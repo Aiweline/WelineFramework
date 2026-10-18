@@ -44,5 +44,7 @@ final class StalwartManagementAdapterTest extends TestCase
         self::assertStringContainsString("ReloadSettings", $src);
         self::assertStringContainsString('certificateIdsCoveringHostname', $src);
         self::assertStringNotContainsString('AcmeProvider', $src);
+        self::assertStringContainsString('function deleteAccount', $src);
+        self::assertStringContainsString("'destroy' => [\$accountId]", $src);
     }
 }

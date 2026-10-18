@@ -78,6 +78,10 @@ private function assert_SetDomainStatusEnsuresContact_testEnterpriseUiHintsConta
     self::assertStringContainsString('mail-enterprise-acme-tls', $src);
     self::assertStringContainsString('smtp_cname', $src);
     self::assertStringContainsString('默认必需', $src);
+    self::assertStringContainsString('mail-smtp-edit-external-', $src);
+    self::assertStringContainsString('w-disclosure__trigger', $src);
+    self::assertStringContainsString('修改凭据', $src);
+    self::assertStringNotContainsString('<summary class="w-text" data-size="sm"><?= __(\'修改凭据\') ?></summary>', $src);
 }
 
 private function extractActiveBlock_SetDomainStatusEnsuresContact(string $src): string

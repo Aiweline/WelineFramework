@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_Mail',
     __DIR__,
-    '0.1.0',
+    '0.2.38',
     '企业邮箱管理模块：管理自建邮件服务环境、域名、账号、DNS 检测和服务状态。',
     [
         'Weline_Admin',

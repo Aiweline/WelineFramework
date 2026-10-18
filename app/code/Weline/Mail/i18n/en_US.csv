@@ -1,6 +1,8 @@
 ﻿企业邮箱邮件已发送,"Work mailbox email sent"
 "后台代发或鉴权发信成功后派发；可携带 source / source_id 供业务闭环。","Dispatched after admin proxy or auth send succeeds; may carry source / source_id for business closure."
 "Mail 查询器不支持的操作：%{1}","Mail query does not support operation: %{1}"
+失败,失败
+密码（仅一次）：%{1},密码（仅一次）：%{1}
 主机名为空,主机名为空
 自建邮箱账号不存在或未启用,"The self-hosted mailbox account does not exist or is not active"
 企业邮箱查询器,"Mail query provider"
@@ -40,6 +42,49 @@ FQDN,FQDN
 多主机,多主机
 根域,根域
 "源站 IP","源站 IP"
+列出收件域外投导流规则,列出收件域外投导流规则
+"新增或更新收件域外投导流规则并同步 Stalwart","新增或更新收件域外投导流规则并同步 Stalwart"
+规则ID（更新时）,规则ID（更新时）
+收件域,收件域
+优先级,优先级
+是否启用,是否启用
+中继主机,中继主机
+中继端口,中继端口
+中继用户,中继用户
+中继密码,中继密码
+TLS,TLS
+"Smtp 目录选型","Smtp 目录选型"
+删除一条收件域外投导流规则并同步,删除一条收件域外投导流规则并同步
+规则ID,规则ID
+批量删除收件域外投导流规则并同步,批量删除收件域外投导流规则并同步
+规则ID列表,规则ID列表
+开通企业邮箱账号（后台弹层）,开通企业邮箱账号（后台弹层）
+"邮局域名 ID","邮局域名 ID"
+邮箱账号前缀,"Email account prefix."
+完整邮箱（可空，由前缀拼接）,完整邮箱（可空，由前缀拼接）
+显示名称,"Display name"
+"系统用户 ID","System User ID"
+"容量 MB","Capacity MB"
+初始密码,初始密码
+开通邮局域名（后台弹层）,开通邮局域名（后台弹层）
+网站域名候选,网站域名候选
+邮箱域名,"Mail domain"
+邮件主机,"Mail host"
+引擎,Engine
+"默认容量 MB","Default capacity MB"
+开通或重置企业邮箱密码（后台弹层）,开通或重置企业邮箱密码（后台弹层）
+"邮箱账号 ID","邮箱账号 ID"
+新密码,"New password"
+"设置企业邮箱外投 smarthost（后台弹层）","设置企业邮箱外投 smarthost（后台弹层）"
+是否启用外投,是否启用外投
+主机,Host
+端口,Port
+用户名,用户名
+密码,Password
+"在 Smtp 服务上增加本机账户（后台弹层）","在 Smtp 服务上增加本机账户（后台弹层）"
+"Smtp 服务 ID","Smtp 服务 ID"
+账号前缀,账号前缀
+角色,角色
 通信,通信
 安装并启动邮局引擎,"Install and start mail engine"
 "当前仅 fake 测试域：可先冒烟。上线真实域名前在「环境修复 / env:install」装邮局依赖（stalwart-mail-server，Mail 模块已登记安装脚本，系统安装 -y 会自动装），再 mail:env:check。","当前仅 fake 测试域：可先冒烟。上线真实域名前在「环境修复 / env:install」装邮局依赖（stalwart-mail-server，Mail 模块已登记安装脚本，系统安装 -y 会自动装），再 mail:env:check。"
@@ -79,12 +124,7 @@ id属性不能为空,id属性不能为空
 只能使用本人已启用的企业邮箱账号,"You may only use your own active enterprise mailbox"
 操作成功,"Operation succeeded"
 操作失败,"Operation failed"
-请选择或输入邮箱域名,"Please select or enter your email domain name"
-邮件引擎参数无效,"Invalid mail engine parameter"
-"Fake 测试引擎只允许 .invalid 或 .test 域名","The Fake test engine only allows .invalid or .test domains"
-"真实邮箱域名必须先从 Websites 域名候选中选择","The real email domain name must first be selected from the Websites domain name candidates"
-邮箱域名已存在,"Email domain name already exists"
-邮箱域名已创建，可在域名列表中开启或继续创建邮箱账号,"The email domain name has been created. You can open it in the domain name list or continue to create an email account."
+邮箱域名操作失败,邮箱域名操作失败
 无效的请求方法,"Invalid request method"
 邮箱账号操作失败,"Email account operation failed."
 域名状态参数无效,"Domain name status parameter is invalid"
@@ -99,24 +139,20 @@ id属性不能为空,id属性不能为空
 域名已启用，但自动开通邮箱异常：%{1},域名已启用，但自动开通邮箱异常：%{1}
 "默认 Smtp 提交已迁至 Smtp 模块：请在「Smtp 配置」中启用并自配域名与账户，邮局不再开通 Smtp。","默认 Smtp 提交已迁至 Smtp 模块：请在「Smtp 配置」中启用并自配域名与账户，邮局不再开通 Smtp。"
 "外投 smarthost 已迁至「用户与账号」编辑；域名与 DNS 不再配置外投。","外投 smarthost 已迁至「用户与账号」编辑；域名与 DNS 不再配置外投。"
-"Smtp 选择无效","Smtp 选择无效"
-邮箱账号不存在,"Mailbox account does not exist"
-"开启外投时请选择 Smtp 账户或填写 smarthost 主机","开启外投时请选择 Smtp 账户或填写 smarthost 主机"
-外投密码密封失败：%{1},外投密码密封失败：%{1}
-"已保存该账号外投 smarthost（路由异步下发）","已保存该账号外投 smarthost（路由异步下发）"
-已关闭该账号外投（路由异步下发）,已关闭该账号外投（路由异步下发）
+外投保存失败,外投保存失败
 "缺少账号或邮件 ID","缺少账号或邮件 ID"
 邮件不存在,邮件不存在
 缺少账号,缺少账号
 缺少附件参数,缺少附件参数
 请选择附件,请选择附件
 附件读取失败,附件读取失败
-失败,失败
-密码（仅一次）：%{1},密码（仅一次）：%{1}
+"无权限修改 Smtp 账户","No permission to update SMTP accounts"
+"无权限删除 Smtp 账户","No permission to delete SMTP accounts"
 "无权限重置 Smtp 账户密码","无权限重置 Smtp 账户密码"
 "账号 %{1} 新密码：%{2}","账号 %{1} 新密码：%{2}"
 "无权限写入 Smtp 账户到本机 Stalwart 邮局","No permission to write SMTP accounts to local Stalwart"
 "无权限从本机 Stalwart 同步账号","No permission to sync accounts from local Stalwart"
+"无权限从企业邮箱域名同步 Smtp 服务","无权限从企业邮箱域名同步 Smtp 服务"
 请选择已启用的本机企业邮箱账号,"Select an enabled local business email account"
 邮件发送失败,"Failed to send email"
 "邮箱域名 ID 无效。","The email domain ID is invalid."
@@ -138,6 +174,7 @@ mail,mail
 "管理企业邮箱、用户账号、邮件与 DNS","Manage corporate email, user accounts, mail services, and DNS."
 管理企业邮箱账号,"Manage corporate email accounts."
 users,users
+"从企业邮箱域名同步 Smtp 服务目录","从企业邮箱域名同步 Smtp 服务目录"
 开通、暂停及重置企业邮箱账号,"Activating, suspending, and resetting corporate email accounts."
 开通或重置邮箱密码,"Activate or reset your email password."
 key,key
@@ -174,8 +211,6 @@ composer,composer
 当前没有已开启的邮箱域名，请稍后再试。,"No mail domains are currently enabled. Please try again later."
 邮箱账号,"Mailbox account"
 仅支持小写字母、数字、点、下划线和短横线。,"Only lowercase letters, numbers, dots, underscores, and hyphens are supported."
-邮箱域名,"Mail domain"
-显示名称,"Display name"
 例如：业务邮箱,"For example: business mailbox"
 申请邮箱账号,"Apply for mailbox"
 您还没有申请邮箱账号。,"You have not applied for any mailbox accounts yet."
@@ -232,13 +267,11 @@ composer,composer
 邮件主机名,"Email hostname"
 邮件引擎,"Mail engine"
 "Fake 测试引擎","Fake test engine"
-"默认容量 MB","Default capacity MB"
 开通邮箱域名,"Open an email domain name"
 邮箱域名列表,"Email domain name list"
 支持多个域名,"Support multiple domain names"
 域名,"domain name"
 主机名,hostname
-引擎,Engine
 账号数,"Number of accounts"
 操作,operate
 暂无邮箱域名,"No email domain name yet"
@@ -264,7 +297,6 @@ composer,composer
 邮箱地址使用邮箱域，例如：,"Mail addresses use the mailbox domain, for example:"
 邮件服务使用独立主机名，例如：,"The mail service uses a separate host name, for example:"
 类型,type
-主机,Host
 建议值,"Recommended value"
 配置要求,Requirement
 "服务器公网 IPv4","Server public IPv4"
@@ -302,7 +334,6 @@ composer,composer
 客户端收信（POP3S，可选）,"Client mail retrieval (POP3S, optional)"
 "禁止把 Stalwart 管理口 8080 裸暴露到公网；账户密码见上方「Stalwart Admin（:8080）登录」提醒。","Do not expose Stalwart admin port 8080 to the public internet; see the Stalwart Admin (:8080) login tip above for credentials."
 本机防火墙（ufw/firewalld/iptables）若开启，须与云安全组同步放行同一批端口。,"If a host firewall (ufw/firewalld/iptables) is on, allow the same ports as the cloud security group."
-端口,Port
 用途,Purpose
 加密与注意事项,"Encryption and notes"
 服务器接收入站邮件（MTA）,"Server inbound mail (MTA)"
@@ -316,7 +347,6 @@ STARTTLS（推荐）,"STARTTLS (recommended)"
 请选择域名,"Please select a domain name"
 管理员,administrator
 客户ID,"Customer ID"
-"容量 MB","Capacity MB"
 账号状态,"Account status"
 "Fake 域名会自动建议开启，真实域名默认待同步。","The fake domain name will be automatically recommended to be turned on, and the real domain name will be synchronized by default."
 域名邮箱列表管理,"Domain name mailbox list management"
@@ -359,6 +389,7 @@ STARTTLS（推荐）,"STARTTLS (recommended)"
 选择客户,"Select customer"
 用户与账号,"Users & Accounts"
 Smtp,Smtp
+收件域导流,收件域导流
 "域名与 DNS","Domains & DNS"
 "Cloudflare OAuth 未能完成","Cloudflare OAuth 未能完成"
 "授权回跳失败。请核对 OAuth Client 权限与回调 URL 后重试。","授权回跳失败。请核对 OAuth Client 权限与回调 URL 后重试。"
@@ -409,34 +440,36 @@ Smtp,Smtp
 暂无邮件可阅读。写一封或开通更多账号后回来查看。,"Nothing to read yet. Compose a message or provision more accounts, then check back."
 正文加载失败,正文加载失败
 请先选择邮件,请先选择邮件
-开通企业邮箱账号,"Activate a corporate email account."
-邮箱账号前缀,"Email account prefix."
-"系统用户 ID","System User ID"
-"初始密码（真实邮箱至少 12 位）","Initial password (must be at least 12 characters and use a real email address)."
+企业邮箱账号,企业邮箱账号
 开通邮箱,"Open an email account."
 系统用户,"System user"
 暂无邮箱账号。,"No mailbox accounts yet."
 外投,外投
 查看邮件,"View email."
 开通/重置密码,"Provision / Reset password"
-新密码,"New password"
-确认更新,"Confirm update."
 "外投 smarthost","外投 smarthost"
+确认更新,"Confirm update."
 "未勾选则走本域 MX:25。优先从 Smtp Tab 已建账户/服务中选择；也可手动填写。","未勾选则走本域 MX:25。优先从 Smtp Tab 已建账户/服务中选择；也可手动填写。"
 该邮箱走外投中继,该邮箱走外投中继
 "选择 Smtp 账户/服务","选择 Smtp 账户/服务"
 "（暂无可用 Smtp，请先到 Smtp Tab 创建）","（暂无可用 Smtp，请先到 Smtp Tab 创建）"
 "手动填写 / 不选用目录","手动填写 / 不选用目录"
-用户名,用户名
-"密码（选目录后请留空；点保存时从 Smtp 目录自动带入，页面不显示明文）","密码（选目录后请留空；点保存时从 Smtp 目录自动带入，页面不显示明文）"
+"密码（选目录后请留空；点保存时从 Smtp 目录自动带入）","密码（选目录后请留空；点保存时从 Smtp 目录自动带入）"
 选目录后留空即可,选目录后留空即可
-TLS,TLS
 无,无
 保存外投,保存外投
+开通企业邮箱账号,"Activate a corporate email account."
+"初始密码（真实邮箱至少 12 位）","Initial password (must be at least 12 characters and use a real email address)."
 留空不改,留空不改
 已选目录：保存时自动带入密码,已选目录：保存时自动带入密码
+"Mail API 不可用","Mail API 不可用"
+开通中…,开通中…
+更新中…,更新中…
+保存中…,保存中…
 "Smtp 服务","Smtp 服务"
-"管理本站发信通道。本机启用会自动建默认账号 smtp@根域；外部填入是登记 QQ/企业邮等第三方 SMTP 凭据供本站代发，不是收件人名单。","管理本站发信通道。本机启用会自动建默认账号 smtp@根域；外部填入是登记 QQ/企业邮等第三方 SMTP 凭据供本站代发，不是收件人名单。"
+"管理本站发信通道。绿标「本机启用」：DNS→入池→出证并建 smtp@；蓝标「外部填入」：只登记 QQ/企业邮等第三方凭据供代发，不是收件人名单。","Manage send channels. Green badge Local SMTP: DNS → pool → cert and create smtp@; blue badge External: register third-party credentials (QQ/enterprise mail) for relay — not a recipient list."
+"从「域名与 DNS」已登记的本机邮局主机同步到本列表（如 mail.aiweline.com）","从「域名与 DNS」已登记的本机邮局主机同步到本列表（如 mail.aiweline.com）"
+从邮件服务同步,从邮件服务同步
 新建,新建
 搜索服务,搜索服务
 "名称 / 主机 / 域名","名称 / 主机 / 域名"
@@ -456,11 +489,12 @@ TLS,TLS
 外部填入,外部填入
 "QQ / 企业微信 SMTP","QQ / 企业微信 SMTP"
 "SMTP 主机","SMTP 主机"
-密码,Password
 "登记外部 Smtp","登记外部 Smtp"
-"暂无 Smtp 服务。点右上角「新建」本机启用或外部填入。","暂无 Smtp 服务。点右上角「新建」本机启用或外部填入。"
+"暂无 Smtp 服务。若本机邮局已在「域名与 DNS」登记，点右上角「从邮件服务同步」；或「新建」本机启用 / 外部填入。","暂无 Smtp 服务。若本机邮局已在「域名与 DNS」登记，点右上角「从邮件服务同步」；或「新建」本机启用 / 外部填入。"
+"展开或收起 Smtp 服务配置：%{1}","Expand or collapse Smtp service settings: %{1}"
 启用,启用
-"确定删除该 Smtp 服务？外投若仍引用需改绑。","确定删除该 Smtp 服务？外投若仍引用需改绑。"
+"确定删除该 Smtp 服务及其下属全部 %{1} 个账户？将同时从本机 Stalwart 移除这些账户，不可恢复。外投若仍引用需改绑。","Delete this SMTP service and all %{1} accounts under it? They will also be removed from local Stalwart and cannot be undone. Rebind any outbound that still references it."
+"确定删除该外部 Smtp 服务？外投若仍引用需改绑。","Delete this external SMTP service? Rebind any outbound that still references it."
 "外部中继凭据可在下方修改主机/用户名/密码。要给企业邮箱外投：打开「用户与账号」→ 编辑 contact@ →「外投 smarthost」选本条。本机 smtp@ 账号表请用「新建 → 本机启用」。","外部中继凭据可在下方修改主机/用户名/密码。要给企业邮箱外投：打开「用户与账号」→ 编辑 contact@ →「外投 smarthost」选本条。本机 smtp@ 账号表请用「新建 → 本机启用」。"
 去用户与账号绑定外投,去用户与账号绑定外投
 修改凭据,修改凭据
@@ -473,7 +507,6 @@ TLS,TLS
 "从 Stalwart 同步账号","Sync accounts from Stalwart"
 "未能探测本机 Stalwart（管理凭据或邮局未就绪）；写入按钮仍会对未确认账号显示。","Could not probe local Stalwart; write is still shown for unconfirmed accounts."
 "尚无账户。可「从 Stalwart 同步账号」或下方新建。","No accounts yet. Sync from Stalwart or create below."
-角色,角色
 "本机 Stalwart","本机 Stalwart"
 复制账号,复制账号
 已写入,已写入
@@ -486,18 +519,38 @@ TLS,TLS
 "写入本机 Stalwart","写入本机 Stalwart"
 需先重置密码再写入,"Reset password before writing"
 重置密码,重置密码
-再加本机账户,再加本机账户
-账号前缀,账号前缀
+"确认删除该 Smtp 账户？将同时从本机 Stalwart 移除。","Delete this SMTP account? It will also be removed from local Stalwart."
+修改,修改
 "提交 submit","提交 submit"
 "中继 relay","中继 relay"
-创建账户,创建账户
+"启用 active","Enabled active"
+"停用 disabled",Disabled
+"待设密码 needs_password","Needs password"
+增加本机账户,"Add local account"
 "没有匹配的 Smtp 服务。","没有匹配的 Smtp 服务。"
 已复制,已复制
 复制失败,复制失败
 收起新建,收起新建
-保存中…,保存中…
 已保存,已保存
 保存失败,保存失败
+创建账户,创建账户
+创建中…,创建中…
+"与账号「外投 smarthost」的关系","与账号「外投 smarthost」的关系"
+"默认：同域有本机 Smtp 时本机直投（策略 else=mx）。例外①账号勾选「外投 smarthost」→ 该发件人走账号中继；例外②本页收件域导流（例 qq.com → Hub）→ 仅命中收件域走中继。不要指望「某账号外投」变成全站默认中继。","Priority: recipient-domain routes (587/465 as configured) → account outbound → self SMTP default (587/465) → MX:25 last. Rules beat defaults; configured relays win."
+"优先级：本页收件域导流（按配置 587/465）→ 账号外投 → 本机 Smtp 默认外投（587/465）→ 最后才 MX:25。规则大于默认；配置了中继就按规则走。","Priority: recipient-domain routes (587/465 as configured) → account outbound → self SMTP default (587/465) → MX:25 last. Rules beat defaults; configured relays win."
+已配置规则,已配置规则
+新增规则,新增规则
+批量删除,批量删除
+"暂无导流规则。例如将 qq.com 导向 mail.aiweline.com:587。","暂无导流规则。例如将 qq.com 导向 mail.aiweline.com:587。"
+编辑,编辑
+新增导流规则,新增导流规则
+选目录后留空即可；编辑时留空表示不改,选目录后留空即可；编辑时留空表示不改
+清空表单,清空表单
+保存并下发,保存并下发
+确定删除该导流规则？,确定删除该导流规则？
+确定删除所选规则？,确定删除所选规则？
+请至少勾选一条规则,请至少勾选一条规则
+编辑导流规则,编辑导流规则
 "先完成本机 Stalwart 引擎安装与管理连接，再配置下方域名 DNS。可在服务器上运行检测与安装计划命令。","Finish local Stalwart engine install and management connection first, then configure domain DNS below. Run the check and install-plan commands on the server."
 检测企业邮箱服务环境,"Detect corporate email service environment"
 查看或执行安装计划,"View or run the install plan"
@@ -514,9 +567,9 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 "仅当业务需要 POP3 时放行。","Allow only when POP3 is required."
 "推荐顺序：放行上表端口 → 引擎就绪 → DNS（灰云）→ 启用域名 → 真实收发验收。","Recommended order: open the ports above → engine ready → DNS (DNS-only) → enable domain → real send/receive acceptance."
 "mail 主机的 A/AAAA 必须关闭 Cloudflare 代理（灰云、DNS-only），否则会隐藏源站 IP，SMTP/IMAP 无法工作。smtp 子域名可选；若配置也必须 DNS-only。","For mail hosts, A/AAAA records must have Cloudflare proxy disabled (set to ""DNS-only"" mode). Otherwise, the origin server IP will be hidden, and SMTP/IMAP will not function.  The SMTP subdomain is optional; however, if configured, it must also be set to ""DNS-only"" mode."
+从网站域名候选开通邮局；创建后可在列表中启用。,从网站域名候选开通邮局；创建后可在列表中启用。
 新增邮箱域名,"New email domain."
 网站域名,"Website domain"
-邮件主机,"Mail host"
 创建邮箱域名,"Create an email domain."
 "暂无邮箱域名。请先新增域名并完成 DNS。","No email domains yet. Add a domain and finish DNS first."
 本机邮局公钥待生成,"Local mailer public key pending"
@@ -561,12 +614,19 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 邮箱账号已开通,"Mailbox provisioned"
 "邮箱账号开通失败，请检查 Stalwart 管理连接","Email account creation failed. Please check the Stalwart management connection."
 邮箱账号状态参数无效,"Invalid email account status parameter."
+邮箱账号不存在,"Mailbox account does not exist"
 "请先通过“开通/重置密码”在 Stalwart 中开通该账号","Please first activate or reset the password for this account within Stalwart."
 "无法确认 Stalwart 账号状态，请检查管理连接","Unable to verify the Stalwart account status. Please check the management connection."
 邮箱账号状态已更新,"Email account status updated."
 "Fake 邮箱不需要 Stalwart 密码","Fake email addresses do not require Stalwart passwords."
 "邮箱已在 Stalwart 中开通，密码已更新","Mailbox provisioned in Stalwart and password updated"
 "邮箱开通或密码重置失败，请检查 Stalwart 管理连接","Email activation or password reset failed. Please check the Stalwart connection."
+请选择或输入邮箱域名,"Please select or enter your email domain name"
+邮件引擎参数无效,"Invalid mail engine parameter"
+"Fake 测试引擎只允许 .invalid 或 .test 域名","The Fake test engine only allows .invalid or .test domains"
+"真实邮箱域名必须先从 Websites 域名候选中选择","The real email domain name must first be selected from the Websites domain name candidates"
+邮箱域名已存在,"Email domain name already exists"
+邮箱域名已创建，可在域名列表中开启或继续创建邮箱账号,"The email domain name has been created. You can open it in the domain name list or continue to create an email account."
 邮件已提交发送,"Message submitted"
 请选择邮件,请选择邮件
 已移入废纸篓,已移入废纸篓
@@ -653,6 +713,11 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 "必须填写 Stalwart 实际生成的 DKIM 公钥，禁止填写私钥或示例值。","Enter the actual DKIM public key generated by Stalwart; private keys and examples are forbidden."
 "DKIM TXT 缺少有效的 p= 公钥。","DKIM TXT record is missing a valid public key (p=)."
 "DKIM 公钥不是有效的 Base64 公钥。","The DKIM public key is not a valid Base64 public key."
+"Smtp 选择无效","Smtp 选择无效"
+"开启外投时请选择 Smtp 账户或填写 smarthost 主机","开启外投时请选择 Smtp 账户或填写 smarthost 主机"
+外投密码密封失败：%{1},外投密码密封失败：%{1}
+"已保存该账号外投 smarthost（路由异步下发）","已保存该账号外投 smarthost（路由异步下发）"
+已关闭该账号外投（路由异步下发）,已关闭该账号外投（路由异步下发）
 请选择已启用的自建邮箱账号,"Please choose an active self-hosted mailbox account"
 真实自建邮箱账号必须通过已鉴权的邮箱界面发送,"Real, self-built email accounts must send messages through an authenticated email interface."
 企业邮箱发送失败，请检查邮件服务状态,"Failed to send corporate email. Please check the email service status."
@@ -675,6 +740,17 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 "DKIM 私钥写入失败。","Failed to write the DKIM private key."
 "DKIM 私钥不可读。","The DKIM private key is unreadable."
 "DKIM 公钥提取失败。","Failed to extract the DKIM public key."
+"请填写有效的收件域（如 qq.com）","请填写有效的收件域（如 qq.com）"
+"请选择 Smtp 或填写中继主机","请选择 Smtp 或填写中继主机"
+规则不存在,规则不存在
+已存在启用中的同域规则：%{1},已存在启用中的同域规则：%{1}
+中继密码密封失败：%{1},中继密码密封失败：%{1}
+已保存导流规则并下发路由,已保存导流规则并下发路由
+已保存规则，但路由下发失败,已保存规则，但路由下发失败
+请选择要删除的规则,请选择要删除的规则
+未删除任何规则,未删除任何规则
+"已删除 %{1} 条规则并下发路由","已删除 %{1} 条规则并下发路由"
+已删除规则，但路由下发失败,已删除规则，但路由下发失败
 "========== 企业邮箱环境检测 ==========","========== Enterprise mailbox environment detection =========="
 平台：%{1},"Platform: %{1}"
 引擎：%{1},"Engine: %{1}"
@@ -710,6 +786,11 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 "检测企业邮箱 DNS 记录","Detect corporate email DNS records"
 "检测 MX/SPF/DKIM/DMARC 记录是否存在","Check if MX/SPF/DKIM/DMARC records exist"
 邮件服务主机名,"Mail service host name"
+"密码（选目录后请留空；点保存时从 Smtp 目录自动带入，页面不显示明文）","密码（选目录后请留空；点保存时从 Smtp 目录自动带入，页面不显示明文）"
+"暂无 Smtp 服务。点右上角「新建」本机启用或外部填入。","暂无 Smtp 服务。点右上角「新建」本机启用或外部填入。"
+"新增 / 编辑导流规则","新增 / 编辑导流规则"
+"确定删除该 Smtp 服务？外投若仍引用需改绑。","确定删除该 Smtp 服务？外投若仍引用需改绑。"
+再加本机账户,再加本机账户
 "邮件主机 TLS（走域名池，不必手开 Stalwart ACME）","邮件主机 TLS（走域名池，不必手开 Stalwart ACME）"
 "mail / smtp 主机名随 DNS 一键同步入 Websites 域名池并申请证书后即可使用；无需在 Stalwart Admin 单独启用 Let’s Encrypt。若日志仍报 No TLS certificates available，先确认域名池已有对应主机与有效证书。","mail / smtp 主机名随 DNS 一键同步入 Websites 域名池并申请证书后即可使用；无需在 Stalwart Admin 单独启用 Let’s Encrypt。若日志仍报 No TLS certificates available，先确认域名池已有对应主机与有效证书。"
 "一键写 DNS 成功后会自动","一键写 DNS 成功后会自动"
@@ -819,3 +900,14 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 "邮局引擎未就绪%{1}。请执行：php bin/w mail:env:check → php bin/w env:install stalwart-mail-server -y → php bin/w mail:service:status","Mail engine not ready%{1}. Run: php bin/w mail:env:check → php bin/w env:install stalwart-mail-server -y → php bin/w mail:service:status"
 "当前为 fake 测试域，无需公网 DNS。上线真实域时在域名页按清单配置，或 php bin/w mail:dns:check example.com mail.example.com","Fake domains need no public DNS. For real domains use the domain checklist or php bin/w mail:dns:check example.com mail.example.com"
 "本机 Stalwart 邮局（%{1}）","Local Stalwart mail server (%{1})"
+账户已更新：%{1},"Account updated: %{1}"
+"已删除账户 %{1}%{2}","Deleted account %{1}%{2}"
+"（含本机 Stalwart）","(including local Stalwart)"
+"Stalwart 删除失败，目录未改：%{1}","Stalwart delete failed; directory unchanged: %{1}"
+"；已同步写入本机 Stalwart","; synced to local Stalwart"
+"；已从本机 Stalwart 移除登录","; removed login from local Stalwart"
+"启用前须有密封密码：请先「重置密码」再保存为 active","Sealed password required before enabling: reset password first, then save as active"
+"Stalwart 同步失败，目录未改：%{1}","Stalwart sync failed; directory unchanged: %{1}"
+账户已更新：%{1}%{2},"Account updated: %{1}%{2}"
+"本机 Smtp 服务已删除，下属账户 %{1} 个已从目录与本机 Stalwart 移除","Local SMTP service deleted; %{1} account(s) removed from directory and local Stalwart"
+"Stalwart 删除账户 %{1} 失败，服务与目录未改：%{2}","Stalwart failed to delete account %{1}; service and directory unchanged: %{2}"

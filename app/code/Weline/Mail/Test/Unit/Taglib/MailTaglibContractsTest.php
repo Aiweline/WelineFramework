@@ -125,6 +125,6 @@ private function assert_MailComposerTaglib_testSceneMapListsMailComposer(): void
 private function assert_MailComposerTaglib_testModuleVersion(): void
 {
     $module = include BP . 'app/code/Weline/Mail/etc/module.php';
-    self::assertSame('0.2.1', $module['version'] ?? null);
+    self::assertSame('0.2.36', $module['version'] ?? null);
 }
 }

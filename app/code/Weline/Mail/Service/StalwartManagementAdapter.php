@@ -348,6 +348,46 @@ final class StalwartManagementAdapter
      * @param list<array<string, mixed>> $routes
      * @param array<string, mixed> $strategyRoute
      */
+    /**
+     * 列出 Stalwart 中名称带指定前缀的 Relay 路由名（用于保留已配置 hub 导流）。
+     *
+     * @return list<string>
+     */
+    public function listRelayRouteNamesByPrefix(string $prefix): array
+    {
+        $prefix = trim($prefix);
+        if ($prefix === '') {
+            return [];
+        }
+        $query = $this->managementCall('x:MtaRoute/query', [
+            'filter' => (object)[],
+            'limit' => 200,
+        ]);
+        $ids = $query['ids'] ?? [];
+        if (!is_array($ids) || $ids === []) {
+            return [];
+        }
+        $got = $this->managementCall('x:MtaRoute/get', [
+            'ids' => array_values($ids),
+            'properties' => ['name', '@type'],
+        ]);
+        $names = [];
+        foreach (($got['list'] ?? []) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            if (($row['@type'] ?? '') !== 'Relay') {
+                continue;
+            }
+            $name = trim((string)($row['name'] ?? ''));
+            if ($name !== '' && str_starts_with($name, $prefix)) {
+                $names[] = $name;
+            }
+        }
+
+        return array_values(array_unique($names));
+    }
+
     public function applyOutboundRelayRoutes(array $routes, array $strategyRoute): void
     {
         $normalizedRoutes = [];
@@ -408,9 +448,12 @@ final class StalwartManagementAdapter
      */
     private function normalizeStrategyRouteExpression(array $strategyRoute): array
     {
-        $else = (string)($strategyRoute['else'] ?? "'mx'");
+        // else 可以是本机 Smtp Relay 名（587/465）或兜底 'mx'；禁止空串默成奇怪值。
+        $else = trim((string)($strategyRoute['else'] ?? "'mx'"));
         if ($else === '' || $else === 'mx') {
             $else = "'mx'";
+        } elseif ($else[0] !== "'") {
+            $else = "'" . addcslashes($else, "'\\") . "'";
         }
         $rawMatch = $strategyRoute['match'] ?? [];
         if ($rawMatch instanceof \stdClass) {
@@ -459,12 +502,8 @@ final class StalwartManagementAdapter
         if ($port < 1 || $port > 65535 || $port === 25) {
             $port = 587;
         }
-        $authSecret = $route['authSecret'] ?? ['@type' => 'None'];
-        if (!is_array($authSecret)) {
-            $authSecret = ['@type' => 'None'];
-        }
-
-        return [
+        $authUser = trim((string)($route['authUsername'] ?? ''));
+        $out = [
             '@type' => 'Relay',
             'name' => $name,
             'address' => $address,
@@ -472,9 +511,23 @@ final class StalwartManagementAdapter
             'protocol' => (string)($route['protocol'] ?? 'smtp') ?: 'smtp',
             'implicitTls' => (bool)($route['implicitTls'] ?? false),
             'allowInvalidCerts' => (bool)($route['allowInvalidCerts'] ?? true),
-            'authUsername' => trim((string)($route['authUsername'] ?? '')),
-            'authSecret' => $authSecret,
         ];
+        // 空用户名 / None 密钥勿下发：Stalwart 对 authUsername="" 或无意义 authSecret 会 invalidPatch。
+        if ($authUser !== '') {
+            $out['authUsername'] = $authUser;
+        }
+        $authSecret = $route['authSecret'] ?? null;
+        if (is_array($authSecret)
+            && (($authSecret['@type'] ?? '') === 'Value')
+            && trim((string)($authSecret['secret'] ?? '')) !== ''
+        ) {
+            $out['authSecret'] = [
+                '@type' => 'Value',
+                'secret' => (string)$authSecret['secret'],
+            ];
+        }
+
+        return $out;
     }
 
     /**
@@ -494,9 +547,14 @@ final class StalwartManagementAdapter
             'protocol' => $route['protocol'],
             'implicitTls' => (bool)$route['implicitTls'],
             'allowInvalidCerts' => (bool)($route['allowInvalidCerts'] ?? true),
-            'authUsername' => $route['authUsername'],
-            'authSecret' => $route['authSecret'],
         ];
+        $authUser = trim((string)($route['authUsername'] ?? ''));
+        if ($authUser !== '') {
+            $fields['authUsername'] = $authUser;
+        }
+        if (isset($route['authSecret']) && is_array($route['authSecret'])) {
+            $fields['authSecret'] = $route['authSecret'];
+        }
 
         if ($existingId !== '') {
             $result = $this->managementCall('x:MtaRoute/set', [
@@ -547,6 +605,30 @@ final class StalwartManagementAdapter
             throw new \RuntimeException('Stalwart 邮箱密码重置失败' . ($type !== '' ? '：' . $type : '。'));
         }
         return $accountId;
+    }
+
+    /**
+     * 删除本机 Stalwart 账户（幂等：不存在则成功）。
+     */
+    public function deleteAccount(string $mailbox): void
+    {
+        [$localPart, $domainName] = $this->splitMailbox($mailbox);
+        try {
+            $domainId = $this->domainId($domainName);
+        } catch (\DomainException) {
+            return;
+        }
+        $accountId = $this->accountId($localPart, $domainId);
+        if ($accountId === null || $accountId === '') {
+            return;
+        }
+        $result = $this->managementCall('x:Account/set', [
+            'destroy' => [$accountId],
+        ]);
+        if (isset($result['notDestroyed'][$accountId])) {
+            $type = (string)($result['notDestroyed'][$accountId]['type'] ?? '');
+            throw new \RuntimeException('Stalwart 账户删除失败' . ($type !== '' ? '：' . $type : '。'));
+        }
     }
 
     /**

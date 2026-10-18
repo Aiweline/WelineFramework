@@ -253,7 +253,7 @@ private function assert_MailComposeDeeplink_testBackendComposePrefillAndSendEven
 private function assert_MailComposeDeeplink_testModuleVersion(): void
 {
     $module = include BP . 'app/code/Weline/Mail/etc/module.php';
-    self::assertSame('0.2.27', $module['version'] ?? null);
+    self::assertSame('0.2.36', $module['version'] ?? null);
 }
 
 private function assert_MailDkimLocalEnsureService_testEnsureGeneratesReusablePublicKey(): void
@@ -377,24 +377,87 @@ private function assert_MailOutboundRelaySync_testSyncBuildsSenderRouteNotAuthen
     self::assertStringContainsString("sender == '", $src);
     self::assertStringNotContainsString('authenticated_as', $src);
     self::assertStringContainsString('weline-outbound-acct-', $src);
+    self::assertStringContainsString('weline-outbound-rcpt-', $src);
     self::assertStringContainsString('is_local_domain', $src);
     self::assertStringContainsString('schema_fields_OUTBOUND_RELAY_HOST', $src);
+    self::assertStringContainsString('MailOutboundRouteRule', $src);
     // fetch() 行可能不是 Model；必须 fetchArray，否则 instanceof 全跳过 → 空路由直连 MX。
     self::assertStringContainsString('fetchArray()', $src);
     self::assertStringNotContainsString('instanceof MailAccount', $src);
     self::assertStringContainsString('$port === 25', $src);
     self::assertStringContainsString('is_local_domain(rcpt_domain)', $src);
+    self::assertStringContainsString("rcpt_domain == '", $src);
     self::assertStringContainsString('(object)$matchMap', $src);
-    // 有认证中继时 else 走 primary relay，禁止无条件回落 'mx'。
-    self::assertStringContainsString('$primaryRelayName', $src);
-    self::assertStringContainsString("addcslashes(\$primaryRelayName, \"'\\\\\")", $src);
-    self::assertMatchesRegularExpression("/\\\$else = \\\$primaryRelayName !== ''/", $src);
+    // A1：拼接段必须 local → foreach rcptMatches → foreach senderMatches（禁止旧版 sender 先、local 殿后）。
+    self::assertMatchesRegularExpression(
+        '/\$match\s*=\s*\[\];.*?is_local_domain\(rcpt_domain\).*?foreach\s*\(\s*\$rcptMatches.*?foreach\s*\(\s*\$senderMatches/s',
+        $src,
+        'match assembly must be local then rcpt then sender'
+    );
+    self::assertStringNotContainsString(
+        "\$match[] = [\n            'if' => \"sender == '",
+        $src
+    );
+    // A2：else 默认本机 Smtp（587/465）；无本机才兜底 mx；账号外投不得抬成全局 else。
+    self::assertStringNotContainsString('$primaryRelayName', $src);
+    self::assertStringContainsString('resolveDefaultSelfSmtpRelay', $src);
+    self::assertStringContainsString('normalizeSubmissionPort', $src);
+    self::assertStringContainsString('weline-outbound-self-', $src);
+    self::assertStringContainsString('mergeHubBindingsIntoPayload', $src);
+    self::assertStringContainsString('weline-hub-', $src);
+    self::assertStringContainsString('else 默认本机 Smtp', $src);
+    self::assertStringContainsString('不得抬成全局 else', $src);
+    self::assertStringContainsString('// A1：local → rcpt 分流 → sender 外投', $src);
+    self::assertStringContainsString("\$rcptMatches", $src);
+    self::assertStringContainsString("\$senderMatches", $src);
     $adapter = (string) \file_get_contents(BP . '/app/code/Weline/Mail/Service/StalwartManagementAdapter.php');
     self::assertStringContainsString('x:MtaRoute/set', $adapter);
     self::assertStringContainsString('x:MtaOutboundStrategy/set', $adapter);
     self::assertStringContainsString('ReloadSettings', $adapter);
     self::assertStringContainsString('normalizeRelayRoute', $adapter);
     self::assertStringContainsString('normalizeStrategyRouteExpression', $adapter);
+    self::assertStringContainsString('listRelayRouteNamesByPrefix', $adapter);
+    self::assertStringContainsString('authUsername=""', $adapter);
+
+    $model = (string) \file_get_contents(BP . '/app/code/Weline/Mail/Model/MailOutboundRouteRule.php');
+    self::assertStringContainsString('weline_mail_outbound_route_rule', $model);
+    self::assertStringContainsString('match_domain', $model);
+    self::assertStringContainsString('relay_password_sealed', $model);
+
+    $qp = (string) \file_get_contents(BP . '/app/code/Weline/Mail/extends/module/Weline_Framework/Query/MailQueryProvider.php');
+    self::assertStringContainsString('listOutboundRouteRules', $qp);
+    self::assertStringContainsString('saveOutboundRouteRule', $qp);
+    self::assertStringContainsString('batchDeleteOutboundRouteRules', $qp);
+    self::assertStringContainsString('createMailboxAccount', $qp);
+    self::assertStringContainsString('createMailboxDomain', $qp);
+    self::assertStringContainsString('resetMailboxPassword', $qp);
+    self::assertStringContainsString('setMailboxOutboundRelay', $qp);
+    self::assertStringContainsString('createSmtpServiceAccount', $qp);
+
+    $enterprise = (string) file_get_contents(BP . 'app/code/Weline/Mail/view/templates/backend/Index/enterprise.phtml');
+    self::assertStringContainsString("'routes' => __('收件域导流')", $enterprise);
+    self::assertStringContainsString('mail-enterprise-outbound-routes', $enterprise);
+    self::assertStringContainsString('mail-outbound-routes-mutex-hint', $enterprise);
+    self::assertStringContainsString('saveOutboundRouteRule', $enterprise);
+    self::assertStringContainsString('mail-outbound-route-dialog', $enterprise);
+    self::assertStringContainsString('data-route-add', $enterprise);
+    self::assertStringNotContainsString('mail-outbound-route-form-card', $enterprise);
+    self::assertStringNotContainsString('form.scrollIntoView', $enterprise);
+    self::assertStringContainsString('mail-account-create-dialog', $enterprise);
+    self::assertStringContainsString('createMailboxAccount', $enterprise);
+    self::assertStringContainsString('data-account-create-open', $enterprise);
+    self::assertStringContainsString('mail-account-reset-dialog', $enterprise);
+    self::assertStringContainsString('mail-account-outbound-dialog', $enterprise);
+    self::assertStringContainsString('mail-domain-create-dialog', $enterprise);
+    self::assertStringContainsString('mail-smtp-add-dialog', $enterprise);
+    self::assertStringContainsString('createMailboxDomain', $enterprise);
+    self::assertStringContainsString('resetMailboxPassword', $enterprise);
+    self::assertStringContainsString('setMailboxOutboundRelay', $enterprise);
+    self::assertStringContainsString('createSmtpServiceAccount', $enterprise);
+    self::assertStringNotContainsString("action=\"@backend-url{'weline_mail/backend/index/create-account'}\"", $enterprise);
+    self::assertStringNotContainsString("action=\"@backend-url{'weline_mail/backend/index/create-domain'}\"", $enterprise);
+    self::assertStringNotContainsString("action=\"@backend-url{'weline_mail/backend/index/reset-account-password'}\"", $enterprise);
+    self::assertStringNotContainsString('details open data-testid="mail-smtp-add-account-', $enterprise);
 }
 
 private function assert_MailOutboundRelaySync_testAccountHasOutboundHostColumns(): void
@@ -406,8 +469,10 @@ private function assert_MailOutboundRelaySync_testAccountHasOutboundHostColumns(
     $enterprise = (string) file_get_contents(BP . 'app/code/Weline/Mail/view/templates/backend/Index/enterprise.phtml');
     self::assertStringContainsString('outbound_smtp_pick', $enterprise);
     self::assertStringContainsString('选择 Smtp 账户/服务', $enterprise);
+    $relay = (string) file_get_contents(BP . 'app/code/Weline/Mail/Service/MailAccountOutboundRelayService.php');
+    self::assertStringContainsString('resolveOutboundPick', $relay);
     $index = (string) file_get_contents(BP . 'app/code/Weline/Mail/Controller/Backend/Index.php');
-    self::assertStringContainsString('resolveOutboundPick', $index);
+    self::assertStringContainsString('MailAccountOutboundRelayService', $index);
     self::assertStringContainsString('listOutboundPicks', $index);
 }
 

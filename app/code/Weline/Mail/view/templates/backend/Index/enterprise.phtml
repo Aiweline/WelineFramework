@@ -70,6 +70,7 @@ $navItems = [
     'mailbox' => __('邮箱'),
     'accounts' => __('用户与账号'),
     'smtp' => __('Smtp'),
+    'routes' => __('收件域导流'),
     'domains' => __('域名与 DNS'),
 ];
 $smtpServices = $smtp_services ?? [];
@@ -79,6 +80,7 @@ $smtpAccountPasswords = is_array($smtp_account_passwords ?? null) ? $smtp_accoun
 $smtpCanViewPasswords = (bool)($smtp_can_view_passwords ?? false);
 $smtpOutboundPicks = is_array($smtp_outbound_picks ?? null) ? $smtp_outbound_picks : [];
 $smtpStalwartByService = is_array($smtp_stalwart_by_service ?? null) ? $smtp_stalwart_by_service : [];
+$outboundRouteRules = is_array($outbound_route_rules ?? null) ? $outbound_route_rules : [];
 $dnsLiveChecks = $dns_live_checks ?? [];
 $detectedOriginIp = trim((string)($detected_origin_ip ?? ''));
 $cloudflareTokenReady = (bool)($cloudflare_token_ready ?? false);
@@ -320,6 +322,74 @@ if ($oauthCfError === 'invalid_scope') {
 }
 .mail-enterprise details > summary::-webkit-details-marker {
     display: none;
+}
+.mail-smtp-service-card {
+    overflow: clip;
+}
+.mail-smtp-service-card > summary.mail-smtp-service-card__summary {
+    display: block;
+    margin: 0;
+    padding: var(--weline-space-3);
+    cursor: pointer;
+    list-style: none;
+    border-bottom: 1px solid transparent;
+}
+.mail-smtp-service-card > summary.mail-smtp-service-card__summary::-webkit-details-marker {
+    display: none;
+}
+.mail-smtp-service-card[open] > summary.mail-smtp-service-card__summary {
+    border-bottom-color: var(--weline-theme-border);
+}
+.mail-smtp-service-card__bar {
+    align-items: flex-start;
+    gap: var(--weline-space-2);
+    flex-wrap: nowrap;
+    width: 100%;
+}
+.mail-smtp-service-card__meta {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--weline-space-2);
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.mail-smtp-service-card__meta > div {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.mail-smtp-service-card__chevron {
+    flex: 0 0 auto;
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-sm);
+    line-height: 1.5rem;
+    transition: transform 0.15s ease;
+}
+.mail-smtp-service-card[open] > summary .mail-smtp-service-card__chevron {
+    transform: rotate(180deg);
+}
+.mail-smtp-service-card__actions {
+    flex: 0 0 auto;
+}
+.mail-smtp-service-card > .w-card__body {
+    padding-block-start: var(--weline-space-3);
+}
+/* Theme .w-card__body/.w-stack 会把 display 设成 flex，盖掉 UA 对 closed details 的隐藏 */
+.mail-smtp-service-card:not([open]) > .w-card__body {
+    display: none;
+}
+/* 本机启用=实心绿、外部填入=实心蓝（说明区分）；软表面在暗色下易糊成灰 */
+.mail-enterprise .mail-smtp-mode-badge[data-tone="success"],
+.mail-enterprise .mail-smtp-stalwart-badge[data-tone="success"] {
+    background: var(--weline-theme-success);
+    color: var(--weline-theme-on-success, var(--weline-theme-surface));
+}
+.mail-enterprise .mail-smtp-mode-badge[data-tone="primary"] {
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary, var(--weline-theme-surface));
+}
+.mail-enterprise .mail-smtp-stalwart-badge[data-tone="warning"] {
+    background: var(--weline-theme-warning);
+    color: var(--weline-theme-on-warning, var(--weline-theme-surface));
 }
 .mail-enterprise__folders {
     display: inline-flex;
@@ -1258,53 +1328,12 @@ if ($oauthCfError === 'invalid_scope') {
         </div>
 
     <?php elseif ($view === 'accounts'): ?>
-        <section class="w-card">
-            <details open>
-                <summary class="w-card__header mail-enterprise__panel-summary"><?= __('开通企业邮箱账号') ?></summary>
-                <div class="w-card__body">
-                    <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-account'}">
-                        <input type="hidden" name="return_view" value="accounts">
-                        <div class="mail-enterprise__form-grid">
-                            <label class="w-field">
-                                <span class="w-field__label"><?= __('邮箱域名') ?></span>
-                                <select class="w-select" name="domain_id" required>
-                                    <?php foreach ($domains as $domain): ?>
-                                        <option value="<?= (int)$domain->getId() ?>">
-                                            <?= $escape($domain->getData(MailDomain::schema_fields_DOMAIN_NAME)) ?> · <?= $escape($domain->getData(MailDomain::schema_fields_ENGINE)) ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </label>
-                            <label class="w-field">
-                                <span class="w-field__label"><?= __('邮箱账号前缀') ?></span>
-                                <input class="w-input" type="text" name="local_part" pattern="[a-z0-9._-]+" required>
-                            </label>
-                            <label class="w-field">
-                                <span class="w-field__label"><?= __('系统用户 ID') ?></span>
-                                <input class="w-input" type="number" min="0" name="customer_id" value="0">
-                            </label>
-                            <label class="w-field">
-                                <span class="w-field__label"><?= __('显示名称') ?></span>
-                                <input class="w-input" type="text" name="display_name">
-                            </label>
-                            <label class="w-field">
-                                <span class="w-field__label"><?= __('容量 MB') ?></span>
-                                <input class="w-input" type="number" min="128" name="quota_mb" value="1024">
-                            </label>
-                            <label class="w-field">
-                                <span class="w-field__label"><?= __('初始密码（真实邮箱至少 12 位）') ?></span>
-                                <input class="w-input" type="password" name="password" minlength="12" autocomplete="new-password">
-                            </label>
-                        </div>
-                        <div class="mail-enterprise__actions" style="--w-mt:var(--weline-space-3);">
-                            <button class="w-button" data-tone="primary" type="submit"><?= __('开通邮箱') ?></button>
-                        </div>
-                    </w:form>
-                </div>
-            </details>
-        </section>
-
-        <section class="w-card">
+        <section class="w-card" data-testid="mail-enterprise-accounts" id="mail-enterprise-accounts">
+            <div class="w-card__header w-cluster" data-justify="between" style="--w-gap:var(--weline-space-2);">
+                <h2 class="w-card__title" style="--w-m:0;"><?= __('企业邮箱账号') ?></h2>
+                <button class="w-button" data-tone="primary" data-size="sm" type="button"
+                        data-testid="mail-account-create-open" data-account-create-open><?= __('开通邮箱') ?></button>
+            </div>
             <div class="w-card__body">
                 <div class="w-table-wrap">
                     <table class="w-table">
@@ -1330,6 +1359,7 @@ if ($oauthCfError === 'invalid_scope') {
                         <?php else: ?>
                             <?php foreach ($accounts as $account):
                                 $acctId = (int)$account->getId();
+                                $email = (string)$account->getData(MailAccount::schema_fields_EMAIL);
                                 $obOn = (int)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_ENABLED) === 1;
                                 $obHost = trim((string)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_HOST));
                                 $obPort = (int)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_PORT);
@@ -1360,33 +1390,85 @@ if ($oauthCfError === 'invalid_scope') {
                                                 </button>
                                             </w:form>
                                         </div>
-                                        <details>
-                                            <summary class="w-text" data-size="sm"><?= __('开通/重置密码') ?></summary>
-                                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/reset-account-password'}">
-                                                <input type="hidden" name="return_view" value="accounts">
-                                                <input type="hidden" name="account_id" value="<?= $acctId ?>">
-                                                <label class="w-field">
-                                                    <span class="w-field__label"><?= __('新密码') ?></span>
-                                                    <input class="w-input" type="password" name="password" minlength="12" required autocomplete="new-password">
-                                                </label>
-                                                <button class="w-button" data-tone="primary" data-size="sm" type="submit"><?= __('确认更新') ?></button>
-                                            </w:form>
-                                        </details>
-                                        <details data-testid="mail-account-outbound-<?= $acctId ?>">
-                                            <summary class="w-text" data-size="sm"><?= __('外投 smarthost') ?></summary>
-                                            <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0; --w-mb:var(--weline-space-2);">
-                                                <?= __('未勾选则走本域 MX:25。优先从 Smtp Tab 已建账户/服务中选择；也可手动填写。') ?>
-                                            </p>
-                                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-account-outbound-relay'}" class="mail-outbound-relay-form" data-testid="mail-outbound-relay-form-<?= $acctId ?>">
-                                                <input type="hidden" name="return_view" value="accounts">
-                                                <input type="hidden" name="account_id" value="<?= $acctId ?>">
-                                                <label class="w-text" data-size="sm" style="display:block; --w-mb:var(--weline-space-2);">
-                                                    <input type="checkbox" name="outbound_relay_enabled" value="1" <?= $obOn ? 'checked' : '' ?> data-outbound-enabled>
-                                                    <?= __('该邮箱走外投中继') ?>
-                                                </label>
-                                                <label class="w-field" style="--w-mb:var(--weline-space-2);">
-                                                    <span class="w-field__label"><?= __('选择 Smtp 账户/服务') ?></span>
-                                                    <select class="w-select" name="outbound_smtp_pick" data-testid="mail-outbound-smtp-pick-<?= $acctId ?>" data-outbound-pick>
+                                        <div class="mail-enterprise__actions" style="--w-mt:var(--weline-space-2);">
+                                            <button class="w-button" data-variant="outline" data-size="sm" type="button"
+                                                    data-testid="mail-account-reset-open-<?= $acctId ?>"
+                                                    data-account-reset-open
+                                                    data-account-id="<?= $acctId ?>"
+                                                    data-account-email="<?= $escape($email) ?>"><?= __('开通/重置密码') ?></button>
+                                            <button class="w-button" data-variant="outline" data-size="sm" type="button"
+                                                    data-testid="mail-account-outbound-open-<?= $acctId ?>"
+                                                    data-account-outbound-open
+                                                    data-account-id="<?= $acctId ?>"
+                                                    data-account-email="<?= $escape($email) ?>"
+                                                    data-ob-on="<?= $obOn ? '1' : '0' ?>"
+                                                    data-ob-host="<?= $escape($obHost) ?>"
+                                                    data-ob-port="<?= $obPort > 0 ? $obPort : 587 ?>"
+                                                    data-ob-user="<?= $escape($obUser) ?>"
+                                                    data-ob-tls="<?= $escape($obTls) ?>"><?= __('外投 smarthost') ?></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+
+            <div class="w-dialog" id="mail-account-reset-dialog" tabindex="-1" aria-hidden="true"
+                 data-w-component="dialog" data-state="closed" hidden
+                 data-testid="mail-account-reset-dialog">
+                <div class="w-dialog__frame" data-size="sm" style="max-block-size:min(90vh, 24rem);">
+                    <div class="w-dialog__surface" style="display:flex; flex-direction:column; max-block-size:inherit; min-block-size:0;">
+                        <form id="mail-account-reset-form" class="w-stack" style="--w-gap:0; flex:1 1 auto; min-block-size:0; display:flex; flex-direction:column;" data-testid="mail-account-reset-form">
+                            <div class="w-dialog__header" style="flex-shrink:0;">
+                                <h2 class="w-dialog__title" style="--w-m:0;"><?= __('开通/重置密码') ?></h2>
+                                <button type="button" class="w-button" aria-label="<?= __('关闭') ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                            </div>
+                            <div class="w-dialog__body w-stack" style="--w-gap:var(--weline-space-3); flex:1 1 auto; min-block-size:0; overflow:auto;">
+                                <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;" data-reset-email></p>
+                                <input type="hidden" name="account_id" value="0" data-reset-field="account_id">
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('新密码') ?></span>
+                                    <input class="w-input" type="password" name="password" minlength="12" required autocomplete="new-password" data-reset-field="password" data-testid="mail-account-reset-password">
+                                </label>
+                                <span class="w-text" data-size="sm" data-tone="muted" data-reset-status style="--w-m:0;"></span>
+                            </div>
+                            <div class="w-dialog__footer" style="flex-shrink:0;">
+                                <button class="w-button" data-w-action="dialog.close" data-tone="neutral" type="button"><?= __('取消') ?></button>
+                                <button class="w-button" data-tone="primary" type="submit" data-testid="mail-account-reset-submit"><?= __('确认更新') ?></button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="w-dialog" id="mail-account-outbound-dialog" tabindex="-1" aria-hidden="true"
+                 data-w-component="dialog" data-state="closed" hidden
+                 data-testid="mail-account-outbound-dialog">
+                <div class="w-dialog__frame" data-size="md" style="max-block-size:min(90vh, 40rem);">
+                    <div class="w-dialog__surface" style="display:flex; flex-direction:column; max-block-size:inherit; min-block-size:0;">
+                        <form id="mail-account-outbound-form" class="w-stack mail-outbound-relay-form" style="--w-gap:0; flex:1 1 auto; min-block-size:0; display:flex; flex-direction:column;" data-testid="mail-account-outbound-form">
+                            <div class="w-dialog__header" style="flex-shrink:0;">
+                                <h2 class="w-dialog__title" style="--w-m:0;"><?= __('外投 smarthost') ?></h2>
+                                <button type="button" class="w-button" aria-label="<?= __('关闭') ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                            </div>
+                            <div class="w-dialog__body w-stack" style="--w-gap:var(--weline-space-3); flex:1 1 auto; min-block-size:0; overflow:auto;">
+                                <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;" data-outbound-email></p>
+                                <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                                    <?= __('未勾选则走本域 MX:25。优先从 Smtp Tab 已建账户/服务中选择；也可手动填写。') ?>
+                                </p>
+                                <input type="hidden" name="account_id" value="0" data-outbound-field="account_id">
+                                <label class="w-text" data-size="sm" style="display:block;">
+                                    <input type="checkbox" name="outbound_relay_enabled" value="1" data-outbound-enabled data-outbound-field="enabled">
+                                    <?= __('该邮箱走外投中继') ?>
+                                </label>
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('选择 Smtp 账户/服务') ?></span>
+                                    <select class="w-select" name="outbound_smtp_pick" data-testid="mail-outbound-smtp-pick" data-outbound-pick data-outbound-field="pick">
+
                                                         <option value=""><?= $smtpOutboundPicks === [] ? __('（暂无可用 Smtp，请先到 Smtp Tab 创建）') : __('手动填写 / 不选用目录') ?></option>
                                                         <?php foreach ($smtpOutboundPicks as $pick):
                                                             if (!is_array($pick)) {
@@ -1405,43 +1487,95 @@ if ($oauthCfError === 'invalid_scope') {
                                                                 data-tls="<?= $escape((string)($pick['tls'] ?? 'starttls')) ?>"
                                                             ><?= $escape((string)($pick['label'] ?? $pkey)) ?></option>
                                                         <?php endforeach; ?>
-                                                    </select>
-                                                </label>
-                                                <div class="mail-enterprise__form-grid" data-outbound-manual>
-                                                    <label class="w-field">
-                                                        <span class="w-field__label"><?= __('主机') ?></span>
-                                                        <input class="w-input" type="text" name="outbound_relay_host" value="<?= $escape($obHost) ?>" placeholder="smtp.example.com" data-outbound-host>
-                                                    </label>
-                                                    <label class="w-field">
-                                                        <span class="w-field__label"><?= __('端口') ?></span>
-                                                        <input class="w-input" type="number" name="outbound_relay_port" value="<?= $obPort > 0 ? $obPort : 587 ?>" min="1" max="65535" data-outbound-port>
-                                                    </label>
-                                                    <label class="w-field">
-                                                        <span class="w-field__label"><?= __('用户名') ?></span>
-                                                        <input class="w-input" type="text" name="outbound_relay_username" value="<?= $escape($obUser) ?>" data-outbound-user>
-                                                    </label>
-                                                    <label class="w-field">
-                                                        <span class="w-field__label"><?= __('密码（选目录后请留空；点保存时从 Smtp 目录自动带入，页面不显示明文）') ?></span>
-                                                        <input class="w-input" type="password" name="outbound_relay_password" value="" autocomplete="new-password" data-outbound-pass placeholder="<?= $escape((string)__('选目录后留空即可')) ?>">
-                                                    </label>
-                                                    <label class="w-field">
-                                                        <span class="w-field__label"><?= __('TLS') ?></span>
-                                                        <select class="w-select" name="outbound_relay_tls" data-outbound-tls>
-                                                            <option value="starttls" <?= $obTls === 'starttls' ? 'selected' : '' ?>>STARTTLS</option>
-                                                            <option value="smtps" <?= $obTls === 'smtps' ? 'selected' : '' ?>>SMTPS</option>
-                                                            <option value="none" <?= $obTls === 'none' ? 'selected' : '' ?>><?= __('无') ?></option>
-                                                        </select>
-                                                    </label>
-                                                </div>
-                                                <button class="w-button" data-tone="primary" data-size="sm" type="submit" style="--w-mt:var(--weline-space-2);"><?= __('保存外投') ?></button>
-                                            </w:form>
-                                        </details>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                        </tbody>
-                    </table>
+                                    </select>
+                                </label>
+                                <div class="mail-enterprise__form-grid" data-outbound-manual>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('主机') ?></span>
+                                        <input class="w-input" type="text" name="outbound_relay_host" placeholder="smtp.example.com" data-outbound-host data-outbound-field="host">
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('端口') ?></span>
+                                        <input class="w-input" type="number" name="outbound_relay_port" value="587" min="1" max="65535" data-outbound-port data-outbound-field="port">
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('用户名') ?></span>
+                                        <input class="w-input" type="text" name="outbound_relay_username" data-outbound-user data-outbound-field="user">
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('密码（选目录后请留空；点保存时从 Smtp 目录自动带入）') ?></span>
+                                        <input class="w-input" type="password" name="outbound_relay_password" value="" autocomplete="new-password" data-outbound-pass data-outbound-field="pass" placeholder="<?= $escape((string)__('选目录后留空即可')) ?>">
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('TLS') ?></span>
+                                        <select class="w-select" name="outbound_relay_tls" data-outbound-tls data-outbound-field="tls">
+                                            <option value="starttls">STARTTLS</option>
+                                            <option value="smtps">SMTPS</option>
+                                            <option value="none"><?= __('无') ?></option>
+                                        </select>
+                                    </label>
+                                </div>
+                                <span class="w-text" data-size="sm" data-tone="muted" data-outbound-status style="--w-m:0;"></span>
+                            </div>
+                            <div class="w-dialog__footer" style="flex-shrink:0;">
+                                <button class="w-button" data-w-action="dialog.close" data-tone="neutral" type="button"><?= __('取消') ?></button>
+                                <button class="w-button" data-tone="primary" type="submit" data-testid="mail-account-outbound-submit"><?= __('保存外投') ?></button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="w-dialog" id="mail-account-create-dialog" tabindex="-1" aria-hidden="true"
+                 data-w-component="dialog" data-state="closed" hidden
+                 data-testid="mail-account-create-dialog">
+                <div class="w-dialog__frame" data-size="md" style="max-block-size:min(90vh, 36rem);">
+                    <div class="w-dialog__surface" style="display:flex; flex-direction:column; max-block-size:inherit; min-block-size:0;">
+                        <form id="mail-account-create-form" class="w-stack" style="--w-gap:0; flex:1 1 auto; min-block-size:0; display:flex; flex-direction:column;" data-testid="mail-account-create-form">
+                            <div class="w-dialog__header" style="flex-shrink:0;">
+                                <h2 class="w-dialog__title" style="--w-m:0;"><?= __('开通企业邮箱账号') ?></h2>
+                                <button type="button" class="w-button" aria-label="<?= __('关闭') ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                            </div>
+                            <div class="w-dialog__body w-stack" style="--w-gap:var(--weline-space-3); flex:1 1 auto; min-block-size:0; overflow:auto;">
+                                <div class="mail-enterprise__form-grid">
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('邮箱域名') ?></span>
+                                        <select class="w-select" name="domain_id" required data-account-field="domain_id" data-testid="mail-account-create-domain">
+                                            <?php foreach ($domains as $domain): ?>
+                                                <option value="<?= (int)$domain->getId() ?>">
+                                                    <?= $escape($domain->getData(MailDomain::schema_fields_DOMAIN_NAME)) ?> · <?= $escape($domain->getData(MailDomain::schema_fields_ENGINE)) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('邮箱账号前缀') ?></span>
+                                        <input class="w-input" type="text" name="local_part" pattern="[a-z0-9._-]+" required data-account-field="local_part" data-testid="mail-account-create-local-part">
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('系统用户 ID') ?></span>
+                                        <input class="w-input" type="number" min="0" name="customer_id" value="0" data-account-field="customer_id">
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('显示名称') ?></span>
+                                        <input class="w-input" type="text" name="display_name" data-account-field="display_name">
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('容量 MB') ?></span>
+                                        <input class="w-input" type="number" min="128" name="quota_mb" value="1024" data-account-field="quota_mb">
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('初始密码（真实邮箱至少 12 位）') ?></span>
+                                        <input class="w-input" type="password" name="password" minlength="12" autocomplete="new-password" data-account-field="password" data-testid="mail-account-create-password">
+                                    </label>
+                                </div>
+                                <span class="w-text" data-size="sm" data-tone="muted" data-account-create-status style="--w-m:0;"></span>
+                            </div>
+                            <div class="w-dialog__footer" style="flex-shrink:0;">
+                                <button class="w-button" data-w-action="dialog.close" data-tone="neutral" type="button"><?= __('取消') ?></button>
+                                <button class="w-button" data-tone="primary" type="submit" data-testid="mail-account-create-submit"><?= __('开通邮箱') ?></button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
             <script>
@@ -1478,6 +1612,233 @@ if ($oauthCfError === 'invalid_scope') {
                         }
                     });
                 });
+
+                var root = document.getElementById('mail-enterprise-accounts');
+                var form = document.getElementById('mail-account-create-form');
+                var dialog = document.getElementById('mail-account-create-dialog');
+                var resetFormEl = document.getElementById('mail-account-reset-form');
+                var resetDialog = document.getElementById('mail-account-reset-dialog');
+                var outboundForm = document.getElementById('mail-account-outbound-form');
+                var outboundDialog = document.getElementById('mail-account-outbound-dialog');
+                if (!root) return;
+                var statusEl = form ? form.querySelector('[data-account-create-status]') : null;
+                var unavailableMsg = <?= json_encode((string)__('Mail API 不可用'), JSON_UNESCAPED_UNICODE) ?>;
+
+                function toast(kind, message) {
+                    var ui = window.Weline && window.Weline.UI;
+                    var api = ui && ui.toast;
+                    var text = String(message || '').trim();
+                    if (!text) return;
+                    if (api && typeof api[kind] === 'function') { api[kind](text); return; }
+                    if (api && typeof api.show === 'function') {
+                        api.show(text, { tone: kind === 'success' ? 'success' : 'danger' });
+                    }
+                }
+                function setStatus(tone, text) {
+                    if (!statusEl) return;
+                    statusEl.setAttribute('data-tone', tone || 'muted');
+                    statusEl.textContent = text || '';
+                }
+                function openDialog() {
+                    var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+                    if (ui && typeof ui.open === 'function') {
+                        ui.open(dialog);
+                        return;
+                    }
+                    dialog.hidden = false;
+                    dialog.setAttribute('data-state', 'open');
+                    dialog.setAttribute('aria-hidden', 'false');
+                }
+                function closeDialog() {
+                    var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+                    if (ui && typeof ui.close === 'function') {
+                        ui.close(dialog);
+                        return;
+                    }
+                    dialog.hidden = true;
+                    dialog.setAttribute('data-state', 'closed');
+                    dialog.setAttribute('aria-hidden', 'true');
+                }
+                function mailApi() {
+                    if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                        return Promise.reject(new Error(unavailableMsg));
+                    }
+                    if (typeof window.Weline.load === 'function') {
+                        return window.Weline.load('api').then(function () {
+                            return window.Weline.Api.resource('mail');
+                        });
+                    }
+                    return Promise.resolve(window.Weline.Api.resource('mail'));
+                }
+                function field(name) {
+                    return form ? form.querySelector('[data-account-field="' + name + '"]') : null;
+                }
+                function resetForm() {
+                    var lp = field('local_part'); if (lp) lp.value = '';
+                    var cid = field('customer_id'); if (cid) cid.value = '0';
+                    var dn = field('display_name'); if (dn) dn.value = '';
+                    var qm = field('quota_mb'); if (qm) qm.value = '1024';
+                    var pw = field('password'); if (pw) pw.value = '';
+                    setStatus('muted', '');
+                }
+                if (form && dialog) {
+                var openBtn = root.querySelector('[data-account-create-open]');
+                if (openBtn) {
+                    openBtn.addEventListener('click', function () {
+                        resetForm();
+                        openDialog();
+                    });
+                }
+                }
+                if (form && dialog) {
+                form.addEventListener('submit', function (ev) {
+                    ev.preventDefault();
+                    var payload = {
+                        domain_id: parseInt((field('domain_id') || {}).value || '0', 10) || 0,
+                        local_part: String((field('local_part') || {}).value || '').trim(),
+                        customer_id: parseInt((field('customer_id') || {}).value || '0', 10) || 0,
+                        display_name: String((field('display_name') || {}).value || '').trim(),
+                        quota_mb: parseInt((field('quota_mb') || {}).value || '1024', 10) || 1024,
+                        password: String((field('password') || {}).value || '')
+                    };
+                    setStatus('muted', <?= json_encode((string)__('开通中…'), JSON_UNESCAPED_UNICODE) ?>);
+                    mailApi().then(function (api) {
+                        return api.createMailboxAccount(payload);
+                    }).then(function (res) {
+                        var ok = !!(res && res.success);
+                        var msg = (res && res.message) ? String(res.message) : (ok ? 'ok' : 'fail');
+                        setStatus(ok ? 'success' : 'danger', msg);
+                        toast(ok ? 'success' : 'error', msg);
+                        if (ok) {
+                            closeDialog();
+                            window.location.reload();
+                        }
+                    }).catch(function (err) {
+                        var msg = (err && err.message) ? String(err.message) : unavailableMsg;
+                        setStatus('danger', msg);
+                        toast('error', msg);
+                    });
+                });
+                }
+
+                if (resetFormEl && resetDialog) {
+                    var resetStatus = resetFormEl.querySelector('[data-reset-status]');
+                    function setResetStatus(tone, text) {
+                        if (!resetStatus) return;
+                        resetStatus.setAttribute('data-tone', tone || 'muted');
+                        resetStatus.textContent = text || '';
+                    }
+                    function openResetDialog() {
+                        var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+                        if (ui && typeof ui.open === 'function') { ui.open(resetDialog); return; }
+                        resetDialog.hidden = false; resetDialog.setAttribute('data-state', 'open'); resetDialog.setAttribute('aria-hidden', 'false');
+                    }
+                    function closeResetDialog() {
+                        var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+                        if (ui && typeof ui.close === 'function') { ui.close(resetDialog); return; }
+                        resetDialog.hidden = true; resetDialog.setAttribute('data-state', 'closed'); resetDialog.setAttribute('aria-hidden', 'true');
+                    }
+                    root.querySelectorAll('[data-account-reset-open]').forEach(function (btn) {
+                        btn.addEventListener('click', function () {
+                            var idField = resetFormEl.querySelector('[data-reset-field="account_id"]');
+                            var pw = resetFormEl.querySelector('[data-reset-field="password"]');
+                            var emailEl = resetFormEl.querySelector('[data-reset-email]');
+                            if (idField) idField.value = btn.getAttribute('data-account-id') || '0';
+                            if (pw) pw.value = '';
+                            if (emailEl) emailEl.textContent = btn.getAttribute('data-account-email') || '';
+                            setResetStatus('muted', '');
+                            openResetDialog();
+                        });
+                    });
+                    resetFormEl.addEventListener('submit', function (ev) {
+                        ev.preventDefault();
+                        var payload = {
+                            account_id: parseInt((resetFormEl.querySelector('[data-reset-field="account_id"]') || {}).value || '0', 10) || 0,
+                            password: String((resetFormEl.querySelector('[data-reset-field="password"]') || {}).value || '')
+                        };
+                        setResetStatus('muted', <?= json_encode((string)__('更新中…'), JSON_UNESCAPED_UNICODE) ?>);
+                        mailApi().then(function (api) { return api.resetMailboxPassword(payload); })
+                            .then(function (res) {
+                                var ok = !!(res && res.success);
+                                var msg = (res && res.message) ? String(res.message) : (ok ? 'ok' : 'fail');
+                                setResetStatus(ok ? 'success' : 'danger', msg);
+                                toast(ok ? 'success' : 'error', msg);
+                                if (ok) { closeResetDialog(); window.location.reload(); }
+                            }).catch(function (err) {
+                                var msg = (err && err.message) ? String(err.message) : unavailableMsg;
+                                setResetStatus('danger', msg); toast('error', msg);
+                            });
+                    });
+                }
+
+                if (outboundForm && outboundDialog) {
+                    var outboundStatus = outboundForm.querySelector('[data-outbound-status]');
+                    function setOutboundStatus(tone, text) {
+                        if (!outboundStatus) return;
+                        outboundStatus.setAttribute('data-tone', tone || 'muted');
+                        outboundStatus.textContent = text || '';
+                    }
+                    function openOutboundDialog() {
+                        var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+                        if (ui && typeof ui.open === 'function') { ui.open(outboundDialog); return; }
+                        outboundDialog.hidden = false; outboundDialog.setAttribute('data-state', 'open'); outboundDialog.setAttribute('aria-hidden', 'false');
+                    }
+                    function closeOutboundDialog() {
+                        var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+                        if (ui && typeof ui.close === 'function') { ui.close(outboundDialog); return; }
+                        outboundDialog.hidden = true; outboundDialog.setAttribute('data-state', 'closed'); outboundDialog.setAttribute('aria-hidden', 'true');
+                    }
+                    root.querySelectorAll('[data-account-outbound-open]').forEach(function (btn) {
+                        btn.addEventListener('click', function () {
+                            var idField = outboundForm.querySelector('[data-outbound-field="account_id"]');
+                            var enabled = outboundForm.querySelector('[data-outbound-enabled]');
+                            var host = outboundForm.querySelector('[data-outbound-host]');
+                            var port = outboundForm.querySelector('[data-outbound-port]');
+                            var user = outboundForm.querySelector('[data-outbound-user]');
+                            var tls = outboundForm.querySelector('[data-outbound-tls]');
+                            var pass = outboundForm.querySelector('[data-outbound-pass]');
+                            var pick = outboundForm.querySelector('[data-outbound-pick]');
+                            var emailEl = outboundForm.querySelector('[data-outbound-email]');
+                            if (idField) idField.value = btn.getAttribute('data-account-id') || '0';
+                            if (enabled) enabled.checked = btn.getAttribute('data-ob-on') === '1';
+                            if (host) host.value = btn.getAttribute('data-ob-host') || '';
+                            if (port) port.value = btn.getAttribute('data-ob-port') || '587';
+                            if (user) user.value = btn.getAttribute('data-ob-user') || '';
+                            if (tls) tls.value = btn.getAttribute('data-ob-tls') || 'starttls';
+                            if (pass) { pass.value = ''; pass.placeholder = <?= json_encode((string)__('选目录后留空即可'), JSON_UNESCAPED_UNICODE) ?>; }
+                            if (pick) pick.value = '';
+                            if (emailEl) emailEl.textContent = btn.getAttribute('data-account-email') || '';
+                            setOutboundStatus('muted', '');
+                            openOutboundDialog();
+                        });
+                    });
+                    outboundForm.addEventListener('submit', function (ev) {
+                        ev.preventDefault();
+                        var enabled = outboundForm.querySelector('[data-outbound-enabled]');
+                        var payload = {
+                            account_id: parseInt((outboundForm.querySelector('[data-outbound-field="account_id"]') || {}).value || '0', 10) || 0,
+                            outbound_relay_enabled: (enabled && enabled.checked) ? 1 : 0,
+                            outbound_smtp_pick: String((outboundForm.querySelector('[data-outbound-pick]') || {}).value || ''),
+                            outbound_relay_host: String((outboundForm.querySelector('[data-outbound-host]') || {}).value || '').trim(),
+                            outbound_relay_port: parseInt((outboundForm.querySelector('[data-outbound-port]') || {}).value || '587', 10) || 587,
+                            outbound_relay_username: String((outboundForm.querySelector('[data-outbound-user]') || {}).value || '').trim(),
+                            outbound_relay_password: String((outboundForm.querySelector('[data-outbound-pass]') || {}).value || ''),
+                            outbound_relay_tls: String((outboundForm.querySelector('[data-outbound-tls]') || {}).value || 'starttls')
+                        };
+                        setOutboundStatus('muted', <?= json_encode((string)__('保存中…'), JSON_UNESCAPED_UNICODE) ?>);
+                        mailApi().then(function (api) { return api.setMailboxOutboundRelay(payload); })
+                            .then(function (res) {
+                                var ok = !!(res && res.success);
+                                var msg = (res && res.message) ? String(res.message) : (ok ? 'ok' : 'fail');
+                                setOutboundStatus(ok ? 'success' : 'danger', msg);
+                                toast(ok ? 'success' : 'error', msg);
+                                if (ok) { closeOutboundDialog(); window.location.reload(); }
+                            }).catch(function (err) {
+                                var msg = (err && err.message) ? String(err.message) : unavailableMsg;
+                                setOutboundStatus('danger', msg); toast('error', msg);
+                            });
+                    });
+                }
             })();
             </script>
         </section>
@@ -1488,12 +1849,20 @@ if ($oauthCfError === 'invalid_scope') {
                 <div>
                     <h2 class="w-card__title" style="--w-m:0;"><?= __('Smtp 服务') ?></h2>
                     <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
-                        <?= __('管理本站发信通道。本机启用会自动建默认账号 smtp@根域；外部填入是登记 QQ/企业邮等第三方 SMTP 凭据供本站代发，不是收件人名单。') ?>
+                        <?= __('管理本站发信通道。绿标「本机启用」：DNS→入池→出证并建 smtp@；蓝标「外部填入」：只登记 QQ/企业邮等第三方凭据供代发，不是收件人名单。') ?>
                     </p>
                 </div>
-                <button class="w-button" data-tone="primary" data-size="sm" type="button" id="mail-smtp-new-toggle" data-testid="mail-smtp-new-toggle" aria-expanded="false" aria-controls="mail-smtp-create-panel">
-                    <?= __('新建') ?>
-                </button>
+                <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                    <w:form method="post" action="@backend-url{'weline_mail/backend/index/import-smtp-services-from-mail-domains'}" data-testid="mail-smtp-sync-from-mail-domains">
+                        <input type="hidden" name="return_view" value="smtp">
+                        <button class="w-button" data-tone="neutral" data-size="sm" type="submit" title="<?= $escape(__('从「域名与 DNS」已登记的本机邮局主机同步到本列表（如 mail.aiweline.com）')) ?>">
+                            <?= __('从邮件服务同步') ?>
+                        </button>
+                    </w:form>
+                    <button class="w-button" data-tone="primary" data-size="sm" type="button" id="mail-smtp-new-toggle" data-testid="mail-smtp-new-toggle" aria-expanded="false" aria-controls="mail-smtp-create-panel">
+                        <?= __('新建') ?>
+                    </button>
+                </div>
             </div>
             <div class="w-card__body w-stack" style="--w-gap:var(--weline-space-3);">
                 <label class="w-field" data-testid="mail-smtp-search-field">
@@ -1597,7 +1966,7 @@ if ($oauthCfError === 'invalid_scope') {
                 <?php if ($smtpServices === []): ?>
                     <div class="w-empty" style="--w-min-block-size:8rem;" data-testid="mail-smtp-empty">
                         <w:icon name="mail" size="sm"></w:icon>
-                        <p class="w-text" data-tone="muted" style="--w-m:0;"><?= __('暂无 Smtp 服务。点右上角「新建」本机启用或外部填入。') ?></p>
+                        <p class="w-text" data-tone="muted" style="--w-m:0;"><?= __('暂无 Smtp 服务。若本机邮局已在「域名与 DNS」登记，点右上角「从邮件服务同步」；或「新建」本机启用 / 外部填入。') ?></p>
                     </div>
                 <?php else: ?>
                     <div class="w-stack" style="--w-gap:var(--weline-space-4);" id="mail-smtp-service-cards" data-testid="mail-smtp-service-cards">
@@ -1618,42 +1987,74 @@ if ($oauthCfError === 'invalid_scope') {
                                 $status,
                             ])));
                             ?>
-                            <article class="w-card" data-testid="mail-smtp-service-<?= $sid ?>" data-smtp-search="<?= $escape($searchBlob) ?>">
-                                <div class="w-card__header w-cluster" data-justify="between" style="--w-gap:var(--weline-space-2);">
-                                    <div>
-                                        <h3 class="w-card__title" style="--w-m:0;"><?= $escape($svc->getData(SmtpService::schema_fields_NAME)) ?></h3>
-                                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
-                                            <span class="w-badge" data-tone="<?= $mode === SmtpService::MODE_SELF ? 'success' : 'primary' ?>"
-                                                  data-testid="mail-smtp-mode-badge-<?= $sid ?>">
-                                                <?= $mode === SmtpService::MODE_SELF ? __('本机启用') : __('外部填入') ?>
-                                            </span>
-                                            <span class="w-badge" data-tone="neutral"><?= $escape($status) ?></span>
-                                            <?php if ((string)$svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME) !== ''): ?>
-                                                · <code data-mail-smtp-host-display="<?= $sid ?>"><?= $escape($svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME)) ?></code>
-                                                :<span data-mail-smtp-port-display="<?= $sid ?>"><?= (int)$svc->getData(SmtpService::schema_fields_PORT) ?></span>
-                                            <?php endif; ?>
-                                        </p>
+                            <?php
+                            $svcTitle = (string)$svc->getData(SmtpService::schema_fields_NAME);
+                            $svcSummaryLabel = (string)__('展开或收起 Smtp 服务配置：%{1}', [$svcTitle !== '' ? $svcTitle : (string)$sid]);
+                            ?>
+                            <details class="w-card mail-smtp-service-card"
+                                     data-testid="mail-smtp-service-<?= $sid ?>"
+                                     data-smtp-search="<?= $escape($searchBlob) ?>">
+                                <summary class="mail-smtp-service-card__summary"
+                                         data-testid="mail-smtp-service-toggle-<?= $sid ?>"
+                                         aria-label="<?= $escape($svcSummaryLabel) ?>">
+                                    <div class="mail-smtp-service-card__bar w-cluster" data-justify="between">
+                                        <div class="mail-smtp-service-card__meta">
+                                            <span class="mail-smtp-service-card__chevron" aria-hidden="true">▾</span>
+                                            <div style="min-width:0;">
+                                                <h3 class="w-card__title" style="--w-m:0;"><?= $escape($svcTitle) ?></h3>
+                                                <p class="w-cluster" data-size="sm" style="--w-m:0; --w-gap:var(--weline-space-2); --w-align:center;">
+                                                    <span class="w-badge mail-smtp-mode-badge"
+                                                          data-tone="<?= $mode === SmtpService::MODE_SELF ? 'success' : 'primary' ?>"
+                                                          data-testid="mail-smtp-mode-badge-<?= $sid ?>">
+                                                        <?= $mode === SmtpService::MODE_SELF ? __('本机启用') : __('外部填入') ?>
+                                                    </span>
+                                                    <span class="w-badge"
+                                                          data-tone="<?= $status === 'active' ? 'info' : 'muted' ?>"
+                                                          data-testid="mail-smtp-status-badge-<?= $sid ?>">
+                                                        <?= $escape($status) ?>
+                                                    </span>
+                                                    <?php if ((string)$svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME) !== ''): ?>
+                                                        <span class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                                                            <code data-mail-smtp-host-display="<?= $sid ?>"><?= $escape($svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME)) ?></code>
+                                                            :<span data-mail-smtp-port-display="<?= $sid ?>"><?= (int)$svc->getData(SmtpService::schema_fields_PORT) ?></span>
+                                                        </span>
+                                                    <?php endif; ?>
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div class="mail-smtp-service-card__actions w-cluster" style="--w-gap:var(--weline-space-2);"
+                                             data-smtp-card-actions>
+                                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-smtp-service-status'}">
+                                                <input type="hidden" name="return_view" value="smtp">
+                                                <input type="hidden" name="smtp_service_id" value="<?= $sid ?>">
+                                                <input type="hidden" name="status" value="<?= $status === 'active' ? 'disabled' : 'active' ?>">
+                                                <button class="w-button" data-variant="outline" data-size="sm" type="submit">
+                                                    <?= $status === 'active' ? __('停用') : __('启用') ?>
+                                                </button>
+                                            </w:form>
+                                            <?php
+                                            $svcAccountCount = is_array($svcAccounts) ? count($svcAccounts) : 0;
+                                            $deleteServiceConfirm = $mode === SmtpService::MODE_SELF
+                                                ? (string)__(
+                                                    '确定删除该 Smtp 服务及其下属全部 %{1} 个账户？将同时从本机 Stalwart 移除这些账户，不可恢复。外投若仍引用需改绑。',
+                                                    [(string)$svcAccountCount]
+                                                )
+                                                : (string)__('确定删除该外部 Smtp 服务？外投若仍引用需改绑。');
+                                            ?>
+                                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/delete-smtp-service'}"
+                                                   onsubmit="return confirm(<?= json_encode($deleteServiceConfirm, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>);"
+                                                   data-testid="mail-smtp-delete-service-form-<?= $sid ?>">
+                                                <input type="hidden" name="return_view" value="smtp">
+                                                <input type="hidden" name="smtp_service_id" value="<?= $sid ?>">
+                                                <button class="w-button" data-variant="outline" data-tone="danger" data-size="sm" type="submit"
+                                                        data-testid="mail-smtp-delete-<?= $sid ?>"
+                                                        title="<?= $escape($deleteServiceConfirm) ?>">
+                                                    <?= __('删除') ?>
+                                                </button>
+                                            </w:form>
+                                        </div>
                                     </div>
-                                    <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
-                                        <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-smtp-service-status'}">
-                                            <input type="hidden" name="return_view" value="smtp">
-                                            <input type="hidden" name="smtp_service_id" value="<?= $sid ?>">
-                                            <input type="hidden" name="status" value="<?= $status === 'active' ? 'disabled' : 'active' ?>">
-                                            <button class="w-button" data-variant="outline" data-size="sm" type="submit">
-                                                <?= $status === 'active' ? __('停用') : __('启用') ?>
-                                            </button>
-                                        </w:form>
-                                        <w:form method="post" action="@backend-url{'weline_mail/backend/index/delete-smtp-service'}"
-                                               onsubmit="return confirm(<?= json_encode((string)__('确定删除该 Smtp 服务？外投若仍引用需改绑。'), JSON_UNESCAPED_UNICODE) ?>);">
-                                            <input type="hidden" name="return_view" value="smtp">
-                                            <input type="hidden" name="smtp_service_id" value="<?= $sid ?>">
-                                            <button class="w-button" data-variant="outline" data-tone="danger" data-size="sm" type="submit"
-                                                    data-testid="mail-smtp-delete-<?= $sid ?>">
-                                                <?= __('删除') ?>
-                                            </button>
-                                        </w:form>
-                                    </div>
-                                </div>
+                                </summary>
                                 <div class="w-card__body w-stack" style="--w-gap:var(--weline-space-3);">
                                     <?php if ($mode === SmtpService::MODE_EXTERNAL): ?>
                                         <p class="w-text" data-size="sm" style="--w-m:0;">
@@ -1670,60 +2071,80 @@ if ($oauthCfError === 'invalid_scope') {
                                             <?= __('用户名') ?>：<code data-mail-smtp-user-display="<?= $sid ?>"><?= $escape((string)$svc->getData(SmtpService::schema_fields_USERNAME)) ?></code>
                                             · TLS：<span data-mail-smtp-tls-display="<?= $sid ?>"><?= $escape((string)$svc->getData(SmtpService::schema_fields_TLS)) ?></span>
                                         </p>
-                                        <details class="w-disclosure" data-testid="mail-smtp-edit-external-<?= $sid ?>">
-                                            <summary class="w-text" data-size="sm"><?= __('修改凭据') ?></summary>
-                                            <form method="post" action="@backend-url{'weline_mail/backend/index/update-smtp-service-external'}"
-                                                  class="mail-smtp-external-edit-form"
-                                                  data-testid="mail-smtp-external-edit-form-<?= $sid ?>"
-                                                  data-smtp-service-id="<?= $sid ?>"
-                                                  style="--w-mt:var(--weline-space-3);">
-                                                <input type="hidden" name="return_view" value="smtp">
-                                                <input type="hidden" name="smtp_service_id" value="<?= $sid ?>">
-                                                <input type="hidden" name="isAjax" value="1">
-                                                <label class="w-field">
-                                                    <span class="w-field__label"><?= __('显示名称') ?></span>
-                                                    <input class="w-input" type="text" name="name"
-                                                           value="<?= $escape((string)$svc->getData(SmtpService::schema_fields_NAME)) ?>">
-                                                </label>
-                                                <label class="w-field">
-                                                    <span class="w-field__label"><?= __('SMTP 主机') ?></span>
-                                                    <input class="w-input" type="text" name="smtp_hostname" required
-                                                           value="<?= $escape((string)$svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME)) ?>">
-                                                </label>
-                                                <label class="w-field">
-                                                    <span class="w-field__label"><?= __('端口') ?></span>
-                                                    <input class="w-input" type="number" name="port" min="1" max="65535"
-                                                           value="<?= (int)$svc->getData(SmtpService::schema_fields_PORT) ?: 587 ?>">
-                                                </label>
-                                                <label class="w-field">
-                                                    <span class="w-field__label"><?= __('用户名') ?></span>
-                                                    <input class="w-input" type="text" name="username"
-                                                           value="<?= $escape((string)$svc->getData(SmtpService::schema_fields_USERNAME)) ?>">
-                                                </label>
-                                                <label class="w-field">
-                                                    <span class="w-field__label"><?= __('密码（留空不改）') ?></span>
-                                                    <input class="w-input" type="password" name="password" autocomplete="new-password"
-                                                           placeholder="<?= $escape((string)__('留空保留原密码')) ?>">
-                                                </label>
-                                                <label class="w-field">
-                                                    <span class="w-field__label"><?= __('TLS') ?></span>
-                                                    <?php $curTls = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_TLS))) ?: 'starttls'; ?>
-                                                    <select class="w-select" name="tls_mode">
-                                                        <option value="starttls" <?= $curTls === 'starttls' ? 'selected' : '' ?>>STARTTLS</option>
-                                                        <option value="smtps" <?= $curTls === 'smtps' ? 'selected' : '' ?>>SMTPS</option>
-                                                        <option value="none" <?= $curTls === 'none' ? 'selected' : '' ?>><?= __('无') ?></option>
-                                                    </select>
-                                                </label>
-                                                <div class="w-cluster" style="--w-gap:var(--weline-space-2); --w-align:center;">
-                                                    <button class="w-button" data-tone="primary" data-size="sm" type="submit"
-                                                            data-testid="mail-smtp-save-external-<?= $sid ?>">
-                                                        <?= __('保存修改') ?>
-                                                    </button>
-                                                    <span class="w-text" data-size="sm" data-tone="muted"
-                                                          data-mail-smtp-edit-status="<?= $sid ?>" style="--w-m:0;" aria-live="polite"></span>
+                                        <?php $smtpEditPanelId = 'mail-smtp-edit-external-body-' . $sid; ?>
+                                        <div class="w-disclosure" data-w-component="disclosure"
+                                             data-testid="mail-smtp-edit-external-<?= $sid ?>">
+                                            <div id="mail-smtp-edit-external-heading-<?= $sid ?>">
+                                                <button class="w-disclosure__trigger" type="button"
+                                                        aria-expanded="false"
+                                                        aria-controls="<?= $escape($smtpEditPanelId) ?>"
+                                                        data-w-target="#<?= $escape($smtpEditPanelId) ?>"
+                                                        data-w-action="disclosure.toggle"
+                                                        data-w-disclosure-trigger>
+                                                    <span><?= __('修改凭据') ?></span>
+                                                    <w:icon name="chevron-down" size="sm"></w:icon>
+                                                </button>
+                                            </div>
+                                            <div id="<?= $escape($smtpEditPanelId) ?>"
+                                                 class="w-disclosure__panel"
+                                                 aria-labelledby="mail-smtp-edit-external-heading-<?= $sid ?>"
+                                                 data-w-disclosure-panel
+                                                 hidden>
+                                                <div class="w-disclosure__body">
+                                                    <form method="post" action="@backend-url{'weline_mail/backend/index/update-smtp-service-external'}"
+                                                          class="mail-smtp-external-edit-form w-stack"
+                                                          data-testid="mail-smtp-external-edit-form-<?= $sid ?>"
+                                                          data-smtp-service-id="<?= $sid ?>"
+                                                          style="--w-gap:var(--weline-space-3);">
+                                                        <input type="hidden" name="return_view" value="smtp">
+                                                        <input type="hidden" name="smtp_service_id" value="<?= $sid ?>">
+                                                        <input type="hidden" name="isAjax" value="1">
+                                                        <label class="w-field">
+                                                            <span class="w-field__label"><?= __('显示名称') ?></span>
+                                                            <input class="w-input" type="text" name="name"
+                                                                   value="<?= $escape((string)$svc->getData(SmtpService::schema_fields_NAME)) ?>">
+                                                        </label>
+                                                        <label class="w-field">
+                                                            <span class="w-field__label"><?= __('SMTP 主机') ?></span>
+                                                            <input class="w-input" type="text" name="smtp_hostname" required
+                                                                   value="<?= $escape((string)$svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME)) ?>">
+                                                        </label>
+                                                        <label class="w-field">
+                                                            <span class="w-field__label"><?= __('端口') ?></span>
+                                                            <input class="w-input" type="number" name="port" min="1" max="65535"
+                                                                   value="<?= (int)$svc->getData(SmtpService::schema_fields_PORT) ?: 587 ?>">
+                                                        </label>
+                                                        <label class="w-field">
+                                                            <span class="w-field__label"><?= __('用户名') ?></span>
+                                                            <input class="w-input" type="text" name="username"
+                                                                   value="<?= $escape((string)$svc->getData(SmtpService::schema_fields_USERNAME)) ?>">
+                                                        </label>
+                                                        <label class="w-field">
+                                                            <span class="w-field__label"><?= __('密码（留空不改）') ?></span>
+                                                            <input class="w-input" type="password" name="password" autocomplete="new-password"
+                                                                   placeholder="<?= $escape((string)__('留空保留原密码')) ?>">
+                                                        </label>
+                                                        <label class="w-field">
+                                                            <span class="w-field__label"><?= __('TLS') ?></span>
+                                                            <?php $curTls = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_TLS))) ?: 'starttls'; ?>
+                                                            <select class="w-select" name="tls_mode">
+                                                                <option value="starttls" <?= $curTls === 'starttls' ? 'selected' : '' ?>>STARTTLS</option>
+                                                                <option value="smtps" <?= $curTls === 'smtps' ? 'selected' : '' ?>>SMTPS</option>
+                                                                <option value="none" <?= $curTls === 'none' ? 'selected' : '' ?>><?= __('无') ?></option>
+                                                            </select>
+                                                        </label>
+                                                        <div class="w-cluster" style="--w-gap:var(--weline-space-2); --w-align:center;">
+                                                            <button class="w-button" data-tone="primary" data-size="sm" type="submit"
+                                                                    data-testid="mail-smtp-save-external-<?= $sid ?>">
+                                                                <?= __('保存修改') ?>
+                                                            </button>
+                                                            <span class="w-text" data-size="sm" data-tone="muted"
+                                                                  data-mail-smtp-edit-status="<?= $sid ?>" style="--w-m:0;" aria-live="polite"></span>
+                                                        </div>
+                                                    </form>
                                                 </div>
-                                            </form>
-                                        </details>
+                                            </div>
+                                        </div>
                                     <?php else: ?>
                                         <?php
                                         $stalwartMeta = is_array($smtpStalwartByService[$sid] ?? null)
@@ -1806,10 +2227,10 @@ if ($oauthCfError === 'invalid_scope') {
                                                             <td><?= $escape($sa->getData(SmtpAccount::schema_fields_STATUS)) ?></td>
                                                             <td data-testid="mail-smtp-stalwart-status-<?= $aid ?>">
                                                                 <?php if ($inStalwart): ?>
-                                                                    <span class="w-badge" data-tone="success"><?= __('已写入') ?></span>
+                                                                    <span class="w-badge mail-smtp-stalwart-badge" data-tone="success"><?= __('已写入') ?></span>
                                                                     <span class="w-text" data-size="sm" data-tone="muted"><?= $escape($stalwartTarget) ?></span>
                                                                 <?php elseif ($stalwartProbeOk): ?>
-                                                                    <span class="w-badge" data-tone="warning"><?= __('未写入') ?></span>
+                                                                    <span class="w-badge mail-smtp-stalwart-badge" data-tone="warning"><?= __('未写入') ?></span>
                                                                 <?php else: ?>
                                                                     <span class="w-text" data-tone="muted" data-size="sm"><?= __('未探测') ?></span>
                                                                 <?php endif; ?>
@@ -1831,31 +2252,84 @@ if ($oauthCfError === 'invalid_scope') {
                                                                 <?php endif; ?>
                                                             </td>
                                                             <?php if ($smtpCanViewPasswords): ?>
+                                                                <?php
+                                                                $acctRole = (string)$sa->getData(SmtpAccount::schema_fields_ROLE);
+                                                                $acctStatus = (string)$sa->getData(SmtpAccount::schema_fields_STATUS);
+                                                                $acctDisplay = (string)$sa->getData(SmtpAccount::schema_fields_DISPLAY_NAME);
+                                                                ?>
                                                                 <td>
-                                                                    <div class="w-cluster" style="--w-gap:var(--weline-space-1); --w-align:center;">
-                                                                        <?php if (!$inStalwart && $hasSealed): ?>
-                                                                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/sync-smtp-service-account-to-stalwart'}">
+                                                                    <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                                                                        <div class="w-cluster" style="--w-gap:var(--weline-space-1); --w-align:center;">
+                                                                            <?php if (!$inStalwart && $hasSealed): ?>
+                                                                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/sync-smtp-service-account-to-stalwart'}">
+                                                                                    <input type="hidden" name="return_view" value="smtp">
+                                                                                    <input type="hidden" name="smtp_account_id" value="<?= $aid ?>">
+                                                                                    <button class="w-button" data-tone="primary" data-variant="outline" data-size="sm" type="submit"
+                                                                                            data-testid="mail-smtp-sync-stalwart-<?= $aid ?>"
+                                                                                            title="<?= $escape((string)__('把目录密封密码写入 %{1}，不改密码', [$stalwartTarget])) ?>">
+                                                                                        <?= __('写入本机 Stalwart') ?>
+                                                                                    </button>
+                                                                                </w:form>
+                                                                            <?php elseif (!$inStalwart && !$hasSealed): ?>
+                                                                                <span class="w-text" data-tone="muted" data-size="sm"
+                                                                                      data-testid="mail-smtp-sync-need-password-<?= $aid ?>">
+                                                                                    <?= __('需先重置密码再写入') ?>
+                                                                                </span>
+                                                                            <?php endif; ?>
+                                                                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/reset-smtp-service-account-password'}">
                                                                                 <input type="hidden" name="return_view" value="smtp">
                                                                                 <input type="hidden" name="smtp_account_id" value="<?= $aid ?>">
-                                                                                <button class="w-button" data-tone="primary" data-variant="outline" data-size="sm" type="submit"
-                                                                                        data-testid="mail-smtp-sync-stalwart-<?= $aid ?>"
-                                                                                        title="<?= $escape((string)__('把目录密封密码写入 %{1}，不改密码', [$stalwartTarget])) ?>">
-                                                                                    <?= __('写入本机 Stalwart') ?>
+                                                                                <button class="w-button" data-variant="outline" data-size="sm" type="submit" data-testid="mail-smtp-reset-password-<?= $aid ?>">
+                                                                                    <?= __('重置密码') ?>
                                                                                 </button>
                                                                             </w:form>
-                                                                        <?php elseif (!$inStalwart && !$hasSealed): ?>
-                                                                            <span class="w-text" data-tone="muted" data-size="sm"
-                                                                                  data-testid="mail-smtp-sync-need-password-<?= $aid ?>">
-                                                                                <?= __('需先重置密码再写入') ?>
-                                                                            </span>
-                                                                        <?php endif; ?>
-                                                                        <w:form method="post" action="@backend-url{'weline_mail/backend/index/reset-smtp-service-account-password'}">
-                                                                            <input type="hidden" name="return_view" value="smtp">
-                                                                            <input type="hidden" name="smtp_account_id" value="<?= $aid ?>">
-                                                                            <button class="w-button" data-variant="outline" data-size="sm" type="submit" data-testid="mail-smtp-reset-password-<?= $aid ?>">
-                                                                                <?= __('重置密码') ?>
-                                                                            </button>
-                                                                        </w:form>
+                                                                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/delete-smtp-service-account'}"
+                                                                                    onsubmit="return confirm(<?= json_encode((string)__('确认删除该 Smtp 账户？将同时从本机 Stalwart 移除。'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>);">
+                                                                                <input type="hidden" name="return_view" value="smtp">
+                                                                                <input type="hidden" name="smtp_account_id" value="<?= $aid ?>">
+                                                                                <input type="hidden" name="also_stalwart" value="1">
+                                                                                <button class="w-button" data-variant="outline" data-tone="danger" data-size="sm" type="submit"
+                                                                                        data-testid="mail-smtp-delete-account-<?= $aid ?>">
+                                                                                    <?= __('删除') ?>
+                                                                                </button>
+                                                                            </w:form>
+                                                                        </div>
+                                                                        <details data-testid="mail-smtp-edit-account-<?= $aid ?>">
+                                                                            <summary class="w-text" data-size="sm"><?= __('修改') ?></summary>
+                                                                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/update-smtp-service-account'}">
+                                                                                <input type="hidden" name="return_view" value="smtp">
+                                                                                <input type="hidden" name="smtp_account_id" value="<?= $aid ?>">
+                                                                                <div class="mail-enterprise__form-grid" style="--w-mt:var(--weline-space-2);">
+                                                                                    <label class="w-field">
+                                                                                        <span class="w-field__label"><?= __('显示名') ?></span>
+                                                                                        <input class="w-input" type="text" name="display_name" value="<?= $escape($acctDisplay) ?>"
+                                                                                               data-testid="mail-smtp-edit-display-<?= $aid ?>">
+                                                                                    </label>
+                                                                                    <label class="w-field">
+                                                                                        <span class="w-field__label"><?= __('角色') ?></span>
+                                                                                        <select class="w-select" name="account_role" data-testid="mail-smtp-edit-role-<?= $aid ?>">
+                                                                                            <option value="<?= SmtpAccount::ROLE_SUBMIT ?>"<?= $acctRole === SmtpAccount::ROLE_SUBMIT ? ' selected' : '' ?>><?= __('提交 submit') ?></option>
+                                                                                            <?php if ((int)$svc->getData(SmtpService::schema_fields_RELAY_SERVICE) === 1 || $acctRole === SmtpAccount::ROLE_RELAY): ?>
+                                                                                                <option value="<?= SmtpAccount::ROLE_RELAY ?>"<?= $acctRole === SmtpAccount::ROLE_RELAY ? ' selected' : '' ?>><?= __('中继 relay') ?></option>
+                                                                                            <?php endif; ?>
+                                                                                        </select>
+                                                                                    </label>
+                                                                                    <label class="w-field">
+                                                                                        <span class="w-field__label"><?= __('状态') ?></span>
+                                                                                        <select class="w-select" name="account_status" data-testid="mail-smtp-edit-status-<?= $aid ?>">
+                                                                                            <option value="active"<?= $acctStatus === 'active' ? ' selected' : '' ?>><?= __('启用 active') ?></option>
+                                                                                            <option value="disabled"<?= $acctStatus === 'disabled' ? ' selected' : '' ?>><?= __('停用 disabled') ?></option>
+                                                                                            <option value="needs_password"<?= $acctStatus === 'needs_password' ? ' selected' : '' ?>><?= __('待设密码 needs_password') ?></option>
+                                                                                        </select>
+                                                                                    </label>
+                                                                                </div>
+                                                                                <button class="w-button" data-tone="primary" data-size="sm" type="submit"
+                                                                                        style="--w-mt:var(--weline-space-2);"
+                                                                                        data-testid="mail-smtp-save-account-<?= $aid ?>">
+                                                                                    <?= __('保存修改') ?>
+                                                                                </button>
+                                                                            </w:form>
+                                                                        </details>
                                                                     </div>
                                                                 </td>
                                                             <?php endif; ?>
@@ -1865,32 +2339,15 @@ if ($oauthCfError === 'invalid_scope') {
                                                 </table>
                                             </div>
                                         <?php endif; ?>
-                                        <details>
-                                            <summary class="w-text" data-size="sm"><?= __('再加本机账户') ?></summary>
-                                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-smtp-service-account'}">
-                                                <input type="hidden" name="return_view" value="smtp">
-                                                <input type="hidden" name="smtp_service_id" value="<?= $sid ?>">
-                                                <div class="mail-enterprise__form-grid">
-                                                    <label class="w-field">
-                                                        <span class="w-field__label"><?= __('账号前缀') ?></span>
-                                                        <input class="w-input" type="text" name="local_part" pattern="[a-z0-9._-]+" required placeholder="noreply">
-                                                    </label>
-                                                    <label class="w-field">
-                                                        <span class="w-field__label"><?= __('角色') ?></span>
-                                                        <select class="w-select" name="account_role">
-                                                            <option value="<?= SmtpAccount::ROLE_SUBMIT ?>"><?= __('提交 submit') ?></option>
-                                                            <?php if ((int)$svc->getData(SmtpService::schema_fields_RELAY_SERVICE) === 1): ?>
-                                                                <option value="<?= SmtpAccount::ROLE_RELAY ?>"><?= __('中继 relay') ?></option>
-                                                            <?php endif; ?>
-                                                        </select>
-                                                    </label>
-                                                </div>
-                                                <button class="w-button" data-tone="primary" data-size="sm" type="submit" style="--w-mt:var(--weline-space-2);"><?= __('创建账户') ?></button>
-                                            </w:form>
-                                        </details>
+                                        <button class="w-button" data-variant="outline" data-size="sm" type="button"
+                                                style="--w-mt:var(--weline-space-2);"
+                                                data-testid="mail-smtp-add-open-<?= $sid ?>"
+                                                data-smtp-add-open
+                                                data-smtp-service-id="<?= $sid ?>"
+                                                data-smtp-relay="<?= (int)$svc->getData(SmtpService::schema_fields_RELAY_SERVICE) === 1 ? '1' : '0' ?>"><?= __('增加本机账户') ?></button>
                                     <?php endif; ?>
                                 </div>
-                            </article>
+                            </details>
                         <?php endforeach; ?>
                         <p class="w-text" data-tone="muted" data-size="sm" id="mail-smtp-search-empty" data-testid="mail-smtp-search-empty" hidden style="--w-m:0;">
                             <?= __('没有匹配的 Smtp 服务。') ?>
@@ -1966,6 +2423,11 @@ if ($oauthCfError === 'invalid_scope') {
                     mode.addEventListener('change', syncDomain);
                     syncDomain();
                 }
+                document.querySelectorAll('[data-smtp-card-actions]').forEach(function (actions) {
+                    actions.addEventListener('click', function (ev) {
+                        ev.stopPropagation();
+                    });
+                });
                 var search = document.getElementById('mail-smtp-service-search');
                 var cards = document.querySelectorAll('[data-smtp-search]');
                 var empty = document.getElementById('mail-smtp-search-empty');
@@ -2054,6 +2516,487 @@ if ($oauthCfError === 'invalid_scope') {
                             });
                     });
                 });
+            })();
+            </script>
+        </section>
+            <div class="w-dialog" id="mail-smtp-add-dialog" tabindex="-1" aria-hidden="true"
+                 data-w-component="dialog" data-state="closed" hidden
+                 data-testid="mail-smtp-add-dialog">
+                <div class="w-dialog__frame" data-size="sm" style="max-block-size:min(90vh, 26rem);">
+                    <div class="w-dialog__surface" style="display:flex; flex-direction:column; max-block-size:inherit; min-block-size:0;">
+                        <form id="mail-smtp-add-form" class="w-stack" style="--w-gap:0; flex:1 1 auto; min-block-size:0; display:flex; flex-direction:column;" data-testid="mail-smtp-add-form">
+                            <div class="w-dialog__header" style="flex-shrink:0;">
+                                <h2 class="w-dialog__title" style="--w-m:0;"><?= __('增加本机账户') ?></h2>
+                                <button type="button" class="w-button" aria-label="<?= __('关闭') ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                            </div>
+                            <div class="w-dialog__body w-stack" style="--w-gap:var(--weline-space-3); flex:1 1 auto; min-block-size:0; overflow:auto;">
+                                <input type="hidden" name="smtp_service_id" value="0" data-smtp-add-field="smtp_service_id">
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('账号前缀') ?></span>
+                                    <input class="w-input" type="text" name="local_part" pattern="[a-z0-9._-]+" required placeholder="noreply" data-smtp-add-field="local_part" data-testid="mail-smtp-add-local">
+                                </label>
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('角色') ?></span>
+                                    <select class="w-select" name="account_role" data-smtp-add-field="account_role" data-testid="mail-smtp-add-role">
+                                        <option value="<?= SmtpAccount::ROLE_SUBMIT ?>"><?= __('提交 submit') ?></option>
+                                        <option value="<?= SmtpAccount::ROLE_RELAY ?>" data-smtp-relay-option hidden><?= __('中继 relay') ?></option>
+                                    </select>
+                                </label>
+                                <span class="w-text" data-size="sm" data-tone="muted" data-smtp-add-status style="--w-m:0;"></span>
+                            </div>
+                            <div class="w-dialog__footer" style="flex-shrink:0;">
+                                <button class="w-button" data-w-action="dialog.close" data-tone="neutral" type="button"><?= __('取消') ?></button>
+                                <button class="w-button" data-tone="primary" type="submit" data-testid="mail-smtp-add-submit"><?= __('创建账户') ?></button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <script>
+            (function () {
+                var form = document.getElementById('mail-smtp-add-form');
+                var dialog = document.getElementById('mail-smtp-add-dialog');
+                if (!form || !dialog) return;
+                var statusEl = form.querySelector('[data-smtp-add-status]');
+                var unavailableMsg = <?= json_encode((string)__('Mail API 不可用'), JSON_UNESCAPED_UNICODE) ?>;
+                var relayOpt = form.querySelector('[data-smtp-relay-option]');
+                function toast(kind, message) {
+                    var ui = window.Weline && window.Weline.UI;
+                    var api = ui && ui.toast;
+                    var text = String(message || '').trim();
+                    if (!text) return;
+                    if (api && typeof api[kind] === 'function') { api[kind](text); return; }
+                    if (api && typeof api.show === 'function') {
+                        api.show(text, { tone: kind === 'success' ? 'success' : 'danger' });
+                    }
+                }
+                function setStatus(tone, text) {
+                    if (!statusEl) return;
+                    statusEl.setAttribute('data-tone', tone || 'muted');
+                    statusEl.textContent = text || '';
+                }
+                function openDialog() {
+                    var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+                    if (ui && typeof ui.open === 'function') { ui.open(dialog); return; }
+                    dialog.hidden = false; dialog.setAttribute('data-state', 'open'); dialog.setAttribute('aria-hidden', 'false');
+                }
+                function closeDialog() {
+                    var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+                    if (ui && typeof ui.close === 'function') { ui.close(dialog); return; }
+                    dialog.hidden = true; dialog.setAttribute('data-state', 'closed'); dialog.setAttribute('aria-hidden', 'true');
+                }
+                function mailApi() {
+                    if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                        return Promise.reject(new Error(unavailableMsg));
+                    }
+                    if (typeof window.Weline.load === 'function') {
+                        return window.Weline.load('api').then(function () { return window.Weline.Api.resource('mail'); });
+                    }
+                    return Promise.resolve(window.Weline.Api.resource('mail'));
+                }
+                document.querySelectorAll('[data-smtp-add-open]').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var sid = btn.getAttribute('data-smtp-service-id') || '0';
+                        var relay = btn.getAttribute('data-smtp-relay') === '1';
+                        var sidField = form.querySelector('[data-smtp-add-field="smtp_service_id"]');
+                        var lp = form.querySelector('[data-smtp-add-field="local_part"]');
+                        var role = form.querySelector('[data-smtp-add-field="account_role"]');
+                        if (sidField) sidField.value = sid;
+                        if (lp) lp.value = '';
+                        if (role) role.value = 'submit';
+                        if (relayOpt) {
+                            relayOpt.hidden = !relay;
+                            if (!relay && role && role.value === 'relay') {
+                                role.value = 'submit';
+                            }
+                        }
+                        setStatus('muted', '');
+                        openDialog();
+                    });
+                });
+                form.addEventListener('submit', function (ev) {
+                    ev.preventDefault();
+                    var payload = {
+                        smtp_service_id: parseInt((form.querySelector('[data-smtp-add-field="smtp_service_id"]') || {}).value || '0', 10) || 0,
+                        local_part: String((form.querySelector('[data-smtp-add-field="local_part"]') || {}).value || '').trim(),
+                        account_role: String((form.querySelector('[data-smtp-add-field="account_role"]') || {}).value || 'submit')
+                    };
+                    setStatus('muted', <?= json_encode((string)__('创建中…'), JSON_UNESCAPED_UNICODE) ?>);
+                    mailApi().then(function (api) { return api.createSmtpServiceAccount(payload); })
+                        .then(function (res) {
+                            var ok = !!(res && res.success);
+                            var msg = (res && res.message) ? String(res.message) : (ok ? 'ok' : 'fail');
+                            setStatus(ok ? 'success' : 'danger', msg);
+                            toast(ok ? 'success' : 'error', msg);
+                            if (ok) { closeDialog(); window.location.reload(); }
+                        }).catch(function (err) {
+                            var msg = (err && err.message) ? String(err.message) : unavailableMsg;
+                            setStatus('danger', msg); toast('error', msg);
+                        });
+                });
+            })();
+            </script>
+
+
+    <?php elseif ($view === 'routes'): ?>
+        <section class="w-stack" style="--w-gap:var(--weline-space-4);" data-testid="mail-enterprise-outbound-routes" id="mail-outbound-routes">
+            <div class="w-alert" data-tone="warning" data-testid="mail-outbound-routes-mutex-hint">
+                <div class="w-alert__content">
+                    <div class="w-alert__title"><?= __('与账号「外投 smarthost」的关系') ?></div>
+                    <p class="w-text" data-size="sm" style="--w-m:0;">
+                        <?= __('优先级：本页收件域导流（按配置 587/465）→ 账号外投 → 本机 Smtp 默认外投（587/465）→ 最后才 MX:25。规则大于默认；配置了中继就按规则走。') ?>
+                    </p>
+                </div>
+            </div>
+
+            <article class="w-card" data-testid="mail-outbound-route-list-card">
+                <div class="w-card__header w-cluster" data-justify="between" style="--w-gap:var(--weline-space-2);">
+                    <h2 class="w-card__title" style="--w-m:0;"><?= __('已配置规则') ?></h2>
+                    <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                        <button class="w-button" data-tone="primary" data-size="sm" type="button" data-testid="mail-outbound-route-add" data-route-add><?= __('新增规则') ?></button>
+                        <button class="w-button" data-variant="outline" data-tone="danger" data-size="sm" type="button" data-testid="mail-outbound-route-batch-delete" data-route-batch-delete><?= __('批量删除') ?></button>
+                    </div>
+                </div>
+                <div class="w-card__body">
+                    <?php if ($outboundRouteRules === []): ?>
+                        <div class="w-empty" style="--w-min-block-size:6rem;" data-testid="mail-outbound-route-empty">
+                            <p class="w-text" data-tone="muted" style="--w-m:0;"><?= __('暂无导流规则。例如将 qq.com 导向 mail.aiweline.com:587。') ?></p>
+                        </div>
+                    <?php else: ?>
+                        <div class="w-stack" style="--w-gap:var(--weline-space-2);" data-testid="mail-outbound-route-list">
+                            <?php foreach ($outboundRouteRules as $ruleRow):
+                                if (!is_array($ruleRow)) {
+                                    continue;
+                                }
+                                $rid = (int)($ruleRow['rule_id'] ?? 0);
+                                if ($rid <= 0) {
+                                    continue;
+                                }
+                                $rDomain = (string)($ruleRow['match_domain'] ?? '');
+                                $rHost = (string)($ruleRow['relay_host'] ?? '');
+                                $rPort = (int)($ruleRow['relay_port'] ?? 587);
+                                $rUser = (string)($ruleRow['relay_username'] ?? '');
+                                $rTls = (string)($ruleRow['relay_tls'] ?? 'starttls');
+                                $rPri = (int)($ruleRow['priority'] ?? 100);
+                                $rOn = (int)($ruleRow['enabled'] ?? 0) === 1;
+                                ?>
+                                <div class="w-cluster" data-justify="between" style="--w-gap:var(--weline-space-2);"
+                                     data-testid="mail-outbound-route-row-<?= $rid ?>"
+                                     data-route-row
+                                     data-rule-id="<?= $rid ?>"
+                                     data-match-domain="<?= $escape($rDomain) ?>"
+                                     data-priority="<?= $rPri ?>"
+                                     data-enabled="<?= $rOn ? '1' : '0' ?>"
+                                     data-relay-host="<?= $escape($rHost) ?>"
+                                     data-relay-port="<?= $rPort ?>"
+                                     data-relay-username="<?= $escape($rUser) ?>"
+                                     data-relay-tls="<?= $escape($rTls) ?>">
+                                    <label class="w-cluster" style="--w-gap:var(--weline-space-2); min-width:0;">
+                                        <input type="checkbox" data-route-check value="<?= $rid ?>">
+                                        <span class="w-text" style="--w-m:0;">
+                                            <code><?= $escape($rDomain) ?></code>
+                                            → <code><?= $escape($rHost) ?>:<?= $rPort ?></code>
+                                            · <?= $escape($rTls) ?>
+                                            · #<?= $rPri ?>
+                                            <?php if (!$rOn): ?>
+                                                <span class="w-badge" data-tone="neutral"><?= __('停用') ?></span>
+                                            <?php endif; ?>
+                                        </span>
+                                    </label>
+                                    <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                                        <button class="w-button" data-variant="outline" data-size="sm" type="button" data-route-edit data-testid="mail-outbound-route-edit-<?= $rid ?>"><?= __('编辑') ?></button>
+                                        <button class="w-button" data-variant="outline" data-tone="danger" data-size="sm" type="button" data-route-delete data-testid="mail-outbound-route-delete-<?= $rid ?>"><?= __('删除') ?></button>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </article>
+
+            <div class="w-dialog" id="mail-outbound-route-dialog" tabindex="-1" aria-hidden="true"
+                 data-w-component="dialog" data-state="closed" hidden
+                 data-testid="mail-outbound-route-dialog">
+                <div class="w-dialog__frame" data-size="lg">
+                    <div class="w-dialog__surface">
+                        <form id="mail-outbound-route-form" class="w-stack" style="--w-gap:0;" data-testid="mail-outbound-route-form">
+                            <div class="w-dialog__header">
+                                <h2 class="w-dialog__title" id="mail-outbound-route-dialog-title" style="--w-m:0;"><?= __('新增导流规则') ?></h2>
+                                <button type="button" class="w-button" aria-label="<?= __('关闭') ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                            </div>
+                            <div class="w-dialog__body w-stack" style="--w-gap:var(--weline-space-3);">
+                                <input type="hidden" name="rule_id" value="" data-route-field="rule_id">
+                                <div class="w-cluster" style="--w-gap:var(--weline-space-3);">
+                                    <label class="w-field" style="--w-flex:1;">
+                                        <span class="w-field__label"><?= __('收件域') ?></span>
+                                        <input class="w-input" type="text" name="match_domain" required placeholder="qq.com" data-route-field="match_domain" data-testid="mail-outbound-route-match-domain">
+                                    </label>
+                                    <label class="w-field" style="--w-flex:0 0 8rem;">
+                                        <span class="w-field__label"><?= __('优先级') ?></span>
+                                        <input class="w-input" type="number" name="priority" value="100" min="0" max="999999" data-route-field="priority">
+                                    </label>
+                                    <label class="w-field" style="--w-flex:0 0 auto; align-self:end;">
+                                        <span class="w-field__label">&nbsp;</span>
+                                        <label class="w-cluster" style="--w-gap:var(--weline-space-2);">
+                                            <input type="checkbox" name="enabled" value="1" checked data-route-field="enabled">
+                                            <span><?= __('启用') ?></span>
+                                        </label>
+                                    </label>
+                                </div>
+                                <label class="w-field">
+                                    <span class="w-field__label"><?= __('选择 Smtp 账户/服务') ?></span>
+                                    <select class="w-select" name="outbound_smtp_pick" data-route-field="outbound_smtp_pick" data-testid="mail-outbound-route-smtp-pick">
+                                        <option value=""><?= $smtpOutboundPicks === [] ? __('（暂无可用 Smtp，请先到 Smtp Tab 创建）') : __('手动填写 / 不选用目录') ?></option>
+                                        <?php foreach ($smtpOutboundPicks as $pick):
+                                            if (!is_array($pick)) {
+                                                continue;
+                                            }
+                                            $pickKey = (string)($pick['key'] ?? '');
+                                            $pickLabel = (string)($pick['label'] ?? $pickKey);
+                                            if ($pickKey === '') {
+                                                continue;
+                                            }
+                                            ?>
+                                            <option value="<?= $escape($pickKey) ?>"><?= $escape($pickLabel) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </label>
+                                <div class="w-cluster" style="--w-gap:var(--weline-space-3);">
+                                    <label class="w-field" style="--w-flex:1;">
+                                        <span class="w-field__label"><?= __('中继主机') ?></span>
+                                        <input class="w-input" type="text" name="relay_host" placeholder="mail.aiweline.com" data-route-field="relay_host" data-testid="mail-outbound-route-host">
+                                    </label>
+                                    <label class="w-field" style="--w-flex:0 0 7rem;">
+                                        <span class="w-field__label"><?= __('端口') ?></span>
+                                        <input class="w-input" type="number" name="relay_port" value="587" min="1" max="65535" data-route-field="relay_port">
+                                    </label>
+                                    <label class="w-field" style="--w-flex:0 0 9rem;">
+                                        <span class="w-field__label">TLS</span>
+                                        <select class="w-select" name="relay_tls" data-route-field="relay_tls">
+                                            <option value="starttls">STARTTLS</option>
+                                            <option value="smtps">SMTPS</option>
+                                            <option value="none"><?= __('无') ?></option>
+                                        </select>
+                                    </label>
+                                </div>
+                                <div class="w-cluster" style="--w-gap:var(--weline-space-3);">
+                                    <label class="w-field" style="--w-flex:1;">
+                                        <span class="w-field__label"><?= __('用户名') ?></span>
+                                        <input class="w-input" type="text" name="relay_username" data-route-field="relay_username">
+                                    </label>
+                                    <label class="w-field" style="--w-flex:1;">
+                                        <span class="w-field__label"><?= __('密码') ?></span>
+                                        <input class="w-input" type="password" name="relay_password" autocomplete="new-password" placeholder="<?= $escape((string)__('选目录后留空即可；编辑时留空表示不改')) ?>" data-route-field="relay_password">
+                                    </label>
+                                </div>
+                                <span class="w-text" data-size="sm" data-tone="muted" data-route-status style="--w-m:0;"></span>
+                            </div>
+                            <div class="w-dialog__footer">
+                                <button class="w-button" data-variant="outline" type="button" data-testid="mail-outbound-route-reset" data-route-reset><?= __('清空表单') ?></button>
+                                <button class="w-button" data-w-action="dialog.close" data-tone="neutral" type="button"><?= __('取消') ?></button>
+                                <button class="w-button" data-tone="primary" type="submit" data-testid="mail-outbound-route-save"><?= __('保存并下发') ?></button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <script>
+            (function () {
+                var root = document.getElementById('mail-outbound-routes');
+                if (!root) return;
+                var form = document.getElementById('mail-outbound-route-form');
+                var dialog = document.getElementById('mail-outbound-route-dialog');
+                if (!form || !dialog) return;
+                var titleEl = document.getElementById('mail-outbound-route-dialog-title');
+                var statusEl = form.querySelector('[data-route-status]');
+                var unavailableMsg = <?= json_encode((string)__('Mail API 不可用'), JSON_UNESCAPED_UNICODE) ?>;
+                var confirmDelete = <?= json_encode((string)__('确定删除该导流规则？'), JSON_UNESCAPED_UNICODE) ?>;
+                var confirmBatch = <?= json_encode((string)__('确定删除所选规则？'), JSON_UNESCAPED_UNICODE) ?>;
+                var pickNone = <?= json_encode((string)__('请至少勾选一条规则'), JSON_UNESCAPED_UNICODE) ?>;
+                var titleCreate = <?= json_encode((string)__('新增导流规则'), JSON_UNESCAPED_UNICODE) ?>;
+                var titleEdit = <?= json_encode((string)__('编辑导流规则'), JSON_UNESCAPED_UNICODE) ?>;
+
+                function toast(kind, message) {
+                    var ui = window.Weline && window.Weline.UI;
+                    var api = ui && ui.toast;
+                    var text = String(message || '').trim();
+                    if (!text) return;
+                    if (api && typeof api[kind] === 'function') { api[kind](text); return; }
+                    if (api && typeof api.show === 'function') {
+                        api.show(text, { tone: kind === 'success' ? 'success' : 'danger' });
+                    }
+                }
+                function setStatus(tone, text) {
+                    if (!statusEl) return;
+                    statusEl.setAttribute('data-tone', tone || 'muted');
+                    statusEl.textContent = text || '';
+                }
+                function openDialog() {
+                    var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+                    if (ui && typeof ui.open === 'function') {
+                        ui.open(dialog);
+                        return;
+                    }
+                    dialog.hidden = false;
+                    dialog.setAttribute('data-state', 'open');
+                    dialog.setAttribute('aria-hidden', 'false');
+                }
+                function closeDialog() {
+                    var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+                    if (ui && typeof ui.close === 'function') {
+                        ui.close(dialog);
+                        return;
+                    }
+                    dialog.hidden = true;
+                    dialog.setAttribute('data-state', 'closed');
+                    dialog.setAttribute('aria-hidden', 'true');
+                }
+                function confirmUi(message) {
+                    var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+                    if (ui && typeof ui.confirm === 'function') {
+                        return Promise.resolve(ui.confirm(message)).then(function (ok) { return !!ok; });
+                    }
+                    return Promise.resolve(false);
+                }
+                function mailApi() {
+                    if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                        return Promise.reject(new Error(unavailableMsg));
+                    }
+                    if (typeof window.Weline.load === 'function') {
+                        return window.Weline.load('api').then(function () {
+                            return window.Weline.Api.resource('mail');
+                        });
+                    }
+                    return Promise.resolve(window.Weline.Api.resource('mail'));
+                }
+                function field(name) {
+                    return form.querySelector('[data-route-field="' + name + '"]');
+                }
+                function resetForm() {
+                    var id = field('rule_id'); if (id) id.value = '';
+                    var md = field('match_domain'); if (md) md.value = '';
+                    var pr = field('priority'); if (pr) pr.value = '100';
+                    var en = field('enabled'); if (en) en.checked = true;
+                    var pk = field('outbound_smtp_pick'); if (pk) pk.value = '';
+                    var rh = field('relay_host'); if (rh) rh.value = '';
+                    var rp = field('relay_port'); if (rp) rp.value = '587';
+                    var ru = field('relay_username'); if (ru) ru.value = '';
+                    var rw = field('relay_password'); if (rw) rw.value = '';
+                    var rt = field('relay_tls'); if (rt) rt.value = 'starttls';
+                    if (titleEl) titleEl.textContent = titleCreate;
+                    setStatus('muted', '');
+                }
+                function openCreate() {
+                    resetForm();
+                    openDialog();
+                }
+                function openEdit(row) {
+                    if (!row) return;
+                    var id = field('rule_id'); if (id) id.value = row.getAttribute('data-rule-id') || '';
+                    var md = field('match_domain'); if (md) md.value = row.getAttribute('data-match-domain') || '';
+                    var pr = field('priority'); if (pr) pr.value = row.getAttribute('data-priority') || '100';
+                    var en = field('enabled'); if (en) en.checked = row.getAttribute('data-enabled') === '1';
+                    var pk = field('outbound_smtp_pick'); if (pk) pk.value = '';
+                    var rh = field('relay_host'); if (rh) rh.value = row.getAttribute('data-relay-host') || '';
+                    var rp = field('relay_port'); if (rp) rp.value = row.getAttribute('data-relay-port') || '587';
+                    var ru = field('relay_username'); if (ru) ru.value = row.getAttribute('data-relay-username') || '';
+                    var rw = field('relay_password'); if (rw) rw.value = '';
+                    var rt = field('relay_tls'); if (rt) rt.value = row.getAttribute('data-relay-tls') || 'starttls';
+                    if (titleEl) titleEl.textContent = titleEdit;
+                    setStatus('muted', '');
+                    openDialog();
+                }
+                var resetBtn = form.querySelector('[data-route-reset]');
+                if (resetBtn) resetBtn.addEventListener('click', resetForm);
+                var addBtn = root.querySelector('[data-route-add]');
+                if (addBtn) addBtn.addEventListener('click', openCreate);
+
+                form.addEventListener('submit', function (ev) {
+                    ev.preventDefault();
+                    var payload = {
+                        rule_id: parseInt((field('rule_id') || {}).value || '0', 10) || 0,
+                        match_domain: String((field('match_domain') || {}).value || '').trim(),
+                        priority: parseInt((field('priority') || {}).value || '100', 10) || 100,
+                        enabled: (field('enabled') && field('enabled').checked) ? 1 : 0,
+                        outbound_smtp_pick: String((field('outbound_smtp_pick') || {}).value || ''),
+                        relay_host: String((field('relay_host') || {}).value || '').trim(),
+                        relay_port: parseInt((field('relay_port') || {}).value || '587', 10) || 587,
+                        relay_username: String((field('relay_username') || {}).value || '').trim(),
+                        relay_password: String((field('relay_password') || {}).value || ''),
+                        relay_tls: String((field('relay_tls') || {}).value || 'starttls')
+                    };
+                    setStatus('muted', <?= json_encode((string)__('保存中…'), JSON_UNESCAPED_UNICODE) ?>);
+                    mailApi().then(function (api) {
+                        return api.saveOutboundRouteRule(payload);
+                    }).then(function (res) {
+                        var ok = !!(res && res.success);
+                        var msg = (res && res.message) ? String(res.message) : (ok ? 'ok' : 'fail');
+                        setStatus(ok ? 'success' : 'danger', msg);
+                        toast(ok ? 'success' : 'error', msg);
+                        if (ok) {
+                            closeDialog();
+                            window.location.reload();
+                        }
+                    }).catch(function (err) {
+                        var msg = (err && err.message) ? String(err.message) : unavailableMsg;
+                        setStatus('danger', msg);
+                        toast('error', msg);
+                    });
+                });
+
+                root.querySelectorAll('[data-route-edit]').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        openEdit(btn.closest('[data-route-row]'));
+                    });
+                });
+
+                root.querySelectorAll('[data-route-delete]').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var row = btn.closest('[data-route-row]');
+                        if (!row) return;
+                        var rid = parseInt(row.getAttribute('data-rule-id') || '0', 10) || 0;
+                        if (rid <= 0) return;
+                        confirmUi(confirmDelete).then(function (ok) {
+                            if (!ok) return;
+                            return mailApi().then(function (api) {
+                                return api.deleteOutboundRouteRule({ rule_id: rid });
+                            }).then(function (res) {
+                                var success = !!(res && res.success);
+                                toast(success ? 'success' : 'error', (res && res.message) ? String(res.message) : (success ? 'ok' : 'fail'));
+                                if (success) window.location.reload();
+                            });
+                        }).catch(function (err) {
+                            toast('error', (err && err.message) ? String(err.message) : unavailableMsg);
+                        });
+                    });
+                });
+
+                var batchBtn = root.querySelector('[data-route-batch-delete]');
+                if (batchBtn) {
+                    batchBtn.addEventListener('click', function () {
+                        var ids = [];
+                        root.querySelectorAll('[data-route-check]:checked').forEach(function (el) {
+                            var id = parseInt(el.value || '0', 10) || 0;
+                            if (id > 0) ids.push(id);
+                        });
+                        if (ids.length === 0) {
+                            toast('error', pickNone);
+                            return;
+                        }
+                        confirmUi(confirmBatch).then(function (ok) {
+                            if (!ok) return;
+                            return mailApi().then(function (api) {
+                                return api.batchDeleteOutboundRouteRules({ rule_ids: ids });
+                            }).then(function (res) {
+                                var success = !!(res && res.success);
+                                toast(success ? 'success' : 'error', (res && res.message) ? String(res.message) : (success ? 'ok' : 'fail'));
+                                if (success) window.location.reload();
+                            });
+                        }).catch(function (err) {
+                            toast('error', (err && err.message) ? String(err.message) : unavailableMsg);
+                        });
+                    });
+                }
             })();
             </script>
         </section>
@@ -2168,39 +3111,129 @@ if ($oauthCfError === 'invalid_scope') {
             <?= __('mail 主机的 A/AAAA 必须关闭 Cloudflare 代理（灰云、DNS-only），否则会隐藏源站 IP，SMTP/IMAP 无法工作。smtp 子域名可选；若配置也必须 DNS-only。') ?>
         </div>
 
-        <section class="w-card">
-            <details>
-                <summary class="w-card__header mail-enterprise__panel-summary"><?= __('新增邮箱域名') ?></summary>
-                <div class="w-card__body">
-                    <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-domain'}">
-                        <input type="hidden" name="return_view" value="domains">
-                        <div class="mail-enterprise__form-grid">
-                            <label class="w-field">
-                                <span class="w-field__label"><?= __('网站域名') ?></span>
-                                <select class="w-select" name="website_domain" required>
-                                    <?php foreach ($websiteOptions as $option):
-                                        if (!empty($option['is_created'])) {
-                                            continue;
-                                        }
-                                        ?>
-                                        <option value="<?= $escape($option['domain'] ?? '') ?>"><?= $escape($option['domain'] ?? '') ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </label>
-                            <label class="w-field">
-                                <span class="w-field__label"><?= __('邮件主机') ?></span>
-                                <input class="w-input" type="text" name="hostname" placeholder="mail.example.com">
-                            </label>
-                            <input type="hidden" name="engine" value="stalwart">
-                            <input type="hidden" name="default_quota_mb" value="1024">
-                        </div>
-                        <div class="mail-enterprise__actions" style="--w-mt:var(--weline-space-3);">
-                            <button class="w-button" data-tone="primary" type="submit"><?= __('创建邮箱域名') ?></button>
-                        </div>
-                    </w:form>
+        <section class="w-card" data-testid="mail-domain-create-toolbar">
+            <div class="w-card__header w-cluster" data-justify="between" style="--w-gap:var(--weline-space-2);">
+                <div>
+                    <h2 class="w-card__title" style="--w-m:0;"><?= __('邮箱域名') ?></h2>
+                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;"><?= __('从网站域名候选开通邮局；创建后可在列表中启用。') ?></p>
                 </div>
-            </details>
+                <button class="w-button" data-tone="primary" data-size="sm" type="button"
+                        data-testid="mail-domain-create-open" data-domain-create-open><?= __('新增邮箱域名') ?></button>
+            </div>
         </section>
+            <div class="w-dialog" id="mail-domain-create-dialog" tabindex="-1" aria-hidden="true"
+                 data-w-component="dialog" data-state="closed" hidden
+                 data-testid="mail-domain-create-dialog">
+                <div class="w-dialog__frame" data-size="md" style="max-block-size:min(90vh, 28rem);">
+                    <div class="w-dialog__surface" style="display:flex; flex-direction:column; max-block-size:inherit; min-block-size:0;">
+                        <form id="mail-domain-create-form" class="w-stack" style="--w-gap:0; flex:1 1 auto; min-block-size:0; display:flex; flex-direction:column;" data-testid="mail-domain-create-form">
+                            <div class="w-dialog__header" style="flex-shrink:0;">
+                                <h2 class="w-dialog__title" style="--w-m:0;"><?= __('新增邮箱域名') ?></h2>
+                                <button type="button" class="w-button" aria-label="<?= __('关闭') ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                            </div>
+                            <div class="w-dialog__body w-stack" style="--w-gap:var(--weline-space-3); flex:1 1 auto; min-block-size:0; overflow:auto;">
+                                <div class="mail-enterprise__form-grid">
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('网站域名') ?></span>
+                                        <select class="w-select" name="website_domain" required data-domain-field="website_domain" data-testid="mail-domain-create-website">
+                                            <?php foreach ($websiteOptions as $option):
+                                                if (!empty($option['is_created'])) {
+                                                    continue;
+                                                }
+                                                ?>
+                                                <option value="<?= $escape($option['domain'] ?? '') ?>"><?= $escape($option['domain'] ?? '') ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('邮件主机') ?></span>
+                                        <input class="w-input" type="text" name="hostname" placeholder="mail.example.com" data-domain-field="hostname" data-testid="mail-domain-create-hostname">
+                                    </label>
+                                    <input type="hidden" name="engine" value="stalwart" data-domain-field="engine">
+                                    <input type="hidden" name="default_quota_mb" value="1024" data-domain-field="default_quota_mb">
+                                </div>
+                                <span class="w-text" data-size="sm" data-tone="muted" data-domain-create-status style="--w-m:0;"></span>
+                            </div>
+                            <div class="w-dialog__footer" style="flex-shrink:0;">
+                                <button class="w-button" data-w-action="dialog.close" data-tone="neutral" type="button"><?= __('取消') ?></button>
+                                <button class="w-button" data-tone="primary" type="submit" data-testid="mail-domain-create-submit"><?= __('创建邮箱域名') ?></button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <script>
+            (function () {
+                var form = document.getElementById('mail-domain-create-form');
+                var dialog = document.getElementById('mail-domain-create-dialog');
+                var openBtn = document.querySelector('[data-domain-create-open]');
+                if (!form || !dialog || !openBtn) return;
+                var statusEl = form.querySelector('[data-domain-create-status]');
+                var unavailableMsg = <?= json_encode((string)__('Mail API 不可用'), JSON_UNESCAPED_UNICODE) ?>;
+                function toast(kind, message) {
+                    var ui = window.Weline && window.Weline.UI;
+                    var api = ui && ui.toast;
+                    var text = String(message || '').trim();
+                    if (!text) return;
+                    if (api && typeof api[kind] === 'function') { api[kind](text); return; }
+                    if (api && typeof api.show === 'function') {
+                        api.show(text, { tone: kind === 'success' ? 'success' : 'danger' });
+                    }
+                }
+                function setStatus(tone, text) {
+                    if (!statusEl) return;
+                    statusEl.setAttribute('data-tone', tone || 'muted');
+                    statusEl.textContent = text || '';
+                }
+                function openDialog() {
+                    var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+                    if (ui && typeof ui.open === 'function') { ui.open(dialog); return; }
+                    dialog.hidden = false; dialog.setAttribute('data-state', 'open'); dialog.setAttribute('aria-hidden', 'false');
+                }
+                function closeDialog() {
+                    var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+                    if (ui && typeof ui.close === 'function') { ui.close(dialog); return; }
+                    dialog.hidden = true; dialog.setAttribute('data-state', 'closed'); dialog.setAttribute('aria-hidden', 'true');
+                }
+                function mailApi() {
+                    if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                        return Promise.reject(new Error(unavailableMsg));
+                    }
+                    if (typeof window.Weline.load === 'function') {
+                        return window.Weline.load('api').then(function () { return window.Weline.Api.resource('mail'); });
+                    }
+                    return Promise.resolve(window.Weline.Api.resource('mail'));
+                }
+                openBtn.addEventListener('click', function () {
+                    setStatus('muted', '');
+                    openDialog();
+                });
+                form.addEventListener('submit', function (ev) {
+                    ev.preventDefault();
+                    var wd = form.querySelector('[data-domain-field="website_domain"]');
+                    var hn = form.querySelector('[data-domain-field="hostname"]');
+                    var payload = {
+                        website_domain: String((wd && wd.value) || '').trim(),
+                        hostname: String((hn && hn.value) || '').trim(),
+                        engine: 'stalwart',
+                        default_quota_mb: 1024
+                    };
+                    setStatus('muted', <?= json_encode((string)__('创建中…'), JSON_UNESCAPED_UNICODE) ?>);
+                    mailApi().then(function (api) { return api.createMailboxDomain(payload); })
+                        .then(function (res) {
+                            var ok = !!(res && res.success);
+                            var msg = (res && res.message) ? String(res.message) : (ok ? 'ok' : 'fail');
+                            setStatus(ok ? 'success' : 'danger', msg);
+                            toast(ok ? 'success' : 'error', msg);
+                            if (ok) { closeDialog(); window.location.reload(); }
+                        }).catch(function (err) {
+                            var msg = (err && err.message) ? String(err.message) : unavailableMsg;
+                            setStatus('danger', msg); toast('error', msg);
+                        });
+                });
+            })();
+            </script>
+
 
         <div class="mail-enterprise__domains">
             <?php if ($domains === []): ?>
