@@ -51,8 +51,7 @@ final class Detail extends FrontendController
         }
 
         if ($offers === []) {
-            $this->getMessageManager()->addError(__('商品不存在或当前不可用。'));
-            return (string)$this->redirect($this->getUrl('products'));
+            return $this->renderUnavailableProduct($slug, $productId);
         }
 
         $canonicalSlug = strtolower(trim((string)($offers[0]['slug'] ?? '')));
@@ -235,8 +234,8 @@ final class Detail extends FrontendController
             return $description;
         }
         if ($description === '') {
-            $label = $title !== '' ? $title : (string)__('汉服商品');
-            $prefix = $brand !== '' ? ($brand . (string)__('正品汉服：')) : '';
+            $label = $title !== '' ? $title : (string)__('在售商品');
+            $prefix = $brand !== '' ? ($brand . (string)__('正品：')) : '';
             $description = $prefix . $label . (string)__('。查看颜色与尺码、实拍图片、库存与发货说明，便于日常与礼仪场景选购。');
         }
         if (mb_strlen($description) < 80) {
@@ -254,7 +253,7 @@ final class Detail extends FrontendController
                 $description = rtrim($description, "。.;； ") . '。' . $suffix;
             }
             if (mb_strlen($description) < 80) {
-                $description .= (string)__('欢迎对比形制与面料后再下单。');
+                $description .= (string)__('欢迎对比款式与面料后再下单。');
             }
         }
         if (mb_strlen($description) > 170) {
@@ -334,6 +333,56 @@ final class Detail extends FrontendController
         }
 
         return $offer;
+    }
+
+    /**
+     * Missing / unpublished product: stay on /product/{slug} with an inline notice.
+     * Do not 301 back to /products/ (shopper sees a “refresh”); never long-TTL FPC this body.
+     */
+    private function renderUnavailableProduct(string $slug, int $productId): string
+    {
+        $response = $this->request->getResponse();
+        if (method_exists($response, 'setCode')) {
+            $response->setCode(404);
+        } else {
+            $response->setHttpResponseCode(404);
+        }
+        $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
+
+        $productsUrl = '';
+        try {
+            $productsUrl = (string)$this->getUrl('products');
+        } catch (\Throwable) {
+            $productsUrl = '/products';
+        }
+        if ($productsUrl === '') {
+            $productsUrl = '/products';
+        }
+
+        $title = (string)__('商品不存在或当前不可用。');
+        $this->layoutType = 'not_found';
+        $this->request->setGet('page_type', 'not_found');
+        $this->request->setGet('theme_page_title', $title);
+        $this->carryResolvedIdentity($productId, $slug);
+
+        $this->assign('meta', [
+            'statusCode' => 404,
+            'title' => $title,
+            'pageTitle' => $title,
+            'pageLead' => (string)__('您访问的商品链接可能已失效，或该商品当前不可购买。'),
+            'pageHint' => (string)__('请返回全部商品继续选购，或检查链接是否正确。'),
+            'homeHref' => $productsUrl,
+            'productsHref' => $productsUrl,
+            'requestedSlug' => $slug,
+        ]);
+        $this->assign('page_title', $title);
+        $this->assign('seo', [
+            'page_type' => 'not_found',
+            'title' => '404 · ' . $title,
+            'robots' => 'noindex,nofollow',
+        ]);
+
+        return (string)$this->fetch('Weline_Product::templates/frontend/catalog/unavailable.phtml');
     }
 
     private function carryResolvedIdentity(int $productId, string $slug): void

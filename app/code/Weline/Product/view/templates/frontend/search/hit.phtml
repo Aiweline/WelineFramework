@@ -9,11 +9,37 @@ $hit = $this->getData('hit') ?? [];
 $hit = is_array($hit) ? $hit : [];
 $offer = $hit['storefront_offer'] ?? null;
 if (!is_array($offer) || $offer === []) {
-    echo (string)$this->fetch(
-        'Weline_Search::templates/frontend/partials/hit-card.phtml',
-        ['hit' => $hit],
-    );
-    return;
+    // Presenter should always attach an offer (bulk → single → stub).
+    // Last-resort stub keeps media cards; never fall back to Search text hit-card.
+    $productId = (int)($hit['product_id'] ?? 0);
+    if ($productId <= 0) {
+        return;
+    }
+    $name = trim((string)($hit['title'] ?? $hit['name'] ?? ''));
+    $sku = trim((string)($hit['sku'] ?? ''));
+    $currency = strtoupper(trim((string)($hit['currency'] ?? $hit['requested_currency'] ?? 'CNY')));
+    if ($currency === '') {
+        $currency = 'CNY';
+    }
+    $offer = [
+        'product_id' => $productId,
+        'offer_id' => max(0, (int)($hit['offer_id'] ?? 0)),
+        'provider_code' => trim((string)($hit['provider_code'] ?? 'product')),
+        'global_offer_uuid' => trim((string)($hit['global_offer_uuid'] ?? '')),
+        'name' => $name !== '' ? $name : ($sku !== '' ? $sku : ('#' . $productId)),
+        'sku' => $sku,
+        'slug' => strtolower(trim((string)($hit['slug'] ?? ''))),
+        'image' => \Weline\Theme\Helper\StorefrontImagePlaceholder::url($productId),
+        'images' => [\Weline\Theme\Helper\StorefrontImagePlaceholder::url($productId)],
+        'currency' => $currency,
+        'unit_price_minor' => 0,
+        'stock' => 0,
+        'sellable' => false,
+        'quote_only' => true,
+        'currency_unavailable' => false,
+        'message' => '',
+        'search_offer_stub' => true,
+    ];
 }
 
 echo (string)$this->fetch(

@@ -3,6 +3,10 @@
  * Compatibility shim: canonical storefront PDP main info lives in the product-info widget.
  * Prefer Theme product-main slot + default_injections; keep this path for residual contentTemplate callers.
  *
+ * Must use Template::fetch (Taglib compile). A raw `__DIR__` include of product-info.phtml bypasses
+ * expandInlineTags — Framework rewrites T_DIR to the source directory, so url inline tags would leak
+ * into HTML attributes (e.g. data-variant-live-url) and break live variant fetch.
+ *
  * @var \Weline\Framework\View\Template $this
  */
-include __DIR__ . '/../widgets/product-info.phtml';
+echo $this->fetch('Weline_Product::templates/frontend/widgets/product-info.phtml');

@@ -8,8 +8,8 @@ use Weline\Product\Helper\StorefrontPageAssignBag;
  * @var list<array<string,mixed>> $storefront_category_children
  */
 
-$heading = trim((string)StorefrontPageAssignBag::coalesce($this->getData('storefront_heading'), 'storefront_heading', __('汉服分类')));
-$lede = trim((string)StorefrontPageAssignBag::coalesce($this->getData('storefront_lede'), 'storefront_lede', __('按形制探索分类，再进入商品列表选购。')));
+$heading = trim((string)StorefrontPageAssignBag::coalesce($this->getData('storefront_heading'), 'storefront_heading', __('品类浏览')));
+$lede = trim((string)StorefrontPageAssignBag::coalesce($this->getData('storefront_lede'), 'storefront_lede', __('按款式探索分类，再进入商品列表选购。')));
 $children = StorefrontPageAssignBag::coalesce($this->getData('storefront_category_children'), 'storefront_category_children', []);
 $children = is_array($children) ? $children : [];
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');

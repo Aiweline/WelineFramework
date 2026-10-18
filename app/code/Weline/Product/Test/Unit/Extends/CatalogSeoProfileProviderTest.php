@@ -118,7 +118,8 @@ final class CatalogSeoProfileProviderTest extends TestCase
 
         self::assertSame('category', $profile['page_type']);
         self::assertSame('马面裙', $profile['title']);
-        self::assertSame('精选马面裙', $profile['description']);
+        self::assertStringStartsWith('精选马面裙', $profile['description']);
+        self::assertStringContainsString('浏览马面裙商品', $profile['description']);
         self::assertSame('红马面', $profile['item_list'][0]['name']);
         self::assertSame('/', $profile['breadcrumbs'][0]['url']);
         self::assertSame('马面裙', $profile['breadcrumbs'][2]['name']);

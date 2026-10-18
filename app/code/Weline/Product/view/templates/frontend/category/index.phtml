@@ -48,6 +48,11 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
 
 $from = $visibleCount > 0 ? (($page - 1) * $pageSize) + 1 : 0;
 $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
+$ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
+    $this->getData('storefront_listing_ssr_filtered'),
+    'storefront_listing_ssr_filtered',
+    false,
+);
 ?>
 <section class="amz-plp"
          data-testid="storefront-category-catalog"
@@ -55,6 +60,7 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
          data-listing-surface="category"
          data-listing-path="<?= $escape($listingPath) ?>"
          data-category-path="<?= $escape($categoryRoutePath) ?>"
+         data-listing-ssr-filtered="<?= $ssrFiltered ? '1' : '0' ?>"
          data-weline-load="storefrontListing"
          data-weline-load-when="idle"
          data-listing-loading-label="<?= $escape(__('加载中…')) ?>"

@@ -52,7 +52,7 @@ $pick = static function (array $item, array $keys, mixed $fallback = ''): mixed 
         </div>
         <p class="new-arrivals-page__lede">
             <?php $lede = trim((string)($this->getData('storefront_new_arrivals_lede') ?? '')); ?>
-            <?= $escape($lede !== '' ? $lede : __('甄选近期上架的汉服、马面裙与传统配饰，循时序发现新的东方衣冠。')) ?>
+            <?= $escape($lede !== '' ? $lede : __('甄选近期上架的商品与配饰，按上新时间发现新品。')) ?>
         </p>
         <p class="new-arrivals-page__count" data-testid="storefront-new-arrivals-count">
             <?= $escape(__('共 %{1} 件新品', [$count])) ?>
@@ -67,7 +67,7 @@ $pick = static function (array $item, array $keys, mixed $fallback = ''): mixed 
                     continue;
                 }
                 $productId = (int)$pick($item, ['product_id', 'id'], 0);
-                $name = trim((string)$pick($item, ['name', 'title'], __('汉服商品')));
+                $name = trim((string)$pick($item, ['name', 'title'], __('在售商品')));
                 $url = trim((string)$pick($item, ['url', 'product_url', 'detail_url', 'link'], '/products'));
                 $image = trim((string)$pick($item, ['image_url', 'image', 'thumbnail_url', 'thumbnail'], ''));
                 $priceRaw = trim((string)$pick($item, ['formatted_price', 'price_label', 'price'], ''));

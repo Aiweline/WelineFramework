@@ -50,6 +50,12 @@ private function assert_ProductSearchHitTemplate_testProductSearchProviderDeclar
     self::assertStringContainsString("return 'Weline_Product::templates/frontend/search/hit.phtml';", $provider);
     self::assertStringContainsString('ProductSearchHitPresenter', $provider);
     self::assertStringContainsString('storefront-offer-card.phtml', $hitTemplate);
+    self::assertStringNotContainsString('hit-card.phtml', $hitTemplate);
+    self::assertStringContainsString('search_offer_stub', $hitTemplate);
+    $presenter = (string) file_get_contents(BP . 'app/code/Weline/Product/Service/ProductSearchHitPresenter.php');
+    self::assertStringContainsString('publishedOffer($productId)', $presenter);
+    self::assertStringContainsString('stubOfferFromSearchRow', $presenter);
+    self::assertStringContainsString('StorefrontImagePlaceholder::url', $presenter);
     self::assertStringContainsString('ProductCardRenderer::render', $offerCard);
     self::assertStringContainsString('ProductCardRenderer::fromStorefrontOffer', $offerCard);
     self::assertStringContainsString("'show_sku' => true", $offerCard);

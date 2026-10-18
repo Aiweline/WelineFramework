@@ -1896,6 +1896,16 @@ private function assert_StorefrontListingShellPathOnly_testListingTemplatesBindJ
     self::assertStringContainsString('facet_counts', $js);
     self::assertStringContainsString('hasSoftListingQuery', $js);
     self::assertStringContainsString('hydrateStateFromLocation', $js);
+    self::assertStringContainsString("data-listing-ssr-filtered') === '1'", $js);
+    self::assertStringContainsString('data-listing-ssr-filtered', $catalog);
+    $categoryTpl = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Product' . '/view/templates/frontend/category/index.phtml');
+    self::assertStringContainsString('data-listing-ssr-filtered', $categoryTpl);
+    $hanfuCategoryTpl = (string) file_get_contents('/Users/weline/Project/Official/框架/app/design/Weline/hanfu/Weline_Product/templates/frontend/category/index.phtml');
+    self::assertStringContainsString('data-listing-ssr-filtered', $hanfuCategoryTpl);
+    $categoryCtrl = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Product' . '/Controller/Frontend/Category.php');
+    $catalogCtrl = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Product' . '/Controller/Frontend/Catalog.php');
+    self::assertStringContainsString('storefront_listing_ssr_filtered', $categoryCtrl);
+    self::assertStringContainsString('storefront_listing_ssr_filtered', $catalogCtrl);
     self::assertStringContainsString('data-listing-loading-label', $catalog);
     self::assertStringNotContainsString('window.location.href', $catalog);
 }

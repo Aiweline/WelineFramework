@@ -96,6 +96,76 @@ final class StorefrontListingFpcQueryKeys
     }
 
     /**
+     * Project filteredListingPage BinQuery params → storefront canonical URI for FPC disk.
+     * Returns null when no allowlisted query remains (path-only — skip bq leaf).
+     *
+     * @param array<string, mixed> $params
+     */
+    public static function canonicalStorefrontUriFromBinQueryParams(array $params, string $hostWithScheme): ?string
+    {
+        $hostWithScheme = \rtrim(\trim($hostWithScheme), '/');
+        if ($hostWithScheme === '' || !\preg_match('#^https?://#i', $hostWithScheme)) {
+            return null;
+        }
+        $surface = \strtolower(\trim((string)($params['surface'] ?? 'products')));
+        $listingPath = \trim(\str_replace('\\', '/', (string)($params['listing_path'] ?? '')), '/');
+        if ($listingPath === '') {
+            $listingPath = $surface === 'category' ? 'category' : 'products';
+        }
+        $path = '/' . $listingPath;
+
+        $bag = [];
+        foreach (['price', 'sort', 'page'] as $key) {
+            $v = $params[$key] ?? null;
+            if (\is_array($v)) {
+                $v = \reset($v);
+            }
+            if (!\is_scalar($v) && $v !== null) {
+                continue;
+            }
+            $scalar = \trim((string)$v);
+            if ($scalar === '' || ($key === 'page' && $scalar === '1')) {
+                continue;
+            }
+            $bag[$key] = $scalar;
+        }
+        $filters = \is_array($params['filters'] ?? null) ? $params['filters'] : [];
+        foreach ($filters as $code => $value) {
+            $code = \strtolower(\trim((string)$code));
+            $code = \preg_replace('/[^a-z0-9_\-]/', '', $code) ?? '';
+            if ($code === '') {
+                continue;
+            }
+            if (!\str_starts_with($code, 'af_')) {
+                $code = 'af_' . $code;
+            }
+            if (\is_array($value)) {
+                $value = \reset($value);
+            }
+            if (!\is_scalar($value) && $value !== null) {
+                continue;
+            }
+            $scalar = \trim((string)$value);
+            if ($scalar === '') {
+                continue;
+            }
+            $bag[$code] = $scalar;
+        }
+
+        $allow = \array_fill_keys(self::all(), true);
+        $canonicalQuery = \Weline\Framework\Http\Fpc\FpcAllowlistedQueryIdentity::filterQueryString(
+            \http_build_query($bag),
+            $allow,
+            false,
+        );
+        if ($canonicalQuery === '') {
+            return null;
+        }
+
+        return $hostWithScheme . $path . '?' . $canonicalQuery;
+    }
+
+    /**
      * @return list<string>
      */
     private static function shopperFacetCodes(): array

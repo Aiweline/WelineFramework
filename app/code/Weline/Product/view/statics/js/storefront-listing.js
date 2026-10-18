@@ -1,5 +1,7 @@
 /**
  * Storefront PLP: path-only FPC shell + BinQuery filteredListingPage.
+ * Allowlisted ?price/sort/page/af_* SSR uses projectFiltered (data-listing-ssr-filtered=1)
+ * — boot must NOT soft-refetch (keeps Shared FPC body). Filter clicks still soft BinQuery.
  * Sort / page / price / af_* refresh the grid in one shot; never full-page navigate.
  * Filter clicks are debounced + coalesced; stage shows loading while in flight.
  */
@@ -730,11 +732,13 @@
                 scheduleRefresh(root);
             });
         }
-        // Path-only SSR is neutral; URL soft query must soft-refresh so facet chrome matches grid.
+        // Path-only SSR is neutral. Allowlisted query SSR is already projectFiltered —
+        // skip boot BinQuery so Shared FPC HIT is not wiped by soft refresh.
         hydrateStateFromLocation(state);
         if (sortSelect && state.sort) {
             sortSelect.value = String(state.sort);
         }
+        paintFacetActive(state);
         root.addEventListener('click', function (event) {
             var pageBtn = event.target.closest('[data-listing-page]');
             if (pageBtn && root.contains(pageBtn)) {
@@ -744,6 +748,11 @@
             }
         });
         if (hasSoftListingQuery(state)) {
+            if (root.getAttribute('data-listing-ssr-filtered') === '1') {
+                commitCurrent(state);
+                softSyncUrl(root, state);
+                return;
+            }
             // Keep committed = SSR neutral until first successful paint; fail → revertToCommitted.
             scheduleRefresh(root);
         }

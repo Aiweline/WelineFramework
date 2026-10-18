@@ -60,6 +60,11 @@ final class Category extends FrontendController
         $productIds = $page['product_ids'];
         $listingQuery = StorefrontListingFpcQueryKeys::fromRequest($this->request);
         $bindListingQuery = $listingQuery !== [];
+        if ($bindListingQuery
+            && \class_exists(\Weline\Server\Security\SearchFilterOriginGate::class)
+        ) {
+            \Weline\Server\Security\SearchFilterOriginGate::assertHtmlExtraVariantOrTerminate($this->request);
+        }
         $offers = $productIds === []
             ? []
             : $this->catalog->publishedOffersForProductIds($productIds, 120, $bindListingQuery);
@@ -113,6 +118,8 @@ final class Category extends FrontendController
         $this->assign('storefront_listing_page_options', $projection['page_options']);
         $this->assign('storefront_listing_sort_options', $projection['sort_options']);
         $this->assign('storefront_listing_path', $this->listingShell->normalizeListingPath($categoryUrl));
+        // Soft JS must not BinQuery-refetch when Shared FPC already painted projectFiltered.
+        $this->assign('storefront_listing_ssr_filtered', $bindListingQuery);
         StorefrontPageAssignBag::replace([
             'page_title' => $pageTitle,
             'storefront_category' => $category,
@@ -134,6 +141,7 @@ final class Category extends FrontendController
             'storefront_listing_page_options' => $projection['page_options'],
             'storefront_listing_sort_options' => $projection['sort_options'],
             'storefront_listing_path' => $this->listingShell->normalizeListingPath($categoryUrl),
+            'storefront_listing_ssr_filtered' => $bindListingQuery,
         ]);
 
         $listingFacts = new StorefrontSeoListingFacts();

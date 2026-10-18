@@ -291,8 +291,8 @@ final class ProductSeoProfileProvider implements SeoProfileProviderInterface
         }
 
         if ($description === '') {
-            $label = $title !== '' ? $title : '汉服商品';
-            $prefix = $brand !== '' ? ($brand . '正品汉服：') : '';
+            $label = $title !== '' ? $title : '在售商品';
+            $prefix = $brand !== '' ? ($brand . '正品：') : '';
             $description = $prefix . $label . '。查看颜色与尺码、实拍图片、库存与发货说明，便于日常与礼仪场景选购。';
         }
         if (mb_strlen($description) < 80) {
@@ -310,7 +310,7 @@ final class ProductSeoProfileProvider implements SeoProfileProviderInterface
                 $description = rtrim($description, "。.;； ") . '。' . $suffix;
             }
             if (mb_strlen($description) < 80) {
-                $description .= '欢迎对比形制与面料后再下单。';
+                $description .= '欢迎对比款式与面料后再下单。';
             }
         }
 

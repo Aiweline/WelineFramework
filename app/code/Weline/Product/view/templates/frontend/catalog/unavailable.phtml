@@ -1,0 +1,57 @@
+<?php
+/**
+ * Storefront PDP when slug/id resolves to no published offers.
+ * Keeps the /product/... URL; controller already set HTTP 404 + no-store.
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$meta = is_array($this->getData('meta')) ? $this->getData('meta') : [];
+$title = trim((string)($meta['pageTitle'] ?? $meta['title'] ?? __('商品不存在或当前不可用。')));
+$lead = trim((string)($meta['pageLead'] ?? __('您访问的商品链接可能已失效，或该商品当前不可购买。')));
+$hint = trim((string)($meta['pageHint'] ?? __('请返回全部商品继续选购，或检查链接是否正确。')));
+$productsHref = trim((string)($meta['productsHref'] ?? $meta['homeHref'] ?? ''));
+if ($productsHref === '') {
+    $productsHref = '/products';
+}
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
+</head>
+<body>
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+
+    <main class="w-container"
+          id="product-unavailable-main"
+          data-testid="storefront-product-unavailable"
+          data-layout="product-unavailable">
+        <section class="w-empty" role="status" aria-labelledby="product-unavailable-title">
+            <h1 id="product-unavailable-title"><?= $esc($title) ?></h1>
+            <?php if ($lead !== ''): ?>
+                <p><?= $esc($lead) ?></p>
+            <?php endif; ?>
+            <?php if ($hint !== ''): ?>
+                <p><?= $esc($hint) ?></p>
+            <?php endif; ?>
+            <p>
+                <a class="w-button"
+                   data-tone="primary"
+                   data-testid="storefront-product-unavailable-catalog"
+                   href="<?= $esc($productsHref) ?>">
+                    <?= __('浏览全部商品') ?>
+                </a>
+            </p>
+        </section>
+    </main>
+
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+</body>
+</html>

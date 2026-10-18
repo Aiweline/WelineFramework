@@ -99,6 +99,9 @@ final class ProductFrontendContractsTest extends TestCase
             'ProductDetailTemplate::testConfigurableDetailRequiresAnExplicitOfferIdentity' => function () {
             $this->assert_ProductDetailTemplate_testConfigurableDetailRequiresAnExplicitOfferIdentity();
         },
+            'ProductDetailTemplate::testDetailShimFetchesProductInfoThroughTaglib' => function () {
+            $this->assert_ProductDetailTemplate_testDetailShimFetchesProductInfoThroughTaglib();
+        },
             'ProductDownloadSurface::testPaidObserverIsSynchronousCriticalAndReadsOrderUuid' => function () {
             $this->assert_ProductDownloadSurface_testPaidObserverIsSynchronousCriticalAndReadsOrderUuid();
         },
@@ -431,6 +434,30 @@ private function assert_ProductDetailTemplate_testDetailTemplateRendersPublished
     self::assertStringNotContainsString('<dd>', $html);
 }
 
+private function assert_ProductDetailTemplate_testDetailShimFetchesProductInfoThroughTaglib(): void
+{
+    $shim = (string) file_get_contents(BP . 'app/code/Weline/Product/view/templates/frontend/catalog/detail.phtml');
+    self::assertStringContainsString(
+        "fetch('Weline_Product::templates/frontend/widgets/product-info.phtml')",
+        $shim,
+        'detail.phtml shim must Template::fetch product-info so Taglib expands @url',
+    );
+    self::assertStringNotContainsString(
+        'include __DIR__',
+        $shim,
+        'raw __DIR__ include of product-info bypasses Taglib (T_DIR → source dir) and leaks @url into HTML',
+    );
+    self::assertStringContainsString('data-variant-live-url="@url{\'weline_product/frontend/api/variant-availability\'}"', (string) file_get_contents(BP . 'app/code/Weline/Product/view/templates/frontend/widgets/product-info.phtml'));
+
+    // Optional local design overlay (often gitignored): must compile module bytes, never raw-include.
+    $hanfuOverlay = BP . 'app/design/Weline/hanfu/Weline_Product/templates/frontend/widgets/product-info.phtml';
+    if (is_file($hanfuOverlay)) {
+        $overlay = (string) file_get_contents($hanfuOverlay);
+        self::assertStringContainsString('fetchSourceHtml(', $overlay);
+        self::assertStringNotContainsString('include $moduleTpl', $overlay);
+    }
+}
+
 private function assert_ProductDetailTemplate_testDetailControllerOwnsTheNativeProductDetailLayout(): void
 {
     $controller = (string) file_get_contents(BP . 'app/code/Weline/Product/Controller/Frontend/Detail.php');
@@ -448,7 +475,11 @@ private function assert_ProductDetailTemplate_testDetailControllerOwnsTheNativeP
     self::assertStringContainsString('publishedOffersForProduct($productId)', $controller);
     self::assertStringContainsString('publishedOffersBySlug($slug)', $controller);
     self::assertStringContainsString('carryResolvedIdentity', $controller);
-    self::assertStringContainsString("\$this->getUrl('products')", $controller);
+    self::assertStringContainsString('renderUnavailableProduct', $controller);
+    self::assertStringContainsString('unavailable.phtml', $controller);
+    self::assertStringContainsString("setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate')", $controller);
+    self::assertStringContainsString("data-testid=\"storefront-product-unavailable\"", (string) file_get_contents(BP . 'app/code/Weline/Product/view/templates/frontend/catalog/unavailable.phtml'));
+    self::assertStringNotContainsString("return (string)\$this->redirect(\$this->getUrl('products'));", $controller);
     self::assertStringContainsString('detail.phtml', $controller);
     self::assertStringNotContainsString('detail-shell', $controller);
     self::assertStringNotContainsString('product_detail', $controller);

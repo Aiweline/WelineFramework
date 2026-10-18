@@ -134,6 +134,13 @@ final class Catalog extends FrontendController
         // → facet-listing bag + projectFiltered so Shared FPC body matches the key.
         $listingQuery = StorefrontListingFpcQueryKeys::fromRequest($this->request);
         $bindListingQuery = $listingQuery !== [];
+        $isInternalStorefrontChainWarmupEarly = (string)$this->request->getServer('WLS_INTERNAL_STOREFRONT_CHAIN_WARMUP') === '1';
+        if ($bindListingQuery
+            && !$isInternalStorefrontChainWarmupEarly
+            && \class_exists(\Weline\Server\Security\SearchFilterOriginGate::class)
+        ) {
+            \Weline\Server\Security\SearchFilterOriginGate::assertHtmlExtraVariantOrTerminate($this->request);
+        }
         $offers = $this->catalog->publishedListingCandidates(1000, $bindListingQuery);
         StorefrontPageContext::setListingOffers($offers);
 
@@ -179,6 +186,8 @@ final class Catalog extends FrontendController
         $this->assign('storefront_listing_page_options', $projection['page_options']);
         $this->assign('storefront_listing_sort_options', $projection['sort_options']);
         $this->assign('storefront_listing_path', $this->listingShell->normalizeListingPath($productsUrl));
+        // Soft JS must not BinQuery-refetch when Shared FPC already painted projectFiltered.
+        $this->assign('storefront_listing_ssr_filtered', $bindListingQuery && !$isInternalStorefrontChainWarmup);
         StorefrontPageAssignBag::replace([
             'page_title' => $surface['title'],
             'storefront_heading' => $surface['heading'],
@@ -196,6 +205,7 @@ final class Catalog extends FrontendController
             'storefront_listing_page_options' => $projection['page_options'],
             'storefront_listing_sort_options' => $projection['sort_options'],
             'storefront_listing_path' => $this->listingShell->normalizeListingPath($productsUrl),
+            'storefront_listing_ssr_filtered' => $bindListingQuery && !$isInternalStorefrontChainWarmup,
         ]);
 
         $listingFacts = new StorefrontSeoListingFacts();

@@ -381,7 +381,7 @@ final class CatalogSeoProfileProvider implements SeoProfileProviderInterface
             $siteName = '本店';
         }
         if ($seed === '' && $name !== '') {
-            $seed = $name . '精选汉服与配饰，覆盖形制说明、面料要点与搭配场景，助你更快选到合身得体的款式。';
+            $seed = $name . '精选商品与配饰，覆盖款式说明、面料要点与搭配场景，助你更快选到合身得体的款式。';
         }
         if (mb_strlen($seed) >= 90) {
             return $seed;

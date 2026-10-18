@@ -132,7 +132,7 @@ private function assert_ProductSeoProfileProvider_testItProjectsImportedSeoAndDi
 
 private function assert_ProductSeoProfileProvider_testBreadcrumbHomeUsesAbsoluteSiteRootWhenCanonicalPresent(): void
 {
-    $product = ['product_id' => 83, 'name' => '汉服商品', 'meta_name' => '汉服商品 | 织造司汉服', 'meta_description' => '织造司汉服，支持颜色与尺码选择。', 'image' => 'https://shop.test/media/hanfu.jpg', 'brand' => '织造司', 'storefront_offers' => [['global_offer_uuid' => 'offer-1', 'sku' => 'SKU-1', 'unit_price_minor' => 1000, 'currency' => 'CNY', 'sellable' => true]]];
+    $product = ['product_id' => 83, 'name' => '在售商品', 'meta_name' => '在售商品 | 织造司', 'meta_description' => '织造司，支持颜色与尺码选择。', 'image' => 'https://shop.test/media/product.jpg', 'brand' => '织造司', 'storefront_offers' => [['global_offer_uuid' => 'offer-1', 'sku' => 'SKU-1', 'unit_price_minor' => 1000, 'currency' => 'CNY', 'sellable' => true]]];
     $profile = (new ProductSeoProfileProvider())->provideSeoProfile(new class
     {
         public function getData(string $key): mixed
@@ -141,7 +141,7 @@ private function assert_ProductSeoProfileProvider_testBreadcrumbHomeUsesAbsolute
         }
     }, ['_slot' => 'head', 'page_type' => 'product', 'product' => $product, 'canonical_url' => 'https://shop.test/product/hanfu']);
     self::assertSame('https://shop.test/', $profile['breadcrumbs'][0]['url']);
-    self::assertSame('汉服商品', $profile['breadcrumbs'][array_key_last($profile['breadcrumbs'])]['name']);
+    self::assertSame('在售商品', $profile['breadcrumbs'][array_key_last($profile['breadcrumbs'])]['name']);
 }
 
 private function assert_ProductSeoProfileProvider_testStyleTypeAxisMapsToPatternAndOfferUrls(): void
@@ -177,7 +177,7 @@ private function assert_ProductSeoProfileProvider_testItIgnoresNonHeadAndNonProd
 
 private function assert_ProductSeoProfileProvider_testObjectManagerHeadRendererDiscoversProductProviderByDefault(): void
 {
-    $product = ['product_id' => 83, 'name' => '汉服商品', 'meta_name' => '汉服商品 | 织造司汉服', 'meta_description' => '织造司汉服，支持颜色与尺码选择。', 'meta_keywords' => '织造司,汉服', 'image' => 'https://shop.test/media/hanfu.jpg', 'brand' => '织造司'];
+    $product = ['product_id' => 83, 'name' => '在售商品', 'meta_name' => '在售商品 | 织造司', 'meta_description' => '织造司，支持颜色与尺码选择。', 'meta_keywords' => '织造司,商品', 'image' => 'https://shop.test/media/product.jpg', 'brand' => '织造司'];
     $product['storefront_offers'] = [array_replace($product, ['global_offer_uuid' => 'offer-white-s', 'sku' => 'ZHIZAOSI-HANFU-BAISE-S', 'unit_price_minor' => 1234, 'currency' => 'CNY', 'sellable' => true, 'variant_axes' => [['code' => 'color', 'value' => '48', 'value_label' => '白色'], ['code' => 'size', 'value' => '57', 'value_label' => 'S']]]), array_replace($product, ['global_offer_uuid' => 'offer-red-m', 'sku' => 'ZHIZAOSI-HANFU-HONGSE-M', 'unit_price_minor' => 1567, 'currency' => 'CNY', 'sellable' => true, 'variant_axes' => [['code' => 'color', 'value' => '49', 'value_label' => '红色'], ['code' => 'size', 'value' => '58', 'value_label' => 'M']]])];
     $template = new class(['seo' => ['page_type' => 'product', 'title' => $product['meta_name'], 'description' => $product['meta_description'], 'keywords' => $product['meta_keywords'], 'canonical_url' => 'https://shop.test/product/hanfu-product', 'product' => $product]])
     {
