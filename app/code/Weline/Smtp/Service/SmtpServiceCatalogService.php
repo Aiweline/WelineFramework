@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Smtp\Service;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Mail\Model\MailDomain;
 use Weline\Mail\Service\MailOutboundRelaySecretService;
 use Weline\Mail\Service\StalwartManagementAdapter;
 use Weline\Smtp\Model\SmtpAccount;
@@ -282,7 +283,7 @@ final class SmtpServiceCatalogService
     }
 
     /**
-     * 删除 Smtp 服务：外部直接删；本机启用先删下属账户再删服务。
+     * 删除 Smtp 服务：外部直接删；本机启用先按账户卸本机 Stalwart，再删目录下属账户，最后删服务。
      *
      * @return array{success: bool, message: string}
      */
@@ -294,25 +295,31 @@ final class SmtpServiceCatalogService
             return ['success' => false, 'message' => (string)__('服务不存在')];
         }
         $mode = (string)$svc->getData(SmtpService::schema_fields_MODE);
+        $removedAccounts = 0;
         if ($mode === SmtpService::MODE_SELF) {
-            /** @var SmtpAccount $acctModel */
-            $acctModel = ObjectManager::getInstance(SmtpAccount::class);
-            $rows = $acctModel->clear()
-                ->where(SmtpAccount::schema_fields_SERVICE_ID, $serviceId)
-                ->select()
-                ->fetchArray();
-            foreach ($rows as $row) {
-                if (!is_array($row)) {
+            $accounts = $this->listAccountsForService($serviceId);
+            /** @var StalwartManagementAdapter $mgmt */
+            $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+            foreach ($accounts as $one) {
+                if (!$one instanceof SmtpAccount || !(int)$one->getId()) {
                     continue;
                 }
-                $aid = (int)($row[SmtpAccount::schema_fields_ID] ?? $row['smtp_account_id'] ?? 0);
-                if ($aid <= 0) {
-                    continue;
+                $email = strtolower(trim((string)$one->getData(SmtpAccount::schema_fields_EMAIL)));
+                if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false) {
+                    try {
+                        $mgmt->deleteAccount($email);
+                    } catch (\Throwable $e) {
+                        return [
+                            'success' => false,
+                            'message' => (string)__(
+                                'Stalwart 删除账户 %{1} 失败，服务与目录未改：%{2}',
+                                [$email, $e->getMessage()]
+                            ),
+                        ];
+                    }
                 }
-                $one = ObjectManager::getInstance(SmtpAccount::class)->clear()->load($aid);
-                if ($one->getId()) {
-                    $one->delete();
-                }
+                $one->delete();
+                $removedAccounts++;
             }
         }
         $svc->delete();
@@ -321,7 +328,10 @@ final class SmtpServiceCatalogService
             'success' => true,
             'message' => $mode === SmtpService::MODE_EXTERNAL
                 ? (string)__('外部 Smtp 已删除')
-                : (string)__('本机 Smtp 服务及下属账户已删除'),
+                : (string)__(
+                    '本机 Smtp 服务已删除，下属账户 %{1} 个已从目录与本机 Stalwart 移除',
+                    [(string)$removedAccounts]
+                ),
         ];
     }
 
@@ -393,6 +403,158 @@ final class SmtpServiceCatalogService
             'smtp_account_id' => $id,
             'email' => $email,
             'password_once' => $id > 0 ? $password : '',
+        ];
+    }
+
+    /**
+     * 修改本机服务账户：角色 / 状态 / 显示名（不改邮箱前缀；改密码请用重置）。
+     * 状态变更与本机 Stalwart 联动：active→确保邮局有账号；disabled/needs_password→从邮局移除（目录保留）。
+     *
+     * @return array{success: bool, message: string, smtp_account_id: int, email: string, password_once: string}
+     */
+    public function updateAccountOnService(
+        int $accountId,
+        string $role = '',
+        string $status = '',
+        string $displayName = '',
+    ): array {
+        /** @var SmtpAccount $model */
+        $model = ObjectManager::getInstance(SmtpAccount::class)->clear()->load($accountId);
+        if (!$model->getId()) {
+            return $this->acctFail(__('账户不存在'));
+        }
+        $email = strtolower(trim((string)$model->getData(SmtpAccount::schema_fields_EMAIL)));
+        $serviceId = (int)$model->getData(SmtpAccount::schema_fields_SERVICE_ID);
+        $prevStatus = strtolower(trim((string)$model->getData(SmtpAccount::schema_fields_STATUS)));
+        /** @var SmtpService $svc */
+        $svc = ObjectManager::getInstance(SmtpService::class)->clear()->load($serviceId);
+        if (!$svc->getId()) {
+            return $this->acctFail(__('服务不存在'), $accountId, $email);
+        }
+        if ((string)$svc->getData(SmtpService::schema_fields_MODE) !== SmtpService::MODE_SELF) {
+            return $this->acctFail(__('外部填入服务不在此修改本机账户'), $accountId, $email);
+        }
+        $role = strtolower(trim($role));
+        if ($role !== '') {
+            if (!in_array($role, [SmtpAccount::ROLE_SUBMIT, SmtpAccount::ROLE_RELAY], true)) {
+                return $this->acctFail(__('角色无效'), $accountId, $email);
+            }
+            if ($role === SmtpAccount::ROLE_RELAY && !(int)$svc->getData(SmtpService::schema_fields_RELAY_SERVICE)) {
+                return $this->acctFail(__('请先在该服务开启中继'), $accountId, $email);
+            }
+            $model->setData(SmtpAccount::schema_fields_ROLE, $role);
+        }
+        $status = strtolower(trim($status));
+        if ($status !== '') {
+            if (!in_array($status, ['active', 'disabled', 'needs_password'], true)) {
+                return $this->acctFail(__('状态无效'), $accountId, $email);
+            }
+            $model->setData(SmtpAccount::schema_fields_STATUS, $status);
+        }
+        if ($displayName !== '') {
+            $model->setData(SmtpAccount::schema_fields_DISPLAY_NAME, trim($displayName));
+        }
+
+        $nextStatus = $status !== '' ? $status : $prevStatus;
+        $stalwartNote = '';
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false) {
+            try {
+                /** @var StalwartManagementAdapter $mgmt */
+                $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+                if ($nextStatus === 'active') {
+                    $sealed = trim((string)$model->getData(SmtpAccount::schema_fields_PASSWORD_SEALED));
+                    if ($sealed === '') {
+                        return $this->acctFail(
+                            __('启用前须有密封密码：请先「重置密码」再保存为 active'),
+                            $accountId,
+                            $email
+                        );
+                    }
+                    /** @var MailOutboundRelaySecretService $secrets */
+                    $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+                    $plain = $secrets->open($sealed);
+                    $this->provisionSelfMailboxToStalwart($email, $plain);
+                    $stalwartNote = (string)__('；已同步写入本机 Stalwart');
+                } elseif (in_array($nextStatus, ['disabled', 'needs_password'], true)) {
+                    // 停用/待设密码：从邮局卸下，避免仍能 AUTH；目录行保留便于再启用。
+                    if ($prevStatus === 'active' || $mgmt->accountExists($email)) {
+                        $mgmt->deleteAccount($email);
+                        $stalwartNote = (string)__('；已从本机 Stalwart 移除登录');
+                    }
+                }
+            } catch (\Throwable $e) {
+                return $this->acctFail(
+                    __('Stalwart 同步失败，目录未改：%{1}', [$e->getMessage()]),
+                    $accountId,
+                    $email
+                );
+            }
+        }
+
+        $model->setData(SmtpAccount::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))->save();
+
+        return [
+            'success' => true,
+            'message' => (string)__(
+                '账户已更新：%{1}%{2}',
+                [$email !== '' ? $email : (string)$accountId, $stalwartNote]
+            ),
+            'smtp_account_id' => $accountId,
+            'email' => $email,
+            'password_once' => '',
+        ];
+    }
+
+    /**
+     * 删除本机服务账户；默认同步从 Stalwart 移除。
+     *
+     * @return array{success: bool, message: string, smtp_account_id: int, email: string, password_once: string}
+     */
+    public function deleteAccountOnService(int $accountId, bool $alsoStalwart = true): array
+    {
+        /** @var SmtpAccount $model */
+        $model = ObjectManager::getInstance(SmtpAccount::class)->clear()->load($accountId);
+        if (!$model->getId()) {
+            return $this->acctFail(__('账户不存在'));
+        }
+        $email = strtolower(trim((string)$model->getData(SmtpAccount::schema_fields_EMAIL)));
+        $serviceId = (int)$model->getData(SmtpAccount::schema_fields_SERVICE_ID);
+        if ($serviceId > 0) {
+            /** @var SmtpService $svc */
+            $svc = ObjectManager::getInstance(SmtpService::class)->clear()->load($serviceId);
+            if ($svc->getId()
+                && (string)$svc->getData(SmtpService::schema_fields_MODE) !== SmtpService::MODE_SELF
+            ) {
+                return $this->acctFail(__('外部填入服务不在此删除本机账户'), $accountId, $email);
+            }
+        }
+        if ($alsoStalwart && $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false) {
+            try {
+                /** @var StalwartManagementAdapter $mgmt */
+                $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
+                $mgmt->deleteAccount($email);
+            } catch (\Throwable $e) {
+                return $this->acctFail(
+                    __('Stalwart 删除失败，目录未改：%{1}', [$e->getMessage()]),
+                    $accountId,
+                    $email
+                );
+            }
+        }
+        $model->delete();
+
+        return [
+            'success' => true,
+            'message' => (string)__(
+                '已删除账户 %{1}%{2}',
+                [
+                    $email !== '' ? $email : (string)$accountId,
+                    $alsoStalwart ? (string)__('（含本机 Stalwart）') : '',
+                ]
+            ),
+            'smtp_account_id' => $accountId,
+            'email' => $email,
+            'password_once' => '',
         ];
     }
 
@@ -729,6 +891,123 @@ final class SmtpServiceCatalogService
         } catch (\Throwable) {
             return $empty;
         }
+    }
+
+    /**
+     * 把企业邮箱「域名与 DNS」里已登记的本机邮局（MailDomain / Stalwart）同步成 Smtp 服务目录行。
+     * 不新建密码、不改 Stalwart；已有同根域或同主机的服务跳过；新建后尽量同步账号目录。
+     *
+     * @return array{
+     *   success: bool,
+     *   message: string,
+     *   imported: int,
+     *   skipped: int,
+     *   accounts_imported: int,
+     *   services: list<array{smtp_service_id:int,domain:string,smtp_hostname:string}>
+     * }
+     */
+    public function importSelfServicesFromMailDomains(): array
+    {
+        /** @var MailDomain $domainModel */
+        $domainModel = ObjectManager::getInstance(MailDomain::class);
+        $collection = $domainModel->clear()->order(MailDomain::schema_fields_ID, 'ASC')->select()->fetch();
+        $rows = is_object($collection) && method_exists($collection, 'getItems')
+            ? $collection->getItems()
+            : (is_iterable($collection) ? $collection : []);
+
+        $existingByDomain = [];
+        $existingByHost = [];
+        foreach ($this->listServices() as $svc) {
+            $d = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_DOMAIN_NAME)));
+            $h = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME)));
+            if ($d !== '') {
+                $existingByDomain[$d] = (int)$svc->getId();
+            }
+            if ($h !== '') {
+                $existingByHost[$h] = (int)$svc->getId();
+            }
+        }
+
+        $imported = 0;
+        $skipped = 0;
+        $accountsImported = 0;
+        $created = [];
+        $now = date('Y-m-d H:i:s');
+
+        foreach ($rows as $row) {
+            if (!$row instanceof MailDomain) {
+                continue;
+            }
+            $domain = strtolower(trim((string)$row->getData(MailDomain::schema_fields_DOMAIN_NAME)));
+            if ($domain === '') {
+                continue;
+            }
+            $hostname = strtolower(trim((string)$row->getData(MailDomain::schema_fields_HOSTNAME)));
+            if ($hostname === '') {
+                $hostname = 'mail.' . $domain;
+            }
+            if (isset($existingByDomain[$domain]) || isset($existingByHost[$hostname])) {
+                $skipped++;
+                continue;
+            }
+
+            $poolDomainId = $this->resolveExistingPoolId($domain, $hostname);
+            $name = (string)__('本机 Smtp · %{1}', [$hostname]);
+            /** @var SmtpService $svc */
+            $svc = ObjectManager::getInstance(SmtpService::class);
+            $svc->clear()
+                ->setData(SmtpService::schema_fields_NAME, $name)
+                ->setData(SmtpService::schema_fields_MODE, SmtpService::MODE_SELF)
+                ->setData(SmtpService::schema_fields_STATUS, 'active')
+                ->setData(SmtpService::schema_fields_DOMAIN_NAME, $domain)
+                ->setData(SmtpService::schema_fields_SMTP_HOSTNAME, $hostname)
+                ->setData(SmtpService::schema_fields_PORT, 587)
+                ->setData(SmtpService::schema_fields_TLS, 'starttls')
+                ->setData(SmtpService::schema_fields_RELAY_SERVICE, 0)
+                ->setData(SmtpService::schema_fields_POOL_DOMAIN_ID, $poolDomainId)
+                ->setData(SmtpService::schema_fields_CREATED_AT, $now)
+                ->setData(SmtpService::schema_fields_UPDATED_AT, $now)
+                ->save();
+            $id = (int)$svc->getId();
+            if ($id <= 0) {
+                continue;
+            }
+            $imported++;
+            $existingByDomain[$domain] = $id;
+            $existingByHost[$hostname] = $id;
+            $created[] = [
+                'smtp_service_id' => $id,
+                'domain' => $domain,
+                'smtp_hostname' => $hostname,
+            ];
+            $acctSync = $this->importAccountsFromStalwart($id);
+            if (!empty($acctSync['success'])) {
+                $accountsImported += (int)($acctSync['imported'] ?? 0);
+            }
+        }
+
+        if ($imported === 0 && $skipped === 0) {
+            return [
+                'success' => false,
+                'message' => (string)__('企业邮箱域名池为空，请先在「域名与 DNS」登记本机邮局域名'),
+                'imported' => 0,
+                'skipped' => 0,
+                'accounts_imported' => 0,
+                'services' => [],
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => (string)__(
+                '已从企业邮箱域名同步：新增 %{1} 个 Smtp 服务，已有 %{2} 个跳过；同步账号目录 %{3} 个。',
+                [(string)$imported, (string)$skipped, (string)$accountsImported]
+            ),
+            'imported' => $imported,
+            'skipped' => $skipped,
+            'accounts_imported' => $accountsImported,
+            'services' => $created,
+        ];
     }
 
     /**

@@ -177,8 +177,10 @@ final class SmtpServiceEnableService
         if ($input === '') {
             return ['root' => '', 'smtp_hostname' => ''];
         }
-        if (str_starts_with($input, 'smtp.')) {
-            $root = substr($input, 5);
+        // 本机邮局主机常见为 smtp.{root} 或 mail.{root}；二者都按 FQDN 登记，根域取后缀。
+        if (str_starts_with($input, 'smtp.') || str_starts_with($input, 'mail.')) {
+            $dot = strpos($input, '.');
+            $root = $dot === false ? '' : substr($input, $dot + 1);
 
             return ['root' => $root, 'smtp_hostname' => $input];
         }

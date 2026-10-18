@@ -95,6 +95,8 @@ settings,settings
 密码（仅一次）：%{1},密码（仅一次）：%{1}
 创建失败,创建失败
 重置失败,重置失败
+更新失败,更新失败
+删除失败,删除失败
 "已废止：Smtp 不依赖邮局启域。请启用上方 Smtp 服务并填写外部 SMTP 传输。","已废止：Smtp 不依赖邮局启域。请启用上方 Smtp 服务并填写外部 SMTP 传输。"
 "已废止：请在企业邮局模块管理邮箱；Smtp 配置不创建邮局账号。","已废止：请在企业邮局模块管理邮箱；Smtp 配置不创建邮局账号。"
 Smtp配置成功！为了保证Smtp邮件服务正常工作，请测试确认。,"Smtp configuration successful! In order to ensure that the Smtp mail service works properly, please test and confirm."
@@ -178,12 +180,22 @@ copy,copy
 关闭中继服务,关闭中继服务
 开启中继服务,开启中继服务
 "关闭 Smtp 服务","关闭 Smtp 服务"
+"新建 Smtp 账户","新建 Smtp 账户"
+关闭,Close
 "新建账户 local_part","新建账户 local_part"
 角色,角色
 提交账号,提交账号
 中继账号（需已开中继服务）,中继账号（需已开中继服务）
+取消,Cancel
 创建并显示一次密码,创建并显示一次密码
 重置密码,重置密码
+"确认删除该 Smtp 账户？将同时从本机 Stalwart 移除。","Delete this SMTP account? It will also be removed from local Stalwart."
+删除,Delete
+中继账号,中继账号
+状态,状态
+启用,启用
+停用,停用
+保存修改,"Save changes"
 "启用时录入域名：须 DNS 已解析，才会统一进入域名池并申请证书。可外接。与企业邮局是否启域无关，不必先开邮局。","启用时录入域名：须 DNS 已解析，才会统一进入域名池并申请证书。可外接。与企业邮局是否启域无关，不必先开邮局。"
 域名来源,域名来源
 从域名池选择,从域名池选择
@@ -200,7 +212,6 @@ copy,copy
 添加账户,"Add account"
 发件人,Sender
 测试,Test
-删除,Delete
 "传输账户 ID","Transfer account ID"
 系统生成，只读,"System-generated, read-only"
 显示名称,"Display name"
@@ -227,9 +238,7 @@ copy,copy
 新发件人,"New Sender"
 默认发件人,"Default Sender"
 该发件人默认收件人,"Default recipient for this sender"
-关闭,Close
 收件邮箱,"Recipient Email"
-取消,Cancel
 发送,Send
 暂无匹配的自建邮箱账号,"No matching self-hosted mailbox account"
 "外部 SMTP 需手动填写下方连接信息。","External SMTP requires the connection fields below to be filled manually."
@@ -398,8 +407,9 @@ Smtp配置,"Smtp configuration"
 状态已更新,状态已更新
 仅外部填入服务可在此改主机凭据,仅外部填入服务可在此改主机凭据
 "外部 Smtp 凭据已更新","外部 Smtp 凭据已更新"
+"Stalwart 删除账户 %{1} 失败，服务与目录未改：%{2}","Stalwart failed to delete account %{1}; service and directory unchanged: %{2}"
 "外部 Smtp 已删除","外部 Smtp 已删除"
-"本机 Smtp 服务及下属账户已删除","本机 Smtp 服务及下属账户已删除"
+"本机 Smtp 服务已删除，下属账户 %{1} 个已从目录与本机 Stalwart 移除","Local SMTP service deleted; %{1} account(s) removed from directory and local Stalwart"
 外部填入服务不建本机账户；请直接拷贝主机凭据,外部填入服务不建本机账户；请直接拷贝主机凭据
 服务未启用,服务未启用
 请先在该服务开启中继,请先在该服务开启中继
@@ -407,6 +417,18 @@ Smtp配置,"Smtp configuration"
 账户已存在,账户已存在
 "Stalwart 开通失败：%{1}","Stalwart 开通失败：%{1}"
 "账户已创建（已同步 Stalwart），请立即复制密码","账户已创建（已同步 Stalwart），请立即复制密码"
+账户不存在,账户不存在
+外部填入服务不在此修改本机账户,外部填入服务不在此修改本机账户
+角色无效,角色无效
+"启用前须有密封密码：请先「重置密码」再保存为 active","Sealed password required before enabling: reset password first, then save as active"
+"；已同步写入本机 Stalwart","; synced to local Stalwart"
+"；已从本机 Stalwart 移除登录","; removed login from local Stalwart"
+"Stalwart 同步失败，目录未改：%{1}","Stalwart sync failed; directory unchanged: %{1}"
+账户已更新：%{1}%{2},"Account updated: %{1}%{2}"
+外部填入服务不在此删除本机账户,外部填入服务不在此删除本机账户
+"Stalwart 删除失败，目录未改：%{1}","Stalwart 删除失败，目录未改：%{1}"
+"已删除账户 %{1}%{2}","已删除账户 %{1}%{2}"
+"（含本机 Stalwart）","（含本机 Stalwart）"
 "外部 · %{1}（%{2}:%{3}）","外部 · %{1}（%{2}:%{3}）"
 "本机 · %{1}（%{2} → %{3}:%{4}）","本机 · %{1}（%{2} → %{3}:%{4}）"
 "请选择 Smtp 账户或服务","请选择 Smtp 账户或服务"
@@ -415,12 +437,14 @@ Smtp配置,"Smtp configuration"
 无法读取账户密码,无法读取账户密码
 "外部 Smtp 服务不存在","外部 Smtp 服务不存在"
 "无法解密外部 Smtp 密码：%{1}","无法解密外部 Smtp 密码：%{1}"
-账户不存在,账户不存在
 该账户无密封密码,该账户无密封密码
 无法解密密码：%{1},无法解密密码：%{1}
 密码如下（请立即复制，页面不会常显）,密码如下（请立即复制，页面不会常显）
 "本机 Stalwart 邮局","Local Stalwart mail server"
 "本机 Stalwart 邮局（%{1}）","Local Stalwart mail server (%{1})"
+"本机 Smtp · %{1}","本机 Smtp · %{1}"
+"企业邮箱域名池为空，请先在「域名与 DNS」登记本机邮局域名","企业邮箱域名池为空，请先在「域名与 DNS」登记本机邮局域名"
+"已从企业邮箱域名同步：新增 %{1} 个 Smtp 服务，已有 %{2} 个跳过；同步账号目录 %{3} 个。","已从企业邮箱域名同步：新增 %{1} 个 Smtp 服务，已有 %{2} 个跳过；同步账号目录 %{3} 个。"
 "外部填入服务无需从本机 Stalwart 同步账号","External services do not sync accounts from local Stalwart"
 服务域名无效,"Service domain is invalid"
 "读取本机 Stalwart 账号失败：%{1}","Failed to read local Stalwart accounts: %{1}"
@@ -455,6 +479,8 @@ Global,Global
 "SMTP 用户名未配置","SMTP username is not configured"
 接受者邮箱为空：请正确设置接收邮箱！,"Recipient email is empty: Please set the receiving email correctly!"
 发送者邮箱为空：请正确设置发件邮箱！,"Sender email is empty: please set the sending email correctly!"
+"本机 Smtp 服务及下属账户已删除","本机 Smtp 服务及下属账户已删除"
+账户已更新：%{1},账户已更新：%{1}
 "写入 Stalwart 失败：%{1}","写入 Stalwart 失败：%{1}"
 "已将 %{1} 写入 Stalwart（密码未改）","已将 %{1} 写入 Stalwart（密码未改）"
 账户已创建，请立即复制密码,账户已创建，请立即复制密码
@@ -592,5 +618,7 @@ Smtp邮件服务,"Smtp mail service"
 邮件正文预览,"Mail body preview"
 选择网站范围,"Select website scope"
 全部渠道,"All channels"
-长安汉服水墨中国风独立站，精选明制、宋制、唐制汉服与马面裙及传统配饰，覆盖日常出行、节日庆典与礼仪场合；提供形制说明、尺码参考、面料要点与搭配灵感，助你更快选到合身又得体的汉服款式。,"Chang'an Hanfu is an ink-wash Chinese-style boutique for Ming, Song, and Tang Hanfu and mamian skirts with traditional accessories—everyday, festival, and ceremonial wear—with silhouette guides, sizing notes, fabric tips, and styling inspiration."
-"长安汉服 · Hanfu Atelier","Chang'an Hanfu · Hanfu Atelier"
+本站精选在售商品与配饰，覆盖日常、节日与礼仪等场景；提供款式说明、尺码参考、面料要点与搭配灵感，助你更快选到合身又得体的款式。,"This store curates products and accessories for everyday, festival, and ceremonial occasions—with style guides, sizing notes, fabric tips, and styling inspiration."
+本站品牌,"Store brand"
+"确定删除该 Smtp 服务及其下属全部 %{1} 个账户？将同时从本机 Stalwart 移除这些账户，不可恢复。外投若仍引用需改绑。","Delete this SMTP service and all %{1} accounts under it? They will also be removed from local Stalwart and cannot be undone. Rebind any outbound that still references it."
+"确定删除该外部 Smtp 服务？外投若仍引用需改绑。","Delete this external SMTP service? Rebind any outbound that still references it."

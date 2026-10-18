@@ -118,6 +118,48 @@ final class SmtpAccountManageService
     /**
      * @return array{success: bool, message: string, smtp_account_id: int, email: string, password_once: string, created: bool}
      */
+    public function updateAccount(
+        int $accountId,
+        string $role = '',
+        string $status = '',
+        string $displayName = '',
+    ): array {
+        /** @var SmtpServiceCatalogService $catalog */
+        $catalog = ObjectManager::getInstance(SmtpServiceCatalogService::class);
+        $result = $catalog->updateAccountOnService($accountId, $role, $status, $displayName);
+
+        return [
+            'success' => !empty($result['success']),
+            'message' => (string)($result['message'] ?? ''),
+            'smtp_account_id' => (int)($result['smtp_account_id'] ?? $accountId),
+            'email' => (string)($result['email'] ?? ''),
+            'password_once' => '',
+            'created' => false,
+        ];
+    }
+
+    /**
+     * @return array{success: bool, message: string, smtp_account_id: int, email: string, password_once: string, created: bool}
+     */
+    public function deleteAccount(int $accountId, bool $alsoStalwart = true): array
+    {
+        /** @var SmtpServiceCatalogService $catalog */
+        $catalog = ObjectManager::getInstance(SmtpServiceCatalogService::class);
+        $result = $catalog->deleteAccountOnService($accountId, $alsoStalwart);
+
+        return [
+            'success' => !empty($result['success']),
+            'message' => (string)($result['message'] ?? ''),
+            'smtp_account_id' => (int)($result['smtp_account_id'] ?? $accountId),
+            'email' => (string)($result['email'] ?? ''),
+            'password_once' => '',
+            'created' => false,
+        ];
+    }
+
+    /**
+     * @return array{success: bool, message: string, smtp_account_id: int, email: string, password_once: string, created: bool}
+     */
     public function resetPassword(int $accountId): array
     {
         /** @var SmtpAccount $model */

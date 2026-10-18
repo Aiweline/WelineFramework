@@ -110,6 +110,8 @@ class Config extends BackendController
         $this->assign('smtp_disable_service_url', $this->_url->getBackendUrl('smtp/backend/config/disableService', $scopeQs));
         $this->assign('smtp_create_account_url', $this->_url->getBackendUrl('smtp/backend/config/createSmtpAccount', $scopeQs));
         $this->assign('smtp_reset_account_url', $this->_url->getBackendUrl('smtp/backend/config/resetSmtpAccountPassword', $scopeQs));
+        $this->assign('smtp_update_account_url', $this->_url->getBackendUrl('smtp/backend/config/updateSmtpAccount', $scopeQs));
+        $this->assign('smtp_delete_account_url', $this->_url->getBackendUrl('smtp/backend/config/deleteSmtpAccount', $scopeQs));
         $this->assign('smtp_set_relay_url', $this->_url->getBackendUrl('smtp/backend/config/setRelayService', $scopeQs));
         $this->assign('smtp_sync_tls_url', $this->_url->getBackendUrl('smtp/backend/config/syncTls', $scopeQs));
         $tlsStatus = [
@@ -275,6 +277,45 @@ class Config extends BackendController
             $this->getMessageManager()->addSuccess($msg);
         } else {
             $this->getMessageManager()->addError((string)($result['message'] ?? __('重置失败')));
+        }
+        $this->redirect($this->scopedConfigUrl($workScope));
+
+        return '';
+    }
+
+    #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
+    public function postUpdateSmtpAccount(): string
+    {
+        $workScope = $this->resolveWorkScope(false);
+        $accountId = (int)$this->request->getPost('smtp_account_id', 0);
+        $role = trim((string)$this->request->getPost('account_role', ''));
+        $status = trim((string)$this->request->getPost('account_status', ''));
+        $display = trim((string)$this->request->getPost('display_name', ''));
+        /** @var SmtpAccountManageService $svc */
+        $svc = ObjectManager::getInstance(SmtpAccountManageService::class);
+        $result = $svc->updateAccount($accountId, $role, $status, $display);
+        if (!empty($result['success'])) {
+            $this->getMessageManager()->addSuccess((string)$result['message']);
+        } else {
+            $this->getMessageManager()->addError((string)($result['message'] ?? __('更新失败')));
+        }
+        $this->redirect($this->scopedConfigUrl($workScope));
+
+        return '';
+    }
+
+    #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
+    public function postDeleteSmtpAccount(): string
+    {
+        $workScope = $this->resolveWorkScope(false);
+        $accountId = (int)$this->request->getPost('smtp_account_id', 0);
+        /** @var SmtpAccountManageService $svc */
+        $svc = ObjectManager::getInstance(SmtpAccountManageService::class);
+        $result = $svc->deleteAccount($accountId, true);
+        if (!empty($result['success'])) {
+            $this->getMessageManager()->addSuccess((string)$result['message']);
+        } else {
+            $this->getMessageManager()->addError((string)($result['message'] ?? __('删除失败')));
         }
         $this->redirect($this->scopedConfigUrl($workScope));
 

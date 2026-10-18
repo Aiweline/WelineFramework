@@ -240,6 +240,8 @@ $centerUrl = $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig
         $disableServiceUrl = (string)($smtp_disable_service_url ?? '');
         $createSmtpAcctUrl = (string)($smtp_create_account_url ?? '');
         $resetSmtpAcctUrl = (string)($smtp_reset_account_url ?? '');
+        $updateSmtpAcctUrl = (string)($smtp_update_account_url ?? '');
+        $deleteSmtpAcctUrl = (string)($smtp_delete_account_url ?? '');
         $setRelayUrl = (string)($smtp_set_relay_url ?? '');
         ?>
         <div class="w-card" data-testid="smtp-service-enable-card" style="--w-mb:var(--weline-space-4);">
@@ -289,21 +291,42 @@ $centerUrl = $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig
                         <form method="post" action="<?= htmlspecialchars($disableServiceUrl, ENT_QUOTES, 'UTF-8') ?>">
                             <button class="w-button" data-variant="outline" data-size="sm" type="submit" data-testid="smtp-service-disable"><?= __('关闭 Smtp 服务') ?></button>
                         </form>
+                        <button class="w-button" data-tone="primary" data-size="sm" type="button" data-testid="smtp-account-create-open"
+                                onclick="(function(){var d=document.getElementById('smtp-account-create-dialog'); if(!d)return; if(window.Weline&amp;&amp;Weline.UI&amp;&amp;Weline.UI.dialog&amp;&amp;typeof Weline.UI.dialog.open==='function'){Weline.UI.dialog.open(d);}else{d.hidden=false;d.setAttribute('data-state','open');}})();">
+                            <?= __('新建 Smtp 账户') ?>
+                        </button>
                     </div>
-                    <form method="post" action="<?= htmlspecialchars($createSmtpAcctUrl, ENT_QUOTES, 'UTF-8') ?>" data-testid="smtp-account-create-form" class="w-stack" style="--w-gap:var(--weline-space-2); --w-mb:var(--weline-space-3);">
-                        <label class="w-field">
-                            <span class="w-field__label"><?= __('新建账户 local_part') ?></span>
-                            <input class="w-input" type="text" name="local_part" required pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}" placeholder="relay">
-                        </label>
-                        <label class="w-field">
-                            <span class="w-field__label"><?= __('角色') ?></span>
-                            <select class="w-select" name="account_role">
-                                <option value="submit"><?= __('提交账号') ?></option>
-                                <option value="relay"><?= __('中继账号（需已开中继服务）') ?></option>
-                            </select>
-                        </label>
-                        <button class="w-button" data-variant="primary" data-size="sm" type="submit"><?= __('创建并显示一次密码') ?></button>
-                    </form>
+                    <div class="w-dialog" id="smtp-account-create-dialog" tabindex="-1" aria-hidden="true"
+                         data-w-component="dialog" data-state="closed" hidden
+                         data-testid="smtp-account-create-dialog">
+                        <div class="w-dialog__frame">
+                            <div class="w-dialog__surface">
+                                <form method="post" action="<?= htmlspecialchars($createSmtpAcctUrl, ENT_QUOTES, 'UTF-8') ?>" data-testid="smtp-account-create-form">
+                                    <div class="w-dialog__header">
+                                        <h3 class="w-dialog__title" style="--w-m:0;"><?= __('新建 Smtp 账户') ?></h3>
+                                        <button type="button" class="w-button" aria-label="<?= __('关闭') ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                                    </div>
+                                    <div class="w-dialog__body w-stack" style="--w-gap:var(--weline-space-2);">
+                                        <label class="w-field">
+                                            <span class="w-field__label"><?= __('新建账户 local_part') ?></span>
+                                            <input class="w-input" type="text" name="local_part" required pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}" placeholder="relay">
+                                        </label>
+                                        <label class="w-field">
+                                            <span class="w-field__label"><?= __('角色') ?></span>
+                                            <select class="w-select" name="account_role">
+                                                <option value="submit"><?= __('提交账号') ?></option>
+                                                <option value="relay"><?= __('中继账号（需已开中继服务）') ?></option>
+                                            </select>
+                                        </label>
+                                    </div>
+                                    <div class="w-dialog__footer">
+                                        <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                                        <button class="w-button" data-tone="primary" data-size="sm" type="submit"><?= __('创建并显示一次密码') ?></button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
                     <?php if ($smtpServiceAccounts !== []): ?>
                         <ul class="w-stack" style="--w-gap:var(--weline-space-2);" data-testid="smtp-service-account-list">
                             <?php foreach ($smtpServiceAccounts as $sa):
@@ -314,12 +337,42 @@ $centerUrl = $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig
                                 $semail = (string)$sa->getData('email');
                                 $srole = (string)$sa->getData('account_role');
                                 ?>
-                                <li class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
-                                    <span class="w-text" data-size="sm"><?= htmlspecialchars($semail, ENT_QUOTES, 'UTF-8') ?> (<?= htmlspecialchars($srole, ENT_QUOTES, 'UTF-8') ?>)</span>
-                                    <form method="post" action="<?= htmlspecialchars($resetSmtpAcctUrl, ENT_QUOTES, 'UTF-8') ?>">
-                                        <input type="hidden" name="smtp_account_id" value="<?= $sid ?>">
-                                        <button class="w-button" data-variant="outline" data-size="sm" type="submit"><?= __('重置密码') ?></button>
-                                    </form>
+                                <li class="w-stack" style="--w-gap:var(--weline-space-1);" data-testid="smtp-service-account-<?= $sid ?>">
+                                    <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
+                                        <span class="w-text" data-size="sm"><?= htmlspecialchars($semail, ENT_QUOTES, 'UTF-8') ?> (<?= htmlspecialchars($srole, ENT_QUOTES, 'UTF-8') ?>)</span>
+                                        <form method="post" action="<?= htmlspecialchars($resetSmtpAcctUrl, ENT_QUOTES, 'UTF-8') ?>">
+                                            <input type="hidden" name="smtp_account_id" value="<?= $sid ?>">
+                                            <button class="w-button" data-variant="outline" data-size="sm" type="submit"><?= __('重置密码') ?></button>
+                                        </form>
+                                        <?php if ($deleteSmtpAcctUrl !== ''): ?>
+                                            <form method="post" action="<?= htmlspecialchars($deleteSmtpAcctUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                                  onsubmit="return confirm(<?= htmlspecialchars(json_encode((string)__('确认删除该 Smtp 账户？将同时从本机 Stalwart 移除。'), JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>);">
+                                                <input type="hidden" name="smtp_account_id" value="<?= $sid ?>">
+                                                <button class="w-button" data-variant="outline" data-tone="danger" data-size="sm" type="submit" data-testid="smtp-account-delete-<?= $sid ?>"><?= __('删除') ?></button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php if ($updateSmtpAcctUrl !== ''): ?>
+                                        <form method="post" action="<?= htmlspecialchars($updateSmtpAcctUrl, ENT_QUOTES, 'UTF-8') ?>" class="w-cluster" data-align="end" style="--w-gap:var(--weline-space-2);">
+                                            <input type="hidden" name="smtp_account_id" value="<?= $sid ?>">
+                                            <label class="w-field" style="--w-m:0;">
+                                                <span class="w-field__label"><?= __('角色') ?></span>
+                                                <select class="w-select" name="account_role">
+                                                    <option value="submit"<?= $srole === 'submit' ? ' selected' : '' ?>><?= __('提交账号') ?></option>
+                                                    <option value="relay"<?= $srole === 'relay' ? ' selected' : '' ?>><?= __('中继账号') ?></option>
+                                                </select>
+                                            </label>
+                                            <label class="w-field" style="--w-m:0;">
+                                                <span class="w-field__label"><?= __('状态') ?></span>
+                                                <select class="w-select" name="account_status">
+                                                    <?php $sstatus = (string)$sa->getData('status'); ?>
+                                                    <option value="active"<?= $sstatus === 'active' ? ' selected' : '' ?>><?= __('启用') ?></option>
+                                                    <option value="disabled"<?= $sstatus === 'disabled' ? ' selected' : '' ?>><?= __('停用') ?></option>
+                                                </select>
+                                            </label>
+                                            <button class="w-button" data-variant="outline" data-size="sm" type="submit" data-testid="smtp-account-update-<?= $sid ?>"><?= __('保存修改') ?></button>
+                                        </form>
+                                    <?php endif; ?>
                                 </li>
                             <?php endforeach; ?>
                         </ul>

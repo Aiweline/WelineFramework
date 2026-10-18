@@ -618,6 +618,7 @@ private function assert_MailSmtpBootstrapDefaultRelay_testEnableServiceDnsBefore
     self::assertStringContainsString('ensurePublicDnsHostnamesInPool', $src);
     self::assertStringContainsString('request_certificate', $src);
     self::assertStringContainsString('normalizeDomainInput', $src);
+    self::assertStringContainsString("str_starts_with(\$input, 'smtp.') || str_starts_with(\$input, 'mail.')", $src);
     self::assertStringContainsString("syncSmtpTlsFromDomainPool", $src);
 }
 
@@ -1484,9 +1485,18 @@ private function assert_SmtpServiceCatalog_testCatalogServiceCreatesBothModes():
     self::assertStringContainsString('已默认创建发信账号', $src);
     self::assertStringContainsString('function revealAccountPassword', $src);
     self::assertStringContainsString('function resetAccountPassword', $src);
+    self::assertStringContainsString('function updateAccountOnService', $src);
+    self::assertStringContainsString('function deleteAccountOnService', $src);
+    self::assertStringContainsString('已同步写入本机 Stalwart', $src);
+    self::assertStringContainsString('已从本机 Stalwart 移除登录', $src);
+    self::assertStringContainsString('下属账户 %{1} 个已从目录与本机 Stalwart 移除', $src);
+    self::assertStringContainsString('Stalwart 删除账户 %{1} 失败，服务与目录未改', $src);
     self::assertStringContainsString('function syncAccountToStalwart', $src);
     self::assertStringContainsString('function probeStalwartPresenceForService', $src);
     self::assertStringContainsString('function importAccountsFromStalwart', $src);
+    self::assertStringContainsString('function importSelfServicesFromMailDomains', $src);
+    self::assertStringContainsString('MailDomain', $src);
+    self::assertStringContainsString('从企业邮箱域名同步', $src);
     self::assertStringContainsString('写入本机 Stalwart 邮局失败', $src);
     self::assertStringContainsString('listLocalPartsForDomain', (string) \file_get_contents(\BP . '/app/code/Weline/Mail/Service/StalwartManagementAdapter.php'));
     self::assertStringContainsString('function listOutboundPicks', $src);
@@ -1502,6 +1512,11 @@ private function assert_SmtpServiceCatalog_testCatalogServiceCreatesBothModes():
     self::assertStringContainsString('provisionOrResetAccount', $manage);
     self::assertStringContainsString('Stalwart 开通失败', $manage);
     self::assertStringContainsString('Stalwart 密码同步失败', $manage);
+    self::assertStringContainsString('function updateAccount', $manage);
+    self::assertStringContainsString('function deleteAccount', $manage);
+    $cfg = (string) \file_get_contents(\BP . '/app/code/Weline/Smtp/Controller/Backend/Config.php');
+    self::assertStringContainsString('function postUpdateSmtpAccount', $cfg);
+    self::assertStringContainsString('function postDeleteSmtpAccount', $cfg);
 }
 
 private function assert_SmtpServiceCatalog_testSmtpAccountBelongsToService(): void
