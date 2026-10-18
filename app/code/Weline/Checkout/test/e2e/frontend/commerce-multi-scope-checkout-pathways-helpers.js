@@ -425,23 +425,44 @@ async function fillOrderNoteViaUi(page, text = NOTE_TEXT) {
 }
 
 async function probeWholesaleSurfaces(page) {
-  return page.evaluate(() => {
-    const deposit = document.querySelector('[data-testid="b2b-checkout-deposit-note"], [data-b2b-deposit-note]');
-    const coupon = document.querySelector('[data-testid="checkout-coupon"], [data-marketing-checkout-coupon]');
-    const couponDisabled = !!(coupon && (
-      coupon.hasAttribute('data-disabled')
-      || coupon.getAttribute('aria-disabled') === 'true'
-      || coupon.classList.contains('is-disabled')
-      || !!(coupon.querySelector('[disabled], [aria-disabled="true"]'))
-    ));
-    return {
-      deposit_present: !!deposit,
-      deposit_hidden: !!(deposit && deposit.hasAttribute('hidden')),
-      deposit_visible: !!(deposit && !deposit.hasAttribute('hidden') && deposit.getClientRects().length > 0),
-      coupon_present: !!coupon,
-      coupon_disabled_hint: couponDisabled,
-    };
-  });
+  await page.waitForLoadState('domcontentloaded').catch(() => {});
+  await waitForWelineApi(page).catch(() => {});
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await page.evaluate(() => {
+        const deposit = document.querySelector('[data-testid="b2b-checkout-deposit-note"], [data-b2b-deposit-note]');
+        const coupon = document.querySelector('[data-testid="checkout-coupon"], [data-marketing-checkout-coupon]');
+        const couponDisabled = !!(coupon && (
+          coupon.hasAttribute('data-disabled')
+          || coupon.getAttribute('aria-disabled') === 'true'
+          || coupon.classList.contains('is-disabled')
+          || !!(coupon.querySelector('[disabled], [aria-disabled="true"]'))
+        ));
+        return {
+          deposit_present: !!deposit,
+          deposit_hidden: !!(deposit && deposit.hasAttribute('hidden')),
+          deposit_visible: !!(deposit && !deposit.hasAttribute('hidden') && deposit.getClientRects().length > 0),
+          coupon_present: !!coupon,
+          coupon_disabled_hint: couponDisabled,
+        };
+      });
+    } catch (error) {
+      const msg = String(error && error.message || error);
+      if (attempt < 2 && /Execution context was destroyed|navigation|Target closed/i.test(msg)) {
+        await page.waitForLoadState('domcontentloaded').catch(() => {});
+        await page.waitForTimeout(800);
+        continue;
+      }
+      throw error;
+    }
+  }
+  return {
+    deposit_present: false,
+    deposit_hidden: true,
+    deposit_visible: false,
+    coupon_present: false,
+    coupon_disabled_hint: false,
+  };
 }
 
 async function applyCouponExpectFailForTob(page, code = COUPON) {
@@ -469,7 +490,9 @@ async function submitCheckoutCaptureEvidence(page, meta = {}) {
 
   // Rewarm Worker Scope before freeze/submit (duplicate Host-Scope cookies break QueryBin).
   // tob: skip cookie clear/nav — wholesale cart+session is fragile across Scope rewrite.
-  if (mode !== 'tob') {
+  // B2B channel URLs: hard Scope rewrite mid-submit often closes the page under suite load.
+  const onB2bChannel = /e2e-b2b/i.test(String(page.url() || meta.scope || ''));
+  if (mode !== 'tob' && !onB2bChannel) {
     try {
       const context = page.context();
       const recoveryUrl = page.url();
