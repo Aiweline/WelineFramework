@@ -24,6 +24,7 @@ use Weline\Framework\Session\Session;
 use Weline\Framework\Session\SessionCookieNameResolver;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Session\Strategy\WlsStrategy;
+use Weline\Order\Api\OrderFacadeInterface;
 use Weline\Order\Model\Order;
 use Weline\Order\Model\OrderItem;
 use Weline\Payment\Model\PaymentTransaction;
@@ -529,6 +530,40 @@ try {
             }
         }
         rel_paypal_output(['ok' => true, 'cleaned' => true]);
+    }
+
+    // Controllable commerce-release: fake_card may leave Order.payment_status=pending until
+    // Success reconcile; call OrderFacade.notifyOrderPaid so lifecycle inspect sees paid.
+    if ($action === 'reconcile_paid') {
+        $orderUuid = trim((string)($input['order_uuid'] ?? ''));
+        $transactionNo = trim((string)($input['transaction_no'] ?? ''));
+        if ($orderUuid === '') {
+            rel_paypal_fail('reconcile_paid_order_uuid_required');
+        }
+        /** @var OrderFacadeInterface $orders */
+        $orders = ObjectManager::getInstance()->get(OrderFacadeInterface::class);
+        $txId = 0;
+        if ($transactionNo !== '') {
+            try {
+                /** @var PaymentTransaction $tx */
+                $tx = ObjectManager::getInstance()->get(PaymentTransaction::class);
+                $tx->clear()->reset()
+                    ->where(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo)
+                    ->find()
+                    ->fetch();
+                $txId = (int)$tx->getId();
+            } catch (Throwable) {
+                $txId = 0;
+            }
+        }
+        $orders->notifyOrderPaid($orderUuid, [
+            'payment_method' => (string)($input['payment_method'] ?? 'fake_card'),
+            'payment_transaction_id' => $txId,
+            'payment_transaction_no' => $transactionNo,
+            'reconcile_source' => 'e2e_rel_paypal_reconcile_paid',
+        ]);
+        $data = rel_paypal_inspect($orderUuid);
+        rel_paypal_output(['ok' => true, 'data' => $data]);
     }
 
     rel_paypal_fail('unknown_action:' . $action);

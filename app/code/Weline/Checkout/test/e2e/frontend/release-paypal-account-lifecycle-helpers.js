@@ -1012,6 +1012,16 @@ async function submitPaypalCheckout(page, email) {
       await page.goto(land, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(() => {});
       await page.waitForTimeout(1500);
     }
+    // Fail-closed reconcile for controllable: Success land may miss notifyOrderPaid.
+    try {
+      runFixture('reconcile_paid', {
+        order_uuid: orderUuid,
+        transaction_no: transactionNo,
+        payment_method: wanted,
+      });
+    } catch (_) {
+      // inspect in the spec remains the final gate
+    }
     return {
       success: true,
       stage: 'api_controllable_paid',
