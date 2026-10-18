@@ -12,7 +12,7 @@ use Weline\Seo\Model\SeoSubject;
 use Weline\Seo\Service\Seed\HanfuSubjectSeedService;
 
 /**
- * 模块安装：写入汉服默认 SEO 主体画像，避免主体管理空态。
+ * 模块安装：写入默认站 SEO 主体画像（汉服站专属见 design），避免主体管理空态。
  */
 class Install implements InstallInterface
 {

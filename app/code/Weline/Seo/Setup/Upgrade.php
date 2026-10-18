@@ -14,7 +14,7 @@ use Weline\Seo\Service\Seed\HanfuSubjectSeedService;
 use Weline\Seo\Service\SeoPlatformCode;
 
 /**
- * 模块升级：幂等补种汉服默认 SEO 主体画像；归一 Google 平台别名。
+ * 模块升级：幂等补种默认站 SEO 主体画像（汉服站专属见 design seo-subject-seed）；归一 Google 平台别名。
  */
 class Upgrade implements UpgradeInterface
 {

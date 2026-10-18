@@ -32,7 +32,8 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
           id="product-unavailable-main"
           data-testid="storefront-product-unavailable"
           data-layout="product-unavailable">
-        <section class="w-empty" role="status" aria-labelledby="product-unavailable-title">
+        <section class="w-empty" role="status" aria-labelledby="product-unavailable-title"
+                 weline-code="product.frontend.catalog.unavailable">
             <h1 id="product-unavailable-title"><?= $esc($title) ?></h1>
             <?php if ($lead !== ''): ?>
                 <p><?= $esc($lead) ?></p>

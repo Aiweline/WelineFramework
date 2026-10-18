@@ -224,6 +224,9 @@ settings,settings
 第三方条款,第三方条款
 "除本协议外，您还须遵守 PayPal 用户协议、隐私声明及当地适用法律。若条款冲突，涉及 PayPal 账户与资金清算的部分以 PayPal 规则为准。","除本协议外，您还须遵守 PayPal 用户协议、隐私声明及当地适用法律。若条款冲突，涉及 PayPal 账户与资金清算的部分以 PayPal 规则为准。"
 全部支付方式,全部支付方式
+支付政策导航,支付政策导航
+用户协议导航,用户协议导航
+支付指南导航,支付指南导航
 "Stripe 支付指南","Stripe 支付指南"
 "使用银行卡或 Stripe 支持的本地支付方式完成结账，并在安全支付页确认订单金额。","使用银行卡或 Stripe 支持的本地支付方式完成结账，并在安全支付页确认订单金额。"
 "准备可用的银行卡，或本站已启用的 Stripe 本地支付方式。","准备可用的银行卡，或本站已启用的 Stripe 本地支付方式。"
@@ -816,8 +819,6 @@ login,login
 支付政策,支付政策
 支付指南,支付指南
 "平台 PayPal 沙箱应用尚未就绪。请联系运维配置 WELINE_PAYPAL_SANDBOX_CLIENT_ID / WELINE_PAYPAL_SANDBOX_CLIENT_SECRET 或 app/etc/env.php 的 payment.paypal.platform.sandbox；商户无需手动创建 PayPal App。","平台 PayPal 沙箱应用尚未就绪。请联系运维配置 WELINE_PAYPAL_SANDBOX_CLIENT_ID / WELINE_PAYPAL_SANDBOX_CLIENT_SECRET 或 app/etc/env.php 的 payment.paypal.platform.sandbox；商户无需手动创建 PayPal App。"
-支付指南导航,支付指南导航
-支付政策导航,支付政策导航
 支付供应商导航,支付供应商导航
 支付与账户,支付与账户
 "在 fake 模式下完成浏览器 端到端 冒烟测试。","在 fake 模式下完成浏览器端到端冒烟测试。"
@@ -862,7 +863,6 @@ login,login
 摘要行标签,摘要行标签
 发布版本号,发布版本号
 货到付款手续费,货到付款手续费
-用户协议导航,用户协议导航
 "选用 PayPal 时可减免的激励折扣。未启用=0。与 surcharge 无关；禁止默认全开。","选用 PayPal 时可减免的激励折扣。未启用=0。与 surcharge 无关；禁止默认全开。"
 "开启后结账列表可展示「减 X」，选中后计入应付与 discount_lines。","开启后结账列表可展示「减 X」，选中后计入应付与 discount_lines。"
 "例如 USD 分：500 = $5.00。仅 fixed_amount 时生效。","例如 USD 分：500 = $5.00。仅 fixed_amount 时生效。"

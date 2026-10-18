@@ -42,15 +42,28 @@ final class OpsLaneDeepLink
     public static function socialAdmin(Url $url, int $websiteId): string
     {
         $websiteId = max(0, $websiteId);
-
-        return self::backend($url, 'weline_social/backend/social', $websiteId, [
+        $query = [
             'scope_type' => 'website',
             'scope_id' => $websiteId,
             'child_scope_type' => 'website_default',
             'child_scope_id' => 0,
             'scope_key' => 'website:' . $websiteId . ':website_default:0',
             'tab' => 'accounts',
-        ]);
+        ];
+        if (\class_exists(\Weline\Social\Service\SocialWebsiteAccountService::class)) {
+            try {
+                /** @var \Weline\Social\Service\SocialWebsiteAccountService $scopeService */
+                $scopeService = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Social\Service\SocialWebsiteAccountService::class
+                );
+                $query = $scopeService->websiteEditorEmbedQuery($websiteId, 'accounts');
+                unset($query['isIframe']);
+            } catch (\Throwable) {
+                // Keep hardcoded fallback when Social service is unavailable.
+            }
+        }
+
+        return self::backend($url, 'weline_social/backend/social', $websiteId, $query);
     }
 
     /**

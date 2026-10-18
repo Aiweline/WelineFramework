@@ -365,8 +365,8 @@ SSH 主机映射只解决「要连生产时连哪台」，不改变查询目标�
 
 | 站点柜 | 主用 SSH Host | 禁止 |
 |--------|---------------|------|
-| `websites/changanhanfu.com/` | **`hanfu`**（同机兼容 `manycart-server` / `motor` / `fcdc`；IP `47.251.242.124`） | `weline` / `daocharms` / `47.92.25.188` / 库 `www_aiweline_com` |
-| `websites/daocharms.com/` | **`daocharms`**（同机兼容 `weline`；IP `47.92.25.188`；应用根 `/www/wwwroot/www.aiweline.com`） | `hanfu` / `47.251.242.124` / 汉服 wwwroot / 库 `changanhanfu` |
+| `websites/changanhanfu.com/` | **`changanhanfu`**（IP `199.102.216.204`） | `hanfu` / `daocharms` / `47.251.242.124` / `weline` / 库 `www_aiweline_com` |
+| `websites/daocharms.com/` | **`daocharms`**（IP `47.251.242.124`；兼容 `hanfu` 仅同机进机） | `changanhanfu` / `199.102.216.204` / `weline` / 汉服 wwwroot / 库 `changanhanfu` |
 | （无柜）www.aiweline.com | **`weline`** | `weline-saas` 当默认生产；汉服机当官方站 |
 
 索引：本机 `websites/README.md`。Cursor alwaysApply 镜像：`.cursor/rules/ssh-weline-host.mdc`（本机生成/维护，不进 Git）。
