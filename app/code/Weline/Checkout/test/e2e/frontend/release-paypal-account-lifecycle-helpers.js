@@ -970,33 +970,55 @@ async function submitPaypalCheckout(page, email) {
     }, { address, wantedMethod: wanted });
   }
 
-  // --- controllable (commerce-release): freeze+submitV2 via API — same paid authority as multi-scope.
+  // --- controllable (commerce-release): freeze+submitV2 via API — same create path as multi-scope.
   // UI click with fake_card often lands #payment-recovery with payment_status=pending (not paid).
+  // After submitV2, land /payment/success?transaction_no=… so Success reconciles notifyOrderPaid.
   if (controllable) {
     if (page.isClosed()) {
       assertStep(false, 'checkout.submit', 'checkout page closed before controllable submitV2');
     }
-    const started = await createPaymentApproveViaApi().catch((error) => ({
-      success: false,
-      stage: 'api_eval_error',
-      message: String(error && error.message || error),
-      redirect_url: '',
-      approve_url: '',
-      order_uuid: '',
-      transaction_no: '',
-    }));
+    let started = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      started = await createPaymentApproveViaApi().catch((error) => ({
+        success: false,
+        stage: 'api_eval_error',
+        message: String(error && error.message || error),
+        redirect_url: '',
+        approve_url: '',
+        order_uuid: '',
+        transaction_no: '',
+      }));
+      if (started && started.success !== false && String(started.order_uuid || '').trim()) {
+        break;
+      }
+      if (attempt === 0 && /Execution context was destroyed|navigation/i.test(String(started && started.message || ''))) {
+        await waitForWelineApi(page).catch(() => {});
+        await page.waitForTimeout(800);
+        continue;
+      }
+      break;
+    }
     assertStep(
       !!(started && started.success !== false && String(started.order_uuid || '').trim()),
       'checkout.submit',
-      { ...started, hint: 'controllable fake_card must produce paid order_uuid via submitV2' },
+      { ...started, hint: 'controllable fake_card must produce order_uuid via submitV2' },
     );
+    const transactionNo = String(started.transaction_no || '').trim();
+    const orderUuid = String(started.order_uuid || '').trim();
+    if (transactionNo) {
+      const origin = storefrontOrigin().replace(/\/$/, '');
+      const land = `${origin}/payment/success?transaction_no=${encodeURIComponent(transactionNo)}`
+        + (orderUuid ? `&order_uuid=${encodeURIComponent(orderUuid)}` : '');
+      await page.goto(land, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(() => {});
+      await page.waitForTimeout(1500);
+    }
     return {
       success: true,
       stage: 'api_controllable_paid',
-      redirect_url: String(started.redirect_url || page.url() || ''),
+      redirect_url: String(page.url() || started.redirect_url || ''),
       approve_url: String(started.approve_url || ''),
-      order_uuid: String(started.order_uuid || ''),
-      transaction_no: String(started.transaction_no || ''),
+      order_uuid: orderUuid,
+      transaction_no: transactionNo,
       checkout_group_uuid: String(started.checkout_group_uuid || ''),
       paypalPage: page,
     };
