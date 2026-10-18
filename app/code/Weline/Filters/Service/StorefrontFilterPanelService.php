@@ -272,10 +272,11 @@ final class StorefrontFilterPanelService
             ];
         }
 
+        // 回退文案保持服饰通用（与 Filters/i18n 源串对齐）；站专属「汉服形制」等由 EAV 属性名 / design 目录种子覆盖。
         $fallbackCodeNames = [
-            'hanfu_chao_dai' => '朝代',
-            'hanfu_xing_zhi' => '形制',
-            'hanfu_han_fu_zhi_shi' => '汉服形制',
+            'hanfu_chao_dai' => '系列',
+            'hanfu_xing_zhi' => '版型',
+            'hanfu_han_fu_zhi_shi' => '款式版型',
             'style_type' => '类型',
             'hanfu_shi_yong_xing_bie' => '适用性别',
             'color' => '颜色',
@@ -759,10 +760,11 @@ final class StorefrontFilterPanelService
             $codeNames = [];
         }
 
+        // 回退文案保持服饰通用（与 Filters/i18n 源串对齐）；站专属展示名优先走上方 EAV metadata。
         $fallbackCodeNames = [
-            'hanfu_chao_dai' => '朝代',
-            'hanfu_xing_zhi' => '形制',
-            'hanfu_han_fu_zhi_shi' => '汉服形制',
+            'hanfu_chao_dai' => '系列',
+            'hanfu_xing_zhi' => '版型',
+            'hanfu_han_fu_zhi_shi' => '款式版型',
             'style_type' => '类型',
             'hanfu_shi_yong_xing_bie' => '适用性别',
             'color' => '颜色',

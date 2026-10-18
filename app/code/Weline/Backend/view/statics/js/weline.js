@@ -1567,10 +1567,11 @@
         const area = config.theme?.area || config.area || 'backend';
         
         if (window.Weline && window.Weline.declare) {
-            Weline.declare('url-backend', true, 'Weline_Backend::js/url-backend.js?v=rebuild2');
+            // rebuild5: bust HTTP cache of url-backend that doubled admin prefix on theme-config/set.
+            Weline.declare('url-backend', true, 'Weline_Backend::js/url-backend.js?v=rebuild5');
         } else if (window.Weline && window.Weline.load) {
             // 如果 declare 不可用，直接加载
-            window.Weline.load('url-backend', 'Weline_Backend::js/url-backend.js?v=rebuild2');
+            window.Weline.load('url-backend', 'Weline_Backend::js/url-backend.js?v=rebuild5');
         }
     })();
 

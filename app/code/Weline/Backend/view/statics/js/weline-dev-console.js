@@ -57,15 +57,31 @@
     function binQuery(meta) {
         meta = meta && typeof meta === 'object' ? meta : {};
         var ok = meta.ok === true;
+        // Recoverable scope-stamp miss: client re-punches + retries — not a final ERR.
+        var recovering = !ok && meta.recovering === true;
         var summary = String(meta.summary || 'request');
         var status = meta.status != null && meta.status !== '' ? String(meta.status) : '';
         var ms = meta.durationMs != null ? (Math.max(0, Number(meta.durationMs) || 0) + 'ms') : '';
         var metaText = [status, ms].filter(Boolean).join(' · ');
         var payload = {
             endpoint: meta.endpoint || '',
+            recovering: recovering || undefined,
             request: cloneValue(meta.request || {}),
             response: cloneValue(meta.response || {}),
         };
+
+        if (recovering) {
+            printLine(
+                'warn',
+                'BinQuery',
+                STYLE.warnBadge,
+                summary + ' · re-signing scope',
+                STYLE.title,
+                metaText,
+                payload
+            );
+            return;
+        }
 
         printLine(
             ok ? 'log' : 'error',

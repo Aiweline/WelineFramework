@@ -21,11 +21,12 @@
     'use strict';
 
     // 防止重复初始化；版本 bump 用于覆盖「误把首段当 admin 前缀」的旧缓存脚本。
-    if (window.__WelineUrlBackendInitialized && window.__WelineUrlBackendRebuildVersion === 4) {
+    if (window.__WelineUrlBackendInitialized && window.__WelineUrlBackendRebuildVersion === 5) {
         return;
     }
     window.__WelineUrlBackendInitialized = true;
-    window.__WelineUrlBackendRebuildVersion = 4; // path-only language (no WELINE_USER_LANG cookie)
+    // v5: url_host already includes admin area — do not prepend area again (theme-config/set 404).
+    window.__WelineUrlBackendRebuildVersion = 5;
 
     /**
      * Cookie 操作函数（如果不存在则定义）
@@ -610,8 +611,18 @@
     window.backend_url = function (path, params = {}) {
         if (!path) return '';
         const normalizedPath = normalizePath(path, config.baseRouter);
-        const backendPath = config.adminArea ? config.adminArea + '/' + normalizedPath : normalizedPath;
-        return buildUrlWithParams(config.urlHost, backendPath, params);
+        const urlHost = String(config.urlHost || '').replace(/\/+$/g, '');
+        const adminArea = String(config.adminArea || '').replace(/^\/+|\/+$/g, '');
+        // site.url_host is already ".../{adminArea}"; prepending adminArea again yields
+        // /{admin}/{admin}/system/... → 404, and rapid retries hit Weline.Api MAX_IN_FLIGHT=1.
+        const hostEndsWithAdmin = !!(adminArea && (
+            urlHost.endsWith('/' + adminArea)
+            || urlHost.toLowerCase().endsWith('/' + adminArea.toLowerCase())
+        ));
+        const backendPath = (adminArea && !hostEndsWithAdmin)
+            ? (adminArea + '/' + normalizedPath)
+            : normalizedPath;
+        return buildUrlWithParams(urlHost, backendPath, params);
     };
 
     window.frontend_url = function (path, params = {}) {

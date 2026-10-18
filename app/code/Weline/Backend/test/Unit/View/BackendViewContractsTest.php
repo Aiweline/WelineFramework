@@ -72,6 +72,9 @@ final class BackendViewContractsTest extends TestCase
             'SettingsTemplatePath::testRootControllerTemplatesLiveBesideControllerPath' => function () {
             $this->assert_SettingsTemplatePath_testRootControllerTemplatesLiveBesideControllerPath();
         },
+            'BackendUrlNoDoubleAdminPrefix::testBackendUrlSkipsAdminWhenUrlHostAlreadyHasArea' => function () {
+            $this->assert_BackendUrlNoDoubleAdminPrefix_testBackendUrlSkipsAdminWhenUrlHostAlreadyHasArea();
+        },
             'ThemeColorMode::testBackendPersistsOnlySupportedPreferencesAndKeepsLegacyCompatibility' => function () {
             $this->assert_ThemeColorMode_testBackendPersistsOnlySupportedPreferencesAndKeepsLegacyCompatibility();
         },
@@ -233,6 +236,22 @@ private function assert_BackendSidebarCollapsePersist_testBackendSidebarCollapse
     self::assertStringContainsString('resolveMenuIconName', $menuService);
     self::assertStringContainsString('LegacyIconNameMap', $menuService);
     self::assertStringContainsString('w-backend-nav__entry--group', $menuService);
+}
+
+private function assert_BackendUrlNoDoubleAdminPrefix_testBackendUrlSkipsAdminWhenUrlHostAlreadyHasArea(): void
+{
+    $script = (string) file_get_contents(BP . '/app/code/Weline/Backend/view/statics/js/url-backend.js');
+    self::assertStringContainsString('__WelineUrlBackendRebuildVersion = 5', $script);
+    self::assertStringContainsString('hostEndsWithAdmin', $script);
+    self::assertStringContainsString('url_host already includes admin area', $script);
+    // Must not unconditionally prepend adminArea on top of urlHost.
+    self::assertStringNotContainsString(
+        "const backendPath = config.adminArea ? config.adminArea + '/' + normalizedPath : normalizedPath;",
+        $script
+    );
+    $loader = (string) file_get_contents(BP . '/app/code/Weline/Backend/view/statics/js/weline.js');
+    self::assertStringContainsString('url-backend.js?v=rebuild5', $loader);
+    self::assertStringNotContainsString('url-backend.js?v=rebuild2', $loader);
 }
 
 private function backendRoot_NotificationCenterMarkAllRead(): string
