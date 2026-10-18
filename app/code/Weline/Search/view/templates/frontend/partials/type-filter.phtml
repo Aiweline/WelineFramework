@@ -65,7 +65,9 @@ $containsCategory = static function (array $nodes, int $targetId) use (&$contain
     return false;
 };
 
-$onChange = "var f=this.form;var c=f.category_id;if(c){c.value=this.getAttribute('data-category-id')||'';}f.submit();";
+// Empty category_id must not appear in the GET URL (FPC identity drops empties;
+// submitting category_id= forked a dead ~q leaf vs BinQuery/Worker).
+$onChange = "var f=this.form;var c=f.category_id;if(c){var v=this.getAttribute('data-category-id')||'';if(v){c.disabled=false;c.value=v;}else{c.value='';c.disabled=true;}}f.submit();";
 
 /**
  * @param list<array<string,mixed>> $nodes

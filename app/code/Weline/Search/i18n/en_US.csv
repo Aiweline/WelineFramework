@@ -12,6 +12,7 @@
 "Product Search 投影负载无效","Invalid Product Search projection payload"
 "Product Search 投影 Scope kind 无效","Product Search projection Scope kind is invalid"
 "Product Search 投影 Store Scope 无效","Product Search projection Store Scope is invalid"
+搜索：%{1},"Search: %{1}"
 搜索本站商品、灵感文章与帮助指南。,"Search products, inspiration articles, and help guides."
 性能慢日志,"Slow performance logs."
 clock,clock
@@ -177,8 +178,7 @@ chart,chart
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
 "共 %{1} 条","Total %{1} items"
 查看更多%{1}结果,"View more %{1} results"
-搜索：%{1},"Search: %{1}"
-查看“%{1}”在本站商品、文章与帮助中的相关结果。,"See results for “%{1}” across products, articles, and help."
+查看“%{1}”在本站商品、文章与帮助中的相关结果。,"See results for “%{1}” across products, articles, and help on this site."
 全部,All
 商品,Products
 博客,Blog
@@ -196,8 +196,7 @@ chart,chart
 "浏览全部物件 →","Browse all objects →"
 按分类探索,"Explore by category"
 探索,EXPLORE
-查看“%{1}”在本站汉服、文章与帮助中的相关结果。,"See results for “%{1}” across Hanfu products, articles, and help on this site."
-在汉服商城中搜索商品、搭配灵感与帮助指南。,"Search Hanfu products, styling ideas, and help guides in the store."
+在本站搜索商品、搭配灵感与帮助指南。,"Search products, styling ideas, and help guides in the store."
 输入关键词…,"Enter keywords..."
 "Product Search 投影事件负载无效","Product Search projection event payload is invalid"
 "Search Product 投影事件 %{1}","Search Product Projection Event %{1}"

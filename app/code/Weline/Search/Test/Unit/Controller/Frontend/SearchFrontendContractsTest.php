@@ -45,17 +45,21 @@ final class SearchFrontendContractsTest extends TestCase
 private function assert_SearchIndexTemplate_testSearchControllerSelectsTheSearchThemeLayout(): void
 {
     $controller = (string) file_get_contents(BP . 'app/code/Weline/Search/Controller/Frontend/Index.php');
+    $keysHelper = (string) file_get_contents(BP . 'app/code/Weline/Search/Service/StorefrontSearchFpcQueryKeys.php');
     self::assertStringContainsString("\$this->layoutType = 'search'", $controller);
     self::assertStringContainsString("setGet('page_type', 'search')", $controller);
     self::assertStringNotContainsString('theme_public_route', $controller);
     self::assertStringNotContainsString('getParam(\'q\'', $controller);
     self::assertStringNotContainsString('website_id\' => $this->request', $controller);
-    // FPC shell: never SSR SearchHub hits; path-only (no request q bake).
-    self::assertStringNotContainsString('SearchHubService', $controller);
-    self::assertStringNotContainsString('hub->search', $controller);
+    // Extra query_keys + SearchHub SSR when q present; empty stays path-only shell.
+    self::assertStringContainsString('SearchHubService', $controller);
+    self::assertStringContainsString('StorefrontSearchFpcQueryKeys', $controller);
+    self::assertStringContainsString('query_keys=' . \Weline\Search\Service\StorefrontSearchFpcQueryKeys::csv(), $controller);
+    self::assertStringContainsString('hub->search', $controller);
     self::assertStringContainsString("'search_async'", $controller);
-    self::assertStringContainsString("assign('search_query', '')", $controller);
-    self::assertStringContainsString('Path-only FPC', $controller);
+    self::assertStringContainsString('search_ssr_ready', $controller);
+    self::assertStringContainsString('class StorefrontSearchFpcQueryKeys', $keysHelper);
+    self::assertStringContainsString("'q'", $keysHelper);
 }
 
 private function assert_SearchIndexTemplate_testSearchTemplateIsFpcShellWithAsyncResultsSlot(): void
@@ -70,8 +74,17 @@ private function assert_SearchIndexTemplate_testSearchTemplateIsFpcShellWithAsyn
     self::assertStringContainsString('data-weline-load="storefrontSearchResults"', $template);
     self::assertStringContainsString('data-search-async="1"', $template);
     self::assertStringContainsString('data-search-hydrate-url="1"', $template);
+    self::assertStringContainsString('data-search-ssr-ready', $template);
+    self::assertStringContainsString('data-search-ssr-payload', $template);
     self::assertStringContainsString('data-search-results-host', $template);
+    self::assertStringContainsString('data-search-ssr-html', $template);
+    self::assertStringContainsString('search_hit_templates', $template);
+    self::assertStringContainsString('data-search-img-placeholder', $template);
     self::assertStringContainsString('data-search-title', $template);
+    self::assertStringContainsString("data-search-ssr-ready') === '1'", $js);
+    self::assertStringContainsString("data-search-ssr-html') === '1'", $js);
+    self::assertStringContainsString('renderProductOfferCard', $js);
+    self::assertStringContainsString('storefront_offer', $js);
     self::assertStringContainsString("\$keepPh('搜索：%{1}')", $template);
     self::assertStringContainsString("\$keepPh('共 %{1} 条')", $template);
     self::assertStringNotContainsString('search-layout__grid', $template);

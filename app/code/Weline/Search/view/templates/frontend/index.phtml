@@ -1,6 +1,9 @@
 <?php
 /**
- * P2 storefront search shell (path-only Extra FPC). Hits fill asynchronously from URL q.
+ * Storefront search: path-only Extra FPC when empty; allowlisted q/type/page SSR when present.
+ *
+ * SSR paints provider hit templates (Product → offer card with image) into Shared FPC HTML.
+ * JS keeps that HTML when data-search-ssr-html=1; async hydrate still renders from offer/image fields.
  *
  * @var string $search_query
  * @var string $search_type
@@ -8,6 +11,8 @@
  * @var int $search_page
  * @var int $search_page_size
  * @var bool $search_async
+ * @var bool $search_ssr_ready
+ * @var array<string,mixed>|null $search_ssr_payload
  * @var list<array<string,mixed>> $search_types
  * @var list<array{label:string,type:string,category_id:int}> $search_category_breadcrumb
  * @var array<string,string> $search_hit_templates
@@ -17,6 +22,8 @@
  * @var string $search_error
  * @var string $search_error_code
  */
+use Weline\Theme\Helper\StorefrontImagePlaceholder;
+
 $types = $this->getData('search_types') ?? [];
 $types = is_array($types) ? $types : [];
 $typeLabels = $this->getData('search_type_labels') ?? [];
@@ -52,6 +59,59 @@ $i18n = [
     'title_with_q' => $keepPh('搜索：%{1}'),
     'title' => (string)__('搜索'),
 ];
+$q = trim((string)($this->getData('search_query') ?? ''));
+$type = trim((string)($this->getData('search_type') ?? 'all')) ?: 'all';
+$page = max(1, (int)($this->getData('search_page') ?? 1));
+$pageSize = max(1, (int)($this->getData('search_page_size') ?? 24));
+$categoryId = max(0, (int)($this->getData('search_category_id') ?? 0));
+$ssrReady = (bool)($this->getData('search_ssr_ready') ?? false);
+$ssrPayload = $this->getData('search_ssr_payload');
+$ssrJson = '';
+if ($ssrReady && is_array($ssrPayload)) {
+    $ssrJson = (string)(\json_encode($ssrPayload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}');
+}
+$hitCount = (int)($this->getData('search_hit_count') ?? 0);
+$metaText = $q === ''
+    ? $i18n['prompt']
+    : ($ssrReady
+        ? \str_replace('%{1}', (string)$hitCount, $i18n['count'])
+        : $i18n['loading']);
+$titleText = $q !== ''
+    ? \str_replace('%{1}', $q, $i18n['title_with_q'])
+    : $i18n['title'];
+
+$hitTemplates = $this->getData('search_hit_templates') ?? [];
+$hitTemplates = is_array($hitTemplates) ? $hitTemplates : [];
+$hits = $this->getData('search_hits') ?? [];
+$hits = is_array($hits) ? $hits : [];
+$sections = $this->getData('search_sections') ?? [];
+$sections = is_array($sections) ? $sections : [];
+$imgPlaceholder = StorefrontImagePlaceholder::url(0);
+
+$tplEngine = $this;
+$renderHit = static function (array $hit) use ($hitTemplates, $tplEngine): string {
+    $code = trim((string)($hit['type'] ?? $hit['indexer'] ?? ''));
+    $tpl = trim((string)($hitTemplates[$code] ?? ''));
+    if ($tpl === '') {
+        $tpl = 'Weline_Search::templates/frontend/partials/hit-card.phtml';
+    }
+    $payload = is_array($hit['payload'] ?? null) ? $hit['payload'] : $hit;
+
+    return (string)$tplEngine->fetch($tpl, [
+        'hit' => $hit,
+        'payload' => $payload,
+    ]);
+};
+
+$gridClass = static function (string $resolved): string {
+    $resolved = trim($resolved);
+    $classes = 'storefront-search__grid';
+    if ($resolved === 'product' || $resolved === 'blog') {
+        $classes .= ' storefront-search__grid--' . $resolved;
+    }
+
+    return $classes;
+};
 ?>
 <section
     class="storefront-search"
@@ -60,24 +120,91 @@ $i18n = [
     data-weline-load-when="idle"
     data-search-async="1"
     data-search-hydrate-url="1"
-    data-search-q=""
-    data-search-type="all"
-    data-search-category-id="0"
-    data-search-page="1"
-    data-search-page-size="24"
+    data-search-ssr-ready="<?= $ssrReady ? '1' : '0' ?>"
+    data-search-q="<?= $esc($q) ?>"
+    data-search-type="<?= $esc($type) ?>"
+    data-search-category-id="<?= $esc((string)$categoryId) ?>"
+    data-search-page="<?= $esc((string)$page) ?>"
+    data-search-page-size="<?= $esc((string)$pageSize) ?>"
+    data-search-img-placeholder="<?= $esc($imgPlaceholder) ?>"
     data-search-i18n="<?= $esc(\json_encode($i18n, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}') ?>"
     data-search-type-labels="<?= $esc(\json_encode($typeLabels, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}') ?>"
     weline-code="search.search.section_1"
 >
     <header class="storefront-search__header">
-        <h1 class="storefront-search__title" data-search-title><?= $esc($i18n['title']) ?></h1>
-        <p class="storefront-search__meta" data-search-meta role="status"><?= $esc($i18n['prompt']) ?></p>
-        <nav class="storefront-search__breadcrumb" aria-label="<?= $esc((string)__('分类面包屑')) ?>" data-search-breadcrumb hidden>
+        <h1 class="storefront-search__title" data-search-title><?= $esc($titleText) ?></h1>
+        <p class="storefront-search__meta" data-search-meta role="status"><?= $esc($metaText) ?></p>
+        <nav class="storefront-search__breadcrumb" aria-label="<?= $esc((string)__('分类面包屑')) ?>" data-search-breadcrumb<?= $q === '' ? ' hidden' : '' ?>>
             <ol class="storefront-search__breadcrumb-list" data-search-breadcrumb-list></ol>
         </nav>
     </header>
 
-    <div class="storefront-search__body" data-search-results-host>
-        <?php /* Path-only shell: JS fills loading/results from location.search */ ?>
+    <?php if ($ssrJson !== ''): ?>
+        <script type="application/json" data-testid="storefront-search-ssr-payload" data-search-ssr-payload><?= $ssrJson ?></script>
+    <?php endif; ?>
+
+    <div
+        class="storefront-search__body"
+        data-search-results-host
+        <?php if ($ssrReady): ?>data-search-ssr-html="1"<?php endif; ?>
+    >
+        <?php if ($ssrReady): ?>
+            <?php if ($type === 'all'): ?>
+                <?php
+                $sectionKeys = array_keys($sections);
+                $hasAny = $sectionKeys !== [] || $hits !== [];
+                ?>
+                <?php if (!$hasAny): ?>
+                    <div class="storefront-search__empty" data-testid="storefront-search-empty"><?= $esc($i18n['empty']) ?></div>
+                <?php else: ?>
+                    <div class="storefront-search__results">
+                        <?php foreach ($sections as $sectionType => $sectionHits): ?>
+                            <?php
+                            $sectionType = trim((string)$sectionType);
+                            $sectionHits = is_array($sectionHits) ? $sectionHits : [];
+                            $isEmptyProduct = $sectionType === 'product' && $sectionHits === [];
+                            if ($sectionHits === [] && !$isEmptyProduct) {
+                                continue;
+                            }
+                            $sectionLabel = (string)($typeLabels[$sectionType] ?? $sectionType);
+                            ?>
+                            <div class="storefront-search__section" data-section-type="<?= $esc($sectionType) ?>">
+                                <h2 class="storefront-search__section-title"><?= $esc($sectionLabel) ?></h2>
+                                <?php if ($isEmptyProduct): ?>
+                                    <p class="storefront-search__section-empty" data-testid="storefront-search-product-empty" role="status">
+                                        <?= $esc($i18n['product_empty']) ?> · <?= $esc($i18n['product_empty_hint']) ?>
+                                    </p>
+                                <?php else: ?>
+                                    <div class="<?= $esc($gridClass($sectionType)) ?>">
+                                        <?php foreach ($sectionHits as $hit): ?>
+                                            <?php if (is_array($hit)): ?>
+                                                <?= $renderHit($hit) ?>
+                                            <?php endif; ?>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <p class="storefront-search__section-more">
+                                        <a href="/search?q=<?= $esc(rawurlencode($q)) ?>&amp;type=<?= $esc(rawurlencode($sectionType)) ?>">
+                                            <?= $esc(\str_replace('%{1}', $sectionLabel, $i18n['more'])) ?> →
+                                        </a>
+                                    </p>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            <?php elseif ($hits === []): ?>
+                <div class="storefront-search__empty" data-testid="storefront-search-empty"><?= $esc($i18n['empty']) ?></div>
+            <?php else: ?>
+                <div class="storefront-search__results">
+                    <div class="<?= $esc($gridClass($type)) ?>">
+                        <?php foreach ($hits as $hit): ?>
+                            <?php if (is_array($hit)): ?>
+                                <?= $renderHit($hit) ?>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+        <?php endif; ?>
     </div>
 </section>

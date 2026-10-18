@@ -1,6 +1,6 @@
 /**
- * Storefront search page: path-only FPC shell + async BinQuery results (mode=page).
- * Hydrates q/type/page from location.search so shared HTML never bakes query identity.
+ * Storefront search: Extra FPC query_keys SSR when present; else path-only shell.
+ * Prefer embedded SSR payload (Shared HIT); otherwise BinQuery mode=page.
  */
 (function () {
     'use strict';
@@ -191,7 +191,139 @@
         return '';
     }
 
-    function renderCard(hit) {
+    function offerFromHit(hit) {
+        if (!hit || typeof hit !== 'object') {
+            return null;
+        }
+        if (hit.storefront_offer && typeof hit.storefront_offer === 'object') {
+            return hit.storefront_offer;
+        }
+        if (hit.payload && hit.payload.storefront_offer && typeof hit.payload.storefront_offer === 'object') {
+            return hit.payload.storefront_offer;
+        }
+        return null;
+    }
+
+    function formatOfferPrice(offer) {
+        if (!offer || typeof offer !== 'object') {
+            return '';
+        }
+        if (offer.quote_only || offer.currency_unavailable) {
+            return '';
+        }
+        var minor = parseInt(String(offer.unit_price_minor || 0), 10) || 0;
+        if (minor <= 0) {
+            return '';
+        }
+        var currency = String(offer.currency || '').trim();
+        var major = (minor / 100).toFixed(2);
+        return currency ? currency + ' ' + major : major;
+    }
+
+    function resolveImage(src, placeholder) {
+        var image = String(src || '').trim();
+        if (image && image.indexOf('data:image/') !== 0) {
+            return image;
+        }
+        return String(placeholder || '').trim();
+    }
+
+    function renderProductOfferCard(hit, offer, placeholder) {
+        var productId = parseInt(String((offer && offer.product_id) || (hit && hit.product_id) || '0'), 10) || 0;
+        var entityId = String((hit && hit.entity_id) || productId || '').trim();
+        var title = String((offer && offer.name) || (hit && (hit.title || hit.name)) || '').trim();
+        var url = hitUrl(hit);
+        if (!url && productId > 0) {
+            url = '/product/' + productId;
+        }
+        var image = resolveImage((offer && (offer.image || (offer.images && offer.images[0]))) || '', placeholder);
+        var price = formatOfferPrice(offer);
+        var sku = String((offer && offer.sku) || '').trim();
+        var clickable = url ? ' is-clickable' : '';
+        var hitLink = url
+            ? '<a class="product-storefront__card-hit" href="' +
+              escapeHtml(url) +
+              '" aria-label="' +
+              escapeHtml(title || entityId) +
+              '"></a>'
+            : '';
+        return (
+            '<article class="product-storefront__card' +
+            clickable +
+            '" data-testid="storefront-search-product-card" data-entity-id="' +
+            escapeHtml(entityId) +
+            '"' +
+            (productId > 0 ? ' data-product-id="' + productId + '"' : '') +
+            '>' +
+            hitLink +
+            '<div class="product-storefront__media">' +
+            (image
+                ? '<img src="' +
+                  escapeHtml(image) +
+                  '" alt="" width="400" height="400" loading="lazy" decoding="async" data-storefront-img="1" data-fallback="' +
+                  escapeHtml(placeholder || image) +
+                  '">'
+                : '') +
+            '</div>' +
+            '<div class="product-storefront__body">' +
+            '<h2>' +
+            escapeHtml(title || entityId || '') +
+            '</h2>' +
+            (sku ? '<p class="product-storefront__sku">' + escapeHtml(sku) + '</p>' : '') +
+            (price ? '<p class="product-storefront__price">' + escapeHtml(price) + '</p>' : '') +
+            '</div></article>'
+        );
+    }
+
+    function renderBlogCard(hit, placeholder) {
+        var payload = hit && hit.payload && typeof hit.payload === 'object' ? hit.payload : hit || {};
+        var title = String((payload && payload.title) || (hit && hit.title) || '').trim();
+        var entityId = String((payload && payload.entity_id) || (hit && hit.entity_id) || '').trim();
+        var url = String((payload && payload.url) || (hit && hit.url) || '').trim() || hitUrl(hit);
+        var image = resolveImage((payload && payload.image) || '', placeholder);
+        var excerpt = String((payload && payload.excerpt) || '').trim();
+        var clickable = url ? ' is-clickable' : '';
+        var hitLink = url
+            ? '<a class="blog-storefront__card-hit" href="' +
+              escapeHtml(url) +
+              '" aria-label="' +
+              escapeHtml(title || entityId) +
+              '" data-testid="search-hit-blog-post"></a>'
+            : '';
+        return (
+            '<article class="blog-storefront__card' +
+            clickable +
+            '" data-testid="storefront-blog-card" data-entity-id="' +
+            escapeHtml(entityId) +
+            '">' +
+            hitLink +
+            '<div class="blog-storefront__media w-frame" data-ratio="4/3" data-fit="cover">' +
+            (image
+                ? '<img src="' +
+                  escapeHtml(image) +
+                  '" alt="" width="1200" height="800" loading="lazy" decoding="async" data-storefront-img="1" data-fallback="' +
+                  escapeHtml(placeholder || image) +
+                  '">'
+                : '') +
+            '</div>' +
+            '<div class="blog-storefront__body"><h2>' +
+            escapeHtml(title || entityId || '') +
+            '</h2>' +
+            (excerpt ? '<p class="blog-storefront__excerpt">' + escapeHtml(excerpt) + '</p>' : '') +
+            '</div></article>'
+        );
+    }
+
+    function renderCard(hit, placeholder) {
+        var offer = offerFromHit(hit);
+        if (offer) {
+            return renderProductOfferCard(hit, offer, placeholder);
+        }
+        var indexer = String((hit && (hit.type || hit.indexer || hit.entity_type)) || '').trim();
+        var payload = hit && hit.payload && typeof hit.payload === 'object' ? hit.payload : null;
+        if (indexer === 'blog' || (payload && (payload.image || payload.excerpt || payload.content_kind))) {
+            return renderBlogCard(hit, placeholder);
+        }
         var title = String((hit && (hit.title || hit.name)) || '').trim();
         var entityId = String((hit && hit.entity_id) || '').trim();
         var url = hitUrl(hit);
@@ -233,6 +365,7 @@
         }
         var type = String(root.getAttribute('data-search-type') || 'all') || 'all';
         var q = String(root.getAttribute('data-search-q') || '');
+        var placeholder = String(root.getAttribute('data-search-img-placeholder') || '').trim();
         var success = payload.success !== false;
         var errorMessage = String(payload.message || payload.error || '').trim();
         var hitCount = parseInt(String(payload.hit_count || 0), 10) || 0;
@@ -243,6 +376,11 @@
             meta.textContent = success
                 ? formatCount(i18n.count || '', hitCount)
                 : (errorMessage || i18n.error || '');
+        }
+
+        // Shared FPC already painted provider hit templates (cards with images).
+        if (host.getAttribute('data-search-ssr-html') === '1' && success) {
+            return;
         }
 
         if (!success) {
@@ -286,7 +424,7 @@
                 } else {
                     html += '<div class="' + escapeHtml(gridClass(sectionType, type)) + '">';
                     sectionHits.forEach(function (hit) {
-                        html += renderCard(hit);
+                        html += renderCard(hit, placeholder);
                     });
                     html += '</div>';
                     html +=
@@ -316,7 +454,7 @@
             escapeHtml(gridClass(null, type)) +
             '">';
         hits.forEach(function (hit) {
-            typedHtml += renderCard(hit);
+            typedHtml += renderCard(hit, placeholder);
         });
         typedHtml += '</div></div>';
         host.innerHTML = typedHtml;
@@ -339,6 +477,23 @@
         var i18n = parseJsonAttr(root, 'data-search-i18n');
         var labels = parseJsonAttr(root, 'data-search-type-labels');
         var host = root.querySelector('[data-search-results-host]');
+
+        // Shared FPC SSR: payload already matches allowlisted query identity.
+        if (root.getAttribute('data-search-ssr-ready') === '1') {
+            var ssrNode = root.querySelector('[data-search-ssr-payload]');
+            if (ssrNode) {
+                try {
+                    var ssrPayload = JSON.parse(String(ssrNode.textContent || '{}'));
+                    if (ssrPayload && typeof ssrPayload === 'object') {
+                        renderResults(ssrPayload, root, i18n, labels);
+                        return;
+                    }
+                } catch (e) {
+                    // Fall through to BinQuery.
+                }
+            }
+        }
+
         if (host) {
             host.innerHTML =
                 '<div class="storefront-search__loading" data-testid="storefront-search-loading" role="status">' +

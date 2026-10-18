@@ -56,7 +56,8 @@ final class SearchQueryProvider implements QueryProviderInterface
         auth: 'any',
         cost: 2,
     )]
-    #[BinQueryCache(ttl: '0s', description: 'Search results are never CDN cached', cdn: false)]
+    // ttl:0 + cdn:false = no CDN/API cache; does NOT forbid FPC disk index.bq.br publish.
+    #[BinQueryCache(ttl: '0s', description: 'Search results are never CDN cached (disk bq leaf still allowed)', cdn: false)]
     #[BinQueryParam(name: 'q', type: 'string', required: false, maxLength: 255)]
     #[BinQueryParam(name: 'type', type: 'string', required: false)]
     #[BinQueryParam(name: 'area', type: 'string', required: false, maxLength: 16)]
