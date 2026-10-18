@@ -6,23 +6,22 @@ namespace Weline\Mail\Service;
 
 /**
  * Builds only real, user-confirmed mail DNS targets. It never invents a DKIM key.
- * 公钥为空时可先同步 A/MX/SPF/DMARC；有公钥后再写入 DKIM。
+ * DKIM 公钥以 Stalwart 活跃签名为 SoT（可多 selector）；为空时可先同步 A/MX/SPF/DMARC。
  */
 final class MailDnsRecordFactory
 {
     /**
+     * @param list<array{selector:string,public_key:string,algorithm?:string}> $dkimRecords
      * @return array{desired_records: array<int, array<string, mixed>>, dns_only_hosts: array<int, string>}
      */
     public function build(
         string $domain,
         string $hostname,
         string $originIp,
-        string $dkimSelector,
-        string $dkimPublicKey,
+        array $dkimRecords = [],
     ): array {
         $domain = strtolower(rtrim(trim($domain), '.'));
         $hostname = strtolower(rtrim(trim($hostname), '.'));
-        $selector = strtolower(trim($dkimSelector));
 
         if (!filter_var('postmaster@' . $domain, FILTER_VALIDATE_EMAIL)) {
             throw new \DomainException((string)__('邮箱域名格式无效。'));
@@ -32,9 +31,6 @@ final class MailDnsRecordFactory
             || !str_ends_with($hostname, '.' . $domain)
         ) {
             throw new \DomainException((string)__('邮件服务主机名必须属于当前邮箱域名。'));
-        }
-        if (!preg_match('/^[a-z0-9][a-z0-9_-]{0,62}$/', $selector)) {
-            throw new \DomainException((string)__('DKIM 选择器格式无效。'));
         }
 
         $records = [
@@ -59,12 +55,28 @@ final class MailDnsRecordFactory
             ],
         ];
 
-        $dkimPublicKey = trim($dkimPublicKey);
-        if ($dkimPublicKey !== '') {
+        $seenSelectors = [];
+        foreach ($dkimRecords as $dkim) {
+            if (!is_array($dkim)) {
+                continue;
+            }
+            $selector = strtolower(trim((string)($dkim['selector'] ?? '')));
+            $publicKey = trim((string)($dkim['public_key'] ?? ''));
+            $algorithm = strtolower(trim((string)($dkim['algorithm'] ?? '')));
+            if ($selector === '' || $publicKey === '') {
+                continue;
+            }
+            if (!preg_match('/^[a-z0-9][a-z0-9_-]{0,62}$/', $selector)) {
+                throw new \DomainException((string)__('DKIM 选择器格式无效。'));
+            }
+            if (isset($seenSelectors[$selector])) {
+                continue;
+            }
+            $seenSelectors[$selector] = true;
             $records[] = [
                 'type' => 'TXT',
                 'name' => $selector . '._domainkey.' . $domain,
-                'content' => $this->normalizeDkim($dkimPublicKey),
+                'content' => $this->normalizeDkim($publicKey, $algorithm),
                 'ttl' => 1,
             ];
         }
@@ -103,12 +115,13 @@ final class MailDnsRecordFactory
         ];
     }
 
-    private function normalizeDkim(string $value): string
+    private function normalizeDkim(string $value, string $algorithmHint = ''): string
     {
         $value = trim(preg_replace('/"\s*"/', '', trim($value)) ?? '', " \t\n\r\0\x0B\"");
         if (
             $value === ''
             || stripos($value, 'PRIVATE KEY') !== false
+            || stripos($value, 'BEGIN ') !== false
             || stripos($value, 'example') !== false
             || stripos($value, 'replace') !== false
         ) {
@@ -125,7 +138,8 @@ final class MailDnsRecordFactory
             $record = $value;
         } else {
             $key = preg_replace('/[\s"]+/', '', $value) ?? '';
-            $record = 'v=DKIM1; k=rsa; p=' . $key;
+            $algorithm = $this->resolveDkimAlgorithm($algorithmHint, $key);
+            $record = 'v=DKIM1; k=' . $algorithm . '; p=' . $key;
         }
 
         $decoded = base64_decode($key, true);
@@ -134,5 +148,22 @@ final class MailDnsRecordFactory
         }
 
         return $record;
+    }
+
+    private function resolveDkimAlgorithm(string $hint, string $base64Key): string
+    {
+        $hint = strtolower(trim($hint));
+        if (str_contains($hint, 'ed25519')) {
+            return 'ed25519';
+        }
+        if (str_contains($hint, 'rsa')) {
+            return 'rsa';
+        }
+        $decoded = base64_decode($base64Key, true);
+        if (is_string($decoded) && strlen($decoded) === 32) {
+            return 'ed25519';
+        }
+
+        return 'rsa';
     }
 }

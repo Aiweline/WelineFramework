@@ -128,7 +128,24 @@ $accountPath = '/customer/account/index';
                     <?php if (!empty($selectedMessage['has_attachment'])): ?>
                         <div class="w-badge" style="margin-top:.75rem;"><?= __('含附件') ?></div>
                     <?php endif; ?>
-                    <div class="weline-real-mail__body"><?= $escape((string)($selectedMessage['body'] ?? '')) ?></div>
+                    <?php
+                    $realBodyIsHtml = !empty($selectedMessage['body_is_html']) && trim((string)($selectedMessage['html_body'] ?? '')) !== '';
+                    $realHtmlBody = (string)($selectedMessage['html_body'] ?? '');
+                    ?>
+                    <?php if ($realBodyIsHtml): ?>
+                        <div class="weline-real-mail__body weline-real-mail__body--html" data-mail-body-format="html">
+                            <iframe
+                                class="weline-real-mail__html"
+                                title="<?= $escape(__('邮件正文预览')) ?>"
+                                sandbox=""
+                                referrerpolicy="no-referrer"
+                                srcdoc="<?= $escape($realHtmlBody) ?>"
+                                data-testid="mail-real-reader-html"
+                            ></iframe>
+                        </div>
+                    <?php else: ?>
+                        <div class="weline-real-mail__body" data-mail-body-format="text"><?= $escape((string)($selectedMessage['body'] ?? '')) ?></div>
+                    <?php endif; ?>
                 <?php else: ?>
                     <div class="weline-real-mail__empty"><?= __('选择一封邮件查看正文。') ?></div>
                 <?php endif; ?>

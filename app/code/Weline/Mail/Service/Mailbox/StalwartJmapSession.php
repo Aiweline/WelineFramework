@@ -143,6 +143,7 @@ final class StalwartJmapSession
         $keywords = is_array($message['keywords'] ?? null) ? $message['keywords'] : [];
         $subject = trim((string)($message['subject'] ?? ''));
         $preview = $this->limitText(trim((string)($message['preview'] ?? '')), 500);
+        $presentation = MailBodyPresentation::fromJmapMessage($message, $includeBody);
         $out = [
             'id' => (string)($message['id'] ?? ''),
             'thread_id' => (string)($message['threadId'] ?? ''),
@@ -153,7 +154,9 @@ final class StalwartJmapSession
             'bcc' => $this->formatAddresses($message['bcc'] ?? []),
             'received_at' => (string)($message['receivedAt'] ?? $message['sentAt'] ?? ''),
             'preview' => $preview,
-            'body' => $includeBody ? $this->extractPlainBody($message) : '',
+            'body' => $presentation['body'],
+            'html_body' => $presentation['html_body'],
+            'body_is_html' => $presentation['body_is_html'],
             'has_attachment' => !empty($message['hasAttachment']),
             'size' => (int)($message['size'] ?? 0),
             'unread' => !isset($keywords['$seen']),
@@ -256,7 +259,8 @@ final class StalwartJmapSession
         $username = strtolower(trim((string)($credential['username'] ?? '')));
         $baseUrl = $this->normalizeLoopbackBaseUrl((string)($credential['base_url'] ?? self::DEFAULT_JMAP_BASE_URL));
         $sealed = base64_decode((string)($credential['sealed_secret'] ?? ''), true);
-        if (!filter_var($username, FILTER_VALIDATE_EMAIL)
+        // Stalwart 管理账号可为短名（如 admin）；JMAP 冒充形如 mailbox%admin。
+        if (!$this->isValidReaderUsername($username)
             || !is_string($sealed)
             || strlen($sealed) <= SODIUM_CRYPTO_SECRETBOX_NONCEBYTES
         ) {
@@ -269,6 +273,21 @@ final class StalwartJmapSession
             throw new \RuntimeException('邮件读取凭据无法解密。');
         }
         return ['username' => $username, 'password' => $password, 'base_url' => $baseUrl];
+    }
+
+    /**
+     * 读取代理账号：完整邮箱，或 Stalwart 短名（字母数字._-，用于 mailbox%admin 冒充）。
+     */
+    private function isValidReaderUsername(string $username): bool
+    {
+        if ($username === '') {
+            return false;
+        }
+        if (filter_var($username, FILTER_VALIDATE_EMAIL)) {
+            return true;
+        }
+
+        return (bool)preg_match('/^[a-z0-9][a-z0-9._-]{0,63}$/', $username);
     }
 
     private function readerKey(): string
@@ -449,33 +468,6 @@ final class StalwartJmapSession
 
     /**
      * @param array<string, mixed> $message
-     */
-    private function extractPlainBody(array $message): string
-    {
-        $bodyValues = is_array($message['bodyValues'] ?? null) ? $message['bodyValues'] : [];
-        foreach (['textBody', 'htmlBody'] as $bodyType) {
-            $chunks = [];
-            foreach ((array)($message[$bodyType] ?? []) as $part) {
-                if (!is_array($part)) {
-                    continue;
-                }
-                $partId = (string)($part['partId'] ?? '');
-                $value = $partId !== '' && is_array($bodyValues[$partId] ?? null)
-                    ? (string)($bodyValues[$partId]['value'] ?? '')
-                    : '';
-                if ($value !== '') {
-                    $chunks[] = $bodyType === 'htmlBody' ? $this->htmlToPlainText($value) : $value;
-                }
-            }
-            if ($chunks !== []) {
-                return $this->limitText(implode("\n\n", $chunks), 100000);
-            }
-        }
-        return $this->limitText((string)($message['preview'] ?? ''), 100000);
-    }
-
-    /**
-     * @param array<string, mixed> $message
      * @return list<array{name:string,type:string,size:int,blob_id:string}>
      */
     private function extractAttachments(array $message): array
@@ -519,14 +511,6 @@ final class StalwartJmapSession
             ];
         }
         return $out;
-    }
-
-    private function htmlToPlainText(string $html): string
-    {
-        $html = preg_replace('~<(script|style)\b[^>]*>.*?</\1>~is', ' ', $html) ?? '';
-        $html = preg_replace('~<br\s*/?>~i', "\n", $html) ?? $html;
-        $html = preg_replace('~</p\s*>~i', "\n\n", $html) ?? $html;
-        return html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
 
     private function limitText(string $text, int $limit): string

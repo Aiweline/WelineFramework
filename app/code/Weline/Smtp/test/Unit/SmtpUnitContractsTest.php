@@ -219,6 +219,9 @@ final class SmtpUnitContractsTest extends TestCase
             'SmtpServiceCatalog::testCatalogServiceCreatesBothModes' => function () {
             $this->assert_SmtpServiceCatalog_testCatalogServiceCreatesBothModes();
         },
+            'SmtpLocalDomainHealth::testHealthServiceAndGates' => function () {
+            $this->assert_SmtpLocalDomainHealth_testHealthServiceAndGates();
+        },
             'SmtpServiceCatalog::testSmtpAccountBelongsToService' => function () {
             $this->assert_SmtpServiceCatalog_testSmtpAccountBelongsToService();
         },
@@ -1481,12 +1484,27 @@ private function assert_SmtpServiceCatalog_testCatalogServiceCreatesBothModes():
     self::assertStringContainsString('resolveExistingPoolId', $src);
     self::assertStringContainsString('getDomainPoolList', $src);
     self::assertStringContainsString('域名已在池中', $src);
-    self::assertStringContainsString("createAccountOnService(\$id, 'smtp'", $src);
-    self::assertStringContainsString('已默认创建发信账号', $src);
+    self::assertStringContainsString('SmtpSystemAccountProvisioner', $src);
+    self::assertStringContainsString('ensureForService', $src);
+    self::assertStringContainsString('已创建系统账号', $src);
+    self::assertStringContainsString('系统账号已就绪', $src);
+    self::assertStringContainsString('function setRelayService', $src);
     self::assertStringContainsString('function revealAccountPassword', $src);
     self::assertStringContainsString('function resetAccountPassword', $src);
     self::assertStringContainsString('function updateAccountOnService', $src);
     self::assertStringContainsString('function deleteAccountOnService', $src);
+    $systemProvisioner = (string) \file_get_contents(\BP . '/app/code/Weline/Smtp/Service/SmtpSystemAccountProvisioner.php');
+    self::assertStringContainsString('function ensureForDomain', $systemProvisioner);
+    self::assertStringContainsString('function denyMutationReason', $systemProvisioner);
+    self::assertStringContainsString('不可删除', $systemProvisioner);
+    self::assertStringContainsString('不可修改密码', $systemProvisioner);
+    self::assertStringContainsString('SYSTEM_SUBMIT_LOCAL', (string) \file_get_contents(\BP . '/app/code/Weline/Smtp/Model/SmtpAccount.php'));
+    self::assertStringContainsString('is_system', (string) \file_get_contents(\BP . '/app/code/Weline/Smtp/Model/SmtpAccount.php'));
+    self::assertStringContainsString('ensureForDomain', (string) \file_get_contents(\BP . '/app/code/Weline/Smtp/Service/SmtpServiceEnableService.php'));
+    self::assertStringContainsString('data-smtp-system-account', (string) \file_get_contents(\BP . '/app/code/Weline/Smtp/view/backend/Config.phtml'));
+    self::assertStringContainsString('不可删除 / 不可改密', (string) \file_get_contents(\BP . '/app/code/Weline/Smtp/view/backend/Config.phtml'));
+    self::assertStringContainsString('?callable $onProgress = null', $src);
+    self::assertStringContainsString('function emitDeleteProgress', $src);
     self::assertStringContainsString('已同步写入本机 Stalwart', $src);
     self::assertStringContainsString('已从本机 Stalwart 移除登录', $src);
     self::assertStringContainsString('下属账户 %{1} 个已从目录与本机 Stalwart 移除', $src);
@@ -1523,6 +1541,43 @@ private function assert_SmtpServiceCatalog_testSmtpAccountBelongsToService(): vo
 {
     $src = (string) \file_get_contents(BP . '/app/code/Weline/Smtp/Model/SmtpAccount.php');
     self::assertStringContainsString('smtp_service_id', $src);
+    self::assertStringContainsString('schema_fields_IS_SYSTEM', $src);
+    self::assertStringContainsString('function isSystemAccount', $src);
+    self::assertStringContainsString('function systemLocalParts', $src);
+}
+
+private function assert_SmtpLocalDomainHealth_testHealthServiceAndGates(): void
+{
+    $healthPath = BP . '/app/code/Weline/Smtp/Service/SmtpLocalDomainHealthService.php';
+    self::assertFileExists($healthPath);
+    $health = (string) \file_get_contents($healthPath);
+    self::assertStringContainsString('function summarizeForServices', $health);
+    self::assertStringContainsString('function summarizePreview', $health);
+    self::assertStringContainsString("w_query('mail', 'getSmtpTlsStatusBatch'", $health);
+    self::assertStringContainsString("w_query('mail', 'getSmtpTlsStatus'", $health);
+    self::assertStringContainsString("'block_create'", $health);
+    self::assertStringContainsString("'health_applicable'", $health);
+    self::assertStringContainsString("'mode_tone'", $health);
+    self::assertStringNotContainsString('use Weline\\Website\\Model\\DomainPool', $health);
+    self::assertStringNotContainsString('DomainPool::', $health);
+    self::assertStringNotContainsString('StalwartTlsCertificateSyncService', $health);
+    self::assertStringNotContainsString('ObjectManager::getInstance(DomainPool', $health);
+
+    $catalog = (string) \file_get_contents(BP . '/app/code/Weline/Smtp/Service/SmtpServiceCatalogService.php');
+    self::assertStringContainsString('SmtpLocalDomainHealthService', $catalog);
+    self::assertStringContainsString('block_create', $catalog);
+    self::assertStringContainsString('非本机已跳过', $catalog);
+    self::assertStringContainsString('summarizePreview', $catalog);
+
+    $enable = (string) \file_get_contents(BP . '/app/code/Weline/Smtp/Service/SmtpServiceEnableService.php');
+    self::assertStringContainsString('SmtpLocalDomainHealthService', $enable);
+    self::assertStringContainsString('block_create', $enable);
+    self::assertStringContainsString('summarizePreview', $enable);
+
+    $index = (string) \file_get_contents(BP . '/app/code/Weline/Mail/Controller/Backend/Index.php');
+    self::assertStringContainsString('SmtpLocalDomainHealthService', $index);
+    self::assertStringContainsString("assign('smtp_local_health_by_service'", $index);
+    self::assertStringContainsString('summarizeForServices', $index);
 }
 
 private function assert_SmtpServiceSplit_testSmtpAccountModelExists(): void

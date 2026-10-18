@@ -142,6 +142,82 @@ final class StalwartManagementAdapter
         return array_values($out);
     }
 
+    /**
+     * 列出本机 Stalwart 中应对 DNS 发布的 DKIM 公钥（SoT：active/pending/retiring）。
+     *
+     * @return list<array{selector:string,public_key:string,algorithm:string,stage:string}>
+     */
+    public function listPublishableDkimDnsRecords(string $domainName): array
+    {
+        $domainName = strtolower(trim($domainName));
+        if ($domainName === '' || !preg_match('/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/', $domainName)) {
+            return [];
+        }
+        try {
+            $domainId = $this->domainId($domainName);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $query = $this->managementCall('x:DkimSignature/query', [
+            'filter' => ['domainId' => $domainId],
+            'limit' => 50,
+        ]);
+        $ids = $query['ids'] ?? [];
+        if (!is_array($ids) || $ids === []) {
+            return [];
+        }
+        $idList = [];
+        foreach ($ids as $id) {
+            $id = trim((string)$id);
+            if ($id !== '') {
+                $idList[] = $id;
+            }
+        }
+        if ($idList === []) {
+            return [];
+        }
+
+        $get = $this->managementCall('x:DkimSignature/get', [
+            'ids' => $idList,
+            'properties' => ['selector', 'publicKey', 'stage', 'domainId', '@type'],
+        ]);
+        $list = $get['list'] ?? [];
+        if (!is_array($list)) {
+            return [];
+        }
+
+        $publishableStages = ['active' => true, 'pending' => true, 'retiring' => true];
+        $out = [];
+        foreach ($list as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $stage = strtolower(trim((string)($item['stage'] ?? '')));
+            if (!isset($publishableStages[$stage])) {
+                continue;
+            }
+            $selector = strtolower(trim((string)($item['selector'] ?? '')));
+            $publicKey = trim((string)($item['publicKey'] ?? ''));
+            if ($selector === '' || $publicKey === '') {
+                continue;
+            }
+            if (!preg_match('/^[a-z0-9][a-z0-9_-]{0,62}$/', $selector)) {
+                continue;
+            }
+            $type = (string)($item['@type'] ?? '');
+            $algorithm = stripos($type, 'ed25519') !== false ? 'ed25519' : 'rsa';
+            $out[] = [
+                'selector' => $selector,
+                'public_key' => $publicKey,
+                'algorithm' => $algorithm,
+                'stage' => $stage,
+            ];
+        }
+
+        return $out;
+    }
+
     public function provisionAccount(string $mailbox, string $password, int $quotaMb): string
     {
         [$localPart, $domainName] = $this->splitMailbox($mailbox);
@@ -349,6 +425,41 @@ final class StalwartManagementAdapter
      * @param array<string, mixed> $strategyRoute
      */
     /**
+     * 读取已存在 Relay 的 authUsername（如 QQ SMTP 授权账号）。
+     */
+    public function getRelayAuthUsername(string $routeName): string
+    {
+        $routeName = trim($routeName);
+        if ($routeName === '') {
+            return '';
+        }
+        $query = $this->managementCall('x:MtaRoute/query', [
+            'filter' => ['name' => $routeName],
+            'limit' => 1,
+        ]);
+        $id = (string)($query['ids'][0] ?? '');
+        if ($id === '') {
+            return '';
+        }
+        $got = $this->managementCall('x:MtaRoute/get', [
+            'ids' => [$id],
+            'properties' => ['name', 'authUsername', '@type'],
+        ]);
+        foreach (($got['list'] ?? []) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            if (($row['@type'] ?? '') !== 'Relay') {
+                continue;
+            }
+
+            return strtolower(trim((string)($row['authUsername'] ?? '')));
+        }
+
+        return '';
+    }
+
+    /**
      * 列出 Stalwart 中名称带指定前缀的 Relay 路由名（用于保留已配置 hub 导流）。
      *
      * @return list<string>
@@ -429,6 +540,9 @@ final class StalwartManagementAdapter
             throw new \RuntimeException('Stalwart 外投策略更新失败' . ($type !== '' ? '：' . $type : '。'));
         }
 
+        // Hub 最终出站 else=QQ 时：已认证且 From≠授权用户 → 改写信封（避免 smtp.qq.com 501）。
+        $this->applyQqHubEnvelopeFromRewriteIfElse($strategyRoute);
+
         $reloadResult = $this->managementCall('x:Action/set', [
             'create' => [
                 'reload' => ['@type' => 'ReloadSettings'],
@@ -437,6 +551,199 @@ final class StalwartManagementAdapter
         if (!isset($reloadResult['created']['reload']) && isset($reloadResult['notCreated']['reload'])) {
             $type = (string)($reloadResult['notCreated']['reload']['type'] ?? '');
             throw new \RuntimeException('Stalwart ReloadSettings 失败' . ($type !== '' ? '：' . $type : '。'));
+        }
+    }
+
+    /**
+     * else 为 QQ hub 时改写信封 MAIL FROM→授权用户，并对齐 Header From；否则清掉改写。
+     *
+     * QQ SMTP 硬约束：授权用户必须同时出现在信封 MAIL FROM 与 Header From。
+     * 仅改信封、保留品牌邮箱 Header From 会被 QQ 以 550「inappropriate words」拒绝。
+     *
+     * @param array<string, mixed> $strategyRoute
+     */
+    private function applyQqHubEnvelopeFromRewriteIfElse(array $strategyRoute): void
+    {
+        $else = trim((string)($strategyRoute['else'] ?? ''));
+        if ($else === 'weline-hub-qq-smtp') {
+            $else = "'weline-hub-qq-smtp'";
+        }
+        if ($else !== "'weline-hub-qq-smtp'") {
+            try {
+                $this->managementCall('x:MtaStageMail/set', [
+                    'update' => [
+                        'singleton' => [
+                            'rewrite' => (object)['match' => (object)[], 'else' => 'false'],
+                        ],
+                    ],
+                ]);
+                $this->managementCall('x:MtaStageAuth/set', [
+                    'update' => [
+                        'singleton' => [
+                            'mustMatchSender' => (object)['match' => (object)[], 'else' => 'true'],
+                        ],
+                    ],
+                ]);
+                $this->clearQqHubHeaderFromAlignSieve();
+            } catch (\Throwable) {
+            }
+
+            return;
+        }
+        $qqAuth = $this->getRelayAuthUsername('weline-hub-qq-smtp');
+        if ($qqAuth === '' || !filter_var($qqAuth, FILTER_VALIDATE_EMAIL)) {
+            return;
+        }
+        // Stalwart 0.16 表达式字符串字面量必须用双引号；单引号会被拆成非法标识符，rewrite 静默不生效 → QQ 501。
+        $quoted = '"' . addcslashes($qqAuth, '"\\') . '"';
+        $result = $this->managementCall('x:MtaStageMail/set', [
+            'update' => [
+                'singleton' => [
+                    'rewrite' => (object)[
+                        'match' => (object)[
+                            '0' => [
+                                'if' => "sender != {$quoted} && !is_empty(authenticated_as)",
+                                'then' => $quoted,
+                            ],
+                        ],
+                        'else' => 'false',
+                    ],
+                ],
+            ],
+        ]);
+        if (isset($result['notUpdated']['singleton'])) {
+            $type = (string)($result['notUpdated']['singleton']['type'] ?? '');
+            throw new \RuntimeException('Stalwart MAIL FROM 改写更新失败' . ($type !== '' ? '：' . $type : '。'));
+        }
+        // 信封改写后 sender≠authenticated_as；Hub QQ 路径关闭 mustMatchSender（587 仍强制 AUTH）。
+        $authResult = $this->managementCall('x:MtaStageAuth/set', [
+            'update' => [
+                'singleton' => [
+                    'mustMatchSender' => (object)['match' => (object)[], 'else' => 'false'],
+                ],
+            ],
+        ]);
+        if (isset($authResult['notUpdated']['singleton'])) {
+            $type = (string)($authResult['notUpdated']['singleton']['type'] ?? '');
+            throw new \RuntimeException('Stalwart mustMatchSender 更新失败' . ($type !== '' ? '：' . $type : '。'));
+        }
+        $this->applyQqHubHeaderFromAlignSieve($qqAuth);
+    }
+
+    private const QQ_HUB_FROM_ALIGN_SIEVE = 'weline-qq-align-from';
+
+    /**
+     * DATA 阶段 Sieve：信封已是 QQ 授权用户时，把 Header From 对齐到同一地址，原 From 写入 Reply-To。
+     */
+    private function applyQqHubHeaderFromAlignSieve(string $qqAuth): void
+    {
+        $qqAuth = strtolower(trim($qqAuth));
+        if ($qqAuth === '' || !filter_var($qqAuth, FILTER_VALIDATE_EMAIL)) {
+            return;
+        }
+        // Sieve 字符串字面量用双引号；邮箱不含引号/反斜杠，直接嵌入。
+        $contents = 'require ["editheader", "envelope", "variables"];' . "\n\n"
+            . '# QQ SMTP: Header From must equal authorized user (envelope rewrite alone → QQ 550).' . "\n"
+            . 'if envelope :is "from" "' . $qqAuth . '" {' . "\n"
+            . '  if not header :contains "From" "' . $qqAuth . '" {' . "\n"
+            . '    if header :matches "From" "*" {' . "\n"
+            . '      set "origfrom" "${1}";' . "\n"
+            . '      if not exists "Reply-To" {' . "\n"
+            . '        addheader :last "Reply-To" "${origfrom}";' . "\n"
+            . '      }' . "\n"
+            . '    }' . "\n"
+            . '    deleteheader "From";' . "\n"
+            . '    addheader :last "From" "' . $qqAuth . '";' . "\n"
+            . '  }' . "\n"
+            . '}' . "\n";
+
+        $query = $this->managementCall('x:SieveSystemScript/query', [
+            'filter' => ['name' => self::QQ_HUB_FROM_ALIGN_SIEVE],
+            'limit' => 5,
+        ]);
+        $ids = [];
+        foreach ((array)($query['ids'] ?? []) as $id) {
+            $id = trim((string)$id);
+            if ($id !== '') {
+                $ids[] = $id;
+            }
+        }
+        $payload = [
+            'name' => self::QQ_HUB_FROM_ALIGN_SIEVE,
+            'description' => 'Align Header From to QQ SMTP auth; preserve original as Reply-To',
+            'isActive' => true,
+            'contents' => $contents,
+        ];
+        if ($ids !== []) {
+            $set = $this->managementCall('x:SieveSystemScript/set', [
+                'update' => [$ids[0] => $payload],
+            ]);
+            if (isset($set['notUpdated'][$ids[0]])) {
+                $type = (string)($set['notUpdated'][$ids[0]]['type'] ?? '');
+                throw new \RuntimeException('Stalwart QQ From 对齐 Sieve 更新失败' . ($type !== '' ? '：' . $type : '。'));
+            }
+        } else {
+            $set = $this->managementCall('x:SieveSystemScript/set', [
+                'create' => ['qqAlignFrom' => $payload],
+            ]);
+            if (empty($set['created']['qqAlignFrom']['id'])) {
+                $type = (string)($set['notCreated']['qqAlignFrom']['type'] ?? '');
+                throw new \RuntimeException('Stalwart QQ From 对齐 Sieve 创建失败' . ($type !== '' ? '：' . $type : '。'));
+            }
+        }
+
+        $quotedName = '"' . addcslashes(self::QQ_HUB_FROM_ALIGN_SIEVE, '"\\') . '"';
+        $stage = $this->managementCall('x:MtaStageData/set', [
+            'update' => [
+                'singleton' => [
+                    'script' => (object)[
+                        'match' => (object)[
+                            '0' => [
+                                'if' => '!is_empty(authenticated_as)',
+                                'then' => $quotedName,
+                            ],
+                        ],
+                        'else' => 'false',
+                    ],
+                ],
+            ],
+        ]);
+        if (isset($stage['notUpdated']['singleton'])) {
+            $type = (string)($stage['notUpdated']['singleton']['type'] ?? '');
+            throw new \RuntimeException('Stalwart DATA Sieve 挂载失败' . ($type !== '' ? '：' . $type : '。'));
+        }
+    }
+
+    private function clearQqHubHeaderFromAlignSieve(): void
+    {
+        try {
+            $this->managementCall('x:MtaStageData/set', [
+                'update' => [
+                    'singleton' => [
+                        'script' => (object)['match' => (object)[], 'else' => 'false'],
+                    ],
+                ],
+            ]);
+        } catch (\Throwable) {
+        }
+        try {
+            $query = $this->managementCall('x:SieveSystemScript/query', [
+                'filter' => ['name' => self::QQ_HUB_FROM_ALIGN_SIEVE],
+                'limit' => 5,
+            ]);
+            $destroy = [];
+            foreach ((array)($query['ids'] ?? []) as $id) {
+                $id = trim((string)$id);
+                if ($id !== '') {
+                    $destroy[] = $id;
+                }
+            }
+            if ($destroy !== []) {
+                $this->managementCall('x:SieveSystemScript/set', [
+                    'destroy' => $destroy,
+                ]);
+            }
+        } catch (\Throwable) {
         }
     }
 

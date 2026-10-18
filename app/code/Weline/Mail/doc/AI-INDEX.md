@@ -75,3 +75,8 @@
 - 涉及模板、主题、slot、widget、taglib 或 `view/theme` 时，必须先读 `app/code/Weline/Theme/doc/AI-INDEX.md`。
 - 禁止直接修改 `generated/`、`view/tpl/`、`routes.xml` 或复制旧文档里的过时路径。
 - 如果本文件与源码冲突，以源码为准，并在同次任务中修正模块文档。
+
+## 专题规格（人工指针）
+
+- Smtp 本机域名健康（跨模块 Query + 企业页双徽章）：见 [`../../Smtp/doc/开发/spec/smtp-local-domain-health.md`](../../Smtp/doc/%E5%BC%80%E5%8F%91/spec/smtp-local-domain-health.md)
+

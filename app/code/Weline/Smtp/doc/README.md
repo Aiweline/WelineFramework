@@ -56,6 +56,13 @@
 - **编辑工作区**：顶栏 CTA；变量分组；左编辑右 sticky 实时预览；**预览站址取 WebsiteDomain；Logo 上溯 Website appearance brand（`/pub/media/websites/...`，非 Theme 默认标）**
 - 发信自动注入站店渠信任变量：`site_name` / `store_name` / `channel_name` / `site_logo_img` / `contact_*` / `brand_primary` 等（`MailBrandContextService`）
 
+
+## 本机域名健康（Smtp 列表 / 门禁）
+
+企业邮局 Smtp 多服务列表须区分 **登记模式**（本机登记 / 外部填入）与 **本机健康**（TLS/池四态）。  
+耐久规格：[`开发/spec/smtp-local-domain-health.md`](%E5%BC%80%E5%8F%91/spec/smtp-local-domain-health.md)。  
+实现锚点：`Service/SmtpLocalDomainHealthService`；Query `mail.getSmtpTlsStatus` / `mail.getSmtpTlsStatusBatch`；门禁在 `createSelfService` / `enable` / `importSelfServicesFromMailDomains`。
+
 ## 本模块文档资产
 
 - 本模块长期知识由当前 `doc/` 文档维护；新增稳定行为、接口或配置约定时继续补到本目录，由 MCP 动态索引。

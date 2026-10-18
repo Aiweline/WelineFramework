@@ -13,14 +13,17 @@ use Weline\Smtp\Service\SmtpServiceCatalogService;
 /**
  * 全量重建 Stalwart outbound route。
  *
- * 优先级（规则 > 默认）：
+ * 优先级（用户拍板）：
  * 1) local：本域收件进本地投递
- * 2) 收件域导流（配置了中继就按规则：587/465，禁 25）
- * 3) 账号 sender 外投
- * 4) else：本机 Smtp 服务（587/465）作默认外投
- * 5) 无本机 Smtp 时才兜底 mx（25）
+ * 2) 导流规则 → 具体 Smtp 账户（收件域规则 / 账号外投 / hub 绑定；端口 587/465，禁 25）
+ * 3) 无匹配规则 → 自家域名 Smtp（MailDomain.hostname / Smtp self，587/465）
+ * 4) 都没有 → 才兜底 mx（25）
  *
- * not_to_do：把 else 固定成 mx；把单个账号外投抬成全局 else；中继端口写 25。
+ * 边缘站（汉服）：导流/账号外投指向 mail.aiweline.com hub——跨机中继，不是自环。
+ * Hub 站（weline）：本机 hostname 不可作 else（会自环）；无可达域名 Smtp 时 else 可升为已配置
+ * weline-hub-*（如 QQ:465）作云主机最终出站；再没有才 mx:25。
+ *
+ * not_to_do：边缘站把跨机 hub 误判自环；有可达域名 Smtp/导流却走 mx；中继端口写 25。
  */
 final class MailOutboundRelaySyncService
 {
@@ -120,20 +123,44 @@ final class MailOutboundRelaySyncService
         }
 
         $hubSet = array_fill_keys($existingHubs, true);
-        foreach ($bindings as $domain => $routeName) {
-            $domain = $this->normalizeMatchDomain((string)$domain);
+
+        // QQ SMTP 硬约束：MAIL FROM 必须等于授权用户；禁止 rcpt_domain==qq.com 无条件导流
+        // （contact@外域 → smtp.qq.com 会 501；已发送≠已投递）。
+        if (isset($hubSet['weline-hub-qq-smtp'])) {
+            $qqAuth = strtolower($adapter->getRelayAuthUsername('weline-hub-qq-smtp'));
+            if ($qqAuth !== '' && filter_var($qqAuth, FILTER_VALIDATE_EMAIL)) {
+                unset($bindings['qq.com']);
+                $bindings['sender:' . $qqAuth] = 'weline-hub-qq-smtp';
+                $this->saveHubBindings($bindings);
+            }
+        }
+
+        // 绑定表：domain → route；或 sender:email → route（QQ 等强制 From=auth 的中继）。
+        foreach ($bindings as $key => $routeName) {
             $routeName = trim((string)$routeName);
-            if ($domain === '' || $routeName === '') {
+            $key = trim((string)$key);
+            if ($routeName === '' || $key === '') {
                 continue;
             }
-            if (!isset($hubSet[$routeName]) && !str_starts_with($routeName, 'weline-hub-')) {
-                continue;
-            }
-            // 绑定指向的 hub 必须仍在 Stalwart；否则跳过，避免策略挂死名。
             if ($existingHubs !== [] && !isset($hubSet[$routeName])) {
                 continue;
             }
-            $if = "rcpt_domain == '" . addcslashes($domain, "'\\") . "'";
+            if (str_starts_with($key, 'sender:')) {
+                $email = strtolower(trim(substr($key, 7)));
+                if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    continue;
+                }
+                $if = "sender == '" . addcslashes($email, "'\\") . "'";
+            } else {
+                $domain = $this->normalizeMatchDomain($key);
+                if ($domain === '') {
+                    continue;
+                }
+                if ($domain === 'qq.com' && $routeName === 'weline-hub-qq-smtp') {
+                    continue;
+                }
+                $if = "rcpt_domain == '" . addcslashes($domain, "'\\") . "'";
+            }
             if (isset($coveredIf[$if])) {
                 continue;
             }
@@ -144,25 +171,53 @@ final class MailOutboundRelaySyncService
             $coveredIf[$if] = true;
         }
 
-        // 无绑定文件时：若仅有一个 qq hub，按约定挂 qq.com（用户已配好的特殊导流）。
-        if ($bindings === [] && isset($hubSet['weline-hub-qq-smtp'])) {
-            $if = "rcpt_domain == 'qq.com'";
-            if (!isset($coveredIf[$if])) {
-                $match[(string)count($match)] = [
-                    'if' => $if,
-                    'then' => "'weline-hub-qq-smtp'",
-                ];
-                $this->saveHubBindings(['qq.com' => 'weline-hub-qq-smtp']);
-            }
-        }
-
         $built['strategy_route']['match'] = (object)$match;
+        // 本机已有 weline-hub-*（Hub 站）：无可达域名 Smtp 时 else 从 mx 升为 hub 出站（边缘站通常无此 hub）。
+        $built['strategy_route']['else'] = $this->preferConfiguredHubOverMxElse(
+            (string)($built['strategy_route']['else'] ?? "'mx'"),
+            $existingHubs
+        );
 
         return $built;
     }
 
     /**
-     * @return array<string, string> match_domain => route_name
+     * Hub 站最终出站：else 仍是 mx 且已配置 weline-hub-* → 改用 hub（587/465），避免云拦 :25。
+     * 边缘站指向 mail.aiweline.com 走导流/账号外投/域名 Smtp，不靠本函数。
+     *
+     * @param list<string> $existingHubs
+     */
+    private function preferConfiguredHubOverMxElse(string $else, array $existingHubs): string
+    {
+        $else = trim($else);
+        if ($else === '' || $else === 'mx') {
+            $else = "'mx'";
+        }
+        if ($else !== "'mx'" || $existingHubs === []) {
+            return $else;
+        }
+        $preferred = '';
+        foreach ($existingHubs as $name) {
+            $name = trim((string)$name);
+            if ($name === '') {
+                continue;
+            }
+            if ($name === 'weline-hub-qq-smtp') {
+                return "'" . addcslashes($name, "'\\") . "'";
+            }
+            if ($preferred === '') {
+                $preferred = $name;
+            }
+        }
+        if ($preferred === '') {
+            return "'mx'";
+        }
+
+        return "'" . addcslashes($preferred, "'\\") . "'";
+    }
+
+    /**
+     * @return array<string, string> match_domain|sender:email => route_name
      */
     private function loadHubBindings(): array
     {
@@ -175,10 +230,21 @@ final class MailOutboundRelaySyncService
             return [];
         }
         $out = [];
-        foreach ($raw as $domain => $routeName) {
-            $domain = $this->normalizeMatchDomain((string)$domain);
+        foreach ($raw as $key => $routeName) {
+            $key = trim((string)$key);
             $routeName = trim((string)$routeName);
-            if ($domain !== '' && $routeName !== '') {
+            if ($routeName === '' || $key === '') {
+                continue;
+            }
+            if (str_starts_with($key, 'sender:')) {
+                $email = strtolower(trim(substr($key, 7)));
+                if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $out['sender:' . $email] = $routeName;
+                }
+                continue;
+            }
+            $domain = $this->normalizeMatchDomain($key);
+            if ($domain !== '') {
                 $out[$domain] = $routeName;
             }
         }
@@ -197,10 +263,21 @@ final class MailOutboundRelaySyncService
             return;
         }
         $clean = [];
-        foreach ($bindings as $domain => $routeName) {
-            $domain = $this->normalizeMatchDomain((string)$domain);
+        foreach ($bindings as $key => $routeName) {
+            $key = trim((string)$key);
             $routeName = trim((string)$routeName);
-            if ($domain !== '' && $routeName !== '') {
+            if ($routeName === '' || $key === '') {
+                continue;
+            }
+            if (str_starts_with($key, 'sender:')) {
+                $email = strtolower(trim(substr($key, 7)));
+                if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $clean['sender:' . $email] = $routeName;
+                }
+                continue;
+            }
+            $domain = $this->normalizeMatchDomain($key);
+            if ($domain !== '') {
                 $clean[$domain] = $routeName;
             }
         }
@@ -428,7 +505,7 @@ final class MailOutboundRelaySyncService
             ];
         }
 
-        // A1：local → rcpt 分流 → sender 外投
+        // A1：local → 导流规则（rcpt / sender）→ 再挂自家域名 Smtp（按 sender_domain）
         $match = [];
         $match[] = [
             'if' => 'is_local_domain(rcpt_domain)',
@@ -441,15 +518,15 @@ final class MailOutboundRelaySyncService
             $match[] = $rule;
         }
 
-        // A2：else 默认本机 Smtp（587/465）；无本机 Smtp 才兜底 mx（25）。
+        // A2：无导流匹配时走可达的域名/外部 Smtp（587/465）。本机 hostname≠自环目标；
+        // 跨机 hub（如 mail.aiweline.com）算合法 else。都不可达才 mx（25）。
         $else = "'mx'";
+        $domainSmtpMatches = $this->buildDomainSmtpSenderMatches($domainLookup, $routeByKey, $selfRef);
+        foreach ($domainSmtpMatches as $rule) {
+            $match[] = $rule;
+        }
         $selfSmtp = $this->resolveDefaultSelfSmtpRelay($domainLookup);
         if ($selfSmtp !== null) {
-            if ($this->looksSelfRefHost($selfSmtp['host'])
-                || $this->hostMatchesAnyMailDomain($selfSmtp['host'], $domainLookup)
-            ) {
-                $selfRef = true;
-            }
             $selfRouteName = $this->ensureRelayRoute(
                 $routeByKey,
                 $selfSmtp['host'],
@@ -483,7 +560,61 @@ final class MailOutboundRelaySyncService
     }
 
     /**
-     * 本机 Smtp 默认外投：优先 Smtp 目录 self 服务；否则 MailDomain.hostname。
+     * 自家域名 Smtp：每个 active 域 hostname（非本机）→ sender_domain == 该域 走 587/465。
+     *
+     * @param array<int, array<string, mixed>> $domainLookup
+     * @param array<string, array{route_name: string, relay: array<string, mixed>}> $routeByKey
+     * @return list<array{if:string,then:string}>
+     */
+    private function buildDomainSmtpSenderMatches(array $domainLookup, array &$routeByKey, bool &$selfRef): array
+    {
+        $out = [];
+        $seenDomain = [];
+        foreach ($domainLookup as $domain) {
+            if ((string)($domain[MailDomain::schema_fields_STATUS] ?? $domain['status'] ?? '') !== 'active') {
+                continue;
+            }
+            $domainName = strtolower(trim((string)($domain[MailDomain::schema_fields_DOMAIN_NAME]
+                ?? $domain['domain_name']
+                ?? '')));
+            if ($domainName === '' || isset($seenDomain[$domainName])) {
+                continue;
+            }
+            $host = strtolower(trim((string)($domain[MailDomain::schema_fields_HOSTNAME]
+                ?? $domain['hostname']
+                ?? '')));
+            if ($host === '') {
+                $host = 'mail.' . $domainName;
+            }
+            if ($this->isLocalOutboundHost($host)) {
+                $selfRef = true;
+                continue;
+            }
+            $seenDomain[$domainName] = true;
+            $submission = $this->resolveReachableSubmissionEndpoint($host);
+            if ($submission === null) {
+                continue;
+            }
+            $routeName = $this->ensureRelayRoute(
+                $routeByKey,
+                $host,
+                $submission['port'],
+                '',
+                $submission['tls'],
+                '',
+                'weline-outbound-domain-'
+            );
+            $out[] = [
+                'if' => "sender_domain == '" . addcslashes($domainName, "'\\") . "'",
+                'then' => "'" . $routeName . "'",
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * 本机 Smtp 默认外投：优先 Smtp 目录 self 服务；否则首个非本机 MailDomain.hostname。
      * 端口只允许 587/465（25→587）。
      *
      * @param array<int, array<string, mixed>> $domainLookup
@@ -494,30 +625,40 @@ final class MailOutboundRelaySyncService
         try {
             /** @var SmtpServiceCatalogService $catalog */
             $catalog = ObjectManager::getInstance(SmtpServiceCatalogService::class);
+            $fallbackExternal = null;
             foreach ($catalog->listServices() as $svc) {
                 if (!$svc instanceof SmtpService) {
-                    continue;
-                }
-                if ((string)$svc->getData(SmtpService::schema_fields_MODE) !== SmtpService::MODE_SELF) {
                     continue;
                 }
                 if ((string)$svc->getData(SmtpService::schema_fields_STATUS) !== 'active') {
                     continue;
                 }
+                $mode = (string)$svc->getData(SmtpService::schema_fields_MODE);
                 $host = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME)));
-                if ($host === '') {
+                if ($host === '' || $this->isLocalOutboundHost($host)) {
                     continue;
                 }
-                $port = $this->normalizeSubmissionPort((int)$svc->getData(SmtpService::schema_fields_PORT));
-                $tls = $this->normalizeTls((string)$svc->getData(SmtpService::schema_fields_TLS), $port);
-
-                return [
+                $submission = $this->resolveReachableSubmissionEndpoint($host);
+                if ($submission === null) {
+                    continue;
+                }
+                $candidate = [
                     'host' => $host,
-                    'port' => $port,
-                    'user' => '',
-                    'tls' => $tls,
+                    'port' => $submission['port'],
+                    'user' => trim((string)$svc->getData(SmtpService::schema_fields_USERNAME)),
+                    'tls' => $submission['tls'],
                     'password' => '',
                 ];
+                // 优先本机 Smtp 目录里的「非本机」self；否则用 external hub（如 mail.aiweline.com）。
+                if ($mode === SmtpService::MODE_SELF) {
+                    return $candidate;
+                }
+                if ($fallbackExternal === null && $mode === SmtpService::MODE_EXTERNAL) {
+                    $fallbackExternal = $candidate;
+                }
+            }
+            if ($fallbackExternal !== null) {
+                return $fallbackExternal;
             }
         } catch (\Throwable) {
             // Smtp 模块不可用时退回 MailDomain。
@@ -539,12 +680,19 @@ final class MailOutboundRelaySyncService
                 }
                 $host = 'mail.' . $root;
             }
+            if ($this->isLocalOutboundHost($host)) {
+                continue;
+            }
+            $submission = $this->resolveReachableSubmissionEndpoint($host);
+            if ($submission === null) {
+                continue;
+            }
 
             return [
                 'host' => $host,
-                'port' => 587,
+                'port' => $submission['port'],
                 'user' => '',
-                'tls' => 'starttls',
+                'tls' => $submission['tls'],
                 'password' => '',
             ];
         }
@@ -640,19 +788,21 @@ final class MailOutboundRelaySyncService
     }
 
     /**
-     * @param array<int, array<string, mixed>> $domainLookup
+     * 外投目标是否本机：回环、本机网卡 IP、或与本机公开 mail 主机（STALWART_PUBLIC_URL）同 A 记录。
+     * 禁止「凡 MailDomain.hostname 一律自指」——边缘站 hostname 对 hub 是远端中继。
      */
-    private function hostMatchesAnyMailDomain(string $host, array $domainLookup): bool
+    private function isLocalOutboundHost(string $host): bool
     {
         $host = strtolower(trim($host));
-        if ($host === '') {
-            return false;
+        if ($host === '' || $this->looksSelfRefHost($host)) {
+            return true;
         }
-        foreach ($domainLookup as $domain) {
-            $mailHost = strtolower(trim((string)($domain[MailDomain::schema_fields_HOSTNAME]
-                ?? $domain['hostname']
-                ?? '')));
-            if ($mailHost !== '' && $host === $mailHost) {
+        $localIps = $this->localIdentityIpv4s();
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            return isset($localIps[$host]);
+        }
+        foreach ($this->resolveIpv4s($host) as $ip) {
+            if (isset($localIps[$ip])) {
                 return true;
             }
         }
@@ -660,16 +810,112 @@ final class MailOutboundRelaySyncService
         return false;
     }
 
-    private function looksSelfRef(string $host, string $mailHost, string $domainName): bool
+    /**
+     * @return array<string, true>
+     */
+    private function localIdentityIpv4s(): array
     {
-        unset($domainName);
-        if ($this->looksSelfRefHost($host)) {
-            return true;
+        static $localIps = null;
+        if ($localIps !== null) {
+            return $localIps;
         }
-        if ($mailHost !== '' && $host === $mailHost) {
-            return true;
+        $localIps = ['127.0.0.1' => true];
+        foreach (@net_get_interfaces() ?: [] as $iface) {
+            foreach (($iface['unicast'] ?? []) as $addr) {
+                $candidate = (string)($addr['address'] ?? '');
+                if ($candidate !== '' && filter_var($candidate, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                    $localIps[$candidate] = true;
+                }
+            }
+        }
+        foreach ($this->resolveIpv4s($this->publicMailHostname()) as $ip) {
+            $localIps[$ip] = true;
         }
 
-        return false;
+        return $localIps;
+    }
+
+    private function publicMailHostname(): string
+    {
+        $candidates = [];
+        $envFile = '/etc/stalwart/stalwart.env';
+        if (is_readable($envFile)) {
+            $raw = (string)@file_get_contents($envFile);
+            if (preg_match('/^STALWART_PUBLIC_URL=(.+)$/m', $raw, $m)) {
+                $candidates[] = trim($m[1], " \t\"'");
+            }
+        }
+        $envUrl = (string)(getenv('STALWART_PUBLIC_URL') ?: '');
+        if ($envUrl !== '') {
+            $candidates[] = $envUrl;
+        }
+        foreach ($candidates as $url) {
+            $host = strtolower((string)(parse_url($url, PHP_URL_HOST) ?: ''));
+            if ($host !== '') {
+                return $host;
+            }
+        }
+
+        return 'mail.aiweline.com';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveIpv4s(string $host): array
+    {
+        $host = strtolower(trim($host));
+        if ($host === '') {
+            return [];
+        }
+        if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            return [$host];
+        }
+        $out = [];
+        foreach (@dns_get_record($host, DNS_A) ?: [] as $row) {
+            $ip = (string)($row['ip'] ?? '');
+            if ($ip !== '' && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                $out[] = $ip;
+            }
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /**
+     * 探测域名 Smtp 可达提交口：587/starttls 优先，否则 465/smtps。
+     *
+     * @return array{port:int,tls:string}|null
+     */
+    private function resolveReachableSubmissionEndpoint(string $host): ?array
+    {
+        if ($this->tcpPortOpen($host, 587)) {
+            return ['port' => 587, 'tls' => 'starttls'];
+        }
+        if ($this->tcpPortOpen($host, 465)) {
+            return ['port' => 465, 'tls' => 'smtps'];
+        }
+
+        return null;
+    }
+
+    private function tcpPortOpen(string $host, int $port): bool
+    {
+        $errno = 0;
+        $errstr = '';
+        $fp = @fsockopen($host, $port, $errno, $errstr, 3.0);
+        if (!is_resource($fp)) {
+            return false;
+        }
+        fclose($fp);
+
+        return true;
+    }
+
+    private function looksSelfRef(string $host, string $mailHost, string $domainName): bool
+    {
+        unset($domainName, $mailHost);
+
+        return $this->isLocalOutboundHost($host);
     }
 }

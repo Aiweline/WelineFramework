@@ -5,6 +5,7 @@ namespace Weline\Mail\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\ResponseTerminateException;
+use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\PostResponseTaskQueue;
 use Weline\Mail\Model\MailAccount;
@@ -55,17 +56,53 @@ class Index extends BackendController
 
         /** @var MailAccount $accountModel */
         $accountModel = ObjectManager::getInstance(MailAccount::class);
-        $accounts = $accountModel->clear()
+        $allAccounts = $accountModel->clear()
             ->order(MailAccount::schema_fields_DOMAIN_ID, 'ASC')
             ->order(MailAccount::schema_fields_EMAIL, 'ASC')
             ->select()
             ->fetch()
             ->getItems();
 
+        $accountFilterQ = trim((string)$this->request->getParam('q', ''));
+        $accountFilterStatus = strtolower(trim((string)$this->request->getParam('status', '')));
+        $accountFilterDomainId = max(0, (int)$this->request->getParam('domain_id', 0));
+        $accountPage = max(1, (int)$this->request->getParam('page', 1));
+        $accountPageSize = \Weline\Mail\Service\MailAccountManagementService::DEFAULT_PAGE_SIZE;
+        $accountListTotal = count($allAccounts);
+        $accountListHasMore = false;
+        $accounts = $allAccounts;
+        if ($mailView === 'accounts') {
+            /** @var \Weline\Mail\Service\MailAccountManagementService $accountMgmt */
+            $accountMgmt = ObjectManager::getInstance(
+                \Weline\Mail\Service\MailAccountManagementService::class
+            );
+            $listed = $accountMgmt->listAccounts([
+                'q' => $accountFilterQ,
+                'status' => $accountFilterStatus,
+                'domain_id' => $accountFilterDomainId,
+                'page' => $accountPage,
+                'page_size' => $accountPageSize,
+            ]);
+            $accountListTotal = (int)($listed['total'] ?? 0);
+            $accountListHasMore = !empty($listed['has_more']);
+            // SSR 直接用序列化行，避免 ORM 单例/克隆在长驻 worker 里把行数据冲成空。
+            $accounts = [];
+            foreach (($listed['items'] ?? []) as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $aid = (int)($row['account_id'] ?? 0);
+                if ($aid <= 0) {
+                    continue;
+                }
+                $accounts[] = $row;
+            }
+        }
+
         $domainLookup = $this->buildDomainLookup($domains);
-        $domainAccountCounts = $this->buildDomainAccountCounts($accounts);
+        $domainAccountCounts = $this->buildDomainAccountCounts($allAccounts);
         $mailboxAccounts = array_values(array_filter(
-            $accounts,
+            $allAccounts,
             static fn($account): bool => trim((string)$account->getData(MailAccount::schema_fields_EMAIL)) !== ''
         ));
 
@@ -122,6 +159,13 @@ class Index extends BackendController
         $this->assign('folder', $folder);
         $this->assign('domains', $domains);
         $this->assign('accounts', $accounts);
+        $this->assign('account_filter_q', $accountFilterQ);
+        $this->assign('account_filter_status', $accountFilterStatus);
+        $this->assign('account_filter_domain_id', $accountFilterDomainId);
+        $this->assign('account_page', $accountPage);
+        $this->assign('account_page_size', $accountPageSize);
+        $this->assign('account_list_total', $accountListTotal);
+        $this->assign('account_list_has_more', $accountListHasMore);
         $this->assign('mailbox_accounts', $mailboxAccounts);
         $this->assign('selected_account_id', $selectedAccountId);
         $this->assign('selected_mailbox', $selectedMailbox);
@@ -157,6 +201,8 @@ class Index extends BackendController
         $smtpCanViewPasswords = false;
         $smtpOutboundPicks = [];
         $smtpStalwartByService = [];
+        $smtpLocalHealthByService = [];
+        $smtpSystemCompletenessByService = [];
         $outboundRouteRules = [];
         if ($mailView === 'smtp' || $mailView === 'accounts' || $mailView === 'routes') {
             /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
@@ -171,6 +217,10 @@ class Index extends BackendController
             }
             if ($mailView === 'smtp') {
                 $smtpServices = $catalog->listServices();
+                /** @var \Weline\Smtp\Service\SmtpSystemAccountProvisioner $systemProvisioner */
+                $systemProvisioner = ObjectManager::getInstance(
+                    \Weline\Smtp\Service\SmtpSystemAccountProvisioner::class
+                );
                 foreach ($smtpServices as $svc) {
                     $sid = (int)$svc->getId();
                     if ($sid > 0) {
@@ -179,9 +229,21 @@ class Index extends BackendController
                             === \Weline\Smtp\Model\SmtpService::MODE_SELF
                         ) {
                             $smtpStalwartByService[$sid] = $catalog->probeStalwartPresenceForService($sid);
+                            $byId = is_array($smtpStalwartByService[$sid]['by_account_id'] ?? null)
+                                ? $smtpStalwartByService[$sid]['by_account_id']
+                                : [];
+                            $smtpSystemCompletenessByService[$sid] = $systemProvisioner->inspectForService(
+                                $sid,
+                                $byId
+                            );
                         }
                     }
                 }
+                /** @var \Weline\Smtp\Service\SmtpLocalDomainHealthService $localHealth */
+                $localHealth = ObjectManager::getInstance(
+                    \Weline\Smtp\Service\SmtpLocalDomainHealthService::class
+                );
+                $smtpLocalHealthByService = $localHealth->summarizeForServices($smtpServices);
                 // 有「开通或重置邮箱密码」ACL 时本页直接解出密码展示，不另开 reveal 路由。
                 $smtpCanViewPasswords = $this->isMailAclAllowed('Weline_Mail::mail_accounts_password');
                 if ($smtpCanViewPasswords) {
@@ -212,6 +274,8 @@ class Index extends BackendController
         $this->assign('smtp_can_view_passwords', $smtpCanViewPasswords);
         $this->assign('smtp_outbound_picks', $smtpOutboundPicks);
         $this->assign('smtp_stalwart_by_service', $smtpStalwartByService);
+        $this->assign('smtp_local_health_by_service', $smtpLocalHealthByService);
+        $this->assign('smtp_system_completeness_by_service', $smtpSystemCompletenessByService);
         $this->assign('outbound_route_rules', $outboundRouteRules);
 
         $compose = $this->resolveComposeContext($selectedAccountId, $mailboxAccounts);
@@ -658,6 +722,31 @@ class Index extends BackendController
         );
     }
 
+    public function postResetSmtpSystemAccounts(): string
+    {
+        if (!$this->request->isPost()) {
+            return $this->respondFormResult(405, __('无效的请求方法'));
+        }
+        if (!$this->isMailAclAllowed('Weline_Mail::mail_accounts_password')) {
+            return $this->respondFormResult(403, __('无权限重置系统代理账户'));
+        }
+        $serviceId = (int)$this->request->getParam('smtp_service_id', 0);
+        /** @var \Weline\Smtp\Service\SmtpSystemAccountProvisioner $systemProvisioner */
+        $systemProvisioner = ObjectManager::getInstance(
+            \Weline\Smtp\Service\SmtpSystemAccountProvisioner::class
+        );
+        $inspect = $systemProvisioner->inspectForService($serviceId);
+        if (empty($inspect['show_reset'])) {
+            return $this->respondFormResult(200, (string)__('系统代理账户已齐全，无需重置'));
+        }
+        $result = $systemProvisioner->repairForService($serviceId);
+
+        return $this->respondFormResult(
+            !empty($result['success']) ? 200 : 400,
+            (string)($result['message'] ?? __('失败'))
+        );
+    }
+
     public function postImportSmtpAccountsFromStalwart(): string
     {
         if (!$this->request->isPost()) {
@@ -769,6 +858,187 @@ class Index extends BackendController
             !empty($result['success']) ? 200 : 400,
             (string)($result['message'] ?? __('失败'))
         );
+    }
+
+    /**
+     * SSE：删除 Smtp 服务（本机会逐账户卸 Stalwart），进度事件后 done/error。
+     * complete() + CaptureMode::None：避免 WLS 捕获 Fiber 上下文冲掉 SSE 流。
+     */
+    public function postSmtpServiceDeleteStream(): string
+    {
+        @\set_time_limit(0);
+        @\ignore_user_abort(true);
+
+        $sse = new SseWriter();
+        $sse->setHeartbeatInterval(15)->start();
+
+        try {
+            if (!$this->request->isPost()) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)__('无效的请求方法'),
+                ]);
+                $sse->close();
+
+                return '';
+            }
+
+            $serviceId = (int)$this->request->getParam('smtp_service_id', 0);
+            $sse->sendEvent('start', [
+                'message' => (string)__('开始删除 Smtp 服务…'),
+                'progress' => 0,
+                'smtp_service_id' => $serviceId,
+            ]);
+
+            /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
+            $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
+            $result = $catalog->deleteService(
+                $serviceId,
+                static function (string $step, string $message, int $current, int $total) use ($sse): void {
+                    if (!$sse->isAlive()) {
+                        return;
+                    }
+                    $percent = (int)floor(($current / max(1, $total)) * 95);
+                    $sse->sendEvent('progress', [
+                        'step' => $step,
+                        'message' => $message,
+                        'current' => $current,
+                        'total' => $total,
+                        'progress' => min(95, max(1, $percent)),
+                    ]);
+                }
+            );
+
+            if (empty($result['success'])) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)($result['message'] ?? __('失败')),
+                    'progress' => 100,
+                ]);
+                $sse->close();
+
+                return '';
+            }
+
+            $sse->complete([
+                'success' => true,
+                'message' => (string)($result['message'] ?? __('已删除')),
+                'progress' => 100,
+                'smtp_service_id' => $serviceId,
+            ]);
+
+            PostResponseTaskQueue::enqueue(
+                'mail-outbound-relay-sync',
+                static function (): void {
+                    try {
+                        ObjectManager::getInstance(\Weline\Mail\Service\MailOutboundRelaySyncService::class)->syncAll();
+                    } catch (\Throwable) {
+                    }
+                },
+                0.0,
+                \Weline\Framework\Runtime\PostResponseCaptureMode::None
+            );
+        } catch (\Throwable $e) {
+            if ($sse->isAlive()) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => $e->getMessage() !== '' ? $e->getMessage() : (string)__('删除失败'),
+                ]);
+                $sse->close();
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * SSE：删除 Smtp 账户（默认同步卸本机 Stalwart）。
+     */
+    public function postSmtpServiceAccountDeleteStream(): string
+    {
+        @\set_time_limit(0);
+        @\ignore_user_abort(true);
+
+        $sse = new SseWriter();
+        $sse->setHeartbeatInterval(15)->start();
+
+        try {
+            if (!$this->request->isPost()) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)__('无效的请求方法'),
+                ]);
+                $sse->close();
+
+                return '';
+            }
+            if (!$this->isMailAclAllowed('Weline_Mail::mail_accounts_password')) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)__('无权限删除 Smtp 账户'),
+                ]);
+                $sse->close();
+
+                return '';
+            }
+
+            $accountId = (int)$this->request->getParam('smtp_account_id', 0);
+            $alsoStalwart = (string)$this->request->getParam('also_stalwart', '1') !== '0';
+            $sse->sendEvent('start', [
+                'message' => (string)__('开始删除 Smtp 账户…'),
+                'progress' => 0,
+                'smtp_account_id' => $accountId,
+            ]);
+
+            /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
+            $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
+            $result = $catalog->deleteAccountOnService(
+                $accountId,
+                $alsoStalwart,
+                static function (string $step, string $message, int $current, int $total) use ($sse): void {
+                    if (!$sse->isAlive()) {
+                        return;
+                    }
+                    $percent = (int)floor(($current / max(1, $total)) * 95);
+                    $sse->sendEvent('progress', [
+                        'step' => $step,
+                        'message' => $message,
+                        'current' => $current,
+                        'total' => $total,
+                        'progress' => min(95, max(1, $percent)),
+                    ]);
+                }
+            );
+
+            if (empty($result['success'])) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)($result['message'] ?? __('失败')),
+                    'progress' => 100,
+                ]);
+                $sse->close();
+
+                return '';
+            }
+
+            $sse->complete([
+                'success' => true,
+                'message' => (string)($result['message'] ?? __('已删除')),
+                'progress' => 100,
+                'smtp_account_id' => $accountId,
+                'email' => (string)($result['email'] ?? ''),
+            ]);
+        } catch (\Throwable $e) {
+            if ($sse->isAlive()) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => $e->getMessage() !== '' ? $e->getMessage() : (string)__('删除失败'),
+                ]);
+                $sse->close();
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -1099,6 +1369,23 @@ class Index extends BackendController
                 );
                 $originIp = $originResolver->resolve('');
             }
+            $domainName = (string)$domain->getData(
+                \Weline\Mail\Model\MailDomain::schema_fields_DOMAIN_NAME
+            );
+            /** @var list<array{selector:string,public_key:string,algorithm?:string,stage?:string}> $dkimRecords */
+            $dkimRecords = [];
+            /** @var \Weline\Mail\Service\StalwartManagementAdapter $stalwartMgmt */
+            $stalwartMgmt = ObjectManager::getInstance(
+                \Weline\Mail\Service\StalwartManagementAdapter::class
+            );
+            if ($stalwartMgmt->hasManagementCredential()) {
+                try {
+                    $dkimRecords = $stalwartMgmt->listPublishableDkimDnsRecords($domainName);
+                } catch (\Throwable) {
+                    $dkimRecords = [];
+                }
+            }
+
             $selector = trim((string)$this->request->getPost('dkim_selector', ''));
             if ($selector === '') {
                 $selector = trim((string)$domain->getData(
@@ -1114,27 +1401,40 @@ class Index extends BackendController
                     \Weline\Mail\Model\MailDomain::schema_fields_DKIM_PUBLIC_KEY
                 ));
             }
-            /** @var \Weline\Mail\Service\MailDkimLocalEnsureService $dkimEnsure */
-            $dkimEnsure = ObjectManager::getInstance(
-                \Weline\Mail\Service\MailDkimLocalEnsureService::class
-            );
-            $ensured = $dkimEnsure->ensure(
-                (string)$domain->getData(\Weline\Mail\Model\MailDomain::schema_fields_DOMAIN_NAME),
-                $selector,
-                $publicKey,
-            );
-            $selector = $ensured['selector'];
-            $publicKey = $ensured['public_key'];
+
+            if ($dkimRecords === []) {
+                /** @var \Weline\Mail\Service\MailDkimLocalEnsureService $dkimEnsure */
+                $dkimEnsure = ObjectManager::getInstance(
+                    \Weline\Mail\Service\MailDkimLocalEnsureService::class
+                );
+                $ensured = $dkimEnsure->ensure($domainName, $selector, $publicKey);
+                $selector = $ensured['selector'];
+                $publicKey = $ensured['public_key'];
+                $dkimRecords = [[
+                    'selector' => $selector,
+                    'public_key' => $publicKey,
+                    'algorithm' => 'rsa',
+                ]];
+            } else {
+                $primary = $dkimRecords[0];
+                foreach ($dkimRecords as $candidate) {
+                    if (($candidate['algorithm'] ?? '') === 'rsa') {
+                        $primary = $candidate;
+                        break;
+                    }
+                }
+                $selector = (string)$primary['selector'];
+                $publicKey = (string)$primary['public_key'];
+            }
 
             $factory = \Weline\Framework\Manager\ObjectManager::getInstance(
                 \Weline\Mail\Service\MailDnsRecordFactory::class
             );
             $targets = $factory->build(
-                (string)$domain->getData(\Weline\Mail\Model\MailDomain::schema_fields_DOMAIN_NAME),
+                $domainName,
                 (string)$domain->getData(\Weline\Mail\Model\MailDomain::schema_fields_HOSTNAME),
                 $originIp,
-                $selector,
-                $publicKey,
+                $dkimRecords,
             );
 
             $domain->setData(\Weline\Mail\Model\MailDomain::schema_fields_ORIGIN_IP, $originIp);

@@ -55,7 +55,7 @@ if ($mailView !== 'config'):
 .mail-inbox-row{display:block;padding:1rem 1.15rem;border-bottom:1px solid var(--weline-color-border,#eaecf0);color:inherit;text-decoration:none}
 .mail-inbox-row:hover,.mail-inbox-row.is-active{background:#f4f7ff}.mail-inbox-row.is-unread .mail-inbox-row__subject{font-weight:750}
 .mail-inbox-row__meta{display:flex;justify-content:space-between;gap:1rem;color:#667085;font-size:.82rem}.mail-inbox-row__subject{margin:.35rem 0}.mail-inbox-row__preview{margin:0;color:#667085;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mail-inbox-reader__body{padding:1.25rem}.mail-inbox-reader__addresses{display:grid;gap:.3rem;color:#667085;font-size:.88rem}.mail-inbox-reader__content{margin-top:1.2rem;padding-top:1.2rem;border-top:1px solid #eaecf0;white-space:pre-wrap;word-break:break-word;line-height:1.65}
+.mail-inbox-reader__body{padding:1.25rem}.mail-inbox-reader__addresses{display:grid;gap:.3rem;color:#667085;font-size:.88rem}.mail-inbox-reader__content{margin-top:1.2rem;padding-top:1.2rem;border-top:1px solid #eaecf0;white-space:pre-wrap;word-break:break-word;line-height:1.65}.mail-inbox-reader__content--html{white-space:normal}.mail-inbox-reader__html{display:block;width:100%;min-height:18rem;border:1px solid var(--weline-theme-border,#eaecf0);border-radius:var(--weline-radius-md,8px);background:#fff}
 .mail-inbox-empty{display:grid;place-items:center;min-height:20rem;padding:2rem;text-align:center;color:#667085}
 @media (max-width:900px){.mail-inbox-layout{grid-template-columns:1fr}.mail-inbox-hero{flex-direction:column}.mail-inbox-reader{min-height:20rem}}
 </style>
@@ -139,7 +139,24 @@ if ($mailView !== 'config'):
                         <?php if (!empty($selectedMessage['has_attachment'])): ?>
                             <div class="w-badge"><?= __('含附件') ?></div>
                         <?php endif; ?>
-                        <div class="mail-inbox-reader__content"><?= $escape((string)($selectedMessage['body'] ?? '')) ?></div>
+                        <?php
+                        $inboxBodyIsHtml = !empty($selectedMessage['body_is_html']) && trim((string)($selectedMessage['html_body'] ?? '')) !== '';
+                        $inboxHtmlBody = (string)($selectedMessage['html_body'] ?? '');
+                        ?>
+                        <?php if ($inboxBodyIsHtml): ?>
+                            <div class="mail-inbox-reader__content mail-inbox-reader__content--html" data-mail-body-format="html">
+                                <iframe
+                                    class="mail-inbox-reader__html"
+                                    title="<?= $escape(__('邮件正文预览')) ?>"
+                                    sandbox=""
+                                    referrerpolicy="no-referrer"
+                                    srcdoc="<?= $escape($inboxHtmlBody) ?>"
+                                    data-testid="mail-inbox-reader-html"
+                                ></iframe>
+                            </div>
+                        <?php else: ?>
+                            <div class="mail-inbox-reader__content" data-mail-body-format="text"><?= $escape((string)($selectedMessage['body'] ?? '')) ?></div>
+                        <?php endif; ?>
                     </div>
                 <?php else: ?>
                     <div class="mail-inbox-empty"><?= __('选择一封邮件查看正文。') ?></div>

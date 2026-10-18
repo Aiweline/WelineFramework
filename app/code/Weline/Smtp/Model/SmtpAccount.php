@@ -21,6 +21,12 @@ class SmtpAccount extends Model
     public const ROLE_SUBMIT = 'submit';
     public const ROLE_RELAY = 'relay';
 
+    /** 本机启用时固定创建的提交账号 local_part（不可删、不可改密）。 */
+    public const SYSTEM_SUBMIT_LOCAL = 'smtp';
+
+    /** 开启中继服务时固定创建的中继账号 local_part（不可删、不可改密）。 */
+    public const SYSTEM_RELAY_LOCAL = 'relay';
+
     #[Col('int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'Smtp 账户ID')]
     public const schema_fields_ID = 'smtp_account_id';
 
@@ -42,6 +48,9 @@ class SmtpAccount extends Model
     #[Col('varchar', 32, default: 'active', comment: '状态')]
     public const schema_fields_STATUS = 'status';
 
+    #[Col('tinyint', default: 0, comment: '系统固定账号：禁止删除与改密')]
+    public const schema_fields_IS_SYSTEM = 'is_system';
+
     #[Col('text', nullable: true, comment: '密码密封')]
     public const schema_fields_PASSWORD_SEALED = 'password_sealed';
 
@@ -50,4 +59,46 @@ class SmtpAccount extends Model
 
     #[Col('datetime', default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
     public const schema_fields_UPDATED_AT = 'updated_at';
+
+    /**
+     * 本机 Smtp 固定系统账号 local_part → 角色。
+     *
+     * @return array<string, string>
+     */
+    public static function systemLocalParts(bool $relayEnabled): array
+    {
+        $parts = [self::SYSTEM_SUBMIT_LOCAL => self::ROLE_SUBMIT];
+        if ($relayEnabled) {
+            $parts[self::SYSTEM_RELAY_LOCAL] = self::ROLE_RELAY;
+        }
+
+        return $parts;
+    }
+
+    public static function isReservedSystemLocalPart(string $localPart): bool
+    {
+        $local = strtolower(trim($localPart));
+
+        return $local === self::SYSTEM_SUBMIT_LOCAL || $local === self::SYSTEM_RELAY_LOCAL;
+    }
+
+    public static function emailLocalPart(string $email): string
+    {
+        $email = strtolower(trim($email));
+        $at = strpos($email, '@');
+        if ($at === false || $at === 0) {
+            return '';
+        }
+
+        return substr($email, 0, $at);
+    }
+
+    public function isSystemAccount(): bool
+    {
+        if ((int)$this->getData(self::schema_fields_IS_SYSTEM) === 1) {
+            return true;
+        }
+
+        return self::isReservedSystemLocalPart(self::emailLocalPart((string)$this->getData(self::schema_fields_EMAIL)));
+    }
 }

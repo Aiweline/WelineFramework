@@ -48,6 +48,9 @@ final class MailViewContractsTest extends TestCase
             'MailAccountMailClient::testSidebarKeepsSingleMailEntry' => function () {
             $this->assert_MailAccountMailClient_testSidebarKeepsSingleMailEntry();
         },
+            'EnterpriseHtmlReaderPreview::testReaderUsesSandboxedHtmlIframeWithoutScripts' => function () {
+            $this->assert_EnterpriseHtmlReaderPreview_testReaderUsesSandboxedHtmlIframeWithoutScripts();
+        },
         ];
     }
 
@@ -123,17 +126,55 @@ private function assert_EnterpriseEngineSetupGuide_testEngineSetupGuidesFirewall
     self::assertStringContainsString('展开或收起 Smtp 服务配置', $enterprise);
     self::assertStringContainsString('.mail-smtp-service-card:not([open]) > .w-card__body', $enterprise);
     self::assertStringContainsString('mail-smtp-mode-badge', $enterprise);
-    self::assertStringContainsString('绿标「本机启用」', $enterprise);
+    self::assertStringContainsString('mail-smtp-health-badge', $enterprise);
+    self::assertStringContainsString('data-is-local', $enterprise);
+    self::assertStringContainsString("health_applicable", $enterprise);
+    self::assertStringContainsString("is_local", $enterprise);
+    self::assertStringContainsString('mail-smtp-health-alert-', $enterprise);
+    self::assertStringContainsString('mail-smtp-service-card__signals', $enterprise);
+    self::assertStringContainsString("smtp_local_health_by_service", $enterprise);
+    self::assertStringContainsString("__('本机登记')", $enterprise);
+    self::assertStringContainsString("__('健康未校验')", $enterprise);
+    self::assertStringContainsString("__('已启用')", $enterprise);
+    self::assertStringContainsString("__('已停用')", $enterprise);
+    self::assertStringContainsString("MODE_SELF ? 'info' : 'primary'", $enterprise);
+    self::assertStringNotContainsString("MODE_SELF ? 'success'", $enterprise);
+    self::assertStringNotContainsString("MODE_SELF ? __('本机启用')", $enterprise);
+    self::assertStringNotContainsString('!important', $enterprise);
+    self::assertStringContainsString('模式标「本机登记」', $enterprise);
     self::assertStringContainsString('蓝标「外部填入」', $enterprise);
-    self::assertStringContainsString('默认创建发信账号 smtp@根域', $enterprise);
+    self::assertStringNotContainsString('绿标「本机启用」', $enterprise);
+    self::assertStringContainsString('自动创建系统账号 smtp@根域', $enterprise);
+    self::assertStringContainsString('data-smtp-system-account', $enterprise);
+    self::assertStringContainsString('mail-smtp-system-badge', $enterprise);
+    self::assertStringContainsString('不可删除 / 不可改密', $enterprise);
+    self::assertStringContainsString('重置系统代理账户', $enterprise);
+    self::assertStringContainsString('reset-smtp-system-accounts', $enterprise);
+    self::assertStringContainsString('mail-smtp-reset-system-accounts', $enterprise);
     self::assertStringNotContainsString('reveal-smtp-service-account-password', $enterprise);
     self::assertStringContainsString('reset-smtp-service-account-password', $enterprise);
     self::assertStringContainsString('update-smtp-service-account', $enterprise);
-    self::assertStringContainsString('delete-smtp-service-account', $enterprise);
+    self::assertStringContainsString('smtp-service-account-delete-stream', $enterprise);
+    self::assertStringContainsString('smtp-service-delete-stream', $enterprise);
+    self::assertStringContainsString('data-smtp-delete-sse', $enterprise);
     self::assertStringContainsString('mail-smtp-delete-account-', $enterprise);
     self::assertStringContainsString('mail-smtp-delete-service-form-', $enterprise);
+    self::assertStringContainsString('mailSmtpBindDeleteSse', $enterprise);
     self::assertStringContainsString('下属全部 %{1} 个账户', $enterprise);
     self::assertStringContainsString('将同时从本机 Stalwart 移除这些账户', $enterprise);
+    self::assertStringContainsString('mail-account-filter', $enterprise);
+    self::assertStringContainsString('mail-account-filter-q', $enterprise);
+    self::assertStringContainsString('mail-account-batch-delete', $enterprise);
+    self::assertStringContainsString('mail-account-create-open', $enterprise);
+    self::assertStringContainsString('mail-account-create-dialog', $enterprise);
+    self::assertStringContainsString('data-account-edit', $enterprise);
+    self::assertStringContainsString('data-account-delete', $enterprise);
+    self::assertStringContainsString('updateMailboxAccount', $enterprise);
+    self::assertStringContainsString('setMailboxAccountStatus', $enterprise);
+    self::assertStringContainsString('batchDeleteMailboxAccounts', $enterprise);
+    self::assertStringNotContainsString("weline_mail/backend/index/set-account-status", $enterprise);
+    self::assertStringContainsString('account_filter_q', (string) file_get_contents(BP . 'app/code/Weline/Mail/Controller/Backend/Index.php'));
+    self::assertStringContainsString('listAccounts', (string) file_get_contents(BP . 'app/code/Weline/Mail/Controller/Backend/Index.php'));
     self::assertStringContainsString('mail-smtp-edit-account-', $enterprise);
     self::assertStringContainsString('增加本机账户', $enterprise);
     self::assertStringContainsString('sync-smtp-service-account-to-stalwart', $enterprise);
@@ -148,6 +189,9 @@ private function assert_EnterpriseEngineSetupGuide_testEngineSetupGuidesFirewall
     self::assertStringContainsString('已写入', $enterprise);
     self::assertStringContainsString('未写入', $enterprise);
     $indexCtrl = (string) file_get_contents(BP . 'app/code/Weline/Mail/Controller/Backend/Index.php');
+    self::assertStringContainsString('postResetSmtpSystemAccounts', $indexCtrl);
+    self::assertStringContainsString('repairForService', $indexCtrl);
+    self::assertStringContainsString('smtp_system_completeness_by_service', $indexCtrl);
     self::assertStringContainsString('postSyncSmtpServiceAccountToStalwart', $indexCtrl);
     self::assertStringContainsString('postImportSmtpAccountsFromStalwart', $indexCtrl);
     self::assertStringContainsString('postImportSmtpServicesFromMailDomains', $indexCtrl);
@@ -156,6 +200,9 @@ private function assert_EnterpriseEngineSetupGuide_testEngineSetupGuidesFirewall
     self::assertStringContainsString('importSelfServicesFromMailDomains', $indexCtrl);
     self::assertStringContainsString('probeStalwartPresenceForService', $indexCtrl);
     self::assertStringContainsString('smtp_stalwart_by_service', $indexCtrl);
+    self::assertStringContainsString('SmtpLocalDomainHealthService', $indexCtrl);
+    self::assertStringContainsString("assign('smtp_local_health_by_service'", $indexCtrl);
+    self::assertStringContainsString('summarizeForServices', $indexCtrl);
     self::assertStringContainsString('smtp_can_view_passwords', (string) file_get_contents(BP . 'app/code/Weline/Mail/Controller/Backend/Index.php'));
     self::assertStringContainsString('mail_accounts_password', (string) file_get_contents(BP . 'app/code/Weline/Mail/Controller/Backend/Index.php'));
     self::assertStringContainsString('mail-smtp-password-cell-', $enterprise);
@@ -211,6 +258,27 @@ private function assert_EnterpriseEngineSetupGuide_testEngineSetupGuidesFirewall
     self::assertStringContainsString('云安全组 / 防火墙（入站放行，必需）', $readme);
     self::assertStringContainsString('Stalwart Admin（:8080）账户与初始密码', $readme);
     self::assertStringContainsString('journalctl -u stalwart', $readme);
+}
+
+private function assert_EnterpriseHtmlReaderPreview_testReaderUsesSandboxedHtmlIframeWithoutScripts(): void
+{
+    $enterprise = (string) file_get_contents(BP . 'app/code/Weline/Mail/view/templates/backend/Index/enterprise.phtml');
+    self::assertStringContainsString('data-testid="mail-enterprise-reader-html"', $enterprise);
+    self::assertStringContainsString('sandbox=""', $enterprise);
+    self::assertStringContainsString('srcdoc=', $enterprise);
+    self::assertStringContainsString('body_is_html', $enterprise);
+    self::assertStringContainsString('html_body', $enterprise);
+    self::assertStringContainsString('renderReaderBody', $enterprise);
+    self::assertStringNotContainsString('allow-scripts', $enterprise);
+    self::assertStringContainsString('data-mail-body-format="html"', $enterprise);
+    $session = (string) file_get_contents(BP . 'app/code/Weline/Mail/Service/Mailbox/StalwartJmapSession.php');
+    self::assertStringContainsString('MailBodyPresentation::fromJmapMessage', $session);
+    self::assertStringContainsString("'body_is_html'", $session);
+    $helper = (string) file_get_contents(BP . 'app/code/Weline/Mail/Service/Mailbox/MailBodyPresentation.php');
+    self::assertStringContainsString('sanitizeHtml', $helper);
+    self::assertStringContainsString('looksLikeHtml', $helper);
+    self::assertStringContainsString('(script|iframe|object|embed|link|meta|base)', $helper);
+    self::assertStringContainsString('javascript', $helper);
 }
 
 private function assert_MailAccountMailClient_testMailClientExposesReplyAndAccountControls(): void

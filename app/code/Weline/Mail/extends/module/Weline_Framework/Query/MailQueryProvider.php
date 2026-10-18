@@ -46,6 +46,9 @@ class MailQueryProvider implements QueryProviderInterface
         return $this->ensureService ?? ObjectManager::getInstance(MailAccountEnsureService::class);
     }
 
+    /** @var array<string, array<string, mixed>> 请求内 hostname→getStatus 同形 */
+    private array $smtpTlsStatusMemo = [];
+
     public function getProviderName(): string
     {
         return 'mail';
@@ -67,6 +70,7 @@ class MailQueryProvider implements QueryProviderInterface
             'setDefaultSmtpAccount' => $this->setDefaultSmtpAccount($params),
             'ensureMailbox' => $this->ensureMailbox($params),
             'getSmtpTlsStatus' => $this->getSmtpTlsStatus($params),
+            'getSmtpTlsStatusBatch' => $this->getSmtpTlsStatusBatch($params),
             'syncSmtpTlsFromDomainPool' => $this->syncSmtpTlsFromDomainPool($params),
             'listOutboundRouteRules' => [
                 'success' => true,
@@ -82,6 +86,26 @@ class MailQueryProvider implements QueryProviderInterface
                     : (is_array($params['ids'] ?? null) ? $params['ids'] : [])
             ),
             'createMailboxAccount' => $this->createMailboxAccount($params),
+            'listMailboxAccounts' => $this->accountManagement()->listAccounts($params),
+            'updateMailboxAccount' => $this->accountManagement()->updateAccount($params),
+            'setMailboxAccountStatus' => $this->accountManagement()->setStatus(
+                (int)($params['account_id'] ?? 0),
+                (string)($params['status'] ?? '')
+            ),
+            'deleteMailboxAccount' => $this->accountManagement()->deleteAccount(
+                (int)($params['account_id'] ?? 0)
+            ),
+            'batchSetMailboxAccountStatus' => $this->accountManagement()->batchSetStatus(
+                is_array($params['account_ids'] ?? null)
+                    ? $params['account_ids']
+                    : (is_array($params['ids'] ?? null) ? $params['ids'] : []),
+                (string)($params['status'] ?? '')
+            ),
+            'batchDeleteMailboxAccounts' => $this->accountManagement()->batchDelete(
+                is_array($params['account_ids'] ?? null)
+                    ? $params['account_ids']
+                    : (is_array($params['ids'] ?? null) ? $params['ids'] : [])
+            ),
             'createMailboxDomain' => $this->createMailboxDomain($params),
             'resetMailboxPassword' => $this->resetMailboxPassword($params),
             'setMailboxOutboundRelay' => $this->setMailboxOutboundRelay($params),
@@ -187,7 +211,58 @@ class MailQueryProvider implements QueryProviderInterface
             ];
         }
 
-        return $this->tlsSync()->getStatus($hostname);
+        $memoKey = strtolower($hostname);
+        if (isset($this->smtpTlsStatusMemo[$memoKey])) {
+            return $this->smtpTlsStatusMemo[$memoKey];
+        }
+
+        $status = $this->tlsSync()->getStatus($hostname);
+        $this->smtpTlsStatusMemo[$memoKey] = $status;
+
+        return $status;
+    }
+
+    /**
+     * 批量查询 smtp/mail 主机 TLS 状态：去重后复用 getSmtpTlsStatus（→ getStatus，含非本机早退），请求内 memo。
+     *
+     * @param array<string, mixed> $params
+     * @return array{success:bool,items:list<array<string,mixed>>,by_hostname:array<string,array<string,mixed>>}
+     */
+    private function getSmtpTlsStatusBatch(array $params): array
+    {
+        $raw = $params['hostnames'] ?? [];
+        if (!\is_array($raw)) {
+            $raw = [];
+        }
+
+        $seen = [];
+        $ordered = [];
+        foreach ($raw as $entry) {
+            $hostname = strtolower(trim((string)$entry));
+            if ($hostname === '' || isset($seen[$hostname])) {
+                continue;
+            }
+            $seen[$hostname] = true;
+            $ordered[] = $hostname;
+        }
+
+        $items = [];
+        $byHostname = [];
+        foreach ($ordered as $hostname) {
+            $status = $this->getSmtpTlsStatus(['hostname' => $hostname]);
+            $items[] = $status;
+            $mapKey = strtolower(trim((string)($status['hostname'] ?? $hostname)));
+            if ($mapKey === '') {
+                $mapKey = $hostname;
+            }
+            $byHostname[$mapKey] = $status;
+        }
+
+        return [
+            'success' => true,
+            'items' => $items,
+            'by_hostname' => $byHostname,
+        ];
     }
 
     private function syncSmtpTlsFromDomainPool(array $params): array
@@ -461,6 +536,13 @@ class MailQueryProvider implements QueryProviderInterface
                     ],
                 ],
                 [
+                    'name' => 'getSmtpTlsStatusBatch',
+                    'description' => __('批量查询 smtp/mail 主机 TLS 状态（去重+请求内 memo，复用 getStatus 非本机早退）'),
+                    'params' => [
+                        ['name' => 'hostnames', 'type' => 'array', 'required' => true, 'description' => __('FQDN 列表')],
+                    ],
+                ],
+                [
                     'name' => 'syncSmtpTlsFromDomainPool',
                     'description' => __('入池出证（如需）并将 PEM 导入本机 Stalwart'),
                     'mode' => 'write',
@@ -551,6 +633,100 @@ class MailQueryProvider implements QueryProviderInterface
                         ['name' => 'customer_id', 'type' => 'int', 'required' => false, 'description' => __('系统用户 ID')],
                         ['name' => 'quota_mb', 'type' => 'int', 'required' => false, 'description' => __('容量 MB')],
                         ['name' => 'password', 'type' => 'string', 'required' => false, 'description' => __('初始密码')],
+                    ],
+                ],
+                [
+                    'name' => 'listMailboxAccounts',
+                    'description' => __('列出企业邮箱账号（检索/筛选/分页）'),
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'auth' => 'backend',
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Mail::mail_accounts_manage',
+                    ],
+                    'params' => [
+                        ['name' => 'q', 'type' => 'string', 'required' => false, 'description' => __('关键词')],
+                        ['name' => 'status', 'type' => 'string', 'required' => false, 'description' => __('状态')],
+                        ['name' => 'domain_id', 'type' => 'int', 'required' => false, 'description' => __('域名 ID')],
+                        ['name' => 'page', 'type' => 'int', 'required' => false, 'description' => __('页码')],
+                        ['name' => 'page_size', 'type' => 'int', 'required' => false, 'description' => __('每页条数')],
+                    ],
+                ],
+                [
+                    'name' => 'updateMailboxAccount',
+                    'description' => __('更新企业邮箱账号（后台弹层）'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'auth' => 'backend',
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Mail::mail_accounts_manage',
+                    ],
+                    'params' => [
+                        ['name' => 'account_id', 'type' => 'int', 'required' => true, 'description' => __('邮箱账号 ID')],
+                        ['name' => 'display_name', 'type' => 'string', 'required' => false, 'description' => __('显示名称')],
+                        ['name' => 'customer_id', 'type' => 'int', 'required' => false, 'description' => __('系统用户 ID')],
+                        ['name' => 'quota_mb', 'type' => 'int', 'required' => false, 'description' => __('容量 MB')],
+                        ['name' => 'status', 'type' => 'string', 'required' => false, 'description' => __('状态')],
+                    ],
+                ],
+                [
+                    'name' => 'setMailboxAccountStatus',
+                    'description' => __('设置企业邮箱账号状态'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'auth' => 'backend',
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Mail::mail_accounts_manage',
+                    ],
+                    'params' => [
+                        ['name' => 'account_id', 'type' => 'int', 'required' => true, 'description' => __('邮箱账号 ID')],
+                        ['name' => 'status', 'type' => 'string', 'required' => true, 'description' => __('状态')],
+                    ],
+                ],
+                [
+                    'name' => 'deleteMailboxAccount',
+                    'description' => __('删除企业邮箱账号'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'auth' => 'backend',
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Mail::mail_accounts_manage',
+                    ],
+                    'params' => [
+                        ['name' => 'account_id', 'type' => 'int', 'required' => true, 'description' => __('邮箱账号 ID')],
+                    ],
+                ],
+                [
+                    'name' => 'batchSetMailboxAccountStatus',
+                    'description' => __('批量设置企业邮箱账号状态'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'auth' => 'backend',
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Mail::mail_accounts_manage',
+                    ],
+                    'params' => [
+                        ['name' => 'account_ids', 'type' => 'array', 'required' => true, 'description' => __('账号 ID 列表')],
+                        ['name' => 'status', 'type' => 'string', 'required' => true, 'description' => __('状态')],
+                    ],
+                ],
+                [
+                    'name' => 'batchDeleteMailboxAccounts',
+                    'description' => __('批量删除企业邮箱账号'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'auth' => 'backend',
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Mail::mail_accounts_manage',
+                    ],
+                    'params' => [
+                        ['name' => 'account_ids', 'type' => 'array', 'required' => true, 'description' => __('账号 ID 列表')],
                     ],
                 ],
                 [

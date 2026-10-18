@@ -94,6 +94,22 @@ final class SmtpServiceCatalogService
         if ($poolDomainId <= 0) {
             $poolDomainId = $existingPoolId;
         }
+        // G1 fail-closed：池本机健康门禁；ensure warn 不得绕过 !is_local / needs_dns
+        /** @var SmtpLocalDomainHealthService $localHealth */
+        $localHealth = ObjectManager::getInstance(SmtpLocalDomainHealthService::class);
+        $healthSummary = $localHealth->summarizePreview(SmtpService::MODE_SELF, $parsed['smtp_hostname']);
+        if (!empty($healthSummary['block_create'])) {
+            $blockMsg = trim((string)($healthSummary['message'] ?? ''));
+            if ($blockMsg === '') {
+                $blockMsg = (string)__('DNS 未指向本机，不能登记为本机 Smtp 服务');
+            }
+
+            return [
+                'success' => false,
+                'message' => $blockMsg,
+                'smtp_service_id' => 0,
+            ];
+        }
         $now = date('Y-m-d H:i:s');
         /** @var SmtpService $svc */
         $svc = ObjectManager::getInstance(SmtpService::class);
@@ -117,20 +133,31 @@ final class SmtpServiceCatalogService
         $msg = $poolWarn !== ''
             ? (string)__('本机 Smtp 服务已启用（域名已在池中）。%{1}', [$poolWarn])
             : (string)__('本机 Smtp 服务已启用并入池出证');
-        // 默认创建 submit 账号 smtp@{根域}，密码仅本次返回。
-        $acct = $this->createAccountOnService($id, 'smtp', SmtpAccount::ROLE_SUBMIT);
+        // 固定系统账号：smtp@（提交）；若勾选中继再加 relay@。不可删、不可改密。
+        /** @var SmtpSystemAccountProvisioner $systemProvisioner */
+        $systemProvisioner = ObjectManager::getInstance(SmtpSystemAccountProvisioner::class);
+        $system = $systemProvisioner->ensureForService($id);
         $passwordOnce = '';
         $email = '';
-        if (!empty($acct['success'])) {
-            $passwordOnce = (string)($acct['password_once'] ?? '');
-            $email = (string)($acct['email'] ?? '');
-            if ($passwordOnce !== '') {
-                $msg .= ' ' . (string)__('已默认创建发信账号 %{1}，密码（仅一次）：%{2}', [$email, $passwordOnce]);
+        if (!empty($system['success'])) {
+            $ensured = is_array($system['ensured'] ?? null) ? $system['ensured'] : [];
+            $email = (string)($ensured[0] ?? ('smtp@' . $parsed['root']));
+            $created = is_array($system['created'] ?? null) ? $system['created'] : [];
+            if ($created !== []) {
+                $passwordOnce = (string)($created[0]['password_once'] ?? '');
+                $bits = [];
+                foreach ($created as $row) {
+                    if (!is_array($row)) {
+                        continue;
+                    }
+                    $bits[] = (string)($row['email'] ?? '') . '=' . (string)($row['password_once'] ?? '');
+                }
+                $msg .= ' ' . (string)__('已创建系统账号，密码（仅一次）：%{1}', [implode('；', $bits)]);
             } else {
-                $msg .= ' ' . (string)__('已默认创建发信账号 %{1}', [$email !== '' ? $email : 'smtp@' . $parsed['root']]);
+                $msg .= ' ' . (string)__('系统账号已就绪：%{1}', [implode(', ', $ensured)]);
             }
-        } elseif (!empty($acct['message'])) {
-            $msg .= ' ' . (string)__('默认账号未创建：%{1}', [(string)$acct['message']]);
+        } elseif (!empty($system['message'])) {
+            $msg .= ' ' . (string)__('系统账号未就绪：%{1}', [(string)$system['message']]);
         }
 
         return [
@@ -285,9 +312,10 @@ final class SmtpServiceCatalogService
     /**
      * 删除 Smtp 服务：外部直接删；本机启用先按账户卸本机 Stalwart，再删目录下属账户，最后删服务。
      *
+     * @param callable(string $step, string $message, int $current, int $total): void|null $onProgress
      * @return array{success: bool, message: string}
      */
-    public function deleteService(int $serviceId): array
+    public function deleteService(int $serviceId, ?callable $onProgress = null): array
     {
         /** @var SmtpService $svc */
         $svc = ObjectManager::getInstance(SmtpService::class)->clear()->load($serviceId);
@@ -298,13 +326,35 @@ final class SmtpServiceCatalogService
         $removedAccounts = 0;
         if ($mode === SmtpService::MODE_SELF) {
             $accounts = $this->listAccountsForService($serviceId);
+            $workable = [];
+            foreach ($accounts as $one) {
+                if ($one instanceof SmtpAccount && (int)$one->getId() > 0) {
+                    $workable[] = $one;
+                }
+            }
+            $total = count($workable);
+            $this->emitDeleteProgress(
+                $onProgress,
+                'plan',
+                (string)__('准备从本机 Stalwart 与目录移除 %{1} 个账户…', [(string)$total]),
+                0,
+                max(1, $total)
+            );
             /** @var StalwartManagementAdapter $mgmt */
             $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
-            foreach ($accounts as $one) {
-                if (!$one instanceof SmtpAccount || !(int)$one->getId()) {
-                    continue;
-                }
+            $index = 0;
+            foreach ($workable as $one) {
+                $index++;
                 $email = strtolower(trim((string)$one->getData(SmtpAccount::schema_fields_EMAIL)));
+                $this->emitDeleteProgress(
+                    $onProgress,
+                    'stalwart',
+                    $email !== ''
+                        ? (string)__('正在从本机 Stalwart 删除 %{1}…', [$email])
+                        : (string)__('正在删除账户…'),
+                    $index,
+                    max(1, $total)
+                );
                 if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false) {
                     try {
                         $mgmt->deleteAccount($email);
@@ -318,10 +368,34 @@ final class SmtpServiceCatalogService
                         ];
                     }
                 }
+                $this->emitDeleteProgress(
+                    $onProgress,
+                    'catalog',
+                    $email !== ''
+                        ? (string)__('已卸邮局，正在删除目录账户 %{1}…', [$email])
+                        : (string)__('正在删除目录账户…'),
+                    $index,
+                    max(1, $total)
+                );
                 $one->delete();
                 $removedAccounts++;
             }
+        } else {
+            $this->emitDeleteProgress(
+                $onProgress,
+                'catalog',
+                (string)__('正在删除外部 Smtp 服务目录…'),
+                1,
+                1
+            );
         }
+        $this->emitDeleteProgress(
+            $onProgress,
+            'service',
+            (string)__('正在删除 Smtp 服务目录行…'),
+            max(1, $removedAccounts),
+            max(1, $removedAccounts)
+        );
         $svc->delete();
 
         return [
@@ -359,6 +433,14 @@ final class SmtpServiceCatalogService
         if (!preg_match('/^[a-z0-9][a-z0-9._-]{0,63}$/', $localPart) || $domain === '') {
             return $this->acctFail(__('账号或域名无效'));
         }
+        if (SmtpAccount::isReservedSystemLocalPart($localPart)) {
+            return $this->acctFail(
+                __('系统账号 %{1}@%{2} 由本机启用自动创建，不能手动新建；已有则不可删除/改密', [
+                    $localPart,
+                    $domain,
+                ])
+            );
+        }
         $email = $localPart . '@' . $domain;
         /** @var SmtpAccount $model */
         $model = ObjectManager::getInstance(SmtpAccount::class);
@@ -391,6 +473,7 @@ final class SmtpServiceCatalogService
             ->setData(SmtpAccount::schema_fields_DISPLAY_NAME, $localPart)
             ->setData(SmtpAccount::schema_fields_ROLE, $role)
             ->setData(SmtpAccount::schema_fields_STATUS, 'active')
+            ->setData(SmtpAccount::schema_fields_IS_SYSTEM, 0)
             ->setData(SmtpAccount::schema_fields_PASSWORD_SEALED, $sealed)
             ->setData(SmtpAccount::schema_fields_CREATED_AT, $now)
             ->setData(SmtpAccount::schema_fields_UPDATED_AT, $now)
@@ -403,6 +486,41 @@ final class SmtpServiceCatalogService
             'smtp_account_id' => $id,
             'email' => $email,
             'password_once' => $id > 0 ? $password : '',
+        ];
+    }
+
+    /**
+     * 开启/关闭服务级中继；开启时幂等确保 relay@ 系统账号。
+     *
+     * @return array{success: bool, message: string, smtp_service_id: int}
+     */
+    public function setRelayService(int $serviceId, bool $on): array
+    {
+        /** @var SmtpService $svc */
+        $svc = ObjectManager::getInstance(SmtpService::class)->clear()->load($serviceId);
+        if (!$svc->getId()) {
+            return ['success' => false, 'message' => (string)__('服务不存在'), 'smtp_service_id' => 0];
+        }
+        if ((string)$svc->getData(SmtpService::schema_fields_MODE) !== SmtpService::MODE_SELF) {
+            return ['success' => false, 'message' => (string)__('外部服务无本机中继开关'), 'smtp_service_id' => $serviceId];
+        }
+        $svc->setData(SmtpService::schema_fields_RELAY_SERVICE, $on ? 1 : 0)
+            ->setData(SmtpService::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
+            ->save();
+        $msg = $on ? (string)__('中继服务已开启') : (string)__('中继服务已关闭');
+        if ($on) {
+            /** @var SmtpSystemAccountProvisioner $systemProvisioner */
+            $systemProvisioner = ObjectManager::getInstance(SmtpSystemAccountProvisioner::class);
+            $system = $systemProvisioner->ensureForService($serviceId);
+            if (!empty($system['message'])) {
+                $msg .= ' ' . (string)$system['message'];
+            }
+        }
+
+        return [
+            'success' => true,
+            'message' => $msg,
+            'smtp_service_id' => $serviceId,
         ];
     }
 
@@ -426,6 +544,7 @@ final class SmtpServiceCatalogService
         $email = strtolower(trim((string)$model->getData(SmtpAccount::schema_fields_EMAIL)));
         $serviceId = (int)$model->getData(SmtpAccount::schema_fields_SERVICE_ID);
         $prevStatus = strtolower(trim((string)$model->getData(SmtpAccount::schema_fields_STATUS)));
+        $prevRole = strtolower(trim((string)$model->getData(SmtpAccount::schema_fields_ROLE)));
         /** @var SmtpService $svc */
         $svc = ObjectManager::getInstance(SmtpService::class)->clear()->load($serviceId);
         if (!$svc->getId()) {
@@ -434,6 +553,8 @@ final class SmtpServiceCatalogService
         if ((string)$svc->getData(SmtpService::schema_fields_MODE) !== SmtpService::MODE_SELF) {
             return $this->acctFail(__('外部填入服务不在此修改本机账户'), $accountId, $email);
         }
+        /** @var SmtpSystemAccountProvisioner $systemProvisioner */
+        $systemProvisioner = ObjectManager::getInstance(SmtpSystemAccountProvisioner::class);
         $role = strtolower(trim($role));
         if ($role !== '') {
             if (!in_array($role, [SmtpAccount::ROLE_SUBMIT, SmtpAccount::ROLE_RELAY], true)) {
@@ -442,12 +563,24 @@ final class SmtpServiceCatalogService
             if ($role === SmtpAccount::ROLE_RELAY && !(int)$svc->getData(SmtpService::schema_fields_RELAY_SERVICE)) {
                 return $this->acctFail(__('请先在该服务开启中继'), $accountId, $email);
             }
+            if ($role !== $prevRole) {
+                $deny = $systemProvisioner->denyMutationReason($model, 'change_role');
+                if ($deny !== null) {
+                    return $this->acctFail($deny, $accountId, $email);
+                }
+            }
             $model->setData(SmtpAccount::schema_fields_ROLE, $role);
         }
         $status = strtolower(trim($status));
         if ($status !== '') {
             if (!in_array($status, ['active', 'disabled', 'needs_password'], true)) {
                 return $this->acctFail(__('状态无效'), $accountId, $email);
+            }
+            if (in_array($status, ['disabled', 'needs_password'], true) && $status !== $prevStatus) {
+                $deny = $systemProvisioner->denyMutationReason($model, 'disable');
+                if ($deny !== null) {
+                    return $this->acctFail($deny, $accountId, $email);
+                }
             }
             $model->setData(SmtpAccount::schema_fields_STATUS, $status);
         }
@@ -508,10 +641,14 @@ final class SmtpServiceCatalogService
     /**
      * 删除本机服务账户；默认同步从 Stalwart 移除。
      *
+     * @param callable(string $step, string $message, int $current, int $total): void|null $onProgress
      * @return array{success: bool, message: string, smtp_account_id: int, email: string, password_once: string}
      */
-    public function deleteAccountOnService(int $accountId, bool $alsoStalwart = true): array
-    {
+    public function deleteAccountOnService(
+        int $accountId,
+        bool $alsoStalwart = true,
+        ?callable $onProgress = null,
+    ): array {
         /** @var SmtpAccount $model */
         $model = ObjectManager::getInstance(SmtpAccount::class)->clear()->load($accountId);
         if (!$model->getId()) {
@@ -528,7 +665,21 @@ final class SmtpServiceCatalogService
                 return $this->acctFail(__('外部填入服务不在此删除本机账户'), $accountId, $email);
             }
         }
+        /** @var SmtpSystemAccountProvisioner $systemProvisioner */
+        $systemProvisioner = ObjectManager::getInstance(SmtpSystemAccountProvisioner::class);
+        $deny = $systemProvisioner->denyMutationReason($model, 'delete');
+        if ($deny !== null) {
+            return $this->acctFail($deny, $accountId, $email);
+        }
+        $label = $email !== '' ? $email : (string)$accountId;
         if ($alsoStalwart && $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false) {
+            $this->emitDeleteProgress(
+                $onProgress,
+                'stalwart',
+                (string)__('正在从本机 Stalwart 删除 %{1}…', [$label]),
+                1,
+                2
+            );
             try {
                 /** @var StalwartManagementAdapter $mgmt */
                 $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
@@ -540,7 +691,22 @@ final class SmtpServiceCatalogService
                     $email
                 );
             }
+        } else {
+            $this->emitDeleteProgress(
+                $onProgress,
+                'plan',
+                (string)__('准备删除目录账户 %{1}…', [$label]),
+                1,
+                1
+            );
         }
+        $this->emitDeleteProgress(
+            $onProgress,
+            'catalog',
+            (string)__('正在删除目录账户 %{1}…', [$label]),
+            $alsoStalwart ? 2 : 1,
+            $alsoStalwart ? 2 : 1
+        );
         $model->delete();
 
         return [
@@ -548,7 +714,7 @@ final class SmtpServiceCatalogService
             'message' => (string)__(
                 '已删除账户 %{1}%{2}',
                 [
-                    $email !== '' ? $email : (string)$accountId,
+                    $label,
                     $alsoStalwart ? (string)__('（含本机 Stalwart）') : '',
                 ]
             ),
@@ -556,6 +722,22 @@ final class SmtpServiceCatalogService
             'email' => $email,
             'password_once' => '',
         ];
+    }
+
+    /**
+     * @param callable(string $step, string $message, int $current, int $total): void|null $onProgress
+     */
+    private function emitDeleteProgress(
+        ?callable $onProgress,
+        string $step,
+        string $message,
+        int $current,
+        int $total,
+    ): void {
+        if ($onProgress === null) {
+            return;
+        }
+        $onProgress($step, $message, max(0, $current), max(1, $total));
     }
 
     /**
@@ -812,6 +994,16 @@ final class SmtpServiceCatalogService
      */
     public function resetAccountPassword(int $accountId): array
     {
+        /** @var SmtpAccount $gate */
+        $gate = ObjectManager::getInstance(SmtpAccount::class)->clear()->load($accountId);
+        if ($gate->getId()) {
+            /** @var SmtpSystemAccountProvisioner $systemProvisioner */
+            $systemProvisioner = ObjectManager::getInstance(SmtpSystemAccountProvisioner::class);
+            $deny = $systemProvisioner->denyMutationReason($gate, 'reset_password');
+            if ($deny !== null) {
+                return $this->acctFail($deny, $accountId, (string)$gate->getData(SmtpAccount::schema_fields_EMAIL));
+            }
+        }
         /** @var SmtpAccountManageService $manage */
         $manage = ObjectManager::getInstance(SmtpAccountManageService::class);
         $result = $manage->resetPassword($accountId);
@@ -932,7 +1124,10 @@ final class SmtpServiceCatalogService
         $skipped = 0;
         $accountsImported = 0;
         $created = [];
+        $skipNotes = [];
         $now = date('Y-m-d H:i:s');
+        /** @var SmtpLocalDomainHealthService $localHealth */
+        $localHealth = ObjectManager::getInstance(SmtpLocalDomainHealthService::class);
 
         foreach ($rows as $row) {
             if (!$row instanceof MailDomain) {
@@ -948,6 +1143,18 @@ final class SmtpServiceCatalogService
             }
             if (isset($existingByDomain[$domain]) || isset($existingByHost[$hostname])) {
                 $skipped++;
+                continue;
+            }
+
+            // G3：非本机跳过，禁止盲建假绿 MODE_SELF
+            $healthSummary = $localHealth->summarizePreview(SmtpService::MODE_SELF, $hostname);
+            if (!empty($healthSummary['block_create'])) {
+                $skipped++;
+                $reason = trim((string)($healthSummary['message'] ?? ''));
+                if ($reason === '') {
+                    $reason = (string)__('DNS 未指向本机');
+                }
+                $skipNotes[] = $hostname . '：' . $reason;
                 continue;
             }
 
@@ -997,12 +1204,22 @@ final class SmtpServiceCatalogService
             ];
         }
 
+        $msg = (string)__(
+            '已从企业邮箱域名同步：新增 %{1} 个 Smtp 服务，已有 %{2} 个跳过；同步账号目录 %{3} 个。',
+            [(string)$imported, (string)$skipped, (string)$accountsImported]
+        );
+        if ($skipNotes !== []) {
+            $uniqueNotes = array_values(array_unique($skipNotes));
+            $preview = array_slice($uniqueNotes, 0, 5);
+            $msg .= ' ' . (string)__('非本机已跳过：%{1}', [implode('；', $preview)]);
+            if (count($uniqueNotes) > 5) {
+                $msg .= ' ' . (string)__('…等共 %{1} 条', [(string)count($uniqueNotes)]);
+            }
+        }
+
         return [
             'success' => true,
-            'message' => (string)__(
-                '已从企业邮箱域名同步：新增 %{1} 个 Smtp 服务，已有 %{2} 个跳过；同步账号目录 %{3} 个。',
-                [(string)$imported, (string)$skipped, (string)$accountsImported]
-            ),
+            'message' => $msg,
             'imported' => $imported,
             'skipped' => $skipped,
             'accounts_imported' => $accountsImported,
@@ -1064,6 +1281,11 @@ final class SmtpServiceCatalogService
             if ($local === '') {
                 continue;
             }
+            // 系统账号（smtp/relay）禁止以「无密码」形态从邮局导入；由 ensure 创建并密封。
+            if (SmtpAccount::isReservedSystemLocalPart($local)) {
+                $skipped++;
+                continue;
+            }
             $email = $local . '@' . $domain;
             if (isset($existing[$email])) {
                 $skipped++;
@@ -1085,6 +1307,7 @@ final class SmtpServiceCatalogService
                 ->setData(SmtpAccount::schema_fields_DISPLAY_NAME, $local)
                 ->setData(SmtpAccount::schema_fields_ROLE, SmtpAccount::ROLE_SUBMIT)
                 ->setData(SmtpAccount::schema_fields_STATUS, 'needs_password')
+                ->setData(SmtpAccount::schema_fields_IS_SYSTEM, 0)
                 ->setData(SmtpAccount::schema_fields_PASSWORD_SEALED, '')
                 ->setData(SmtpAccount::schema_fields_CREATED_AT, $now)
                 ->setData(SmtpAccount::schema_fields_UPDATED_AT, $now)

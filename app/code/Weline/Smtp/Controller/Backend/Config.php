@@ -226,9 +226,25 @@ class Config extends BackendController
             'relay_service' => $on ? '1' : '0',
             'pool_domain_id' => (string)(int)($state['pool_domain_id'] ?? 0),
         ], $storageScope);
-        $this->getMessageManager()->addSuccess(
-            $on ? (string)__('中继服务已开启') : (string)__('中继服务已关闭')
-        );
+        $msg = $on ? (string)__('中继服务已开启') : (string)__('中继服务已关闭');
+        if ($on) {
+            $domain = (string)($state['domain_name'] ?? '');
+            if ($domain !== '') {
+                try {
+                    /** @var \Weline\Smtp\Service\SmtpSystemAccountProvisioner $systemProvisioner */
+                    $systemProvisioner = ObjectManager::getInstance(
+                        \Weline\Smtp\Service\SmtpSystemAccountProvisioner::class
+                    );
+                    $system = $systemProvisioner->ensureForDomain($domain, true, 0);
+                    if (!empty($system['message'])) {
+                        $msg .= ' ' . (string)$system['message'];
+                    }
+                } catch (\Throwable $e) {
+                    $msg .= ' ' . (string)__('系统中继账号创建失败：%{1}', [$e->getMessage()]);
+                }
+            }
+        }
+        $this->getMessageManager()->addSuccess($msg);
         $this->redirect($this->scopedConfigUrl($workScope));
 
         return '';

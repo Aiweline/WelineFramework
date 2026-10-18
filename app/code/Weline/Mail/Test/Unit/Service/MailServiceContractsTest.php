@@ -112,6 +112,9 @@ private function assert_MailboxClient_testInterfaceAndOpsFacadeExist(): void
     self::assertFileExists(BP . 'app/code/Weline/Mail/Service/Mailbox/MailboxClientInterface.php');
     self::assertFileExists(BP . 'app/code/Weline/Mail/Service/Mailbox/MailboxFolder.php');
     self::assertFileExists(BP . 'app/code/Weline/Mail/Service/Mailbox/StalwartJmapSession.php');
+    $jmapSession = (string) file_get_contents(BP . 'app/code/Weline/Mail/Service/Mailbox/StalwartJmapSession.php');
+    self::assertStringContainsString('isValidReaderUsername', $jmapSession);
+    self::assertStringContainsString('mailbox%admin', $jmapSession);
     self::assertFileExists(BP . 'app/code/Weline/Mail/Service/Mailbox/StalwartMailboxClient.php');
     self::assertFileExists(BP . 'app/code/Weline/Mail/Service/Mailbox/FakeMailboxClient.php');
     self::assertFileExists(BP . 'app/code/Weline/Mail/Service/Mailbox/MailboxOpsService.php');
@@ -253,7 +256,7 @@ private function assert_MailComposeDeeplink_testBackendComposePrefillAndSendEven
 private function assert_MailComposeDeeplink_testModuleVersion(): void
 {
     $module = include BP . 'app/code/Weline/Mail/etc/module.php';
-    self::assertSame('0.2.36', $module['version'] ?? null);
+    self::assertSame('0.2.39', $module['version'] ?? null);
 }
 
 private function assert_MailDkimLocalEnsureService_testEnsureGeneratesReusablePublicKey(): void
@@ -398,16 +401,22 @@ private function assert_MailOutboundRelaySync_testSyncBuildsSenderRouteNotAuthen
         "\$match[] = [\n            'if' => \"sender == '",
         $src
     );
-    // A2：else 默认本机 Smtp（587/465）；无本机才兜底 mx；账号外投不得抬成全局 else。
+    // A2：导流 → 自家域名 Smtp → 才 mx；hub 不得抬成全局 else。
     self::assertStringNotContainsString('$primaryRelayName', $src);
     self::assertStringContainsString('resolveDefaultSelfSmtpRelay', $src);
     self::assertStringContainsString('normalizeSubmissionPort', $src);
     self::assertStringContainsString('weline-outbound-self-', $src);
+    self::assertStringContainsString('weline-outbound-domain-', $src);
+    self::assertStringContainsString('buildDomainSmtpSenderMatches', $src);
+    self::assertStringContainsString('isLocalOutboundHost', $src);
+    self::assertStringContainsString('resolveReachableSubmissionEndpoint', $src);
+    self::assertStringContainsString('sender_domain ==', $src);
     self::assertStringContainsString('mergeHubBindingsIntoPayload', $src);
+    self::assertStringContainsString('preferConfiguredHubOverMxElse', $src);
     self::assertStringContainsString('weline-hub-', $src);
-    self::assertStringContainsString('else 默认本机 Smtp', $src);
-    self::assertStringContainsString('不得抬成全局 else', $src);
-    self::assertStringContainsString('// A1：local → rcpt 分流 → sender 外投', $src);
+    self::assertStringContainsString('跨机 hub', $src);
+    self::assertStringContainsString('都没有 → 才兜底 mx', $src);
+    self::assertStringContainsString('// A1：local → 导流规则（rcpt / sender）', $src);
     self::assertStringContainsString("\$rcptMatches", $src);
     self::assertStringContainsString("\$senderMatches", $src);
     $adapter = (string) \file_get_contents(BP . '/app/code/Weline/Mail/Service/StalwartManagementAdapter.php');
@@ -417,6 +426,13 @@ private function assert_MailOutboundRelaySync_testSyncBuildsSenderRouteNotAuthen
     self::assertStringContainsString('normalizeRelayRoute', $adapter);
     self::assertStringContainsString('normalizeStrategyRouteExpression', $adapter);
     self::assertStringContainsString('listRelayRouteNamesByPrefix', $adapter);
+    self::assertStringContainsString('applyQqHubEnvelopeFromRewriteIfElse', $adapter);
+    self::assertStringContainsString('applyQqHubHeaderFromAlignSieve', $adapter);
+    self::assertStringContainsString('clearQqHubHeaderFromAlignSieve', $adapter);
+    self::assertStringContainsString('weline-qq-align-from', $adapter);
+    self::assertStringContainsString('x:SieveSystemScript/set', $adapter);
+    self::assertStringContainsString('x:MtaStageData/set', $adapter);
+    self::assertStringContainsString('x:MtaStageMail/set', $adapter);
     self::assertStringContainsString('authUsername=""', $adapter);
 
     $model = (string) \file_get_contents(BP . '/app/code/Weline/Mail/Model/MailOutboundRouteRule.php');
@@ -484,7 +500,10 @@ private function assert_MailOutboundRelaySync_testEnterpriseOutboundOnAccountSmt
     self::assertStringContainsString('mail-smtp-create-external', $src);
     self::assertStringContainsString('去用户与账号绑定外投', $src);
     self::assertStringContainsString('mail-smtp-edit-external-', $src);
-    self::assertStringContainsString('delete-smtp-service', $src);
+    self::assertStringContainsString('smtp-service-delete-stream', $src);
+    self::assertStringContainsString('data-smtp-delete-sse', $src);
+    self::assertStringContainsString('mailSmtpConsumeSse', $src);
+    self::assertStringContainsString('text/event-stream', $src);
     self::assertStringContainsString('update-smtp-service-external', $src);
     self::assertStringContainsString("data-tone=\"primary\"", $src);
     self::assertStringContainsString('mail-smtp-external-edit-form', $src);
@@ -493,9 +512,14 @@ private function assert_MailOutboundRelaySync_testEnterpriseOutboundOnAccountSmt
     $index = (string) \file_get_contents(BP . '/app/code/Weline/Mail/Controller/Backend/Index.php');
     self::assertStringContainsString('postUpdateSmtpServiceExternal', $index);
     self::assertStringContainsString('postDeleteSmtpService', $index);
+    self::assertStringContainsString('function postSmtpServiceDeleteStream', $index);
+    self::assertStringContainsString('function postSmtpServiceAccountDeleteStream', $index);
+    self::assertStringContainsString('SseWriter', $index);
     $catalog = (string) \file_get_contents(BP . '/app/code/Weline/Smtp/Service/SmtpServiceCatalogService.php');
     self::assertStringContainsString('function updateExternalService', $catalog);
     self::assertStringContainsString('function deleteService', $catalog);
+    self::assertStringContainsString('emitDeleteProgress', $catalog);
+    self::assertStringContainsString('?callable $onProgress = null', $catalog);
     self::assertStringNotContainsString('mail-domain-outbound-', $src);
     self::assertStringNotContainsString('set-default-smtp-account', $src);
 }

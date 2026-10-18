@@ -46,5 +46,11 @@ final class StalwartManagementAdapterTest extends TestCase
         self::assertStringNotContainsString('AcmeProvider', $src);
         self::assertStringContainsString('function deleteAccount', $src);
         self::assertStringContainsString("'destroy' => [\$accountId]", $src);
+        self::assertStringContainsString('function listPublishableDkimDnsRecords', $src);
+        self::assertStringContainsString('x:DkimSignature/query', $src);
+        self::assertStringContainsString('x:DkimSignature/get', $src);
+        self::assertStringContainsString("'active' => true", $src);
+        self::assertStringContainsString("'pending' => true", $src);
+        self::assertStringContainsString("'retiring' => true", $src);
     }
 }

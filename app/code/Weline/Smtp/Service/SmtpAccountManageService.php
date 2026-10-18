@@ -44,6 +44,17 @@ final class SmtpAccountManageService
             return $this->fail(__('账号名格式无效'), 0, '', false);
         }
         $domain = (string)$state['domain_name'];
+        if (SmtpAccount::isReservedSystemLocalPart($localPart)) {
+            return $this->fail(
+                __('系统账号 %{1}@%{2} 由本机启用自动创建，不能手动新建；已有则不可删除/改密', [
+                    $localPart,
+                    $domain,
+                ]),
+                0,
+                '',
+                false
+            );
+        }
         $email = $localPart . '@' . $domain;
         /** @var SmtpAccount $model */
         $model = ObjectManager::getInstance(SmtpAccount::class);
@@ -74,6 +85,7 @@ final class SmtpAccountManageService
             ->setData(SmtpAccount::schema_fields_DISPLAY_NAME, $displayName !== '' ? $displayName : $localPart)
             ->setData(SmtpAccount::schema_fields_ROLE, $role)
             ->setData(SmtpAccount::schema_fields_STATUS, 'active')
+            ->setData(SmtpAccount::schema_fields_IS_SYSTEM, 0)
             ->setData(SmtpAccount::schema_fields_PASSWORD_SEALED, $sealed)
             ->setData(SmtpAccount::schema_fields_CREATED_AT, $now)
             ->setData(SmtpAccount::schema_fields_UPDATED_AT, $now)
@@ -167,8 +179,14 @@ final class SmtpAccountManageService
         if (!$model->getId()) {
             return $this->fail(__('Smtp 账户不存在'), 0, '', false);
         }
-        $password = $this->generatePassword();
         $email = (string)$model->getData(SmtpAccount::schema_fields_EMAIL);
+        /** @var SmtpSystemAccountProvisioner $systemProvisioner */
+        $systemProvisioner = ObjectManager::getInstance(SmtpSystemAccountProvisioner::class);
+        $deny = $systemProvisioner->denyMutationReason($model, 'reset_password');
+        if ($deny !== null) {
+            return $this->fail($deny, $accountId, $email, false);
+        }
+        $password = $this->generatePassword();
         /** @var MailOutboundRelaySecretService $secrets */
         $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
         try {

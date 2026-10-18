@@ -5,6 +5,7 @@ namespace Weline\Smtp\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Smtp\Helper\Data;
+use Weline\Smtp\Model\SmtpService;
 
 /**
  * Smtp 独立启用：池选或自填域名 → DNS 解析门禁 → 统一入域名池出证。
@@ -97,6 +98,19 @@ final class SmtpServiceEnableService
             $poolDomainId = $existingPoolId;
         }
 
+        // G1 fail-closed：与 createSelfService 同一健康源；禁止「已启用」却非本机
+        /** @var SmtpLocalDomainHealthService $localHealth */
+        $localHealth = ObjectManager::getInstance(SmtpLocalDomainHealthService::class);
+        $healthSummary = $localHealth->summarizePreview(SmtpService::MODE_SELF, $smtpHost);
+        if (!empty($healthSummary['block_create'])) {
+            $blockMsg = trim((string)($healthSummary['message'] ?? ''));
+            if ($blockMsg === '') {
+                $blockMsg = (string)__('DNS 未指向本机，不能启用本机 Smtp');
+            }
+
+            return $this->fail($blockMsg, false, $root, $smtpHost);
+        }
+
         $this->data()->setServiceState([
             'enabled' => '1',
             'domain_name' => $root,
@@ -126,10 +140,22 @@ final class SmtpServiceEnableService
             $tlsNote = (string)__('；Stalwart 证书同步暂未能完成：%{1}', [$e->getMessage()]);
         }
 
+        $systemNote = '';
+        try {
+            /** @var SmtpSystemAccountProvisioner $systemProvisioner */
+            $systemProvisioner = ObjectManager::getInstance(SmtpSystemAccountProvisioner::class);
+            $system = $systemProvisioner->ensureForDomain($root, $relayService, 0);
+            if (!empty($system['message'])) {
+                $systemNote = '；' . (string)$system['message'];
+            }
+        } catch (\Throwable $e) {
+            $systemNote = (string)__('；系统账号创建失败：%{1}', [$e->getMessage()]);
+        }
+
         $msg = $poolWarn !== ''
             ? (string)__('Smtp 已启用（域名已在池中）。%{1}', [$poolWarn])
             : (string)__('Smtp 已启用：DNS 已通并已入域名池申请证书');
-        $msg .= $tlsNote;
+        $msg .= $tlsNote . $systemNote;
 
         return [
             'success' => true,

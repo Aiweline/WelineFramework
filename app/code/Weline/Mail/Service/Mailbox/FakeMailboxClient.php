@@ -174,6 +174,7 @@ final class FakeMailboxClient implements MailboxClientInterface
     {
         $body = (string)$item->getData(MailMessage::schema_fields_BODY);
         $preview = strlen($body) > 120 ? substr($body, 0, 117) . '...' : $body;
+        $presentation = MailBodyPresentation::fromStoredBody($body, $includeBody);
         return [
             'id' => (string)$item->getId(),
             'thread_id' => '',
@@ -185,7 +186,9 @@ final class FakeMailboxClient implements MailboxClientInterface
             'subject' => (string)$item->getData(MailMessage::schema_fields_SUBJECT),
             'received_at' => (string)$item->getData(MailMessage::schema_fields_CREATED_AT),
             'preview' => $preview,
-            'body' => $includeBody ? $body : '',
+            'body' => $presentation['body'],
+            'html_body' => $presentation['html_body'],
+            'body_is_html' => $presentation['body_is_html'],
             'has_attachment' => false,
             'attachments' => [],
             'size' => strlen($body),

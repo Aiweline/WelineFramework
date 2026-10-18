@@ -9,6 +9,8 @@ use Weline\Mail\Model\MailDomain;
 
 final class MailAccountManagementService
 {
+    public const DEFAULT_PAGE_SIZE = 20;
+
     public function createAccount(
         int $domainId,
         string $email,
@@ -74,6 +76,119 @@ final class MailAccountManagementService
         }
     }
 
+    /**
+     * @param array<string, mixed> $params
+     * @return array{
+     *   success:bool,
+     *   items:list<array<string,mixed>>,
+     *   total:int,
+     *   page:int,
+     *   page_size:int,
+     *   has_more:bool
+     * }
+     */
+    public function listAccounts(array $params = []): array
+    {
+        $q = trim((string)($params['q'] ?? $params['search'] ?? ''));
+        $status = strtolower(trim((string)($params['status'] ?? '')));
+        $domainId = max(0, (int)($params['domain_id'] ?? 0));
+        $page = max(1, (int)($params['page'] ?? 1));
+        $pageSize = max(1, min(100, (int)($params['page_size'] ?? self::DEFAULT_PAGE_SIZE)));
+
+        /** @var MailAccount $model */
+        $model = ObjectManager::getInstance(MailAccount::class);
+        $query = $model->clear();
+        if ($domainId > 0) {
+            $query->where(MailAccount::schema_fields_DOMAIN_ID, $domainId);
+        }
+        if ($status !== '' && in_array($status, ['active', 'pending', 'suspended'], true)) {
+            $query->where(MailAccount::schema_fields_STATUS, $status);
+        }
+        if ($q !== '') {
+            // 仅按邮箱模糊检索，避免 OR 与 domain/status 的 AND 优先级踩坑
+            $query->where(MailAccount::schema_fields_EMAIL, '%' . $q . '%', 'LIKE');
+        }
+
+        $countQuery = clone $query;
+        $total = (int)$countQuery->count();
+        $rows = $query
+            ->order(MailAccount::schema_fields_DOMAIN_ID, 'ASC')
+            ->order(MailAccount::schema_fields_EMAIL, 'ASC')
+            ->limit($pageSize, ($page - 1) * $pageSize)
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        $items = [];
+        foreach ($rows as $row) {
+            if (!$row instanceof MailAccount) {
+                continue;
+            }
+            $items[] = $this->serializeAccount($row);
+        }
+
+        return [
+            'success' => true,
+            'items' => $items,
+            'total' => $total,
+            'page' => $page,
+            'page_size' => $pageSize,
+            'has_more' => ($page * $pageSize) < $total,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    public function updateAccount(array $params): array
+    {
+        $accountId = max(0, (int)($params['account_id'] ?? 0));
+        if ($accountId <= 0) {
+            return $this->failure(__('邮箱账号参数无效'));
+        }
+
+        /** @var MailAccount $account */
+        $account = ObjectManager::getInstance(MailAccount::class)->clear()->load($accountId);
+        if (!$account->getId()) {
+            return $this->failure(__('邮箱账号不存在'), 404);
+        }
+
+        if (array_key_exists('display_name', $params)) {
+            $account->setData(MailAccount::schema_fields_DISPLAY_NAME, trim((string)$params['display_name']));
+        }
+        if (array_key_exists('customer_id', $params)) {
+            $account->setData(MailAccount::schema_fields_CUSTOMER_ID, max(0, (int)$params['customer_id']));
+        }
+        if (array_key_exists('quota_mb', $params)) {
+            $account->setData(MailAccount::schema_fields_QUOTA_MB, max(128, (int)$params['quota_mb']));
+        }
+
+        $status = array_key_exists('status', $params)
+            ? strtolower(trim((string)$params['status']))
+            : '';
+        if ($status !== '') {
+            if (!in_array($status, ['active', 'pending', 'suspended'], true)) {
+                return $this->failure(__('邮箱账号状态参数无效'));
+            }
+            if ($status === 'active') {
+                $gate = $this->assertCanActivate($account);
+                if ($gate !== null) {
+                    return $gate;
+                }
+            }
+            $account->setData(MailAccount::schema_fields_STATUS, $status);
+        }
+
+        $account->setData(MailAccount::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))->save();
+
+        return [
+            'success' => true,
+            'message' => __('邮箱账号已更新'),
+            'account' => $this->serializeAccount($account),
+        ];
+    }
+
     public function setStatus(int $accountId, string $status): array
     {
         $status = strtolower(trim($status));
@@ -88,21 +203,9 @@ final class MailAccountManagementService
         }
 
         if ($status === 'active') {
-            $domain = ObjectManager::getInstance(MailDomain::class)
-                ->clear()
-                ->load((int)$account->getData(MailAccount::schema_fields_DOMAIN_ID));
-            $isFake = $domain->getId()
-                && ObjectManager::getInstance(MailCustomerAccountService::class)->isFakeDomain($domain);
-            if (!$isFake) {
-                try {
-                    if (!ObjectManager::getInstance(StalwartManagementAdapter::class)->accountExists(
-                        (string)$account->getData(MailAccount::schema_fields_EMAIL)
-                    )) {
-                        return $this->failure(__('请先通过“开通/重置密码”在 Stalwart 中开通该账号'));
-                    }
-                } catch (\Throwable) {
-                    return $this->failure(__('无法确认 Stalwart 账号状态，请检查管理连接'));
-                }
+            $gate = $this->assertCanActivate($account);
+            if ($gate !== null) {
+                return $gate;
             }
         }
 
@@ -111,6 +214,135 @@ final class MailAccountManagementService
             ->save();
 
         return ['success' => true, 'message' => __('邮箱账号状态已更新')];
+    }
+
+    /**
+     * @return array<string, mixed>|null failure payload when blocked
+     */
+    private function assertCanActivate(MailAccount $account): ?array
+    {
+        $domain = ObjectManager::getInstance(MailDomain::class)
+            ->clear()
+            ->load((int)$account->getData(MailAccount::schema_fields_DOMAIN_ID));
+        $isFake = $domain->getId()
+            && ObjectManager::getInstance(MailCustomerAccountService::class)->isFakeDomain($domain);
+        if ($isFake) {
+            return null;
+        }
+        try {
+            if (!ObjectManager::getInstance(StalwartManagementAdapter::class)->accountExists(
+                (string)$account->getData(MailAccount::schema_fields_EMAIL)
+            )) {
+                return $this->failure(__('请先通过“开通/重置密码”在 Stalwart 中开通该账号'));
+            }
+        } catch (\Throwable) {
+            return $this->failure(__('无法确认 Stalwart 账号状态，请检查管理连接'));
+        }
+
+        return null;
+    }
+
+    public function deleteAccount(int $accountId): array
+    {
+        if ($accountId <= 0) {
+            return $this->failure(__('邮箱账号参数无效'));
+        }
+
+        /** @var MailAccount $account */
+        $account = ObjectManager::getInstance(MailAccount::class)->clear()->load($accountId);
+        if (!$account->getId()) {
+            return $this->failure(__('邮箱账号不存在'), 404);
+        }
+
+        $email = strtolower(trim((string)$account->getData(MailAccount::schema_fields_EMAIL)));
+        $domainId = (int)$account->getData(MailAccount::schema_fields_DOMAIN_ID);
+        /** @var MailDomain $domain */
+        $domain = ObjectManager::getInstance(MailDomain::class)->clear()->load($domainId);
+        $isFake = $domain->getId()
+            && ObjectManager::getInstance(MailCustomerAccountService::class)->isFakeDomain($domain);
+
+        try {
+            if (!$isFake && $email !== '') {
+                ObjectManager::getInstance(StalwartManagementAdapter::class)->deleteAccount($email);
+            }
+            $account->delete();
+        } catch (\InvalidArgumentException|\DomainException $exception) {
+            return $this->failure($exception->getMessage());
+        } catch (\Throwable) {
+            return $this->failure(__('邮箱账号删除失败，请检查 Stalwart 管理连接'), 500);
+        }
+
+        return ['success' => true, 'message' => __('邮箱账号已删除')];
+    }
+
+    /**
+     * @param list<int|string>|mixed $ids
+     * @return array<string, mixed>
+     */
+    public function batchSetStatus(mixed $ids, string $status): array
+    {
+        $accountIds = $this->normalizeIds($ids);
+        if ($accountIds === []) {
+            return $this->failure(__('请选择至少一个邮箱账号'));
+        }
+        $ok = 0;
+        $fail = 0;
+        $messages = [];
+        foreach ($accountIds as $accountId) {
+            $result = $this->setStatus($accountId, $status);
+            if (!empty($result['success'])) {
+                $ok++;
+            } else {
+                $fail++;
+                $messages[] = '#' . $accountId . ': ' . (string)($result['message'] ?? __('失败'));
+            }
+        }
+
+        return [
+            'success' => $fail === 0,
+            'message' => $fail === 0
+                ? (string)__('已更新 %{1} 个账号状态', [$ok])
+                : (string)__('成功 %{1}，失败 %{2}', [$ok, $fail]),
+            'ok' => $ok,
+            'fail' => $fail,
+            'errors' => $messages,
+            'code' => $fail === 0 ? 200 : 422,
+        ];
+    }
+
+    /**
+     * @param list<int|string>|mixed $ids
+     * @return array<string, mixed>
+     */
+    public function batchDelete(mixed $ids): array
+    {
+        $accountIds = $this->normalizeIds($ids);
+        if ($accountIds === []) {
+            return $this->failure(__('请选择至少一个邮箱账号'));
+        }
+        $ok = 0;
+        $fail = 0;
+        $messages = [];
+        foreach ($accountIds as $accountId) {
+            $result = $this->deleteAccount($accountId);
+            if (!empty($result['success'])) {
+                $ok++;
+            } else {
+                $fail++;
+                $messages[] = '#' . $accountId . ': ' . (string)($result['message'] ?? __('失败'));
+            }
+        }
+
+        return [
+            'success' => $fail === 0,
+            'message' => $fail === 0
+                ? (string)__('已删除 %{1} 个账号', [$ok])
+                : (string)__('成功 %{1}，失败 %{2}', [$ok, $fail]),
+            'ok' => $ok,
+            'fail' => $fail,
+            'errors' => $messages,
+            'code' => $fail === 0 ? 200 : 422,
+        ];
     }
 
     public function provisionOrResetPassword(int $accountId, string $password): array
@@ -157,6 +389,47 @@ final class MailAccountManagementService
     ): array {
         return ObjectManager::getInstance(MailSmtpAccountService::class)
             ->sendViaAuthorizedAccount($accountId, $to, $subject, $body);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function serializeAccount(MailAccount $account): array
+    {
+        return [
+            'account_id' => (int)$account->getId(),
+            'domain_id' => (int)$account->getData(MailAccount::schema_fields_DOMAIN_ID),
+            'customer_id' => (int)$account->getData(MailAccount::schema_fields_CUSTOMER_ID),
+            'email' => (string)$account->getData(MailAccount::schema_fields_EMAIL),
+            'display_name' => (string)$account->getData(MailAccount::schema_fields_DISPLAY_NAME),
+            'quota_mb' => (int)$account->getData(MailAccount::schema_fields_QUOTA_MB),
+            'status' => (string)$account->getData(MailAccount::schema_fields_STATUS),
+            'outbound_relay_enabled' => (int)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_ENABLED) === 1 ? 1 : 0,
+            'outbound_relay_host' => trim((string)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_HOST)),
+            'outbound_relay_port' => (int)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_PORT),
+            'outbound_relay_username' => trim((string)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_USERNAME)),
+            'outbound_relay_tls' => trim((string)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_TLS)) ?: 'starttls',
+        ];
+    }
+
+    /**
+     * @param list<int|string>|mixed $ids
+     * @return list<int>
+     */
+    private function normalizeIds(mixed $ids): array
+    {
+        if (!is_array($ids)) {
+            return [];
+        }
+        $out = [];
+        foreach ($ids as $id) {
+            $n = (int)$id;
+            if ($n > 0) {
+                $out[$n] = $n;
+            }
+        }
+
+        return array_values($out);
     }
 
     private function failure(mixed $message, int $code = 422): array

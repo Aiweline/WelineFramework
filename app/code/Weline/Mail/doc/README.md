@@ -154,3 +154,10 @@ fake 引擎仅用于 `.test` / `.invalid` 域名的本地业务冒烟。fake 账
 - 新域名和新账号应限制发信额度。
 - 未完成 DNS 和 DKIM 检测前，不建议放开发信量。
 - 系统服务安装需要管理员/root 权限。
+
+## Smtp 本机域名健康（跨模块）
+
+企业邮局 Smtp Tab 的模式/健康双徽章与 `mail.getSmtpTlsStatusBatch` 见 Smtp 模块规格：  
+[`Weline/Smtp/doc/开发/spec/smtp-local-domain-health.md`](../../Smtp/doc/%E5%BC%80%E5%8F%91/spec/smtp-local-domain-health.md)。  
+Mail 侧只提供 Query + `smtp_local_health_by_service` assign + `enterprise.phtml` 渲染；门禁归属 `Weline_Smtp`。
+

@@ -134,6 +134,8 @@ if (is_array($selectedMessage)) {
 .weline-mail-client__meta{display:flex;justify-content:space-between;gap:var(--weline-space-3);color:var(--weline-color-text-secondary);font-size:.82rem}
 .weline-mail-client__subject{margin:.35rem 0;font-weight:650}.weline-mail-client__preview{margin:0;color:var(--weline-color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .weline-mail-client__reader-body{padding:var(--weline-space-5);white-space:pre-wrap;word-break:break-word;line-height:1.65}
+.weline-mail-client__reader-body--html{white-space:normal}
+.weline-mail-client__reader-html{display:block;width:100%;min-height:18rem;border:1px solid var(--weline-theme-border,var(--color-border,#d7e0e5));border-radius:var(--weline-radius-md,8px);background:#fff}
 .weline-mail-client__empty{display:grid;place-items:center;min-height:14rem;padding:var(--weline-space-5);color:var(--weline-color-text-secondary);text-align:center}
 .weline-mail-client__compose-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--weline-space-3)}.weline-mail-client__compose-grid .is-wide{grid-column:1/-1}
 .weline-mail-client__accounts{display:grid;gap:var(--weline-space-3)}
@@ -226,7 +228,24 @@ if (is_array($selectedMessage)) {
                         </div>
                     <?php endif; ?>
                 </header>
-                <div class="weline-mail-client__reader-body"><?= $escape($selectedMessage['body'] ?? '') ?></div>
+                <?php
+                $clientBodyIsHtml = !empty($selectedMessage['body_is_html']) && trim((string)($selectedMessage['html_body'] ?? '')) !== '';
+                $clientHtmlBody = (string)($selectedMessage['html_body'] ?? '');
+                ?>
+                <?php if ($clientBodyIsHtml): ?>
+                    <div class="weline-mail-client__reader-body weline-mail-client__reader-body--html" data-mail-body-format="html">
+                        <iframe
+                            class="weline-mail-client__reader-html"
+                            title="<?= $escape(__('邮件正文预览')) ?>"
+                            sandbox=""
+                            referrerpolicy="no-referrer"
+                            srcdoc="<?= $escape($clientHtmlBody) ?>"
+                            data-testid="mail-client-reader-html"
+                        ></iframe>
+                    </div>
+                <?php else: ?>
+                    <div class="weline-mail-client__reader-body" data-mail-body-format="text"><?= $escape($selectedMessage['body'] ?? '') ?></div>
+                <?php endif; ?>
             <?php else: ?>
                 <div class="weline-mail-client__empty"><?= __('选择一封邮件查看正文。') ?></div>
             <?php endif; ?>
