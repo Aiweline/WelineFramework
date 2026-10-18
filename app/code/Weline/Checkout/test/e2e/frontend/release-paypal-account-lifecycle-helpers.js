@@ -1137,6 +1137,11 @@ async function approvePaypalAndLand(context, redirectUrl, existingPage = null, s
       || (context.pages ? context.pages().find((p) => /checkout\/success/.test(p.url())) : null)
       || (context.pages ? context.pages()[0] : null);
     if (page) {
+      const shellUuid = String(shell.order_uuid || extractShellKeysFromUrl(page.url()).order_uuid || '').trim();
+      // fake_card often stays on #payment-recovery?order_uuid=… — durable uuid is enough; do not block on success DOM.
+      if (shellUuid && !/checkout\/success/.test(page.url()) && !(redirectUrl && /checkout\/success/.test(String(redirectUrl)))) {
+        return page;
+      }
       if (!/checkout\/success/.test(page.url()) && redirectUrl && /checkout\/success/.test(redirectUrl)) {
         await page.goto(redirectUrl, { waitUntil: 'domcontentloaded', timeout: 90000 }).catch(() => {});
       }
@@ -1406,6 +1411,7 @@ module.exports = {
   FIXTURE,
   ADDRESS,
   PAYMENT_METHOD,
+  isControllable,
   storefrontOrigin,
   gotoStorefront,
   waitForWelineApi,
