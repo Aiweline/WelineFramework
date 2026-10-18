@@ -545,6 +545,14 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         $snapshot = $this->capturePhysicalTableSnapshot($identity);
         // AUTO_INCREMENT 当前值不参与指纹，避免纯写入导致破坏性 DDL 门禁误判。
         unset($snapshot['auto_increment']);
+        // SHOW CREATE TABLE 尾部也带 AUTO_INCREMENT=N；不剥离则插入行会改指纹。
+        if (isset($snapshot['ddl']) && is_string($snapshot['ddl'])) {
+            $snapshot['ddl'] = (string)preg_replace(
+                '/\s*AUTO_INCREMENT=\d+/i',
+                '',
+                $snapshot['ddl'],
+            );
+        }
         return hash('sha256', $this->canonicalSnapshotJson($snapshot));
     }
 
