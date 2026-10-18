@@ -15,6 +15,11 @@ interface MailboxClientInterface
     public function listMessages(string $mailbox, string $folder, int $limit = 50): array;
 
     /**
+     * Gmail 式未读角标：收件箱未读封数（JMAP Mailbox.unreadEmails / fake ORM）。
+     */
+    public function countUnreadInbox(string $mailbox): int;
+
+    /**
      * @return list<array<string, mixed>>
      */
     public function searchMessages(string $mailbox, string $folder, string $query, int $limit = 50): array;

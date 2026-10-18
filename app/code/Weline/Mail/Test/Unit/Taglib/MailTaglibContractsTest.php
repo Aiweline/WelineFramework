@@ -78,12 +78,21 @@ private function assert_AccountSelect_testAccountSelectTaglibUsesLocalSearchable
     self::assertStringContainsString('filterOptions', $script);
     self::assertStringContainsString('dataset.hasValue', $script);
     self::assertStringContainsString("classList.toggle('has-value'", $script);
+    self::assertStringContainsString('appendUnreadBadge', $script);
+    self::assertStringContainsString('mail-account-select-unread', $script);
+    self::assertStringContainsString('mail-account-option-unread', $script);
     self::assertStringContainsString('data-has-value=', $renderer);
     self::assertStringContainsString("\$__mas_value !== '' ? ' has-value' : ''", $renderer);
     self::assertStringContainsString('<w:mail:account:select', $enterprise);
     self::assertStringContainsString('mail-enterprise-current-account', $enterprise);
     self::assertStringContainsString('auto-submit="true"', $enterprise);
+    self::assertStringContainsString("'unread' => \$__optUnread", $enterprise);
+    self::assertStringContainsString('mail-enterprise-folder-unread', $enterprise);
+    self::assertStringContainsString('mail-enterprise-reply-chip', $enterprise);
+    self::assertStringContainsString('mailbox_unread_by_account', $enterprise);
     self::assertStringNotContainsString('name="account" onchange="this.form.submit()"', $enterprise);
+    $css = (string) file_get_contents($cssPath);
+    self::assertStringContainsString('w-mail-account-select__unread', $css);
 }
 
 private function assert_MailComposerTaglib_testTaglibImplementsMailComposer(): void

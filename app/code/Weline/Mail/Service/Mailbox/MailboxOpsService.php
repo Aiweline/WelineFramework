@@ -52,6 +52,33 @@ final class MailboxOpsService
         return $ctx['client']->listMessages($ctx['mailbox'], $folder, $limit);
     }
 
+    public function countUnreadInbox(int $accountId): int
+    {
+        $ctx = $this->resolveAccount($accountId);
+        try {
+            return max(0, $ctx['client']->countUnreadInbox($ctx['mailbox']));
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /**
+     * @param list<int> $accountIds
+     * @return array<int, int> account_id => unread inbox count
+     */
+    public function mapInboxUnreadCounts(array $accountIds): array
+    {
+        $out = [];
+        foreach ($accountIds as $accountId) {
+            $accountId = (int)$accountId;
+            if ($accountId <= 0) {
+                continue;
+            }
+            $out[$accountId] = $this->countUnreadInbox($accountId);
+        }
+        return $out;
+    }
+
     /**
      * @return list<array<string, mixed>>
      */

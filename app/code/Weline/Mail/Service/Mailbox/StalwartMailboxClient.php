@@ -17,6 +17,22 @@ final class StalwartMailboxClient implements MailboxClientInterface
         return $this->queryMessages($mailbox, $folder, null, $limit);
     }
 
+    public function countUnreadInbox(string $mailbox): int
+    {
+        $context = $this->session->openMailboxSession($mailbox);
+        $mailboxId = $this->session->findMailboxIdByRole($context, 'inbox');
+        $result = $this->session->jmapCall($context, 'Mailbox/get', [
+            'accountId' => $context['account_id'],
+            'ids' => [$mailboxId],
+            'properties' => ['unreadEmails', 'totalEmails', 'role'],
+        ]);
+        $row = $result['list'][0] ?? null;
+        if (!is_array($row)) {
+            return 0;
+        }
+        return max(0, (int)($row['unreadEmails'] ?? 0));
+    }
+
     public function searchMessages(string $mailbox, string $folder, string $query, int $limit = 50): array
     {
         $query = trim($query);

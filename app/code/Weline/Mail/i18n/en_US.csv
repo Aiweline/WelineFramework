@@ -431,6 +431,7 @@ Smtp,Smtp
 供应商原文：%{1},供应商原文：%{1}
 "去 Cloudflare 勾选权限","去 Cloudflare 勾选权限"
 废纸篓,废纸篓
+"%1 封未读","%1 封未读"
 取消,Cancel
 测试邮箱仅写入本系统发件箱，不会投递到外网,"Test mailbox only writes to this system's Sent folder and does not deliver externally"
 使用当前邮箱发送邮件,"Send email using the current email address."

@@ -36,6 +36,22 @@ final class FakeMailboxClient implements MailboxClientInterface
         return $out;
     }
 
+    public function countUnreadInbox(string $mailbox): int
+    {
+        $account = $this->loadAccountByMailbox($mailbox);
+        /** @var MailMessage $model */
+        $model = ObjectManager::getInstance(MailMessage::class);
+        $items = $model->clear()
+            ->where(MailMessage::schema_fields_ACCOUNT_ID, (int)$account->getId())
+            ->where(MailMessage::schema_fields_FOLDER, MailboxFolder::INBOX)
+            ->where(MailMessage::schema_fields_IS_READ, 0)
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        return is_array($items) ? count($items) : 0;
+    }
+
     public function searchMessages(string $mailbox, string $folder, string $query, int $limit = 50): array
     {
         $query = trim($query);

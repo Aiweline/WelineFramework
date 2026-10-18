@@ -141,17 +141,26 @@ class Index extends BackendController
         $selectedMessage = null;
         $mailboxError = null;
         $messageId = trim((string)$this->request->getParam('message', ''));
+        /** @var array<int, int> $mailboxUnreadByAccount */
+        $mailboxUnreadByAccount = [];
 
-        if ($selectedAccount && $mailView === 'mailbox') {
-            try {
-                /** @var MailboxOpsService $ops */
-                $ops = ObjectManager::getInstance(MailboxOpsService::class);
-                $mailboxMessages = $ops->list($selectedAccountId, $folder, 50);
-                if ($messageId !== '') {
-                    $selectedMessage = $ops->get($selectedAccountId, $messageId);
+        if ($mailView === 'mailbox') {
+            /** @var MailboxOpsService $ops */
+            $ops = ObjectManager::getInstance(MailboxOpsService::class);
+            $accountIds = [];
+            foreach ($mailboxAccounts as $mailboxAccount) {
+                $accountIds[] = (int)$mailboxAccount->getId();
+            }
+            $mailboxUnreadByAccount = $ops->mapInboxUnreadCounts($accountIds);
+            if ($selectedAccount) {
+                try {
+                    $mailboxMessages = $ops->list($selectedAccountId, $folder, 50);
+                    if ($messageId !== '') {
+                        $selectedMessage = $ops->get($selectedAccountId, $messageId);
+                    }
+                } catch (\Throwable $throwable) {
+                    $mailboxError = $throwable->getMessage();
                 }
-            } catch (\Throwable $throwable) {
-                $mailboxError = $throwable->getMessage();
             }
         }
 
@@ -167,6 +176,7 @@ class Index extends BackendController
         $this->assign('account_list_total', $accountListTotal);
         $this->assign('account_list_has_more', $accountListHasMore);
         $this->assign('mailbox_accounts', $mailboxAccounts);
+        $this->assign('mailbox_unread_by_account', $mailboxUnreadByAccount);
         $this->assign('selected_account_id', $selectedAccountId);
         $this->assign('selected_mailbox', $selectedMailbox);
         $this->assign('selected_mailbox_is_fake', $selectedMailboxIsFake);

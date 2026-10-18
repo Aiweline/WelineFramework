@@ -18,13 +18,32 @@
         const email = String(row.email || row.label || '').trim().toLowerCase();
         const label = String(row.label || row.email || value).trim();
         const meta = String(row.meta || row.display_name || '').trim();
+        const unreadRaw = Number(row.unread != null ? row.unread : (row.unread_count != null ? row.unread_count : 0));
+        const unread = Number.isFinite(unreadRaw) && unreadRaw > 0 ? Math.floor(unreadRaw) : 0;
         return {
             value,
             label,
             meta: meta && meta.toLowerCase() !== email ? meta : '',
             email,
+            unread,
             search: String(row.search || `${label} ${meta} ${email} ${value}`).toLocaleLowerCase(),
         };
+    }
+
+    function formatUnread(count) {
+        if (!(count > 0)) return '';
+        return count > 99 ? '99+' : String(count);
+    }
+
+    function appendUnreadBadge(parent, count, testId) {
+        const text = formatUnread(count);
+        if (!text || !(parent instanceof HTMLElement)) return;
+        const badge = document.createElement('span');
+        badge.className = 'w-mail-account-select__unread';
+        badge.textContent = text;
+        badge.setAttribute('aria-label', `${text} unread`);
+        if (testId) badge.setAttribute('data-testid', testId);
+        parent.append(badge);
     }
 
     function register(UI) {
@@ -79,6 +98,11 @@
                 trigger.setAttribute('aria-invalid', String(missing));
             };
 
+            const selectedUnread = () => {
+                const record = allOptions.find((item) => item.value === selectedValue);
+                return record ? Number(record.unread || 0) : 0;
+            };
+
             const renderTags = () => {
                 const fragment = document.createDocumentFragment();
                 if (selectedValue === '') {
@@ -97,6 +121,7 @@
                     label.className = 'w-language-select__tag-label';
                     label.textContent = selectedLabel || selectedValue;
                     tag.append(label);
+                    appendUnreadBadge(tag, selectedUnread(), 'mail-account-select-unread');
                     fragment.append(tag);
                 }
                 tags.replaceChildren(fragment);
@@ -136,6 +161,7 @@
                 button.append(copy);
 
                 if (!clear && value) {
+                    appendUnreadBadge(button, Number(record.unread || 0), 'mail-account-option-unread');
                     const code = document.createElement('span');
                     code.className = 'w-mail-account-select__code';
                     code.textContent = `#${value}`;

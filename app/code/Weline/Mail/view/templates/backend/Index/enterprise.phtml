@@ -43,25 +43,40 @@ $mailComposeCustomerPlaceholder = (string)__('搜索客户姓名或邮箱');
 $mailComposeCustomerEmptyLabel = (string)__('选择客户');
 $mailAccountSelectPlaceholder = (string)__('搜索邮箱或显示名');
 $mailAccountSelectEmptyLabel = (string)__('请选择邮箱');
+$mailboxUnreadByAccount = is_array($mailbox_unread_by_account ?? null) ? $mailbox_unread_by_account : [];
 $mailboxAccountSelectOptions = [];
 $selectedMailboxDisplay = '';
+$selectedMailboxUnread = 0;
 foreach ($mailboxAccounts as $__mailAccountOpt) {
     $__optId = (int)$__mailAccountOpt->getId();
     $__optEmail = strtolower(trim((string)$__mailAccountOpt->getData(MailAccount::schema_fields_EMAIL)));
     $__optName = trim((string)$__mailAccountOpt->getData(MailAccount::schema_fields_DISPLAY_NAME));
     $__optLabel = $__optName !== '' ? $__optEmail . ' · ' . $__optName : $__optEmail;
+    $__optUnread = max(0, (int)($mailboxUnreadByAccount[$__optId] ?? 0));
     $mailboxAccountSelectOptions[] = [
         'value' => (string)$__optId,
         'label' => $__optLabel,
         'email' => $__optEmail,
         'meta' => $__optName,
         'display_name' => $__optName,
+        'unread' => $__optUnread,
         'search' => strtolower($__optEmail . ' ' . $__optName . ' ' . $__optId),
     ];
     if ($__optId === $selectedAccountId) {
         $selectedMailboxDisplay = $__optLabel;
+        $selectedMailboxUnread = $__optUnread;
     }
 }
+usort(
+    $mailboxAccountSelectOptions,
+    static function (array $left, array $right): int {
+        $unreadCmp = ((int)($right['unread'] ?? 0)) <=> ((int)($left['unread'] ?? 0));
+        if ($unreadCmp !== 0) {
+            return $unreadCmp;
+        }
+        return strcmp((string)($left['email'] ?? ''), (string)($right['email'] ?? ''));
+    }
+);
 $mailboxAccountSelectOptionsJson = json_encode(
     $mailboxAccountSelectOptions,
     JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
@@ -493,6 +508,7 @@ if ($oauthCfError === 'invalid_scope') {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: var(--weline-space-1);
     min-height: var(--weline-control-height-sm, 2rem);
     padding-inline: var(--weline-space-3);
     border-radius: var(--weline-radius-pill, 999px);
@@ -509,6 +525,31 @@ if ($oauthCfError === 'invalid_scope') {
     background: var(--weline-theme-surface);
     color: var(--weline-theme-primary);
     box-shadow: var(--weline-shadow-xs, 0 1px 2px color-mix(in srgb, var(--weline-theme-text) 8%, transparent));
+}
+.mail-enterprise__folder.has-unread {
+    font-weight: 750;
+    color: var(--weline-theme-text);
+}
+.mail-enterprise__folder-badge,
+.mail-enterprise__reply-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 1.25rem;
+    min-block-size: 1.25rem;
+    padding-inline: var(--weline-space-1);
+    border-radius: var(--weline-radius-pill, 999px);
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary, #fff);
+    font-size: 0.6875rem;
+    font-weight: 750;
+    line-height: 1;
+}
+.mail-enterprise__reply-chip {
+    background: color-mix(in srgb, var(--weline-theme-primary) 16%, var(--weline-theme-surface));
+    color: var(--weline-theme-primary);
+    border: 1px solid color-mix(in srgb, var(--weline-theme-primary) 28%, transparent);
+    margin-inline-end: var(--weline-space-1);
 }
 .mail-enterprise__panel-summary {
     display: flex;
@@ -677,9 +718,20 @@ if ($oauthCfError === 'invalid_scope') {
             <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
                 <nav class="mail-enterprise__folders" aria-label="<?= $escape(__('邮件夹')) ?>" data-testid="mail-enterprise-folder-nav">
                     <?php foreach ($mailboxFolders as $key => $label): ?>
-                        <a class="mail-enterprise__folder"
+                        <?php
+                        $__folderUnread = ($key === 'inbox') ? $selectedMailboxUnread : 0;
+                        ?>
+                        <a class="mail-enterprise__folder<?= $__folderUnread > 0 ? ' has-unread' : '' ?>"
                            href="@backend-url{$basePath|['view' => 'mailbox', 'account' => $selectedAccountId, 'folder' => $key]}"
-                           aria-current="<?= $folder === $key ? 'page' : 'false' ?>"><?= $label ?></a>
+                           aria-current="<?= $folder === $key ? 'page' : 'false' ?>"
+                           data-testid="mail-enterprise-folder-<?= $escape($key) ?>">
+                            <span><?= $label ?></span>
+                            <?php if ($__folderUnread > 0): ?>
+                                <span class="mail-enterprise__folder-badge"
+                                      data-testid="mail-enterprise-folder-unread"
+                                      aria-label="<?= $escape((string)__('%1 封未读', $__folderUnread)) ?>"><?= $__folderUnread > 99 ? '99+' : (string)$__folderUnread ?></span>
+                            <?php endif; ?>
+                        </a>
                     <?php endforeach; ?>
                 </nav>
                 <?php if ($composeOpen): ?>
@@ -1109,10 +1161,13 @@ if ($oauthCfError === 'invalid_scope') {
                         $msgId = (string)($message['id'] ?? '');
                         $unread = !empty($message['unread']);
                         $hasAtt = !empty($message['has_attachment']);
+                        $subjectText = trim((string)($message['subject'] ?? ''));
+                        $isReply = (bool)preg_match('/^\s*(re|回复|答覆|答复)\s*[:：]/ui', $subjectText);
                         ?>
                         <div class="mail-enterprise__row <?= $active ? 'is-active' : '' ?> <?= $unread ? 'is-unread' : '' ?>"
                              data-mail-row
-                             data-message-id="<?= $escape($msgId) ?>">
+                             data-message-id="<?= $escape($msgId) ?>"
+                             data-testid="<?= $unread ? 'mail-enterprise-row-unread' : 'mail-enterprise-row' ?>">
                             <input type="checkbox" data-mail-check value="<?= $escape($msgId) ?>" aria-label="<?= $escape(__('选择')) ?>">
                             <a class="mail-enterprise__row-main"
                                href="@backend-url{$basePath|$mailMsgParams}"
@@ -1125,8 +1180,11 @@ if ($oauthCfError === 'invalid_scope') {
                                     <time><?= $escape($message['received_at'] ?? '') ?></time>
                                 </div>
                                 <div class="mail-enterprise__subject">
+                                    <?php if ($isReply): ?>
+                                        <span class="mail-enterprise__reply-chip" data-testid="mail-enterprise-reply-chip"><?= __('回复') ?></span>
+                                    <?php endif; ?>
                                     <?php if ($hasAtt): ?><span class="w-text" data-tone="muted" data-size="sm" title="<?= $escape(__('含附件')) ?>">📎</span> <?php endif; ?>
-                                    <?= $escape($message['subject'] ?? __('（无主题）')) ?>
+                                    <?= $escape($subjectText !== '' ? $subjectText : (string)__('（无主题）')) ?>
                                 </div>
                                 <p class="mail-enterprise__preview"><?= $escape($message['preview'] ?? '') ?></p>
                             </a>

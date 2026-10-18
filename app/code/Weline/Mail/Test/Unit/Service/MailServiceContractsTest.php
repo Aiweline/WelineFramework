@@ -123,8 +123,16 @@ private function assert_MailboxClient_testInterfaceAndOpsFacadeExist(): void
     self::assertStringContainsString('function restoreToInbox', $iface);
     self::assertStringContainsString('function destroy', $iface);
     self::assertStringContainsString('function uploadBlob', $iface);
+    self::assertStringContainsString('function countUnreadInbox', $iface);
     $ops = (string) file_get_contents(BP . 'app/code/Weline/Mail/Service/Mailbox/MailboxOpsService.php');
     self::assertStringContainsString('function buildComposePrefill', $ops);
+    self::assertStringContainsString('function mapInboxUnreadCounts', $ops);
+    self::assertStringContainsString('function countUnreadInbox', $ops);
+    $liveClient = (string) file_get_contents(BP . 'app/code/Weline/Mail/Service/Mailbox/StalwartMailboxClient.php');
+    self::assertStringContainsString('function countUnreadInbox', $liveClient);
+    self::assertStringContainsString('unreadEmails', $liveClient);
+    $fakeClient = (string) file_get_contents(BP . 'app/code/Weline/Mail/Service/Mailbox/FakeMailboxClient.php');
+    self::assertStringContainsString('function countUnreadInbox', $fakeClient);
     $smtp = (string) file_get_contents(BP . 'app/code/Weline/Mail/Service/MailSmtpAccountService.php');
     self::assertStringContainsString('MailboxOpsService', $smtp);
     self::assertStringNotContainsString('->sendMessage(', $smtp);
