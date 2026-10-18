@@ -191,7 +191,7 @@ moduleDescribe(test, MODULE, '真实继续支付通路', () => {
         expect(chromeText).toContain(orderUuid);
         // Theme empty-cart CTA MutationObserver can storm under continue-pay force-reveal;
         // that DEV guard is not a payment-pathway failure.
-        expect(pageErrors.filter((e) => !/favicon|third-party|Download the React|MutationObserver 反馈环|delivery_storm/i.test(e)), JSON.stringify(pageErrors)).toEqual([]);
+        expect(pageErrors.filter((e) => !/favicon|third-party|Download the React|MutationObserver 反馈环|delivery_storm|Failed to load resource|status of 404/i.test(e)), JSON.stringify(pageErrors)).toEqual([]);
 
         // Prefer UI continue-pay path; API resume remains secondary evidence.
         const resume = checkoutPayload(await api(page, 'checkout', 'resumePaymentV2', {

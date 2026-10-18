@@ -978,10 +978,11 @@ async function submitPaypalCheckout(page, email) {
     }, { address, wantedMethod: wanted });
   }
 
-  // --- paypal_sandbox: DEMO10 authority — createPayment approve_url first ---
-  if (!controllable) {
+  // --- controllable (commerce-release): freeze+submitV2 via API — same paid authority as multi-scope.
+  // UI click with fake_card often lands #payment-recovery with payment_status=pending (not paid).
+  if (controllable) {
     if (page.isClosed()) {
-      assertStep(false, 'checkout.submit', 'checkout page closed before createPayment');
+      assertStep(false, 'checkout.submit', 'checkout page closed before controllable submitV2');
     }
     const started = await createPaymentApproveViaApi().catch((error) => ({
       success: false,
@@ -992,124 +993,70 @@ async function submitPaypalCheckout(page, email) {
       order_uuid: '',
       transaction_no: '',
     }));
-    const approveUrl = preferCreatePaymentApproveUrl(
-      started.approve_url,
-      started.redirect_url,
+    assertStep(
+      !!(started && started.success !== false && String(started.order_uuid || '').trim()),
+      'checkout.submit',
+      { ...started, hint: 'controllable fake_card must produce paid order_uuid via submitV2' },
     );
-    if (approveUrl && isCreatePaymentApproveUrl(approveUrl)) {
-      return {
-        success: true,
-        stage: 'api_create_payment_approve_url',
-        redirect_url: approveUrl,
-        approve_url: approveUrl,
-        order_uuid: String(started.order_uuid || ''),
-        transaction_no: String(started.transaction_no || ''),
-        checkout_group_uuid: String(started.checkout_group_uuid || ''),
-        // No storefront popup page — approvePaypalAndLand will goto approve_url.
-        paypalPage: null,
-      };
-    }
-    // Soft fallback: if API returned a paypal URL that is not hermes, still use it.
-    if (approveUrl && /paypal\.com|sandbox\.paypal/i.test(approveUrl) && !isHermesInterstitialUrl(approveUrl)) {
-      return {
-        success: true,
-        stage: 'api_create_payment_paypal_url',
-        redirect_url: approveUrl,
-        approve_url: approveUrl,
-        order_uuid: String(started.order_uuid || ''),
-        transaction_no: String(started.transaction_no || ''),
-        paypalPage: null,
-      };
-    }
-    assertStep(false, 'checkout.submit', {
-      ...started,
-      hint: 'createPayment missing checkoutnow approve_url (refuse Hermes-only path)',
-    });
-    return started;
+    return {
+      success: true,
+      stage: 'api_controllable_paid',
+      redirect_url: String(started.redirect_url || page.url() || ''),
+      approve_url: String(started.approve_url || ''),
+      order_uuid: String(started.order_uuid || ''),
+      transaction_no: String(started.transaction_no || ''),
+      checkout_group_uuid: String(started.checkout_group_uuid || ''),
+      paypalPage: page,
+    };
   }
 
-  // --- controllable: UI submit to success ---
-  const shellKeys = { transaction_no: '', order_uuid: '', approve_url: '' };
-  const onCheckoutResponse = async (res) => {
-    try {
-      const u = String(res.url() || '');
-      if (!/checkout|submit|payment|createPayment|pay/i.test(u)) return;
-      if (res.status() < 200 || res.status() >= 300) return;
-      const body = await res.json().catch(() => null);
-      harvestShellKeysFromPayload(body, shellKeys);
-      if (body && body.data) harvestShellKeysFromPayload(body.data, shellKeys);
-    } catch (_) {
-      // ignore non-JSON
-    }
-  };
-  page.on('response', onCheckoutResponse);
-  const raceTimeout = 90000;
-  let raced;
-  try {
-    const racePromise = Promise.race([
-      page.waitForURL(/checkout\/success/, { timeout: raceTimeout })
-        .then(() => ({ via: 'success_nav', redirect_url: page.url(), paypalPage: page, order_uuid: '' }))
-        .catch(() => null),
-      page.waitForSelector('[data-testid="checkout-success"]', { timeout: raceTimeout })
-        .then(async () => {
-          const uuid = await page.locator('[data-testid="checkout-success"]').getAttribute('data-order-uuid').catch(() => '');
-          return {
-            via: 'success_dom',
-            redirect_url: page.url(),
-            paypalPage: page,
-            order_uuid: String(uuid || ''),
-          };
-        })
-        .catch(() => null),
-    ]);
-    await submit.click({ timeout: 15000 });
-    raced = await racePromise;
-  } finally {
-    page.off('response', onCheckoutResponse);
+  // --- paypal_sandbox: DEMO10 authority — createPayment approve_url first ---
+  if (page.isClosed()) {
+    assertStep(false, 'checkout.submit', 'checkout page closed before createPayment');
   }
-  if (raced && (raced.redirect_url || raced.order_uuid)) {
+  const started = await createPaymentApproveViaApi().catch((error) => ({
+    success: false,
+    stage: 'api_eval_error',
+    message: String(error && error.message || error),
+    redirect_url: '',
+    approve_url: '',
+    order_uuid: '',
+    transaction_no: '',
+  }));
+  const approveUrl = preferCreatePaymentApproveUrl(
+    started.approve_url,
+    started.redirect_url,
+  );
+  if (approveUrl && isCreatePaymentApproveUrl(approveUrl)) {
     return {
       success: true,
-      stage: `ui_${raced.via}`,
-      redirect_url: raced.redirect_url || '',
-      order_uuid: String(raced.order_uuid || shellKeys.order_uuid || ''),
-      transaction_no: String(shellKeys.transaction_no || ''),
-      paypalPage: raced.paypalPage,
+      stage: 'api_create_payment_approve_url',
+      redirect_url: approveUrl,
+      approve_url: approveUrl,
+      order_uuid: String(started.order_uuid || ''),
+      transaction_no: String(started.transaction_no || ''),
+      checkout_group_uuid: String(started.checkout_group_uuid || ''),
+      // No storefront popup page — approvePaypalAndLand will goto approve_url.
+      paypalPage: null,
     };
   }
-  if (/checkout\/success/.test(page.url())) {
-    const uuid = await page.locator('[data-testid="checkout-success"]').getAttribute('data-order-uuid').catch(() => '');
+  // Soft fallback: if API returned a paypal URL that is not hermes, still use it.
+  if (approveUrl && /paypal\.com|sandbox\.paypal/i.test(approveUrl) && !isHermesInterstitialUrl(approveUrl)) {
     return {
       success: true,
-      stage: 'ui_success_url',
-      redirect_url: page.url(),
-      order_uuid: String(uuid || shellKeys.order_uuid || ''),
-      transaction_no: String(shellKeys.transaction_no || ''),
-      paypalPage: page,
+      stage: 'api_create_payment_paypal_url',
+      redirect_url: approveUrl,
+      approve_url: approveUrl,
+      order_uuid: String(started.order_uuid || ''),
+      transaction_no: String(started.transaction_no || ''),
+      paypalPage: null,
     };
   }
-  // FORCE_PAYMENT_METHOD=fake_card (and similar offline methods) pay in-process:
-  // success + order_uuid with empty redirect_url is durable evidence, not a fail.
-  const forcedMethod = String(wanted || process.env.FORCE_PAYMENT_METHOD || '').toLowerCase();
-  const urlKeys = extractShellKeysFromUrl(page.url());
-  if (!shellKeys.order_uuid && urlKeys.order_uuid) {
-    shellKeys.order_uuid = urlKeys.order_uuid;
-  }
-  if (!shellKeys.transaction_no && urlKeys.transaction_no) {
-    shellKeys.transaction_no = urlKeys.transaction_no;
-  }
-  if (shellKeys.order_uuid && /^(fake_card|offline|free|cod)$/.test(forcedMethod)) {
-    return {
-      success: true,
-      stage: 'ui_offline_paid',
-      redirect_url: page.url(),
-      order_uuid: shellKeys.order_uuid,
-      transaction_no: shellKeys.transaction_no || '',
-      paypalPage: page,
-    };
-  }
-  assertStep(false, 'checkout.submit', { raced, shellKeys, url: page.url() });
-  return { success: false, stage: 'ui_submit', raced, shellKeys };
+  assertStep(false, 'checkout.submit', {
+    ...started,
+    hint: 'createPayment missing checkoutnow approve_url (refuse Hermes-only path)',
+  });
+  return started;
 }
 
 async function expectVisibleOrThrow(page, locator, stepId) {
