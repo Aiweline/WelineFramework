@@ -55,6 +55,8 @@ HMAC 签名 token（`PaymentBrowserCallbackTokenService`），解码得 `method_
 
 浏览器 return：`shell_token` 或显式支付码 → `PaymentBrowserReturnContextResolver` → 按 `method_code` 实例化 Provider → `resumePayment`（网关 reference 单独传入）。OAuth 仍走 `code+state`。
 
+**验收权威（硬）**：店面 e2e / 沙盒验收以 Payment `Transaction.isSuccess` 与 `browser_landing` / Orchestrator 为权威；PayPal DOM 文案（如 Getting your wallet）仅为辅助，不得单独判定支付成败。
+
 ## 3. 第三方最小交付
 
 1. `extends/module/Weline_Payment/PaymentProvider/{X}Provider.php`

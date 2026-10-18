@@ -114,8 +114,9 @@ function makeShellPaidProbe(keys = {}) {
 }
 
 /**
- * Harvest transaction_no / order_uuid from checkout API JSON shapes.
+ * Harvest transaction_no / order_uuid / approve_url from checkout API JSON shapes.
  * @param {any} body
+ * @param {{transaction_no?:string, order_uuid?:string, approve_url?:string}} into
  */
 function harvestShellKeysFromPayload(body, into) {
   if (!body || typeof body !== 'object' || !into) return into;
@@ -138,9 +139,48 @@ function harvestShellKeysFromPayload(body, into) {
     || uuids[0]
     || ''
   ).trim();
+  const approveUrl = String(
+    payment.redirect_url
+    || payment.approve_url
+    || body.redirect_url
+    || body.approve_url
+    || data.redirect_url
+    || data.approve_url
+    || (tx0 && (tx0.redirect_url || tx0.approve_url))
+    || ''
+  ).trim();
   if (txn && !into.transaction_no) into.transaction_no = txn;
   if (orderUuid && !into.order_uuid) into.order_uuid = orderUuid;
+  if (approveUrl && /paypal\.com|sandbox\.paypal/i.test(approveUrl) && !into.approve_url) {
+    into.approve_url = approveUrl;
+  }
   return into;
+}
+
+/** Hermes one-page / smart-button interstitial — not the createPayment approve_url surface. */
+function isHermesInterstitialUrl(url) {
+  return /sandbox\.paypal\.com\/webapps\/hermes|paypal\.com\/webapps\/hermes/i.test(String(url || ''));
+}
+
+/** createPayment / checkoutnow (DEMO10) approve surface — preferred over Hermes. */
+function isCreatePaymentApproveUrl(url) {
+  const u = String(url || '');
+  if (!/paypal\.com|sandbox\.paypal/i.test(u)) return false;
+  if (isHermesInterstitialUrl(u)) return false;
+  return /checkoutnow|cgi-bin\/webscr|token=/i.test(u);
+}
+
+/**
+ * Prefer createPayment approve_url (checkoutnow) over Hermes popup/nav URL.
+ * @param {...string} candidates
+ */
+function preferCreatePaymentApproveUrl(...candidates) {
+  const list = candidates.map((c) => String(c || '').trim()).filter(Boolean);
+  const preferred = list.find((u) => isCreatePaymentApproveUrl(u));
+  if (preferred) return preferred;
+  const anyPaypal = list.find((u) => /paypal\.com|sandbox\.paypal/i.test(u) && !isHermesInterstitialUrl(u));
+  if (anyPaypal) return anyPaypal;
+  return list[0] || '';
 }
 
 /**
@@ -842,7 +882,147 @@ async function submitPaypalCheckout(page, email) {
   const submit = page.locator('[data-submit], button[type="submit"]:has-text("提交"), button:has-text("下单")').first();
   await expectVisibleOrThrow(page, submit, 'checkout.submit_btn');
 
-  const shellKeys = { transaction_no: '', order_uuid: '' };
+  const controllable = isControllable() || /^(fake_card|offline|free|cod)$/.test(wanted);
+
+  /**
+   * DEMO10-aligned createPayment path: freeze + submitV2 → approve_url (checkoutnow).
+   * Avoids storefront PayPal JS / smart-button landing on Hermes interstitial without controls.
+   */
+  async function createPaymentApproveViaApi() {
+    return page.evaluate(async ({ address: addr, wantedMethod }) => {
+      let guestToken = '';
+      try { guestToken = String(sessionStorage.getItem('weline.cart.guest_token') || '').trim(); } catch (e) {}
+      let apiClient = window.Weline.Api;
+      if (!apiClient || typeof apiClient.resource !== 'function') {
+        apiClient = await window.Weline.load('api');
+      }
+      const api = await apiClient.resource('checkout');
+      const data = await api.getData({
+        guest_token: guestToken,
+        shipping_address: addr,
+        cart_type: 'toc',
+        selling_mode: 'toc',
+      }, { silent: true, requestTimeoutMs: 120000 });
+      const root = (data && data.data && typeof data.data === 'object') ? data.data : data;
+      const methods = (root && root.shipping_methods) || [];
+      const codes = Array.isArray(methods)
+        ? methods.map((m) => String((m && (m.code || m.service_code)) || '')).filter(Boolean)
+        : [];
+      const shippingMethod = codes.find((c) => /AMERICAS|INTL/i.test(c))
+        || codes.find((c) => c && !/DOMESTIC/i.test(c))
+        || codes[0]
+        || '';
+      if (!shippingMethod) {
+        return { success: false, stage: 'shipping', codes, message: root && root.message };
+      }
+      const frozen = await api.freezeQuote({
+        address: addr,
+        billing_address: addr,
+        billing_same_as_shipping: true,
+        service_code: shippingMethod,
+        payment_method: wantedMethod,
+        guest_token: guestToken,
+        cart_type: 'toc',
+        selling_mode: 'toc',
+      }, { silent: true, requestTimeoutMs: 120000 });
+      if (!frozen || frozen.success === false) {
+        return { success: false, stage: 'freeze', frozen, codes };
+      }
+      const quoteToken = String((frozen.quote_token || (frozen.data && frozen.data.quote_token) || '')).trim();
+      const result = await api.submitV2({
+        quote_token: quoteToken,
+        payment_method: wantedMethod,
+        idempotency_key: `rel_paypal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        country_code: addr.country_code,
+        guest_token: guestToken,
+      }, { silent: true, requestTimeoutMs: 120000 });
+      const payload = (result && result.data && typeof result.data === 'object') ? result.data : result;
+      const payment = (result && result.payment) || (payload && payload.payment) || {};
+      const orderUuids = Array.isArray(payload && payload.order_uuids) ? payload.order_uuids : [];
+      const tx0 = Array.isArray(payment.transactions) ? payment.transactions[0] : null;
+      const approveUrl = String(
+        payment.redirect_url
+        || payment.approve_url
+        || (result && result.redirect_url)
+        || (result && result.approve_url)
+        || (payload && payload.redirect_url)
+        || (payload && payload.approve_url)
+        || (tx0 && (tx0.redirect_url || tx0.approve_url))
+        || ''
+      ).trim();
+      return {
+        success: !(result && result.success === false),
+        stage: 'api_create_payment',
+        order_uuid: String(orderUuids[0] || '').trim(),
+        transaction_no: String(
+          payment.transaction_no
+          || (result && result.transaction_no)
+          || (payload && payload.transaction_no)
+          || (tx0 && tx0.transaction_no)
+          || ''
+        ).trim(),
+        checkout_group_uuid: String((payload && payload.checkout_group_uuid) || '').trim(),
+        redirect_url: approveUrl,
+        approve_url: approveUrl,
+        error_code: String(payment.error_code || ''),
+        message: String(payment.message || ''),
+        shipping_method: shippingMethod,
+      };
+    }, { address, wantedMethod: wanted });
+  }
+
+  // --- paypal_sandbox: DEMO10 authority — createPayment approve_url first ---
+  if (!controllable) {
+    if (page.isClosed()) {
+      assertStep(false, 'checkout.submit', 'checkout page closed before createPayment');
+    }
+    const started = await createPaymentApproveViaApi().catch((error) => ({
+      success: false,
+      stage: 'api_eval_error',
+      message: String(error && error.message || error),
+      redirect_url: '',
+      approve_url: '',
+      order_uuid: '',
+      transaction_no: '',
+    }));
+    const approveUrl = preferCreatePaymentApproveUrl(
+      started.approve_url,
+      started.redirect_url,
+    );
+    if (approveUrl && isCreatePaymentApproveUrl(approveUrl)) {
+      return {
+        success: true,
+        stage: 'api_create_payment_approve_url',
+        redirect_url: approveUrl,
+        approve_url: approveUrl,
+        order_uuid: String(started.order_uuid || ''),
+        transaction_no: String(started.transaction_no || ''),
+        checkout_group_uuid: String(started.checkout_group_uuid || ''),
+        // No storefront popup page — approvePaypalAndLand will goto approve_url.
+        paypalPage: null,
+      };
+    }
+    // Soft fallback: if API returned a paypal URL that is not hermes, still use it.
+    if (approveUrl && /paypal\.com|sandbox\.paypal/i.test(approveUrl) && !isHermesInterstitialUrl(approveUrl)) {
+      return {
+        success: true,
+        stage: 'api_create_payment_paypal_url',
+        redirect_url: approveUrl,
+        approve_url: approveUrl,
+        order_uuid: String(started.order_uuid || ''),
+        transaction_no: String(started.transaction_no || ''),
+        paypalPage: null,
+      };
+    }
+    assertStep(false, 'checkout.submit', {
+      ...started,
+      hint: 'createPayment missing checkoutnow approve_url (refuse Hermes-only path)',
+    });
+    return started;
+  }
+
+  // --- controllable: UI submit to success ---
+  const shellKeys = { transaction_no: '', order_uuid: '', approve_url: '' };
   const onCheckoutResponse = async (res) => {
     try {
       const u = String(res.url() || '');
@@ -856,43 +1036,25 @@ async function submitPaypalCheckout(page, email) {
     }
   };
   page.on('response', onCheckoutResponse);
-
-  const controllable = isControllable() || /^(fake_card|offline|free|cod)$/.test(wanted);
-  const raceTimeout = controllable ? 90000 : 180000;
+  const raceTimeout = 90000;
   let raced;
   try {
-    const racePromise = controllable
-      ? Promise.race([
-        page.waitForURL(/checkout\/success/, { timeout: raceTimeout })
-          .then(() => ({ via: 'success_nav', redirect_url: page.url(), paypalPage: page, order_uuid: '' }))
-          .catch(() => null),
-        page.waitForSelector('[data-testid="checkout-success"]', { timeout: raceTimeout })
-          .then(async () => {
-            const uuid = await page.locator('[data-testid="checkout-success"]').getAttribute('data-order-uuid').catch(() => '');
-            return {
-              via: 'success_dom',
-              redirect_url: page.url(),
-              paypalPage: page,
-              order_uuid: String(uuid || ''),
-            };
-          })
-          .catch(() => null),
-      ])
-      : Promise.race([
-        page.waitForURL(/paypal\.com|sandbox\.paypal/, { timeout: raceTimeout })
-          .then(() => ({ via: 'nav', redirect_url: page.url(), paypalPage: page }))
-          .catch(() => null),
-        page.context().waitForEvent('page', { timeout: raceTimeout })
-          .then(async (popup) => {
-            await popup.waitForLoadState('domcontentloaded').catch(() => {});
-            if (/paypal\.com|sandbox\.paypal/i.test(popup.url())) {
-              return { via: 'popup', redirect_url: popup.url(), paypalPage: popup };
-            }
-            return null;
-          })
-          .catch(() => null),
-      ]);
-
+    const racePromise = Promise.race([
+      page.waitForURL(/checkout\/success/, { timeout: raceTimeout })
+        .then(() => ({ via: 'success_nav', redirect_url: page.url(), paypalPage: page, order_uuid: '' }))
+        .catch(() => null),
+      page.waitForSelector('[data-testid="checkout-success"]', { timeout: raceTimeout })
+        .then(async () => {
+          const uuid = await page.locator('[data-testid="checkout-success"]').getAttribute('data-order-uuid').catch(() => '');
+          return {
+            via: 'success_dom',
+            redirect_url: page.url(),
+            paypalPage: page,
+            order_uuid: String(uuid || ''),
+          };
+        })
+        .catch(() => null),
+    ]);
     await submit.click({ timeout: 15000 });
     raced = await racePromise;
   } finally {
@@ -908,7 +1070,7 @@ async function submitPaypalCheckout(page, email) {
       paypalPage: raced.paypalPage,
     };
   }
-  if (controllable && /checkout\/success/.test(page.url())) {
+  if (/checkout\/success/.test(page.url())) {
     const uuid = await page.locator('[data-testid="checkout-success"]').getAttribute('data-order-uuid').catch(() => '');
     return {
       success: true,
@@ -919,131 +1081,21 @@ async function submitPaypalCheckout(page, email) {
       paypalPage: page,
     };
   }
-
-  // Same-context redirect may close the checkout page; scan open tabs.
-  for (const open of page.context().pages()) {
-    try {
-      if (/paypal\.com|sandbox\.paypal/i.test(open.url())) {
-        return {
-          success: true,
-          stage: 'ui_context_scan',
-          redirect_url: open.url(),
-          order_uuid: String(shellKeys.order_uuid || ''),
-          transaction_no: String(shellKeys.transaction_no || ''),
-          paypalPage: open,
-        };
-      }
-    } catch (_) {
-      // page may already be closed
-    }
-  }
-
-  // Fallback: API path used by continue-pay runner (same silent submitV2).
-  // Skip if checkout page was destroyed by gateway redirect.
-  if (page.isClosed()) {
-    assertStep(false, 'checkout.submit', 'checkout page closed without PayPal URL');
-  }
-  const started = await page.evaluate(async ({ address: addr, wantedMethod }) => {
-    let guestToken = '';
-    try { guestToken = String(sessionStorage.getItem('weline.cart.guest_token') || '').trim(); } catch (e) {}
-    let apiClient = window.Weline.Api;
-    if (!apiClient || typeof apiClient.resource !== 'function') {
-      apiClient = await window.Weline.load('api');
-    }
-    const api = await apiClient.resource('checkout');
-    const data = await api.getData({
-      guest_token: guestToken,
-      shipping_address: addr,
-      cart_type: 'toc',
-      selling_mode: 'toc',
-    }, { silent: true, requestTimeoutMs: 120000 });
-    const root = (data && data.data && typeof data.data === 'object') ? data.data : data;
-    const methods = (root && root.shipping_methods) || [];
-    const codes = Array.isArray(methods)
-      ? methods.map((m) => String((m && (m.code || m.service_code)) || '')).filter(Boolean)
-      : [];
-    const shippingMethod = codes.find((c) => /AMERICAS|INTL/i.test(c))
-      || codes.find((c) => c && !/DOMESTIC/i.test(c))
-      || codes[0]
-      || '';
-    if (!shippingMethod) {
-      return { success: false, stage: 'shipping', codes, message: root && root.message };
-    }
-    const frozen = await api.freezeQuote({
-      address: addr,
-      billing_address: addr,
-      billing_same_as_shipping: true,
-      service_code: shippingMethod,
-      payment_method: wantedMethod,
-      guest_token: guestToken,
-      cart_type: 'toc',
-      selling_mode: 'toc',
-    }, { silent: true, requestTimeoutMs: 120000 });
-    if (!frozen || frozen.success === false) {
-      return { success: false, stage: 'freeze', frozen, codes };
-    }
-    const quoteToken = String((frozen.quote_token || (frozen.data && frozen.data.quote_token) || '')).trim();
-    const result = await api.submitV2({
-      quote_token: quoteToken,
-      payment_method: wantedMethod,
-      idempotency_key: `rel_paypal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      country_code: addr.country_code,
-      guest_token: guestToken,
-    }, { silent: true, requestTimeoutMs: 120000 });
-    const payload = (result && result.data && typeof result.data === 'object') ? result.data : result;
-    const payment = (result && result.payment) || (payload && payload.payment) || {};
-    const orderUuids = Array.isArray(payload && payload.order_uuids) ? payload.order_uuids : [];
-    const tx0 = Array.isArray(payment.transactions) ? payment.transactions[0] : null;
-    return {
-      success: !(result && result.success === false),
-      stage: 'api_submit',
-      order_uuid: String(orderUuids[0] || '').trim(),
-      transaction_no: String(
-        payment.transaction_no
-        || (result && result.transaction_no)
-        || (payload && payload.transaction_no)
-        || (tx0 && tx0.transaction_no)
-        || ''
-      ).trim(),
-      checkout_group_uuid: String((payload && payload.checkout_group_uuid) || '').trim(),
-      redirect_url: String(payment.redirect_url || '').trim(),
-      error_code: String(payment.error_code || ''),
-      message: String(payment.message || ''),
-      shipping_method: shippingMethod,
-    };
-  }, { address, wantedMethod: wanted }).catch((error) => ({
-    success: false,
-    stage: 'api_eval_error',
-    message: String(error && error.message || error),
-    redirect_url: /paypal\.com/i.test(page.url()) ? page.url() : '',
-    order_uuid: String(shellKeys.order_uuid || ''),
-    transaction_no: String(shellKeys.transaction_no || ''),
-  }));
-
-  if (started.redirect_url) {
-    return {
-      ...started,
-      order_uuid: String(started.order_uuid || shellKeys.order_uuid || ''),
-      transaction_no: String(started.transaction_no || shellKeys.transaction_no || ''),
-    };
-  }
-  if (/paypal\.com|sandbox\.paypal/i.test(page.url())) {
-    return {
-      success: true,
-      stage: 'page_url',
-      redirect_url: page.url(),
-      order_uuid: String(started.order_uuid || shellKeys.order_uuid || ''),
-      transaction_no: String(started.transaction_no || shellKeys.transaction_no || ''),
-    };
-  }
   // FORCE_PAYMENT_METHOD=fake_card (and similar offline methods) pay in-process:
   // success + order_uuid with empty redirect_url is durable evidence, not a fail.
   const forcedMethod = String(wanted || process.env.FORCE_PAYMENT_METHOD || '').toLowerCase();
-  if (started.success && started.order_uuid && /^(fake_card|offline|free|cod)$/.test(forcedMethod)) {
-    return started;
+  if (shellKeys.order_uuid && /^(fake_card|offline|free|cod)$/.test(forcedMethod)) {
+    return {
+      success: true,
+      stage: 'ui_offline_paid',
+      redirect_url: page.url(),
+      order_uuid: shellKeys.order_uuid,
+      transaction_no: shellKeys.transaction_no || '',
+      paypalPage: page,
+    };
   }
-  assertStep(false, 'checkout.submit', started);
-  return started;
+  assertStep(false, 'checkout.submit', { raced, shellKeys, url: page.url() });
+  return { success: false, stage: 'ui_submit', raced, shellKeys };
 }
 
 async function expectVisibleOrThrow(page, locator, stepId) {
@@ -1062,7 +1114,7 @@ async function expectVisibleOrThrow(page, locator, stepId) {
  * @param {import('@playwright/test').BrowserContext} context
  * @param {string} redirectUrl
  * @param {import('@playwright/test').Page|null} [existingPage]
- * @param {{transaction_no?:string, order_uuid?:string, wallet_budget_ms?:number, land_budget_ms?:number}} [shell]
+ * @param {{transaction_no?:string, order_uuid?:string, approve_url?:string, wallet_budget_ms?:number, land_budget_ms?:number}} [shell]
  */
 async function approvePaypalAndLand(context, redirectUrl, existingPage = null, shell = {}) {
   // Controllable driver: offline methods land on success without PayPal DOM.
@@ -1079,12 +1131,50 @@ async function approvePaypalAndLand(context, redirectUrl, existingPage = null, s
     }
   }
 
-  let paypal = existingPage;
-  if (paypal && /paypal\.com|sandbox\.paypal/i.test(paypal.url())) {
-    // already navigated in-place
-  } else {
-    paypal = await context.newPage();
-    await paypal.goto(redirectUrl, { waitUntil: 'domcontentloaded', timeout: 120000 });
+  // Architect §5: same authority as DEMO10 — open createPayment approve_url (checkoutnow),
+  // never reuse Hermes smart-button interstitial as the approve surface.
+  const approveUrl = preferCreatePaymentApproveUrl(
+    shell.approve_url,
+    redirectUrl,
+    existingPage && !existingPage.isClosed() ? existingPage.url() : '',
+  );
+  assertStep(
+    approveUrl && /paypal\.com|sandbox\.paypal/i.test(approveUrl) && !isHermesInterstitialUrl(approveUrl),
+    'paypal.approve_url',
+    {
+      approve_url: shell.approve_url || '',
+      redirect_url: redirectUrl || '',
+      existing: existingPage && !existingPage.isClosed() ? existingPage.url() : '',
+      chosen: approveUrl,
+      hint: 'refuse Hermes interstitial; need createPayment checkoutnow URL',
+    },
+  );
+
+  let paypal = existingPage && !existingPage.isClosed() ? existingPage : null;
+  const alreadyOnApprove = paypal
+    && isCreatePaymentApproveUrl(paypal.url())
+    && preferCreatePaymentApproveUrl(paypal.url()) === preferCreatePaymentApproveUrl(approveUrl);
+  if (!alreadyOnApprove) {
+    // Prefer a clean tab goto(approve_url) like DEMO10; close stray Hermes popups.
+    if (paypal && isHermesInterstitialUrl(paypal.url())) {
+      await paypal.close().catch(() => {});
+      paypal = null;
+    }
+    if (!paypal) {
+      paypal = await context.newPage();
+    }
+    await paypal.goto(approveUrl, { waitUntil: 'domcontentloaded', timeout: 120000 });
+  }
+
+  // Close other Hermes tabs so they do not steal focus / confuse land waits.
+  for (const open of context.pages()) {
+    try {
+      if (open !== paypal && isHermesInterstitialUrl(open.url())) {
+        await open.close().catch(() => {});
+      }
+    } catch (_) {
+      // ignore
+    }
   }
 
   const urlKeys = extractShellKeysFromUrl(paypal.url());
@@ -1092,7 +1182,7 @@ async function approvePaypalAndLand(context, redirectUrl, existingPage = null, s
   const orderUuid = String(shell.order_uuid || urlKeys.order_uuid || '').trim();
   const landBudgetMs = shell.land_budget_ms || DEFAULT_LAND_BUDGET_MS;
 
-  // Login + shared shell-authority waiter (approve + land). No assertWalletNotHung text gate.
+  // Shared shell-authority waiter (approve + land). No wallet-copy fail gate / Continue patches.
   await paypalLoginAndApprove(paypal, {
     transaction_no: transactionNo,
     order_uuid: orderUuid,
@@ -1315,6 +1405,9 @@ module.exports = {
   paypalLoginAndApprove,
   makeShellPaidProbe,
   harvestShellKeysFromPayload,
+  isHermesInterstitialUrl,
+  isCreatePaymentApproveUrl,
+  preferCreatePaymentApproveUrl,
   installEventProbe,
   attachEventProbeLive,
   collectEvents,
