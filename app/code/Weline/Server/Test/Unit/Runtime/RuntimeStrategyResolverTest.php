@@ -44,7 +44,7 @@ final class RuntimeStrategyResolverTest extends TestCase
                 'supports_reuse_port' => true,
                 'reuse_port_probe' => ['supported' => true],
                 'event_classes_available' => true,
-                'extensions' => ['event' => true],
+                'extensions' => ['event' => true, 'ffi' => true],
                 'functions' => ['proc_open' => true],
             ]),
         );
@@ -217,7 +217,7 @@ final class RuntimeStrategyResolverTest extends TestCase
                 'direct_listener_mode' => 'shared_fd',
                 'direct_listener_probe' => ['supported' => true],
                 'event_classes_available' => false,
-                'extensions' => [],
+                'extensions' => ['ffi' => true],
                 'functions' => ['proc_open' => true],
             ]),
         );
@@ -231,6 +231,53 @@ final class RuntimeStrategyResolverTest extends TestCase
             $selection->reasonCodes,
         );
         self::assertStringContainsString('event extension', \implode(' ', $result['warnings']));
+    }
+
+    public function testAutoFallsBackToDispatcherWhenFfiCapabilityMissing(): void
+    {
+        $result = (new RuntimeStrategyResolver())->resolve(
+            ['worker_count' => 4],
+            [],
+            $this->profile([
+                'os_family' => 'Darwin',
+                'supports_direct_listener' => true,
+                'direct_listener_mode' => 'shared_fd',
+                'direct_listener_probe' => ['supported' => true],
+                'event_classes_available' => true,
+                'extensions' => ['event' => true],
+                'functions' => ['proc_open' => true],
+            ]),
+        );
+
+        $selection = $this->selection($result);
+        self::assertSame(RequestedTopology::Auto, $selection->requestedTopology);
+        self::assertSame(EffectiveTopology::Dispatcher, $selection->effectiveTopology);
+        self::assertSame('single', $selection->listenerMode);
+        self::assertContains(
+            RuntimeTopologyConsistency::AUTO_DISPATCHER_FALLBACK_REASON_CODE,
+            $selection->reasonCodes,
+        );
+        self::assertStringContainsString('FFI', \implode(' ', $result['warnings']));
+    }
+
+    public function testExplicitDirectFailsClosedWhenFfiMissing(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('FFI extension');
+
+        (new RuntimeStrategyResolver())->resolve(
+            ['worker_count' => 4],
+            ['direct' => true],
+            $this->profile([
+                'os_family' => 'Darwin',
+                'supports_direct_listener' => true,
+                'direct_listener_mode' => 'shared_fd',
+                'direct_listener_probe' => ['supported' => true],
+                'event_classes_available' => true,
+                'extensions' => ['event' => true],
+                'functions' => ['proc_open' => true],
+            ]),
+        );
     }
 
     public function testExplicitDirectFailsClosedWhenSharedListenerProbeFails(): void
@@ -407,14 +454,19 @@ final class RuntimeStrategyResolverTest extends TestCase
     /** @param array<string,mixed> $overrides */
     private function sharedListenerProfile(array $overrides = []): WlsRuntimeProfile
     {
-        return $this->profile($overrides + [
+        $base = [
             'supports_direct_listener' => true,
             'direct_listener_mode' => 'shared_fd',
             'direct_listener_probe' => ['supported' => true],
             'event_classes_available' => true,
-            'extensions' => ['event' => true],
+            'extensions' => ['event' => true, 'ffi' => true],
             'functions' => ['proc_open' => true],
-        ]);
+        ];
+        if (isset($overrides['extensions']) && \is_array($overrides['extensions'])) {
+            $overrides['extensions'] = $overrides['extensions'] + ['event' => true, 'ffi' => true];
+        }
+
+        return $this->profile($overrides + $base);
     }
 
     /** @param array<string,mixed> $overrides */

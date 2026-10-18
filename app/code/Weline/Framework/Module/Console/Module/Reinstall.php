@@ -431,7 +431,7 @@ class Reinstall extends CommandAbstract
                 
                 try {
                     // 确保备份目录存在
-                    $backupDir = Env::backup_dir . 'db' . DS;
+                    $backupDir = Env::backupDir() . 'db' . DS;
                     if (!is_dir($backupDir)) {
                         mkdir($backupDir, 0777, true);
                     }

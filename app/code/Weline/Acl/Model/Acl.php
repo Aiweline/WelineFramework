@@ -77,7 +77,8 @@ class Acl extends \Weline\Framework\Database\Model
     public const schema_fields_SCOPE_GROUP = 'scope_group';
     #[Col(type: 'smallint', nullable: false, default: 0, comment: '是否允许外部API应用授权')]
     public const schema_fields_API_EXPOSABLE = 'api_exposable';
-    #[Col(type: 'text', nullable: true, comment: '资源结构化元数据JSON')]
+    // mediumtext：店面/后台绑定 JSON 可超过 text(64KiB)；迁库后曾有 ~190KB 行，禁缩成 text。
+    #[Col(type: 'mediumtext', nullable: true, comment: '资源结构化元数据JSON')]
     public const schema_fields_RESOURCE_METADATA = 'resource_metadata';
 
     public const type_MENUS = 'menus';

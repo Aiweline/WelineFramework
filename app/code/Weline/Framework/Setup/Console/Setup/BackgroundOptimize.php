@@ -24,7 +24,7 @@ class BackgroundOptimize extends CommandAbstract
     public function execute(array $args = [], array $data = [])
     {
         $startTime = microtime(true);
-        $logFile = BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'background_optimize.log';
+        $logFile = VAR_DIR . 'log' . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'background_optimize.log';
 
         $this->log($logFile, '====== 开始后台优化任务 ======');
         $this->log($logFile, '开始时间: ' . date('Y-m-d H:i:s'));

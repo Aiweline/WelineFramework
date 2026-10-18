@@ -1693,7 +1693,7 @@ final class MasterChildCredentialStore
         string $directory,
         bool $allowMissingLeaf = false,
     ): bool {
-        $root = \rtrim(Env::VAR_DIR, '/\\');
+        $root = \rtrim(Env::varDir(), '/\\');
         if ($root === ''
             || !\str_starts_with($directory . DIRECTORY_SEPARATOR, $root . DIRECTORY_SEPARATOR)
         ) {

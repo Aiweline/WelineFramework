@@ -193,19 +193,24 @@ class StalwartEngineAdapter implements MailEngineInterface
 
     private const READER_KEY_FILE = '/etc/weline/mail-reader.key';
     private const READER_CREDENTIAL_FILE = '/etc/weline/mail-reader.credential';
+    private const ETC_READER_KEY_FILE = '/etc/weline/mail-reader.key';
+    private const ETC_READER_CREDENTIAL_FILE = '/etc/weline/mail-reader.credential';
+    private const VAR_READER_KEY_REL = 'var/mail/mail-reader.key';
+    private const VAR_READER_CREDENTIAL_REL = 'var/mail/mail-reader.credential';
     private const DEFAULT_JMAP_BASE_URL = 'http://127.0.0.1:18080';
     private const JMAP_CORE_CAPABILITY = 'urn:ietf:params:jmap:core';
     private const JMAP_MAIL_CAPABILITY = 'urn:ietf:params:jmap:mail';
 
     public function hasReaderCredential(): bool
     {
-        return is_readable(self::READER_KEY_FILE) && is_readable(self::READER_CREDENTIAL_FILE);
+        return $this->resolveReadableReaderCredentialPair() !== null;
     }
 
     public function createReaderCredentialPayload(
         string $username,
         string $password,
-        string $baseUrl = self::DEFAULT_JMAP_BASE_URL
+        string $baseUrl = self::DEFAULT_JMAP_BASE_URL,
+        ?string $key = null
     ): string {
         $username = strtolower(trim($username));
         if (!$this->isValidReaderUsername($username)) {
@@ -216,7 +221,7 @@ class StalwartEngineAdapter implements MailEngineInterface
         }
 
         $baseUrl = $this->normalizeLoopbackBaseUrl($baseUrl);
-        $key = $this->readerKey();
+        $key ??= $this->ensureReaderKeyAt($this->resolveWritableReaderCredentialPair()['key']);
         $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
         $sealed = $nonce . sodium_crypto_secretbox($password, $nonce, $key);
 
@@ -226,6 +231,147 @@ class StalwartEngineAdapter implements MailEngineInterface
             'base_url' => $baseUrl,
             'sealed_secret' => base64_encode($sealed),
         ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * 写入本机 mail-reader 凭据（/etc 与 var/mail 双路径；供按库同步尾步从 contact@ 密封补齐）。
+     */
+    public function upsertReaderCredential(
+        string $username,
+        string $password,
+        string $baseUrl = self::DEFAULT_JMAP_BASE_URL
+    ): void {
+        $pair = $this->resolveWritableReaderCredentialPair();
+        $key = $this->ensureReaderKeyAt($pair['key']);
+        $payload = $this->createReaderCredentialPayload($username, $password, $baseUrl, $key);
+        $dir = dirname($pair['credential']);
+        if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
+            throw new \RuntimeException('无法创建邮件读取凭据目录。');
+        }
+        if (@file_put_contents($pair['credential'], $payload) === false) {
+            throw new \RuntimeException('无法写入邮件读取凭据。');
+        }
+        @chmod($pair['credential'], 0600);
+        @chmod(dirname($pair['credential']), 0750);
+        @chmod($pair['key'], 0600);
+    }
+
+    private function ensureReaderKeyAt(string $keyFile): string
+    {
+        if (!function_exists('sodium_crypto_secretbox')) {
+            throw new \RuntimeException('PHP Sodium 扩展不可用。');
+        }
+        if (is_readable($keyFile)) {
+            $raw = file_get_contents($keyFile);
+            $key = is_string($raw) ? base64_decode(trim($raw), true) : false;
+            if (is_string($key) && strlen($key) === SODIUM_CRYPTO_SECRETBOX_KEYBYTES) {
+                return $key;
+            }
+        }
+        $dir = dirname($keyFile);
+        if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
+            throw new \RuntimeException('无法创建邮件读取密钥目录。');
+        }
+        $generated = random_bytes(SODIUM_CRYPTO_SECRETBOX_KEYBYTES);
+        if (@file_put_contents($keyFile, base64_encode($generated)) === false) {
+            throw new \RuntimeException('无法写入邮件读取密钥。');
+        }
+        @chmod($keyFile, 0600);
+
+        return $generated;
+    }
+
+    private function projectBasePath(): string
+    {
+        $bp = defined('BP') ? (string)BP : '';
+        $bp = rtrim($bp, '/\\');
+        if ($bp !== '') {
+            $real = realpath($bp);
+            if (is_string($real) && $real !== '') {
+                return $real;
+            }
+
+            return $bp;
+        }
+        $fallback = dirname(__DIR__, 5);
+        $real = realpath($fallback);
+
+        return is_string($real) && $real !== '' ? $real : rtrim($fallback, '/\\');
+    }
+
+    /**
+     * @return list<array{key:string,credential:string}>
+     */
+    private function readerCredentialPathCandidates(): array
+    {
+        $bp = $this->projectBasePath();
+
+        return [
+            ['key' => self::ETC_READER_KEY_FILE, 'credential' => self::ETC_READER_CREDENTIAL_FILE],
+            [
+                'key' => $bp . '/' . self::VAR_READER_KEY_REL,
+                'credential' => $bp . '/' . self::VAR_READER_CREDENTIAL_REL,
+            ],
+            ['key' => self::READER_KEY_FILE, 'credential' => self::READER_CREDENTIAL_FILE],
+        ];
+    }
+
+    /**
+     * @return array{key:string,credential:string}|null
+     */
+    private function resolveReadableReaderCredentialPair(): ?array
+    {
+        $seen = [];
+        foreach ($this->readerCredentialPathCandidates() as $pair) {
+            $sig = $pair['key'] . "\0" . $pair['credential'];
+            if (isset($seen[$sig])) {
+                continue;
+            }
+            $seen[$sig] = true;
+            if (is_readable($pair['key']) && is_readable($pair['credential'])) {
+                return $pair;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{key:string,credential:string}
+     */
+    private function resolveWritableReaderCredentialPair(): array
+    {
+        $etcDir = dirname(self::ETC_READER_KEY_FILE);
+        if ($this->directoryIsWritableOrCreatable($etcDir)) {
+            return [
+                'key' => self::ETC_READER_KEY_FILE,
+                'credential' => self::ETC_READER_CREDENTIAL_FILE,
+            ];
+        }
+        $bp = $this->projectBasePath();
+        $varKey = $bp . '/' . self::VAR_READER_KEY_REL;
+        $varCred = $bp . '/' . self::VAR_READER_CREDENTIAL_REL;
+        $varDir = dirname($varKey);
+        if (!$this->directoryIsWritableOrCreatable($varDir)) {
+            throw new \RuntimeException(
+                '无法写入邮件读取凭据（/etc/weline 与 ' . $varDir . ' 均不可写；Web/CLI 须同用户可读 BP/var/mail）。'
+            );
+        }
+
+        return ['key' => $varKey, 'credential' => $varCred];
+    }
+
+    private function directoryIsWritableOrCreatable(string $dir): bool
+    {
+        if (is_dir($dir)) {
+            return is_writable($dir);
+        }
+        $parent = dirname($dir);
+        if (!is_dir($parent) || !is_writable($parent)) {
+            return false;
+        }
+
+        return @mkdir($dir, 0700, true) || is_dir($dir);
     }
 
     /**
@@ -351,11 +497,12 @@ class StalwartEngineAdapter implements MailEngineInterface
      */
     private function readerCredential(): array
     {
-        if (!$this->hasReaderCredential()) {
+        $pair = $this->resolveReadableReaderCredentialPair();
+        if ($pair === null) {
             throw new \RuntimeException('邮件读取凭据尚未配置。');
         }
 
-        $raw = file_get_contents(self::READER_CREDENTIAL_FILE);
+        $raw = file_get_contents($pair['credential']);
         if (!is_string($raw) || trim($raw) === '') {
             throw new \RuntimeException('邮件读取凭据不可用。');
         }
@@ -382,7 +529,7 @@ class StalwartEngineAdapter implements MailEngineInterface
 
         $nonce = substr($sealed, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
         $ciphertext = substr($sealed, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-        $password = sodium_crypto_secretbox_open($ciphertext, $nonce, $this->readerKey());
+        $password = sodium_crypto_secretbox_open($ciphertext, $nonce, $this->readerKeyAt($pair['key']));
         if (!is_string($password) || $password === '') {
             throw new \RuntimeException('邮件读取凭据无法解密。');
         }
@@ -405,17 +552,18 @@ class StalwartEngineAdapter implements MailEngineInterface
         return (bool)preg_match('/^[a-z0-9][a-z0-9._-]{0,63}$/', $username);
     }
 
-    private function readerKey(): string
+    private function readerKeyAt(string $keyFile): string
     {
         if (!function_exists('sodium_crypto_secretbox')) {
             throw new \RuntimeException('PHP Sodium 扩展不可用。');
         }
 
-        $raw = file_get_contents(self::READER_KEY_FILE);
+        $raw = file_get_contents($keyFile);
         $key = is_string($raw) ? base64_decode(trim($raw), true) : false;
         if (!is_string($key) || strlen($key) !== SODIUM_CRYPTO_SECRETBOX_KEYBYTES) {
             throw new \RuntimeException('邮件读取密钥无效。');
         }
+
         return $key;
     }
 

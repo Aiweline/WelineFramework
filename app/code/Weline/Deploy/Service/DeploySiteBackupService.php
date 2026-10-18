@@ -30,7 +30,7 @@ class DeploySiteBackupService
             throw new \RuntimeException((string)__('部署根目录不存在，无法创建备份。'));
         }
 
-        $backupDir = Env::backup_dir . 'deploy' . DS;
+        $backupDir = Env::backupDir() . 'deploy' . DS;
         if (!is_dir($backupDir) && !mkdir($backupDir, 0755, true) && !is_dir($backupDir)) {
             throw new \RuntimeException((string)__('无法创建备份目录。'));
         }

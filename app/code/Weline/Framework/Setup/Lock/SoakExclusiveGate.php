@@ -23,7 +23,7 @@ final class SoakExclusiveGate
 
     public static function lockPath(): string
     {
-        return Env::VAR_DIR . 'run' . DIRECTORY_SEPARATOR . self::LOCK_FILENAME;
+        return Env::varDir() . 'run' . DIRECTORY_SEPARATOR . self::LOCK_FILENAME;
     }
 
     /**

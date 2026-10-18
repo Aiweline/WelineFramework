@@ -30,7 +30,7 @@ class DeployWebhookSetupService
 
     public function sshKeyDirectory(): string
     {
-        return Env::VAR_DIR . 'deploy' . DS . 'ssh' . DS;
+        return Env::varDir() . 'deploy' . DS . 'ssh' . DS;
     }
 
     public function sshPrivateKeyPath(): string

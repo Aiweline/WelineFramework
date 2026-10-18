@@ -135,7 +135,7 @@ final class ServerLifecycleOperationLock
             throw new \InvalidArgumentException('WLS lifecycle lock instance name is invalid.');
         }
 
-        return Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'locks'
+        return Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'locks'
             . DIRECTORY_SEPARATOR . 'lifecycle_' . $instanceName . '.lock';
     }
 }

@@ -20,8 +20,11 @@
 | pgsql 与 env.php | 处理 pgsql 后：若 `app/etc/env.php` 已存在则**红色警告并询问**是否覆盖数据库配置；确认后写入 `db.master` 并输出账户/密码/数据库/主机及连接示例 |
 | weline.env 完整性 | **安装前**检查：若存在 weline.env，每行须为 `KEY=VALUE` 或 `#` 注释，否则红色警告并询问是否继续 |
 | 下载失败提示 | 下载 PHP 等失败时，提示「若下载失败请检查网络或 VPN 配置」 |
-| 安装后命令 | 安装结束后若 php 可用则执行：`php setup/server_installer/run.php`（内部完成 composer、env:check、env:install、尝试安装 event 推荐扩展、setup:upgrade×2、server:stop、server:start） |
+| 安装后命令 | 安装结束后若 php 可用则执行：`php setup/server_installer/run.php`（内部完成 composer、env:check、env:install、**必装 brotli**（FPC html-disk）、**必装 event+FFI**（Linux/macOS WLS Direct，失败即停）、setup:upgrade×2、server:stop、server:start） |
+| brotli（必装） | Linux 编译依赖 `libbrotli-dev`；`install.bash` 在 PHP 就绪后 `ensure_brotli_extension`（phpize/PECL）；`requirements.php` + `ConfigurePhpIni` 声明；`run.php` 硬校验。缺则边缘永不 HIT html-disk。 |
+| event + FFI（Unix Direct 必装） | Linux 编译依赖 `libevent-dev` + `libffi-dev`；`install.bash` configure `--with-ffi`（`make -j` 默认封顶 2，可用 `WELINE_PHP_MAKE_JOBS` 覆盖；小内存机 `WELINE_PHP_LOW_MEM=1` 加 `-O0` 降编译峰），PHP 就绪后 `ensure_event_extension` + `ensure_ffi_extension`（失败即停）；`make` 失败禁止继续 `make install`。`Weline_Server/env/requirements.php` items（platform=unix）；`run.php` `$requireDirectRuntimeExtensions`；运行时 `RuntimeStrategyResolver`/`server:start` 对缺 FFI fail-closed（auto→Dispatcher，显式 Direct 抛错）。**禁止**再把 FFI 当推荐项软过。Windows Direct=worker_ports 不硬依赖。 |
 | 部署用户 / 防特权污染 | **Linux**：`install.bash` 以 root 启动时可创建 `WELINE_USER` 并切用户；`run.php` 对 `bin/w`/composer 用 `runuser`/`sudo -u` 降权。**Windows**：允许管理员跑 `install.bat`；框架命令经 `DeployUserCommandRunner` 以部署用户 Limited/凭据降权（可选 `WELINE_USER_PASSWORD` 跨用户）；`Cli` 在 elevated 时重执行。**macOS**：禁止 sudo/root 安装（Homebrew）。 |
+| 全局 `weline` CLI | **Linux/macOS**：`install.bash` 的 `ensure_system_bin_links` 写入 `/usr/local/bin/weline`（内嵌项目 ROOT + 项目 PHP + `bin/w`），任意目录可执行；非部署用户时经 `runuser`/`sudo -u` 以 `WELINE_USER`（默认 `weline`）身份运行。仓内可移植入口：`bin/weline`。例：`weline s:up` ≡ `php bin/w s:up`。 |
 
 ## 面板 / 平台一键部署（统一目录）
 
@@ -53,6 +56,6 @@
 - [ ] weline.env 的 key 与默认值是否一致
 - [ ] 新增组件或参数时，两端是否都加了
 - [ ] pgsql 写入 env.php 与显示账户/密码逻辑是否一致（含 weline.env 中的 DB_*）
-- [ ] env.php 已存在时是否红色询问、weline.env 完整性是否安装前检查、下载失败是否提示网络/VPN、安装后是否执行 composer + event 推荐扩展尝试安装 + setup:upgrade×2 + server:stop + server:start
+- [ ] env.php 已存在时是否红色询问、weline.env 完整性是否安装前检查、下载失败是否提示网络/VPN、安装后是否执行 composer + **brotli 必装（失败即停）** + **event+FFI Unix Direct 必装（失败即停）** + setup:upgrade×2 + server:stop + server:start
 - [ ] Linux root 安装是否先切到部署用户；`run.php` 是否具备 root 自降权与框架命令包装
 - [ ] Windows 管理员安装是否仍允许；框架命令是否降到部署用户（而非直接报错中断）

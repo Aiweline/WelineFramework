@@ -122,7 +122,7 @@ final class ScopeHolePunchSecurityGate
         int $limit,
         int $window,
     ): array {
-        $dir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR
+        $dir = VAR_DIR . 'cache' . \DIRECTORY_SEPARATOR
             . 'frontend_worker' . \DIRECTORY_SEPARATOR . 'scope_hole_punch' . \DIRECTORY_SEPARATOR;
         if (!\is_dir($dir) && !@\mkdir($dir, 0775, true) && !\is_dir($dir)) {
             return [

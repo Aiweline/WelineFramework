@@ -10,9 +10,10 @@ namespace Weline\Mail\Service\Mailbox;
 interface MailboxClientInterface
 {
     /**
+     * @param bool $unreadOnly 收件箱 Gmail 式：只列未读（已读不展示）
      * @return list<array<string, mixed>>
      */
-    public function listMessages(string $mailbox, string $folder, int $limit = 50): array;
+    public function listMessages(string $mailbox, string $folder, int $limit = 50, bool $unreadOnly = false): array;
 
     /**
      * Gmail 式未读角标：收件箱未读封数（JMAP Mailbox.unreadEmails / fake ORM）。

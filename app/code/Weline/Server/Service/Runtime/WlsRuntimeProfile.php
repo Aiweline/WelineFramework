@@ -161,6 +161,15 @@ final class WlsRuntimeProfile
             && (bool) $this->get('event_classes_available', false);
     }
 
+    /**
+     * POSIX Direct shared_fd/reuseport 硬依赖：共享监听 FD 交接与 Unix batch 启动器。
+     * Windows worker_ports 不要求 FFI。
+     */
+    public function canUseFfi(): bool
+    {
+        return $this->hasExtension('ffi') || $this->hasExtension('FFI');
+    }
+
     public function canControlProcesses(): bool
     {
         return $this->hasFunction('proc_open') || $this->hasFunction('exec') || $this->hasFunction('popen');

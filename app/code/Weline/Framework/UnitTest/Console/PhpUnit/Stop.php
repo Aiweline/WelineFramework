@@ -46,7 +46,7 @@ class Stop implements \Weline\Framework\Console\CommandInterface
      */
     private function stopPhpUnitServer(): void
     {
-        $pidFile = BP . 'var' . DS . 'phpunit_server.pid';
+        $pidFile = VAR_DIR . 'phpunit_server.pid';
         
         if (!file_exists($pidFile)) {
             $this->printing->note(__('PHPUnit报告服务器未运行'));

@@ -594,7 +594,7 @@ class ModuleDataPackageService
 
     public function getPackagesRoot(): string
     {
-        return BP . 'var' . DS . self::RELATIVE_ROOT;
+        return VAR_DIR . self::RELATIVE_ROOT;
     }
 
     private function resolvePhysicalTableName(ModuleTable $row): ?string

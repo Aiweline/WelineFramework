@@ -56,6 +56,25 @@ final class RuntimeStrategyResolver
                 }
                 $topology = $fallback;
             }
+            // FFI：POSIX Direct（shared_fd/reuseport）硬依赖；禁止再当建议项软回退。
+            if (
+                $topology['effective'] === EffectiveTopology::Direct
+                && $topology['listener_mode'] !== 'worker_ports'
+                && !$profile->canUseFfi()
+            ) {
+                $ffiGap = 'WLS POSIX Direct topology requires the PHP FFI extension for shared-listener FD handoff; '
+                    . 'rebuild PHP with --with-ffi (libffi-dev), use Windows worker_ports, or explicitly select --dispatcher.';
+                $fallback = $this->autoDispatcherFallbackTopology(
+                    $topology['requested'],
+                    $this->configuredDirectListenerMode($config),
+                    $topology['source'],
+                    $ffiGap,
+                );
+                if ($fallback === null) {
+                    throw new \RuntimeException($ffiGap);
+                }
+                $topology = $fallback;
+            }
         }
 
         $supervisor = $this->resolveSupervisor($config, $profile, $strategy);

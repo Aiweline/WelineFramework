@@ -4088,7 +4088,7 @@ class Domain extends BackendController
                     $poolModel->setHttpsStatus(DomainPool::HTTPS_STATUS_PENDING)->setHttpsError('')->save();
                     $httpsResult = w_query('server', 'requestCertificate', [
                         'domain' => $domain,
-                        'webroot' => \defined('PUB') ? PUB : (BP . 'pub'),
+                        'webroot' => PUB,
                         'email' => $email,
                         'provider' => 'letsencrypt',
                         'pool_id' => (int) $poolModel->getPoolId(),

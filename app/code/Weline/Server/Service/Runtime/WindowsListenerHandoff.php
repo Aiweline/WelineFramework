@@ -1972,7 +1972,7 @@ final class WindowsListenerHandoff
         if (!\defined('BP')) {
             throw new \RuntimeException('WLS project root is unavailable.');
         }
-        $serverDirectory = BP . 'var' . DIRECTORY_SEPARATOR . 'server';
+        $serverDirectory = VAR_DIR . 'server';
         $directory = $serverDirectory . DIRECTORY_SEPARATOR . 'instances';
 
         return self::ensureHandoffDirectory($serverDirectory, $directory);

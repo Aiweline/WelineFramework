@@ -356,7 +356,7 @@ final class GatewayBackendCapabilityStateStore
 
     private function resolvedStateFile(): string
     {
-        return $this->stateFile ?? Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR
+        return $this->stateFile ?? Env::varDir() . 'server' . DIRECTORY_SEPARATOR
             . 'gateway-v2' . DIRECTORY_SEPARATOR . 'backend-capability.json';
     }
 

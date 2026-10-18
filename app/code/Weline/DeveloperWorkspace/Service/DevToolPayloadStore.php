@@ -276,7 +276,7 @@ class DevToolPayloadStore
 
     private function baseDir(): string
     {
-        return Env::VAR_DIR . 'dev_tool' . DS . 'payload' . DS;
+        return Env::varDir() . 'dev_tool' . DS . 'payload' . DS;
     }
 
     private function storeKey(string $type, string $key): string

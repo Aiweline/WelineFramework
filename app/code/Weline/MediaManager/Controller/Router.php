@@ -35,7 +35,8 @@ class Router implements RouterInterface
      */
     private static function resolveRasterFallback(string $relative): string
     {
-        $abs = PUB . 'media/' . ltrim($relative, '/');
+        $mediaRoot = \defined('MEDIA_DIR') ? \rtrim((string)\constant('MEDIA_DIR'), '/\\') : \rtrim(PUB, '/\\') . '/media';
+        $abs = $mediaRoot . '/' . ltrim($relative, '/');
         if (file_exists($abs)) {
             return $relative;
         }
@@ -47,7 +48,8 @@ class Router implements RouterInterface
         }
         $dir = (string)($info['dirname'] ?? '.');
         $webpRel = ($dir === '.' || $dir === '') ? ($stem . '.webp') : ($dir . '/' . $stem . '.webp');
-        $webpAbs = PUB . 'media/' . ltrim($webpRel, '/');
+        $mediaRoot = \defined('MEDIA_DIR') ? \rtrim((string)\constant('MEDIA_DIR'), '/\\') : \rtrim(PUB, '/\\') . '/media';
+        $webpAbs = $mediaRoot . '/' . ltrim($webpRel, '/');
         if (file_exists($webpAbs)) {
             return $webpRel;
         }

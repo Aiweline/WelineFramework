@@ -1656,7 +1656,7 @@ final class Agent extends CommandAbstract
         if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\z/D', $instanceName) !== 1) {
             throw new \RuntimeException('Gateway desired-state work instance is invalid.');
         }
-        $directory = \rtrim((string)Env::VAR_DIR, '/\\')
+        $directory = \rtrim((string)Env::varDir(), '/\\')
             . DIRECTORY_SEPARATOR . 'server'
             . DIRECTORY_SEPARATOR . 'gateway-agent-work'
             . DIRECTORY_SEPARATOR . \substr(

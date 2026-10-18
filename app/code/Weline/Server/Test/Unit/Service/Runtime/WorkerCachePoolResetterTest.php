@@ -16,7 +16,7 @@ final class WorkerCachePoolResetterTest extends TestCase
 {
     public function testWorkerCacheEpochKeepsTheSharedRouterFilePool(): void
     {
-        $root = BP . 'var/tmp/wls-worker-cache-resetter-' . \bin2hex(\random_bytes(6));
+        $root = VAR_DIR . 'tmp/wls-worker-cache-resetter-' . \bin2hex(\random_bytes(6));
         $adapter = new FileAdapter('router', ['path' => $root]);
         $pool = new CachePool('router', $adapter);
         $pool->set('published-homepage', 'still-published', 60);

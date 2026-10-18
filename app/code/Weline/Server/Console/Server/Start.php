@@ -574,7 +574,7 @@ class Start extends CommandAbstract
                 ));
                 return 1;
             }
-            $lockFile = Env::VAR_DIR . 'server' . DS . 'locks' . DS . 'start_' . $instanceName . '.lock';
+            $lockFile = Env::varDir() . 'server' . DS . 'locks' . DS . 'start_' . $instanceName . '.lock';
             $lockInfo = [];
             try {
                 $lockData = GatewayProjectStateFilesystem::readOptional(
@@ -1086,7 +1086,7 @@ class Start extends CommandAbstract
                         $this->printer->note((string)$dependencyResult['output']);
                     }
                     if ($dependencyTopologyIntent['effective']->isDirect()) {
-                        $this->printer->note(__('显式 Direct 不会静默切换到 Dispatcher；Linux auto 优先验证 reuseport（需要 sockets/SO_REUSEPORT），能力不可用时回退 shared_fd（需要 ext-event 与 POSIX FD/进程原语）；macOS 使用 shared_fd，Nginx 模式的 Windows 使用 worker_ports。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议由最终边缘模式负责：默认 Nginx，--no-nginx 时为纯 WLS。'));
+                        $this->printer->note(__('显式 Direct 不会静默切换到 Dispatcher；Linux/macOS Direct（shared_fd/reuseport）硬依赖 ext-event + FFI（--with-ffi）；缺则 auto 回退 Dispatcher、显式 Direct fail-closed。Windows Nginx 模式使用 worker_ports（不硬依赖 FFI）。也可显式改用 --dispatcher。公网 TLS 与 HTTP 协议由最终边缘模式负责：默认 Nginx，--no-nginx 时为纯 WLS。'));
                     }
                     return 1;
                 }
@@ -3526,47 +3526,31 @@ class Start extends CommandAbstract
                     $processIdentity,
                 );
             } elseif ($inheritedDescriptors !== []) {
-                // Inherited-FD handoff needs the FFI-backed Unix batch launcher.
-                // Production PHP builds often omit FFI; falling back keeps Master
-                // startable via createDetachedPhpArgv after releasing the sockets.
-                $ffiReady = \extension_loaded('FFI') && \class_exists(\FFI::class, false);
-                $spawnedMasterPid = 0;
-                if ($ffiReady) {
-                    try {
-                        $command = \implode(' ', \array_map('escapeshellarg', $argv));
-                        $spawnResults = Processer::batchCreate([
-                            'wls-master-startup-handoff' => [
-                                'command' => $command,
-                                'argv' => $argv,
-                                'cwd' => BP,
-                                'block' => false,
-                                'foreground' => false,
-                                'enableLog' => null,
-                                'childOwnsPid' => true,
-                                'masterOwned' => false,
-                                'inheritDescriptors' => $inheritedDescriptors,
-                            ],
-                        ]);
-                        $spawnedMasterPid = (int)($spawnResults['wls-master-startup-handoff'] ?? 0);
-                    } catch (\RuntimeException $throwable) {
-                        if (!\str_contains(
-                            $throwable->getMessage(),
-                            'Unix batch process creation is unavailable'
-                        )) {
-                            throw $throwable;
-                        }
-                        $spawnedMasterPid = 0;
-                    }
-                }
-                if ($spawnedMasterPid <= 0) {
-                    $this->closeStartupListenerCopies();
-                    $spawnedMasterPid = Processer::createDetachedPhpArgv(
-                        $argv,
-                        BP,
-                        $processIdentity,
-                        null
+                // Inherited-FD handoff hard-requires FFI-backed Unix batch launcher.
+                // No createDetachedPhpArgv soft fallback — that silently breaks Direct.
+                $ffiReady = (\extension_loaded('ffi') || \extension_loaded('FFI'))
+                    && \class_exists(\FFI::class, false);
+                if (!$ffiReady) {
+                    throw new \RuntimeException(
+                        'POSIX Direct shared-listener handoff requires the PHP FFI extension. '
+                        . 'Install libffi-dev / libffi-devel, then: bash bin/install.sh --rebuild-php php'
                     );
                 }
+                $command = \implode(' ', \array_map('escapeshellarg', $argv));
+                $spawnResults = Processer::batchCreate([
+                    'wls-master-startup-handoff' => [
+                        'command' => $command,
+                        'argv' => $argv,
+                        'cwd' => BP,
+                        'block' => false,
+                        'foreground' => false,
+                        'enableLog' => null,
+                        'childOwnsPid' => true,
+                        'masterOwned' => false,
+                        'inheritDescriptors' => $inheritedDescriptors,
+                    ],
+                ]);
+                $spawnedMasterPid = (int)($spawnResults['wls-master-startup-handoff'] ?? 0);
                 if ($spawnedMasterPid <= 0) {
                     throw new \RuntimeException(
                         'POSIX Master inherited-listener launcher did not return a child PID.'
@@ -5288,7 +5272,7 @@ class Start extends CommandAbstract
      */
     protected function updateInstanceMasterInfo(string $instanceName, int $masterPid, bool $enabled): void
     {
-        $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
+        $instanceDir = Env::varDir() . 'server' . DS . 'instances' . DS;
         $instanceFile = $instanceDir . $instanceName . '.json';
         
         if (!\file_exists($instanceFile)) {
@@ -8152,13 +8136,15 @@ class Start extends CommandAbstract
         } catch (\Throwable) {
         }
 
-        if ($ips === []) {
-            $v4 = @\gethostbynamel($host);
-            if (\is_array($v4)) {
-                foreach ($v4 as $ip) {
-                    if ($this->isValidComparisonIp((string)$ip)) {
-                        $ips[] = (string)$ip;
-                    }
+        // Always merge NSS/hosts (gethostbynamel): Cloudflare orange-cloud public DNS
+        // returns edge IPs, while ops pin the origin via /etc/hosts (see website Host Guard).
+        // Previously NSS was only a fallback when dns_get_record was empty, so Host Guard
+        // blocked every CF-proxied production start despite a correct hosts pin.
+        $v4 = @\gethostbynamel($host);
+        if (\is_array($v4)) {
+            foreach ($v4 as $ip) {
+                if ($this->isValidComparisonIp((string)$ip)) {
+                    $ips[] = (string)$ip;
                 }
             }
         }
@@ -9231,7 +9217,7 @@ class Start extends CommandAbstract
      */
     protected function generateCertificateMap(): void
     {
-        $mapFile = Env::VAR_DIR . 'server' . DS . 'ssl_certificate_map.json';
+        $mapFile = Env::varDir() . 'server' . DS . 'ssl_certificate_map.json';
         
         // 确保目录存在
         $mapDir = \dirname($mapFile);
@@ -11624,7 +11610,7 @@ class Start extends CommandAbstract
 
     protected function getInstanceRuntimeDir(): string
     {
-        return Env::VAR_DIR . 'server' . DS . 'instances' . DS;
+        return Env::varDir() . 'server' . DS . 'instances' . DS;
     }
 
     protected function getRuntimeInstanceFile(string $instanceName): string
@@ -11750,7 +11736,7 @@ class Start extends CommandAbstract
 
     protected function getStartLockFileForInstance(string $instanceName): string
     {
-        return Env::VAR_DIR . 'server' . DS . 'locks' . DS . 'start_' . $instanceName . '.lock';
+        return Env::varDir() . 'server' . DS . 'locks' . DS . 'start_' . $instanceName . '.lock';
     }
 
     protected function isStartLockHeldBy(string $instanceName, int $expectedPid): bool
@@ -12016,7 +12002,7 @@ class Start extends CommandAbstract
             }
         }
 
-        $stagingRoot = BP . 'var' . DS . 'tmp' . DS . 'framework-start-stage-'
+        $stagingRoot = VAR_DIR . 'tmp' . DS . 'framework-start-stage-'
             . (string)(\getmypid() ?: 0)
             . '-'
             . \bin2hex(\random_bytes(8));
@@ -12516,7 +12502,7 @@ class Start extends CommandAbstract
      */
     protected function getInstanceConfigDir(): string
     {
-        return Env::VAR_DIR . 'server' . DS . 'config' . DS;
+        return Env::varDir() . 'server' . DS . 'config' . DS;
     }
     
     /**
@@ -13663,7 +13649,7 @@ PHP;
      */
     protected function runFileWatcher(array $watchDirs, float $interval, string $instanceName): void
     {
-        $configDir = Env::VAR_DIR . 'tmp' . DS;
+        $configDir = Env::varDir() . 'tmp' . DS;
         $watchDirs = \array_values(\array_filter(
             \array_map(static fn(mixed $path): string => \trim((string)$path), $watchDirs),
             static fn(string $path): bool => $path !== '' && \strlen($path) <= 4096,
@@ -14044,7 +14030,7 @@ PHP;
         $context['memory_mb'] = \round(\memory_get_usage(true) / 1048576, 2);
         $tracePreviousNs = $nowNs;
 
-        $dir = Env::VAR_DIR . 'log' . DS;
+        $dir = Env::varDir() . 'log' . DS;
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0755, true);
         }
@@ -14425,7 +14411,7 @@ PHP;
 
     protected function getWorkerPortAllocationLockFilePath(): string
     {
-        return Env::VAR_DIR . 'server' . DS . 'locks' . DS . 'worker_port_allocation.lock';
+        return Env::varDir() . 'server' . DS . 'locks' . DS . 'worker_port_allocation.lock';
     }
 
     /**

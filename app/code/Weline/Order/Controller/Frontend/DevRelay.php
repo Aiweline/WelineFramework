@@ -99,7 +99,7 @@ class DevRelay extends FrontendController
             return true;
         }
 
-        $settings = BP . 'var/order-tracking-dev-relay-settings.json';
+        $settings = VAR_DIR . 'order-tracking-dev-relay-settings.json';
         if (!is_file($settings)) {
             return false;
         }

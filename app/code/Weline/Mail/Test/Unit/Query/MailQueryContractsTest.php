@@ -102,5 +102,14 @@ final class MailQueryContractsTest extends TestCase
         self::assertStringContainsString('updateAccount($params)', $src);
         self::assertStringContainsString('batchDelete(', $src);
         self::assertStringContainsString('Weline_Mail::mail_accounts_manage', $src);
+        self::assertStringContainsString('isReservedSystemLocalPart', $src);
+        self::assertStringContainsString('系统账号', $src);
+
+        $model = (string) file_get_contents(BP . '/app/code/Weline/Mail/Model/MailAccount.php');
+        self::assertStringContainsString('schema_fields_IS_SYSTEM', $model);
+        self::assertStringContainsString('function isSystemAccount', $model);
+        $mgmt = (string) file_get_contents(BP . '/app/code/Weline/Mail/Service/MailAccountManagementService.php');
+        self::assertStringContainsString('assertSystemMutable', $mgmt);
+        self::assertStringContainsString("'is_system'", $mgmt);
     }
 }

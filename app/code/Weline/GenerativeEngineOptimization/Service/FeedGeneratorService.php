@@ -22,7 +22,7 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class FeedGeneratorService
 {
-    public const FEED_DIR = BP . '/pub/geo-feeds';
+    public const FEED_DIR = PUB . 'geo-feeds';
 
     /**
      * 生成Feed内容

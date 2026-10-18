@@ -255,9 +255,23 @@ class ExtensionInstallStrategyMap
             . 'else apt-get update && apt-get install -y --no-install-recommends '
             . 'libevent-dev libssl-dev pkg-config $PHPIZE_DEPS; fi && '
             . $eventPeclLinux . ' && docker-php-ext-enable event';
+        $dockerBrotliInstall = 'if command -v apk >/dev/null 2>&1; then '
+            . 'apk add --no-cache brotli-dev pkgconf $PHPIZE_DEPS; '
+            . 'else apt-get update && apt-get install -y --no-install-recommends '
+            . 'libbrotli-dev pkg-config $PHPIZE_DEPS; fi && '
+            . $peclInstall . ' && docker-php-ext-enable brotli';
+        $dockerCmd = 'docker-php-ext-install ' . $extQ;
+        $dockerName = 'docker-php-ext-install';
+        if ($ext === 'event') {
+            $dockerCmd = $dockerEventInstall;
+            $dockerName = 'docker build deps + pecl';
+        } elseif ($ext === 'brotli') {
+            $dockerCmd = $dockerBrotliInstall;
+            $dockerName = 'docker build deps + pecl brotli';
+        }
         $list[] = [
-            'cmd'       => $ext === 'event' ? $dockerEventInstall : 'docker-php-ext-install ' . $extQ,
-            'name'      => $ext === 'event' ? 'docker build deps + pecl' : 'docker-php-ext-install',
+            'cmd'       => $dockerCmd,
+            'name'      => $dockerName,
             'check'     => 'docker-php-ext-install',
             'platforms' => [self::PLATFORM_DOCKER],
             'elevated'  => false,
@@ -277,6 +291,15 @@ class ExtensionInstallStrategyMap
             $list[] = [
                 'cmd'       => 'brew install libsodium && ' . $peclInstall,
                 'name'      => 'brew libsodium + pecl libsodium',
+                'check'     => 'brew',
+                'platforms' => [self::PLATFORM_DARWIN],
+                'elevated'  => false,
+            ];
+        }
+        if ($ext === 'brotli') {
+            $list[] = [
+                'cmd'       => 'brew install brotli pkgconf && ' . $peclInstall,
+                'name'      => 'brew brotli + pecl brotli',
                 'check'     => 'brew',
                 'platforms' => [self::PLATFORM_DARWIN],
                 'elevated'  => false,
@@ -427,6 +450,44 @@ class ExtensionInstallStrategyMap
                 ],
             ];
             foreach ($sodiumBuildStrategies as $strategy) {
+                $strategy['cmd'] = 'sh -c ' . escapeshellarg($strategy['cmd']);
+                $strategy['elevated'] = true;
+                $list[] = $strategy;
+            }
+        }
+
+        if ($ext === 'brotli') {
+            $brotliBuildStrategies = [
+                [
+                    'cmd' => 'apt-get install -y php-pear php-dev libbrotli-dev pkg-config build-essential && '
+                        . $peclInstall,
+                    'name' => 'apt build deps + pecl brotli',
+                    'check' => 'apt-get',
+                    'platforms' => [self::PLATFORM_LINUX_APT],
+                ],
+                [
+                    'cmd' => 'dnf install -y php-pear php-devel libbrotli-devel gcc make autoconf pkgconf-pkg-config && '
+                        . $peclInstall,
+                    'name' => 'dnf build deps + pecl brotli',
+                    'check' => 'dnf',
+                    'platforms' => [self::PLATFORM_LINUX_DNF],
+                ],
+                [
+                    'cmd' => 'yum install -y php-pear php-devel libbrotli-devel gcc make autoconf pkgconfig && '
+                        . $peclInstall,
+                    'name' => 'yum build deps + pecl brotli',
+                    'check' => 'yum',
+                    'platforms' => [self::PLATFORM_LINUX_YUM],
+                ],
+                [
+                    'cmd' => 'apk add --no-cache php-dev php-pear brotli-dev pkgconf build-base && '
+                        . $peclInstall,
+                    'name' => 'apk build deps + pecl brotli',
+                    'check' => 'apk',
+                    'platforms' => [self::PLATFORM_LINUX_APK],
+                ],
+            ];
+            foreach ($brotliBuildStrategies as $strategy) {
                 $strategy['cmd'] = 'sh -c ' . escapeshellarg($strategy['cmd']);
                 $strategy['elevated'] = true;
                 $list[] = $strategy;

@@ -82,7 +82,7 @@ class FileHandler implements HandlerInterface
     private function getDefaultLogPath(): string
     {
         if (defined('BP')) {
-            return BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR;
+            return VAR_DIR . 'log' . DIRECTORY_SEPARATOR;
         }
         return sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline_log' . DIRECTORY_SEPARATOR;
     }

@@ -1,6 +1,6 @@
 # WLS 当前能力与验收状态
 
-> 更新时间：2026-08-16。本文是 WLS **当前能力与验收状态**的权威入口。架构文档描述长期契约，带日期的报告与冻结记录描述历史证据；两者都不能替代本文的当前判定。
+> 更新时间：2026-10-19。本文是 WLS **当前能力与验收状态**的权威入口。架构文档描述长期契约，带日期的报告与冻结记录描述历史证据；两者都不能替代本文的当前判定。
 
 ## 状态口径
 
@@ -45,6 +45,7 @@
 | Windows 专用 10 GiB / 65,536 inode 容量门禁 | 已实现，待验证 | 需要专用 Windows Runner 的真实结果。 |
 | 公网 CA/DNS、真实 443 首签 | 外部环境延期 | 按用户决定，待提供上线测试环境后最后执行。 |
 | fresh-worker 均衡、跨 Worker 会话恢复的专项性能门 | 已实现，待验证 | 本轮百万报告不能据此宣称通过。 |
+| 托管 Nginx `origin_mode=fpm`（协助部署） | 已实现，待验证 | `server:origin:set fpm\|wls` 已落地：项目隔离托管 Nginx → php-fpm → `pub/index.php`；切 fpm 停业务平面保留 Nginx；TLS/Host 与 WLS 回源同路径。静态 conf 契约已有；**不得**把本行写成全平台 FPM 性能矩阵或生产热路径已百万验证（见性能预算 Runtime=FPM 矩阵）。操作权威：[WLS模式部署指南.md](WLS模式部署指南.md#origin-mode-wls-vs-fpm)。硬规则：`wls_managed_nginx_supports_fpm_origin`。 |
 
 ## 文档使用规则
 

@@ -567,7 +567,7 @@ final class TlsSessionResumptionLiveVerifier
     /** @return array<string,mixed> */
     private function readInstanceConfig(string $instanceName): array
     {
-        $path = Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances'
+        $path = Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'instances'
             . DIRECTORY_SEPARATOR . $instanceName . '.json';
         for ($attempt = 1; $attempt <= self::INSTANCE_CONFIG_READ_ATTEMPTS; $attempt++) {
             \clearstatcache(true, $path);

@@ -113,8 +113,8 @@ namespace {
     define('APP_CODE_PATH', APP_PATH . 'code/');
     define('APP_ETC_PATH', APP_PATH . 'etc/');
     define('VENDOR_PATH', $root . '/vendor/');
-    define('VAR_DIR', BP . 'var/');
-    define('PUB', BP . 'pub/');
+    define('VAR_DIR', VAR_DIR);
+    define('PUB', PUB);
     define('DEV', false);
     define('DEBUG', false);
     define('CLI', true);

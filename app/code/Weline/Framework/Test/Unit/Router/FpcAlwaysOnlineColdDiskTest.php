@@ -18,7 +18,7 @@ final class FpcAlwaysOnlineColdDiskTest extends TestCase
         ProjectRoot::defineBp(__DIR__);
         $path = '/always-online-probe-' . \uniqid('', true);
         $fullUri = 'https://p05113ef3.test.weline.com' . $path;
-        $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
+        $payloadDir = VAR_DIR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
             . \DIRECTORY_SEPARATOR . 'ac';
         if (!\is_dir($payloadDir)) {
             @\mkdir($payloadDir, 0775, true);
@@ -58,7 +58,7 @@ final class FpcAlwaysOnlineColdDiskTest extends TestCase
         ProjectRoot::defineBp(__DIR__);
         $path = '/always-online-private-' . \uniqid('', true);
         $fullUri = 'https://p05113ef3.test.weline.com' . $path;
-        $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
+        $payloadDir = VAR_DIR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
             . \DIRECTORY_SEPARATOR . 'ad';
         if (!\is_dir($payloadDir)) {
             @\mkdir($payloadDir, 0775, true);

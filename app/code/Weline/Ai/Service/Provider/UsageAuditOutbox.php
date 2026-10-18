@@ -47,7 +47,7 @@ final class UsageAuditOutbox
 
     public function __construct(?string $directory = null)
     {
-        $base = $directory ?? (Env::VAR_DIR . 'ai' . DS . 'provider-usage-outbox');
+        $base = $directory ?? (Env::varDir() . 'ai' . DS . 'provider-usage-outbox');
         $this->directory = rtrim($base, '/\\');
     }
 

@@ -232,9 +232,13 @@ php bin/w server:nginx:status
 php bin/w server:stop   # managed=true 时会先停本项目托管 Nginx
 ```
 
+<a id="origin-mode-wls-vs-fpm"></a>
+
 #### 回源模式：WLS Workers vs PHP-FPM
 
 托管 Nginx 的 `wls.edge.nginx.origin_mode` 决定公网边缘如何进应用：
+
+> **能力声明（硬）**：WLS **支持** FPM 回源协助部署（`origin_mode=fpm`）。切换命令 `php bin/w server:origin:set fpm|wls`。细则与否决面见 MCP 硬规则 `wls_managed_nginx_supports_fpm_origin` / [规则/40 §8](../../Ai/doc/规则/40-集成与运维.md)。
 
 | 模式 | 回源 | 需要 Worker / Session / Memory？ |
 |------|------|----------------------------------|
@@ -285,9 +289,7 @@ php bin/w server:start
 - **显式配置不做探测**。`wls.edge.nginx.listen_http|listen_https`（或
   `WLS_NGINX_LISTEN_HTTP|WLS_NGINX_LISTEN_HTTPS`）一旦指定，端口可用性由运维负责；
   显式端口与解析出的另一侧公网端口撞车时直接报错，不静默生成自相冲突的 conf。
-- **无权限绑定也算回退理由**。Linux 非 root 且未 `setcap` 时 `80/443` 绑不上，
-  此时与「被占用」同样回退到 offset，只是 `source`/`notes` 里写明是权限原因 ——
-  静默换端口会把「网关没拿到公网端口」藏起来。
+- **PHP 无权绑定不算回退理由（≥2.0.214）**。Linux 非 root 时探测进程对 `80/443` 的 `UNBINDABLE` 是常态；公网入口由托管 Nginx 文件 `cap_net_bind_service`（安装/启动时有界 `sudo -n setcap` + `getcap` 校验）绑定。仅**外人占用**才回退高端口。缺 cap 时启动 fail-closed（可用 `WLS_NGINX_ALLOW_MISSING_NET_BIND_CAP=1` 显式放行高端口场景）。
 
 每次托管 Nginx reload 还执行独立的 `fresh-share-across-nginx-reload-v1` 连续性事务：候选发布前用新 SSL share 建立一个 fresh TLS 1.3 Session 并保留该 share；新 generation 激活、旧 Worker 排水后，使用同一 share 在 fresh TCP 上恢复。只有 Nginx Master PID 和证书摘要不变、generation 已变化、结果为 `r`、新旧 Nginx Worker PID 不同且恢复握手 ≤ 50ms 才通过。它证明 Nginx shared SSL session cache/ticket 在 graceful reload 期间连续，不能推导 PHP Stream/WLS 或 HTTP/3/QUIC Session Resumption。
 

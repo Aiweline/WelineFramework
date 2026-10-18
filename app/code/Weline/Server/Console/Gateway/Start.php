@@ -55,7 +55,7 @@ class Start implements CommandInterface
      */
     private function autoDiscoverConfig(): ?array
     {
-        $instanceDir = Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR;
+        $instanceDir = Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR;
         if (!is_dir($instanceDir)) {
             return null;
         }

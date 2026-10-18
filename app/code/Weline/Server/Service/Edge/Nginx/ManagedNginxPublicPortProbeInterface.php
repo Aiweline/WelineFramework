@@ -18,7 +18,11 @@ interface ManagedNginxPublicPortProbeInterface
     public const STATE_SELF = 'self';
     /** 被非本项目托管 Nginx 的进程占用。 */
     public const STATE_FOREIGN = 'foreign';
-    /** 端口没人监听，但本进程无权限绑定（Linux 非 root 且未 setcap）。 */
+    /**
+     * 端口没人监听，但**探测用的 PHP 进程**无权限绑定（Linux 非 root 常态）。
+     * 托管 Nginx 靠文件 `cap_net_bind_service` 绑定公网端口；PortAllocator 不得
+     * 仅因本状态把 80/443 静默挪到高位端口。
+     */
     public const STATE_UNBINDABLE = 'unbindable';
 
     /**

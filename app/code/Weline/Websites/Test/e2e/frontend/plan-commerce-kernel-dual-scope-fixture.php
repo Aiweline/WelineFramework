@@ -113,7 +113,7 @@ function ck_scope(string $code, int $websiteId): ScopeIdentity
 
 function ck_rollout_snapshot_path(string $token): string
 {
-    return BP . 'var/tmp/commerce-kernel-rollout-' . $token . '.json';
+    return VAR_DIR . 'tmp/commerce-kernel-rollout-' . $token . '.json';
 }
 
 /** @return list<string> */

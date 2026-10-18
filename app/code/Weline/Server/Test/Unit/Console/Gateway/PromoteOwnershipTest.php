@@ -56,7 +56,7 @@ final class PromoteOwnershipTest extends TestCase
             \define('DS', DIRECTORY_SEPARATOR);
         }
         $instance = 'unit-promote-' . \bin2hex(\random_bytes(6));
-        $directory = Env::VAR_DIR . 'server' . DS . 'config' . DS;
+        $directory = Env::varDir() . 'server' . DS . 'config' . DS;
         if (!\is_dir($directory)) {
             self::assertTrue(\mkdir($directory, 0755, true));
         }

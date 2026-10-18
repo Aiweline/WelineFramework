@@ -31,7 +31,12 @@ final class ContextSnapshot
     public function capture(?int $websiteId = null, ?string $websiteCode = null): array
     {
         $websiteId ??= WelineEnv::getWebsiteId();
-        $websiteCode = trim($websiteCode ?? WelineEnv::getWebsiteCode());
+        $websiteCode = trim((string)($websiteCode ?? WelineEnv::getWebsiteCode() ?? ''));
+        // CLI / setup: 默认站 id=0 时环境常无 website_code；与 Websites::CODE_DEFAULT 对齐填 default。
+        // 禁止把「未知站」伪装成 default——仅当显式 website_id===0。
+        if ($websiteId === 0 && $websiteCode === '') {
+            $websiteCode = 'default';
+        }
         if ($websiteId === null || $websiteId < 0 || $websiteCode === '') {
             throw new AsyncEventValidationException(
                 __('异步事件必须显式解析 website_id/website_code；缺失不能伪装为默认站点'),

@@ -295,16 +295,34 @@ final class SetupPgsqlDatabase
         $this->lastAutoSetAttempted = true;
         $h = in_array($host, ['', 'localhost'], true) ? '127.0.0.1' : $host;
         $sql = "ALTER USER postgres WITH PASSWORD 'postgres';";
-        $cmd = escapeshellarg($psqlExe) . ' -h ' . escapeshellarg($h) . ' -p ' . escapeshellarg($port) . ' -U postgres -c ' . escapeshellarg($sql);
+        $dataDir = $this->projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server'
+            . DIRECTORY_SEPARATOR . 'pgsql' . DIRECTORY_SEPARATOR . 'data';
+        $candidates = [];
+        // Project-local cluster: unix socket (-h dataDir) often uses trust/peer for the OS owner.
+        if (is_dir($dataDir)) {
+            $candidates[] = escapeshellarg($psqlExe) . ' -h ' . escapeshellarg($dataDir)
+                . ' -p ' . escapeshellarg($port) . ' -U postgres -d postgres -c ' . escapeshellarg($sql);
+        }
+        // System peer auth (Debian/Ubuntu): sudo -n -u postgres without password prompt.
+        $candidates[] = 'sudo -n -u postgres ' . escapeshellarg($psqlExe)
+            . ' -p ' . escapeshellarg($port) . ' -d postgres -c ' . escapeshellarg($sql);
+        $candidates[] = escapeshellarg($psqlExe) . ' -h ' . escapeshellarg($h)
+            . ' -p ' . escapeshellarg($port) . ' -U postgres -c ' . escapeshellarg($sql);
         $code = -1;
         $execOut = [];
-        @exec($cmd . ' 2>&1', $execOut, $code);
-        if ($code !== 0) {
-            echo "  自动设置 postgres 密码未成功。手动执行: psql -h 127.0.0.1 -p {$port} -U postgres -c \"ALTER USER postgres WITH PASSWORD 'postgres';\"\n";
-            return false;
+        foreach ($candidates as $cmd) {
+            $execOut = [];
+            $code = -1;
+            @exec($cmd . ' 2>&1', $execOut, $code);
+            if ($code === 0) {
+                echo "  已自动为 postgres 用户设置密码，正在重试连接...\n";
+                return true;
+            }
         }
-        echo "  已自动为 postgres 用户设置密码，正在重试连接...\n";
-        return true;
+        echo "  自动设置 postgres 密码未成功。可尝试（项目 socket）: "
+            . "psql -h {$dataDir} -p {$port} -U postgres -c \"ALTER USER postgres WITH PASSWORD 'postgres';\"\n";
+        echo "  或系统 peer: sudo -u postgres psql -c \"ALTER USER postgres WITH PASSWORD 'postgres';\"\n";
+        return false;
     }
 
     private function didTryAutoSetPostgresPasswordLinux(): bool

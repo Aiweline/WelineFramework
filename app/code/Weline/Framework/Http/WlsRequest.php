@@ -863,7 +863,7 @@ class WlsRequest extends Request
             $jsonOutput = \json_encode($debugServerVars, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
             
             // 始终写入日志文件（便于查看）
-            $logDir = \defined('BP') ? BP . 'var/log/wls/' : '';
+            $logDir = \defined('BP') ? VAR_DIR . 'log/wls/' : '';
             if ($logDir && !\is_dir($logDir)) {
                 @\mkdir($logDir, 0755, true);
             }

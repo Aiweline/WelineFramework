@@ -18,7 +18,7 @@ class ThemeStaticAssetPublisherTest extends TestCore
 {
     /**
      * 本用例调用真实发布器（ThemeStaticAssetPublisher → ThemeResourceGateway），
-     * 而该链路把发布根硬编码为 `BP . '/pub/static'`，因此夹具主题会被写进**项目真实**的
+     * 而该链路把发布根硬编码为 `PUB . 'static'`，因此夹具主题会被写进**项目真实**的
      * Web 根目录。若用例结束不回收，`WeShop/*`、`Codex/demo-theme` 等夹具命名空间会长期
      * 残留（并可能被静态发布/扫描流程再次读到）。
      *

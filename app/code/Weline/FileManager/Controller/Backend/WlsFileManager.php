@@ -2011,7 +2011,7 @@ class WlsFileManager extends BackendController
             [
                 'key' => 'var',
                 'label' => (string)__('运行时目录'),
-                'path' => defined('VAR_PATH') ? VAR_PATH : ((defined('BP') ? BP : '') . 'var' . DIRECTORY_SEPARATOR),
+                'path' => defined('VAR_DIR') ? VAR_DIR : ((defined('BP') ? BP : '') . 'var' . DIRECTORY_SEPARATOR),
                 'description' => (string)__('缓存、日志、队列和临时运行数据所在目录。'),
                 'write_enabled' => true,
             ],
@@ -3468,7 +3468,7 @@ class WlsFileManager extends BackendController
      */
     private function ensureSourceArchiveDirectory(): array
     {
-        $varPath = defined('VAR_PATH') ? (string)VAR_PATH : ((defined('BP') ? (string)BP : '') . DIRECTORY_SEPARATOR . 'var');
+        $varPath = defined('VAR_PATH') ? (string)VAR_DIR : ((defined('BP') ? (string)BP : '') . DIRECTORY_SEPARATOR . 'var');
         $varPath = rtrim($varPath, "\\/");
         $varRealPath = $varPath !== '' ? realpath($varPath) : false;
         if ($varRealPath === false) {
@@ -4346,7 +4346,7 @@ class WlsFileManager extends BackendController
 
     private function operationLogPath(): string
     {
-        $varPath = defined('VAR_PATH') ? VAR_PATH : ((defined('BP') ? BP : '') . 'var' . DIRECTORY_SEPARATOR);
+        $varPath = defined('VAR_DIR') ? VAR_DIR : ((defined('BP') ? BP : '') . 'var' . DIRECTORY_SEPARATOR);
         $varPath = trim((string)$varPath);
         if ($varPath === '') {
             return '';

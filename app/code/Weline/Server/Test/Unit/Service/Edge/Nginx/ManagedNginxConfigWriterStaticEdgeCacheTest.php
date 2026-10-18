@@ -14,8 +14,8 @@ ProjectRoot::defineBp(__DIR__);
 \defined('APP_PATH') || \define('APP_PATH', BP . 'app' . DS);
 \defined('APP_CODE_PATH') || \define('APP_CODE_PATH', APP_PATH . 'code' . DS);
 \defined('APP_ETC_PATH') || \define('APP_ETC_PATH', APP_PATH . 'etc' . DS);
-\defined('PUB') || \define('PUB', BP . 'pub' . DS);
-\defined('VAR_DIR') || \define('VAR_DIR', BP . 'var' . DS);
+\defined('PUB') || \define('PUB', PUB);
+\defined('VAR_DIR') || \define('VAR_DIR', VAR_DIR);
 
 /**
  * Static layers: ^~ /pub/media, ^~ /static → pub, regex → FPC static disk,
@@ -66,7 +66,12 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
             'Managed nginx must disk-serve /pub/media/ so listing images survive WLS drains.',
         );
         self::assertStringContainsString('X-Wls-Media-Disk "1"', $config);
-        self::assertStringContainsString('try_files $uri =404;', $config);
+        self::assertMatchesRegularExpression(
+            '#location\s+\^~\s+/pub/media/\s*\{[^}]*alias\s+"[^"]+/"\s*;#s',
+            $config,
+            'Media alias trailing slash must be inside the quoted path (alias "/path"/; fails nginx -t).',
+        );
+        self::assertStringNotContainsString("location ^~ /pub/media/ {\n            root ", $config);
         self::assertStringContainsString('location ^~ /static/', $config);
         self::assertStringContainsString('map $uri $wls_static_br_eligible', $config);
         self::assertStringNotContainsString('map $uri $wls_static_br_mime', $config);
@@ -154,6 +159,15 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
             'proxy_cache_bypass $wls_edge_bypass;',
             $staticBlock,
             'Static assets must not inherit Cookie/Authorization edge bypass.',
+        );
+        self::assertStringNotContainsString(
+            'expires 365d;',
+            $staticBlock,
+            'expires must not stack a second Cache-Control alongside add_header immutable.',
+        );
+        self::assertStringContainsString(
+            'Cache-Control "public, max-age=31536000, immutable" always;',
+            $staticBlock,
         );
         self::assertStringContainsString(
             'proxy_set_header Cookie "";',

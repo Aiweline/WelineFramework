@@ -392,7 +392,21 @@ final class ManagedNginxPaths
 
     public function pubRoot(): string
     {
+        if (\defined('PUB')) {
+            return \rtrim((string)\constant('PUB'), '/\\');
+        }
         return $this->projectRoot() . DIRECTORY_SEPARATOR . 'pub';
+    }
+
+    /**
+     * Disk root for /pub/media URL prefix (may be relocatable via env directories.media).
+     */
+    public function mediaRoot(): string
+    {
+        if (\defined('MEDIA_DIR')) {
+            return \rtrim((string)\constant('MEDIA_DIR'), '/\\');
+        }
+        return $this->pubRoot() . DIRECTORY_SEPARATOR . 'media';
     }
 
     private function detectDefaultFpmListen(): string

@@ -72,7 +72,8 @@ class ThumbnailService
      */
     public function getThumbCacheDir(): string
     {
-        return PUB . 'media' . DS . '.thumbs' . DS;
+        $mediaRoot = \defined('MEDIA_DIR') ? (string)\constant('MEDIA_DIR') : (PUB . 'media' . DS);
+        return \rtrim($mediaRoot, '/\\') . DS . '.thumbs' . DS;
     }
     
     /**
@@ -81,7 +82,8 @@ class ThumbnailService
     public function getThumbCachePath(string $originalPath): string
     {
         $relativePath = '';
-        $mediaRoot = PUB . 'media' . DS;
+        $mediaRoot = \defined('MEDIA_DIR') ? (string)\constant('MEDIA_DIR') : (PUB . 'media' . DS);
+        $mediaRoot = \rtrim($mediaRoot, '/\\') . DS;
         
         if (\str_starts_with($originalPath, $mediaRoot)) {
             $relativePath = \substr($originalPath, \strlen($mediaRoot));

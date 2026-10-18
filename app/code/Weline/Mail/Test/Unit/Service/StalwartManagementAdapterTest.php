@@ -32,6 +32,16 @@ final class StalwartManagementAdapterTest extends TestCase
         (new StalwartManagementAdapter())->buildUserObject('alice', 'domain-id', 'short', 1024);
     }
 
+    public function testManagementCredentialDualPathAndUpsertLocked(): void
+    {
+        $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/StalwartManagementAdapter.php');
+        self::assertStringContainsString('/etc/weline/mail-admin.key', $src);
+        self::assertStringContainsString('var/mail/mail-admin.key', $src);
+        self::assertStringContainsString('function upsertManagementCredential', $src);
+        self::assertStringContainsString('function hasManagementCredential', $src);
+        self::assertStringContainsString('resolveReadableCredentialPair', $src);
+    }
+
     public function testImportManagedHostnameCertificateSourceLocksProvenShape(): void
     {
         $src = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/StalwartManagementAdapter.php');

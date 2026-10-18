@@ -383,7 +383,7 @@ final class TestRunExecutor
             }
         }
 
-        $instancesDir = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances';
+        $instancesDir = VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances';
         if (!is_dir($instancesDir)) {
             return '';
         }

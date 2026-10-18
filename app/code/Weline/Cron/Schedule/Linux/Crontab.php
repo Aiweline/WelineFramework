@@ -138,7 +138,7 @@ class Crontab implements \Weline\Cron\Schedule\ScheduleInterface
         $base_project_dir = BP;
         $cron_shell_file_path = Env::path_framework_generated . $name . '-cron.sh';
         $php_binary = PHP_BINARY;
-        $log = BP . 'var/cron.log';
+        $log = VAR_DIR . 'cron.log';
         
         $this->logDev('debug', '[Linux/Crontab] 脚本路径: {script_path}, PHP: {php_binary}, 日志: {log_path}', [
             'script_path' => $cron_shell_file_path,

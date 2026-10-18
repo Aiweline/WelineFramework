@@ -348,7 +348,7 @@ class MemoryCacheRuleManager
         $rulesFile = null;
         
         // 1. 优先从 CDN 后台推送的规则文件加载
-        $cdnRulesFile = Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'memory-cache-rules.json';
+        $cdnRulesFile = Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'memory-cache-rules.json';
         if (file_exists($cdnRulesFile)) {
             $rulesFile = $cdnRulesFile;
         }
@@ -411,7 +411,7 @@ class MemoryCacheRuleManager
      */
     public static function getRulesUpdateFlagPath(): string
     {
-        return Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'rules-update.flag';
+        return Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'rules-update.flag';
     }
 
     /**
@@ -421,7 +421,7 @@ class MemoryCacheRuleManager
      */
     public static function getCdnRulesFilePath(): string
     {
-        return Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'memory-cache-rules.json';
+        return Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'memory-cache-rules.json';
     }
 
     /**

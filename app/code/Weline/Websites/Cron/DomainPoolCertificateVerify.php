@@ -199,7 +199,7 @@ class DomainPoolCertificateVerify
         $poolDomain->setPoolLifecycleStage(DomainPool::LIFECYCLE_CERT_PENDING);
         $poolDomain->save();
 
-        $webroot = \defined('PUB') ? PUB : (BP . 'pub');
+        $webroot = PUB;
         $email = Env::getInstance()->getConfig('ssl.contact_email') ?? '';
         $reqEmail = $email !== '' ? $email : 'admin@' . $domain;
 

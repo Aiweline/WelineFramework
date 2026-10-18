@@ -14,16 +14,20 @@ use Weline\Mail\Service\MailFakeMailboxService;
  */
 final class FakeMailboxClient implements MailboxClientInterface
 {
-    public function listMessages(string $mailbox, string $folder, int $limit = 50): array
+    public function listMessages(string $mailbox, string $folder, int $limit = 50, bool $unreadOnly = false): array
     {
         $folder = MailboxFolder::assertValid($folder);
         $account = $this->loadAccountByMailbox($mailbox);
         $limit = max(1, min(100, $limit));
         /** @var MailMessage $model */
         $model = ObjectManager::getInstance(MailMessage::class);
-        $items = $model->clear()
+        $query = $model->clear()
             ->where(MailMessage::schema_fields_ACCOUNT_ID, (int)$account->getId())
-            ->where(MailMessage::schema_fields_FOLDER, $folder)
+            ->where(MailMessage::schema_fields_FOLDER, $folder);
+        if ($unreadOnly) {
+            $query->where(MailMessage::schema_fields_IS_READ, 0);
+        }
+        $items = $query
             ->order(MailMessage::schema_fields_ID, 'DESC')
             ->limit($limit)
             ->select()

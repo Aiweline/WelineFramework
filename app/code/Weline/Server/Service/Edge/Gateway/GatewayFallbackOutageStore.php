@@ -23,7 +23,7 @@ final class GatewayFallbackOutageStore
     public function __construct(?string $directory = null)
     {
         $this->directory = $directory
-            ?? BP . 'var' . DIRECTORY_SEPARATOR . 'server'
+            ?? VAR_DIR . 'server'
                 . DIRECTORY_SEPARATOR . 'gateway-v2'
                 . DIRECTORY_SEPARATOR . 'agent-outages';
     }

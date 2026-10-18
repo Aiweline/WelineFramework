@@ -382,7 +382,7 @@ final class CheckoutDeliveryContextService
     private function loadBackupReceivingGuestAddress(): ?array
     {
         $paths = [
-            BP . 'var/session',
+            VAR_DIR . 'session',
             '/tmp',
         ];
         foreach ($paths as $dir) {

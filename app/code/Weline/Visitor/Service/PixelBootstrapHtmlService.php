@@ -434,7 +434,7 @@ HTML;
     private function resolveFrontendApiAssetVersion(): string
     {
         $deployVersion = '';
-        $deployMetaPath = BP . 'var/deploy/current.json';
+        $deployMetaPath = VAR_DIR . 'deploy/current.json';
         if (\is_file($deployMetaPath)) {
             try {
                 $decoded = \json_decode((string)@\file_get_contents($deployMetaPath), true);

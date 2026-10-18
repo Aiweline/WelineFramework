@@ -1129,14 +1129,14 @@ class SharedStateServiceManager
         if (!\is_string($resolved) || $resolved === '') {
             // Broken symlink / already gone: allow unlink by nominal prefixes.
             $normalized = \str_replace('\\', '/', $path);
-            $varDir = \str_replace('\\', '/', \rtrim((string)Env::VAR_DIR, '\\/')) . '/';
+            $varDir = \str_replace('\\', '/', \rtrim((string)Env::varDir(), '\\/')) . '/';
             $tokenDir = \str_replace('\\', '/', \rtrim(SharedStateRuntimeScope::tokenDirectory(), '\\/')) . '/';
             return \str_starts_with($normalized, $varDir)
                 || \str_starts_with($normalized, $tokenDir);
         }
         $resolved = \str_replace('\\', '/', $resolved);
         $roots = [];
-        $varReal = \realpath((string)Env::VAR_DIR);
+        $varReal = \realpath((string)Env::varDir());
         if (\is_string($varReal) && $varReal !== '') {
             $roots[] = \str_replace('\\', '/', $varReal);
         }
@@ -2192,8 +2192,8 @@ class SharedStateServiceManager
         }
 
         // POSIX: always detach (fork+setsid / out-of-process helper). Do NOT use
-        // masterOwned proc_open — CLI shutdown reaps those with SIGTERM, and
-        // masterOwned=false requires FFI which production PHP often lacks.
+        // masterOwned proc_open — CLI shutdown reaps those with SIGTERM.
+        // masterOwned=false 需要 FFI；Unix Direct 现已强制 FFI，共享侧车仍走 detach。
         if (!(\defined('IS_WIN') && IS_WIN)) {
             $pids = [];
             foreach ($definitions as $definition) {
@@ -2881,7 +2881,7 @@ class SharedStateServiceManager
     {
         $shortRole = $this->toShortRole($role);
 
-        return Env::VAR_DIR . 'server' . \DIRECTORY_SEPARATOR . 'shared' . \DIRECTORY_SEPARATOR
+        return Env::varDir() . 'server' . \DIRECTORY_SEPARATOR . 'shared' . \DIRECTORY_SEPARATOR
             . SharedStateRuntimeScope::scopeDefaultFileName($shortRole . '.json');
     }
 
@@ -2985,7 +2985,7 @@ class SharedStateServiceManager
     protected function getRoleLifecycleLockPath(string $role): string
     {
         $shortRole = $this->toShortRole($this->normalizeRoleName($role));
-        return Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'shared'
+        return Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'shared'
             . DIRECTORY_SEPARATOR
             . SharedStateRuntimeScope::scopeDefaultFileName(
                 $shortRole . '.lifecycle.lock',

@@ -429,7 +429,7 @@ while (true) {
             }
         }
 
-        $localCaDir = BP . 'var' . DS . 'server' . DS . '_local_ca' . DS;
+        $localCaDir = VAR_DIR . 'server' . DS . '_local_ca' . DS;
         $localCaAssets = [
             '/_wls/local-ca/rootCA.pem' => [
                 'path' => $localCaDir . 'rootCA.pem',

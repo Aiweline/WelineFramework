@@ -356,7 +356,7 @@ class ServerQueryProvider implements QueryProviderInterface
         if (!empty($params['use_wls_virtual_http01'])) {
             $webroot = SslCertificateService::WEBROOT_WLS_VIRTUAL;
         } elseif ($webroot === '') {
-            $webroot = \defined('PUB') ? PUB : (BP . 'pub');
+            $webroot = PUB;
         }
 
         $email = (string) ($params['email'] ?? '');
@@ -1105,7 +1105,7 @@ class ServerQueryProvider implements QueryProviderInterface
         if (!$cert->getCertId()) {
             return ['success' => false, 'message' => __('未找到证书记录')];
         }
-        $webroot = BP . 'pub';
+        $webroot = rtrim(PUB, '/\\');
         return $this->sslCertificateService->renewCertificate($cert, $webroot, $email ?: 'admin@' . $domain);
     }
 

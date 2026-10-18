@@ -139,7 +139,7 @@ class SslCertificateServiceTest extends TestCase
 
     public function testRegenerateCertificateMapCanSkipBroadcastForStartupRefresh(): void
     {
-        $mapFile = Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
+        $mapFile = Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
         $hadMap = \is_file($mapFile);
         $previousMap = $hadMap ? (string) \file_get_contents($mapFile) : null;
 
@@ -1569,7 +1569,7 @@ class SslCertificateServiceTest extends TestCase
 
     public function testLegacyCertificateMapCollectsValidPairedAtomicRecoveryBackup(): void
     {
-        $mapFile = Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
+        $mapFile = Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
         $hadMap = \is_file($mapFile);
         $previousMap = $hadMap ? (string)\file_get_contents($mapFile) : null;
         $backup = $mapFile . '.wls-backup-eeeeeeeeeeeeeeee';

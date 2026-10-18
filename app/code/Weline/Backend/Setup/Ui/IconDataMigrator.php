@@ -84,7 +84,7 @@ final class IconDataMigrator
 
     public function defaultSnapshotPath(): string
     {
-        $varPath = defined('VAR_PATH') ? (string)VAR_PATH : (string)BP . 'var' . DIRECTORY_SEPARATOR;
+        $varPath = defined('VAR_PATH') ? (string)VAR_DIR : (string)VAR_DIR;
         return rtrim($varPath, '/\\')
             . DIRECTORY_SEPARATOR . 'migration'
             . DIRECTORY_SEPARATOR . 'weline-ui-2.0-icons.json';

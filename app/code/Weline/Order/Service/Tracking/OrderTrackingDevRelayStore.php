@@ -11,7 +11,7 @@ final class OrderTrackingDevRelayStore
 {
     private function path(): string
     {
-        $dir = BP . 'var';
+        $dir = rtrim(VAR_DIR, '/\\');
         if (!is_dir($dir)) {
             @mkdir($dir, 0775, true);
         }

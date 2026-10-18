@@ -20,6 +20,16 @@
  */
 
 return [
+    // ==================== 可迁磁盘根（系统盘 / 数据盘分离）====================
+    // 空或省略 = 默认 BP/pub、BP/var、{pub}/media。
+    // 相对路径相对 BP；绝对路径原样使用。改完后须重启并重写托管 Nginx/WLS 边缘。
+    // URL 前缀仍为 /pub/media、/static —— 只改磁盘根，不改对外路径。
+    'directories' => [
+        'pub' => '',    // 例：'/data/weline/pub'
+        'var' => '',    // 例：'/data/weline/var'
+        'media' => '',  // 例：'/data/weline/media'（可单独外置，默认 {pub}/media）
+    ],
+
     // ==================== 系统核心配置 ====================
     'system' => [
         'env' => 'local',           // 环境类型：local, dev, test, prod

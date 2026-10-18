@@ -30,7 +30,9 @@ class File extends DataObject implements SessionDriverHandlerInterface
     {
         parent::__construct($config);
         $this->config = $config;
-        $this->sessionPath = isset($this->config['path']) ? BP . str_replace('/', DS, $this->config['path']) : BP . 'var' . DS . 'session' . DS;
+        $configured = isset($this->config['path']) ? (string)$this->config['path'] : 'var/session/';
+        $resolved = \Weline\Framework\App\DirectoryList::resolveConfiguredDataPathStatic($configured);
+        $this->sessionPath = \rtrim(\str_replace(['/', '\\'], DS, $resolved), DS) . DS;
         if (!is_dir($this->sessionPath)) {
             mkdir($this->sessionPath, 0700);
         }

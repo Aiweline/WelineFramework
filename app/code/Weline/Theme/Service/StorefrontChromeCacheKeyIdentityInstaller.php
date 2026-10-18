@@ -269,10 +269,10 @@ final class StorefrontChromeCacheKeyIdentityInstaller
             ?: 'default'
         );
         $instance = \trim($instance) !== '' ? \trim($instance) : 'default';
-        $path = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR
+        $path = VAR_DIR . 'server' . DIRECTORY_SEPARATOR
             . 'instances' . DIRECTORY_SEPARATOR . $instance . '.json';
         if (!\is_file($path)) {
-            $path = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR
+            $path = VAR_DIR . 'server' . DIRECTORY_SEPARATOR
                 . 'instances' . DIRECTORY_SEPARATOR . 'default.json';
         }
         if (!\is_file($path)) {

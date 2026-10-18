@@ -1753,7 +1753,7 @@ class ServiceOrchestrator
             return;
         }
 
-        $path = BP . 'var' . \DIRECTORY_SEPARATOR . 'log' . \DIRECTORY_SEPARATOR . 'wls-startup-trace.log';
+        $path = VAR_DIR . 'log' . \DIRECTORY_SEPARATOR . 'wls-startup-trace.log';
         $handle = @\fopen($path, 'ab');
         if (!\is_resource($handle)) {
             return;
@@ -3655,7 +3655,7 @@ class ServiceOrchestrator
             return;
         }
 
-        $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $context->instanceName . '.json';
+        $instanceFile = Env::varDir() . 'server' . DS . 'instances' . DS . $context->instanceName . '.json';
         $now = \time();
         $at = \date('Y-m-d H:i:s', $now);
 
@@ -8192,7 +8192,7 @@ class ServiceOrchestrator
             return;
         }
 
-        $dir = Env::VAR_DIR . 'server' . \DIRECTORY_SEPARATOR . 'control' . \DIRECTORY_SEPARATOR;
+        $dir = Env::varDir() . 'server' . \DIRECTORY_SEPARATOR . 'control' . \DIRECTORY_SEPARATOR;
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0755, true);
         }
@@ -18937,7 +18937,7 @@ class ServiceOrchestrator
 
     protected function markStartupPhaseRunning(ServiceContext $context, int $totalServices): void
     {
-        $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $context->instanceName . '.json';
+        $instanceFile = Env::varDir() . 'server' . DS . 'instances' . DS . $context->instanceName . '.json';
         $published = ServerInstanceManager::updateJsonFileAtomically(
             $instanceFile,
             static function (array $data) use ($context, $totalServices): array {
@@ -19007,7 +19007,7 @@ class ServiceOrchestrator
             $message = 'startup event';
         }
 
-        $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $context->instanceName . '.json';
+        $instanceFile = Env::varDir() . 'server' . DS . 'instances' . DS . $context->instanceName . '.json';
         $now = \time();
         $event = \array_merge([
             'kind' => $kind,
@@ -19051,7 +19051,7 @@ class ServiceOrchestrator
 
     private function persistMasterEpoch(ServiceContext $context): void
     {
-        $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $context->instanceName . '.json';
+        $instanceFile = Env::varDir() . 'server' . DS . 'instances' . DS . $context->instanceName . '.json';
         $published = ServerInstanceManager::updateJsonFileAtomically(
             $instanceFile,
             static function (array $data) use ($context): array {

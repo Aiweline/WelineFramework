@@ -535,7 +535,7 @@ class SqlImportService
 
     private function storageRoot(): string
     {
-        return BP . 'var' . DS . 'database' . DS . 'sql-import' . DS;
+        return VAR_DIR . 'database' . DS . 'sql-import' . DS;
     }
 
     private function ensureStorage(): void

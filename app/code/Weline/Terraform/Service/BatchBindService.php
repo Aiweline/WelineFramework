@@ -367,7 +367,7 @@ class BatchBindService
      */
     private function prepareTerraformWorkspace(int $batchId, array $domains, string $apiToken, string $accountId, array $dnsRecord): string
     {
-        $workDir = BP . 'var' . DIRECTORY_SEPARATOR . 'terraform' . DIRECTORY_SEPARATOR . 'batch_' . $batchId;
+        $workDir = VAR_DIR . 'terraform' . DIRECTORY_SEPARATOR . 'batch_' . $batchId;
         if (!is_dir($workDir)) {
             mkdir($workDir, 0755, true);
         }

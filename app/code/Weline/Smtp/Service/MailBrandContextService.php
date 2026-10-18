@@ -1061,7 +1061,7 @@ class MailBrandContextService
             $websiteCode = 'default';
         }
         $baseRel = 'websites/' . $websiteCode . '/default/brand';
-        $dir = BP . '/pub/media/' . $baseRel;
+        $dir = MEDIA_DIR . $baseRel;
         if (!is_dir($dir)) {
             return '';
         }
@@ -1455,7 +1455,7 @@ class MailBrandContextService
         if ($path === '' || str_contains($path, '..')) {
             return '';
         }
-        $disk = BP . '/pub/media/' . $path;
+        $disk = MEDIA_DIR . $path;
         if (!is_file($disk)) {
             return '';
         }

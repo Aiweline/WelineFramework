@@ -84,9 +84,6 @@ class Env extends DataObject
         self::path_FRONTEND_PC_ROUTER_FILE,
     ];
 
-    // 生成的var目录
-    public const VAR_DIR = BP . 'var' . DS;
-
     // 生成文件的目录
     public const GENERATED_DIR = BP . 'generated';
 
@@ -113,16 +110,73 @@ class Env extends DataObject
     // 拓展目录
     public const extend_dir = BP . 'extend' . DS;
 
-    // 拓展目录
-    public const backup_dir = self::VAR_DIR . DS . 'backup' . DS;
-
     // 卸载备份目录（默认在项目根目录的上级目录的 storage 目录）
     public const path_UNINSTALL_BACKUP_DIR = null; // 将在 getUninstallBackupDir() 中动态获取
 
     // 主题设计
     public const path_THEME_DESIGN_DIR = BP . 'app' . DS . 'design' . DS;
-    // 主题设计
-    public const path_UPLOAD_DIR = PUB . 'upload' . DS;
+
+    /**
+     * Relocatable var root (env.php directories.var). Prefer global VAR_DIR after bootstrap.
+     */
+    public static function varDir(): string
+    {
+        if (\defined('VAR_DIR')) {
+            return (string)\constant('VAR_DIR');
+        }
+        // Worker/sidecar early boot may call this before bootstrap defines VAR_DIR.
+        // Never use bare VAR_DIR here: inside this namespace it resolves to
+        // Weline\Framework\App\VAR_DIR and fatals.
+        if (\defined('BP')) {
+            return \rtrim((string)\constant('BP'), '/\\') . \DIRECTORY_SEPARATOR . 'var' . \DIRECTORY_SEPARATOR;
+        }
+
+        throw new \RuntimeException('VAR_DIR is not defined and BP is unavailable.');
+    }
+
+    /**
+     * Backup tree under relocatable var.
+     */
+    public static function backupDir(): string
+    {
+        return \rtrim(self::varDir(), '/\\') . DS . 'backup' . DS;
+    }
+
+    /**
+     * Public upload directory under relocatable PUB.
+     */
+    public static function uploadDir(): string
+    {
+        $pub = self::pubDir();
+        return \rtrim($pub, '/\\') . DS . 'upload' . DS;
+    }
+
+    /**
+     * Relocatable media root (env.php directories.media). Prefer global MEDIA_DIR.
+     */
+    public static function mediaDir(): string
+    {
+        if (\defined('MEDIA_DIR')) {
+            return (string)\constant('MEDIA_DIR');
+        }
+        $pub = self::pubDir();
+        return \rtrim($pub, '/\\') . DS . 'media' . DS;
+    }
+
+    /**
+     * Relocatable public root. Prefer global PUB after bootstrap.
+     */
+    private static function pubDir(): string
+    {
+        if (\defined('PUB')) {
+            return (string)\constant('PUB');
+        }
+        if (\defined('BP')) {
+            return \rtrim((string)\constant('BP'), '/\\') . \DIRECTORY_SEPARATOR . 'pub' . \DIRECTORY_SEPARATOR;
+        }
+
+        throw new \RuntimeException('PUB is not defined and BP is unavailable.');
+    }
 
     // 变量
 
@@ -660,7 +714,7 @@ class Env extends DataObject
     {
         $value = trim($filename);
         if ($value === '') {
-            return Env::VAR_DIR . 'log' . DS . 'app.log';
+            return Env::varDir() . 'log' . DS . 'app.log';
         }
 
         $normalized = str_replace('\\', '/', $value);
@@ -678,7 +732,7 @@ class Env extends DataObject
             $safe .= '.log';
         }
 
-        return Env::VAR_DIR . 'log' . DS . $safe;
+        return Env::varDir() . 'log' . DS . $safe;
     }
 
     /**
@@ -1331,7 +1385,8 @@ class Env extends DataObject
      */
     public function getLogPath(string $type): string
     {
-        return BP . $this->config['log'][$type];
+        $configured = (string)($this->config['log'][$type] ?? '');
+        return DirectoryList::resolveConfiguredDataPathStatic($configured);
     }
 
     /**

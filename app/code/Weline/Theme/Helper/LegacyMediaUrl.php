@@ -102,7 +102,7 @@ final class LegacyMediaUrl
             return $url;
         }
 
-        $pubRoot = rtrim((string)(defined('PUB') ? PUB : (defined('BP') ? BP . '/pub/' : '')), '/\\');
+        $pubRoot = rtrim((string)(defined('PUB') ? PUB : (defined('BP') ? PUB . '' : '')), '/\\');
         if ($pubRoot === '') {
             return $url;
         }

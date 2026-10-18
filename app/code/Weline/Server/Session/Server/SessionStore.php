@@ -182,7 +182,7 @@ final class SessionStore
             : !\in_array(\strtolower(\trim((string)$persistEnabled)), ['', '0', 'false', 'no', 'off'], true);
         
         $defaultLegacyPath = \defined('BP')
-            ? BP . 'var/session/'
+            ? VAR_DIR . 'session/'
             : '/tmp/wls_session/';
         $persistPathExplicit = \array_key_exists('persist_path', $config)
             && \trim((string)$config['persist_path']) !== '';

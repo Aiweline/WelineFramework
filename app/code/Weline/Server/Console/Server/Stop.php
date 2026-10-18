@@ -372,7 +372,7 @@ class Stop extends CommandAbstract
         if (!$lifecycleLock->acquire($instanceName, 'stop', $timeout)) {
             return false;
         }
-        $lockDir = Env::VAR_DIR . 'server' . DS . 'locks' . DS;
+        $lockDir = Env::varDir() . 'server' . DS . 'locks' . DS;
         $this->stopLockFile = $lockDir . 'stop_' . $instanceName . '.lock';
         $handle = VerifiedPersistentFileLock::acquire(
             $this->stopLockFile,
@@ -2816,7 +2816,7 @@ class Stop extends CommandAbstract
      * 从 pid_index 中一次性收集指定实例的 WLS PID，避免逐前缀触发系统搜索。
      *
      * 可见性为 `protected`（**不是** `private`）：本方法是**唯一**读取
-     * `Env::VAR_DIR . process/pid/pid_index.json` 的残留来源，因此也是唯一会把
+     * `Env::varDir() . process/pid/pid_index.json` 的残留来源，因此也是唯一会把
      * 「本机此刻是否真有同名实例在跑」这一环境状态带进单测的入口。
      * 必须允许测试覆写它，才能在不依赖宿主环境的前提下验证「热路径不扫 PID 索引」
      * 与「IPC 成功后不做本地前缀扫描」两条契约；
@@ -3032,7 +3032,7 @@ class Stop extends CommandAbstract
 
     private function findConfiguredRunningInstanceNameByPort(int $port): ?string
     {
-        $configDir = Env::VAR_DIR . 'server' . DS . 'config' . DS;
+        $configDir = Env::varDir() . 'server' . DS . 'config' . DS;
         foreach ($this->enumerateBoundedRecoveryFiles(
             $configDir,
             '.json',
@@ -3231,7 +3231,7 @@ class Stop extends CommandAbstract
         }
 
         $portIndex = $this->readBoundedRecoveryJson(
-            Env::VAR_DIR . 'process' . DS . 'pid' . DS . 'port_index.json',
+            Env::varDir() . 'process' . DS . 'pid' . DS . 'port_index.json',
             self::MAX_RECOVERY_PORT_INDEX_BYTES,
             'WLS process port index',
             true,
@@ -3341,7 +3341,7 @@ class Stop extends CommandAbstract
         if (\preg_match('/\A[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\z/D', $name) !== 1) {
             return [];
         }
-        $configFile = Env::VAR_DIR . 'server' . DS . 'config' . DS . $name . '.json';
+        $configFile = Env::varDir() . 'server' . DS . 'config' . DS . $name . '.json';
         $data = $this->readBoundedRecoveryJson(
             $configFile,
             self::MAX_RECOVERY_CONFIG_BYTES,
@@ -3360,7 +3360,7 @@ class Stop extends CommandAbstract
             }
         }
 
-        $portIndexFile = Env::VAR_DIR . 'process' . DS . 'pid' . DS . 'port_index.json';
+        $portIndexFile = Env::varDir() . 'process' . DS . 'pid' . DS . 'port_index.json';
         $portIndex = $this->readBoundedRecoveryJson(
             $portIndexFile,
             self::MAX_RECOVERY_PORT_INDEX_BYTES,
@@ -3425,7 +3425,7 @@ class Stop extends CommandAbstract
 
     protected function ipcAppendStopTraceHint(string $instanceName): void
     {
-        $file = Env::VAR_DIR . 'server' . DS . 'control' . DS . $instanceName . '.stop.trace.jsonl';
+        $file = Env::varDir() . 'server' . DS . 'control' . DS . $instanceName . '.stop.trace.jsonl';
         $tail = $this->readBoundedRecoveryFileTail(
             $file,
             self::MAX_STOP_TRACE_BYTES,
@@ -3745,7 +3745,7 @@ class Stop extends CommandAbstract
      */
     protected function queryRecoverableManagedPids(string $name): array
     {
-        $pidDir = Env::VAR_DIR . 'process' . DS . 'pid' . DS;
+        $pidDir = Env::varDir() . 'process' . DS . 'pid' . DS;
         $scopedInstanceSuffix = '-' . MasterProcess::getScopedInstanceName($name);
         $pids = [];
 

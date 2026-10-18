@@ -225,7 +225,7 @@ class PixelErrorIncidentService
 
     private function resolveServerDeployVersion(): string
     {
-        $file = BP . 'var' . DIRECTORY_SEPARATOR . 'deploy' . DIRECTORY_SEPARATOR . 'current.json';
+        $file = VAR_DIR . 'deploy' . DIRECTORY_SEPARATOR . 'current.json';
         if (!is_file($file)) {
             return 'dev';
         }
@@ -239,7 +239,7 @@ class PixelErrorIncidentService
 
     private function resolveServerWorkerBuildId(): string
     {
-        $file = BP . 'var' . DIRECTORY_SEPARATOR . 'deploy' . DIRECTORY_SEPARATOR . 'current.json';
+        $file = VAR_DIR . 'deploy' . DIRECTORY_SEPARATOR . 'current.json';
         if (!is_file($file)) {
             return 'dev';
         }

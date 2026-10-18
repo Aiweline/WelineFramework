@@ -36,7 +36,7 @@ final class TemplateCompileOriginScopeTest extends TestCase
             $events = $this->getMockBuilder(EventsManager::class)->disableOriginalConstructor()->onlyMethods(['dispatch'])->getMock();
             (new ReflectionProperty(Template::class, 'eventsManager'))->setValue($template, $events);
             $method = new ReflectionMethod(Template::class, 'stableTemplateCompileDirectory');
-            $directory = BP . 'var/origin-fixture-compile/';
+            $directory = VAR_DIR . 'origin-fixture-compile/';
             $first = $method->invoke($template, $directory);
 
             self::assertStringContainsString('frontend_w27_origin_shop_en_US_USD', $first);

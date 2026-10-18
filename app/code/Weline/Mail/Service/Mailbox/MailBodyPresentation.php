@@ -24,8 +24,11 @@ final class MailBodyPresentation
 
         $text = self::extractBodyType($message, 'textBody');
         $html = self::extractBodyType($message, 'htmlBody');
-        if ($html === '' && $text !== '' && self::looksLikeHtml($text)) {
-            $html = $text;
+        // QQ/客户端有时把 HTML 整份塞进 text/plain；不能当纯文本留给阅读器/回复引用。
+        if ($text !== '' && self::looksLikeHtml($text)) {
+            if ($html === '') {
+                $html = $text;
+            }
             $text = '';
         }
         if ($html === '' && $text === '') {

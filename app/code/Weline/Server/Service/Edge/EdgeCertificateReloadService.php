@@ -84,7 +84,7 @@ final class EdgeCertificateReloadService
      */
     private function persistLastResult(array $result): void
     {
-        $path = Env::VAR_DIR . self::LAST_RESULT_RELATIVE;
+        $path = Env::varDir() . self::LAST_RESULT_RELATIVE;
         $dir = \dirname($path);
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0755, true);
@@ -100,7 +100,7 @@ final class EdgeCertificateReloadService
      */
     public function readLastResult(): ?array
     {
-        $path = Env::VAR_DIR . self::LAST_RESULT_RELATIVE;
+        $path = Env::varDir() . self::LAST_RESULT_RELATIVE;
         if (!\is_file($path)) {
             return null;
         }

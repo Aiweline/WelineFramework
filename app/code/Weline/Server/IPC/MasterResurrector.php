@@ -217,7 +217,7 @@ class MasterResurrector
     public function attemptResurrect(): bool
     {
         // ========== 文件锁：确保只有一个进程能执行复活 ==========
-        $lockDir = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances';
+        $lockDir = VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances';
         if (!is_dir($lockDir)) {
             @mkdir($lockDir, 0755, true);
         }
@@ -486,7 +486,7 @@ class MasterResurrector
             return true;
         }
 
-        $instanceFile = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $this->instanceName . '.json';
+        $instanceFile = Env::varDir() . 'server' . DS . 'instances' . DS . $this->instanceName . '.json';
         if (!\is_file($instanceFile)) {
             return true;
         }

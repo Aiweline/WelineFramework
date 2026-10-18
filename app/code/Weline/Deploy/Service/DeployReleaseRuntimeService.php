@@ -12,7 +12,7 @@ class DeployReleaseRuntimeService
 
     public function __construct()
     {
-        $this->filePath = BP . 'var' . DS . 'deploy' . DS . 'current.json';
+        $this->filePath = VAR_DIR . 'deploy' . DS . 'current.json';
     }
 
     /**

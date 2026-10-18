@@ -39,6 +39,13 @@ class MailAccount extends Model
     #[Col('varchar', 32, default: 'pending', comment: '账号状态')]
     public const schema_fields_STATUS = 'status';
 
+    /** 启域/Ensure 创建的系统邮箱（contact@ 人收、smtp@ 提交代理等）：禁止删改身份与改密。 */
+    public const SYSTEM_LOCAL_CONTACT = 'contact';
+    public const SYSTEM_LOCAL_SMTP = 'smtp';
+
+    #[Col('tinyint', default: 0, comment: '系统固定账号：禁止删除、改身份与改密')]
+    public const schema_fields_IS_SYSTEM = 'is_system';
+
     #[Col('tinyint', default: 0, comment: '该邮箱是否走外投 smarthost')]
     public const schema_fields_OUTBOUND_RELAY_ENABLED = 'outbound_relay_enabled';
 
@@ -60,6 +67,9 @@ class MailAccount extends Model
     #[Col('varchar', 255, nullable: true, comment: '本地登录密码哈希')]
     public const schema_fields_PASSWORD_HASH = 'password_hash';
 
+    #[Col('text', nullable: true, comment: '登录密码密封（项目密钥，可跟库迁机）')]
+    public const schema_fields_PASSWORD_SEALED = 'password_sealed';
+
     #[Col('datetime', nullable: true, comment: '最后同步时间')]
     public const schema_fields_LAST_SYNCED_AT = 'last_synced_at';
 
@@ -68,4 +78,62 @@ class MailAccount extends Model
 
     #[Col('datetime', default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
     public const schema_fields_UPDATED_AT = 'updated_at';
+
+    /**
+     * 邮局系统固定账号 local_part（与 Ensure / Smtp 提交代理对齐）。
+     *
+     * @return list<string>
+     */
+    public static function reservedSystemLocalParts(): array
+    {
+        return [self::SYSTEM_LOCAL_CONTACT, self::SYSTEM_LOCAL_SMTP];
+    }
+
+    public static function isReservedSystemLocalPart(string $localPart): bool
+    {
+        $local = strtolower(trim($localPart));
+
+        return $local !== '' && in_array($local, self::reservedSystemLocalParts(), true);
+    }
+
+    public static function emailLocalPart(string $email): string
+    {
+        $email = strtolower(trim($email));
+        $at = strpos($email, '@');
+        if ($at === false || $at === 0) {
+            return '';
+        }
+
+        return substr($email, 0, $at);
+    }
+
+    /**
+     * 系统角色短标签（列表徽章旁说明）。
+     */
+    public static function systemRoleLabelForLocal(string $localPart): string
+    {
+        return match (strtolower(trim($localPart))) {
+            self::SYSTEM_LOCAL_CONTACT => (string)__('站点联系（人收）'),
+            self::SYSTEM_LOCAL_SMTP => (string)__('SMTP 提交/代理'),
+            default => (string)__('系统固定账号'),
+        };
+    }
+
+    public function isSystemAccount(): bool
+    {
+        if ((int)$this->getData(self::schema_fields_IS_SYSTEM) === 1) {
+            return true;
+        }
+
+        return self::isReservedSystemLocalPart(
+            self::emailLocalPart((string)$this->getData(self::schema_fields_EMAIL))
+        );
+    }
+
+    public function systemRoleLabel(): string
+    {
+        return self::systemRoleLabelForLocal(
+            self::emailLocalPart((string)$this->getData(self::schema_fields_EMAIL))
+        );
+    }
 }

@@ -228,8 +228,14 @@ class Create extends AbstractTable implements CreateInterface
             $this->additional = "default charset {$this->getConnection()->getConfigProvider()->getCharset()} collate {$this->getConnection()->getConfigProvider()->getCollate()};";
         }
 
+        // SchemaDiff 已建表时，Legacy Install::createTable 再跑会撞「already exists」。
+        // 与 Sqlite/Pgsql Create 对齐：已存在则幂等跳过（不改结构；结构演进走 SchemaDiff）。
+        if ($this->getConnector()->tableExist($this->table)) {
+            return true;
+        }
+
         $sql = <<<createSQL
-CREATE TABLE {$this->table}(
+CREATE TABLE IF NOT EXISTS {$this->table}(
  {$fields_str}
  {$indexes_str}
  {$foreign_key_str}

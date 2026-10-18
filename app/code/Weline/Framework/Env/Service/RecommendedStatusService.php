@@ -41,7 +41,7 @@ class RecommendedStatusService
 
     public function __construct()
     {
-        $varDir = Env::VAR_DIR;
+        $varDir = Env::varDir();
         $envDir = $varDir . 'env' . DIRECTORY_SEPARATOR;
         if (!\is_dir($envDir)) {
             @\mkdir($envDir, 0755, true);

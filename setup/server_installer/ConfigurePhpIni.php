@@ -56,6 +56,7 @@ final class ConfigurePhpIni
             'pdo_pgsql', 'pgsql', 'pdo_mysql', 'mysqli', 'sockets', 'zip', 'bcmath',
             'zlib',
             'sodium',
+            'brotli', // FPC html-disk：Nginx 只认 index.html.br；缺则安装失败
         ];
     }
 

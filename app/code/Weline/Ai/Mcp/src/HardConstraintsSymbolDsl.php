@@ -16,7 +16,8 @@ final class HardConstraintsSymbolDsl
 
     public const GLOSS_MAX = 64;
 
-    public const PACKAGE_TOKEN_BUDGET = 8000;
+    /** Raised 8000→8100 with wls_managed_nginx_supports_fpm_origin hot entry (2026-10-19). */
+    public const PACKAGE_TOKEN_BUDGET = 8100;
 
     public const EXPAND_IDS_MAX = 20;
 
@@ -475,6 +476,11 @@ final class HardConstraintsSymbolDsl
             'production_http_probe_forbids_agent_local_curl' => [
                 'formula' => 'ProdProbe→□SshLocalhost∧¬AgentLocalCurl',
                 'gloss_zh' => '生产公网探活禁本机curl；须SSH本机探',
+                'cluster' => '§P',
+            ],
+            'wls_managed_nginx_supports_fpm_origin' => [
+                'formula' => '□Obey∧(Violate→⊥)',
+                'gloss_zh' => 'WLS支持fpm；须origin:set',
                 'cluster' => '§P',
             ],
             'global_rules_dual_write_mcp_and_host' => [

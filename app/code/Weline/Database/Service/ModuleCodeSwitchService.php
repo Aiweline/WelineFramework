@@ -358,7 +358,7 @@ PHP;
 
     private function temporaryScriptPath(string $purpose): string
     {
-        $directory = BP . 'var' . DS . 'database' . DS . 'rollback-runtime';
+        $directory = VAR_DIR . 'database' . DS . 'rollback-runtime';
         if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
             throw new \RuntimeException(__('无法创建回滚运行时目录'));
         }
@@ -370,7 +370,7 @@ PHP;
         if (!is_file($path)) {
             return;
         }
-        $root = realpath(BP . 'var' . DS . 'database' . DS . 'rollback-runtime');
+        $root = realpath(VAR_DIR . 'database' . DS . 'rollback-runtime');
         $resolved = realpath($path);
         if ($root === false
             || $resolved === false

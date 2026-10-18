@@ -57,7 +57,7 @@ final class FrontendWorkerSessionService
     private const MAX_ACTIVE_STREAM_TICKETS = 4096;
     private const MAX_ACTIVE_SCOPE_BOOTSTRAPS = 4096;
     private const MAX_ACTIVE_BACKEND_BOOTSTRAPS = 4096;
-    private const STORE_DIRECTORY = BP . 'var' . DS . 'cache' . DS . 'frontend_worker' . DS;
+    private const STORE_DIRECTORY = VAR_DIR . 'cache' . DS . 'frontend_worker' . DS;
     private const STORE_FILE = self::STORE_DIRECTORY . 'store.json';
     private const LOCK_FILE = self::STORE_DIRECTORY . 'store.lock';
     private const META_KEY = '_meta';

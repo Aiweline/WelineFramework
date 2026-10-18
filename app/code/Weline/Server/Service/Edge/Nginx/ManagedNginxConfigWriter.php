@@ -462,15 +462,17 @@ NGINX;
         $fpmOrigin = $this->paths->isFpmOrigin();
         $quotedProjectRoot = $this->nginxQuotedPath($this->paths->projectRoot());
         $quotedPubRoot = $this->nginxQuotedPath($this->paths->pubRoot());
+        // Trailing slash must stay inside quotes: alias "/path/media"/; fails nginx -t.
+        $quotedMediaAlias = $this->nginxQuotedPath(\rtrim($this->paths->mediaRoot(), '/\\') . '/');
         $quotedAcmeRoot = $this->nginxQuotedPath($this->paths->acmeChallengeRoot());
         $quotedFastcgiParams = $this->nginxQuotedPath($this->resolveFastcgiParamsPath());
         if ($fpmOrigin) {
             $this->paths->ensureRuntimeDirectories();
         }
         // Literal default_type per extension — nginx does not expand vars in default_type.
+        // Cache-Control only: `expires` also emits Cache-Control max-age and would duplicate.
         $staticBrHitHeaders = <<<NGINX
             access_log off;
-            expires 365d;
             add_header Cache-Control "public, max-age=31536000, immutable" always;
             add_header X-Wls-Static-Disk "1" always;
             error_page 418 = @wls_static_pub_plain;
@@ -486,15 +488,14 @@ NGINX;
             add_header X-Weline-Static-Encoding br always;
 {$locationProtocolHeaders}
 NGINX;
+        // alias maps /pub/media/{rel} → {mediaRoot}/{rel}; do not use try_files $uri with alias.
         $mediaDiskLocationBlock = <<<NGINX
 
         location ^~ /pub/media/ {
-            root {$quotedProjectRoot};
+            alias {$quotedMediaAlias};
             access_log off;
-            expires 365d;
             add_header Cache-Control "public, max-age=31536000, immutable" always;
             add_header X-Wls-Media-Disk "1" always;
-            try_files \$uri =404;
         }
         # Published compile tree: /static/... → {BP}/pub/static/...
         # Nested compressible locations prefer \$uri.br; else plain try_files.
@@ -530,7 +531,6 @@ NGINX;
                 default_type text/plain;
             }
             access_log off;
-            expires 365d;
             add_header Cache-Control "public, max-age=31536000, immutable" always;
             add_header X-Wls-Static-Disk "1" always;
             try_files \$uri @wls_static_origin;
@@ -539,7 +539,6 @@ NGINX;
         location @wls_static_pub_plain {
             root {$quotedPubRoot};
             access_log off;
-            expires 365d;
             add_header Cache-Control "public, max-age=31536000, immutable" always;
             add_header X-Wls-Static-Disk "1" always;
             try_files \$uri @wls_static_origin;
@@ -556,7 +555,6 @@ NGINX;
 {$httpRedirectLocation}
             root {$quotedProjectRoot};
             open_file_cache_errors off;
-            expires 365d;
             add_header Cache-Control "public, max-age=31536000, immutable" always;
             add_header X-Wls-Static-Disk "1" always;
             add_header X-Wls-Static-Fpc "1" always;
@@ -626,7 +624,6 @@ NGINX;
                 return 419;
             }
             try_files /generated/static/live/\$wls_fpc_html_host\$uri @wls_static_origin;
-            expires 365d;
             add_header Cache-Control "public, max-age=31536000, immutable" always;
             add_header X-Wls-Static-Disk "1" always;
             add_header X-Wls-Static-Fpc "1" always;
@@ -636,7 +633,6 @@ NGINX;
         location @wls_static_fpc_plain {
             root {$quotedProjectRoot};
             open_file_cache_errors off;
-            expires 365d;
             add_header Cache-Control "public, max-age=31536000, immutable" always;
             add_header X-Wls-Static-Disk "1" always;
             add_header X-Wls-Static-Fpc "1" always;

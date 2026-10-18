@@ -28,11 +28,11 @@ class DispatcherHttpsDetectionFallbackTest extends TestCase
     {
         $instanceName = 'dispatcher-https-runtime';
         $this->writeJson(
-            BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json',
+            VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json',
             ['ssl_enabled' => true]
         );
         $this->writeJson(
-            BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . $instanceName . '.json',
+            VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . $instanceName . '.json',
             ['ssl_cert' => '', 'ssl_key' => '']
         );
 
@@ -43,11 +43,11 @@ class DispatcherHttpsDetectionFallbackTest extends TestCase
     {
         $instanceName = 'dispatcher-https-config-fallback';
         $this->writeJson(
-            BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json',
+            VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json',
             ['master_enabled' => true]
         );
         $this->writeJson(
-            BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . $instanceName . '.json',
+            VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . $instanceName . '.json',
             ['ssl_cert' => BP . 'app/etc/ssl/example/fullchain.pem', 'ssl_key' => BP . 'app/etc/ssl/example/privkey.pem']
         );
 
@@ -58,7 +58,7 @@ class DispatcherHttpsDetectionFallbackTest extends TestCase
     {
         $instanceName = 'dispatcher-https-disabled';
         $this->writeJson(
-            BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . $instanceName . '.json',
+            VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . $instanceName . '.json',
             ['host' => '127.0.0.1', 'port' => 8080]
         );
 

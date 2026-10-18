@@ -169,7 +169,7 @@ class Scale extends CommandAbstract
             /** @var ServerInstanceManager $manager */
             $manager = ObjectManager::getInstance(ServerInstanceManager::class);
             $resolved = $manager->resolvePersistedInstanceName($instanceName) ?? $instanceName;
-            $configDir = \Weline\Framework\App\Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'config';
+            $configDir = \Weline\Framework\App\Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'config';
             $store = new \Weline\Server\Service\Edge\Gateway\SavedInstanceConfigStore($configDir);
             $cfg = $store->load($resolved);
             if (!\is_array($cfg)) {

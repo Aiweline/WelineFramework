@@ -393,8 +393,10 @@ final class MaintenanceStaticGenerator
     private function pruneObsoleteStaticFiles(array $activeLocales): void
     {
         $active = \array_fill_keys($activeLocales, true);
-        $dir = (\defined('PUB') ? \rtrim((string)PUB, \DIRECTORY_SEPARATOR) : BP . 'pub')
-            . \DIRECTORY_SEPARATOR . 'errors' . \DIRECTORY_SEPARATOR . 'maintenance';
+        $pub = \defined('PUB')
+            ? \rtrim((string)\constant('PUB'), '/\\')
+            : ((\defined('BP') ? \rtrim((string)\constant('BP'), '/\\') : '') . \DIRECTORY_SEPARATOR . 'pub');
+        $dir = $pub . \DIRECTORY_SEPARATOR . 'errors' . \DIRECTORY_SEPARATOR . 'maintenance';
         if (!\is_dir($dir)) {
             return;
         }
@@ -679,7 +681,7 @@ final class MaintenanceStaticGenerator
         if ($src === '' || !\is_file($src)) {
             return '';
         }
-        $destDir = BP . 'pub/errors/maintenance/flags';
+        $destDir = rtrim(PUB, '/\\') . '/errors/maintenance/flags';
         $dest = $destDir . '/' . $code . '.svg';
         if (!\is_file($dest)) {
             if (!\is_dir($destDir) && !@\mkdir($destDir, 0755, true) && !\is_dir($destDir)) {

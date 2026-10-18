@@ -46,7 +46,7 @@ class Flush implements \Weline\Framework\Console\CommandInterface
         $errors = [];
 
         // 获取缓存目录
-        $cacheDir = BP . 'var' . DS . 'cache';
+        $cacheDir = VAR_DIR . 'cache';
         
         if (!is_dir($cacheDir)) {
             $this->printing->errorIcon(__('缓存目录不存在: %{1}', [$cacheDir]));

@@ -523,7 +523,7 @@ private function assert_UrlMatrixExpanderPathLocale_testMatrixPurgeClearsBakedZh
     $slug = 'probe-' . \substr(\md5((string) \microtime(true)), 0, 8);
     $urlZh = FpcPayloadPathIndex::normalizeIndexKey($origin . '/product/' . $slug);
     $urlEn = FpcPayloadPathIndex::normalizeIndexKey($origin . '/en_US/product/' . $slug);
-    $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads' . \DIRECTORY_SEPARATOR . 'mx';
+    $payloadDir = VAR_DIR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads' . \DIRECTORY_SEPARATOR . 'mx';
     if (!\is_dir($payloadDir)) {
         \mkdir($payloadDir, 0775, true);
     }

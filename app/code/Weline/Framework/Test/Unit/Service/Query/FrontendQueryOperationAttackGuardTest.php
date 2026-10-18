@@ -16,7 +16,7 @@ final class FrontendQueryOperationAttackGuardTest extends TestCase
     {
         parent::setUp();
         $storeDir = \defined('BP')
-            ? BP . 'var/cache/frontend_worker/operation_attack/'
+            ? VAR_DIR . 'cache/frontend_worker/operation_attack/'
             : \sys_get_temp_dir() . '/weline-operation-attack/';
         $this->storeDir = $storeDir;
         if (\is_dir($this->storeDir)) {

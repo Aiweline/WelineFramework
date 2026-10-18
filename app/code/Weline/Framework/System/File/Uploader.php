@@ -16,7 +16,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 class Uploader
 {
-    private string $media_dir = PUB . 'media' . DS;
+    private string $media_dir;
     private string $uploader_dir = 'uploader' . DS;
     private string $module_dir = '';
     private string $module_name = '';
@@ -24,6 +24,12 @@ class Uploader
     private array $ext = ['gif', 'jpg', 'png', 'jpeg'];
     private bool $headerResponse = false;
     private $headers = [];
+
+    public function __construct()
+    {
+        $mediaRoot = \defined('MEDIA_DIR') ? (string)\constant('MEDIA_DIR') : (PUB . 'media' . DS);
+        $this->media_dir = \rtrim($mediaRoot, '/\\') . DS;
+    }
 
     function setExt(array $ext): self
     {
@@ -219,6 +225,11 @@ class Uploader
             chmod($dir, 0777);
         }
         if (move_uploaded_file($tmp_file, $filename)) {
+            $abs = \str_replace('\\', '/', $filename);
+            $mediaRoot = \str_replace('\\', '/', \rtrim($this->media_dir, '/\\'));
+            if ($mediaRoot !== '' && \str_starts_with($abs, $mediaRoot)) {
+                return '/pub/media/' . \ltrim(\substr($abs, \strlen($mediaRoot)), '/');
+            }
             $filename = str_replace(BP, '', $filename);
             return '/' . str_replace('\\', '/', $filename);
         } else {

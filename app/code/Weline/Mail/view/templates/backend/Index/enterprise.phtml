@@ -13,8 +13,44 @@ use Weline\Smtp\Model\SmtpAccount;
 use Weline\Smtp\Model\SmtpService;
 
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$formatMailListParty = static function (string $raw): string {
+    $raw = trim(preg_replace('/\s+/u', ' ', $raw) ?? $raw);
+    if ($raw === '') {
+        return '';
+    }
+    if (preg_match('/^(.+?)\s*<\s*([^>]+)\s*>$/u', $raw, $m) === 1) {
+        $name = trim($m[1]);
+        $email = strtolower(trim($m[2]));
+        if ($name !== '' && strcasecmp($name, $email) !== 0) {
+            return $name;
+        }
+        return $email !== '' ? $email : $name;
+    }
+    return $raw;
+};
+$formatMailListTime = static function (string $raw): string {
+    $raw = trim($raw);
+    if ($raw === '') {
+        return '';
+    }
+    try {
+        $dt = new \DateTimeImmutable($raw);
+    } catch (\Throwable) {
+        return $raw;
+    }
+    $now = new \DateTimeImmutable('now');
+    if ($dt->format('Y-m-d') === $now->format('Y-m-d')) {
+        return $dt->format('H:i');
+    }
+    if ($dt->format('Y') === $now->format('Y')) {
+        return $dt->format('m-d H:i');
+    }
+    return $dt->format('Y-m-d');
+};
 $view = $mail_view ?? 'mailbox';
 $folder = $folder ?? 'inbox';
+$mailboxListUnreadOnly = (bool)($mailbox_list_unread_only ?? ($folder === 'inbox'));
+$mailboxShowAll = (bool)($mailbox_show_all ?? false);
 $domains = $domains ?? [];
 $accounts = $accounts ?? [];
 $mailboxAccounts = $mailbox_accounts ?? [];
@@ -163,23 +199,41 @@ if ($oauthCfError === 'invalid_scope') {
 }
 .mail-enterprise__row {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: var(--weline-space-3);
+    grid-template-columns: auto auto minmax(0, 1fr);
+    gap: var(--weline-space-2) var(--weline-space-3);
     align-items: start;
     padding: var(--weline-space-3) var(--weline-space-4);
     border-bottom: 1px solid var(--weline-theme-border);
     color: inherit;
     text-decoration: none;
+    background: transparent;
 }
-.mail-enterprise__row:hover,
-.mail-enterprise__row.is-active {
+.mail-enterprise__row:hover {
     background: var(--weline-theme-surface-hover);
 }
-.mail-enterprise__row.is-unread {
-    box-shadow: inset 3px 0 0 var(--weline-theme-primary, var(--weline-theme-accent, #2563eb));
+.mail-enterprise__row.is-active {
+    background: color-mix(in srgb, var(--weline-theme-primary) 10%, var(--weline-theme-surface-hover, transparent));
 }
-.mail-enterprise__row.is-unread .mail-enterprise__subject {
-    font-weight: 700;
+.mail-enterprise__row.is-unread {
+    background: color-mix(in srgb, var(--weline-theme-primary) 7%, transparent);
+    box-shadow: inset 3px 0 0 var(--weline-theme-primary, #3b82f6);
+}
+.mail-enterprise__row.is-unread:hover,
+.mail-enterprise__row.is-unread.is-active {
+    background: color-mix(in srgb, var(--weline-theme-primary) 12%, var(--weline-theme-surface-hover, transparent));
+}
+.mail-enterprise__unread-dot {
+    display: block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-block-start: 0.55rem;
+    border-radius: 999px;
+    background: transparent;
+    flex: 0 0 auto;
+}
+.mail-enterprise__row.is-unread .mail-enterprise__unread-dot {
+    background: var(--weline-theme-primary, #3b82f6);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--weline-theme-primary) 22%, transparent);
 }
 .mail-enterprise__row-main {
     display: block;
@@ -208,25 +262,76 @@ if ($oauthCfError === 'invalid_scope') {
     font-size: var(--weline-font-size-sm);
     color: var(--weline-theme-text-muted);
 }
+.mail-enterprise__party {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+    color: var(--weline-theme-text-muted);
+}
+.mail-enterprise__row.is-unread .mail-enterprise__party {
+    font-weight: 750;
+    color: var(--weline-theme-text);
+}
 .mail-enterprise__meta time {
     flex: 0 0 auto;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+    color: var(--weline-theme-text-muted);
+    font-size: 0.75rem;
+}
+.mail-enterprise__row.is-unread .mail-enterprise__meta time {
+    color: var(--weline-theme-primary);
+    font-weight: 650;
 }
 .mail-enterprise__subject {
     margin: var(--weline-space-1) 0;
-    font-weight: 650;
-    color: var(--weline-theme-text);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--weline-space-1);
+    font-weight: 500;
+    color: color-mix(in srgb, var(--weline-theme-text) 82%, var(--weline-theme-text-muted));
     line-height: 1.35;
+}
+.mail-enterprise__row.is-unread .mail-enterprise__subject {
+    font-weight: 750;
+    color: var(--weline-theme-text);
+}
+.mail-enterprise__subject-text {
+    min-inline-size: 0;
 }
 .mail-enterprise__preview {
     margin: 0;
     color: var(--weline-theme-text-muted);
     font-size: var(--weline-font-size-sm);
+    font-weight: 400;
     line-height: 1.4;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    opacity: 0.92;
+}
+.mail-enterprise__row.is-unread .mail-enterprise__preview {
+    opacity: 1;
+}
+.mail-enterprise__reader-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--weline-space-3);
+}
+.mail-enterprise__reader-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--weline-space-2);
+    align-items: center;
+}
+.mail-enterprise__reader-party {
+    display: grid;
+    gap: var(--weline-space-1);
+    font-size: var(--weline-font-size-sm);
+    color: var(--weline-theme-text-muted);
 }
 .mail-enterprise__reader-body {
     padding: var(--weline-space-5);
@@ -599,7 +704,7 @@ if ($oauthCfError === 'invalid_scope') {
         <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0; min-inline-size:0; flex:1 1 16rem;">
             <?= __('查看真实邮件、管理用户邮箱、代发邮件，并指导每个域名完成 DNS。') ?>
         </p>
-        <div class="mail-enterprise__status" style="max-inline-size:min(100%,24rem);">
+        <div class="mail-enterprise__status w-stack" style="max-inline-size:min(100%,28rem); --w-gap:var(--weline-space-2);">
             <?php if ($managementReady): ?>
                 <span class="w-badge" data-tone="success" data-testid="mail-enterprise-stalwart-ready">
                     <?= __('Stalwart 管理连接正常') ?>
@@ -612,7 +717,17 @@ if ($oauthCfError === 'invalid_scope') {
                             <?= __('完成管理连接后才能开通真实邮箱并同步 DNS。') ?>
                         </p>
                         <div class="mail-enterprise__actions" style="--w-mt:var(--weline-space-2);">
-                            <a class="w-button" data-tone="primary" data-size="sm"
+                            <w:form method="post"
+                                    action="@backend-url{'weline_mail/backend/index/one-click-mail-setup-stream'}"
+                                    data-mail-one-click-setup-sse="1"
+                                    data-testid="mail-one-click-setup-global-form-warning">
+                                <button class="w-button" data-tone="primary" data-size="sm" type="submit"
+                                        data-testid="mail-one-click-setup-global"
+                                        title="<?= $escape((string)__('一键绑定本机邮局管理凭据并按库同步账户')) ?>">
+                                    <?= __('一键配置邮局') ?>
+                                </button>
+                            </w:form>
+                            <a class="w-button" data-tone="primary" data-variant="outline" data-size="sm"
                                href="@backend-url{$basePath|['view' => 'domains']}"
                                data-testid="mail-enterprise-stalwart-config-link">
                                 <?= __('去域名与 DNS') ?>
@@ -626,6 +741,29 @@ if ($oauthCfError === 'invalid_scope') {
                     </div>
                 </div>
             <?php endif; ?>
+            <?php if ($managementReady): ?>
+                <w:form method="post"
+                        action="@backend-url{'weline_mail/backend/index/one-click-mail-setup-stream'}"
+                        data-mail-one-click-setup-sse="1"
+                        data-testid="mail-one-click-setup-global-form">
+                    <button class="w-button" data-tone="primary" data-size="sm" type="submit"
+                            data-testid="mail-one-click-setup-global"
+                            title="<?= $escape((string)__('一键绑定本机邮局管理凭据并按库同步账户')) ?>">
+                        <?= __('一键配置邮局') ?>
+                    </button>
+                </w:form>
+            <?php endif; ?>
+            <w:form method="post"
+                    action="@backend-url{'weline_mail/backend/index/sync-engine-accounts-from-db-stream'}"
+                    data-mail-sync-engine-from-db-sse="1"
+                    data-testid="mail-sync-engine-accounts-from-db-form">
+                <button class="w-button" data-variant="outline" data-size="sm" type="submit"
+                        data-testid="mail-sync-engine-accounts-from-db"
+                        <?= $managementReady ? '' : 'disabled' ?>
+                        title="<?= $escape((string)__('将数据库中的邮箱账户同步到本机 Stalwart 引擎')) ?>">
+                    <?= __('从数据库同步到本机引擎') ?>
+                </button>
+            </w:form>
         </div>
     </header>
 
@@ -1106,6 +1244,7 @@ if ($oauthCfError === 'invalid_scope') {
 
         <div class="mail-enterprise__layout" data-testid="mail-enterprise-workspace"
              data-mail-account-id="<?= (int)$selectedAccountId ?>"
+             data-mail-unread-only="<?= $mailboxListUnreadOnly ? '1' : '0' ?>"
              data-mail-folder="<?= $escape($folder) ?>">
             <section class="w-card">
                 <div class="w-card__header w-cluster" data-align="baseline" data-justify="between" style="--w-gap:var(--weline-space-2);">
@@ -1127,6 +1266,18 @@ if ($oauthCfError === 'invalid_scope') {
                     <input class="w-input" type="search" data-mail-search data-testid="mail-enterprise-search"
                            placeholder="<?= $escape(__('搜索邮件…')) ?>">
                     <button type="button" class="w-button" data-variant="outline" data-size="sm" data-mail-refresh data-testid="mail-enterprise-refresh"><?= __('刷新') ?></button>
+                    <?php if ($folder === 'inbox'): ?>
+                        <?php if ($mailboxListUnreadOnly): ?>
+                            <a class="w-button" data-variant="outline" data-size="sm"
+                               href="@backend-url{$basePath|['view' => 'mailbox', 'account' => $selectedAccountId, 'folder' => 'inbox', 'show' => 'all']}"
+                               data-testid="mail-enterprise-show-all"><?= __('显示已读') ?></a>
+                        <?php else: ?>
+                            <a class="w-button" data-variant="outline" data-size="sm"
+                               href="@backend-url{$basePath|['view' => 'mailbox', 'account' => $selectedAccountId, 'folder' => 'inbox']}"
+                               data-testid="mail-enterprise-show-unread"><?= __('只看未读') ?></a>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                    <span class="w-text" data-tone="muted" data-size="sm" data-mail-live-status data-testid="mail-enterprise-live-status" style="white-space:nowrap;"><?= __('自动收信中') ?></span>
                     <?php if ($folder === 'trash'): ?>
                         <button type="button" class="w-button" data-variant="outline" data-size="sm" data-mail-batch="restore" data-testid="mail-enterprise-batch-restore"><?= __('恢复') ?></button>
                         <button type="button" class="w-button" data-tone="danger" data-size="sm" data-mail-batch="destroy" data-testid="mail-enterprise-batch-destroy"><?= __('永久删除') ?></button>
@@ -1140,8 +1291,15 @@ if ($oauthCfError === 'invalid_scope') {
                 <?php if ($messages === []): ?>
                     <div class="w-empty" data-testid="mail-enterprise-folder-empty">
                         <w:icon name="mail" size="sm"></w:icon>
-                        <p class="w-text" data-tone="muted" style="--w-m:0;"><?= __('这个邮件夹暂无邮件。') ?></p>
+                        <p class="w-text" data-tone="muted" style="--w-m:0;"><?= $mailboxListUnreadOnly
+                            ? __('没有未读邮件。')
+                            : __('这个邮件夹暂无邮件。') ?></p>
                         <div class="mail-enterprise__actions">
+                            <?php if ($mailboxListUnreadOnly): ?>
+                                <a class="w-button" data-variant="outline" data-size="sm"
+                                   href="@backend-url{$basePath|['view' => 'mailbox', 'account' => $selectedAccountId, 'folder' => 'inbox', 'show' => 'all']}"
+                                   data-testid="mail-enterprise-empty-show-all"><?= __('查看已读') ?></a>
+                            <?php endif; ?>
                             <a class="w-button" data-tone="primary" data-size="sm"
                                href="@backend-url{$basePath|$composeParams}#mail-compose"><?= __('写第一封邮件') ?></a>
                             <a class="w-button" data-variant="outline" data-tone="neutral" data-size="sm"
@@ -1163,12 +1321,16 @@ if ($oauthCfError === 'invalid_scope') {
                         $hasAtt = !empty($message['has_attachment']);
                         $subjectText = trim((string)($message['subject'] ?? ''));
                         $isReply = (bool)preg_match('/^\s*(re|回复|答覆|答复)\s*[:：]/ui', $subjectText);
+                        $partyRaw = (string)($folder === 'sent' ? ($message['to'] ?? '') : ($message['from'] ?? ''));
+                        $partyLabel = $formatMailListParty($partyRaw);
+                        $timeLabel = $formatMailListTime((string)($message['received_at'] ?? ''));
                         ?>
                         <div class="mail-enterprise__row <?= $active ? 'is-active' : '' ?> <?= $unread ? 'is-unread' : '' ?>"
                              data-mail-row
                              data-message-id="<?= $escape($msgId) ?>"
                              data-testid="<?= $unread ? 'mail-enterprise-row-unread' : 'mail-enterprise-row' ?>">
                             <input type="checkbox" data-mail-check value="<?= $escape($msgId) ?>" aria-label="<?= $escape(__('选择')) ?>">
+                            <span class="mail-enterprise__unread-dot" aria-hidden="true"></span>
                             <a class="mail-enterprise__row-main"
                                href="@backend-url{$basePath|$mailMsgParams}"
                                data-mail-async-row
@@ -1176,15 +1338,15 @@ if ($oauthCfError === 'invalid_scope') {
                                data-account-id="<?= (int)$selectedAccountId ?>"
                                data-folder="<?= $escape($folder) ?>">
                                 <div class="mail-enterprise__meta">
-                                    <span><?= $escape($folder === 'sent' ? ($message['to'] ?? '') : ($message['from'] ?? '')) ?></span>
-                                    <time><?= $escape($message['received_at'] ?? '') ?></time>
+                                    <span class="mail-enterprise__party" title="<?= $escape($partyRaw) ?>"><?= $escape($partyLabel !== '' ? $partyLabel : $partyRaw) ?></span>
+                                    <time datetime="<?= $escape((string)($message['received_at'] ?? '')) ?>"><?= $escape($timeLabel) ?></time>
                                 </div>
                                 <div class="mail-enterprise__subject">
                                     <?php if ($isReply): ?>
                                         <span class="mail-enterprise__reply-chip" data-testid="mail-enterprise-reply-chip"><?= __('回复') ?></span>
                                     <?php endif; ?>
-                                    <?php if ($hasAtt): ?><span class="w-text" data-tone="muted" data-size="sm" title="<?= $escape(__('含附件')) ?>">📎</span> <?php endif; ?>
-                                    <?= $escape($subjectText !== '' ? $subjectText : (string)__('（无主题）')) ?>
+                                    <?php if ($hasAtt): ?><span class="w-text" data-tone="muted" data-size="sm" title="<?= $escape(__('含附件')) ?>">📎</span><?php endif; ?>
+                                    <span class="mail-enterprise__subject-text"><?= $escape($subjectText !== '' ? $subjectText : (string)__('（无主题）')) ?></span>
                                 </div>
                                 <p class="mail-enterprise__preview"><?= $escape($message['preview'] ?? '') ?></p>
                             </a>
@@ -1196,13 +1358,15 @@ if ($oauthCfError === 'invalid_scope') {
 
             <article class="w-card" id="mail-enterprise-reader" data-testid="mail-enterprise-reader">
                 <?php if (is_array($selectedMessage)): ?>
-                    <header class="w-card__header">
-                        <h2 class="w-card__title" data-mail-reader-subject><?= $escape($selectedMessage['subject'] ?? __('（无主题）')) ?></h2>
-                        <div class="mail-enterprise__meta" style="--w-mt:var(--weline-space-2);">
-                            <span data-mail-reader-from><?= __('发件人') ?>：<?= $escape($selectedMessage['from'] ?? '') ?></span>
-                            <span data-mail-reader-to><?= __('收件人') ?>：<?= $escape($selectedMessage['to'] ?? '') ?></span>
+                    <header class="w-card__header mail-enterprise__reader-header">
+                        <div class="w-stack" style="--w-gap:var(--weline-space-2); min-inline-size:0;">
+                            <h2 class="w-card__title" data-mail-reader-subject style="--w-m:0;"><?= $escape($selectedMessage['subject'] ?? __('（无主题）')) ?></h2>
+                            <div class="mail-enterprise__reader-party">
+                                <span data-mail-reader-from><?= __('发件人') ?>：<?= $escape($selectedMessage['from'] ?? '') ?></span>
+                                <span data-mail-reader-to><?= __('收件人') ?>：<?= $escape($selectedMessage['to'] ?? '') ?></span>
+                            </div>
                         </div>
-                        <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);--w-mt:var(--weline-space-2);" data-mail-reader-actions data-testid="mail-enterprise-reader-actions">
+                        <div class="mail-enterprise__reader-actions" data-mail-reader-actions data-testid="mail-enterprise-reader-actions">
                             <button type="button" class="w-button" data-size="sm" data-mail-reply="reply"><?= __('回复') ?></button>
                             <button type="button" class="w-button" data-variant="outline" data-size="sm" data-mail-reply="reply_all"><?= __('回复全部') ?></button>
                             <button type="button" class="w-button" data-variant="outline" data-size="sm" data-mail-reply="forward"><?= __('转发') ?></button>
@@ -1253,12 +1417,16 @@ if ($oauthCfError === 'invalid_scope') {
                 if (!workspace || !reader) return;
                 var accountId = workspace.getAttribute('data-mail-account-id') || '';
                 var folder = workspace.getAttribute('data-mail-folder') || 'inbox';
+                var unreadOnly = workspace.getAttribute('data-mail-unread-only') === '1';
                 var endpoint = <?= json_encode((string)$this->getBackendUrl('weline_mail/backend/index/mailbox-message'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
                 var batchEndpoint = <?= json_encode((string)$this->getBackendUrl('weline_mail/backend/index/mailbox-batch'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
                 var searchEndpoint = <?= json_encode((string)$this->getBackendUrl('weline_mail/backend/index/mailbox-search'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+                var listEndpoint = <?= json_encode((string)$this->getBackendUrl('weline_mail/backend/index/mailbox-list'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
                 var prefillEndpoint = <?= json_encode((string)$this->getBackendUrl('weline_mail/backend/index/mailbox-compose-prefill'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
                 var attachEndpoint = <?= json_encode((string)$this->getBackendUrl('weline_mail/backend/index/mailbox-attachment'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
                 var composeUrl = <?= json_encode((string)$this->getBackendUrl('weline_mail/backend', ['view' => 'mailbox', 'account' => $selectedAccountId, 'folder' => $folder, 'compose' => '1']), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+                var messageUrlBase = <?= json_encode((string)$this->getBackendUrl('weline_mail/backend', ['view' => 'mailbox', 'account' => $selectedAccountId, 'folder' => $folder]), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+                var accountsUrl = <?= json_encode((string)$this->getBackendUrl('weline_mail/backend', ['view' => 'accounts']), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
                 var loadingText = <?= json_encode((string)__('加载中…'), JSON_UNESCAPED_UNICODE) ?>;
                 var failText = <?= json_encode((string)__('正文加载失败'), JSON_UNESCAPED_UNICODE) ?>;
                 var fromLabel = <?= json_encode((string)__('发件人'), JSON_UNESCAPED_UNICODE) ?>;
@@ -1272,9 +1440,23 @@ if ($oauthCfError === 'invalid_scope') {
                 var unseenLabel = <?= json_encode((string)__('标未读'), JSON_UNESCAPED_UNICODE) ?>;
                 var attachLabel = <?= json_encode((string)__('附件'), JSON_UNESCAPED_UNICODE) ?>;
                 var bodyPreviewTitle = <?= json_encode((string)__('邮件正文预览'), JSON_UNESCAPED_UNICODE) ?>;
+                var noSubjectLabel = <?= json_encode((string)__('（无主题）'), JSON_UNESCAPED_UNICODE) ?>;
+                var emptyFolderText = <?= json_encode((string)__('这个邮件夹暂无邮件。'), JSON_UNESCAPED_UNICODE) ?>;
+                var writeFirstLabel = <?= json_encode((string)__('写第一封邮件'), JSON_UNESCAPED_UNICODE) ?>;
+                var goAccountsLabel = <?= json_encode((string)__('去用户与账号'), JSON_UNESCAPED_UNICODE) ?>;
+                var liveOnText = <?= json_encode((string)__('自动收信中'), JSON_UNESCAPED_UNICODE) ?>;
+                var liveOffText = <?= json_encode((string)__('自动收信已暂停'), JSON_UNESCAPED_UNICODE) ?>;
+                var liveSyncText = <?= json_encode((string)__('正在收信…'), JSON_UNESCAPED_UNICODE) ?>;
+                var liveUpdatedText = <?= json_encode((string)__('已更新'), JSON_UNESCAPED_UNICODE) ?>;
+                var newMailToast = <?= json_encode((string)__('收到新邮件'), JSON_UNESCAPED_UNICODE) ?>;
                 var currentMessageId = <?= json_encode(is_array($selectedMessage) ? (string)($selectedMessage['id'] ?? '') : '', JSON_UNESCAPED_UNICODE) ?>;
                 var activeAbort = null;
                 var loadSeq = 0;
+                var listAbort = null;
+                var listSeq = 0;
+                var listFingerprint = '';
+                var pollTimer = null;
+                var POLL_MS = 15000;
                 function esc(s) {
                     return String(s == null ? '' : s)
                         .replace(/&/g, '&amp;')
@@ -1282,15 +1464,27 @@ if ($oauthCfError === 'invalid_scope') {
                         .replace(/>/g, '&gt;')
                         .replace(/"/g, '&quot;');
                 }
+                function looksLikeHtml(value) {
+                    var sample = String(value == null ? '' : value).replace(/^\s+/, '');
+                    if (!sample) return false;
+                    if (/^(?:<!DOCTYPE\s+html\b|<html\b|<head\b|<body\b)/i.test(sample)) return true;
+                    return /<(?:div|table|p|span|br|img|a|style|font|center|h[1-6])\b/i.test(sample)
+                        && /<\/?[a-z][^>]*>/i.test(sample);
+                }
                 function renderReaderBody(data) {
                     var htmlBody = String(data && data.html_body != null ? data.html_body : '');
-                    var isHtml = !!(data && data.body_is_html) && htmlBody !== '';
-                    if (isHtml) {
+                    var plainBody = String(data && data.body != null ? data.body : '');
+                    var isHtml = (!!(data && data.body_is_html) && htmlBody !== '')
+                        || (htmlBody === '' && looksLikeHtml(plainBody));
+                    if (isHtml && htmlBody === '' && looksLikeHtml(plainBody)) {
+                        htmlBody = plainBody;
+                    }
+                    if (isHtml && htmlBody !== '') {
                         return '<div class="mail-enterprise__reader-body mail-enterprise__reader-body--html" data-mail-reader-body data-mail-body-format="html">' +
                             '<iframe class="mail-enterprise__reader-html" title="' + esc(bodyPreviewTitle) + '" sandbox="" referrerpolicy="no-referrer" srcdoc="' + esc(htmlBody) + '" data-testid="mail-enterprise-reader-html"></iframe>' +
                             '</div>';
                     }
-                    return '<div class="mail-enterprise__reader-body" data-mail-reader-body data-mail-body-format="text">' + esc(data && data.body ? data.body : '') + '</div>';
+                    return '<div class="mail-enterprise__reader-body" data-mail-reader-body data-mail-body-format="text">' + esc(plainBody) + '</div>';
                 }
                 function toast(msg, tone) {
                     if (window.Weline && window.Weline.UI && window.Weline.UI.toast) {
@@ -1339,17 +1533,59 @@ if ($oauthCfError === 'invalid_scope') {
                         btns += '<button type="button" class="w-button" data-tone="danger" data-size="sm" data-mail-one="delete">' + esc(deleteLabel) + '</button>';
                         btns += '<button type="button" class="w-button" data-variant="outline" data-size="sm" data-mail-one="unseen">' + esc(unseenLabel) + '</button>';
                     }
-                    return '<div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);--w-mt:var(--weline-space-2);" data-mail-reader-actions data-testid="mail-enterprise-reader-actions">' + btns + '</div>';
+                    return '<div class="mail-enterprise__reader-actions" data-mail-reader-actions data-testid="mail-enterprise-reader-actions">' + btns + '</div>';
+                }
+                function markSeenQuiet(messageId) {
+                    if (!messageId || folder === 'trash') return;
+                    var body = new URLSearchParams();
+                    body.set('account', accountId);
+                    body.set('action', 'seen');
+                    body.set('folder', folder);
+                    body.append('ids[]', messageId);
+                    nativeFetch(batchEndpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: body.toString()
+                    }).catch(function () {});
+                }
+                function bumpFolderUnread(delta) {
+                    var badge = document.querySelector('[data-testid="mail-enterprise-folder-unread"]');
+                    var accountBadge = document.querySelector('[data-testid="mail-account-select-unread"]');
+                    var next = function (el) {
+                        if (!el) return;
+                        var n = parseInt(String(el.textContent || '0').replace('+', ''), 10);
+                        if (!isFinite(n)) n = 0;
+                        n = Math.max(0, n + delta);
+                        if (n <= 0) {
+                            el.remove();
+                            return;
+                        }
+                        el.textContent = n > 99 ? '99+' : String(n);
+                    };
+                    next(badge);
+                    next(accountBadge);
+                }
+                function markRowRead(wrap) {
+                    if (!wrap || !wrap.classList.contains('is-unread')) return;
+                    if (unreadOnly) {
+                        wrap.remove();
+                        bumpFolderUnread(-1);
+                        return;
+                    }
+                    wrap.classList.remove('is-unread');
+                    wrap.setAttribute('data-testid', 'mail-enterprise-row');
+                    bumpFolderUnread(-1);
                 }
                 function renderMessage(data) {
                     currentMessageId = data.id || '';
                     reader.innerHTML =
-                        '<header class="w-card__header">' +
-                        '<h2 class="w-card__title" data-mail-reader-subject>' + esc(data.subject || '') + '</h2>' +
-                        '<div class="mail-enterprise__meta" style="--w-mt:var(--weline-space-2);">' +
+                        '<header class="w-card__header mail-enterprise__reader-header">' +
+                        '<div class="w-stack" style="--w-gap:var(--weline-space-2);min-inline-size:0;">' +
+                        '<h2 class="w-card__title" data-mail-reader-subject style="--w-m:0;">' + esc(data.subject || '') + '</h2>' +
+                        '<div class="mail-enterprise__reader-party">' +
                         '<span data-mail-reader-from>' + esc(fromLabel) + '：' + esc(data.from || '') + '</span>' +
                         '<span data-mail-reader-to>' + esc(toLabel) + '：' + esc(data.to || '') + '</span>' +
-                        '</div>' + readerActionsHtml() + '</header>' +
+                        '</div></div>' + readerActionsHtml() + '</header>' +
                         renderReaderBody(data) +
                         renderAttachments(data.attachments || []);
                     bindReaderActions();
@@ -1374,9 +1610,20 @@ if ($oauthCfError === 'invalid_scope') {
                           toast(json.msg || 'ok', 'success');
                           ids.forEach(function (id) {
                               var row = workspace.querySelector('[data-mail-row][data-message-id="' + id + '"]');
-                              if (row && (action === 'delete' || action === 'destroy' || action === 'restore')) row.remove();
+                              if (!row) return;
+                              if (action === 'delete' || action === 'destroy' || action === 'restore') {
+                                  row.remove();
+                                  return;
+                              }
+                              if (action === 'seen') {
+                                  markRowRead(row);
+                              } else if (action === 'unseen') {
+                                  row.classList.add('is-unread');
+                                  row.setAttribute('data-testid', 'mail-enterprise-row-unread');
+                                  bumpFolderUnread(1);
+                              }
                           });
-                          if (currentMessageId && ids.indexOf(currentMessageId) >= 0) {
+                          if (currentMessageId && ids.indexOf(currentMessageId) >= 0 && (action === 'delete' || action === 'destroy' || action === 'restore' || (action === 'seen' && unreadOnly))) {
                               reader.innerHTML = '<div class="w-empty"><p class="w-text" data-tone="muted" style="--w-m:0;">' + esc(<?= json_encode((string)__('选择一封邮件查看正文。'), JSON_UNESCAPED_UNICODE) ?>) + '</p></div>';
                               currentMessageId = '';
                           }
@@ -1414,48 +1661,242 @@ if ($oauthCfError === 'invalid_scope') {
                         };
                     });
                 }
-                document.querySelectorAll('[data-mail-async-row]').forEach(function (row) {
-                    row.addEventListener('click', function (ev) {
-                        if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || ev.button !== 0) return;
-                        ev.preventDefault();
-                        var messageId = row.getAttribute('data-message-id') || '';
-                        if (!messageId || !accountId) return;
-                        document.querySelectorAll('[data-mail-row].is-active').forEach(function (el) {
-                            el.classList.remove('is-active');
-                        });
-                        var wrap = row.closest('[data-mail-row]');
-                        if (wrap) wrap.classList.add('is-active');
-                        reader.innerHTML = '<div class="w-empty"><p class="w-text" data-tone="muted" style="--w-m:0;">' + esc(loadingText) + '</p></div>';
-                        var url = endpoint +
-                            (endpoint.indexOf('?') >= 0 ? '&' : '?') +
-                            'account=' + encodeURIComponent(accountId) +
-                            '&folder=' + encodeURIComponent(folder) +
-                            '&message=' + encodeURIComponent(messageId) +
-                            '&isAjax=1';
-                        if (activeAbort) { try { activeAbort.abort(); } catch (e) {} }
-                        var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-                        activeAbort = ac;
-                        var seq = ++loadSeq;
-                        var fetchOpts = { signal: ac ? ac.signal : undefined };
-                        nativeFetch(url, fetchOpts)
-                            .then(function (r) { return r.json(); })
-                            .then(function (json) {
-                                if (seq !== loadSeq) return;
-                                if (!json || json.code !== 200 || !json.data) throw new Error((json && json.msg) || failText);
-                                renderMessage(json.data);
-                                try {
-                                    var next = row.getAttribute('href');
-                                    if (next && window.history && window.history.replaceState) window.history.replaceState({}, '', next);
-                                } catch (e) {}
-                            })
-                            .catch(function (err) {
-                                if (seq !== loadSeq) return;
-                                if (err && (err.name === 'AbortError' || err.code === 20)) return;
-                                reader.innerHTML = '<div class="w-empty"><p class="w-text" data-tone="danger" style="--w-m:0;">' +
-                                    esc(err && err.message ? err.message : failText) + '</p></div>';
+                function messageHref(messageId) {
+                    return messageUrlBase + (messageUrlBase.indexOf('?') >= 0 ? '&' : '?') +
+                        'message=' + encodeURIComponent(messageId || '');
+                }
+                function formatMailListParty(raw) {
+                    raw = String(raw == null ? '' : raw).replace(/\s+/g, ' ').trim();
+                    if (!raw) return '';
+                    var m = raw.match(/^(.+?)\s*<\s*([^>]+)\s*>$/);
+                    if (m) {
+                        var name = String(m[1] || '').trim();
+                        var email = String(m[2] || '').trim().toLowerCase();
+                        if (name && name.toLowerCase() !== email) return name;
+                        return email || name;
+                    }
+                    return raw;
+                }
+                function formatMailListTime(raw) {
+                    raw = String(raw == null ? '' : raw).trim();
+                    if (!raw) return '';
+                    var dt = new Date(raw);
+                    if (isNaN(dt.getTime())) return raw;
+                    var now = new Date();
+                    var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+                    if (dt.toDateString() === now.toDateString()) {
+                        return pad(dt.getHours()) + ':' + pad(dt.getMinutes());
+                    }
+                    if (dt.getFullYear() === now.getFullYear()) {
+                        return pad(dt.getMonth() + 1) + '-' + pad(dt.getDate()) + ' ' +
+                            pad(dt.getHours()) + ':' + pad(dt.getMinutes());
+                    }
+                    return dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate());
+                }
+                function fingerprintItems(items) {
+                    return (items || []).map(function (m) {
+                        return String(m.id || '') + ':' + (m.unread ? '1' : '0');
+                    }).join('|');
+                }
+                function setLiveStatus(text) {
+                    var el = workspace.querySelector('[data-mail-live-status]');
+                    if (el) el.textContent = text;
+                }
+                function bindAsyncRows(root) {
+                    (root || workspace).querySelectorAll('[data-mail-async-row]').forEach(function (row) {
+                        if (row.getAttribute('data-mail-bound') === '1') return;
+                        row.setAttribute('data-mail-bound', '1');
+                        row.addEventListener('click', function (ev) {
+                            if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || ev.button !== 0) return;
+                            ev.preventDefault();
+                            var messageId = row.getAttribute('data-message-id') || '';
+                            if (!messageId || !accountId) return;
+                            workspace.querySelectorAll('[data-mail-row].is-active').forEach(function (el) {
+                                el.classList.remove('is-active');
                             });
+                            var wrap = row.closest('[data-mail-row]');
+                            if (wrap) wrap.classList.add('is-active');
+                            reader.innerHTML = '<div class="w-empty"><p class="w-text" data-tone="muted" style="--w-m:0;">' + esc(loadingText) + '</p></div>';
+                            var url = endpoint +
+                                (endpoint.indexOf('?') >= 0 ? '&' : '?') +
+                                'account=' + encodeURIComponent(accountId) +
+                                '&folder=' + encodeURIComponent(folder) +
+                                '&message=' + encodeURIComponent(messageId) +
+                                '&isAjax=1';
+                            if (activeAbort) { try { activeAbort.abort(); } catch (e) {} }
+                            var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                            activeAbort = ac;
+                            var seq = ++loadSeq;
+                            nativeFetch(url, { signal: ac ? ac.signal : undefined })
+                                .then(function (r) { return r.json(); })
+                                .then(function (json) {
+                                    if (seq !== loadSeq) return;
+                                    if (!json || json.code !== 200 || !json.data) throw new Error((json && json.msg) || failText);
+                                    renderMessage(json.data);
+                                    markRowRead(wrap);
+                                    markSeenQuiet(messageId);
+                                    try {
+                                        var next = row.getAttribute('href');
+                                        if (next && window.history && window.history.replaceState) window.history.replaceState({}, '', next);
+                                    } catch (e) {}
+                                })
+                                .catch(function (err) {
+                                    if (seq !== loadSeq) return;
+                                    if (err && (err.name === 'AbortError' || err.code === 20)) return;
+                                    reader.innerHTML = '<div class="w-empty"><p class="w-text" data-tone="danger" style="--w-m:0;">' +
+                                        esc(err && err.message ? err.message : failText) + '</p></div>';
+                                });
+                        });
                     });
-                });
+                }
+                function renderListEmpty() {
+                    return '<div class="w-empty" data-testid="mail-enterprise-folder-empty">' +
+                        '<p class="w-text" data-tone="muted" style="--w-m:0;">' + esc(emptyFolderText) + '</p>' +
+                        '<div class="mail-enterprise__actions">' +
+                        '<a class="w-button" data-tone="primary" data-size="sm" href="' + esc(composeUrl) + '#mail-compose">' + esc(writeFirstLabel) + '</a>' +
+                        '<a class="w-button" data-variant="outline" data-tone="neutral" data-size="sm" href="' + esc(accountsUrl) + '">' + esc(goAccountsLabel) + '</a>' +
+                        '</div></div>';
+                }
+                function renderListRows(items) {
+                    var listRoot = workspace.querySelector('[data-mail-list]');
+                    if (!listRoot) return;
+                    var checked = {};
+                    workspace.querySelectorAll('[data-mail-check]:checked').forEach(function (el) {
+                        checked[String(el.value)] = true;
+                    });
+                    var activeId = currentMessageId || '';
+                    if (!items || !items.length) {
+                        listRoot.innerHTML = renderListEmpty();
+                        return;
+                    }
+                    var html = '';
+                    items.forEach(function (message) {
+                        var msgId = String(message.id || '');
+                        var unread = !!message.unread;
+                        var hasAtt = !!message.has_attachment;
+                        var subjectText = String(message.subject || '').trim();
+                        var isReply = /^\s*(re|回复|答覆|答复)\s*[:：]/i.test(subjectText);
+                        var partyRaw = String(folder === 'sent' ? (message.to || '') : (message.from || ''));
+                        var partyLabel = formatMailListParty(partyRaw);
+                        var timeLabel = formatMailListTime(message.received_at || '');
+                        var active = activeId !== '' && activeId === msgId;
+                        html += '<div class="mail-enterprise__row' + (active ? ' is-active' : '') + (unread ? ' is-unread' : '') + '"' +
+                            ' data-mail-row data-message-id="' + esc(msgId) + '"' +
+                            ' data-testid="' + (unread ? 'mail-enterprise-row-unread' : 'mail-enterprise-row') + '">' +
+                            '<input type="checkbox" data-mail-check value="' + esc(msgId) + '"' +
+                            (checked[msgId] ? ' checked' : '') + ' aria-label="select">' +
+                            '<span class="mail-enterprise__unread-dot" aria-hidden="true"></span>' +
+                            '<a class="mail-enterprise__row-main" href="' + esc(messageHref(msgId)) + '"' +
+                            ' data-mail-async-row data-message-id="' + esc(msgId) + '"' +
+                            ' data-account-id="' + esc(accountId) + '" data-folder="' + esc(folder) + '">' +
+                            '<div class="mail-enterprise__meta">' +
+                            '<span class="mail-enterprise__party" title="' + esc(partyRaw) + '">' +
+                            esc(partyLabel || partyRaw) + '</span>' +
+                            '<time datetime="' + esc(message.received_at || '') + '">' + esc(timeLabel) + '</time>' +
+                            '</div><div class="mail-enterprise__subject">' +
+                            (isReply ? '<span class="mail-enterprise__reply-chip" data-testid="mail-enterprise-reply-chip">' + esc(replyLabel) + '</span>' : '') +
+                            (hasAtt ? '<span class="w-text" data-tone="muted" data-size="sm">📎</span>' : '') +
+                            '<span class="mail-enterprise__subject-text">' + esc(subjectText || noSubjectLabel) + '</span>' +
+                            '</div><p class="mail-enterprise__preview">' + esc(message.preview || '') + '</p>' +
+                            '</a></div>';
+                    });
+                    listRoot.innerHTML = html;
+                    bindAsyncRows(listRoot);
+                    applySearchFilter();
+                }
+                function applySearchFilter() {
+                    var searchInput = workspace.querySelector('[data-mail-search]');
+                    var q = searchInput ? String(searchInput.value || '').trim() : '';
+                    if (!q) {
+                        workspace.querySelectorAll('[data-mail-row]').forEach(function (row) {
+                            row.style.display = '';
+                        });
+                        return;
+                    }
+                    var url = searchEndpoint + (searchEndpoint.indexOf('?') >= 0 ? '&' : '?') +
+                        'account=' + encodeURIComponent(accountId) +
+                        '&folder=' + encodeURIComponent(folder) +
+                        '&q=' + encodeURIComponent(q) + '&isAjax=1';
+                    nativeFetch(url).then(function (r) { return r.json(); })
+                        .then(function (json) {
+                            if (!json || json.code !== 200) return;
+                            var ids = {};
+                            (json.data || []).forEach(function (m) { ids[String(m.id)] = true; });
+                            workspace.querySelectorAll('[data-mail-row]').forEach(function (row) {
+                                var id = row.getAttribute('data-message-id') || '';
+                                row.style.display = ids[id] ? '' : 'none';
+                            });
+                        });
+                }
+                function refreshMailboxList(opts) {
+                    opts = opts || {};
+                    if (!accountId) return Promise.resolve();
+                    if (listAbort) { try { listAbort.abort(); } catch (e) {} }
+                    var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                    listAbort = ac;
+                    var seq = ++listSeq;
+                    if (!opts.silent) setLiveStatus(liveSyncText);
+                    var url = listEndpoint + (listEndpoint.indexOf('?') >= 0 ? '&' : '?') +
+                        'account=' + encodeURIComponent(accountId) +
+                        '&folder=' + encodeURIComponent(folder) +
+                        '&limit=50&isAjax=1';
+                    return nativeFetch(url, { signal: ac ? ac.signal : undefined })
+                        .then(function (r) { return r.json(); })
+                        .then(function (json) {
+                            if (seq !== listSeq) return;
+                            if (!json || json.code !== 200 || !json.data) {
+                                throw new Error((json && json.msg) || failText);
+                            }
+                            var items = json.data.items || [];
+                            var nextFp = fingerprintItems(items);
+                            var changed = nextFp !== listFingerprint;
+                            var prevIds = {};
+                            String(listFingerprint || '').split('|').forEach(function (part) {
+                                var id = String(part.split(':')[0] || '');
+                                if (id) prevIds[id] = true;
+                            });
+                            var hasNew = false;
+                            if (listFingerprint && changed) {
+                                items.forEach(function (m) {
+                                    if (!prevIds[String(m.id || '')]) hasNew = true;
+                                });
+                            }
+                            if (changed || opts.force) {
+                                listFingerprint = nextFp;
+                                renderListRows(items);
+                            }
+                            if (hasNew && opts.notify !== false) {
+                                toast(newMailToast, 'success');
+                            }
+                            var stamp = '';
+                            try {
+                                var d = new Date((json.data.fetched_at || 0) * 1000);
+                                if (!isNaN(d.getTime())) {
+                                    stamp = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+                                }
+                            } catch (e) {}
+                            setLiveStatus(document.hidden ? liveOffText : (liveOnText + (stamp ? ' · ' + liveUpdatedText + ' ' + stamp : '')));
+                        })
+                        .catch(function (err) {
+                            if (seq !== listSeq) return;
+                            if (err && (err.name === 'AbortError' || err.code === 20)) return;
+                            if (!opts.silent) toast(err && err.message ? err.message : failText, 'danger');
+                            setLiveStatus(document.hidden ? liveOffText : liveOnText);
+                        });
+                }
+                function schedulePoll() {
+                    if (pollTimer) clearInterval(pollTimer);
+                    pollTimer = null;
+                    if (document.hidden || !accountId) {
+                        setLiveStatus(liveOffText);
+                        return;
+                    }
+                    setLiveStatus(liveOnText);
+                    pollTimer = setInterval(function () {
+                        if (document.hidden) return;
+                        refreshMailboxList({ silent: true, notify: true });
+                    }, POLL_MS);
+                }
                 var selectAll = workspace.querySelector('[data-mail-select-all]');
                 if (selectAll) {
                     selectAll.addEventListener('change', function () {
@@ -1471,33 +1912,40 @@ if ($oauthCfError === 'invalid_scope') {
                 });
                 var refreshBtn = workspace.querySelector('[data-mail-refresh]');
                 if (refreshBtn) {
-                    refreshBtn.addEventListener('click', function () { window.location.reload(); });
+                    refreshBtn.addEventListener('click', function () {
+                        refreshMailboxList({ force: true, silent: false, notify: false });
+                    });
                 }
                 var searchInput = workspace.querySelector('[data-mail-search]');
                 var searchTimer = null;
                 if (searchInput) {
                     searchInput.addEventListener('input', function () {
                         clearTimeout(searchTimer);
-                        searchTimer = setTimeout(function () {
-                            var q = searchInput.value.trim();
-                            var url = searchEndpoint + (searchEndpoint.indexOf('?') >= 0 ? '&' : '?') +
-                                'account=' + encodeURIComponent(accountId) +
-                                '&folder=' + encodeURIComponent(folder) +
-                                '&q=' + encodeURIComponent(q) + '&isAjax=1';
-                            nativeFetch(url).then(function (r) { return r.json(); })
-                                .then(function (json) {
-                                    if (!json || json.code !== 200) return;
-                                    var ids = {};
-                                    (json.data || []).forEach(function (m) { ids[String(m.id)] = true; });
-                                    workspace.querySelectorAll('[data-mail-row]').forEach(function (row) {
-                                        var id = row.getAttribute('data-message-id') || '';
-                                        row.style.display = (!q || ids[id]) ? '' : 'none';
-                                    });
-                                });
-                        }, 250);
+                        searchTimer = setTimeout(function () { applySearchFilter(); }, 250);
                     });
                 }
+                document.addEventListener('visibilitychange', function () {
+                    if (document.hidden) {
+                        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+                        setLiveStatus(liveOffText);
+                        return;
+                    }
+                    refreshMailboxList({ silent: true, notify: true }).finally(schedulePoll);
+                });
+                bindAsyncRows(workspace);
                 bindReaderActions();
+                listFingerprint = fingerprintItems(Array.prototype.map.call(
+                    workspace.querySelectorAll('[data-mail-row]'),
+                    function (row) {
+                        return {
+                            id: row.getAttribute('data-message-id') || '',
+                            unread: row.classList.contains('is-unread')
+                        };
+                    }
+                ));
+                if (accountId) {
+                    schedulePoll();
+                }
             })();
             </script>
         </div>
@@ -1570,6 +2018,9 @@ if ($oauthCfError === 'invalid_scope') {
                     <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;" data-testid="mail-account-list-meta">
                         <?= __('共 %{1} 个账号 · 第 %{2} / %{3} 页', [$accountListTotal, $accountPage, $accountPageCount]) ?>
                     </p>
+                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;" data-testid="mail-account-system-hint">
+                        <?= __('标有「系统账号」的邮箱（如 contact@ 人收、smtp@ 提交/代理）由启用域名或 Smtp 自动创建，不可编辑身份、暂停、改密或删除；仍可查看邮件与配置外投。') ?>
+                    </p>
                     <div class="w-table-wrap">
                         <table class="w-table" data-testid="mail-account-table">
                             <thead>
@@ -1609,6 +2060,12 @@ if ($oauthCfError === 'invalid_scope') {
                                         $obPort = (int)($account['outbound_relay_port'] ?? 0);
                                         $obUser = trim((string)($account['outbound_relay_username'] ?? ''));
                                         $obTls = trim((string)($account['outbound_relay_tls'] ?? '')) ?: 'starttls';
+                                        $isSystemAcct = !empty($account['is_system'])
+                                            || MailAccount::isReservedSystemLocalPart(MailAccount::emailLocalPart($email));
+                                        $systemRoleLabel = trim((string)($account['system_role_label'] ?? ''));
+                                        if ($isSystemAcct && $systemRoleLabel === '') {
+                                            $systemRoleLabel = MailAccount::systemRoleLabelForLocal(MailAccount::emailLocalPart($email));
+                                        }
                                     } else {
                                         $acctId = (int)$account->getId();
                                         if ($acctId <= 0) {
@@ -1625,6 +2082,15 @@ if ($oauthCfError === 'invalid_scope') {
                                         $obPort = (int)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_PORT);
                                         $obUser = trim((string)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_USERNAME));
                                         $obTls = trim((string)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_TLS)) ?: 'starttls';
+                                        $isSystemAcct = method_exists($account, 'isSystemAccount')
+                                            ? (bool)$account->isSystemAccount()
+                                            : ((int)$account->getData(MailAccount::schema_fields_IS_SYSTEM) === 1
+                                                || MailAccount::isReservedSystemLocalPart(MailAccount::emailLocalPart($email)));
+                                        $systemRoleLabel = $isSystemAcct
+                                            ? (method_exists($account, 'systemRoleLabel')
+                                                ? (string)$account->systemRoleLabel()
+                                                : MailAccount::systemRoleLabelForLocal(MailAccount::emailLocalPart($email)))
+                                            : '';
                                     }
                                     if ($acctId <= 0) {
                                         continue;
@@ -1638,18 +2104,34 @@ if ($oauthCfError === 'invalid_scope') {
                                         data-account-quota-mb="<?= $quotaMb ?>"
                                         data-account-status="<?= $escape($status) ?>"
                                         data-account-domain-id="<?= $domainId ?>"
+                                        data-account-system="<?= $isSystemAcct ? '1' : '0' ?>"
                                         data-ob-on="<?= $obOn ? '1' : '0' ?>"
                                         data-ob-host="<?= $escape($obHost) ?>"
                                         data-ob-port="<?= $obPort > 0 ? $obPort : 587 ?>"
                                         data-ob-user="<?= $escape($obUser) ?>"
                                         data-ob-tls="<?= $escape($obTls) ?>"
-                                        data-testid="mail-account-row-<?= $acctId ?>">
+                                        data-testid="mail-account-row-<?= $acctId ?>"
+                                        <?= $isSystemAcct ? ' data-mail-system-account="1"' : '' ?>>
                                         <td>
-                                            <input type="checkbox" data-account-check value="<?= $acctId ?>"
-                                                   data-testid="mail-account-check-<?= $acctId ?>">
+                                            <?php if ($isSystemAcct): ?>
+                                                <input type="checkbox" disabled
+                                                       aria-label="<?= $escape(__('系统账号不可批量操作')) ?>"
+                                                       data-testid="mail-account-check-<?= $acctId ?>">
+                                            <?php else: ?>
+                                                <input type="checkbox" data-account-check value="<?= $acctId ?>"
+                                                       data-testid="mail-account-check-<?= $acctId ?>">
+                                            <?php endif; ?>
                                         </td>
                                         <td>
-                                            <strong><?= $escape($email) ?></strong><br>
+                                            <strong><?= $escape($email) ?></strong>
+                                            <?php if ($isSystemAcct): ?>
+                                                <br>
+                                                <span class="w-badge" data-tone="info" data-size="sm"
+                                                      data-testid="mail-account-system-badge-<?= $acctId ?>"><?= __('系统账号') ?></span>
+                                                <span class="w-text" data-tone="muted" data-size="sm"
+                                                      data-testid="mail-account-system-role-<?= $acctId ?>"><?= $escape($systemRoleLabel) ?> · <?= __('不可删改') ?></span>
+                                            <?php endif; ?>
+                                            <br>
                                             <span class="w-text" data-tone="muted" data-size="sm"><?= $escape($displayName) ?></span>
                                             <?php if ($obOn && $obHost !== ''): ?>
                                                 <br><span class="w-badge" data-tone="info" data-size="sm"><?= __('外投') ?> · <?= $escape($obHost) ?></span>
@@ -1660,28 +2142,36 @@ if ($oauthCfError === 'invalid_scope') {
                                         <td><?= $quotaMb ?> MB</td>
                                         <td>
                                             <div class="mail-enterprise__actions">
-                                                <button class="w-button" data-variant="outline" data-size="sm" type="button"
-                                                        data-testid="mail-account-edit-<?= $acctId ?>"
-                                                        data-account-edit><?= __('编辑') ?></button>
+                                                <?php if (!$isSystemAcct): ?>
+                                                    <button class="w-button" data-variant="outline" data-size="sm" type="button"
+                                                            data-testid="mail-account-edit-<?= $acctId ?>"
+                                                            data-account-edit><?= __('编辑') ?></button>
+                                                <?php endif; ?>
                                                 <a class="w-button" data-variant="outline" data-size="sm"
                                                    href="@backend-url{$basePath|['view' => 'mailbox', 'account' => $acctId]}"><?= __('查看邮件') ?></a>
-                                                <button class="w-button" data-variant="outline" data-size="sm" type="button"
-                                                        data-testid="mail-account-status-<?= $acctId ?>"
-                                                        data-account-toggle-status
-                                                        data-next-status="<?= $status === 'suspended' ? 'active' : 'suspended' ?>">
-                                                    <?= $status === 'suspended' ? __('恢复') : __('暂停') ?>
-                                                </button>
+                                                <?php if (!$isSystemAcct): ?>
+                                                    <button class="w-button" data-variant="outline" data-size="sm" type="button"
+                                                            data-testid="mail-account-status-<?= $acctId ?>"
+                                                            data-account-toggle-status
+                                                            data-next-status="<?= $status === 'suspended' ? 'active' : 'suspended' ?>">
+                                                        <?= $status === 'suspended' ? __('恢复') : __('暂停') ?>
+                                                    </button>
+                                                <?php endif; ?>
                                             </div>
                                             <div class="mail-enterprise__actions" style="--w-mt:var(--weline-space-2);">
-                                                <button class="w-button" data-variant="outline" data-size="sm" type="button"
-                                                        data-testid="mail-account-reset-open-<?= $acctId ?>"
-                                                        data-account-reset-open><?= __('开通/重置密码') ?></button>
+                                                <?php if (!$isSystemAcct): ?>
+                                                    <button class="w-button" data-variant="outline" data-size="sm" type="button"
+                                                            data-testid="mail-account-reset-open-<?= $acctId ?>"
+                                                            data-account-reset-open><?= __('开通/重置密码') ?></button>
+                                                <?php endif; ?>
                                                 <button class="w-button" data-variant="outline" data-size="sm" type="button"
                                                         data-testid="mail-account-outbound-open-<?= $acctId ?>"
                                                         data-account-outbound-open><?= __('外投 smarthost') ?></button>
-                                                <button class="w-button" data-variant="outline" data-tone="danger" data-size="sm" type="button"
-                                                        data-testid="mail-account-delete-<?= $acctId ?>"
-                                                        data-account-delete><?= __('删除') ?></button>
+                                                <?php if (!$isSystemAcct): ?>
+                                                    <button class="w-button" data-variant="outline" data-tone="danger" data-size="sm" type="button"
+                                                            data-testid="mail-account-delete-<?= $acctId ?>"
+                                                            data-account-delete><?= __('删除') ?></button>
+                                                <?php endif; ?>
                                             </div>
                                         </td>
                                     </tr>
@@ -3991,6 +4481,9 @@ if ($oauthCfError === 'invalid_scope') {
             <?php foreach ($domains as $domain):
                 $domainId = (int)$domain->getId();
                 $domainName = (string)$domain->getData(MailDomain::schema_fields_DOMAIN_NAME);
+                $domainStatus = (string)$domain->getData(MailDomain::schema_fields_STATUS);
+                // 页上无独立域缺口袋时：管理未就绪或域未 active 即显示本域一键
+                $domainOneClickNeeded = !$managementReady || $domainStatus !== 'active';
                 $host = (string)$domain->getData(MailDomain::schema_fields_HOSTNAME);
                 $storedOriginIp = trim((string)$domain->getData(MailDomain::schema_fields_ORIGIN_IP));
                 $originIp = $storedOriginIp !== '' ? $storedOriginIp : $detectedOriginIp;
@@ -4206,18 +4699,424 @@ if ($oauthCfError === 'invalid_scope') {
                             <p class="w-text" data-tone="muted" data-size="sm">
                                 <?= __('启用域名时自动开通 contact@（企业邮箱人收）。Smtp 多服务请在「Smtp」Tab（本机启用 / 外部填入）；邮箱外投请在「用户与账号」编辑。') ?>
                             </p>
-                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-domain-status'}">
-                                <input type="hidden" name="return_view" value="domains">
-                                <input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>">
-                                <input type="hidden" name="status" value="<?= (string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active' ? 'suspended' : 'active' ?>">
-                                <button class="w-button" data-variant="outline" data-size="sm" type="submit">
-                                    <?= (string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active' ? __('暂停域名') : __('启用域名') ?>
-                                </button>
-                            </w:form>
+                            <div class="mail-enterprise__actions" style="--w-mt:var(--weline-space-2);">
+                                <?php if ($domainOneClickNeeded): ?>
+                                    <w:form method="post"
+                                            action="@backend-url{'weline_mail/backend/index/one-click-domain-setup-stream'}"
+                                            data-mail-one-click-setup-sse="1"
+                                            data-testid="mail-one-click-setup-domain-form-<?= $domainId ?>">
+                                        <input type="hidden" name="domain_id" value="<?= $domainId ?>">
+                                        <button class="w-button" data-tone="primary" data-size="sm" type="submit"
+                                                data-testid="mail-one-click-setup-domain-<?= $domainId ?>"
+                                                title="<?= $escape((string)__('一键确保本域引擎与系统账号并同步账户')) ?>">
+                                            <?= __('一键配置本域') ?>
+                                        </button>
+                                    </w:form>
+                                <?php endif; ?>
+                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-domain-status'}">
+                                    <input type="hidden" name="return_view" value="domains">
+                                    <input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>">
+                                    <input type="hidden" name="status" value="<?= $domainStatus === 'active' ? 'suspended' : 'active' ?>">
+                                    <button class="w-button" data-variant="outline" data-size="sm" type="submit">
+                                        <?= $domainStatus === 'active' ? __('暂停域名') : __('启用域名') ?>
+                                    </button>
+                                </w:form>
+                            </div>
                         </div>
                     </div>
                 </article>
             <?php endforeach; ?>
         </div>
     <?php endif; ?>
+    <script>
+    (function () {
+        var syncForm = document.querySelector('[data-mail-sync-engine-from-db-sse]');
+        if (!syncForm) {
+            return;
+        }
+        var syncBusyLabel = <?= json_encode((string)__('同步中…'), JSON_UNESCAPED_UNICODE) ?>;
+        var syncFailLabel = <?= json_encode((string)__('同步失败'), JSON_UNESCAPED_UNICODE) ?>;
+        var syncSseMissingLabel = <?= json_encode((string)__('未返回 SSE 流'), JSON_UNESCAPED_UNICODE) ?>;
+        var syncPasswordOnceTpl = <?= json_encode((string)__('账号 %{1} 新密码（仅一次）：%{2}'), JSON_UNESCAPED_UNICODE) ?>;
+
+        function mailSyncEngineToast(kind, text) {
+            try {
+                if (window.Weline && window.Weline.UI && window.Weline.UI.toast) {
+                    if (kind === 'success' && typeof window.Weline.UI.toast.success === 'function') {
+                        window.Weline.UI.toast.success(text);
+                        return;
+                    }
+                    if (kind === 'error' && typeof window.Weline.UI.toast.error === 'function') {
+                        window.Weline.UI.toast.error(text);
+                        return;
+                    }
+                    if (typeof window.Weline.UI.toast.show === 'function') {
+                        window.Weline.UI.toast.show(text, { tone: kind === 'success' ? 'success' : 'danger' });
+                    }
+                }
+            } catch (e) {}
+        }
+
+        function mailSyncEngineFormat(tpl, a, b) {
+            return String(tpl || '')
+                .replace('%{1}', String(a == null ? '' : a))
+                .replace('%{2}', String(b == null ? '' : b));
+        }
+
+        function mailSyncEngineConsumeSse(response, onEvent) {
+            if (!response || !response.body || typeof response.body.getReader !== 'function') {
+                return Promise.reject(new Error(syncSseMissingLabel));
+            }
+            var reader = response.body.getReader();
+            var decoder = new TextDecoder('utf-8');
+            var buffer = '';
+            var eventName = 'message';
+            var dataLines = [];
+
+            function flushEvent() {
+                if (!dataLines.length) {
+                    eventName = 'message';
+                    return;
+                }
+                var raw = dataLines.join('\n');
+                dataLines = [];
+                var payload = raw;
+                try {
+                    payload = JSON.parse(raw);
+                } catch (e) {}
+                onEvent(eventName || 'message', payload);
+                eventName = 'message';
+            }
+
+            function pump() {
+                return reader.read().then(function (result) {
+                    if (result.done) {
+                        buffer += decoder.decode();
+                        if (buffer.trim()) {
+                            buffer.split(/\r?\n/).forEach(function (line) {
+                                if (line.indexOf('event:') === 0) {
+                                    eventName = line.slice(6).trim();
+                                } else if (line.indexOf('data:') === 0) {
+                                    dataLines.push(line.slice(5).trim());
+                                } else if (line === '') {
+                                    flushEvent();
+                                }
+                            });
+                            flushEvent();
+                        }
+                        return;
+                    }
+                    buffer += decoder.decode(result.value, { stream: true });
+                    var parts = buffer.split(/\r?\n/);
+                    buffer = parts.pop();
+                    parts.forEach(function (line) {
+                        if (line.indexOf('event:') === 0) {
+                            eventName = line.slice(6).trim();
+                        } else if (line.indexOf('data:') === 0) {
+                            dataLines.push(line.slice(5).trim());
+                        } else if (line === '') {
+                            flushEvent();
+                        }
+                    });
+                    return pump();
+                });
+            }
+
+            return pump();
+        }
+
+        syncForm.addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            var btn = syncForm.querySelector('[data-testid="mail-sync-engine-accounts-from-db"]');
+            if (btn && btn.disabled) {
+                return;
+            }
+            var url = syncForm.getAttribute('action') || '';
+            if (!url) {
+                return;
+            }
+            var done = false;
+            var sawPasswordOnce = false;
+            var lastMessage = syncBusyLabel;
+            if (btn) {
+                btn.disabled = true;
+                if (!btn.getAttribute('data-mail-sync-label')) {
+                    btn.setAttribute('data-mail-sync-label', btn.textContent || '');
+                }
+                btn.textContent = syncBusyLabel;
+            }
+            mailSyncEngineToast('success', syncBusyLabel);
+            var body = new URLSearchParams();
+            new FormData(syncForm).forEach(function (value, key) {
+                body.append(key, value);
+            });
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'text/event-stream',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'include',
+                body: body.toString(),
+                __welineNativeFetch: true
+            }).then(function (response) {
+                var contentType = String(response.headers.get('content-type') || '').toLowerCase();
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
+                if (contentType.indexOf('text/event-stream') === -1) {
+                    throw new Error(syncSseMissingLabel);
+                }
+                return mailSyncEngineConsumeSse(response, function (eventName, data) {
+                    var message = (data && data.message) ? String(data.message) : eventName;
+                    lastMessage = message;
+                    if (btn && eventName === 'progress') {
+                        btn.textContent = message.length > 28 ? message.slice(0, 28) + '…' : message;
+                    }
+                    if (eventName === 'password_once') {
+                        sawPasswordOnce = true;
+                        var email = (data && data.email) ? String(data.email) : '';
+                        var once = (data && data.password_once) ? String(data.password_once) : '';
+                        if (email !== '' && once !== '') {
+                            mailSyncEngineToast('success', mailSyncEngineFormat(syncPasswordOnceTpl, email, once));
+                        } else if (message && message !== 'password_once') {
+                            mailSyncEngineToast('success', message);
+                        }
+                    }
+                    if (eventName === 'done') {
+                        done = true;
+                        mailSyncEngineToast('success', message);
+                        window.setTimeout(function () {
+                            window.location.reload();
+                        }, sawPasswordOnce ? 1200 : 250);
+                    }
+                    if (eventName === 'error') {
+                        done = true;
+                        mailSyncEngineToast('error', message || syncFailLabel);
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = btn.getAttribute('data-mail-sync-label')
+                                || <?= json_encode((string)__('从数据库同步到本机引擎'), JSON_UNESCAPED_UNICODE) ?>;
+                        }
+                    }
+                });
+            }).then(function () {
+                if (!done) {
+                    mailSyncEngineToast('error', lastMessage || syncFailLabel);
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = btn.getAttribute('data-mail-sync-label')
+                            || <?= json_encode((string)__('从数据库同步到本机引擎'), JSON_UNESCAPED_UNICODE) ?>;
+                    }
+                }
+            }).catch(function (error) {
+                mailSyncEngineToast('error', (error && error.message) ? error.message : syncFailLabel);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = btn.getAttribute('data-mail-sync-label')
+                        || <?= json_encode((string)__('从数据库同步到本机引擎'), JSON_UNESCAPED_UNICODE) ?>;
+                }
+            });
+        });
+    })();
+    </script>
+    <script>
+    (function () {
+        var forms = document.querySelectorAll('[data-mail-one-click-setup-sse]');
+        if (!forms.length) {
+            return;
+        }
+        var busyLabel = <?= json_encode((string)__('配置中…'), JSON_UNESCAPED_UNICODE) ?>;
+        var failLabel = <?= json_encode((string)__('配置失败'), JSON_UNESCAPED_UNICODE) ?>;
+        var sseMissingLabel = <?= json_encode((string)__('未返回 SSE 流'), JSON_UNESCAPED_UNICODE) ?>;
+        var passwordOnceTpl = <?= json_encode((string)__('账号 %{1} 新密码（仅一次）：%{2}'), JSON_UNESCAPED_UNICODE) ?>;
+        var globalLabel = <?= json_encode((string)__('一键配置邮局'), JSON_UNESCAPED_UNICODE) ?>;
+        var domainLabel = <?= json_encode((string)__('一键配置本域'), JSON_UNESCAPED_UNICODE) ?>;
+
+        function mailOneClickToast(kind, text) {
+            try {
+                if (window.Weline && window.Weline.UI && window.Weline.UI.toast) {
+                    if (kind === 'success' && typeof window.Weline.UI.toast.success === 'function') {
+                        window.Weline.UI.toast.success(text);
+                        return;
+                    }
+                    if (kind === 'error' && typeof window.Weline.UI.toast.error === 'function') {
+                        window.Weline.UI.toast.error(text);
+                        return;
+                    }
+                    if (typeof window.Weline.UI.toast.show === 'function') {
+                        window.Weline.UI.toast.show(text, { tone: kind === 'success' ? 'success' : 'danger' });
+                    }
+                }
+            } catch (e) {}
+        }
+
+        function mailOneClickFormat(tpl, a, b) {
+            return String(tpl || '')
+                .replace('%{1}', String(a == null ? '' : a))
+                .replace('%{2}', String(b == null ? '' : b));
+        }
+
+        function mailOneClickConsumeSse(response, onEvent) {
+            if (!response || !response.body || typeof response.body.getReader !== 'function') {
+                return Promise.reject(new Error(sseMissingLabel));
+            }
+            var reader = response.body.getReader();
+            var decoder = new TextDecoder('utf-8');
+            var buffer = '';
+            var eventName = 'message';
+            var dataLines = [];
+
+            function flushEvent() {
+                if (!dataLines.length) {
+                    eventName = 'message';
+                    return;
+                }
+                var raw = dataLines.join('\n');
+                dataLines = [];
+                var payload = raw;
+                try {
+                    payload = JSON.parse(raw);
+                } catch (e) {}
+                onEvent(eventName || 'message', payload);
+                eventName = 'message';
+            }
+
+            function pump() {
+                return reader.read().then(function (result) {
+                    if (result.done) {
+                        buffer += decoder.decode();
+                        if (buffer.trim()) {
+                            buffer.split(/\r?\n/).forEach(function (line) {
+                                if (line.indexOf('event:') === 0) {
+                                    eventName = line.slice(6).trim();
+                                } else if (line.indexOf('data:') === 0) {
+                                    dataLines.push(line.slice(5).trim());
+                                } else if (line === '') {
+                                    flushEvent();
+                                }
+                            });
+                            flushEvent();
+                        }
+                        return;
+                    }
+                    buffer += decoder.decode(result.value, { stream: true });
+                    var parts = buffer.split(/\r?\n/);
+                    buffer = parts.pop();
+                    parts.forEach(function (line) {
+                        if (line.indexOf('event:') === 0) {
+                            eventName = line.slice(6).trim();
+                        } else if (line.indexOf('data:') === 0) {
+                            dataLines.push(line.slice(5).trim());
+                        } else if (line === '') {
+                            flushEvent();
+                        }
+                    });
+                    return pump();
+                });
+            }
+
+            return pump();
+        }
+
+        function mailOneClickBind(form) {
+            form.addEventListener('submit', function (ev) {
+                ev.preventDefault();
+                var url = form.getAttribute('action') || '';
+                if (!url) {
+                    return;
+                }
+                var btn = form.querySelector('[type="submit"]');
+                if (btn && btn.disabled) {
+                    return;
+                }
+                var isDomain = !!form.querySelector('[name="domain_id"]');
+                var defaultLabel = isDomain ? domainLabel : globalLabel;
+                var done = false;
+                var sawPasswordOnce = false;
+                var lastMessage = busyLabel;
+                if (btn) {
+                    btn.disabled = true;
+                    if (!btn.getAttribute('data-mail-one-click-label')) {
+                        btn.setAttribute('data-mail-one-click-label', btn.textContent || '');
+                    }
+                    btn.textContent = busyLabel;
+                }
+                mailOneClickToast('success', busyLabel);
+                var body = new URLSearchParams();
+                new FormData(form).forEach(function (value, key) {
+                    body.append(key, value);
+                });
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'text/event-stream',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'include',
+                    body: body.toString(),
+                    __welineNativeFetch: true
+                }).then(function (response) {
+                    var contentType = String(response.headers.get('content-type') || '').toLowerCase();
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status);
+                    }
+                    if (contentType.indexOf('text/event-stream') === -1) {
+                        throw new Error(sseMissingLabel);
+                    }
+                    return mailOneClickConsumeSse(response, function (eventName, data) {
+                        var message = (data && data.message) ? String(data.message) : eventName;
+                        lastMessage = message;
+                        if (btn && eventName === 'progress') {
+                            btn.textContent = message.length > 28 ? message.slice(0, 28) + '…' : message;
+                        }
+                        if (eventName === 'password_once') {
+                            sawPasswordOnce = true;
+                            var email = (data && data.email) ? String(data.email) : '';
+                            var once = (data && data.password_once) ? String(data.password_once) : '';
+                            if (email !== '' && once !== '') {
+                                mailOneClickToast('success', mailOneClickFormat(passwordOnceTpl, email, once));
+                            } else if (message && message !== 'password_once') {
+                                mailOneClickToast('success', message);
+                            }
+                        }
+                        if (eventName === 'done') {
+                            done = true;
+                            mailOneClickToast('success', message);
+                            window.setTimeout(function () {
+                                window.location.reload();
+                            }, sawPasswordOnce ? 1200 : 250);
+                        }
+                        if (eventName === 'error') {
+                            done = true;
+                            mailOneClickToast('error', message || failLabel);
+                            if (btn) {
+                                btn.disabled = false;
+                                btn.textContent = btn.getAttribute('data-mail-one-click-label') || defaultLabel;
+                            }
+                        }
+                    });
+                }).then(function () {
+                    if (!done) {
+                        mailOneClickToast('error', lastMessage || failLabel);
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = btn.getAttribute('data-mail-one-click-label') || defaultLabel;
+                        }
+                    }
+                }).catch(function (error) {
+                    mailOneClickToast('error', (error && error.message) ? error.message : failLabel);
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = btn.getAttribute('data-mail-one-click-label') || defaultLabel;
+                    }
+                });
+            });
+        }
+
+        forms.forEach(mailOneClickBind);
+    })();
+    </script>
 </div>

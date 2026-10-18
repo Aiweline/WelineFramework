@@ -91,7 +91,7 @@ class Upgrade extends CommandAbstract
      * 安装模式标志文件路径
      * 安装模式下会扫描所有模块的命令（不管是否激活），确保核心命令可用
      */
-    public const INSTALL_MODE_FLAG = BP . 'var' . DS . 'process' . DS . 'command_install_mode.flag';
+    public const INSTALL_MODE_FLAG = VAR_DIR . 'process' . DS . 'command_install_mode.flag';
     
     /**
      * 设置安装模式

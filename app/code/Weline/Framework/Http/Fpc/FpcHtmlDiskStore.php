@@ -20,7 +20,8 @@ use Weline\Framework\Http\ContentEncodingNegotiator;
  * When brotli bytes are supplied (or plaintext is published and brotli_compress
  * is available), `.br` is the on-disk authority (Nginx edge serves
  * `index.html.br` / `index.bq.br`); plaintext `index.html` is not written.
- * Without the brotli extension, plaintext leaves remain the authority.
+ * Without the brotli extension, publish fail-closes (returns false) — never
+ * silently leave plaintext-only leaves as long-term html-disk authority.
  *
  * Path-only leaf = host+path (query empty). Allowlisted canonical query URIs
  * (Coordinator-normalized) get a sibling `~q/{sha1}` directory — never overwrite the
@@ -200,6 +201,15 @@ final class FpcHtmlDiskStore
             return false;
         }
         $brPath = $bqPath . '.br';
+        if ($brotli === '' && $wirePlain !== '' && ContentEncodingNegotiator::brotliAvailable()) {
+            $compressed = ContentEncodingNegotiator::encode(
+                $wirePlain,
+                ContentEncodingNegotiator::ENCODING_BROTLI,
+            );
+            if (\is_string($compressed) && $compressed !== '') {
+                $brotli = $compressed;
+            }
+        }
         if ($brotli !== '') {
             if (!self::writeAtomic($brPath, $brotli)) {
                 return false;
@@ -208,12 +218,13 @@ final class FpcHtmlDiskStore
 
             return true;
         }
-        if (!self::writeAtomic($bqPath, $wirePlain)) {
-            return false;
+        if (\function_exists('w_log_warning')) {
+            \w_log_warning(
+                '[FpcHtmlDiskStore] publishBq refused: brotli bytes unavailable; refusing plaintext-only BQ leaf'
+            );
         }
-        @\unlink($brPath);
 
-        return true;
+        return false;
     }
 
     /**
@@ -341,12 +352,16 @@ final class FpcHtmlDiskStore
 
             return true;
         }
-        if (!self::writeAtomic($htmlPath, $html)) {
-            return false;
+        // Fail-closed: missing brotli (or compress failure) must not publish plaintext
+        // as html-disk authority — Nginx only recognizes index.html.br.
+        if (\function_exists('w_log_warning')) {
+            \w_log_warning(
+                '[FpcHtmlDiskStore] publish refused: brotli bytes unavailable (ext missing or compress failed); '
+                . 'refusing plaintext-only html-disk leaf'
+            );
         }
-        @\unlink($brPath);
 
-        return true;
+        return false;
     }
 
     /**

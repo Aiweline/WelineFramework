@@ -48,7 +48,7 @@ final class ProtocolEdgeRuntime
     {
         $instanceName = self::normalizeInstanceName($instanceName);
 
-        return Env::VAR_DIR . 'server' . DS . 'protocol-edge' . DS . $instanceName;
+        return Env::varDir() . 'server' . DS . 'protocol-edge' . DS . $instanceName;
     }
 
     public static function tokenFile(string $instanceName): string
@@ -805,7 +805,7 @@ final class ProtocolEdgeRuntime
     {
         $binaryName = PHP_OS_FAMILY === 'Windows' ? 'caddy.exe' : 'caddy';
 
-        return Env::VAR_DIR . 'server' . DS . 'runtime' . DS . 'caddy' . DS . $binaryName;
+        return Env::varDir() . 'server' . DS . 'runtime' . DS . 'caddy' . DS . $binaryName;
     }
 
     /**
@@ -817,7 +817,7 @@ final class ProtocolEdgeRuntime
     {
         $binaryName = PHP_OS_FAMILY === 'Windows' ? 'wls-protocol-edge.exe' : 'wls-protocol-edge';
 
-        return Env::VAR_DIR . 'server' . DS . 'runtime' . DS . 'protocol-edge' . DS . $binaryName;
+        return Env::varDir() . 'server' . DS . 'runtime' . DS . 'protocol-edge' . DS . $binaryName;
     }
 
     /**
@@ -1358,7 +1358,7 @@ final class ProtocolEdgeRuntime
         $compareCandidate = \PHP_OS_FAMILY === 'Windows' ? \strtolower($candidate) : $candidate;
         $compareProject = \PHP_OS_FAMILY === 'Windows' ? \strtolower($project) : $project;
         $runtimeRoot = \str_replace('\\', '/', \rtrim(
-            Env::VAR_DIR . 'server' . DS . 'protocol-edge',
+            Env::varDir() . 'server' . DS . 'protocol-edge',
             '/\\',
         ));
         $compareRuntimeRoot = \PHP_OS_FAMILY === 'Windows'

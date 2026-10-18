@@ -123,7 +123,7 @@ final class AtomicSitemapPublisher
         int $maxBytes,
     ): array {
         $generationId = gmdate('YmdHis') . '-' . bin2hex(random_bytes(6));
-        $targetDirectory = BP . '/pub/sitemaps/' . $websiteCode . '/' . $target;
+        $targetDirectory = PUB . 'sitemaps/' . $websiteCode . '/' . $target;
         $this->ensureDirectory($targetDirectory);
         $journalDirectory = BP . '/var/weline-seo/sitemap-journals';
         $this->ensureDirectory($journalDirectory);

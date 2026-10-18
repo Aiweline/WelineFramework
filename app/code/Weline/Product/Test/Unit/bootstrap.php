@@ -37,7 +37,7 @@ if (!\defined('APP_ETC_PATH')) {
     \define('APP_ETC_PATH', APP_PATH . 'etc' . DS);
 }
 if (!\defined('PUB')) {
-    \define('PUB', BP . 'pub' . DS);
+    \define('PUB', PUB);
 }
 if (!\defined('VENDOR_PATH')) {
     \define('VENDOR_PATH', BP . 'vendor' . DS);

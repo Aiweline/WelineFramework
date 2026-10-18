@@ -10,7 +10,7 @@ use Weline\Framework\Env\WelineEnv;
  */
 final class FrontendQueryOperationAttackGuard
 {
-    private const STORE_DIR = BP . 'var' . DS . 'cache' . DS . 'frontend_worker' . DS . 'operation_attack' . DS;
+    private const STORE_DIR = VAR_DIR . 'cache' . DS . 'frontend_worker' . DS . 'operation_attack' . DS;
 
     /**
      * @param array<string, mixed> $descriptor

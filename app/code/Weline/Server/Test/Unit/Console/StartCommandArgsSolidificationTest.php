@@ -1476,7 +1476,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
     /** T-PH-5: saveInstanceConfig round-trip keeps non-empty extra_allowed_hosts. */
     public function testSaveInstanceConfigPersistsExtraAllowedHosts(): void
     {
-        $base = \rtrim((string)\Weline\Framework\App\Env::VAR_DIR, '/\\')
+        $base = \rtrim((string)\Weline\Framework\App\Env::varDir(), '/\\')
             . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'config';
         $dir = $base . DIRECTORY_SEPARATOR
             . 'ut-extra-hosts-' . \str_replace('.', '', \uniqid('', true));

@@ -1047,7 +1047,7 @@ private function assert_WlsRuntimePublicOriginWarmupHost_testResolveWorkerPublic
     if (!\defined('BP')) {
         self::markTestSkipped('BP undefined');
     }
-    $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . 'default.json';
+    $instanceFile = VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . 'default.json';
     if (!\is_file($instanceFile)) {
         self::markTestSkipped('default instance metadata missing');
     }
@@ -1077,7 +1077,7 @@ private function assert_WlsRuntimePublicOriginWarmupHost_testProcessLocalDynamic
     if (!\defined('BP')) {
         self::markTestSkipped('BP undefined');
     }
-    $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . 'default.json';
+    $instanceFile = VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . 'default.json';
     if (!\is_file($instanceFile)) {
         self::markTestSkipped('default instance metadata missing');
     }

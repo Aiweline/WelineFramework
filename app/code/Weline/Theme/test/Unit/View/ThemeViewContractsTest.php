@@ -1955,6 +1955,9 @@ private function assert_StorefrontFloatLayer_testFloatLayerCssOwnsStickyClearanc
     self::assertStringContainsString('storefront-float-edge-dock-v1', $css);
     self::assertStringContainsString('storefront-float-edge-flush-v2', $css);
     self::assertStringContainsString('storefront-float-edge-transform-clear-v1', $css);
+    self::assertStringContainsString('storefront-float-consent-clearance-v1', $css);
+    self::assertStringContainsString('#weline-consent-banner:not([hidden])', $css);
+    self::assertStringContainsString('--weline-consent-banner-clearance', $css);
     self::assertStringContainsString('is-edge-collapsed', $css);
     self::assertStringContainsString('.w-storefront-float-edge__dismiss', $css);
     self::assertStringContainsString('storefront-float-dismiss-contrast-v1', $css);
@@ -1973,6 +1976,9 @@ private function assert_StorefrontFloatLayer_testFloatLayerJsOwnsEdgeDockLocalSt
     $js = (string) file_get_contents($this->themeRoot_StorefrontFloatLayer() . '/view/statics/js/storefront-float-layer.js');
     self::assertStringContainsString('storefront-float-edge-dock-v1', $js);
     self::assertStringContainsString('storefront-float-edge-transform-clear-v1', $js);
+    self::assertStringContainsString('storefront-float-dock-real-content-v1', $js);
+    self::assertStringContainsString(':not([data-store-music-skipped])', $js);
+    self::assertStringNotContainsString('[data-widget-code]:not([data-store-music-skipped])', $js);
     self::assertStringContainsString('weline.storefrontFloat.edgeCollapsed.', $js);
     self::assertStringContainsString('localStorage', $js);
     self::assertStringContainsString('data-float-edge-dismiss', $js);

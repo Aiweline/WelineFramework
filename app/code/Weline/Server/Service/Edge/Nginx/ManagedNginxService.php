@@ -260,6 +260,22 @@ final class ManagedNginxService
                     . 'downloads or compiles it. Run php bin/w server:nginx:install explicitly.',
             ];
         }
+        // Public 80/443 binds need file capability on the nginx inode. We grant
+        // via bounded `sudo -n setcap` here (not by running the edge as root).
+        $netBind = $this->installer->ensureNetBindCapability();
+        if (\PHP_OS_FAMILY === 'Linux'
+            && !($netBind['granted'] ?? false)
+            && !$this->installer->allowMissingNetBindCapability()
+        ) {
+            return [
+                'ok' => false,
+                'message' => 'managed nginx cannot start on public ports without '
+                    . 'cap_net_bind_service: ' . (string)($netBind['message'] ?? 'unknown')
+                    . '. Configure passwordless `sudo -n /usr/sbin/setcap` for the run user,'
+                    . ' or set WLS_NGINX_ALLOW_MISSING_NET_BIND_CAP=1 only when high listen'
+                    . ' ports are intentional.',
+            ];
+        }
         $identity = $this->installedBinaryIdentity();
         if (!($identity['ok'] ?? false)) {
             return $identity;

@@ -866,7 +866,7 @@ class Core extends CommandAbstract
 
     private function prepareTempDirectory(): string
     {
-        $tmpDir = Env::backup_dir . 'tmp' . DS . 'core-update';
+        $tmpDir = Env::backupDir() . 'tmp' . DS . 'core-update';
         
         // 只有在强制模式下才删除旧目录
         if ($this->forceUpdate && is_dir($tmpDir)) {

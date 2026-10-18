@@ -12,7 +12,7 @@ use Weline\Server\Service\MasterProcess;
 
 /**
  * 托管 Nginx 是本项目的公网网关：默认必须监听公网 80/443，只有被**别人**占着
- * （或本用户无权绑定）才回退 8080/8443 + projectPortOffset，而且回退必须可见。
+ * 才回退 8080/8443 + projectPortOffset；PHP UNBINDABLE 不回退（靠 Nginx setcap）。
  */
 final class ManagedNginxPortAllocatorTest extends TestCase
 {
@@ -87,7 +87,7 @@ final class ManagedNginxPortAllocatorTest extends TestCase
         self::assertStringContainsString((string)(8080 + $offset), $ports['notes'][0]);
     }
 
-    public function testUnbindablePublicPortFallsBackWithItsOwnReason(): void
+    public function testUnbindablePublicPortKeepsPublicGatewayForManagedNginxCaps(): void
     {
         $probe = new FakeManagedNginxPublicPortProbe([
             443 => ManagedNginxPublicPortProbeInterface::STATE_UNBINDABLE,
@@ -95,9 +95,12 @@ final class ManagedNginxPortAllocatorTest extends TestCase
         $ports = $this->allocate([], $probe);
 
         self::assertSame(80, $ports['http']);
-        self::assertSame(8443 + MasterProcess::getProjectPortOffset(), $ports['https']);
+        self::assertSame(443, $ports['https'], 'PHP UNBINDABLE 不得把托管 Nginx 公网入口挪到高位端口');
+        self::assertSame(ManagedNginxPortAllocator::SOURCE_PUBLIC_DEFAULT, $ports['source']);
+        self::assertSame(ManagedNginxPortAllocator::SOURCE_PUBLIC_DEFAULT, $ports['https_source']);
         self::assertCount(1, $ports['notes']);
-        self::assertStringContainsString('not bindable', $ports['notes'][0]);
+        self::assertStringContainsString('unbindable by this PHP process', $ports['notes'][0]);
+        self::assertStringContainsString('cap_net_bind_service', $ports['notes'][0]);
     }
 
     public function testOwnManagedNginxHoldingThePublicPortIsNotAFallback(): void
@@ -146,7 +149,7 @@ final class ManagedNginxPortAllocatorTest extends TestCase
     {
         $probe = new FakeManagedNginxPublicPortProbe([
             80 => ManagedNginxPublicPortProbeInterface::STATE_FOREIGN,
-            443 => ManagedNginxPublicPortProbeInterface::STATE_UNBINDABLE,
+            443 => ManagedNginxPublicPortProbeInterface::STATE_FOREIGN,
         ]);
         $ports = $this->allocate([], $probe);
         $offset = MasterProcess::getProjectPortOffset();
@@ -154,6 +157,22 @@ final class ManagedNginxPortAllocatorTest extends TestCase
         self::assertSame(8080 + $offset, $ports['http']);
         self::assertSame(8443 + $offset, $ports['https']);
         self::assertCount(2, $ports['notes']);
+    }
+
+    public function testForeignHttpWithUnbindableHttpsOnlyFallsBackTheOccupiedHalf(): void
+    {
+        $probe = new FakeManagedNginxPublicPortProbe([
+            80 => ManagedNginxPublicPortProbeInterface::STATE_FOREIGN,
+            443 => ManagedNginxPublicPortProbeInterface::STATE_UNBINDABLE,
+        ]);
+        $ports = $this->allocate([], $probe);
+        $offset = MasterProcess::getProjectPortOffset();
+
+        self::assertSame(8080 + $offset, $ports['http']);
+        self::assertSame(443, $ports['https']);
+        self::assertCount(2, $ports['notes']);
+        self::assertStringContainsString('occupied', $ports['notes'][0]);
+        self::assertStringContainsString('unbindable by this PHP process', $ports['notes'][1]);
     }
 
     public function testExplicitPortCollidingWithResolvedPublicPortIsRejected(): void

@@ -889,58 +889,6 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-分类,Classification
-分类展示图,"Category showcase image"
-查看全部,"View all"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
-查看更多,"View more"
-距离结束,"Ends in"
-时,Hour
-分,Minute
-秒,Second
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
-官方社交媒体,"Official social media"
-商品,Products
-查看商品图,"View product image"
-查看规格图,"View spec images"
-减少数量,"Decrease quantity"
-数量,Quantity
-增加数量,"Increase quantity"
-购物车是空的,"Shopping cart is empty"
-"浏览%1 %2件商品","Browse %1 · %2 items"
-零售车,零售车
-批发车,批发车
-继续购物,"Continue shopping"
-小计,Subtotal
-去结算,"Proceed to Checkout"
-正在前往结算...,"Proceeding to checkout..."
-查看购物车,"View cart"
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-运费将在结算时计算,"Shipping calculated at checkout"
-税费,Tax
-正在加载购物车...,"Loading cart..."
-正在更新购物车...,"Updating cart..."
-商品小计,"Goods subtotal"
-本次应付定金,"Deposit due now"
-本单共计,"Order total"
-优惠券,Coupon
-叠加优惠,"Stacked discount"
-自动优惠,"Automatic discount"
-"还差 %1 包邮","You're %1 away from free shipping"
-已享包邮,"You've unlocked free shipping"
-收起明细,"Collapse details"
-展开明细,"Expand details"
-零售,Retail
-迷你购物车金额小计,"Mini-cart money summary"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
-天,Day(s)
-面包屑,"bread crumbs"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -1016,6 +964,7 @@ ERROR,ERROR
 分页导航,"Pagination navigation"
 缺货,"Out of Stock"
 联系询价,联系询价
+面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 我的,mine
 账户及心愿单,"Accounts and Wishlists"
@@ -1031,6 +980,9 @@ Weline,Weline
 搜索,Search
 切换语言,"Switch Language"
 切换货币,"Switch Currency"
+分类,Classification
+分类展示图,"Category showcase image"
+查看全部,"View all"
 导航菜单,"Navigation menu"
 我的账户,"My account"
 我的收藏,"My Favorites"
@@ -1040,8 +992,12 @@ Weline,Weline
 "示例商品 1","Example Item 1"
 "示例商品 2","Example Item 2"
 "示例商品 3","Example Item 3"
+购物车是空的,"Shopping cart is empty"
 去购物,"Go Shopping"
 删除,delete
+小计,Subtotal
+查看购物车,"View cart"
+去结算,"Proceed to Checkout"
 关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
 微信二维码,"WeChat QR code"
@@ -1067,6 +1023,8 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1119,6 +1077,10 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
+天,Day(s)
+时,Hour
+分,Minute
+秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
@@ -1136,9 +1098,15 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
+查看更多,"View more"
+距离结束,"Ends in"
 精选轮播,"Featured Carousel"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
+官方社交媒体,"Official social media"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1160,6 +1128,34 @@ Logo,Logo
 下一条,Next
 全部商品,"Shop All"
 面包屑导航,Breadcrumbs
+商品,Products
+查看商品图,"View product image"
+查看规格图,"View spec images"
+减少数量,"Decrease quantity"
+数量,Quantity
+增加数量,"Increase quantity"
+"浏览%1 %2件商品","Browse %1 · %2 items"
+零售车,零售车
+批发车,批发车
+继续购物,"Continue shopping"
+正在前往结算...,"Proceeding to checkout..."
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+运费将在结算时计算,"Shipping calculated at checkout"
+税费,Tax
+正在加载购物车...,"Loading cart..."
+正在更新购物车...,"Updating cart..."
+商品小计,"Goods subtotal"
+本次应付定金,"Deposit due now"
+本单共计,"Order total"
+优惠券,Coupon
+叠加优惠,"Stacked discount"
+自动优惠,"Automatic discount"
+"还差 %1 包邮","You're %1 away from free shipping"
+已享包邮,"You've unlocked free shipping"
+收起明细,"Collapse details"
+展开明细,"Expand details"
+零售,Retail
+迷你购物车金额小计,"Mini-cart money summary"
 关闭通知,"Close notification"
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
@@ -1175,6 +1171,10 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
 加载中,loading
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
@@ -2330,12 +2330,12 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+个人中心,"Personal center"
 登录,"Log in"
 登录页工具,"Login page tools"
-尺码指南,尺码指南
+尺码指南,"Size Guide"
 旅行攻略,旅行攻略
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
-个人中心,"Personal center"
 圆领袍,"Round-Collar Robes"
 发簪与发冠,"Hairpins & Crowns"
 腰带与禁步,"Belts & Jinbu Charms"
@@ -4808,3 +4808,36 @@ cookie政策,"Cookie Policy"
 查找订单进度、物流配送、退换货、支付发票与账户问题的自助指南，快速解决购物常见疑问，支持中英文浏览。,"Self-service guides for order tracking, shipping, returns, payments, invoices, and account issues—quick answers for shopping, with multilingual browsing."
 "7.1 个性化商品的撤回权例外仅适用于满足法定条件的实际定制。普通服饰、标准尺码选项或手工工艺不自动属于该例外；任何适用例外均不取消瑕疵、描述不符或其他法定救济。","7.1 An exception to withdrawal rights for personalised goods applies only to actual personalisation that meets the legal conditions. Ordinary apparel, standard size options or handcrafting do not automatically qualify. No applicable exception removes remedies for defects, misdescription or other statutory claims."
 "7.2 服饰类请关注尺码表与养护说明，降低因尺码或穿着不当导致的退换争议。","7.2 For apparel, please check the size chart and care guide to reduce disputes from sizing or improper wear."
+尺码,Size
+胸围,Bust
+腰围,Waist
+臀围,Hip
+身高,Height
+下摆,Hem
+"胸围 Bust",Bust
+在胸部最丰满处水平围一圈，软尺贴身不勒。,"Measure horizontally around the fullest part of the bust; keep the tape snug, not tight."
+"腰围 Waist",Waist
+在自然腰线（通常在髋骨上方最细处）水平围一圈。,"Measure horizontally around your natural waistline (usually the narrowest point above the hip bones)."
+"臀围 Hip",Hip
+在臀部与胯部最丰满处水平围一圈。,"Measure horizontally around the fullest part of the hips and seat."
+"身高 Height",Height
+赤脚靠墙直立测量；有助于选择袖长与裙长。,"Stand barefoot against a wall; this helps choose sleeve and skirt length."
+"襦裙 Ruqun",Ruqun
+"魏晋 Wei Jin",Wei-Jin
+"唐制 Tang",Tang
+"明制 Ming",Ming
+"马面 Mamian",Mamian
+"大码 Plus",Plus
+"贴合 Close",Close
+领口干净、垂感柔和而无余布。适合宋花克制与明制领型。,"A clean neckline with soft drape and little excess fabric. Suited to restrained Song-style florals and Ming collars."
+"从容 Relaxed",Relaxed
+魏晋层叠与园中缓步建议大一码。首次穿着推荐。,"For layered Wei-Jin looks and easy garden walks, size up. Recommended for first wear."
+"包容 Inclusive",Inclusive
+大码区间沿用同一形制语法——比例，而非强行拉伸。,"Plus sizes keep the same silhouette grammar—proportion, not forced stretch."
+"Fit · 尺码","Fit · Size"
+"量体 · 形制 · 从容入袖","Measure · Silhouette · Ease into the sleeve"
+量一次，穿得从容。请以厘米为准。层叠唐制襦裙与魏晋飘逸套装，介于两码之间时建议选大一码。,"Measure once, wear with ease. Use centimeters. For layered Tang ruqun and flowing Wei-Jin sets, size up when between sizes."
+形制尺码表,"Silhouette size chart"
+襦裙厘米尺码表,"Ruqun size chart (cm)"
+介于两码之间？唐制高腰套装与层叠襦裙建议选大一码。马面裙常以腰围单独定号。,"Between sizes? For high-waist Tang sets and layered ruqun, size up. Mamian skirts are often sized by waist alone."
+留言身高、胸围、腰围——下单前我们会帮你建议尺码。,"Leave your height, bust, and waist—we'll suggest a size before you order."

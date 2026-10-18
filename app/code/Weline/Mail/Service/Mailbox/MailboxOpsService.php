@@ -45,11 +45,11 @@ final class MailboxOpsService
     /**
      * @return list<array<string, mixed>>
      */
-    public function list(int $accountId, string $folder, int $limit = 50): array
+    public function list(int $accountId, string $folder, int $limit = 50, bool $unreadOnly = false): array
     {
         $ctx = $this->resolveAccount($accountId);
         $folder = MailboxFolder::assertValid($folder);
-        return $ctx['client']->listMessages($ctx['mailbox'], $folder, $limit);
+        return $ctx['client']->listMessages($ctx['mailbox'], $folder, $limit, $unreadOnly);
     }
 
     public function countUnreadInbox(int $accountId): int

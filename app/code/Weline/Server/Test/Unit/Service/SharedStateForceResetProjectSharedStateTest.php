@@ -21,8 +21,8 @@ final class SharedStateForceResetProjectSharedStateTest extends TestCase
     public function testForceResetClearsStaleRuntimeAndRegistryWithoutThrowing(): void
     {
         $id = \bin2hex(\random_bytes(4));
-        $sharedDir = Env::VAR_DIR . 'server' . \DIRECTORY_SEPARATOR . 'shared' . \DIRECTORY_SEPARATOR;
-        $registryDir = Env::VAR_DIR . 'server' . \DIRECTORY_SEPARATOR . 'shared-services' . \DIRECTORY_SEPARATOR;
+        $sharedDir = Env::varDir() . 'server' . \DIRECTORY_SEPARATOR . 'shared' . \DIRECTORY_SEPARATOR;
+        $registryDir = Env::varDir() . 'server' . \DIRECTORY_SEPARATOR . 'shared-services' . \DIRECTORY_SEPARATOR;
         if (!\is_dir($sharedDir) && !@\mkdir($sharedDir, 0755, true) && !\is_dir($sharedDir)) {
             self::markTestSkipped('unable to create shared dir under VAR_DIR');
         }

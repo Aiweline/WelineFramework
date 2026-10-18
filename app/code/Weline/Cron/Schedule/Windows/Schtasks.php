@@ -193,7 +193,7 @@ class Schtasks implements \Weline\Cron\Schedule\ScheduleInterface
         if (!$this->exist($name)) {
             $php_binary = PHP_BINARY;
             # 获取盘符
-            $log = BP . 'var/cron.log';
+            $log = VAR_DIR . 'cron.log';
             if (!file_exists($log)) {
                 if (!is_dir(dirname($log))) {
                     $created = mkdir(dirname($log), 0777, true);

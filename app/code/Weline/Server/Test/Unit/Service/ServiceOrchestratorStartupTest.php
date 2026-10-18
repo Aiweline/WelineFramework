@@ -55,7 +55,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             \define('DEV_PATH', BP . 'dev' . DS);
         }
         if (!\defined('PUB')) {
-            \define('PUB', BP . 'pub' . DS);
+            \define('PUB', PUB);
         }
         if (!\defined('IS_WIN')) {
             \define('IS_WIN', true);

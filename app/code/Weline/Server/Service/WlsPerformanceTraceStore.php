@@ -1151,7 +1151,7 @@ class WlsPerformanceTraceStore
             return \rtrim(\str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $configured), \DIRECTORY_SEPARATOR) . \DIRECTORY_SEPARATOR;
         }
 
-        return Env::VAR_DIR . 'wls' . \DIRECTORY_SEPARATOR . 'panel-trace' . \DIRECTORY_SEPARATOR;
+        return Env::varDir() . 'wls' . \DIRECTORY_SEPARATOR . 'panel-trace' . \DIRECTORY_SEPARATOR;
     }
 
     private function clearFileStore(): void

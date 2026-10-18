@@ -48,9 +48,15 @@ final class ResourceChangeFactory
         ?string $resourceScope = null,
     ): ResourceChange {
         if (($websiteId === null) !== ($websiteCode === null)) {
-            throw new \InvalidArgumentException('resource_change_website_identity_incomplete');
+            // 默认站 id=0 允许缺 code（由 ContextSnapshot 填 default）；其它站必须成对。
+            if (!($websiteId === 0 && $websiteCode === null)) {
+                throw new \InvalidArgumentException('resource_change_website_identity_incomplete');
+            }
         }
         $websiteCode = $websiteCode === null ? null : trim($websiteCode);
+        if ($websiteId === 0 && ($websiteCode === null || $websiteCode === '')) {
+            $websiteCode = 'default';
+        }
         $previousWebsiteCode = $previousWebsiteCode === null
             ? null
             : trim($previousWebsiteCode);

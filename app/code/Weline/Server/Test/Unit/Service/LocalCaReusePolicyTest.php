@@ -29,7 +29,7 @@ class LocalCaReusePolicyTest extends TestCase
             \define('DEV_PATH', BP . 'dev' . DS);
         }
         if (!\defined('PUB')) {
-            \define('PUB', BP . 'pub' . DS);
+            \define('PUB', PUB);
         }
         if (!\defined('IS_WIN')) {
             \define('IS_WIN', \PHP_OS_FAMILY === 'Windows');
@@ -83,7 +83,7 @@ class LocalCaReusePolicyTest extends TestCase
             }
         };
 
-        self::assertFalse($service->exposePrepare(BP . 'var' . DS . 'server' . DS . 'missing-local-ca.pem'));
+        self::assertFalse($service->exposePrepare(VAR_DIR . 'server' . DS . 'missing-local-ca.pem'));
     }
 
 }

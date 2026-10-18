@@ -309,7 +309,7 @@ class PreviewTokenService
         }
 
         $adapter = new FileAdapter(self::FILE_FALLBACK_IDENTITY, [
-            'path' => BP . 'var' . DS . 'cache' . DS,
+            'path' => VAR_DIR . 'cache' . DS,
         ]);
         $this->fileFallback = new CachePool(
             self::FILE_FALLBACK_IDENTITY,

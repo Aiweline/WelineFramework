@@ -593,7 +593,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
             $userAgent = \w_env('server.http_user_agent') ?? '';
             $timestamp = date('Y-m-d H:i:s');
             
-            $logDir = BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR;
+            $logDir = VAR_DIR . 'log' . DIRECTORY_SEPARATOR;
             if (!is_dir($logDir)) {
                 @mkdir($logDir, 0755, true);
             }

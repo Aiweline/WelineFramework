@@ -32,6 +32,12 @@ final class StorefrontGenerationOutbound
                 return;
             }
 
+            // Shareable FPC HIT/STALE (and armed suppress) must never mint identity Cookie.
+            // Defense for Worker emission after StateManager::reset cleared RequestContext.
+            if (self::forbidsIdentityCookie($response)) {
+                return;
+            }
+
             $id = self::resolveVersionId();
             if ($id === '') {
                 return;
@@ -52,6 +58,38 @@ final class StorefrontGenerationOutbound
         } catch (\Throwable) {
             // Outbound decoration must never block emission.
         }
+    }
+
+    /**
+     * True when Set-Cookie (incl. storefront generation) must not leave the process.
+     */
+    public static function forbidsIdentityCookie(Response $response): bool
+    {
+        if (\class_exists(Fpc\SharedFpcSetCookieSuppress::class)
+            && Fpc\SharedFpcSetCookieSuppress::isArmed()
+        ) {
+            return true;
+        }
+        if ((bool)WelineEnv::get('response.from_cache', false)) {
+            return true;
+        }
+
+        foreach (['X-Weline-FPC', 'X-Weline-Fpc'] as $name) {
+            $raw = $response->getHeader($name);
+            $value = \is_array($raw) ? \implode(',', \array_map('strval', $raw)) : (string)($raw ?? '');
+            if ($value !== '' && \preg_match('/\b(HIT|STALE)\b/i', $value) === 1) {
+                return true;
+            }
+        }
+        $cacheStatus = $response->getHeader('X-Weline-Cache-Status');
+        $cacheStatusValue = \is_array($cacheStatus)
+            ? \implode(',', \array_map('strval', $cacheStatus))
+            : (string)($cacheStatus ?? '');
+        if ($cacheStatusValue !== '' && \preg_match('/\bhit\b/i', $cacheStatusValue) === 1) {
+            return true;
+        }
+
+        return false;
     }
 
     public static function resolveVersionId(): string

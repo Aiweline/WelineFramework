@@ -3761,7 +3761,7 @@ class Benchmark extends CommandAbstract
             'benchmark_client' => (array)($benchmarkContext['benchmark_client'] ?? []),
         ];
         
-        $reportDir = BP . 'var/log/wls';
+        $reportDir = VAR_DIR . 'log/wls';
         if (!\is_dir($reportDir)) {
             @\mkdir($reportDir, 0755, true);
         }

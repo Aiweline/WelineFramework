@@ -295,7 +295,7 @@ final class InstallLocalStorefrontBaseResolver
 
     private function originFromServerInstance(): ?string
     {
-        $path = BP . 'var/server/instances/default.json';
+        $path = VAR_DIR . 'server/instances/default.json';
         if (!\is_file($path)) {
             return null;
         }

@@ -361,6 +361,11 @@ private function assert_FullPageCacheHitCookieSuppress_testMarkCacheHitSourceCle
     self::assertNotSame('', $runtimeSrc);
     self::assertStringContainsString('SharedFpcSetCookieSuppress::isArmed()', $runtimeSrc);
     self::assertStringContainsString("'cookies' => \$suppressCookies ? [] : \$headerCollector->getCookies()", $runtimeSrc);
+    self::assertStringContainsString("'suppress_set_cookie' => \$suppressCookies", $runtimeSrc);
+    self::assertStringContainsString('rearmPendingSetCookieSuppress', $runtimeSrc);
+    $workerSrc = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/Server/bin/worker.php');
+    self::assertStringContainsString('wlsWorkerApplyPendingSetCookieSuppress', $workerSrc);
+    self::assertStringContainsString('wlsStripSetCookieFromFormattedHttp', $workerSrc);
 }
 
 private function assert_FullPageCacheHomepageReceiptSharedRehydrate_testResolveHomepageProcessReceiptRehydratesFromSharedOnProcessMiss(): void

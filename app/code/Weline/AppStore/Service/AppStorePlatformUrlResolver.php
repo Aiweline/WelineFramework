@@ -84,7 +84,7 @@ class AppStorePlatformUrlResolver implements AppStorePlatformUrlResolverInterfac
      */
     private function readProductionDeployPlatformUrl(): array
     {
-        $currentFile = $this->deployCurrentFile ?? (BP . 'var' . DS . 'deploy' . DS . 'current.json');
+        $currentFile = $this->deployCurrentFile ?? (VAR_DIR . 'deploy' . DS . 'current.json');
         if (!is_file($currentFile) || !is_readable($currentFile)) {
             return ['platform_url' => '', 'source' => '', 'environment' => ''];
         }

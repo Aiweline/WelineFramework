@@ -101,11 +101,161 @@ final class MailServiceContractsTest extends TestCase
             'MailOutboundRelaySync::testEnterpriseOutboundOnAccountSmtpTabNotDomain' => function () {
             $this->assert_MailOutboundRelaySync_testEnterpriseOutboundOnAccountSmtpTabNotDomain();
         },
+            'MailEngineAccountDbSseSync::testSecretsPreferProjectKeyNotEtc' => function () {
+            $this->assert_MailEngineAccountDbSseSync_testSecretsPreferProjectKeyNotEtc();
+        },
+            'MailEngineAccountDbSseSync::testPasswordSealedWritePathsAndSyncSse' => function () {
+            $this->assert_MailEngineAccountDbSseSync_testPasswordSealedWritePathsAndSyncSse();
+        },
+            'MailEngineAccountDbSseSync::testListQueriesSelectBeforeFetchArray' => function () {
+            $this->assert_MailEngineAccountDbSseSync_testListQueriesSelectBeforeFetchArray();
+        },
+            'MailOneClickSetup::testManagementDualPathUpsertAndSse' => function () {
+            $this->assert_MailOneClickSetup_testManagementDualPathUpsertAndSse();
+        },
             'MailboxClient::testInterfaceAndOpsFacadeExist' => function () {
             $this->assert_MailboxClient_testInterfaceAndOpsFacadeExist();
         },
         ];
     }
+
+private function assert_MailEngineAccountDbSseSync_testSecretsPreferProjectKeyNotEtc(): void
+{
+    $src = (string) file_get_contents(BP . '/app/code/Weline/Mail/Service/MailOutboundRelaySecretService.php');
+    self::assertStringContainsString('mail.secrets_key_base64', $src);
+    self::assertStringContainsString('var/mail/account-secrets.key', $src);
+    self::assertStringContainsString('ENV_SECRETS_KEY', $src);
+    self::assertStringContainsString('consumePendingReseal', $src);
+    self::assertStringContainsString('projectKey', $src);
+    self::assertStringContainsString('legacyKeys', $src);
+    self::assertStringContainsString('var/mail/outbound-relay.key', $src);
+    // seal 首选不得是 /etc
+    self::assertMatchesRegularExpression('/function seal\([\s\S]*?projectKey\(\)/', $src);
+    self::assertDoesNotMatchRegularExpression(
+        '/private function projectKey\(\): string\s*\{[\s\S]*?\/etc\/weline\/mail-admin\.key/',
+        $src
+    );
+}
+
+private function assert_MailEngineAccountDbSseSync_testPasswordSealedWritePathsAndSyncSse(): void
+{
+    $account = (string) file_get_contents(BP . '/app/code/Weline/Mail/Model/MailAccount.php');
+    self::assertStringContainsString("schema_fields_PASSWORD_SEALED = 'password_sealed'", $account);
+
+    $mgmt = (string) file_get_contents(BP . '/app/code/Weline/Mail/Service/MailAccountManagementService.php');
+    self::assertStringContainsString('MailOutboundRelaySecretService', $mgmt);
+    self::assertStringContainsString('schema_fields_PASSWORD_SEALED', $mgmt);
+    self::assertStringContainsString('function createAccount', $mgmt);
+    self::assertStringContainsString('function provisionOrResetPassword', $mgmt);
+
+    $frontend = (string) file_get_contents(BP . '/app/code/Weline/Mail/Service/MailFrontendRegisterService.php');
+    self::assertStringContainsString('schema_fields_PASSWORD_SEALED', $frontend);
+    self::assertStringContainsString('MailOutboundRelaySecretService', $frontend);
+
+    $sync = (string) file_get_contents(BP . '/app/code/Weline/Mail/Service/MailEngineAccountSyncService.php');
+    self::assertStringContainsString('hasManagementCredential', $sync);
+    self::assertStringContainsString('provisionOrResetAccount', $sync);
+    self::assertStringContainsString('ensureDomain', $sync);
+    self::assertStringContainsString('accountExists', $sync);
+    self::assertStringContainsString('upsertReaderCredential', $sync);
+    self::assertStringContainsString('function countActiveMailAccounts', $sync);
+    self::assertStringNotContainsString('->assertSystemMutable(', $sync);
+    self::assertStringNotContainsString('->provisionOrResetPassword(', $sync);
+    self::assertStringNotContainsString('MailAccountManagementService', $sync);
+
+    $engine = (string) file_get_contents(BP . '/app/code/Weline/Mail/Service/StalwartEngineAdapter.php');
+    self::assertStringContainsString('function upsertReaderCredential', $engine);
+    self::assertStringContainsString('/etc/weline/mail-reader.key', $engine);
+    self::assertStringContainsString('/etc/weline/mail-reader.credential', $engine);
+    self::assertStringContainsString('var/mail/mail-reader.key', $engine);
+    self::assertStringContainsString('var/mail/mail-reader.credential', $engine);
+    self::assertStringContainsString('resolveWritableReaderCredentialPair', $engine);
+    self::assertStringContainsString('resolveReadableReaderCredentialPair', $engine);
+
+    $index = (string) file_get_contents(BP . '/app/code/Weline/Mail/Controller/Backend/Index.php');
+    self::assertStringContainsString('function postSyncEngineAccountsFromDbStream', $index);
+    self::assertStringContainsString('MailEngineAccountSyncService', $index);
+    self::assertStringContainsString("sendEvent('password_once'", $index);
+    self::assertStringContainsString('SseWriter', $index);
+}
+
+private function assert_MailOneClickSetup_testManagementDualPathUpsertAndSse(): void
+{
+    $adapter = (string) file_get_contents(BP . '/app/code/Weline/Mail/Service/StalwartManagementAdapter.php');
+    self::assertStringContainsString('/etc/weline/mail-admin.key', $adapter);
+    self::assertStringContainsString('/etc/weline/mail-admin.credential', $adapter);
+    self::assertStringContainsString('var/mail/mail-admin.key', $adapter);
+    self::assertStringContainsString('var/mail/mail-admin.credential', $adapter);
+    self::assertStringContainsString('function upsertManagementCredential', $adapter);
+    self::assertStringContainsString('function probeManagementApi', $adapter);
+    self::assertStringContainsString('function probeManagementAuth', $adapter);
+    self::assertStringContainsString('function completeBootstrapIfNeeded', $adapter);
+    self::assertStringContainsString('function openManagementPassword', $adapter);
+    self::assertStringContainsString('resolveReadableCredentialPair', $adapter);
+    self::assertStringContainsString('resolveWritableCredentialPair', $adapter);
+
+    $setup = (string) file_get_contents(BP . '/app/code/Weline/Mail/Service/MailOneClickSetupService.php');
+    self::assertStringContainsString('function bindManagementIfNeeded', $setup);
+    self::assertStringContainsString('function oneClickGlobal', $setup);
+    self::assertStringContainsString('function oneClickDomain', $setup);
+    self::assertStringContainsString('upsertManagementCredential', $setup);
+    self::assertStringContainsString('openManagementPassword', $setup);
+    self::assertStringContainsString('probeManagementApi', $setup);
+    self::assertStringContainsString('completeBootstrapIfNeeded', $setup);
+    self::assertStringContainsString('RESTARTED', $setup);
+    self::assertStringContainsString('syncFromDatabase', $setup);
+    self::assertStringContainsString('ensureContactAccount', $setup);
+    self::assertStringContainsString('bind_stalwart_recovery_admin.sh', $setup);
+    self::assertStringContainsString('/opt/stalwart/etc/stalwart.env', $setup);
+
+    $sync = (string) file_get_contents(BP . '/app/code/Weline/Mail/Service/MailEngineAccountSyncService.php');
+    self::assertStringContainsString('?int $domainId = null', $sync);
+    self::assertStringContainsString('function shouldSkipEngineDomain', $sync);
+    self::assertStringContainsString('function shouldSkipEngineMailbox', $sync);
+    self::assertStringContainsString('.invalid', $sync);
+    self::assertStringContainsString('isFakeDomain', $sync);
+    self::assertStringContainsString('跳过假域', $sync);
+
+    self::assertStringContainsString('projectBasePath', $adapter);
+    self::assertStringContainsString('shouldSkipEngineDomain', $setup);
+
+    $index = (string) file_get_contents(BP . '/app/code/Weline/Mail/Controller/Backend/Index.php');
+    self::assertStringContainsString('function postOneClickMailSetupStream', $index);
+    self::assertStringContainsString('function postOneClickDomainSetupStream', $index);
+    self::assertStringContainsString('MailOneClickSetupService', $index);
+    self::assertStringContainsString("sendEvent('password_once'", $index);
+    self::assertStringContainsString('PostResponseCaptureMode::None', $index);
+    self::assertStringContainsString('domain_id', $index);
+
+    $script = BP . '/app/code/Weline/Mail/env/script/bind_stalwart_recovery_admin.sh';
+    self::assertFileExists($script);
+    $body = (string) file_get_contents($script);
+    self::assertStringContainsString('STALWART_RECOVERY_ADMIN', $body);
+    self::assertStringContainsString('/opt/stalwart/etc/stalwart.env', $body);
+    self::assertStringContainsString('launchctl kickstart', $body);
+    self::assertStringContainsString('BOUND', $body);
+    self::assertStringContainsString('RESTARTED', $body);
+}
+
+private function assert_MailEngineAccountDbSseSync_testListQueriesSelectBeforeFetchArray(): void
+{
+    $sync = (string) file_get_contents(BP . '/app/code/Weline/Mail/Service/MailEngineAccountSyncService.php');
+    // 每个 fetchArray 列表链须紧邻 select()（对齐 MailOutboundRelaySync / RouteRule）
+    $offset = 0;
+    $fetchCount = 0;
+    while (($pos = strpos($sync, '->fetchArray()', $offset)) !== false) {
+        $fetchCount++;
+        $before = substr($sync, max(0, $pos - 48), 48);
+        self::assertStringContainsString(
+            '->select()',
+            $before,
+            'list query must call select() immediately before fetchArray()'
+        );
+        $offset = $pos + 1;
+    }
+    self::assertGreaterThanOrEqual(5, $fetchCount);
+    self::assertStringContainsString('function countActiveMailAccounts', $sync);
+}
 
 private function assert_MailboxClient_testInterfaceAndOpsFacadeExist(): void
 {
@@ -124,6 +274,8 @@ private function assert_MailboxClient_testInterfaceAndOpsFacadeExist(): void
     self::assertStringContainsString('function destroy', $iface);
     self::assertStringContainsString('function uploadBlob', $iface);
     self::assertStringContainsString('function countUnreadInbox', $iface);
+    self::assertStringContainsString('bool $unreadOnly = false', $iface);
+    self::assertStringContainsString('hasKeyword', (string) file_get_contents(BP . 'app/code/Weline/Mail/Service/Mailbox/StalwartMailboxClient.php'));
     $ops = (string) file_get_contents(BP . 'app/code/Weline/Mail/Service/Mailbox/MailboxOpsService.php');
     self::assertStringContainsString('function buildComposePrefill', $ops);
     self::assertStringContainsString('function mapInboxUnreadCounts', $ops);
@@ -264,7 +416,7 @@ private function assert_MailComposeDeeplink_testBackendComposePrefillAndSendEven
 private function assert_MailComposeDeeplink_testModuleVersion(): void
 {
     $module = include BP . 'app/code/Weline/Mail/etc/module.php';
-    self::assertSame('0.2.39', $module['version'] ?? null);
+    self::assertSame('0.2.40', $module['version'] ?? null);
 }
 
 private function assert_MailDkimLocalEnsureService_testEnsureGeneratesReusablePublicKey(): void

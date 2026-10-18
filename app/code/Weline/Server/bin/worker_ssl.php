@@ -853,7 +853,7 @@ $wlsStartupTrace = static function (string $stage, array $context = []) use (&$w
             'data' => $context,
         ];
         @\file_put_contents(
-            BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'wls-worker-startup-trace.log',
+            VAR_DIR . 'log' . DIRECTORY_SEPARATOR . 'wls-worker-startup-trace.log',
             (\json_encode($traceRow, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}') . PHP_EOL,
             FILE_APPEND
         );
@@ -885,7 +885,7 @@ $wlsWorkerExitTrace = static function (string $event, string $reason = '', array
     // during READY gate before logger sinks flush; keep an append-only file.
     if (\defined('BP')) {
         @\file_put_contents(
-            BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'wls-worker-exit-trace.log',
+            VAR_DIR . 'log' . DIRECTORY_SEPARATOR . 'wls-worker-exit-trace.log',
             (\json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}') . PHP_EOL,
             FILE_APPEND
         );
@@ -3315,7 +3315,7 @@ $runReadyGateWorkerBootstrapWarmup = static function () use (
             'data' => $context,
         ];
         @\file_put_contents(
-            BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'wls-ready-gate-stage.log',
+            VAR_DIR . 'log' . DIRECTORY_SEPARATOR . 'wls-ready-gate-stage.log',
             (\json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}') . PHP_EOL,
             FILE_APPEND
         );
@@ -11982,6 +11982,12 @@ function handleRequest(
         
         // WLS 模式下控制器通过 return 返回 body；对 body trim 并可从 JSON 的 code 解析出状态码
         if (\is_string($result) && \str_starts_with($result, 'HTTP/')) {
+            // Shareable FPC HIT/build: never merge or leave Set-Cookie (CF BYPASS otherwise).
+            $suppressSetCookie = wlsWorkerApplyPendingSetCookieSuppress($runtime);
+            if ($suppressSetCookie) {
+                $result = wlsStripSetCookieFromFormattedHttp($result);
+                $runtime->consumePendingCookies();
+            } else {
             // 合并 Runtime 保存的 Cookie（在 StateManager reset 前提取的副本）
             // 若 302 已在 WlsRuntime 中带上了 Set-Cookie，则不再合并，避免重复头导致浏览器异常
             $headerEnd = \strpos($result, "\r\n\r\n");
@@ -12006,6 +12012,7 @@ function handleRequest(
                     $headerPart .= "\r\n" . $cookieHeaders;
                 }
                 $result = $headerPart . "\r\n\r\n" . $bodyPart;
+            }
             }
             $sni = \Weline\Server\Service\RouteHintService::extractSniFromHeaders($policyDecision->headers);
             $result = \Weline\Server\Service\RouteHintService::addHintToResponse($result, $sni);
@@ -12052,7 +12059,16 @@ function handleRequest(
         // 框架内部（Session、Cookie 类等）通过 HeaderCollector 设置响应头和 Cookie，
         // 但 WLS 模式下 PHP 内置的 header()/setcookie() 无效。
         // WlsRuntime 在 StateManager 重置前将 HeaderCollector 副本保存到 pendingCookies/pendingHeaders。
-        $pendingCookies2 = $runtime->consumePendingCookies();
+        $pendingHeaders2 = $runtime->consumePendingHeaders();
+        foreach ($pendingHeaders2 as $name => $value) {
+            if (\is_string($value)) { $response->setHeader($name, $value); }
+        }
+        // Headers first so FPC HIT markers are present; then re-arm suppress after reset.
+        $suppressSetCookie = wlsWorkerApplyPendingSetCookieSuppress($runtime);
+        $pendingCookies2 = $suppressSetCookie ? [] : $runtime->consumePendingCookies();
+        if ($suppressSetCookie) {
+            $runtime->consumePendingCookies();
+        }
         foreach ($pendingCookies2 as $cookie) {
             $response->setCookie(
                 (string)$cookie['name'],
@@ -12064,10 +12080,6 @@ function handleRequest(
                 (bool)($cookie['httpOnly'] ?? true),
                 (string)($cookie['sameSite'] ?? 'Lax')
             );
-        }
-        $pendingHeaders2 = $runtime->consumePendingHeaders();
-        foreach ($pendingHeaders2 as $name => $value) {
-            if (\is_string($value)) { $response->setHeader($name, $value); }
         }
         
         // 添加路由提示头（用于 TCP 透传模式下的智能路由）
@@ -12783,10 +12795,16 @@ function handleStaticFile(string $uri, string $rawRequest, ?int $maxPreAdmission
     $filename = null;
     foreach ($candidateUris as $candidateUri) {
         $searchPaths = [];
-        $searchPaths[] = BP . 'pub' . DS . \str_replace('/', DS, $candidateUri);
-        $searchPaths[] = BP . 'app' . DS . 'code' . DS . \str_replace('/', DS, $candidateUri);
-        $searchPaths[] = BP . 'vendor' . DS . \str_replace('/', DS, $candidateUri);
-        $searchPaths[] = BP . \str_replace('/', DS, $candidateUri);
+        $diskRel = \str_replace('/', DS, $candidateUri);
+        if (\str_starts_with($candidateUri, 'media/')) {
+            $mediaRel = \substr($candidateUri, \strlen('media/'));
+            $mediaRoot = \defined('MEDIA_DIR') ? \rtrim((string)\constant('MEDIA_DIR'), '/\\') : (\rtrim((string)PUB, '/\\') . DS . 'media');
+            $searchPaths[] = $mediaRoot . DS . \str_replace('/', DS, $mediaRel);
+        }
+        $searchPaths[] = \rtrim((string)PUB, '/\\') . DS . $diskRel;
+        $searchPaths[] = BP . 'app' . DS . 'code' . DS . $diskRel;
+        $searchPaths[] = BP . 'vendor' . DS . $diskRel;
+        $searchPaths[] = BP . $diskRel;
 
         foreach ($searchPaths as $path) {
             $path = \str_replace([DS . DS, '//'], DS, $path);

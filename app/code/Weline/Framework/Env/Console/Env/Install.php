@@ -334,11 +334,9 @@ class Install extends CommandAbstract
         $missingRec = $result->getMissingRecommendedExtensions();
         $unsatisfiedRec = $result->getUnsatisfiedRecommendedItems();
 
-        // FFI is topology-conditional: only POSIX Direct HTTPS requires it.
-        // Keep it out of the global recommendation list, while allowing the
-        // WLS control-plane bootstrapper to request an explicit installation.
+        // FFI：Linux/macOS WLS Direct 硬依赖（非推荐项）。env:install ffi 失败即 exit(1)。
         if ($targetLower === 'ffi') {
-            if (\extension_loaded('FFI') && \class_exists(\FFI::class)) {
+            if ((\extension_loaded('ffi') || \extension_loaded('FFI')) && \class_exists(\FFI::class, false)) {
                 try {
                     $ffi = \FFI::cdef('int abs(int);');
                     if ((int)$ffi->abs(-1) === 1) {
@@ -349,13 +347,15 @@ class Install extends CommandAbstract
                     // Continue into the platform installer and fresh-process verification.
                 }
             }
-            $this->printer->note(__('正在安装 WLS Direct HTTPS 原生传输扩展: FFI'));
+            $this->printer->note(__('正在安装 WLS Direct 硬依赖扩展: FFI'));
             $installed = $this->tryInstallExtension('ffi');
             if ($installed) {
                 $this->printer->success(__('扩展 FFI 已由当前 PHP 二进制启用 ✔'));
             } else {
-                $this->printer->warning(__('扩展 FFI 自动安装失败'));
+                $this->printer->error(__('扩展 FFI 自动安装失败（Linux/macOS Direct 硬依赖，禁止软过）'));
                 $this->printExtensionInstallGuide('ffi');
+                $this->printer->note(__('请安装 libffi-dev 后执行: bash bin/install.sh --rebuild-php php'));
+                exit(1);
             }
             return;
         }

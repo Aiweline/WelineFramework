@@ -10,7 +10,9 @@ use Weline\Server\Service\MasterProcess;
  * Per-project listen ports so multiple BP checkouts do not collide.
  *
  * 托管 Nginx 是本项目的公网网关，所以**默认就是公网端口 80/443**；只有当 80/443
- * 确实被别的进程占着（或本进程无权绑定）时才回退到 8080/8443 + projectPortOffset。
+ * 确实被**别的**进程占着时才回退到 8080/8443 + projectPortOffset。
+ * PHP 探测到 `UNBINDABLE`（非 root 常态）**不算**回退理由——真正绑公网端口的是
+ * 已 `sudo -n setcap cap_net_bind_service` 的托管 Nginx 二进制，不是探测用的 PHP。
  * 回退一律通过 `source` / `http_source` / `https_source` / `notes` 写明，不静默。
  *
  * 显式配置（`wls.edge.nginx.listen_http|listen_https`，或环境变量
@@ -119,7 +121,7 @@ final class ManagedNginxPortAllocator
     }
 
     /**
-     * 公网端口可用就用公网端口；被外人占着或本进程无权绑定才回退。
+     * 公网端口可用就用公网端口；仅被外人占着才回退。
      *
      * @return array{0:int,1:string,2:string}
      */
@@ -129,17 +131,25 @@ final class ManagedNginxPortAllocator
         if (\in_array($verdict['state'], [
             ManagedNginxPublicPortProbeInterface::STATE_FREE,
             ManagedNginxPublicPortProbeInterface::STATE_SELF,
+            // PHP 无权绑特权端口是 Linux 非 root 常态；托管 Nginx 靠文件
+            // cap_net_bind_service 绑定，不得因此把公网入口挪到高位端口。
+            ManagedNginxPublicPortProbeInterface::STATE_UNBINDABLE,
         ], true)) {
             // STATE_SELF：本项目的托管 Nginx 正在这个公网端口上跑（重载/证书续期
             // 路径）。这不是「被占用」，必须继续沿用，否则会把一个健康的公网入口
             // 悄悄挪到高位端口上。
-            return [$publicPort, self::SOURCE_PUBLIC_DEFAULT, ''];
+            $note = '';
+            if ($verdict['state'] === ManagedNginxPublicPortProbeInterface::STATE_UNBINDABLE) {
+                $note = $label . ' ' . $publicPort
+                    . ' is unbindable by this PHP process; keeping public port for'
+                    . ' managed Nginx (file cap_net_bind_service)'
+                    . ($verdict['detail'] !== '' ? ' (' . $verdict['detail'] . ')' : '');
+            }
+
+            return [$publicPort, self::SOURCE_PUBLIC_DEFAULT, $note];
         }
 
-        $reason = $verdict['state'] === ManagedNginxPublicPortProbeInterface::STATE_UNBINDABLE
-            ? 'not bindable by this user'
-            : 'occupied';
-        $note = $label . ' ' . $publicPort . ' is ' . $reason
+        $note = $label . ' ' . $publicPort . ' is occupied'
             . ($verdict['detail'] !== '' ? ' (' . $verdict['detail'] . ')' : '')
             . '; falling back to ' . $fallbackPort . ' (project offset)';
 

@@ -138,7 +138,7 @@ final class ResumableTaskWatchdogHeartbeat
 
     private function directory(): string
     {
-        return BP . 'var' . DS . 'runtime' . DS . 'resumable' . DS . 'watchdogs';
+        return VAR_DIR . 'runtime' . DS . 'resumable' . DS . 'watchdogs';
     }
 
     private function readPath(string $path): ?array

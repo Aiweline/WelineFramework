@@ -15,7 +15,7 @@ final class PayPalSandboxPublicOriginServiceTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->instanceFile = BP . 'var/server/instances/default.json';
+        $this->instanceFile = VAR_DIR . 'server/instances/default.json';
     }
 
     public function testResolvesPublicOriginFromDefaultWlsInstanceFile(): void

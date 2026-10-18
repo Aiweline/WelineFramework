@@ -2401,7 +2401,7 @@ CNF;
 
     protected function getLocalCaDir(): string
     {
-        $dir = Env::VAR_DIR . 'server' . DS . self::LOCAL_CA_DIRNAME . DS;
+        $dir = Env::varDir() . 'server' . DS . self::LOCAL_CA_DIRNAME . DS;
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0700, true);
         }
@@ -11107,11 +11107,11 @@ CNF;
         $updated = 0;
         foreach ([
             [
-                'directory' => Env::VAR_DIR . 'server' . DS . 'config' . DS,
+                'directory' => Env::varDir() . 'server' . DS . 'config' . DS,
                 'managed_endpoint' => false,
             ],
             [
-                'directory' => Env::VAR_DIR . 'server' . DS . 'instances' . DS,
+                'directory' => Env::varDir() . 'server' . DS . 'instances' . DS,
                 'managed_endpoint' => true,
             ],
         ] as $source) {
@@ -11713,8 +11713,8 @@ CNF;
     protected function clearInvalidSslPathsFromInstanceConfigs(): void
     {
         $dirsToClear = [
-            Env::VAR_DIR . 'server' . DS . 'config' . DS,
-            Env::VAR_DIR . 'server' . DS . 'instances' . DS,
+            Env::varDir() . 'server' . DS . 'config' . DS,
+            Env::varDir() . 'server' . DS . 'instances' . DS,
         ];
         $clearModifier = static function (array $data): array {
             $sslCert = \trim((string) ($data['ssl_cert'] ?? ''));
@@ -11981,7 +11981,7 @@ CNF;
         // WLS 1.x workers still consume this compatibility map. WLS 2.0 TLS
         // workers never read it; their only serving input is the bound
         // immutable manifest published by the edge coordinator.
-        $mapFile = Env::VAR_DIR . 'server' . DS . 'ssl_certificate_map.json';
+        $mapFile = Env::varDir() . 'server' . DS . 'ssl_certificate_map.json';
         $mapDir = \dirname($mapFile);
         if (!\is_dir($mapDir)) {
             @\mkdir($mapDir, 0755, true);

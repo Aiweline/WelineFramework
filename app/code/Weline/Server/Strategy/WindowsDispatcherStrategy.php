@@ -377,7 +377,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
      */
     private function saveInstanceInfo(ServerConfig $config, array $workerPids, int $dispatcherPid, int $httpRedirectPid): void
     {
-        $instanceDir = Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR;
+        $instanceDir = Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR;
         if (!\is_dir($instanceDir)) {
             @\mkdir($instanceDir, 0755, true);
         }
@@ -422,7 +422,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
         $this->log(__('停止实例: %{1}', [$instanceName]));
         
         // 读取实例信息
-        $instanceFile = Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
+        $instanceFile = Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
         
         if (!\is_file($instanceFile)) {
             $this->log(__('实例不存在: %{1}', [$instanceName]), 'WARN');
@@ -473,7 +473,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
      */
     public function getStatus(string $instanceName): array
     {
-        $instanceFile = Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
+        $instanceFile = Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
         
         if (!\is_file($instanceFile)) {
             return [

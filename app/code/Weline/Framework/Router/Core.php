@@ -1277,7 +1277,7 @@ class Core
             return true;
         }
 
-        $processDir = BP . 'var' . DS . 'process' . DS;
+        $processDir = VAR_DIR . 'process' . DS;
 
         return is_file($processDir . 'setup_upgrade.lock')
             || is_file($processDir . 'setup_upgrade_recollect.flag');
@@ -1347,7 +1347,7 @@ class Core
 
     private static function getGeneratedRouterSnapshotFile(string $routerFilepath): string
     {
-        return BP . 'var' . DS . 'cache' . DS . self::GENERATED_ROUTER_SNAPSHOT_DIR
+        return VAR_DIR . 'cache' . DS . self::GENERATED_ROUTER_SNAPSHOT_DIR
             . DS . sha1($routerFilepath) . '-' . basename($routerFilepath);
     }
 
@@ -1520,9 +1520,8 @@ class Core
         # 卸载Cookie
         Cookie::static_file();
         if ($is_media) {
-            $filename = BP . trim($url, DS);
+            $filename = \Weline\Framework\App\DirectoryList::mediaAbsoluteFromUrlPath($url);
             $filename = str_replace('/', DS, $filename);
-            # 修复静态资源路径\\ 或者 // 等错误路径修复
             $filename = str_replace(DS . DS, DS, $filename);
         } else {
             $filename = APP_CODE_PATH . trim($url, DS);

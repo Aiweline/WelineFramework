@@ -29,7 +29,7 @@ final class RuntimeDependencyBootstrapperLockSafetyTest extends TestCase
         foreach ([
             'APP_PATH' => BP . 'app' . DS,
             'APP_ETC_PATH' => BP . 'app' . DS . 'etc' . DS,
-            'PUB' => BP . 'pub' . DS,
+            'PUB' => PUB,
             'VENDOR_PATH' => BP . 'vendor' . DS,
             'APP_CODE_PATH' => BP . 'app' . DS . 'code' . DS,
         ] as $name => $path) {
@@ -628,7 +628,7 @@ final class RuntimeDependencyBootstrapperLockSafetyTest extends TestCase
             . 'define(' . \var_export('DS', true) . ', DIRECTORY_SEPARATOR);'
             . 'define(' . \var_export('APP_PATH', true) . ', BP . "app" . DS);'
             . 'define(' . \var_export('APP_ETC_PATH', true) . ', APP_PATH . "etc" . DS);'
-            . 'define(' . \var_export('PUB', true) . ', BP . "pub" . DS);'
+            . 'define(' . \var_export('PUB', true) . ', PUB);'
             . 'define(' . \var_export('VENDOR_PATH', true) . ', ' . \var_export($sourceRoot . '/vendor/', true) . ');'
             . 'define(' . \var_export('APP_CODE_PATH', true) . ', ' . \var_export($sourceRoot . '/app/code/', true) . ');'
             . 'require ' . \var_export($sourceRoot . '/vendor/autoload.php', true) . ';'

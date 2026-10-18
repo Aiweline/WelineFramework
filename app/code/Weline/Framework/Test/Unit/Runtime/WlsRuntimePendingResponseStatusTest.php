@@ -93,6 +93,33 @@ final class WlsRuntimePendingResponseStatusTest extends TestCase
         self::assertSame([], $collector->getCookies());
         $runtime->capture($collector);
         self::assertSame([], $runtime->consumePendingCookies());
+        self::assertTrue($runtime->peekPendingSuppressSetCookie());
+    }
+
+    public function testPendingSuppressSurvivesRequestContextCleanupAndRearms(): void
+    {
+        $runtime = new class extends WlsRuntime {
+            public function capture(HeaderCollector $collector): void
+            {
+                $this->snapshotPendingResponseState($collector);
+            }
+        };
+
+        $collector = HeaderCollector::getInstance();
+        WelineEnv::set('response.from_cache', true, 'unit-test');
+        \Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress::arm('cache_hit');
+        $runtime->capture($collector);
+        self::assertTrue($runtime->peekPendingSuppressSetCookie());
+
+        // Simulate StateManager::reset clearing RequestContext + from_cache visibility.
+        RequestContext::cleanup();
+        WelineEnv::set('response.from_cache', false, 'unit-test-simulate-reset');
+        self::assertFalse(\Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress::isArmed());
+
+        self::assertTrue($runtime->rearmPendingSetCookieSuppress());
+        self::assertTrue(\Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress::isArmed());
+        self::assertTrue((bool)WelineEnv::get('response.from_cache', false));
+        self::assertSame([], $runtime->consumePendingCookies());
     }
 
     public function testPendingResponseStateStaysFiberLocalAcrossConcurrentFibers(): void

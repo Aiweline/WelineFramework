@@ -60,7 +60,8 @@ final class ReviewMediaService
         }
 
         $relativeDirectory = 'review/' . $typeCode . '/' . date('Y/m');
-        $absoluteDirectory = rtrim(PUB, '/\\') . DIRECTORY_SEPARATOR . 'media' . DIRECTORY_SEPARATOR
+        $mediaRoot = \defined('MEDIA_DIR') ? (string)\constant('MEDIA_DIR') : (PUB . 'media');
+        $absoluteDirectory = rtrim($mediaRoot, '/\\') . DIRECTORY_SEPARATOR
             . str_replace('/', DIRECTORY_SEPARATOR, $relativeDirectory);
         if (!is_dir($absoluteDirectory) && !@mkdir($absoluteDirectory, 0755, true) && !is_dir($absoluteDirectory)) {
             throw new \RuntimeException((string)__('评论媒体目录无法写入。'));

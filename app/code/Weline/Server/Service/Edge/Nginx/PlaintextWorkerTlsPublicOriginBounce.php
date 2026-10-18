@@ -94,7 +94,7 @@ final class PlaintextWorkerTlsPublicOriginBounce
      */
     private static function loadCertificateMap(): array
     {
-        $path = Env::VAR_DIR . 'server' . \DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
+        $path = Env::varDir() . 'server' . \DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
         if (!\is_file($path)) {
             return [];
         }

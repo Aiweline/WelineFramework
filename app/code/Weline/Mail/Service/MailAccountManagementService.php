@@ -56,6 +56,8 @@ final class MailAccountManagementService
                     ->provisionAccount($email, $password, $quotaMb);
             }
 
+            $isSystem = MailAccount::isReservedSystemLocalPart($localPart)
+                || MailAccount::isReservedSystemLocalPart(MailAccount::emailLocalPart($email));
             $now = date('Y-m-d H:i:s');
             $model->clear()
                 ->setData(MailAccount::schema_fields_DOMAIN_ID, $domainId)
@@ -64,9 +66,16 @@ final class MailAccountManagementService
                 ->setData(MailAccount::schema_fields_DISPLAY_NAME, trim($displayName))
                 ->setData(MailAccount::schema_fields_QUOTA_MB, max(128, $quotaMb))
                 ->setData(MailAccount::schema_fields_STATUS, 'active')
+                ->setData(MailAccount::schema_fields_IS_SYSTEM, $isSystem ? 1 : 0)
                 ->setData(MailAccount::schema_fields_CREATED_AT, $now)
-                ->setData(MailAccount::schema_fields_UPDATED_AT, $now)
-                ->save();
+                ->setData(MailAccount::schema_fields_UPDATED_AT, $now);
+            $password = trim($password);
+            if ($password !== '') {
+                /** @var MailOutboundRelaySecretService $secrets */
+                $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+                $model->setData(MailAccount::schema_fields_PASSWORD_SEALED, $secrets->seal($password));
+            }
+            $model->save();
 
             return ['success' => true, 'message' => __('邮箱账号已开通'), 'account_id' => (int)$model->getId()];
         } catch (\InvalidArgumentException|\DomainException $exception) {
@@ -153,6 +162,10 @@ final class MailAccountManagementService
         if (!$account->getId()) {
             return $this->failure(__('邮箱账号不存在'), 404);
         }
+        $blocked = $this->assertSystemMutable($account, 'update');
+        if ($blocked !== null) {
+            return $blocked;
+        }
 
         if (array_key_exists('display_name', $params)) {
             $account->setData(MailAccount::schema_fields_DISPLAY_NAME, trim((string)$params['display_name']));
@@ -200,6 +213,10 @@ final class MailAccountManagementService
         $account = ObjectManager::getInstance(MailAccount::class)->clear()->load($accountId);
         if (!$account->getId()) {
             return $this->failure(__('邮箱账号不存在'), 404);
+        }
+        $blocked = $this->assertSystemMutable($account, 'status');
+        if ($blocked !== null) {
+            return $blocked;
         }
 
         if ($status === 'active') {
@@ -252,6 +269,10 @@ final class MailAccountManagementService
         $account = ObjectManager::getInstance(MailAccount::class)->clear()->load($accountId);
         if (!$account->getId()) {
             return $this->failure(__('邮箱账号不存在'), 404);
+        }
+        $blocked = $this->assertSystemMutable($account, 'delete');
+        if ($blocked !== null) {
+            return $blocked;
         }
 
         $email = strtolower(trim((string)$account->getData(MailAccount::schema_fields_EMAIL)));
@@ -353,6 +374,10 @@ final class MailAccountManagementService
             if (!$account->getId()) {
                 return $this->failure(__('邮箱账号不存在'), 404);
             }
+            $blocked = $this->assertSystemMutable($account, 'reset_password');
+            if ($blocked !== null) {
+                return $blocked;
+            }
             /** @var MailDomain $domain */
             $domain = ObjectManager::getInstance(MailDomain::class)
                 ->clear()
@@ -369,7 +394,10 @@ final class MailAccountManagementService
                 $password,
                 max(128, (int)$account->getData(MailAccount::schema_fields_QUOTA_MB))
             );
+            /** @var MailOutboundRelaySecretService $secrets */
+            $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
             $account->setData(MailAccount::schema_fields_STATUS, 'active')
+                ->setData(MailAccount::schema_fields_PASSWORD_SEALED, $secrets->seal(trim($password)))
                 ->setData(MailAccount::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
                 ->save();
 
@@ -396,6 +424,9 @@ final class MailAccountManagementService
      */
     public function serializeAccount(MailAccount $account): array
     {
+        $this->healSystemFlag($account);
+        $isSystem = $account->isSystemAccount();
+
         return [
             'account_id' => (int)$account->getId(),
             'domain_id' => (int)$account->getData(MailAccount::schema_fields_DOMAIN_ID),
@@ -404,12 +435,56 @@ final class MailAccountManagementService
             'display_name' => (string)$account->getData(MailAccount::schema_fields_DISPLAY_NAME),
             'quota_mb' => (int)$account->getData(MailAccount::schema_fields_QUOTA_MB),
             'status' => (string)$account->getData(MailAccount::schema_fields_STATUS),
+            'is_system' => $isSystem ? 1 : 0,
+            'system_role_label' => $isSystem ? $account->systemRoleLabel() : '',
+            'mutable' => !$isSystem,
             'outbound_relay_enabled' => (int)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_ENABLED) === 1 ? 1 : 0,
             'outbound_relay_host' => trim((string)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_HOST)),
             'outbound_relay_port' => (int)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_PORT),
             'outbound_relay_username' => trim((string)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_USERNAME)),
             'outbound_relay_tls' => trim((string)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_TLS)) ?: 'starttls',
         ];
+    }
+
+    /**
+     * @return array<string, mixed>|null failure when system account blocks the action
+     */
+    private function assertSystemMutable(MailAccount $account, string $action): ?array
+    {
+        if (!$account->isSystemAccount()) {
+            return null;
+        }
+        $this->healSystemFlag($account);
+        $email = (string)$account->getData(MailAccount::schema_fields_EMAIL);
+        $label = $email !== '' ? $email : ('#' . (int)$account->getId());
+
+        return match ($action) {
+            'delete' => $this->failure(__('系统账号 %{1} 不可删除（邮局固定账号）', [$label])),
+            'update' => $this->failure(__('系统账号 %{1} 不可修改身份资料', [$label])),
+            'status' => $this->failure(__('系统账号 %{1} 不可暂停或改状态', [$label])),
+            'reset_password' => $this->failure(__('系统账号 %{1} 不可在此改密；请用 Smtp/启用流程管理凭据', [$label])),
+            default => $this->failure(__('系统账号 %{1} 不可执行该操作', [$label])),
+        };
+    }
+
+    /** 历史行：保留 local 已是系统账号但未落 is_system=1 时补钉。 */
+    private function healSystemFlag(MailAccount $account): void
+    {
+        if ((int)$account->getData(MailAccount::schema_fields_IS_SYSTEM) === 1) {
+            return;
+        }
+        if (!MailAccount::isReservedSystemLocalPart(
+            MailAccount::emailLocalPart((string)$account->getData(MailAccount::schema_fields_EMAIL))
+        )) {
+            return;
+        }
+        try {
+            $account->setData(MailAccount::schema_fields_IS_SYSTEM, 1)
+                ->setData(MailAccount::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
+                ->save();
+        } catch (\Throwable) {
+            // 列表展示仍按 isSystemAccount() 识别；落库失败不阻断读路径
+        }
     }
 
     /**

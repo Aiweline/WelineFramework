@@ -85,7 +85,7 @@ final class SubprocessControlKernel
             return $controlPort;
         }
 
-        $endpointFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
+        $endpointFile = VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
         $maxWaitSec = \max(0, \min(self::CONTROL_PORT_SELF_HEAL_TIMEOUT_SEC, $maxWaitSec));
         $nowMonotonic = ControlMessage::monotonicSeconds();
         $deadline = $nowMonotonic + $maxWaitSec;
@@ -741,7 +741,7 @@ final class SubprocessControlKernel
         }
 
         $instanceCode = $this->instanceCode !== '' ? $this->instanceCode : 'default';
-        $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceCode . '.json';
+        $instanceFile = VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceCode . '.json';
         if (!\is_file($instanceFile)) {
             return false;
         }
@@ -789,7 +789,7 @@ final class SubprocessControlKernel
     private function resolveSupervisorChannelId(): string
     {
         $instanceCode = $this->instanceCode !== '' ? $this->instanceCode : 'default';
-        $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceCode . '.json';
+        $instanceFile = VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceCode . '.json';
         if (\is_file($instanceFile)) {
             $raw = @\file_get_contents($instanceFile);
             $data = \is_string($raw) ? @\json_decode($raw, true) : null;

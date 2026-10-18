@@ -1164,7 +1164,7 @@ final class ProtocolEdgeDependencyBootstrapper
      */
     private function acquireInstallLock(): mixed
     {
-        $directory = Env::VAR_DIR . 'server' . DS . 'locks';
+        $directory = Env::varDir() . 'server' . DS . 'locks';
         if (!\is_dir($directory) && !@\mkdir($directory, 0755, true) && !\is_dir($directory)) {
             return null;
         }

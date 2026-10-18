@@ -1758,7 +1758,7 @@ class Create extends CommandAbstract
         }
 
         // 如果配置文件在var目录，迁移到模块根目录
-        $oldConfigFile = BP . 'var' . DS . 'module_config' . DS . str_replace('_', DS, $moduleName) . '.json';
+        $oldConfigFile = VAR_DIR . 'module_config' . DS . str_replace('_', DS, $moduleName) . '.json';
         $newConfigFile = $modulePath . DS . '.module_config.json';
         if (file_exists($oldConfigFile) && !file_exists($newConfigFile)) {
             // 迁移配置文件到模块根目录
@@ -2298,7 +2298,7 @@ XML;
         // 如果模块目录存在，使用模块根目录
         if (is_dir($modulePath)) {
             // 检查var目录是否有旧配置，如果有则迁移
-            $oldConfigFile = BP . 'var' . DS . 'module_config' . DS . str_replace('_', DS, $moduleName) . '.json';
+            $oldConfigFile = VAR_DIR . 'module_config' . DS . str_replace('_', DS, $moduleName) . '.json';
             if (file_exists($oldConfigFile) && !file_exists($moduleConfigFile)) {
                 // 迁移旧配置到模块根目录
                 $oldConfig = json_decode(file_get_contents($oldConfigFile), true) ?? [];
@@ -2313,7 +2313,7 @@ XML;
         }
         
         // 如果模块目录不存在，检查var目录是否有配置
-        $varConfigFile = BP . 'var' . DS . 'module_config' . DS . str_replace('_', DS, $moduleName) . '.json';
+        $varConfigFile = VAR_DIR . 'module_config' . DS . str_replace('_', DS, $moduleName) . '.json';
         if (file_exists($varConfigFile)) {
             return $varConfigFile;
         }
@@ -4450,7 +4450,7 @@ XML;
         
         // 创建备份记录ID（使用时间戳作为唯一标识）
         $backupId = 'uninstall_' . $moduleName . '_' . date('Y-m-d_H-i-s');
-        $backupInfoFile = BP . 'var' . DS . 'backup' . DS . 'module_uninstall' . DS . $backupId . '.json';
+        $backupInfoFile = VAR_DIR . 'backup' . DS . 'module_uninstall' . DS . $backupId . '.json';
         
         try {
             // 0. 备份数据库数据（在卸载前）
@@ -4622,7 +4622,7 @@ XML;
             $connection = $connectionFactory->getConnection();
             
             // 备份每个表的数据
-            $backupDir = BP . 'var' . DS . 'backup' . DS . 'module_uninstall' . DS . $backupId;
+            $backupDir = VAR_DIR . 'backup' . DS . 'module_uninstall' . DS . $backupId;
             if (!is_dir($backupDir)) {
                 mkdir($backupDir, 0755, true);
             }
@@ -4738,7 +4738,7 @@ XML;
         $this->printer->note(__('=== 回滚模块卸载 ==='));
         
         // 查找备份信息文件
-        $backupDir = BP . 'var' . DS . 'backup' . DS . 'module_uninstall';
+        $backupDir = VAR_DIR . 'backup' . DS . 'module_uninstall';
         if (!is_dir($backupDir)) {
             $this->printer->error(__('备份目录不存在，无法回滚'));
             return;

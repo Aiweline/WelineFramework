@@ -459,7 +459,7 @@ final class ConnectionAdapter
                     'body_sha256' => \hash('sha256', $body),
                 ], \JSON_UNESCAPED_SLASHES);
                 if (\is_string($line) && \defined('BP')) {
-                    @\file_put_contents(BP . 'var/log/wls-h2-length-mismatch.log', $line . "\n", \FILE_APPEND | \LOCK_EX);
+                    @\file_put_contents(VAR_DIR . 'log/wls-h2-length-mismatch.log', $line . "\n", \FILE_APPEND | \LOCK_EX);
                 }
             }
         }

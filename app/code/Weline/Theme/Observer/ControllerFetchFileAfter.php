@@ -869,7 +869,7 @@ HTML;
 
     private function resolveDeployVersion(): string
     {
-        $file = BP . 'var' . DS . 'deploy' . DS . 'current.json';
+        $file = VAR_DIR . 'deploy' . DS . 'current.json';
         if (!is_file($file)) {
             return 'dev';
         }
@@ -883,7 +883,7 @@ HTML;
 
     private function resolveWorkerBuildId(): string
     {
-        $file = BP . 'var' . DS . 'deploy' . DS . 'current.json';
+        $file = VAR_DIR . 'deploy' . DS . 'current.json';
         if (!is_file($file)) {
             return 'dev';
         }

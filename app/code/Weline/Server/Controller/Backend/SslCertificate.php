@@ -251,7 +251,7 @@ class SslCertificate extends BackendController
             return $this->fetchJson(['success' => false, 'message' => $readinessWarning]);
         }
 
-        $webroot = \defined('PUB') ? PUB : (BP . 'pub');
+        $webroot = PUB;
         $result = w_query('server', 'requestCertificate', [
             'domain' => $domain,
             'webroot' => $webroot,
@@ -301,7 +301,7 @@ class SslCertificate extends BackendController
             return $this->fetchJson(['success' => false, 'message' => $block]);
         }
         
-        $webroot = BP . 'pub';
+        $webroot = rtrim(PUB, '/\\');
         $result = $this->sslService->renewCertificate($cert, $webroot, $email ?: 'admin@' . $domain);
         
         if ($result['cert']) {
@@ -494,7 +494,7 @@ class SslCertificate extends BackendController
             'failed' => [],
         ];
         
-        $webroot = \defined('PUB') ? PUB : (BP . 'pub');
+        $webroot = PUB;
 
         foreach ($domains as $domain) {
             $domain = \trim((string) $domain);
@@ -632,7 +632,7 @@ class SslCertificate extends BackendController
         $success = 0;
         $failed = 0;
         $errors = [];
-        $webroot = \defined('PUB') ? PUB : (BP . 'pub');
+        $webroot = PUB;
 
         foreach ($domains as $domain) {
             $domain = \strtolower(\trim((string) $domain));

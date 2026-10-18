@@ -6600,6 +6600,12 @@ function handleRequest(
             if (WLS_WORKER_HOT_PATH_LOGS_ENABLED) {
                 WlsLogger::info_("返回已格式化的 HTTP 响应（可能是重定向）");
             }
+            // Shareable FPC HIT/build: never merge or leave Set-Cookie (CF BYPASS otherwise).
+            $suppressSetCookie = wlsWorkerApplyPendingSetCookieSuppress($runtime);
+            if ($suppressSetCookie) {
+                $result = wlsStripSetCookieFromFormattedHttp($result);
+                $runtime->consumePendingCookies();
+            } else {
             // 合并 Runtime 保存的 Cookie（登录 302 等必须随响应发送 Set-Cookie，与 worker_ssl 一致）
             $pendingCookies = $runtime->consumePendingCookies();
             if (!empty($pendingCookies)) {
@@ -6641,6 +6647,7 @@ function handleRequest(
 
                     $result = $headerPart . "\r\n\r\n" . $bodyPart;
                 }
+            }
             }
             $sni = \Weline\Server\Service\RouteHintService::extractSniFromHeaders($policyDecision->headers);
             $result = \Weline\Server\Service\RouteHintService::addHintToResponse($result, $sni);
@@ -6699,8 +6706,14 @@ function handleRequest(
             $value = \is_array($value) ? \implode(', ', $value) : (string) $value;
             $response->setHeader($name, $value);
         }
+        // Re-arm suppress AFTER headers (FPC HIT markers) so prepareForEmission
+        // cannot reintroduce weline_storefront_gen after StateManager::reset.
+        $suppressSetCookie = wlsWorkerApplyPendingSetCookieSuppress($runtime);
         // 合并应用通过 HeaderCollector 设置的 Cookie（与“HTTP/” 分支行为一致）
-        $pendingCookies = $runtime->consumePendingCookies();
+        $pendingCookies = $suppressSetCookie ? [] : $runtime->consumePendingCookies();
+        if ($suppressSetCookie) {
+            $runtime->consumePendingCookies();
+        }
         foreach ($pendingCookies as $cookie) {
             $response->setCookie(
                 (string)$cookie['name'],
@@ -7167,10 +7180,17 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     $filename = null;
     foreach ($candidateUris as $candidateUri) {
         $searchPaths = [];
-        $searchPaths[] = BP . 'pub' . DS . \str_replace('/', DS, $candidateUri);
-        $searchPaths[] = BP . 'app' . DS . 'code' . DS . \str_replace('/', DS, $candidateUri);
-        $searchPaths[] = BP . 'vendor' . DS . \str_replace('/', DS, $candidateUri);
-        $searchPaths[] = BP . \str_replace('/', DS, $candidateUri);
+        $searchPaths = [];
+        $diskRel = \str_replace('/', DS, $candidateUri);
+        if (\str_starts_with($candidateUri, 'media/')) {
+            $mediaRel = \substr($candidateUri, \strlen('media/'));
+            $mediaRoot = \defined('MEDIA_DIR') ? \rtrim((string)\constant('MEDIA_DIR'), '/\\') : (\rtrim((string)PUB, '/\\') . DS . 'media');
+            $searchPaths[] = $mediaRoot . DS . \str_replace('/', DS, $mediaRel);
+        }
+        $searchPaths[] = \rtrim((string)PUB, '/\\') . DS . $diskRel;
+        $searchPaths[] = BP . 'app' . DS . 'code' . DS . $diskRel;
+        $searchPaths[] = BP . 'vendor' . DS . $diskRel;
+        $searchPaths[] = BP . $diskRel;
 
         foreach ($searchPaths as $path) {
             $path = \str_replace([DS . DS, '//'], DS, $path);

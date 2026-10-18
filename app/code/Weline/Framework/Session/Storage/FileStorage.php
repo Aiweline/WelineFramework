@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Session\Storage;
 
+use Weline\Framework\App\DirectoryList;
 use Weline\Framework\App\Env;
 
 /**
@@ -33,8 +34,9 @@ final class FileStorage implements SessionStorageInterface
         $this->config = $config;
         $this->defaultTtl = (int)($config['lifetime'] ?? $config['session_ttl'] ?? 3600);
         
-        $configPath = $config['path'] ?? 'var/session/';
-        $this->path = BP . \str_replace('/', DS, $configPath);
+        $configPath = (string)($config['path'] ?? 'var/session/');
+        $resolved = DirectoryList::resolveConfiguredDataPathStatic($configPath);
+        $this->path = \rtrim(\str_replace(['/', '\\'], DS, $resolved), DS) . DS;
         
         if (!\is_dir($this->path)) {
             @\mkdir($this->path, 0700, true);

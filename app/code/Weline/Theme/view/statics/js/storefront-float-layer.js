@@ -134,8 +134,13 @@
     if (!body) {
       return false;
     }
+    // Real float widgets only. Empty widget-wrapper + data-store-music-skipped
+    // stubs must NOT count — otherwise an orphan × sits on the Cookie bar.
+    // Marker: storefront-float-dock-real-content-v1
     return !!body.querySelector(
-      '.w-store-music-host[data-store-music-host], .w-store-music[data-store-music], .customer-service-widget, [data-widget-code]:not([data-store-music-skipped])'
+      '.w-store-music-host[data-store-music-host], ' +
+        '.w-store-music[data-store-music]:not([hidden]):not([data-store-music-skipped]), ' +
+        '.customer-service-widget'
     );
   }
 

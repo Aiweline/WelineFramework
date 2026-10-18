@@ -129,7 +129,7 @@ class ModuleInstallerServiceTest extends TestCase
      */
     public function testTempDirectoryCreation(): void
     {
-        $tempDir = BP . 'var' . DS . 'appstore' . DS . 'temp';
+        $tempDir = VAR_DIR . 'appstore' . DS . 'temp';
 
         // 验证路径格式
         $this->assertStringContainsString('var', $tempDir);
@@ -375,7 +375,7 @@ class ModuleInstallerServiceTest extends TestCase
         $previousServer = $_SERVER['WLS_INSTANCE'] ?? null;
         $previousSuperEnv = $_ENV['WLS_INSTANCE'] ?? null;
         $instanceName = 'ai-appstore-terminal-phpunit-' . getmypid();
-        $instanceDir = BP . 'var' . DS . 'server' . DS . 'instances';
+        $instanceDir = VAR_DIR . 'server' . DS . 'instances';
         $instanceFile = $instanceDir . DS . $instanceName . '.json';
 
         if (!is_dir($instanceDir)) {

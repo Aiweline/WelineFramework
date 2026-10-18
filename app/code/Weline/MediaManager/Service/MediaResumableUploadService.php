@@ -980,7 +980,7 @@ final class MediaResumableUploadService
 
     private function baseDirectory(): string
     {
-        $base = rtrim(Env::VAR_DIR, '/\\') . DIRECTORY_SEPARATOR . 'tmp'
+        $base = rtrim(Env::varDir(), '/\\') . DIRECTORY_SEPARATOR . 'tmp'
             . DIRECTORY_SEPARATOR . 'media-upload' . DIRECTORY_SEPARATOR;
         if (!is_dir($base) && !@mkdir($base, 0700, true) && !is_dir($base)) {
             throw new \RuntimeException((string)__('无法创建分块上传暂存目录。'));

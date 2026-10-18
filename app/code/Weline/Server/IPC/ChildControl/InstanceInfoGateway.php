@@ -47,7 +47,7 @@ class InstanceInfoGateway
         }
         
         $this->instanceName = $instanceName;
-        $this->instanceJsonPath = BP . 'var' . DIRECTORY_SEPARATOR 
+        $this->instanceJsonPath = VAR_DIR 
             . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR 
             . $instanceName . '.json';
     }

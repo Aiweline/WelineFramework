@@ -181,7 +181,7 @@ final class DarwinWinModeWindowRegistry
 
     public function directory(): string
     {
-        return Env::VAR_DIR . 'server' . \DIRECTORY_SEPARATOR . 'darwin-win-windows' . \DIRECTORY_SEPARATOR;
+        return Env::varDir() . 'server' . \DIRECTORY_SEPARATOR . 'darwin-win-windows' . \DIRECTORY_SEPARATOR;
     }
 
     /**

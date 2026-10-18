@@ -312,7 +312,7 @@ final class StorefrontFpcWarmer implements CacheWarmerInterface
         if (\is_array($cached)) {
             return $cached;
         }
-        $path = BP . 'var/server/instances/default.json';
+        $path = VAR_DIR . 'server/instances/default.json';
         if (!\is_file($path)) {
             $cached = [];
 

@@ -588,7 +588,7 @@ final class ModuleRollbackManager implements ModuleRollbackManagerInterface
     /** @return resource */
     private function acquireStartLock()
     {
-        $directory = BP . 'var' . DS . 'database';
+        $directory = VAR_DIR . 'database';
         if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
             throw new \RuntimeException(__('无法创建回滚锁目录'));
         }

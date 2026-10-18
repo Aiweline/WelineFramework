@@ -167,7 +167,7 @@ $checks = [
             static fn (bool $hit, mixed $notice): bool => $hit || (is_string($notice) && str_contains($notice, 'Weline UI 2.0') && str_contains($notice, 'w-field')),
             false,
         ),
-    'startup and MCP instructions stay compact pointers' => strlen(ToolService::instructions()) < 2_200
+    'startup and MCP instructions stay compact pointers' => strlen(ToolService::instructions()) < 2_300
         && strlen(json_encode($contract['session_startup_notices'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) < 2_000
         && !str_contains(ToolService::instructions(), 'required 默认 JSON 注入')
         && !str_contains(implode("\n", $contract['session_startup_notices']), 'Every feature MUST Agent-run Playwright e2e to PASS'),
@@ -2709,6 +2709,29 @@ $checks = [
     'mcp instructions mention production_http_probe_forbids_agent_local_curl' => str_contains(
         ToolService::instructions(),
         'production_http_probe_forbids_agent_local_curl'
+    ),
+    'mcp_operational include wls_managed_nginx_supports_fpm_origin' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'wls_managed_nginx_supports_fpm_origin'
+            && str_contains((string) ($rule['summary'] ?? ''), 'origin_mode')
+            && str_contains((string) ($rule['summary'] ?? ''), 'server:origin:set')
+            && str_contains((string) ($rule['summary'] ?? ''), 'php-fpm')
+            && str_contains((string) ($rule['summary'] ?? ''), '/etc/nginx')
+            && str_contains((string) ($rule['summary'] ?? ''), 'wls-managed-nginx-supports-fpm-origin.mdc')),
+        false,
+    ),
+    'global_rules_dual_write mentions wls_managed_nginx_supports_fpm_origin mirror' => array_reduce(
+        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'global_rules_dual_write_mcp_and_host'
+            && str_contains((string) ($rule['summary'] ?? ''), 'wls_managed_nginx_supports_fpm_origin')
+            && str_contains((string) ($rule['summary'] ?? ''), 'wls-managed-nginx-supports-fpm-origin.mdc')),
+        false,
+    ),
+    'mcp instructions mention wls_managed_nginx_supports_fpm_origin' => str_contains(
+        ToolService::instructions(),
+        'wls_managed_nginx_supports_fpm_origin'
     ),
     'MCP hard constraints require skills fetch from MCP' => array_reduce(
         is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],

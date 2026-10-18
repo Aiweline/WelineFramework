@@ -32,7 +32,7 @@ class ThemeContextServiceTest extends TestCase
             define('APP_ETC_PATH', APP_PATH . 'etc' . DIRECTORY_SEPARATOR);
         }
         if (!defined('PUB')) {
-            define('PUB', BP . 'pub' . DIRECTORY_SEPARATOR);
+            define('PUB', PUB);
         }
 
         require_once BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . 'Weline' . DIRECTORY_SEPARATOR . 'Framework' . DIRECTORY_SEPARATOR . 'Common' . DIRECTORY_SEPARATOR . 'functions.php';

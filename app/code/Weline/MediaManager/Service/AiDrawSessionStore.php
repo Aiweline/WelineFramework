@@ -30,7 +30,7 @@ final class AiDrawSessionStore
 
     public function getBaseDir(): string
     {
-        $dir = rtrim(Env::VAR_DIR, '/\\') . DIRECTORY_SEPARATOR . 'tmp'
+        $dir = rtrim(Env::varDir(), '/\\') . DIRECTORY_SEPARATOR . 'tmp'
             . DIRECTORY_SEPARATOR . 'media-ai-draw' . DIRECTORY_SEPARATOR;
         if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
             throw new \RuntimeException((string)__('无法创建 AI 作图临时目录。'));

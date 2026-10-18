@@ -41,7 +41,7 @@ function store_music_out(array $payload): void
 
 function store_music_fixture_audio_path(string $format = 'mp3'): string
 {
-    $dir = BP . '/pub/media/store-music-e2e';
+    $dir = PUB . 'media/store-music-e2e';
     if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
         throw new RuntimeException('unable to create store-music e2e media dir');
     }
@@ -53,9 +53,9 @@ function store_music_fixture_audio_path(string $format = 'mp3'): string
         $file = $dir . '/beep.m4a';
         if (!is_file($file)) {
             $candidates = [
-                BP . '/pub/media/store-music/gaoshan.m4a',
-                BP . '/pub/media/store-music/gaoshan-liushui.m4a',
-                BP . '/pub/media/store-music/高山流水 - 纯音乐网.m4a',
+                PUB . 'media/store-music/gaoshan.m4a',
+                PUB . 'media/store-music/gaoshan-liushui.m4a',
+                PUB . 'media/store-music/高山流水 - 纯音乐网.m4a',
             ];
             $copied = false;
             foreach ($candidates as $src) {

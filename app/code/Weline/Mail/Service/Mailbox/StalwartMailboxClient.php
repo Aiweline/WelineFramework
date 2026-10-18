@@ -12,9 +12,9 @@ final class StalwartMailboxClient implements MailboxClientInterface
         $this->session = $session ?? new StalwartJmapSession();
     }
 
-    public function listMessages(string $mailbox, string $folder, int $limit = 50): array
+    public function listMessages(string $mailbox, string $folder, int $limit = 50, bool $unreadOnly = false): array
     {
-        return $this->queryMessages($mailbox, $folder, null, $limit);
+        return $this->queryMessages($mailbox, $folder, null, $limit, $unreadOnly);
     }
 
     public function countUnreadInbox(string $mailbox): int
@@ -39,7 +39,7 @@ final class StalwartMailboxClient implements MailboxClientInterface
         if ($query === '') {
             return $this->listMessages($mailbox, $folder, $limit);
         }
-        return $this->queryMessages($mailbox, $folder, $query, $limit);
+        return $this->queryMessages($mailbox, $folder, $query, $limit, false);
     }
 
     public function getMessage(string $mailbox, string $messageId): ?array
@@ -283,22 +283,31 @@ final class StalwartMailboxClient implements MailboxClientInterface
     /**
      * @return list<array<string, mixed>>
      */
-    private function queryMessages(string $mailbox, string $folder, ?string $text, int $limit): array
+    private function queryMessages(string $mailbox, string $folder, ?string $text, int $limit, bool $unreadOnly = false): array
     {
         $folder = MailboxFolder::assertValid($folder);
         $limit = max(1, min(100, $limit));
         $context = $this->session->openMailboxSession($mailbox);
         $mailboxId = $this->session->findMailboxIdByRole($context, MailboxFolder::jmapRole($folder));
-        $filter = ['inMailbox' => $mailboxId];
-        if ($text !== null && $text !== '') {
-            $filter = [
-                'operator' => 'AND',
+        $conditions = [['inMailbox' => $mailboxId]];
+        if ($unreadOnly) {
+            // JMAP：未读 = 没有 $seen 关键字
+            $conditions[] = [
+                'operator' => 'NOT',
                 'conditions' => [
-                    ['inMailbox' => $mailboxId],
-                    ['text' => $text],
+                    ['hasKeyword' => '$seen'],
                 ],
             ];
         }
+        if ($text !== null && $text !== '') {
+            $conditions[] = ['text' => $text];
+        }
+        $filter = count($conditions) === 1
+            ? $conditions[0]
+            : [
+                'operator' => 'AND',
+                'conditions' => $conditions,
+            ];
         $sortProp = $folder === MailboxFolder::SENT ? 'sentAt' : 'receivedAt';
         $query = $this->session->jmapCall($context, 'Email/query', [
             'accountId' => $context['account_id'],

@@ -43,9 +43,9 @@ final class ServerInstanceManagerCleanupTransactionTest extends TestCase
         foreach ($this->instanceNames as $instanceName) {
             foreach ([
                 ServerLifecycleOperationLock::pathForInstance($instanceName),
-                Env::VAR_DIR . 'server' . DS . 'locks' . DS
+                Env::varDir() . 'server' . DS . 'locks' . DS
                     . 'start_' . $instanceName . '.lock',
-                Env::VAR_DIR . 'server' . DS . 'locks' . DS
+                Env::varDir() . 'server' . DS . 'locks' . DS
                     . 'stop_' . $instanceName . '.lock',
             ] as $lockPath) {
                 @\unlink($lockPath);
@@ -122,7 +122,7 @@ final class ServerInstanceManagerCleanupTransactionTest extends TestCase
             $manager = $this->manager();
             $lockPath = $kind === 'lifecycle'
                 ? ServerLifecycleOperationLock::pathForInstance($name)
-                : Env::VAR_DIR . 'server' . DS . 'locks' . DS
+                : Env::varDir() . 'server' . DS . 'locks' . DS
                     . 'start_' . $name . '.lock';
             [$process, $pipes] = $this->holdLockInChildProcess($lockPath);
             try {
@@ -164,9 +164,9 @@ final class ServerInstanceManagerCleanupTransactionTest extends TestCase
             $manager->getPidFile($name) . '.lock',
             $this->directory . $name . '.resurrect.lock',
             $this->directory . ServerInstanceManager::GATEWAY_ENDPOINT_NAMESPACE_LOCK,
-            Env::VAR_DIR . 'server' . DS . 'locks' . DS
+            Env::varDir() . 'server' . DS . 'locks' . DS
                 . 'start_' . $name . '.lock',
-            Env::VAR_DIR . 'server' . DS . 'locks' . DS
+            Env::varDir() . 'server' . DS . 'locks' . DS
                 . 'stop_' . $name . '.lock',
             ServerLifecycleOperationLock::pathForInstance($name),
         ];

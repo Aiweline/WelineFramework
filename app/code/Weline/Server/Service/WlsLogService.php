@@ -244,7 +244,10 @@ class WlsLogService
         if (!\defined('BP')) {
             return false;
         }
-        $path = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances'
+        if (!\defined('VAR_DIR')) {
+            \define('VAR_DIR', \rtrim((string)\BP, '/\\') . \DIRECTORY_SEPARATOR . 'var' . \DIRECTORY_SEPARATOR);
+        }
+        $path = \VAR_DIR . 'server' . \DIRECTORY_SEPARATOR . 'instances'
             . DIRECTORY_SEPARATOR . $instanceName . '.json';
         if (!\is_file($path)) {
             return false;

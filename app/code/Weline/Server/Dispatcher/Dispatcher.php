@@ -473,7 +473,7 @@ class Dispatcher
      */
     private function detectHttpsEnabled(string $instanceName): bool
     {
-        $instanceFile = BP . 'var' . DS . 'server' . DS . 'instances' . DS . $instanceName . '.json';
+        $instanceFile = VAR_DIR . 'server' . DS . 'instances' . DS . $instanceName . '.json';
         if (\is_file($instanceFile)) {
             $instData = @\json_decode((string)\file_get_contents($instanceFile), true);
             if (\is_array($instData) && (string)($instData['edge_adapter'] ?? '') === 'nginx') {
@@ -484,7 +484,7 @@ class Dispatcher
             }
         }
 
-        $configFile = BP . 'var' . DS . 'server' . DS . 'config' . DS . $instanceName . '.json';
+        $configFile = VAR_DIR . 'server' . DS . 'config' . DS . $instanceName . '.json';
         if (!\is_file($configFile)) {
             return false;
         }
@@ -1110,7 +1110,7 @@ class Dispatcher
             return \in_array(\strtolower((string) $raw), ['1', 'true', 'yes', 'on'], true);
         }
 
-        $instanceFile = BP . 'var' . DS . 'server' . DS . 'instances' . DS . $this->instanceName . '.json';
+        $instanceFile = VAR_DIR . 'server' . DS . 'instances' . DS . $this->instanceName . '.json';
         if (!\is_file($instanceFile)) {
             return false;
         }
@@ -1154,7 +1154,7 @@ class Dispatcher
 
     private function resolveSupervisorChannelId(): string
     {
-        $instanceFile = BP . 'var' . DS . 'server' . DS . 'instances' . DS . $this->instanceName . '.json';
+        $instanceFile = VAR_DIR . 'server' . DS . 'instances' . DS . $this->instanceName . '.json';
         if (\is_file($instanceFile)) {
             $raw = @\file_get_contents($instanceFile);
             $data = \is_string($raw) ? @\json_decode($raw, true) : null;

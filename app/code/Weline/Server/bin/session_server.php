@@ -247,7 +247,7 @@ if ($instanceName !== '') {
 }
 $configuredPersistPath = \trim((string)($sessionConfig['persist_path'] ?? ''));
 if ($configuredPersistPath === '') {
-    $legacyPersistPath = BP . 'var' . DIRECTORY_SEPARATOR . 'session' . DIRECTORY_SEPARATOR;
+    $legacyPersistPath = VAR_DIR . 'session' . DIRECTORY_SEPARATOR;
     $sessionConfig['persist_path'] = $legacyPersistPath
         . '.wls-state' . DIRECTORY_SEPARATOR;
     $sessionConfig['legacy_persist_path'] = $legacyPersistPath;

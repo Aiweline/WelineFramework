@@ -231,7 +231,7 @@ class Build extends CommandAbstract
      */
     private function backupProject(array $config): void
     {
-        $backupDir = Env::backup_dir . 'deploy' . DS;
+        $backupDir = Env::backupDir() . 'deploy' . DS;
         if (!is_dir($backupDir)) {
             mkdir($backupDir, 0755, true);
         }

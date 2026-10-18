@@ -148,7 +148,7 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
 
         try {
             $master->saveMasterInfo('bootstrapping');
-            $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
+            $instanceFile = VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
             self::assertFileExists($instanceFile);
             $data = \json_decode((string)\file_get_contents($instanceFile), true);
             self::assertIsArray($data);
@@ -162,7 +162,7 @@ final class MasterProcessControlPlaneRuntimeTest extends TestCase
             self::assertSame($httpProtocolSelection, $data['http_protocol_selection'] ?? null);
         } finally {
             $hybrid->close();
-            $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
+            $instanceFile = VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
             if (\is_file($instanceFile)) {
                 @\unlink($instanceFile);
             }

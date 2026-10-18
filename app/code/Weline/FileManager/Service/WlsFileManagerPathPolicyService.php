@@ -372,7 +372,7 @@ class WlsFileManagerPathPolicyService
 
     private function storagePath(): string
     {
-        $varPath = defined('VAR_PATH') ? VAR_PATH : ((defined('BP') ? BP : '') . 'var' . DIRECTORY_SEPARATOR);
+        $varPath = defined('VAR_DIR') ? VAR_DIR : ((defined('BP') ? BP : '') . 'var' . DIRECTORY_SEPARATOR);
         $varPath = trim((string)$varPath);
         if ($varPath === '') {
             return '';

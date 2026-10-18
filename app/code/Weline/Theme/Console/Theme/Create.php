@@ -143,7 +143,7 @@ class Create implements CommandInterface
                     if ($isDirExists) {
                         $this->configFile = $themePath . DS . '.theme-config.json';
                     } else {
-                        $this->configFile = BP . 'var' . DS . 'theme_config' . DS . $themeName . '.json';
+                        $this->configFile = VAR_DIR . 'theme_config' . DS . $themeName . '.json';
                     }
                     
                     $this->themeConfig = [
@@ -171,7 +171,7 @@ class Create implements CommandInterface
                 if (is_dir($themePath)) {
                     $this->configFile = $themePath . DS . '.theme-config.json';
                 } else {
-                    $this->configFile = BP . 'var' . DS . 'theme_config' . DS . $themeName . '.json';
+                    $this->configFile = VAR_DIR . 'theme_config' . DS . $themeName . '.json';
                 }
                 
                 $this->themeConfig = [
@@ -227,7 +227,7 @@ class Create implements CommandInterface
                     if ($isDirExists) {
                         $this->configFile = $themePath . DS . '.theme-config.json';
                     } else {
-                        $this->configFile = BP . 'var' . DS . 'theme_config' . DS . $themeName . '.json';
+                        $this->configFile = VAR_DIR . 'theme_config' . DS . $themeName . '.json';
                     }
                     
                     $this->themeConfig = [
@@ -255,7 +255,7 @@ class Create implements CommandInterface
             if (is_dir($themePath)) {
                 $this->configFile = $themePath . DS . '.theme-config.json';
             } else {
-                $this->configFile = BP . 'var' . DS . 'theme_config' . DS . $themeName . '.json';
+                $this->configFile = VAR_DIR . 'theme_config' . DS . $themeName . '.json';
             }
         }
         $this->themeConfig['theme_name'] = $themeName;
@@ -300,7 +300,7 @@ class Create implements CommandInterface
         }
         
         // 兼容旧数据：检查 var/theme_config 目录
-        $oldConfigFile = BP . 'var' . DS . 'theme_config' . DS . $themeName . '.json';
+        $oldConfigFile = VAR_DIR . 'theme_config' . DS . $themeName . '.json';
         if (file_exists($oldConfigFile)) {
             // 如果主题目录存在，迁移配置文件
             if (is_dir($themePath)) {
@@ -1183,7 +1183,7 @@ MD;
             
             // 加载或创建配置
             if (empty($this->themeConfig)) {
-                $this->configFile = BP . 'var' . DS . 'theme_config' . DS . $themeName . '.json';
+                $this->configFile = VAR_DIR . 'theme_config' . DS . $themeName . '.json';
                 if (file_exists($this->configFile)) {
                     $this->themeConfig = json_decode(file_get_contents($this->configFile), true) ?? [];
                 } else {
@@ -1255,7 +1255,7 @@ MD;
         if (is_dir($themePath)) {
             $this->configFile = $themePath . DS . '.theme-config.json';
         } else {
-            $this->configFile = BP . 'var' . DS . 'theme_config' . DS . $themeName . '.json';
+            $this->configFile = VAR_DIR . 'theme_config' . DS . $themeName . '.json';
         }
         
         if (!isset($this->themeConfig['theme_name'])) {
@@ -2483,7 +2483,7 @@ USAGE;
                     if (is_dir($themePath)) {
                         $this->configFile = $themePath . DS . '.theme-config.json';
                     } else {
-                        $this->configFile = BP . 'var' . DS . 'theme_config' . DS . $themeName . '.json';
+                        $this->configFile = VAR_DIR . 'theme_config' . DS . $themeName . '.json';
                     }
                     
                     $this->themeConfig = [
@@ -2948,7 +2948,7 @@ USAGE;
             }
             
             // 创建备份目录
-            $backupDir = BP . 'var' . DS . 'backup' . DS . 'theme' . DS;
+            $backupDir = VAR_DIR . 'backup' . DS . 'theme' . DS;
             if (!is_dir($backupDir)) {
                 mkdir($backupDir, 0755, true);
             }

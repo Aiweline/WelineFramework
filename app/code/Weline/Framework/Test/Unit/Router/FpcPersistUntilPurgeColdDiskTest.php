@@ -17,7 +17,7 @@ final class FpcPersistUntilPurgeColdDiskTest extends TestCase
         ProjectRoot::defineBp(__DIR__);
         $path = '/persist-until-purge-' . \uniqid('', true);
         $fullUri = 'https://p05113ef3.test.weline.com' . $path;
-        $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
+        $payloadDir = VAR_DIR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
             . \DIRECTORY_SEPARATOR . 'pu';
         if (!\is_dir($payloadDir)) {
             @\mkdir($payloadDir, 0775, true);

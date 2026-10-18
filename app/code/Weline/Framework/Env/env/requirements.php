@@ -38,6 +38,9 @@ return [
         'bcmath',
         'zlib', // gzdecode：公开运价种子 .json.gz、HTTP/备份压缩等
         'sodium', // Mail 管理凭据密封、Gateway 包签名、配置包 AEAD；缺则 env:install / --rebuild-php 须装入
+        // FPC html-disk / Nginx try_files 只认 index.html.br；无 brotli_compress 则边缘永远打源站。
+        // 安装脚本（install.bash / run.php / env:install）必须编入 PECL brotli，失败即停，不可降为推荐。
+        'brotli',
         // DB PDO 驱动：EnvChecker 按 env.php db.master.type 只把「当前库」对应驱动当必需
         // （pgsql→pdo_pgsql；mysql/mariadb→pdo_mysql；sqlite 不强制二者）。未装的另一侧会降为推荐。
         'pdo_pgsql',
@@ -66,6 +69,12 @@ return [
             'description' => '框架需要 exec/putenv/proc_open/chown 等函数。安装阶段会自动从 disable_functions 移除；失败时请手动编辑 php.ini。',
             'script_linux' => 'script/unblock_functions.php',
             'script_windows' => 'script/unblock_functions.php',
+        ],
+        [
+            'name' => 'brotli 扩展（FPC html-disk 必装）',
+            'description' => 'Nginx 边缘 try_files 只服务 index.html.br。缺 ext-brotli 时盘叶只能落明文，公开页永远打源站。bundled PHP 用 phpize 从 PECL 源码构建；失败阻断安装。',
+            'script_linux' => 'script/install_brotli_extension.php',
+            'script_windows' => 'script/install_brotli_extension.php',
         ],
     ],
 ];

@@ -18,7 +18,8 @@ class Image extends FrontendController
     public function getIndex()
     {
         // 原始图片的路径
-        $mediaPath = PUB . 'media' . DS;
+        $mediaPath = (\defined('MEDIA_DIR') ? (string)\constant('MEDIA_DIR') : (PUB . 'media' . DS));
+        $mediaPath = \rtrim($mediaPath, '/\\') . DS;
         $sourcePath = $mediaPath . $this->request->getRule('file');
         if (!file_exists($sourcePath)) {
             $this->redirect(404);

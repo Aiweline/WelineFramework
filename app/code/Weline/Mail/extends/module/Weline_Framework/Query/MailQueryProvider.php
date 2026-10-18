@@ -5,6 +5,7 @@ namespace Weline\Mail\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Mail\Model\MailAccount;
 use Weline\Mail\Service\MailAccountEnsureService;
 use Weline\Mail\Service\MailAccountManagementService;
 use Weline\Mail\Service\MailAccountOutboundRelayService;
@@ -122,10 +123,26 @@ class MailQueryProvider implements QueryProviderInterface
      */
     private function createMailboxAccount(array $params): array
     {
+        $local = strtolower(trim((string)($params['local_part'] ?? '')));
+        $email = strtolower(trim((string)($params['email'] ?? '')));
+        if ($local === '' && $email !== '') {
+            $local = MailAccount::emailLocalPart($email);
+        }
+        if (MailAccount::isReservedSystemLocalPart($local)) {
+            return [
+                'success' => false,
+                'message' => (string)__(
+                    '系统账号 %{1}@ 由启用域名 / Smtp 自动创建，不能手工开通；列表中已标记为系统账号，不可删改。',
+                    [$local]
+                ),
+                'code' => 422,
+            ];
+        }
+
         return $this->accountManagement()->createAccount(
             (int)($params['domain_id'] ?? 0),
-            (string)($params['email'] ?? ''),
-            (string)($params['local_part'] ?? ''),
+            $email,
+            $local,
             (string)($params['display_name'] ?? ''),
             max(0, (int)($params['customer_id'] ?? 0)),
             max(128, (int)($params['quota_mb'] ?? 1024)),

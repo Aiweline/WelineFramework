@@ -47,7 +47,7 @@ final class TemplateCompileMapLangIsolationTest extends TestCase
             $template = (new ReflectionClass(Template::class))->newInstanceWithoutConstructor();
             $events = $this->getMockBuilder(EventsManager::class)->disableOriginalConstructor()->onlyMethods(['dispatch'])->getMock();
             (new ReflectionProperty(Template::class, 'eventsManager'))->setValue($template, $events);
-            (new ReflectionProperty(Template::class, 'view_dir'))->setValue($template, BP . 'var/compile-map-lang-fixture/');
+            (new ReflectionProperty(Template::class, 'view_dir'))->setValue($template, VAR_DIR . 'compile-map-lang-fixture/');
 
             $mapKey = new ReflectionMethod(Template::class, 'templateCompileScopeMapKey');
             $enKey = $mapKey->invoke($template);

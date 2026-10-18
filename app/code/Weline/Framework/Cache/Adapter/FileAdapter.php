@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Cache\Adapter;
 
+use Weline\Framework\App\DirectoryList;
 use Weline\Framework\Cache\Contract\CacheAdapterInterface;
 
 class FileAdapter implements CacheAdapterInterface
@@ -23,20 +24,11 @@ class FileAdapter implements CacheAdapterInterface
     public function __construct(string $identity, array $config = [])
     {
         $this->identity = $identity;
-        $basePath = $config['path'] ?? BP . 'var' . DS . 'cache' . DS;
+        $configured = (string)($config['path'] ?? 'var/cache/');
+        $basePath = DirectoryList::resolveConfiguredDataPathStatic($configured);
+        $basePath = rtrim(str_replace(['/', '\\'], DS, $basePath), DS) . DS;
         
-        $isWin = \defined('IS_WIN') ? (bool) \constant('IS_WIN') : (\PHP_OS_FAMILY === 'Windows');
-        if ($isWin) {
-            $basePath = str_replace('/', DS, $basePath);
-        } else {
-            $basePath = str_replace('\\', DS, $basePath);
-        }
-        
-        if (!str_starts_with($basePath, BP)) {
-            $basePath = BP . $basePath;
-        }
-        
-        $this->cachePath = rtrim($basePath, DS) . DS . $identity . DS;
+        $this->cachePath = $basePath . $identity . DS;
 
         if (!is_dir($this->cachePath)) {
             $parentDir = dirname($this->cachePath);

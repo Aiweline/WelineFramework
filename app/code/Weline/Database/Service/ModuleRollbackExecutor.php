@@ -354,7 +354,7 @@ final class ModuleRollbackExecutor
     /** @return array{0: resource, 1: ModuleVersionOperation, 2: array<string, mixed>} */
     private function begin(string $operationId, string $expectedStatus): array
     {
-        $directory = BP . 'var' . DS . 'database';
+        $directory = VAR_DIR . 'database';
         if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
             throw new \RuntimeException(__('无法创建回滚锁目录'));
         }

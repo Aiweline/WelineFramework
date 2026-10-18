@@ -216,7 +216,7 @@ class SharedStateRuntimeOptionsTest extends TestCase
      */
     private function writeInstanceFile(string $instanceName, array $data): void
     {
-        $dir = Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR;
+        $dir = Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR;
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0777, true);
         }

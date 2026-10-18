@@ -67,7 +67,7 @@ final class SharedStateProtocolProbeTest extends TestCase
         self::assertGreaterThan(0, $port);
 
         $tokenBasename = 'shared_probe_timeout_' . \bin2hex(\random_bytes(4)) . '.token';
-        $tokenDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'session' . \DIRECTORY_SEPARATOR;
+        $tokenDir = VAR_DIR . 'session' . \DIRECTORY_SEPARATOR;
         $tokenPath = $tokenDir . $tokenBasename;
         if (!\is_dir($tokenDir)) {
             self::assertTrue(@\mkdir($tokenDir, 0777, true) || \is_dir($tokenDir));

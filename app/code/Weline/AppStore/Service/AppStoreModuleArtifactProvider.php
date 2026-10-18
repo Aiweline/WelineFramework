@@ -10,8 +10,8 @@ use Weline\Database\Api\ModuleArtifactStore;
 
 final class AppStoreModuleArtifactProvider implements ModuleArtifactProviderInterface
 {
-    private const INSTALL_RECORD_DIR = BP . 'var' . DS . 'appstore' . DS . 'install-records';
-    private const TEMP_DIR = BP . 'var' . DS . 'appstore' . DS . 'temp';
+    private const INSTALL_RECORD_DIR = VAR_DIR . 'appstore' . DS . 'install-records';
+    private const TEMP_DIR = VAR_DIR . 'appstore' . DS . 'temp';
 
     public function __construct(
         private readonly AppStoreInstalledModule $installedModule,

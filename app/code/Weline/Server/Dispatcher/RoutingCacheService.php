@@ -144,7 +144,7 @@ class RoutingCacheService
      */
     private function loadRoutingRules(): void
     {
-        $rulesFile = BP . 'var' . DS . 'server' . DS . 'routing-rules.json';
+        $rulesFile = VAR_DIR . 'server' . DS . 'routing-rules.json';
         if (\is_file($rulesFile)) {
             $rules = @\json_decode(\file_get_contents($rulesFile), true);
             if (\is_array($rules)) {

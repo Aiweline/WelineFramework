@@ -228,7 +228,7 @@ class Test implements CommandInterface
     {
         $this->printSection('步骤 5: 检查文件系统');
         
-        $sitemapsDir = BP . '/pub/sitemaps';
+        $sitemapsDir = PUB . 'sitemaps';
         
         if (!is_dir($sitemapsDir)) {
             echo "  ✗ Sitemap 目录不存在: {$sitemapsDir}\n";

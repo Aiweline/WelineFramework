@@ -10,7 +10,7 @@ namespace Weline\Deploy\Test\Unit\Service;
 \defined('APP_ETC_PATH') || \define('APP_ETC_PATH', APP_PATH . 'etc' . DS);
 \defined('APP_CODE_PATH') || \define('APP_CODE_PATH', APP_PATH . 'code' . DS);
 \defined('VENDOR_PATH') || \define('VENDOR_PATH', BP . 'vendor' . DS);
-\defined('PUB') || \define('PUB', BP . 'pub' . DS);
+\defined('PUB') || \define('PUB', PUB);
 \defined('DEV') || \define('DEV', false);
 \defined('DEBUG') || \define('DEBUG', false);
 \defined('SANDBOX') || \define('SANDBOX', false);

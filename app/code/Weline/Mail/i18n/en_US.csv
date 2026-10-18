@@ -1,6 +1,7 @@
 ﻿企业邮箱邮件已发送,"Work mailbox email sent"
 "后台代发或鉴权发信成功后派发；可携带 source / source_id 供业务闭环。","Dispatched after admin proxy or auth send succeeds; may carry source / source_id for business closure."
 "Mail 查询器不支持的操作：%{1}","Mail query does not support operation: %{1}"
+"系统账号 %{1}@ 由启用域名 / Smtp 自动创建，不能手工开通；列表中已标记为系统账号，不可删改。","系统账号 %{1}@ 由启用域名 / Smtp 自动创建，不能手工开通；列表中已标记为系统账号，不可删改。"
 失败,失败
 密码（仅一次）：%{1},密码（仅一次）：%{1}
 主机名为空,主机名为空
@@ -173,6 +174,10 @@ id属性不能为空,id属性不能为空
 已删除,已删除
 删除失败,删除失败
 "开始删除 Smtp 账户…","开始删除 Smtp 账户…"
+无权限从数据库同步到本机引擎,无权限从数据库同步到本机引擎
+开始从数据库同步到本机引擎…,开始从数据库同步到本机引擎…
+同步失败,"Sync failed"
+已同步,已同步
 请选择已启用的本机企业邮箱账号,"Select an enabled local business email account"
 邮件发送失败,"Failed to send email"
 "邮箱域名 ID 无效。","The email domain ID is invalid."
@@ -210,6 +215,9 @@ composer,composer
 按业务来源加载企业邮箱沟通线程,"Load business-email chat thread by business source"
 企业邮箱沟通发送,"Business email chat send"
 经写信浮层发送企业邮箱并写入业务线程,"Send via compose overlay to business email and write business thread"
+站点联系（人收）,站点联系（人收）
+"SMTP 提交/代理","SMTP 提交/代理"
+系统固定账号,系统固定账号
 企业邮箱,"Business email"
 尚未开通企业邮箱，可在下方申请本站邮箱。,"No business email yet; apply for site email below."
 我的邮箱,"My Mail"
@@ -427,6 +435,8 @@ Smtp,Smtp
 "完成管理连接后才能开通真实邮箱并同步 DNS。","Finish the management connection before provisioning real mailboxes and syncing DNS."
 "去域名与 DNS","Go to Domains & DNS"
 配置引擎,"Configure engine"
+"将数据库中的邮箱账户同步到本机 Stalwart 引擎","Sync mailbox accounts from the database into the local Stalwart engine"
+从数据库同步到本机引擎,"Sync accounts from database to local engine"
 企业邮箱管理导航,"Enterprise mail navigation"
 供应商原文：%{1},供应商原文：%{1}
 "去 Cloudflare 勾选权限","去 Cloudflare 勾选权限"
@@ -449,10 +459,15 @@ Smtp,Smtp
 "当前为本地测试邮箱：列表里的「已发送」只存在本系统数据库，不会经 SMTP 投递到外网。要给 QQ 等真实地址发信，请切换到真实域名账号。","This is a local test mailbox: Sent items exist only in this system's database and are not SMTP-delivered. To reach real addresses such as QQ, switch to a real-domain account."
 全选,全选
 搜索邮件…,搜索邮件…
+显示已读,显示已读
+只看未读,只看未读
+自动收信中,自动收信中
 永久删除,永久删除
 删除,删除
 标已读,标已读
 标未读,标未读
+没有未读邮件。,没有未读邮件。
+查看已读,查看已读
 写第一封邮件,"Compose first message"
 去用户与账号,"Go to Users & accounts"
 选择,选择
@@ -460,6 +475,10 @@ Smtp,Smtp
 转发,转发
 暂无邮件可阅读。写一封或开通更多账号后回来查看。,"Nothing to read yet. Compose a message or provision more accounts, then check back."
 正文加载失败,正文加载失败
+自动收信已暂停,自动收信已暂停
+正在收信…,正在收信…
+已更新,已更新
+收到新邮件,收到新邮件
 请先选择邮件,请先选择邮件
 企业邮箱账号,企业邮箱账号
 开通邮箱,"Open an email account."
@@ -471,8 +490,12 @@ Smtp,Smtp
 待开通,待开通
 筛选,筛选
 "共 %{1} 个账号 · 第 %{2} / %{3} 页","共 %{1} 个账号 · 第 %{2} / %{3} 页"
+"标有「系统账号」的邮箱（如 contact@ 人收、smtp@ 提交/代理）由启用域名或 Smtp 自动创建，不可编辑身份、暂停、改密或删除；仍可查看邮件与配置外投。","标有「系统账号」的邮箱（如 contact@ 人收、smtp@ 提交/代理）由启用域名或 Smtp 自动创建，不可编辑身份、暂停、改密或删除；仍可查看邮件与配置外投。"
 系统用户,"System user"
 暂无邮箱账号。,"No mailbox accounts yet."
+系统账号不可批量操作,系统账号不可批量操作
+系统账号,系统账号
+不可删改,不可删改
 外投,外投
 编辑,编辑
 查看邮件,"View email."
@@ -556,7 +579,6 @@ Smtp,Smtp
 "未能探测本机 Stalwart（管理凭据或邮局未就绪）；写入按钮仍会对未确认账号显示。","Could not probe local Stalwart; write is still shown for unconfirmed accounts."
 "尚无账户。可「从 Stalwart 同步账号」或下方新建。","No accounts yet. Sync from Stalwart or create below."
 "本机 Stalwart","本机 Stalwart"
-系统账号,系统账号
 复制账号,复制账号
 已写入,已写入
 未写入,"Not written"
@@ -656,6 +678,8 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 "启用域名时自动开通 contact@（企业邮箱人收）。Smtp 多服务请在「Smtp」Tab（本机启用 / 外部填入）；邮箱外投请在「用户与账号」编辑。","启用域名时自动开通 contact@（企业邮箱人收）。Smtp 多服务请在「Smtp」Tab（本机启用 / 外部填入）；邮箱外投请在「用户与账号」编辑。"
 暂停域名,"Suspend domain."
 启用域名,"Enable domain."
+同步中…,Syncing…
+"账号 %{1} 新密码（仅一次）：%{2}","Account %{1} new password (once only): %{2}"
 收件邮箱格式不正确,"Recipient email format is invalid"
 主题和正文不能为空,"Subject and body are required"
 邮箱地址必须属于所选域名,"Email address must belong to the selected domain name"
@@ -679,6 +703,11 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 "Fake 邮箱不需要 Stalwart 密码","Fake email addresses do not require Stalwart passwords."
 "邮箱已在 Stalwart 中开通，密码已更新","Mailbox provisioned in Stalwart and password updated"
 "邮箱开通或密码重置失败，请检查 Stalwart 管理连接","Email activation or password reset failed. Please check the Stalwart connection."
+"系统账号 %{1} 不可删除（邮局固定账号）","系统账号 %{1} 不可删除（邮局固定账号）"
+"系统账号 %{1} 不可修改身份资料","系统账号 %{1} 不可修改身份资料"
+"系统账号 %{1} 不可暂停或改状态","系统账号 %{1} 不可暂停或改状态"
+"系统账号 %{1} 不可在此改密；请用 Smtp/启用流程管理凭据","系统账号 %{1} 不可在此改密；请用 Smtp/启用流程管理凭据"
+"系统账号 %{1} 不可执行该操作","系统账号 %{1} 不可执行该操作"
 请选择或输入邮箱域名,"Please select or enter your email domain name"
 邮件引擎参数无效,"Invalid mail engine parameter"
 "Fake 测试引擎只允许 .invalid 或 .test 域名","The Fake test engine only allows .invalid or .test domains"
@@ -761,6 +790,17 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 "已复用邮局账号 %{1}","已复用邮局账号 %{1}"
 邮箱账号开通失败,邮箱账号开通失败
 "已开通邮局账号 %{1}","已开通邮局账号 %{1}"
+请先配置引擎管理连接,请先配置引擎管理连接
+"确保域名 %{1}","确保域名 %{1}"
+"域名 %{1} 录入失败：%{2}","域名 %{1} 录入失败：%{2}"
+"同步邮局账号 %{1}","同步邮局账号 %{1}"
+"邮局账号 %{1} 同步失败：%{2}","邮局账号 %{1} 同步失败：%{2}"
+"同步 Smtp 账号 %{1}","同步 Smtp 账号 %{1}"
+"Smtp 账号 %{1} 同步失败：%{2}","Smtp 账号 %{1} 同步失败：%{2}"
+检查读取凭据,检查读取凭据
+读取凭据补齐失败：%{1},读取凭据补齐失败：%{1}
+"缺少读取凭据，且库中无可用的 contact@ 密封密码","缺少读取凭据，且库中无可用的 contact@ 密封密码"
+"已同步：录入 %{1}，跳过 %{2}，重生密码 %{3}","已同步：录入 %{1}，跳过 %{2}，重生密码 %{3}"
 "已导入 Stalwart 证书","已导入 Stalwart 证书"
 邮箱域名格式无效。,"The email domain format is invalid."
 邮件服务主机名必须属于当前邮箱域名。,"The mail server hostname must belong to the current email domain."
@@ -969,3 +1009,9 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 账户已更新：%{1}%{2},"Account updated: %{1}%{2}"
 "本机 Smtp 服务已删除，下属账户 %{1} 个已从目录与本机 Stalwart 移除","Local SMTP service deleted; %{1} account(s) removed from directory and local Stalwart"
 "Stalwart 删除账户 %{1} 失败，服务与目录未改：%{2}","Stalwart failed to delete account %{1}; service and directory unchanged: %{2}"
+"一键配置邮局","One-click mail setup"
+"一键配置本域","One-click setup this domain"
+"配置中…","Setting up…"
+"配置失败","Setup failed"
+"一键绑定本机邮局管理凭据并按库同步账户","One-click: bind local mail admin credentials and sync accounts from the database"
+"一键确保本域引擎与系统账号并同步账户","One-click: ensure this domain in the engine, system mailbox, and sync accounts"

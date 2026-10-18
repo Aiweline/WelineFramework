@@ -296,7 +296,8 @@ private function assert_StaticBrowserTtl_testManagedNginxStaticLocationUsesOneYe
     $path = (new \ReflectionClass(ManagedNginxConfigWriter::class))->getFileName();
     $this->assertIsString($path);
     $src = (string) \file_get_contents($path);
-    $this->assertStringContainsString('expires 365d;', $src);
+    // Single Cache-Control only — `expires` would emit a second Cache-Control max-age.
+    $this->assertStringNotContainsString('expires 365d;', $src);
     $this->assertStringContainsString('max-age=31536000, immutable', $src);
     $this->assertStringNotContainsString('expires 30d;', $src);
     $this->assertStringNotContainsString('max-age=2592000', $src);

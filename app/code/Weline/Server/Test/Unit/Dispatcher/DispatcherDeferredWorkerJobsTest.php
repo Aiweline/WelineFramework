@@ -803,7 +803,7 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
         $instanceName = 'ut-dispatcher-runtime-supervisor';
-        $instanceDir = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances';
+        $instanceDir = VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances';
         $instanceFile = $instanceDir . DIRECTORY_SEPARATOR . $instanceName . '.json';
         if (!\is_dir($instanceDir)) {
             @\mkdir($instanceDir, 0777, true);

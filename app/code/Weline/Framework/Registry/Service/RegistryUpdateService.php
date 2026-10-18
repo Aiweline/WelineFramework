@@ -493,7 +493,7 @@ class RegistryUpdateService
      */
     private function isUpgradeLockExists(): bool
     {
-        $lockFile = BP . 'var' . DS . 'process' . DS . 'setup_upgrade.lock';
+        $lockFile = VAR_DIR . 'process' . DS . 'setup_upgrade.lock';
         
         if (!file_exists($lockFile)) {
             return false;

@@ -2148,7 +2148,7 @@ class QueueDispatchService
     private function withQueueClassDispatchLock(string $queueClass, callable $callback): mixed
     {
         $queueClass = \ltrim($queueClass, '\\');
-        $lockDir = BP . 'var' . DIRECTORY_SEPARATOR . 'lock';
+        $lockDir = VAR_DIR . 'lock';
         if (!\is_dir($lockDir) && !@\mkdir($lockDir, 0775, true) && !\is_dir($lockDir)) {
             return $callback();
         }

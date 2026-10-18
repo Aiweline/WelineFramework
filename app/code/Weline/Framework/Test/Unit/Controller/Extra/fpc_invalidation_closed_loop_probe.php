@@ -89,7 +89,7 @@ if ($adapter === null) {
     fwrite(STDERR, 'NO_FPC_ADAPTER' . PHP_EOL);
     exit(5);
 }
-$payloadDir = BP . 'var' . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . 'router-fpc-payloads'
+$payloadDir = VAR_DIR . 'cache' . DIRECTORY_SEPARATOR . 'router-fpc-payloads'
     . DIRECTORY_SEPARATOR . 'ff';
 if (!is_dir($payloadDir)) {
     @mkdir($payloadDir, 0775, true);

@@ -23,7 +23,7 @@ if (!defined('DEV_PATH')) {
     define('DEV_PATH', BP . 'dev' . DS);
 }
 if (!defined('PUB')) {
-    define('PUB', BP . 'pub' . DS);
+    define('PUB', PUB);
 }
 
 use PHPUnit\Framework\TestCase;

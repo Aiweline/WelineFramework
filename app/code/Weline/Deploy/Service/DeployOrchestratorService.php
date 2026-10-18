@@ -925,7 +925,7 @@ class DeployOrchestratorService
     private function snapshotProtectedPaths(string $deployRoot): string
     {
         $snapshotId = 'snap_' . date('Y-m-d_H-i-s') . '_' . substr(md5((string)microtime(true)), 0, 8);
-        $snapshotRoot = Env::backup_dir . 'deploy' . DS . 'protected_snapshots' . DS . $snapshotId . DS;
+        $snapshotRoot = Env::backupDir() . 'deploy' . DS . 'protected_snapshots' . DS . $snapshotId . DS;
         if (!is_dir($snapshotRoot) && !mkdir($snapshotRoot, 0755, true) && !is_dir($snapshotRoot)) {
             throw new \RuntimeException((string)__('无法创建发布保护快照目录。'));
         }
@@ -956,7 +956,7 @@ class DeployOrchestratorService
             return;
         }
 
-        $snapshotRoot = Env::backup_dir . 'deploy' . DS . 'protected_snapshots' . DS . $snapshotId . DS;
+        $snapshotRoot = Env::backupDir() . 'deploy' . DS . 'protected_snapshots' . DS . $snapshotId . DS;
         if (!is_dir($snapshotRoot)) {
             return;
         }
@@ -1154,7 +1154,7 @@ class DeployOrchestratorService
      */
     private function backupProject(array $config, string $deployRoot): void
     {
-        $backupDir = Env::backup_dir . 'deploy' . DS;
+        $backupDir = Env::backupDir() . 'deploy' . DS;
         if (!is_dir($backupDir)) {
             mkdir($backupDir, 0755, true);
         }

@@ -723,7 +723,7 @@ class StoreMusicSettings
         if ($relative === '' || !defined('BP')) {
             return $publicUrl;
         }
-        $mediaRoot = rtrim((string) BP, '/\\') . '/pub/media';
+        $mediaRoot = rtrim(MEDIA_DIR, '/\\');
         $primary = $mediaRoot . '/' . $relative;
         if (is_file($primary) && filesize($primary) > 1024) {
             return $publicUrl;

@@ -8,7 +8,7 @@ use Weline\Framework\App\Exception;
 
 class ModuleUninstallService
 {
-    private const INSTALL_RECORD_DIR = BP . 'var' . DS . 'appstore' . DS . 'install-records';
+    private const INSTALL_RECORD_DIR = VAR_DIR . 'appstore' . DS . 'install-records';
 
     private const PROTECTED_MODULES = [
         'Weline_AppStore',

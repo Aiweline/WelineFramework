@@ -108,7 +108,7 @@ final class PayPalSandboxPublicOriginService
             $safeName = 'default';
         }
 
-        $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server'
+        $instanceFile = VAR_DIR . 'server'
             . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $safeName . '.json';
         if (!is_file($instanceFile)) {
             return '';

@@ -1964,7 +1964,7 @@ abstract class QueryAst implements WriteIntentQueryInterface, PhysicalTableQuery
             $originTable = explode('.', $originTable) ?: [$table];
             $originTable = end($originTable);
             // 使用 Y-m-d_H-i-s 格式避免 Windows 文件名中的冒号问题
-            $backupFile = Env::backup_dir . 'db' . DS . $table . DS . $originTable . '_' . date('Y-m-d_H-i-s') . '.sql';
+            $backupFile = Env::backupDir() . 'db' . DS . $table . DS . $originTable . '_' . date('Y-m-d_H-i-s') . '.sql';
         } else {
             if (!str_starts_with($backup_file, BP)) {
                 $backupFile = BP . $backup_file;

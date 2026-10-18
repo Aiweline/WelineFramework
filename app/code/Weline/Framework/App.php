@@ -1255,10 +1255,8 @@ class App
             echo('请告知根目录BP(常量)的位置。');
             System::exit(0);
         }
-        // 静态文件路径
-        if (!defined('PUB')) {
-            define('PUB', BP . 'pub' . DS);
-        }
+        // Relocatable pub/var/media roots from env.php directories (defaults = BP/*).
+        \Weline\Framework\App\DirectoryList::defineBootstrapConstants(BP);
         // SERVER 整理
         if (self::isRequestRuntime()) {
             $context = Context::current();
@@ -1448,7 +1446,7 @@ class App
         }
         
         // 设置 PHP 错误日志路径到 var/log/php_error.log
-        $phpErrorLogFile = Env::VAR_DIR . 'log' . DS . 'php_error.log';
+        $phpErrorLogFile = Env::varDir() . 'log' . DS . 'php_error.log';
         $phpErrorLogDir = dirname($phpErrorLogFile);
         if (!is_dir($phpErrorLogDir)) {
             @mkdir($phpErrorLogDir, 0755, true);

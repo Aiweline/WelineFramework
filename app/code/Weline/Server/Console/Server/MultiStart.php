@@ -347,7 +347,7 @@ class MultiStart extends CommandAbstract
         
         // 不要 proc_close，让进程继续运行
         // 记录 PID 到文件
-        $pidFile = BP . "var/process/pid/worker-{$port}.json";
+        $pidFile = VAR_DIR . "process/pid/worker-{$port}.json";
         $pidDir = \dirname($pidFile);
         if (!\is_dir($pidDir)) {
             @\mkdir($pidDir, 0755, true);
@@ -420,7 +420,7 @@ class MultiStart extends CommandAbstract
             $phpBinary = \str_replace('/', '\\', $phpBinary);
             
             // 创建临时批处理文件
-            $batFile = BP . "var\\tmp\\start_worker_{$port}.bat";
+            $batFile = VAR_DIR . "tmp\\start_worker_{$port}.bat";
             $batDir = \dirname($batFile);
             if (!\is_dir($batDir)) {
                 @\mkdir($batDir, 0755, true);

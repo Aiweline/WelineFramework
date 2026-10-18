@@ -88,7 +88,7 @@ class ServerInstanceManager
      */
     public function getInstanceDir(): string
     {
-        return Env::VAR_DIR . self::INSTANCE_SUBDIR;
+        return Env::varDir() . self::INSTANCE_SUBDIR;
     }
 
     /**
@@ -441,7 +441,7 @@ class ServerInstanceManager
         }
 
         $lifecyclePath = ServerLifecycleOperationLock::pathForInstance($name);
-        $startPath = Env::VAR_DIR . 'server' . DS . 'locks' . DS . 'start_' . $name . '.lock';
+        $startPath = Env::varDir() . 'server' . DS . 'locks' . DS . 'start_' . $name . '.lock';
         if (VerifiedPersistentFileLock::isHeld($lifecyclePath) === true
             || VerifiedPersistentFileLock::isHeld($startPath) === true
         ) {
@@ -514,7 +514,7 @@ class ServerInstanceManager
      */
     private function purgeInactiveInstanceTransaction(string $name, array $selected): bool
     {
-        $lockDir = Env::VAR_DIR . 'server' . DS . 'locks' . DS;
+        $lockDir = Env::varDir() . 'server' . DS . 'locks' . DS;
         $lifecyclePath = ServerLifecycleOperationLock::pathForInstance($name);
         $startPath = $lockDir . 'start_' . $name . '.lock';
         // Force-clean is never a legitimate re-entrant lifecycle action. A
@@ -699,7 +699,7 @@ class ServerInstanceManager
      */
     private function purgeForcedInstanceArtifacts(string $name): bool
     {
-        $lockDir = Env::VAR_DIR . 'server' . DS . 'locks' . DS;
+        $lockDir = Env::varDir() . 'server' . DS . 'locks' . DS;
         $lifecyclePath = ServerLifecycleOperationLock::pathForInstance($name);
         $startPath = $lockDir . 'start_' . $name . '.lock';
         if (VerifiedPersistentFileLock::isHeld($lifecyclePath) === true
@@ -1425,7 +1425,7 @@ class ServerInstanceManager
         }
 
         $configDir = $savedConfigDirectory
-            ?? (Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'config');
+            ?? (Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'config');
         $store = new \Weline\Server\Service\Edge\Gateway\SavedInstanceConfigStore($configDir);
         try {
             $store->update(
@@ -1464,7 +1464,7 @@ class ServerInstanceManager
     ): void {
         $baselineCount = \max(1, $baselineCount);
         $configDir = $savedConfigDirectory
-            ?? (Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'config');
+            ?? (Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'config');
         $store = new \Weline\Server\Service\Edge\Gateway\SavedInstanceConfigStore($configDir);
         try {
             $store->update(
@@ -2144,7 +2144,7 @@ class ServerInstanceManager
         if (!$lifecycleLock->acquire($name, 'stale-cleanup', 0.05)) {
             return false;
         }
-        $lockDir = Env::VAR_DIR . 'server' . DS . 'locks' . DS;
+        $lockDir = Env::varDir() . 'server' . DS . 'locks' . DS;
         if (!\is_dir($lockDir) && !@\mkdir($lockDir, 0755, true) && !\is_dir($lockDir)) {
             $lifecycleLock->release();
             return false;
@@ -2225,7 +2225,7 @@ class ServerInstanceManager
      */
     private function isStartLockHeld(string $name): bool
     {
-        $lockFile = Env::VAR_DIR . 'server' . DS . 'locks' . DS . 'start_' . $name . '.lock';
+        $lockFile = Env::varDir() . 'server' . DS . 'locks' . DS . 'start_' . $name . '.lock';
         // Unsafe/indeterminate lock state is a cleanup veto, never evidence
         // that no launcher owns the instance.
         return VerifiedPersistentFileLock::isHeld($lockFile) !== false;
@@ -4354,7 +4354,7 @@ class ServerInstanceManager
         ) {
             return null;
         }
-        $expectedDirectory = \realpath(Env::VAR_DIR . self::INSTANCE_SUBDIR);
+        $expectedDirectory = \realpath(Env::varDir() . self::INSTANCE_SUBDIR);
         $actualDirectory = \realpath(\dirname($file));
         if (!\is_string($expectedDirectory)
             || !\is_string($actualDirectory)

@@ -24,7 +24,7 @@ final class SetupUpgradeIntent
 
     public static function path(): string
     {
-        return \BP . 'var' . DIRECTORY_SEPARATOR . 'process' . DIRECTORY_SEPARATOR . self::FILENAME;
+        return \VAR_DIR . 'process' . DIRECTORY_SEPARATOR . self::FILENAME;
     }
 
     /**

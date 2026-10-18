@@ -5509,9 +5509,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
     private function sharedPayloadBaseDir(): string
     {
-        return BP
-            . 'var'
-            . \DIRECTORY_SEPARATOR
+        return VAR_DIR
             . 'cache'
             . \DIRECTORY_SEPARATOR
             . 'router-fpc-payloads';
@@ -6827,7 +6825,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
      */
     private function acquireFileLock(string $lockKey)
     {
-        $lockDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-locks';
+        $lockDir = VAR_DIR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-locks';
         if (!\is_dir($lockDir) && !@\mkdir($lockDir, 0775, true) && !\is_dir($lockDir)) {
             return null;
         }

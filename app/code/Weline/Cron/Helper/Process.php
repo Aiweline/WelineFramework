@@ -486,7 +486,7 @@ class Process
         }
 
         $fileName = str_replace(':', '-', $pname);
-        $path = Env::VAR_DIR . 'log' . DS . 'cron' . DS . $fileName . '.log';
+        $path = Env::varDir() . 'log' . DS . 'cron' . DS . $fileName . '.log';
         if (!is_file($path)) {
             if (!is_dir(dirname($path))) {
                 mkdir(dirname($path), 0777, true);
@@ -632,7 +632,7 @@ class Process
 
     public static function historyDirectoryForExecuteName(string $executeName): string
     {
-        return Env::VAR_DIR . 'log' . DS . 'cron' . DS . 'history' . DS
+        return Env::varDir() . 'log' . DS . 'cron' . DS . 'history' . DS
             . substr(hash('sha256', $executeName), 0, 24);
     }
 

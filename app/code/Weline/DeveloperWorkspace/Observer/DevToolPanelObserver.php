@@ -619,7 +619,7 @@ HTML;
             $deployVersion = (string)($versionMeta['deployVersion'] ?? '');
             $themePublishedVersionId = (string)($versionMeta['themePublishedVersionId'] ?? '');
             $themePublishedVersion = (string)($versionMeta['themePublishedVersion'] ?? '');
-            $deployStampFile = BP . 'var' . DIRECTORY_SEPARATOR . 'deploy' . DIRECTORY_SEPARATOR . 'current.json';
+            $deployStampFile = VAR_DIR . 'deploy' . DIRECTORY_SEPARATOR . 'current.json';
             $deployFileMtime = \is_file($deployStampFile) ? (string)\filemtime($deployStampFile) : '0';
             $cacheKey = sha1(json_encode([
                 'backend' => $isBackend,
@@ -733,7 +733,7 @@ HTML;
         }
         if ($deployVersion === '') {
             try {
-                $deployFile = BP . 'var' . DIRECTORY_SEPARATOR . 'deploy' . DIRECTORY_SEPARATOR . 'current.json';
+                $deployFile = VAR_DIR . 'deploy' . DIRECTORY_SEPARATOR . 'current.json';
                 if (\is_file($deployFile)) {
                     $deployMeta = \json_decode((string)\file_get_contents($deployFile), true);
                     if (\is_array($deployMeta)) {

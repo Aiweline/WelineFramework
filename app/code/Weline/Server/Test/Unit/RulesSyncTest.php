@@ -27,7 +27,7 @@ class RulesSyncTest extends TestCase
     {
         parent::setUp();
         
-        $this->serverDir = Env::VAR_DIR . 'server';
+        $this->serverDir = Env::varDir() . 'server';
         $this->rulesFile = $this->serverDir . DIRECTORY_SEPARATOR . 'memory-cache-rules.json';
         $this->flagFile = $this->serverDir . DIRECTORY_SEPARATOR . 'rules-update.flag';
         

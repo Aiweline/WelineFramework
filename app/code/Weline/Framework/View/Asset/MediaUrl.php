@@ -22,7 +22,8 @@ final class MediaUrl
             return $path;
         }
 
-        $extension = \strtolower(\pathinfo(PUB . 'media' . DIRECTORY_SEPARATOR . $relative, PATHINFO_EXTENSION));
+        $mediaRoot = \defined('MEDIA_DIR') ? (string)\constant('MEDIA_DIR') : (PUB . 'media' . DIRECTORY_SEPARATOR);
+        $extension = \strtolower(\pathinfo(\rtrim($mediaRoot, '/\\') . DIRECTORY_SEPARATOR . $relative, PATHINFO_EXTENSION));
         if ($extension === 'svg') {
             return '/pub/media/' . \ltrim($relative, '/');
         }

@@ -152,9 +152,12 @@ class Index extends BackendController
                 $accountIds[] = (int)$mailboxAccount->getId();
             }
             $mailboxUnreadByAccount = $ops->mapInboxUnreadCounts($accountIds);
+            // 收件箱默认只列未读；?show=all 可看全部（含已读）
+            $showAll = strtolower(trim((string)$this->request->getParam('show', ''))) === 'all';
+            $mailboxListUnreadOnly = $folder === MailboxFolder::INBOX && !$showAll;
             if ($selectedAccount) {
                 try {
-                    $mailboxMessages = $ops->list($selectedAccountId, $folder, 50);
+                    $mailboxMessages = $ops->list($selectedAccountId, $folder, 50, $mailboxListUnreadOnly);
                     if ($messageId !== '') {
                         $selectedMessage = $ops->get($selectedAccountId, $messageId);
                     }
@@ -162,10 +165,15 @@ class Index extends BackendController
                     $mailboxError = $throwable->getMessage();
                 }
             }
+        } else {
+            $mailboxListUnreadOnly = false;
+            $showAll = false;
         }
 
         $this->assign('mail_view', $mailView);
         $this->assign('folder', $folder);
+        $this->assign('mailbox_list_unread_only', $mailboxListUnreadOnly ?? false);
+        $this->assign('mailbox_show_all', $showAll ?? false);
         $this->assign('domains', $domains);
         $this->assign('accounts', $accounts);
         $this->assign('account_filter_q', $accountFilterQ);
@@ -501,6 +509,45 @@ class Index extends BackendController
             return $this->fetchJson(['code' => 500, 'msg' => $e->getMessage(), 'data' => []]);
         }
         return $this->fetchJson(['code' => 200, 'msg' => 'ok', 'data' => $rows]);
+    }
+
+    /**
+     * 邮件夹列表异步拉取（JSON），供刷新/轮询收信，避免整页 reload。
+     */
+    public function getMailboxList(): string
+    {
+        $accountId = max(0, (int)$this->request->getParam('account', 0));
+        $folder = strtolower(trim((string)$this->request->getParam('folder', 'inbox')));
+        $limit = max(1, min(100, (int)$this->request->getParam('limit', 50)));
+        try {
+            $folder = MailboxFolder::assertValid($folder);
+        } catch (\InvalidArgumentException) {
+            $folder = MailboxFolder::INBOX;
+        }
+        if ($accountId <= 0) {
+            return $this->fetchJson(['code' => 400, 'msg' => (string)__('缺少账号'), 'data' => null]);
+        }
+        $showAll = strtolower(trim((string)$this->request->getParam('show', ''))) === 'all';
+        $unreadOnly = $folder === MailboxFolder::INBOX && !$showAll;
+        try {
+            $ops = ObjectManager::getInstance(MailboxOpsService::class);
+            $rows = $ops->list($accountId, $folder, $limit, $unreadOnly);
+            $unread = $folder === MailboxFolder::INBOX ? $ops->countUnreadInbox($accountId) : 0;
+        } catch (\Throwable $e) {
+            return $this->fetchJson(['code' => 500, 'msg' => $e->getMessage(), 'data' => null]);
+        }
+
+        return $this->fetchJson([
+            'code' => 200,
+            'msg' => 'ok',
+            'data' => [
+                'folder' => $folder,
+                'items' => $rows,
+                'unread_inbox' => $unread,
+                'unread_only' => $unreadOnly,
+                'fetched_at' => time(),
+            ],
+        ]);
     }
 
     public function postMailboxBatch(): string
@@ -1043,6 +1090,344 @@ class Index extends BackendController
                 $sse->sendEvent('error', [
                     'success' => false,
                     'message' => $e->getMessage() !== '' ? $e->getMessage() : (string)__('删除失败'),
+                ]);
+                $sse->close();
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * SSE：按库将 Mail/Smtp 账户录入本机 Stalwart（需管理连接；系统账号直调 adapter）。
+     * complete() + CaptureMode::None：对齐删除流，避免 WLS 捕获冲掉 SSE。
+     */
+    public function postSyncEngineAccountsFromDbStream(): string
+    {
+        @\set_time_limit(0);
+        @\ignore_user_abort(true);
+
+        $sse = new SseWriter();
+        $sse->setHeartbeatInterval(15)->start();
+
+        try {
+            if (!$this->request->isPost()) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)__('无效的请求方法'),
+                ]);
+                $sse->close();
+
+                return '';
+            }
+            if (
+                !$this->isMailAclAllowed('Weline_Mail::mail_accounts_password')
+                && !$this->isMailAclAllowed('Weline_Mail::mail_accounts_manage')
+            ) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)__('无权限从数据库同步到本机引擎'),
+                ]);
+                $sse->close();
+
+                return '';
+            }
+
+            $force = (string)$this->request->getParam('force', '0') === '1';
+            $sse->sendEvent('start', [
+                'message' => (string)__('开始从数据库同步到本机引擎…'),
+                'progress' => 0,
+            ]);
+
+            /** @var \Weline\Mail\Service\MailEngineAccountSyncService $sync */
+            $sync = ObjectManager::getInstance(\Weline\Mail\Service\MailEngineAccountSyncService::class);
+            $result = $sync->syncFromDatabase(
+                static function (string $step, string $message, int $current, int $total) use ($sse): void {
+                    if (!$sse->isAlive()) {
+                        return;
+                    }
+                    $percent = (int)floor(($current / max(1, $total)) * 95);
+                    $sse->sendEvent('progress', [
+                        'step' => $step,
+                        'message' => $message,
+                        'current' => $current,
+                        'total' => $total,
+                        'progress' => min(95, max(1, $percent)),
+                    ]);
+                },
+                static function (string $email, string $passwordOnce) use ($sse): void {
+                    if (!$sse->isAlive()) {
+                        return;
+                    }
+                    $sse->sendEvent('password_once', [
+                        'email' => $email,
+                        'password_once' => $passwordOnce,
+                    ]);
+                },
+                $force
+            );
+
+            if (empty($result['success'])) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)($result['message'] ?? __('同步失败')),
+                    'progress' => 100,
+                    'provisioned' => (int)($result['provisioned'] ?? 0),
+                    'skipped' => (int)($result['skipped'] ?? 0),
+                    'regenerated' => (int)($result['regenerated'] ?? 0),
+                ]);
+                $sse->close();
+
+                return '';
+            }
+
+            $sse->complete([
+                'success' => true,
+                'message' => (string)($result['message'] ?? __('已同步')),
+                'progress' => 100,
+                'provisioned' => (int)($result['provisioned'] ?? 0),
+                'skipped' => (int)($result['skipped'] ?? 0),
+                'regenerated' => (int)($result['regenerated'] ?? 0),
+                'reader_synced' => !empty($result['reader_synced']),
+            ]);
+        } catch (\Throwable $e) {
+            if ($sse->isAlive()) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => $e->getMessage() !== '' ? $e->getMessage() : (string)__('同步失败'),
+                ]);
+                $sse->close();
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * SSE：全局一键配置（绑定管理凭据 → 按库同步）。
+     * complete() + CaptureMode::None：对齐同步流，避免 WLS 捕获冲掉 SSE。
+     */
+    public function postOneClickMailSetupStream(): string
+    {
+        @\set_time_limit(0);
+        @\ignore_user_abort(true);
+
+        $sse = new SseWriter();
+        $sse->setHeartbeatInterval(15)->start();
+
+        try {
+            if (!$this->request->isPost()) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)__('无效的请求方法'),
+                ]);
+                $sse->close();
+
+                return '';
+            }
+            if (
+                !$this->isMailAclAllowed('Weline_Mail::mail_accounts_password')
+                && !$this->isMailAclAllowed('Weline_Mail::mail_accounts_manage')
+            ) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)__('无权限一键配置邮局'),
+                ]);
+                $sse->close();
+
+                return '';
+            }
+
+            $sse->sendEvent('start', [
+                'message' => (string)__('开始一键配置邮局…'),
+                'progress' => 0,
+            ]);
+
+            /** @var \Weline\Mail\Service\MailOneClickSetupService $setup */
+            $setup = ObjectManager::getInstance(\Weline\Mail\Service\MailOneClickSetupService::class);
+            $result = $setup->oneClickGlobal(
+                static function (string $step, string $message, int $current, int $total) use ($sse): void {
+                    if (!$sse->isAlive()) {
+                        return;
+                    }
+                    $percent = (int)floor(($current / max(1, $total)) * 95);
+                    $sse->sendEvent('progress', [
+                        'step' => $step,
+                        'message' => $message,
+                        'current' => $current,
+                        'total' => $total,
+                        'progress' => min(95, max(1, $percent)),
+                    ]);
+                },
+                static function (string $email, string $passwordOnce) use ($sse): void {
+                    if (!$sse->isAlive()) {
+                        return;
+                    }
+                    $sse->sendEvent('password_once', [
+                        'email' => $email,
+                        'password_once' => $passwordOnce,
+                    ]);
+                }
+            );
+
+            if (empty($result['success'])) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)($result['message'] ?? __('一键配置失败')),
+                    'hint' => (string)($result['hint'] ?? ''),
+                    'progress' => 100,
+                    'provisioned' => (int)($result['provisioned'] ?? 0),
+                    'skipped' => (int)($result['skipped'] ?? 0),
+                    'regenerated' => (int)($result['regenerated'] ?? 0),
+                ]);
+                $sse->close();
+
+                return '';
+            }
+
+            $sse->complete([
+                'success' => true,
+                'message' => (string)($result['message'] ?? __('一键配置完成')),
+                'progress' => 100,
+                'provisioned' => (int)($result['provisioned'] ?? 0),
+                'skipped' => (int)($result['skipped'] ?? 0),
+                'regenerated' => (int)($result['regenerated'] ?? 0),
+                'reader_synced' => !empty($result['reader_synced']),
+                'bind_skipped' => !empty($result['bind_skipped']),
+            ]);
+
+            PostResponseTaskQueue::enqueue(
+                'mail-one-click-setup-done',
+                static function (): void {
+                },
+                0.0,
+                \Weline\Framework\Runtime\PostResponseCaptureMode::None
+            );
+        } catch (\Throwable $e) {
+            if ($sse->isAlive()) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => $e->getMessage() !== '' ? $e->getMessage() : (string)__('一键配置失败'),
+                ]);
+                $sse->close();
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * SSE：单域一键配置（需管理连接；ensureDomain + contact@ + 域内 sync）。
+     * complete() + CaptureMode::None：对齐同步流。
+     */
+    public function postOneClickDomainSetupStream(): string
+    {
+        @\set_time_limit(0);
+        @\ignore_user_abort(true);
+
+        $sse = new SseWriter();
+        $sse->setHeartbeatInterval(15)->start();
+
+        try {
+            if (!$this->request->isPost()) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)__('无效的请求方法'),
+                ]);
+                $sse->close();
+
+                return '';
+            }
+            if (
+                !$this->isMailAclAllowed('Weline_Mail::mail_accounts_password')
+                && !$this->isMailAclAllowed('Weline_Mail::mail_accounts_manage')
+            ) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)__('无权限一键配置本域'),
+                ]);
+                $sse->close();
+
+                return '';
+            }
+
+            $domainId = (int)$this->request->getParam('domain_id', 0);
+            $sse->sendEvent('start', [
+                'message' => (string)__('开始一键配置本域…'),
+                'progress' => 0,
+                'domain_id' => $domainId,
+            ]);
+
+            /** @var \Weline\Mail\Service\MailOneClickSetupService $setup */
+            $setup = ObjectManager::getInstance(\Weline\Mail\Service\MailOneClickSetupService::class);
+            $result = $setup->oneClickDomain(
+                $domainId,
+                static function (string $step, string $message, int $current, int $total) use ($sse): void {
+                    if (!$sse->isAlive()) {
+                        return;
+                    }
+                    $percent = (int)floor(($current / max(1, $total)) * 95);
+                    $sse->sendEvent('progress', [
+                        'step' => $step,
+                        'message' => $message,
+                        'current' => $current,
+                        'total' => $total,
+                        'progress' => min(95, max(1, $percent)),
+                    ]);
+                },
+                static function (string $email, string $passwordOnce) use ($sse): void {
+                    if (!$sse->isAlive()) {
+                        return;
+                    }
+                    $sse->sendEvent('password_once', [
+                        'email' => $email,
+                        'password_once' => $passwordOnce,
+                    ]);
+                }
+            );
+
+            if (empty($result['success'])) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)($result['message'] ?? __('本域一键配置失败')),
+                    'hint' => (string)($result['hint'] ?? ''),
+                    'progress' => 100,
+                    'domain_id' => $domainId,
+                    'provisioned' => (int)($result['provisioned'] ?? 0),
+                    'skipped' => (int)($result['skipped'] ?? 0),
+                    'regenerated' => (int)($result['regenerated'] ?? 0),
+                ]);
+                $sse->close();
+
+                return '';
+            }
+
+            $sse->complete([
+                'success' => true,
+                'message' => (string)($result['message'] ?? __('本域一键配置完成')),
+                'progress' => 100,
+                'domain_id' => $domainId,
+                'domain_name' => (string)($result['domain_name'] ?? ''),
+                'contact_email' => (string)($result['contact_email'] ?? ''),
+                'provisioned' => (int)($result['provisioned'] ?? 0),
+                'skipped' => (int)($result['skipped'] ?? 0),
+                'regenerated' => (int)($result['regenerated'] ?? 0),
+                'reader_synced' => !empty($result['reader_synced']),
+                'bind_skipped' => !empty($result['bind_skipped']),
+            ]);
+
+            PostResponseTaskQueue::enqueue(
+                'mail-one-click-domain-setup-done',
+                static function (): void {
+                },
+                0.0,
+                \Weline\Framework\Runtime\PostResponseCaptureMode::None
+            );
+        } catch (\Throwable $e) {
+            if ($sse->isAlive()) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => $e->getMessage() !== '' ? $e->getMessage() : (string)__('本域一键配置失败'),
                 ]);
                 $sse->close();
             }

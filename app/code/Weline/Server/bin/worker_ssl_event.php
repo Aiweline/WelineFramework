@@ -2036,7 +2036,7 @@ function wlsEventHandleStaticFile(
     $relative = \ltrim(\str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path), DIRECTORY_SEPARATOR);
     $candidates = [
         BP . $relative,
-        BP . 'pub' . DIRECTORY_SEPARATOR . $relative,
+        PUB . $relative,
         BP . 'generated' . DIRECTORY_SEPARATOR . $relative,
     ];
     foreach ($candidates as $candidate) {

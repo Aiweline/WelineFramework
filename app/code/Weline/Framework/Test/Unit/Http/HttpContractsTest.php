@@ -197,6 +197,14 @@ final class HttpContractsTest extends TestCase
                 $this->tearDown_FpcHtmlDiskStore();
             }
         },
+            'FpcHtmlDiskStore::testPublishFailClosedWithoutBrotliBytes' => function () {
+            $this->setUp_FpcHtmlDiskStore();
+            try {
+                $this->assert_FpcHtmlDiskStore_testPublishFailClosedWithoutBrotliBytes();
+            } finally {
+                $this->tearDown_FpcHtmlDiskStore();
+            }
+        },
             'FpcHtmlDiskStore::testBrotliPublishIsBrOnlyAndReadableWithoutAcceptBr' => function () {
             $this->setUp_FpcHtmlDiskStore();
             try {
@@ -478,6 +486,14 @@ final class HttpContractsTest extends TestCase
             $this->setUp_StorefrontGenerationOutbound();
             try {
                 $this->assert_StorefrontGenerationOutbound_testSharedFpcSuppressBlocksIdentitySetCookie();
+            } finally {
+                $this->tearDown_StorefrontGenerationOutbound();
+            }
+        },
+            'StorefrontGenerationOutbound::testFpcHitHeaderForbidsIdentityCookieWithoutArm' => function () {
+            $this->setUp_StorefrontGenerationOutbound();
+            try {
+                $this->assert_StorefrontGenerationOutbound_testFpcHitHeaderForbidsIdentityCookieWithoutArm();
             } finally {
                 $this->tearDown_StorefrontGenerationOutbound();
             }
@@ -979,27 +995,46 @@ private function assert_FpcHtmlDiskStore_testPublishReadAndPurgeUrls(): void
     self::assertStringNotContainsString(\DIRECTORY_SEPARATOR . 'generations' . \DIRECTORY_SEPARATOR, $live);
     $hit = FpcHtmlDiskStore::read($url, '');
     self::assertIsArray($hit);
-    if (ContentEncodingNegotiator::brotliAvailable()) {
-        $brPath = $path . '.br';
-        self::assertFileExists($brPath);
-        self::assertFileDoesNotExist($path);
-        self::assertSame('br', $hit['encoding']);
-        $decoded = ContentEncodingNegotiator::decode(
-            (string)$hit['body'],
-            ContentEncodingNegotiator::ENCODING_BROTLI,
-        );
-        self::assertSame($html, $decoded);
-        FpcHtmlDiskStore::purgeUrls([$url]);
-        self::assertFileDoesNotExist($brPath);
-    } else {
-        self::assertFileExists($path);
-        self::assertSame($html, (string) \file_get_contents($path));
-        self::assertSame($html, $hit['body']);
-        self::assertNull($hit['encoding']);
-        FpcHtmlDiskStore::purgeUrls([$url]);
-        self::assertFileDoesNotExist($path);
+    if (!ContentEncodingNegotiator::brotliAvailable()) {
+        self::markTestSkipped('brotli extension required for html-disk publish (fail-closed)');
     }
+    $brPath = $path . '.br';
+    self::assertFileExists($brPath);
+    self::assertFileDoesNotExist($path);
+    self::assertSame('br', $hit['encoding']);
+    $decoded = ContentEncodingNegotiator::decode(
+        (string)$hit['body'],
+        ContentEncodingNegotiator::ENCODING_BROTLI,
+    );
+    self::assertSame($html, $decoded);
+    FpcHtmlDiskStore::purgeUrls([$url]);
+    self::assertFileDoesNotExist($brPath);
     self::assertNull(FpcHtmlDiskStore::read($url, ''));
+}
+
+
+private function assert_FpcHtmlDiskStore_testPublishFailClosedWithoutBrotliBytes(): void
+{
+    // Force the plaintext branch by stubbing unavailable compress path:
+    // publish with empty brotli and empty html must fail; with html but no usable
+    // brotli bytes after encode refusal is covered when extension missing.
+    $url = 'https://' . $this->fixtureHost_FpcHtmlDiskStore . '/en/fail-closed';
+    self::assertFalse(FpcHtmlDiskStore::publish($url, '', ''), 'empty payload must fail');
+    if (!ContentEncodingNegotiator::brotliAvailable()) {
+        self::assertFalse(
+            FpcHtmlDiskStore::publish($url, "<html>no-br</html>\n", ''),
+            'without brotli extension plaintext-only publish must fail-closed'
+        );
+        self::assertNull(FpcHtmlDiskStore::read($url, ''));
+        return;
+    }
+    // With brotli present, plaintext-only authority is still not written — .br is.
+    self::assertTrue(FpcHtmlDiskStore::publish($url, "<html>with-br</html>\n", ''));
+    $htmlPath = FpcHtmlDiskStore::htmlPath($url);
+    self::assertIsString($htmlPath);
+    self::assertFileExists($htmlPath . '.br');
+    self::assertFileDoesNotExist($htmlPath);
+    FpcHtmlDiskStore::purgeUrls([$url]);
 }
 
 private function assert_FpcHtmlDiskStore_testBrotliPublishIsBrOnlyAndReadableWithoutAcceptBr(): void
@@ -1402,7 +1437,7 @@ private function setUp_FpcStaticDiskStore(): void
 {
     ProjectRoot::defineBp(__DIR__);
     $this->fixtureHost_FpcStaticDiskStore = 'fpc-static-disk-' . \bin2hex(\random_bytes(4)) . '.example.test';
-    $dir = BP . 'var' . \DIRECTORY_SEPARATOR . 'tmp' . \DIRECTORY_SEPARATOR . 'fpc-static-src';
+    $dir = VAR_DIR . 'tmp' . \DIRECTORY_SEPARATOR . 'fpc-static-src';
     if (!\is_dir($dir)) {
         @\mkdir($dir, 0775, true);
     }
@@ -1555,7 +1590,7 @@ private function assert_FpcVarNotUnderAppCode_testPayloadPathIndexUsesRepoVarNot
     ProjectRoot::defineBp(__DIR__);
     self::assertFalse(ProjectRoot::isAccidentalAppCodeVar((string) BP), 'BP itself must not be app/code');
     $url = 'https://contract-fpc-var.test/probe-' . \uniqid('', true);
-    $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads' . \DIRECTORY_SEPARATOR . 'cv';
+    $payloadDir = VAR_DIR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads' . \DIRECTORY_SEPARATOR . 'cv';
     if (!\is_dir($payloadDir)) {
         \mkdir($payloadDir, 0775, true);
     }
@@ -1638,7 +1673,7 @@ private function assert_FpcOfflineBakeGates_testImportRejectsForeignWebsiteAndPa
 
 private function assert_FpcOfflineBakeGates_testExportImportRoundTripHostScopedAndLangHints(): void
 {
-    $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads' . \DIRECTORY_SEPARATOR . 'ob';
+    $payloadDir = VAR_DIR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads' . \DIRECTORY_SEPARATOR . 'ob';
     if (!\is_dir($payloadDir)) {
         \mkdir($payloadDir, 0775, true);
     }
@@ -1777,7 +1812,7 @@ private string $dir_StaticAssetBrotliSidecar = '';
 private function setUp_StaticAssetBrotliSidecar(): void
 {
     ProjectRoot::defineBp(__DIR__);
-    $this->dir_StaticAssetBrotliSidecar = BP . 'var' . \DIRECTORY_SEPARATOR . 'tmp' . \DIRECTORY_SEPARATOR . 'static-br-sidecar-' . \bin2hex(\random_bytes(4));
+    $this->dir_StaticAssetBrotliSidecar = VAR_DIR . 'tmp' . \DIRECTORY_SEPARATOR . 'static-br-sidecar-' . \bin2hex(\random_bytes(4));
     @\mkdir($this->dir_StaticAssetBrotliSidecar, 0775, true);
 }
 
@@ -2022,6 +2057,18 @@ private function assert_StorefrontGenerationOutbound_testSharedFpcSuppressBlocks
     $response->setBody('ok');
     // Even with a forced apply, suppress must win.
     $response->setCookie(StorefrontGenerationOutbound::COOKIE_NAME, 'forced-id', \time() + 60, '/', '', false, false, 'Lax');
+    self::assertSame([], $response->getCookies());
+}
+
+private function assert_StorefrontGenerationOutbound_testFpcHitHeaderForbidsIdentityCookieWithoutArm(): void
+{
+    RequestContext::cleanup();
+    WelineEnv::set('response.from_cache', false, 'unit-test');
+    $response = new Response(true);
+    $response->setHeader('X-Weline-FPC', 'HIT');
+    $response->setBody('<html></html>');
+    self::assertTrue(StorefrontGenerationOutbound::forbidsIdentityCookie($response));
+    StorefrontGenerationOutbound::applyToResponse($response);
     self::assertSame([], $response->getCookies());
 }
 

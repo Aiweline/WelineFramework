@@ -57,6 +57,36 @@ body:has(.weline-social-quick-bar:not([hidden]))
   );
 }
 
+/*
+ * Cookie consent bar occupies the bottom band — lift both float slots so edge
+ * chrome (×) never nests into the dark consent strip.
+ * Marker: storefront-float-consent-clearance-v1
+ */
+body:has(#weline-consent-banner:not([hidden]))
+  .w-storefront-float-layer__slot--start {
+  bottom: calc(
+    max(0.95rem, env(safe-area-inset-bottom, 0px))
+    + var(--weline-consent-banner-clearance, 4.75rem)
+  );
+}
+
+body:has(#weline-consent-banner:not([hidden]))
+  .w-storefront-float-layer__slot--end:not(:has(.customer-service-widget.is-open)) {
+  bottom: calc(
+    max(var(--weline-space-5, 1.25rem), env(safe-area-inset-bottom, 0px))
+    + var(--weline-consent-banner-clearance, 4.75rem)
+  );
+}
+
+body:has(#weline-consent-banner:not([hidden])):has(.weline-social-quick-bar:not([hidden]))
+  .w-storefront-float-layer__slot--end:not(:has(.customer-service-widget.is-open)) {
+  bottom: calc(
+    max(var(--weline-space-5, 1.25rem), env(safe-area-inset-bottom, 0px))
+    + 10.5rem
+    + var(--weline-consent-banner-clearance, 4.75rem)
+  );
+}
+
 /* Edge dock chrome */
 .w-storefront-float-edge__chrome {
   position: absolute;
@@ -254,6 +284,31 @@ body:has(.weline-social-quick-bar:not([hidden]))
     bottom: calc(
       max(var(--weline-space-3, 0.75rem), env(safe-area-inset-bottom, 0px))
       + 10.5rem
+    );
+  }
+
+  body:has(#weline-consent-banner:not([hidden]))
+    .w-storefront-float-layer__slot--start {
+    bottom: calc(
+      max(0.7rem, env(safe-area-inset-bottom, 0px))
+      + var(--weline-consent-banner-clearance, 5.25rem)
+    );
+  }
+
+  body:has(#weline-consent-banner:not([hidden]))
+    .w-storefront-float-layer__slot--end:not(:has(.customer-service-widget.is-open)) {
+    bottom: calc(
+      max(var(--weline-space-3, 0.75rem), env(safe-area-inset-bottom, 0px))
+      + var(--weline-consent-banner-clearance, 5.25rem)
+    );
+  }
+
+  body:has(#weline-consent-banner:not([hidden])):has(.weline-social-quick-bar:not([hidden]))
+    .w-storefront-float-layer__slot--end:not(:has(.customer-service-widget.is-open)) {
+    bottom: calc(
+      max(var(--weline-space-3, 0.75rem), env(safe-area-inset-bottom, 0px))
+      + 10.5rem
+      + var(--weline-consent-banner-clearance, 5.25rem)
     );
   }
 

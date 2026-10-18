@@ -1209,7 +1209,7 @@ class Processer
             throw new \RuntimeException('POSIX detached spawn config exceeds the secure size limit.');
         }
 
-        $configDir = Env::VAR_DIR . 'process' . DS . 'spawn';
+        $configDir = Env::varDir() . 'process' . DS . 'spawn';
         if (!\is_dir($configDir) && !@\mkdir($configDir, 0700, true) && !\is_dir($configDir)) {
             throw new \RuntimeException('POSIX detached spawn config directory is unavailable.');
         }
@@ -3231,7 +3231,7 @@ class Processer
     {
         $pname = self::buildManagedIdentity($pname);
         $task_name = self::getTaskName($pname);
-        $path      = Env::VAR_DIR . 'process' . DS . $task_name . '.log';
+        $path      = Env::varDir() . 'process' . DS . $task_name . '.log';
         if (!is_file($path)) {
             if (!is_dir(dirname($path))) {
                 mkdir(dirname($path), 0777, true);
@@ -3413,7 +3413,7 @@ class Processer
     {
         $pname = self::buildManagedIdentity($pname);
         $task_name = self::getTaskName($pname);
-        $dir       = Env::VAR_DIR . 'process' . DS . 'pid' . DS;
+        $dir       = Env::varDir() . 'process' . DS . 'pid' . DS;
         if ($pid > 0) {
             $path = $dir . $task_name . '-' . $pid . '-pid.json';
             if (!\is_dir($dir)) {
@@ -3455,7 +3455,7 @@ class Processer
             return '';
         }
         // 不再创建文件，仅返回路径（用于清理旧文件）
-        return Env::VAR_DIR . 'process' . DS . 'pid' . DS . $pid . '.pid';
+        return Env::varDir() . 'process' . DS . 'pid' . DS . $pid . '.pid';
     }
 
     /**
@@ -3725,7 +3725,7 @@ class Processer
      */
     public static function cleanupStalePidFiles(): int
     {
-        $dir = Env::VAR_DIR . 'process' . DS . 'pid' . DS;
+        $dir = Env::varDir() . 'process' . DS . 'pid' . DS;
         if (!\is_dir($dir)) {
             return 0;
         }
@@ -3824,7 +3824,7 @@ class Processer
      */
     public static function cleanupDeadPidJsonOrphansFast(): int
     {
-        $dir = Env::VAR_DIR . 'process' . DS . 'pid' . DS;
+        $dir = Env::varDir() . 'process' . DS . 'pid' . DS;
         if (!\is_dir($dir)) {
             return 0;
         }
@@ -11569,7 +11569,7 @@ POWERSHELL;
      */
     public static function getNameIndexFile(): string
     {
-        return Env::VAR_DIR . 'process' . DS . 'pid' . DS . 'name_index.json';
+        return Env::varDir() . 'process' . DS . 'pid' . DS . 'name_index.json';
     }
     
     /**
@@ -11578,7 +11578,7 @@ POWERSHELL;
      */
     public static function getPidIndexFile(): string
     {
-        return Env::VAR_DIR . 'process' . DS . 'pid' . DS . 'pid_index.json';
+        return Env::varDir() . 'process' . DS . 'pid' . DS . 'pid_index.json';
     }
     
     /**
@@ -11587,7 +11587,7 @@ POWERSHELL;
      */
     public static function getPortIndexFile(): string
     {
-        return Env::VAR_DIR . 'process' . DS . 'pid' . DS . 'port_index.json';
+        return Env::varDir() . 'process' . DS . 'pid' . DS . 'port_index.json';
     }
     
     /**
@@ -11595,7 +11595,7 @@ POWERSHELL;
      */
     public static function getLifecycleLogFile(): string
     {
-        return Env::VAR_DIR . 'process' . DS . 'lifecycle.log';
+        return Env::varDir() . 'process' . DS . 'lifecycle.log';
     }
     
     /**
@@ -11696,7 +11696,7 @@ POWERSHELL;
      */
     private static function withManagedIndexLock(callable $callback, bool $failClosed = false): mixed
     {
-        $dir = Env::VAR_DIR . 'process' . DS . 'pid' . DS;
+        $dir = Env::varDir() . 'process' . DS . 'pid' . DS;
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0777, true);
         }
@@ -13026,7 +13026,7 @@ POWERSHELL;
      */
     private static function cleanupLegacyPidFiles(): int
     {
-        $dir = Env::VAR_DIR . 'process' . DS . 'pid' . DS;
+        $dir = Env::varDir() . 'process' . DS . 'pid' . DS;
         if (!\is_dir($dir)) {
             return 0;
         }

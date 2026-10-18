@@ -93,9 +93,16 @@ final class ManagedNginxInstaller
         if (!$force && $this->paths->isInstalled()) {
             $manifest = $this->readManifest();
             if ($this->manifestMatches($manifest)) {
+                // Re-grant on existing installs (caps can be lost after copy/restore).
+                // Start path fail-closes if still missing; do not break status probes here.
+                $grant = $this->ensureNetBindCapability();
+
                 return [
                     'ok' => true,
-                    'message' => 'managed nginx already installed',
+                    'message' => 'managed nginx already installed'
+                        . (($grant['granted'] ?? false)
+                            ? '; cap_net_bind_service verified'
+                            : '; cap_net_bind_service pending: ' . (string)($grant['message'] ?? '')),
                     'manifest' => $manifest ?? [],
                     'platform' => \PHP_OS_FAMILY,
                 ];
@@ -109,10 +116,12 @@ final class ManagedNginxInstaller
                     );
                 }
                 $this->reconcileInterruptedInstallCandidates();
+                $grant = $this->ensureNetBindCapability();
 
                 return [
                     'ok' => true,
-                    'message' => 'managed nginx already installed; legacy manifest upgraded in place',
+                    'message' => 'managed nginx already installed; legacy manifest upgraded in place'
+                        . (($grant['granted'] ?? false) ? '; cap_net_bind_service verified' : ''),
                     'manifest' => $migrated ?? [],
                     'platform' => \PHP_OS_FAMILY,
                 ];
@@ -1072,7 +1081,8 @@ final class ManagedNginxInstaller
                     'platform' => \PHP_OS_FAMILY,
                 ];
             }
-            $this->tryGrantNetBindCapability($candidateBinary);
+            // Best-effort early grant on the candidate inode (rename keeps caps).
+            $this->ensureNetBindCapability($candidateBinary);
             $binarySha256 = $this->sha256RegularFile(
                 $candidateBinary,
                 self::MAX_TREE_BYTES,
@@ -1084,6 +1094,8 @@ final class ManagedNginxInstaller
             if ($binaryArchitecture === '') {
                 return ['ok' => false, 'message' => 'unable to identify installed nginx binary architecture', 'platform' => \PHP_OS_FAMILY];
             }
+            $finalBinary = $prefix . DIRECTORY_SEPARATOR . 'sbin'
+                . DIRECTORY_SEPARATOR . 'nginx';
             $manifest = [
                 'version' => self::VERSION,
                 'source_url' => self::SOURCE_URL,
@@ -1093,8 +1105,7 @@ final class ManagedNginxInstaller
                 'arch' => $binaryArchitecture,
                 'php_process_arch' => $this->normalizeArchitecture((string)\php_uname('m')),
                 'prefix' => $prefix,
-                'binary' => $prefix . DIRECTORY_SEPARATOR . 'sbin'
-                    . DIRECTORY_SEPARATOR . 'nginx',
+                'binary' => $finalBinary,
                 'binary_sha256' => $binarySha256,
                 'build_flags' => [
                     'http_v2_module' => true,
@@ -1113,9 +1124,28 @@ final class ManagedNginxInstaller
             );
             $this->assertSafeTree($candidate, 'managed nginx install candidate');
             $this->publishInstallCandidate($candidate, $prefix, true);
+            // Fail-closed on the published binary: sudo -n setcap + getcap verify.
+            $grant = $this->ensureNetBindCapability($finalBinary);
+            $manifest['cap_net_bind_service'] = (bool)($grant['granted'] ?? false);
+            $this->writeManifestFile($this->paths->manifestFile(), $manifest);
+            if (!($grant['ok'] ?? false) && !$this->allowMissingNetBindCapability()) {
+                return [
+                    'ok' => false,
+                    'message' => 'managed nginx binary published but net-bind capability grant failed: '
+                        . (string)($grant['message'] ?? 'unknown')
+                        . '. Grant passwordless `sudo -n /usr/sbin/setcap cap_net_bind_service=+ep`'
+                        . ' for the run user, or set WLS_NGINX_ALLOW_MISSING_NET_BIND_CAP=1'
+                        . ' only when high ports are intentional.',
+                    'manifest' => $manifest,
+                    'platform' => \PHP_OS_FAMILY,
+                ];
+            }
             return [
                 'ok' => true,
-                'message' => 'managed nginx installed from source (' . \PHP_OS_FAMILY . '/' . \php_uname('m') . ')',
+                'message' => 'managed nginx installed from source (' . \PHP_OS_FAMILY . '/' . \php_uname('m') . ')'
+                    . (($grant['granted'] ?? false)
+                        ? '; cap_net_bind_service granted'
+                        : '; cap_net_bind_service skipped (' . (string)($grant['message'] ?? '') . ')'),
                 'manifest' => $manifest,
                 'platform' => \PHP_OS_FAMILY,
             ];
@@ -2161,27 +2191,136 @@ final class ManagedNginxInstaller
 
     /**
      * Non-root WLS cannot bind 80/443 unless the nginx inode has
-     * cap_net_bind_service (same pattern as the managed PHP binary).
-     * Best-effort: passwordless sudo -n, never fail the compile.
+     * cap_net_bind_service. Grant via bounded passwordless `sudo -n setcap`,
+     * then verify with `getcap`. Never interactive; never `sudo` the whole service.
+     *
+     * @return array{ok:bool,granted:bool,message:string}
      */
-    private function tryGrantNetBindCapability(string $binary): void
+    public function ensureNetBindCapability(?string $binary = null): array
     {
-        if (\PHP_OS_FAMILY !== 'Linux' || $binary === '') {
-            return;
+        $target = $binary ?? $this->paths->binary();
+        if (\PHP_OS_FAMILY !== 'Linux') {
+            return [
+                'ok' => true,
+                'granted' => false,
+                'message' => 'cap_net_bind_service is Linux-only; skipped on ' . \PHP_OS_FAMILY,
+            ];
         }
-        $setcap = '/usr/sbin/setcap';
-        if (!\is_file($setcap) || !\is_executable($setcap)) {
-            $setcap = '/sbin/setcap';
+        if ($target === '' || !\is_file($target) || \is_link($target)) {
+            return [
+                'ok' => false,
+                'granted' => false,
+                'message' => 'managed nginx binary missing or unsafe for setcap: ' . $target,
+            ];
         }
-        if (!\is_file($setcap) || !\is_executable($setcap)) {
-            return;
+        if ($this->binaryHasNetBindCapability($target)) {
+            return [
+                'ok' => true,
+                'granted' => true,
+                'message' => 'cap_net_bind_service already present on ' . $target,
+            ];
         }
-        $this->runTool(
-            ['/usr/bin/sudo', '-n', $setcap, 'cap_net_bind_service=+ep', $binary],
-            8.0,
-            null,
-            false,
-        );
+        if (\function_exists('posix_geteuid') && (int)\posix_geteuid() === 0) {
+            $setcap = $this->resolveSetcapBinary();
+            if ($setcap === null) {
+                return [
+                    'ok' => false,
+                    'granted' => false,
+                    'message' => 'setcap binary not found while running as root',
+                ];
+            }
+            $result = $this->runTool(
+                [$setcap, 'cap_net_bind_service=+ep', $target],
+                8.0,
+                null,
+                false,
+            );
+        } else {
+            $setcap = $this->resolveSetcapBinary();
+            $sudo = '/usr/bin/sudo';
+            if ($setcap === null) {
+                return [
+                    'ok' => false,
+                    'granted' => false,
+                    'message' => 'setcap binary not found; install libcap2-bin (Debian/Ubuntu)',
+                ];
+            }
+            if (!\is_file($sudo) || !\is_executable($sudo)) {
+                return [
+                    'ok' => false,
+                    'granted' => false,
+                    'message' => 'sudo binary not found; cannot grant cap_net_bind_service non-interactively',
+                ];
+            }
+            $result = $this->runTool(
+                [$sudo, '-n', $setcap, 'cap_net_bind_service=+ep', $target],
+                8.0,
+                null,
+                false,
+            );
+        }
+        if ((int)($result['code'] ?? 1) !== 0) {
+            return [
+                'ok' => false,
+                'granted' => false,
+                'message' => 'sudo -n setcap failed (exit '
+                    . (string)($result['code'] ?? 1) . '): '
+                    . \trim((string)($result['output'] ?? ''))
+                    . '. Configure NOPASSWD setcap for the run user.',
+            ];
+        }
+        if (!$this->binaryHasNetBindCapability($target)) {
+            return [
+                'ok' => false,
+                'granted' => false,
+                'message' => 'setcap reported success but getcap does not show '
+                    . 'cap_net_bind_service on ' . $target
+                    . ' (filesystem may strip capabilities)',
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'granted' => true,
+            'message' => 'cap_net_bind_service granted on ' . $target,
+        ];
+    }
+
+    public function allowMissingNetBindCapability(): bool
+    {
+        $raw = \getenv('WLS_NGINX_ALLOW_MISSING_NET_BIND_CAP');
+        if (!\is_string($raw) || $raw === '') {
+            return false;
+        }
+
+        return \in_array(\strtolower(\trim($raw)), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    private function resolveSetcapBinary(): ?string
+    {
+        foreach (['/usr/sbin/setcap', '/sbin/setcap'] as $candidate) {
+            if (\is_file($candidate) && \is_executable($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private function binaryHasNetBindCapability(string $binary): bool
+    {
+        $getcap = '/usr/sbin/getcap';
+        if (!\is_file($getcap) || !\is_executable($getcap)) {
+            $getcap = '/sbin/getcap';
+        }
+        if (!\is_file($getcap) || !\is_executable($getcap)) {
+            return false;
+        }
+        // Plain getcap prints "path = cap_net_bind_service=ep"; empty when absent.
+        $result = $this->runTool([$getcap, $binary], 5.0, null, false);
+        $output = \strtolower((string)($result['output'] ?? ''));
+
+        return \str_contains($output, 'cap_net_bind_service');
     }
 
     private function detectCc(): ?string

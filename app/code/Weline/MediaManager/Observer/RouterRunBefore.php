@@ -51,7 +51,7 @@ class RouterRunBefore implements ObserverInterface
                 $core->StaticFile($publishedThemePath, true);
             }
 
-            $file_path = $this->resolveExistingFileInRoot(BP . '/pub/static', \substr($staticPath, \strlen('/static/')));
+            $file_path = $this->resolveExistingFileInRoot(PUB . 'static', \substr($staticPath, \strlen('/static/')));
             if ($file_path !== null && is_file($file_path)) {
                 /**@var Core $core */
                 $core = ObjectManager::getInstance(Core::class);
@@ -185,7 +185,7 @@ class RouterRunBefore implements ObserverInterface
         if ($relative === '' || \str_contains($relative, '..')) {
             return null;
         }
-        $filePath = $this->resolveExistingFileInRoot(BP . '/pub/media', $relative);
+        $filePath = $this->resolveExistingFileInRoot(rtrim(MEDIA_DIR, '/\\'), $relative);
         if ($filePath !== null) {
             return $relative;
         }
@@ -197,7 +197,7 @@ class RouterRunBefore implements ObserverInterface
         }
         $dir = (string)($info['dirname'] ?? '.');
         $webpRel = ($dir === '.' || $dir === '') ? ($stem . '.webp') : ($dir . '/' . $stem . '.webp');
-        $webpPath = $this->resolveExistingFileInRoot(BP . '/pub/media', $webpRel);
+        $webpPath = $this->resolveExistingFileInRoot(rtrim(MEDIA_DIR, '/\\'), $webpRel);
 
         return $webpPath !== null ? $webpRel : null;
     }

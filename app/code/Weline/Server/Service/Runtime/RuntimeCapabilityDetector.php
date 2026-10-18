@@ -29,6 +29,7 @@ final class RuntimeCapabilityDetector
         $extensions = [
             'event' => \extension_loaded('event'),
             'ev' => \extension_loaded('ev'),
+            'ffi' => \extension_loaded('ffi') && \class_exists(\FFI::class, false),
             'sockets' => \extension_loaded('sockets'),
             'openssl' => \extension_loaded('openssl'),
             'pcntl' => \extension_loaded('pcntl'),

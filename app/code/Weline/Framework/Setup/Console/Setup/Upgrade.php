@@ -533,7 +533,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function clearCacheContentsPreservingRuntimeOwner(): void
     {
-        $varDir = BP . 'var';
+        $varDir = rtrim(VAR_DIR, '/\\');
         $cacheDir = $varDir . DS . 'cache';
 
         if (!is_dir($cacheDir) && !mkdir($cacheDir, 0775, true) && !is_dir($cacheDir)) {
@@ -2727,7 +2727,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $this->printing->note(__('清理模块 %{1} 的缓存...', [$moduleName]));
                 // 清理模块特定的缓存目录
                 $moduleCacheDirs = [
-                    BP . 'var' . DS . 'cache' . DS . strtolower(str_replace('_', DS, $moduleName)),
+                    VAR_DIR . 'cache' . DS . strtolower(str_replace('_', DS, $moduleName)),
                     BP . 'generated' . DS . 'code' . DS . str_replace('_', '\\', $moduleName),
                     BP . 'generated' . DS . 'metadata' . DS . str_replace('_', '\\', $moduleName),
                 ];
@@ -3948,7 +3948,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
     private function getLockFile(): string
     {
-        $lockDir = BP . 'var' . DS . 'process';
+        $lockDir = VAR_DIR . 'process';
         if (!is_dir($lockDir)) {
             mkdir($lockDir, 0755, true);
         }
@@ -4097,7 +4097,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function getRecollectFlagFile(): string
     {
-        $processDir = BP . 'var' . DS . 'process';
+        $processDir = VAR_DIR . 'process';
         if (!is_dir($processDir)) {
             mkdir($processDir, 0755, true);
         }

@@ -16,7 +16,7 @@ final class GatewayBackendIngressTokenStore
     public static function runtimeDirectory(string $instanceName): string
     {
         $instanceName = self::normalizeInstanceName($instanceName);
-        return Env::VAR_DIR . 'server' . DS . 'gateway-backend' . DS . $instanceName;
+        return Env::varDir() . 'server' . DS . 'gateway-backend' . DS . $instanceName;
     }
 
     public static function tokenFile(string $instanceName): string
@@ -396,7 +396,7 @@ final class GatewayBackendIngressTokenStore
         $runtimeRoot = \str_replace(
             '\\',
             '/',
-            \rtrim(Env::VAR_DIR . 'server' . DS . 'gateway-backend', '/\\'),
+            \rtrim(Env::varDir() . 'server' . DS . 'gateway-backend', '/\\'),
         );
         $runtimeRoot = PHP_OS_FAMILY === 'Windows'
             ? \strtolower($runtimeRoot)

@@ -532,7 +532,7 @@ class Installed extends BackendController
 
     private function loadLatestUninstallRecord(): array
     {
-        $dir = BP . 'var' . DS . 'appstore' . DS . 'install-records';
+        $dir = VAR_DIR . 'appstore' . DS . 'install-records';
         if (!is_dir($dir)) {
             return [];
         }

@@ -46,7 +46,7 @@ class TemplateCacheManager
 
     private function __construct()
     {
-        $this->cacheRoot = BP . 'var' . DS . 'cache' . DS . 'template';
+        $this->cacheRoot = VAR_DIR . 'cache' . DS . 'template';
         $this->manifestFile = $this->cacheRoot . DS . '.manifest';
         $this->ensureCacheDir();
     }

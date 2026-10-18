@@ -26,7 +26,7 @@ final class ModuleCodeSwitchServiceSecurityTest extends TestCore
         $this->service->cleanup([[
             'module_name' => 'Fixture_UnsafePath',
             'target_path' => BP,
-            'old_path' => BP . 'var',
+            'old_path' => rtrim(VAR_DIR, '/\\'),
         ]]);
     }
 

@@ -108,7 +108,7 @@ class DomainPoolCertificateRequest
             $this->echoLine($line);
             w_log_info('[DomainPoolCertificateRequest] ' . $line, [], 'domain_pool_cert');
 
-            $webroot = \defined('PUB') ? PUB : (BP . 'pub');
+            $webroot = PUB;
             $email = Env::getInstance()->getConfig('ssl.contact_email') ?? '';
             $processLogs[] = __('域名池任务：仅按每条记录的域名申请单域证书，不做泛域（*.*）申请');
             $this->echoLine($processLogs[\count($processLogs) - 1]);

@@ -23,11 +23,13 @@ use Weline\Framework\Session\Auth\Device\AuthenticatedDeviceRegistryInterface;
 #[Index(name: 'idx_user_key', columns: ['user_id', 'key'], type: 'UNIQUE', comment: '管理员配置唯一索引')]
 #[Index(name: 'idx_module', columns: ['module'], comment: '模组索引')]
 #[Index(name: 'idx_name', columns: ['name'], comment: '配置名')]
+#[Index(name: 'idx_id', columns: ['id'], comment: 'Legacy surrogate id（MySQL AUTO_INCREMENT 须有索引）')]
 class BackendUserConfig extends Model
 {
     /** Natural key matches physical UNIQUE `idx_user_key`; legacy `id` is non-PK surrogate. */
     public const schema_primary_keys = ['user_id', 'key'];
-    #[Col('int', 0, nullable: false, comment: 'Legacy surrogate id (not PRIMARY)')]
+    /** MySQL STRICT：非主键 id 插入省略时须 AUTO_INCREMENT + 索引（见 idx_id）。 */
+    #[Col('int', 0, nullable: false, autoIncrement: true, comment: 'Legacy surrogate id (not PRIMARY)')]
     public const schema_fields_ID = 'id';
     #[Col('int', 0, nullable: false, default: 0, comment: '管理员ID')]
     public const schema_fields_user_id = 'user_id';

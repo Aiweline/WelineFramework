@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Portable Weline CLI — run from the project tree (or via symlink to this file).
+# Replaces: php bin/w …
+# Example: ./bin/weline s:up
+# Global install writes /usr/local/bin/weline with an embedded project ROOT (see install.bash).
+set -euo pipefail
+
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "$SOURCE" ]]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  LINK="$(readlink "$SOURCE")"
+  if [[ "$LINK" == /* ]]; then
+    SOURCE="$LINK"
+  else
+    SOURCE="$DIR/$LINK"
+  fi
+done
+ROOT="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
+PHP="${WELINE_PHP:-$ROOT/extend/server/php/bin/php}"
+BIN_W="$ROOT/bin/w"
+DEPLOY_USER="${WELINE_USER:-weline}"
+
+if [[ ! -x "$PHP" ]]; then
+  echo "weline: project php missing: $PHP" >&2
+  exit 127
+fi
+if [[ ! -f "$BIN_W" ]]; then
+  echo "weline: bin/w missing: $BIN_W" >&2
+  exit 127
+fi
+
+cd "$ROOT" || exit 1
+
+current="$(id -un 2>/dev/null || true)"
+if [[ "$current" == "$DEPLOY_USER" ]]; then
+  exec "$PHP" "$BIN_W" "$@"
+fi
+
+if command -v runuser >/dev/null 2>&1; then
+  exec runuser -u "$DEPLOY_USER" -- "$PHP" "$BIN_W" "$@"
+fi
+if command -v sudo >/dev/null 2>&1; then
+  exec sudo -u "$DEPLOY_USER" -- "$PHP" "$BIN_W" "$@"
+fi
+
+echo "weline: cannot switch to user $DEPLOY_USER (need runuser or sudo)" >&2
+exit 1

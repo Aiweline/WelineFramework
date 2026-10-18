@@ -16,11 +16,11 @@ class Api extends \Weline\DeveloperWorkspace\Controller\Docs
         $sdk = \strtolower(\trim((string)$this->request->getParam('sdk', '')));
         $packages = [
             'php' => [
-                'directory' => BP . 'pub' . DS . 'source' . DS . 'binquery-php',
+                'directory' => PUB . 'source' . DS . 'binquery-php',
                 'filename' => 'binquery-php-sdk.zip',
             ],
             'js' => [
-                'directory' => BP . 'pub' . DS . 'source' . DS . 'binquery-js',
+                'directory' => PUB . 'source' . DS . 'binquery-js',
                 'filename' => 'binquery-js-sdk.zip',
             ],
         ];

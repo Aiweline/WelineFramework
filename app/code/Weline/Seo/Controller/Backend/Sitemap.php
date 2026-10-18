@@ -26,7 +26,15 @@ use Weline\Seo\Service\SitemapUrlSyncService;
 class Sitemap extends BackendController
 {
     const MAX_URLS_PER_SITEMAP = 50000;
-    const PUB_DIR = BP . '/pub';
+    // Relocatable pub root; evaluated at runtime (PUB is a bootstrap define).
+    private static function pubDir(): string
+    {
+        if (\defined('PUB')) {
+            return \rtrim((string)\constant('PUB'), '/\\');
+        }
+        $bp = \defined('BP') ? \rtrim((string)\constant('BP'), '/\\') : '';
+        return $bp . DIRECTORY_SEPARATOR . 'pub';
+    }
     
     /**
      * Sitemap管理首页
@@ -283,7 +291,7 @@ class Sitemap extends BackendController
     private function getModuleSitemaps(array $websites): array
     {
         $result = [];
-        $sitemapsDir = self::PUB_DIR . '/sitemaps';
+        $sitemapsDir = self::pubDir() . '/sitemaps';
         
         if (!is_dir($sitemapsDir)) {
             return $result;

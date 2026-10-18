@@ -14,7 +14,7 @@ final class FpcPayloadPathIndexTest extends TestCase
     {
         ProjectRoot::defineBp(__DIR__);
         $url = 'https://shop-a.test/category/demo-path-index';
-        $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
+        $payloadDir = VAR_DIR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
             . \DIRECTORY_SEPARATOR . 'aa';
         if (!\is_dir($payloadDir)) {
             @\mkdir($payloadDir, 0775, true);
@@ -66,7 +66,7 @@ final class FpcPayloadPathIndexTest extends TestCase
     public function testAnyQuerySharesOnePathIndexBody(): void
     {
         ProjectRoot::defineBp(__DIR__);
-        $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
+        $payloadDir = VAR_DIR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
             . \DIRECTORY_SEPARATOR . 'gq';
         if (!\is_dir($payloadDir)) {
             @\mkdir($payloadDir, 0775, true);
@@ -91,7 +91,7 @@ final class FpcPayloadPathIndexTest extends TestCase
     public function testLookupIsHostScopedAndDoesNotCrossSites(): void
     {
         ProjectRoot::defineBp(__DIR__);
-        $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
+        $payloadDir = VAR_DIR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
             . \DIRECTORY_SEPARATOR . 'ab';
         if (!\is_dir($payloadDir)) {
             @\mkdir($payloadDir, 0775, true);
@@ -126,7 +126,7 @@ final class FpcPayloadPathIndexTest extends TestCase
     {
         ProjectRoot::defineBp(__DIR__);
         $url = 'https://shop.test/policy/privacy-lookup-' . \uniqid('', true);
-        $payloadDir = BP . 'var' . \DIRECTORY_SEPARATOR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
+        $payloadDir = VAR_DIR . 'cache' . \DIRECTORY_SEPARATOR . 'router-fpc-payloads'
             . \DIRECTORY_SEPARATOR . 'ab';
         if (!\is_dir($payloadDir)) {
             @\mkdir($payloadDir, 0775, true);

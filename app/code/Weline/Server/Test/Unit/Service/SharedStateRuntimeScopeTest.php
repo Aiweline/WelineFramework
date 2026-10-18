@@ -16,11 +16,11 @@ final class SharedStateRuntimeScopeTest extends TestCase
         }
 
         self::assertSame(
-            BP . 'var/session/.wls-state/tokens/',
+            VAR_DIR . 'session/.wls-state/tokens/',
             \str_replace('\\', '/', SharedStateRuntimeScope::tokenDirectory()),
         );
         self::assertSame(
-            BP . 'var/session/.wls-state/tokens/session_server.test.token',
+            VAR_DIR . 'session/.wls-state/tokens/session_server.test.token',
             \str_replace(
                 '\\',
                 '/',

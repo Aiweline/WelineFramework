@@ -1779,7 +1779,7 @@ final class SharedStateServiceManagerTest extends TestCase
             \define('DEV_PATH', BP . 'dev' . DS);
         }
         if (!\defined('PUB')) {
-            \define('PUB', BP . 'pub' . DS);
+            \define('PUB', PUB);
         }
         $registry = new class extends SharedStateServiceRegistry {
             public bool $removed = false;

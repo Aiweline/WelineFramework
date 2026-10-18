@@ -1282,7 +1282,7 @@ class MasterProcess
         $tracePreviousNs = $nowNs;
         $payload = ['ts' => \date('Y-m-d H:i:s'), 'pid' => (int)\getmypid(), 'instance' => $this->instanceName, 'phase' => $phase, 'context' => $context];
 
-        $dir = BP . 'var' . \DIRECTORY_SEPARATOR . 'log' . \DIRECTORY_SEPARATOR;
+        $dir = VAR_DIR . 'log' . \DIRECTORY_SEPARATOR;
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0755, true);
         }
@@ -1487,7 +1487,7 @@ class MasterProcess
      */
     protected function getInstanceFile(): string
     {
-        return Env::VAR_DIR . 'server' . DS . 'instances' . DS . $this->instanceName . '.json';
+        return Env::varDir() . 'server' . DS . 'instances' . DS . $this->instanceName . '.json';
     }
 
     /**
@@ -1664,7 +1664,7 @@ class MasterProcess
      */
     public static function getMasterEndpoint(string $instanceName = 'default'): ?array
     {
-        $file = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $instanceName . '.json';
+        $file = Env::varDir() . 'server' . DS . 'instances' . DS . $instanceName . '.json';
         try {
             $content = GatewayProjectStateFilesystem::readOptional(
                 $file,
@@ -2042,7 +2042,7 @@ class MasterProcess
      */
     public static function getServiceExceptionFile(string $instanceName): string
     {
-        $dir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
+        $dir = Env::varDir() . 'server' . DS . 'instances' . DS;
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0755, true);
         }

@@ -90,7 +90,7 @@ class Debug
 
     public static function log(mixed $content = '', bool $append = true): bool
     {
-        $log = Env::VAR_DIR . '/log/' . Env::log_path_DEBUG . '.log';
+        $log = Env::varDir() . '/log/' . Env::log_path_DEBUG . '.log';
         if (!is_dir(dirname($log))) {
             mkdir(dirname($log), 0777, true);
         }

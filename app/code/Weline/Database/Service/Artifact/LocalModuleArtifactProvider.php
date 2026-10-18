@@ -219,7 +219,7 @@ final class LocalModuleArtifactProvider implements ModuleArtifactProviderInterfa
 
     private function artifactRoot(): string
     {
-        return BP . 'var' . DS . 'database' . DS . 'module-artifacts';
+        return VAR_DIR . 'database' . DS . 'module-artifacts';
     }
 
     private function safeSegment(string $value): string

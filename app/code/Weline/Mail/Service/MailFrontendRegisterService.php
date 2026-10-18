@@ -124,7 +124,10 @@ final class MailFrontendRegisterService
         foreach ($this->accountService->getAccountsForCustomer($customerId) as $account) {
             $accountEmail = strtolower((string)$account->getData(MailAccount::schema_fields_EMAIL));
             if (str_starts_with($accountEmail, $email . '@')) {
+                /** @var MailOutboundRelaySecretService $secrets */
+                $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
                 $account->setData(MailAccount::schema_fields_PASSWORD_HASH, password_hash($password, PASSWORD_DEFAULT))
+                    ->setData(MailAccount::schema_fields_PASSWORD_SEALED, $secrets->seal($password))
                     ->setData(MailAccount::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
                     ->save();
                 break;

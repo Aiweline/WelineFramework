@@ -59,7 +59,7 @@ final class StorageConfigRepository
                 throw new \RuntimeException((string)__('存储磁盘配置不可用：%{1}', [$canonical]));
             }
             $config = [
-                'root_path' => rtrim(PUB, '/\\') . DIRECTORY_SEPARATOR . 'media',
+                'root_path' => rtrim((\defined('MEDIA_DIR') ? (string)\constant('MEDIA_DIR') : (PUB . 'media')), '/\\'),
                 'base_url' => '/pub/media',
                 'visibility' => 'public',
             ];

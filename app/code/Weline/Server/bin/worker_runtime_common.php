@@ -1290,6 +1290,54 @@ function wlsWorkerStaticPropertyDiagnostics(int $limit = 25, int $thresholdBytes
 }
 }
 
+
+if (!\function_exists('wlsStripSetCookieFromFormattedHttp')) {
+    /**
+     * Remove all Set-Cookie header lines from a formatted HTTP/1.x response.
+     * Used when shareable FPC suppress is pending after StateManager::reset.
+     */
+    function wlsStripSetCookieFromFormattedHttp(string $http): string
+    {
+        $headerEnd = \strpos($http, "\r\n\r\n");
+        if ($headerEnd === false) {
+            return $http;
+        }
+        $headerPart = \substr($http, 0, $headerEnd);
+        $bodyPart = \substr($http, $headerEnd + 4);
+        $lines = \preg_split("/\r\n/", $headerPart) ?: [];
+        $kept = [];
+        foreach ($lines as $line) {
+            if (\strncasecmp($line, 'Set-Cookie:', 11) === 0) {
+                continue;
+            }
+            $kept[] = $line;
+        }
+        return \implode("\r\n", $kept) . "\r\n\r\n" . $bodyPart;
+    }
+}
+
+if (!\function_exists('wlsWorkerApplyPendingSetCookieSuppress')) {
+    /**
+     * Re-arm FPC Set-Cookie suppress after reset; return true when suppress is active.
+     *
+     * @param object $runtime WlsRuntime (duck-typed for peek/rearm APIs)
+     */
+    function wlsWorkerApplyPendingSetCookieSuppress(object $runtime): bool
+    {
+        if (!\method_exists($runtime, 'peekPendingSuppressSetCookie')
+            || !\method_exists($runtime, 'rearmPendingSetCookieSuppress')
+        ) {
+            return false;
+        }
+        if (!$runtime->peekPendingSuppressSetCookie()) {
+            return false;
+        }
+        $runtime->rearmPendingSetCookieSuppress();
+
+        return true;
+    }
+}
+
 if (!\function_exists('wlsApproxMemoryValueSize')) {
 function wlsApproxMemoryValueSize(mixed $value, int $depth = 0, int &$visited = 0): int
 {

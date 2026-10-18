@@ -234,7 +234,7 @@ class Status implements \Weline\Framework\Console\CommandInterface
             return 0;
         }
 
-        $cacheDir = BP . 'var' . DS . 'cache' . DS . $identity;
+        $cacheDir = VAR_DIR . 'cache' . DS . $identity;
         if (!\is_dir($cacheDir)) {
             return 0;
         }

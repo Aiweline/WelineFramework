@@ -66,6 +66,6 @@ class WidgetRuntimeTemplateRenderer implements RuntimeTemplateRendererInterface
 
     private function getRuntimeDirectory(): string
     {
-        return BP . 'var' . DS . 'runtime' . DS . 'widget-components';
+        return VAR_DIR . 'runtime' . DS . 'widget-components';
     }
 }

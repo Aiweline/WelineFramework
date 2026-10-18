@@ -28,7 +28,7 @@ final class ProcesserUnicodeManagedIdentityTest extends TestCase
         $taskName = 'queue-i18n-ai翻译-unit-' . \bin2hex(\random_bytes(4));
         $launchId = \bin2hex(\random_bytes(32));
         $pid = 700000 + (\getmypid() % 100000);
-        $dir = Env::VAR_DIR . 'process' . \DIRECTORY_SEPARATOR . 'pid' . \DIRECTORY_SEPARATOR;
+        $dir = Env::varDir() . 'process' . \DIRECTORY_SEPARATOR . 'pid' . \DIRECTORY_SEPARATOR;
         if (!\is_dir($dir)) {
             self::assertTrue(@\mkdir($dir, 0777, true));
         }
@@ -106,7 +106,7 @@ final class ProcesserUnicodeManagedIdentityTest extends TestCase
 
     public function testCleanupDeadPidJsonOrphansFastRemovesDeadLeaseFiles(): void
     {
-        $dir = Env::VAR_DIR . 'process' . \DIRECTORY_SEPARATOR . 'pid' . \DIRECTORY_SEPARATOR;
+        $dir = Env::varDir() . 'process' . \DIRECTORY_SEPARATOR . 'pid' . \DIRECTORY_SEPARATOR;
         if (!\is_dir($dir)) {
             self::assertTrue(@\mkdir($dir, 0777, true));
         }

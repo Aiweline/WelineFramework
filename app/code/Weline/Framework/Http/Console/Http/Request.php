@@ -88,7 +88,7 @@ class Request extends CommandAbstract
         // 如果访问后台或API，需要处理登录态
         if (($isBackend || $isApiBackend) && !$noLoginRequired) {
             // 使用默认cookie文件路径
-            $defaultCookieFile = BP . 'var' . DIRECTORY_SEPARATOR . 'http_request_cookies.txt';
+            $defaultCookieFile = VAR_DIR . 'http_request_cookies.txt';
             if (empty($cookieFile)) {
                 $cookieFile = $defaultCookieFile;
             }
@@ -480,7 +480,7 @@ class Request extends CommandAbstract
             return [];
         }
 
-        $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR
+        $instanceFile = VAR_DIR . 'server' . DIRECTORY_SEPARATOR
             . 'instances' . DIRECTORY_SEPARATOR . $safeName . '.json';
         if (!\is_file($instanceFile)) {
             return [];
@@ -604,7 +604,7 @@ class Request extends CommandAbstract
             }
         } elseif ($saveCookie) {
             // 创建新cookie文件到var目录
-            $varPath = BP . 'var';
+            $varPath = rtrim(VAR_DIR, '/\\');
             if (!is_dir($varPath)) {
                 mkdir($varPath, 0755, true);
             }
@@ -1211,7 +1211,7 @@ class Request extends CommandAbstract
                 $cookieJar = new \GuzzleHttp\Cookie\FileCookieJar($cookieFile, true);
                 $options['cookies'] = $cookieJar;
             } elseif ($saveCookie) {
-                $varPath = BP . 'var';
+                $varPath = rtrim(VAR_DIR, '/\\');
                 if (!is_dir($varPath)) {
                     mkdir($varPath, 0755, true);
                 }

@@ -43,7 +43,7 @@ final class StorageConfigSnapshotGuard implements StorageConfigSnapshotGuardInte
                 throw new \RuntimeException((string)__('存储磁盘配置在对象提交前已不可用。'));
             }
             $builtin = [
-                'root_path' => rtrim(PUB, '/\\') . DIRECTORY_SEPARATOR . 'media',
+                'root_path' => rtrim((\defined('MEDIA_DIR') ? (string)\constant('MEDIA_DIR') : (PUB . 'media')), '/\\'),
                 'base_url' => '/pub/media',
                 'visibility' => 'public',
             ];

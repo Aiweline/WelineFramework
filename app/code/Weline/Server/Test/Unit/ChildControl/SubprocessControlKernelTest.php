@@ -24,7 +24,7 @@ final class SubprocessControlKernelTest extends TestCase
     public function testResolveControlPortFromInstanceFile(): void
     {
         $instanceName = 'ut-kernel-port';
-        $instanceDir = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances';
+        $instanceDir = VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances';
         $instanceFile = $instanceDir . DIRECTORY_SEPARATOR . $instanceName . '.json';
         if (!\is_dir($instanceDir)) {
             @\mkdir($instanceDir, 0777, true);
@@ -46,7 +46,7 @@ final class SubprocessControlKernelTest extends TestCase
     public function testResolveControlPortRejectsFutureWallAuditTimestamp(): void
     {
         $instanceName = 'ut-kernel-port-future-' . \bin2hex(\random_bytes(4));
-        $instanceDir = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances';
+        $instanceDir = VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances';
         $instanceFile = $instanceDir . DIRECTORY_SEPARATOR . $instanceName . '.json';
         if (!\is_dir($instanceDir)) {
             @\mkdir($instanceDir, 0777, true);
@@ -173,7 +173,7 @@ final class SubprocessControlKernelTest extends TestCase
         }
 
         $instanceName = 'ut-kernel-port-refresh-' . \bin2hex(\random_bytes(4));
-        $instanceDir = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances';
+        $instanceDir = VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances';
         $instanceFile = $instanceDir . DIRECTORY_SEPARATOR . $instanceName . '.json';
         if (!\is_dir($instanceDir)) {
             @\mkdir($instanceDir, 0777, true);
@@ -450,7 +450,7 @@ PHP);
     public function testKernelChoosesSupervisorClientWhenInstanceRuntimeMetadataEnablesIt(): void
     {
         $instanceName = 'ut-instance-runtime-supervisor';
-        $instanceDir = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances';
+        $instanceDir = VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances';
         $instanceFile = $instanceDir . DIRECTORY_SEPARATOR . $instanceName . '.json';
         if (!\is_dir($instanceDir)) {
             @\mkdir($instanceDir, 0777, true);

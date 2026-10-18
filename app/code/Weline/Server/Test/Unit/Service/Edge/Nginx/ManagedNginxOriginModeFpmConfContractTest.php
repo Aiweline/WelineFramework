@@ -15,8 +15,8 @@ ProjectRoot::defineBp(__DIR__);
 \defined('APP_PATH') || \define('APP_PATH', BP . 'app' . DS);
 \defined('APP_CODE_PATH') || \define('APP_CODE_PATH', APP_PATH . 'code' . DS);
 \defined('APP_ETC_PATH') || \define('APP_ETC_PATH', APP_PATH . 'etc' . DS);
-\defined('PUB') || \define('PUB', BP . 'pub' . DS);
-\defined('VAR_DIR') || \define('VAR_DIR', BP . 'var' . DS);
+\defined('PUB') || \define('PUB', PUB);
+\defined('VAR_DIR') || \define('VAR_DIR', VAR_DIR);
 
 /**
  * FPM origin conf contract: zero wls_backend proxy, fastcgi front-controller,

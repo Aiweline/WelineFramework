@@ -216,7 +216,7 @@ final class FirstRender extends CommandAbstract
      */
     private function runningInstances(): array
     {
-        $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances';
+        $instanceDir = Env::varDir() . 'server' . DS . 'instances';
         if (!\is_dir($instanceDir)) {
             return [];
         }

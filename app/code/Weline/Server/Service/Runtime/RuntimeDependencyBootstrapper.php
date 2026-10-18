@@ -1634,7 +1634,7 @@ PHP;
     /** @return array{handle:resource|null,error:string} */
     private function acquireInstallLock(): array
     {
-        $directory = Env::VAR_DIR . 'server' . DS . 'locks';
+        $directory = Env::varDir() . 'server' . DS . 'locks';
         if (!$this->ensureSafeRuntimeLockDirectory($directory)) {
             return [
                 'handle' => null,

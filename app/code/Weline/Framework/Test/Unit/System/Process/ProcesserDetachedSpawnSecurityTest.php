@@ -167,7 +167,7 @@ final class ProcesserDetachedSpawnSecurityTest extends TestCase
             self::assertGreaterThan(0, $pid);
             self::assertTrue($this->waitForPath($sentinel, 2.0), 'Secure spool child did not execute.');
 
-            $spool = BP . 'var' . DIRECTORY_SEPARATOR . 'process' . DIRECTORY_SEPARATOR . 'spawn';
+            $spool = VAR_DIR . 'process' . DIRECTORY_SEPARATOR . 'spawn';
             $status = \lstat($spool);
             self::assertIsArray($status);
             self::assertSame(0700, ((int)$status['mode']) & 0777);

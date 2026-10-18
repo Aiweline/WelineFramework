@@ -294,12 +294,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         if (!\defined('APP_CODE_PATH')) {
             \define('APP_CODE_PATH', APP_PATH . 'code' . DIRECTORY_SEPARATOR);
         }
-        if (!\defined('PUB')) {
-            \define('PUB', BP . 'pub' . DIRECTORY_SEPARATOR);
-        }
-        if (!\defined('VAR_PATH')) {
-            \define('VAR_PATH', BP . 'var' . DIRECTORY_SEPARATOR);
-        }
+        // Relocatable pub/var/media before App::init (Env must not load against BP-hardcoded roots).
+        \Weline\Framework\App\DirectoryList::defineBootstrapConstants(BP);
         
         // 初始化框架核心
         App::init();
@@ -1073,7 +1069,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 'data' => ['elapsed_ms' => $elapsedMs],
             ];
             @\file_put_contents(
-                BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'wls-ready-gate-stage.log',
+                VAR_DIR . 'log' . DIRECTORY_SEPARATOR . 'wls-ready-gate-stage.log',
                 (\json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}') . PHP_EOL,
                 FILE_APPEND
             );
@@ -4317,7 +4313,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             'data' => $data,
         ];
         @\file_put_contents(
-            BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'wls-storefront-warmup.log',
+            VAR_DIR . 'log' . DIRECTORY_SEPARATOR . 'wls-storefront-warmup.log',
             (\json_encode($row, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}') . PHP_EOL,
             FILE_APPEND
         );
@@ -5046,7 +5042,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
 
         $file = \defined('BP')
-            ? BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instance . '.json'
+            ? VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instance . '.json'
             : '';
         if ($file === '' || !\is_file($file)) {
             return [];
@@ -11088,6 +11084,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
 
         // Shared anonymous FPC shell (HIT / build / prime): never merge Set-Cookie.
+        // Persist suppress across StateManager::reset — RequestContext / from_cache
+        // are cleared there, but Worker still emits via prepareForEmission.
         $suppressCookies = (bool)WelineEnv::get('response.from_cache', false)
             || (\class_exists(\Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress::class)
                 && \Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress::isArmed());
@@ -11097,11 +11095,41 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             'status_code' => $headerCollector->getStatusCode(),
             'explicit' => $headerCollector->hasExplicitStatusCode(),
             'sse_started' => $sseStarted,
+            'suppress_set_cookie' => $suppressCookies,
         ]);
     }
 
     /**
-     * @return array{cookies: array, headers: array, status_code:?int, explicit: bool, sse_started: bool}
+     * Whether this response must not emit Set-Cookie (shareable FPC HIT/build/prime).
+     * Survives StateManager::reset; Worker must consult before merge / emission.
+     */
+    public function peekPendingSuppressSetCookie(): bool
+    {
+        $state = $this->getPendingResponseState();
+
+        return !empty($state['suppress_set_cookie']);
+    }
+
+    /**
+     * Re-arm SharedFpcSetCookieSuppress after reset so HeaderCollector / outbound
+     * helpers still no-op Set-Cookie during Worker Response emission.
+     */
+    public function rearmPendingSetCookieSuppress(): bool
+    {
+        if (!$this->peekPendingSuppressSetCookie()) {
+            return false;
+        }
+        if (\class_exists(\Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress::class)) {
+            \Weline\Framework\Http\Fpc\SharedFpcSetCookieSuppress::arm('pending_after_reset');
+        }
+        // from_cache also feeds isArmed() if RequestContext arm is later cleared.
+        WelineEnv::set('response.from_cache', true, 'pending_suppress_after_reset');
+
+        return true;
+    }
+
+    /**
+     * @return array{cookies: array, headers: array, status_code:?int, explicit: bool, sse_started: bool, suppress_set_cookie: bool}
      */
     private function getPendingResponseState(): array
     {
@@ -11118,13 +11146,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     }
 
     /**
-     * @param array{cookies: array, headers: array, status_code:?int, explicit: bool, sse_started: bool} $state
+     * @param array{cookies: array, headers: array, status_code:?int, explicit: bool, sse_started: bool, suppress_set_cookie?: bool} $state
      */
     private function setPendingResponseState(array $state): void
     {
         $fiber = \Fiber::getCurrent();
         if ($fiber === null) {
-            $this->mainPendingResponseState = $state;
+            $this->mainPendingResponseState = $state + ['suppress_set_cookie' => false];
             return;
         }
 
@@ -11132,11 +11160,11 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $this->fiberPendingResponseStates = new \WeakMap();
         }
 
-        $this->fiberPendingResponseStates[$fiber] = $state;
+        $this->fiberPendingResponseStates[$fiber] = $state + ['suppress_set_cookie' => !empty($state['suppress_set_cookie'])];
     }
 
     /**
-     * @return array{cookies: array, headers: array, status_code:?int, explicit: bool, sse_started: bool}
+     * @return array{cookies: array, headers: array, status_code:?int, explicit: bool, sse_started: bool, suppress_set_cookie: bool}
      */
     private function emptyPendingResponseState(): array
     {
@@ -11146,6 +11174,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             'status_code' => null,
             'explicit' => false,
             'sse_started' => false,
+            'suppress_set_cookie' => false,
         ];
     }
     

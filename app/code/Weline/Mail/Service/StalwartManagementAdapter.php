@@ -5,21 +5,28 @@ namespace Weline\Mail\Service;
 
 final class StalwartManagementAdapter
 {
+    /** @deprecated 保留字面量供契约/旧引用；读写请走 resolve* 双路径 */
     private const KEY_FILE = '/etc/weline/mail-admin.key';
+    /** @deprecated 保留字面量供契约/旧引用；读写请走 resolve* 双路径 */
     private const CREDENTIAL_FILE = '/etc/weline/mail-admin.credential';
+    private const ETC_KEY_FILE = '/etc/weline/mail-admin.key';
+    private const ETC_CREDENTIAL_FILE = '/etc/weline/mail-admin.credential';
+    private const VAR_KEY_REL = 'var/mail/mail-admin.key';
+    private const VAR_CREDENTIAL_REL = 'var/mail/mail-admin.credential';
     private const DEFAULT_BASE_URL = 'http://127.0.0.1:18080';
     private const CORE_CAPABILITY = 'urn:ietf:params:jmap:core';
     private const MANAGEMENT_CAPABILITY = 'urn:stalwart:jmap';
 
     public function hasManagementCredential(): bool
     {
-        return is_readable(self::KEY_FILE) && is_readable(self::CREDENTIAL_FILE);
+        return $this->resolveReadableCredentialPair() !== null;
     }
 
     public function createManagementCredentialPayload(
         string $username,
         string $password,
-        string $baseUrl = self::DEFAULT_BASE_URL
+        string $baseUrl = self::DEFAULT_BASE_URL,
+        ?string $keyBytes = null
     ): string {
         $username = trim($username);
         if ($username === '' || strlen($username) > 190) {
@@ -29,8 +36,9 @@ final class StalwartManagementAdapter
             throw new \InvalidArgumentException('Stalwart 管理密码至少需要 16 位。');
         }
 
+        $key = $keyBytes ?? $this->managementKey();
         $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-        $sealed = $nonce . sodium_crypto_secretbox($password, $nonce, $this->managementKey());
+        $sealed = $nonce . sodium_crypto_secretbox($password, $nonce, $key);
 
         return json_encode([
             'version' => 1,
@@ -38,6 +46,149 @@ final class StalwartManagementAdapter
             'base_url' => $this->normalizeLoopbackBaseUrl($baseUrl),
             'sealed_secret' => base64_encode($sealed),
         ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * 写入本机 mail-admin 管理凭据（/etc 与 var 双路径；优先可写目录）。
+     * 对齐 StalwartEngineAdapter::upsertReaderCredential。
+     */
+    public function upsertManagementCredential(
+        string $username,
+        string $password,
+        string $baseUrl = self::DEFAULT_BASE_URL
+    ): void {
+        $pair = $this->resolveWritableCredentialPair();
+        $key = $this->ensureManagementKeyAt($pair['key']);
+        $payload = $this->createManagementCredentialPayload($username, $password, $baseUrl, $key);
+        $credDir = dirname($pair['credential']);
+        if (!is_dir($credDir) && !@mkdir($credDir, 0700, true) && !is_dir($credDir)) {
+            throw new \RuntimeException('无法创建 Stalwart 管理凭据目录。');
+        }
+        if (@file_put_contents($pair['credential'], $payload) === false) {
+            throw new \RuntimeException('无法写入 Stalwart 管理凭据。');
+        }
+        @chmod($pair['credential'], 0600);
+        // 目录保持可遍历，便于同机 Web SAPI / WLS worker（同用户）is_readable
+        @chmod(dirname($pair['credential']), 0750);
+        @chmod($pair['key'], 0600);
+    }
+
+    /**
+     * 轻量探测管理 API（绑定后验收；须已出 bootstrap）。
+     */
+    public function probeManagementApi(): void
+    {
+        $this->managementCall('x:Domain/query', ['limit' => 1]);
+    }
+
+    /**
+     * 认证是否已通（recovery 生效）。bootstrap 中 Domain 仍 forbidden，但 Bootstrap/get 可用。
+     */
+    public function probeManagementAuth(): void
+    {
+        try {
+            $this->probeManagementApi();
+
+            return;
+        } catch (\Throwable $e) {
+            $msg = strtolower($e->getMessage());
+            if (str_contains($msg, '401') || str_contains($msg, '认证')) {
+                throw $e;
+            }
+        }
+        $this->managementCall('x:Bootstrap/get', []);
+    }
+
+    /**
+     * 若仍在 bootstrap：用本机 /opt/stalwart 路径提交 Bootstrap/set。
+     * 返回 true 表示刚提交、通常需要重启服务后再 probe Domain。
+     */
+    public function completeBootstrapIfNeeded(): bool
+    {
+        try {
+            $this->probeManagementApi();
+
+            return false;
+        } catch (\Throwable $e) {
+            $msg = strtolower($e->getMessage());
+            if (!str_contains($msg, 'forbidden') && !str_contains($msg, 'bootstrap')) {
+                throw $e;
+            }
+        }
+
+        $installDir = '/opt/stalwart';
+        $dataPath = $installDir . '/data/';
+        $logPath = $installDir . '/logs/';
+        $host = gethostname();
+        if (!is_string($host) || trim($host) === '') {
+            $host = 'localhost';
+        }
+        $host = strtolower(trim($host));
+
+        $result = $this->managementCall('x:Bootstrap/set', [
+            'update' => [
+                'singleton' => [
+                    '@type' => 'Bootstrap',
+                    'serverHostname' => $host,
+                    'defaultDomain' => $host,
+                    'requestTlsCertificate' => false,
+                    'generateDkimKeys' => true,
+                    'dataStore' => [
+                        '@type' => 'RocksDb',
+                        'path' => $dataPath,
+                        'blobSize' => 16834,
+                        'bufferSize' => 134217728,
+                        'poolWorkers' => null,
+                        'cacheSize' => 134217728,
+                    ],
+                    'blobStore' => ['@type' => 'Default'],
+                    'searchStore' => ['@type' => 'Default'],
+                    'inMemoryStore' => ['@type' => 'Default'],
+                    'directory' => ['@type' => 'Internal'],
+                    'tracer' => [
+                        '@type' => 'Log',
+                        'path' => $logPath,
+                        'prefix' => 'stalwart',
+                        'rotate' => 'daily',
+                        'ansi' => true,
+                        'multiline' => false,
+                        'enable' => true,
+                        'level' => 'info',
+                        'lossy' => false,
+                        'events' => (object)[],
+                        'eventsPolicy' => 'exclude',
+                    ],
+                    'dnsServer' => ['@type' => 'Manual'],
+                ],
+            ],
+        ], 30);
+
+        if (!isset($result['updated']['singleton']) && !isset($result['updated'])) {
+            $err = $result['notUpdated']['singleton']['description']
+                ?? $result['notUpdated']['singleton']['type']
+                ?? '';
+            throw new \RuntimeException(
+                'Stalwart Bootstrap 提交失败' . ($err !== '' ? '：' . (string)$err : '。')
+            );
+        }
+
+        return true;
+    }
+
+    /**
+     * 打开已密封的管理密码（供一键绑定在 probe 401 时用同密重写 recovery）。
+     */
+    public function openManagementPassword(): string
+    {
+        return $this->managementCredential()['password'];
+    }
+
+    /**
+     * @return array{username:string,password:string,base_url:string}
+     */
+    public function readManagementCredential(): array
+    {
+        return $this->managementCredential();
     }
 
     /**
@@ -996,7 +1147,14 @@ final class StalwartManagementAdapter
         }
         if ((string)$methodResponse[0] === 'error') {
             $type = is_array($methodResponse[1]) ? (string)($methodResponse[1]['type'] ?? '') : '';
-            throw new \RuntimeException('Stalwart 管理操作失败' . ($type !== '' ? '：' . $type : '。'));
+            $description = is_array($methodResponse[1])
+                ? (string)($methodResponse[1]['description'] ?? '')
+                : '';
+            $detail = $type;
+            if ($description !== '') {
+                $detail .= ($detail !== '' ? ' — ' : '') . $description;
+            }
+            throw new \RuntimeException('Stalwart 管理操作失败' . ($detail !== '' ? '：' . $detail : '。'));
         }
         if ((string)$methodResponse[0] !== $method || !is_array($methodResponse[1])) {
             throw new \RuntimeException('Stalwart 管理接口响应不匹配。');
@@ -1009,10 +1167,11 @@ final class StalwartManagementAdapter
      */
     private function managementCredential(): array
     {
-        if (!$this->hasManagementCredential()) {
+        $pair = $this->resolveReadableCredentialPair();
+        if ($pair === null) {
             throw new \RuntimeException('Stalwart 管理凭据尚未配置。');
         }
-        $raw = file_get_contents(self::CREDENTIAL_FILE);
+        $raw = file_get_contents($pair['credential']);
         try {
             $credential = json_decode((string)$raw, true, 16, JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
@@ -1025,7 +1184,7 @@ final class StalwartManagementAdapter
         }
         $nonce = substr($sealed, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
         $ciphertext = substr($sealed, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-        $password = sodium_crypto_secretbox_open($ciphertext, $nonce, $this->managementKey());
+        $password = sodium_crypto_secretbox_open($ciphertext, $nonce, $this->readManagementKeyFile($pair['key']));
         if (!is_string($password) || $password === '') {
             throw new \RuntimeException('Stalwart 管理凭据无法解密。');
         }
@@ -1038,15 +1197,150 @@ final class StalwartManagementAdapter
 
     private function managementKey(): string
     {
+        $pair = $this->resolveReadableCredentialPair();
+        if ($pair === null) {
+            throw new \RuntimeException('Stalwart 管理密钥无效。');
+        }
+
+        return $this->readManagementKeyFile($pair['key']);
+    }
+
+    private function readManagementKeyFile(string $keyFile): string
+    {
         if (!function_exists('sodium_crypto_secretbox')) {
             throw new \RuntimeException('PHP Sodium 扩展不可用。');
         }
-        $raw = file_get_contents(self::KEY_FILE);
+        $raw = file_get_contents($keyFile);
         $key = is_string($raw) ? base64_decode(trim($raw), true) : false;
         if (!is_string($key) || strlen($key) !== SODIUM_CRYPTO_SECRETBOX_KEYBYTES) {
             throw new \RuntimeException('Stalwart 管理密钥无效。');
         }
+
         return $key;
+    }
+
+    /**
+     * 项目根绝对路径（CLI/Web SAPI 共用；禁止相对路径导致 Web 读不到 var/mail）。
+     */
+    private function projectBasePath(): string
+    {
+        $bp = defined('BP') ? (string)BP : '';
+        $bp = rtrim($bp, '/\\');
+        if ($bp !== '') {
+            $real = realpath($bp);
+            if (is_string($real) && $real !== '') {
+                return $real;
+            }
+
+            return $bp;
+        }
+        // Service → Mail → Weline → code → app → 仓库根
+        $fallback = dirname(__DIR__, 5);
+        $real = realpath($fallback);
+
+        return is_string($real) && $real !== '' ? $real : rtrim($fallback, '/\\');
+    }
+
+    /**
+     * @return list<array{key:string,credential:string}>
+     */
+    private function credentialPathCandidates(): array
+    {
+        $bp = $this->projectBasePath();
+        $varKey = $bp . '/' . self::VAR_KEY_REL;
+        $varCred = $bp . '/' . self::VAR_CREDENTIAL_REL;
+
+        return [
+            ['key' => self::ETC_KEY_FILE, 'credential' => self::ETC_CREDENTIAL_FILE],
+            ['key' => $varKey, 'credential' => $varCred],
+            // 字面量常量保留，确保与旧路径判定一致
+            ['key' => self::KEY_FILE, 'credential' => self::CREDENTIAL_FILE],
+        ];
+    }
+
+    /**
+     * @return array{key:string,credential:string}|null
+     */
+    private function resolveReadableCredentialPair(): ?array
+    {
+        $seen = [];
+        foreach ($this->credentialPathCandidates() as $pair) {
+            $sig = $pair['key'] . "\0" . $pair['credential'];
+            if (isset($seen[$sig])) {
+                continue;
+            }
+            $seen[$sig] = true;
+            if (is_readable($pair['key']) && is_readable($pair['credential'])) {
+                return $pair;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 写入优先：可写 /etc/weline，否则项目 var/mail。
+     *
+     * @return array{key:string,credential:string}
+     */
+    private function resolveWritableCredentialPair(): array
+    {
+        $etcDir = dirname(self::ETC_KEY_FILE);
+        if ($this->directoryIsWritableOrCreatable($etcDir)) {
+            return [
+                'key' => self::ETC_KEY_FILE,
+                'credential' => self::ETC_CREDENTIAL_FILE,
+            ];
+        }
+        $bp = $this->projectBasePath();
+        $varKey = $bp . '/' . self::VAR_KEY_REL;
+        $varCred = $bp . '/' . self::VAR_CREDENTIAL_REL;
+        $varDir = dirname($varKey);
+        if (!$this->directoryIsWritableOrCreatable($varDir)) {
+            throw new \RuntimeException(
+                '无法写入 Stalwart 管理凭据（/etc/weline 与 ' . $varDir . ' 均不可写；Web/CLI 须同用户可读 BP/var/mail）。'
+            );
+        }
+
+        return ['key' => $varKey, 'credential' => $varCred];
+    }
+
+    private function directoryIsWritableOrCreatable(string $dir): bool
+    {
+        if (is_dir($dir)) {
+            return is_writable($dir);
+        }
+        $parent = dirname($dir);
+        if (!is_dir($parent) || !is_writable($parent)) {
+            return false;
+        }
+
+        return @mkdir($dir, 0700, true) || is_dir($dir);
+    }
+
+    private function ensureManagementKeyAt(string $keyFile): string
+    {
+        if (!function_exists('sodium_crypto_secretbox')) {
+            throw new \RuntimeException('PHP Sodium 扩展不可用。');
+        }
+        if (is_readable($keyFile)) {
+            $raw = file_get_contents($keyFile);
+            $key = is_string($raw) ? base64_decode(trim($raw), true) : false;
+            if (is_string($key) && strlen($key) === SODIUM_CRYPTO_SECRETBOX_KEYBYTES) {
+                return $key;
+            }
+        }
+        $dir = dirname($keyFile);
+        if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) {
+            throw new \RuntimeException('无法创建 Stalwart 管理密钥目录。');
+        }
+        $generated = random_bytes(SODIUM_CRYPTO_SECRETBOX_KEYBYTES);
+        if (@file_put_contents($keyFile, base64_encode($generated)) === false) {
+            throw new \RuntimeException('无法写入 Stalwart 管理密钥。');
+        }
+        @chmod($keyFile, 0600);
+
+        return $generated;
     }
 
     private function normalizeLoopbackBaseUrl(string $baseUrl): string

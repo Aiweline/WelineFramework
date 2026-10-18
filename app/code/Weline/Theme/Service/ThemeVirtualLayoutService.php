@@ -1616,7 +1616,7 @@ class ThemeVirtualLayoutService
 
     private function runtimeDirectory(): string
     {
-        return BP . 'var' . DS . 'runtime' . DS . self::RUNTIME_DIR;
+        return VAR_DIR . 'runtime' . DS . self::RUNTIME_DIR;
     }
 
     private function containsForbiddenLayoutLogic(string $source): bool

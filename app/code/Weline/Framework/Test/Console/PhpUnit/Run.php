@@ -995,8 +995,8 @@ class Run implements \Weline\Framework\Console\CommandInterface
      */
     private function startPhpUnitServerBackground(string $documentRoot, int $port = 9980, bool $watchMode = false): void
     {
-        $pidFile = BP . 'var' . DS . 'phpunit_server.pid';
-        $logFile = BP . 'var' . DS . 'log' . DS . 'phpunit_server.log';
+        $pidFile = VAR_DIR . 'phpunit_server.pid';
+        $logFile = VAR_DIR . 'log' . DS . 'phpunit_server.log';
         
         # 检查是否已经在运行
         if (file_exists($pidFile)) {
@@ -1313,8 +1313,8 @@ class Run implements \Weline\Framework\Console\CommandInterface
         
         if ($isWindows) {
             # 创建批处理文件来启动服务器
-            $batFile = BP . 'var' . DS . 'start_phpunit_server_' . $port . '.bat';
-            $vbsFile = BP . 'var' . DS . 'start_phpunit_server_' . $port . '.vbs';
+            $batFile = VAR_DIR . 'start_phpunit_server_' . $port . '.bat';
+            $vbsFile = VAR_DIR . 'start_phpunit_server_' . $port . '.vbs';
             
             # 创建批处理文件内容
             $batContent = "@echo off\n";
@@ -1360,7 +1360,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
      */
     private function stopPhpUnitServer(): void
     {
-        $pidFile = BP . 'var' . DS . 'phpunit_server.pid';
+        $pidFile = VAR_DIR . 'phpunit_server.pid';
         
         if (!file_exists($pidFile)) {
             $this->printing->note(__('PHPUnit报告服务器未运行'));

@@ -29,14 +29,14 @@ class ModuleInstallerService
     /**
      * 临时目录
      */
-    private const TEMP_DIR = BP . 'var' . DS . 'appstore' . DS . 'temp';
+    private const TEMP_DIR = VAR_DIR . 'appstore' . DS . 'temp';
 
     /**
      * 模块目标目录
      */
     private const MODULE_DIR = APP_CODE_PATH;
 
-    private const INSTALL_RECORD_DIR = BP . 'var' . DS . 'appstore' . DS . 'install-records';
+    private const INSTALL_RECORD_DIR = VAR_DIR . 'appstore' . DS . 'install-records';
 
     private const MARKETPLACE_README = '商城应用.md';
 
@@ -836,7 +836,7 @@ class ModuleInstallerService
      */
     private function backupModule(string $moduleDir): string
     {
-        $backupDir = BP . 'var' . DS . 'appstore' . DS . 'backup' . DS . basename($moduleDir) . '_' . date('YmdHis');
+        $backupDir = VAR_DIR . 'appstore' . DS . 'backup' . DS . basename($moduleDir) . '_' . date('YmdHis');
         $this->recursiveCopy($moduleDir, $backupDir);
         return $backupDir;
     }
@@ -1193,7 +1193,7 @@ class ModuleInstallerService
             return $pid > 0 && $this->isProcessRunning($pid);
         }
 
-        $pidFile = BP . 'var' . DS . 'wls' . DS . 'master.pid';
+        $pidFile = VAR_DIR . 'wls' . DS . 'master.pid';
         if (!file_exists($pidFile)) {
             return false;
         }
@@ -1208,7 +1208,7 @@ class ModuleInstallerService
             return 0;
         }
 
-        $path = BP . 'var' . DS . 'server' . DS . 'instances' . DS . $instanceName . '.json';
+        $path = VAR_DIR . 'server' . DS . 'instances' . DS . $instanceName . '.json';
         if (!is_file($path)) {
             return 0;
         }

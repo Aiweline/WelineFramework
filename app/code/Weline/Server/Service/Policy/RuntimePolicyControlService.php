@@ -196,10 +196,10 @@ final class RuntimePolicyControlService
         }
 
         $endpoint = $this->readControlPlaneConfig(
-            Env::VAR_DIR . 'server' . DS . 'instances' . DS . $instance . '.json',
+            Env::varDir() . 'server' . DS . 'instances' . DS . $instance . '.json',
         );
         $saved = $this->readControlPlaneConfig(
-            Env::VAR_DIR . 'server' . DS . 'config' . DS . $instance . '.json',
+            Env::varDir() . 'server' . DS . 'config' . DS . $instance . '.json',
         );
         return \array_replace($this->hostFields($endpoint), $this->hostFields($saved));
     }

@@ -73,11 +73,25 @@ $resolveProjectPhpBin = static function (string $root, string $phpDir): string {
     return $bin;
 };
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'SetupPgsqlDatabase.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'SetupMysqlDatabase.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'ConfigurePhpIni.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnsurePgsql.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnsurePgsqlData.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnsureComposer.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'PgsqlProjectOwnership.php';
+
+/** Resolve first-install DB driver: mysql|pgsql (default pgsql). Set via weline.env INSTALL_DB_DRIVER / DB_TYPE. */
+$resolveInstallDbDriver = static function (string $root): string {
+    $env = (new EnvLoader($root))->load(true);
+    $raw = \strtolower(\trim((string)($env['INSTALL_DB_DRIVER'] ?? $env['DB_TYPE'] ?? '')));
+    if (\in_array($raw, ['mysql', 'mariadb'], true)) {
+        return 'mysql';
+    }
+    if ($raw === 'pgsql' || $raw === 'postgresql' || $raw === 'postgres') {
+        return 'pgsql';
+    }
+    return 'pgsql';
+};
 
 /** 配置 php.ini 并确保 extend/server/composer.phar 存在（已安装环境重跑 install 时也会补全） */
 $ensureLocalComposer = static function (string $root) use ($resolveProjectPhpBin): bool {
@@ -306,17 +320,6 @@ if ($envPhpHadDbAtStart) {
             $run = static function (string $cmd) use ($projectRoot, $phpBin): int {
                 return DeployUserCommandRunner::runPhp($projectRoot, $phpBin, $cmd);
             };
-            $tryInstallEventExtension = function () use ($run): void {
-                if (extension_loaded('event')) {
-                    echo "event 扩展已加载，跳过自动安装。\n";
-                    return;
-                }
-                echo "event 扩展未加载，正在尝试自动安装（失败不影响 WLS 启动）...\n";
-                $code = $run('bin/w env:install event -y');
-                if ($code !== 0) {
-                    fwrite(STDERR, "WARNING: event 扩展自动安装失败 (exit $code)。WLS 将继续使用默认事件循环，可稍后运行 php bin/w env:install event -y。\n");
-                }
-            };
             $runWithUpgradeRetry = function (string $cmd, string $stage, string $setupLockPath, int $maxWaitSeconds = 120) use ($run): int {
                 $code = $run($cmd);
                 if ($code === 0 || !is_file($setupLockPath)) {
@@ -370,7 +373,22 @@ if ($envPhpHadDbAtStart) {
                 fwrite(STDERR, "ERROR: PostgreSQL 连接失败，无法执行 setup:upgrade。\n");
                 exit(1);
             }
-            $tryInstallEventExtension();
+            // 注意：本分支当前位于上方 exit(0) 之后，为历史死代码；主链见 $requireDirectRuntimeExtensions。
+            // FPC html-disk：已装站快捷路径也必须有 brotli（与主链一致，失败即停）
+            if (!\extension_loaded('brotli') || !\function_exists('brotli_compress') || !\function_exists('brotli_uncompress')) {
+                echo "brotli 扩展未加载，正在必装（FPC html-disk）...\n";
+                $brotliCode = $run('bin/w env:install brotli -y');
+                $brotliProbe = $run('-r ' . \escapeshellarg(
+                    'exit(extension_loaded("brotli") && function_exists("brotli_compress")'
+                    . ' && function_exists("brotli_uncompress") ? 0 : 1);'
+                ));
+                if ($brotliProbe !== 0) {
+                    \fwrite(\STDERR, "ERROR: brotli 扩展必装失败（env=$brotliCode probe=$brotliProbe）。FPC html-disk 需要 brotli_compress。\n");
+                    \fwrite(\STDERR, "  请安装 libbrotli-dev 后执行: bash bin/install.sh --rebuild-php php\n");
+                    exit(1);
+                }
+                echo "brotli 扩展已验证可用。\n";
+            }
             $installModeFlagDir = $projectRoot . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'process';
             $installModeFlagFile = $installModeFlagDir . DIRECTORY_SEPARATOR . 'command_install_mode.flag';
             $setupLockPath = $installModeFlagDir . DIRECTORY_SEPARATOR . 'setup_upgrade.lock';
@@ -481,16 +499,133 @@ $phpBin = $resolveProjectPhpBin($projectRoot, $phpDir);
 $run = static function (string $cmd) use ($projectRoot, $phpBin): int {
     return DeployUserCommandRunner::runPhp($projectRoot, $phpBin, $cmd);
 };
-$tryInstallEventExtension = function () use ($run): void {
-    if (extension_loaded('event')) {
-        echo "event 扩展已加载，跳过自动安装。\n";
+/**
+ * Linux/macOS WLS auto→Direct 硬依赖：先装 event（+ 校验 FFI），再允许启动。
+ * Windows Direct=worker_ports 不硬依赖 event/FFI。
+ */
+$requireDirectRuntimeExtensions = function () use ($run, $projectRoot, $phpBin): void {
+    if (\PHP_OS_FAMILY === 'Windows') {
+        echo "Windows Direct 使用 worker_ports，跳过 Unix Direct 扩展硬校验。\n";
         return;
     }
-    echo "event 扩展未加载，正在尝试自动安装（失败不影响 WLS 启动）...\n";
-    $code = $run('bin/w env:install event -y');
-    if ($code !== 0) {
-        fwrite(STDERR, "WARNING: event 扩展自动安装失败 (exit $code)。WLS 将继续使用默认事件循环，可稍后运行 php bin/w env:install event -y。\n");
+    $hasEvent = static function (): bool {
+        return \extension_loaded('event') && \class_exists(\EventBase::class, false);
+    };
+    if (!$hasEvent()) {
+        echo "event 扩展未加载，正在必装（WLS Linux/macOS Direct）...\n";
+        $code = $run('bin/w env:install event -y');
+        if ($code !== 0) {
+            $script = $projectRoot . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'code'
+                . DIRECTORY_SEPARATOR . 'Weline' . DIRECTORY_SEPARATOR . 'Server'
+                . DIRECTORY_SEPARATOR . 'env' . DIRECTORY_SEPARATOR . 'script'
+                . DIRECTORY_SEPARATOR . 'install_event_extension.php';
+            if (\is_file($script) && $phpBin !== '') {
+                echo "env:install event 未成功，改用 pecl/phpize 脚本...\n";
+                $code = DeployUserCommandRunner::runPhp(
+                    $projectRoot,
+                    $phpBin,
+                    \escapeshellarg($script) . ' install'
+                );
+            }
+        }
+        $probe = DeployUserCommandRunner::runPhp(
+            $projectRoot,
+            $phpBin,
+            '-r ' . \escapeshellarg(
+                'exit(extension_loaded("event") && class_exists("EventBase", false) ? 0 : 1);'
+            )
+        );
+        if ($probe !== 0) {
+            \fwrite(\STDERR, "ERROR: event 扩展必装失败（exit env=$code probe=$probe）。\n");
+            \fwrite(\STDERR, "  Linux/macOS Direct 需要 ext-event；请安装 libevent-dev 后执行:\n");
+            \fwrite(\STDERR, "  bash bin/install.sh --rebuild-php php\n");
+            \fwrite(\STDERR, "  或: php bin/w env:install event -y\n");
+            exit(1);
+        }
+        echo "event 扩展已验证可用。\n";
+    } else {
+        echo "event 扩展已加载，跳过必装。\n";
     }
+
+    $ffiProbe = DeployUserCommandRunner::runPhp(
+        $projectRoot,
+        $phpBin,
+        '-r ' . \escapeshellarg(
+            'exit(extension_loaded("ffi") && class_exists("FFI", false) ? 0 : 1);'
+        )
+    );
+    if ($ffiProbe !== 0) {
+        $ffiScript = $projectRoot . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'code'
+            . DIRECTORY_SEPARATOR . 'Weline' . DIRECTORY_SEPARATOR . 'Server'
+            . DIRECTORY_SEPARATOR . 'env' . DIRECTORY_SEPARATOR . 'script'
+            . DIRECTORY_SEPARATOR . 'check_ffi_extension.php';
+        if (\is_file($ffiScript) && $phpBin !== '') {
+            echo "FFI 未加载，尝试启用（WLS Direct 共享监听交接）...\n";
+            DeployUserCommandRunner::runPhp(
+                $projectRoot,
+                $phpBin,
+                \escapeshellarg($ffiScript) . ' install'
+            );
+            $ffiProbe = DeployUserCommandRunner::runPhp(
+                $projectRoot,
+                $phpBin,
+                '-r ' . \escapeshellarg(
+                    'exit(extension_loaded("ffi") && class_exists("FFI", false) ? 0 : 1);'
+                )
+            );
+        }
+        if ($ffiProbe !== 0) {
+            \fwrite(\STDERR, "ERROR: FFI 扩展不可用。Linux/macOS Direct 共享监听交接需要 --with-ffi。\n");
+            \fwrite(\STDERR, "  请安装 libffi-dev 后执行: bash bin/install.sh --rebuild-php php\n");
+            exit(1);
+        }
+    }
+    echo "FFI 扩展已验证可用。\n";
+};
+/** FPC html-disk 硬依赖：缺 brotli 则安装失败退出。 */
+$requireBrotliExtension = function () use ($run, $projectRoot, $phpBin): void {
+    $hasBrotli = static function (): bool {
+        return \extension_loaded('brotli')
+            && \function_exists('brotli_compress')
+            && \function_exists('brotli_uncompress');
+    };
+    if ($hasBrotli()) {
+        echo "brotli 扩展已加载，跳过必装。\n";
+        return;
+    }
+    echo "brotli 扩展未加载，正在必装（FPC html-disk / Nginx index.html.br）...\n";
+    $code = $run('bin/w env:install brotli -y');
+    if ($code !== 0) {
+        $script = $projectRoot . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'code'
+            . DIRECTORY_SEPARATOR . 'Weline' . DIRECTORY_SEPARATOR . 'Framework'
+            . DIRECTORY_SEPARATOR . 'Env' . DIRECTORY_SEPARATOR . 'env'
+            . DIRECTORY_SEPARATOR . 'script' . DIRECTORY_SEPARATOR . 'install_brotli_extension.php';
+        if (is_file($script) && $phpBin !== '') {
+            echo "env:install brotli 未成功，改用 phpize 源码脚本...\n";
+            $code = DeployUserCommandRunner::runPhp(
+                $projectRoot,
+                $phpBin,
+                escapeshellarg($script) . ' install'
+            );
+        }
+    }
+    // 当前进程不会动态加载新扩展；用同二进制新进程探测。
+    $probe = DeployUserCommandRunner::runPhp(
+        $projectRoot,
+        $phpBin,
+        '-r ' . escapeshellarg(
+            'exit(extension_loaded("brotli") && function_exists("brotli_compress")'
+            . ' && function_exists("brotli_uncompress") ? 0 : 1);'
+        )
+    );
+    if ($probe !== 0) {
+        fwrite(STDERR, "ERROR: brotli 扩展必装失败（exit env=$code probe=$probe）。\n");
+        fwrite(STDERR, "  FPC html-disk 需要 brotli_compress；请安装 libbrotli-dev 后执行:\n");
+        fwrite(STDERR, "  bash bin/install.sh --rebuild-php php\n");
+        fwrite(STDERR, "  或: php bin/w env:install brotli -y\n");
+        exit(1);
+    }
+    echo "brotli 扩展已验证可用。\n";
 };
 // 执行裸命令（不 prepend php），用于 composer 等独立可执行命令
 $runRaw = static function (string $cmd) use ($projectRoot): int {
@@ -582,7 +717,8 @@ if (!$fromStep5b) {
     if ($code !== 0) {
         fwrite(STDERR, "WARNING: env:install 有项未成功安装 (exit $code)。将继续后续步骤，请稍后运行 php bin/w env:check 验证并手动修复。\n");
     }
-    $tryInstallEventExtension();
+    $requireDirectRuntimeExtensions();
+    $requireBrotliExtension();
 }
 
 // 3b. Linux/macOS 下安装 crontab 依赖（cron:install 需要）；失败不阻断
@@ -596,9 +732,12 @@ if (!$fromStep5b && DIRECTORY_SEPARATOR !== '\\') {
 
 // 4. （无独立步骤）
 
-// 5. 将 pgsql/bin 加入 PATH（便于 psql / pdo_pgsql 加载 libpq.dll）
+$installDbDriver = $resolveInstallDbDriver($projectRoot);
+echo "Step 5: install DB driver = {$installDbDriver}\n";
+
+// 5. 将 pgsql/bin 加入 PATH（便于 psql / pdo_pgsql 加载 libpq.dll）——仅 pgsql 路径需要
 $pgsqlBin = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'pgsql' . DIRECTORY_SEPARATOR . 'bin';
-if (is_dir($pgsqlBin)) {
+if ($installDbDriver === 'pgsql' && is_dir($pgsqlBin)) {
     $currentPath = getenv('PATH') ?: '';
     $pathSep = (DIRECTORY_SEPARATOR === '\\') ? ';' : ':';
     if (strpos($currentPath, $pgsqlBin) === false) {
@@ -606,66 +745,121 @@ if (is_dir($pgsqlBin)) {
     }
 }
 
-// 5a. 若 extend/server/pgsql 存在，确保 data 已初始化并启动（与 install.sh Linux 数据目录一致）
-$envTargetBeforeDbSetup = $pgsqlOwnership->targetFromEnvPhp();
-if (!$envPhpHadDbAtStart) {
-    $pgsqlPrepared = $pgsqlOwnership->withInstallLock(static function () use ($projectRoot, $ensureProjectPgsqlBinary): bool {
-        if (!$ensureProjectPgsqlBinary(null)) {
-            return false;
+$step5bOk = false;
+if ($installDbDriver === 'mysql') {
+    // MySQL/MariaDB first-install: skip project-local PostgreSQL entirely.
+    if (!$envPhpHadDbAtStart) {
+        echo "Step 5b: First install MySQL/MariaDB database init...\n";
+        if (!extension_loaded('pdo_mysql')) {
+            echo "Step 5a2: pdo_mysql 未加载，正在执行 env:install pdo_mysql -y...\n";
+            $installCode = $run('bin/w env:install pdo_mysql -y');
+            if ($installCode === 0) {
+                $runPhp = is_file($phpDir . DIRECTORY_SEPARATOR . 'php.exe')
+                    ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe"'
+                    : (is_file($phpDir . DIRECTORY_SEPARATOR . 'php') ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php"' : 'php');
+                $runCmd = $runPhp . ' "' . $projectRoot . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'server_installer' . DIRECTORY_SEPARATOR . 'run.php" --from 5b';
+                $code = DeployUserCommandRunner::runShell($projectRoot, $runCmd);
+                exit($code);
+            }
+            fwrite(STDERR, "WARNING: env:install pdo_mysql 未成功；将仍尝试 PDO 连接。\n");
         }
-        return (new EnsurePgsqlData($projectRoot, true))->ensure();
-    });
-    if ($pgsqlPrepared !== true) {
-        fwrite(STDERR, "ERROR: PostgreSQL project data preparation failed.\n");
+        $env = (new EnvLoader($projectRoot))->load(true);
+        $step5bOk = (new SetupMysqlDatabase($projectRoot, $env))->run();
+    } else {
+        echo "Step 5b: Verifying MySQL from env.php (no database/user creation)...\n";
+        $env = (new EnvLoader($projectRoot))->load(true);
+        $target = $pgsqlOwnership->targetFromEnvPhp();
+        // For mysql targets, classifyEnvTarget skips local pgsql; just try reconnect via SetupMysqlDatabase settings.
+        $master = null;
+        if (is_file($envPhpFile)) {
+            $cfg = @include $envPhpFile;
+            $master = is_array($cfg) ? ($cfg['db']['master'] ?? null) : null;
+        }
+        if (is_array($master) && ($master['type'] ?? '') === 'mysql') {
+            try {
+                $h = (string)($master['hostname'] ?? '127.0.0.1');
+                $p = (string)($master['hostport'] ?? '3306');
+                $d = (string)($master['database'] ?? '');
+                $u = (string)($master['username'] ?? '');
+                $pw = (string)($master['password'] ?? '');
+                new PDO("mysql:host={$h};port={$p};dbname={$d};charset=utf8mb4", $u, $pw, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+                $step5bOk = true;
+                echo "  MySQL connection OK.\n";
+            } catch (Throwable $e) {
+                fwrite(STDERR, 'ERROR: MySQL in env.php not ready: ' . $e->getMessage() . "\n");
+                $step5bOk = false;
+            }
+        } else {
+            $step5bOk = false;
+            fwrite(STDERR, "ERROR: env.php db.master is not mysql while INSTALL_DB_DRIVER=mysql.\n");
+        }
+    }
+    if (!$step5bOk) {
+        fwrite(STDERR, "ERROR: MySQL database init failed. Set DB_* / DB_ROOT_PASSWORD in weline.env or ensure mariadb is running (sudo mysql).\n");
         exit(1);
     }
 } else {
-    $pgsqlOwnership->printTargetSummary($envTargetBeforeDbSetup, 'env.php db.master');
-    echo "env.php db.master exists before database setup; local PostgreSQL init is skipped unless this project owns the data.\n";
-}
-$env = (new EnvLoader($projectRoot))->load(true);
-
-// 5a2. 数据库驱动自动安装：pdo_pgsql 未加载时执行 env:install pdo_pgsql -y，成功时重新执行本脚本（--from 5b）以便新进程加载扩展
-if (!extension_loaded('pdo_pgsql')) {
-    echo "Step 5a2: pdo_pgsql 未加载，正在执行 env:install pdo_pgsql -y 尝试自动安装...\n";
-    $installCode = $run('bin/w env:install pdo_pgsql -y');
-    if ($installCode === 0) {
-        echo "数据库驱动安装已成功，正在重新执行以加载扩展...\n";
-        $runPhp = is_file($phpDir . DIRECTORY_SEPARATOR . 'php.exe')
-            ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe"'
-            : (is_file($phpDir . DIRECTORY_SEPARATOR . 'php') ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php"' : 'php');
-        $runCmd = $runPhp . ' "' . $projectRoot . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'server_installer' . DIRECTORY_SEPARATOR . 'run.php" --from 5b';
-        $code = DeployUserCommandRunner::runShell($projectRoot, $runCmd);
-        exit($code);
+    // 5a. 若 extend/server/pgsql 存在，确保 data 已初始化并启动（与 install.sh Linux 数据目录一致）
+    $envTargetBeforeDbSetup = $pgsqlOwnership->targetFromEnvPhp();
+    if (!$envPhpHadDbAtStart) {
+        $pgsqlPrepared = $pgsqlOwnership->withInstallLock(static function () use ($projectRoot, $ensureProjectPgsqlBinary): bool {
+            if (!$ensureProjectPgsqlBinary(null)) {
+                return false;
+            }
+            return (new EnsurePgsqlData($projectRoot, true))->ensure();
+        });
+        if ($pgsqlPrepared !== true) {
+            fwrite(STDERR, "ERROR: PostgreSQL project data preparation failed.\n");
+            exit(1);
+        }
+    } else {
+        $pgsqlOwnership->printTargetSummary($envTargetBeforeDbSetup, 'env.php db.master');
+        echo "env.php db.master exists before database setup; local PostgreSQL init is skipped unless this project owns the data.\n";
     }
-    fwrite(STDERR, "WARNING: env:install pdo_pgsql 未成功。Linux/Mac 请确保有 sudo 权限；Windows 需在 php.ini 启用 extension=pdo_pgsql 并将 extend/server/pgsql/bin 加入 PATH。\n");
-}
+    $env = (new EnvLoader($projectRoot))->load(true);
 
-// 5b. 每次运行都执行：根据 env DB_* 或项目级默认值同步 env.php 的 db，并视情况建库/校验连接
-// env.php is authoritative. Only first install may create database/user.
-$envTargetAtDbSetup = $pgsqlOwnership->targetFromEnvPhp();
-if ($envPhpHadDbAtStart && $envTargetAtDbSetup !== null) {
-    echo "Step 5b: Verifying database from env.php (no database/user creation)...\n";
-    $step5bOk = $pgsqlOwnership->withInstallLock($ensureConfiguredDatabaseReady);
-} else {
-    echo "Step 5b: First install PostgreSQL database init (project-local DB)...\n";
-    $step5bOk = $pgsqlOwnership->withInstallLock($initializeFirstInstallDatabase);
-}
-
-if (!$step5bOk && DIRECTORY_SEPARATOR === '\\' && is_dir($pgsqlBin)) {
-    $libpq = $pgsqlBin . DIRECTORY_SEPARATOR . 'libpq.dll';
-    if (!$fromStep5b && is_file($libpq) && !extension_loaded('pdo_pgsql')) {
-        echo "Step 5b: pdo_pgsql needs libpq.dll. Re-running from Step 5b with PATH set...\n";
-        $runPhp = is_file($phpDir . DIRECTORY_SEPARATOR . 'php.exe') ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe"' : 'php';
-        $runCmd = $runPhp . ' "' . $projectRoot . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'server_installer' . DIRECTORY_SEPARATOR . 'run.php" --from 5b';
-        $code = DeployUserCommandRunner::runShell($projectRoot, $runCmd);
-        exit($code);
+    // 5a2. 数据库驱动自动安装：pdo_pgsql 未加载时执行 env:install pdo_pgsql -y，成功时重新执行本脚本（--from 5b）以便新进程加载扩展
+    if (!extension_loaded('pdo_pgsql')) {
+        echo "Step 5a2: pdo_pgsql 未加载，正在执行 env:install pdo_pgsql -y 尝试自动安装...\n";
+        $installCode = $run('bin/w env:install pdo_pgsql -y');
+        if ($installCode === 0) {
+            echo "数据库驱动安装已成功，正在重新执行以加载扩展...\n";
+            $runPhp = is_file($phpDir . DIRECTORY_SEPARATOR . 'php.exe')
+                ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe"'
+                : (is_file($phpDir . DIRECTORY_SEPARATOR . 'php') ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php"' : 'php');
+            $runCmd = $runPhp . ' "' . $projectRoot . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'server_installer' . DIRECTORY_SEPARATOR . 'run.php" --from 5b';
+            $code = DeployUserCommandRunner::runShell($projectRoot, $runCmd);
+            exit($code);
+        }
+        fwrite(STDERR, "WARNING: env:install pdo_pgsql 未成功。Linux/Mac 请确保有 sudo 权限；Windows 需在 php.ini 启用 extension=pdo_pgsql 并将 extend/server/pgsql/bin 加入 PATH。\n");
     }
-}
 
-if (!$step5bOk) {
-    fwrite(STDERR, "ERROR: PostgreSQL database init failed. 未配置 DB_* 时会自动生成项目级数据库；若连接失败请按上方提示配置 PGSQL_INIT_* 后重试。\n");
-    exit(1);
+    // 5b. 每次运行都执行：根据 env DB_* 或项目级默认值同步 env.php 的 db，并视情况建库/校验连接
+    // env.php is authoritative. Only first install may create database/user.
+    $envTargetAtDbSetup = $pgsqlOwnership->targetFromEnvPhp();
+    if ($envPhpHadDbAtStart && $envTargetAtDbSetup !== null) {
+        echo "Step 5b: Verifying database from env.php (no database/user creation)...\n";
+        $step5bOk = $pgsqlOwnership->withInstallLock($ensureConfiguredDatabaseReady);
+    } else {
+        echo "Step 5b: First install PostgreSQL database init (project-local DB)...\n";
+        $step5bOk = $pgsqlOwnership->withInstallLock($initializeFirstInstallDatabase);
+    }
+
+    if (!$step5bOk && DIRECTORY_SEPARATOR === '\\' && is_dir($pgsqlBin)) {
+        $libpq = $pgsqlBin . DIRECTORY_SEPARATOR . 'libpq.dll';
+        if (!$fromStep5b && is_file($libpq) && !extension_loaded('pdo_pgsql')) {
+            echo "Step 5b: pdo_pgsql needs libpq.dll. Re-running from Step 5b with PATH set...\n";
+            $runPhp = is_file($phpDir . DIRECTORY_SEPARATOR . 'php.exe') ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe"' : 'php';
+            $runCmd = $runPhp . ' "' . $projectRoot . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'server_installer' . DIRECTORY_SEPARATOR . 'run.php" --from 5b';
+            $code = DeployUserCommandRunner::runShell($projectRoot, $runCmd);
+            exit($code);
+        }
+    }
+
+    if (!$step5bOk) {
+        fwrite(STDERR, "ERROR: PostgreSQL database init failed. 未配置 DB_* 时会自动生成项目级数据库；若连接失败请按上方提示配置 PGSQL_INIT_* 后重试。\n");
+        exit(1);
+    }
 }
 
 // 6. 设置安装模式标志

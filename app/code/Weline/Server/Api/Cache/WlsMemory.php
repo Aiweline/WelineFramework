@@ -255,13 +255,13 @@ class WlsMemory implements EdgeCacheAdapterInterface
     {
         try {
             // 1. 确保目录存在
-            $serverDir = Env::VAR_DIR . 'server';
+            $serverDir = Env::varDir() . 'server';
             if (!is_dir($serverDir)) {
                 @mkdir($serverDir, 0755, true);
             }
 
             // 2. 将规则写入 var/server/memory-cache-rules.json
-            $rulesFile = Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'memory-cache-rules.json';
+            $rulesFile = Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'memory-cache-rules.json';
             $rulesData = [
                 'description' => 'WLS 内存缓存规则 - 由 CDN 后台推送',
                 'version' => '1.0.0',
@@ -278,7 +278,7 @@ class WlsMemory implements EdgeCacheAdapterInterface
             }
 
             // 3. 写入标记文件通知 Dispatcher 重载规则
-            $flagFile = Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'rules-update.flag';
+            $flagFile = Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'rules-update.flag';
             file_put_contents($flagFile, (string) time());
 
             // 4. 同时更新内存中的规则（如果当前进程中有 RuleManager 实例）
@@ -309,7 +309,7 @@ class WlsMemory implements EdgeCacheAdapterInterface
      */
     public static function getRulesUpdateFlagPath(): string
     {
-        return Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'rules-update.flag';
+        return Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'rules-update.flag';
     }
 
     /**
@@ -319,7 +319,7 @@ class WlsMemory implements EdgeCacheAdapterInterface
      */
     public static function getRulesFilePath(): string
     {
-        return Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'memory-cache-rules.json';
+        return Env::varDir() . 'server' . DIRECTORY_SEPARATOR . 'memory-cache-rules.json';
     }
 
     /**

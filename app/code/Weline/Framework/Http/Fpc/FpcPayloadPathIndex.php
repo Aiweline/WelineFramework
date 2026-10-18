@@ -292,9 +292,7 @@ final class FpcPayloadPathIndex
 
     private static function indexBaseDir(): string
     {
-        return BP
-            . 'var'
-            . \DIRECTORY_SEPARATOR
+        return VAR_DIR
             . 'cache'
             . \DIRECTORY_SEPARATOR
             . 'router-fpc-path-index';
@@ -302,9 +300,7 @@ final class FpcPayloadPathIndex
 
     private static function payloadBaseDir(): string
     {
-        return BP
-            . 'var'
-            . \DIRECTORY_SEPARATOR
+        return VAR_DIR
             . 'cache'
             . \DIRECTORY_SEPARATOR
             . 'router-fpc-payloads';

@@ -47,7 +47,7 @@ class Status implements \Weline\Framework\Console\CommandInterface
      */
     private function checkPhpUnitServerStatus(): void
     {
-        $pidFile = BP . 'var' . DS . 'phpunit_server.pid';
+        $pidFile = VAR_DIR . 'phpunit_server.pid';
         $envFile = BP . 'app' . DS . 'etc' . DS . 'env.php';
         
         $this->printing->note(__('PHPUnit报告服务器状态检查'));

@@ -64,7 +64,7 @@ class MasterLeaseManager
     {
         $safeInstance = self::safeInstance($instance);
 
-        return Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR
+        return Env::varDir() . 'server' . DIRECTORY_SEPARATOR
             . 'runtime' . DIRECTORY_SEPARATOR
             . $safeInstance . DIRECTORY_SEPARATOR
             . 'master_lease.json';
@@ -1095,7 +1095,7 @@ class MasterLeaseManager
 
     private function ensurePrivateLeaseDirectory(string $directory): void
     {
-        $root = \rtrim(Env::VAR_DIR, '/\\');
+        $root = \rtrim(Env::varDir(), '/\\');
         if ($root === '' || !\str_starts_with($directory . DIRECTORY_SEPARATOR, $root . DIRECTORY_SEPARATOR)) {
             throw new \RuntimeException('WLS Master lease directory escapes the project runtime root.');
         }
@@ -1142,7 +1142,7 @@ class MasterLeaseManager
 
     private function assertExistingLeaseDirectory(string $directory): void
     {
-        $root = \rtrim(Env::VAR_DIR, '/\\');
+        $root = \rtrim(Env::varDir(), '/\\');
         if ($root === ''
             || !\str_starts_with($directory . DIRECTORY_SEPARATOR, $root . DIRECTORY_SEPARATOR)
         ) {

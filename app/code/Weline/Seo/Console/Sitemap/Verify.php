@@ -152,7 +152,7 @@ class Verify implements CommandInterface
     {
         $this->printTest('检查 Sitemap 文件生成');
         
-        $sitemapsDir = BP . '/pub/sitemaps';
+        $sitemapsDir = PUB . 'sitemaps';
         
         $this->check(is_dir($sitemapsDir), 'Sitemap 目录存在');
         
@@ -191,7 +191,7 @@ class Verify implements CommandInterface
     {
         $this->printTest('检查文件结构规范');
         
-        $sitemapsDir = BP . '/pub/sitemaps';
+        $sitemapsDir = PUB . 'sitemaps';
         $siteDirs = glob($sitemapsDir . '/*', GLOB_ONLYDIR);
         
         foreach ($siteDirs as $siteDir) {
@@ -223,7 +223,7 @@ class Verify implements CommandInterface
     {
         $this->printTest('检查 XML 文件有效性');
         
-        $sitemapsDir = BP . '/pub/sitemaps';
+        $sitemapsDir = PUB . 'sitemaps';
         
         // 测试站点文件
         $siteDirs = glob($sitemapsDir . '/*', GLOB_ONLYDIR);
@@ -272,7 +272,7 @@ class Verify implements CommandInterface
     {
         $this->printTest('检查 URL 可访问性（模拟）');
         
-        $sitemapsDir = BP . '/pub/sitemaps';
+        $sitemapsDir = PUB . 'sitemaps';
         
         // 检查站点平台索引
         $siteDirs = glob($sitemapsDir . '/*', GLOB_ONLYDIR);

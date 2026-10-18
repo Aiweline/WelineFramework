@@ -45,7 +45,7 @@ final class GatewayFallbackProviderTest extends TestCase
         foreach ([
             'APP_PATH' => BP . 'app' . DS,
             'APP_ETC_PATH' => BP . 'app' . DS . 'etc' . DS,
-            'PUB' => BP . 'pub' . DS,
+            'PUB' => PUB,
             'VENDOR_PATH' => BP . 'vendor' . DS,
             'APP_CODE_PATH' => BP . 'app' . DS . 'code' . DS,
         ] as $name => $path) {

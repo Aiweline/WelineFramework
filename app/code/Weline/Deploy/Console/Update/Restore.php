@@ -164,7 +164,7 @@ class Restore extends CommandAbstract
     private function clearCache(): void
     {
         $cacheDirs = [
-            BP . 'var/cache',
+            VAR_DIR . 'cache',
             BP . 'generated/code',
         ];
 

@@ -33,7 +33,7 @@ final class LocalFilesystemProvider implements StorageDriverConfigurationProvide
                 'root_path',
                 (string)__('根目录路径'),
                 required: true,
-                placeholder: rtrim((string)PUB, '/\\') . DIRECTORY_SEPARATOR . 'media',
+                placeholder: rtrim((string)(\defined('MEDIA_DIR') ? \constant('MEDIA_DIR') : (PUB . 'media')), '/\\'),
             ),
             new StorageConfigField(
                 'base_url',
@@ -55,7 +55,7 @@ final class LocalFilesystemProvider implements StorageDriverConfigurationProvide
     {
         $rootPath = trim((string)($input['root_path'] ?? $previous['root_path'] ?? ''));
         if ($rootPath === '') {
-            $rootPath = rtrim((string)PUB, '/\\') . DIRECTORY_SEPARATOR . 'media';
+            $rootPath = rtrim((string)(\defined('MEDIA_DIR') ? \constant('MEDIA_DIR') : (PUB . 'media')), '/\\');
         }
         $isAbsolute = str_starts_with($rootPath, DIRECTORY_SEPARATOR)
             || preg_match('/^[A-Za-z]:[\\\\\/]/D', $rootPath) === 1;
@@ -106,7 +106,7 @@ final class LocalFilesystemProvider implements StorageDriverConfigurationProvide
         $config = $snapshot->driverConfig();
         return new LocalFilesystemDriver(
             $snapshot->diskCode,
-            (string)($config['root_path'] ?? rtrim(PUB, '/\\') . DIRECTORY_SEPARATOR . 'media'),
+            (string)($config['root_path'] ?? rtrim((string)(\defined('MEDIA_DIR') ? \constant('MEDIA_DIR') : (PUB . 'media')), '/\\')),
             $resources,
             (int)($config['max_object_bytes'] ?? StorageWriteHandle::DEFAULT_MAX_TOTAL_BYTES),
         );

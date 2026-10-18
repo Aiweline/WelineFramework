@@ -324,7 +324,7 @@ class SharedStateServiceRegistry
 
     public function getRegistryFile(): string
     {
-        return Env::VAR_DIR . self::REGISTRY_DIR
+        return Env::varDir() . self::REGISTRY_DIR
             . SharedStateRuntimeScope::scopeDefaultFileName('registry.json');
     }
 

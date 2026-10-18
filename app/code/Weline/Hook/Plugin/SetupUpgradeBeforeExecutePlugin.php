@@ -45,7 +45,7 @@ class SetupUpgradeBeforeExecutePlugin
      */
     private function cleanupOldLockFiles(): void
     {
-        $processDir = BP . 'var' . DS . 'process';
+        $processDir = VAR_DIR . 'process';
         if (!is_dir($processDir)) {
             return;
         }
@@ -107,7 +107,7 @@ class SetupUpgradeBeforeExecutePlugin
      */
     private function cleanupOldLogFiles(): void
     {
-        $logDir = BP . 'var' . DS . 'log';
+        $logDir = VAR_DIR . 'log';
         if (!is_dir($logDir)) {
             return;
         }
@@ -142,7 +142,7 @@ class SetupUpgradeBeforeExecutePlugin
      */
     private function cleanupTempFiles(): void
     {
-        $tempDir = BP . 'var' . DS . 'tmp';
+        $tempDir = VAR_DIR . 'tmp';
         if (!is_dir($tempDir)) {
             return;
         }

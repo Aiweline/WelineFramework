@@ -20,7 +20,7 @@ final class SharedStateRuntimeScope
     {
         if (\PHP_OS_FAMILY !== 'Windows') {
             $basePath = \defined('BP')
-                ? BP . 'var' . \DIRECTORY_SEPARATOR . 'session'
+                ? VAR_DIR . 'session'
                 : \rtrim(\sys_get_temp_dir(), '\\/') . \DIRECTORY_SEPARATOR . 'wls_session';
 
             // PHP's native Session directory can contain hundreds of

@@ -14,7 +14,7 @@ use Weline\Framework\MarketplaceMeta\MarketplaceTag;
 
 class InstalledModuleMetaService
 {
-    private const CACHE_DIR = BP . 'var' . DS . 'appstore' . DS . 'meta-cache';
+    private const CACHE_DIR = VAR_DIR . 'appstore' . DS . 'meta-cache';
     private const TAG_CACHE_FILE = self::CACHE_DIR . DS . 'platform-tags.json';
 
     public function __construct(

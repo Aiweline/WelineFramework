@@ -20,7 +20,7 @@ class DispatcherMasterHeartbeatWindowTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $baseDir = BP . 'var' . DS . 'server' . DS . 'instances';
+        $baseDir = VAR_DIR . 'server' . DS . 'instances';
         if (!\is_dir($baseDir)) {
             \mkdir($baseDir, 0777, true);
         }

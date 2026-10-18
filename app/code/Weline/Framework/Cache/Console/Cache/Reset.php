@@ -59,7 +59,7 @@ class Reset implements \Weline\Framework\Console\CommandInterface
 //        /**@var EventsManager $eventsManager */
 //        $eventsManager = ObjectManager::getInstance(EventsManager::class);
 //        $eventsManager->dispatch('WelineFrame');
-        $system_cache_dir = BP . 'var' . DS . 'cache';
+        $system_cache_dir = VAR_DIR . 'cache';
         $var_dirs         = $this->scanner->scanDir($system_cache_dir);
         foreach ($var_dirs as $var_dir) {
             $cache_dir = $system_cache_dir . DS . $var_dir;

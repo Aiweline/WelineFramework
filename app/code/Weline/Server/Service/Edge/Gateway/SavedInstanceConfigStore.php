@@ -172,7 +172,7 @@ final class SavedInstanceConfigStore
             throw new \RuntimeException('Saved instance configuration name is invalid.');
         }
         $directory = $this->configDirectory
-            ?? Env::VAR_DIR . 'server' . DS . 'config';
+            ?? Env::varDir() . 'server' . DS . 'config';
         return \rtrim($directory, '/\\') . DIRECTORY_SEPARATOR
             . $instanceName . '.json';
     }

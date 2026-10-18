@@ -25,7 +25,7 @@ final class TemplateCacheManagerEnvironmentKeyTest extends TestCore
         $this->hadContext = Context::getCurrent() !== null;
         $this->envSnapshot = WelineEnv::getInstance()->capture();
 
-        $tmpDir = BP . 'var' . DS . 'tmp';
+        $tmpDir = VAR_DIR . 'tmp';
         if (!is_dir($tmpDir)) {
             mkdir($tmpDir, 0775, true);
         }
@@ -49,7 +49,7 @@ final class TemplateCacheManagerEnvironmentKeyTest extends TestCore
         foreach ($this->compiledFiles as $compiledFile) {
             @unlink($compiledFile);
             $hash = basename($compiledFile, '.phtml');
-            @unlink(BP . 'var' . DS . 'cache' . DS . 'template' . DS . substr($hash, 0, 2) . DS . $hash . '.meta');
+            @unlink(VAR_DIR . 'cache' . DS . 'template' . DS . substr($hash, 0, 2) . DS . $hash . '.meta');
         }
 
         @unlink($this->sourceFile);

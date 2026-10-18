@@ -46,7 +46,7 @@ final class AttackDetectorStateTransactionTest extends TestCase
         }
 
         $result = $this->runChild(<<<'PHP'
-$server = BP . 'var' . DS . 'server';
+$server = VAR_DIR . 'server';
 mkdir($server, 0700, true);
 $detector = \Weline\Server\Security\AttackDetector::getInstance();
 $foreign = BP . 'foreign.json';
@@ -136,7 +136,7 @@ PHP);
     public function testRulesReloadUsesCommittedDigestWithoutLegacyFlag(): void
     {
         $result = $this->runChild(<<<'PHP'
-$server = BP . 'var' . DS . 'server';
+$server = VAR_DIR . 'server';
 mkdir($server, 0700, true);
 $path = \Weline\Server\Security\AttackDetector::getRulesFilePath();
 file_put_contents($path, json_encode(['rate_limit' => ['max_requests' => 10]]));
@@ -161,7 +161,7 @@ PHP);
         }
 
         $result = $this->runChild(<<<'PHP'
-$server = BP . 'var' . DS . 'server';
+$server = VAR_DIR . 'server';
 mkdir($server, 0700, true);
 $detector = \Weline\Server\Security\AttackDetector::getInstance();
 $foreign = BP . 'foreign-bans.json';
@@ -189,7 +189,7 @@ PHP);
     public function testRuntimeCompilerRestoresOneValidRulesBackup(): void
     {
         $result = $this->runChild(<<<'PHP'
-$server = BP . 'var' . DS . 'server';
+$server = VAR_DIR . 'server';
 mkdir($server, 0700, true);
 $path = \Weline\Server\Security\AttackDetector::getRulesFilePath();
 file_put_contents($path, '{broken');
@@ -215,7 +215,7 @@ PHP);
     public function testRuntimeCompilerFailsClosedOnAmbiguousRulesBackups(): void
     {
         $result = $this->runChild(<<<'PHP'
-$server = BP . 'var' . DS . 'server';
+$server = VAR_DIR . 'server';
 mkdir($server, 0700, true);
 $path = \Weline\Server\Security\AttackDetector::getRulesFilePath();
 file_put_contents($path, '{broken');
@@ -254,7 +254,7 @@ PHP);
         }
 
         $result = $this->runChild(<<<'PHP'
-$server = BP . 'var' . DS . 'server';
+$server = VAR_DIR . 'server';
 mkdir($server, 0700, true);
 $detector = \Weline\Server\Security\AttackDetector::getInstance();
 $foreign = BP . 'panel-foreign.json';
@@ -285,7 +285,7 @@ PHP);
     public function testPanelServiceRejectsASecondSaveFromTheSameStaleReceipt(): void
     {
         $result = $this->runChild(<<<'PHP'
-$server = BP . 'var' . DS . 'server';
+$server = VAR_DIR . 'server';
 mkdir($server, 0700, true);
 if (!function_exists('__')) {
     function __(string $message, mixed ...$arguments): string {

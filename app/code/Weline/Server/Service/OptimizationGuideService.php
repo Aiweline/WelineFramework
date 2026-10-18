@@ -736,7 +736,7 @@ INI,
      */
     public function getServerStatus(): array
     {
-        $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances';
+        $instanceDir = Env::varDir() . 'server' . DS . 'instances';
         $instances = [];
         
         if (\is_dir($instanceDir)) {
@@ -775,7 +775,7 @@ INI,
      */
     public static function generateToken(): string
     {
-        $tokenFile = Env::VAR_DIR . 'server' . DS . 'doc_token.txt';
+        $tokenFile = Env::varDir() . 'server' . DS . 'doc_token.txt';
         $tokenDir = \dirname($tokenFile);
         
         if (!\is_dir($tokenDir)) {
@@ -806,7 +806,7 @@ INI,
      */
     public static function validateToken(string $token): bool
     {
-        $tokenFile = Env::VAR_DIR . 'server' . DS . 'doc_token.txt';
+        $tokenFile = Env::varDir() . 'server' . DS . 'doc_token.txt';
         
         if (!\file_exists($tokenFile)) {
             return false;

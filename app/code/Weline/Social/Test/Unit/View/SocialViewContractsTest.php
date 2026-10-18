@@ -125,6 +125,10 @@ private function assert_SocialScopeMailboxStrip_testTabsBarHostsMailboxStripOnRi
     self::assertStringContainsString('border: 0', $css);
     self::assertStringContainsString('.weline-social-admin__mailbox-actions', $css);
     self::assertStringContainsString('flex-wrap: nowrap', $css);
+    self::assertStringContainsString('mailboxRegisterHint', $tpl);
+    self::assertStringContainsString('social-mailbox-register-hint', $tpl);
+    self::assertStringContainsString('注册平台时可用此邮箱，方便统一管理。', $tpl);
+    self::assertStringContainsString('.weline-social-admin__mailbox-hint', $css);
 }
 
 private function assert_WebsiteEditorEmbed_testHookInjectsSocialDisclosure(): void

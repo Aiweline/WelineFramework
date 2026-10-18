@@ -160,6 +160,22 @@ private function assert_EnterpriseEngineSetupGuide_testEngineSetupGuidesFirewall
     self::assertStringContainsString('mail-smtp-delete-account-', $enterprise);
     self::assertStringContainsString('mail-smtp-delete-service-form-', $enterprise);
     self::assertStringContainsString('mailSmtpBindDeleteSse', $enterprise);
+    self::assertStringContainsString('从数据库同步到本机引擎', $enterprise);
+    self::assertStringContainsString('mail-sync-engine-accounts-from-db', $enterprise);
+    self::assertStringContainsString('sync-engine-accounts-from-db-stream', $enterprise);
+    self::assertStringContainsString('data-mail-sync-engine-from-db-sse', $enterprise);
+    self::assertStringContainsString('password_once', $enterprise);
+    self::assertStringContainsString('一键配置邮局', $enterprise);
+    self::assertStringContainsString('一键配置本域', $enterprise);
+    self::assertStringContainsString('mail-one-click-setup-global', $enterprise);
+    self::assertStringContainsString('mail-one-click-setup-domain-', $enterprise);
+    self::assertStringContainsString('one-click-mail-setup-stream', $enterprise);
+    self::assertStringContainsString('one-click-domain-setup-stream', $enterprise);
+    self::assertStringContainsString('data-mail-one-click-setup-sse', $enterprise);
+    self::assertStringContainsString('domainOneClickNeeded', $enterprise);
+    self::assertStringContainsString('mailOneClickBind', $enterprise);
+    self::assertStringContainsString('配置中…', $enterprise);
+    self::assertStringContainsString('配置失败', $enterprise);
     self::assertStringContainsString('下属全部 %{1} 个账户', $enterprise);
     self::assertStringContainsString('将同时从本机 Stalwart 移除这些账户', $enterprise);
     self::assertStringContainsString('mail-account-filter', $enterprise);
@@ -167,6 +183,10 @@ private function assert_EnterpriseEngineSetupGuide_testEngineSetupGuidesFirewall
     self::assertStringContainsString('mail-account-batch-delete', $enterprise);
     self::assertStringContainsString('mail-account-create-open', $enterprise);
     self::assertStringContainsString('mail-account-create-dialog', $enterprise);
+    self::assertStringContainsString('mail-account-system-hint', $enterprise);
+    self::assertStringContainsString('mail-account-system-badge-', $enterprise);
+    self::assertStringContainsString('data-mail-system-account', $enterprise);
+    self::assertStringContainsString('不可删改', $enterprise);
     self::assertStringContainsString('data-account-edit', $enterprise);
     self::assertStringContainsString('data-account-delete', $enterprise);
     self::assertStringContainsString('updateMailboxAccount', $enterprise);
@@ -214,8 +234,17 @@ private function assert_EnterpriseEngineSetupGuide_testEngineSetupGuidesFirewall
     self::assertStringContainsString("\$this->getBackendUrl('weline_mail/backend/index/mailbox-message')", $enterprise);
     self::assertStringContainsString('mailbox-batch', $enterprise);
     self::assertStringContainsString('mailbox-search', $enterprise);
+    self::assertStringContainsString('mailbox-list', $enterprise);
     self::assertStringContainsString('mailbox-compose-prefill', $enterprise);
     self::assertStringContainsString('data-testid="mail-enterprise-list-toolbar"', $enterprise);
+    self::assertStringContainsString('data-testid="mail-enterprise-live-status"', $enterprise);
+    self::assertStringContainsString('refreshMailboxList', $enterprise);
+    self::assertStringContainsString('POLL_MS', $enterprise);
+    self::assertStringContainsString("refreshMailboxList({ force: true", $enterprise);
+    self::assertDoesNotMatchRegularExpression(
+        '/\[data-mail-refresh\][\s\S]{0,180}window\.location\.reload\(\)/',
+        $enterprise
+    );
     self::assertStringContainsString('mail-enterprise__row-main', $enterprise);
     self::assertStringContainsString('data-testid="mail-enterprise-fake-mailbox-banner"', $enterprise);
     self::assertStringContainsString('data-testid="mail-enterprise-fake-compose-banner"', $enterprise);
@@ -233,6 +262,7 @@ private function assert_EnterpriseEngineSetupGuide_testEngineSetupGuidesFirewall
     self::assertStringContainsString('function getMailboxMessage', $indexCtrl);
     self::assertStringContainsString('function postMailboxBatch', $indexCtrl);
     self::assertStringContainsString('function getMailboxSearch', $indexCtrl);
+    self::assertStringContainsString('function getMailboxList', $indexCtrl);
     self::assertStringContainsString('function getMailboxComposePrefill', $indexCtrl);
     self::assertStringContainsString('MailboxOpsService', $indexCtrl);
     self::assertStringNotContainsString('StalwartEngineAdapter::class', $indexCtrl);
@@ -268,6 +298,14 @@ private function assert_EnterpriseHtmlReaderPreview_testReaderUsesSandboxedHtmlI
     self::assertStringContainsString('srcdoc=', $enterprise);
     self::assertStringContainsString('body_is_html', $enterprise);
     self::assertStringContainsString('html_body', $enterprise);
+    self::assertStringContainsString('mail-enterprise__unread-dot', $enterprise);
+    self::assertStringContainsString('mail-enterprise__party', $enterprise);
+    self::assertStringContainsString('formatMailListTime', $enterprise);
+    self::assertStringContainsString('looksLikeHtml', $enterprise);
+    self::assertStringContainsString('markSeenQuiet', $enterprise);
+    self::assertStringContainsString('mail-enterprise-show-all', $enterprise);
+    self::assertStringContainsString('mailbox_list_unread_only', $enterprise);
+    self::assertStringContainsString('data-mail-unread-only', $enterprise);
     self::assertStringContainsString('renderReaderBody', $enterprise);
     self::assertStringNotContainsString('allow-scripts', $enterprise);
     self::assertStringContainsString('data-mail-body-format="html"', $enterprise);
@@ -276,6 +314,17 @@ private function assert_EnterpriseHtmlReaderPreview_testReaderUsesSandboxedHtmlI
     self::assertStringContainsString("'body_is_html'", $session);
     $helper = (string) file_get_contents(BP . 'app/code/Weline/Mail/Service/Mailbox/MailBodyPresentation.php');
     self::assertStringContainsString('sanitizeHtml', $helper);
+    self::assertStringContainsString('looksLikeHtml($text)', $helper);
+    $qqHtml = "<html><head><meta http-equiv='Content-Type' content='text/html; charset=UTF-8'></head><body><p>hi</p></body></html>";
+    $presented = \Weline\Mail\Service\Mailbox\MailBodyPresentation::fromJmapMessage([
+        'textBody' => [['partId' => '1']],
+        'htmlBody' => [],
+        'bodyValues' => ['1' => ['value' => $qqHtml]],
+        'preview' => '',
+    ], true);
+    self::assertTrue($presented['body_is_html']);
+    self::assertNotSame('', $presented['html_body']);
+    self::assertStringNotContainsString('<html>', $presented['body']);
     self::assertStringContainsString('looksLikeHtml', $helper);
     self::assertStringContainsString('(script|iframe|object|embed|link|meta|base)', $helper);
     self::assertStringContainsString('javascript', $helper);

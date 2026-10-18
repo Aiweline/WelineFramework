@@ -815,7 +815,7 @@ class WlsPanel extends BackendController
             return ['platform_url' => '', 'source' => '', 'environment' => ''];
         }
 
-        $currentFile = BP . 'var' . DIRECTORY_SEPARATOR . 'deploy' . DIRECTORY_SEPARATOR . 'current.json';
+        $currentFile = VAR_DIR . 'deploy' . DIRECTORY_SEPARATOR . 'current.json';
         if (!\is_file($currentFile) || !\is_readable($currentFile)) {
             return ['platform_url' => '', 'source' => '', 'environment' => ''];
         }

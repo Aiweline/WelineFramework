@@ -226,7 +226,7 @@ private function assert_FrontendRuntimeThemeVersion_testHeaderProdDeployVersionR
     $path = '/Users/weline/Project/Official/框架/app/code/Weline/Frontend' . '/view/blocks/header/base.phtml';
     self::assertFileExists($path);
     $src = (string) file_get_contents($path);
-    self::assertStringContainsString("BP . 'var/deploy/current.json'", $src);
+    self::assertStringContainsString("VAR_DIR . 'deploy/current.json'", $src);
     self::assertStringContainsString("\$deployMeta['deploy_version']", $src);
     self::assertStringContainsString('PROD 禁止沿用粘滞的 deploy_version=dev', $src);
     self::assertStringContainsString("strcasecmp(\$deployVersion, 'dev') === 0", $src);

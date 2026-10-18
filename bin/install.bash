@@ -27,11 +27,11 @@ usage() {
   echo "Usage: $0 [--path-only] [--rebuild-php] [--env-file FILE] [-f|--force] [-y|--yes] [-b BRANCH] [php] [pgsql] [mysql]"
   echo "  No args: install php and pgsql (default)."
   echo "  --path-only: only add extend/server/*/bin to PATH, do not download/install."
-  echo "  --rebuild-php: on Linux, remove existing extend/server/php and recompile (e.g. to add missing extensions like xsl)."
+  echo "  --rebuild-php: on Linux, remove existing extend/server/php and recompile (e.g. to add missing extensions like xsl/brotli)."
   echo "  -f, --force: force reinstall even if env.php exists (will prompt for confirmation)."
   echo "  -y, --yes: when already installed, directly run setup:upgrade without prompting."
   echo "  --env-file FILE: load DB_* and installer settings from a custom env file."
-  echo "  --link-system: create symlinks in /usr/local/bin (php, psql) for system-wide use (uses sudo when needed)."
+  echo "  --link-system: create symlinks in /usr/local/bin (php, psql, w, weline) for system-wide use (uses sudo when needed)."
   echo "  -b BRANCH: when run.php is missing, clone this branch (default: master)."
   exit 0
 }
@@ -70,6 +70,15 @@ done
 # 无组件时默认安装 php 和 pgsql
 [[ ${#COMPONENTS[@]} -eq 0 ]] && COMPONENTS=(php pgsql)
 
+# 组件意图：mysql 路径跳过强制 pgsql；写入 INSTALL_DB_DRIVER 供 run.php 使用
+WANT_MYSQL=false
+WANT_PGSQL=false
+for _c in "${COMPONENTS[@]}"; do
+  [[ "$_c" == mysql ]] && WANT_MYSQL=true
+  [[ "$_c" == pgsql ]] && WANT_PGSQL=true
+done
+unset _c
+
 # 读取 weline.env 并检查配置完整性（与 Windows 一致）
 WELINE_ENV_INCOMPLETE=false
 ENV_FILE_PATH="$ROOT/weline.env"
@@ -99,6 +108,27 @@ fi
 INSTALL_PGSQL_VERSION="${INSTALL_PGSQL_VERSION:-16}"
 INSTALL_MYSQL_VERSION="${INSTALL_MYSQL_VERSION:-8.0}"
 WELINE_USER="${WELINE_USER:-weline}"
+
+# Upsert KEY=VALUE in project weline.env (idempotent).
+upsert_weline_env() {
+  local key="$1"
+  local val="$2"
+  local file="$ROOT/weline.env"
+  touch "$file" 2>/dev/null || true
+  if [[ ! -f "$file" ]]; then
+    echo "${key}=${val}" > "$file" 2>/dev/null || return 1
+    return 0
+  fi
+  if grep -qE "^${key}=" "$file" 2>/dev/null; then
+    # Escape sed replacement carefully: val should be simple tokens (mysql/3306).
+    sed -i.bak -E "s|^${key}=.*|${key}=${val}|" "$file" 2>/dev/null || \
+      sed -i '' -E "s|^${key}=.*|${key}=${val}|" "$file" 2>/dev/null || true
+  else
+    printf '%s=%s\n' "$key" "$val" >> "$file"
+  fi
+  # Drop backup noise if present
+  rm -f "${file}.bak" 2>/dev/null || true
+}
 
 # 从 composer.json 解析 PHP 主版本（兼容 GNU/BSD grep 与 bash 3.x）
 get_php_version() {
@@ -295,7 +325,16 @@ if [[ "$PLATFORM" == "linux" ]] && [[ "$(id -u)" -eq 0 ]] && [[ "${WELINE_AS_USE
   echo "Switching to user $WELINE_USER for all installation steps..."
   run_privileged chown -R "$WELINE_USER":"$WELINE_USER" "$ROOT" 2>/dev/null || true
   [[ -d "$ROOT/.git" ]] && run_privileged sudo -u "$WELINE_USER" git config --global --add safe.directory "$ROOT" 2>/dev/null || true
-  exec sudo -u "$WELINE_USER" env WELINE_AS_USER=1 PATH="$PATH" bash "$SCRIPT_DIR/install.bash" "${ORIG_ARGS[@]}"
+  # 透传 PHP 编译限流/低内存标志（否则 root→weline 后 WELINE_PHP_* 丢失，易 OOM）。
+  # 必须 cd 到项目根：root 启动时 cwd 常为 /root，weline 无权 popd 回去会导致 make install 后脚本中断。
+  exec sudo -u "$WELINE_USER" -H env \
+    WELINE_AS_USER=1 \
+    PATH="$PATH" \
+    WELINE_PHP_MAKE_JOBS="${WELINE_PHP_MAKE_JOBS:-}" \
+    WELINE_PHP_LOW_MEM="${WELINE_PHP_LOW_MEM:-}" \
+    WELINE_PHP_REBUILD_ATTEMPTED="${WELINE_PHP_REBUILD_ATTEMPTED:-}" \
+    WELINE_PHP_MYSQL_REBUILD_ATTEMPTED="${WELINE_PHP_MYSQL_REBUILD_ATTEMPTED:-}" \
+    bash -c "cd \"$ROOT\" && exec bash \"$SCRIPT_DIR/install.bash\" \"\$@\"" -- "${ORIG_ARGS[@]}"
 fi
 
 if [[ "$PLATFORM" == "linux" ]] && [[ "$(id -un 2>/dev/null || true)" != "$WELINE_USER" ]]; then
@@ -433,7 +472,8 @@ install_php_system_deps() {
         build-essential autoconf libtool pkg-config bison re2c \
         libxml2-dev libssl-dev libcurl4-openssl-dev libsqlite3-dev \
         libzip-dev libpng-dev libjpeg-dev libfreetype6-dev libonig-dev \
-        libxslt1-dev libpq-dev libicu-dev zlib1g-dev libgd-dev libsodium-dev
+        libxslt1-dev libpq-dev libicu-dev zlib1g-dev libgd-dev libsodium-dev \
+        libbrotli-dev libevent-dev libffi-dev
       return
     fi
     if [[ -f /etc/redhat-release ]]; then
@@ -443,13 +483,15 @@ install_php_system_deps() {
           gcc gcc-c++ make autoconf libtool pkgconfig bison re2c \
           libxml2-devel openssl-devel libcurl-devel sqlite-devel \
           libzip-devel libpng-devel libjpeg-turbo-devel freetype-devel \
-          oniguruma-devel libxslt-devel postgresql-devel libicu-devel zlib-devel gd-devel libsodium-devel
+          oniguruma-devel libxslt-devel postgresql-devel libicu-devel zlib-devel gd-devel libsodium-devel \
+          libbrotli-devel libevent-devel libffi-devel
       elif command -v yum &>/dev/null; then
         run_privileged yum install -y \
           gcc gcc-c++ make autoconf libtool pkgconfig bison re2c \
           libxml2-devel openssl-devel libcurl-devel sqlite-devel \
           libzip-devel libpng-devel libjpeg-turbo-devel freetype-devel \
-          oniguruma-devel libxslt-devel postgresql-devel libicu-devel zlib-devel gd-devel libsodium-devel
+          oniguruma-devel libxslt-devel postgresql-devel libicu-devel zlib-devel gd-devel libsodium-devel \
+          libbrotli-devel libevent-devel libffi-devel
       else
         echo "ERROR: Neither dnf nor yum found. Please install PHP build dependencies manually." >&2
         return 1
@@ -673,7 +715,9 @@ get_required_php_extensions() {
   # WLS/多进程：即便 requirements 只列了 PDO 等必需项，Linux 编译也必须带上 pcntl（及 opcache）。
   # 否则「有 requirements 就不走下方默认集」会导致 configure 丢掉 --enable-pcntl，server:start 无法 fork。
   # sodium：Mail 管理凭据 / Gateway 包签名硬依赖；漏编会导致线上「扩展不可用」而非可降级提示。
-  exts="$exts pcntl opcache sodium"
+  # brotli：FPC html-disk / Nginx 只认 index.html.br；PECL 扩展（非 configure 内置），安装后必装。
+  # event：Linux/macOS WLS auto→Direct 硬依赖（PECL）；ffi：Direct 共享监听 FD 交接（configure --with-ffi）。
+  exts="$exts pcntl opcache sodium brotli event ffi"
   # 去重、排序、每行一个
   echo "$exts" | tr ' ' '\n' | grep -v '^$' | sort -u
 }
@@ -684,7 +728,14 @@ get_php_configure_flags_for_extensions() {
   exts=$(get_required_php_extensions)
   # 无 composer/requirements 时使用默认扩展集，保证框架与 composer 可运行
   [[ -z "$exts" ]] && exts="bcmath curl exif fileinfo gd iconv intl json libxml dom simplexml mbstring opcache pcntl pdo pgsql sockets sqlite3 zip xsl zlib sodium"
-  local seen_pdo=0 seen_libxml=0
+  # mysql 组件 / INSTALL_DB_DRIVER=mysql：必须编入 pdo_mysql（mysqlnd，无需客户端开发库）
+  local want_mysql_ext=0
+  if [[ "${WANT_MYSQL:-false}" == true ]] \
+    || [[ "$(echo "${INSTALL_DB_DRIVER:-${DB_TYPE:-}}" | tr '[:upper:]' '[:lower:]')" =~ ^(mysql|mariadb)$ ]]; then
+    want_mysql_ext=1
+    echo "$exts" | grep -qiw mysql || exts="$exts mysql"
+  fi
+  local seen_pdo=0 seen_libxml=0 seen_mysql=0
   local ext
   for ext in $exts; do
     case "$ext" in
@@ -703,8 +754,23 @@ get_php_configure_flags_for_extensions() {
       pcntl)      echo "--enable-pcntl" ;;
       sockets)    echo "--enable-sockets" ;;
       sodium)     echo "--with-sodium" ;;
+      ffi)        echo "--with-ffi" ;;
+      event|brotli) ;; # PECL：install_php 后 ensure_* 必装
       pdo)
-        [[ $seen_pdo -eq 0 ]] && { echo "--with-pdo-pgsql"; echo "--with-pdo-sqlite"; seen_pdo=1; } ;;
+        if [[ $seen_pdo -eq 0 ]]; then
+          echo "--with-pdo-pgsql"
+          echo "--with-pdo-sqlite"
+          [[ $want_mysql_ext -eq 1 ]] && echo "--with-pdo-mysql=mysqlnd"
+          seen_pdo=1
+        fi
+        ;;
+      mysql|mysqli|pdo_mysql)
+        if [[ $seen_mysql -eq 0 ]]; then
+          echo "--with-pdo-mysql=mysqlnd"
+          echo "--with-mysqli=mysqlnd"
+          seen_mysql=1
+        fi
+        ;;
       pgsql)      echo "--with-pgsql" ;;
       sqlite3)    echo "--with-sqlite3" ;;
       zip)        echo "--with-zip" ;;
@@ -713,6 +779,14 @@ get_php_configure_flags_for_extensions() {
       *)          ;;
     esac
   done
+  # 即使 get_required 未列出 mysql，组件为 mysql 时仍强制编入
+  if [[ $want_mysql_ext -eq 1 ]] && [[ $seen_mysql -eq 0 ]] && [[ $seen_pdo -eq 0 ]]; then
+    echo "--with-pdo-mysql=mysqlnd"
+    echo "--with-mysqli=mysqlnd"
+  elif [[ $want_mysql_ext -eq 1 ]] && [[ $seen_mysql -eq 0 ]]; then
+    echo "--with-pdo-mysql=mysqlnd"
+    echo "--with-mysqli=mysqlnd"
+  fi
 }
 
 install_php_from_source() {
@@ -747,6 +821,13 @@ install_php_from_source() {
 
   local jobs
   jobs=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
+  # FFI/opcache JIT 并行编译易 OOM 小内存 VPS；硬依赖 --with-ffi 时失败=整次安装失败，故限流。
+  if [[ -n "${WELINE_PHP_MAKE_JOBS:-}" ]] && [[ "${WELINE_PHP_MAKE_JOBS}" =~ ^[0-9]+$ ]]; then
+    jobs="$WELINE_PHP_MAKE_JOBS"
+  elif (( jobs > 2 )); then
+    jobs=2
+  fi
+  echo "PHP make -j${jobs} (cap 2 unless WELINE_PHP_MAKE_JOBS set)"
 
   mkdir -p "$dest"
   pushd "$src_dir" >/dev/null
@@ -815,6 +896,14 @@ install_php_from_source() {
     fi
   fi
 
+  # 小内存机：WELINE_PHP_LOW_MEM=1 须在 configure 前设 CFLAGS，make 时再覆盖（防 Makefile 写死 -O2）。
+  local make_extra=()
+  if [[ "${WELINE_PHP_LOW_MEM:-0}" == "1" ]]; then
+    export CFLAGS="${CFLAGS:-} -O0 -g0"
+    export CXXFLAGS="${CXXFLAGS:-} -O0 -g0"
+    make_extra+=(CFLAGS="-O0 -g0" CXXFLAGS="-O0 -g0")
+    echo "WELINE_PHP_LOW_MEM=1: configure+make use -O0 -g0"
+  fi
   echo "Configuring php-src ..."
   if [[ "$PLATFORM" == "mac" && -n "$brew_prefix" ]]; then
     (
@@ -834,11 +923,20 @@ install_php_from_source() {
     "${conf[@]}"
   fi
   echo "Building php-src (jobs=$jobs) ..."
-  make -j"$jobs"
+  # OOM killer 会把 make 标成 Killed；禁止继续 make install（会装出缺 FFI 的残缺树）。
+  if ! make -j"$jobs" "${make_extra[@]}"; then
+    echo "ERROR: php-src make failed (exit=$?). Often OOM on opcache JIT — add swap, set WELINE_PHP_MAKE_JOBS=1 WELINE_PHP_LOW_MEM=1, stop WLS, retry." >&2
+    popd >/dev/null || true
+    return 1
+  fi
   echo "Installing php to $dest ..."
-  make install
+  if ! make install "${make_extra[@]}"; then
+    echo "ERROR: php-src make install failed." >&2
+    popd >/dev/null || true
+    return 1
+  fi
 
-  popd >/dev/null
+  popd >/dev/null || true
   rm -rf "$build_root"
 
   if [[ ! -x "$dest/bin/php" ]] && [[ ! -x "$dest/php" ]]; then
@@ -888,18 +986,119 @@ configure_wls_php_ini() {
   return 0
 }
 
-# 检测 PHP 是否包含框架所需扩展（含 pdo_pgsql），避免重复编译
+# FPC html-disk 必装：用当前 PHP 的 phpize 编入 PECL brotli；失败阻断安装。
+ensure_brotli_extension() {
+  local php_bin="$1"
+  [[ -z "$php_bin" ]] || [[ ! -x "$php_bin" ]] && return 1
+  if "$php_bin" -m 2>/dev/null | grep -qxi '^brotli$' \
+    && "$php_bin" -r 'exit(function_exists("brotli_compress") && function_exists("brotli_uncompress") ? 0 : 1);' 2>/dev/null; then
+    echo "brotli extension already loaded on $php_bin"
+    return 0
+  fi
+  local script="$ROOT/app/code/Weline/Framework/Env/env/script/install_brotli_extension.php"
+  if [[ ! -f "$script" ]]; then
+    echo "ERROR: missing brotli install script: $script" >&2
+    return 1
+  fi
+  echo "Installing required brotli extension into $php_bin (FPC html-disk)..."
+  if ! "$php_bin" -d opcache.enable=0 -d opcache.enable_cli=0 "$script" install; then
+    echo "ERROR: brotli extension install failed. FPC html-disk requires brotli_compress." >&2
+    echo "  Install libbrotli-dev then re-run, or: $0 --rebuild-php php" >&2
+    return 1
+  fi
+  if ! "$php_bin" -m 2>/dev/null | grep -qxi '^brotli$' \
+    || ! "$php_bin" -r 'exit(function_exists("brotli_compress") && function_exists("brotli_uncompress") ? 0 : 1);' 2>/dev/null; then
+    echo "ERROR: brotli installed but not loadable on new process ($php_bin -m)." >&2
+    echo "  Check conf.d / php.ini for extension=brotli and extension_dir." >&2
+    return 1
+  fi
+  echo "brotli extension verified on $php_bin"
+  return 0
+}
+
+# Linux/macOS：WLS auto→Direct 硬依赖 ext-event（缺则只能回退 Dispatcher）
+ensure_event_extension() {
+  local php_bin="$1"
+  [[ -z "$php_bin" ]] || [[ ! -x "$php_bin" ]] && return 1
+  if [[ "$PLATFORM" == "windows" ]]; then
+    return 0
+  fi
+  if "$php_bin" -m 2>/dev/null | grep -qxi '^event$' \
+    && "$php_bin" -r 'exit(extension_loaded("event") && class_exists("EventBase", false) ? 0 : 1);' 2>/dev/null; then
+    echo "event extension already loaded on $php_bin"
+    return 0
+  fi
+  local script="$ROOT/app/code/Weline/Server/env/script/install_event_extension.php"
+  if [[ ! -f "$script" ]]; then
+    echo "ERROR: missing event install script: $script" >&2
+    return 1
+  fi
+  echo "Installing required event extension into $php_bin (WLS Direct)..."
+  if ! "$php_bin" -d opcache.enable=0 -d opcache.enable_cli=0 "$script" install; then
+    echo "ERROR: event extension install failed. Linux/macOS Direct requires ext-event." >&2
+    echo "  Install libevent-dev then re-run, or: php bin/w env:install event -y" >&2
+    return 1
+  fi
+  if ! "$php_bin" -m 2>/dev/null | grep -qxi '^event$' \
+    || ! "$php_bin" -r 'exit(extension_loaded("event") && class_exists("EventBase", false) ? 0 : 1);' 2>/dev/null; then
+    echo "ERROR: event installed but not loadable on new process ($php_bin -m)." >&2
+    echo "  Check conf.d / php.ini for extension=event and extension_dir." >&2
+    return 1
+  fi
+  echo "event extension verified on $php_bin"
+  return 0
+}
+
+# Linux/macOS：Direct 共享监听 FD 交接需要 FFI（编译期 --with-ffi）
+ensure_ffi_extension() {
+  local php_bin="$1"
+  [[ -z "$php_bin" ]] || [[ ! -x "$php_bin" ]] && return 1
+  if [[ "$PLATFORM" == "windows" ]]; then
+    return 0
+  fi
+  if "$php_bin" -m 2>/dev/null | grep -qxi '^ffi$' \
+    && "$php_bin" -r 'exit(extension_loaded("ffi") && class_exists("FFI", false) ? 0 : 1);' 2>/dev/null; then
+    echo "ffi extension already loaded on $php_bin"
+    return 0
+  fi
+  local script="$ROOT/app/code/Weline/Server/env/script/check_ffi_extension.php"
+  if [[ -f "$script" ]]; then
+    echo "Enabling FFI on $php_bin (WLS Direct shared-listener handoff)..."
+    if "$php_bin" -d opcache.enable=0 -d opcache.enable_cli=0 "$script" install \
+      && "$php_bin" -m 2>/dev/null | grep -qxi '^ffi$'; then
+      echo "ffi extension verified on $php_bin"
+      return 0
+    fi
+  fi
+  echo "ERROR: FFI not available on $php_bin. Rebuild PHP with --with-ffi (libffi-dev):" >&2
+  echo "  $0 --rebuild-php php" >&2
+  return 1
+}
+
+# brotli + event + ffi：安装 PHP 后、启动 WLS 前必须齐（Unix Direct）
+ensure_wls_direct_runtime_extensions() {
+  local php_bin="$1"
+  ensure_brotli_extension "$php_bin" || return 1
+  ensure_event_extension "$php_bin" || return 1
+  ensure_ffi_extension "$php_bin" || return 1
+  return 0
+}
+
+# 检测 PHP 是否包含框架所需扩展（含 pdo_pgsql + brotli + Direct 依赖），避免重复编译
 php_has_required_extensions() {
   local exe="$1"
   [[ -z "$exe" ]] || [[ ! -x "$exe" ]] && return 1
   local modules
   modules=$("$exe" -m 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)
   [[ -z "$modules" ]] && return 1
-  local -a required=(pdo pdo_pgsql sockets mbstring json dom fileinfo intl)
+  local -a required=(pdo pdo_pgsql sockets mbstring json dom fileinfo intl brotli event ffi)
   local ext
   for ext in "${required[@]}"; do
     echo "$modules" | grep -qE "^${ext}$" || return 1
   done
+  "$exe" -r 'exit(function_exists("brotli_compress") && function_exists("brotli_uncompress") ? 0 : 1);' 2>/dev/null || return 1
+  "$exe" -r 'exit(extension_loaded("event") && class_exists("EventBase", false) ? 0 : 1);' 2>/dev/null || return 1
+  "$exe" -r 'exit(extension_loaded("ffi") && class_exists("FFI", false) ? 0 : 1);' 2>/dev/null || return 1
   return 0
 }
 
@@ -999,10 +1198,18 @@ install_php() {
           [[ -x "$php_prefix/bin/php-fpm" ]] && safe_ln_sf "$php_prefix/bin/php-fpm" "$SERVER_DIR/php/bin/php-fpm" 2>/dev/null || true
         fi
         echo "PHP already installed via brew (version $installed). Skipping."
+        local brew_php=""
+        [[ -x "$SERVER_DIR/php/bin/php" ]] && brew_php="$SERVER_DIR/php/bin/php"
+        [[ -z "$brew_php" ]] && brew_php="$(command -v php 2>/dev/null || true)"
+        ensure_wls_direct_runtime_extensions "$brew_php" || return 1
         return
       fi
     fi
-    install_php_via_brew
+    install_php_via_brew || return 1
+    local brew_php_new=""
+    [[ -x "$SERVER_DIR/php/bin/php" ]] && brew_php_new="$SERVER_DIR/php/bin/php"
+    [[ -z "$brew_php_new" ]] && brew_php_new="$(command -v php 2>/dev/null || true)"
+    ensure_wls_direct_runtime_extensions "$brew_php_new" || return 1
     return
   fi
 
@@ -1032,6 +1239,20 @@ install_php() {
   if [[ -n "$php_exe" ]]; then
     local installed
     installed=$(get_installed_php_major_minor "$php_exe")
+    local need_mysql_rebuild=0
+    if [[ "${WANT_MYSQL:-false}" == true ]] || [[ "$(echo "${INSTALL_DB_DRIVER:-${DB_TYPE:-}}" | tr '[:upper:]' '[:lower:]')" =~ ^(mysql|mariadb)$ ]]; then
+      if ! "$php_exe" -m 2>/dev/null | grep -qxi '^pdo_mysql$'; then
+        need_mysql_rebuild=1
+      fi
+    fi
+    if [[ "$need_mysql_rebuild" -eq 1 ]] && [[ "$REBUILD_PHP" != true ]] && [[ "${WELINE_PHP_MYSQL_REBUILD_ATTEMPTED:-0}" != "1" ]]; then
+      echo "PHP at $dest lacks pdo_mysql but mysql install was requested; rebuilding with --with-pdo-mysql=mysqlnd ..."
+      export WELINE_PHP_MYSQL_REBUILD_ATTEMPTED=1
+      REBUILD_PHP=true
+      # Recurse once into rebuild path (install_php will move dest aside).
+      install_php
+      return $?
+    fi
     if [[ -n "$installed" ]] && [[ "$installed" == "$PHP_VERSION" ]]; then
       echo "PHP already installed at $dest (version $installed). Skipping build and install."
     elif [[ -n "$installed" ]]; then
@@ -1044,6 +1265,11 @@ install_php() {
       safe_ln_sf "$php_exe" "$dest/bin/php" || return 1
     fi
     configure_wls_php_ini "$dest"
+    local php_for_direct=""
+    [[ -x "$dest/bin/php" ]] && php_for_direct="$dest/bin/php"
+    [[ -z "$php_for_direct" && -x "$dest/php" ]] && php_for_direct="$dest/php"
+    [[ -z "$php_for_direct" && -n "$php_exe" ]] && php_for_direct="$php_exe"
+    ensure_wls_direct_runtime_extensions "$php_for_direct" || return 1
     if [[ -n "${php_rebuild_backup:-}" ]] && [[ -d "$php_rebuild_backup" ]]; then
       trap - ERR
       echo "Rebuild succeeded; removing PHP backup $php_rebuild_backup"
@@ -1063,7 +1289,7 @@ install_php() {
     local sys_php
     sys_php="$(find_system_php_linux "$PHP_VERSION" 2>/dev/null || true)"
     if [[ -n "$sys_php" ]]; then
-      echo "检测到系统已有 PHP $PHP_VERSION (含 pdo_pgsql)，直接使用，跳过安装：$sys_php"
+      echo "检测到系统已有 PHP $PHP_VERSION (含 pdo_pgsql + brotli/event/ffi)，直接使用，跳过安装：$sys_php"
       mkdir -p "$dest/bin" || return 1
       safe_ln_sf "$sys_php" "$dest/bin/php" || return 1
       [[ -x "$(dirname "$sys_php")/php-fpm" ]] && safe_ln_sf "$(dirname "$sys_php")/php-fpm" "$dest/bin/php-fpm" 2>/dev/null || true
@@ -1076,6 +1302,10 @@ install_php() {
   install_php_system_deps || return 1
   install_php_from_source "$dest" || return 1
   configure_wls_php_ini "$dest"
+  local php_new=""
+  [[ -x "$dest/bin/php" ]] && php_new="$dest/bin/php"
+  [[ -z "$php_new" && -x "$dest/php" ]] && php_new="$dest/php"
+  ensure_wls_direct_runtime_extensions "$php_new" || return 1
     if [[ -n "${php_rebuild_backup:-}" ]] && [[ -d "$php_rebuild_backup" ]]; then
       trap - ERR
       echo "Rebuild succeeded; removing PHP backup $php_rebuild_backup"
@@ -1416,20 +1646,76 @@ install_pgsql() {
   fi
 }
 
-# ---- MySQL ----（缺省为 pgsql，仅当已安装 MySQL 时显示并加 PATH）
+# ---- MySQL/MariaDB ----（显式 mysql 组件时安装/启用服务，并写入 INSTALL_DB_DRIVER=mysql）
 install_mysql() {
+  echo "========== MySQL/MariaDB =========="
   local dest="$SERVER_DIR/mysql"
-  if [[ -f "$dest/bin/mysql" ]] || [[ -f "$dest/bin/mysqld" ]]; then
-    echo "========== MySQL =========="
-    echo "MySQL already present at $dest."
-    add_to_path "$dest/bin"
-    return
-  fi
   if [[ "$PATH_ONLY" == true ]]; then
-    echo "(--path-only) MySQL not found at $dest."
+    if [[ -f "$dest/bin/mysql" ]] || [[ -f "$dest/bin/mysqld" ]]; then
+      echo "MySQL already present at $dest."
+      add_to_path "$dest/bin"
+    else
+      echo "(--path-only) project MySQL not at $dest; system mysql/mariadb may still be used."
+    fi
+    upsert_weline_env INSTALL_DB_DRIVER mysql
     return
   fi
-  # 未安装则不显示，避免与缺省 pgsql 重复提示
+
+  if [[ "$PLATFORM" == "linux" ]]; then
+    local have_server=0
+    if systemctl is-active --quiet mariadb 2>/dev/null || systemctl is-active --quiet mysql 2>/dev/null; then
+      have_server=1
+      echo "MariaDB/MySQL service already active."
+    elif command -v mysql &>/dev/null || command -v mariadb &>/dev/null; then
+      have_server=1
+      echo "mysql/mariadb client present; ensuring server is running..."
+      run_privileged systemctl enable --now mariadb 2>/dev/null \
+        || run_privileged systemctl enable --now mysql 2>/dev/null \
+        || true
+    fi
+    if [[ "$have_server" -eq 0 ]]; then
+      echo "Installing MariaDB server (preferred) or MySQL..."
+      run_apt_update_once || true
+      if [[ -f /etc/debian_version ]]; then
+        if ! run_privileged DEBIAN_FRONTEND=noninteractive apt-get install -y mariadb-server mariadb-client; then
+          run_privileged DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server mysql-client || true
+        fi
+      elif [[ -f /etc/redhat-release ]]; then
+        if command -v dnf &>/dev/null; then
+          run_privileged dnf install -y mariadb-server mariadb || run_privileged dnf install -y mysql-server mysql || true
+        else
+          run_privileged yum install -y mariadb-server mariadb || true
+        fi
+      fi
+      run_privileged systemctl enable --now mariadb 2>/dev/null \
+        || run_privileged systemctl enable --now mysql 2>/dev/null \
+        || true
+    fi
+  elif [[ "$PLATFORM" == "mac" ]]; then
+    ensure_brew_installed || true
+    if ! command -v mysql &>/dev/null; then
+      echo "Installing MySQL via Homebrew..."
+      brew install mysql || brew install mariadb || true
+    fi
+    brew services start mysql 2>/dev/null || brew services start mariadb 2>/dev/null || true
+  fi
+
+  upsert_weline_env INSTALL_DB_DRIVER mysql
+  # 58550 是项目级 pgsql 默认端口；mysql 路径改为 3306
+  if grep -qE '^DB_PORT=58550$' "$ROOT/weline.env" 2>/dev/null \
+    || ! grep -qE '^DB_PORT=' "$ROOT/weline.env" 2>/dev/null; then
+    upsert_weline_env DB_PORT 3306
+    echo "  Wrote INSTALL_DB_DRIVER=mysql and DB_PORT=3306 to weline.env"
+  else
+    echo "  Wrote INSTALL_DB_DRIVER=mysql to weline.env (DB_PORT left as-is)"
+  fi
+
+  if [[ -f "$dest/bin/mysql" ]] || [[ -f "$dest/bin/mysqld" ]]; then
+    echo "Project MySQL binaries present at $dest."
+    add_to_path "$dest/bin"
+  else
+    echo "Using system MariaDB/MySQL (no project copy under $dest)."
+  fi
 }
 
 # 执行安装
@@ -1521,12 +1807,16 @@ enable_php_ext_via_ini() {
 # 在首次运行 php（run.php）前，确保 Framework 所需 PHP 扩展已安装
 # 扩展列表含 composer.json 与 requirements.php 所需；composer 依赖 exif、fileinfo
 ensure_framework_php_extensions() {
-  local -a needed=(PDO json iconv fileinfo exif xsl dom libxml simplexml intl mbstring sockets openssl curl zip bcmath)
+  local -a needed=(PDO json iconv fileinfo exif xsl dom libxml simplexml intl mbstring sockets openssl curl zip bcmath brotli event ffi)
   local -a missing=()
   local ext
   for ext in "${needed[@]}"; do
     "$PHP_EXE" -m 2>/dev/null | grep -qxi "^${ext}$" || missing+=("$ext")
   done
+  # brotli 即使已在 -m 列表也须有 compress API（FPC 硬依赖）
+  if ! "$PHP_EXE" -r 'exit(function_exists("brotli_compress") && function_exists("brotli_uncompress") ? 0 : 1);' 2>/dev/null; then
+    printf '%s\n' "${missing[@]}" | grep -qxi '^brotli$' || missing+=("brotli")
+  fi
   [[ ${#missing[@]} -eq 0 ]] && return 0
 
   # 当前使用的是自编译 PHP（extend/server/php）时，apt 包只影响系统 PHP，无法给自编译 PHP 加扩展
@@ -1535,20 +1825,55 @@ ensure_framework_php_extensions() {
   local server_php_abs
   server_php_abs="$(cd "$ROOT" 2>/dev/null && cd "$SERVER_DIR/php" 2>/dev/null && pwd 2>/dev/null)" || true
   if [[ -n "$server_php_abs" ]] && [[ -n "$php_exe_abs" ]] && [[ "$php_exe_abs" == "$server_php_abs"* ]]; then
+    # brotli/event 可 pecl/phpize；ffi 缺则必须重编 --with-ffi
+    if printf '%s\n' "${missing[@]}" | grep -Eiqx '^(brotli|event)$'; then
+      ensure_wls_direct_runtime_extensions "$PHP_EXE" || {
+        echo "ERROR: WLS PHP missing Direct/FPC runtime extensions (brotli/event/ffi)." >&2
+        return 1
+      }
+      missing=()
+      for ext in "${needed[@]}"; do
+        "$PHP_EXE" -m 2>/dev/null | grep -qxi "^${ext}$" || missing+=("$ext")
+      done
+      if ! "$PHP_EXE" -r 'exit(function_exists("brotli_compress") && function_exists("brotli_uncompress") ? 0 : 1);' 2>/dev/null; then
+        printf '%s\n' "${missing[@]}" | grep -qxi '^brotli$' || missing+=("brotli")
+      fi
+      [[ ${#missing[@]} -eq 0 ]] && return 0
+    fi
     echo "WARNING: WLS PHP (extend/server/php) missing extensions: ${missing[*]}." >&2
     echo "  apt/dnf cannot fix bundled PHP. Rebuilding with required configure flags..." >&2
     if [[ "${WELINE_PHP_REBUILD_ATTEMPTED:-0}" != "1" ]]; then
       export WELINE_PHP_REBUILD_ATTEMPTED=1
       REBUILD_PHP=true
-      install_php || true
+      # install_php 内部已 ensure_wls_direct_runtime_extensions；失败不得 || true 吞掉。
+      if ! install_php; then
+        echo "ERROR: rebuild PHP failed while missing: ${missing[*]}" >&2
+        return 1
+      fi
       configure_wls_php_ini "$SERVER_DIR/php"
+      local rebuilt_php=""
+      [[ -x "$SERVER_DIR/php/bin/php" ]] && rebuilt_php="$SERVER_DIR/php/bin/php"
+      [[ -z "$rebuilt_php" && -x "$SERVER_DIR/php/php" ]] && rebuilt_php="$SERVER_DIR/php/php"
+      if [[ -z "$rebuilt_php" ]]; then
+        echo "ERROR: rebuilt PHP binary missing under $SERVER_DIR/php" >&2
+        return 1
+      fi
+      ensure_wls_direct_runtime_extensions "$rebuilt_php" || return 1
+      PHP_EXE="$rebuilt_php"
       missing=()
       for ext in "${needed[@]}"; do
         "$PHP_EXE" -m 2>/dev/null | grep -qxi "^${ext}$" || missing+=("$ext")
       done
+      if ! "$PHP_EXE" -r 'exit(function_exists("brotli_compress") && function_exists("brotli_uncompress") ? 0 : 1);' 2>/dev/null; then
+        printf '%s\n' "${missing[@]}" | grep -qxi '^brotli$' || missing+=("brotli")
+      fi
       [[ ${#missing[@]} -eq 0 ]] && return 0
     fi
     echo "  Still missing after rebuild: ${missing[*]}. Install build deps then: $0 --rebuild-php php" >&2
+    if printf '%s\n' "${missing[@]}" | grep -Eiqx '^(brotli|event|ffi)$'; then
+      echo "ERROR: brotli/event/ffi still missing — refusing to continue (FPC + WLS Direct hard requirements)." >&2
+      return 1
+    fi
     return 0
   fi
 
@@ -1615,6 +1940,11 @@ ensure_framework_php_extensions() {
     echo "WARNING: These PHP extensions are still missing: ${missing[*]}. run.php may fail." >&2
     echo "  Debian/Ubuntu: sudo apt install -y php${php_ver}-xml php${php_ver}-intl php${php_ver}-fileinfo php${php_ver}-exif php${php_ver}-mbstring" >&2
     echo "  BT Panel: Enable exif, fileinfo in 软件商店 -> PHP -> 安装扩展" >&2
+    if printf '%s\n' "${missing[@]}" | grep -qxi '^brotli$'; then
+      echo "ERROR: brotli is required (FPC html-disk). Install libbrotli-dev then: pecl install brotli" >&2
+      echo "  or: $0 --rebuild-php php" >&2
+      return 1
+    fi
   fi
   return 0
 }
@@ -1698,7 +2028,84 @@ fi
 echo ""
 cd "$ROOT"
 
-# 将项目 php/psql/w 软链到 /usr/local/bin，确保 `php` 命令使用项目安装（不依赖 PATH）
+# 全局 `weline` CLI：任意目录执行，等价项目 PHP + bin/w；始终以部署用户（默认 weline）身份跑。
+# 写入 /usr/local/bin/weline（实体脚本，内嵌 ROOT/PHP/USER，避免软链丢根路径）。
+install_weline_global_cli() {
+  local php_bin="$SERVER_DIR/php/bin/php"
+  local bin_w="$ROOT/bin/w"
+  local deploy_user="${WELINE_USER:-weline}"
+  local target="/usr/local/bin/weline"
+  local tmp
+
+  if [[ ! -x "$php_bin" ]]; then
+    echo "  跳过全局 weline CLI：未找到 $php_bin" >&2
+    return 1
+  fi
+  if [[ ! -f "$bin_w" ]]; then
+    echo "  跳过全局 weline CLI：未找到 $bin_w" >&2
+    return 1
+  fi
+
+  tmp="$(mktemp "${TMPDIR:-/tmp}/weline-cli.XXXXXX")"
+  cat >"$tmp" <<EOF
+#!/usr/bin/env bash
+# Generated by bin/install.bash — global Weline CLI (php bin/w …)
+# Example: weline s:up   →   \$PHP \$ROOT/bin/w s:up  (as user ${deploy_user})
+set -euo pipefail
+ROOT=$(printf '%q' "$ROOT")
+PHP=$(printf '%q' "$php_bin")
+BIN_W=$(printf '%q' "$bin_w")
+DEPLOY_USER=$(printf '%q' "$deploy_user")
+
+if [[ ! -x "\$PHP" ]]; then
+  echo "weline: project php missing: \$PHP" >&2
+  exit 127
+fi
+if [[ ! -f "\$BIN_W" ]]; then
+  echo "weline: bin/w missing: \$BIN_W" >&2
+  exit 127
+fi
+
+cd "\$ROOT" || exit 1
+
+current="\$(id -un 2>/dev/null || true)"
+if [[ "\$current" == "\$DEPLOY_USER" ]]; then
+  exec "\$PHP" "\$BIN_W" "\$@"
+fi
+
+if command -v runuser >/dev/null 2>&1; then
+  exec runuser -u "\$DEPLOY_USER" -- "\$PHP" "\$BIN_W" "\$@"
+fi
+if command -v sudo >/dev/null 2>&1; then
+  exec sudo -u "\$DEPLOY_USER" -- "\$PHP" "\$BIN_W" "\$@"
+fi
+
+echo "weline: cannot switch to user \$DEPLOY_USER (need runuser or sudo)" >&2
+exit 1
+EOF
+  chmod 755 "$tmp"
+
+  # 确保仓内可移植入口可执行（相对项目根解析；全局命令用下方内嵌 ROOT 的副本）
+  if [[ -f "$ROOT/bin/weline" ]]; then
+    chmod 755 "$ROOT/bin/weline" 2>/dev/null || true
+  fi
+
+  if ! sudo -n true 2>/dev/null; then
+    echo "安装全局 weline 命令需要 sudo 权限（输入密码后继续）："
+    if ! sudo true; then
+      rm -f "$tmp"
+      echo "  sudo 失败：可用项目内入口: $ROOT/bin/weline …" >&2
+      echo "  或手动: sudo install -m 755 $tmp $target" >&2
+      return 1
+    fi
+  fi
+  sudo install -m 755 "$tmp" "$target"
+  rm -f "$tmp"
+  echo "  ✓ $target  (as user $deploy_user → $php_bin bin/w …)"
+  return 0
+}
+
+# 将项目 php/psql/w 软链到 /usr/local/bin，并安装全局 weline CLI
 # 当存在 extend/server/php 时自动执行；或显式传 --link-system 时执行
 ensure_system_bin_links() {
   local did_link=0 failed=0
@@ -1713,6 +2120,7 @@ ensure_system_bin_links() {
       echo "    sudo ln -sf $SERVER_DIR/php/bin/php /usr/local/bin/php" >&2
       echo "    sudo ln -sf $SERVER_DIR/pgsql/bin/psql /usr/local/bin/psql" >&2
       echo "    sudo ln -sf $ROOT/bin/w /usr/local/bin/w" >&2
+      echo "    # 全局 weline：重跑安装或见 install_weline_global_cli" >&2
       return 1
     fi
   fi
@@ -1731,6 +2139,13 @@ ensure_system_bin_links() {
     sudo ln -sf "$ROOT/bin/w" /usr/local/bin/w && did_link=1
   fi
 
+  echo "正在安装全局命令: /usr/local/bin/weline"
+  if install_weline_global_cli; then
+    did_link=1
+  else
+    failed=1
+  fi
+
   # 验证软链
   if [[ -x "$SERVER_DIR/php/bin/php" ]]; then
     local actual_php expect_php
@@ -1744,8 +2159,14 @@ ensure_system_bin_links() {
       failed=1
     fi
   fi
+  if [[ -x /usr/local/bin/weline ]]; then
+    echo "  ✓ /usr/local/bin/weline  (try: weline s:up)"
+  else
+    echo "  ✗ /usr/local/bin/weline 未安装" >&2
+    failed=1
+  fi
   if [[ $did_link -eq 1 ]] && [[ $failed -eq 0 ]]; then
-    echo "已将项目 php/psql/w 软链到 /usr/local/bin"
+    echo "已将项目 php/psql/w 软链到 /usr/local/bin，并安装全局 weline CLI"
   fi
 }
 if [[ "$LINK_SYSTEM" == true ]] || [[ -x "$SERVER_DIR/php/bin/php" ]]; then
@@ -1775,22 +2196,32 @@ verify_path_added() {
     ok=0
     msg="${msg:+$msg; }w 命令未找到"
   fi
+  local found_weline
+  found_weline="$(command -v weline 2>/dev/null || true)"
+  if [[ ! -x /usr/local/bin/weline ]] && [[ -z "$found_weline" ]]; then
+    ok=0
+    msg="${msg:+$msg; }weline 命令未找到"
+  fi
   if [[ $ok -eq 0 ]] && [[ -n "$msg" ]]; then
     echo "" >&2
     printf '\033[33mWARNING: PATH 验证未通过 - %s\033[0m\n' "$msg" >&2
     echo "  请手动执行:" >&2
     echo "    sudo ln -sf $SERVER_DIR/php/bin/php /usr/local/bin/php" >&2
     echo "    sudo ln -sf $ROOT/bin/w /usr/local/bin/w" >&2
+    echo "    # 全局 weline：重跑 bash bin/install.bash --path-only 或带 --link-system" >&2
     echo "  然后: hash -r  或新开终端" >&2
     echo "" >&2
   else
     echo "PATH 验证通过: php=$(command -v php) -> $(readlink -f "$(command -v php)" 2>/dev/null || echo "?")"
+    if [[ -x /usr/local/bin/weline ]]; then
+      echo "  weline=$(command -v weline 2>/dev/null || echo /usr/local/bin/weline)  (例: weline s:up)"
+    fi
   fi
 }
 verify_path_added
 
-echo "Done. php, pgsql and bin (w command) have been added to PATH (project paths prepended, override system PHP)."
+echo "Done. php, pgsql and bin (w / weline) have been added to PATH (project paths prepended, override system PHP)."
 echo "  Linux: ~/.bashrc, ~/.profile, /etc/profile.d/weline-path.sh (login)  |  Mac: ~/.zshrc, ~/.zprofile"
 echo "To use in this terminal now:  source ~/.bashrc   (Linux) or source ~/.zshrc   (Mac)"
-echo "Or open a new terminal window. Then you can run: php bin/w setup:upgrade"
+echo "Or open a new terminal window. Then you can run: weline setup:upgrade   (or: php bin/w setup:upgrade)"
 echo "Current directory is now project root: $ROOT"

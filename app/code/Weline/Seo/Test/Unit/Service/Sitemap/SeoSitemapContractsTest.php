@@ -80,12 +80,12 @@ private function setUp_AtomicSitemapPublisherStableFilename(): void
 {
     parent::setUp();
     $this->websiteCode_AtomicSitemapPublisherStableFilename = 'ut-stable-sm-' . substr(bin2hex(random_bytes(4)), 0, 8);
-    $this->targetDir_AtomicSitemapPublisherStableFilename = BP . '/pub/sitemaps/' . $this->websiteCode_AtomicSitemapPublisherStableFilename . '/canonical';
+    $this->targetDir_AtomicSitemapPublisherStableFilename = PUB . 'sitemaps/' . $this->websiteCode_AtomicSitemapPublisherStableFilename . '/canonical';
 }
 
 private function tearDown_AtomicSitemapPublisherStableFilename(): void
 {
-    $root = BP . '/pub/sitemaps/' . $this->websiteCode_AtomicSitemapPublisherStableFilename;
+    $root = PUB . 'sitemaps/' . $this->websiteCode_AtomicSitemapPublisherStableFilename;
     if (is_dir($root)) {
         $this->removeTree_AtomicSitemapPublisherStableFilename($root);
     }

@@ -295,6 +295,7 @@ grid,grid
 当前没有可复制的明文密码。将重置并复制新密码，旧密码立即失效，是否继续？,"No plaintext password is available to copy. Reset and copy a new password now? The old password will stop working immediately."
 本站企业邮箱未就绪,"Site enterprise mail not ready"
 企业邮箱模块未启用,"Enterprise mail module disabled"
+注册平台时可用此邮箱，方便统一管理。,"Use this mailbox when registering on platforms for easier management."
 官方凭据指南,"Official credentials guide"
 通用步骤,"General steps"
 顶部选好范围类型、站点范围、二级范围。,"Select scope type, website scope, and secondary scope at the top."

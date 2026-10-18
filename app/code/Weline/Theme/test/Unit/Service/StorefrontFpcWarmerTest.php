@@ -48,7 +48,7 @@ final class StorefrontFpcWarmerTest extends TestCase
 
     public function testResolveWarmTargetsPrefersPublicOriginAndAvoidsHttpsOnPlainWorker(): void
     {
-        $instancePath = \defined('BP') ? BP . 'var/server/instances/default.json' : '';
+        $instancePath = \defined('BP') ? VAR_DIR . 'server/instances/default.json' : '';
         if ($instancePath === '' || !\is_file($instancePath)) {
             self::markTestSkipped('default WLS instance.json absent');
         }
