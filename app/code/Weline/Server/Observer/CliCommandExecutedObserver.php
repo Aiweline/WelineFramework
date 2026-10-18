@@ -59,7 +59,8 @@ class CliCommandExecutedObserver implements ObserverInterface
         }
 
         // setup:upgrade 等在命令内先关维护，本观察者再异步 reload。
-        // Direct 拓扑下 reload/补位可能留下粘性 Worker 门禁；若框架标志已是关闭，再推一次 disable 愈合。
+        // Direct 拓扑下 reload/补位可能留下粘性 Worker 门禁；cleanup 也可能未写掉 env。
+        // setup: 收尾意图恒为「退出升级 503」：强制写 env=false 并再推一次 disable（禁止因粘 true 直接 return）。
         if ($reloadType === self::RELOAD_TYPE_CODE && \str_starts_with($command, 'setup:')) {
             $this->reconcileMaintenanceOffAfterSetupReload($printer);
         }
@@ -67,12 +68,9 @@ class CliCommandExecutedObserver implements ObserverInterface
 
     private function reconcileMaintenanceOffAfterSetupReload(Printing $printer): void
     {
-        $enabled = (bool)Env::getInstance()->getConfig('system.maintenance', false);
-        if ($enabled) {
-            return;
-        }
-
         try {
+            // 升级收尾后必须退出升级 503：即便 env 仍粘 true（cleanup 失败/竞态）也强制清掉。
+            Env::getInstance()->setConfig('system.maintenance', false);
             $result = $this->getDispatchService()->setMaintenanceMode(false);
             if (($result['attempted'] ?? []) === []) {
                 return;

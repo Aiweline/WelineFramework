@@ -448,6 +448,13 @@ private function assert_WlsRuntimeStartPagePreviewMount_testStartPageNormalizesV
     // Website probe must run AFTER peel, using routing REQUEST_URI.
     self::assertMatchesRegularExpression('/normalizeVisitorUriForStartPage\(\$currentUri\);[\s\S]*?ensureWebsiteContextForStartPage\(\$request\)/', $runtime);
     self::assertMatchesRegularExpression('/\$routingUri = \$normalized\[\'routing_uri\'\];[\s\S]*?isRootRequestUri\(\$routingUri\)/', $runtime);
+    // Path-locale visitor origin survives CMS start-page remap (/bn_BD → home).
+    self::assertStringContainsString('preferVisitorOriginOverStartPageCanonical', $runtime);
+    self::assertMatchesRegularExpression(
+        '/preferVisitorOriginOverStartPageCanonical\(\$originUri,\s*\$canonicalUri\)/',
+        $runtime
+    );
+    self::assertStringContainsString('resolveLocalizationFromPathSegments', $runtime);
     // Server must not hardcode Theme preview path segment.
     self::assertStringNotContainsString("'/~preview'", $runtime);
     self::assertStringNotContainsString('"/~preview"', $runtime);

@@ -240,40 +240,60 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
 
     public function testShouldDrainForZendRatchetWithConfiguredPressureAndCandidate(): void
     {
-        WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(256 * 1024 * 1024);
+        $mib = 1024 * 1024;
+        WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(256 * $mib);
+        $shellDrain256 = WorkerResponseMemoryGuard::zendShellDrainBytesForLimit(256 * $mib);
+        self::assertSame(48 * $mib, $shellDrain256);
         // shell=10MiB < 48 → no shell drain; baseline overrun but ratio 80/256 < soft → false
         self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
-            80 * 1024 * 1024,
-            70 * 1024 * 1024,
-            64 * 1024 * 1024,
+            80 * $mib,
+            70 * $mib,
+            64 * $mib,
             true
         ));
         // shell=92MiB ≥ 48 → true even when real/limit (0.75) would have been the old gate
         self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
-            192 * 1024 * 1024,
-            100 * 1024 * 1024,
-            64 * 1024 * 1024,
+            192 * $mib,
+            100 * $mib,
+            64 * $mib,
             true
         ));
         // Cold-scan shape: real below soft ratio, shell ≥ 48MiB → true
         self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
-            158 * 1024 * 1024,
-            30 * 1024 * 1024,
+            158 * $mib,
+            30 * $mib,
             null,
             true
         ));
         // shell=20MiB < 48; baseline overrun 120≥64+32 but ratio 120/256 < soft → false
         self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
-            120 * 1024 * 1024,
-            100 * 1024 * 1024,
-            64 * 1024 * 1024,
+            120 * $mib,
+            100 * $mib,
+            64 * $mib,
             true
         ));
         self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
-            192 * 1024 * 1024,
-            100 * 1024 * 1024,
+            192 * $mib,
+            100 * $mib,
             null,
             false
+        ));
+
+        // 1024M：空壳线≈153MiB；旧「~60MiB 就退役」不再触发
+        WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(1024 * $mib);
+        $shellDrain1g = WorkerResponseMemoryGuard::zendShellDrainBytesForLimit(1024 * $mib);
+        self::assertSame((int) \floor(1024 * $mib * 0.15), $shellDrain1g);
+        self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
+            120 * $mib,
+            60 * $mib,
+            null,
+            true
+        ));
+        self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(
+            220 * $mib,
+            60 * $mib,
+            null,
+            true
         ));
     }
 

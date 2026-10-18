@@ -25,10 +25,20 @@ final class WorkerResponseMemoryGuard
     private const SOFT_HEAP_FORCE_BYTES = 48 * 1024 * 1024;
     /** 未知内存上限时，保留绝对量触发的 aggressive 回收。 */
     private const LARGE_HEAP_FORCE_AGGRESSIVE_BYTES = 64 * 1024 * 1024;
-    /** 回收后 shell 达此量即 ratchet 候选（不过 soft 比）。 */
-    private const ZEND_SHELL_DRAIN_BYTES = 48 * 1024 * 1024;
-    /** real may exceed captured warm baseline by this much before drain. */
-    private const ZEND_REAL_OVER_BASELINE_DRAIN_BYTES = 32 * 1024 * 1024;
+    /**
+     * 回收后 shell（real−used）退役下限。小预算（≤~320M）仍≈历史 48MiB；
+     * 大预算再按 {@see ZEND_SHELL_DRAIN_LIMIT_FRACTION} 放大，避免 1G Worker 被 ~50MiB 空壳抖死。
+     */
+    private const ZEND_SHELL_DRAIN_BYTES_FLOOR = 48 * 1024 * 1024;
+    private const ZEND_SHELL_DRAIN_BYTES_CAP = 256 * 1024 * 1024;
+    private const ZEND_SHELL_DRAIN_LIMIT_FRACTION = 0.15;
+    /** limit 未知时的绝对空壳线（高于 floor，低于典型 1G 缩放值）。 */
+    private const ZEND_SHELL_DRAIN_BYTES_UNKNOWN_LIMIT = 128 * 1024 * 1024;
+    /** real 相对 warm baseline 超标下限；随 limit 略放大。 */
+    private const ZEND_REAL_OVER_BASELINE_DRAIN_BYTES_FLOOR = 32 * 1024 * 1024;
+    private const ZEND_REAL_OVER_BASELINE_DRAIN_BYTES_CAP = 128 * 1024 * 1024;
+    private const ZEND_REAL_OVER_BASELINE_LIMIT_FRACTION = 0.0625;
+    private const ZEND_REAL_OVER_BASELINE_BYTES_UNKNOWN_LIMIT = 64 * 1024 * 1024;
     /** Capture warm baseline only when shell is small enough to look like framework floor. */
     private const ZEND_WARM_BASELINE_MAX_SHELL_BYTES = 24 * 1024 * 1024;
     private const ZEND_WARM_BASELINE_MAX_USED_BYTES = 96 * 1024 * 1024;
@@ -429,8 +439,47 @@ final class WorkerResponseMemoryGuard
     }
 
     /**
+     * 空壳退役线：max(floor, min(cap, limit×15%))；limit 未知 → 128MiB。
+     * 1024M → ~153MiB；256M → 48MiB（保持小预算敏感度）。
+     *
+     * @internal 契约/诊断可调用
+     */
+    public static function zendShellDrainBytesForLimit(?int $limitBytes): int
+    {
+        if ($limitBytes === null || $limitBytes <= 0) {
+            return self::ZEND_SHELL_DRAIN_BYTES_UNKNOWN_LIMIT;
+        }
+
+        $scaled = (int) \floor($limitBytes * self::ZEND_SHELL_DRAIN_LIMIT_FRACTION);
+
+        return \max(
+            self::ZEND_SHELL_DRAIN_BYTES_FLOOR,
+            \min(self::ZEND_SHELL_DRAIN_BYTES_CAP, $scaled)
+        );
+    }
+
+    /**
+     * baseline 超标增量：max(32MiB, min(128MiB, limit×6.25%))；未知 → 64MiB。
+     *
+     * @internal 契约/诊断可调用
+     */
+    public static function zendRealOverBaselineDrainBytesForLimit(?int $limitBytes): int
+    {
+        if ($limitBytes === null || $limitBytes <= 0) {
+            return self::ZEND_REAL_OVER_BASELINE_BYTES_UNKNOWN_LIMIT;
+        }
+
+        $scaled = (int) \floor($limitBytes * self::ZEND_REAL_OVER_BASELINE_LIMIT_FRACTION);
+
+        return \max(
+            self::ZEND_REAL_OVER_BASELINE_DRAIN_BYTES_FLOOR,
+            \min(self::ZEND_REAL_OVER_BASELINE_DRAIN_BYTES_CAP, $scaled)
+        );
+    }
+
+    /**
      * 回收后请求安全退役。
-     * shell≥ZEND_SHELL_DRAIN：不过 soft 比（used↓ 后 ratio 常跌破 soft）。
+     * shell≥缩放空壳线：不过 soft 比（used↓ 后 ratio 常跌破 soft）。
      * baseline 超标路径仍要求 real/limit ≥ soft（limit≤0 时仅看 baseline）。
      */
     public static function shouldDrainForZendRatchet(
@@ -442,15 +491,16 @@ final class WorkerResponseMemoryGuard
         if (!$afterForcedReclaim || $realBytes <= 0) {
             return false;
         }
+        $limitBytes = self::getMemoryLimitBytes();
         $shell = \max(0, $realBytes - \max(0, $usedBytes));
-        if ($shell >= self::ZEND_SHELL_DRAIN_BYTES) {
+        if ($shell >= self::zendShellDrainBytesForLimit($limitBytes > 0 ? $limitBytes : null)) {
             return true;
         }
+        $baselineOver = self::zendRealOverBaselineDrainBytesForLimit($limitBytes > 0 ? $limitBytes : null);
         if ($warmRealBaselineBytes !== null
             && $warmRealBaselineBytes > 0
-            && $realBytes >= ($warmRealBaselineBytes + self::ZEND_REAL_OVER_BASELINE_DRAIN_BYTES)
+            && $realBytes >= ($warmRealBaselineBytes + $baselineOver)
         ) {
-            $limitBytes = self::getMemoryLimitBytes();
             if ($limitBytes <= 0) {
                 return true;
             }

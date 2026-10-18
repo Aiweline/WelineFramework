@@ -437,6 +437,12 @@ final class GlobalRateLimiter
         }
     }
 
+    /** Public normalize for origin gates that share ban identity with this limiter. */
+    public static function normalizeClientIp(string $ip): string
+    {
+        return self::normalizeIp($ip);
+    }
+
     private static function normalizeIp(string $ip): string
     {
         $packed = @\inet_pton(\trim($ip));

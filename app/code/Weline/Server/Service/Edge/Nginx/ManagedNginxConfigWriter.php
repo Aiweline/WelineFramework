@@ -334,9 +334,10 @@ NGINX;
         default 0;
         "11" 1;
     }
-    # β FPC query_keys allowlist (from fpc-query-allowlist.map.conf / policy snapshot).
-    # Variable defined in included map; OR into disk bypass so Shared can HIT.
-    map "\$wls_fpc_html_bypass_auth\$wls_fpc_html_bypass_upgrade\$wls_fpc_html_bypass_preview_path\$wls_fpc_html_webhook_bypass\$wls_fpc_html_diag_bypass\$wls_fpc_html_i18n_inline_cookie_bypass\$wls_fpc_html_query_allowlist_bypass" \$wls_fpc_html_disk_bypass {
+    # Install pierce alone MUST bypass html-disk (UC-FPC-Pierce); wrong secret → pierce_ok=0.
+    # Allowlisted query is NOT OR'd here — it drives \$wls_fpc_html_disk_try instead
+    # (noise-only query stays path-only HIT; allowlisted → origin/~q).
+    map "\$wls_fpc_pierce_ok\$wls_fpc_html_bypass_auth\$wls_fpc_html_bypass_upgrade\$wls_fpc_html_bypass_preview_path\$wls_fpc_html_webhook_bypass\$wls_fpc_html_diag_bypass\$wls_fpc_html_i18n_inline_cookie_bypass" \$wls_fpc_html_disk_bypass {
         default 0;
         "~1" 1;
     }
@@ -347,6 +348,15 @@ NGINX;
     map \$http_accept_encoding \$wls_fpc_accepts_br {
         default 0;
         "~*(^|[, ])br(\$|[;,\\s])" 1;
+    }
+    # Single gate for html-disk try_files (nginx multi-if is unreliable — last if wins).
+    # HTTPS + no disk-bypass + no allowlisted Extra query + accepts br → path-only try_files.
+    # Allowlisted query (\$wls_fpc_html_query_allowlist_bypass=1) → 418/origin (~q leaf).
+    # Noise-only query keeps allowlist=0 → path-only HIT (UC-FPC-Scan).
+    # HTTP → 418 → @wls_html_origin (owns http→https 308).
+    map "\$scheme:\$wls_fpc_html_disk_bypass:\$wls_fpc_html_query_allowlist_bypass:\$wls_fpc_accepts_br" \$wls_fpc_html_disk_try {
+        default 0;
+        "https:0:0:1" 1;
     }
     # Compressible static leaves eligible for precomputed \$uri.br disk HIT.
     # MIME is NOT mapped here: nginx default_type does not expand variables
@@ -543,6 +553,14 @@ NGINX;
             add_header X-Wls-Static-Fpc "1" always;
             access_log off;
             error_page 418 = @wls_static_fpc_plain;
+            error_page 419 = @wls_static_origin;
+            # DEV/acceptance cache-bust: never serve stale live FPC; WLS remirrors on origin.
+            if (\$arg__wb_nc) {
+                return 419;
+            }
+            if (\$arg__weline_dev) {
+                return 419;
+            }
             if (\$wls_fpc_accepts_br = 0) {
                 return 418;
             }
@@ -591,6 +609,13 @@ NGINX;
 {$httpRedirectLocation}
             root {$quotedProjectRoot};
             open_file_cache_errors off;
+            error_page 419 = @wls_static_origin;
+            if (\$arg__wb_nc) {
+                return 419;
+            }
+            if (\$arg__weline_dev) {
+                return 419;
+            }
             try_files /generated/static/live/\$wls_fpc_html_host\$uri @wls_static_origin;
             expires 365d;
             add_header Cache-Control "public, max-age=31536000, immutable" always;
@@ -739,19 +764,17 @@ http {
 {$staticCacheLocationBlock}
         # FPC URL tree: generated/html/live/{Host}/…/index.html.br. Miss / bypass / no-br → @wls_html_origin.
         # Non-HTML (/api/, /bin/query, area prefixes) already proxy above — never try_files.
+        # Non-empty query / pierce / no-br / http → origin. One if only (no scheme if here).
         location / {
             error_page 418 = @wls_html_origin;
-            if (\$wls_fpc_html_disk_bypass) {
-                return 418;
-            }
-            if (\$wls_fpc_accepts_br = 0) {
+            if (\$wls_fpc_html_disk_try = 0) {
                 return 418;
             }
             root {$quotedFpcHtmlRoot};
             try_files \$uri/index.html.br =418;
             default_type text/html;
             charset utf-8;
-{$fpcHtmlDiskHitHeaders}{$httpRedirectLocation}{$locationProtocolHeaders}
+{$fpcHtmlDiskHitHeaders}{$locationProtocolHeaders}
         }
         location @wls_html_origin {
             # Avoid stacking gzip_vary Accept-Encoding on upstream's merged Vary.
@@ -1340,10 +1363,7 @@ NGINX;
 {$nonHtmlOriginLocationBlock}
         location / {
             error_page 418 = @wls_html_origin_distinct_{$originName};
-            if (\$wls_fpc_html_disk_bypass) {
-                return 418;
-            }
-            if (\$wls_fpc_accepts_br = 0) {
+            if (\$wls_fpc_html_disk_try = 0) {
                 return 418;
             }
             root {$quotedFpcHtmlRoot};
@@ -2150,6 +2170,44 @@ NGINX;
             : '$wls_business_upstream_connection';
 
         $blocks = [];
+        $quotedBqFpcRoot = '"' . \str_replace(
+            ['\\', '"'],
+            ['/', '\\"'],
+            $this->paths->projectRoot()
+            . DIRECTORY_SEPARATOR . 'generated'
+            . DIRECTORY_SEPARATOR . 'html'
+            . DIRECTORY_SEPARATOR . 'live'
+        ) . '/$wls_fpc_html_host"';
+        // Heredoc would eat `{40}` / leave `{{40}}`; inject quantifier via variable.
+        $hexSha1Quant = '{40}';
+        foreach ($this->resolveNonHtmlOriginPathPrefixes() as $prefix) {
+            if (!$this->isRestFrontendOrApiSemanticPrefix($prefix)) {
+                continue;
+            }
+            // Must be ^~ (not regex ~): otherwise location ^~ /{$prefix}/ steals the URI.
+            $blocks[] = <<<NGINX
+
+        # BinQuery FPC leaf (same ~q identity as HTML). HIT = index.bq.br only.
+        location ^~ /{$prefix}/framework/query-bin/~fpc/ {
+            if (\$request_method !~ ^(GET|HEAD)\$) {
+                return 405;
+            }
+            if (\$wls_fpc_accepts_br = 0) {
+                return 404;
+            }
+            root {$quotedBqFpcRoot};
+            rewrite "^/{$prefix}/framework/query-bin/~fpc/([A-Za-z0-9._~%/-]+)/~q/([a-f0-9]{$hexSha1Quant})\$" /\$1/~q/\$2/index.bq.br break;
+            try_files \$uri =404;
+            default_type application/x-weline-query-bin;
+            charset utf-8;
+            gzip_vary off;
+            add_header Content-Encoding br always;
+            add_header X-Weline-FPC HIT always;
+            add_header X-Weline-FPC-Source bq-disk always;
+            add_header Cache-Control "public, max-age=60" always;
+        }
+NGINX;
+        }
         if ($includeSseStream) {
             foreach ($this->resolveNonHtmlOriginPathPrefixes() as $prefix) {
                 // SSE only exists under rest_frontend (semantic /api/ + configured prefix).

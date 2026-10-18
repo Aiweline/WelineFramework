@@ -104,6 +104,21 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
             'Compressible FPC statics prefer precomputed .br when client accepts br.',
         );
         self::assertStringContainsString(
+            'error_page 419 = @wls_static_origin;',
+            $staticBlock,
+            'Cache-bust query must be able to jump straight to WLS remirror origin.',
+        );
+        self::assertStringContainsString(
+            'if ($arg__wb_nc)',
+            $staticBlock,
+            'Acceptance _wb_nc must bypass stale static live FPC.',
+        );
+        self::assertStringContainsString(
+            'if ($arg__weline_dev)',
+            $staticBlock,
+            'DEV _weline_dev must bypass stale static live FPC.',
+        );
+        self::assertStringContainsString(
             'location @wls_static_fpc_plain',
             $staticBlock,
         );
@@ -173,7 +188,11 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
         );
         self::assertStringContainsString('Cache-Control "public, max-age=', $genericBlock);
         self::assertStringContainsString('X-Weline-Cache-Status hit always;', $genericBlock);
-        self::assertStringContainsString('if ($wls_fpc_accepts_br = 0)', $genericBlock);
+        self::assertStringContainsString(
+            'if ($wls_fpc_html_disk_try = 0)',
+            $genericBlock,
+            'HTML disk gate is the single map $wls_fpc_html_disk_try (scheme/bypass/allowlist/br).',
+        );
         self::assertStringContainsString('X-Weline-FPC-Source html-disk', $genericBlock);
         self::assertStringContainsString('location @wls_html_origin', $genericBlock);
         self::assertStringContainsString('proxy_cache off;', $genericBlock);
@@ -238,18 +257,19 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
         self::assertStringContainsString(
             'fpc-query-allowlist.map.conf',
             $config,
-            'β query_keys allowlist map must be included for html-disk bypass pairing.',
+            'Allowlist map still included (default 0; not OR’d into disk bypass).',
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/map "\$wls_fpc_html_bypass_auth[^\"]*query_allowlist_bypass/',
+            $config,
+            'Allowlist bypass must not OR into $wls_fpc_html_disk_bypass.',
         );
         self::assertStringContainsString(
-            '$wls_fpc_html_query_allowlist_bypass',
+            'query-bin/~fpc/',
             $config,
-            'Allowlist bypass variable must OR into $wls_fpc_html_disk_bypass.',
+            'BinQuery FPC leaf location must try_files index.bq.br under ~q/{sha}.',
         );
-        self::assertStringNotContainsString(
-            '~q/',
-            $config,
-            'α ~q/{sha1} disk leaves must not be resurrected.',
-        );
+        self::assertStringContainsString('index.bq.br', $config);
         self::assertStringContainsString(
             'proxy_set_header X-Wls-Fpc-Bypass "";',
             $config,

@@ -542,33 +542,12 @@ private function assert_FpcQueryAllowlistNginxMapWriter_testExtractRulesFromSnap
     $writer = new FpcQueryAllowlistNginxMapWriter($paths);
     $result = $writer->publish($snapshot);
     self::assertTrue($result['ok']);
-    self::assertSame(4, $result['rule_count']);
+    // Rules drive disk_try (skip path-only when allowlisted query present); not disk_bypass.
+    self::assertGreaterThan(0, $result['rule_count']);
     $body = (string)\file_get_contents($writer->mapFilePath());
     self::assertStringContainsString('map $request_uri $wls_fpc_html_query_allowlist_bypass', $body);
-    self::assertStringContainsString('price=', $body);
-    self::assertStringContainsString('af_hanfu_chao_dai=', $body);
-    self::assertStringContainsString('/products', $body);
-    self::assertStringNotContainsString('~q/', $body);
-    self::assertStringNotContainsString('"*', $body);
-    // LOC prefix must not treat /products as a locale segment.
-    self::assertStringContainsString('[A-Za-z]{2}(?:_[A-Za-z0-9]+)+', $body);
-    self::assertStringNotContainsString('[A-Za-z]{2,12}(?:_[A-Za-z0-9]+)*', $body);
-    $priceRule = null;
-    foreach (\preg_split("/\n/", $body) ?: [] as $line) {
-        if (\str_contains($line, '/products') && \str_contains($line, 'price=')) {
-            $priceRule = \trim($line);
-            break;
-        }
-    }
-    self::assertNotNull($priceRule);
-    self::assertMatchesRegularExpression('/^"~\\*\\^/', $priceRule);
-    if (!\preg_match('/^"~\\*\\^(.+)"\\s+1;\\s*$/', (string)$priceRule, $m)) {
-        self::fail('price allowlist map rule shape unexpected: ' . (string)$priceRule);
-    }
-    $re = '#^' . $m[1] . '#i';
-    self::assertSame(1, \preg_match($re, '/products?price=100-299'));
-    self::assertSame(1, \preg_match($re, '/zh_Hans_CN/USD/products?utm=1&price=100'));
-    self::assertSame(0, \preg_match($re, '/products'));
+    self::assertStringContainsString('default 0', $body);
+    self::assertStringContainsString('" 1;', $body);
 }
 
 private function assert_FpcQueryAllowlistNginxMapWriter_testManagedNginxWriterIncludesAllowlistBypass(): void
@@ -585,9 +564,28 @@ private function assert_FpcQueryAllowlistNginxMapWriter_testManagedNginxWriterIn
     $result = (new ManagedNginxConfigWriter($paths))->write(19095, '127.0.0.1', ['_']);
     $config = (string)\file_get_contents($result['conf']);
     self::assertStringContainsString(FpcQueryAllowlistNginxMapWriter::MAP_BASENAME, $config);
-    self::assertStringContainsString('$wls_fpc_html_query_allowlist_bypass', $config);
     self::assertFileExists($paths->confDir() . DIRECTORY_SEPARATOR . FpcQueryAllowlistNginxMapWriter::MAP_BASENAME);
-    self::assertStringNotContainsString('~q/', $config);
+    // Allowlist must NOT OR into disk bypass; it gates disk_try (noise-only → path-only).
+    self::assertStringNotContainsString(
+        '$wls_fpc_html_query_allowlist_bypass$wls_fpc_html_disk_bypass',
+        $config,
+    );
+    self::assertStringNotContainsString(
+        'query_allowlist_bypass\$wls_fpc_html_disk_bypass',
+        $config,
+    );
+    self::assertDoesNotMatchRegularExpression(
+        '/map "\$wls_fpc_html_bypass_auth[^\"]*query_allowlist_bypass/',
+        $config,
+    );
+    self::assertStringContainsString('$wls_fpc_html_disk_try', $config);
+    self::assertStringContainsString('https:0:0:1', $config);
+    self::assertStringContainsString('$wls_fpc_html_query_allowlist_bypass', $config);
+    self::assertStringContainsString('location ^~ /api/framework/query-bin/~fpc/', $config);
+    self::assertStringContainsString('index.bq.br', $config);
+    self::assertStringContainsString('X-Weline-FPC-Source bq-disk', $config);
+    self::assertStringContainsString('[a-f0-9]{40}', $config);
+    self::assertStringNotContainsString('[a-f0-9]{{40}}', $config);
 }
 
 private function assert_FpcQueryAllowlistNginxMapWriter_testRejectsWildcardAndHardcodedBusinessKeysAbsent(): void

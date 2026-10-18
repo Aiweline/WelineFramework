@@ -8888,19 +8888,25 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $canonicalQuery = $this->parseUriQuery($canonicalUri);
 
         // Token / mount markers were already applied by normalizeVisitorUriForStartPage
-        // (RequestContext + $_GET). Keep historical start-page origin = CMS canonical
-        // so Url::resealVisitorUriFromWire does not reintroduce the mount over the
-        // mapped business path; URL generation still reads the path token.
+        // (RequestContext + $_GET). REQUEST_URI becomes the CMS start-page route for
+        // dispatch. WELINE_ORIGIN_REQUEST_URI must keep the visitor-facing pretty
+        // path when it still carries a localization segment (e.g. /bn_BD → CMS home):
+        // overwriting origin with the CMS canonical erased path locale for homepage
+        // layout SERP packs and made HotCache bag HIT the default-lang HTML.
+        // Mount-only origins without currency/language still use CMS canonical so
+        // Url::resealVisitorUriFromWire does not reintroduce preview mounts.
+
+        $originForVisitor = $this->preferVisitorOriginOverStartPageCanonical($originUri, $canonicalUri);
+        $fullRequestUri = $this->buildStartPageFullRequestUri($request, $originForVisitor);
 
         $this->putRequestServer('REQUEST_URI',  $canonicalUri);
         $this->putRequestServer('PATH_INFO',  $canonicalPath);
         $this->putRequestServer('QUERY_STRING',  $canonicalQuery);
-        $fullRequestUri = $this->buildStartPageFullRequestUri($request, $canonicalUri);
 
         $request->setServer('REQUEST_URI', $canonicalUri);
         $request->setServer('PATH_INFO', $canonicalPath);
         $request->setServer('QUERY_STRING', $canonicalQuery);
-        $request->setServer('WELINE_ORIGIN_REQUEST_URI', $canonicalUri);
+        $request->setServer('WELINE_ORIGIN_REQUEST_URI', $originForVisitor);
         $request->setServer('WELINE_FULL_REQUEST_URI', $fullRequestUri);
         if ($request instanceof WlsRequest) {
             $request->replaceParsedUriForRouting($canonicalUri);
@@ -8908,17 +8914,52 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $request->invalidateUriCache();
         Request::clearStaticUrlPathCache();
 
-        $this->putRequestServer('WELINE_ORIGIN_REQUEST_URI',  $canonicalUri);
+        $this->putRequestServer('WELINE_ORIGIN_REQUEST_URI',  $originForVisitor);
         $this->putRequestServer('WELINE_FULL_REQUEST_URI',  $fullRequestUri);
         WelineEnv::set('request.uri', $canonicalUri, 'WlsRuntime start page route');
-        WelineEnv::set('origin_request_uri', $canonicalUri, 'WlsRuntime start page route');
+        WelineEnv::set('origin_request_uri', $originForVisitor, 'WlsRuntime start page route');
         WelineEnv::set('full_request_uri', $fullRequestUri, 'WlsRuntime start page route');
         WelineEnv::set('request.query_string', $canonicalQuery, 'WlsRuntime start page route');
         WelineEnv::setServer('REQUEST_URI', $canonicalUri, 'WlsRuntime start page route');
         WelineEnv::setServer('PATH_INFO', $canonicalPath, 'WlsRuntime start page route');
         WelineEnv::setServer('QUERY_STRING', $canonicalQuery, 'WlsRuntime start page route');
-        WelineEnv::setServer('WELINE_ORIGIN_REQUEST_URI', $canonicalUri, 'WlsRuntime start page route');
+        WelineEnv::setServer('WELINE_ORIGIN_REQUEST_URI', $originForVisitor, 'WlsRuntime start page route');
         WelineEnv::setServer('WELINE_FULL_REQUEST_URI', $fullRequestUri, 'WlsRuntime start page route');
+    }
+
+    /**
+     * Keep visitor pretty-path origin when it still encodes storefront localization.
+     * Otherwise keep historical start-page origin = CMS canonical (preview mounts).
+     */
+    private function preferVisitorOriginOverStartPageCanonical(string $visitorOrigin, string $canonicalUri): string
+    {
+        $visitorOrigin = \trim($visitorOrigin);
+        if ($visitorOrigin === '') {
+            return $canonicalUri;
+        }
+        $path = \parse_url($visitorOrigin, \PHP_URL_PATH);
+        if (!\is_string($path) || $path === '') {
+            $path = $visitorOrigin;
+        }
+        $q = \strpos($path, '?');
+        if ($q !== false) {
+            $path = \substr($path, 0, $q);
+        }
+        $segments = \array_values(\array_filter(
+            \explode('/', \trim($path, '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        if ($segments === []) {
+            return $canonicalUri;
+        }
+        $localized = State::resolveLocalizationFromPathSegments($segments);
+        $language = \trim((string)($localized['language'] ?? ''));
+        $currency = \trim((string)($localized['currency'] ?? ''));
+        if ($language !== '' || $currency !== '') {
+            return $visitorOrigin;
+        }
+
+        return $canonicalUri;
     }
 
     /**

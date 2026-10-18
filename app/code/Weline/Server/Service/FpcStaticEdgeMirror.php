@@ -25,6 +25,8 @@ final class FpcStaticEdgeMirror
             return;
         }
         try {
+            // publishFromFile content-hash heals stale live leaves when origin is reached
+            // (Nginx _wb_nc / _weline_dev bypass + cold miss). Best-effort only.
             FpcStaticDiskStore::publishFromFile($host, $uriPath, $absoluteFile);
         } catch (\Throwable) {
             // Edge mirror is best-effort; never fail the static response.

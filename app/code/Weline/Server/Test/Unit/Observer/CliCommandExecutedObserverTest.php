@@ -92,6 +92,65 @@ final class CliCommandExecutedObserverTest extends TestCase
 
         $this->assertSame(1, $dispatchService->reloadCalls);
         $this->assertSame(1, $dispatchService->maintenanceDisableCalls);
+        $this->assertFalse((bool)Env::getInstance()->getConfig('system.maintenance', true));
+    }
+
+    public function testSetupReloadForcesMaintenanceOffEvenWhenEnvStickyTrue(): void
+    {
+        Env::getInstance()->setConfig('system.maintenance', true);
+
+        $dispatchService = new class extends BroadcastControlDispatchService {
+            public int $maintenanceDisableCalls = 0;
+
+            public function __construct()
+            {
+            }
+
+            public function reloadAsync(?string $instanceName, string $reloadType, float $timeout = 3.0): array
+            {
+                return [
+                    'success' => true,
+                    'attempted' => ['verify_http'],
+                    'succeeded' => ['verify_http'],
+                    'failed_by_instance' => [],
+                    'skipped_by_instance' => [],
+                    'results_by_instance' => [],
+                    'message' => 'ok',
+                ];
+            }
+
+            public function setMaintenanceMode(bool $enabled, ?string $instanceName = null, float $timeout = 6.0): array
+            {
+                if (!$enabled) {
+                    $this->maintenanceDisableCalls++;
+                }
+
+                return [
+                    'success' => true,
+                    'attempted' => ['verify_http'],
+                    'succeeded' => ['verify_http'],
+                    'failed_by_instance' => [],
+                    'skipped_by_instance' => [],
+                    'results_by_instance' => [],
+                    'message' => 'disable-ok',
+                ];
+            }
+        };
+
+        $printing = $this->getMockBuilder(Printing::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['note', 'warning'])
+            ->getMock();
+        $printing->expects($this->atLeast(1))->method('note');
+
+        ObjectManager::setInstance(BroadcastControlDispatchService::class, $dispatchService);
+        ObjectManager::setInstance(Printing::class, $printing);
+
+        $observer = new CliCommandExecutedObserver();
+        $observer->execute(new Event(['data' => ['command' => 'setup:upgrade']]));
+
+        $this->assertSame(1, $dispatchService->maintenanceDisableCalls);
+        $this->assertFalse((bool)Env::getInstance()->getConfig('system.maintenance', true));
     }
 
     public function testCacheCommandSkipsDuplicateDispatch(): void

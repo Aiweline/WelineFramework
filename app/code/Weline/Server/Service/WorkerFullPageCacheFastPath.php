@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Compilation\CompiledPhpRegistry;
 use Weline\Framework\Context;
 use Weline\Framework\Controller\Extra\ExtraPolicyResolver;
 use Weline\Framework\Controller\Extra\FpcPolicySnapshot;
@@ -303,12 +304,9 @@ final class WorkerFullPageCacheFastPath
             \parse_str(\substr($requestUri, $qPos + 1), $query);
         }
 
-        // β: Extra query_keys allowlist present on this path → skip Worker
-        // html-disk fast path (path-only leaf). Rules come from FPC policy
-        // snapshot via ExtraPolicyResolver — never hardcode business keys.
-        if ($query !== [] && $this->requestCarriesFpcQueryAllowlist($requestUri, $query)) {
-            return true;
-        }
+        // Allowlisted Extra query_keys no longer force bypass: Coordinator +
+        // FpcHtmlDiskStore serve …/~q/{sha}/index.html.br (edge njs mirrors).
+        // Path-only wrong HIT is prevented by URI priming before disk read.
 
         $normalizedHeaders = [];
         foreach ($headers as $name => $value) {
@@ -332,17 +330,48 @@ final class WorkerFullPageCacheFastPath
         try {
             $path = (string)(\parse_url($requestUri, \PHP_URL_PATH) ?: '/');
             $path = FpcPolicySnapshot::normalizePath($path);
-            /** @var ExtraPolicyResolver $resolver */
-            $resolver = ObjectManager::getInstance(ExtraPolicyResolver::class);
+            $keys = $this->fpcQueryKeysForPath($path);
+            if ($keys === []) {
+                return false;
+            }
 
-            return $resolver->requestCarriesAllowlistedQueryForPath(
-                $path,
-                ScopeIdentity::website(0, 'default'),
-                $query,
-            );
+            return FpcPolicySnapshot::requestCarriesAllowlistedQuery($keys, $query);
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * Same source as Nginx β map / Coordinator: compiled fpc_policy_snapshot.
+     *
+     * @return list<string>
+     */
+    private function fpcQueryKeysForPath(string $path): array
+    {
+        try {
+            /** @var ExtraPolicyResolver $resolver */
+            $resolver = ObjectManager::getInstance(ExtraPolicyResolver::class);
+
+            return $resolver->queryKeysForPath($path, ScopeIdentity::website(0, 'default'));
+        } catch (\Throwable) {
+            // Probe / unit contexts may lack the resolver — read compiled snapshot.
+        }
+
+        $file = (\defined('BP') ? (string)BP : '') . '/generated/framework/fpc_policy_snapshot.php';
+        if ($file === '/generated/framework/fpc_policy_snapshot.php' || !\is_file($file)) {
+            return [];
+        }
+        try {
+            $snapshot = CompiledPhpRegistry::load($file);
+        } catch (\Throwable) {
+            $snapshot = @include $file;
+        }
+        if (!\is_array($snapshot)) {
+            return [];
+        }
+        $policy = FpcPolicySnapshot::resolve($snapshot, $path, ScopeIdentity::global());
+
+        return FpcPolicySnapshot::queryKeysFromPolicy($policy);
     }
 
     /** @param array<string, mixed> $targetParts */

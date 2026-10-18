@@ -61,6 +61,9 @@ private function assert_CliCommandExecutedObserverSetupMaintenanceHeal_testSetup
     self::assertStringContainsString('reconcileMaintenanceOffAfterSetupReload', $src);
     self::assertStringContainsString("str_starts_with(\$command, 'setup:')", $src);
     self::assertStringContainsString('setMaintenanceMode(false)', $src);
+    self::assertStringContainsString("setConfig('system.maintenance', false)", $src);
+    self::assertStringContainsString('退出升级 503', $src);
     self::assertStringContainsString('WLS 维护门禁已在代码重载后再次确认关闭', $src);
+    self::assertStringNotContainsString('getConfig(\'system.maintenance\'', $src);
 }
 }

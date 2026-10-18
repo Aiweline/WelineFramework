@@ -92,7 +92,8 @@ final class WorkerResponseMemoryGuardConfiguredBudgetTest extends TestCase
     public function testRatchetSamplesRespectConfiguredLimitWithoutLosingEitherCandidate(): void
     {
         WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(256 * self::MIB);
-        // shell≥48MiB → drain true（不再被 soft 比短路）
+        self::assertSame(48 * self::MIB, WorkerResponseMemoryGuard::zendShellDrainBytesForLimit(256 * self::MIB));
+        // shell≥48MiB（256M 缩放仍为 floor）→ drain true（不再被 soft 比短路）
         foreach ([[98, 20.8], [80, 23.6], [86, 34]] as [$real, $used]) {
             self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet((int) ($real * self::MIB), (int) ($used * self::MIB), null, true));
         }
@@ -107,8 +108,15 @@ final class WorkerResponseMemoryGuardConfiguredBudgetTest extends TestCase
         // shell=60 ≥ 48 → true（与 soft 比无关）
         self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(200 * self::MIB, 140 * self::MIB, null, true));
 
+        // 压力限额 1G：空壳线≈153MiB；shell=60 不再退役，shell=160 仍退役
+        WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(1024 * self::MIB);
+        self::assertSame((int) \floor(1024 * self::MIB * 0.15), WorkerResponseMemoryGuard::zendShellDrainBytesForLimit(1024 * self::MIB));
+        self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(200 * self::MIB, 140 * self::MIB, null, true));
+        self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(220 * self::MIB, 60 * self::MIB, null, true));
+        // ini 1G 但压力限额已设时仍以压力限额为准（上已覆盖）；清限额后 ini 生效
+        WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(0);
         \ini_set('memory_limit', '1G');
-        self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(200 * self::MIB, 140 * self::MIB, null, true));
+        self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(200 * self::MIB, 140 * self::MIB, null, true));
         WorkerResponseMemoryGuard::setPressureMemoryLimitBytes(128 * self::MIB);
         self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(98 * self::MIB, 20 * self::MIB, null, true));
     }
@@ -122,7 +130,10 @@ final class WorkerResponseMemoryGuardConfiguredBudgetTest extends TestCase
         self::assertIsArray($result);
         self::assertSame([], $this->read(FullPageCacheCoordinator::class, 'processFpcPayloadCache'));
         self::assertSame([], $this->read(FullPageCacheCoordinator::class, 'processLocalizedHomepageReceipts'));
-        self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(98 * self::MIB, 20 * self::MIB, null, true));
+        // 未知 limit：空壳线 128MiB；shell≈78 < 128 → 不退役；shell≥128 → 退役
+        self::assertSame(128 * self::MIB, WorkerResponseMemoryGuard::zendShellDrainBytesForLimit(null));
+        self::assertFalse(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(98 * self::MIB, 20 * self::MIB, null, true));
+        self::assertTrue(WorkerResponseMemoryGuard::shouldDrainForZendRatchet(180 * self::MIB, 40 * self::MIB, null, true));
     }
 
     private function seed(): void
