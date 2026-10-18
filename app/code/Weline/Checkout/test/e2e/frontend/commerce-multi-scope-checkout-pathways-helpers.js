@@ -131,11 +131,17 @@ async function addToCartMode(page, gotoFrontend, pdpPath, mode) {
       }
     }
     pinTheme();
-    const buyNow = document.querySelector('[data-testid="product-add-to-cart"][data-product-id]')
-      || document.querySelector('[data-testid="product-buy-now"][data-product-id]')
-      || document.querySelector('[data-action="add"][data-product-id]')
-      || document.querySelector('[data-action="buy-now"][data-product-id]')
-      || document.querySelector('[data-action="add-to-cart"][data-product-id]');
+    // Prefer the main PDP purchase root — related/recommend cards also expose
+    // product-add-to-cart and can steal querySelector (金羽 #221 vs 悦雅 #113).
+    const root = document.querySelector('.product-native-detail')
+      || document.querySelector('[data-testid="product-detail"]')
+      || document.querySelector('main')
+      || document;
+    const buyNow = root.querySelector('[data-testid="product-add-to-cart"][data-product-id]')
+      || root.querySelector('[data-testid="product-buy-now"][data-product-id]')
+      || root.querySelector('[data-action="add"][data-product-id]')
+      || root.querySelector('[data-action="buy-now"][data-product-id]')
+      || root.querySelector('[data-action="add-to-cart"][data-product-id]');
     if (!buyNow) {
       return {
         success: false,
@@ -144,7 +150,6 @@ async function addToCartMode(page, gotoFrontend, pdpPath, mode) {
         html_hint: (document.body && document.body.innerHTML || '').includes('product-add-to-cart'),
       };
     }
-    const root = (buyNow.closest && buyNow.closest('.product-native-detail')) || document;
     root.querySelectorAll('[data-variant-axis]').forEach((axisHost) => {
       if (!axisHost.querySelector('[data-variant-option].is-selected')) {
         const first = axisHost.querySelector('[data-variant-option]');

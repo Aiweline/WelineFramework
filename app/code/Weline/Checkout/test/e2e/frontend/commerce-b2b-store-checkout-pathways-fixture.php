@@ -174,10 +174,31 @@ function e2e_b2b_ensure_product_stock(int $websiteId, int $storeId): array
     // 悦雅霓裳 product_uuid (slug 4d375d6d / product_id 113 uses 70e4dd07…, not the older bc49a334…).
     $productUuids = [
         '70e4dd07-de40-50c0-8ad1-66d5fb17cd9a', // YUEYANICHANG-804749* (current PDP add-to-cart offers)
-        'bc49a334-a39e-5bfd-b893-c98fcdfb014b', // YUEYANICHANG-010223* (older release-paypal seed)
+        'bc49a334-a39e-5bfd-b893-c98fcdfb014b', // product_id 113 / YUEYANICHANG-010223* registry
         '74228704-6db4-50aa-8428-41a8f46e465b', // YUEYANICHANG-A55351C0-MIN-ZU sibling
         '8a3eda07-182e-57c2-991b-bfa66251637b', // product_id 321 黑山茶 (legacy)
     ];
+    // product_id 221 金羽 — related-card / sticky CTA steal target on some B2B PDP paints.
+    try {
+        $q = ObjectManager::getInstance()->get(\Weline\Framework\Database\ConnectionFactory::class)
+            ->getConnection()
+            ->getQuery();
+        $jinyuRows = $q->query(
+            "SELECT p.global_product_uuid FROM w_product_ws_0_product p
+             INNER JOIN w_product_ws_0_attribute_value a
+               ON a.entity_type='product' AND a.entity_id=p.product_id
+              AND a.attribute_code='name' AND a.locale='zh_Hans_CN'
+             WHERE a.value_text LIKE '%金羽%' LIMIT 5"
+        )->fetchArray() ?: [];
+        foreach ($jinyuRows as $jr) {
+            $u = (string)($jr['global_product_uuid'] ?? '');
+            if ($u !== '') {
+                $productUuids[] = $u;
+            }
+        }
+    } catch (Throwable) {
+        // optional; pathway CTA scope fix is primary
+    }
     // Also pull any registry row whose SKU still matches the live PDP family.
     /** @var OfferIdentityRegistry $skuReg */
     $skuReg = ObjectManager::getInstance()->get(OfferIdentityRegistry::class);
