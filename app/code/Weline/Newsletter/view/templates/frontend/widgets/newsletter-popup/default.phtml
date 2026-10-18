@@ -159,12 +159,13 @@ $rootStyle = $isEditorPreview ? '' : 'display: none;';
         </button>
 
         <div class="letter-shell" data-testid="newsletter-letter-sheet">
-            <img class="letter-shell__art"
-                 src="<?= $esc($shellUrl) ?>"
-                 alt=""
-                 width="720"
-                 height="960"
-                 decoding="async">
+            <div class="letter-shell__art w-frame" data-ratio="3/4" data-fit="contain">
+                <img src="<?= $esc($shellUrl) ?>"
+                     alt=""
+                     width="720"
+                     height="960"
+                     decoding="async">
+            </div>
 
             <div class="letter-shell__form">
                 <?php if ($headline): ?>

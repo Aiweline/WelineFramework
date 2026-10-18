@@ -33,8 +33,8 @@ final class GuideEnglishTranslationTest extends TestCase
                 '1.1 In-stock orders: After successful payment, we pick, inspect and dispatch your order within 1–3 business days. Public holidays and peak shipping periods may extend this timeframe.',
             ],
             'return eligibility' => [
-                '1.1 跨境售后说明：本店从中国国内发往海外。汉服跨境回程运费与税费较高，试穿后也较难二次销售，因此更建议您下单前确认尺码与款式。发出后，个人原因的退换通常难以安排；若遇到质量、错发或运输损坏，我们会认真处理。与部分平台的无理由退货不同，我们的售后重心是质量与发货准确性。',
-                '1.1 Cross-border after-sales note: We ship from mainland China overseas. Cross-border return freight and taxes for hanfu are high, and tried-on garments are hard to resell, so we recommend confirming size and style before ordering. After dispatch, returns for personal reasons are usually difficult to arrange; if you encounter quality issues, wrong items, or shipping damage, we will handle them carefully. Unlike no-reason returns on some platforms, our after-sales focus is product quality and shipping accuracy.',
+                '1.1 跨境售后说明：本店从中国国内发往海外。跨境回程运费与税费较高，试穿后也较难二次销售，因此更建议您下单前确认尺码与款式。发出后，个人原因的退换通常难以安排；若遇到质量、错发或运输损坏，我们会认真处理。与部分平台的无理由退货不同，我们的售后重心是质量与发货准确性。',
+                '1.1 Cross-border after-sales note: We ship from mainland China overseas. Cross-border return freight and taxes are high, and tried-on garments are hard to resell, so we recommend confirming size and style before ordering. After dispatch, returns for personal reasons are usually difficult to arrange; if you encounter quality issues, wrong items, or shipping damage, we will handle them carefully. Unlike no-reason returns on some platforms, our after-sales focus is product quality and shipping accuracy.',
             ],
             'refund timeframe' => [
                 '5.3 到账时效：质检通过后 3–15 个工作日内原路退回，具体到账时间以支付渠道（银行卡、第三方支付等）为准。节假日可能顺延。',

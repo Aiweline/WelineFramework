@@ -544,6 +544,7 @@ final class PromotionActivityThemeService
         $legacyTitle = [
             '今日搭配精选' => '今日特价专场',
             "Today's Hanfu edit" => "Today's Deals",
+            "Today's edit" => "Today's Deals",
             "Today's Featured Looks" => "Today's Deals",
             'أفضل الخيارات اليوم' => 'عروض اليوم',
             'Heute ausgewählte Outfit-Vorschläge' => 'Tagesangebote',

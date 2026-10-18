@@ -1258,15 +1258,71 @@
         ensureOperatorFab();
         bindPopoverActions();
         decorateAllMarkers(document);
+        var observeOptions = {
+            childList: true,
+            subtree: true,
+            characterData: true,
+            attributes: true,
+            attributeFilter: ['data-i18n-empty', 'data-i18n-toc-cart', 'data-i18n-tob-cart', 'aria-label', 'title', 'alt', 'placeholder'],
+        };
+        var pendingRoots = [];
+        var observeHandle = null;
+        function runStampDecorate(roots) {
+            var apply = function () {
+                if (roots && roots.length) {
+                    roots.forEach(function (node) {
+                        if (!node || node.nodeType !== 1) return;
+                        if (node.tagName === 'A') stampAnchor(node);
+                        else if (node.querySelectorAll) stampAllAnchors(node);
+                    });
+                }
+                stampAllAnchors(document);
+                decorateAllMarkers(document);
+            };
+            if (observeHandle && typeof observeHandle.withPaused === 'function') {
+                observeHandle.withPaused(apply);
+            } else {
+                apply();
+            }
+        }
+        var observeApi = (window.Weline && window.Weline.dom && typeof window.Weline.dom.observe === 'function')
+            ? window.Weline.dom.observe.bind(window.Weline.dom)
+            : null;
+        if (observeApi && document.documentElement) {
+            observeHandle = observeApi({
+                target: document.documentElement,
+                options: observeOptions,
+                idleTimeoutMs: 100,
+                label: 'i18n-inline-edit-shell',
+                onRecords: function (mutations) {
+                    mutations.forEach(function (m) {
+                        m.addedNodes && m.addedNodes.forEach(function (node) {
+                            if (node && node.nodeType === 1) {
+                                pendingRoots.push(node);
+                            }
+                        });
+                    });
+                },
+                onFlush: function () {
+                    var roots = pendingRoots;
+                    pendingRoots = [];
+                    runStampDecorate(roots);
+                },
+            });
+            return;
+        }
+        /* ARCH_MO_FALLBACK_START */
         var moTimer = 0;
         var mo = new MutationObserver(function (mutations) {
-            // Debounce: quick-add inject + script rebind storms many mutations.
+            try { mo.disconnect(); } catch (_d) { /* ignore */ }
             if (moTimer) clearTimeout(moTimer);
             moTimer = setTimeout(function () {
                 moTimer = 0;
-                stampAllAnchors(document);
-                decorateAllMarkers(document);
-            }, 48);
+                runStampDecorate([]);
+                try {
+                    mo.observe(document.documentElement, observeOptions);
+                } catch (_o) { /* ignore */ }
+            }, 100);
             mutations.forEach(function (m) {
                 m.addedNodes && m.addedNodes.forEach(function (node) {
                     if (node && node.nodeType === 1) {
@@ -1276,13 +1332,10 @@
                 });
             });
         });
-        mo.observe(document.documentElement, {
-            childList: true,
-            subtree: true,
-            characterData: true,
-            attributes: true,
-            attributeFilter: ['data-i18n-empty', 'data-i18n-toc-cart', 'data-i18n-tob-cart', 'aria-label', 'title', 'alt', 'placeholder'],
-        });
+        try {
+            mo.observe(document.documentElement, observeOptions);
+        } catch (_b) { /* ignore */ }
+        /* ARCH_MO_FALLBACK_END */
     }
 
     if (document.readyState === 'loading') {

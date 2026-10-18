@@ -56,7 +56,7 @@ $bootstrapTown = $this->fetchTagSource('statics', 'Weline_Daocharms3d::js/bootst
  $route = (string)($card['url'] ?? ''); $routePath = explode('?', $route, 2); $routeParams = []; parse_str($routePath[1] ?? '', $routeParams); $productUrl = preg_match('~^(?:https?:)?//~', $route) || str_starts_with($route, '/') ? $route : $this->getUrl($routePath[0], $routeParams);
 ?>
 <article data-town-product="<?= $id ?>" data-name="<?= $escapeTown($card['name'] ?? '') ?>" data-image="<?= $escapeTown($card['image'] ?? '') ?>" data-url="<?= $escapeTown($productUrl) ?>" data-price="<?= $escapeTown($card['formatted_price'] ?? '') ?>">
-<a href="<?= $escapeTown($productUrl) ?>"><?php if (!empty($card['image'])): ?><img src="<?= $escapeTown($card['image']) ?>" width="240" height="240" loading="lazy" alt="<?= $escapeTown($card['name']) ?>"><?php endif; ?><span><?= $escapeTown($card['name']) ?></span></a>
+<a href="<?= $escapeTown($productUrl) ?>"><?php if (!empty($card['image'])): ?><span class="w-frame" data-ratio="1" data-fit="cover"><img src="<?= $escapeTown($card['image']) ?>" width="240" height="240" loading="lazy" alt="<?= $escapeTown($card['name']) ?>"></span><?php endif; ?><span><?= $escapeTown($card['name']) ?></span></a>
 <span><?= $escapeTown($card['formatted_price'] ?? '') ?></span>
 <button type="button" class="w-button" data-travel="<?= $id ?>"><lang>镇内查看</lang></button>
 <div class="weline-cart-product-card-add-to-cart" data-weline-load="cart" data-widget-module="Weline_Daocharms3d"><button type="button" class="w-button" data-town-purchase data-action="add" data-product-id="<?= $id ?>" data-qty="1" data-open-purchase-panel="1" data-needs-selection="1" data-checkout-url="<?= $escapeTown($checkoutTown) ?>"><lang>查看商品与规格</lang></button></div>

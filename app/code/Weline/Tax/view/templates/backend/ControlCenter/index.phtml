@@ -93,62 +93,79 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
                 </div>
             </div>
         <?php else: ?>
-        <div class="w-card" data-testid="tax-<?= $escape($code) ?>-create-form" style="--w-mb:var(--weline-space-4);">
-            <div class="w-card__header"><h5 style="--w-mb:0;"><?= __('新增%{1}', $title) ?></h5></div>
-            <div class="w-card__body">
-                <w:form method="post" action="@backend-url{$formActionPath}">
-                    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
-                        <div style="--w-span-md:3;"><label class="w-field__label"><?= __('网站') ?></label>
-                            <w:websites:website:select
-                                id="tax-cc-website"
-                                name="website_id"
-                                value="websiteSelectValue"
-                                display="websiteSelectDisplay"
-                                options="websiteSelectOptionsJson"
-                                multiple="false"
-                                allow-empty="false"
-                                empty-label="@lang(请选择站点)"
-                                placeholder="@lang(搜索站点名称或编码)"
-                            />
+        <div class="w-cluster" data-justify="end" style="--w-mb:var(--weline-space-3);">
+            <button class="w-button" data-tone="primary" data-size="sm" type="button"
+                    data-testid="tax-<?= $escape($code) ?>-create-open"
+                    onclick="(function(){var d=document.getElementById('tax-<?= $escape($code) ?>-create-dialog'); if(!d)return; if(window.Weline&amp;&amp;Weline.UI&amp;&amp;Weline.UI.dialog&amp;&amp;typeof Weline.UI.dialog.open==='function'){Weline.UI.dialog.open(d);}else{d.hidden=false;d.setAttribute('data-state','open');}})();">
+                <?= __('新增%{1}', $title) ?>
+            </button>
+        </div>
+        <div class="w-dialog" id="tax-<?= $escape($code) ?>-create-dialog" tabindex="-1" aria-hidden="true"
+             data-w-component="dialog" data-state="closed" hidden
+             data-testid="tax-<?= $escape($code) ?>-create-dialog">
+            <div class="w-dialog__frame" data-size="lg">
+                <div class="w-dialog__surface">
+                    <w:form method="post" action="@backend-url{$formActionPath}" data-testid="tax-<?= $escape($code) ?>-create-form">
+                        <div class="w-dialog__header">
+                            <h5 class="w-dialog__title" style="--w-mb:0;"><?= __('新增%{1}', $title) ?></h5>
+                            <button type="button" class="w-button" aria-label="<?= __('关闭') ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
                         </div>
-                        <div style="--w-span-md:3;">
-                            <label class="w-field__label"><?= __('税类代码') ?></label>
-                            <input class="w-input" name="class_code" maxlength="64" pattern="[a-z0-9][a-z0-9_\-]{0,63}" required>
-                        </div>
-                        <?php if ($kind === 'class'): ?>
-                            <div style="--w-span-md:4;">
-                                <label class="w-field__label"><?= __('税类名称') ?></label>
-                                <input class="w-input" name="name" maxlength="255" required>
-                            </div>
-                        <?php else: ?>
-                            <div style="--w-span-md:3;">
-                                <label class="w-field__label"><?= __('管辖区') ?></label>
-                                <input class="w-input" name="jurisdiction_key" maxlength="64" placeholder="CN| 或 US|CA" required>
-                            </div>
-                            <div style="--w-span-md:2;">
-                                <label class="w-field__label"><?= __('税率（基点）') ?></label>
-                                <input class="w-input" type="number" min="0" max="10000" name="rate_bps" required>
-                            </div>
-                            <?php if ($kind === 'rule'): ?>
-                                <div style="--w-span-md:2;">
-                                    <label class="w-field__label"><?= __('规则版本') ?></label>
-                                    <input class="w-input" type="number" min="1" name="rule_version" value="1" required>
+                        <div class="w-dialog__body">
+                            <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                                <div style="--w-span-md:6;"><label class="w-field__label"><?= __('网站') ?></label>
+                                    <w:websites:website:select
+                                        id="tax-cc-website"
+                                        name="website_id"
+                                        value="websiteSelectValue"
+                                        display="websiteSelectDisplay"
+                                        options="websiteSelectOptionsJson"
+                                        multiple="false"
+                                        allow-empty="false"
+                                        empty-label="@lang(请选择站点)"
+                                        placeholder="@lang(搜索站点名称或编码)"
+                                    />
                                 </div>
-                                <div style="--w-span-md:2;">
-                                    <label class="w-field__label"><?= __('舍入模式') ?></label>
-                                    <select class="w-select" name="rounding"><option value="half_up">half_up</option></select>
+                                <div style="--w-span-md:6;">
+                                    <label class="w-field__label"><?= __('税类代码') ?></label>
+                                    <input class="w-input" name="class_code" maxlength="64" pattern="[a-z0-9][a-z0-9_\-]{0,63}" required>
                                 </div>
-                            <?php endif; ?>
-                        <?php endif; ?>
-                        <div class="w-cluster" data-align="end" style="--w-span-md:2;">
-                            <input type="hidden" name="enabled" value="0">
-                            <label class="w-check" style="--w-mb:var(--weline-space-2);"><input type="checkbox" name="enabled" value="1" checked> <span><?= __('启用') ?></span></label>
+                                <?php if ($kind === 'class'): ?>
+                                    <div style="--w-span-md:12;">
+                                        <label class="w-field__label"><?= __('税类名称') ?></label>
+                                        <input class="w-input" name="name" maxlength="255" required>
+                                    </div>
+                                <?php else: ?>
+                                    <div style="--w-span-md:6;">
+                                        <label class="w-field__label"><?= __('管辖区') ?></label>
+                                        <input class="w-input" name="jurisdiction_key" maxlength="64" placeholder="CN| 或 US|CA" required>
+                                    </div>
+                                    <div style="--w-span-md:6;">
+                                        <label class="w-field__label"><?= __('税率（基点）') ?></label>
+                                        <input class="w-input" type="number" min="0" max="10000" name="rate_bps" required>
+                                    </div>
+                                    <?php if ($kind === 'rule'): ?>
+                                        <div style="--w-span-md:6;">
+                                            <label class="w-field__label"><?= __('规则版本') ?></label>
+                                            <input class="w-input" type="number" min="1" name="rule_version" value="1" required>
+                                        </div>
+                                        <div style="--w-span-md:6;">
+                                            <label class="w-field__label"><?= __('舍入模式') ?></label>
+                                            <select class="w-select" name="rounding"><option value="half_up">half_up</option></select>
+                                        </div>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+                                <div style="--w-span-md:12;">
+                                    <input type="hidden" name="enabled" value="0">
+                                    <label class="w-check"><input type="checkbox" name="enabled" value="1" checked> <span><?= __('启用') ?></span></label>
+                                </div>
+                            </div>
                         </div>
-                        <div class="w-cluster" data-align="end" style="--w-span-md:2;">
-                            <button class="w-button" type="submit" data-testid="tax-<?= $escape($code) ?>-submit" data-w-width="full" data-tone="primary"><?= __('创建') ?></button>
+                        <div class="w-dialog__footer">
+                            <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                            <button class="w-button" type="submit" data-testid="tax-<?= $escape($code) ?>-submit" data-tone="primary"><?= __('创建') ?></button>
                         </div>
-                    </div>
-                </w:form>
+                    </w:form>
+                </div>
             </div>
         </div>
         <?php endif; ?>

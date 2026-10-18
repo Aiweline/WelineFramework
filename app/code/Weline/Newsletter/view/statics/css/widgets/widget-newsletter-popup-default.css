@@ -84,9 +84,19 @@
 .wc-theme_widget_newsletter_popup .letter-shell__art {
     display: block;
     width: 100%;
-    height: auto;
     pointer-events: none;
     user-select: none;
+}
+
+/* 信笺 WebP 为 3:4；须钉 frame 比，避免未注册 ratio 回落 1:1 两侧露白 */
+.wc-theme_widget_newsletter_popup .letter-shell__art.w-frame {
+    --weline-frame-ratio: 3 / 4;
+    border-radius: 0;
+    background: transparent;
+}
+
+.wc-theme_widget_newsletter_popup .letter-shell__art:not(.w-frame) {
+    height: auto;
 }
 
 /* 表单铺满笺面内侧；背景透明以露出宣纸格线，字靠实心笺面可读 */

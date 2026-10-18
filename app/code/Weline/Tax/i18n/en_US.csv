@@ -75,6 +75,7 @@ sync,sync
 配置深度链接,"Config deep link"
 免费源并集冲突取较高税率；配置专业源后对其返回管辖区覆盖。不同步到结账热路径。,"Free sources union with max rate on conflict; configured professional source overlays returned jurisdictions. Never on checkout hot path."
 新增%{1},"Added %{1}"
+关闭,关闭
 税类代码,"tax code"
 税类名称,"Tax category name"
 管辖区,Jurisdiction
@@ -82,6 +83,7 @@ sync,sync
 规则版本,"Rule version"
 舍入模式,"Rounding Mode"
 启用,enable
+取消,取消
 创建,create
 当前没有记录。,"There are currently no records."
 "通用 HTTP 专业税率源","Generic HTTP professional rate source"
