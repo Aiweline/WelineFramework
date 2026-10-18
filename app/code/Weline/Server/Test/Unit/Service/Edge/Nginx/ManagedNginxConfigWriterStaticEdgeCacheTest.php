@@ -193,6 +193,11 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
             $genericBlock,
             'HTML disk gate is the single map $wls_fpc_html_disk_try (scheme/bypass/allowlist/br).',
         );
+        self::assertStringContainsString(
+            'var/maintenance/edge.on',
+            $genericBlock,
+            'Maintenance edge.on must force 418→origin so FPM/WLS share pub/errors/maintenance pages.',
+        );
         self::assertStringContainsString('X-Weline-FPC-Source html-disk', $genericBlock);
         self::assertStringContainsString('location @wls_html_origin', $genericBlock);
         self::assertStringContainsString('proxy_cache off;', $genericBlock);

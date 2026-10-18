@@ -342,6 +342,7 @@ final class ManagedNginxPaths
             $this->confDir() . DIRECTORY_SEPARATOR . 'conf.d',
             $this->cacheDir(),
             $this->tempDir(),
+            $this->acmeChallengeRoot(),
         ];
         foreach ($this->nginxTempSubdirs() as $sub) {
             $dirs[] = $this->tempDir() . DIRECTORY_SEPARATOR . $sub;
@@ -351,6 +352,67 @@ final class ManagedNginxPaths
                 throw new \RuntimeException('Unable to create managed nginx directory: ' . $dir);
             }
         }
+    }
+
+    /**
+     * Public edge origin: {@see ManagedNginxOriginMode::WLS} (default) or FPM.
+     */
+    public function originMode(): string
+    {
+        return ManagedNginxOriginMode::normalize($this->config()['origin_mode'] ?? ManagedNginxOriginMode::WLS);
+    }
+
+    public function isFpmOrigin(): bool
+    {
+        return $this->originMode() === ManagedNginxOriginMode::FPM;
+    }
+
+    /**
+     * PHP-FPM listen target for nginx `fastcgi_pass` (host:port or absolute unix path).
+     */
+    public function fpmListen(): string
+    {
+        $configured = \trim((string)($this->config()['fpm_listen'] ?? ''));
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        return $this->detectDefaultFpmListen();
+    }
+
+    /**
+     * Local ACME webroot (FPM origin does not proxy challenges to Workers).
+     */
+    public function acmeChallengeRoot(): string
+    {
+        return $this->runtimeRoot()
+            . DIRECTORY_SEPARATOR . 'acme'
+            . DIRECTORY_SEPARATOR . 'challenge';
+    }
+
+    public function pubRoot(): string
+    {
+        return $this->projectRoot() . DIRECTORY_SEPARATOR . 'pub';
+    }
+
+    private function detectDefaultFpmListen(): string
+    {
+        $candidates = [
+            '/opt/homebrew/var/run/php-fpm.sock',
+            '/usr/local/var/run/php-fpm.sock',
+            '/run/php/php-fpm.sock',
+            '/run/php/php8.4-fpm.sock',
+            '/run/php/php8.3-fpm.sock',
+            '/var/run/php/php-fpm.sock',
+            '/tmp/php-fpm.sock',
+        ];
+        foreach ($candidates as $sock) {
+            if (@\is_file($sock) || @\file_exists($sock)) {
+                return $sock;
+            }
+        }
+
+        return '127.0.0.1:9000';
     }
 
     /**

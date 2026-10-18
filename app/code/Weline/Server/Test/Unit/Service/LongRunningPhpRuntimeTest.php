@@ -191,4 +191,24 @@ final class LongRunningPhpRuntimeTest extends TestCase
 
         self::assertSame(0, $runtime->consoleEncodingInitCount);
     }
+
+    public function testStartupCliArgumentsEnableTracingJitOnNonWindowsWhenOpcachePresent(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $args = LongRunningPhpRuntime::startupCliArguments();
+            self::assertContains('opcache.jit=0', $args);
+            self::assertContains('opcache.jit_buffer_size=0', $args);
+
+            return;
+        }
+
+        if (!\extension_loaded('Zend OPcache') && !\function_exists('opcache_get_status')) {
+            self::markTestSkipped('Zend OPcache is not loaded');
+        }
+
+        $args = LongRunningPhpRuntime::startupCliArguments();
+        self::assertContains('opcache.enable_cli=1', $args);
+        self::assertContains('opcache.jit=tracing', $args);
+        self::assertContains('opcache.jit_buffer_size=64M', $args);
+    }
 }

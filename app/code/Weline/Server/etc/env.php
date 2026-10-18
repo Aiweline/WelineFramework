@@ -63,6 +63,11 @@ return [
                 'gzip_comp_level' => 2,
                 'upstream_keepalive' => 256,
                 'worker_connections' => 32768,
+                // Origin behind managed Nginx: wls (Workers proxy) | fpm (PHP-FPM fastcgi).
+                // FPM does not require Workers / Session / Memory sidecars.
+                'origin_mode' => 'wls',
+                // null → auto-detect (127.0.0.1:9000 or common unix socks).
+                'fpm_listen' => null,
             ],
         ],
         'gateway' => [

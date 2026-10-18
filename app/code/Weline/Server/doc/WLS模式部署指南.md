@@ -232,6 +232,36 @@ php bin/w server:nginx:status
 php bin/w server:stop   # managed=true 时会先停本项目托管 Nginx
 ```
 
+#### 回源模式：WLS Workers vs PHP-FPM
+
+托管 Nginx 的 `wls.edge.nginx.origin_mode` 决定公网边缘如何进应用：
+
+| 模式 | 回源 | 需要 Worker / Session / Memory？ |
+|------|------|----------------------------------|
+| **`wls`（默认）** | `proxy_pass` → loopback WLS Workers | 需要（现网生命周期） |
+| **`fpm`** | `fastcgi_pass` → 本机 php-fpm → `{BP}/pub/index.php` | **不需要**；可全停 |
+
+```bash
+# 切到 FPM（须本机 php-fpm 已监听；可选钉 listen）
+# 成功后会自动 server:stop --keep-nginx：停 Worker/Session/Memory，保留托管 Nginx
+php bin/w server:origin:set fpm
+php bin/w server:origin:set fpm --fpm-listen=127.0.0.1:9000
+
+# 切回 WLS Workers（须再手动 server:start 拉起 Worker；本命令不会自动 start）
+php bin/w server:origin:set wls
+php bin/w server:start
+```
+
+说明：
+
+- **FPM = 协助部署**：WLS 仍可安装/管理**项目隔离**托管 Nginx，并生成 FPM front-controller conf；**不**向系统 `/etc/nginx` 注入站点。
+- **切到 fpm 会停 WLS 业务平面并保留 Nginx**（`server:stop --keep-nginx`），避免与 php-fpm 双开抢 CPU；也可手动执行该 stop。
+- **FPM pool 推荐钉 tracing JIT**（Unix）：在 php-fpm pool 配置中设置 `php_admin_value[opcache.jit] = tracing` 与 `php_admin_value[opcache.jit_buffer_size] = 64M`，然后 reload php-fpm。WLS Worker 启程参数已由 `LongRunningPhpRuntime` 在非 Windows 上默认打开 tracing JIT。
+- **TLS/证书与 WLS 回源同路径**：`ManagedNginxLocalHostCatalog` 扩本地 Host + 优先 `*.test.weline.com`（等）Local CA 通配 generation；`origin_mode=fpm` **不得**丢掉证书、不得回退到 `server_name=_` + `localhost` 叶证（否则浏览器 `ERR_CERT_COMMON_NAME_INVALID`）。纯 WLS（`--edge=wls` / 无 Nginx）仍走自身 TLS；有托管 Nginx 时无论 `wls`/`fpm` 回源，公网证书绑定逻辑一致，只改 upstream（`proxy_pass` ↔ `fastcgi_pass`）。
+- **回源头（仅开发）**：`deploy=dev`（或 `wls.debug.identity_headers`）时边缘/Worker 放出 `X-Wls-Origin-Mode: fpm|wls`；线上默认不放出（`ResponseObservabilityPolicy::identityHeadersEnabled`）。
+- FPM 下 `/_wls/health` 与 ACME `/.well-known/acme-challenge/` 均为边缘本地处理，不回源 Worker。
+- `server:start` **不会**静默改 `origin_mode`，也**不会**静默安装 Nginx。
+
 普通 `server:start`、reload 和 restart **绝不下载或编译 Nginx**。托管模式缺少二进制时，启动返回非零并提示先显式执行 `php bin/w server:nginx:install`；不会在启动路径中自动补装。Unix 显式安装在 PCRE2 头文件缺失时 fail closed，安装 manifest 和运行时 capability probe 都要求 rewrite 模块；不会回退到 `--without-http_rewrite_module`。
 
 对外访问端口**默认就是公网 `80/443`** —— 托管 Nginx 是本项目的公网网关，正常状态就该占用公网端口。只有当 `80/443` 已被**别的**进程占用（例如宿主 Nginx 已监听），或当前用户无权绑定特权端口（Linux 非 root 且未 `setcap`）时，才逐端口回退到 `8080/8443 + projectPortOffset`；回退不静默，`server:nginx:status` 的 `configured_port_source` / `configured_port_notes` 会写明是哪个端口、因为什么回退。两端都可用 env `wls.edge.nginx.listen_http|listen_https` 或环境变量 `WLS_NGINX_LISTEN_HTTP|WLS_NGINX_LISTEN_HTTPS` 显式指定（显式指定时不再做占用探测，端口可用性由运维负责）。判断 `80/443` 是否可用必须用**通配地址**绑定探测：BSD/macOS 允许具体地址与通配监听共存，绑 `127.0.0.1:80` 在别人已 `listen *:80` 时仍会成功，会把已占用误判成空闲；如果占用者正是本项目托管 Nginx 自己（重载/证书续期路径），则继续沿用该端口，绝不把健康的公网入口挪到高位端口。安装与运行目录均按项目 BP 和平台隔离；Linux 默认目录还包含架构后缀，Windows 使用项目身份哈希对应的本机目录。托管 conf 默认：HTTPS `http2 on`（客户端不支持时自动回退 HTTP/1.1）、HTTP/1.1 upstream keepalive、`upstream_keepalive_timeout_sec=5`、`access_log off`、较大 `worker_connections`。Worker reload 的 drain 安全下限为 upstream idle timeout 再加 5 秒。启动前同时校验 manifest 的平台/架构/官方包摘要/已安装二进制摘要、实际 `nginx -V` 版本、HTTP/2、HTTP SSL、rewrite 与 OpenSSL ≥ 1.1.1；发布后还必须完成证书指纹绑定的 TLS 1.3 握手，并分别以真实 H2/H1 请求抵达 owner 绑定的 WLS health、匹配 generation 与 backend identity。install/start/reload/stop 共用项目级生命周期锁。新配置先写候选文件并通过 `nginx -t`，再发布、reload；任一步失败都会恢复磁盘上的上一版配置，而且只有旧 owner generation 被真实请求重新证明后才继续运行，否则停止 Nginx 并保留恢复证据。

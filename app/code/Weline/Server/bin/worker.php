@@ -6730,6 +6730,15 @@ function handleRequest(
                 'X-WLS-Uptime',
                 (string)\max(0, (int)\floor(wlsWorkerMonotonicNow() - $startTime)),
             );
+            try {
+                $originMode = \Weline\Server\Service\Edge\Nginx\ManagedNginxOriginMode::normalize(
+                    (string)(\Weline\Framework\App\Env::getInstance()
+                        ->getConfig('wls.edge.nginx.origin_mode') ?? 'wls'),
+                );
+            } catch (\Throwable) {
+                $originMode = \Weline\Server\Service\Edge\Nginx\ManagedNginxOriginMode::WLS;
+            }
+            $response->setHeader('X-Wls-Origin-Mode', $originMode);
         }
 
         // 慢请求/verbose 性能摘要头：随 performanceBreakdown 闸门

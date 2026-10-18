@@ -265,14 +265,41 @@ final class ManagedNginxService
             return $identity;
         }
         $capabilities = (array)$identity['capabilities'];
-        $backendIdentity = $this->resolveWlsBackendIdentity($ownerInstance, $upstreamPort);
-        if ($backendIdentity === null) {
+        $fpmOrigin = $this->paths->isFpmOrigin();
+        $backendIdentity = null;
+        $upstreamPorts = [$upstreamPort];
+        if (!$fpmOrigin) {
+            $backendIdentity = $this->resolveWlsBackendIdentity($ownerInstance, $upstreamPort);
+            if ($backendIdentity === null) {
+                return [
+                    'ok' => false,
+                    'message' => 'managed nginx could not bind the requested owner to a canonical WLS backend identity',
+                ];
+            }
+            $upstreamPorts = $backendIdentity['upstream_ports'];
+        } elseif (!$this->probePhpFpmListen($this->paths->fpmListen())) {
             return [
                 'ok' => false,
-                'message' => 'managed nginx could not bind the requested owner to a canonical WLS backend identity',
+                'message' => 'managed nginx FPM origin requires a reachable php-fpm listen: '
+                    . $this->paths->fpmListen(),
             ];
         }
-        $upstreamPorts = $backendIdentity['upstream_ports'];
+        // FPM (and any weak server_name=_ seed) must reuse the same local-host catalog
+        // + wildcard generation path as WLS edge start — never localhost leaf only.
+        if ($fpmOrigin || $this->serverNamesAreTlsWeak($serverNames)) {
+            $ownerHint = [
+                'instance_name' => $ownerInstance,
+                'server_names' => $serverNames,
+                'certificate_domain' => \is_array($certificateGeneration)
+                    ? (string)($certificateGeneration['domain'] ?? '')
+                    : '',
+            ];
+            $binding = $this->resolveLocalEdgeTlsBinding($serverNames, $ownerHint);
+            $serverNames = $binding['server_names'];
+            if ($certificateGeneration === null && \is_array($binding['certificate'])) {
+                $certificateGeneration = $binding['certificate'];
+            }
+        }
         $candidate = null;
         $rollback = null;
         $wasRunning = false;
@@ -302,7 +329,7 @@ final class ManagedNginxService
                 ];
             }
             $candidate = (string)$written['conf'];
-            if (!$this->probeWlsBackendPool(
+            if (!$fpmOrigin && !$this->probeWlsBackendPool(
                 $upstreamHost,
                 $upstreamPorts,
                 $ownerInstance,
@@ -348,6 +375,8 @@ final class ManagedNginxService
                 'upstream_host' => $upstreamHost,
                 'upstream_port' => $upstreamPort,
                 'upstream_ports' => $upstreamPorts,
+                'origin_mode' => $this->paths->originMode(),
+                'fpm_listen' => $fpmOrigin ? $this->paths->fpmListen() : null,
                 'server_names' => (array)($written['server_names'] ?? []),
                 'listen_http' => (int)$written['http'],
                 'listen_https' => (int)$written['https'],
@@ -435,7 +464,8 @@ final class ManagedNginxService
                 ];
             }
             if (!(bool)($written['http2_enabled'] ?? false)
-                || !$this->verifyHttpRuntime(
+                || !$this->verifyPublicEdgeHttpRuntime(
+                    $fpmOrigin,
                     '2',
                     (int)$written['https'],
                     (array)($written['server_names'] ?? []),
@@ -452,11 +482,13 @@ final class ManagedNginxService
                 );
                 return [
                     'ok' => false,
-                    'message' => 'managed nginx did not carry an owner-bound HTTP/2 WLS health request'
-                        . $recovery,
+                    'message' => $fpmOrigin
+                        ? ('managed nginx FPM origin did not prove HTTP/2 /_wls/health' . $recovery)
+                        : ('managed nginx did not carry an owner-bound HTTP/2 WLS health request' . $recovery),
                 ];
             }
-            if (!$this->verifyHttpRuntime(
+            if (!$this->verifyPublicEdgeHttpRuntime(
+                $fpmOrigin,
                 '1.1',
                 (int)$written['https'],
                 (array)($written['server_names'] ?? []),
@@ -472,8 +504,9 @@ final class ManagedNginxService
                 );
                 return [
                     'ok' => false,
-                    'message' => 'managed nginx did not carry an owner-bound HTTP/1.1 WLS health request'
-                        . $recovery,
+                    'message' => $fpmOrigin
+                        ? ('managed nginx FPM origin did not prove HTTP/1.1 /_wls/health' . $recovery)
+                        : ('managed nginx did not carry an owner-bound HTTP/1.1 WLS health request' . $recovery),
                 ];
             }
             $httpRuntimeEvidence = [
@@ -497,20 +530,80 @@ final class ManagedNginxService
                     'message' => 'managed nginx exited or changed identity after live verification' . $recovery,
                 ];
             }
-            $http3 = $this->verifyHttp3Runtime(
-                (bool)($written['http3_enabled'] ?? false),
-                (bool)($capabilities['http3_module'] ?? false),
-                (int)$written['https'],
-                (int)$currentStatus['pid'],
-                (string)$written['config_generation'],
-                (string)$written['config_sha256'],
-                (string)($written['ssl_certificate_sha256'] ?? ''),
-                (array)($written['server_names'] ?? []),
-                $ownerInstance,
-                $upstreamPort,
-            );
-            if (!($http3['ok'] ?? false)) {
-                if (!$this->http3FailureCanDegrade($written, $http3)) {
+            if ($fpmOrigin) {
+                // FPM skips Worker-bound HTTP/3 / TLS-session proofs. Do not invent
+                // decodeOwner-illegal status strings (e.g. skipped_fpm_origin) — keep
+                // protocolFacts defaults so owner intent round-trips.
+                $http3 = [
+                    'ok' => true,
+                    'evidence' => [
+                        'http3_runtime_verified' => false,
+                        'http3_reason' => 'FPM origin skips Worker-bound HTTP/3 verification; '
+                            . 'H2/H1 /_wls/health already proven.',
+                    ],
+                ];
+                $resumption = [
+                    'ok' => true,
+                    'evidence' => [
+                        'tls_session_resumption_runtime_verified' => false,
+                    ],
+                ];
+            } else {
+                $http3 = $this->verifyHttp3Runtime(
+                    (bool)($written['http3_enabled'] ?? false),
+                    (bool)($capabilities['http3_module'] ?? false),
+                    (int)$written['https'],
+                    (int)$currentStatus['pid'],
+                    (string)$written['config_generation'],
+                    (string)$written['config_sha256'],
+                    (string)($written['ssl_certificate_sha256'] ?? ''),
+                    (array)($written['server_names'] ?? []),
+                    $ownerInstance,
+                    $upstreamPort,
+                );
+                if (!($http3['ok'] ?? false)) {
+                    if (!$this->http3FailureCanDegrade($written, $http3)) {
+                        $recovery = $this->restorePublishedConfig(
+                            $rollback,
+                            $wasRunning,
+                            $startedByCall,
+                            $ownerIntent,
+                        );
+                        return [
+                            'ok' => false,
+                            'message' => 'managed nginx HTTP/3 runtime verification failed: '
+                                . (string)($http3['message'] ?? 'unknown') . $recovery,
+                        ];
+                    }
+                    $degraded = $this->degradeFailedHttp3Publication(
+                        $written,
+                        $http3,
+                        $capabilities,
+                        $ownerIntent,
+                        $transactionId,
+                        $rollback,
+                        $upstreamPort,
+                        $upstreamHost,
+                        $upstreamPorts,
+                        $ownerInstance,
+                        $certificateGeneration,
+                        (int)$currentStatus['pid'],
+                    );
+                    $written = $degraded['config'];
+                    $ownerIntent = $degraded['owner_intent'];
+                    $currentStatus = $degraded['status'];
+                    $httpRuntimeEvidence = $degraded['http_runtime_evidence'];
+                    $http3 = $degraded['http3'];
+                }
+                $resumption = $this->tlsSessionResumptionVerifier->verify(
+                    (int)$written['https'],
+                    (array)($written['server_names'] ?? []),
+                    (int)$currentStatus['pid'],
+                    (string)$written['config_generation'],
+                    (string)$written['config_sha256'],
+                    (string)($written['ssl_certificate_sha256'] ?? ''),
+                );
+                if (!($resumption['ok'] ?? false)) {
                     $recovery = $this->restorePublishedConfig(
                         $rollback,
                         $wasRunning,
@@ -519,50 +612,10 @@ final class ManagedNginxService
                     );
                     return [
                         'ok' => false,
-                        'message' => 'managed nginx HTTP/3 runtime verification failed: '
-                            . (string)($http3['message'] ?? 'unknown') . $recovery,
+                        'message' => 'managed nginx TLS session resumption verification failed: '
+                            . (string)($resumption['message'] ?? 'unknown') . $recovery,
                     ];
                 }
-                $degraded = $this->degradeFailedHttp3Publication(
-                    $written,
-                    $http3,
-                    $capabilities,
-                    $ownerIntent,
-                    $transactionId,
-                    $rollback,
-                    $upstreamPort,
-                    $upstreamHost,
-                    $upstreamPorts,
-                    $ownerInstance,
-                    $certificateGeneration,
-                    (int)$currentStatus['pid'],
-                );
-                $written = $degraded['config'];
-                $ownerIntent = $degraded['owner_intent'];
-                $currentStatus = $degraded['status'];
-                $httpRuntimeEvidence = $degraded['http_runtime_evidence'];
-                $http3 = $degraded['http3'];
-            }
-            $resumption = $this->tlsSessionResumptionVerifier->verify(
-                (int)$written['https'],
-                (array)($written['server_names'] ?? []),
-                (int)$currentStatus['pid'],
-                (string)$written['config_generation'],
-                (string)$written['config_sha256'],
-                (string)($written['ssl_certificate_sha256'] ?? ''),
-            );
-            if (!($resumption['ok'] ?? false)) {
-                $recovery = $this->restorePublishedConfig(
-                    $rollback,
-                    $wasRunning,
-                    $startedByCall,
-                    $ownerIntent,
-                );
-                return [
-                    'ok' => false,
-                    'message' => 'managed nginx TLS session resumption verification failed: '
-                        . (string)($resumption['message'] ?? 'unknown') . $recovery,
-                ];
             }
             $verifiedStatus = $this->processManager->status(
                 $this->activeLifecycleDeadlineMonotonic,
@@ -907,18 +960,38 @@ final class ManagedNginxService
                 'exit_code' => null,
             ];
         }
-        $backendIdentity = $this->resolveWlsBackendIdentity(
-            (string)$owner['instance_name'],
-            (int)$owner['upstream_port'],
-        );
-        if ($backendIdentity === null) {
-            return [
-                'ok' => false,
-                'message' => 'managed nginx owner no longer resolves to a canonical WLS backend identity',
-                'exit_code' => 1,
-            ];
+        $fpmOrigin = $this->paths->isFpmOrigin();
+        $backendIdentity = null;
+        $upstreamPorts = [];
+        if ($fpmOrigin) {
+            // FPM origin does not require live Workers / sidecars.
+            $storedPorts = (array)($owner['upstream_ports'] ?? []);
+            foreach ($storedPorts as $port) {
+                $port = (int)$port;
+                if ($port > 0 && $port <= 65535) {
+                    $upstreamPorts[] = $port;
+                }
+            }
+            if ($upstreamPorts === []) {
+                $fallback = (int)($owner['upstream_port'] ?? 0);
+                if ($fallback > 0) {
+                    $upstreamPorts = [$fallback];
+                }
+            }
+        } else {
+            $backendIdentity = $this->resolveWlsBackendIdentity(
+                (string)$owner['instance_name'],
+                (int)$owner['upstream_port'],
+            );
+            if ($backendIdentity === null) {
+                return [
+                    'ok' => false,
+                    'message' => 'managed nginx owner no longer resolves to a canonical WLS backend identity',
+                    'exit_code' => 1,
+                ];
+            }
+            $upstreamPorts = $backendIdentity['upstream_ports'];
         }
-        $upstreamPorts = $backendIdentity['upstream_ports'];
 
         $candidate = null;
         $rollback = null;
@@ -927,11 +1000,18 @@ final class ManagedNginxService
         $reloadContinuityProbe = null;
         $reloadContinuityEvidence = [];
         try {
-            $certificateGeneration = $this->resolveOwnerCertificateGeneration($owner);
+            // Same TLS binding as server:nginx:start / syncLocal — FPM must not
+            // republish server_name=_ + localhost leaf (ERR_CERT_COMMON_NAME_INVALID).
+            $binding = $this->resolveLocalEdgeTlsBinding(
+                (array)($owner['server_names'] ?? []),
+                $owner,
+            );
+            $certificateGeneration = $binding['certificate']
+                ?? $this->resolveOwnerCertificateGeneration($owner);
             $refreshed = $this->configWriter->write(
                 (int)$owner['upstream_port'],
                 (string)$owner['upstream_host'],
-                (array)($owner['server_names'] ?? []),
+                $binding['server_names'],
                 true,
                 (bool)($capabilities['gzip_module'] ?? false),
                 true,
@@ -943,7 +1023,7 @@ final class ManagedNginxService
                 (bool)($capabilities['realip_module'] ?? false),
             );
             $candidate = (string)$refreshed['conf'];
-            if (!$this->probeWlsBackendPool(
+            if (!$fpmOrigin && !$this->probeWlsBackendPool(
                 (string)$owner['upstream_host'],
                 $upstreamPorts,
                 (string)$owner['instance_name'],
@@ -953,6 +1033,15 @@ final class ManagedNginxService
                 return [
                     'ok' => false,
                     'message' => 'managed nginx reload refused because its loopback WLS backend is not healthy',
+                    'exit_code' => 1,
+                ];
+            }
+            if ($fpmOrigin && !$this->probePhpFpmListen($this->paths->fpmListen())) {
+                $this->configWriter->discardCandidate($candidate);
+                return [
+                    'ok' => false,
+                    'message' => 'managed nginx FPM origin reload refused because php-fpm listen is not reachable: '
+                        . $this->paths->fpmListen(),
                     'exit_code' => 1,
                 ];
             }
@@ -1018,6 +1107,8 @@ final class ManagedNginxService
                 ...$owner,
                 'transaction_id' => $transactionId,
                 'upstream_ports' => $upstreamPorts,
+                'origin_mode' => $this->paths->originMode(),
+                'fpm_listen' => $fpmOrigin ? $this->paths->fpmListen() : null,
                 'server_names' => (array)($refreshed['server_names'] ?? []),
                 'ssl_required' => $tlsConfigured,
                 'listen_http' => (int)$refreshed['http'],
@@ -1096,7 +1187,8 @@ final class ManagedNginxService
                 ? '; worker drain proof soft-failed but live config/TLS generation was proven'
                 : '';
             if (!(bool)($refreshed['http2_enabled'] ?? false)
-                || !$this->verifyHttpRuntime(
+                || !$this->verifyPublicEdgeHttpRuntime(
+                    $fpmOrigin,
                     '2',
                     (int)$refreshed['https'],
                     (array)($refreshed['server_names'] ?? []),
@@ -1113,12 +1205,14 @@ final class ManagedNginxService
                 );
                 return [
                     'ok' => false,
-                    'message' => 'managed nginx reload did not carry an owner-bound HTTP/2 WLS health request'
-                        . $recovery,
+                    'message' => $fpmOrigin
+                        ? ('managed nginx FPM reload did not prove HTTP/2 /_wls/health' . $recovery)
+                        : ('managed nginx reload did not carry an owner-bound HTTP/2 WLS health request' . $recovery),
                     'exit_code' => 1,
                 ];
             }
-            if (!$this->verifyHttpRuntime(
+            if (!$this->verifyPublicEdgeHttpRuntime(
+                $fpmOrigin,
                 '1.1',
                 (int)$refreshed['https'],
                 (array)($refreshed['server_names'] ?? []),
@@ -1134,8 +1228,9 @@ final class ManagedNginxService
                 );
                 return [
                     'ok' => false,
-                    'message' => 'managed nginx reload did not carry an owner-bound HTTP/1.1 WLS health request'
-                        . $recovery,
+                    'message' => $fpmOrigin
+                        ? ('managed nginx FPM reload did not prove HTTP/1.1 /_wls/health' . $recovery)
+                        : ('managed nginx reload did not carry an owner-bound HTTP/1.1 WLS health request' . $recovery),
                     'exit_code' => 1,
                 ];
             }
@@ -1613,6 +1708,114 @@ final class ManagedNginxService
         }
 
         return null;
+    }
+
+    /**
+     * Expand managed local hosts and prefer the shared Local CA wildcard generation —
+     * identical binding used by server:nginx:start / syncLocalManagedHosts.
+     * FPM origin must not drop this path and fall back to server_name=_ + localhost.
+     *
+     * @param list<string> $seedNames
+     * @param array<string,mixed>|null $owner
+     * @return array{server_names:list<string>,certificate:array<string,mixed>|null}
+     */
+    private function resolveLocalEdgeTlsBinding(array $seedNames, ?array $owner = null): array
+    {
+        $seed = [];
+        foreach ($seedNames as $name) {
+            $seed[] = (string)$name;
+        }
+        if (\is_array($owner)) {
+            foreach ((array)($owner['server_names'] ?? []) as $name) {
+                $seed[] = (string)$name;
+            }
+            $instance = \trim((string)($owner['instance_name'] ?? ''));
+            if ($instance !== '') {
+                try {
+                    $endpoint = (new ServerInstanceManager())->getRawInstanceData($instance);
+                    if (\is_array($endpoint)) {
+                        $publicHost = \trim((string)($endpoint['public_host'] ?? ''));
+                        if ($publicHost === '') {
+                            $publicHost = \trim((string)($endpoint['host'] ?? ''));
+                        }
+                        if ($publicHost !== '') {
+                            $seed[] = $publicHost;
+                        }
+                    }
+                } catch (\Throwable) {
+                    // FPM may run without a live WLS instance — catalog still expands actives.
+                }
+            }
+        }
+        try {
+            $cfgHost = \strtolower(\trim((string)($this->paths->config()['public_host'] ?? '')));
+            if ($cfgHost !== '') {
+                $seed[] = $cfgHost;
+            }
+        } catch (\Throwable) {
+        }
+
+        $catalog = new ManagedNginxLocalHostCatalog();
+        $store = new ProjectCertificateGenerationStore($this->paths->projectRoot());
+        $serverNames = $catalog->expandServerNames($seed);
+        if ($serverNames === []) {
+            $serverNames = ['_'];
+        }
+
+        $preferred = null;
+        if (\is_array($owner)) {
+            $boundDomain = \strtolower(\trim((string)($owner['certificate_domain'] ?? '')));
+            if ($boundDomain !== '' && $boundDomain !== '_') {
+                try {
+                    $preferred = $store->active($boundDomain);
+                } catch (\Throwable) {
+                    $preferred = null;
+                }
+            }
+            if (!\is_array($preferred)) {
+                try {
+                    $preferred = $this->resolveActiveCertificateGenerationForOwner([
+                        ...$owner,
+                        'server_names' => $serverNames,
+                    ]);
+                } catch (\Throwable) {
+                    $preferred = null;
+                }
+            }
+        }
+
+        $certificate = $catalog->resolveEdgeCertificate(
+            \is_array($preferred) ? $preferred : null,
+            $serverNames,
+            $store,
+        );
+
+        return [
+            'server_names' => $serverNames,
+            'certificate' => \is_array($certificate) ? $certificate : null,
+        ];
+    }
+
+    /**
+     * @param list<string> $serverNames
+     */
+    private function serverNamesAreTlsWeak(array $serverNames): bool
+    {
+        foreach ($serverNames as $name) {
+            $name = \strtolower(\trim((string)$name));
+            if ($name === ''
+                || $name === '_'
+                || $name === 'localhost'
+                || $name === '127.0.0.1'
+                || $name === '::1'
+            ) {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -2378,6 +2581,167 @@ final class ManagedNginxService
      *
      * @param list<string> $serverNames
      */
+    /**
+     * Public-edge HTTP runtime proof: WLS owner-bound health, or FPM local /_wls/health.
+     */
+    private function verifyPublicEdgeHttpRuntime(
+        bool $fpmOrigin,
+        string $protocol,
+        int $port,
+        array $serverNames,
+        string $generation,
+        string $ownerInstance,
+        int $upstreamPort,
+    ): bool {
+        if ($fpmOrigin) {
+            return $this->verifyFpmEdgeHttpRuntime($protocol, $port, $serverNames, $generation);
+        }
+
+        return $this->verifyHttpRuntime(
+            $protocol,
+            $port,
+            $serverNames,
+            $generation,
+            $ownerInstance,
+            $upstreamPort,
+        );
+    }
+
+    /**
+     * FPM origin: prove /_wls/health is local (200 + X-Wls-Nginx-Config) without Workers.
+     */
+    private function verifyFpmEdgeHttpRuntime(
+        string $protocol,
+        int $port,
+        array $serverNames,
+        string $generation,
+    ): bool {
+        if (!\in_array($protocol, ['1.1', '2'], true)
+            || $port < 1
+            || $port > 65535
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $generation) !== 1
+            || !\extension_loaded('curl')
+            || !\function_exists('curl_init')
+            || !\defined('CURLINFO_HTTP_VERSION')
+            || !\defined('CURL_SSLVERSION_TLSv1_3')
+            || !$this->lifecycleDeadlineAvailable()
+        ) {
+            return false;
+        }
+        if ($protocol === '2'
+            && (!\defined('CURL_HTTP_VERSION_2_0')
+                || !\defined('CURL_VERSION_HTTP2')
+                || (((int)(\curl_version()['features'] ?? 0)
+                    & (int)\constant('CURL_VERSION_HTTP2')) === 0))
+        ) {
+            return false;
+        }
+        if ($protocol === '1.1' && !\defined('CURL_HTTP_VERSION_1_1')) {
+            return false;
+        }
+
+        $probeHost = $this->resolveTlsProbeHost($serverNames);
+        $requestedVersion = $protocol === '2'
+            ? (int)\constant('CURL_HTTP_VERSION_2_0')
+            : (int)\constant('CURL_HTTP_VERSION_1_1');
+        $sslVersion = (int)\constant('CURL_SSLVERSION_TLSv1_3');
+        if (\defined('CURL_SSLVERSION_MAX_TLSv1_3')) {
+            $sslVersion |= (int)\constant('CURL_SSLVERSION_MAX_TLSv1_3');
+        }
+
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $remainingMilliseconds = $this->remainingLifecycleMilliseconds(5_000);
+            if ($remainingMilliseconds === null) {
+                return false;
+            }
+            $headers = '';
+            $responseBody = '';
+            $responseOverflow = false;
+            $handle = @\curl_init(
+                'https://' . $probeHost . ':' . $port . '/_wls/health',
+            );
+            if ($handle === false) {
+                return false;
+            }
+            $options = [
+                CURLOPT_RETURNTRANSFER => false,
+                CURLOPT_HEADER => false,
+                CURLOPT_HEADERFUNCTION => static function (mixed $curl, string $line) use (
+                    &$headers,
+                    &$responseOverflow,
+                ): int {
+                    if (\preg_match('/\AHTTP\//i', $line) === 1) {
+                        $headers = '';
+                    }
+                    if (\strlen($headers) + \strlen($line) > self::MAX_HEALTH_HEADERS_BYTES) {
+                        $responseOverflow = true;
+                        return 0;
+                    }
+                    $headers .= $line;
+                    return \strlen($line);
+                },
+                CURLOPT_WRITEFUNCTION => static function (mixed $curl, string $chunk) use (
+                    &$responseBody,
+                    &$responseOverflow,
+                ): int {
+                    if (\strlen($responseBody) + \strlen($chunk) > self::MAX_HEALTH_RESPONSE_BYTES) {
+                        $responseOverflow = true;
+                        return 0;
+                    }
+                    $responseBody .= $chunk;
+                    return \strlen($chunk);
+                },
+                CURLOPT_HTTP_VERSION => $requestedVersion,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => 2,
+                CURLOPT_SSLVERSION => $sslVersion,
+                CURLOPT_RESOLVE => [$probeHost . ':' . $port . ':127.0.0.1'],
+                CURLOPT_CONNECTTIMEOUT_MS => \min(1_500, $remainingMilliseconds),
+                CURLOPT_TIMEOUT_MS => $remainingMilliseconds,
+                CURLOPT_FRESH_CONNECT => true,
+                CURLOPT_FORBID_REUSE => true,
+                CURLOPT_PROXY => '',
+                CURLOPT_NOPROXY => '*',
+                CURLOPT_NOSIGNAL => true,
+                CURLOPT_HTTPHEADER => [
+                    'Cache-Control: no-cache',
+                    'Pragma: no-cache',
+                ],
+            ];
+            if (\defined('CURLOPT_PROTOCOLS') && \defined('CURLPROTO_HTTPS')) {
+                $options[(int)\constant('CURLOPT_PROTOCOLS')] = (int)\constant('CURLPROTO_HTTPS');
+            }
+            if (!@\curl_setopt_array($handle, $options)) {
+                @\curl_close($handle);
+                return false;
+            }
+            $completed = @\curl_exec($handle);
+            $errno = @\curl_errno($handle);
+            $responseCode = (int)@\curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+            $httpVersion = (int)@\curl_getinfo($handle, CURLINFO_HTTP_VERSION);
+            @\curl_close($handle);
+
+            if ($completed === true
+                && $this->lifecycleDeadlineAvailable()
+                && !$responseOverflow
+                && $errno === CURLE_OK
+                && $responseCode === 200
+                && $httpVersion === $requestedVersion
+                && \preg_match(
+                    '/^X-Wls-Nginx-Config:\s*' . \preg_quote($generation, '/') . '\s*$/mi',
+                    $headers,
+                ) === 1
+            ) {
+                return true;
+            }
+            if (!$this->sleepWithinLifecycleDeadline(0.1)) {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
     private function verifyHttpRuntime(
         string $protocol,
         int $port,
@@ -2905,7 +3269,8 @@ final class ManagedNginxService
                     (string)($degraded['ssl_certificate_sha256'] ?? ''),
                 )
                 || !(bool)($degraded['http2_enabled'] ?? false)
-                || !$this->verifyHttpRuntime(
+                || !$this->verifyPublicEdgeHttpRuntime(
+                    $this->paths->isFpmOrigin(),
                     '2',
                     (int)$degraded['https'],
                     (array)($degraded['server_names'] ?? []),
@@ -2913,7 +3278,8 @@ final class ManagedNginxService
                     $ownerInstance,
                     $upstreamPort,
                 )
-                || !$this->verifyHttpRuntime(
+                || !$this->verifyPublicEdgeHttpRuntime(
+                    $this->paths->isFpmOrigin(),
                     '1.1',
                     (int)$degraded['https'],
                     (array)($degraded['server_names'] ?? []),
@@ -3352,24 +3718,24 @@ final class ManagedNginxService
                 return null;
             }
         }
+        // Unverified resumption leaves empty digests (normalizeOwner defaults).
+        // Match http3_* hash policy: empty is allowed; non-empty must be hex.
         foreach ([
             'tls_session_resumption_config_sha256',
             'tls_session_resumption_ssl_certificate_sha256',
         ] as $hashField) {
-            if (\array_key_exists($hashField, $decoded)
-                && \preg_match(
-                    '/\A[a-f0-9]{64}\z/D',
-                    \strtolower((string)$decoded[$hashField]),
-                ) !== 1
+            $value = \strtolower((string)($decoded[$hashField] ?? ''));
+            if ($value !== ''
+                && \preg_match('/\A[a-f0-9]{64}\z/D', $value) !== 1
             ) {
                 return null;
             }
         }
-        if (\array_key_exists('tls_session_resumption_config_generation', $decoded)
-            && \preg_match(
-                '/\A[a-f0-9]{32}\z/D',
-                \strtolower((string)$decoded['tls_session_resumption_config_generation']),
-            ) !== 1
+        $resumptionConfigGeneration = \strtolower(
+            (string)($decoded['tls_session_resumption_config_generation'] ?? ''),
+        );
+        if ($resumptionConfigGeneration !== ''
+            && \preg_match('/\A[a-f0-9]{32}\z/D', $resumptionConfigGeneration) !== 1
         ) {
             return null;
         }
@@ -5375,6 +5741,13 @@ final class ManagedNginxService
             'running' => $status['running'],
             'runtime_owner_active' => $runtimeOwnerActive,
             'pid' => $status['pid'],
+            'origin_mode' => $this->paths->originMode(),
+            'fpm_listen' => $this->paths->isFpmOrigin() ? $this->paths->fpmListen() : null,
+            'fpm_listen_reachable' => $this->paths->isFpmOrigin()
+                ? $this->probePhpFpmListen($this->paths->fpmListen())
+                : null,
+            'owner_origin_mode' => (string)($owner['origin_mode'] ?? ''),
+            'owner_fpm_listen' => $owner['fpm_listen'] ?? null,
             'owner_instance' => (string)($owner['instance_name'] ?? ''),
             'owner_upstream_host' => (string)($owner['upstream_host'] ?? ''),
             'owner_upstream_port' => (int)($owner['upstream_port'] ?? 0),
@@ -5510,5 +5883,219 @@ final class ManagedNginxService
             new ManagedNginxProcessManager($paths),
             new ManagedNginxPortAllocator($paths),
         );
+    }
+
+    /**
+     * Persist origin_mode (and optional fpm_listen), then reload managed Nginx when live.
+     * FPM mode must not require Workers / Session / Memory sidecars.
+     *
+     * @return array{ok:bool,message:string,details?:array<string,mixed>,exit_code?:int|null}
+     */
+    public function applyOriginMode(string $mode, ?string $fpmListen = null): array
+    {
+        $raw = \strtolower(\trim($mode));
+        if (!\in_array($raw, ['wls', 'fpm', 'php-fpm', 'php_fpm'], true)) {
+            return [
+                'ok' => false,
+                'message' => 'origin mode must be wls or fpm',
+            ];
+        }
+        $normalized = ManagedNginxOriginMode::normalize($raw);
+        $env = Env::getInstance();
+        if (!$env->setConfig('wls.edge.nginx.origin_mode', $normalized)) {
+            return [
+                'ok' => false,
+                'message' => 'failed to persist wls.edge.nginx.origin_mode',
+            ];
+        }
+        if ($fpmListen !== null) {
+            $listen = \trim($fpmListen);
+            if ($listen !== '' && !$env->setConfig('wls.edge.nginx.fpm_listen', $listen)) {
+                return [
+                    'ok' => false,
+                    'message' => 'failed to persist wls.edge.nginx.fpm_listen',
+                ];
+            }
+        }
+
+        // Paths / writer bind config at construction — always continue on a fresh instance.
+        $service = self::fromEnv();
+        if ($normalized === ManagedNginxOriginMode::FPM
+            && !$service->probePhpFpmListen($service->paths->fpmListen())
+        ) {
+            return [
+                'ok' => false,
+                'message' => 'php-fpm listen is not reachable: ' . $service->paths->fpmListen(),
+                'details' => [
+                    'origin_mode' => $normalized,
+                    'fpm_listen' => $service->paths->fpmListen(),
+                ],
+            ];
+        }
+
+        $status = $service->processManager->status(null);
+        if (!($status['ok'] ?? false)) {
+            return [
+                'ok' => false,
+                'message' => 'managed nginx PID identity is unsafe after origin_mode persist: '
+                    . (string)($status['message'] ?? 'unknown'),
+                'details' => [
+                    'origin_mode' => $normalized,
+                    'fpm_listen' => $normalized === ManagedNginxOriginMode::FPM
+                        ? $service->paths->fpmListen()
+                        : null,
+                ],
+            ];
+        }
+        if (!(bool)($status['running'] ?? false)) {
+            $owner = $service->ownerSnapshot();
+            $instanceName = \trim((string)($owner['instance_name'] ?? 'default'));
+            $upstreamPort = (int)($owner['upstream_port'] ?? 0);
+            $upstreamHost = (string)($owner['upstream_host'] ?? '127.0.0.1');
+            $serverNames = (array)($owner['server_names'] ?? []);
+            // FPM can cold-start the edge without a prior WLS owner: bookkeeping
+            // upstream_port is unused for fastcgi, but write()/owner still need a slot.
+            if ($normalized === ManagedNginxOriginMode::FPM) {
+                if ($instanceName === '') {
+                    $instanceName = 'default';
+                }
+                if ($upstreamPort < 1 || $upstreamPort > 65535) {
+                    $upstreamPort = 9555;
+                }
+                if ($upstreamHost === '') {
+                    $upstreamHost = '127.0.0.1';
+                }
+            } elseif (!\is_array($owner)
+                || $instanceName === ''
+                || $upstreamPort < 1
+            ) {
+                return [
+                    'ok' => true,
+                    'message' => 'origin_mode persisted; managed nginx is not running and no owner '
+                        . 'is available to start (run server:start once, then origin:set again)',
+                    'details' => [
+                        'origin_mode' => $normalized,
+                        'fpm_listen' => null,
+                        'nginx_running' => false,
+                    ],
+                ];
+            }
+            // Bind local hosts + Local CA generation before start (same as WLS edge).
+            $binding = $service->resolveLocalEdgeTlsBinding($serverNames, \is_array($owner) ? $owner : null);
+            $started = $service->prepareAndStart(
+                $upstreamPort,
+                $upstreamHost,
+                $binding['server_names'],
+                $instanceName,
+                EdgeAdapterInterface::NAME_NGINX,
+                $binding['certificate'],
+            );
+            $started['details'] = [
+                ...((array)($started['details'] ?? [])),
+                'origin_mode' => $normalized,
+                'fpm_listen' => $normalized === ManagedNginxOriginMode::FPM
+                    ? $service->paths->fpmListen()
+                    : null,
+                'nginx_running' => (bool)($started['ok'] ?? false),
+                'started_from_owner' => true,
+            ];
+            if ($started['ok'] ?? false) {
+                $started['message'] = 'origin_mode=' . $normalized . '; ' . (string)$started['message'];
+            }
+
+            return $started;
+        }
+
+        // FPM must not hard-fail on Worker-bound TLS session continuity / H3 owner proofs.
+        $reloadOptions = $normalized === ManagedNginxOriginMode::FPM
+            ? ['light_verification' => true]
+            : null;
+        $reload = $service->reload(null, $reloadOptions);
+        $reload['details'] = [
+            ...((array)($reload['details'] ?? [])),
+            'origin_mode' => $normalized,
+            'fpm_listen' => $normalized === ManagedNginxOriginMode::FPM
+                ? $service->paths->fpmListen()
+                : null,
+            'nginx_running' => true,
+        ];
+        if ($reload['ok'] ?? false) {
+            $reload['message'] = 'origin_mode=' . $normalized . '; ' . (string)$reload['message'];
+        }
+
+        return $reload;
+    }
+
+    /**
+     * Reachability probe for nginx fastcgi_pass target (tcp host:port or unix socket).
+     */
+    public function probePhpFpmListen(string $listen): bool
+    {
+        $listen = \trim($listen);
+        if ($listen === '') {
+            return false;
+        }
+
+        if (\str_starts_with($listen, 'unix:')) {
+            $listen = \substr($listen, 5);
+        }
+
+        if (\str_contains($listen, '/') && !\str_contains($listen, ':')) {
+            // Absolute unix socket path.
+            if (!@\file_exists($listen)) {
+                return false;
+            }
+            $errno = 0;
+            $error = '';
+            $socket = @\stream_socket_client(
+                'unix://' . $listen,
+                $errno,
+                $error,
+                0.5,
+                STREAM_CLIENT_CONNECT,
+            );
+            if (\is_resource($socket)) {
+                @\fclose($socket);
+
+                return true;
+            }
+
+            return false;
+        }
+
+        $host = '127.0.0.1';
+        $port = 9000;
+        if (\str_contains($listen, ':')) {
+            $parts = \explode(':', $listen, 2);
+            $host = \trim($parts[0]) !== '' ? \trim($parts[0]) : '127.0.0.1';
+            $port = (int)$parts[1];
+        } elseif (\ctype_digit($listen)) {
+            $port = (int)$listen;
+        } else {
+            return false;
+        }
+        if ($port < 1 || $port > 65535) {
+            return false;
+        }
+        $normalizedHost = \strtolower(\trim($host, " \t\n\r\0\x0B[]"));
+        $targetHost = \str_contains($normalizedHost, ':')
+            ? '[' . $normalizedHost . ']'
+            : $normalizedHost;
+        $errno = 0;
+        $error = '';
+        $socket = @\stream_socket_client(
+            'tcp://' . $targetHost . ':' . $port,
+            $errno,
+            $error,
+            0.5,
+            STREAM_CLIENT_CONNECT,
+        );
+        if (\is_resource($socket)) {
+            @\fclose($socket);
+
+            return true;
+        }
+
+        return false;
     }
 }

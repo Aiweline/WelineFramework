@@ -50,11 +50,17 @@ class LongRunningPhpRuntime
                     }
                 }
 
+                // Per-process CLI OPcache + tracing JIT (not SHM-shared across Workers).
+                // Windows keeps JIT off below — PHP 8.4 can crash on shared JIT buffers there.
                 return [
                     '-d',
                     'opcache.enable_cli=1',
                     '-d',
                     'opcache.memory_consumption=' . $opcacheMb,
+                    '-d',
+                    'opcache.jit=tracing',
+                    '-d',
+                    'opcache.jit_buffer_size=64M',
                 ];
             }
 

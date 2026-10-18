@@ -244,6 +244,7 @@ NGINX;
             . DIRECTORY_SEPARATOR . 'html'
             . DIRECTORY_SEPARATOR . 'live'
         ) . '/$wls_fpc_html_host"';
+        $maintenanceEdgeDiskBypassSnippet = $this->buildMaintenanceEdgeDiskBypassSnippet();
         $fpcHtmlDiskHitHeaders = $this->buildFpcHtmlDiskHitHeaderBlock();
         try {
             (new FpcPierceNginxMapWriter($this->paths))->publish();
@@ -423,11 +424,15 @@ NGINX;
             $emitNginxConfigHeader = \Weline\Framework\Http\ResponseObservabilityPolicy::identityHeadersEnabled();
         } catch (\Throwable) {
         }
+        // Origin mode (fpm|wls): same identity gate — deploy=dev / verbose only; production lean.
+        $originModeHeaderValue = $this->paths->originMode();
         $locationProtocolHeaders = $emitNginxConfigHeader
             ? "\n            add_header X-Wls-Nginx-Config {$configGeneration} always;"
+                . "\n            add_header X-Wls-Origin-Mode {$originModeHeaderValue} always;"
             : '';
         $serverNginxConfigHeader = $emitNginxConfigHeader
             ? "        add_header X-Wls-Nginx-Config {$configGeneration} always;\n"
+                . "        add_header X-Wls-Origin-Mode {$originModeHeaderValue} always;\n"
             : '';
         if ($http3Configured) {
             $locationProtocolHeaders .= "\n            add_header Alt-Svc \$wls_alt_svc always;";
@@ -454,10 +459,14 @@ NGINX;
         // Static disk layers (priority via ^~ then regex):
         // 1) /pub/media  2) /static → pub/static  3) extension → FPC static disk
         // 4) @wls_static_origin (+ optional proxy_cache). Do NOT try_files app/code.
+        $fpmOrigin = $this->paths->isFpmOrigin();
         $quotedProjectRoot = $this->nginxQuotedPath($this->paths->projectRoot());
-        $quotedPubRoot = $this->nginxQuotedPath(
-            $this->paths->projectRoot() . DIRECTORY_SEPARATOR . 'pub'
-        );
+        $quotedPubRoot = $this->nginxQuotedPath($this->paths->pubRoot());
+        $quotedAcmeRoot = $this->nginxQuotedPath($this->paths->acmeChallengeRoot());
+        $quotedFastcgiParams = $this->nginxQuotedPath($this->resolveFastcgiParamsPath());
+        if ($fpmOrigin) {
+            $this->paths->ensureRuntimeDirectories();
+        }
         // Literal default_type per extension — nginx does not expand vars in default_type.
         $staticBrHitHeaders = <<<NGINX
             access_log off;
@@ -669,6 +678,12 @@ NGINX;
             $eventsExtra = "    multi_accept        on;\n";
         }
 
+        $upstreamBlock = $fpmOrigin
+            ? $this->buildFpmUpstreamBlock()
+            : $this->buildWlsUpstreamBlock($upstreamServers, $upstreamKeepalive, $upstreamKeepaliveTimeoutSec);
+        $acmeChallengeLocationBlock = $this->buildAcmeChallengeLocation($fpmOrigin, $quotedAcmeRoot);
+        $internalProbeLocationBlock = $this->buildInternalProbeLocation($fpmOrigin, $configGeneration);
+
         $conf = <<<NGINX
 worker_processes  {$workerProcesses};
 worker_rlimit_nofile  {$rlimit};
@@ -703,13 +718,7 @@ http {
 {$tempBlock}{$gzipBlock}
 {$cacheHttpBlock}{$fpcHtmlDiskMapBlock}{$authorityMapBlock}{$protocolMapBlock}
 {$edgeLimitHttpZone}
-    upstream wls_backend {
-{$upstreamServers}
-        keepalive {$upstreamKeepalive};
-        keepalive_requests 1000;
-        keepalive_timeout {$upstreamKeepaliveTimeoutSec}s;
-    }
-
+{$upstreamBlock}
     server {
         listen {$ports['http']}{$tcpReuse};
 {$sslBlock}
@@ -728,36 +737,8 @@ http {
             empty_gif;
         }
 
-        location ^~ /.well-known/acme-challenge/ {
-            proxy_pass http://wls_backend;
-            proxy_http_version 1.1;
-            proxy_set_header Connection "";
-            proxy_set_header Host \$wls_upstream_authority;
-            proxy_set_header X-Forwarded-Port \$server_port;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
-            proxy_set_header X-Forwarded-Proto \$scheme;
-        }
-
-        # 内部探测不走边缘缓存。
-        # X-Wls-Nginx-Config is a publication/probe contract for ManagedNginxService
-        # gates (/_wls/health); always emit here — independent of wls.debug.identity_headers.
-        location ^~ /_wls/ {
-            proxy_pass http://wls_backend;
-            allow 127.0.0.1;
-            allow ::1;
-            deny all;
-            add_header X-Wls-Nginx-Config {$configGeneration} always;
-            proxy_http_version 1.1;
-            proxy_set_header Connection \$wls_probe_upstream_connection;
-            proxy_set_header Host \$wls_upstream_authority;
-            proxy_set_header X-Forwarded-Port \$server_port;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
-            proxy_set_header X-Forwarded-Proto \$scheme;
-            proxy_set_header X-Real-IP \$remote_addr;
-        }
-
+{$acmeChallengeLocationBlock}
+{$internalProbeLocationBlock}
 {$nonHtmlOriginLocationBlock}
         include {$quotedSitemapEdgeLocations};
 {$mediaDiskLocationBlock}
@@ -767,7 +748,7 @@ http {
         # Non-empty query / pierce / no-br / http → origin. One if only (no scheme if here).
         location / {
             error_page 418 = @wls_html_origin;
-            if (\$wls_fpc_html_disk_try = 0) {
+{$maintenanceEdgeDiskBypassSnippet}            if (\$wls_fpc_html_disk_try = 0) {
                 return 418;
             }
             root {$quotedFpcHtmlRoot};
@@ -818,6 +799,21 @@ NGINX;
         // Windows: events.use already omitted above.
         if (\PHP_OS_FAMILY === 'Darwin' || \PHP_OS_FAMILY === 'BSD') {
             $conf = \str_replace("    use                 epoll;\n", "    use                 kqueue;\n", $conf);
+        }
+
+        if ($fpmOrigin) {
+            $conf = $this->rewriteGeneratedConfForFpmOrigin(
+                $conf,
+                $quotedPubRoot,
+                $quotedFastcgiParams,
+                $quotedAcmeRoot,
+                $configGeneration,
+                $edgeLimitLocation,
+                $businessProxyConnectTimeoutSec,
+                $businessProxyReadTimeoutSec,
+                $businessProxySendTimeoutSec,
+                $locationProtocolHeaders,
+            );
         }
 
         $conf = $hostCacheState->configComment() . $conf;
@@ -1322,6 +1318,7 @@ NGINX;
                 . DIRECTORY_SEPARATOR . 'html'
                 . DIRECTORY_SEPARATOR . 'live'
             ) . '/$wls_fpc_html_host"';
+            $maintenanceEdgeDiskBypassSnippet = $this->buildMaintenanceEdgeDiskBypassSnippet();
             $fpcHtmlDiskHitHeaders = $this->buildFpcHtmlDiskHitHeaderBlock();
             $originName = $this->nginxSafeNamedLocationSuffix($host);
             $nonHtmlOriginLocationBlock = $this->buildNonHtmlOriginProxyLocations(
@@ -1363,7 +1360,7 @@ NGINX;
 {$nonHtmlOriginLocationBlock}
         location / {
             error_page 418 = @wls_html_origin_distinct_{$originName};
-            if (\$wls_fpc_html_disk_try = 0) {
+{$maintenanceEdgeDiskBypassSnippet}            if (\$wls_fpc_html_disk_try = 0) {
                 return 418;
             }
             root {$quotedFpcHtmlRoot};
@@ -2101,6 +2098,28 @@ NGINX;
     }
 
     /**
+     * When Maintenance writes var/maintenance/edge.on, skip storefront html-disk
+     * HIT and 418 → origin so FPM/WLS both serve pub/errors/maintenance pages.
+     * Path must stay aligned with Weline\Maintenance\Helper\MaintenanceEdgeFlag.
+     */
+    private function buildMaintenanceEdgeDiskBypassSnippet(): string
+    {
+        $flagPath = $this->paths->projectRoot()
+            . DIRECTORY_SEPARATOR . 'var'
+            . DIRECTORY_SEPARATOR . 'maintenance'
+            . DIRECTORY_SEPARATOR . 'edge.on';
+        $quoted = '"' . \str_replace(['\\', '"'], ['/', '\\"'], $flagPath) . '"';
+
+        return <<<NGINX
+            # Framework maintenance edge flag → origin (same static pages as WLS).
+            if (-f {$quoted}) {
+                return 418;
+            }
+
+NGINX;
+    }
+
+    /**
      * Outbound headers for Nginx html-disk FPC HIT (try_files index.html.br).
      *
      * Aligns with Framework FullPageCacheCoordinator::applyFpcHitEdgeCacheHeaders
@@ -2397,6 +2416,283 @@ NGINX;
         }
 
         return \strtolower($fingerprint);
+    }
+
+    private function resolveFastcgiParamsPath(): string
+    {
+        $source = $this->paths->installRoot() . DIRECTORY_SEPARATOR
+            . 'conf' . DIRECTORY_SEPARATOR . 'fastcgi_params';
+        if (\is_file($source)) {
+            return $source;
+        }
+
+        // Minimal fallback when install tree lacks fastcgi_params (tests / fresh roots).
+        $fallback = $this->paths->confDir() . DIRECTORY_SEPARATOR . 'fastcgi_params.weline-fallback';
+        if (!\is_file($fallback)) {
+            $this->paths->ensureRuntimeDirectories();
+            $body = <<<'PARAMS'
+fastcgi_param  QUERY_STRING       $query_string;
+fastcgi_param  REQUEST_METHOD     $request_method;
+fastcgi_param  CONTENT_TYPE       $content_type;
+fastcgi_param  CONTENT_LENGTH     $content_length;
+fastcgi_param  SCRIPT_NAME        $fastcgi_script_name;
+fastcgi_param  REQUEST_URI        $request_uri;
+fastcgi_param  DOCUMENT_URI       $document_uri;
+fastcgi_param  DOCUMENT_ROOT      $document_root;
+fastcgi_param  SERVER_PROTOCOL    $server_protocol;
+fastcgi_param  REQUEST_SCHEME     $scheme;
+fastcgi_param  HTTPS              $https if_not_empty;
+fastcgi_param  GATEWAY_INTERFACE  CGI/1.1;
+fastcgi_param  SERVER_SOFTWARE    nginx/$nginx_version;
+fastcgi_param  REMOTE_ADDR        $remote_addr;
+fastcgi_param  REMOTE_PORT        $remote_port;
+fastcgi_param  SERVER_ADDR        $server_addr;
+fastcgi_param  SERVER_PORT        $server_port;
+fastcgi_param  SERVER_NAME        $server_name;
+fastcgi_param  REDIRECT_STATUS    200;
+
+PARAMS;
+            if (@\file_put_contents($fallback, $body) === false) {
+                throw new \RuntimeException('Unable to write fallback fastcgi_params for managed nginx FPM origin.');
+            }
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * nginx upstream server line for PHP-FPM (unix: or host:port).
+     */
+    private function formatFpmUpstreamServer(string $listen): string
+    {
+        $listen = \trim($listen);
+        if ($listen === '') {
+            $listen = '127.0.0.1:9000';
+        }
+        if (\str_starts_with($listen, 'unix:') || \str_contains($listen, '/')) {
+            $path = \str_starts_with($listen, 'unix:') ? \substr($listen, 5) : $listen;
+
+            return 'unix:' . \str_replace('\\', '/', $path);
+        }
+
+        return $listen;
+    }
+
+    private function buildFpmUpstreamBlock(): string
+    {
+        $server = $this->formatFpmUpstreamServer($this->paths->fpmListen());
+
+        return <<<NGINX
+    upstream weline_fpm {
+        server {$server};
+        keepalive 8;
+    }
+
+NGINX;
+    }
+
+    private function buildWlsUpstreamBlock(
+        string $upstreamServers,
+        int $upstreamKeepalive,
+        int $upstreamKeepaliveTimeoutSec,
+    ): string {
+        return <<<NGINX
+    upstream wls_backend {
+{$upstreamServers}
+        keepalive {$upstreamKeepalive};
+        keepalive_requests 1000;
+        keepalive_timeout {$upstreamKeepaliveTimeoutSec}s;
+    }
+
+NGINX;
+    }
+
+    private function buildAcmeChallengeLocation(bool $fpmOrigin, string $quotedAcmeRoot): string
+    {
+        if ($fpmOrigin) {
+            return <<<NGINX
+        location ^~ /.well-known/acme-challenge/ {
+            root {$quotedAcmeRoot};
+            default_type text/plain;
+            allow all;
+        }
+
+NGINX;
+        }
+
+        return <<<NGINX
+        location ^~ /.well-known/acme-challenge/ {
+            proxy_pass http://wls_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_set_header Host \$wls_upstream_authority;
+            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+        }
+
+NGINX;
+    }
+
+    private function buildInternalProbeLocation(bool $fpmOrigin, string $configGeneration): string
+    {
+        if ($fpmOrigin) {
+            // Local health for ManagedNginxService /_wls/health probes — no Worker.
+            return <<<NGINX
+        location ^~ /_wls/ {
+            allow 127.0.0.1;
+            allow ::1;
+            deny all;
+            add_header X-Wls-Nginx-Config {$configGeneration} always;
+            add_header Cache-Control "no-store" always;
+            default_type text/plain;
+            return 200 "ok\\n";
+        }
+
+NGINX;
+        }
+
+        return <<<NGINX
+        # 内部探测不走边缘缓存。
+        # X-Wls-Nginx-Config is a publication/probe contract for ManagedNginxService
+        # gates (/_wls/health); always emit here — independent of wls.debug.identity_headers.
+        location ^~ /_wls/ {
+            proxy_pass http://wls_backend;
+            allow 127.0.0.1;
+            allow ::1;
+            deny all;
+            add_header X-Wls-Nginx-Config {$configGeneration} always;
+            proxy_http_version 1.1;
+            proxy_set_header Connection \$wls_probe_upstream_connection;
+            proxy_set_header Host \$wls_upstream_authority;
+            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Real-IP \$remote_addr;
+        }
+
+NGINX;
+    }
+
+    /**
+     * FPM front-controller directives for a location (named or prefix).
+     * Aligns with traditional nginx.conf: execute pub/index.php; keep REQUEST_URI.
+     */
+    private function buildFpmFrontControllerDirectives(
+        string $quotedPubRoot,
+        string $quotedFastcgiParams,
+        string $edgeLimitLocation,
+        int $connectTimeoutSec,
+        int $readTimeoutSec,
+        int $sendTimeoutSec,
+        string $locationProtocolHeaders,
+        string $prefixLines = '',
+    ): string {
+        return <<<NGINX
+{$prefixLines}{$edgeLimitLocation}            root {$quotedPubRoot};
+            include {$quotedFastcgiParams};
+            fastcgi_pass weline_fpm;
+            # Front controller — SCRIPT is index.php; path stays in REQUEST_URI.
+            fastcgi_param SCRIPT_FILENAME \$document_root/index.php;
+            fastcgi_param SCRIPT_NAME /index.php;
+            fastcgi_param DOCUMENT_ROOT \$document_root;
+            fastcgi_param HTTPS \$https if_not_empty;
+            fastcgi_param HTTP_X_FORWARDED_PROTO \$scheme;
+            fastcgi_param HTTP_X_FORWARDED_PORT \$server_port;
+            fastcgi_param HTTP_X_REAL_IP \$remote_addr;
+            fastcgi_param HTTP_X_FORWARDED_FOR \$proxy_add_x_forwarded_for;
+            fastcgi_connect_timeout {$connectTimeoutSec}s;
+            fastcgi_read_timeout {$readTimeoutSec}s;
+            fastcgi_send_timeout {$sendTimeoutSec}s;
+            fastcgi_buffers 32 64k;
+            fastcgi_buffer_size 64k;
+{$locationProtocolHeaders}
+NGINX;
+    }
+
+    /**
+     * Convert residual WLS proxy_pass origins to FPM after the shared template is rendered.
+     * Primary ACME /_wls/ upstream blocks are already mode-aware; this covers static/HTML/API.
+     */
+    private function rewriteGeneratedConfForFpmOrigin(
+        string $conf,
+        string $quotedPubRoot,
+        string $quotedFastcgiParams,
+        string $quotedAcmeRoot,
+        string $configGeneration,
+        string $edgeLimitLocation,
+        int $connectTimeoutSec,
+        int $readTimeoutSec,
+        int $sendTimeoutSec,
+        string $locationProtocolHeaders,
+    ): string {
+        // Distinct-host ACME still emitted as proxy in helper — force local webroot.
+        $conf = \preg_replace(
+            '/location \^~ \/\.well-known\/acme-challenge\/ \{.*?\n        \}/s',
+            \trim($this->buildAcmeChallengeLocation(true, $quotedAcmeRoot)),
+            $conf,
+        ) ?? $conf;
+
+        // Locations already emit $edgeLimitLocation and $locationProtocolHeaders
+        // around the proxy_pass block — do not re-inject either or nginx -t /
+        // browsers see duplicate limit_req / X-Wls-* headers.
+        $fpmBody = $this->buildFpmFrontControllerDirectives(
+            $quotedPubRoot,
+            $quotedFastcgiParams,
+            '',
+            $connectTimeoutSec,
+            $readTimeoutSec,
+            $sendTimeoutSec,
+            '',
+        );
+
+        // Replace proxy_pass + following proxy_* / http→https if (blank lines OK).
+        // {$httpRedirectLocation} is emitted with a leading newline, which inserts a
+        // blank line between proxy_http_version and later proxy_set_header — a
+        // proxy_*-only regex stopped there and left dead proxy_* + stacked headers.
+        $conf = \preg_replace(
+            '/[ \t]*proxy_pass http:\/\/wls_backend;\n'
+            . '(?:'
+            . '[ \t]*\n'
+            . '|'
+            . '[ \t]*(?:proxy_[^\n]+|if \(\$scheme = http\) \{[^}\n]*\})\n'
+            . ')*/',
+            $fpmBody,
+            $conf,
+        ) ?? $conf;
+
+        if (\preg_match(
+            '/add_header X-Wls-Origin-Mode [^\n]+\n(?:[ \t]*add_header Alt-Svc \$wls_alt_svc always;\n)?[ \t]*add_header X-Wls-Origin-Mode /',
+            $conf,
+        ) === 1) {
+            throw new \RuntimeException(
+                'FPM origin conf stacks duplicate X-Wls-Origin-Mode headers after rewrite.',
+            );
+        }
+        // Silence unused after deciding not to re-inject into fpmBody.
+        unset($locationProtocolHeaders);
+
+        if (\str_contains($conf, 'proxy_pass http://wls_backend')) {
+            throw new \RuntimeException(
+                'FPM origin conf still contains proxy_pass http://wls_backend after rewrite.'
+            );
+        }
+        if (!\str_contains($conf, 'fastcgi_pass weline_fpm')
+            || !\str_contains($conf, 'upstream weline_fpm')
+        ) {
+            throw new \RuntimeException('FPM origin conf missing weline_fpm upstream or fastcgi_pass.');
+        }
+
+        // Ensure /_wls health remains local even if a residual proxy form survived.
+        if (!\str_contains($conf, 'location ^~ /_wls/')) {
+            throw new \RuntimeException('FPM origin conf missing /_wls/ probe location.');
+        }
+
+        unset($configGeneration); // retained for call-site clarity / future header asserts
+
+        return $conf;
     }
 
 }

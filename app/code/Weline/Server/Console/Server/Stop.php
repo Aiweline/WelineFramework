@@ -83,6 +83,8 @@ class Stop extends CommandAbstract
     private array $lastExactRetirementReasons = [];
     private bool $managedNginxStopFailed = false;
     private bool $allowUnsafeGatewayStop = false;
+    /** When true, tear down WLS business plane but leave managed Nginx running (FPM origin). */
+    private bool $keepManagedNginx = false;
 
     /**
      * Keep the historical one-argument protected extension point compatible;
@@ -142,6 +144,8 @@ class Stop extends CommandAbstract
         $fastLocal = isset($args['fast-local'])
             || isset($args['fast_local']);
         $restartCleanup = isset($args['restart-cleanup']) || isset($args['restart_cleanup']);
+        $this->keepManagedNginx = isset($args['keep-nginx'])
+            || isset($args['keep_nginx']);
 
         if ($stopAll && $instancePrefix !== '') {
             $this->printer->error(__('`--all` 与 `-pre/--prefix` 不能同时使用。'));
@@ -189,6 +193,14 @@ class Stop extends CommandAbstract
         bool $force = false,
     ): bool
     {
+        if ($this->keepManagedNginx) {
+            $this->printer->note(__(
+                '已保留托管 Nginx（--keep-nginx）：仅停止 WLS 业务平面（Worker / Session / Memory）。'
+            ));
+
+            return true;
+        }
+
         $gatewayRuntime = \is_array($instanceData['gateway'] ?? null)
             ? $instanceData['gateway']
             : [];
@@ -4246,6 +4258,7 @@ class Stop extends CommandAbstract
                 '-pre, --prefix <prefix>' => __('停止所有实例名以该前缀开头的 Weline Server 实例'),
                 '-f, --force' => __('强制停止：通过认证 IPC 跳过排水；IPC 失联时仅按受保护进程出生身份清理'),
                 '--fast-local' => __('显式跳过 IPC；仅允许受保护 Master/子进程出生身份清理，无法证明时拒绝终止'),
+                '--keep-nginx' => __('保留托管 Nginx，仅停止 WLS 业务平面（FPM 回源时使用）'),
                 '--ipc, --force-ipc' => __('兼容参数：WLS 2.0 默认始终优先使用认证 IPC'),
                 '--help' => __('显示帮助信息'),
             ],
@@ -4259,6 +4272,7 @@ class Stop extends CommandAbstract
                 __('停止所有实例') => 'php bin/w server:stop --all',
                 __('强制停止（认证 IPC，失败后精确身份清理）') => 'php bin/w server:stop -f',
                 __('显式本地精确身份清理') => 'php bin/w server:stop --fast-local',
+                __('FPM 回源：停业务平面保留 Nginx') => 'php bin/w server:stop --keep-nginx',
             ]
         );
     }
