@@ -205,6 +205,37 @@
     schedulePredict(img);
   }
 
+  function healStuckLooksTile(img) {
+    if (!img || img.nodeType !== 1) {
+      return;
+    }
+    if (img.getAttribute('data-looks-healed') === '1') {
+      return;
+    }
+    if (!(img.hasAttribute('data-looks-tile') || (img.closest && img.closest('.weline-site-block.is-looks')))) {
+      return;
+    }
+    var src = (img.getAttribute('src') || '').trim();
+    if (!src || src.indexOf('data:image/') === 0) {
+      return;
+    }
+    if (!(img.complete && img.naturalWidth === 0)) {
+      return;
+    }
+    img.setAttribute('data-looks-healed', '1');
+    img.loading = 'eager';
+    img.removeAttribute('src');
+    img.src = src;
+  }
+
+  function healStuckLooksTiles(root) {
+    var scope = root || document;
+    if (!scope.querySelectorAll) {
+      return;
+    }
+    scope.querySelectorAll('.weline-site-block.is-looks img[src], img[data-looks-tile][src]').forEach(healStuckLooksTile);
+  }
+
   function boot(scope) {
     var root = scope || document;
     var nodes = root.querySelectorAll ? root.querySelectorAll('img') : [];
@@ -214,6 +245,11 @@
         bindImage(img);
       }
     });
+    healStuckLooksTiles(root);
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(function () { healStuckLooksTiles(root); });
+    }
+    setTimeout(function () { healStuckLooksTiles(root); }, 400);
   }
 
   var t = theme();

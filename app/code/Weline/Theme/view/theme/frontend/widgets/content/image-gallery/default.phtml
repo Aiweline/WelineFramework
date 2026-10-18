@@ -109,10 +109,14 @@ $renderImageGallerySection = static function () use (
             $url = Block::link($item['link'] ?? '');
             $itemText = Block::text($item['text'] ?? '');
             $itemTitle = Block::text($item['title'] ?? '');
+            // looks wall is a short curated fold gallery (≤6). Native lazy can leave
+            // in-viewport tiles at naturalWidth=0 (beige .sb-media) despite 200 media.
+            $imgLoading = $isLooks ? 'eager' : 'lazy';
             $mediaInner = $mediaHtml !== ''
                 ? $mediaHtml
                 : '<div class="w-frame" data-ratio="3/4" data-fit="cover" style="--weline-frame-ratio:3 / 4;">'
-                    . '<img src="' . $esc($image) . '" alt="' . $t($itemTitle) . '" loading="lazy" decoding="async" width="400" height="533">'
+                    . '<img src="' . $esc($image) . '" alt="' . $t($itemTitle) . '" loading="' . $imgLoading . '" decoding="async" width="400" height="533"'
+                    . ($isLooks ? ' data-looks-tile="1"' : '') . '>'
                     . '</div>';
         ?>
             <article class="w-card sb-card<?= $isLooks ? ' sb-looks-tile' : '' ?>">

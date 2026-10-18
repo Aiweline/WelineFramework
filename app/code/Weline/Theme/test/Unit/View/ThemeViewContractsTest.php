@@ -312,6 +312,9 @@ final class ThemeViewContractsTest extends TestCase
             'StorefrontImageLoadingPolicy::testFallbackBindingRemains' => function () {
             $this->assert_StorefrontImageLoadingPolicy_testFallbackBindingRemains();
         },
+            'StorefrontImageLoadingPolicy::testLooksWallUsesEagerLoading' => function () {
+                $this->assert_StorefrontImageLoadingPolicy_testLooksWallUsesEagerLoading();
+            },
             'StorefrontImageLoadingPolicy::testModuleStillRegistersFallbackScript' => function () {
             $this->assert_StorefrontImageLoadingPolicy_testModuleStillRegistersFallbackScript();
         },
@@ -2074,6 +2077,8 @@ private function assert_StorefrontImageLoadingPolicy_testAutoLazyAndPredictPrefe
     self::assertStringContainsString('shouldSkipAutoLazy', $script);
     self::assertStringContainsString('data-no-auto-lazy', $script);
     self::assertStringContainsString('fetchpriority', $script);
+    self::assertStringContainsString('healStuckLooksTile', $script);
+    self::assertStringContainsString('data-looks-healed', $script);
 }
 
 private function assert_StorefrontImageLoadingPolicy_testFallbackBindingRemains(): void
@@ -2090,6 +2095,13 @@ private function assert_StorefrontImageLoadingPolicy_testModuleStillRegistersFal
     $modules = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/statics/frontend/weline.modules.js');
     self::assertStringContainsString('storefrontImageFallback', $modules);
     self::assertStringContainsString('Weline_Theme::js/storefront-image-fallback.js', $modules);
+}
+
+private function assert_StorefrontImageLoadingPolicy_testLooksWallUsesEagerLoading(): void
+{
+    $widget = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/theme/frontend/widgets/content/image-gallery/default.phtml');
+    self::assertStringContainsString("\$imgLoading = \$isLooks ? 'eager' : 'lazy'", $widget);
+    self::assertStringContainsString('data-looks-tile="1"', $widget);
 }
 
 private const TOAST_CSS_StorefrontShopperToast = 'css/widgets/storefront-shopper-toast.css';

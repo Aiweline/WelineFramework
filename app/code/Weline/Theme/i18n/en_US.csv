@@ -889,11 +889,16 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-内容标题,"Section title"
-面包屑,"bread crumbs"
 分类,Classification
 分类展示图,"Category showcase image"
 查看全部,"View all"
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
+查看更多,"View more"
+距离结束,"Ends in"
+时,Hour
+分,Minute
+秒,Second
 回到顶部,"Back to top"
 站点偏好,"Site preferences"
 法律与政策,"Law and Policy"
@@ -930,18 +935,18 @@ FAQ/常见问题,FAQ
 展开明细,"Expand details"
 零售,Retail
 迷你购物车金额小计,"Mini-cart money summary"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
-查看更多,"View more"
-距离结束,"Ends in"
-时,Hour
-分,Minute
-秒,Second
 上一张,"Previous picture"
 下一张,Next
 第%d张,"Slide %d"
 剩余,Remaining
 天,Day(s)
+加载中,loading
+"WelineFramework Admin","WelineFramework Admin"
+面包屑,"bread crumbs"
+关闭通知,"Close notification"
+件商品,"items of goods"
+展开社交媒体,"Expand social media"
+收起社交媒体,"Collapse social media"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -1109,7 +1114,6 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆活动,节庆活动
 日常通勤,"Everyday commute"
-件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1120,6 +1124,7 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
+内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
@@ -1137,8 +1142,6 @@ Weline,Weline
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
 精选轮播,"Featured Carousel"
-展开社交媒体,"Expand social media"
-收起社交媒体,"Collapse social media"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1160,7 +1163,6 @@ Logo,Logo
 下一条,Next
 全部商品,"Shop All"
 面包屑导航,Breadcrumbs
-关闭通知,"Close notification"
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
 订单跟踪,"Order Tracking"
@@ -1175,7 +1177,6 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
-加载中,loading
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -1201,7 +1202,6 @@ Logo,Logo
 确认操作,"Confirm action"
 确定,Sure
 输入,Input
-"WelineFramework Admin","WelineFramework Admin"
 "Weline Admin","Weline Admin"
 管理后台,"Admin Panel"
 后台Logo,"Background Logo"
@@ -2330,15 +2330,16 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+个人中心,"Personal center"
+登录,"Log in"
+登录页工具,"Login page tools"
 圆领袍,"Round-Collar Robes"
 发簪与发冠,"Hairpins & Crowns"
 腰带与禁步,"Belts & Jinbu Charms"
 绣花鞋履,"Embroidered Shoes"
 节庆与雅集,"Festivals & Gatherings"
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 注册,Register
-登录页工具,"Login page tools"
-登录,"Log in"
 "Search results","Search results"
 Search,Search
 "Search · 检索","Search · 检索"
@@ -2361,7 +2362,6 @@ Next,Next
 我的菜单,"my menu"
 关闭菜单,"Close menu"
 主题文件不在允许的主题目录内：,"The theme file is not in the allowed theme directory:"
-个人中心,"Personal center"
 "开始将设计主题 area 资源双写到 Weline/Theme/view/theme URL 路径...","开始将设计主题 area 资源双写到 Weline/Theme/view/theme URL 路径..."
 "设计 area→Theme 模块路径：","设计 area→Theme 模块路径："
 选择作用范围,"Select scope."

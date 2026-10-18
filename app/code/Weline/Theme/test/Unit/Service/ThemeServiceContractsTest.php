@@ -2959,6 +2959,9 @@ private function assert_StorefrontNotFoundStaticGeneratorStripDictionaries_testG
     self::assertStringContainsString('stripClientTranslationDictionaries', $source);
     self::assertStringContainsString('SlotBoundaryMarkers::strip', $source);
     self::assertStringContainsString('StaticErrorPagePublisher::CTX_PUBLISHING', $source);
+    // 404 static must collapse synth+footer float layers (same as live hard-cut).
+    self::assertStringContainsString('StorefrontFloatLayerHost::ensureInHtml', $source);
+    self::assertStringContainsString('storefront-float-single-layer-v1', $source);
 }
 
 private function generatorSource_StorefrontNotFoundThemeApplication(): string

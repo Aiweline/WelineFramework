@@ -21,6 +21,7 @@ use Weline\Framework\View\Template;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\LayoutEntity\StorefrontFloatLayerHost;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\SlotBoundaryMarkers;
 use Weline\Websites\Model\Website;
@@ -471,13 +472,18 @@ final class StorefrontNotFoundStaticGenerator
         }
 
         // 不在每个语言清空槽位缓存：布局图与部件元数据可复用；文案/推荐仍随语言覆盖重算。
-        return $this->slotRenderer->processSlots(
+        $html = $this->slotRenderer->processSlots(
             $html,
             $themeId,
             self::PAGE_TYPE,
             ThemeLayout::STATUS_PUBLISHED,
             PreviewContextService::AREA_FRONTEND,
         );
+        // Hard-cut storefront finalizer collapses synth+footer float layers on live
+        // pages; static 404 publish used to skip that → dual storefront-float-end
+        // copies of customer-service-float (DEV 同槽重复). Keep JSON default_injection;
+        // collapse drops the synth layout shell (storefront-float-single-layer-v1).
+        return StorefrontFloatLayerHost::ensureInHtml($html);
     }
 
     /**
