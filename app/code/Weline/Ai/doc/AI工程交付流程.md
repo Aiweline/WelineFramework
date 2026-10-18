@@ -175,6 +175,8 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 **【高压线 · 基础组件只用主题规范变量】** 开发/改主题时，基础组件（`w-button` / `w-input` / `w-select` / `w-textarea` / `w-field` / `w-badge` / `w-alert` / `w-text` / `w-menu` / `w-dialog` / `w-toast` / `w-table` 及 `foundation.css` 同级）**必须**只消费 `--weline-theme-*` / `--color-*` / `--backend-color-*`（及 spacing·radius·shadow）。**禁止**为基础组件私写 hex/rgb 或平行色变量。品牌主题只改 `colors/_*.css` 色盘叶子；默认语义合同继承自 `variables/_colors.css` + `colors/_default.css`。MCP 规则 id：`theme_base_components_token_only`。权威：`theme-semantic-color-matrix.md`。
 
+**【高压线 · 引用 Token 必须有主题盘叶子】** 组件只能消费主题变量，**不能**私造色；但每个被引用的色/字重/描边等**必须**在主题 `variables`/`colors`（含暗色）可解析。`data-tone`/属性有了颜色不生效 = 空壳 FAIL——修法补主题全局叶子，禁止组件 `#hex`。审图按钮色/粗细未按主题生效同判。MCP：`theme_referenced_tokens_must_resolve`。权威：`theme-css-variables-only.md`「禁止空壳」。
+
 **【高压线 · inverse 下 raised 纸面墨钉字面】** 暗顶栏 / `[data-surface=inverse]` 下的浅色 raised 面板须先钉 foundation `#0f1111`/`#565959` 再消费 Token；**禁止** Token 化时把纸面种子改成 `var(--color-text-primary)`（白底浅字）。MCP 规则 id：`theme_inverse_raised_paper_ink_pin`。权威：`theme-css-variables-only.md`「WO-UI-CONTRAST-INVERSE 纸面钉」；`规则/20` §2b。
 
 **【高压线 · 前端必须守变量+表面角色双层】** Token 化/去硬编码前必须挂主题技能、字面量分类（普通→Token；纸面钉/断点→保留）、禁盲 `#hex`→`--color-text-primary`、契约+Browser+bake。MCP 规则 id：`theme_frontend_must_obey_tokens_and_surface_roles`。权威：`规则/20` §2c；`theme-css-variables-only.md` §8b。

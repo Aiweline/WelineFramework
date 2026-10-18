@@ -201,6 +201,8 @@ AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_int
 
 面向用户的**全部**进度 / 收口 / 计划 / 状态说明：聊天里只给**明确、简短、可裁决**的**简述**汇报（与 §4.2 结论置尾配套）。「简述」「只要简述」「说简述」「说人话」触发立即按模板总结**本次计划/会话**。**注意：「减速」≠「简述」，禁止把二者当同义词。**
 
+**与真机验收的优先级（硬，冲突裁决）**：`Accept` / `real_machine_usecases_not_unit_tests` / WB-OP ≻ 简述长度预算。简述**只约束聊天怎么写**，**绝不豁免**真机闭环。未测完时 `结论：` **只能**写「未完成」；**禁止**为赶 ≤5 行 / ≤180 字而跳过真机，却写「已完成 / 通过 / PASS」。通过后简述里最多一句「真机已跑」；证据表仍自存（`automation_test_report_durable_evidence`）。公式：`Closeout→□Brief∧(¬Accept→¬ReportDone)`。
+
 **固定模板（默认且唯一）**：
 
 ```text
@@ -214,12 +216,13 @@ AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_int
 |------|------|
 | 行数预算：默认收口 ≤5 行（另可附一行「待提交：…」）；超长先自压缩再发 | 流程复述、工具名堆砌、路径/规则 id 当主叙事 |
 | 用词具体、可裁决；结论置尾 | 半截黑话、证据表、流水账「我先…然后…」 |
-| 详细技术/证据 **Agent 自存**（Agent Store / `dev/session/`）；用户要「证据/深挖」再贴 | 默认把证据整表贴进聊天 |
+| 详细技术/证据 **Agent 自存**（Agent Store / `dev/session/`）；用户要「证据/深挖」再贴 | 默认把证据整表贴进聊天；**为简述跳过真机** |
+| 未测 → `结论：未完成`（可配「代码已改，验收未完成」） | 未测却 `结论：已完成/通过` |
 | 用户口糊「汇报怎么写」→ Agent **自行补全**清晰/短/自存，禁止反问「要简述还是详细」 | 用反问把格式决策甩回用户 |
 
 **豁免**：纯闲聊；用户明确要求技术深挖、完整证据或完整 diff；中途一句进度（该回合最终收口仍须模板 + 结论置尾）。
 
-配套：`automation_test_report_durable_evidence`（证据仍须采集并持久化，默认不堆进聊天）。
+配套：`requirement_acceptance_always`（先测后报）、`automation_test_report_durable_evidence`（证据仍须采集并持久化，默认不堆进聊天）。
 
 宿主常带：`~/.cursor/rules/user-facing-brief-plain-report.mdc`（与 MCP 双写，见 §4.1）。
 

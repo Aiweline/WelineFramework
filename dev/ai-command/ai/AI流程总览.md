@@ -41,8 +41,11 @@ lane=engineering
 | Web/UI：禁缓存导航 → 真点选 → **截图 Read 审图** | 截图未 Read、只报尺寸 |
 | 用户明示「固化用例」→ 落模块 `test/e2e`/`Test/e2e` + 正式 runner | `node -e` / 临时 launch 当交付 |
 | 汇审 + SESSION 计划项 closed 后才向用户宣称完成 | 「代码已改」当 PASS |
+| 收口可用简述模板，但 **Accept ≻ Brief**：未测只能 `结论：未完成` | 为赶简述跳过真机却写「已完成」；写完码立刻报完成 |
 
-权威：`real_machine_usecases_not_unit_tests`、`requirement_use_case_closed_loop_acceptance`、`tester_tests_must_be_real`、`e2e_ai_record_into_module_formal_path`。
+权威：`real_machine_usecases_not_unit_tests`、`requirement_use_case_closed_loop_acceptance`、`requirement_acceptance_always`、`user_facing_brief_plain_report`、`plan_complete_self_review_then_implement`、`tester_tests_must_be_real`、`e2e_ai_record_into_module_formal_path`。
+
+**顺序钉死**：`Impl/Write → 真机 Accept（UC/WB-OP/e2e）→ Brief Closeout`。「通过即开发」只放开施工，不放开宣称完成。
 
 ## 3. 已消重对照（审查结论）
 

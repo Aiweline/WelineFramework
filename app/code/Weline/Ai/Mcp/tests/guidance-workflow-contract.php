@@ -267,6 +267,28 @@ $checks = [
             && str_contains((string) ($rule['doc'] ?? ''), 'theme-css-variables-only')),
         false,
     ),
+    'hard_constraints include theme_semantic_severity_tone_required' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'theme_semantic_severity_tone_required'
+            && str_contains((string) ($rule['summary'] ?? ''), 'data-tone')
+            && str_contains((string) ($rule['summary'] ?? ''), 'danger')
+            && (str_contains((string) ($rule['summary'] ?? ''), 'quiet')
+                || str_contains((string) ($rule['summary'] ?? ''), 'neutral'))
+            && str_contains((string) ($rule['doc'] ?? ''), 'theme-semantic-color-matrix')),
+        false,
+    ),
+    'hard_constraints include theme_referenced_tokens_must_resolve' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'theme_referenced_tokens_must_resolve'
+            && str_contains((string) ($rule['summary'] ?? ''), 'dangling')
+            && (str_contains((string) ($rule['summary'] ?? ''), '_dark')
+                || str_contains((string) ($rule['summary'] ?? ''), 'dark'))
+            && str_contains((string) ($rule['summary'] ?? ''), 'leaves')
+            && str_contains((string) ($rule['doc'] ?? ''), 'theme-css-variables-only')),
+        false,
+    ),
     'hard_constraints include ui_skill_requires_theme_skill' => array_reduce(
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -2164,6 +2186,33 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'BinQuery')
             && str_contains((string) ($rule['summary'] ?? ''), 'fallback')
             && str_contains((string) ($rule['summary'] ?? ''), 'fetch')),
+        false,
+    ),
+    'hard_constraints include ui_page_controllers_mutations_via_async_binquery' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'ui_page_controllers_mutations_via_async_binquery'
+            && str_contains((string) ($rule['summary'] ?? ''), 'BinQuery')
+            && str_contains((string) ($rule['summary'] ?? ''), 'Controller')
+            && str_contains((string) ($rule['summary'] ?? ''), 'multiple Controllers')),
+        false,
+    ),
+    'hard_constraints include admin_manage_ui_requires_humanized_full_ops' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'admin_manage_ui_requires_humanized_full_ops'
+            && str_contains((string) ($rule['summary'] ?? ''), 'create-only')
+            && str_contains((string) ($rule['summary'] ?? ''), 'batch')
+            && str_contains((string) ($rule['summary'] ?? ''), 'delete')),
+        false,
+    ),
+    'hard_constraints include admin_simple_create_edit_via_modal_binquery' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'admin_simple_create_edit_via_modal_binquery'
+            && str_contains((string) ($rule['summary'] ?? ''), 'dialog')
+            && str_contains((string) ($rule['summary'] ?? ''), 'BinQuery')
+            && str_contains((string) ($rule['summary'] ?? ''), 'inline')),
         false,
     ),
     'frontend surface requires companion skills trio' => is_array($frontend['required_companion_skills'] ?? null)

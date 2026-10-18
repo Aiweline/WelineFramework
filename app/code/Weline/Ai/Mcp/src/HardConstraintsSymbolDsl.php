@@ -143,8 +143,10 @@ final class HardConstraintsSymbolDsl
             'OneSeatOneAgent', 'Impl', 'HostPlanMode', 'ImplementabilityBullets', 'PromptWork', 'PayWork',
             'WidgetWork', 'ThemeWork', 'CodexOptIn', 'Cli', 'Codex', 'RuleCRUD', 'Skill', 'LangTable',
             'SyncMap', 'DirtySym', 'Silent', 'Nested', 'InverseRaised', 'Frontend', 'NeedPlan', 'PlanDone',
-            'Complex', 'Simple', 'API', 'DesignTheme', 'PlanBody', 'Scheme', 'SiteSeed', 'ProjectRules',
+            'Complex', 'Simple', 'API', 'DesignTheme', 'PlanBody', 'Scheme', 'SiteSeed', 'SiteCopy', 'ProjectRules',
             'McpGen', 'HandEdit', 'GlobalRuleEdit', 'MCP', 'HostMdc', 'DemoPage', 'Git', 'CacheOff',
+            'SeverityUi', 'SemTone', 'AllDefault',
+            'CompVar', 'PaletteLeaf', 'DanglingVar',
         ];
     }
 
@@ -167,8 +169,22 @@ final class HardConstraintsSymbolDsl
             'Aoci' => ['gloss_zh' => 'aoci_rules(+overview若不可靠)', 'rule_ids' => ['aoci_complements_weline_mcp']],
             'WebTouch' => ['gloss_zh' => '触.phtml/CSS/主题/店面页', 'rule_ids' => ['browser_operator_self_test']],
             'WBOP' => ['gloss_zh' => 'Browser真机禁缓存+抹自动+点选+截图Read', 'rule_ids' => ['browser_operator_self_test']],
-            'Accept' => ['gloss_zh' => '本机验收证据已齐', 'rule_ids' => ['requirement_acceptance_always']],
-            'ReportDone' => ['gloss_zh' => '对用户宣称完成/PASS', 'rule_ids' => ['requirement_acceptance_always']],
+            'Accept' => [
+                'gloss_zh' => '本机验收证据已齐',
+                'rule_ids' => [
+                    'requirement_acceptance_always',
+                    'user_facing_brief_plain_report',
+                    'plan_complete_self_review_then_implement',
+                ],
+            ],
+            'ReportDone' => [
+                'gloss_zh' => '对用户宣称完成/PASS',
+                'rule_ids' => [
+                    'requirement_acceptance_always',
+                    'user_facing_brief_plain_report',
+                    'plan_complete_self_review_then_implement',
+                ],
+            ],
             'PlanRev' => ['gloss_zh' => '审查/自审/汇审计划', 'rule_ids' => ['plan_review_three_lenses']],
             'LensE' => ['gloss_zh' => '读计划∧探磁盘码', 'rule_ids' => ['plan_review_requires_code_evidence']],
             'LensA' => ['gloss_zh' => '架构审mech+own+¬do', 'rule_ids' => ['scheme_requires_architecture_review']],
@@ -196,6 +212,84 @@ final class HardConstraintsSymbolDsl
             'DelivUrl' => [
                 'gloss_zh' => '交付地址/规划汇报http(s)链接',
                 'rule_ids' => ['feature_delivery_urls'],
+            ],
+            'UiPage' => [
+                'gloss_zh' => '界面页渲染请求(HTML/壳)',
+                'rule_ids' => ['ui_page_controllers_mutations_via_async_binquery'],
+            ],
+            'Ctrl' => [
+                'gloss_zh' => 'HTTP页面控制器',
+                'rule_ids' => ['ui_page_controllers_mutations_via_async_binquery'],
+            ],
+            'Mutate' => [
+                'gloss_zh' => '非界面资料增删改/更新',
+                'rule_ids' => ['ui_page_controllers_mutations_via_async_binquery'],
+            ],
+            'AsyncBQ' => [
+                'gloss_zh' => '异步BinQuery(Weline.Api→query-bin)',
+                'rule_ids' => [
+                    'ui_page_controllers_mutations_via_async_binquery',
+                    'admin_simple_create_edit_via_modal_binquery',
+                ],
+            ],
+            'MultiCtrlCRUD' => [
+                'gloss_zh' => '多控制器CRUD管同一信息域',
+                'rule_ids' => ['ui_page_controllers_mutations_via_async_binquery'],
+            ],
+            'AdminManage' => [
+                'gloss_zh' => '后台/管理界面资源管理面',
+                'rule_ids' => [
+                    'admin_manage_ui_requires_humanized_full_ops',
+                    'admin_simple_create_edit_via_modal_binquery',
+                ],
+            ],
+            'Crud' => [
+                'gloss_zh' => '增删改查齐备',
+                'rule_ids' => ['admin_manage_ui_requires_humanized_full_ops'],
+            ],
+            'HumanOps' => [
+                'gloss_zh' => '批量/筛选/确认等人性化操作',
+                'rule_ids' => ['admin_manage_ui_requires_humanized_full_ops'],
+            ],
+            'CreateOnlyShip' => [
+                'gloss_zh' => '只做新增或残缺管理就宣称完成',
+                'rule_ids' => ['admin_manage_ui_requires_humanized_full_ops'],
+            ],
+            'SimpleForm' => [
+                'gloss_zh' => '不复杂的管理新增/编辑表单',
+                'rule_ids' => ['admin_simple_create_edit_via_modal_binquery'],
+            ],
+            'Dlg' => [
+                'gloss_zh' => 'Weline.UI弹层dialog',
+                'rule_ids' => ['admin_simple_create_edit_via_modal_binquery'],
+            ],
+            'InlineExpand' => [
+                'gloss_zh' => '列表页内常驻展开表单占版面',
+                'rule_ids' => ['admin_simple_create_edit_via_modal_binquery'],
+            ],
+            'SeverityUi' => [
+                'gloss_zh' => '表达风险/结果/操作等级的UI',
+                'rule_ids' => ['theme_semantic_severity_tone_required'],
+            ],
+            'SemTone' => [
+                'gloss_zh' => '按矩阵绑data-tone语义色',
+                'rule_ids' => ['theme_semantic_severity_tone_required'],
+            ],
+            'AllDefault' => [
+                'gloss_zh' => '严重度不同却全默认/quiet/neutral',
+                'rule_ids' => ['theme_semantic_severity_tone_required'],
+            ],
+            'CompVar' => [
+                'gloss_zh' => '组件/foundation引用主题CSS变量',
+                'rule_ids' => ['theme_referenced_tokens_must_resolve'],
+            ],
+            'PaletteLeaf' => [
+                'gloss_zh' => '主题variables/colors盘可解析叶子(含暗色)',
+                'rule_ids' => ['theme_referenced_tokens_must_resolve'],
+            ],
+            'DanglingVar' => [
+                'gloss_zh' => '写了var/data-tone但主题叶子缺失',
+                'rule_ids' => ['theme_referenced_tokens_must_resolve'],
             ],
         ];
     }
@@ -245,7 +339,7 @@ final class HardConstraintsSymbolDsl
             ],
             'requirement_acceptance_always' => [
                 'formula' => 'Eng→(ReportDone→□Accept)∧(¬Accept→¬ReportDone)',
-                'gloss_zh' => '未测禁报完成；Web须真机WB-OP',
+                'gloss_zh' => '未测禁报完成；Accept≻Brief；Web须真机WB-OP',
                 'cluster' => '§✓',
             ],
             'browser_operator_self_test' => [
@@ -289,13 +383,13 @@ final class HardConstraintsSymbolDsl
                 'cluster' => '§Π',
             ],
             'plan_complete_self_review_then_implement' => [
-                'formula' => 'PlanDone→□(三视角)∧Pass→□Impl',
-                'gloss_zh' => '计划写完自审；通过即开发勿等Build',
+                'formula' => 'PlanDone→□(三视角)∧Pass→□Impl|(ReportDone→□Accept)',
+                'gloss_zh' => '自审通过即开发；宣称完成前须真机验收',
                 'cluster' => '§Π',
             ],
             'user_facing_brief_plain_report' => [
-                'formula' => 'Closeout→□Brief',
-                'gloss_zh' => '收口简述：问题→改动→结论；证据自存',
+                'formula' => 'Closeout→□Brief∧(¬Accept→¬ReportDone)',
+                'gloss_zh' => '收口简述；未测禁已完成；禁用简述跳过真机',
                 'cluster' => '§U',
             ],
             'user_facing_verdict_last' => [
@@ -333,6 +427,16 @@ final class HardConstraintsSymbolDsl
                 'gloss_zh' => '前端守变量+表面角色；纸面钉勿当硬编码扫掉',
                 'cluster' => '§Θ',
             ],
+            'theme_referenced_tokens_must_resolve' => [
+                'formula' => 'CompVar→□PaletteLeaf∧¬DanglingVar',
+                'gloss_zh' => '组件var须主题盘叶子；禁空壳；暗色同验',
+                'cluster' => '§Θ',
+            ],
+            'theme_semantic_severity_tone_required' => [
+                'formula' => 'SeverityUi→□SemTone∧¬AllDefault',
+                'gloss_zh' => '风险结果操作须data-tone；禁全默认quiet',
+                'cluster' => '§Θ',
+            ],
             'preserve_dirty_workspace' => [
                 'formula' => '¬(checkout∨restore∨clean∨stash_wipe)',
                 'gloss_zh' => '禁擦脏工作区；须dirty-load再改',
@@ -359,8 +463,8 @@ final class HardConstraintsSymbolDsl
                 'cluster' => '§Π',
             ],
             'website_concept_seed_not_in_modules' => [
-                'formula' => 'SiteSeed→□design∨站柜∧¬app/code',
-                'gloss_zh' => '站/主题种子禁写入app/code模块',
+                'formula' => 'SiteSeed∨SiteCopy→□(design∨站柜)∧¬app/code',
+                'gloss_zh' => '站种子与专属文案·i18n禁写入app/code',
                 'cluster' => '§A',
             ],
             'framework_demos_live_in_weline_demo' => [
@@ -412,6 +516,21 @@ final class HardConstraintsSymbolDsl
                 'formula' => 'RuleCRUD→□(Skill∧LangTable∧SyncMap)|DirtySym→⊥',
                 'gloss_zh' => '硬规则增删改须技能+语言表；禁散文脏留符号',
                 'cluster' => '§P',
+            ],
+            'ui_page_controllers_mutations_via_async_binquery' => [
+                'formula' => 'UiPage→◇Ctrl∧Mutate→□AsyncBQ∧¬MultiCtrlCRUD',
+                'gloss_zh' => '界面页可用控制器；资料变更须异步BinQuery；禁多控制器CRUD',
+                'cluster' => '§A',
+            ],
+            'admin_manage_ui_requires_humanized_full_ops' => [
+                'formula' => 'AdminManage→□(Crud∧HumanOps)∧¬CreateOnlyShip',
+                'gloss_zh' => '管理界面须增删改查+批量等人性化；禁只做新增就收工',
+                'cluster' => '§A',
+            ],
+            'admin_simple_create_edit_via_modal_binquery' => [
+                'formula' => 'AdminManage∧SimpleForm→□(Dlg∧AsyncBQ)∧¬InlineExpand',
+                'gloss_zh' => '简单管理新增/编辑须弹层+BinQuery；禁页内常驻展开',
+                'cluster' => '§A',
             ],
         ];
     }

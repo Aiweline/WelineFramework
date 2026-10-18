@@ -2,10 +2,10 @@
   "schema": "commerce-paypal-sandbox-gate.v1",
   "suite_id": "commerce-paypal-sandbox",
   "title": "PayPal 真沙盒专项（可选，非全量购物门禁）",
-  "description": "True PayPal sandbox pathways. Wallet interstitial hang MUST fail-fast (≤45s). Third-party uncontrollable ≠ commerce-release gate. Missing sandbox credentials MUST FAIL (no skip).",
+  "description": "True PayPal sandbox pathways (opt-in). PASS authority = shell Transaction/landing (paid + land), NOT PayPal DOM copy. Hermes interstitial hang on \"Getting your wallet\" with no actionable control MUST honest FAIL as budget_exceeded within ≤45s (known third-party debt — do NOT Continue-patch). Amount/discount lock = sandbox-paypal-demo10-amount-runner.js (guest+login). Missing sandbox credentials MUST FAIL (no skip). Hermes debt MUST NOT block commerce-release.",
   "runner": "php bin/w e2e:run --suite=commerce-paypal-sandbox --project=chromium",
   "hard_rule": "full_release_requires_commerce_pathway_e2e",
-  "note": "Opt-in before PayPal-affecting publish; commerce-release stays on controllable driver.",
+  "note": "Split (architect A+limited B): (1) PASS 真源=壳 Transaction/landing，非钱包 DOM 文案；(2) Hermes「Getting your wallet」无控件 → budget_exceeded 诚实 FAIL（known third-party；禁止 Continue 补丁假绿）；(3) 金额/优惠权威验收用 app/code/Weline/Checkout/test/e2e/frontend/sandbox-paypal-demo10-amount-runner.js（guest+login）；(4) 全量发布门禁仍 commerce-release（FORCE_PAYMENT_METHOD=fake_card）——本套件 Hermes 债不阻塞 commerce-release。",
   "env": {
     "WELINE_E2E_PAYMENT_DRIVER": "paypal_sandbox",
     "FORCE_PAYMENT_METHOD": "paypal",
@@ -17,7 +17,13 @@
       "scope": "paypal_sandbox_account_lifecycle",
       "module": "Weline_Checkout",
       "spec": "app/code/Weline/Checkout/test/e2e/frontend/release-paypal-account-lifecycle-plan-suite.spec.js",
-      "rationale": "真 PayPal 沙盒结账 + 账户生命周期；钱包挂起 fail-fast"
+      "rationale": "真 PayPal 沙盒结账 + 账户生命周期；壳权威 PASS；钱包挂起 ≤45s 诚实 FAIL"
     }
-  ]
+  ],
+  "amount_discount_authority": {
+    "runner": "app/code/Weline/Checkout/test/e2e/frontend/sandbox-paypal-demo10-amount-runner.js",
+    "coupon": "DEMO10",
+    "modes": ["guest", "login"],
+    "assert": "checkout/express UI grand_total_minor === payment create amount_minor (+ DEMO10 discount)"
+  }
 }

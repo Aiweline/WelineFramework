@@ -34,13 +34,21 @@
 - [ ] 基座 Theme 默认 `homepage/default.phtml` 整页某一品牌店面  
 - [ ] `app/code/**/Weline_<brand>/` 或 `daocharms-*.css` 等品牌皮肤树挂在模块而非 `app/design`
 
+### E. 站专属文案 / i18n（SiteCopy）
+
+- [ ] 模块 `i18n/*.csv` 把某一品牌店名、垂直品类政策、站专属售后/SEO 导语当作**默认**译文  
+- [ ] 模块默认 widget/layout/template 硬编码某一品牌促销条/分类名  
+- [ ] 品牌身份种子把某一品牌简介当**系统默认** `SEED_*`（历史回写词表≠默认）  
+- [ ] 正确家：`app/design/{Vendor}/{theme}/` 模板覆盖，或布局/部件 Meta i18n（`ThemeScopedI18nProjector`）；模块只留中性领域措辞  
+
 ## 正确落点
 
 | 内容 | 家 |
 |------|-----|
 | 站/主题开站货架、分类树、CatalogSeeder、品牌文案包 | `app/design/{Vendor}/{theme}/data|scripts|…` |
+| 站专属政策页/部件默认文案、布局部件翻译 | `app/design/{Vendor}/{theme}/` 覆盖模板 + Theme Meta i18n |
 | 生产运维事实、站柜脚本 | `websites/<site>/` |
-| 无站门禁全局领域默认 | 模块 Setup/Tax 等 |
+| 无站门禁全局领域默认 / 中性电商措辞 | 模块 Setup/Tax/`i18n` 等 |
 
 ## 周边架构隐患（汇报，不擅自扩修）
 
