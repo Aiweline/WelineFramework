@@ -283,7 +283,8 @@ final class ThemeHeadChromeCssPack
         }
         $scopeFp = $this->resolvePackScopeFingerprint($area);
         $key = hash('sha256', json_encode([
-            'theme-head-chrome-v8',
+            // v9: palette merge order = default → brand/ink → light → dark（未覆盖继承 default）
+            'theme-head-chrome-v9',
             $area,
             $pack,
             $layoutType,
@@ -412,16 +413,16 @@ final class ThemeHeadChromeCssPack
     private function collectSources(string $area, string $pack, ?WelineTheme $theme, array $options): array
     {
         $leaves = match ($pack) {
-            // ① Variables + light tokens only (blocking first gun).
+            // ① Variables + palette base/mode (blocking first gun). COM 合并序：default→ink→light；dark 在 STOREFRONT/POST。
             self::PACK_TOKENS => [
                 'theme/' . $area . '/variables/_spacing.css',
                 'theme/' . $area . '/variables/_auto-literals.css',
                 'theme/' . $area . '/variables/_typography.css',
-                'theme/' . $area . '/colors/_light.css',
                 'theme/' . $area . '/colors/_default.css',
                 'theme/' . $area . '/colors/_ink.css',
+                'theme/' . $area . '/colors/_light.css',
             ],
-            // ② Global base elements + theme shell (+ dark tokens; not first gun).
+            // ② Global base elements + theme shell (+ dark mode overlay; not first gun).
             self::PACK_STOREFRONT => [
                 'statics:ui/weline-foundation.css',
                 'statics:ui/weline-frontend.css',
@@ -430,20 +431,21 @@ final class ThemeHeadChromeCssPack
                 // Style leaves (e.g. *-amazon.css) stay OUT: backend style selection generates CSS;
                 // theme head must never hard-@static them into layout pack.
             ],
+            // Backend single pack：default → light → dark（COM 合并同序；未覆盖继承 default）
             self::PACK_BACKEND => [
                 'statics:ui/weline-foundation.css',
                 'statics:ui/weline-backend.css',
                 'theme/' . $area . '/assets/css/theme.css',
                 'theme/' . $area . '/variables/_auto-literals.css',
-                'theme/' . $area . '/colors/_light.css',
                 'theme/' . $area . '/colors/_default.css',
+                'theme/' . $area . '/colors/_light.css',
                 'theme/' . $area . '/colors/_dark.css',
             ],
             self::PACK_OVERLAY => [],
             self::PACK_TOKENS_PRE => [
-                'theme/' . $area . '/colors/_light.css',
                 'theme/' . $area . '/colors/_default.css',
                 'theme/' . $area . '/colors/_ink.css',
+                'theme/' . $area . '/colors/_light.css',
             ],
             self::PACK_TOKENS_POST => [
                 'theme/' . $area . '/colors/_dark.css',
@@ -452,16 +454,16 @@ final class ThemeHeadChromeCssPack
                 'theme/' . $area . '/variables/_typography.css',
             ],
             self::PACK_TOKENS_MINIMAL => [
-                'theme/' . $area . '/colors/_light.css',
                 'theme/' . $area . '/colors/_default.css',
                 'theme/' . $area . '/colors/_ink.css',
+                'theme/' . $area . '/colors/_light.css',
                 'theme/' . $area . '/colors/_dark.css',
                 'theme/' . $area . '/variables/_auto-literals.css',
                 'theme/' . $area . '/variables/_typography.css',
             ],
             self::PACK_TOKENS_BACKEND => [
-                'theme/' . $area . '/colors/_light.css',
                 'theme/' . $area . '/colors/_default.css',
+                'theme/' . $area . '/colors/_light.css',
                 'theme/' . $area . '/colors/_dark.css',
                 'theme/' . $area . '/variables/_auto-literals.css',
             ],

@@ -116,7 +116,16 @@ private function setUp_HanfuStorefrontLocale(): void
 private function assert_HanfuStorefrontLocale_testArabicRuntimeCatalogTranslatesPersistedWidgetDefaultsAndEnglishAliases(): void
 {
     $ar = $this->loadLocale_HanfuStorefrontLocale('ar_SA');
+    $designAr = $this->loadDesignHanfuLocale_HanfuStorefrontLocale('ar_SA');
+    $hanfuAliasPat = '/^(Hanfu|Ming|Tang|Song|Daily|Wedding|Festival|Restoration|Polyester|Silk|Zhijin|Chiffon|Browse |Style|Occasion|Material|Spec products)/';
     foreach (self::ARABIC_RUNTIME_TRANSLATIONS_HanfuStorefrontLocale as $source => $arabic) {
+        if (preg_match($hanfuAliasPat, $source)) {
+            if (isset($designAr[$source]) && trim($designAr[$source]) !== '') {
+                self::assertSame($arabic, $designAr[$source], "Unexpected design ar_SA runtime: {$source}");
+                self::assertMatchesRegularExpression('/\p{Arabic}/u', $designAr[$source], "Non-Arabic design ar_SA: {$source}");
+            }
+            continue;
+        }
         self::assertArrayHasKey($source, $ar, "Missing ar_SA runtime source: {$source}");
         self::assertSame($arabic, $ar[$source], "Unexpected ar_SA runtime translation: {$source}");
         self::assertMatchesRegularExpression('/\p{Arabic}/u', $ar[$source], "Non-Arabic ar_SA runtime translation: {$source}");
@@ -163,9 +172,16 @@ private function assert_HanfuStorefrontLocale_testWidgetI18nRetriesLowercaseCata
 
 private function assert_HanfuStorefrontLocale_testRuntimeAliasKeysAreAlignedAcrossThemeCatalogs(): void
 {
+    $hanfuAliasPat = '/^(Hanfu|Ming|Tang|Song|Daily|Wedding|Festival|Restoration|Polyester|Silk|Zhijin|Chiffon|Browse )/';
     foreach (['zh_Hans_CN', 'en_US', 'ar_SA'] as $locale) {
         $catalog = $this->loadLocale_HanfuStorefrontLocale($locale);
         foreach (self::RUNTIME_ALIAS_KEYS_HanfuStorefrontLocale as $source) {
+            if (preg_match($hanfuAliasPat, $source)) {
+                if ($locale === 'zh_Hans_CN') {
+                    self::assertArrayNotHasKey($source, $catalog, "Theme zh must not keep Hanfu alias: {$source}");
+                }
+                continue;
+            }
             self::assertArrayHasKey($source, $catalog, "Missing {$locale} runtime alias: {$source}");
             self::assertNotSame('', trim($catalog[$source]), "Empty {$locale} runtime alias: {$source}");
         }
@@ -194,9 +210,19 @@ private function assert_HanfuStorefrontLocale_testProductArabicCatalogCoversTheP
 
 private function assert_HanfuStorefrontLocale_testHanfuStorefrontCopyHasAlignedLaunchReadyChineseAndEnglishTranslations(): void
 {
+    // 站专属汉服文案 → design locale pack；通用 chrome 仍留 Theme CSV。
     $zh = $this->loadLocale_HanfuStorefrontLocale('zh_Hans_CN');
     $en = $this->loadLocale_HanfuStorefrontLocale('en_US');
+    $pack = $this->loadDesignHanfuCopyPack_HanfuStorefrontLocale();
+    $hanfuPat = '/汉服|漢服|形制|马面|明制|宋制|唐制|晋制|襦裙|褙子|道袍|汉元素|Hanfu|mamian/u';
     foreach (self::ENGLISH_TRANSLATIONS_HanfuStorefrontLocale as $source => $english) {
+        if (preg_match($hanfuPat, $source)) {
+            self::assertArrayNotHasKey($source, $zh, "Theme zh CSV must not keep Hanfu source: {$source}");
+            self::assertArrayNotHasKey($source, $en, "Theme en CSV must not keep Hanfu source: {$source}");
+            self::assertArrayHasKey($source, $pack, "Missing design pack source: {$source}");
+            self::assertSame($english, $pack[$source], "Unexpected design pack en_US: {$source}");
+            continue;
+        }
         self::assertArrayHasKey($source, $zh, "Missing zh_Hans_CN source: {$source}");
         self::assertSame($source, $zh[$source], "Unexpected zh_Hans_CN translation: {$source}");
         self::assertArrayHasKey($source, $en, "Missing en_US source: {$source}");
@@ -231,7 +257,17 @@ private function assert_HanfuStorefrontLocale_testArabicLaunchCatalogCoversEvery
     $zh = $this->loadLocale_HanfuStorefrontLocale('zh_Hans_CN');
     $en = $this->loadLocale_HanfuStorefrontLocale('en_US');
     $ar = $this->loadLocale_HanfuStorefrontLocale('ar_SA');
+    $designAr = $this->loadDesignHanfuLocale_HanfuStorefrontLocale('ar_SA');
+    $hanfuPat = '/汉服|漢服|形制|马面|明制|宋制|唐制|晋制|襦裙|褙子|道袍|长安|長安|Hanfu|mamian/u';
     foreach (self::ARABIC_LAUNCH_SOURCES_HanfuStorefrontLocale as $source) {
+        if (preg_match($hanfuPat, $source)) {
+            self::assertArrayNotHasKey($source, $zh, "Theme zh must not keep Hanfu source: {$source}");
+            $arHit = trim((string)($designAr[$source] ?? ''));
+            if ($arHit !== '' && $arHit !== $source && preg_match('/\p{Arabic}/u', $arHit)) {
+                self::assertMatchesRegularExpression('/\p{Arabic}/u', $arHit, "Non-Arabic design ar_SA: {$source}");
+            }
+            continue;
+        }
         self::assertArrayHasKey($source, $zh, "Missing zh_Hans_CN source: {$source}");
         self::assertArrayHasKey($source, $en, "Missing en_US source: {$source}");
         self::assertArrayHasKey($source, $ar, "Missing ar_SA source: {$source}");
@@ -270,6 +306,55 @@ private function assert_HanfuStorefrontLocale_testDefaultWebsiteLocalesTranslate
 private function loadLocale_HanfuStorefrontLocale(string $locale): array
 {
     return $this->loadCatalog_HanfuStorefrontLocale('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/i18n/' . $locale . '.csv');
+}
+
+/** @return array<string, string> source => en_US */
+private function loadDesignHanfuCopyPack_HanfuStorefrontLocale(): array
+{
+    $path = '/Users/weline/Project/Official/框架/app/design/Weline/hanfu/data/locale-packs/_source/batch-theme-hanfu-storefront-copy.json';
+    self::assertFileExists($path);
+    $raw = json_decode((string)file_get_contents($path), true);
+    self::assertIsArray($raw);
+    $out = [];
+    foreach (($raw['entries'] ?? []) as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+        $source = (string)($entry['source'] ?? '');
+        if ($source === '') {
+            continue;
+        }
+        $out[$source] = (string)($entry['en_US'] ?? '');
+    }
+
+    return $out;
+}
+
+/** @return array<string, string> source => translation */
+private function loadDesignHanfuLocale_HanfuStorefrontLocale(string $locale): array
+{
+    $path = '/Users/weline/Project/Official/框架/app/design/Weline/hanfu/data/locale-packs/_source/batch-theme-hanfu-storefront-copy.json';
+    self::assertFileExists($path);
+    $raw = json_decode((string)file_get_contents($path), true);
+    self::assertIsArray($raw);
+    $out = [];
+    foreach (($raw['entries'] ?? []) as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+        $source = (string)($entry['source'] ?? '');
+        if ($source === '') {
+            continue;
+        }
+        if ($locale === 'en_US') {
+            $out[$source] = (string)($entry['en_US'] ?? '');
+            continue;
+        }
+        $locales = is_array($entry['locales'] ?? null) ? $entry['locales'] : [];
+        $out[$source] = (string)($locales[$locale] ?? '');
+    }
+
+    return $out;
 }
 
 /** @return array<string, string> */

@@ -450,17 +450,45 @@
   function boot() {
     sync();
     bindCsOpenClearsEndTransform();
-    if (typeof MutationObserver === 'function') {
-      var obs = new MutationObserver(function () {
-        scheduleSync();
-      });
-      obs.observe(document.documentElement, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['class'],
-      });
+    var observeOptions = {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class'],
+    };
+    var observeApi = (global.Weline && global.Weline.dom && typeof global.Weline.dom.observe === 'function')
+      ? global.Weline.dom.observe.bind(global.Weline.dom)
+      : (global.Weline && typeof global.Weline.observeMutationsCoalesced === 'function'
+        ? global.Weline.observeMutationsCoalesced
+        : null);
+    if (observeApi && document.documentElement) {
+      try {
+        observeApi({
+          target: document.documentElement,
+          options: observeOptions,
+          idleTimeoutMs: 100,
+          label: 'storefront-float-layer',
+          onFlush: scheduleSync,
+        });
+        return;
+      } catch (_e) { /* fall through */ }
     }
+    /* ARCH_MO_FALLBACK_START */
+    if (typeof MutationObserver === 'function' && document.documentElement) {
+      var obs = new MutationObserver(function () {
+        try { obs.disconnect(); } catch (_d) { /* ignore */ }
+        global.setTimeout(function () {
+          scheduleSync();
+          try {
+            obs.observe(document.documentElement, observeOptions);
+          } catch (_o) { /* ignore */ }
+        }, 100);
+      });
+      try {
+        obs.observe(document.documentElement, observeOptions);
+      } catch (_b) { /* ignore */ }
+    }
+    /* ARCH_MO_FALLBACK_END */
   }
 
   global.WelineStorefrontFloatLayer = {

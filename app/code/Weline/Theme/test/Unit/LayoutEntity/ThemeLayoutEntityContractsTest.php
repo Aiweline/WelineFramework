@@ -2597,6 +2597,10 @@ private function assert_ThemeLayoutOriginWatch_testWatchServiceCascadesWidgetsVi
     self::assertStringContainsString('FpcStaticDiskStore::republishFromFileOnAllHosts', $src);
     self::assertStringContainsString('assets:live_static_mirror:', $src);
     self::assertStringContainsString('uriFromAppCodeAbsolute', $src);
+    self::assertStringContainsString('processModulePrefixStatics', $src);
+    self::assertStringContainsString('__modstatic__/', $src);
+    self::assertStringContainsString('module_statics:live_static_mirror:', $src);
+    self::assertStringContainsString("kind' => 'module_static'", $src);
     self::assertStringNotContainsString('purgeAllLive(', $src);
     self::assertStringContainsString('collectExternalWidgetRefs', $src);
     self::assertStringContainsString('resolveSolidifyCascade', $src);

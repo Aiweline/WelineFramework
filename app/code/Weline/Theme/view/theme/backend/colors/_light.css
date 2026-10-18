@@ -11,8 +11,8 @@
  * @meta.palette_role {default="mode",name="palette_role",description="palette_role"}
  */
 
-[data-theme="light"],
-:root {
+/* 模式盘：仅亮色选择器；未覆盖叶子继承 _default（禁止 :root 污染暗色） */
+[data-theme="light"] {
     /* ========================================
        文本色
        ======================================== */
@@ -109,4 +109,13 @@
     --backend-card-shadow: 0 8px 24px rgb(15 23 42 / 0.10); --backend-dropdown-shadow: 0 18px 40px rgb(15 23 42 / 0.14); --backend-modal-shadow: 0 24px 56px rgb(15 23 42 / 0.18); --backend-focus-ring: 0 0 0 3px rgb(79 70 229 / 0.35);
     --backend-color-text-rgb: 33, 37, 41; --backend-color-bg-canvas-rgb: 241, 245, 249; --backend-color-emphasis-rgb: 33, 37, 41;
     --backend-color-success-rgb: 21, 128, 61; --backend-color-warning-rgb: 161, 98, 7; --backend-color-danger-rgb: 185, 28, 28; --backend-color-info-rgb: 3, 105, 161;
+
+    /* Scrollbar / elevation / gradient — mode-disk key parity with _dark (Editor 切色系不丢项) */
+    --backend-scrollbar-thumb: #c3cedd;
+    --backend-scrollbar-thumb-hover: #9eabc0;
+    --backend-scrollbar-track: rgba(226, 232, 240, 0.4);
+    --backend-header-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
+    --backend-sidebar-shadow: 16px 0 32px rgba(15, 23, 42, 0.04);
+    --backend-color-gradient-start: #4f46e5;
+    --backend-color-gradient-end: #0ea5e9;
 }

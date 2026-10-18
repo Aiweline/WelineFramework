@@ -58,8 +58,8 @@ try {
 <?php if ($backendPackHtml !== null): ?>
 <?= $backendPackHtml ?>
 <?php else: ?>
-<theme:css>Weline_Theme::theme/backend/colors/_light.css</theme:css>
 <theme:css>Weline_Theme::theme/backend/colors/_default.css</theme:css>
+<theme:css>Weline_Theme::theme/backend/colors/_light.css</theme:css>
 <theme:css>Weline_Theme::theme/backend/colors/_dark.css</theme:css>
 <?php if (!$diskAbsorbed) { echo $diskOverrideHtml; } ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)" data-weline-layout-css>

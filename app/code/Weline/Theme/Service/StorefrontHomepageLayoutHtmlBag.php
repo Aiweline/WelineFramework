@@ -51,6 +51,10 @@ final class StorefrontHomepageLayoutHtmlBag implements ProcessSharedInterface
     /**
      * Formal layouts/homepage wrap only; controller content template is irrelevant.
      * Never preview/editor.
+     * Path-locale storefront prefixes (e.g. /bn_BD) bypass the bag: HotCache vary is
+     * lang+currency only, so a request whose State lang has not yet matched the URI
+     * prefix would otherwise HIT the default-lang homepage HTML and skip layout
+     * pathLocale SERP packs (GSC indexes those prefixes).
      */
     public function isEligible(string $contentTemplate, string $layoutTemplate): bool
     {
@@ -63,6 +67,9 @@ final class StorefrontHomepageLayoutHtmlBag implements ProcessSharedInterface
             return false;
         }
         if ($this->isPreviewOrEditorRequest()) {
+            return false;
+        }
+        if ($this->requestHasStorefrontPathLocalePrefix()) {
             return false;
         }
 
@@ -355,6 +362,47 @@ final class StorefrontHomepageLayoutHtmlBag implements ProcessSharedInterface
         }
 
         return \array_values(\array_unique($candidates));
+    }
+
+    /**
+     * True when the visitor URI starts with a storefront locale segment (bn_BD, ar_SA, …).
+     * Prefer WELINE_ORIGIN_REQUEST_URI / WELINE_FULL_REQUEST_URI — Framework may rewrite
+     * REQUEST_URI to the canonical (locale-stripped) path before layout bag peek.
+     */
+    private function requestHasStorefrontPathLocalePrefix(): bool
+    {
+        $candidates = [];
+        try {
+            $candidates[] = (string)\Weline\Framework\Env\WelineEnv::server('WELINE_VISITOR_REQUEST_URI', '');
+            $candidates[] = (string)\Weline\Framework\Env\WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '');
+            $candidates[] = (string)\Weline\Framework\Env\WelineEnv::server('WELINE_FULL_REQUEST_URI', '');
+            $candidates[] = (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '');
+        } catch (\Throwable) {
+        }
+        $candidates[] = (string)($_SERVER['WELINE_VISITOR_REQUEST_URI'] ?? '');
+        $candidates[] = (string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? '');
+        $candidates[] = (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? '');
+        $candidates[] = (string)($_SERVER['REQUEST_URI'] ?? '');
+
+        foreach ($candidates as $uri) {
+            $uri = \trim($uri);
+            if ($uri === '') {
+                continue;
+            }
+            $path = \parse_url($uri, \PHP_URL_PATH);
+            if (!\is_string($path) || $path === '') {
+                $path = $uri;
+            }
+            $q = \strpos($path, '?');
+            if ($q !== false) {
+                $path = \substr($path, 0, $q);
+            }
+            if (\preg_match('#^/([a-z]{2}(?:_[A-Za-z]{2,4}){1,2})(?:/|$)#', $path) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function isPreviewOrEditorRequest(): bool

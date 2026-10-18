@@ -10,8 +10,8 @@
 
 1. **变量盘兜底**：`view/theme/{frontend|backend}/variables/_colors.css`（盘加载前可解析）。
 2. **默认品牌盘**：`colors/_default.css`（完整 primary/secondary/status/neutral 全家）。
-3. **前台加载链**：`_light`（模式）→ `_default`（默认可继承合同）→ 品牌叠加（如 `_ink`）→ `_dark`。
-4. **后台加载链**：`_light` → `_default` → `_dark`。
+3. **前台加载/编译合并链**：`_default`（底盘合同）→ 品牌叠加（如 `_ink`）→ `_light`（亮色覆盖）→ `_dark`（暗色覆盖）。亮/暗找不到的叶子**只**继承 `_default`（一层）。
+4. **后台加载/编译合并链**：`_default` → `_light` → `_dark`（同上：未覆盖即继承 default）。
 
 品牌盘只允许覆盖品牌相关叶子（primary/accent/chrome/link 等）；**不得**删掉 secondary/status 强度矩阵。基础组件（`w-button`/`w-input`/`w-alert`/…）**禁止** `#hex`/`rgb()` 私写色，只消费 `--weline-theme-*` / `--color-*` / `--backend-color-*`。
 
@@ -53,17 +53,23 @@
 
 改色盘后须能驱动按钮 / 徽章 / Alert；`php bin/w resource:compile welineUi` 同步编译产物。
 
-## 按钮 tone 约定
+## 按钮 / 徽章 / Alert tone 约定（硬 · `theme_semantic_severity_tone_required` + `theme_referenced_tokens_must_resolve`）
+
+表达严重度、风险、结果或操作等级时，**必须**绑 `data-tone`（经 Foundation 上色）。  
+**禁止**把「只用 Token / 禁私写色」误读成「全用组件默认 / quiet / neutral」。  
+**禁止**只标 `data-tone`、主题 status/色盘叶子（含 `_dark`）缺失——属性有了颜色不生效 = 空壳，须补主题全局叶子，不得在组件私造色。
 
 | 场景 | tone |
 |---|---|
 | 主保存 / 发布 | `primary` |
 | 次操作 | `secondary` |
-| 取消 / 返回 | `neutral` 或 `quiet` |
+| 取消 / 返回 / 纯 chrome | `neutral` 或 `quiet` |
 | 删除 / 破坏 | `danger` |
 | 风险确认 | `warning` |
 | 成功结果 | `success` |
 | 说明提示 | `info`（常用 soft / Alert） |
+
+`quiet`/`neutral` **仅**用于 chrome 级；严重度不同却全部默认 = 违规。
 
 ## 外观盘分组
 

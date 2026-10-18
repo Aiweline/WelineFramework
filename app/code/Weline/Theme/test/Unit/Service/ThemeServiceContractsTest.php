@@ -514,7 +514,10 @@ final class ThemeServiceContractsTest extends TestCase
         },
             'StorefrontNotFoundThemeApplication::testFallbackShellSkipsStaticSnapshotReload' => function () {
             $this->assert_StorefrontNotFoundThemeApplication_testFallbackShellSkipsStaticSnapshotReload();
-        },
+            },
+            'StorefrontNotFoundThemeApplication::testRenderUsesThemeAwareFetchHtmlNotModuleForce' => function () {
+            $this->assert_StorefrontNotFoundThemeApplication_testRenderUsesThemeAwareFetchHtmlNotModuleForce();
+            },
             'StorefrontSsrChromeHealer::testHealerDoesNotDependOnChromeRenderedDiskSplice' => function () {
             $this->assert_StorefrontSsrChromeHealer_testHealerDoesNotDependOnChromeRenderedDiskSplice();
         },
@@ -1605,6 +1608,7 @@ private function assert_HomepageLayoutHtmlBag_testPreviewAndEditorBypassBag(): v
     self::assertStringContainsString('preview', $bagSource);
     self::assertStringContainsString('isPreviewOrEditorRequest', $bagSource);
     self::assertStringContainsString('preview_bypass', $bagSource);
+    self::assertStringContainsString('requestHasStorefrontPathLocalePrefix', $bagSource);
 }
 
 private function assert_HomepageLayoutHtmlBag_testHydrateIsPeekOnlyAndWiredFromSeeder(): void
@@ -2986,6 +2990,19 @@ private function assert_StorefrontNotFoundThemeApplication_testFallbackShellSkip
     self::assertStringContainsString('ThemeApplicationContext::REQUEST_KEY_PREFIX', $src, 'Must clear prior site ThemeApplicationContext between publishes');
 }
 
+private function assert_StorefrontNotFoundThemeApplication_testRenderUsesThemeAwareFetchHtmlNotModuleForce(): void
+{
+    $src = $this->generatorSource_StorefrontNotFoundThemeApplication();
+    self::assertStringContainsString('fetchHtml(', $src, 'Static 404 must bake via theme-aware fetchHtml (design overlay)');
+    self::assertStringNotContainsString('fetchModuleThemeHtml(', $src, 'fetchModuleThemeHtml locks module Theme and blocks design not_found');
+    self::assertStringContainsString('DATA_FORCE_MODULE_THEME_SOURCE', $src, 'Doc must name the forbidden force flag');
+    self::assertDoesNotMatchRegularExpression(
+        '/->fetchModuleThemeHtml\s*\(/',
+        $src,
+        'Generator must never call fetchModuleThemeHtml'
+    );
+}
+
 private function assert_StorefrontSsrChromeHealer_testHealerDoesNotDependOnChromeRenderedDiskSplice(): void
 {
     $healer = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/StorefrontSsrChromeHealer.php';
@@ -3538,7 +3555,7 @@ private function assert_ThemeHeadChromeCssPack_testStorefrontPackIsBaseOnlyAndTo
     self::assertStringContainsString('PACK_TOKENS', $src);
     self::assertStringContainsString('PACK_STOREFRONT', $src);
     self::assertStringContainsString('PACK_BACKEND', $src);
-    self::assertStringContainsString('theme-head-chrome-v8', $src);
+    self::assertStringContainsString('theme-head-chrome-v9', $src);
     self::assertStringContainsString('normalizeOverlayManifest', $src);
     self::assertStringContainsString('resolveOverlayLeavesForLayout', $src);
     self::assertStringContainsString('selectOverlayLeaves', $src);
@@ -3556,11 +3573,15 @@ private function assert_ThemeHeadChromeCssPack_testStorefrontPackIsBaseOnlyAndTo
     self::assertGreaterThan($tokens, $sf);
     $tokensBlock = substr($src, $tokens, $sf - $tokens);
     self::assertStringContainsString('variables/_spacing.css', $tokensBlock);
+    self::assertStringContainsString('colors/_default.css', $tokensBlock);
     self::assertStringContainsString('colors/_light.css', $tokensBlock);
     self::assertStringContainsString('colors/_ink.css', $tokensBlock);
     self::assertStringNotContainsString('weline-foundation.css', $tokensBlock);
     self::assertStringNotContainsString('assets/css/theme.css', $tokensBlock);
     self::assertStringNotContainsString('colors/_dark.css', $tokensBlock);
+    // COM 合并序：default → ink → light（未覆盖继承 default）
+    self::assertLessThan(strpos($tokensBlock, 'colors/_default.css'), strpos($tokensBlock, 'colors/_ink.css'));
+    self::assertLessThan(strpos($tokensBlock, 'colors/_ink.css'), strpos($tokensBlock, 'colors/_light.css'));
     $sfEnd = strpos($src, 'self::PACK_BACKEND => [', $sf);
     self::assertNotFalse($sfEnd);
     $sfBlock = substr($src, $sf, $sfEnd - $sf);
@@ -3569,6 +3590,12 @@ private function assert_ThemeHeadChromeCssPack_testStorefrontPackIsBaseOnlyAndTo
     self::assertStringContainsString('colors/_dark.css', $sfBlock);
     self::assertStringNotContainsString('variables/_spacing.css', $sfBlock);
     self::assertStringNotContainsString('colors/_light.css', $sfBlock);
+    $beEnd = strpos($src, 'self::PACK_OVERLAY => [', $sfEnd);
+    self::assertNotFalse($beEnd);
+    $beBlock = substr($src, $sfEnd, $beEnd - $sfEnd);
+    self::assertLessThan(strpos($beBlock, 'colors/_default.css'), strpos($beBlock, 'colors/_light.css'));
+    self::assertLessThan(strpos($beBlock, 'colors/_light.css'), strpos($beBlock, 'colors/_dark.css'));
+    self::assertStringContainsString('theme-head-chrome-v9', $src);
     $tryLinkAttrs = $this->extractTryLinkAttrsSnippet_ThemeHeadChromeCssPack($src);
     self::assertDoesNotMatchRegularExpression('/\$attrs\s*\.=\s*[\'"] data-weline-layout-css/', $tryLinkAttrs, 'theme pack link must not set data-weline-layout-css');
     // Pin attribute assignment only — comments may mention media="print" as forbidden.

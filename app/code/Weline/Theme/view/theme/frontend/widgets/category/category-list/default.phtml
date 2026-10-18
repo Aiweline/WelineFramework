@@ -36,46 +36,46 @@ $showImage = (bool)($this->getData('show_image') ?? false);
 $collapsed = (bool)($this->getData('collapsed') ?? false);
 $searchHref = static fn (string $query): string => '/search?q=' . rawurlencode($query);
 
+// 默认主题编辑器占位：中性服饰类目。站专属汉服树见 app/design/Weline/hanfu/.../category-list。
 $categories = [
     [
         'id' => 1,
-        'name' => __('女士汉服'),
-        'url' => $searchHref('女士汉服'),
+        'name' => __('女装'),
+        'url' => $searchHref('女装'),
         'children' => [
-            ['id' => 11, 'name' => __('明制汉服'), 'url' => $searchHref('明制汉服')],
-            ['id' => 12, 'name' => __('宋制汉服'), 'url' => $searchHref('宋制汉服')],
-            ['id' => 13, 'name' => __('唐制汉服'), 'url' => $searchHref('唐制汉服')],
+            ['id' => 11, 'name' => __('上装'), 'url' => $searchHref('女装 上装')],
+            ['id' => 12, 'name' => __('下装'), 'url' => $searchHref('女装 下装')],
+            ['id' => 13, 'name' => __('套装'), 'url' => $searchHref('女装 套装')],
         ],
     ],
     [
         'id' => 2,
-        'name' => __('男士汉服'),
-        'url' => $searchHref('男士汉服'),
+        'name' => __('男装'),
+        'url' => $searchHref('男装'),
         'children' => [
-            ['id' => 21, 'name' => __('道袍与直裰'), 'url' => $searchHref('道袍 直裰')],
-            ['id' => 22, 'name' => __('曳撒与贴里'), 'url' => $searchHref('曳撒 贴里')],
-            ['id' => 23, 'name' => __('圆领袍'), 'url' => $searchHref('圆领袍')],
+            ['id' => 21, 'name' => __('外套'), 'url' => $searchHref('男装 外套')],
+            ['id' => 22, 'name' => __('内搭'), 'url' => $searchHref('男装 内搭')],
+            ['id' => 23, 'name' => __('长袍'), 'url' => $searchHref('男装 长袍')],
         ],
     ],
     [
         'id' => 3,
-        'name' => __('儿童汉服'),
-        'url' => $searchHref('儿童汉服'),
+        'name' => __('童装'),
+        'url' => $searchHref('童装'),
         'children' => [
-            ['id' => 31, 'name' => __('女童汉服'), 'url' => $searchHref('女童汉服')],
-            ['id' => 32, 'name' => __('男童汉服'), 'url' => $searchHref('男童汉服')],
-            ['id' => 33, 'name' => __('亲子系列'), 'url' => $searchHref('亲子汉服')],
+            ['id' => 31, 'name' => __('女童'), 'url' => $searchHref('女童')],
+            ['id' => 32, 'name' => __('男童'), 'url' => $searchHref('男童')],
+            ['id' => 33, 'name' => __('亲子系列'), 'url' => $searchHref('亲子系列')],
         ],
     ],
     [
         'id' => 4,
-        'name' => __('汉服配饰'),
-        // 分类页有货；勿链 /search?q=汉服配饰（QA-03：仅 blog/FAQ）
+        'name' => __('配饰'),
         'url' => '/category/accessories',
         'children' => [
-            ['id' => 41, 'name' => __('发簪与发冠'), 'url' => $searchHref('发簪 发冠')],
-            ['id' => 42, 'name' => __('腰带与禁步'), 'url' => $searchHref('腰带 禁步')],
-            ['id' => 43, 'name' => __('绣花鞋履'), 'url' => $searchHref('绣花鞋')],
+            ['id' => 41, 'name' => __('头饰'), 'url' => $searchHref('头饰')],
+            ['id' => 42, 'name' => __('腰带'), 'url' => $searchHref('腰带')],
+            ['id' => 43, 'name' => __('鞋履'), 'url' => $searchHref('鞋履')],
         ],
     ],
     [
@@ -84,7 +84,7 @@ $categories = [
         'url' => '/categories',
         'children' => [
             ['id' => 51, 'name' => __('婚礼与礼服'), 'url' => $searchHref('婚礼 礼服')],
-            ['id' => 52, 'name' => __('节庆与雅集'), 'url' => $searchHref('节庆 雅集')],
+            ['id' => 52, 'name' => __('节庆活动'), 'url' => $searchHref('节庆')],
             ['id' => 53, 'name' => __('日常通勤'), 'url' => $searchHref('日常 通勤')],
         ],
     ],

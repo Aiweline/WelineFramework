@@ -889,6 +889,59 @@ FAQ/常见问题,FAQ/常见问题
 参数配置,参数配置
 参数保存成功,参数保存成功
 参数保存失败,参数保存失败
+内容标题,内容标题
+面包屑,面包屑
+分类,分类
+分类展示图,分类展示图
+查看全部,查看全部
+回到顶部,回到顶部
+站点偏好,站点偏好
+法律与政策,法律与政策
+官方社交媒体,官方社交媒体
+商品,商品
+查看商品图,查看商品图
+查看规格图,查看规格图
+减少数量,减少数量
+数量,数量
+增加数量,增加数量
+购物车是空的,购物车是空的
+"浏览%1 %2件商品","浏览%1 %2件商品"
+零售车,零售车
+批发车,批发车
+继续购物,继续购物
+小计,小计
+去结算,去结算
+正在前往结算...,正在前往结算...
+查看购物车,查看购物车
+税费与运费将在结算时计算,税费与运费将在结算时计算
+运费将在结算时计算,运费将在结算时计算
+税费,税费
+正在加载购物车...,正在加载购物车...
+正在更新购物车...,正在更新购物车...
+商品小计,商品小计
+本次应付定金,本次应付定金
+本单共计,本单共计
+优惠券,优惠券
+叠加优惠,叠加优惠
+自动优惠,自动优惠
+"还差 %1 包邮","还差 %1 包邮"
+已享包邮,已享包邮
+收起明细,收起明细
+展开明细,展开明细
+零售,零售
+迷你购物车金额小计,迷你购物车金额小计
+视频,视频
+您的浏览器不支持视频标签。,您的浏览器不支持视频标签。
+查看更多,查看更多
+距离结束,距离结束
+时,时
+分,分
+秒,秒
+上一张,上一张
+下一张,下一张
+第%d张,第%d张
+剩余,剩余
+天,天
 数据卡片,数据卡片
 "近 7 日访问量 +18%","近 7 日访问量 +18%"
 卡片内容,卡片内容
@@ -964,7 +1017,6 @@ ERROR,ERROR
 分页导航,分页导航
 缺货,缺货
 联系询价,联系询价
-面包屑,面包屑
 跳转到主要内容,跳转到主要内容
 我的,我的
 账户及心愿单,账户及心愿单
@@ -980,9 +1032,6 @@ Weline,Weline
 搜索,搜索
 切换语言,切换语言
 切换货币,切换货币
-分类,分类
-分类展示图,分类展示图
-查看全部,查看全部
 导航菜单,导航菜单
 我的账户,我的账户
 我的收藏,我的收藏
@@ -992,12 +1041,8 @@ Weline,Weline
 "示例商品 1","示例商品 1"
 "示例商品 2","示例商品 2"
 "示例商品 3","示例商品 3"
-购物车是空的,购物车是空的
 去购物,去购物
 删除,删除
-小计,小计
-查看购物车,查看购物车
-去结算,去结算
 关注我们,关注我们
 微信扫码关注,微信扫码关注
 微信二维码,微信二维码
@@ -1023,8 +1068,6 @@ Weline,Weline
 第一页,第一页
 最后一页,最后一页
 支付方式,支付方式
-视频,视频
-您的浏览器不支持视频标签。,您的浏览器不支持视频标签。
 请填写视频地址,请填写视频地址
 请粘贴嵌入代码（iframe）或视频链接,请粘贴嵌入代码（iframe）或视频链接
 "请填写自托管视频地址（mp4 等）","请填写自托管视频地址（mp4 等）"
@@ -1046,25 +1089,25 @@ Weline,Weline
 "安全注册 · 隐私受保护","安全注册 · 隐私受保护"
 注册品牌文案,注册品牌文案
 商品分类,商品分类
-女士汉服,女士汉服
-明制汉服,明制汉服
-宋制汉服,宋制汉服
-唐制汉服,唐制汉服
-男士汉服,男士汉服
-道袍与直裰,道袍与直裰
-曳撒与贴里,曳撒与贴里
-圆领袍,圆领袍
-儿童汉服,儿童汉服
-女童汉服,女童汉服
-男童汉服,男童汉服
+女装,女装
+上装,上装
+下装,下装
+套装,套装
+男装,男装
+外套,外套
+内搭,内搭
+长袍,长袍
+童装,童装
+女童,女童
+男童,男童
 亲子系列,亲子系列
-汉服配饰,汉服配饰
-发簪与发冠,发簪与发冠
-腰带与禁步,腰带与禁步
-绣花鞋履,绣花鞋履
+配饰,配饰
+头饰,头饰
+腰带,腰带
+鞋履,鞋履
 按场景选购,按场景选购
 婚礼与礼服,婚礼与礼服
-节庆与雅集,节庆与雅集
+节庆活动,节庆活动
 日常通勤,日常通勤
 件商品,件商品
 暂无匹配的问题,暂无匹配的问题
@@ -1077,11 +1120,6 @@ Weline,Weline
 请在部件配置中添加真实内容,请在部件配置中添加真实内容
 限时活动,限时活动
 活动已结束,活动已结束
-天,天
-时,时
-分,分
-秒,秒
-内容标题,内容标题
 请选择真实图片,请选择真实图片
 图文标题,图文标题
 在这里介绍内容、服务或品牌故事。,在这里介绍内容、服务或品牌故事。
@@ -1098,15 +1136,9 @@ Weline,Weline
 全部加入购物车,全部加入购物车
 请至少选择一个商品,请至少选择一个商品
 已添加,已添加
-查看更多,查看更多
-距离结束,距离结束
 精选轮播,精选轮播
-回到顶部,回到顶部
-站点偏好,站点偏好
-法律与政策,法律与政策
 展开社交媒体,展开社交媒体
 收起社交媒体,收起社交媒体
-官方社交媒体,官方社交媒体
 "Hero 轮播区域","Hero 轮播区域"
 拖放轮播图或促销横幅到此处,拖放轮播图或促销横幅到此处
 推荐区域,推荐区域
@@ -1128,34 +1160,6 @@ Logo,Logo
 下一条,下一条
 全部商品,全部商品
 面包屑导航,面包屑导航
-商品,商品
-查看商品图,查看商品图
-查看规格图,查看规格图
-减少数量,减少数量
-数量,数量
-增加数量,增加数量
-"浏览%1 %2件商品","浏览%1 %2件商品"
-零售车,零售车
-批发车,批发车
-继续购物,继续购物
-正在前往结算...,正在前往结算...
-税费与运费将在结算时计算,税费与运费将在结算时计算
-运费将在结算时计算,运费将在结算时计算
-税费,税费
-正在加载购物车...,正在加载购物车...
-正在更新购物车...,正在更新购物车...
-商品小计,商品小计
-本次应付定金,本次应付定金
-本单共计,本单共计
-优惠券,优惠券
-叠加优惠,叠加优惠
-自动优惠,自动优惠
-"还差 %1 包邮","还差 %1 包邮"
-已享包邮,已享包邮
-收起明细,收起明细
-展开明细,展开明细
-零售,零售
-迷你购物车金额小计,迷你购物车金额小计
 关闭通知,关闭通知
 国际配送，售后有保障,国际配送，售后有保障
 帮助中心,帮助中心
@@ -1171,10 +1175,6 @@ Logo,Logo
 促销活动,促销活动
 暂停轮播,暂停轮播
 播放轮播,播放轮播
-上一张,上一张
-下一张,下一张
-第%d张,第%d张
-剩余,剩余
 加载中,加载中
 打印,打印
 仪表盘部件区域,仪表盘部件区域
@@ -2330,18 +2330,28 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 静态文件：weline.modules.js编译文件！,静态文件：weline.modules.js编译文件！
 "编译 Weline UI 2.0 静态资源包！","编译 Weline UI 2.0 静态资源包！"
 编译主题资源（less、weline.modules.js等）,编译主题资源（less、weline.modules.js等）
+圆领袍,圆领袍
+发簪与发冠,发簪与发冠
+腰带与禁步,腰带与禁步
+绣花鞋履,绣花鞋履
+节庆与雅集,节庆与雅集
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+注册,注册
+登录页工具,登录页工具
+登录,登录
+"Search results","Search results"
+Search,Search
+"Search · 检索","Search · 检索"
+Search…,Search…
+搜索筛选,搜索筛选
+尺码指南,尺码指南
 Pagination,Pagination
 Previous,Previous
 "Page %{1} of %{2}","Page %{1} of %{2}"
 Next,Next
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
-搜索筛选,搜索筛选
 "footer-above 槽默认内容；未覆盖时回退 Theme trust-badges，供其它模块覆盖或追加。","footer-above 槽默认内容；未覆盖时回退 Theme trust-badges，供其它模块覆盖或追加。"
-登录,登录
-登录页工具,登录页工具
 "在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。全局悬浮层 DOM 与可编辑 w:slot（storefront-float-start/end）在 footer partial；本 Hook 仅保留店面占位图与 float-layer JS 加载。","在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。全局悬浮层 DOM 与可编辑 w:slot（storefront-float-start/end）在 footer partial；本 Hook 仅保留店面占位图与 float-layer JS 加载。"
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
-"寻衣 · 形制 · 织绣","寻衣 · 形制 · 织绣"
 "Decision information pack · Digital delivery after payment","Decision information pack · Digital delivery after payment"
 "Attraction ticket · Handpicked for independent travelers","Attraction ticket · Handpicked for independent travelers"
 "更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿）","更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿）"
@@ -2359,25 +2369,18 @@ Next,Next
 未找到匹配作用范围,未找到匹配作用范围
 "欢迎光临 · 精选好物上新","Dobrodošli · izbrani novi izdelki"
 去选购,Nakup
-形制顾问,"Style advisor"
 工艺与质检,"Craft & QC"
-穿搭与形制,"Wear & silhouette"
 "面料 · 刺绣 · 成衣","Fabric · embroidery · ready-to-wear"
 了解品牌,"About the brand"
 跨境履约,"Cross-border fulfillment"
 "批发 + 单件","Wholesale + single piece"
-形制、工艺与履约，陪你选对第一套汉服,"Silhouette, craft, and fulfillment—helping you choose your first Hanfu."
-从明制马面裙到唐风襦裙，按场景给出形制与层次建议，帮你选对第一套汉服。,"From Ming mamian skirts to Tang ruqun, we suggest silhouettes and layering by occasion so you pick the right first set."
 把关织造、刺绣与成衣细节，确保上身气韵与日常穿着兼顾。,"We check weaving, embroidery, and finishing so presence and everyday wear both hold up."
 支持一件起订与批发拿货，协调国际物流、尺码沟通与售后跟进。,"Order one piece or wholesale—we coordinate international shipping, sizing questions, and after-sales."
 购买、尺码、配送与养护,"Buying, sizing, shipping & care"
 可以批发，也可以只买一件吗？,"Can I buy wholesale or just one piece?"
-可以。長安漢服同时服务一件起订的个人买家与批发客户，商品页可切换零售／批发身份后下单。,"Yes. Chang’an Hanfu serves single-piece shoppers and wholesale buyers—switch retail/wholesale on the product page before ordering."
 尺码如何选择？,"How do I choose a size?"
-请对照商品页尺码表，按胸围、腰围与身高选号；不确定时可联系客服，我们会按形制给出建议。,"Use the size chart on the product page (bust, waist, height). Unsure? Contact support for silhouette advice."
 国际配送大概多久？,"How long does international shipping take?"
 视目的地与清关情况，通常在付款后数个工作日内发出；物流单号可在订单中心跟踪。,"Depending on destination and customs, we usually ship within a few business days after payment; track the number in your order center."
-汉服怎么养护？,"How should I care for Hanfu?"
 建议轻柔手洗或专业干洗，避免暴晒与高温烘干；刺绣与袖缘请单独放置，减少勾丝。,"Hand-wash gently or dry-clean; avoid strong sun and high heat. Store embroidery and cuffs separately to reduce snags."
 退换货怎么处理？,"How do returns & exchanges work?"
 未穿用且吊牌完整的商品可按退换政策申请；定制款与贴身衣物规则以政策页为准。,"Unused items with tags can follow the return policy; made-to-order and intimate items follow the policy page."

@@ -16,6 +16,14 @@ final class ThemeEditorFpcBypassProvider implements FpcBypassRuleProviderInterfa
     {
         return [
             [
+                // UC-FPC-Pierce / Extra UC-05 (also Framework PierceStampFpcBypassProvider).
+                'id' => 'framework.fpc_pierce_stamp',
+                'match' => [
+                    'env_flags' => ['fpc_pierce_stamp'],
+                ],
+                'effect' => 'bypass_serve_and_publish',
+            ],
+            [
                 'id' => 'theme.editor_preview_query',
                 'match' => [
                     // Open-source short names stay; without pierce stamp they must not bypass.

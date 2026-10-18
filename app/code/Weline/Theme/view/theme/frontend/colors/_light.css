@@ -11,8 +11,8 @@
  * @meta.palette_role {default="mode",name="palette_role",description="palette_role"}
  */
 
-[data-theme="light"],
-:root {
+/* 模式盘：仅亮色选择器；未覆盖叶子继承 _default（禁止 :root 污染暗色） */
+[data-theme="light"] {
     /* 文本色 */
     --color-text-primary: #111;
     --color-text-secondary: #767676;
@@ -67,9 +67,8 @@
     --scrollbar-track: transparent;
 }
 
-/* Canonical semantic contract. Brand overlays may replace only brand tokens. */
-[data-theme="light"],
-:root {
+/* Light-mode semantic overrides on top of _default（未列叶子继承 default） */
+[data-theme="light"] {
     --color-text-amazon-body: #0f1111;
     --color-text: #172033;
     --color-text-primary: var(--color-text);

@@ -22,10 +22,7 @@ final class PolicyDocumentDefaults
             $page = 'term-condition';
         }
         $all = self::all();
-        if (isset($all[$page])) {
-            return $all[$page];
-        }
-        return $all['privacy'] ?? [
+        $defaults = isset($all[$page]) ? $all[$page] : ($all['privacy'] ?? [
             'variant' => 'amazon',
             'title' => '政策',
             'lead' => '',
@@ -34,7 +31,65 @@ final class PolicyDocumentDefaults
             'show_legal_contact' => false,
             'related_links' => [],
             'sections' => [],
-        ];
+        ]);
+
+        return self::applyDesignThemeSectionOverrides($page, $defaults);
+    }
+
+    /**
+     * 站/主题专属政策条款（如汉服措辞）从 design 覆盖，模块保持中性默认。
+     *
+     * @param array<string,mixed> $defaults
+     * @return array<string,mixed>
+     */
+    private static function applyDesignThemeSectionOverrides(string $page, array $defaults): array
+    {
+        if (!self::isHanfuThemeActive()) {
+            return $defaults;
+        }
+        $path = (defined('BP') ? BP : '') . 'app/design/Weline/hanfu/data/policy-document-defaults-overrides.v1.php';
+        if (!is_file($path)) {
+            return $defaults;
+        }
+        /** @var mixed $pack */
+        $pack = require $path;
+        if (!is_array($pack)) {
+            return $defaults;
+        }
+        $bodies = $pack[$page] ?? null;
+        if (!is_array($bodies) || $bodies === []) {
+            return $defaults;
+        }
+        $sections = $defaults['sections'] ?? null;
+        if (!is_array($sections)) {
+            return $defaults;
+        }
+        foreach ($sections as $i => $section) {
+            if (!is_array($section)) {
+                continue;
+            }
+            $id = (string)($section['id'] ?? '');
+            if ($id === '' || !isset($bodies[$id]) || !is_string($bodies[$id])) {
+                continue;
+            }
+            $sections[$i]['body'] = $bodies[$id];
+        }
+        $defaults['sections'] = $sections;
+
+        return $defaults;
+    }
+
+    private static function isHanfuThemeActive(): bool
+    {
+        try {
+            if (!class_exists(\Weline\Websites\Service\WebsiteBrandIdentitySeedService::class)) {
+                return false;
+            }
+
+            return \Weline\Websites\Service\WebsiteBrandIdentitySeedService::isHanfuThemeActive();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -365,8 +420,8 @@ final class PolicyDocumentDefaults
       array (
         'id' => 'refund-s7',
         'title' => '7 / 特殊商品说明',
-        'body' => '<p>7.1 个性化商品的撤回权例外仅适用于满足法定条件的实际定制。普通汉服、标准尺码选项或手工工艺不自动属于该例外；任何适用例外均不取消瑕疵、描述不符或其他法定救济。</p>
-<p>7.2 汉服等服饰类请关注尺码表与养护说明，降低因尺码或穿着不当导致的退换争议。</p>',
+        'body' => '<p>7.1 个性化商品的撤回权例外仅适用于满足法定条件的实际定制。普通服饰、标准尺码选项或手工工艺不自动属于该例外；任何适用例外均不取消瑕疵、描述不符或其他法定救济。</p>
+<p>7.2 服饰类请关注尺码表与养护说明，降低因尺码或穿着不当导致的退换争议。</p>',
       ),
       7 => 
       array (

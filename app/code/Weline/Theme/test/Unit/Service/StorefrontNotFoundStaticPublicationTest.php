@@ -27,7 +27,7 @@ final class StorefrontNotFoundStaticPublicationTest extends TestCase
         $context->method('resolveTheme')->willReturn($theme);
         $output = '<!doctype html><html><body>dependency A</body></html>';
         $template = $this->createMock(Template::class);
-        $template->method('fetchModuleThemeHtml')->willReturnCallback(static function () use (&$output): string { return $output; });
+        $template->method('fetchHtml')->willReturnCallback(static function () use (&$output): string { return $output; });
         $slots = $this->createMock(SlotRendererService::class);
         $slots->method('processSlots')->willReturnCallback(static fn(string $html): string => $html);
         $generator = new StorefrontNotFoundStaticGenerator($context, $slots, $template,

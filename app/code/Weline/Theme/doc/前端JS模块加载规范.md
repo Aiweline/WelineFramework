@@ -62,7 +62,7 @@
 
 ### 1.2 MutationObserver：架构总线 vs DEV 护栏
 
-**架构入口（硬）**：对 `document` / `documentElement` / `body` 的 `childList|subtree` 观察必须用 **`Weline.dom.observe`**（共享总线，同 target+options 仅一个物理观察者）。权威：[DOM-Mutation观察总线.md](../../Frontend/doc/架构/DOM-Mutation观察总线.md)；MCP `dom_mutation_observe_via_weline_dom`。
+**架构入口（硬）**：对 `document` / `documentElement` / `body` 的 `childList|subtree` 观察必须用 **`Weline.dom.observe`**（共享总线，同 target+options+quietMs 仅一个物理观察者）。运行时另有 **Document Observe Gate**（`dom-observer.js`）：裸 `new MutationObserver` + `observe(document*)` 会被强制入线。权威：[DOM-Mutation观察总线.md](../../Frontend/doc/架构/DOM-Mutation观察总线.md)；MCP `dom_mutation_observe_via_weline_dom`。
 
 **合并语义**：
 

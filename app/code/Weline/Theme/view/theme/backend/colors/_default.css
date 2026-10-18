@@ -18,6 +18,10 @@
     --backend-color-primary-bg-subtle: rgba(37, 99, 235, 0.12);
     --backend-color-primary-bg-light: rgba(37, 99, 235, 0.18);
 
+    /* Wheel-card aliases（配色盘卡片解析 --color-primary；与 _ink 品牌盘键集对齐） */
+    --color-primary: var(--backend-color-primary);
+    --color-bg-secondary: var(--backend-color-bg-secondary);
+
     /* Typography */
     --backend-color-text: #172033;
     --backend-color-text-primary: var(--backend-color-text);

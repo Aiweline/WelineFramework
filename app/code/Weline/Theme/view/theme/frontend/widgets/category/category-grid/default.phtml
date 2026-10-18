@@ -49,12 +49,10 @@ $translateDefaultCopy = static function (string $source, string $english) use ($
     return $isChineseLocale ? $source : $english;
 };
 
-$allowHanfuDemo = \Weline\Theme\Helper\StorefrontHanfuDemoCatalog::allowed();
 $titleSource = trim((string)($this->getData('title') ?? ''));
 $subtitleSource = trim((string)($this->getData('subtitle') ?? ''));
-if ($allowHanfuDemo && in_array($titleSource, ['', '热门分类', '按汉服品类选购'], true)) {
-    $title = $translateDefaultCopy('按汉服品类选购', 'Shop Hanfu by Category');
-} elseif (in_array($titleSource, ['', '热门分类', '按汉服品类选购'], true)) {
+// 默认主题中性标题；站专属「按汉服品类选购」等由 design 覆盖或布局参数提供。
+if (in_array($titleSource, ['', '热门分类', '按汉服品类选购'], true)) {
     $title = $translateDefaultCopy('热门分类', 'Shop by Category');
 } else {
     $title = WidgetI18n::label($titleSource);
@@ -84,98 +82,9 @@ $ratioMap = [
 ];
 $paddingTop = $displayMode === 'strip' ? '100%' : ($ratioMap[$imageRatio] ?? '100%');
 
-$categoryNames = [
-    [
-        'id' => 164,
-        'code' => 'women',
-        'name_zh' => '女装',
-        'name_en' => "Women's Hanfu",
-        'alt_zh' => '女装汉服分类图，展示女性汉服的裙装层次',
-        'alt_en' => "Women's Hanfu category image showing layered skirt silhouettes",
-    ],
-    [
-        'id' => 175,
-        'code' => 'men',
-        'name_zh' => '男装',
-        'name_en' => "Men's Hanfu",
-        'alt_zh' => '男装汉服分类图，展示男性袍衫轮廓',
-        'alt_en' => "Men's Hanfu category image showing robe silhouettes",
-    ],
-    [
-        'id' => 180,
-        'code' => 'kids',
-        'name_zh' => '童装',
-        'name_en' => "Children's Hanfu",
-        'alt_zh' => '童装汉服分类图，展示儿童尺度汉服',
-        'alt_en' => "Children's Hanfu category image showing child-proportioned garments",
-    ],
-    [
-        'id' => 183,
-        'code' => 'accessories',
-        'name_zh' => '配饰',
-        'name_en' => 'Accessories',
-        'alt_zh' => '汉服配饰分类图，展示头饰、佩饰与鞋履',
-        'alt_en' => 'Hanfu accessories category image showing headwear, pendants, and footwear',
-    ],
-    [
-        'id' => 188,
-        'code' => 'sets',
-        'name_zh' => '套装与场景',
-        'name_en' => 'Sets & Occasions',
-        'alt_zh' => '汉服套装分类图，展示完整上下装搭配',
-        'alt_en' => 'Hanfu sets category image showing a complete coordinated outfit',
-    ],
-    [
-        'id' => 190,
-        'code' => 'women/mamian',
-        'name_zh' => '马面裙',
-        'name_en' => 'Mamian Skirt',
-        'alt_zh' => '马面裙分类图',
-        'alt_en' => 'Mamian skirt category image',
-    ],
-    [
-        'id' => 191,
-        'code' => 'women/ruqun',
-        'name_zh' => '襦裙',
-        'name_en' => 'Ruqun',
-        'alt_zh' => '襦裙分类图',
-        'alt_en' => 'Ruqun category image',
-    ],
-    [
-        'id' => 192,
-        'code' => 'women/aoqun',
-        'name_zh' => '袄裙',
-        'name_en' => 'Aoqun',
-        'alt_zh' => '袄裙分类图',
-        'alt_en' => 'Aoqun category image',
-    ],
-];
-$categoryDisplayNames = [];
-try {
-    $categoryDisplayNames = \Weline\Theme\Helper\HeaderCommerceData::categoryDisplayNamesByCode();
-} catch (\Throwable) {
-    $categoryDisplayNames = [];
-}
+// 默认主题不注入站专属演示磁贴；有真实分类数据时由布局/设计主题覆盖提供。
+// 汉服 dynasty/form 磁贴见 app/design/Weline/hanfu/frontend/widgets/category/category-grid。
 $categories = [];
-if ($allowHanfuDemo) {
-    foreach (array_slice($categoryNames, 0, $limit) as $category) {
-        $code = (string)$category['code'];
-        $localizedName = trim((string)($categoryDisplayNames[$code] ?? ''));
-        // 叶子 code 对应独立图标（mamian.webp / ruqun.webp）；勿只取根段 women
-        $codeSegments = explode('/', $code);
-        $iconCode = (string)(end($codeSegments) ?: $codeSegments[0]);
-        $categories[] = [
-            'id' => (int)$category['id'],
-            'name' => $localizedName !== ''
-                ? $localizedName
-                : ($isChineseLocale ? (string)$category['name_zh'] : (string)$category['name_en']),
-            'alt' => $translateDefaultCopy($category['alt_zh'], $category['alt_en']),
-            'url' => '/category/' . $code,
-            'image' => '/pub/media/catalog/hanfu/r2/categories/icons/' . $iconCode . '.webp',
-            'count' => 0,
-        ];
-    }
-}
 $allLabel = $translateDefaultCopy('全部', 'All');
 $allUrl = \Weline\Theme\Helper\HeaderNavFragment::localizeHref('/products');
 $rootStyle = '--wc-category-ratio:' . $paddingTop . ';';

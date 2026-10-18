@@ -23,6 +23,9 @@ use Weline\Widget\Model\WidgetRegistryEntry;
  *          layout_source. Ext asset changes → assets publish **and** widget cascade (force_pages bake)
  *          **and** `FpcStaticDiskStore::republishFromFileOnAllHosts` for module direct-link live mirrors
  *          (Nginx try_files `generated/static/live/{host}/…` must not lag widget-assets packs).
+ * Module-prefix statics (once per run, shared manifest): enabled modules'
+ *          app/code/{Vendor}/{Module}/view/statics tree (.css/.js) keyed as `__modstatic__/…` →
+ *          **only** live remirror (no theme assets bake / widget cascade / layout FPC purge).
  * widgets: ledger layout_type first; else quick-scan `<w:widget type/name|code[/module]>` embeds
  *          (not slot accept=). Explicit ledger `*` → full theme.
  * shared templates: solidify all layouts. chrome-only → heal only.
@@ -34,6 +37,10 @@ final class ThemeLayoutOriginWatchService
 {
     private const MANIFEST_NAME = '.origin-watch.json';
     private const MANIFEST_VERSION = 2;
+    private const MODULE_STATIC_PREFIX = '__modstatic__/';
+    private const MODULE_STATIC_MANIFEST_DIR = '_module_statics';
+    /** Soft cap per module to keep DEV cron bounded (mtime/size reuse after bootstrap). */
+    private const MODULE_STATIC_MAX_FILES_PER_MODULE = 800;
     private const CACHE_CLEAR_REASON = 'theme_layout_origin_watch';
     private const CACHE_CLEAR_REASON_ASSETS = 'theme_layout_origin_watch_assets';
 
@@ -102,7 +109,68 @@ final class ThemeLayoutOriginWatchService
             }
         }
 
+        // Shared once: module-prefix /Vendor/Module/view/statics (not per-theme).
+        try {
+            $mod = $this->processModulePrefixStatics();
+            if (!empty($mod['bootstrapped'])) {
+                ++$report['bootstrapped'];
+            }
+            if (!empty($mod['changed'])) {
+                ++$report['changed'];
+            }
+            $report['static_published'] += (int)($mod['static_published'] ?? 0);
+            foreach ((array)($mod['messages'] ?? []) as $msg) {
+                $report['messages'][] = (string)$msg;
+            }
+        } catch (\Throwable $e) {
+            $report['messages'][] = 'module_statics_error:' . $e->getMessage();
+        }
+
         return $report;
+    }
+
+    /**
+     * Watch enabled modules' view/statics css/js → remirror Nginx live FPC leaves.
+     * not_to_do: theme assets bake; widget cascade; clearAllThemeRelatedCaches; purgeAllLive.
+     *
+     * @return array{changed:bool,bootstrapped:bool,static_published:int,messages:list<string>}
+     */
+    private function processModulePrefixStatics(): array
+    {
+        $out = [
+            'changed' => false,
+            'bootstrapped' => false,
+            'static_published' => 0,
+            'messages' => [],
+        ];
+        $previous = $this->watchedManifestFiles($this->readModuleStaticsManifest());
+        $snapshot = $this->buildModulePrefixStaticsSnapshot($previous);
+        if ($previous === null) {
+            $this->writeModuleStaticsManifest($snapshot);
+            $out['bootstrapped'] = true;
+            $out['messages'][] = 'module_statics:bootstrapped:' . \count($snapshot);
+
+            return $out;
+        }
+        $diff = $this->diffSnapshot($previous, $snapshot);
+        if ($diff['changed_paths'] === []) {
+            if ($diff['manifest_dirty']) {
+                $this->writeModuleStaticsManifest($snapshot);
+            }
+
+            return $out;
+        }
+        $out['changed'] = true;
+        $mirrored = $this->refreshLiveStaticMirrorsForChangedPaths($diff['changed_paths']);
+        $out['static_published'] = $mirrored;
+        if ($mirrored > 0) {
+            $out['messages'][] = 'module_statics:live_static_mirror:' . $mirrored;
+        } else {
+            $out['messages'][] = 'module_statics:changed:' . \count($diff['changed_paths']);
+        }
+        $this->writeModuleStaticsManifest($snapshot);
+
+        return $out;
     }
 
     /**
@@ -252,7 +320,7 @@ final class ThemeLayoutOriginWatchService
     }
 
     /**
-     * After `__ext__/…/asset/*.{css,js}` changes: refresh Nginx live FPC mirrors for those module URIs.
+     * After `__ext__/…/asset/*.{css,js}` or `__modstatic__/…` changes: refresh Nginx live FPC mirrors.
      * Framework owns the disk store; Theme only maps watched paths → source abs → URI.
      * not_to_do: purgeAllLive; invent hosts; rewrite live paths outside FpcStaticDiskStore.
      *
@@ -263,7 +331,12 @@ final class ThemeLayoutOriginWatchService
         $ok = 0;
         $seenUri = [];
         foreach ($changedPaths as $path) {
-            $class = $this->classifyRelativePath((string)$path);
+            $path = \str_replace('\\', '/', (string)$path);
+            if (\str_starts_with($path, self::MODULE_STATIC_PREFIX)) {
+                $ok += $this->republishModulePrefixStaticPath($path, $seenUri);
+                continue;
+            }
+            $class = $this->classifyRelativePath($path);
             if (!\is_array($class) || empty($class['asset'])) {
                 continue;
             }
@@ -273,7 +346,7 @@ final class ThemeLayoutOriginWatchService
             if ($module === '' || $type === '' || $code === '') {
                 continue;
             }
-            $basename = \basename(\str_replace('\\', '/', (string)$path));
+            $basename = \basename($path);
             if ($basename === '' || !\preg_match('/\.(css|js)$/i', $basename)) {
                 continue;
             }
@@ -291,6 +364,33 @@ final class ThemeLayoutOriginWatchService
         }
 
         return $ok;
+    }
+
+    /**
+     * @param array<string, true> $seenUri
+     */
+    private function republishModulePrefixStaticPath(string $relativeKey, array &$seenUri): int
+    {
+        $rel = \substr($relativeKey, \strlen(self::MODULE_STATIC_PREFIX));
+        $rel = \ltrim(\str_replace('\\', '/', $rel), '/');
+        if ($rel === '' || \str_contains($rel, '..') || !\preg_match('/\.(css|js)$/i', $rel)) {
+            return 0;
+        }
+        $base = \defined('BP') ? \rtrim(\str_replace('\\', '/', (string)\constant('BP')), '/') : '';
+        if ($base === '') {
+            return 0;
+        }
+        $abs = $base . '/app/code/' . $rel;
+        if (!\is_file($abs)) {
+            return 0;
+        }
+        $uri = FpcStaticDiskStore::uriFromAppCodeAbsolute($abs);
+        if ($uri === '' || isset($seenUri[$uri])) {
+            return 0;
+        }
+        $seenUri[$uri] = true;
+
+        return FpcStaticDiskStore::republishFromFileOnAllHosts($uri, $abs);
     }
 
     /**
@@ -901,6 +1001,10 @@ final class ThemeLayoutOriginWatchService
                 $assets = true;
                 continue;
             }
+            if ($class['kind'] === 'module_static') {
+                // Handled only by processModulePrefixStatics (shared remirror); never theme bake.
+                continue;
+            }
             if ($class['kind'] === 'widget') {
                 $module = \trim((string)($class['module'] ?? 'Weline_Theme'));
                 if ($module === '') {
@@ -942,7 +1046,7 @@ final class ThemeLayoutOriginWatchService
     }
 
     /**
-     * Classifier: theme .phtml / .css / .js, or `__ext__/{Module}/{type}/{code}(.phtml|/asset/*.{css,js})`.
+     * Classifier: theme .phtml / .css / .js, `__modstatic__/…`, or `__ext__/{Module}/{type}/{code}(.phtml|/asset/*.{css,js})`.
      *
      * @return array{kind:string,type?:string,option?:string,code?:string,module?:string,asset?:bool}|null
      */
@@ -951,6 +1055,14 @@ final class ThemeLayoutOriginWatchService
         $relative = \str_replace('\\', '/', \ltrim($relative, '/'));
         if ($relative === '') {
             return null;
+        }
+        if (\str_starts_with($relative, self::MODULE_STATIC_PREFIX)) {
+            $lower = \strtolower($relative);
+            if (\str_ends_with($lower, '.css') || \str_ends_with($lower, '.js')) {
+                return ['kind' => 'module_static'];
+            }
+
+            return ['kind' => 'skip'];
         }
         if (!\str_starts_with($relative, '__ext__/')) {
             $lower = \strtolower($relative);
@@ -1083,6 +1195,92 @@ final class ThemeLayoutOriginWatchService
         \ksort($files);
 
         return $files;
+    }
+
+    /**
+     * Snapshot enabled modules' view/statics .css/.js as `__modstatic__/{Vendor}/{Module}/view/statics/…`.
+     *
+     * @param array<string, array{sha256:string,mtime:int,size:int}>|null $previous
+     * @return array<string, array{sha256:string,mtime:int,size:int}>
+     */
+    private function buildModulePrefixStaticsSnapshot(?array $previous = null): array
+    {
+        $files = [];
+        $base = \defined('BP') ? \rtrim(\str_replace('\\', '/', (string)\constant('BP')), '/') : '';
+        if ($base === '') {
+            return [];
+        }
+        $prefix = $base . '/app/code/';
+        try {
+            $modules = Env::getInstance()->getModuleList();
+        } catch (\Throwable) {
+            return [];
+        }
+        if (!\is_array($modules)) {
+            return [];
+        }
+        foreach ($modules as $meta) {
+            if (!\is_array($meta) || empty($meta['status'])) {
+                continue;
+            }
+            $moduleBase = \rtrim(\str_replace('\\', '/', (string)($meta['base_path'] ?? '')), '/');
+            if ($moduleBase === '' || !\str_starts_with($moduleBase, $prefix)) {
+                continue;
+            }
+            $statics = $moduleBase . '/view/statics';
+            if (!\is_dir($statics)) {
+                continue;
+            }
+            $this->appendCssJsUnderDir($files, $previous, $statics, $prefix, self::MODULE_STATIC_MAX_FILES_PER_MODULE);
+        }
+        \ksort($files);
+
+        return $files;
+    }
+
+    /**
+     * @param array<string, array{sha256:string,mtime:int,size:int}> $files
+     * @param array<string, array{sha256:string,mtime:int,size:int}>|null $previous
+     */
+    private function appendCssJsUnderDir(
+        array &$files,
+        ?array $previous,
+        string $dir,
+        string $appCodePrefix,
+        int $maxFiles,
+    ): void {
+        $count = 0;
+        try {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::LEAVES_ONLY,
+            );
+        } catch (\Throwable) {
+            return;
+        }
+        foreach ($iterator as $item) {
+            if ($count >= $maxFiles) {
+                break;
+            }
+            if (!$item->isFile() || $item->isLink()) {
+                continue;
+            }
+            $absolute = \str_replace('\\', '/', $item->getPathname());
+            $lower = \strtolower($absolute);
+            if (!\str_ends_with($lower, '.css') && !\str_ends_with($lower, '.js')) {
+                continue;
+            }
+            if (!\str_starts_with($absolute, $appCodePrefix)) {
+                continue;
+            }
+            $rel = \substr($absolute, \strlen($appCodePrefix));
+            if ($rel === false || $rel === '' || \str_contains($rel, '..')) {
+                continue;
+            }
+            $key = self::MODULE_STATIC_PREFIX . $rel;
+            $this->putWatchedFile($files, $previous, $key, $absolute);
+            ++$count;
+        }
     }
 
     /**
@@ -1594,5 +1792,78 @@ final class ThemeLayoutOriginWatchService
             . $themeId
             . \DIRECTORY_SEPARATOR
             . self::MANIFEST_NAME;
+    }
+
+    private function moduleStaticsManifestPath(): string
+    {
+        return \rtrim($this->paths->root(), '/\\')
+            . \DIRECTORY_SEPARATOR
+            . self::MODULE_STATIC_MANIFEST_DIR
+            . \DIRECTORY_SEPARATOR
+            . self::MANIFEST_NAME;
+    }
+
+    /**
+     * @return array<string, array{sha256:string,mtime:int,size:int}>|null
+     */
+    private function readModuleStaticsManifest(): ?array
+    {
+        $path = $this->moduleStaticsManifestPath();
+        if (!\is_file($path)) {
+            return null;
+        }
+        try {
+            $raw = \file_get_contents($path);
+            if ($raw === false || $raw === '') {
+                return null;
+            }
+            $data = \json_decode($raw, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!\is_array($data) || !\is_array($data['files'] ?? null)) {
+            return null;
+        }
+        $files = [];
+        foreach ($data['files'] as $rel => $meta) {
+            if (!\is_string($rel) || !\is_array($meta)) {
+                continue;
+            }
+            $files[$rel] = [
+                'sha256' => (string)($meta['sha256'] ?? ''),
+                'mtime' => (int)($meta['mtime'] ?? 0),
+                'size' => (int)($meta['size'] ?? 0),
+            ];
+        }
+
+        return $files;
+    }
+
+    /**
+     * @param array<string, array{sha256:string,mtime:int,size:int}> $files
+     */
+    private function writeModuleStaticsManifest(array $files): void
+    {
+        $path = $this->moduleStaticsManifestPath();
+        $dir = \dirname($path);
+        if (!\is_dir($dir) && !@\mkdir($dir, 0775, true) && !\is_dir($dir)) {
+            throw new \RuntimeException('theme_origin_watch_module_statics_manifest_mkdir_failed:' . $dir);
+        }
+        $payload = [
+            'version' => self::MANIFEST_VERSION,
+            'scope' => 'module_prefix_statics',
+            'updated_at' => \gmdate('c'),
+            'deploy' => (string)(Env::system('deploy') ?? ''),
+            'files' => $files,
+        ];
+        $json = \json_encode($payload, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_SLASHES | \JSON_PRETTY_PRINT);
+        $tmp = $path . '.tmp.' . \getmypid();
+        if (@\file_put_contents($tmp, $json) === false) {
+            throw new \RuntimeException('theme_origin_watch_module_statics_manifest_write_failed:' . $tmp);
+        }
+        if (!@\rename($tmp, $path)) {
+            @\unlink($tmp);
+            throw new \RuntimeException('theme_origin_watch_module_statics_manifest_rename_failed:' . $path);
+        }
     }
 }

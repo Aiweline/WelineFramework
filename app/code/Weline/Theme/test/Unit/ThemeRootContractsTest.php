@@ -733,6 +733,9 @@ final class ThemeRootContractsTest extends TestCase
             'ThemeCategoryLayoutWidth::testCategoryLayoutUsesSharedContentWidthToken' => function () {
             $this->assert_ThemeCategoryLayoutWidth_testCategoryLayoutUsesSharedContentWidthToken();
         },
+            'ThemeBackendPreferenceInflightBypass::testPersistUsesNativeFetchAndCoalesce' => function () {
+            $this->assert_ThemeBackendPreferenceInflightBypass_testPersistUsesNativeFetchAndCoalesce();
+        },
             'ThemeColorMode::testUiTwoUsesOneNativeThemeRuntime' => function () {
             $this->setUp_ThemeColorMode();
             $this->assert_ThemeColorMode_testUiTwoUsesOneNativeThemeRuntime();
@@ -1155,6 +1158,9 @@ final class ThemeRootContractsTest extends TestCase
         },
             'ThemeSemanticColorBridge::testHardConstraintsForbidPrivateColorsOnBaseComponents' => function () {
             $this->assert_ThemeSemanticColorBridge_testHardConstraintsForbidPrivateColorsOnBaseComponents();
+        },
+            'ThemeSemanticColorBridge::testBackendPaletteDisksKeepSchemeKeyParity' => function () {
+            $this->assert_ThemeSemanticColorBridge_testBackendPaletteDisksKeepSchemeKeyParity();
         },
             'ThemeSetupScopedContextFactory::testUpgradeUsesTheConcreteScopedEditorContextFactory' => function () {
             $this->assert_ThemeSetupScopedContextFactory_testUpgradeUsesTheConcreteScopedEditorContextFactory();
@@ -3155,13 +3161,18 @@ private function assert_LayoutCriticalCss_testPartialsEnsuresCssReadyWhenFoucPen
 
 private function assert_LayoutCriticalCss_testBodyEndDeclaresThemeChromeModules(): void
 {
-    $body = (string) file_get_contents(BP . 'app/code/Weline/Theme/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml');
-    self::assertStringContainsString('data-weline-load="themePrepaint,welineUi"', $body);
+    // Amazon-style: Theme chrome JS is idle-loaded from footer storefront-tail, not body-end.
+    $tail = (string) file_get_contents(BP . 'app/code/Weline/Theme/view/theme/frontend/widgets/footer/theme-storefront-tail/default.phtml');
+    self::assertStringContainsString('data-weline-load="themePrepaint,welineUi"', $tail);
     $modules = (string) file_get_contents(BP . 'app/code/Weline/Theme/view/statics/frontend/weline.modules.js');
     self::assertStringContainsString('themePrepaint:', $modules);
     self::assertStringContainsString('welineUi:', $modules);
+    self::assertStringContainsString('type: "module"', $modules);
     self::assertStringContainsString('Weline_Theme::ui/weline-theme-prepaint.js', $modules);
     self::assertStringContainsString('Weline_Theme::ui/weline-ui.js', $modules);
+    $base = (string) file_get_contents(BP . 'app/code/Weline/Frontend/view/statics/base/weline.modules.js');
+    self::assertStringContainsString('welineUi:', $base);
+    self::assertStringContainsString('type: "module"', $base, 'base modules must mark welineUi as ESM so ModuleLoader sets script.type');
 }
 
 private function setUp_LayoutSeoFallbackBridge(): void
@@ -4858,6 +4869,34 @@ private function assert_ThemeCategoryLayoutWidth_testCategoryLayoutUsesSharedCon
     $this->assertStringNotContainsString('max-width: var(--layout-max-width, 1600px);', $content);
 }
 
+/**
+ * Active lock: backend theme preference POST must bypass Weline.Api MAX_IN_FLIGHT=1
+ * (rapid 色系/主题切换 otherwise toasts "too many in-flight requests for POST .../theme-config/set").
+ */
+private function assert_ThemeBackendPreferenceInflightBypass_testPersistUsesNativeFetchAndCoalesce(): void
+{
+    $sources = [
+        BP . 'app/code/Weline/Theme/view/ui/js/weline-ui.js',
+        BP . 'app/code/Weline/Theme/view/statics/ui/weline-ui.js',
+        BP . 'app/code/Weline/Admin/view/statics/assets/js/app.js',
+    ];
+    foreach ($sources as $path) {
+        self::assertFileExists($path, 'Missing theme preference persist source: ' . $path);
+        $src = (string) file_get_contents($path);
+        self::assertStringContainsString('theme-config/set', $src, $path);
+        self::assertStringContainsString('__welineNativeFetch', $src, $path);
+        self::assertStringContainsString('WelineNativeFetch', $src, $path);
+    }
+    $runtime = (string) file_get_contents(BP . 'app/code/Weline/Theme/view/ui/js/weline-ui.js');
+    self::assertStringContainsString('backendPersistLatest', $runtime);
+    self::assertStringContainsString('function persistBackendThemePreference(preference)', $runtime);
+    self::assertStringContainsString('site.url_host', $runtime);
+    self::assertStringContainsString("'/system/theme-config/set'", $runtime);
+    self::assertStringNotContainsString("Weline.Api.call('theme', 'setBackendThemeMode'", $runtime);
+    $welineJs = (string) file_get_contents(BP . 'app/code/Weline/Backend/view/statics/js/weline.js');
+    self::assertStringContainsString('url-backend.js?v=rebuild5', $welineJs);
+}
+
 private function setUp_ThemeColorMode(): void
 {
     parent::setUp();
@@ -4882,6 +4921,11 @@ private function assert_ThemeColorMode_testUiTwoUsesOneNativeThemeRuntime(): voi
     self::assertStringContainsString('function persistBackendThemePreference(preference)', $runtime);
     self::assertStringContainsString("'theme-mode-switch': preference", $runtime);
     self::assertStringContainsString('system/theme-config/set', $runtime);
+    // ThemeConfig/Set must bypass Backend fetch worker MAX_IN_FLIGHT=1 so rapid
+    // preference / 色系 switches do not toast "too many in-flight requests".
+    self::assertStringContainsString('__welineNativeFetch: true', $runtime);
+    self::assertStringContainsString('WelineNativeFetch', $runtime);
+    self::assertStringContainsString('backendPersistLatest', $runtime);
     self::assertStringNotContainsString("Weline.Api.call('theme', 'setBackendThemeMode'", $runtime);
     // Storefront must not follow OS dark into near-black body canvas (#020617).
     self::assertStringContainsString("const area = root.dataset.wArea || 'frontend';", $prepaint);
@@ -5022,7 +5066,18 @@ private function assert_ThemeColorMode_testHeadsLoadOnlyExplicitUiTwoAssetsAndNo
     self::assertSame(1, substr_count($backend, 'colors/_light.css'));
     self::assertSame(1, substr_count($backend, 'colors/_default.css'));
     self::assertSame(1, substr_count($backend, 'colors/_dark.css'));
+    self::assertLessThan(strpos($backend, 'colors/_default.css'), strpos($backend, 'colors/_light.css'), 'Backend: default base before light mode overlay.');
+    self::assertLessThan(strpos($backend, 'colors/_light.css'), strpos($backend, 'colors/_dark.css'), 'Backend: light before dark; uncovered leaves inherit default.');
     self::assertLessThan(strpos($backend, 'weline-foundation.css'), strpos($backend, 'colors/_default.css'), 'Backend palette must load before foundation CSS.');
+    $packSrc = $this->read_ThemeColorMode('app/code/Weline/Theme/Service/ThemeHeadChromeCssPack.php');
+    self::assertStringContainsString('theme-head-chrome-v9', $packSrc);
+    $packTokens = strpos($packSrc, 'self::PACK_TOKENS => [');
+    $packSf = strpos($packSrc, 'self::PACK_STOREFRONT => [');
+    self::assertNotFalse($packTokens);
+    self::assertNotFalse($packSf);
+    $packTokensBlock = substr($packSrc, $packTokens, $packSf - $packTokens);
+    self::assertLessThan(strpos($packTokensBlock, 'colors/_default.css'), strpos($packTokensBlock, 'colors/_ink.css'));
+    self::assertLessThan(strpos($packTokensBlock, 'colors/_ink.css'), strpos($packTokensBlock, 'colors/_light.css'));
     foreach (['default.phtml', 'minimal.phtml', 'assets-suffix.phtml'] as $head) {
         $frontend = $this->read_ThemeColorMode('app/code/Weline/Theme/view/theme/frontend/partials/head/' . $head);
         // Default Theme Amazon-style: Theme chrome JS not in head (modules / body-end).
@@ -5036,9 +5091,10 @@ private function assert_ThemeColorMode_testHeadsLoadOnlyExplicitUiTwoAssetsAndNo
         self::assertSame(1, substr_count($frontend, 'colors/_default.css'));
         self::assertSame(1, substr_count($frontend, 'colors/_ink.css'));
         self::assertSame(1, substr_count($frontend, 'colors/_dark.css'));
-        self::assertLessThan(strpos($frontend, 'colors/_default.css'), strpos($frontend, 'colors/_light.css'), 'Default inheritable palette must load after light mode base.');
-        self::assertLessThan(strpos($frontend, 'colors/_ink.css'), strpos($frontend, 'colors/_default.css'), 'Brand ink overlay must load after the default semantic contract.');
-        self::assertLessThan(strpos($frontend, 'colors/_dark.css'), strpos($frontend, 'colors/_ink.css'), 'The ink brand palette must load before dark mode so dark tokens can override.');
+        // default 底盘 → brand → light 覆盖 → dark 覆盖；未覆盖继承 default
+        self::assertLessThan(strpos($frontend, 'colors/_default.css'), strpos($frontend, 'colors/_ink.css'), 'Brand ink overlay must load after the default semantic contract.');
+        self::assertLessThan(strpos($frontend, 'colors/_ink.css'), strpos($frontend, 'colors/_light.css'), 'Light mode overlay must load after default+brand so it only overrides mode leaves.');
+        self::assertLessThan(strpos($frontend, 'colors/_light.css'), strpos($frontend, 'colors/_dark.css'), 'Dark mode overlay must load last so it can override light/default leaves.');
         self::assertDoesNotMatchRegularExpression('/<script(?:\s[^>]*)?>\s*\(function/s', $frontend);
         self::assertStringNotContainsString('assets/js/theme.js', $frontend);
         self::assertStringContainsString('Weline_Theme::theme/frontend/assets/css/theme.css', $frontend);
@@ -7633,6 +7689,38 @@ private function assert_ThemeSemanticColorBridge_testHardConstraintsForbidPrivat
     $catalog = $this->read_ThemeSemanticColorBridge('app/code/Weline/Ai/Mcp/src/HardConstraintsCatalog.php');
     self::assertStringContainsString("'id' => 'theme_base_components_token_only'", $catalog);
     self::assertStringContainsString('basic/foundation components', $catalog);
+}
+
+private function assert_ThemeSemanticColorBridge_testBackendPaletteDisksKeepSchemeKeyParity(): void
+{
+    $extract = static function (string $relative): array {
+        $css = file_get_contents(BP . '/' . $relative);
+        self::assertIsString($css, $relative . ' must be readable');
+        preg_match_all('/(--[a-zA-Z0-9_-]+)\s*:/', $css, $matches);
+
+        return array_values(array_unique($matches[1] ?? []));
+    };
+
+    $light = $extract('app/code/Weline/Theme/view/theme/backend/colors/_light.css');
+    $dark = $extract('app/code/Weline/Theme/view/theme/backend/colors/_dark.css');
+    $default = $extract('app/code/Weline/Theme/view/theme/backend/colors/_default.css');
+    $ink = $extract('app/code/Weline/Theme/view/theme/backend/colors/_ink.css');
+    $variables = $extract('app/code/Weline/Theme/view/theme/backend/variables/_colors.css');
+
+    sort($light);
+    sort($dark);
+    sort($default);
+    sort($ink);
+
+    // 架构：_default 唯一底盘；light/dark 只覆盖。暗色盘须覆盖 default 全部叶子（防浅色字面漏到暗色）。
+    // light 可少于 dark（亮色多靠继承 default）；dark 须 ⊇ light 中独有键，便于 Editor 切 scheme 不丢键。
+    self::assertSame([], array_values(array_diff($default, $dark)), 'backend dark must override every default brand leaf');
+    self::assertSame([], array_values(array_diff($light, $dark)), 'backend dark must cover every light mode-disk key');
+    self::assertSame($default, $ink, 'backend brand disks default/ink must expose the same token keys (Editor scheme switch)');
+
+    $palette = array_values(array_unique(array_merge($light, $dark, $default)));
+    $missingFromVariables = array_values(array_diff($palette, $variables));
+    self::assertSame([], $missingFromVariables, 'backend variables/_colors must resolve every colors/* palette key');
 }
 
 private function extractBackendAreaBlock_ThemeSemanticColorBridge(string $foundation): string

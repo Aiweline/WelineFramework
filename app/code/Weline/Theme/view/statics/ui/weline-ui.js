@@ -364,6 +364,11 @@ function resolveBackendThemeConfigUrl() {
     if (typeof window.site !== 'undefined' && typeof window.site.buildUrl === 'function') {
         return window.site.buildUrl('system/ThemeConfig/Set');
     }
+    // site.url_host already includes the admin area (same as Runtime.backendUrl).
+    // Do not call backend_url() here: older url-backend builds prepend area again → 404.
+    if (window.site?.url_host) {
+        return `${String(window.site.url_host).replace(/\/+$/, '')}/system/theme-config/set`;
+    }
     if (typeof window.backend_url === 'function') {
         return window.backend_url('system/theme-config/set');
     }
@@ -378,11 +383,19 @@ async function persistBackendThemePreference(preference) {
     if (window.site?.csrf_token) {
         headers['X-CSRF-TOKEN'] = String(window.site.csrf_token);
     }
-    const response = await fetch(resolveBackendThemeConfigUrl(), {
+    // Prefer native fetch: Backend monkey-patches window.fetch into Weline.Api
+    // with MAX_IN_FLIGHT=1 per METHOD+pathname. Rapid theme/色系 preference
+    // switches share POST .../theme-config/set and would otherwise toast
+    // "too many in-flight requests". Same bypass pattern as Mail enterprise.
+    const fetchImpl = typeof window.WelineNativeFetch === 'function'
+        ? window.WelineNativeFetch
+        : fetch;
+    const response = await fetchImpl(resolveBackendThemeConfigUrl(), {
         method: 'POST',
         headers,
         body: JSON.stringify({'theme-mode-switch': preference}),
         credentials: 'same-origin',
+        __welineNativeFetch: true,
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || Number(result.code) >= 400 || result.success === false) {
@@ -422,18 +435,35 @@ function initializeThemePreference() {
             return normalize(root.dataset.themePreference);
         }
     };
+    // Last-write-wins serialize for backend preference POSTs (rapid 色系/主题连点).
+    let backendPersistTail = Promise.resolve();
+    let backendPersistLatest = null;
     const setPreference = async (value) => {
         const preference = normalize(value);
         if (String(value) !== preference) {
             throw new TypeError('Theme preference must be system, light or dark.');
         }
         if (area === 'backend') {
-            await persistBackendThemePreference(preference);
-        } else {
-            try {
-                localStorage.setItem(storageKey, preference);
-            } catch (_error) {
-            }
+            backendPersistLatest = preference;
+            const run = async () => {
+                const next = backendPersistLatest;
+                if (next == null) {
+                    return apply(normalize(root.dataset.themePreference));
+                }
+                backendPersistLatest = null;
+                await persistBackendThemePreference(next);
+                // A newer click may have queued while we awaited; keep draining.
+                if (backendPersistLatest != null) {
+                    return run();
+                }
+                return apply(next);
+            };
+            backendPersistTail = backendPersistTail.then(run, run);
+            return backendPersistTail;
+        }
+        try {
+            localStorage.setItem(storageKey, preference);
+        } catch (_error) {
         }
         return apply(preference);
     };
@@ -456,13 +486,18 @@ function initializeThemePreference() {
         if (!(trigger instanceof HTMLButtonElement) || trigger.disabled) return;
         const preference = trigger.dataset.wThemePreference || '';
         if (!Weline.Theme.isSupportedPreference(preference)) return;
-        trigger.disabled = true;
+        const triggers = document.querySelectorAll('[data-w-theme-preference]');
+        triggers.forEach((el) => {
+            if (el instanceof HTMLButtonElement) el.disabled = true;
+        });
         try {
             await setPreference(preference);
         } catch (error) {
             Weline.UI?.toast.error(error instanceof Error ? error.message : String(error));
         } finally {
-            trigger.disabled = false;
+            triggers.forEach((el) => {
+                if (el instanceof HTMLButtonElement) el.disabled = false;
+            });
         }
     });
     document.addEventListener('weline:theme:change', (event) => {

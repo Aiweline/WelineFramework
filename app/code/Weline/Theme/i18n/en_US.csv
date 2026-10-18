@@ -889,6 +889,59 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
+内容标题,"Section title"
+面包屑,"bread crumbs"
+分类,Classification
+分类展示图,"Category showcase image"
+查看全部,"View all"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
+官方社交媒体,"Official social media"
+商品,Products
+查看商品图,"View product image"
+查看规格图,"View spec images"
+减少数量,"Decrease quantity"
+数量,Quantity
+增加数量,"Increase quantity"
+购物车是空的,"Shopping cart is empty"
+"浏览%1 %2件商品","Browse %1 · %2 items"
+零售车,零售车
+批发车,批发车
+继续购物,"Continue shopping"
+小计,Subtotal
+去结算,"Proceed to Checkout"
+正在前往结算...,"Proceeding to checkout..."
+查看购物车,"View cart"
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+运费将在结算时计算,"Shipping calculated at checkout"
+税费,Tax
+正在加载购物车...,"Loading cart..."
+正在更新购物车...,"Updating cart..."
+商品小计,"Goods subtotal"
+本次应付定金,"Deposit due now"
+本单共计,"Order total"
+优惠券,Coupon
+叠加优惠,"Stacked discount"
+自动优惠,"Automatic discount"
+"还差 %1 包邮","You're %1 away from free shipping"
+已享包邮,"You've unlocked free shipping"
+收起明细,"Collapse details"
+展开明细,"Expand details"
+零售,Retail
+迷你购物车金额小计,"Mini-cart money summary"
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
+查看更多,"View more"
+距离结束,"Ends in"
+时,Hour
+分,Minute
+秒,Second
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
+天,Day(s)
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -964,7 +1017,6 @@ ERROR,ERROR
 分页导航,"Pagination navigation"
 缺货,"Out of Stock"
 联系询价,联系询价
-面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 我的,mine
 账户及心愿单,"Accounts and Wishlists"
@@ -980,9 +1032,6 @@ Weline,Weline
 搜索,Search
 切换语言,"Switch Language"
 切换货币,"Switch Currency"
-分类,Classification
-分类展示图,"Category showcase image"
-查看全部,"View all"
 导航菜单,"Navigation menu"
 我的账户,"My account"
 我的收藏,"My Favorites"
@@ -992,12 +1041,8 @@ Weline,Weline
 "示例商品 1","Example Item 1"
 "示例商品 2","Example Item 2"
 "示例商品 3","Example Item 3"
-购物车是空的,"Shopping cart is empty"
 去购物,"Go Shopping"
 删除,delete
-小计,Subtotal
-查看购物车,"View cart"
-去结算,"Proceed to Checkout"
 关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
 微信二维码,"WeChat QR code"
@@ -1023,8 +1068,6 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1046,25 +1089,25 @@ Weline,Weline
 "安全注册 · 隐私受保护","Secure registration · Privacy protected"
 注册品牌文案,"Registration brand copy"
 商品分类,"Product classification"
-女士汉服,"Women's Hanfu"
-明制汉服,"Ming Dynasty Hanfu"
-宋制汉服,"Song Dynasty Hanfu"
-唐制汉服,"Tang Dynasty Hanfu"
-男士汉服,"Men's Hanfu"
-道袍与直裰,"Daopao & Zhiduo Robes"
-曳撒与贴里,"Yesa & Tieli Robes"
-圆领袍,"Round-Collar Robes"
-儿童汉服,"Children's Hanfu"
-女童汉服,"Girls' Hanfu"
-男童汉服,"Boys' Hanfu"
+女装,"Women's Clothing"
+上装,Tops
+下装,Bottoms
+套装,套装
+男装,"Men's clothing"
+外套,coat
+内搭,内搭
+长袍,长袍
+童装,"Children's Clothing"
+女童,女童
+男童,男童
 亲子系列,"Family Matching"
-汉服配饰,"Hanfu Accessories"
-发簪与发冠,"Hairpins & Crowns"
-腰带与禁步,"Belts & Jinbu Charms"
-绣花鞋履,"Embroidered Shoes"
+配饰,Accessories
+头饰,头饰
+腰带,腰带
+鞋履,鞋履
 按场景选购,"Shop by Occasion"
 婚礼与礼服,"Wedding & Ceremonial"
-节庆与雅集,"Festivals & Gatherings"
+节庆活动,节庆活动
 日常通勤,"Everyday commute"
 件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
@@ -1077,11 +1120,6 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-天,Day(s)
-时,Hour
-分,Minute
-秒,Second
-内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
@@ -1098,15 +1136,9 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
-查看更多,"View more"
-距离结束,"Ends in"
 精选轮播,"Featured Carousel"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
-官方社交媒体,"Official social media"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1128,34 +1160,6 @@ Logo,Logo
 下一条,Next
 全部商品,"Shop All"
 面包屑导航,Breadcrumbs
-商品,Products
-查看商品图,"View product image"
-查看规格图,"View spec images"
-减少数量,"Decrease quantity"
-数量,Quantity
-增加数量,"Increase quantity"
-"浏览%1 %2件商品","Browse %1 · %2 items"
-零售车,零售车
-批发车,批发车
-继续购物,"Continue shopping"
-正在前往结算...,"Proceeding to checkout..."
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-运费将在结算时计算,"Shipping calculated at checkout"
-税费,Tax
-正在加载购物车...,"Loading cart..."
-正在更新购物车...,"Updating cart..."
-商品小计,"Goods subtotal"
-本次应付定金,"Deposit due now"
-本单共计,"Order total"
-优惠券,Coupon
-叠加优惠,"Stacked discount"
-自动优惠,"Automatic discount"
-"还差 %1 包邮","You're %1 away from free shipping"
-已享包邮,"You've unlocked free shipping"
-收起明细,"Collapse details"
-展开明细,"Expand details"
-零售,Retail
-迷你购物车金额小计,"Mini-cart money summary"
 关闭通知,"Close notification"
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
@@ -1171,10 +1175,6 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
 加载中,loading
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
@@ -2330,18 +2330,28 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+圆领袍,"Round-Collar Robes"
+发簪与发冠,"Hairpins & Crowns"
+腰带与禁步,"Belts & Jinbu Charms"
+绣花鞋履,"Embroidered Shoes"
+节庆与雅集,"Festivals & Gatherings"
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+注册,Register
+登录页工具,"Login page tools"
+登录,"Log in"
+"Search results","Search results"
+Search,Search
+"Search · 检索","Search · 检索"
+Search…,Search…
+搜索筛选,"Search and filter"
+尺码指南,尺码指南
 Pagination,Pagination
 Previous,Previous
 "Page %{1} of %{2}","Page %{1} of %{2}"
 Next,Next
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
-搜索筛选,"Search and filter"
 "footer-above 槽默认内容；未覆盖时回退 Theme trust-badges，供其它模块覆盖或追加。","Default content for the footer-above slot; falls back to Theme trust-badges when uncovered; other modules may override or append."
-登录,"Log in"
-登录页工具,"Login page tools"
 "在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。全局悬浮层 DOM 与可编辑 w:slot（storefront-float-start/end）在 footer partial；本 Hook 仅保留店面占位图与 float-layer JS 加载。","在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。全局悬浮层 DOM 与可编辑 w:slot（storefront-float-start/end）在 footer partial；本 Hook 仅保留店面占位图与 float-layer JS 加载。"
 搜索商品、分类与关键词...,"Search products, categories, and keywords..."
-"寻衣 · 形制 · 织绣","Find attire · silhouette · embroidery"
 "Decision information pack · Digital delivery after payment","Decision information pack · Digital delivery after payment"
 "Attraction ticket · Handpicked for independent travelers","Attraction ticket · Handpicked for independent travelers"
 "更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿）","Upgrade theme statics (design overlay + module view/theme; omit -t for scope-bound themes only; default published+draft)"
@@ -2368,7 +2378,6 @@ Next,Next
 主题布局预固化,"Solidifying theme layouts"
 "未找到激活主题，请用 -t/--theme 指定主题名。","未找到激活主题，请用 -t/--theme 指定主题名。"
 "更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时发布前台+后台激活主题）","更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时发布前台+后台激活主题）"
-注册,Register
 "画布与默认预览跟当前后台 Host：本站本机域上开编辑器则用当前域；项目 Host 上开则用 /~site/{站点}。真实预览靠 Token，跨 Host 一般不掉后台登录；正式/外部域名可选，线上可能看不到本机草稿。","Canvas and default preview follow the current admin Host: use the current domain when the editor is already on this site's local domain; use /~site/{site} on the project Host. Live preview relies on the Token, so a cross-Host open usually does not drop admin login; formal/external domains are optional and may not show local drafts."
 "默认预览：走项目壳 /~site/{站点}，保证能正确预览当前要发布的版本。编辑器画布也固定用此通道，不依赖外部域名。","Default preview uses project shell /~site/{site} so you always see the version about to publish. The editor canvas uses the same channel and does not depend on external domains."
 本机独立域名可选；编辑与默认预览请优先「本机项目壳（/~site）」。,"Optional local bound domain; prefer the local project shell (/~site) for editing and default preview."
@@ -2617,11 +2626,9 @@ history,history
 已恢复到原始布局,"Restored to original layout"
 "已备份为 %{name}","Backed up as %{name}"
 版本已发布,"Version Published"
-汉服分类展示图,"Hanfu category showcase image"
 开始搬迁文件...,"Start moving files..."
 更新主题文件！,"Update theme file!"
 晒出你的穿搭,"Share your look"
-晒出你的汉服穿搭,"Share your Hanfu look"
 SALE,SALE
 查看全部新品,"View all new products"
 限时抢购，错过不再,"Flash Sale, Don't Miss Out"
@@ -2651,7 +2658,6 @@ SALE,SALE
 恢复到主题模板原始布局（自动创建备份）,"Restore theme template to original layout (auto-create backup)"
 "清理 Theme 运行时与预览缓存（不改布局）","Clear Theme runtime and preview caches (layout unchanged)"
 "东方衣冠 · 全球配送","Eastern attire · worldwide shipping"
-寻衣,"Find attire"
 "No available frontend theme. Please activate or select one first.","No available frontend theme. Please activate or select one first."
 "Selected backend theme is unavailable, fallback to the active backend theme.","Selected backend theme is unavailable, fallback to the active backend theme."
 主题预览地址不可用：%{1},"Theme preview address is unavailable: %{1}"
@@ -2745,7 +2751,6 @@ Copied,Copied
 返回首页,"Return to home page"
 选购答疑,"Shopping Q&A"
 商品问答,"Product Q&A"
-关于形制、尺码、面料或穿着场景的问题，请进入对应商品详情页查看已公开的回答；需要订单协助时，可直接联系客户服务。,"For questions about silhouette, size, fabric, or wear occasions, open the product detail page for published answers; contact customer service for order help."
 按分类选购,"Shop by category"
 联系客户服务,"Contact customer service"
 问答使用说明,"How Q&A works"
@@ -2784,7 +2789,6 @@ SSL安全,"SSL security"
 订单列表,"order list"
 时令新章,"Seasonal new chapter"
 新的活动正在筹备,"A new campaign is being prepared"
-当前没有可展示的限时活动。您仍可浏览在售汉服、配饰与本季新作；活动上线后会在此处集中呈现。,"No limited-time campaigns to show right now. You can still browse hanfu, accessories, and this season’s new pieces; campaigns will appear here when live."
 浏览全部商品,"Shop All"
 查看购物帮助,"View shopping help"
 订单确认,"Order Confirmation"
@@ -2845,9 +2849,6 @@ Product,Product
 视频加载中...,"Video loading..."
 "浏览%{1} %{2}件商品","Browse %{1} · %{2} items"
 无需再次激活,"No need to activate again"
-搜索汉服、形制与配饰...,"Search Hanfu, garment forms, and accessories..."
-热门形制,"Popular Hanfu Styles"
-汉服文化,"Hanfu Culture"
 "© %{1} Weline Framework. %{2}","© %{1} Weline Framework. %{2}"
 "开始发布前台 404 静态页（按语言逐个渲染，可能较慢）…","Publishing storefront 404 static pages (render per locale; may be slow)…"
 "前台 404 静态页发布完成：共 %{count} 个语言","Storefront 404 static publish completed: %{count} locales"
@@ -2858,12 +2859,9 @@ Product,Product
 阅读本站隐私、Cookie、退款与相关法律政策说明。,"Read this site’s privacy, Cookie, refund, and related legal policy statements."
 了解我们如何收集、使用与保护您的个人信息。,"Learn how we collect, use, and protect your personal information."
 阅读使用本站服务前需要了解的条款与条件。,"Read the terms and conditions you should know before using this site’s services."
-查看配送、退换与购物相关说明，帮助顺利完成汉服选购。,"View shipping, returns, and shopping guidance to complete your hanfu purchase smoothly."
 了解可用支付方式、账单与安全保障说明。,"Learn about available payment methods, billing, and security protections."
 查找订单、物流、退换与账户相关常见问题。,"Find FAQs about orders, shipping, returns, and your account."
-查看已选汉服商品、调整数量并进入结算。,"Review selected hanfu items, adjust quantities, and proceed to checkout."
 登录或注册账户，管理订单与收藏。,"Sign in or register to manage orders and favorites."
-浏览%{1}相关信息，了解汉服选购与服务说明。,"Browse %{1}-related information for hanfu shopping and service guidance."
 "前台 404 静态页生成为空，跳过：%{lang}","Storefront 404 static generation empty; skipped: %{lang}"
 已改为本布局独立页头/页脚,"Switched this layout to an independent header/footer"
 告诉我们你需要什么，支持团队会将请求分派给合适的处理人。,"Tell us what you need and the support team will route the request to the appropriate handler."
@@ -2984,41 +2982,23 @@ Product,Product
 退换政策,"Returns policy"
 "热门 FAQ 主题","Popular FAQ topics"
 目录,Contents
-精选明制、宋制、唐制汉服与马面裙，服务日常、节庆与礼仪场景。,"Curated Ming, Song, and Tang Hanfu with mamian skirts for everyday, festival, and ceremonial wear."
-我们以形制为准绳、以织造为根基，把可穿的传统美学带给全球穿搭者。,"Guided by silhouette and craft, we bring wearable traditional aesthetics to dressers worldwide."
 明·宋·唐,"Ming · Song · Tang"
-形制谱系,"Silhouette lineages"
-马面裙,"Mamian Skirts"
 披帛,"Pibo sash"
 高频爆款,"Signature bestsellers"
 全球,Global
 国际直邮,"Worldwide shipping"
-形制为本,"Silhouette first"
-先辨明制、宋制、唐制与穿法，再谈款式与场景，让选购有据可依。,"Start with Ming, Song, or Tang silhouettes and wear methods before style and occasion."
 织艺可感,"Craft you can feel"
 云锦、宋锦、妆花与苏绣不是标签堆砌，而是可看见、可触碰的材质表达。,"Yunjin, Songjin, zhuanghua, and Suzhou embroidery are tangible materials, not empty labels."
 可穿日常,"Wearable every day"
-礼仪与出游兼顾：从入门襦裙到成套明制，覆盖通勤到节庆。,"From starter ruqun to full Ming sets for commute through ceremony."
 全球履约,"Global fulfillment"
 独立站多语言与跨境履约并行，让海外穿搭者也能安心下单。,"Multilingual storefronts and cross-border fulfillment for overseas dressers."
-从形制科普起步，建立汉服入门选购标准。,"Began with silhouette education and clear Hanfu buying standards."
-扩展马面裙、袄裙与配饰矩阵，覆盖更多日常场景。,"Expanded mamian, aoqun, and accessory ranges for daily wear."
 完善尺码、养护与退换指引，服务海外独立站顾客。,"Refined sizing, care, and returns guidance for overseas shoppers."
-上线水墨中国风主题与国际化店面，打磨可上线的汉服商城体验。,"Launched an ink-wash theme and international storefront for a launch-ready Hanfu shop."
-浏览汉服,"Browse Hanfu"
 我们的承诺,"Our promise"
-形制清晰、尺码可依、养护有指引——让每一次穿汉服都踏实从容。,"Clear silhouettes, reliable sizing, and care guides for every Hanfu wear."
 品牌概览,"Brand snapshot"
 我们的故事,"Our story"
-从形制科普到可穿日常，我们把顾客对汉服的疑问，沉淀成更清晰的选购路径与更可靠的履约体验。,"From silhouette literacy to wearable daily looks, we turn Hanfu questions into clearer buying paths."
-好的汉服体验不靠运气：形制标注清楚、面料说明可信、尺码有据、物流可追踪。,"Great Hanfu shopping is not luck: clear silhouettes, honest fabrics, sized fits, trackable shipping."
 团队围绕「可穿的传统美学」打磨每一个关键路径——从首页发现到订单完成。,"Our team crafts every journey around wearable tradition—from discovery to order complete."
 我们的价值观,"Our values"
-这些原则指导我们如何做形制选品、如何服务穿搭者，以及如何持续打磨独立站体验。,"These principles guide silhouette selection, dresser care, and storefront craft."
 发展历程,"Our journey"
-关键节点记录我们如何把汉服从兴趣走进可上线的国际化商城。,"Milestones show how Hanfu moved from interest to a launch-ready international shop."
-准备好穿上第一套汉服了吗？,"Ready for your first Hanfu set?"
-从明制马面裙到唐风襦裙，挑选适合你的形制，或联系我们了解尺码与养护。,"From Ming mamian skirts to Tang-inspired ruqun—pick your silhouette or ask about sizing and care."
 前往帮助中心,"Go to help center"
 我们非常重视您的隐私保护。本隐私政策说明我们如何收集、使用、存储和保护您的个人信息。请仔细阅读，以了解我们对个人信息的处理方式。,"We take your privacy seriously. This privacy policy explains how we collect, use, store, and protect your personal information. Please read carefully to understand how we process personal data."
 本政策构成您与本网站之间关于个人信息处理的重要说明。请结合目录逐章阅读；如有疑问，可通过帮助中心或联系入口与我们沟通。,"This policy is an important statement between you and this website about personal information processing. Read it chapter by chapter with the table of contents; contact us via the help center or contact entry if you have questions."
@@ -3182,7 +3162,6 @@ Product,Product
 "5.1 因商品质量问题或描述不符导致的退货，往返运费通常由我们或商家承担（以审核结论为准）。","5.1 For returns due to quality issues or description mismatch, round-trip shipping is usually covered by us or the merchant (subject to review)."
 "5.2 因个人原因退货，退货运费一般由买家承担，除非当地强制性法规另有规定。","5.2 For returns for personal reasons, return shipping is generally paid by the buyer unless mandatory local law says otherwise."
 "6.1 贴身衣物、定制商品、数字内容、一经拆封无法退换的卫生类商品等，可能不适用无理由退货，请以下单页提示为准。","6.1 Intimate apparel, custom goods, digital content, and sealed hygiene items may be ineligible for no-reason returns; follow the checkout-page notice."
-"6.2 汉服等服饰类请关注尺码表与养护说明，降低因尺码或穿着不当导致的退换争议。","6.2 For hanfu and apparel, check the size chart and care guide to reduce disputes from sizing or improper wear."
 如需协助办理退款或查询进度，请通过订单详情、帮助中心或「联系我们」入口提交工单，并提供订单号与问题说明。,"For refund help or status, submit a ticket via order details, Help Center, or Contact Us, and include the order number and issue description."
 如对退款进度或条件有疑问，请通过帮助中心、订单详情或联系我们与客服沟通。,"If you have questions about refund status or conditions, contact support via Help Center, order details, or Contact Us."
 "本页面向您说明我们如何在本网站中使用 Cookie 及相关技术，以及您对 Cookie 的管理选择。","This page explains how we use cookies and related technologies on this website, as well as your choices for managing cookies."
@@ -3369,9 +3348,6 @@ CNY,CNY
 夏季促销,"Summer promotion"
 电子产品,Electronics
 服装鞋帽,"Clothing, Shoes & Hats"
-男装,"Men's clothing"
-女装,"Women's Clothing"
-童装,"Children's Clothing"
 家居生活,"Home & Living"
 家具,Furniture
 家纺,"Home Textiles"
@@ -3468,26 +3444,15 @@ CNY,CNY
 "300 元以上","Over $300"
 暂无浏览记录,"No recently viewed items"
 用户名,Username
-按形制探索适合日常、节庆与礼仪场景的女士汉服,"Explore women's Hanfu by historical style for everyday wear, festivals, and ceremonies."
-端庄利落的立领、马面裙与披风层次,"Structured stand collars, mamian skirts, and elegant outer layers."
 立领长衫,"Stand-Collar Long Robes"
 披风与比甲,"Pifeng & Bijia Layers"
-清雅轻盈的褙子、百迭裙与宋裤搭配,"Graceful beizi jackets, baidie skirts, and Song-style trousers."
-褙子,"Beizi Jackets"
 百迭裙,"Baidie Skirts"
 宋裤,"Song-Style Trousers"
-明快华丽的齐胸襦裙、坦领与圆领款式,"Vibrant qixiong ruqun, tanling necklines, and round-collar robes."
-齐胸襦裙,"Qixiong Ruqun"
-坦领,"Tanling Hanfu"
-晋制汉服,"Jin Dynasty Hanfu"
 飘逸交领、大袖衫与裙装组合,"Flowing cross-collar ruqun, wide-sleeved jackets, and layered skirts."
-交领襦裙,"Cross-Collar Ruqun"
 大袖衫,"Wide-Sleeved Jackets"
 杂裾,"Zaju Robes"
-传统形制与现代日常穿着兼顾的男士系列,"Traditional silhouettes refined for contemporary everyday wear."
 节庆、礼仪与出行皆宜,"Made for festivals, ceremonies, and travel."
 从容雅正的传统衣冠,"Effortless, dignified traditional dress."
-明制风格与利落剪裁,"Clean tailoring with a distinct Ming character."
 日常汉元素,"Everyday Han-Inspired Wear"
 适合通勤与日常搭配,"Easy pieces for workdays and daily styling."
 舒适、安全并适合成长活动的儿童传统服饰,"Comfortable, child-safe traditional clothing made for movement and growth."
@@ -3497,10 +3462,8 @@ CNY,CNY
 按重要时刻与穿着需求快速找到合适的一套,"Find the right ensemble for each moment and dress code."
 旅拍与演出,"Travel Shoots & Performance"
 品牌与文化,"Our Brand & Culture"
-汉服文化指南,"Hanfu Culture Guide"
 新手购物帮助,"First-Time Buyer Guide"
 定制与合作,"Bespoke & Partnerships"
-长安国际页脚,"Chang'an International Footer"
 2026春季新品上市,"2026 spring new product launch"
 探索最新时尚潮流,"Explore the latest fashion trends"
 全场满300减50,"Spend 300, Save 50 Storewide"
@@ -3643,7 +3606,6 @@ T恤,t-shirt
 Polo衫,"Polo shirt"
 长裤,trousers
 短裤,shorts
-外套,coat
 毛衣,sweater
 皮鞋,"leather shoes"
 运动鞋,sneakers
@@ -3651,8 +3613,6 @@ Polo衫,"Polo shirt"
 手表,watch
 包袋,bag
 连衣裙,dress
-上装,Tops
-下装,Bottoms
 半身裙,skirt
 大衣,coat
 高跟鞋,"High heel"
@@ -4007,7 +3967,6 @@ Subscribe,Subscribe
 Docs,Docs
 "Free theme-ready header. Replace this area from any module hook or slot.","Free theme-ready header. Replace this area from any module hook or slot."
 Search...,Search...
-Search,Search
 Account,Account
 Cart,Cart
 "Toggle navigation","Toggle navigation"
@@ -4077,28 +4036,12 @@ Cart,Cart
 预览中未找到该部件，请先刷新预览,"Widget not found in preview; refresh preview first"
 请先安装该应用部件,"Install this application widget first"
 该部件为模板内嵌，无法从此卸载,"Template-inline widget cannot be uninstalled here"
-"桃园清梦 · 明制花鸟套装","Peach Garden Dream · Ming-Style Set"
-烟粉花鸟，上衣与马面裙可选,"Ivory and blush florals, with top and mamian options"
-桃园清梦米白粉色明制上衣与马面裙套装,"Peach Garden Dream ivory-and-pink Ming-style top and mamian set"
-"神龙吟 · 妆花马面裙","Dragon Chant · Zhuanghua Mamian"
-黑红妆花，马面裙与飞机袖可选,"Black-and-red zhuanghua, with mamian and feijixiu options"
-神龙吟黑红妆花明制马面裙造型,"Dragon Chant black-and-red zhuanghua Ming-style mamian look"
 "醉梦夕风 · 仙鹤织金","Evening Wind · Crane Brocade"
 仙鹤织金，单裙与套装可选,"Crane brocade, available as a skirt or coordinated set"
-醉梦夕风深色仙鹤织金马面裙造型,"Evening Wind dark crane-brocade mamian look"
 浏览系列,"Explore collection"
 浏览精选,"Shop Featured"
 按场景选,"Shop by Occasion"
-即刻寻衣,"Find Your Hanfu"
-按汉服品类选购,"Shop Hanfu by Category"
-从准确形制开始选择,"Start with the garment form that matches your needs"
-配饰,Accessories
 套装与场景,"Sets & Occasions"
-女装汉服分类图，展示女性汉服的裙装层次,"Women's Hanfu category image showing layered skirt silhouettes"
-男装汉服分类图，展示男性袍衫轮廓,"Men's Hanfu category image showing robe silhouettes"
-童装汉服分类图，展示儿童尺度汉服,"Children's Hanfu category image showing child-proportioned garments"
-汉服配饰分类图，展示头饰、佩饰与鞋履,"Hanfu accessories category image showing headwear, pendants, and footwear"
-汉服套装分类图，展示完整上下装搭配,"Hanfu sets category image showing a complete coordinated outfit"
 云锦,"Nanjing Yunjin"
 宋锦,"Suzhou Song Brocade"
 蜀锦,"Chengdu Shu Brocade"
@@ -4122,7 +4065,6 @@ Favorites,Favorites
 Register,Register
 "All Categories","All Categories"
 "Open all categories menu","Open all categories menu"
-Hanfu,Hanfu
 "Add to Favorites","Add to Favorites"
 "Add to Compare","Add to Compare"
 "Quick View","Quick View"
@@ -4135,9 +4077,6 @@ Style,Style
 Occasion,Occasion
 Material,Material
 "Spec products","Spec products"
-Ming,Ming
-Tang,Tang
-Song,Song
 Daily,Daily
 Wedding,Wedding
 Festival,Festival
@@ -4146,9 +4085,6 @@ Polyester,Polyester
 Silk,Silk
 Zhijin,Zhijin
 Chiffon,Chiffon
-"Browse ming products and accessories","Browse Ming products and accessories"
-"Browse tang products and accessories","Browse Tang products and accessories"
-"Browse song products and accessories","Browse Song products and accessories"
 "Browse daily products and accessories","Browse daily products and accessories"
 "Browse wedding products and accessories","Browse wedding products and accessories"
 "Browse festival products and accessories","Browse festival products and accessories"
@@ -4157,7 +4093,6 @@ Chiffon,Chiffon
 "Browse silk products and accessories","Browse silk products and accessories"
 "Browse zhijin products and accessories","Browse gold-brocade products and accessories"
 "Browse chiffon products and accessories","Browse chiffon products and accessories"
-汉服,Hanfu
 主视觉标题,"Hero title"
 内容卡片,"Content cards"
 图片相册,"Image gallery"
@@ -4219,7 +4154,6 @@ Chiffon,Chiffon
 "Home, Garden & Furniture","Home, Garden & Furniture"
 浏览相关商品与配件,"Browse related products and accessories"
 浏览全部已发布商品,"Browse all published products"
-长安,Chang'an
 清乾隆黄地龙袍（云锦织造）,"Qing Qianlong yellow-ground dragon robe (Yunjin weaving)"
 "银线嵌入宋锦实物织样（论文图 13）","Song brocade sample with silver-thread inlay (paper fig. 13)"
 唐代联珠对鸟纹蜀锦,"Tang dynasty Shu brocade with pearl roundel and paired birds"
@@ -4235,7 +4169,6 @@ Chiffon,Chiffon
 大小:,Size:
 类型:,Type:
 "帮助中心 | 订单物流退换与支付指南","Help Center | Orders, Shipping, Returns and Payments"
-查找订单进度、物流配送、退换货、支付发票与账户问题的自助指南，快速解决汉服购物常见疑问，支持中英文浏览。,"Self-service guides for order tracking, shipping, returns, payments, invoices, and account issues—quick answers for Hanfu shopping, with multilingual browsing."
 帮助中心分享预览图,"Help Center share preview image"
 帮助文章,"Help article"
 解决方案,Solutions
@@ -4256,9 +4189,6 @@ Chiffon,Chiffon
 发货工作台,"Shipping desk"
 浏览我们的商品分类,"Browse our categories"
 "满 $49 包邮 · 新品上架","Free shipping over $49 · New curated styles"
-"云裳汉服 · 满 ¥299 包邮 · 形制精选上新","Free shipping over $49 · New curated styles"
-"长安汉服 · 满 ¥299 包邮 · 形制精选上新","Free shipping over $49 · New curated styles"
-"长安汉服 · 形制精选上新","Chang'an Hanfu · Curated new styles"
 "欢迎光临！满 ¥299 包邮 · 新客首单立减","Welcome! Free shipping over $49 · New customer discount"
 登录并保存订单,"Sign in and save your order"
 立即订阅,"Subscribe now"
@@ -4319,7 +4249,6 @@ Chiffon,Chiffon
 "6.2 因个人原因（尺码不合适、不喜欢、拍错）在无理由期限内退货：寄回运费由买家承担；包邮活动一般不包含回程运费，除非当地强制性法规另有规定。","6.2 For personal-reason returns within the no-reason window (fit, preference, wrong choice): the buyer pays return shipping; free-shipping offers generally exclude return shipping unless mandatory local law says otherwise."
 "6.3 因地址错误、拒收或长期无人签收导致退回或二次配送的费用，可能由买家承担。","6.3 Costs from wrong address, refusal, or prolonged non-receipt leading to return or redelivery may be borne by the buyer."
 "7.1 贴身衣物、定制商品、数字内容、一经拆封无法退换的卫生类商品等，可能不适用无理由退货，请以下单页提示为准。","7.1 Intimate apparel, custom items, digital content, and unsealed hygiene goods may be ineligible for no-reason returns; follow the product-page notice."
-"7.2 汉服等服饰类请关注尺码表与养护说明，降低因尺码或穿着不当导致的退换争议。","7.2 For hanfu and apparel, please check the size chart and care guide to reduce disputes from sizing or improper wear."
 "8.1 本站经营者公开信息以网站页脚公示及营业执照信息为准；您也可通过下列联系方式联系我们。","8.1 Public operator information is as shown in the site footer and business license details; you may also contact us as follows."
 "1.1 我们向结算页可选地址提供配送服务；偏远或受限地区可能无法下单或需加收费用。","1.1 We ship to addresses available at checkout; remote or restricted areas may be unavailable or incur surcharges."
 "1.2 跨境配送可能受海关、检疫与当地法规限制，清关所需资料由收件人配合提供。","1.2 Cross-border delivery may be limited by customs, quarantine, and local law; the recipient must assist with clearance documents."
@@ -4412,7 +4341,6 @@ Chiffon,Chiffon
 来自顾客的星级口碑,"Star ratings from customers"
 买家评价,"Customer reviews"
 特色产品,"Featured Products"
-裙上桃鸟入画：烟粉远山，上衣与马面可单选成套,"Peach birds from the skirt become misty mountains; top or mamian alone, or as a set"
 裙幅青绿峰与金鹤散作朱砂江山，同系可选,"Teal peaks and golden cranes from the skirt unfold into cinnabar mountains"
 裙裾金山水与蝶影化作夜色泼金，单裙或套装可入藏,"Gold mountains and butterflies from the hem become a night ink wash; skirt or set"
 桃花源意,"Peach Blossom Spring"
@@ -4572,7 +4500,6 @@ Chiffon,Chiffon
 "5.2 适用欧盟或英国法定撤回权时，我们在收到撤回通知后14日内退款；在法律允许时，可等到收到退货或您提供寄回凭证（以较早者为准）再退款。支付机构的到账处理时间另计；其他退款按相应法定期限及确认方案办理。","5.2 Where EU or UK statutory withdrawal rights apply, we refund within 14 days of receiving your withdrawal notice. Where legally permitted, we may withhold the refund until we receive the returned goods or proof of return, whichever is earlier. Your payment provider may require additional processing time. Other refunds follow the applicable legal deadline and agreed resolution."
 "6.2 适用欧盟或英国法定撤回权的整单退货，退款包括原标准配送费用；您自行选择的加急等额外运费差额可不退。直接回程运费仅在下单前已告知且法律允许时由买家承担，不任意扣回原包邮优惠。","6.2 For a full-order return under EU or UK statutory withdrawal rights, the refund includes the original standard delivery charge. The extra cost of an express or other upgraded service you selected need not be refunded. You pay direct return shipping costs only where disclosed before ordering and permitted by law. We do not arbitrarily deduct the original free-shipping discount."
 "6.4 运输延误或轨迹空白时，请联系我们查询。未按承诺发货或未在适用交付期限内送达的订单，按适用规则提供等待、取消或退款处理；清关或承运商延误不自动排除这些权利。","6.4 Contact us if delivery is delayed or tracking has stopped updating. Orders not dispatched as promised or delivered within an applicable deadline will be handled under the relevant rules, including waiting, cancellation or a refund. Customs or carrier delays do not automatically exclude these rights."
-"7.1 个性化商品的撤回权例外仅适用于满足法定条件的实际定制。普通汉服、标准尺码选项或手工工艺不自动属于该例外；任何适用例外均不取消瑕疵、描述不符或其他法定救济。","7.1 An exception to withdrawal rights for personalised goods applies only to actual personalisation that meets the legal conditions. Ordinary hanfu, standard size options or handcrafting do not automatically qualify. No applicable exception removes remedies for defects, misdescription or other statutory claims."
 经营主体,"Legal entity"
 注册地址,"Registered address"
 公司联系邮箱,"Business contact email"
@@ -4619,7 +4546,6 @@ Chiffon,Chiffon
 玉石吊坠,"Jade Pendant"
 五行吊坠,"Five Elements Pendant"
 黑曜石外圈，阴阳缓转——吊坠悬于雾光一侧，佩一件小小的持中。,"Obsidian rim, yin and yang turning slowly — the pendant hangs beside the mist and light. Wear a quiet center."
-明制短袄马面很合身,"Ming-style short jacket & horse-face skirt fit perfectly"
 刺绣大袖衫质感在线,"Heavy embroidery wide sleeves look premium"
 长乐公主试穿很惊艳,"Princess Changle try-on looks stunning"
 做工细致,"Fine craftsmanship"
@@ -4632,32 +4558,23 @@ Chiffon,Chiffon
 款式清爽好搭配,"Fresh look, easy to style"
 发货快，包装完整,"Fast shipping, intact packaging"
 面料舒服，尺码建议对照表,"Soft fabric — check the size chart"
-绣工细致，襦裙版型好看,"Fine embroidery, flattering ruqun cut"
 长乐公主试穿,"Princess Changle try-on"
 刺绣大袖试穿,"Embroidered wide-sleeve try-on"
-明制马面试穿,"Ming horse-face skirt try-on"
 方领短袄试穿,"Square-collar jacket try-on"
 魏晋大袖试穿,"Wei–Jin wide-sleeve try-on"
 礼宴雅集留影,"Banquet gathering snapshot"
-形制顾问,"Style advisor"
-穿搭与形制,"Wear & silhouette"
 工艺与质检,"Craft & QC"
 "面料 · 刺绣 · 成衣","Fabric · embroidery · ready-to-wear"
 "批发 + 单件","Wholesale + single piece"
 去选购,"Shop now"
 了解品牌,"About the brand"
-形制、工艺与履约，陪你选对第一套汉服,"Silhouette, craft, and fulfillment—helping you choose your first Hanfu."
 购买、尺码、配送与养护,"Buying, sizing, shipping & care"
-从明制马面裙到唐风襦裙，按场景给出形制与层次建议，帮你选对第一套汉服。,"From Ming mamian skirts to Tang ruqun, we suggest silhouettes and layering by occasion so you pick the right first set."
 把关织造、刺绣与成衣细节，确保上身气韵与日常穿着兼顾。,"We check weaving, embroidery, and finishing so presence and everyday wear both hold up."
 支持一件起订与批发拿货，协调国际物流、尺码沟通与售后跟进。,"Order one piece or wholesale—we coordinate international shipping, sizing questions, and after-sales."
 可以批发，也可以只买一件吗？,"Can I buy wholesale or just one piece?"
-可以。長安漢服同时服务一件起订的个人买家与批发客户，商品页可切换零售／批发身份后下单。,"Yes. Chang’an Hanfu serves single-piece shoppers and wholesale buyers—switch retail/wholesale on the product page before ordering."
 尺码如何选择？,"How do I choose a size?"
-请对照商品页尺码表，按胸围、腰围与身高选号；不确定时可联系客服，我们会按形制给出建议。,"Use the size chart on the product page (bust, waist, height). Unsure? Contact support for silhouette advice."
 国际配送大概多久？,"How long does international shipping take?"
 视目的地与清关情况，通常在付款后数个工作日内发出；物流单号可在订单中心跟踪。,"Depending on destination and customs, we usually ship within a few business days after payment; track the number in your order center."
-汉服怎么养护？,"How should I care for Hanfu?"
 建议轻柔手洗或专业干洗，避免暴晒与高温烘干；刺绣与袖缘请单独放置，减少勾丝。,"Hand-wash gently or dry-clean; avoid strong sun and high heat. Store embroidery and cuffs separately to reduce snags."
 退换货怎么处理？,"How do returns & exchanges work?"
 未穿用且吊牌完整的商品可按退换政策申请；定制款与贴身衣物规则以政策页为准。,"Unused items with tags can follow the return policy; made-to-order and intimate items follow the policy page."
@@ -4702,13 +4619,11 @@ Chiffon,Chiffon
 一隅安静,"A quiet corner"
 走进这一角,"Enter this corner"
 松身之物,"Things that loosen the body"
-看居家形制,"See lounge forms"
 几道关于日常节奏的短问，帮你找到更贴身的物件。,"A few short questions about your daily rhythm — to find what fits you quietly."
 从此刻开始,"Begin from here"
 道家意象,"Daoist motifs"
 八方各有其位。,"Each direction keeps its place."
 八卦定方，不争先——器物安静地标出方位，心亦可有所归。,"The eight trigrams settle the directions without rushing — a quiet mark for where the mind can return."
-见八卦形制,"See Bagua forms"
 八卦意象,"Bagua motif"
 五行流转，各安其位。,"Five phases turn; each finds its place."
 金木水火土如四季更迭——不求功效传说，只留材质与节奏的平衡感。,"Metal, wood, water, fire, earth like seasons turning — not claims of power, only balance of material and rhythm."
@@ -4886,5 +4801,9 @@ cookie政策,"Cookie Policy"
 更新当前页缓存失败,"Failed to update current page cache"
 "合并布局 bake 的部件 CSS（layout 整页单包 + source 前 N 个阻塞合包、其后延迟合包→/widget-assets/）。自动与开启均始终合包；关闭可显式关掉。","Merge layout-baked widget CSS (one layout page pack + source: first N blocking pack, then deferred pack → /widget-assets/). Auto and On always pack; Off disables."
 "合并布局 bake 的部件 source JS（前 N 个阻塞合包、其后再合包→/widget-assets/）。自动与开启均始终合包；关闭可显式关掉。","Merge layout-baked widget source JS (first N blocking pack, then another pack → /widget-assets/). Auto and On always pack; Off disables."
-按品类浏览明制、宋制、唐制与马面裙，或直接进入全部商品列表。,"Browse Ming, Song, and Tang styles and mamian skirts by category, or go directly to the full product list."
 语言与货币,"Language & Currency"
+"精选上新 · 本季新品","Curated new arrivals · This season"
+当前没有可展示的限时活动。您仍可浏览在售商品、配饰与本季新作；活动上线后会在此处集中呈现。,"No limited-time campaigns to show right now. You can still browse products, accessories, and this season’s new pieces; campaigns will appear here when live."
+查找订单进度、物流配送、退换货、支付发票与账户问题的自助指南，快速解决购物常见疑问，支持中英文浏览。,"Self-service guides for order tracking, shipping, returns, payments, invoices, and account issues—quick answers for shopping, with multilingual browsing."
+"7.1 个性化商品的撤回权例外仅适用于满足法定条件的实际定制。普通服饰、标准尺码选项或手工工艺不自动属于该例外；任何适用例外均不取消瑕疵、描述不符或其他法定救济。","7.1 An exception to withdrawal rights for personalised goods applies only to actual personalisation that meets the legal conditions. Ordinary apparel, standard size options or handcrafting do not automatically qualify. No applicable exception removes remedies for defects, misdescription or other statutory claims."
+"7.2 服饰类请关注尺码表与养护说明，降低因尺码或穿着不当导致的退换争议。","7.2 For apparel, please check the size chart and care guide to reduce disputes from sizing or improper wear."

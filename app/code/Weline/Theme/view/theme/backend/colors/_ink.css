@@ -10,9 +10,9 @@
  * @meta.palette_role {default="brand",name="palette_role",description="palette_role"}
  */
 
+/* 品牌盘：叠在 _default 之上；勿绑 data-theme=default（那是 default 盘的职责） */
 :root,
-[data-theme="ink"],
-[data-theme="default"] {
+[data-theme="ink"] {
     /* Brand — 朱砂 */
     --backend-color-primary: #b84a3c;
     --backend-color-primary-rgb: 184, 74, 60;
@@ -51,45 +51,91 @@
     --backend-color-bg-surface: #fffefa;
     --backend-color-bg-overlay: rgba(12, 12, 12, 0.985);
 
+    /* Typography aliases — brand-disk key parity with _default */
+    --backend-color-text: #1c1c1c;
+    --backend-color-text-subtle: #7a7874;
+    --backend-color-text-on-dark: #f7f4ef;
+    --backend-color-text-on-dark-muted: #d4cfc5;
+
     /* Borders — 淡墨线 */
     --backend-color-border-default: #d4cfc5;
+    --backend-color-border-subtle: #e8e4dc;
+    --backend-color-border-strong: #a8a299;
     --backend-color-border-emphasis: #a8a299;
     --backend-color-border-focus: var(--backend-color-primary);
     --backend-color-border-light: #e8e4dc;
     --backend-color-border-dark: #7a7874;
 
-    /* Status — 石绿 / 胭脂 / 赭石 / 花青 */
+    /* Surfaces — semantic aliases */
+    --backend-color-surface: var(--backend-color-bg-surface);
+    --backend-color-surface-subtle: var(--backend-color-bg-secondary);
+    --backend-color-surface-muted: var(--backend-color-bg-tertiary);
+    --backend-color-surface-hover: #f0ebe3;
+    --backend-color-surface-disabled: #ede9e1;
+
+    /* Secondary（默认可继承全家） */
+    --backend-color-secondary: #4a4a48;
+    --backend-color-secondary-rgb: 74, 74, 72;
+    --backend-color-secondary-hover: #1c1c1c;
+    --backend-color-secondary-active: #0f0f0f;
+    --backend-color-on-secondary: #fffefa;
+    --backend-color-secondary-bg-subtle: #e8e4dc;
+    --backend-color-secondary-border-subtle: #a8a299;
+    --backend-color-secondary-text-emphasis: #1c1c1c;
+
+    /* Status — 石绿 / 胭脂 / 赭石 / 花青（全家 — 与 _default 键集对齐） */
     --backend-color-success: #4a7c59;
     --backend-color-success-rgb: 74, 124, 89;
     --backend-color-success-light: #6a9a78;
     --backend-color-success-dark: #3a6448;
     --backend-color-success-hover: #3a6448;
+    --backend-color-success-active: #2f523b;
+    --backend-color-on-success: #fffefa;
     --backend-color-success-bg-subtle: rgba(74, 124, 89, 0.12);
     --backend-color-success-border: #3a6448;
+    --backend-color-success-border-subtle: #b5d0bd;
+    --backend-color-success-text-emphasis: #3a6448;
 
     --backend-color-danger: #a63d3d;
     --backend-color-danger-rgb: 166, 61, 61;
     --backend-color-danger-light: #c46565;
     --backend-color-danger-dark: #8b3333;
     --backend-color-danger-hover: #8b3333;
+    --backend-color-danger-active: #7a3028;
+    --backend-color-on-danger: #fffefa;
     --backend-color-danger-bg-subtle: rgba(166, 61, 61, 0.12);
     --backend-color-danger-border: #8b3333;
+    --backend-color-danger-border-subtle: #e8c4bc;
+    --backend-color-danger-text-emphasis: #8b3333;
+    --backend-color-error: var(--backend-color-danger);
 
     --backend-color-warning: #c4893f;
     --backend-color-warning-rgb: 196, 137, 63;
     --backend-color-warning-light: #d4a66a;
     --backend-color-warning-dark: #a06e2f;
     --backend-color-warning-hover: #a06e2f;
+    --backend-color-warning-active: #7a5520;
+    --backend-color-on-warning: #fffefa;
     --backend-color-warning-bg-subtle: rgba(196, 137, 63, 0.14);
     --backend-color-warning-border: #a06e2f;
+    --backend-color-warning-border-subtle: #e8d0a8;
+    --backend-color-warning-text-emphasis: #a06e2f;
 
     --backend-color-info: #4a6b8a;
     --backend-color-info-rgb: 74, 107, 138;
     --backend-color-info-light: #6a89a6;
     --backend-color-info-dark: #3a5670;
     --backend-color-info-hover: #3a5670;
+    --backend-color-info-active: #2f465c;
+    --backend-color-on-info: #fffefa;
     --backend-color-info-bg-subtle: rgba(74, 107, 138, 0.12);
     --backend-color-info-border: #3a5670;
+    --backend-color-info-border-subtle: #b8c8d6;
+    --backend-color-info-text-emphasis: #3a5670;
+
+    --backend-color-on-primary: #fffefa;
+    --backend-color-primary-border-subtle: rgba(184, 74, 60, 0.34);
+    --backend-color-primary-text-emphasis: #963b30;
 
     /* Links — 石青 */
     --backend-color-link: #3d6b78;

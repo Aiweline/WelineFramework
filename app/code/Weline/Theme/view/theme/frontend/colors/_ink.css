@@ -11,9 +11,9 @@
  * @meta.palette_role {default="brand",name="palette_role",description="palette_role"}
  */
 
+/* 品牌盘叠在 _default 之上（:root = 当前激活品牌）；模式差异仍归 _light/_dark */
 :root,
-[data-theme="ink"],
-[data-theme="light"] {
+[data-theme="ink"] {
     /* ========== 品牌色（朱砂 — 印章红，点缀主色） ========== */
     --color-primary: #b84a3c;
     --color-primary-light: #d4786a;

@@ -8,7 +8,7 @@ Hook: `Weline_Theme::frontend::layouts::not-found::recommendations`
 
 Contributing modules implement this hook under `view/hooks/` by mapping `::` to directories and keeping templates thin.
 
-默认由 `Weline_Product::recommended-products` 通过 `default_injections` 注入 `not-found-recommendations` 槽；静态 404 HTML 在 `setup:upgrade` 时生成并写入 `pub/errors/storefront-not-found/`。
+默认由 `Weline_Product::recommended-products` 通过 `default_injections` 注入 `not-found-recommendations` 槽；静态 404 HTML 在 `setup:upgrade` / `theme:publish-not-found-static` 时由 `StorefrontNotFoundStaticGenerator` 经 **theme-aware `fetchHtml`** 生成并写入 `pub/errors/storefront-not-found/`（设计主题可覆盖 `app/design/.../layouts/not_found/`；禁止手改 `pub/errors` 当 SoT）。
 
 产品卡片链接必须使用根相对路径（如 `/product/{slug}`，非默认语种可带 locale 前缀 `/ja_JP/product/{slug}`），禁止 `product/...` 相对路径或 CLI 下空 host 拼出的 `http://product/...`，否则嵌套 404 URL 会解析错误。
 

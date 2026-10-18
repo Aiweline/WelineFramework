@@ -199,15 +199,35 @@ private function assert_DealsOfDayCountdownMutationIdle_testExpiredCountdownStop
 
 private function assert_HanfuDefaultNavigationWidget_testCategoryListDefaultsToHanfuCatalogWithoutInventedCounts(): void
 {
-    $html = $this->render_HanfuDefaultNavigationWidget('category/category-list/default.phtml');
+    $modulePath = '/Users/weline/Project/Official/框架/app/code/Weline/Theme/view/theme/frontend/widgets/category/category-list/default.phtml';
+    self::assertFileExists($modulePath);
+    $moduleSrc = (string) file_get_contents($modulePath);
+    foreach (["__('女装')", "__('男装')", "__('童装')", "__('配饰')", "__('按场景选购')"] as $label) {
+        self::assertStringContainsString($label, $moduleSrc);
+    }
+    foreach (['女士汉服', '明制汉服', '汉服配饰'] as $banned) {
+        self::assertStringNotContainsString($banned, $moduleSrc);
+    }
+
+    $moduleHtml = $this->render_HanfuDefaultNavigationWidget('category/category-list/default.phtml');
+    foreach (['女士汉服', '明制汉服', '汉服配饰', '电子产品', '手机', '电脑'] as $banned) {
+        self::assertStringNotContainsString($banned, $moduleHtml);
+    }
+    self::assertStringNotContainsString('class="category-count"', $moduleHtml);
+    self::assertStringContainsString('/search?q=', $moduleHtml);
+    self::assertTrue(
+        str_contains($moduleHtml, '女装')
+        || str_contains($moduleHtml, "Women&#039;s clothing")
+        || str_contains($moduleHtml, "Women's clothing"),
+        'neutral women category label missing from rendered category-list'
+    );
+
+    $designPath = '/Users/weline/Project/Official/框架/app/design/Weline/hanfu/frontend/widgets/category/category-list/default.phtml';
+    self::assertFileExists($designPath);
+    $designSrc = (string) file_get_contents($designPath);
     foreach (['女士汉服', '明制汉服', '宋制汉服', '男士汉服', '儿童汉服', '汉服配饰'] as $label) {
-        self::assertStringContainsString($label, $html);
+        self::assertStringContainsString($label, $designSrc);
     }
-    foreach (['电子产品', '手机', '电脑', '家居生活', '美妆个护', '食品生鲜'] as $legacyLabel) {
-        self::assertStringNotContainsString($legacyLabel, $html);
-    }
-    self::assertStringNotContainsString('class="category-count"', $html);
-    self::assertStringContainsString('/search?q=', $html);
 }
 
 private function assert_HanfuDefaultNavigationWidget_testBreadcrumbDefaultUsesRealCatalogDestinations(): void
@@ -325,18 +345,30 @@ private function assert_PromoBannerFigcaptionLocale_testPromoBannerHidesBackgrou
 {
     $moduleRoot = '/Users/weline/Project/Official/框架/app/code/Weline/Theme';
     $projectRoot = dirname($moduleRoot, 4);
-    $templates = [$moduleRoot . '/view/theme/frontend/widgets/banner/promo-banner/default.phtml', $projectRoot . '/app/design/Weline/hanfu/frontend/widgets/banner/promo-banner/default.phtml'];
+    $modulePath = $moduleRoot . '/view/theme/frontend/widgets/banner/promo-banner/default.phtml';
+    $designPath = $projectRoot . '/app/design/Weline/hanfu/frontend/widgets/banner/promo-banner/default.phtml';
     $cssFiles = [$moduleRoot . '/view/statics/css/widgets/widget-banner-promo-banner-default.css', $moduleRoot . '/view/statics/css/widgets/widget-hanfu-banner-promo-banner-default.css'];
-    foreach ($templates as $path) {
-        self::assertFileExists($path);
-        $source = (string) file_get_contents($path);
-        self::assertStringContainsString('preg_replace', $source);
-        self::assertStringContainsString('<figcaption\b', $source);
-        self::assertStringContainsString('WidgetI18n::label', $source);
-        self::assertStringContainsString('长安汉服 · 形制精选上新', $source);
-        self::assertStringNotContainsString('@param text {default="运费以结算页为准"', $source);
-        self::assertStringContainsString('promoTextDeprecated', $source);
-    }
+
+    self::assertFileExists($modulePath);
+    $moduleSrc = (string) file_get_contents($modulePath);
+    self::assertStringContainsString('preg_replace', $moduleSrc);
+    self::assertStringContainsString('<figcaption\b', $moduleSrc);
+    self::assertStringContainsString('WidgetI18n::label', $moduleSrc);
+    self::assertStringContainsString('精选上新 · 本季新品', $moduleSrc);
+    self::assertStringContainsString('@param text {default="精选上新 · 本季新品"', $moduleSrc);
+    self::assertStringNotContainsString('@param text {default="长安汉服 · 形制精选上新"', $moduleSrc);
+    self::assertStringNotContainsString('@param text {default="运费以结算页为准"', $moduleSrc);
+    self::assertStringContainsString('promoTextDeprecated', $moduleSrc);
+
+    self::assertFileExists($designPath);
+    $designSrc = (string) file_get_contents($designPath);
+    self::assertStringContainsString('preg_replace', $designSrc);
+    self::assertStringContainsString('<figcaption\b', $designSrc);
+    self::assertStringContainsString('WidgetI18n::label', $designSrc);
+    self::assertStringContainsString('长安汉服 · 形制精选上新', $designSrc);
+    self::assertStringContainsString('@param text {default="长安汉服 · 形制精选上新"', $designSrc);
+    self::assertStringContainsString('promoTextDeprecated', $designSrc);
+
     foreach ($cssFiles as $path) {
         self::assertFileExists($path);
         $css = (string) file_get_contents($path);

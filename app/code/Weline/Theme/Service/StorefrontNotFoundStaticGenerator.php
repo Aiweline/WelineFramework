@@ -37,6 +37,12 @@ use Weline\Websites\Service\ThemeApplicationContextProducer;
  *
  * Snapshots are already SSR'd per locale — never keep client multi-locale
  * translation dictionaries (e.g. CustomerService widgetTranslations) in the HTML.
+ *
+ * Architecture (design-theme bake, not pub/errors hand-edit):
+ * After ThemeApplicationContext install, render via Template::fetchHtml so
+ * ThemePathResolver can pick app/design/{Vendor}/{theme}/frontend/layouts/not_found/.
+ * Never fetchModuleThemeHtml / DATA_FORCE_MODULE_THEME_SOURCE here — that locks
+ * Amazon module source and forces operators to hand-patch pub/errors.
  */
 final class StorefrontNotFoundStaticGenerator
 {
@@ -455,7 +461,9 @@ final class StorefrontNotFoundStaticGenerator
         ];
         $this->template->assign('meta', $meta);
 
-        $html = (string)$this->template->fetchModuleThemeHtml(
+        // Theme-aware fetch (design overlay + inheritance). Do NOT use
+        // fetchModuleThemeHtml — it forces module Theme and skips design skins.
+        $html = (string)$this->template->fetchHtml(
             'Weline_Theme::theme/frontend/layouts/' . self::LAYOUT_TYPE . '/' . self::LAYOUT_OPTION . '.phtml'
         );
         if ($html === '') {

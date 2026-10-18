@@ -35,8 +35,8 @@ final class LayoutOriginWatch implements CronTaskInterface
             . 'layouts 按级联 solidify；widgets 先账本 layout_type，无计划则快扫布局 <w:widget> 内嵌；'
             . '账本 * / 共享模板→全主题；chrome heal。含 Taglib→com_*。'
             . '固化/编译完成后仅按涉及布局 impact.slugs 清 FPC（禁止全站 clearAll）。'
-            . '内嵌/账本用到的外模块部件以 __ext__ 监视；不监视 assets/。'
-            . '开发机须 Cron 进程在跑。非开发 skip:non_dev。店面闸门不能替代本任务。';
+            . '内嵌/账本用到的外模块部件以 __ext__ 监视；启用模块 view/statics 的 css/js 以 __modstatic__ 监视并 remirror live；'
+            . '不监视主题 assets/ 图片字体。开发机须 Cron 进程在跑。非开发 skip:non_dev。店面闸门不能替代本任务。';
     }
 
     public function cron_time(): string

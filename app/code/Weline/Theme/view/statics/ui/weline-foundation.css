@@ -2065,7 +2065,10 @@
         border-radius: var(--weline-radius-md, var(--weline-theme-radius-md, 0.625rem));
     }
     .w-frame[data-ratio="1"] { --weline-frame-ratio: 1; }
+    .w-frame[data-ratio="3/4"] { --weline-frame-ratio: 3 / 4; }
+    .w-frame[data-ratio="2/3"] { --weline-frame-ratio: 2 / 3; }
     .w-frame[data-ratio="4/3"] { --weline-frame-ratio: 4 / 3; }
+    .w-frame[data-ratio="3/2"] { --weline-frame-ratio: 3 / 2; }
     .w-frame[data-ratio="16/5"] { --weline-frame-ratio: 16 / 5; }
     .w-frame[data-ratio="16/9"] { --weline-frame-ratio: 16 / 9; }
     .w-frame[data-ratio="21/9"] { --weline-frame-ratio: 21 / 9; }

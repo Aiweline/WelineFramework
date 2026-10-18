@@ -18,7 +18,8 @@ Object.assign(window.WelineModulesConfig.modules, {
         paths: ["Weline_Theme::ui/weline-ui.js"],
         globalVar: null,
         load: "eager",
-        description: "Weline UI 2 runtime (classic script; was type=module in head)"
+        type: "module",
+        description: "Weline UI 2 runtime (ES module: import.meta + lazy import(); loader must set type=module)"
     },
     // Legacy FOUC unlock only — do NOT declare on amazon-progressive storefront
     // (css-ready sets data-weline-css=pending). Kept for design themes / backend.

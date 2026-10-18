@@ -32,9 +32,9 @@
    - 颜色 → `variables/_colors.css`，并在 `colors/_default.css`（默认可继承合同）与 `colors/_light.css` / `colors/_dark.css`（若有模式差异）给出可解析默认；
    - 间距/字号/边框/阴影 → 对应 `variables/_*.css`。
 3. **面板归属**：颜色 Token 的 `@meta.panel` 必须是 `color`（或挂在 `_colors.css` / `colors/**`），**禁止**把颜色丢进 `_auto-literals.css`（spacing 杂项堆）导致 Theme Editor 色盘空白/未设置。
-4. **禁止空壳**：业务侧不得只写 `var(--new-token)` 却不在盘内定义叶子；桥接层 `theme.css` 的 `var(--x, fallback)` 不能替代色盘登记。
-5. **继承**：前台 `_light` → `_default` → 品牌盘（如 `_ink`）→ `_dark`；后台 `_light` → `_default` → `_dark`。品牌盘只叠加品牌叶子，不拆除 secondary/status 全家。
-6. **验收**：对新增 Token 做「引用 → 盘内定义 → 亮/暗可解析」三连检查；Theme Editor 外观盘应能看到非空默认。
+4. **禁止空壳（硬 · MCP `theme_referenced_tokens_must_resolve`）**：业务/基础组件侧不得只写 `var(--new-token)` / 标 `data-tone` 却不在盘内定义叶子；桥接层 `theme.css` 的 `var(--x, fallback)` 不能替代色盘登记。暗色模式属性有了但颜色不生效 = 叶子缺失，须补 `_dark`（或模式盘）而非组件私造色。
+5. **继承（default 为准 · 一层）**：前台 `_default` → 品牌盘（如 `_ink`）→ `_light` → `_dark`；后台 `_default` → `_light` → `_dark`。模式盘（light/dark）只写差异；未覆盖叶子继承 `_default`。chrome pack 编译合并同序。品牌盘只叠加品牌叶子，不拆除 secondary/status 全家。模式盘禁止用裸 `:root` 污染另一模式。
+6. **验收**：对新增 Token 做「引用 → 盘内定义 → 亮/暗可解析」三连检查；Theme Editor 外观盘应能看到非空默认。审图见按钮色/字重/描边未按主题生效 → 补主题全局叶子到 pass。
 
 7. **@media 断点例外**：`@media` 条件里**禁止** `var(--breakpoint-*)` / `var(--token-bp-*)`（浏览器会忽略整条规则，布局全乱）。断点须写 `768px` 等字面量；变量盘里的 `--breakpoint-md` 等只供 JS/文档，不进 `@media`。
 
@@ -54,7 +54,9 @@
 
 正确示例：映射到 `--color-bg-tertiary` / `--color-border-subtle`，或在 `_colors.css` + `_light.css` 新增语义名并给叶子值。
 
-语义角色 × 强度矩阵、Foundation 桥接与 `data-tone` 约定见 [`theme-semantic-color-matrix.md`](./theme-semantic-color-matrix.md)。
+语义角色 × 强度矩阵、Foundation 桥接与 `data-tone` 约定见 [`theme-semantic-color-matrix.md`](./theme-semantic-color-matrix.md)。  
+硬规则：`theme_referenced_tokens_must_resolve`——组件只能消费主题变量，且引用必须在主题盘有可解析叶子（含暗色）；`theme_semantic_severity_tone_required`——风险/结果/操作须绑 `data-tone`（仍依赖上条叶子上色）。  
+「禁组件私造色」与「必须补主题全局色/粗细变量」**不矛盾**：私色禁在组件，统一配在主题盘。
 店面间距/圆角/字号**消费约定**见 [`theme-storefront-token-consumption.md`](./theme-storefront-token-consumption.md)。
 
 ## 禁止

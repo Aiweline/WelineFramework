@@ -102,6 +102,26 @@ HTML;
         self::assertSame('Weline_Demo', $class['module']);
     }
 
+    public function testClassifyModulePrefixStaticJsAsModuleStatic(): void
+    {
+        $class = $this->invokeBare(
+            'classifyRelativePath',
+            '__modstatic__/Weline/Framework/view/statics/js/dom-observer.js'
+        );
+        self::assertIsArray($class);
+        self::assertSame('module_static', $class['kind']);
+    }
+
+    public function testClassifyModulePrefixStaticNonJsSkipped(): void
+    {
+        $class = $this->invokeBare(
+            'classifyRelativePath',
+            '__modstatic__/Weline/Framework/view/statics/img/logo.png'
+        );
+        self::assertIsArray($class);
+        self::assertSame('skip', $class['kind']);
+    }
+
     public function testClassifyThemeWidgetDefaultsModuleWelineTheme(): void
     {
         $class = $this->invokeBare(

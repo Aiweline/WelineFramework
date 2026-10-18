@@ -92,7 +92,8 @@ $headerFlattenNavForEditor = static function (array $items): array {
 
 // 保留定义供契约检索；整页预览禁止拍平 children。
 
-$hanfuDemoNav = static function (): array {
+// 默认主题编辑器空导航占位（中性）。站专属汉服预览树见 design/Weline/hanfu/.../category-menu。
+$editorPreviewDemoNav = static function (): array {
     $searchHref = static fn (string $query): string => '/search?q=' . rawurlencode($query);
 
     return [
@@ -103,46 +104,45 @@ $hanfuDemoNav = static function (): array {
             'children' => [],
         ],
         [
-            'text' => '女士汉服',
-            'url' => $searchHref('女士汉服'),
-            'description' => '按形制探索适合日常、节庆与礼仪场景的女士汉服',
+            'text' => '女装',
+            'url' => $searchHref('女装'),
+            'description' => '按品类探索女装系列',
             'children' => [
-                ['text' => '明制汉服', 'url' => $searchHref('明制汉服'), 'children' => []],
-                ['text' => '宋制汉服', 'url' => $searchHref('宋制汉服'), 'children' => []],
-                ['text' => '唐制汉服', 'url' => $searchHref('唐制汉服'), 'children' => []],
+                ['text' => '上装', 'url' => $searchHref('女装 上装'), 'children' => []],
+                ['text' => '下装', 'url' => $searchHref('女装 下装'), 'children' => []],
+                ['text' => '套装', 'url' => $searchHref('女装 套装'), 'children' => []],
             ],
         ],
         [
-            'text' => '男士汉服',
-            'url' => $searchHref('男士汉服'),
-            'description' => '传统形制与现代日常穿着兼顾的男士系列',
+            'text' => '男装',
+            'url' => $searchHref('男装'),
+            'description' => '日常与正式场合的男装系列',
             'children' => [
-                ['text' => '圆领袍', 'url' => $searchHref('男士圆领袍')],
-                ['text' => '道袍与直裰', 'url' => $searchHref('道袍 直裰')],
+                ['text' => '外套', 'url' => $searchHref('男装 外套')],
+                ['text' => '内搭', 'url' => $searchHref('男装 内搭')],
             ],
         ],
         [
-            'text' => '儿童汉服',
-            'url' => $searchHref('儿童汉服'),
+            'text' => '童装',
+            'url' => $searchHref('童装'),
             'children' => [
-                ['text' => '女童汉服', 'url' => $searchHref('女童汉服')],
-                ['text' => '男童汉服', 'url' => $searchHref('男童汉服')],
+                ['text' => '女童', 'url' => $searchHref('女童')],
+                ['text' => '男童', 'url' => $searchHref('男童')],
             ],
         ],
         [
-            'text' => '汉服配饰',
-            // 分类页有货；勿链 /search?q=汉服配饰（QA-03）
+            'text' => '配饰',
             'url' => '/category/accessories',
             'children' => [
-                ['text' => '发簪与发冠', 'url' => $searchHref('发簪 发冠')],
-                ['text' => '绣花鞋履', 'url' => $searchHref('汉服鞋履')],
+                ['text' => '头饰', 'url' => $searchHref('头饰')],
+                ['text' => '鞋履', 'url' => $searchHref('鞋履')],
             ],
         ],
     ];
 };
 
 if ($navItems === [] && $editorPreviewLight) {
-    $navItems = $hanfuDemoNav();
+    $navItems = $editorPreviewDemoNav();
 }
 // 整页可视化预览必须与店面一致：保留 children，供 hover mega 面板渲染。
 // $headerFlattenNavForEditor 仅作契约保留，禁止在此拍平。

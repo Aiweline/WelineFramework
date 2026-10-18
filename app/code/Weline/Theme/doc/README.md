@@ -369,3 +369,5 @@ Worker 重载不能代替入口静态缓存或浏览器资源版本的更新。
 ### 404 静态页发布与模板依赖
 
 404 静态页发布每次走正常模板渲染，覆盖公共模板、Hook 和部件依赖的当前输出；不以仅包含主布局的输入摘要提前跳过。最终内容相同则保留已有静态文件。访问已发布 404 页面仍直接读取静态 HTML，不逐次查询数据库重建部件。
+
+**设计主题继承（硬）**：`StorefrontNotFoundStaticGenerator` 在安装站点 `ThemeApplicationContext` 后必须用 `Template::fetchHtml` 渲染 `layouts/not_found`，以便 `ThemePathResolver` 命中 `app/design/{Vendor}/{theme}/frontend/layouts/not_found/`。禁止 `fetchModuleThemeHtml` / 强制模块源——那会锁死 Amazon 模块壳，逼运维手改 `pub/errors`。品牌 404 只落 design 主题；手改 `pub/errors` 不是合法 SoT。
