@@ -12,6 +12,7 @@ const {
   DEFAULT_LAND_BUDGET_MS,
   extractShellKeysFromUrl,
 } = require('./payment-pathway-driver');
+const { parsePhpFixtureStdout, phpFixtureEnv } = require('./e2e-php-fixture-json');
 
 const ROOT_DIR = path.resolve(__dirname, '../../../../../../..');
 const FIXTURE = path.resolve(__dirname, 'release-paypal-account-lifecycle-fixture.php');
@@ -40,18 +41,9 @@ function runFixture(action, payload = {}) {
     input: JSON.stringify({ action, ...payload }),
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: {
-      ...process.env,
-      HTTPS_PROXY: '',
-      https_proxy: '',
-      HTTP_PROXY: '',
-      http_proxy: '',
-      ALL_PROXY: '',
-      all_proxy: '',
-    },
+    env: phpFixtureEnv(),
   });
-  const lines = String(stdout).trim().split(/\n/).filter(Boolean);
-  const parsed = JSON.parse(lines[lines.length - 1] || '{}');
+  const parsed = parsePhpFixtureStdout(stdout, `fixture ${action}`);
   if (!parsed.ok) {
     throw new Error(`fixture ${action} failed: ${parsed.error || stdout}`);
   }

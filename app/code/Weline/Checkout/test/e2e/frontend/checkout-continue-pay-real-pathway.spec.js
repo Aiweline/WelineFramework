@@ -21,6 +21,7 @@ const {
   evaluateWithThemeReload,
   reloadIfThemeGenerationStale,
 } = require('./release-paypal-account-lifecycle-helpers');
+const { parsePhpFixtureStdout, phpFixtureEnv } = require('./e2e-php-fixture-json');
 
 const MODULE = 'Weline_Checkout';
 const ROOT_DIR = path.resolve(__dirname, '../../../../../../..');
@@ -36,14 +37,14 @@ function fixture(action, payload = {}) {
       input: JSON.stringify({ action, ...payload }),
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: phpFixtureEnv(),
     });
   } catch (error) {
     stdout = String(error && error.stdout || '');
     stderr = String(error && error.stderr || '');
     throw new Error(`fixture ${action} process failed: stdout=${stdout.trim()} stderr=${stderr.trim()}`);
   }
-  const lines = String(stdout).trim().split(/\n/).filter(Boolean);
-  const result = JSON.parse(lines[lines.length - 1] || '{}');
+  const result = parsePhpFixtureStdout(stdout, `fixture ${action}`);
   if (!result.ok) {
     throw new Error(`fixture ${action} failed: ${result.error || stdout}`);
   }

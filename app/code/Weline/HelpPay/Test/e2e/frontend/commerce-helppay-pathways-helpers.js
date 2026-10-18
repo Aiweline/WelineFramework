@@ -17,6 +17,10 @@ const {
   ROOT_DIR,
   'app/code/Weline/Checkout/test/e2e/frontend/release-paypal-account-lifecycle-helpers.js'
 ));
+const { parsePhpFixtureStdout, phpFixtureEnv } = require(path.resolve(
+  ROOT_DIR,
+  'app/code/Weline/Checkout/test/e2e/frontend/e2e-php-fixture-json.js'
+));
 const CHECKOUT_FIXTURE = path.resolve(
   ROOT_DIR,
   'app/code/Weline/Checkout/test/e2e/frontend/commerce-multi-scope-checkout-pathways-fixture.php'
@@ -54,18 +58,9 @@ function prepareCustomer() {
     input: JSON.stringify({ action: 'prepare' }),
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: {
-      ...process.env,
-      HTTPS_PROXY: '',
-      https_proxy: '',
-      HTTP_PROXY: '',
-      http_proxy: '',
-      ALL_PROXY: '',
-      all_proxy: '',
-    },
+    env: phpFixtureEnv(),
   });
-  const lines = String(stdout).trim().split(/\n/).filter(Boolean);
-  const parsed = JSON.parse(lines[lines.length - 1] || '{}');
+  const parsed = parsePhpFixtureStdout(stdout, 'helppay prepare');
   if (!parsed.ok) {
     throw new Error(`helppay prepare failed: ${parsed.error || stdout}`);
   }
