@@ -39,8 +39,22 @@ final class FrontendObserverContractsTest extends TestCase
             'ModulesConfigPathBake::testCompilerDocumentsNoDevAbsoluteBake' => function () {
             $this->assert_ModulesConfigPathBake_testCompilerDocumentsNoDevAbsoluteBake();
         },
+            'MaintenanceObserver::testOnlyExtendsWhitelistNoThemeShellSteal' => function () {
+            $this->assert_MaintenanceObserver_testOnlyExtendsWhitelistNoThemeShellSteal();
+        },
         ];
     }
+
+private function assert_MaintenanceObserver_testOnlyExtendsWhitelistNoThemeShellSteal(): void
+{
+    $path = '/Users/weline/Project/Official/框架/app/code/Weline/Frontend/Observer/Maintenance.php';
+    self::assertFileExists($path);
+    $source = (string) file_get_contents($path);
+    self::assertStringContainsString('white_urls', $source);
+    self::assertStringNotContainsString("Weline_Frontend::templates/maintenance.phtml", $source);
+    self::assertStringNotContainsString("setData('handled'", $source);
+    self::assertStringNotContainsString('ResponseTerminateException', $source);
+}
 
 private function assert_ModulesConfigPathBake_testCompiledFrontendModulesKeepLogicalModulePaths(): void
 {

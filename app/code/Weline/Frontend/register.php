@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_Frontend',
     __DIR__,
-    '2.0.123',
+    '2.0.124',
     '<a href="https://bbs.aiweline.com">前端模块</a>',
     []
 );

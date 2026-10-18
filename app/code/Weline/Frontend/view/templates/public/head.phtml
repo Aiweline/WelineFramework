@@ -6,6 +6,8 @@
 $frontendRoot = (string)$this->getFrontendUrl('/');
 // <base> is origin+path only; query/fragment (e.g. agent pierce) must not become part of base.
 $frontendRoot = (string)preg_replace('/[?#].*$/', '', $frontendRoot);
+// Root-relative path only — follow the live document Host (never bake absolute Origin).
+$frontendRoot = \Weline\Framework\Http\Url::toDocumentRootRelative($frontendRoot);
 $storefrontBaseHref = rtrim($frontendRoot, '/') . '/';
 ?>
 <base href="<?= htmlspecialchars($storefrontBaseHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">

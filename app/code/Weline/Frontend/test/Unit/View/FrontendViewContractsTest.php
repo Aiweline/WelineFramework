@@ -182,6 +182,7 @@ private function assert_FrontendHeadBaseHref_testPublicHeadDeclaresRuntimeFronte
     self::assertStringNotContainsString('url-of-root', $source, 'head.phtml must not spell the Taglib root-url token even in comments');
     self::assertStringNotContainsString('http://', $source, 'head.phtml must not contain http:// even in comments (?> leak risk after rewrite)');
     self::assertStringContainsString("preg_replace('/[?#].*$/'", $source, 'document base must strip query/fragment from getFrontendUrl root');
+    self::assertStringContainsString('toDocumentRootRelative', $source, 'document base must strip Origin to root-relative path');
     self::assertLessThan((int) strpos($source, '<meta charset="UTF-8">'), (int) strpos($source, '<base href="<?='), 'base must precede charset so relative resolution is established early');
 }
 

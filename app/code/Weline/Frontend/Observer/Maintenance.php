@@ -13,9 +13,15 @@ namespace Weline\Frontend\Observer;
 
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
-use Weline\Framework\Http\Request;
-use Weline\Framework\View\Block;
 
+/**
+ * Extends maintenance whitelist with theme/static asset paths only.
+ *
+ * HTML/JSON body ownership stays with Weline_Maintenance (Interceptor →
+ * MaintenanceStaticPage host-scoped pub/errors/maintenance), same authority as
+ * WLS ServiceUnavailablePage. Do not render theme shell or mark handled here —
+ * that made Nginx→FPM show a different page than WLS.
+ */
 class Maintenance implements \Weline\Framework\Event\ObserverInterface
 {
     /**
@@ -23,29 +29,21 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
      */
     public function execute(Event &$event): void
     {
-        // MaintenanceInterceptor 已完成唯一次早期 URL 解析，直接复用结果。
         $parse = (array)$event->getData('parse');
-        $uri = (string)($parse['uri'] ?? '/');
         $area = (string)($parse['area'] ?? 'frontend');
         $isApiRequest = \in_array($area, ['rest_frontend', 'rest_backend'], true);
         $isBackend = $area === 'backend';
-        
-        // 如果 area 不是 API，再检查 Accept 头（兼容某些特殊情况）
+
         if (!$isApiRequest) {
             $acceptHeader = (string)\w_env('server.http_accept', '');
             $isApiRequest = str_contains($acceptHeader, 'application/json');
         }
-        // 仅处理前端非 API 请求
+        // API / backend: no storefront theme asset whitelist contribution.
         if ($isApiRequest || $isBackend) {
             return;
         }
-        // 添加当前模块名到 Request 对象
-        $request = w_obj(Request::class);
-        /**@var Request $request */
-        $request->addModule('Weline_Frontend');
 
-        $block = Block::getInstance();
-        /**@var DataObject $data */
+        /** @var DataObject $data */
         $data = $event->getData('data');
         $white_urls = $data->getData('white_urls') ?? [];
         $white_urls[] = 'Weline/Theme/view/statics/ui/';
@@ -54,36 +52,6 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
         $white_urls[] = 'Weline/Theme/view/theme/frontend/assets/images/theme/icon.png';
         $white_urls[] = 'Weline/Theme/view/theme/frontend/assets/images/theme/apple-touch-icon.png';
         $white_urls[] = 'Weline/Backend/view/statics/img/favicon.png';
-        $white = false;
-        foreach ($white_urls as $white_url_string) {
-            if (str_contains($uri, $white_url_string)) {
-                $white = true;
-                break;
-            }
-        }
-
         $data->setData('white_urls', $white_urls);
-        if (!$white) {
-            // 获取语言（从事件数据中读取，如果事件数据中有的话）
-            $lang = $data->getData('language') ?? \Weline\Framework\App\State::getLang();
-            // 设置语言到 Request，以便模板能够使用正确的语言
-            $request->setData('WELINE_USER_LANG', $lang);
-            \w_env_set('user.lang', $lang);
-            
-            // 标记为已处理，阻止 MaintenanceInterceptor 继续执行
-            $data->setData('handled', true);
-            // 使用 ResponseTerminateException 替代 die()，由 Runtime 层统一处理
-            throw new \Weline\Framework\Http\ResponseTerminateException(
-                503,
-                $block->fetchHtml('Weline_Frontend::templates/maintenance.phtml'),
-                [
-                    'Content-Type' => 'text/html; charset=UTF-8',
-                    'Retry-After' => '3600',
-                    'Cache-Control' => 'no-store, no-cache, must-revalidate',
-                    'Pragma' => 'no-cache',
-                    'Expires' => '0',
-                ]
-            );
-        }
     }
 }
