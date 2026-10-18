@@ -16,7 +16,8 @@ final class StaticErrorRuntimeTransportTest extends TestCase
         self::assertStringStartsWith($prefix, $out);
         preg_match('#<script[^>]*>(.*?)</script>#s', $out, $matches);
         $actual = json_decode($matches[1], true, 512, JSON_THROW_ON_ERROR);
-        self::assertSame('https://example.test/shop/api/framework/query-bin', $actual['api']['endpoint']);
+        // Absolute Origin must collapse to document-root-relative for Weline.Api same-origin.
+        self::assertSame('/shop/api/framework/query-bin', $actual['api']['endpoint']);
         self::assertSame($actual['api']['endpoint'], $actual['api']['queryBinUrl']);
         self::assertSame('https://example.test/shop/', $actual['site']['base_host']);
         self::assertSame('/worker.js', $actual['api']['workerUrl']);

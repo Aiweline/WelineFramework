@@ -115,7 +115,10 @@ if ($modulesJsMtime) {
 }
 // Keep the Worker endpoint on the current Website mount so its trusted binding
 // refines the same Website navigation Scope rather than the host default.
-$queryBinUrl = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Url::class)->getFrontendApiUrl('framework/query-bin', [], false);
+// Root-relative only: absolute Origin breaks Weline.Api same-origin (e2e proxy / Host 切换).
+$queryBinUrl = \Weline\Framework\Http\Url::toDocumentRootRelative(
+    (string)\Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Url::class)->getFrontendApiUrl('framework/query-bin', [], false)
+);
 $cacheCatalog = [];
 try {
     $cacheCatalog = \Weline\Framework\Manager\ObjectManager::getInstance(

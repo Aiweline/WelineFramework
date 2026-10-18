@@ -213,6 +213,9 @@ private function assert_FrontendRuntimeThemeVersion_testHeaderRuntimeInjectsThem
     self::assertStringContainsString("'softTips'", $src);
     self::assertStringContainsString('scope_bootstrap_waiting', $src);
     self::assertStringContainsString('FrontendScopeReloadTip::build', $src);
+    // query-bin must be document-root-relative so Weline.Api same-origin matches workerUrl.
+    self::assertStringContainsString('toDocumentRootRelative', $src);
+    self::assertStringContainsString("getFrontendApiUrl('framework/query-bin'", $src);
 }
 
 /**

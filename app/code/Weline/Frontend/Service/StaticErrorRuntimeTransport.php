@@ -2,11 +2,16 @@
 declare(strict_types=1);
 namespace Weline\Frontend\Service;
 
+use Weline\Framework\Http\Url;
+
 /** Rebind the existing browser transport config when serving a static error page. */
 final class StaticErrorRuntimeTransport
 {
     public static function rebind(string $html, string $host, string $baseHost, string $apiHost, string $endpoint): string
     {
+        // query-bin must stay root-relative for Weline.Api same-origin (worker vs endpoint).
+        $endpoint = Url::toDocumentRootRelative($endpoint);
+
         return preg_replace_callback(
             '~(<script\b[^>]*\bid=(["\x27])weline-frontend-runtime-config\2[^>]*>)(.*?)(</script\s*>)~is',
             static function (array $match) use ($host, $baseHost, $apiHost, $endpoint): string {
