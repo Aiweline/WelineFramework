@@ -53,21 +53,29 @@ $jsV = (string)((int)(@filemtime($jsPath) ?: time()));
 $instanceCssV = (string)((int)(@filemtime($instanceCssPath) ?: time()));
 $instanceJsV = (string)((int)(@filemtime($instanceJsPath) ?: time()));
 ?>
+<?php
+$withV = static function (string $href, string $v): string {
+    if ($href === '') {
+        return '';
+    }
+    return $href . (str_contains($href, '?') ? '&' : '?') . 'v=' . rawurlencode($v);
+};
+?>
 <link rel="stylesheet"
-      href="<?= $h($cssHref) ?>?v=<?= $h($cssV) ?>"
+      href="<?= $h($withV($cssHref, $cssV)) ?>"
       data-no-extract="true"
       data-weline-ssa-float="1">
 <link rel="stylesheet"
-      href="<?= $h($instanceCssHref) ?>?v=<?= $h($instanceCssV) ?>"
+      href="<?= $h($withV($instanceCssHref, $instanceCssV)) ?>"
       data-no-extract="true"
       data-weline-ssa-float="1">
 <?= $this->fetch('Weline_SiteSetupAssistant::templates/backend/widgets/site-setup-assistant-float.phtml') ?>
-<script src="<?= $h($runtimeHref) ?>?v=<?= $h($runtimeV) ?>"
+<script src="<?= $h($withV($runtimeHref, $runtimeV)) ?>"
         data-no-extract="true"
         data-weline-ssa-float="1"></script>
-<script src="<?= $h($jsHref) ?>?v=<?= $h($jsV) ?>"
+<script src="<?= $h($withV($jsHref, $jsV)) ?>"
         data-no-extract="true"
         data-weline-ssa-float="1"></script>
-<script src="<?= $h($instanceJsHref) ?>?v=<?= $h($instanceJsV) ?>"
+<script src="<?= $h($withV($instanceJsHref, $instanceJsV)) ?>"
         data-no-extract="true"
         data-weline-ssa-float="1"></script>

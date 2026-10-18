@@ -12,8 +12,9 @@
     --ssa-shadow: var(--weline-shadow-lg, 0 var(--spacing-3) var(--control-height-md) var(--color-literal-rgba-15-23-42-0-22));
     position: fixed !important;
     z-index: 12050;
-    right: var(--weline-space-4);
-    bottom: var(--weline-space-4);
+    /* Keep off home-indicator / other bottom-right floats (e.g. DEV trigger). */
+    right: calc(var(--weline-space-4) + env(safe-area-inset-right, 0px));
+    bottom: calc(var(--weline-space-4) + env(safe-area-inset-bottom, 0px));
     left: auto;
     top: auto;
     width: auto;
@@ -28,54 +29,155 @@
     font-size: var(--spacing-3_5);
     pointer-events: none;
     contain: layout style;
+    isolation: isolate;
+}
+/* Open: drop layout containment so fixed scrim can cover the viewport. */
+#ssa-float-root.ssa-float.is-open {
+    contain: style;
 }
 #ssa-float-root.ssa-float[hidden] { display: none !important; }
 #ssa-float-root.ssa-float > * { pointer-events: auto; }
-#ssa-float-root .ssa-float__fab {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-0_55);
+/* ssa-pop-20261018: dim backdrop — click closes (data-ssa-close) */
+#ssa-float-root .ssa-float__scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    margin: 0;
+    padding: 0;
     border: 0;
-    border-radius: var(--token-size-999px);
-    padding: var(--spacing-0_7) var(--weline-space-4) var(--spacing-0_7) var(--token-size-1-1rem);
+    border-radius: 0;
+    background: rgba(15, 23, 42, 0.34);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+}
+#ssa-float-root .ssa-float__scrim[hidden] { display: none !important; }
+@keyframes ssa-float-scrim-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+@keyframes ssa-float-panel-in {
+    from {
+        opacity: 0;
+        transform: translate3d(0, 0.6rem, 0) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+#ssa-float-root .ssa-float__fab {
+    /* ssa-fab-align-20261018c: rem literals — backend --token-size-999px/--spacing-0_* are defined as 0 */
+    position: relative;
+    z-index: 2;
+    display: inline-flex;
+    align-items: stretch;
+    gap: 0;
+    border: 0;
+    border-radius: 999px;
+    overflow: hidden;
+    min-height: 2.5rem;
+    padding: 0;
+    padding-inline-start: 0.75rem;
     background: var(--ssa-text);
     color: var(--ssa-surface);
     box-shadow: var(--ssa-shadow);
     cursor: pointer;
     font: inherit;
     font-weight: 600;
+    line-height: 1.25;
+    box-sizing: border-box;
+}
+#ssa-float-root .ssa-float__fab-label {
+    display: inline-flex;
+    align-items: center;
+    align-self: stretch;
+    white-space: nowrap;
+    line-height: 1.25;
+    padding-block: 0.45rem;
+    padding-inline-end: 0.5rem;
 }
 #ssa-float-root .ssa-float__fab:focus-visible {
     outline: var(--border-width-medium) solid var(--ssa-primary);
     outline-offset: var(--border-width-thick);
 }
 #ssa-float-root .ssa-float__badge {
-    min-width: var(--weline-space-6);
-    height: var(--weline-space-6);
-    padding: 0 var(--token-size-0-35rem);
-    border-radius: var(--token-size-999px);
-    display: inline-grid;
-    place-items: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    flex: 0 0 auto;
+    min-width: 1.5rem;
+    height: auto;
+    min-height: 100%;
+    margin: 0;
+    padding: 0 0.55rem;
+    border-radius: 0;
     background: var(--ssa-primary);
     color: var(--ssa-surface);
-    font-size: var(--weline-space-3);
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    box-sizing: border-box;
 }
 #ssa-float-root .ssa-float__panel {
-    width: min(var(--token-size-26rem), calc(100vw - var(--weline-space-8)));
-    max-height: min(70vh, var(--token-size-36rem));
-    overflow: auto;
-    background: var(--ssa-surface);
-    border: var(--border-width-thin) solid var(--ssa-border);
+    /* ssa-chrome-20261018 + ssa-pop-20261018: elevated sheet over scrim */
+    /* Local --ssa-* : instance-styles rewriter maps box-shadow/radius back to these vars */
+    --ssa-radius: 1rem;
+    --ssa-shadow:
+        0 0 0 1px rgba(15, 23, 42, 0.06),
+        0 10px 24px -4px rgba(15, 23, 42, 0.22),
+        0 28px 56px -12px rgba(15, 23, 42, 0.28);
+    position: relative;
+    z-index: 1;
+    width: min(26rem, calc(100vw - 2rem));
+    max-height: min(52dvh, 26rem);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background-color: var(--ssa-surface);
+    border: 1px solid color-mix(in srgb, var(--ssa-border) 85%, transparent);
     border-radius: var(--ssa-radius);
     box-shadow: var(--ssa-shadow);
-    padding: var(--weline-space-3);
+    /* Extra lift if box-shadow token path still collapses */
+    filter: drop-shadow(0 14px 28px rgba(15, 23, 42, 0.2));
+    padding: 0;
+    isolation: isolate;
+    transform-origin: bottom right;
+}
+#ssa-float-root.ssa-float.is-open .ssa-float__scrim {
+    animation: ssa-float-scrim-in 180ms ease-out both;
+}
+#ssa-float-root.ssa-float.is-open .ssa-float__panel {
+    animation: ssa-float-panel-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+    #ssa-float-root.ssa-float.is-open .ssa-float__scrim,
+    #ssa-float-root.ssa-float.is-open .ssa-float__panel {
+        animation: none;
+    }
 }
 #ssa-float-root .ssa-float__panel[hidden] { display: none !important; }
 #ssa-float-root .ssa-float__head {
+    flex: 0 0 auto;
     display: flex;
     justify-content: space-between;
     gap: var(--weline-space-3);
     align-items: flex-start;
+    padding: var(--weline-space-3) var(--weline-space-3) var(--weline-space-2);
+    background-color: var(--ssa-surface);
+    border-bottom: var(--border-width-thin) solid var(--ssa-border);
+    z-index: 1;
+}
+#ssa-float-root .ssa-float__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: var(--weline-space-2) var(--weline-space-3);
+    -webkit-overflow-scrolling: touch;
 }
 #ssa-float-root .ssa-float__kicker {
     margin: 0;
@@ -141,15 +243,24 @@
     background: color-mix(in srgb, var(--ssa-primary) 14%, transparent);
 }
 #ssa-float-root .ssa-float__icon-btn {
+    flex: 0 0 auto;
     border: var(--border-width-thin) solid var(--ssa-border);
     background: var(--ssa-soft);
     color: var(--ssa-text);
-    width: var(--weline-space-8);
-    height: var(--weline-space-8);
+    width: var(--control-height-md, var(--weline-space-10));
+    height: var(--control-height-md, var(--weline-space-10));
+    min-width: var(--weline-space-10);
+    min-height: var(--weline-space-10);
     border-radius: var(--token-size-999px);
     cursor: pointer;
-    font-size: var(--token-size-1-1rem);
+    font-size: var(--weline-space-5);
     line-height: 1;
+    font-weight: 600;
+}
+#ssa-float-root .ssa-float__icon-btn:hover,
+#ssa-float-root .ssa-float__icon-btn:focus-visible {
+    border-color: var(--ssa-primary);
+    color: var(--ssa-primary);
 }
 #ssa-float-root .ssa-float__meter {
     margin: var(--weline-space-3) 0;
@@ -231,25 +342,52 @@
 }
 #ssa-float-root .ssa-float-b__task {
     display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: var(--spacing-0_55);
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: var(--spacing-0_55) var(--weline-space-2);
     align-items: start;
     padding: var(--spacing-0_65);
     border: var(--border-width-thin) solid var(--ssa-border);
     border-radius: var(--ssa-radius);
+    background-color: var(--ssa-surface);
 }
-#ssa-float-root .ssa-float-b__task[data-status="done"] { opacity: 0.65; }
-#ssa-float-root .ssa-float-b__name { margin: 0 0 var(--spacing-0_2); font-size: var(--spacing-3_5); font-weight: 600; }
-#ssa-float-root .ssa-float-b__tip,
-#ssa-float-root .ssa-float-b__task small { margin: 0; color: var(--ssa-muted); font-size: var(--weline-space-3); }
-#ssa-float-root .ssa-float-b__task label span {
-    display: block;
-    margin-top: var(--weline-space-1);
+#ssa-float-root .ssa-float-b__task > label {
+    display: inline-flex;
+    align-items: center;
+    padding-top: var(--spacing-0_2);
+}
+/* Done=muted tokens only — never whole-row opacity (bleeds page text through). */
+#ssa-float-root .ssa-float-b__task[data-status="done"] {
+    background-color: var(--ssa-soft);
+    border-color: color-mix(in srgb, var(--ssa-border) 80%, transparent);
+}
+#ssa-float-root .ssa-float-b__task[data-status="done"] .ssa-float-b__name,
+#ssa-float-root .ssa-float-b__task[data-status="done"] .ssa-float-b__tip,
+#ssa-float-root .ssa-float-b__task[data-status="done"] small {
+    color: var(--ssa-muted);
+}
+#ssa-float-root .ssa-float-b__task[data-status="done"] .ssa-float-b__name {
+    font-weight: 500;
+}
+#ssa-float-root .ssa-float-b__name {
+    margin: 0 0 var(--spacing-0_2);
+    font-size: var(--spacing-3_5);
+    font-weight: 600;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--weline-space-2);
+}
+#ssa-float-root .ssa-float-b__status {
+    flex: 0 0 auto;
+    font-style: normal;
     font-size: var(--spacing-0_7);
+    font-weight: 600;
     color: var(--ssa-warn);
 }
-#ssa-float-root .ssa-float-b__task[data-status="done"] label span { color: var(--ssa-ok); }
-#ssa-float-root .ssa-float-b__task[data-status="doing"] label span { color: var(--ssa-primary); }
+#ssa-float-root .ssa-float-b__task[data-status="done"] .ssa-float-b__status { color: var(--ssa-ok); }
+#ssa-float-root .ssa-float-b__task[data-status="doing"] .ssa-float-b__status { color: var(--ssa-primary); }
+#ssa-float-root .ssa-float-b__tip,
+#ssa-float-root .ssa-float-b__task small { margin: 0; color: var(--ssa-muted); font-size: var(--weline-space-3); }
 #ssa-float-root .ssa-float-c {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -278,15 +416,49 @@
 #ssa-float-root .ssa-float-c__card strong { display: block; font-size: var(--weline-space-3); margin-bottom: var(--weline-space-1); }
 #ssa-float-root .ssa-float-c__card a { font-size: var(--spacing-0_7); color: var(--ssa-primary); }
 #ssa-float-root .ssa-float__foot {
+    flex: 0 0 auto;
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: var(--weline-space-2);
-    margin-top: var(--weline-space-3);
-    padding-top: var(--spacing-0_55);
+    margin: 0;
+    padding: var(--weline-space-2) var(--weline-space-3) var(--weline-space-3);
     border-top: var(--border-width-thin) solid var(--ssa-border);
+    background-color: var(--ssa-surface);
     color: var(--ssa-muted);
     font-size: var(--spacing-0_7);
+}
+#ssa-float-root .ssa-float__foot--prod {
+    justify-content: space-between;
+}
+#ssa-float-root .ssa-float__foot--prod a {
+    color: var(--ssa-primary);
+    text-decoration: none;
+    font-weight: 600;
+}
+#ssa-float-root .ssa-float__foot-close {
+    border: var(--border-width-thin) solid var(--ssa-border);
+    background: var(--ssa-soft);
+    color: var(--ssa-text);
+    border-radius: var(--token-size-999px);
+    padding: var(--spacing-0_45) var(--weline-space-3);
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+}
+#ssa-float-root .ssa-float__foot-close:hover,
+#ssa-float-root .ssa-float__foot-close:focus-visible {
+    border-color: var(--ssa-primary);
+    color: var(--ssa-primary);
+}
+#ssa-float-root.ssa-float.is-open .ssa-float__fab {
+    background: var(--ssa-primary);
+    color: var(--ssa-surface);
+}
+#ssa-float-root .ssa-float__badge[hidden] {
+    display: none !important;
+}
+#ssa-float-root .ssa-float__foot--proto {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 #ssa-float-root .ssa-float__variants { display: flex; gap: var(--weline-space-1); }
@@ -301,9 +473,12 @@
     border-color: var(--ssa-primary);
     color: var(--ssa-primary);
 }
-@media (max-width: var(--size-content-720)) {
+/* Literal 720px — var() in @media is unreliable across hosts. */
+@media (max-width: 720px) {
     #ssa-float-root .ssa-float-c { grid-template-columns: 1fr; }
-    #ssa-float-root .ssa-float-b__task { grid-template-columns: 1fr; }
+    #ssa-float-root .ssa-float__panel {
+        max-height: min(48dvh, var(--token-size-22rem, 22rem));
+    }
 }
 /* Drawer/dialog scrim owns focus; keep FAB under overlay so it cannot pierce the edit panel. */
 body:has(.w-overlay) #ssa-float-root.ssa-float,

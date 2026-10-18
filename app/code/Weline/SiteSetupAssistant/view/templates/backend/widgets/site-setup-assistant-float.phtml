@@ -21,6 +21,7 @@ $variant = strtoupper(trim((string)($_GET['variant'] ?? 'B')));
 if (!in_array($variant, ['A', 'B', 'C'], true)) {
     $variant = 'B';
 }
+$showProto = ((string)($_GET['ssa_proto'] ?? '')) === '1';
 
 // 悬浮助手固定全站：不跟随仪表盘/其它页的 website_id（避免默认落到子站）
 $progressPath = '';
@@ -92,7 +93,8 @@ $buildUrl = static function (array $overrides) use ($progressPath): string {
 };
 
 $buildVariantUrl = static function (string $v) use ($buildUrl): string {
-    return $buildUrl(['variant' => $v]);
+    $url = $buildUrl(['variant' => $v]);
+    return $url . (str_contains($url, '?') ? '&' : '?') . 'ssa_proto=1';
 };
 
 if ($allDone) {
@@ -107,6 +109,13 @@ if ($allDone) {
      data-ssa-dimension="global"
      data-ssa-website-id="global"
      data-ssa-remaining="<?= $h((string)$fabRemaining) ?>">
+    <button type="button"
+            class="ssa-float__scrim"
+            data-ssa-close
+            data-ssa-scrim
+            data-testid="ssa-float-scrim"
+            hidden
+            aria-label="<?= $h(__('收起助手')) ?>"></button>
     <div class="ssa-float__panel" data-ssa-panel hidden>
         <div class="ssa-float__head">
             <div>
@@ -114,9 +123,15 @@ if ($allDone) {
                 <p class="ssa-float__title"><?= $h($websiteLabel) ?></p>
                 <p class="ssa-float__meta"><?= $h(__('进度 %{1}/%{2} · 还差 %{3} 项', [(string)$done, (string)$total, (string)$remaining])) ?></p>
             </div>
-            <button type="button" class="ssa-float__icon-btn" data-ssa-close aria-label="<?= $h(__('收起助手')) ?>">×</button>
+            <button type="button"
+                    class="ssa-float__icon-btn"
+                    data-ssa-close
+                    data-testid="ssa-float-close"
+                    title="<?= $h(__('收起助手')) ?>"
+                    aria-label="<?= $h(__('收起助手')) ?>">×</button>
         </div>
 
+        <div class="ssa-float__body">
         <div class="ssa-float__capsules" data-testid="ssa-float-capsules" role="navigation" aria-label="<?= $h(__('站点未完成提示')) ?>">
             <a class="ssa-float__capsule is-active"
                href="<?= $h($buildUrl([])) ?>"
@@ -156,11 +171,16 @@ if ($allDone) {
                  data-group="<?= $h((string)($tip['group'] ?? 'setup')) ?>"
                  data-scenes="<?= $h(implode(',', $tip['scenarios'] ?? ['new', 'migrate'])) ?>">
                 <label>
-                    <input type="checkbox" <?= ($tip['status'] ?? '') === 'done' ? 'checked' : '' ?> disabled>
-                    <span><?= $h($statusLabel((string)($tip['status'] ?? 'todo'))) ?></span>
+                    <input type="checkbox"
+                           <?= ($tip['status'] ?? '') === 'done' ? 'checked' : '' ?>
+                           disabled
+                           aria-label="<?= $h($statusLabel((string)($tip['status'] ?? 'todo'))) ?>">
                 </label>
                 <div>
-                    <p class="ssa-float-b__name"><?= $h($tip['title'] ?? '') ?></p>
+                    <p class="ssa-float-b__name">
+                        <em class="ssa-float-b__status"><?= $h($statusLabel((string)($tip['status'] ?? 'todo'))) ?></em>
+                        <?= $h($tip['title'] ?? '') ?>
+                    </p>
                     <p class="ssa-float-b__tip"><?= $h($tip['tip'] ?? '') ?></p>
                     <small><?= $h(($tip['module'] ?? '') . (($tip['category'] ?? '') !== '' ? ' · ' . $tip['category'] : '')) ?></small>
                 </div>
@@ -264,23 +284,33 @@ if ($allDone) {
                 </div>
             </div>
         <?php endif; ?>
+        </div><!-- /.ssa-float__body -->
 
-        <div class="ssa-float__foot">
-            <span data-ssa-state>variant=<?= $h($variant) ?>; dim=global; website=global; open=?</span>
-            <div class="ssa-float__variants" aria-label="<?= $h(__('面板布局原型')) ?>">
-                <a href="<?= $h($buildVariantUrl('A')) ?>" class="<?= $variant === 'A' ? 'is-active' : '' ?>">A</a>
-                <a href="<?= $h($buildVariantUrl('B')) ?>" class="<?= $variant === 'B' ? 'is-active' : '' ?>">B</a>
-                <a href="<?= $h($buildVariantUrl('C')) ?>" class="<?= $variant === 'C' ? 'is-active' : '' ?>">C</a>
+        <?php if ($showProto): ?>
+            <div class="ssa-float__foot ssa-float__foot--proto">
+                <span data-ssa-state>variant=<?= $h($variant) ?>; dim=global; website=global; open=?</span>
+                <div class="ssa-float__variants" aria-label="<?= $h(__('面板布局原型')) ?>">
+                    <a href="<?= $h($buildVariantUrl('A')) ?>" class="<?= $variant === 'A' ? 'is-active' : '' ?>">A</a>
+                    <a href="<?= $h($buildVariantUrl('B')) ?>" class="<?= $variant === 'B' ? 'is-active' : '' ?>">B</a>
+                    <a href="<?= $h($buildVariantUrl('C')) ?>" class="<?= $variant === 'C' ? 'is-active' : '' ?>">C</a>
+                </div>
             </div>
-        </div>
+        <?php else: ?>
+            <div class="ssa-float__foot ssa-float__foot--prod">
+                <button type="button" class="ssa-float__foot-close" data-ssa-close><?= $h(__('收起')) ?></button>
+                <a href="<?= $h($buildUrl([])) ?>"><?= $h(__('查看完整进度')) ?></a>
+            </div>
+        <?php endif; ?>
     </div>
 
     <button type="button"
             class="ssa-float__fab"
             data-ssa-toggle
+            data-label-open="<?= $h(__('建站助手')) ?>"
+            data-label-close="<?= $h(__('收起')) ?>"
             aria-expanded="false">
-        <span class="ssa-float__fab-label"><?= $h(__('建站助手')) ?></span>
-        <span class="ssa-float__badge" title="<?= $h(__('未完成项')) ?>"><?= $h((string)$fabRemaining) ?></span>
+        <span class="ssa-float__fab-label" data-ssa-fab-label><?= $h(__('建站助手')) ?></span>
+        <span class="ssa-float__badge" data-ssa-fab-badge title="<?= $h(__('未完成项')) ?>"><?= $h((string)$fabRemaining) ?></span>
     </button>
 </div>
 

@@ -10,11 +10,17 @@ window.WelineWidgetAssets.register('sitesetupassistant-site-setup-assistant-floa
 
     var websiteId = root.getAttribute('data-ssa-website-id') || 'global';
     var remaining = parseInt(root.getAttribute('data-ssa-remaining') || '0', 10) || 0;
-    var storageKey = 'weline.ssa.float.open.v2.' + websiteId;
+    // v3: first visit defaults closed (v2 defaulted open and felt like a takeover).
+    var storageKey = 'weline.ssa.float.open.v3.' + websiteId;
     var panel = root.querySelector('[data-ssa-panel]');
+    var scrim = root.querySelector('[data-ssa-scrim]');
     var toggle = root.querySelector('[data-ssa-toggle]');
-    var closeBtn = root.querySelector('[data-ssa-close]');
+    var closeBtns = root.querySelectorAll('[data-ssa-close]');
     var stateEl = root.querySelector('[data-ssa-state]');
+    var fabLabel = root.querySelector('[data-ssa-fab-label]');
+    var fabBadge = root.querySelector('[data-ssa-fab-badge]');
+    var labelOpen = (toggle && toggle.getAttribute('data-label-open')) || '建站助手';
+    var labelClose = (toggle && toggle.getAttribute('data-label-close')) || '收起';
 
     if (remaining <= 0) {
         root.setAttribute('hidden', '');
@@ -23,13 +29,12 @@ window.WelineWidgetAssets.register('sitesetupassistant-site-setup-assistant-floa
     root.removeAttribute('hidden');
 
     function readOpen() {
-        // 首次访问（无本地记录）默认展开面板，避免只剩 FAB 像「没弹出」。
         try {
             var stored = localStorage.getItem(storageKey);
-            if (stored === null) return true;
+            if (stored === null) return false;
             return stored === '1';
         } catch (e) {
-            return true;
+            return false;
         }
     }
     function writeOpen(open) {
@@ -40,15 +45,34 @@ window.WelineWidgetAssets.register('sitesetupassistant-site-setup-assistant-floa
             stateEl.textContent = stateEl.textContent.replace(/open=\S*/, 'open=' + (open ? '1' : '0'));
         }
     }
+    function paintFab(open) {
+        if (fabLabel) {
+            fabLabel.textContent = open ? labelClose : labelOpen;
+        }
+        if (fabBadge) {
+            if (open) {
+                fabBadge.setAttribute('hidden', '');
+            } else {
+                fabBadge.removeAttribute('hidden');
+            }
+        }
+        if (toggle) {
+            toggle.setAttribute('aria-label', open ? labelClose : labelOpen);
+        }
+        root.classList.toggle('is-open', !!open);
+    }
     function setOpen(open) {
         if (!panel || !toggle) return;
         if (open) {
             panel.removeAttribute('hidden');
+            if (scrim) scrim.removeAttribute('hidden');
             toggle.setAttribute('aria-expanded', 'true');
         } else {
             panel.setAttribute('hidden', '');
+            if (scrim) scrim.setAttribute('hidden', '');
             toggle.setAttribute('aria-expanded', 'false');
         }
+        paintFab(open);
         writeOpen(open);
         paintState(open);
     }
@@ -60,9 +84,9 @@ window.WelineWidgetAssets.register('sitesetupassistant-site-setup-assistant-floa
             setOpen(panel && panel.hasAttribute('hidden'));
         });
     }
-    if (closeBtn) {
-        closeBtn.addEventListener('click', function () { setOpen(false); });
-    }
+    closeBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () { setOpen(false); });
+    });
 
     root.querySelectorAll('[data-ssa-scene]').forEach(function (btn) {
         btn.addEventListener('click', function () {
