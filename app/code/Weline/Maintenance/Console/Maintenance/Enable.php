@@ -19,6 +19,7 @@ use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Setup\Lock\SoakExclusiveGate;
+use Weline\Maintenance\Helper\MaintenanceEdgeFlag;
 use Weline\Maintenance\Helper\WlsMaintenanceSync;
 use Weline\Maintenance\Service\MaintenanceStaticGenerator;
 use Weline\Maintenance\Service\UpgradeWaveService;
@@ -63,6 +64,12 @@ class Enable implements \Weline\Framework\Console\CommandInterface
         ]));
 
         Env::getInstance()->setConfig('system.maintenance', true);
+        if (!MaintenanceEdgeFlag::enable()) {
+            $this->printing->warning(__(
+                '未能写入边缘维护标志 %{1}；托管 Nginx 可能仍对店面 html-disk 返回 HIT。',
+                [MaintenanceEdgeFlag::RELATIVE_PATH]
+            ));
+        }
         $retryAfter = (int)(Env::getInstance()->getConfig('maintenance_retry_after', 60));
         $locales = (new MaintenanceStaticGenerator())->publishAll($retryAfter);
         $this->printing->note(__('维护静态页已生成：%{1}', [\implode(', ', $locales)]));

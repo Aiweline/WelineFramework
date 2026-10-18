@@ -745,6 +745,18 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
      */
     private function renderApiResponse(string $lang, int $retryAfter): string
     {
+        // Same authority as WLS ServiceUnavailablePage (host→website×locale static).
+        $static = MaintenanceStaticPage::loadJson(
+            $lang,
+            (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '/'),
+            (string)\Weline\Framework\Env\WelineEnv::server('QUERY_STRING', ''),
+            (string)\Weline\Framework\Env\WelineEnv::server('HTTP_COOKIE', ''),
+            (string)\Weline\Framework\Env\WelineEnv::server('HTTP_HOST', ''),
+        );
+        if (\is_string($static) && $static !== '') {
+            return $static;
+        }
+
         return $this->getStaticGenerator()->renderJson($lang, $retryAfter);
     }
 
@@ -753,6 +765,18 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
      */
     private function renderHtmlResponse(string $lang): string
     {
+        // Same authority as WLS ServiceUnavailablePage (host→website×locale static).
+        $static = MaintenanceStaticPage::loadHtml(
+            $lang,
+            (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '/'),
+            (string)\Weline\Framework\Env\WelineEnv::server('QUERY_STRING', ''),
+            (string)\Weline\Framework\Env\WelineEnv::server('HTTP_COOKIE', ''),
+            (string)\Weline\Framework\Env\WelineEnv::server('HTTP_HOST', ''),
+        );
+        if (\is_string($static) && $static !== '') {
+            return $static;
+        }
+
         return $this->getStaticGenerator()->renderHtml($lang);
     }
 }

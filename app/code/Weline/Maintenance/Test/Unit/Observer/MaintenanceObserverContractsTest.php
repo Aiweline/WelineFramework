@@ -42,6 +42,12 @@ final class MaintenanceObserverContractsTest extends TestCase
             'MaintenanceInterceptor::testWaitGiftApiPathIsWhitelistedInSource' => function () {
             $this->assert_MaintenanceInterceptor_testWaitGiftApiPathIsWhitelistedInSource();
         },
+            'MaintenanceInterceptor::testHtmlResponseLoadsHostScopedStaticLikeWls' => function () {
+            $this->assert_MaintenanceInterceptor_testHtmlResponseLoadsHostScopedStaticLikeWls();
+        },
+            'MaintenanceEdgeFlag::testEnableDisablePathAlignedWithNginxSnippet' => function () {
+            $this->assert_MaintenanceEdgeFlag_testEnableDisablePathAlignedWithNginxSnippet();
+        },
             'MaintenanceInterceptor::testBackendAreaAutoBypassesMaintenance' => function () {
             $this->assert_MaintenanceInterceptor_testBackendAreaAutoBypassesMaintenance();
         },
@@ -135,7 +141,7 @@ private function assert_MaintenanceRecoveryCheck_testInterceptorShortCircuitsRec
     self::assertStringContainsString('HTTP_X_MAINTENANCE_RECOVERY_CHECK', $source);
     self::assertStringContainsString('_maintenance_recovery_probe', $source);
     self::assertStringContainsString('X-Weline-Maintenance-Recovery', $source);
-    self::assertMatchesRegularExpression('/tryHandleRecoveryCheck\(\$pureEarly\).*tryHandleWaitGiftApi\(\$pureEarly\)/s', $source);
+    self::assertMatchesRegularExpression('/tryHandleRecoveryCheck\(\$pureGuess\).*tryHandleWaitGiftApi\(\$pureGuess\)/s', $source);
 }
 
 private function assert_MaintenanceRecoveryCheck_testFrontendWaitModalUsesLightweightRecoveryCheck(): void
@@ -149,5 +155,40 @@ private function assert_MaintenanceRecoveryCheck_testFrontendWaitModalUsesLightw
     self::assertStringContainsString('maintenanceAsyncWait', $welineJs);
     self::assertStringContainsString('installMaintenanceHandlerLazyBridge', $welineJs);
     self::assertStringNotContainsString('weline-maintenance-wait-modal', $welineJs);
+}
+
+private function assert_MaintenanceInterceptor_testHtmlResponseLoadsHostScopedStaticLikeWls(): void
+{
+    $root = '/Users/weline/Project/Official/框架';
+    $source = (string) \file_get_contents($root . '/app/code/Weline/Maintenance/Observer/MaintenanceInterceptor.php');
+    self::assertStringContainsString('MaintenanceStaticPage::loadHtml(', $source);
+    self::assertStringContainsString('MaintenanceStaticPage::loadJson(', $source);
+    // Frontend must not steal HTML with theme shell (FPM≠WLS root cause).
+    $frontendObs = (string) \file_get_contents(
+        $root . '/app/code/Weline/Frontend/Observer/Maintenance.php'
+    );
+    self::assertStringNotContainsString(
+        "Weline_Frontend::templates/maintenance.phtml",
+        $frontendObs,
+        'Frontend maintenance observer must only extend white_urls; body = MaintenanceStaticPage.',
+    );
+    self::assertStringNotContainsString("setData('handled'", $frontendObs);
+    self::assertStringNotContainsString('ResponseTerminateException', $frontendObs);
+    self::assertStringContainsString('HTTP_HOST', $source);
+    self::assertStringContainsString('Same authority as WLS ServiceUnavailablePage', $source);
+}
+
+private function assert_MaintenanceEdgeFlag_testEnableDisablePathAlignedWithNginxSnippet(): void
+{
+    $root = '/Users/weline/Project/Official/框架';
+    $flagSrc = (string) \file_get_contents($root . '/app/code/Weline/Maintenance/Helper/MaintenanceEdgeFlag.php');
+    $nginxSrc = (string) \file_get_contents($root . '/app/code/Weline/Server/Service/Edge/Nginx/ManagedNginxConfigWriter.php');
+    $enableSrc = (string) \file_get_contents($root . '/app/code/Weline/Maintenance/Console/Maintenance/Enable.php');
+    $disableSrc = (string) \file_get_contents($root . '/app/code/Weline/Maintenance/Console/Maintenance/Disable.php');
+    self::assertStringContainsString("RELATIVE_PATH = 'var/maintenance/edge.on'", $flagSrc);
+    self::assertStringContainsString('var/maintenance/edge.on', $nginxSrc);
+    self::assertStringContainsString('buildMaintenanceEdgeDiskBypassSnippet', $nginxSrc);
+    self::assertStringContainsString('MaintenanceEdgeFlag::enable()', $enableSrc);
+    self::assertStringContainsString('MaintenanceEdgeFlag::disable()', $disableSrc);
 }
 }

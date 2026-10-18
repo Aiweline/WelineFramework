@@ -18,6 +18,7 @@ use Weline\Framework\Console\CommandInterface;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Maintenance\Helper\MaintenanceEdgeFlag;
 use Weline\Maintenance\Helper\WlsMaintenanceSync;
 use Weline\Maintenance\Service\UpgradeWaveService;
 
@@ -46,6 +47,12 @@ class Disable implements \Weline\Framework\Console\CommandInterface
     public function execute(array $args = [], array $data = [])
     {
         Env::getInstance()->setConfig('system.maintenance', false);
+        if (!MaintenanceEdgeFlag::disable()) {
+            $this->printing->warning(__(
+                '未能删除边缘维护标志 %{1}；托管 Nginx 可能仍跳过店面 html-disk。',
+                [MaintenanceEdgeFlag::RELATIVE_PATH]
+            ));
+        }
         $waves = new UpgradeWaveService();
         $wave = $waves->markRecovered();
         if ($wave !== null) {
