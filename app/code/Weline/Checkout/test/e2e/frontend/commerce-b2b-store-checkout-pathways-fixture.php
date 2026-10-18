@@ -170,11 +170,28 @@ function e2e_b2b_ensure_store_channel(): array
  */
 function e2e_b2b_ensure_product_stock(int $websiteId, int $storeId): array
 {
-    // Live pathway PDP (悦雅霓裳 / product_id 113) + legacy catalog fixture product.
+    // Live pathway PDP variants drift across catalog regenerations — seed every known
+    // 悦雅霓裳 product_uuid (slug 4d375d6d / product_id 113 uses 70e4dd07…, not the older bc49a334…).
     $productUuids = [
-        'bc49a334-a39e-5bfd-b893-c98fcdfb014b', // yue-ya-ni-shang… (release-paypal PDP)
+        '70e4dd07-de40-50c0-8ad1-66d5fb17cd9a', // YUEYANICHANG-804749* (current PDP add-to-cart offers)
+        'bc49a334-a39e-5bfd-b893-c98fcdfb014b', // YUEYANICHANG-010223* (older release-paypal seed)
+        '74228704-6db4-50aa-8428-41a8f46e465b', // YUEYANICHANG-A55351C0-MIN-ZU sibling
         '8a3eda07-182e-57c2-991b-bfa66251637b', // product_id 321 黑山茶 (legacy)
     ];
+    // Also pull any registry row whose SKU still matches the live PDP family.
+    /** @var OfferIdentityRegistry $skuReg */
+    $skuReg = ObjectManager::getInstance()->get(OfferIdentityRegistry::class);
+    $skuHits = (clone $skuReg)->clear()
+        ->where(OfferIdentityRegistry::schema_fields_SKU, 'YUEYANICHANG%', 'like')
+        ->limit(200)
+        ->select()
+        ->fetchArray() ?: [];
+    foreach ($skuHits as $hit) {
+        $u = (string)($hit[OfferIdentityRegistry::schema_fields_PRODUCT_UUID] ?? '');
+        if ($u !== '') {
+            $productUuids[] = $u;
+        }
+    }
     $productUuids = array_values(array_unique(array_filter($productUuids)));
 
     /** @var OfferIdentityRegistry $reg */
