@@ -52,13 +52,21 @@ final class StorefrontWarmup implements CronTaskInterface
             $elapsed = \round((\microtime(true) - $started), 2);
 
             return \sprintf(
-                'storefront_warmup source=%s phase=%s reason=%s warmed=%d skipped=%d failed=%d elapsed=%ss',
+                'storefront_warmup source=%s phase=%s reason=%s warmed=%d skipped=%d failed=%d band=%s designed_conc=%d designed_shard=%d effective_conc=%d effective_shard=%d idle_ratio=%.3f remaining=%d yield=%d elapsed=%ss',
                 (string)($report['source'] ?? 'cron'),
                 (string)($report['phase'] ?? ''),
                 (string)($report['reason'] ?? ''),
                 (int)($report['warmed'] ?? 0),
                 (int)($report['skipped'] ?? 0),
                 (int)($report['failed'] ?? 0),
+                (string)($report['band'] ?? ($report['capacity']['band'] ?? '')),
+                (int)($report['designed_conc'] ?? ($report['capacity']['designed_concurrency'] ?? 0)),
+                (int)($report['designed_shard'] ?? ($report['capacity']['designed_shard'] ?? 0)),
+                (int)($report['effective_conc'] ?? ($report['capacity']['effective_concurrency'] ?? 0)),
+                (int)($report['effective_shard'] ?? ($report['capacity']['effective_shard'] ?? 0)),
+                (float)($report['idle_ratio'] ?? (1.0 - (float)($report['capacity']['ratio'] ?? 0))),
+                (int)($report['remaining'] ?? ($report['capacity']['remaining'] ?? 0)),
+                (($report['reason'] ?? '') === 'yield_traffic' || ($report['band'] ?? '') === 'yield') ? 1 : 0,
                 (string)$elapsed,
             );
         } catch (\Throwable $e) {

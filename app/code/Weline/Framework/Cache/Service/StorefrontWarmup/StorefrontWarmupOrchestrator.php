@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Cache\Service\StorefrontWarmup;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FpcWarmupProviderInterface;
 
@@ -16,8 +15,6 @@ use Weline\Framework\Runtime\FpcWarmupProviderInterface;
 final class StorefrontWarmupOrchestrator
 {
     private const LOCK_NAME = 'storefront_warmup_orchestrator.lock';
-    private const DEFAULT_SHARD = 6;
-    private const DEFAULT_WALL_MS = 45000;
     private const OFFER_DRAIN_PER_SLICE = 3;
 
     public function __construct(
@@ -27,6 +24,7 @@ final class StorefrontWarmupOrchestrator
         private readonly StorefrontWarmupHttpClient $http = new StorefrontWarmupHttpClient(),
         private readonly StorefrontWarmupSitemapParser $sitemapParser = new StorefrontWarmupSitemapParser(),
         private readonly StorefrontWarmupOfferQueue $offerQueue = new StorefrontWarmupOfferQueue(),
+        private readonly StorefrontWarmupCapacityPlanner $capacityPlanner = new StorefrontWarmupCapacityPlanner(),
     ) {
     }
 
@@ -43,7 +41,7 @@ final class StorefrontWarmupOrchestrator
     }
 
     /**
-     * Cron tick: resume ledger; respect busy/backoff.
+     * Cron tick: resume ledger; designed budget + traffic bands (no sticky busy backoff).
      *
      * @param array{source?:string,reset?:bool} $options
      * @return array<string, mixed>
@@ -64,37 +62,44 @@ final class StorefrontWarmupOrchestrator
 
         try {
             $state = $this->ledger->read();
-            $now = \microtime(true);
-            if (($state['backoff_until'] ?? 0) > $now) {
-                return [
-                    'ok' => true,
-                    'reason' => 'backoff',
-                    'source' => $source,
-                    'phase' => $state['phase'],
-                    'backoff_until' => $state['backoff_until'],
-                    'elapsed_ms' => $this->elapsedMs($startedAt),
-                ];
+            // Clear legacy sticky busy backoff so idle ticks resume designed budget.
+            if (($state['backoff_until'] ?? 0) > 0) {
+                $state['backoff_until'] = 0.0;
             }
 
             $busy = $this->busyGate->sample();
-            if ($busy['busy'] && $source !== 'clear') {
-                $state['backoff_until'] = $now + 60.0;
+            $capacity = $this->capacityPlanner->plan($state, $busy);
+            if ($source !== 'clear' && $capacity['band'] === StorefrontWarmupCapacityPlanner::BAND_YIELD) {
                 $state['last_status'] = 'skip';
-                $state['last_reason'] = $busy['reason'];
+                $state['last_reason'] = 'yield_traffic';
+                $state['last_yield_at'] = \microtime(true);
+                $state['backoff_until'] = 0.0;
                 $this->ledger->write($state);
 
                 return [
                     'ok' => true,
-                    'reason' => 'busy_gate',
+                    'reason' => 'yield_traffic',
                     'source' => $source,
                     'busy' => $busy,
+                    'capacity' => $capacity,
                     'phase' => $state['phase'],
+                    'warmed' => 0,
+                    'skipped' => 0,
+                    'failed' => 0,
+                    'designed_conc' => (int)$capacity['designed_concurrency'],
+                    'designed_shard' => (int)$capacity['designed_shard'],
+                    'effective_conc' => 0,
+                    'effective_shard' => 0,
+                    'band' => StorefrontWarmupCapacityPlanner::BAND_YIELD,
+                    'idle_ratio' => 1.0 - (float)$capacity['ratio'],
+                    'remaining' => (int)$capacity['remaining'],
                     'elapsed_ms' => $this->elapsedMs($startedAt),
                 ];
             }
 
-            $shard = $this->intEnv('framework.cache.storefront_warmup_shard', self::DEFAULT_SHARD, 1, 24);
-            $wallMs = $this->intEnv('framework.cache.storefront_warmup_wall_ms', self::DEFAULT_WALL_MS, 5000, 180000);
+            $shard = (int)$capacity['effective_shard'];
+            $wallMs = (int)$capacity['effective_wall_ms'];
+            $concurrency = \max(1, (int)$capacity['effective_concurrency']);
             $warmed = 0;
             $skipped = 0;
             $failed = 0;
@@ -136,30 +141,38 @@ final class StorefrontWarmupOrchestrator
                 if ($source !== 'clear'
                     && $this->busyGate->shouldAbortMidSlice((float)$midBusy['ratio'], (float)$midBusy['abort_threshold'])
                 ) {
-                    $state['backoff_until'] = \microtime(true) + 60.0;
                     $state['last_status'] = 'skip';
                     $state['last_reason'] = 'abort_busy';
+                    $state['last_yield_at'] = \microtime(true);
+                    $state['backoff_until'] = 0.0;
                     $this->ledger->write($state);
                     break;
                 }
 
-                $step = $this->advanceOne($state);
-                $state = $step['state'];
-                $samples[] = $step['sample'];
-                if ($step['sample']['status'] === 'ok') {
-                    $warmed++;
-                    $state['ok'] = (int)$state['ok'] + 1;
-                } elseif ($step['sample']['status'] === 'skip') {
-                    $skipped++;
-                    $state['skip'] = (int)$state['skip'] + 1;
-                } elseif ($step['sample']['status'] === 'fail') {
-                    $failed++;
-                    $state['fail'] = (int)$state['fail'] + 1;
-                }
-                if (($step['sample']['status'] ?? '') === 'done') {
-                    break;
+                $room = $shard - ($warmed + $skipped + $failed);
+                $batchN = \max(1, \min($concurrency, $room));
+                $batch = $this->advanceBatch($state, $batchN);
+                $state = $batch['state'];
+                foreach ($batch['samples'] as $sample) {
+                    $samples[] = $sample;
+                    if (($sample['status'] ?? '') === 'ok') {
+                        $warmed++;
+                        $state['ok'] = (int)$state['ok'] + 1;
+                    } elseif (($sample['status'] ?? '') === 'skip') {
+                        $skipped++;
+                        $state['skip'] = (int)$state['skip'] + 1;
+                    } elseif (($sample['status'] ?? '') === 'fail') {
+                        $failed++;
+                        $state['fail'] = (int)$state['fail'] + 1;
+                    }
                 }
                 $this->ledger->write($state);
+                if (($batch['done'] ?? false) === true) {
+                    break;
+                }
+                if ($batch['samples'] === []) {
+                    break;
+                }
             }
             $this->ledger->write($state);
 
@@ -174,11 +187,257 @@ final class StorefrontWarmupOrchestrator
                 'offer_pending' => $this->offerQueue->pendingCount(),
                 'samples' => \array_slice($samples, 0, 12),
                 'busy' => $busy,
+                'capacity' => $capacity,
+                'designed_conc' => (int)$capacity['designed_concurrency'],
+                'designed_shard' => (int)$capacity['designed_shard'],
+                'effective_conc' => $concurrency,
+                'effective_shard' => $shard,
+                'band' => (string)$capacity['band'],
+                'idle_ratio' => 1.0 - (float)$capacity['ratio'],
+                'remaining' => (int)$capacity['remaining'],
                 'elapsed_ms' => $this->elapsedMs($startedAt),
             ];
         } finally {
             $this->releaseLock($lock);
         }
+    }
+
+    /**
+     * Advance up to N warm steps in the current phase (HTTP via getMany when possible).
+     *
+     * @param array<string, mixed> $state
+     * @return array{state:array<string,mixed>,samples:list<array<string,mixed>>,done:bool}
+     */
+    private function advanceBatch(array $state, int $n): array
+    {
+        $n = \max(1, $n);
+        $phase = (string)($state['phase'] ?? StorefrontWarmupProgressLedger::PHASE_A_HOMEPAGE);
+        if ($phase === StorefrontWarmupProgressLedger::PHASE_A_HOMEPAGE
+            || $phase === StorefrontWarmupProgressLedger::PHASE_DONE
+            || $n === 1
+        ) {
+            $step = $this->advanceOne($state);
+
+            return [
+                'state' => $step['state'],
+                'samples' => [$step['sample']],
+                'done' => (($step['sample']['status'] ?? '') === 'done'),
+            ];
+        }
+
+        return match ($phase) {
+            StorefrontWarmupProgressLedger::PHASE_B_SITEMAP_DOCS => $this->advanceBatchPhaseB($state, $n),
+            StorefrontWarmupProgressLedger::PHASE_C_EXTRAS => $this->advanceBatchPhaseC($state, $n),
+            StorefrontWarmupProgressLedger::PHASE_D_LOCS => $this->advanceBatchPhaseD($state, $n),
+            default => [
+                'state' => $state,
+                'samples' => [['status' => 'done', 'url' => '', 'reason' => 'phase_done']],
+                'done' => true,
+            ],
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array{state:array<string,mixed>,samples:list<array<string,mixed>>,done:bool}
+     */
+    private function advanceBatchPhaseB(array $state, int $n): array
+    {
+        $docs = \is_array($state['sitemap_docs'] ?? null) ? $state['sitemap_docs'] : [];
+        if ($docs === []) {
+            $step = $this->runPhaseB($state);
+
+            return [
+                'state' => $step['state'],
+                'samples' => [$step['sample']],
+                'done' => false,
+            ];
+        }
+        $cursor = (int)($state['sitemap_doc_cursor'] ?? 0);
+        if ($cursor >= \count($docs)) {
+            $step = $this->runPhaseB($state);
+
+            return [
+                'state' => $step['state'],
+                'samples' => [$step['sample']],
+                'done' => false,
+            ];
+        }
+
+        $planned = [];
+        $i = $cursor;
+        while (\count($planned) < $n && $i < \count($docs)) {
+            $path = (string)$docs[$i];
+            $gate = $this->excludeGate->evaluate($path);
+            $isXml = \str_ends_with(\strtolower((string)(\parse_url($path, \PHP_URL_PATH) ?: $path)), '.xml')
+                || $path === '/sitemap.xml'
+                || \str_contains($path, '/sitemap');
+            if (!$isXml && !$gate['allow']) {
+                $planned[] = ['path' => $path, 'skip' => true, 'reason' => $gate['reason'], 'index' => $i];
+            } else {
+                $planned[] = ['path' => $path, 'skip' => false, 'reason' => '', 'index' => $i];
+            }
+            $i++;
+        }
+
+        $fetchPaths = [];
+        $fetchMap = [];
+        foreach ($planned as $idx => $row) {
+            if ($row['skip']) {
+                continue;
+            }
+            $fetchMap[\count($fetchPaths)] = $idx;
+            $fetchPaths[] = $row['path'];
+        }
+        $fetches = $fetchPaths === [] ? [] : $this->http->getMany($fetchPaths, true);
+        $samples = [];
+        foreach ($planned as $idx => $row) {
+            $path = $row['path'];
+            if ($row['skip']) {
+                $samples[] = ['status' => 'skip', 'url' => $path, 'reason' => $row['reason'], 'phase' => 'B'];
+                $state['last_url'] = $path;
+                $state['last_status'] = 'skip';
+                $state['last_reason'] = $row['reason'];
+                continue;
+            }
+            $fetchIdx = \array_search($idx, $fetchMap, true);
+            $fetch = \is_int($fetchIdx) ? ($fetches[$fetchIdx] ?? ['ok' => false, 'reason' => 'missing', 'body' => '']) : ['ok' => false, 'reason' => 'missing', 'body' => ''];
+            $status = ($fetch['ok'] ?? false) ? 'ok' : 'fail';
+            $reason = ($fetch['ok'] ?? false) ? (string)($fetch['reason'] !== '' ? $fetch['reason'] : 'http_ok') : (string)($fetch['reason'] ?? 'fail');
+            $state['last_url'] = $path;
+            $state['last_status'] = $status;
+            $state['last_reason'] = $reason;
+            if (($fetch['ok'] ?? false) && ($fetch['body'] ?? '') !== '') {
+                $locs = $state['locs'] ?? [];
+                if (!\is_array($locs)) {
+                    $locs = [];
+                }
+                foreach ($this->sitemapParser->extractPageLocs((string)$fetch['body']) as $loc) {
+                    $pagePath = $this->sitemapParser->locToPath($loc, true);
+                    if ($pagePath === null) {
+                        continue;
+                    }
+                    $locs[$pagePath] = $pagePath;
+                }
+                $state['locs'] = \array_values($locs);
+            }
+            $samples[] = ['status' => $status, 'url' => $path, 'reason' => $reason, 'phase' => 'B'];
+        }
+        $state['sitemap_doc_cursor'] = $cursor + \count($planned);
+
+        return ['state' => $state, 'samples' => $samples, 'done' => false];
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array{state:array<string,mixed>,samples:list<array<string,mixed>>,done:bool}
+     */
+    private function advanceBatchPhaseC(array $state, int $n): array
+    {
+        $extras = \is_array($state['extras'] ?? null) ? $state['extras'] : [];
+        if ($extras === []) {
+            $step = $this->runPhaseC($state);
+
+            return [
+                'state' => $step['state'],
+                'samples' => [$step['sample']],
+                'done' => false,
+            ];
+        }
+        $cursor = (int)($state['extras_cursor'] ?? 0);
+        if ($cursor >= \count($extras)) {
+            $step = $this->runPhaseC($state);
+
+            return [
+                'state' => $step['state'],
+                'samples' => [$step['sample']],
+                'done' => false,
+            ];
+        }
+
+        return $this->advanceBatchWarmPaths($state, $extras, $cursor, $n, 'extras_cursor', 'C');
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array{state:array<string,mixed>,samples:list<array<string,mixed>>,done:bool}
+     */
+    private function advanceBatchPhaseD(array $state, int $n): array
+    {
+        $locs = \is_array($state['locs'] ?? null) ? $state['locs'] : [];
+        $cursor = (int)($state['loc_cursor'] ?? 0);
+        if ($cursor >= \count($locs)) {
+            $step = $this->runPhaseD($state);
+
+            return [
+                'state' => $step['state'],
+                'samples' => [$step['sample']],
+                'done' => (($step['sample']['status'] ?? '') === 'done'),
+            ];
+        }
+
+        return $this->advanceBatchWarmPaths($state, $locs, $cursor, $n, 'loc_cursor', 'D');
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @param list<string>|array<int, string> $paths
+     * @return array{state:array<string,mixed>,samples:list<array<string,mixed>>,done:bool}
+     */
+    private function advanceBatchWarmPaths(
+        array $state,
+        array $paths,
+        int $cursor,
+        int $n,
+        string $cursorKey,
+        string $phaseLabel,
+    ): array {
+        $planned = [];
+        $i = $cursor;
+        while (\count($planned) < $n && $i < \count($paths)) {
+            $raw = (string)$paths[$i];
+            $gate = $this->excludeGate->evaluate($raw);
+            if (!$gate['allow']) {
+                $planned[] = ['path' => $raw, 'fetch' => null, 'skip' => true, 'reason' => $gate['reason']];
+            } else {
+                $planned[] = ['path' => $gate['path'], 'fetch' => $gate['path'], 'skip' => false, 'reason' => ''];
+            }
+            $i++;
+        }
+        $fetchPaths = [];
+        $fetchMap = [];
+        foreach ($planned as $idx => $row) {
+            if ($row['skip'] || $row['fetch'] === null) {
+                continue;
+            }
+            $fetchMap[\count($fetchPaths)] = $idx;
+            $fetchPaths[] = $row['fetch'];
+        }
+        $fetches = $fetchPaths === [] ? [] : $this->http->getMany($fetchPaths, false);
+        $samples = [];
+        foreach ($planned as $idx => $row) {
+            $path = $row['path'];
+            if ($row['skip']) {
+                $samples[] = ['status' => 'skip', 'url' => $path, 'reason' => $row['reason'], 'phase' => $phaseLabel];
+                $state['last_url'] = $path;
+                $state['last_status'] = 'skip';
+                $state['last_reason'] = $row['reason'];
+                continue;
+            }
+            $fetchIdx = \array_search($idx, $fetchMap, true);
+            $fetch = \is_int($fetchIdx) ? ($fetches[$fetchIdx] ?? ['ok' => false, 'reason' => 'missing', 'fpc' => '']) : ['ok' => false, 'reason' => 'missing', 'fpc' => ''];
+            $status = ($fetch['ok'] ?? false) ? 'ok' : 'fail';
+            $reason = ($fetch['ok'] ?? false)
+                ? (((string)($fetch['fpc'] ?? '')) !== '' ? (string)$fetch['fpc'] : 'http_ok')
+                : (string)($fetch['reason'] ?? 'fail');
+            $state['last_url'] = $path;
+            $state['last_status'] = $status;
+            $state['last_reason'] = $reason;
+            $samples[] = ['status' => $status, 'url' => $path, 'reason' => $reason, 'phase' => $phaseLabel];
+        }
+        $state[$cursorKey] = $cursor + \count($planned);
+
+        return ['state' => $state, 'samples' => $samples, 'done' => false];
     }
 
     /**
@@ -532,15 +791,5 @@ final class StorefrontWarmupOrchestrator
     private function elapsedMs(float $startedAt): float
     {
         return \round((\microtime(true) - $startedAt) * 1000, 2);
-    }
-
-    private function intEnv(string $key, int $default, int $min, int $max): int
-    {
-        $raw = Env::get($key, $default);
-        if (!\is_numeric($raw)) {
-            return $default;
-        }
-
-        return \max($min, \min($max, (int)$raw));
     }
 }

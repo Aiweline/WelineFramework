@@ -117,6 +117,211 @@ final class StorefrontWarmupHttpClient
     }
 
     /**
+     * Parallel path warm via curl_multi (falls back to serial get()).
+     *
+     * @param list<string> $paths
+     * @return list<array{ok:bool,status:int,body:string,fpc:string,reason:string,url:string}>
+     */
+    public function getMany(array $paths, bool $needBody = false): array
+    {
+        $paths = \array_values($paths);
+        if ($paths === []) {
+            return [];
+        }
+        if (\count($paths) === 1 || !\function_exists('curl_multi_init') || !\function_exists('curl_init')) {
+            $out = [];
+            foreach ($paths as $path) {
+                $out[] = $this->get($path, $needBody);
+            }
+
+            return $out;
+        }
+
+        $targets = $this->resolveTargets();
+        if ($targets === []) {
+            $empty = [];
+            foreach ($paths as $path) {
+                $empty[] = [
+                    'ok' => false,
+                    'status' => 0,
+                    'body' => '',
+                    'fpc' => '',
+                    'reason' => 'no_target',
+                    'url' => $path,
+                ];
+            }
+
+            return $empty;
+        }
+
+        $target = $targets[0];
+        $results = $this->httpGetManyOnTarget($target, $paths, $needBody);
+        foreach ($results as $i => $row) {
+            $ok = (bool)($row['ok'] ?? false);
+            if (!$ok || ($needBody && self::isFpcHit((string)($row['fpc'] ?? '')))) {
+                $results[$i] = $this->get($paths[$i], $needBody);
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * @param array{scheme:string,connect:string,port:int,host:string} $target
+     * @param list<string> $paths
+     * @return list<array{ok:bool,status:int,body:string,fpc:string,reason:string,url:string}>
+     */
+    private function httpGetManyOnTarget(array $target, array $paths, bool $needBody): array
+    {
+        $mh = \curl_multi_init();
+        if ($mh === false) {
+            $out = [];
+            foreach ($paths as $path) {
+                $out[] = $this->get($path, $needBody);
+            }
+
+            return $out;
+        }
+
+        /** @var array<int, resource|\CurlHandle> $handles */
+        $handles = [];
+        $headerBags = [];
+        foreach ($paths as $i => $path) {
+            $path = \trim((string)$path);
+            if ($path === '' || $path[0] !== '/') {
+                $path = '/' . \ltrim($path, '/');
+            }
+            $path = self::appendPierceQuery($path);
+            $scheme = \strtolower((string)($target['scheme'] ?? 'http')) === 'http' ? 'http' : 'https';
+            $connectHost = \trim((string)($target['connect'] ?? ''));
+            $port = (int)($target['port'] ?? 0);
+            $requestHost = (string)($target['host'] ?? '');
+            if (\str_contains($connectHost, ':') && !\str_starts_with($connectHost, '[') && \substr_count($connectHost, ':') > 1) {
+                $connectHost = '[' . $connectHost . ']';
+            }
+            $authority = $connectHost;
+            if (!(($scheme === 'https' && $port === 443) || ($scheme === 'http' && $port === 80))) {
+                $authority .= ':' . $port;
+            }
+            $url = $scheme . '://' . $authority . $path;
+            $ch = \curl_init($url);
+            if ($ch === false) {
+                continue;
+            }
+            $headerBags[$i] = [];
+            $requestHeaders = [
+                'Host: ' . $requestHost,
+                'Accept: text/html,application/xml,text/xml,*/*',
+                'User-Agent: WelineStorefrontWarmup/1.0',
+            ];
+            if ($needBody) {
+                $requestHeaders[] = 'x-wls-fpc-bypass: 1';
+            }
+            \curl_setopt_array($ch, [
+                \CURLOPT_RETURNTRANSFER => true,
+                \CURLOPT_FOLLOWLOCATION => true,
+                \CURLOPT_MAXREDIRS => 3,
+                \CURLOPT_TIMEOUT => self::TIMEOUT_SECONDS,
+                \CURLOPT_CONNECTTIMEOUT => 5,
+                \CURLOPT_SSL_VERIFYPEER => false,
+                \CURLOPT_SSL_VERIFYHOST => 0,
+                \CURLOPT_HTTPHEADER => $requestHeaders,
+                \CURLOPT_HEADERFUNCTION => static function ($ch, string $line) use (&$headerBags, $i): int {
+                    $trim = \trim($line);
+                    if ($trim !== '' && \str_contains($trim, ':')) {
+                        [$name, $value] = \array_map('trim', \explode(':', $trim, 2));
+                        $headerBags[$i][\strtolower($name)] = $value;
+                    }
+
+                    return \strlen($line);
+                },
+            ]);
+            $handles[$i] = $ch;
+            \curl_multi_add_handle($mh, $ch);
+        }
+
+        $running = null;
+        do {
+            $status = \curl_multi_exec($mh, $running);
+            if ($running) {
+                \curl_multi_select($mh, 1.0);
+            }
+        } while ($running && $status === \CURLM_OK);
+
+        $results = [];
+        foreach ($paths as $i => $_path) {
+            if (!isset($handles[$i])) {
+                $results[$i] = [
+                    'ok' => false,
+                    'status' => 0,
+                    'body' => '',
+                    'fpc' => '',
+                    'reason' => 'curl_init',
+                    'url' => '',
+                ];
+                continue;
+            }
+            $ch = $handles[$i];
+            $body = \curl_multi_getcontent($ch);
+            $httpStatus = (int)\curl_getinfo($ch, \CURLINFO_HTTP_CODE);
+            $errno = \curl_errno($ch);
+            $error = (string)\curl_error($ch);
+            $url = (string)\curl_getinfo($ch, \CURLINFO_EFFECTIVE_URL);
+            \curl_multi_remove_handle($mh, $ch);
+            \curl_close($ch);
+
+            if ($errno !== 0) {
+                $results[$i] = [
+                    'ok' => false,
+                    'status' => $httpStatus,
+                    'body' => '',
+                    'fpc' => '',
+                    'reason' => 'curl:' . $error,
+                    'url' => $url,
+                ];
+                continue;
+            }
+            if ($httpStatus < 200 || $httpStatus >= 400 || !\is_string($body)) {
+                $results[$i] = [
+                    'ok' => false,
+                    'status' => $httpStatus,
+                    'body' => '',
+                    'fpc' => '',
+                    'reason' => !\is_string($body) ? 'empty_body' : 'http_' . $httpStatus,
+                    'url' => $url,
+                ];
+                continue;
+            }
+            if (!$needBody && \strlen($body) < 80) {
+                $results[$i] = [
+                    'ok' => false,
+                    'status' => $httpStatus,
+                    'body' => '',
+                    'fpc' => '',
+                    'reason' => 'empty_body',
+                    'url' => $url,
+                ];
+                continue;
+            }
+            $headers = $headerBags[$i] ?? [];
+            $fpc = (string)($headers['x-weline-fpc'] ?? $headers['x-wls-fpc-status'] ?? '');
+            $results[$i] = [
+                'ok' => true,
+                'status' => $httpStatus,
+                'body' => $needBody ? $body : '',
+                'fpc' => $fpc,
+                'reason' => '',
+                'url' => $url,
+            ];
+        }
+        \curl_multi_close($mh);
+
+        \ksort($results);
+
+        return \array_values($results);
+    }
+
+    /**
      * Warm an absolute http(s) URL or a storefront path (Changed offer queue).
      *
      * @return array{ok:bool,status:int,body:string,fpc:string,reason:string,url:string}

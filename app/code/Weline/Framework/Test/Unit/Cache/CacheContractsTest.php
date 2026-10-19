@@ -14,7 +14,9 @@ use Weline\Framework\Cache\Namespace\NamespaceKeyDecorator;
 use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupCapacityPlanner;
 use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupExcludeGate;
+use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupHttpClient;
 use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupOfferQueue;
 use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupOrchestrator;
 use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupProgressLedger;
@@ -186,6 +188,9 @@ final class CacheContractsTest extends TestCase
         },
             'StorefrontWarmupOrchestrator::testWarmupHttpClientNeedBodyForcesOriginAndRefusesHit' => function () {
             $this->assert_StorefrontWarmupOrchestrator_testWarmupHttpClientNeedBodyForcesOriginAndRefusesHit();
+        },
+            'StorefrontWarmupOrchestrator::testDesignedBudgetAndTrafficBandsWithoutStickyBackoff' => function () {
+            $this->assert_StorefrontWarmupOrchestrator_testDesignedBudgetAndTrafficBandsWithoutStickyBackoff();
         },
             'SharedResponseCachePolicyForbiddenEvent::testForbidDispatchesSharedCacheForbiddenEventConstant' => function () {
             $this->assert_SharedResponseCachePolicyForbiddenEvent_testForbidDispatchesSharedCacheForbiddenEventConstant();
@@ -697,6 +702,62 @@ private function assert_StorefrontWarmupOrchestrator_testWarmupHttpClientNeedBod
     self::assertStringContainsString('Post-promote visitor assert', $src);
     self::assertStringContainsString('bool $pierce = true', $src);
     self::assertStringContainsString('bool $bypass = false', $src);
+}
+
+private function assert_StorefrontWarmupOrchestrator_testDesignedBudgetAndTrafficBandsWithoutStickyBackoff(): void
+{
+    self::assertTrue(class_exists(StorefrontWarmupCapacityPlanner::class));
+    self::assertTrue(method_exists(StorefrontWarmupHttpClient::class, 'getMany'));
+
+    $planner = new StorefrontWarmupCapacityPlanner();
+    $state = [
+        'phase' => StorefrontWarmupProgressLedger::PHASE_D_LOCS,
+        'locs' => \array_fill(0, 100, '/p'),
+        'loc_cursor' => 0,
+        'sitemap_docs' => [],
+        'extras' => [],
+    ];
+    $full = $planner->plan($state, [
+        'ratio' => 0.10,
+        'start_threshold' => 0.40,
+        'abort_threshold' => 0.70,
+    ]);
+    self::assertSame(StorefrontWarmupCapacityPlanner::BAND_FULL, $full['band']);
+    self::assertGreaterThan(6, (int)$full['designed_shard']);
+    self::assertGreaterThan(6, (int)$full['effective_shard']);
+    self::assertGreaterThanOrEqual(2, (int)$full['designed_concurrency']);
+    self::assertSame((int)$full['designed_shard'], (int)$full['effective_shard']);
+
+    $scale = $planner->plan($state, [
+        'ratio' => 0.50,
+        'start_threshold' => 0.40,
+        'abort_threshold' => 0.70,
+    ]);
+    self::assertSame(StorefrontWarmupCapacityPlanner::BAND_SCALE, $scale['band']);
+    self::assertLessThan((int)$scale['designed_shard'], (int)$scale['effective_shard']);
+    self::assertGreaterThan(0, (int)$scale['effective_shard']);
+
+    $yield = $planner->plan($state, [
+        'ratio' => 0.80,
+        'start_threshold' => 0.40,
+        'abort_threshold' => 0.70,
+    ]);
+    self::assertSame(StorefrontWarmupCapacityPlanner::BAND_YIELD, $yield['band']);
+    self::assertSame(0, (int)$yield['effective_concurrency']);
+
+    $orchSrc = (string) \file_get_contents((new \ReflectionClass(StorefrontWarmupOrchestrator::class))->getFileName() ?: '');
+    self::assertStringContainsString('StorefrontWarmupCapacityPlanner', $orchSrc);
+    self::assertStringContainsString('getMany', $orchSrc);
+    self::assertStringContainsString('yield_traffic', $orchSrc);
+    self::assertStringContainsString('advanceBatch', $orchSrc);
+    self::assertStringNotContainsString('+ 60.0', $orchSrc);
+    self::assertStringNotContainsString('+60.0', $orchSrc);
+    self::assertStringNotContainsString('DEFAULT_SHARD = 6', $orchSrc);
+    self::assertStringContainsString('256', (string) \file_get_contents((new \ReflectionClass(StorefrontWarmupCapacityPlanner::class))->getFileName() ?: ''));
+
+    $httpSrc = (string) \file_get_contents((new \ReflectionClass(StorefrontWarmupHttpClient::class))->getFileName() ?: '');
+    self::assertStringContainsString('function getMany', $httpSrc);
+    self::assertStringContainsString('curl_multi_init', $httpSrc);
 }
 
 private function assert_SharedResponseCachePolicyForbiddenEvent_testForbidDispatchesSharedCacheForbiddenEventConstant(): void
