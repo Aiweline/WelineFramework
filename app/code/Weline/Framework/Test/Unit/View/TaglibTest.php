@@ -179,6 +179,54 @@ class TaglibTest extends TestCore
     }
 
     /**
+     * <block title="@lang(词)"/>：@lang 展开为 <?=emit(...)?> / __PHP_N__ 后，block 导出必须
+     * 解析为 PHP 表达式，禁止再包进单引号（restore 后嵌套引号 → ParseError）。
+     */
+    public function testBlockLangAttributeExportsAsPhpExpression(): void
+    {
+        $template = new Template();
+        $content = '<block class="Weline\Component\Block\OffCanvas"'
+            . ' template="Weline_Component::off-canvas.phtml"'
+            . ' title="@lang(添加域名)"'
+            . ' id="cdn_domain_add_offcanvas"'
+            . ' action="*/backend/domain/form"'
+            . ' target-button-text="@lang(添加域名)"'
+            . '/>';
+        $parse_str = $this->taglib->tagReplace($template, $content);
+
+        self::assertStringContainsString('framework_view_process_block', $parse_str);
+        self::assertStringContainsString("InlinePhraseMarker::emit('添加域名'", $parse_str);
+        self::assertDoesNotMatchRegularExpression(
+            "/'title'\\s*=>\\s*'<\?=/",
+            $parse_str,
+            'title 不得把 <?=emit(...)?> 再包进单引号字符串'
+        );
+        self::assertMatchesRegularExpression(
+            "/'title'\\s*=>\\s*\\(\\\\Weline\\\\I18n\\\\Service\\\\InlineEdit\\\\InlinePhraseMarker::emit\\('添加域名'/",
+            $parse_str,
+            'title 应为 emit(...) 表达式'
+        );
+
+        self::assertTrue(
+            preg_match(
+                '/framework_view_process_block\((.*?),\$vars=/s',
+                $parse_str,
+                $m
+            ) === 1,
+            '应能抽出 block 属性数组字面量'
+        );
+        $arrPhp = '<?php $__w_block_attrs = ' . $m[1] . ';';
+        $tmp = tempnam(sys_get_temp_dir(), 'w_block_lang_');
+        self::assertNotFalse($tmp);
+        file_put_contents($tmp, $arrPhp);
+        $lint = [];
+        $code = 0;
+        exec('php -l ' . escapeshellarg($tmp) . ' 2>&1', $lint, $code);
+        @unlink($tmp);
+        self::assertSame(0, $code, implode("\n", $lint));
+    }
+
+    /**
      * 测试混合内容属性值（文本 + PHP 表达式）
      */
     public function testMixedAttributeValueRuntime()

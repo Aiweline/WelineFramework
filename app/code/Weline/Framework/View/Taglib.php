@@ -73,6 +73,9 @@ class Taglib
      * PHP 提取器
      */
     private ?PhpExtractor $phpExtractor = null;
+
+    /** Current compile-depth PhpExtractor (nested compiles use a private instance). */
+    private ?PhpExtractor $activeCompileExtractor = null;
     
     /**
      * 词法分析器
@@ -523,6 +526,57 @@ class Taglib
     }
 
     /**
+     * Compile-time array literal for framework_view_process_block(...).
+     *
+     * expandInlineTags may turn title="@lang(词)" into <?=InlinePhraseMarker::emit(...)?>,
+     * then PhpExtractor replaces that with __PHP_N__. Those must be emitted as PHP
+     * expressions — w_var_export() would quote the placeholder and restore() would
+     * nest emit('…') quotes → ParseError (unexpected identifier).
+     *
+     * @param array<array-key, mixed> $attributes
+     */
+    private function exportBlockProcessAttributes(array $attributes): string
+    {
+        if ($attributes === []) {
+            return '[]';
+        }
+
+        $pairs = [];
+        foreach ($attributes as $key => $value) {
+            $pairs[] = var_export((string)$key, true) . ' => ' . $this->exportBlockAttributeValue($value);
+        }
+
+        return '[' . implode(', ', $pairs) . ']';
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private function exportBlockAttributeValue(mixed $value): string
+    {
+        if (!\is_string($value)) {
+            return w_var_export($value, true);
+        }
+
+        $trimmed = \trim($value);
+        $extractor = $this->activeCompileExtractor ?? $this->phpExtractor;
+        if ($extractor instanceof PhpExtractor && $extractor->isPlaceholder($trimmed)) {
+            $expr = $extractor->getExpression($trimmed);
+            if (\is_string($expr) && $expr !== '') {
+                return '(' . \rtrim(\trim($expr), ';') . ')';
+            }
+        }
+        if (\preg_match('/^<\?=\s*(.*?)\s*\?>$/s', $trimmed, $m) === 1) {
+            return '(' . $m[1] . ')';
+        }
+        if (\preg_match('/^<\?(?:php)?\s+echo\s+(.*?);\s*\?>$/s', $trimmed, $m) === 1) {
+            return '(' . \rtrim(\trim($m[1]), ';') . ')';
+        }
+
+        return \var_export($value, true);
+    }
+
+    /**
      * When path (+ optional params) are compile-time literals, resolve via Template
      * Url helpers and bake the final string into com_*. Dynamic path/params keep PHP stubs.
      *
@@ -773,50 +827,56 @@ class Taglib
             $nested = $compileDepth > 1;
             $extractor = $nested ? new PhpExtractor() : $this->getPhpExtractor();
             $extractor->reset();
-            $cleanContent = $extractor->extract($content);
-            
-            // 阶段 2: 词法分析（复用实例 + reset）
-            $tokenizer = $nested ? new Tokenizer() : $this->getTokenizer();
-            $tokenizer->reset();
-            $tags = $this->getTags($template, $fileName, $content);
-            if ($topLevelCompile) {
-                $this->resetCompileScopedTagState();
-            }
-            $tokenizer->setFrameworkTags(array_keys($tags));
-            $tokens = $tokenizer->tokenize($cleanContent);
-            
-            // 阶段 3: 构建 AST（复用实例 + reset）
-            $astBuilder = $nested ? new AstBuilder() : $this->getAstBuilder();
-            $astBuilder->reset();
-            $astBuilder->setPhpExtractor($extractor);
-            $ast = $astBuilder->build($tokens, $fileName);
-            
-            // 阶段 4: 编译管道优化
-            $pipeline = $nested ? $this->newCompilePipeline() : $this->getCompilePipeline();
-            $ast = $pipeline->process($ast);
-            
-            // 阶段 5: 生成代码（复用实例 + reset，避免回调累积）
-            $generator = $nested ? new CodeGenerator() : $this->getCodeGenerator();
-            $generator->reset();
-            $generator->setPhpExtractor($extractor);
-            
-            // 调试模式：传递 SourceMap 给生成器
-            if ($this->debug && $this->sourceMap !== null) {
-                $generator->setSourceMap($this->sourceMap);
-            }
-            
-            $this->registerTagCallbacks($generator, $tags, $template, $fileName);
-            $result = $generator->generate($ast);
-            
-            // 恢复 PHP 占位符
-            $result = $extractor->restore($result);
-            
-            $result = \Weline\Framework\View\Taglib\TemplateTranslationWords::withRuntimePrefetch($result);
+            $previousActiveExtractor = $this->activeCompileExtractor;
+            $this->activeCompileExtractor = $extractor;
+            try {
+                $cleanContent = $extractor->extract($content);
 
-            // 缓存结果（写入所有缓存层）
-            $cache->set($template, $fileName, $content, $result);
-            
-            return $result;
+                // 阶段 2: 词法分析（复用实例 + reset）
+                $tokenizer = $nested ? new Tokenizer() : $this->getTokenizer();
+                $tokenizer->reset();
+                $tags = $this->getTags($template, $fileName, $content);
+                if ($topLevelCompile) {
+                    $this->resetCompileScopedTagState();
+                }
+                $tokenizer->setFrameworkTags(array_keys($tags));
+                $tokens = $tokenizer->tokenize($cleanContent);
+
+                // 阶段 3: 构建 AST（复用实例 + reset）
+                $astBuilder = $nested ? new AstBuilder() : $this->getAstBuilder();
+                $astBuilder->reset();
+                $astBuilder->setPhpExtractor($extractor);
+                $ast = $astBuilder->build($tokens, $fileName);
+
+                // 阶段 4: 编译管道优化
+                $pipeline = $nested ? $this->newCompilePipeline() : $this->getCompilePipeline();
+                $ast = $pipeline->process($ast);
+
+                // 阶段 5: 生成代码（复用实例 + reset，避免回调累积）
+                $generator = $nested ? new CodeGenerator() : $this->getCodeGenerator();
+                $generator->reset();
+                $generator->setPhpExtractor($extractor);
+
+                // 调试模式：传递 SourceMap 给生成器
+                if ($this->debug && $this->sourceMap !== null) {
+                    $generator->setSourceMap($this->sourceMap);
+                }
+
+                $this->registerTagCallbacks($generator, $tags, $template, $fileName);
+                $result = $generator->generate($ast);
+
+                // 恢复 PHP 占位符
+                $result = $extractor->restore($result);
+
+                $result = \Weline\Framework\View\Taglib\TemplateTranslationWords::withRuntimePrefetch($result);
+
+                // 缓存结果（写入所有缓存层）
+                $cache->set($template, $fileName, $content, $result);
+
+                return $result;
+            } finally {
+                $this->activeCompileExtractor = $previousActiveExtractor;
+            }
         } finally {
             self::setCompileDepthValue(\max(0, $compileDepth - 1));
             if ($topLevelCompile) {
@@ -2427,7 +2487,7 @@ class Taglib
                             case 'tag':
                                 $data = explode('|', $tag_data[2]);
                                 $data = array_merge($data, $attributes);
-                                $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . w_var_export($data, true) . ');' . self::PHP_CLOSE_TAG;
+                                $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . $this->exportBlockProcessAttributes($data) . ');' . self::PHP_CLOSE_TAG;
                                 break;
                             // @block{Vendor\Module\Block\Demo|Vendor_Module::block/demo.phtml}
                             case '@tag{}':
@@ -2442,7 +2502,7 @@ class Taglib
                                         )
                                     );
                                 }
-                                $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . w_var_export($data, true) . ');' . self::PHP_CLOSE_TAG;
+                                $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . $this->exportBlockProcessAttributes($data) . ');' . self::PHP_CLOSE_TAG;
                                 break;
                             // <block class='Vendor\Module\Block\Demo' template='Vendor_Module::templates/demo.phtml'/>
                             // AST 自闭合使用 tag-self-close；旧解析器用 tag-self-close-with-attrs。
@@ -2470,7 +2530,7 @@ class Taglib
                                     }
                                 }
                                 $vars_string .= ']';
-                                $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . w_var_export($attributes, true) . ',$vars=' . $vars_string . ');' . self::PHP_CLOSE_TAG;
+                                $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . $this->exportBlockProcessAttributes($attributes) . ',$vars=' . $vars_string . ');' . self::PHP_CLOSE_TAG;
                                 break;
                             default:
                         }
