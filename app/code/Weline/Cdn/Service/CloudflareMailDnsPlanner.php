@@ -77,30 +77,38 @@ final class CloudflareMailDnsPlanner
         foreach ($specifications as $specification) {
             $matches = $specification['matches'];
             $wanted = array_values(array_filter($desired, $matches));
+            $label = (string)$specification['label'];
             // DKIM 公钥未生成前可先同步 A/MX/SPF/DMARC；有公钥后再写入 DKIM
-            if ($wanted === [] && ($specification['label'] === 'DKIM' || !empty($specification['optional']))) {
+            if ($wanted === [] && ($label === 'DKIM' || !empty($specification['optional']))) {
+                continue;
+            }
+            // Stalwart 可同时发布多个 selector（RSA + Ed25519）；逐条 reconcile
+            if ($label === 'DKIM') {
+                usort(
+                    $wanted,
+                    static fn(array $a, array $b): int => strcmp((string)$a['name'], (string)$b['name']),
+                );
+                foreach ($wanted as $wantedRecord) {
+                    $wantedName = (string)$wantedRecord['name'];
+                    $currentForName = array_values(array_filter(
+                        $existing,
+                        static fn(array $record): bool =>
+                            $record['type'] === 'TXT'
+                            && $record['name'] === $wantedName
+                            && str_starts_with(strtolower($record['content']), 'v=dkim1'),
+                    ));
+                    $this->reconcileSingleton($label, $currentForName, $wantedRecord, $operations);
+                }
                 continue;
             }
             if (count($wanted) !== 1) {
                 throw new \DomainException(
-                    (string)__('邮箱 DNS 计划必须包含且仅包含一条 %{1} 记录。', $specification['label'])
+                    (string)__('邮箱 DNS 计划必须包含且仅包含一条 %{1} 记录。', $label)
                 );
             }
 
             $current = array_values(array_filter($existing, $matches));
-            if ($specification['label'] === 'DKIM') {
-                $wantedName = $wanted[0]['name'];
-                $current = array_values(array_filter(
-                    $current,
-                    static fn(array $record): bool => $record['name'] === $wantedName,
-                ));
-            }
-            $this->reconcileSingleton(
-                (string)$specification['label'],
-                $current,
-                $wanted[0],
-                $operations,
-            );
+            $this->reconcileSingleton($label, $current, $wanted[0], $operations);
         }
 
         return [

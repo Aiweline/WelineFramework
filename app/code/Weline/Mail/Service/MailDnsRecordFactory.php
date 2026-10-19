@@ -109,9 +109,11 @@ final class MailDnsRecordFactory
             'proxied' => false,
         ];
 
+        // dns_only_hosts 仅含须 A/AAAA + DNS-only 的邮件主机。
+        // smtp.* 走 CNAME（desired_records），不可放进本列表，否则 Planner 会按 A/AAAA 校验并失败。
         return [
             'desired_records' => $records,
-            'dns_only_hosts' => array_values(array_unique([$hostname, $smtpHost])),
+            'dns_only_hosts' => [$hostname],
         ];
     }
 

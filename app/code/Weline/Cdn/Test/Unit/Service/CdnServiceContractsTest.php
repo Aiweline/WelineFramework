@@ -521,12 +521,17 @@ private function assert_CloudflareMailDnsGlobalKey_testMailDnsManagerUsesCredent
     self::assertStringContainsString('apiWithCredentials', $mgr);
     self::assertStringContainsString('hasUsableCredentials', $mgr);
     self::assertStringNotContainsString("\$token = trim((string)(\$credentials['api_token'] ?? ''));", $mgr);
+    self::assertStringContainsString('array_slice($labels, $i)', $mgr);
+    self::assertStringContainsString('已尝试：%{1}', $mgr);
+    self::assertStringContainsString('catch (\\Throwable $e)', $mgr);
 }
 
 private function assert_CloudflareMailDnsGlobalKey_testPlannerAllowsAbsentDkimDesiredRecord(): void
 {
     $src = (string) file_get_contents(BP . 'app/code/Weline/Cdn/Service/CloudflareMailDnsPlanner.php');
-    self::assertStringContainsString("\$wanted === [] && \$specification['label'] === 'DKIM'", $src);
+    self::assertStringContainsString("\$wanted === [] && (\$label === 'DKIM'", $src);
+    self::assertStringContainsString("\$label === 'DKIM'", $src);
+    self::assertStringContainsString('foreach ($wanted as $wantedRecord)', $src);
 }
 
 private function assert_CloudflareOAuthScopes_testRequiredScopesOmitProtocolOfflineAccess(): void

@@ -5357,20 +5357,30 @@ if ($oauthCfError === 'invalid_scope') {
                 $requiredOk = is_array($live) ? !empty($live['ok']) : false;
                 $formOriginIp = $originIp;
                 ?>
-                <article class="w-card" data-testid="mail-domain-card-<?= $domainId ?>">
-                    <header class="w-card__header">
-                        <h2 class="w-card__title"><?= $escape($domainName) ?></h2>
-                        <div class="mail-enterprise__meta" style="--w-mt:var(--weline-space-2);">
-                            <span><?= $escape($host) ?></span>
-                            <?php if ($originIp !== ''): ?>
-                                <span class="w-badge" data-tone="neutral" data-testid="mail-domain-origin-ip-<?= $domainId ?>">
-                                    <?= $escape(__('本机邮局 IP %{1}', [$originIp])) ?>
+                <article class="w-card" data-testid="mail-domain-card-<?= $domainId ?>" data-mail-domain-id="<?= $domainId ?>">
+                    <header class="w-card__header w-cluster" data-justify="between" data-align="start" style="--w-gap:var(--weline-space-2);">
+                        <div style="min-inline-size:0; flex:1 1 auto;">
+                            <h2 class="w-card__title" style="--w-m:0;"><?= $escape($domainName) ?></h2>
+                            <div class="mail-enterprise__meta" style="--w-mt:var(--weline-space-2);">
+                                <span><?= $escape($host) ?></span>
+                                <?php if ($originIp !== ''): ?>
+                                    <span class="w-badge" data-tone="neutral" data-testid="mail-domain-origin-ip-<?= $domainId ?>">
+                                        <?= $escape(__('本机邮局 IP %{1}', [$originIp])) ?>
+                                    </span>
+                                <?php endif; ?>
+                                <span class="w-badge" data-tone="<?= $requiredOk ? 'success' : 'neutral' ?>" data-testid="mail-domain-dns-badge-<?= $domainId ?>">
+                                    <?= $requiredOk ? __('DNS 已通过') : $escape($domain->getData(MailDomain::schema_fields_STATUS)) ?>
                                 </span>
-                            <?php endif; ?>
-                            <span class="w-badge" data-tone="<?= $requiredOk ? 'success' : 'neutral' ?>" data-testid="mail-domain-dns-badge-<?= $domainId ?>">
-                                <?= $requiredOk ? __('DNS 已通过') : $escape($domain->getData(MailDomain::schema_fields_STATUS)) ?>
-                            </span>
+                            </div>
                         </div>
+                        <button class="w-button" type="button" data-tone="danger" data-variant="outline" data-size="sm"
+                                data-mail-domain-delete
+                                data-domain-id="<?= $domainId ?>"
+                                data-domain-name="<?= $escape($domainName) ?>"
+                                data-testid="mail-domain-delete-<?= $domainId ?>"
+                                title="<?= $escape(__('移除本邮箱域名配置（不删网站域名）')) ?>">
+                            <?= __('删除') ?>
+                        </button>
                     </header>
                     <div class="w-card__body">
                         <div class="mail-enterprise__dns" data-testid="mail-domain-dns-checklist-<?= $domainId ?>">
@@ -5528,6 +5538,66 @@ if ($oauthCfError === 'invalid_scope') {
                 </article>
             <?php endforeach; ?>
         </div>
+        <script>
+        (function () {
+            var root = document.querySelector('.mail-enterprise__domains');
+            if (!root) return;
+            var unavailableMsg = <?= json_encode((string)__('Mail API 不可用'), JSON_UNESCAPED_UNICODE) ?>;
+            var confirmDelete = <?= json_encode(
+                (string)__('确定移除该邮箱域名配置？其下邮箱账号也会删除。网站域名本身不会被删除。'),
+                JSON_UNESCAPED_UNICODE
+            ) ?>;
+            function toast(kind, message) {
+                var ui = window.Weline && window.Weline.UI;
+                var api = ui && ui.toast;
+                var text = String(message || '').trim();
+                if (!text) return;
+                if (api && typeof api[kind] === 'function') { api[kind](text); return; }
+                if (api && typeof api.show === 'function') {
+                    api.show(text, { tone: kind === 'success' ? 'success' : 'danger' });
+                }
+            }
+            function confirmUi(message) {
+                var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+                if (ui && typeof ui.confirm === 'function') {
+                    return Promise.resolve(ui.confirm(message)).then(function (ok) { return !!ok; });
+                }
+                return Promise.resolve(window.confirm(String(message || '')));
+            }
+            function mailApi() {
+                if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                    return Promise.reject(new Error(unavailableMsg));
+                }
+                if (typeof window.Weline.load === 'function') {
+                    return window.Weline.load('api').then(function () { return window.Weline.Api.resource('mail'); });
+                }
+                return Promise.resolve(window.Weline.Api.resource('mail'));
+            }
+            root.querySelectorAll('[data-mail-domain-delete]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var id = parseInt(btn.getAttribute('data-domain-id') || '0', 10) || 0;
+                    var name = String(btn.getAttribute('data-domain-name') || '').trim();
+                    if (id <= 0) return;
+                    var msg = confirmDelete + (name ? ('\n' + name) : '');
+                    confirmUi(msg).then(function (ok) {
+                        if (!ok) return;
+                        btn.disabled = true;
+                        return mailApi().then(function (api) {
+                            return api.deleteMailboxDomain({ domain_id: id });
+                        }).then(function (res) {
+                            var success = !!(res && res.success);
+                            toast(success ? 'success' : 'error', (res && res.message) ? String(res.message) : (success ? 'ok' : 'fail'));
+                            if (success) window.location.reload();
+                            else btn.disabled = false;
+                        });
+                    }).catch(function (err) {
+                        btn.disabled = false;
+                        toast('error', (err && err.message) ? String(err.message) : unavailableMsg);
+                    });
+                });
+            });
+        })();
+        </script>
     <?php endif; ?>
     <script>
     (function () {

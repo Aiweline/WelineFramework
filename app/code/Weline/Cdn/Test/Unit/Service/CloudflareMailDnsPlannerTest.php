@@ -89,6 +89,54 @@ final class CloudflareMailDnsPlannerTest extends TestCase
         }
     }
 
+    public function testMultipleDkimSelectorsAreReconciledIndependently(): void
+    {
+        $planner = new CloudflareMailDnsPlanner();
+        $ed25519 = base64_encode(str_repeat('A', 32));
+        $desired = $this->desired();
+        $desired[] = [
+            'type' => 'TXT',
+            'name' => 'v1-ed25519._domainkey.example.com',
+            'content' => 'v=DKIM1; k=ed25519; p=' . $ed25519,
+            'ttl' => 1,
+        ];
+        $desired[] = [
+            'type' => 'CNAME',
+            'name' => 'smtp.example.com',
+            'content' => 'mail.example.com',
+            'ttl' => 1,
+            'proxied' => false,
+        ];
+
+        $plan = $planner->buildPlan('example.com', [], $desired, ['mail.example.com']);
+        $createdDkim = [];
+        foreach ($plan['operations'] as $operation) {
+            if (($operation['action'] ?? '') !== 'create') {
+                continue;
+            }
+            $name = (string)($operation['record']['name'] ?? '');
+            if (str_contains($name, '._domainkey.')) {
+                $createdDkim[] = $name;
+            }
+        }
+        sort($createdDkim);
+        self::assertSame(
+            [
+                'default._domainkey.example.com',
+                'v1-ed25519._domainkey.example.com',
+            ],
+            $createdDkim,
+        );
+        $smtpOps = array_values(array_filter(
+            $plan['operations'],
+            static fn(array $op): bool =>
+                ($op['action'] ?? '') === 'create'
+                && ($op['record']['type'] ?? '') === 'CNAME'
+                && ($op['record']['name'] ?? '') === 'smtp.example.com',
+        ));
+        self::assertCount(1, $smtpOps);
+    }
+
     public function testLockedEmailRoutingRecordStopsBeforeWriting(): void
     {
         $planner = new CloudflareMailDnsPlanner();

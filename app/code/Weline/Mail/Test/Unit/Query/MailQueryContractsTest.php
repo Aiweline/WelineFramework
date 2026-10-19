@@ -94,6 +94,8 @@ final class MailQueryContractsTest extends TestCase
             'batchSetMailboxAccountStatus',
             'batchDeleteMailboxAccounts',
             'createMailboxAccount',
+            'createMailboxDomain',
+            'deleteMailboxDomain',
         ] as $op) {
             self::assertStringContainsString("'" . $op . "'", $src);
             self::assertStringContainsString("'name' => '" . $op . "'", $src);

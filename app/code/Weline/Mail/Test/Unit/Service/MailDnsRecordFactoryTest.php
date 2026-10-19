@@ -27,7 +27,8 @@ final class MailDnsRecordFactoryTest extends TestCase
             ]],
         );
 
-        self::assertSame(['mail.example.com', 'smtp.example.com'], $result['dns_only_hosts']);
+        self::assertSame(['mail.example.com'], $result['dns_only_hosts']);
+        self::assertNotContains('smtp.example.com', $result['dns_only_hosts']);
         $address = array_values(array_filter(
             $result['desired_records'],
             static fn(array $record): bool => $record['type'] === 'A',

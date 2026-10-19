@@ -438,7 +438,7 @@ private function assert_MailComposeDeeplink_testBackendComposePrefillAndSendEven
 private function assert_MailComposeDeeplink_testModuleVersion(): void
 {
     $module = include BP . 'app/code/Weline/Mail/etc/module.php';
-    self::assertSame('0.2.40', $module['version'] ?? null);
+    self::assertSame('0.2.44', $module['version'] ?? null);
 }
 
 private function assert_MailDkimLocalEnsureService_testEnsureGeneratesReusablePublicKey(): void
@@ -610,8 +610,8 @@ private function assert_MailOutboundRelaySync_testSyncBuildsSenderRouteNotAuthen
     self::assertStringContainsString('mergeHubBindingsIntoPayload', $src);
     self::assertStringContainsString('preferConfiguredHubOverMxElse', $src);
     self::assertStringContainsString('weline-hub-', $src);
-    self::assertStringContainsString('收件域后缀导流', $src);
-    self::assertStringContainsString('都没有 → 才兜底 mx', $src);
+    self::assertStringContainsString('收件域导流', $src);
+    self::assertStringContainsString('再没有 → 才兜底 mx', $src);
     // 禁止 Hub/QQ 作 else / retry 兜底；QQ 仅 sender 绑定。本域 mail./smtp. 禁止无认证自环。
     self::assertStringContainsString('禁止把 else 抬成任何 weline-hub-', $src);
     self::assertStringContainsString('禁止 MODE_EXTERNAL Hub', $src);
@@ -656,9 +656,16 @@ private function assert_MailOutboundRelaySync_testSyncBuildsSenderRouteNotAuthen
     self::assertStringContainsString('batchDeleteOutboundRouteRules', $qp);
     self::assertStringContainsString('createMailboxAccount', $qp);
     self::assertStringContainsString('createMailboxDomain', $qp);
+    self::assertStringContainsString('deleteMailboxDomain', $qp);
     self::assertStringContainsString('resetMailboxPassword', $qp);
     self::assertStringContainsString('setMailboxOutboundRelay', $qp);
     self::assertStringContainsString('createSmtpServiceAccount', $qp);
+
+    $admin = (string) file_get_contents(BP . '/app/code/Weline/Mail/Service/MailDomainAdminService.php');
+    self::assertStringContainsString('function deleteDomain', $admin);
+    self::assertStringContainsString('function normalizeMailboxDomainName', $admin);
+    self::assertStringContainsString("str_starts_with(\$domain, 'www.')", $admin);
+    self::assertStringContainsString('网站域名本身未删除', $admin);
 
     $enterprise = (string) file_get_contents(BP . 'app/code/Weline/Mail/view/templates/backend/Index/enterprise.phtml');
     self::assertStringContainsString("'routes' => __('收件域导流')", $enterprise);
@@ -677,6 +684,9 @@ private function assert_MailOutboundRelaySync_testSyncBuildsSenderRouteNotAuthen
     self::assertStringContainsString('mail-domain-create-dialog', $enterprise);
     self::assertStringContainsString('mail-smtp-add-dialog', $enterprise);
     self::assertStringContainsString('createMailboxDomain', $enterprise);
+    self::assertStringContainsString('deleteMailboxDomain', $enterprise);
+    self::assertStringContainsString('data-mail-domain-delete', $enterprise);
+    self::assertStringContainsString('mail-domain-delete-', $enterprise);
     self::assertStringContainsString('resetMailboxPassword', $enterprise);
     self::assertStringContainsString('setMailboxOutboundRelay', $enterprise);
     self::assertStringContainsString('createSmtpServiceAccount', $enterprise);

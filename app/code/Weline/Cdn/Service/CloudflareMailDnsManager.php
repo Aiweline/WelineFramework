@@ -86,7 +86,7 @@ final class CloudflareMailDnsManager implements MailDnsManagerInterface
             if ((int)$verification['operation_count'] !== 0) {
                 throw new \RuntimeException((string)__('Cloudflare DNS 写入后校验未收敛。'));
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             $residual = $this->rollback($credentials, $zoneId, $completed);
             if (is_array($currentOperation)) {
                 $record = (array)($currentOperation['record'] ?? $currentOperation['before'] ?? []);
@@ -98,10 +98,16 @@ final class CloudflareMailDnsManager implements MailDnsManagerInterface
                 ]);
             }
 
+            $detail = trim($e->getMessage());
+            $message = (string)__('Cloudflare DNS 写入失败，已尝试回滚。');
+            if ($detail !== '') {
+                $message .= ' ' . $detail;
+            }
+
             return array_merge($publicPlan, [
                 'success' => false,
                 'status' => $residual === [] ? 'rolled_back' : 'rollback_incomplete',
-                'message' => (string)__('Cloudflare DNS 写入失败，已尝试回滚。'),
+                'message' => $message,
                 'applied_count' => count($completed),
                 'verification_operation_count' => null,
                 'residual_changes' => $residual,
@@ -119,30 +125,54 @@ final class CloudflareMailDnsManager implements MailDnsManagerInterface
     }
 
     /**
+     * 从邮箱 FQDN 逐级上溯查找 Cloudflare active zone（www.example.com → example.com）。
+     *
      * @param array<string, mixed> $credentials
      */
     private function resolveZoneId(array $credentials, string $domain): string
     {
         $domain = strtolower(rtrim(trim($domain), '.'));
-        $response = $this->http->apiWithCredentials($credentials, 'GET', '/zones', [
-            'name' => $domain,
-            'status' => 'active',
-            'per_page' => 50,
-        ]);
-
-        $matches = array_values(array_filter(
-            is_array($response['result'] ?? null) ? $response['result'] : [],
-            static fn(mixed $zone): bool =>
-                is_array($zone)
-                && strtolower(rtrim((string)($zone['name'] ?? ''), '.')) === $domain,
-        ));
-        if (count($matches) !== 1 || trim((string)($matches[0]['id'] ?? '')) === '') {
-            throw new \DomainException(
-                (string)__('Cloudflare 账户中找不到唯一的活动域名 %{1}。', $domain)
-            );
+        if ($domain === '') {
+            throw new \DomainException((string)__('邮箱域名不能为空。'));
         }
 
-        return (string)$matches[0]['id'];
+        $candidates = [];
+        $labels = explode('.', $domain);
+        for ($i = 0, $n = count($labels); $i < $n - 1; $i++) {
+            $candidate = implode('.', array_slice($labels, $i));
+            if ($candidate !== '') {
+                $candidates[] = $candidate;
+            }
+        }
+        if ($candidates === []) {
+            $candidates[] = $domain;
+        }
+
+        $tried = [];
+        foreach ($candidates as $candidate) {
+            $tried[] = $candidate;
+            $response = $this->http->apiWithCredentials($credentials, 'GET', '/zones', [
+                'name' => $candidate,
+                'status' => 'active',
+                'per_page' => 50,
+            ]);
+            $matches = array_values(array_filter(
+                is_array($response['result'] ?? null) ? $response['result'] : [],
+                static fn(mixed $zone): bool =>
+                    is_array($zone)
+                    && strtolower(rtrim((string)($zone['name'] ?? ''), '.')) === $candidate,
+            ));
+            if (count($matches) === 1 && trim((string)($matches[0]['id'] ?? '')) !== '') {
+                return (string)$matches[0]['id'];
+            }
+        }
+
+        throw new \DomainException(
+            (string)__(
+                'Cloudflare 账户中找不到唯一的活动域名（已尝试：%{1}）。',
+                implode(', ', $tried)
+            )
+        );
     }
 
     /**

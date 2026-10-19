@@ -108,6 +108,7 @@ class MailQueryProvider implements QueryProviderInterface
                     : (is_array($params['ids'] ?? null) ? $params['ids'] : [])
             ),
             'createMailboxDomain' => $this->createMailboxDomain($params),
+            'deleteMailboxDomain' => $this->deleteMailboxDomain($params),
             'resetMailboxPassword' => $this->resetMailboxPassword($params),
             'setMailboxOutboundRelay' => $this->setMailboxOutboundRelay($params),
             'createSmtpServiceAccount' => $this->createSmtpServiceAccount($params),
@@ -165,6 +166,18 @@ class MailQueryProvider implements QueryProviderInterface
         $service = ObjectManager::getInstance(MailDomainAdminService::class);
 
         return $service->createDomain($domain, $hostname, $engine, $quota);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function deleteMailboxDomain(array $params): array
+    {
+        /** @var MailDomainAdminService $service */
+        $service = ObjectManager::getInstance(MailDomainAdminService::class);
+
+        return $service->deleteDomain((int)($params['domain_id'] ?? 0));
     }
 
     /**
@@ -763,6 +776,20 @@ class MailQueryProvider implements QueryProviderInterface
                         ['name' => 'hostname', 'type' => 'string', 'required' => false, 'description' => __('邮件主机')],
                         ['name' => 'engine', 'type' => 'string', 'required' => false, 'description' => __('引擎')],
                         ['name' => 'default_quota_mb', 'type' => 'int', 'required' => false, 'description' => __('默认容量 MB')],
+                    ],
+                ],
+                [
+                    'name' => 'deleteMailboxDomain',
+                    'description' => __('删除邮箱域名配置卡片（不删网站域名）'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'auth' => 'backend',
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Mail::mail_accounts_manage',
+                    ],
+                    'params' => [
+                        ['name' => 'domain_id', 'type' => 'int', 'required' => true, 'description' => __('邮箱域名 ID')],
                     ],
                 ],
                 [

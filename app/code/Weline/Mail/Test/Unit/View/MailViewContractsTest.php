@@ -92,6 +92,11 @@ private function assert_EnterpriseDnsChecklistMarks_testEnterpriseShowsLiveDnsMa
     self::assertStringContainsString('cloudflare_token_ready', $src);
     self::assertStringContainsString('一键同步 DNS 到 Cloudflare', $src);
     self::assertStringContainsString('mail-cf-one-click-apply', $src);
+    self::assertStringContainsString('data-mail-domain-delete', $src);
+    self::assertStringContainsString('mail-domain-delete-', $src);
+    self::assertStringContainsString('deleteMailboxDomain', $src);
+    self::assertStringContainsString('网站域名本身不会被删除', $src);
+    self::assertStringContainsString('不删网站域名', $src);
     self::assertStringContainsString('data-dns-code', $src);
     self::assertStringContainsString('data-testid="mail-oauth-error"', $src);
     self::assertStringContainsString('invalid_scope', $src);
@@ -140,7 +145,13 @@ private function assert_EnterpriseEngineSetupGuide_testEngineSetupGuidesFirewall
     self::assertStringContainsString("MODE_SELF ? 'info' : 'primary'", $enterprise);
     self::assertStringNotContainsString("MODE_SELF ? 'success'", $enterprise);
     self::assertStringNotContainsString("MODE_SELF ? __('本机启用')", $enterprise);
-    self::assertStringNotContainsString('!important', $enterprise);
+    // UA/[hidden] 允许 display:none !important；其它业务视觉禁止
+    $enterpriseSansHiddenImportant = (string) preg_replace(
+        '/\[hidden\]\s*\{[^}]*!important[^}]*\}/',
+        '',
+        $enterprise
+    );
+    self::assertStringNotContainsString('!important', $enterpriseSansHiddenImportant);
     self::assertStringContainsString('模式标「本机登记」', $enterprise);
     self::assertStringContainsString('蓝标「外部填入」', $enterprise);
     self::assertStringNotContainsString('绿标「本机启用」', $enterprise);
