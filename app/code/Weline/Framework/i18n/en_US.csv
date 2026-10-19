@@ -949,6 +949,7 @@ operation：%{id},operation：%{id}
 已启用延迟注册表更新模式（批量优化）,"Delayed registry update mode enabled (batch optimization)"
 正在准备系统环境...,"Preparing system environment..."
 "已跳过 composer dump-autoload（快速更新模式）","Skipped composer dump-autoload (fast update mode)"
+"Bootstrap 模块注册表写入等待框架编译锁失败：%{1}；%{2}","Bootstrap 模块注册表写入等待框架编译锁失败：%{1}；%{2}"
 已跳过环境依赖检测,"Environment dependency check skipped"
 正在检测环境依赖...,"Detecting environment dependencies..."
 "✓ 环境依赖检测通过","✓ Environment dependency detection passed"

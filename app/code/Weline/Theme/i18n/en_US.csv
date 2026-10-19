@@ -891,10 +891,21 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-面包屑,"bread crumbs"
 分类,Classification
+Pagination,Pagination
+Previous,Previous
+"Page %{1} of %{2}","Page %{1} of %{2}"
+Next,Next
+面包屑,"bread crumbs"
 分类展示图,"Category showcase image"
 查看全部,"View all"
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
+查看更多,"View more"
+距离结束,"Ends in"
+时,Hour
+分,Minute
+秒,Second
 回到顶部,"Back to top"
 站点偏好,"Site preferences"
 法律与政策,"Law and Policy"
@@ -931,6 +942,11 @@ FAQ/常见问题,FAQ
 展开明细,"Expand details"
 零售,Retail
 迷你购物车金额小计,"Mini-cart money summary"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
+天,Day(s)
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
 加载中,loading
@@ -1061,8 +1077,6 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1115,10 +1129,6 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-天,Day(s)
-时,Hour
-分,Minute
-秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
@@ -1136,8 +1146,6 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
-查看更多,"View more"
-距离结束,"Ends in"
 精选轮播,"Featured Carousel"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
@@ -1175,10 +1183,6 @@ Logo,Logo
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -2349,10 +2353,6 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 Search,Search
 "Search · 检索","Search · 检索"
 Search…,Search…
-Pagination,Pagination
-Previous,Previous
-"Page %{1} of %{2}","Page %{1} of %{2}"
-Next,Next
 "footer-above 槽默认内容；未覆盖时回退 Theme trust-badges，供其它模块覆盖或追加。","Default content for the footer-above slot; falls back to Theme trust-badges when uncovered; other modules may override or append."
 "在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。全局悬浮层 DOM 与可编辑 w:slot（storefront-float-start/end）在 footer partial；本 Hook 仅保留店面占位图与 float-layer JS 加载。","在渲染基础布局的 <body> 标签结束处触发，允许其他模块在 body 结束处注入内容。此 hook 适用于所有使用基础布局的页面。全局悬浮层 DOM 与可编辑 w:slot（storefront-float-start/end）在 footer partial；本 Hook 仅保留店面占位图与 float-layer JS 加载。"
 搜索商品、分类与关键词...,"Search products, categories, and keywords..."
