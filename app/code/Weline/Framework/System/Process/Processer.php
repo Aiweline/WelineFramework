@@ -13235,6 +13235,12 @@ POWERSHELL;
         // 策略1：通过命令行判断
         $cmdLine = self::getProcessCommandLine($pid);
         if ($cmdLine !== '') {
+            // cli_set_process_title 会把 /proc/pid/cmdline 换成短标题
+            // （如 weline-wls-worker-… / weline-wls-maintenance-http-…），
+            // 不再含 worker.php / --name=；须先按 Weline 前缀认身份，否则 READY 永久 foreign。
+            if (self::looksLikeWelineProcessName($cmdLine)) {
+                return true;
+            }
             // Master 进程：通过 bin/w (或 bin\w) CLI 入口启动的 server 命令
             // 命令行形如 php bin/w server:start ... 或 php bin/w s:start ...
             $processName = self::extractCommandLineArg($cmdLine, 'name');
