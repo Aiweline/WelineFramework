@@ -48,6 +48,13 @@ foreach ($typeLabels as $code => $label) {
     }
     $typeLabels[$code] = (string)__($label);
 }
+// Static __('…') so i18n:collect keeps these words in frontend/shared (not backend-only).
+if (false) {
+    __('商品');
+    __('全部');
+    __('博客');
+    __('常问问题');
+}
 $esc = static fn (mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 // Keep %{1} for client formatters: __() without a real arg can eat the token.
 $keepPh = static fn (string $source): string => \str_replace(
