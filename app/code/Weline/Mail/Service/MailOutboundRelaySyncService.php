@@ -15,17 +15,14 @@ use Weline\Smtp\Service\SmtpServiceCatalogService;
  *
  * 优先级（用户拍板）：
  * 1) local：本域收件进本地投递
- * 2) 收件域后缀导流（如 qq.com → Hub）；不命中则不进 Hub/QQ
- * 3) 账号外投（仅该 sender==邮箱；不得替代后缀分流、不得抬成全局 else）
- * 4) 跨机可达的域名/Smtp self 中继（587/465，须能 AUTH；禁止本域 mail./smtp. 无认证自环）
- * 5) 都没有 → 才兜底 mx（25）
+ * 2) 有收件域/账号分流 → 走该分流 SMTP（显式规则，不是兜底）
+ * 3) 无分流 → 本域名 Smtp（跨机可达的 self/域名中继 587/465）
+ * 4) 再没有 → 才兜底 mx（邮局本机 :25 直投）
  *
- * 边缘站：qq 等后缀才走 Hub；Gmail 等非命中后缀已在 smtp.{域} 提交，出站走 mx（25）。
- * 本域 mail./smtp. 无认证 Relay 会 503 永久失败且不触发 failover，禁止写入策略。
- * Hub 站：else 可升为非 QQ 的 weline-hub-*；QQ 只绑 sender==授权用户，禁止作全局 else。
+ * QQ/Hub 不得作全局 else，也不得用 retry_num 顶替 :25。
+ * QQ 仅允许 sender==授权用户 的显式绑定。本域 mail./smtp. 禁止无认证自环。
  *
- * not_to_do：品牌账号整账号外投 Hub 导致 Gmail From 变 QQ；QQ/Hub 作全局 else；
- * 本域 submission 主机无认证自环；中继端口写 25。
+ * not_to_do：QQ/Hub 作全局 else；retry→Hub 当 :25 兜底；本域 submission 无认证自环；中继端口写 25。
  */
 final class MailOutboundRelaySyncService
 {
@@ -422,7 +419,7 @@ final class MailOutboundRelaySyncService
         }
 
         $built['strategy_route']['match'] = (object)$match;
-        // 本机已有 weline-hub-*（Hub 站）：无可达域名 Smtp 时 else 从 mx 升为 hub 出站（边缘站通常无此 hub）。
+        // else 只保留 buildPayload 结果（域名 Smtp 或 mx）；禁止用 Hub/QQ 顶替 :25 兜底。
         $built['strategy_route']['else'] = $this->preferConfiguredHubOverMxElse(
             (string)($built['strategy_route']['else'] ?? "'mx'"),
             $existingHubs
@@ -432,47 +429,28 @@ final class MailOutboundRelaySyncService
     }
 
     /**
-     * Hub 站最终出站：else 仍是 mx 且已配置非 QQ 的 weline-hub-* → 改用 hub（587/465），避免云拦 :25。
-     * 边缘站 else 已是域名 Smtp / mx，不靠本函数抬 Hub。
+     * 规范化 else：保留 buildPayload 的域名 Smtp / mx。
+     * 禁止把 else 抬成任何 weline-hub-*（含 QQ）——Hub/QQ 只能出现在显式导流或 sender 绑定，不得作 :25 兜底。
      *
-     * Hub 站 else：优先非 QQ 的 weline-hub-*；仅有 QQ 时 else=QQ 作传输（云拦 :25 否则外投全死）。
-     * Header From 软包装由 applyQqHubEnvelopeFromRewriteIfElse + Sieve 负责——禁止把品牌信头硬改成 QQ。
-     * 边缘站无 weline-hub-*，不走本函数抬 QQ。
-     *
-     * @param list<string> $existingHubs
+     * @param list<string> $existingHubs 保留参数以兼容调用方；故意不用于抬 else。
      */
     private function preferConfiguredHubOverMxElse(string $else, array $existingHubs): string
     {
+        unset($existingHubs);
         $else = trim($else);
         if ($else === '' || $else === 'mx') {
-            $else = "'mx'";
+            return "'mx'";
         }
-        if ($else !== "'mx'" || $existingHubs === []) {
-            return $else;
+        // 防御：历史策略若已是 hub/qq else，强制回退 mx（下次 sync 清掉窜 From 路径）。
+        $bare = $else;
+        if ($bare !== '' && $bare[0] === "'" && str_ends_with($bare, "'")) {
+            $bare = substr($bare, 1, -1);
         }
-        $preferred = '';
-        $qqOnly = '';
-        foreach ($existingHubs as $name) {
-            $name = trim((string)$name);
-            if ($name === '') {
-                continue;
-            }
-            if ($name === 'weline-hub-qq-smtp') {
-                $qqOnly = $name;
-                continue;
-            }
-            if ($preferred === '') {
-                $preferred = $name;
-            }
-        }
-        if ($preferred !== '') {
-            return "'" . addcslashes($preferred, "'\\") . "'";
-        }
-        if ($qqOnly !== '') {
-            return "'" . addcslashes($qqOnly, "'\\") . "'";
+        if (str_starts_with($bare, 'weline-hub-')) {
+            return "'mx'";
         }
 
-        return "'mx'";
+        return $else;
     }
 
     /**
@@ -808,7 +786,7 @@ final class MailOutboundRelaySyncService
             ];
         }
 
-        // A1：local → 收件域后缀导流 → 账号外投 →（有 Hub 导流时）mx 临时失败后 retry→Hub
+        // A1：local → 导流规则（rcpt / sender）→ 账号外投。禁止 retry→Hub 顶替 :25 兜底。
         $match = [];
         $match[] = [
             'if' => 'is_local_domain(rcpt_domain)',
@@ -819,15 +797,6 @@ final class MailOutboundRelaySyncService
         }
         foreach ($senderMatches as $rule) {
             $match[] = $rule;
-        }
-
-        // 云拦 :25：首次 else=mx；临时失败后 retry_num>0 走已配置的 Hub 导流（软包装在 Hub）。
-        $hubFailoverRoute = $this->firstHubBoundRcptRouteName($rcptMatches);
-        if ($hubFailoverRoute !== '') {
-            $match[] = [
-                'if' => 'retry_num > 0',
-                'then' => "'" . addcslashes($hubFailoverRoute, "'\\") . "'",
-            ];
         }
 
         // A2：无导流匹配时走可达跨机 Smtp；本域 submission 不作自环。都没有 → mx（25）。
@@ -868,28 +837,6 @@ final class MailOutboundRelaySyncService
             ],
             'self_ref_warning' => $selfRef,
         ];
-    }
-
-    /**
-     * 取首个收件域导流路由名（通常 qq.com→mail.aiweline.com），供 mx 临时失败后 failover。
-     *
-     * @param list<array{if:string,then:string}> $rcptMatches
-     */
-    private function firstHubBoundRcptRouteName(array $rcptMatches): string
-    {
-        foreach ($rcptMatches as $rule) {
-            $then = trim((string)($rule['then'] ?? ''));
-            if ($then === '' || $then === "'local'" || $then === "'mx'") {
-                continue;
-            }
-            if ($then[0] === "'" && str_ends_with($then, "'")) {
-                return substr($then, 1, -1);
-            }
-
-            return $then;
-        }
-
-        return '';
     }
 
     /**

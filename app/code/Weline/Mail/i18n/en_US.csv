@@ -122,6 +122,10 @@ TLS,TLS
 "当前仍是外部 SMTP。生产请点「用自建邮局一键配置」：自动确保 contact@、写 mail_account 传输并绑全渠（旧外部账户保留），再测发确认。","当前仍是外部 SMTP。生产请点「用自建邮局一键配置」：自动确保 contact@、写 mail_account 传输并绑全渠（旧外部账户保留），再测发确认。"
 "邮局域名/账号已可用。请打开 Smtp配置 点「用自建邮局一键配置」：自动确保 contact@、写入传输并绑定全部发信渠道，然后点「测试」跑通发信。","邮局域名/账号已可用。请打开 Smtp配置 点「用自建邮局一键配置」：自动确保 contact@、写入传输并绑定全部发信渠道，然后点「测试」跑通发信。"
 "请先完成：① 安装启动邮局引擎 ② 开通并启用真实域名 ③ 配好 MX/SPF/DKIM。完成后本任务会引导 Smtp 一键确保 contact@ 并测发。","请先完成：① 安装启动邮局引擎 ② 开通并启用真实域名 ③ 配好 MX/SPF/DKIM。完成后本任务会引导 Smtp 一键确保 contact@ 并测发。"
+id属性不能为空,id属性不能为空
+"mail:domain:select 当前仅支持单选","mail:domain:select currently supports single select only"
+请选择域名,"Please select a domain name"
+搜索域名或引擎,"Search domain or engine"
 未找到匹配邮箱,"No matching mailbox found"
 企业邮箱沟通,"Business email chat"
 关闭,Close
@@ -129,7 +133,7 @@ TLS,TLS
 沟通历史,"Chat history"
 暂无沟通记录,"No chat records"
 加载中…,Loading...
-id属性不能为空,id属性不能为空
+未找到匹配域名,"No matching domain found"
 "mail:account:select 当前仅支持单选","mail:account:select 当前仅支持单选"
 请选择邮箱,"Please select a mailbox"
 搜索邮箱或显示名,"Search by email or display name"
@@ -380,7 +384,6 @@ STARTTLS（推荐）,"STARTTLS (recommended)"
 "配置完成后，请使用下方 DNS 检测，并执行真实收发验收。","After configuration, use the DNS checker below and complete real send/receive acceptance."
 "检测此域名 DNS","Check DNS for this domain"
 创建邮箱账号,"Create an email account"
-请选择域名,"Please select a domain name"
 管理员,administrator
 客户ID,"Customer ID"
 账号状态,"Account status"

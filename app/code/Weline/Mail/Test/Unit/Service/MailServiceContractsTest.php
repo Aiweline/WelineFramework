@@ -612,12 +612,12 @@ private function assert_MailOutboundRelaySync_testSyncBuildsSenderRouteNotAuthen
     self::assertStringContainsString('weline-hub-', $src);
     self::assertStringContainsString('收件域后缀导流', $src);
     self::assertStringContainsString('都没有 → 才兜底 mx', $src);
-    // Hub 可 else=QQ 作传输；Header From 软包装。本域 mail./smtp. 禁止无认证自环。
-    self::assertStringContainsString('Header From 软包装', $src);
+    // 禁止 Hub/QQ 作 else / retry 兜底；QQ 仅 sender 绑定。本域 mail./smtp. 禁止无认证自环。
+    self::assertStringContainsString('禁止把 else 抬成任何 weline-hub-', $src);
     self::assertStringContainsString('禁止 MODE_EXTERNAL Hub', $src);
     self::assertStringContainsString('isOwnDomainSubmissionHost', $src);
-    self::assertStringContainsString('retry_num > 0', $src);
-    self::assertStringContainsString('firstHubBoundRcptRouteName', $src);
+    self::assertStringNotContainsString('retry_num > 0', $src);
+    self::assertStringNotContainsString('firstHubBoundRcptRouteName', $src);
     self::assertStringContainsString('本域 mail./smtp.', $src);
     self::assertStringNotContainsString('\$fallbackExternal', $src);
     self::assertStringContainsString('// A1：local → 导流规则（rcpt / sender）', $src);
@@ -639,6 +639,7 @@ private function assert_MailOutboundRelaySync_testSyncBuildsSenderRouteNotAuthen
     self::assertStringNotContainsString('inappropriate words', $adapter);
     $sync = (string) \file_get_contents(BP . '/app/code/Weline/Mail/Service/MailOutboundRelaySyncService.php');
     self::assertStringContainsString('不得作全局 else', $sync);
+    self::assertStringContainsString('不得用 retry_num 顶替', $sync);
     self::assertStringContainsString('x:SieveSystemScript/set', $adapter);
     self::assertStringContainsString('x:MtaStageData/set', $adapter);
     self::assertStringContainsString('x:MtaStageMail/set', $adapter);

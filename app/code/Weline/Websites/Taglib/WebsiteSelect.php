@@ -247,7 +247,9 @@ class WebsiteSelect implements TaglibInterface
             $optionsRaw = \json_encode($optionsRaw, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
         } else {
             $optionsRaw = (string)$optionsRaw;
-            if ($optionsRaw === '') {
+            // runtime 未 resolve 的声明式变量名（如 seoAccountWebsiteSelectOptionsJson）
+            // 不能当 JSON 原文，否则 parse 失败表现为「未找到匹配站点」。
+            if ($optionsRaw === '' || \preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $optionsRaw) === 1) {
                 $optionsRaw = '[]';
             }
         }

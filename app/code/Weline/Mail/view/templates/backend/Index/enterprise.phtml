@@ -117,6 +117,35 @@ $mailboxAccountSelectOptionsJson = json_encode(
     $mailboxAccountSelectOptions,
     JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 ) ?: '[]';
+$mailDomainSelectPlaceholder = (string)__('搜索域名或引擎');
+$mailDomainSelectEmptyLabel = (string)__('请选择域名');
+$mailDomainSelectValue = '';
+$mailDomainSelectDisplay = '';
+$mailDomainSelectOptions = [];
+foreach ($domains as $__mailDomainOpt) {
+    $__domId = (int)$__mailDomainOpt->getId();
+    if ($__domId <= 0) {
+        continue;
+    }
+    $__domName = strtolower(trim((string)$__mailDomainOpt->getData(MailDomain::schema_fields_DOMAIN_NAME)));
+    $__domEngine = trim((string)$__mailDomainOpt->getData(MailDomain::schema_fields_ENGINE));
+    $__domLabel = $__domEngine !== '' ? $__domName . ' · ' . $__domEngine : $__domName;
+    $mailDomainSelectOptions[] = [
+        'value' => (string)$__domId,
+        'label' => $__domLabel,
+        'domain' => $__domName,
+        'email' => $__domName,
+        'meta' => $__domEngine,
+        'engine' => $__domEngine,
+        'search' => strtolower($__domName . ' ' . $__domEngine . ' ' . $__domId),
+    ];
+}
+$mailDomainSelectOptionsJson = json_encode(
+    $mailDomainSelectOptions,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+) ?: '[]';
+$mailDomainCreateWebsiteValue = '';
+$mailDomainCreateWebsiteDisplay = (string)__('请选择域名');
 $navItems = [
     'mailbox' => __('邮箱'),
     'accounts' => __('用户与账号'),
@@ -130,6 +159,7 @@ $smtpPoolDomains = is_array($smtp_pool_domains ?? null) ? $smtp_pool_domains : [
 $smtpAccountPasswords = is_array($smtp_account_passwords ?? null) ? $smtp_account_passwords : [];
 $smtpCanViewPasswords = (bool)($smtp_can_view_passwords ?? false);
 $smtpOutboundPicks = is_array($smtp_outbound_picks ?? null) ? $smtp_outbound_picks : [];
+$smtpExternalProviders = is_array($smtp_external_providers ?? null) ? $smtp_external_providers : [];
 $smtpStalwartByService = is_array($smtp_stalwart_by_service ?? null) ? $smtp_stalwart_by_service : [];
 $smtpLocalHealthByService = is_array($smtp_local_health_by_service ?? null) ? $smtp_local_health_by_service : [];
 $smtpSystemCompletenessByService = is_array($smtp_system_completeness_by_service ?? null)
@@ -2796,13 +2826,18 @@ if ($oauthCfError === 'invalid_scope') {
                                 <div class="mail-enterprise__form-grid" data-account-create-only>
                                     <label class="w-field">
                                         <span class="w-field__label"><?= __('邮箱域名') ?></span>
-                                        <select class="w-select" name="domain_id" data-account-field="domain_id" data-testid="mail-account-create-domain">
-                                            <?php foreach ($domains as $domain): ?>
-                                                <option value="<?= (int)$domain->getId() ?>">
-                                                    <?= $escape($domain->getData(MailDomain::schema_fields_DOMAIN_NAME)) ?> · <?= $escape($domain->getData(MailDomain::schema_fields_ENGINE)) ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
+                                        <span class="w-field__control">
+                                            <w:mail:domain:select
+                                                id="mail-account-create-domain"
+                                                name="domain_id"
+                                                value="mailDomainSelectValue"
+                                                display="mailDomainSelectDisplay"
+                                                options="mailDomainSelectOptionsJson"
+                                                placeholder="mailDomainSelectPlaceholder"
+                                                empty-label="mailDomainSelectEmptyLabel"
+                                                required="true"
+                                            />
+                                        </span>
                                     </label>
                                     <label class="w-field">
                                         <span class="w-field__label"><?= __('邮箱账号前缀') ?></span>
@@ -2888,7 +2923,7 @@ if ($oauthCfError === 'invalid_scope') {
                             <div class="w-dialog__body w-stack" style="--w-gap:var(--weline-space-3); flex:1 1 auto; min-block-size:0; overflow:auto;">
                                 <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;" data-outbound-email></p>
                                 <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
-                                    <?= __('未勾选则走本域 MX:25。优先从 Smtp Tab 已建账户/服务中选择；也可手动填写。') ?>
+                                    <?= __('未勾选则走本域 MX:25。优先选用 Smtp Tab 已登记的外部服务；也可服务商预设手填，或完全自定义。') ?>
                                 </p>
                                 <input type="hidden" name="account_id" value="0" data-outbound-field="account_id">
                                 <label class="w-text" data-size="sm" style="display:block;">
@@ -2918,18 +2953,44 @@ if ($oauthCfError === 'invalid_scope') {
                                         <?php endforeach; ?>
                                     </select>
                                 </label>
-                                <div class="mail-enterprise__form-grid" data-outbound-manual>
+                                <div class="mail-enterprise__form-grid mail-smtp-provider-form" data-outbound-manual>
+                                    <label class="w-field" style="grid-column:1/-1;">
+                                        <span class="w-field__label"><?= __('服务商预设（手填时）') ?></span>
+                                        <select class="w-select" data-smtp-provider-preset data-testid="mail-outbound-provider-preset">
+                                            <?php foreach ($smtpExternalProviders as $prov):
+                                                if (!is_array($prov)) {
+                                                    continue;
+                                                }
+                                                $pid = (string)($prov['id'] ?? '');
+                                                if ($pid === '') {
+                                                    continue;
+                                                }
+                                                ?>
+                                                <option
+                                                    value="<?= $escape($pid) ?>"
+                                                    data-host="<?= $escape((string)($prov['host'] ?? '')) ?>"
+                                                    data-port="<?= (int)($prov['port'] ?? 587) ?>"
+                                                    data-tls="<?= $escape((string)($prov['tls'] ?? 'starttls')) ?>"
+                                                    data-name="<?= $escape((string)($prov['label'] ?? '')) ?>"
+                                                    data-username-hint="<?= $escape((string)($prov['username_hint'] ?? '')) ?>"
+                                                    data-note="<?= $escape((string)($prov['note'] ?? '')) ?>"
+                                                    <?= $pid === 'custom' ? 'selected' : '' ?>
+                                                ><?= $escape((string)($prov['label'] ?? $pid)) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;grid-column:1/-1;" data-smtp-provider-note aria-live="polite"></p>
                                     <label class="w-field">
                                         <span class="w-field__label"><?= __('主机') ?></span>
-                                        <input class="w-input" type="text" name="outbound_relay_host" placeholder="smtp.example.com" data-outbound-host data-outbound-field="host">
+                                        <input class="w-input" type="text" name="outbound_relay_host" placeholder="smtp.example.com" data-outbound-host data-outbound-field="host" data-smtp-provider-host>
                                     </label>
                                     <label class="w-field">
                                         <span class="w-field__label"><?= __('端口') ?></span>
-                                        <input class="w-input" type="number" name="outbound_relay_port" value="587" min="1" max="65535" data-outbound-port data-outbound-field="port">
+                                        <input class="w-input" type="number" name="outbound_relay_port" value="587" min="1" max="65535" data-outbound-port data-outbound-field="port" data-smtp-provider-port>
                                     </label>
                                     <label class="w-field">
                                         <span class="w-field__label"><?= __('用户名') ?></span>
-                                        <input class="w-input" type="text" name="outbound_relay_username" data-outbound-user data-outbound-field="user">
+                                        <input class="w-input" type="text" name="outbound_relay_username" data-outbound-user data-outbound-field="user" data-smtp-provider-user>
                                     </label>
                                     <label class="w-field">
                                         <span class="w-field__label"><?= __('密码（选目录后请留空；点保存时从 Smtp 目录自动带入）') ?></span>
@@ -2937,7 +2998,7 @@ if ($oauthCfError === 'invalid_scope') {
                                     </label>
                                     <label class="w-field">
                                         <span class="w-field__label"><?= __('TLS') ?></span>
-                                        <select class="w-select" name="outbound_relay_tls" data-outbound-tls data-outbound-field="tls">
+                                        <select class="w-select" name="outbound_relay_tls" data-outbound-tls data-outbound-field="tls" data-smtp-provider-tls>
                                             <option value="starttls">STARTTLS</option>
                                             <option value="smtps">SMTPS</option>
                                             <option value="none"><?= __('无') ?></option>
@@ -3070,6 +3131,18 @@ if ($oauthCfError === 'invalid_scope') {
                     var qm = field('quota_mb'); if (qm) qm.value = '1024';
                     var pw = field('password'); if (pw) pw.value = '';
                     var st = field('status'); if (st) st.value = 'active';
+                    var domain = field('domain_id');
+                    if (domain) {
+                        domain.value = '';
+                        var wrap = domain.closest('[data-w-component="mail-domain-select"]');
+                        var ui = window.Weline && window.Weline.UI;
+                        var inst = wrap && ui && typeof ui.get === 'function' ? ui.get(wrap, 'mail-domain-select') : null;
+                        if (inst && typeof inst.setValue === 'function') {
+                            inst.setValue('');
+                        } else {
+                            domain.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    }
                     var emailEl = form ? form.querySelector('[data-account-edit-email]') : null;
                     if (emailEl) emailEl.textContent = '';
                     setMode('create');
@@ -3422,23 +3495,52 @@ if ($oauthCfError === 'invalid_scope') {
                         <article class="w-card" data-testid="mail-smtp-create-external">
                             <div class="w-card__header"><h3 class="w-card__title" style="--w-m:0;"><?= __('外部填入') ?></h3></div>
                             <div class="w-card__body">
-                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-smtp-service-external'}">
+                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-smtp-service-external'}"
+                                        class="mail-smtp-provider-form" data-testid="mail-smtp-create-external-form">
                                     <input type="hidden" name="return_view" value="smtp">
                                     <label class="w-field">
+                                        <span class="w-field__label"><?= __('服务商预设') ?></span>
+                                        <select class="w-select" data-smtp-provider-preset data-testid="mail-smtp-create-provider-preset">
+                                            <?php foreach ($smtpExternalProviders as $prov):
+                                                if (!is_array($prov)) {
+                                                    continue;
+                                                }
+                                                $pid = (string)($prov['id'] ?? '');
+                                                if ($pid === '') {
+                                                    continue;
+                                                }
+                                                ?>
+                                                <option
+                                                    value="<?= $escape($pid) ?>"
+                                                    data-host="<?= $escape((string)($prov['host'] ?? '')) ?>"
+                                                    data-port="<?= (int)($prov['port'] ?? 587) ?>"
+                                                    data-tls="<?= $escape((string)($prov['tls'] ?? 'starttls')) ?>"
+                                                    data-name="<?= $escape((string)($prov['label'] ?? '')) ?>"
+                                                    data-username-hint="<?= $escape((string)($prov['username_hint'] ?? '')) ?>"
+                                                    data-note="<?= $escape((string)($prov['note'] ?? '')) ?>"
+                                                    <?= $pid === 'custom' ? 'selected' : '' ?>
+                                                ><?= $escape((string)($prov['label'] ?? $pid)) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;" data-smtp-provider-note aria-live="polite">
+                                        <?= __('选择服务商后自动填主机/端口/TLS；账号密码在对方控制台注册后粘贴。保留「自定义」可手填任意主机。') ?>
+                                    </p>
+                                    <label class="w-field">
                                         <span class="w-field__label"><?= __('显示名称') ?></span>
-                                        <input class="w-input" type="text" name="name" placeholder="<?= $escape(__('QQ / 企业微信 SMTP')) ?>">
+                                        <input class="w-input" type="text" name="name" data-smtp-provider-name placeholder="<?= $escape(__('如 Brevo / 阿里云推送')) ?>">
                                     </label>
                                     <label class="w-field">
                                         <span class="w-field__label"><?= __('SMTP 主机') ?></span>
-                                        <input class="w-input" type="text" name="smtp_hostname" required placeholder="smtp.example.com">
+                                        <input class="w-input" type="text" name="smtp_hostname" required placeholder="smtp.example.com" data-smtp-provider-host>
                                     </label>
                                     <label class="w-field">
                                         <span class="w-field__label"><?= __('端口') ?></span>
-                                        <input class="w-input" type="number" name="port" value="587" min="1" max="65535">
+                                        <input class="w-input" type="number" name="port" value="587" min="1" max="65535" data-smtp-provider-port>
                                     </label>
                                     <label class="w-field">
                                         <span class="w-field__label"><?= __('用户名') ?></span>
-                                        <input class="w-input" type="text" name="username">
+                                        <input class="w-input" type="text" name="username" data-smtp-provider-user placeholder="">
                                     </label>
                                     <label class="w-field">
                                         <span class="w-field__label"><?= __('密码') ?></span>
@@ -3446,7 +3548,7 @@ if ($oauthCfError === 'invalid_scope') {
                                     </label>
                                     <label class="w-field">
                                         <span class="w-field__label"><?= __('TLS') ?></span>
-                                        <select class="w-select" name="tls_mode">
+                                        <select class="w-select" name="tls_mode" data-smtp-provider-tls>
                                             <option value="starttls">STARTTLS</option>
                                             <option value="smtps">SMTPS</option>
                                             <option value="none"><?= __('无') ?></option>
@@ -3715,8 +3817,22 @@ if ($oauthCfError === 'invalid_scope') {
                                                  data-w-disclosure-panel
                                                  hidden>
                                                 <div class="w-disclosure__body">
+                                                    <?php
+                                                    $editHost = trim((string)$svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME));
+                                                    $editProviderId = 'custom';
+                                                    foreach ($smtpExternalProviders as $provMatch) {
+                                                        if (!is_array($provMatch)) {
+                                                            continue;
+                                                        }
+                                                        $ph = strtolower(trim((string)($provMatch['host'] ?? '')));
+                                                        if ($ph !== '' && $ph === strtolower($editHost)) {
+                                                            $editProviderId = (string)($provMatch['id'] ?? 'custom');
+                                                            break;
+                                                        }
+                                                    }
+                                                    ?>
                                                     <form method="post" action="@backend-url{'weline_mail/backend/index/update-smtp-service-external'}"
-                                                          class="mail-smtp-external-edit-form w-stack"
+                                                          class="mail-smtp-external-edit-form mail-smtp-provider-form w-stack"
                                                           data-testid="mail-smtp-external-edit-form-<?= $sid ?>"
                                                           data-smtp-service-id="<?= $sid ?>"
                                                           style="--w-gap:var(--weline-space-3);">
@@ -3724,23 +3840,49 @@ if ($oauthCfError === 'invalid_scope') {
                                                         <input type="hidden" name="smtp_service_id" value="<?= $sid ?>">
                                                         <input type="hidden" name="isAjax" value="1">
                                                         <label class="w-field">
+                                                            <span class="w-field__label"><?= __('服务商预设') ?></span>
+                                                            <select class="w-select" data-smtp-provider-preset data-testid="mail-smtp-edit-provider-preset-<?= $sid ?>">
+                                                                <?php foreach ($smtpExternalProviders as $prov):
+                                                                    if (!is_array($prov)) {
+                                                                        continue;
+                                                                    }
+                                                                    $pid = (string)($prov['id'] ?? '');
+                                                                    if ($pid === '') {
+                                                                        continue;
+                                                                    }
+                                                                    ?>
+                                                                    <option
+                                                                        value="<?= $escape($pid) ?>"
+                                                                        data-host="<?= $escape((string)($prov['host'] ?? '')) ?>"
+                                                                        data-port="<?= (int)($prov['port'] ?? 587) ?>"
+                                                                        data-tls="<?= $escape((string)($prov['tls'] ?? 'starttls')) ?>"
+                                                                        data-name="<?= $escape((string)($prov['label'] ?? '')) ?>"
+                                                                        data-username-hint="<?= $escape((string)($prov['username_hint'] ?? '')) ?>"
+                                                                        data-note="<?= $escape((string)($prov['note'] ?? '')) ?>"
+                                                                        <?= $pid === $editProviderId ? 'selected' : '' ?>
+                                                                    ><?= $escape((string)($prov['label'] ?? $pid)) ?></option>
+                                                                <?php endforeach; ?>
+                                                            </select>
+                                                        </label>
+                                                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;" data-smtp-provider-note aria-live="polite"></p>
+                                                        <label class="w-field">
                                                             <span class="w-field__label"><?= __('显示名称') ?></span>
-                                                            <input class="w-input" type="text" name="name"
+                                                            <input class="w-input" type="text" name="name" data-smtp-provider-name
                                                                    value="<?= $escape((string)$svc->getData(SmtpService::schema_fields_NAME)) ?>">
                                                         </label>
                                                         <label class="w-field">
                                                             <span class="w-field__label"><?= __('SMTP 主机') ?></span>
-                                                            <input class="w-input" type="text" name="smtp_hostname" required
-                                                                   value="<?= $escape((string)$svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME)) ?>">
+                                                            <input class="w-input" type="text" name="smtp_hostname" required data-smtp-provider-host
+                                                                   value="<?= $escape($editHost) ?>">
                                                         </label>
                                                         <label class="w-field">
                                                             <span class="w-field__label"><?= __('端口') ?></span>
-                                                            <input class="w-input" type="number" name="port" min="1" max="65535"
+                                                            <input class="w-input" type="number" name="port" min="1" max="65535" data-smtp-provider-port
                                                                    value="<?= (int)$svc->getData(SmtpService::schema_fields_PORT) ?: 587 ?>">
                                                         </label>
                                                         <label class="w-field">
                                                             <span class="w-field__label"><?= __('用户名') ?></span>
-                                                            <input class="w-input" type="text" name="username"
+                                                            <input class="w-input" type="text" name="username" data-smtp-provider-user
                                                                    value="<?= $escape((string)$svc->getData(SmtpService::schema_fields_USERNAME)) ?>">
                                                         </label>
                                                         <label class="w-field">
@@ -3751,7 +3893,7 @@ if ($oauthCfError === 'invalid_scope') {
                                                         <label class="w-field">
                                                             <span class="w-field__label"><?= __('TLS') ?></span>
                                                             <?php $curTls = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_TLS))) ?: 'starttls'; ?>
-                                                            <select class="w-select" name="tls_mode">
+                                                            <select class="w-select" name="tls_mode" data-smtp-provider-tls>
                                                                 <option value="starttls" <?= $curTls === 'starttls' ? 'selected' : '' ?>>STARTTLS</option>
                                                                 <option value="smtps" <?= $curTls === 'smtps' ? 'selected' : '' ?>>SMTPS</option>
                                                                 <option value="none" <?= $curTls === 'none' ? 'selected' : '' ?>><?= __('无') ?></option>
@@ -4948,15 +5090,19 @@ if ($oauthCfError === 'invalid_scope') {
                                 <div class="mail-enterprise__form-grid">
                                     <label class="w-field">
                                         <span class="w-field__label"><?= __('网站域名') ?></span>
-                                        <select class="w-select" name="website_domain" required data-domain-field="website_domain" data-testid="mail-domain-create-website">
-                                            <?php foreach ($websiteOptions as $option):
-                                                if (!empty($option['is_created'])) {
-                                                    continue;
-                                                }
-                                                ?>
-                                                <option value="<?= $escape($option['domain'] ?? '') ?>"><?= $escape($option['domain'] ?? '') ?></option>
-                                            <?php endforeach; ?>
-                                        </select>
+                                        <span class="w-field__control">
+                                            <w:websites:domain:select
+                                                id="mail-domain-create-website"
+                                                name="website_domain"
+                                                value="mailDomainCreateWebsiteValue"
+                                                display="mailDomainCreateWebsiteDisplay"
+                                                multiple="false"
+                                                site-ready-only="false"
+                                                allow-bound="true"
+                                                value-type="domain"
+                                                data-w-width="full"
+                                            />
+                                        </span>
                                     </label>
                                     <label class="w-field">
                                         <span class="w-field__label"><?= __('邮件主机') ?></span>
@@ -5023,7 +5169,9 @@ if ($oauthCfError === 'invalid_scope') {
                 });
                 form.addEventListener('submit', function (ev) {
                     ev.preventDefault();
-                    var wd = form.querySelector('[data-domain-field="website_domain"]');
+                    var wd = form.querySelector('[data-domain-field="website_domain"]')
+                        || form.querySelector('#mail-domain-create-website_value')
+                        || form.querySelector('[name="website_domain"]');
                     var hn = form.querySelector('[data-domain-field="hostname"]');
                     var payload = {
                         website_domain: String((wd && wd.value) || '').trim(),

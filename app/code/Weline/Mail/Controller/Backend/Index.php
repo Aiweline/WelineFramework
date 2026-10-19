@@ -225,6 +225,7 @@ class Index extends BackendController
         $smtpAccountPasswords = [];
         $smtpCanViewPasswords = false;
         $smtpOutboundPicks = [];
+        $smtpExternalProviders = [];
         $smtpStalwartByService = [];
         $smtpLocalHealthByService = [];
         $smtpSystemCompletenessByService = [];
@@ -232,6 +233,11 @@ class Index extends BackendController
         if ($mailView === 'smtp' || $mailView === 'accounts' || $mailView === 'routes') {
             /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
             $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
+            /** @var \Weline\Smtp\Service\SmtpExternalProviderCatalog $providerCatalog */
+            $providerCatalog = ObjectManager::getInstance(
+                \Weline\Smtp\Service\SmtpExternalProviderCatalog::class
+            );
+            $smtpExternalProviders = $providerCatalog->listPresetsForUi();
             if ($mailView === 'accounts' || $mailView === 'routes') {
                 $smtpOutboundPicks = $catalog->listOutboundPicks();
             }
@@ -298,6 +304,7 @@ class Index extends BackendController
         $this->assign('smtp_account_passwords', $smtpAccountPasswords);
         $this->assign('smtp_can_view_passwords', $smtpCanViewPasswords);
         $this->assign('smtp_outbound_picks', $smtpOutboundPicks);
+        $this->assign('smtp_external_providers', $smtpExternalProviders);
         $this->assign('smtp_stalwart_by_service', $smtpStalwartByService);
         $this->assign('smtp_local_health_by_service', $smtpLocalHealthByService);
         $this->assign('smtp_system_completeness_by_service', $smtpSystemCompletenessByService);
