@@ -339,7 +339,7 @@
         entity_uuid: entityUuid,
         page: page,
         page_size: pageSize,
-      }));
+      }, { silent: true, keepBusinessResult: true }));
       if (!listData || listData.success === false) {
         throw new Error(listData && listData.message ? listData.message : messages.loadFailed);
       }
@@ -748,12 +748,19 @@
       }
       try {
         var client = await api();
+        // Hydrate must not open the global「请求失败」toast (QueryBin often HTTP 200).
+        var hydrateOpts = { silent: true, keepBusinessResult: true };
         var results = await Promise.all([
-          client.form({ type_code: typeCode, entity_uuid: entityUuid }),
-          client.list({ type_code: typeCode, entity_uuid: entityUuid, page: 1, page_size: pageSize }),
+          client.form({ type_code: typeCode, entity_uuid: entityUuid }, hydrateOpts),
+          client.list({ type_code: typeCode, entity_uuid: entityUuid, page: 1, page_size: pageSize }, hydrateOpts),
         ]);
         var formData = unwrap(results[0]);
         var listData = unwrap(results[1]);
+        if (formData && (formData.available === false || formData.code === 'review_entity_not_found')) {
+          // Entity missing / unpublished: keep empty shell, no global modal.
+          renderPreviewShell();
+          return;
+        }
         if (!formData || formData.success === false) {
           throw new Error(formData && formData.message ? formData.message : messages.schemaFailed);
         }

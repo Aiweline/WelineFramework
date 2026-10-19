@@ -56,7 +56,20 @@ final class ReviewService implements ReviewSeoFactsInterface
         Parser::prefetchWords(self::formSchemaSourcePhrases());
         $entity = $type->resolveEntity($externalEntityUuid);
         if ($entity === null) {
-            throw new \InvalidArgumentException((string)__('未找到对应的评论对象。'));
+            // Soft miss (align list/seoFacts): hydrate must not be a business_error toast.
+            // Mutations (create/upload) still hard-fail when the entity is gone.
+            return [
+                'success' => true,
+                'available' => false,
+                'code' => 'review_entity_not_found',
+                'message' => (string)__('未找到对应的评论对象。'),
+                'type_code' => $type->typeCode(),
+                'entity_uuid' => $externalEntityUuid,
+                'schema_version' => 1,
+                'fields' => [],
+                'authenticated' => $this->customers->currentCustomerId() !== null,
+                'media' => ['image_max_files' => 6, 'video_max_files' => 2],
+            ];
         }
         return [
             'success' => true,
@@ -137,11 +150,22 @@ final class ReviewService implements ReviewSeoFactsInterface
     {
         $type = $this->types->get($typeCode);
         $entity = $type->resolveEntity($externalEntityUuid);
-        if ($entity === null) {
-            throw new \InvalidArgumentException((string)__('未找到对应的评论对象。'));
-        }
         $page = max(1, $page);
         $pageSize = max(1, min(20, $pageSize));
+        // Align with seoFacts(): missing entity is an empty list, not a toast-worthy failure.
+        if ($entity === null) {
+            return [
+                'success' => true,
+                'items' => [],
+                'total' => 0,
+                'average_rating' => 0.0,
+                'pagination' => [
+                    'page' => $page,
+                    'pageSize' => $pageSize,
+                    'totalSize' => 0,
+                ],
+            ];
+        }
         /** @var ProductReview $review */
         $review = ObjectManager::getInstance(ProductReview::class);
         $review->clear()
