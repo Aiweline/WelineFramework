@@ -85,8 +85,37 @@ final class ThemeObserverContractsTest extends TestCase
             'WorkerBootstrapWarmupRank::testRankBucketsMatchIdleWarmupContract' => function () {
             $this->assert_WorkerBootstrapWarmupRank_testRankBucketsMatchIdleWarmupContract();
         },
+            'WidgetDefaultInjectionIdentityDdlBefore::testObserverRegisteredOnTableDdlBefore' => function () {
+            $this->assert_WidgetDefaultInjectionIdentityDdlBefore_testObserverRegisteredOnTableDdlBefore();
+        },
+            'WidgetDefaultInjectionIdentityDdlBefore::testHealerUsesLayoutIdentityHasherInjection' => function () {
+            $this->assert_WidgetDefaultInjectionIdentityDdlBefore_testHealerUsesLayoutIdentityHasherInjection();
+        },
         ];
     }
+
+private function assert_WidgetDefaultInjectionIdentityDdlBefore_testObserverRegisteredOnTableDdlBefore(): void
+{
+    $xml = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/etc/event.xml');
+    self::assertStringContainsString('Weline_Framework_Schema::table_ddl_before', $xml);
+    self::assertStringContainsString('WidgetDefaultInjectionIdentityDdlBefore', $xml);
+    self::assertStringContainsString('widget_default_injection_identity_ddl_before', $xml);
+}
+
+private function assert_WidgetDefaultInjectionIdentityDdlBefore_testHealerUsesLayoutIdentityHasherInjection(): void
+{
+    $src = (string) file_get_contents(
+        '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/LayoutEntity/ThemeWidgetDefaultInjectionIdentityHealer.php'
+    );
+    self::assertStringContainsString('LayoutIdentityHasher::injection', $src);
+    self::assertStringContainsString('layout_identity_hash', $src);
+    self::assertStringContainsString('getTableColumns', $src);
+    $observer = (string) file_get_contents(
+        '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Observer/WidgetDefaultInjectionIdentityDdlBefore.php'
+    );
+    self::assertStringContainsString('ThemeWidgetDefaultInjection::schema_table', $observer);
+    self::assertStringContainsString('ThemeWidgetDefaultInjectionIdentityHealer', $observer);
+}
 
 private function assert_HomepageShellSkipTemplateFetch_testFetchFileBeforeArmsSkipForHomepageLayoutType(): void
 {

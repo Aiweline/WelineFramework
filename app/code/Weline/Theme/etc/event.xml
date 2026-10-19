@@ -299,6 +299,7 @@
         theme_scope_workspace 新增列 binding_identity_key 的唯一索引：必须在 ADD_COLUMN 之后、
         ADD_INDEX 之前回填存量空值，否则重复空值会导致建唯一索引失败。
         sort=500 保证在 ModuleManager 的表名冲突检查（sort=0）之后执行。
+        theme_widget_default_injection.layout_identity_hash 同理（空 char(64) 撞 UNIQUE）。
     -->
     <event name="Weline_Framework_Schema::table_ddl_before">
         <observer name="Weline_Theme::scoped_workspace_binding_key_ddl_before"
@@ -306,6 +307,11 @@
                   disabled="false"
                   shared="true"
                   sort="500"/>
+        <observer name="Weline_Theme::widget_default_injection_identity_ddl_before"
+                  instance="Weline\Theme\Observer\WidgetDefaultInjectionIdentityDdlBefore"
+                  disabled="false"
+                  shared="true"
+                  sort="510"/>
     </event>
 
     <!-- Website info form: persist Website-scoped storefront theme application after commit. -->
