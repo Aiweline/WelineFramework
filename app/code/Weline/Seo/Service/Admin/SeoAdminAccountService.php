@@ -166,6 +166,71 @@ final class SeoAdminAccountService
         return $saved;
     }
 
+    /**
+     * 下载账户已保存的 JSON/敏感凭据字段（不写回表单 HTML；仅后台 ACL 会话可调）。
+     *
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
+    public function downloadAccountConfigJson(array $params): array
+    {
+        $accountId = (int)($params['account_id'] ?? $params['id'] ?? 0);
+        $configKey = trim((string)($params['config_key'] ?? ''));
+        if ($configKey === '' || preg_match('/^[a-z][a-z0-9_]{0,63}$/', $configKey) !== 1) {
+            throw new \InvalidArgumentException((string)__('配置键无效'));
+        }
+        $account = $this->assertAccount($accountId);
+        $platform = SeoPlatformCode::canonicalize((string)$account->getData(SeoAccount::schema_fields_PLATFORM));
+        $capability = $this->capabilities->getCapability($platform) ?? [];
+        $fields = (array)($capability['config_fields'] ?? []);
+        $field = null;
+        foreach ($fields as $candidate) {
+            if (!is_array($candidate)) {
+                continue;
+            }
+            if ((string)($candidate['key'] ?? '') === $configKey) {
+                $field = $candidate;
+                break;
+            }
+        }
+        if ($field === null) {
+            throw new \InvalidArgumentException((string)__('配置字段不存在'));
+        }
+        $boundary = new SeoAccountConfig();
+        $type = (string)($field['type'] ?? 'text');
+        if ($type !== 'json' && !$boundary->isSensitive($field)) {
+            throw new \InvalidArgumentException((string)__('仅支持下载 JSON 或敏感凭据字段'));
+        }
+        $config = $account->getConfigArray();
+        if (!array_key_exists($configKey, $config) || $config[$configKey] === null || $config[$configKey] === '' || $config[$configKey] === []) {
+            throw new \InvalidArgumentException((string)__('该账户尚未配置此凭证'));
+        }
+        $value = $config[$configKey];
+        if (is_array($value)) {
+            $content = json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        } elseif (is_string($value)) {
+            $trimmed = trim($value);
+            $decoded = json_decode($trimmed, true);
+            $content = is_array($decoded)
+                ? json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                : $trimmed;
+        } else {
+            throw new \InvalidArgumentException((string)__('凭证内容无效'));
+        }
+        if (!is_string($content) || $content === '') {
+            throw new \InvalidArgumentException((string)__('凭证内容无效'));
+        }
+        $safeName = preg_replace('/[^a-zA-Z0-9._-]+/', '-', $configKey) ?: 'credential';
+        $filename = 'seo-account-' . $accountId . '-' . $safeName . '.json';
+
+        return $this->result((string)__('凭证已准备下载'), [
+            'filename' => $filename,
+            'content' => $content,
+            'mime' => 'application/json',
+            'config_key' => $configKey,
+        ]);
+    }
+
     private function prepareConfig(SeoAccount $account, string $platform, array $posted, array $capability): array
     {
         $boundary = new SeoAccountConfig();

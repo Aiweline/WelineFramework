@@ -21,6 +21,7 @@ final class SeoAdminQueryProvider implements QueryProviderInterface
         'submitSitemaps' => 'Weline_Seo::sitemap_management',
         'saveAccount' => 'Weline_Seo::seo_account',
         'deleteAccount' => 'Weline_Seo::seo_account',
+        'downloadAccountConfigJson' => 'Weline_Seo::seo_account',
         'syncAccountStats' => 'Weline_Seo::seo_account',
         'saveWebsiteBindings' => 'Weline_Seo::website_account',
         'saveWebsiteConfig' => 'Weline_Seo::website_account',
@@ -55,6 +56,7 @@ final class SeoAdminQueryProvider implements QueryProviderInterface
             'submitSitemaps' => $this->sitemaps->submitSitemaps($params),
             'saveAccount' => $this->accounts->saveAccount($params),
             'deleteAccount' => $this->accounts->deleteAccount($params),
+            'downloadAccountConfigJson' => $this->accounts->downloadAccountConfigJson($params),
             'syncAccountStats' => $this->accounts->syncAccountStats($params),
             'saveWebsiteBindings' => $this->accounts->saveWebsiteBindings($params),
             'saveWebsiteConfig' => $this->accounts->saveWebsiteConfig($params),
@@ -120,6 +122,10 @@ final class SeoAdminQueryProvider implements QueryProviderInterface
             $this->operation('deleteAccount', __('删除 SEO 账户，并级联解除站点绑定与统计数据。'), [
                 'account_id' => ['type' => 'int', 'required' => true, 'min' => 1],
             ]),
+            $this->operation('downloadAccountConfigJson', __('下载已保存的账户 JSON/敏感凭据字段（仅后台登录且具备账户 ACL）。'), [
+                'account_id' => ['type' => 'int', 'required' => true, 'min' => 1],
+                'config_key' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+            ], 'read', 1),
             $this->operation('saveWebsiteBindings', __('保存账户到站点或站点到账户的绑定关系。'), [
                 'account_id' => ['type' => 'int', 'min' => 1],
                 'website_id' => ['type' => 'int', 'min' => 0],

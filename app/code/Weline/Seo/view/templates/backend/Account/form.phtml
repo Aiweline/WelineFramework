@@ -92,6 +92,12 @@ try {
     $seoAccountWebsiteSelectOptions = [];
 }
 $seoAccountWebsiteSelectOptionsJson = json_encode($seoAccountWebsiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+// WebsiteSelect runtime 路径（含 @lang 属性）经 Template::getData 解析 options/value；
+// 仅本地 PHP 变量不会进 getData，会落到字面量 "seoAccountWebsiteSelectOptionsJson" → 空列表「未找到匹配站点」。
+if (isset($this) && \is_object($this) && \method_exists($this, 'assign')) {
+    $this->assign('seoAccountWebsiteSelectOptions', $seoAccountWebsiteSelectOptions);
+    $this->assign('seoAccountWebsiteSelectOptionsJson', $seoAccountWebsiteSelectOptionsJson);
+}
 
 $boundWebsiteIds = [];
 if ($id > 0) {
@@ -113,6 +119,9 @@ if ($id > 0) {
     }
 }
 $boundWebsiteIdsValue = implode(',', array_map('strval', $boundWebsiteIds));
+if (isset($this) && \is_object($this) && \method_exists($this, 'assign')) {
+    $this->assign('boundWebsiteIdsValue', $boundWebsiteIdsValue);
+}
 
 // 平台功能说明和配置指引
 $platformFeatures = [
@@ -380,6 +389,7 @@ foreach ($platforms as $code => $info) {
                 <script>
                 // ==================== 平台配置数据 ====================
                 const PLATFORM_DATA = <?= json_encode($platformFeatures, $jsonForScriptFlags) ?>;
+                const ACCOUNT_ID = <?= (int)$id ?>;
                 const ACCOUNT_SECRET_KEYS = <?= json_encode($configuredSecretKeys, $jsonForScriptFlags) ?>;
                 const ACCOUNT_SAVED_PLATFORM = <?= json_encode($platform, $jsonForScriptFlags) ?>;
                 const ACCOUNT_CONFIG_VALUES = <?= json_encode($configArray, $jsonForScriptFlags) ?> || {};
@@ -1244,6 +1254,7 @@ foreach ($platforms as $code => $info) {
                             tools.className = 'w-cluster';
                             tools.style.setProperty('--w-mt', 'var(--weline-space-2)');
                             tools.setAttribute('data-gap', 'sm');
+                            tools.setAttribute('data-seo-json-tools', key);
                             const uploadBtn = document.createElement('button');
                             uploadBtn.type = 'button';
                             uploadBtn.className = 'w-button';
@@ -1253,6 +1264,22 @@ foreach ($platforms as $code => $info) {
                             uploadBtn.setAttribute('data-seo-json-upload-for', fieldId);
                             uploadBtn.textContent = <?= json_encode((string)__('上传 JSON 文件'), $jsonForScriptFlags) ?>;
                             tools.appendChild(uploadBtn);
+                            const downloadBtn = document.createElement('button');
+                            downloadBtn.type = 'button';
+                            downloadBtn.className = 'w-button';
+                            downloadBtn.setAttribute('data-tone', 'neutral');
+                            downloadBtn.setAttribute('data-variant', 'outline');
+                            downloadBtn.setAttribute('data-size', 'sm');
+                            downloadBtn.setAttribute('data-seo-json-download-for', fieldId);
+                            downloadBtn.setAttribute('data-seo-config-key', key);
+                            downloadBtn.setAttribute('data-testid', 'seo-json-download-' + key);
+                            downloadBtn.textContent = <?= json_encode((string)__('下载 JSON 文件'), $jsonForScriptFlags) ?>;
+                            const canDownloadSaved = hasSavedSecret && ACCOUNT_ID > 0;
+                            downloadBtn.disabled = !canDownloadSaved;
+                            downloadBtn.title = canDownloadSaved
+                                ? <?= json_encode((string)__('下载已保存的 JSON 凭证'), $jsonForScriptFlags) ?>
+                                : <?= json_encode((string)__('暂无可下载的凭证；请先上传并保存配置'), $jsonForScriptFlags) ?>;
+                            tools.appendChild(downloadBtn);
                             const fileInput = document.createElement('input');
                             fileInput.type = 'file';
                             fileInput.accept = String(field.accept || '.json,application/json');
@@ -1260,6 +1287,10 @@ foreach ($platforms as $code => $info) {
                             fileInput.setAttribute('data-seo-json-file-for', fieldId);
                             tools.appendChild(fileInput);
                             wrap.appendChild(tools);
+                            control.addEventListener('input', function() {
+                                syncJsonDownloadButtonState(downloadBtn, control, key);
+                            });
+                            syncJsonDownloadButtonState(downloadBtn, control, key);
                         }
 
                         if (field.hint) {
@@ -1284,6 +1315,113 @@ foreach ($platforms as $code => $info) {
 
                     syncConfigJsonFromFields();
                     updateGscOwnerActionHint();
+                }
+
+                function syncJsonDownloadButtonState(button, control, configKey) {
+                    if (!button || !control) {
+                        return;
+                    }
+                    const hasLocal = String(control.value || '').trim() !== '';
+                    const canDownloadSaved = ACCOUNT_ID > 0
+                        && ACCOUNT_SAVED_PLATFORM === (document.getElementById('platformSelect') || {}).value
+                        && ACCOUNT_SECRET_KEYS.includes(configKey);
+                    const enabled = hasLocal || canDownloadSaved;
+                    button.disabled = !enabled;
+                    button.title = enabled
+                        ? <?= json_encode((string)__('下载已保存的 JSON 凭证'), $jsonForScriptFlags) ?>
+                        : <?= json_encode((string)__('暂无可下载的凭证；请先上传并保存配置'), $jsonForScriptFlags) ?>;
+                }
+
+                function triggerBrowserJsonDownload(filename, content) {
+                    const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = filename || 'service-account.json';
+                    link.rel = 'noopener';
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    window.setTimeout(function() {
+                        URL.revokeObjectURL(url);
+                    }, 1000);
+                }
+
+                async function resolveSeoAdminApi() {
+                    if (!window.Weline) {
+                        throw new Error(<?= json_encode((string)__('Weline.Api 不可用'), $jsonForScriptFlags) ?>);
+                    }
+                    const api = typeof window.Weline.load === 'function'
+                        ? await window.Weline.load('api')
+                        : window.Weline.Api;
+                    if (!api || typeof api.resource !== 'function') {
+                        throw new Error(<?= json_encode((string)__('Weline.Api.resource 不可用'), $jsonForScriptFlags) ?>);
+                    }
+                    return await api.resource('seo_admin');
+                }
+
+                async function handleJsonFileDownload(trigger) {
+                    const fieldId = trigger.getAttribute('data-seo-json-download-for') || '';
+                    const configKey = trigger.getAttribute('data-seo-config-key') || '';
+                    const target = fieldId ? document.getElementById(fieldId) : null;
+                    if (!target || !configKey) {
+                        return;
+                    }
+                    const localValue = String(target.value || '').trim();
+                    if (localValue !== '') {
+                        try {
+                            const parsed = JSON.parse(localValue);
+                            triggerBrowserJsonDownload(
+                                'seo-account-' + (ACCOUNT_ID || 'draft') + '-' + configKey + '.json',
+                                JSON.stringify(parsed, null, 2)
+                            );
+                            showMessage('success', <?= json_encode((string)__('JSON 文件已开始下载'), $jsonForScriptFlags) ?>);
+                        } catch (err) {
+                            showMessage('error', <?= json_encode((string)__('JSON 文件格式错误'), $jsonForScriptFlags) ?> + ': ' + err.message);
+                        }
+                        return;
+                    }
+                    if (!(ACCOUNT_ID > 0) || !ACCOUNT_SECRET_KEYS.includes(configKey)) {
+                        showMessage('warning', <?= json_encode((string)__('暂无可下载的凭证；请先上传并保存配置'), $jsonForScriptFlags) ?>);
+                        return;
+                    }
+                    const originalLabel = trigger.textContent;
+                    trigger.disabled = true;
+                    trigger.setAttribute('aria-busy', 'true');
+                    trigger.textContent = <?= json_encode((string)__('正在准备下载…'), $jsonForScriptFlags) ?>;
+                    try {
+                        const api = await resolveSeoAdminApi();
+                        const response = await api.downloadAccountConfigJson({
+                            account_id: ACCOUNT_ID,
+                            config_key: configKey
+                        }, {
+                            area: 'backend'
+                        });
+                        const payload = response && response.data !== undefined && response.success === undefined
+                            ? response.data
+                            : response;
+                        const data = payload && payload.data && typeof payload.data === 'object'
+                            ? payload.data
+                            : payload;
+                        const content = data && typeof data.content === 'string' ? data.content : '';
+                        const filename = data && typeof data.filename === 'string' ? data.filename : '';
+                        if (!content) {
+                            throw new Error(<?= json_encode((string)__('凭证内容无效'), $jsonForScriptFlags) ?>);
+                        }
+                        triggerBrowserJsonDownload(filename || ('seo-account-' + ACCOUNT_ID + '-' + configKey + '.json'), content);
+                        showMessage('success', (payload && payload.message)
+                            ? String(payload.message)
+                            : <?= json_encode((string)__('JSON 文件已开始下载'), $jsonForScriptFlags) ?>);
+                    } catch (error) {
+                        const message = error && error.message
+                            ? String(error.message)
+                            : <?= json_encode((string)__('凭证下载失败'), $jsonForScriptFlags) ?>;
+                        showMessage('error', message);
+                    } finally {
+                        trigger.textContent = originalLabel;
+                        trigger.removeAttribute('aria-busy');
+                        syncJsonDownloadButtonState(trigger, target, configKey);
+                    }
                 }
 
                 /**
@@ -1419,6 +1557,17 @@ foreach ($platforms as $code => $info) {
                             if (fileInput) {
                                 fileInput.click();
                             }
+                            return;
+                        }
+
+                        const downloadTrigger = event.target.closest('[data-seo-json-download-for]');
+                        if (downloadTrigger) {
+                            event.preventDefault();
+                            if (downloadTrigger.disabled) {
+                                showMessage('warning', <?= json_encode((string)__('暂无可下载的凭证；请先上传并保存配置'), $jsonForScriptFlags) ?>);
+                                return;
+                            }
+                            handleJsonFileDownload(downloadTrigger);
                             return;
                         }
                     });

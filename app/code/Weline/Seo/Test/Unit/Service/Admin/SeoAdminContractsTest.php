@@ -33,6 +33,9 @@ final class SeoAdminContractsTest extends TestCase
             'SeoAdminAccountDelete::testDeleteAccountIsWiredThroughAdminStack' => function () {
             $this->assert_SeoAdminAccountDelete_testDeleteAccountIsWiredThroughAdminStack();
         },
+            'SeoAdminAccountDownloadConfigJson::testDownloadAccountConfigJsonIsWiredThroughAdminStack' => function () {
+            $this->assert_SeoAdminAccountDownloadConfigJson_testDownloadAccountConfigJsonIsWiredThroughAdminStack();
+        },
             'SeoAdminAccountSaveWebsiteBindings::testSaveAccountAssignsTransactionResultBeforeBindingSync' => function () {
             $this->assert_SeoAdminAccountSaveWebsiteBindings_testSaveAccountAssignsTransactionResultBeforeBindingSync();
         },
@@ -75,17 +78,44 @@ private function assert_SeoAdminAccountDelete_testDeleteAccountIsWiredThroughAdm
     self::assertStringContainsString('data-account-confirm-delete', $templateSrc);
 }
 
+private function assert_SeoAdminAccountDownloadConfigJson_testDownloadAccountConfigJsonIsWiredThroughAdminStack(): void
+{
+    $root = '/Users/weline/Project/Official/框架/app/code/Weline/Seo';
+    $service = $root . '/Service/Admin/SeoAdminAccountService.php';
+    $provider = $root . '/extends/module/Weline_Framework/Query/SeoAdminQueryProvider.php';
+    $template = $root . '/view/templates/backend/Account/form.phtml';
+    foreach ([$service, $provider, $template] as $path) {
+        self::assertFileExists($path);
+    }
+    $serviceSrc = (string) file_get_contents($service);
+    $providerSrc = (string) file_get_contents($provider);
+    $templateSrc = (string) file_get_contents($template);
+    self::assertStringContainsString('function downloadAccountConfigJson(array $params)', $serviceSrc);
+    self::assertStringContainsString("__('凭证已准备下载')", $serviceSrc);
+    self::assertStringContainsString("'downloadAccountConfigJson' => 'Weline_Seo::seo_account'", $providerSrc);
+    self::assertStringContainsString("'downloadAccountConfigJson' => \$this->accounts->downloadAccountConfigJson(\$params)", $providerSrc);
+    self::assertStringContainsString("operation('downloadAccountConfigJson'", $providerSrc);
+    self::assertStringContainsString('data-seo-json-download-for', $templateSrc);
+    self::assertStringContainsString('handleJsonFileDownload', $templateSrc);
+    self::assertStringContainsString('downloadAccountConfigJson', $templateSrc);
+    self::assertStringContainsString("setAttribute('data-testid', 'seo-json-download-' + key)", $templateSrc);
+}
+
 private function assert_SeoAdminAccountSaveWebsiteBindings_testSaveAccountAssignsTransactionResultBeforeBindingSync(): void
 {
     $path = '/Users/weline/Project/Official/框架/app/code/Weline/Seo' . '/Service/Admin/SeoAdminAccountService.php';
     self::assertFileExists($path);
     $src = (string) file_get_contents($path);
-    self::assertMatchesRegularExpression('/\$saved\s*=\s*\$this->transactions->run\(/', $src, 'saveAccount 必须先把事务结果赋给 $saved，再同步 website_ids');
-    self::assertStringNotContainsString("return \$this->transactions->run(\$this->accounts->getConnection()", $src, '禁止提前 return 事务结果导致 website_ids 绑定死代码');
-    self::assertStringContainsString("array_key_exists('website_ids', \$params)", $src);
-    self::assertStringContainsString('saveAccountWebsiteBindings($savedAccountId, $websiteIds)', $src);
-    self::assertStringContainsString('bound_website_ids', $src);
-    self::assertStringContainsString('账户已保存，但站点绑定未同步成功，请重试保存。', $src);
+    if (preg_match('/public function saveAccount\(array \$params\): array\s*\{(.*?)\n    public function /s', $src, $matches) !== 1) {
+        self::fail('saveAccount 方法体未定位到下一个 public function');
+    }
+    $saveBody = (string)$matches[1];
+    self::assertMatchesRegularExpression('/\$saved\s*=\s*\$this->transactions->run\(/', $saveBody, 'saveAccount 必须先把事务结果赋给 $saved，再同步 website_ids');
+    self::assertStringNotContainsString("return \$this->transactions->run(\$this->accounts->getConnection()", $saveBody, '禁止 saveAccount 提前 return 事务结果导致 website_ids 绑定死代码');
+    self::assertStringContainsString("array_key_exists('website_ids', \$params)", $saveBody);
+    self::assertStringContainsString('saveAccountWebsiteBindings($savedAccountId, $websiteIds)', $saveBody);
+    self::assertStringContainsString('bound_website_ids', $saveBody);
+    self::assertStringContainsString('账户已保存，但站点绑定未同步成功，请重试保存。', $saveBody);
 }
 
 private function assert_SeoAdminAccountSaveWebsiteBindings_testFrontendKeepsWebsiteIdZeroWhenReadingBoundIds(): void
