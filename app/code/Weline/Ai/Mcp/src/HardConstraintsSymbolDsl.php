@@ -170,6 +170,9 @@ final class HardConstraintsSymbolDsl
             'Aoci' => ['gloss_zh' => 'aoci_rules(+overview若不可靠)', 'rule_ids' => ['aoci_complements_weline_mcp']],
             'WebTouch' => ['gloss_zh' => '触.phtml/CSS/主题/店面页', 'rule_ids' => ['browser_operator_self_test']],
             'WBOP' => ['gloss_zh' => 'Browser真机禁缓存+抹自动+点选+截图Read', 'rule_ids' => ['browser_operator_self_test']],
+            'Curl5' => ['gloss_zh' => '打开前curl --max-time 5探活', 'rule_ids' => ['browser_operator_fail_closed_release']],
+            'Hang' => ['gloss_zh' => 'Browser超时/无tab/锁死', 'rule_ids' => ['browser_operator_fail_closed_release']],
+            'HangRelease' => ['gloss_zh' => 'Browser卡住立即unlock+关验收签', 'rule_ids' => ['browser_operator_fail_closed_release']],
             'Accept' => [
                 'gloss_zh' => '本机验收证据已齐',
                 'rule_ids' => [
@@ -346,6 +349,11 @@ final class HardConstraintsSymbolDsl
             'browser_operator_self_test' => [
                 'formula' => 'WebTouch→□WBOP∧(¬WBOP→¬Pass)',
                 'gloss_zh' => 'Web改须禁缓存+抹自动+点选+截图Read',
+                'cluster' => '§✓',
+            ],
+            'browser_operator_fail_closed_release' => [
+                'formula' => 'WBOP→□Curl5∧(Hang→□HangRelease)',
+                'gloss_zh' => '开Browser前curl≤5s；卡住立即unlock关签',
                 'cluster' => '§✓',
             ],
             'browser_cache_disabled_on_open' => [

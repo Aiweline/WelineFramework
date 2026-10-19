@@ -16,7 +16,7 @@
 1. **禁止**从 Cursor / Agent **本机**对生产或 CDN 前公网 FQDN 执行 `curl` / `wget` / `httpie` / 裸 `fetch` 做连通性、状态码或抽 HTML。  
 2. **必须**先 Read `websites/<site>/README.md`，用柜内 **主用 SSH Host**（或等价 SSH MCP profile）登录目标机。  
 3. 在远端对本机 loopback 探活，例如：  
-   `curl -sI --max-time 12 -H 'Host: www.example.com' http://127.0.0.1/path`  
+   `curl -sI --max-time 5 -H 'Host: www.example.com' http://127.0.0.1/path`  
    （HTTPS 时加 `-k` 与正确 SNI/`--resolve` 按机房约定。）  
 4. 命中 `shared_ban` / 纯文字 Forbidden：在目标机执行  
    `php bin/w server:security:unblock --ip=<客户端IP>` 或 `--clear-all`（按运维判断）——**禁止**再用本机公网 curl「试到通」。  

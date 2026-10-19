@@ -24,7 +24,7 @@ aliases:
 ## 强制
 
 1. **禁止** Agent 本机对生产公网 FQDN `curl`/`wget`/`httpie`。  
-2. **必须** Read 站柜 README → SSH 主用 Host → 远端 `127.0.0.1` + `Host:` 探活。  
+2. **必须** Read 站柜 README → SSH 主用 Host → 远端 `127.0.0.1` + `Host:` 探活（`curl --max-time 5`，禁止 10/15/30s）。  
 3. Forbidden/`shared_ban` → `server:security:unblock`，禁止更多本机公网 curl。  
 
 ## 豁免

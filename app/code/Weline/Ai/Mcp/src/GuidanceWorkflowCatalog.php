@@ -1229,7 +1229,7 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'wb_op_browser_self_test', 'summary' => 'AI 必须用当前宿主可用的真实 Browser 跑完约定用例；单测/curl 不能替代；不绑定 Cursor'],
                 ['id' => 'browser_operator_non_preemptive', 'summary' => 'WB-OP 等为虚拟操作面、默认非抢占后台：省略 position；禁止抢 IDE 焦点/鼠标/键盘；后台≠免测；仅用户要求观看时前台'],
                 ['id' => 'browser_cache_disabled_on_open', 'summary' => '每次打开/导航验收 Browser 前禁用 HTTP 缓存（默认缓存会造成假 PASS）；Cursor：Network.setCacheDisabled 后 browser_navigate；验收 URL 必须带安装级 w_fpc_pierce=（FpcPierceStamp::buildQuerySuffix）；本回合改静态须再加 _wb_nc= 并抽检正文；禁止 browser_cdp Page.reload；禁止仅 Runtime.evaluate 冒充操作员点击；setCacheDisabled 被拒则 pierce+cache-bust 再 navigate 并注明降级；visitor-path HIT 明示标注时可免穿章'],
-                ['id' => 'browser_operator_fail_closed_release', 'summary' => '打开前 curl --max-time≤15 探活；Browser 超时/无 tab/锁死立即 unlock+关闭全部验收标签（可 e2e:cleanup-browsers）；导航重试≤2；禁止无限等待或跨长 shell 持 lock'],
+                ['id' => 'browser_operator_fail_closed_release', 'summary' => '打开前 curl --max-time 5 探活（禁 10/15/30s）；Browser 超时/无 tab/锁死立即 unlock+关闭全部验收标签（可 e2e:cleanup-browsers）；导航重试≤2；禁止无限等待或跨长 shell 持 lock'],
                 ['id' => 'wb_vis_screenshots', 'summary' => '有视觉面且宿主可截图时：多断点截图存 doc/evidence/；有原型文档则对照'],
                 ['id' => 'delivery_urls_section', 'summary' => '每次功能完成汇报末尾必须有「交付地址」小节（主链 http(s) Markdown）'],
                 ['id' => 'delivery_default_host_test_weline_com', 'summary' => '本机主验收 Host 默认 {project_hash}.test.weline.com；禁止主链 *.weline.test；仅无前者时才用 127.0.0.1'],
@@ -1240,7 +1240,7 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'automation_test_report_durable_evidence', 'summary' => '自动化验收面向用户收口必须回报可回查证据数据（order_uuid/transaction_no/券/邮箱等）；禁止只说 N passed/测试完了'],
             ],
             'verification_commands' => [
-                'curl --max-time 10 -I <probe_verified_acceptance_url>',
+                'curl --max-time 5 -I <probe_verified_acceptance_url>',
                 'php bin/w e2e:cleanup-browsers',
                 'php bin/w e2e:run --suite=commerce-release --project=chromium',
             ],
@@ -1265,7 +1265,7 @@ final class GuidanceWorkflowCatalog
                 ],
                 'required' => [
                     'Define operator use cases (URL, steps, expected) before claiming Web done',
-                    'Before every acceptance Browser navigate: curl --max-time ≤15 probe; on Browser hang/timeout: unlock+close all acceptance tabs (fail-closed)',
+                    'Before every acceptance Browser navigate: curl --max-time 5 probe; on Browser hang/timeout: unlock+close all acceptance tabs (fail-closed)',
                     'On every acceptance Browser open/navigate: prefer background non-preemptive navigate (omit position); Network.setCacheDisabled then browser_navigate—never browser_cdp Page.reload',
                     'Run host-available real Browser on those use cases (WB-OP); collect WB-VIS when visual and screenshot-capable',
                     'End every feature/stage report with probe-verified http(s) Markdown Delivery URLs on {project_hash}.test.weline.com by default',
