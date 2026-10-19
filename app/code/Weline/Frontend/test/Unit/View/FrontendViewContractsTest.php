@@ -329,6 +329,9 @@ private function assert_WelineApiErrorPresentation_testApiPresentsFriendlyToastW
     self::assertStringContainsString('toastOptions', $script);
     self::assertStringContainsString('details: presentation.details', $script);
     self::assertStringContainsString('error.details = serverError.details', $script);
+    // Business failures on HTTP 200 must not stamp "(HTTP 200)" / "code:200".
+    self::assertStringContainsString('const transportFailed = status >= 400;', $script);
+    self::assertStringContainsString('transportFailed ? `${code}:${status}` : code', $script);
 }
 
 private function assert_WelineApiErrorPresentation_testApiSilentTransientFailuresDoNotFanOutOrResetWorker(): void

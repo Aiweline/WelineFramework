@@ -1283,10 +1283,14 @@
             title = i18nText('请求失败');
             message = rawMessage || i18nText('请求失败，请稍后重试。');
         }
-        if (!preset && !preferServerMessage && !localeTip && status > 0 && !/\bHTTP\s+\d+/i.test(message)) {
+        // QueryBin business failures often travel as HTTP 200 + success:false.
+        // Stamping "(HTTP 200)" / "business_error:200" reads as a transport success
+        // contradiction — only annotate real transport failures (4xx/5xx).
+        const transportFailed = status >= 400;
+        if (!preset && !preferServerMessage && !localeTip && transportFailed && !/\bHTTP\s+\d+/i.test(message)) {
             message = `${message} (HTTP ${status})`;
         }
-        const displayCode = status > 0 ? `${code}:${status}` : code;
+        const displayCode = transportFailed ? `${code}:${status}` : code;
         const showDetails = details !== '' && details !== message;
         return {
             title,
