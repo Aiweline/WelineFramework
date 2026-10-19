@@ -595,6 +595,7 @@ final class MailOutboundRelaySyncService
             $user = trim((string)($rule[MailOutboundRouteRule::schema_fields_RELAY_USERNAME]
                 ?? $rule['relay_username']
                 ?? ''));
+            $user = $this->normalizeFixedSmtpUsername($host, $user);
             $tls = $this->normalizeTls(
                 (string)($rule[MailOutboundRouteRule::schema_fields_RELAY_TLS]
                     ?? $rule['relay_tls']
@@ -727,6 +728,7 @@ final class MailOutboundRelaySyncService
             }
             $port = $this->normalizeSubmissionPort($port);
             $tls = $this->normalizeTls($tls, $port);
+            $user = $this->normalizeFixedSmtpUsername($host, $user);
 
             $authUser = $user !== '' ? $user : $email;
             $password = $this->resolveRelayAuthPassword(
@@ -926,7 +928,10 @@ final class MailOutboundRelaySyncService
                 ) {
                     continue;
                 }
-                $user = trim((string)$svc->getData(SmtpService::schema_fields_USERNAME));
+                $user = $this->normalizeFixedSmtpUsername(
+                    $host,
+                    trim((string)$svc->getData(SmtpService::schema_fields_USERNAME))
+                );
                 $sealed = trim((string)$svc->getData(SmtpService::schema_fields_PASSWORD_SEALED));
                 // 无认证跨机 self 会 503；本域 submission 已在上方跳过。
                 if ($user === '') {
@@ -1082,6 +1087,15 @@ final class MailOutboundRelaySyncService
         }
 
         return $tls;
+    }
+
+    /** Resend/SendGrid 等固定用户名：按 host 强制目录字面量，避免把显示名写进 AUTH。 */
+    private function normalizeFixedSmtpUsername(string $host, string $username): string
+    {
+        /** @var \Weline\Smtp\Service\SmtpExternalProviderCatalog $catalog */
+        $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpExternalProviderCatalog::class);
+
+        return $catalog->normalizeUsernameForHost($host, $username);
     }
 
     private function looksSelfRefHost(string $host): bool

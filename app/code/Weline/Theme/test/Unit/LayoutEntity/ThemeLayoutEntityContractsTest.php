@@ -130,6 +130,9 @@ final class ThemeLayoutEntityContractsTest extends TestCase
             'LayoutSlotRendererColdPathPolicy::testPublishedLayoutSourceCandidatesPolicySharesProjectionPool' => function () {
             $this->assert_LayoutSlotRendererColdPathPolicy_testPublishedLayoutSourceCandidatesPolicySharesProjectionPool();
         },
+            'LayoutSlotRendererColdPathPolicy::testCriticalChromePinsRejectStaleAmazonBag' => function () {
+            $this->assert_LayoutSlotRendererColdPathPolicy_testCriticalChromePinsRejectStaleAmazonBag();
+        },
             'LayoutSlotRendererColdPathPolicy::testHardCutFinalizeRecordsSkippedL3BudgetPhase' => function () {
             $this->assert_LayoutSlotRendererColdPathPolicy_testHardCutFinalizeRecordsSkippedL3BudgetPhase();
         },
@@ -880,6 +883,94 @@ private function assert_LayoutSlotRendererColdPathPolicy_testPublishedLayoutSour
     self::assertStringContainsString('allowsPublishedSourceCandidatesHotCache', $snapshotSrc);
     self::assertStringContainsString('MODE_FORMAL', $snapshotSrc);
     self::assertStringContainsString('isPreviewMode', $snapshotSrc);
+    self::assertStringContainsString('criticalChromePinsMatchDisk', $snapshotSrc);
+    self::assertStringContainsString('purgePublishedProjectionPoolAfterEntityPromote', $snapshotSrc);
+    $publisherSrc = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/LayoutEntity/ThemeLayoutEntityBatchPublisher.php');
+    self::assertStringContainsString('purgePublishedProjectionPoolAfterEntityPromote', $publisherSrc);
+    self::assertStringContainsString('rollback_plan', $publisherSrc);
+    $cleanerSrc = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/ThemeRuntimeCacheCleaner.php');
+    self::assertStringContainsString('public static function purgePublishedProjectionPoolAfterEntityPromote', $cleanerSrc);
+}
+
+/**
+ * Stale source_candidates bag with Amazon-like header bytes must fail chrome pin gate
+ * when live derived disk already holds design SoT chrome.
+ */
+private function assert_LayoutSlotRendererColdPathPolicy_testCriticalChromePinsRejectStaleAmazonBag(): void
+{
+    $tmp = \sys_get_temp_dir() . '/weline-chrome-pin-gate-' . \bin2hex(\random_bytes(4));
+    \mkdir($tmp, 0777, true);
+    $paths = new \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths($tmp);
+    $identity = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+        3999,
+        'fixture.chrome.pin',
+        'normal',
+        'frontend',
+        17,
+        'formal',
+        3,
+    );
+    $diskHeader = $paths->partialPhtml($identity, 'header', 'default');
+    \mkdir(\dirname($diskHeader), 0777, true);
+
+    $wrap = static function (string $origin, string $bodyHtml) use ($identity): string {
+        $meta = [
+            'origin' => $origin,
+            'identity' => $identity->toArray(),
+            'resource_type' => 'partial',
+            'partial_type' => 'header',
+            'partial_option' => 'default',
+            'input_digest' => '',
+        ];
+        $encoded = \base64_encode((string)\json_encode($meta, JSON_THROW_ON_ERROR));
+        $bytes = "<?php /* weline-source:{$encoded} */ ?>\n{$bodyHtml}\n";
+        \file_put_contents($origin, $bytes);
+        $digest = \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPageInputDigest::forOrigin($origin);
+        $meta['input_digest'] = $digest;
+        $encoded = \base64_encode((string)\json_encode($meta, JSON_THROW_ON_ERROR));
+
+        return "<?php /* weline-source:{$encoded} */ ?>\n{$bodyHtml}\n";
+    };
+
+    $sotOrigin = $tmp . '/design-header-default.phtml';
+    $amazonOrigin = $tmp . '/amazon-header-default.phtml';
+    $sotDisk = $wrap($sotOrigin, '<header data-header-chrome="sot"></header>');
+    $amazonPin = $wrap($amazonOrigin, '<header data-header-mobile="amazon"></header>');
+    \file_put_contents($diskHeader, $sotDisk);
+
+    $stale = \Weline\Theme\Service\LayoutEntity\ThemeLayoutSourceSnapshot::fromCandidates(
+        $identity,
+        '',
+        [$diskHeader => $amazonPin],
+    );
+    $fresh = \Weline\Theme\Service\LayoutEntity\ThemeLayoutSourceSnapshot::fromCandidates(
+        $identity,
+        '',
+        [$diskHeader => $sotDisk],
+    );
+    $ref = new \ReflectionClass(\Weline\Theme\Service\LayoutEntity\ThemeLayoutSourceSnapshot::class);
+    $method = $ref->getMethod('criticalChromePinsMatchDisk');
+    $method->setAccessible(true);
+    self::assertFalse(
+        (bool)$method->invoke(null, $stale, $paths, $identity),
+        'stale Amazon pin against SoT disk must fail criticalChromePinsMatchDisk',
+    );
+    self::assertTrue(
+        (bool)$method->invoke(null, $fresh, $paths, $identity),
+        'matching SoT pin must pass criticalChromePinsMatchDisk',
+    );
+
+    foreach (new \RecursiveIteratorIterator(
+        new \RecursiveDirectoryIterator($tmp, \FilesystemIterator::SKIP_DOTS),
+        \RecursiveIteratorIterator::CHILD_FIRST,
+    ) as $file) {
+        if ($file->isDir()) {
+            @\rmdir($file->getPathname());
+        } else {
+            @\unlink($file->getPathname());
+        }
+    }
+    @\rmdir($tmp);
 }
 
 private function assert_LayoutSlotRendererColdPathPolicy_testHardCutFinalizeRecordsSkippedL3BudgetPhase(): void

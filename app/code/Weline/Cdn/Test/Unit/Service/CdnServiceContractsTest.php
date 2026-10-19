@@ -524,6 +524,12 @@ private function assert_CloudflareMailDnsGlobalKey_testMailDnsManagerUsesCredent
     self::assertStringContainsString('array_slice($labels, $i)', $mgr);
     self::assertStringContainsString('已尝试：%{1}', $mgr);
     self::assertStringContainsString('catch (\\Throwable $e)', $mgr);
+    self::assertStringContainsString('?callable $onProgress = null', $mgr);
+    self::assertStringContainsString("\$emit('resolve_zone'", $mgr);
+    self::assertStringContainsString("'apply_op'", $mgr);
+    self::assertStringContainsString("\$emit('verify'", $mgr);
+    $iface = (string) file_get_contents(BP . 'app/code/Weline/Cdn/Api/MailDnsManagerInterface.php');
+    self::assertStringContainsString('?callable $onProgress = null', $iface);
 }
 
 private function assert_CloudflareMailDnsGlobalKey_testPlannerAllowsAbsentDkimDesiredRecord(): void

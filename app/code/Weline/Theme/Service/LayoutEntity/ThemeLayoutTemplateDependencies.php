@@ -24,7 +24,15 @@ final class ThemeLayoutTemplateDependencies
     /** @return list<string> */
     private function parseLiteralFetches(string $source): array
     {
-        $tree = (new \PhpParser\ParserFactory())->createForNewestSupportedVersion()->parse($source) ?? [];
+        // Origins may be temporarily corrupt (e.g. broken design override). Dependency
+        // extraction is best-effort — never fail solidify/upgrade on PhpParser errors.
+        try {
+            $tree = (new \PhpParser\ParserFactory())->createForNewestSupportedVersion()->parse($source) ?? [];
+        } catch (\PhpParser\Error $error) {
+            w_log_warning('ThemeLayoutTemplateDependencies PhpParser: ' . $error->getMessage());
+
+            return [];
+        }
         $calls = (new \PhpParser\NodeFinder())->findInstanceOf($tree, \PhpParser\Node\Expr\MethodCall::class);
         $literals = [];
         foreach ($calls as $call) {

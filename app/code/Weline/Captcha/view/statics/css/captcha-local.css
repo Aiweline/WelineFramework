@@ -11,6 +11,24 @@
     margin: 0;
 }
 
+/* Stacked challenge label — never float over the image/refresh row. */
+.weline-captcha .w-field[data-label-layout="stacked"] > .w-field__label,
+.weline-captcha-local .w-field > .w-field__label {
+    position: static;
+    inset: auto;
+    translate: none;
+    display: block;
+    max-inline-size: none;
+    margin: 0 0 var(--weline-space-2, 0.5rem);
+    padding: 0;
+    overflow: visible;
+    background: transparent;
+    white-space: normal;
+    text-overflow: unset;
+    pointer-events: auto;
+    line-height: 1.35;
+}
+
 .weline-captcha-stack {
     display: flex;
     flex-direction: column;

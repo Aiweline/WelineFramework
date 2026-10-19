@@ -438,7 +438,7 @@ private function assert_MailComposeDeeplink_testBackendComposePrefillAndSendEven
 private function assert_MailComposeDeeplink_testModuleVersion(): void
 {
     $module = include BP . 'app/code/Weline/Mail/etc/module.php';
-    self::assertSame('0.2.44', $module['version'] ?? null);
+    self::assertSame('0.2.45', $module['version'] ?? null);
 }
 
 private function assert_MailDkimLocalEnsureService_testEnsureGeneratesReusablePublicKey(): void
@@ -579,6 +579,9 @@ private function assert_MailOutboundRelaySync_testSyncBuildsSenderRouteNotAuthen
     self::assertStringContainsString('persistPendingReseal', $src);
     self::assertStringContainsString('consumePendingReseal', $src);
     self::assertStringContainsString('schema_fields_PASSWORD_SEALED', $src);
+    // 固定用户名服务商（Resend/SendGrid）：禁止把显示名写进 AUTH。
+    self::assertStringContainsString('normalizeFixedSmtpUsername', $src);
+    self::assertStringContainsString('normalizeUsernameForHost', $src);
     // 下发后 AUTH 探针：Hub 密码错不得假成功。
     self::assertStringContainsString('assertAuthenticatedRelaysReachable', $src);
     self::assertStringContainsString('probeSmtpAuthLogin', $src);
@@ -707,6 +710,7 @@ private function assert_MailOutboundRelaySync_testAccountHasOutboundHostColumns(
     self::assertStringContainsString('选择 Smtp 账户/服务', $enterprise);
     $relay = (string) file_get_contents(BP . 'app/code/Weline/Mail/Service/MailAccountOutboundRelayService.php');
     self::assertStringContainsString('resolveOutboundPick', $relay);
+    self::assertStringContainsString('normalizeUsernameForHost', $relay);
     $index = (string) file_get_contents(BP . 'app/code/Weline/Mail/Controller/Backend/Index.php');
     self::assertStringContainsString('MailAccountOutboundRelayService', $index);
     self::assertStringContainsString('listOutboundPicks', $index);
@@ -734,6 +738,8 @@ private function assert_MailOutboundRelaySync_testEnterpriseOutboundOnAccountSmt
     self::assertStringContainsString('postDeleteSmtpService', $index);
     self::assertStringContainsString('function postSmtpServiceDeleteStream', $index);
     self::assertStringContainsString('function postSmtpServiceAccountDeleteStream', $index);
+    self::assertStringContainsString('function postConfigureCloudflareDnsStream', $index);
+    self::assertStringContainsString('function runConfigureCloudflareDns', $index);
     self::assertStringContainsString('SseWriter', $index);
     $catalog = (string) \file_get_contents(BP . '/app/code/Weline/Smtp/Service/SmtpServiceCatalogService.php');
     self::assertStringContainsString('function updateExternalService', $catalog);

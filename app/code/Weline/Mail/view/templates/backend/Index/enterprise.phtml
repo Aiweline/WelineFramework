@@ -465,6 +465,9 @@ if ($oauthCfError === 'invalid_scope') {
     font-size: var(--weline-font-size-sm);
     color: var(--weline-theme-text);
 }
+.mail-enterprise__inline-compose-bar .mail-enterprise__inline-actions {
+    margin-inline-start: auto;
+}
 .mail-enterprise__inline-field {
     display: grid;
     gap: var(--weline-space-1);
@@ -1626,7 +1629,10 @@ if ($oauthCfError === 'invalid_scope') {
                     <div class="mail-enterprise__inline-compose" data-mail-inline-compose data-testid="mail-enterprise-inline-compose" hidden>
                         <div class="mail-enterprise__inline-compose-bar">
                             <strong data-mail-inline-mode-label><?= __('回复') ?></strong>
-                            <button type="button" class="w-button" data-variant="ghost" data-size="sm" data-mail-inline-discard><?= __('取消') ?></button>
+                            <div class="mail-enterprise__inline-actions" data-mail-inline-actions>
+                                <button type="button" class="w-button" data-tone="primary" data-size="sm" data-mail-inline-send data-testid="mail-enterprise-inline-send"><?= __('发送') ?></button>
+                                <button type="button" class="w-button" data-variant="outline" data-tone="neutral" data-size="sm" data-mail-inline-discard data-testid="mail-enterprise-inline-discard"><?= __('舍弃') ?></button>
+                            </div>
                         </div>
                         <div class="mail-enterprise__inline-field">
                             <label for="mail-inline-to"><?= __('收件人') ?></label>
@@ -1645,10 +1651,6 @@ if ($oauthCfError === 'invalid_scope') {
                             <textarea id="mail-inline-body" data-mail-inline-body rows="6" data-testid="mail-enterprise-inline-body"></textarea>
                         </div>
                         <div class="mail-enterprise__inline-quote" data-mail-inline-quote data-testid="mail-enterprise-inline-quote" hidden></div>
-                        <div class="mail-enterprise__inline-actions">
-                            <button type="button" class="w-button" data-tone="primary" data-size="sm" data-mail-inline-send data-testid="mail-enterprise-inline-send"><?= __('发送') ?></button>
-                            <button type="button" class="w-button" data-variant="outline" data-tone="neutral" data-size="sm" data-mail-inline-discard><?= __('舍弃') ?></button>
-                        </div>
                     </div>
                     </div>
                 <?php elseif ($messages === []): ?>
@@ -1783,8 +1785,10 @@ if ($oauthCfError === 'invalid_scope') {
                     return '<div class="mail-enterprise__inline-compose" data-mail-inline-compose data-testid="mail-enterprise-inline-compose" hidden>' +
                         '<div class="mail-enterprise__inline-compose-bar">' +
                         '<strong data-mail-inline-mode-label>' + esc(inlineReplyLabel) + '</strong>' +
-                        '<button type="button" class="w-button" data-variant="ghost" data-size="sm" data-mail-inline-discard>' + esc(inlineCancelLabel) + '</button>' +
-                        '</div>' +
+                        '<div class="mail-enterprise__inline-actions" data-mail-inline-actions>' +
+                        '<button type="button" class="w-button" data-tone="primary" data-size="sm" data-mail-inline-send data-testid="mail-enterprise-inline-send">' + esc(inlineSendLabel) + '</button>' +
+                        '<button type="button" class="w-button" data-variant="outline" data-tone="neutral" data-size="sm" data-mail-inline-discard data-testid="mail-enterprise-inline-discard">' + esc(inlineDiscardLabel) + '</button>' +
+                        '</div></div>' +
                         '<div class="mail-enterprise__inline-field"><label>' + esc(inlineToLabel) + '</label>' +
                         '<input type="text" data-mail-inline-to autocomplete="email" data-testid="mail-enterprise-inline-to"></div>' +
                         '<div class="mail-enterprise__inline-field" data-mail-inline-cc-wrap hidden><label>' + esc(inlineCcLabel) + '</label>' +
@@ -1794,10 +1798,7 @@ if ($oauthCfError === 'invalid_scope') {
                         '<div class="mail-enterprise__inline-field"><label>' + esc(inlineBodyLabel) + '</label>' +
                         '<textarea data-mail-inline-body rows="6" data-testid="mail-enterprise-inline-body"></textarea></div>' +
                         '<div class="mail-enterprise__inline-quote" data-mail-inline-quote data-testid="mail-enterprise-inline-quote" hidden></div>' +
-                        '<div class="mail-enterprise__inline-actions">' +
-                        '<button type="button" class="w-button" data-tone="primary" data-size="sm" data-mail-inline-send data-testid="mail-enterprise-inline-send">' + esc(inlineSendLabel) + '</button>' +
-                        '<button type="button" class="w-button" data-variant="outline" data-tone="neutral" data-size="sm" data-mail-inline-discard>' + esc(inlineDiscardLabel) + '</button>' +
-                        '</div></div>';
+                        '</div>';
                 }
                 function mailApiResource() {
                     if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
@@ -1888,10 +1889,23 @@ if ($oauthCfError === 'invalid_scope') {
                     panel.hidden = false;
                     try { panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {}
                 }
+                function resolveInlineQuoteText(panel) {
+                    var quote = String(inlineQuotePlain || '').trim();
+                    if (quote) return quote;
+                    var quoteEl = panel ? panel.querySelector('[data-mail-inline-quote]') : null;
+                    if (!quoteEl || quoteEl.hidden) return '';
+                    return String(quoteEl.innerText || quoteEl.textContent || '').replace(/\s+$/g, '').trim();
+                }
                 function sendInlineCompose() {
-                    if (inlineSending) return;
+                    if (inlineSending) {
+                        toast(inlineSendingLabel, 'neutral');
+                        return;
+                    }
                     var panel = reader.querySelector('[data-mail-inline-compose]');
-                    if (!panel || panel.hidden) return;
+                    if (!panel || panel.hidden) {
+                        toast(<?= json_encode((string)__('请先点击回复再发送'), JSON_UNESCAPED_UNICODE) ?>, 'warning');
+                        return;
+                    }
                     var toEl = panel.querySelector('[data-mail-inline-to]');
                     var ccEl = panel.querySelector('[data-mail-inline-cc]');
                     var subjectEl = panel.querySelector('[data-mail-inline-subject]');
@@ -1901,13 +1915,19 @@ if ($oauthCfError === 'invalid_scope') {
                     var cc = String(ccEl && ccEl.value || '').trim();
                     var subject = String(subjectEl && subjectEl.value || '').trim();
                     var userBody = String(bodyEl && bodyEl.value || '');
+                    var quoteText = resolveInlineQuoteText(panel);
+                    var aid = parseInt(accountId, 10) || 0;
+                    if (aid <= 0) {
+                        toast(<?= json_encode((string)__('请先选择已启用的企业邮箱账号'), JSON_UNESCAPED_UNICODE) ?>, 'warning');
+                        return;
+                    }
                     if (!to) {
                         toast(inlineNeedToText, 'warning');
                         return;
                     }
                     var fullBody = userBody;
-                    if (inlineQuotePlain) {
-                        fullBody = userBody.replace(/\s+$/, '') + (userBody.trim() ? '\n' : '') + inlineQuotePlain;
+                    if (quoteText) {
+                        fullBody = userBody.replace(/\s+$/, '') + (userBody.trim() ? '\n\n' : '') + quoteText;
                     }
                     if (!String(fullBody || '').trim()) {
                         toast(inlineNeedBodyText, 'warning');
@@ -1922,7 +1942,7 @@ if ($oauthCfError === 'invalid_scope') {
                         sendBtn.textContent = inlineSendingLabel;
                     }
                     var payload = {
-                        account_id: parseInt(accountId, 10) || 0,
+                        account_id: aid,
                         to: to,
                         cc: cc,
                         subject: subject,
@@ -1952,7 +1972,6 @@ if ($oauthCfError === 'invalid_scope') {
                             }
                             toast(message || inlineSendOkText, 'success');
                             hideInlineCompose();
-                            // Refresh list so Sent shows the new message when viewing sent.
                             try {
                                 if (typeof refreshMailboxList === 'function') {
                                     refreshMailboxList({ force: true });
@@ -1965,7 +1984,13 @@ if ($oauthCfError === 'invalid_scope') {
                         ? loading.with(run, { message: inlineSendingLabel })
                         : run();
                     Promise.resolve(task).catch(function (err) {
-                        toast(err && err.message ? err.message : inlineSendFailText, 'danger');
+                        var msg = '';
+                        if (err && typeof err === 'object') {
+                            msg = String(err.message || err.msg || err.error || '').trim();
+                        } else if (err) {
+                            msg = String(err).trim();
+                        }
+                        toast(msg || inlineSendFailText, 'danger');
                     }).finally(function () {
                         inlineSending = false;
                         if (sendBtn instanceof HTMLButtonElement) {
@@ -1975,11 +2000,15 @@ if ($oauthCfError === 'invalid_scope') {
                     });
                 }
                 function toast(msg, tone) {
-                    if (window.Weline && window.Weline.UI && window.Weline.UI.toast) {
-                        window.Weline.UI.toast(msg, { tone: tone || 'neutral' });
-                        return;
-                    }
-                    alert(msg);
+                    msg = String(msg == null ? '' : msg).trim();
+                    if (!msg) msg = inlineSendFailText;
+                    try {
+                        if (window.Weline && window.Weline.UI && typeof window.Weline.UI.toast === 'function') {
+                            window.Weline.UI.toast(msg, { tone: tone || 'neutral' });
+                            return;
+                        }
+                    } catch (e) {}
+                    try { alert(msg); } catch (e2) {}
                 }
                 function nativeFetch(url, opts) {
                     opts = opts || {};
@@ -2179,55 +2208,65 @@ if ($oauthCfError === 'invalid_scope') {
                     });
                 }
                 function bindReaderActions() {
-                    reader.querySelectorAll('[data-mail-one]').forEach(function (btn) {
-                        btn.onclick = function () {
-                            if (!currentMessageId) return;
-                            runBatch(btn.getAttribute('data-mail-one'), [currentMessageId]);
-                        };
-                    });
-                    reader.querySelectorAll('[data-mail-inline-discard]').forEach(function (btn) {
-                        btn.onclick = function () { hideInlineCompose(); };
-                    });
-                    var sendBtn = reader.querySelector('[data-mail-inline-send]');
-                    if (sendBtn) {
-                        sendBtn.onclick = function () { sendInlineCompose(); };
+                    if (reader.getAttribute('data-mail-reader-bound') === '1') {
+                        return;
                     }
-                    reader.querySelectorAll('[data-mail-reply]').forEach(function (btn) {
-                        btn.onclick = function () {
-                            if (!currentMessageId) {
-                                toast(<?= json_encode((string)__('请先选择一封邮件再回复'), JSON_UNESCAPED_UNICODE) ?>, 'warning');
-                                return;
+                    reader.setAttribute('data-mail-reader-bound', '1');
+                    reader.addEventListener('click', function (ev) {
+                        var t = ev.target;
+                        if (!(t instanceof Element)) return;
+                        var oneBtn = t.closest('[data-mail-one]');
+                        if (oneBtn && reader.contains(oneBtn)) {
+                            if (!currentMessageId) return;
+                            runBatch(oneBtn.getAttribute('data-mail-one'), [currentMessageId]);
+                            return;
+                        }
+                        var discardBtn = t.closest('[data-mail-inline-discard]');
+                        if (discardBtn && reader.contains(discardBtn)) {
+                            hideInlineCompose();
+                            return;
+                        }
+                        var sendBtn = t.closest('[data-mail-inline-send]');
+                        if (sendBtn && reader.contains(sendBtn)) {
+                            ev.preventDefault();
+                            sendInlineCompose();
+                            return;
+                        }
+                        var replyBtn = t.closest('[data-mail-reply]');
+                        if (!(replyBtn && reader.contains(replyBtn))) return;
+                        if (!currentMessageId) {
+                            toast(<?= json_encode((string)__('请先选择一封邮件再回复'), JSON_UNESCAPED_UNICODE) ?>, 'warning');
+                            return;
+                        }
+                        var mode = replyBtn.getAttribute('data-mail-reply') || 'reply';
+                        var url = prefillEndpoint + (prefillEndpoint.indexOf('?') >= 0 ? '&' : '?') +
+                            'account=' + encodeURIComponent(accountId) +
+                            '&message=' + encodeURIComponent(currentMessageId) +
+                            '&mode=' + encodeURIComponent(mode) + '&isAjax=1';
+                        nativeFetch(url).then(function (r) {
+                            var ct = String(r.headers.get('content-type') || '');
+                            if (!r.ok) {
+                                throw new Error(failText + ' (HTTP ' + r.status + ')');
                             }
-                            var mode = btn.getAttribute('data-mail-reply') || 'reply';
-                            var url = prefillEndpoint + (prefillEndpoint.indexOf('?') >= 0 ? '&' : '?') +
-                                'account=' + encodeURIComponent(accountId) +
-                                '&message=' + encodeURIComponent(currentMessageId) +
-                                '&mode=' + encodeURIComponent(mode) + '&isAjax=1';
-                            nativeFetch(url).then(function (r) {
-                                var ct = String(r.headers.get('content-type') || '');
-                                if (!r.ok) {
-                                    throw new Error(failText + ' (HTTP ' + r.status + ')');
-                                }
-                                if (ct.indexOf('application/json') < 0) {
-                                    throw new Error(<?= json_encode((string)__('回复预填接口返回非 JSON，请刷新后重试'), JSON_UNESCAPED_UNICODE) ?>);
-                                }
-                                return r.json();
+                            if (ct.indexOf('application/json') < 0) {
+                                throw new Error(<?= json_encode((string)__('回复预填接口返回非 JSON，请刷新后重试'), JSON_UNESCAPED_UNICODE) ?>);
+                            }
+                            return r.json();
+                        })
+                            .then(function (json) {
+                                if (!json || json.code !== 200 || !json.data) throw new Error((json && json.msg) || failText);
+                                var d = json.data || {};
+                                openInlineCompose({
+                                    mode: d.mode || mode,
+                                    to: d.to || '',
+                                    cc: d.cc || '',
+                                    subject: d.subject || '',
+                                    body: d.body || '',
+                                    quote: d.quote || '',
+                                    quote_html: d.quote_html || ''
+                                });
                             })
-                                .then(function (json) {
-                                    if (!json || json.code !== 200 || !json.data) throw new Error((json && json.msg) || failText);
-                                    var d = json.data || {};
-                                    openInlineCompose({
-                                        mode: d.mode || mode,
-                                        to: d.to || '',
-                                        cc: d.cc || '',
-                                        subject: d.subject || '',
-                                        body: d.body || '',
-                                        quote: d.quote || '',
-                                        quote_html: d.quote_html || ''
-                                    });
-                                })
-                                .catch(function (err) { toast(err.message || failText, 'danger'); });
-                        };
+                            .catch(function (err) { toast(err.message || failText, 'danger'); });
                     });
                 }
                 function messageHref(messageId) {
@@ -2973,6 +3012,7 @@ if ($oauthCfError === 'invalid_scope') {
                                                     data-tls="<?= $escape((string)($prov['tls'] ?? 'starttls')) ?>"
                                                     data-name="<?= $escape((string)($prov['label'] ?? '')) ?>"
                                                     data-username-hint="<?= $escape((string)($prov['username_hint'] ?? '')) ?>"
+                                                    data-username-fixed="<?= !empty($prov['username_fixed']) ? '1' : '0' ?>"
                                                     data-note="<?= $escape((string)($prov['note'] ?? '')) ?>"
                                                     <?= $pid === 'custom' ? 'selected' : '' ?>
                                                 ><?= $escape((string)($prov['label'] ?? $pid)) ?></option>
@@ -3060,6 +3100,7 @@ if ($oauthCfError === 'invalid_scope') {
                         var tls = opt.getAttribute('data-tls') || 'starttls';
                         var name = opt.getAttribute('data-name') || '';
                         var hint = opt.getAttribute('data-username-hint') || '';
+                        var usernameFixed = opt.getAttribute('data-username-fixed') === '1';
                         var note = opt.getAttribute('data-note') || '';
                         var id = opt.value || 'custom';
                         var hostEl = form.querySelector('[data-smtp-provider-host]');
@@ -3077,10 +3118,10 @@ if ($oauthCfError === 'invalid_scope') {
                                 nameEl.setAttribute('data-autofilled', '1');
                             }
                         }
-                        if (userEl && hint) {
-                            userEl.setAttribute('placeholder', hint);
-                        } else if (userEl) {
-                            userEl.removeAttribute('placeholder');
+                        if (userEl) {
+                            if (hint) userEl.setAttribute('placeholder', hint);
+                            else userEl.removeAttribute('placeholder');
+                            if (usernameFixed && hint) userEl.value = hint;
                         }
                         if (noteEl) {
                             noteEl.textContent = note || <?= json_encode((string)__('选择服务商后自动填主机/端口/TLS；账号密码在对方控制台注册后粘贴。'), JSON_UNESCAPED_UNICODE) ?>;
@@ -3563,6 +3604,7 @@ if ($oauthCfError === 'invalid_scope') {
                                                     data-tls="<?= $escape((string)($prov['tls'] ?? 'starttls')) ?>"
                                                     data-name="<?= $escape((string)($prov['label'] ?? '')) ?>"
                                                     data-username-hint="<?= $escape((string)($prov['username_hint'] ?? '')) ?>"
+                                                    data-username-fixed="<?= !empty($prov['username_fixed']) ? '1' : '0' ?>"
                                                     data-note="<?= $escape((string)($prov['note'] ?? '')) ?>"
                                                     <?= $pid === 'custom' ? 'selected' : '' ?>
                                                 ><?= $escape((string)($prov['label'] ?? $pid)) ?></option>
@@ -3904,6 +3946,7 @@ if ($oauthCfError === 'invalid_scope') {
                                                                         data-tls="<?= $escape((string)($prov['tls'] ?? 'starttls')) ?>"
                                                                         data-name="<?= $escape((string)($prov['label'] ?? '')) ?>"
                                                                         data-username-hint="<?= $escape((string)($prov['username_hint'] ?? '')) ?>"
+                                                                        data-username-fixed="<?= !empty($prov['username_fixed']) ? '1' : '0' ?>"
                                                                         data-note="<?= $escape((string)($prov['note'] ?? '')) ?>"
                                                                         <?= $pid === $editProviderId ? 'selected' : '' ?>
                                                                     ><?= $escape((string)($prov['label'] ?? $pid)) ?></option>
@@ -4782,6 +4825,7 @@ if ($oauthCfError === 'invalid_scope') {
                                                     data-tls="<?= $escape((string)($prov['tls'] ?? 'starttls')) ?>"
                                                     data-name="<?= $escape((string)($prov['label'] ?? '')) ?>"
                                                     data-username-hint="<?= $escape((string)($prov['username_hint'] ?? '')) ?>"
+                                                    data-username-fixed="<?= !empty($prov['username_fixed']) ? '1' : '0' ?>"
                                                     data-note="<?= $escape((string)($prov['note'] ?? '')) ?>"
                                                     <?= $pid === 'custom' ? 'selected' : '' ?>
                                                 ><?= $escape((string)($prov['label'] ?? $pid)) ?></option>
@@ -5427,7 +5471,10 @@ if ($oauthCfError === 'invalid_scope') {
                                 </p>
                             </div>
                             <div class="mail-enterprise__actions">
-                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/configure-cloudflare-dns'}">
+                                <w:form method="post"
+                                    action="@backend-url{'weline_mail/backend/index/configure-cloudflare-dns-stream'}"
+                                    data-mail-cf-dns-sse="1"
+                                    data-testid="mail-cf-one-click-apply-form-<?= $domainId ?>">
                                     <input type="hidden" name="return_view" value="domains">
                                     <input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>">
                                     <input type="hidden" name="origin_ip" value="<?= $escape($formOriginIp) ?>">
@@ -5439,7 +5486,10 @@ if ($oauthCfError === 'invalid_scope') {
                                         <?= __('一键同步 DNS 到 Cloudflare') ?>
                                     </button>
                                 </w:form>
-                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/configure-cloudflare-dns'}">
+                                <w:form method="post"
+                                    action="@backend-url{'weline_mail/backend/index/configure-cloudflare-dns-stream'}"
+                                    data-mail-cf-dns-sse="1"
+                                    data-testid="mail-cf-preview-form-<?= $domainId ?>">
                                     <input type="hidden" name="return_view" value="domains">
                                     <input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>">
                                     <input type="hidden" name="origin_ip" value="<?= $escape($formOriginIp) ?>">
@@ -5447,7 +5497,7 @@ if ($oauthCfError === 'invalid_scope') {
                                     <input type="hidden" name="dkim_public_key" value="<?= $escape($publicKey) ?>">
                                     <input type="hidden" name="confirm_public_origin" value="1">
                                     <input type="hidden" name="apply" value="0">
-                                    <button class="w-button" data-variant="outline" data-size="sm" type="submit"><?= __('仅预览') ?></button>
+                                    <button class="w-button" data-variant="outline" data-size="sm" type="submit" data-testid="mail-cf-preview-<?= $domainId ?>"><?= __('仅预览') ?></button>
                                 </w:form>
                             </div>
                         <?php elseif ($cloudflareTokenReady): ?>
@@ -5464,7 +5514,10 @@ if ($oauthCfError === 'invalid_scope') {
                         <?php endif; ?>
                         <details<?= $cloudflareTokenReady ? '' : ' open' ?>>
                             <summary class="w-text" data-size="sm"><?= __('高级：手动 DNS / 补 DKIM / OAuth') ?></summary>
-                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/configure-cloudflare-dns'}">
+                            <w:form method="post"
+                                action="@backend-url{'weline_mail/backend/index/configure-cloudflare-dns-stream'}"
+                                data-mail-cf-dns-sse="1"
+                                data-testid="mail-cf-advanced-form-<?= $domainId ?>">
                                 <input type="hidden" name="return_view" value="domains">
                                 <input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>">
                                 <label class="w-field">
@@ -6003,6 +6056,7 @@ if ($oauthCfError === 'invalid_scope') {
             var tls = opt.getAttribute('data-tls') || 'starttls';
             var name = opt.getAttribute('data-name') || '';
             var hint = opt.getAttribute('data-username-hint') || '';
+            var usernameFixed = opt.getAttribute('data-username-fixed') === '1';
             var note = opt.getAttribute('data-note') || '';
             var id = opt.value || 'custom';
             var hostEl = form.querySelector('[data-smtp-provider-host]');
@@ -6023,6 +6077,7 @@ if ($oauthCfError === 'invalid_scope') {
             if (userEl) {
                 if (hint) userEl.setAttribute('placeholder', hint);
                 else userEl.removeAttribute('placeholder');
+                if (usernameFixed && hint) userEl.value = hint;
             }
             if (noteEl) {
                 noteEl.textContent = note || <?= json_encode((string)__('选择服务商后自动填主机/端口/TLS；账号密码在对方控制台注册后粘贴。'), JSON_UNESCAPED_UNICODE) ?>;
@@ -6033,6 +6088,193 @@ if ($oauthCfError === 'invalid_scope') {
             select.setAttribute('data-smtp-provider-bound', '1');
             select.addEventListener('change', function () { applySmtpProviderPreset(select); });
             applySmtpProviderPreset(select);
+        });
+    })();
+    </script>
+    <script>
+    (function () {
+        var forms = document.querySelectorAll('[data-mail-cf-dns-sse]');
+        if (!forms.length) {
+            return;
+        }
+        var busyLabel = <?= json_encode((string)__('同步中…'), JSON_UNESCAPED_UNICODE) ?>;
+        var previewBusyLabel = <?= json_encode((string)__('预览中…'), JSON_UNESCAPED_UNICODE) ?>;
+        var failLabel = <?= json_encode((string)__('Cloudflare DNS 配置失败'), JSON_UNESCAPED_UNICODE) ?>;
+        var sseMissingLabel = <?= json_encode((string)__('未返回 SSE 流'), JSON_UNESCAPED_UNICODE) ?>;
+
+        function mailCfDnsToast(kind, text) {
+            try {
+                if (window.Weline && window.Weline.UI && window.Weline.UI.toast) {
+                    if (kind === 'success' && typeof window.Weline.UI.toast.success === 'function') {
+                        window.Weline.UI.toast.success(text);
+                        return;
+                    }
+                    if (kind === 'error' && typeof window.Weline.UI.toast.error === 'function') {
+                        window.Weline.UI.toast.error(text);
+                        return;
+                    }
+                    if (typeof window.Weline.UI.toast.show === 'function') {
+                        window.Weline.UI.toast.show(text, { tone: kind === 'success' ? 'success' : 'danger' });
+                    }
+                }
+            } catch (e) {}
+        }
+
+        function mailCfDnsConsumeSse(response, onEvent) {
+            if (!response || !response.body || typeof response.body.getReader !== 'function') {
+                return Promise.reject(new Error(sseMissingLabel));
+            }
+            var reader = response.body.getReader();
+            var decoder = new TextDecoder('utf-8');
+            var buffer = '';
+            var eventName = 'message';
+            var dataLines = [];
+
+            function flushEvent() {
+                if (!dataLines.length) {
+                    eventName = 'message';
+                    return;
+                }
+                var raw = dataLines.join('\n');
+                dataLines = [];
+                var payload = raw;
+                try {
+                    payload = JSON.parse(raw);
+                } catch (e) {}
+                onEvent(eventName || 'message', payload);
+                eventName = 'message';
+            }
+
+            function pump() {
+                return reader.read().then(function (result) {
+                    if (result.done) {
+                        buffer += decoder.decode();
+                        if (buffer.trim()) {
+                            buffer.split(/\r?\n/).forEach(function (line) {
+                                if (line.indexOf('event:') === 0) {
+                                    eventName = line.slice(6).trim();
+                                } else if (line.indexOf('data:') === 0) {
+                                    dataLines.push(line.slice(5).trim());
+                                } else if (line === '') {
+                                    flushEvent();
+                                }
+                            });
+                            flushEvent();
+                        }
+                        return;
+                    }
+                    buffer += decoder.decode(result.value, { stream: true });
+                    var parts = buffer.split(/\r?\n/);
+                    buffer = parts.pop();
+                    parts.forEach(function (line) {
+                        if (line.indexOf('event:') === 0) {
+                            eventName = line.slice(6).trim();
+                        } else if (line.indexOf('data:') === 0) {
+                            dataLines.push(line.slice(5).trim());
+                        } else if (line === '') {
+                            flushEvent();
+                        }
+                    });
+                    return pump();
+                });
+            }
+
+            return pump();
+        }
+
+        forms.forEach(function (form) {
+            if (form.getAttribute('data-mail-cf-dns-bound') === '1') {
+                return;
+            }
+            form.setAttribute('data-mail-cf-dns-bound', '1');
+            form.addEventListener('submit', function (ev) {
+                ev.preventDefault();
+                var submitter = ev.submitter || null;
+                var btn = submitter && submitter.tagName === 'BUTTON'
+                    ? submitter
+                    : form.querySelector('button[type="submit"]');
+                if (btn && btn.disabled) {
+                    return;
+                }
+                var url = form.getAttribute('action') || '';
+                if (!url) {
+                    return;
+                }
+                var body = new URLSearchParams();
+                new FormData(form).forEach(function (value, key) {
+                    body.append(key, value);
+                });
+                if (submitter && submitter.name) {
+                    body.set(submitter.name, submitter.value || '1');
+                }
+                var apply = body.get('apply') === '1';
+                var defaultBusy = apply ? busyLabel : previewBusyLabel;
+                var done = false;
+                var lastMessage = defaultBusy;
+                if (btn) {
+                    btn.disabled = true;
+                    if (!btn.getAttribute('data-mail-cf-dns-label')) {
+                        btn.setAttribute('data-mail-cf-dns-label', btn.textContent || '');
+                    }
+                    btn.textContent = defaultBusy;
+                }
+                mailCfDnsToast('success', defaultBusy);
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'text/event-stream',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'include',
+                    body: body.toString(),
+                    __welineNativeFetch: true
+                }).then(function (response) {
+                    var contentType = String(response.headers.get('content-type') || '').toLowerCase();
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status);
+                    }
+                    if (contentType.indexOf('text/event-stream') === -1) {
+                        throw new Error(sseMissingLabel);
+                    }
+                    return mailCfDnsConsumeSse(response, function (eventName, data) {
+                        var message = (data && data.message) ? String(data.message) : eventName;
+                        lastMessage = message;
+                        if (btn && (eventName === 'progress' || eventName === 'start')) {
+                            btn.textContent = message.length > 28 ? message.slice(0, 28) + '…' : message;
+                        }
+                        if (eventName === 'done') {
+                            done = true;
+                            mailCfDnsToast('success', message);
+                            window.setTimeout(function () {
+                                window.location.reload();
+                            }, 400);
+                        }
+                        if (eventName === 'error') {
+                            done = true;
+                            mailCfDnsToast('error', message || failLabel);
+                            if (btn) {
+                                btn.disabled = false;
+                                btn.textContent = btn.getAttribute('data-mail-cf-dns-label') || btn.textContent;
+                            }
+                        }
+                    });
+                }).then(function () {
+                    if (!done) {
+                        mailCfDnsToast('error', lastMessage || failLabel);
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = btn.getAttribute('data-mail-cf-dns-label') || btn.textContent;
+                        }
+                    }
+                }).catch(function (error) {
+                    mailCfDnsToast('error', (error && error.message) ? error.message : failLabel);
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = btn.getAttribute('data-mail-cf-dns-label') || btn.textContent;
+                    }
+                });
+            });
         });
     })();
     </script>

@@ -50,6 +50,9 @@ final class MailAccountOutboundRelayService
         if ($port < 1 || $port > 65535 || $port === 25) {
             $port = 587;
         }
+        /** @var \Weline\Smtp\Service\SmtpExternalProviderCatalog $providerCatalog */
+        $providerCatalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpExternalProviderCatalog::class);
+        $user = $providerCatalog->normalizeUsernameForHost($host, $user);
 
         /** @var MailAccount $account */
         $account = ObjectManager::getInstance(MailAccount::class)->clear()->load($accountId);

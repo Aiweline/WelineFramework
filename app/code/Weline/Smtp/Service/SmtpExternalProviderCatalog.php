@@ -20,6 +20,7 @@ final class SmtpExternalProviderCatalog
      *   port: int,
      *   tls: string,
      *   username_hint: string,
+     *   username_fixed?: bool,
      *   note: string,
      *   tier: string
      * }>
@@ -74,7 +75,8 @@ final class SmtpExternalProviderCatalog
                 'port' => 587,
                 'tls' => 'starttls',
                 'username_hint' => 'resend',
-                'note' => '用户名多为 resend；密码为 API Key。需验证域名。',
+                'username_fixed' => true,
+                'note' => '用户名固定为 resend；密码为 API Key。需验证域名。',
                 'tier' => 'free',
             ],
             [
@@ -84,6 +86,7 @@ final class SmtpExternalProviderCatalog
                 'port' => 587,
                 'tls' => 'starttls',
                 'username_hint' => 'apikey',
+                'username_fixed' => true,
                 'note' => '用户名固定 apikey；密码为 API Key。',
                 'tier' => 'free',
             ],
@@ -124,7 +127,8 @@ final class SmtpExternalProviderCatalog
                 'port' => 587,
                 'tls' => 'starttls',
                 'username_hint' => 'SMTP_Injection',
-                'note' => '密码为 API Key。',
+                'username_fixed' => true,
+                'note' => '用户名固定 SMTP_Injection；密码为 API Key。',
                 'tier' => 'paid',
             ],
             [
@@ -265,5 +269,41 @@ final class SmtpExternalProviderCatalog
         }
 
         return self::ID_CUSTOM;
+    }
+
+    /**
+     * 固定 SMTP 用户名服务商（如 Resend=resend、SendGrid=apikey）：按 host 精确匹配返回字面用户名。
+     * 非固定或未知主机返回 null（调用方保留原用户名）。
+     */
+    public function fixedUsernameForHost(string $host): ?string
+    {
+        $host = strtolower(trim($host));
+        if ($host === '') {
+            return null;
+        }
+        foreach ($this->listPresets() as $row) {
+            if (empty($row['username_fixed'])) {
+                continue;
+            }
+            $presetHost = strtolower(trim((string)($row['host'] ?? '')));
+            if ($presetHost === '' || $presetHost !== $host) {
+                continue;
+            }
+            $fixed = trim((string)($row['username_hint'] ?? ''));
+
+            return $fixed !== '' ? $fixed : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * 写库/同步前归一：若 host 属于固定用户名服务商，强制覆盖为目录字面量。
+     */
+    public function normalizeUsernameForHost(string $host, string $username): string
+    {
+        $fixed = $this->fixedUsernameForHost($host);
+
+        return $fixed ?? trim($username);
     }
 }

@@ -1488,10 +1488,15 @@ private function assert_SmtpExternalProviderCatalog_testPresetsIncludeCustomAndP
     self::assertStringContainsString('smtp.resend.com', $src);
     self::assertStringContainsString('smtpdm.aliyun.com', $src);
     self::assertStringContainsString('mail.aiweline.com', $src);
+    self::assertStringContainsString("'username_fixed' => true", $src);
     self::assertStringContainsString('function listPresetsForUi', $src);
     self::assertStringContainsString('function matchIdByHost', $src);
+    self::assertStringContainsString('function fixedUsernameForHost', $src);
+    self::assertStringContainsString('function normalizeUsernameForHost', $src);
     $mailUi = (string) \file_get_contents(\BP . '/app/code/Weline/Mail/view/templates/backend/Index/enterprise.phtml');
     self::assertStringContainsString('data-smtp-provider-preset', $mailUi);
+    self::assertStringContainsString('data-username-fixed', $mailUi);
+    self::assertStringContainsString('usernameFixed && hint', $mailUi);
     self::assertStringContainsString('smtp_external_providers', $mailUi);
     $mailCtrl = (string) \file_get_contents(\BP . '/app/code/Weline/Mail/Controller/Backend/Index.php');
     self::assertStringContainsString('SmtpExternalProviderCatalog', $mailCtrl);

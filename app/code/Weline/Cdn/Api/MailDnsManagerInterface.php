@@ -15,6 +15,7 @@ interface MailDnsManagerInterface
     /**
      * @param array<int, array<string, mixed>> $desiredRecords
      * @param array<int, string> $dnsOnlyHosts
+     * @param (callable(string $step, string $message, int $current, int $total): void)|null $onProgress
      * @return array<string, mixed> Redacted plan or apply result
      */
     public function reconcile(
@@ -22,5 +23,6 @@ interface MailDnsManagerInterface
         array $desiredRecords,
         array $dnsOnlyHosts,
         bool $apply = false,
+        ?callable $onProgress = null,
     ): array;
 }

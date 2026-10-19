@@ -574,6 +574,16 @@ final class ThemeRuntimeCacheCleaner
     }
 
     /**
+     * Public entry after layout-entity BatchPublisher promote / chrome rematerialize.
+     * Must drop {@see StorefrontThemeCacheCoordinator::LAYOUT_ENTITY_PUBLISHED_PROJECTION_POOL}
+     * so per-layout_type `source_candidates` bags cannot keep pinning pre-heal Amazon chrome.
+     */
+    public static function purgePublishedProjectionPoolAfterEntityPromote(): void
+    {
+        self::purgeLayoutEntityPublishedProjectionHotCachePool();
+    }
+
+    /**
      * Drop layout-entity published chrome/page projection HotCache (wave6-6s).
      * Also clears homepage/blog layout HTML bags
      * ({@see StorefrontThemeCacheCoordinator::storefrontHomepageLayoutHtmlPolicy()},

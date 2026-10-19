@@ -15,6 +15,7 @@ use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
+use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 
 /** One request's immutable page/partial source bytes, captured under the owner read lock. */
 final class ThemeLayoutSourceSnapshot
@@ -71,11 +72,18 @@ final class ThemeLayoutSourceSnapshot
                         && isset($bag['candidates'])
                         && \is_array($bag['candidates'])
                     ) {
-                        return self::fromCandidates(
+                        $fromBag = self::fromCandidates(
                             $identity,
                             \is_string($bag['page'] ?? null) ? (string)$bag['page'] : '',
                             $bag['candidates'],
                         );
+                        // Critical chrome pin bytes must match live derived disk. Stale bags
+                        // (chrome rematerialize without projection purge) can pin Theme Amazon
+                        // header while homepage/journal bags already hold design SoT.
+                        if (self::criticalChromePinsMatchDisk($fromBag, $paths, $identity)) {
+                            return $fromBag;
+                        }
+                        ThemeRuntimeCacheCleaner::purgePublishedProjectionPoolAfterEntityPromote();
                     }
                 } catch (\Throwable) {
                     // Fail-open: disk capture under owner lock.
@@ -127,6 +135,56 @@ final class ThemeLayoutSourceSnapshot
         }
         if (self::isEditorOrPreviewCaptureContext()) {
             return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * True when pinned critical chrome partial bytes equal live derived disk files.
+     * Missing pin for an existing disk chrome file counts as mismatch (incomplete bag).
+     */
+    private static function criticalChromePinsMatchDisk(
+        self $snapshot,
+        ThemeLayoutEntityPaths $paths,
+        ThemeVersionIdentity $identity,
+    ): bool {
+        /** @var list<array{0:string,1:string}> $pairs */
+        $pairs = [
+            ['header', 'default'],
+            ['footer', 'default'],
+            ['header', 'storefront-shell'],
+        ];
+        foreach ($pairs as [$type, $option]) {
+            try {
+                $diskPath = $paths->partialPhtml($identity, $type, $option);
+            } catch (\Throwable) {
+                continue;
+            }
+            if (!\is_file($diskPath)) {
+                continue;
+            }
+            $diskBytes = \file_get_contents($diskPath);
+            if (!\is_string($diskBytes)) {
+                return false;
+            }
+            $pinned = $snapshot->sources[$diskPath]['bytes'] ?? null;
+            if (!\is_string($pinned)) {
+                return false;
+            }
+            if (!\hash_equals(\hash('sha256', $diskBytes), \hash('sha256', $pinned))) {
+                return false;
+            }
+            // Also reject bags whose chrome origin digest no longer matches live origin.
+            $meta = self::metadata($pinned);
+            if (!\is_array($meta)) {
+                return false;
+            }
+            $digest = \trim((string)($meta['input_digest'] ?? ''));
+            $origin = \trim((string)($meta['origin'] ?? ''));
+            if ($digest === '' || $origin === '' || !ThemeLayoutEntityPageInputDigest::matchesStored($digest, $origin)) {
+                return false;
+            }
         }
 
         return true;

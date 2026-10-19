@@ -25,7 +25,20 @@ final class CloudflareMailDnsManager implements MailDnsManagerInterface
         array $desiredRecords,
         array $dnsOnlyHosts,
         bool $apply = false,
+        ?callable $onProgress = null,
     ): array {
+        $emit = static function (
+            string $step,
+            string $message,
+            int $current,
+            int $total,
+        ) use ($onProgress): void {
+            if ($onProgress === null) {
+                return;
+            }
+            $onProgress($step, $message, $current, $total);
+        };
+
         $account = $this->accountManager->getDefaultAccount('cloudflare');
         if (!$account instanceof Account) {
             throw new \DomainException((string)__('请先连接 Cloudflare 账户。'));
@@ -36,12 +49,17 @@ final class CloudflareMailDnsManager implements MailDnsManagerInterface
             throw new \DomainException((string)__('Cloudflare 账户未配置可用令牌。'));
         }
 
+        $emit('resolve_zone', (string)__('正在解析 Cloudflare 域名区…'), 1, 6);
         $zoneId = $this->resolveZoneId($credentials, $domain);
+        $emit('list_records', (string)__('正在读取现有 DNS 记录…'), 2, 6);
         $existing = $this->listRecords($credentials, $zoneId);
+        $emit('plan', (string)__('正在规划 DNS 变更…'), 3, 6);
         $internalPlan = $this->planner->buildPlan($domain, $existing, $desiredRecords, $dnsOnlyHosts);
         $publicPlan = $this->publicPlan($internalPlan);
 
         if (!$apply) {
+            $emit('preview', (string)__('DNS 预览完成'), 6, 6);
+
             return array_merge($publicPlan, [
                 'success' => true,
                 'status' => 'preview',
@@ -54,6 +72,8 @@ final class CloudflareMailDnsManager implements MailDnsManagerInterface
         }
 
         if ((int)$internalPlan['operation_count'] === 0) {
+            $emit('unchanged', (string)__('Cloudflare DNS 无需变更。'), 6, 6);
+
             return array_merge($publicPlan, [
                 'success' => true,
                 'status' => 'unchanged',
@@ -66,9 +86,27 @@ final class CloudflareMailDnsManager implements MailDnsManagerInterface
 
         $completed = [];
         $currentOperation = null;
+        $ops = $internalPlan['operations'];
+        $opTotal = max(1, count($ops));
         try {
-            foreach ($internalPlan['operations'] as $operation) {
+            foreach ($ops as $index => $operation) {
                 $currentOperation = $operation;
+                $record = (array)($operation['record'] ?? $operation['before'] ?? []);
+                $label = trim(
+                    (string)($operation['action'] ?? '')
+                    . ' '
+                    . (string)($record['type'] ?? '')
+                    . ' '
+                    . (string)($record['name'] ?? '')
+                );
+                $emit(
+                    'apply_op',
+                    $label !== ''
+                        ? (string)__('正在写入：%{1}', $label)
+                        : (string)__('正在写入 DNS 变更…'),
+                    $index + 1,
+                    $opTotal,
+                );
                 $completed[] = [
                     'operation' => $operation,
                     'result' => $this->execute($credentials, $zoneId, $operation),
@@ -76,6 +114,7 @@ final class CloudflareMailDnsManager implements MailDnsManagerInterface
                 $currentOperation = null;
             }
 
+            $emit('verify', (string)__('正在校验 Cloudflare DNS…'), $opTotal, $opTotal);
             $verifiedRecords = $this->listRecords($credentials, $zoneId);
             $verification = $this->planner->buildPlan(
                 $domain,

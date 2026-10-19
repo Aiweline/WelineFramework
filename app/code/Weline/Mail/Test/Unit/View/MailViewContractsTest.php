@@ -92,6 +92,10 @@ private function assert_EnterpriseDnsChecklistMarks_testEnterpriseShowsLiveDnsMa
     self::assertStringContainsString('cloudflare_token_ready', $src);
     self::assertStringContainsString('一键同步 DNS 到 Cloudflare', $src);
     self::assertStringContainsString('mail-cf-one-click-apply', $src);
+    self::assertStringContainsString('configure-cloudflare-dns-stream', $src);
+    self::assertStringContainsString('data-mail-cf-dns-sse', $src);
+    self::assertStringContainsString('mailCfDnsConsumeSse', $src);
+    self::assertStringContainsString('text/event-stream', $src);
     self::assertStringContainsString('data-mail-domain-delete', $src);
     self::assertStringContainsString('mail-domain-delete-', $src);
     self::assertStringContainsString('deleteMailboxDomain', $src);
@@ -332,6 +336,15 @@ private function assert_EnterpriseHtmlReaderPreview_testReaderUsesSandboxedHtmlI
     self::assertStringContainsString('data-mail-unread-only', $enterprise);
     self::assertStringContainsString('renderReaderBody', $enterprise);
     self::assertStringContainsString('data-testid="mail-enterprise-inline-compose"', $enterprise);
+    self::assertStringContainsString('data-mail-inline-actions', $enterprise);
+    self::assertStringContainsString('resolveInlineQuoteText', $enterprise);
+    self::assertStringContainsString('data-mail-reader-bound', $enterprise);
+    // 发送/舍弃在回复顶栏右上，禁止底栏再放一套。
+    self::assertMatchesRegularExpression(
+        '/mail-enterprise__inline-compose-bar[\s\S]*?data-mail-inline-send[\s\S]*?data-mail-inline-quote/s',
+        $enterprise,
+        'inline send must sit in compose bar before quote'
+    );
     self::assertStringContainsString('openInlineCompose', $enterprise);
     self::assertStringContainsString('sendInlineCompose', $enterprise);
     self::assertStringContainsString('sendComposerMessage', $enterprise);

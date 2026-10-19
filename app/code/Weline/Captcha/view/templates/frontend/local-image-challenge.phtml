@@ -13,7 +13,12 @@ $esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES |
 <div class="weline-captcha weline-captcha-local" data-weline-captcha-provider="local_image">
     <input type="hidden" name="captcha_provider" value="local_image">
     <input type="hidden" name="captcha_token" value="<?= $esc($token) ?>">
-    <div class="w-field">
+    <?php
+    // Stacked label: foundation floating labels target :has(.w-input) and rest at
+    // control-height/2 of the whole .w-field — which here is the image+refresh row,
+    // so the label paints over the challenge image (storefront login PIC 2026-10-20).
+    ?>
+    <div class="w-field" data-label-layout="stacked" data-testid="weline-captcha-field">
         <label class="w-field__label" for="<?= $esc($inputId) ?>"><lang>请输入图片中的验证码</lang></label>
         <div class="weline-captcha-stack">
             <div class="weline-captcha-visual weline-captcha-row">

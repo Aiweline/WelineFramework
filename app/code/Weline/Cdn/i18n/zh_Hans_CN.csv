@@ -741,12 +741,19 @@ JSON格式错误,JSON格式错误
 "邮箱 DNS 计划包含不支持的记录类型：%{1}","邮箱 DNS 计划包含不支持的记录类型：%{1}"
 "邮箱 DNS 记录缺少 type、name 或 content。","邮箱 DNS 记录缺少 type、name 或 content。"
 "请先连接 Cloudflare 账户。","请先连接 Cloudflare 账户。"
+"正在解析 Cloudflare 域名区…","正在解析 Cloudflare 域名区…"
+"正在读取现有 DNS 记录…","正在读取现有 DNS 记录…"
+"正在规划 DNS 变更…","正在规划 DNS 变更…"
+"DNS 预览完成","DNS 预览完成"
 "Cloudflare DNS 预览完成：%{1} 项变更。","Cloudflare DNS 预览完成：%{1} 项变更。"
 "Cloudflare DNS 无需变更。","Cloudflare DNS 无需变更。"
+正在写入：%{1},正在写入：%{1}
+"正在写入 DNS 变更…","正在写入 DNS 变更…"
+"正在校验 Cloudflare DNS…","正在校验 Cloudflare DNS…"
 "Cloudflare DNS 写入后校验未收敛。","Cloudflare DNS 写入后校验未收敛。"
 "Cloudflare DNS 写入失败，已尝试回滚。","Cloudflare DNS 写入失败，已尝试回滚。"
 "Cloudflare DNS 已同步。","Cloudflare DNS 已同步。"
-"Cloudflare 账户中找不到唯一的活动域名 %{1}。","Cloudflare 账户中找不到唯一的活动域名 %{1}。"
+"Cloudflare 账户中找不到唯一的活动域名（已尝试：%{1}）。","Cloudflare 账户中找不到唯一的活动域名（已尝试：%{1}）。"
 "Cloudflare DNS 列表响应无效。","Cloudflare DNS 列表响应无效。"
 "Cloudflare DNS 记录分页超过安全上限。","Cloudflare DNS 记录分页超过安全上限。"
 "enabled 必须是布尔值或 null","enabled 必须是布尔值或 null"
@@ -834,14 +841,15 @@ CDN域名创建成功：%{1},CDN域名创建成功：%{1}
 "规则导入成功，共导入 %{1} 条规则","规则导入成功，共导入 %{1} 条规则"
 规则已保存为域名覆盖规则,规则已保存为域名覆盖规则
 规则导入失败：%{1},规则导入失败：%{1}
-"当前为域名覆盖规则（不含全局默认合并结果）。保存后需推送到 CDN 才生效。","当前为域名覆盖规则（不含全局默认合并结果）。保存后需推送到 CDN 才生效。"
-"请求失败: %{1}","请求失败: %{1}"
-"HTTP错误: %{1}","HTTP错误: %{1}"
-"Cloudflare 返回无效响应","Cloudflare 返回无效响应"
 确认,确认
 "缺少 data-provider / data-operation","缺少 data-provider / data-operation"
 删除请求失败,删除请求失败
 确认删除吗？,确认删除吗？
+"Cloudflare 账户中找不到唯一的活动域名 %{1}。","Cloudflare 账户中找不到唯一的活动域名 %{1}。"
+"当前为域名覆盖规则（不含全局默认合并结果）。保存后需推送到 CDN 才生效。","当前为域名覆盖规则（不含全局默认合并结果）。保存后需推送到 CDN 才生效。"
+"请求失败: %{1}","请求失败: %{1}"
+"HTTP错误: %{1}","HTTP错误: %{1}"
+"Cloudflare 返回无效响应","Cloudflare 返回无效响应"
 折叠,折叠
 展开,展开
 未找到匹配作用范围,未找到匹配作用范围

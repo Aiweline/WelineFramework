@@ -5,6 +5,7 @@ namespace Weline\Theme\Service\LayoutEntity;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
+use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 
 /** All candidates are complete before promotion; ordinary failures restore old bytes. */
 class ThemeLayoutEntityBatchPublisher
@@ -37,6 +38,12 @@ class ThemeLayoutEntityBatchPublisher
                 }
                 throw $compileError;
             }
+        }
+
+        // Disk bytes changed → drop per-layout_type source_candidates projection bags.
+        // Chrome rematerialize must not leave blog/etc. pinning pre-heal Amazon header.
+        if ($rollbackPlan !== []) {
+            ThemeRuntimeCacheCleaner::purgePublishedProjectionPoolAfterEntityPromote();
         }
 
         return $result;

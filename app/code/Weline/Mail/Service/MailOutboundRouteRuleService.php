@@ -90,6 +90,9 @@ final class MailOutboundRouteRuleService
         if ($host === '') {
             return ['success' => false, 'message' => (string)__('请选择 Smtp 或填写中继主机')];
         }
+        /** @var \Weline\Smtp\Service\SmtpExternalProviderCatalog $providerCatalog */
+        $providerCatalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpExternalProviderCatalog::class);
+        $user = $providerCatalog->normalizeUsernameForHost($host, $user);
 
         /** @var MailOutboundRouteRule $model */
         $model = ObjectManager::getInstance(MailOutboundRouteRule::class);

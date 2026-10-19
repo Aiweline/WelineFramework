@@ -88,6 +88,8 @@ TLS,TLS
 邮件主机,"Mail host"
 引擎,Engine
 "默认容量 MB","Default capacity MB"
+删除邮箱域名配置卡片（不删网站域名）,删除邮箱域名配置卡片（不删网站域名）
+"邮箱域名 ID","邮箱域名 ID"
 开通或重置企业邮箱密码（后台弹层）,开通或重置企业邮箱密码（后台弹层）
 新密码,"New password"
 "设置企业邮箱外投 smarthost（后台弹层）","设置企业邮箱外投 smarthost（后台弹层）"
@@ -192,12 +194,22 @@ id属性不能为空,id属性不能为空
 本域一键配置完成,本域一键配置完成
 请选择已启用的本机企业邮箱账号,"Select an enabled local business email account"
 邮件发送失败,"Failed to send email"
-"邮箱域名 ID 无效。","The email domain ID is invalid."
-"应用前必须确认邮件主机将以 DNS-only 暴露源站公网 IP。","Before applying, confirm that the DNS-only mail host exposes its public origin IP."
-邮箱域名不存在。,"The email domain does not exist."
-"CDN 模块返回了无效的 DNS 结果。","The CDN module returned an invalid DNS result."
+"开始同步 Cloudflare DNS…","开始同步 Cloudflare DNS…"
+"开始预览 Cloudflare DNS…","开始预览 Cloudflare DNS…"
 "Cloudflare DNS 配置失败。","Cloudflare DNS configuration failed."
 "Cloudflare DNS 已同步。","Cloudflare DNS has been synchronized."
+"Cloudflare DNS 配置失败","Cloudflare DNS 配置失败"
+"邮箱域名 ID 无效。","The email domain ID is invalid."
+"应用前必须确认邮件主机将以 DNS-only 暴露源站公网 IP。","Before applying, confirm that the DNS-only mail host exposes its public origin IP."
+正在加载邮箱域名…,正在加载邮箱域名…
+邮箱域名不存在。,"The email domain does not exist."
+"正在探测本机邮局公网 IP…","正在探测本机邮局公网 IP…"
+"正在准备 DKIM 公钥…","正在准备 DKIM 公钥…"
+"正在生成 DNS 清单…","正在生成 DNS 清单…"
+"正在写入 Cloudflare…","正在写入 Cloudflare…"
+"正在预览 Cloudflare…","正在预览 Cloudflare…"
+"CDN 模块返回了无效的 DNS 结果。","The CDN module returned an invalid DNS result."
+正在同步域名池主机名…,正在同步域名池主机名…
 "Cloudflare DNS 预览完成。","Cloudflare DNS preview completed."
 "Cloudflare DNS 配置失败：%{1}","Cloudflare DNS configuration failed: %{1}"
 域名池同步返回异常。,域名池同步返回异常。
@@ -222,6 +234,7 @@ send,send
 "配置 Cloudflare 邮箱 DNS","Configure Cloudflare email DNS."
 cloud,cloud
 "预览并同步当前企业邮箱域名 DNS","Preview and synchronize the DNS records for the current corporate email domain."
+"预览并同步当前企业邮箱域名 DNS（SSE）","预览并同步当前企业邮箱域名 DNS（SSE）"
 企业邮箱沟通线程,"Business email chat thread"
 composer,composer
 按业务来源加载企业邮箱沟通线程,"Load business-email chat thread by business source"
@@ -689,6 +702,7 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 "Smtp 模块启用时的提交主机（可与企业邮同域或外接）。须 DNS 解析正确后入域名池出证。","Smtp 模块启用时的提交主机（可与企业邮同域或外接）。须 DNS 解析正确后入域名池出证。"
 "本机邮局 IP %{1}","Local mailer IP %{1}"
 "DNS 已通过","DNS passed"
+移除本邮箱域名配置（不删网站域名）,移除本邮箱域名配置（不删网站域名）
 期望记录,"Expected record"
 线上探测：%{1},"Live probe: %{1}"
 "打开本页时会自动探测公网 DNS；刷新可更新打钩状态。","This page probes public DNS on open; refresh to update check marks."
@@ -713,10 +727,12 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 一键配置本域,"One-click setup this domain"
 暂停域名,"Suspend domain."
 启用域名,"Enable domain."
+确定移除该邮箱域名配置？其下邮箱账号也会删除。网站域名本身不会被删除。,确定移除该邮箱域名配置？其下邮箱账号也会删除。网站域名本身不会被删除。
 同步中…,Syncing…
 "账号 %{1} 新密码（仅一次）：%{2}","Account %{1} new password (once only): %{2}"
 配置中…,"Setting up…"
 配置失败,"Setup failed"
+预览中…,预览中…
 收件邮箱格式不正确,"Recipient email format is invalid"
 主题和正文不能为空,"Subject and body are required"
 邮箱地址必须属于所选域名,"Email address must belong to the selected domain name"
@@ -751,6 +767,9 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 "真实邮箱域名必须先从 Websites 域名候选中选择","The real email domain name must first be selected from the Websites domain name candidates"
 邮箱域名已存在,"Email domain name already exists"
 邮箱域名已创建，可在域名列表中开启或继续创建邮箱账号,"The email domain name has been created. You can open it in the domain name list or continue to create an email account."
+"邮箱域名 ID 无效","邮箱域名 ID 无效"
+"邮箱域名删除失败，请检查 Stalwart 管理连接","邮箱域名删除失败，请检查 Stalwart 管理连接"
+"已移除邮箱域名配置 %{1}（账号 %{2} 个）。网站域名本身未删除。","已移除邮箱域名配置 %{1}（账号 %{2} 个）。网站域名本身未删除。"
 邮件已提交发送,"Message submitted"
 请选择邮件,请选择邮件
 已移入废纸篓,已移入废纸篓

@@ -1746,33 +1746,175 @@ class Index extends BackendController
             return $this->respondFormResult(405, __('无效的请求方法'));
         }
 
-        $domainId = (int)$this->request->getPost('domain_id', 0);
-        $apply = (string)$this->request->getPost('apply', '') === '1';
-        if ($domainId < 1) {
-            return $this->respondFormResult(422, __('邮箱域名 ID 无效。'));
+        try {
+            $outcome = $this->runConfigureCloudflareDns(null);
+            return $this->respondFormResult((int)$outcome['code'], (string)$outcome['message']);
+        } catch (ResponseTerminateException $terminate) {
+            // respondFormResult → redirect() 以 302 终止；不可当成业务失败 flash
+            throw $terminate;
         }
-        if ($apply && (string)$this->request->getPost('confirm_public_origin', '') !== '1') {
-            return $this->respondFormResult(
-                422,
-                __('应用前必须确认邮件主机将以 DNS-only 暴露源站公网 IP。')
+    }
+
+    /**
+     * SSE：一键/预览 Cloudflare 邮箱 DNS（长请求心跳，避免反代空等超时）。
+     * complete()：对齐 Smtp/一键配置流，避免 WLS 捕获冲掉 SSE。
+     */
+    #[\Weline\Framework\Acl\Acl(
+        'Weline_Mail::mail_dns_cloudflare',
+        '配置 Cloudflare 邮箱 DNS',
+        'cloud',
+        '预览并同步当前企业邮箱域名 DNS（SSE）',
+        'Weline_Mail::mail'
+    )]
+    public function postConfigureCloudflareDnsStream(): string
+    {
+        @\set_time_limit(0);
+        @\ignore_user_abort(true);
+
+        $sse = new SseWriter();
+        $sse->setHeartbeatInterval(15)->start();
+
+        try {
+            if (!$this->request->isPost()) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)__('无效的请求方法'),
+                ]);
+                $sse->close();
+
+                return '';
+            }
+
+            $apply = (string)$this->request->getPost('apply', '') === '1'
+                || (string)$this->request->getParam('apply', '') === '1';
+            $sse->sendEvent('start', [
+                'message' => (string)(
+                    $apply
+                        ? __('开始同步 Cloudflare DNS…')
+                        : __('开始预览 Cloudflare DNS…')
+                ),
+                'progress' => 0,
+                'apply' => $apply,
+            ]);
+
+            $outcome = $this->runConfigureCloudflareDns(
+                static function (string $step, string $message, int $current, int $total) use ($sse): void {
+                    if (!$sse->isAlive()) {
+                        return;
+                    }
+                    $percent = (int)floor(($current / max(1, $total)) * 95);
+                    $sse->sendEvent('progress', [
+                        'step' => $step,
+                        'message' => $message,
+                        'current' => $current,
+                        'total' => $total,
+                        'progress' => min(95, max(1, $percent)),
+                    ]);
+                    $sse->maybeHeartbeat();
+                }
             );
+
+            if (empty($outcome['success'])) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)($outcome['message'] ?? __('Cloudflare DNS 配置失败。')),
+                    'progress' => 100,
+                    'code' => (int)($outcome['code'] ?? 500),
+                ]);
+                $sse->close();
+
+                return '';
+            }
+
+            $sse->complete([
+                'success' => true,
+                'message' => (string)($outcome['message'] ?? __('Cloudflare DNS 已同步。')),
+                'progress' => 100,
+                'apply' => $apply,
+            ]);
+        } catch (\Throwable $e) {
+            if ($sse->isAlive()) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => $e->getMessage() !== ''
+                        ? $e->getMessage()
+                        : (string)__('Cloudflare DNS 配置失败'),
+                ]);
+                $sse->close();
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * 同步 Cloudflare 邮箱 DNS（表单与 SSE 共用）。
+     *
+     * @param (callable(string $step, string $message, int $current, int $total): void)|null $onProgress
+     * @return array{success:bool,code:int,message:string}
+     */
+    private function runConfigureCloudflareDns(?callable $onProgress = null): array
+    {
+        $emit = static function (
+            string $step,
+            string $message,
+            int $current,
+            int $total,
+        ) use ($onProgress): void {
+            if ($onProgress === null) {
+                return;
+            }
+            $onProgress($step, $message, $current, $total);
+        };
+
+        $domainId = (int)$this->request->getPost('domain_id', 0);
+        if ($domainId < 1) {
+            $domainId = (int)$this->request->getParam('domain_id', 0);
+        }
+        $apply = (string)$this->request->getPost('apply', '') === '1'
+            || (string)$this->request->getParam('apply', '') === '1';
+        $confirmOrigin = (string)$this->request->getPost('confirm_public_origin', '') === '1'
+            || (string)$this->request->getParam('confirm_public_origin', '') === '1';
+
+        if ($domainId < 1) {
+            return [
+                'success' => false,
+                'code' => 422,
+                'message' => (string)__('邮箱域名 ID 无效。'),
+            ];
+        }
+        if ($apply && !$confirmOrigin) {
+            return [
+                'success' => false,
+                'code' => 422,
+                'message' => (string)__('应用前必须确认邮件主机将以 DNS-only 暴露源站公网 IP。'),
+            ];
         }
 
         try {
+            $emit('load_domain', (string)__('正在加载邮箱域名…'), 1, 8);
             $domain = \Weline\Framework\Manager\ObjectManager::getInstance(
                 \Weline\Mail\Model\MailDomain::class
             )->reset()->load($domainId);
             if (!$domain->getId()) {
-                return $this->respondFormResult(404, __('邮箱域名不存在。'));
+                return [
+                    'success' => false,
+                    'code' => 404,
+                    'message' => (string)__('邮箱域名不存在。'),
+                ];
             }
 
             $originIp = trim((string)$this->request->getPost('origin_ip', ''));
+            if ($originIp === '') {
+                $originIp = trim((string)$this->request->getParam('origin_ip', ''));
+            }
             if ($originIp === '') {
                 $originIp = trim((string)$domain->getData(
                     \Weline\Mail\Model\MailDomain::schema_fields_ORIGIN_IP
                 ));
             }
             if ($originIp === '') {
+                $emit('resolve_origin', (string)__('正在探测本机邮局公网 IP…'), 2, 8);
                 /** @var \Weline\Mail\Service\MailOriginIpResolver $originResolver */
                 $originResolver = ObjectManager::getInstance(
                     \Weline\Mail\Service\MailOriginIpResolver::class
@@ -1784,6 +1926,7 @@ class Index extends BackendController
             );
             /** @var list<array{selector:string,public_key:string,algorithm?:string,stage?:string}> $dkimRecords */
             $dkimRecords = [];
+            $emit('dkim', (string)__('正在准备 DKIM 公钥…'), 3, 8);
             /** @var \Weline\Mail\Service\StalwartManagementAdapter $stalwartMgmt */
             $stalwartMgmt = ObjectManager::getInstance(
                 \Weline\Mail\Service\StalwartManagementAdapter::class
@@ -1798,6 +1941,9 @@ class Index extends BackendController
 
             $selector = trim((string)$this->request->getPost('dkim_selector', ''));
             if ($selector === '') {
+                $selector = trim((string)$this->request->getParam('dkim_selector', ''));
+            }
+            if ($selector === '') {
                 $selector = trim((string)$domain->getData(
                     \Weline\Mail\Model\MailDomain::schema_fields_DKIM_SELECTOR
                 ));
@@ -1806,6 +1952,9 @@ class Index extends BackendController
                 $selector = 'default';
             }
             $publicKey = trim((string)$this->request->getPost('dkim_public_key', ''));
+            if ($publicKey === '') {
+                $publicKey = trim((string)$this->request->getParam('dkim_public_key', ''));
+            }
             if ($publicKey === '') {
                 $publicKey = trim((string)$domain->getData(
                     \Weline\Mail\Model\MailDomain::schema_fields_DKIM_PUBLIC_KEY
@@ -1837,6 +1986,7 @@ class Index extends BackendController
                 $publicKey = (string)$primary['public_key'];
             }
 
+            $emit('build_records', (string)__('正在生成 DNS 清单…'), 4, 8);
             $factory = \Weline\Framework\Manager\ObjectManager::getInstance(
                 \Weline\Mail\Service\MailDnsRecordFactory::class
             );
@@ -1852,14 +2002,23 @@ class Index extends BackendController
             $domain->setData(\Weline\Mail\Model\MailDomain::schema_fields_DKIM_PUBLIC_KEY, $publicKey);
             $domain->save();
 
-            $result = \w_query('cdn', 'reconcileMailDns', [
-                'domain' => (string)$domain->getData(
+            $emit(
+                'reconcile',
+                (string)($apply ? __('正在写入 Cloudflare…') : __('正在预览 Cloudflare…')),
+                5,
+                8
+            );
+            /** @var \Weline\Cdn\Api\MailDnsManagerInterface $mailDns */
+            $mailDns = ObjectManager::getInstance(\Weline\Cdn\Api\MailDnsManagerInterface::class);
+            $result = $mailDns->reconcile(
+                (string)$domain->getData(
                     \Weline\Mail\Model\MailDomain::schema_fields_DOMAIN_NAME
                 ),
-                'desired_records' => $targets['desired_records'],
-                'dns_only_hosts' => $targets['dns_only_hosts'],
-                'apply' => $apply,
-            ]);
+                $targets['desired_records'],
+                $targets['dns_only_hosts'],
+                $apply,
+                $onProgress
+            );
             if (!is_array($result)) {
                 throw new \RuntimeException((string)__('CDN 模块返回了无效的 DNS 结果。'));
             }
@@ -1875,14 +2034,16 @@ class Index extends BackendController
             $domain->save();
 
             if (($result['success'] ?? false) !== true) {
-                return $this->respondFormResult(
-                    409,
-                    (string)($result['message'] ?? __('Cloudflare DNS 配置失败。'))
-                );
+                return [
+                    'success' => false,
+                    'code' => 409,
+                    'message' => (string)($result['message'] ?? __('Cloudflare DNS 配置失败。')),
+                ];
             }
 
             $poolMsg = '';
             if ($apply) {
+                $emit('domain_pool', (string)__('正在同步域名池主机名…'), 7, 8);
                 $poolMsg = $this->ensureMailHostnamesInDomainPool(
                     (string)$domain->getData(\Weline\Mail\Model\MailDomain::schema_fields_DOMAIN_NAME),
                     (string)$domain->getData(\Weline\Mail\Model\MailDomain::schema_fields_HOSTNAME),
@@ -1898,17 +2059,25 @@ class Index extends BackendController
                 $baseMsg .= ' ' . $poolMsg;
             }
 
-            return $this->respondFormResult(200, $baseMsg);
-        } catch (ResponseTerminateException $terminate) {
-            // respondFormResult → redirect() 以 302 终止；不可当成业务失败 flash
-            throw $terminate;
+            $emit('done', $baseMsg, 8, 8);
+
+            return [
+                'success' => true,
+                'code' => 200,
+                'message' => $baseMsg,
+            ];
         } catch (\DomainException|\InvalidArgumentException $e) {
-            return $this->respondFormResult(422, $e->getMessage());
+            return [
+                'success' => false,
+                'code' => 422,
+                'message' => $e->getMessage(),
+            ];
         } catch (\Throwable $e) {
-            return $this->respondFormResult(
-                500,
-                __('Cloudflare DNS 配置失败：%{1}', $e->getMessage())
-            );
+            return [
+                'success' => false,
+                'code' => 500,
+                'message' => (string)__('Cloudflare DNS 配置失败：%{1}', $e->getMessage()),
+            ];
         }
     }
 
