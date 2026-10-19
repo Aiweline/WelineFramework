@@ -3048,6 +3048,52 @@ if ($oauthCfError === 'invalid_scope') {
                     });
                 });
 
+                (function bindSmtpProviderPresets() {
+                    function applyPreset(select) {
+                        if (!select) return;
+                        var form = select.closest('.mail-smtp-provider-form') || select.closest('form');
+                        if (!form) return;
+                        var opt = select.options[select.selectedIndex];
+                        if (!opt) return;
+                        var host = opt.getAttribute('data-host') || '';
+                        var port = opt.getAttribute('data-port') || '587';
+                        var tls = opt.getAttribute('data-tls') || 'starttls';
+                        var name = opt.getAttribute('data-name') || '';
+                        var hint = opt.getAttribute('data-username-hint') || '';
+                        var note = opt.getAttribute('data-note') || '';
+                        var id = opt.value || 'custom';
+                        var hostEl = form.querySelector('[data-smtp-provider-host]');
+                        var portEl = form.querySelector('[data-smtp-provider-port]');
+                        var tlsEl = form.querySelector('[data-smtp-provider-tls]');
+                        var nameEl = form.querySelector('[data-smtp-provider-name]');
+                        var userEl = form.querySelector('[data-smtp-provider-user]');
+                        var noteEl = form.querySelector('[data-smtp-provider-note]');
+                        if (id !== 'custom') {
+                            if (hostEl) hostEl.value = host;
+                            if (portEl) portEl.value = port;
+                            if (tlsEl) tlsEl.value = tls;
+                            if (nameEl && name && (!nameEl.value || nameEl.getAttribute('data-autofilled') === '1')) {
+                                nameEl.value = name;
+                                nameEl.setAttribute('data-autofilled', '1');
+                            }
+                        }
+                        if (userEl && hint) {
+                            userEl.setAttribute('placeholder', hint);
+                        } else if (userEl) {
+                            userEl.removeAttribute('placeholder');
+                        }
+                        if (noteEl) {
+                            noteEl.textContent = note || <?= json_encode((string)__('选择服务商后自动填主机/端口/TLS；账号密码在对方控制台注册后粘贴。'), JSON_UNESCAPED_UNICODE) ?>;
+                        }
+                    }
+                    document.querySelectorAll('[data-smtp-provider-preset]').forEach(function (select) {
+                        if (select.getAttribute('data-smtp-provider-bound') === '1') return;
+                        select.setAttribute('data-smtp-provider-bound', '1');
+                        select.addEventListener('change', function () { applyPreset(select); });
+                        applyPreset(select);
+                    });
+                })();
+
                 var root = document.getElementById('mail-enterprise-accounts');
                 var form = document.getElementById('mail-account-editor-form');
                 var dialog = document.getElementById('mail-account-editor-dialog');
@@ -4716,18 +4762,45 @@ if ($oauthCfError === 'invalid_scope') {
                                         <?php endforeach; ?>
                                     </select>
                                 </label>
+                                <div class="mail-smtp-provider-form w-stack" style="--w-gap:var(--weline-space-3);">
+                                    <label class="w-field">
+                                        <span class="w-field__label"><?= __('服务商预设（手填时）') ?></span>
+                                        <select class="w-select" data-smtp-provider-preset data-testid="mail-outbound-route-provider-preset">
+                                            <?php foreach ($smtpExternalProviders as $prov):
+                                                if (!is_array($prov)) {
+                                                    continue;
+                                                }
+                                                $pid = (string)($prov['id'] ?? '');
+                                                if ($pid === '') {
+                                                    continue;
+                                                }
+                                                ?>
+                                                <option
+                                                    value="<?= $escape($pid) ?>"
+                                                    data-host="<?= $escape((string)($prov['host'] ?? '')) ?>"
+                                                    data-port="<?= (int)($prov['port'] ?? 587) ?>"
+                                                    data-tls="<?= $escape((string)($prov['tls'] ?? 'starttls')) ?>"
+                                                    data-name="<?= $escape((string)($prov['label'] ?? '')) ?>"
+                                                    data-username-hint="<?= $escape((string)($prov['username_hint'] ?? '')) ?>"
+                                                    data-note="<?= $escape((string)($prov['note'] ?? '')) ?>"
+                                                    <?= $pid === 'custom' ? 'selected' : '' ?>
+                                                ><?= $escape((string)($prov['label'] ?? $pid)) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;" data-smtp-provider-note aria-live="polite"></p>
                                 <div class="w-cluster" style="--w-gap:var(--weline-space-3);">
                                     <label class="w-field" style="--w-flex:1;">
                                         <span class="w-field__label"><?= __('中继主机') ?></span>
-                                        <input class="w-input" type="text" name="relay_host" placeholder="mail.aiweline.com" data-route-field="relay_host" data-testid="mail-outbound-route-host">
+                                        <input class="w-input" type="text" name="relay_host" placeholder="mail.aiweline.com" data-route-field="relay_host" data-testid="mail-outbound-route-host" data-smtp-provider-host>
                                     </label>
                                     <label class="w-field" style="--w-flex:0 0 7rem;">
                                         <span class="w-field__label"><?= __('端口') ?></span>
-                                        <input class="w-input" type="number" name="relay_port" value="587" min="1" max="65535" data-route-field="relay_port">
+                                        <input class="w-input" type="number" name="relay_port" value="587" min="1" max="65535" data-route-field="relay_port" data-smtp-provider-port>
                                     </label>
                                     <label class="w-field" style="--w-flex:0 0 9rem;">
                                         <span class="w-field__label">TLS</span>
-                                        <select class="w-select" name="relay_tls" data-route-field="relay_tls">
+                                        <select class="w-select" name="relay_tls" data-route-field="relay_tls" data-smtp-provider-tls>
                                             <option value="starttls">STARTTLS</option>
                                             <option value="smtps">SMTPS</option>
                                             <option value="none"><?= __('无') ?></option>
@@ -4737,12 +4810,13 @@ if ($oauthCfError === 'invalid_scope') {
                                 <div class="w-cluster" style="--w-gap:var(--weline-space-3);">
                                     <label class="w-field" style="--w-flex:1;">
                                         <span class="w-field__label"><?= __('用户名') ?></span>
-                                        <input class="w-input" type="text" name="relay_username" data-route-field="relay_username">
+                                        <input class="w-input" type="text" name="relay_username" data-route-field="relay_username" data-smtp-provider-user>
                                     </label>
                                     <label class="w-field" style="--w-flex:1;">
                                         <span class="w-field__label"><?= __('密码') ?></span>
                                         <input class="w-input" type="password" name="relay_password" autocomplete="new-password" placeholder="<?= $escape((string)__('选目录后留空即可；编辑时留空表示不改')) ?>" data-route-field="relay_password">
                                     </label>
+                                </div>
                                 </div>
                                 <span class="w-text" data-size="sm" data-tone="muted" data-route-status style="--w-m:0;"></span>
                             </div>
@@ -5844,6 +5918,52 @@ if ($oauthCfError === 'invalid_scope') {
         }
 
         forms.forEach(mailOneClickBind);
+    })();
+    </script>
+    <script>
+    (function () {
+        function applySmtpProviderPreset(select) {
+            if (!select) return;
+            var form = select.closest('.mail-smtp-provider-form') || select.closest('form');
+            if (!form) return;
+            var opt = select.options[select.selectedIndex];
+            if (!opt) return;
+            var host = opt.getAttribute('data-host') || '';
+            var port = opt.getAttribute('data-port') || '587';
+            var tls = opt.getAttribute('data-tls') || 'starttls';
+            var name = opt.getAttribute('data-name') || '';
+            var hint = opt.getAttribute('data-username-hint') || '';
+            var note = opt.getAttribute('data-note') || '';
+            var id = opt.value || 'custom';
+            var hostEl = form.querySelector('[data-smtp-provider-host]');
+            var portEl = form.querySelector('[data-smtp-provider-port]');
+            var tlsEl = form.querySelector('[data-smtp-provider-tls]');
+            var nameEl = form.querySelector('[data-smtp-provider-name]');
+            var userEl = form.querySelector('[data-smtp-provider-user]');
+            var noteEl = form.querySelector('[data-smtp-provider-note]');
+            if (id !== 'custom') {
+                if (hostEl) hostEl.value = host;
+                if (portEl) portEl.value = port;
+                if (tlsEl) tlsEl.value = tls;
+                if (nameEl && name && (!nameEl.value || nameEl.getAttribute('data-autofilled') === '1')) {
+                    nameEl.value = name;
+                    nameEl.setAttribute('data-autofilled', '1');
+                }
+            }
+            if (userEl) {
+                if (hint) userEl.setAttribute('placeholder', hint);
+                else userEl.removeAttribute('placeholder');
+            }
+            if (noteEl) {
+                noteEl.textContent = note || <?= json_encode((string)__('选择服务商后自动填主机/端口/TLS；账号密码在对方控制台注册后粘贴。'), JSON_UNESCAPED_UNICODE) ?>;
+            }
+        }
+        document.querySelectorAll('[data-smtp-provider-preset]').forEach(function (select) {
+            if (select.getAttribute('data-smtp-provider-bound') === '1') return;
+            select.setAttribute('data-smtp-provider-bound', '1');
+            select.addEventListener('change', function () { applySmtpProviderPreset(select); });
+            applySmtpProviderPreset(select);
+        });
     })();
     </script>
 </div>

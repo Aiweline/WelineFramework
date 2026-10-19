@@ -219,6 +219,9 @@ final class SmtpUnitContractsTest extends TestCase
             'SmtpServiceCatalog::testCatalogServiceCreatesBothModes' => function () {
             $this->assert_SmtpServiceCatalog_testCatalogServiceCreatesBothModes();
         },
+            'SmtpExternalProviderCatalog::testPresetsIncludeCustomAndPopularHosts' => function () {
+            $this->assert_SmtpExternalProviderCatalog_testPresetsIncludeCustomAndPopularHosts();
+        },
             'SmtpLocalDomainHealth::testHealthServiceAndGates' => function () {
             $this->assert_SmtpLocalDomainHealth_testHealthServiceAndGates();
         },
@@ -1473,6 +1476,26 @@ private function assert_SmtpServiceCatalog_testSmtpServiceModelHasSelfAndExterna
     self::assertStringContainsString('weline_smtp_service', $src);
     self::assertStringContainsString("MODE_SELF = 'self'", $src);
     self::assertStringContainsString("MODE_EXTERNAL = 'external'", $src);
+}
+
+private function assert_SmtpExternalProviderCatalog_testPresetsIncludeCustomAndPopularHosts(): void
+{
+    $path = \BP . '/app/code/Weline/Smtp/Service/SmtpExternalProviderCatalog.php';
+    self::assertFileExists($path);
+    $src = (string) \file_get_contents($path);
+    self::assertStringContainsString('ID_CUSTOM', $src);
+    self::assertStringContainsString('smtp-relay.brevo.com', $src);
+    self::assertStringContainsString('smtp.resend.com', $src);
+    self::assertStringContainsString('smtpdm.aliyun.com', $src);
+    self::assertStringContainsString('mail.aiweline.com', $src);
+    self::assertStringContainsString('function listPresetsForUi', $src);
+    self::assertStringContainsString('function matchIdByHost', $src);
+    $mailUi = (string) \file_get_contents(\BP . '/app/code/Weline/Mail/view/templates/backend/Index/enterprise.phtml');
+    self::assertStringContainsString('data-smtp-provider-preset', $mailUi);
+    self::assertStringContainsString('smtp_external_providers', $mailUi);
+    $mailCtrl = (string) \file_get_contents(\BP . '/app/code/Weline/Mail/Controller/Backend/Index.php');
+    self::assertStringContainsString('SmtpExternalProviderCatalog', $mailCtrl);
+    self::assertStringContainsString('smtp_external_providers', $mailCtrl);
 }
 
 private function assert_SmtpServiceCatalog_testCatalogServiceCreatesBothModes(): void
