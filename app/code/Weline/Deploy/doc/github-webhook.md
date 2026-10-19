@@ -1,5 +1,7 @@
 # GitHub Webhook 配置指南
 
+> **默认自动更新不依赖本页。** 产品主路径是：GitHub 打 Tag → 站点 `origin`/`project_remote` 指向同一 GitHub 仓 → Cron `DeployWebhookExpect` 发现 Tag → Drain 发布。Webhook 仅作可选即时入队。
+
 将 GitHub 仓库 Webhook 接到 `Weline_Deploy` 统一入口。实际地址由 `deploy:webhook:setup --base-url=https://<域名>` 输出，形如 `https://<域名>/~wh~...`。
 
 访问密码说明见 [`webhook-secret.md`](webhook-secret.md)；后台字段与 Nginx 见 [`backend-config.md`](backend-config.md)。

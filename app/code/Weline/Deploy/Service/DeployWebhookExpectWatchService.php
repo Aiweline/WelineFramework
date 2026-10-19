@@ -90,8 +90,15 @@ class DeployWebhookExpectWatchService
             $bootstrapTipSha = strtolower(trim((string)($state['bootstrap_tip_sha'] ?? '')));
             $bootstrapTipBranch = trim((string)($state['bootstrap_tip_branch'] ?? ''));
             $pending = is_array($state['pending'] ?? null) ? $state['pending'] : [];
+            $bootstrapRemote = trim((string)($state['bootstrap_remote'] ?? ''));
 
-            if (empty($state['bootstrapped'])) {
+            // Switching project_remote (e.g. gitee→github) must re-baseline: never treat the whole
+            // remote tag catalog as "new" (would coalesce to a random lexicographic winner).
+            $needsBootstrap = empty($state['bootstrapped'])
+                || ($bootstrapRemote !== '' && $bootstrapRemote !== $remote)
+                || ($bootstrapRemote === '' && !empty($state['bootstrapped']));
+            if ($needsBootstrap) {
+                $bootstrapSeen = [];
                 if ($watchTags && is_array($remoteTags)) {
                     foreach ($remoteTags as $tag) {
                         if ($this->tagMatchesPolicy($tag, $config)) {
@@ -99,12 +106,15 @@ class DeployWebhookExpectWatchService
                         }
                     }
                 }
+                $bootstrapTipSha = '';
+                $bootstrapTipBranch = '';
                 if ($watchTip && is_string($tipSha) && $tipSha !== '') {
                     $bootstrapTipSha = $tipSha;
                     $bootstrapTipBranch = $branch;
                 }
                 $this->saveState([
                     'bootstrapped' => true,
+                    'bootstrap_remote' => $remote,
                     'bootstrap_seen' => $bootstrapSeen,
                     'bootstrap_tip_sha' => $bootstrapTipSha,
                     'bootstrap_tip_branch' => $bootstrapTipBranch,
@@ -167,6 +177,7 @@ class DeployWebhookExpectWatchService
                 $pending = [];
                 $this->saveState([
                     'bootstrapped' => true,
+                    'bootstrap_remote' => $remote,
                     'bootstrap_seen' => $bootstrapSeen,
                     'bootstrap_tip_sha' => $bootstrapTipSha,
                     'bootstrap_tip_branch' => $bootstrapTipBranch,
@@ -321,6 +332,7 @@ class DeployWebhookExpectWatchService
 
             $this->saveState([
                 'bootstrapped' => true,
+                'bootstrap_remote' => $remote,
                 'bootstrap_seen' => $bootstrapSeen,
                 'bootstrap_tip_sha' => $bootstrapTipSha,
                 'bootstrap_tip_branch' => $bootstrapTipBranch,
@@ -371,7 +383,10 @@ class DeployWebhookExpectWatchService
         if ($tags === []) {
             return '';
         }
-        usort($tags, static function (string $a, string $b): int {
+        // Product release tags win over incidental tags (skills/deploy-* helpers) when coalescing.
+        $release = array_values(array_filter($tags, static fn (string $t): bool => str_starts_with($t, 'release-')));
+        $pool = $release !== [] ? $release : $tags;
+        usort($pool, static function (string $a, string $b): int {
             $aVer = self::versionLikeCore($a);
             $bVer = self::versionLikeCore($b);
             if ($aVer !== null && $bVer !== null) {
@@ -384,7 +399,7 @@ class DeployWebhookExpectWatchService
             return strcmp($a, $b);
         });
 
-        return (string)end($tags);
+        return (string)end($pool);
     }
 
     /** @return string|null numeric core for version_compare, or null if not version-like */

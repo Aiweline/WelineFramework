@@ -16,7 +16,15 @@ use Weline\Framework\Http\Fpc\StaticAssetBrotliSidecar;
  */
 final class AtomicCompiledFilePublisher
 {
-    private const DEFAULT_LOCK_TIMEOUT_MILLISECONDS = 10_000;
+    /** Request / accidental publish paths: fail fast under contention. */
+    public const DEFAULT_LOCK_TIMEOUT_MILLISECONDS = 10_000;
+
+    /**
+     * Control-plane CLI (setup:upgrade, framework:compile, server:start):
+     * wait long enough to cover one concurrent full compile session.
+     */
+    public const CLI_LOCK_TIMEOUT_MILLISECONDS = 180_000;
+
     private const LOCK_FILE = '.framework-compile.lock';
 
     /**
@@ -32,6 +40,88 @@ final class AtomicCompiledFilePublisher
         if ($this->lockTimeoutMilliseconds < 1) {
             throw new \InvalidArgumentException('Compiled artifact lock timeout must be at least 1ms.');
         }
+    }
+
+    /**
+     * Publisher for Setup / framework:compile / server:start control-plane work.
+     */
+    public static function forCli(): self
+    {
+        return new self(self::CLI_LOCK_TIMEOUT_MILLISECONDS);
+    }
+
+    public function getLockTimeoutMilliseconds(): int
+    {
+        return $this->lockTimeoutMilliseconds;
+    }
+
+    /**
+     * Best-effort snapshot of who last wrote the lock file metadata.
+     * Does not acquire the flock; alive reflects OS process table only.
+     *
+     * @return array{pid:int, acquired_at:string, alive:bool, cmdline:?string}|null
+     */
+    public static function describeLockHolder(string $directory): ?array
+    {
+        if (\trim($directory) === '') {
+            return null;
+        }
+
+        $resolvedDirectory = \realpath($directory) ?: $directory;
+        $lockFile = $resolvedDirectory . \DIRECTORY_SEPARATOR . self::LOCK_FILE;
+        if (!\is_file($lockFile)) {
+            return null;
+        }
+
+        $raw = @\file_get_contents($lockFile);
+        if ($raw === false || $raw === '') {
+            return null;
+        }
+
+        $pid = 0;
+        $acquiredAt = '';
+        if (\preg_match('/^pid=(\d+)\s*$/m', $raw, $pidMatch) === 1) {
+            $pid = (int)$pidMatch[1];
+        }
+        if (\preg_match('/^acquired_at=(.+)\s*$/m', $raw, $atMatch) === 1) {
+            $acquiredAt = \trim($atMatch[1]);
+        }
+        if ($pid < 1 && $acquiredAt === '') {
+            return null;
+        }
+
+        $alive = $pid > 0 && self::isProcessAlive($pid);
+        $cmdline = ($pid > 0 && $alive) ? self::readProcessCommandLine($pid) : null;
+
+        return [
+            'pid' => $pid,
+            'acquired_at' => $acquiredAt,
+            'alive' => $alive,
+            'cmdline' => $cmdline,
+        ];
+    }
+
+    /**
+     * Human-readable holder fragment for timeout / ops messages.
+     */
+    public static function formatLockHolder(string $directory): string
+    {
+        $holder = self::describeLockHolder($directory);
+        if ($holder === null) {
+            return 'holder=unknown';
+        }
+
+        $aliveLabel = $holder['alive'] ? 'alive' : 'dead';
+        $parts = [
+            'holder_pid=' . $holder['pid'],
+            'acquired_at=' . ($holder['acquired_at'] !== '' ? $holder['acquired_at'] : 'unknown'),
+            'holder_status=' . $aliveLabel,
+        ];
+        if (\is_string($holder['cmdline']) && $holder['cmdline'] !== '') {
+            $parts[] = 'holder_cmd=' . $holder['cmdline'];
+        }
+
+        return \implode(' ', $parts);
     }
 
     public function publish(string $target, string $content): void
@@ -215,8 +305,9 @@ final class AtomicCompiledFilePublisher
 
         @\fclose($handle);
         $modeLabel = $mode === \LOCK_SH ? 'shared' : 'exclusive';
+        $holder = self::formatLockHolder($resolvedDirectory);
         throw new \RuntimeException(
-            "Timed out after {$this->lockTimeoutMilliseconds}ms waiting for {$modeLabel} framework compile lock: {$lockFile}.",
+            "Timed out after {$this->lockTimeoutMilliseconds}ms waiting for {$modeLabel} framework compile lock: {$lockFile}. {$holder}.",
         );
     }
 
@@ -224,6 +315,54 @@ final class AtomicCompiledFilePublisher
     {
         $resolvedDirectory = \realpath($directory) ?: $directory;
         return \DIRECTORY_SEPARATOR === '\\' ? \strtolower($resolvedDirectory) : $resolvedDirectory;
+    }
+
+    private static function isProcessAlive(int $pid): bool
+    {
+        if ($pid < 1) {
+            return false;
+        }
+        if (\DIRECTORY_SEPARATOR === '\\') {
+            $handle = @\popen('tasklist /FI "PID eq ' . $pid . '" 2>NUL', 'r');
+            if (!\is_resource($handle)) {
+                return false;
+            }
+            $output = (string)\stream_get_contents($handle);
+            @\pclose($handle);
+
+            return \str_contains($output, (string)$pid);
+        }
+
+        if (\function_exists('posix_kill')) {
+            return @\posix_kill($pid, 0);
+        }
+
+        // Best-effort fallback when POSIX extension is absent.
+        return @\is_dir('/proc/' . $pid);
+    }
+
+    private static function readProcessCommandLine(int $pid): ?string
+    {
+        if ($pid < 1 || \DIRECTORY_SEPARATOR === '\\') {
+            return null;
+        }
+        $cmdlinePath = '/proc/' . $pid . '/cmdline';
+        if (!\is_readable($cmdlinePath)) {
+            return null;
+        }
+        $raw = @\file_get_contents($cmdlinePath);
+        if ($raw === false || $raw === '') {
+            return null;
+        }
+        $normalized = \trim(\str_replace("\0", ' ', $raw));
+        if ($normalized === '') {
+            return null;
+        }
+        if (\strlen($normalized) > 240) {
+            return \substr($normalized, 0, 237) . '...';
+        }
+
+        return $normalized;
     }
 
     private function registerShutdownRelease(): void

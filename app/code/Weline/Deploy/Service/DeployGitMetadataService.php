@@ -48,7 +48,8 @@ class DeployGitMetadataService
     {
         $root = $this->normalizeRoot($root);
         $this->fetch(true, $remote, $root);
-        $this->runGitOrFail(['checkout', $tag], 'Git checkout tag failed: %{1}', $root);
+        // Deploy always force-aligns: dirty/untracked worktrees must not block tag releases.
+        $this->runGitOrFail(['checkout', '-f', $tag], 'Git checkout tag failed: %{1}', $root);
     }
 
     public function checkoutRemoteBranch(string $branch, string $remote = 'origin', ?string $root = null): void

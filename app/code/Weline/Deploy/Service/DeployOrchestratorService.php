@@ -6,7 +6,7 @@ namespace Weline\Deploy\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
-use Weline\Framework\Console\Console\Printing;
+use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;

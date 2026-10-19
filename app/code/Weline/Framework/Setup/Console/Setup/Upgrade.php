@@ -17,6 +17,8 @@ namespace Weline\Framework\Setup\Console\Setup;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\System;
+use Weline\Framework\Compilation\AtomicCompiledFilePublisher;
+use Weline\Framework\Compilation\CompiledPhpArrayWriter;
 use Weline\Framework\Compilation\ModuleRegistryCompiler;
 use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Console\CommandResult;
@@ -1073,10 +1075,21 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     {
         $outputDirectory = BP . 'generated' . DS . 'framework';
         $registryFile = $outputDirectory . DS . 'modules.php';
-        $compiled = (new ModuleRegistryCompiler())->compile(
-            BP . 'app' . DS . 'code' . DS . 'Weline',
-            $registryFile,
-        );
+        $cliPublisher = AtomicCompiledFilePublisher::forCli();
+        $writer = new CompiledPhpArrayWriter($cliPublisher);
+        try {
+            $compiled = (new ModuleRegistryCompiler(null, null, $writer))->compile(
+                BP . 'app' . DS . 'code' . DS . 'Weline',
+                $registryFile,
+            );
+        } catch (\Throwable $e) {
+            $holder = AtomicCompiledFilePublisher::formatLockHolder($outputDirectory);
+            $this->printing->error(__(
+                'Bootstrap 模块注册表写入等待框架编译锁失败：%{1}；%{2}',
+                [$e->getMessage(), $holder]
+            ));
+            throw $e;
+        }
 
         $providerRegistry = new ServiceProviderRegistry($registryFile);
         ObjectManager::replaceServiceProviderRegistry($providerRegistry);

@@ -82,7 +82,10 @@ backup，禁止对已存在 target 原地写入。同一输出目录的编译锁
 产物发布保持到整个 `FrameworkCompiler` 会话结束，并在 `finally` 显式释放；
 shutdown 只是 fatal 安全网。锁文件尽可能以 close-on-exec 打开，且禁止 fork 子进程
 对父 PID 拥有的锁执行 `LOCK_UN`。并发 `framework:compile` 只能有界等待，
-超时明确失败。该 Windows 切换协议依赖“编译完成前不创建
+超时明确失败。`setup:upgrade` 的 bootstrap 模块注册表（`modules.php`）与
+`framework:compile` / `server:start` 晋升共用同一 `generated/framework`
+目录锁；Setup 与其它控制面 CLI 使用 `AtomicCompiledFilePublisher::forCli()`
+（180s）等待预算，请求/默认路径保持 10s。该 Windows 切换协议依赖“编译完成前不创建
 Master/Worker”的控制面不变量，不允许在运行中 Worker 内调用。
 
 `server:start` 在重启旧 Master 前使用更强的多文件事务边界：先在
