@@ -7,7 +7,7 @@
         "priceUSD": "$700+",
         "cities": "Beijing → Xi'an → Shanghai",
         "desc": "The essential first-China trip: the Great Wall, Forbidden City and Temple of Heaven, then the Terracotta Army and Xi'an's city wall, finishing on the Bund skyline.",
-        "img": "https://aka.doubaocdn.com/s/fq4gaVg8Jr",
+        "img": "/pub/media/websites/playinginchina/catalog/fq4gaVg8Jr.webp",
         "itin": [
             [
                 "Day 1",
@@ -76,7 +76,21 @@
         "slug": "golden-triangle-classic",
         "pack_price": "¥99",
         "pack_price_usd": "$12.99",
-        "pack_price_minor": 9900
+        "pack_price_minor": 9900,
+        "gallery": [
+            "/pub/media/websites/playinginchina/catalog/fq4gaVg8Jr.webp",
+            "/pub/media/websites/playinginchina/catalog/e4c95v18E9.webp",
+            "/pub/media/websites/playinginchina/catalog/A6uCSu9PxK.webp",
+            "/pub/media/websites/playinginchina/catalog/RKBsHmotuW.webp",
+            "/pub/media/websites/playinginchina/catalog/XRYDLLbeKI.webp",
+            "/pub/media/websites/playinginchina/catalog/4udMdHwxyC.webp",
+            "/pub/media/websites/playinginchina/catalog/DHCbFn7wmy.webp",
+            "/pub/media/websites/playinginchina/catalog/EfUxQeBzxj.webp",
+            "/pub/media/websites/playinginchina/catalog/ahv5CpW5yn.webp",
+            "/pub/media/websites/playinginchina/catalog/qlvI8OsbeP.webp",
+            "/pub/media/websites/playinginchina/catalog/s3AJ2cUEwX.webp",
+            "/pub/media/websites/playinginchina/catalog/x9WTjDM7GF.webp"
+        ]
     },
     {
         "id": "r2",
@@ -86,7 +100,7 @@
         "priceUSD": "$600+",
         "cities": "Chengdu → Leshan → Jiuzhaigou",
         "desc": "Pandas, the world's biggest Buddha, and a turquoise fairyland — one province, three icons. Best in autumn when Jiuzhaigou blazes with color.",
-        "img": "https://aka.doubaocdn.com/s/4udMdHwxyC",
+        "img": "/pub/media/websites/playinginchina/catalog/4udMdHwxyC.webp",
         "itin": [
             [
                 "Day 1",
@@ -154,7 +168,7 @@
         "priceUSD": "$520+",
         "cities": "Zhangjiajie → Guilin → Yangshuo",
         "desc": "China's two most surreal landscapes: the pillar forests of Avatar and the karst river of every Chinese painting.",
-        "img": "https://aka.doubaocdn.com/s/XRYDLLbeKI",
+        "img": "/pub/media/websites/playinginchina/catalog/XRYDLLbeKI.webp",
         "itin": [
             [
                 "Day 1",
@@ -217,7 +231,7 @@
         "priceUSD": "$1,250+",
         "cities": "Xi'an → Dunhuang → Lhasa",
         "desc": "From the Terracotta Army to Mogao's thousand Buddhas to the Potala Palace — the epic trans-continental China. Requires Tibet travel permits (booked via agency).",
-        "img": "https://aka.doubaocdn.com/s/RKBsHmotuW",
+        "img": "/pub/media/websites/playinginchina/catalog/RKBsHmotuW.webp",
         "itin": [
             [
                 "Day 1–2",
@@ -285,7 +299,7 @@
         "priceUSD": "$440+",
         "cities": "Shanghai → Suzhou → Wuzhen → Hangzhou",
         "desc": "Classical gardens, lantern-lit canals and the poetry of West Lake — the refined east-China classic, all linked by 30-minute high-speed trains.",
-        "img": "https://aka.doubaocdn.com/s/A6uCSu9PxK",
+        "img": "/pub/media/websites/playinginchina/catalog/A6uCSu9PxK.webp",
         "itin": [
             [
                 "Day 1",
@@ -350,7 +364,7 @@
         "priceUSD": "$580+",
         "cities": "Lijiang → Sanya",
         "desc": "Old-town romance under snow mountains, then three days of turquoise beaches — the ultimate contrast trip.",
-        "img": "https://aka.doubaocdn.com/s/DHCbFn7wmy",
+        "img": "/pub/media/websites/playinginchina/catalog/DHCbFn7wmy.webp",
         "itin": [
             [
                 "Day 1",
@@ -413,7 +427,7 @@
         "priceUSD": "$450+",
         "cities": "Luoyang → Dengfeng → Pingyao",
         "desc": "The cradle of Chinese civilization: the Longmen Grottoes, Shaolin kung fu on Mount Song, then a living Ming–Qing walled city.",
-        "img": "https://aka.doubaocdn.com/s/e4c95v18E9",
+        "img": "/pub/media/websites/playinginchina/catalog/e4c95v18E9.webp",
         "itin": [
             [
                 "Day 1",
@@ -473,7 +487,7 @@
         "priceUSD": "$500+",
         "cities": "Dali → Lijiang → Shangri-La",
         "desc": "Erhai lake loops, Naxi old-town romance under snow peaks, then Tibet-flavored Shangri-La with a river-gorge trek on the way.",
-        "img": "https://aka.doubaocdn.com/s/EfUxQeBzxj",
+        "img": "/pub/media/websites/playinginchina/catalog/EfUxQeBzxj.webp",
         "itin": [
             [
                 "Day 1",
@@ -526,6 +540,45 @@
             }
         },
         "slug": "yunnan-highlands",
+        "pack_price": "¥99",
+        "pack_price_usd": "$12.99",
+        "pack_price_minor": 9900
+    },
+    {
+        "id": "r9",
+        "title": "Chengdu Evening Snack Walk",
+        "days": 1,
+        "price": "Self-guided · pay-as-you-go",
+        "priceUSD": "Food ~$12–25 pp (est.)",
+        "cities": "Chengdu",
+        "desc": "Self-guided evening snack walk in UNESCO Creative City of Gastronomy Chengdu: sample Sichuan street snacks and light hotpot-style bites around classic old-town lanes (Kuanzhai / Jinli corridor)—not a ticketed tour. Spice levels run medium–high; many stalls are cashless (Alipay/WeChat) with limited English menus. Vendors and hours change—verify on the day. No booking or buy CTA; this is editorial pacing only.",
+        "img": "/pub/media/websites/playinginchina/catalog/4udMdHwxyC.webp",
+        "itin": [
+            [
+                "Evening 0–0.5h",
+                "Self-guided start near Kuanzhai Alley; skim spice/cashless tips before you eat"
+            ],
+            [
+                "0.5–1.5h",
+                "Wander alley snack stalls: dan dan–style noodles, skewers, cold dishes—order small plates to share"
+            ],
+            [
+                "1.5–2.5h",
+                "Continue toward Jinli-area snack streets for sweets/tea; pace yourself on chili oil"
+            ],
+            [
+                "Close",
+                "Metro/taxi back; keep water handy. Not a sold tour—no guide booking required"
+            ]
+        ],
+        "dests": [
+            "cheng-dou-kuan-zhai-xiang-zi",
+            "cheng-dou-jin-li"
+        ],
+        "best": "Year-round evenings; cooler months easier for spice",
+        "style": "food",
+        "variants": {},
+        "slug": "chengdu-evening-snack-walk",
         "pack_price": "¥99",
         "pack_price_usd": "$12.99",
         "pack_price_minor": 9900

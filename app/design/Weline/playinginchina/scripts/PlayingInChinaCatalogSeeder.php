@@ -271,13 +271,22 @@ final class PlayingInChinaCatalogSeeder
             throw new \RuntimeException('product/offer creation failed for ' . $sku);
         }
 
+        // ProductAdminMutationService::createOffer persists product_id + offer UUID only.
+        // Search projection requires offer.sku (or offer_identity.v2); empty SKU → whole
+        // storefront search fails closed to 0 hits. Always pin SKU on the offer row.
+        $offerSku = trim((string)$offer->getData('sku'));
+        $offerPatch = [];
+        if ($offerSku === '') {
+            $offerPatch['sku'] = $sku;
+        }
         // Decision packs are digital: never require shipping weight/quote theatre.
         $productType = strtolower(trim((string)($item['product_type'] ?? 'simple')));
         if ($productType === 'travel_route') {
+            $offerPatch['requires_shipping'] = 0;
+        }
+        if ($offerPatch !== []) {
             $expectedVersion = (int)$offer->getData('publish_version');
-            $offer = $this->offers->updateVersioned($websiteId, $offerId, $expectedVersion, [
-                'requires_shipping' => 0,
-            ]);
+            $offer = $this->offers->updateVersioned($websiteId, $offerId, $expectedVersion, $offerPatch);
         }
 
         $this->writeCopy($websiteId, $productId, $item);
