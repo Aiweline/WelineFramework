@@ -995,7 +995,11 @@ ensure_brotli_extension() {
     echo "brotli extension already loaded on $php_bin"
     return 0
   fi
-  local script="$ROOT/app/code/Weline/Framework/Env/env/script/install_brotli_extension.php"
+  # Git tracks Framework/env (lowercase); macOS APFS often merges Env/env.
+  local script="$ROOT/app/code/Weline/Framework/env/env/script/install_brotli_extension.php"
+  if [[ ! -f "$script" ]]; then
+    script="$ROOT/app/code/Weline/Framework/Env/env/script/install_brotli_extension.php"
+  fi
   if [[ ! -f "$script" ]]; then
     echo "ERROR: missing brotli install script: $script" >&2
     return 1
