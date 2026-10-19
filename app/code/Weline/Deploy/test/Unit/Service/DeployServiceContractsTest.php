@@ -52,6 +52,12 @@ final class DeployServiceContractsTest extends TestCase
             'DeployPostDeployPolicy::testOrchestratorDefaultsEmptyPostDeployToSetupUpgrade' => function () {
             $this->assert_DeployPostDeployPolicy_testOrchestratorDefaultsEmptyPostDeployToSetupUpgrade();
         },
+            'DeployPostDeployPolicy::testKeepMaintenanceFlagAllowedAndInjected' => function () {
+            $this->assert_DeployPostDeployPolicy_testKeepMaintenanceFlagAllowedAndInjected();
+        },
+            'DeployMaintenanceWindow::testOrchestratorAndBuildOwnRuntimeWindow' => function () {
+            $this->assert_DeployMaintenanceWindow_testOrchestratorAndBuildOwnRuntimeWindow();
+        },
             'DeployPostDeployPolicy::testReleaseAfterDoesNotTouchFpcOrThemeStaticVersion' => function () {
             $this->assert_DeployPostDeployPolicy_testReleaseAfterDoesNotTouchFpcOrThemeStaticVersion();
         },
@@ -188,15 +194,55 @@ private function assert_DeployPostDeployPolicy_testEmptyNormalizesToEmptyString(
 
 private function assert_DeployPostDeployPolicy_testOrchestratorDefaultsEmptyPostDeployToSetupUpgrade(): void
 {
-    $src = (string) file_get_contents(BP . 'app/code/Weline/Deploy/Service/DeployOrchestratorService.php');
+    $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Deploy/Service/DeployOrchestratorService.php');
     self::assertStringContainsString("php bin/w setup:upgrade", $src);
     self::assertStringContainsString('POST_DEPLOY 为空', $src);
     self::assertStringContainsString('默认执行 setup:upgrade', $src);
 }
 
+private function assert_DeployPostDeployPolicy_testKeepMaintenanceFlagAllowedAndInjected(): void
+{
+    $policy = new DeployProjectCommandPolicyService();
+    self::assertSame(
+        'php bin/w setup:upgrade --keep-maintenance',
+        $policy->normalizePostDeployCommand('php bin/w setup:upgrade --keep-maintenance')
+    );
+    $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Deploy/Service/DeployOrchestratorService.php');
+    self::assertStringContainsString('ensureKeepMaintenanceOnSetupUpgrade', $src);
+    self::assertStringContainsString('--keep-maintenance', $src);
+    $policySrc = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Deploy/Service/DeployProjectCommandPolicyService.php');
+    self::assertStringContainsString("'--keep-maintenance' => true", $policySrc);
+}
+
+private function assert_DeployMaintenanceWindow_testOrchestratorAndBuildOwnRuntimeWindow(): void
+{
+    $base = '/Users/weline/Project/Official/框架/app/code/Weline/Deploy';
+    $window = (string) file_get_contents($base . '/Service/DeployMaintenanceWindowService.php');
+    self::assertStringContainsString('enableRuntimeGate', $window);
+    self::assertStringContainsString('disableRuntimeGate', $window);
+    self::assertStringContainsString('deploy:maintenance-window', $window);
+    self::assertStringNotContainsString('enableFull', $window);
+    self::assertStringNotContainsString('beginWave', $window);
+
+    $orch = (string) file_get_contents($base . '/Service/DeployOrchestratorService.php');
+    self::assertStringContainsString('DeployMaintenanceWindowService', $orch);
+    self::assertStringContainsString('$this->maintenanceWindow->begin', $orch);
+    self::assertStringContainsString('$this->maintenanceWindow->end', $orch);
+    self::assertGreaterThanOrEqual(2, substr_count($orch, '$this->maintenanceWindow->begin'));
+    self::assertGreaterThanOrEqual(2, substr_count($orch, '$this->maintenanceWindow->end'));
+
+    $build = (string) file_get_contents($base . '/Console/Deploy/Build.php');
+    self::assertStringContainsString('DeployMaintenanceWindowService', $build);
+    self::assertStringContainsString('$maintenanceWindow->begin', $build);
+    self::assertStringContainsString('$maintenanceWindow->end', $build);
+
+    $module = (string) file_get_contents($base . '/etc/module.php');
+    self::assertStringContainsString("'Weline_Maintenance'", $module);
+}
+
 private function assert_DeployPostDeployPolicy_testReleaseAfterDoesNotTouchFpcOrThemeStaticVersion(): void
 {
-    $src = (string) file_get_contents(BP . 'app/code/Weline/Deploy/Observer/ReleaseAfter.php');
+    $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Deploy/Observer/ReleaseAfter.php');
     self::assertStringNotContainsString('use Weline\Framework\Deploy\DeployFpcInvalidation', $src);
     self::assertStringNotContainsString("setConfig('theme_static_version'", $src);
     self::assertStringNotContainsString('->afterRelease(', $src);
@@ -206,7 +252,7 @@ private function assert_DeployPostDeployPolicy_testReleaseAfterDoesNotTouchFpcOr
 
 private function assert_DeployPostDeployPolicy_testCoreUpdateDocumentsFollowUpUpgrade(): void
 {
-    $src = (string) file_get_contents(BP . 'app/code/Weline/Deploy/Console/Update/Core.php');
+    $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Deploy/Console/Update/Core.php');
     self::assertStringContainsString('setup:upgrade', $src);
     self::assertStringContainsString('deploy:upgrade', $src);
     self::assertStringContainsString('不算静态发布完成', $src);
@@ -516,9 +562,13 @@ private function assert_DeployWebhookExpectWatch_testExpectWatchServiceAndCronEx
     self::assertStringContainsString('branch_tip_webhook_miss_after_grace', $watch);
     self::assertStringContainsString('resolveNotifyDeployRoot', $watch);
     self::assertStringContainsString("'deploy_root' => \$this->resolveNotifyDeployRoot(\$config)", $watch);
-    // Must not auto-deploy on miss.
-    self::assertStringNotContainsString('deploy:release', $watch);
+    self::assertStringContainsString('isCronUpdateEnabled', $watch);
+    self::assertStringContainsString('selectCronWinnerRef', $watch);
+    self::assertStringContainsString('pickNewestTag', $watch);
+    self::assertStringContainsString('asyncDispatcher->dispatchRelease', $watch);
+    // Miss alert path must not call Orchestrator; cron path may dispatchRelease only.
     self::assertStringNotContainsString('orchestrator->release', $watch);
+    self::assertStringNotContainsString('deploy:release', $watch);
     // Tip must not use local tracking-only helper as the sole source.
     self::assertStringNotContainsString('getRemoteBranchCommit', $watch);
     self::assertStringContainsString('function listRemoteBranchTip', $git);
@@ -729,7 +779,7 @@ private function assert_DeployWebhookQueue_testQueueAndDrainAndCronExist(): void
     $dispatcher = (string) file_get_contents($base . '/Service/DeployWebhookAsyncDispatcher.php');
     self::assertStringContainsString('abandonIncomplete(', $dispatcher);
     self::assertStringContainsString('abandonStaleIncomplete(', $dispatcher);
-    self::assertStringContainsString('superseded_by_newer_webhook', $dispatcher);
+    self::assertStringContainsString('superseded_by_newer_deploy', $dispatcher);
     self::assertStringContainsString('PHASE_ABANDONED', $dispatcher);
     $drain = (string) file_get_contents($base . '/Service/DeployWebhookJobDrainService.php');
     self::assertStringContainsString('abandonStaleIncomplete(', $drain);

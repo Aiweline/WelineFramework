@@ -176,6 +176,9 @@ private function assert_HelpPayWidget_testCartCheckoutCtasUseModuleLoadWithoutSt
         self::assertStringContainsString('data-helppay-placement=', $tpl);
         self::assertStringContainsString('w-helppay-cta--quiet', $tpl);
         self::assertStringContainsString('w-helppay-cta__link', $tpl);
+        self::assertStringContainsString('<a href="#"', $tpl);
+        self::assertStringContainsString('role="button"', $tpl);
+        self::assertStringNotContainsString('<button', $tpl);
         self::assertStringContainsString('data-helppay-i18n=', $tpl);
         self::assertStringContainsString('ShareModalI18n::json()', $tpl);
         self::assertStringNotContainsString('data-mini-cart-tab-label', $tpl);
@@ -205,6 +208,9 @@ private function assert_HelpPayWidget_testProductHelpPayCtaIsQuietLinkNotSeconda
     self::assertStringContainsString('data-helppay-product-help-pay', $tpl);
     self::assertStringContainsString('w-helppay-cta--quiet', $tpl);
     self::assertStringContainsString('w-helppay-cta__link', $tpl);
+    self::assertStringContainsString('<a href="#"', $tpl);
+    self::assertStringContainsString('role="button"', $tpl);
+    self::assertStringNotContainsString('<button', $tpl);
     self::assertStringContainsString('weline-pixel::friend_help_pay', $tpl);
     self::assertStringContainsString('data-pixel-event="friend_help_pay"', $tpl);
     self::assertStringContainsString('data-product-id=', $tpl);
@@ -212,7 +218,11 @@ private function assert_HelpPayWidget_testProductHelpPayCtaIsQuietLinkNotSeconda
     self::assertStringContainsString('ShareModalI18n::json()', $tpl);
     self::assertStringNotContainsString('w-button--secondary', $tpl);
     self::assertStringNotContainsString('w-button--primary', $tpl);
-    self::assertDoesNotMatchRegularExpression('/\bhidden(?:=|\s|>)/', $tpl);
+    // CTA 根不得默认 hidden（currency_unavailable 早退块可含 hidden，勿整文件扫）。
+    self::assertDoesNotMatchRegularExpression(
+        '/<div class="w-helppay-cta[^"]*"[^>]*\bhidden\b/',
+        $tpl
+    );
     self::assertStringNotContainsString('@static', $tpl);
     self::assertStringNotContainsString('checkout-shipping-address', $tpl);
     self::assertStringNotContainsString('data-shipping-checkout-address', $tpl);
@@ -415,6 +425,9 @@ private function assert_HelpPayWidget_testQuickPayDoesNotSsrCheckoutAddressOnPro
     self::assertStringContainsString('data-pixel-event="quick_buy"', $tpl);
     self::assertStringContainsString('w-helppay-cta--quiet', $tpl);
     self::assertStringContainsString('w-helppay-cta__link', $tpl);
+    self::assertStringContainsString('<a href="#"', $tpl);
+    self::assertStringContainsString('role="button"', $tpl);
+    self::assertStringNotContainsString('<button', $tpl);
     self::assertStringNotContainsString('product-native-detail__secondary', $tpl);
     self::assertStringNotContainsString('w-button--secondary', $tpl);
     self::assertStringNotContainsString('w-helppay-cta__btn', $tpl);
@@ -433,6 +446,9 @@ private function assert_HelpPayWidget_testSelectionShareButtonExposesTranslatedI
     self::assertStringContainsString('data-product-id=', $tpl);
     self::assertStringContainsString('w-helppay-cta--quiet', $tpl);
     self::assertStringContainsString('w-helppay-cta__link', $tpl);
+    self::assertStringContainsString('<a href="#"', $tpl);
+    self::assertStringContainsString('role="button"', $tpl);
+    self::assertStringNotContainsString('<button', $tpl);
     self::assertStringNotContainsString('product-native-detail__secondary', $tpl);
     self::assertStringNotContainsString('w-button--secondary', $tpl);
     self::assertFileExists('/Users/weline/Project/Official/框架/app/code/Weline/HelpPay' . '/Service/ShareModalI18n.php');

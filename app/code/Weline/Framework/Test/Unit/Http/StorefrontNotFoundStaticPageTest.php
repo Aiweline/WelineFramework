@@ -5,15 +5,39 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Http;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Framework\Env\WelineEnv;
+use Weline\Framework\App\State;
+use Weline\Framework\Context;
 use Weline\Framework\Http\StorefrontNotFoundStaticPage;
+use Weline\Framework\Runtime\RequestContext;
 
 final class StorefrontNotFoundStaticPageTest extends TestCase
 {
     public function testResolveLangFromQueryAndPathOnly(): void
     {
-        $previousMirror = $_SERVER['WELINE_USER_LANG'] ?? null;
-        unset($_SERVER['WELINE_USER_LANG']);
+        $languageMaps = new \ReflectionProperty(State::class, 'allowedLanguageCodeMapsByScope');
+        $originalLanguageMaps = $languageMaps->getValue(null);
+        $entered = false;
+        if (Context::getCurrent() !== null) {
+            try {
+                RequestContext::cleanup();
+            } catch (\Throwable) {
+            }
+            Context::leave();
+        }
+        Context::enter(new Context([
+            'meta' => ['type' => 'request', 'mode' => 'test'],
+            'route' => [
+                'language' => 'zh_Hans_CN',
+                'currency' => 'CNY',
+                'website_id' => 0,
+            ],
+        ]));
+        RequestContext::init();
+        $entered = true;
+        RequestContext::locale('zh_Hans_CN');
+        $languageMaps->setValue(null, [
+            '0' => ['zh_hans_cn' => true, 'en_us' => true],
+        ]);
         try {
             self::assertSame('en_US', StorefrontNotFoundStaticPage::resolveLang('/', 'lang=en_US'));
             self::assertSame('en_US', StorefrontNotFoundStaticPage::resolveLang('/en_US/products'));
@@ -22,21 +46,19 @@ final class StorefrontNotFoundStaticPageTest extends TestCase
                 'en_US',
                 StorefrontNotFoundStaticPage::resolveLang('/en_US/products', 'lang=ja_JP')
             );
-            // Language cookies are ignored (path/query/request-server mirror only).
+            // Language cookies are ignored (path/query/RequestContext only).
+            RequestContext::locale('zh_Hans_CN');
             self::assertSame(
                 'zh_Hans_CN',
                 StorefrontNotFoundStaticPage::resolveLang('/', '', 'foo=bar; WELINE_USER_LANG=ja_JP')
             );
             self::assertSame('zh_Hans_CN', StorefrontNotFoundStaticPage::resolveLang('/products'));
-            WelineEnv::setServer('WELINE_USER_LANG', 'en_US', 'storefront-not-found-test');
+            RequestContext::locale('en_US');
             self::assertSame('en_US', StorefrontNotFoundStaticPage::resolveLang('/products'));
-            // Stripped path + website-default USER_LANG must not beat PATH_LANG
-            // (browser still on /zh_Hans_CN/... after Url::detectLanguage peel).
-            WelineEnv::setServer('WELINE_URL_PATH_LANG', 'zh_Hans_CN', 'storefront-not-found-test');
-            WelineEnv::setServer('WELINE_USER_LANG', 'en_US', 'storefront-not-found-test');
+            // Stripped path after Url::detectLanguage peel: RequestContext still
+            // holds the visitor-facing path locale (not a parallel PATH_LANG bag).
+            RequestContext::locale('zh_Hans_CN');
             self::assertSame('zh_Hans_CN', StorefrontNotFoundStaticPage::resolveLang('/ddsds'));
-            WelineEnv::removeServer('WELINE_URL_PATH_LANG');
-            WelineEnv::removeServer('WELINE_USER_LANG');
             self::assertSame(
                 'en_US',
                 StorefrontNotFoundStaticPage::resolveLang('/pub/errors/storefront-not-found/en_US.html')
@@ -54,10 +76,13 @@ final class StorefrontNotFoundStaticPageTest extends TestCase
                 StorefrontNotFoundStaticPage::publicHtmlUrl('en_US', 'shop')
             );
         } finally {
-            if ($previousMirror === null) {
-                unset($_SERVER['WELINE_USER_LANG']);
-            } else {
-                $_SERVER['WELINE_USER_LANG'] = $previousMirror;
+            $languageMaps->setValue(null, $originalLanguageMaps);
+            if ($entered) {
+                try {
+                    RequestContext::cleanup();
+                } catch (\Throwable) {
+                }
+                Context::leave();
             }
         }
     }

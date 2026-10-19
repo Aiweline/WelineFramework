@@ -100,13 +100,24 @@ final class WidgetAssetHtmlPlacement
     }
 
     /**
-     * Insert big layout pack after theme-head / disk / overlay <link> tags (industry order).
+     * Insert big layout pack at the explicit head slot when present; else after theme chrome links.
      *
-     * Only <link> chrome markers count — <script data-weline-theme-head-pack="early|after-css">
+     * Slot (preferred): `<!--weline:head-layout-assets-->` in assets-prefix / default head.
+     * Heuristic fallback: only <link> chrome markers count — <script data-weline-theme-head-pack>
      * must not win the anchor or layout CSS is injected inside the script and never loads.
      */
     private function insertAfterThemeChrome(string $html, string $chunk): string
     {
+        if (preg_match('/<!--\s*weline:head-layout-assets\s*-->/i', $html) === 1) {
+            $replaced = preg_replace(
+                '/<!--\s*weline:head-layout-assets\s*-->/i',
+                rtrim($chunk) . "\n",
+                $html,
+                1
+            );
+
+            return \is_string($replaced) ? $replaced : $html;
+        }
         $markers = [
             'data-weline-theme-overlay=',
             'data-weline-theme-disk=',

@@ -33,6 +33,9 @@ final class FrontendApiContractsTest extends TestCase
             'QueryBinCacheHeader::testQueryBinResolvesBinQueryCacheHeadersForCalls' => function () {
             $this->assert_QueryBinCacheHeader_testQueryBinResolvesBinQueryCacheHeadersForCalls();
         },
+            'QueryBinLocalization::testApplyLocalizationPrefersDocumentPathname' => function () {
+            $this->assert_QueryBinLocalization_testApplyLocalizationPrefersDocumentPathname();
+        },
             'QueryBinDeployGeneration::testHandshakeAssertsClientThemeGeneration' => function () {
             $this->assert_QueryBinDeployGeneration_testHandshakeAssertsClientThemeGeneration();
         },
@@ -74,6 +77,18 @@ private function assert_QueryBinCacheHeader_testQueryBinResolvesBinQueryCacheHea
     self::assertStringContainsString('readCacheMarker', $source);
     self::assertStringContainsString('array $cacheHeaders', $source);
     self::assertDoesNotMatchRegularExpression('/private function binaryResponse\([^\)]*\)\s*:\s*Response\s*\{\s*[^}]*setHeader\(\'Cache-Control\',\s*\'no-store\'\);/s', $source, 'binaryResponse must accept cache headers instead of hardcoding only no-store');
+}
+
+private function assert_QueryBinLocalization_testApplyLocalizationPrefersDocumentPathname(): void
+{
+    $base = '/Users/weline/Project/Official/框架/app/code/Weline/Frontend';
+    $source = (string) file_get_contents($base . '/Controller/Api/QueryBin.php');
+    self::assertStringContainsString('State::writeLocalizationHintsFromUri($pathname)', $source);
+    self::assertStringContainsString('resolvePathLocalization', $source);
+    self::assertStringContainsString('pathLanguage === \'\'', $source);
+    self::assertStringContainsString('State::isLanguageCodeShape', $source);
+    $worker = (string) file_get_contents($base . '/view/statics/js/weline-api-worker.js');
+    self::assertStringContainsString('Case-fix Script/REGION', $worker);
 }
 
 private function assert_QueryBinDeployGeneration_testHandshakeAssertsClientThemeGeneration(): void

@@ -40,6 +40,14 @@ if ($typeLabels === []) {
         $typeLabels[$code] = (string)($row['label'] ?? $code);
     }
 }
+// Chinese source labels → storefront locale (dict / module CSV).
+foreach ($typeLabels as $code => $label) {
+    $label = trim((string)$label);
+    if ($label === '') {
+        continue;
+    }
+    $typeLabels[$code] = (string)__($label);
+}
 $esc = static fn (mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 // Keep %{1} for client formatters: __() without a real arg can eat the token.
 $keepPh = static fn (string $source): string => \str_replace(

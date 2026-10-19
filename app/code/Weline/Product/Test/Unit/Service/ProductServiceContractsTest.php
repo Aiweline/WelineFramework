@@ -136,6 +136,9 @@ final class ProductServiceContractsTest extends TestCase
             'OfferTaxClassBinding::testAdminAndCartSurfacesWireTaxClass' => function () {
             $this->assert_OfferTaxClassBinding_testAdminAndCartSurfacesWireTaxClass();
         },
+            'ProductAdminMutationService::testCreateOfferPersistsSku' => function () {
+            $this->assert_ProductAdminMutationService_testCreateOfferPersistsSku();
+        },
             'PlpFilterOffersLightCacheWarmer::testModuleProvidesPlpLightWarmer' => function () {
             $this->assert_PlpFilterOffersLightCacheWarmer_testModuleProvidesPlpLightWarmer();
         },
@@ -758,6 +761,16 @@ private function assert_OfferTaxClassBinding_testAdminAndCartSurfacesWireTaxClas
     self::assertStringContainsString('writeOfferTaxClassCode', $cmd);
     self::assertStringContainsString('TAX_CLASS_CODE', $snap);
     self::assertStringContainsString('taxClassCode:', $snap);
+}
+
+private function assert_ProductAdminMutationService_testCreateOfferPersistsSku(): void
+{
+    $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Product' . '/Service/ProductAdminMutationService.php');
+    self::assertStringContainsString('Offer::schema_fields_SKU => $identity->sku', $src);
+    self::assertMatchesRegularExpression(
+        '/function createOffer\([\s\S]*?Offer::schema_fields_SKU\s*=>\s*\$identity->sku/s',
+        $src,
+    );
 }
 
 private function assert_PlpFilterOffersLightCacheWarmer_testModuleProvidesPlpLightWarmer(): void

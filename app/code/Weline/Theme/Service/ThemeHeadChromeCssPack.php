@@ -963,13 +963,23 @@ final class ThemeHeadChromeCssPack
 
     private function resolveTheme(string $area): ?WelineTheme
     {
+        // Prefer ThemeApplicationContext / preview via ThemeContextService before
+        // process ThemeData. ThemeData may still hold module Default while the
+        // website application pins a design theme — trusting ThemeData first
+        // publishes packs under /static/Weline/Theme/... and 404s design CSS.
+        try {
+            $resolved = $this->themeContext->resolveTheme($area);
+            if ($resolved instanceof WelineTheme && (int)$resolved->getId() > 0) {
+                return $resolved;
+            }
+        } catch (\Throwable) {
+        }
         $current = ThemeData::getCurrentTheme();
         if ($current instanceof WelineTheme && (int)$current->getId() > 0) {
             return $current;
         }
         try {
-            $resolved = $this->themeContext->resolveTheme($area)
-                ?? $this->themeContext->resolveRegisteredDefaultTheme($area);
+            $resolved = $this->themeContext->resolveRegisteredDefaultTheme($area);
 
             return $resolved instanceof WelineTheme && (int)$resolved->getId() > 0 ? $resolved : null;
         } catch (\Throwable) {

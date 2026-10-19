@@ -133,4 +133,28 @@ final class WidgetAssetPositionTest extends TestCase
         }
         self::assertSame(1, substr_count($html, 'href="/layout.css"'));
     }
+
+    public function testLayoutPackPrefersExplicitHeadLayoutAssetsSlot(): void
+    {
+        $placer = new \Weline\Theme\Service\LayoutEntity\WidgetAssetHtmlPlacement();
+        $layout = '<link data-weline-layout-pack="1" data-weline-widget-asset="layout" rel="stylesheet" href="/layout.css">';
+        $head = '<link rel="stylesheet" data-weline-theme-head-pack="storefront" href="/theme.css">'
+            . '<!--weline:head-layout-assets-->'
+            . '<script defer src="/runtime.js"></script>'
+            . '<link rel="stylesheet" data-weline-theme-overlay="1" href="/late-overlay.css">';
+        $html = $placer->inject('<html><head>' . $head . '</head><body>' . $layout . '</body></html>');
+        $themePos = strpos($html, 'href="/theme.css"');
+        $layoutPos = strpos($html, 'data-weline-layout-pack=');
+        $runtimePos = strpos($html, 'src="/runtime.js"');
+        $overlayPos = strpos($html, 'href="/late-overlay.css"');
+        self::assertNotFalse($themePos);
+        self::assertNotFalse($layoutPos);
+        self::assertNotFalse($runtimePos);
+        self::assertNotFalse($overlayPos);
+        self::assertLessThan($layoutPos, $themePos);
+        self::assertLessThan($runtimePos, $layoutPos);
+        self::assertLessThan($overlayPos, $layoutPos);
+        self::assertStringNotContainsString('weline:head-layout-assets', $html);
+        self::assertSame(1, substr_count($html, 'href="/layout.css"'));
+    }
 }

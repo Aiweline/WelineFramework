@@ -6,8 +6,8 @@ Weline_Deploy 模块提供了基于 Git 的自动部署、发布系统与版本�
 
 ## 功能特性
 
-- Git 仓库自动拉取代码（`deploy:build`）
-- 完整发布流水线：Git + 后置命令 + 版本戳 + reload（`deploy:release`）
+- Git 仓库自动拉取代码（`deploy:build`；整窗维护）
+- 完整发布流水线：开维护 → Git + 后置命令 + 版本戳 + reload → 关维护（`deploy:release`）
 - 分支发布（版本 = commit 短 SHA）与 Tag 发布（版本 = tag 名）
 - Webhook 自动触发部署（支持 Gitee / GitHub / 通用平台）
 - 运行时版本探测（`GET <随机 Webhook 路径>/version`）
@@ -89,7 +89,7 @@ php bin/w deploy:build
 | `deploy:mode:set prod` | 是（内联） |
 | `setup:upgrade`（!DEV） | 是（`SetupUpgradeAfterDeployStatic`） |
 | `deploy:upgrade` | 是（直接） |
-| `deploy:release` / Orchestrator | **是**：空 `POST_DEPLOY` 默认 `php bin/w setup:upgrade`；白名单亦允许 `deploy:upgrade` |
+| `deploy:release` / Orchestrator | **是**：整窗维护；空 `POST_DEPLOY` 默认 `php bin/w setup:upgrade` 并注入 `--keep-maintenance`；白名单亦允许 `deploy:upgrade` |
 | `core:update` | **否**（静态铺平）— 须再跑 `setup:upgrade` 或 `deploy:upgrade`；**会**派发 `core_update_after`（Theme 可清布局固化物） |
 
 发布成功后 `release_after` **零碰 FPC / 零写主题静态戳**（店面失效由主题版本发布与业务 ChangedType 自管）。
@@ -104,7 +104,7 @@ php bin/w deploy:build
 | `仅 Tag Push` | 只有 tag 推送触发，分支推送忽略 |
 | `分支 + Tag 都生效` | 两者都触发（需明确选择） |
 
-默认模式为 `仅 Tag Push`，分支 push 会返回 `trigger_mode_tag_only`，只有明确选择分支模式或“两者都生效”时才响应分支发布。
+默认模式为 `仅 Tag Push`，分支 push 会返回 `trigger_mode_tag_only`，只有明确选择分支模式或“两者都生效”时才响应分支发布。自 `1.1.22` 起：**Cron 计划更新默认开启**（整轮只入队最新一条），**Webhook 默认关闭**（关则无公网地址/404）；触发规则两通道共用。
 
 ## 版本探测
 

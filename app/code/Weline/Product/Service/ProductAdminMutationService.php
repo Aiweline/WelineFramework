@@ -94,6 +94,17 @@ final class ProductAdminMutationService
         $identity = $this->requireIdentity($sku);
         $existing = $this->offers->findByGlobalUuid($websiteId, $identity->globalOfferUuid);
         if ($existing !== null) {
+            // Heal legacy rows created before offer.sku was persisted on create.
+            $existingSku = trim((string)$existing->getData(Offer::schema_fields_SKU));
+            if ($existingSku === '' && trim($identity->sku) !== '') {
+                return $this->offers->updateVersioned(
+                    $websiteId,
+                    (int)$existing->getId(),
+                    (int)$existing->getData(Offer::schema_fields_PUBLISH_VERSION),
+                    [Offer::schema_fields_SKU => $identity->sku],
+                );
+            }
+
             return $existing;
         }
         $product = $this->products->findByGlobalUuid($websiteId, $identity->globalProductUuid);
@@ -101,9 +112,13 @@ final class ProductAdminMutationService
             throw new \InvalidArgumentException(__('请先创建 SKU 对应的商品'));
         }
 
+        // Offer.sku is required for Search projection and preferred for Cart/line
+        // display; Cart can fall back to product.sku, but empty offer.sku still
+        // fails closed on storefront search. Always persist the registered SKU.
         $offer = $this->offers->create($websiteId, [
             Offer::schema_fields_PRODUCT_ID => (int)$product->getId(),
             Offer::schema_fields_GLOBAL_OFFER_UUID => $identity->globalOfferUuid,
+            Offer::schema_fields_SKU => $identity->sku,
         ]);
         if ($this->cutoverPolicy->legacyWritesAllowed()) {
             $this->skuRegistry->incrementRefCount($identity->registryId);

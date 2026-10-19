@@ -262,6 +262,8 @@ final class SmtpSystemAccountProvisioner
             $status = strtolower(trim((string)$row->getData(SmtpAccount::schema_fields_STATUS)));
             if ($sealed === '') {
                 $gaps[] = (string)__('%{1} 无密封密码', [$email]);
+            } elseif (!$this->sealedPasswordOpenable($sealed)) {
+                $gaps[] = (string)__('%{1} 密封密码无法解密', [$email]);
             }
             if ($status !== 'active') {
                 $gaps[] = (string)__('%{1} 状态非 active（%{2}）', [$email, $status !== '' ? $status : '—']);
@@ -284,8 +286,8 @@ final class SmtpSystemAccountProvisioner
     }
 
     /**
-     * 补齐/修复不齐全的系统账号（缺则建；无密封则首次制密；有密封未入邮局则同步写入）。
-     * 已齐全且已有密封密码的账号不改密。
+     * 补齐/修复不齐全的系统账号（缺则建；无密封/无法解密则重制密；有可用密封未入邮局则同步写入）。
+     * 已齐全且密封可解密的账号不改密。
      *
      * @return array{
      *   success: bool,
@@ -315,6 +317,7 @@ final class SmtpSystemAccountProvisioner
         $created = is_array($base['created'] ?? null) ? $base['created'] : [];
         $ensured = is_array($base['ensured'] ?? null) ? $base['ensured'] : [];
         $notes = [];
+        $infos = [];
         foreach (SmtpAccount::systemLocalParts($relay) as $local => $role) {
             $email = $local . '@' . $domain;
             /** @var SmtpAccount $model */
@@ -330,7 +333,18 @@ final class SmtpSystemAccountProvisioner
                 $mgmt = ObjectManager::getInstance(StalwartManagementAdapter::class);
                 /** @var MailOutboundRelaySecretService $secrets */
                 $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
-                if ($sealed === '') {
+                $needRemint = $sealed === '';
+                $plain = null;
+                if (!$needRemint) {
+                    try {
+                        $plain = $secrets->open($sealed);
+                    } catch (\Throwable) {
+                        // 密钥轮换/迁机后旧密文不可读：与无密封同等处理，重制并写回邮局。
+                        $needRemint = true;
+                        $infos[] = (string)__('%{1} 密封无法解密，已重制', [$email]);
+                    }
+                }
+                if ($needRemint) {
                     $password = rtrim(strtr(base64_encode(random_bytes(18)), '+/', '._'), '=');
                     $sealed = $secrets->seal($password);
                     $mgmt->ensureDomain($domain);
@@ -345,11 +359,10 @@ final class SmtpSystemAccountProvisioner
                     $repaired[] = $email;
                     continue;
                 }
-                $plain = $secrets->open($sealed);
                 $needsSync = $status !== 'active' || !$mgmt->accountExists($email);
                 if ($needsSync) {
                     $mgmt->ensureDomain($domain);
-                    $mgmt->provisionOrResetAccount($email, $plain, 128);
+                    $mgmt->provisionOrResetAccount($email, (string)$plain, 128);
                     if ($status !== 'active') {
                         $row->setData(SmtpAccount::schema_fields_STATUS, 'active')
                             ->setData(SmtpAccount::schema_fields_IS_SYSTEM, 1)
@@ -381,6 +394,9 @@ final class SmtpSystemAccountProvisioner
                 $msg .= ' ' . (string)__('新建/补密封密码（仅一次）：%{1}', [implode('；', $bits)]);
             }
         }
+        if ($infos !== []) {
+            $msg .= ' ' . implode('；', $infos);
+        }
         if ($notes !== []) {
             $msg .= ' ' . implode('；', $notes);
         }
@@ -392,6 +408,23 @@ final class SmtpSystemAccountProvisioner
             'ensured' => $ensured,
             'repaired' => $repaired,
         ];
+    }
+
+    private function sealedPasswordOpenable(string $sealedB64): bool
+    {
+        $sealedB64 = trim($sealedB64);
+        if ($sealedB64 === '') {
+            return false;
+        }
+        try {
+            /** @var MailOutboundRelaySecretService $secrets */
+            $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+            $plain = $secrets->open($sealedB64);
+
+            return is_string($plain) && $plain !== '';
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**

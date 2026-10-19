@@ -3,6 +3,10 @@ declare(strict_types=1);
 
 namespace Weline\Mail\Service;
 
+use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Mail\Model\MailDomain;
+
 final class StalwartManagementAdapter
 {
     /** @deprecated 保留字面量供契约/旧引用；读写请走 resolve* 双路径 */
@@ -119,18 +123,15 @@ final class StalwartManagementAdapter
         $installDir = '/opt/stalwart';
         $dataPath = $installDir . '/data/';
         $logPath = $installDir . '/logs/';
-        $host = gethostname();
-        if (!is_string($host) || trim($host) === '') {
-            $host = 'localhost';
-        }
-        $host = strtolower(trim($host));
+        // Stalwart 0.16 拒绝无点主机名（如云厂商短 hostname）；须 FQDN。
+        [$serverHostname, $defaultDomain] = $this->resolveBootstrapHostnames();
 
         $result = $this->managementCall('x:Bootstrap/set', [
             'update' => [
                 'singleton' => [
                     '@type' => 'Bootstrap',
-                    'serverHostname' => $host,
-                    'defaultDomain' => $host,
+                    'serverHostname' => $serverHostname,
+                    'defaultDomain' => $defaultDomain,
                     'requestTlsCertificate' => false,
                     'generateDkimKeys' => true,
                     'dataStore' => [
@@ -173,6 +174,64 @@ final class StalwartManagementAdapter
         }
 
         return true;
+    }
+
+    /**
+     * Bootstrap 用 FQDN：优先库内真实邮域，其次 env public_host/ssl_domain，最后仅当本机名含点才用。
+     *
+     * @return array{0:string,1:string} [serverHostname, defaultDomain]
+     */
+    private function resolveBootstrapHostnames(): array
+    {
+        $defaultDomain = $this->resolveBootstrapDefaultDomain();
+        $serverHostname = 'mail.' . $defaultDomain;
+
+        return [$serverHostname, $defaultDomain];
+    }
+
+    private function resolveBootstrapDefaultDomain(): string
+    {
+        try {
+            /** @var MailDomain $domainModel */
+            $domainModel = ObjectManager::getInstance(MailDomain::class);
+            $rows = $domainModel->reset()->select()->fetchArray() ?: [];
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $name = strtolower(trim((string)($row['domain_name'] ?? $row['name'] ?? '')));
+                if ($name === '' || str_ends_with($name, '.invalid') || !str_contains($name, '.')) {
+                    continue;
+                }
+
+                return $name;
+            }
+        } catch (\Throwable) {
+            // fall through to env / hostname
+        }
+
+        try {
+            $env = Env::getInstance();
+            foreach (['wls.public_host', 'wls.ssl_domain'] as $key) {
+                $host = strtolower(trim((string)$env->getConfig($key, '')));
+                $host = preg_replace('/^www\./', '', $host) ?? $host;
+                if ($host !== '' && str_contains($host, '.') && !str_ends_with($host, '.invalid')) {
+                    return $host;
+                }
+            }
+        } catch (\Throwable) {
+            // fall through
+        }
+
+        $host = gethostname();
+        $host = is_string($host) ? strtolower(trim($host)) : '';
+        if ($host !== '' && str_contains($host, '.') && !str_ends_with($host, '.invalid')) {
+            return $host;
+        }
+
+        throw new \RuntimeException(
+            '无法解析 Bootstrap 默认域：请先在企业邮局添加真实域名（含点的 FQDN），或配置 wls.public_host。'
+        );
     }
 
     /**
@@ -691,7 +750,8 @@ final class StalwartManagementAdapter
             throw new \RuntimeException('Stalwart 外投策略更新失败' . ($type !== '' ? '：' . $type : '。'));
         }
 
-        // Hub 最终出站 else=QQ 时：已认证且 From≠授权用户 → 改写信封（避免 smtp.qq.com 501）。
+        // Hub 最终出站 else=QQ 时：已认证且 From≠授权用户 → 只改写信封 MAIL FROM（QQ 501：须等于授权用户）。
+        // 信头 From 保留品牌址；勿再对齐成 QQ（实测信封对齐后 QQ 250 接受品牌 Header From）。
         $this->applyQqHubEnvelopeFromRewriteIfElse($strategyRoute);
 
         $reloadResult = $this->managementCall('x:Action/set', [
@@ -706,10 +766,11 @@ final class StalwartManagementAdapter
     }
 
     /**
-     * else 为 QQ hub 时改写信封 MAIL FROM→授权用户，并对齐 Header From；否则清掉改写。
+     * else 为 QQ hub 时：只改写信封 MAIL FROM→授权用户；Header From 保留品牌址。
      *
-     * QQ SMTP 硬约束：授权用户必须同时出现在信封 MAIL FROM 与 Header From。
-     * 仅改信封、保留品牌邮箱 Header From 会被 QQ 以 550「inappropriate words」拒绝。
+     * QQ SMTP 硬约束（已证实）：MAIL FROM 必须等于授权用户，否则 501
+     * 「Mail from address must be same as authorization user.」
+     * Header From 可保留品牌邮箱（2026-10-19 实测 QQ 250）；旧注释「须改信头/550」作废。
      *
      * @param array<string, mixed> $strategyRoute
      */
@@ -784,7 +845,8 @@ final class StalwartManagementAdapter
     private const QQ_HUB_FROM_ALIGN_SIEVE = 'weline-qq-align-from';
 
     /**
-     * DATA 阶段 Sieve：信封已是 QQ 授权用户时，把 Header From 对齐到同一地址，原 From 写入 Reply-To。
+     * DATA 阶段 Sieve：信封已是 QQ 授权用户时，不改 Header From（保留品牌址），
+     * 仅在缺 Reply-To 时补上原 From，方便对方回信落到品牌邮箱。
      */
     private function applyQqHubHeaderFromAlignSieve(string $qqAuth): void
     {
@@ -792,19 +854,17 @@ final class StalwartManagementAdapter
         if ($qqAuth === '' || !filter_var($qqAuth, FILTER_VALIDATE_EMAIL)) {
             return;
         }
-        // Sieve 字符串字面量用双引号；邮箱不含引号/反斜杠，直接嵌入。
+        // 禁止再把 Header From 改成 QQ：对方会看到 aiweline@qq.com，与后台已发送不一致。
         $contents = 'require ["editheader", "envelope", "variables"];' . "\n\n"
-            . '# QQ SMTP: Header From must equal authorized user (envelope rewrite alone → QQ 550).' . "\n"
+            . '# QQ: envelope MAIL FROM already auth user; keep Header From as brand.' . "\n"
             . 'if envelope :is "from" "' . $qqAuth . '" {' . "\n"
             . '  if not header :contains "From" "' . $qqAuth . '" {' . "\n"
-            . '    if header :matches "From" "*" {' . "\n"
-            . '      set "origfrom" "${1}";' . "\n"
-            . '      if not exists "Reply-To" {' . "\n"
+            . '    if not exists "Reply-To" {' . "\n"
+            . '      if header :matches "From" "*" {' . "\n"
+            . '        set "origfrom" "${1}";' . "\n"
             . '        addheader :last "Reply-To" "${origfrom}";' . "\n"
             . '      }' . "\n"
             . '    }' . "\n"
-            . '    deleteheader "From";' . "\n"
-            . '    addheader :last "From" "' . $qqAuth . '";' . "\n"
             . '  }' . "\n"
             . '}' . "\n";
 
@@ -821,7 +881,7 @@ final class StalwartManagementAdapter
         }
         $payload = [
             'name' => self::QQ_HUB_FROM_ALIGN_SIEVE,
-            'description' => 'Align Header From to QQ SMTP auth; preserve original as Reply-To',
+            'description' => 'QQ hub: keep brand Header From; Reply-To only if missing',
             'isActive' => true,
             'contents' => $contents,
         ];
@@ -1131,13 +1191,15 @@ final class StalwartManagementAdapter
     private function managementCall(string $method, array $arguments, int $timeoutSeconds = 12): array
     {
         $credential = $this->managementCredential();
+        // JMAP 方法参数必须是 JSON object；PHP 空 array 会编成 [] → Stalwart 直接 HTTP 400 notRequest。
+        $argumentObject = $arguments === [] ? new \stdClass() : $arguments;
         $response = $this->requestJson(
             $credential['base_url'] . '/jmap/',
             $credential['username'],
             $credential['password'],
             [
                 'using' => [self::CORE_CAPABILITY, self::MANAGEMENT_CAPABILITY],
-                'methodCalls' => [[$method, $arguments, 'management']],
+                'methodCalls' => [[$method, $argumentObject, 'management']],
             ],
             $timeoutSeconds
         );
@@ -1408,7 +1470,15 @@ final class StalwartManagementAdapter
         ]);
         $body = curl_exec($handle);
         $status = (int)curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+        $curlErrno = (int)curl_errno($handle);
+        $curlError = trim((string)curl_error($handle));
         curl_close($handle);
+        if ($body === false || $status === 0) {
+            $detail = $curlError !== '' ? $curlError : ('errno=' . $curlErrno);
+            throw new \RuntimeException(
+                'Stalwart 管理连接失败（HTTP 0）：' . $detail . '。服务可能正在重启，请稍后重试一键配置。'
+            );
+        }
         if (!is_string($body) || $status < 200 || $status >= 300) {
             throw new \RuntimeException('Stalwart 管理认证或请求失败（HTTP ' . $status . '）。');
         }

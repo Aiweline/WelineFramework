@@ -32,6 +32,7 @@ class DeployProjectCommandPolicyService
             '--skip-env-check' => true,
             '--skip-reflection-compile' => true,
             '--stage=route_update' => true,
+            '--keep-maintenance' => true,
         ],
         // 短路径：直达 Deploy\Upgrade（仍推荐 setup:upgrade 以覆盖其它 upgrade_after）
         'deploy:upgrade' => [],

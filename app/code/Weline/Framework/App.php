@@ -139,8 +139,11 @@ class App
             WelineEnv::set('is_static_file', weline_is_static_file_path($reqPath), 'App bootstrapRequestCycle');
         }
 
-        $this->primeRequestRouteHints($this->getCurrentRequestUri());
+        // RequestContext first, then bind lang/currency/website hints into it.
+        // Later readers (State / WidgetI18n / Phrase) must use the request Context —
+        // not re-derive from process-static State caches under WLS Fibers.
         RequestContext::init();
+        $this->primeRequestRouteHints($this->resolveOriginRequestUriForPrime());
         DevToolMemoryLimitBootstrap::applyIfDevToolSessionActive();
     }
 
@@ -838,10 +841,9 @@ class App
         $parse['language'] = $effectiveLanguage;
         $parse['server']['WELINE_USER_CURRENCY'] = $effectiveCurrency;
         $parse['server']['WELINE_USER_LANG'] = $effectiveLanguage;
-        Context::current()->set('input.server.WELINE_USER_CURRENCY', $effectiveCurrency);
-        Context::current()->set('input.server.WELINE_USER_LANG', $effectiveLanguage);
-        WelineEnv::set('user.currency', $effectiveCurrency, 'App synchronizeParsedLocalization');
-        WelineEnv::set('user.lang', $effectiveLanguage, 'App synchronizeParsedLocalization');
+        // Canonical write: RequestContext route.* is the sole post-parse authority.
+        RequestContext::setWelineUserCurrency($effectiveCurrency);
+        RequestContext::setWelineUserLang($effectiveLanguage);
         State::resetLangLocalCache();
     }
 
@@ -1532,30 +1534,41 @@ class App
 
     private function primeRequestRouteHints(string $uri): void
     {
-        if ($uri === '' || $uri === '/') {
-            return;
+        // Single early writer: path localization → RequestContext only.
+        // Readers (State::getLang/getCurrency, WidgetI18n) must not re-parse URI.
+        State::writeLocalizationHintsFromUri($uri);
+    }
+
+    /**
+     * Visitor URI that may still carry /{CURRENCY}/{locale}/ before SEO rewrite strips REQUEST_URI.
+     */
+    private function resolveOriginRequestUriForPrime(): string
+    {
+        $candidates = [
+            (string)WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', ''),
+            (string)WelineEnv::server('ORIGIN_REQUEST_URI', ''),
+            (string)WelineEnv::get('origin_request_uri', ''),
+            (string)WelineEnv::server('WELINE_FULL_REQUEST_URI', ''),
+            (string)WelineEnv::get('full_request_uri', ''),
+            $this->getCurrentRequestUri(),
+        ];
+        foreach ($candidates as $uri) {
+            $uri = \trim($uri);
+            if ($uri === '' || $uri === '/') {
+                continue;
+            }
+            if (!\str_starts_with($uri, '/') && \str_contains($uri, '://')) {
+                $path = (string)(\parse_url($uri, \PHP_URL_PATH) ?: '');
+                if ($path !== '' && $path !== '/') {
+                    return $path;
+                }
+                continue;
+            }
+
+            return \str_starts_with($uri, '/') ? $uri : '/' . $uri;
         }
 
-        $segments = \explode('/', \trim($uri, '/'));
-        if ($segments === []) {
-            return;
-        }
-
-        $localization = State::resolveLocalizationFromPathSegments(\array_slice($segments, 0, 4));
-        $currency = (string)($localization['currency'] ?? '');
-        $language = (string)($localization['language'] ?? '');
-
-        $context = Context::getCurrent();
-        if ($currency !== '') {
-            WelineEnv::set('user.currency', $currency, 'App primeRequestRouteHints');
-            $context?->set('route.currency', $currency);
-            $context?->set('input.server.WELINE_USER_CURRENCY', $currency);
-        }
-        if ($language !== '') {
-            WelineEnv::set('user.lang', $language, 'App primeRequestRouteHints');
-            $context?->set('route.language', $language);
-            $context?->set('input.server.WELINE_USER_LANG', $language);
-        }
+        return '/';
     }
 
     private function syncCookieRouteStateFromServer(): void

@@ -71,4 +71,13 @@ class HomePageProvider extends AbstractSitemapUrlProvider
     {
         return __('Weline 首页 sitemap URL 提供器');
     }
+
+    /**
+     * Fallback homepage is path-stable across website languages.
+     * Opt into SitemapLocaleUrlExpander so enabled locales appear in sitemap.
+     */
+    public function supportsSiteLanguagePathExpansion(): bool
+    {
+        return true;
+    }
 }

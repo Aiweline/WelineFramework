@@ -239,8 +239,9 @@ class StalwartEngineAdapter implements MailEngineInterface
     public function upsertReaderCredential(
         string $username,
         string $password,
-        string $baseUrl = self::DEFAULT_JMAP_BASE_URL
+        string $baseUrl = ''
     ): void {
+        $baseUrl = trim($baseUrl) !== '' ? $baseUrl : $this->detectJmapBaseUrl();
         $pair = $this->resolveWritableReaderCredentialPair();
         $key = $this->ensureReaderKeyAt($pair['key']);
         $payload = $this->createReaderCredentialPayload($username, $password, $baseUrl, $key);
@@ -854,6 +855,25 @@ class StalwartEngineAdapter implements MailEngineInterface
             return trim($which['output']);
         }
         return null;
+    }
+
+    /**
+     * JMAP/管理 HTTP 本机回环：优先 8080（官方 bootstrap），其次 18080（旧默认）。
+     */
+    public function detectJmapBaseUrl(): string
+    {
+        foreach ([8080, 18080] as $port) {
+            $errno = 0;
+            $errstr = '';
+            $fp = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.4);
+            if (is_resource($fp)) {
+                fclose($fp);
+
+                return 'http://127.0.0.1:' . $port;
+            }
+        }
+
+        return self::DEFAULT_JMAP_BASE_URL;
     }
 
     private function checkAdminHttpPort(): array

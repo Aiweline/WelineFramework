@@ -515,7 +515,29 @@
     const ensureScopeBootstrapHolePunch = ensureScopeStamp;
 
     const normalizeLocale = (value) => {
-        const locale = String(value || '').trim();
+        let locale = String(value || '').trim().replace(/-/g, '_');
+        if (!locale) {
+            return '';
+        }
+        if (/^[a-z]{2}_[A-Za-z]{2,8}(?:_[A-Z]{2})?$/.test(locale)) {
+            return locale;
+        }
+        const parts = locale.split('_');
+        if (parts.length < 2 || parts.length > 3 || parts[0].length !== 2) {
+            return '';
+        }
+        parts[0] = parts[0].toLowerCase();
+        if (parts.length === 2) {
+            if (parts[1].length === 2) {
+                parts[1] = parts[1].toUpperCase();
+            } else if (parts[1].length >= 4) {
+                parts[1] = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
+            }
+        } else {
+            parts[1] = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
+            parts[2] = parts[2].toUpperCase();
+        }
+        locale = parts.join('_');
         return /^[a-z]{2}_[A-Za-z]{2,8}(?:_[A-Z]{2})?$/.test(locale) ? locale : '';
     };
 

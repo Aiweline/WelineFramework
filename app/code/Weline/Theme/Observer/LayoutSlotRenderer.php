@@ -1740,10 +1740,8 @@ HTML;
             $previewLocale = \trim((string)\Weline\Framework\App\State::getLangLocal());
         }
         if ($previewLocale === '' || \strcasecmp($previewLocale, 'default') === 0) {
-            $pathLocale = \Weline\Theme\Helper\WidgetI18n::localeFromRequestUri(
-                (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''))
-            );
-            $previewLocale = $pathLocale ?? 'zh_Hans_CN';
+            // RequestContext / State only — no URI re-parse on the read path.
+            $previewLocale = \trim((string)\Weline\Theme\Helper\WidgetI18n::storefrontLocale()) ?: 'zh_Hans_CN';
         }
         $previewLocaleJson = \json_encode($previewLocale, $previewMessageJsonFlags) ?: '"zh_Hans_CN"';
         $previewModeLabel = \htmlspecialchars((string)__('预览模式'), \ENT_QUOTES, 'UTF-8');

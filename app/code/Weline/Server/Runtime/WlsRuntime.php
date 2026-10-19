@@ -8220,8 +8220,6 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 try {
                     if (\method_exists($request, 'unsetServer')) {
                         $request->unsetServer('WELINE_URL_PATH_LANG');
-                    } elseif (\method_exists($request, 'setServer')) {
-                        $request->setServer('WELINE_URL_PATH_LANG', '');
                     }
                 } catch (\Throwable) {
                 }
@@ -9584,29 +9582,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             RequestContext::locale($parse['language']);
             // 同步到 WelineEnv
             WelineEnv::set('user.lang', $parse['language'], 'WlsRuntime processUrlParse');
-            // PATH_LANG is owned by Url::detectLanguage / RouterRewrite when the
-            // visitor URL actually contained a locale segment. parse['language']
-            // often falls back to Cookie/default and must not poison PATH_LANG
-            // for unprefixed URLs like /about.
-            $existingPathLang = \trim((string)($this->requestServer('WELINE_URL_PATH_LANG') ?? ''));
-            if ($existingPathLang === '') {
-                $originForLang = (string)($this->requestServer('WELINE_ORIGIN_REQUEST_URI') ?? $this->requestServer('ORIGIN_REQUEST_URI') ?? '');
-                if ($originForLang !== ''
-                    && \preg_match(
-                        '#(?:^|/)(' . \preg_quote((string)$parse['language'], '#') . ')(?:/|$)#i',
-                        $originForLang
-                    ) === 1
-                ) {
-                    $this->putRequestServer('WELINE_URL_PATH_LANG',  $parse['language']);
-                    WelineEnv::setServer('WELINE_URL_PATH_LANG', $parse['language'], 'WlsRuntime processUrlParse');
-                }
-            }
+            // Path locale authority is RequestContext (set above via locale()).
+            // parse['language'] may be Cookie/default for unprefixed /about — do
+            // not invent a parallel PATH_LANG bag.
         } else {
             // 设置默认值，确保模板访问时不会出现 undefined 警告
             $this->putRequestServer('WELINE_USER_LANG',  $this->requestServer('WELINE_USER_LANG') ?? RequestContext::locale());
-            // Do not clear WELINE_URL_PATH_LANG here: SEO rewrite re-parses the
-            // controller path (no locale segment) after Url::detectLanguage already
-            // captured the visitor-facing /en_US/… locale.
         }
         
         // 存储网站信息到上下文
@@ -9676,11 +9657,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
         if ($language !== '') {
             $this->putRequestServer('WELINE_USER_LANG',  $language);
-            $this->putRequestServer('WELINE_URL_PATH_LANG',  $language);
             RequestContext::locale($language);
             // 同步到 WelineEnv
             WelineEnv::set('user.lang', $language, 'WlsRuntime parseUrlLangCurrency');
-            WelineEnv::setServer('WELINE_URL_PATH_LANG', $language, 'WlsRuntime parseUrlLangCurrency');
         } else {
             // Drop stale worker locale when the path omits a language segment so
             // State::getLang() can honor Cookie/default on /USD/faq.

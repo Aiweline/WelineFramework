@@ -169,6 +169,11 @@ private function assert_MailEngineAccountDbSseSync_testPasswordSealedWritePathsA
     self::assertStringContainsString('/etc/weline/mail-reader.credential', $engine);
     self::assertStringContainsString('var/mail/mail-reader.key', $engine);
     self::assertStringContainsString('var/mail/mail-reader.credential', $engine);
+    self::assertStringContainsString('function detectJmapBaseUrl', $engine);
+
+    $jmapSession = (string) file_get_contents(BP . '/app/code/Weline/Mail/Service/Mailbox/StalwartJmapSession.php');
+    self::assertStringContainsString('resolveReadableReaderCredentialPair', $jmapSession);
+    self::assertStringContainsString('var/mail/mail-reader.credential', $jmapSession);
     self::assertStringContainsString('resolveWritableReaderCredentialPair', $engine);
     self::assertStringContainsString('resolveReadableReaderCredentialPair', $engine);
 
@@ -198,6 +203,10 @@ private function assert_MailOneClickSetup_testManagementDualPathUpsertAndSse(): 
     self::assertStringContainsString('function bindManagementIfNeeded', $setup);
     self::assertStringContainsString('function oneClickGlobal', $setup);
     self::assertStringContainsString('function oneClickDomain', $setup);
+    // 一键必须下发库内 Hub/外投导流；禁止只录账户却丢分流。
+    self::assertStringContainsString('MailOutboundRelaySyncService', $setup);
+    self::assertStringContainsString('syncAll()', $setup);
+    self::assertStringContainsString('relay_applied', $setup);
     self::assertStringContainsString('upsertManagementCredential', $setup);
     self::assertStringContainsString('openManagementPassword', $setup);
     self::assertStringContainsString('probeManagementApi', $setup);
@@ -207,6 +216,19 @@ private function assert_MailOneClickSetup_testManagementDualPathUpsertAndSse(): 
     self::assertStringContainsString('ensureContactAccount', $setup);
     self::assertStringContainsString('bind_stalwart_recovery_admin.sh', $setup);
     self::assertStringContainsString('/opt/stalwart/etc/stalwart.env', $setup);
+    // HTTP 0 during restart must retry; do not treat generic「认证」as hard 401.
+    self::assertStringContainsString('function isHardAuthFailure', $setup);
+    self::assertStringContainsString('http 0', $setup);
+    self::assertStringNotContainsString("str_contains(\$msg, '认证')", $setup);
+
+    $engineMgmt = (string) file_get_contents(BP . '/app/code/Weline/Mail/Service/StalwartManagementAdapter.php');
+    self::assertStringContainsString('管理连接失败（HTTP 0）', $engineMgmt);
+    // Empty JMAP args must be JSON object {}; PHP [] → HTTP 400 notRequest on Stalwart 0.16.
+    self::assertStringContainsString('new \\stdClass()', $engineMgmt);
+    self::assertStringContainsString('$argumentObject', $engineMgmt);
+    // Bootstrap hostname must be FQDN (not bare cloud hostname).
+    self::assertStringContainsString('function resolveBootstrapHostnames', $engineMgmt);
+    self::assertStringContainsString('mail.', $engineMgmt);
 
     $sync = (string) file_get_contents(BP . '/app/code/Weline/Mail/Service/MailEngineAccountSyncService.php');
     self::assertStringContainsString('?int $domainId = null', $sync);
@@ -544,9 +566,23 @@ private function assert_MailOutboundRelaySync_testSyncBuildsSenderRouteNotAuthen
     self::assertStringContainsString('is_local_domain', $src);
     self::assertStringContainsString('schema_fields_OUTBOUND_RELAY_HOST', $src);
     self::assertStringContainsString('MailOutboundRouteRule', $src);
-    // fetch() 行可能不是 Model；必须 fetchArray，否则 instanceof 全跳过 → 空路由直连 MX。
+    // fetch() 行可能不是 Model；必须 fetchArray，禁止在 accounts 循环里 instanceof 跳过 → 空路由直连 MX。
     self::assertStringContainsString('fetchArray()', $src);
-    self::assertStringNotContainsString('instanceof MailAccount', $src);
+    self::assertDoesNotMatchRegularExpression(
+        '/foreach\s*\(\s*\$accounts.*?instanceof\s+MailAccount/s',
+        $src,
+        'accounts loop must not filter with instanceof MailAccount'
+    );
+    // 库内 Hub：密封优先；解不开回退同址邮箱口令并重封；禁止静默空 authSecret。
+    self::assertStringContainsString('resolveRelayAuthPassword', $src);
+    self::assertStringContainsString('openMailAccountPassword', $src);
+    self::assertStringContainsString('persistPendingReseal', $src);
+    self::assertStringContainsString('consumePendingReseal', $src);
+    self::assertStringContainsString('schema_fields_PASSWORD_SEALED', $src);
+    // 下发后 AUTH 探针：Hub 密码错不得假成功。
+    self::assertStringContainsString('assertAuthenticatedRelaysReachable', $src);
+    self::assertStringContainsString('probeSmtpAuthLogin', $src);
+    self::assertStringContainsString('AUTH LOGIN', $src);
     self::assertStringContainsString('$port === 25', $src);
     self::assertStringContainsString('is_local_domain(rcpt_domain)', $src);
     self::assertStringContainsString("rcpt_domain == '", $src);
@@ -574,8 +610,16 @@ private function assert_MailOutboundRelaySync_testSyncBuildsSenderRouteNotAuthen
     self::assertStringContainsString('mergeHubBindingsIntoPayload', $src);
     self::assertStringContainsString('preferConfiguredHubOverMxElse', $src);
     self::assertStringContainsString('weline-hub-', $src);
-    self::assertStringContainsString('跨机 hub', $src);
+    self::assertStringContainsString('收件域后缀导流', $src);
     self::assertStringContainsString('都没有 → 才兜底 mx', $src);
+    // Hub 可 else=QQ 作传输；Header From 软包装。本域 mail./smtp. 禁止无认证自环。
+    self::assertStringContainsString('Header From 软包装', $src);
+    self::assertStringContainsString('禁止 MODE_EXTERNAL Hub', $src);
+    self::assertStringContainsString('isOwnDomainSubmissionHost', $src);
+    self::assertStringContainsString('retry_num > 0', $src);
+    self::assertStringContainsString('firstHubBoundRcptRouteName', $src);
+    self::assertStringContainsString('本域 mail./smtp.', $src);
+    self::assertStringNotContainsString('\$fallbackExternal', $src);
     self::assertStringContainsString('// A1：local → 导流规则（rcpt / sender）', $src);
     self::assertStringContainsString("\$rcptMatches", $src);
     self::assertStringContainsString("\$senderMatches", $src);
@@ -590,6 +634,11 @@ private function assert_MailOutboundRelaySync_testSyncBuildsSenderRouteNotAuthen
     self::assertStringContainsString('applyQqHubHeaderFromAlignSieve', $adapter);
     self::assertStringContainsString('clearQqHubHeaderFromAlignSieve', $adapter);
     self::assertStringContainsString('weline-qq-align-from', $adapter);
+    self::assertStringContainsString('keep Header From as brand', $adapter);
+    self::assertStringContainsString('Reply-To only if missing', $adapter);
+    self::assertStringNotContainsString('inappropriate words', $adapter);
+    $sync = (string) \file_get_contents(BP . '/app/code/Weline/Mail/Service/MailOutboundRelaySyncService.php');
+    self::assertStringContainsString('不得作全局 else', $sync);
     self::assertStringContainsString('x:SieveSystemScript/set', $adapter);
     self::assertStringContainsString('x:MtaStageData/set', $adapter);
     self::assertStringContainsString('x:MtaStageMail/set', $adapter);

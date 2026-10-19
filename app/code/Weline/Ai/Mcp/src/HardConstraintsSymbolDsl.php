@@ -16,8 +16,8 @@ final class HardConstraintsSymbolDsl
 
     public const GLOSS_MAX = 64;
 
-    /** Raised 8000→8100 with wls_managed_nginx_supports_fpm_origin hot entry (2026-10-19). */
-    public const PACKAGE_TOKEN_BUDGET = 8100;
+    /** Raised 8100→8200 with request_context_logic_diagram_must_read_and_sync hot entry (2026-10-19). */
+    public const PACKAGE_TOKEN_BUDGET = 8200;
 
     public const EXPAND_IDS_MAX = 20;
 
@@ -148,6 +148,7 @@ final class HardConstraintsSymbolDsl
             'McpGen', 'HandEdit', 'GlobalRuleEdit', 'MCP', 'HostMdc', 'DemoPage', 'Git', 'CacheOff',
             'SeverityUi', 'SemTone', 'AllDefault',
             'CompVar', 'PaletteLeaf', 'DanglingVar',
+            'ReqCtxAsk', 'ReadDiag', 'LogicChg', 'SyncDiag',
         ];
     }
 
@@ -470,6 +471,11 @@ final class HardConstraintsSymbolDsl
                 'formula' => 'Plan细节→□ImplementabilityBullets',
                 'gloss_zh' => '细节须含可实施清单子弹；缺则禁开工',
                 'cluster' => '§Π',
+            ],
+            'request_context_logic_diagram_must_read_and_sync' => [
+                'formula' => 'ReqCtxAsk→□ReadDiag∧(LogicChg→□SyncDiag)',
+                'gloss_zh' => '请求上下文先读逻辑图；改管线同波更新',
+                'cluster' => '§A',
             ],
             'website_concept_seed_not_in_modules' => [
                 'formula' => 'SiteSeed∨SiteCopy→□(design∨站柜)∧¬app/code',

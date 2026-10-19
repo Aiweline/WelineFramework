@@ -44,13 +44,14 @@ $i18nJson = \Weline\HelpPay\Service\ShareModalI18n::json();
      data-helppay-toc-only="1"
      data-weline-load="helpPayShare"
      data-helppay-i18n="<?= $escape($i18nJson) ?>">
-    <button type="button"
-            class="w-helppay-cta__link weline-pixel::friend_help_pay"
-            data-testid="help-pay-open"
-            data-pixel-event="friend_help_pay"
-            data-helppay-open="1"
-            data-helppay-product-help-pay="1"
-            data-product-id="<?= (int) $productId ?>">
+    <a href="#"
+       role="button"
+       class="w-helppay-cta__link weline-pixel::friend_help_pay"
+       data-testid="help-pay-open"
+       data-pixel-event="friend_help_pay"
+       data-helppay-open="1"
+       data-helppay-product-help-pay="1"
+       data-product-id="<?= (int) $productId ?>">
         <?= $escape(__('找朋友代付')) ?>
-    </button>
+    </a>
 </div>

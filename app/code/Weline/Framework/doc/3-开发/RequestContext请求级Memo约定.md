@@ -1,5 +1,7 @@
 # RequestContext 请求级 Memo 约定
 
+> **先读主干图**：[请求上下文逻辑图.md](./请求上下文逻辑图.md)（入口→管线→FPC/Router→响应；硬规则 `request_context_logic_diagram_must_read_and_sync`）。
+
 权威边界仍见 [WLS-Fiber上下文与进程缓存边界.md](./WLS-Fiber上下文与进程缓存边界.md)。本页只约定 **同请求内** 如何把「第一次算得的事实」写进袋子，避免下游重复查库/RPC。
 
 ## API

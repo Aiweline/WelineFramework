@@ -96,4 +96,6 @@ $overlayAbsorbed = $headPack instanceof \Weline\Theme\Service\ThemeHeadChromeCss
 <?php if ($overlayPackHtml !== null): ?>
 <?= $overlayPackHtml ?>
 <?php endif; ?>
+<?php // Layout widget CSS/JS slot — WidgetAssetHtmlPlacement replaces this marker first. ?>
+<!--weline:head-layout-assets-->
 <?php // no Theme scripts here — weline.js from Frontend header/base only ?>

@@ -19,8 +19,8 @@ final class MaintenanceStaticPage
     /**
      * Resolve locale for a maintenance response.
      *
-     * Priority: path segment → query(lang|locale|locale_code) → WELINE_URL_PATH_LANG
-     * → zh_Hans_CN (no language cookie). Align with storefront 404 PATH_LANG lock.
+     * Priority: path segment → query(lang|locale|locale_code) → State::getLang()
+     * (RequestContext) → zh_Hans_CN (no language cookie).
      */
     public static function resolveLang(
         string $path,
@@ -51,13 +51,15 @@ final class MaintenanceStaticPage
         }
 
         try {
-            if (\class_exists(\Weline\Framework\Env\WelineEnv::class, false)
-                || \class_exists(\Weline\Framework\Env\WelineEnv::class)) {
-                $pathLocked = self::normalizeLangCode(
-                    (string)\Weline\Framework\Env\WelineEnv::server('WELINE_URL_PATH_LANG', '')
+            if (\class_exists(\Weline\Framework\Context::class, false)
+                && \Weline\Framework\Context::getCurrent() !== null
+                && \class_exists(\Weline\Framework\App\State::class, false)
+            ) {
+                $fromState = self::normalizeLangCode(
+                    (string)\Weline\Framework\App\State::getLang()
                 );
-                if ($pathLocked !== '') {
-                    return $pathLocked;
+                if ($fromState !== '') {
+                    return $fromState;
                 }
             }
         } catch (\Throwable) {

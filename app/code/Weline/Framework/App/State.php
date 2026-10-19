@@ -10,7 +10,6 @@
 namespace Weline\Framework\App;
 
 use Weline\Framework\App\Localization\LocalizationProviderRegistry;
-use Weline\Framework\Cache\StorefrontCacheKeyContext;
 use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Http\Request;
@@ -54,24 +53,7 @@ class State extends DataObject
 
     private const PROCESS_LOCALIZATION_MAP_MAX = 64;
 
-    /**
-     * @var array{
-     *     currency: string,
-     *     language: string,
-     *     area_offset: int,
-     *     consumed: int,
-     *     remaining: list<string>,
-     *     canonical: list<string>
-     * }|null 单次请求路径前缀解析缓存
-     */
-    private static ?array $pathLocalizationCache = null;
-
-    private static bool $pathLocalizationResolving = false;
-
     public static bool $is_backend = false;
-
-    /** 请求级缓存：getLangLocal() 结果，同请求内只触发一次事件，WLS 下由 StateManager 重置 */
-    private static ?string $langLocalCache = null;
 
     private const LANG_LOCAL_CONTEXT_CACHE = 'state.lang_local_cache';
 
@@ -119,10 +101,13 @@ class State extends DataObject
 
     /**
      * 获取当前语言
-     * 优先级：路径段 / PATH_LANG > 请求覆盖 > query(locale|locale_code|lang) > 区域默认
+     * 优先级：请求覆盖 > RequestContext route.language（及同写镜像 user.lang）> 区域默认
+     *
+     * 路径段 / query / PATH_LANG / 冻结 StorefrontCacheKeyContext 不是读口权威。
+     * 它们只允许在 App::primeRequestRouteHints / synchronizeParsedLocalization 写入 RC。
      *
      * 前台区域默认是网站默认语言。后台区域默认是 backend_default_language，与网站无关。
-     * 不读语言偏好 Cookie。非默认语种主 UX 走 /{locale}/...；query 仅作路径缺失时的兼容入口。
+     * 不读语言偏好 Cookie。
      *
      * @return string
      */
@@ -134,27 +119,9 @@ class State extends DataObject
             return self::normalizeLanguageSegment($forced);
         }
 
-        // Path / PATH_LANG must beat frozen StorefrontCacheKeyContext. Under WLS,
-        // early controller __() for document title can otherwise lock onto a peer
-        // Fiber's frozen lang while later H1 __() already sees the correct path
-        // (title×locale: Contact/Guide on zh_Hans_CN). Align with WidgetI18n.
-        $pathLang = self::detectLanguageFromRequestPath();
-        if ($pathLang !== '' && self::languageCodeAllowedForCurrentArea($pathLang)) {
-            return self::normalizeLanguageSegment($pathLang);
-        }
-
-        $resolved = StorefrontCacheKeyContext::current();
-        if ($resolved?->hasCompleteFrozenScope()) {
-            return $resolved->lang;
-        }
-        $routeLang = self::resolvedRouteLanguage();
+        $routeLang = self::readRequestContextLanguage();
         if ($routeLang !== '') {
             return $routeLang;
-        }
-
-        $queryLang = self::detectLanguageFromRequestQuery();
-        if ($queryLang !== '' && self::languageCodeAllowedForCurrentArea($queryLang)) {
-            return self::normalizeLanguageSegment($queryLang);
         }
 
         return self::resolveAreaDefaultLanguage();
@@ -292,33 +259,74 @@ class State extends DataObject
 
     /**
      * 获取当前货币
-     * 优先级：路径段 > query(currency) > 网站默认 > CNY
+     * 优先级：RequestContext route.currency（及同写镜像 user.currency）> 网站默认
      *
-     * 不读货币偏好 Cookie；非默认货币主 UX 走 /{CURRENCY}/...；query 仅作路径缺失时的兼容入口。
+     * 路径段 / query / 冻结 StorefrontCacheKeyContext 不是读口权威；
+     * 只允许在 App 初始化写入口写入 RC。
+     *
+     * 不读货币偏好 Cookie。
      *
      * @return string
      */
     public static function getCurrency(): string
     {
-        $resolved = StorefrontCacheKeyContext::current();
-        if ($resolved?->hasCompleteFrozenScope()) {
-            return $resolved->currency;
-        }
-        $routeCurrency = self::resolvedRouteCurrency();
+        $routeCurrency = self::readRequestContextCurrency();
         if ($routeCurrency !== '') {
             return $routeCurrency;
         }
-        $currency = self::detectCurrencyFromRequestPath();
-        if ($currency !== '' && self::isAllowedCurrencyCode($currency)) {
-            return $currency;
-        }
-
-        $queryCurrency = self::detectCurrencyFromRequestQuery();
-        if ($queryCurrency !== '' && self::isAllowedCurrencyCode($queryCurrency)) {
-            return $queryCurrency;
-        }
 
         return self::resolveWebsiteDefaultCurrency();
+    }
+
+    /**
+     * Writer helper: derive path localization from a visitor URI and write into RequestContext.
+     * Call sites: App::primeRequestRouteHints (and tests). Readers must not re-parse URI.
+     */
+    public static function writeLocalizationHintsFromUri(string $uri): void
+    {
+        $uri = \trim($uri);
+        if ($uri === '' || $uri === '/') {
+            return;
+        }
+
+        $localizationUri = $uri;
+        try {
+            $normalized = \Weline\Framework\Http\Url::normalizeVisitorUri($uri);
+            $routing = \trim((string)($normalized['routing_uri'] ?? ''));
+            if ($routing !== '') {
+                $localizationUri = $routing;
+            }
+        } catch (\Throwable) {
+        }
+
+        $path = (string)(\parse_url($localizationUri, \PHP_URL_PATH) ?: $localizationUri);
+        $websiteUrl = '';
+        try {
+            $websiteUrl = \trim((string)\Weline\Framework\Env\WelineEnv::get('website_url', ''));
+        } catch (\Throwable) {
+        }
+        if ($websiteUrl !== '') {
+            $path = self::stripWebsitePathPrefix($path, $websiteUrl);
+        }
+
+        $segments = \array_values(\array_filter(
+            \explode('/', \trim($path, '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        if ($segments === []) {
+            return;
+        }
+
+        $localization = self::resolveLocalizationFromPathSegments(\array_slice($segments, 0, 4));
+        $currency = \strtoupper(\trim((string)($localization['currency'] ?? '')));
+        $language = self::normalizeLanguageSegment((string)($localization['language'] ?? ''));
+
+        if ($currency !== '' && self::isCurrencySegmentCandidate($currency)) {
+            \Weline\Framework\Runtime\RequestContext::setWelineUserCurrency($currency);
+        }
+        if ($language !== '' && self::isLanguageSegmentCandidate($language)) {
+            \Weline\Framework\Runtime\RequestContext::setWelineUserLang($language);
+        }
     }
 
     /**
@@ -341,8 +349,6 @@ class State extends DataObject
             ) {
                 return (string)$cached['value'];
             }
-        } elseif (self::$langLocalCache !== null) {
-            return self::$langLocalCache;
         }
         $data = new DataObject();
         $data->setData('lang', $lang);
@@ -362,30 +368,9 @@ class State extends DataObject
                 'key' => $cacheKey,
                 'value' => $langLocal,
             ]);
-        } else {
-            self::$langLocalCache = $langLocal;
         }
 
         return $langLocal;
-    }
-
-    private static function detectLanguageFromRequestPath(): string
-    {
-        $fromSegments = self::resolveRequestPathLocalization()['language'];
-        if ($fromSegments !== '') {
-            return $fromSegments;
-        }
-
-        // Url::detectLanguage / SEO 改写会剥掉路径中的语言段；PATH_LANG 必须仍作路由最高优先。
-        try {
-            $locked = \trim((string)\Weline\Framework\Env\WelineEnv::server('WELINE_URL_PATH_LANG', ''));
-            if ($locked !== '') {
-                return self::normalizeLanguageSegment($locked);
-            }
-        } catch (\Throwable) {
-        }
-
-        return '';
     }
 
     /**
@@ -612,52 +597,12 @@ class State extends DataObject
     }
 
     /**
-     * @return array{
-     *     currency: string,
-     *     language: string,
-     *     area_offset: int,
-     *     consumed: int,
-     *     remaining: list<string>,
-     *     canonical: list<string>
-     * }
-     */
-    private static function resolveRequestPathLocalization(): array
-    {
-        if (self::$pathLocalizationCache !== null) {
-            return self::$pathLocalizationCache;
-        }
-
-        if (self::$pathLocalizationResolving) {
-            return [
-                'currency' => '',
-                'language' => '',
-                'area_offset' => 0,
-                'consumed' => 0,
-                'remaining' => [],
-                'canonical' => [],
-            ];
-        }
-
-        self::$pathLocalizationResolving = true;
-        try {
-            self::$pathLocalizationCache = self::resolveLocalizationFromPathSegments(
-                self::requestPathPrefixSegments()
-            );
-        } finally {
-            self::$pathLocalizationResolving = false;
-        }
-
-        return self::$pathLocalizationCache;
-    }
-
-    /**
-     * 单元测试 / WLS 请求切换后重置路径解析缓存。
+     * 单元测试 / WLS 请求切换后钩子（历史路径缓存已移除；读口只认 RequestContext）。
      * 语/币允许表与站点默认值是进程级共享，不在此清空。
      */
     public static function resetRequestPathLocalizationCache(): void
     {
-        self::$pathLocalizationCache = null;
-        self::$pathLocalizationResolving = false;
+        self::resetLangLocalCache();
     }
 
     /**
@@ -809,7 +754,6 @@ class State extends DataObject
      */
     public static function resetLangLocalCache(): void
     {
-        self::$langLocalCache = null;
         $context = Context::getCurrent();
         if ($context !== null) {
             $context->set(self::LANG_LOCAL_CONTEXT_CACHE, null);
@@ -1048,131 +992,26 @@ class State extends DataObject
         }
     }
 
-    private static function detectCurrencyFromRequestPath(): string
-    {
-        return self::resolveRequestPathLocalization()['currency'];
-    }
-
     /**
-     * Query locale when path has no language segment: locale | locale_code | lang.
+     * RequestContext route.language (and same-write WelineEnv user.lang mirror).
      */
-    private static function detectLanguageFromRequestQuery(): string
+    private static function readRequestContextLanguage(): string
     {
-        $params = self::requestQueryParams();
-        foreach (['locale', 'locale_code', 'lang'] as $key) {
-            $raw = self::normalizeLanguageSegment((string)($params[$key] ?? ''));
-            if ($raw === '' || \strtolower($raw) === 'default') {
-                continue;
-            }
-            if (self::isLanguageSegmentCandidate($raw)) {
-                return $raw;
-            }
-        }
-
-        return '';
-    }
-
-    /**
-     * Query currency when path has no currency segment.
-     */
-    private static function detectCurrencyFromRequestQuery(): string
-    {
-        $params = self::requestQueryParams();
-        $code = \strtoupper(\trim((string)($params['currency'] ?? '')));
-        if ($code !== '' && self::isCurrencySegmentCandidate($code)) {
-            return $code;
-        }
-
-        return '';
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private static function requestQueryParams(): array
-    {
-        try {
-            $get = \Weline\Framework\Env\WelineEnv::getGet(null, null);
-            if (\is_array($get) && $get !== []) {
-                return $get;
-            }
-        } catch (\Throwable) {
-        }
-
-        $query = '';
-        try {
-            $query = (string)\Weline\Framework\Env\WelineEnv::server('QUERY_STRING', '');
-        } catch (\Throwable) {
-        }
-        if ($query === '') {
-            return [];
-        }
-
-        $params = [];
-        \parse_str($query, $params);
-
-        return \is_array($params) ? $params : [];
-    }
-
-    /**
-     * 取首个可用 URI 的前缀段（最多 3：area / currency / language）。根路径 / 直接返回空数组。
-     *
-     * @return list<string>
-     */
-    private static function requestPathPrefixSegments(): array
-    {
-        $uris = [
-            (string)\w_env('origin_request_uri', ''),
-            (string)\Weline\Framework\Env\WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', ''),
-            (string)\w_env('full_request_uri', ''),
-            (string)\w_env('request.uri', ''),
-            (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', ''),
-        ];
-
-        foreach ($uris as $uri) {
-            if ($uri === '' || $uri === '/') {
-                continue;
-            }
-
-            $path = (string)(parse_url($uri, PHP_URL_PATH) ?: $uri);
-            if ($path === '' || $path === '/') {
-                continue;
-            }
-
-            $segments = array_values(array_filter(
-                explode('/', trim($path, '/')),
-                static fn (string $segment): bool => $segment !== ''
-            ));
-            if ($segments === []) {
-                continue;
-            }
-
-            return \array_slice($segments, 0, 3);
-        }
-
-        return [];
-    }
-
-    /**
-     * URL 解析完成后的本请求语言（Context route.language / WelineEnv user.lang）。
-     */
-    private static function resolvedRouteLanguage(): string
-    {
-        if (!self::isRouteLocalizationParsed()) {
-            return '';
-        }
-
         $context = Context::getCurrent();
-        if ($context !== null) {
+        if ($context !== null && $context->has('route.language')) {
             $lang = self::normalizeLanguageSegment((string)$context->get('route.language', ''));
-            if ($lang !== '' && self::isLanguageSegmentCandidate($lang)) {
+            if ($lang !== '' && self::isLanguageSegmentCandidate($lang)
+                && self::languageCodeAllowedForCurrentArea($lang)
+            ) {
                 return $lang;
             }
         }
 
         try {
             $lang = self::normalizeLanguageSegment((string)\Weline\Framework\Env\WelineEnv::get('user.lang', ''));
-            if ($lang !== '' && self::isLanguageSegmentCandidate($lang)) {
+            if ($lang !== '' && self::isLanguageSegmentCandidate($lang)
+                && self::languageCodeAllowedForCurrentArea($lang)
+            ) {
                 return $lang;
             }
         } catch (\Throwable) {
@@ -1182,45 +1021,28 @@ class State extends DataObject
     }
 
     /**
-     * URL 解析完成后的本请求货币。
+     * RequestContext route.currency (and same-write WelineEnv user.currency mirror).
+     * Disallowed/stale codes are ignored so website default wins (writer should not leave them).
      */
-    private static function resolvedRouteCurrency(): string
+    private static function readRequestContextCurrency(): string
     {
-        if (!self::isRouteLocalizationParsed()) {
-            return '';
-        }
-
         $context = Context::getCurrent();
-        if ($context !== null) {
+        if ($context !== null && $context->has('route.currency')) {
             $currency = \strtoupper(\trim((string)$context->get('route.currency', '')));
-            if (self::isCurrencySegmentCandidate($currency)) {
+            if (self::isCurrencySegmentCandidate($currency) && self::isAllowedCurrencyCode($currency)) {
                 return $currency;
             }
         }
 
         try {
             $currency = \strtoupper(\trim((string)\Weline\Framework\Env\WelineEnv::get('user.currency', '')));
-            if (self::isCurrencySegmentCandidate($currency)) {
+            if (self::isCurrencySegmentCandidate($currency) && self::isAllowedCurrencyCode($currency)) {
                 return $currency;
             }
         } catch (\Throwable) {
         }
 
         return '';
-    }
-
-    private static function isRouteLocalizationParsed(): bool
-    {
-        $context = Context::getCurrent();
-        if ($context !== null && (bool)$context->get('route.url_parsed', false)) {
-            return true;
-        }
-
-        try {
-            return (bool)\Weline\Framework\Env\WelineEnv::get('url_parsed', false);
-        } catch (\Throwable) {
-            return false;
-        }
     }
 
     /**

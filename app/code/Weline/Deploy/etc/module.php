@@ -2,10 +2,11 @@
 
 return [
     "name" => 'Weline_Deploy',
-    "version" => '1.1.21',
+    "version" => '1.1.23',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
+        'Weline_Maintenance' => '*',
         'Weline_ModuleRouter' => '*',
         'Weline_SystemConfig' => '*',
     ],

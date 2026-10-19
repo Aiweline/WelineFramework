@@ -64,8 +64,8 @@ private function assert_HindiIdentityChipCsv_testBodyEndUsesPathLocaleAndWidgetI
     $path = '/Users/weline/Project/Official/框架/app/code/Weline/CustomerService' . '/view/templates/frontend/widgets/customer-service-float.phtml';
     self::assertFileExists($path);
     $src = (string) file_get_contents($path);
-    self::assertStringContainsString('WidgetI18n::localeFromRequestUri', $src);
-    self::assertStringContainsString('storefrontLocale', $src);
+    self::assertStringContainsString('WidgetI18n::storefrontLocale()', $src);
+    self::assertStringNotContainsString('localeFromRequestUri', $src);
     self::assertStringContainsString("\$cs('修改邮箱身份')", $src);
 }
 

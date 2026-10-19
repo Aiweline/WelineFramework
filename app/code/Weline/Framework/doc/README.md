@@ -10,6 +10,8 @@
 
 #### 核心开发
 - [模块开发完整指南](./3-开发/模块开发完整指南.md) - 模块开发全流程
+- [请求上下文逻辑图](./3-开发/请求上下文逻辑图.md) - **HTTP 请求主干树**（Context / Pipeline / FPC / 缓存袋 / 事件 → 响应；改管线须同波更新）
+- [RequestContext 请求级 Memo](./3-开发/RequestContext请求级Memo约定.md) - 同请求内 remember 边界
 - [扩展点选型](./3-开发/扩展点选型.md) - Event/Query/Hook/Interface 机制选择
 - [事件索引](./event/README.md) - Framework 事件文档树
 - [BinQuery 文档目录](./BinQuery/) - 站外二进制 Query 网关、SDK 与 Provider 开发指南

@@ -9,7 +9,6 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\I18n\Api\Translation\TranslationResolverInterface;
 use Weline\I18n\Api\Translation\BatchTranslationResolverInterface;
-use Weline\Theme\Service\Storefront\StorefrontRenderContextBag;
 
 /**
  * 主题部件文案：布局配置里存的是中文源串，渲染时按当前语言解析（含 Weline_Theme 语言包回退）。
@@ -49,7 +48,7 @@ final class WidgetI18n
     ];
 
     /**
-     * First-path-segment locales that must win over a lagging RequestContext.
+     * Pure URI helper for path-shape checks / writers. Not a storefront locale authority.
      * Keep in sync with default-site + installed storefront packs.
      */
     public const STOREFRONT_PATH_LOCALE_PATTERN = '#/(ar_SA|bg_BG|bn_BD|ca_ES|cs_CZ|da_DK|de_DE|el_GR|en_GB|en_US|es_ES|es_MX|et_EE|fi_FI|fr_CA|fr_FR|ga_IE|hi_IN|hr_HR|hu_HU|id_ID|is_IS|it_IT|ja_JP|ko_KR|lt_LT|lv_LV|mt_MT|nb_NO|nl_NL|pl_PL|pt_BR|pt_PT|ro_RO|ru_RU|sk_SK|sl_SI|sv_SE|th_TH|tr_TR|uk_UA|ur_PK|vi_VN|zh_Hans_CN|zh_Hant_TW|zh_CN)(?:/|$)#';
@@ -64,11 +63,12 @@ final class WidgetI18n
     }
 
     /**
-     * Current storefront locale for chrome/Phrase (path override wins over RequestContext).
+     * Current storefront locale for chrome/Phrase.
+     * Sole authority: State::getLang() → request override + RequestContext (App init writers).
      */
     public static function storefrontLocale(): string
     {
-        return self::resolveStorefrontLocale();
+        return State::getLang();
     }
 
     /** 已知文案集合先批量解析，后续 label() 保持原有输出及参数替换。 */
@@ -77,7 +77,7 @@ final class WidgetI18n
         if (!RequestContext::isInitialized()) {
             return;
         }
-        $lang = self::resolveStorefrontLocale();
+        $lang = self::storefrontLocale();
         $pending = [];
         $words = [];
         foreach ($sources as $source) {
@@ -168,7 +168,7 @@ final class WidgetI18n
             return '';
         }
 
-        $lang = self::resolveStorefrontLocale();
+        $lang = self::storefrontLocale();
         $memoKey = self::requestMemoKey($key, $lang, $args);
         if (self::hasRequestMemo($memoKey)) {
             return self::getRequestMemo($memoKey);
@@ -252,73 +252,5 @@ final class WidgetI18n
         }
         $memo[$key] = $value;
         RequestContext::set(self::REQUEST_MEMO_KEY, $memo);
-    }
-
-    private static function resolveStorefrontLocale(): string
-    {
-        // Fiber-safe static publish sets request language override in Context only
-        // (no $_SERVER / WelineEnv mutation). Prefer that before path / globals.
-        try {
-            $forced = trim((string)State::getRequestLanguageOverride());
-            if ($forced !== ''
-                && preg_match('/^[a-z]{2,3}_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$/', $forced)
-            ) {
-                return $forced;
-            }
-        } catch (\Throwable) {
-        }
-
-        // Path locale wins over RequestContext/KeyBuilder, which can lag on /{locale}/ pages.
-        // Never fall back to process $_SERVER under WLS — it is not Fiber-local.
-        $requestUri = '';
-        try {
-            $requestUri = (string) (\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: '');
-        } catch (\Throwable) {
-        }
-        if ($requestUri === '') {
-            try {
-                $requestUri = (string) (\Weline\Framework\Env\WelineEnv::server('WELINE_FULL_REQUEST_URI', '') ?: '');
-            } catch (\Throwable) {
-            }
-        }
-        $pathLocale = self::localeFromRequestUri($requestUri);
-        if ($pathLocale !== null) {
-            return $pathLocale;
-        }
-
-        // WS1: prefer bag locale (chrome / Phrase) after path override; before lagging RC.
-        $bagLocale = StorefrontRenderContextBag::locale();
-        if ($bagLocale !== null) {
-            return $bagLocale;
-        }
-
-        try {
-            $requestLocale = trim((string)(RequestContext::locale() ?? ''));
-            if ($requestLocale !== ''
-                && preg_match('/^[a-z]{2,3}_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$/', $requestLocale)
-            ) {
-                return $requestLocale;
-            }
-        } catch (\Throwable) {
-            // CLI and early bootstrap paths may not have a request context yet.
-        }
-
-        $lang = trim(State::getLangLocal());
-        if ($lang !== '') {
-            return $lang;
-        }
-
-        // 无 path / RequestContext 时回落到网站默认语（默认站可能是 en_US），禁止硬编码 zh。
-        try {
-            $websiteDefault = trim(State::resolveWebsiteDefaultLanguage());
-            if ($websiteDefault !== ''
-                && preg_match('/^[a-z]{2,3}_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?$/', $websiteDefault)
-            ) {
-                return $websiteDefault;
-            }
-        } catch (\Throwable) {
-        }
-
-        return 'zh_Hans_CN';
     }
 }

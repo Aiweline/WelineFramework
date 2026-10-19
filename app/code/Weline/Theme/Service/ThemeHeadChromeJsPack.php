@@ -234,13 +234,20 @@ final class ThemeHeadChromeJsPack
 
     private function resolveTheme(string $area): ?WelineTheme
     {
+        // Same authority as ThemeHeadChromeCssPack: application/preview first.
+        try {
+            $resolved = $this->themeContext->resolveTheme($area);
+            if ($resolved instanceof WelineTheme && (int)$resolved->getId() > 0) {
+                return $resolved;
+            }
+        } catch (\Throwable) {
+        }
         $current = ThemeData::getCurrentTheme();
         if ($current instanceof WelineTheme && (int)$current->getId() > 0) {
             return $current;
         }
         try {
-            $resolved = $this->themeContext->resolveTheme($area)
-                ?? $this->themeContext->resolveRegisteredDefaultTheme($area);
+            $resolved = $this->themeContext->resolveRegisteredDefaultTheme($area);
 
             return $resolved instanceof WelineTheme && (int)$resolved->getId() > 0 ? $resolved : null;
         } catch (\Throwable) {

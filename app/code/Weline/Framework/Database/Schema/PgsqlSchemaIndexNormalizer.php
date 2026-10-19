@@ -103,9 +103,11 @@ final class PgsqlSchemaIndexNormalizer
             }
         }
 
+        $actualMethod = strtoupper($actual->method !== '' ? $actual->method : 'BTREE');
+
         return $declared->columns === $actual->columns
             && ($declared->type === 'UNIQUE') === ($actual->type === 'UNIQUE')
-            && $this->expectedMethod($declared) === strtoupper($actual->method);
+            && $this->expectedMethod($declared) === $actualMethod;
     }
 
     private function expectedMethod(IndexDefinition $index): string
@@ -113,7 +115,8 @@ final class PgsqlSchemaIndexNormalizer
         return match (strtoupper($index->type)) {
             'FULLTEXT' => 'GIN',
             'SPATIAL' => 'GIST',
-            default => strtoupper($index->method),
+            // Declared btree indexes often omit method; PostgreSQL reports BTREE.
+            default => strtoupper($index->method !== '' ? $index->method : 'BTREE'),
         };
     }
 }

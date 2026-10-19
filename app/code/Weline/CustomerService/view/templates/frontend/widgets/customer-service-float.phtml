@@ -61,11 +61,8 @@ $bindCaptchaHtml = '';
 $widgetTranslationService = ObjectManager::getInstance(WidgetTranslationService::class);
 $supportedLocales = $widgetTranslationService->getSupportedLocales();
 $defaultCustomerLocale = $customerServiceSettings->defaultCustomerLocale();
-$requestUriForLocale = (string)($this->request->getPathInfo() ?: \w_env_request_uri());
-$storefrontLocale = WidgetI18n::localeFromRequestUri($requestUriForLocale)
-    ?? WidgetI18n::localeFromRequestUri((string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? '')));
-$currentLocale = $storefrontLocale
-    ?: (State::getLangLocal() ?: $defaultCustomerLocale);
+// Locale authority is RequestContext (via State / WidgetI18n::storefrontLocale). Do not re-parse URI.
+$currentLocale = WidgetI18n::storefrontLocale() ?: (State::getLangLocal() ?: $defaultCustomerLocale);
 // P10: keep body-end config slim — dictionaries load on first chat open via Query.
 // Prefer {} over [] so clients treat it as a locale map, not a list.
 $widgetTranslations = new \stdClass();

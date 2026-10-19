@@ -28,10 +28,11 @@ $i18nJson = \Weline\HelpPay\Service\ShareModalI18n::json();
      data-helppay-placement="cart"
      data-weline-load="helpPayShare"
      data-helppay-i18n="<?= $escape($i18nJson) ?>">
-    <button type="button"
-            class="w-helppay-cta__link"
-            data-testid="help-pay-open"
-            data-helppay-open="1">
+    <a href="#"
+       role="button"
+       class="w-helppay-cta__link"
+       data-testid="help-pay-open"
+       data-helppay-open="1">
         <?= $escape(__('找朋友代付')) ?>
-    </button>
+    </a>
 </div>

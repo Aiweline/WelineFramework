@@ -470,6 +470,11 @@ private function assert_UpgradeMaintenanceClose_testCleanupRequiresWlsSyncBefore
     self::assertStringContainsString("getConfig('system.maintenance', false)", $src);
     self::assertStringContainsString('框架维护标志已关闭，但 WLS Worker 门禁未完全同步', $src);
     self::assertStringNotContainsString('$this->notifyWlsReload()', $src);
+    // Nested deploy window: --keep-maintenance skips clear; bare upgrade still clears.
+    self::assertStringContainsString("'keep-maintenance'", $src);
+    self::assertStringContainsString('if ($keepMaintenance)', $src);
+    self::assertStringContainsString('已保留维护模式（--keep-maintenance）', $src);
+    self::assertStringContainsString('isset($args[\'keep-maintenance\'])', $src);
 }
 
 private function assert_UpgradeMigrationsEvent_testMigrationEventIsCataloguedSubscribedAndOrdered(): void

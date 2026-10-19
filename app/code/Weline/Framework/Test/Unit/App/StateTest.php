@@ -32,9 +32,15 @@ class StateTest extends TestCore
                 'REQUEST_URI' => '/products',
                 'HTTP_HOST' => 'example.test',
             ]);
+            // Readers only trust RequestContext — frozen cache-key context is not an authority.
+            $context = Context::current();
+            $context->set('route.language', 'en_US');
+            $context->set('route.currency', 'USD');
+            WelineEnv::set('user.lang', 'en_US', 'StateTest resolved RC');
+            WelineEnv::set('user.currency', 'USD', 'StateTest resolved RC');
             StorefrontCacheKeyContext::install(new StorefrontCacheKeyContext(
                 ScopeIdentity::channel(0, 'default', 'default', 'default', ScopeIdentity::MODE_NORMAL),
-                'en_US', 'USD', str_repeat('a', 64), str_repeat('b', 64), true,
+                'ja_JP', 'JPY', str_repeat('a', 64), str_repeat('b', 64), true,
             ));
 
             self::assertSame('en_US', State::getLang());
@@ -119,6 +125,8 @@ class StateTest extends TestCore
     {
         $hadContext = Context::getCurrent() !== null;
         $snapshot = WelineEnv::getInstance()->capture();
+        $previous = Context::getCurrent();
+        Context::enter(new Context());
 
         try {
             State::resetRequestPathLocalizationCache();
@@ -127,11 +135,16 @@ class StateTest extends TestCore
                 'REQUEST_URI' => '/CNY/zh_Hans_CN/catalog/category/home',
                 'HTTP_HOST' => 'example.test',
             ]);
+            State::writeLocalizationHintsFromUri('/CNY/zh_Hans_CN/catalog/category/home');
 
             self::assertSame('zh_Hans_CN', State::getLang());
             self::assertSame('CNY', State::getCurrency());
         } finally {
             State::resetRequestPathLocalizationCache();
+            Context::leave();
+            if ($previous !== null) {
+                Context::enter($previous);
+            }
             if ($hadContext) {
                 WelineEnv::getInstance()->restore($snapshot);
             } else {
@@ -198,6 +211,8 @@ class StateTest extends TestCore
     {
         $hadContext = Context::getCurrent() !== null;
         $snapshot = WelineEnv::getInstance()->capture();
+        $previous = Context::getCurrent();
+        Context::enter(new Context());
 
         try {
             State::resetRequestPathLocalizationCache();
@@ -209,11 +224,18 @@ class StateTest extends TestCore
             ]);
             self::seedAllowedLanguageCodes(['en_US', 'zh_Hans_CN', 'ja_JP']);
             self::seedAllowedCurrencyCodes(['USD', 'CNY']);
+            // Query is absorbed by App URL parse writers into RequestContext — not re-read here.
+            \Weline\Framework\Runtime\RequestContext::setWelineUserLang('en_US');
+            \Weline\Framework\Runtime\RequestContext::setWelineUserCurrency('USD');
 
             self::assertSame('en_US', State::getLang());
             self::assertSame('USD', State::getCurrency());
         } finally {
             State::resetRequestPathLocalizationCache();
+            Context::leave();
+            if ($previous !== null) {
+                Context::enter($previous);
+            }
             if ($hadContext) {
                 WelineEnv::getInstance()->restore($snapshot);
             } else {
@@ -226,6 +248,8 @@ class StateTest extends TestCore
     {
         $hadContext = Context::getCurrent() !== null;
         $snapshot = WelineEnv::getInstance()->capture();
+        $previous = Context::getCurrent();
+        Context::enter(new Context());
 
         try {
             State::resetRequestPathLocalizationCache();
@@ -237,11 +261,17 @@ class StateTest extends TestCore
             ]);
             self::seedAllowedLanguageCodes(['en_US', 'zh_Hans_CN', 'ja_JP']);
             self::seedAllowedCurrencyCodes(['CNY', 'EUR', 'USD']);
+            // Writer absorbs path (not query) into RC — same as App synchronize path-first policy.
+            State::writeLocalizationHintsFromUri('/CNY/zh_Hans_CN/catalog/category/home');
 
             self::assertSame('zh_Hans_CN', State::getLang());
             self::assertSame('CNY', State::getCurrency());
         } finally {
             State::resetRequestPathLocalizationCache();
+            Context::leave();
+            if ($previous !== null) {
+                Context::enter($previous);
+            }
             if ($hadContext) {
                 WelineEnv::getInstance()->restore($snapshot);
             } else {
@@ -261,6 +291,8 @@ class StateTest extends TestCore
     {
         $hadContext = Context::getCurrent() !== null;
         $snapshot = WelineEnv::getInstance()->capture();
+        $previous = Context::getCurrent();
+        Context::enter(new Context());
 
         try {
             State::resetRequestPathLocalizationCache();
@@ -270,10 +302,15 @@ class StateTest extends TestCore
                 'WELINE_ORIGIN_REQUEST_URI' => '/api/CNY/zh_Hans_CN/catalog/product/demo',
                 'HTTP_HOST' => 'example.test',
             ]);
+            State::writeLocalizationHintsFromUri('/api/CNY/zh_Hans_CN/catalog/product/demo');
 
             self::assertSame('CNY', State::getCurrency());
         } finally {
             State::resetRequestPathLocalizationCache();
+            Context::leave();
+            if ($previous !== null) {
+                Context::enter($previous);
+            }
             if ($hadContext) {
                 WelineEnv::getInstance()->restore($snapshot);
             } else {
@@ -314,6 +351,8 @@ class StateTest extends TestCore
     {
         $hadContext = Context::getCurrent() !== null;
         $snapshot = WelineEnv::getInstance()->capture();
+        $previous = Context::getCurrent();
+        Context::enter(new Context());
 
         try {
             State::resetRequestPathLocalizationCache();
@@ -323,15 +362,105 @@ class StateTest extends TestCore
                 'WELINE_ORIGIN_REQUEST_URI' => '/CNY/zh_Hans_CN/catalog/category/home/furniture/sofas',
                 'HTTP_HOST' => 'example.test',
             ]);
+            // App::prime writes from ORIGIN URI into RequestContext; readers do not re-scan.
+            State::writeLocalizationHintsFromUri('/CNY/zh_Hans_CN/catalog/category/home/furniture/sofas');
 
             self::assertSame('zh_Hans_CN', State::getLang());
             self::assertSame('CNY', State::getCurrency());
         } finally {
             State::resetRequestPathLocalizationCache();
+            Context::leave();
+            if ($previous !== null) {
+                Context::enter($previous);
+            }
             if ($hadContext) {
                 WelineEnv::getInstance()->restore($snapshot);
             } else {
                 WelineEnv::getInstance()->reset();
+            }
+        }
+    }
+
+    public function testPathCurrencyBeatsFrozenStorefrontCacheKeyContext(): void
+    {
+        $previous = Context::getCurrent();
+        Context::enter(new Context());
+        $snapshot = WelineEnv::getInstance()->capture();
+        try {
+            State::resetRequestPathLocalizationCache();
+            State::clearProcessLocalizationCaches();
+            WelineEnv::getInstance()->initFromSnapshot([], [], [], [], [
+                'REQUEST_METHOD' => 'GET',
+                'REQUEST_URI' => '/CNY/zh_Hans_CN/catalog/category/home',
+                'HTTP_HOST' => 'example.test',
+            ]);
+            self::seedAllowedLanguageCodes(['zh_Hans_CN', 'en_US']);
+            self::seedAllowedCurrencyCodes(['CNY', 'USD']);
+            State::writeLocalizationHintsFromUri('/CNY/zh_Hans_CN/catalog/category/home');
+            StorefrontCacheKeyContext::install(new StorefrontCacheKeyContext(
+                ScopeIdentity::channel(0, 'default', 'default', 'default', ScopeIdentity::MODE_NORMAL),
+                'en_US',
+                'USD',
+                str_repeat('a', 64),
+                str_repeat('b', 64),
+                true,
+            ));
+
+            self::assertSame('zh_Hans_CN', State::getLang());
+            self::assertSame('CNY', State::getCurrency());
+        } finally {
+            State::resetLangLocalCache();
+            State::resetRequestPathLocalizationCache();
+            State::clearProcessLocalizationCaches();
+            WelineEnv::getInstance()->restore($snapshot);
+            Context::leave();
+            if ($previous !== null) {
+                Context::enter($previous);
+            }
+        }
+    }
+
+    public function testParsedRequestContextLangAndCurrencyBeatFrozenCacheKeyContext(): void
+    {
+        $previous = Context::getCurrent();
+        Context::enter(new Context());
+        $snapshot = WelineEnv::getInstance()->capture();
+        try {
+            State::resetRequestPathLocalizationCache();
+            State::clearProcessLocalizationCaches();
+            WelineEnv::getInstance()->initFromSnapshot([], [], [], [], [
+                'REQUEST_METHOD' => 'GET',
+                'REQUEST_URI' => '/catalog/category/home',
+                'HTTP_HOST' => 'example.test',
+            ]);
+            self::seedAllowedLanguageCodes(['zh_Hans_CN', 'en_US']);
+            self::seedAllowedCurrencyCodes(['CNY', 'USD']);
+            $context = Context::current();
+            $context->set('route.url_parsed', true);
+            $context->set('route.language', 'zh_Hans_CN');
+            $context->set('route.currency', 'CNY');
+            WelineEnv::set('url_parsed', true, 'StateTest parsed RC authority');
+            WelineEnv::set('user.lang', 'zh_Hans_CN', 'StateTest parsed RC authority');
+            WelineEnv::set('user.currency', 'CNY', 'StateTest parsed RC authority');
+            StorefrontCacheKeyContext::install(new StorefrontCacheKeyContext(
+                ScopeIdentity::channel(0, 'default', 'default', 'default', ScopeIdentity::MODE_NORMAL),
+                'en_US',
+                'USD',
+                str_repeat('c', 64),
+                str_repeat('d', 64),
+                true,
+            ));
+
+            self::assertSame('zh_Hans_CN', State::getLang());
+            self::assertSame('CNY', State::getCurrency());
+        } finally {
+            State::resetLangLocalCache();
+            State::resetRequestPathLocalizationCache();
+            State::clearProcessLocalizationCaches();
+            WelineEnv::getInstance()->restore($snapshot);
+            Context::leave();
+            if ($previous !== null) {
+                Context::enter($previous);
             }
         }
     }

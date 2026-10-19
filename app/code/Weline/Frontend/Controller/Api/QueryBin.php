@@ -654,29 +654,62 @@ class QueryBin extends FrontendRestController
             return;
         }
 
-        $language = $this->normalizeWorkerLanguage(
-            $context['locale'] ?? $context['lang'] ?? $context['language'] ?? ''
-        );
-        if ($language !== '') {
-            RequestContext::setWelineUserLang($language);
-            // Phrase/__() resolve via State::getLang(); Worker path is /bin/query without /{locale}/.
-            State::setRequestLanguageOverride($language);
-        }
-
-        $currency = $this->normalizeWorkerCurrency($context['currency'] ?? '');
-        if ($currency !== '') {
-            RequestContext::setWelineUserCurrency($currency);
-        }
-
+        // Document pathname is storefront authority for Worker hydrate.
+        // /api/framework/query-bin itself has no /{locale}/ segment — App sync would
+        // otherwise leave website-default lang while SSR chrome used the page path.
         $pathname = $this->normalizeWorkerStorefrontPathname(
             $context['pathname'] ?? $context['path'] ?? ''
         );
+        $pathLanguage = '';
+        $pathCurrency = '';
         if ($pathname !== '') {
             RequestContext::set(
                 FrontendWorkerExecutionContext::STOREFRONT_PATHNAME_CONTEXT_KEY,
                 $pathname,
             );
+            $pathLoc = $this->resolvePathLocalization($pathname);
+            $pathLanguage = $pathLoc['language'];
+            $pathCurrency = $pathLoc['currency'];
+            // Writes route.language / route.currency into RequestContext when path carries them.
+            State::writeLocalizationHintsFromUri($pathname);
         }
+
+        // Explicit Worker locale fills only when the document path omitted language.
+        $language = $this->normalizeWorkerLanguage(
+            $context['locale'] ?? $context['lang'] ?? $context['language'] ?? ''
+        );
+        if ($language !== '' && $pathLanguage === '') {
+            RequestContext::setWelineUserLang($language);
+            // Phrase/__() resolve via State::getLang(); Worker path is /bin/query without /{locale}/.
+            State::setRequestLanguageOverride($language);
+        } elseif ($pathLanguage !== '') {
+            // Path already wrote RC; keep State override aligned for Phrase readers.
+            State::setRequestLanguageOverride($pathLanguage);
+        }
+
+        $currency = $this->normalizeWorkerCurrency($context['currency'] ?? '');
+        if ($currency !== '' && $pathCurrency === '') {
+            RequestContext::setWelineUserCurrency($currency);
+        }
+    }
+
+    /**
+     * @return array{language:string,currency:string}
+     */
+    private function resolvePathLocalization(string $pathname): array
+    {
+        $segments = \array_values(\array_filter(
+            \explode('/', \trim($pathname, '/')),
+            static fn(string $segment): bool => $segment !== '',
+        ));
+        if ($segments === []) {
+            return ['language' => '', 'currency' => ''];
+        }
+        $loc = State::resolveLocalizationFromPathSegments(\array_slice($segments, 0, 4));
+        $language = $this->normalizeWorkerLanguage($loc['language'] ?? '');
+        $currency = $this->normalizeWorkerCurrency($loc['currency'] ?? '');
+
+        return ['language' => $language, 'currency' => $currency];
     }
 
     /**
@@ -707,8 +740,32 @@ class QueryBin extends FrontendRestController
 
     private function normalizeWorkerLanguage(mixed $value): string
     {
-        $language = \trim((string)$value);
-        return \preg_match('/^[a-z]{2}_[A-Za-z]{2,8}(?:_[A-Z]{2})?$/', $language) === 1 ? $language : '';
+        $language = \str_replace('-', '_', \trim((string)$value));
+        if ($language === '') {
+            return '';
+        }
+        // Align with State path candidates (Script casing: Hans/Hant, REGION upper).
+        if (State::isLanguageCodeShape($language)) {
+            return $language;
+        }
+        $parts = \explode('_', $language);
+        if (\count($parts) < 2 || \count($parts) > 3 || \strlen($parts[0]) !== 2) {
+            return '';
+        }
+        $parts[0] = \strtolower($parts[0]);
+        if (\count($parts) === 2) {
+            if (\strlen($parts[1]) === 2) {
+                $parts[1] = \strtoupper($parts[1]);
+            } elseif (\strlen($parts[1]) >= 4) {
+                $parts[1] = \ucfirst(\strtolower($parts[1]));
+            }
+        } else {
+            $parts[1] = \ucfirst(\strtolower($parts[1]));
+            $parts[2] = \strtoupper($parts[2]);
+        }
+        $normalized = \implode('_', $parts);
+
+        return State::isLanguageCodeShape($normalized) ? $normalized : '';
     }
 
     private function normalizeWorkerCurrency(mixed $value): string

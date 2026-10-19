@@ -63,6 +63,26 @@ final class ProductStorefrontQueryProviderTest extends TestCase
             self::assertTrue($op['frontend'], $opName . ' must be BinQuery frontend');
             self::assertSame('any', $op['auth'] ?? null, $opName);
         }
+
+        $yml = null;
+        $rv = null;
+        foreach ($descriptor['operations'] as $operation) {
+            if (($operation['name'] ?? '') === 'youMayLikeCards') {
+                $yml = $operation;
+            }
+            if (($operation['name'] ?? '') === 'recentlyViewedCards') {
+                $rv = $operation;
+            }
+        }
+        self::assertNotNull($yml);
+        self::assertTrue((bool)($yml['external'] ?? false), 'youMayLikeCards must be CDN/FPC-eligible');
+        self::assertTrue((bool)(($yml['cache'] ?? [])['cdn'] ?? false));
+        self::assertSame('10m', (string)(($yml['cache'] ?? [])['ttl'] ?? ''));
+        self::assertSame('public', (string)(($yml['cache'] ?? [])['visibility'] ?? ''));
+        self::assertNotNull($rv);
+        self::assertFalse((bool)(($rv['cache'] ?? [])['cdn'] ?? true), 'recentlyViewedCards must forbid CDN/FPC');
+        self::assertSame('0s', (string)(($rv['cache'] ?? [])['ttl'] ?? ''));
+        self::assertSame('2/5s', (string)(($rv['attack'] ?? [])['rate_limit'] ?? ''));
     }
 
     public function testCardsByProductIdsPreservesOrderDedupesAndSkipsMissing(): void

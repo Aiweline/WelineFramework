@@ -213,6 +213,7 @@ list,列表
 核心仓库用户名,核心仓库用户名
 "核心仓库 Token","核心仓库 Token"
 Webhook,网络钩子
+"Webhook 已关闭：不展示公网地址；请求原路径将 404。勾选「启用 Webhook 更新」并保存后才会生效。setup 仅生成路径/密钥，不会自动开启。","Webhook 已关闭：不展示公网地址；请求原路径将 404。勾选「启用 Webhook 更新」并保存后才会生效。setup 仅生成路径/密钥，不会自动开启。"
 "当前站点域名可直接用于 Webhook；请将下方完整地址复制到 Gitee/GitHub 仓库 Webhook 配置。","当前站点域名可直接用于 Webhook；请将下方完整地址复制到 Gitee/GitHub 仓库 Webhook 配置。"
 域名来源：%{1},域名来源：%{1}
 "尚未生成 Webhook 路径。首次生成：","尚未生成 Webhook 路径。首次生成："
@@ -223,7 +224,7 @@ Webhook,网络钩子
 版本探测地址,版本探测地址
 "Webhook 随机路径（只读）","Webhook 随机路径（只读）"
 "Webhook 密钥","Webhook 密钥"
-"即 webhook_secret；留空保存表示不修改已有密钥。","即 webhook_secret；留空保存表示不修改已有密钥。"
+"即 webhook_secret；留空保存表示不修改已有密钥。启用 Webhook 前也可先配置。","即 webhook_secret；留空保存表示不修改已有密钥。启用 Webhook 前也可先配置。"
 "Bash 命令","Bash 命令"
 "Webhook 配置引导","Webhook 配置引导"
 "Git 平台 Webhook URL 使用上方「Webhook 公网地址」；Secret/密码与「Webhook 密钥」相同。","Git 平台 Webhook URL 使用上方「Webhook 公网地址」；Secret/密码与「Webhook 密钥」相同。"
@@ -255,8 +256,14 @@ Webhook,网络钩子
 "Webhook 随机路径与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。","Webhook 随机路径与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。"
 手动测试,手动测试
 "默认仅 Tag Push：分支测试会返回 trigger_mode_tag_only；选择分支或两者都生效后，branch_mismatch 表示分支不匹配。","默认仅 Tag Push：分支测试会返回 trigger_mode_tag_only；选择分支或两者都生效后，branch_mismatch 表示分支不匹配。"
+更新通道,更新通道
+"启用 Cron 计划更新","启用 Cron 计划更新"
+"默认开启：后端定时检测远程 tip/tag，整轮只入队最新一条，避免累积卡死。","默认开启：后端定时检测远程 tip/tag，整轮只入队最新一条，避免累积卡死。"
+"启用 Webhook 更新","启用 Webhook 更新"
+"默认关闭。关闭后不展示公网地址，访问原路径返回 404；开启后才对外生效。","默认关闭。关闭后不展示公网地址，访问原路径返回 404；开启后才对外生效。"
 触发模式,触发模式
 部署触发方式,部署触发方式
+"Webhook 与 Cron 共用此规则（分支 / Tag / 两者）。","Webhook 与 Cron 共用此规则（分支 / Tag / 两者）。"
 "默认仅 Tag Push；只有明确选择分支模式或两者都生效时才响应分支 push。","默认仅 Tag Push；只有明确选择分支模式或两者都生效时才响应分支 push。"
 分支过滤,分支过滤
 "留空匹配所有分支；填写后仅该分支的 push 触发部署","留空匹配所有分支；填写后仅该分支的 push 触发部署"
@@ -545,6 +552,9 @@ pending,等待中
 "无法执行 git ls-files 以快照保护路径：%{1}","无法执行 git ls-files 以快照保护路径：%{1}"
 "git ls-files 失败（exit %{1}）保护路径 %{2}：%{3}","git ls-files 失败（exit %{1}）保护路径 %{2}：%{3}"
 "部署后命令失败（exit %{1}）：%{2}","部署后命令失败（exit %{1}）：%{2}"
+"部署维护窗已开启（runtime gate）。","部署维护窗已开启（runtime gate）。"
+部署维护窗结束：部署前已是维护态，保持开启。,部署维护窗结束：部署前已是维护态，保持开启。
+部署维护窗已关闭。,部署维护窗已关闭。
 "Deploy：Webhook 已入队%{1}","Deploy：Webhook 已入队%{1}"
 Deploy：已排队等待进行中发布%{1},Deploy：已排队等待进行中发布%{1}
 Deploy：旧发布任务已作废%{1},Deploy：旧发布任务已作废%{1}
@@ -622,7 +632,7 @@ Deploy：%{1},Deploy：%{1}
 "命令包含不允许的 shell 控制字符。","命令包含不允许的 shell 控制字符。"
 命令包含不允许的命令替换表达式。,命令包含不允许的命令替换表达式。
 "命令包含不允许的 & 控制符。","命令包含不允许的 & 控制符。"
-"检测远程新 tag 超时未见 Webhook 入队并告警","检测远程新 tag 超时未见 Webhook 入队并告警"
+"Cron 检测远程 tip/tag：启用计划更新时只入队最新一条；仅 Webhook 时超时告警","Cron 检测远程 tip/tag：启用计划更新时只入队最新一条；仅 Webhook 时超时告警"
 "消费 Deploy Webhook 发布队列，并收口已退出的 systemd-run 外部任务（不依赖 sudo）","消费 Deploy Webhook 发布队列，并收口已退出的 systemd-run 外部任务（不依赖 sudo）"
 "从 Git 仓库恢复框架核心文件","从 Git 仓库恢复框架核心文件"
 框架核心文件恢复,框架核心文件恢复
@@ -869,6 +879,8 @@ tag：%{1},标签：%{1}
 "完整发布：Git 更新 + 后置命令 + 写版本戳 + reload","完整发布：Git 更新 + 后置命令 + 写版本戳 + reload"
 "发布繁忙：已重新排队，等待进行中的发布结束后由 Drain 执行。","发布繁忙：已重新排队，等待进行中的发布结束后由 Drain 执行。"
 生成不执行发布的机器可读部署计划,生成不执行发布的机器可读部署计划
+"即 webhook_secret；留空保存表示不修改已有密钥。","即 webhook_secret；留空保存表示不修改已有密钥。"
+"检测远程新 tag 超时未见 Webhook 入队并告警","检测远程新 tag 超时未见 Webhook 入队并告警"
 Deploy：备份中,Deploy：备份中
 Deploy：后置命令开始,Deploy：后置命令开始
 Deploy：后置命令完成,Deploy：后置命令完成

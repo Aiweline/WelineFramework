@@ -104,7 +104,8 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'youMayLikeCards',
                     'frontend' => true,
-                    'external' => false,
+                    // external+cdn+ttl: BinQuery CDN/FPC-eligible (locale/currency vary).
+                    'external' => true,
                     'auth' => 'any',
                     'mode' => 'read',
                     'graph' => false,
@@ -115,6 +116,14 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'PDP you-may-like cards (same-category companions batch)',
+                    'cache' => [
+                        'cdn' => true,
+                        'ttl' => '10m',
+                        'visibility' => 'public',
+                        'key_params' => ['exclude_product_id', 'limit'],
+                        'vary' => ['area', 'locale', 'currency', 'website_id', 'store_id', 'channel_id'],
+                        'description' => '猜你喜欢卡片 BinQuery CDN/FPC 缓存 10 分钟',
+                    ],
                 ],
                 [
                     'name' => 'recentlyViewedCards',
@@ -130,6 +139,19 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Recently-viewed cards via cookie MRU → cardsByProductIds batch (no live N+1)',
+                    // Cookie MRU — never CDN/FPC; rate-limit hydrate storms.
+                    'cache' => [
+                        'cdn' => false,
+                        'ttl' => '0s',
+                        'visibility' => 'private',
+                        'description' => '最近浏览禁止 FPC/CDN 缓存',
+                    ],
+                    'attack' => [
+                        'enabled' => true,
+                        'rate_limit' => '2/5s',
+                        'challenge' => 'managed',
+                        'description' => '最近浏览卡片异步加载：每 5 秒最多 2 次',
+                    ],
                 ],
                 [
                     'name' => 'liveOffersByProductIds',

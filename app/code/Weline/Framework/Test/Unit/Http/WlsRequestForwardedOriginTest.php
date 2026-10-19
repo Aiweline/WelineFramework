@@ -58,6 +58,53 @@ final class WlsRequestForwardedOriginTest extends TestCase
         self::assertSame('https://127.0.0.1', $request->getBaseHost());
     }
 
+    /**
+     * Multi-project / CF Flexible: trusted Nginx edge may send Proto=https without
+     * X-Forwarded-Port. Must not publish Worker listen ports (e.g. :16314).
+     */
+    public function testTrustedNginxEdgeWithoutForwardedPortStripsWorkerListenPort(): void
+    {
+        $request = $this->createRequest(
+            "Host: www.playinginchina.com\r\n"
+            . "X-Forwarded-Host: www.playinginchina.com\r\n"
+            . "X-Forwarded-Proto: https\r\n"
+            . "X-Forwarded-For: 1.2.3.4\r\n"
+            . "CF-Connecting-IP: 1.2.3.4\r\n",
+            [
+                'WLS_PORT' => 16314,
+                'WLS_TRUST_FORWARDED_HEADERS' => '1',
+                'WLS_EDGE_ADAPTER' => 'nginx',
+            ],
+        );
+
+        self::assertTrue($request->isSecure());
+        self::assertSame('www.playinginchina.com', $_SERVER['HTTP_HOST'] ?? null);
+        self::assertSame('443', $_SERVER['SERVER_PORT'] ?? null);
+        self::assertSame(
+            'https://www.playinginchina.com/customer/account/logout',
+            $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null,
+        );
+        self::assertStringNotContainsString(':16314', (string)$request->getBaseHost());
+        self::assertSame('https://www.playinginchina.com', $request->getBaseHost());
+    }
+
+    /** Undeclared edge_adapter follows nginx strip policy (same as edge=nginx). */
+    public function testTrustedEdgeUnsetAdapterWithoutForwardedPortStripsWorkerListenPort(): void
+    {
+        $request = $this->createRequest(
+            "Host: www.example.com\r\n"
+            . "X-Forwarded-Proto: https\r\n",
+            [
+                'WLS_PORT' => 16314,
+                'WLS_TRUST_FORWARDED_HEADERS' => '1',
+            ],
+        );
+
+        self::assertSame('www.example.com', $_SERVER['HTTP_HOST'] ?? null);
+        self::assertSame('443', $_SERVER['SERVER_PORT'] ?? null);
+        self::assertStringNotContainsString(':16314', (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? ''));
+    }
+
     public function testForwardedHeadersPreserveNonDefaultPort(): void
     {
         $request = $this->createRequest(

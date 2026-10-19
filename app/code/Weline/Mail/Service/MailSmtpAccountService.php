@@ -141,7 +141,8 @@ class MailSmtpAccountService
         string $subject,
         string $content,
         string $source = '',
-        int $sourceId = 0
+        int $sourceId = 0,
+        string|array $cc = []
     ): array {
         $config = $this->getAccountConfig($accountId);
         if ($config === null) {
@@ -157,7 +158,7 @@ class MailSmtpAccountService
         try {
             /** @var \Weline\Mail\Service\Mailbox\MailboxOpsService $ops */
             $ops = ObjectManager::getInstance(\Weline\Mail\Service\Mailbox\MailboxOpsService::class);
-            return $ops->send($accountId, $to, $subject, $content);
+            return $ops->send($accountId, $to, $subject, $content, [], $cc);
         } catch (\InvalidArgumentException|\DomainException $exception) {
             return ['success' => false, 'message' => $exception->getMessage()];
         } catch (\Throwable) {

@@ -165,9 +165,7 @@
 }
 
 .w-helppay-cta__link {
-  /* Reset UA <button> chrome (WebKit/Safari native grey bevel) → quiet text link. */
-  appearance: none;
-  -webkit-appearance: none;
+  /* Quiet text link (<a>); no UA button chrome. */
   display: inline;
   margin: 0;
   padding: 0;
@@ -737,10 +735,13 @@ dialog:has(> .w-helppay-dialog) {
   justify-self: start;
 }
 
-button[data-helppay-quick-pay][disabled],
-button[data-testid="product-quick-pay"][disabled] {
+[data-helppay-quick-pay][disabled],
+[data-helppay-quick-pay][aria-disabled="true"],
+[data-testid="product-quick-pay"][disabled],
+[data-testid="product-quick-pay"][aria-disabled="true"] {
   opacity: var(--weline-opacity-disabled, 0.55);
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* Share result: flatten nested panel when hosted in dialog */

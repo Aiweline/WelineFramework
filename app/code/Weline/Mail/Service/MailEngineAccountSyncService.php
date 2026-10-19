@@ -260,6 +260,18 @@ final class MailEngineAccountSyncService
             }
         } else {
             $readerSynced = true;
+            // 已有凭据时仍按活端口重写 base_url（避免历史默认 18080 在 8080 上读邮失败）。
+            try {
+                $this->syncReaderFromContact(
+                    $mgmt,
+                    $secrets,
+                    $engine,
+                    null,
+                    $domainNameFilter
+                );
+            } catch (\Throwable) {
+                // 保留已有读取凭据；端口校正失败不阻断本轮同步成功。
+            }
         }
 
         return [

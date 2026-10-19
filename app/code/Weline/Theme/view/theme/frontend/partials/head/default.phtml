@@ -78,6 +78,8 @@ $diskAbsorbed = false;
 <?php if ($overlayPackHtml !== null): ?>
 <?= $overlayPackHtml ?>
 <?php endif; ?>
+<?php // Layout widget CSS/JS slot — WidgetAssetHtmlPlacement replaces this marker first. ?>
+<!--weline:head-layout-assets-->
 <w:template>Weline_Frontend::templates/public/head.phtml</w:template>
 <w:hook>Weline_Theme::frontend::partials::head::styles-after</w:hook>
 <?php // site-blocks.css：由部件 bake→head；Theme chrome JS → modules / body-end（无 head script） ?>

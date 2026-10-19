@@ -404,6 +404,16 @@ curl -s 'https://你的域名/~wh~.../version?project_id=12'
 - `分支过滤`（原 Webhook 分支）：留空匹配所有分支；填写后仅该分支的 push 触发部署。
 - `Tag 前缀过滤`：留空匹配所有 tag；填写（如 `v`）后仅匹配此前缀的 tag 才触发部署。
 
+### 更新通道开关（1.1.22）
+
+| 键 | 默认 | 说明 |
+|----|------|------|
+| `cron_update_enabled` | `1` | 开启后 ExpectWatch Cron 检测远程 tip/tag，**单 tick 只入队最新一条**（多 tag coalesce；`both` 时 tag 优先于 tip） |
+| `webhook_enabled` | `0` | 关闭时不解析/不展示公网 URL，Router 不映射 → 404；开启后才对外生效 |
+
+后台「触发模式 / 分支过滤 / Tag 前缀」对 Webhook 与 Cron **共用**。  
+`ensureChannelDefaults()`：stored 无键时，有 `webhook_path` → `webhook_enabled=1`（兼容旧站）；否则 `0`；`cron_update_enabled` 缺省写 `1`。配置页展示/保存前会 ensure，避免首次保存把旧 Webhook 写成关闭。
+
 ### 向后兼容
 
 默认模式为「仅 Tag Push」。旧配置 `webhook_allow_tag_deploy`（0/1 开关）仍然生效：值为 `1` 时等价于「分支 + Tag 都生效」，值为 `0` 时等价于「仅分支 Push」。新配置 `deploy_trigger_mode` 优先。

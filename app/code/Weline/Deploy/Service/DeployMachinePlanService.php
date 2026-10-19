@@ -186,10 +186,12 @@ class DeployMachinePlanService
         $requirements = [
             'project_repo_url' => ['请提供目标项目 Git 仓库地址。', false],
             'deploy_root' => ['请提供目标服务器上的绝对部署目录。', false],
-            'webhook_path' => ['请配置部署 Webhook 路径。', false],
-            'webhook_secret' => ['请配置部署 Webhook 密钥；请勿在 AI 会话中粘贴。', true],
             'base_url' => ['请提供目标站点 HTTPS 基础地址，用于只读健康检查。', false],
         ];
+        if ($this->configService->isWebhookEnabled()) {
+            $requirements['webhook_path'] = ['请配置部署 Webhook 路径。', false];
+            $requirements['webhook_secret'] = ['请配置部署 Webhook 密钥；请勿在 AI 会话中粘贴。', true];
+        }
         $configured = [];
         $questions = [];
         foreach ($requirements as $key => [$prompt, $secret]) {

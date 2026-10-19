@@ -6,6 +6,7 @@ namespace Weline\Server\Security;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Binary\WelineBinaryCodec;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Runtime\Policy\PolicyStage;
 use Weline\Framework\Runtime\Policy\RequestEnvelope;
 use Weline\Framework\Runtime\Policy\RuntimePolicyBundle;
@@ -1542,75 +1543,13 @@ final class WorkerPolicyKernel
 
     /**
      * Split request-target into path + raw query without PHP parse_url.
-     * parse_url() corrupts bare UTF-8 query bytes into invalid sequences.
+     * Delegates to {@see Url::splitRequestTargetPathQuery()} (parse_url corrupts bare UTF-8).
      *
      * @return array{path:string,raw_query:string}|array{error:string}
      */
     private function splitRequestTargetPathQuery(string $target): array
     {
-        if ($target === '' || $target === '*') {
-            return ['error' => 'invalid_target'];
-        }
-
-        if (\str_starts_with($target, '/')) {
-            $qPos = \strpos($target, '?');
-            if ($qPos === false) {
-                return ['path' => $target, 'raw_query' => ''];
-            }
-
-            return [
-                'path' => \substr($target, 0, $qPos),
-                'raw_query' => \substr($target, $qPos + 1),
-            ];
-        }
-
-        // absolute-form: scheme://authority[/path][?query]
-        if (\preg_match('#^[a-zA-Z][a-zA-Z0-9+.-]*://#D', $target) !== 1) {
-            return ['error' => 'invalid_target'];
-        }
-        $schemeSep = \strpos($target, '://');
-        if ($schemeSep === false) {
-            return ['error' => 'invalid_target'];
-        }
-        $authStart = $schemeSep + 3;
-        if ($authStart >= \strlen($target)) {
-            return ['error' => 'invalid_target'];
-        }
-        $authEnd = \strlen($target);
-        foreach (['/', '?', '#'] as $marker) {
-            $pos = \strpos($target, $marker, $authStart);
-            if ($pos !== false && $pos < $authEnd) {
-                $authEnd = $pos;
-            }
-        }
-        if ($authEnd <= $authStart) {
-            return ['error' => 'invalid_target'];
-        }
-        $rest = \substr($target, $authEnd);
-        if ($rest === '' || \str_starts_with($rest, '?') || \str_starts_with($rest, '#')) {
-            $rawQuery = '';
-            if (\str_starts_with($rest, '?')) {
-                $hashPos = \strpos($rest, '#');
-                $rawQuery = $hashPos === false
-                    ? \substr($rest, 1)
-                    : \substr($rest, 1, $hashPos - 1);
-            }
-
-            return ['path' => '/', 'raw_query' => $rawQuery];
-        }
-        $hashPos = \strpos($rest, '#');
-        if ($hashPos !== false) {
-            $rest = \substr($rest, 0, $hashPos);
-        }
-        $qPos = \strpos($rest, '?');
-        if ($qPos === false) {
-            return ['path' => $rest, 'raw_query' => ''];
-        }
-
-        return [
-            'path' => \substr($rest, 0, $qPos),
-            'raw_query' => \substr($rest, $qPos + 1),
-        ];
+        return Url::splitRequestTargetPathQuery($target);
     }
 
     /**

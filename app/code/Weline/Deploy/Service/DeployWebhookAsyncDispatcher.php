@@ -81,7 +81,7 @@ class DeployWebhookAsyncDispatcher
         @file_put_contents($logPath, $header);
 
         // Newest webhook wins: abandon incomplete predecessors (and TTL-stale) before enqueue.
-        $superseded = $this->jobQueue->abandonIncomplete('superseded_by_newer_webhook');
+        $superseded = $this->jobQueue->abandonIncomplete('superseded_by_newer_deploy');
         $stale = $this->jobQueue->abandonStaleIncomplete();
         foreach (array_merge($superseded, $stale) as $row) {
             $abandonedId = (string)($row['job_id'] ?? '');

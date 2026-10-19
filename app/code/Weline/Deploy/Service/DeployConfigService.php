@@ -63,6 +63,8 @@ class DeployConfigService
             'webhook_pierce_ack_hash' => '',
             'webhook_branch' => '',
             'webhook_bash' => 'bash',
+            'webhook_enabled' => '0',
+            'cron_update_enabled' => '1',
             'deploy_trigger_mode' => self::TRIGGER_MODE_TAG,
             'webhook_allow_tag_deploy' => '0',
             'webhook_tag_prefix' => '',
@@ -71,6 +73,59 @@ class DeployConfigService
             'cloudflare_api_token' => '',
             'cloudflare_zone_id' => '',
         ];
+    }
+
+    /**
+     * Webhook ingress enabled. Reads stored only (never merge defaults).
+     * Absent key + non-empty webhook_path → enabled (legacy).
+     */
+    public function isWebhookEnabled(): bool
+    {
+        $stored = $this->getStoredSettings();
+        if (array_key_exists('webhook_enabled', $stored)) {
+            return (string)$stored['webhook_enabled'] === '1';
+        }
+
+        return trim((string)($stored['webhook_path'] ?? '')) !== '';
+    }
+
+    /**
+     * Cron remote-poll auto-enqueue. Reads stored only; absent key → enabled.
+     */
+    public function isCronUpdateEnabled(): bool
+    {
+        $stored = $this->getStoredSettings();
+        if (array_key_exists('cron_update_enabled', $stored)) {
+            return (string)$stored['cron_update_enabled'] === '1';
+        }
+
+        return true;
+    }
+
+    /**
+     * Persist channel defaults once so Config UI save cannot clobber legacy webhook.
+     *
+     * @return bool true when stored settings were written
+     */
+    public function ensureChannelDefaults(): bool
+    {
+        $stored = $this->getStoredSettings();
+        $changed = false;
+
+        if (!array_key_exists('webhook_enabled', $stored)) {
+            $path = trim((string)($stored['webhook_path'] ?? ''));
+            $stored['webhook_enabled'] = $path !== '' ? '1' : '0';
+            $changed = true;
+        }
+        if (!array_key_exists('cron_update_enabled', $stored)) {
+            $stored['cron_update_enabled'] = '1';
+            $changed = true;
+        }
+        if (!$changed) {
+            return false;
+        }
+
+        return $this->saveSettings(array_merge($this->getDefaults(), $stored));
     }
 
     /**
@@ -149,7 +204,10 @@ class DeployConfigService
             SystemConfig::area_BACKEND
         );
 
-        if ($saved && array_key_exists('webhook_path', $filtered)) {
+        if ($saved && (
+            array_key_exists('webhook_path', $filtered)
+            || array_key_exists('webhook_enabled', $filtered)
+        )) {
             try {
                 (new DeployWebhookRouteService($this))->clearCache();
             } catch (\Throwable) {

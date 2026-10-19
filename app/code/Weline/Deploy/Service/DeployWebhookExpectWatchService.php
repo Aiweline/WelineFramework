@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Weline\Deploy\Service;
 
 /**
- * Light CLI Cron reconciliation: remote tags / branch tips without Webhook enqueue.
+ * CLI Cron: remote tip/tag watch.
+ * - cron_update_enabled: coalesce to one newest ref and enqueue via AsyncDispatcher (no backlog).
+ * - webhook_enabled only: pending + grace → webhook_miss (never auto-deploy on miss).
  * Fail-open: ls-remote / IO errors skip the round (never fake webhook_miss).
  */
 class DeployWebhookExpectWatchService
@@ -26,16 +28,23 @@ class DeployWebhookExpectWatchService
         private readonly DeployReleaseRuntimeService $runtimeService,
         private readonly DeployReleaseHistoryService $historyService,
         private readonly DeployReleaseNotifier $releaseNotifier,
+        private readonly DeployWebhookAsyncDispatcher $asyncDispatcher,
     ) {
     }
 
     /**
-     * @return array{ok:bool,skipped:bool,reason:string,new_pending:int,cleared:int,notified:int}
+     * @return array{ok:bool,skipped:bool,reason:string,new_pending:int,cleared:int,notified:int,enqueued:int}
      */
     public function tick(?int $now = null, ?int $graceSec = null): array
     {
         $now = $now ?? time();
         try {
+            $cronOn = $this->configService->isCronUpdateEnabled();
+            $webhookOn = $this->configService->isWebhookEnabled();
+            if (!$cronOn && !$webhookOn) {
+                return $this->result(true, true, 'channels_disabled', 0, 0, 0, 0);
+            }
+
             $config = $this->configService->getWebhookShellConfig();
             if ($config === []) {
                 $config = $this->configService->getProjectDeployConfig();
@@ -47,7 +56,7 @@ class DeployWebhookExpectWatchService
             $watchTip = $mode === DeployConfigService::TRIGGER_MODE_BRANCH
                 || $mode === DeployConfigService::TRIGGER_MODE_BOTH;
             if (!$watchTags && !$watchTip) {
-                return $this->result(true, true, 'trigger_mode_none', 0, 0, 0);
+                return $this->result(true, true, 'trigger_mode_none', 0, 0, 0, 0);
             }
 
             $grace = $this->normalizeGrace($graceSec ?? $this->readGraceFromConfig($config));
@@ -61,18 +70,18 @@ class DeployWebhookExpectWatchService
             if ($watchTags) {
                 $remoteTags = $this->gitService->listRemoteTagNames($remote);
                 if ($remoteTags === null) {
-                    return $this->result(true, true, 'ls_remote_failed', 0, 0, 0);
+                    return $this->result(true, true, 'ls_remote_failed', 0, 0, 0, 0);
                 }
             }
 
             $tipSha = null;
             if ($watchTip) {
                 if ($branch === '') {
-                    return $this->result(true, true, 'branch_unconfigured', 0, 0, 0);
+                    return $this->result(true, true, 'branch_unconfigured', 0, 0, 0, 0);
                 }
                 $tipSha = $this->gitService->listRemoteBranchTip($branch, $remote);
                 if ($tipSha === null) {
-                    return $this->result(true, true, 'ls_remote_failed', 0, 0, 0);
+                    return $this->result(true, true, 'ls_remote_failed', 0, 0, 0, 0);
                 }
             }
 
@@ -103,7 +112,88 @@ class DeployWebhookExpectWatchService
                     'updated_at' => $now,
                 ]);
 
-                return $this->result(true, false, 'bootstrap', 0, 0, 0);
+                return $this->result(true, false, 'bootstrap', 0, 0, 0, 0);
+            }
+
+            /** @var list<string> $newTags */
+            $newTags = [];
+            if ($watchTags && is_array($remoteTags)) {
+                foreach ($remoteTags as $tag) {
+                    if (!$this->tagMatchesPolicy($tag, $config)) {
+                        continue;
+                    }
+                    if (isset($bootstrapSeen[$tag])) {
+                        continue;
+                    }
+                    $newTags[] = $tag;
+                }
+            }
+
+            $tipIsNew = false;
+            if ($watchTip && is_string($tipSha) && $tipSha !== '') {
+                $tipIsNew = !($bootstrapTipBranch === $branch && $bootstrapTipSha === $tipSha);
+            }
+
+            if ($cronOn) {
+                $enqueued = 0;
+                $winner = $this->selectCronWinnerRef($newTags, $tipIsNew ? $tipSha : null, $branch);
+                $dispatchOk = false;
+                $winnerTag = '';
+                if ($winner !== null) {
+                    $winnerTag = (string)($winner['tag'] ?? '');
+                    $dispatched = $this->asyncDispatcher->dispatchRelease($winner['ref'], false, false);
+                    $dispatchOk = !empty($dispatched['ok']);
+                    if ($dispatchOk) {
+                        $enqueued = 1;
+                    }
+                }
+
+                // Coalesce: mark non-winner new tags as seen (skip history). Winner only on success.
+                foreach ($newTags as $tag) {
+                    if ($winnerTag !== '' && $tag === $winnerTag && !$dispatchOk) {
+                        continue;
+                    }
+                    $bootstrapSeen[$tag] = true;
+                }
+                if ($watchTip && is_string($tipSha) && $tipSha !== '') {
+                    $tipWasWinner = $winner !== null && ($winner['kind'] ?? '') === self::KIND_BRANCH_TIP;
+                    if (!$tipWasWinner || $dispatchOk) {
+                        $bootstrapTipSha = $tipSha;
+                        $bootstrapTipBranch = $branch;
+                    }
+                }
+
+                // Cron path does not accumulate miss pending.
+                $pending = [];
+                $this->saveState([
+                    'bootstrapped' => true,
+                    'bootstrap_seen' => $bootstrapSeen,
+                    'bootstrap_tip_sha' => $bootstrapTipSha,
+                    'bootstrap_tip_branch' => $bootstrapTipBranch,
+                    'pending' => $pending,
+                    'updated_at' => $now,
+                ]);
+
+                if (!$webhookOn) {
+                    return $this->result(
+                        true,
+                        false,
+                        $enqueued > 0 ? 'cron_enqueued' : ($winner !== null ? 'cron_enqueue_failed' : 'cron_noop'),
+                        0,
+                        0,
+                        0,
+                        $enqueued
+                    );
+                }
+                // webhook also on: miss watch only for failures / no cron candidate — fall through with empty pending
+                if ($enqueued > 0 || $winner === null) {
+                    return $this->result(true, false, $enqueued > 0 ? 'cron_enqueued' : 'cron_noop', 0, 0, 0, $enqueued);
+                }
+                // dispatch failed: re-seed a single pending for miss if webhook waiting
+            }
+
+            if (!$webhookOn) {
+                return $this->result(true, true, 'webhook_disabled', 0, 0, 0, 0);
             }
 
             $newPending = 0;
@@ -134,7 +224,6 @@ class DeployWebhookExpectWatchService
                 $tipKey = $this->pendingKey(self::KIND_BRANCH_TIP, $branch . '@' . $tipSha);
                 $sameAsBootstrap = ($bootstrapTipBranch === $branch && $bootstrapTipSha === $tipSha);
                 if (!$sameAsBootstrap && !isset($pending[$tipKey])) {
-                    // Drop older tip pending for the same branch (superseded by newer tip).
                     foreach ($pending as $pkey => $pentry) {
                         if (!is_array($pentry)) {
                             continue;
@@ -158,6 +247,7 @@ class DeployWebhookExpectWatchService
                 }
             }
 
+            // Webhook-only miss path: never enqueue / never call dispatchRelease here.
             foreach ($pending as $key => $entry) {
                 if (!is_array($entry)) {
                     unset($pending[$key]);
@@ -217,7 +307,6 @@ class DeployWebhookExpectWatchService
                 $notified++;
             }
 
-            // Drop tag pending no longer on remote; tip pending kept until arrived/superseded.
             if (is_array($remoteTags)) {
                 foreach ($pending as $key => $entry) {
                     if (!is_array($entry) || ($entry['kind'] ?? self::KIND_TAG) !== self::KIND_TAG) {
@@ -239,10 +328,77 @@ class DeployWebhookExpectWatchService
                 'updated_at' => $now,
             ]);
 
-            return $this->result(true, false, 'ok', $newPending, $cleared, $notified);
+            return $this->result(true, false, 'ok', $newPending, $cleared, $notified, 0);
         } catch (\Throwable $e) {
-            return $this->result(true, true, 'fail_open:' . $e->getMessage(), 0, 0, 0);
+            return $this->result(true, true, 'fail_open:' . $e->getMessage(), 0, 0, 0, 0);
         }
+    }
+
+    /**
+     * Pick at most one ref for cron enqueue. Tag winner preferred over branch tip when both.
+     *
+     * @param list<string> $newTags
+     * @return array{kind:string,ref:string,tag?:string}|null
+     */
+    public function selectCronWinnerRef(array $newTags, ?string $tipSha, string $branch): ?array
+    {
+        $tagWinner = $this->pickNewestTag($newTags);
+        if ($tagWinner !== '') {
+            return [
+                'kind' => self::KIND_TAG,
+                'ref' => 'refs/tags/' . $tagWinner,
+                'tag' => $tagWinner,
+            ];
+        }
+        $tipSha = $tipSha !== null ? strtolower(trim($tipSha)) : '';
+        $branch = trim($branch);
+        if ($tipSha !== '' && $branch !== '') {
+            return [
+                'kind' => self::KIND_BRANCH_TIP,
+                'ref' => 'refs/heads/' . $branch,
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<string> $tags
+     */
+    public function pickNewestTag(array $tags): string
+    {
+        $tags = array_values(array_filter(array_map(static fn ($t) => trim((string)$t), $tags), static fn ($t) => $t !== ''));
+        if ($tags === []) {
+            return '';
+        }
+        usort($tags, static function (string $a, string $b): int {
+            $aVer = self::versionLikeCore($a);
+            $bVer = self::versionLikeCore($b);
+            if ($aVer !== null && $bVer !== null) {
+                $vc = version_compare($aVer, $bVer);
+                if ($vc !== 0) {
+                    return $vc;
+                }
+            }
+
+            return strcmp($a, $b);
+        });
+
+        return (string)end($tags);
+    }
+
+    /** @return string|null numeric core for version_compare, or null if not version-like */
+    private static function versionLikeCore(string $tag): ?string
+    {
+        $tag = trim($tag);
+        if ($tag === '') {
+            return null;
+        }
+        if (!preg_match('/^v?(\d+(?:\.\d+){0,3}(?:[-+][0-9A-Za-z.\-]+)?)$/i', $tag, $m)) {
+            return null;
+        }
+
+        return (string)$m[1];
     }
 
     public function statePath(): string
@@ -257,8 +413,6 @@ class DeployWebhookExpectWatchService
     }
 
     /**
-     * Identity for webhook_miss notifications: configured deploy_root, else BP.
-     *
      * @param array<string,mixed> $config
      */
     private function resolveNotifyDeployRoot(array $config): string
@@ -448,7 +602,7 @@ class DeployWebhookExpectWatchService
     }
 
     /**
-     * @return array{ok:bool,skipped:bool,reason:string,new_pending:int,cleared:int,notified:int}
+     * @return array{ok:bool,skipped:bool,reason:string,new_pending:int,cleared:int,notified:int,enqueued:int}
      */
     private function result(
         bool $ok,
@@ -456,7 +610,8 @@ class DeployWebhookExpectWatchService
         string $reason,
         int $newPending,
         int $cleared,
-        int $notified
+        int $notified,
+        int $enqueued = 0
     ): array {
         return [
             'ok' => $ok,
@@ -465,6 +620,7 @@ class DeployWebhookExpectWatchService
             'new_pending' => $newPending,
             'cleared' => $cleared,
             'notified' => $notified,
+            'enqueued' => $enqueued,
         ];
     }
 }

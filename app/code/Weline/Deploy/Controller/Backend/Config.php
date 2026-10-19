@@ -24,6 +24,7 @@ class Config extends BackendController
     #[Acl('Weline_Deploy::deploy_config_index', '查看部署配置', 'circle', '查看部署信息配置')]
     public function index(): string
     {
+        $this->deployConfigService->ensureChannelDefaults();
         $settings = $this->deployConfigService->getSettings();
         foreach (DeployConfigService::SECRET_KEYS as $secretKey) {
             if (($settings[$secretKey] ?? '') !== '') {
@@ -31,10 +32,14 @@ class Config extends BackendController
             }
             $settings[$secretKey] = '';
         }
+        // Bind checkboxes to stored/effective channel flags (post-ensure), not bare merge defaults.
+        $settings['webhook_enabled'] = $this->deployConfigService->isWebhookEnabled() ? '1' : '0';
+        $settings['cron_update_enabled'] = $this->deployConfigService->isCronUpdateEnabled() ? '1' : '0';
 
         $this->assign('settings', $settings);
         $this->assign('saveUrl', $this->_url->getBackendUrl('deploy/backend/config/save'));
         $this->assign('webhookMeta', $this->buildWebhookMeta($this->deployConfigService->getSettings()));
+        $this->assign('webhookEnabled', $this->deployConfigService->isWebhookEnabled());
         $this->assign('pierceAckPending', $this->pierceGate->isPierceAckPending());
         $this->assign(
             'pierceAckUrl',
@@ -73,6 +78,7 @@ class Config extends BackendController
         }
 
         try {
+            $this->deployConfigService->ensureChannelDefaults();
             $existing = $this->deployConfigService->getStoredSettings();
             $data = $this->request->getPost();
             $settings = [];
@@ -124,6 +130,23 @@ class Config extends BackendController
             $baseUrlSource = (string)($baseInfo['source'] ?? '');
         }
 
+        $setupBase = $baseUrl !== '' ? $baseUrl : 'https://你的域名';
+        $path = trim((string)($settings['webhook_path'] ?? ''));
+
+        if (!$this->deployConfigService->isWebhookEnabled()) {
+            return [
+                'url' => '',
+                'version_url' => '',
+                'path' => $path,
+                'base_url' => $baseUrl,
+                'base_url_source' => $baseUrlSource,
+                'setup_command' => 'php bin/w deploy:webhook:setup --base-url=' . $setupBase,
+                'rotate_path_command' => 'php bin/w deploy:webhook:setup --rotate-path -y --base-url=' . $setupBase,
+                'ready' => false,
+                'enabled' => false,
+            ];
+        }
+
         $webhookUrl = $this->deployWebhookSetupService->buildWebhookUrl(
             $settings,
             null,
@@ -133,8 +156,6 @@ class Config extends BackendController
             $settings,
             $baseUrl !== '' ? $baseUrl : null
         );
-        $path = trim((string)($settings['webhook_path'] ?? ''));
-        $setupBase = $baseUrl !== '' ? $baseUrl : 'https://你的域名';
 
         return [
             'url' => $webhookUrl,
@@ -145,6 +166,7 @@ class Config extends BackendController
             'setup_command' => 'php bin/w deploy:webhook:setup --base-url=' . $setupBase,
             'rotate_path_command' => 'php bin/w deploy:webhook:setup --rotate-path -y --base-url=' . $setupBase,
             'ready' => $webhookUrl !== '',
+            'enabled' => true,
         ];
     }
 

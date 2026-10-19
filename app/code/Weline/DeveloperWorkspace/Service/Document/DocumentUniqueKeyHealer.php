@@ -187,7 +187,10 @@ final class DocumentUniqueKeyHealer
             return ['table' => $logicalTable, 'groups' => 0, 'deleted' => 0, 'backup' => ''];
         }
 
-        $rows = $model->clear()->select()->fetchArray();
+        $rows = $model->clear()->select()->fetchSmart();
+        if ($rows instanceof \Generator) {
+            $rows = iterator_to_array($rows, false);
+        }
         if (!is_array($rows) || $rows === []) {
             $printing->note(__('DocumentUniqueKeyHealer: %{1} groups=%{2} deleted=%{3}', [$logicalTable, 0, 0]));
             return ['table' => $logicalTable, 'groups' => 0, 'deleted' => 0, 'backup' => ''];

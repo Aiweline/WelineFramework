@@ -171,48 +171,47 @@ final class HeaderCommerceDataTest extends TestCase
     }
 
     /**
-     * plan_id lazy-hamburger-nav：#categories-sidebar-list 空壳 + DOM hydrate；
-     * 禁止侧栏再 resolveCategoryNavItems / fetchCategoriesSidebarNav SSR 整树。
-     * 覆盖模块 default + 汉服店面实际 chrome（storefront-shell）。
+     * plan_id lazy-hamburger-nav：模块 default 用 #categories-sidebar-list 空壳 + DOM hydrate。
+     * 汉服 storefront-shell 把 category-menu 直接塞进抽屉 → enhanceDrawerCategoryAccordion
+     * 点击手风琴（禁 hover mega）。两侧都禁止侧栏 SSR 灌树。
      */
     public function testSidebarCategoryTreeUsesCatalogNotAllMenuPublished(): void
     {
         $themeRoot = dirname(__DIR__, 2);
-        $paths = [
-            $themeRoot . '/view/theme/frontend/partials/header/default.phtml',
-            dirname($themeRoot, 3) . '/design/Weline/hanfu/frontend/partials/header/storefront-shell.phtml',
-        ];
-        foreach ($paths as $header) {
-            self::assertFileExists($header, $header);
-            $src = (string)file_get_contents($header);
-            $listPos = strpos($src, 'id="categories-sidebar-list"');
-            self::assertNotFalse($listPos, 'categories-sidebar-list missing in ' . $header);
-            $sidebarBlock = substr($src, $listPos, 1800);
+        $defaultHeader = $themeRoot . '/view/theme/frontend/partials/header/default.phtml';
+        self::assertFileExists($defaultHeader);
+        $src = (string)file_get_contents($defaultHeader);
+        $listPos = strpos($src, 'id="categories-sidebar-list"');
+        self::assertNotFalse($listPos, 'categories-sidebar-list missing in default header');
+        $sidebarBlock = substr($src, $listPos, 1800);
 
-            self::assertStringContainsString('data-sidebar-nav-lazy="pending"', $sidebarBlock, $header);
-            self::assertStringContainsString('hydrateSidebarCategoryTreeFromNav', $sidebarBlock, $header);
-            // 可执行路径禁 SSR 灌树（注释可提及否决符号作文档钩子）。
-            $codeOnly = preg_replace('#//.*$#m', '', $sidebarBlock) ?? $sidebarBlock;
-            self::assertStringNotContainsString(
-                'HeaderCommerceData::resolveCategoryNavItems',
-                $codeOnly,
-                'Sidebar must NOT SSR resolveCategoryNavItems; DOM hydrate from #categories-list in ' . $header
-            );
-            self::assertStringNotContainsString(
-                'fetchCategoriesSidebarNav',
-                $codeOnly,
-                'Sidebar must NOT fetchCategoriesSidebarNav SSR tree in ' . $header
-            );
-            self::assertStringNotContainsString('AllMenuTreeRegistry::hasPublished()', $codeOnly);
-            self::assertStringNotContainsString('->toNavItems(', $codeOnly);
-            self::assertStringNotContainsString('AllMenuTreeRegistry::get()', $codeOnly);
-            self::assertStringNotContainsString('$navItems', $codeOnly, $header);
-            self::assertStringNotContainsString("meta['navItems']", $codeOnly, $header);
-            self::assertStringNotContainsString("getData('navItems')", $codeOnly, $header);
-            self::assertStringNotContainsString('navItems_set_by_hook', $codeOnly, $header);
-            self::assertStringNotContainsString('$sidebarSource', $codeOnly, $header);
-            self::assertStringNotContainsString('$sidebarNavItems', $codeOnly, $header);
-        }
+        self::assertStringContainsString('data-sidebar-nav-lazy="pending"', $sidebarBlock);
+        self::assertStringContainsString('hydrateSidebarCategoryTreeFromNav', $sidebarBlock);
+        $codeOnly = preg_replace('#//.*$#m', '', $sidebarBlock) ?? $sidebarBlock;
+        self::assertStringNotContainsString(
+            'HeaderCommerceData::resolveCategoryNavItems',
+            $codeOnly,
+            'Sidebar must NOT SSR resolveCategoryNavItems; DOM hydrate from #categories-list'
+        );
+        self::assertStringNotContainsString('fetchCategoriesSidebarNav', $codeOnly);
+        self::assertStringNotContainsString('AllMenuTreeRegistry::hasPublished()', $codeOnly);
+        self::assertStringNotContainsString('->toNavItems(', $codeOnly);
+        self::assertStringNotContainsString('AllMenuTreeRegistry::get()', $codeOnly);
+        self::assertStringNotContainsString('$navItems', $codeOnly);
+        self::assertStringNotContainsString("meta['navItems']", $codeOnly);
+        self::assertStringNotContainsString("getData('navItems')", $codeOnly);
+        self::assertStringNotContainsString('navItems_set_by_hook', $codeOnly);
+        self::assertStringNotContainsString('$sidebarSource', $codeOnly);
+        self::assertStringNotContainsString('$sidebarNavItems', $codeOnly);
+
+        $hanfuShell = dirname($themeRoot, 3) . '/design/Weline/hanfu/frontend/partials/header/storefront-shell.phtml';
+        self::assertFileExists($hanfuShell);
+        $hanfuSrc = (string)file_get_contents($hanfuShell);
+        self::assertStringContainsString('id="categories-sidebar"', $hanfuSrc);
+        self::assertStringContainsString('hanfu-chrome__drawer-categories', $hanfuSrc);
+        self::assertStringContainsString('name="category-menu"', $hanfuSrc);
+        self::assertStringNotContainsString('HeaderCommerceData::resolveCategoryNavItems', $hanfuSrc);
+        self::assertStringNotContainsString('fetchCategoriesSidebarNav', $hanfuSrc);
 
         $jsPath = $themeRoot . '/view/statics/js/partials/header-default.js';
         self::assertFileExists($jsPath);
@@ -224,5 +223,8 @@ final class HeaderCommerceDataTest extends TestCase
         self::assertStringContainsString(':scope > .category-item', $js);
         self::assertStringContainsString('data-sidebar-mega-source', $js);
         self::assertStringContainsString('data-sidebar-mega-deferred', $js);
+        self::assertStringContainsString('function enhanceDrawerCategoryAccordion', $js);
+        self::assertStringContainsString('enhanceDrawerCategoryAccordion(categoriesSidebar)', $js);
+        self::assertStringContainsString('drawer-category-children', $js);
     }
 }

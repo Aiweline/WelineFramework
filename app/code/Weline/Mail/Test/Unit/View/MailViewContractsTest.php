@@ -233,6 +233,12 @@ private function assert_EnterpriseEngineSetupGuide_testEngineSetupGuidesFirewall
     self::assertStringContainsString('mailbox-message', $enterprise);
     self::assertStringContainsString("\$this->getBackendUrl('weline_mail/backend/index/mailbox-message')", $enterprise);
     self::assertStringContainsString('mailbox-batch', $enterprise);
+    self::assertStringContainsString('batchBusy', $enterprise);
+    self::assertStringContainsString('batchLoadingMessage', $enterprise);
+    self::assertStringContainsString('正在删除邮件，请稍候…', $enterprise);
+    self::assertStringContainsString('loading.with', $enterprise);
+    self::assertStringContainsString('syncSelectAllState', $enterprise);
+    self::assertStringContainsString('setBatchControlsDisabled', $enterprise);
     self::assertStringContainsString('mailbox-search', $enterprise);
     self::assertStringContainsString('mailbox-list', $enterprise);
     self::assertStringContainsString('mailbox-compose-prefill', $enterprise);
@@ -247,11 +253,15 @@ private function assert_EnterpriseEngineSetupGuide_testEngineSetupGuidesFirewall
     );
     self::assertStringContainsString('mail-enterprise__row-main', $enterprise);
     self::assertStringContainsString('data-testid="mail-enterprise-fake-mailbox-banner"', $enterprise);
+    self::assertStringContainsString('data-testid="mail-enterprise-switch-real-account"', $enterprise);
+    self::assertStringContainsString('preferred_real_account_id', $enterprise);
     self::assertStringContainsString('data-testid="mail-enterprise-fake-compose-banner"', $enterprise);
     self::assertStringContainsString('selected_mailbox_is_fake', $enterprise);
     self::assertStringContainsString('data-testid="mail-enterprise-reader-actions"', $enterprise);
     $indexCtrlMailbox = (string) file_get_contents(BP . 'app/code/Weline/Mail/Controller/Backend/Index.php');
     self::assertStringContainsString("assign('selected_mailbox_is_fake'", $indexCtrlMailbox);
+    self::assertStringContainsString('orderMailboxAccountsPreferReal', $indexCtrlMailbox);
+    self::assertStringContainsString('preferred_real_account_id', $indexCtrlMailbox);
     self::assertStringContainsString("'trash' => __('废纸篓')", $enterprise);
     self::assertStringNotContainsString('$this->_url->getBackendUrl', $enterprise);
     // 绕过 Backend fetch worker MAX_IN_FLIGHT=1（连点会报 too many in-flight）。
@@ -303,10 +313,17 @@ private function assert_EnterpriseHtmlReaderPreview_testReaderUsesSandboxedHtmlI
     self::assertStringContainsString('formatMailListTime', $enterprise);
     self::assertStringContainsString('looksLikeHtml', $enterprise);
     self::assertStringContainsString('markSeenQuiet', $enterprise);
+    self::assertStringContainsString('weline_mail_compose_prefill_v1', $enterprise);
+    self::assertStringContainsString('show=unread', $enterprise);
+    self::assertStringContainsString('请先选择一封邮件再回复', $enterprise);
     self::assertStringContainsString('mail-enterprise-show-all', $enterprise);
     self::assertStringContainsString('mailbox_list_unread_only', $enterprise);
     self::assertStringContainsString('data-mail-unread-only', $enterprise);
     self::assertStringContainsString('renderReaderBody', $enterprise);
+    self::assertStringContainsString('data-testid="mail-enterprise-inline-compose"', $enterprise);
+    self::assertStringContainsString('openInlineCompose', $enterprise);
+    self::assertStringContainsString('sendInlineCompose', $enterprise);
+    self::assertStringContainsString('sendComposerMessage', $enterprise);
     self::assertStringNotContainsString('allow-scripts', $enterprise);
     self::assertStringContainsString('data-mail-body-format="html"', $enterprise);
     $session = (string) file_get_contents(BP . 'app/code/Weline/Mail/Service/Mailbox/StalwartJmapSession.php');
@@ -315,6 +332,11 @@ private function assert_EnterpriseHtmlReaderPreview_testReaderUsesSandboxedHtmlI
     $helper = (string) file_get_contents(BP . 'app/code/Weline/Mail/Service/Mailbox/MailBodyPresentation.php');
     self::assertStringContainsString('sanitizeHtml', $helper);
     self::assertStringContainsString('looksLikeHtml($text)', $helper);
+    self::assertStringContainsString('gmailQuotePlain', $helper);
+    self::assertStringContainsString('plainThreadToGmailHtml', $helper);
+    self::assertStringContainsString('mail-thread', $helper);
+    self::assertStringContainsString('THREAD_SEP', $helper);
+    self::assertStringContainsString('mail-enterprise__reader-scroll', $enterprise);
     $qqHtml = "<html><head><meta http-equiv='Content-Type' content='text/html; charset=UTF-8'></head><body><p>hi</p></body></html>";
     $presented = \Weline\Mail\Service\Mailbox\MailBodyPresentation::fromJmapMessage([
         'textBody' => [['partId' => '1']],
@@ -328,6 +350,28 @@ private function assert_EnterpriseHtmlReaderPreview_testReaderUsesSandboxedHtmlI
     self::assertStringContainsString('looksLikeHtml', $helper);
     self::assertStringContainsString('(script|iframe|object|embed|link|meta|base)', $helper);
     self::assertStringContainsString('javascript', $helper);
+    $messy = "知道了知道了\n---------- 原始邮件 ----------\n发件人: a@b.com\n日期: 2026-10-19T06:32:10Z\n主题: Re:test\n\n好吧，这是测试";
+    $threadHtml = \Weline\Mail\Service\Mailbox\MailBodyPresentation::plainThreadToGmailHtml($messy);
+    self::assertStringContainsString('mail-thread', $threadHtml);
+    self::assertStringContainsString('mail-thread__sep', $threadHtml);
+    self::assertStringContainsString('知道了知道了', $threadHtml);
+    self::assertStringContainsString('引用', $threadHtml);
+    self::assertStringNotContainsString('<br><br><br>', $threadHtml);
+    $qqSparse = "好吧\n\n\n\nFrom\n\n\n<a@b.com>\n\n\nDate\n\n\n10/19/2026 14:31\n\n\nSubject\n\n\nt\n\n\nbody";
+    $qqHtml = \Weline\Mail\Service\Mailbox\MailBodyPresentation::plainThreadToGmailHtml(
+        "top\n---------- Replied Message ----------\n" . $qqSparse
+    );
+    self::assertStringContainsString('mail-thread__sep', $qqHtml);
+    self::assertStringContainsString('a@b.com', $qqHtml);
+    self::assertStringNotContainsString('From<br>', $qqHtml);
+    $quote = \Weline\Mail\Service\Mailbox\MailBodyPresentation::gmailQuotePlain([
+        'from' => 'a@b.com',
+        'received_at' => '2026-10-19T06:32:10Z',
+        'body' => "hello\nworld",
+    ]);
+    self::assertStringContainsString('引用', $quote);
+    self::assertStringContainsString('> hello', $quote);
+    self::assertStringContainsString('> world', $quote);
 }
 
 private function assert_MailAccountMailClient_testMailClientExposesReplyAndAccountControls(): void

@@ -353,7 +353,16 @@ class ControllerFetchFileBefore implements ObserverInterface
             );
 
             self::registerStateManager();
-            $themeId = $theme->getId() ?: 0;
+            // Pin ThemeData on every request before layoutConfig cache branches.
+            // Cache hits used to skip setCurrentTheme, leaving Env module Default
+            // in ThemeData while design templates still render via $theme — head
+            // CSS packs then published under /static/Weline/Theme/... and 404'd
+            // design-only leaves (header/footer unstyled; page widgets still OK).
+            if ($theme instanceof \Weline\Theme\Model\WelineTheme && (int)$theme->getId() > 0) {
+                ThemeData::setCurrentTheme($theme);
+                ThemeData::setCurrentArea($area);
+            }
+            $themeId = $theme instanceof \Weline\Theme\Model\WelineTheme ? ((int)$theme->getId() ?: 0) : 0;
             $configCacheKey = "{$themeId}_{$area}_{$scope}";
             $runtimeCacheAllowed = $this->isRuntimeCacheAllowed($request, $isBackendRequest);
             $didPerformanceLoad = false;
@@ -363,8 +372,6 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $layoutConfig = is_array($runtimeLayoutConfig[1]) ? $runtimeLayoutConfig[1] : [];
                 $requestCache->layoutConfigCache[$configCacheKey] = $layoutConfig;
             } else {
-                ThemeData::setCurrentTheme($theme);
-                ThemeData::setCurrentArea($area);
                 \Weline\Framework\Runtime\TraceGate::measurePhase('theme.layout.performance_load', fn() => ThemeData::performanceLoad(scope: $scope));
                 $didPerformanceLoad = true;
                 $layoutConfig = ThemeData::getLayoutConfig($area, $scope);

@@ -37,12 +37,13 @@ $i18nJson = \Weline\HelpPay\Service\ShareModalI18n::json();
      data-helppay-placement="product-selection-share"
      data-weline-load="helpPayShare"
      data-helppay-i18n="<?= $escape($i18nJson) ?>">
-    <button type="button"
-            class="w-helppay-cta__link weline-pixel::selection_share"
-            data-testid="product-selection-share"
-            data-pixel-event="selection_share"
-            data-helppay-selection-share="1"
-            data-product-id="<?= (int) $productId ?>">
+    <a href="#"
+       role="button"
+       class="w-helppay-cta__link weline-pixel::selection_share"
+       data-testid="product-selection-share"
+       data-pixel-event="selection_share"
+       data-helppay-selection-share="1"
+       data-product-id="<?= (int) $productId ?>">
         <?= $escape(__('分享给朋友')) ?>
-    </button>
+    </a>
 </div>

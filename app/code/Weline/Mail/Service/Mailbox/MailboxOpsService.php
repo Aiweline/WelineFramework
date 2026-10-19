@@ -179,7 +179,10 @@ final class MailboxOpsService
     }
 
     /**
-     * @return array{mode:string,to:string,cc:string,subject:string,body:string,account_id:int}
+     * @return array{
+     *   mode:string,to:string,cc:string,subject:string,body:string,
+     *   quote:string,quote_html:string,account_id:int
+     * }
      */
     public function buildComposePrefill(int $accountId, string $messageId, string $mode): array
     {
@@ -197,7 +200,8 @@ final class MailboxOpsService
         $toList = $this->extractEmails((string)($message['to'] ?? ''));
         $ccList = $this->extractEmails((string)($message['cc'] ?? ''));
         $self = $ctx['mailbox'];
-        $quoted = $this->quoteBody($message);
+        $quote = MailBodyPresentation::gmailQuotePlain($message);
+        $quoteHtml = MailBodyPresentation::gmailQuoteHtml($message);
 
         if ($mode === 'forward') {
             $fwdSubject = preg_match('/^\s*fwd:/i', $subject) ? $subject : 'Fwd: ' . $subject;
@@ -206,18 +210,23 @@ final class MailboxOpsService
                 'to' => '',
                 'cc' => '',
                 'subject' => $fwdSubject,
-                'body' => $quoted,
+                // Forward: leave editor empty; quoted history shown below (Gmail).
+                'body' => '',
+                'quote' => $quote,
+                'quote_html' => $quoteHtml,
                 'account_id' => $accountId,
             ];
         }
 
         $reSubject = preg_match('/^\s*re:/i', $subject) ? $subject : 'Re: ' . $subject;
-        $to = $from;
+        // Sent/drafts: From is ourselves — reply to the original To (Gmail behavior).
+        $to = ($from !== '' && $from !== $self) ? $from : ($toList[0] ?? '');
         $cc = '';
         if ($mode === 'reply_all') {
             $others = [];
-            foreach (array_merge($toList, $ccList) as $email) {
-                if ($email === $self || $email === $from) {
+            $replyTarget = $to;
+            foreach (array_merge($toList, $ccList, $from !== '' ? [$from] : []) as $email) {
+                if ($email === $self || $email === $replyTarget) {
                     continue;
                 }
                 $others[$email] = $email;
@@ -230,7 +239,10 @@ final class MailboxOpsService
             'to' => $to,
             'cc' => $cc,
             'subject' => $reSubject,
-            'body' => $quoted,
+            // Reply: empty editor; full thread quote below (Gmail).
+            'body' => '',
+            'quote' => $quote,
+            'quote_html' => $quoteHtml,
             'account_id' => $accountId,
         ];
     }
@@ -253,22 +265,11 @@ final class MailboxOpsService
 
     /**
      * @param array<string, mixed> $message
+     * @deprecated Prefer MailBodyPresentation::gmailQuotePlain; kept for callers/tests.
      */
     private function quoteBody(array $message): string
     {
-        $from = (string)($message['from'] ?? '');
-        $date = (string)($message['received_at'] ?? '');
-        $body = trim((string)($message['body'] ?? $message['preview'] ?? ''));
-        $lines = [
-            '',
-            '---------- ' . __('原始邮件') . ' ----------',
-            __('发件人') . ': ' . $from,
-            __('日期') . ': ' . $date,
-            __('主题') . ': ' . (string)($message['subject'] ?? ''),
-            '',
-            $body,
-        ];
-        return implode("\n", $lines);
+        return MailBodyPresentation::gmailQuotePlain($message);
     }
 
     private function extractPrimaryEmail(string $raw): string

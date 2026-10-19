@@ -105,6 +105,8 @@ class Index extends BackendController
             $allAccounts,
             static fn($account): bool => trim((string)$account->getData(MailAccount::schema_fields_EMAIL)) !== ''
         ));
+        // 真实域优先：一键装好后默认落到 contact@ 等可外投账号，避免卡在 .invalid 测试域「已发送」假成功。
+        $mailboxAccounts = $this->orderMailboxAccountsPreferReal($mailboxAccounts, $domainLookup);
 
         $selectedAccountId = max(0, (int)$this->request->getParam('account', 0));
         $canPickAccount = $this->canPickAnyLocalMailbox();
@@ -125,6 +127,8 @@ class Index extends BackendController
             $selectedAccount = $mailboxAccounts[0];
             $selectedAccountId = (int)$selectedAccount->getId();
         }
+        // 显式点开测试域时保留；无参/坏参已在上方落到真实域优先序的首项。
+        $preferredRealAccountId = $this->firstRealMailboxAccountId($mailboxAccounts, $domainLookup);
 
         $selectedMailbox = $selectedAccount
             ? strtolower(trim((string)$selectedAccount->getData(MailAccount::schema_fields_EMAIL)))
@@ -152,9 +156,11 @@ class Index extends BackendController
                 $accountIds[] = (int)$mailboxAccount->getId();
             }
             $mailboxUnreadByAccount = $ops->mapInboxUnreadCounts($accountIds);
-            // 收件箱默认只列未读；?show=all 可看全部（含已读）
-            $showAll = strtolower(trim((string)$this->request->getParam('show', ''))) === 'all';
-            $mailboxListUnreadOnly = $folder === MailboxFolder::INBOX && !$showAll;
+            // 收件箱默认显示全部（含已读）；?show=unread 才只看未读——避免点开标已读后从列表消失。
+            // 兼容旧链 ?show=all（仍表示全部）。
+            $showParam = strtolower(trim((string)$this->request->getParam('show', '')));
+            $showAll = $showParam === 'all' || ($folder === MailboxFolder::INBOX && $showParam !== 'unread' && $showParam !== 'unread_only');
+            $mailboxListUnreadOnly = $folder === MailboxFolder::INBOX && ($showParam === 'unread' || $showParam === 'unread_only');
             if ($selectedAccount) {
                 try {
                     $mailboxMessages = $ops->list($selectedAccountId, $folder, 50, $mailboxListUnreadOnly);
@@ -186,6 +192,7 @@ class Index extends BackendController
         $this->assign('mailbox_accounts', $mailboxAccounts);
         $this->assign('mailbox_unread_by_account', $mailboxUnreadByAccount);
         $this->assign('selected_account_id', $selectedAccountId);
+        $this->assign('preferred_real_account_id', $preferredRealAccountId);
         $this->assign('selected_mailbox', $selectedMailbox);
         $this->assign('selected_mailbox_is_fake', $selectedMailboxIsFake);
         $this->assign('mailbox_messages', $mailboxMessages);
@@ -527,8 +534,9 @@ class Index extends BackendController
         if ($accountId <= 0) {
             return $this->fetchJson(['code' => 400, 'msg' => (string)__('缺少账号'), 'data' => null]);
         }
-        $showAll = strtolower(trim((string)$this->request->getParam('show', ''))) === 'all';
-        $unreadOnly = $folder === MailboxFolder::INBOX && !$showAll;
+        $showParam = strtolower(trim((string)$this->request->getParam('show', '')));
+        $unreadOnly = $folder === MailboxFolder::INBOX
+            && ($showParam === 'unread' || $showParam === 'unread_only');
         try {
             $ops = ObjectManager::getInstance(MailboxOpsService::class);
             $rows = $ops->list($accountId, $folder, $limit, $unreadOnly);
@@ -1931,6 +1939,76 @@ class Index extends BackendController
     private function isFakeTestDomain(string $domain): bool
     {
         return str_ends_with($domain, '.invalid') || str_ends_with($domain, '.test');
+    }
+
+    /**
+     * 邮箱账号列表：可外投的真实域在前（contact@ 优先），.invalid/.test / fake 殿后。
+     *
+     * @param list<object> $mailboxAccounts
+     * @param array<int, array<string, mixed>> $domainLookup
+     * @return list<object>
+     */
+    private function orderMailboxAccountsPreferReal(array $mailboxAccounts, array $domainLookup): array
+    {
+        if ($mailboxAccounts === []) {
+            return $mailboxAccounts;
+        }
+        $real = [];
+        $fake = [];
+        foreach ($mailboxAccounts as $account) {
+            if ($this->isMailboxAccountFake($account, $domainLookup)) {
+                $fake[] = $account;
+            } else {
+                $real[] = $account;
+            }
+        }
+        usort($real, static function ($a, $b): int {
+            $ea = strtolower(trim((string)$a->getData(MailAccount::schema_fields_EMAIL)));
+            $eb = strtolower(trim((string)$b->getData(MailAccount::schema_fields_EMAIL)));
+            $ca = str_starts_with($ea, 'contact@') ? 0 : 1;
+            $cb = str_starts_with($eb, 'contact@') ? 0 : 1;
+            if ($ca !== $cb) {
+                return $ca <=> $cb;
+            }
+
+            return ((int)$a->getId()) <=> ((int)$b->getId());
+        });
+
+        return array_values(array_merge($real, $fake));
+    }
+
+    /**
+     * @param list<object> $mailboxAccounts
+     * @param array<int, array<string, mixed>> $domainLookup
+     */
+    private function firstRealMailboxAccountId(array $mailboxAccounts, array $domainLookup): int
+    {
+        foreach ($mailboxAccounts as $account) {
+            if ($this->isMailboxAccountFake($account, $domainLookup)) {
+                continue;
+            }
+            $id = (int)$account->getId();
+            if ($id > 0) {
+                return $id;
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $domainLookup
+     */
+    private function isMailboxAccountFake(object $account, array $domainLookup): bool
+    {
+        $domainId = (int)$account->getData(MailAccount::schema_fields_DOMAIN_ID);
+        $meta = $domainLookup[$domainId] ?? null;
+        if (self::isFakeDomainLookupEntry($meta)) {
+            return true;
+        }
+        $domainName = strtolower(trim((string)($meta['domain_name'] ?? '')));
+
+        return $this->isFakeTestDomain($domainName);
     }
 
     /**

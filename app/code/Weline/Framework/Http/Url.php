@@ -169,9 +169,9 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
                 $uri = substr($uri, strlen('/' . $code));
             }
             self::$parserServer['WELINE_USER_LANG'] = $code;
-            // PATH_LANG must survive SEO rewrite: after detectLanguage strips
-            // /en_US from the URI, RouterRewrite only sees /about and cannot
-            // re-derive the visitor-facing locale. PageBuilder LIVE reads this.
+            // RequestContext locale must survive SEO rewrite: after detectLanguage
+            // strips /en_US from the URI, RouterRewrite only sees /about and cannot
+            // re-derive the visitor-facing locale. PageBuilder LIVE reads RC.
             self::rememberPathLanguage($code);
             self::rememberParserLanguage($code);
             self::traceLanguageValidation('static_hit', $code, $uri, ['parser_key' => $parserCacheKey]);
@@ -243,8 +243,9 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
     }
 
     /**
-     * Persist the visitor-facing path locale for the current request.
-     * detectLanguage strips /en_US from the working URI; without PATH_LANG,
+     * Persist the visitor-facing path locale for the current request into
+     * RequestContext (route.language + same-write WELINE_USER_LANG mirror).
+     * detectLanguage strips /en_US from the working URI; without this write,
      * later SEO rewrite + PageBuilder only see /about and fall back to the
      * site default locale while the browser URL still shows /en_US/….
      */
@@ -254,21 +255,32 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         if ($code === '') {
             return;
         }
-        self::$parserServer['WELINE_URL_PATH_LANG'] = $code;
+        self::$parserServer['WELINE_USER_LANG'] = $code;
         if (!\class_exists(\Weline\Framework\Runtime\Runtime::class)
             || !\Weline\Framework\Runtime\Runtime::isPersistent()
         ) {
-            $_SERVER['WELINE_URL_PATH_LANG'] = $code;
+            $_SERVER['WELINE_USER_LANG'] = $code;
         }
-        if (\class_exists(\Weline\Framework\Env\WelineEnv::class, false)) {
+        if (\class_exists(\Weline\Framework\Runtime\RequestContext::class, false)) {
             try {
-                \Weline\Framework\Env\WelineEnv::setServer(
-                    'WELINE_URL_PATH_LANG',
-                    $code,
-                    'Url::rememberPathLanguage'
-                );
+                \Weline\Framework\Runtime\RequestContext::locale($code);
             } catch (\Throwable) {
             }
+        }
+    }
+
+    /**
+     * Current request path locale from RequestContext (sole authority).
+     */
+    private static function currentRequestPathLanguage(): string
+    {
+        if (!\class_exists(\Weline\Framework\Runtime\RequestContext::class, false)) {
+            return '';
+        }
+        try {
+            return \trim((string)(\Weline\Framework\Runtime\RequestContext::locale() ?? ''));
+        } catch (\Throwable) {
+            return '';
         }
     }
 
@@ -362,8 +374,9 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
     }
 
     /**
-     * Cached parse results predate PATH_LANG / pretty ORIGIN fixes. Re-apply the
-     * visitor-facing locale from the URI that started this parser() call.
+     * Cached parse results may predate visitor ORIGIN / RequestContext locale
+     * writes. Re-apply the visitor-facing locale from the URI that started this
+     * parser() call into RequestContext and $parse['language'].
      *
      * @param array<string, mixed> $parse
      * @return array<string, mixed>
@@ -376,11 +389,21 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
             ?? \Weline\Framework\Env\WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
             ?? $visitorUri
         );
-        $pathLang = \trim((string)(
-            self::$parserServer['WELINE_URL_PATH_LANG']
-            ?? \Weline\Framework\Env\WelineEnv::server('WELINE_URL_PATH_LANG', '')
-            ?? ''
-        ));
+        $pathLang = self::currentRequestPathLanguage();
+        if ($pathLang === '') {
+            $path = (string)(\parse_url($visitorUri, \PHP_URL_PATH) ?: $visitorUri);
+            $segments = \array_values(\array_filter(
+                \explode('/', \trim($path, '/')),
+                static fn(string $part): bool => $part !== ''
+            ));
+            if ($segments !== []) {
+                $localization = State::resolveLocalizationFromPathSegments(\array_slice($segments, 0, 4));
+                $pathLang = \trim((string)($localization['language'] ?? ''));
+                if ($pathLang !== '') {
+                    self::rememberPathLanguage($pathLang);
+                }
+            }
+        }
         if (!isset($parse['server']) || !\is_array($parse['server'])) {
             $parse['server'] = self::$parserServer;
         }
@@ -391,13 +414,11 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
             self::$parserServer['ORIGIN_REQUEST_URI'] = $origin;
         }
         if ($pathLang !== '') {
-            $parse['server']['WELINE_URL_PATH_LANG'] = $pathLang;
-            self::$parserServer['WELINE_URL_PATH_LANG'] = $pathLang;
-            if (!empty($parse['language']) || $pathLang !== '') {
-                // Prefer the path-derived locale when the cached entry only had a
-                // Cookie/default language filled in.
-                $parse['language'] = $pathLang;
-            }
+            $parse['server']['WELINE_USER_LANG'] = $pathLang;
+            self::$parserServer['WELINE_USER_LANG'] = $pathLang;
+            // Prefer the path-derived locale when the cached entry only had a
+            // Cookie/default language filled in.
+            $parse['language'] = $pathLang;
         }
 
         return $parse;
@@ -1612,6 +1633,19 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
                     \w_log_warning('[Url] parse_url failed for malformed URL: ' . $e->getMessage());
                 }
             }
+            // PHP parse_url corrupts bare UTF-8 query bytes; overlay path/query from a
+            // byte-safe splitter (same contract as WorkerPolicyKernel).
+            if (\is_array($parsed)) {
+                $split = self::splitRequestTargetPathQuery($url);
+                if (!isset($split['error'])) {
+                    $parsed['path'] = $split['path'];
+                    if ($split['raw_query'] !== '') {
+                        $parsed['query'] = $split['raw_query'];
+                    } else {
+                        unset($parsed['query']);
+                    }
+                }
+            }
             self::storeCappedArrayItem(
                 self::$parserUrlCache,
                 $cacheKey,
@@ -1747,8 +1781,14 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         $perfMark('server_init');
         
         if ($url) {
-            $path = self::parse_url($url, 'path') ?: '';
-            $query = self::parse_url($url, 'query') ?: '';
+            $split = self::splitRequestTargetPathQuery($url);
+            if (isset($split['error'])) {
+                $path = '';
+                $query = '';
+            } else {
+                $path = $split['path'];
+                $query = $split['raw_query'];
+            }
             $uri = $path . ($query !== '' ? '?' . $query : '');
         } else {
             // 1) 百分号解码：REQUEST_URI 先 rawurldecode（%2F→/ 等），便于后续网站匹配与重写查找
@@ -2361,11 +2401,20 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
             ?? \Weline\Framework\Env\WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
             ?? ''
         );
-        $lockedPathLang = \trim((string)(
-            self::$parserServer['WELINE_URL_PATH_LANG']
-            ?? \Weline\Framework\Env\WelineEnv::server('WELINE_URL_PATH_LANG', '')
-            ?? ''
-        ));
+        $lockedPathLang = self::currentRequestPathLanguage();
+        if ($lockedPathLang === '' && $lockedVisitorUri !== '') {
+            $visitorPath = (string)(\parse_url($lockedVisitorUri, \PHP_URL_PATH) ?: $lockedVisitorUri);
+            $visitorSegments = \array_values(\array_filter(
+                \explode('/', \trim($visitorPath, '/')),
+                static fn(string $part): bool => $part !== ''
+            ));
+            if ($visitorSegments !== []) {
+                $visitorLocalization = State::resolveLocalizationFromPathSegments(
+                    \array_slice($visitorSegments, 0, 4)
+                );
+                $lockedPathLang = \trim((string)($visitorLocalization['language'] ?? ''));
+            }
+        }
         $decode_url = self::decode_url($url);
         $perfMark('decode');
         if($url !== $decode_url){
@@ -2425,7 +2474,8 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
             self::$parserServer['WELINE_USER_LANG'] = $data['language'];
             // Do NOT rememberPathLanguage here: $data['language'] may be a
             // Cookie/default fallback (see above), not a URL path segment.
-            // PATH_LANG is set only inside detectLanguage() / lockVisitorFacingRequestUri().
+            // Path locale is written only inside detectLanguage() /
+            // lockVisitorFacingRequestUri() → RequestContext.
         }
         if (!empty($data['currency'])) {
             self::$parserServer['WELINE_USER_CURRENCY'] = $data['currency'];
@@ -2465,6 +2515,81 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
     public static function isValidUtf8Text(string $value): bool
     {
         return $value === '' || \preg_match('//u', $value) === 1;
+    }
+
+    /**
+     * Split request-target / absolute URL into path + raw query without PHP parse_url.
+     *
+     * PHP's parse_url() corrupts bare UTF-8 query bytes into invalid sequences
+     * (e.g. `/search?q=四川` → invalid UTF-8), which then fail-closes as HTTP 400.
+     *
+     * @return array{path:string,raw_query:string}|array{error:string}
+     */
+    public static function splitRequestTargetPathQuery(string $target): array
+    {
+        if ($target === '' || $target === '*') {
+            return ['error' => 'invalid_target'];
+        }
+
+        if (\str_starts_with($target, '/')) {
+            $qPos = \strpos($target, '?');
+            if ($qPos === false) {
+                return ['path' => $target, 'raw_query' => ''];
+            }
+
+            return [
+                'path' => \substr($target, 0, $qPos),
+                'raw_query' => \substr($target, $qPos + 1),
+            ];
+        }
+
+        // absolute-form: scheme://authority[/path][?query]
+        if (\preg_match('#^[a-zA-Z][a-zA-Z0-9+.-]*://#D', $target) !== 1) {
+            return ['error' => 'invalid_target'];
+        }
+        $schemeSep = \strpos($target, '://');
+        if ($schemeSep === false) {
+            return ['error' => 'invalid_target'];
+        }
+        $authStart = $schemeSep + 3;
+        if ($authStart >= \strlen($target)) {
+            return ['error' => 'invalid_target'];
+        }
+        $authEnd = \strlen($target);
+        foreach (['/', '?', '#'] as $marker) {
+            $pos = \strpos($target, $marker, $authStart);
+            if ($pos !== false && $pos < $authEnd) {
+                $authEnd = $pos;
+            }
+        }
+        if ($authEnd <= $authStart) {
+            return ['error' => 'invalid_target'];
+        }
+        $rest = \substr($target, $authEnd);
+        if ($rest === '' || \str_starts_with($rest, '?') || \str_starts_with($rest, '#')) {
+            $rawQuery = '';
+            if (\str_starts_with($rest, '?')) {
+                $hashPos = \strpos($rest, '#');
+                $rawQuery = $hashPos === false
+                    ? \substr($rest, 1)
+                    : \substr($rest, 1, $hashPos - 1);
+            }
+
+            return ['path' => '/', 'raw_query' => $rawQuery];
+        }
+        $hashPos = \strpos($rest, '#');
+        if ($hashPos !== false) {
+            $rest = \substr($rest, 0, $hashPos);
+        }
+        $qPos = \strpos($rest, '?');
+        if ($qPos === false) {
+            return ['path' => $rest, 'raw_query' => ''];
+        }
+
+        return [
+            'path' => \substr($rest, 0, $qPos),
+            'raw_query' => \substr($rest, $qPos + 1),
+        ];
     }
 
     /**
@@ -3696,7 +3821,6 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
                          'WELINE_ORIGIN_REQUEST_URI',
                          'WELINE_FULL_REQUEST_URI',
                          'WELINE_USER_LANG',
-                         'WELINE_URL_PATH_LANG',
                          'WELINE_USER_CURRENCY',
                          'WELINE_WEBSITE_URL',
                          'WELINE_WEBSITE_ID',

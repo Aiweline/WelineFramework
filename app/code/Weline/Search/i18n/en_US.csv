@@ -51,6 +51,8 @@ chart,chart
 "非法 search shard key：%{1}","Illegal search shard key: %{1}"
 "非法 search shard 实体名：%{1}","Illegal search shard entity name: %{1}"
 搜索筛选,"Search Filters"
+展开/收起,"Expand / collapse"
+搜索类型,"Search type"
 正在搜索…,正在搜索…
 未找到相关结果,"No matching results found"
 搜索失败，请稍后重试,搜索失败，请稍后重试
@@ -58,8 +60,6 @@ chart,chart
 暂无匹配商品，可换词或浏览分类,"No matching products — try another keyword or browse categories"
 请输入关键词开始搜索,"Enter a keyword to start searching"
 分类面包屑,"Category breadcrumb"
-展开/收起,"Expand / collapse"
-搜索类型,"Search type"
 是,yes
 否,no
 只读诊断,"Read-only diagnostics"

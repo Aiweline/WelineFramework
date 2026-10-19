@@ -1496,6 +1496,9 @@ private function assert_SmtpServiceCatalog_testCatalogServiceCreatesBothModes():
     $systemProvisioner = (string) \file_get_contents(\BP . '/app/code/Weline/Smtp/Service/SmtpSystemAccountProvisioner.php');
     self::assertStringContainsString('function ensureForDomain', $systemProvisioner);
     self::assertStringContainsString('function denyMutationReason', $systemProvisioner);
+    self::assertStringContainsString('function sealedPasswordOpenable', $systemProvisioner);
+    self::assertStringContainsString('密封密码无法解密', $systemProvisioner);
+    self::assertStringContainsString('密封无法解密，已重制', $systemProvisioner);
     self::assertStringContainsString('不可删除', $systemProvisioner);
     self::assertStringContainsString('不可修改密码', $systemProvisioner);
     self::assertStringContainsString('SYSTEM_SUBMIT_LOCAL', (string) \file_get_contents(\BP . '/app/code/Weline/Smtp/Model/SmtpAccount.php'));

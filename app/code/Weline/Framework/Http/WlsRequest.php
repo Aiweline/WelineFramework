@@ -332,8 +332,17 @@ class WlsRequest extends Request
             if ($forwardedPort !== null) {
                 return $forwardedPort;
             }
-            // X-Forwarded-Proto alone is not a public-port signal: HTTP/2
-            // ConnectionAdapter always injects it on direct TLS connections.
+            // Trusted edge omitted X-Forwarded-Port (common: CF Flexible →
+            // origin :80 with X-Forwarded-Proto=https only). Public authority is
+            // scheme default 80/443 — never the Worker listen socket (:16314 /
+            // :9555 / multi-project ports outside 9xxx). Pure-WLS keeps falling
+            // through below when edge_adapter=wls.
+            //
+            // Do not treat X-Forwarded-Proto alone as a port signal on pure-WLS:
+            // ConnectionAdapter may inject it on direct TLS without being Nginx.
+            if (WlsPublicOriginPort::edgeAdapter($serverInfo) !== 'wls') {
+                return null;
+            }
         }
 
         $raw = $serverInfo['WLS_PORT'] ?? $serverInfo['SERVER_PORT'] ?? \getenv('WLS_PORT') ?: '';
@@ -386,15 +395,16 @@ class WlsRequest extends Request
             $query = '';
             $targetPath = '';
             if ($validatedTarget !== '') {
-                try {
-                    $parsedQuery = \parse_url($validatedTarget, \PHP_URL_QUERY);
-                    $query = \is_string($parsedQuery) ? $parsedQuery : '';
-                    $parsedPath = \parse_url($validatedTarget, \PHP_URL_PATH);
-                    $targetPath = \is_string($parsedPath) ? $parsedPath : '';
-                } catch (\ValueError) {
+                // Never use PHP parse_url on the wire target: bare UTF-8 query
+                // bytes (e.g. q=四川) are corrupted into invalid sequences and
+                // Url::parser fail-closes with "Invalid request URI encoding".
+                $split = Url::splitRequestTargetPathQuery($validatedTarget);
+                if (isset($split['error'])) {
                     // WorkerPolicyKernel already validated the target; fail closed if the snapshot was mutated.
                     throw new \InvalidArgumentException('Invalid request target in request envelope.');
                 }
+                $targetPath = $split['path'];
+                $query = $split['raw_query'];
             }
             // Preserve the validated wire encoding here. WorkerPolicyKernel
             // already decoded it once for policy matching; Url::parser owns
@@ -486,20 +496,29 @@ class WlsRequest extends Request
         $this->parsedProtocol = $protocol;
         // parsedHttps 将在后面根据实际检测结果设置
         
-        // 解析 URI
-        try {
-            $uriParts = \parse_url($uri);
-            $uriParts = \is_array($uriParts) ? $uriParts : [];
-        } catch (\ValueError $e) {
+        // 解析 URI（path/query 必须避开 PHP parse_url 的 UTF-8 query 腐蚀）
+        $uriSplit = Url::splitRequestTargetPathQuery($uri);
+        if (isset($uriSplit['error'])) {
             $uriParts = [];
             if (\function_exists('w_log_warning')) {
-                \w_log_warning('[WlsRequest] parse_url failed for malformed request URI: ' . $e->getMessage());
+                \w_log_warning('[WlsRequest] splitRequestTargetPathQuery failed for malformed request URI');
             }
+        } else {
+            $uriParts = [
+                'path' => $uriSplit['path'],
+                'query' => $uriSplit['raw_query'],
+            ];
         }
         $path = $envelope instanceof RequestEnvelope
             ? $envelope->path
             : ($uriParts['path'] ?? '/');
-        $queryString = $uriParts['query'] ?? '';
+        // Prefer policy-validated decoded query when present; else wire raw query.
+        if ($envelope instanceof RequestEnvelope) {
+            $attrQuery = (string)($envelope->attributes['query'] ?? '');
+            $queryString = $attrQuery !== '' ? $attrQuery : (string)($uriParts['query'] ?? '');
+        } else {
+            $queryString = (string)($uriParts['query'] ?? '');
+        }
         $this->parsedQueryString = $queryString;
         $isStaticResource = weline_is_static_file_path($path);
         

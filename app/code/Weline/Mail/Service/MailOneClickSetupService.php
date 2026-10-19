@@ -193,6 +193,36 @@ final class MailOneClickSetupService
         $result['bind_skipped'] = !empty($bind['skipped']);
         $result['bind_message'] = (string)($bind['message'] ?? '');
 
+        // Bootstrap/冷装后引擎只剩 local/mx；库内 Hub 导流必须重下发，否则外投直连 25。
+        if (!empty($result['success'])) {
+            if ($onProgress !== null) {
+                $onProgress('relay', (string)__('正在下发外投/Hub 导流路由…'), 1, 1);
+            }
+            try {
+                /** @var MailOutboundRelaySyncService $relaySync */
+                $relaySync = ObjectManager::getInstance(MailOutboundRelaySyncService::class);
+                $relay = $relaySync->syncAll();
+                $result['relay_applied'] = !empty($relay['applied']);
+                $result['relay_message'] = (string)($relay['message'] ?? '');
+                if (empty($relay['success'])) {
+                    $result['success'] = false;
+                    $result['message'] = (string)__(
+                        '账户已同步，但外投导流下发失败：%{1}',
+                        [(string)($relay['message'] ?? '')]
+                    );
+                    $result['code'] = 500;
+                }
+            } catch (\Throwable $e) {
+                $result['success'] = false;
+                $result['relay_applied'] = false;
+                $result['message'] = (string)__(
+                    '账户已同步，但外投导流下发异常：%{1}',
+                    [$e->getMessage()]
+                );
+                $result['code'] = 500;
+            }
+        }
+
         return $result;
     }
 
@@ -324,6 +354,32 @@ final class MailOneClickSetupService
         $result['contact_email'] = (string)($contact['email'] ?? ('contact@' . $domainName));
         $result['engine_skipped'] = $skipEngine;
 
+        if (!empty($result['success']) && !$skipEngine) {
+            try {
+                /** @var MailOutboundRelaySyncService $relaySync */
+                $relaySync = ObjectManager::getInstance(MailOutboundRelaySyncService::class);
+                $relay = $relaySync->syncAll();
+                $result['relay_applied'] = !empty($relay['applied']);
+                $result['relay_message'] = (string)($relay['message'] ?? '');
+                if (empty($relay['success'])) {
+                    $result['success'] = false;
+                    $result['message'] = (string)__(
+                        '账户已同步，但外投导流下发失败：%{1}',
+                        [(string)($relay['message'] ?? '')]
+                    );
+                    $result['code'] = 500;
+                }
+            } catch (\Throwable $e) {
+                $result['success'] = false;
+                $result['relay_applied'] = false;
+                $result['message'] = (string)__(
+                    '账户已同步，但外投导流下发异常：%{1}',
+                    [$e->getMessage()]
+                );
+                $result['code'] = 500;
+            }
+        }
+
         return $result;
     }
 
@@ -438,9 +494,10 @@ final class MailOneClickSetupService
     private function waitForManagementProbe(StalwartManagementAdapter $mgmt, bool $requireDomain): string
     {
         $probeError = '';
-        for ($attempt = 1; $attempt <= 10; $attempt++) {
+        // launchctl 重启后常有数秒 HTTP 0（连接拒绝）；须重试，禁止把「认证」泛串当 401 提前中断。
+        for ($attempt = 1; $attempt <= 20; $attempt++) {
             try {
-                usleep(400_000);
+                usleep(min(1_200_000, 300_000 + ($attempt * 100_000)));
                 if ($requireDomain) {
                     $mgmt->probeManagementApi();
                 } else {
@@ -459,7 +516,7 @@ final class MailOneClickSetupService
                 break;
             } catch (\Throwable $e) {
                 $probeError = $e->getMessage();
-                if ($this->isAuthFailure($probeError)) {
+                if ($this->isHardAuthFailure($probeError)) {
                     break;
                 }
             }
@@ -477,10 +534,25 @@ final class MailOneClickSetupService
         ) || (str_contains($msg, 'forbidden') && str_contains($msg, 'only the'));
     }
 
-    private function isAuthFailure(string $message): bool
+    /**
+     * 仅真·凭证错误才提前停重试。HTTP 0 / 连接失败必须继续等服务起来。
+     * 禁止匹配「管理认证或请求失败」里的泛「认证」字样。
+     */
+    private function isHardAuthFailure(string $message): bool
     {
         $msg = strtolower($message);
+        if (str_contains($msg, 'http 0') || str_contains($msg, '(http 0)')) {
+            return false;
+        }
+        if (str_contains($msg, '连接失败') || str_contains($msg, 'connection refused')
+            || str_contains($msg, 'couldn\'t connect') || str_contains($msg, 'timed out')
+        ) {
+            return false;
+        }
 
-        return str_contains($msg, '401') || str_contains($msg, '认证') || str_contains($msg, 'unauthorized');
+        return str_contains($msg, 'http 401')
+            || str_contains($msg, '(http 401)')
+            || str_contains($msg, 'unauthorized')
+            || (bool)preg_match('/\b401\b/', $msg);
     }
 }

@@ -16,6 +16,10 @@ class Webhook extends FrontendController
 
     public function deploy(): string
     {
+        if (!$this->webhookReleaseService->isWebhookIngressEnabled()) {
+            return $this->fetchJson(['ok' => false, 'error' => 'webhook_disabled'], 404);
+        }
+
         $config = $this->webhookReleaseService->loadConfig();
 
         if ($this->request->isGet() && (string)$this->request->getGet('health', '') === '1') {

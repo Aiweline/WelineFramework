@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Weline\Deploy\Console\Deploy;
 
 use Weline\Deploy\Service\DeployConfigService;
+use Weline\Deploy\Service\DeployMaintenanceWindowService;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
 use Weline\Framework\Console\CommandAbstract;
@@ -100,50 +101,59 @@ class Build extends CommandAbstract
         $this->printer->setup('═══════════════════════════════════════════════════════════════');
         $this->printer->note('');
 
-        // 1. 读取 .env 配置
-        $this->printer->setup(__('步骤 1/5：读取配置文件...'));
-        $config = $this->loadEnvConfig();
-        if (empty($config)) {
-            $this->printer->error(__('错误：无法读取 .env 配置文件或配置为空！'));
-            $this->printer->note(__('请创建 .env 文件，或从 .env.sample 复制模板并修改配置。'));
-            exit(1);
+        /** @var DeployMaintenanceWindowService $maintenanceWindow */
+        $maintenanceWindow = ObjectManager::getInstance(DeployMaintenanceWindowService::class);
+
+        try {
+            // 1. 读取 .env 配置
+            $this->printer->setup(__('步骤 1/5：读取配置文件...'));
+            $config = $this->loadEnvConfig();
+            if (empty($config)) {
+                $this->printer->error(__('错误：无法读取 .env 配置文件或配置为空！'));
+                $this->printer->note(__('请创建 .env 文件，或从 .env.sample 复制模板并修改配置。'));
+                exit(1);
+            }
+            $this->printer->success(__('✓ 配置文件读取成功'));
+
+            // 2. 验证必需配置
+            $this->printer->setup(__('步骤 2/5：验证配置...'));
+            $this->validateConfig($config);
+            $this->printer->success(__('✓ 配置验证通过'));
+
+            $maintenanceWindow->begin($this->printer);
+
+            // 3. 备份当前项目（可选）
+            $force = isset($args['force']) || isset($args['f']);
+            $noBackup = isset($args['no-backup']);
+
+            if (!$noBackup && ($config['BACKUP_BEFORE_DEPLOY'] ?? true)) {
+                $this->printer->setup(__('步骤 3/5：备份当前项目...'));
+                $this->backupProject($config);
+                $this->printer->success(__('✓ 项目备份完成'));
+            } else {
+                $this->printer->warning(__('⚠ 跳过备份步骤'));
+            }
+
+            // 4. 执行 Git 操作
+            $branch = $args['branch'] ?? $args['b'] ?? $config['GIT_BRANCH'] ?? 'main';
+            $this->printer->setup(__('步骤 4/5：执行 Git 拉取更新...'));
+            $this->executeGitOperations($config, $branch, $force);
+            $this->printer->success(__('✓ Git 更新完成'));
+
+            // 5. 清理和维护
+            $this->printer->setup(__('步骤 5/5：执行部署后清理...'));
+            $this->cleanupAfterDeploy($config);
+            $this->printer->success(__('✓ 清理完成'));
+
+            // 完成
+            $this->printer->note('');
+            $this->printer->success('═══════════════════════════════════════════════════════════════');
+            $this->printer->success(__('✓✓✓ 部署完成！✓✓✓'));
+            $this->printer->success('═══════════════════════════════════════════════════════════════');
+            $this->printer->note('');
+        } finally {
+            $maintenanceWindow->end($this->printer);
         }
-        $this->printer->success(__('✓ 配置文件读取成功'));
-
-        // 2. 验证必需配置
-        $this->printer->setup(__('步骤 2/5：验证配置...'));
-        $this->validateConfig($config);
-        $this->printer->success(__('✓ 配置验证通过'));
-
-        // 3. 备份当前项目（可选）
-        $force = isset($args['force']) || isset($args['f']);
-        $noBackup = isset($args['no-backup']);
-        
-        if (!$noBackup && ($config['BACKUP_BEFORE_DEPLOY'] ?? true)) {
-            $this->printer->setup(__('步骤 3/5：备份当前项目...'));
-            $this->backupProject($config);
-            $this->printer->success(__('✓ 项目备份完成'));
-        } else {
-            $this->printer->warning(__('⚠ 跳过备份步骤'));
-        }
-
-        // 4. 执行 Git 操作
-        $branch = $args['branch'] ?? $args['b'] ?? $config['GIT_BRANCH'] ?? 'main';
-        $this->printer->setup(__('步骤 4/5：执行 Git 拉取更新...'));
-        $this->executeGitOperations($config, $branch, $force);
-        $this->printer->success(__('✓ Git 更新完成'));
-
-        // 5. 清理和维护
-        $this->printer->setup(__('步骤 5/5：执行部署后清理...'));
-        $this->cleanupAfterDeploy($config);
-        $this->printer->success(__('✓ 清理完成'));
-
-        // 完成
-        $this->printer->note('');
-        $this->printer->success('═══════════════════════════════════════════════════════════════');
-        $this->printer->success(__('✓✓✓ 部署完成！✓✓✓'));
-        $this->printer->success('═══════════════════════════════════════════════════════════════');
-        $this->printer->note('');
     }
 
     /**

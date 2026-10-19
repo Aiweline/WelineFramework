@@ -107,8 +107,38 @@ final class MaintenanceServiceContractsTest extends TestCase
                 $this->tearDown_WaitGiftToken();
             }
         },
+            'MaintenanceModeToggle::testLayeredApiAndCliThinWrappers' => function () {
+            $this->assert_MaintenanceModeToggle_testLayeredApiAndCliThinWrappers();
+        },
         ];
     }
+
+private function assert_MaintenanceModeToggle_testLayeredApiAndCliThinWrappers(): void
+{
+    $base = '/Users/weline/Project/Official/框架/app/code/Weline/Maintenance';
+    $toggle = (string) file_get_contents($base . '/Service/MaintenanceModeToggleService.php');
+    self::assertStringContainsString('function enableRuntimeGate', $toggle);
+    self::assertStringContainsString('function disableRuntimeGate', $toggle);
+    self::assertStringContainsString('function enableFull', $toggle);
+    self::assertStringContainsString('function disableFull', $toggle);
+    self::assertStringContainsString('WlsMaintenanceSync::syncAfterCliToggle', $toggle);
+    self::assertStringContainsString('beginWave', $toggle);
+    // runtime gate must not start upgrade wave (full owns wave)
+    $runtimeStart = strpos($toggle, 'function enableRuntimeGate');
+    $fullStart = strpos($toggle, 'function enableFull');
+    self::assertNotFalse($runtimeStart);
+    self::assertNotFalse($fullStart);
+    $runtimeBlock = substr($toggle, (int)$runtimeStart, (int)$fullStart - (int)$runtimeStart);
+    self::assertStringNotContainsString('beginWave', $runtimeBlock);
+    self::assertStringNotContainsString('WaitGiftCampaignSyncService', $runtimeBlock);
+
+    $enable = (string) file_get_contents($base . '/Console/Maintenance/Enable.php');
+    $disable = (string) file_get_contents($base . '/Console/Maintenance/Disable.php');
+    self::assertStringContainsString('enableFull', $enable);
+    self::assertStringContainsString('disableFull', $disable);
+    self::assertStringNotContainsString('beginWave', $enable);
+    self::assertStringNotContainsString('UpgradeWaveService', $disable);
+}
 
 private function assert_MaintenanceContactEmailResolver_testConfigKeyAndModuleAreStable(): void
 {

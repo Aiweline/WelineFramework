@@ -67,6 +67,11 @@ class DeployWebhookRouteService
             return $cached;
         }
 
+        if (!$this->deployConfigService->isWebhookEnabled()) {
+            self::$memoryCache = [];
+            return null;
+        }
+
         $webhook = $this->normalizePath((string)($this->deployConfigService->getSettings()['webhook_path'] ?? ''));
         if ($webhook === '' || $this->isLegacyOrEmptyPath($webhook)) {
             self::$memoryCache = [];

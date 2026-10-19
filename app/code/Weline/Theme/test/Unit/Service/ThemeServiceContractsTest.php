@@ -646,7 +646,10 @@ final class ThemeServiceContractsTest extends TestCase
         },
             'ThemeHeadChromeCssPack::testGatewayPublishesHeadChromeUnderActiveThemeNamespace' => function () {
             $this->assert_ThemeHeadChromeCssPack_testGatewayPublishesHeadChromeUnderActiveThemeNamespace();
-        },
+            },
+            'ThemeHeadChromeCssPack::testResolveThemePrefersApplicationContext' => function () {
+            $this->assert_ThemeHeadChromeCssPack_testResolveThemePrefersApplicationContext();
+            },
             'ThemeHeadChromeCssPack::testStorefrontPackEmitsBeforeStylesAfterHook' => function () {
             $this->assert_ThemeHeadChromeCssPack_testStorefrontPackEmitsBeforeStylesAfterHook();
         },
@@ -3618,6 +3621,19 @@ private function assert_ThemeHeadChromeCssPack_testGatewayPublishesHeadChromeUnd
     self::assertStringContainsString('?WelineTheme $theme = null', $src);
     self::assertMatchesRegularExpression('/function buildWidgetAssetArtifact\s*\([^)]*\?WelineTheme\s+\$theme\s*=\s*null/s', $src);
     self::assertStringContainsString('/Weline/Theme/widget-assets/', $src);
+}
+
+private function assert_ThemeHeadChromeCssPack_testResolveThemePrefersApplicationContext(): void
+{
+    $src = $this->read_ThemeHeadChromeCssPack('Service/ThemeHeadChromeCssPack.php');
+    $fn = strpos($src, 'private function resolveTheme(string $area)');
+    self::assertNotFalse($fn);
+    $slice = substr($src, $fn, 900);
+    $ctxPos = strpos($slice, 'themeContext->resolveTheme($area)');
+    $dataPos = strpos($slice, 'ThemeData::getCurrentTheme()');
+    self::assertNotFalse($ctxPos);
+    self::assertNotFalse($dataPos);
+    self::assertLessThan($dataPos, $ctxPos, 'application/preview resolveTheme must beat stale ThemeData Default');
 }
 
 private function assert_ThemeHeadChromeCssPack_testStorefrontPackEmitsBeforeStylesAfterHook(): void

@@ -45,12 +45,25 @@ final class DeployMachinePlanServiceTest extends TestCase
         $plan = $service->build(['operation' => 'config', 'target' => 'staging']);
 
         self::assertSame('needs_configuration', $plan['status']);
+        // Cron-first: webhook path/secret only required when webhook ingress is enabled.
         self::assertSame(
-            ['project_repo_url', 'deploy_root', 'webhook_path', 'webhook_secret', 'base_url'],
+            ['project_repo_url', 'deploy_root', 'base_url'],
             array_column($plan['configuration']['questions'], 'key'),
         );
         self::assertFalse($plan['repository_written']);
         self::assertFalse($plan['settings_written']);
+    }
+
+    public function testWebhookEnabledAddsPathAndSecretQuestions(): void
+    {
+        $service = $this->service(['webhook_enabled' => '1']);
+
+        $plan = $service->build(['operation' => 'config', 'target' => 'staging']);
+
+        self::assertSame(
+            ['project_repo_url', 'deploy_root', 'base_url', 'webhook_path', 'webhook_secret'],
+            array_column($plan['configuration']['questions'], 'key'),
+        );
     }
 
     public function testReleasePlanRequiresCommitOrTagAndNeverExecutes(): void
@@ -120,6 +133,9 @@ final class DeployMachinePlanServiceTest extends TestCase
             'GIT_REPO_URL' => (string) ($settings['project_repo_url'] ?? ''),
             'GIT_TOKEN' => 'must-not-leak',
         ]);
+        $webhookEnabled = (string)($settings['webhook_enabled'] ?? '') === '1'
+            || trim((string)($settings['webhook_path'] ?? '')) !== '';
+        $config->method('isWebhookEnabled')->willReturn($webhookEnabled);
 
         $control = $this->createMock(DeployReleaseControlService::class);
         $control->method('buildReleaseParams')->willReturnCallback(

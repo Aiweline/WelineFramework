@@ -3416,6 +3416,254 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     padding: 0;
 }
 
+/*
+ * Drawer containment: published layouts may inject the desktop category-menu
+ * widget and header-nav-extensions into #categories-sidebar. Those selectors
+ * are styled for .header-main-nav / .header-nav-extensions only — without a
+ * drawer scope they fall back to UA list bullets + underlined links.
+ * work_mode=default_theme — Token only; no !important.
+ */
+.categories-sidebar .categories-list {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.categories-sidebar .category-item {
+    display: block;
+    width: 100%;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.categories-sidebar .category-link-wrapper {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.categories-sidebar .category-link,
+.categories-sidebar .category-link-wrapper > .category-link {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    min-height: 2.75rem;
+    padding: var(--weline-space-3) var(--weline-space-4);
+    box-sizing: border-box;
+    color: var(--color-text-primary);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    line-height: 1.35;
+    white-space: normal;
+    border-radius: 0;
+}
+
+.categories-sidebar .category-link:hover,
+.categories-sidebar .category-link-wrapper:hover > .category-link {
+    background-color: var(--color-bg-secondary);
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+/* Drawer: has-children → chevron + click accordion (never hover mega flyout). */
+.categories-sidebar .category-item.has-children > .category-link-wrapper {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 2.75rem;
+    border-block-end: 1px solid color-mix(in srgb, var(--color-border, #d4d4d4) 70%, transparent);
+}
+
+.categories-sidebar .category-item.has-children > .category-link-wrapper > .category-link {
+    border-block-end: 0;
+    min-height: 0;
+    padding-block: var(--weline-space-3);
+}
+
+.categories-sidebar .category-item:not(.has-children) > .category-link,
+.categories-sidebar .category-item:not(.has-children) > .category-link-wrapper {
+    border-block-end: 1px solid color-mix(in srgb, var(--color-border, #d4d4d4) 70%, transparent);
+}
+
+.categories-sidebar .category-item.has-children > .category-link-wrapper > .category-arrow,
+.categories-sidebar .category-item.has-children:hover > .category-link-wrapper > .category-arrow,
+.categories-sidebar .category-link-wrapper:hover > .category-arrow {
+    display: inline-block;
+    width: 0;
+    height: 0;
+    margin-left: auto;
+    margin-right: var(--weline-space-4);
+    border-left: 0.28rem solid transparent;
+    border-right: 0.28rem solid transparent;
+    border-top: 0.34rem solid var(--color-text-secondary, #565959);
+    border-bottom: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+    transform: rotate(-90deg);
+    transition: transform 0.18s ease, border-top-color 0.18s ease;
+    pointer-events: auto;
+}
+
+.categories-sidebar .category-item.has-children[data-state="open"] > .category-link-wrapper > .category-arrow,
+.categories-sidebar .category-item.has-children[data-state="open"]:hover > .category-link-wrapper > .category-arrow {
+    transform: rotate(0deg);
+    border-top-color: var(--color-primary, #b13f3c);
+}
+
+.categories-sidebar .drawer-category-children {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 var(--weline-space-4);
+    background: var(--color-bg-secondary, #f5f5f5);
+    border-block-end: 1px solid color-mix(in srgb, var(--color-border, #d4d4d4) 70%, transparent);
+}
+
+.categories-sidebar .drawer-category-children[hidden] {
+    display: none;
+}
+
+.categories-sidebar .drawer-category-child {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.categories-sidebar .drawer-category-child__link {
+    display: flex;
+    align-items: center;
+    min-height: 2.5rem;
+    padding: var(--weline-space-2) var(--weline-space-4);
+    box-sizing: border-box;
+    color: var(--color-text-primary);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    line-height: 1.35;
+}
+
+.categories-sidebar .drawer-category-child__link:hover {
+    background-color: color-mix(in srgb, var(--color-bg, #fff) 70%, var(--color-bg-secondary, #f5f5f5));
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.categories-sidebar .category-item.has-children > [data-w-popover-panel],
+.categories-sidebar .category-item.has-children > .w-mega-menu,
+.categories-sidebar .category-item.has-children > .header-category-panel,
+.categories-sidebar .category-item.has-children > .w-popover,
+.categories-sidebar .category-item.has-children .mega-menu-sidebar,
+.categories-sidebar .category-item.has-children .is-drawer-accordion-source,
+.categories-sidebar .category-item[data-drawer-accordion="1"] > [data-w-popover-panel],
+.categories-sidebar .category-item[data-drawer-accordion="1"] > .header-category-panel {
+    display: none;
+    visibility: hidden;
+    pointer-events: none;
+    height: 0;
+    overflow: hidden;
+}
+
+.categories-sidebar .sidebar-section-title {
+    display: block;
+    margin: 0;
+    padding: var(--weline-space-3) var(--weline-space-4) var(--weline-space-2);
+    color: var(--color-text-secondary, #565959);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.3;
+    border-block-end: 0;
+}
+
+.categories-sidebar .header-nav-extension-link,
+.categories-sidebar a.header-blog-link,
+.categories-sidebar a.header-deals-link,
+.categories-sidebar a.header-contact-service-link {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-space-3);
+    min-height: 2.75rem;
+    padding: var(--weline-space-3) var(--weline-space-4);
+    box-sizing: border-box;
+    color: var(--color-text-primary);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    line-height: 1.35;
+    border-block-end: 1px solid color-mix(in srgb, var(--color-border, #d4d4d4) 70%, transparent);
+}
+
+.categories-sidebar .header-nav-extension-link:hover,
+.categories-sidebar a.header-blog-link:hover,
+.categories-sidebar a.header-deals-link:hover,
+.categories-sidebar a.header-contact-service-link:hover {
+    background-color: var(--color-bg-secondary);
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.categories-sidebar .theme-published-slot[data-slot-id="header-nav-extensions"],
+.categories-sidebar .hanfu-chrome__drawer-extensions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+}
+
+.categories-sidebar .theme-published-slot[data-slot-id="header-nav-extensions"] .widget-wrapper,
+.categories-sidebar .hanfu-chrome__drawer-extensions .widget-wrapper {
+    display: block;
+    width: 100%;
+    margin: 0;
+}
+
+/* Shortcuts / popular links: same row rhythm as category links */
+.categories-sidebar .sidebar-shortcuts-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.categories-sidebar .sidebar-shortcuts-list li {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.categories-sidebar .sidebar-shortcuts-list li a,
+.categories-sidebar .categories-sidebar-shortcuts a,
+.categories-sidebar .header-drawer-shortcuts a,
+.categories-sidebar a.shortcut-link {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-space-3);
+    min-height: 2.75rem;
+    padding: var(--weline-space-3) var(--weline-space-4);
+    box-sizing: border-box;
+    color: var(--color-text-primary);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    line-height: 1.35;
+    border-block-end: 1px solid color-mix(in srgb, var(--color-border, #d4d4d4) 70%, transparent);
+}
+
+.categories-sidebar .sidebar-shortcuts-list li a:hover,
+.categories-sidebar .categories-sidebar-shortcuts a:hover,
+.categories-sidebar .header-drawer-shortcuts a:hover,
+.categories-sidebar a.shortcut-link:hover {
+    background-color: var(--color-bg-secondary);
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
 /* ========== 响应式设计 ========== */
 @media (min-width: 769px) {
     /* 桌面端汉堡侧栏同样内联展开，无悬浮层 */

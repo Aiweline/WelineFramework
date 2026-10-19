@@ -2345,6 +2345,148 @@
         });
     }
 
+    /**
+     * Published drawers may inject desktop category-menu (hover mega popover).
+     * In #categories-sidebar: show chevron for has-children, click-to-expand
+     * inline children — never hover flyout. Idempotent via data-drawer-accordion.
+     */
+    function enhanceDrawerCategoryAccordion(sidebarRoot) {
+        var root = sidebarRoot || document.getElementById('categories-sidebar');
+        if (!root || typeof root.querySelectorAll !== 'function') {
+            return;
+        }
+
+        root.querySelectorAll('.category-item.has-children').forEach(function(item) {
+            if (item.getAttribute('data-drawer-accordion') === '1') {
+                return;
+            }
+
+            // Disable hover popover / mega flyout inside the drawer.
+            item.removeAttribute('data-w-component');
+            item.removeAttribute('data-w-open-on');
+            item.removeAttribute('data-w-placement');
+            item.setAttribute('data-drawer-accordion', '1');
+            item.setAttribute('data-state', 'closed');
+
+            var wrapper = item.querySelector(':scope > .category-link-wrapper');
+            if (wrapper) {
+                wrapper.removeAttribute('data-w-popover-trigger');
+                wrapper.setAttribute('aria-expanded', 'false');
+                wrapper.setAttribute('aria-haspopup', 'true');
+            }
+
+            var mega = item.querySelector(':scope > [data-w-popover-panel], :scope > .header-category-panel, :scope > .w-mega-menu');
+            if (mega) {
+                mega.setAttribute('hidden', '');
+                mega.setAttribute('aria-hidden', 'true');
+                mega.setAttribute('data-state', 'closed');
+                mega.classList.add('is-drawer-accordion-source');
+            }
+
+            var children = item.querySelector(':scope > .drawer-category-children');
+            if (!children) {
+                children = document.createElement('ul');
+                children.className = 'drawer-category-children';
+                children.setAttribute('hidden', '');
+                children.setAttribute('data-testid', 'drawer-category-children');
+
+                var tabs = mega
+                    ? mega.querySelectorAll('.mega-menu-sidebar-item, a.mega-menu-sidebar-item')
+                    : [];
+                if (!tabs.length && mega) {
+                    tabs = mega.querySelectorAll('a[href]');
+                }
+                var seen = Object.create(null);
+                Array.prototype.forEach.call(tabs, function(tab) {
+                    var href = (tab.getAttribute('href') || '').trim();
+                    if (!href || href === '#') {
+                        return;
+                    }
+                    var labelEl = tab.querySelector('.mega-menu-sidebar-item__label');
+                    var label = (labelEl ? labelEl.textContent : tab.textContent || '')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                    if (!label || seen[href + '|' + label]) {
+                        return;
+                    }
+                    seen[href + '|' + label] = 1;
+                    var li = document.createElement('li');
+                    li.className = 'drawer-category-child';
+                    var a = document.createElement('a');
+                    a.className = 'drawer-category-child__link';
+                    a.href = href;
+                    a.textContent = label;
+                    li.appendChild(a);
+                    children.appendChild(li);
+                });
+
+                if (wrapper && wrapper.parentNode === item) {
+                    if (wrapper.nextSibling) {
+                        item.insertBefore(children, wrapper.nextSibling);
+                    } else {
+                        item.appendChild(children);
+                    }
+                } else {
+                    item.appendChild(children);
+                }
+            }
+
+            var arrow = wrapper
+                ? wrapper.querySelector('.category-arrow')
+                : item.querySelector(':scope > .category-arrow');
+            if (!arrow && wrapper) {
+                arrow = document.createElement('span');
+                arrow.className = 'category-arrow';
+                arrow.setAttribute('aria-hidden', 'true');
+                wrapper.appendChild(arrow);
+            }
+            if (arrow) {
+                arrow.setAttribute('role', 'button');
+                arrow.setAttribute('tabindex', '0');
+                arrow.setAttribute('aria-label', labels.expandCategory || '展开子分类');
+            }
+
+            if (!children.childElementCount) {
+                item.classList.remove('has-children');
+                item.removeAttribute('data-drawer-accordion');
+                if (arrow) {
+                    arrow.hidden = true;
+                }
+                return;
+            }
+
+            function setOpen(willOpen) {
+                item.setAttribute('data-state', willOpen ? 'open' : 'closed');
+                if (wrapper) {
+                    wrapper.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                }
+                if (willOpen) {
+                    children.removeAttribute('hidden');
+                } else {
+                    children.setAttribute('hidden', '');
+                }
+            }
+
+            function toggle(ev) {
+                if (ev) {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                }
+                setOpen(item.getAttribute('data-state') !== 'open');
+            }
+
+            if (arrow && arrow.dataset.drawerAccordionBound !== '1') {
+                arrow.dataset.drawerAccordionBound = '1';
+                arrow.addEventListener('click', toggle);
+                arrow.addEventListener('keydown', function(ev) {
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                        toggle(ev);
+                    }
+                });
+            }
+        });
+    }
+
     function ensureHeaderHamburgerTriggers() {
         var navAllRoot = document.getElementById('header-nav-all-root');
         if (navAllRoot) {
@@ -2423,6 +2565,8 @@
             hydrateSidebarCategoryTreeFromNav(categoriesSidebar);
             hydrateSidebarDeferredImages(categoriesSidebar);
             hydrateSidebarMegaPanels(categoriesSidebar);
+            // Published injects desktop category-menu into the drawer: accordion, not hover.
+            enhanceDrawerCategoryAccordion(categoriesSidebar);
             bindHeaderMegaMenu(categoriesSidebar);
             bindDrawerFlyoutAlign(categoriesSidebar);
             bindSidebarAccordions(categoriesSidebar);

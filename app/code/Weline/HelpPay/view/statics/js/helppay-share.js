@@ -1297,13 +1297,30 @@
   function setPurchaseGate(btn, unavailable) {
     if (!btn) return;
     var disable = !!unavailable;
-    btn.disabled = disable;
-    btn.setAttribute('aria-disabled', disable ? 'true' : 'false');
+    var isAnchor = String(btn.tagName || '').toLowerCase() === 'a';
+    // <a> has no meaningful HTML disabled; gate via aria-disabled + tabindex.
+    if (isAnchor) {
+      btn.setAttribute('aria-disabled', disable ? 'true' : 'false');
+      if (disable) {
+        btn.setAttribute('tabindex', '-1');
+      } else {
+        btn.removeAttribute('tabindex');
+      }
+    } else {
+      btn.disabled = disable;
+      btn.setAttribute('aria-disabled', disable ? 'true' : 'false');
+    }
     if (unavailable) {
       btn.title = '当前规格暂不可售';
     } else {
       btn.removeAttribute('title');
     }
+  }
+
+  function isCtaGated(el) {
+    if (!el) return true;
+    if (el.disabled) return true;
+    return el.getAttribute('aria-disabled') === 'true';
   }
 
   function syncQuickPayCtas() {
@@ -2542,7 +2559,7 @@
   }
 
   async function createQuickPayAndShow(btn) {
-    if (btn.disabled) return;
+    if (isCtaGated(btn)) return;
     // Pure-digital Offer: skip address-pick / shipping-pick (Checkout virtual_only parity).
     if (!readRequiresShipping(btn)) {
       await openQuickDigitalPaymentFlow(btn);
@@ -2952,20 +2969,22 @@
 
     var payerPayBtn = t.closest('[data-helppay-pay]');
     if (payerPayBtn && payerPayBtn.closest('[data-testid="help-pay-payer"]')) {
-      if (payerPayBtn.disabled || payerPayBtn.getAttribute('aria-disabled') === 'true') return;
+      if (isCtaGated(payerPayBtn)) return;
       onPayerPayClick(payerPayBtn);
       return;
     }
     if (payerPayBtn && (payerPayBtn.getAttribute('data-helppay-quick-self-pay') === '1'
       || payerPayBtn.closest('[data-testid="quick-pay-self"]'))) {
-      if (payerPayBtn.disabled || payerPayBtn.getAttribute('aria-disabled') === 'true') return;
+      if (isCtaGated(payerPayBtn)) return;
       onQuickSelfPayClick(payerPayBtn);
       return;
     }
 
     var openBtn = t.closest('[data-helppay-open]');
     if (openBtn) {
-      if (openBtn.disabled || openBtn.getAttribute('aria-disabled') === 'true') return;
+      // Quiet CTAs are <a href="#"> — always swallow navigation.
+      if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+      if (isCtaGated(openBtn)) return;
       var wrap = openBtn.closest('[data-helppay-placement]');
       var placement = wrap ? wrap.getAttribute('data-helppay-placement') : 'cart';
       if (placement === 'product' || openBtn.getAttribute('data-helppay-product-help-pay') === '1') {
@@ -2978,14 +2997,16 @@
 
     var shareBtn = t.closest('[data-helppay-selection-share]');
     if (shareBtn) {
-      if (shareBtn.disabled || shareBtn.getAttribute('aria-disabled') === 'true') return;
+      if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+      if (isCtaGated(shareBtn)) return;
       createSelectionShareAndShow(shareBtn);
       return;
     }
 
     var quickBtn = t.closest('[data-helppay-quick-pay]');
     if (quickBtn) {
-      if (quickBtn.disabled || quickBtn.getAttribute('aria-disabled') === 'true') return;
+      if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+      if (isCtaGated(quickBtn)) return;
       createQuickPayAndShow(quickBtn);
     }
   }

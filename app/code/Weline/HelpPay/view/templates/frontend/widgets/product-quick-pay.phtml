@@ -46,14 +46,15 @@ $i18nJson = \Weline\HelpPay\Service\ShareModalI18n::json();
      data-helppay-placement="product-quick-pay"
      data-weline-load="helpPayShare"
      data-helppay-i18n="<?= $escape($i18nJson) ?>">
-    <button type="button"
-            class="w-helppay-cta__link weline-pixel::quick_buy"
-            data-testid="product-quick-pay"
-            data-pixel-event="quick_buy"
-            data-helppay-quick-pay="1"
-            data-helppay-toc-only="1"
-            data-product-id="<?= (int) $productId ?>"
-            data-requires-shipping="<?= $requiresShipping ? '1' : '0' ?>">
+    <a href="#"
+       role="button"
+       class="w-helppay-cta__link weline-pixel::quick_buy"
+       data-testid="product-quick-pay"
+       data-pixel-event="quick_buy"
+       data-helppay-quick-pay="1"
+       data-helppay-toc-only="1"
+       data-product-id="<?= (int) $productId ?>"
+       data-requires-shipping="<?= $requiresShipping ? '1' : '0' ?>">
         <?= $escape(__('快捷购买')) ?>
-    </button>
+    </a>
 </div>

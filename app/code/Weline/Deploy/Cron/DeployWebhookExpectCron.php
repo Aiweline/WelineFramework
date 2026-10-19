@@ -8,7 +8,7 @@ use Weline\Deploy\Service\DeployWebhookExpectWatchService;
 use Weline\Framework\Cron\CronTaskInterface;
 
 /**
- * Tag × Webhook expect-watch: remote new tags without enqueue → webhook_miss.
+ * Remote tip/tag watch: cron_update enqueues newest only; webhook-only → miss alert.
  * Runs in cron CLI — independent of nginx/WLS HTTP.
  */
 class DeployWebhookExpectCron implements CronTaskInterface
@@ -25,7 +25,7 @@ class DeployWebhookExpectCron implements CronTaskInterface
 
     public function tip(): string
     {
-        return (string)__('检测远程新 tag 超时未见 Webhook 入队并告警');
+        return (string)__('Cron 检测远程 tip/tag：启用计划更新时只入队最新一条；仅 Webhook 时超时告警');
     }
 
     public function cron_time(): string
@@ -40,12 +40,13 @@ class DeployWebhookExpectCron implements CronTaskInterface
         $result = $watch->tick();
 
         return sprintf(
-            'ok skipped=%d reason=%s new_pending=%d cleared=%d notified=%d',
+            'ok skipped=%d reason=%s new_pending=%d cleared=%d notified=%d enqueued=%d',
             !empty($result['skipped']) ? 1 : 0,
             (string)($result['reason'] ?? ''),
             (int)($result['new_pending'] ?? 0),
             (int)($result['cleared'] ?? 0),
-            (int)($result['notified'] ?? 0)
+            (int)($result['notified'] ?? 0),
+            (int)($result['enqueued'] ?? 0)
         );
     }
 

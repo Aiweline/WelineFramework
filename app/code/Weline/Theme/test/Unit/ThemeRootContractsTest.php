@@ -2841,6 +2841,14 @@ private function assert_HeaderCategoryMenuSlot_testHeaderNavExtensionsCssPresent
     self::assertMatchesRegularExpression('/\.header-nav-left-cluster \{[^}]*flex:\s*1\s+1\s+auto;/s', $css);
     self::assertStringContainsString('.header-nav-extensions {', $css);
     self::assertStringContainsString('.header-nav-extensions:empty {', $css);
+    // Drawer may host desktop category-menu / nav-extensions — must restyle under .categories-sidebar.
+    self::assertStringContainsString('.categories-sidebar .categories-list {', $css);
+    self::assertStringContainsString('.categories-sidebar .category-link', $css);
+    self::assertStringContainsString('.categories-sidebar .header-nav-extension-link', $css);
+    self::assertStringContainsString('text-decoration: none', $css);
+    // Has-children: chevron + click accordion (not hover mega).
+    self::assertStringContainsString('.categories-sidebar .drawer-category-children', $css);
+    self::assertStringContainsString('.categories-sidebar .category-arrow', $css);
     self::assertStringContainsString('.header-nav-right-cluster > .header-nav-right-slot:has(#nav-links-list:empty)', $css);
     self::assertStringContainsString('id="nav-more-wrapper"', $header);
     self::assertStringContainsString('.header-nav-right-cluster > .nav-more-wrapper[style*="display: none"]', $css);
@@ -3123,6 +3131,7 @@ private function assert_LayoutCriticalCss_testStorefrontHeadAssetsPrefixIsCssOnl
     $src = (string) file_get_contents($path);
     self::assertStringContainsString('css-fouc-bootstrap.phtml', $src);
     self::assertStringContainsString('theme:layout-critical', $src);
+    self::assertStringContainsString('<!--weline:head-layout-assets-->', $src);
     self::assertStringNotContainsString('weline-theme-prepaint.js', $src);
     self::assertStringNotContainsString('ThemeHeadChromeJsPack', $src);
     self::assertStringNotContainsString('<script', $src);

@@ -121,6 +121,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         'force-menu',
         'skip-classmap',
         'skip-composer-dump',
+        'keep-maintenance',
         'y',
         'yes',
         '-y',
@@ -149,6 +150,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         '--force-menu',
         '--skip-classmap',
         '--skip-composer-dump',
+        '--keep-maintenance',
         '--yes, -y',
         '--help, -h',
     ];
@@ -761,7 +763,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             } finally {
                 try {
                     // ========== 清理阶段 ==========
-                    $this->cleanupUpgrade($lockHandle, $lockFile, $maintenanceEnabled);
+                    $this->cleanupUpgrade(
+                        $lockHandle,
+                        $lockFile,
+                        $maintenanceEnabled,
+                        isset($args['keep-maintenance'])
+                    );
                 } finally {
                     $setupReleaseFailed = null;
                     try {
@@ -2041,10 +2048,15 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      * @param mixed $lockHandle 锁句柄
      * @param string $lockFile 锁文件路径
      * @param bool $maintenanceEnabled 维护模式是否已启用
+     * @param bool $keepMaintenance 外层部署窗拥有维护生命周期时跳过清除
      * @return void
      */
-    private function cleanupUpgrade($lockHandle, string $lockFile, bool $maintenanceEnabled): void
-    {
+    private function cleanupUpgrade(
+        $lockHandle,
+        string $lockFile,
+        bool $maintenanceEnabled,
+        bool $keepMaintenance = false
+    ): void {
         $this->releaseForceMenuHold();
 
         // 1. 禁用延迟注册表更新模式（无论升级是否成功，都要恢复正常模式）
@@ -2064,6 +2076,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 3. 关闭维护模式（须先写 env 再同步 WLS；成功判定含 Worker 门禁 ACK）
         // 升级命令收尾恒退出「升级 503」：即使本轮未置位 $maintenanceEnabled，
         // 也清掉历史粘性 system.maintenance=true（失败升级/竞态残留）。
+        // --keep-maintenance：外层 Deploy 窗拥有开关，禁止此处抢关。
+        if ($keepMaintenance) {
+            $this->printing->note(__('已保留维护模式（--keep-maintenance）：由外层部署窗负责关闭。'));
+
+            return;
+        }
         $shouldClearMaintenance = $maintenanceEnabled
             || (bool)Env::getInstance()->getConfig('system.maintenance', false);
         if ($shouldClearMaintenance) {
@@ -4286,6 +4304,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '--force-menu' => __('强制全量重解析 menu.xml 并写入 ACL 菜单（清除 menu:* 指纹；不跳过环境检测）'),
                 '--skip-classmap' => __('跳过 composer dump-autoload 与类映射缓存生成。适用：未变更 Composer 依赖/自动加载配置的快速更新'),
                 '--skip-composer-dump' => __('仅跳过 composer dump-autoload。适用：Composer 子进程不可用但需要执行 setup 阶段'),
+                '--keep-maintenance' => __('保留维护模式：收尾不关闭 system.maintenance（供外层 deploy:release 窗拥有生命周期）'),
                 '--force-i18n-collect' => __('强制在 upgrade_after 跑全量短语 collect（默认跳过，避免 locale 稀表前扇出拖死升级；平时用 i18n:collect）'),
                 '-h, --help' => '显示帮助信息',
             ],
@@ -4293,6 +4312,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             [
                 '升级所有模块（默认；部署/系统更新用此命令，已含路由同步）' => 'php bin/w setup:upgrade',
                 __('升级并强制全量语言包收集') => 'php bin/w setup:upgrade --force-i18n-collect',
+                __('部署窗内升级（不关维护）') => 'php bin/w setup:upgrade --keep-maintenance',
                 '升级数据库模型（含 SchemaDiff）' => 'php bin/w setup:upgrade --model',
                 '仅升级路由（仅新增 Controller、无需 Schema 时）' => 'php bin/w setup:upgrade --route',
                 __('仅运行 schema_diff 阶段（测试声明式表）') => 'php bin/w setup:upgrade --stage=schema_diff',
@@ -4313,7 +4333,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 __('兼容旧脚本的同步参数') => 'php bin/w setup:upgrade --sync',
                 __('DEV 同版本 Schema 重绑') => 'php bin/w setup:upgrade --force-schema-rebind',
             ],
-            'php bin/w setup:upgrade [--model|--route|--stage=<code>|--hot|--force-optimize|--force-menu|--background-optimize|--sync|--force-schema-rebind] [-m|--module=<模块名>]'
+            'php bin/w setup:upgrade [--model|--route|--stage=<code>|--hot|--force-optimize|--force-menu|--background-optimize|--sync|--force-schema-rebind|--keep-maintenance] [-m|--module=<模块名>]'
         );
     }
 

@@ -426,7 +426,8 @@ class MailQueryProvider implements QueryProviderInterface
             (string)($params['subject'] ?? ''),
             (string)($params['body'] ?? $params['content'] ?? ''),
             (string)($params['source'] ?? ''),
-            (int)($params['source_id'] ?? 0)
+            (int)($params['source_id'] ?? 0),
+            (string)($params['cc'] ?? '')
         );
     }
 

@@ -65,10 +65,12 @@ final class MailComposerService
         string $subject,
         string $body,
         string $source = '',
-        int $sourceId = 0
+        int $sourceId = 0,
+        string $cc = ''
     ): array {
         $accountId = max(0, $accountId);
-        $to = strtolower(trim($to));
+        $toList = $this->parseAddressList($to);
+        $ccList = $this->parseAddressList($cc);
         $subject = trim($subject);
         $body = trim($body);
         $source = $this->normalizeSource($source);
@@ -77,7 +79,7 @@ final class MailComposerService
         if ($accountId <= 0) {
             return ['success' => false, 'message' => __('请选择已启用的本机企业邮箱账号'), 'code' => 422];
         }
-        if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+        if ($toList === []) {
             return ['success' => false, 'message' => __('收件邮箱格式不正确'), 'code' => 422];
         }
         if ($subject === '' || $body === '') {
@@ -90,7 +92,16 @@ final class MailComposerService
             return ['success' => false, 'message' => __('请选择已启用的本机企业邮箱账号'), 'code' => 422];
         }
 
-        $result = $smtp->sendViaAuthorizedAccount($accountId, $to, $subject, $body, $source, $sourceId);
+        $to = $toList[0];
+        $result = $smtp->sendViaAuthorizedAccount(
+            $accountId,
+            count($toList) === 1 ? $to : $toList,
+            $subject,
+            $body,
+            $source,
+            $sourceId,
+            $ccList
+        );
         if (empty($result['success'])) {
             return [
                 'success' => false,
@@ -160,5 +171,26 @@ final class MailComposerService
     private function normalizeSource(string $source): string
     {
         return preg_replace('/[^a-z0-9_]/', '', strtolower(trim($source))) ?: '';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function parseAddressList(string $raw): array
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return [];
+        }
+        preg_match_all('/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i', $raw, $m);
+        $out = [];
+        foreach ($m[0] ?? [] as $email) {
+            $email = strtolower((string)$email);
+            if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $out[$email] = $email;
+            }
+        }
+
+        return array_values($out);
     }
 }

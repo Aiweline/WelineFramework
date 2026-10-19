@@ -38,6 +38,7 @@ class DeployOrchestratorService
         private readonly DeploySiteBackupService $siteBackupService,
         private readonly DeployReleaseNotifier $releaseNotifier,
         private readonly DeployReleaseFlightGate $flightGate,
+        private readonly DeployMaintenanceWindowService $maintenanceWindow,
     ) {
         $this->isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
     }
@@ -74,6 +75,7 @@ class DeployOrchestratorService
         $releaseContext = $this->releaseContextFromParams($params, $runtimeConfig);
         /** @var Printing|null $printer */
         $printer = $params['printer'] ?? null;
+        $windowPrinter = $this->resolvePrinting($printer);
 
         $log = static function (string $message) use ($printer): void {
             if ($printer) {
@@ -91,6 +93,7 @@ class DeployOrchestratorService
         $gitCommit = '';
         $deployVersion = '';
         $releaseId = '';
+        $flightAcquired = false;
         $notifyBase = static fn(array $extra = []): array => $extra;
 
         try {
@@ -110,6 +113,7 @@ class DeployOrchestratorService
                     'message' => DeployReleaseFlightGate::BUSY_MESSAGE,
                 ];
             }
+            $flightAcquired = true;
 
             $releaseId = $this->runtimeService->generateReleaseId($versionHint ?? 'release');
             $this->historyService->start($releaseId, $trigger, $refType, $ref, $versionHint, $gitTag, $releaseContext);
@@ -124,6 +128,8 @@ class DeployOrchestratorService
             };
             $log(__('开始发布：%{1}', [$releaseId]));
             $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_STARTED, $notifyBase());
+
+            $this->maintenanceWindow->begin($windowPrinter);
 
             $preCommit = $this->gitService->getFullCommit($deployRoot);
             $preBranch = $this->gitService->getCurrentBranch($deployRoot);
@@ -167,6 +173,7 @@ class DeployOrchestratorService
                 $postDeployCommand = 'php bin/w setup:upgrade';
                 $log(__('POST_DEPLOY 为空，默认执行 setup:upgrade 以达静态铺平…'));
             }
+            $postDeployCommand = $this->ensureKeepMaintenanceOnSetupUpgrade($postDeployCommand);
             $log(__('执行后置命令...'));
             $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_POST_DEPLOY_START, $notifyBase([
                 'deploy_root' => $deployRoot,
@@ -287,7 +294,13 @@ class DeployOrchestratorService
                 'message' => $error,
             ];
         } finally {
-            $this->flightGate->release();
+            try {
+                $this->maintenanceWindow->end($windowPrinter);
+            } finally {
+                if ($flightAcquired) {
+                    $this->flightGate->release();
+                }
+            }
         }
     }
 
@@ -320,6 +333,7 @@ class DeployOrchestratorService
         $backupTrigger = trim((string)($params['backup_trigger'] ?? 'rollback'));
         /** @var Printing|null $printer */
         $printer = $params['printer'] ?? null;
+        $windowPrinter = $this->resolvePrinting($printer);
         $log = static function (string $message) use ($printer): void {
             if ($printer) {
                 $printer->note($message);
@@ -365,6 +379,7 @@ class DeployOrchestratorService
             $config = $this->loadConfig($runtimeConfig);
             $deployRoot = $this->resolveDeployRoot($config);
             $releaseContext['deploy_root'] = $deployRoot;
+            $this->maintenanceWindow->begin($windowPrinter);
 
             if ($this->shouldRunBackup($noBackup)) {
                 $log(__('回滚前备份中...'));
@@ -453,6 +468,8 @@ class DeployOrchestratorService
                 'deploy_version' => '',
                 'message' => $error,
             ];
+        } finally {
+            $this->maintenanceWindow->end($windowPrinter);
         }
     }
 
@@ -1206,6 +1223,45 @@ class DeployOrchestratorService
                 [$code, $output !== '' ? $output : $command]
             ));
         }
+    }
+
+    private function resolvePrinting(?Printing $printer): Printing
+    {
+        if ($printer instanceof Printing) {
+            return $printer;
+        }
+
+        return ObjectManager::getInstance(Printing::class);
+    }
+
+    /**
+     * Idempotently append --keep-maintenance to every setup:upgrade segment
+     * so nested upgrade cleanup cannot close the deploy window.
+     */
+    private function ensureKeepMaintenanceOnSetupUpgrade(string $command): string
+    {
+        $command = trim($command);
+        if ($command === '') {
+            return 'php bin/w setup:upgrade --keep-maintenance';
+        }
+
+        $segments = preg_split('/\s*&&\s*/', $command) ?: [];
+        $normalized = [];
+        foreach ($segments as $segment) {
+            $segment = trim((string)$segment);
+            if ($segment === '') {
+                continue;
+            }
+            if (
+                preg_match('/^php\s+bin\/w\s+setup:upgrade(?:\s|$)/', $segment) === 1
+                && !preg_match('/(^|\s)--keep-maintenance(\s|$)/', $segment)
+            ) {
+                $segment .= ' --keep-maintenance';
+            }
+            $normalized[] = $segment;
+        }
+
+        return $normalized === [] ? $command : implode(' && ', $normalized);
     }
 
     private function reloadServer(string $deployRoot): void

@@ -18,6 +18,7 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\UrlManager\Model\UrlRewrite;
 
 class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
@@ -148,10 +149,9 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         $language = \trim((string)($stripped['language'] ?? ''));
         if ($language !== '') {
             // Preserve the visitor-facing path locale after the pretty path is
-            // stripped for rewrite lookup. PageBuilder LIVE rendering reads this
+            // stripped for rewrite lookup. PageBuilder LIVE reads RequestContext
             // when REQUEST_URI no longer contains /en_US/...
-            WelineEnv::setServer('WELINE_URL_PATH_LANG', $language, 'RouterRewrite strip locale');
-            $_SERVER['WELINE_URL_PATH_LANG'] = $language;
+            RequestContext::locale($language);
         }
 
         return (string)($stripped['path'] ?? '');
@@ -253,12 +253,11 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
             if ($lookupUri === '') {
                 $lookupUri = $this->stripLocalizationPrefix($workingUri);
             } elseif ($lookupPath !== '' && \is_string($lookupPath)) {
-                // lookup_path already stripped by Url::decode_url; still pin PATH_LANG
-                // when the working URL still carries a locale segment.
+                // lookup_path already stripped by Url::decode_url; still pin
+                // RequestContext locale when the working URL still carries a locale segment.
                 $meta = Url::stripStorefrontLocalizationFromPath($workingUri);
                 if ($meta['language'] !== '') {
-                    WelineEnv::setServer('WELINE_URL_PATH_LANG', $meta['language'], 'RouterRewrite payload locale');
-                    $_SERVER['WELINE_URL_PATH_LANG'] = $meta['language'];
+                    RequestContext::locale($meta['language']);
                 }
             }
             $websiteId = \is_numeric($websiteFromPayload) && (int)$websiteFromPayload > 0
@@ -615,15 +614,21 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         );
         $originLanguage = \trim((string)($originLocalization['language'] ?? ''));
         if ($originLanguage === '') {
-            $originLanguage = \trim((string)(
-                $_SERVER['WELINE_URL_PATH_LANG']
-                ?? WelineEnv::server('WELINE_URL_PATH_LANG', '')
-                ?? ''
-            ));
+            try {
+                $originLanguage = \trim((string)(RequestContext::locale() ?? ''));
+            } catch (\Throwable) {
+                $originLanguage = '';
+            }
+            if ($originLanguage === '') {
+                try {
+                    $originLanguage = \trim((string)State::getLang());
+                } catch (\Throwable) {
+                    $originLanguage = '';
+                }
+            }
         }
         if ($originLanguage !== '') {
-            WelineEnv::setServer('WELINE_URL_PATH_LANG', $originLanguage, 'RouterRewrite origin locale');
-            $_SERVER['WELINE_URL_PATH_LANG'] = $originLanguage;
+            RequestContext::locale($originLanguage);
         }
         if ($websiteId !== null && $websiteId > 0) {
             WelineEnv::setServer('WELINE_WEBSITE_ID', (string)$websiteId, 'RouterRewrite decoded website');
@@ -650,9 +655,6 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
                 ->setServer('QUERY_STRING', $queryString)
                 ->setServer('WELINE_ORIGIN_REQUEST_URI', $originRequestUri);
 
-            if ($originLanguage !== '') {
-                $request->setServer('WELINE_URL_PATH_LANG', $originLanguage);
-            }
             if ($websiteId !== null && $websiteId > 0) {
                 $request->setServer('WELINE_WEBSITE_ID', (string)$websiteId)
                     ->setServer('WELINE_URL_REWRITE_WEBSITE_ID', (string)$websiteId);

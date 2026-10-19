@@ -15,6 +15,11 @@ class DeployWebhookReleaseService
     ) {
     }
 
+    public function isWebhookIngressEnabled(): bool
+    {
+        return $this->configService->isWebhookEnabled();
+    }
+
     public function loadConfig(): array
     {
         $config = $this->configService->getWebhookShellConfig();

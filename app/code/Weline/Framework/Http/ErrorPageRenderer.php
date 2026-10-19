@@ -569,19 +569,10 @@ HTML;
                 }
             }
 
-            // Prefer explicit visitor locale when REQUEST_URI was rewritten without
-            // /{locale} but PATH_LANG / State still know the browser path language.
+            // Prefer RequestContext / State when REQUEST_URI was rewritten without
+            // /{locale} but the visitor path locale was already written at peel time.
             $explicitLang = '';
-            if (\class_exists(WelineEnv::class, false)) {
-                try {
-                    $explicitLang = StorefrontNotFoundStaticPage::normalizeLangCode(
-                        (string)WelineEnv::server('WELINE_URL_PATH_LANG', '')
-                    );
-                } catch (\Throwable) {
-                    $explicitLang = '';
-                }
-            }
-            if ($explicitLang === '' && \class_exists(\Weline\Framework\App\State::class, false)) {
+            if (\class_exists(\Weline\Framework\App\State::class, false)) {
                 try {
                     $explicitLang = StorefrontNotFoundStaticPage::normalizeLangCode(
                         (string)\Weline\Framework\App\State::getLang()

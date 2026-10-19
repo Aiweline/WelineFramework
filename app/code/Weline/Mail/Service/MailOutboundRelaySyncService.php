@@ -15,15 +15,17 @@ use Weline\Smtp\Service\SmtpServiceCatalogService;
  *
  * 优先级（用户拍板）：
  * 1) local：本域收件进本地投递
- * 2) 导流规则 → 具体 Smtp 账户（收件域规则 / 账号外投 / hub 绑定；端口 587/465，禁 25）
- * 3) 无匹配规则 → 自家域名 Smtp（MailDomain.hostname / Smtp self，587/465）
- * 4) 都没有 → 才兜底 mx（25）
+ * 2) 收件域后缀导流（如 qq.com → Hub）；不命中则不进 Hub/QQ
+ * 3) 账号外投（仅该 sender==邮箱；不得替代后缀分流、不得抬成全局 else）
+ * 4) 跨机可达的域名/Smtp self 中继（587/465，须能 AUTH；禁止本域 mail./smtp. 无认证自环）
+ * 5) 都没有 → 才兜底 mx（25）
  *
- * 边缘站（汉服）：导流/账号外投指向 mail.aiweline.com hub——跨机中继，不是自环。
- * Hub 站（weline）：本机 hostname 不可作 else（会自环）；无可达域名 Smtp 时 else 可升为已配置
- * weline-hub-*（如 QQ:465）作云主机最终出站；再没有才 mx:25。
+ * 边缘站：qq 等后缀才走 Hub；Gmail 等非命中后缀已在 smtp.{域} 提交，出站走 mx（25）。
+ * 本域 mail./smtp. 无认证 Relay 会 503 永久失败且不触发 failover，禁止写入策略。
+ * Hub 站：else 可升为非 QQ 的 weline-hub-*；QQ 只绑 sender==授权用户，禁止作全局 else。
  *
- * not_to_do：边缘站把跨机 hub 误判自环；有可达域名 Smtp/导流却走 mx；中继端口写 25。
+ * not_to_do：品牌账号整账号外投 Hub 导致 Gmail From 变 QQ；QQ/Hub 作全局 else；
+ * 本域 submission 主机无认证自环；中继端口写 25。
  */
 final class MailOutboundRelaySyncService
 {
@@ -41,11 +43,34 @@ final class MailOutboundRelaySyncService
      */
     public function syncAll(): array
     {
-        $built = $this->buildPayload();
+        try {
+            $built = $this->buildPayload();
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => (string)__('外投路由载荷构建失败：%{1}', [$e->getMessage()]),
+                'applied' => false,
+                'self_ref_warning' => false,
+                'routes' => [],
+                'strategy_route' => [],
+            ];
+        }
         $selfRef = !empty($built['self_ref_warning']);
         /** @var StalwartManagementAdapter $adapter */
         $adapter = ObjectManager::getInstance(StalwartManagementAdapter::class);
         if (!$adapter->hasManagementCredential()) {
+            // 无引擎管理凭据时：若载荷里已有需下发的 Relay，不得假成功（一键/导流保存会吃这个坑）。
+            if ($built['routes'] !== []) {
+                return [
+                    'success' => false,
+                    'message' => (string)__('有外投/Hub 导流配置，但 Stalwart 管理凭据未就绪，无法下发'),
+                    'applied' => false,
+                    'self_ref_warning' => $selfRef,
+                    'routes' => $built['routes'],
+                    'strategy_route' => $built['strategy_route'],
+                ];
+            }
+
             return [
                 'success' => true,
                 'message' => (string)__('已生成外投路由载荷（无 Stalwart 管理凭据，未下发）'),
@@ -70,6 +95,23 @@ final class MailOutboundRelaySyncService
             ];
         }
 
+        // 一键/同步后探针：带账号的中继必须 AUTH 成功，否则 Hub 密码错也会假成功。
+        try {
+            $this->assertAuthenticatedRelaysReachable($built['routes']);
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => (string)__(
+                    '外投路由已写入引擎，但中继认证探针失败：%{1}',
+                    [$e->getMessage()]
+                ),
+                'applied' => true,
+                'self_ref_warning' => $selfRef,
+                'routes' => $built['routes'],
+                'strategy_route' => $built['strategy_route'],
+            ];
+        }
+
         return [
             'success' => true,
             'message' => $selfRef
@@ -80,6 +122,214 @@ final class MailOutboundRelaySyncService
             'routes' => $built['routes'],
             'strategy_route' => $built['strategy_route'],
         ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $routes
+     */
+    private function assertAuthenticatedRelaysReachable(array $routes): void
+    {
+        $seen = [];
+        foreach ($routes as $route) {
+            if (!is_array($route)) {
+                continue;
+            }
+            $host = strtolower(trim((string)($route['address'] ?? '')));
+            $port = (int)($route['port'] ?? 0);
+            $user = trim((string)($route['authUsername'] ?? ''));
+            $secret = '';
+            $authSecret = $route['authSecret'] ?? null;
+            if (is_array($authSecret) && (($authSecret['@type'] ?? '') === 'Value')) {
+                $secret = (string)($authSecret['secret'] ?? '');
+            }
+            if ($host === '' || $user === '' || $secret === '') {
+                continue;
+            }
+            $port = $this->normalizeSubmissionPort($port);
+            $key = $host . '|' . $port . '|' . strtolower($user);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $this->probeSmtpAuthLogin($host, $port, $user, $secret);
+        }
+    }
+
+    private function probeSmtpAuthLogin(string $host, int $port, string $user, string $password): void
+    {
+        $errno = 0;
+        $errstr = '';
+        $fp = @stream_socket_client(
+            'tcp://' . $host . ':' . $port,
+            $errno,
+            $errstr,
+            8.0
+        );
+        if (!is_resource($fp)) {
+            throw new \RuntimeException(
+                (string)__('无法连接中继 %{1}:%{2}（%{3}）', [$host, (string)$port, $errstr !== '' ? $errstr : (string)$errno])
+            );
+        }
+        stream_set_timeout($fp, 10);
+        $read = static function ($fp): string {
+            $data = '';
+            while (($line = fgets($fp, 512)) !== false) {
+                $data .= $line;
+                if (isset($line[3]) && $line[3] === ' ') {
+                    break;
+                }
+            }
+
+            return $data;
+        };
+        try {
+            $read($fp);
+            fwrite($fp, "EHLO weline-relay-probe\r\n");
+            $read($fp);
+            if ($port !== 465) {
+                fwrite($fp, "STARTTLS\r\n");
+                $tlsResp = $read($fp);
+                if (!str_starts_with(trim($tlsResp), '220')) {
+                    throw new \RuntimeException((string)__('中继 %{1} STARTTLS 失败', [$host]));
+                }
+                if (!@stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
+                    throw new \RuntimeException((string)__('中继 %{1} TLS 握手失败', [$host]));
+                }
+                fwrite($fp, "EHLO weline-relay-probe\r\n");
+                $read($fp);
+            }
+            fwrite($fp, "AUTH LOGIN\r\n");
+            $auth = trim($read($fp));
+            if (!str_starts_with($auth, '334')) {
+                throw new \RuntimeException((string)__('中继 %{1} 不接受 AUTH LOGIN：%{2}', [$host, $auth]));
+            }
+            fwrite($fp, base64_encode($user) . "\r\n");
+            $read($fp);
+            fwrite($fp, base64_encode($password) . "\r\n");
+            $passResp = trim($read($fp));
+            if (!str_starts_with($passResp, '235')) {
+                throw new \RuntimeException(
+                    (string)__(
+                        '中继 %{1} 用户 %{2} 认证失败（%{3}）。请确认 Hub 上该账号密码与导流密封一致。',
+                        [$host, $user, $passResp]
+                    )
+                );
+            }
+            fwrite($fp, "QUIT\r\n");
+        } finally {
+            fclose($fp);
+        }
+    }
+
+    /**
+     * 解析中继认证密码（一键/同步必须带上库内 Hub，禁止静默空 authSecret）。
+     *
+     * 顺序：密封 open → 旧钥解开则重封回库 → 解不开/无密封时，若用户名是邮箱则回退同址
+     * MailAccount.password_sealed（Hub 提交口令通常=邮箱口令）并重封写回中继列。
+     *
+     * @param callable(string $resealed): void|null $persistSealed
+     */
+    private function resolveRelayAuthPassword(
+        MailOutboundRelaySecretService $secrets,
+        string $sealed,
+        string $username,
+        string $contextLabel,
+        ?callable $persistSealed = null
+    ): string {
+        $sealed = trim($sealed);
+        $username = trim($username);
+        $password = '';
+        $openedFromSealed = false;
+
+        if ($sealed !== '') {
+            try {
+                $password = $secrets->open($sealed);
+                $openedFromSealed = $password !== '';
+                $this->persistPendingReseal($secrets, $persistSealed);
+            } catch (\Throwable) {
+                $password = '';
+                $openedFromSealed = false;
+            }
+        }
+
+        if ($password === '' && $username !== '' && filter_var($username, FILTER_VALIDATE_EMAIL)) {
+            $fallback = $this->openMailAccountPassword($secrets, strtolower($username));
+            if ($fallback !== '') {
+                $password = $fallback;
+                try {
+                    $resealed = $secrets->seal($password);
+                    if ($persistSealed !== null) {
+                        $persistSealed($resealed);
+                    }
+                } catch (\Throwable) {
+                    // 下发仍可用明文；重封失败不阻断一键。
+                }
+            }
+        }
+
+        if ($password !== '') {
+            return $password;
+        }
+
+        if ($sealed !== '' && !$openedFromSealed) {
+            throw new \RuntimeException(
+                (string)__(
+                    '%{1}：中继密码无法解密，且未能用同址邮箱账户密码回退。请在后台重新填写 Hub/中继密码并保存后再一键配置。',
+                    [$contextLabel]
+                )
+            );
+        }
+
+        return '';
+    }
+
+    /**
+     * 旧钥解开后的项目钥重封写回库。
+     *
+     * @param callable(string $resealed): void|null $persistSealed
+     */
+    private function persistPendingReseal(
+        MailOutboundRelaySecretService $secrets,
+        ?callable $persistSealed
+    ): void {
+        $resealed = $secrets->consumePendingReseal();
+        if ($resealed === null || $resealed === '' || $persistSealed === null) {
+            return;
+        }
+        try {
+            $persistSealed($resealed);
+        } catch (\Throwable) {
+            // 重封写库失败不阻断下发。
+        }
+    }
+
+    private function openMailAccountPassword(
+        MailOutboundRelaySecretService $secrets,
+        string $email
+    ): string {
+        $email = strtolower(trim($email));
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return '';
+        }
+        try {
+            /** @var MailAccount $account */
+            $account = ObjectManager::getInstance(MailAccount::class)
+                ->clear()
+                ->where(MailAccount::schema_fields_EMAIL, $email)
+                ->find()
+                ->fetch();
+            if (!$account instanceof MailAccount || !(int)$account->getId()) {
+                return '';
+            }
+            $sealed = trim((string)$account->getData(MailAccount::schema_fields_PASSWORD_SEALED));
+            if ($sealed === '') {
+                return '';
+            }
+
+            return $secrets->open($sealed);
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /**
@@ -182,8 +432,12 @@ final class MailOutboundRelaySyncService
     }
 
     /**
-     * Hub 站最终出站：else 仍是 mx 且已配置 weline-hub-* → 改用 hub（587/465），避免云拦 :25。
-     * 边缘站指向 mail.aiweline.com 走导流/账号外投/域名 Smtp，不靠本函数。
+     * Hub 站最终出站：else 仍是 mx 且已配置非 QQ 的 weline-hub-* → 改用 hub（587/465），避免云拦 :25。
+     * 边缘站 else 已是域名 Smtp / mx，不靠本函数抬 Hub。
+     *
+     * Hub 站 else：优先非 QQ 的 weline-hub-*；仅有 QQ 时 else=QQ 作传输（云拦 :25 否则外投全死）。
+     * Header From 软包装由 applyQqHubEnvelopeFromRewriteIfElse + Sieve 负责——禁止把品牌信头硬改成 QQ。
+     * 边缘站无 weline-hub-*，不走本函数抬 QQ。
      *
      * @param list<string> $existingHubs
      */
@@ -197,23 +451,28 @@ final class MailOutboundRelaySyncService
             return $else;
         }
         $preferred = '';
+        $qqOnly = '';
         foreach ($existingHubs as $name) {
             $name = trim((string)$name);
             if ($name === '') {
                 continue;
             }
             if ($name === 'weline-hub-qq-smtp') {
-                return "'" . addcslashes($name, "'\\") . "'";
+                $qqOnly = $name;
+                continue;
             }
             if ($preferred === '') {
                 $preferred = $name;
             }
         }
-        if ($preferred === '') {
-            return "'mx'";
+        if ($preferred !== '') {
+            return "'" . addcslashes($preferred, "'\\") . "'";
+        }
+        if ($qqOnly !== '') {
+            return "'" . addcslashes($qqOnly, "'\\") . "'";
         }
 
-        return "'" . addcslashes($preferred, "'\\") . "'";
+        return "'mx'";
     }
 
     /**
@@ -367,13 +626,32 @@ final class MailOutboundRelaySyncService
             $sealed = trim((string)($rule[MailOutboundRouteRule::schema_fields_RELAY_PASSWORD_SEALED]
                 ?? $rule['relay_password_sealed']
                 ?? ''));
-            $password = '';
-            if ($sealed !== '') {
-                try {
-                    $password = $secrets->open($sealed);
-                } catch (\Throwable) {
-                    $password = '';
-                }
+            $ruleId = (int)($rule[MailOutboundRouteRule::schema_fields_ID]
+                ?? $rule['rule_id']
+                ?? 0);
+            // 库内 Hub 导流：密封优先；解不开则回退同址邮箱口令并重封（一键不得丢分流）。
+            $password = $this->resolveRelayAuthPassword(
+                $secrets,
+                $sealed,
+                $user,
+                (string)__('收件域导流 %{1} → %{2}', [$matchDomain, $host]),
+                $ruleId > 0
+                    ? static function (string $resealed) use ($ruleId): void {
+                        $m = ObjectManager::getInstance(MailOutboundRouteRule::class)->clear()->load($ruleId);
+                        if ((int)$m->getId() === $ruleId) {
+                            $m->setData(MailOutboundRouteRule::schema_fields_RELAY_PASSWORD_SEALED, $resealed)
+                                ->save();
+                        }
+                    }
+                    : null
+            );
+            if ($user !== '' && $password === '') {
+                throw new \RuntimeException(
+                    (string)__(
+                        '收件域导流 %{1} → %{2} 需要中继密码，但库中无可用密封/账户密码；请在后台重新填写并保存。',
+                        [$matchDomain, $host]
+                    )
+                );
             }
             if ($this->looksSelfRefHost($host)) {
                 $selfRef = true;
@@ -435,6 +713,7 @@ final class MailOutboundRelaySyncService
             $sealed = trim((string)($acct[MailAccount::schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED]
                 ?? $acct['outbound_relay_password_sealed']
                 ?? ''));
+            $sealedFromDomain = false;
 
             if ($host === '') {
                 $host = strtolower(trim((string)($domain[MailDomain::schema_fields_OUTBOUND_RELAY_HOST]
@@ -454,6 +733,7 @@ final class MailOutboundRelaySyncService
                     $sealed = trim((string)($domain[MailDomain::schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED]
                         ?? $domain['outbound_relay_password_sealed']
                         ?? ''));
+                    $sealedFromDomain = $sealed !== '';
                 }
                 if ($tls === 'starttls') {
                     $domainTls = strtolower(trim((string)($domain[MailDomain::schema_fields_OUTBOUND_RELAY_TLS]
@@ -470,13 +750,36 @@ final class MailOutboundRelaySyncService
             $port = $this->normalizeSubmissionPort($port);
             $tls = $this->normalizeTls($tls, $port);
 
-            $password = '';
-            if ($sealed !== '') {
-                try {
-                    $password = $secrets->open($sealed);
-                } catch (\Throwable) {
-                    $password = '';
+            $authUser = $user !== '' ? $user : $email;
+            $password = $this->resolveRelayAuthPassword(
+                $secrets,
+                $sealed,
+                $authUser,
+                (string)__('账号外投 %{1} → %{2}', [$email, $host]),
+                static function (string $resealed) use ($accountId, $domainId, $sealedFromDomain): void {
+                    if ($sealedFromDomain && $domainId > 0) {
+                        $d = ObjectManager::getInstance(MailDomain::class)->clear()->load($domainId);
+                        if ((int)$d->getId() === $domainId) {
+                            $d->setData(MailDomain::schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED, $resealed)
+                                ->save();
+                        }
+
+                        return;
+                    }
+                    $a = ObjectManager::getInstance(MailAccount::class)->clear()->load($accountId);
+                    if ((int)$a->getId() === $accountId) {
+                        $a->setData(MailAccount::schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED, $resealed)
+                            ->save();
+                    }
                 }
+            );
+            if ($authUser !== '' && $password === '') {
+                throw new \RuntimeException(
+                    (string)__(
+                        '账号外投 %{1} → %{2} 需要中继密码，但库中无可用密封/账户密码；请在后台重新填写并保存。',
+                        [$email, $host]
+                    )
+                );
             }
 
             $mailHost = strtolower(trim((string)($domain[MailDomain::schema_fields_HOSTNAME]
@@ -493,7 +796,7 @@ final class MailOutboundRelaySyncService
                 $routeByKey,
                 $host,
                 $port,
-                $user,
+                $authUser,
                 $tls,
                 $password,
                 'weline-outbound-acct-'
@@ -505,7 +808,7 @@ final class MailOutboundRelaySyncService
             ];
         }
 
-        // A1：local → 导流规则（rcpt / sender）→ 再挂自家域名 Smtp（按 sender_domain）
+        // A1：local → 收件域后缀导流 → 账号外投 →（有 Hub 导流时）mx 临时失败后 retry→Hub
         $match = [];
         $match[] = [
             'if' => 'is_local_domain(rcpt_domain)',
@@ -518,8 +821,16 @@ final class MailOutboundRelaySyncService
             $match[] = $rule;
         }
 
-        // A2：无导流匹配时走可达的域名/外部 Smtp（587/465）。本机 hostname≠自环目标；
-        // 跨机 hub（如 mail.aiweline.com）算合法 else。都不可达才 mx（25）。
+        // 云拦 :25：首次 else=mx；临时失败后 retry_num>0 走已配置的 Hub 导流（软包装在 Hub）。
+        $hubFailoverRoute = $this->firstHubBoundRcptRouteName($rcptMatches);
+        if ($hubFailoverRoute !== '') {
+            $match[] = [
+                'if' => 'retry_num > 0',
+                'then' => "'" . addcslashes($hubFailoverRoute, "'\\") . "'",
+            ];
+        }
+
+        // A2：无导流匹配时走可达跨机 Smtp；本域 submission 不作自环。都没有 → mx（25）。
         $else = "'mx'";
         $domainSmtpMatches = $this->buildDomainSmtpSenderMatches($domainLookup, $routeByKey, $selfRef);
         foreach ($domainSmtpMatches as $rule) {
@@ -560,7 +871,30 @@ final class MailOutboundRelaySyncService
     }
 
     /**
-     * 自家域名 Smtp：每个 active 域 hostname（非本机）→ sender_domain == 该域 走 587/465。
+     * 取首个收件域导流路由名（通常 qq.com→mail.aiweline.com），供 mx 临时失败后 failover。
+     *
+     * @param list<array{if:string,then:string}> $rcptMatches
+     */
+    private function firstHubBoundRcptRouteName(array $rcptMatches): string
+    {
+        foreach ($rcptMatches as $rule) {
+            $then = trim((string)($rule['then'] ?? ''));
+            if ($then === '' || $then === "'local'" || $then === "'mx'") {
+                continue;
+            }
+            if ($then[0] === "'" && str_ends_with($then, "'")) {
+                return substr($then, 1, -1);
+            }
+
+            return $then;
+        }
+
+        return '';
+    }
+
+    /**
+     * 跨机域名 Smtp：active 域 hostname 指向远端中继时 → sender_domain 走 587/465。
+     * 本域 mail./smtp. submission（消息已在此机提交）禁止无认证自环 Relay（会 503 永久失败）。
      *
      * @param array<int, array<string, mixed>> $domainLookup
      * @param array<string, array{route_name: string, relay: array<string, mixed>}> $routeByKey
@@ -586,7 +920,7 @@ final class MailOutboundRelaySyncService
             if ($host === '') {
                 $host = 'mail.' . $domainName;
             }
-            if ($this->isLocalOutboundHost($host)) {
+            if ($this->isOwnDomainSubmissionHost($host, $domainLookup) || $this->isLocalOutboundHost($host)) {
                 $selfRef = true;
                 continue;
             }
@@ -614,8 +948,8 @@ final class MailOutboundRelaySyncService
     }
 
     /**
-     * 本机 Smtp 默认外投：优先 Smtp 目录 self 服务；否则首个非本机 MailDomain.hostname。
-     * 端口只允许 587/465（25→587）。
+     * 默认 else：仅跨机、带认证的 Smtp self 可作 Relay；本域 smtp.{域} 已是提交入口，出站应 mx。
+     * 禁止 MODE_EXTERNAL Hub 抬成全局 else（非 qq 后缀会进 Hub，From 硬成 QQ）。
      *
      * @param array<int, array<string, mixed>> $domainLookup
      * @return array{host:string,port:int,user:string,tls:string,password:string}|null
@@ -625,7 +959,8 @@ final class MailOutboundRelaySyncService
         try {
             /** @var SmtpServiceCatalogService $catalog */
             $catalog = ObjectManager::getInstance(SmtpServiceCatalogService::class);
-            $fallbackExternal = null;
+            /** @var MailOutboundRelaySecretService $secrets */
+            $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
             foreach ($catalog->listServices() as $svc) {
                 if (!$svc instanceof SmtpService) {
                     continue;
@@ -634,70 +969,90 @@ final class MailOutboundRelaySyncService
                     continue;
                 }
                 $mode = (string)$svc->getData(SmtpService::schema_fields_MODE);
+                if ($mode !== SmtpService::MODE_SELF) {
+                    continue;
+                }
                 $host = strtolower(trim((string)$svc->getData(SmtpService::schema_fields_SMTP_HOSTNAME)));
-                if ($host === '' || $this->isLocalOutboundHost($host)) {
+                if ($host === ''
+                    || $this->isOwnDomainSubmissionHost($host, $domainLookup)
+                    || $this->isLocalOutboundHost($host)
+                ) {
+                    continue;
+                }
+                $user = trim((string)$svc->getData(SmtpService::schema_fields_USERNAME));
+                $sealed = trim((string)$svc->getData(SmtpService::schema_fields_PASSWORD_SEALED));
+                // 无认证跨机 self 会 503；本域 submission 已在上方跳过。
+                if ($user === '') {
+                    continue;
+                }
+                $password = '';
+                try {
+                    $password = $this->resolveRelayAuthPassword(
+                        $secrets,
+                        $sealed,
+                        $user,
+                        (string)__('Smtp self else %{1}', [$host]),
+                        null
+                    );
+                } catch (\Throwable) {
+                    $password = '';
+                }
+                if ($password === '') {
                     continue;
                 }
                 $submission = $this->resolveReachableSubmissionEndpoint($host);
                 if ($submission === null) {
                     continue;
                 }
-                $candidate = [
+
+                return [
                     'host' => $host,
                     'port' => $submission['port'],
-                    'user' => trim((string)$svc->getData(SmtpService::schema_fields_USERNAME)),
+                    'user' => $user,
                     'tls' => $submission['tls'],
-                    'password' => '',
+                    'password' => $password,
                 ];
-                // 优先本机 Smtp 目录里的「非本机」self；否则用 external hub（如 mail.aiweline.com）。
-                if ($mode === SmtpService::MODE_SELF) {
-                    return $candidate;
-                }
-                if ($fallbackExternal === null && $mode === SmtpService::MODE_EXTERNAL) {
-                    $fallbackExternal = $candidate;
-                }
-            }
-            if ($fallbackExternal !== null) {
-                return $fallbackExternal;
             }
         } catch (\Throwable) {
-            // Smtp 模块不可用时退回 MailDomain。
+            // Smtp 模块不可用：无跨机带认证 self 则 else=mx。
         }
 
+        return null;
+    }
+
+    /**
+     * 本域 submission 主机：mail.{域} / smtp.{域} / MailDomain.hostname——消息已在此提交，出站应 mx，禁止自环 Relay。
+     *
+     * @param array<int, array<string, mixed>> $domainLookup
+     */
+    private function isOwnDomainSubmissionHost(string $host, array $domainLookup): bool
+    {
+        $host = strtolower(trim($host));
+        if ($host === '') {
+            return false;
+        }
         foreach ($domainLookup as $domain) {
             if ((string)($domain[MailDomain::schema_fields_STATUS] ?? $domain['status'] ?? '') !== 'active') {
                 continue;
             }
-            $host = strtolower(trim((string)($domain[MailDomain::schema_fields_HOSTNAME]
+            $domainName = strtolower(trim((string)($domain[MailDomain::schema_fields_DOMAIN_NAME]
+                ?? $domain['domain_name']
+                ?? '')));
+            $hostname = strtolower(trim((string)($domain[MailDomain::schema_fields_HOSTNAME]
                 ?? $domain['hostname']
                 ?? '')));
-            if ($host === '') {
-                $root = strtolower(trim((string)($domain[MailDomain::schema_fields_DOMAIN_NAME]
-                    ?? $domain['domain_name']
-                    ?? '')));
-                if ($root === '') {
-                    continue;
-                }
-                $host = 'mail.' . $root;
-            }
-            if ($this->isLocalOutboundHost($host)) {
+            if ($domainName === '') {
                 continue;
             }
-            $submission = $this->resolveReachableSubmissionEndpoint($host);
-            if ($submission === null) {
-                continue;
+            if ($host === $hostname
+                || $host === 'mail.' . $domainName
+                || $host === 'smtp.' . $domainName
+            ) {
+                return true;
             }
-
-            return [
-                'host' => $host,
-                'port' => $submission['port'],
-                'user' => '',
-                'tls' => $submission['tls'],
-                'password' => '',
-            ];
         }
 
-        return null;
+        return false;
     }
 
     /**

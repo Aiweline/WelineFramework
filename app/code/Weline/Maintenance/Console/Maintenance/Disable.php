@@ -14,13 +14,8 @@ declare(strict_types=1);
 
 namespace Weline\Maintenance\Console\Maintenance;
 
-use Weline\Framework\Console\CommandInterface;
-
-use Weline\Framework\App\Env;
 use Weline\Framework\Output\Cli\Printing;
-use Weline\Maintenance\Helper\MaintenanceEdgeFlag;
-use Weline\Maintenance\Helper\WlsMaintenanceSync;
-use Weline\Maintenance\Service\UpgradeWaveService;
+use Weline\Maintenance\Service\MaintenanceModeToggleService;
 
 class Disable implements \Weline\Framework\Console\CommandInterface
 {
@@ -36,8 +31,7 @@ class Disable implements \Weline\Framework\Console\CommandInterface
      */
     public function __construct(
         Printing $printing
-    )
-    {
+    ) {
         $this->printing = $printing;
     }
 
@@ -46,26 +40,7 @@ class Disable implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
-        Env::getInstance()->setConfig('system.maintenance', false);
-        if (!MaintenanceEdgeFlag::disable()) {
-            $this->printing->warning(__(
-                '未能删除边缘维护标志 %{1}；托管 Nginx 可能仍跳过店面 html-disk。',
-                [MaintenanceEdgeFlag::RELATIVE_PATH]
-            ));
-        }
-        $waves = new UpgradeWaveService();
-        $wave = $waves->markRecovered();
-        if ($wave !== null) {
-            $deadline = (int)($wave['redeem_deadline_at'] ?? 0);
-            $this->printing->note(__('维护礼金兑礼窗口已开启，截止时间戳：%{1}', [(string)$deadline]));
-        }
-        $closed = $waves->closeExpiredWave();
-        if ($closed !== null && (string)($closed['status'] ?? '') === 'closed') {
-            $this->printing->note(__('已过期的兑礼波次状态已关闭（status=closed）。'));
-        }
-        $this->printing->success(__('维护模式已关闭！'));
-        $this->printing->note(__('本机店面验收一键关维护：php bin/w maintenance:disable（会同步本机 WLS Worker；禁止用于假关生产）。'));
-        WlsMaintenanceSync::syncAfterCliToggle($this->printing, false, $args);
+        (new MaintenanceModeToggleService())->disableFull($this->printing, $args);
     }
 
     /**
