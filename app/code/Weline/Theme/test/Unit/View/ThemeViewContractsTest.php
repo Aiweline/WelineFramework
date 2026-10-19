@@ -2250,7 +2250,7 @@ private function assert_StorefrontTailChrome_testFooterNestedFingerprintListsTai
 private function assert_StorefrontTailChrome_testPartialsSchemaIncludesFooterNestedFingerprint(): void
 {
     $src = (string) file_get_contents($this->themeRoot_StorefrontTailChrome() . '/Block/Partials.php');
-    self::assertStringContainsString('chrome-partial-v25-footer-tail-chrome-fp', $src);
+    self::assertStringContainsString('chrome-partial-v26-lang-currency', $src);
     self::assertStringContainsString('frontendFooterNestedChromeFingerprint', $src);
     self::assertStringContainsString('FooterNestedChromeSourceFingerprint', $src);
 }

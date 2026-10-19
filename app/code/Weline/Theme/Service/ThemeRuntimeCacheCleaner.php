@@ -827,28 +827,56 @@ final class ThemeRuntimeCacheCleaner
      */
     private function rebuildFpcViaStagingWarmPromote(array &$result): void
     {
-        FpcHtmlDiskStore::beginStagingGeneration(true);
-        try {
-            if (\class_exists(StorefrontFpcWarmer::class)) {
-                ObjectManager::getInstance(StorefrontFpcWarmer::class)->warm();
-            }
-            // Seed hardlinks + FPC-off can leave warm as edge HIT without PHP publish.
-            // Pierce homepage and write the fresh body into the staging write root.
-            $this->republishHomepageIntoOpenStaging();
-            if (!FpcHtmlDiskStore::promoteStagingGeneration()) {
-                FpcHtmlDiskStore::abandonStagingGeneration();
-                throw new \RuntimeException('fpc_staging_promote_failed');
-            }
-        } catch (\Throwable $e) {
+        $attempts = 0;
+        $last = null;
+        while ($attempts < 2) {
+            ++$attempts;
             try {
-                FpcHtmlDiskStore::abandonStagingGeneration();
-            } catch (\Throwable) {
+                FpcHtmlDiskStore::beginStagingGeneration(true);
+                if (\class_exists(StorefrontFpcWarmer::class)) {
+                    ObjectManager::getInstance(StorefrontFpcWarmer::class)->warm();
+                }
+                // Seed hardlinks + FPC-off can leave warm as edge HIT without PHP publish.
+                // Pierce homepage and write the fresh body into the staging write root.
+                $this->republishHomepageIntoOpenStaging();
+                if (!FpcHtmlDiskStore::promoteStagingGeneration()) {
+                    FpcHtmlDiskStore::abandonStagingGeneration();
+                    throw new \RuntimeException('fpc_staging_promote_failed');
+                }
+                $last = null;
+                break;
+            } catch (\Throwable $e) {
+                $last = $e;
+                try {
+                    FpcHtmlDiskStore::abandonStagingGeneration();
+                } catch (\Throwable) {
+                }
+                // One retry: live tree race during seed (vanished locale/path dirs).
+                if ($attempts < 2 && self::isTransientFpcStagingFilesystemRace($e)) {
+                    Env::log(
+                        'theme_cache_clear',
+                        'fpc_staging_warm_promote race retry: ' . $e->getMessage(),
+                    );
+                    continue;
+                }
+                throw $e;
             }
-            throw $e;
+        }
+        if ($last instanceof \Throwable) {
+            throw $last;
         }
         FpcHtmlDiskStore::purgeLegacyHashTrees();
         $this->assertPromotedHtmlDiskMatchesStorefrontGeneration();
         unset($result);
+    }
+
+    private static function isTransientFpcStagingFilesystemRace(\Throwable $e): bool
+    {
+        $message = $e->getMessage();
+
+        return $e instanceof \UnexpectedValueException
+            || \str_contains($message, 'Failed to open directory')
+            || \str_contains($message, 'fpc_html_disk_staging_seed_copy_failed');
     }
 
     /**

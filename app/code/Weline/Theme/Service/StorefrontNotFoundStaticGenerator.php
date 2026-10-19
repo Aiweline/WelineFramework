@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\App\State;
+use Weline\Framework\Context;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Http\ErrorPageRenderer;
 use Weline\Framework\Http\Request;
@@ -277,6 +278,9 @@ final class StorefrontNotFoundStaticGenerator
         $this->isolatePhraseBagForStaticRender();
         RequestContext::set(StaticErrorPagePublisher::CTX_PUBLISHING, true);
 
+        // Ensure Framework Context exists so State language override sticks in CLI
+        // (Fiber/main). Without it, WidgetI18n falls back to zh and footers bake Chinese.
+        Context::current();
         State::setRequestLanguageOverride($lang);
         try {
             // Fiber / 多站串行发布共用进程：清掉上一站的 Scope 热缓存、请求 memo、应用上下文与 header chrome，避免 brand/logo 串站。
@@ -312,6 +316,10 @@ final class StorefrontNotFoundStaticGenerator
         }
 
         // Prefer Context language override — do not mutate process $_SERVER REQUEST_URI.
+        // Re-pin after resets / WebsiteData install: prior locale's route.language or
+        // chrome bag can otherwise win mid-render and bake Chinese footers into en_US+.
+        Context::current();
+        State::setRequestLanguageOverride($lang);
         try {
             $html = $this->renderThemedNotFoundPage($websiteId, $websiteCode, $websiteUrl);
             // Published outbound: promote data-wslot → data-slot-id (header / not-found-*)

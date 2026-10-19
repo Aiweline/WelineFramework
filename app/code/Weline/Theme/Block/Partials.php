@@ -923,10 +923,9 @@ class Partials extends Block
             return $html;
         }
 
+        $placeholderSource = $this->resolveSearchFacadePlaceholderSource($html);
         try {
-            $live = $this->renderHeaderSearchFacadeIslandHtml(
-                $this->resolveSearchFacadePlaceholderSource($html),
-            );
+            $live = $this->renderHeaderSearchFacadeIslandHtml($placeholderSource);
         } catch (\Throwable $e) {
             $this->logPartialCacheDiagnostic('chrome_search_facade_island_hydrate_failed', [
                 'error' => $e->getMessage(),
@@ -938,6 +937,10 @@ class Partials extends Block
         if ($live === '') {
             return $html;
         }
+
+        // Shell attr keeps Chinese source for dictionary lookup; serve path must
+        // rewrite it to the active-locale translation so attrs do not leak source.
+        $translatedPlaceholder = (string)__($placeholderSource);
 
         $liveInner = $live;
         if (\preg_match(
@@ -951,7 +954,11 @@ class Partials extends Block
         if (\str_contains($html, 'data-weline-chrome-island="header-search"')) {
             $replaced = \preg_replace_callback(
                 '#(<weline-chrome-island\b[^>]*\bdata-weline-chrome-island="header-search"[^>]*>).*?(</weline-chrome-island>)#is',
-                static fn(array $m): string => $m[1] . $liveInner . $m[2],
+                function (array $m) use ($liveInner, $translatedPlaceholder): string {
+                    $open = $this->rewriteSearchFacadePlaceholderAttr($m[1], $translatedPlaceholder);
+
+                    return $open . $liveInner . $m[2];
+                },
                 $html,
             );
             $html = \is_string($replaced) ? $replaced : $html;
@@ -965,6 +972,33 @@ class Partials extends Block
         }
 
         return $html;
+    }
+
+    /**
+     * Pin translated placeholder onto the island open tag (create or replace attr).
+     */
+    private function rewriteSearchFacadePlaceholderAttr(string $openTag, string $translatedPlaceholder): string
+    {
+        $escaped = \htmlspecialchars($translatedPlaceholder, \ENT_QUOTES, 'UTF-8');
+        if (\preg_match('/\\bdata-weline-search-placeholder="/i', $openTag) === 1) {
+            $rewritten = \preg_replace(
+                '/\\bdata-weline-search-placeholder="[^"]*"/i',
+                'data-weline-search-placeholder="' . $escaped . '"',
+                $openTag,
+                1,
+            );
+
+            return \is_string($rewritten) ? $rewritten : $openTag;
+        }
+
+        $rewritten = \preg_replace(
+            '/>\\s*$/',
+            ' data-weline-search-placeholder="' . $escaped . '">',
+            $openTag,
+            1,
+        );
+
+        return \is_string($rewritten) ? $rewritten : $openTag;
     }
 
     /**
@@ -1070,7 +1104,12 @@ class Partials extends Block
             return '';
         }
 
-        return '<weline-chrome-island data-weline-chrome-island="header-search" style="display:contents">'
+        $translatedPlaceholder = (string)__($placeholderSource);
+        $escapedPlaceholder = \htmlspecialchars($translatedPlaceholder, \ENT_QUOTES, 'UTF-8');
+
+        return '<weline-chrome-island data-weline-chrome-island="header-search"'
+            . ' data-weline-search-placeholder="' . $escapedPlaceholder . '"'
+            . ' style="display:contents">'
             . $live
             . '</weline-chrome-island>';
     }

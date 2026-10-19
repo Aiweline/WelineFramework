@@ -120,7 +120,17 @@ final class ThemeLayoutEntityBakeCoordinator
         $nodes = $this->themeConfiguredNodes($identity, (new ThemeLayoutEntityInputResolver())->placements($nodes));
         $path = $this->paths()->pageLayoutPhtml($identity, $context->layoutType, $context->layoutOption, $context->targetType, $context->targetId ?: null);
         $hasLocaleParams = array_filter($locales, static fn(array $values): bool => array_key_exists('layout', $values)) !== [];
-        if (!$hasIntent && $defaults === [] && $params === [] && !$hasLocaleParams) { return [$path => null]; }
+        // Design-owned layout origin (e.g. hanfu journal/faq) must bake even without editor intent
+        // or required-default injection nodes — Materializer compiles from design absolute path.
+        $designOwned = ThemeLayoutDesignOverride::provides(
+            $identity->themeId,
+            $context->layoutType,
+            $context->layoutOption,
+            $identity->area,
+        );
+        if (!$hasIntent && $defaults === [] && $params === [] && !$hasLocaleParams && !$designOwned && $nodes === []) {
+            return [$path => null];
+        }
         return $this->materializer->candidatePage($identity, $context->identityHash(),
             hash('sha256', json_encode([$nodes, $locales], JSON_THROW_ON_ERROR)), $nodes, $nodes,
             $context->layoutType, $context->layoutOption, $context->targetType, $context->targetId ?: null, $locales, $params);
@@ -891,6 +901,9 @@ final class ThemeLayoutEntityBakeCoordinator
                 $targets,
                 $this->existingPageTargets($identity),
                 $this->declaredPageTargets($identity, $changes),
+                // Catalog layouts this theme owns on disk (design layer) — e.g. journal/faq —
+                // enter the bake set via LayoutScanner + DesignOverride, not Runtime slug lists.
+                $this->designOwnedPageTargets($identity),
             ));
             if ($targets === [] && $layoutTypeFilter === '') {
                 $targets[] = [
@@ -916,9 +929,9 @@ final class ThemeLayoutEntityBakeCoordinator
                     $this->lastRebakeReport['skipped']++;
                     continue;
                 }
-                // Design override alone is not enough: pageCandidates may return null (chrome-only
-                // injections / no page content). Never re-queue those forever.
-                // When $changes is non-empty, keep pending so chromeCandidates still refresh.
+                // Empty only when no intent / params / required-default nodes AND no design origin.
+                // Design-owned pages (journal/faq shells) must stay pending. When $changes is
+                // non-empty, keep pending so chromeCandidates still refresh.
                 if ($changes === []
                     && $this->pageDerivedWouldBeEmpty($identity, $type, $option, $targetType, $targetId, $changes)
                 ) {
@@ -1401,6 +1414,64 @@ final class ThemeLayoutEntityBakeCoordinator
         return array_values($targets);
     }
 
+    /**
+     * Layout options this theme supplies on its own design/module layer (not parent inherit).
+     * Feeds collectRebakeWorkItems via LayoutScanner + ThemeLayoutDesignOverride — never a
+     * hard-coded slug list in Runtime/orchestrator.
+     *
+     * @return list<array{layout_type:string,layout_option:string}>
+     */
+    private function designOwnedPageTargets(ThemeVersionIdentity $identity): array
+    {
+        if ($identity->themeId < 1) {
+            return [];
+        }
+        try {
+            $theme = (clone ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class))
+                ->clearData()
+                ->clearQuery()
+                ->load($identity->themeId);
+            if ((int)$theme->getId() !== $identity->themeId) {
+                return [];
+            }
+            $catalog = \Weline\Theme\Helper\LayoutScanner::scanLayouts($theme, $identity->area);
+        } catch (\Throwable) {
+            return [];
+        }
+        $out = [];
+        foreach ($catalog as $type => $options) {
+            $type = (string)$type;
+            if ($type === '') {
+                continue;
+            }
+            if (!\is_array($options)) {
+                continue;
+            }
+            foreach ($options as $option) {
+                $optionName = \is_array($option)
+                    ? (string)($option['value'] ?? 'default')
+                    : (string)$option;
+                if ($optionName === '') {
+                    $optionName = 'default';
+                }
+                if (!ThemeLayoutDesignOverride::provides(
+                    $identity->themeId,
+                    $type,
+                    $optionName,
+                    $identity->area,
+                )) {
+                    continue;
+                }
+                $out[] = [
+                    'layout_type' => $type,
+                    'layout_option' => $optionName,
+                ];
+            }
+        }
+
+        return $out;
+    }
+
     /** @param list<array<string,mixed>> $targets @return list<array{layout_type:string,layout_option:string,target_type:string,target_id:int}> */
     /**
      * theme:upgrade -l/--layout [-o/--option] cascade:
@@ -1572,8 +1643,8 @@ final class ThemeLayoutEntityBakeCoordinator
     }
 
     /**
-     * Mirror pageCandidates null gate: no intent / page-level defaults / params ⇒ no page PHTML.
-     * Chrome-only injections still bake via dedicated chrome paths, not catalog page pending.
+     * Mirror pageCandidates null gate: no intent / page-level defaults / params / design origin
+     * ⇒ no page PHTML. Chrome-only injections still bake via dedicated chrome paths.
      *
      * @param array<int|string, mixed> $changes
      */
@@ -1586,6 +1657,14 @@ final class ThemeLayoutEntityBakeCoordinator
         array $changes,
     ): bool {
         if ($this->layoutHasEditorIntent($identity, $layoutType, $layoutOption, $targetType, $targetId)) {
+            return false;
+        }
+        if (ThemeLayoutDesignOverride::provides(
+            $identity->themeId,
+            $layoutType,
+            $layoutOption,
+            $identity->area,
+        )) {
             return false;
         }
         $context = $this->context($identity, $layoutType, $layoutOption, $targetType, $targetId ?: null);

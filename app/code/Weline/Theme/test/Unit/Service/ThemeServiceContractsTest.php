@@ -1994,7 +1994,7 @@ private function assert_NestedChromeSourceFingerprint_testPartialsDelegatesAndPi
     self::assertStringContainsString('NestedChromeSourceFingerprint', $source);
     self::assertStringContainsString('NestedChromeSourceFingerprint::compute()', $source);
     // Live schema is v25 (footer-tail fp); v24 nested fill remains in builder comments + helpers.
-    self::assertStringContainsString("'schema' => 'chrome-partial-v25-footer-tail-chrome-fp'", $source);
+    self::assertStringContainsString("'schema' => 'chrome-partial-v26-lang-currency'", $source);
     self::assertStringContainsString('v24：建袋填实 footer-extras', $source);
     self::assertStringContainsString('fillNestedChromeCarriersForSharedBag', $source);
     self::assertStringContainsString('isIncompleteStorefrontHeaderNestedChrome', $source);
@@ -3558,7 +3558,7 @@ private function assert_ThemeHeadChromeCssPack_testStorefrontPackIsBaseOnlyAndTo
     self::assertStringContainsString('PACK_TOKENS', $src);
     self::assertStringContainsString('PACK_STOREFRONT', $src);
     self::assertStringContainsString('PACK_BACKEND', $src);
-    self::assertStringContainsString('theme-head-chrome-v9', $src);
+    self::assertStringContainsString('theme-head-chrome-v10', $src);
     self::assertStringContainsString('normalizeOverlayManifest', $src);
     self::assertStringContainsString('resolveOverlayLeavesForLayout', $src);
     self::assertStringContainsString('selectOverlayLeaves', $src);
@@ -3598,7 +3598,7 @@ private function assert_ThemeHeadChromeCssPack_testStorefrontPackIsBaseOnlyAndTo
     $beBlock = substr($src, $sfEnd, $beEnd - $sfEnd);
     self::assertLessThan(strpos($beBlock, 'colors/_default.css'), strpos($beBlock, 'colors/_light.css'));
     self::assertLessThan(strpos($beBlock, 'colors/_light.css'), strpos($beBlock, 'colors/_dark.css'));
-    self::assertStringContainsString('theme-head-chrome-v9', $src);
+    self::assertStringContainsString('theme-head-chrome-v10', $src);
     $tryLinkAttrs = $this->extractTryLinkAttrsSnippet_ThemeHeadChromeCssPack($src);
     self::assertDoesNotMatchRegularExpression('/\$attrs\s*\.=\s*[\'"] data-weline-layout-css/', $tryLinkAttrs, 'theme pack link must not set data-weline-layout-css');
     // Pin attribute assignment only — comments may mention media="print" as forbidden.
@@ -4692,8 +4692,10 @@ private function assert_ThemePublishHtmlDiskGenerationAtomic_testStagingWarmRepu
     // Staging seed must refuse FPC HIT bodies (needBody warm uses bypass in HttpClient).
     self::assertStringContainsString("str_contains(\$fpc, 'HIT')", $src);
     self::assertStringContainsString('StorefrontWarmupHttpClient', $src);
-    $chunk = \substr($src, (int) \strpos($src, 'function rebuildFpcViaStagingWarmPromote'), 1800);
+    $chunk = \substr($src, (int) \strpos($src, 'function rebuildFpcViaStagingWarmPromote'), 3200);
     self::assertStringContainsString('republishHomepageIntoOpenStaging()', $chunk);
+    self::assertStringContainsString('isTransientFpcStagingFilesystemRace', $chunk);
+    self::assertStringContainsString('Failed to open directory', $chunk);
     self::assertStringContainsString('header-chrome-amazon', $src);
     self::assertStringContainsString('data-weline-layout-pack', $src);
 }

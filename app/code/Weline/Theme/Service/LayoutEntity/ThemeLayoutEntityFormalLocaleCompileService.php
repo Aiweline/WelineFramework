@@ -20,6 +20,8 @@ use Weline\Theme\Service\Theme\LayoutCriticalCssMaterializer;
 use Weline\Theme\Service\ThemeHeadChromeCssPack;
 use Weline\Theme\Service\ThemeHeadChromeJsPack;
 use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
+use Weline\Theme\Service\ThemeApplicationUsageService;
+use Weline\Theme\Service\ThemeStorefrontSlugFpcPublisher;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteLanguage;
@@ -34,13 +36,16 @@ use Weline\Widget\Api\WidgetRegistryInterface;
  * Before compile, pins Website/RequestContext from the identity storage scope so
  * literal @url / <url> bake carries the publish-site mount (not default-site).
  *
- * After Taglib + theme-head warm, always invalidates storefront chrome/FPC via
- * {@see ThemeRuntimeCacheCleaner} so CLI / editor / pipeline workers share one path.
+ * After Taglib + theme-head warm, invalidates storefront FPC via scoped
+ * {@see ThemeStorefrontSlugFpcPublisher::purgeLayoutsForThemeTargets} by default
+ * (`cache_invalidation=scoped`). Full {@see ThemeRuntimeCacheCleaner::clearAllThemeRelatedCaches}
+ * only when options explicitly set `cache_invalidation=all` (cutover). Drain / single-page
+ * rematerialize must never pass `all`.
  */
 final class ThemeLayoutEntityFormalLocaleCompileService
 {
-    /** @var array<int, true> Process-local debounce for post-warm clearAll. */
-    private static array $postWarmClearedThemeIds = [];
+    /** @var array<string, true> Process-local debounce keys: "all:{themeId}" or "scoped:{themeId}:{fp}". */
+    private static array $postWarmClearedKeys = [];
 
     /** Cross-process coalesce window so pipeline workers do not N× FPC promote. */
     private const POST_WARM_CLEAR_COALESCE_SECONDS = 20;
@@ -53,13 +58,21 @@ final class ThemeLayoutEntityFormalLocaleCompileService
         private readonly ThemeHeadChromeJsPack $headJsPack,
         private readonly LayoutCriticalCssMaterializer $layoutCriticalMaterializer,
         private readonly ThemeRuntimeCacheCleaner $cacheCleaner,
+        private readonly ThemeStorefrontSlugFpcPublisher $slugFpcPublisher,
+        private readonly ThemeApplicationUsageService $themeApplicationUsage,
     ) {
     }
 
     /**
      * @param array<string,?string> $candidates completed publish candidates
-     * @param array{nested?:bool,locale_concurrency?:int,on_progress?:callable} $options
+     * @param array{
+     *   nested?:bool,
+     *   locale_concurrency?:int,
+     *   on_progress?:callable,
+     *   cache_invalidation?:'scoped'|'all'
+     * } $options
      *        nested=true → force locale concurrency 1 (pipeline compile worker; no nested process pool).
+     *        cache_invalidation default scoped → purgeLayoutsForThemeTargets; all → clearAllThemeRelatedCaches.
      */
     public function compileAfterPromote(ThemeVersionIdentity $identity, array $candidates, array $options = []): void
     {
@@ -100,6 +113,10 @@ final class ThemeLayoutEntityFormalLocaleCompileService
 
         // Pin ThemeData for the whole Formal compile+warm so theme-head / widget-assets
         // never land under process-global Default (or a sibling theme) during multi-theme upgrade.
+        $invalidation = strtolower(trim((string)($options['cache_invalidation'] ?? 'scoped')));
+        if ($invalidation !== 'all') {
+            $invalidation = 'scoped';
+        }
         $previousTheme = ThemeData::getCurrentTheme();
         $previousArea = ThemeData::getCurrentArea();
         ThemeData::setCurrentTheme($theme);
@@ -119,6 +136,7 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             $pageTotal,
             $localeTotal,
             $localeOrdinal,
+            $invalidation,
         ): void {
             $template = Template::getInstance();
             if (!$nested) {
@@ -253,8 +271,8 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             }
             // Post-com warm: bake theme-head packs so first request consumes artifacts (not hot-path merge).
             $this->warmPublishedResourcePacks($identity->area, $theme, $themeLabel, $identity->canonicalScope);
-            // Same class owns invalidation: any caller of compileAfterPromote* clears chrome/FPC.
-            $this->clearCachesAfterCompileWarm($theme);
+            // Default scoped invalidation (drain/single-page); cutover may pass cache_invalidation=all.
+            $this->clearCachesAfterCompileWarm($theme, $identity, $pages, $invalidation);
         });
         } finally {
             ThemeData::setCurrentTheme($previousTheme);
@@ -346,46 +364,136 @@ final class ThemeLayoutEntityFormalLocaleCompileService
     }
 
     /**
-     * Invalidate storefront chrome / templates / FPC after Formal compile+warm.
-     * Entry for every compile caller (theme:upgrade cutover, editor publish, pipeline).
-     * Soft-fails CDN like UpgradeSolidify cutover; never rolls back promoted com_*.
+     * Invalidate storefront FPC after Formal compile+warm.
+     * Default scoped (drain / single-page); explicit cache_invalidation=all for cutover only.
+     * Soft-fails CDN; never rolls back promoted com_*; never rotates themePublishedVersionId.
+     *
+     * @param list<array{layout_type:string,layout_option:string,target_type:string,target_id:int}> $pages
+     * @param 'scoped'|'all' $invalidation
      */
-    private function clearCachesAfterCompileWarm(WelineTheme $theme): void
-    {
+    private function clearCachesAfterCompileWarm(
+        WelineTheme $theme,
+        ThemeVersionIdentity $identity,
+        array $pages,
+        string $invalidation,
+    ): void {
         $themeId = (int)$theme->getId();
         if ($themeId < 1) {
             return;
         }
-        if (isset(self::$postWarmClearedThemeIds[$themeId])) {
+        $layouts = [];
+        $layoutKeys = [];
+        foreach ($pages as $page) {
+            if (!is_array($page)) {
+                continue;
+            }
+            $type = trim((string)($page['layout_type'] ?? ''));
+            if ($type === '') {
+                continue;
+            }
+            $option = trim((string)($page['layout_option'] ?? 'default'));
+            if ($option === '' || $option === '*') {
+                $option = 'default';
+            }
+            $layouts[] = ['type' => $type, 'option' => $option];
+            $layoutKeys[] = $type . '/' . $option;
+        }
+        $layoutKeys = array_values(array_unique($layoutKeys));
+        sort($layoutKeys);
+        $fp = $layoutKeys === [] ? 'empty' : hash('sha256', implode('|', $layoutKeys));
+        $debounceKey = $invalidation === 'all'
+            ? ('all:' . $themeId)
+            : ('scoped:' . $themeId . ':' . $fp);
+        if (isset(self::$postWarmClearedKeys[$debounceKey])) {
             return;
         }
-        if (!$this->acquirePostWarmClearGate($themeId)) {
+        if (!$this->acquirePostWarmClearGate($themeId, $invalidation, $fp)) {
             return;
         }
-        self::$postWarmClearedThemeIds[$themeId] = true;
+        self::$postWarmClearedKeys[$debounceKey] = true;
         try {
-            // Compile+warm flushes chrome/FPC only — never rotates themePublishedVersionId
-            // (generation === Scope published version; only editor Publish may change it).
-            $result = $this->cacheCleaner->clearAllThemeRelatedCaches(
+            if ($invalidation === 'all') {
+                $result = $this->cacheCleaner->clearAllThemeRelatedCaches(
+                    $themeId,
+                    'theme_layout_formal_compile_warm',
+                );
+                foreach ((array)($result['failures'] ?? []) as $step => $message) {
+                    $stepKey = (string)$step;
+                    $msg = (string)$message;
+                    if (str_starts_with($stepKey, 'cdn_') || str_contains($msg, 'cdn_')) {
+                        continue;
+                    }
+                    $this->printing->warning(
+                        'theme_layout_formal_compile_cache_clear_partial:' . $stepKey . '=' . $msg
+                    );
+                }
+                $this->printing->note(sprintf(
+                    '%s · 主题=#%d · %s',
+                    (string)__('主题布局发布'),
+                    $themeId,
+                    (string)__('编译后缓存已清理'),
+                ));
+
+                return;
+            }
+
+            if ($layouts === []) {
+                $this->printing->note(sprintf(
+                    '%s · 主题=#%d · scoped purge skipped:no_layouts',
+                    (string)__('主题布局发布'),
+                    $themeId,
+                ));
+
+                return;
+            }
+            $targets = $this->themeApplicationUsage->ownSolidifyTargetsForTheme($themeId);
+            if ($targets === []) {
+                $scope = trim((string)$identity->canonicalScope);
+                if ($scope !== '') {
+                    $targets[] = [
+                        'version_owner_scope' => $scope,
+                        'store_mode' => 'normal',
+                        'area' => 'frontend',
+                    ];
+                }
+            }
+            $result = $this->slugFpcPublisher->purgeLayoutsForThemeTargets(
                 $themeId,
-                'theme_layout_formal_compile_warm',
+                $layouts,
+                $targets,
+                'theme_layout_formal_compile_scoped',
             );
-            foreach ((array)($result['failures'] ?? []) as $step => $message) {
-                $stepKey = (string)$step;
-                $msg = (string)$message;
-                if (str_starts_with($stepKey, 'cdn_') || str_contains($msg, 'cdn_')) {
+            if (!($result['ok'] ?? false)) {
+                $this->printing->warning(
+                    'theme_layout_formal_compile_scoped_purge_skipped:'
+                    . (string)($result['skipped'] ?? 'unknown')
+                );
+            } else {
+                $this->printing->note(sprintf(
+                    '%s · 主题=#%d · scoped purge slugs=%d targets=%d',
+                    (string)__('主题布局发布'),
+                    $themeId,
+                    (int)($result['slug_count'] ?? 0),
+                    (int)($result['target_count'] ?? 0),
+                ));
+            }
+            foreach ($targets as $target) {
+                if (!is_array($target)) {
                     continue;
                 }
-                $this->printing->warning(
-                    'theme_layout_formal_compile_cache_clear_partial:' . $stepKey . '=' . $msg
-                );
+                if (trim((string)($target['area'] ?? 'frontend')) !== 'frontend') {
+                    continue;
+                }
+                $scope = trim((string)($target['version_owner_scope'] ?? ''));
+                if ($scope === '') {
+                    continue;
+                }
+                $storeMode = trim((string)($target['store_mode'] ?? 'normal'));
+                try {
+                    $this->cacheCleaner->clearLayoutEntityCaches($themeId, $scope, $storeMode !== '' ? $storeMode : 'normal');
+                } catch (\Throwable) {
+                }
             }
-            $this->printing->note(sprintf(
-                '%s · 主题=#%d · %s',
-                (string)__('主题布局发布'),
-                $themeId,
-                (string)__('编译后缓存已清理'),
-            ));
         } catch (\Throwable $error) {
             $this->printing->warning(
                 'theme_layout_formal_compile_cache_clear_failed:' . $error->getMessage()
@@ -394,16 +502,18 @@ final class ThemeLayoutEntityFormalLocaleCompileService
     }
 
     /**
-     * Cross-process coalesce: pipeline compile workers share one clearAll window per theme.
+     * Cross-process coalesce: all=per theme; scoped=per theme+layout fingerprint
+     * so different drain pages are not skipped by a sibling layout's window.
      */
-    private function acquirePostWarmClearGate(int $themeId): bool
+    private function acquirePostWarmClearGate(int $themeId, string $invalidation, string $layoutFp): bool
     {
         $dir = rtrim((string)BP, '/\\') . '/var/locks/theme-formal-compile-cache-clear';
         if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
             return true;
         }
-        $stampPath = $dir . '/theme-' . $themeId . '.stamp';
-        $lockPath = $dir . '/theme-' . $themeId . '.lock';
+        $suffix = $invalidation === 'all' ? 'all' : ('scoped-' . $layoutFp);
+        $stampPath = $dir . '/theme-' . $themeId . '-' . $suffix . '.stamp';
+        $lockPath = $dir . '/theme-' . $themeId . '-' . $suffix . '.lock';
         $handle = @fopen($lockPath, 'c+');
         if ($handle === false) {
             return true;

@@ -85,6 +85,8 @@ class ThemeLayout extends Model implements SchemaDiffExcludedModelInterface
     public const PAGE_TYPE_CHECKOUT_SUCCESS = 'checkout/success'; // layouts/checkout/success/
     public const PAGE_TYPE_CHECKOUT_FAILURE = 'checkout/failure'; // layouts/checkout/failure/
     public const PAGE_TYPE_FAQ = 'faq';                // layouts/faq/
+    public const PAGE_TYPE_JOURNAL = 'journal';        // layouts/journal/
+    public const PAGE_TYPE_JOURNAL_ARTICLE = 'journal-article'; // layouts/journal-article/
     public const PAGE_TYPE_PAYMENT_GUIDE = 'payment_guide'; // layouts/payment_guide/
     public const PAGE_TYPE_GUIDE = 'guide';            // layouts/guide/
     public const PAGE_TYPE_ABOUT = 'about';            // layouts/about/
@@ -141,6 +143,8 @@ class ThemeLayout extends Model implements SchemaDiffExcludedModelInterface
             self::PAGE_TYPE_CHECKOUT_SUCCESS => __('结算成功页'),
             self::PAGE_TYPE_CHECKOUT_FAILURE => __('结算失败页'),
             self::PAGE_TYPE_FAQ => __('FAQ/常见问题'),
+            self::PAGE_TYPE_JOURNAL => __('道记'),
+            self::PAGE_TYPE_JOURNAL_ARTICLE => __('道记文章'),
             self::PAGE_TYPE_PAYMENT_GUIDE => __('支付指南'),
             self::PAGE_TYPE_GUIDE => __('指南页'),
             self::PAGE_TYPE_ABOUT => __('关于我们'),

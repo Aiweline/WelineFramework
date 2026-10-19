@@ -63,7 +63,7 @@ private function assert_PartialsHtmlOutputCacheKey_testPartialOutputKeysUseSyste
     self::assertStringContainsString("'theme.head.partial'", $src);
     self::assertStringContainsString("'theme.chrome.partial'", $src);
     // v25 supersedes v24 nested-footer-extras-filled (same Partials bag; footer-tail fp added).
-    self::assertStringContainsString("'schema' => 'chrome-partial-v25-footer-tail-chrome-fp'", $src);
+    self::assertStringContainsString("'schema' => 'chrome-partial-v26-lang-currency'", $src);
     self::assertStringContainsString('fillNestedChromeCarriersForSharedBag', $src);
     self::assertStringContainsString("\$typeLc !== 'header' && \$typeLc !== 'footer'", $src);
     self::assertStringNotContainsString('\sha1($path . \'|\' . $sourceFingerprint . \'|\' . $cacheContext)', $src);

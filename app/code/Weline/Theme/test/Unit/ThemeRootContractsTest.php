@@ -179,6 +179,9 @@ final class ThemeRootContractsTest extends TestCase
             'ChromeSearchFacadeIsland::testHeaderCacheKeyIsGuestNeutralWithoutSearchFacade' => function () {
             $this->assert_ChromeSearchFacadeIsland_testHeaderCacheKeyIsGuestNeutralWithoutSearchFacade();
         },
+            'ChromeSearchFacadeIsland::testHydrateRewritesPlaceholderAttrToTranslatedLocale' => function () {
+            $this->assert_ChromeSearchFacadeIsland_testHydrateRewritesPlaceholderAttrToTranslatedLocale();
+        },
             'ChromeSearchFacadeIsland::testStripThenHydrateKeepsPendingWhenLiveRenderUnavailable' => function () {
             $this->assert_ChromeSearchFacadeIsland_testStripThenHydrateKeepsPendingWhenLiveRenderUnavailable();
         },
@@ -1845,9 +1848,10 @@ private function assert_ChromeSearchFacadeIsland_testHanfuStorefrontShellAlignsS
 private function assert_ChromeSearchFacadeIsland_testHeaderCacheKeyIsGuestNeutralWithoutSearchFacade(): void
 {
     $source = (string) \file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
-    self::assertStringContainsString('chrome-partial-v25-footer-tail-chrome-fp', $source);
+    self::assertStringContainsString('chrome-partial-v26-lang-currency', $source);
     self::assertStringContainsString('hydrateChromeSearchFacadeIslands', $source);
     self::assertStringContainsString('stripChromeSearchFacadeIslands', $source);
+    self::assertStringContainsString('rewriteSearchFacadePlaceholderAttr', $source);
     self::assertStringContainsString('StorefrontHeaderSearchFacadeFragmentCache', $source);
     $headerDataStart = \strpos($source, "if (\$type === 'header')");
     self::assertNotFalse($headerDataStart);
@@ -1856,6 +1860,24 @@ private function assert_ChromeSearchFacadeIsland_testHeaderCacheKeyIsGuestNeutra
     self::assertStringNotContainsString("'q' =>", $headerDataChunk);
     self::assertStringNotContainsString("'category_id'", $headerDataChunk);
     self::assertStringNotContainsString("'blog_category_id'", $headerDataChunk);
+}
+
+private function assert_ChromeSearchFacadeIsland_testHydrateRewritesPlaceholderAttrToTranslatedLocale(): void
+{
+    $source = (string) \file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
+    self::assertStringContainsString('rewriteSearchFacadePlaceholderAttr', $source);
+    self::assertStringContainsString('translatedPlaceholder', $source);
+    self::assertStringContainsString(
+        'Shell attr keeps Chinese source for dictionary lookup',
+        $source,
+    );
+    $partials = (new ReflectionClass(Partials::class))->newInstanceWithoutConstructor();
+    $rewrite = new \ReflectionMethod(Partials::class, 'rewriteSearchFacadePlaceholderAttr');
+    $rewrite->setAccessible(true);
+    $open = '<weline-chrome-island data-weline-chrome-island="header-search" data-weline-search-placeholder="寻衣 · 形制 · 织绣" style="display:contents">';
+    $out = (string) $rewrite->invoke($partials, $open, 'Find · Form · Weave');
+    self::assertStringContainsString('data-weline-search-placeholder="Find · Form · Weave"', $out);
+    self::assertStringNotContainsString('data-weline-search-placeholder="寻衣 · 形制 · 织绣"', $out);
 }
 
 private function assert_ChromeSearchFacadeIsland_testStripThenHydrateKeepsPendingWhenLiveRenderUnavailable(): void
@@ -5070,7 +5092,7 @@ private function assert_ThemeColorMode_testHeadsLoadOnlyExplicitUiTwoAssetsAndNo
     self::assertLessThan(strpos($backend, 'colors/_light.css'), strpos($backend, 'colors/_dark.css'), 'Backend: light before dark; uncovered leaves inherit default.');
     self::assertLessThan(strpos($backend, 'weline-foundation.css'), strpos($backend, 'colors/_default.css'), 'Backend palette must load before foundation CSS.');
     $packSrc = $this->read_ThemeColorMode('app/code/Weline/Theme/Service/ThemeHeadChromeCssPack.php');
-    self::assertStringContainsString('theme-head-chrome-v9', $packSrc);
+    self::assertStringContainsString('theme-head-chrome-v10', $packSrc);
     $packTokens = strpos($packSrc, 'self::PACK_TOKENS => [');
     $packSf = strpos($packSrc, 'self::PACK_STOREFRONT => [');
     self::assertNotFalse($packTokens);

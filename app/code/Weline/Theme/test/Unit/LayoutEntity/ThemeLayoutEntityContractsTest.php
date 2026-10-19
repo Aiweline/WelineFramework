@@ -308,6 +308,7 @@ final class ThemeLayoutEntityContractsTest extends TestCase
         },
             'ThemeLayoutEntityLocaleComPrewarm::testFormalCompilePinsWebsiteFromIdentityBeforeCompile' => function () {
             $this->assert_ThemeLayoutEntityLocaleComPrewarm_testFormalCompilePinsWebsiteFromIdentityBeforeCompile();
+            $this->assert_ThemeLayoutEntityFormalScopedPurge_testDrainPathForbidsClearAll();
         },
             'ThemeLayoutEntityOwnerLockTimeout::testOwnerLockWaitIsAtLeastTwoMinutes' => function () {
             $this->assert_ThemeLayoutEntityOwnerLockTimeout_testOwnerLockWaitIsAtLeastTwoMinutes();
@@ -1762,9 +1763,20 @@ private function assert_ThemeLayoutEntityBakeCoordinator_testRebakeDedupesLayout
     self::assertStringContainsString('function generatedPageMatchesInputs', $source);
     self::assertStringContainsString('function layoutNeedsOwnSolidify', $source);
     self::assertStringContainsString('function pageDerivedWouldBeEmpty', $source);
+    self::assertStringContainsString('function designOwnedPageTargets', $source);
+    self::assertStringContainsString('$this->designOwnedPageTargets($identity)', $source);
     self::assertStringContainsString('skipped_inherit', $source);
     self::assertStringContainsString('skipped_unchanged', $source);
     self::assertStringContainsString('ThemeLayoutDesignOverride::provides', $source);
+    // Design-owned pages must not be treated as empty (journal/faq bake member set).
+    self::assertMatchesRegularExpression(
+        '/function pageDerivedWouldBeEmpty\b[\s\S]*?ThemeLayoutDesignOverride::provides\(/s',
+        $source,
+    );
+    self::assertMatchesRegularExpression(
+        '/function pageCandidates\b[\s\S]*?\$designOwned\s*=\s*ThemeLayoutDesignOverride::provides\(/s',
+        $source,
+    );
     self::assertStringContainsString('function scopeOwnsSolidify', $source);
     self::assertStringContainsString('function hasOwnThemeApplication', $source);
     self::assertStringContainsString('$includeSelectedDraft = true', $source);
@@ -1866,16 +1878,21 @@ private function assert_ThemeLayoutEntityLocaleComPrewarm_testFormalCompilePinsW
     self::assertStringContainsString('warmAreaPacks', $service);
     self::assertStringContainsString('ThemeRuntimeCacheCleaner', $service);
     self::assertStringContainsString('clearCachesAfterCompileWarm', $service);
+    self::assertStringContainsString('ThemeStorefrontSlugFpcPublisher', $service);
+    self::assertStringContainsString('purgeLayoutsForThemeTargets', $service);
+    self::assertStringContainsString('theme_layout_formal_compile_scoped', $service);
+    self::assertStringContainsString("cache_invalidation", $service);
+    self::assertStringContainsString("'scoped'", $service);
     self::assertStringContainsString('clearAllThemeRelatedCaches', $service);
     self::assertStringContainsString('theme_layout_formal_compile_warm', $service);
-    // Formal compile must clear FPC only — clearAll never rotates generation (editor Publish only).
+    // clearAll only inside explicit cache_invalidation=all branch (cutover), never the default path.
     self::assertMatchesRegularExpression(
-        '/clearAllThemeRelatedCaches\s*\(\s*\$themeId\s*,\s*[\'"]theme_layout_formal_compile_warm[\'"]\s*,?\s*\)/s',
+        '/if\s*\(\s*\$invalidation\s*===\s*[\'"]all[\'"]\s*\)\s*\{[^}]*clearAllThemeRelatedCaches\s*\(/s',
         $service,
     );
     self::assertStringNotContainsString('advancePublishedStorefrontGeneration', $service);
     $warmPos = strpos($service, 'warmPublishedResourcePacks($identity->area, $theme, $themeLabel, $identity->canonicalScope);');
-    $clearPos = strpos($service, 'clearCachesAfterCompileWarm($theme);');
+    $clearPos = strpos($service, 'clearCachesAfterCompileWarm($theme, $identity, $pages, $invalidation);');
     self::assertNotFalse($warmPos);
     self::assertNotFalse($clearPos);
     self::assertGreaterThan($warmPos, $clearPos, 'post-warm cache clear must run after theme-head warm');
@@ -1885,6 +1902,25 @@ private function assert_ThemeLayoutEntityLocaleComPrewarm_testFormalCompilePinsW
     self::assertStringContainsString('sourceContextKey', $service);
     self::assertStringNotContainsString("'context_key' => \$snapshot->fingerprint()", $service, 'context_key must be per-source (stable across pages), not whole-snapshot fingerprint');
     self::assertMatchesRegularExpression('/warmPublishedResourcePacks\s*\(\s*\$identity->area\s*,\s*\$theme\s*,/', $service);
+}
+
+private function assert_ThemeLayoutEntityFormalScopedPurge_testDrainPathForbidsClearAll(): void
+{
+    $themeRoot = '/Users/weline/Project/Official/框架/app/code/Weline/Theme';
+    $formal = (string) file_get_contents($themeRoot . '/Service/LayoutEntity/ThemeLayoutEntityFormalLocaleCompileService.php');
+    $publisher = (string) file_get_contents($themeRoot . '/Service/LayoutEntity/ThemeLayoutEntityBatchPublisher.php');
+    $queue = (string) file_get_contents($themeRoot . '/Service/LayoutEntity/ThemeLayoutEntitySolidifyQueue.php');
+    $pipeline = (string) file_get_contents($themeRoot . '/Service/LayoutEntity/ThemeLayoutEntitySolidifyCompilePipeline.php');
+    // Drain / batch / pipeline must not force Formal full clear.
+    self::assertStringNotContainsString('clearAllThemeRelatedCaches(', $publisher);
+    self::assertStringNotContainsString('clearAllThemeRelatedCaches(', $queue);
+    self::assertStringNotContainsString("cache_invalidation' => 'all'", $publisher);
+    self::assertStringNotContainsString('cache_invalidation\' => \'all\'', $pipeline);
+    self::assertStringNotContainsString('"cache_invalidation" => "all"', $pipeline);
+    // Formal default is scoped purge API.
+    self::assertStringContainsString("\$options['cache_invalidation'] ?? 'scoped'", $formal);
+    self::assertStringContainsString('purgeLayoutsForThemeTargets', $formal);
+    self::assertStringContainsString('theme_layout_formal_compile_scoped', $formal);
 }
 
 private function assert_ThemeLayoutEntityOwnerLockTimeout_testOwnerLockWaitIsAtLeastTwoMinutes(): void

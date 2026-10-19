@@ -284,7 +284,8 @@ final class ThemeHeadChromeCssPack
         $scopeFp = $this->resolvePackScopeFingerprint($area);
         $key = hash('sha256', json_encode([
             // v9: palette merge order = default → brand/ink → light → dark（未覆盖继承 default）
-            'theme-head-chrome-v9',
+            // v10: design-theme leaf URLs must use active theme static namespace (not bare Weline/Theme).
+            'theme-head-chrome-v10',
             $area,
             $pack,
             $layoutType,
@@ -808,8 +809,13 @@ final class ThemeHeadChromeCssPack
         if (!is_string($content) || $content === '') {
             return null;
         }
-        $tagSource = 'Weline_Theme::theme/' . $relativeUnderTheme;
-        $url = $this->fetchThemeUrl($tagSource);
+        // Prefer gateway + pinned theme so design themes publish under
+        // /static/{Vendor}/{theme}/Weline/Theme/view/theme/... — never bare
+        // /static/Weline/Theme/view/theme/... (that 404s design-only leaves).
+        $url = $this->resolveThemeLeafPublicUrl($relativeUnderTheme, $theme);
+        if ($url === '') {
+            $url = $this->fetchThemeUrl('Weline_Theme::theme/' . $relativeUnderTheme);
+        }
         if ($url === '') {
             $url = '/static/Weline/Theme/view/theme/' . $relativeUnderTheme;
         }
@@ -821,6 +827,34 @@ final class ThemeHeadChromeCssPack
             'content' => $content,
             'hash' => hash('sha256', $absolute . '|' . filemtime($absolute) . '|' . $content),
         ];
+    }
+
+    /**
+     * Build the public static URL for a theme leaf under the active theme namespace.
+     */
+    private function resolveThemeLeafPublicUrl(string $relativeUnderTheme, ?WelineTheme $theme): string
+    {
+        if (!$theme instanceof WelineTheme || (int)$theme->getId() < 1) {
+            return '';
+        }
+        $relativeUnderTheme = ltrim(str_replace('\\', '/', $relativeUnderTheme), '/');
+        [$areaHint, $rest] = array_pad(explode('/', $relativeUnderTheme, 2), 2, '');
+        $area = strtolower(trim((string)$areaHint)) === 'backend' ? 'backend' : 'frontend';
+        $relativePath = ltrim((string)$rest, '/');
+        if ($relativePath === '') {
+            return '';
+        }
+        try {
+            return trim($this->gateway->buildThemeAssetUrl(
+                'Weline_Theme',
+                $area,
+                $relativePath,
+                $theme,
+                false,
+            ));
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /**
