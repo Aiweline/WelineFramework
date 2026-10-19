@@ -387,8 +387,9 @@ if (!\function_exists('wlsResetLongRunningExecutionLimit')) {
 /**
  * Resolve fiber admission defaults.
  *
- * Defaults (when keys omitted): max_active=6, queue_wait_ms=30000 (hard cap 30s),
- * queue_depth=max_active. Prefer delay over early 503 so Master can scale.
+ * Defaults (when keys omitted): max_active=6, queue_wait_ms=5000 (hard cap 5s),
+ * queue_depth=max_active. Prefer short delay over early 503 so Master can scale;
+ * FORBIDDEN 30s queue waits (fail closed to 503 within 5s under contention).
  * Explicit max_active=0 keeps unlimited concurrency (memory path still waits).
  *
  * @param array<string, mixed> $wls
@@ -407,11 +408,11 @@ function wlsResolveFiberAdmissionConfig(array $wls, array $wlsInstance = []): ar
         : 6;
 
     // Prefer a short delay for Master scale / peer finish; 503 only after wait.
-    $waitMs = (int)($fiber['admission_queue_wait_ms'] ?? 30000);
+    $waitMs = (int)($fiber['admission_queue_wait_ms'] ?? 5000);
     if ($waitMs < 0) {
         $waitMs = 0;
-    } elseif ($waitMs > 30000) {
-        $waitMs = 30000;
+    } elseif ($waitMs > 5000) {
+        $waitMs = 5000;
     }
 
     $depth = (int)($fiber['admission_queue_depth'] ?? 0);

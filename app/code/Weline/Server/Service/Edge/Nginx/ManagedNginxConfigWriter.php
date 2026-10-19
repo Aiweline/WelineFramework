@@ -196,15 +196,16 @@ NGINX;
             )
             : '';
 
-        $tempBlock = '';
-        if ($isWindows) {
-            $tempRoot = $this->paths->tempDir();
-            $clientBodyTemp = $this->nginxQuotedPath($tempRoot . DIRECTORY_SEPARATOR . 'client_body_temp');
-            $proxyTemp = $this->nginxQuotedPath($tempRoot . DIRECTORY_SEPARATOR . 'proxy_temp');
-            $fastcgiTemp = $this->nginxQuotedPath($tempRoot . DIRECTORY_SEPARATOR . 'fastcgi_temp');
-            $uwsgiTemp = $this->nginxQuotedPath($tempRoot . DIRECTORY_SEPARATOR . 'uwsgi_temp');
-            $scgiTemp = $this->nginxQuotedPath($tempRoot . DIRECTORY_SEPARATOR . 'scgi_temp');
-            $tempBlock = <<<NGINX
+        // Linux + Windows: pin body/proxy temp under temp/ (project-owned).
+        // Omitting these on Linux lets nginx create prefix-root client_body_temp
+        // as a different uid (historically nobody) → POST query-bin Permission denied.
+        $tempRoot = $this->paths->nginxBodyTempRoot();
+        $clientBodyTemp = $this->nginxQuotedPath($tempRoot . DIRECTORY_SEPARATOR . 'client_body_temp');
+        $proxyTemp = $this->nginxQuotedPath($tempRoot . DIRECTORY_SEPARATOR . 'proxy_temp');
+        $fastcgiTemp = $this->nginxQuotedPath($tempRoot . DIRECTORY_SEPARATOR . 'fastcgi_temp');
+        $uwsgiTemp = $this->nginxQuotedPath($tempRoot . DIRECTORY_SEPARATOR . 'uwsgi_temp');
+        $scgiTemp = $this->nginxQuotedPath($tempRoot . DIRECTORY_SEPARATOR . 'scgi_temp');
+        $tempBlock = <<<NGINX
 
     client_body_temp_path {$clientBodyTemp};
     proxy_temp_path       {$proxyTemp};
@@ -212,7 +213,6 @@ NGINX;
     uwsgi_temp_path       {$uwsgiTemp};
     scgi_temp_path        {$scgiTemp};
 NGINX;
-        }
 
         $cacheHttpBlock = '';
         $staticCacheLocationBlock = '';
@@ -288,6 +288,11 @@ NGINX;
         );
         $quotedSitemapEdgeLocations = $this->nginxQuotedPath(
             $this->paths->confDir() . DIRECTORY_SEPARATOR . SitemapEdgeNginxMapWriter::LOCATIONS_BASENAME
+        );
+        // Satellite vhosts (multi-project gateway): ops drop files under conf.d/;
+        // main conf is regenerated on start/reload — only this include keeps them live.
+        $quotedConfDGlob = $this->nginxQuotedPath(
+            $this->paths->confDir() . DIRECTORY_SEPARATOR . 'conf.d' . DIRECTORY_SEPARATOR . '*.conf'
         );
         $fpcHtmlDiskMapBlock = <<<NGINX
 
@@ -788,6 +793,7 @@ http {
         }
     }
 {$apexRedirectBlock}{$distinctHostBlocks}
+    include {$quotedConfDGlob};
 }
 NGINX;
 
@@ -2122,8 +2128,11 @@ NGINX;
      * so Cloudflare bypass_by_default can store the response. Disk is body-only;
      * these are static edge-policy headers, not a replayed header bag.
      *
-     * gzip_vary off (location): http-level gzip_vary on would emit a second
-     * Vary: Accept-Encoding alongside add_header Vary "Accept-Encoding, Cookie".
+     * gzip off + gzip_vary off (location): disk body is already brotli (.html.br).
+     * http-level `gzip on` would wrap those bytes again and emit a second
+     * Content-Encoding: gzip beside add_header Content-Encoding br — browsers then
+     * show mojibake. Same trap as static $uri.br locations. gzip_vary off also
+     * prevents a second Vary: Accept-Encoding beside Vary "Accept-Encoding, Cookie".
      */
     private function buildFpcHtmlDiskHitHeaderBlock(): string
     {
@@ -2143,6 +2152,7 @@ NGINX;
             : 'public, max-age=0, must-revalidate';
 
         return <<<NGINX
+            gzip off;
             gzip_vary off;
             add_header Content-Encoding br always;
             add_header Vary "Accept-Encoding, Cookie" always;
@@ -2215,6 +2225,7 @@ NGINX;
             try_files \$uri =404;
             default_type application/x-weline-query-bin;
             charset utf-8;
+            gzip off;
             gzip_vary off;
             add_header Content-Encoding br always;
             add_header X-Weline-FPC HIT always;

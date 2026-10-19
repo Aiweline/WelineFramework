@@ -94,8 +94,8 @@ return [
             'enabled' => true,
             // 'force' => 'tiny',
         ],
-        // Fiber 准入：默认限制每 Worker 并发渲染数；满则排队等待，优先延迟再 503。
-        // max_active=0 表示不限制（内存软压仍会等待）。wait 默认 20s、硬顶 30s。
+        // Fiber 准入：默认限制每 Worker 并发渲染数；满则排队等待，优先短延迟再 503。
+        // max_active=0 表示不限制（内存软压仍会等待）。wait 默认 5s、硬顶 5s（禁 30s 干等）。
         // mix30 / 爬虫：钉死较低 max_active + 满等待，避免 FileAdapter 并发读缓存 OOM→502。
         // adaptive_max_active：按实时头寸降快升慢；pin_max_active 钉死配置值。
         // tiny/small 上 HostCapacityTier 保活优先，仍覆盖 pin。
@@ -103,7 +103,7 @@ return [
             'max_active' => 6,
             'adaptive_max_active' => false,
             'pin_max_active' => true,
-            'admission_queue_wait_ms' => 30000,
+            'admission_queue_wait_ms' => 5000,
             // Depth must cover mix30 waiters (not collapse to max_active=6).
             'admission_queue_depth' => 64,
             'admission_queue_slice_ms' => 25,

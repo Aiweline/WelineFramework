@@ -656,7 +656,7 @@ final class WorkerPolicyKernel
                 return null;
 
             case 'backend_key':
-                if ($this->isUnkeyedBackendPath($parsed['path'], $descriptor->matcher)) {
+                if ($this->shouldDenyBackendKeyPath($parsed['path'], $descriptor->matcher)) {
                     return $this->deny($parsed, $envelope->peerIp, (bool)$envelope->attributes['trusted_proxy'], 404, $descriptor->id);
                 }
                 return null;
@@ -1693,19 +1693,34 @@ final class WorkerPolicyKernel
     /**
      * @param array<string, mixed> $matcher
      */
-    private function isUnkeyedBackendPath(string $path, array $matcher): bool
+    /**
+     * Fast-reject unkeyed `/admin*` and wrong/stale secret-shaped area keys
+     * before FPC/Router/theme work. Correct configured area prefixes never deny.
+     *
+     * @param array<string, mixed> $matcher
+     */
+    private function shouldDenyBackendKeyPath(string $path, array $matcher): bool
     {
         $segments = \array_values(\array_filter(\explode('/', \trim($path, '/')), static fn(string $part): bool => $part !== ''));
         if ($segments === []) {
             return false;
         }
-        $backendPrefix = (string)($matcher['backend_prefix'] ?? '');
-        $restBackendPrefix = (string)($matcher['rest_backend_prefix'] ?? '');
-        if (($backendPrefix !== '' && \hash_equals($backendPrefix, (string)$segments[0]))
-            || ($restBackendPrefix !== '' && \hash_equals($restBackendPrefix, (string)$segments[0]))
-        ) {
-            return false;
+
+        $knownPrefixes = $this->knownAreaRoutePrefixes($matcher);
+        $first = (string)$segments[0];
+        foreach ($knownPrefixes as $known) {
+            if ($known !== '' && \hash_equals($known, $first)) {
+                return false;
+            }
         }
+
+        // Stale/guessed secret key (e.g. old bookmark after reinstall): tiny 404,
+        // never storefront theme work. Charset matches Text::random_string +
+        // historical admin_* keys; hyphens (SEO slugs) never match.
+        if (!$this->isLocalizationSegment($first) && $this->looksLikeSecretAreaKey($first)) {
+            return true;
+        }
+
         $index = 0;
         while ($index < 2 && isset($segments[$index]) && $this->isLocalizationSegment($segments[$index])) {
             $index++;
@@ -1717,6 +1732,41 @@ final class WorkerPolicyKernel
             }
         }
         return false;
+    }
+
+    /**
+     * @param array<string, mixed> $matcher
+     * @return list<string>
+     */
+    private function knownAreaRoutePrefixes(array $matcher): array
+    {
+        $out = [];
+        foreach (['backend_prefix', 'rest_backend_prefix', 'rest_frontend_prefix'] as $key) {
+            $prefix = \trim((string)($matcher[$key] ?? ''), '/');
+            if ($prefix !== '') {
+                $out[] = $prefix;
+            }
+        }
+        foreach ((array)($matcher['known_area_prefixes'] ?? []) as $prefix) {
+            $normalized = \trim((string)$prefix, '/');
+            if ($normalized !== '') {
+                $out[] = $normalized;
+            }
+        }
+        return \array_values(\array_unique($out));
+    }
+
+    /**
+     * Secret-shaped first segment: Framework area keys are random alnum
+     * (often 32) or historical `admin_*` tokens — not hyphenated SEO slugs.
+     */
+    private function looksLikeSecretAreaKey(string $segment): bool
+    {
+        if (\preg_match('/\A[A-Za-z0-9_]{16,64}\z/', $segment) !== 1) {
+            return false;
+        }
+        return \preg_match('/[A-Za-z]/', $segment) === 1
+            && \preg_match('/\d/', $segment) === 1;
     }
 
     /**

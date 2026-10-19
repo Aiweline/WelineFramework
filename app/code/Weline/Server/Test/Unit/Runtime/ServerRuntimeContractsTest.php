@@ -53,8 +53,8 @@ final class ServerRuntimeContractsTest extends TestCase
             'FiberAdmissionQueue::testAwaitSoftMemoryMissWaitsUntilDeadline' => function () {
             $this->assert_FiberAdmissionQueue_testAwaitSoftMemoryMissWaitsUntilDeadline();
         },
-            'FiberAdmissionQueue::testWaitMsDefaultTwentySecondsAndCapThirty' => function () {
-            $this->assert_FiberAdmissionQueue_testWaitMsDefaultTwentySecondsAndCapThirty();
+            'FiberAdmissionQueue::testWaitMsDefaultAndHardCapFiveSeconds' => function () {
+            $this->assert_FiberAdmissionQueue_testWaitMsDefaultAndHardCapFiveSeconds();
         },
             'FiberAdmissionQueue::testWaitingRequestCanFinishFromCacheBeforeAdmissionSlotOpens' => function () {
             $this->assert_FiberAdmissionQueue_testWaitingRequestCanFinishFromCacheBeforeAdmissionSlotOpens();
@@ -147,7 +147,7 @@ private function assert_FiberAdmissionQueue_testResolveDefaultsPreferQueueNotUnl
 {
     $cfg = wlsResolveFiberAdmissionConfig([]);
     self::assertSame(6, $cfg['max_active']);
-    self::assertSame(30000, $cfg['queue_wait_ms']);
+    self::assertSame(5000, $cfg['queue_wait_ms']);
     // Default depth = max(max_active×8, 64) so mix can wait, not instant queue_full.
     self::assertSame(64, $cfg['queue_depth']);
     self::assertSame(25, $cfg['queue_slice_ms']);
@@ -229,14 +229,14 @@ private function assert_FiberAdmissionQueue_testAwaitSoftMemoryMissWaitsUntilDea
     \Weline\Server\Service\WorkerResponseMemoryGuard::resetThresholdCache();
 }
 
-private function assert_FiberAdmissionQueue_testWaitMsDefaultTwentySecondsAndCapThirty(): void
+private function assert_FiberAdmissionQueue_testWaitMsDefaultAndHardCapFiveSeconds(): void
 {
-    $configured = wlsResolveFiberAdmissionConfig(['fiber' => ['admission_queue_wait_ms' => 5000]]);
-    self::assertSame(5000, $configured['queue_wait_ms']);
+    $configured = wlsResolveFiberAdmissionConfig(['fiber' => ['admission_queue_wait_ms' => 3000]]);
+    self::assertSame(3000, $configured['queue_wait_ms']);
     $cfg = wlsResolveFiberAdmissionConfig(['fiber' => ['admission_queue_wait_ms' => 45000]]);
-    self::assertSame(30000, $cfg['queue_wait_ms']);
+    self::assertSame(5000, $cfg['queue_wait_ms']);
     $moduleEnv = require '/Users/weline/Project/Official/框架/app/code/Weline/Server' . '/etc/env.php';
-    self::assertSame(30000, $moduleEnv['wls']['fiber']['admission_queue_wait_ms']);
+    self::assertSame(5000, $moduleEnv['wls']['fiber']['admission_queue_wait_ms']);
     self::assertSame(6, $moduleEnv['wls']['fiber']['max_active']);
     self::assertSame(64, $moduleEnv['wls']['fiber']['admission_queue_depth']);
     self::assertTrue((bool) $moduleEnv['wls']['fiber']['pin_max_active']);
@@ -304,7 +304,7 @@ private function assert_FiberAdmissionQueue_testInstanceAdmissionPolicyIsLoadedF
         file_put_contents($path, '<?php return ' . var_export(['wls' => ['fiber' => ['max_active' => 0], 'servers' => ['soak' => ['fiber' => ['max_active' => 12, 'admission_queue_wait_ms' => 45000, 'admission_queue_depth' => 256]]]]], true) . ';');
         $cfg = wlsResolveFiberAdmissionConfigFromEnvironment($path, 'soak');
         self::assertSame(12, $cfg['max_active']);
-        self::assertSame(30000, $cfg['queue_wait_ms']);
+        self::assertSame(5000, $cfg['queue_wait_ms']);
         self::assertSame(256, $cfg['queue_depth']);
     } finally {
         @unlink($path);

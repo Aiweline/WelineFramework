@@ -207,7 +207,7 @@ final class HostCapacityTier
         $snap = self::resolve($hostLimitMb, $config);
         $maxActive = $clampedMaxActive;
         $pin = (bool)($fiberConfig['pin_max_active'] ?? false);
-        $waitMs = (int)($fiberConfig['queue_wait_ms'] ?? 30000);
+        $waitMs = (int)($fiberConfig['queue_wait_ms'] ?? 5000);
 
         if ($snap['fiber_max_active_cap'] !== null) {
             $cap = (int)$snap['fiber_max_active_cap'];

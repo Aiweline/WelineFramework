@@ -127,7 +127,7 @@ fast-path 性能面板记录必须由 `X-WLS-Performance-Diagnostics: 1` 或 `X-
 
 若 Framework runtime 未完成初始化，当前 H1 Worker 返回通用 `500 Internal Server Error` 与 `request_id`/`X-Weline-Request-Id`；Nginx 只透传该结果。公开 body 不得包含异常消息、文件路径、连接信息或 `$runtimeError`；完整内部错误只在 WLS 日志中按同一 `request_id` 关联。
 
-后台路由必须以当前 `backend_key` 开头。裸 `/admin/login`、`/admin/login/post` 等缺少 Key 的路径必须在 FPC/Router 前返回 404；正确入口是 `/{backend_key}/admin/login`。Area Route Manifest 还必须支持 Key 后只有货币、只有语言，以及货币/语言任意顺序的组合。Framework Router 仍是最终权威，Worker manifest 只做无副作用的快速拒绝。
+后台路由必须以当前 `backend_key` 开头。裸 `/admin/login`、`/admin/login/post` 等缺少 Key 的路径必须在 FPC/Router 前返回 404；正确入口是 `/{backend_key}/admin/login`。首段呈密钥形（`[A-Za-z0-9_]{16,64}` 且含字母与数字，如过期书签 `admin_…` / 旧随机串）但**不是**当前已配置的任一 `area_routes` 前缀时，同样在 FPC/Router/主题前返回极简 404（`server.request.backend_key`），禁止整页店面 404 占 Fiber。H1 `worker.php` 对任意策略拒绝必须在 Fiber 准入排队之前直回，不得先 `wlsAwaitFiberAdmissionSlot` 再 deny（忙时会表现为 `Service Unavailable`）。Area Route Manifest 还必须支持 Key 后只有货币、只有语言，以及货币/语言任意顺序的组合。Framework Router 仍是最终权威，Worker manifest 只做无副作用的快速拒绝。
 
 ## 5. 全局限流、封禁与日志
 

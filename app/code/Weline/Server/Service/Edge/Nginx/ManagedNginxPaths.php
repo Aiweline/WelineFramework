@@ -319,6 +319,16 @@ final class ManagedNginxPaths
     }
 
     /**
+     * Canonical root for nginx body/proxy temp paths (conf `*_temp_path`).
+     * Always under {@see tempDir()} so Linux does not fall back to prefix-root
+     * defaults that nginx may create as a different uid (e.g. nobody).
+     */
+    public function nginxBodyTempRoot(): string
+    {
+        return $this->tempDir();
+    }
+
+    /**
      * @return list<string>
      */
     public function nginxTempSubdirs(): array
@@ -333,6 +343,23 @@ final class ManagedNginxPaths
         ];
     }
 
+    /**
+     * Legacy prefix-root temp dirs nginx creates when conf omits `*_temp_path`
+     * (Linux default under `-p` prefix). Kept for ownership heal only.
+     *
+     * @return list<string>
+     */
+    public function legacyPrefixNginxTempDirs(): array
+    {
+        $root = $this->runtimeRoot();
+        $out = [];
+        foreach ($this->nginxTempSubdirs() as $sub) {
+            $out[] = $root . DIRECTORY_SEPARATOR . $sub;
+        }
+
+        return $out;
+    }
+
     public function ensureRuntimeDirectories(): void
     {
         $dirs = [
@@ -345,13 +372,98 @@ final class ManagedNginxPaths
             $this->acmeChallengeRoot(),
         ];
         foreach ($this->nginxTempSubdirs() as $sub) {
-            $dirs[] = $this->tempDir() . DIRECTORY_SEPARATOR . $sub;
+            $dirs[] = $this->nginxBodyTempRoot() . DIRECTORY_SEPARATOR . $sub;
         }
         foreach ($dirs as $dir) {
-            if (!\is_dir($dir) && !@\mkdir($dir, 0755, true) && !\is_dir($dir)) {
+            $mode = $this->isNginxBodyTempPath($dir) ? 0700 : 0755;
+            if (!\is_dir($dir) && !@\mkdir($dir, $mode, true) && !\is_dir($dir)) {
                 throw new \RuntimeException('Unable to create managed nginx directory: ' . $dir);
             }
+            if ($this->isNginxBodyTempPath($dir) && \is_dir($dir)) {
+                @\chmod($dir, 0700);
+            }
         }
+        $this->alignNginxTempDirectoriesOwnership();
+    }
+
+    /**
+     * Align canonical + legacy nginx temp dirs to the project runtime owner
+     * (or current euid when not root). Prevents 700 nobody-owned
+     * `client_body_temp` from breaking POST /api/.../query-bin when workers
+     * run as the project user.
+     */
+    public function alignNginxTempDirectoriesOwnership(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            return;
+        }
+        $owner = $this->resolveRuntimeOwnerIds();
+        if ($owner === null) {
+            return;
+        }
+        [$uid, $gid] = $owner;
+        $targets = [];
+        foreach ($this->nginxTempSubdirs() as $sub) {
+            $targets[] = $this->nginxBodyTempRoot() . DIRECTORY_SEPARATOR . $sub;
+        }
+        foreach ($this->legacyPrefixNginxTempDirs() as $legacy) {
+            if (\is_dir($legacy)) {
+                $targets[] = $legacy;
+            }
+        }
+        $targets[] = $this->nginxBodyTempRoot();
+        foreach ($targets as $path) {
+            if (!\is_dir($path) || \is_link($path)) {
+                continue;
+            }
+            $stat = @\lstat($path);
+            if (!\is_array($stat)) {
+                continue;
+            }
+            $curUid = (int)($stat['uid'] ?? -1);
+            $curGid = (int)($stat['gid'] ?? -1);
+            if ($curUid !== $uid || $curGid !== $gid) {
+                @\chown($path, $uid);
+                @\chgrp($path, $gid);
+            }
+            if ($this->isNginxBodyTempPath($path) || $path === $this->nginxBodyTempRoot()) {
+                @\chmod($path, $path === $this->nginxBodyTempRoot() ? 0755 : 0700);
+            }
+        }
+    }
+
+    /**
+     * @return array{0:int,1:int}|null
+     */
+    private function resolveRuntimeOwnerIds(): ?array
+    {
+        if (!\function_exists('posix_geteuid') || !\function_exists('posix_getegid')) {
+            return null;
+        }
+        $euid = (int)\posix_geteuid();
+        $egid = (int)\posix_getegid();
+        if ($euid !== 0) {
+            return [$euid, $egid];
+        }
+        $root = $this->runtimeRoot();
+        $stat = @\lstat($root);
+        if (!\is_array($stat) || !\is_int($stat['uid'] ?? null) || !\is_int($stat['gid'] ?? null)) {
+            return null;
+        }
+
+        return [(int)$stat['uid'], (int)$stat['gid']];
+    }
+
+    private function isNginxBodyTempPath(string $path): bool
+    {
+        $base = \basename($path);
+        foreach ($this->nginxTempSubdirs() as $sub) {
+            if ($base === $sub) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

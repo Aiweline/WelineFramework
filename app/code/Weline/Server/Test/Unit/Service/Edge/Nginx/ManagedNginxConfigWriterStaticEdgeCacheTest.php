@@ -60,6 +60,21 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
         $config = \file_get_contents($result['conf']);
         self::assertIsString($config);
 
+        self::assertMatchesRegularExpression(
+            '#include\s+"[^"]+/conf\.d/\*\.conf"\s*;#',
+            $config,
+            'Managed nginx must include conf.d/*.conf so multi-project satellite vhosts survive regen.',
+        );
+        $confDIncludePos = \strpos($config, '/conf.d/*.conf');
+        self::assertIsInt($confDIncludePos);
+        $httpClosePos = \strrpos($config, "\n}");
+        self::assertIsInt($httpClosePos);
+        self::assertLessThan(
+            $httpClosePos,
+            $confDIncludePos,
+            'conf.d include must sit inside the http {} block before its closing brace.',
+        );
+
         $mediaStart = \strpos($config, 'location ^~ /pub/media/');
         self::assertIsInt(
             $mediaStart,
@@ -184,8 +199,14 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
         self::assertStringContainsString('html/live/$wls_fpc_html_host', $config);
         self::assertStringContainsString('try_files $uri/index.html.br =418;', $genericBlock);
         self::assertStringContainsString('Content-Encoding br always;', $genericBlock);
+        self::assertStringContainsString('gzip off;', $genericBlock);
         self::assertStringContainsString('gzip_vary off;', $genericBlock);
         self::assertStringContainsString('Vary "Accept-Encoding, Cookie" always;', $genericBlock);
+        self::assertMatchesRegularExpression(
+            '/try_files \$uri\/index\.html\.br =418;[\s\S]*?gzip off;[\s\S]*?Content-Encoding br always;/',
+            $genericBlock,
+            'html-disk HIT must gzip off before serving precompressed .br (no dual Content-Encoding).',
+        );
         self::assertMatchesRegularExpression(
             '/location @wls_html_origin\s*\{[^}]*gzip_vary off;/s',
             $genericBlock,

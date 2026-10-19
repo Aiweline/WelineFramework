@@ -95,6 +95,18 @@ final class RuntimePolicyCompiler
         $rules = $this->loadAttackRules();
         $backendPrefix = \trim((string)(Env::getAreaRoutePrefix('backend') ?? ''), '/');
         $restBackendPrefix = \trim((string)(Env::getAreaRoutePrefix('rest_backend') ?? ''), '/');
+        $restFrontendPrefix = \trim((string)(Env::getAreaRoutePrefix('rest_frontend') ?? ''), '/');
+        $knownAreaPrefixes = [];
+        foreach (Env::getAreaRoutes() as $areaConfig) {
+            if (!\is_array($areaConfig)) {
+                continue;
+            }
+            $prefix = \trim((string)($areaConfig['prefix'] ?? ''), '/');
+            if ($prefix !== '') {
+                $knownAreaPrefixes[] = $prefix;
+            }
+        }
+        $knownAreaPrefixes = \array_values(\array_unique($knownAreaPrefixes));
         $originValidation = \is_array($wls['origin_token_validation'] ?? null)
             ? $wls['origin_token_validation']
             : [];
@@ -192,6 +204,8 @@ final class RuntimePolicyCompiler
                     'type' => 'backend_key',
                     'backend_prefix' => $backendPrefix,
                     'rest_backend_prefix' => $restBackendPrefix,
+                    'rest_frontend_prefix' => $restFrontendPrefix,
+                    'known_area_prefixes' => $knownAreaPrefixes,
                     'protected_prefixes' => ['admin', 'rest_admin'],
                     'localized_prefix_order' => 'any',
                 ],

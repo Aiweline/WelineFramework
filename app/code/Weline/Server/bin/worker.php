@@ -5156,6 +5156,37 @@ function wlsDispatchRequestFiberStep(
         (bool)($connectionTrustedProxy[$connId] ?? false),
     );
 
+    // Policy deny (host_guard / backend_key / attack / …) must not enter Fiber
+    // admission — wrong/stale admin keys and bare /admin would otherwise queue
+    // under load and surface as Service Unavailable while holding waiters.
+    if (!$policyDecision->allowed) {
+        $handleDuration = \round((wlsWorkerMonotonicNow() - $staticFastPathStartedAt) * 1000, 2);
+        sendResponseAndCleanup(
+            $conn,
+            $connId,
+            (string)$policyDecision->response,
+            $rawRequest,
+            $connections,
+            $requestBuffers,
+            $connectionLastActivity,
+            $requestLogged,
+            $ipcClient,
+            $instanceName,
+            $activeRequests,
+            $handleDuration,
+            $ipcDraining,
+            $longLivedConnections,
+            false,
+            $writeBuffers,
+            $writableConnections,
+            $pendingClose,
+            true,
+            (string)($policyDecision->headers['host'] ?? ''),
+            false,
+        );
+        return;
+    }
+
     if ($policyDecision->allowed) {
         // Managed Nginx owns browser HTTPS. Direct hits on the plaintext Worker
         // listen port (Host host:workerPort) must bounce to the public origin so
