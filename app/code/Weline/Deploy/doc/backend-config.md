@@ -404,19 +404,24 @@ curl -s 'https://你的域名/~wh~.../version?project_id=12'
 - `分支过滤`（原 Webhook 分支）：留空匹配所有分支；填写后仅该分支的 push 触发部署。
 - `Tag 前缀过滤`：留空匹配所有 tag；填写（如 `v`）后仅匹配此前缀的 tag 才触发部署。
 
-### 更新通道开关（1.1.22）
+### 更新通道开关（1.1.22+ / 默认 Tag·Cron 1.1.24）
+
+**主路径**：Tag 出现在站点 remote → Cron `DeployWebhookExpect` → 入队 → `DeployWebhookDrain`。Webhook 可选。
 
 | 键 | 默认 | 说明 |
 |----|------|------|
-| `cron_update_enabled` | `1` | 开启后 ExpectWatch Cron 检测远程 tip/tag，**单 tick 只入队最新一条**（多 tag coalesce；`both` 时 tag 优先于 tip） |
-| `webhook_enabled` | `0` | 关闭时不解析/不展示公网 URL，Router 不映射 → 404；开启后才对外生效 |
+| `cron_update_enabled` | `1` | ExpectWatch 检测远程 tip/tag，**单 tick 只入队最新一条**（`both` 时 tag 优先于 tip） |
+| `webhook_enabled` | `0` | 关闭时不解析/不展示公网 URL，Router 不映射 → 404 |
+| `deploy_trigger_mode` | `tag` | 产品默认仅 Tag；显式 `branch`/`both` 才跟分支 |
 
 后台「触发模式 / 分支过滤 / Tag 前缀」对 Webhook 与 Cron **共用**。  
-`ensureChannelDefaults()`：stored 无键时，有 `webhook_path` → `webhook_enabled=1`（兼容旧站）；否则 `0`；`cron_update_enabled` 缺省写 `1`。配置页展示/保存前会 ensure，避免首次保存把旧 Webhook 写成关闭。
+`ensureChannelDefaults()`：无键时写入 `cron_update_enabled=1`、`deploy_trigger_mode=tag`；有 `webhook_path` 且无 `webhook_enabled` → `webhook_enabled=1`（兼容旧站），否则 `0`。
+
+**远程一致性（硬）**：`git ls-remote --tags <project_remote|origin>` 必须能看到你刚推的 tag。只推 GitHub、站跟 Gitee（或反过来）→ Cron 不入队。
 
 ### 向后兼容
 
-默认模式为「仅 Tag Push」。旧配置 `webhook_allow_tag_deploy`（0/1 开关）仍然生效：值为 `1` 时等价于「分支 + Tag 都生效」，值为 `0` 时等价于「仅分支 Push」。新配置 `deploy_trigger_mode` 优先。
+默认模式为「仅 Tag Push」。旧键 `webhook_allow_tag_deploy=1` 且未写 `deploy_trigger_mode` 时仍视为「分支 + Tag」；`=0` **不再**推断为「仅分支」（1.1.24 起改为落默认 Tag）。已显式写入的 `deploy_trigger_mode` 不变。
 
 ### Git 平台配置提示
 

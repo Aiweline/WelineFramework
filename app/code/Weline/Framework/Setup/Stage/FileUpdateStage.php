@@ -155,7 +155,7 @@ class FileUpdateStage extends AbstractStage
         }
         
         $failedFiles = [];
-        $publisher = new AtomicCompiledFilePublisher();
+        $publisher = AtomicCompiledFilePublisher::forCli();
 
         // 原子发布所有文件（temp+rename，避免半截 PHP）
         foreach ($this->fileData as $filePath => $content) {
@@ -188,7 +188,7 @@ class FileUpdateStage extends AbstractStage
             return;
         }
         
-        $publisher = new AtomicCompiledFilePublisher();
+        $publisher = AtomicCompiledFilePublisher::forCli();
         // 恢复原始文件内容
         foreach ($this->originalFileData as $filePath => $originalContent) {
             try {

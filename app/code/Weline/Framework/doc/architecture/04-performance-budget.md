@@ -45,8 +45,13 @@
   保留在替换清单，不得仅因索引已生成就宣布热路径已全量迁移。
 - modules/query/runtime-policy/template/container 注册表不得向现有 target
   原地写入；发布失败后旧 target 必须仍可完整 `require`，临时文件必须清理。
-- 并发 `framework:compile` 必须按输出目录串行，锁等待上限 `10s`；超时不得
-  继续发布或静默降级。每次成功发布后必须 invalidate target 的 OPcache。
+- 并发 `framework:compile` 必须按输出目录串行。锁等待双档：
+  **请求/默认** `AtomicCompiledFilePublisher::DEFAULT_LOCK_TIMEOUT_MILLISECONDS`
+ （10s）fail-fast；**控制面 CLI**（`forCli()`：`setup:upgrade` bootstrap、
+  `framework:compile`、`server:start` 晋升、`FileUpdateStage`）
+  `CLI_LOCK_TIMEOUT_MILLISECONDS`（180s），以覆盖一次完整并发 compile 会话。
+  超时不得继续发布或静默降级；超时文案须带 lock holder（pid / acquired_at /
+  alive）。每次成功发布后必须 invalidate target 的 OPcache。
 - `server:start` 必须先在私有 staging 目录完成 5 个注册表、container
   digest 和 runtime-policy 预检；预检失败时 final 5 文件的 SHA-256 必须
   全部不变。promotion 以 `container.php` 收尾，第 N 项失败后必须恢复

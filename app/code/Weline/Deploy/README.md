@@ -94,17 +94,21 @@ php bin/w deploy:build
 
 发布成功后 `release_after` **零碰 FPC / 零写主题静态戳**（店面失效由主题版本发布与业务 ChangedType 自管）。
 
-## 触发模式
+## 触发模式与默认自动更新
 
-后台配置「部署触发方式」决定 Webhook 何时触发部署：
+**产品默认主路径（1.1.24+）**：**打 Tag → 推到站点能 `git ls-remote` 到的 remote → 各站 Cron `DeployWebhookExpect` 发现新 Tag → Drain 发布**。Webhook 为可选即时入队，不是默认前置。
+
+后台「部署触发方式」对 Webhook 与 Cron **共用**：
 
 | 模式 | 含义 |
 |------|------|
-| `仅分支 Push` | 只有分支推送触发，tag 推送忽略 |
-| `仅 Tag Push` | 只有 tag 推送触发，分支推送忽略 |
-| `分支 + Tag 都生效` | 两者都触发（需明确选择） |
+| `仅分支 Push` | 只跟分支 tip；**打 tag 不会部署** |
+| `仅 Tag Push`（默认） | 只跟 tag；分支 tip 忽略 |
+| `分支 + Tag 都生效` | 两者都跟（单 tick 只入队最新一条，tag 优先） |
 
-默认模式为 `仅 Tag Push`，分支 push 会返回 `trigger_mode_tag_only`，只有明确选择分支模式或“两者都生效”时才响应分支发布。自 `1.1.22` 起：**Cron 计划更新默认开启**（整轮只入队最新一条），**Webhook 默认关闭**（关则无公网地址/404）；触发规则两通道共用。
+自 `1.1.22` 起 Cron 默认开、Webhook 默认关；自 `1.1.24` 起缺省触发模式钉 **Tag**，且不再把旧键 `webhook_allow_tag_deploy=0` 推断成「仅分支」。
+
+**远程必须一致**：站点 `origin`/`project_remote` 若是 Gitee，只把 tag 推到 GitHub → Expect 永远 `MISS`，Drain 空转。
 
 ## 版本探测
 

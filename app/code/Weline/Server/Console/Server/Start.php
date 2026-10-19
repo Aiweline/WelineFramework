@@ -11977,7 +11977,7 @@ class Start extends CommandAbstract
         $compiler = ObjectManager::getInstance(FrameworkCompiler::class);
         // A waiting starter must cover one Defender-cold compile, but the
         // deadline remains bounded so a dead compiler cannot stall startup.
-        $publisher = new AtomicCompiledFilePublisher(60_000);
+        $publisher = AtomicCompiledFilePublisher::forCli();
 
         $sharedLockAcquiredHere = false;
         try {

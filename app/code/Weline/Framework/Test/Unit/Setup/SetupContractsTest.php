@@ -124,6 +124,9 @@ final class SetupContractsTest extends TestCase
             'UpgradeMaintenanceClose::testCleanupRequiresWlsSyncBeforeClaimingClosed' => function () {
             $this->assert_UpgradeMaintenanceClose_testCleanupRequiresWlsSyncBeforeClaimingClosed();
         },
+            'UpgradeCompileLockCli::testBootstrapRegistryUsesCliPublisher' => function () {
+            $this->assert_UpgradeCompileLockCli_testBootstrapRegistryUsesCliPublisher();
+        },
             'UpgradeMigrationsEvent::testMigrationEventIsCataloguedSubscribedAndOrdered' => function () {
             $this->assert_UpgradeMigrationsEvent_testMigrationEventIsCataloguedSubscribedAndOrdered();
         },
@@ -475,6 +478,19 @@ private function assert_UpgradeMaintenanceClose_testCleanupRequiresWlsSyncBefore
     self::assertStringContainsString('if ($keepMaintenance)', $src);
     self::assertStringContainsString('已保留维护模式（--keep-maintenance）', $src);
     self::assertStringContainsString('isset($args[\'keep-maintenance\'])', $src);
+}
+
+private function assert_UpgradeCompileLockCli_testBootstrapRegistryUsesCliPublisher(): void
+{
+    $frameworkRoot = '/Users/weline/Project/Official/框架/app/code/Weline/Framework';
+    $upgrade = (string) \file_get_contents($frameworkRoot . '/Setup/Console/Setup/Upgrade.php');
+    $fileStage = (string) \file_get_contents($frameworkRoot . '/Setup/Stage/FileUpdateStage.php');
+    self::assertStringContainsString('AtomicCompiledFilePublisher::forCli()', $upgrade);
+    self::assertStringContainsString('new CompiledPhpArrayWriter($cliPublisher)', $upgrade);
+    self::assertStringContainsString('new ModuleRegistryCompiler(null, null, $writer)', $upgrade);
+    self::assertStringContainsString('formatLockHolder($outputDirectory)', $upgrade);
+    self::assertStringContainsString('AtomicCompiledFilePublisher::forCli()', $fileStage);
+    self::assertStringNotContainsString('new AtomicCompiledFilePublisher()', $fileStage);
 }
 
 private function assert_UpgradeMigrationsEvent_testMigrationEventIsCataloguedSubscribedAndOrdered(): void

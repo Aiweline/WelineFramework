@@ -27,7 +27,7 @@ final class FrameworkCompiler
     public function compile(string $modulesRoot, string $outputDirectory): array
     {
         $outputDirectory = rtrim($outputDirectory, '/\\');
-        $publisher = new AtomicCompiledFilePublisher(60_000);
+        $publisher = AtomicCompiledFilePublisher::forCli();
         $outputLockAcquiredHere = $publisher->acquireDirectoryLock($outputDirectory, \LOCK_EX);
         $previousProviderRegistry = null;
         $providerRegistryInstalled = false;

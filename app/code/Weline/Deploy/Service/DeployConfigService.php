@@ -105,6 +105,8 @@ class DeployConfigService
     /**
      * Persist channel defaults once so Config UI save cannot clobber legacy webhook.
      *
+     * Product default (HARD): Cron + Tag — sites poll origin for new tags; Webhook is optional.
+     *
      * @return bool true when stored settings were written
      */
     public function ensureChannelDefaults(): bool
@@ -121,6 +123,13 @@ class DeployConfigService
             $stored['cron_update_enabled'] = '1';
             $changed = true;
         }
+        // Absent trigger mode → pin Tag (do not infer branch from legacy allow_tag=0).
+        if (!array_key_exists('deploy_trigger_mode', $stored)
+            || !in_array((string)$stored['deploy_trigger_mode'], self::TRIGGER_MODES, true)
+        ) {
+            $stored['deploy_trigger_mode'] = self::TRIGGER_MODE_TAG;
+            $changed = true;
+        }
         if (!$changed) {
             return false;
         }
@@ -130,6 +139,8 @@ class DeployConfigService
 
     /**
      * 获取生效的触发模式（兼容旧配置 webhook_allow_tag_deploy）。
+     *
+     * 产品默认：仅 Tag。未写 deploy_trigger_mode 时不再把 allow_tag=0 当成「仅分支」。
      */
     public function getEffectiveTriggerMode(): string
     {
@@ -140,10 +151,11 @@ class DeployConfigService
             return $mode;
         }
 
-        // 兼容旧配置：如果 deploy_trigger_mode 未设置，从 webhook_allow_tag_deploy 推断
-        if (array_key_exists('webhook_allow_tag_deploy', $storedSettings)) {
-            $allowTag = (string)($storedSettings['webhook_allow_tag_deploy'] ?? '0') === '1';
-            return $allowTag ? self::TRIGGER_MODE_BOTH : self::TRIGGER_MODE_BRANCH;
+        // Legacy: allow_tag=1 → both; otherwise product default Tag (not branch).
+        if (array_key_exists('webhook_allow_tag_deploy', $storedSettings)
+            && (string)($storedSettings['webhook_allow_tag_deploy'] ?? '0') === '1'
+        ) {
+            return self::TRIGGER_MODE_BOTH;
         }
 
         return self::TRIGGER_MODE_TAG;
