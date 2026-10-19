@@ -105,17 +105,20 @@ class Dictionary extends BaseController
             $words[] = $item->getData($this->dictionary::schema_fields_WORD);
         }
         
-        // 查询对应的翻译数据
+        // 查询对应的翻译数据（md5 PK 批查，禁止 locale.word IN）
         $translations = [];
         if (!empty($words)) {
-            $translationData = $this->localeDictionary->reset()
-                ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $localeCode)
-                ->where($this->localeDictionary::schema_fields_WORD, $words, 'in')
-                ->select()
-                ->fetchArray();
-            
-            foreach ($translationData as $t) {
-                $translations[$t[$this->localeDictionary::schema_fields_WORD]] = $t;
+            foreach (array_chunk($words, 200) as $wordChunk) {
+                foreach ($this->localeDictionary->getEntries($wordChunk, (string)$localeCode) as $wordKey => $entry) {
+                    $translations[$wordKey] = [
+                        $this->localeDictionary::schema_fields_TRANSLATE => $entry->translation,
+                        $this->localeDictionary::schema_fields_LOCALE_CODE => $entry->localeCode,
+                        $this->localeDictionary::schema_fields_MD5 => $this->localeDictionary->getMd5(
+                            $entry->word,
+                            $entry->localeCode,
+                        ),
+                    ];
+                }
             }
         }
         
@@ -1080,7 +1083,7 @@ class Dictionary extends BaseController
     {
         $query = $this->localeDictionary->reset()
             ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $localeCode);
-        $this->applyModuleScopeToLocaleQuery($query, $moduleFilter);
+        $this->applyModuleScopeToLocaleQuery($query, $moduleFilter, $localeCode);
 
         return (int)$query->count();
     }
@@ -1103,7 +1106,7 @@ class Dictionary extends BaseController
             "{$translateField} <> {$wordField}",
         ];
 
-        $moduleCondition = $this->buildModuleScopeSqlCondition($moduleFilter);
+        $moduleCondition = $this->buildModuleScopeSqlCondition($moduleFilter, $localeCode);
         if ($moduleCondition !== '') {
             $conditions[] = $moduleCondition;
         }
@@ -1116,10 +1119,13 @@ class Dictionary extends BaseController
     }
 
     /**
-     * 为 locale 词典查询附加模块范围。
+     * 为 locale 词典查询附加模块范围（按 md5，禁止 word IN）。
      */
-    private function applyModuleScopeToLocaleQuery(\Weline\I18n\Model\Locale\Dictionary $query, string $moduleFilter): void
-    {
+    private function applyModuleScopeToLocaleQuery(
+        \Weline\I18n\Model\Locale\Dictionary $query,
+        string $moduleFilter,
+        string $localeCode,
+    ): void {
         $moduleFilter = trim($moduleFilter);
         if ($moduleFilter === '') {
             return;
@@ -1127,7 +1133,11 @@ class Dictionary extends BaseController
 
         $moduleWords = $this->getModuleWords($moduleFilter);
         if ($moduleWords !== []) {
-            $query->where($this->localeDictionary::schema_fields_WORD, $moduleWords, 'in');
+            $fingerprints = [];
+            foreach ($moduleWords as $word) {
+                $fingerprints[] = $this->localeDictionary->getMd5($word, $localeCode);
+            }
+            $query->where($this->localeDictionary::schema_fields_MD5, $fingerprints, 'in');
             return;
         }
 
@@ -1135,9 +1145,9 @@ class Dictionary extends BaseController
     }
 
     /**
-     * 构建模块范围 SQL 条件（供聚合统计使用）。
+     * 构建模块范围 SQL 条件（供聚合统计使用；按 md5）。
      */
-    private function buildModuleScopeSqlCondition(string $moduleFilter): string
+    private function buildModuleScopeSqlCondition(string $moduleFilter, string $localeCode): string
     {
         $moduleFilter = trim($moduleFilter);
         if ($moduleFilter === '') {
@@ -1146,12 +1156,13 @@ class Dictionary extends BaseController
 
         $moduleWords = $this->getModuleWords($moduleFilter);
         if ($moduleWords !== []) {
-            $quotedWords = array_map(
-                static fn (string $word): string => "'" . str_replace("'", "''", $word) . "'",
-                $moduleWords
-            );
+            $quoted = [];
+            foreach ($moduleWords as $word) {
+                $md5 = $this->localeDictionary->getMd5($word, $localeCode);
+                $quoted[] = "'" . str_replace("'", "''", $md5) . "'";
+            }
 
-            return $this->localeDictionary::schema_fields_WORD . ' IN (' . implode(',', $quotedWords) . ')';
+            return $this->localeDictionary::schema_fields_MD5 . ' IN (' . implode(',', $quoted) . ')';
         }
 
         $moduleSql = str_replace("'", "''", $moduleFilter);
@@ -1286,17 +1297,20 @@ class Dictionary extends BaseController
             // 获取所有词汇
             $words = array_column($dictionaryItems, $this->dictionary::schema_fields_WORD);
             
-            // 查询对应的翻译数据
+            // 查询对应的翻译数据（md5 PK 批查，禁止 locale.word IN）
             $translations = [];
             if (!empty($words)) {
-                $translationData = $this->localeDictionary->reset()
-                    ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $localeCode)
-                    ->where($this->localeDictionary::schema_fields_WORD, $words, 'in')
-                    ->select()
-                    ->fetchArray();
-                
-                foreach ($translationData as $t) {
-                    $translations[$t[$this->localeDictionary::schema_fields_WORD]] = $t;
+                foreach (array_chunk($words, 200) as $wordChunk) {
+                    foreach ($this->localeDictionary->getEntries($wordChunk, (string)$localeCode) as $wordKey => $entry) {
+                        $translations[$wordKey] = [
+                            $this->localeDictionary::schema_fields_TRANSLATE => $entry->translation,
+                            $this->localeDictionary::schema_fields_LOCALE_CODE => $entry->localeCode,
+                            $this->localeDictionary::schema_fields_MD5 => $this->localeDictionary->getMd5(
+                                $entry->word,
+                                $entry->localeCode,
+                            ),
+                        ];
+                    }
                 }
             }
             

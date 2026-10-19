@@ -78,6 +78,8 @@ WLS 的翻译所有权统一在 `Weline\Framework\Phrase\Parser`，`Weline\I18n\
 
 **Collect / Export 分层（性能）**：后台收集只跑 **一次** `DictionaryCompiler::compile`（禁止再 `convertToLanguageFile` 二次全链）。`dictionary_compile_after` 用 `publishLocales` **一次**加载 base area 映射后导出；全量仍导出全部发布语种；**单模块默认只导出源语 + `en_US`**，需要全语种文件时加 `--republish-all`。源码扫描默认仍回写模块 `i18n/*.csv`，高频开发可加 `--no-rewrite-csv`。内容与现文件相同则 skip 写盘与 revision bump（不广播缓存风暴）。
 
+**稀表架构（locale 覆盖层）**：`i18n_locale_dictionary` 只存默认语镜像 + AI/后台真覆盖，**禁止**预扇出「每词×每语」。批存在性 / 后台点查只打 **`md5` PK**（`getEntries`），禁止 locale.`word IN`（TEXT）。`AiTranslationPublisher` 合并写袋：`模块 CSV ∪ locale 稀覆盖`（DB 后写优先），不是整语种 DB 快照。`setup:upgrade` **默认跳过**全量 collect；需要时 `--force-i18n-collect` 或 `php bin/w i18n:collect`。历史扇出用 `php bin/w i18n:dictionary:demote-fanout`（先 `--dry-run`）降级。
+
 `Countries` / `Locale` / `Locals` 会保存完整内联 SVG 国旗，不是资源键或国家码；三张表的 `flag` 统一声明为 `MEDIUMTEXT`。MySQL `TEXT` 的 65,535 字节上限不足以容纳部分 `flag-icons` SVG（例如 ES 资源超过 80 KB）；不允许静默截断或把安装失败降级成每轮重复警告。PostgreSQL/SQLite 按各自方言映射为无小容量上限的 TEXT 语义。
 
 ```php

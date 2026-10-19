@@ -12,6 +12,9 @@ use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
 /**
  * 系统词典 → generated/language/{locale}.{shared|frontend|backend}.php 唯一写出入口。
  * 三袋互斥：一词只进一区；可选保留 {locale}.php 并集供 CLI。
+ *
+ * 稀表契约：袋内容 = 模块 CSV 基线 ∪ locale 稀覆盖（DB 后写优先）；
+ * 禁止仅依赖整语种 DB 快照。
  */
 class AiTranslationPublisher
 {
@@ -154,32 +157,15 @@ class AiTranslationPublisher
                     }
                 }
 
-                $bags = [
-                    DictionaryAreaPolicy::AREA_SHARED => [],
-                    DictionaryAreaPolicy::AREA_FRONTEND => [],
-                    DictionaryAreaPolicy::AREA_BACKEND => [],
-                ];
-                $query = (clone $this->localeDictionary)->clear()->reset()
-                    ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localeCode)
-                    ->select();
-                foreach ($query->fetchIterator() as $row) {
-                    if (!\is_array($row)) {
-                        continue;
-                    }
-                    $word = (string)($row[LocaleDictionary::schema_fields_WORD] ?? '');
-                    $translate = (string)($row[LocaleDictionary::schema_fields_TRANSLATE] ?? '');
-                    if ($word === '' || $translate === '' || str_starts_with($word, '@meta::')) {
-                        continue;
-                    }
-                    $area = $areaByWord[$word] ?? DictionaryAreaPolicy::AREA_SHARED;
-                    $bags[$area][$word] = $translate;
-                }
+                // 稀表契约：袋 = 模块 CSV 基线 ∪ locale 稀覆盖（DB 后写覆盖 CSV）。
+                // 禁止把「整语种 DB 快照」当作唯一内容源。
+                $bags = $this->mergeLocaleBags($localeCode, $areaByWord);
 
                 $total = count($bags[DictionaryAreaPolicy::AREA_SHARED])
                     + count($bags[DictionaryAreaPolicy::AREA_FRONTEND])
                     + count($bags[DictionaryAreaPolicy::AREA_BACKEND]);
                 if ($total === 0 && is_string($previousByPath[$unionFile] ?? null) && $previousByPath[$unionFile] !== '') {
-                    w_log_warning('I18n locale publish skipped empty DB snapshot', [
+                    w_log_warning('I18n locale publish skipped empty merged bag', [
                         'locale' => $localeCode,
                     ], 'i18n');
                     $replaced = false;
@@ -338,5 +324,65 @@ class AiTranslationPublisher
         if ($bytes > 0 && $bytes < 512 * 1024 * 1024) {
             @\ini_set('memory_limit', '512M');
         }
+    }
+
+    /**
+     * @param array<string, string> $areaByWord
+     * @return array{
+     *   shared: array<string, string>,
+     *   frontend: array<string, string>,
+     *   backend: array<string, string>
+     * }
+     */
+    private function mergeLocaleBags(string $localeCode, array $areaByWord): array
+    {
+        $bags = [
+            DictionaryAreaPolicy::AREA_SHARED => [],
+            DictionaryAreaPolicy::AREA_FRONTEND => [],
+            DictionaryAreaPolicy::AREA_BACKEND => [],
+        ];
+
+        $put = static function (array &$bags, array $areaByWord, string $word, string $translate): void {
+            if ($word === '' || $translate === '' || str_starts_with($word, '@meta::')) {
+                return;
+            }
+            if (I18nCsvCodec::isJunkTranslation($translate) || I18nCsvCodec::isGarbledText($word) || I18nCsvCodec::isGarbledText($translate)) {
+                return;
+            }
+            $area = $areaByWord[$word] ?? DictionaryAreaPolicy::AREA_SHARED;
+            if (!isset($bags[$area])) {
+                $area = DictionaryAreaPolicy::AREA_SHARED;
+            }
+            $bags[$area][$word] = $translate;
+        };
+
+        foreach (Env::getInstance()->getActiveModules() as $module) {
+            if (!\is_array($module)) {
+                continue;
+            }
+            $base = \rtrim((string)($module['base_path'] ?? ''), '/\\');
+            if ($base === '') {
+                continue;
+            }
+            $csvFile = $base . DIRECTORY_SEPARATOR . 'i18n' . DIRECTORY_SEPARATOR . $localeCode . '.csv';
+            foreach (I18nCsvCodec::readWords($csvFile) as $word => $translate) {
+                $put($bags, $areaByWord, (string)$word, (string)$translate);
+            }
+        }
+
+        // 稀覆盖后写覆盖 CSV（真 AI/人工译文）。
+        $query = (clone $this->localeDictionary)->clear()->reset()
+            ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localeCode)
+            ->select();
+        foreach ($query->fetchIterator() as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $word = (string)($row[LocaleDictionary::schema_fields_WORD] ?? '');
+            $translate = (string)($row[LocaleDictionary::schema_fields_TRANSLATE] ?? '');
+            $put($bags, $areaByWord, $word, $translate);
+        }
+
+        return $bags;
     }
 }

@@ -178,6 +178,14 @@ id属性不能为空,id属性不能为空
 开始从数据库同步到本机引擎…,开始从数据库同步到本机引擎…
 同步失败,"Sync failed"
 已同步,已同步
+无权限一键配置邮局,无权限一键配置邮局
+开始一键配置邮局…,开始一键配置邮局…
+一键配置失败,一键配置失败
+一键配置完成,一键配置完成
+无权限一键配置本域,无权限一键配置本域
+开始一键配置本域…,开始一键配置本域…
+本域一键配置失败,本域一键配置失败
+本域一键配置完成,本域一键配置完成
 请选择已启用的本机企业邮箱账号,"Select an enabled local business email account"
 邮件发送失败,"Failed to send email"
 "邮箱域名 ID 无效。","The email domain ID is invalid."
@@ -433,6 +441,8 @@ Smtp,Smtp
 "Stalwart 管理连接正常","Stalwart management connected"
 "Stalwart 管理连接待配置","Stalwart management connection required"
 "完成管理连接后才能开通真实邮箱并同步 DNS。","Finish the management connection before provisioning real mailboxes and syncing DNS."
+一键绑定本机邮局管理凭据并按库同步账户,"One-click: bind local mail admin credentials and sync accounts from the database"
+一键配置邮局,"One-click mail setup"
 "去域名与 DNS","Go to Domains & DNS"
 配置引擎,"Configure engine"
 "将数据库中的邮箱账户同步到本机 Stalwart 引擎","Sync mailbox accounts from the database into the local Stalwart engine"
@@ -676,10 +686,14 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 "应用 DNS","Applying DNS."
 "改用 OAuth 重新授权（可选）","Switch to OAuth re-authorize (optional)"
 "启用域名时自动开通 contact@（企业邮箱人收）。Smtp 多服务请在「Smtp」Tab（本机启用 / 外部填入）；邮箱外投请在「用户与账号」编辑。","启用域名时自动开通 contact@（企业邮箱人收）。Smtp 多服务请在「Smtp」Tab（本机启用 / 外部填入）；邮箱外投请在「用户与账号」编辑。"
+一键确保本域引擎与系统账号并同步账户,"One-click: ensure this domain in the engine, system mailbox, and sync accounts"
+一键配置本域,"One-click setup this domain"
 暂停域名,"Suspend domain."
 启用域名,"Enable domain."
 同步中…,Syncing…
 "账号 %{1} 新密码（仅一次）：%{2}","Account %{1} new password (once only): %{2}"
+配置中…,"Setting up…"
+配置失败,"Setup failed"
 收件邮箱格式不正确,"Recipient email format is invalid"
 主题和正文不能为空,"Subject and body are required"
 邮箱地址必须属于所选域名,"Email address must belong to the selected domain name"
@@ -791,15 +805,21 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 邮箱账号开通失败,邮箱账号开通失败
 "已开通邮局账号 %{1}","已开通邮局账号 %{1}"
 请先配置引擎管理连接,请先配置引擎管理连接
+邮箱域名无效,邮箱域名无效
+"跳过假域/测试域 %{1}","跳过假域/测试域 %{1}"
 "确保域名 %{1}","确保域名 %{1}"
 "域名 %{1} 录入失败：%{2}","域名 %{1} 录入失败：%{2}"
+"跳过假域邮局账号 %{1}","跳过假域邮局账号 %{1}"
 "同步邮局账号 %{1}","同步邮局账号 %{1}"
 "邮局账号 %{1} 同步失败：%{2}","邮局账号 %{1} 同步失败：%{2}"
+"跳过假域 Smtp 账号 %{1}","跳过假域 Smtp 账号 %{1}"
 "同步 Smtp 账号 %{1}","同步 Smtp 账号 %{1}"
 "Smtp 账号 %{1} 同步失败：%{2}","Smtp 账号 %{1} 同步失败：%{2}"
 检查读取凭据,检查读取凭据
 读取凭据补齐失败：%{1},读取凭据补齐失败：%{1}
+本轮无真实引擎域，跳过读取凭据硬失败,本轮无真实引擎域，跳过读取凭据硬失败
 "缺少读取凭据，且库中无可用的 contact@ 密封密码","缺少读取凭据，且库中无可用的 contact@ 密封密码"
+本轮仅假域/测试域，读取凭据可稍后由真实域补齐,本轮仅假域/测试域，读取凭据可稍后由真实域补齐
 "已同步：录入 %{1}，跳过 %{2}，重生密码 %{3}","已同步：录入 %{1}，跳过 %{2}，重生密码 %{3}"
 "已导入 Stalwart 证书","已导入 Stalwart 证书"
 邮箱域名格式无效。,"The email domain format is invalid."
@@ -829,6 +849,35 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 验证码已发送到辅助邮箱（测试环境可直接使用）：%{1},"Verification code sent to secondary email (test env may use directly): %{1}"
 验证已过期，请重新申请,"Verification expired, please reapply"
 验证码不正确,"Incorrect verification code"
+检测已有管理凭据…,检测已有管理凭据…
+管理凭据已可用，跳过绑定,管理凭据已可用，跳过绑定
+管理凭据已就绪,管理凭据已就绪
+"凭据存在但 API 未通，将用同密重绑 recovery…","凭据存在但 API 未通，将用同密重绑 recovery…"
+无法打开已有管理凭据：%{1},无法打开已有管理凭据：%{1}
+"正在设置 Stalwart recovery 管理员…","正在设置 Stalwart recovery 管理员…"
+无法自动绑定管理凭据,无法自动绑定管理凭据
+"正在写入本机管理凭据（与 recovery 同密）…","正在写入本机管理凭据（与 recovery 同密）…"
+写入管理凭据失败：%{1},写入管理凭据失败：%{1}
+"等待服务就绪并探测管理 API…","等待服务就绪并探测管理 API…"
+"引擎仍在 bootstrap，正在提交本机路径…","引擎仍在 bootstrap，正在提交本机路径…"
+"Bootstrap 失败：%{1}","Bootstrap 失败：%{1}"
+"Bootstrap 已提交，正在重启服务…","Bootstrap 已提交，正在重启服务…"
+"Bootstrap 后重启失败：%{1}","Bootstrap 后重启失败：%{1}"
+"管理 API 探测失败：%{1}","管理 API 探测失败：%{1}"
+"已写入 %{1} 并尝试重启；仍 401 则 recovery 未生效；仍 bootstrap 则需完成 Bootstrap/set。","已写入 %{1} 并尝试重启；仍 401 则 recovery 未生效；仍 bootstrap 则需完成 Bootstrap/set。"
+管理连接已绑定并通过探测,管理连接已绑定并通过探测
+管理连接已绑定,管理连接已绑定
+绑定管理凭据失败,绑定管理凭据失败
+"域名 ID 无效","域名 ID 无效"
+"跳过假域/测试域引擎录入 %{1}","跳过假域/测试域引擎录入 %{1}"
+"确保引擎域名 %{1}","确保引擎域名 %{1}"
+"确保 contact@%{1}","确保 contact@%{1}"
+"确保 contact@ 失败","确保 contact@ 失败"
+缺少绑定脚本,缺少绑定脚本
+"自动设置 STALWART_RECOVERY_ADMIN 失败（须写入 stalwart.env 并重启）","自动设置 STALWART_RECOVERY_ADMIN 失败（须写入 stalwart.env 并重启）"
+"请在本机以管理员权限执行（将 <PWD> 换成下方一次性密码）：","请在本机以管理员权限执行（将 <PWD> 换成下方一次性密码）："
+"或运行：bash app/code/Weline/Mail/env/script/bind_stalwart_recovery_admin.sh --elevate <PWD>","或运行：bash app/code/Weline/Mail/env/script/bind_stalwart_recovery_admin.sh --elevate <PWD>"
+脚本输出：%{1},脚本输出：%{1}
 "本机 OpenSSL 不可用，无法自动生成 DKIM。","OpenSSL is unavailable on this host; DKIM cannot be auto-generated."
 "DKIM RSA 密钥生成失败。","Failed to generate the DKIM RSA key pair."
 "DKIM 私钥导出失败。","Failed to export the DKIM private key."
@@ -1009,9 +1058,3 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 账户已更新：%{1}%{2},"Account updated: %{1}%{2}"
 "本机 Smtp 服务已删除，下属账户 %{1} 个已从目录与本机 Stalwart 移除","Local SMTP service deleted; %{1} account(s) removed from directory and local Stalwart"
 "Stalwart 删除账户 %{1} 失败，服务与目录未改：%{2}","Stalwart failed to delete account %{1}; service and directory unchanged: %{2}"
-"一键配置邮局","One-click mail setup"
-"一键配置本域","One-click setup this domain"
-"配置中…","Setting up…"
-"配置失败","Setup failed"
-"一键绑定本机邮局管理凭据并按库同步账户","One-click: bind local mail admin credentials and sync accounts from the database"
-"一键确保本域引擎与系统账号并同步账户","One-click: ensure this domain in the engine, system mailbox, and sync accounts"

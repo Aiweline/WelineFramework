@@ -89,6 +89,12 @@ final class I18nServiceContractsTest extends TestCase
             'AiTranslationPublisherMemory::testPublishRaisesMemoryCeilingBeforeVarExport' => function () {
             $this->assert_AiTranslationPublisherMemory_testPublishRaisesMemoryCeilingBeforeVarExport();
         },
+            'SetupUpgradeCollect::testDefaultsToSkipUnlessForceFlag' => function () {
+            $this->assert_SetupUpgradeCollect_testDefaultsToSkipUnlessForceFlag();
+        },
+            'DictionaryFanoutDemote::testServiceDeletesPlaceholderFanoutByMd5' => function () {
+            $this->assert_DictionaryFanoutDemote_testServiceDeletesPlaceholderFanoutByMd5();
+        },
             'AiTranslationPublisherStream::testPublishCommittedLocaleStreamsDictionaryRowsInsteadOfUnboundedFetchArray' => function () {
             $this->assert_AiTranslationPublisherStream_testPublishCommittedLocaleStreamsDictionaryRowsInsteadOfUnboundedFetchArray();
         },
@@ -455,9 +461,11 @@ private function assert_AiTranslationPublisherDbSnapshot_testPublishCommittedLoc
 {
     $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/I18n' . '/Service/AiTranslationPublisher.php');
     self::assertStringContainsString('loadBaseWordAreas', $source);
+    self::assertStringContainsString('mergeLocaleBags', $source);
+    self::assertStringContainsString('I18nCsvCodec::readWords', $source);
     self::assertStringContainsString('fetchIterator', $source);
     self::assertStringNotContainsString('$words = $this->readExistingWords($localeCode);', $source);
-    self::assertStringContainsString('empty DB snapshot', $source);
+    self::assertStringContainsString('empty merged bag', $source);
 }
 
 private function assert_AiTranslationPublisherMemory_testPublishRaisesMemoryCeilingBeforeVarExport(): void
@@ -465,7 +473,22 @@ private function assert_AiTranslationPublisherMemory_testPublishRaisesMemoryCeil
     $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/I18n' . '/Service/AiTranslationPublisher.php');
     self::assertStringContainsString('ensurePublishMemoryCeiling', $source);
     self::assertStringContainsString("ini_set('memory_limit', '512M')", $source);
-    self::assertStringContainsString('unset($words)', $source);
+}
+
+private function assert_SetupUpgradeCollect_testDefaultsToSkipUnlessForceFlag(): void
+{
+    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/I18n' . '/Observer/SetupUpgradeCollectTranslations.php');
+    self::assertStringContainsString('wantsForceI18nCollect', $source);
+    self::assertStringContainsString('--force-i18n-collect', $source);
+    self::assertStringContainsString('已跳过语言包全量 collect', $source);
+}
+
+private function assert_DictionaryFanoutDemote_testServiceDeletesPlaceholderFanoutByMd5(): void
+{
+    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/I18n' . '/Service/DictionaryFanoutDemoteService.php');
+    self::assertStringContainsString('translate = word', $source);
+    self::assertStringContainsString('DELETE FROM {$table} WHERE md5 IN', $source);
+    self::assertStringContainsString('locale_code <> ?', $source);
 }
 
 private function assert_AiTranslationPublisherStream_testPublishCommittedLocaleStreamsDictionaryRowsInsteadOfUnboundedFetchArray(): void
@@ -684,7 +707,7 @@ private function assert_DictionaryCollectBatch_testPersistMarksCollectBatchInChu
     $src = (string) file_get_contents($path);
     self::assertStringContainsString('?int $collectBatch = null', $src);
     self::assertStringContainsString('schema_fields_COLLECT_BATCH', $src);
-    self::assertStringContainsString("array_chunk(\$existingToMark, 200)", $src);
+    self::assertStringContainsString("array_chunk(\$existingToMark, 500)", $src);
     self::assertStringContainsString("'touched'", $src);
 }
 
@@ -725,8 +748,15 @@ private function assert_DictionaryCollectPerf_testExportLocaleResolverModuleBase
 private function assert_DictionaryCollectPerf_testPersistUsesLargerInChunks(): void
 {
     $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/I18n' . '/Service/DictionaryCollectService.php');
+    // base 表仍可 word IN 500；locale 探缺必须 md5/getEntries，批≤200。
     self::assertStringContainsString('array_chunk($wordKeys, 500)', $source);
     self::assertStringContainsString('array_chunk($existingToMark, 500)', $source);
+    self::assertStringContainsString('getEntries($wordChunk, $defaultLanguageCode)', $source);
+    self::assertStringContainsString('$localeProbeChunk = 200', $source);
+    self::assertStringNotContainsString(
+        "localeDictionary->reset()\n                ->where(\$this->localeDictionary::schema_fields_LOCALE_CODE, \$defaultLanguageCode)\n                ->where(\$this->localeDictionary::schema_fields_WORD, \$wordChunk, 'IN')",
+        $source,
+    );
 }
 
 private function assert_DictionaryCollectPersist_testPersistCollectedWordsIsTheSharedDictionaryWritePath(): void
@@ -895,6 +925,7 @@ private function assert_DictionaryStaleWordPrune_testPruneDeletesPhraseNotOnCurr
     self::assertStringContainsString('invalid_current_batch', $src);
     self::assertStringContainsString('{$batchCol} <> ?', $src);
     self::assertStringContainsString('DELETE FROM', $src);
+    self::assertStringContainsString('deleteLocaleWordsByMd5', $src);
     self::assertStringNotContainsString('DISTINCT word', $src);
     self::assertStringNotContainsString('pruneFromCollectedWords', $src);
 }
@@ -903,9 +934,9 @@ private function assert_DictionaryStaleWordPrune_testPublisherStripsMetaFromFina
 {
     $path = '/Users/weline/Project/Official/框架/app/code/Weline/I18n' . '/Service/AiTranslationPublisher.php';
     $src = (string) file_get_contents($path);
+    // mergeLocaleBags 入口过滤 @meta::，稀表合并后不再二次扫 existingWord。
     self::assertStringContainsString("str_starts_with(\$word, '@meta::')", $src);
-    self::assertStringContainsString("str_starts_with(\$existingWord, '@meta::')", $src);
-    self::assertStringContainsString('unset($words[$existingWord])', $src);
+    self::assertStringContainsString('mergeLocaleBags', $src);
 }
 
 private function assert_LocaleAreaDictionaryLoader_testDetectRequestAreaPrefersRequestContextBackend(): void

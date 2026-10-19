@@ -13,6 +13,9 @@ use Weline\Framework\Setup\Service\SetupSourceFingerprint;
 
 /**
  * 系统升级后自动收集语言包（Framework DictionaryCompiler）。
+ *
+ * 稀表架构：s:up 默认不跑全量 DB collect（避免百万行 locale 拖死升级）。
+ * 需要全量时显式 `--force-i18n-collect`；平时用 cron / `i18n:collect`。
  */
 class SetupUpgradeCollectTranslations implements ObserverInterface
 {
@@ -25,6 +28,15 @@ class SetupUpgradeCollectTranslations implements ObserverInterface
     {
         $eventData = $event->getData();
         if (!empty($eventData['is_partial_upgrade'])) {
+            return;
+        }
+
+        $args = \is_array($eventData['args'] ?? null) ? $eventData['args'] : [];
+        if (!$this->wantsForceI18nCollect($args)) {
+            if (php_sapi_name() === 'cli') {
+                echo "\n[Phrase] 已跳过语言包全量 collect（稀表默认）。需要时：php bin/w setup:upgrade --force-i18n-collect 或 php bin/w i18n:collect\n";
+            }
+
             return;
         }
 
@@ -42,7 +54,7 @@ class SetupUpgradeCollectTranslations implements ObserverInterface
             }
 
             if (php_sapi_name() === 'cli') {
-                echo "\n[Phrase] 正在收集语言包...\n";
+                echo "\n[Phrase] 正在收集语言包（--force-i18n-collect）...\n";
             }
 
             RegistryProgress::run(function (): void {
@@ -62,6 +74,26 @@ class SetupUpgradeCollectTranslations implements ObserverInterface
                 echo '[Phrase] 语言包收集失败：' . $throwable->getMessage() . "\n";
             }
         }
+    }
+
+    /**
+     * @param array<int|string, mixed> $args
+     */
+    private function wantsForceI18nCollect(array $args): bool
+    {
+        if (isset($args['force-i18n-collect']) || isset($args['force_i18n_collect'])) {
+            return true;
+        }
+        foreach ($args as $key => $value) {
+            if ($key === '--force-i18n-collect' || $value === '--force-i18n-collect') {
+                return true;
+            }
+            if (\is_string($key) && str_contains($key, 'force-i18n-collect')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function allI18nFingerprintsFresh(): bool

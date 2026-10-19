@@ -84,8 +84,9 @@ final class DictionaryStaleWordPruneService
 
         $deletedLocale = 0;
         $deletedBase = 0;
+        $localeCodes = $this->listLocaleCodes($localeConn, $localeTable);
         foreach (array_chunk($stale, self::DELETE_BATCH) as $chunk) {
-            $deletedLocale += $this->deleteWords($localeConn, $localeTable, $chunk);
+            $deletedLocale += $this->deleteLocaleWordsByMd5($localeConn, $localeTable, $chunk, $localeCodes);
             $deletedBase += $this->deleteWords($baseConn, $baseTable, $chunk);
         }
 
@@ -189,10 +190,62 @@ final class DictionaryStaleWordPruneService
         }
         $pdo = $conn->getConnector()->getWrappedConnection()->getPdo();
         $placeholders = implode(',', array_fill(0, count($words), '?'));
+        // base 表 word 为 varchar PK，允许 word IN。
         $stmt = $pdo->prepare("DELETE FROM {$table} WHERE word IN ({$placeholders})");
         $stmt->execute(array_values($words));
 
         return $stmt->rowCount();
+    }
+
+    /**
+     * locale 表只按 md5 PK 删；禁止 TEXT word IN。
+     *
+     * @param list<string> $words
+     * @param list<string> $localeCodes
+     */
+    private function deleteLocaleWordsByMd5(
+        ConnectionFactory $conn,
+        string $table,
+        array $words,
+        array $localeCodes,
+    ): int {
+        if ($words === [] || $localeCodes === []) {
+            return 0;
+        }
+        $fingerprints = [];
+        foreach ($words as $word) {
+            foreach ($localeCodes as $localeCode) {
+                $fingerprints[] = LocaleDictionary::generateMd5((string)$word, (string)$localeCode);
+            }
+        }
+        $pdo = $conn->getConnector()->getWrappedConnection()->getPdo();
+        $deleted = 0;
+        foreach (array_chunk($fingerprints, 500) as $chunk) {
+            $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+            $stmt = $pdo->prepare("DELETE FROM {$table} WHERE md5 IN ({$placeholders})");
+            $stmt->execute(array_values($chunk));
+            $deleted += $stmt->rowCount();
+        }
+
+        return $deleted;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function listLocaleCodes(ConnectionFactory $conn, string $table): array
+    {
+        $pdo = $conn->getConnector()->getWrappedConnection()->getPdo();
+        $rows = $pdo->query("SELECT DISTINCT locale_code FROM {$table}")->fetchAll(\PDO::FETCH_COLUMN);
+        $codes = [];
+        foreach ((array)$rows as $code) {
+            $code = trim((string)$code);
+            if ($code !== '') {
+                $codes[] = $code;
+            }
+        }
+
+        return $codes;
     }
 
     /**

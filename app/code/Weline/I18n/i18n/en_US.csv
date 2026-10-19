@@ -931,6 +931,7 @@ CSV文件路径（导入单个文件时必填）,"CSV file path (required when i
 "4. 网络连接是否正常","4. Is the network connection normal?"
 无法创建文件：%{1},"Unable to create file: %{1}"
 清理超长/换行/BOM/引号失控/非法地区码的词典脏行,清理超长/换行/BOM/引号失控/非法地区码的词典脏行
+删除非默认语占位扇出行（译=源），保留真覆盖；配合稀表架构,删除非默认语占位扇出行（译=源），保留真覆盖；配合稀表架构
 查看本地语言码,"View local language code"
 正在翻译：%{1},正在翻译：%{1}
 已翻译语种,"Translated locales"

@@ -727,23 +727,17 @@ class DictionaryModuleCatalogService
             return $translated;
         }
 
-        foreach (array_chunk(array_values(array_unique($words)), 400) as $chunk) {
+        foreach (array_chunk(array_values(array_unique($words)), 200) as $chunk) {
             try {
-                $items = $this->localeDictionary->reset()
-                    ->where(LocaleDictionary::schema_fields_WORD, $chunk, 'IN')
-                    ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $targetLocale)
-                    ->select()
-                    ->fetch()
-                    ->getItems();
+                foreach ($this->localeDictionary->getEntries($chunk, $targetLocale) as $word => $entry) {
+                    $word = trim((string)$word);
+                    $translate = trim((string)$entry->translation);
+                    if ($word !== '' && $translate !== '' && $translate !== $word) {
+                        $translated[$word] = true;
+                    }
+                }
             } catch (\Throwable) {
                 continue;
-            }
-            foreach ($items as $row) {
-                $word = trim((string)$row->getData(LocaleDictionary::schema_fields_WORD));
-                $translate = trim((string)$row->getData(LocaleDictionary::schema_fields_TRANSLATE));
-                if ($word !== '' && $translate !== '' && $translate !== $word) {
-                    $translated[$word] = true;
-                }
             }
         }
 

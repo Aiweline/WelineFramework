@@ -303,15 +303,22 @@ class DictionaryCollectService
         }
 
         $this->report($onProgress, (string) __('同步默认语言译文…'), 85);
-        foreach (array_chunk($wordKeys, 500) as $wordChunk) {
+        // locale 探缺只打 md5 PK（禁 word IN TEXT）；批大小与 TranslationResolver/getEntries 对齐。
+        $localeProbeChunk = 200;
+        $wordKeyChunks = array_chunk($wordKeys, $localeProbeChunk);
+        $chunkTotal = count($wordKeyChunks);
+        $chunkIndex = 0;
+        foreach ($wordKeyChunks as $wordChunk) {
+            ++$chunkIndex;
+            if ($chunkTotal > 1 && ($chunkIndex === 1 || $chunkIndex === $chunkTotal || $chunkIndex % 25 === 0)) {
+                RegistryProgress::count(
+                    'I18n locale md5 probe',
+                    $chunkIndex,
+                    'chunks/' . $chunkTotal,
+                );
+            }
             $existingLocaleWords = [];
-            $localeRecords = $this->localeDictionary->reset()
-                ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)
-                ->where($this->localeDictionary::schema_fields_WORD, $wordChunk, 'IN')
-                ->select()
-                ->fetchArray();
-            foreach ((array) $localeRecords as $record) {
-                $word = (string) ($record[$this->localeDictionary::schema_fields_WORD] ?? '');
+            foreach ($this->localeDictionary->getEntries($wordChunk, $defaultLanguageCode) as $word => $_entry) {
                 if ($word !== '') {
                     $existingLocaleWords[$word] = true;
                 }
