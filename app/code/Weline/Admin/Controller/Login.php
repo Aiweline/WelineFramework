@@ -164,16 +164,16 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             // 使用连字符小写路径以与白名单精确匹配，并兼容路由规则
             $this->assign('backend_verification_code_url', $this->getBackendUrlSameOrigin('admin/login/verification-code'));
         }
-        # 登录页：使用后台配置（Logo、站点名）
+        # 登录页：Logo/背景用后台配置；站名/简介优先当前请求 Website（避免全局 Backend site_name 被默认站汉服种子盖住其它站）
         $backendConfig = ObjectManager::getInstance(BackendConfigStore::class);
         $backendConfigs = $backendConfig->getConfigs('Weline_Backend');
         $logoDark = (string)($backendConfigs['logo_dark'] ?? '');
         $logoLight = (string)($backendConfigs['logo_light'] ?? '');
         $this->assign('login_logo_dark', $this->resolveLoginLogoUrl($logoDark));
         $this->assign('login_logo_light', $this->resolveLoginLogoUrl($logoLight));
-        $siteName = (string)($backendConfigs['site_name'] ?? 'Weline');
-        $this->assign('login_site_name', $siteName);
-        $this->assign('login_site_description', trim((string)($backendConfigs['site_description'] ?? '')));
+        $siteIdentity = $this->resolveLoginSiteIdentity($backendConfigs);
+        $this->assign('login_site_name', $siteIdentity['name']);
+        $this->assign('login_site_description', $siteIdentity['description']);
         $loginBg = trim((string)($backendConfigs['login_bg'] ?? ''));
         if ($loginBg !== '') {
             foreach (['/pub/media/', 'pub/media/', '/media/'] as $prefix) {
@@ -971,5 +971,50 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
 
         return str_contains($configuredPath, 'image/backend/logo/');
+    }
+
+    /**
+     * 登录标题站名：当前请求 Website 实体优先，Backend 全局 site_name 仅回退。
+     * 与 CurrentWebsiteStorefrontUrlProvider 同源（WebsiteAclGrantService::currentWebsiteId）。
+     *
+     * @param array<string, mixed> $backendConfigs
+     * @return array{name: string, description: string}
+     */
+    private function resolveLoginSiteIdentity(array $backendConfigs): array
+    {
+        $fallbackName = trim((string)($backendConfigs['site_name'] ?? ''));
+        $fallbackDescription = trim((string)($backendConfigs['site_description'] ?? ''));
+        $name = '';
+        $description = '';
+
+        try {
+            if (\class_exists(\Weline\Websites\Service\WebsiteAclGrantService::class)
+                && \class_exists(\Weline\Websites\Model\Website::class)
+            ) {
+                /** @var \Weline\Websites\Service\WebsiteAclGrantService $grant */
+                $grant = ObjectManager::getInstance(\Weline\Websites\Service\WebsiteAclGrantService::class);
+                $websiteId = $grant->currentWebsiteId();
+                /** @var \Weline\Websites\Model\Website $website */
+                $website = ObjectManager::getInstance(\Weline\Websites\Model\Website::class, [], false)
+                    ->load($websiteId);
+                $name = trim((string)$website->getName());
+                $description = trim((string)$website->getDescription());
+            }
+        } catch (\Throwable) {
+            $name = '';
+            $description = '';
+        }
+
+        if ($name === '') {
+            $name = $fallbackName !== '' ? $fallbackName : 'Weline';
+        }
+        if ($description === '') {
+            $description = $fallbackDescription;
+        }
+
+        return [
+            'name' => $name,
+            'description' => $description,
+        ];
     }
 }

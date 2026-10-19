@@ -57,6 +57,9 @@ final class AdminViewContractsTest extends TestCase
             'LoginStorefrontLink::testLoginToolbarUsesSameStorefrontLinkAsBackendTopbar' => function () {
             $this->assert_LoginStorefrontLink_testLoginToolbarUsesSameStorefrontLinkAsBackendTopbar();
         },
+            'LoginSiteIdentity::testLoginPrefersCurrentWebsiteNameOverBackendSiteName' => function () {
+            $this->assert_LoginSiteIdentity_testLoginPrefersCurrentWebsiteNameOverBackendSiteName();
+        },
             'ThemeColorMode::testAdminControlsUseTheNativeThreeStateThemeContract' => function () {
             $this->assert_ThemeColorMode_testAdminControlsUseTheNativeThreeStateThemeContract();
         },
@@ -274,6 +277,29 @@ private function assert_LoginStorefrontLink_testLoginToolbarUsesSameStorefrontLi
     self::assertSame($topbarAnchor, $loginAnchor);
     self::assertStringContainsString('CurrentWebsiteStorefrontUrlProviderInterface', $controller);
     self::assertStringContainsString("'storefront_url'", $controller);
+}
+
+private function assert_LoginSiteIdentity_testLoginPrefersCurrentWebsiteNameOverBackendSiteName(): void
+{
+    $controller = $this->read_LoginStorefrontLink('app/code/Weline/Admin/Controller/Login.php');
+    $template = $this->read_LoginStorefrontLink('app/code/Weline/Admin/view/templates/Login/index.phtml');
+    self::assertStringContainsString('resolveLoginSiteIdentity', $controller);
+    self::assertStringContainsString('WebsiteAclGrantService', $controller);
+    self::assertStringContainsString('currentWebsiteId', $controller);
+    self::assertStringContainsString('getName()', $controller);
+    self::assertStringContainsString('getDescription()', $controller);
+    self::assertStringContainsString("'login_site_name'", $controller);
+    self::assertStringContainsString('$siteIdentity[\'name\']', $controller);
+    self::assertStringContainsString('$siteIdentity[\'description\']', $controller);
+    // Must not assign login title solely from Backend site_name without Website-first resolution.
+    self::assertDoesNotMatchRegularExpression(
+        '/\$siteName\s*=\s*\(string\)\(\$backendConfigs\[\s*[\'"]site_name[\'"]\s*\]/',
+        $controller
+    );
+    self::assertStringNotContainsString('长安汉服', $controller);
+    self::assertStringNotContainsString('长安汉服', $template);
+    self::assertStringContainsString('login_site_name', $template);
+    self::assertStringContainsString("登录 %{name} 管理面板", $template);
 }
 
 private function extractStorefrontButtonAnchor_LoginStorefrontLink(string $source): string
