@@ -89,7 +89,7 @@ probe_http_with_max_time_before_navigate → prefer_background_non_preemptive_na
 
 中途 Browser 挂死会拖死整轮 Agent（Cursor「Explored N tools, 1 browser action」后停住）。**禁止无限等待**。
 
-1. **打开前探活**：对字面验收 URL 执行 `curl --max-time 10`（或 ≤15s）；仅接受 `200`/`302`/`308`/`401`/`403`。超时 / DNS 失败 / 连不上 / Host 畸形（token 当主机名、无可用 FQDN、有 `*.test.weline.com` 却不用）→ **禁止** `browser_navigate`，直接报「代码已改，WebUI 验收未完成」+ 探活错误。
+1. **打开前探活**：对字面验收 URL 执行 `curl --max-time 5`（禁止 10/15/30s）；仅接受 `200`/`302`/`308`/`401`/`403`。超时 / DNS 失败 / 连不上 / Host 畸形（token 当主机名、无可用 FQDN、有 `*.test.weline.com` 却不用）→ **禁止** `browser_navigate`，直接报「代码已改，WebUI 验收未完成」+ 探活错误。
 2. **异常即关**：任一 Browser 工具超时、报错、`No browser tab`、lock 卡住、导航空转 → **立即** `browser_lock` unlock（若已锁）→ 关闭本回合全部验收标签 → 可选 `php bin/w e2e:cleanup-browsers` → 汇报阻断；**禁止**继续持 lock 跑长 shell。
 3. **重试上限**：同 URL 导航重试 ≤2 次，仍失败则 fail-closed 收口，不得空转。
 4. 与门禁 D 关系：门禁 D 管**交付后**关标签；本条管**中途卡住**强制释放，避免宿主会话冻住。
@@ -197,7 +197,7 @@ probe_http_with_max_time_before_navigate → prefer_background_non_preemptive_na
 | 主 Host 写成 `*.weline.test` | 改用 `{project_hash}.test.weline.com` |
 | 规范写死某一 IDE Browser | 改用「宿主可用真实 Browser」表述 |
 | 写完交付地址仍不关 Browser | 立即 unlock + close 本回合验收标签；用户未要求保留则不得留下 |
-| 错误 Host / 无超时 curl 后开 Browser 卡住 | 先 `curl --max-time 10`；卡住立即 unlock+关标签（`browser_operator_fail_closed_release`） |
+| 错误 Host / 无超时 curl 后开 Browser 卡住 | 先 `curl --max-time 5`；卡住立即 unlock+关标签（`browser_operator_fail_closed_release`） |
 
 ## 相关
 

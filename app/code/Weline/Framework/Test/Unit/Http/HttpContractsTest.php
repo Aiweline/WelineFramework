@@ -245,6 +245,17 @@ final class HttpContractsTest extends TestCase
                 $this->tearDown_FpcHtmlDiskStore();
             }
         },
+            'FpcHtmlDiskStore::testStagingSeedToleratesVanishedChildDirectory' => function () {
+            $this->setUp_FpcHtmlDiskStore();
+            try {
+                $this->assert_FpcHtmlDiskStore_testStagingSeedToleratesVanishedChildDirectory();
+            } finally {
+                $this->tearDown_FpcHtmlDiskStore();
+            }
+        },
+            'FpcHtmlDiskStore::testMirrorAndPurgeUseResilientWalkNotRecursiveDirectoryIterator' => function () {
+            $this->assert_FpcHtmlDiskStore_testMirrorAndPurgeUseResilientWalkNotRecursiveDirectoryIterator();
+        },
             'FpcHtmlDiskStore::testCoordinatorExternalizeNoLongerRemembersHashPayloadIndex' => function () {
             $this->setUp_FpcHtmlDiskStore();
             try {
@@ -1150,6 +1161,70 @@ private function assert_FpcHtmlDiskStore_testAbandonStagingKeepsLive(): void
     $hit = FpcHtmlDiskStore::read($url, '');
     self::assertIsArray($hit);
     $this->assertFpcHtmlDiskHitPlainEquals($old, $hit);
+}
+
+private function assert_FpcHtmlDiskStore_testStagingSeedToleratesVanishedChildDirectory(): void
+{
+    $host = $this->fixtureHost_FpcHtmlDiskStore;
+    $keep = 'https://' . $host . '/en_US/keep-page';
+    $vanish = 'https://' . $host . '/ar_SA/about';
+    $html = "<html><body>seed-race</body></html>\n";
+    self::assertTrue(FpcHtmlDiskStore::publish($keep, $html, ''));
+    self::assertTrue(FpcHtmlDiskStore::publish($vanish, $html, ''));
+    $liveId = FpcHtmlDiskStore::currentGenerationId();
+    self::assertNotSame('', $liveId);
+    $vanishDir = FpcHtmlDiskStore::generationsRoot()
+        . \DIRECTORY_SEPARATOR . $liveId
+        . \DIRECTORY_SEPARATOR . $host
+        . \DIRECTORY_SEPARATOR . 'ar_SA'
+        . \DIRECTORY_SEPARATOR . 'about';
+    self::assertDirectoryExists($vanishDir);
+    // Simulate concurrent purge removing a locale leaf before/during seed mirror.
+    $rm = static function (string $dir) use (&$rm): void {
+        if (!\is_dir($dir)) {
+            return;
+        }
+        foreach (\scandir($dir) ?: [] as $n) {
+            if ($n === '.' || $n === '..') {
+                continue;
+            }
+            $p = $dir . \DIRECTORY_SEPARATOR . $n;
+            if (\is_dir($p) && !\is_link($p)) {
+                $rm($p);
+            } else {
+                @\unlink($p);
+            }
+        }
+        @\rmdir($dir);
+    };
+    $rm($vanishDir);
+    self::assertDirectoryDoesNotExist($vanishDir);
+    // Must not throw UnexpectedValueException / Failed to open directory.
+    $stagingId = FpcHtmlDiskStore::beginStagingGeneration(true);
+    self::assertNotSame('', $stagingId);
+    self::assertTrue(FpcHtmlDiskStore::promoteStagingGeneration());
+    $hit = FpcHtmlDiskStore::read($keep, '');
+    self::assertIsArray($hit);
+    $this->assertFpcHtmlDiskHitPlainEquals($html, $hit);
+}
+
+private function assert_FpcHtmlDiskStore_testMirrorAndPurgeUseResilientWalkNotRecursiveDirectoryIterator(): void
+{
+    $path = '/Users/weline/Project/Official/框架/app/code/Weline/Framework'
+        . '/Http/Fpc/FpcHtmlDiskStore.php';
+    $src = (string)\file_get_contents($path);
+    self::assertStringContainsString('function walkTreeResilient(', $src);
+    self::assertStringContainsString('Never RecursiveDirectoryIterator here', $src);
+    $mirrorPos = \strpos($src, 'private static function mirrorTree(');
+    $purgePos = \strpos($src, 'private static function purgeTree(');
+    self::assertNotFalse($mirrorPos);
+    self::assertNotFalse($purgePos);
+    $mirrorChunk = \substr($src, $mirrorPos, (int)($purgePos - $mirrorPos));
+    self::assertStringContainsString('walkTreeResilient(', $mirrorChunk);
+    self::assertStringNotContainsString('new \\RecursiveDirectoryIterator(', $mirrorChunk);
+    $purgeChunk = \substr($src, $purgePos, 900);
+    self::assertStringContainsString('walkTreeResilient(', $purgeChunk);
+    self::assertStringNotContainsString('new \\RecursiveDirectoryIterator(', $purgeChunk);
 }
 
 private function assert_FpcHtmlDiskStore_testCoordinatorExternalizeNoLongerRemembersHashPayloadIndex(): void

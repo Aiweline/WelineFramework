@@ -269,10 +269,10 @@ class State extends DataObject
     public static function setRequestLanguageOverride(string $locale): void
     {
         $locale = self::normalizeLanguageSegment(\trim($locale));
-        $context = Context::getCurrent();
-        if ($context === null) {
-            return;
-        }
+        // CLI / static-404 publish may have no request Context yet. Silent no-op
+        // here previously left override empty → WidgetI18n fell back to zh/default
+        // and baked Chinese footers into every locale snapshot.
+        $context = Context::current();
         if ($locale === '' || !self::isLanguageSegmentCandidate($locale)) {
             $context->set(self::REQUEST_LANGUAGE_OVERRIDE, null);
         } else {

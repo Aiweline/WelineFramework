@@ -178,6 +178,22 @@ class StateTest extends TestCore
         }
     }
 
+    public function testRequestLanguageOverridePersistsWhenNoPriorContext(): void
+    {
+        // CLI static-404 publish path: set override must not silently no-op.
+        Context::leave();
+        self::assertNull(Context::getCurrent());
+
+        try {
+            State::setRequestLanguageOverride('hi_IN');
+            self::assertNotNull(Context::getCurrent());
+            self::assertSame('hi_IN', State::getRequestLanguageOverride());
+        } finally {
+            State::setRequestLanguageOverride('');
+            Context::leave();
+        }
+    }
+
     public function testLangAndCurrencyFallBackToQueryWhenPathMissing(): void
     {
         $hadContext = Context::getCurrent() !== null;

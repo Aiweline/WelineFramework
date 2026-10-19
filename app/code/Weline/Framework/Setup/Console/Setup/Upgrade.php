@@ -4286,11 +4286,13 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '--force-menu' => __('强制全量重解析 menu.xml 并写入 ACL 菜单（清除 menu:* 指纹；不跳过环境检测）'),
                 '--skip-classmap' => __('跳过 composer dump-autoload 与类映射缓存生成。适用：未变更 Composer 依赖/自动加载配置的快速更新'),
                 '--skip-composer-dump' => __('仅跳过 composer dump-autoload。适用：Composer 子进程不可用但需要执行 setup 阶段'),
+                '--force-i18n-collect' => __('强制在 upgrade_after 跑全量短语 collect（默认跳过，避免 locale 稀表前扇出拖死升级；平时用 i18n:collect）'),
                 '-h, --help' => '显示帮助信息',
             ],
             [],
             [
                 '升级所有模块（默认；部署/系统更新用此命令，已含路由同步）' => 'php bin/w setup:upgrade',
+                __('升级并强制全量语言包收集') => 'php bin/w setup:upgrade --force-i18n-collect',
                 '升级数据库模型（含 SchemaDiff）' => 'php bin/w setup:upgrade --model',
                 '仅升级路由（仅新增 Controller、无需 Schema 时）' => 'php bin/w setup:upgrade --route',
                 __('仅运行 schema_diff 阶段（测试声明式表）') => 'php bin/w setup:upgrade --stage=schema_diff',

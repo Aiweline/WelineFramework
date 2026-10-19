@@ -45,12 +45,16 @@ final class Upgrade implements UpgradeInterface
     /** @return list<mixed> */
     private function readAllRows(): array
     {
-        $rows = $this->urlRewrites->newQuery()
+        // Setup 门禁：无界 SELECT 须流式；再物化为列表供二次 inspect。
+        $rows = [];
+        foreach ($this->urlRewrites->newQuery()
             ->order(UrlRewrite::schema_fields_ID, 'ASC')
             ->select()
-            ->fetchArray();
+            ->fetchIterator() as $row) {
+            $rows[] = $row;
+        }
 
-        return \is_array($rows) ? \array_values($rows) : [];
+        return $rows;
     }
 
     /**

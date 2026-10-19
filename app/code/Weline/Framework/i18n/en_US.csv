@@ -1137,6 +1137,7 @@ operation：%{id},operation：%{id}
 "强制全量重解析 menu.xml 并写入 ACL 菜单（清除 menu:* 指纹；不跳过环境检测）","Force full menu.xml reparse and write ACL menus (clear menu:* fingerprints; do not skip env checks)"
 "跳过 composer dump-autoload 与类映射缓存生成。适用：未变更 Composer 依赖/自动加载配置的快速更新","Skip composer dump-autoload and class map cache generation. Use for fast updates when Composer dependencies/autoload config are unchanged"
 "仅跳过 composer dump-autoload。适用：Composer 子进程不可用但需要执行 setup 阶段","Only skip composer dump-autoload. Use when the Composer child process is unavailable but setup stages must run"
+升级并强制全量语言包收集,升级并强制全量语言包收集
 "仅运行 schema_diff 阶段（测试声明式表）","Only run the schema_diff phase (test declarative tables)"
 "仅运行 framework_db_bootstrap 阶段","Only run the framework_db_bootstrap phase"
 "跳过 classmap 生成（未新增/删除文件时）","Skipped classmap generation (when no files are added or deleted)"

@@ -680,34 +680,35 @@ final class FpcHtmlDiskStore
 
     private static function mirrorTree(string $src, string $dest): void
     {
+        if (!\is_dir($src)) {
+            return;
+        }
         if (!self::ensureDirectory($dest)) {
             throw new \RuntimeException('fpc_html_disk_staging_seed_mkdir_failed');
         }
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($src, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::SELF_FIRST,
-        );
         $srcPrefix = \rtrim(\str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $src), \DIRECTORY_SEPARATOR)
             . \DIRECTORY_SEPARATOR;
-        foreach ($iterator as $node) {
-            if (!$node instanceof \SplFileInfo) {
-                continue;
-            }
-            $path = $node->getPathname();
+        // Never RecursiveDirectoryIterator here: concurrent purge can remove a child
+        // between parent listing and open → "Failed to open directory" aborts seed.
+        self::walkTreeResilient($src, static function (string $path, bool $isDir) use ($srcPrefix, $dest): void {
             $normalized = \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $path);
-            if (!\str_starts_with($normalized, $srcPrefix) && $normalized !== \rtrim($srcPrefix, \DIRECTORY_SEPARATOR)) {
-                continue;
+            if (!\str_starts_with($normalized, $srcPrefix)) {
+                return;
             }
             $rel = \substr($normalized, \strlen($srcPrefix));
             if ($rel === false || $rel === '') {
-                continue;
+                return;
             }
             $target = $dest . \DIRECTORY_SEPARATOR . $rel;
-            if ($node->isDir() && !$node->isLink()) {
+            if ($isDir) {
                 if (!self::ensureDirectory($target)) {
                     throw new \RuntimeException('fpc_html_disk_staging_seed_mkdir_failed');
                 }
-                continue;
+
+                return;
+            }
+            if (!\is_file($path) && !\is_link($path)) {
+                return;
             }
             $parent = \dirname($target);
             if (!self::ensureDirectory($parent)) {
@@ -718,7 +719,54 @@ final class FpcHtmlDiskStore
             }
             // Prefer hardlink (COW-friendly); fall back to byte copy.
             if (!@\link($path, $target) && !@\copy($path, $target)) {
+                // Source vanished mid-seed (race with purge) — skip leaf, keep seed going.
+                if (!\is_file($path) && !\is_link($path)) {
+                    return;
+                }
                 throw new \RuntimeException('fpc_html_disk_staging_seed_copy_failed');
+            }
+        });
+    }
+
+    /**
+     * Pre-order directory walk that tolerates vanished children (purge races).
+     * Missing dirs/files are skipped; does not throw UnexpectedValueException.
+     *
+     * @param callable(string $path, bool $isDir):void $onNode
+     */
+    private static function walkTreeResilient(string $root, callable $onNode): void
+    {
+        if (!\is_dir($root)) {
+            return;
+        }
+        $stack = [$root];
+        while ($stack !== []) {
+            $dir = \array_pop($stack);
+            if (!\is_dir($dir)) {
+                continue;
+            }
+            $items = @\scandir($dir);
+            if (!\is_array($items)) {
+                continue;
+            }
+            foreach ($items as $name) {
+                if ($name === '.' || $name === '..') {
+                    continue;
+                }
+                $path = $dir . \DIRECTORY_SEPARATOR . $name;
+                // Re-check after scandir: sibling purge may remove the entry.
+                if (\is_link($path)) {
+                    $onNode($path, false);
+                    continue;
+                }
+                if (\is_dir($path)) {
+                    $onNode($path, true);
+                    $stack[] = $path;
+                    continue;
+                }
+                if (\is_file($path)) {
+                    $onNode($path, false);
+                }
             }
         }
     }
@@ -1121,21 +1169,26 @@ final class FpcHtmlDiskStore
         if (!\is_dir($dir)) {
             return;
         }
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST,
-        );
-        foreach ($iterator as $node) {
-            if (!$node instanceof \SplFileInfo) {
-                continue;
+        // Post-order: collect then delete children first (same race tolerance as seed).
+        $dirs = [];
+        $files = [];
+        self::walkTreeResilient($dir, static function (string $path, bool $isDir) use (&$dirs, &$files): void {
+            if ($isDir) {
+                $dirs[] = $path;
+            } else {
+                $files[] = $path;
             }
-            $path = $node->getPathname();
-            if ($node->isLink()) {
+        });
+        foreach ($files as $path) {
+            if (\is_link($path) || \is_file($path)) {
                 @\unlink($path);
-            } elseif ($node->isDir()) {
+            }
+        }
+        // Deepest dirs first.
+        \usort($dirs, static fn(string $a, string $b): int => \strlen($b) <=> \strlen($a));
+        foreach ($dirs as $path) {
+            if (\is_dir($path)) {
                 @\rmdir($path);
-            } elseif ($node->isFile()) {
-                @\unlink($path);
             }
         }
         @\rmdir($dir);

@@ -19,7 +19,12 @@ final class StorefrontNotFoundStaticPage
     /**
      * Resolve locale for a storefront 404 response.
      *
-     * Priority: path segment → query(lang|locale|locale_code) → zh_Hans_CN (no language cookie).
+     * Priority: path segment → query(lang|locale|locale_code) → WELINE_URL_PATH_LANG
+     * → WELINE_USER_LANG → zh_Hans_CN (no language cookie).
+     *
+     * Url::detectLanguage strips /{locale} from REQUEST_URI; ErrorPageRenderer may
+     * only see /ddsds while the browser still shows /zh_Hans_CN/ddsds. PATH_LANG is
+     * the locked visitor-facing segment (same contract as State::getLang).
      */
     public static function resolveLang(
         string $path,
@@ -49,10 +54,17 @@ final class StorefrontNotFoundStaticPage
             }
         }
 
-        // Path locale may already be stripped from request.path; prefer request-scoped mirror.
+        // Path locale may already be stripped from request.path; prefer PATH_LANG
+        // (visitor URL) over USER_LANG (may be website default after strip).
         try {
             if (\class_exists(\Weline\Framework\Env\WelineEnv::class, false)
                 || \class_exists(\Weline\Framework\Env\WelineEnv::class)) {
+                $pathLocked = self::normalizeLangCode(
+                    (string)\Weline\Framework\Env\WelineEnv::server('WELINE_URL_PATH_LANG', '')
+                );
+                if ($pathLocked !== '') {
+                    return $pathLocked;
+                }
                 $mirror = self::normalizeLangCode(
                     (string)\Weline\Framework\Env\WelineEnv::server('WELINE_USER_LANG', '')
                 );

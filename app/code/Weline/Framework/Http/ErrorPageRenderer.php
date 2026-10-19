@@ -569,8 +569,30 @@ HTML;
                 }
             }
 
+            // Prefer explicit visitor locale when REQUEST_URI was rewritten without
+            // /{locale} but PATH_LANG / State still know the browser path language.
+            $explicitLang = '';
+            if (\class_exists(WelineEnv::class, false)) {
+                try {
+                    $explicitLang = StorefrontNotFoundStaticPage::normalizeLangCode(
+                        (string)WelineEnv::server('WELINE_URL_PATH_LANG', '')
+                    );
+                } catch (\Throwable) {
+                    $explicitLang = '';
+                }
+            }
+            if ($explicitLang === '' && \class_exists(\Weline\Framework\App\State::class, false)) {
+                try {
+                    $explicitLang = StorefrontNotFoundStaticPage::normalizeLangCode(
+                        (string)\Weline\Framework\App\State::getLang()
+                    );
+                } catch (\Throwable) {
+                    $explicitLang = '';
+                }
+            }
+
             $html = StorefrontNotFoundStaticPage::loadHtml(
-                null,
+                $explicitLang !== '' ? $explicitLang : null,
                 $path !== '' ? $path : '/',
                 $query,
                 $cookie,

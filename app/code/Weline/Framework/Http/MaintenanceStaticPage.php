@@ -19,7 +19,8 @@ final class MaintenanceStaticPage
     /**
      * Resolve locale for a maintenance response.
      *
-     * Priority: path segment → query(lang|locale|locale_code) → zh_Hans_CN (no language cookie).
+     * Priority: path segment → query(lang|locale|locale_code) → WELINE_URL_PATH_LANG
+     * → zh_Hans_CN (no language cookie). Align with storefront 404 PATH_LANG lock.
      */
     public static function resolveLang(
         string $path,
@@ -47,6 +48,19 @@ final class MaintenanceStaticPage
                     return $lang;
                 }
             }
+        }
+
+        try {
+            if (\class_exists(\Weline\Framework\Env\WelineEnv::class, false)
+                || \class_exists(\Weline\Framework\Env\WelineEnv::class)) {
+                $pathLocked = self::normalizeLangCode(
+                    (string)\Weline\Framework\Env\WelineEnv::server('WELINE_URL_PATH_LANG', '')
+                );
+                if ($pathLocked !== '') {
+                    return $pathLocked;
+                }
+            }
+        } catch (\Throwable) {
         }
 
         // $cookieHeader retained for call-site compatibility; language cookies are ignored.

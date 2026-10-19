@@ -30,6 +30,12 @@ final class StorefrontNotFoundStaticPageTest extends TestCase
             self::assertSame('zh_Hans_CN', StorefrontNotFoundStaticPage::resolveLang('/products'));
             WelineEnv::setServer('WELINE_USER_LANG', 'en_US', 'storefront-not-found-test');
             self::assertSame('en_US', StorefrontNotFoundStaticPage::resolveLang('/products'));
+            // Stripped path + website-default USER_LANG must not beat PATH_LANG
+            // (browser still on /zh_Hans_CN/... after Url::detectLanguage peel).
+            WelineEnv::setServer('WELINE_URL_PATH_LANG', 'zh_Hans_CN', 'storefront-not-found-test');
+            WelineEnv::setServer('WELINE_USER_LANG', 'en_US', 'storefront-not-found-test');
+            self::assertSame('zh_Hans_CN', StorefrontNotFoundStaticPage::resolveLang('/ddsds'));
+            WelineEnv::removeServer('WELINE_URL_PATH_LANG');
             WelineEnv::removeServer('WELINE_USER_LANG');
             self::assertSame(
                 'en_US',
