@@ -4721,13 +4721,22 @@ private function assert_ThemePublishHtmlDiskGenerationAtomic_testRebuildAssertsV
     $src = $this->read_ThemePublishHtmlDiskGenerationAtomic('app/code/Weline/Theme/Service/ThemeRuntimeCacheCleaner.php');
     $assertPos = \strpos($src, 'function assertPromotedHtmlDiskMatchesStorefrontGeneration');
     self::assertNotFalse($assertPos);
-    $assertChunk = \substr($src, $assertPos, 3200);
+    $assertChunk = \substr($src, $assertPos, 4200);
     self::assertStringContainsString('themePublishedVersionId', $assertChunk);
     self::assertStringContainsString('requestTarget', $assertChunk);
     self::assertStringContainsString("'pierce' => false", $assertChunk);
     self::assertStringContainsString("'bypass' => false", $assertChunk);
     self::assertStringContainsString('live=', $assertChunk);
     self::assertStringContainsString('origin=', $assertChunk);
+    // Empty live stamp = draft/never-published: soft-pass after origin read (not unconditional throw).
+    self::assertStringContainsString('draft_never_published', $assertChunk);
+    self::assertStringContainsString('origin_empty=1', $assertChunk);
+    self::assertStringContainsString('origin_unverified=1', $assertChunk);
+    // Fail-closed only when origin baked a non-empty stamp but live is empty.
+    self::assertMatchesRegularExpression(
+        '/if\s*\(\s*\$liveStamp\s*===\s*[\'"][\'"]\s*\)\s*\{[\s\S]*?\$originOk[\s\S]*?\$originStamp\s*!==\s*[\'"][\'"]/',
+        $assertChunk,
+    );
     self::assertStringNotContainsString('deploy_version', $assertChunk);
     // Must not CLI-probe acceptable published ids for promote assert.
     self::assertStringNotContainsString('collectAcceptableStorefrontGenerationIds', $assertChunk);

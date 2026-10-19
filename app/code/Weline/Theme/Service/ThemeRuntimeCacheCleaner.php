@@ -944,8 +944,12 @@ final class ThemeRuntimeCacheCleaner
      * For each warm Host target:
      * 1) Visitor-path GET (no pierce / no FPC bypass) — what live html-disk serves.
      * 2) Origin-path GET (pierce + bypass) — what this Host would bake under current publish.
-     * Fail-closed when live stamp is empty, or live ≠ origin for the same Host.
-     * Soft-fail (log) when no target is reachable — do not invent CLI acceptable-id sets.
+     * Empty themePublishedVersionId = draft / never editor-published for that Scope
+     * (same spirit as ThemePublishedVersionRuntimeResolver empty id = skip enforcement).
+     * Soft-pass when live is empty and origin is also empty or unverifiable (log
+     * draft_never_published). Fail-closed when origin bakes a non-empty stamp but live
+     * is empty, or when both non-empty and live ≠ origin. Soft-fail (log) when no target
+     * is reachable — do not invent CLI acceptable-id sets.
      */
     private function assertPromotedHtmlDiskMatchesStorefrontGeneration(): void
     {
@@ -974,12 +978,37 @@ final class ThemeRuntimeCacheCleaner
                 continue;
             }
             $liveStamp = $this->extractThemePublishedVersionIdFromHtml((string)$live['body']);
+            $origin = $http->requestTarget($target, '/', [
+                'pierce' => true,
+                'bypass' => true,
+                'return_body' => true,
+            ]);
+            $originOk = ($origin['ok'] ?? false)
+                && \strlen((string)($origin['body'] ?? '')) >= 1000
+                && !\str_contains(\strtoupper((string)($origin['fpc'] ?? '')), 'HIT');
+            $originStamp = $originOk
+                ? $this->extractThemePublishedVersionIdFromHtml((string)$origin['body'])
+                : '';
+
             if ($liveStamp === '') {
-                throw new \RuntimeException(
-                    'html-disk promote access left empty themePublishedVersionId for host=' . $host
-                    . ' url=' . (string)($live['url'] ?? ''),
+                // Published origin with empty live = hole; draft/never-published = soft-pass.
+                if ($originOk && $originStamp !== '') {
+                    throw new \RuntimeException(
+                        'html-disk promote access left empty themePublishedVersionId for host=' . $host
+                        . ' url=' . (string)($live['url'] ?? '')
+                        . ' origin=' . $originStamp,
+                    );
+                }
+                Env::log(
+                    'theme_cache_clear',
+                    'html-disk promote access draft_never_published host=' . $host
+                    . ' url=' . (string)($live['url'] ?? '')
+                    . ($originOk ? ' origin_empty=1' : ' origin_unverified=1'),
                 );
+                ++$probed;
+                continue;
             }
+
             $cookie = \trim((string)($live['storefront_gen_cookie'] ?? ''));
             if ($cookie !== '' && \strcasecmp($cookie, $liveStamp) !== 0) {
                 throw new \RuntimeException(
@@ -988,22 +1017,11 @@ final class ThemeRuntimeCacheCleaner
                 );
             }
 
-            $origin = $http->requestTarget($target, '/', [
-                'pierce' => true,
-                'bypass' => true,
-                'return_body' => true,
-            ]);
-            if (($origin['ok'] ?? false)
-                && \strlen((string)($origin['body'] ?? '')) >= 1000
-                && !\str_contains(\strtoupper((string)($origin['fpc'] ?? '')), 'HIT')
-            ) {
-                $originStamp = $this->extractThemePublishedVersionIdFromHtml((string)$origin['body']);
-                if ($originStamp !== '' && \strcasecmp($originStamp, $liveStamp) !== 0) {
-                    throw new \RuntimeException(
-                        'html-disk promote access stamp mismatch for host=' . $host
-                        . '; live=' . $liveStamp . ' origin=' . $originStamp,
-                    );
-                }
+            if ($originOk && $originStamp !== '' && \strcasecmp($originStamp, $liveStamp) !== 0) {
+                throw new \RuntimeException(
+                    'html-disk promote access stamp mismatch for host=' . $host
+                    . '; live=' . $liveStamp . ' origin=' . $originStamp,
+                );
             }
             ++$probed;
         }
