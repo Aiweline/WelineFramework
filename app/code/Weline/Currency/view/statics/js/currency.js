@@ -11,7 +11,7 @@
     'use strict';
 
     // 防止重复初始化（版本 bump：live preview peel + portal 货币点击）
-    if (window.WelineCurrency && window.WelineCurrency.__initialized === 3) {
+    if (window.WelineCurrency && window.WelineCurrency.__initialized === 4) {
         return;
     }
 
@@ -592,7 +592,7 @@
 
     // 导出模块 API
     window.WelineCurrency = {
-        __initialized: 3,
+        __initialized: 4,
         getCurrentCurrency: getCurrentCurrency,
         updateCurrentCurrencyDisplay: updateCurrentCurrencyDisplay,
         updateCurrencySwitcherLinks: updateCurrencySwitcherLinks,
@@ -603,15 +603,24 @@
     function openUnsupportedCurrencyDialog() {
         document.querySelectorAll('[data-currency-surface="dialog"]').forEach(function (root) {
             const dialog = root.closest('dialog');
-            if (dialog instanceof HTMLDialogElement && !dialog.open && typeof dialog.showModal === 'function') {
-                dialog.showModal();
+            if (dialog instanceof HTMLDialogElement && !dialog.open) {
+                const api = window.Weline && window.Weline.UI && typeof window.Weline.UI.get === 'function'
+                    ? window.Weline.UI.get(dialog, 'dialog')
+                    : null;
+                if (api && typeof api.open === 'function') {
+                    api.open();
+                } else if (typeof dialog.showModal === 'function') {
+                    dialog.hidden = false;
+                    dialog.removeAttribute('hidden');
+                    dialog.showModal();
+                }
             }
             const search = root.querySelector('[data-w-choice-search]');
             if (search && search.getAttribute('data-unsupported-bound') !== '1') {
                 search.setAttribute('data-unsupported-bound', '1');
                 search.addEventListener('input', function () {
                     const query = String(search.value || '').trim().toLowerCase();
-                    root.querySelectorAll('[data-currency-option]').forEach(function (option) {
+                    root.querySelectorAll('[data-unsupported-currency]').forEach(function (option) {
                         const hay = String(option.getAttribute('data-w-search') || option.textContent || '').toLowerCase();
                         option.hidden = query !== '' && hay.indexOf(query) === -1;
                     });

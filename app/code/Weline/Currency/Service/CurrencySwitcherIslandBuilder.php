@@ -628,7 +628,9 @@ final class CurrencySwitcherIslandBuilder implements ProcessSharedInterface
         $rejected = $notice->rejectedCode();
         $uri = $this->visitorUri();
         $safe = static fn (string $value): string => \htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
-        $placeholder = '搜索货币';
+        $placeholder = \class_exists(\Weline\Theme\Helper\WidgetI18n::class)
+            ? \Weline\Theme\Helper\WidgetI18n::label('搜索货币')
+            : (string) __('搜索货币');
         $html = '<div class="w-currency-switcher" data-currency-switcher data-currency-surface="dialog">'
             . '<div class="w-currency-switcher__menu" role="menu" aria-label="' . $safe($placeholder) . '">'
             . '<div class="w-language-switcher__search-wrap">'
@@ -648,8 +650,8 @@ final class CurrencySwitcherIslandBuilder implements ProcessSharedInterface
             $search = \trim((string)($item['search'] ?? ($code . ' ' . $name)));
             $href = UnsupportedPathCurrencyNotice::replaceCurrencySegment($uri, $rejected, $code);
             $html .= '<a class="w-menu__item w-language-switcher__option" role="menuitem" href="'
-                . $safe($href) . '" data-currency-option data-currency="' . $safe($code) . '"'
-                . ' data-i18n-authoritative-href="1" data-w-search="' . $safe($search) . '">'
+                . $safe($href) . '" data-unsupported-currency="' . $safe($code) . '"'
+                . ' data-w-search="' . $safe($search) . '">'
                 . '<span class="w-language-switcher__copy"><strong>' . $safe($name) . '</strong>'
                 . '<small>' . $safe($symbol !== '' ? $code . ' ' . $symbol : $code) . '</small></span></a>';
         }

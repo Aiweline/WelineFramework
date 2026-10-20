@@ -251,6 +251,7 @@ API返回数据格式错误,"API return data format error"
 "API返回错误状态码: %{1}","API returned error status code: %{1}"
 "API返回数据解析失败: %{1}","API response data parsing failed: %{1}"
 "API请求失败，已重试 %{1} 次: %{2}","API request failed, retried %{1} times: %{2}"
+搜索货币,搜索货币
 "货币 %{1} 的 API 汇率无效: %{2}","Invalid API exchange rate for currency %{1}: %{2}"
 "新汇率 = 旧汇率 ÷ 新基准币在旧基准下的汇率","New rate = old rate ÷ rate of the new base currency under the old base"
 "新基准货币的 API 汇率无效","API rate for the new base currency is invalid"
