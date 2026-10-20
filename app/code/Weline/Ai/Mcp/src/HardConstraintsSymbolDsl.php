@@ -16,8 +16,8 @@ final class HardConstraintsSymbolDsl
 
     public const GLOSS_MAX = 64;
 
-    /** Raised 9200→9400 when browser_tab_group_identity entered the hot package (2026-10-20). */
-    public const PACKAGE_TOKEN_BUDGET = 9400;
+    /** Raised 9200→9400 when browser_tab_group_identity entered the hot package (2026-10-20); 9400→9500 for no_error_masking_or_patch_workaround (2026-10-21). */
+    public const PACKAGE_TOKEN_BUDGET = 9500;
 
     public const EXPAND_IDS_MAX = 20;
 
@@ -420,6 +420,14 @@ final class HardConstraintsSymbolDsl
                 'gloss_zh' => '站柜有server.md且官网源站可通',
                 'rule_ids' => ['social_scope_mailbox_for_platform_register'],
             ],
+            'Mask' => [
+                'gloss_zh' => '空catch·默认值假成功·@抑制·删断言·静默降级',
+                'rule_ids' => ['no_error_masking_or_patch_workaround'],
+            ],
+            'Patch' => [
+                'gloss_zh' => '单站if·白名单绕校验·绕扩展点·临时hack',
+                'rule_ids' => ['no_error_masking_or_patch_workaround'],
+            ],
         ];
     }
 
@@ -704,6 +712,11 @@ final class HardConstraintsSymbolDsl
             'social_scope_mailbox_for_platform_register' => [
                 'formula' => 'MediaAsk→□SocSkill|SocReg→□(LiveCab∧MbProbe)|(¬LiveCab→⊥)',
                 'gloss_zh' => '注册须站柜已上线且官网可通；未上线禁开号',
+                'cluster' => '§P',
+            ],
+            'no_error_masking_or_patch_workaround' => [
+                'formula' => 'Mask∨Patch→⊥',
+                'gloss_zh' => '禁掩盖错误/打补丁；错误须真暴露+根因修',
                 'cluster' => '§P',
             ],
         ];
