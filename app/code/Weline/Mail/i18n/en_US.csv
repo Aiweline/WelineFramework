@@ -469,10 +469,7 @@ Smtp,Smtp
 供应商原文：%{1},供应商原文：%{1}
 "去 Cloudflare 勾选权限","去 Cloudflare 勾选权限"
 废纸篓,废纸篓
-"%1 封未读","%1 封未读"
 取消,Cancel
-"%1 封未读在收件箱（对方回信不会出现在「已发送」）。","%1 封未读在收件箱（对方回信不会出现在「已发送」）。"
-打开收件箱,打开收件箱
 测试邮箱仅写入本系统发件箱，不会投递到外网,"Test mailbox only writes to this system's Sent folder and does not deliver externally"
 使用当前邮箱发送邮件,"Send email using the current email address."
 "当前发件账号是本地测试域（.invalid / .test）。点「发送」只会写入「已发送」，QQ/Gmail 等真实邮箱收不到。请改用真实域名的 Stalwart 企业邮箱账号外发。","The current From account is a local test domain (.invalid / .test). Send only writes to Sent in this system—QQ/Gmail will not receive it. Switch to a real-domain Stalwart mailbox to deliver externally."
@@ -502,6 +499,7 @@ Smtp,Smtp
 写第一封邮件,"Compose first message"
 去用户与账号,"Go to Users & accounts"
 选择,选择
+未读,Unread
 回复全部,回复全部
 转发,转发
 舍弃,舍弃
@@ -511,7 +509,6 @@ Smtp,Smtp
 自动收信已暂停,自动收信已暂停
 正在收信…,正在收信…
 已更新,已更新
-收到新邮件,收到新邮件
 正在处理所选邮件，请稍候…,"Working on selected messages…"
 正在删除邮件，请稍候…,"Deleting messages…"
 正在更新已读状态，请稍候…,"Updating read state…"
@@ -993,6 +990,10 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 "检测企业邮箱 DNS 记录","Detect corporate email DNS records"
 "检测 MX/SPF/DKIM/DMARC 记录是否存在","Check if MX/SPF/DKIM/DMARC records exist"
 邮件服务主机名,"Mail service host name"
+"%1 封未读","%1 封未读"
+"%1 封未读在收件箱（对方回信不会出现在「已发送」）。","%1 封未读在收件箱（对方回信不会出现在「已发送」）。"
+打开收件箱,打开收件箱
+收到新邮件,收到新邮件
 "标有「系统账号」的邮箱（如 contact@ 人收、smtp@ 提交/代理）由启用域名或 Smtp 自动创建，不可编辑身份、暂停、改密或删除；仍可查看邮件与配置外投。","标有「系统账号」的邮箱（如 contact@ 人收、smtp@ 提交/代理）由启用域名或 Smtp 自动创建，不可编辑身份、暂停、改密或删除；仍可查看邮件与配置外投。"
 "未勾选则走本域 MX:25。优先从 Smtp Tab 已建账户/服务中选择；也可手动填写。","未勾选则走本域 MX:25。优先从 Smtp Tab 已建账户/服务中选择；也可手动填写。"
 "QQ / 企业微信 SMTP","QQ / 企业微信 SMTP"

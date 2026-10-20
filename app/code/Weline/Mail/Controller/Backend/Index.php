@@ -163,7 +163,7 @@ class Index extends BackendController
             $mailboxListUnreadOnly = $folder === MailboxFolder::INBOX && ($showParam === 'unread' || $showParam === 'unread_only');
             if ($selectedAccount) {
                 try {
-                    $mailboxMessages = $ops->list($selectedAccountId, $folder, 50, $mailboxListUnreadOnly);
+                    $mailboxMessages = $ops->listForWorkspace($selectedAccountId, $folder, 50, $mailboxListUnreadOnly);
                     if ($messageId !== '') {
                         $selectedMessage = $ops->get($selectedAccountId, $messageId);
                         if (is_array($selectedMessage) && (string)($selectedMessage['id'] ?? '') !== '') {
@@ -550,7 +550,7 @@ class Index extends BackendController
             && ($showParam === 'unread' || $showParam === 'unread_only');
         try {
             $ops = ObjectManager::getInstance(MailboxOpsService::class);
-            $rows = $ops->list($accountId, $folder, $limit, $unreadOnly);
+            $rows = $ops->listForWorkspace($accountId, $folder, $limit, $unreadOnly);
             $unread = $folder === MailboxFolder::INBOX ? $ops->countUnreadInbox($accountId) : 0;
         } catch (\Throwable $e) {
             return $this->fetchJson(['code' => 500, 'msg' => $e->getMessage(), 'data' => null]);

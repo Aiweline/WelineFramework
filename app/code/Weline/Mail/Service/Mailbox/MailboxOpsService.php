@@ -52,6 +52,88 @@ final class MailboxOpsService
         return $ctx['client']->listMessages($ctx['mailbox'], $folder, $limit, $unreadOnly);
     }
 
+    /**
+     * 工作台左侧列表：未读在前。非收件箱时把收件箱未读钉在最前，便于看出是哪一封。
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function listForWorkspace(int $accountId, string $folder, int $limit = 50, bool $unreadOnly = false): array
+    {
+        $folder = MailboxFolder::assertValid($folder);
+        $rows = $this->list($accountId, $folder, $limit, $unreadOnly);
+        if ($folder === MailboxFolder::INBOX || $unreadOnly) {
+            return self::orderUnreadFirst($rows);
+        }
+        $pinned = [];
+        try {
+            if ($this->countUnreadInbox($accountId) > 0) {
+                $pinned = $this->list($accountId, MailboxFolder::INBOX, min($limit, 20), true);
+            }
+        } catch (\Throwable) {
+            $pinned = [];
+        }
+
+        return self::orderUnreadFirst(self::prependInboxUnread($pinned, $rows));
+    }
+
+    /**
+     * @param list<array<string, mixed>> $unreadInbox
+     * @param list<array<string, mixed>> $folderRows
+     * @return list<array<string, mixed>>
+     */
+    public static function prependInboxUnread(array $unreadInbox, array $folderRows): array
+    {
+        $seen = [];
+        $pinned = [];
+        foreach ($unreadInbox as $row) {
+            if (!is_array($row) || empty($row['unread'])) {
+                continue;
+            }
+            $id = trim((string)($row['id'] ?? ''));
+            if ($id === '' || isset($seen[$id])) {
+                continue;
+            }
+            $row['folder'] = MailboxFolder::INBOX;
+            $pinned[] = $row;
+            $seen[$id] = true;
+        }
+        $rest = [];
+        foreach ($folderRows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $id = trim((string)($row['id'] ?? ''));
+            if ($id !== '' && isset($seen[$id])) {
+                continue;
+            }
+            $rest[] = $row;
+        }
+
+        return array_merge($pinned, $rest);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    public static function orderUnreadFirst(array $rows): array
+    {
+        $unread = [];
+        $read = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            if (!empty($row['unread'])) {
+                $unread[] = $row;
+            } else {
+                $read[] = $row;
+            }
+        }
+
+        return array_merge($unread, $read);
+    }
+
     public function countUnreadInbox(int $accountId): int
     {
         $ctx = $this->resolveAccount($accountId);

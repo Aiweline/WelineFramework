@@ -302,6 +302,18 @@ private function assert_MailboxClient_testInterfaceAndOpsFacadeExist(): void
     self::assertStringContainsString('function buildComposePrefill', $ops);
     self::assertStringContainsString('function mapInboxUnreadCounts', $ops);
     self::assertStringContainsString('function countUnreadInbox', $ops);
+    self::assertStringContainsString('function listForWorkspace', $ops);
+    $ordered = \Weline\Mail\Service\Mailbox\MailboxOpsService::orderUnreadFirst([
+        ['id' => 'read', 'unread' => false],
+        ['id' => 'unread', 'unread' => true],
+    ]);
+    self::assertSame('unread', $ordered[0]['id'] ?? null);
+    $pinned = \Weline\Mail\Service\Mailbox\MailboxOpsService::prependInboxUnread(
+        [['id' => 'in', 'unread' => true, 'folder' => 'sent']],
+        [['id' => 'out', 'unread' => false, 'folder' => 'sent'], ['id' => 'in', 'unread' => false, 'folder' => 'sent']]
+    );
+    self::assertSame(['in', 'out'], array_column($pinned, 'id'));
+    self::assertSame('inbox', $pinned[0]['folder'] ?? null);
     $liveClient = (string) file_get_contents(BP . 'app/code/Weline/Mail/Service/Mailbox/StalwartMailboxClient.php');
     self::assertStringContainsString('function countUnreadInbox', $liveClient);
     self::assertStringContainsString('unreadEmails', $liveClient);
@@ -438,7 +450,7 @@ private function assert_MailComposeDeeplink_testBackendComposePrefillAndSendEven
 private function assert_MailComposeDeeplink_testModuleVersion(): void
 {
     $module = include BP . 'app/code/Weline/Mail/etc/module.php';
-    self::assertSame('0.2.46', $module['version'] ?? null);
+    self::assertSame('0.2.48', $module['version'] ?? null);
 }
 
 private function assert_MailDkimLocalEnsureService_testEnsureGeneratesReusablePublicKey(): void

@@ -90,7 +90,9 @@ private function assert_AccountSelect_testAccountSelectTaglibUsesLocalSearchable
     self::assertStringContainsString('mail-enterprise-current-account', $enterprise);
     self::assertStringContainsString('auto-submit="true"', $enterprise);
     self::assertStringContainsString("'unread' => \$__optUnread", $enterprise);
-    self::assertStringContainsString('mail-enterprise-folder-unread', $enterprise);
+    self::assertStringNotContainsString('mail-enterprise-inbox-unread-hint', $enterprise);
+    self::assertStringContainsString('mail-enterprise-unread-chip', $enterprise);
+    self::assertStringNotContainsString('mail-enterprise-folder-unread', $enterprise);
     self::assertStringContainsString('mail-enterprise-reply-chip', $enterprise);
     self::assertStringContainsString('mailbox_unread_by_account', $enterprise);
     self::assertStringNotContainsString('name="account" onchange="this.form.submit()"', $enterprise);
@@ -176,6 +178,6 @@ private function assert_MailComposerTaglib_testSceneMapListsMailComposer(): void
 private function assert_MailComposerTaglib_testModuleVersion(): void
 {
     $module = include BP . 'app/code/Weline/Mail/etc/module.php';
-    self::assertSame('0.2.46', $module['version'] ?? null);
+    self::assertSame('0.2.48', $module['version'] ?? null);
 }
 }
