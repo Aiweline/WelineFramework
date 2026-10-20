@@ -260,18 +260,22 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
         }
     }
 
-    public function testAuthorizationAlwaysBypassesRawWorkerFpc(): void
+    public function testDocumentRequestIgnoresAuthorizationForWorkerFpc(): void
     {
         $reflection = new \ReflectionClass(WorkerFullPageCacheFastPath::class);
         $fastPath = $reflection->newInstanceWithoutConstructor();
         $mustBypass = $reflection->getMethod('mustBypass');
 
-        self::assertTrue($mustBypass->invoke($fastPath, ['authorization' => 'Bearer private-token']));
+        self::assertFalse($mustBypass->invoke(
+            $fastPath,
+            ['authorization' => 'Bearer private-token'],
+            '/bg_BG/product/example',
+        ));
         self::assertFalse($mustBypass->invoke($fastPath, ['authorization' => '']));
         self::assertFalse($mustBypass->invoke($fastPath, []));
         self::assertTrue($mustBypass->invoke($fastPath, ['x-wls-fpc-bypass' => '1'], '/'));
-        self::assertTrue($mustBypass->invoke($fastPath, ['cookie' => 'weline_preview_token=abc'], '/'));
-        self::assertTrue($mustBypass->invoke($fastPath, [], '/?editor_mode=1'));
+        self::assertFalse($mustBypass->invoke($fastPath, ['cookie' => 'weline_preview_token=abc'], '/'));
+        self::assertFalse($mustBypass->invoke($fastPath, [], '/?editor_mode=1'));
         self::assertFalse($mustBypass->invoke($fastPath, ['cache-control' => 'no-cache'], '/'));
         self::assertTrue($mustBypass->invoke($fastPath, ['cache-control' => 'no-store'], '/'));
     }

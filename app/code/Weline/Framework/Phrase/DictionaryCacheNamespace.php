@@ -621,38 +621,56 @@ final class DictionaryCacheNamespace
 
     private static function cacheKeyBelongsToLocale(string $key, string $lang): bool
     {
-        $needle = '|' . $lang;
-        $offset = 0;
-        $length = \strlen($key);
-        $needleLength = \strlen($needle);
-        while (($pos = \strpos($key, $needle, $offset)) !== false) {
-            $after = $pos + $needleLength;
-            if ($after >= $length || $key[$after] === '|') {
-                return true;
-            }
-            $offset = $pos + 1;
+        $lang = LocaleFallbackChain::normalize(\trim($lang));
+        if ($lang === '' || !self::isLocaleCode($lang)) {
+            return false;
         }
 
-        return false;
+        return \in_array($lang, self::extractLocalesFromCacheKey($key), true);
     }
 
     /**
+     * 袋键里的主语文种。独立 `|zh_Hans_CN|` 段，以及 Worker 词袋
+     * `phrase_locale_words_{locale}_…`。`chain:` 里的回退语种不是这份袋的主人，
+     * 避免踢 en_US 时把仍在用的主词袋一起丢掉。
+     *
      * @return list<string>
      */
     private static function extractLocalesFromCacheKey(string $key): array
     {
         $out = [];
         foreach (\explode('|', $key) as $part) {
-            $normalized = LocaleFallbackChain::normalize(\trim($part));
-            if ($normalized === '') {
+            $part = \trim($part);
+            if ($part === '') {
                 continue;
             }
-            if (\preg_match('/^[a-z]{2,3}(?:_[A-Z][a-z]{3})?(?:_(?:[A-Z]{2}|[0-9]{3}))?$/D', $normalized)) {
+            $normalized = LocaleFallbackChain::normalize($part);
+            if (self::isLocaleCode($normalized)) {
                 $out[$normalized] = true;
+                continue;
+            }
+            $marker = 'phrase_locale_words_';
+            $pos = \strpos($part, $marker);
+            if ($pos === false) {
+                continue;
+            }
+            $rest = \substr($part, $pos + \strlen($marker));
+            if (\preg_match('/^([a-z]{2,3}(?:_[A-Z][a-z]{3})?(?:_(?:[A-Z]{2}|[0-9]{3}))?)(?=_|$)/', $rest, $match) !== 1) {
+                continue;
+            }
+            $locale = LocaleFallbackChain::normalize($match[1]);
+            if (self::isLocaleCode($locale)) {
+                $out[$locale] = true;
             }
         }
 
         return \array_keys($out);
+    }
+
+    private static function isLocaleCode(string $locale): bool
+    {
+        return $locale !== ''
+            && \preg_match('/^[a-z]{2,3}(?:_[A-Z][a-z]{3})?(?:_(?:[A-Z]{2}|[0-9]{3}))?$/D', $locale) === 1;
     }
 
     private static function resolveGenerationFingerprint(array $namespaces): string

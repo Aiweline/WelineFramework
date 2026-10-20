@@ -14,7 +14,7 @@ use Weline\Framework\Runtime\RequestContext;
  *
  * Covers homepage prime, process/Shared HIT/STALE serve, and anonymous SSR that
  * is eligible to build/publish a shareable shell. Session preference jars belong
- * to hole-punch / QueryBin / non-shareable (logged-in / private) SSR only.
+ * to hole-punch / QueryBin / non-shareable SSR only. Login does not opt out.
  */
 final class SharedFpcSetCookieSuppress
 {

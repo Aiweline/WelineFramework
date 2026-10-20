@@ -1973,8 +1973,8 @@ class Core
         # HEAD 请求应该被允许访问 GET 方法的路由（HTTP 规范：HEAD 返回与 GET 相同的响应头）
         $routeProfile['fpc'] = $fpcCoordinator === null ? 'disabled' : ($fpcBuildLock === null ? 'wait_miss' : 'build_lock');
         $routeProfileMark('fpc_probe');
-        // Anonymous shareable FPC SSR (build lock or canBuild shell): never Set-Cookie.
-        // Logged-in / non-shareable wait_miss keeps normal Session/route cookies.
+        // Shareable FPC SSR is the anonymous shell (login does not opt out): never Set-Cookie.
+        // Non-shareable wait_miss still keeps normal Session/route cookies.
         if ($fpcCoordinator !== null) {
             $fpcMethodForCookie = $this->request->getMethod() ?: 'GET';
             if ($fpcBuildLock !== null) {

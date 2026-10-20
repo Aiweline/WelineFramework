@@ -469,20 +469,6 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 5000
             )));
         }
-        // Signed-in shoppers may HIT public FPC but cannot publish. When an
-        // anonymous peer holds the build lock, wait for that publish instead of
-        // stampeding into a second multi-second SSR (debug 70285b wait_miss).
-        if ($timeoutMs === self::LOCK_WAIT_TIMEOUT_MS
-            && Runtime::isPersistent()
-            && $this->hasLoggedInFrontendSession()
-            && !$this->canBuildCachedResponse('GET')
-            && $this->isBuildLockHeld('GET')
-        ) {
-            return \max(500, \min(15000, (int)Env::get(
-                'wls.performance.fpc_logged_in_publish_wait_ms',
-                8000
-            )));
-        }
         if ($timeoutMs !== self::LOCK_WAIT_TIMEOUT_MS || !Runtime::isPersistent()) {
             return \max(0, $timeoutMs);
         }
@@ -844,10 +830,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return false;
         }
 
-        // Serve public guest FPC even when the shopper is signed in. Account soft-
-        // reconciles header chrome (w_auth / data-auth-state). Build/publish stay
-        // blocked for logged-in requests so personalized HTML never enters the
-        // shared cache (see canBuildCachedResponse / P1a private-session hard off).
+        // Storefront SSR is the anonymous shell. Login session does not decide
+        // serve or build. Account soft-reconciles header chrome after HIT.
         $frozen = $this->hasCompleteFrozenStorefrontScope();
         FpcDiag::event('can_serve', [
             'allowed' => $frozen,
@@ -891,7 +875,6 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
         return $this->normalizeHttpMethod($method) === 'GET'
             && $this->isFrontendResponseCacheAllowed($method)
-            && !$this->hasLoggedInFrontendSession()
             && $this->hasCompleteFrozenStorefrontScope();
     }
 
@@ -2714,16 +2697,12 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return null;
         }
         $hitEncoding = $this->resolveHitContentEncoding($acceptEncoding, null);
-        $loggedInFrontendSession = $this->cookieHeaderHasLoggedInFrontendSession($cookieHeader, $fullUri);
         $privateSessionToken = '';
-        // Signed-in shoppers may HIT the public guest FPC; Account soft-reconciles.
-        // Never use a private-session token here (P1a hard-off).
+        // Public FPC key is the anonymous shell. Login cookies must not select a
+        // private-session token (P1a stays off) and must not skip this lookup.
         // When legacy Shared rebuild is gated off, still serve Layer B Process L1
         // before falling through to Layer A html-disk (do not skip Process adopt).
         $allowLegacyShared = $this->legacyPreRouterFpcAllowed();
-        if ($loggedInFrontendSession) {
-            $privateSessionToken = '';
-        }
         if ($this->isEditorOrPreviewRequest($fullUri) || $this->isExcludedFrontendPath($fullUri)) {
             return null;
         }
@@ -2995,7 +2974,6 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         if ($this->isEditorOrPreviewRequest($fullUri) || $this->isExcludedFrontendPath($fullUri)) {
             return false;
         }
-        // Logged-in shoppers may probe the public guest FPC (HIT only; never build).
         if (!$this->legacyPreRouterFpcAllowed()) {
             return false;
         }
@@ -3032,11 +3010,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         if ((bool)WelineEnv::get('is_static_file', false) || (bool)WelineEnv::get('is_backend', false)) {
             return false;
         }
-        if (trim((string)(Context::getCurrent()?->server('HTTP_AUTHORIZATION', '')
-            ?: WelineEnv::server('HTTP_AUTHORIZATION', '')
-            ?: WelineEnv::get('server.http_authorization', ''))) !== '') {
-            return false;
-        }
+        // Document SSR ignores Authorization. API and query-bin never reach
+        // this gate: isExcludedFrontendPath already drops those prefixes.
 
         $rawFullUri = $this->getRawFullUri();
         $cacheKeyFullUri = $this->getCacheKeyFullUri();
@@ -3405,7 +3380,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private function sessionIdIndicatesLoggedInFrontend(string $sessionId): bool
     {
         if (!\preg_match('/^[a-f0-9]{32}$/i', $sessionId)) {
-            // Invalid wire shape: fail closed and bypass public FPC.
+            // Invalid wire shape still counts as a session cookie for observers.
+            // It must not gate public FPC; storefront SSR is the anonymous shell.
             return true;
         }
 
@@ -3432,7 +3408,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
             return $loggedIn;
         } catch (\Throwable) {
-            // If session state is unavailable, prefer correctness over serving a public cache to a logged-in user.
+            // Session storage unreadability is not an FPC bypass. Callers that
+            // only observe login must fail closed; serve/build ignore this flag.
             return true;
         }
     }
@@ -3560,8 +3537,8 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             if (\is_array($cached)) {
                 $cached = $this->hydrateSharedPayload($cached);
                 if ($cached === null && $rawShared) {
-                    // Externalized body missing/corrupt: drop stub so an anonymous
-                    // builder can republish. Logged-in shoppers cannot publish.
+                    // Externalized body missing/corrupt: drop stub so the next
+                    // shareable SSR can republish. Login does not block that publish.
                     $this->deleteCachedPayloadByKey($cacheKey);
                 }
             }
@@ -4462,6 +4439,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $remaining = $this->payloadRemainingTtlSeconds($payload) ?? 0;
         $maxAge = max(0, min((int)($payload['policy_ttl'] ?? 3600), $remaining));
         $directive = $stale || $maxAge <= 0 ? 'no-store' : 'public, max-age=' . $maxAge;
+        // Transport fast path serializes this Response directly and never
+        // reaches WlsRuntime::currentFpcStatus. Stamp the WLS status here so
+        // a url-tree hit is observable as HIT/STALE.
+        $response->setHeader('X-WLS-FPC-Status', $stale ? 'STALE' : 'HIT');
         $response->setHeader('CDN-Cache-Control', $directive);
         $response->setHeader('Cloudflare-CDN-Cache-Control', $directive);
         if ($stale || $maxAge <= 0) {

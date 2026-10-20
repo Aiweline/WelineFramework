@@ -270,6 +270,13 @@ final class PhraseContractsTest extends TestCase
                 $this->tearDown_PhraseBagLocaleSoftReclaim();
             }
         },
+            'PhraseBagLocaleSoftReclaim::testWorkerPhraseLocaleWordsKeyIsEvictable' => function () {
+            try {
+                $this->assert_PhraseBagLocaleSoftReclaim_testWorkerPhraseLocaleWordsKeyIsEvictable();
+            } finally {
+                $this->tearDown_PhraseBagLocaleSoftReclaim();
+            }
+        },
         ];
     }
 
@@ -924,5 +931,26 @@ private function assert_PhraseBagLocaleSoftReclaim_testSoftCompactEvictsBagOnlyC
     self::assertLessThan(3, \count($remainingLocales), 'soft reclaim must drop at least one bag-only cold locale when Store is empty');
     self::assertTrue(DictionaryCacheNamespace::isLocaleBucketPinned('bn_BD'), 'pinned request locale must survive soft compact');
     DictionaryCacheNamespace::unpinLocaleBucket('bn_BD');
+}
+
+private function assert_PhraseBagLocaleSoftReclaim_testWorkerPhraseLocaleWordsKeyIsEvictable(): void
+{
+    DictionaryCacheNamespace::clearProcessMemoryStore();
+    $zhKey = 'fp|phrase_locale_words_zh_Hans_CN_v_Weline_Product|chain:zh_Hans_CN,en_US';
+    $bnKey = 'fp|phrase_locale_words_bn_BD_v_Weline_Product|chain:bn_BD,en_US';
+    $bag = [
+        $zhKey => ['你好' => 'Hello'],
+        $bnKey => ['ক' => 'k'],
+    ];
+    DictionaryCacheNamespace::bindProcessBag('workerWords', $bag);
+    self::assertContains('zh_Hans_CN', DictionaryCacheNamespace::localesPresentInBoundBags());
+    self::assertContains('bn_BD', DictionaryCacheNamespace::localesPresentInBoundBags());
+    self::assertNotContains('en_US', DictionaryCacheNamespace::localesPresentInBoundBags());
+    self::assertTrue(DictionaryCacheNamespace::localeHasBoundBagKeys('zh_Hans_CN'));
+    self::assertFalse(DictionaryCacheNamespace::localeHasBoundBagKeys('en_US'));
+    $shed = DictionaryCacheNamespace::shedColdLocalesForHeadroom(\PHP_INT_MAX);
+    self::assertGreaterThan(0, (int) ($shed['count'] ?? 0));
+    self::assertArrayNotHasKey($zhKey, $bag);
+    self::assertArrayNotHasKey($bnKey, $bag);
 }
 }

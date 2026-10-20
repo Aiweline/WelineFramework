@@ -167,6 +167,7 @@ final class WorkerFullPageCacheFastPath
                     $fullUri,
                     (string)($headers['cookie'] ?? ''),
                 );
+                $cached = null;
                 if (\is_array($localizedReceipt)) {
                     $this->prepareReceiptResponseContext($probeContext, $decision, $scheme, $host, $requestUri, $fullUri);
                     RequestContext::installScopeIdentity(ScopeIdentity::fromArray($localizedReceipt['scope_identity']));
@@ -179,11 +180,21 @@ final class WorkerFullPageCacheFastPath
                         (string)($headers['accept-encoding'] ?? ''),
                         true,
                     );
-                } else {
-                    // Localized homepage receipt miss (incl. Cookie present) and
-                    // other storefront URLs: same cold-disk / Shared fallthrough.
-                    // Must prime URI: without it canonicalize drops allowlisted
-                    // query → wrong path-only html-disk HIT (UC-edge-parity).
+                    if ($cached === null) {
+                        $cached = $this->coordinator->getFormattedStaleCachedResponseForInternalReceipt(
+                            $localizedReceipt,
+                            $decision->keepAlive(),
+                            $decision->method,
+                            (string)($headers['accept'] ?? ''),
+                            (string)($headers['accept-encoding'] ?? ''),
+                            true,
+                            $this->processOnly || !$decision->fpcSharedCacheEnabled(),
+                        );
+                    }
+                }
+                // Process receipt miss (language/currency path included): still
+                // serve the URL-tree html-disk leaf. Do not enter the router.
+                if ($cached === null) {
                     $this->prepareReceiptResponseContext($probeContext, $decision, $scheme, $host, $requestUri, $fullUri);
                     RequestContext::setWelineArea(RequestContext::AREA_FRONTEND);
                     $cached = $this->coordinator->getFormattedCachedResponseForFullUri(
@@ -275,17 +286,14 @@ final class WorkerFullPageCacheFastPath
     }
 
     /**
-     * Serve-policy（Authorization / internal label / no-store）仍归早路径；
+     * Serve-policy（internal label / no-store）仍归早路径。
+     * 文档请求的 Authorization 不在这里旁路；接口与 BinQuery 由协调器按路径排除。
      * 身份/显式参数旁路一律走 Framework Evaluator + 侧车。
      *
      * @param array<string, string> $headers
      */
     private function mustBypass(array $headers, string $requestUri = ''): bool
     {
-        if (\trim((string)($headers['authorization'] ?? '')) !== '') {
-            return true;
-        }
-
         $internalLabel = \strtolower(\trim((string)($headers['x-wls-internal-request'] ?? '')));
         if (\in_array($internalLabel, self::BYPASS_INTERNAL_REQUEST_LABELS, true)) {
             return true;

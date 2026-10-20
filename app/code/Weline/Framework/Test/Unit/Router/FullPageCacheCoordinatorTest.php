@@ -483,7 +483,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
         $coordinator->releaseBuildLock($takeover['lock']);
     }
 
-    public function testPortQualifiedLoggedInSessionMayServePublicFpcButNeverBuild(): void
+    public function testPortQualifiedLoggedInSessionStillBuildsPublicFpc(): void
     {
         \Weline\Framework\Http\CookieScope::setPolicyResolverOverride(static fn(): array => [
             'active' => true, 'name_suffix' => '_w0', 'mount_path' => '/',
@@ -493,21 +493,21 @@ final class FullPageCacheCoordinatorTest extends TestCase
         Context::current()->set('input.server.SERVER_PORT', 9502);
         Context::current()->set('input.host', '127.0.0.1');
         // CookieScope authority resolves to _{port}_w0; keep port-only alias in the jar too.
-        $cookieHeader = 'WELINE_SESSID_9502=' . $sid . '; WELINE_SESSID_9502_w0=' . $sid;
+        $cookieHeader = 'WELINE_CUSTOMER_SESSID_9502=' . $sid . '; WELINE_CUSTOMER_SESSID_9502_w0=' . $sid;
         Context::current()->set('input.server.HTTP_COOKIE', $cookieHeader);
         WelineEnv::setServer('HTTP_COOKIE', $cookieHeader, 'unit-test');
         $this->setKnownLoggedInSession($sid);
 
         $coordinator = $this->coordinator(new InMemoryCachePool());
-        self::assertSame('WELINE_SESSID_9502_w0', SessionCookieNameResolver::resolve());
+        self::assertSame('WELINE_CUSTOMER_SESSID_9502_w0', SessionCookieNameResolver::resolve());
         self::assertSame($cookieHeader, Context::current()->server('HTTP_COOKIE', ''));
         self::assertTrue($coordinator->hasLoggedInFrontendSessionForCache());
-        // Signed-in may HIT public guest FPC; Customer soft-reconciles chrome.
-        // Build/publish stay blocked so personalized HTML never enters shared FPC.
+        // Storefront SSR is the anonymous shell. Login may still be observed,
+        // but it must not block serve, build, or publish of the public page.
         self::assertTrue($coordinator->canServeCachedResponse('GET'));
-        self::assertFalse($coordinator->canBuildCachedResponse('GET'));
-        self::assertFalse($coordinator->canPublishResponse(
-            Response::html('<html>private</html>')->setHeader('Cache-Control', 'public'),
+        self::assertTrue($coordinator->canBuildCachedResponse('GET'));
+        self::assertTrue($coordinator->canPublishResponse(
+            Response::html('<html>public</html>')->setHeader('Cache-Control', 'public'),
             'GET',
         ));
     }
@@ -561,18 +561,18 @@ final class FullPageCacheCoordinatorTest extends TestCase
 
         self::assertTrue($method->invoke(
             $coordinator,
-            'WELINE_SESSID_9502=' . $sid,
+            'WELINE_CUSTOMER_SESSID_9502=' . $sid,
             'https://127.0.0.1:9502/',
         ));
-        // Legacy unscoped name remains a Session reader candidate (cookie-name split).
+        // Unscoped customer name remains a Session reader candidate (cookie-name split).
         self::assertTrue($method->invoke(
             $coordinator,
-            'WELINE_SESSID=' . $sid,
+            'WELINE_CUSTOMER_SESSID=' . $sid,
             'https://127.0.0.1:9502/',
         ));
         self::assertTrue($method->invoke(
             $coordinator,
-            'WELINE_SESSID_9502=invalid',
+            'WELINE_CUSTOMER_SESSID_9502=invalid',
             'https://127.0.0.1:9502/',
         ));
     }
@@ -585,16 +585,16 @@ final class FullPageCacheCoordinatorTest extends TestCase
         $sid = str_repeat('d', 32);
         $this->setKnownLoggedInSession($sid);
 
-        // Document login often lands on WELINE_SESSID_{port}; CookieScope later uses _{port}_w0.
-        // Detection must see aliases so build/publish stay blocked; serve still HIT guest FPC.
+        // Document login often lands on WELINE_CUSTOMER_SESSID_{port}; CookieScope later uses _{port}_w0.
+        // Detection still sees aliases. Login must not block public FPC build/publish.
         self::assertTrue($method->invoke(
             $coordinator,
-            'WELINE_SESSID_9555_w0=' . $sid,
+            'WELINE_CUSTOMER_SESSID_9555_w0=' . $sid,
             'https://p05113ef3.test.weline.com:9555/',
         ));
         self::assertTrue($method->invoke(
             $coordinator,
-            'WELINE_SESSID_9555=' . $sid . '; WELINE_SESSID_9555_w0=' . str_repeat('e', 32),
+            'WELINE_CUSTOMER_SESSID_9555=' . $sid . '; WELINE_CUSTOMER_SESSID_9555_w0=' . str_repeat('e', 32),
             'https://p05113ef3.test.weline.com:9555/',
         ));
         self::assertFalse($method->invoke(
@@ -642,9 +642,27 @@ final class FullPageCacheCoordinatorTest extends TestCase
             );
         }
 
+    }
+
+    public function testDocumentRequestWithAuthorizationStillBuildsPublicFpc(): void
+    {
+        $coordinator = $this->coordinator(new InMemoryCachePool());
+        $this->setCurrentFpcUri(
+            'https://example.test/bg_BG/product/example',
+            '/bg_BG/product/example',
+        );
         Context::current()->set('input.server.HTTP_AUTHORIZATION', 'Bearer private-token');
+        WelineEnv::setServer('HTTP_AUTHORIZATION', 'Bearer private-token', 'unit-test');
+
+        self::assertTrue($coordinator->canServeCachedResponse('GET'));
+        self::assertTrue($coordinator->canBuildCachedResponse('GET'));
+
+        $this->setCurrentFpcUri(
+            'https://example.test/api/framework/query-bin',
+            '/api/framework/query-bin',
+        );
+        self::assertFalse($coordinator->canServeCachedResponse('GET'));
         self::assertFalse($coordinator->canBuildCachedResponse('GET'));
-        Context::current()->set('input.server.HTTP_AUTHORIZATION', '');
     }
 
     public function testNamespaceFailurePausesServeBuildAndPublishWithoutShortKeyFallback(): void

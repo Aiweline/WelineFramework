@@ -79,6 +79,18 @@ private function assert_PersistentWorkerForbidsWholeLocaleInclude_testLoadLocale
     self::assertNotFalse($gatePos);
     self::assertNotFalse($includePos);
     self::assertLessThan($includePos, $gatePos, 'Hard gate must precede locale.php include');
+    if (!\preg_match('/private static function loadLocaleAreaBagsForWorker\(.*?^\s{4}\}/ms', $src, $workerLoad)) {
+        self::fail('loadLocaleAreaBagsForWorker not found');
+    }
+    $workerLoadBody = $workerLoad[0];
+    $touchPos = \strpos($workerLoadBody, 'touchHeavyLocaleResident');
+    $skipPos = \strpos($workerLoadBody, 'shouldSkipHeavyLocaleDictionaryLoad');
+    $mergedPos = \strpos($workerLoadBody, 'loadMerged');
+    self::assertNotFalse($touchPos);
+    self::assertNotFalse($skipPos);
+    self::assertNotFalse($mergedPos);
+    self::assertLessThan($mergedPos, $touchPos, 'Resident eviction must run before area-bag include');
+    self::assertLessThan($mergedPos, $skipPos, 'Pressure skip must run before area-bag include');
 }
 
 private function assert_PersistentWorkerForbidsWholeLocaleInclude_testBuildWordsFromWorkerCacheMergesAreaBagsNotWholeLocaleWhenPersistent(): void

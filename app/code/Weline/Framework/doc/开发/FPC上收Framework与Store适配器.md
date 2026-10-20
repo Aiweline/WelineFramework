@@ -8,7 +8,7 @@
 | 编辑器 / 预览 query·Cookie·env 旁路声明 | **Theme** `FpcBypassRuleProvider` |
 | **CDN Scope「开发模式」临时旁路 FPC**（SystemConfig + Provider `env_flags`；facts 由 Coordinator 按 Scope 注入） | **Weline_Cdn** Provider + Framework facts 组装（规格：`Weline_Cdn/doc/开发/spec/cdn-route-realtime-fpc-devmode.md`） |
 | 传输层 bypass 头 + 默认 Store（L1+L2+外置）+ Worker 早路径 HIT | **WLS / Server** |
-| 方法 / 登录态 / `no-store` / 静态 path 等 serve 策略 | **Coordinator**（非 BypassProvider） |
+| 方法 / `no-store` / 静态 path 等 serve 策略（登录态与文档请求的 `Authorization` 不参与；接口与 BinQuery 走路径排除） | **Coordinator**（非 BypassProvider） |
 
 ## 读策略主链（店面是否 FPC）
 

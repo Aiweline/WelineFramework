@@ -1349,6 +1349,15 @@ class Parser
         if (!\class_exists(\Weline\I18n\Service\LocaleAreaDictionaryLoader::class)) {
             return [];
         }
+        // 重语种驻留默认只留 1 个。先踢冷袋，水位仍越过 55% 再丢掉未钉住的冷语种。
+        // 还不够就不 include 区袋：本请求少译文，进程不能在语言包上 fatal。
+        self::touchHeavyLocaleResident($lang);
+        if (self::shouldSkipHeavyLocaleDictionaryLoad()) {
+            DictionaryCacheNamespace::shedColdLocalesForHeadroom(\PHP_INT_MAX);
+        }
+        if (self::shouldSkipHeavyLocaleDictionaryLoad()) {
+            return [];
+        }
         try {
             return \Weline\I18n\Service\LocaleAreaDictionaryLoader::loadMerged($lang, null, false);
         } catch (\Throwable) {
