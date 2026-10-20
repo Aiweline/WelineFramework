@@ -524,6 +524,7 @@ class MailQueryProvider implements QueryProviderInterface
                     'params' => [
                         ['name' => 'account_id', 'type' => 'int', 'required' => true, 'description' => __('发件账号')],
                         ['name' => 'to', 'type' => 'string', 'required' => true, 'description' => __('收件人')],
+                        ['name' => 'cc', 'type' => 'string', 'required' => false, 'description' => __('抄送')],
                         ['name' => 'subject', 'type' => 'string', 'required' => true, 'description' => __('主题')],
                         ['name' => 'body', 'type' => 'string', 'required' => true, 'description' => __('正文')],
                         ['name' => 'source', 'type' => 'string', 'required' => false, 'description' => __('业务来源')],

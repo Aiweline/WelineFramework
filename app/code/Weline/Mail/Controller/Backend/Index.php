@@ -144,6 +144,7 @@ class Index extends BackendController
         $mailboxMessages = [];
         $selectedMessage = null;
         $mailboxError = null;
+        $mailboxFolderCounts = ['inbox' => 0, 'sent' => 0];
         $messageId = trim((string)$this->request->getParam('message', ''));
         /** @var array<int, int> $mailboxUnreadByAccount */
         $mailboxUnreadByAccount = [];
@@ -163,7 +164,11 @@ class Index extends BackendController
             $mailboxListUnreadOnly = $folder === MailboxFolder::INBOX && ($showParam === 'unread' || $showParam === 'unread_only');
             if ($selectedAccount) {
                 try {
-                    $mailboxMessages = $ops->listForWorkspace($selectedAccountId, $folder, 50, $mailboxListUnreadOnly);
+                    $workspace = $ops->workspace($selectedAccountId, $folder, 50, $mailboxListUnreadOnly);
+                    $mailboxMessages = $workspace['items'];
+                    $mailboxFolderCounts = $workspace['counts'];
+                    $mailboxUnreadByAccount[$selectedAccountId] = (int)$mailboxFolderCounts['inbox']
+                        + (int)$mailboxFolderCounts['sent'];
                     if ($messageId !== '') {
                         $selectedMessage = $ops->get($selectedAccountId, $messageId);
                         if (is_array($selectedMessage) && (string)($selectedMessage['id'] ?? '') !== '') {
@@ -194,6 +199,7 @@ class Index extends BackendController
         $this->assign('account_list_has_more', $accountListHasMore);
         $this->assign('mailbox_accounts', $mailboxAccounts);
         $this->assign('mailbox_unread_by_account', $mailboxUnreadByAccount);
+        $this->assign('mailbox_folder_counts', $mailboxFolderCounts);
         $this->assign('selected_account_id', $selectedAccountId);
         $this->assign('preferred_real_account_id', $preferredRealAccountId);
         $this->assign('selected_mailbox', $selectedMailbox);
@@ -550,8 +556,9 @@ class Index extends BackendController
             && ($showParam === 'unread' || $showParam === 'unread_only');
         try {
             $ops = ObjectManager::getInstance(MailboxOpsService::class);
-            $rows = $ops->listForWorkspace($accountId, $folder, $limit, $unreadOnly);
-            $unread = $folder === MailboxFolder::INBOX ? $ops->countUnreadInbox($accountId) : 0;
+            $workspace = $ops->workspace($accountId, $folder, $limit, $unreadOnly);
+            $rows = $workspace['items'];
+            $counts = $workspace['counts'];
         } catch (\Throwable $e) {
             return $this->fetchJson(['code' => 500, 'msg' => $e->getMessage(), 'data' => null]);
         }
@@ -562,7 +569,9 @@ class Index extends BackendController
             'data' => [
                 'folder' => $folder,
                 'items' => $rows,
-                'unread_inbox' => $unread,
+                'counts' => $counts,
+                'unread_inbox' => (int)($counts['inbox'] ?? 0),
+                'unread_sent' => (int)($counts['sent'] ?? 0),
                 'unread_only' => $unreadOnly,
                 'fetched_at' => time(),
             ],

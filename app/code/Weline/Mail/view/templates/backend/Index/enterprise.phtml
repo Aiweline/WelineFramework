@@ -80,6 +80,11 @@ $mailComposeCustomerEmptyLabel = (string)__('选择客户');
 $mailAccountSelectPlaceholder = (string)__('搜索邮箱或显示名');
 $mailAccountSelectEmptyLabel = (string)__('请选择邮箱');
 $mailboxUnreadByAccount = is_array($mailbox_unread_by_account ?? null) ? $mailbox_unread_by_account : [];
+$mailboxFolderCounts = is_array($mailbox_folder_counts ?? null) ? $mailbox_folder_counts : ['inbox' => 0, 'sent' => 0];
+$mailboxNavUnread = 0;
+foreach ($mailboxUnreadByAccount as $__navUnread) {
+    $mailboxNavUnread += max(0, (int)$__navUnread);
+}
 $mailboxAccountSelectOptions = [];
 $selectedMailboxDisplay = '';
 foreach ($mailboxAccounts as $__mailAccountOpt) {
@@ -805,6 +810,12 @@ if ($oauthCfError === 'invalid_scope') {
     font-weight: 750;
     line-height: 1;
 }
+.mail-enterprise__folder-badge:not(.is-on) {
+    display: none;
+}
+.w-tabs__tab .mail-enterprise__folder-badge {
+    margin-inline-start: var(--weline-space-1);
+}
 .mail-enterprise__reply-chip {
     background: color-mix(in srgb, var(--weline-theme-primary) 16%, var(--weline-theme-surface));
     color: var(--weline-theme-primary);
@@ -944,7 +955,7 @@ if ($oauthCfError === 'invalid_scope') {
                    aria-selected="<?= $selected ? 'true' : 'false' ?>"
                    aria-current="<?= $selected ? 'page' : 'false' ?>"
                    tabindex="<?= $selected ? '0' : '-1' ?>"
-                   <?= $selected ? 'data-state="active"' : '' ?>><?= $label ?></a>
+                   <?= $selected ? 'data-state="active"' : '' ?>><?= $label ?><?php if ($key === 'mailbox'): ?><span class="mail-enterprise__folder-badge<?= $mailboxNavUnread > 0 ? ' is-on' : '' ?>" data-testid="mail-enterprise-nav-unread"><?= $mailboxNavUnread > 99 ? '99+' : (int)$mailboxNavUnread ?></span><?php endif; ?></a>
             <?php endforeach; ?>
         </div>
     </nav>
@@ -1023,11 +1034,14 @@ if ($oauthCfError === 'invalid_scope') {
             <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
                 <nav class="mail-enterprise__folders" aria-label="<?= $escape(__('邮件夹')) ?>" data-testid="mail-enterprise-folder-nav">
                     <?php foreach ($mailboxFolders as $key => $label): ?>
-                        <a class="mail-enterprise__folder"
+                        <?php $folderCount = max(0, (int)($mailboxFolderCounts[$key] ?? 0)); ?>
+                        <a class="mail-enterprise__folder<?= $folderCount > 0 ? ' has-unread' : '' ?>"
                            href="@backend-url{$basePath|['view' => 'mailbox', 'account' => $selectedAccountId, 'folder' => $key]}"
                            aria-current="<?= $folder === $key ? 'page' : 'false' ?>"
                            data-testid="mail-enterprise-folder-<?= $escape($key) ?>">
                             <span><?= $label ?></span>
+                            <span class="mail-enterprise__folder-badge<?= $folderCount > 0 ? ' is-on' : '' ?>"
+                                  data-testid="mail-enterprise-folder-count-<?= $escape($key) ?>"><?= $folderCount > 99 ? '99+' : $folderCount ?></span>
                         </a>
                     <?php endforeach; ?>
                 </nav>
@@ -1519,7 +1533,8 @@ if ($oauthCfError === 'invalid_scope') {
                         $unread = !empty($message['unread']);
                         $hasAtt = !empty($message['has_attachment']);
                         $subjectText = trim((string)($message['subject'] ?? ''));
-                        $isReply = (bool)preg_match('/^\s*(re|回复|答覆|答复)\s*[:：]/ui', $subjectText);
+                        $replyCount = max(0, (int)($message['reply_count'] ?? 0));
+                        $isReply = $replyCount <= 0 && (bool)preg_match('/^\s*(re|回复|答覆|答复)\s*[:：]/ui', $subjectText);
                         $partyRaw = (string)($rowFolder === 'sent' ? ($message['to'] ?? '') : ($message['from'] ?? ''));
                         $partyLabel = $formatMailListParty($partyRaw);
                         $timeLabel = $formatMailListTime((string)($message['received_at'] ?? ''));
@@ -1544,7 +1559,9 @@ if ($oauthCfError === 'invalid_scope') {
                                     <?php if ($unread): ?>
                                         <span class="mail-enterprise__reply-chip" data-testid="mail-enterprise-unread-chip"><?= __('未读') ?></span>
                                     <?php endif; ?>
-                                    <?php if ($isReply): ?>
+                                    <?php if ($replyCount > 0): ?>
+                                        <span class="mail-enterprise__reply-chip" data-testid="mail-enterprise-reply-count"><?= (int)$replyCount ?> <?= __('回复') ?></span>
+                                    <?php elseif ($isReply): ?>
                                         <span class="mail-enterprise__reply-chip" data-testid="mail-enterprise-reply-chip"><?= __('回复') ?></span>
                                     <?php endif; ?>
                                     <?php if ($hasAtt): ?><span class="w-text" data-tone="muted" data-size="sm" title="<?= $escape(__('含附件')) ?>">📎</span><?php endif; ?>
@@ -2058,13 +2075,28 @@ if ($oauthCfError === 'invalid_scope') {
                         var n = parseInt(String(el.textContent || '0').replace('+', ''), 10);
                         if (!isFinite(n)) n = 0;
                         n = Math.max(0, n + delta);
-                        if (n <= 0) {
-                            el.remove();
-                            return;
-                        }
-                        el.textContent = n > 99 ? '99+' : String(n);
+                        paintCount(el, n);
                     };
                     next(accountBadge);
+                    next(document.querySelector('[data-testid="mail-enterprise-nav-unread"]'));
+                    next(document.querySelector('[data-testid="mail-enterprise-folder-count-' + folder + '"]'));
+                }
+                function paintCount(el, n) {
+                    if (!el) return;
+                    n = Math.max(0, parseInt(n, 10) || 0);
+                    el.textContent = n > 99 ? '99+' : String(n);
+                    el.classList.toggle('is-on', n > 0);
+                    var folderLink = el.closest('.mail-enterprise__folder');
+                    if (folderLink) folderLink.classList.toggle('has-unread', n > 0);
+                }
+                function paintFolderCounts(counts) {
+                    if (!counts) return;
+                    var inbox = Math.max(0, parseInt(counts.inbox, 10) || 0);
+                    var sent = Math.max(0, parseInt(counts.sent, 10) || 0);
+                    paintCount(document.querySelector('[data-testid="mail-enterprise-folder-count-inbox"]'), inbox);
+                    paintCount(document.querySelector('[data-testid="mail-enterprise-folder-count-sent"]'), sent);
+                    paintCount(document.querySelector('[data-testid="mail-enterprise-nav-unread"]'), inbox + sent);
+                    paintCount(document.querySelector('[data-testid="mail-account-select-unread"]'), inbox + sent);
                 }
                 function markRowRead(wrap) {
                     if (!wrap || !wrap.classList.contains('is-unread')) return;
@@ -2218,40 +2250,43 @@ if ($oauthCfError === 'invalid_scope') {
                         }
                         var replyBtn = t.closest('[data-mail-reply]');
                         if (!(replyBtn && reader.contains(replyBtn))) return;
-                        if (!currentMessageId) {
-                            toast(<?= json_encode((string)__('请先选择一封邮件再回复'), JSON_UNESCAPED_UNICODE) ?>, 'warning');
-                            return;
-                        }
-                        var mode = replyBtn.getAttribute('data-mail-reply') || 'reply';
-                        var url = prefillEndpoint + (prefillEndpoint.indexOf('?') >= 0 ? '&' : '?') +
-                            'account=' + encodeURIComponent(accountId) +
-                            '&message=' + encodeURIComponent(currentMessageId) +
-                            '&mode=' + encodeURIComponent(mode) + '&isAjax=1';
-                        nativeFetch(url).then(function (r) {
-                            var ct = String(r.headers.get('content-type') || '');
-                            if (!r.ok) {
-                                throw new Error(failText + ' (HTTP ' + r.status + ')');
-                            }
-                            if (ct.indexOf('application/json') < 0) {
-                                throw new Error(<?= json_encode((string)__('回复预填接口返回非 JSON，请刷新后重试'), JSON_UNESCAPED_UNICODE) ?>);
-                            }
-                            return r.json();
-                        })
-                            .then(function (json) {
-                                if (!json || json.code !== 200 || !json.data) throw new Error((json && json.msg) || failText);
-                                var d = json.data || {};
-                                openInlineCompose({
-                                    mode: d.mode || mode,
-                                    to: d.to || '',
-                                    cc: d.cc || '',
-                                    subject: d.subject || '',
-                                    body: d.body || '',
-                                    quote: d.quote || '',
-                                    quote_html: d.quote_html || ''
-                                });
-                            })
-                            .catch(function (err) { toast(err.message || failText, 'danger'); });
+                        requestComposePrefill(replyBtn.getAttribute('data-mail-reply') || 'reply');
                     });
+                }
+                function requestComposePrefill(mode) {
+                    if (!currentMessageId) {
+                        toast(<?= json_encode((string)__('请先选择一封邮件再回复'), JSON_UNESCAPED_UNICODE) ?>, 'warning');
+                        return;
+                    }
+                    mode = mode || 'reply';
+                    var url = prefillEndpoint + (prefillEndpoint.indexOf('?') >= 0 ? '&' : '?') +
+                        'account=' + encodeURIComponent(accountId) +
+                        '&message=' + encodeURIComponent(currentMessageId) +
+                        '&mode=' + encodeURIComponent(mode) + '&isAjax=1';
+                    nativeFetch(url).then(function (r) {
+                        var ct = String(r.headers.get('content-type') || '');
+                        if (!r.ok) {
+                            throw new Error(failText + ' (HTTP ' + r.status + ')');
+                        }
+                        if (ct.indexOf('application/json') < 0) {
+                            throw new Error(<?= json_encode((string)__('回复预填接口返回非 JSON，请刷新后重试'), JSON_UNESCAPED_UNICODE) ?>);
+                        }
+                        return r.json();
+                    })
+                        .then(function (json) {
+                            if (!json || json.code !== 200 || !json.data) throw new Error((json && json.msg) || failText);
+                            var d = json.data || {};
+                            openInlineCompose({
+                                mode: d.mode || mode,
+                                to: d.to || '',
+                                cc: d.cc || '',
+                                subject: d.subject || '',
+                                body: d.body || '',
+                                quote: d.quote || '',
+                                quote_html: d.quote_html || ''
+                            });
+                        })
+                        .catch(function (err) { toast(err.message || failText, 'danger'); });
                 }
                 function messageHref(messageId, rowFolder) {
                     var href = messageUrlBase;
@@ -2292,7 +2327,7 @@ if ($oauthCfError === 'invalid_scope') {
                 }
                 function fingerprintItems(items) {
                     return (items || []).map(function (m) {
-                        return String(m.id || '') + ':' + (m.unread ? '1' : '0');
+                        return String(m.id || '') + ':' + (m.unread ? '1' : '0') + ':' + String(m.reply_count || 0);
                     }).join('|');
                 }
                 function setLiveStatus(text) {
@@ -2332,6 +2367,7 @@ if ($oauthCfError === 'invalid_scope') {
                                     renderMessage(json.data);
                                     markRowRead(wrap);
                                     markSeenQuiet(messageId);
+                                    if (folder !== 'trash') requestComposePrefill('reply');
                                     try {
                                         var next = row.getAttribute('href');
                                         if (next && window.history && window.history.replaceState) window.history.replaceState({}, '', next);
@@ -2372,7 +2408,8 @@ if ($oauthCfError === 'invalid_scope') {
                         var unread = !!message.unread;
                         var hasAtt = !!message.has_attachment;
                         var subjectText = String(message.subject || '').trim();
-                        var isReply = /^\s*(re|回复|答覆|答复)\s*[:：]/i.test(subjectText);
+                        var replyCount = parseInt(message.reply_count || 0, 10) || 0;
+                        var isReply = replyCount <= 0 && /^\s*(re|回复|答覆|答复)\s*[:：]/i.test(subjectText);
                         var rowFolder = String(message.folder || folder);
                         if (rowFolder !== 'inbox' && rowFolder !== 'sent' && rowFolder !== 'trash') rowFolder = folder;
                         var partyRaw = String(rowFolder === 'sent' ? (message.to || '') : (message.from || ''));
@@ -2394,7 +2431,8 @@ if ($oauthCfError === 'invalid_scope') {
                             '<time datetime="' + esc(message.received_at || '') + '">' + esc(timeLabel) + '</time>' +
                             '</div><div class="mail-enterprise__subject">' +
                             (unread ? '<span class="mail-enterprise__reply-chip" data-testid="mail-enterprise-unread-chip">' + esc(unreadChipLabel) + '</span>' : '') +
-                            (isReply ? '<span class="mail-enterprise__reply-chip" data-testid="mail-enterprise-reply-chip">' + esc(replyLabel) + '</span>' : '') +
+                            (replyCount > 0 ? '<span class="mail-enterprise__reply-chip" data-testid="mail-enterprise-reply-count">' + esc(String(replyCount) + ' ' + replyLabel) + '</span>' : '') +
+                            (replyCount <= 0 && isReply ? '<span class="mail-enterprise__reply-chip" data-testid="mail-enterprise-reply-chip">' + esc(replyLabel) + '</span>' : '') +
                             (hasAtt ? '<span class="w-text" data-tone="muted" data-size="sm">📎</span>' : '') +
                             '<span class="mail-enterprise__subject-text">' + esc(subjectText || noSubjectLabel) + '</span>' +
                             '</div><p class="mail-enterprise__preview">' + esc(message.preview || '') + '</p>' +
@@ -2476,6 +2514,10 @@ if ($oauthCfError === 'invalid_scope') {
                                 listFingerprint = nextFp;
                                 renderListRows(items);
                             }
+                            paintFolderCounts(json.data.counts || {
+                                inbox: json.data.unread_inbox || 0,
+                                sent: json.data.unread_sent || 0
+                            });
                             var stamp = '';
                             try {
                                 var d = new Date((json.data.fetched_at || 0) * 1000);
@@ -2560,6 +2602,9 @@ if ($oauthCfError === 'invalid_scope') {
                 });
                 bindAsyncRows(workspace);
                 bindReaderActions();
+                if (currentMessageId && folder !== 'trash') {
+                    requestComposePrefill('reply');
+                }
                 listFingerprint = fingerprintItems(Array.prototype.map.call(
                     workspace.querySelectorAll('[data-mail-row]'),
                     function (row) {

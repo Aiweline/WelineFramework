@@ -314,6 +314,23 @@ private function assert_MailboxClient_testInterfaceAndOpsFacadeExist(): void
     );
     self::assertSame(['in', 'out'], array_column($pinned, 'id'));
     self::assertSame('inbox', $pinned[0]['folder'] ?? null);
+    self::assertStringContainsString('function workspace', $ops);
+    self::assertStringContainsString('function annotateSentReplies', $ops);
+    $annotated = \Weline\Mail\Service\Mailbox\MailboxOpsService::annotateSentReplies(
+        [
+            ['id' => 'sent-1', 'thread_id' => 't1', 'subject' => '测试长安汉服', 'unread' => false, 'folder' => 'sent'],
+            ['id' => 'sent-2', 'thread_id' => '', 'subject' => '另一封', 'unread' => false, 'folder' => 'sent'],
+        ],
+        [
+            ['id' => 'in-1', 'thread_id' => 't1', 'subject' => 'Re: 测试长安汉服', 'unread' => true, 'folder' => 'inbox'],
+            ['id' => 'in-2', 'thread_id' => '', 'subject' => '回复: 另一封', 'unread' => false, 'folder' => 'inbox'],
+        ]
+    );
+    self::assertSame(1, (int)($annotated[0]['reply_count'] ?? 0));
+    self::assertTrue((bool)($annotated[0]['unread'] ?? false));
+    self::assertSame(1, (int)($annotated[1]['reply_count'] ?? 0));
+    self::assertFalse((bool)($annotated[1]['unread'] ?? true));
+    self::assertSame(1, \Weline\Mail\Service\Mailbox\MailboxOpsService::countSignaledRows($annotated));
     $liveClient = (string) file_get_contents(BP . 'app/code/Weline/Mail/Service/Mailbox/StalwartMailboxClient.php');
     self::assertStringContainsString('function countUnreadInbox', $liveClient);
     self::assertStringContainsString('unreadEmails', $liveClient);
@@ -399,11 +416,14 @@ private function assert_MailComposeDeeplink_testQueryProviderExposesResolveAndLi
     self::assertStringContainsString('sendComposerMessage', $src);
     $sendPos = strpos($src, "'name' => 'sendComposerMessage'");
     self::assertNotFalse($sendPos);
-    $sendSlice = substr($src, $sendPos, 700);
+    $sendEnd = strpos($src, "'name' => 'resolveActiveMailDomain'", $sendPos);
+    self::assertNotFalse($sendEnd);
+    $sendSlice = substr($src, $sendPos, $sendEnd - $sendPos);
     self::assertStringContainsString("'frontend' => true", $sendSlice);
     self::assertStringContainsString("'mode' => 'write'", $sendSlice);
     self::assertStringContainsString("'auth' => 'backend'", $sendSlice);
     self::assertStringContainsString('Weline_Mail::mail_send_as', $sendSlice);
+    self::assertStringContainsString("'name' => 'cc'", $sendSlice);
 }
 
 private function assert_MailComposeDeeplink_testBackendComposePrefillAndSendEvent(): void
@@ -450,7 +470,7 @@ private function assert_MailComposeDeeplink_testBackendComposePrefillAndSendEven
 private function assert_MailComposeDeeplink_testModuleVersion(): void
 {
     $module = include BP . 'app/code/Weline/Mail/etc/module.php';
-    self::assertSame('0.2.48', $module['version'] ?? null);
+    self::assertSame('0.2.50', $module['version'] ?? null);
 }
 
 private function assert_MailDkimLocalEnsureService_testEnsureGeneratesReusablePublicKey(): void

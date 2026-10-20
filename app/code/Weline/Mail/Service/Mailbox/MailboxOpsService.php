@@ -53,27 +53,59 @@ final class MailboxOpsService
     }
 
     /**
-     * 工作台左侧列表：未读在前。非收件箱时把收件箱未读钉在最前，便于看出是哪一封。
+     * 工作台左侧列表：未读在前。新信留在收件箱；已发送按线程标出回复数。
      *
      * @return list<array<string, mixed>>
      */
     public function listForWorkspace(int $accountId, string $folder, int $limit = 50, bool $unreadOnly = false): array
     {
+        return $this->workspace($accountId, $folder, $limit, $unreadOnly)['items'];
+    }
+
+    /**
+     * 当前邮箱的列表 + 文件夹新消息条数。
+     * inbox = 收件箱未读；sent = 已发送里本身未读或有未读回复的封数。
+     *
+     * @return array{items:list<array<string, mixed>>,counts:array{inbox:int,sent:int}}
+     */
+    public function workspace(int $accountId, string $folder, int $limit = 50, bool $unreadOnly = false): array
+    {
         $folder = MailboxFolder::assertValid($folder);
-        $rows = $this->list($accountId, $folder, $limit, $unreadOnly);
-        if ($folder === MailboxFolder::INBOX || $unreadOnly) {
-            return self::orderUnreadFirst($rows);
-        }
-        $pinned = [];
+        $inboxUnread = $this->countUnreadInbox($accountId);
+        $inboxRows = [];
+        $sentRows = [];
         try {
-            if ($this->countUnreadInbox($accountId) > 0) {
-                $pinned = $this->list($accountId, MailboxFolder::INBOX, min($limit, 20), true);
-            }
+            $inboxRows = $this->list($accountId, MailboxFolder::INBOX, $limit, false);
         } catch (\Throwable) {
-            $pinned = [];
+            $inboxRows = [];
+        }
+        try {
+            $sentRows = $this->list($accountId, MailboxFolder::SENT, $limit, false);
+        } catch (\Throwable) {
+            $sentRows = [];
+        }
+        $annotatedSent = self::annotateSentReplies($sentRows, $inboxRows);
+        if ($folder === MailboxFolder::INBOX) {
+            $items = $unreadOnly
+                ? array_values(array_filter(
+                    $inboxRows,
+                    static fn(array $row): bool => !empty($row['unread'])
+                ))
+                : $inboxRows;
+            $items = self::orderUnreadFirst($items);
+        } elseif ($folder === MailboxFolder::SENT) {
+            $items = self::orderUnreadFirst($annotatedSent);
+        } else {
+            $items = self::orderUnreadFirst($this->list($accountId, $folder, $limit, false));
         }
 
-        return self::orderUnreadFirst(self::prependInboxUnread($pinned, $rows));
+        return [
+            'items' => $items,
+            'counts' => [
+                'inbox' => $inboxUnread,
+                'sent' => self::countSignaledRows($annotatedSent),
+            ],
+        ];
     }
 
     /**
@@ -110,6 +142,138 @@ final class MailboxOpsService
         }
 
         return array_merge($pinned, $rest);
+    }
+
+    /**
+     * 已发送对照收件箱：同一线程或同一主题（去掉回复前缀）记为回复。
+     * 有未读回复时，该已发送行也标成新消息。
+     *
+     * @param list<array<string, mixed>> $sentRows
+     * @param list<array<string, mixed>> $inboxRows
+     * @return list<array<string, mixed>>
+     */
+    public static function annotateSentReplies(array $sentRows, array $inboxRows): array
+    {
+        $byThread = [];
+        $bySubject = [];
+        foreach ($inboxRows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $id = trim((string)($row['id'] ?? ''));
+            if ($id === '') {
+                continue;
+            }
+            $threadId = trim((string)($row['thread_id'] ?? ''));
+            if ($threadId !== '') {
+                $byThread[$threadId][$id] = $row;
+            }
+            $subjectKey = self::subjectThreadKey((string)($row['subject'] ?? ''));
+            if ($subjectKey !== '') {
+                $bySubject[$subjectKey][$id] = $row;
+            }
+        }
+        $consumed = [];
+        $prepared = [];
+        foreach ($sentRows as $index => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $selfId = trim((string)($row['id'] ?? ''));
+            $matches = [];
+            $threadId = trim((string)($row['thread_id'] ?? ''));
+            if ($threadId !== '' && isset($byThread[$threadId])) {
+                foreach ($byThread[$threadId] as $id => $hit) {
+                    if ($id === $selfId) {
+                        continue;
+                    }
+                    $matches[$id] = $hit;
+                    $consumed[$id] = true;
+                }
+            }
+            $prepared[] = [
+                'index' => $index,
+                'row' => $row,
+                'matches' => $matches,
+            ];
+        }
+        foreach ($prepared as &$item) {
+            if ($item['matches'] !== []) {
+                continue;
+            }
+            $selfId = trim((string)($item['row']['id'] ?? ''));
+            $subjectKey = self::subjectThreadKey((string)($item['row']['subject'] ?? ''));
+            if ($subjectKey === '' || !isset($bySubject[$subjectKey])) {
+                continue;
+            }
+            foreach ($bySubject[$subjectKey] as $id => $hit) {
+                if ($id === $selfId || isset($consumed[$id])) {
+                    continue;
+                }
+                $item['matches'][$id] = $hit;
+                $consumed[$id] = true;
+            }
+        }
+        unset($item);
+        $out = [];
+        foreach ($prepared as $item) {
+            $row = $item['row'];
+            $matches = $item['matches'];
+            $newReplies = 0;
+            foreach ($matches as $hit) {
+                if (!empty($hit['unread'])) {
+                    $newReplies++;
+                }
+            }
+            $row['folder'] = MailboxFolder::SENT;
+            $row['reply_count'] = count($matches);
+            $row['new_reply_count'] = $newReplies;
+            if ($newReplies > 0) {
+                $row['unread'] = true;
+                $row['has_new_reply'] = true;
+            }
+            $out[] = $row;
+        }
+
+        return $out;
+    }
+
+    public static function subjectThreadKey(string $subject): string
+    {
+        $subject = trim($subject);
+        $previous = null;
+        while ($previous !== $subject) {
+            $previous = $subject;
+            $subject = trim((string)preg_replace(
+                '/^(re|fwd|fw|回复|答复|答覆|转发)\s*[:：]\s*/iu',
+                '',
+                $subject
+            ));
+        }
+        $subject = mb_strtolower($subject);
+        if ($subject === '' || $subject === '（无主题）' || $subject === '(no subject)') {
+            return '';
+        }
+
+        return $subject;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     */
+    public static function countSignaledRows(array $rows): int
+    {
+        $count = 0;
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            if (!empty($row['unread']) || (int)($row['new_reply_count'] ?? 0) > 0) {
+                $count++;
+            }
+        }
+
+        return $count;
     }
 
     /**
