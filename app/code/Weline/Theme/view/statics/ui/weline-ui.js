@@ -1857,6 +1857,12 @@ function registerDialog() {
                 emitLocal('close', { returnValue: element.returnValue }, false);
             });
         }
+        if (element.getAttribute('data-w-initial') === 'open') {
+            queueMicrotask(() => {
+                const alreadyOpen = nativeDialog ? element.open : element.dataset.state === 'open';
+                if (!alreadyOpen) open();
+            });
+        }
         return {
             open,
             close,

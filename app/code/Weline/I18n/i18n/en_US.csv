@@ -290,6 +290,10 @@ language,language
 翻译词不能包含换行,翻译词不能包含换行
 翻译词不能包含连续引号失控串,翻译词不能包含连续引号失控串
 语言目录写入与资源变更必须使用同一逻辑数据库连接,"Language catalog writes and resource changes must use the same logical DB connection"
+请选择已开通的语种和货币。,"Choose an available language and currency."
+这个语种没有开通。当前页面用本站默认语显示。请选一个已开通的语种。,"This language is not available. This page is shown in the site default language. Choose an available language."
+这个货币没有开通。当前页面用本站默认货币显示。请选一个已开通的货币。,"This currency is not available. Prices on this page use the site default currency. Choose an available currency."
+货币,Currency
 用户申请语言,"User application language"
 保存网站后即可查看用户申请并加入语言。,"After saving the website, you can view user applications and add languages."
 仅显示已安装、已启用且语言包可运行的申请语言。,"Only application languages ​​that are installed, enabled, and have language packs running are displayed."
@@ -935,7 +939,6 @@ CSV文件路径（导入单个文件时必填）,"CSV file path (required when i
 查看本地语言码,"View local language code"
 本站默认语,"Site default language"
 语种未开通,"Language not available"
-这个语种没有开通。当前页面用本站默认语显示。请选一个已开通的语种。,"This language is not available. This page is shown in the site default language. Choose an available language."
 正在翻译：%{1},正在翻译：%{1}
 已翻译语种,"Translated locales"
 没有开启实时翻译，不能访问！,"Real-time translation is not enabled"
@@ -1189,7 +1192,6 @@ ri-translate,ri-translate
 搜索语言,"Search language"
 加载更多,"Load more"
 切换货币,"Switch Currency"
-货币,Currency
 货币选项,"Currency Options"
 搜索货币、货币码、符号或翻译,"Search for currencies, currency codes, symbols or translations"
 搜索货币,"Search currency"

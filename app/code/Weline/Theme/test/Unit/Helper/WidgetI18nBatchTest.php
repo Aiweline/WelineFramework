@@ -22,6 +22,7 @@ final class WidgetI18nBatchTest extends TestCase
         Context::enter(new Context());
         RequestContext::init();
         RequestContext::setWelineUserLang('en_US');
+        self::resetProcessLabelBag();
         $this->originalResolver = ObjectManager::getInstances()[TranslationResolverInterface::class] ?? null;
     }
 
@@ -33,6 +34,14 @@ final class WidgetI18nBatchTest extends TestCase
         }
         RequestContext::cleanup();
         Context::leave();
+        self::resetProcessLabelBag();
+    }
+
+    private static function resetProcessLabelBag(): void
+    {
+        $property = new \ReflectionProperty(WidgetI18n::class, 'processLabelBag');
+        $property->setAccessible(true);
+        $property->setValue(null, []);
     }
 
     public function testPrefetchKeepsAliasMissesAndRepeatedLabelsOutOfSingleQueries(): void
@@ -61,5 +70,28 @@ final class WidgetI18nBatchTest extends TestCase
         self::assertSame('Value one', WidgetI18n::label('batch-format %{1}', '', ['one']));
         self::assertSame('Value two', WidgetI18n::label('batch-format %{1}', '', ['two']));
         WidgetI18n::prefetchLabels(['batch-label', 'batch-missing']);
+    }
+
+    public function testProcessBagServesChildFiberContextWithoutRequestId(): void
+    {
+        $dictionary = $this->createMock(DictionaryRepositoryInterface::class);
+        $dictionary->expects(self::once())->method('getEntries')->willReturn([
+            'process-label' => new DictionaryEntry('process-label', 'en_US', 'Process translated'),
+        ]);
+        ObjectManager::setInstance(
+            TranslationResolverInterface::class,
+            new TranslationResolver(dictionaryRepository: $dictionary)
+        );
+
+        WidgetI18n::prefetchLabels(['process-label']);
+        self::assertSame('Process translated', WidgetI18n::label('process-label'));
+
+        // Child widget Fibers have their own Context and may have no request id.
+        RequestContext::cleanup();
+        Context::leave();
+        Context::enter(new Context());
+        RequestContext::setWelineUserLang('en_US');
+
+        self::assertSame('Process translated', WidgetI18n::label('process-label'));
     }
 }

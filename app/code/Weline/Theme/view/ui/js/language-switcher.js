@@ -1429,8 +1429,17 @@ export function register(UI) {
         scheduleCountryFlagHydration([root], { mode: 'trigger' });
         if (root.getAttribute('data-i18n-surface') === 'dialog') {
             const dialog = root.closest('dialog');
-            if (dialog instanceof HTMLDialogElement && !dialog.open && typeof dialog.showModal === 'function') {
-                dialog.showModal();
+            if (dialog instanceof HTMLDialogElement && !dialog.open) {
+                const api = window.Weline && window.Weline.UI && typeof window.Weline.UI.get === 'function'
+                    ? window.Weline.UI.get(dialog, 'dialog')
+                    : null;
+                if (api && typeof api.open === 'function') {
+                    api.open();
+                } else if (typeof dialog.showModal === 'function') {
+                    dialog.hidden = false;
+                    dialog.removeAttribute('hidden');
+                    dialog.showModal();
+                }
             }
             flagsHydrated = true;
             void enqueueFlagHydration([root, panel].filter(Boolean), { mode: 'panel' });

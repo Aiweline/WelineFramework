@@ -35,7 +35,7 @@ final class StorefrontHomepageLayoutHtmlBag implements ProcessSharedInterface
     private const REQUEST_MEMO_PREFIX = 'theme.homepage_layout_html.req.v1.';
     /** v2: payload is post hard-cut finalize (safety_net complete). */
     /** v4: unsupported language uses the switcher dialog, not a header list. */
-    private const LOGICAL_KEY_PREFIX = 'theme.homepage_layout.html.v5.';
+    private const LOGICAL_KEY_PREFIX = 'theme.homepage_layout.html.v7.';
     /** Gzip envelope marker (ASCII — avoids null-byte FileAdapter edge cases). */
     private const PACK_PREFIX = 'HPLH1:';
 
@@ -52,10 +52,11 @@ final class StorefrontHomepageLayoutHtmlBag implements ProcessSharedInterface
     /**
      * Formal layouts/homepage wrap only; controller content template is irrelevant.
      * Never preview/editor.
-     * Path-locale storefront prefixes (e.g. /bn_BD) bypass the bag: HotCache vary is
-     * lang+currency only, so a request whose State lang has not yet matched the URI
-     * prefix would otherwise HIT the default-lang homepage HTML and skip layout
-     * pathLocale SERP packs (GSC indexes those prefixes).
+     * Path-locale storefront prefixes (e.g. /bn_BD) are supported because
+     * logicalKey() carries the active locale: each language gets its own bag.
+     * If the active locale has not caught up with the visitor path yet, bypass
+     * the bag so a default-language payload can never be served under a
+     * path-locale URL (GSC indexes those prefixes).
      */
     public function isEligible(string $contentTemplate, string $layoutTemplate): bool
     {
@@ -70,7 +71,10 @@ final class StorefrontHomepageLayoutHtmlBag implements ProcessSharedInterface
         if ($this->isPreviewOrEditorRequest()) {
             return false;
         }
-        if ($this->requestHasStorefrontPathLocalePrefix()) {
+        $pathLocale = $this->requestPathLocaleSegment();
+        if ($pathLocale !== '' && $pathLocale !== $this->activeLocaleSegment()) {
+            // The URI asks for a locale the request context has not adopted yet.
+            // Bypass instead of risking a default-language bag HIT.
             return false;
         }
 
@@ -266,11 +270,14 @@ final class StorefrontHomepageLayoutHtmlBag implements ProcessSharedInterface
         $rejectedSeg = $rejected !== '' ? \substr(\sha1($rejected), 0, 8) : 'langok';
         $rejectedCurrency = \strtolower(\trim((string)\Weline\Framework\Runtime\RequestContext::get('route.rejected_path_currency', '')));
         $rejectedCurrencySeg = $rejectedCurrency !== '' ? \substr(\sha1($rejectedCurrency), 0, 8) : 'curok';
+        $localeSeg = $this->activeLocaleSegment();
 
         return self::LOGICAL_KEY_PREFIX
             . $this->themeIdentitySegment()
             . '.homepage.'
             . $option
+            . '.'
+            . $localeSeg
             . '.'
             . $rejectedSeg
             . '.'
@@ -348,6 +355,20 @@ final class StorefrontHomepageLayoutHtmlBag implements ProcessSharedInterface
     }
 
     /**
+     * Dialog copy is already translated into the cached HTML.
+     * Rejected-path flags alone let two enabled languages share one bag.
+     */
+    private function activeLocaleSegment(): string
+    {
+        $lang = \strtolower(\str_replace('-', '_', \trim(
+            \Weline\Framework\Runtime\RequestContext::getWelineUserLang()
+        )));
+        $lang = \preg_replace('/[^a-z0-9_]/', '', $lang) ?? '';
+
+        return $lang !== '' ? $lang : 'nolang';
+    }
+
+    /**
      * @return list<string>
      */
     private function hydrateCurrencyCandidates(): array
@@ -381,6 +402,14 @@ final class StorefrontHomepageLayoutHtmlBag implements ProcessSharedInterface
      */
     private function requestHasStorefrontPathLocalePrefix(): bool
     {
+        return $this->requestPathLocaleSegment() !== '';
+    }
+
+    /**
+     * Normalized locale segment from the visitor URI, or '' when absent.
+     */
+    private function requestPathLocaleSegment(): string
+    {
         $candidates = [];
         try {
             $candidates[] = (string)\Weline\Framework\Env\WelineEnv::server('WELINE_VISITOR_REQUEST_URI', '');
@@ -407,12 +436,12 @@ final class StorefrontHomepageLayoutHtmlBag implements ProcessSharedInterface
             if ($q !== false) {
                 $path = \substr($path, 0, $q);
             }
-            if (\preg_match('#^/([a-z]{2}(?:_[A-Za-z]{2,4}){1,2})(?:/|$)#', $path) === 1) {
-                return true;
+            if (\preg_match('#^/([a-z]{2}(?:_[A-Za-z]{2,4}){1,2})(?:/|$)#', $path, $m) === 1) {
+                return \strtolower(\str_replace('-', '_', (string)$m[1]));
             }
         }
 
-        return false;
+        return '';
     }
 
     private function isPreviewOrEditorRequest(): bool

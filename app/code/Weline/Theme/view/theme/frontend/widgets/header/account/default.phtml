@@ -33,6 +33,20 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 // later `$label('退出登录')` into Call to undefined function 我的询价().
 $accountI18n = static fn (string $source, array $args = []): string => WidgetI18n::label($source, '', $args);
 
+// Batch-prefetch the fixed account chrome copy. Without this, a cold locale opens
+// one dictionary PK lookup per label (header SSR was paying 8 dictionary spans).
+WidgetI18n::prefetchLabels([
+    '登录',
+    '注册',
+    '您好',
+    '您好, %{1}',
+    '我的账户',
+    '我的订单',
+    '地址管理',
+    '退出登录',
+    '欢迎回来',
+]);
+
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $showAvatar = (bool)($this->getData('show_avatar') ?? true);
 $showName = (bool)($this->getData('show_name') ?? false);

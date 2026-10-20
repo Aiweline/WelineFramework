@@ -30,8 +30,8 @@ final class StorefrontBlogLayoutHtmlBag implements ProcessSharedInterface
     public const RESOURCE = 'theme.storefront_blog_layout_html';
 
     private const REQUEST_MEMO_PREFIX = 'theme.blog_layout_html.req.v1.';
-    /** v5: unsupported language or currency opens one dialog; bag key includes both. */
-    private const LOGICAL_KEY_PREFIX = 'theme.blog_layout.html.v5.';
+    /** v6: dialog opens through the dialog component, including currency-only. */
+    private const LOGICAL_KEY_PREFIX = 'theme.blog_layout.html.v7.';
     /** Same gzip envelope as homepage bag. */
     private const PACK_PREFIX = 'HPLH1:';
 
@@ -198,6 +198,7 @@ final class StorefrontBlogLayoutHtmlBag implements ProcessSharedInterface
         $rejectedSeg = $rejected !== '' ? \substr(\sha1($rejected), 0, 8) : 'langok';
         $rejectedCurrency = \strtolower(\trim((string)\Weline\Framework\Runtime\RequestContext::get('route.rejected_path_currency', '')));
         $rejectedCurrencySeg = $rejectedCurrency !== '' ? \substr(\sha1($rejectedCurrency), 0, 8) : 'curok';
+        $localeSeg = $this->activeLocaleSegment();
 
         return self::LOGICAL_KEY_PREFIX
             . $this->themeIdentitySegment()
@@ -205,6 +206,8 @@ final class StorefrontBlogLayoutHtmlBag implements ProcessSharedInterface
             . $option
             . '.'
             . $slugHash
+            . '.'
+            . $localeSeg
             . '.'
             . $rejectedSeg
             . '.'
@@ -341,6 +344,20 @@ final class StorefrontBlogLayoutHtmlBag implements ProcessSharedInterface
         }
 
         return 't0';
+    }
+
+    /**
+     * Dialog copy is already translated into the cached HTML.
+     * Rejected-path flags alone let two enabled languages share one bag.
+     */
+    private function activeLocaleSegment(): string
+    {
+        $lang = \strtolower(\str_replace('-', '_', \trim(
+            \Weline\Framework\Runtime\RequestContext::getWelineUserLang()
+        )));
+        $lang = \preg_replace('/[^a-z0-9_]/', '', $lang) ?? '';
+
+        return $lang !== '' ? $lang : 'nolang';
     }
 
     private function isPreviewOrEditorRequest(): bool

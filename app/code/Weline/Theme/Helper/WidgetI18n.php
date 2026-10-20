@@ -8,6 +8,7 @@ namespace Weline\Theme\Helper;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\DictionaryCacheNamespace;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\I18n\Api\Translation\TranslationResolverInterface;
 use Weline\I18n\Api\Translation\BatchTranslationResolverInterface;
@@ -50,6 +51,22 @@ final class WidgetI18n
     ];
 
     /**
+     * Process-level base-label cache shared by all request Fibers.
+     *
+     * Widget renders run in child Fibers with their own RequestContext, so a
+     * layout prefetch in the main Fiber cannot fill their Fiber-local memo.
+     * Dictionary labels are process data (locale-scoped, invalidated by the
+     * `global/i18n` namespace), so keep the base translation here.
+     *
+     * @var array<string, string>
+     */
+    private static array $processLabelBag = [];
+
+    private const PROCESS_LABEL_BAG = 'theme.widget_i18n.labels';
+
+    private const PROCESS_LABEL_BAG_LIMIT = 4096;
+
+    /**
      * Pure URI helper for path-shape checks / writers. Not a storefront locale authority.
      * Keep in sync with default-site + installed storefront packs.
      */
@@ -80,11 +97,21 @@ final class WidgetI18n
             return;
         }
         $lang = self::storefrontLocale();
+        $bag = &self::labelProcessBag($lang);
         $pending = [];
         $words = [];
         foreach ($sources as $source) {
             $source = trim((string)$source);
-            if ($source === '' || self::hasRequestMemo(self::requestMemoKey($source, $lang, []))) {
+            if ($source === '') {
+                continue;
+            }
+            $memoKey = self::requestMemoKey($source, $lang, []);
+            if (self::hasRequestMemo($memoKey)) {
+                continue;
+            }
+            $bagKey = self::processLabelBagKey($source, $lang);
+            if (isset($bag[$bagKey])) {
+                self::setRequestMemo($memoKey, $bag[$bagKey]);
                 continue;
             }
             $pending[$source] = $source;
@@ -113,6 +140,7 @@ final class WidgetI18n
             if ($translated === '' || \Weline\Framework\View\Helper\EmbeddedPageTitle::isInternalIdentifier($translated)) {
                 $translated = \Weline\Framework\View\Helper\EmbeddedPageTitle::isInternalIdentifier($source) ? '' : $source;
             }
+            $bag[self::processLabelBagKey($source, $lang)] = $translated;
             self::setRequestMemo(self::requestMemoKey($source, $lang, []), $translated);
         }
     }
@@ -180,21 +208,29 @@ final class WidgetI18n
         if ($args !== [] && self::hasRequestMemo($baseMemoKey)) {
             $translated = self::getRequestMemo($baseMemoKey);
         } else {
-
-            /** @var TranslationResolverInterface $resolver */
-            $resolver = ObjectManager::getInstance(TranslationResolverInterface::class);
-            $preferredModules = self::PREFERRED_MODULES;
-            $translated = $resolver->translate(
-                $key,
-                $lang,
-                $preferredModules,
-            );
-            if ($translated === $key && preg_match('/^[a-z]/', $key) === 1) {
-                $titleCaseAlias = ucfirst($key);
-                $aliasTranslation = $resolver->translate($titleCaseAlias, $lang, $preferredModules);
-                if ($aliasTranslation !== '' && $aliasTranslation !== $titleCaseAlias) {
-                    $translated = $aliasTranslation;
+            $bag = &self::labelProcessBag($lang);
+            $bagKey = self::processLabelBagKey($key, $lang);
+            if (isset($bag[$bagKey])) {
+                $translated = $bag[$bagKey];
+                self::setRequestMemo($baseMemoKey, $translated);
+            } else {
+                /** @var TranslationResolverInterface $resolver */
+                $resolver = ObjectManager::getInstance(TranslationResolverInterface::class);
+                $preferredModules = self::PREFERRED_MODULES;
+                $translated = $resolver->translate(
+                    $key,
+                    $lang,
+                    $preferredModules,
+                );
+                if ($translated === $key && preg_match('/^[a-z]/', $key) === 1) {
+                    $titleCaseAlias = ucfirst($key);
+                    $aliasTranslation = $resolver->translate($titleCaseAlias, $lang, $preferredModules);
+                    if ($aliasTranslation !== '' && $aliasTranslation !== $titleCaseAlias) {
+                        $translated = $aliasTranslation;
+                    }
                 }
+                // Only the fixed prefetch list is process-cached; dynamic labels
+                // stay request-local so catalog/store-specific copy cannot leak.
             }
         }
 
@@ -210,6 +246,45 @@ final class WidgetI18n
         self::setRequestMemo($memoKey, $translated);
 
         return $translated;
+    }
+
+    /**
+     * Process-level base translation bag. The dictionary namespace fingerprint
+     * keeps it aligned with `global/i18n` invalidation; active transactions
+     * bypass the bag so dirty reads are never cached.
+     *
+     * @return array<string, string>
+     */
+    private static function &labelProcessBag(string $lang): array
+    {
+        return DictionaryCacheNamespace::processBag(
+            self::PROCESS_LABEL_BAG,
+            self::$processLabelBag,
+            self::PROCESS_LABEL_BAG_LIMIT,
+            [$lang],
+        );
+    }
+
+    /**
+     * Child Fibers may have no request id, so the dictionary fingerprint can be
+     * `process|<hash>` there while the main Fiber sees `<hash>`. Normalize to the
+     * generation hash so a layout prefetch is visible in every Fiber.
+     */
+    private static function processLabelBagKey(string $source, string $lang): string
+    {
+        $fingerprint = DictionaryCacheNamespace::fingerprint([$lang]);
+        if ($fingerprint !== null) {
+            $separator = strrpos($fingerprint, '|');
+            if ($separator !== false) {
+                $fingerprint = substr($fingerprint, $separator + 1);
+            }
+        }
+
+        return $lang
+            . '|'
+            . ($fingerprint !== null && $fingerprint !== '' ? $fingerprint : 'uncached')
+            . '|'
+            . $source;
     }
 
     private static function requestMemoKey(string $source, string $locale, array $args): string

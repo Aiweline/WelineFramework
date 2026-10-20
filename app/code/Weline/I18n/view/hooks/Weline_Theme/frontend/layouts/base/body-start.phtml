@@ -40,7 +40,7 @@ try {
     $size = $columns === '2' ? 'lg' : 'md';
     $titleId = 'i18n-unsupported-path-title';
     echo '<dialog id="i18n-unsupported-path-dialog" class="w-dialog" data-w-component="dialog"'
-        . ' data-size="' . $size . '" data-i18n-unsupported-lang data-columns="' . $columns . '"'
+        . ' data-w-initial="open" data-size="' . $size . '" data-i18n-unsupported-lang data-columns="' . $columns . '"'
         . ' aria-labelledby="' . $titleId . '">';
     echo '<header class="w-dialog__header">'
         . '<h2 id="' . $titleId . '" class="w-dialog__title">'
