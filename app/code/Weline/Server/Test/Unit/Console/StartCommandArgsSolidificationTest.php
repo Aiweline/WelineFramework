@@ -435,19 +435,19 @@ final class StartCommandArgsSolidificationTest extends TestCase
             'hasExplicitCertificatePairForLegacySelectorMigration',
         );
 
-        self::assertTrue($method->invoke(new Start(), [
+        self::assertTrue($method->invoke($this->createStart(), [
             'ssl_cert' => '/project/app/etc/ssl/unit/fullchain.pem',
             'ssl_key' => '/project/app/etc/ssl/unit/privkey.pem',
         ]));
-        self::assertFalse($method->invoke(new Start(), [
+        self::assertFalse($method->invoke($this->createStart(), [
             'ssl_cert' => '/project/app/etc/ssl/unit/fullchain.pem',
             'ssl_key' => '',
         ]));
-        self::assertFalse($method->invoke(new Start(), [
+        self::assertFalse($method->invoke($this->createStart(), [
             'ssl_cert' => '',
             'ssl_key' => '/project/app/etc/ssl/unit/privkey.pem',
         ]));
-        self::assertFalse($method->invoke(new Start(), []));
+        self::assertFalse($method->invoke($this->createStart(), []));
 
         $ensure = new \ReflectionMethod(Start::class, 'ensureSslCertificate');
         $source = (string)\file_get_contents((string)$ensure->getFileName());
@@ -1529,6 +1529,14 @@ final class StartCommandArgsSolidificationTest extends TestCase
         }
     }
 
+    private function createStart(): Start
+    {
+        $start = new Start();
+        $start->__init();
+
+        return $start;
+    }
+
     private function createProbe(?array $savedConfig = null, array $envConfig = []): StartConfigProbe
     {
         $sslServiceMock = $this->createMock(SslCertificateService::class);
@@ -1542,6 +1550,7 @@ final class StartDiskConfigProbe extends Start
 {
     public function __construct(private readonly string $configDir)
     {
+        $this->__init();
     }
 
     /** @param array<string,mixed> $args @param array<string,mixed> $config */
@@ -1597,6 +1606,7 @@ final class StartConfigProbe extends Start
         private readonly array $envConfig = [],
         private readonly ?SslCertificateService $sslService = null,
     ) {
+        $this->__init();
     }
 
     public function resolveConfig(string $instanceName, array $args): array
@@ -1825,6 +1835,11 @@ final class StartConfigProbe extends Start
 
 final class StartBaseEnvConfigProbe extends Start
 {
+    public function __construct()
+    {
+        $this->__init();
+    }
+
     public function readEnvConfig(): array
     {
         return $this->getEnvConfig();
@@ -1872,6 +1887,7 @@ final class StartInstanceInfoProbe extends Start
 {
     public function __construct(private readonly ServerInstanceManager $manager)
     {
+        $this->__init();
     }
 
     public function persistInstanceInfo(string $instanceName): void
@@ -1959,6 +1975,11 @@ final class StartInstanceManagerProbe extends ServerInstanceManager
 
 final class StartInstanceManagerAccessorProbe extends Start
 {
+    public function __construct()
+    {
+        $this->__init();
+    }
+
     public function readInstanceManager(): ServerInstanceManager
     {
         return $this->getInstanceManager();

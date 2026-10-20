@@ -5,11 +5,11 @@
     "license": "MIT",
     "require": {
         "php": "^8.4",
-        "weline/framework": "@dev"
+        "weline/framework": "@dev",
+        "weline/module-backend": "@dev"
     },
     "suggest": {
-        "weline/module-app-store": "Enables the optional WLS Panel marketplace endpoint resolver.",
-        "weline/module-backend": "Enables optional backend ACL/menu, theme configuration integration, and certificate expiry notifications."
+        "weline/module-app-store": "Enables the optional WLS Panel marketplace endpoint resolver."
     },
     "autoload": {
         "psr-4": {

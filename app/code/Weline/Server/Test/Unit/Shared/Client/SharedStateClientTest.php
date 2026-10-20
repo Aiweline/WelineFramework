@@ -333,13 +333,14 @@ final class SharedStateClientTest extends TestCase
         Env::getInstance()->applyRuntimeConfig(['wls' => ['debug' => ['request_trace_max_spans' => 64]]]);
         Runtime::setMode(RuntimeInterface::MODE_WLS);
         Context::enter(new Context($enabled ? ['runtime' => ['request_context' => ['initialized' => true, 'request_id' => 'rpc-unit-request']]] : []));
+        // reset() disarms TraceGate; arm after reset so the request actually records spans.
+        RequestLifecycleTrace::reset();
         if ($enabled) {
             RequestContext::setId('rpc-unit-request');
             RequestLifecycleTrace::installPanelTraceOn();
         } else {
             RequestLifecycleTrace::clearPanelTrace();
         }
-        RequestLifecycleTrace::reset();
         try {
             $callback();
         } finally {

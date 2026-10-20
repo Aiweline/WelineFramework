@@ -66,7 +66,12 @@ final class SecurityProbeTokenServiceTest extends TestCase
         self::assertContains('sqli_double_encoded', $ids);
         self::assertContains('sqli_union_select', $ids);
         self::assertContains('path_traversal_encoded', $ids);
-        self::assertCount(20, $cases);
+        self::assertGreaterThanOrEqual(20, \count($cases), '安全探针目录不得少于基线 20 项');
+        self::assertSame(
+            \count($ids),
+            \count(\array_unique($ids)),
+            '安全探针目录 id 必须唯一',
+        );
         self::assertSame('编码', SecurityProbeCatalog::groupLabel('encoding'));
         self::assertSame('严重', SecurityProbeCatalog::severityLabel('critical'));
     }

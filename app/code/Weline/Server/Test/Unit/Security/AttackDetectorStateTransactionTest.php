@@ -420,6 +420,7 @@ PHP);
         $script = 'define("BP", rtrim($argv[1], "/\\\\") . DIRECTORY_SEPARATOR);'
             . 'define("DS", DIRECTORY_SEPARATOR);'
             . 'require $argv[2];'
+            . '\\Weline\\Framework\\App\\DirectoryList::defineBootstrapConstants();'
             . $body
             . 'echo "WLS_ATTACK_STATE_RESULT="'
             . '.base64_encode((string)json_encode($result, JSON_UNESCAPED_SLASHES));';

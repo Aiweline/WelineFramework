@@ -5,166 +5,121 @@ namespace Weline\Server\Test\Unit\Dispatcher;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Dispatcher\Dispatcher;
-use Weline\Server\IPC\ChildControl\ChildControlClientInterface;
+use Weline\Server\IPC\ChildControl\ChildMasterGuard;
 
 /**
- * P1-1 / P1-2 覆盖：
- *   - IPC 连接正常时跳过昂贵的 PID 检测，视为 Master 存活。
- *   - 同时要求「次数 >= 阈值」和「持续观测 >= graceSec」才判定 Master 脱离，抵御瞬时抖动误判。
+ * Master PID guard contract.
+ *
+ * 原「缺失次数 + grace window」语义已随 Dispatcher 重构移除；当前契约为：
+ *   - 每 MASTER_PID_CHECK_INTERVAL_SEC 最多探测一次；
+ *   - 存活则清零 masterDeadCount；
+ *   - 不可达累计到 MASTER_PID_DEAD_THRESHOLD 即 running=false；
+ *   - 收到 shutdown 或 masterGuard 启用时短路。
  */
-class DispatcherMasterHeartbeatWindowTest extends TestCase
+final class DispatcherMasterHeartbeatWindowTest extends TestCase
 {
-    private string $instanceName = 'ai-test-heartbeat';
-    private string $instanceFile = '';
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $baseDir = VAR_DIR . 'server' . DS . 'instances';
-        if (!\is_dir($baseDir)) {
-            \mkdir($baseDir, 0777, true);
-        }
-        $this->instanceFile = $baseDir . DS . $this->instanceName . '.json';
-    }
-
-    protected function tearDown(): void
-    {
-        if (\is_file($this->instanceFile)) {
-            @\unlink($this->instanceFile);
-        }
-        parent::tearDown();
-    }
-
-    public function testIpcAliveResetsMasterMissingObservationsWithoutBlockingPidCheck(): void
+    public function testAliveMasterResetsDeadCount(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
-        $this->seedInstanceFile(\PHP_INT_MAX); // 不存在的 PID，若真去做 PID 探活必然 missing
-
-        $ipc = $this->createMock(ChildControlClientInterface::class);
-        $ipc->method('isConnected')->willReturn(true);
-
-        $this->setProperty($dispatcher, 'instanceName', $this->instanceName);
-        $this->setProperty($dispatcher, 'masterCheckInterval', 0);
-        $this->setProperty($dispatcher, 'maxMasterMissing', 2);
-        $this->setProperty($dispatcher, 'masterMissingGraceSec', 0.01);
-        $this->setProperty($dispatcher, 'masterMissingCount', 1);
-        $this->setProperty($dispatcher, 'masterMissingSince', \microtime(true) - 10.0);
-        $this->setProperty($dispatcher, 'ipcClient', $ipc);
-        $this->setProperty($dispatcher, 'running', true);
+        $this->setProperty($dispatcher, 'masterPid', \getmypid());
+        $this->setProperty($dispatcher, 'lastMasterPidCheck', 0.0);
+        $this->setProperty($dispatcher, 'masterDeadCount', 2);
         $this->setProperty($dispatcher, 'ipcReceivedShutdown', false);
+        $this->setProperty($dispatcher, 'masterGuard', null);
+        $this->setProperty($dispatcher, 'running', true);
 
-        $this->invokePrivate($dispatcher, 'checkMasterHeartbeat');
+        $this->invokePrivate($dispatcher, 'checkMasterPidAlive');
 
-        // IPC 连接正常 => masterAlive=true，计数和窗口都应被重置
-        self::assertSame(0, $this->getProperty($dispatcher, 'masterMissingCount'));
-        self::assertSame(0.0, $this->getProperty($dispatcher, 'masterMissingSince'));
+        self::assertSame(0, $this->getProperty($dispatcher, 'masterDeadCount'));
         self::assertTrue($this->getProperty($dispatcher, 'running'));
     }
 
-    public function testThresholdReachedButGraceNotMetKeepsDispatcherRunning(): void
+    public function testDeadMasterStopsDispatcherAtThreshold(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
-        $this->seedInstanceFile(\PHP_INT_MAX);
-
-        $this->setProperty($dispatcher, 'instanceName', $this->instanceName);
-        $this->setProperty($dispatcher, 'masterCheckInterval', 0);
-        $this->setProperty($dispatcher, 'maxMasterMissing', 2);
-        $this->setProperty($dispatcher, 'masterMissingGraceSec', 30.0); // 宽限期很长
-        $this->setProperty($dispatcher, 'ipcClient', null); // IPC 断开 => 回退 PID 检测
-        $this->setProperty($dispatcher, 'running', true);
+        $this->setProperty($dispatcher, 'masterPid', 2_147_483_647);
+        $this->setProperty($dispatcher, 'lastMasterPidCheck', 0.0);
+        $this->setProperty($dispatcher, 'masterDeadCount', 0);
         $this->setProperty($dispatcher, 'ipcReceivedShutdown', false);
+        $this->setProperty($dispatcher, 'masterGuard', null);
+        $this->setProperty($dispatcher, 'running', true);
 
-        // 第 1 次：missing 计入，持续时间尚未开始
-        $this->invokePrivate($dispatcher, 'checkMasterHeartbeat');
-        self::assertSame(1, $this->getProperty($dispatcher, 'masterMissingCount'));
-        self::assertGreaterThan(0.0, $this->getProperty($dispatcher, 'masterMissingSince'));
-        self::assertTrue($this->getProperty($dispatcher, 'running'));
+        $this->invokePrivate($dispatcher, 'checkMasterPidAlive');
 
-        // 第 2 次：count 达阈值，但持续窗口（30s）远未满足
-        $this->setProperty($dispatcher, 'lastMasterCheck', 0);
-        $this->invokePrivate($dispatcher, 'checkMasterHeartbeat');
-        self::assertSame(2, $this->getProperty($dispatcher, 'masterMissingCount'));
-        self::assertTrue(
-            $this->getProperty($dispatcher, 'running'),
-            'count 达阈值但持续观察 < graceSec 时不得判定 Master 脱离'
-        );
+        self::assertSame(1, $this->getProperty($dispatcher, 'masterDeadCount'));
+        self::assertFalse($this->getProperty($dispatcher, 'running'));
     }
 
-    public function testThresholdAndGraceBothMetStopsDispatcher(): void
+    public function testCheckIntervalSkipsProbeWithinWindow(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
-        $this->seedInstanceFile(\PHP_INT_MAX);
-
-        $this->setProperty($dispatcher, 'instanceName', $this->instanceName);
-        $this->setProperty($dispatcher, 'masterCheckInterval', 0);
-        $this->setProperty($dispatcher, 'maxMasterMissing', 2);
-        $this->setProperty($dispatcher, 'masterMissingGraceSec', 0.0); // 立即满足持续窗口
-        $this->setProperty($dispatcher, 'ipcClient', null);
-        $this->setProperty($dispatcher, 'running', true);
+        $this->setProperty($dispatcher, 'masterPid', 2_147_483_647);
+        $this->setProperty($dispatcher, 'lastMasterPidCheck', \hrtime(true) / 1_000_000_000);
+        $this->setProperty($dispatcher, 'masterDeadCount', 0);
         $this->setProperty($dispatcher, 'ipcReceivedShutdown', false);
+        $this->setProperty($dispatcher, 'masterGuard', null);
+        $this->setProperty($dispatcher, 'running', true);
 
-        $this->invokePrivate($dispatcher, 'checkMasterHeartbeat');
+        $this->invokePrivate($dispatcher, 'checkMasterPidAlive');
+
+        self::assertSame(0, $this->getProperty($dispatcher, 'masterDeadCount'));
         self::assertTrue($this->getProperty($dispatcher, 'running'));
-
-        $this->setProperty($dispatcher, 'lastMasterCheck', 0);
-        $this->invokePrivate($dispatcher, 'checkMasterHeartbeat');
-        self::assertFalse(
-            $this->getProperty($dispatcher, 'running'),
-            '达阈值且持续时间满足时应判定 Master 脱离，running 置 false'
-        );
     }
 
-    public function testShutdownSignalShortCircuitsHeartbeatCheck(): void
+    public function testShutdownSignalShortCircuitsPidProbe(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
-        $this->seedInstanceFile(\PHP_INT_MAX);
-
-        $this->setProperty($dispatcher, 'instanceName', $this->instanceName);
+        $this->setProperty($dispatcher, 'masterPid', 2_147_483_647);
+        $this->setProperty($dispatcher, 'lastMasterPidCheck', 0.0);
+        $this->setProperty($dispatcher, 'masterDeadCount', 0);
         $this->setProperty($dispatcher, 'ipcReceivedShutdown', true);
+        $this->setProperty($dispatcher, 'masterGuard', null);
         $this->setProperty($dispatcher, 'running', true);
-        $this->setProperty($dispatcher, 'masterMissingCount', 0);
 
-        $this->invokePrivate($dispatcher, 'checkMasterHeartbeat');
+        $this->invokePrivate($dispatcher, 'checkMasterPidAlive');
 
-        // shutdown 已发 => 不应计入 missing
-        self::assertSame(0, $this->getProperty($dispatcher, 'masterMissingCount'));
+        self::assertSame(0, $this->getProperty($dispatcher, 'masterDeadCount'));
+        self::assertTrue($this->getProperty($dispatcher, 'running'));
     }
 
-    public function testMismatchedInstanceRuntimeStopsStaleDispatcher(): void
+    public function testMasterGuardExitStopsDispatcher(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();
-        $this->seedInstanceFile(\PHP_INT_MAX, 26895, 443);
-
-        $this->setProperty($dispatcher, 'instanceName', $this->instanceName);
-        $this->setProperty($dispatcher, 'controlPort', 1);
-        $this->setProperty($dispatcher, 'port', 29981);
-        $this->setProperty($dispatcher, 'masterCheckInterval', 0);
+        $guard = $this->createMock(ChildMasterGuard::class);
+        $guard->method('shouldExit')->willReturn(true);
+        $guard->method('getLastExitReason')->willReturn('unit-test');
+        $this->setProperty($dispatcher, 'masterGuard', $guard);
+        $this->setProperty($dispatcher, 'masterPid', \getmypid());
         $this->setProperty($dispatcher, 'running', true);
-        $this->setProperty($dispatcher, 'ipcReceivedShutdown', false);
 
-        $this->invokePrivate($dispatcher, 'checkMasterHeartbeat');
+        $this->invokePrivate($dispatcher, 'checkMasterPidAlive');
 
         self::assertFalse($this->getProperty($dispatcher, 'running'));
     }
 
-    private function seedInstanceFile(int $masterPid, int $controlPort = 0, int $dispatcherPort = 0): void
+    public function testEnabledMasterGuardResetsDeadCountWithoutPidProbe(): void
     {
-        \file_put_contents(
-            $this->instanceFile,
-            \json_encode([
-                'master_pid' => $masterPid,
-                'master_enabled' => true,
-                'control_port' => $controlPort,
-                'dispatcher_port' => $dispatcherPort,
-            ])
-        );
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $guard = $this->createMock(ChildMasterGuard::class);
+        $guard->method('shouldExit')->willReturn(false);
+        $guard->method('isEnabled')->willReturn(true);
+        $this->setProperty($dispatcher, 'masterGuard', $guard);
+        $this->setProperty($dispatcher, 'masterDeadCount', 5);
+        $this->setProperty($dispatcher, 'running', true);
+
+        $this->invokePrivate($dispatcher, 'checkMasterPidAlive');
+
+        self::assertSame(0, $this->getProperty($dispatcher, 'masterDeadCount'));
+        self::assertTrue($this->getProperty($dispatcher, 'running'));
     }
 
     private function newDispatcherWithoutConstructor(): Dispatcher
     {
         $reflector = new \ReflectionClass(Dispatcher::class);
+
         /** @var Dispatcher $dispatcher */
         $dispatcher = $reflector->newInstanceWithoutConstructor();
+
         return $dispatcher;
     }
 
@@ -179,6 +134,7 @@ class DispatcherMasterHeartbeatWindowTest extends TestCase
     {
         $property = new \ReflectionProperty($target, $name);
         $property->setAccessible(true);
+
         return $property->getValue($target);
     }
 
@@ -186,6 +142,7 @@ class DispatcherMasterHeartbeatWindowTest extends TestCase
     {
         $ref = new \ReflectionMethod($target, $method);
         $ref->setAccessible(true);
+
         return $ref->invoke($target);
     }
 }

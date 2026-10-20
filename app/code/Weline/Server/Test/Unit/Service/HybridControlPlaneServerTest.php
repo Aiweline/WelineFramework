@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\IPC\MasterControlServer;
 use Weline\Server\Service\Control\HybridControlPlaneServer;
@@ -11,9 +12,37 @@ use Weline\Server\Supervisor\Client\SupervisorChildClient;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
 use Weline\Server\Supervisor\Lease\SlotLease;
 use Weline\Server\Supervisor\SupervisorRuntime;
+use Weline\Server\Service\Runtime\WorkerNamespaceGenerationApplier;
 
 final class HybridControlPlaneServerTest extends TestCase
 {
+    private ?object $originalNamespaceApplier = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->originalNamespaceApplier = ObjectManager::getInstance(WorkerNamespaceGenerationApplier::class);
+        $fake = new class {
+            /** @return array{authority_clock:int,generations:array<string,int>} */
+            public function reconcileBeforeReady(): array
+            {
+                return ['authority_clock' => 0, 'generations' => []];
+            }
+        };
+        ObjectManager::setInstance(WorkerNamespaceGenerationApplier::class, $fake);
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->originalNamespaceApplier !== null) {
+            ObjectManager::setInstance(
+                WorkerNamespaceGenerationApplier::class,
+                $this->originalNamespaceApplier,
+            );
+        }
+        parent::tearDown();
+    }
+
     public function testInstanceControlPlaneFailsClosedWithoutProductionCredentials(): void
     {
         $hybrid = new HybridControlPlaneServer(

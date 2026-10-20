@@ -138,7 +138,9 @@ final class CoroutineRuntimeTest extends TestCase
                 }
             );
             $fiber = new \Fiber(static function () use ($reader, $trace, $system): array {
+                // TraceGate 按 fiber 记录 arm 状态；fiber 内需 reset 后重新 arm。
                 $trace::reset();
+                $trace::installPanelTraceOn();
                 $ready = $system::awaitReadable($reader, 0.5);
                 $bytes = \fread($reader, 4);
                 $first = self::guardTimingIoSpans($trace::getSpans())[0];

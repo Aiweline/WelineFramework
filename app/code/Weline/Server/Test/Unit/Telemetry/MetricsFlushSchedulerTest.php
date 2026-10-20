@@ -41,7 +41,7 @@ class FakeServerTrafficMetricForScheduler extends ServerTrafficMetric
         return $this->bucketRow ?? [];
     }
 
-    public function load(string|int $field_or_pk_value, $value = null): \Weline\Framework\Database\AbstractModel
+    public function load(string|int $field_or_pk_value, $value = null, bool $forceReload = false): \Weline\Framework\Database\AbstractModel
     {
         if (\is_array($this->bucketRow)) {
             $this->data = $this->bucketRow;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\ChildControl;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\IPC\ChildControl\ChildProcessIdentity;
 use Weline\Server\IPC\ChildControl\MasterOrphanGuard;
@@ -18,9 +19,37 @@ use Weline\Server\Supervisor\Lease\LeaseRegistry;
 use Weline\Server\Supervisor\Supervisor;
 use Weline\Server\Supervisor\SupervisorRuntime;
 use Weline\Server\Supervisor\SupervisorServer;
+use Weline\Server\Service\Runtime\WorkerNamespaceGenerationApplier;
 
 final class SubprocessControlKernelTest extends TestCase
 {
+    private ?object $originalNamespaceApplier = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->originalNamespaceApplier = ObjectManager::getInstance(WorkerNamespaceGenerationApplier::class);
+        $fake = new class {
+            /** @return array{authority_clock:int,generations:array<string,int>} */
+            public function reconcileBeforeReady(): array
+            {
+                return ['authority_clock' => 0, 'generations' => []];
+            }
+        };
+        ObjectManager::setInstance(WorkerNamespaceGenerationApplier::class, $fake);
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->originalNamespaceApplier !== null) {
+            ObjectManager::setInstance(
+                WorkerNamespaceGenerationApplier::class,
+                $this->originalNamespaceApplier,
+            );
+        }
+        parent::tearDown();
+    }
+
     public function testResolveControlPortFromInstanceFile(): void
     {
         $instanceName = 'ut-kernel-port';

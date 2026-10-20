@@ -30,7 +30,7 @@ declare(strict_types=1);
  */
 return [
     // PHP 版本约束
-    'php' => '^8.1',
+    'php' => '^8.4',
 
     // 跨平台必需的扩展
     'extensions' => [

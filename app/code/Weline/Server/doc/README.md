@@ -41,6 +41,7 @@ Windows/MSVC/SCM 与冷重启、macOS system-domain 冷重启、专用 Windows �
 7. [WLS Session/Memory 共享服务架构](WLS_Session共享服务架构.md) — 跨 Worker/实例共享状态 sidecar。
 8. [WLS 模式部署指南](WLS模式部署指南.md) — WLS 2.0 edge mode、共享网关、纯 WLS 回退、启动参数和运维门禁。
 9. [WLS 2.0 Gateway 使用指南](WLS-Gateway使用指南.md) — edge 模式、项目身份、宿主边界与当前实施状态。
+10. [WLS 缺陷修复计划（逐项验收台账）](开发/plan.md) — 当前缺陷清单、逐项验收标准与实时进度。
 
 ## 按问题定位
 
