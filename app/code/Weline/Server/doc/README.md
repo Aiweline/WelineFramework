@@ -49,6 +49,7 @@ Windows/MSVC/SCM 与冷重启、macOS system-domain 冷重启、专用 Windows �
 | Windows 启动慢、Worker 批量拉起 | [WLS 运行时架构](WLS架构图.md)、[启动与关闭链路](WLS启动与关闭链路图.md) |
 | Worker 掉线、整池重载、路由为空 | [WLS 运行时架构](WLS架构图.md)、[IPC 控制通道](IPC控制通道架构.md) |
 | 请求转发、Worker 故障转移 | [Dispatcher 分流架构](Dispatcher分流架构设计.md) |
+| 为什么要 FFI、shared_fd / reuseport / worker_ports | [WLS 运行时架构 §6.1](WLS架构图.md#61-监听拓扑与-ffi) |
 | TLS 1.3、H2/H1、H3 与 Session 恢复门禁 | [WLS 模式部署指南](WLS模式部署指南.md#5-https--ssl)、[WLS 运行时架构](WLS架构图.md#301-当前-http-协议与连接复用) |
 | 项目托管 Nginx、纯 WLS 回退、trusted loopback | [WLS 模式部署指南](WLS模式部署指南.md#13-本项目托管-nginx多项目互不干扰)、[域名接入](WLS模式部署指南.md#4-域名接入) |
 | 托管 Nginx 回源切 PHP-FPM / `origin_mode` / `server:origin:set` | [回源模式：WLS Workers vs PHP-FPM](WLS模式部署指南.md#origin-mode-wls-vs-fpm)、[当前能力与验收状态](WLS当前能力与验收状态.md) |

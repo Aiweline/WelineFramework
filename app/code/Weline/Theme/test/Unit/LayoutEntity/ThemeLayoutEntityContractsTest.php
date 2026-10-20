@@ -1938,6 +1938,15 @@ private function assert_ThemeLayoutEntityLocaleComPrewarm_testPublishGateUsesFor
     self::assertStringContainsString('finishProgressLine', $service);
     self::assertStringContainsString('进程池', $service);
     self::assertStringContainsString('compileAfterPromoteFromPaths', $service);
+    self::assertStringContainsString('loadPageCandidateSubset', $service);
+    self::assertStringContainsString('stream_candidate_paths', $service);
+    self::assertStringContainsString('indexPageLayoutsFromPaths', $service);
+    self::assertStringContainsString('Parser::clearWorkerCaches', $service);
+    self::assertStringContainsString('->uninstall(', $service);
+    $compileSvc = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/View/TemplateCompileService.php');
+    self::assertStringContainsString('Parser::releaseLocaleWorkerCaches', $compileSvc);
+    $template = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/View/Template.php');
+    self::assertStringContainsString('function clearPinnedSources', $template);
     self::assertStringContainsString('snapshotFromPublishedCandidates', $service);
     // Promote candidates must be closed over (PHP 8.4 typed arg ≠ silent null).
     self::assertStringContainsString('$candidateMap = $candidates', $service);
@@ -2342,6 +2351,9 @@ private function assert_ThemeLayoutEntitySolidifyCompilePipeline_testPipelineExp
     self::assertStringContainsString('deploy_staging_root', $src);
     self::assertStringContainsString('applyDeployStagingRootFromJob', $src);
     self::assertStringContainsString('workerEnvironment', $src);
+    self::assertStringNotContainsString('WORKER_MEMORY_LIMIT', $src);
+    self::assertStringNotContainsString('memory_limit=', $src);
+    self::assertStringNotContainsString('PhpCliRuntimePreflight', $src);
     self::assertStringContainsString('expectedPhaseTotal', $src);
     self::assertStringContainsString("'done'", $src);
     self::assertStringContainsString('formatPipelineProgressLabel', $src);
@@ -2360,6 +2372,7 @@ private function assert_ThemeLayoutEntitySolidifyCompilePipeline_testConcurrency
     $ref = new \ReflectionClass(ThemeLayoutEntitySolidifyCompilePipeline::class);
     self::assertSame(10, $ref->getConstant('DEFAULT_CONCURRENCY'));
     self::assertSame(32, $ref->getConstant('MAX_CONCURRENCY'));
+    self::assertFalse($ref->hasConstant('WORKER_MEMORY_LIMIT'));
 }
 
 private function assert_ThemeLayoutEntitySolidifyCompilePipeline_testWorkerScriptsExist(): void
@@ -2372,6 +2385,10 @@ private function assert_ThemeLayoutEntitySolidifyCompilePipeline_testWorkerScrip
     self::assertStringContainsString('runSolidifyJob', $solidify);
     self::assertStringContainsString('runCompileJob', $compile);
     self::assertStringContainsString('WELINE_TEMPLATE_COMPILE_NESTED', $compile);
+    self::assertStringNotContainsString('raiseCliMemoryFloor', $solidify);
+    self::assertStringNotContainsString('raiseCliMemoryFloor', $compile);
+    self::assertStringNotContainsString("ini_set('memory_limit'", $solidify);
+    self::assertStringNotContainsString("ini_set('memory_limit'", $compile);
 }
 
 private function assert_ThemeLayoutEntitySolidifyCompilePipeline_testBatchPublisherCompileOptionAndPromoteSplit(): void

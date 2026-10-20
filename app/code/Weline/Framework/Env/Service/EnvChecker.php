@@ -391,7 +391,8 @@ class EnvChecker implements EnvCheckerInterface
      */
     public function checkItem(array $item, string $modulePath): bool
     {
-        $envDir = $modulePath . DIRECTORY_SEPARATOR . 'env' . DIRECTORY_SEPARATOR;
+        $envDir = ModuleEnvDir::resolve($modulePath)
+            ?? ($modulePath . DIRECTORY_SEPARATOR . 'env' . DIRECTORY_SEPARATOR);
 
         // 获取脚本执行器
         $executor = $this->getScriptExecutor();

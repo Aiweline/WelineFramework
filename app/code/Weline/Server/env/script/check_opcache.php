@@ -62,81 +62,35 @@ switch ($action) {
 }
 
 /**
- * 尝试启用 opcache
+ * 尝试启用 opcache。安装期与这里共用 PhpInstallIniOptimizer，成功只看新进程探针。
  */
 function tryEnableOpcache(): array
 {
-    $phpIniPath = php_ini_loaded_file();
-    if (!$phpIniPath) {
-        return ['success' => false, 'message' => '无法获取 php.ini 路径', 'guide' => getGuide()];
+    $optimizer = dirname(__DIR__, 3) . '/Framework/Env/Service/PhpInstallIniOptimizer.php';
+    $enabler = dirname(__DIR__, 3) . '/Framework/Env/Service/PhpExtensionIniEnabler.php';
+    if (!is_file($optimizer)) {
+        $optimizer = dirname(__DIR__, 3) . '/Framework/env/Service/PhpInstallIniOptimizer.php';
+        $enabler = dirname(__DIR__, 3) . '/Framework/env/Service/PhpExtensionIniEnabler.php';
     }
-    if (!is_writable($phpIniPath)) {
-        return ['success' => false, 'message' => 'php.ini 不可写: ' . $phpIniPath, 'guide' => getGuide()];
+    if (!is_file($optimizer) || !is_file($enabler)) {
+        return ['success' => false, 'message' => '缺少 PhpInstallIniOptimizer', 'guide' => getGuide()];
     }
-
-    $content = file_get_contents($phpIniPath);
-    if ($content === false) {
-        return ['success' => false, 'message' => '无法读取 php.ini'];
-    }
-
-    // 查找 DLL/.so 是否存在
-    if (PHP_OS_FAMILY === 'Windows') {
-        $phpDir = dirname(PHP_BINARY);
-        $extDir = $phpDir . DIRECTORY_SEPARATOR . ini_get('extension_dir');
-        if (is_dir(ini_get('extension_dir'))) {
-            $extDir = ini_get('extension_dir');
-        }
-        $libFile = $extDir . DIRECTORY_SEPARATOR . 'php_opcache.dll';
-        $zendLine = 'zend_extension=php_opcache.dll';
-    } else {
-        $extDir = ini_get('extension_dir');
-        $libFile = $extDir . DIRECTORY_SEPARATOR . 'opcache.so';
-        $zendLine = 'zend_extension=opcache.so';
-    }
-
-    if (!file_exists($libFile)) {
+    require_once $enabler;
+    require_once $optimizer;
+    $item = (new \Weline\Framework\Env\Service\PhpInstallIniOptimizer())->enableOpcache();
+    if ($item['skipped']) {
         return [
             'success' => false,
-            'message' => 'opcache 库文件不存在: ' . $libFile,
-            'guide'   => getGuide(),
+            'message' => $item['message'],
+            'guide' => getGuide(),
         ];
     }
 
-    // 检查是否已有被注释的 zend_extension 行
-    $patterns = [
-        '/^;\s*zend_extension\s*=\s*(?:php_)?opcache(?:\.dll|\.so)?\s*$/mi',
+    return [
+        'success' => $item['success'],
+        'message' => $item['message'],
+        'guide' => $item['success'] ? null : getGuide(),
     ];
-
-    $modified = false;
-    foreach ($patterns as $pattern) {
-        if (preg_match($pattern, $content)) {
-            $content = preg_replace($pattern, $zendLine, $content);
-            $modified = true;
-            break;
-        }
-    }
-
-    if (!$modified) {
-        // 检查是否已启用
-        $enabledPattern = '/^\s*zend_extension\s*=\s*(?:php_)?opcache(?:\.dll|\.so)?\s*$/mi';
-        if (preg_match($enabledPattern, $content)) {
-            return ['success' => true, 'message' => 'opcache 已在 php.ini 中配置（可能需要重启 PHP）'];
-        }
-
-        // 追加
-        $content .= "\n" . $zendLine . "\nopcache.enable=1\nopcache.enable_cli=1\n";
-        $modified = true;
-    }
-
-    if ($modified && file_put_contents($phpIniPath, $content) !== false) {
-        return [
-            'success' => true,
-            'message' => 'opcache 已在 php.ini 中启用',
-            'note'    => 'CLI 模式已生效，Web 服务需要重启',
-        ];
-    }
-
-    return ['success' => false, 'message' => '写入 php.ini 失败'];
 }
 
 /**

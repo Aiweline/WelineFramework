@@ -9,9 +9,8 @@ namespace Weline\Framework\Console;
  * It is loaded directly by bin/w and bin/m before app/bootstrap.php, so it must
  * not depend on autoloading, framework services, translations, or generated code.
  *
- * Also raises a CLI memory_limit floor so subprocesses started as
- * `PHP_BINARY bin/w …` (e.g. setup:upgrade → framework:compile) inherit a
- * usable limit instead of the stock php.ini 128M default.
+ * CLI memory_limit is set when PHP is installed (php.ini and php-cli.ini).
+ * This preflight does not raise memory at runtime.
  */
 final class PhpCliRuntimePreflight
 {
@@ -19,10 +18,6 @@ final class PhpCliRuntimePreflight
     public const ENV_PROFILE = 'WELINE_PHP_CLI_RUNTIME_PROFILE';
     public const ENV_WLS_PROFILE = 'WLS_PHP_RUNTIME_SAFETY_PROFILE';
     public const ENV_DEPTH = 'WELINE_PHP_CLI_RUNTIME_REEXEC_DEPTH';
-    /** Optional override for the CLI memory floor (e.g. 4096M). Never lowers an already-higher limit. */
-    public const ENV_CLI_MEMORY_LIMIT = 'WELINE_CLI_MEMORY_LIMIT';
-    /** Default floor aligned with setup:upgrade / reflection:compile heavy CLI work. */
-    public const CLI_MEMORY_FLOOR = '2048M';
 
     private const MANAGED_INI_FILE = '99-weline-windows-arm64-x64-cli-safe.ini';
 
@@ -34,8 +29,6 @@ final class PhpCliRuntimePreflight
         // Agent shells sometimes assign HOME to a site URL or curl %{http_code}.
         // Repair before any descendant work that may mkdir under $HOME.
         self::sanitizeUnixHomeEnvironment();
-        // Raise before any compile/scan work; child `php bin/w` processes re-enter here.
-        self::raiseCliMemoryFloor();
         $projectRoot = self::resolveWindowsPersistentPath($projectRoot);
         $entryScript = self::resolveWindowsPersistentPath($entryScript);
         $profile = self::applyForDescendants($projectRoot);
@@ -318,70 +311,6 @@ final class PhpCliRuntimePreflight
             }
         }
         return false;
-    }
-
-    /**
-     * Raise PHP CLI memory_limit to at least {@see CLI_MEMORY_FLOOR} (or WELINE_CLI_MEMORY_LIMIT).
-     * Never lowers an explicit higher limit or unlimited (-1). Safe no-op outside CLI.
-     *
-     * @return string Effective memory_limit after the raise attempt
-     */
-    public static function raiseCliMemoryFloor(): string
-    {
-        if (\PHP_SAPI !== 'cli' && \PHP_SAPI !== 'phpdbg') {
-            return (string)\ini_get('memory_limit');
-        }
-
-        $currentLimit = (string)\ini_get('memory_limit');
-        if ($currentLimit === '-1') {
-            return $currentLimit;
-        }
-
-        $targetLimit = self::resolveCliMemoryFloorTarget();
-        $currentBytes = self::memoryLimitToBytes($currentLimit);
-        $targetBytes = self::memoryLimitToBytes($targetLimit);
-        if ($targetBytes === null) {
-            return $currentLimit;
-        }
-        if ($currentBytes !== null && $currentBytes >= $targetBytes) {
-            return $currentLimit;
-        }
-
-        @\ini_set('memory_limit', $targetLimit);
-
-        return (string)\ini_get('memory_limit');
-    }
-
-    public static function resolveCliMemoryFloorTarget(): string
-    {
-        $fromEnv = \trim((string)(\getenv(self::ENV_CLI_MEMORY_LIMIT) ?: ''));
-        if ($fromEnv !== '' && self::memoryLimitToBytes($fromEnv) !== null) {
-            return $fromEnv;
-        }
-
-        return self::CLI_MEMORY_FLOOR;
-    }
-
-    public static function memoryLimitToBytes(string $limit): ?int
-    {
-        $limit = \trim($limit);
-        if ($limit === '' || $limit === '-1') {
-            return $limit === '-1' ? \PHP_INT_MAX : null;
-        }
-
-        if (\preg_match('/^(\d+)([KMG])?$/i', $limit, $matches) !== 1) {
-            return null;
-        }
-
-        $bytes = (int)$matches[1];
-        $unit = \strtoupper((string)($matches[2] ?? ''));
-
-        return match ($unit) {
-            'G' => $bytes * 1024 * 1024 * 1024,
-            'M' => $bytes * 1024 * 1024,
-            'K' => $bytes * 1024,
-            default => $bytes,
-        };
     }
 
     private static function isIniEnabled(string $value): bool

@@ -16,8 +16,8 @@ final class HardConstraintsSymbolDsl
 
     public const GLOSS_MAX = 64;
 
-    /** Raised 8100→8200 with request_context_logic_diagram_must_read_and_sync hot entry (2026-10-19). */
-    public const PACKAGE_TOKEN_BUDGET = 8200;
+    /** Raised 8200→8600 with user_utterance_commit_ships_dev_and_sites hot entry (2026-10-20). */
+    public const PACKAGE_TOKEN_BUDGET = 8600;
 
     public const EXPAND_IDS_MAX = 20;
 
@@ -296,6 +296,52 @@ final class HardConstraintsSymbolDsl
                 'gloss_zh' => '写了var/data-tone但主题叶子缺失',
                 'rule_ids' => ['theme_referenced_tokens_must_resolve'],
             ],
+            'SayCommit' => [
+                'gloss_zh' => '用户口令「提交」且非否定',
+                'rule_ids' => [
+                    'user_utterance_commit_ships_dev_and_sites',
+                    'concurrent_session_commit_hygiene',
+                ],
+            ],
+            'Negate' => [
+                'gloss_zh' => '别/不要/先别/不用等否定',
+                'rule_ids' => ['user_utterance_commit_ships_dev_and_sites'],
+            ],
+            'CommitAll' => [
+                'gloss_zh' => '一次提交全部非忽略工作区变更',
+                'rule_ids' => [
+                    'user_utterance_commit_ships_dev_and_sites',
+                    'concurrent_session_commit_hygiene',
+                ],
+            ],
+            'SelectiveStage' => [
+                'gloss_zh' => '只暂存本回合声明路径',
+                'rule_ids' => ['concurrent_session_commit_hygiene'],
+            ],
+            'PushDevBoth' => [
+                'gloss_zh' => '将dev推到Gitee与GitHub两远程',
+                'rule_ids' => ['user_utterance_commit_ships_dev_and_sites'],
+            ],
+            'ProdPipe' => [
+                'gloss_zh' => '各生产站核心更新后系统更新再主题更新',
+                'rule_ids' => ['user_utterance_commit_ships_dev_and_sites'],
+            ],
+            'ThemeUpd' => [
+                'gloss_zh' => '用户口令主题更新/更新某主题',
+                'rule_ids' => ['theme_update_matches_site_cabinet'],
+            ],
+            'CabMatch' => [
+                'gloss_zh' => '关系卡唯一匹配且与server.md应用根一致',
+                'rule_ids' => ['theme_update_matches_site_cabinet'],
+            ],
+            'ThemeCopy' => [
+                'gloss_zh' => '无--delete地把该主题目录拷到匹配应用根',
+                'rule_ids' => ['theme_update_matches_site_cabinet'],
+            ],
+            'ThemeUpg' => [
+                'gloss_zh' => '目标机系统更新后theme:upgrade该主题',
+                'rule_ids' => ['theme_update_matches_site_cabinet'],
+            ],
         ];
     }
 
@@ -502,6 +548,16 @@ final class HardConstraintsSymbolDsl
                 'gloss_zh' => '全局规则须MCP与~/.cursor/rules双写',
                 'cluster' => '§P',
             ],
+            'user_utterance_commit_ships_dev_and_sites' => [
+                'formula' => 'SayCommit∧¬Negate→□(CommitAll∧PushDevBoth∧ProdPipe)',
+                'gloss_zh' => '口令「提交」：全量提交、推dev两仓、各生产站核心/系统/主题更新',
+                'cluster' => '§P',
+            ],
+            'concurrent_session_commit_hygiene' => [
+                'formula' => '¬SayCommit→□SelectiveStage|(SayCommit→□CommitAll)',
+                'gloss_zh' => '非提交口令只暂存声明路径；口令提交才全量提交',
+                'cluster' => '§P',
+            ],
             'host_editor_rules_mcp_generated_only' => [
                 'formula' => 'ProjectRules→□McpGen∧¬HandEdit',
                 'gloss_zh' => '项目.cursor/rules仅MCP生成；禁手改权威',
@@ -551,6 +607,11 @@ final class HardConstraintsSymbolDsl
                 'formula' => 'AdminManage∧SimpleForm→□(Dlg∧AsyncBQ)∧¬InlineExpand',
                 'gloss_zh' => '简单管理新增/编辑须弹层+BinQuery；禁页内常驻展开',
                 'cluster' => '§A',
+            ],
+            'theme_update_matches_site_cabinet' => [
+                'formula' => 'ThemeUpd→□(CabMatch∧ThemeCopy∧ThemeUpg)∧(¬CabMatch→⊥ThemeCopy)',
+                'gloss_zh' => '主题更新须柜卡唯一匹配后拷贝并升级；对不上禁拷',
+                'cluster' => '§P',
             ],
         ];
     }

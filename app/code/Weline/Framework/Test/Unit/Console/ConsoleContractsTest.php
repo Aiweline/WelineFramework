@@ -6,7 +6,6 @@ namespace Weline\Framework\Test\Unit\Console;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Console\EarlyDatabaseAccessGate;
-use Weline\Framework\Console\PhpCliRuntimePreflight;
 use Weline\Framework\Setup\Lock\SetupDatabaseAccessLock;
 use Weline\Framework\Setup\Lock\SetupUpgradeIntent;
 use Weline\Framework\Test\Console\E2e\CleanupBrowsers;
@@ -85,13 +84,13 @@ final class ConsoleContractsTest extends TestCase
             'TestRunnerAllowsAnyDeployMode::testRunnersDoNotGateOnDeployMode' => function () {
             $this->assert_TestRunnerAllowsAnyDeployMode_testRunnersDoNotGateOnDeployMode();
         },
-            'PhpCliMemoryFloor::testBinWLoadsPreflightAndFloorRaisesLowLimit' => function () {
-            $this->assert_PhpCliMemoryFloor_testBinWLoadsPreflightAndFloorRaisesLowLimit();
+            'PhpCliMemoryFloor::testBinWDoesNotRaiseMemoryAtRuntime' => function () {
+            $this->assert_PhpCliMemoryFloor_testBinWDoesNotRaiseMemoryAtRuntime();
         },
         ];
     }
 
-private function assert_PhpCliMemoryFloor_testBinWLoadsPreflightAndFloorRaisesLowLimit(): void
+private function assert_PhpCliMemoryFloor_testBinWDoesNotRaiseMemoryAtRuntime(): void
 {
     $binW = (string) \file_get_contents(BP . 'bin/w');
     $binM = (string) \file_get_contents(BP . 'bin/m');
@@ -101,23 +100,10 @@ private function assert_PhpCliMemoryFloor_testBinWLoadsPreflightAndFloorRaisesLo
     $preflight = (string) \file_get_contents(
         BP . 'app/code/Weline/Framework/Console/PhpCliRuntimePreflight.php'
     );
-    self::assertStringContainsString('raiseCliMemoryFloor', $preflight);
-    self::assertStringContainsString('CLI_MEMORY_FLOOR', $preflight);
-    self::assertStringContainsString('2048M', $preflight);
-
-    $previous = (string) \ini_get('memory_limit');
-    try {
-        @\ini_set('memory_limit', '128M');
-        self::assertSame('128M', (string) \ini_get('memory_limit'));
-        $after = PhpCliRuntimePreflight::raiseCliMemoryFloor();
-        $afterBytes = PhpCliRuntimePreflight::memoryLimitToBytes($after);
-        $floorBytes = PhpCliRuntimePreflight::memoryLimitToBytes(PhpCliRuntimePreflight::CLI_MEMORY_FLOOR);
-        self::assertNotNull($afterBytes);
-        self::assertNotNull($floorBytes);
-        self::assertGreaterThanOrEqual($floorBytes, $afterBytes);
-    } finally {
-        @\ini_set('memory_limit', $previous);
-    }
+    self::assertStringNotContainsString('raiseCliMemoryFloor', $preflight);
+    self::assertStringNotContainsString('CLI_MEMORY_FLOOR', $preflight);
+    self::assertStringNotContainsString('2048M', $preflight);
+    self::assertStringNotContainsString("ini_set('memory_limit'", $preflight);
 }
 
 private function assert_E2eBrowserCleanup_testCleanupCommandTipMentionsAutomationLeftovers(): void

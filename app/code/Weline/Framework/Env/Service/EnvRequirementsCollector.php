@@ -153,7 +153,11 @@ class EnvRequirementsCollector implements EnvRequirementsCollectorInterface
     {
         $requirements = new EnvRequirements();
 
-        $requirementsFile = $modulePath . 'env' . DIRECTORY_SEPARATOR . 'requirements.php';
+        $envDir = ModuleEnvDir::resolve($modulePath);
+        if ($envDir === null) {
+            return $requirements;
+        }
+        $requirementsFile = $envDir . 'requirements.php';
         if (!is_file($requirementsFile)) {
             return $requirements;
         }

@@ -105,43 +105,19 @@ function tryInstallEventWindows(): array
         return $install;
     }
 
-    // DLL 存在，尝试在 php.ini 中启用
-    $phpIniPath = php_ini_loaded_file();
-    if (!$phpIniPath || !is_writable($phpIniPath)) {
+    $enabled = enableExtensionInIni('event');
+    if (!$enabled) {
         return [
             'success' => false,
-            'message' => 'php.ini 不可写: ' . ($phpIniPath ?: '未知'),
-            'guide'   => getInstallGuide(),
+            'message' => 'event DLL 已就位，但未能写入当前 PHP 会加载的 ini 或新进程未加载',
+            'guide' => getInstallGuide(),
         ];
-    }
-
-    $content = file_get_contents($phpIniPath);
-    if ($content === false) {
-        return ['success' => false, 'message' => '无法读取 php.ini'];
-    }
-
-    // 检查是否已有被注释的行
-    $pattern = '/^;(\s*extension\s*=\s*(?:php_)?event(?:\.dll)?\s*)$/mi';
-    if (preg_match($pattern, $content)) {
-        $content = preg_replace($pattern, '$1', $content);
-    } else {
-        // 检查是否已启用
-        $enabledPattern = '/^\s*extension\s*=\s*(?:php_)?event(?:\.dll)?\s*$/mi';
-        if (preg_match($enabledPattern, $content)) {
-            return ['success' => true, 'message' => 'event 扩展已在 php.ini 中启用'];
-        }
-        // 追加
-        $content .= "\nextension=event\n";
-    }
-
-    if (file_put_contents($phpIniPath, $content) === false) {
-        return ['success' => false, 'message' => '写入 php.ini 失败'];
     }
 
     return [
         'success' => true,
-        'message' => 'event 扩展已安装并在 php.ini 中启用；新 PHP 进程将执行最终 ABI 加载验证',
-        'note'    => '当前进程不会动态加载新 DLL；WLS 将在创建任何子进程前自动重入',
+        'message' => 'event 扩展已安装并在 php.ini 中启用；新 PHP 进程已确认加载',
+        'note' => '当前进程不会动态加载新 DLL；WLS 将在创建任何子进程前自动重入',
     ];
 }
 
@@ -412,9 +388,15 @@ function tryInstallEventLinux(): array
     // pecl install event 可能会提示是否启用 OpenSSL，用 yes 管道
     @exec('printf "\n\n\n\n" | pecl install event 2>&1', $output, $code);
     if ($code === 0) {
-        // 尝试在 php.ini 中启用
-        enableExtensionInIni('event');
-        return ['success' => true, 'message' => 'event 扩展已通过 pecl 安装'];
+        $enabled = enableExtensionInIni('event');
+
+        return [
+            'success' => $enabled,
+            'message' => $enabled
+                ? 'event 扩展已通过 pecl 安装并启用'
+                : 'event 已编译但未能写入当前 PHP 会加载的 ini',
+            'enabled' => $enabled,
+        ];
     }
     $errors[] = 'pecl install event 失败: ' . implode("\n", array_slice($output, -5));
 
@@ -531,13 +513,14 @@ function tryBuildEventFromSource(): array
 
     $cleanup();
 
-    // 构建产物只对新进程生效，必须写入 ini 才能让 WLS 重启后真正加载。
+    // 构建产物只对新进程生效；probe 失败则安装失败，禁止只写了文件却报成功。
     $enabled = enableExtensionInIni('event');
 
     return [
-        'success' => true,
-        'message' => 'event 扩展已从源码构建并安装（版本 ' . $version . '）'
-            . ($enabled ? '' : '；请确认 extension=event 已启用'),
+        'success' => $enabled,
+        'message' => $enabled
+            ? 'event 扩展已从源码构建并安装（版本 ' . $version . '）'
+            : 'event 已构建但新进程未加载（ini 未生效）',
         'enabled' => $enabled,
         'restart_required' => true,
     ];
@@ -583,58 +566,29 @@ function downloadUrlToFile(string $url, string $target): bool
 }
 
 /**
- * 在 php.ini 中启用扩展
+ * 在当前 PHP 真正会读取的 ini 中启用扩展，并用新进程探针确认。
  */
 function enableExtensionInIni(string $ext): bool
 {
-    $phpIniPath = php_ini_loaded_file();
-    if ($phpIniPath && is_writable($phpIniPath)) {
-        $content = file_get_contents($phpIniPath);
-        if ($content !== false) {
-            // 检查是否已启用
-            $pattern = '/^\s*extension\s*=\s*' . preg_quote($ext, '/') . '(?:\.so)?\s*$/mi';
-            if (preg_match($pattern, $content)) {
-                return true;
-            }
+    $classFile = dirname(__DIR__, 3) . '/Framework/Env/Service/PhpExtensionIniEnabler.php';
+    if (!is_file($classFile)) {
+        $classFile = dirname(__DIR__, 3) . '/Framework/env/Service/PhpExtensionIniEnabler.php';
+    }
+    require_once $classFile;
+    $result = (new \Weline\Framework\Env\Service\PhpExtensionIniEnabler())->enable(
+        $ext,
+        static function () use ($ext): bool {
+            $probe = escapeshellarg(PHP_BINARY)
+                . ' -d opcache.enable=0 -d opcache.enable_cli=0 -r '
+                . escapeshellarg('exit(extension_loaded(' . var_export($ext, true) . ') ? 0 : 1);');
+            $code = 1;
+            exec($probe, $out, $code);
 
-            // 检查被注释的行
-            $commentPattern = '/^;(\s*extension\s*=\s*' . preg_quote($ext, '/') . '(?:\.so)?\s*)$/mi';
-            if (preg_match($commentPattern, $content)) {
-                $content = preg_replace($commentPattern, '$1', $content);
-            } else {
-                $content .= "\nextension=" . $ext . "\n";
-            }
-
-            if (file_put_contents($phpIniPath, $content) !== false) {
-                return true;
-            }
+            return $code === 0;
         }
-    }
+    );
 
-    // 没有加载 php.ini（bundled PHP 常只配了 --with-config-file-scan-dir）时，
-    // 必须写入附加 ini 扫描目录，否则新进程也不会加载该扩展。
-    return enableExtensionInScanDir($ext);
-}
-
-/**
- * 在 PHP 的附加 ini 扫描目录（conf.d）中启用扩展。
- */
-function enableExtensionInScanDir(string $ext): bool
-{
-    $scanDir = defined('PHP_CONFIG_FILE_SCAN_DIR') ? (string) PHP_CONFIG_FILE_SCAN_DIR : '';
-    if ($scanDir === '' || !is_dir($scanDir) || !is_writable($scanDir)) {
-        return false;
-    }
-
-    $target = rtrim($scanDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'weline-' . $ext . '.ini';
-    $desired = '; 由 WLS env/script/install_event_extension.php 生成' . PHP_EOL
-        . 'extension=' . $ext . '.so' . PHP_EOL;
-
-    if (is_file($target) && file_get_contents($target) === $desired) {
-        return true;
-    }
-
-    return file_put_contents($target, $desired) !== false;
+    return $result['success'];
 }
 
 /**

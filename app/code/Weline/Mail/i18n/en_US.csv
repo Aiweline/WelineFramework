@@ -502,8 +502,8 @@ Smtp,Smtp
 选择,选择
 回复全部,回复全部
 转发,转发
-抄送,抄送
 舍弃,舍弃
+抄送,抄送
 暂无邮件可阅读。写一封或开通更多账号后回来查看。,"Nothing to read yet. Compose a message or provision more accounts, then check back."
 正文加载失败,正文加载失败
 自动收信已暂停,自动收信已暂停
@@ -519,6 +519,8 @@ Smtp,Smtp
 请填写正文,请填写正文
 发送失败，请稍后重试,发送失败，请稍后重试
 邮件发送接口不可用，请刷新后重试,邮件发送接口不可用，请刷新后重试
+请先点击回复再发送,请先点击回复再发送
+请先选择已启用的企业邮箱账号,请先选择已启用的企业邮箱账号
 请先选择邮件,请先选择邮件
 请先选择一封邮件再回复,"Please select a message before replying"
 "回复预填接口返回非 JSON，请刷新后重试","Reply prefill returned non-JSON; refresh and try again"

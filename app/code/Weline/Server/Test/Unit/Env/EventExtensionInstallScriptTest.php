@@ -49,14 +49,22 @@ final class EventExtensionInstallScriptTest extends TestCase
         self::assertStringContainsString('EVENT_PECL_FALLBACK_VERSION', $source);
     }
 
-    public function testScriptEnablesExtensionInScanDirWhenNoIniIsLoaded(): void
+    public function testScriptEnablesExtensionViaSharedIniEnabler(): void
     {
         $source = (string)\file_get_contents($this->scriptPath());
 
-        // 没有加载 php.ini 时（bundled PHP 常见）必须写入 conf.d，否则新进程不生效。
-        self::assertStringContainsString('function enableExtensionInScanDir(', $source);
-        self::assertStringContainsString('PHP_CONFIG_FILE_SCAN_DIR', $source);
-        self::assertStringContainsString('enableExtensionInScanDir($ext)', $source);
+        // 启用必须走统一 enabler：只改会被加载的 ini，禁止猜一个未被扫描的 conf.d 当成功。
+        self::assertStringContainsString('PhpExtensionIniEnabler', $source);
+        self::assertStringContainsString('function enableExtensionInIni(', $source);
+        self::assertStringNotContainsString('function enableExtensionInScanDir(', $source);
+    }
+
+    public function testOpcacheInstallDelegatesToSharedIniOptimizer(): void
+    {
+        $source = (string) file_get_contents(\dirname(__DIR__, 3) . '/env/script/check_opcache.php');
+        self::assertStringContainsString('PhpInstallIniOptimizer', $source);
+        self::assertStringContainsString('function tryEnableOpcache(', $source);
+        self::assertStringNotContainsString('file_put_contents($phpIniPath', $source);
     }
 
     public function testScriptKeepsCheckAndInstallExitCodeContract(): void

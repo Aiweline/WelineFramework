@@ -7,6 +7,7 @@ namespace Weline\Theme\Service\LayoutEntity;
 use Weline\Framework\App\State;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
@@ -79,7 +80,15 @@ final class ThemeLayoutEntityFormalLocaleCompileService
         if ($identity->area !== 'frontend' || $identity->mode !== ThemeVersionIdentity::MODE_FORMAL) {
             return;
         }
-        $pages = $this->extractPublishedPageLayouts($candidates);
+        $streamPaths = is_array($options['stream_candidate_paths'] ?? null)
+            ? array_values(array_filter($options['stream_candidate_paths'], 'is_string'))
+            : null;
+        $streamPages = is_array($options['stream_pages'] ?? null) ? $options['stream_pages'] : null;
+        if (is_array($streamPages) && $streamPages !== []) {
+            $pages = $streamPages;
+        } else {
+            $pages = $this->extractPublishedPageLayouts($candidates);
+        }
         if ($pages === []) {
             return;
         }
@@ -137,6 +146,7 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             $localeTotal,
             $localeOrdinal,
             $invalidation,
+            $streamPaths,
         ): void {
             $template = Template::getInstance();
             if (!$nested) {
@@ -157,11 +167,20 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             $compiledSourcePaths = [];
             foreach ($pages as $pageIndex => $page) {
                 $pageNo = $pageIndex + 1;
+                $snapshot = null;
+                $pinned = [];
+                $widgets = [];
+                $pageSource = null;
+                // Nested pipeline: one page's bytes at a time. Sync publish keeps the full map.
+                $pageCandidates = $streamPaths !== null
+                    ? $this->loadPageCandidateSubset($streamPaths, $page)
+                    : $candidateMap;
+                try {
                 // Prefer promote-candidate bytes first (no OwnerLock). Pipeline compile
                 // otherwise contends with same-owner solidify WRITE via capture LOCK_SH.
                 $snapshot = $this->snapshotFromPublishedCandidates(
                     $identity,
-                    $candidateMap,
+                    $pageCandidates,
                     $page['layout_type'],
                     $page['layout_option'],
                     $page['target_type'],
@@ -190,7 +209,6 @@ final class ThemeLayoutEntityFormalLocaleCompileService
                 $widgets = $pageSource !== null
                     ? $this->resolveInlineWidgetTemplates((string)$pageSource['bytes'], $identity->area)
                     : [];
-                try {
                     $this->compiler->compilePinnedSources(
                         $pinned,
                         $locales,
@@ -267,6 +285,16 @@ final class ThemeLayoutEntityFormalLocaleCompileService
                         $error->getMessage(),
                     ));
                     throw $error;
+                } finally {
+                    if ($nested) {
+                        if ($snapshot instanceof ThemeLayoutSourceSnapshot) {
+                            $snapshot->uninstall($template);
+                        }
+                        unset($snapshot, $pinned, $widgets, $pageSource, $pageCandidates);
+                        Parser::clearWorkerCaches();
+                        Parser::clearUsedWords();
+                        gc_collect_cycles();
+                    }
                 }
             }
             // Post-com warm: bake theme-head packs so first request consumes artifacts (not hot-path merge).
@@ -291,9 +319,89 @@ final class ThemeLayoutEntityFormalLocaleCompileService
         array $candidatePaths,
         array $options = [],
     ): void {
-        $candidates = [];
+        $paths = [];
         foreach ($candidatePaths as $path) {
             if (!is_string($path) || $path === '') {
+                continue;
+            }
+            $paths[] = $path;
+        }
+        $pages = $this->indexPageLayoutsFromPaths($paths);
+        // Nested worker: index metadata only, then load one page subset inside compileAfterPromote.
+        $this->compileAfterPromote($identity, [], $options + [
+            'nested' => true,
+            'stream_candidate_paths' => $paths,
+            'stream_pages' => $pages,
+        ]);
+    }
+
+    /**
+     * Page layouts from promote paths without holding every file's bytes.
+     *
+     * @param list<string> $paths
+     * @return list<array{layout_type:string,layout_option:string,target_type:string,target_id:int}>
+     */
+    private function indexPageLayoutsFromPaths(array $paths): array
+    {
+        $pages = [];
+        $seen = [];
+        foreach ($paths as $path) {
+            $normalized = str_replace('\\', '/', $path);
+            if (!str_contains($normalized, '/pages/layouts/') || str_contains($normalized, '/sources/')) {
+                continue;
+            }
+            if (!is_file($path)) {
+                continue;
+            }
+            $head = $this->readSourceHead($path);
+            if ($head === null) {
+                throw new \RuntimeException('theme_layout_formal_compile_path_unreadable:' . $path);
+            }
+            $metadata = ThemeLayoutSourceSnapshot::metadata($head);
+            if (!is_array($metadata)) {
+                continue;
+            }
+            $layoutType = trim((string)($metadata['layout_type'] ?? ''));
+            if ($layoutType === '') {
+                continue;
+            }
+            $entry = [
+                'layout_type' => $layoutType,
+                'layout_option' => (string)($metadata['layout_option'] ?? 'default'),
+                'target_type' => (string)($metadata['target_type'] ?? 'global'),
+                'target_id' => max(0, (int)($metadata['target_id'] ?? 0)),
+            ];
+            $key = implode('|', $entry);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $pages[] = $entry;
+        }
+
+        return $pages;
+    }
+
+    /**
+     * Bytes for one page plus its sources and shared chrome partials.
+     *
+     * @param list<string> $paths
+     * @param array{layout_type:string,layout_option:string,target_type:string,target_id:int} $page
+     * @return array<string,?string>
+     */
+    private function loadPageCandidateSubset(array $paths, array $page): array
+    {
+        $layoutType = (string)$page['layout_type'];
+        $layoutOption = (string)$page['layout_option'];
+        $pageSuffix = '/pages/layouts/' . $layoutType . '/' . $layoutOption . '.phtml';
+        $sourceNeedle = '/pages/layouts/' . $layoutType . '/' . $layoutOption . '/sources/';
+        $candidates = [];
+        foreach ($paths as $path) {
+            $normalized = str_replace('\\', '/', $path);
+            $keep = str_ends_with($normalized, $pageSuffix)
+                || str_contains($normalized, $sourceNeedle)
+                || str_contains($normalized, '/partials/');
+            if (!$keep) {
                 continue;
             }
             if (!is_file($path)) {
@@ -306,7 +414,20 @@ final class ThemeLayoutEntityFormalLocaleCompileService
             }
             $candidates[$path] = $bytes;
         }
-        $this->compileAfterPromote($identity, $candidates, $options + ['nested' => true]);
+
+        return $candidates;
+    }
+
+    private function readSourceHead(string $path): ?string
+    {
+        $handle = fopen($path, 'rb');
+        if ($handle === false) {
+            return null;
+        }
+        $head = fread($handle, 65536);
+        fclose($handle);
+
+        return is_string($head) ? $head : null;
     }
 
     private function isNestedCompileEnv(): bool

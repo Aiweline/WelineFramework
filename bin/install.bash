@@ -717,7 +717,8 @@ get_required_php_extensions() {
   # sodium：Mail 管理凭据 / Gateway 包签名硬依赖；漏编会导致线上「扩展不可用」而非可降级提示。
   # brotli：FPC html-disk / Nginx 只认 index.html.br；PECL 扩展（非 configure 内置），安装后必装。
   # event：Linux/macOS WLS auto→Direct 硬依赖（PECL）；ffi：Direct 共享监听 FD 交接（configure --with-ffi）。
-  exts="$exts pcntl opcache sodium brotli event ffi"
+  exts="$exts pcntl opcache sodium"
+  exts="$exts brotli event ffi"
   # 去重、排序、每行一个
   echo "$exts" | tr ' ' '\n' | grep -v '^$' | sort -u
 }
@@ -961,6 +962,19 @@ get_installed_php_major_minor() {
 }
 
 
+# 把环境依赖写进当前 PHP 真正会读的 ini（opcache / brotli / event / ffi）
+optimize_env_php_ini() {
+  local php_bin="$1"
+  local script="$ROOT/setup/server_installer/optimize_env_php_ini.php"
+  [[ -z "$php_bin" || ! -x "$php_bin" || ! -f "$script" ]] && return 0
+  echo "Optimizing env dependency ini for $php_bin ..."
+  if ! "$php_bin" -d opcache.enable=0 -d opcache.enable_cli=0 "$script"; then
+    echo "WARNING: env dependency ini optimize did not fully apply for $php_bin" >&2
+    return 1
+  fi
+  return 0
+}
+
 # 配置 WLS 自带 PHP 的 php.ini：启用框架扩展声明、清空运行所需 disable_functions
 configure_wls_php_ini() {
   local php_home="$1"
@@ -973,8 +987,8 @@ configure_wls_php_ini() {
     echo "Configuring WLS PHP ini (extensions + disable_functions) at $php_home ..."
     "$php_bin" -d opcache.enable=0 -d opcache.enable_cli=0 "$bootstrap" || {
       echo "WARNING: configure_wls_php_ini via bootstrap_php_ini failed" >&2
-      return 0
     }
+    optimize_env_php_ini "$php_bin" || true
     return 0
   fi
   local cfg="$ROOT/setup/server_installer/ConfigurePhpIni.php"
@@ -982,6 +996,7 @@ configure_wls_php_ini() {
     echo "Configuring WLS PHP ini via ConfigurePhpIni at $php_home ..."
     "$php_bin" -r 'require $argv[1]; (new ConfigurePhpIni($argv[2], $argv[3]))->apply([]);' \
       "$cfg" "$ROOT" "$php_home" || echo "WARNING: ConfigurePhpIni apply failed" >&2
+    optimize_env_php_ini "$php_bin" || true
   fi
   return 0
 }
@@ -995,10 +1010,10 @@ ensure_brotli_extension() {
     echo "brotli extension already loaded on $php_bin"
     return 0
   fi
-  # Git tracks Framework/env (lowercase); macOS APFS often merges Env/env.
-  local script="$ROOT/app/code/Weline/Framework/env/env/script/install_brotli_extension.php"
+  # 契约目录是 Framework/Env/env/script。旧 checkout 可能仍在小写 env/env/script。
+  local script="$ROOT/app/code/Weline/Framework/Env/env/script/install_brotli_extension.php"
   if [[ ! -f "$script" ]]; then
-    script="$ROOT/app/code/Weline/Framework/Env/env/script/install_brotli_extension.php"
+    script="$ROOT/app/code/Weline/Framework/env/env/script/install_brotli_extension.php"
   fi
   if [[ ! -f "$script" ]]; then
     echo "ERROR: missing brotli install script: $script" >&2
@@ -1085,6 +1100,7 @@ ensure_wls_direct_runtime_extensions() {
   ensure_brotli_extension "$php_bin" || return 1
   ensure_event_extension "$php_bin" || return 1
   ensure_ffi_extension "$php_bin" || return 1
+  optimize_env_php_ini "$php_bin" || true
   return 0
 }
 
@@ -1821,7 +1837,10 @@ ensure_framework_php_extensions() {
   if ! "$PHP_EXE" -r 'exit(function_exists("brotli_compress") && function_exists("brotli_uncompress") ? 0 : 1);' 2>/dev/null; then
     printf '%s\n' "${missing[@]}" | grep -qxi '^brotli$' || missing+=("brotli")
   fi
-  [[ ${#missing[@]} -eq 0 ]] && return 0
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    optimize_env_php_ini "$PHP_EXE" || true
+    return 0
+  fi
 
   # 当前使用的是自编译 PHP（extend/server/php）时，apt 包只影响系统 PHP，无法给自编译 PHP 加扩展
   local php_exe_abs
@@ -1897,6 +1916,7 @@ ensure_framework_php_extensions() {
     fi
     echo "Detected panel PHP (/www/server/php/). Enabling extensions in php.ini (only if .so exists)..."
     enable_php_ext_via_ini exif fileinfo 2>/dev/null || true
+    optimize_env_php_ini "$PHP_EXE" || true
   fi
 
   echo "Framework requires PHP extensions that are missing: ${missing[*]}. Installing..."

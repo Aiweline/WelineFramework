@@ -6,6 +6,7 @@ namespace Weline\Framework\View;
 
 use Weline\Framework\App\State;
 use Weline\Framework\Deploy\HostProcessPoolPolicy;
+use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Runtime\RequestContext;
 
 /**
@@ -127,8 +128,15 @@ final class TemplateCompileService
         $compiled = [];
         $template = Template::getInstance();
         $done = 0;
+        $releaseLocales = $this->isNestedCompileWorker();
+        $previousLocale = null;
         foreach ($units as $unit) {
-            $this->applyLocaleCurrency((string)$unit['locale'], $currency);
+            $locale = (string)$unit['locale'];
+            if ($releaseLocales && $previousLocale !== null && $previousLocale !== $locale) {
+                Parser::releaseLocaleWorkerCaches($previousLocale);
+            }
+            $previousLocale = $locale;
+            $this->applyLocaleCurrency($locale, $currency);
             if ($unit['kind'] === 'pinned') {
                 $source = $unit['source'];
                 $origin = (string)($source['origin'] ?? $unit['logical']);
@@ -143,6 +151,9 @@ final class TemplateCompileService
             if ($onProgress !== null) {
                 $onProgress($done, $total, (string)$unit['locale'], (string)$unit['label']);
             }
+        }
+        if ($releaseLocales && $previousLocale !== null) {
+            Parser::releaseLocaleWorkerCaches($previousLocale);
         }
 
         return $compiled;

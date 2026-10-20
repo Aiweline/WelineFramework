@@ -181,7 +181,7 @@ AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_int
 **禁止**：只写 `~/.cursor/rules` 不进 Catalog；或只改 Catalog 不写宿主全局。  
 **仍禁止**：把手写项目内 `.cursor/rules` 当规则源（coldstart 仍只由 MCP 生成）。  
 **冲突裁决**：仓内 `hard_constraints` / 文档 > 宿主全局 `.mdc`。  
-示例：`requirement_acceptance_always` ↔ `acceptance-before-user-report.mdc`；`plan_review_requires_code_evidence` ↔ `plan-review-requires-code-probe.mdc`；`plan_review_requires_impact_surface` ↔ `plan-review-requires-impact-surface.mdc`；`plan_complete_self_review_then_implement` ↔ `plan-complete-self-review-then-implement.mdc`；`user_facing_verdict_last` ↔ `user-facing-verdict-last.mdc`；`user_facing_brief_plain_report` ↔ `user-facing-brief-plain-report.mdc`；`browser_operator_non_preemptive` ↔ `browser-operator-non-preemptive.mdc`；`e2e_ai_record_into_module_formal_path` ↔ `e2e-ai-record-formal-path.mdc`；`full_release_requires_commerce_pathway_e2e` ↔ `full-release-commerce-e2e.mdc`；`automation_test_report_durable_evidence` ↔ `automation-test-report-evidence.mdc`；`theme_inverse_raised_paper_ink_pin` ↔ `theme-inverse-raised-paper-ink.mdc`；`theme_frontend_must_obey_tokens_and_surface_roles` ↔ `theme-frontend-obey-tokens-and-surfaces.mdc`；`business_forbids_sql_dialect` ↔ `business-forbids-sql-dialect.mdc`；`framework_demos_live_in_weline_demo` ↔ `framework-demos-live-in-weline-demo.mdc`。
+示例：`user_utterance_commit_ships_dev_and_sites` ↔ `user-utterance-commit-ships-dev-and-sites.mdc`；`requirement_acceptance_always` ↔ `acceptance-before-user-report.mdc`；`plan_review_requires_code_evidence` ↔ `plan-review-requires-code-probe.mdc`；`plan_review_requires_impact_surface` ↔ `plan-review-requires-impact-surface.mdc`；`plan_complete_self_review_then_implement` ↔ `plan-complete-self-review-then-implement.mdc`；`user_facing_verdict_last` ↔ `user-facing-verdict-last.mdc`；`user_facing_brief_plain_report` ↔ `user-facing-brief-plain-report.mdc`；`browser_operator_non_preemptive` ↔ `browser-operator-non-preemptive.mdc`；`e2e_ai_record_into_module_formal_path` ↔ `e2e-ai-record-formal-path.mdc`；`full_release_requires_commerce_pathway_e2e` ↔ `full-release-commerce-e2e.mdc`；`automation_test_report_durable_evidence` ↔ `automation-test-report-evidence.mdc`；`theme_inverse_raised_paper_ink_pin` ↔ `theme-inverse-raised-paper-ink.mdc`；`theme_frontend_must_obey_tokens_and_surface_roles` ↔ `theme-frontend-obey-tokens-and-surfaces.mdc`；`business_forbids_sql_dialect` ↔ `business-forbids-sql-dialect.mdc`；`framework_demos_live_in_weline_demo` ↔ `framework-demos-live-in-weline-demo.mdc`；`theme_update_matches_site_cabinet` ↔ `theme-update-matches-site-cabinet.mdc`。
 
 ### 4.2 面向用户结论置尾（`user_facing_verdict_last`，强制）
 
@@ -336,6 +336,30 @@ MCP 子进程只允许只读 Git 检查，禁止上述全部 Git 写操作，禁
 **合并须审查（硬）**：跨会话 / 跨 worktree / 跨分支的合并**必须审查合并**，禁止盲合并与自动丢一侧：① 先 `git diff <base>...<branch>` **逐文件、逐 hunk** 审查，再 `git merge --no-commit` 停下看 `git diff --cached`；② **禁止** `-X ours` / `-X theirs` / `-s ours` 等自动丢弃一侧的解析（冲突只能人工合，且必须两边语义都在）；③ 合并后**双方对账复验**：`git grep` 确认两边新增的 id / 函数 / 片段**都还在**（例如两条硬规则 id 同时在 `mcpOperationalRules()` 与索引中出现）；④ 证据**双落点**：本地工作记录写 `dev/session/{slug}.md`，但**该目录被 `.gitignore` 忽略、不入库**——可入库的合并证据必须同时写进拥有模块的 `doc/开发日志.md`（合并范围、逐文件审查结论、对账命令与输出、被排除文件），否则事后无据可查；**禁止**把「合并成功 / exit 0」当成审查通过。
 
 权威：`HardConstraintsCatalog::mcpOperationalRules()` → `concurrent_session_commit_hygiene`。
+
+**口令豁免（仅 `user_utterance_commit_ships_dev_and_sites`）**：用户把「提交」当作发船口令时，本节选择性暂存让位，改为一次提交全部非忽略工作区变更。否定（先别提交 / 不要提交）与正在定义该词时不豁免。豁免仍禁止 `stash` / `checkout --` / `clean` / `reset`。
+
+## 7c. 口令「提交」= 全量提交并更新各生产站（`user_utterance_commit_ships_dev_and_sites`，强制）
+
+用户消息把「提交」当作发船口令（含「确认提交」「提交吧」）时，按顺序做完，不得停在本地 commit：
+
+| 步 | 动作 |
+|----|------|
+| 1 | 一次提交工作区全部非忽略变更。无变更不空提交。密钥/凭证文件停手报告，不提交该路径。 |
+| 2 | 该提交落在分支 `dev`。当前已在 `dev` 则留在 `dev`；否则合并进本地 `dev`，禁止 force，禁止丢掉另一分支。 |
+| 3 | 把 `dev` 推到本仓声明的 **Gitee 与 GitHub 两个远程**（`git remote -v` 核对；站柜惯例是 `origin` + `github`）。禁止写死 URL，禁止 `--force`，禁止跳过 hooks。 |
+| 4 | 任一生产 SSH 写入之前：`php bin/w e2e:run --suite=commerce-release` 必须全 PASS。失败则停在推送之后，不上机。 |
+| 5 | 当回合读 `websites/README.md`、各站柜 `README.md` 与 **`关系.md`**。只更新**写明了生产主用 SSH Host 且写明了应用根**的站柜。无生产 Host 或应用根未核验的站柜跳过。软链/别名站柜只算一次。同一 Host、不同应用根分开更新，禁止按 IP 合并。禁止把主机、IP、目录、主题名写进本规则。 |
+| 6 | 对每个这样的站柜：SSH 到其主用 Host，进入其应用根，然后 `maintenance:enable` → `php bin/w core:update -b dev` → `php bin/w setup:upgrade`（系统更新）→ `php bin/w theme:upgrade`（主题名以该站柜绑定为准；未写则跑已绑定范围的 `theme:upgrade`）→ `server:reload -r` → `maintenance:disable`（中途失败也要关维护）。`-b` 必须是字面 `dev`。 |
+| 7 | 设计主题不进 Git。本步的 `theme:upgrade` 只重新发布**该应用根上已有**的主题。用户没有另外要求上传主题文件时，禁止顺手把本机 `app/design` 传上去。另说「主题更新 / 更新某主题」时走 `theme_update_matches_site_cabinet`（先按 `关系.md` 拷贝再升级），不要用本步代替那次上传。 |
+| 8 | 仅当该站柜写明这次升级会动数据库时才备份库。禁止做站柜明确禁止的整站/代码/主题备份。 |
+| 9 | 更新后探活走 SSH 上的 `127.0.0.1` + `Host` 头。禁止从 Agent 本机 curl 公网域名。 |
+
+**不触发**：先别提交、不要提交、别提交、不用提交、先不提交、不要 commit；只是在讨论或定义「提交」这个词；Agent 自己写的「待提交」提醒。
+
+本口令不豁免：脏工作区不可擦除、hooks、禁止 force、生产用户数据与 `env.php` 保护。
+
+宿主常带：`~/.cursor/rules/user-utterance-commit-ships-dev-and-sites.mdc`。
 
 ## 8. 运行/状态查询默认本机（`runtime_status_query_local_first`，强制）
 

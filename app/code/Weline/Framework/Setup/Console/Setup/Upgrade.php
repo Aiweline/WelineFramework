@@ -2428,45 +2428,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             || $currentDependencies !== $manifestDependencies;
     }
 
-    private function raiseCliMemoryLimit(string $targetLimit): void
-    {
-        $currentLimit = (string)\ini_get('memory_limit');
-        if ($currentLimit === '-1') {
-            return;
-        }
-
-        $currentBytes = $this->memoryLimitToBytes($currentLimit);
-        $targetBytes = $this->memoryLimitToBytes($targetLimit);
-        if ($targetBytes === null) {
-            return;
-        }
-
-        if ($currentBytes === null || $currentBytes < $targetBytes) {
-            @\ini_set('memory_limit', $targetLimit);
-        }
-    }
-
-    private function memoryLimitToBytes(string $limit): ?int
-    {
-        $limit = trim($limit);
-        if ($limit === '' || $limit === '-1') {
-            return $limit === '-1' ? PHP_INT_MAX : null;
-        }
-
-        if (!preg_match('/^(\d+)([KMG])?$/i', $limit, $matches)) {
-            return null;
-        }
-
-        $bytes = (int)$matches[1];
-        $unit = strtoupper($matches[2] ?? '');
-        return match ($unit) {
-            'G' => $bytes * 1024 * 1024 * 1024,
-            'M' => $bytes * 1024 * 1024,
-            'K' => $bytes * 1024,
-            default => $bytes,
-        };
-    }
-    
     /**
      * 执行模块升级流程（原 module:upgrade 的功能）
      * @param array $args
@@ -2477,9 +2438,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function executeModuleUpgrade(array $args = [], array $data = []): void
     {
-        // setup:upgrade still runs post-upgrade observers and modules.json generation late in the CLI flow.
-        // Raise low defaults without lowering an explicit higher or unlimited CLI memory limit.
-        $this->raiseCliMemoryLimit('2048M');
         $setupStageContext = ['operation_id' => $this->setupOperationId];
         if (isset($args['force-schema-rebind'])) {
             if (!(defined('DEV') && DEV)) {

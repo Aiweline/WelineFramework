@@ -315,6 +315,19 @@ final class ThemeLayoutSourceSnapshot
         RequestContext::set(self::REQUEST_KEY, $this);
     }
 
+    /** Release this snapshot's pinned bytes so the next page can load a smaller set. */
+    public function uninstall(Template $template): void
+    {
+        $template->clearPinnedSources();
+        if (!RequestContext::isInitialized()) {
+            return;
+        }
+        $current = RequestContext::get(self::REQUEST_KEY);
+        if ($current === $this) {
+            RequestContext::remove(self::REQUEST_KEY);
+        }
+    }
+
     /** Preserve the original source/alias overwrite order, preparing bindings only once. */
     private function buildSourceBindings(): void
     {

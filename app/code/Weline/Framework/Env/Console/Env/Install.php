@@ -19,6 +19,7 @@ use Weline\Framework\Env\Api\EnvRequirementsCollectorInterface;
 use Weline\Framework\Env\Api\InstallScriptExecutorInterface;
 use Weline\Framework\Env\Api\Data\EnvCheckResult;
 use Weline\Framework\Env\Service\EnvChecker;
+use Weline\Framework\Env\Service\ModuleEnvDir;
 use Weline\Framework\Env\Service\EnvRequirementsCollector;
 use Weline\Framework\Env\Service\ExtensionInstallStrategyMap;
 use Weline\Framework\Env\Service\LinuxScriptExecutor;
@@ -401,7 +402,8 @@ class Install extends CommandAbstract
                 return;
             }
             $this->printer->note(__('正在安装推荐项: %{name}', ['name' => $target]));
-            $envDir = $modulePath . DIRECTORY_SEPARATOR . 'env' . DIRECTORY_SEPARATOR;
+            $envDir = ModuleEnvDir::resolve($modulePath)
+                ?? ($modulePath . DIRECTORY_SEPARATOR . 'env' . DIRECTORY_SEPARATOR);
             $executor = $this->getScriptExecutor();
             $execResult = $executor->execute($modulePath, $item, $envDir, InstallScriptExecutorInterface::ACTION_INSTALL);
             if ($execResult->isSuccess()) {
@@ -499,7 +501,8 @@ class Install extends CommandAbstract
                     continue;
                 }
                 $this->printer->note(__('  正在安装推荐项: %{name}', ['name' => $name]));
-                $envDir = $modulePath . DIRECTORY_SEPARATOR . 'env' . DIRECTORY_SEPARATOR;
+                $envDir = ModuleEnvDir::resolve($modulePath)
+                ?? ($modulePath . DIRECTORY_SEPARATOR . 'env' . DIRECTORY_SEPARATOR);
                 $execResult = $executor->execute($modulePath, $item, $envDir, InstallScriptExecutorInterface::ACTION_INSTALL);
                 if ($execResult->isSuccess()) {
                     $recSuccess++;
@@ -618,7 +621,8 @@ class Install extends CommandAbstract
 
                 $this->printer->note(__('  正在安装: %{name}', ['name' => $name]));
 
-                $envDir = $modulePath . DIRECTORY_SEPARATOR . 'env' . DIRECTORY_SEPARATOR;
+                $envDir = ModuleEnvDir::resolve($modulePath)
+                ?? ($modulePath . DIRECTORY_SEPARATOR . 'env' . DIRECTORY_SEPARATOR);
                 $execResult = $executor->execute($modulePath, $item, $envDir, InstallScriptExecutorInterface::ACTION_INSTALL);
 
                 if ($execResult->isSuccess()) {
@@ -722,7 +726,8 @@ class Install extends CommandAbstract
                     continue;
                 }
                 $this->printer->note(__('  正在安装推荐项: %{name}', ['name' => $name]));
-                $envDir = $modulePath . DIRECTORY_SEPARATOR . 'env' . DIRECTORY_SEPARATOR;
+                $envDir = ModuleEnvDir::resolve($modulePath)
+                ?? ($modulePath . DIRECTORY_SEPARATOR . 'env' . DIRECTORY_SEPARATOR);
                 $execResult = $executor->execute($modulePath, $item, $envDir, InstallScriptExecutorInterface::ACTION_INSTALL);
                 if ($execResult->isSuccess()) {
                     $recSuccess++;

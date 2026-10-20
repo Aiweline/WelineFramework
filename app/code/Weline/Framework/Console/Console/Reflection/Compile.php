@@ -73,10 +73,6 @@ class Compile extends CommandAbstract
     {
         $this->printer->note(__('开始预编译反射元数据与编译型工厂...'));
 
-        // Full-tree reflection holds metadata for every module class in one process.
-        // Raise low CLI defaults without lowering an explicit higher/unlimited limit.
-        $this->raiseCliMemoryLimit('2048M');
-
         $verbose = isset($args['v']) || isset($args['verbose']) || isset($data['v']) || isset($data['verbose']);
 
         $env = Env::getInstance();
@@ -879,46 +875,6 @@ class Compile extends CommandAbstract
         }
         
         return null;
-    }
-
-    private function raiseCliMemoryLimit(string $targetLimit): void
-    {
-        $currentLimit = (string)\ini_get('memory_limit');
-        if ($currentLimit === '-1') {
-            return;
-        }
-
-        $currentBytes = $this->memoryLimitToBytes($currentLimit);
-        $targetBytes = $this->memoryLimitToBytes($targetLimit);
-        if ($targetBytes === null) {
-            return;
-        }
-
-        if ($currentBytes === null || $currentBytes < $targetBytes) {
-            @\ini_set('memory_limit', $targetLimit);
-        }
-    }
-
-    private function memoryLimitToBytes(string $limit): ?int
-    {
-        $limit = \trim($limit);
-        if ($limit === '' || $limit === '-1') {
-            return $limit === '-1' ? \PHP_INT_MAX : null;
-        }
-
-        if (!\preg_match('/^(\d+)([KMG])?$/i', $limit, $matches)) {
-            return null;
-        }
-
-        $bytes = (int)$matches[1];
-        $unit = \strtoupper($matches[2] ?? '');
-
-        return match ($unit) {
-            'G' => $bytes * 1024 * 1024 * 1024,
-            'M' => $bytes * 1024 * 1024,
-            'K' => $bytes * 1024,
-            default => $bytes,
-        };
     }
 
     public function tip(): string

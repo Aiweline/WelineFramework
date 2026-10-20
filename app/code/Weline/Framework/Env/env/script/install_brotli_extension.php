@@ -82,11 +82,14 @@ function tryInstallBrotli(): array
     $code = 0;
     @exec('printf "\n" | pecl install brotli 2>&1', $output, $code);
     if ($code === 0) {
-        enableBrotliExtensionInIni();
+        $enabled = enableBrotliExtensionInIni();
 
         return [
-            'success' => true,
-            'message' => 'brotli 扩展已通过 pecl 安装；新 PHP 进程将加载',
+            'success' => $enabled,
+            'message' => $enabled
+                ? 'brotli 扩展已通过 pecl 安装并启用'
+                : 'brotli 已编译但未能写入当前 PHP 会加载的 ini',
+            'enabled' => $enabled,
             'restart_required' => true,
         ];
     }
@@ -203,9 +206,10 @@ function tryBuildBrotliFromSource(): array
     $enabled = enableBrotliExtensionInIni();
 
     return [
-        'success' => true,
-        'message' => 'brotli 扩展已从源码构建并安装（版本 ' . $version . '）'
-            . ($enabled ? '' : '；请确认 extension=brotli 已启用'),
+        'success' => $enabled,
+        'message' => $enabled
+            ? 'brotli 扩展已从源码构建并安装（版本 ' . $version . '）'
+            : 'brotli 已构建但新进程未加载（ini 未生效）',
         'enabled' => $enabled,
         'restart_required' => true,
     ];
@@ -246,58 +250,25 @@ function downloadBrotliUrlToFile(string $url, string $target): bool
 
 function enableBrotliExtensionInIni(): bool
 {
-    $ext = 'brotli';
-    $phpIniPath = php_ini_loaded_file();
-    if ($phpIniPath && is_writable($phpIniPath)) {
-        $content = file_get_contents($phpIniPath);
-        if ($content !== false) {
-            $pattern = '/^\s*extension\s*=\s*' . preg_quote($ext, '/') . '(?:\.so)?\s*$/mi';
-            if (preg_match($pattern, $content)) {
-                return true;
-            }
-            $commentPattern = '/^;(\s*extension\s*=\s*' . preg_quote($ext, '/') . '(?:\.so)?\s*)$/mi';
-            if (preg_match($commentPattern, $content)) {
-                $content = preg_replace($commentPattern, '$1', $content);
-            } else {
-                $content .= "\nextension=" . $ext . "\n";
-            }
-            if (file_put_contents($phpIniPath, $content) !== false) {
-                return true;
-            }
+    $classFile = dirname(__DIR__, 2) . '/Service/PhpExtensionIniEnabler.php';
+    if (!is_file($classFile)) {
+        $classFile = dirname(__DIR__, 3) . '/Env/Service/PhpExtensionIniEnabler.php';
+    }
+    require_once $classFile;
+    $result = (new \Weline\Framework\Env\Service\PhpExtensionIniEnabler())->enable(
+        'brotli',
+        static function (): bool {
+            $probe = escapeshellarg(PHP_BINARY)
+                . ' -d opcache.enable=0 -d opcache.enable_cli=0 -r '
+                . escapeshellarg('exit(extension_loaded("brotli") && function_exists("brotli_compress") && function_exists("brotli_uncompress") ? 0 : 1);');
+            $code = 1;
+            exec($probe, $out, $code);
+
+            return $code === 0;
         }
-    }
+    );
 
-    return enableBrotliExtensionInScanDir($ext);
-}
-
-function enableBrotliExtensionInScanDir(string $ext): bool
-{
-    $scanDir = defined('PHP_CONFIG_FILE_SCAN_DIR') ? (string) PHP_CONFIG_FILE_SCAN_DIR : '';
-    if ($scanDir === '' || !is_dir($scanDir) || !is_writable($scanDir)) {
-        // Fall back to --with-config-file-scan-dir next to php binary (bundled PHP).
-        $candidate = dirname(PHP_BINARY) . '/../conf.d';
-        $candidate = realpath($candidate) ?: $candidate;
-        if (is_dir($candidate) && is_writable($candidate)) {
-            $scanDir = $candidate;
-        } else {
-            $prefixConf = dirname(dirname(PHP_BINARY)) . '/conf.d';
-            if (is_dir($prefixConf) && is_writable($prefixConf)) {
-                $scanDir = $prefixConf;
-            } else {
-                return false;
-            }
-        }
-    }
-
-    $target = rtrim($scanDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'weline-' . $ext . '.ini';
-    $desired = '; 由 Weline Framework env/script/install_brotli_extension.php 生成' . PHP_EOL
-        . 'extension=' . $ext . '.so' . PHP_EOL;
-
-    if (is_file($target) && file_get_contents($target) === $desired) {
-        return true;
-    }
-
-    return file_put_contents($target, $desired) !== false;
+    return $result['success'];
 }
 
 /**

@@ -11,6 +11,12 @@ final class ConfigurePhpIni
     private const MANAGED_EXTENSIONS_BEGIN = '; >>> installer managed extensions >>>';
     private const MANAGED_EXTENSIONS_END = '; <<< installer managed extensions <<<';
 
+    /**
+     * Written into both php.ini (FPM/Apache) and php-cli.ini (CLI).
+     * PHP 8 loads them separately. bin/w does not raise memory at runtime.
+     */
+    public const INSTALLED_MEMORY_LIMIT = '2048M';
+
     private const CACERT_URL = 'https://curl.se/ca/cacert.pem';
 
     private const MIN_CACERT_SIZE = 100_000;
@@ -173,17 +179,87 @@ final class ConfigurePhpIni
             $content
         ) ?? $content;
 
-        $content = preg_replace('/^\s*;?\s*memory_limit\s*=.*$/mi', 'memory_limit = 512M', $content, 1, $memCount);
-        if (($memCount ?? 0) === 0) {
-            $content = preg_replace('/(\[PHP\])/', '$1' . "\nmemory_limit = 512M\n", $content, 1) ?? $content;
-        }
+        $content = $this->applyInstalledMemoryLimit($content);
 
         $this->ensurePublicCaBundle();
         $content = $this->configureLogPaths($content);
         $content = $this->configureSslCaPaths($content);
+        if ($this->isOpcacheAvailable($isWindows)) {
+            $content = $this->ensureZendOpcacheLine($content);
+        }
         $content = $this->configureOpcache($content, $isWindows);
+        $content = $this->upsertIniDirective($content, 'ffi.enable', 'true');
         file_put_contents($iniPath, $content);
         file_put_contents($this->phpDir . '/php.installer.ini', $this->buildInstallerIni($extList, $extDirReal, $isWindows));
+        $this->ensurePhpAndCliIniPair($iniPath, $content);
+        $this->applyEnvDependencyProfileToSiblingInis($iniPath, $isWindows);
+    }
+
+    /**
+     * Rewrite every memory_limit line. PHP uses the last one, so a leftover 128M wins.
+     */
+    public function applyInstalledMemoryLimit(string $content): string
+    {
+        $line = 'memory_limit = ' . self::INSTALLED_MEMORY_LIMIT;
+        $content = preg_replace('/^\s*;?\s*memory_limit\s*=.*$/mi', $line, $content, -1, $count) ?? $content;
+        if (($count ?? 0) === 0) {
+            $content = preg_replace('/(\[PHP\])/', '$1' . "\n" . $line . "\n", $content, 1) ?? $content;
+            if (!str_contains($content, 'memory_limit')) {
+                $content = $line . "\n" . $content;
+            }
+        }
+
+        return $content;
+    }
+
+    /**
+     * PHP 8 CLI reads php-cli.ini when it sits beside php.ini; FPM/Apache keep php.ini.
+     * Both get the installed memory limit. A missing php-cli.ini is created as a copy of
+     * the configured php.ini so CLI does not keep a stock 128M file.
+     */
+    private function ensurePhpAndCliIniPair(string $phpIniPath, string $phpIniContent): void
+    {
+        $this->writeCliIniBeside($phpIniPath, $phpIniContent);
+        $etcPhp = $this->phpDir . '/etc/php.ini';
+        $primaryReal = realpath($phpIniPath) ?: $phpIniPath;
+        if (is_file($etcPhp) && (realpath($etcPhp) ?: $etcPhp) !== $primaryReal) {
+            $etcRaw = (string) file_get_contents($etcPhp);
+            $etcNext = $this->applyInstalledMemoryLimit($etcRaw);
+            if ($etcNext !== $etcRaw) {
+                file_put_contents($etcPhp, $etcNext);
+            }
+            $this->writeCliIniBeside($etcPhp, $etcNext);
+        }
+        foreach (['conf.d', 'etc/conf.d', 'scan'] as $scan) {
+            foreach (glob($this->phpDir . '/' . $scan . '/*.ini') ?: [] as $scanned) {
+                $raw = (string) file_get_contents($scanned);
+                if (!preg_match('/^\s*;?\s*memory_limit\s*=/mi', $raw)) {
+                    continue;
+                }
+                $next = $this->applyInstalledMemoryLimit($raw);
+                if ($next !== $raw) {
+                    file_put_contents($scanned, $next);
+                }
+            }
+        }
+    }
+
+    private function writeCliIniBeside(string $phpIniPath, string $phpIniContent): void
+    {
+        $cliPath = dirname($phpIniPath) . '/php-cli.ini';
+        $phpReal = realpath($phpIniPath) ?: $phpIniPath;
+        if ((realpath($cliPath) ?: $cliPath) === $phpReal) {
+            return;
+        }
+        if (!is_file($cliPath)) {
+            file_put_contents($cliPath, $phpIniContent);
+            return;
+        }
+        $raw = (string) file_get_contents($cliPath);
+        $next = $this->applyInstalledMemoryLimit($raw);
+        if ($next !== $raw) {
+            file_put_contents($cliPath, $next);
+        }
     }
 
     public function getCaBundlePath(): string
@@ -282,6 +358,44 @@ final class ConfigurePhpIni
         }
 
         return $content;
+    }
+
+    private function ensureZendOpcacheLine(string $content): string
+    {
+        $active = '/^\s*zend_extension\s*=\s*["\']?(?:.*[\/\\\\])?(?:php_)?opcache(?:\.(?:so|dll))?["\']?\s*$/mi';
+        if (preg_match($active, $content) === 1) {
+            return $content;
+        }
+        if (preg_match('/^;\s*zend_extension\s*=.*opcache.*$/mi', $content) === 1) {
+            return (string) preg_replace('/^;\s*zend_extension\s*=.*opcache.*$/mi', 'zend_extension=opcache', $content, 1);
+        }
+
+        return rtrim($content) . "\nzend_extension=opcache\n";
+    }
+
+    private function applyEnvDependencyProfileToSiblingInis(string $primaryIni, bool $isWindows): void
+    {
+        $primaryReal = realpath($primaryIni) ?: $primaryIni;
+        foreach (['php.ini', 'php-cli.ini', 'etc/php.ini', 'etc/php-cli.ini'] as $name) {
+            $path = $this->phpDir . '/' . $name;
+            if (!is_file($path)) {
+                continue;
+            }
+            $real = realpath($path) ?: $path;
+            if ($real === $primaryReal) {
+                continue;
+            }
+            $raw = (string) file_get_contents($path);
+            $next = $raw;
+            if ($this->isOpcacheAvailable($isWindows)) {
+                $next = $this->ensureZendOpcacheLine($next);
+            }
+            $next = $this->configureOpcache($next, $isWindows);
+            $next = $this->upsertIniDirective($next, 'ffi.enable', 'true');
+            if ($next !== $raw) {
+                file_put_contents($path, $next);
+            }
+        }
     }
 
     private function isOpcacheAvailable(bool $isWindows): bool
@@ -406,7 +520,7 @@ final class ConfigurePhpIni
             $managedLines[] = 'extension=' . $ext;
         }
 
-        if ($isWindows && is_file($extDirReal . '/php_opcache.dll')) {
+        if ($this->isOpcacheAvailable($isWindows)) {
             $managedLines[] = 'zend_extension=opcache';
         }
 
@@ -460,7 +574,7 @@ final class ConfigurePhpIni
         $extensionDirValue = $isWindows ? 'ext' : $extDirReal;
         $lines = [
             'extension_dir = "' . $extensionDirValue . '"',
-            'memory_limit = 512M',
+            'memory_limit = ' . self::INSTALLED_MEMORY_LIMIT,
             'log_errors = On',
         ];
 
@@ -477,12 +591,13 @@ final class ConfigurePhpIni
             $lines[] = 'extension=' . $ext;
         }
 
-        if ($isWindows && is_file($extDirReal . '/php_opcache.dll')) {
+        if ($this->isOpcacheAvailable($isWindows)) {
             $lines[] = 'zend_extension=opcache';
-            foreach ($this->getOpcacheInstallerIniLines(true) as $opcacheLine) {
+            foreach ($this->getOpcacheInstallerIniLines($isWindows) as $opcacheLine) {
                 $lines[] = $opcacheLine;
             }
         }
+        $lines[] = 'ffi.enable=true';
 
         $this->ensurePublicCaBundle();
         $caPath = str_replace('\\', '/', $this->getCaBundlePath());

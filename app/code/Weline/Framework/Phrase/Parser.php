@@ -1462,6 +1462,19 @@ class Parser
     }
 
     /**
+     * Nested Taglib compile: drop one locale's dictionary bags before the next locale hydrates.
+     */
+    public static function releaseLocaleWorkerCaches(string $locale): void
+    {
+        $locale = \trim($locale);
+        if ($locale === '') {
+            return;
+        }
+        self::evictHeavyLocaleCaches($locale);
+        self::clearUsedWords();
+    }
+
+    /**
      * 从按模块组织的语言数组中提取当前请求所需词条。
      */
     private static function extractModuleWords(array $lang_words, array $modules): array

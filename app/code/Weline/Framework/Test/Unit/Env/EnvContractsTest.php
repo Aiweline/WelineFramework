@@ -47,6 +47,9 @@ final class EnvContractsTest extends TestCase
             'InstallPhpSodiumConfigure::testConfigurePhpIniRequiresSodium' => function () {
             $this->assert_InstallPhpSodiumConfigure_testConfigurePhpIniRequiresSodium();
         },
+            'InstallPhpIniMemoryFloor::testConfigureRewritesEveryMemoryLimitToCliFloor' => function () {
+            $this->assert_InstallPhpIniMemoryFloor_testConfigureRewritesEveryMemoryLimitToCliFloor();
+        },
             'InstallPhpSodiumConfigure::testPeclPackageNameMapsSodiumToLibsodium' => function () {
             $this->assert_InstallPhpSodiumConfigure_testPeclPackageNameMapsSodiumToLibsodium();
         },
@@ -101,6 +104,19 @@ private function assert_InstallPhpSodiumConfigure_testConfigurePhpIniRequiresSod
 {
     $src = (string) file_get_contents('/Users/weline/Project/Official/框架' . '/setup/server_installer/ConfigurePhpIni.php');
     self::assertMatchesRegularExpression("/getFrameworkRequiredExtensions\\(\\)[\\s\\S]*?'sodium'/", $src);
+}
+
+private function assert_InstallPhpIniMemoryFloor_testConfigureRewritesEveryMemoryLimitToCliFloor(): void
+{
+    $src = (string) file_get_contents('/Users/weline/Project/Official/框架' . '/setup/server_installer/ConfigurePhpIni.php');
+    self::assertStringContainsString('INSTALLED_MEMORY_LIMIT', $src);
+    self::assertStringContainsString("'2048M'", $src);
+    self::assertStringContainsString('function applyInstalledMemoryLimit', $src);
+    self::assertStringContainsString('function ensurePhpAndCliIniPair', $src);
+    self::assertStringContainsString('function writeCliIniBeside', $src);
+    self::assertStringContainsString('php-cli.ini', $src);
+    self::assertStringNotContainsString('PhpCliRuntimePreflight', $src);
+    self::assertStringNotContainsString('memory_limit = 512M', $src);
 }
 
 private function assert_InstallPhpSodiumConfigure_testPeclPackageNameMapsSodiumToLibsodium(): void

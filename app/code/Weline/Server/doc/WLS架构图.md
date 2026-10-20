@@ -233,7 +233,81 @@ Alt-Svc 和真实后端探针同时通过才可声明；纯 WLS 当前只提供 
 [WLS启动与关闭链路图.md](WLS启动与关闭链路图.md)、
 [IPC控制通道架构.md](IPC控制通道架构.md) 和
 [Dispatcher分流架构设计.md](Dispatcher分流架构设计.md) 维护；本文不复制它们的
-完整状态机。
+完整状态机。监听方式与 FFI 的现行契约见下一节。
+
+### 6.1 监听拓扑与 FFI
+
+FFI（PHP `ext-ffi`）不在请求热路径上。Worker 接连接、跑业务、写响应靠
+`ext-event` 和普通 PHP；`app/code/Weline/Server/bin/worker.php` 不调用
+`FFI`。单次 FFI 要经 libffi 打包参数，比同等 PHP 调用更贵，所以只允许出现在
+进程生命周期里，而且次数很少。
+
+FFI 在这里解决的是纯 PHP 做不到的描述符交接。Direct 的 `shared_fd` /
+`reuseport` 由父进程先打开监听套接字，再从 FD 3 起交给 Master/Worker。
+`proc_open` / `pcntl` 管不住「哪些描述符传给子进程、哪些立刻关掉、就绪管道是否
+带 `FD_CLOEXEC`」。Unix 批量启动器因此用 FFI 调 libc：`pipe`、`fcntl`、
+`close`、`poll`，以及就绪管道上的 `read` / `write`。实现在
+[Processer.php](../../Framework/System/Process/Processer.php)。
+
+同一扩展还用于少量运维探测，同样不进入每个 HTTP 请求：macOS 用 `sysctl`
+`KERN_PROCARGS2` 读完整 argv；Windows 在隔离 batch broker 身份核验时打开进程
+句柄。这些探测失败时回退原有路径，不改变监听模型。
+
+```mermaid
+flowchart TD
+  Start["server:start"] --> OS{平台}
+  OS -->|"Linux / macOS"| FFI{FFI 可用?}
+  FFI -->|否，且 auto| Disp["Dispatcher<br/>每个连接多一跳 PHP 转发"]
+  FFI -->|否，且显式 Direct| Fail["失败退出<br/>禁止无 FFI 硬启 Direct"]
+  FFI -->|是| Mode{listener_mode}
+  Mode -->|"auto 或 shared_fd"| Shared["Master 先监听<br/>子进程继承 FD 3<br/>内核一条 accept 队列"]
+  Mode -->|"reuseport，仅 Linux 显式"| Reuse["每个 Worker 自己的队列<br/>SO_REUSEPORT"]
+  OS -->|Windows| Win{前面有谁听公网?}
+  Win -->|纯 WLS 的 auto| Disp
+  Win -->|纯 WLS 且显式 Direct| FailWin["失败退出<br/>没有 Nginx 不能按 Worker 拆端口"]
+  Win -->|schema-6 连续监听所有权| Disp
+  Win -->|托管 Nginx，且无该交接| Ports["worker_ports<br/>每个 Worker 一个回环端口<br/>Nginx 分流"]
+  Shared --> Hot["Worker 热路径<br/>ext-event + PHP，无 FFI"]
+  Reuse --> Hot
+  Ports --> Hot
+  Disp --> Hot
+```
+
+| 监听 | 谁分流 | 默认出现在 | 缺 FFI |
+| --- | --- | --- | --- |
+| `shared_fd` | 内核一条 accept 队列；退出的 Worker 只关自己的描述符，已排队连接仍在 | Linux / macOS 的 auto 与显式 `shared_fd` | auto 退回 Dispatcher；显式 Direct 失败退出 |
+| `reuseport` | 每个 Worker 一条队列。替换进程时，已进退役 Worker 队列的连接可能被重置 | 仅 Linux，且必须显式 `listener_mode=reuseport` 并通过探测 | 与 `shared_fd` 相同：POSIX Direct 硬依赖 FFI |
+| `worker_ports` | Nginx 把连接分到各 Worker 的回环端口 | 仅 Windows 托管 Nginx 的 Direct，且不是 schema-6 连续监听所有权 | 不依赖 FFI |
+| Dispatcher | Master/Dispatcher 用 PHP 再转发一跳 | POSIX 上 auto 但 Direct 能力不足；Windows 纯 WLS 的 auto；Windows schema-6 连续监听所有权 | POSIX 上这是缺 FFI 时的退路，不是 Direct |
+
+选择入口是
+[RuntimeStrategyResolver.php](../Service/Runtime/RuntimeStrategyResolver.php)
+与
+[WlsRuntimeProfile.php](../Service/Runtime/WlsRuntimeProfile.php)。
+`worker_ports` 在 Linux/macOS 上直接拒绝；`shared_fd` 与 `reuseport` 在
+Windows 上直接拒绝；显式 `reuseport` 只允许 Linux。macOS 的
+`SO_REUSEPORT` 探测不能当成 Linux 那种「每 Worker 一条队列、内核负载均衡」：
+Darwin 上重复 bind 仍可能把同一客户端身份送进单个套接字，auto 因此固定
+`shared_fd`。
+
+macOS 不照搬 Windows 的 `worker_ports`。POSIX 已经能把同一把监听套接字交给
+全部 Worker。改成按端口拆开之后，纯 WLS 前面没有 Nginx 就无法统一拆端口；
+有 Nginx 时 Worker 增减都要改上游；某个 Worker 退出时，它那个端口上已排队的
+连接一起断。共享一把套接字时不会。
+
+Windows 也不能照搬 macOS 的 `shared_fd`。Winsock 句柄不是 Unix 文件描述符，
+不能靠继承 FD 3 拿到同一条 accept 队列，也没有可用的 `SO_REUSEPORT` 负载
+均衡。要做成「一把监听口、多个进程一起 accept」需要另写
+`WSADuplicateSocket` 交接；当前代码没有这条路径。托管 Nginx 且没有 schema-6
+连续监听所有权时，Windows 的 Direct 是 `worker_ports`：请求不经过
+Dispatcher，分流点在 Nginx 而不是内核队列。纯 WLS 的 auto 走公网
+Dispatcher；纯 WLS 上显式 Direct 直接失败。schema-6 把保留套接字收成单一
+Dispatcher 所有者时，显式 Direct 同样失败，不能再拆成每 Worker 一个端口。
+
+因此 POSIX 上「没有 FFI 的 Direct」是坏的：子进程拿不到同一把监听句柄，若仍用
+普通 `proc_open` 拉起，会看起来像服务起来了，实际不是共享监听。
+`auto` 缺 FFI（或共享监听 Direct 还缺 `ext-event`）就退回 Dispatcher；显式
+Direct 失败退出，不再软回退。
 
 ## 7. 网关健康与自动恢复
 

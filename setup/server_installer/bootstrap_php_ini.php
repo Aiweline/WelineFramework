@@ -20,7 +20,7 @@ if (!is_dir($phpDir)) {
 try {
     $env = (new EnvLoader($projectRoot))->load(true);
     (new ConfigurePhpIni($projectRoot, $phpDir))->apply($env);
-    echo "bootstrap_php_ini: php.ini / php.installer.ini configured.\n";
+    echo "bootstrap_php_ini: php.ini / php-cli.ini / php.installer.ini configured.\n";
     exit(0);
 } catch (Throwable $e) {
     fwrite(STDERR, 'bootstrap_php_ini failed: ' . $e->getMessage() . "\n");

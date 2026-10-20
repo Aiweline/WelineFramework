@@ -6,7 +6,9 @@ declare(strict_types=1);
  * FFI 扩展检测/启用（Linux/macOS Direct 硬依赖）
  *
  * FFI 是 PHP 核心扩展，须在编译期 --with-ffi（依赖 libffi）。
- * 本脚本不能从零编译 FFI；仅能检测，或在 extension_dir 已有 ffi.so 时写入 conf.d 启用。
+ * 本脚本不能从零编译 FFI；仅能检测，或在 extension_dir 已有 ffi.so 时
+ * 交给 PhpExtensionIniEnabler 写入当前 PHP 真正会读的 ini（含宝塔 php.ini/php-cli.ini）。
+ *
  * 失败必须阻断安装/启动，禁止当推荐项软过。
  *
  * 用法：
@@ -89,74 +91,41 @@ function tryEnableFfi(): array
         ];
     }
 
-    $confDir = resolvePhpConfDir();
-    if ($confDir === null) {
-        return [
-            'success' => false,
-            'message' => '无法定位 conf.d / php.ini 以启用 FFI',
-            'guide' => getFfiGuide(),
-        ];
+    $classFile = \dirname(__DIR__, 3) . '/Framework/Env/Service/PhpExtensionIniEnabler.php';
+    if (!\is_file($classFile)) {
+        $classFile = \dirname(__DIR__, 3) . '/Framework/env/Service/PhpExtensionIniEnabler.php';
     }
+    require_once $classFile;
+    $result = (new \Weline\Framework\Env\Service\PhpExtensionIniEnabler())->enable(
+        'ffi',
+        static function (): bool {
+            $probe = \escapeshellarg(PHP_BINARY)
+                . ' -d opcache.enable=0 -d opcache.enable_cli=0 -r '
+                . \escapeshellarg('exit(extension_loaded("ffi") && class_exists("FFI", false) ? 0 : 1);');
+            $code = 1;
+            \exec($probe, $out, $code);
 
-    $iniPath = $confDir . DIRECTORY_SEPARATOR . '20-ffi.ini';
-    $body = "; WLS Direct shared-listener FD handoff\nextension=ffi\nffi.enable=true\n";
-    if (@\file_put_contents($iniPath, $body, LOCK_EX) === false) {
+            return $code === 0;
+        },
+        ['ffi.enable=true']
+    );
+    if ($result['success']) {
         return [
-            'success' => false,
-            'message' => '无法写入 ' . $iniPath,
-            'guide' => getFfiGuide(),
-        ];
-    }
-
-    // 当前进程不会加载新 ini；用同二进制子进程探测。
-    $probe = \escapeshellarg(PHP_BINARY)
-        . ' -d opcache.enable=0 -d opcache.enable_cli=0 -r '
-        . \escapeshellarg('exit(extension_loaded("ffi") && class_exists("FFI", false) ? 0 : 1);');
-    $code = 1;
-    \exec($probe, $out, $code);
-    if ($code !== 0) {
-        return [
-            'success' => false,
-            'message' => '已写 20-ffi.ini 但新进程仍未加载 FFI；请重编 PHP（--with-ffi）',
-            'guide' => getFfiGuide(),
+            'success' => true,
+            'message' => $result['message'] . '；ffi.so=' . $so,
         ];
     }
 
     return [
-        'success' => true,
-        'message' => '已启用 FFI（' . $iniPath . '）',
+        'success' => false,
+        'message' => $result['message'] . '；ffi.so=' . $so,
+        'guide' => getFfiGuide(),
     ];
-}
-
-function resolvePhpConfDir(): ?string
-{
-    $scan = (string)\php_ini_scanned_files();
-    if ($scan !== '') {
-        $first = \trim(\explode(',', $scan)[0] ?? '');
-        if ($first !== '' && \is_file($first)) {
-            return \dirname($first);
-        }
-    }
-    $ini = \php_ini_loaded_file();
-    if (\is_string($ini) && $ini !== '' && \is_file($ini)) {
-        $dir = \dirname($ini) . DIRECTORY_SEPARATOR . 'conf.d';
-        if (!\is_dir($dir)) {
-            @\mkdir($dir, 0755, true);
-        }
-        return \is_dir($dir) ? $dir : \dirname($ini);
-    }
-    $prefix = \dirname(PHP_BINARY, 2);
-    $dir = $prefix . DIRECTORY_SEPARATOR . 'conf.d';
-    if (!\is_dir($dir)) {
-        @\mkdir($dir, 0755, true);
-    }
-
-    return \is_dir($dir) ? $dir : null;
 }
 
 function getFfiGuide(): string
 {
-    return 'Linux/macOS：安装 libffi-dev（Debian）或 libffi-devel，然后 '
-        . 'bash bin/install.sh --rebuild-php php（configure 含 --with-ffi）。'
+    return 'Linux/macOS：确认 extension_dir 有 ffi.so；在已加载 php.ini 取消注释 extension=ffi 并设 ffi.enable=true'
+        . '（php --ini）。若无 ffi.so：安装 libffi-devel 后 bash bin/install.sh --rebuild-php php（--with-ffi）。'
         . ' Windows Direct 不硬依赖 FFI。';
 }

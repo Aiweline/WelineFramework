@@ -1139,6 +1139,19 @@ class Template extends DataObject implements RequestLocalInterface
         $this->pinnedSourceSetGeneration = $this->pinnedSourceGeneration;
     }
 
+    /**
+     * Drop pinned layout bytes after a compile page finishes (pipeline worker).
+     * Bumps generation so a later pinSourceSet cannot reuse a stale install.
+     */
+    public function clearPinnedSources(): void
+    {
+        $this->pinnedSources = [];
+        $this->pinnedSourceDigests = [];
+        $this->pinnedSourceSetToken = null;
+        $this->pinnedSourceSetGeneration = -1;
+        ++$this->pinnedSourceGeneration;
+    }
+
     private function writePinnedSource(string $logicalPath, string $sourceBytes, string $originPath = '', string $contextKey = ''): void
     {
         $source = [$sourceBytes, $originPath !== '' ? $originPath : $logicalPath, $contextKey];

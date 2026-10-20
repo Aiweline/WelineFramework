@@ -596,11 +596,23 @@ $requireBrotliExtension = function () use ($run, $projectRoot, $phpBin): void {
     echo "brotli 扩展未加载，正在必装（FPC html-disk / Nginx index.html.br）...\n";
     $code = $run('bin/w env:install brotli -y');
     if ($code !== 0) {
-        $script = $projectRoot . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'code'
-            . DIRECTORY_SEPARATOR . 'Weline' . DIRECTORY_SEPARATOR . 'Framework'
-            . DIRECTORY_SEPARATOR . 'Env' . DIRECTORY_SEPARATOR . 'env'
-            . DIRECTORY_SEPARATOR . 'script' . DIRECTORY_SEPARATOR . 'install_brotli_extension.php';
-        if (is_file($script) && $phpBin !== '') {
+        // 契约：Framework/Env/env/script。旧树 Framework/env/env/script 仅作回退。
+        $frameworkRoot = $projectRoot . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'code'
+            . DIRECTORY_SEPARATOR . 'Weline' . DIRECTORY_SEPARATOR . 'Framework';
+        $scriptCandidates = [
+            $frameworkRoot . DIRECTORY_SEPARATOR . 'Env' . DIRECTORY_SEPARATOR . 'env'
+                . DIRECTORY_SEPARATOR . 'script' . DIRECTORY_SEPARATOR . 'install_brotli_extension.php',
+            $frameworkRoot . DIRECTORY_SEPARATOR . 'env' . DIRECTORY_SEPARATOR . 'env'
+                . DIRECTORY_SEPARATOR . 'script' . DIRECTORY_SEPARATOR . 'install_brotli_extension.php',
+        ];
+        $script = '';
+        foreach ($scriptCandidates as $candidate) {
+            if (is_file($candidate)) {
+                $script = $candidate;
+                break;
+            }
+        }
+        if ($script !== '' && $phpBin !== '') {
             echo "env:install brotli 未成功，改用 phpize 源码脚本...\n";
             $code = DeployUserCommandRunner::runPhp(
                 $projectRoot,
