@@ -3824,6 +3824,14 @@ class SharedStateServiceManager
         }
         $recordFields['role'] = $role;
         $recordFields['shared_service'] = true;
+        // The runtime may already carry a binding advanced past a stale
+        // runtime authority; use it as the registry floor instead of letting
+        // the updater restart at generation 1.
+        if (SharedStateServiceRegistry::hasExactLifecycleBinding($role, $runtime)) {
+            $recordFields['lifecycle_schema'] = $runtime['lifecycle_schema'];
+            $recordFields['lifecycle_generation'] = $runtime['lifecycle_generation'];
+            $recordFields['lifecycle_identity_digest'] = $runtime['lifecycle_identity_digest'];
+        }
 
         return $registry->updateRecord(
             $role,

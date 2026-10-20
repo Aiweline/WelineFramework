@@ -4,7 +4,7 @@
 - **计划文件**：`app/code/Weline/Server/doc/开发/plan.md`
 - **建立日期**：2026-10-20
 - **执行方式**：一次只做一项 → 实现 → 跑该项验收 → 写完成证据 → 勾选 → 汇报计划文件与本轮进度
-- **当前进度**：**4 / 16**（WLS-001、WLS-002、WLS-010、WLS-003 已完成；其余待开发）
+- **当前进度**：**4 / 17**（WLS-001、WLS-002、WLS-010、WLS-003 已完成；WLS-004 部分完成，余 6 项移交 WLS-017）
 
 ---
 
@@ -75,7 +75,7 @@
 | WLS-001 | P0 | 单测加载期 fatal，整套不可运行 | `MetricsFlushSchedulerTest.php:44` 的 `load()` 签名与父类不兼容 | ✅ 已完成（2026-10-21） |
 | WLS-002 | P0 | 96 项单测失败无归因，无法判断是代码还是测试过期 | 33 errors + 63 failures | ✅ 已完成（2026-10-21） |
 | WLS-003 | P0 | 夹具/框架漂移簇 39 项 | Start 21、Dispatcher 5、子进程常量 12、探针目录 1 | ✅ 已完成（2026-10-21） |
-| WLS-004 | P0 | 共享态/控制/实例/监督簇 24 项 | SharedState 5、Instance 5、BroadcastControl 4 等 | ⬜ 待开发 |
+| WLS-004 | P0 | 共享态/控制/实例/监督簇 24 项 | 已清 18；余 6 项 SharedState 生命周期权威移交 WLS-017 | 🔄 进行中（18/24） |
 | WLS-005 | P0 | FPC/内存守卫/Worker 入口簇 17 项 | FPC 5、Monotonic 3、MemoryGuard 3、503 页 1 等 | ⬜ 待开发 |
 | WLS-006 | P0 | Gateway/SSL/CLI/编排簇 21 项 | SSL ACME 2、Gateway 9、Start/Stop 2 等 | ⬜ 待开发 |
 | WLS-007 | P1 | `WlsRuntime` 硬编码业务路径 `/products` | `Runtime/WlsRuntime.php:1801,1835,2836,3877,4041` | ⬜ 待开发 |
@@ -88,6 +88,7 @@
 | WLS-014 | P2 | 遗留 Worker/Protocol 死代码 | `Worker.php`、`Service/HttpServer.php`、`Protocol/Http.php` 等仅自引用 | ⬜ 待开发 |
 | WLS-015 | P2 | CI 未跑 WLS 单测/语法 | `.github/workflows` 无对应 job | ⬜ 待开发 |
 | WLS-016 | P3 | 巨型文件无体量守卫 | `bin/wls_gateway_controller.php` 50,499 行；`ServiceOrchestrator.php` 34,506 行 | ⬜ 待开发 |
+| WLS-017 | P0 | 共享态生命周期权威 vs 更高 stale runtime（6 项） | `SharedStateGenerationAndRecoveryTest` 3 errors + 3 failures | 🔄 进行中 |
 
 ### 2.1 单测失败簇明细（WLS-002 的输入）
 
@@ -107,7 +108,7 @@
 - [x] WLS-001 修复单测加载期 fatal
 - [x] WLS-002 96 项失败归因清单
 - [x] WLS-003 夹具/框架漂移簇 39 项清零
-- [ ] WLS-004 共享态/控制/实例/监督簇 24 项清零
+- [ ] WLS-004 共享态/控制/实例/监督簇 24 项（已清 18，余 6 移交 WLS-017）
 - [ ] WLS-005 FPC/内存/Worker 簇 17 项清零
 - [ ] WLS-006 Gateway/SSL/CLI/编排簇 21 项清零（含平台跳过口径）
 - [ ] WLS-007 移除 `WlsRuntime` `/products` 硬编码
@@ -120,6 +121,7 @@
 - [ ] WLS-014 遗留 Worker/Protocol 死代码处置
 - [ ] WLS-015 WLS 单测/语法 CI 门禁
 - [ ] WLS-016 巨型文件体量守卫与拆分路线
+- [ ] WLS-017 共享态生命周期权威 vs 更高 stale runtime（6 项）
 
 ---
 
@@ -198,7 +200,7 @@
 
 ### WLS-004 共享态/控制/实例/监督簇 24 项清零
 
-- **状态**：⬜ 待开发
+- **状态**：🔄 进行中（18/24；余 6 项移交 WLS-017）
 - **优先级**：P0
 - **缺陷证据**：
   - `SharedStateGenerationAndRecoveryTest` 5：`Stale WLS shared-state lifecycle...`；
@@ -212,7 +214,9 @@
   1. 上述 9 个类单独运行 → `OK`。
   2. 全量单测失败数 ≤ 38。
   3. 若改产品代码：`php -l` 通过 + 相关契约测试通过 + 版本 bump。
-- **完成证据**：（待填）
+- **完成证据**：
+  - 2026-10-21：18 项清零——`ServerInstanceManagerAppendOnlyRecordsTest` 5（按 endpoint-only 契约重写）、`BroadcastControlDispatchServiceTest` 4（改结构化断言，去掉本地化文案断言）、`SharedStateClientTest` 2（trace 先 reset 后 arm）、`CoroutineRuntimeTest` 1（fiber 内重新 arm）、`SupervisorChildClientTest` 3 + `SubprocessControlKernelTest` 2 + `HybridControlPlaneServerTest` 1（测试内注入 namespace applier fake，避开缺失 DB 表）、`ConnectionPoolReconnectOwnershipTest` 1（单独运行 OK，全量稳定性待复核）。
+  - 余 6 项全部在 `SharedStateGenerationAndRecoveryTest`：3 errors（`Stale WLS shared-state lifecycle binding cannot replace the current generation`）+ 3 failures（代次/快照断言）。根因是 `writeRuntimeFile()` 用 stale runtime 的更高代次拒绝已认证的新 runtime；HEAD `70021525d5` 的 authority-bound 修复未能闭合，且工作树当前又移除了该块（未提交脏改）。移交 WLS-017。
 - **回滚**：按提交 revert。
 
 ---
@@ -499,6 +503,30 @@
 
 ---
 
+### WLS-017 共享态生命周期权威 vs 更高 stale runtime
+
+- **状态**：🔄 进行中
+- **优先级**：P0
+- **缺陷证据**：
+  - `SharedStateGenerationAndRecoveryTest` 6 项：3 errors `Stale WLS shared-state lifecycle binding cannot replace the current generation` + 3 failures（代次/快照断言）。
+  - HEAD `70021525d5` 增加 `$authorityBound` 后测试仍失败；工作树当前又移除了该块（未提交脏改）。
+  - 抛错点：`SharedStateServiceRegistry::bindLifecycleGeneration()` 由 `SharedStateServiceManager::writeRuntimeFile()` 调用；观测到 candidate gen=1 / previous stale gen=2 / digest 不同。
+- **根因**：`writeRuntimeFile()` 只按 runtime 文件代次做 CAS，无法表达「已认证 live registry 权威应压过更高 stale runtime」；单纯比较 generation 会把新 live 侧车判成 stale。
+- **修复方案**：
+  1. 明确权威优先级：已认证 live registry > 更高 stale runtime > 无绑定；
+  2. `writeRuntimeFile()` 绑定前读取 registry 权威，按「权威代次 + 1」推进，而不是用 stale runtime 代次拒绝；
+  3. 保留 fail-closed：无认证信号、低代次且不同 digest 仍拒绝；
+  4. 补契约测试：live gen 3 vs stale gen 68 → 69；live gen 1 vs stale gen 2 → 3。
+- **影响面**：`SharedStateServiceManager::writeRuntimeFile`、`SharedStateServiceRegistry::bindLifecycleGeneration`、Session/Memory sidecar 发布路径。
+- **验收标准**：
+  1. 6 个用例全部通过。
+  2. 全量单测 0 errors / 0 failures（WLS-005/006 清零后）。
+  3. 权威优先级有独立契约测试；不得用放宽断言/删用例过关。
+- **完成证据**：（待填）
+- **回滚**：按提交 revert；保留 HEAD `70021525d5` 的意图，不静默回退。
+
+---
+
 ## 5. 验收与汇报协议
 
 ### 5.1 单项任务闭环
@@ -512,7 +540,7 @@
 
 ```text
 计划：app/code/Weline/Server/doc/开发/plan.md
-进度：✅ 已完成 N/16；本轮 WLS-00X
+进度：✅ 已完成 N/17；本轮 WLS-00X
 结果：通过 / 未通过（原因）
 证据：命令 + 输出摘要 / 文件路径
 下一项：WLS-00Y
@@ -531,6 +559,7 @@
 WLS-001 → WLS-002 → WLS-010（版本/依赖基线）
       → WLS-003 → WLS-004 → WLS-005 → WLS-006
       → WLS-015（先让 CI 守住基线）
+      → WLS-017（共享态生命周期权威）
       → WLS-007 → WLS-008 → WLS-009
       → WLS-011 → WLS-012 → WLS-013 → WLS-014 → WLS-016
 ```
@@ -548,6 +577,13 @@ WLS-001 → WLS-002 → WLS-010（版本/依赖基线）
 ---
 
 ## 6. 进度日志
+
+### 2026-10-21 — WLS-004 部分完成（18/24，4/17）
+
+- 已清 18 项：Instance 5、Broadcast 4、SharedStateClient 2、Coroutine 1、Supervisor 3、Subprocess 2、Hybrid 1；ConnectionPool 1 单独通过、全量待复核。
+- 余 6 项：`SharedStateGenerationAndRecoveryTest`（3 errors + 3 failures），全部是「已认证 live 代次 vs 更高 stale runtime」权威问题；HEAD `70021525d5` 修复未闭合，工作树又移除了该块。
+- 新增 WLS-017 承接余项；WLS-004 不标完成。
+- 下一步：WLS-017。
 
 ### 2026-10-21 — WLS-003 完成（4/16）
 
