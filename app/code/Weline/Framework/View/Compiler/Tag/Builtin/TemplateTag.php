@@ -86,10 +86,19 @@ final class TemplateTag
             throw new \LogicException('template 标签需要只读 Template 注入（Lower 第 4 个参数）');
         }
 
-        $compiledPath = $template->fetchTagSource(DataInterface::dir_type_TEMPLATE, $path);
-        $content = @\file_get_contents($compiledPath);
+        try {
+            $compiledPath = $template->fetchTagSource(DataInterface::dir_type_TEMPLATE, $path);
+            $content = @\file_get_contents($compiledPath);
+        } catch (\Throwable) {
+            $content = false;
+        }
         if (!\is_string($content)) {
-            throw new \RuntimeException('template 标签无法读取编译产物：' . $path);
+            // 旧链在子模板缺失/不可读时回退为运行期 include，而不是编译失败。
+            return new RawPhpStmt(
+                '<?php include $this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_TEMPLATE, '
+                . \var_export($path, true) . '); ?>',
+                $node->span(),
+            );
         }
 
         return new RawPhpStmt($content, $node->span());

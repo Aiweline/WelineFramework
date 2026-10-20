@@ -27,7 +27,9 @@ use Weline\Framework\View\Compiler\Tag\Builtin\FormTag;
 use Weline\Framework\View\Compiler\Tag\Builtin\HookTag;
 use Weline\Framework\View\Compiler\Tag\Builtin\JsTag;
 use Weline\Framework\View\Compiler\Tag\Builtin\LangTag;
+use Weline\Framework\View\Compiler\Tag\Builtin\PhpTag;
 use Weline\Framework\View\Compiler\Tag\Builtin\StaticTag;
+use Weline\Framework\View\Compiler\Tag\Builtin\StringTag;
 use Weline\Framework\View\Compiler\Tag\Builtin\TemplateTag;
 use Weline\Framework\View\Compiler\Tag\Builtin\UrlTag;
 use Weline\Framework\View\Compiler\Tag\Builtin\VarTag;
@@ -46,9 +48,11 @@ final class BuiltinRegistry
             JsTag::descriptor(),
             CssTag::descriptor(),
             CsrfTag::descriptor(),
+            PhpTag::descriptor(),
             TemplateTag::descriptor(),
             FormTag::descriptor(),
             VarTag::descriptor(),
+            StringTag::descriptor(),
             BlockTag::descriptor(),
             HookTag::descriptor(),
             StaticTag::descriptor(),

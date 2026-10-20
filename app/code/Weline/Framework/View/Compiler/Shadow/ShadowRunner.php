@@ -61,10 +61,71 @@ final class ShadowRunner
             $source = self::removeHtmlComments($source);
         }
 
-        $parser = new Parser(new Lexer(), $this->matcher);
+        $phpTransformer = null;
+        if ($template !== null) {
+            $taglib = $template->getTaglib();
+            if (\method_exists($taglib, 'expandInlineTagsForCompiler')) {
+                $phpTransformer = static function (string $raw) use ($taglib, $template, $fileName): string {
+                    $bound = $template;
+                    return $taglib->expandInlineTagsForCompiler($raw, $bound, $fileName);
+                };
+            }
+        }
+
+        $isDForm = \str_contains($source, 'w:d-form');
+        if ($isDForm && \class_exists(\Weline\DataTable\Helper\UiAssets::class)) {
+            \Weline\DataTable\Helper\UiAssets::resetRequestState();
+        }
+
+        $slotClass = 'Weline\\Theme\\Taglib\\Slot';
+        $slotKey = 'theme.taglib.registered_slots.v1';
+        $slotState = \class_exists($slotClass) ? $slotClass::getRegisteredSlots() : null;
+        $hadSlotState = \class_exists(\Weline\Framework\Runtime\RequestContext::class)
+            && \Weline\Framework\Runtime\RequestContext::has($slotKey);
+
+        $localClass = 'Weline\\I18n\\Taglib\\Local';
+        $localState = [];
+        $localRef = null;
+        if (\class_exists($localClass)) {
+            $localRef = new \ReflectionClass($localClass);
+            foreach (['ids' => [], 'bulkModalRendered' => false, 'runtimeRecordId' => ''] as $property => $default) {
+                $prop = $localRef->getProperty($property);
+                $prop->setAccessible(true);
+                $localState[$property] = $prop->getValue();
+                $prop->setValue(null, $default);
+            }
+        }
+
+        $parser = new Parser(new Lexer(), $this->matcher, $phpTransformer);
         $emitter = new Emitter();
         $lower = new Lower($this->registry, $emitter, new Interpolation(), $template);
-        $v3 = $emitter->emit($lower->lower($parser->parse($source)));
+        try {
+            $compile = static fn (): string => $emitter->emit($lower->lower($parser->parse($source)));
+            $v3 = $template !== null
+                ? $template->withActiveSourceOrigin($fileName, $compile)
+                : $compile();
+        } finally {
+            // 影子编译会触发 w:slot 的 registerSlot()，不能污染当前请求的运行期 slot 表。
+            if ($slotState !== null) {
+                if ($hadSlotState) {
+                    \Weline\Framework\Runtime\RequestContext::set($slotKey, $slotState);
+                } else {
+                    $slotClass::clearRegisteredSlots();
+                }
+            }
+            if ($localRef !== null) {
+                foreach ($localState as $property => $value) {
+                    $prop = $localRef->getProperty($property);
+                    $prop->setAccessible(true);
+                    $prop->setValue(null, $value);
+                }
+            }
+        }
+
+
+        if ($isDForm) {
+            $v3 = self::stripPrefetchBlocks($v3, "\n");
+        }
 
         // 与旧 compile() 相同的产物级后处理（词条预取）。
         if (\class_exists(\Weline\Framework\View\Taglib\TemplateTranslationWords::class)) {
@@ -95,6 +156,26 @@ final class ShadowRunner
     }
 
     /**
+     * 精确剥离 prefetch 块，不能用 `<?php if (.*?prefetch...)` 宽正则：
+     * 那会从 `if ($this->getHeader())` 一路吃到后面的 prefetch 块，删掉真实内容。
+     */
+    private static function stripPrefetchBlocks(string $compiled, string $replacement = ''): string
+    {
+        $marker = "<?php if (\\method_exists(\\Weline\\Framework\\Phrase\\Parser::class, 'prefetchTemplateWords')) {";
+        $offset = 0;
+        while (($position = \strpos($compiled, $marker, $offset)) !== false) {
+            $end = \strpos($compiled, '} ?>', $position + \strlen($marker));
+            if ($end === false) {
+                break;
+            }
+            $compiled = \substr($compiled, 0, $position) . $replacement . \substr($compiled, $end + 4);
+            $offset = $position;
+        }
+
+        return $compiled;
+    }
+
+    /**
      * 影子比对前归一化「非语义」易变标识：
      * - `ms_xxxxxx`：旧 AttributeCodeCompiler 缺 id 时随机生成；
      * - `$__children_<n>`：旧 AST 行号口径差异导致的 runtime 捕获变量名。
@@ -104,6 +185,8 @@ final class ShadowRunner
     private static function normalizeVolatile(string $compiled): string
     {
         $compiled = (string)\preg_replace('/ms_[0-9a-f]{6}/', 'ms_<id>', $compiled);
+        $compiled = (string)\preg_replace('/mm_[0-9a-f]{6,}/', 'mm_<id>', $compiled);
+        $compiled = (string)\preg_replace('/data-node-uid="[^"]*"/', 'data-node-uid="<id>"', $compiled);
         // csrf 的 token 是编译期随机值；只归一化 hidden input 的 value。
         $compiled = (string)\preg_replace(
             "/(<input type='hidden' name='[^']+' value=')[^']*(')/",
@@ -113,11 +196,7 @@ final class ShadowRunner
 
         $compiled = (string)\preg_replace('/\$__children_\d+/', '$__children_<id>', $compiled);
         // prefetch 前缀/子模板内联前缀是产物级词条缓存，不影响 HTML；影子按 S3 白名单剥离。
-        $compiled = (string)\preg_replace(
-            '/<\?php if \(.*?prefetchTemplateWords.*?\} \?>/s',
-            '',
-            $compiled,
-        );
+        $compiled = self::stripPrefetchBlocks($compiled);
 
         return \trim($compiled);
     }

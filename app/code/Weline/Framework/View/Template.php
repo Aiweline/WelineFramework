@@ -375,6 +375,21 @@ class Template extends DataObject implements RequestLocalInterface
      * 参数区：
      * @return string
      */
+    /**
+     * 迁移期只读辅助：在指定源文件上下文中执行回调，用于 v3 影子编译解析
+     * `fetchTagSource()` 相对路径；不改变渲染行为。
+     */
+    public function withActiveSourceOrigin(string $origin, callable $callback): mixed
+    {
+        $previous = $this->activeSourceOrigin;
+        $this->activeSourceOrigin = $origin;
+        try {
+            return $callback();
+        } finally {
+            $this->activeSourceOrigin = $previous;
+        }
+    }
+
     public function getFileExt(): string
     {
         return $this->file_ext;
@@ -1371,9 +1386,26 @@ class Template extends DataObject implements RequestLocalInterface
     private function compileSourceBytes(string $baseCompiledPath, string $sourceBytes, string $originPath, string $contextKey, ?string $sourceHash = null): string
     {
         $sourceHash ??= $this->sourceBytesDigest($sourceBytes);
+        // S2-A：模板级白名单（默认关闭）。只有显式配置 engine.templates 命中时才走 v3；
+        // 未配置时 useV3=false，旧编译入口行为完全不变。
+        $useV3 = false;
+        try {
+            if (\class_exists(\Weline\Framework\View\Compiler\Shadow\ShadowConfig::class)) {
+                $useV3 = \Weline\Framework\View\Compiler\Shadow\ShadowConfig::fromEnv()
+                    ->shouldCompileTemplate($originPath);
+            }
+        } catch (\Throwable) {
+            $useV3 = false;
+        }
         // Event registration + hooks registry alter baked output; fold into compile_id.
         $pipeline = $this->beforeCompilePipeline();
-        $compileId = $this->buildCompileIdentity($sourceHash, $originPath, $contextKey, $pipeline);
+        $compileId = $this->buildCompileIdentity(
+            $sourceHash,
+            $originPath,
+            $contextKey,
+            $pipeline,
+            $useV3 ? 'v3-template' : '',
+        );
         // Fixed path: overwrite in place (no __bytes_{digest}/ accumulation).
         $compiledPath = $baseCompiledPath;
         $this->compiledSourceOrigins[$compiledPath] = $originPath;
@@ -1399,19 +1431,31 @@ class Template extends DataObject implements RequestLocalInterface
         // 影子编译（默认关）：必须在 tmp_replace 之前留副本，因为旧 compile() 的
         // $content 是按引用传递的，会在内联标签展开时就地改写。
         $shadowSource = null;
-        try {
-            if (\class_exists(\Weline\Framework\View\Compiler\Shadow\ShadowHook::class)
-                && \Weline\Framework\View\Compiler\Shadow\ShadowHook::isEnabled()) {
-                $shadowSource = $content;
+        if (!$useV3) {
+            try {
+                if (\class_exists(\Weline\Framework\View\Compiler\Shadow\ShadowHook::class)
+                    && \Weline\Framework\View\Compiler\Shadow\ShadowHook::isEnabled()) {
+                    $shadowSource = $content;
+                }
+            } catch (\Throwable) {
+                $shadowSource = null;
             }
-        } catch (\Throwable) {
-            $shadowSource = null;
         }
 
         $previousOrigin = $this->activeSourceOrigin;
         $this->activeSourceOrigin = $originPath;
         try {
-            $compiled = (string)$this->tmp_replace($content, $originPath);
+            if ($useV3) {
+                try {
+                    $compiled = \Weline\Framework\View\Compiler\V3Compiler::compile($content, $originPath, $this);
+                } catch (\Throwable $exception) {
+                    // 灰度安全：v3 失败回退旧链，不影响请求。
+                    \w_log_error('[template-v3] fallback ' . $originPath . ': ' . $exception->getMessage());
+                    $compiled = (string)$this->tmp_replace($content, $originPath);
+                }
+            } else {
+                $compiled = (string)$this->tmp_replace($content, $originPath);
+            }
         } finally {
             $this->activeSourceOrigin = $previousOrigin;
         }
@@ -1479,14 +1523,15 @@ class Template extends DataObject implements RequestLocalInterface
         }
     }
 
-    private function buildCompileIdentity(string $sourceHash, string $originPath, string $contextKey, string $pipeline): string
+    private function buildCompileIdentity(string $sourceHash, string $originPath, string $contextKey, string $pipeline, string $engineMode = ''): string
     {
         $hooks = self::hooksRegistryCompileDigest();
         $pipeDigest = \substr(\hash('sha256', $pipeline), 0, 16);
         $ctxDigest = \substr(\hash('sha256', $originPath . "\0" . $contextKey), 0, 12);
+        $engine = $engineMode !== '' ? "\0" . $engineMode : '';
 
         // Compact, filesystem-safe token embedded in the compiled file header.
-        return \substr(\hash('sha256', $sourceHash . "\0" . $hooks . "\0" . $pipeDigest . "\0" . $ctxDigest . "\0v7-inplace"), 0, 40);
+        return \substr(\hash('sha256', $sourceHash . "\0" . $hooks . "\0" . $pipeDigest . "\0" . $ctxDigest . "\0v7-inplace" . $engine), 0, 40);
     }
 
     private function compiledFileMatchesIdentity(string $compiledPath, string $compileId): bool

@@ -263,6 +263,57 @@ final class TagScanner
      *
      * @return array<string, string|true>
      */
+    /**
+     * 跳过 `@tag{...}` / `@tag(...)` 整个 body，供属性引号扫描使用。
+     * body 内可以有与属性外层相同的引号（如 `@url{'path'}`），不能提前闭合属性。
+     */
+    private static function skipInlineBody(string $raw, int $at): ?int
+    {
+        if (\preg_match('/\G@([A-Za-z][A-Za-z0-9_.:-]*)\s*([\(\{])/', $raw, $matches, 0, $at) !== 1) {
+            return null;
+        }
+        $open = $matches[2];
+        $close = $open === '(' ? ')' : '}';
+        $length = \strlen($raw);
+        $depth = 1;
+        $quote = null;
+        $i = $at + \strlen($matches[0]);
+        while ($i < $length) {
+            $char = $raw[$i];
+            if (\substr($raw, $i, 2) === '<?') {
+                $phpEnd = \strpos($raw, '?>', $i + 2);
+                if ($phpEnd === false) {
+                    return null;
+                }
+                $i = $phpEnd + 2;
+                continue;
+            }
+            if ($quote !== null) {
+                if ($char === $quote && ($raw[$i - 1] ?? '') !== '\\') {
+                    $quote = null;
+                }
+                $i++;
+                continue;
+            }
+            if ($char === '"' || $char === "'") {
+                $quote = $char;
+                $i++;
+                continue;
+            }
+            if ($char === $open) {
+                $depth++;
+            } elseif ($char === $close) {
+                $depth--;
+                if ($depth === 0) {
+                    return $i + 1;
+                }
+            }
+            $i++;
+        }
+
+        return null;
+    }
+
     public static function parseAttributes(string $raw): array
     {
         $attributes = [];
@@ -311,6 +362,13 @@ final class TagScanner
                         }
                         $cursor = $phpEnd + 2;
                         continue;
+                    }
+                    if ($raw[$cursor] === '@') {
+                        $inlineEnd = self::skipInlineBody($raw, $cursor);
+                        if ($inlineEnd !== null) {
+                            $cursor = $inlineEnd;
+                            continue;
+                        }
                     }
                     if ($raw[$cursor] === $quote) {
                         $closing = $cursor;

@@ -44,7 +44,22 @@ final class ModuleTagBridge
         $class = $this->taglibClass;
         $config = $this->config($class);
         $tagKey = $this->resolveTagKey($node, $config);
-        $tagData = [$node->openRaw(), $node->attributesRaw(), $childrenOutput];
+        $tagName = $node->name();
+        if (\str_starts_with(\strtolower($tagName), 'w:')) {
+            $tagName = \substr($tagName, 2);
+        }
+        // 旧 registerTagCallbacks 的 $tag_data = ['<tagName>', rawContent, innerContent]；
+        // 不是 openRaw/attributesRaw。模块回调会直接读这两个槽位。
+        $rawContent = '';
+        if (!$node->isSelfClosing()) {
+            $whole = $node->raw();
+            $openLength = \strlen($node->openRaw());
+            $closeAt = \strrpos($whole, '</');
+            if ($closeAt !== false && $closeAt >= $openLength) {
+                $rawContent = \substr($whole, $openLength, $closeAt - $openLength);
+            }
+        }
+        $tagData = ['<' . $tagName . '>', $rawContent, $childrenOutput];
         $attributes = $node->attributes();
         $callback = $class::callback();
 

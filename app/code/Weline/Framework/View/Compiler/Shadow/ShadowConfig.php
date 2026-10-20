@@ -30,6 +30,7 @@ final class ShadowConfig
         public readonly bool $v3 = false,
         public readonly array $tags = [],
         public readonly array $shadowTags = [],
+        public readonly array $templates = [],
     ) {
     }
 
@@ -52,6 +53,7 @@ final class ShadowConfig
                     ? ($engine['shadow']['tags'] ?? [])
                     : ($engine['shadow_tags'] ?? [])
             ),
+            templates: self::paths($engine['templates'] ?? []),
         );
     }
 
@@ -71,6 +73,32 @@ final class ShadowConfig
         return $this->enabled && !$this->v3;
     }
 
+    /**
+     * S2-A：模板级白名单。`v3` 总闸为真时全量；否则只命中显式模板。
+     * 未配置 templates 时恒为 false，旧编译入口行为不变。
+     */
+    public function shouldCompileTemplate(string $fileName): bool
+    {
+        if ($this->v3) {
+            return true;
+        }
+        if ($this->templates === []) {
+            return false;
+        }
+        $normalized = \str_replace('\\', '/', $fileName);
+        foreach ($this->templates as $template) {
+            $template = \str_replace('\\', '/', $template);
+            if (!\str_starts_with($template, '/')) {
+                $template = (\defined('BP') ? BP : '') . $template;
+            }
+            if ($normalized === $template) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function isTagShadowed(string $name): bool
     {
         return \in_array(\strtolower($name), $this->shadowTags, true);
@@ -84,6 +112,28 @@ final class ShadowConfig
     /**
      * @return list<string>
      */
+    /**
+     * @return list<string>
+     */
+    private static function paths(mixed $value): array
+    {
+        if (\is_string($value)) {
+            $value = \array_map('trim', \explode(',', $value));
+        }
+        if (!\is_array($value)) {
+            return [];
+        }
+        $paths = [];
+        foreach ($value as $path) {
+            $path = \trim((string)$path);
+            if ($path !== '') {
+                $paths[] = $path;
+            }
+        }
+
+        return $paths;
+    }
+
     private static function names(mixed $value): array
     {
         if (\is_string($value)) {

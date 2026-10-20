@@ -29,13 +29,16 @@ final class Parser
 {
     private readonly TagNameMatcherInterface $matcher;
     private readonly TagScanner $scanner;
+    private readonly ?\Closure $phpTransformer;
 
     public function __construct(
         private readonly Lexer $lexer = new Lexer(),
         ?TagNameMatcherInterface $matcher = null,
+        ?callable $phpTransformer = null,
     ) {
         $this->matcher = $matcher ?? new StaticTagNameMatcher([]);
         $this->scanner = new TagScanner($this->matcher);
+        $this->phpTransformer = $phpTransformer !== null ? \Closure::fromCallable($phpTransformer) : null;
     }
 
     public function parse(string $source): Document
@@ -71,8 +74,11 @@ final class Parser
         foreach ($fragments as $fragment) {
             if ($fragment instanceof PhpFragment) {
                 $phpNewlines += \substr_count($fragment->raw(), "\n");
+                $raw = $this->phpTransformer !== null
+                    ? ($this->phpTransformer)($fragment->raw())
+                    : $fragment->raw();
                 $tokens[] = ParseToken::php(
-                    $fragment->raw(),
+                    $raw,
                     $fragment->span(),
                     $fragment->isEcho(),
                     $fragment->openTag(),
@@ -320,7 +326,80 @@ final class Parser
                 }
                 $i++;
             }
-            $offset = $i + 1;
+            // 标签可能正好结束于文件末尾；offset 不能超过 haystack 长度。
+            $offset = \min($i + 1, $length);
+        }
+
+        return $this->maskPhpInInlineBodies($masked);
+    }
+
+    /**
+     * 内联标签 body 里的 PHP（如 `@backend-url('<?= $path ?>')`）也要先掩码，
+     * 否则 Lexer 会在 `<?` 处切成 PhpFragment，Parser 看不到完整的 inline 标签。
+     * 只掩码已注册的内联标签，位置长度不变；bodyRaw 仍从原始源码切片。
+     */
+    private function maskPhpInInlineBodies(string $masked): string
+    {
+        $length = \strlen($masked);
+        $offset = 0;
+
+        while (($at = \strpos($masked, '@', $offset)) !== false) {
+            $cursor = $at + 1;
+            if (\preg_match('/\G([A-Za-z][A-Za-z0-9_.:-]*)/', $masked, $matches, 0, $cursor) !== 1) {
+                $offset = $at + 1;
+                continue;
+            }
+            $name = $matches[1];
+            if (!$this->matcher->matchesInline($name)) {
+                $offset = $at + 1;
+                continue;
+            }
+            $delimiterAt = $cursor + \strlen($name);
+            $open = $masked[$delimiterAt] ?? '';
+            if ($open !== '(' && $open !== '{') {
+                $offset = $at + 1;
+                continue;
+            }
+            $close = $open === '(' ? ')' : '}';
+            $depth = 0;
+            $quote = null;
+            $endAt = null;
+            for ($i = $delimiterAt; $i < $length; $i++) {
+                $char = $masked[$i];
+                if ($char === '<' && ($masked[$i + 1] ?? '') === '?') {
+                    $phpEnd = \strpos($masked, '?>', $i + 2);
+                    if ($phpEnd === false) {
+                        break;
+                    }
+                    for ($j = $i; $j <= $phpEnd + 1; $j++) {
+                        $masked[$j] = "\x01";
+                    }
+                    $i = $phpEnd + 1;
+                    continue;
+                }
+                if ($quote !== null) {
+                    if ($char === $quote && ($masked[$i - 1] ?? '') !== '\\') {
+                        $quote = null;
+                    }
+                    continue;
+                }
+                if ($char === '"' || $char === "'") {
+                    $quote = $char;
+                    continue;
+                }
+                if ($char === $open) {
+                    $depth++;
+                    continue;
+                }
+                if ($char === $close) {
+                    $depth--;
+                    if ($depth === 0) {
+                        $endAt = $i;
+                        break;
+                    }
+                }
+            }
+            $offset = $endAt === null ? $at + 1 : $endAt + 1;
         }
 
         return $masked;

@@ -26,6 +26,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\View\Compiler\Tag\Adapter;
 
+use Weline\Framework\Taglib\OwnsChildCompilationInterface;
 use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\View\Compiler\Tag\AttributeSpec;
 use Weline\Framework\View\Compiler\Tag\TagDescriptor;
@@ -58,6 +59,7 @@ final class ModuleTagAdapter
         $selfClosing = (bool)$taglibClass::tag_self_close()
             || (bool)$taglibClass::tag_self_close_with_attrs();
         $elementForm = $paired || $tagStart || $tagEnd || $selfClosing;
+        $ownsChildren = \is_subclass_of($taglibClass, OwnsChildCompilationInterface::class);
 
         return new TagDescriptor(
             name: $name,
@@ -67,14 +69,23 @@ final class ModuleTagAdapter
             selfClosing: $selfClosing,
             // 静态属性走编译期 callback 桥；动态属性按旧 StageResolver 走 runtime 下发。
             stage: TagDescriptor::STAGE_AUTO,
-            ownsChildren: false,
+            ownsChildren: $ownsChildren,
             lower: static function (
                 \Weline\Framework\View\Compiler\Parser\TagNode $node,
                 mixed $context
-            ) use ($taglibClass): array {
-                $children = $context instanceof \Weline\Framework\View\Compiler\Ir\LowerContext
-                    ? $context->children($node)
-                    : '';
+            ) use ($taglibClass, $ownsChildren): array {
+                $children = '';
+                if ($context instanceof \Weline\Framework\View\Compiler\Ir\LowerContext) {
+                    if ($ownsChildren) {
+                        // 旧 CodeGenerator 对 OwnsChildCompilation 父标签不先编译子节点，
+                        // 而是把原始子源码交给回调自行 tagReplace()；否则会二次编译。
+                        foreach ($node->children() as $child) {
+                            $children .= $child->raw();
+                        }
+                    } else {
+                        $children = $context->children($node);
+                    }
+                }
 
                 return [(new ModuleTagBridge($taglibClass))->lower($node, $children)];
             },

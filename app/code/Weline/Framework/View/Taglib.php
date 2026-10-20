@@ -332,6 +332,15 @@ class Taglib
      * @param string $fileName 文件名
      * @return string 展开后的内容（内联标签已替换为 PHP）
      */
+    /**
+     * 迁移期只读桥：v3 的 PHP Fragment 需要与旧链一样，在 PHP 块/字符串内展开内联标签。
+     * P6 删除旧编译器时，用 v3 原生实现替换。
+     */
+    public function expandInlineTagsForCompiler(string $content, Template $template, string $fileName = ''): string
+    {
+        return $this->expandInlineTags($content, $template, $fileName);
+    }
+
     private function expandInlineTags(string $content, Template &$template, string $fileName): string
     {
         // 快速路径：无 @ 则无内联标签

@@ -39,14 +39,18 @@ final class VarTag
 
                 return [new RawPhpStmt('<?=' . $content . ' ?>', $node->span())];
             },
-            inlineLower: static function (InlineNode $node): array {
+            inlineLower: static function (InlineNode $node, mixed $context): array {
                 $expression = \trim($node->bodyRaw());
-                // 旧 `@var(expr)` 走 `varParser()`：裸标识补 `$`，函数调用/`$var` 原样。
-                if (\preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $expression) === 1) {
-                    $expression = '$' . $expression;
+                // 旧 `@var(expr)` 一律走 `varParser()`：裸标识补 `$`、点分转数组、
+                // 三元里的 `false` 也按旧行为变成 `$false`，函数调用保持原样。
+                $template = $context instanceof LowerContext ? $context->template() : null;
+                if ($template !== null) {
+                    $expression = $template->getTaglib()->varParser($expression);
+                } else {
+                    $expression = '$' . \ltrim($expression, '$');
                 }
 
-                return [new RawPhpStmt('<?=' . $expression . ' ?>', $node->span())];
+                return [new RawPhpStmt('<?=' . \rtrim($expression) . ' ?>', $node->span())];
             },
         );
     }

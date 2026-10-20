@@ -25,6 +25,7 @@ use Weline\Framework\View\Compiler\Parser\Node;
 use Weline\Framework\View\Compiler\Parser\Parser;
 use Weline\Framework\View\Compiler\Parser\PhpNode;
 use Weline\Framework\View\Compiler\Parser\TagNode;
+use Weline\Framework\View\Compiler\Parser\TagScanner;
 use Weline\Framework\View\Compiler\Parser\TextNode;
 use Weline\Framework\View\Compiler\Tag\Builtin\Interpolation;
 use Weline\Framework\View\Compiler\Tag\Registry;
@@ -144,6 +145,12 @@ final class Lower
             return $this->lowerRuntimeTag($node);
         }
 
+        // 旧链对 w: 前缀的 if/elseif/else/foreach 返回空串（整段丢弃），
+        // 不能按无前缀控制流编译。
+        if (\in_array(\strtolower($node->name()), ['w:if', 'w:elseif', 'w:else', 'w:foreach'], true)) {
+            return new RawPhpStmt('', $node->span());
+        }
+
         $descriptor = $this->registry?->get($node->name());
         if ($descriptor !== null
             && ($descriptor->stage === TagDescriptor::STAGE_RUNTIME
@@ -176,6 +183,15 @@ final class Lower
      */
     private function hasDynamicAttributes(TagNode $node): bool
     {
+        // `maskPhpInTags()` 会把标签属性里的 PHP 换成 \x01 占位；属性数组因此
+        // 看不到 `<?`。原始属性串仍保留源码，必须先按它判定动态属性。
+        $rawAttributes = $node->attributesRaw();
+        if (\str_contains($rawAttributes, '<?')
+            || \str_contains($rawAttributes, '{{')
+            || \str_contains($rawAttributes, '@')) {
+            return true;
+        }
+
         foreach ($node->attributes() as $value) {
             if (!\is_string($value)) {
                 continue;
@@ -197,7 +213,33 @@ final class Lower
     private function lowerRuntimeTag(TagNode $node): Stmt
     {
         $tagName = \var_export($node->name(), true);
-        $attributes = $this->runtimeAttributes($node->attributes());
+        $attributes = $this->runtimeAttributes($node);
+        $descriptor = $this->registry?->get($node->name());
+
+        // OwnsChildCompilation 的 runtime 标签：旧链把原始子源码作为字符串传入，
+        // 不做 Fiber capture（DTable 等需要自己编译 children）。
+        if ($descriptor?->ownsChildren && !$node->isSelfClosing()) {
+            // 子节点 raw 可能来自 maskPhpInTags 的 \x01 掩码；整段 raw() 是原文切片，
+            // 从开标签末尾到闭标签之间截取，才能拿到带 PHP 的原始 children。
+            $wholeRaw = $node->raw();
+            $openLength = \strlen($node->openRaw());
+            $closeAt = \strrpos($wholeRaw, '</');
+            $rawChildren = $closeAt !== false && $closeAt >= $openLength
+                ? \substr($wholeRaw, $openLength, $closeAt - $openLength)
+                : '';
+            if ($rawChildren !== '') {
+                $template = $this->context()->template();
+                if ($template !== null && \method_exists($template->getTaglib(), 'expandInlineTagsForCompiler')) {
+                    $bound = $template;
+                    $rawChildren = $template->getTaglib()->expandInlineTagsForCompiler($rawChildren, $bound, '');
+                }
+                return new RawPhpStmt(
+                    '<?= $this->getTaglib()->renderRuntimeTag($this, ' . $tagName . ", 'tag-start', "
+                    . $attributes . ', ' . \var_export($rawChildren, true) . ", '', '', '') ?>",
+                    $node->span(),
+                );
+            }
+        }
 
         $children = $this->emitter->emit($this->lowerNodes($node->children()));
         // 空成对 runtime 标签旧 AST 会按自闭合下发（empty slot/form 实测），
@@ -225,17 +267,28 @@ final class Lower
         return new RawPhpStmt($code, $node->span());
     }
 
-    /**
-     * @param array<string, string|true> $attributes
-     */
-    private function runtimeAttributes(array $attributes): string
+    private function runtimeAttributes(TagNode $node): string
     {
+        // attributes() 经过 maskPhpInTags，PHP 变成 \x01；原始属性串仍保留 PHP，
+        // 从 attributesRaw() 重解析后再展开 @url + PHP 混排。
+        $attributes = TagScanner::parseAttributes($node->attributesRaw());
+        if ($attributes === []) {
+            $attributes = $node->attributes();
+        }
+
         $pairs = [];
         foreach ($attributes as $name => $value) {
             if (\is_string($value) && \str_contains($value, '@')) {
-                // 旧链在 AST 之前就展开内联标签（@url/@lang/@backend-url）；
-                // runtime 属性数组必须拿展开后的值，否则会把 @url 原样传进 HTML。
-                $value = $this->attributeInlineFragment($value);
+                $template = $this->context()->template();
+                if ($template !== null
+                    && \str_contains($value, '<?')
+                    && \method_exists($template->getTaglib(), 'expandInlineTagsForCompiler')) {
+                    $bound = $template;
+                    $value = $template->getTaglib()->expandInlineTagsForCompiler($value, $bound, '');
+                }
+                if (\str_contains($value, '@')) {
+                    $value = $this->attributeInlineFragment($value);
+                }
             }
             $pairs[] = \var_export((string)$name, true) . ' => ' . $this->runtimeAttributeValue($value);
         }
@@ -249,6 +302,7 @@ final class Lower
      */
     private function attributeInlineFragment(string $value): string
     {
+        $hasLang = \preg_match('/@lang\s*[\(\{]/i', $value) === 1;
         $expanded = $this->lowerInlineFragment($value);
         $expanded = (string)\preg_replace(
             '/InlinePhraseMarker::emit\((.*),\s*false\)/s',
@@ -256,7 +310,8 @@ final class Lower
             $expanded,
             1,
         );
-        if (!\str_contains($expanded, 'InlinePhraseMarker::emit')
+        if ($hasLang
+            && !\str_contains($expanded, 'InlinePhraseMarker::emit')
             && \preg_match('/^<\?=\s*__\((.+)\)\s*\?>$/s', \trim($expanded), $matches) === 1) {
             $expanded = '<?=\Weline\I18n\Service\InlineEdit\InlinePhraseMarker::emit('
                 . $matches[1] . ', true) ?>';
