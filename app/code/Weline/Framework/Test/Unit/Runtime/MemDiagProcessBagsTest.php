@@ -54,6 +54,30 @@ final class MemDiagProcessBagsTest extends TestCase
         self::assertGreaterThanOrEqual(320, $snapshot['process_bag_bytes']);
     }
 
+    public function testSnapshotFlagsBagsAboveHeavyThreshold(): void
+    {
+        $heavy = [];
+        $threshold = DictionaryCacheNamespace::HEAVY_BAG_ENTRY_THRESHOLD;
+        for ($i = 0; $i <= $threshold; $i++) {
+            $bag = &DictionaryCacheNamespace::processBag('memdiag.test.heavy', $heavy, 128, ['zh_Hans_CN']);
+            $bag['k' . $i] = $i;
+        }
+
+        $boundary = [];
+        for ($i = 0; $i < $threshold; $i++) {
+            $bag = &DictionaryCacheNamespace::processBag('memdiag.test.boundary', $boundary, 128, ['zh_Hans_CN']);
+            $bag['k' . $i] = $i;
+        }
+
+        $snapshot = MemDiag::cacheSnapshot();
+
+        self::assertSame($threshold + 1, $snapshot['process_bags']['memdiag.test.heavy']['entries']);
+        self::assertSame($threshold, $snapshot['process_bags']['memdiag.test.boundary']['entries']);
+        self::assertContains('memdiag.test.heavy', $snapshot['process_bag_heavy_names']);
+        self::assertNotContains('memdiag.test.boundary', $snapshot['process_bag_heavy_names']);
+        self::assertGreaterThanOrEqual(1, $snapshot['process_bag_heavy']);
+    }
+
     public function testRegisteredBagCountIsStableAcrossRepeatedCalls(): void
     {
         $bag = [];

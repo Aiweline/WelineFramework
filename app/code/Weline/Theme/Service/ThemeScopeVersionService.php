@@ -363,13 +363,6 @@ final class ThemeScopeVersionService
         foreach ($this->scopeAncestorChain($scope) as $candidate) {
             $selection = $this->loadSelection($themeId, $candidate, $storeMode, $area);
             $publishedId = (int)($selection['published_version_id'] ?? 0);
-            $flagged = $this->loadFlagged(
-                $themeId,
-                $candidate,
-                ThemeScopeVersion::schema_fields_IS_PUBLISHED,
-                $storeMode,
-                $area,
-            );
             if ($publishedId > 0) {
                 $version = $this->loadVersionById($publishedId, $themeId, $candidate, $storeMode, $area);
                 // Selection is v3 authority for sealed targets (is_published flag may lag).
@@ -380,8 +373,17 @@ final class ThemeScopeVersionService
                     && $version->getLifecycle() === ThemeScopeVersion::LIFECYCLE_SEALED
                 ) {
                     if ($version->isPublished()) {
+                        // Common path: sealed + flagged selection row. The legacy
+                        // is_published probe cannot change the answer, so skip that query.
                         return $version;
                     }
+                    $flagged = $this->loadFlagged(
+                        $themeId,
+                        $candidate,
+                        ThemeScopeVersion::schema_fields_IS_PUBLISHED,
+                        $storeMode,
+                        $area,
+                    );
                     if (!$flagged instanceof ThemeScopeVersion
                         || $flagged->getLifecycle() !== ThemeScopeVersion::LIFECYCLE_SEALED
                         || (int)$flagged->getVersionId() === (int)$version->getVersionId()
@@ -389,10 +391,18 @@ final class ThemeScopeVersionService
                         // v3 selection-only publish: trust sealed selection when no flagged peer.
                         return $version;
                     }
-                    // else: superseded — ignore stale selection, use flagged below
+                    // Superseded — stale selection, the flagged peer wins.
+                    return $flagged;
                 }
             }
 
+            $flagged = $this->loadFlagged(
+                $themeId,
+                $candidate,
+                ThemeScopeVersion::schema_fields_IS_PUBLISHED,
+                $storeMode,
+                $area,
+            );
             if ($flagged instanceof ThemeScopeVersion && $flagged->getLifecycle() === ThemeScopeVersion::LIFECYCLE_SEALED) {
                 return $flagged;
             }

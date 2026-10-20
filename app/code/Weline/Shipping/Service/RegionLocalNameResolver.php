@@ -8,6 +8,7 @@ namespace Weline\Shipping\Service;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\DictionaryCacheNamespace;
 use Weline\Shipping\Model\PostalPlace;
 use Weline\Shipping\Model\PostalPlace\LocalDescription as PostalPlaceLocalDescription;
 use Weline\Shipping\Model\Region;
@@ -20,15 +21,20 @@ use Weline\Shipping\Model\Street\LocalDescription as StreetLocalDescription;
  */
 class RegionLocalNameResolver
 {
-    private const PROCESS_BAG_MAX = 256;
+    private const PROCESS_BAG_MAX = 4096;
 
-    /** @var array<string, array<int, string>> locale → id → name (Worker process) */
+    /** 进程袋身份（显式命名，禁止匿名登记）。 */
+    private const BAG_REGION_NAMES = 'shipping.region_names';
+    private const BAG_STREET_NAMES = 'shipping.street_names';
+    private const BAG_POSTAL_PLACE_NAMES = 'shipping.postal_place_names';
+
+    /** @var array<string, string> "locale|id" → name (Worker process) */
     private static array $processRegionCache = [];
 
-    /** @var array<string, array<int, string>> */
+    /** @var array<string, string> */
     private static array $processStreetCache = [];
 
-    /** @var array<string, array<int, string>> */
+    /** @var array<string, string> */
     private static array $processPostalPlaceCache = [];
 
     public function __construct(private readonly ObjectManager $objectManager)
@@ -63,9 +69,15 @@ class RegionLocalNameResolver
 
         $missing = [];
         $out = [];
+        $bag = &DictionaryCacheNamespace::processBag(
+            self::BAG_REGION_NAMES,
+            self::$processRegionCache,
+            self::PROCESS_BAG_MAX,
+        );
         foreach ($ids as $id) {
-            if (isset(self::$processRegionCache[$locale][$id])) {
-                $out[$id] = self::$processRegionCache[$locale][$id];
+            $key = $locale . '|' . $id;
+            if (isset($bag[$key])) {
+                $out[$id] = $bag[$key];
             } else {
                 $missing[] = $id;
             }
@@ -81,7 +93,7 @@ class RegionLocalNameResolver
             if ($name === '') {
                 $name = trim((string)($defaults[$id] ?? ''));
             }
-            $this->rememberProcessName(self::$processRegionCache, $locale, $id, $name);
+            $bag[$locale . '|' . $id] = $name;
             $out[$id] = $name;
         }
 
@@ -111,9 +123,15 @@ class RegionLocalNameResolver
 
         $missing = [];
         $out = [];
+        $bag = &DictionaryCacheNamespace::processBag(
+            self::BAG_STREET_NAMES,
+            self::$processStreetCache,
+            self::PROCESS_BAG_MAX,
+        );
         foreach ($ids as $id) {
-            if (isset(self::$processStreetCache[$locale][$id])) {
-                $out[$id] = self::$processStreetCache[$locale][$id];
+            $key = $locale . '|' . $id;
+            if (isset($bag[$key])) {
+                $out[$id] = $bag[$key];
             } else {
                 $missing[] = $id;
             }
@@ -129,7 +147,7 @@ class RegionLocalNameResolver
             if ($name === '') {
                 $name = trim((string)($defaults[$id] ?? ''));
             }
-            $this->rememberProcessName(self::$processStreetCache, $locale, $id, $name);
+            $bag[$locale . '|' . $id] = $name;
             $out[$id] = $name;
         }
 
@@ -159,9 +177,15 @@ class RegionLocalNameResolver
 
         $missing = [];
         $out = [];
+        $bag = &DictionaryCacheNamespace::processBag(
+            self::BAG_POSTAL_PLACE_NAMES,
+            self::$processPostalPlaceCache,
+            self::PROCESS_BAG_MAX,
+        );
         foreach ($ids as $id) {
-            if (isset(self::$processPostalPlaceCache[$locale][$id])) {
-                $out[$id] = self::$processPostalPlaceCache[$locale][$id];
+            $key = $locale . '|' . $id;
+            if (isset($bag[$key])) {
+                $out[$id] = $bag[$key];
             } else {
                 $missing[] = $id;
             }
@@ -177,25 +201,11 @@ class RegionLocalNameResolver
             if ($name === '') {
                 $name = trim((string)($defaults[$id] ?? ''));
             }
-            $this->rememberProcessName(self::$processPostalPlaceCache, $locale, $id, $name);
+            $bag[$locale . '|' . $id] = $name;
             $out[$id] = $name;
         }
 
         return $out;
-    }
-
-    /**
-     * @param array<string, array<int, string>> $bag
-     */
-    private function rememberProcessName(array &$bag, string $locale, int $id, string $name): void
-    {
-        if (!isset($bag[$locale]) && \count($bag) >= self::PROCESS_BAG_MAX) {
-            $first = \array_key_first($bag);
-            if ($first !== null) {
-                unset($bag[$first]);
-            }
-        }
-        $bag[$locale][$id] = $name;
     }
 
     public function nameByPostalPlaceId(int $postalPlaceId, ?string $locale = null): string

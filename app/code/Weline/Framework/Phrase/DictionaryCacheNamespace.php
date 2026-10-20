@@ -30,6 +30,14 @@ final class DictionaryCacheNamespace
     private const DEFAULT_HEAVY_LOCALE_RESIDENT_MAX = 1;
     private const PROCESS_STORE_MAX_ITEMS = 8192;
 
+    /**
+     * 重袋观测阈值：条目数超过该值的命名袋进入 MemDiag 的 `process_bag_heavy` 名单。
+     *
+     * 这是观测信号，不是硬失败：`phrase.*` 词表、`currency.local_names`、`shipping.*`
+     * 等按设计可超过 20 条，必须在耐久文档的「重袋豁免清单」中登记。
+     */
+    public const HEAVY_BAG_ENTRY_THRESHOLD = 20;
+
     private static ?ProcessMemoryStore $store = null;
     private static ?MemoryReclaimableInterface $reclaimable = null;
     /** @var array<string, array> 命名进程袋（身份=名称，显式绑定）。 */
@@ -215,6 +223,25 @@ final class DictionaryCacheNamespace
         }
 
         return $stats;
+    }
+
+    /**
+     * 重袋观测：条目数超过 {@see HEAVY_BAG_ENTRY_THRESHOLD} 的命名袋。
+     *
+     * 只读，不触发加载；供 MemDiag / 运维探针识别未登记豁免的重袋。
+     *
+     * @return array<string, array{entries:int, bytes:int}>
+     */
+    public static function heavyBagStats(): array
+    {
+        $heavy = [];
+        foreach (self::bagStats() as $name => $stat) {
+            if ((int)($stat['entries'] ?? 0) > self::HEAVY_BAG_ENTRY_THRESHOLD) {
+                $heavy[$name] = $stat;
+            }
+        }
+
+        return $heavy;
     }
 
     public static function scopedPool(CachePoolInterface $pool, array $locales = []): CachePoolInterface

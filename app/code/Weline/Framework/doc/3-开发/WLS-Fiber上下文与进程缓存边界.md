@@ -29,6 +29,10 @@
 3. **记账不落热路径**：locale 记账只在袋尺寸变化时写 `ProcessMemoryStore`；请求袋不写 Store。
 4. **先 R0 后 L1**：请求内事实先 `RequestContext` memo，再命名进程袋，再 L2（`ScopeSharedMemo` / `w_cache`），DB 仅 miss。
 5. **门禁**：`ProcessBagRegistryContractTest`（空名不登记、命名合法、登记表 ≤40）；`ProcessBagIdentityContractTest`（请求袋永不登记/不写 Store、90% 水位）。
+6. **重袋观测**：条目数 `> 20`（`DictionaryCacheNamespace::HEAVY_BAG_ENTRY_THRESHOLD`）的袋进入 `MemDiag.process_bag_heavy_names`。这是观测信号，不是硬失败；真实上界仍是各袋 `maxEntries`。
+   - **重袋豁免清单**（按设计可超 20，新增超阈袋必须先登记再改门禁）：
+     `worker*`（11 个 `BAG_*` 词表）、`globalDictionaryModuleBags`、`phrase.*`、`i18n.repository.country.rows`、`i18n.model.local_words`、`i18n.active_locale.codes`、`i18n.taglib.language_select.items`、`i18n.repository.locale.installed_active`、`i18n.taglib.language_switcher.html`、`i18n.taglib.language_switcher.chrome_words`、`currency.local_names`、`shipping.region_names`、`shipping.street_names`、`shipping.postal_place_names`、`product.*`。
+   - 未登记却超阈的袋：优先拆分命名/降低 `maxEntries`，不要只把阈值调大。
 
 生产命名袋清单（新增袋必须同时更新本节与门禁豁免）：
 
@@ -38,6 +42,10 @@
 | `globalDictionaryModuleBags` | `Phrase\GlobalDictionaryModuleBagCache` | 整 locale/module 文件袋 |
 | `i18n.*` | `I18n` | taglib 渲染、模型、active locale、本地化仓库 L1 |
 | `phrase.*` | `Phrase` | 词表/测试袋 |
+| `currency.local_names` | `Currency` | 币种本地名；保存/删除时 `clearProcessCache` |
+| `shipping.region_names` / `shipping.street_names` / `shipping.postal_place_names` | `Shipping` | 地址展示名（`locale\|id` 扁平键）；`ProcessCacheResetter` 清理 |
+| `product.*` | `Product` | PDP/店铺页渲染袋（buy box、defer SSR 卡片、页面分配） |
+| `storefront.render_context.v1` | `Storefront` | 渲染上下文袋 |
 
 `i18n.repository.locale.installed_active` / `i18n.repository.country.rows` 由 locale 目录观察者 `LocaleCatalogChangedClearActiveLocales` 失效。
 
@@ -79,3 +87,4 @@ Fiber **结束/回收**（Worker 仍可能握着 terminated Fiber 引用）必�
 - `om_fiber_instances`：每桶仅上下文类，不应再含 CacheManager / HotCache / FPC coordinator 等进程共享服务。
 - `om_main_instances`：进程共享服务计数随暖机上升、不随并发线性翻倍。
 - `process_bags` / `process_bag_entries` / `process_bag_bytes`：命名进程袋清单；登记条目不随请求数增长（`ProcessBagIdentityContractTest`）。
+- `process_bag_heavy` / `process_bag_heavy_names`：条目数 `> 20` 的袋数量与名单（观测信号；豁免清单见「进程袋契约」第 6 条）。

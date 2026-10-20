@@ -7,6 +7,7 @@ namespace Weline\Currency\Service;
 use Weline\Currency\Model\Currency;
 use Weline\Currency\Model\Currency\LocalDescription;
 use Weline\Framework\Cache\Service\ScopeSharedMemo;
+use Weline\Framework\Phrase\DictionaryCacheNamespace;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\I18n\Api\Localization\LocaleRepositoryInterface;
@@ -15,6 +16,9 @@ class CurrencyLocalDescriptionService
 {
     private const DEFAULT_LOCALE_CODES = ['zh_Hans_CN', 'en_US'];
     private const PROCESS_BAG_MAX = 128;
+
+    /** 进程袋身份（显式命名，禁止匿名登记）。 */
+    private const BAG_LOCAL_NAMES = 'currency.local_names';
 
     /** @var array<int, array<string, string>> currency_id → locale → name */
     private static array $processLocalNamesByCurrencyId = [];
@@ -89,8 +93,13 @@ class CurrencyLocalDescriptionService
         if ($currencyId <= 0) {
             return [];
         }
-        if (\array_key_exists($currencyId, self::$processLocalNamesByCurrencyId)) {
-            return self::$processLocalNamesByCurrencyId[$currencyId];
+        $bag = &DictionaryCacheNamespace::processBag(
+            self::BAG_LOCAL_NAMES,
+            self::$processLocalNamesByCurrencyId,
+            self::PROCESS_BAG_MAX,
+        );
+        if (\array_key_exists($currencyId, $bag)) {
+            return $bag[$currencyId];
         }
 
         $names = ScopeSharedMemo::rememberScoped(
@@ -125,15 +134,7 @@ class CurrencyLocalDescriptionService
             $names = [];
         }
 
-        if (!\array_key_exists($currencyId, self::$processLocalNamesByCurrencyId)
-            && \count(self::$processLocalNamesByCurrencyId) >= self::PROCESS_BAG_MAX
-        ) {
-            $first = \array_key_first(self::$processLocalNamesByCurrencyId);
-            if ($first !== null) {
-                unset(self::$processLocalNamesByCurrencyId[$first]);
-            }
-        }
-        self::$processLocalNamesByCurrencyId[$currencyId] = $names;
+        $bag[$currencyId] = $names;
 
         return $names;
     }

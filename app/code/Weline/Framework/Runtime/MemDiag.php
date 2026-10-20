@@ -167,6 +167,8 @@ final class MemDiag
             'process_bags' => [],
             'process_bag_entries' => 0,
             'process_bag_bytes' => 0,
+            'process_bag_heavy' => 0,
+            'process_bag_heavy_names' => [],
             'tracked_bytes' => 0,
         ];
         $tracked = 0;
@@ -331,6 +333,7 @@ final class MemDiag
         }
         try {
             $bagStats = \Weline\Framework\Phrase\DictionaryCacheNamespace::bagStats();
+            $heavyBagStats = \Weline\Framework\Phrase\DictionaryCacheNamespace::heavyBagStats();
             $bagEntries = 0;
             $bagBytes = 0;
             foreach ($bagStats as $stat) {
@@ -340,6 +343,8 @@ final class MemDiag
             $out['process_bags'] = $bagStats;
             $out['process_bag_entries'] = $bagEntries;
             $out['process_bag_bytes'] = $bagBytes;
+            $out['process_bag_heavy'] = \count($heavyBagStats);
+            $out['process_bag_heavy_names'] = \array_keys($heavyBagStats);
             $tracked += $bagBytes;
         } catch (\Throwable) {
         }
