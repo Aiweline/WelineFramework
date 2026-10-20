@@ -152,8 +152,8 @@ final class TranslationResolver implements BatchTranslationResolverInterface
     private function moduleWords(string $moduleName, string $localeCode): array
     {
         $cacheKey = DictionaryCacheNamespace::cacheKey($localeCode . '|' . $moduleName);
-        if (isset(DictionaryCacheNamespace::localCache($this->moduleWords, 2048)[$cacheKey])) {
-            return DictionaryCacheNamespace::localCache($this->moduleWords, 2048)[$cacheKey];
+        if (isset(DictionaryCacheNamespace::requestBag($this->moduleWords, 2048)[$cacheKey])) {
+            return DictionaryCacheNamespace::requestBag($this->moduleWords, 2048)[$cacheKey];
         }
 
         $words = [];
@@ -161,12 +161,12 @@ final class TranslationResolver implements BatchTranslationResolverInterface
             $moduleInfo = Env::getInstance()->getModuleInfo($moduleName);
             $csvFile = (string)($moduleInfo['base_path'] ?? '') . '/i18n/' . $localeCode . '.csv';
             if (!\is_file($csvFile)) {
-                return DictionaryCacheNamespace::localCache($this->moduleWords, 2048)[$cacheKey] = [];
+                return DictionaryCacheNamespace::requestBag($this->moduleWords, 2048)[$cacheKey] = [];
             }
 
             $handle = @\fopen($csvFile, 'r');
             if ($handle === false) {
-                return DictionaryCacheNamespace::localCache($this->moduleWords, 2048)[$cacheKey] = [];
+                return DictionaryCacheNamespace::requestBag($this->moduleWords, 2048)[$cacheKey] = [];
             }
             try {
                 while (($data = \fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
@@ -187,7 +187,7 @@ final class TranslationResolver implements BatchTranslationResolverInterface
         } catch (\Throwable) {
         }
 
-        return DictionaryCacheNamespace::localCache($this->moduleWords, 2048)[$cacheKey] = $words;
+        return DictionaryCacheNamespace::requestBag($this->moduleWords, 2048)[$cacheKey] = $words;
     }
 
     private function isUsableModuleTranslation(string $source, string $translated, string $localeCode): bool

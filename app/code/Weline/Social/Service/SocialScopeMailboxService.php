@@ -191,6 +191,128 @@ class SocialScopeMailboxService
         ]);
     }
 
+    /**
+     * 用社媒邮箱给同域 contact@ 发一封探测信，并在 contact 收件箱里找这封信。
+     * 邮局域名不可用、或没有 contact 邮箱时，不造域、不继续开号。
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    public function probeScopeSocialMailbox(array $params): array
+    {
+        $current = $this->ensureScopeSocialMailbox($params);
+        $state = (string)($current['state'] ?? '');
+        if (\in_array($state, ['need_scope', 'mail_unavailable', 'domain_unavailable'], true) || empty($current['success'])) {
+            return $current;
+        }
+        if ((int)($current['account_id'] ?? 0) <= 0 || (string)($current['email'] ?? '') === '') {
+            return $current;
+        }
+
+        $domain = (string)($current['domain_name'] ?? '');
+        $contactEmail = 'contact@' . $domain;
+        $contactId = $this->findAccountIdByEmail($contactEmail);
+        if ($contactId <= 0) {
+            return $this->payload(false, (string)__('本站邮局还没有 contact 邮箱，无法确认社媒邮箱能发信。'), [
+                'state' => 'contact_missing',
+                'website_id' => (int)($current['website_id'] ?? 0),
+                'email' => (string)$current['email'],
+                'account_id' => (int)$current['account_id'],
+                'contact_email' => $contactEmail,
+                'domain_name' => $domain,
+            ]);
+        }
+
+        $opsClass = 'Weline\\Mail\\Service\\Mailbox\\MailboxOpsService';
+        if (!\class_exists($opsClass)) {
+            return $this->payload(false, (string)__('邮箱读写不可用，无法探测社媒邮箱。'), [
+                'state' => 'probe_unavailable',
+                'email' => (string)$current['email'],
+                'account_id' => (int)$current['account_id'],
+                'contact_email' => $contactEmail,
+            ]);
+        }
+
+        $token = 'social-probe-' . \bin2hex(\random_bytes(4));
+        $ops = $this->om()->getInstance($opsClass);
+        $sent = $ops->send((int)$current['account_id'], $contactEmail, $token, $token);
+        if (empty($sent['success'])) {
+            return $this->payload(false, (string)($sent['message'] ?? __('社媒邮箱发信失败')), [
+                'state' => 'probe_failed',
+                'email' => (string)$current['email'],
+                'account_id' => (int)$current['account_id'],
+                'contact_email' => $contactEmail,
+                'probe_token' => $token,
+            ]);
+        }
+
+        \usleep(1500000);
+        $rows = $this->readContactProbeRows($ops, $contactId, $token);
+        if ($this->rowsContainToken($rows, $token)) {
+            return $this->payload(true, (string)__('社媒邮箱已能发给本站 contact，可以拿去注册平台。'), [
+                'state' => 'probed',
+                'website_id' => (int)($current['website_id'] ?? 0),
+                'email' => (string)$current['email'],
+                'account_id' => (int)$current['account_id'],
+                'contact_email' => $contactEmail,
+                'probe_token' => $token,
+                'password_once' => (string)($current['password_once'] ?? ''),
+                'has_password_once' => !empty($current['has_password_once']),
+            ]);
+        }
+
+        return $this->payload(false, (string)__('探测信已发出，但 contact 收件箱里还没有。先不要去平台注册。'), [
+            'state' => 'probe_unconfirmed',
+            'website_id' => (int)($current['website_id'] ?? 0),
+            'email' => (string)$current['email'],
+            'account_id' => (int)$current['account_id'],
+            'contact_email' => $contactEmail,
+            'probe_token' => $token,
+            'password_once' => (string)($current['password_once'] ?? ''),
+            'has_password_once' => !empty($current['has_password_once']),
+        ]);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function readContactProbeRows(object $ops, int $contactId, string $token): array
+    {
+        try {
+            $searched = $ops->search($contactId, 'inbox', $token, 10);
+            if (\is_array($searched) && $searched !== []) {
+                return $searched;
+            }
+        } catch (\Throwable) {
+        }
+        try {
+            $listed = $ops->list($contactId, 'inbox', 20, false);
+
+            return \is_array($listed) ? $listed : [];
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     */
+    private function rowsContainToken(array $rows, string $token): bool
+    {
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            foreach (['subject', 'preview', 'snippet', 'text', 'body', 'from', 'to'] as $key) {
+                if (\str_contains((string)($row[$key] ?? ''), $token)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private function mailAvailable(): bool
     {
         return \class_exists('Weline\\Mail\\Service\\MailAccountEnsureService')

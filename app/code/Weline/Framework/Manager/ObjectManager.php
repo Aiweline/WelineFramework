@@ -35,11 +35,15 @@ class ObjectManager implements ManagerInterface
 
     private static ?ObjectManager $instance = null;
 
+    public const TAG_CONTROLLER = 'controller';
+    public const TAG_MODEL = 'model';
+    public const TAG_OBSERVER = 'observer';
+
     private static array $instances = [];
     private static array $reflections = [];
-    private static array $origin_instances = [];
     private static ?\WeakMap $fiberInstances = null;
-    private static ?\WeakMap $fiberOriginInstances = null;
+    /** @var array<string, array<class-string, true>> 进程桶类型索引（controller/model/observer） */
+    private static array $instanceTags = [];
     /** @var array<string, bool> class => uses process-shared OM bucket */
     private static array $processSharedBucketCache = [];
     /**
@@ -374,73 +378,87 @@ class ObjectManager implements ManagerInterface
         return self::$processSharedBucketCache[$class] = $shared;
     }
 
-    private static function getScopedInstance(string $class, bool $origin = false): ?object
+    private static function getScopedInstance(string $class): ?object
     {
         if (self::usesProcessSharedBucket($class)) {
-            return $origin
-                ? (self::$origin_instances[$class] ?? null)
-                : (self::$instances[$class] ?? null);
+            return self::$instances[$class] ?? null;
         }
 
         $fiber = self::currentRequestFiber();
         if ($fiber === null) {
-            return $origin
-                ? (self::$origin_instances[$class] ?? null)
-                : (self::$instances[$class] ?? null);
+            return self::$instances[$class] ?? null;
         }
 
-        return self::getFiberScope($origin, $fiber)?->get($class);
+        return self::getFiberScope($fiber)?->get($class);
     }
 
-    private static function setScopedInstance(string $class, object $object, bool $origin = false): void
+    private static function setScopedInstance(string $class, object $object): void
     {
+        $tag = self::tagForInstance($object);
         if (self::usesProcessSharedBucket($class)) {
-            if ($origin) {
-                self::$origin_instances[$class] = $object;
-            } else {
-                self::$instances[$class] = $object;
-            }
+            self::$instances[$class] = $object;
+            self::tagProcessInstance($class, $tag);
             return;
         }
 
         $fiber = self::currentRequestFiber();
         if ($fiber === null) {
-            if ($origin) {
-                self::$origin_instances[$class] = $object;
-            } else {
-                self::$instances[$class] = $object;
-            }
+            self::$instances[$class] = $object;
+            self::tagProcessInstance($class, $tag);
             return;
         }
 
-        self::getFiberScope($origin, $fiber, true)->set($class, $object);
+        self::getFiberScope($fiber, true)->set($class, $object, $tag);
     }
 
-    private static function getScopedInstances(bool $origin = false): array
+    private static function tagForInstance(object $object): ?string
+    {
+        if ($object instanceof \Weline\Framework\Controller\Core) {
+            return self::TAG_CONTROLLER;
+        }
+        if ($object instanceof \Weline\Framework\Database\AbstractModel) {
+            return self::TAG_MODEL;
+        }
+        if ($object instanceof \Weline\Framework\Event\ObserverInterface) {
+            return self::TAG_OBSERVER;
+        }
+
+        return null;
+    }
+
+    private static function tagProcessInstance(string $class, ?string $tag): void
+    {
+        foreach ([self::TAG_CONTROLLER, self::TAG_MODEL, self::TAG_OBSERVER] as $known) {
+            if ($known !== $tag) {
+                unset(self::$instanceTags[$known][$class]);
+            }
+        }
+        if ($tag !== null) {
+            self::$instanceTags[$tag][$class] = true;
+        }
+    }
+
+    private static function getScopedInstances(): array
     {
         $fiber = self::currentRequestFiber();
         if ($fiber === null) {
-            return $origin ? self::$origin_instances : self::$instances;
+            return self::$instances;
         }
 
         // Fiber views only request-local buckets; process-shared live on $instances.
-        return self::getFiberScope($origin, $fiber)?->all() ?? [];
+        return self::getFiberScope($fiber)?->all() ?? [];
     }
 
-    private static function setScopedInstances(array $instances, bool $origin = false): void
+    private static function setScopedInstances(array $instances): void
     {
         $fiber = self::currentRequestFiber();
         if ($fiber === null) {
-            if ($origin) {
-                self::$origin_instances = $instances;
-            } else {
-                self::$instances = $instances;
-            }
+            self::$instances = $instances;
             return;
         }
 
         if ($instances === []) {
-            self::unsetFiberScope($origin, $fiber);
+            self::unsetFiberScope($fiber);
             return;
         }
 
@@ -451,73 +469,58 @@ class ObjectManager implements ManagerInterface
                 continue;
             }
             if (self::usesProcessSharedBucket($class)) {
-                if ($origin) {
-                    self::$origin_instances[$class] = $object;
-                } else {
-                    self::$instances[$class] = $object;
-                }
+                self::$instances[$class] = $object;
+                self::tagProcessInstance($class, self::tagForInstance($object));
             } else {
                 $fiberLocal[$class] = $object;
             }
         }
         if ($fiberLocal === []) {
-            self::unsetFiberScope($origin, $fiber);
+            self::unsetFiberScope($fiber);
             return;
         }
-        self::getFiberScope($origin, $fiber, true)->replace($fiberLocal);
+        $scope = self::getFiberScope($fiber, true);
+        $scope->replace($fiberLocal);
+        foreach ($fiberLocal as $class => $object) {
+            $scope->set($class, $object, self::tagForInstance($object));
+        }
     }
 
-    private static function removeScopedInstance(string $class, bool $origin = false): void
+    private static function removeScopedInstance(string $class): void
     {
         if (self::usesProcessSharedBucket($class)) {
-            if ($origin) {
-                unset(self::$origin_instances[$class]);
-            } else {
-                unset(self::$instances[$class]);
-            }
+            unset(self::$instances[$class]);
+            self::tagProcessInstance($class, null);
             return;
         }
 
         $fiber = self::currentRequestFiber();
         if ($fiber === null) {
-            if ($origin) {
-                unset(self::$origin_instances[$class]);
-            } else {
-                unset(self::$instances[$class]);
-            }
+            unset(self::$instances[$class]);
+            self::tagProcessInstance($class, null);
             return;
         }
 
-        $scope = self::getFiberScope($origin, $fiber);
+        $scope = self::getFiberScope($fiber);
         if ($scope === null) {
             return;
         }
 
         $scope->remove($class);
         if ($scope->isEmpty()) {
-            self::unsetFiberScope($origin, $fiber);
+            self::unsetFiberScope($fiber);
         }
     }
 
-    private static function getFiberScope(bool $origin, \Fiber $fiber, bool $create = false): ?RequestScope
+    private static function getFiberScope(\Fiber $fiber, bool $create = false): ?RequestScope
     {
-        if ($origin) {
-            if (self::$fiberOriginInstances === null) {
-                if (!$create) {
-                    return null;
-                }
-                self::$fiberOriginInstances = new \WeakMap();
+        if (self::$fiberInstances === null) {
+            if (!$create) {
+                return null;
             }
-            $storage = self::$fiberOriginInstances;
-        } else {
-            if (self::$fiberInstances === null) {
-                if (!$create) {
-                    return null;
-                }
-                self::$fiberInstances = new \WeakMap();
-            }
-            $storage = self::$fiberInstances;
+            self::$fiberInstances = new \WeakMap();
         }
+        $storage = self::$fiberInstances;
 
         if (!isset($storage[$fiber])) {
             if (!$create) {
@@ -537,15 +540,8 @@ class ObjectManager implements ManagerInterface
         return $scope;
     }
 
-    private static function unsetFiberScope(bool $origin, \Fiber $fiber): void
+    private static function unsetFiberScope(\Fiber $fiber): void
     {
-        if ($origin) {
-            if (self::$fiberOriginInstances !== null && isset(self::$fiberOriginInstances[$fiber])) {
-                unset(self::$fiberOriginInstances[$fiber]);
-            }
-            return;
-        }
-
         if (self::$fiberInstances !== null && isset(self::$fiberInstances[$fiber])) {
             unset(self::$fiberInstances[$fiber]);
         }
@@ -969,30 +965,8 @@ class ObjectManager implements ManagerInterface
     
 
     /**
-     * @DESC          # 读取原始对象数据，不处理Factory工厂类
+     * @deprecated 使用 {@see getInstance()}。origin 桶已移除（生产零调用），本方法仅作兼容薄壳。
      *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 2022/3/20 13:34
-     * 参数区：
-     *
-     * @param string $class 类
-     * @param array $arguments __construct()初始化参数
-     * @param bool $shared 是否共享：共享后会多次调用存储在对象管理器中的同一个对象（上一次存储的对象）
-     * @param bool $cache 是否缓存
-     *
-     * @return mixed
-     * @throws Exception
-     * @throws \ReflectionException
-     */
-    /**
-     * 读取原始对象数据，不处理Factory工厂类
-     * 
-     * PHP 8 性能优化：
-     * - 使用 isset 替代 empty
-     * - 使用 ??= 操作符
-     * - 减少字符串拼接
-     * 
      * @param string $class 类
      * @param array $arguments __construct()初始化参数
      * @param bool $shared 是否共享
@@ -1003,50 +977,7 @@ class ObjectManager implements ManagerInterface
      */
     public static function getOriginInstance(string $class, array $arguments = [], bool $shared = true, bool $cache = false): mixed
     {
-        // PHP 8 性能优化：使用 ??= 操作符
-        if ($class === '') {
-            return self::$instance ??= new self();
-        }
-        self::$instance ??= new self();
-        
-        // PHP 8 性能优化：提前返回
-        $originInstance = self::getScopedInstance($class, true);
-        if ($originInstance !== null) {
-            return $originInstance;
-        }
-        
-        // PHP 8 性能优化：合并条件判断
-        if ($cache && !CLI && $shared) {
-            $cachedObject = self::getCache()->get($class);
-            if ($cachedObject) {
-                $cachedObject = self::initClassInstance($class, $cachedObject, false);
-                self::setScopedInstance($class, $cachedObject, true);
-
-                return $cachedObject;
-            }
-        }
-        
-        // PHP 8 性能优化：使用缓存的类名解析
-        $class_cache_key = $class . '_cache_key';
-        $new_class = self::getCache()->get($class_cache_key);
-        if (!$new_class) {
-            $new_class = self::parserClass($class);
-            self::getCache()->set($class_cache_key, $new_class);
-        }
-        
-        $arguments = $arguments ?: self::getMethodParams($new_class);
-        $refClass = self::getReflectionInstance($new_class);
-        $new_object = $refClass->newInstanceArgs($arguments);
-        $new_object = self::initClassInstance($class, $new_object, false);
-
-        self::setScopedInstance($class, $new_object, true);
-        
-        // PHP 8 性能优化：使用 in_array 的严格模式
-        if ($cache && !CLI && !in_array($class, self::unserializable_class, true)) {
-            self::getCache()->set($class, $new_object);
-        }
-
-        return $new_object;
+        return self::getInstance($class, $arguments, $shared, $cache);
     }
 
     /**
@@ -1090,14 +1021,12 @@ class ObjectManager implements ManagerInterface
     {
         self::setScopedInstances([]);
         self::$reflections = [];
-        self::setScopedInstances([], true);
         self::$processSharedBucketCache = [];
         // Process-shared live on worker bags even inside a Fiber — drop them too.
         self::$instances = [];
-        self::$origin_instances = [];
+        self::$instanceTags = [];
         if (self::currentRequestFiber() === null) {
             self::$fiberInstances = null;
-            self::$fiberOriginInstances = null;
         }
     }
 
@@ -1108,7 +1037,7 @@ class ObjectManager implements ManagerInterface
     public static function clearProcessInstances(): void
     {
         self::$instances = [];
-        self::$origin_instances = [];
+        self::$instanceTags = [];
         self::$reflections = [];
     }
 
@@ -1117,18 +1046,16 @@ class ObjectManager implements ManagerInterface
         $fiber = self::currentRequestFiber();
         if ($fiber === null) {
             self::$instances = [];
-            self::$origin_instances = [];
+            self::$instanceTags = [];
             return;
         }
 
-        self::unsetFiberScope(false, $fiber);
-        self::unsetFiberScope(true, $fiber);
+        self::unsetFiberScope($fiber);
     }
 
     public static function clearRequestScopeForFiber(\Fiber $fiber): void
     {
-        self::unsetFiberScope(false, $fiber);
-        self::unsetFiberScope(true, $fiber);
+        self::unsetFiberScope($fiber);
         // Template / OutputBuffer use their own Fiber WeakMaps; Worker may still
         // pin the Fiber object after terminate, so WeakMap alone will not release.
         if (\class_exists(\Weline\Framework\View\Template::class, false)) {
@@ -1145,29 +1072,21 @@ class ObjectManager implements ManagerInterface
      */
     public static function sweepTerminatedFiberScopes(): int
     {
+        if (!self::$fiberInstances instanceof \WeakMap) {
+            return 0;
+        }
+
         $cleared = 0;
-        $seen = [];
-        foreach ([self::$fiberInstances, self::$fiberOriginInstances] as $storage) {
-            if (!$storage instanceof \WeakMap) {
-                continue;
+        $victims = [];
+        foreach (self::$fiberInstances as $fiber => $_) {
+            if ($fiber instanceof \Fiber && $fiber->isTerminated()) {
+                $victims[] = $fiber;
             }
-            $victims = [];
-            foreach ($storage as $fiber => $_) {
-                if ($fiber instanceof \Fiber && $fiber->isTerminated()) {
-                    $victims[] = $fiber;
-                }
-            }
-            foreach ($victims as $fiber) {
-                $id = \spl_object_id($fiber);
-                if (isset($seen[$id])) {
-                    unset($storage[$fiber]);
-                    continue;
-                }
-                $seen[$id] = true;
-                // Full fiber teardown (OM + Template + OutputBuffer).
-                self::clearRequestScopeForFiber($fiber);
-                $cleared++;
-            }
+        }
+        foreach ($victims as $fiber) {
+            // Full fiber teardown (OM + Template + OutputBuffer).
+            self::clearRequestScopeForFiber($fiber);
+            $cleared++;
         }
 
         return $cleared;
@@ -1182,17 +1101,17 @@ class ObjectManager implements ManagerInterface
      */
     public static function clearCurrentFiberInstances(bool $includeOrigin = true): void
     {
+        if (self::$fiberInstances === null) {
+            return;
+        }
+
         $fiber = self::currentRequestFiber();
         if ($fiber === null) {
             return;
         }
 
-        if (self::$fiberInstances !== null && isset(self::$fiberInstances[$fiber])) {
+        if (isset(self::$fiberInstances[$fiber])) {
             unset(self::$fiberInstances[$fiber]);
-        }
-
-        if ($includeOrigin && self::$fiberOriginInstances !== null && isset(self::$fiberOriginInstances[$fiber])) {
-            unset(self::$fiberOriginInstances[$fiber]);
         }
     }
 
@@ -1307,13 +1226,10 @@ class ObjectManager implements ManagerInterface
     {
         $sampleLimit = \max(0, \min(50, $sampleLimit));
         $fiberBuckets = self::summarizeFiberBuckets(self::$fiberInstances, $sampleLimit);
-        $fiberOriginBuckets = self::summarizeFiberBuckets(self::$fiberOriginInstances, $sampleLimit);
 
         $diagnostics = [
             'main_instances' => self::summarizeInstanceBucket(self::$instances, $sampleLimit),
-            'origin_instances' => self::summarizeInstanceBucket(self::$origin_instances, $sampleLimit),
             'fiber_instances' => $fiberBuckets,
-            'fiber_origin_instances' => $fiberOriginBuckets,
             'metadata_entries' => [
                 'reflections' => \count(self::$reflections),
                 'method_params' => \count(self::$methodParamsMetadata),
@@ -1368,11 +1284,8 @@ class ObjectManager implements ManagerInterface
     public static function countFiberBagClasses(): array
     {
         $counts = [];
-        foreach ([self::$fiberInstances, self::$fiberOriginInstances] as $storage) {
-            if (!$storage instanceof \WeakMap) {
-                continue;
-            }
-            foreach ($storage as $instances) {
+        if (self::$fiberInstances instanceof \WeakMap) {
+            foreach (self::$fiberInstances as $instances) {
                 $bag = $instances instanceof RequestScope
                     ? $instances->all()
                     : (\is_array($instances) ? $instances : []);
@@ -1620,9 +1533,6 @@ class ObjectManager implements ManagerInterface
         if (self::$instances !== []) {
             $buckets[] = self::$instances;
         }
-        if (self::$origin_instances !== []) {
-            $buckets[] = self::$origin_instances;
-        }
 
         if (self::$fiberInstances !== null) {
             foreach (self::$fiberInstances as $scope) {
@@ -1635,16 +1545,6 @@ class ObjectManager implements ManagerInterface
             }
         }
 
-        if (self::$fiberOriginInstances !== null) {
-            foreach (self::$fiberOriginInstances as $scope) {
-                $instances = $scope instanceof RequestScope
-                    ? $scope->all()
-                    : (is_array($scope) ? $scope : []);
-                if ($instances !== []) {
-                    $buckets[] = $instances;
-                }
-            }
-        }
 
         return $buckets;
     }
@@ -1657,6 +1557,39 @@ class ObjectManager implements ManagerInterface
      * @param string $className 类名
      * @return void
      */
+    /**
+     * 按类型索引移除当前作用域的 controller/model/observer 实例（O(tagged)）。
+     */
+    public static function removeInstancesByTag(string $tag): int
+    {
+        $classes = [];
+        foreach (\array_keys(self::$instanceTags[$tag] ?? []) as $class) {
+            $classes[$class] = true;
+        }
+
+        $fiber = self::currentRequestFiber();
+        if ($fiber !== null) {
+            $scope = self::getFiberScope($fiber);
+            if ($scope !== null) {
+                foreach ($scope->classesByTag($tag) as $class) {
+                    $classes[$class] = true;
+                }
+            }
+        }
+
+        $removed = 0;
+        foreach (\array_keys($classes) as $class) {
+            if (self::getScopedInstance($class) === null) {
+                unset(self::$instanceTags[$tag][$class]);
+                continue;
+            }
+            self::removeScopedInstance($class);
+            $removed++;
+        }
+
+        return $removed;
+    }
+
     public static function removeInstance(string $className): void
     {
         // 移除实例缓存
@@ -1669,7 +1602,6 @@ class ObjectManager implements ManagerInterface
         }
         
         // 移除原始实例
-        self::removeScopedInstance($className, true);
     }
 
     /**

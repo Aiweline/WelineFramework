@@ -2,6 +2,8 @@
 
 namespace Weline\CKEditorEditorManager\EditorManager;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\EditorManager\Api\Editor\EditorManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\View\Template;
@@ -36,7 +38,7 @@ class CKEditor extends EditorManager
         # 分配Block
         $this->setData('class', \Weline\CKEditorEditorManager\Block\CKEditor::class);
         $this->setData('cache', 0);
-        $language = strtolower(str_replace('_', '-', Cookie::getLang()));
+        $language = strtolower(str_replace('_', '-', WelineEnv::getLang()));
         $languagePrefix = explode('-', $language, 2)[0];
         $ckLanguage = self::LANGUAGE_FILES[$languagePrefix] ?? 'en';
         $template = Template::getInstance();

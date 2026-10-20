@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\TranslationService\Controller\Api;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\State;
 use Weline\Frontend\Controller\FrontendRestController;
@@ -52,7 +54,7 @@ class Translate extends FrontendRestController
             $targetLanguage = $this->request->getPost('target_language', '');
             if (empty($targetLanguage)) {
                 // 获取当前语言
-                $currentLang = Cookie::getLang() ?: State::getLang();
+                $currentLang = WelineEnv::getLang() ?: WelineEnv::getLang();
                 // 转换为ISO 639-1格式
                 $targetLanguage = LanguageCodeConverter::normalize($currentLang);
             } else {
@@ -138,7 +140,7 @@ class Translate extends FrontendRestController
             // 获取目标语言
             $targetLanguage = $this->request->getPost('target_language', '');
             if (empty($targetLanguage)) {
-                $currentLang = Cookie::getLang() ?: State::getLang();
+                $currentLang = WelineEnv::getLang() ?: WelineEnv::getLang();
                 $targetLanguage = LanguageCodeConverter::normalize($currentLang);
             } else {
                 $targetLanguage = LanguageCodeConverter::normalize($targetLanguage);

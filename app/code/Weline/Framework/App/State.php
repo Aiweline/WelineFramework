@@ -100,34 +100,6 @@ class State extends DataObject
     }
 
     /**
-     * 获取当前语言
-     * 优先级：请求覆盖 > RequestContext route.language（及同写镜像 user.lang）> 区域默认
-     *
-     * 路径段 / query / PATH_LANG / 冻结 StorefrontCacheKeyContext 不是读口权威。
-     * 它们只允许在 App::primeRequestRouteHints / synchronizeParsedLocalization 写入 RC。
-     *
-     * 前台区域默认是网站默认语言。后台区域默认是 backend_default_language，与网站无关。
-     * 不读语言偏好 Cookie。
-     *
-     * @return string
-     */
-    public static function getLang(): string
-    {
-        // Theme preview / controlled shells may force a locale for this request only.
-        $forced = self::getRequestLanguageOverride();
-        if ($forced !== '' && self::isLanguageSegmentCandidate($forced)) {
-            return self::normalizeLanguageSegment($forced);
-        }
-
-        $routeLang = self::readRequestContextLanguage();
-        if ($routeLang !== '') {
-            return $routeLang;
-        }
-
-        return self::resolveAreaDefaultLanguage();
-    }
-
-    /**
      * 当前区域的默认语言。后台不读网站默认语言。
      * CLI（非 WLS Worker）使用独立 cli_language，不回落到网站语种列表首项。
      */
@@ -178,16 +150,6 @@ class State extends DataObject
     }
 
     /**
-     * 后台路径/查询语言只校验形态，不套网站语种白名单。
-     */
-    private static function languageCodeAllowedForCurrentArea(string $code): bool
-    {
-        return self::currentAreaIsBackend()
-            ? self::isLanguageCodeShape($code)
-            : self::isAllowedLanguageCode($code);
-    }
-
-    /**
      * 后台默认语言：运行时覆盖 > env.php backend_default_language > 框架 zh_Hans_CN。
      * 不读取网站 default_language。
      */
@@ -228,6 +190,14 @@ class State extends DataObject
     }
 
     /**
+     * Public normalize for Env / RequestContext readers (hyphen → underscore, trim).
+     */
+    public static function normalizeLanguageCode(string $code): string
+    {
+        return self::normalizeLanguageSegment($code);
+    }
+
+    /**
      * Force language for the current request only (no cookie write).
      * Pass empty string to clear the override.
      * Locale shape is validated; allow-list is not required so theme preview can
@@ -255,27 +225,6 @@ class State extends DataObject
             return '';
         }
         return \trim((string)$context->get(self::REQUEST_LANGUAGE_OVERRIDE, ''));
-    }
-
-    /**
-     * 获取当前货币
-     * 优先级：RequestContext route.currency（及同写镜像 user.currency）> 网站默认
-     *
-     * 路径段 / query / 冻结 StorefrontCacheKeyContext 不是读口权威；
-     * 只允许在 App 初始化写入口写入 RC。
-     *
-     * 不读货币偏好 Cookie。
-     *
-     * @return string
-     */
-    public static function getCurrency(): string
-    {
-        $routeCurrency = self::readRequestContextCurrency();
-        if ($routeCurrency !== '') {
-            return $routeCurrency;
-        }
-
-        return self::resolveWebsiteDefaultCurrency();
     }
 
     /**
@@ -327,50 +276,6 @@ class State extends DataObject
         if ($language !== '' && self::isLanguageSegmentCandidate($language)) {
             \Weline\Framework\Runtime\RequestContext::setWelineUserLang($language);
         }
-    }
-
-    /**
-     * 获取语言本地化代码（触发事件，允许其他模块修改）
-     * 同请求内只触发一次事件，后续调用直接返回缓存值，减少重复 dispatch。
-     *
-     * @return string
-     */
-    public static function getLangLocal(): string
-    {
-        $lang = self::getLang();
-        $currency = self::getCurrency();
-        $cacheKey = $lang . '|' . $currency;
-        $context = Context::getCurrent();
-        if ($context !== null) {
-            $cached = $context->get(self::LANG_LOCAL_CONTEXT_CACHE, null);
-            if (\is_array($cached)
-                && (string)($cached['key'] ?? '') === $cacheKey
-                && \array_key_exists('value', $cached)
-            ) {
-                return (string)$cached['value'];
-            }
-        }
-        $data = new DataObject();
-        $data->setData('lang', $lang);
-        $data->setData('currency', $currency);
-        $data->setData('lang_local', $lang);
-
-        try {
-            \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
-                ->dispatch('Weline_Framework_Cookie::lang_local', $data);
-        } catch (\Exception $e) {
-            // 如果事件系统未初始化，静默处理
-        }
-
-        $langLocal = (string)$data->getData('lang_local');
-        if ($context !== null) {
-            $context->set(self::LANG_LOCAL_CONTEXT_CACHE, [
-                'key' => $cacheKey,
-                'value' => $langLocal,
-            ]);
-        }
-
-        return $langLocal;
     }
 
     /**
@@ -456,104 +361,21 @@ class State extends DataObject
     }
 
     /**
-     * Rebuild a storefront path that omits website-default language/currency segments
-     * and disallowed (not Website-enabled) language prefixes.
+     * Language and currency segments already on the visitor URL are the request.
      *
-     * Path-first contract: default locale/currency must not appear in visitor URLs;
-     * locale codes with valid shape that are not in the Website allow-list are also
-     * stripped (301) so they cannot render under a fake prefix.
-     * Returns null when the path is already canonical or is not a storefront
-     * localization prefix (e.g. backend area key as first segment — keep /ja_JP/admin/…).
+     * Do not rebuild a shorter path for them. Callers treat a non-null return as
+     * a 301 target; this stays null so default currency, default language,
+     * duplicates, and codes outside the allow-list are not redirected (including
+     * not redirected onto an English URL).
      */
     public static function canonicalizeStorefrontLocalizationPath(
         string $path,
         string $defaultLanguage,
         string $defaultCurrency,
     ): ?string {
-        $path = \trim($path);
-        if ($path === '') {
-            $path = '/';
-        } elseif (!\str_starts_with($path, '/')) {
-            $path = '/' . $path;
-        }
+        unset($path, $defaultLanguage, $defaultCurrency);
 
-        $segments = \array_values(\array_filter(
-            \explode('/', \trim($path, '/')),
-            static fn(string $segment): bool => $segment !== ''
-        ));
-        $localized = self::resolveLocalizationFromPathSegments($segments);
-        if ((int)($localized['area_offset'] ?? 0) > 0) {
-            return null;
-        }
-
-        $currency = \strtoupper(\trim((string)($localized['currency'] ?? '')));
-        $language = self::normalizeLanguageSegment((string)($localized['language'] ?? ''));
-        $defaultLanguage = self::normalizeLanguageSegment($defaultLanguage);
-        $defaultCurrency = \strtoupper(\trim($defaultCurrency));
-
-        $omitCurrency = $currency !== '' && $defaultCurrency !== '' && $currency === $defaultCurrency;
-        $omitLanguage = $language !== '' && $defaultLanguage !== ''
-            && \strcasecmp($language, $defaultLanguage) === 0;
-        // Unenabled path language (valid shape, not Website-allowed): strip like default.
-        if (!$omitLanguage
-            && $language !== ''
-            && self::isLanguageCodeShape($language)
-            && !self::isAllowedLanguageCode($language)
-        ) {
-            $omitLanguage = true;
-        }
-        if (!$omitCurrency && !$omitLanguage) {
-            return null;
-        }
-
-        $out = [];
-        if ($currency !== '' && !$omitCurrency) {
-            $out[] = $currency;
-        }
-        if ($language !== '' && !$omitLanguage) {
-            $out[] = $language;
-        }
-        foreach ((array)($localized['remaining'] ?? []) as $part) {
-            $part = \trim((string)$part);
-            if ($part === '') {
-                continue;
-            }
-            // Collapse duplicated default localization segments left in remaining
-            // (e.g. /USD/USD or /en_US/en_US after a mount/parser glitch) so 301
-            // targets stay canonical and never self-loop on the visitor path.
-            if ($omitCurrency
-                && $defaultCurrency !== ''
-                && \strtoupper($part) === $defaultCurrency
-                && self::isCurrencySegmentCandidate($part)
-            ) {
-                continue;
-            }
-            $normalizedPartLang = self::normalizeLanguageSegment($part);
-            if ($omitLanguage
-                && $normalizedPartLang !== ''
-                && (
-                    ($defaultLanguage !== '' && \strcasecmp($normalizedPartLang, $defaultLanguage) === 0)
-                    || (
-                        self::isLanguageCodeShape($normalizedPartLang)
-                        && !self::isAllowedLanguageCode($normalizedPartLang)
-                    )
-                )
-            ) {
-                continue;
-            }
-            $out[] = $part;
-        }
-
-        $canonical = $out === [] ? '/' : '/' . \implode('/', $out);
-        $original = '/' . \trim($path, '/');
-        if ($original === '/') {
-            $original = '/';
-        }
-        if ($canonical === $original) {
-            return null;
-        }
-
-        return $canonical;
+        return null;
     }
 
     /**
@@ -990,59 +812,6 @@ class State extends DataObject
         } catch (\Throwable) {
             return false;
         }
-    }
-
-    /**
-     * RequestContext route.language (and same-write WelineEnv user.lang mirror).
-     */
-    private static function readRequestContextLanguage(): string
-    {
-        $context = Context::getCurrent();
-        if ($context !== null && $context->has('route.language')) {
-            $lang = self::normalizeLanguageSegment((string)$context->get('route.language', ''));
-            if ($lang !== '' && self::isLanguageSegmentCandidate($lang)
-                && self::languageCodeAllowedForCurrentArea($lang)
-            ) {
-                return $lang;
-            }
-        }
-
-        try {
-            $lang = self::normalizeLanguageSegment((string)\Weline\Framework\Env\WelineEnv::get('user.lang', ''));
-            if ($lang !== '' && self::isLanguageSegmentCandidate($lang)
-                && self::languageCodeAllowedForCurrentArea($lang)
-            ) {
-                return $lang;
-            }
-        } catch (\Throwable) {
-        }
-
-        return '';
-    }
-
-    /**
-     * RequestContext route.currency (and same-write WelineEnv user.currency mirror).
-     * Disallowed/stale codes are ignored so website default wins (writer should not leave them).
-     */
-    private static function readRequestContextCurrency(): string
-    {
-        $context = Context::getCurrent();
-        if ($context !== null && $context->has('route.currency')) {
-            $currency = \strtoupper(\trim((string)$context->get('route.currency', '')));
-            if (self::isCurrencySegmentCandidate($currency) && self::isAllowedCurrencyCode($currency)) {
-                return $currency;
-            }
-        }
-
-        try {
-            $currency = \strtoupper(\trim((string)\Weline\Framework\Env\WelineEnv::get('user.currency', '')));
-            if (self::isCurrencySegmentCandidate($currency) && self::isAllowedCurrencyCode($currency)) {
-                return $currency;
-            }
-        } catch (\Throwable) {
-        }
-
-        return '';
     }
 
     /**

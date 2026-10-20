@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Eav\Service\LocalTranslation;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Group;
 use Weline\Eav\Model\EavAttribute\Option;
@@ -59,7 +61,7 @@ final class EavLocalTranslationService
 
     public function getCurrentLocale(): string
     {
-        return trim(Cookie::getLang());
+        return trim(WelineEnv::getLang());
     }
 
     public function isSourceLocale(?string $localeCode = null): bool

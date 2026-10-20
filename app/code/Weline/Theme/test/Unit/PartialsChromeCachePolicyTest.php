@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Test\Unit;
 
+
+use Weline\Framework\Env\WelineEnv;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
@@ -299,7 +301,7 @@ final class PartialsChromeCachePolicyTest extends TestCase
         self::assertStringContainsString('always guest-SSR', $source);
         self::assertStringContainsString("'i18n_switcher_markup'", $source);
         self::assertStringContainsString('SWITCHER_MARKUP_VERSION', $source);
-        self::assertStringContainsString("'lang' => (string)State::getLang()", $source);
+        self::assertStringContainsString("'lang' => (string)WelineEnv::getLang()", $source);
         self::assertStringContainsString(
             'Theme-preview request language override must win over storefront',
             $source,

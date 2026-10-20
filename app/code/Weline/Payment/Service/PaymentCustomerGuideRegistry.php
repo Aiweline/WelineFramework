@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Payment\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Extends\ExtendsData;
@@ -225,7 +227,7 @@ class PaymentCustomerGuideRegistry
     private function getEntries(bool $forceReload = false): array
     {
         $raw = $this->getRawEntries($forceReload);
-        $locale = trim((string) State::getLangLocal());
+        $locale = trim((string) WelineEnv::getLangLocal());
         if ($locale === '') {
             $locale = '_';
         }

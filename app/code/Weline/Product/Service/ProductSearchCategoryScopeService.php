@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -41,7 +43,7 @@ final class ProductSearchCategoryScopeService
     private function listFromCatalog(): array
     {
         $websiteId = $this->resolveWebsiteId();
-        $locale = (string)State::getLangLocal();
+        $locale = (string)WelineEnv::getLangLocal();
 
         // Search scopes contain IDs and labels, never navigation URLs. The
         // existing Search registry caches this projection by scope + locale;

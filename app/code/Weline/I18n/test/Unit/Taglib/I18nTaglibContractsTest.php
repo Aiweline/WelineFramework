@@ -45,6 +45,9 @@ final class I18nTaglibContractsTest extends TestCase
             'LanguageInjectLocales::testLanguageSwitcherInjectsAuthoritativeLocalesWithoutWebsite' => function () {
             $this->assert_LanguageInjectLocales_testLanguageSwitcherInjectsAuthoritativeLocalesWithoutWebsite();
         },
+            'LanguageInjectLocales::testUnsupportedLanguageDialogReusesSwitcherWithoutLazyFetch' => function () {
+            $this->assert_LanguageInjectLocales_testUnsupportedLanguageDialogReusesSwitcherWithoutLazyFetch();
+        },
             'LanguageInjectLocales::testLanguageSelectResolveInjectsMissingCodesInCallerOrder' => function () {
             $this->assert_LanguageInjectLocales_testLanguageSelectResolveInjectsMissingCodesInCallerOrder();
         },
@@ -173,6 +176,24 @@ private function assert_LanguageInjectLocales_testLanguageSwitcherInjectsAuthori
     self::assertStringContainsString('en_US', (string) (\preg_match('/data-i18n-supported-locales="([^"]*)"/', $html, $m) ? $m[1] : ''));
     self::assertStringContainsString('bn_IN', (string) (\preg_match('/data-i18n-supported-locales="([^"]*)"/', $html, $m) ? $m[1] : ''));
     self::assertStringContainsString('data-i18n-current-locale="as_IN"', $html);
+}
+
+private function assert_LanguageInjectLocales_testUnsupportedLanguageDialogReusesSwitcherWithoutLazyFetch(): void
+{
+    $html = LanguageSwitcher::render([
+        'allowed_values' => ['zh_Hans_CN', 'en_US'],
+        'current' => 'zh_Hans_CN',
+        'navigation' => 'emit',
+        'surface' => 'dialog',
+        'show_search' => true,
+        'show_request' => false,
+    ]);
+    self::assertStringContainsString('data-i18n-unsupported-lang', $html);
+    self::assertStringContainsString('data-w-language-search', $html);
+    self::assertStringContainsString('data-language-option="1"', $html);
+    self::assertStringContainsString('data-i18n-surface="dialog"', $html);
+    self::assertStringNotContainsString('data-i18n-panel-lazy', $html);
+    self::assertStringNotContainsString('i18n-unavailable-lang__choices', $html);
 }
 
 private function assert_LanguageInjectLocales_testLanguageSelectResolveInjectsMissingCodesInCallerOrder(): void

@@ -437,7 +437,7 @@ class ArrayType extends AbstractParamType
         // Prefer current request / cookie locale, then zh_Hans_CN / default / first non-empty.
         $locale = '';
         try {
-            $locale = trim((string)(\Weline\Framework\Http\Cookie::getLangLocal() ?? ''));
+            $locale = trim((string)(\Weline\Framework\Env\WelineEnv::getLangLocal() ?? ''));
         } catch (\Throwable) {
             $locale = '';
         }

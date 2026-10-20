@@ -54,8 +54,39 @@ class Upgrade extends CommandAbstract
 
     public function execute(array $args = [], array $data = [])
     {
-        $this->treeChanged = false;
         $skipInvalidation = !empty($data[self::DATA_SKIP_INVALIDATION]);
+        $this->publishStaticTree();
+
+        if (!$skipInvalidation) {
+            /** @var DeployFpcInvalidation $invalidation */
+            $invalidation = ObjectManager::getInstance(DeployFpcInvalidation::class);
+            $result = $invalidation->afterUpgrade($this->treeChanged);
+            if (!empty($result['skipped'])) {
+                $this->printer->note(__('静态树无变更，跳过 FPC deploy ns bump（空跑勿 thrash）'));
+            } else {
+                $this->printer->note(__('已 bump global/storefront/deploy（日常 Upgrade 优先 bump）'));
+            }
+        }
+
+        // Theme 等模块可在此清布局固化物（theme-layout-entities）；核心不硬绑 Theme。
+        /** @var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        $afterPayload = [
+            'tree_changed' => $this->treeChanged,
+            'skip_invalidation' => $skipInvalidation,
+            'args' => $args,
+            'data' => $data,
+        ];
+        $eventsManager->dispatch('Weline_Framework_Deploy::upgrade_after', $afterPayload);
+    }
+
+    /**
+     * Copy module view/statics (flat + existing theme-namespace compat overlay) and
+     * module view/theme bytes into the current static root. No FPC bump, no upgrade_after.
+     */
+    public function publishStaticTree(): void
+    {
+        $this->treeChanged = false;
 
         $modules    = Env::getInstance()->getActiveModules();
         $theme      = Env::getInstance()->getTheme();
@@ -138,28 +169,6 @@ class Upgrade extends CommandAbstract
         $this->publishFlatStaticRuntimeFiles($modules);
         $normalizePermissions($staticRoot);
         $this->printer->success('静态文件部署完毕！');
-
-        if (!$skipInvalidation) {
-            /** @var DeployFpcInvalidation $invalidation */
-            $invalidation = ObjectManager::getInstance(DeployFpcInvalidation::class);
-            $result = $invalidation->afterUpgrade($this->treeChanged);
-            if (!empty($result['skipped'])) {
-                $this->printer->note(__('静态树无变更，跳过 FPC deploy ns bump（空跑勿 thrash）'));
-            } else {
-                $this->printer->note(__('已 bump global/storefront/deploy（日常 Upgrade 优先 bump）'));
-            }
-        }
-
-        // Theme 等模块可在此清布局固化物（theme-layout-entities）；核心不硬绑 Theme。
-        /** @var EventsManager $eventsManager */
-        $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $afterPayload = [
-            'tree_changed' => $this->treeChanged,
-            'skip_invalidation' => $skipInvalidation,
-            'args' => $args,
-            'data' => $data,
-        ];
-        $eventsManager->dispatch('Weline_Framework_Deploy::upgrade_after', $afterPayload);
     }
 
     public function resolveStaticConcurrency(?int $override = null): int

@@ -14,5 +14,5 @@ $csp = $service->resolveCurrentDocumentCsp();
 if ($csp === '') {
     return;
 }
-$content = htmlspecialchars($csp, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-echo '<meta http-equiv="Content-Security-Policy" content="' . $content . '" data-weline-csp="1">' . "\n";
+$cspMeta = htmlspecialchars($csp, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+echo '<meta http-equiv="Content-Security-Policy" content="' . $cspMeta . '" data-weline-csp="1">' . "\n";

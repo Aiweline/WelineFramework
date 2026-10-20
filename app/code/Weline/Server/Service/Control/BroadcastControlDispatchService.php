@@ -141,6 +141,36 @@ class BroadcastControlDispatchService
     }
 
     /**
+     * Tell each live Master the committed authority clock. Does not fan out
+     * invalidation frames. Best-effort within the same 500ms publish budget.
+     */
+    public function observeAuthorityClock(int $authorityClock, ?string $instanceName = null): void
+    {
+        if ($authorityClock <= 0) {
+            return;
+        }
+        $failedByInstance = [];
+        $skippedByInstance = [];
+        $targets = $this->resolveRunningInstances($instanceName, $failedByInstance, $skippedByInstance);
+        $deadline = ControlMessage::monotonicSeconds() + 0.5;
+        foreach ($targets as $target) {
+            $remaining = $deadline - ControlMessage::monotonicSeconds();
+            if ($remaining <= 0.0) {
+                return;
+            }
+            try {
+                $this->ipcControlGateway->observeAuthorityClock(
+                    $target,
+                    $authorityClock,
+                    \min(0.1, $remaining),
+                );
+            } catch (\Throwable) {
+                return;
+            }
+        }
+    }
+
+    /**
      * @return array{
      *     success:bool,
      *     attempted:array<int,string>,

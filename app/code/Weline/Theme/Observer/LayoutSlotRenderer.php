@@ -330,9 +330,9 @@ class LayoutSlotRenderer implements ObserverInterface
             $context += [
                 'request_id' => (string)(\Weline\Framework\Runtime\RequestContext::getId() ?? ''),
                 'uri' => (string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''),
-                'lang' => (string)\Weline\Framework\App\State::getLang(),
-                'lang_local' => (string)\Weline\Framework\App\State::getLangLocal(),
-                'currency' => (string)\Weline\Framework\App\State::getCurrency(),
+                'lang' => (string)\Weline\Framework\Env\WelineEnv::getLang(),
+                'lang_local' => (string)\Weline\Framework\Env\WelineEnv::getLangLocal(),
+                'currency' => (string)\Weline\Framework\Env\WelineEnv::getCurrency(),
             ];
         } catch (\Throwable) {
         }
@@ -1737,7 +1737,7 @@ HTML;
         $previewProgressSourceMapJson = \json_encode($previewProgressSourceMap, $previewMessageJsonFlags) ?: '{}';
         $previewLocale = \trim((string)($this->request->getParam('locale', '') ?: (\Weline\Framework\Runtime\RequestContext::locale() ?? '')));
         if ($previewLocale === '' || \strcasecmp($previewLocale, 'default') === 0) {
-            $previewLocale = \trim((string)\Weline\Framework\App\State::getLangLocal());
+            $previewLocale = \trim((string)\Weline\Framework\Env\WelineEnv::getLangLocal());
         }
         if ($previewLocale === '' || \strcasecmp($previewLocale, 'default') === 0) {
             // RequestContext / State only — no URI re-parse on the read path.

@@ -2143,7 +2143,7 @@ HTML;
             // 后端模板：包含后端公共模板
             $content = <<<HTML
 <!DOCTYPE html>
-<html lang="<?= str_replace('_', '-', \$_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<html lang="<?= str_replace('_', '-', \\Weline\\Framework\\Env\\WelineEnv::getLang()) ?>">
 <head>
     @template(Weline_Backend::templates/public/head.phtml)
 </head>
@@ -2177,7 +2177,7 @@ HTML;
             // 前端模板：包含前端公共模板
             $content = <<<HTML
 <!DOCTYPE html>
-<html lang="<?= str_replace('_', '-', \$_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<html lang="<?= str_replace('_', '-', \\Weline\\Framework\\Env\\WelineEnv::getLang()) ?>">
 <head>
     @template(Weline_Frontend::templates/public/head.phtml)
 </head>

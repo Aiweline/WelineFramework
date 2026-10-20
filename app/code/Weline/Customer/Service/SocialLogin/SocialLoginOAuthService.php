@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Customer\Service\SocialLogin;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Session\SessionFactory;
@@ -122,8 +124,8 @@ class SocialLoginOAuthService
             'intent' => $intent,
             'customer_id' => $customerId,
             'locale_prefix' => $localePrefix,
-            'lang' => State::getLang(),
-            'currency' => State::getCurrency(),
+            'lang' => WelineEnv::getLang(),
+            'currency' => WelineEnv::getCurrency(),
             'created_at' => time(),
         ];
         $this->transientStore->put(self::STATE_KIND, $state, $payload, self::STATE_TTL);

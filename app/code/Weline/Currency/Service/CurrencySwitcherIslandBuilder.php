@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Currency\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Currency\Data\CurrencyData;
 use Weline\Currency\Helper\CurrencyDisplayName;
 use Weline\Currency\Helper\CurrencySymbol;
@@ -122,7 +124,7 @@ final class CurrencySwitcherIslandBuilder implements ProcessSharedInterface
         $locale = $this->activeLocale();
         $bag = $this->rememberOptionsBag($locale);
 
-        return $this->stampIslandHtml($bag, State::getCurrency(), $locale);
+        return $this->stampIslandHtml($bag, WelineEnv::getCurrency(), $locale);
     }
 
     /**
@@ -542,7 +544,7 @@ final class CurrencySwitcherIslandBuilder implements ProcessSharedInterface
 
     private function activeLocale(): string
     {
-        $locale = \trim(State::getLang());
+        $locale = \trim(WelineEnv::getLang());
 
         return $locale !== '' ? $locale : 'zh_Hans_CN';
     }
@@ -607,5 +609,67 @@ final class CurrencySwitcherIslandBuilder implements ProcessSharedInterface
         }
 
         return \implode(' ', \array_values($normalized));
+    }
+
+    /**
+     * Searchable currency list for the unsupported-path dialog.
+     * Options are the website catalog already resolved on this request.
+     * Each choice is a path href; the click does not ask the server for another catalog.
+     */
+    public function renderDialogColumnHtml(): string
+    {
+        $notice = ObjectManager::getInstance(UnsupportedPathCurrencyNotice::class);
+        if (!$notice->isActive()) {
+            return '';
+        }
+        $locale = $this->activeLocale();
+        $bag = $this->rememberOptionsBag($locale);
+        $items = \is_array($bag['items'] ?? null) ? $bag['items'] : [];
+        $rejected = $notice->rejectedCode();
+        $uri = $this->visitorUri();
+        $safe = static fn (string $value): string => \htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+        $placeholder = '搜索货币';
+        $html = '<div class="w-currency-switcher" data-currency-switcher data-currency-surface="dialog">'
+            . '<div class="w-currency-switcher__menu" role="menu" aria-label="' . $safe($placeholder) . '">'
+            . '<div class="w-language-switcher__search-wrap">'
+            . '<input class="w-input" type="search" placeholder="' . $safe($placeholder) . '"'
+            . ' autocomplete="off" data-w-choice-search aria-label="' . $safe($placeholder) . '">'
+            . '</div><div class="w-language-switcher__list">';
+        foreach ($items as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $code = \strtoupper(\trim((string)($item['code'] ?? '')));
+            if ($code === '' || $code === $rejected) {
+                continue;
+            }
+            $name = \trim((string)($item['name'] ?? $code));
+            $symbol = \trim((string)($item['symbol'] ?? ''));
+            $search = \trim((string)($item['search'] ?? ($code . ' ' . $name)));
+            $href = UnsupportedPathCurrencyNotice::replaceCurrencySegment($uri, $rejected, $code);
+            $html .= '<a class="w-menu__item w-language-switcher__option" role="menuitem" href="'
+                . $safe($href) . '" data-currency-option data-currency="' . $safe($code) . '"'
+                . ' data-i18n-authoritative-href="1" data-w-search="' . $safe($search) . '">'
+                . '<span class="w-language-switcher__copy"><strong>' . $safe($name) . '</strong>'
+                . '<small>' . $safe($symbol !== '' ? $code . ' ' . $symbol : $code) . '</small></span></a>';
+        }
+        $html .= '</div></div></div>';
+
+        return $html;
+    }
+
+    private function visitorUri(): string
+    {
+        $uri = \trim((string)WelineEnv::server('WELINE_VISITOR_REQUEST_URI', ''));
+        if ($uri === '') {
+            $uri = \trim((string)WelineEnv::server('REQUEST_URI', '/'));
+        }
+        if ($uri === '') {
+            return '/';
+        }
+        $path = (string)(\parse_url($uri, \PHP_URL_PATH) ?: $uri);
+        $query = (string)(\parse_url($uri, \PHP_URL_QUERY) ?: '');
+
+        return $query !== '' ? $path . '?' . $query : $path;
     }
 }

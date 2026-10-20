@@ -129,7 +129,7 @@ class Meta implements TaglibInterface
                 if (!str_starts_with($translationKey, '@meta::')) {
                     $translationKey = '@meta::' . $translationKey;
                 }
-                $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
+                $locale = \Weline\Framework\Env\WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
                 $translation = MetaTranslation::getTranslatedValueWithScope($translationKey, 'default', $locale, '');
                 if ($translation !== '') {
                     return $translation;

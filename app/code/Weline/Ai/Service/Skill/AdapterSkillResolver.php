@@ -151,6 +151,47 @@ final class AdapterSkillResolver
     }
 
     /**
+     * 智能体自带技能：只解析声明的锁定码，不读适配器手工绑定表。
+     *
+     * @param list<string> $lockedCodes
+     * @param list<string> $temporarySkillCodes
+     * @return array{codes:list<string>,items:list<array<string,mixed>>,warnings:list<string>}
+     */
+    public function resolveExplicitSkillBindings(array $lockedCodes, array $temporarySkillCodes = [], string $ownerCode = 'agent'): array
+    {
+        $skills = $this->skillRegistry()->listAvailableSkills(false);
+        $lockedCodes = $this->normalizer()->normalizeCodeList($lockedCodes);
+        $temporaryCodes = $this->normalizer()->normalizeCodeList($temporarySkillCodes);
+        $itemsByCode = [];
+        $warnings = [];
+
+        foreach ($lockedCodes as $code) {
+            $skill = $skills[$code] ?? null;
+            if (!\is_array($skill) || (string)($skill['status'] ?? '') !== AiSkill::STATUS_ACTIVE) {
+                throw new \RuntimeException('Locked agent skill "' . $code . '" is missing or inactive for "' . $ownerCode . '".');
+            }
+            $itemsByCode[$code] = $this->decorate($skill, true, false, false, 'locked');
+        }
+
+        foreach ($temporaryCodes as $code) {
+            $skill = $skills[$code] ?? null;
+            if (!\is_array($skill) || (string)($skill['status'] ?? '') !== AiSkill::STATUS_ACTIVE) {
+                $warnings[] = 'Temporary skill "' . $code . '" is missing or inactive and was skipped.';
+                continue;
+            }
+            $existing = $itemsByCode[$code] ?? $skill;
+            $source = !empty($existing['locked']) ? 'locked' : 'temporary';
+            $itemsByCode[$code] = $this->decorate($existing, !empty($existing['locked']), false, true, $source);
+        }
+
+        return [
+            'codes' => \array_values(\array_keys($itemsByCode)),
+            'items' => \array_values($itemsByCode),
+            'warnings' => $warnings,
+        ];
+    }
+
+    /**
      * @param list<array<string,mixed>> $items
      */
     public function buildPromptGuideText(array $items): string

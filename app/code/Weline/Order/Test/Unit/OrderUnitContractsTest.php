@@ -39,6 +39,9 @@ final class OrderUnitContractsTest extends TestCase
             'OrderNoticeWidget::testOrderNoticeScriptUsesAsyncOrderApiResource' => function () {
             $this->assert_OrderNoticeWidget_testOrderNoticeScriptUsesAsyncOrderApiResource();
         },
+            'OrderListMenuSignal::testProviderTargetsOrderListAndViewDeepLink' => function () {
+            $this->assert_OrderListMenuSignal_testProviderTargetsOrderListAndViewDeepLink();
+        },
         ];
     }
 
@@ -80,5 +83,21 @@ private function assert_OrderNoticeWidget_testOrderNoticeScriptUsesAsyncOrderApi
     self::assertStringContainsString('async function orderApi()', $source);
     self::assertStringContainsString("resource('order')", $source);
     self::assertStringContainsString('await orderApi()', $source);
+}
+
+private function assert_OrderListMenuSignal_testProviderTargetsOrderListAndViewDeepLink(): void
+{
+    $root = '/Users/weline/Project/Official/框架/app/code/Weline/Order';
+    $provider = (string) file_get_contents($root . '/extends/module/Weline_Admin/BackendMenuSignalProvider/OrderListMenuSignalProvider.php');
+    $observer = (string) file_get_contents($root . '/Observer/OrderCreatedObserver.php');
+    $controller = (string) file_get_contents($root . '/Controller/Backend/Order.php');
+    self::assertStringContainsString('BackendMenuSignalInbox', $provider);
+    self::assertStringContainsString("'unread' => true", $provider);
+    self::assertStringContainsString("MENU_SOURCE_ID = 'Weline_Order::order_list'", $provider);
+    self::assertStringContainsString("getBackendUrl('order/backend/order/view'", $provider);
+    self::assertStringNotContainsString('countOpen', $provider);
+    self::assertStringContainsString('publishUnreadMenuMessage', $observer);
+    self::assertStringContainsString('markOrderMenuMessageRead', $controller);
+    self::assertFileDoesNotExist($root . '/Service/BackendOrderMenuAttentionService.php');
 }
 }

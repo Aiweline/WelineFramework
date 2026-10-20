@@ -290,6 +290,22 @@ class RequestLifecycleTrace
     }
 
     /**
+     * Cached arm latch, readable without resolving.
+     *
+     * {@see TraceGate} keeps its own WeakMap mirror so that disarmed hot paths never
+     * touch this class. The mirror is refreshed by {@see latchArmed()}/{@see latchDisarmed()};
+     * when it is empty (fresh Fiber/Context, or a writer that only touched this latch)
+     * the gate falls back to this value instead of re-probing cookies.
+     *
+     * Never resolves, never probes, never allocates recording payloads.
+     * null = unresolved; the gate must stay disarmed until a real resolve happens.
+     */
+    public static function peekEnabledCache(): ?bool
+    {
+        return self::state()->enabledCache;
+    }
+
+    /**
      * Drop sticky enablement latch (panel cookie clear / CookieScope while disarmed / tests).
      */
     public static function invalidateEnablementCache(): void
@@ -352,18 +368,25 @@ class RequestLifecycleTrace
         $fiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
         if ($fiber !== null) {
             self::$fiberHotArmed ??= new \WeakMap();
-
-            return self::$fiberHotArmed[$fiber] ?? null;
+            $hot = self::$fiberHotArmed[$fiber] ?? null;
+        } else {
+            $context = Context::getCurrent();
+            if ($context !== null) {
+                self::$contextHotArmed ??= new \WeakMap();
+                $hot = self::$contextHotArmed[$context] ?? null;
+            } else {
+                $hot = self::$mainHotArmed;
+            }
         }
 
-        $context = Context::getCurrent();
-        if ($context !== null) {
-            self::$contextHotArmed ??= new \WeakMap();
-
-            return self::$contextHotArmed[$context] ?? null;
+        if ($hot !== null) {
+            return $hot;
         }
 
-        return self::$mainHotArmed;
+        // Per-scope latch empty: the per-state cache is the same decision written by
+        // latchArmed()/latchDisarmed(), so honor it before any cookie re-probe. Only
+        // reached pre-resolve, where isEnabled() would touch state() anyway.
+        return self::state()->enabledCache;
     }
 
     private static function setHotArmed(bool $armed): void

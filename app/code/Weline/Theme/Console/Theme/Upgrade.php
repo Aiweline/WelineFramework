@@ -13,6 +13,8 @@ namespace Weline\Theme\Console\Theme;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
+use Weline\Framework\Deploy\DeployStagingSession;
+use Weline\Framework\Deploy\StaticAssetMode;
 use Weline\Framework\Console\ConsoleException;
 use Weline\Framework\Deploy\StaticPublishExclusion;
 use Weline\Framework\Http\Fpc\StaticAssetBrotliSidecar;
@@ -80,8 +82,13 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             throw new ConsoleException(__('未找到范围已绑定主题，请用 -t/--theme 指定主题名。'));
         }
 
-        foreach ($themes as $theme) {
-            $this->upgradeOneTheme($theme, $modules);
+        /** @var StaticAssetMode $staticAssetMode */
+        $staticAssetMode = ObjectManager::getInstance(StaticAssetMode::class);
+        // Registry may be stale until the next framework compile; keep the direct path.
+        if ($staticAssetMode->publishForThemeUpgrade($themes, $modules) < 1) {
+            foreach ($themes as $theme) {
+                $this->upgradeOneTheme($theme, $modules);
+            }
         }
 
         // C-RP-07：-t 指定主题；无 -t → 仅范围已绑定主题；默认正式+草稿；--all 全历史版本
@@ -657,7 +664,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     $theme->getPath(),
                     $file_path,
                     $publicThemePath,
-                    APP_STATIC_PATH,
+                    DeployStagingSession::staticRoot(),
                 );
                 if ($destinationDirectory === null) {
                     // Fail-soft: one out-of-root scan entry must not abort bare theme:upgrade.

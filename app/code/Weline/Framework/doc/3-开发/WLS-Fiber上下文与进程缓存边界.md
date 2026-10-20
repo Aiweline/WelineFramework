@@ -12,6 +12,37 @@
 
 多 Fiber 并发时：**每个 Fiber 只有自己的上下文**；可读缓存一律进程袋或 Memory Service，禁止「每 Fiber 复制一份胖单例 + 私有袋」。
 
+## 进程袋（命名 L1）契约
+
+权威 API：`Weline\Framework\Phrase\DictionaryCacheNamespace`。
+
+| API | 用途 | 登记进程表 |
+|-----|------|-----------|
+| `processBag($name, &$bag, $maxEntries, $locales)` | Worker 常驻 L1；`$name` 是显式身份 | 是（同名幂等，只移引用） |
+| `requestBag(&$bag, $maxEntries, $locales)` | 请求级袋；随 `Parser::reset` / Fiber 释放 | **否** |
+| `localCache(...)`（`@deprecated`） | 旧 API，语义已降为请求袋，仅供仓外迁移 | **否** |
+
+硬规则：
+
+1. **身份显式**：空名不得登记；禁止引用探测/匿名采纳（旧 `anon_N` 已删除）。
+2. **容量必填**：每袋声明 `maxEntries`；满袋**一次削到 90% 水位**（`intdiv($max * 9, 10)`），后续插入摊还 O(1)。
+3. **记账不落热路径**：locale 记账只在袋尺寸变化时写 `ProcessMemoryStore`；请求袋不写 Store。
+4. **先 R0 后 L1**：请求内事实先 `RequestContext` memo，再命名进程袋，再 L2（`ScopeSharedMemo` / `w_cache`），DB 仅 miss。
+5. **门禁**：`ProcessBagRegistryContractTest`（空名不登记、命名合法、登记表 ≤40）；`ProcessBagIdentityContractTest`（请求袋永不登记/不写 Store、90% 水位）。
+
+生产命名袋清单（新增袋必须同时更新本节与门禁豁免）：
+
+| 袋名前缀 | Owner | 说明 |
+|----------|-------|------|
+| `worker*`（11 个 `BAG_*`） | `Phrase\Parser` | 词典 L1 分层/物化/翻译/模块/全局词典 |
+| `globalDictionaryModuleBags` | `Phrase\GlobalDictionaryModuleBagCache` | 整 locale/module 文件袋 |
+| `i18n.*` | `I18n` | taglib 渲染、模型、active locale、本地化仓库 L1 |
+| `phrase.*` | `Phrase` | 词表/测试袋 |
+
+`i18n.repository.locale.installed_active` / `i18n.repository.country.rows` 由 locale 目录观察者 `LocaleCatalogChangedClearActiveLocales` 失效。
+
+MemDiag：`process_bags`（name → entries/bytes）、`process_bag_entries`、`process_bag_bytes`；登记数不随请求增长。
+
 Fiber **结束/回收**（Worker 仍可能握着 terminated Fiber 引用）必须显式释放：
 - `ObjectManager::clearRequestScopeForFiber`（含 Template / FiberOutputBuffer 的 Fiber WeakMap）
 - `ObjectManager::sweepTerminatedFiberScopes`（reset 扫尾）
@@ -47,3 +78,4 @@ Fiber **结束/回收**（Worker 仍可能握着 terminated Fiber 引用）必�
 - `om_fiber_bucket_count`：约等于并发中的请求 Fiber 数（小）。
 - `om_fiber_instances`：每桶仅上下文类，不应再含 CacheManager / HotCache / FPC coordinator 等进程共享服务。
 - `om_main_instances`：进程共享服务计数随暖机上升、不随并发线性翻倍。
+- `process_bags` / `process_bag_entries` / `process_bag_bytes`：命名进程袋清单；登记条目不随请求数增长（`ProcessBagIdentityContractTest`）。

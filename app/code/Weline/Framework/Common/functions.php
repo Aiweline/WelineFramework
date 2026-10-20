@@ -683,20 +683,6 @@ if (!function_exists('w_env_area')) {
     }
 }
 
-if (!function_exists('w_env_lang')) {
-    function w_env_lang(): string
-    {
-        return WelineEnv::getLang();
-    }
-}
-
-if (!function_exists('w_env_currency')) {
-    function w_env_currency(): string
-    {
-        return WelineEnv::getCurrency();
-    }
-}
-
 if (!function_exists('w_env_website_id')) {
     function w_env_website_id(): ?int
     {

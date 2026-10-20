@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 namespace Weline\Eav\Controller\Backend;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Backend\Api\UserData\BackendCurrentUserDataInterface;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Group;
@@ -79,7 +81,7 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
                 'main_table.' . EavAttribute::schema_fields_eav_entity_id
                 . '=entity_local.' . EavEntity\LocalDescription::schema_fields_ID
                 . ' and entity_local.' . EavEntity\LocalDescription::schema_fields_local_code
-                . '=\'' . Cookie::getLangLocal() . '\'',
+                . '=\'' . WelineEnv::getLangLocal() . '\'',
                 'left',
                 'entity_local.' . EavEntity\LocalDescription::schema_fields_name . ' as entity_local_name'
             );

@@ -82,7 +82,7 @@ class Meta extends AbstractModel
 
         $metaIdentify = trim((string)$this->getData(self::schema_fields_META_IDENTIFY));
         if ($metaIdentify !== '' && !empty($metaData['info']) && is_array($metaData['info'])) {
-            $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
+            $locale = \Weline\Framework\Env\WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
             foreach ($metaData['info'] as $field => $value) {
                 $value = trim((string)$value);
                 if ($value === '') {

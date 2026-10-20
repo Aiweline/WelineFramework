@@ -66,7 +66,7 @@ class Dictionary extends BaseController
     function get()
     {
         // 获取参数
-        $localeCode = $this->request->getParam('locale_code', \Weline\Framework\Http\Cookie::getLangLocal());
+        $localeCode = $this->request->getParam('locale_code', \Weline\Framework\Env\WelineEnv::getLangLocal());
         $search = $this->request->getParam('search', '');
         $moduleFilter = trim((string)$this->request->getParam('module', ''));
         $activeTab = trim((string)$this->request->getParam('tab', 'dictionary'));
@@ -414,7 +414,7 @@ class Dictionary extends BaseController
             // Fiber-local silence: never install a process-global bare ob layer under WLS.
             FiberOutputBuffer::beginCapture();
             try {
-                $result = $this->i18n->getLocaleName($localeCode, \Weline\Framework\Http\Cookie::getLangLocal());
+                $result = $this->i18n->getLocaleName($localeCode, \Weline\Framework\Env\WelineEnv::getLangLocal());
                 FiberOutputBuffer::discardCapture();
                 return $result;
             } catch (\Throwable $e) {

@@ -35,7 +35,7 @@ class TemplateCompile implements ObserverInterface
             return;
         }
 
-        $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
+        $locale = \Weline\Framework\Env\WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
         foreach ($metaTranslations as $row) {
             $word = (string)($row['word'] ?? '');
             $translate = (string)($row['translate'] ?? '');

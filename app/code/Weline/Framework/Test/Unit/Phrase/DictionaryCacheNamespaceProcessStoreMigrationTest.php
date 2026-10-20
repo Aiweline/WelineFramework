@@ -53,10 +53,10 @@ final class DictionaryCacheNamespaceProcessStoreMigrationTest extends TestCase
 
         $before = DictionaryCacheNamespace::processMemoryStore()->getItemCount();
         $cache = [];
-        $bag = &DictionaryCacheNamespace::localCache($cache, 1024, ['ja_JP']);
+        $bag = &DictionaryCacheNamespace::requestBag($cache, 1024, ['ja_JP']);
         $bag['fp|ja_JP|word'] = 'dirty';
 
-        $again = &DictionaryCacheNamespace::localCache($cache, 1024, ['ja_JP']);
+        $again = &DictionaryCacheNamespace::requestBag($cache, 1024, ['ja_JP']);
         self::assertArrayNotHasKey('fp|ja_JP|word', $again);
         self::assertSame([], $cache);
         self::assertSame($before, DictionaryCacheNamespace::processMemoryStore()->getItemCount());
@@ -68,9 +68,9 @@ final class DictionaryCacheNamespaceProcessStoreMigrationTest extends TestCase
         $localeBag = [];
         DictionaryCacheNamespace::bindProcessBag('workerLocaleWords', $localeBag);
 
-        $hot = &DictionaryCacheNamespace::localCache($localeBag, 1024, ['ja_JP']);
+        $hot = &DictionaryCacheNamespace::processBag('workerLocaleWords', $localeBag, 1024, ['ja_JP']);
         $hot['fp|ja_JP|a'] = ['hello' => 'こんにちは'];
-        $cold = &DictionaryCacheNamespace::localCache($localeBag, 1024, ['ko_KR']);
+        $cold = &DictionaryCacheNamespace::processBag('workerLocaleWords', $localeBag, 1024, ['ko_KR']);
         $cold['fp|ko_KR|a'] = ['hello' => '안녕하세요'];
 
         DictionaryCacheNamespace::touchLocaleBucket('ja_JP');
@@ -92,12 +92,12 @@ final class DictionaryCacheNamespaceProcessStoreMigrationTest extends TestCase
         $localeBag = [];
         DictionaryCacheNamespace::bindProcessBag('workerLocaleWords', $localeBag);
 
-        $bagEs = &DictionaryCacheNamespace::localCache($localeBag, 1024, ['es_ES']);
+        $bagEs = &DictionaryCacheNamespace::processBag('workerLocaleWords', $localeBag, 1024, ['es_ES']);
         $bagEs['fp|es_ES|heavy'] = ['x' => 'es_ES'];
         DictionaryCacheNamespace::touchLocaleBucket('es_ES');
         DictionaryCacheNamespace::pinLocaleBucket('es_ES');
 
-        $bagFr = &DictionaryCacheNamespace::localCache($localeBag, 1024, ['fr_FR']);
+        $bagFr = &DictionaryCacheNamespace::processBag('workerLocaleWords', $localeBag, 1024, ['fr_FR']);
         $bagFr['fp|fr_FR|heavy'] = ['x' => 'fr_FR'];
         DictionaryCacheNamespace::touchLocaleBucket('fr_FR');
 
@@ -118,7 +118,7 @@ final class DictionaryCacheNamespaceProcessStoreMigrationTest extends TestCase
     public function testClearWorkerCachesClearsProcessMemoryStore(): void
     {
         $cache = [];
-        $bag = &DictionaryCacheNamespace::localCache($cache, 1024, ['en_US']);
+        $bag = &DictionaryCacheNamespace::requestBag($cache, 1024, ['en_US']);
         $bag['fp|en_US|k'] = 'v';
         DictionaryCacheNamespace::touchLocaleBucket('en_US');
         self::assertGreaterThan(0, DictionaryCacheNamespace::processMemoryStore()->getItemCount());

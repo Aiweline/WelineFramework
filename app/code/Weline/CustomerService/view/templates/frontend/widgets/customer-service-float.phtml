@@ -62,7 +62,7 @@ $widgetTranslationService = ObjectManager::getInstance(WidgetTranslationService:
 $supportedLocales = $widgetTranslationService->getSupportedLocales();
 $defaultCustomerLocale = $customerServiceSettings->defaultCustomerLocale();
 // Locale authority is RequestContext (via State / WidgetI18n::storefrontLocale). Do not re-parse URI.
-$currentLocale = WidgetI18n::storefrontLocale() ?: (State::getLangLocal() ?: $defaultCustomerLocale);
+$currentLocale = WidgetI18n::storefrontLocale() ?: (\Weline\Framework\Env\WelineEnv::getLangLocal() ?: $defaultCustomerLocale);
 // P10: keep body-end config slim — dictionaries load on first chat open via Query.
 // Prefer {} over [] so clients treat it as a locale map, not a list.
 $widgetTranslations = new \stdClass();

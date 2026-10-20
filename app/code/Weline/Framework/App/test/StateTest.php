@@ -37,8 +37,8 @@ class StateTest extends TestCore
                 'HTTP_HOST' => 'example.test',
             ]);
 
-            self::assertSame('zh_Hans_CN', State::getLang());
-            self::assertSame('CNY', State::getCurrency());
+            self::assertSame('zh_Hans_CN', WelineEnv::getLang());
+            self::assertSame('CNY', WelineEnv::getCurrency());
         } finally {
             State::resetRequestPathLocalizationCache();
             if ($hadContext) {
@@ -70,7 +70,7 @@ class StateTest extends TestCore
                 'HTTP_HOST' => 'example.test',
             ]);
 
-            self::assertSame('CNY', State::getCurrency());
+            self::assertSame('CNY', WelineEnv::getCurrency());
         } finally {
             State::resetRequestPathLocalizationCache();
             if ($hadContext) {
@@ -95,8 +95,8 @@ class StateTest extends TestCore
                 'HTTP_HOST' => 'example.test',
             ]);
 
-            self::assertSame('zh_Hans_CN', State::getLang());
-            self::assertSame('CNY', State::getCurrency());
+            self::assertSame('zh_Hans_CN', WelineEnv::getLang());
+            self::assertSame('CNY', WelineEnv::getCurrency());
         } finally {
             State::resetRequestPathLocalizationCache();
             if ($hadContext) {

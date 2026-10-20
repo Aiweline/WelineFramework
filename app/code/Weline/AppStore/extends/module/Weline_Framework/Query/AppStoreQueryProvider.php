@@ -66,7 +66,7 @@ class AppStoreQueryProvider implements QueryProviderInterface
         $moduleFilter = trim((string)($params['module_name'] ?? $params['module'] ?? ''));
         $locale = trim((string)($params['locale'] ?? ''));
         if ($locale === '') {
-            $locale = (string)w_env('user.lang', Env::get('user.lang', 'zh_Hans_CN'));
+            $locale = \Weline\Framework\Env\WelineEnv::getLang();
         }
 
         /** @var AppStoreInstalledModule $moduleModel */

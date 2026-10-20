@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Eav\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Eav\Api\Attribute\AttributeStorageException;
 use Weline\Eav\Api\Entity\EntityDefinitionInterface;
 use Weline\Eav\Api\Metadata\AttributeGroupMetadata;
@@ -917,7 +919,7 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
             $locale = '';
         }
         if ($locale === '') {
-            $locale = trim(str_replace('-', '_', (string)State::getLangLocal()));
+            $locale = trim(str_replace('-', '_', (string)WelineEnv::getLangLocal()));
         }
 
         return $locale !== '' ? $locale : 'zh_Hans_CN';
@@ -1207,7 +1209,12 @@ final class AttributeMetadataCatalog implements AttributeMetadataCatalogInterfac
     private function rememberRequest(string $logicalKey, callable $builder): mixed
     {
         if (\array_key_exists($logicalKey, self::$processBag)) {
-            return self::$processBag[$logicalKey];
+            // LRU：命中移到队尾，满袋淘汰最久未使用项（旧实现为 FIFO）。
+            $cached = self::$processBag[$logicalKey];
+            unset(self::$processBag[$logicalKey]);
+            self::$processBag[$logicalKey] = $cached;
+
+            return $cached;
         }
 
         $value = ScopeSharedMemo::rememberScoped(

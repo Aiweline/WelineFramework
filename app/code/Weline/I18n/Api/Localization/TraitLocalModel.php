@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Api\Localization;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
@@ -22,7 +24,7 @@ trait TraitLocalModel
     {
         parent::__init();
         if (!CLI) {
-            $this->where(self::schema_fields_local_code, Cookie::getLang(), '=', 'or')->where(self::schema_fields_local_code, null, 'IS NULL');
+            $this->where(self::schema_fields_local_code, WelineEnv::getLang(), '=', 'or')->where(self::schema_fields_local_code, null, 'IS NULL');
         }
     }
 

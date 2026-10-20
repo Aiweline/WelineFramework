@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Controller\Backend;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
@@ -24,16 +26,16 @@ class Words extends \Weline\Framework\App\Controller\BackendController
     {
         /**@var I18n $I18n */
         $I18n        = ObjectManager::getInstance(I18n::class);
-        $locals      = $I18n->getLocals(Cookie::getLangLocal());
+        $locals      = $I18n->getLocals(WelineEnv::getLangLocal());
         $need_locals = [];
-        $cache_key   = 'getLocals' . 'need_locals' . Cookie::getLangLocal();
+        $cache_key   = 'getLocals' . 'need_locals' . WelineEnv::getLangLocal();
         if ($data = $I18n->i18nCache->get($cache_key)) {
             $need_locals = $data;
         } else {
             foreach ($locals as $code => $local_name) {
                 $need_locals[] = [
                     Locals::schema_fields_ID          => $code,
-                    Locals::schema_fields_TARGET_CODE => Cookie::getLangLocal(),
+                    Locals::schema_fields_TARGET_CODE => WelineEnv::getLangLocal(),
                     Locals::schema_fields_NAME        => $local_name,
                     Locals::schema_fields_FLAG        => $I18n->getCountryFlagWithLocal($code)['flag'] ?? '',
                 ];
@@ -44,10 +46,10 @@ class Words extends \Weline\Framework\App\Controller\BackendController
         $localsModel = ObjectManager::getInstance(Locals::class);
         $localsModel->insert($need_locals, Locals::schema_fields_ID)->fetch();
         $localsModel->clearData();
-        $locals = $localsModel->where(Locals::schema_fields_TARGET_CODE, Cookie::getLangLocal())->pagination()->select()->fetch();
+        $locals = $localsModel->where(Locals::schema_fields_TARGET_CODE, WelineEnv::getLangLocal())->pagination()->select()->fetch();
         $this->assign('locals', $locals->getItems());
         $this->assign('pagination', $locals->getPagination());
-        $target_local = $localsModel->where(Locals::schema_fields_CODE, Cookie::getLangLocal())->find()->fetch();
+        $target_local = $localsModel->where(Locals::schema_fields_CODE, WelineEnv::getLangLocal())->find()->fetch();
         $this->assign('target_local', $target_local);
         return $this->fetch();
     }

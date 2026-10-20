@@ -393,7 +393,8 @@
                         host1s.shift();
                         host1s1 = host1s[0];
                     }
-                    if (getCookie('WELINE_USER_CURRENCY') === host1s1) {
+                    // Currency path segment (ISO-4217 shape) — never preference cookies.
+                    if (/^[A-Z]{3}$/.test(String(host1s1 || ''))) {
                         host1s.shift();
                         host1s1 = host1s[0];
                     }

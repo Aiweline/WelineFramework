@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Blog\Test\Unit\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use PHPUnit\Framework\TestCase;
 use Weline\Blog\Controller\Frontend\View;
 use Weline\Blog\Model\Post;
@@ -257,7 +259,7 @@ private function assert_BlogContentResolver_testResolverSourceChecksPostBeforeCm
 private function assert_BlogContentResolver_testScopeResolverUsesCurrentRequestLanguageState(): void
 {
     $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/Service/BlogScopeResolver.php');
-    self::assertStringContainsString('State::getLangLocal()', $source);
+    self::assertStringContainsString('WelineEnv::getLangLocal()', $source);
     self::assertStringContainsString("str_replace('-', '_', \$locale)", $source);
     self::assertStringNotContainsString('$scope->localeCode', $source);
     self::assertStringNotContainsString("w_env('lang'", $source);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Api\Controller;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Admin\Controller\Index;
 use Weline\Backend\Api\Config\BackendUserConfigStore;
 use Weline\Backend\Api\Runtime\BackendWarmupContext;
@@ -285,9 +287,9 @@ class BaseController extends BackendController
             'website_code' => (string)($this->request->getServer('WELINE_WEBSITE_CODE') ?? ''),
             'website_url' => (string)($this->request->getServer('WELINE_WEBSITE_URL') ?? ''),
             'user_id' => $this->resolveAdminFullPageCacheUserId(),
-            'lang' => State::getLang(),
-            'lang_local' => State::getLangLocal(),
-            'currency' => State::getCurrency(),
+            'lang' => WelineEnv::getLang(),
+            'lang_local' => WelineEnv::getLangLocal(),
+            'currency' => WelineEnv::getCurrency(),
             'theme_config_hash' => $this->resolveAdminThemeConfigHash(),
             // menu:collect bumps this generation; include it so sidebar HTML cannot stick
             // after ACL menu rows change while route/path stay the same.

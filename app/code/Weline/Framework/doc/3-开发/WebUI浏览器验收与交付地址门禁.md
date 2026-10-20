@@ -35,6 +35,7 @@
 1. **先有用例**：URL、步骤、期望结果（来自 `doc/需求.md` 或 TaskContract）；禁止先写代码后补「随便点一下」。
 2. **起真实 WLS**（测试实例），确认 Worker/静态资源已加载本次改动。
 3. **打开当前宿主可用的真实 Browser，且打开即禁用 HTTP 缓存（硬，`browser_cache_disabled_on_open`）**，再按用例逐步操作（点击、填写、提交、看 Toast/跳转）。
+3a0. **用户 Chrome 按功能使用标签组（硬，`browser_tab_group_identity`）**：Agent 操作**用户本机 Google Chrome**（chrome-devtools 连上的那个，含社媒注册、邮箱、第三方站）时，先开或复用**一个**标签组，标题就是这次功能的身份，形如 `AI·{功能短名}`。一个功能一组。新开的页只放进这一组，也只操作这一组里的页。禁止把页开进用户看不见的隔离上下文，禁止在用户原有标签里混着点。不要为了建组去把 Chrome 整窗抢到前台。这一功能收口（做完、停住或放弃）时删掉该组及其标签。编辑器内置验收 Browser 没有 Chrome 标签组，不走本条。建不出组就停，不要把无组标签当成已经分组。
 3a. **操作员 Browser 默认虚拟平面 / 非抢占后台（硬，`browser_operator_non_preemptive`）**：WB-OP（及同类自动化：默认无头 Playwright 等）是**一套虚拟操作面**——在宿主 Browser / webview / 工具通道内完成点击与填写，**禁止**与用户抢 OS/IDE 焦点、鼠标、键盘。Cursor ide-browser：`browser_navigate` **省略** `position`（后台开页、保留用户焦点）；**禁止**默认传 `position:"active"`、把 Browser 面板/有头 Chromium 强行拉到前台，或用会夺取指针/按键的系统级键鼠注入去点验收页。后台 ≠ 免测——仍须按用例跑完 WB-OP。仅当用户**明确**要求观看/聚焦 Browser 时才可前台（与 `e2e_playwright_headless_default` 同精神）。
 3b. **打开即抹掉自动化检测标志（硬，`browser_strip_automation_flags`）**：与禁缓存同序、在页面脚本跑人机验证之前执行。WB-OP / Playwright 必须像真人浏览器，否则云端 reCAPTCHA / 人机验证会按「自动化」拦截登录与提交。
    - **宿主 Browser（Cursor ide-browser 等）**：CDP `Page.addScriptToEvaluateOnNewDocument`（或等价 init script）注入：把 `navigator.webdriver` 置为 `undefined`/`false`；再 `browser_navigate`（**禁止** `browser_cdp` `Page.reload`——在 Cursor 上会重载整个工作台窗口并杀死全部智能体）。

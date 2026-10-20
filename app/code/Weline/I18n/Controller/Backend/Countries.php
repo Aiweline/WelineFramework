@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Controller\Backend;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\Message;
@@ -39,7 +41,7 @@ class Countries extends BaseController
 
     private function getSafeCurrentLocaleCode(): string
     {
-        $localeCode = (string)Cookie::getLangLocal();
+        $localeCode = (string)WelineEnv::getLangLocal();
         if (!\preg_match('/\A[A-Za-z0-9_.-]{1,32}\z/', $localeCode)) {
             return 'zh_Hans_CN';
         }

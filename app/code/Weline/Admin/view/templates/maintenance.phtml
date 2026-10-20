@@ -1,8 +1,8 @@
 <?php
 $maintenanceLang = 'zh_Hans_CN';
 try {
-    $maintenanceLang = \Weline\Framework\App\State::getLangLocal()
-        ?: \Weline\Framework\App\State::getLang()
+    $maintenanceLang = \Weline\Framework\Env\WelineEnv::getLangLocal()
+        ?: \Weline\Framework\Env\WelineEnv::getLang()
         ?: 'zh_Hans_CN';
 } catch (\Throwable) {
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\MediaManager\Controller\Backend;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Backend\Api\View\BackendThemeConfigInterface;
 use Weline\FileManager\Api\FileAssetLibraryInterface;
 use Weline\Framework\Acl\Acl;
@@ -145,7 +147,7 @@ class Manager extends BackendController
             }
         }
 
-        return $this->fileAssets->normalizeLocale((string)State::getLangLocal());
+        return $this->fileAssets->normalizeLocale((string)WelineEnv::getLangLocal());
     }
 
     /**

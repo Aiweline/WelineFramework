@@ -300,6 +300,65 @@ class PageSeoContextResolver
         // TASK-P1D-004-SEO：dev/test 强制 noindex，配置与显式 robots 均不可关闭
         $context = (new \Weline\Seo\Service\StoreModeSeoHardGate())->applyToPageContext($context);
 
+        return $this->applyUnsupportedPathCurrency($this->applyUnsupportedPathLanguage($context));
+    }
+
+    /**
+     * An unsupported language segment stays on the visitor URL. Search engines
+     * should index the same path in the website default language instead.
+     *
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
+    private function applyUnsupportedPathLanguage(array $context): array
+    {
+        try {
+            $notice = ObjectManager::getInstance(\Weline\I18n\Service\UnsupportedPathLanguageNotice::class);
+            if (!$notice instanceof \Weline\I18n\Service\UnsupportedPathLanguageNotice || !$notice->isActive()) {
+                return $context;
+            }
+            $current = $this->currentUrl(null);
+            $canonical = $notice->canonicalUri($current);
+            if ($canonical !== '') {
+                $context['canonical_url'] = $this->canonicalizeUrl($this->absoluteUrl(null, $canonical));
+                $context['url'] = $context['canonical_url'];
+            }
+            $context['robots'] = 'noindex,follow';
+            $context = $this->syncSelfHreflangToCanonical($context);
+        } catch (\Throwable) {
+        }
+
+        return $context;
+    }
+
+    /**
+     * An unsupported currency segment stays on the visitor URL. Search engines
+     * should index the same path in the website default currency instead.
+     *
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
+    private function applyUnsupportedPathCurrency(array $context): array
+    {
+        try {
+            $notice = ObjectManager::getInstance(\Weline\Currency\Service\UnsupportedPathCurrencyNotice::class);
+            if (!$notice instanceof \Weline\Currency\Service\UnsupportedPathCurrencyNotice || !$notice->isActive()) {
+                return $context;
+            }
+            $current = trim((string) ($context['canonical_url'] ?? ''));
+            if ($current === '') {
+                $current = $this->currentUrl(null);
+            }
+            $canonical = $notice->canonicalUri($current);
+            if ($canonical !== '') {
+                $context['canonical_url'] = $this->canonicalizeUrl($this->absoluteUrl(null, $canonical));
+                $context['url'] = $context['canonical_url'];
+            }
+            $context['robots'] = 'noindex,follow';
+            $context = $this->syncSelfHreflangToCanonical($context);
+        } catch (\Throwable) {
+        }
+
         return $context;
     }
 

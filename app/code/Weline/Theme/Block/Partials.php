@@ -9,6 +9,8 @@
 
 namespace Weline\Theme\Block;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\KeyBuilder;
@@ -1533,7 +1535,7 @@ class Partials extends Block
             (string)($themeData['area'] ?? ''),
             (string)($themeData['colorMode'] ?? ''),
             $colorsFp,
-            (string)State::getLang(),
+            (string)WelineEnv::getLang(),
             \implode(';', $fingerprints),
         ]));
     }
@@ -1794,8 +1796,8 @@ class Partials extends Block
                 'auth_mode' => $policy['auth'],
                 // Theme-preview request language override must win over storefront
                 // Cookie lang used by environmentContext when website=true.
-                'lang' => (string)State::getLang(),
-                'lang_local' => (string)State::getLangLocal(),
+                'lang' => (string)WelineEnv::getLang(),
+                'lang_local' => (string)WelineEnv::getLangLocal(),
                 // Invalidate chrome when backend installed/active locale catalog changes
                 // (language switcher is embedded in topbar/sidebar chrome HTML).
                 'locale_catalog' => $area === 'backend'
@@ -1913,8 +1915,8 @@ class Partials extends Block
             // live via header-search islands — do NOT partition the shared chrome bag
             // (same spirit as cart_* removal and currency islands).
             return $this->normalizePartialCacheData([
-                'lang' => (string)State::getLang(),
-                'lang_local' => (string)State::getLangLocal(),
+                'lang' => (string)WelineEnv::getLang(),
+                'lang_local' => (string)WelineEnv::getLangLocal(),
                 // wave8-8c8: guest-neutral header key — do NOT partition on cart_*
                 // (deferred bag-prime is always 0; panel probe carts caused header 846ms miss).
                 'logo' => $data['logo'] ?? null,
@@ -2435,9 +2437,9 @@ class Partials extends Block
             $context += [
                 'request_id' => (string)(RequestContext::getId() ?? ''),
                 'uri' => \function_exists('w_env_request_uri') ? (string)\w_env_request_uri() : '',
-                'lang' => (string)State::getLang(),
-                'lang_local' => (string)State::getLangLocal(),
-                'currency' => (string)State::getCurrency(),
+                'lang' => (string)WelineEnv::getLang(),
+                'lang_local' => (string)WelineEnv::getLangLocal(),
+                'currency' => (string)WelineEnv::getCurrency(),
             ];
         } catch (\Throwable) {
         }

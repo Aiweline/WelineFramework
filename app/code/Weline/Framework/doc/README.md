@@ -89,10 +89,11 @@ PHP-FPM 请求，而不能只验证当前 CLI 进程。
   300 秒 TTL。该文件只记录版本，不承载站点业务数据。
 - `App` 在 storefront FPC 查找前通过 `StorefrontScopeInstallerInterface` 安装一次完整 Website/Store/Channel `ScopeIdentity`，并使用 `StorefrontNavigationScope.routePath` 把已命中的 Store URL 前缀消费成 Router 余量。普通请求内的已冻结身份不得被不同值二次改写。唯一例外是 `rest_frontend` QueryBin：API 路由最初只能按 Host 冻结默认 Store；在 Host、Token、Catalog 与 rollout 已复核，且服务端构造的 execution binding digest 完全一致时，`RequestContext::replaceScopeIdentityForTrustedWorker()` 可把它细化为同 Website 的受信 Store/Channel，并清空 storefront 路由余量。该操作不改变 request authority、method、URI、locale、currency 或 timezone；跨 Website、非 frontend、非权威或 binding 不一致仍返回 409。
 - `App\State::resolveLocalizationFromPathSegments()` 是 URL 前缀单一解析契约：可选 area 之后允许单独 currency、单独 locale、`currency/locale` 或 `locale/currency`；canonical 始终输出 `currency -> locale`。后台 area key 必须位于第一段，不得硬编码具体 key。
-- `App\State::getLang()`：路径段优先；无语言路径段时依次为请求 override → query(`locale`/`locale_code`/`lang`) → 网站 `default_language` → `zh_Hans_CN`。不读语言偏好 Cookie。非默认语种主 UX 仍走 `/{locale}/...`；query 仅路径缺失时的兼容入口。**语言不再使用 `WELINE_USER_LANG` Cookie**（服务端不写、前端不写；残留 Cookie 会被过期清除）。请求内仍可有 `user.lang` / `WELINE_USER_LANG` 服务端镜像（由路径/query/`getLang` 算出）。
-- `App\State::getCurrency()`：路径段优先；无货币路径段时依次为 query(`currency`) → 网站默认 → 硬默认 **`CNY`**。不读货币偏好 Cookie。
-- `Http\Url::parser`：匹配网站前不得用 `State::getLang()` 预填 `WELINE_USER_LANG`（无站点上下文会落到关联语言首项，常见 `en_US`）；站点匹配后无路径语言段时写入 query 或 `website.default_language`。
-- 路径优先 canonical：前台 GET/HEAD 若 URL 含网站默认语言/默认货币段，`App` 在 URL 解析后、FPC 前对 `State::canonicalizeStorefrontLocalizationPath()` 结果发 301（如 `/zh_Hans_CN/product/x` → `/product/x`，`/USD/zh_Hans_CN/x` → `/USD/x`）；`/en_US/...` 保留。
+- **语言/货币读口（仅此）**：`WelineEnv::getLang()` / `getCurrency()` / `getLangLocal()`（及 `w_env('user.lang'|'user.currency')`），或 `RequestContext::locale()` / `currency()`。写口在 `App`/`WlsRuntime`/`Url` 写入 RequestContext 后，Env 映射 `user.lang`↔`route.language`、`user.currency`↔`route.currency`。**禁止** `w_env_lang` / `w_env_currency` / `w_env_lang_local`、`State::getLang*`、`Cookie::getLang*`、偏好 Cookie、裸 `$_SERVER['WELINE_USER_*']`、`App\Env::get('user.lang')`。
+- `WelineEnv::getLang()`：请求 override → `route.language` → 区域默认（前台网站默认 / 后台 backend_default）。不读语言偏好 Cookie。非默认语种主 UX 仍走 `/{locale}/...`。
+- `WelineEnv::getCurrency()`：`route.currency` → 网站默认 → 硬默认 **`CNY`**。不读货币偏好 Cookie。
+- `Http\Url::parser`：匹配网站前不得用当前语种预填 `WELINE_USER_LANG`（无站点上下文会落到关联语言首项，常见 `en_US`）；站点匹配后无路径语言段时写入 query 或 `website.default_language`。
+- 路径上的语言段和货币段就是本次请求的语言和货币。`canonicalizeStorefrontLocalizationPath()` 恒为 null，`App` 不对它们发 301。未启用的语种或货币同样不跳转：正文用网站默认语，价格用网站默认货币；同一个弹窗里选已开通的项（两个都没有则左语种右货币，只有一个则只出那一列）。该 URL 为 `noindex`，canonical 指向同一路径的默认语种和默认货币。无路径语种时仍回填网站默认语言。
 - `RequestContext` 按请求/Fiber 保存 Scope、路由余量、locale、currency 和 timezone；路由余量与时区位于可跨 Context 快照重建保留的请求隔离区，冻结后只允许同值幂等写入。站点时区不修改 PHP 进程全局 timezone。
 - `QueryBin` 成功响应的 `scope_meta` 严格为 `scope_kind`、`website_id`、`website_code`、`store_id`、`store_code`、`store_mode`、`channel_id`、`channel_code`、`locale`、`currency`、`timezone`、`context_version`。该投影不包含 Token、签名、bootstrap ID、指纹、Worker secret 或路由余量。
 

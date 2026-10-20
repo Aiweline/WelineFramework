@@ -66,7 +66,7 @@ class NavTreeType extends AbstractParamType
         try {
             /** @var LocaleCatalogInterface $catalog */
             $catalog = ObjectManager::getInstance(LocaleCatalogInterface::class);
-            $lang = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
+            $lang = \Weline\Framework\Env\WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
             foreach ($catalog->installed($lang) as $locale) {
                 if (!is_array($locale)) {
                     continue;

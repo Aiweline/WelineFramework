@@ -232,8 +232,8 @@ $__pixel_env = [
     'website_url' => (string)\Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_URL', (string)($_SERVER['WELINE_WEBSITE_URL'] ?? '')),
     'store_code' => 'default',
     'channel_code' => 'default',
-    'language' => (string)\Weline\Framework\Env\WelineEnv::server('WELINE_USER_LANG', (string)($_SERVER['WELINE_USER_LANG'] ?? '')),
-    'currency' => (string)\Weline\Framework\Env\WelineEnv::server('WELINE_USER_CURRENCY', (string)($_SERVER['WELINE_USER_CURRENCY'] ?? '')),
+    'language' => \Weline\Framework\Env\WelineEnv::getLang(),
+    'currency' => \Weline\Framework\Env\WelineEnv::getCurrency(),
 ];
 try {
     $__scope_identity = \Weline\Framework\Runtime\RequestContext::scopeIdentity();

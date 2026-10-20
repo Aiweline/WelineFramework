@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Observer;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\Env;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
@@ -78,7 +80,7 @@ class GetWordsFile implements \Weline\Framework\Event\ObserverInterface
                 }
             }
             // 用户语言优先
-            $lang = Cookie::getLang();
+            $lang = WelineEnv::getLang();
             // 默认中文
             if ($lang) {
                 $words_file = Env::path_TRANSLATE_FILES_PATH . $lang . '.php';

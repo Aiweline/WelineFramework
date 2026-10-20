@@ -2818,6 +2818,10 @@ class ServerInstanceManager
             'success' => (bool)($status['success'] ?? false),
             'message' => (string)($status['message'] ?? ''),
             'data' => \is_array($status['data'] ?? null) ? $status['data'] : [],
+            // A timeout is NOT the same as an unreachable Master: the control
+            // port accepted the connection and the command was written, the
+            // Master's single control loop just did not answer in budget.
+            'timed_out' => (bool)($status['timed_out'] ?? false),
         ];
     }
 
@@ -2970,6 +2974,7 @@ class ServerInstanceManager
             'dispatchers' => 0,
             'ports' => [],
             'ipc_success' => false,
+            'ipc_timed_out' => (bool)($result['timed_out'] ?? false),
             'ipc_message' => $result['message'],
         ];
     }

@@ -680,7 +680,7 @@ class QueryBin extends FrontendRestController
         );
         if ($language !== '' && $pathLanguage === '') {
             RequestContext::setWelineUserLang($language);
-            // Phrase/__() resolve via State::getLang(); Worker path is /bin/query without /{locale}/.
+            // Phrase/__() resolve via WelineEnv::getLang(); Worker path is /bin/query without /{locale}/.
             State::setRequestLanguageOverride($language);
         } elseif ($pathLanguage !== '') {
             // Path already wrote RC; keep State override aligned for Phrase readers.

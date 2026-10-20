@@ -20,6 +20,9 @@ class ActiveLocaleCodeProvider
     private const FIELD_IS_ACTIVE = 'is_active';
     private const FIELD_CODE = 'code';
 
+    /** 进程袋身份（显式命名，禁止匿名登记）。 */
+    private const BAG_INSTALLED_ACTIVE_CODES = 'i18n.active_locale.codes';
+
     /** @var array<string, list<string>> 进程级 installed+active 列表 */
     private static array $processInstalledActiveCodes = [];
 
@@ -63,13 +66,13 @@ class ActiveLocaleCodeProvider
     public function getInstalledActiveCodes(): array
     {
         $cacheKey = DictionaryCacheNamespace::cacheKey('installed-active-locales');
-        if (isset(DictionaryCacheNamespace::localCache(self::$processInstalledActiveCodes, 128)[$cacheKey])) {
-            return DictionaryCacheNamespace::localCache(self::$processInstalledActiveCodes, 128)[$cacheKey];
+        if (isset(DictionaryCacheNamespace::processBag(self::BAG_INSTALLED_ACTIVE_CODES, self::$processInstalledActiveCodes, 128)[$cacheKey])) {
+            return DictionaryCacheNamespace::processBag(self::BAG_INSTALLED_ACTIVE_CODES, self::$processInstalledActiveCodes, 128)[$cacheKey];
         }
 
         $codes = $this->loadInstalledActiveCodesFromDb();
 
-        return DictionaryCacheNamespace::localCache(self::$processInstalledActiveCodes, 128)[$cacheKey] = $codes;
+        return DictionaryCacheNamespace::processBag(self::BAG_INSTALLED_ACTIVE_CODES, self::$processInstalledActiveCodes, 128)[$cacheKey] = $codes;
     }
 
     /**

@@ -22,7 +22,7 @@ class Tags extends CommandAbstract
     {
         $locale = trim((string)($args['locale'] ?? $args['l'] ?? ''));
         if ($locale === '') {
-            $locale = (string)w_env('user.lang', Env::get('user.lang', 'zh_Hans_CN'));
+            $locale = \Weline\Framework\Env\WelineEnv::getLang();
         }
 
         $result = $this->metaService->syncPlatformTags($locale);

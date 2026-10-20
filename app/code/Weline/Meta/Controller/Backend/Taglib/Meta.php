@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Meta\Controller\Backend\Taglib;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\MessageManager;
@@ -23,7 +25,7 @@ class Meta extends BackendController
 {
     public function get()
     {
-        $displayLocale = Cookie::getLangLocal();
+        $displayLocale = WelineEnv::getLangLocal();
         $search = trim((string)$this->request->getGet('search', ''));
         $locals = [];
         foreach ($this->localeRepository()->installedActive($displayLocale) as $locale) {

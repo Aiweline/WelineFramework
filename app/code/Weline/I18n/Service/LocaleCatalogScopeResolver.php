@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 use Weline\Framework\Context;
 use Weline\Framework\Manager\ObjectManager;
@@ -31,9 +33,9 @@ final class LocaleCatalogScopeResolver
         $stateLocale = '';
         if (\function_exists('w_env')) {
             try {
-                $stateLocale = $this->normalizeCode((string)State::getLangLocal());
+                $stateLocale = $this->normalizeCode((string)WelineEnv::getLangLocal());
                 if ($stateLocale === '') {
-                    $stateLocale = $this->normalizeCode((string)State::getLang());
+                    $stateLocale = $this->normalizeCode((string)WelineEnv::getLang());
                 }
             } catch (\Throwable) {
                 $stateLocale = '';

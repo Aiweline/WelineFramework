@@ -91,6 +91,10 @@ class I18n
         'US' => 'United States',
     ];
 
+    /** 进程袋身份（显式命名，禁止匿名登记）。 */
+    private const BAG_LOCAL_WORDS = 'i18n.model.local_words';
+    private const BAG_LOCAL_BY_CODE = 'i18n.model.local_by_code';
+
     private static array $local_words = [];
     /** @var array{expires_at: float, value: string[]}|null */
     private static ?array $availableLocaleCodesCache = null;
@@ -306,11 +310,11 @@ class I18n
     public function getLocalByCode(string $locale_code): string
     {
         $cacheKey = DictionaryCacheNamespace::cacheKey(strtolower(trim($locale_code)));
-        if (isset(DictionaryCacheNamespace::localCache(self::$localByCodeCache)[$cacheKey])
-            && DictionaryCacheNamespace::localCache(self::$localByCodeCache)[$cacheKey]['expires_at'] >= microtime(true)) {
-            return DictionaryCacheNamespace::localCache(self::$localByCodeCache)[$cacheKey]['value'];
+        if (isset(DictionaryCacheNamespace::processBag(self::BAG_LOCAL_BY_CODE, self::$localByCodeCache)[$cacheKey])
+            && DictionaryCacheNamespace::processBag(self::BAG_LOCAL_BY_CODE, self::$localByCodeCache)[$cacheKey]['expires_at'] >= microtime(true)) {
+            return DictionaryCacheNamespace::processBag(self::BAG_LOCAL_BY_CODE, self::$localByCodeCache)[$cacheKey]['value'];
         }
-        unset(DictionaryCacheNamespace::localCache(self::$localByCodeCache)[$cacheKey]);
+        unset(DictionaryCacheNamespace::processBag(self::BAG_LOCAL_BY_CODE, self::$localByCodeCache)[$cacheKey]);
 
         if ($data = $this->namespaceCache()?->get($locale_code)) {
             return $this->rememberLocalByCode($cacheKey, (string)$data);
@@ -342,7 +346,7 @@ class I18n
 
     private function rememberLocalByCode(string $cacheKey, string $locale): string
     {
-        DictionaryCacheNamespace::localCache(self::$localByCodeCache)[$cacheKey] = [
+        DictionaryCacheNamespace::processBag(self::BAG_LOCAL_BY_CODE, self::$localByCodeCache)[$cacheKey] = [
             'expires_at' => microtime(true) + $this->localeCacheTtl(),
             'value' => $locale,
         ];
@@ -1111,15 +1115,15 @@ class I18n
 
         // 进程内缓存即可；不再读写 generated/language/words.php（无消费者）。
         $wordsCacheKey = DictionaryCacheNamespace::cacheKey($moduleName ?? '*');
-        if ($cache && isset(DictionaryCacheNamespace::localCache(self::$local_words, 64)[$wordsCacheKey])) {
-            return DictionaryCacheNamespace::localCache(self::$local_words, 64)[$wordsCacheKey];
+        if ($cache && isset(DictionaryCacheNamespace::processBag(self::BAG_LOCAL_WORDS, self::$local_words, 64)[$wordsCacheKey])) {
+            return DictionaryCacheNamespace::processBag(self::BAG_LOCAL_WORDS, self::$local_words, 64)[$wordsCacheKey];
         }
 
         /** @var DictionaryCompiler $compiler */
         $compiler = ObjectManager::getInstance(DictionaryCompiler::class);
         $locals_words = $compiler->compile($moduleName, false);
         if ($cache) {
-            DictionaryCacheNamespace::localCache(self::$local_words, 64)[$wordsCacheKey] = $locals_words;
+            DictionaryCacheNamespace::processBag(self::BAG_LOCAL_WORDS, self::$local_words, 64)[$wordsCacheKey] = $locals_words;
         }
         @ini_set('memory_limit', $_prevMemLimit !== '' ? $_prevMemLimit : '128M');
         return $locals_words;

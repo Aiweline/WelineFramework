@@ -431,6 +431,9 @@ private function assert_FullPageCacheProductCardCssIntegrity_testCoordinatorUses
 {
     $src = (string) file_get_contents((new \ReflectionClass(\Weline\Framework\Router\FullPageCacheCoordinator::class))->getFileName());
     self::assertStringContainsString('HtmlCacheAdmission::admit', $src);
+    self::assertStringContainsString('HtmlCacheAdmission::admitPathLocale', $src);
+    $diskSrc = (string) file_get_contents((new \ReflectionClass(\Weline\Framework\Http\Fpc\FpcHtmlDiskStore::class))->getFileName());
+    self::assertStringContainsString('admitPathLocale', $diskSrc);
     self::assertStringContainsString('skip publish html cache admission rejected', $src);
     self::assertStringContainsString('invalidate hit html cache admission rejected', $src);
     self::assertStringContainsString('invalidate stale hit html cache admission rejected', $src);

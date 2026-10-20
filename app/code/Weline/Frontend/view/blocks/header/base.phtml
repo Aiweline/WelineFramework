@@ -28,8 +28,8 @@ if ($hasSessionCookie) {
     $csrfToken = (string)\Weline\Framework\Security\Token::create('csrf', 16, 600);
 }
 $apiHost = rtrim((string)$this->request->getUrlBuilder()->getFrontendApiUrl('/', [], false), '/');
-$currentLang = (string)(State::getLang() ?: 'zh_Hans_CN');
-$currentCurrency = strtoupper(trim((string)(State::getCurrency() ?: 'CNY')));
+$currentLang = (string)(\Weline\Framework\Env\WelineEnv::getLang() ?: 'zh_Hans_CN');
+$currentCurrency = strtoupper(trim((string)(\Weline\Framework\Env\WelineEnv::getCurrency() ?: 'CNY')));
 $defaultLang = (string)(\w_env('website.language', '') ?: Env::get('locale', Env::get('lang', 'zh_Hans_CN')) ?: 'zh_Hans_CN');
 $defaultCurrency = strtoupper(trim((string)(\w_env('website.currency', '') ?: Env::get('currency', 'CNY')))) ?: 'CNY';
 $availableCurrencies = [];

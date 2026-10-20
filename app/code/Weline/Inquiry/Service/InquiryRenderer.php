@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Inquiry\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Captcha\Service\LazyCaptchaClientRuntime;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
@@ -349,7 +351,7 @@ JS;
 
     private function requestLocale(): string
     {
-        $locale = trim((string)State::getLang());
+        $locale = trim((string)WelineEnv::getLang());
         if ($locale === '' || strtolower($locale) === 'default') {
             return 'zh_Hans_CN';
         }

@@ -64,6 +64,7 @@ class SocialManagementQueryProvider implements QueryProviderInterface
             'getScopeSocialMailbox' => $this->scopeMailboxService->getScopeSocialMailbox($params),
             'ensureScopeSocialMailbox' => $this->scopeMailboxService->ensureScopeSocialMailbox($params),
             'resetScopeSocialMailboxPassword' => $this->scopeMailboxService->resetScopeSocialMailboxPassword($params),
+            'probeScopeSocialMailbox' => $this->scopeMailboxService->probeScopeSocialMailbox($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Weline Social 查询器不支持的操作：%{1}', [$operation])
             ),
@@ -117,6 +118,7 @@ class SocialManagementQueryProvider implements QueryProviderInterface
                 ['name' => 'getScopeSocialMailbox', 'description' => __('获取当前网站范围的社媒注册专用邮箱状态。'), 'frontend' => true, 'backend' => true, 'external' => false, 'mode' => 'read', 'params' => ['website_id' => ['type' => 'int', 'min' => 0], 'scope_id' => ['type' => 'int', 'min' => 0], 'scope_key' => ['type' => 'string', 'max_length' => 128]]],
                 ['name' => 'ensureScopeSocialMailbox', 'description' => __('一键开通当前网站范围的社媒注册专用邮箱。'), 'frontend' => true, 'backend' => true, 'external' => false, 'mode' => 'write', 'params' => ['website_id' => ['type' => 'int', 'min' => 0], 'scope_id' => ['type' => 'int', 'min' => 0], 'scope_key' => ['type' => 'string', 'max_length' => 128]]],
                 ['name' => 'resetScopeSocialMailboxPassword', 'description' => __('重置当前网站范围社媒专用邮箱密码并返回一次明文。'), 'frontend' => true, 'backend' => true, 'external' => false, 'mode' => 'write', 'params' => ['website_id' => ['type' => 'int', 'min' => 0], 'scope_id' => ['type' => 'int', 'min' => 0], 'scope_key' => ['type' => 'string', 'max_length' => 128], 'password' => ['type' => 'string', 'max_length' => 128]]],
+                ['name' => 'probeScopeSocialMailbox', 'description' => __('开通（若缺）社媒邮箱并向本站 contact 发探测信，确认能收到后再允许注册平台。'), 'frontend' => true, 'backend' => true, 'external' => false, 'mode' => 'write', 'params' => ['website_id' => ['type' => 'int', 'min' => 0], 'scope_id' => ['type' => 'int', 'min' => 0], 'scope_key' => ['type' => 'string', 'max_length' => 128]]],
                 ],
             ),
         ];

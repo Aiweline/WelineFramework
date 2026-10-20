@@ -127,6 +127,33 @@ class IpcControlGateway implements IpcControlGatewayInterface
         );
     }
 
+    /** @return array{success:bool,message:string,data:array} */
+    public function observeAuthorityClock(
+        string $instanceName,
+        int $authorityClock,
+        float $timeout = 0.1,
+    ): array {
+        return $this->boundedNamespaceCommand(
+            $instanceName,
+            ControlMessage::ACTION_NAMESPACE_AUTHORITY_CLOCK,
+            ['authority_clock' => $authorityClock],
+            $timeout,
+            (string)__('命名空间时钟通知超时。'),
+        );
+    }
+
+    /** @return array{success:bool,message:string,data:array} */
+    public function capacitySamplePull(string $instanceName, float $timeout = 0.1): array
+    {
+        return $this->boundedNamespaceCommand(
+            $instanceName,
+            ControlMessage::ACTION_CAPACITY_SAMPLE_PULL,
+            [],
+            $timeout,
+            (string)__('容量采样拉取超时。'),
+        );
+    }
+
     public function cacheNamespaceInvalidationStatusV1(
         string $instanceName,
         string $operationId,
@@ -1538,8 +1565,12 @@ class IpcControlGateway implements IpcControlGatewayInterface
         string $action,
         array $payload,
         float $timeout,
+        string $timeoutMessage = '',
     ): array {
         $timeout = \max(0.02, \min(0.1, $timeout));
+        if ($timeoutMessage === '') {
+            $timeoutMessage = (string)__('缓存命名空间失效接收超时。');
+        }
         $startedAt = ControlMessage::monotonicSeconds();
         $requestId = ControlCommandResult::requestId($action);
         $payload['msg_id'] = $requestId;
@@ -1581,7 +1612,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
             if ($remaining <= 0.0) {
                 return ControlCommandResult::normalize([
                     'success' => false,
-                    'message' => (string)__('缓存命名空间失效接收超时。'),
+                    'message' => $timeoutMessage,
                     'data' => ['accepted' => false, 'error_code' => 'accept_timeout'],
                 ], $instanceName, $action, $requestId, true);
             }
@@ -1596,7 +1627,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
             if ($remaining <= 0.0) {
                 return ControlCommandResult::normalize([
                     'success' => false,
-                    'message' => (string)__('缓存命名空间失效接收超时。'),
+                    'message' => $timeoutMessage,
                     'data' => ['accepted' => false, 'error_code' => 'accept_timeout'],
                 ], $instanceName, $action, $requestId, true);
             }

@@ -251,7 +251,7 @@ class MetaConfig extends AbstractModel
     {
         // 如果没有指定语言，使用当前语言
         if ($locale === null) {
-            $locale = \Weline\Framework\Http\Cookie::getLang() ?? 'zh_Hans_CN';
+            $locale = \Weline\Framework\Env\WelineEnv::getLang() ?? 'zh_Hans_CN';
         }
         
         // 如果没有指定默认语言，使用框架默认语言

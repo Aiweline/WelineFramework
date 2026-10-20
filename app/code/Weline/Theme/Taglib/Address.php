@@ -151,7 +151,7 @@ class Address implements TaglibInterface
         }
         // 店面 chrome：路径 locale 优先（与 WidgetI18n 一致），避免 header Hook 渲染时
         // State/RequestContext 仍停在网站默认 en_US，把省市区标签 prefetch/回落成英文。
-        $locale = (string)(\Weline\Theme\Helper\WidgetI18n::storefrontLocale() ?: \Weline\Framework\App\State::getLangLocal() ?: 'zh_Hans_CN');
+        $locale = (string)(\Weline\Theme\Helper\WidgetI18n::storefrontLocale() ?: \Weline\Framework\Env\WelineEnv::getLangLocal() ?: 'zh_Hans_CN');
         $useEnglishFallback = !str_starts_with($locale, 'zh');
         // WLS：CJK 源串缺词不打 DB；先 prefetch 再取值，否则非中文 locale 会英文回落（Province/City…）。
         $labelSources = [

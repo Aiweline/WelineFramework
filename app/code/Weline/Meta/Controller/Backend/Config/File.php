@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Meta\Controller\Backend\Config;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
@@ -19,7 +21,7 @@ class File extends BackendController
         $namespace = trim((string)$this->request->getParam('namespace', ''));
         $area = $this->request->getParam('area', '');
         $scope = $this->request->getParam('scope', 'default');
-        $locale = $this->request->getParam('locale', Cookie::getLangLocal() ?? 'zh_Hans_CN');
+        $locale = $this->request->getParam('locale', WelineEnv::getLangLocal() ?? 'zh_Hans_CN');
         $type = $this->request->getParam('type', '');
         $category = $this->request->getParam('category', '');
         $identityId = $this->request->getParam('identity_id');
@@ -233,7 +235,7 @@ class File extends BackendController
                 'namespace' => $namespace,
                 'area' => $area ?? '',
                 'scope' => $this->request->getParam('scope', 'default'),
-                'locale' => $this->request->getParam('locale', Cookie::getLangLocal() ?? 'zh_Hans_CN'),
+                'locale' => $this->request->getParam('locale', WelineEnv::getLangLocal() ?? 'zh_Hans_CN'),
             ],
         ]));
     }
@@ -388,7 +390,7 @@ class File extends BackendController
             
             // 如果没有指定 locale，使用当前语言
             if (empty($locale)) {
-                $locale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
+                $locale = WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
             }
             
             foreach (array_keys($definitions) as $paramName) {
@@ -503,7 +505,7 @@ class File extends BackendController
         $params = (array)$this->request->getPost('params', []);
         $scope = $this->request->getPost('scope', 'default');
         $identityId = $this->request->getPost('identity_id');
-        $locale = $this->request->getPost('locale') ?: (Cookie::getLangLocal() ?? 'zh_Hans_CN');
+        $locale = $this->request->getPost('locale') ?: (WelineEnv::getLangLocal() ?? 'zh_Hans_CN');
 
         try {
             // 获取 meta 记录以获取 meta_id 和 namespace
@@ -637,7 +639,7 @@ class File extends BackendController
         }
 
         $scope = $this->request->getParam('scope', 'default');
-        $currentLocale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
+        $currentLocale = WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
 
         try {
             // 检查是否是 name 或 description 字段
@@ -810,7 +812,7 @@ class File extends BackendController
     {
         try {
             $localeList = ObjectManager::getInstance(InstalledLocaleCatalog::class)
-                ->list(Cookie::getLangLocal() ?? 'zh_Hans_CN');
+                ->list(WelineEnv::getLangLocal() ?? 'zh_Hans_CN');
             
             return $this->fetchJson($this->success('', ['locales' => $localeList]));
         } catch (\Throwable $e) {
@@ -866,7 +868,7 @@ class File extends BackendController
             }
             
             $locales = ObjectManager::getInstance(InstalledLocaleCatalog::class)
-                ->list(Cookie::getLangLocal() ?? 'zh_Hans_CN');
+                ->list(WelineEnv::getLangLocal() ?? 'zh_Hans_CN');
             
             $translations = [];
             foreach ($locales as $locale) {

@@ -521,7 +521,7 @@ class InstalledModuleMetaService
 
     private function currentLocale(): string
     {
-        return (string)w_env('user.lang', Env::get('user.lang', 'zh_Hans_CN'));
+        return \Weline\Framework\Env\WelineEnv::getLang();
     }
 
     private function submitI18nWords(string $moduleName, array $meta): void

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
@@ -51,7 +53,7 @@ final class StorefrontAllMenuCategoryTreeService
         $websiteId = max(0, $websiteId);
         // Prefer live State locale (query/path override). Fall back to KeyBuilder
         // only when State is empty so PostResponse SWR still has a stable value.
-        $locale = trim((string)State::getLangLocal());
+        $locale = trim((string)WelineEnv::getLangLocal());
         if ($locale === '') {
             $locale = trim((string)(KeyBuilder::storefrontDimensions(false)['lang'] ?? ''));
         }
@@ -131,7 +133,7 @@ final class StorefrontAllMenuCategoryTreeService
     {
         $websiteId = max(0, $websiteId);
         $locales = ['zh_Hans_CN', 'en_US', 'ar_SA', 'bn_BD', 'es_ES', 'fr_FR', 'hi_IN', 'id_ID', 'pt_BR', 'ur_PK'];
-        $stateLocale = trim((string)State::getLangLocal());
+        $stateLocale = trim((string)WelineEnv::getLangLocal());
         if ($stateLocale !== '' && !in_array($stateLocale, $locales, true)) {
             $locales[] = $stateLocale;
         }

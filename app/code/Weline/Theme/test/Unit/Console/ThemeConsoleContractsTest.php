@@ -119,6 +119,12 @@ private function assert_ThemeUpgradeCommand_testLayoutEntitySolidifyIsInvokedAft
     self::assertIsString($source);
     self::assertStringContainsString('ThemeLayoutEntityUpgradeSolidifyService', $source);
     self::assertStringContainsString('cutoverFromThemeCommand', $source);
+    self::assertStringContainsString('publishForThemeUpgrade', $source);
+    $modePos = strpos($source, 'publishForThemeUpgrade');
+    $cutoverPos = strpos($source, 'cutoverFromThemeCommand');
+    self::assertNotFalse($modePos);
+    self::assertNotFalse($cutoverPos);
+    self::assertLessThan($cutoverPos, $modePos);
     self::assertStringContainsString('generated/theme-layout-entities', $source);
     self::assertStringContainsString('purge 旧布局固化物', $source);
     // Must not skip purge (old solidify-only path was the premature-close root cause).

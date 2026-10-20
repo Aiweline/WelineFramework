@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Inventory\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Service\LocalModelTranslation\LocalModelTranslationQueueService;
@@ -282,7 +284,7 @@ final class WarehouseCodeLabelAdminService
         if ($labelId <= 0) {
             return $defaultName;
         }
-        $locale = trim((string)Cookie::getLangLocal());
+        $locale = trim((string)WelineEnv::getLangLocal());
         if ($locale === '') {
             $locale = 'zh_Hans_CN';
         }

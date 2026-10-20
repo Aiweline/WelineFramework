@@ -15,6 +15,7 @@ use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\Console\Deploy\Upgrade;
 use Weline\Framework\Deploy\DeployFpcInvalidation;
 use Weline\Framework\Deploy\DeployStagingSession;
+use Weline\Framework\Deploy\StaticAssetMode;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Console\Setup\Di\Compile;
@@ -195,10 +196,10 @@ class Set extends CommandAbstract
             $this->printer->note('编译静态资源...');
             ObjectManager::getInstance(Compile::class)->execute();
             $this->printer->note('正在执行静态资源部署（写入 staging/static）...');
-            /**@var $deploy_upgrade Upgrade */
-            $deploy_upgrade = ObjectManager::getInstance(Upgrade::class);
             // Mode\Set 末尾走强失效（bump+purge）；Upgrade 内跳过日常 bump，避免双跑。
-            $deploy_upgrade->execute([], [Upgrade::DATA_SKIP_INVALIDATION => true]);
+            ObjectManager::getInstance(StaticAssetMode::class)->publishForModeSet('prod', [
+                Upgrade::DATA_SKIP_INVALIDATION => true,
+            ]);
 
             $this->printer->note('正在将 staging 切换为活树（rename）...');
             $session->commitSwap();

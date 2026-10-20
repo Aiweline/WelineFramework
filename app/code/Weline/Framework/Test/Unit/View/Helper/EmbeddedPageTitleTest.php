@@ -76,6 +76,19 @@ final class EmbeddedPageTitleTest extends TestCase
         ));
     }
 
+    public function testHtmlCacheAdmissionRejectsPathLocaleMismatch(): void
+    {
+        $zh = '<html lang="zh_Hans_CN" data-local="zh_Hans_CN"><body>即刻选购</body></html>';
+        $en = '<html lang="en_GB" data-local="en_GB"><body>Shop Now</body></html>';
+        self::assertTrue(HtmlCacheAdmission::admitPathLocale($zh, 'https://127.0.0.1:9555/'));
+        self::assertTrue(HtmlCacheAdmission::admitPathLocale($en, 'https://127.0.0.1:9555/en_GB'));
+        self::assertFalse(HtmlCacheAdmission::admitPathLocale($zh, 'https://127.0.0.1:9555/en_GB'));
+        self::assertFalse(HtmlCacheAdmission::admitPathLocale($en, 'https://127.0.0.1:9555/zh_Hans_CN'));
+        self::assertFalse(HtmlCacheAdmission::admitPathLocale('<html><body>no marker</body></html>', '/en_US'));
+        self::assertSame('en_GB', HtmlCacheAdmission::extractPathLanguage('https://x.test/en_GB?x=1'));
+        self::assertSame('en_GB', HtmlCacheAdmission::extractBodyLanguage($en));
+    }
+
     public function testTemplateSetDataClearsModuleTitle(): void
     {
         $template = (new \ReflectionClass(Template::class))->newInstanceWithoutConstructor();

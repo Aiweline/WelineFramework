@@ -3,72 +3,65 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Capacity;
 
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Server\Model\ServerCapacitySample;
-
+/**
+ * Capacity history lives in a JSONL file written by cron.
+ * The Master control loop never reads or writes this file.
+ */
 final class CapacitySampleStore
 {
+    public function __construct(
+        private readonly ?string $directory = null,
+    ) {
+    }
+
     /**
      * @param array<string, mixed> $sample
      */
-    public function persist(string $instance, array $sample): bool
+    public function appendIfNew(string $instance, array $sample): bool
     {
-        try {
-            /** @var ServerCapacitySample $model */
-            $model = ObjectManager::getInstance(ServerCapacitySample::class);
-            $now = \date('Y-m-d H:i:s');
-            $codes = $sample['advice_codes'] ?? [];
-            if (!\is_array($codes)) {
-                $codes = [];
-            }
-            $model->clearData()->clearQuery()
-                ->setData(ServerCapacitySample::schema_fields_INSTANCE, $instance !== '' ? $instance : 'default')
-                ->setData(ServerCapacitySample::schema_fields_SAMPLED_AT, $now)
-                ->setData(ServerCapacitySample::schema_fields_HOST_PRESSURE, (float)($sample['host_pressure'] ?? 0))
-                ->setData(ServerCapacitySample::schema_fields_WORKER_PRESSURE_AVG, (float)($sample['worker_pressure_avg'] ?? 0))
-                ->setData(ServerCapacitySample::schema_fields_WORKER_PRESSURE_MAX, (float)($sample['worker_pressure_max'] ?? 0))
-                ->setData(ServerCapacitySample::schema_fields_CONNECTIONS_SUM, (int)($sample['connections_sum'] ?? 0))
-                ->setData(ServerCapacitySample::schema_fields_ACTIVE_REQUESTS_SUM, (int)($sample['active_requests_sum'] ?? 0))
-                ->setData(ServerCapacitySample::schema_fields_COMPACT_DELTA, (int)($sample['compact_delta'] ?? 0))
-                ->setData(ServerCapacitySample::schema_fields_ADVICE_CODES, \json_encode(\array_values($codes), \JSON_UNESCAPED_UNICODE))
-                ->setData(ServerCapacitySample::schema_fields_CONFIG_SOFT_PRESSURE, (float)($sample['config_soft_pressure'] ?? 0.7))
-                ->setData(ServerCapacitySample::schema_fields_CREATED_AT, $now)
-                ->save();
-
-            return true;
-        } catch (\Throwable) {
+        $row = $this->normalize($instance, $sample);
+        $path = $this->pathFor($row['instance']);
+        $last = $this->lastRow($path);
+        if ($last !== null && (string)($last['sampled_at'] ?? '') === $row['sampled_at']) {
             return false;
         }
+        $dir = $this->directory();
+        if (!\is_dir($dir) && !\mkdir($dir, 0775, true) && !\is_dir($dir)) {
+            return false;
+        }
+        $line = \json_encode($row, \JSON_UNESCAPED_UNICODE);
+        if (!\is_string($line)) {
+            return false;
+        }
+
+        return \file_put_contents($path, $line . "\n", \FILE_APPEND | \LOCK_EX) !== false;
     }
 
     public function cleanup(int $retainDays): int
     {
         $retainDays = \max(1, $retainDays);
         $cutoff = \date('Y-m-d H:i:s', \time() - ($retainDays * 86400));
-        try {
-            /** @var ServerCapacitySample $model */
-            $model = ObjectManager::getInstance(ServerCapacitySample::class);
-            $rows = (clone $model)->clearData()->reset()
-                ->where(ServerCapacitySample::schema_fields_SAMPLED_AT, $cutoff, '<')
-                ->select()
-                ->fetchArray();
-            $deleted = 0;
-            foreach ($rows as $row) {
-                $id = (int)($row[ServerCapacitySample::schema_fields_ID] ?? 0);
-                if ($id <= 0) {
-                    continue;
-                }
-                (clone $model)->clearData()->reset()
-                    ->where(ServerCapacitySample::schema_fields_ID, $id)
-                    ->delete()
-                    ->fetch();
-                $deleted++;
-            }
-
-            return $deleted;
-        } catch (\Throwable) {
+        $dir = $this->directory();
+        if (!\is_dir($dir)) {
             return 0;
         }
+        $removed = 0;
+        foreach (\glob($dir . \DIRECTORY_SEPARATOR . '*.jsonl') ?: [] as $path) {
+            if (!\is_string($path)) {
+                continue;
+            }
+            $kept = [];
+            foreach ($this->readRows($path) as $row) {
+                if ((string)($row['sampled_at'] ?? '') >= $cutoff) {
+                    $kept[] = $row;
+                    continue;
+                }
+                $removed++;
+            }
+            $this->rewrite($path, $kept);
+        }
+
+        return $removed;
     }
 
     /**
@@ -97,42 +90,137 @@ final class CapacitySampleStore
             'soft_pressure' => 0.70,
             'latest_advice' => [],
         ];
-        try {
-            /** @var ServerCapacitySample $model */
-            $model = ObjectManager::getInstance(ServerCapacitySample::class);
-            $query = (clone $model)->clearData()->reset()
-                ->where(ServerCapacitySample::schema_fields_SAMPLED_AT, $since, '>=');
-            if ($instance !== '' && $instance !== '*') {
-                $query->where(ServerCapacitySample::schema_fields_INSTANCE, $instance);
+        $paths = $instance !== '' && $instance !== '*'
+            ? [$this->pathFor($instance)]
+            : (\glob($this->directory() . \DIRECTORY_SEPARATOR . '*.jsonl') ?: []);
+        $rows = [];
+        foreach ($paths as $path) {
+            if (!\is_string($path)) {
+                continue;
             }
-            $rows = $query
-                ->order(ServerCapacitySample::schema_fields_SAMPLED_AT, 'ASC')
-                ->select()
-                ->fetchArray();
-        } catch (\Throwable) {
-            return $empty;
+            foreach ($this->readRows($path) as $row) {
+                if ((string)($row['sampled_at'] ?? '') >= $since) {
+                    $rows[] = $row;
+                }
+            }
         }
-
+        \usort($rows, static function (array $left, array $right): int {
+            return \strcmp((string)($left['sampled_at'] ?? ''), (string)($right['sampled_at'] ?? ''));
+        });
         $out = $empty;
         $latestAdvice = [];
         foreach ($rows as $row) {
-            if (!\is_array($row)) {
-                continue;
-            }
-            $out['labels'][] = (string)($row[ServerCapacitySample::schema_fields_SAMPLED_AT] ?? '');
-            $out['host_pressure'][] = (float)($row[ServerCapacitySample::schema_fields_HOST_PRESSURE] ?? 0);
-            $out['worker_pressure_avg'][] = (float)($row[ServerCapacitySample::schema_fields_WORKER_PRESSURE_AVG] ?? 0);
-            $out['worker_pressure_max'][] = (float)($row[ServerCapacitySample::schema_fields_WORKER_PRESSURE_MAX] ?? 0);
-            $out['connections_sum'][] = (int)($row[ServerCapacitySample::schema_fields_CONNECTIONS_SUM] ?? 0);
-            $out['compact_delta'][] = (int)($row[ServerCapacitySample::schema_fields_COMPACT_DELTA] ?? 0);
-            $out['soft_pressure'] = (float)($row[ServerCapacitySample::schema_fields_CONFIG_SOFT_PRESSURE] ?? 0.7);
-            $decoded = \json_decode((string)($row[ServerCapacitySample::schema_fields_ADVICE_CODES] ?? '[]'), true);
-            if (\is_array($decoded) && $decoded !== []) {
-                $latestAdvice = \array_values(\array_map('strval', $decoded));
+            $out['labels'][] = (string)($row['sampled_at'] ?? '');
+            $out['host_pressure'][] = (float)($row['host_pressure'] ?? 0);
+            $out['worker_pressure_avg'][] = (float)($row['worker_pressure_avg'] ?? 0);
+            $out['worker_pressure_max'][] = (float)($row['worker_pressure_max'] ?? 0);
+            $out['connections_sum'][] = (int)($row['connections_sum'] ?? 0);
+            $out['compact_delta'][] = (int)($row['compact_delta'] ?? 0);
+            $out['soft_pressure'] = (float)($row['config_soft_pressure'] ?? 0.7);
+            $codes = $row['advice_codes'] ?? [];
+            if (\is_array($codes) && $codes !== []) {
+                $latestAdvice = \array_values(\array_map('strval', $codes));
             }
         }
         $out['latest_advice'] = $latestAdvice;
 
         return $out;
+    }
+
+    /** @param array<string, mixed> $sample @return array<string, mixed> */
+    private function normalize(string $instance, array $sample): array
+    {
+        $codes = $sample['advice_codes'] ?? [];
+        if (!\is_array($codes)) {
+            $codes = [];
+        }
+        $name = \trim($instance) !== '' ? \trim($instance) : 'default';
+        $sampledAt = \trim((string)($sample['sampled_at'] ?? ''));
+        if ($sampledAt === '') {
+            $sampledAt = \date('Y-m-d H:i:s');
+        }
+
+        return [
+            'instance' => $name,
+            'sampled_at' => $sampledAt,
+            'host_pressure' => (float)($sample['host_pressure'] ?? 0),
+            'worker_pressure_avg' => (float)($sample['worker_pressure_avg'] ?? 0),
+            'worker_pressure_max' => (float)($sample['worker_pressure_max'] ?? 0),
+            'connections_sum' => (int)($sample['connections_sum'] ?? 0),
+            'active_requests_sum' => (int)($sample['active_requests_sum'] ?? 0),
+            'compact_delta' => (int)($sample['compact_delta'] ?? 0),
+            'advice_codes' => \array_values(\array_map('strval', $codes)),
+            'config_soft_pressure' => (float)($sample['config_soft_pressure'] ?? 0.7),
+        ];
+    }
+
+    private function directory(): string
+    {
+        if ($this->directory !== null && $this->directory !== '') {
+            return $this->directory;
+        }
+
+        return (defined('BP') ? BP : '') . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'capacity-samples';
+    }
+
+    private function pathFor(string $instance): string
+    {
+        $name = \trim($instance) !== '' ? \trim($instance) : 'default';
+        $safe = \preg_replace('/[^A-Za-z0-9._-]+/', '_', $name);
+        if (!\is_string($safe) || $safe === '' || $safe === '.' || $safe === '..') {
+            $safe = 'default';
+        }
+
+        return $this->directory() . DIRECTORY_SEPARATOR . $safe . '.jsonl';
+    }
+
+    /** @return array<string,mixed>|null */
+    private function lastRow(string $path): ?array
+    {
+        $rows = $this->readRows($path);
+        if ($rows === []) {
+            return null;
+        }
+        $last = $rows[\count($rows) - 1];
+
+        return \is_array($last) ? $last : null;
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function readRows(string $path): array
+    {
+        if (!\is_file($path)) {
+            return [];
+        }
+        $raw = \file_get_contents($path);
+        if (!\is_string($raw) || $raw === '') {
+            return [];
+        }
+        $rows = [];
+        foreach (\preg_split("/\r\n|\n|\r/", $raw) ?: [] as $line) {
+            if (!\is_string($line) || \trim($line) === '') {
+                continue;
+            }
+            $decoded = \json_decode($line, true);
+            if (\is_array($decoded)) {
+                $rows[] = $decoded;
+            }
+        }
+
+        return $rows;
+    }
+
+    /** @param list<array<string,mixed>> $rows */
+    private function rewrite(string $path, array $rows): void
+    {
+        $lines = [];
+        foreach ($rows as $row) {
+            $encoded = \json_encode($row, \JSON_UNESCAPED_UNICODE);
+            if (\is_string($encoded)) {
+                $lines[] = $encoded;
+            }
+        }
+        $body = $lines === [] ? '' : \implode("\n", $lines) . "\n";
+        \file_put_contents($path, $body, \LOCK_EX);
     }
 }

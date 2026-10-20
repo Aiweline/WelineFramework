@@ -1,0 +1,36 @@
+<?php
+declare(strict_types=1);
+return [
+  'base_slug' => 'hanfu-care-wash-storage',
+  'title' => 'Sulam penuh susah dicuci. Bilang sebelum ada yang beli',
+  'excerpt' => 'Makin penuh sulamnya dan makin banyak benang logam, makin tidak boleh masuk mesin cuci. Beli kalau kamu mau baca label, lalu cuci tangan atau cuci kering. Kalau mau dilempar ke tabung, beli kain polos, bukan kerja berat.',
+  'keywords' => 'perawatan hanfu,sulam,siapa yang jangan membeli kerja berat,lipit,mencuci',
+  'content' => <<<'HTML'
+<p>Yang di toko, yang sulamnya penuh, tenun emas, benang logam, susah dicuci. Slogan perawatan tidak mengubah kenyataan itu. Makin penuh sulamnya, makin tidak boleh masuk mesin cuci. Kalau lipit dikunci pada penyelesaian akhir, panas tinggi merobohkannya, dan tidak kembali. Pada pakaian ini, bagus dilihat dan mudah dicuci berjalan berlawanan. Kalau rencananya dilempar bersama sprei ke tabung, jangan beli kerja berat. Cari kain polos, tanpa benang logam, tanpa sulam timbul, dengan label yang mengizinkan cuci mesin. Sesudah dicuci ia tidak akan berwajah seperti kerja berat. Yang kamu beli adalah kemudahan, bukan pakaian yang sama.</p>
+<h2>Kerja berat untuk siapa, dan bukan untuk siapa</h2>
+<p>Untuk orang yang mau membaca label jahit, bisa cuci tangan atau mau bayar cuci kering, punya tempat mengeringkan di teduh, dan sesudah dipakai membuka tali supaya lembap keluar. Dipakai sesekali lebih cocok daripada jadi jas pulang pergi setiap hari. Keringat, lipstik, dan alas bedak di leher harus diangkat hari itu juga, ditekan dengan kain lembut yang lembap. Jangan digosok.</p>
+<p>Bukan untuk orang yang tidak mau mengurus leher, dan juga tidak menerima «ini tidak boleh masuk mesin». Bukan juga untuk orang yang ingin berlatih mencuci pada sutra tua yang umurnya tidak jelas. Yang sudah rapuh atau menyerpih menjadi bubuk, jangan pakai cara cuci harian yang berikut. Kain yang bercampur kulit dan logam: serahkan ke orang yang membersihkan tekstil. Jangan direndam di rumah.</p>
+<p>Sutra tidak berarti cuci tangan pasti aman. Pewarna dan benang sulam kadang lebih rapuh daripada seratnya. Kami tidak menjanjikan air dingin membuatnya selamat. Kalau label atau kartu perawatan pembuat menulis hanya cuci kering, atau tidak boleh dicuci, kiat dari forum minggir.</p>
+<p>Cuci kering juga bukan jaring pengaman. Ada pelarut yang menggigit payet, benang logam, dan lapisan lem. Sebelum diserahkan, potret labelnya dan tunjukkan ke petugas. Kalau label menulis tidak boleh cuci kering, jangan bertaruh. Tidak ada tempat mengeringkan di teduh, kerja berat juga tidak cocok: panas pengering merobohkan lipit yang sudah dikunci, dan matahari langsung membuat benang sulam rapuh. Tanpa tempat itu, jangan beli.</p>
+<h2>Kalau label mengizinkan air, begini</h2>
+<ul>
+<li>Air dingin, atau suhu rendah yang diizinkan label. Kalau label tidak menulis suhu, pakai air dingin. Jangan menebak dari rasa hangat di tangan. Detergen netral. Balik ke dalam, atau masukkan kantong jaring. Tekan air keluar. Jangan diperas memuntir.</li>
+<li>Keringkan di teduh. Dibentangkan, atau pada gantungan lebar yang menopang pinggang. Jangan dijemur terik. Jangan pengering panas.</li>
+<li>Kalau disetrika, panas rendah, dengan kain perantara. Jangan menekan langsung sulam timbul atau benang logam. Lipit yang sudah dikunci, biarkan.</li>
+</ul>
+<p>Rok berlipit semacam mamian: sesudah dipakai, buka tali, keringkan, baru disimpan. Jangan biarkan lipatan yang sama tertekan berbulan-bulan. Lipit basah yang tertekan adalah awal lipatan mati dan pindahnya warna sulam. Kalau hanya bisa digantung, gantungan lebar di bawah pinggang, pintu menghadap luar, lipit jangan dijadikan satu ikat. Kalau harus dilipat, ikuti arah lipit yang sudah ada, selipkan kain katun bersih di dalam lipatan, dan jangan menindihnya dengan mantel musim dingin.</p>
+<p>Benang sulam dan kain dasar tidak selalu menyusut sama, jadi air bisa menarik jahitan. Benang logam benci lipatan tajam dan sikat keras. Benang mengambang pada jacquard dan tenun emas mudah tersangkut di tabung. Coba noda di tempat yang tidak kelihatan. Kalau tidak hilang, bawa ke orang yang membersihkan tekstil. Jangan pakai pemutih klorin untuk «mencerahkan» sutra atau rayon.</p>
+<p>Lingkaran di leher datang lebih cepat daripada lumpur di ujung bawah. Hari kamu pulang, tekan kain lembut yang lembap pada bekasnya. Jangan digosok bolak-balik. Minyak makanan diserap dulu, baru putuskan apakah seluruh pakaian perlu kena air. Kalau rok bersulam hanya kotor di lekuk lutut, urus bagian itu. Jangan merendam benang logam seluruh pakaian gara-gara sedikit lumpur. Baru selesai dicuci, bentangkan di atas handuk kering dan tekan airnya sebelum digantung. Jangan digoyang dengan memegang pinggang yang masih basah. Lipit kusut, sulam tertarik. Jepitan jangan mengenai sulam.</p>
+<h2>Pakaian lama dan koleksi tidak kena cuci tangan ini</h2>
+<p>Canadian Conservation Institute (CCI) menulisnya lugas: pembersihan tidak bisa dibatalkan. Sutra, wol, serat buatan generasi awal, yang berpayet atau berbulu, dan tekstil yang sudah rapuh atau menyerpih menjadi bubuk, tidak untuk direndam di rumah. Pakaian lama yang umurnya tidak jelas: jauhkan debu dan jangan sering dipindah. Kalau debu harus diangkat, sedot dengan daya rendah melalui saringan, lalu tanya pemulih tekstil. Jangan pakai cara cuci harian tadi pada pakaian itu.</p>
+<p>Penyimpanan museum sedikit melipat, lipatan diberi bantalan supaya membulat, dan tidak ditindih benda berat. Sutra dan wol perlu hati-hati terhadap bahan basa. Potongan besar boleh digulung. Sulam timbul digulung dengan muka ke luar, supaya jahitan tidak gepeng. Lemari rumah tidak sampai ke situ. Yang bisa dilakukan: kering, jauh dari matahari, sudah diangin-anginkan, dan muka sulam tidak di dasar tumpukan. Menyedot debu lewat saringan bukan pengganti mencuci mamian poliester. Dua pekerjaan itu bukan satu keadaan. Uap panas tidak menyelamatkan lipit yang sudah dikunci. Uap itu merusak lipit yang dikunci pabrik.</p>
+<p>Sebelum membeli, tiga pertanyaan. Kamu bisa cuci tangan, atau mau bayar cuci kering? Ada tempat mengeringkan di teduh? Kamu bisa menerima bahwa pakaian ini tidak masuk mesin cuci? Kalau satu jawaban tidak, jangan beli kerja berat. Kami tidak akan menyebut pakaian yang susah dirawat sebagai pakaian yang mudah.</p>
+<aside class="editorial-sources"><strong>Referensi:</strong>
+<a href="https://www.canada.ca/en/conservation-institute/services/conservation-preservation-publications/canadian-conservation-institute-notes/washing-non-coloured-textiles.html" rel="noopener noreferrer">CCI Notes 13/7 — Washing Non-coloured Textiles</a>;
+<a href="https://www.canada.ca/en/conservation-institute/services/conservation-preservation-publications/canadian-conservation-institute-notes/flat-storage-textiles.html" rel="noopener noreferrer">CCI Notes 13/2 — Flat Storage</a>;
+<a href="https://www.canada.ca/en/conservation-institute/services/preventive-conservation/guidelines-collections/textiles-costumes.html" rel="noopener noreferrer">CCI — Caring for textiles and costumes</a>;
+<a href="https://easternstory.com/story/mamianqun-horse-face-skirt/" rel="noopener noreferrer">Eastern Story — catatan perawatan mamian</a>;
+<a href="https://www.hanfuauras.com/hanfu-dress-guide/" rel="noopener noreferrer">HanfuAuras — catatan perawatan hanfu</a>.
+</aside>
+HTML,
+];

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Api\Localization\LocalModel;
@@ -40,7 +42,7 @@ final class TaglibLocalFormService
         $id = trim($id);
         $value = trim($value);
         $search = trim($search);
-        $displayLocale = trim((string)($displayLocale ?? Cookie::getLangLocal() ?? 'zh_Hans_CN'));
+        $displayLocale = trim((string)($displayLocale ?? WelineEnv::getLangLocal() ?? 'zh_Hans_CN'));
 
         if ($modelName === '') {
             return $this->error((string)__('请设置local标签model属性！'));

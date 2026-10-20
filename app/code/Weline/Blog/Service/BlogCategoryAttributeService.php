@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Blog\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Blog\Model\BlogCategoryAttributeEntity;
 use Weline\Eav\Api\Attribute\AttributeRecord;
 use Weline\Eav\Api\Attribute\EntityAttributeStoreInterface;
@@ -261,7 +263,7 @@ final class BlogCategoryAttributeService
             return [];
         }
 
-        $locale = self::normalizeLocaleKey($locale !== '' ? $locale : (string)State::getLangLocal());
+        $locale = self::normalizeLocaleKey($locale !== '' ? $locale : (string)WelineEnv::getLangLocal());
         $scope = ScopeIdentity::website($websiteId, 'default');
         $hits = [];
         if ($this->store instanceof ScopedAttributeBatchReaderInterface) {

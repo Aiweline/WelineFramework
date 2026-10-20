@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Integration\Cart;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Cart\Api\CartPriceSellabilityProviderInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
@@ -135,7 +137,7 @@ final class ProductCartPriceSellabilityProvider implements CartPriceSellabilityP
             return $currency;
         }
         // Same source as the Cart item snapshot resolver: worker route currency
-        // (State::getCurrency() is path/query-only and misses /bin/query calls).
+        // (WelineEnv::getCurrency() is path/query-only and misses /bin/query calls).
         $fromContext = strtoupper(trim(RequestContext::getWelineUserCurrency()));
         if ($fromContext !== '') {
             return $fromContext;

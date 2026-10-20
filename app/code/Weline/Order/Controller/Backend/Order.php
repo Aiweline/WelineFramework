@@ -168,6 +168,7 @@ class Order extends BackendPageController
 
             return $exception->getMessage();
         }
+        $this->markOrderMenuMessageRead($orderId);
         
         try {
             // 覆盖 BackendPageController 默认「WelineFramework Admin」，供顶栏 H1 / 面包屑末级使用。
@@ -273,6 +274,7 @@ class Order extends BackendPageController
 
             return $exception->getMessage();
         }
+        $this->markOrderMenuMessageRead($orderId);
         
         try {
             // 覆盖 BackendPageController 默认「WelineFramework Admin」，供顶栏 H1 / 面包屑末级使用。
@@ -695,6 +697,22 @@ class Order extends BackendPageController
         }
         
         $this->redirect('*/backend/order/edit?id=' . $orderId);
+    }
+
+    private function markOrderMenuMessageRead(int $orderId): void
+    {
+        $userId = (int)$this->getLoginUserId();
+        if ($orderId <= 0 || $userId <= 0 || !class_exists(\Weline\Admin\Service\BackendMenuSignalInbox::class)) {
+            return;
+        }
+        try {
+            ObjectManager::getInstance(\Weline\Admin\Service\BackendMenuSignalInbox::class)->markRead(
+                \Weline\Order\Extends\Module\Weline_Admin\BackendMenuSignalProvider\OrderListMenuSignalProvider::MENU_SOURCE_ID,
+                (string)$orderId,
+                $userId,
+            );
+        } catch (\Throwable) {
+        }
     }
 
     /**

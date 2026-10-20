@@ -684,7 +684,7 @@ class Index extends BackendController
         $area = $this->request->getParam('area', 'frontend');
         $type = $this->request->getParam('type', 'layouts'); // layouts, components, partials
         $identify = $this->request->getParam('identify', ''); // 如 default, account 等
-        $locale = $this->request->getParam('locale') ?: (\Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN');
+        $locale = $this->request->getParam('locale') ?: (\Weline\Framework\Env\WelineEnv::getLangLocal() ?? 'zh_Hans_CN');
         
         if (!$themeId) {
             return $this->fetchJson($this->error(__('请选择主题')));
@@ -772,7 +772,7 @@ class Index extends BackendController
         $area = $this->request->getPost('area', 'frontend');
         $type = $this->request->getPost('type', 'layouts');
         $identify = $this->request->getPost('identify', '');
-        $locale = $this->request->getPost('locale') ?: (\Weline\Framework\Http\Cookie::getLangLocal() ?? null);
+        $locale = $this->request->getPost('locale') ?: (\Weline\Framework\Env\WelineEnv::getLangLocal() ?? null);
         $configJson = $this->request->getPost('config', '{}'); // JSON格式的配置数据
 
         if (!$themeId) {

@@ -30,7 +30,7 @@ final class BlogCategoryAdminService
         if (!\Weline\Framework\Context::hasCurrent()) {
             return $this->buildTree($websiteId, $locale, true);
         }
-        $locale = trim(str_replace('-', '_', $locale !== '' ? $locale : (string)\Weline\Framework\App\State::getLangLocal()));
+        $locale = trim(str_replace('-', '_', $locale !== '' ? $locale : (string)\Weline\Framework\Env\WelineEnv::getLangLocal()));
         $this->contentCache ??= \Weline\Framework\Manager\ObjectManager::getInstance(BlogContentCache::class);
         return $this->contentCache->rememberForRequest('category_tree', [$websiteId, $locale], fn(): array => $this->buildTree($websiteId, $locale, true));
     }
@@ -50,7 +50,7 @@ final class BlogCategoryAdminService
         if (!\Weline\Framework\Context::hasCurrent()) {
             return $this->buildTree($websiteId, $locale, false);
         }
-        $locale = trim(str_replace('-', '_', $locale !== '' ? $locale : (string)\Weline\Framework\App\State::getLangLocal()));
+        $locale = trim(str_replace('-', '_', $locale !== '' ? $locale : (string)\Weline\Framework\Env\WelineEnv::getLangLocal()));
         $this->contentCache ??= \Weline\Framework\Manager\ObjectManager::getInstance(BlogContentCache::class);
         return $this->contentCache->rememberForRequest(
             'category_tree_owned',

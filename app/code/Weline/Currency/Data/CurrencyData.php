@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Currency\Data;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Currency\Helper\CurrencyDisplayName;
 use Weline\Currency\Helper\CurrencyFormatter;
 use Weline\Currency\Model\Currency;
@@ -150,7 +152,7 @@ class CurrencyData
 
     private static function getLocaleCode(): string
     {
-        $localeCode = trim(State::getLang());
+        $localeCode = trim(WelineEnv::getLang());
 
         return $localeCode !== '' ? $localeCode : 'zh_Hans_CN';
     }

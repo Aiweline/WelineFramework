@@ -1802,8 +1802,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
         // Prefer raw provider paths with normalizeInternalWarmupPath so locale
         // homes keep their trailing slash (`/ar_SA/` → FPC key). Drop paths that
-        // App::redirectDefaultLocalizationPrefixIfNeeded would 301-strip (default
-        // locale/currency prefixes waste deferred slots — e.g. `/en_US/` → `/`).
+        // Language and currency prefixes are served in place. Do not drop them
+        // as if App would 301-strip them.
         try {
             $warmup = $this->runtimeProvider(FpcWarmupProviderInterface::class);
             if ($warmup instanceof FpcWarmupProviderInterface) {
@@ -5156,7 +5156,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         );
 
         try {
-            $addPair(State::getCurrency(), State::getLang());
+            $addPair(WelineEnv::getCurrency(), WelineEnv::getLang());
         } catch (\Throwable) {
         }
 
@@ -7344,8 +7344,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     }
 
     /**
-     * Keep trailing-slash locale homes, but drop paths that would 301 under the
-     * storefront default-language/currency strip contract.
+     * Keep trailing-slash locale homes. Language and currency prefixes are not
+     * 301 targets, so they stay eligible for deferred warmup.
      */
     private function filterDeferredStorefrontWarmupPath(string $rawPath, ?int $websiteId = null): ?string
     {
@@ -7375,7 +7375,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     }
 
     /**
-     * Same default-language/currency authority App uses for 301 strip, plus
+     * Website default language/currency for warmup identity, plus
      * State::resolveWebsiteDefault* when the shared Website snapshot is still cold.
      * Never fall back to Env `lang` / `currency` alone — those can be zh_Hans_CN/CNY
      * while the storefront default is en_US, which re-admits `/en_US/` slots and
@@ -9661,10 +9661,28 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             // 同步到 WelineEnv
             WelineEnv::set('user.lang', $language, 'WlsRuntime parseUrlLangCurrency');
         } else {
-            // Drop stale worker locale when the path omits a language segment so
-            // State::getLang() can honor Cookie/default on /USD/faq.
+            // Path omitted language: drop the previous Fiber/request leftover and
+            // backfill the Website default into RequestContext. Cookie residual must
+            // not keep the old route.language until App::synchronizeParsedLocalization.
+            $this->forgetRequestServer('WELINE_USER_LANG');
             try {
                 WelineEnv::remove('user.lang');
+            } catch (\Throwable) {
+            }
+            try {
+                $context = \Weline\Framework\Context::getCurrent();
+                if ($context !== null) {
+                    $context->remove('route.language');
+                }
+            } catch (\Throwable) {
+            }
+            try {
+                $websiteDefault = State::resolveWebsiteDefaultLanguage();
+                if ($websiteDefault !== '') {
+                    $this->putRequestServer('WELINE_USER_LANG', $websiteDefault);
+                    RequestContext::locale($websiteDefault);
+                    WelineEnv::set('user.lang', $websiteDefault, 'WlsRuntime parseUrlLangCurrency website_default');
+                }
             } catch (\Throwable) {
             }
         }
@@ -10438,7 +10456,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $locale = \Weline\Framework\View\Helper\TitleLocaleProbe::localeFromRequestUri($uri);
             if ($locale === '') {
                 try {
-                    $locale = \trim((string)State::getLang());
+                    $locale = \trim((string)WelineEnv::getLang());
                 } catch (\Throwable) {
                     $locale = '';
                 }
@@ -10736,9 +10754,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 'request_id' => TraceGate::ensureRequestId(),
                 'method' => $request?->getMethod() ?? '',
                 'uri' => $request?->getUri() ?: (\function_exists('w_env_request_uri') ? (string)\w_env_request_uri() : ''),
-                'lang' => (string)State::getLang(),
-                'lang_local' => (string)State::getLangLocal(),
-                'currency' => (string)State::getCurrency(),
+                'lang' => (string)WelineEnv::getLang(),
+                'lang_local' => (string)WelineEnv::getLangLocal(),
+                'currency' => (string)WelineEnv::getCurrency(),
                 'status' => $response instanceof Response ? $response->getStatusCode() : 0,
                 'content_type' => $response instanceof Response ? (string)($response->getHeader('Content-Type') ?? '') : '',
                 'content_length_header' => $response instanceof Response ? (string)($response->getHeader('Content-Length') ?? '') : '',

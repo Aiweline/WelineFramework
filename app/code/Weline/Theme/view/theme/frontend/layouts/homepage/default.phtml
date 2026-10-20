@@ -41,7 +41,7 @@ if (!$isEditorPreview) {
 $shouldRenderMetaContent = false;
 
 $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
-$currentLocale = trim(\Weline\Framework\App\State::getLangLocal());
+$currentLocale = trim(\Weline\Framework\Env\WelineEnv::getLangLocal());
 if ($currentLocale === ''
     && preg_match('#/([a-z]{2}(?:_[A-Za-z]{2,4}){1,2})(?:/|$)#', $requestUri, $localeMatch) === 1
 ) {

@@ -3,6 +3,7 @@
 
 use Weline\Backend\Block\ThemeConfig;
 use Weline\Framework\App\Env;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Deploy\DeployPublicUrlMode;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
@@ -103,7 +104,7 @@ $runtime = [
         'apiAdminArea' => $backendApiArea,
     ],
     'i18n' => [
-        'locale' => (string)\w_env_lang(),
+        'locale' => WelineEnv::getLang(),
         'area' => 'backend',
     ],
     'theme' => $backendThemeConfig,
@@ -122,8 +123,8 @@ $runtime = [
         'api_area' => $frontendApiArea,
         'api_admin_area' => $backendApiArea,
         'url_host' => $backendHost,
-        'currency' => (string)\w_env_currency(),
-        'lang' => (string)\w_env_lang(),
+        'currency' => WelineEnv::getCurrency(),
+        'lang' => WelineEnv::getLang(),
         'themeConfig' => $backendThemeConfig,
     ],
 ];

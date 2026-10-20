@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Controller\Admin;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Backend\Api\Config\KeysInterface;
 use Weline\Currency\Api\CurrencyCatalogInterface;
 use Weline\Framework\Acl\Acl;
@@ -1503,7 +1505,7 @@ class Website extends BackendController
      */
     private function getAllLocales(): array
     {
-        $targetCode = Cookie::getLangLocal();
+        $targetCode = WelineEnv::getLangLocal();
         $locales = [];
         foreach ($this->localeRepository()->installedActive($targetCode) as $locale) {
             $locales[] = [

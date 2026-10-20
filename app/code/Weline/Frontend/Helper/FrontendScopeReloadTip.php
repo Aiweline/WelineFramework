@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Frontend\Helper;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 
 /**
@@ -68,7 +70,7 @@ final class FrontendScopeReloadTip
     public static function currentLocale(): string
     {
         try {
-            $locale = \trim((string)(State::getLang() ?: ''));
+            $locale = \trim((string)(WelineEnv::getLang() ?: ''));
         } catch (\Throwable) {
             $locale = '';
         }

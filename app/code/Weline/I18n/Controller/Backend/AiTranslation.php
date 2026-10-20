@@ -163,7 +163,7 @@ class AiTranslation extends BaseController
      */
     private function resolveLocaleDisplayNames(): array
     {
-        $displayLocale = \Weline\Framework\Http\Cookie::getLangLocal();
+        $displayLocale = \Weline\Framework\Env\WelineEnv::getLangLocal();
         $names = [];
         foreach ($this->config->getInstalledActiveLocaleCodes() as $localeCode) {
             $localeCode = trim((string)$localeCode);
@@ -487,7 +487,7 @@ class AiTranslation extends BaseController
     private function buildLocaleRows(array $config): array
     {
         $rows = [];
-        $displayLocale = \Weline\Framework\Http\Cookie::getLangLocal();
+        $displayLocale = \Weline\Framework\Env\WelineEnv::getLangLocal();
         $sourceLocale = (string)($config['source_locale'] ?? AiTranslationConfig::DEFAULT_SOURCE_LOCALE);
         foreach ($this->config->getTranslationCandidateLocaleCodes() as $localeCode) {
             $displayName = $localeCode;

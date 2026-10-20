@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\MediaManager\Controller\Backend;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Cookie;
@@ -80,7 +82,7 @@ class Connector extends BackendController
             // Cookie access is confined to the HTTP assembly boundary. The
             // connector receives an explicit immutable locale value and never
             // reads process-global request state by itself.
-            $params['locale_code'] = Cookie::getLangLocal();
+            $params['locale_code'] = WelineEnv::getLangLocal();
         }
         if (str_starts_with($command, 'upload_session_')) {
             return $this->handleJsonResponse($this->handleResumableUpload(

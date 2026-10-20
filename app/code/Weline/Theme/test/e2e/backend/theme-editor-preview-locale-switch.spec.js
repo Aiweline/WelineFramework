@@ -58,7 +58,7 @@ test.describe('Theme editor preview locale switch', () => {
     await expect(frame.locator('a.w-language-switcher__option[data-lang]').first()).toBeAttached({ timeout: 90000 });
 
     // Prefer a non-default storefront language so the canvas must use a real path prefix.
-    // (Website default stays unprefixed; App 301-strips default language segments.)
+    // (Enabled language prefixes, including the website default, stay on the path.)
     const targetLocale = await frame.locator('body').evaluate((defaultLocale) => {
       const preferred = ['zh_Hans_CN', 'zh_Hant_TW', 'en_US', 'ja_JP', 'fr_FR'];
       const options = Array.from(document.querySelectorAll('a.w-language-switcher__option[data-lang]'));

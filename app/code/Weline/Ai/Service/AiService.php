@@ -15,6 +15,7 @@ namespace Weline\Ai\Service;
 
 use Weline\Ai\Api\AgentCatalogInterface;
 use Weline\Ai\Api\AgentInterface;
+use Weline\Ai\Api\AgentSkillBindingInterface;
 use Weline\Ai\Api\AgentModelExecutor;
 use Weline\Ai\Api\AgentResult;
 use Weline\Ai\Service\Agent\AgentExecutionContext;
@@ -2552,7 +2553,8 @@ class AiService
             };
         }
 
-        // 6. 委托给智能体执行（Agent 自行管理 Tool 调用循环）
+        // 6. 智能体自带技能注入提示词，再委托执行
+        $prompt = $this->injectAgentSkills($prompt, $agent, $params);
         AgentExecutionContext::enter($agentCode);
         try {
             $result = $agent->execute(
@@ -2568,6 +2570,32 @@ class AiService
         } finally {
             AgentExecutionContext::leave();
         }
+    }
+
+    private function injectAgentSkills(string $prompt, AgentInterface $agent, array $params): string
+    {
+        if (!$agent instanceof AgentSkillBindingInterface || !empty($params['disable_skill_prompt_injection'])) {
+            return $prompt;
+        }
+        if (\str_contains($prompt, 'AI ADAPTER SKILL CAPABILITY')) {
+            return $prompt;
+        }
+
+        /** @var AdapterSkillResolver $resolver */
+        $resolver = ObjectManager::getInstance(AdapterSkillResolver::class);
+        $resolved = $resolver->resolveExplicitSkillBindings(
+            $agent->getDefaultSkillCodes(),
+            $this->extractTemporarySkillCodes($params),
+            $agent->getCode(),
+        );
+        $guide = $resolver->buildPromptGuideText($resolved['items']);
+        if ($guide === '') {
+            return $prompt;
+        }
+
+        $prompt = \ltrim($prompt);
+
+        return $prompt === '' ? $guide : $guide . "\n\n" . $prompt;
     }
 
     /**

@@ -168,7 +168,7 @@ final class HeaderCommerceData
     private static function storefrontLocaleSegment(): string
     {
         try {
-            $locale = \trim(\str_replace('-', '_', (string)\Weline\Framework\App\State::getLangLocal()));
+            $locale = \trim(\str_replace('-', '_', (string)\Weline\Framework\Env\WelineEnv::getLangLocal()));
         } catch (\Throwable) {
             $locale = '';
         }

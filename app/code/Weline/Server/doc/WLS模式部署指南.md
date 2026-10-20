@@ -671,8 +671,8 @@ curl -k --http3-only https://example.com/
 | 无法访问 | Nginx 未监听公网端口、证书/防火墙错误、回源未就绪，或纯 WLS endpoint 未 READY | Nginx 模式检查监听、`nginx -t`、证书和 `server:status`；纯 WLS 检查实例端口、TLS/ALPN 与 Worker READY |
 | Nginx 80/443 绑定失败 | 端口被占用或 Nginx 进程权限不足 | 处理 Nginx 的端口/权限；不要让 WLS 抢占公网端口 |
 | 端口被占用 | 已有进程占用该端口 | 使用 `server:stop` 停止对应实例，或 `-p 9981` 等改端口 |
-| Nginx 502 | WLS 未启动或端口错误 | 执行 `php bin/w server:status` 确认 WLS 监听端口，与 Nginx `proxy_pass` 一致 |
-| Nginx 502 + `Stale WLS shared-state lifecycle binding` | Session/Memory 共享态 generation/PID 漂移，普通 `-r` 无法拉起 | 在项目根执行 `php bin/w server:start [name] -f`（强制重置本项目运行态后再启） |
+| 浏览器/爬虫看到 503，且响应头 `X-Wls-Edge-Unavailable: origin` | 托管 Nginx 连不上 WLS，或上游中途断开/超时。边缘把自身生成的 502/504 改写成 503 + `Retry-After`，避免爬虫把软件不稳定当成 Bad Gateway。错误日志里仍是 upstream 失败 | 执行 `php bin/w server:status` 确认 WLS 监听端口与 `proxy_pass` 一致 |
+| 同上，且日志含 `Stale WLS shared-state lifecycle binding` | Session/Memory 共享态 generation/PID 漂移，普通 `-r` 无法拉起 | 在项目根执行 `php bin/w server:start [name] -f`（强制重置本项目运行态后再启） |
 | 子进程停在 STARTING 且 PID=0 | 批量 launcher 创建后 `pcntl_exec` 失败或子进程在注册前退出 | 查看对应 `var/process/<process>.log`；launcher 会记录脱敏后的 errno、PHP 可执行文件名和脚本名，不再静默等待到 READY 超时 |
 | 启动预检报 `compiled_factories.php` 构造参数为 `null` | 旧反射编译器把对象默认值错误降级为 `null` | 更新代码后执行 `php bin/w reflection:compile`；新编译器会让无法安全字面量化的类回退到一次性反射，且预检失败返回非零退出码 |
 | Worker 异常退出 | 进程崩溃 | Master 默认启用，会自动重启异常 Worker |

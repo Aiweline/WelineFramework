@@ -163,12 +163,20 @@ FPC `full_uri` 的 authority 必须来自请求入口已校验并规范化的 `H
 
 WLS 禁止在 Worker READY 或普通请求阶段加载某个 locale 的全模块词典。翻译热路径固定为：
 
-1. 先查 Worker 进程内 `locale + 当前模块集合 + word` 的最终译文哈希，O(1) 返回；该表只随本 Worker 实际遇到的词增长，上限 32,768 项，达到上限时按插入顺序有界裁剪 4,096 项。
+1. 先查 Worker 进程内 `locale + 当前模块集合 + word` 的最终译文哈希，O(1) 返回；该表只随本 Worker 实际遇到的词增长，上限 32,768 项；满袋**一次削到 90% 水位**（`intdiv($max * 9, 10)`），后续插入摊还 O(1)。
 2. 路由涉及的模块词典按模块分别维护 Worker L1。L1 尚未建立时才读取 `phrase` Shared Memory 的模块 CSV 快照；Shared miss 才解析该模块自己的 `i18n/{locale}.csv` 并回填。文件 mtime/size 参与版本，其他 Worker 不重复解析同一 CSV。
 3. 模块 CSV miss 后，旧词典表和无 `source_module` 归属的历史词条按“精确单词”回源：先查 Worker 单词 L1，再查 Shared Memory 的单词级记录，最后才通过 `GlobalDictionaryProviderInterface::word()` 按 `md5(word + locale)` 索引查询一行并回填。该路径不得构造 locale 级数组。
 4. CLI/维护命令可以显式调用 `words(locale, modules)` 读取模块范围或全词典；该批量路径不得进入持久 Worker。
 
 请求 cleanup 只清当前请求的翻译状态，不清 Worker 常驻词哈希。翻译发布或 cache epoch 才清 Worker L1；已知缺失可以缓存为 `null`，Shared/DB 短暂错误则不得写入进程级负缓存。任何共享记录都必须是模块 CSV 快照或单词级小记录，禁止重新发送曾达到约 1.67MB 的 21,055 词全量 locale 字典。
+
+### 进程袋（命名 L1）预算与门禁
+
+- **统一 API**：Worker 常驻缓存必须用 `DictionaryCacheNamespace::processBag(<显式名>, $bag, $maxEntries, $locales)`；请求级数组用 `requestBag()`；旧 `localCache()` 已 `@deprecated` 且语义降为请求袋。
+- **身份与容量**：空名不得登记（禁止匿名 `anon_N`）；每袋必须声明 `maxEntries`；满袋一次削到 90%，locale 记账只在袋尺寸变化时写 Store。
+- **读链**：上下文获取固定 **R0 `RequestContext` → R1 请求袋 → L1 命名袋 → L2 `ScopeSharedMemo`/`w_cache` → DB 仅 miss**。目录/本地化仓库（`i18n.repository.*`）、`WebsiteCatalog::count`、EAV 元数据（LRU）已按此收敛；不得在热路径重复读库。
+- **观测**：`MemDiag::cacheSnapshot()` 输出 `process_bags`（name → entries/bytes）、`process_bag_entries`、`process_bag_bytes`；登记条目不随请求数增长。
+- **门禁**：`ProcessBagRegistryContractTest`（空名不登记、命名合法、登记表 ≤40）+ `ProcessBagIdentityContractTest`（请求袋不登记/不写 Store、90% 水位）。
 
 ## 测试实例约束
 

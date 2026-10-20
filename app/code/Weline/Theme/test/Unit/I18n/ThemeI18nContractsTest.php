@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Test\Unit\I18n;
 
+
+use Weline\Framework\Env\WelineEnv;
 use PHPUnit\Framework\TestCase;
 
 
@@ -150,7 +152,7 @@ private function assert_HanfuStorefrontLocale_testWidgetI18nPrefersTheRequestSco
 {
     $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Helper/WidgetI18n.php');
     $requestLocale = strpos($source, 'RequestContext::locale()');
-    $legacyStateLocale = strpos($source, 'State::getLangLocal()');
+    $legacyStateLocale = strpos($source, 'WelineEnv::getLangLocal()');
     self::assertNotFalse($requestLocale, 'WidgetI18n must read the request-scoped locale.');
     self::assertNotFalse($legacyStateLocale, 'WidgetI18n must keep its CLI/legacy locale fallback.');
     self::assertLessThan($legacyStateLocale, $requestLocale, 'The request-scoped locale must win before process/global State fallbacks.');

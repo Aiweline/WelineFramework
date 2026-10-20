@@ -38,6 +38,10 @@ class LanguageSwitcher implements TaglibInterface
     public const SWITCHER_MARKUP_VERSION = 'component-27-panel-lazy';
     public const TAG_NAME = 'i18n:switcher';
 
+    /** 进程袋身份（显式命名，禁止匿名登记）。 */
+    private const BAG_HTML = 'i18n.taglib.language_switcher.html';
+    private const BAG_CHROME_DICTIONARY = 'i18n.taglib.language_switcher.chrome_words';
+
     /**
      * @var array<string, array{expires: float, html: string}>
      */
@@ -108,6 +112,7 @@ class LanguageSwitcher implements TaglibInterface
             'label-mode' => false,
             'show-search' => false,
             'search-placeholder' => false,
+            'surface' => false,
         ];
     }
 
@@ -129,6 +134,7 @@ class LanguageSwitcher implements TaglibInterface
                 . '\'label_mode\' => (string)($Taglib__label_mode ?? \'short\'),'
                 . '\'show_search\' => $Taglib__show_search ?? null,'
                 . '\'search_placeholder\' => (string)($Taglib__search_placeholder ?? \'\'),'
+                . '\'surface\' => (string)($Taglib__surface ?? \'\'),'
                 . ']); ?>';
         };
     }
@@ -175,6 +181,10 @@ class LanguageSwitcher implements TaglibInterface
             if ($showSearch === null) {
                 $showSearch = true;
             }
+            $surface = \strtolower(\trim((string)($attributes['surface'] ?? 'menu')));
+            if (!\in_array($surface, ['menu', 'dialog', 'column'], true)) {
+                $surface = 'menu';
+            }
             $searchPlaceholderAttr = \trim((string)($attributes['search_placeholder'] ?? ''));
 
             /** @var LocaleCatalogScopeResolver $scopeResolver */
@@ -189,6 +199,9 @@ class LanguageSwitcher implements TaglibInterface
             );
             $websiteId = $scope->websiteId;
             $showLanguageRequest = $scope->allowRequest;
+            if ($surface === 'dialog' || $surface === 'column') {
+                $showLanguageRequest = false;
+            }
             $currentCode = $scope->currentCode;
             $displayLocale = $scope->displayLocale;
             // WLS only loads the current request module CSV into Phrase layers.
@@ -206,6 +219,8 @@ class LanguageSwitcher implements TaglibInterface
                 '加载失败，请稍后重试',
                 '关闭',
                 '未分组国家',
+                '这个语种没有开通。当前页面用本站默认语显示。请选一个已开通的语种。',
+                '语种未开通',
             ];
             try {
                 Parser::prefetchWords($chromeSources, $displayLocale);
@@ -224,9 +239,10 @@ class LanguageSwitcher implements TaglibInterface
             $labelError = self::translateChrome('加载失败，请稍后重试', $displayLocale);
             $labelClose = self::translateChrome('关闭', $displayLocale);
             $labelUngrouped = self::translateChrome('未分组国家', $displayLocale);
-            // Storefront: do not SSR the full ~160-option panel into chrome (cold lang tax).
-            // Backend keeps full SSR. Lazy panel HTML comes from QueryBin getLanguageSwitcherCatalog.
-            $lazyPanel = !$isBackendArea;
+            // Storefront chrome: do not SSR the full panel (cold lang tax).
+            // Backend keeps full SSR. The unsupported-language dialog SSRs the
+            // website catalog already resolved here, so opening it does not fetch.
+            $lazyPanel = !$isBackendArea && $surface !== 'dialog' && $surface !== 'column';
             if ($lazyPanel) {
                 $triggerCodes = [];
                 if ($currentCode !== '') {
@@ -325,7 +341,7 @@ class LanguageSwitcher implements TaglibInterface
             if ($isBackendArea) {
                 $backendRoute = trim((string)(Env::getAreaRoutePrefix('backend') ?? $backendRoute), '/');
             }
-            $currentCurrency = State::getCurrency();
+            $currentCurrency = WelineEnv::getCurrency();
             // Keep path/State currency for hrefs even if the allow-list is still empty
             // for this Fiber; demoting to site default drops /USD from language links.
             if ($currentCurrency === '' || !preg_match('/^[A-Z]{3}$/', strtoupper(trim($currentCurrency)))) {
@@ -354,6 +370,7 @@ class LanguageSwitcher implements TaglibInterface
                     'show_search' => $showSearch ? '1' : '0',
                     'label_mode' => $labelMode,
                     'lazy_panel' => $lazyPanel ? '1' : '0',
+                    'surface' => $surface,
                     'markup' => 'weline-ui-2-language-switcher-' . self::SWITCHER_MARKUP_VERSION,
                     'mount' => $websiteMount,
                     'inst' => $switcherId,
@@ -366,13 +383,13 @@ class LanguageSwitcher implements TaglibInterface
             $useProcessHtmlCache = $isBackendArea;
             if (
                 $useProcessHtmlCache
-                && isset(DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey])
-                && DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey]['expires'] >= $now
+                && isset(DictionaryCacheNamespace::processBag(self::BAG_HTML, self::$htmlCache, 512)[$htmlCacheKey])
+                && DictionaryCacheNamespace::processBag(self::BAG_HTML, self::$htmlCache, 512)[$htmlCacheKey]['expires'] >= $now
             ) {
-                return DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey]['html'];
+                return DictionaryCacheNamespace::processBag(self::BAG_HTML, self::$htmlCache, 512)[$htmlCacheKey]['html'];
             }
             if ($useProcessHtmlCache) {
-                unset(DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey]);
+                unset(DictionaryCacheNamespace::processBag(self::BAG_HTML, self::$htmlCache, 512)[$htmlCacheKey]);
             }
 
             $safeSwitcherId = htmlspecialchars($switcherId, ENT_QUOTES, 'UTF-8');
@@ -386,6 +403,31 @@ class LanguageSwitcher implements TaglibInterface
             $safeSupportedLocales = htmlspecialchars($supportedScope['locales'], ENT_QUOTES, 'UTF-8');
             $safeSupportedCountries = htmlspecialchars($supportedScope['countries'], ENT_QUOTES, 'UTF-8');
             $currentLabel = $renderFor === 'js' ? $currentDisplay : $currentName;
+            if ($surface === 'dialog' || $surface === 'column') {
+                return self::buildUnsupportedLanguageDialogHtml(
+                    $switcherId,
+                    $panelId,
+                    $displayLocale,
+                    $currentCode,
+                    $searchPlaceholder,
+                    $labelNoMatch,
+                    self::translateChrome('关闭', $displayLocale),
+                    $labelUngrouped,
+                    self::translateChrome('这个语种没有开通。当前页面用本站默认语显示。请选一个已开通的语种。', $displayLocale),
+                    self::translateChrome('语种未开通', $displayLocale),
+                    $languageGroups,
+                    $currentPath,
+                    $currentSearch,
+                    $currentCurrency,
+                    $backendRoute,
+                    $websiteId,
+                    $navigation,
+                    $supportedScope['locales'],
+                    $supportedScope['countries'],
+                    $websiteMount,
+                    $surface === 'column',
+                );
+            }
             $html = [];
             $html[] = '<div class="w-language-switcher w-menu-root"'
                 . ' data-w-component="menu language-switcher" data-w-placement="bottom-end" data-w-anchor-mode="element"'
@@ -498,7 +540,7 @@ class LanguageSwitcher implements TaglibInterface
             $html[] = '</div>';
             $output = \implode("\n", $html);
             if ($useProcessHtmlCache) {
-                DictionaryCacheNamespace::localCache(self::$htmlCache, 512)[$htmlCacheKey] = [
+                DictionaryCacheNamespace::processBag(self::BAG_HTML, self::$htmlCache, 512)[$htmlCacheKey] = [
                     'expires' => $now + self::SWITCHER_HTML_CACHE_TTL,
                     'html' => $output,
                 ];
@@ -529,7 +571,7 @@ class LanguageSwitcher implements TaglibInterface
     {
         if ($displayLocales === []) {
             try {
-                $displayLocales = [State::getLangLocal(), 'zh_Hans_CN', 'en_US'];
+                $displayLocales = [WelineEnv::getLangLocal(), 'zh_Hans_CN', 'en_US'];
             } catch (\Throwable) {
                 $displayLocales = ['zh_Hans_CN', 'en_US'];
             }
@@ -1172,18 +1214,18 @@ class LanguageSwitcher implements TaglibInterface
     private static function loadChromeDictionary(string $locale): array
     {
         $cacheKey = DictionaryCacheNamespace::cacheKey($locale, [$locale]);
-        if (isset(DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256, [$locale])[$cacheKey])) {
-            return DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256, [$locale])[$cacheKey];
+        if (isset(DictionaryCacheNamespace::processBag(self::BAG_CHROME_DICTIONARY, self::$chromeDictionaryCache, 256, [$locale])[$cacheKey])) {
+            return DictionaryCacheNamespace::processBag(self::BAG_CHROME_DICTIONARY, self::$chromeDictionaryCache, 256, [$locale])[$cacheKey];
         }
 
         $path = \dirname(__DIR__) . '/i18n/' . $locale . '.csv';
         if (!\is_file($path)) {
-            return DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256, [$locale])[$cacheKey] = [];
+            return DictionaryCacheNamespace::processBag(self::BAG_CHROME_DICTIONARY, self::$chromeDictionaryCache, 256, [$locale])[$cacheKey] = [];
         }
 
         $handle = @\fopen($path, 'rb');
         if ($handle === false) {
-            return DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256, [$locale])[$cacheKey] = [];
+            return DictionaryCacheNamespace::processBag(self::BAG_CHROME_DICTIONARY, self::$chromeDictionaryCache, 256, [$locale])[$cacheKey] = [];
         }
 
         $words = [];
@@ -1203,7 +1245,7 @@ class LanguageSwitcher implements TaglibInterface
             \fclose($handle);
         }
 
-        return DictionaryCacheNamespace::localCache(self::$chromeDictionaryCache, 256, [$locale])[$cacheKey] = $words;
+        return DictionaryCacheNamespace::processBag(self::BAG_CHROME_DICTIONARY, self::$chromeDictionaryCache, 256, [$locale])[$cacheKey] = $words;
     }
 
     /**
@@ -1316,7 +1358,7 @@ class LanguageSwitcher implements TaglibInterface
                     $currentCode,
                     '/',
                     '',
-                    State::getCurrency() ?: self::defaultCurrency(),
+                    WelineEnv::getCurrency() ?: self::defaultCurrency(),
                     '',
                     $labelUngrouped,
                 );
@@ -1334,6 +1376,94 @@ class LanguageSwitcher implements TaglibInterface
                 ];
             },
         );
+    }
+
+    /**
+     * Unsupported path language: the same searchable switcher, as a dialog.
+     * Options are the website catalog already resolved for this request.
+     *
+     * @param list<array{country_code?: string, country_name?: string, languages?: array<string, array<string, mixed>>}> $languageGroups
+     */
+    private static function buildUnsupportedLanguageDialogHtml(
+        string $switcherId,
+        string $panelId,
+        string $displayLocale,
+        string $currentCode,
+        string $searchPlaceholder,
+        string $labelNoMatch,
+        string $labelClose,
+        string $labelUngrouped,
+        string $title,
+        string $dialogLabel,
+        array $languageGroups,
+        string $currentPath,
+        string $currentSearch,
+        string $currentCurrency,
+        string $backendRoute,
+        int $websiteId,
+        string $navigation,
+        string $supportedLocales,
+        string $supportedCountries,
+        string $websiteMount,
+        bool $columnOnly = false,
+    ): string {
+        $dialogId = $switcherId . '-dialog';
+        $titleId = $switcherId . '-title';
+        $safe = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+        $list = self::buildPanelListGroupsHtml(
+            $languageGroups,
+            $switcherId,
+            $currentCode,
+            $currentPath,
+            $currentSearch,
+            $currentCurrency,
+            $backendRoute,
+            $labelUngrouped,
+        );
+        $menu = '<div class="w-language-switcher"'
+            . ' data-w-component="language-switcher"'
+            . ' data-i18n-switcher data-i18n-switcher-id="' . $safe($switcherId) . '"'
+            . ' data-i18n-surface="dialog"'
+            . ' data-i18n-navigation="' . $safe($navigation) . '"'
+            . ' data-i18n-supported-locales="' . $safe($supportedLocales) . '"'
+            . ' data-i18n-supported-countries="' . $safe($supportedCountries) . '"'
+            . ' data-i18n-display-locale="' . $safe($displayLocale) . '"'
+            . ' data-i18n-current-locale="' . $safe($currentCode) . '"'
+            . ' data-website-id="' . $websiteId . '"'
+            . ' data-website-mount="' . $safe($websiteMount) . '">'
+            . '<div id="' . $safe($panelId) . '" class="w-language-switcher__menu" data-w-menu-panel'
+            . ' role="menu" aria-label="' . $safe($dialogLabel) . '">';
+        if ($searchPlaceholder !== '') {
+            $menu .= '<div class="w-language-switcher__search-wrap">'
+                . '<input class="w-input w-language-switcher__search" type="search"'
+                . ' placeholder="' . $safe($searchPlaceholder) . '"'
+                . ' autocomplete="off" data-w-language-search'
+                . ' aria-label="' . $safe($searchPlaceholder) . '"></div>';
+        }
+        $menu .= '<div class="w-language-switcher__list" data-w-language-list>'
+            . '<p class="w-language-switcher__empty" data-w-language-empty hidden>'
+            . $safe($labelNoMatch)
+            . '</p>'
+            . $list
+            . '</div></div></div>';
+        if ($columnOnly) {
+            return $menu;
+        }
+
+        return '<dialog id="' . $safe($dialogId) . '"'
+            . ' class="w-dialog" data-w-component="dialog" data-size="md"'
+            . ' data-i18n-unsupported-lang'
+            . ' aria-labelledby="' . $safe($titleId) . '">'
+            . '<header class="w-dialog__header">'
+            . '<h2 id="' . $safe($titleId) . '" class="w-dialog__title">' . $safe($title) . '</h2>'
+            . '<button type="button" class="w-button" data-tone="quiet" data-size="sm"'
+            . ' data-w-action="dialog.close" data-w-close'
+            . ' aria-label="' . $safe($labelClose) . '">'
+            . '<w-icon name="close" size="sm"></w-icon></button>'
+            . '</header>'
+            . '<div class="w-dialog__body">'
+            . $menu
+            . '</div></dialog>';
     }
 
     /**

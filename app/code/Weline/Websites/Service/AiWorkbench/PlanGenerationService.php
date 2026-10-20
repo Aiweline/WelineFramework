@@ -222,7 +222,7 @@ class PlanGenerationService
     private function resolveFallbackLocale(): string
     {
         try {
-            $lang = \trim((string)\Weline\Framework\App\State::getLang());
+            $lang = \trim((string)\Weline\Framework\Env\WelineEnv::getLang());
             if ($lang !== '') {
                 return $this->normalizePolishLocale($lang, 'zh_Hans_CN');
             }

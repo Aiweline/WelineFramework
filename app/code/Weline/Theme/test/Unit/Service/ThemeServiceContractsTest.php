@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Test\Unit\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod as ReflectionMethod;
 use Weline\Framework\Context;
@@ -1655,7 +1657,7 @@ private function assert_HomepageLayoutHtmlBag_testLogicalKeyCarriesHomepageOptio
     /** @var StorefrontHomepageLayoutHtmlBag $bag */
     $bag = $ref->newInstanceWithoutConstructor();
     $key = $bag->logicalKey('Weline_Theme::theme/frontend/layouts/homepage/default.phtml');
-    self::assertStringContainsString('theme.homepage_layout.html.v2.', $key);
+    self::assertStringContainsString('theme.homepage_layout.html.v5.', $key);
     self::assertStringContainsString('.homepage.default', $key);
 }
 
@@ -1709,7 +1711,7 @@ private function assert_BlogLayoutHtmlBag_testEligibilityRequiresBlogDetailLayou
 private function assert_BlogLayoutHtmlBag_testLogicalKeyContainsSlugHash(): void
 {
     $bagSource = (string) \file_get_contents(BP . 'app/code/Weline/Theme/Service/StorefrontBlogLayoutHtmlBag.php');
-    self::assertStringContainsString('theme.blog_layout.html.v1.', $bagSource);
+    self::assertStringContainsString('theme.blog_layout.html.v5.', $bagSource);
     self::assertStringContainsString('.blog.', $bagSource);
     self::assertStringContainsString('sha1', $bagSource);
     self::assertStringContainsString('resolvePostSlug', $bagSource);
@@ -1722,7 +1724,7 @@ private function assert_BlogLayoutHtmlBag_testLogicalKeyContainsSlugHash(): void
         /** @var StorefrontBlogLayoutHtmlBag $bag */
         $bag = $ref->newInstanceWithoutConstructor();
         $key = $bag->logicalKey('Weline_Blog::theme/frontend/layouts/blog/default.phtml');
-        self::assertStringContainsString('theme.blog_layout.html.v1.', $key);
+        self::assertStringContainsString('theme.blog_layout.html.v5.', $key);
         self::assertStringContainsString('.blog.default.', $key);
         self::assertStringContainsString($expectedHash, $key);
         $other = 'other-post-slug';
@@ -2893,7 +2895,7 @@ private function assert_StorefrontHeaderNavLocaleAuthority_testStorefrontLocaleS
     self::assertStringContainsString('WidgetI18n::storefrontLocale()', $src);
     self::assertStringContainsString('function storefrontLocaleSegment()', $src);
     self::assertStringContainsString('requestOriginSegment()', $src);
-    self::assertStringNotContainsString('State::getLangLocal()', $src);
+    self::assertStringNotContainsString('WelineEnv::getLangLocal()', $src);
 }
 
 private function assert_StorefrontNotFoundStaticGeneratorPhraseIsolation_testBuildHtmlClearsUpgradePhraseBagBeforeRender(): void

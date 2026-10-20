@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Test\Unit\Phrase;
 
+
+use Weline\Framework\Env\WelineEnv;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod as ReflectionMethod;
 use Weline\Framework\App\Env;
@@ -119,18 +121,18 @@ final class PhraseContractsTest extends TestCase
                 $this->tearDown_DictionaryCacheNamespaceProcessCache();
             }
         },
-            'DictionaryCacheNamespaceProcessCache::testLocalCachePersistsWithoutRequestId' => function () {
+            'DictionaryCacheNamespaceProcessCache::testRequestBagPersistsWithoutRequestId' => function () {
             $this->setUp_DictionaryCacheNamespaceProcessCache();
             try {
-                $this->assert_DictionaryCacheNamespaceProcessCache_testLocalCachePersistsWithoutRequestId();
+                $this->assert_DictionaryCacheNamespaceProcessCache_testRequestBagPersistsWithoutRequestId();
             } finally {
                 $this->tearDown_DictionaryCacheNamespaceProcessCache();
             }
         },
-            'DictionaryCacheNamespaceProcessCache::testLocalCacheIsEphemeralDuringActiveTransaction' => function () {
+            'DictionaryCacheNamespaceProcessCache::testRequestBagIsEphemeralDuringActiveTransaction' => function () {
             $this->setUp_DictionaryCacheNamespaceProcessCache();
             try {
-                $this->assert_DictionaryCacheNamespaceProcessCache_testLocalCacheIsEphemeralDuringActiveTransaction();
+                $this->assert_DictionaryCacheNamespaceProcessCache_testRequestBagIsEphemeralDuringActiveTransaction();
             } finally {
                 $this->tearDown_DictionaryCacheNamespaceProcessCache();
             }
@@ -441,7 +443,7 @@ private function assert_CliLanguage_testCliAreaDefaultIsChineseBaselineNotWebsit
     State::clearProcessLocalizationCaches();
     State::resetLangLocalCache();
     State::setRequestLanguageOverride('');
-    $lang = State::getLang();
+    $lang = WelineEnv::getLang();
     self::assertSame(Env::default_LANGUAGE_CODE, $lang);
     self::assertNotSame('it_IT', $lang);
     self::assertNotSame('ar_SA', $lang);
@@ -477,28 +479,28 @@ private function assert_DictionaryCacheNamespaceProcessCache_testFingerprintIsAv
     self::assertStringStartsWith(DictionaryCacheNamespace::fingerprint() . '|', DictionaryCacheNamespace::cacheKey('demo'));
 }
 
-private function assert_DictionaryCacheNamespaceProcessCache_testLocalCachePersistsWithoutRequestId(): void
+private function assert_DictionaryCacheNamespaceProcessCache_testRequestBagPersistsWithoutRequestId(): void
 {
     self::assertNull(RequestContext::getId());
     self::assertSame(0, TransactionContext::activeTransactionConnectionCount());
     $cache = [];
-    $first =& DictionaryCacheNamespace::localCache($cache, 1024);
+    $first =& DictionaryCacheNamespace::requestBag($cache, 1024);
     $first['word'] = 'cached';
-    $second =& DictionaryCacheNamespace::localCache($cache, 1024);
+    $second =& DictionaryCacheNamespace::requestBag($cache, 1024);
     self::assertSame('cached', $second['word'] ?? null);
     self::assertSame('cached', $cache['word'] ?? null);
 }
 
-private function assert_DictionaryCacheNamespaceProcessCache_testLocalCacheIsEphemeralDuringActiveTransaction(): void
+private function assert_DictionaryCacheNamespaceProcessCache_testRequestBagIsEphemeralDuringActiveTransaction(): void
 {
     $query = $this->createStub(QueryInterface::class);
     RequestContext::set(self::TX_STATES_KEY_DictionaryCacheNamespaceProcessCache, ['probe' => new TransactionState($query, 1, false)]);
     self::assertGreaterThan(0, TransactionContext::activeTransactionConnectionCount());
     self::assertNull(DictionaryCacheNamespace::fingerprint());
     $cache = ['keep' => 1];
-    $first =& DictionaryCacheNamespace::localCache($cache, 1024);
+    $first =& DictionaryCacheNamespace::requestBag($cache, 1024);
     $first['word'] = 'dirty';
-    $second =& DictionaryCacheNamespace::localCache($cache, 1024);
+    $second =& DictionaryCacheNamespace::requestBag($cache, 1024);
     self::assertArrayNotHasKey('word', $second);
     self::assertSame(['keep' => 1], $cache);
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Dropship\Controller\Backend;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Dropship\Api\Data\DropshipCatalogSnapshot;
 use Weline\Dropship\Interface\DropshipCatalogBrowseProviderInterface;
 use Weline\Dropship\Interface\DropshipCatalogProviderInterface;
@@ -615,9 +617,9 @@ class Listing extends BackendController
             ? (bool)$caps['browse_country_filter']
             : true;
 
-        $locale = (string)State::getLangLocal();
+        $locale = (string)WelineEnv::getLangLocal();
         if ($locale === '') {
-            $locale = (string)State::getLang();
+            $locale = (string)WelineEnv::getLang();
         }
 
         $categories = [];

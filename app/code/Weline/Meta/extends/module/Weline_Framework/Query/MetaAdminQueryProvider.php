@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Meta\Extends\Module\Weline_Framework\Query;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
@@ -97,7 +99,7 @@ class MetaAdminQueryProvider implements QueryProviderInterface
                 'message' => (string)__('当前请求没有可用的商城 Scope'),
             ];
         }
-        $locale = trim((string)($params['locale'] ?? Cookie::getLangLocal() ?? ''));
+        $locale = trim((string)($params['locale'] ?? WelineEnv::getLangLocal() ?? ''));
         $locale = $locale !== '' ? $locale : null;
 
         /** @var MetaConfigTypedScopeService $resolver */

@@ -18,6 +18,13 @@ final class SharedStateProtocolProbe
     private const SHUTDOWN_READ_TIMEOUT_SEC = 0.5;
 
     /**
+     * How long to poll a socket synchronously before letting the scheduler
+     * suspend the current Fiber. Local sidecar RPCs answer in well under 1 ms,
+     * so this window normally completes the read without any Fiber round-trip.
+     */
+    private const READ_POLL_SYNC_WINDOW_SEC = 0.05;
+
+    /**
      * 单次 TCP 直连 + 读 token + 鉴权后 PING（不经 ConnectionPool）。
      * 用于共享侧车就绪轮询，避免连接池失败退避带来的探测抖动与额外等待。
      */
@@ -318,7 +325,22 @@ final class SharedStateProtocolProbe
 
                     return $messages[0] ?? null;
                 }
-                SchedulerSystem::usleep(2000);
+                // Wait for readability instead of a fixed 2 ms spin. Inside the
+                // Master's scheduler Fiber that spin becomes a Fiber suspend, and
+                // resume latency on a busy loop dwarfs the spin interval — a
+                // sub-millisecond local reply then blows the whole probe budget
+                // and an unrelated reload aborts with "failed authenticated PING".
+                // awaitReadable() does a bounded synchronous select first, so a
+                // fast local RPC is observed without ever yielding.
+                $remaining = $deadline - self::monotonicSeconds();
+                if ($remaining <= 0.0) {
+                    break;
+                }
+                SchedulerSystem::awaitReadable(
+                    $socket,
+                    $remaining,
+                    \min($remaining, self::READ_POLL_SYNC_WINDOW_SEC),
+                );
 
                 continue;
             }

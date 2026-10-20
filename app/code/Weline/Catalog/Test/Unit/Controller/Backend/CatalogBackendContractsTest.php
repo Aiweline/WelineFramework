@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Catalog\Test\Unit\Controller\Backend;
 
+
+use Weline\Framework\Env\WelineEnv;
 use PHPUnit\Framework\TestCase;
 
 
@@ -62,7 +64,7 @@ private function assert_CategoryAdminSurface_testCategoryPageUsesCatalogHubSurfa
     self::assertStringContainsString('Website::ID_DEFAULT', $controller);
     self::assertStringContainsString('postCategoryUpdateOrder', $controller);
     self::assertStringContainsString("fetch('Weline_Catalog::templates/backend/category/index.phtml')", $controller);
-    self::assertStringContainsString("'locale' => (string)State::getLangLocal()", $controller);
+    self::assertStringContainsString("'locale' => (string)WelineEnv::getLangLocal()", $controller);
     foreach (['data-catalog-admin', 'data-grant-version-create', 'data-grant-version-update', 'data-grant-version-delete', 'data-category-dnd-tree', 'draggable="true"', 'data-catalog-form', 'data-testid="catalog-category-admin"', 'data-testid="catalog-space-select"', 'data-testid="catalog-scope-select"', 'data-testid="catalog-scope-badge"', 'data-testid="catalog-display-form"', 'data-testid="catalog-category-name-local"', 'data-testid="catalog-category-image"', 'data-testid="catalog-category-banner"', 'data-testid="catalog-category-summary"', 'data-testid="catalog-category-description"', 'data-testid="catalog-category-description-local"', 'name="image"', 'name="banner"', 'name="summary"', 'name="description"', 'w:websites:website:select', 'w:websites:store:select', 'w:websites:channel:select', '<local model="Weline\Product\Model\Category\LocalDescription"', '保存后可翻译多语言', 'name="space"', 'name="scope_level"', 'weline_catalog/backend/category/index', 'weline_catalog/backend/category/category-post', 'weline_catalog/backend/category/display-save', 'Weline_Catalog::js/backend/category-admin.js', 'Weline_Catalog::css/backend/category-admin.css', '?v=20260912-tree1', 'data-catalog-tree-toggle', 'aria-expanded="true"', 'data-text-delete-products-intro', 'Ops tag only'] as $contract) {
         self::assertStringContainsString($contract, $template);
     }

@@ -110,6 +110,7 @@ private function assert_BackendMenuSignalDeepLink_testSidebarHostsSignalPanelAnd
     self::assertStringContainsString('BackendMenuSignalItemsProviderInterface', $aggregator);
     self::assertStringContainsString('primary_href', $aggregator);
     self::assertStringContainsString('MAX_ITEMS_PER_CODE', $aggregator);
+    self::assertStringContainsString('isUnreadFlag', $aggregator);
 
     self::assertStringContainsString('.w-backend-nav__signal-badge.is-clickable:not([hidden])', $css);
     self::assertStringContainsString('pointer-events: auto', $css);

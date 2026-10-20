@@ -940,7 +940,7 @@ private function assert_HeadCurrencyContext_testDefaultHeadUsesFrameworkCurrency
     $path = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/theme/frontend/partials/head/default.phtml';
     self::assertFileExists($path);
     $template = (string) file_get_contents($path);
-    self::assertStringContainsString('$currentCurrency = \Weline\Framework\App\State::getCurrency();', $template);
+    self::assertStringContainsString('$currentCurrency = \Weline\Framework\Env\WelineEnv::getCurrency();', $template);
     self::assertStringContainsString("\\Weline\\Framework\\App\\Env::system('currency', 'CNY')", $template);
     self::assertStringNotContainsString("\\w_env('user.currency', 'CNY')", $template);
     self::assertStringNotContainsString("\\Weline\\Framework\\App\\Env::get('currency', 'CNY')", $template);

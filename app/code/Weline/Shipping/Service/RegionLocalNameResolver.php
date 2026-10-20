@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Shipping\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\PostalPlace;
@@ -42,7 +44,7 @@ class RegionLocalNameResolver
 
     public function currentLocale(): string
     {
-        $locale = trim((string)Cookie::getLangLocal());
+        $locale = trim((string)WelineEnv::getLangLocal());
 
         return $locale !== '' ? $locale : 'zh_Hans_CN';
     }

@@ -252,7 +252,6 @@ final class SkillRegistry
         if (!\is_file($file)) {
             return null;
         }
-        require_once $file;
         $content = (string)@\file_get_contents($file);
         if ($content === '') {
             return null;
@@ -263,6 +262,9 @@ final class SkillRegistry
         }
 
         $className = '\\' . \trim((string)$namespaceMatches[1]) . '\\' . \trim((string)$classMatches[1]);
+        if (!\class_exists($className, false)) {
+            require_once $file;
+        }
         if (!\class_exists($className)) {
             return null;
         }

@@ -37,8 +37,8 @@
 
 ```bash
 # 1) 刷新三个 JSON（命令正文见本报告会话记录; 或按上表"提取"列重写）
-# 2) php 架构可视化/generate-module-dot-v2.php
+# 2) php dev/架构可视化/generate-module-dot-v2.php
 # 3) dot -Tsvg weline-core-overview.dot -o weline-core-overview.svg
 #    dot -Tsvg weline-module-dependencies-full.dot -o weline-module-dependencies-full.svg
-# 4) cd 架构可视化 && php -S 127.0.0.1:8931   # http://127.0.0.1:8931/
+# 4) cd dev/架构可视化 && php -S 127.0.0.1:8931   # http://127.0.0.1:8931/
 ```

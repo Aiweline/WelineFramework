@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Helper;
 
-use Weline\Framework\App\State;
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\I18n\Service\ClientI18nBagPublisher;
 use Weline\I18n\Service\DictionaryAreaPolicy;
 
@@ -16,14 +17,10 @@ final class ClientI18nBagScript
     public static function currentLocale(): string
     {
         try {
-            $locale = trim((string)(State::getLang() ?: ''));
+            $locale = trim((string)(WelineEnv::getLang() ?: ''));
         } catch (\Throwable) {
             $locale = '';
         }
-        if ($locale === '' && function_exists('w_env_lang')) {
-            $locale = trim((string)\w_env_lang());
-        }
-
         return $locale !== '' ? $locale : 'zh_Hans_CN';
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime;
 
+use Weline\Framework\Context;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Fpc\FpcPierceStamp;
 
@@ -25,25 +26,71 @@ final class TemplateRenderRouteTrace
     private const PANEL_ID = 'wls-tpl-route';
     private const JSON_ID = 'wls-tpl-route-json';
 
-    private static ?bool $requestedMemo = null;
+    /**
+     * Per-scope "is the route trace requested" latch.
+     *
+     * Keyed by Fiber/Context rather than held in one process-wide static: a bare
+     * static `true` survived into the next request on a long-lived WLS worker, so one
+     * `wls_tpl_route=1` request turned tracing on for everything after it. The latch
+     * also caches `false`, which is what makes the disarmed hot path a WeakMap read
+     * instead of two `RequestContext::get()` calls per `begin()`/`end()`.
+     *
+     * @var \WeakMap<\Fiber, bool>|null
+     */
+    private static ?\WeakMap $fiberMemo = null;
+
+    /** @var \WeakMap<Context, bool>|null */
+    private static ?\WeakMap $contextMemo = null;
+
+    private static ?bool $mainMemo = null;
 
     public static function clearMemo(): void
     {
-        self::$requestedMemo = null;
+        self::$fiberMemo = null;
+        self::$contextMemo = null;
+        self::$mainMemo = null;
     }
 
     public static function isRequested(): bool
     {
-        if (self::$requestedMemo === true) {
-            return true;
+        $fiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
+        $context = $fiber === null ? Context::getCurrent() : null;
+
+        if ($fiber !== null) {
+            self::$fiberMemo ??= new \WeakMap();
+            $memo = self::$fiberMemo[$fiber] ?? null;
+        } elseif ($context !== null) {
+            self::$contextMemo ??= new \WeakMap();
+            $memo = self::$contextMemo[$context] ?? null;
+        } else {
+            $memo = self::$mainMemo;
         }
 
+        if ($memo !== null) {
+            return $memo;
+        }
+
+        $memo = self::resolveRequested();
+
+        if ($fiber !== null) {
+            self::$fiberMemo[$fiber] = $memo;
+        } elseif ($context !== null) {
+            self::$contextMemo[$context] = $memo;
+        } else {
+            self::$mainMemo = $memo;
+        }
+
+        return $memo;
+    }
+
+    private static function resolveRequested(): bool
+    {
         try {
             if (RequestContext::isInitialized() && RequestContext::get(self::CTX_ARMED) === true) {
-                return self::$requestedMemo = true;
+                return true;
             }
             if (RequestContext::isInitialized() && RequestContext::get(self::CTX_REQUESTED_CACHE) === true) {
-                return self::$requestedMemo = true;
+                return true;
             }
             if (RequestContext::isInitialized() && RequestContext::get(self::CTX_REQUESTED_CACHE) === false) {
                 return false;
@@ -66,7 +113,7 @@ final class TemplateRenderRouteTrace
         $ok = FpcPierceStamp::isValidCurrentRequest();
         self::cacheRequested($ok);
 
-        return $ok ? (self::$requestedMemo = true) : false;
+        return $ok;
     }
 
     public static function armIfRequested(): void
@@ -234,7 +281,6 @@ final class TemplateRenderRouteTrace
 
     private static function cacheRequested(bool $value): void
     {
-        self::$requestedMemo = $value ?: null;
         try {
             if (RequestContext::isInitialized()) {
                 RequestContext::set(self::CTX_REQUESTED_CACHE, $value);

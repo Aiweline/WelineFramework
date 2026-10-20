@@ -230,9 +230,9 @@ $this->setData('seo', $seoContext);
 
 $htmlLang = 'zh-CN';
 try {
-    $htmlLang = str_replace('_', '-', (string)\Weline\Framework\App\State::getLangLocal());
+    $htmlLang = str_replace('_', '-', (string)\Weline\Framework\Env\WelineEnv::getLangLocal());
     if ($htmlLang === '') {
-        $htmlLang = str_replace('_', '-', (string)\Weline\Framework\App\State::getLang());
+        $htmlLang = str_replace('_', '-', (string)\Weline\Framework\Env\WelineEnv::getLang());
     }
 } catch (\Throwable) {
     $htmlLang = 'zh-CN';

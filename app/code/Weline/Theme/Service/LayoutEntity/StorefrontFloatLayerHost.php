@@ -369,7 +369,7 @@ final class StorefrontFloatLayerHost
     {
         $locale = '';
         try {
-            $locale = trim((string)(State::getLang() ?: ''));
+            $locale = trim((string)(WelineEnv::getLang() ?: ''));
         } catch (\Throwable) {
             $locale = '';
         }
@@ -424,7 +424,7 @@ $floatLayerCssUrl = htmlspecialchars($floatLayerCssUrl, ENT_QUOTES, 'UTF-8');
 $floatEdgeLabelSources = ['收起悬浮', '展开悬浮'];
 $floatEdgeLocale = '';
 try {
-    $floatEdgeLocale = trim((string)(\Weline\Framework\App\State::getLang() ?: ''));
+    $floatEdgeLocale = trim((string)(\Weline\Framework\Env\WelineEnv::getLang() ?: ''));
 } catch (\Throwable) {
     $floatEdgeLocale = '';
 }

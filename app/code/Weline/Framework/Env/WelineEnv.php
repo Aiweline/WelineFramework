@@ -488,24 +488,157 @@ class WelineEnv
         self::set('area', $area, 'WelineEnv::setArea');
     }
 
+    /**
+     * Current request language (Env read authority over RequestContext).
+     * Priority: request override → route.language / env.user.lang → area default.
+     * Does not read preference cookies.
+     */
     public static function getLang(): string
     {
-        return (string)self::get('user.lang', 'zh_Hans_CN');
+        $forced = \Weline\Framework\App\State::getRequestLanguageOverride();
+        if ($forced !== '' && \Weline\Framework\App\State::isLanguageCodeShape($forced)) {
+            return \Weline\Framework\App\State::normalizeLanguageCode($forced);
+        }
+
+        $routeLang = self::readRouteLanguage();
+        if ($routeLang !== '') {
+            return $routeLang;
+        }
+
+        return \Weline\Framework\App\State::resolveAreaDefaultLanguage();
     }
 
     public static function setLang(string $lang): void
     {
         self::set('user.lang', $lang, 'WelineEnv::setLang');
+        if (\class_exists(RequestContext::class, false)) {
+            RequestContext::setWelineUserLang($lang);
+        }
     }
 
+    /**
+     * Current request currency (Env read authority over RequestContext).
+     * Priority: route.currency / env.user.currency → website default.
+     * Does not read preference cookies.
+     */
     public static function getCurrency(): string
     {
-        return (string)self::get('user.currency', 'CNY');
+        $routeCurrency = self::readRouteCurrency();
+        if ($routeCurrency !== '') {
+            return $routeCurrency;
+        }
+
+        return \Weline\Framework\App\State::resolveWebsiteDefaultCurrency();
     }
 
     public static function setCurrency(string $currency): void
     {
         self::set('user.currency', $currency, 'WelineEnv::setCurrency');
+        if (\class_exists(RequestContext::class, false)) {
+            RequestContext::setWelineUserCurrency($currency);
+        }
+    }
+
+    /**
+     * Localization display locale (may be adjusted by Weline_Framework_Cookie::lang_local).
+     */
+    public static function getLangLocal(): string
+    {
+        $lang = self::getLang();
+        $currency = self::getCurrency();
+        $cacheKey = $lang . '|' . $currency;
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $cached = $context->get('state.lang_local_cache', null);
+            if (\is_array($cached)
+                && (string)($cached['key'] ?? '') === $cacheKey
+                && \array_key_exists('value', $cached)
+            ) {
+                return (string)$cached['value'];
+            }
+        }
+
+        $data = new \Weline\Framework\DataObject\DataObject();
+        $data->setData('lang', $lang);
+        $data->setData('currency', $currency);
+        $data->setData('lang_local', $lang);
+
+        try {
+            \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
+                ->dispatch('Weline_Framework_Cookie::lang_local', $data);
+        } catch (\Exception) {
+        }
+
+        $langLocal = (string)$data->getData('lang_local');
+        if ($context !== null) {
+            $context->set('state.lang_local_cache', [
+                'key' => $cacheKey,
+                'value' => $langLocal,
+            ]);
+        }
+
+        return $langLocal;
+    }
+
+    private static function readRouteLanguage(): string
+    {
+        $context = Context::getCurrent();
+        if ($context !== null && $context->has('route.language')) {
+            $lang = \Weline\Framework\App\State::normalizeLanguageCode((string)$context->get('route.language', ''));
+            if ($lang !== '' && \Weline\Framework\App\State::isLanguageCodeShape($lang)
+                && self::languageAllowedForCurrentArea($lang)
+            ) {
+                return $lang;
+            }
+        }
+
+        try {
+            $lang = \Weline\Framework\App\State::normalizeLanguageCode((string)self::get('user.lang', ''));
+            if ($lang !== '' && \Weline\Framework\App\State::isLanguageCodeShape($lang)
+                && self::languageAllowedForCurrentArea($lang)
+            ) {
+                return $lang;
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
+    }
+
+    private static function readRouteCurrency(): string
+    {
+        $context = Context::getCurrent();
+        if ($context !== null && $context->has('route.currency')) {
+            $currency = \strtoupper(\trim((string)$context->get('route.currency', '')));
+            if ($currency !== '' && \Weline\Framework\App\State::isAllowedCurrencyCode($currency)) {
+                return $currency;
+            }
+        }
+
+        try {
+            $currency = \strtoupper(\trim((string)self::get('user.currency', '')));
+            if ($currency !== '' && \Weline\Framework\App\State::isAllowedCurrencyCode($currency)) {
+                return $currency;
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
+    }
+
+    private static function languageAllowedForCurrentArea(string $code): bool
+    {
+        $area = '';
+        try {
+            $area = (string)self::get('area', '');
+        } catch (\Throwable) {
+        }
+
+        if ($area === 'backend' || $area === 'rest_backend' || \Weline\Framework\App\State::isBackend()) {
+            return \Weline\Framework\App\State::isLanguageCodeShape($code);
+        }
+
+        return \Weline\Framework\App\State::isAllowedLanguageCode($code);
     }
 
     public static function getWebsiteId(): ?int

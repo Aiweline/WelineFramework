@@ -43,7 +43,7 @@ class Meta extends BackendController
         $area = $this->request->getParam('area', 'frontend');
         $identify = trim((string)$this->request->getParam('identify'));
         $scope = trim((string)$this->request->getParam('scope', 'default'));
-        $locale = $this->request->getParam('locale') ?: (\Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN');
+        $locale = $this->request->getParam('locale') ?: (\Weline\Framework\Env\WelineEnv::getLangLocal() ?? 'zh_Hans_CN');
 
         if (!$themeId || $identify === '') {
             return $this->fetchJson($this->error(__('参数不完整')));
@@ -172,7 +172,7 @@ class Meta extends BackendController
         $identify = trim((string)$this->request->getParam('identify'));
         $paramName = trim((string)$this->request->getParam('param'));
         $scope = trim((string)$this->request->getParam('scope', 'default'));
-        $locale = $this->request->getParam('locale') ?: (\Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN');
+        $locale = $this->request->getParam('locale') ?: (\Weline\Framework\Env\WelineEnv::getLangLocal() ?? 'zh_Hans_CN');
 
         if (!$themeId || $identify === '' || $paramName === '') {
             return $this->fetchJson($this->error(__('参数不完整')));
@@ -245,7 +245,7 @@ class Meta extends BackendController
         $identify = trim((string)$this->request->getPost('identify'));
         $paramName = trim((string)$this->request->getPost('param'));
         $scope = trim((string)$this->request->getPost('scope', 'default'));
-        $locale = $this->request->getPost('locale') ?: (\Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN');
+        $locale = $this->request->getPost('locale') ?: (\Weline\Framework\Env\WelineEnv::getLangLocal() ?? 'zh_Hans_CN');
         $value = (string)$this->request->getPost('value', '');
 
         if (!$themeId || $identify === '' || $paramName === '') {

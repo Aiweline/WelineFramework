@@ -65,14 +65,14 @@ try {
 }
 if ($locale === '') {
     try {
-        $locale = trim((string)\Weline\Framework\App\State::getLangLocal());
+        $locale = trim((string)\Weline\Framework\Env\WelineEnv::getLangLocal());
     } catch (\Throwable) {
         $locale = '';
     }
 }
 if ($locale === '') {
     try {
-        $locale = trim((string)\Weline\Framework\App\State::getLang());
+        $locale = trim((string)\Weline\Framework\Env\WelineEnv::getLang());
     } catch (\Throwable) {
         $locale = '';
     }

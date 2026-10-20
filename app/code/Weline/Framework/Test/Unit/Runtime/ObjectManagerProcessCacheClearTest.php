@@ -69,5 +69,10 @@ final class ObjectManagerProcessCacheClearTest extends TestCase
 
 final class ProcessCacheClearOrigin
 {
+    /** 非空类：ObjectManager 会拒绝实例化“静态类”（无公共实例方法）。 */
+    public function ping(): string
+    {
+        return 'pong';
+    }
 }
 

@@ -19,6 +19,21 @@ final class NamespaceGenerationSnapshot
     private const STORAGE_KEY = 'framework.cache.namespace_generation_snapshot';
 
     /**
+     * How long a caller with no request identity may reuse a frozen authority
+     * clock before revalidating it against the database.
+     *
+     * A process that is not serving a request (Master control plane, CLI,
+     * startup warmup) has no request id, so `state()` can never retain
+     * anything for it. Re-reading `@clock` on every cache access there is pure
+     * control-plane latency: one boot of the Master issued tens of thousands
+     * of identical `@clock` SELECTs, and the control socket answered late
+     * while it did. Local commits still revalidate immediately through
+     * `advance()` / `replaceProcessSnapshot()`, so this window only bounds how
+     * long a *cross-process* bump may go unnoticed outside a request.
+     */
+    private const PROCESS_SCOPED_CLOCK_TTL_SEC = 2.0;
+
+    /**
      * Process-local immutable value object. Every update replaces the complete
      * array; request Fibers only ever copy from it.
      *
@@ -28,6 +43,21 @@ final class NamespaceGenerationSnapshot
         'authority_clock' => 0,
         'generations' => [],
     ];
+
+    /**
+     * Frozen vector for callers with no request identity, plus the time its
+     * clock was read. Kept on the instance (one per process) so consecutive
+     * cache accesses inside the control plane reuse one database read.
+     *
+     * @var array{request_id:?string,authority_clock:?int,generations:array<string,int>}
+     */
+    private array $processScopedState = [
+        'request_id' => null,
+        'authority_clock' => null,
+        'generations' => [],
+    ];
+
+    private float $processScopedAt = 0.0;
 
     /**
      * @param list<string> $ancestors
@@ -42,7 +72,15 @@ final class NamespaceGenerationSnapshot
 
         $requestId = RequestContext::getId();
         $requestId = \is_string($requestId) && $requestId !== '' ? $requestId : null;
-        $state = $this->state($requestId);
+        // With no request identity the request-scoped store can never retain
+        // anything, so every access used to return to the database. Freeze the
+        // resolved clock per process instead; local commits still revalidate
+        // through `advance()` / `replaceProcessSnapshot()`, and the bounded
+        // window revalidates against cross-process bumps.
+        $processScoped = $requestId === null;
+        $state = $processScoped
+            ? $this->processScopedState()
+            : $this->state($requestId);
         $hasClock = \is_int($state['authority_clock']);
         $missing = array_values(array_diff($ancestors, array_keys($state['generations'])));
 
@@ -69,9 +107,6 @@ final class NamespaceGenerationSnapshot
             }
             $state['authority_clock'] = $authorityClock;
             $state['request_id'] = $requestId;
-            if ($requestId !== null) {
-                $this->store($state);
-            }
         } elseif ($missing !== []) {
             $this->fillMissingGenerations(
                 $state,
@@ -79,9 +114,19 @@ final class NamespaceGenerationSnapshot
                 \max(0, (int)($state['authority_clock'] ?? 0)),
                 $batchLoader,
             );
-            if ($requestId !== null) {
-                $this->store($state);
+        }
+
+        // `fillMissingGenerations()` may publish a newer process snapshot, so
+        // the write-back happens last and never clobbers a concurrent bump.
+        if ($processScoped) {
+            if ($this->processSnapshot['authority_clock'] <= \max(0, (int)($state['authority_clock'] ?? 0))) {
+                $this->processScopedState = $state;
+                $this->processScopedAt = \microtime(true);
+            } else {
+                $this->forgetProcessScopedState();
             }
+        } elseif ($requestId !== null) {
+            $this->store($state);
         }
 
         $vector = [];
@@ -164,6 +209,8 @@ final class NamespaceGenerationSnapshot
             'authority_clock' => $authorityClock,
             'generations' => $normalized,
         ];
+        // A newer reconciled snapshot outdates any frozen control-plane vector.
+        $this->forgetProcessScopedState();
     }
 
     /** @return array{authority_clock:int,generations:array<string,int>} */
@@ -191,6 +238,43 @@ final class NamespaceGenerationSnapshot
     public function clear(): void
     {
         RequestContext::remove(self::STORAGE_KEY);
+    }
+
+    /**
+     * Frozen vector for callers with no request identity, or an empty state
+     * once the bounded window has elapsed so the caller revalidates once.
+     *
+     * @return array{request_id:?string,authority_clock:?int,generations:array<string,int>}
+     */
+    private function processScopedState(): array
+    {
+        if (!\is_int($this->processScopedState['authority_clock'])) {
+            return $this->emptyState();
+        }
+        if (self::PROCESS_SCOPED_CLOCK_TTL_SEC > 0.0
+            && (\microtime(true) - $this->processScopedAt) >= self::PROCESS_SCOPED_CLOCK_TTL_SEC
+        ) {
+            return $this->emptyState();
+        }
+
+        return $this->processScopedState;
+    }
+
+    /** @return array{request_id:?string,authority_clock:?int,generations:array<string,int>} */
+    private function emptyState(): array
+    {
+        return [
+            'request_id' => null,
+            'authority_clock' => null,
+            'generations' => [],
+        ];
+    }
+
+    /** Drop the frozen control-plane vector so the next lookup revalidates. */
+    private function forgetProcessScopedState(): void
+    {
+        $this->processScopedState = $this->emptyState();
+        $this->processScopedAt = 0.0;
     }
 
     /** @return array{request_id:?string,authority_clock:?int,generations:array<string,int>} */

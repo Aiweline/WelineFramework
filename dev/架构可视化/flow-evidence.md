@@ -41,7 +41,7 @@
 | `index.html` 第 3、4、5 个标签页 | http://127.0.0.1:8931/#flow-request.svg · #flow-backend.svg · #flow-request-sequence.svg |
 
 ```bash
-cd 架构可视化
+cd dev/架构可视化
 /opt/homebrew/bin/dot -Tsvg flow-request.dot -o flow-request.svg
 /opt/homebrew/bin/dot -Tpng -Gdpi=130 flow-request.dot -o flow-request-preview.png
 /opt/homebrew/bin/dot -Tsvg flow-backend.dot -o flow-backend.svg

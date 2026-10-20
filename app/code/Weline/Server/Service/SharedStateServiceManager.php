@@ -25,6 +25,16 @@ class SharedStateServiceManager
     private const DEFAULT_LIFECYCLE_LOCK_WAIT_SECONDS = 30.0;
     private const CONSUMER_RENEW_TRANSACTION_BUDGET_SECONDS = 0.025;
 
+    /**
+     * Authenticated-probe attempts before declaring a listening port to be a
+     * foreign occupant. The probe is the only proof that the sidecar on that
+     * port is ours; a foreign process fails every attempt, while a healthy
+     * sidecar sharing the CPU with a worker reload can miss a single 250 ms
+     * window. One miss must not abort an entire reload.
+     */
+    private const AUTH_PROBE_ATTEMPTS = 3;
+    private const AUTH_PROBE_RETRY_USEC = 50_000;
+
     /** @var array{stopped:bool,role:string,reason:string,host:string,port:int,pid:int}|null */
     private ?array $lastStopReport = null;
 
@@ -1481,7 +1491,7 @@ class SharedStateServiceManager
         $configuredTokenFileName = (string) $definition['token_file_name'];
         $runtimeFile = $this->readRuntimeFile($role);
         $healthy = (bool)($definition['_authenticated_probe_verified'] ?? false)
-            || $this->probeRunningSharedService($definition, $configuredTokenFileName);
+            || $this->probeRunningSharedServiceWithRetry($definition, $configuredTokenFileName);
 
         if ($healthy) {
             $runtimePid = 0;
@@ -2122,6 +2132,33 @@ class SharedStateServiceManager
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * Bounded retry around the authenticated probe.
+     *
+     * The probe answer is the only proof that a listening port really is our
+     * sidecar, and its absence is treated as "a foreign process owns this
+     * port" — a fatal, non-retryable refusal. Inside the Master that probe runs
+     * on the same scheduler loop as worker reloads, so a single slow reply is
+     * not evidence of a foreign occupant. A genuinely foreign process fails
+     * every attempt, so retrying sharpens the classification without weakening
+     * the guard.
+     *
+     * @param array<string, mixed> $definition
+     */
+    private function probeRunningSharedServiceWithRetry(array $definition, string $tokenFileName): bool
+    {
+        for ($attempt = 1; $attempt <= self::AUTH_PROBE_ATTEMPTS; $attempt++) {
+            if ($this->probeRunningSharedService($definition, $tokenFileName)) {
+                return true;
+            }
+            if ($attempt < self::AUTH_PROBE_ATTEMPTS) {
+                SchedulerSystem::usleep(self::AUTH_PROBE_RETRY_USEC);
+            }
+        }
+
+        return false;
     }
 
     protected function isPortOccupied(int $port): bool

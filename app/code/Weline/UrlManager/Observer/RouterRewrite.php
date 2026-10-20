@@ -621,7 +621,7 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
             }
             if ($originLanguage === '') {
                 try {
-                    $originLanguage = \trim((string)State::getLang());
+                    $originLanguage = \trim((string)WelineEnv::getLang());
                 } catch (\Throwable) {
                     $originLanguage = '';
                 }

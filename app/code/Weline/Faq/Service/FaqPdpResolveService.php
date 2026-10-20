@@ -341,9 +341,9 @@ final class FaqPdpResolveService
         }
         try {
             if (class_exists(\Weline\Framework\App\State::class)) {
-                $localeCode = trim((string)\Weline\Framework\App\State::getLangLocal());
+                $localeCode = trim((string)\Weline\Framework\Env\WelineEnv::getLangLocal());
                 if ($localeCode === '') {
-                    $localeCode = trim((string)\Weline\Framework\App\State::getLang());
+                    $localeCode = trim((string)\Weline\Framework\Env\WelineEnv::getLang());
                 }
             }
         } catch (\Throwable) {

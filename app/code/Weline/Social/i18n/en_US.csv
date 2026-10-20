@@ -26,11 +26,20 @@
 获取当前网站范围的社媒注册专用邮箱状态。,"Get social registration mailbox status for the current website scope."
 一键开通当前网站范围的社媒注册专用邮箱。,"One-click provision a social registration mailbox for the current website scope."
 重置当前网站范围社媒专用邮箱密码并返回一次明文。,"Reset the social mailbox password for the current website scope and return the plaintext once."
+"开通（若缺）社媒邮箱并向本站 contact 发探测信，确认能收到后再允许注册平台。","开通（若缺）社媒邮箱并向本站 contact 发探测信，确认能收到后再允许注册平台。"
 未知社媒平台：%{1},"Unknown social platform: %{1}"
+缺少网站编号，不能猜测融媒体平台。,缺少网站编号，不能猜测融媒体平台。
+读取该站融媒体账户失败。,读取该站融媒体账户失败。
+该站融媒体还没有绑定默认社媒账户。,该站融媒体还没有绑定默认社媒账户。
+已读取该站融媒体默认账户。,已读取该站融媒体默认账户。
 社媒运营智能体,社媒运营智能体
 "根据 Ops 会话创建社媒创意草稿；公开外发须 Ops 审批。","根据 Ops 会话创建社媒创意草稿；公开外发须 Ops 审批。"
 运营社媒草稿,运营社媒草稿
+该站融媒体还没有可发布的社媒账户。,该站融媒体还没有可发布的社媒账户。
 社媒草稿已创建,社媒草稿已创建
+没有可对接的融媒体平台。,没有可对接的融媒体平台。
+可发布,Publishable
+未开放发布,未开放发布
 社媒连接,社媒连接
 社媒账户,"Social Accounts"
 连接社媒账号,连接社媒账号
@@ -203,6 +212,7 @@ grid,grid
 搜索平台,"Search platforms"
 搜索平台名称、编码、状态或授权方式,"Search by name, code, status, or auth mode"
 "运行 fake 浏览器验证","Run fake browser smoke"
+用社媒邮箱注册,用社媒邮箱注册
 添加到当前范围,"Add to current scope"
 未找到匹配平台，请调整关键词。,"No matching platforms. Try another keyword."
 账户列表,"Account List"
@@ -241,7 +251,6 @@ grid,grid
 不在这里保存任何凭据,"No credentials are saved here"
 当前范围,"current scope"
 默认社媒账户,"Default social accounts"
-可发布,Publishable
 仅关系配置,"Relation only"
 暂无账户。,"No accounts."
 保存范围默认社媒,"Save scope default social media"
@@ -296,6 +305,8 @@ grid,grid
 本站企业邮箱未就绪,"Site enterprise mail not ready"
 企业邮箱模块未启用,"Enterprise mail module disabled"
 注册平台时可用此邮箱，方便统一管理。,"Use this mailbox when registering on platforms for easier management."
+已复制社媒邮箱并打开注册页。若页面没有自动填入，请粘贴。,已复制社媒邮箱并打开注册页。若页面没有自动填入，请粘贴。
+已复制社媒邮箱。该平台没有公开注册页，请自行注册并粘贴。,已复制社媒邮箱。该平台没有公开注册页，请自行注册并粘贴。
 官方凭据指南,"Official credentials guide"
 通用步骤,"General steps"
 顶部选好范围类型、站点范围、二级范围。,"Select scope type, website scope, and secondary scope at the top."
@@ -371,6 +382,11 @@ grid,grid
 "密码至少 8 位。","Password must be at least 8 characters."
 重置密码失败,重置密码失败
 社媒邮箱密码已更新，请立即复制保存。,"Social mailbox password updated. Copy and store it now."
+"本站邮局还没有 contact 邮箱，无法确认社媒邮箱能发信。","本站邮局还没有 contact 邮箱，无法确认社媒邮箱能发信。"
+邮箱读写不可用，无法探测社媒邮箱。,邮箱读写不可用，无法探测社媒邮箱。
+社媒邮箱发信失败,社媒邮箱发信失败
+"社媒邮箱已能发给本站 contact，可以拿去注册平台。","社媒邮箱已能发给本站 contact，可以拿去注册平台。"
+"探测信已发出，但 contact 收件箱里还没有。先不要去平台注册。","探测信已发出，但 contact 收件箱里还没有。先不要去平台注册。"
 账户名称不能为空。,"Account name is required."
 "启用社媒账户部件时必须填写公开主页 URL。","Public profile URL is required when enabling the social account widget."
 账户不存在或已删除。,"Account does not exist or has been deleted."

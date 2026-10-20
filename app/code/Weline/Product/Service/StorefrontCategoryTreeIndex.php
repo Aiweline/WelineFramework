@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Product\Service;
 
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
@@ -48,7 +50,7 @@ final class StorefrontCategoryTreeIndex
     {
         $websiteId = max(0, $websiteId);
         $logicalKey = self::logicalCacheKey($websiteId);
-        $locale = $locale !== '' ? $locale : (string)State::getLangLocal();
+        $locale = $locale !== '' ? $locale : (string)WelineEnv::getLangLocal();
 
         /** @var array{by_id: array<int, array<string, mixed>>, by_parent: array<int, list<array<string, mixed>>>, by_path: array<string, int>} $index */
         $index = $this->hotCache->rememberPolicy(

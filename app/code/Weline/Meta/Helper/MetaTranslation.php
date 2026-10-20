@@ -514,7 +514,7 @@ class MetaTranslation
     private static function resolveLocale(?string $locale): string
     {
         if ($locale === null || $locale === '') {
-            return \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
+            return \Weline\Framework\Env\WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
         }
         return $locale;
     }

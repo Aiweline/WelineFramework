@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Service\InlineEdit;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 use Weline\Framework\Context;
 use Weline\Framework\Runtime\RequestContext;
@@ -46,7 +48,7 @@ final class InlineEditLocaleCatalog
 
         $current = '';
         try {
-            $current = \trim(\str_replace('-', '_', (string)State::getLangLocal()));
+            $current = \trim(\str_replace('-', '_', (string)WelineEnv::getLangLocal()));
         } catch (\Throwable) {
             $current = '';
         }

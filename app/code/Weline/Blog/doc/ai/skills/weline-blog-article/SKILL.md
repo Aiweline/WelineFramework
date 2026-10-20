@@ -2,8 +2,9 @@
 name: weline-blog-article
 description: >-
   Weline Blog article methodology. SKIP MCP (content_ops_skills_skip_mcp)—host
-  Read this path + 新建文章.md only; no prepare_project/get_skill. Research-backed
-  posts, provenance images, default-website locales, BlogPostAdminService.
+  Read this path + 新建文章.md only; no prepare_project/get_skill.   Research-backed
+  posts, provenance images, anti-AI-watermark domain-professional prose,
+  default-website locales, BlogPostAdminService.
   HARD on 新建文章/写博客/审查文章/文章可行性/精写文章. Not CMS; not product 详情优化.
 ---
 
@@ -27,18 +28,19 @@ description: >-
 1. **涉及文章必用本技能**：新建/改写/翻译博客正文、审查可行性、把卡片/搜索链改成文章链——先 Read 本文件 + `新建文章.md`。
 2. **长文走 Blog**（`/blog/{slug}`），不走 CMS 可视化页当正文仓。
 3. **写前上网查证**：无权威 URL 不下笔工艺/史实断言；落 `*-sources.md` 或等价来源表。
-4. **配图**：开放许可真图 + provenance；**禁止** AI 纹样冒充实物（馆藏/织样/绣品）。
+4. **配图**：开放许可真图 + provenance；**禁止** AI 纹样冒充实物（馆藏/织样/绣品）。**禁止重图**（篇内 + 全站）：同一文件、去掉 query 后的同一 URL、或同一 source_url 只许出现一次；缩略图、改 alt、换宽高仍算同一张。篇内：封面已经用过的图，正文不得再放；正文多张 figure 也不得彼此重复；没有另一张不同的图时，正文不插图，只留封面。全站：写前扫描该站每篇的封面和正文 `img`，已被任一篇占用的图不得再给另一篇当封面或正文图。相关文章卡片自动带出的是别篇自己的封面，不计入本篇用图。命中重图 → 审查 **不可发**。
 5. **写入**：只经 `BlogPostAdminService`；分类经 `BlogCategoryAdminService`。
 6. **翻译**：默认站 `WebsiteLanguage::getWebsiteLanguageCodes(0)` **全部**语种真译；**禁止启动 Ollama**（除非用户本回合明确要求）。
 7. **改主题部件链接后**：清主题运行时缓存（`ThemeRuntimeCacheCleaner::clearAllThemeRelatedCaches`）+ `server:reload`，否则 FPC/编译模板仍可能出旧链。
+8. **去 AI 水印 · 对口专业（落盘前硬）**：每篇先写明本篇专业身份，再用该行当的判断和术语写完全部语种。清掉套话结构，并清掉零宽字符等不可见标记。口吻不符、套话成篇、或隐藏字符未清 → 审查 **不可发**。细则见 [methodology.md](methodology.md) §3b。
 
 ## Agent 必做（create）
 
 1. **跳过 MCP**；Read [methodology.md](methodology.md) 骨架与落地路径。  
 2. 定 slug / 分类 / 受众；**逐篇 Web 检索**并写来源表。  
-3. 登记配图到 `pub/media/blog/...`（封面+文内 figure+许可）。  
-4. 精写 `zh_Hans_CN` + `en_US`；幂等 seed 入库。  
-5. 导出 en 源 → 其余默认站语种 locale-packs → `upsert-blog-locale-packs.php`。  
+3. 写前盘点该站已有封面与正文图，再登记新图到 `pub/media/blog/...`（封面 + 与封面不同、且全站未用过的文内 figure + 许可）。封面与正文不得共用同一张图，也不得复用别篇已经用过的图。  
+4. 精写 `zh_Hans_CN` + `en_US`；**入库前过 §3b 去 AI 水印**（对口专业口吻 + 无套话结构 + 无不可见字符）；再幂等 seed 入库。  
+5. 导出 en 源 → 其余默认站语种 locale-packs（每语种同样过 §3b，用该语种里的对口专业写法，禁止把中文套话直译）→ `upsert-blog-locale-packs.php`。  
 6. 若有入口部件/Catalog：主链改为 `blog/{slug}`（经 `@url` / `<base>`；勿裸 `/blog/...`，勿 `/search?q=`）。  
 7. UT/契约 + Browser 禁缓存抽验中文+至少一外语；交付 URL；关 Browser；开发日志。
 
@@ -62,7 +64,9 @@ description: >-
 ## 禁止
 
 - 无来源编造非遗/工艺细节  
+- 百科腔、课件腔、套话成篇，或把零宽/隐藏字符写进正文  
 - AI 生成图冒充馆藏/织绣实物  
+- **重图**：同一篇文章把同一张图用两次，或把别篇封面/正文已经用过的图再拿来当本篇封面或正文图  
 - 只译 `en_US` 声称「已翻译」  
 - 文化长文塞 CMS HTML 页  
 - 首页/部件仍链 `/search?q=主题词` 却声称文章已交付  

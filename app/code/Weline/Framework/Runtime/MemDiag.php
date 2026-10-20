@@ -163,8 +163,10 @@ final class MemDiag
             'tpl_view_file_cache' => 0,
             'tpl_static_hook_cache' => 0,
             'om_main_instances' => 0,
-            'om_origin_instances' => 0,
             'om_reflections' => 0,
+            'process_bags' => [],
+            'process_bag_entries' => 0,
+            'process_bag_bytes' => 0,
             'tracked_bytes' => 0,
         ];
         $tracked = 0;
@@ -317,7 +319,6 @@ final class MemDiag
         try {
             $om = \Weline\Framework\Manager\ObjectManager::getRuntimeMemoryDiagnostics(0, false);
             $out['om_main_instances'] = (int)($om['main_instances']['count'] ?? 0);
-            $out['om_origin_instances'] = (int)($om['origin_instances']['count'] ?? 0);
             $out['om_reflections'] = (int)($om['metadata_entries']['reflections'] ?? 0);
             $out['om_method_params'] = (int)($om['metadata_entries']['method_params'] ?? 0);
             $out['om_fiber_instances'] = (int)($om['fiber_instances']['instance_count'] ?? 0);
@@ -326,6 +327,20 @@ final class MemDiag
             $fiberClassCounts = \Weline\Framework\Manager\ObjectManager::countFiberBagClasses();
             $out['om_fiber_class_counts'] = $fiberClassCounts;
             $out['om_fiber_class_unique'] = \count($fiberClassCounts);
+        } catch (\Throwable) {
+        }
+        try {
+            $bagStats = \Weline\Framework\Phrase\DictionaryCacheNamespace::bagStats();
+            $bagEntries = 0;
+            $bagBytes = 0;
+            foreach ($bagStats as $stat) {
+                $bagEntries += (int)($stat['entries'] ?? 0);
+                $bagBytes += (int)($stat['bytes'] ?? 0);
+            }
+            $out['process_bags'] = $bagStats;
+            $out['process_bag_entries'] = $bagEntries;
+            $out['process_bag_bytes'] = $bagBytes;
+            $tracked += $bagBytes;
         } catch (\Throwable) {
         }
         foreach ([

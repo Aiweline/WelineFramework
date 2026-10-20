@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Controller\Backend;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\State;
@@ -77,7 +79,7 @@ final class Catalog extends BackendController
             $context = $this->productAdminRead->creationContext($websiteId);
             $rows = $this->productAdminRead->search($websiteId, $filters);
             $categoryBulkOptions = $this->flattenCategoryTree(
-                $this->categoryAdmin->tree($websiteId, (string)State::getLangLocal()),
+                $this->categoryAdmin->tree($websiteId, (string)WelineEnv::getLangLocal()),
             );
         } catch (\Throwable $exception) {
             $this->request->getResponse()->setCode(503);

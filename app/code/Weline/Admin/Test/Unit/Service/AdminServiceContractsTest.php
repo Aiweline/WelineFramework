@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Test\Unit\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass as ReflectionClass;
 use ReflectionMethod as ReflectionMethod;
@@ -176,7 +178,7 @@ private function assert_MenuRenderServiceCrossLocaleSearch_testRenderMenuSourceD
     }
     self::assertStringNotContainsString('prefetchCrossLocaleMenuWords', $m[1]);
     self::assertStringContainsString('Parser::prefetchWords', $m[1]);
-    self::assertStringContainsString('State::getLangLocal()', $m[1]);
+    self::assertStringContainsString('WelineEnv::getLangLocal()', $m[1]);
     self::assertStringNotContainsString('data-search-text', $m[1]);
 }
 

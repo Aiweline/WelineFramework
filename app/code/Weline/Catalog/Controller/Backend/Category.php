@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Catalog\Controller\Backend;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Acl\Api\Authorization\BackendObjectAuthorizationGuardInterface;
 use Weline\Acl\Api\Authorization\ObjectAction;
 use Weline\Catalog\Service\CatalogHubService;
@@ -367,7 +369,7 @@ final class Category extends BackendController
                 'website_id' => $websiteId,
                 'store_id' => $storeId,
                 'channel_id' => $channelId,
-                'locale' => (string)State::getLangLocal(),
+                'locale' => (string)WelineEnv::getLangLocal(),
             ],
             'error' => '',
         ];
@@ -413,7 +415,7 @@ final class Category extends BackendController
             'website_id' => $websiteId,
             'store_id' => $storeId,
             'channel_id' => $channelId,
-            'locale' => (string)State::getLangLocal(),
+            'locale' => (string)WelineEnv::getLangLocal(),
         ];
     }
 

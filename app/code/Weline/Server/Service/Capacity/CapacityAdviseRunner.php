@@ -7,17 +7,14 @@ use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Memory\HostMemorySampler;
 
 /**
- * Master tick entry: evaluate → sample row → optional w_msg.
- * Must never call scale / mutate Desired.
+ * Master tick entry: evaluate → in-memory sample → optional w_msg.
+ * Must never call scale, mutate Desired, or touch the capacity history file.
  */
 final class CapacityAdviseRunner
 {
-    private static float $lastCleanupAt = 0.0;
-
     public function __construct(
         private readonly CapacityAdvisorConfigService $configService = new CapacityAdvisorConfigService(),
         private readonly CapacityAdvisor $advisor = new CapacityAdvisor(),
-        private readonly CapacitySampleStore $sampleStore = new CapacitySampleStore(),
         private readonly CapacityAdviceNotifier $notifier = new CapacityAdviceNotifier(),
         private readonly ?HostMemorySampler $hostSampler = null,
     ) {
@@ -95,20 +92,6 @@ final class CapacityAdviseRunner
             'intent_reason' => $intent->reason,
             'intent_target' => $intent->target,
         ];
-
-        try {
-            $this->sampleStore->persist($instance !== '' ? $instance : 'default', $sample);
-        } catch (\Throwable $e) {
-            WlsLogger::warning_('[CapacityAdvisor] sample persist failed: ' . $e->getMessage());
-        }
-
-        if (($now - self::$lastCleanupAt) >= 3600.0) {
-            self::$lastCleanupAt = $now;
-            try {
-                $this->sampleStore->cleanup((int)$config['sample_retain_days']);
-            } catch (\Throwable) {
-            }
-        }
 
         $notified = false;
         try {

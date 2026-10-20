@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Service\InlineEdit;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Http\Request;
@@ -192,7 +194,7 @@ final class InlineEditUpdatePageService
             return $localeCode;
         }
         try {
-            $localeCode = \trim((string)State::getLangLocal());
+            $localeCode = \trim((string)WelineEnv::getLangLocal());
         } catch (\Throwable) {
             $localeCode = '';
         }

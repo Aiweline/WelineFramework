@@ -572,11 +572,11 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $layoutTargets = $this->resolveVirtualLayoutTargets($request);
                 // L1 request + process layout_params keys must include lang so
                 // localized widget labels do not bleed across locales.
-                // Prefer path-aware storefront locale (same as WidgetI18n) — State::getLang()
+                // Prefer path-aware storefront locale (same as WidgetI18n) — WelineEnv::getLang()
                 // can lag behind REQUEST_URI under concurrent WLS Fibers.
                 $lang = \Weline\Theme\Helper\WidgetI18n::storefrontLocale();
                 if ($lang === '') {
-                    $lang = class_exists(Cookie::class) ? State::getLang() : 'zh_Hans_CN';
+                    $lang = class_exists(Cookie::class) ? WelineEnv::getLang() : 'zh_Hans_CN';
                 }
                 $paramsCacheKey = "{$configCacheKey}|{$layoutType}|{$layoutOption}|lang:{$lang}";
                 if (!empty($layoutTargets)) {

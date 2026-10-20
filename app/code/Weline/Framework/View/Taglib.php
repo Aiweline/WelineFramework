@@ -584,6 +584,18 @@ class Taglib
      * @param array<string, mixed> $attributes
      * @param array<int, mixed> $tagData
      */
+    /**
+     * 只读转发：供新编译器（v3）复用 URL 家族的编译期烘焙结果。
+     *
+     * 纯新增、无既有行为变更：内部原样调用 `tryBakeUrlFamily()`。
+     * 之所以必须有这一层：`tryBakeUrlFamily()` 是 private，而 v3 不允许复制一份
+     * 烘焙逻辑（会产生两份实现并漂移）。等 P6 迁移完成、旧编译器删除时一并移除。
+     */
+    public function bakeUrlFamily(Template $template, string $method, string $tagKey, array $tagData, array $attributes): ?string
+    {
+        return $this->tryBakeUrlFamily($template, $method, $tagKey, $tagData, $attributes);
+    }
+
     private function tryBakeUrlFamily(
         Template $template,
         string $method,
@@ -736,27 +748,67 @@ class Taglib
 
     /**
      * Whether $offset sits inside an open PHP block (<?php / <?= / <? ... ?>).
+     *
+     * P-1：原实现是 PHP 层逐字节 `while` 循环（实测 32.9 MB/s），且被每个内联标签
+     * 调用两次、每次从 offset 0 重扫，整体 O(k·n)。改为 C 层 strpos 推进后语义等价、
+     * 实测快两个数量级。
+     *
+     * 语义必须与逐字节版**完全一致**，两条边界不能丢：
+     *  1. token 起点 p 只在 `p < $offset && p + 1 < $len` 时才算数（见 $limit）；
+     *  2. 命中 token 后游标跳 p+2，因此 `?<?>` 这类重叠串里，`<?` 会吞掉紧随的 `?`，
+     *     那个 `?>` 不被识别 —— 用 strpos 从 p+2 起搜即可复现该行为。
+     */
+    /**
+     * Whether $offset sits inside an open PHP block (<?php / <?= / <? ... ?>).
+     *
+     * P-1：原实现是 PHP 层逐字节 `while` 循环（实测 32.9 MB/s），且被每个内联标签
+     * 调用两次、每次从 offset 0 重扫，整体 O(k·n)。改为 C 层 strpos 推进后语义等价、
+     * 实测快两个数量级。
+     *
+     * 语义必须与逐字节版**完全一致**，两条边界不能丢：
+     *  1. token 起点 p 只在 `p < $offset && p + 1 < $len` 时才算数（见 $limit）；
+     *  2. 命中 token 后游标跳 p+2，因此 `?<?>` 这类重叠串里，`<?` 会吞掉紧随的 `?`，
+     *     那个 `?>` 不被识别 —— 用 strpos 从 p+2 起搜即可复现该行为。
      */
     private function isOffsetInsidePhp(string $content, int $offset): bool
     {
-        $len = strlen($content);
-        $open = null;
-        $i = 0;
-        while ($i < $offset && $i < $len) {
-            if ($content[$i] === '<' && ($i + 1) < $len && $content[$i + 1] === '?') {
-                $open = $i;
-                $i += 2;
-                continue;
-            }
-            if ($open !== null && $content[$i] === '?' && ($i + 1) < $len && $content[$i + 1] === '>') {
-                $open = null;
-                $i += 2;
-                continue;
-            }
-            $i++;
+        if ($offset <= 0) {
+            return false;
         }
 
-        return $open !== null;
+        $len = strlen($content);
+        // token 起点 p 必须满足 p < $offset 且 p + 1 < $len
+        $limit = min($offset, $len - 1);
+        if ($limit <= 0) {
+            return false;
+        }
+
+        $open = false;
+        $i = 0;
+        while ($i < $limit) {
+            $nextOpen = strpos($content, '<?', $i);
+            $nextClose = $open ? strpos($content, '?>', $i) : false;
+
+            if ($nextOpen !== false && $nextOpen >= $limit) {
+                $nextOpen = false;
+            }
+            if ($nextClose !== false && $nextClose >= $limit) {
+                $nextClose = false;
+            }
+            if ($nextOpen === false && $nextClose === false) {
+                break;
+            }
+
+            if ($nextOpen !== false && ($nextClose === false || $nextOpen < $nextClose)) {
+                $open = true;
+                $i = $nextOpen + 2;
+            } else {
+                $open = false;
+                $i = $nextClose + 2;
+            }
+        }
+
+        return $open;
     }
 
     /**

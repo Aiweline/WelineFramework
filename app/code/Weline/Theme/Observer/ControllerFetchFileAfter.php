@@ -599,7 +599,7 @@ class ControllerFetchFileAfter implements ObserverInterface
             if ($showHeader || $showFooter) {
                 return null;
             }
-            $locale = (string)($template->getData('locale') ?: \Weline\Framework\App\State::getLangLocal() ?: 'zh_Hans_CN');
+            $locale = (string)($template->getData('locale') ?: \Weline\Framework\Env\WelineEnv::getLangLocal() ?: 'zh_Hans_CN');
             $lang = \str_replace('_', '-', $locale);
             $title = (string)($template->getData('title') ?: ($meta['title'] ?? ''));
             if ($title === '') {
@@ -1249,7 +1249,7 @@ HTML;
                 $request = ObjectManager::getInstance(Request::class);
                 \w_log_warning('[AccountSidebar] layout meta sidebar missing before render', [
                     'uri' => (string)($request->getServer('REQUEST_URI') ?? $request->getUri() ?? ''),
-                    'lang' => (string)($request->getServer('WELINE_USER_LANG') ?? ''),
+                    'lang' => \Weline\Framework\Env\WelineEnv::getLang(),
                     'layout_template' => $layoutTemplate,
                     'content_template' => $contentTemplate,
                     'template_id' => \spl_object_id($template),
@@ -1382,9 +1382,9 @@ HTML;
             $context += [
                 'request_id' => (string)(\Weline\Framework\Runtime\RequestContext::getId() ?? ''),
                 'uri' => (string)($request->getServer('REQUEST_URI') ?? $request->getUri() ?? ''),
-                'lang' => (string)\Weline\Framework\App\State::getLang(),
-                'lang_local' => (string)\Weline\Framework\App\State::getLangLocal(),
-                'currency' => (string)\Weline\Framework\App\State::getCurrency(),
+                'lang' => (string)\Weline\Framework\Env\WelineEnv::getLang(),
+                'lang_local' => (string)\Weline\Framework\Env\WelineEnv::getLangLocal(),
+                'currency' => (string)\Weline\Framework\Env\WelineEnv::getCurrency(),
             ];
         } catch (\Throwable) {
         }

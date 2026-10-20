@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\StoreMusic\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
@@ -666,7 +668,7 @@ class StoreMusicSettings
     public static function currentRequestLocale(): string
     {
         try {
-            $locale = trim((string)State::getLangLocal());
+            $locale = trim((string)WelineEnv::getLangLocal());
             if ($locale !== '') {
                 return $locale;
             }
@@ -674,7 +676,7 @@ class StoreMusicSettings
             // Soft.
         }
         try {
-            $lang = trim((string)State::getLang());
+            $lang = trim((string)WelineEnv::getLang());
             if ($lang !== '') {
                 return $lang;
             }

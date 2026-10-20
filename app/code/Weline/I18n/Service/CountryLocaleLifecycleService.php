@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\Env;
 use Weline\Framework\Database\Transaction\Exception\UnsupportedAsyncTransactionConnectionException;
 use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
@@ -86,7 +88,7 @@ class CountryLocaleLifecycleService
             $preferredLocale = $this->choosePreferredLocaleCode(
                 $countryCode,
                 $localeCodes,
-                array_filter([(string)Cookie::getLangLocal()])
+                array_filter([(string)WelineEnv::getLangLocal()])
             );
 
             if (!$preferredLocale) {
@@ -413,7 +415,7 @@ class CountryLocaleLifecycleService
 
         return [
             'locale_code' => $localeCode,
-            'display_name' => $this->resolveLocaleDisplayName($localeCode, Cookie::getLangLocal()),
+            'display_name' => $this->resolveLocaleDisplayName($localeCode, WelineEnv::getLangLocal()),
             'country_code' => $countryCode,
             'is_install' => (int)$locale->getData(Locale::schema_fields_IS_INSTALL),
             'is_active' => (int)$locale->getData(Locale::schema_fields_IS_ACTIVE),
@@ -594,7 +596,7 @@ class CountryLocaleLifecycleService
             }
         }
 
-        return $this->resolveCountryDisplayNameForLocale($countryCode, Cookie::getLangLocal());
+        return $this->resolveCountryDisplayNameForLocale($countryCode, WelineEnv::getLangLocal());
     }
 
     private function resolveCountryDisplayNameForLocale(string $countryCode, string $displayLocaleCode): string
@@ -870,7 +872,7 @@ class CountryLocaleLifecycleService
             return null;
         }
 
-        $currentLocale = $this->normalizeLocaleCode(Cookie::getLangLocal());
+        $currentLocale = $this->normalizeLocaleCode(WelineEnv::getLangLocal());
         $preferredLocaleCodes = array_values(array_unique(array_filter(array_map([$this, 'normalizeLocaleCode'], array_merge([$currentLocale], $preferredLocaleCodes)))));
         foreach ($preferredLocaleCodes as $preferredLocaleCode) {
             if (in_array($preferredLocaleCode, $localeCodes, true)) {
@@ -945,7 +947,7 @@ class CountryLocaleLifecycleService
     private function getFallbackDisplayLocaleCodes(): array
     {
         return array_values(array_unique(array_filter([
-            Cookie::getLangLocal(),
+            WelineEnv::getLangLocal(),
             'en_US',
             'en',
             self::DEFAULT_LOCALE_CODE,

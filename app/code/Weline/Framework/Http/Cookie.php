@@ -81,55 +81,6 @@ class Cookie
         \w_env_set("cookie.{$key}", null);
     }
 
-    /**
-     * @DESC          # 获取语言（已废弃，请使用 State::getLang()）
-     * @deprecated 请使用 \Weline\Framework\App\State::getLang() 替代
-     * 此方法仅用于向后兼容，实际调用 State::getLang()
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 2022/6/24 22:47
-     * 参数区：
-     * @return string
-     */
-    public static function getLang(): string
-    {
-        return \Weline\Framework\App\State::getLang();
-    }
-
-    /**
-     * @DESC          # 获取货币（已废弃，请使用 State::getCurrency()）
-     * @deprecated 请使用 \Weline\Framework\App\State::getCurrency() 替代
-     * 此方法仅用于向后兼容，实际调用 State::getCurrency()
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 2022/6/24 22:47
-     * 参数区：
-     * @return string
-     */
-    public static function getCurrency(): string
-    {
-        return \Weline\Framework\App\State::getCurrency();
-    }
-
-    /**
-     * @DESC          # 获取语言本地化代码（已废弃，请使用 State::getLangLocal()）
-     * @deprecated 请使用 \Weline\Framework\App\State::getLangLocal() 替代
-     * 此方法仅用于向后兼容，实际调用 State::getLangLocal()
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 2022/6/24 22:47
-     * 参数区：
-     * @return string
-     * @throws Null
-     */
-    public static function getLangLocal(): string
-    {
-        return \Weline\Framework\App\State::getLangLocal();
-    }
-
     public static function static_file(): void
     {
         // Inbound Cookie/Authorization are irrelevant for public static assets.

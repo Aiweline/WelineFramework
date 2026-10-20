@@ -259,7 +259,7 @@ class WebsiteData
         $candidates = [];
         $currentLocale = '';
         try {
-            $currentLocale = trim((string)\Weline\Framework\Http\Cookie::getLang());
+            $currentLocale = trim((string)\Weline\Framework\Env\WelineEnv::getLang());
         } catch (\Throwable) {
             $currentLocale = '';
         }
@@ -334,7 +334,7 @@ class WebsiteData
     {
         $locale = '';
         try {
-            $locale = trim((string)\Weline\Framework\Http\Cookie::getLang());
+            $locale = trim((string)\Weline\Framework\Env\WelineEnv::getLang());
         } catch (\Throwable) {
             $locale = '';
         }

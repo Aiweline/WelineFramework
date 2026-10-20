@@ -444,22 +444,9 @@ class StateManager
             \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\App\State::class);
             \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Router\Core::class);
 
-            $instances = \Weline\Framework\Manager\ObjectManager::getInstances();
-            $removeControllers = [];
-            $removeModels = [];
-            $removeObservers = [];
-            foreach ($instances as $class => $instance) {
-                if ($instance instanceof \Weline\Framework\Controller\Core) {
-                    $removeControllers[] = $class;
-                } elseif ($instance instanceof \Weline\Framework\Database\AbstractModel) {
-                    $removeModels[] = $class;
-                } elseif ($instance instanceof \Weline\Framework\Event\ObserverInterface) {
-                    $removeObservers[] = $class;
-                }
-            }
-            foreach (\array_merge($removeControllers, $removeModels, $removeObservers) as $class) {
-                \Weline\Framework\Manager\ObjectManager::removeInstance($class);
-            }
+            \Weline\Framework\Manager\ObjectManager::removeInstancesByTag(\Weline\Framework\Manager\ObjectManager::TAG_CONTROLLER);
+            \Weline\Framework\Manager\ObjectManager::removeInstancesByTag(\Weline\Framework\Manager\ObjectManager::TAG_MODEL);
+            \Weline\Framework\Manager\ObjectManager::removeInstancesByTag(\Weline\Framework\Manager\ObjectManager::TAG_OBSERVER);
         } catch (\Throwable $e) {
             RequestResetException::append($failures, 'object_manager_entry_baseline', $e);
         }
@@ -482,8 +469,9 @@ class StateManager
 
         try {
             if (\class_exists(\Weline\Framework\Event\EventsManager::class, false)) {
-                $instances = \Weline\Framework\Manager\ObjectManager::getInstances();
-                $eventsManager = $instances[\Weline\Framework\Event\EventsManager::class] ?? null;
+                $eventsManager = \Weline\Framework\Manager\ObjectManager::_getInstance(
+                    \Weline\Framework\Event\EventsManager::class
+                );
                 if ($eventsManager) {
                     if (\method_exists($eventsManager, 'resetRequestState')) {
                         $eventsManager->resetRequestState();
@@ -796,12 +784,7 @@ class StateManager
         //       于是 isPost() 返回 false → "无效的请求方法"。
         // 解决：每次请求开始时清理控制器缓存，确保 __init() 重新执行获取最新 Request。
         self::registerResetCallback('controller_instances', function () {
-            $instances = \Weline\Framework\Manager\ObjectManager::getInstances();
-            foreach ($instances as $class => $instance) {
-                if ($instance instanceof \Weline\Framework\Controller\Core) {
-                    \Weline\Framework\Manager\ObjectManager::removeInstance($class);
-                }
-            }
+            \Weline\Framework\Manager\ObjectManager::removeInstancesByTag(\Weline\Framework\Manager\ObjectManager::TAG_CONTROLLER);
         });
         
         // ========== 5.5 模型实例清理 ==========
@@ -813,12 +796,7 @@ class StateManager
         //       导致新增变成更新，或 unique constraint violation。
         // 解决：每次请求结束时清理所有 AbstractModel 子类的缓存实例。
         self::registerResetCallback('model_instances', function () {
-            $instances = \Weline\Framework\Manager\ObjectManager::getInstances();
-            foreach ($instances as $class => $instance) {
-                if ($instance instanceof \Weline\Framework\Database\AbstractModel) {
-                    \Weline\Framework\Manager\ObjectManager::removeInstance($class);
-                }
-            }
+            \Weline\Framework\Manager\ObjectManager::removeInstancesByTag(\Weline\Framework\Manager\ObjectManager::TAG_MODEL);
         });
         
         // ========== 5.6 Request 实例清理 ==========
@@ -839,12 +817,7 @@ class StateManager
         // 解决：每次请求结束时清理所有 ObserverInterface 实现类的缓存实例，
         //       确保下次请求重新创建 Observer 并注入最新的 Request。
         self::registerResetCallback('observer_instances', function () {
-            $instances = \Weline\Framework\Manager\ObjectManager::getInstances();
-            foreach ($instances as $class => $instance) {
-                if ($instance instanceof \Weline\Framework\Event\ObserverInterface) {
-                    \Weline\Framework\Manager\ObjectManager::removeInstance($class);
-                }
-            }
+            \Weline\Framework\Manager\ObjectManager::removeInstancesByTag(\Weline\Framework\Manager\ObjectManager::TAG_OBSERVER);
         });
         
         // ========== 5.8 Router 实例清理 ==========
@@ -898,8 +871,7 @@ class StateManager
             if (!\class_exists(\Weline\Framework\Event\EventsManager::class, false)) {
                 return;
             }
-            $instances = \Weline\Framework\Manager\ObjectManager::getInstances();
-            $eventsManager = $instances[\Weline\Framework\Event\EventsManager::class] ?? null;
+            $eventsManager = \Weline\Framework\Manager\ObjectManager::_getInstance(\Weline\Framework\Event\EventsManager::class);
             if (!$eventsManager) {
                 return;
             }
@@ -940,7 +912,7 @@ class StateManager
         // ========== 20. ObjectManager 缓存污染 ==========
 
         // ObjectManager 的某些缓存是进程级的（reflections, methodParamsMetadata 等），
-        // 但 $instances 和 $origin_instances 必须在每个请求后清理特定的请求级实例
+        // 但 $instances 必须在每个请求后清理特定的请求级实例
         // 这个已经通过各个 removeInstance 回调处理了，不需要额外重置
 
         // ========== 21. SSE 上下文状态污染 ==========

@@ -6560,7 +6560,7 @@ HTML;
             namespace: 'theme.' . $editorArea,
             configKey: 'layouts.' . $layoutType . '.value',
             scope: $effectiveScope,
-            locale: Cookie::getLang() ?? 'zh_Hans_CN',
+            locale: WelineEnv::getLang() ?? 'zh_Hans_CN',
             identifyId: (string)$theme->getId(),
         ))?->value;
     }
@@ -6807,7 +6807,7 @@ HTML;
      */
     private function getInstalledLocalesPayload(?array $scopeIdentity = null): array
     {
-        $displayLocale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
+        $displayLocale = \Weline\Framework\Env\WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
         $websiteId = $this->resolveEditorWebsiteId($scopeIdentity);
         $websiteDefaultLocale = $this->resolveEditorWebsiteDefaultLocale($scopeIdentity);
 

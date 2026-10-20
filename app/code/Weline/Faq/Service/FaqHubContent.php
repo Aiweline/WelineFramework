@@ -39,9 +39,9 @@ final class FaqHubContent
         $locale = '';
         try {
             if (class_exists(\Weline\Framework\App\State::class)) {
-                $locale = trim((string)\Weline\Framework\App\State::getLangLocal());
+                $locale = trim((string)\Weline\Framework\Env\WelineEnv::getLangLocal());
                 if ($locale === '') {
-                    $locale = trim((string)\Weline\Framework\App\State::getLang());
+                    $locale = trim((string)\Weline\Framework\Env\WelineEnv::getLang());
                 }
             }
         } catch (\Throwable) {

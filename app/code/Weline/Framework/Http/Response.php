@@ -668,7 +668,7 @@ class Response implements ResponseInterface, RequestLocalInterface
         }
 
         try {
-            $lang = \trim((string)State::getLang());
+            $lang = \trim((string)WelineEnv::getLang());
             if ($lang !== '') {
                 return $lang;
             }

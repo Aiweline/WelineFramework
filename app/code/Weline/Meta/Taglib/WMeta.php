@@ -115,7 +115,7 @@ class WMeta implements TaglibInterface
             }
 
             // 获取当前语言
-            $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
+            $locale = \Weline\Framework\Env\WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
 
             // 构建带 scope 的 meta key（用于存储和读取）
             if ($isPhpScope) {
@@ -132,7 +132,7 @@ class WMeta implements TaglibInterface
                 $escapedContent = addcslashes($content, "\\'");
                 $translationPhpCode = <<<PHP
 <?php
-\$locale = \\Weline\\Framework\\Http\\Cookie::getLangLocal() ?? 'zh_Hans_CN';
+\$locale = \\Weline\\Framework\\Env\\WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
 \$scope = {$scopePhpCode};
 \$metaKeyWithScope = \$metaKey . (\$scope !== 'default' ? '|scope:' . \$scope : '');
 \$translation = \\Weline\\Meta\\Helper\\MetaTranslation::getTranslatedValueWithScope(

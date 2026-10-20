@@ -6,8 +6,10 @@ namespace Weline\Ops\Extends\Module\Weline_Ai\Agent;
 
 use Weline\Ai\Api\AgentInterface;
 use Weline\Ai\Api\AgentResult;
+use Weline\Ai\Api\AgentSkillBindingInterface;
 use Weline\Ai\Api\AiModel;
 use Weline\Ai\Api\ToolInterface;
+use Weline\Ai\Extends\Module\Weline_Ai\Skill\OpsSocialScopeSkillProvider;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Ops\Service\OpsDispatchService;
 use Weline\Ops\Service\OpsPersonaService;
@@ -17,7 +19,7 @@ use Weline\Ops\Service\OpsWebsiteContextReader;
 /**
  * 网站 AI 运营调度智能体：画像 + 同步受理配置并异步派工。
  */
-class WebsiteOpsAgent implements AgentInterface
+class WebsiteOpsAgent implements AgentInterface, AgentSkillBindingInterface
 {
     public function getCode(): string
     {
@@ -56,6 +58,11 @@ class WebsiteOpsAgent implements AgentInterface
         );
     }
 
+    public function getDefaultSkillCodes(): array
+    {
+        return [OpsSocialScopeSkillProvider::CODE];
+    }
+
     public function getSystemPrompt(array $context = []): string
     {
         $websiteId = (int)($context['website_id'] ?? 0);
@@ -63,6 +70,7 @@ class WebsiteOpsAgent implements AgentInterface
         return <<<PROMPT
 You are the Weline website operations dispatcher agent.
 Website id: {$websiteId}
+Locked skill: ops-social-scope
 
 Rules:
 1. Call get_website_ops_context first when refreshing persona.
@@ -70,7 +78,7 @@ Rules:
 3. Call save_website_ops_persona with structured fields when asked for persona.
 4. When the user submits ops config, call accept_ops_dispatch_config (lanes content/social).
 5. Do not publish blog or social content yourself.
-6. Do not invent GSC or social credentials.
+6. Do not invent GSC credentials or social platforms. Social platforms for this website are only the accounts already bound in 融媒体.
 PROMPT;
     }
 

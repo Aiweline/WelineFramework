@@ -449,6 +449,8 @@ class FiberScheduler
             return;
         }
 
+        \Weline\Server\Service\WorkerMemoryExhaustionResponder::activateFiber($fiber);
+
         try {
             if ($ioTiming === null) {
                 if ($beforeResume !== null) {

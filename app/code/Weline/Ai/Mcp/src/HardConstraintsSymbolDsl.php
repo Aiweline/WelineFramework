@@ -16,8 +16,8 @@ final class HardConstraintsSymbolDsl
 
     public const GLOSS_MAX = 64;
 
-    /** Raised 8200→8600 with user_utterance_commit_ships_dev_and_sites hot entry (2026-10-20). */
-    public const PACKAGE_TOKEN_BUDGET = 8600;
+    /** Raised 9200→9400 when browser_tab_group_identity entered the hot package (2026-10-20). */
+    public const PACKAGE_TOKEN_BUDGET = 9400;
 
     public const EXPAND_IDS_MAX = 20;
 
@@ -174,6 +174,12 @@ final class HardConstraintsSymbolDsl
             'Curl5' => ['gloss_zh' => '打开前curl --max-time 5探活', 'rule_ids' => ['browser_operator_fail_closed_release']],
             'Hang' => ['gloss_zh' => 'Browser超时/无tab/锁死', 'rule_ids' => ['browser_operator_fail_closed_release']],
             'HangRelease' => ['gloss_zh' => 'Browser卡住立即unlock+关验收签', 'rule_ids' => ['browser_operator_fail_closed_release']],
+            'ExtBr' => ['gloss_zh' => '用户Chrome上的一次外部操作', 'rule_ids' => ['browser_tab_group_identity']],
+            'TabGrp' => ['gloss_zh' => '本功能可见标签组且标题即身份', 'rule_ids' => ['browser_tab_group_identity']],
+            'InGrp' => ['gloss_zh' => '只操作该组内的页', 'rule_ids' => ['browser_tab_group_identity']],
+            'BrDone' => ['gloss_zh' => '该功能浏览器操作收口', 'rule_ids' => ['browser_tab_group_identity']],
+            'DropGrp' => ['gloss_zh' => '删除该标签组及其标签', 'rule_ids' => ['browser_tab_group_identity']],
+            'BrOp' => ['gloss_zh' => '导航、点击或填写', 'rule_ids' => ['browser_tab_group_identity']],
             'Accept' => [
                 'gloss_zh' => '本机验收证据已齐',
                 'rule_ids' => [
@@ -305,7 +311,48 @@ final class HardConstraintsSymbolDsl
             ],
             'Negate' => [
                 'gloss_zh' => '别/不要/先别/不用等否定',
-                'rule_ids' => ['user_utterance_commit_ships_dev_and_sites'],
+                'rule_ids' => [
+                    'user_utterance_commit_ships_dev_and_sites',
+                    'user_utterance_publish_branch_to_sites',
+                ],
+            ],
+            'SayShip' => [
+                'gloss_zh' => '口令「提交」或「发布」',
+                'rule_ids' => [
+                    'user_utterance_commit_ships_dev_and_sites',
+                    'user_utterance_publish_branch_to_sites',
+                    'concurrent_session_commit_hygiene',
+                ],
+            ],
+            'SayPublish' => [
+                'gloss_zh' => '口令「发布」且不是发布主题',
+                'rule_ids' => ['user_utterance_publish_branch_to_sites'],
+            ],
+            'CommitByFn' => [
+                'gloss_zh' => '按功能分别提交全部非忽略变更',
+                'rule_ids' => [
+                    'user_utterance_publish_branch_to_sites',
+                    'concurrent_session_commit_hygiene',
+                ],
+            ],
+            'PubBranch' => [
+                'gloss_zh' => '默认当前分支；指定则用该分支',
+                'rule_ids' => ['user_utterance_publish_branch_to_sites'],
+            ],
+            'PushTip' => [
+                'gloss_zh' => '将该分支最新提交推两远程',
+                'rule_ids' => ['user_utterance_publish_branch_to_sites'],
+            ],
+            'E2ePass' => [
+                'gloss_zh' => '上生产前购物通路e2e全PASS',
+                'rule_ids' => [
+                    'user_utterance_publish_branch_to_sites',
+                    'full_release_requires_commerce_pathway_e2e',
+                ],
+            ],
+            'SitePipe' => [
+                'gloss_zh' => '有服务器的站做核心更新后系统更新再主题更新',
+                'rule_ids' => ['user_utterance_publish_branch_to_sites'],
             ],
             'CommitAll' => [
                 'gloss_zh' => '一次提交全部非忽略工作区变更',
@@ -327,7 +374,7 @@ final class HardConstraintsSymbolDsl
                 'rule_ids' => ['user_utterance_commit_ships_dev_and_sites'],
             ],
             'ThemeUpd' => [
-                'gloss_zh' => '用户口令主题更新/更新某主题',
+                'gloss_zh' => '用户口令主题更新/更新某主题/发布主题/发布某主题',
                 'rule_ids' => ['theme_update_matches_site_cabinet'],
             ],
             'CabMatch' => [
@@ -336,11 +383,42 @@ final class HardConstraintsSymbolDsl
             ],
             'ThemeCopy' => [
                 'gloss_zh' => '无--delete地把该主题目录拷到匹配应用根',
-                'rule_ids' => ['theme_update_matches_site_cabinet'],
+                'rule_ids' => [
+                    'theme_update_matches_site_cabinet',
+                    'user_utterance_publish_branch_to_sites',
+                ],
             ],
             'ThemeUpg' => [
                 'gloss_zh' => '目标机系统更新后theme:upgrade该主题',
                 'rule_ids' => ['theme_update_matches_site_cabinet'],
+            ],
+            'SocReg' => [
+                'gloss_zh' => '融媒体平台开号',
+                'rule_ids' => ['social_scope_mailbox_for_platform_register'],
+            ],
+            'SiteMb' => [
+                'gloss_zh' => '本站社媒专用邮箱',
+                'rule_ids' => ['social_scope_mailbox_for_platform_register'],
+            ],
+            'SocSkill' => [
+                'gloss_zh' => '融媒体注册技能',
+                'rule_ids' => ['social_scope_mailbox_for_platform_register'],
+            ],
+            'MediaAsk' => [
+                'gloss_zh' => '社媒/平台口令',
+                'rule_ids' => ['social_scope_mailbox_for_platform_register'],
+            ],
+            'MbProbe' => [
+                'gloss_zh' => '社媒邮箱发给contact已确认',
+                'rule_ids' => ['social_scope_mailbox_for_platform_register'],
+            ],
+            'MailDom' => [
+                'gloss_zh' => '本站邮局已开通',
+                'rule_ids' => ['social_scope_mailbox_for_platform_register'],
+            ],
+            'LiveCab' => [
+                'gloss_zh' => '站柜有server.md且官网源站可通',
+                'rule_ids' => ['social_scope_mailbox_for_platform_register'],
             ],
         ];
     }
@@ -391,6 +469,11 @@ final class HardConstraintsSymbolDsl
             'requirement_acceptance_always' => [
                 'formula' => 'Eng→(ReportDone→□Accept)∧(¬Accept→¬ReportDone)',
                 'gloss_zh' => '未测禁报完成；Accept≻Brief；Web须真机WB-OP',
+                'cluster' => '§✓',
+            ],
+            'browser_tab_group_identity' => [
+                'formula' => 'ExtBr→□(TabGrp∧InGrp)∧(BrDone→□DropGrp)|(¬TabGrp→⊥BrOp)',
+                'gloss_zh' => '外部Chrome按功能开标签组，只组内操作，收口删组',
                 'cluster' => '§✓',
             ],
             'browser_operator_self_test' => [
@@ -553,9 +636,14 @@ final class HardConstraintsSymbolDsl
                 'gloss_zh' => '口令「提交」：全量提交、推dev两仓、各生产站核心/系统/主题更新',
                 'cluster' => '§P',
             ],
+            'user_utterance_publish_branch_to_sites' => [
+                'formula' => 'SayPublish∧¬Negate∧¬ThemeUpd→□(CommitByFn∧PushTip∧E2ePass∧SitePipe∧ThemeCopy)',
+                'gloss_zh' => '口令「发布」：按功能提交、推两仓，有服务器的站核心/系统/主题更新并发布主题',
+                'cluster' => '§P',
+            ],
             'concurrent_session_commit_hygiene' => [
-                'formula' => '¬SayCommit→□SelectiveStage|(SayCommit→□CommitAll)',
-                'gloss_zh' => '非提交口令只暂存声明路径；口令提交才全量提交',
+                'formula' => '¬SayShip→□SelectiveStage|(SayCommit→□CommitAll)|(SayPublish→□CommitByFn)',
+                'gloss_zh' => '非提交且非发布只暂存声明路径；发布按功能提交',
                 'cluster' => '§P',
             ],
             'host_editor_rules_mcp_generated_only' => [
@@ -610,7 +698,12 @@ final class HardConstraintsSymbolDsl
             ],
             'theme_update_matches_site_cabinet' => [
                 'formula' => 'ThemeUpd→□(CabMatch∧ThemeCopy∧ThemeUpg)∧(¬CabMatch→⊥ThemeCopy)',
-                'gloss_zh' => '主题更新须柜卡唯一匹配后拷贝并升级；对不上禁拷',
+                'gloss_zh' => '主题更新/发布主题须柜卡唯一匹配后拷贝并升级；对不上禁拷',
+                'cluster' => '§P',
+            ],
+            'social_scope_mailbox_for_platform_register' => [
+                'formula' => 'MediaAsk→□SocSkill|SocReg→□(LiveCab∧MbProbe)|(¬LiveCab→⊥)',
+                'gloss_zh' => '注册须站柜已上线且官网可通；未上线禁开号',
                 'cluster' => '§P',
             ],
         ];

@@ -25,6 +25,8 @@ final class RuntimeNamespaceInvalidationPublisher implements RuntimeNamespaceInv
         string $requestId = ''
     ): array {
         if (!$this->publisherEnabled()) {
+            $this->dispatch->observeAuthorityClock($authorityClock, $instanceName);
+
             return [
                 'success' => true,
                 'completed' => false,

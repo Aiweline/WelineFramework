@@ -21,7 +21,6 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
-use Weline\Framework\Http\RedirectException;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\ResponseTerminateException;
@@ -327,19 +326,36 @@ class App
             'context_server_keys' => \count($server),
             'origin' => TraceGate::isArmed() ? self::parsedUrlOriginProfile($parse['server']) : [],
         ]);
-        $rawRequestUri = Url::decode_url($this->normalizeParsedUri(
-            $_SERVER['WELINE_ORIGIN_REQUEST_URI']
-            ?? $server['WELINE_ORIGIN_REQUEST_URI']
-            ?? $_SERVER['REQUEST_URI']
-            ?? $server['REQUEST_URI']
-            ?? $this->getCurrentRequestUri()
+        // Prefer the visitor-facing pretty path for localization. ORIGIN / REQUEST_URI
+        // may already be peeled to /journal after detectLanguage; VISITOR keeps /en_US/journal.
+        // Keep that visitor URI intact for synchronize / redirect / ORIGIN identity.
+        // Url::decode_url (SEO rewrite) may return a controller path without the
+        // locale segment (e.g. /en_US/contact → /contact); feeding that into
+        // synchronizeParsedLocalization would wipe path language back to the
+        // website default. Routing still uses decode via parse['uri'] / REQUEST_URI.
+        $visitorLocalizationUri = \trim((string)(
+            $_SERVER['WELINE_VISITOR_REQUEST_URI']
+            ?? $server['WELINE_VISITOR_REQUEST_URI']
+            ?? WelineEnv::server('WELINE_VISITOR_REQUEST_URI', '')
+            ?: ''
         ));
-        if ($rawRequestUri === '') {
-            $rawRequestUri = '/';
+        if ($visitorLocalizationUri === '') {
+            $visitorLocalizationUri = \trim((string)(
+                $_SERVER['WELINE_ORIGIN_REQUEST_URI']
+                ?? $server['WELINE_ORIGIN_REQUEST_URI']
+                ?? $_SERVER['REQUEST_URI']
+                ?? $server['REQUEST_URI']
+                ?? $this->getCurrentRequestUri()
+            ));
         }
-        if (!\str_starts_with($rawRequestUri, '/')) {
-            $rawRequestUri = '/' . $rawRequestUri;
+        $visitorLocalizationUri = $this->normalizeParsedUri($visitorLocalizationUri);
+        if ($visitorLocalizationUri === '') {
+            $visitorLocalizationUri = '/';
         }
+        if (!\str_starts_with($visitorLocalizationUri, '/')) {
+            $visitorLocalizationUri = '/' . $visitorLocalizationUri;
+        }
+        $rawRequestUri = $visitorLocalizationUri;
         $markApplyUrlStep('raw_request_uri');
 
         $area = (string)($parse['area'] ?? $parse['server']['WELINE_AREA'] ?? $server['WELINE_AREA'] ?? '');
@@ -590,134 +606,13 @@ class App
     }
 
     /**
-     * Path-first: strip website-default language/currency segments and
-     * Website-disallowed path languages from the visitor-facing storefront
-     * URL (301). Non-default enabled segments stay; backend area prefixes stay.
+     * Language and currency on the visitor URL are not 301 targets.
+     * The path segments are the language and currency. Do not send the visitor
+     * to a shorter path or to English.
      */
     private function redirectDefaultLocalizationPrefixIfNeeded(string $rawRequestUri, array $parse = []): void
     {
-        $method = \strtoupper(\trim((string)(WelineEnv::server('REQUEST_METHOD', 'GET') ?: 'GET')));
-        if ($method !== '' && !\in_array($method, ['GET', 'HEAD'], true)) {
-            return;
-        }
-        if (WelineEnv::get('is_static_file', false)) {
-            return;
-        }
-
-        // Authoritative site defaults only. Never preferredLanguageCodes /
-        // resolveWebsiteDefaultLanguage() — those can surface en_US and strip
-        // a legitimate non-default /en_US/ prefix.
-        // Empty defaults still allow canonicalize to 301-strip unenabled path
-        // languages (valid shape, not Website-allowed).
-        $website = \is_array($parse['website'] ?? null) ? $parse['website'] : [];
-        $parseServer = \is_array($parse['server'] ?? null) ? $parse['server'] : [];
-        $defaultLanguage = \trim((string)(
-            WelineEnv::get('website.language', '')
-            ?: WelineEnv::server('WELINE_WEBSITE_LANGUAGE', '')
-            ?: ($parseServer['WELINE_WEBSITE_LANGUAGE'] ?? '')
-            ?: ($website['default_language'] ?? '')
-        ));
-        $defaultCurrency = \trim((string)(
-            WelineEnv::get('website.currency', '')
-            ?: WelineEnv::server('WELINE_WEBSITE_CURRENCY', '')
-            ?: ($parseServer['WELINE_WEBSITE_CURRENCY'] ?? '')
-            ?: ($website['default_currency'] ?? '')
-        ));
-
-        $query = (string)(\parse_url($rawRequestUri, \PHP_URL_QUERY) ?: '');
-        $websiteUrl = \trim((string)WelineEnv::get('website_url', ''));
-
-        // Same peel as synchronizeParsedLocalization: analyze routing path, but
-        // rebuild the visitor-facing target under /~preview/{token}/ when origin
-        // was live-preview mounted (visible URLs must not stack /~site).
-        $originPath = (string)(\parse_url($rawRequestUri, \PHP_URL_PATH) ?: '/');
-        $routingPath = $originPath;
-        $livePreviewMount = '';
-        try {
-            $normalized = Url::normalizeVisitorUri($rawRequestUri);
-            $routingCandidate = \trim((string)($normalized['routing_uri'] ?? ''));
-            if ($routingCandidate !== '') {
-                $routingPath = (string)(\parse_url($routingCandidate, \PHP_URL_PATH) ?: $routingPath);
-            }
-            $originCandidate = \trim((string)($normalized['origin_uri'] ?? $rawRequestUri));
-            $originPath = (string)(\parse_url($originCandidate, \PHP_URL_PATH) ?: $originPath);
-            $livePreviewMount = self::extractLivePreviewPathMount($originPath);
-        } catch (\Throwable) {
-            $livePreviewMount = self::extractLivePreviewPathMount($originPath);
-        }
-
-        $relative = State::stripWebsitePathPrefix($routingPath, $websiteUrl);
-        $canonicalRelative = State::canonicalizeStorefrontLocalizationPath(
-            $relative,
-            $defaultLanguage,
-            $defaultCurrency,
-        );
-        if ($canonicalRelative === null) {
-            return;
-        }
-
-        if ($livePreviewMount !== '') {
-            $targetPath = $canonicalRelative === '/'
-                ? $livePreviewMount
-                : $livePreviewMount . $canonicalRelative;
-        } else {
-            $mount = '';
-            if ($websiteUrl !== '') {
-                try {
-                    $mount = \trim((string)(\parse_url($websiteUrl, \PHP_URL_PATH) ?: ''), '/');
-                } catch (\ValueError) {
-                    $mount = '';
-                }
-            }
-            if ($mount !== '') {
-                $targetPath = $canonicalRelative === '/'
-                    ? '/' . $mount
-                    : '/' . $mount . $canonicalRelative;
-            } else {
-                $targetPath = $canonicalRelative;
-            }
-        }
-        $target = $targetPath . ($query !== '' ? '?' . $query : '');
-
-        // Identity guard: never 301 to the same visitor path (duplicate
-        // default-currency segments or mount remount bugs must not loop).
-        $currentPath = $originPath === '' ? '/' : $originPath;
-        if ($targetPath === $currentPath
-            || $target === $rawRequestUri
-            || \rtrim($targetPath, '/') === \rtrim($currentPath, '/')
-        ) {
-            return;
-        }
-
-        throw new RedirectException($target, 301);
-    }
-
-    /**
-     * Visitor-facing live-preview mount (/~preview/{token}) when present.
-     * Token format is owned by Theme; Framework only recognizes the shared path
-     * namespace already used by FPC bypass rules.
-     */
-    private static function extractLivePreviewPathMount(string $path): string
-    {
-        $path = '/' . \trim(\str_replace('\\', '/', $path), '/');
-        if ($path === '//') {
-            $path = '/';
-        }
-        if ($path !== '/~preview' && !\str_starts_with($path, '/~preview/')) {
-            return '';
-        }
-        $after = $path === '/~preview' ? '' : \substr($path, \strlen('/~preview'));
-        $after = \ltrim((string)$after, '/');
-        if ($after === '') {
-            return '';
-        }
-        $token = \explode('/', $after, 2)[0];
-        $token = \trim((string)$token);
-        if ($token === '' || !\str_starts_with($token, 'pv_')) {
-            return '';
-        }
-
-        return '/~preview/' . $token;
+        unset($rawRequestUri, $parse);
     }
 
     /**
@@ -767,6 +662,8 @@ class App
         $pathLocalization = State::resolveLocalizationFromPathSegments($segments);
 
         $pathCurrency = \strtoupper(\trim((string)($pathLocalization['currency'] ?? '')));
+        $pathCurrencyRejected = false;
+        $rejectedPathCurrency = '';
         $area = (string)(
             ($parse['area'] ?? '')
             ?: ($parse['server']['WELINE_AREA'] ?? '')
@@ -776,15 +673,32 @@ class App
 
         $pathLanguage = \str_replace('-', '_', \trim((string)($pathLocalization['language'] ?? '')));
         $pathLanguageRejected = false;
+        $rejectedPathLanguage = '';
         if ($pathLanguage !== '') {
             $pathLanguageAllowed = $isBackendArea
                 ? State::isLanguageCodeShape($pathLanguage)
                 : State::isAllowedLanguageCode($pathLanguage);
             if (!$pathLanguageAllowed) {
                 $pathLanguageRejected = true;
+                $rejectedPathLanguage = $pathLanguage;
                 $pathLanguage = '';
             }
         }
+        if ($pathLanguageRejected && !$isBackendArea && $rejectedPathLanguage !== '') {
+            RequestContext::set('route.rejected_path_language', $rejectedPathLanguage);
+        } else {
+            RequestContext::set('route.rejected_path_language', '');
+        }
+        if (!$isBackendArea && $pathCurrency !== '' && !State::isAllowedCurrencyCode($pathCurrency)) {
+            // Unsupported currency stays on the URL. Page prices use the website default.
+            $pathCurrencyRejected = true;
+            $rejectedPathCurrency = $pathCurrency;
+            $pathCurrency = '';
+        }
+        RequestContext::set(
+            'route.rejected_path_currency',
+            $pathCurrencyRejected ? $rejectedPathCurrency : ''
+        );
         if ($pathLanguageRejected) {
             // Rejected path locale must not linger as PATH_LANG memory (fake prefix).
             unset($parse['server']['WELINE_URL_PATH_LANG']);
@@ -805,8 +719,9 @@ class App
         if ($effectiveCurrency === '') {
             $effectiveCurrency = \strtoupper(\trim((string)WelineEnv::get('user.currency', '')));
         }
-        if ($pathCurrency === ''
-            && ($effectiveCurrency === '' || !State::isAllowedCurrencyCode($effectiveCurrency))
+        if ($pathCurrencyRejected
+            || ($pathCurrency === ''
+                && ($effectiveCurrency === '' || !State::isAllowedCurrencyCode($effectiveCurrency)))
         ) {
             $effectiveCurrency = State::resolveWebsiteDefaultCurrency();
         }
@@ -824,9 +739,9 @@ class App
             // Independent of the website storefront default.
             $effectiveLanguage = State::resolveBackendEffectiveDefaultLanguage();
         } else {
-            // Unprefixed storefront URLs are the website default language.
-            // Cookie/en residual must not render a non-default locale into an
-            // unprefixed path (FPC keys the same entry as default language).
+            // Unprefixed storefront URLs: always re-fill from Website default data.
+            // Never keep the previous Fiber/request route.language (Worker leftover),
+            // Cookie residual, or a hardcoded zh_Hans_CN bootstrap.
             $effectiveLanguage = State::resolveWebsiteDefaultLanguage();
         }
         if ($isBackendArea) {
@@ -841,7 +756,8 @@ class App
         $parse['language'] = $effectiveLanguage;
         $parse['server']['WELINE_USER_CURRENCY'] = $effectiveCurrency;
         $parse['server']['WELINE_USER_LANG'] = $effectiveLanguage;
-        // Canonical write: RequestContext route.* is the sole post-parse authority.
+        // Canonical write: overwrite RequestContext every request — path language or
+        // Website default. Leftover route.language from the prior request must not win.
         RequestContext::setWelineUserCurrency($effectiveCurrency);
         RequestContext::setWelineUserLang($effectiveLanguage);
         State::resetLangLocalCache();

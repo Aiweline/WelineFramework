@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Promotion\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\DateTime\Timezone;
 use Weline\Framework\Http\Cookie;
@@ -905,7 +907,7 @@ final class PromotionActivityThemeService
             return;
         }
 
-        $locale = trim((string)(Cookie::getLangLocal() ?: Cookie::getLang() ?: 'zh_Hans_CN'));
+        $locale = trim((string)(WelineEnv::getLangLocal() ?: WelineEnv::getLang() ?: 'zh_Hans_CN'));
         $local = clone $this->themeLocal;
         $local->clear()
             ->where(PromotionActivityThemeLocal::schema_fields_ID, $themeId)
@@ -939,7 +941,7 @@ final class PromotionActivityThemeService
     /** @param array<string, mixed> $fallback */
     private function resolveLocalizedCopy(int $themeId, array $fallback): array
     {
-        $locale = trim((string)(Cookie::getLangLocal() ?: Cookie::getLang() ?: 'zh_Hans_CN'));
+        $locale = trim((string)(WelineEnv::getLangLocal() ?: WelineEnv::getLang() ?: 'zh_Hans_CN'));
         $local = clone $this->themeLocal;
         $local->clear()
             ->where(PromotionActivityThemeLocal::schema_fields_ID, $themeId)

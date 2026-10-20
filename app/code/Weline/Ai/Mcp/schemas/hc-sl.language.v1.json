@@ -24,7 +24,7 @@
   "caps": {
     "formula_max": 80,
     "gloss_zh_max": 64,
-    "package_token_budget": 8600,
+    "package_token_budget": 8800,
     "expand_ids_max": 20
   },
   "atom": {

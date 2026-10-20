@@ -1,6 +1,7 @@
 ﻿企业邮箱邮件已发送,"Work mailbox email sent"
 "后台代发或鉴权发信成功后派发；可携带 source / source_id 供业务闭环。","Dispatched after admin proxy or auth send succeeds; may carry source / source_id for business closure."
 "Mail 查询器不支持的操作：%{1}","Mail query does not support operation: %{1}"
+"社媒专用邮箱 %{1}@ 由融媒体开通，会出现在账户列表里，系统生成，不能在这里手工新建或删除。","社媒专用邮箱 %{1}@ 由融媒体开通，会出现在账户列表里，系统生成，不能在这里手工新建或删除。"
 "系统账号 %{1}@ 由启用域名 / Smtp 自动创建，不能手工开通；列表中已标记为系统账号，不可删改。","系统账号 %{1}@ 由启用域名 / Smtp 自动创建，不能手工开通；列表中已标记为系统账号，不可删改。"
 失败,失败
 密码（仅一次）：%{1},密码（仅一次）：%{1}
@@ -240,6 +241,7 @@ composer,composer
 按业务来源加载企业邮箱沟通线程,"Load business-email chat thread by business source"
 企业邮箱沟通发送,"Business email chat send"
 经写信浮层发送企业邮箱并写入业务线程,"Send via compose overlay to business email and write business thread"
+社媒注册（系统）,社媒注册（系统）
 站点联系（人收）,站点联系（人收）
 "SMTP 提交/代理","SMTP 提交/代理"
 系统固定账号,系统固定账号
@@ -534,11 +536,12 @@ Smtp,Smtp
 待开通,待开通
 筛选,筛选
 "共 %{1} 个账号 · 第 %{2} / %{3} 页","共 %{1} 个账号 · 第 %{2} / %{3} 页"
-"标有「系统账号」的邮箱（如 contact@ 人收、smtp@ 提交/代理）由启用域名或 Smtp 自动创建，不可编辑身份、暂停、改密或删除；仍可查看邮件与配置外投。","标有「系统账号」的邮箱（如 contact@ 人收、smtp@ 提交/代理）由启用域名或 Smtp 自动创建，不可编辑身份、暂停、改密或删除；仍可查看邮件与配置外投。"
+"标有「系统账号」的邮箱不能删除。contact@、smtp@ 由启用域名或 Smtp 创建，也不能改密。social- 开头的社媒邮箱由融媒体开通，会出现在本列表，可以重置密码，不能删除。","标有「系统账号」的邮箱不能删除。contact@、smtp@ 由启用域名或 Smtp 创建，也不能改密。social- 开头的社媒邮箱由融媒体开通，会出现在本列表，可以重置密码，不能删除。"
 系统用户,"System user"
 暂无邮箱账号。,"No mailbox accounts yet."
 系统账号不可批量操作,系统账号不可批量操作
 系统账号,系统账号
+不可删除,不可删除
 不可删改,不可删改
 外投,外投
 编辑,编辑
@@ -990,6 +993,7 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 "检测企业邮箱 DNS 记录","Detect corporate email DNS records"
 "检测 MX/SPF/DKIM/DMARC 记录是否存在","Check if MX/SPF/DKIM/DMARC records exist"
 邮件服务主机名,"Mail service host name"
+"标有「系统账号」的邮箱（如 contact@ 人收、smtp@ 提交/代理）由启用域名或 Smtp 自动创建，不可编辑身份、暂停、改密或删除；仍可查看邮件与配置外投。","标有「系统账号」的邮箱（如 contact@ 人收、smtp@ 提交/代理）由启用域名或 Smtp 自动创建，不可编辑身份、暂停、改密或删除；仍可查看邮件与配置外投。"
 "未勾选则走本域 MX:25。优先从 Smtp Tab 已建账户/服务中选择；也可手动填写。","未勾选则走本域 MX:25。优先从 Smtp Tab 已建账户/服务中选择；也可手动填写。"
 "QQ / 企业微信 SMTP","QQ / 企业微信 SMTP"
 原始邮件,原始邮件

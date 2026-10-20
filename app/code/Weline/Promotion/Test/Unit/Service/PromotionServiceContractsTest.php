@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Promotion\Test\Unit\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\DateTime\Timezone;
 
@@ -194,7 +196,7 @@ private function assert_PromotionStorefrontLaunchReadiness_testBuiltInThemeCopyR
     $servicePath = '/Users/weline/Project/Official/框架/app/code/Weline/Promotion' . '/Service/PromotionActivityThemeService.php';
     self::assertFileExists($servicePath);
     $service = (string) file_get_contents($servicePath);
-    self::assertStringContainsString('Cookie::getLangLocal() ?: Cookie::getLang()', $service);
+    self::assertStringContainsString('WelineEnv::getLangLocal() ?: WelineEnv::getLang()', $service);
     self::assertStringContainsString('private function isBuiltInThemeSlug(string $pageSlug): bool', $service);
     self::assertStringContainsString("['deals', 'sale', 'weekend', 'wedding']", $service);
     self::assertStringContainsString('private function isCopyCompatibleWithLocale(string $value, string $locale): bool', $service);

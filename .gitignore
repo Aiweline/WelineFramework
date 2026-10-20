@@ -208,9 +208,7 @@ tests/e2e/.smoke-publish-last.log
 /tests/var/codex-tmp/
 **/*-snapshots/
 
-# 架构可视化：图由 graphviz/mmdc 从 .dot/.mmd 外部生成，只留源与生成器
-/架构可视化/*.svg
-/架构可视化/*.png
+# 架构可视化已迁至 dev/架构可视化/；svg/png 忽略见 dev/.gitignore
 
 # 已迁出模块残留
 /app/code/WeShop/

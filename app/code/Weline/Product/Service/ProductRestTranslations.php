@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 use Weline\Product\Api\Data\ProductAdminCommand;
 
@@ -39,7 +41,7 @@ final class ProductRestTranslations
                 \Weline\I18n\Api\Localization\LocaleRepositoryInterface::class,
             );
             $matches = [];
-            foreach ($repository->installedActive((string)State::getLangLocal()) as $record) {
+            foreach ($repository->installedActive((string)WelineEnv::getLangLocal()) as $record) {
                 $candidate = explode('_', $record->code);
                 if (count($candidate) === 3 && strlen($candidate[1]) === 4
                     && $candidate[0] === $parts[0] && $candidate[2] === $parts[1]

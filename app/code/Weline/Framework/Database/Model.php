@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\Localization\LocaleNameProviderInterface;
 use Weline\Framework\Database\Helper\Tool;
 use Weline\Framework\Http\Cookie;
@@ -264,7 +266,7 @@ abstract class Model extends AbstractModel implements ModelInterface
             }
         }
         if (empty($local_code)) {
-            $local_code = Cookie::getLang();
+            $local_code = WelineEnv::getLang();
         }
         $idField = $this::schema_fields_ID;
         $modelIdField = $model::schema_fields_ID;
@@ -289,7 +291,7 @@ abstract class Model extends AbstractModel implements ModelInterface
         $provider = ObjectManager::getInstance(RuntimeProviderResolver::class)
             ->resolve(LocaleNameProviderInterface::class);
         if ($provider instanceof LocaleNameProviderInterface) {
-            $name = $provider->resolveName((string)$localCode, Cookie::getLangLocal());
+            $name = $provider->resolveName((string)$localCode, WelineEnv::getLangLocal());
             if ($name !== null) {
                 $this->setData($field, $name);
             }

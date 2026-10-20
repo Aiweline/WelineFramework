@@ -1725,7 +1725,9 @@
      * Tokens — keep subtle/placeholder + light color-scheme so theme controls stay readable.
      */
     .w-dialog[data-language-request-modal],
-    dialog.w-dialog[data-language-request-modal] {
+    dialog.w-dialog[data-language-request-modal],
+    .w-dialog[data-i18n-unsupported-lang],
+    dialog.w-dialog[data-i18n-unsupported-lang] {
         --_paper-text: var(--amz-drawer-text, #0f1111);
         --_paper-muted: var(--amz-drawer-muted, #565959);
         --_inverse-text: var(--_paper-text);
@@ -1791,6 +1793,36 @@
     .w-language-switcher__flag img.w-flag-icon { display: block; inline-size: 1.5rem; block-size: auto; max-block-size: 1.1rem; stroke: none; }
     .w-language-switcher__copy { display: grid; min-width: 0; gap: var(--weline-space-1); }
     .w-language-switcher__copy small { color: var(--weline-theme-text-muted); white-space: normal; }
+    /* Dialog surface already has a wide shell. The 24rem cap is for the dropdown panel. */
+    .w-language-switcher[data-i18n-surface="dialog"] .w-language-switcher__menu {
+        width: 100%;
+        max-inline-size: 100%;
+    }
+    .w-language-switcher[data-i18n-surface="dialog"] .w-language-switcher__copy { flex: 1 1 auto; }
+    .w-unsupported-path {
+        display: grid;
+        gap: var(--weline-space-4);
+        min-inline-size: 0;
+    }
+    .w-unsupported-path[data-columns="2"] {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+    .w-unsupported-path__col { min-inline-size: 0; }
+    .w-unsupported-path__label {
+        margin: 0 0 var(--weline-space-2);
+        font-size: var(--weline-font-size-sm);
+        color: var(--weline-chrome-body-text, #0f1111);
+    }
+    .w-unsupported-path .w-currency-switcher__menu,
+    .w-unsupported-path .w-language-switcher__menu {
+        width: 100%;
+        max-inline-size: 100%;
+    }
+    @media (max-width: 720px) {
+        .w-unsupported-path[data-columns="2"] {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
     .w-disclosure {
         overflow: clip;
         border: 1px solid var(--weline-theme-border);

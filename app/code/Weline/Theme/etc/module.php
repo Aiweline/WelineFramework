@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Theme',
-    "version" => '2.3.34',
+    "version" => '2.3.35',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '>=2.5.0',
@@ -54,6 +54,7 @@ return [
         'request_resetter.Weline_Theme' => \Weline\Theme\Api\Runtime\RequestResetter::class,
         'process_cache_resetter.Weline_Theme' => \Weline\Theme\Api\Runtime\ProcessCacheResetter::class,
         'deploy.flat_static.Weline_Theme' => \Weline\Theme\Api\Deploy\FlatStaticRuntimeFilesProvider::class,
+        'deploy.static_asset_mode.Weline_Theme' => \Weline\Theme\Integration\Deploy\ThemeStaticAssetModeContributor::class,
         'resource_compiler.less' => \Weline\Theme\Console\Resource\Compiler\Less::class,
         'resource_compiler.welineModules' => \Weline\Theme\Console\Resource\Compiler\WelineModules::class,
         'resource_compiler.welineUi' => \Weline\Theme\Console\Resource\Compiler\WelineUi::class,

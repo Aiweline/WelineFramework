@@ -235,6 +235,24 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
         );
         self::assertStringContainsString('X-Weline-FPC-Source html-disk', $genericBlock);
         self::assertStringContainsString('location @wls_html_origin', $genericBlock);
+        self::assertStringContainsString(
+            'error_page 502 504 =503 @wls_origin_unavailable;',
+            $config,
+            'Nginx-synthesized upstream failure must be 503 so crawlers retry.',
+        );
+        self::assertMatchesRegularExpression(
+            '/location @wls_html_origin\s*\{[^}]*error_page 502 504 =503 @wls_origin_unavailable;/s',
+            $config,
+            'HTML origin location defines its own error_page chain, so 502 must be mapped there too.',
+        );
+        self::assertStringContainsString('recursive_error_pages on;', $config);
+        self::assertStringContainsString('Retry-After 60 always;', $config);
+        self::assertStringContainsString('X-Wls-Edge-Unavailable "origin" always;', $config);
+        self::assertStringNotContainsString(
+            'proxy_intercept_errors on;',
+            $config,
+            'Application-originated 502 must pass through unchanged.',
+        );
         self::assertStringContainsString('proxy_cache off;', $genericBlock);
         self::assertStringNotContainsString(
             'proxy_cache wls_edge;',

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\CustomerService\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\CustomerService\Model\CustomerServiceConfig;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
@@ -120,7 +122,7 @@ final class CustomerServiceSettings
             }
         } catch (\Throwable) {
         }
-        $request = trim((string)(State::getLangLocal() ?: ''));
+        $request = trim((string)(WelineEnv::getLangLocal() ?: ''));
         if ($request !== '') {
             return $request;
         }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Model\Category;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
@@ -73,7 +75,7 @@ class LocalDescription extends LocalModel
             return;
         }
         $locale = ProductCategoryAttributeService::normalizeLocaleKey(
-            $locale !== '' ? $locale : (string)State::getLangLocal(),
+            $locale !== '' ? $locale : (string)WelineEnv::getLangLocal(),
         );
         if ($locale === '') {
             $locale = 'zh_Hans_CN';

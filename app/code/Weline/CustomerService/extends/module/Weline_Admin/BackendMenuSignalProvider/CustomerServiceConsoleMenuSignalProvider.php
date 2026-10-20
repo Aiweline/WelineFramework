@@ -91,6 +91,7 @@ final class CustomerServiceConsoleMenuSignalProvider implements
                 'title' => $title,
                 'href' => $href,
                 'count' => $unread,
+                'unread' => true,
             ];
         }
 

@@ -94,8 +94,8 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
             \error_log('[AccountSidebarTrace] controller_sidebar_prepared ' . \json_encode([
                 'request_id' => \Weline\Framework\Runtime\RequestContext::getId(),
                 'uri' => (string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''),
-                'lang' => \Weline\Framework\App\State::getLang(),
-                'lang_local' => \Weline\Framework\App\State::getLangLocal(),
+                'lang' => \Weline\Framework\Env\WelineEnv::getLang(),
+                'lang_local' => \Weline\Framework\Env\WelineEnv::getLangLocal(),
                 'sidebar_len' => $sidebarLength,
                 'sidebar_ms' => round($sidebarMs, 3),
                 'template_id' => \spl_object_id(Template::getInstance()),
@@ -104,7 +104,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
         if ($sidebarLength === 0 && function_exists('w_log_warning')) {
             w_log_warning('[AccountSidebar] controller generated empty sidebar', [
                 'uri' => (string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''),
-                'lang' => (string)($this->request->getServer('WELINE_USER_LANG') ?? ''),
+                'lang' => \Weline\Framework\Env\WelineEnv::getLang(),
             ], 'account_sidebar');
         }
         TraceGate::recordSpan('customer::account::sidebarPrepared', $sidebarMs, 'controller', null, [
@@ -168,7 +168,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
             w_log_warning('[AccountPerf] slow account index render', [
                 'request_id' => \Weline\Framework\Runtime\RequestContext::getId(),
                 'uri' => (string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''),
-                'lang' => \Weline\Framework\App\State::getLang(),
+                'lang' => \Weline\Framework\Env\WelineEnv::getLang(),
                 'login_ms' => round($loginMs, 3),
                 'user_ms' => round($userMs, 3),
                 'assign_ms' => round($assignMs, 3),
@@ -251,7 +251,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
         if ($htmlBytes === 0 && function_exists('w_log_warning')) {
             w_log_warning('[AccountSidebarContent] empty lazy sidebar content', [
                 'uri' => (string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''),
-                'lang' => \Weline\Framework\App\State::getLang(),
+                'lang' => \Weline\Framework\Env\WelineEnv::getLang(),
                 'duration_ms' => round($durationMs, 3),
             ], 'account_sidebar');
         }
@@ -291,7 +291,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
             w_log_warning('[AccountPerf] slow account sidebar content render', [
                 'request_id' => RequestContext::getId(),
                 'uri' => (string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''),
-                'lang' => \Weline\Framework\App\State::getLang(),
+                'lang' => \Weline\Framework\Env\WelineEnv::getLang(),
                 'login_ms' => round($loginMs, 3),
                 'user_ms' => round($userMs, 3),
                 'hook_ms' => round($durationMs, 3),

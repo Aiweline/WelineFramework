@@ -764,6 +764,9 @@ if (\function_exists('cli_set_process_title')) {
     );
 }
 
+// 必须早于 ErrorBootstrap 的 shutdown，内存致命时先放开备用内存并写出 503。
+\Weline\Server\Service\WorkerMemoryExhaustionResponder::arm();
+
 ErrorBootstrap::init($processTag, [
     'worker_id' => $workerId,
     'port' => $port,
@@ -9305,6 +9308,9 @@ while (true) {
                             }
                         );
                 }
+                if ($fiberHttp2StreamId <= 0) {
+                    \Weline\Server\Service\WorkerMemoryExhaustionResponder::attach($fiberConn);
+                }
                 return handleRequest(
                     $fiberRawRequest,
                     $runtime,
@@ -9341,6 +9347,7 @@ while (true) {
             } finally {
                 // 统一清台：无论正常/异常/提前返回，都清理请求级上下文，避免 Fiber 间串味。
                 unset($fiberAdmissionWaiters[$fiberKey]);
+                \Weline\Server\Service\WorkerMemoryExhaustionResponder::detach($fiberConn);
                 wlsFiberRequestContextLeave();
                 wlsResetLongRunningExecutionLimit();
             }
@@ -11458,6 +11465,7 @@ function sslFinalizeHttpResponseAfterHandle(
             }
             // 非 SSE 响应遇到缓冲区有残留数据时：直接覆盖，不再追加。
             // 防止前一个 SSE 连接关闭后缓冲区残留 SSE 数据碎片被拼到普通 HTTP 响应前面。
+            \Weline\Server\Service\WorkerMemoryExhaustionResponder::markBytesSent($conn);
             $writeBuffers[$connId] = $response;
             $writableConnections[$connId] = $conn;
             if ($recordObservability) {
@@ -11466,6 +11474,9 @@ function sslFinalizeHttpResponseAfterHandle(
             goto ssl_finalize_skip_write;
         }
 
+        if (!$isHttp2Response) {
+            \Weline\Server\Service\WorkerMemoryExhaustionResponder::markBytesSent($conn);
+        }
         $totalWritten = 0;
         $streamOk = \is_resource($conn) && \in_array(\get_resource_type($conn), ['stream', 'Socket'], true);
         if (!$streamOk) {
@@ -12118,9 +12129,9 @@ function handleRequest(
             $langLocal = '';
             $currency = '';
             try {
-                $lang = (string)\Weline\Framework\App\State::getLang();
-                $langLocal = (string)\Weline\Framework\App\State::getLangLocal();
-                $currency = (string)\Weline\Framework\App\State::getCurrency();
+                $lang = (string)\Weline\Framework\Env\WelineEnv::getLang();
+                $langLocal = (string)\Weline\Framework\Env\WelineEnv::getLangLocal();
+                $currency = (string)\Weline\Framework\Env\WelineEnv::getCurrency();
             } catch (\Throwable) {
             }
             WlsLogger::error_(

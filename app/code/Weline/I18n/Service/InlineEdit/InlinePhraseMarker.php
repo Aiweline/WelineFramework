@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Service\InlineEdit;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -63,7 +65,7 @@ final class InlinePhraseMarker
      */
     public static function wrapBody(string $source, string $translated): string
     {
-        $locale = (string)State::getLangLocal();
+        $locale = (string)WelineEnv::getLangLocal();
         $srcEsc = \htmlspecialchars($source, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
         $locEsc = \htmlspecialchars($locale, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
         // Translated text is already storefront-safe from Phrase; escape to keep markup intact.

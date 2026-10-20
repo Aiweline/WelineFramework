@@ -70,7 +70,7 @@ final class AppearanceTokenGroupMeta
     public static function registerGroupsFromTokens(string $area, array $tokens): void
     {
         $seen = [];
-        $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
+        $locale = \Weline\Framework\Env\WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
         foreach ($tokens as $token) {
             if (!\is_array($token)) {
                 continue;

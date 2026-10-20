@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Smtp\Test\Unit\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Context;
 use Weline\Framework\App\State;
@@ -65,7 +67,7 @@ final class MailChannelCollectorRequestReuseTest extends TestCase
         };
         self::assertSame('other', $otherCollector->collect()[0]['code']);
 
-        $currentLanguage = State::getLangLocal();
+        $currentLanguage = WelineEnv::getLangLocal();
         State::setRequestLanguageOverride($currentLanguage === 'en_US' ? 'zh_Hans_CN' : 'en_US');
         $collector->collect();
         self::assertSame(2, $provider->calls, 'Translated channel declarations must refresh when the active language changes.');

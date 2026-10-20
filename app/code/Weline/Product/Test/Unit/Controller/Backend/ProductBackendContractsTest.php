@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Test\Unit\Controller\Backend;
 
+
+use Weline\Framework\Env\WelineEnv;
 use PHPUnit\Framework\TestCase;
 
 
@@ -520,7 +522,7 @@ private function assert_ProductAdminSurface_testCatalogListExposesBulkSelectionA
     self::assertStringContainsString('bulkAssignCategories', $hookScript);
     self::assertStringContainsString('weline:product:catalog:selection-change', $hookScript);
     self::assertStringContainsString('currentLocale', $hookScript);
-    self::assertStringContainsString('State::getLangLocal()', $this->read_ProductAdminSurface('app/code/Weline/Product/Controller/Backend/Catalog.php'));
+    self::assertStringContainsString('WelineEnv::getLangLocal()', $this->read_ProductAdminSurface('app/code/Weline/Product/Controller/Backend/Catalog.php'));
 }
 
 private function read_ProductAdminSurface(string $path): string

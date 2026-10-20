@@ -1635,7 +1635,7 @@ abstract class AbstractModel extends DataObject
         $this->pagination['hasNextPage'] = $hasNextPage;
         /**@var Request $request */
         $request = ObjectManager::getInstance(Request::class);
-        $this->pagination['lang'] = \Weline\Framework\Http\Cookie::getLangLocal();
+        $this->pagination['lang'] = \Weline\Framework\Env\WelineEnv::getLangLocal();
         $this->pagination['uri'] = $request->getUri();
 
         # 页码缓存（区分样式与是否强制后台 URL，避免 WLS 下区域判断偶发偏差时命中错误缓存）

@@ -41,7 +41,7 @@ $sectionTitleRaw = trim((string)($this->getData('title') ?? ''));
 $poster = LegacyMediaUrl::sanitize($this->getData('poster') ?? '');
 $aspectRatio = $this->getData('aspect_ratio') ?? '16:9';
 
-$currentLocale = trim(\Weline\Framework\App\State::getLangLocal());
+$currentLocale = trim(\Weline\Framework\Env\WelineEnv::getLangLocal());
 $normalizedLocale = strtolower(str_replace('_', '-', $currentLocale));
 $isChineseLocale = $normalizedLocale === '' || str_starts_with($normalizedLocale, 'zh');
 $translateDefaultCopy = static function (string $source, string $english) use ($isChineseLocale): string {

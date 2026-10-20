@@ -66,7 +66,7 @@ class LocalDescription extends AbstractModel
         $identify = self::getWidgetIdentify($module, $type, $name);
 
         if ($locale === null) {
-            $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
+            $locale = \Weline\Framework\Env\WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
         }
 
         /** @var self $model */
@@ -108,7 +108,7 @@ class LocalDescription extends AbstractModel
         $identify = self::getWidgetIdentify($module, $type, $name);
 
         if ($locale === null) {
-            $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
+            $locale = \Weline\Framework\Env\WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
         }
 
         /** @var self $model */

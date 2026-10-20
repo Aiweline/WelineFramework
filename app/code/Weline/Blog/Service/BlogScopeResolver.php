@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Blog\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
@@ -23,9 +25,9 @@ final class BlogScopeResolver
     public function locale(): string
     {
         // Prefer getLangLocal(): I18n maps path casing (en_us) to installed code (en_US).
-        $locale = trim(State::getLangLocal());
+        $locale = trim(WelineEnv::getLangLocal());
         if ($locale === '') {
-            $locale = trim(State::getLang());
+            $locale = trim(WelineEnv::getLang());
         }
         if ($locale === '') {
             return 'zh_Hans_CN';

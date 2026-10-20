@@ -134,7 +134,7 @@ $resolveSlideBackground = static function (array $slide, int $index) use ($defau
 
 // 无运营配置时提供可直接上线的汉服视觉；图片不烘焙文字，文案按当前 storefront locale 输出。
 $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
-$currentLocale = trim(\Weline\Framework\App\State::getLangLocal());
+$currentLocale = trim(\Weline\Framework\Env\WelineEnv::getLangLocal());
 if ($currentLocale === ''
     && preg_match('#/([a-z]{2}(?:_[A-Za-z]{2,4}){1,2})(?:/|$)#', $requestUri, $localeMatch) === 1
 ) {

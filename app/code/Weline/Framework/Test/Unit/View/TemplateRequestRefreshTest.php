@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Test\Unit\View;
 
+
+use Weline\Framework\Env\WelineEnv;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\App\State;
 use Weline\Framework\Context;
@@ -260,13 +262,13 @@ final class TemplateRequestRefreshTest extends TestCase
         self::assertSame('ar_SA', $template->getData('lang'));
         self::assertSame('ar-SA', $template->getData('htmlLang'));
         self::assertSame('rtl', $template->getData('htmlDir'));
-        self::assertSame(['code' => State::getLangLocal(), 'lang' => 'ar_SA'], $template->getData('local'));
+        self::assertSame(['code' => WelineEnv::getLangLocal(), 'lang' => 'ar_SA'], $template->getData('local'));
 
         State::setRequestLanguageOverride('en_US');
         $template->init();
         self::assertSame('en-US', $template->getData('htmlLang'));
         self::assertSame('ltr', $template->getData('htmlDir'));
-        self::assertSame(['code' => State::getLangLocal(), 'lang' => 'en_US'], $template->getData('local'));
+        self::assertSame(['code' => WelineEnv::getLangLocal(), 'lang' => 'en_US'], $template->getData('local'));
     }
 
     private function createRequestStub(string $baseUrl): Request

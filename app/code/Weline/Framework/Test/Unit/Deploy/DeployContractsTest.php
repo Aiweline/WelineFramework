@@ -65,6 +65,9 @@ final class DeployContractsTest extends TestCase
             'DeployModeSetStaging::testProdUsesStagingPipelineWithoutLiveWipeFirst' => function () {
             $this->assert_DeployModeSetStaging_testProdUsesStagingPipelineWithoutLiveWipeFirst();
         },
+            'StaticAssetMode::testModeSetDelegatesProdStaticPublishWithoutThemeTypes' => function () {
+            $this->assert_StaticAssetMode_testModeSetDelegatesProdStaticPublishWithoutThemeTypes();
+        },
             'DeployModeSetStaging::testUpgradeAndTraitTemplateRespectStaging' => function () {
             $this->assert_DeployModeSetStaging_testUpgradeAndTraitTemplateRespectStaging();
         },
@@ -240,6 +243,22 @@ private function assert_DeployFpcInvalidation_testResolverSourceIncludesDeployNa
 private function fakeChange_DeployFpcInvalidation(array $after): \Weline\Framework\Event\ResourceChange\ResourceChange
 {
     return \Weline\Framework\Event\ResourceChange\ResourceChange::fromArray(['schema_version' => 1, 'event_id' => str_repeat('a', 32), 'event_name' => \Weline\Framework\Event\ResourceChange\ResourceChange::EVENT_NAME, 'occurred_at' => '2026-09-24T00:00:00.000000Z', 'resource' => ['type' => 'deploy_static', 'id' => 'storefront:test', 'action' => 'publish', 'revision' => 1], 'website' => ['id' => 0, 'code' => 'default', 'previous_code' => null, 'site_id' => 0], 'impact' => ['namespaces' => [DeployFpcInvalidation::NS_STOREFRONT_DEPLOY], 'previous_namespaces' => [], 'urls' => [], 'previous_urls' => []], 'changed_fields' => ['deploy_version'], 'before' => ['trigger' => 'test'], 'after' => $after, 'origin' => ['area' => 'cli', 'entry' => 'test', 'request_id' => '', 'instance' => '', 'trigger_by' => ['type' => 'system', 'id' => null]], 'context' => ['website_id' => 0, 'website_code' => 'default', 'lang' => 'zh_Hans_CN', 'currency' => 'CNY', 'area' => 'cli', 'timezone' => 'UTC', 'user' => ['type' => 'system', 'id' => null]]]);
+}
+
+private function assert_StaticAssetMode_testModeSetDelegatesProdStaticPublishWithoutThemeTypes(): void
+{
+    $mode = (string) file_get_contents(BP . 'app/code/Weline/Framework/Deploy/StaticAssetMode.php');
+    self::assertStringContainsString('publishForModeSet', $mode);
+    self::assertStringContainsString('publishForThemeUpgrade', $mode);
+    self::assertStringContainsString('publishStaticTree', $mode);
+    self::assertStringContainsString('DeployPublicUrlMode::useProduction', $mode);
+    self::assertStringContainsString("deploy.static_asset_mode.", $mode);
+    self::assertStringNotContainsString('Weline\\Theme\\', $mode);
+    $set = (string) file_get_contents(BP . 'app/code/Weline/Framework/Console/Console/Deploy/Mode/Set.php');
+    self::assertStringContainsString('StaticAssetMode', $set);
+    self::assertStringContainsString('publishForModeSet', $set);
+    $upgrade = (string) file_get_contents(BP . 'app/code/Weline/Framework/Console/Console/Deploy/Upgrade.php');
+    self::assertStringContainsString('function publishStaticTree', $upgrade);
 }
 
 private function assert_DeployModeSetStaging_testProdUsesStagingPipelineWithoutLiveWipeFirst(): void

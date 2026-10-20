@@ -268,7 +268,7 @@ class MetaData
                 $translationKey = "@meta::{$namespaceValue}.{$typeValue}.{$identifyValue}.{$field}";
                 
                 // 获取当前语言
-                $currentLocale = $locale ?? Cookie::getLangLocal() ?? 'zh_Hans_CN';
+                $currentLocale = $locale ?? WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
                 $defaultLocale = 'zh_Hans_CN';
                 
                 // 从 MetaLocal 获取翻译
@@ -463,7 +463,7 @@ class MetaData
                 $keyParts = explode('.', $keyMatches[1]);
                 if (count($keyParts) >= 5) {
                     // 获取当前语言
-                    $locale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
+                    $locale = WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
                     $defaultLocale = 'zh_Hans_CN';
                     
                     // 从 MetaLocal 获取翻译
@@ -813,7 +813,7 @@ class MetaData
     {
         // 获取当前语言
         if ($locale === null) {
-            $locale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
+            $locale = WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
         }
         
         // 默认语言
@@ -1197,7 +1197,7 @@ class MetaData
                 if (count($keyParts) >= 5) {
                     // 获取语言代码
                     if ($locale === null) {
-                        $locale = Cookie::getLangLocal() ?? 'zh_Hans_CN';
+                        $locale = WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
                     }
                     
                     // 设置翻译值 → MetaLocal（禁止再 upsert 词典 @meta::）
@@ -1484,7 +1484,7 @@ class MetaData
         }
         
         // 回退到默认语言
-        $defaultLocale = \Weline\Framework\Http\Cookie::getLang() ?? 'zh_Hans_CN';
+        $defaultLocale = \Weline\Framework\Env\WelineEnv::getLang() ?? 'zh_Hans_CN';
         if (isset($configs[$defaultLocale])) {
             return $configs[$defaultLocale];
         }

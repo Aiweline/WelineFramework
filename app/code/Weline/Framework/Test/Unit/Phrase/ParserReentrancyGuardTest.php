@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Test\Unit\Phrase;
 
+
+use Weline\Framework\Env\WelineEnv;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use Weline\Framework\Context;
@@ -61,7 +63,7 @@ final class ParserReentrancyGuardTest extends TestCase
 
         $entry = substr($source, $methodStart, $loaderStart - $methodStart);
         self::assertStringContainsString('self::translationResolutionDepth() > 0', $entry);
-        self::assertStringNotContainsString('State::getLangLocal()', $entry);
+        self::assertStringNotContainsString('WelineEnv::getLangLocal()', $entry);
         self::assertStringNotContainsString('self::resolveRequestModules()', $entry);
     }
 

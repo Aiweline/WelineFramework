@@ -166,6 +166,9 @@ class Index extends BackendController
                     $mailboxMessages = $ops->list($selectedAccountId, $folder, 50, $mailboxListUnreadOnly);
                     if ($messageId !== '') {
                         $selectedMessage = $ops->get($selectedAccountId, $messageId);
+                        if (is_array($selectedMessage) && (string)($selectedMessage['id'] ?? '') !== '') {
+                            $this->touchMailMenuSignal($selectedAccountId, $messageId, false);
+                        }
                     }
                 } catch (\Throwable $throwable) {
                     $mailboxError = $throwable->getMessage();
@@ -497,6 +500,7 @@ class Index extends BackendController
             if (!is_array($data) || (string)($data['id'] ?? '') === '') {
                 return $this->fetchJson(['code' => 404, 'msg' => (string)__('邮件不存在'), 'data' => null]);
             }
+            $this->touchMailMenuSignal($accountId, $messageId, false);
         } catch (\Throwable $e) {
             return $this->fetchJson(['code' => 500, 'msg' => $e->getMessage(), 'data' => null]);
         }
@@ -581,6 +585,11 @@ class Index extends BackendController
         try {
             $result = ObjectManager::getInstance(MailboxOpsService::class)
                 ->batch($accountId, $action, $ids, $folder);
+            if (!empty($result['success']) && ($action === 'seen' || $action === 'unseen')) {
+                foreach ($ids as $id) {
+                    $this->touchMailMenuSignal($accountId, (string)$id, $action === 'unseen');
+                }
+            }
         } catch (\Throwable $e) {
             return $this->fetchJson(['code' => 500, 'msg' => $e->getMessage(), 'data' => null]);
         }
@@ -2110,6 +2119,27 @@ class Index extends BackendController
         return $this->redirect(
             $this->_url->getBackendUrl('weline_mail/backend') . '?' . http_build_query($query)
         );
+    }
+
+    private function touchMailMenuSignal(int $accountId, string $messageId, bool $unread): void
+    {
+        $messageId = trim($messageId);
+        $userId = (int)$this->getLoginUserId();
+        if ($accountId <= 0 || $messageId === '' || $userId <= 0) {
+            return;
+        }
+        if (!class_exists(\Weline\Mail\Service\Mailbox\MailMenuSignalPublisher::class)) {
+            return;
+        }
+        try {
+            $publisher = ObjectManager::getInstance(\Weline\Mail\Service\Mailbox\MailMenuSignalPublisher::class);
+            if ($unread) {
+                $publisher->markUnread($accountId, $messageId, $userId);
+                return;
+            }
+            $publisher->markRead($accountId, $messageId, $userId);
+        } catch (\Throwable) {
+        }
     }
 
     private function isFakeTestDomain(string $domain): bool

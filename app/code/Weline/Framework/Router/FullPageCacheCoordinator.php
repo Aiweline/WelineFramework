@@ -1371,7 +1371,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 $payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY] = $raw;
             }
             $body = $this->resolvePlaintextBody($payload) ?? '';
-            if ($body !== '' && \Weline\Framework\View\Helper\HtmlCacheAdmission::admit($body)) {
+            if ($body !== ''
+                && \Weline\Framework\View\Helper\HtmlCacheAdmission::admit($body)
+                && \Weline\Framework\View\Helper\HtmlCacheAdmission::admitPathLocale($body, $fullUri)
+            ) {
                 [$responseBody, $hitEncoding] = $this->resolveEncodedHitBody(
                     $payload,
                     $acceptEncoding !== '' ? $acceptEncoding : $this->clientAcceptEncodingHeader(),
@@ -1448,6 +1451,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 continue;
             }
             if (!\Weline\Framework\View\Helper\HtmlCacheAdmission::admit($body)) {
+                continue;
+            }
+            if (!\Weline\Framework\View\Helper\HtmlCacheAdmission::admitPathLocale($body, $fullUri)) {
                 continue;
             }
 
@@ -5998,10 +6004,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         if (($pathVariant['lang'] ?? '') !== '') {
             $variant['lang'] = $this->normalizeVariantLang((string)$pathVariant['lang']);
         } else {
-            // No path language: follow State::getLang() (override → query → website → zh_Hans_CN).
+            // No path language: follow WelineEnv::getLang() (override → query → website → zh_Hans_CN).
             // Never fork from preference cookies.
             try {
-                $resolved = \trim(State::getLang());
+                $resolved = \trim(WelineEnv::getLang());
                 if ($resolved !== '') {
                     $variant['lang'] = $this->normalizeVariantLang($resolved);
                 }
@@ -6019,7 +6025,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             }
         } else {
             try {
-                $resolved = \trim(State::getCurrency());
+                $resolved = \trim(WelineEnv::getCurrency());
                 if ($resolved !== '') {
                     $variant['currency'] = $this->normalizeVariantCurrency($resolved);
                 }

@@ -108,6 +108,28 @@ class Template extends DataObject implements RequestLocalInterface
     private static array $scopedInstances = [];
     /** @var array<string, array{compiled_mtime: int, compiled_size: int, template_mtime: int, template_size: int, force: string, result: bool}> */
     private static array $compiledTemplateFreshnessCache = [];
+    /**
+     * Per-compiled-path proof that `compileSourceBytes()` already accepted this exact
+     * (source, hooks registry, before_compile pipeline) combination.
+     *
+     * Lets the cold fetch path skip the source `open()` plus the content digest —
+     * ~58 µs → ~9 µs for a 10 KB template (measured, `dev/tmp/bench-pa2e.php`).
+     * Validated on every hit by source stat, compiled-file existence, hooks digest
+     * and pipeline digest, so any real change falls through to the full content-hash
+     * identity check.
+     *
+     * The compiled file itself needs no mtime/size check: `compile_id` is a
+     * deterministic function of exactly the inputs validated here, so any artifact
+     * at this path holds the same bytes. Only deletion (cache:clear) must be noticed.
+     *
+     * `ctime`/`ino` are folded in on top of `mtime`/`size`: tools that restore
+     * mtime (rsync --times, tar, git checkout) still bump ctime, and replace-in-place
+     * writers change inode. All four come from the same stat cache entry.
+     *
+     * @var array<string, array{sm:int, ss:int, sc:int, si:int, hd:string, pd:string}>
+     */
+    private static array $fetchFileIdentityMemo = [];
+    private const FETCH_FILE_IDENTITY_MEMO_MAX = 4096;
     private const PROCESS_VIEW_FILE_CACHE_TTL = 3600.0;
     private const PROCESS_VIEW_FILE_CACHE_MAX = 2048;
     /** @var array<string, array{compiled: string, tpl: string, expires_at: float}> */
@@ -433,12 +455,12 @@ class Template extends DataObject implements RequestLocalInterface
     /** @return array{code: string, lang: string} */
     private function initLanguage(): array
     {
-        $lang = State::getLang();
+        $lang = WelineEnv::getLang();
         $this->setData('lang', $lang);
         // lang变量用于HTML lang属性，必须符合BCP 47规范（将下划线替换为连字符）
         $htmlLang = str_replace('_', '-', $lang);
         $htmlDir = $this->resolveTextDirection($lang);
-        $langLocal = State::getLangLocal();
+        $langLocal = WelineEnv::getLangLocal();
         $this->setData('lang_local', $langLocal);
         // htmlLang变量与lang相同，保持向后兼容
         $this->setData('htmlLang', $htmlLang);
@@ -1083,7 +1105,7 @@ class Template extends DataObject implements RequestLocalInterface
 
     private function templateCompileContextDir(): string
     {
-        $lang = (string)State::getLang();
+        $lang = (string)WelineEnv::getLang();
         if (\preg_match('/^[a-z]{2,3}(?:_[A-Za-z]{2,12}){0,2}$/', $lang) !== 1) {
             $lang = \function_exists('w_env_get') ? (string)\w_env_get('user.lang', 'default') : 'default';
         }
@@ -1091,7 +1113,7 @@ class Template extends DataObject implements RequestLocalInterface
             $lang = 'default';
         }
 
-        $currency = (string)State::getCurrency();
+        $currency = (string)WelineEnv::getCurrency();
         if (\preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
             $currency = \function_exists('w_env_get') ? (string)\w_env_get('user.currency', 'CNY') : 'CNY';
         }
@@ -1193,17 +1215,123 @@ class Template extends DataObject implements RequestLocalInterface
         if (isset($this->pinnedSources[$tplFile])) {
             return $this->getFetchFileFromSource($tplFile, ...$this->pinnedSources[$tplFile]);
         }
+        // Render-time consumers ({@see obFileInner}, {@see streamCompiledFile}) read the
+        // origin back out of this map to resolve relative sibling fetches. Record it here
+        // so the stat-proof fast path below cannot skip it; compileSourceBytes() repeats
+        // the same assignment on the slow path.
+        $this->compiledSourceOrigins[$comFileName] = $tplFile;
+        $sourceMtime = (int)@\filemtime($tplFile);
+        $sourceSize = (int)@\filesize($tplFile);
+        $sourceCtime = (int)@\filectime($tplFile);
+        $sourceIno = (int)@\fileinode($tplFile);
+        if ($sourceMtime > 0
+            && $this->fetchFileIdentityIsProven($comFileName, $sourceMtime, $sourceSize, $sourceCtime, $sourceIno)
+        ) {
+            if ($memoKey !== null) {
+                RequestContext::set($memoKey, $comFileName);
+            }
+
+            return $comFileName;
+        }
+
         $content = file_get_contents($tplFile);
         if (!is_string($content)) {
             throw new Exception('Unable to read template source: ' . $tplFile);
         }
 
         $compiled = $this->compileSourceBytes($comFileName, $content, $tplFile, '');
+        if ($sourceMtime > 0) {
+            $this->rememberFetchFileIdentity($compiled, $sourceMtime, $sourceSize, $sourceCtime, $sourceIno);
+        }
         if ($memoKey !== null) {
             RequestContext::set($memoKey, $compiled);
         }
 
         return $compiled;
+    }
+
+    /**
+     * `before_compile` observers bake into compiled output, so their registration
+     * order/identity is part of the compile identity.
+     */
+    private function beforeCompilePipeline(): string
+    {
+        return (string)json_encode(
+            $this->eventsManager->getEventObservers('Weline_Framework_Template::before_compile'),
+            JSON_PARTIAL_OUTPUT_ON_ERROR
+        );
+    }
+
+    /**
+     * True when a previous call already proved this compiled artifact matches the
+     * current source, hooks registry and pipeline.
+     *
+     * Cost of a hit (~9 µs measured): four cached stat probes + `is_file` + hooks
+     * digest + pipeline digest. The full path it replaces costs ~58 µs: source
+     * `open()` + double md5 + compile identity + 512 B header `open()`.
+     *
+     * Relies on PHP's stat cache, which is a **single-entry** cache (the last stat'ed
+     * path only), not a per-path map — verified on this build, see
+     * `dev/tmp/bench-statcache.php`. So a source edited by another process cannot stay
+     * hidden behind a stale entry across requests: the very next `is_file($compiledPath)`
+     * below evicts it. Forcing a fresh `stat()` with `clearstatcache()` costs
+     * 0.87 µs per call (0.05 → 0.92 µs) and buys nothing here.
+     */
+    private function fetchFileIdentityIsProven(
+        string $compiledPath,
+        int $sourceMtime,
+        int $sourceSize,
+        int $sourceCtime,
+        int $sourceIno
+    ): bool {
+        $memo = self::$fetchFileIdentityMemo[$compiledPath] ?? null;
+        if ($memo === null
+            || $memo['sm'] !== $sourceMtime
+            || $memo['ss'] !== $sourceSize
+            || $memo['sc'] !== $sourceCtime
+            || $memo['si'] !== $sourceIno
+        ) {
+            return false;
+        }
+        // A source written in the current second can still change without moving
+        // mtime; only trust the stat proof once the write is at least a second old.
+        if (\time() - $sourceMtime < 1) {
+            return false;
+        }
+        // Content is pinned by the validated inputs; only deletion needs noticing.
+        if (!\is_file($compiledPath)) {
+            return false;
+        }
+        // An operator forcing recompiles in DEV must not be short-circuited.
+        if (DEV && \in_array(Env::getInstance()->getConfig('template.force_recompile_in_dev', false), [true, 1, '1'], true)) {
+            return false;
+        }
+
+        return $memo['hd'] === self::hooksRegistryCompileDigest()
+            && $memo['pd'] === $this->beforeCompilePipeline();
+    }
+
+    private function rememberFetchFileIdentity(
+        string $compiledPath,
+        int $sourceMtime,
+        int $sourceSize,
+        int $sourceCtime,
+        int $sourceIno
+    ): void {
+        if ($sourceMtime <= 0 || !\is_file($compiledPath)) {
+            return;
+        }
+        if (\count(self::$fetchFileIdentityMemo) >= self::FETCH_FILE_IDENTITY_MEMO_MAX) {
+            self::$fetchFileIdentityMemo = [];
+        }
+        self::$fetchFileIdentityMemo[$compiledPath] = [
+            'sm' => $sourceMtime,
+            'ss' => $sourceSize,
+            'sc' => $sourceCtime,
+            'si' => $sourceIno,
+            'hd' => self::hooksRegistryCompileDigest(),
+            'pd' => $this->beforeCompilePipeline(),
+        ];
     }
 
     /** Compile a captured or virtual source with the ordinary Taglib/i18n pipeline. */
@@ -1244,8 +1372,8 @@ class Template extends DataObject implements RequestLocalInterface
     {
         $sourceHash ??= $this->sourceBytesDigest($sourceBytes);
         // Event registration + hooks registry alter baked output; fold into compile_id.
-        $pipeline = json_encode($this->eventsManager->getEventObservers('Weline_Framework_Template::before_compile'), JSON_PARTIAL_OUTPUT_ON_ERROR);
-        $compileId = $this->buildCompileIdentity($sourceHash, $originPath, $contextKey, (string)$pipeline);
+        $pipeline = $this->beforeCompilePipeline();
+        $compileId = $this->buildCompileIdentity($sourceHash, $originPath, $contextKey, $pipeline);
         // Fixed path: overwrite in place (no __bytes_{digest}/ accumulation).
         $compiledPath = $baseCompiledPath;
         $this->compiledSourceOrigins[$compiledPath] = $originPath;
@@ -1268,12 +1396,27 @@ class Template extends DataObject implements RequestLocalInterface
                 $content .= $token;
             }
         }
+        // 影子编译（默认关）：必须在 tmp_replace 之前留副本，因为旧 compile() 的
+        // $content 是按引用传递的，会在内联标签展开时就地改写。
+        $shadowSource = null;
+        try {
+            if (\class_exists(\Weline\Framework\View\Compiler\Shadow\ShadowHook::class)
+                && \Weline\Framework\View\Compiler\Shadow\ShadowHook::isEnabled()) {
+                $shadowSource = $content;
+            }
+        } catch (\Throwable) {
+            $shadowSource = null;
+        }
+
         $previousOrigin = $this->activeSourceOrigin;
         $this->activeSourceOrigin = $originPath;
         try {
             $compiled = (string)$this->tmp_replace($content, $originPath);
         } finally {
             $this->activeSourceOrigin = $previousOrigin;
+        }
+        if ($shadowSource !== null) {
+            $this->shadowCompare($shadowSource, $originPath, $compiled);
         }
         $showComments = Env::getInstance()->getConfig('template.show_comments', false);
         if (!in_array($showComments, [true, 1, '1'], true)) {
@@ -1305,8 +1448,35 @@ class Template extends DataObject implements RequestLocalInterface
                 unlink($temporary);
             }
         }
+        // Fixed-path compiles overwrite in place, so a worker that already included the
+        // previous generation would keep executing its cached bytecode. opcache only
+        // re-reads when validate_timestamps is on; production usually turns it off.
+        // Mirrors AtomicCompiledFilePublisher::publish().
+        if (function_exists('opcache_invalidate')) {
+            @opcache_invalidate($compiledPath, true);
+        }
+        clearstatcache(true, $compiledPath);
 
         return $compiledPath;
+    }
+
+    /**
+     * 影子比对：只读旧产物、只写 var/compile/shadow 差异；任何失败都不影响编译。
+     */
+    private function shadowCompare(string $source, string $originPath, string $legacyCompiled): void
+    {
+        try {
+            \Weline\Framework\View\Compiler\Shadow\ShadowHook::compare(
+                $source,
+                $originPath,
+                $legacyCompiled,
+                $this,
+            );
+        } catch (\Throwable $exception) {
+            if (\function_exists('w_log_error')) {
+                \w_log_error('[template-shadow] ' . $originPath . ': ' . $exception::class . ': ' . $exception->getMessage());
+            }
+        }
     }
 
     private function buildCompileIdentity(string $sourceHash, string $originPath, string $contextKey, string $pipeline): string
@@ -1564,15 +1734,20 @@ class Template extends DataObject implements RequestLocalInterface
     private function fetchLegacy(string $fileName, array $data = [])
     {
         if (FiberOutputBuffer::hasActiveCapture()) {
+            // Identity costs ~1.1 µs (three regexes); only build it when the route
+            // trace is actually on, and reuse it for the matching end() call.
+            $routeIdentity = TemplateRenderRouteTrace::isRequested()
+                ? $this->shortRenderRouteIdentity($fileName)
+                : '';
             TemplateRenderRouteTrace::armIfRequested();
-            TemplateRenderRouteTrace::begin('fetch_stream', $this->shortRenderRouteIdentity($fileName));
+            TemplateRenderRouteTrace::begin('fetch_stream', $routeIdentity);
             try {
                 $this->addSourceModuleToRequest(DataInterface::dir_type_TEMPLATE, $fileName);
                 $this->streamCompiledFile($this->getFetchFile($fileName), $data);
 
                 return '';
             } finally {
-                TemplateRenderRouteTrace::end('fetch_stream', $this->shortRenderRouteIdentity($fileName));
+                TemplateRenderRouteTrace::end('fetch_stream', $routeIdentity);
             }
         }
 
@@ -1609,8 +1784,11 @@ class Template extends DataObject implements RequestLocalInterface
      */
     public function fetchHtml(string $fileName, array $dictionary = []) 
     {
+        $routeIdentity = TemplateRenderRouteTrace::isRequested()
+            ? $this->shortRenderRouteIdentity($fileName)
+            : '';
         TemplateRenderRouteTrace::armIfRequested();
-        TemplateRenderRouteTrace::begin('fetch_html', $this->shortRenderRouteIdentity($fileName));
+        TemplateRenderRouteTrace::begin('fetch_html', $routeIdentity);
         try {
             $this->addSourceModuleToRequest(DataInterface::dir_type_TEMPLATE, $fileName);
 
@@ -1618,7 +1796,7 @@ class Template extends DataObject implements RequestLocalInterface
             $result = $this->ob_file($comFileName, $dictionary);
             return $result;
         } finally {
-            TemplateRenderRouteTrace::end('fetch_html', $this->shortRenderRouteIdentity($fileName));
+            TemplateRenderRouteTrace::end('fetch_html', $routeIdentity);
         }
     }
 
@@ -2002,8 +2180,10 @@ class Template extends DataObject implements RequestLocalInterface
 
     public function ob_file(string $filename, array $dictionary = []): string
     {
+        $routeIdentity = TemplateRenderRouteTrace::isRequested()
+            ? $this->shortRenderRouteIdentity($filename)
+            : '';
         TemplateRenderRouteTrace::armIfRequested();
-        $routeIdentity = $this->shortRenderRouteIdentity($filename);
         TemplateRenderRouteTrace::begin('ob_file', $routeIdentity);
         try {
             return $this->obFileInner($filename, $dictionary);
@@ -2031,8 +2211,10 @@ class Template extends DataObject implements RequestLocalInterface
             return;
         }
 
+        $routeIdentity = TemplateRenderRouteTrace::isRequested()
+            ? $this->shortRenderRouteIdentity($filename)
+            : '';
         TemplateRenderRouteTrace::armIfRequested();
-        $routeIdentity = $this->shortRenderRouteIdentity($filename);
         TemplateRenderRouteTrace::begin('stream_file', $routeIdentity);
         $temporaryTemplateData = $this->pushTemporaryTemplateData($dictionary);
         $previousSourceOrigin = $this->activeSourceOrigin;
@@ -2151,7 +2333,7 @@ class Template extends DataObject implements RequestLocalInterface
         // override the BCP 47 value exposed as the document html lang.
         $htmlLang = \trim((string)$this->getData('htmlLang'));
         if ($htmlLang === '') {
-            $htmlLang = (string)State::getLang();
+            $htmlLang = (string)WelineEnv::getLang();
         }
         $htmlLang = \str_replace('_', '-', $htmlLang);
         $this->setData('htmlLang', $htmlLang);
@@ -2831,8 +3013,8 @@ class Template extends DataObject implements RequestLocalInterface
             $context += [
                 'request_id' => RequestContext::getId(),
                 'uri' => (string)($this->request->getServer('REQUEST_URI') ?? $this->request->getUri() ?? ''),
-                'lang' => State::getLang(),
-                'lang_local' => State::getLangLocal(),
+                'lang' => WelineEnv::getLang(),
+                'lang_local' => WelineEnv::getLangLocal(),
             ];
         } catch (\Throwable) {
         }
@@ -3769,9 +3951,9 @@ class Template extends DataObject implements RequestLocalInterface
             $context += [
                 'request_id' => (string)(RequestContext::getId() ?? ''),
                 'uri' => \function_exists('w_env_request_uri') ? (string)\w_env_request_uri() : '',
-                'lang' => (string)State::getLang(),
-                'lang_local' => (string)State::getLangLocal(),
-                'currency' => (string)State::getCurrency(),
+                'lang' => (string)WelineEnv::getLang(),
+                'lang_local' => (string)WelineEnv::getLangLocal(),
+                'currency' => (string)WelineEnv::getCurrency(),
             ];
         } catch (\Throwable) {
         }

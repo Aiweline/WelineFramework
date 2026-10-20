@@ -328,6 +328,25 @@ final class FpcHtmlDiskStore
         if ($html === '' && $brotli === '') {
             return false;
         }
+        $plainForLocale = $html;
+        if ($plainForLocale === '' && $brotli !== '' && \function_exists('brotli_uncompress')) {
+            $decoded = @\brotli_uncompress($brotli);
+            if (\is_string($decoded) && $decoded !== '') {
+                $plainForLocale = $decoded;
+            }
+        }
+        if ($plainForLocale !== ''
+            && !\Weline\Framework\View\Helper\HtmlCacheAdmission::admitPathLocale($plainForLocale, $fullUri)
+        ) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning(
+                    '[FpcHtmlDiskStore] publish refused: path locale mismatches body language; '
+                    . 'refusing poisoned html-disk leaf for ' . $fullUri
+                );
+            }
+
+            return false;
+        }
         $dir = \dirname($htmlPath);
         if (!self::ensureDirectory($dir)) {
             return false;

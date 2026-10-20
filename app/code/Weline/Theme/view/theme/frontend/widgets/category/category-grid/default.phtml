@@ -34,7 +34,7 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
-$currentLocale = trim(\Weline\Framework\App\State::getLangLocal());
+$currentLocale = trim(\Weline\Framework\Env\WelineEnv::getLangLocal());
 if (preg_match('#/([a-z]{2}(?:_[A-Za-z]{2,4}){1,2})(?:/|$)#', $requestUri, $localeMatch) === 1) {
     $currentLocale = (string)$localeMatch[1];
 }

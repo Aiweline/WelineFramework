@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Eav\Api\Metadata\AttributeMetadata;
 use Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface;
 use Weline\Eav\Api\Metadata\AttributeOptionMetadata;
@@ -470,7 +472,7 @@ final class StorefrontVariantAxisResolver
      */
     private function attributesByCode(): array
     {
-        $locale = trim(str_replace('-', '_', (string)State::getLangLocal()));
+        $locale = trim(str_replace('-', '_', (string)WelineEnv::getLangLocal()));
         if ($locale === '') {
             $locale = 'zh_Hans_CN';
         }

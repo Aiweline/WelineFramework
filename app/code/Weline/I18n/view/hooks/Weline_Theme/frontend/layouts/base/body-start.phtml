@@ -1,0 +1,80 @@
+<?php
+/**
+ * Dialog when the URL language and/or currency is not enabled for this website.
+ *
+ * Hook: Weline_Theme::frontend::layouts::base::body-start
+ * The page stays on this URL. Body copy uses the website default language,
+ * and prices use the website default currency when the path currency is not enabled.
+ * Both missing: language on the left, currency on the right. Only one missing: that column.
+ *
+ * @hook-priority 10
+ * @hook-sort-order 0
+ * @hook-solo false
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\I18n\Service\UnsupportedPathLanguageNotice;
+use Weline\I18n\Taglib\LanguageSwitcher;
+
+try {
+    /** @var UnsupportedPathLanguageNotice $languageNotice */
+    $languageNotice = ObjectManager::getInstance(UnsupportedPathLanguageNotice::class);
+    $languageOn = $languageNotice->isActive();
+    $currencyOn = false;
+    if (\class_exists(\Weline\Currency\Service\UnsupportedPathCurrencyNotice::class)) {
+        $currencyNotice = ObjectManager::getInstance(\Weline\Currency\Service\UnsupportedPathCurrencyNotice::class);
+        $currencyOn = $currencyNotice->isActive();
+    }
+    if (!$languageOn && !$currencyOn) {
+        return;
+    }
+    $columns = ($languageOn && $currencyOn) ? '2' : '1';
+    if ($languageOn && $currencyOn) {
+        $title = (string) __('请选择已开通的语种和货币。');
+    } elseif ($languageOn) {
+        $title = (string) __('这个语种没有开通。当前页面用本站默认语显示。请选一个已开通的语种。');
+    } else {
+        $title = (string) __('这个货币没有开通。当前页面用本站默认货币显示。请选一个已开通的货币。');
+    }
+    $close = (string) __('关闭');
+    $size = $columns === '2' ? 'lg' : 'md';
+    $titleId = 'i18n-unsupported-path-title';
+    echo '<dialog id="i18n-unsupported-path-dialog" class="w-dialog" data-w-component="dialog"'
+        . ' data-size="' . $size . '" data-i18n-unsupported-lang data-columns="' . $columns . '"'
+        . ' aria-labelledby="' . $titleId . '">';
+    echo '<header class="w-dialog__header">'
+        . '<h2 id="' . $titleId . '" class="w-dialog__title">'
+        . \htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</h2>'
+        . '<button type="button" class="w-button" data-tone="quiet" data-size="sm"'
+        . ' data-w-action="dialog.close" data-w-close aria-label="'
+        . \htmlspecialchars($close, ENT_QUOTES, 'UTF-8') . '">'
+        . '<w-icon name="close" size="sm"></w-icon></button></header>';
+    echo '<div class="w-dialog__body"><div class="w-unsupported-path" data-columns="' . $columns . '">';
+    if ($languageOn) {
+        echo '<section class="w-unsupported-path__col">';
+        if ($columns === '2') {
+            echo '<h3 class="w-unsupported-path__label">'
+                . \htmlspecialchars((string) __('语言'), ENT_QUOTES, 'UTF-8') . '</h3>';
+        }
+        echo LanguageSwitcher::render([
+            'surface' => 'column',
+            'show_search' => true,
+            'show_request' => false,
+            'label_mode' => 'display',
+        ]);
+        echo '</section>';
+    }
+    if ($currencyOn) {
+        echo '<section class="w-unsupported-path__col">';
+        if ($columns === '2') {
+            echo '<h3 class="w-unsupported-path__label">'
+                . \htmlspecialchars((string) __('货币'), ENT_QUOTES, 'UTF-8') . '</h3>';
+        }
+        $builder = ObjectManager::getInstance(\Weline\Currency\Service\CurrencySwitcherIslandBuilder::class);
+        echo $builder->renderDialogColumnHtml();
+        echo '</section>';
+    }
+    echo '</div></div></dialog>';
+} catch (\Throwable) {
+    return;
+}

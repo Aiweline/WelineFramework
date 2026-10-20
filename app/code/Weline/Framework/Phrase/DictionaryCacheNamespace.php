@@ -32,13 +32,15 @@ final class DictionaryCacheNamespace
 
     private static ?ProcessMemoryStore $store = null;
     private static ?MemoryReclaimableInterface $reclaimable = null;
-    /** @var array<string, array> */
+    /** @var array<string, array> 命名进程袋（身份=名称，显式绑定）。 */
     private static array $bagRefs = [];
+    /** @var array<string, string> 每个命名袋最近一次 locale 记账的 (bucket:entries) 签名。 */
+    private static array $bagSizes = [];
     /** @var list<string> oldest → newest */
     private static array $localeLru = [];
     /** @var array<string, int> */
     private static array $localeBucketPins = [];
-    private static int $anonBagSeq = 0;
+    private static bool $legacyLocalCacheWarned = false;
 
     /** 纯函数：语言依赖只保留叶子，祖先由统一 NamespaceGenerationRepository 展开。 */
     public static function namespacePaths(array $locales = []): array
@@ -110,31 +112,109 @@ final class DictionaryCacheNamespace
     }
 
     /**
-     * 复用调用者已有 L1。
-     * 仅活跃事务返回临时空数组；无 RequestContext 时按进程级指纹写入同一底层数组。
-     * 内部将语言维登记到 ProcessMemoryStore（bucket=locale）；袋数据仍由调用者数组承载。
+     * 命名进程袋：身份即名称，绑定幂等，热路径 O(1)。
+     *
+     * 调用者必须传入进程级常驻数组（static 属性或进程单例属性）。请求级数组请用
+     * {@see requestBag()}，否则进程表会持有一个随请求重建的引用。
+     *
+     * @param array<string, mixed> $bag
+     * @return array<string, mixed>
      */
-    public static function &localCache(array &$cache, int $maxEntries = 32768, array $locales = []): array
+    public static function &processBag(string $name, array &$bag, int $maxEntries = 32768, array $locales = []): array
     {
         if (self::fingerprint($locales) === null) {
             $uncached = [];
             return $uncached;
         }
 
-        $bucket = self::bucketLocale($locales);
-        $bagName = self::identifyOrAdoptBag($cache);
-        if ($bucket !== '') {
-            self::rememberLocaleInStore($bagName, $bucket, $cache);
+        $name = \trim($name);
+        if ($name === '') {
+            // 空名不是身份；按请求袋处理，禁止回退到匿名登记。
+            return self::requestBag($bag, $maxEntries, $locales);
         }
 
-        // 版本变化会产生新键；在已有数组内淘汰旧条目，避免常驻 Worker 随发布次数增长。
-        if (\count($cache) > $maxEntries) {
-            $cache = \array_slice($cache, -$maxEntries, null, true);
-            if ($bucket !== '') {
-                self::rememberLocaleInStore($bagName, $bucket, $cache);
+        // 同一名称重复绑定只移动引用，不新增条目；旧引用被释放，内存不随调用增长。
+        self::$bagRefs[$name] = &$bag;
+
+        self::trimBag($bag, $maxEntries);
+
+        $bucket = self::bucketLocale($locales);
+        if ($bucket !== '') {
+            // 只在袋尺寸变化时记账；同一尺寸的重复调用不写 Store。
+            $signature = $bucket . ':' . \count($bag);
+            if ((self::$bagSizes[$name] ?? null) !== $signature) {
+                self::$bagSizes[$name] = $signature;
+                self::rememberLocaleInStore($name, $bucket, $bag);
             }
         }
-        return $cache;
+
+        return $bag;
+    }
+
+    /**
+     * 请求袋：随请求释放，永不登记进程表、不写 ProcessMemoryStore。
+     *
+     * @param array<string, mixed> $bag
+     * @return array<string, mixed>
+     */
+    public static function &requestBag(array &$bag, int $maxEntries = 32768, array $locales = []): array
+    {
+        if (self::fingerprint($locales) === null) {
+            $uncached = [];
+            return $uncached;
+        }
+
+        self::trimBag($bag, $maxEntries);
+
+        return $bag;
+    }
+
+    /**
+     * @deprecated 使用 {@see processBag()}（进程级）或 {@see requestBag()}（请求级）。
+     *             保留给本仓外消费方迁移；语义已降为请求袋（不登记、不写 Store）。
+     *             删除计划：仓外调用点清零后删除（见 dev/session/process-bag-unify.md）。
+     *
+     * @param array<string, mixed> $cache
+     * @return array<string, mixed>
+     */
+    public static function &localCache(array &$cache, int $maxEntries = 32768, array $locales = []): array
+    {
+        if (!self::$legacyLocalCacheWarned) {
+            self::$legacyLocalCacheWarned = true;
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('DictionaryCacheNamespace::localCache() is deprecated; use processBag()/requestBag().');
+            }
+        }
+
+        return self::requestBag($cache, $maxEntries, $locales);
+    }
+
+    /**
+     * 已登记的命名进程袋（诊断/契约测试用）。
+     *
+     * @return list<string>
+     */
+    public static function registeredBagNames(): array
+    {
+        return \array_keys(self::$bagRefs);
+    }
+
+    /**
+     * 诊断：已登记进程袋的条目数/估算字节数（只读，不触发加载）。
+     *
+     * @return array<string, array{entries:int, bytes:int}>
+     */
+    public static function bagStats(): array
+    {
+        $stats = [];
+        foreach (self::$bagRefs as $name => $bag) {
+            $stats[$name] = [
+                'entries' => \count($bag),
+                'bytes' => self::estimateBagBytes($bag),
+            ];
+        }
+
+        return $stats;
     }
 
     public static function scopedPool(CachePoolInterface $pool, array $locales = []): CachePoolInterface
@@ -178,7 +258,7 @@ final class DictionaryCacheNamespace
         self::$localeLru = [];
         self::$localeBucketPins = [];
         self::$bagRefs = [];
-        self::$anonBagSeq = 0;
+        self::$bagSizes = [];
     }
 
     /**
@@ -471,42 +551,20 @@ final class DictionaryCacheNamespace
     }
 
     /**
-     * @param array<string, mixed> $cache
+     * 90% 滞后水位：满袋时一次削到 90%，避免每次插入都整袋复制。
+     *
+     * @param array<string, mixed> $bag
      */
-    private static function identifyOrAdoptBag(array &$cache): string
+    private static function trimBag(array &$bag, int $maxEntries): void
     {
-        foreach (self::$bagRefs as $name => &$ref) {
-            if (self::isSameArrayRef($ref, $cache)) {
-                return (string)$name;
-            }
+        if ($maxEntries <= 0) {
+            return;
         }
-        unset($ref);
-
-        $name = 'anon_' . (++self::$anonBagSeq);
-        self::$bagRefs[$name] = &$cache;
-
-        return $name;
-    }
-
-    /**
-     * @param array<string, mixed> $a
-     * @param array<string, mixed> $b
-     */
-    private static function isSameArrayRef(array &$a, array &$b): bool
-    {
-        $probeKey = "\0phrase.ref.probe\0";
-        $probe = \random_int(\PHP_INT_MIN, \PHP_INT_MAX);
-        $had = \array_key_exists($probeKey, $a);
-        $previous = $had ? $a[$probeKey] : null;
-        $a[$probeKey] = $probe;
-        $same = \array_key_exists($probeKey, $b) && $b[$probeKey] === $probe;
-        if ($had) {
-            $a[$probeKey] = $previous;
-        } else {
-            unset($a[$probeKey]);
+        if (\count($bag) <= $maxEntries) {
+            return;
         }
-
-        return $same;
+        $keep = \max(1, \intdiv($maxEntries * 9, 10));
+        $bag = \array_slice($bag, -$keep, null, true);
     }
 
     /**

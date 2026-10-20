@@ -1949,6 +1949,8 @@ Installed,Installed
 "已向 %{1}/%{2} 个可控 WLS 实例发送 %{3}，失败：%{4}；跳过：%{5}","Sent %{3} to %{1}/%{2} controllable WLS instance(s), failed: %{4}; skipped: %{5}"
 "已向 %{1}/%{2} 个可控 WLS 实例发送 %{3}，失败：%{4}","Sent %{3} to %{1}/%{2} controllable WLS instance(s), failed: %{4}"
 "实例 %{1} 的 Master 未运行，无法通过 IPC 控制。","Master of instance %{1} is not running, cannot control via IPC."
+命名空间时钟通知超时。,命名空间时钟通知超时。
+容量采样拉取超时。,容量采样拉取超时。
 连接控制端口失败：%{1},"Failed to Connect to Control Port: %{1}"
 "发送控制命令失败，请检查 Orchestrator IPC 连接状态。","Failed to send control command, please check the Orchestrator IPC connection status."
 读取控制命令响应失败。,"Failed to read the control command response."
@@ -2016,6 +2018,9 @@ Deploy,Deploy
 无活跃攻击信号,"No active attack signals"
 "已通知 CDN 开启攻击防护模式，攻击次数: %{1}","CDN attack protection mode enabled, attack count: %{1}"
 "已通知 CDN 关闭攻击防护模式，持续时间: %{1} 分钟","CDN attack protection mode disabled, duration: %{1} minutes"
+"从 Master 读取最新容量采样并追加到历史文件","从 Master 读取最新容量采样并追加到历史文件"
+"容量采样已追加 %{1} 条，清理 %{2} 条","容量采样已追加 %{1} 条，清理 %{2} 条"
+"容量采样落盘异常: %{1}","容量采样落盘异常: %{1}"
 "每天检查即将到期的证书：%{1} 天内发送通知，%{2} 天内自动续签","Check daily for expiring certificates: send notification within %{1} days, auto-renew within %{2} days"
 没有需要续签的证书,"No certificates need renewal"
 "证书将在 %{1} 天后过期","Certificate Will Expire in %{1} Days"
@@ -3035,6 +3040,8 @@ Previous：%{1},Previous：%{1}
 "停止 4 个进程","Stop 4 processes."
 "实例 [%{1}] 正在执行启动、停止或其他生命周期操作，已拒绝并发重载。","Instance [%{1}] is performing a start, stop, or other lifecycle operation and has rejected concurrent reloads."
 "实例 [%{1}] 自动匹配到 [%{2}]","Instance [%{1}] automatically matched to [%{2}]"
+"实例 [%{1}] 的 Master 控制面在探测预算内未响应（进程存活，控制循环繁忙）。","实例 [%{1}] 的 Master 控制面在探测预算内未响应（进程存活，控制循环繁忙）。"
+"改为异步下发重载：命令将排队，Master 控制循环空闲后执行。","改为异步下发重载：命令将排队，Master 控制循环空闲后执行。"
 "实例 [%{1}] 未检测到运行中的 WLS Worker","Instance [%{1}] no running WLS Worker detected"
 "可执行 server:listing -r 查看当前运行中的实例","Run server:listing -r to view currently running instances."
 你可能想要的实例：%{1},"Instances you might want: %{1}"

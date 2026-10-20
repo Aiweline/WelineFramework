@@ -60,6 +60,16 @@ final class BackendMenuSignalAggregator
                     }
                     $items = [];
                 }
+                if ($items === []) {
+                    continue;
+                }
+                $unreadShown = 0;
+                foreach ($items as $item) {
+                    $unreadShown += max(1, (int)($item['count'] ?? 1));
+                }
+                if (count($items) < self::MAX_ITEMS_PER_CODE || $count < $unreadShown) {
+                    $count = $unreadShown;
+                }
             }
 
             $primaryHref = '';
@@ -83,7 +93,7 @@ final class BackendMenuSignalAggregator
 
     /**
      * @param mixed $raw
-     * @return list<array{id: string, title: string, href: string, count: int}>
+     * @return list<array{id: string, title: string, href: string, count: int, unread: true}>
      */
     private function normalizeItems(mixed $raw): array
     {
@@ -97,7 +107,7 @@ final class BackendMenuSignalAggregator
                 continue;
             }
             $href = trim((string)($row['href'] ?? ''));
-            if ($href === '') {
+            if ($href === '' || !$this->isUnreadFlag($row['unread'] ?? null)) {
                 continue;
             }
             $id = trim((string)($row['id'] ?? ''));
@@ -109,7 +119,8 @@ final class BackendMenuSignalAggregator
                 'id' => $id !== '' ? $id : $href,
                 'title' => $title,
                 'href' => $href,
-                'count' => max(0, (int)($row['count'] ?? 1)),
+                'count' => max(1, (int)($row['count'] ?? 1)),
+                'unread' => true,
             ];
             if (count($out) >= self::MAX_ITEMS_PER_CODE) {
                 break;
@@ -117,5 +128,18 @@ final class BackendMenuSignalAggregator
         }
 
         return $out;
+    }
+
+    private function isUnreadFlag(mixed $value): bool
+    {
+        if ($value === true || $value === 1) {
+            return true;
+        }
+        if (!is_string($value)) {
+            return false;
+        }
+        $normalized = strtolower(trim($value));
+
+        return $normalized === '1' || $normalized === 'true';
     }
 }

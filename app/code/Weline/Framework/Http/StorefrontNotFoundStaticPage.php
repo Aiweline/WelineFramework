@@ -19,7 +19,7 @@ final class StorefrontNotFoundStaticPage
     /**
      * Resolve locale for a storefront 404 response.
      *
-     * Priority: path segment → query(lang|locale|locale_code) → State::getLang()
+     * Priority: path segment → query(lang|locale|locale_code) → WelineEnv::getLang()
      * (RequestContext route.language) → zh_Hans_CN (no language cookie).
      *
      * Url::detectLanguage strips /{locale} from REQUEST_URI; ErrorPageRenderer may
@@ -55,14 +55,14 @@ final class StorefrontNotFoundStaticPage
         }
 
         // Path locale may already be stripped from request.path; RequestContext /
-        // State::getLang() holds the visitor-facing locale written at peel time.
+        // WelineEnv::getLang() holds the visitor-facing locale written at peel time.
         try {
             if (\class_exists(\Weline\Framework\Context::class, false)
                 && \Weline\Framework\Context::getCurrent() !== null
                 && \class_exists(\Weline\Framework\App\State::class, false)
             ) {
                 $fromState = self::normalizeLangCode(
-                    (string)\Weline\Framework\App\State::getLang()
+                    (string)\Weline\Framework\Env\WelineEnv::getLang()
                 );
                 if ($fromState !== '') {
                     return $fromState;

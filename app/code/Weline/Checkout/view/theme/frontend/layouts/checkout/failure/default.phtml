@@ -18,7 +18,7 @@
 ?>
 <?php
 $title = $this->getData('title') ?? __('订单尚未完成');
-$content = $this->getData('content') ?? '';
+$checkoutFailureHtml = (string)($this->getData('content') ?? '');
 $errorMessage = $this->getData('errorMessage') ?? __('本次结算没有生成有效订单，也不会在此页面重复扣款。您可以返回购物车核对商品，或前往帮助中心排查支付与配送问题。');
 $errorCode = $this->getData('errorCode') ?? '';
 $retryUrl = $this->getData('retryUrl') ?? '';
@@ -165,9 +165,9 @@ $this->assign('title', $title);
                 multiple="true"
                 position="content"
                 class="checkout-failure-container">
-            <?php if ($content): ?>
+            <?php if ($checkoutFailureHtml !== ''): ?>
             <div class="checkout-failure-content checkout-failure-content--passthrough">
-                {{content}}
+                <?= $checkoutFailureHtml ?>
             </div>
             <?php else: ?>
             <div class="checkout-failure-content" data-testid="storefront-checkout-failure-page">

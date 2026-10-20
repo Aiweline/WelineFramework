@@ -163,7 +163,7 @@ final class Products extends FrontendRestController
         }
         return \Weline\Product\Service\ProductRestTranslations::negotiateLocale(
             (string)($this->request->getServerBag()->getHeader('Accept-Language') ?? ''),
-            (string)\Weline\Framework\App\State::getLangLocal(),
+            (string)\Weline\Framework\Env\WelineEnv::getLangLocal(),
         );
     }
 

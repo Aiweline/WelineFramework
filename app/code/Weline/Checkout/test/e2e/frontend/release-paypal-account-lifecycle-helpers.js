@@ -772,39 +772,54 @@ async function ensureCheckoutAddress(page, email) {
   );
   await fillAlways(`${scope}input[name="city"]`, address.city);
   await fillAlways(`${scope}input[name="postal_code"]`, address.postal_code);
-  await page.evaluate(async (addr) => {
-    if (window.WelineThemeAddress && typeof window.WelineThemeAddress.applyValues === 'function') {
-      await window.WelineThemeAddress.applyValues('checkout-shipping-address', {
-        country_code: addr.country_code,
-        country: addr.country_name,
-        province: addr.province_name,
-        city: addr.city,
-        district: '',
-        street: addr.street,
-        address1: addr.address1,
-        line1: addr.address1,
-      });
-    }
-    const root = document.querySelector('[data-shipping-checkout-address]') || document;
-    const setVal = (n, v) => {
-      const el = root.querySelector(`[name="${n}"]`);
-      if (el) {
-        el.value = v;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
+  // Address widget can navigate (captcha / save redirect) mid-evaluate on B2B channel.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      await page.evaluate(async (addr) => {
+        if (window.WelineThemeAddress && typeof window.WelineThemeAddress.applyValues === 'function') {
+          await window.WelineThemeAddress.applyValues('checkout-shipping-address', {
+            country_code: addr.country_code,
+            country: addr.country_name,
+            province: addr.province_name,
+            city: addr.city,
+            district: '',
+            street: addr.street,
+            address1: addr.address1,
+            line1: addr.address1,
+          });
+        }
+        const root = document.querySelector('[data-shipping-checkout-address]') || document;
+        const setVal = (n, v) => {
+          const el = root.querySelector(`[name="${n}"]`);
+          if (el) {
+            el.value = v;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        };
+        setVal('country_code', addr.country_code);
+        setVal('country', addr.country_name);
+        setVal('province', addr.province_name);
+        setVal('city', addr.city);
+        setVal('street', addr.street);
+        setVal('address1', addr.address1);
+        setVal('line1', addr.address1);
+        setVal('address', addr.address1);
+        setVal('email', addr.email);
+        setVal('phone', addr.phone);
+      }, address);
+      break;
+    } catch (error) {
+      const message = String((error && error.message) || error);
+      if (attempt >= 1 || !/Execution context was destroyed|Target closed|navigation/i.test(message)) {
+        throw error;
       }
-    };
-    setVal('country_code', addr.country_code);
-    setVal('country', addr.country_name);
-    setVal('province', addr.province_name);
-    setVal('city', addr.city);
-    setVal('street', addr.street);
-    setVal('address1', addr.address1);
-    setVal('line1', addr.address1);
-    setVal('address', addr.address1);
-    setVal('email', addr.email);
-    setVal('phone', addr.phone);
-  }, address);
+      await page.waitForLoadState('domcontentloaded').catch(() => {});
+      await page.waitForTimeout(600);
+      await page.waitForSelector('[data-shipping-checkout-address], .weline-checkout', { timeout: 60000 });
+      await dismissStorefrontNoise(page);
+    }
+  }
   // Persist address card when checkout requires explicit save before PayPal redirect.
   const saveBtn = page.locator(
     '[data-shipping-checkout-address] button:has-text("保存地址"), [data-shipping-checkout-address] button:has-text("Save"), [data-testid="checkout-address-save"]'

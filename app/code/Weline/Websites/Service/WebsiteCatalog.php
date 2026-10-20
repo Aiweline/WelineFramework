@@ -19,8 +19,10 @@ final class WebsiteCatalog implements WebsiteCatalogInterface
     private const POOL = 'website';
     private const RESOURCE_ALL = 'websites.catalog.all';
     private const RESOURCE_DEFAULT_ID = 'websites.catalog.default_id';
+    private const RESOURCE_COUNT = 'websites.catalog.count';
     private const PROCESS_ALL_KEY = 'all';
     private const PROCESS_DEFAULT_ID_KEY = 'default_id';
+    private const PROCESS_COUNT_KEY = 'count';
     private const PROCESS_BAG_MAX = 8;
     private const SHARED_TTL = 600;
 
@@ -38,6 +40,7 @@ final class WebsiteCatalog implements WebsiteCatalogInterface
         $global = ScopeIdentity::global();
         ScopeSharedMemo::forgetScoped(self::POOL, self::RESOURCE_ALL, $global);
         ScopeSharedMemo::forgetScoped(self::POOL, self::RESOURCE_DEFAULT_ID, $global);
+        ScopeSharedMemo::forgetScoped(self::POOL, self::RESOURCE_COUNT, $global);
         ScopeSharedMemo::purgeProcessPrefix('websites.catalog.');
     }
 
@@ -128,7 +131,19 @@ final class WebsiteCatalog implements WebsiteCatalogInterface
 
     public function count(): int
     {
-        return (int)$this->website->reset()->count(Website::schema_fields_ID);
+        if (\array_key_exists(self::PROCESS_COUNT_KEY, self::$processBag)) {
+            return (int)self::$processBag[self::PROCESS_COUNT_KEY];
+        }
+
+        $count = (int)ScopeSharedMemo::rememberScoped(
+            self::POOL,
+            self::RESOURCE_COUNT,
+            fn(): int => (int)$this->website->reset()->count(Website::schema_fields_ID),
+            ScopeIdentity::global(),
+            self::SHARED_TTL,
+        );
+
+        return self::$processBag[self::PROCESS_COUNT_KEY] = $count;
     }
 
     /**

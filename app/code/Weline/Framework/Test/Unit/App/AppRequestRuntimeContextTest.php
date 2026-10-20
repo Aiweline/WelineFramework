@@ -249,7 +249,7 @@ final class AppRequestRuntimeContextTest extends TestCase
         }
     }
 
-    public function testCanonicalizeStorefrontPathStripsDefaultLocaleAndCurrency(): void
+    public function testCanonicalizeStorefrontPathKeepsEnabledLanguageStripsDefaultCurrency(): void
     {
         $scope = $this->currentWebsiteScopeKey();
         $languageMaps = new \ReflectionProperty(State::class, 'allowedLanguageCodeMapsByScope');
@@ -261,20 +261,16 @@ final class AppRequestRuntimeContextTest extends TestCase
                 'fr_fr' => true,
             ]);
 
-            self::assertSame(
-                '/product/x',
+            self::assertNull(
                 State::canonicalizeStorefrontLocalizationPath('/zh_Hans_CN/product/x', 'zh_Hans_CN', 'CNY')
             );
-            self::assertSame(
-                '/product/x',
+            self::assertNull(
                 State::canonicalizeStorefrontLocalizationPath('/CNY/zh_Hans_CN/product/x', 'zh_Hans_CN', 'CNY')
             );
-            self::assertSame(
-                '/USD/product/x',
+            self::assertNull(
                 State::canonicalizeStorefrontLocalizationPath('/USD/zh_Hans_CN/product/x', 'zh_Hans_CN', 'CNY')
             );
-            self::assertSame(
-                '/en_US/product/x',
+            self::assertNull(
                 State::canonicalizeStorefrontLocalizationPath('/CNY/en_US/product/x', 'zh_Hans_CN', 'CNY')
             );
             self::assertNull(
@@ -283,24 +279,19 @@ final class AppRequestRuntimeContextTest extends TestCase
             self::assertNull(
                 State::canonicalizeStorefrontLocalizationPath('/product/x', 'zh_Hans_CN', 'CNY')
             );
-            self::assertSame(
-                '/',
+            self::assertNull(
                 State::canonicalizeStorefrontLocalizationPath('/zh_Hans_CN/', 'zh_Hans_CN', 'CNY')
             );
-            self::assertSame(
-                '/',
+            self::assertNull(
                 State::canonicalizeStorefrontLocalizationPath('/USD/USD', 'zh_Hans_CN', 'USD')
             );
-            self::assertSame(
-                '/product/x',
+            self::assertNull(
                 State::canonicalizeStorefrontLocalizationPath('/USD/USD/product/x', 'zh_Hans_CN', 'USD')
             );
-            self::assertSame(
-                '/',
+            self::assertNull(
                 State::canonicalizeStorefrontLocalizationPath('/en_US/en_US', 'en_US', 'USD')
             );
-            self::assertSame(
-                '/product/x',
+            self::assertNull(
                 State::canonicalizeStorefrontLocalizationPath('/en_US/en_US/product/x', 'en_US', 'USD')
             );
         } finally {
@@ -322,16 +313,13 @@ final class AppRequestRuntimeContextTest extends TestCase
                 'de_de' => true,
             ]);
 
-            self::assertSame(
-                '/product/x',
+            self::assertNull(
                 State::canonicalizeStorefrontLocalizationPath('/ja_JP/product/x', 'zh_Hans_CN', 'CNY')
             );
-            self::assertSame(
-                '/USD/about',
+            self::assertNull(
                 State::canonicalizeStorefrontLocalizationPath('/USD/ko_KR/about', 'zh_Hans_CN', 'CNY')
             );
-            self::assertSame(
-                '/',
+            self::assertNull(
                 State::canonicalizeStorefrontLocalizationPath('/ja_JP/', 'zh_Hans_CN', 'CNY')
             );
             // Enabled non-default stays.
@@ -341,9 +329,8 @@ final class AppRequestRuntimeContextTest extends TestCase
             self::assertNull(
                 State::canonicalizeStorefrontLocalizationPath('/en_US/product/x', 'zh_Hans_CN', 'CNY')
             );
-            // Default still strips.
-            self::assertSame(
-                '/product/x',
+            // Enabled default language stays on the path.
+            self::assertNull(
                 State::canonicalizeStorefrontLocalizationPath('/zh_Hans_CN/product/x', 'zh_Hans_CN', 'CNY')
             );
             // Area-first backend path: canonicalize refuses (App also skips redirect on backend).
@@ -419,6 +406,7 @@ final class AppRequestRuntimeContextTest extends TestCase
             $method->invokeArgs(new App(), [&$parse, '/ja_JP/about']);
 
             self::assertSame('zh_Hans_CN', $parse['language']);
+            self::assertSame('ja_JP', (string) RequestContext::get('route.rejected_path_language', ''));
             self::assertArrayNotHasKey('WELINE_URL_PATH_LANG', $parse['server']);
             self::assertSame('', (string)WelineEnv::server('WELINE_URL_PATH_LANG', ''));
         } finally {
@@ -426,6 +414,70 @@ final class AppRequestRuntimeContextTest extends TestCase
                 WelineEnv::removeServer('WELINE_URL_PATH_LANG');
             } catch (\Throwable) {
             }
+            $languageMaps->setValue(null, $originalLanguage);
+            $currencyMaps->setValue(null, $originalCurrency);
+        }
+    }
+
+    public function testUnsupportedPathCurrencyUsesWebsiteDefaultAndKeepsFlag(): void
+    {
+        $currencyMaps = new \ReflectionProperty(State::class, 'allowedCurrencyCodeMapsByScope');
+        $languageMaps = new \ReflectionProperty(State::class, 'allowedLanguageCodeMapsByScope');
+        $originalCurrency = $currencyMaps->getValue(null);
+        $originalLanguage = $languageMaps->getValue(null);
+
+        try {
+            $method = new ReflectionMethod(App::class, 'synchronizeParsedLocalization');
+            $method->setAccessible(true);
+
+            RequestContext::cleanup();
+            Context::leave();
+            Context::enter(new Context([
+                'meta' => ['type' => 'request', 'mode' => 'wls'],
+                'input' => [
+                    'uri' => '/JPY/about',
+                    'origin_request_uri' => '/JPY/about',
+                    'server' => [
+                        'REQUEST_URI' => '/JPY/about',
+                        'WELINE_ORIGIN_REQUEST_URI' => '/JPY/about',
+                        'WELINE_WEBSITE_ID' => '0',
+                        'WELINE_WEBSITE_CODE' => 'default',
+                        'WELINE_WEBSITE_LANGUAGE' => 'zh_Hans_CN',
+                        'WELINE_WEBSITE_CURRENCY' => 'CNY',
+                    ],
+                ],
+                'route' => [
+                    'website_id' => 0,
+                    'website_code' => 'default',
+                    'language' => 'zh_Hans_CN',
+                    'currency' => 'CNY',
+                ],
+            ]));
+            RequestContext::init();
+
+            $scope = $this->currentWebsiteScopeKey();
+            $this->seedAllowedLanguageMap($scope, ['zh_hans_cn' => true, 'en_us' => true]);
+            $this->seedAllowedCurrencyMap($scope, ['CNY' => true]);
+            WelineEnv::set('website.language', 'zh_Hans_CN', 'unit test');
+            WelineEnv::set('website.currency', 'CNY', 'unit test');
+
+            $parse = [
+                'currency' => 'JPY',
+                'language' => 'zh_Hans_CN',
+                'area' => 'frontend',
+                'server' => [
+                    'WELINE_USER_CURRENCY' => 'JPY',
+                    'WELINE_USER_LANG' => 'zh_Hans_CN',
+                    'WELINE_WEBSITE_LANGUAGE' => 'zh_Hans_CN',
+                    'WELINE_WEBSITE_CURRENCY' => 'CNY',
+                ],
+            ];
+            $method->invokeArgs(new App(), [&$parse, '/JPY/about']);
+
+            self::assertSame('CNY', $parse['currency']);
+            self::assertSame('JPY', (string) RequestContext::get('route.rejected_path_currency', ''));
+            self::assertSame('', (string) RequestContext::get('route.rejected_path_language', ''));
+        } finally {
             $languageMaps->setValue(null, $originalLanguage);
             $currencyMaps->setValue(null, $originalCurrency);
         }
@@ -490,10 +542,139 @@ final class AppRequestRuntimeContextTest extends TestCase
 
             self::assertSame('zh_Hans_CN', $parse['language']);
             self::assertSame('zh_Hans_CN', $parse['server']['WELINE_USER_LANG']);
+            self::assertSame('zh_Hans_CN', RequestContext::getWelineUserLang());
         } finally {
             unset($_COOKIE['WELINE_USER_LANG'], $_COOKIE['WELINE_USER_LANG_w0']);
             WelineEnv::set('cookie.WELINE_USER_LANG', null, 'unit test cleanup');
             WelineEnv::set('cookie.WELINE_USER_LANG_w0', null, 'unit test cleanup');
+            $currencyMaps->setValue(null, $originalCurrency);
+            $languageMaps->setValue(null, $originalLanguage);
+        }
+    }
+
+    public function testUnprefixedPathOverwritesLeftoverRequestLanguageWithWebsiteDefault(): void
+    {
+        $currencyMaps = new \ReflectionProperty(State::class, 'allowedCurrencyCodeMapsByScope');
+        $languageMaps = new \ReflectionProperty(State::class, 'allowedLanguageCodeMapsByScope');
+        $websiteDefaults = new \ReflectionProperty(State::class, 'websiteDefaultLanguageByScope');
+        $originalCurrency = $currencyMaps->getValue(null);
+        $originalLanguage = $languageMaps->getValue(null);
+        $originalDefaults = $websiteDefaults->getValue(null);
+
+        try {
+            $method = new ReflectionMethod(App::class, 'synchronizeParsedLocalization');
+            $method->setAccessible(true);
+
+            RequestContext::cleanup();
+            Context::leave();
+            Context::enter(new Context([
+                'meta' => ['type' => 'request', 'mode' => 'wls'],
+                'input' => [
+                    'uri' => '/journal',
+                    'origin_request_uri' => '/journal',
+                    'server' => [
+                        'REQUEST_URI' => '/journal',
+                        'WELINE_ORIGIN_REQUEST_URI' => '/journal',
+                        'WELINE_WEBSITE_ID' => '0',
+                        'WELINE_WEBSITE_CODE' => 'default',
+                        'WELINE_WEBSITE_LANGUAGE' => 'en_US',
+                    ],
+                ],
+                'route' => [
+                    'website_id' => 0,
+                    'website_code' => 'default',
+                    // Leftover from the previous Fiber/request on this Worker.
+                    'language' => 'zh_Hans_CN',
+                    'currency' => 'CNY',
+                ],
+            ]));
+            RequestContext::init();
+
+            $scope = $this->currentWebsiteScopeKey();
+            $this->seedAllowedCurrencyMap($scope, ['CNY' => true]);
+            $this->seedAllowedLanguageMap($scope, ['zh_hans_cn' => true, 'en_us' => true]);
+            $websiteDefaults->setValue(null, [$scope => 'en_US'] + (array)$websiteDefaults->getValue(null));
+
+            WelineEnv::set('website.language', 'en_US', 'unit test website default');
+            WelineEnv::set('user.lang', 'zh_Hans_CN', 'unit test leftover worker locale');
+
+            $parse = [
+                'currency' => 'CNY',
+                'language' => 'zh_Hans_CN',
+                'server' => [
+                    'WELINE_USER_CURRENCY' => 'CNY',
+                    'WELINE_USER_LANG' => 'zh_Hans_CN',
+                    'WELINE_WEBSITE_LANGUAGE' => 'en_US',
+                ],
+            ];
+            $method->invokeArgs(new App(), [&$parse, '/journal']);
+
+            self::assertSame('en_US', $parse['language']);
+            self::assertSame('en_US', $parse['server']['WELINE_USER_LANG']);
+            self::assertSame('en_US', RequestContext::getWelineUserLang());
+            self::assertSame('en_US', WelineEnv::getLang());
+        } finally {
+            $currencyMaps->setValue(null, $originalCurrency);
+            $languageMaps->setValue(null, $originalLanguage);
+            $websiteDefaults->setValue(null, $originalDefaults);
+        }
+    }
+
+    public function testVisitorUriPathLanguageWinsWhenOriginAlreadyPeeled(): void
+    {
+        $currencyMaps = new \ReflectionProperty(State::class, 'allowedCurrencyCodeMapsByScope');
+        $languageMaps = new \ReflectionProperty(State::class, 'allowedLanguageCodeMapsByScope');
+        $originalCurrency = $currencyMaps->getValue(null);
+        $originalLanguage = $languageMaps->getValue(null);
+
+        try {
+            $method = new ReflectionMethod(App::class, 'synchronizeParsedLocalization');
+            $method->setAccessible(true);
+
+            RequestContext::cleanup();
+            Context::leave();
+            Context::enter(new Context([
+                'meta' => ['type' => 'request', 'mode' => 'wls'],
+                'input' => [
+                    'uri' => '/journal',
+                    'origin_request_uri' => '/journal',
+                    'server' => [
+                        'REQUEST_URI' => '/journal',
+                        'WELINE_ORIGIN_REQUEST_URI' => '/journal',
+                        'WELINE_VISITOR_REQUEST_URI' => '/en_US/journal',
+                        'WELINE_WEBSITE_ID' => '0',
+                        'WELINE_WEBSITE_CODE' => 'default',
+                        'WELINE_WEBSITE_LANGUAGE' => 'zh_Hans_CN',
+                    ],
+                ],
+                'route' => [
+                    'website_id' => 0,
+                    'website_code' => 'default',
+                    'language' => 'zh_Hans_CN',
+                    'currency' => 'CNY',
+                ],
+            ]));
+            RequestContext::init();
+
+            $scope = $this->currentWebsiteScopeKey();
+            $this->seedAllowedCurrencyMap($scope, ['CNY' => true]);
+            $this->seedAllowedLanguageMap($scope, ['zh_hans_cn' => true, 'en_us' => true]);
+
+            $parse = [
+                'currency' => 'CNY',
+                'language' => 'zh_Hans_CN',
+                'server' => [
+                    'WELINE_USER_CURRENCY' => 'CNY',
+                    'WELINE_USER_LANG' => 'zh_Hans_CN',
+                    'WELINE_WEBSITE_LANGUAGE' => 'zh_Hans_CN',
+                ],
+            ];
+            // Caller must pass the visitor pretty path (App::applyParsedUrl prefers VISITOR).
+            $method->invokeArgs(new App(), [&$parse, '/en_US/journal']);
+
+            self::assertSame('en_US', $parse['language']);
+            self::assertSame('en_US', RequestContext::getWelineUserLang());
+        } finally {
             $currencyMaps->setValue(null, $originalCurrency);
             $languageMaps->setValue(null, $originalLanguage);
         }

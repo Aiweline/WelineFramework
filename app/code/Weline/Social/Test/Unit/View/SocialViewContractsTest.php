@@ -128,6 +128,11 @@ private function assert_SocialScopeMailboxStrip_testTabsBarHostsMailboxStripOnRi
     self::assertStringContainsString('mailboxRegisterHint', $tpl);
     self::assertStringContainsString('social-mailbox-register-hint', $tpl);
     self::assertStringContainsString('注册平台时可用此邮箱，方便统一管理。', $tpl);
+    self::assertStringContainsString('data-testid="social-platform-register"', $tpl);
+    self::assertStringContainsString('data-social-signup-url', $tpl);
+    self::assertStringContainsString('openPlatformSignup', $tpl);
+    self::assertStringContainsString('用社媒邮箱注册', $tpl);
+    self::assertStringContainsString('ensureScopeSocialMailbox', $tpl);
     self::assertStringContainsString('.weline-social-admin__mailbox-hint', $css);
 }
 

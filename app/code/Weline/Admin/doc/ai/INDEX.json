@@ -1,0 +1,12 @@
+{
+  "module": "Weline_Admin",
+  "skills": [
+    {
+      "skill_id": "doc:backend-menu-signal",
+      "name": "backend-menu-signal",
+      "aliases": ["菜单消息提示", "菜单消息", "backend-menu-signal", "menu-signal"],
+      "path": "app/code/Weline/Admin/doc/ai/skills/backend-menu-signal/SKILL.md",
+      "description": "后台侧栏菜单消息角标与深链。菜单消息、菜单角标、侧栏未读、邮箱未读传导到菜单时使用。订单与企业邮局都走 BackendMenuSignalProvider，不是 SMTP 或通知渠道。"
+    }
+  ]
+}

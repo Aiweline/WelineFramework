@@ -19,7 +19,7 @@ final class MaintenanceStaticPage
     /**
      * Resolve locale for a maintenance response.
      *
-     * Priority: path segment → query(lang|locale|locale_code) → State::getLang()
+     * Priority: path segment → query(lang|locale|locale_code) → WelineEnv::getLang()
      * (RequestContext) → zh_Hans_CN (no language cookie).
      */
     public static function resolveLang(
@@ -56,7 +56,7 @@ final class MaintenanceStaticPage
                 && \class_exists(\Weline\Framework\App\State::class, false)
             ) {
                 $fromState = self::normalizeLangCode(
-                    (string)\Weline\Framework\App\State::getLang()
+                    (string)\Weline\Framework\Env\WelineEnv::getLang()
                 );
                 if ($fromState !== '') {
                     return $fromState;

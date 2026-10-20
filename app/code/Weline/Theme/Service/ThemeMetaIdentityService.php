@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\State;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
@@ -254,12 +256,12 @@ class ThemeMetaIdentityService
             return $locale;
         }
 
-        $stateLocale = trim((string)State::getLangLocal());
+        $stateLocale = trim((string)WelineEnv::getLangLocal());
         if ($stateLocale !== '') {
             return $stateLocale;
         }
 
-        $stateLang = trim((string)State::getLang());
+        $stateLang = trim((string)WelineEnv::getLang());
         return $stateLang !== '' ? $stateLang : 'zh_Hans_CN';
     }
 

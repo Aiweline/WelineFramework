@@ -116,7 +116,7 @@ class Info extends CommandAbstract
     private function resolveLocale(array $args): string
     {
         $locale = trim((string)($args['locale'] ?? $args['l'] ?? ''));
-        return $locale !== '' ? $locale : (string)w_env('user.lang', Env::get('user.lang', 'zh_Hans_CN'));
+        return $locale !== '' ? $locale : \Weline\Framework\Env\WelineEnv::getLang();
     }
 
     private function moduleDir(string $moduleName, array $moduleInfo): string

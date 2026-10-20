@@ -575,7 +575,7 @@ HTML;
             if (\class_exists(\Weline\Framework\App\State::class, false)) {
                 try {
                     $explicitLang = StorefrontNotFoundStaticPage::normalizeLangCode(
-                        (string)\Weline\Framework\App\State::getLang()
+                        (string)\Weline\Framework\Env\WelineEnv::getLang()
                     );
                 } catch (\Throwable) {
                     $explicitLang = '';

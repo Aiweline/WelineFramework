@@ -1882,6 +1882,7 @@ Transport,运输
 获取操作：%{1},获取操作：%{1}
 模板文件不存在！：%{1},模板文件不存在！：%{1}
 源文件：%{1},源文件：%{1}
+...,...
 "正在更新 Extends 注册表...","正在更新 Extends 注册表..."
 "✓ Extends 注册表已更新完成。","✓ Extends 注册表已更新完成。"
 "Extends 注册表更新失败，但将继续执行。","Extends 注册表更新失败，但将继续执行。"
@@ -2375,9 +2376,9 @@ source_id与parent_source不能相同！,source_id与parent_source不能相同�
 "类型 %{1} 的值仅接受：0或1","类型 %{1} 的值仅接受：0或1"
 "类型 %{1} 设置为：%{1}","类型 %{1} 设置为：%{1}"
 设置静态文件是否末尾添加随机字符，以保证浏览器不缓存文件而得到实时响应修改。接受值：0或1,设置静态文件是否末尾添加随机字符，以保证浏览器不缓存文件而得到实时响应修改。接受值：0或1
-主题命名空间无法归一化，已跳过主题域静态发布（扁平树不受影响）：,主题命名空间无法归一化，已跳过主题域静态发布（扁平树不受影响）：
 "静态树无变更，跳过 FPC deploy ns bump（空跑勿 thrash）","静态树无变更，跳过 FPC deploy ns bump（空跑勿 thrash）"
 "已 bump global/storefront/deploy（日常 Upgrade 优先 bump）","已 bump global/storefront/deploy（日常 Upgrade 优先 bump）"
+主题命名空间无法归一化，已跳过主题域静态发布（扁平树不受影响）：,主题命名空间无法归一化，已跳过主题域静态发布（扁平树不受影响）：
 静态资源部署进程池,静态资源部署进程池
 静态资源部署,静态资源部署
 "同步 path 包 transport-options.symlink（不 update 依赖图）","同步 path 包 transport-options.symlink（不 update 依赖图）"

@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
 use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Console\PhpCliRuntimePreflight;
 use Weline\Framework\Event\EventsManager;
@@ -409,6 +408,16 @@ class ServiceOrchestrator
 
     /** Last issued cache invalidation epoch; wall-clock seeded and process-monotonic. */
     private int $cacheClearEpoch = 0;
+
+    /** Highest namespace authority clock learned from IPC. READY compares against this; it never reads the generation table. */
+    private int $namespaceAuthorityClockWatermark = 0;
+
+    /**
+     * Latest capacity sample. The control loop only stores this; a cron process appends the history file.
+     *
+     * @var array<string,mixed>|null
+     */
+    private ?array $latestCapacitySample = null;
 
     /**
      * @var array{
@@ -17392,24 +17401,8 @@ class ServiceOrchestrator
                 ? 'cache_namespace_authority_clock_invalid'
                 : '';
         }
-        try {
-            $authorityClock = ObjectManager::getInstance(
-                NamespaceGenerationRepository::class,
-            )->ensureAuthorityClock();
-        } catch (\Throwable) {
-            WlsLogger::error_(
-                'cache_namespace_ready_reconcile_failed',
-                [
-                    'instance' => $this->context?->instanceName ?? '',
-                    'error_code' => 'db_reconcile_failed',
-                ],
-            );
-            return $this->isNamespaceCapabilityRequired()
-                ? 'cache_namespace_ready_reconcile_failed'
-                : '';
-        }
 
-        return $reportedClock >= $authorityClock
+        return $reportedClock >= $this->namespaceAuthorityClockWatermark
             ? ''
             : ($this->isNamespaceCapabilityRequired()
                 ? 'cache_namespace_authority_clock_stale'
@@ -26176,6 +26169,16 @@ class ServiceOrchestrator
             return;
         }
 
+        if ($action === ControlMessage::ACTION_NAMESPACE_AUTHORITY_CLOCK) {
+            $this->handleNamespaceAuthorityClockCommand($msg, $clientId);
+            return;
+        }
+
+        if ($action === ControlMessage::ACTION_CAPACITY_SAMPLE_PULL) {
+            $this->handleCapacitySamplePullCommand($msg, $clientId);
+            return;
+        }
+
         if ($action === ControlMessage::ACTION_CACHE_NAMESPACE_STATUS_V1) {
             $this->handleCacheNamespaceInvalidationStatusCommand($msg, $clientId);
             return;
@@ -28969,6 +28972,13 @@ class ServiceOrchestrator
             ];
         }
 
+        if (($accepted['accepted'] ?? false) === true) {
+            $clock = $frame['authority_clock'] ?? null;
+            if (\is_int($clock) && $clock > 0) {
+                $this->raiseNamespaceAuthorityClock($clock);
+            }
+        }
+
         $this->controlServer?->sendTo(
             $clientId,
             ControlMessage::commandResult(
@@ -28986,6 +28996,75 @@ class ServiceOrchestrator
                 $msgId,
             ),
         );
+    }
+
+    private function handleNamespaceAuthorityClockCommand(array $message, int $clientId): void
+    {
+        $msgId = (string)($message['msg_id'] ?? '');
+        $clock = $message['authority_clock'] ?? null;
+        if (!\is_int($clock) || $clock <= 0) {
+            $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+                false,
+                ['accepted' => false, 'error_code' => 'authority_clock_invalid'],
+                (string)__('命名空间权威时钟无效。'),
+                $msgId,
+            ));
+            return;
+        }
+        $this->raiseNamespaceAuthorityClock($clock);
+        $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+            true,
+            [
+                'accepted' => true,
+                'completed' => true,
+                'authority_clock' => $this->namespaceAuthorityClockWatermark,
+            ],
+            (string)__('已记录命名空间权威时钟。'),
+            $msgId,
+        ));
+    }
+
+    private function handleCapacitySamplePullCommand(array $message, int $clientId): void
+    {
+        $msgId = (string)($message['msg_id'] ?? '');
+        $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+            true,
+            [
+                'accepted' => true,
+                'completed' => true,
+                'sample' => $this->latestCapacitySample,
+            ],
+            (string)__('已返回最新容量采样。'),
+            $msgId,
+        ));
+    }
+
+    private function raiseNamespaceAuthorityClock(int $clock): void
+    {
+        if ($clock > $this->namespaceAuthorityClockWatermark) {
+            $this->namespaceAuthorityClockWatermark = $clock;
+        }
+    }
+
+    /** @param array<string, mixed> $sample */
+    private function rememberCapacitySample(string $instance, array $sample): void
+    {
+        $codes = $sample['advice_codes'] ?? [];
+        if (!\is_array($codes)) {
+            $codes = [];
+        }
+        $this->latestCapacitySample = [
+            'instance' => $instance !== '' ? $instance : 'default',
+            'sampled_at' => \date('Y-m-d H:i:s'),
+            'host_pressure' => (float)($sample['host_pressure'] ?? 0),
+            'worker_pressure_avg' => (float)($sample['worker_pressure_avg'] ?? 0),
+            'worker_pressure_max' => (float)($sample['worker_pressure_max'] ?? 0),
+            'connections_sum' => (int)($sample['connections_sum'] ?? 0),
+            'active_requests_sum' => (int)($sample['active_requests_sum'] ?? 0),
+            'compact_delta' => (int)($sample['compact_delta'] ?? 0),
+            'advice_codes' => \array_values(\array_map('strval', $codes)),
+            'config_soft_pressure' => (float)($sample['config_soft_pressure'] ?? 0.7),
+        ];
     }
 
     private function handleCacheNamespaceInvalidationStatusCommand(array $message, int $clientId): void
@@ -33652,6 +33731,7 @@ class ServiceOrchestrator
         if (!$intent instanceof CapacityIntent) {
             return;
         }
+        $this->rememberCapacitySample($instanceName, $intent->sample);
         $this->lastCapacityIntent = $intent->toArray();
         if (!$intent->isScale()) {
             return;

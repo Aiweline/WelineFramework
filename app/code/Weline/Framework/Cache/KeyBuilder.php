@@ -436,17 +436,17 @@ class KeyBuilder
         if (!empty($dimensions['lang'])) {
             $environment['lang'] = $storefront !== null
                 ? (string)$storefront['lang']
-                : (string)State::getLang();
+                : (string)WelineEnv::getLang();
         }
         if (!empty($dimensions['lang_local'])) {
             $environment['lang_local'] = $storefront !== null
                 ? (string)$storefront['lang']
-                : (string)State::getLangLocal();
+                : (string)WelineEnv::getLangLocal();
         }
         if (!empty($dimensions['currency'])) {
             $environment['currency'] = $storefront !== null
                 ? (string)$storefront['currency']
-                : (string)State::getCurrency();
+                : (string)WelineEnv::getCurrency();
         }
 
         return self::normalizeContextValue(\array_replace($environment, $context));

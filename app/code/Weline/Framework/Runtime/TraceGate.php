@@ -29,18 +29,46 @@ final class TraceGate
     private static ?bool $mainArmed = null;
 
     /**
+     * Per-scope latch for the two panel cookies.
+     *
+     * Peeking them is *not* cheap: `PanelTraceCookie::read()` resolves the
+     * CookieScope-qualified name, scans `$_COOKIE`, and may parse the whole
+     * `HTTP_COOKIE` header — measured 8.5–9.7 µs per peek on this machine. Template
+     * rendering used to peek three times per include (overlay arm + two annotate
+     * checks), so ~27 µs per include went into re-answering a question whose answer
+     * cannot change unless *we* change it: cookies are only issued or toggled through
+     * {@see issuePanelTplPerfCookie()} / {@see issuePanelTraceCookie()} /
+     * {@see armFromPanel()} / {@see invalidateIfDisarmed()}, and every one of those
+     * clears this latch.
+     *
+     * @var \WeakMap<\Fiber, array{tpl_perf: bool, panel: bool}>|null
+     */
+    private static ?\WeakMap $fiberCookiePeek = null;
+
+    /** @var \WeakMap<Context, array{tpl_perf: bool, panel: bool}>|null */
+    private static ?\WeakMap $contextCookiePeek = null;
+
+    /** @var array{tpl_perf: bool, panel: bool}|null */
+    private static ?array $mainCookiePeek = null;
+
+    /**
      * Call once after RequestContext is initialized (and after panel cookie install).
      * Closed requests: mark disarmed without loading RequestLifecycleTrace.
      */
     public static function bootstrapFromRequest(): void
     {
+        // Re-read the cookies: callers use this as the "resolve again now" entry point
+        // after installing/removing a panel cookie (see RequestLifecycleTrace::
+        // installPanelTraceOn / clearPanelTrace), so a latched peek would be stale.
+        self::clearCookiePeek();
         if (self::isControlPlane()) {
             self::markArmed(false);
 
             return;
         }
 
-        if (!PanelTraceCookie::isPanelArmed() && !PanelTraceCookie::isTplPerfArmed()) {
+        $peek = self::cookiePeek();
+        if (!$peek['panel'] && !$peek['tpl_perf']) {
             self::markArmed(false);
             self::clearRecorderFromContext();
 
@@ -71,6 +99,7 @@ final class TraceGate
      */
     public static function armFromPanel(): void
     {
+        self::clearCookiePeek();
         if (self::isControlPlane()) {
             self::markArmed(false);
 
@@ -83,6 +112,7 @@ final class TraceGate
     {
         self::markArmed(false);
         self::clearRecorderFromContext();
+        self::clearCookiePeek();
     }
 
     /** Fiber/request reset boundary */
@@ -90,6 +120,7 @@ final class TraceGate
     {
         self::clearArmedSlot();
         self::clearRecorderFromContext();
+        self::clearCookiePeek();
     }
 
     /**
@@ -220,8 +251,10 @@ final class TraceGate
 
     public static function armTemplatePerfOverlayIfRequested(): void
     {
-        // Closed: cookie peek only — do not load the recorder.
-        if (!PanelTraceCookie::isTplPerfArmed() && !PanelTraceCookie::isPanelArmed()) {
+        // Closed: cookie peek only — do not load the recorder. Latched per scope, so
+        // this is a WeakMap read on the hot path instead of two HMAC cookie parses.
+        $peek = self::cookiePeek();
+        if (!$peek['tpl_perf'] && !$peek['panel']) {
             return;
         }
         self::loadAndEnableRecorder();
@@ -230,7 +263,7 @@ final class TraceGate
 
     public static function isTemplatePerfOverlayRequested(): bool
     {
-        if (PanelTraceCookie::isTplPerfArmed()) {
+        if (self::cookiePeek()['tpl_perf']) {
             return true;
         }
         if (!self::isArmed() && !\class_exists(RequestLifecycleTrace::class, false)) {
@@ -269,6 +302,9 @@ final class TraceGate
 
     public static function invalidateIfDisarmed(): void
     {
+        // CookieScope may have just gained a worker suffix, so the latched peek is
+        // no longer trustworthy: drop it before anything re-reads the cookies.
+        self::clearCookiePeek();
         if (!\class_exists(RequestLifecycleTrace::class, false)) {
             if (self::getArmed() !== true) {
                 self::clearArmedSlot();
@@ -344,6 +380,7 @@ final class TraceGate
 
     public static function issuePanelTraceCookie(object $response, bool $enabled): void
     {
+        self::clearCookiePeek();
         RequestLifecycleTrace::issuePanelTraceCookie($response, $enabled);
         if ($enabled) {
             self::armFromPanel();
@@ -354,6 +391,9 @@ final class TraceGate
 
     public static function issuePanelTplPerfCookie(object $response, bool $enabled): void
     {
+        // The Set-Cookie lands after this call, so the latched peek is stale either
+        // way; drop it before re-bootstrapping.
+        self::clearCookiePeek();
         RequestLifecycleTrace::issuePanelTplPerfCookie($response, $enabled);
         if ($enabled) {
             self::armFromPanel();
@@ -397,17 +437,90 @@ final class TraceGate
         $fiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
         if ($fiber !== null) {
             self::$fiberArmed ??= new \WeakMap();
+            $armed = self::$fiberArmed[$fiber] ?? null;
+        } else {
+            $context = Context::getCurrent();
+            if ($context !== null) {
+                self::$contextArmed ??= new \WeakMap();
+                $armed = self::$contextArmed[$context] ?? null;
+            } else {
+                $armed = self::$mainArmed;
+            }
+        }
 
-            return self::$fiberArmed[$fiber] ?? null;
+        if ($armed !== null) {
+            return $armed;
+        }
+
+        // Empty mirror: fall back to the recorder's own cached latch. Guarded by a
+        // no-autoload class_exists so a disarmed request still never loads the
+        // recorder; the mirror is normally filled by bootstrap/latchArmed.
+        if (!\class_exists(RequestLifecycleTrace::class, false)) {
+            return null;
+        }
+
+        return RequestLifecycleTrace::peekEnabledCache();
+    }
+
+    /**
+     * Panel-cookie decision for the current Fiber/Context, computed at most once.
+     *
+     * @return array{tpl_perf: bool, panel: bool}
+     */
+    private static function cookiePeek(): array
+    {
+        $fiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
+        $context = $fiber === null ? Context::getCurrent() : null;
+
+        if ($fiber !== null) {
+            self::$fiberCookiePeek ??= new \WeakMap();
+            $peek = self::$fiberCookiePeek[$fiber] ?? null;
+        } elseif ($context !== null) {
+            self::$contextCookiePeek ??= new \WeakMap();
+            $peek = self::$contextCookiePeek[$context] ?? null;
+        } else {
+            $peek = self::$mainCookiePeek;
+        }
+
+        if ($peek !== null) {
+            return $peek;
+        }
+
+        $peek = [
+            'tpl_perf' => PanelTraceCookie::isTplPerfArmed(),
+            'panel' => PanelTraceCookie::isPanelArmed(),
+        ];
+
+        if ($fiber !== null) {
+            self::$fiberCookiePeek[$fiber] = $peek;
+        } elseif ($context !== null) {
+            self::$contextCookiePeek[$context] = $peek;
+        } else {
+            self::$mainCookiePeek = $peek;
+        }
+
+        return $peek;
+    }
+
+    private static function clearCookiePeek(): void
+    {
+        $fiber = \class_exists(\Fiber::class) ? \Fiber::getCurrent() : null;
+        if ($fiber !== null) {
+            if (self::$fiberCookiePeek !== null && isset(self::$fiberCookiePeek[$fiber])) {
+                unset(self::$fiberCookiePeek[$fiber]);
+            }
+
+            return;
         }
         $context = Context::getCurrent();
         if ($context !== null) {
-            self::$contextArmed ??= new \WeakMap();
+            if (self::$contextCookiePeek !== null && isset(self::$contextCookiePeek[$context])) {
+                unset(self::$contextCookiePeek[$context]);
+            }
 
-            return self::$contextArmed[$context] ?? null;
+            return;
         }
-
-        return self::$mainArmed;
+        self::$mainCookiePeek = null;
     }
 
     private static function clearArmedSlot(): void

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Test\Unit\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use PHPUnit\Framework\TestCase;
 use Weline\Product\Service\StorefrontAllMenuCategoryTreeService;
 
@@ -32,7 +34,7 @@ final class StorefrontAllMenuCategoryTreeServiceTest extends TestCase
         );
         self::assertStringContainsString('ProductCatalogQueryConsumer', $source);
         self::assertStringContainsString('flatRows', $source);
-        self::assertStringContainsString('State::getLangLocal()', $source);
+        self::assertStringContainsString('WelineEnv::getLangLocal()', $source);
         self::assertStringContainsString('KeyBuilder::storefrontDimensions', $source);
         self::assertStringContainsString('build($websiteId, $locale)', $source);
         self::assertStringContainsString('Url', $source);

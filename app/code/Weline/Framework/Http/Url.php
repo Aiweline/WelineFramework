@@ -17,6 +17,7 @@ use Weline\Framework\App\State;
 use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Fpc\FpcMode;
 use Weline\Framework\Manager\ObjectManager;
@@ -957,10 +958,10 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
     {
         $prefix = '';
 
-        // Prefer State (URL path > preference > website default) so getUrl() keeps
-        // the same non-default currency/lang the switchers and runtime already show.
-        $currency = self::normalizeCurrency(State::getCurrency() ?: w_env('user.currency'));
-        $language = self::normalizeLanguage(State::getLang() ?: w_env('user.lang'));
+        // Env / RequestContext authority so getUrl() keeps the same non-default
+        // currency/lang the switchers and runtime already show.
+        $currency = self::normalizeCurrency(WelineEnv::getCurrency());
+        $language = self::normalizeLanguage(WelineEnv::getLang());
         $websiteCurrency = self::normalizeCurrency(w_env('website.currency'));
         if ($websiteCurrency === '') {
             try {
@@ -1017,8 +1018,8 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
     private static function getBackendLocalePrefix(): string
     {
         $prefix = '';
-        $currency = self::normalizeCurrency(State::getCurrency() ?: w_env('user.currency'));
-        $language = self::normalizeLanguage(State::getLang() ?: w_env('user.lang'));
+        $currency = self::normalizeCurrency(WelineEnv::getCurrency());
+        $language = self::normalizeLanguage(WelineEnv::getLang());
         $websiteCurrency = self::normalizeCurrency(w_env('website.currency'));
         if ($websiteCurrency === '') {
             try {
@@ -1953,13 +1954,13 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
             if ($defaultLang !== '') {
                 self::$parserServer['WELINE_USER_LANG'] = $defaultLang;
             } elseif (empty(self::$parserServer['WELINE_USER_LANG'])) {
-                self::$parserServer['WELINE_USER_LANG'] = State::getLang();
+                self::$parserServer['WELINE_USER_LANG'] = WelineEnv::getLang();
             }
             $defaultCurrency = trim((string)($site['default_currency'] ?? ''));
             if ($defaultCurrency !== '') {
                 self::$parserServer['WELINE_USER_CURRENCY'] = $defaultCurrency;
             } elseif (empty(self::$parserServer['WELINE_USER_CURRENCY'])) {
-                self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency();
+                self::$parserServer['WELINE_USER_CURRENCY'] = WelineEnv::getCurrency();
             }
             # 如果URI是空的，后边就不用判断了，直接返回环境包含的参数
             if (empty($uri)) {
@@ -2006,13 +2007,13 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
                 if ($defaultLang !== '') {
                     self::$parserServer['WELINE_USER_LANG'] = $defaultLang;
                 } elseif (empty(self::$parserServer['WELINE_USER_LANG'])) {
-                    self::$parserServer['WELINE_USER_LANG'] = State::getLang();
+                    self::$parserServer['WELINE_USER_LANG'] = WelineEnv::getLang();
                 }
                 $defaultCurrency = trim((string)($site['default_currency'] ?? ''));
                 if ($defaultCurrency !== '') {
                     self::$parserServer['WELINE_USER_CURRENCY'] = $defaultCurrency;
                 } elseif (empty(self::$parserServer['WELINE_USER_CURRENCY'])) {
-                    self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency();
+                    self::$parserServer['WELINE_USER_CURRENCY'] = WelineEnv::getCurrency();
                 }
                 if (empty($uri)) {
                     $query_part = self::parse_url($url, 'query') ?: '';
@@ -2062,13 +2063,13 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
                     if ($defaultLang !== '') {
                         self::$parserServer['WELINE_USER_LANG'] = $defaultLang;
                     } elseif (empty(self::$parserServer['WELINE_USER_LANG'])) {
-                        self::$parserServer['WELINE_USER_LANG'] = State::getLang();
+                        self::$parserServer['WELINE_USER_LANG'] = WelineEnv::getLang();
                     }
                     $defaultCurrency = trim((string)($directSite['default_currency'] ?? ''));
                     if ($defaultCurrency !== '') {
                         self::$parserServer['WELINE_USER_CURRENCY'] = $defaultCurrency;
                     } elseif (empty(self::$parserServer['WELINE_USER_CURRENCY'])) {
-                        self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency();
+                        self::$parserServer['WELINE_USER_CURRENCY'] = WelineEnv::getCurrency();
                     }
                 }
             }
@@ -2469,7 +2470,7 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         self::$parserServer['REQUEST_URI'] = '/' . ltrim($pure_uri, '/');
         // 关键修复：用 URL 解析出的语言/货币更新 $parserServer
         // 初始化时 $parserServer 从 Cookie 获取默认值，但 URL 路径中的语言/货币优先级更高
-        // 如果不更新，State::getLang() 读取 $_SERVER 时会得到 Cookie 值而非 URL 值
+        // 如果不更新，WelineEnv::getLang() 读取 $_SERVER 时会得到 Cookie 值而非 URL 值
         if (!empty($data['language'])) {
             self::$parserServer['WELINE_USER_LANG'] = $data['language'];
             // Do NOT rememberPathLanguage here: $data['language'] may be a
@@ -3807,8 +3808,31 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         $context->set('route.website_id', (int)(self::$parserServer['WELINE_WEBSITE_ID'] ?? $context->get('route.website_id', 0)));
         $context->set('route.website_code', (string)(self::$parserServer['WELINE_WEBSITE_CODE'] ?? $context->get('route.website_code', '')));
         $context->set('route.website_url', (string)(self::$parserServer['WELINE_WEBSITE_URL'] ?? $context->get('route.website_url', '')));
-        $context->set('route.language', (string)(self::$parserServer['WELINE_USER_LANG'] ?? $context->get('route.language', 'zh_Hans_CN')));
-        $context->set('route.currency', (string)(self::$parserServer['WELINE_USER_CURRENCY'] ?? $context->get('route.currency', 'CNY')));
+        // Never fall back to the previous request's route.language / route.currency.
+        // Unprefixed paths get Website default from App::synchronizeParsedLocalization;
+        // empty here must stay empty (or website default) until that write runs.
+        $syncedLanguage = \trim((string)(self::$parserServer['WELINE_USER_LANG'] ?? ''));
+        if ($syncedLanguage === '') {
+            try {
+                $syncedLanguage = \Weline\Framework\App\State::resolveWebsiteDefaultLanguage();
+            } catch (\Throwable) {
+                $syncedLanguage = '';
+            }
+        }
+        if ($syncedLanguage !== '') {
+            $context->set('route.language', $syncedLanguage);
+        }
+        $syncedCurrency = \trim((string)(self::$parserServer['WELINE_USER_CURRENCY'] ?? ''));
+        if ($syncedCurrency === '') {
+            try {
+                $syncedCurrency = \Weline\Framework\App\State::resolveWebsiteDefaultCurrency();
+            } catch (\Throwable) {
+                $syncedCurrency = '';
+            }
+        }
+        if ($syncedCurrency !== '') {
+            $context->set('route.currency', $syncedCurrency);
+        }
 
         if (\class_exists(\Weline\Framework\Env\WelineEnv::class, false)) {
             foreach ([

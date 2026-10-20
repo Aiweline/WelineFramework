@@ -702,12 +702,7 @@ class QueryProviderRegistry implements ProcessSharedInterface
 
     private function descriptorCacheScope(): string
     {
-        $language = \function_exists('w_env') ? (string)\w_env('user.lang', '') : '';
-        if ($language === '') {
-            $language = (string)(WelineEnv::getCookie('WELINE_LANGUAGE', '')
-                ?: WelineEnv::getCookie('language', '')
-                ?: 'default');
-        }
+        $language = \trim((string)WelineEnv::getLang());
 
         return $language !== '' ? $language : 'default';
     }

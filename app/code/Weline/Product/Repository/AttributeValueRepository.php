@@ -395,7 +395,7 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
         $locale = \trim(\str_replace('-', '_', (string)($locale ?? '')));
         if ($locale === '') {
             try {
-                $locale = \trim(\str_replace('-', '_', (string)\Weline\Framework\App\State::getLangLocal()));
+                $locale = \trim(\str_replace('-', '_', (string)\Weline\Framework\Env\WelineEnv::getLangLocal()));
             } catch (\Throwable) {
                 $locale = '';
             }

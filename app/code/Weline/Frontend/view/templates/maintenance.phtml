@@ -1,7 +1,7 @@
 <?php
 $locale = 'zh_Hans_CN';
 try {
-    $locale = \Weline\Framework\App\State::getLangLocal() ?: \Weline\Framework\App\State::getLang() ?: $locale;
+    $locale = \Weline\Framework\Env\WelineEnv::getLangLocal() ?: \Weline\Framework\Env\WelineEnv::getLang() ?: $locale;
 } catch (\Throwable) {
 }
 $logo = (string)($this->getData('maintenance_logo_dark') ?: $this->getData('maintenance_logo_light'));

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Smtp\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
@@ -31,7 +33,7 @@ class MailChannelCollector
     {
         $language = null;
         if (RequestContext::isInitialized()) {
-            $language = State::getLangLocal();
+            $language = WelineEnv::getLangLocal();
             $memo = RequestContext::get(self::REQUEST_CHANNELS_KEY);
             if ($memo instanceof \WeakMap && isset($memo[$this])
                 && $memo[$this]['language'] === $language) {

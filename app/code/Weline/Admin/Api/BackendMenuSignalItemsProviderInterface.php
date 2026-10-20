@@ -15,14 +15,15 @@ namespace Weline\Admin\Api;
  *     id: string,
  *     title: string,
  *     href: string,
+ *     unread: true,
  *     count?: int
  * }
  */
 interface BackendMenuSignalItemsProviderInterface
 {
     /**
-     * Bounded list of deep-link targets for the signed-in backend user.
-     * Empty list is allowed; count() remains authoritative for the badge total.
+     * Unread deep links only. Each row must set unread=true.
+     * Read rows and rows without the flag are dropped and do not paint a badge.
      *
      * @return list<SignalItem>
      */

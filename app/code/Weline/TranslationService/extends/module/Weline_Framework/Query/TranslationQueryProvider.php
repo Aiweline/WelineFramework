@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\TranslationService\Extends\Module\Weline_Framework\Query;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
@@ -140,7 +142,7 @@ class TranslationQueryProvider implements QueryProviderInterface
     private function normalizeTargetLanguage(string $language): string
     {
         if ($language === '') {
-            $language = Cookie::getLang() ?: State::getLang();
+            $language = WelineEnv::getLang() ?: WelineEnv::getLang();
         }
         return LanguageCodeConverter::normalize($language);
     }

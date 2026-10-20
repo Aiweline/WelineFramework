@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 use Weline\Product\Model\Category\LocalDescription;
 use Weline\Product\Model\CategoryAttributeEntity;
@@ -191,7 +193,7 @@ final class ProductCategoryAttributeService
         if ($name === '') {
             return '';
         }
-        $locale = self::normalizeLocaleKey($locale !== '' ? $locale : (string)State::getLangLocal());
+        $locale = self::normalizeLocaleKey($locale !== '' ? $locale : (string)WelineEnv::getLangLocal());
         if ($locale === '') {
             $locale = 'zh_Hans_CN';
         }
@@ -227,7 +229,7 @@ final class ProductCategoryAttributeService
         if ($categoryId <= 0 || $name === '') {
             return '';
         }
-        $locale = self::normalizeLocaleKey($locale !== '' ? $locale : (string)State::getLangLocal());
+        $locale = self::normalizeLocaleKey($locale !== '' ? $locale : (string)WelineEnv::getLangLocal());
         if ($locale === '') {
             $locale = 'zh_Hans_CN';
         }
@@ -375,7 +377,7 @@ final class ProductCategoryAttributeService
             return $maps;
         }
 
-        $locale = self::normalizeLocaleKey($locale !== '' ? $locale : (string)State::getLangLocal());
+        $locale = self::normalizeLocaleKey($locale !== '' ? $locale : (string)WelineEnv::getLangLocal());
         $locales = AttributeValueRepository::storefrontReadLocales($locale);
         foreach (self::localeAliases($locale) as $alias) {
             if (!\in_array($alias, $locales, true)) {

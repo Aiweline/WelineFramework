@@ -6,6 +6,7 @@ namespace Weline\Social\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Mail\Model\MailAccount;
+use Weline\Social\Service\SocialPlatformSignupUrl;
 use Weline\Social\Service\SocialScopeMailboxService;
 
 
@@ -55,6 +56,9 @@ final class SocialServiceContractsTest extends TestCase
         },
             'SocialWebsiteScopeBind::testWidgetPassesCurrentWebsiteId' => function () {
             $this->assert_SocialWebsiteScopeBind_testWidgetPassesCurrentWebsiteId();
+        },
+            'SocialPlatformSignupUrl::testBuildsHttpsEmailUrlAndRejectsUnsafe' => function () {
+            $this->assert_SocialPlatformSignupUrl_testBuildsHttpsEmailUrlAndRejectsUnsafe();
         },
             'SocialScopeMailbox::testSocialLocalPartIsMailSystemAccount' => function () {
             $this->assert_SocialScopeMailbox_testSocialLocalPartIsMailSystemAccount();
@@ -130,6 +134,26 @@ private function assert_SocialWebsiteScopeBind_testWidgetPassesCurrentWebsiteId(
     $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Social' . '/view/theme/frontend/widgets/social/social-accounts/default.phtml');
     self::assertStringContainsString('RequestContext::websiteId()', $src);
     self::assertStringContainsString("'website_id' => \$websiteId", $src);
+}
+
+private function assert_SocialPlatformSignupUrl_testBuildsHttpsEmailUrlAndRejectsUnsafe(): void
+{
+    $email = 'social-demo@example.com';
+    $built = SocialPlatformSignupUrl::build('facebook', $email);
+    self::assertStringStartsWith('https://www.facebook.com/r.php?email=', $built);
+    self::assertStringContainsString(rawurlencode($email), $built);
+    self::assertSame('', SocialPlatformSignupUrl::build('fake_browser', $email));
+    self::assertSame('', SocialPlatformSignupUrl::build('facebook', $email, 'http://evil.example/signup?email={email}'));
+    self::assertSame(
+        'https://x.com/i/flow/signup',
+        SocialPlatformSignupUrl::build('x', $email)
+    );
+    $mailbox = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Social' . '/Service/SocialScopeMailboxService.php');
+    $provider = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Social' . '/extends/module/Weline_Framework/Query/SocialManagementQueryProvider.php');
+    self::assertStringContainsString('function probeScopeSocialMailbox', $mailbox);
+    self::assertStringContainsString('contact@', $mailbox);
+    self::assertStringContainsString('contact_missing', $mailbox);
+    self::assertStringContainsString("'probeScopeSocialMailbox'", $provider);
 }
 
 private function assert_SocialScopeMailbox_testSocialLocalPartIsMailSystemAccount(): void

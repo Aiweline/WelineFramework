@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Controller\Backend\Countries;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\ObjectManager;
@@ -89,8 +91,8 @@ class Locales extends BaseController
             );
 
         // joinModel之后才能使用where条件引用join的表
-        $this->locale->where('lln.' . Name::schema_fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal())
-            ->where('cln.' . \Weline\I18n\Model\Countries\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal())
+        $this->locale->where('lln.' . Name::schema_fields_DISPLAY_LOCALE_CODE, WelineEnv::getLangLocal())
+            ->where('cln.' . \Weline\I18n\Model\Countries\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, WelineEnv::getLangLocal())
             ->where('c.' . \Weline\I18n\Model\Countries::schema_fields_CODE, $country_code);
 
         // 搜索条件（在join之后才能使用country_name）

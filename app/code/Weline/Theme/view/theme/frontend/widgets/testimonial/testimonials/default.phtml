@@ -34,7 +34,7 @@ $layout = Block::choice($this->getData('layout'), ['grid','carousel'], 'grid');
 $showRating = Block::boolean($this->getData('show_rating'), true);
 $showAvatar = Block::boolean($this->getData('show_avatar'), true);
 
-$currentLocale = trim(\Weline\Framework\App\State::getLangLocal());
+$currentLocale = trim(\Weline\Framework\Env\WelineEnv::getLangLocal());
 $normalizedLocale = strtolower(str_replace('_', '-', $currentLocale));
 $isChineseLocale = $normalizedLocale === '' || str_starts_with($normalizedLocale, 'zh');
 $translateDefaultCopy = static function (string $source, string $english) use ($isChineseLocale): string {

@@ -34,7 +34,8 @@ final class StorefrontHomepageLayoutHtmlBag implements ProcessSharedInterface
 
     private const REQUEST_MEMO_PREFIX = 'theme.homepage_layout_html.req.v1.';
     /** v2: payload is post hard-cut finalize (safety_net complete). */
-    private const LOGICAL_KEY_PREFIX = 'theme.homepage_layout.html.v2.';
+    /** v4: unsupported language uses the switcher dialog, not a header list. */
+    private const LOGICAL_KEY_PREFIX = 'theme.homepage_layout.html.v5.';
     /** Gzip envelope marker (ASCII — avoids null-byte FileAdapter edge cases). */
     private const PACK_PREFIX = 'HPLH1:';
 
@@ -261,10 +262,19 @@ final class StorefrontHomepageLayoutHtmlBag implements ProcessSharedInterface
             $option = 'default';
         }
 
+        $rejected = \strtolower(\trim((string)\Weline\Framework\Runtime\RequestContext::get('route.rejected_path_language', '')));
+        $rejectedSeg = $rejected !== '' ? \substr(\sha1($rejected), 0, 8) : 'langok';
+        $rejectedCurrency = \strtolower(\trim((string)\Weline\Framework\Runtime\RequestContext::get('route.rejected_path_currency', '')));
+        $rejectedCurrencySeg = $rejectedCurrency !== '' ? \substr(\sha1($rejectedCurrency), 0, 8) : 'curok';
+
         return self::LOGICAL_KEY_PREFIX
             . $this->themeIdentitySegment()
             . '.homepage.'
-            . $option;
+            . $option
+            . '.'
+            . $rejectedSeg
+            . '.'
+            . $rejectedCurrencySeg;
     }
 
     private function packPayload(string $html): string

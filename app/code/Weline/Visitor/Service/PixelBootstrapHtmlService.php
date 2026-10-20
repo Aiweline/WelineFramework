@@ -422,8 +422,8 @@ HTML;
             'website_id' => (string)WelineEnv::server('WELINE_WEBSITE_ID', (string)($_SERVER['WELINE_WEBSITE_ID'] ?? '')),
             'website_code' => (string)WelineEnv::server('WELINE_WEBSITE_CODE', (string)($_SERVER['WELINE_WEBSITE_CODE'] ?? '')),
             'website_url' => $websiteUrl,
-            'language' => (string)WelineEnv::server('WELINE_USER_LANG', (string)($_SERVER['WELINE_USER_LANG'] ?? '')),
-            'currency' => (string)WelineEnv::server('WELINE_USER_CURRENCY', (string)($_SERVER['WELINE_USER_CURRENCY'] ?? '')),
+            'language' => WelineEnv::getLang(),
+            'currency' => WelineEnv::getCurrency(),
         ];
     }
 

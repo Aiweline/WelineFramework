@@ -1427,6 +1427,15 @@ export function register(UI) {
         bindSearch();
         bindRequest();
         scheduleCountryFlagHydration([root], { mode: 'trigger' });
+        if (root.getAttribute('data-i18n-surface') === 'dialog') {
+            const dialog = root.closest('dialog');
+            if (dialog instanceof HTMLDialogElement && !dialog.open && typeof dialog.showModal === 'function') {
+                dialog.showModal();
+            }
+            flagsHydrated = true;
+            void enqueueFlagHydration([root, panel].filter(Boolean), { mode: 'panel' });
+            focusSearch();
+        }
 
         listen(root, 'weline:ui:menu:open', () => {
             bindPanelClick();

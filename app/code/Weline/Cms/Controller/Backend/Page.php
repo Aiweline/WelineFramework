@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Cms\Controller\Backend;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\BackendActivity\Api\BusinessContextInterface;
 use Weline\Cms\Model\Page as CmsPage;
 use Weline\Cms\Service\PageLocaleService;
@@ -145,7 +147,7 @@ class Page extends BackendController
         $storeOptions = [];
         if ($page !== null && $page->getPageId() > 0) {
             $localeService = $this->pageLocaleService ??= ObjectManager::getInstance(PageLocaleService::class);
-            $requestedLocale = (string)$this->request->getGet('locale_code', State::getLangLocal());
+            $requestedLocale = (string)$this->request->getGet('locale_code', WelineEnv::getLangLocal());
             $requestedStoreId = (int)$this->request->getGet('store_id', 0);
             $resolver = $this->cmsContextResolver ??= ObjectManager::getInstance(CmsEditorContextResolver::class);
             $context = $resolver->resolve(

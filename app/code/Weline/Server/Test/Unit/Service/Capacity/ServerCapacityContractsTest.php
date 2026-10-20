@@ -43,6 +43,9 @@ final class ServerCapacityContractsTest extends TestCase
             $this->setUp_CapacityAdvisorEvaluate();
             $this->assert_CapacityAdvisorEvaluate_testRunnerSourceDoesNotCallScale();
         },
+            'CapacityAdvisorEvaluate::testRunnerDoesNotTouchHistoryStore' => function () {
+            $this->assert_CapacityAdvisorEvaluate_testRunnerDoesNotTouchHistoryStore();
+        },
             'CapacityAdvisorEvaluate::testConfigServiceDefaultsHaveFloorInterval' => function () {
             $this->setUp_CapacityAdvisorEvaluate();
             $this->assert_CapacityAdvisorEvaluate_testConfigServiceDefaultsHaveFloorInterval();
@@ -156,6 +159,17 @@ private function assert_CapacityAdvisorEvaluate_testRunnerSourceDoesNotCallScale
     self::assertStringNotContainsString('ACTION_SCALE_WORKERS', $advisor);
     self::assertStringNotContainsString('Env::set', $runner);
     self::assertStringNotContainsString('env.php', $runner);
+}
+
+private function assert_CapacityAdvisorEvaluate_testRunnerDoesNotTouchHistoryStore(): void
+{
+    $serverRoot = '/Users/weline/Project/Official/框架/app/code/Weline/Server';
+    $runner = (string) \file_get_contents($serverRoot . '/Service/Capacity/CapacityAdviseRunner.php');
+    $store = (string) \file_get_contents($serverRoot . '/Service/Capacity/CapacitySampleStore.php');
+    $orchestrator = (string) \file_get_contents($serverRoot . '/Service/ServiceOrchestrator.php');
+    self::assertStringNotContainsString('CapacitySampleStore', $runner);
+    self::assertStringNotContainsString('ServerCapacitySample', $store);
+    self::assertStringNotContainsString('ensureAuthorityClock', $orchestrator);
 }
 
 private function assert_CapacityAdvisorEvaluate_testConfigServiceDefaultsHaveFloorInterval(): void

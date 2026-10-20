@@ -125,7 +125,7 @@ final class ParserNamespaceGenerationTest extends TestCase
     public function testVersionedLocalCacheEvictsOldEntriesWithinItsOwnerLimit(): void
     {
         $cache = ['generation-1|Title' => 'First', 'generation-2|Title' => 'Second', 'generation-3|Title' => 'Latest'];
-        $view = &\Weline\Framework\Phrase\DictionaryCacheNamespace::localCache($cache, 2);
+        $view = &\Weline\Framework\Phrase\DictionaryCacheNamespace::requestBag($cache, 2);
         self::assertLessThanOrEqual(2, count($view));
         self::assertSame('Latest', $view['generation-3|Title']);
     }

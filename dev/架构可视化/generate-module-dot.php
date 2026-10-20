@@ -55,7 +55,7 @@ function emit_dot(array $nodeSet, array $edges, string $title, callable $cls, ar
     global $d, $colors, $bg, $titles, $platform, $storefront, $commerce, $tierTitles;
     $L = [];
     $L[] = "// $title";
-    $L[] = '// 来源: app/code/Weline/*/etc/module.php，生成日期 2026-10-05。再生成: php 架构可视化/generate-module-dot.php';
+    $L[] = '// 来源: app/code/Weline/*/etc/module.php，生成日期 2026-10-05。再生成: php dev/架构可视化/generate-module-dot.php';
     $L[] = 'digraph {';
     $L[] = '  graph [rankdir=BT, ranksep=0.7, nodesep=0.3, fontname="PingFang SC", labelloc=t, fontsize=18]';
     $L[] = "  graph [label=\"$title\"]";

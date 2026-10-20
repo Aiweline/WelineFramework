@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Font;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 
 /**
@@ -59,7 +61,7 @@ class FontFaceService
         } else {
             $lang = trim((string)($options['lang'] ?? ''));
             if ($lang === '') {
-                $lang = State::getLangLocal();
+                $lang = WelineEnv::getLangLocal();
             }
             $subsetPath = $this->subsetService->getSubsetPath($absolute, $lang);
         }

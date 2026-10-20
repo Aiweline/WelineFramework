@@ -671,7 +671,7 @@ private function assert_BackendUrlLocalePrefix_testGetBackendUrlKeepsNonDefaultL
     WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $parsed['server']);
     WelineEnv::set('website.currency', 'CNY', 'backend url locale contract');
     WelineEnv::set('website.language', 'zh_Hans_CN', 'backend url locale contract');
-    self::assertSame('en_US', State::getLang());
+    self::assertSame('en_US', WelineEnv::getLang());
     self::assertSame('/en_US', Url::getPrefix());
     /** @var Url $url */
     $url = ObjectManager::getInstance(Url::class);

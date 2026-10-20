@@ -289,6 +289,10 @@ class ControlMessage
     public const ACTION_CACHE_CLEAR = 'cache_clear';
     public const ACTION_CACHE_NAMESPACE_INVALIDATE_V1 = 'cache_namespace_invalidate_v1';
     public const ACTION_CACHE_NAMESPACE_STATUS_V1 = 'cache_namespace_invalidation_status_v1';
+    /** Worker → Master：只提交权威时钟整数，不扇出失效帧。 */
+    public const ACTION_NAMESPACE_AUTHORITY_CLOCK = 'namespace_authority_clock';
+    /** Cron → Master：取走内存中的最新容量采样，主循环不写文件。 */
+    public const ACTION_CAPACITY_SAMPLE_PULL = 'capacity_sample_pull';
     public const ACTION_STATUS = 'status';
     /** 启用维护模式：启动维护 Worker，准备滚动重启 */
     public const ACTION_MAINTENANCE_ENABLE = 'maintenance_enable';

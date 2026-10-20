@@ -30,8 +30,8 @@ final class StorefrontBlogLayoutHtmlBag implements ProcessSharedInterface
     public const RESOURCE = 'theme.storefront_blog_layout_html';
 
     private const REQUEST_MEMO_PREFIX = 'theme.blog_layout_html.req.v1.';
-    /** v1: payload is post hard-cut finalize; key includes slug hash. */
-    private const LOGICAL_KEY_PREFIX = 'theme.blog_layout.html.v1.';
+    /** v5: unsupported language or currency opens one dialog; bag key includes both. */
+    private const LOGICAL_KEY_PREFIX = 'theme.blog_layout.html.v5.';
     /** Same gzip envelope as homepage bag. */
     private const PACK_PREFIX = 'HPLH1:';
 
@@ -194,13 +194,21 @@ final class StorefrontBlogLayoutHtmlBag implements ProcessSharedInterface
 
         $slug = $this->resolvePostSlug() ?? '';
         $slugHash = $slug !== '' ? \substr(\sha1($slug), 0, 16) : 'missing';
+        $rejected = \strtolower(\trim((string)\Weline\Framework\Runtime\RequestContext::get('route.rejected_path_language', '')));
+        $rejectedSeg = $rejected !== '' ? \substr(\sha1($rejected), 0, 8) : 'langok';
+        $rejectedCurrency = \strtolower(\trim((string)\Weline\Framework\Runtime\RequestContext::get('route.rejected_path_currency', '')));
+        $rejectedCurrencySeg = $rejectedCurrency !== '' ? \substr(\sha1($rejectedCurrency), 0, 8) : 'curok';
 
         return self::LOGICAL_KEY_PREFIX
             . $this->themeIdentitySegment()
             . '.blog.'
             . $option
             . '.'
-            . $slugHash;
+            . $slugHash
+            . '.'
+            . $rejectedSeg
+            . '.'
+            . $rejectedCurrencySeg;
     }
 
     private function isBlogDetailLayout(string $layoutTemplate): bool

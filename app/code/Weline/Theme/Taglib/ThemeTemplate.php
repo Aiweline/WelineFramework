@@ -255,7 +255,7 @@ class ThemeTemplate implements TaglibInterface
                 if (preg_match('/^@meta::(.+)$/', $translationKey, $keyMatches)) {
                     $keyParts = explode('.', $keyMatches[1]);
                     if (count($keyParts) >= 5) {
-                        $locale = \Weline\Framework\Http\Cookie::getLangLocal() ?? 'zh_Hans_CN';
+                        $locale = \Weline\Framework\Env\WelineEnv::getLangLocal() ?? 'zh_Hans_CN';
                         $translation = MetaTranslation::getTranslatedValueWithScope(
                             $translationKey,
                             'default',

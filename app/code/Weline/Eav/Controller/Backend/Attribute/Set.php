@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 namespace Weline\Eav\Controller\Backend\Attribute;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Eav\Model\EavEntity;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
@@ -44,7 +46,7 @@ class Set extends \Weline\Framework\App\Controller\BackendController
     {
         $this->set->loadLocalDescription()
             ->joinModel(EavEntity::class, 'entity', 'main_table.eav_entity_id=entity.eav_entity_id', 'left', 'entity.name as entity_name')
-            ->joinModel(EavEntity\LocalDescription::class, 'entity_local', 'main_table.eav_entity_id=entity_local.id and entity_local.local_code=\'' . Cookie::getLangLocal() . '\'', 'left', 'entity_local.name as entity_local_name');
+            ->joinModel(EavEntity\LocalDescription::class, 'entity_local', 'main_table.eav_entity_id=entity_local.id and entity_local.local_code=\'' . WelineEnv::getLangLocal() . '\'', 'left', 'entity_local.name as entity_local_name');
 
         if ($search = $this->request->getGet('search')) {
             $this->set->where('concat(local.name,main_table.name,entity.name,entity.code)', "%$search%", 'like');

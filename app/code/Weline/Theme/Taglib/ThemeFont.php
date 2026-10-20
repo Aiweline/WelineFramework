@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Taglib;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Taglib\AttributeCodeCompiler;
 use Weline\Framework\Taglib\CompileTimeStaticMirror;
@@ -123,7 +125,7 @@ final class ThemeFont implements TaglibInterface, StaticMirrorCapableInterface
 字面量 src/family/lang/chars/… 在 Taglib/com_* 编译期烘焙最终 <style>@font-face（对齐 theme:css / @lang）；
 动态属性仍吐运行期 PHP。布局实体关系固化不处理本标签。
 
-按语言（省略 lang 则跟编译时 State::getLangLocal()）：
+按语言（省略 lang 则跟编译时 WelineEnv::getLangLocal()）：
 <w:theme:font src="NotoSansSC-Regular.ttf" family="Noto Sans SC" weight="400" display="swap" />
 
 只提取属性 chars 里的字符（忽略语言表）：

@@ -78,13 +78,13 @@ final class ProcessL1PressureEvictionAcceptanceTest extends TestCase
         $localeBag = [];
         DictionaryCacheNamespace::bindProcessBag('workerLocaleWords', $localeBag);
 
-        $bagEs = &DictionaryCacheNamespace::localCache($localeBag, 1024, ['es_ES']);
+        $bagEs = &DictionaryCacheNamespace::processBag('workerLocaleWords', $localeBag, 1024, ['es_ES']);
         $bagEs['fp|es_ES|k'] = 'es_ES';
         DictionaryCacheNamespace::touchLocaleBucket('es_ES');
         DictionaryCacheNamespace::pinLocaleBucket('es_ES');
 
         foreach (['fr_FR', 'de_DE'] as $locale) {
-            $bag = &DictionaryCacheNamespace::localCache($localeBag, 1024, [$locale]);
+            $bag = &DictionaryCacheNamespace::processBag('workerLocaleWords', $localeBag, 1024, [$locale]);
             $bag['fp|' . $locale . '|k'] = $locale;
             DictionaryCacheNamespace::touchLocaleBucket($locale);
         }
@@ -134,7 +134,7 @@ final class ProcessL1PressureEvictionAcceptanceTest extends TestCase
     public function testUc2GuardHardClearsPhraseStore(): void
     {
         $cache = [];
-        $bag = &DictionaryCacheNamespace::localCache($cache, 1024, ['en_US']);
+        $bag = &DictionaryCacheNamespace::requestBag($cache, 1024, ['en_US']);
         $bag['fp|en_US|k'] = 'v';
         DictionaryCacheNamespace::touchLocaleBucket('en_US');
         self::assertGreaterThan(0, DictionaryCacheNamespace::processMemoryStore()->getItemCount());
@@ -149,13 +149,13 @@ final class ProcessL1PressureEvictionAcceptanceTest extends TestCase
         $localeBag = [];
         DictionaryCacheNamespace::bindProcessBag('workerLocaleWords', $localeBag);
 
-        $bagCc = &DictionaryCacheNamespace::localCache($localeBag, 1024, ['cc_CC']);
+        $bagCc = &DictionaryCacheNamespace::processBag('workerLocaleWords', $localeBag, 1024, ['cc_CC']);
         $bagCc['fp|cc_CC|k'] = 'cc_CC';
         DictionaryCacheNamespace::touchLocaleBucket('cc_CC');
         DictionaryCacheNamespace::pinLocaleBucket('cc_CC');
 
         foreach (['aa_AA', 'bb_BB'] as $locale) {
-            $bag = &DictionaryCacheNamespace::localCache($localeBag, 1024, [$locale]);
+            $bag = &DictionaryCacheNamespace::processBag('workerLocaleWords', $localeBag, 1024, [$locale]);
             $bag['fp|' . $locale . '|k'] = $locale;
             DictionaryCacheNamespace::touchLocaleBucket($locale);
         }
@@ -170,7 +170,7 @@ final class ProcessL1PressureEvictionAcceptanceTest extends TestCase
     public function testUc4ExplicitCacheClearEmptiesStoreUnlikePressureReason(): void
     {
         $cache = [];
-        $bag = &DictionaryCacheNamespace::localCache($cache, 1024, ['zh_Hans_CN']);
+        $bag = &DictionaryCacheNamespace::requestBag($cache, 1024, ['zh_Hans_CN']);
         $bag['fp|zh_Hans_CN|k'] = 'v';
         DictionaryCacheNamespace::touchLocaleBucket('zh_Hans_CN');
         self::assertGreaterThan(0, DictionaryCacheNamespace::processMemoryStore()->getItemCount());
@@ -195,7 +195,7 @@ final class ProcessL1PressureEvictionAcceptanceTest extends TestCase
     public function testUc4RegistryCacheClearEmptiesStore(): void
     {
         $cache = [];
-        $bag = &DictionaryCacheNamespace::localCache($cache, 1024, ['ru_RU']);
+        $bag = &DictionaryCacheNamespace::requestBag($cache, 1024, ['ru_RU']);
         $bag['fp|ru_RU|k'] = 'v';
         DictionaryCacheNamespace::touchLocaleBucket('ru_RU');
 

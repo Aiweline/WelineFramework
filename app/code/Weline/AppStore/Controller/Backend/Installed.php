@@ -28,7 +28,7 @@ class Installed extends BackendController
             ->select()
             ->fetch();
         $modules = $this->recoverFileOnlyInstalledModules($moduleModel->getItems());
-        $locale = (string)w_env('user.lang', Env::get('user.lang', 'zh_Hans_CN'));
+        $locale = \Weline\Framework\Env\WelineEnv::getLang();
         $tagFilter = trim((string)$this->request->getGet('tag', ''));
         $surfaceFilter = trim((string)$this->request->getGet('surface', ''));
         $wlsPanelReturn = $this->isWlsPanelReturnRequested();

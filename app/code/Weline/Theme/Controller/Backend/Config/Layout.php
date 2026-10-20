@@ -9,6 +9,8 @@
 
 namespace Weline\Theme\Controller\Backend\Config;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Backend\Api\View\BackendThemeConfigInterface;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\Env;
@@ -589,7 +591,7 @@ class Layout extends BackendController
         $previewThemeScopeService = ObjectManager::make(\Weline\Theme\Service\PreviewThemeScopeService::class);
         $effectiveScope = $previewThemeScopeService->resolveEffectiveScope((int)$theme->getId(), $area, $scope);
         $namespace = "theme.{$area}";
-        $locale = Cookie::getLang() ?? 'zh_Hans_CN';
+        $locale = WelineEnv::getLang() ?? 'zh_Hans_CN';
 
         // 目录数据、文件字段和目录 Meta 一次读取，避免每个选项四次回表。
         $flatCategory = ($type === 'colors' && $path === 'colors')

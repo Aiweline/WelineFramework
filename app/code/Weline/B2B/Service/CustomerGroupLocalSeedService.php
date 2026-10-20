@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\B2B\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\B2B\Model\CustomerGroupRecord;
 use Weline\B2B\Model\CustomerGroupRecord\LocalDescription;
 use Weline\Framework\Http\Cookie;
@@ -78,7 +80,7 @@ final class CustomerGroupLocalSeedService
         if ($groupRowId <= 0) {
             return '';
         }
-        $locale = trim((string)Cookie::getLangLocal());
+        $locale = trim((string)WelineEnv::getLangLocal());
         if ($locale === '') {
             $locale = 'zh_Hans_CN';
         }
@@ -131,7 +133,7 @@ final class CustomerGroupLocalSeedService
 
     private function resolveSourceLocale(): string
     {
-        $locale = trim((string)Cookie::getLangLocal());
+        $locale = trim((string)WelineEnv::getLangLocal());
         if ($locale !== '') {
             return $locale;
         }

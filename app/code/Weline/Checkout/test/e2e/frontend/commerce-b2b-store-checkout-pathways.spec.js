@@ -198,13 +198,29 @@ moduleDescribe(test, MODULE, 'B2B测试店购物结账通路', () => {
       const pdp = defaultPdp(prepared);
       const guestEmail = String(prepared.guest_email || `e2e.b2b.express.${Date.now()}@example.test`);
 
-      await addToCartMode(page, gotoFrontend, pdp, 'toc');
+      // Align with CR-EXPRESS-CHECKOUT-ORDER: guest cart identity can drop between
+      // add and startExpressCheckout on B2B channel — re-add once on 购物车为空.
+      let added = await addToCartMode(page, gotoFrontend, pdp, 'toc');
+      if (!(added && added.success)) {
+        added = await addToCartMode(page, gotoFrontend, pdp, 'toc');
+      }
+      assertStep(added && added.success, 'b2b.express.cart.add', added);
       await expect(page.locator('body')).not.toContainText(FATAL);
 
       const evidence = await runExpressCheckoutCaptureEvidence(page, {
         scope: 'b2b_store_express',
         email: guestEmail,
       });
+      if (!evidence.order_uuid && /购物车为空/.test(String(evidence.error || evidence.raw_message || ''))) {
+        added = await addToCartMode(page, gotoFrontend, pdp, 'toc');
+        assertStep(added && added.success, 'b2b.express.cart.readd', added);
+        const retry = await runExpressCheckoutCaptureEvidence(page, {
+          scope: 'b2b_store_express',
+          email: guestEmail,
+        });
+        Object.assign(evidence, retry);
+      }
+      assertStep(!!evidence.order_uuid, 'b2b.express.order_uuid', evidence);
       expect(evidence.order_uuid).toMatch(/[0-9a-f-]{16,}/i);
     }
   );

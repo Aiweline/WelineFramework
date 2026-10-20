@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Shipping\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Service\LocalModelTranslation\LocalModelTranslationQueueService;
@@ -181,7 +183,7 @@ final class FreeShippingConditionTypeAdminService
         if ($typeId <= 0) {
             return $fallback;
         }
-        $locale = trim((string)Cookie::getLang());
+        $locale = trim((string)WelineEnv::getLang());
         if ($locale === '') {
             return $fallback;
         }

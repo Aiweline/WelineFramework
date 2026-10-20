@@ -2,7 +2,7 @@
 
 - **产出方式**: `explore` → `system-modeler` + `graphviz`；v2 相对 v1 的核心变化：**先学透框架装配机制，再按机制重新判定依赖边语义**
 - **证据通道（5 类）**: `etc/module.php` requires/optional/provides · `etc/event.xml`(72 模块) · `extends/module/<Target>/`(54 模块 122 处) · `view/hooks/*.phtml`(18 模块 43 文件) · `Framework/Register|Extends|Event|Hook|Registry` 源码
-- **生成日期**: 2026-10-05 · 再生成: `php 架构可视化/generate-module-dot-v2.php`（需先按 evidence.md 刷新 /tmp 两个 JSON）
+- **生成日期**: 2026-10-05 · 再生成: `php dev/架构可视化/generate-module-dot-v2.php`（需先按 evidence.md 刷新 /tmp 两个 JSON）
 
 ---
 
@@ -45,7 +45,7 @@ L0 Framework(扇入78) → L1 Backend(63)/SystemConfig(37)/I18n(24)/Websites(22)
 1. `weline-assembly-mechanisms.mmd` — 先读这张：四条装配通道+门禁如何工作（Mermaid，Markdown 原生可嵌）
 2. `weline-core-overview.dot|svg` — 61 枢纽模块·边按机制着色（绿=event 紫=extends 蓝=纯类引用 灰点=optional）
 3. `weline-module-dependencies-full.dot|svg` — 120 模块全量 + 58 条黄线未声明机制边（治理候选一眼可见）
-4. 在线查看：`cd 架构可视化 && php -S 127.0.0.1:8931` → http://127.0.0.1:8931/
+4. 在线查看：`cd dev/架构可视化 && php -S 127.0.0.1:8931` → http://127.0.0.1:8931/
 
 ## 6. 假设与边界
 

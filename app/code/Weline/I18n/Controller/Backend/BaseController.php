@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Controller\Backend;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
@@ -39,7 +41,7 @@ class BaseController extends \Weline\Framework\App\Controller\BackendController
         $this->locale = (clone $locale)->clear();
         $this->i18n = $i18n;
 
-        $currentLang = (string)Cookie::getLangLocal();
+        $currentLang = (string)WelineEnv::getLangLocal();
         $target_locale = [
             'code' => $currentLang,
             'name' => $currentLang,

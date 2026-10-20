@@ -68,7 +68,7 @@ $resolveLocale = static function (): string {
         return $pathLocale;
     }
     try {
-        $lang = trim((string)\Weline\Framework\App\State::getLangLocal());
+        $lang = trim((string)\Weline\Framework\Env\WelineEnv::getLangLocal());
     } catch (\Throwable) {
         $lang = '';
     }

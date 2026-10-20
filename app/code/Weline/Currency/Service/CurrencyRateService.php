@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Currency\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Cache\RuntimeCachePolicy;
 use Weline\Framework\Cache\Contract\SharedCacheStateFactoryInterface;
 use Weline\Framework\Cache\Contract\SharedCacheStateInterface;
@@ -112,7 +114,7 @@ class CurrencyRateService
 
     public function getCurrentCurrency(): string
     {
-        $currentCurrency = $this->normalizeCurrencyCode(State::getCurrency());
+        $currentCurrency = $this->normalizeCurrencyCode(WelineEnv::getCurrency());
         return $currentCurrency !== '' ? $currentCurrency : $this->getBaseCurrency();
     }
 

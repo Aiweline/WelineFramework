@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Filters\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 use Weline\Framework\Runtime\RequestContext;
 
@@ -60,7 +62,7 @@ final class StorefrontFacetTranslator
         }
         if ($primary === '') {
             try {
-                $primary = trim(str_replace('-', '_', (string)State::getLang()));
+                $primary = trim(str_replace('-', '_', (string)WelineEnv::getLang()));
             } catch (\Throwable) {
                 $primary = '';
             }

@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Admin\Model\MenuAccessLog;
 use Weline\Backend\Api\Auth\BackendUserContext;
 use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
@@ -553,7 +555,7 @@ class MenuRenderService
         $activeFingerprint = $this->buildActiveMenuFingerprint($menus);
         $cacheKey = implode('|', [
             (string)(($user && $user->getId()) ? (int)$user->getId() : 0),
-            State::getLangLocal(),
+            WelineEnv::getLangLocal(),
             $this->cachedBackendUrlPrefix,
             $this->cachedFrontendUrlPrefix,
             $activeFingerprint,
@@ -574,7 +576,7 @@ class MenuRenderService
         $titles = $this->collectMenuTitles($menus);
         if ($titles !== []) {
             try {
-                Parser::prefetchWords($titles, State::getLangLocal());
+                Parser::prefetchWords($titles, WelineEnv::getLangLocal());
             } catch (\Throwable) {
                 // 预取失败不阻断渲染；resolve 时回退 source / __()。
             }
@@ -852,7 +854,7 @@ class MenuRenderService
             return '';
         }
 
-        $resolved = $this->resolveMenuTitleRaw($title, $sourceId, State::getLangLocal());
+        $resolved = $this->resolveMenuTitleRaw($title, $sourceId, WelineEnv::getLangLocal());
         if ($resolved === $title) {
             $phrase = trim((string)__($title));
             if ($phrase !== '') {
@@ -985,7 +987,7 @@ class MenuRenderService
 
         if ($codes === []) {
             $codes = array_values(array_unique(array_filter([
-                State::getLangLocal(),
+                WelineEnv::getLangLocal(),
                 'en_US',
                 'zh_Hans_CN',
             ], static fn(string $code): bool => trim($code) !== '')));

@@ -43,14 +43,14 @@ class StateTest extends TestCore
                 'ja_JP', 'JPY', str_repeat('a', 64), str_repeat('b', 64), true,
             ));
 
-            self::assertSame('en_US', State::getLang());
-            self::assertSame('USD', State::getCurrency());
-            self::assertSame('en_US', State::getLangLocal());
+            self::assertSame('en_US', WelineEnv::getLang());
+            self::assertSame('USD', WelineEnv::getCurrency());
+            self::assertSame('en_US', WelineEnv::getLangLocal());
 
             State::setRequestLanguageOverride('ja_JP');
-            self::assertSame('ja_JP', State::getLangLocal());
+            self::assertSame('ja_JP', WelineEnv::getLangLocal());
             State::setRequestLanguageOverride('');
-            self::assertSame('en_US', State::getLangLocal());
+            self::assertSame('en_US', WelineEnv::getLangLocal());
         } finally {
             State::resetLangLocalCache();
             State::resetRequestPathLocalizationCache();
@@ -82,8 +82,8 @@ class StateTest extends TestCore
             WelineEnv::set('user.lang', 'en_US', 'StateTest parsed route');
             WelineEnv::set('user.currency', 'USD', 'StateTest parsed route');
 
-            self::assertSame('en_US', State::getLang());
-            self::assertSame('USD', State::getCurrency());
+            self::assertSame('en_US', WelineEnv::getLang());
+            self::assertSame('USD', WelineEnv::getCurrency());
         } finally {
             State::resetLangLocalCache();
             State::resetRequestPathLocalizationCache();
@@ -137,8 +137,8 @@ class StateTest extends TestCore
             ]);
             State::writeLocalizationHintsFromUri('/CNY/zh_Hans_CN/catalog/category/home');
 
-            self::assertSame('zh_Hans_CN', State::getLang());
-            self::assertSame('CNY', State::getCurrency());
+            self::assertSame('zh_Hans_CN', WelineEnv::getLang());
+            self::assertSame('CNY', WelineEnv::getCurrency());
         } finally {
             State::resetRequestPathLocalizationCache();
             Context::leave();
@@ -169,12 +169,12 @@ class StateTest extends TestCore
             ]);
 
             // Preference cookies must not drive language.
-            self::assertSame('zh_Hans_CN', State::getLang());
+            self::assertSame('zh_Hans_CN', WelineEnv::getLang());
             State::setRequestLanguageOverride('en_US');
-            self::assertSame('en_US', State::getLang());
+            self::assertSame('en_US', WelineEnv::getLang());
             self::assertSame('ja_JP', $_COOKIE['WELINE_USER_LANG']);
             State::setRequestLanguageOverride('');
-            self::assertSame('zh_Hans_CN', State::getLang());
+            self::assertSame('zh_Hans_CN', WelineEnv::getLang());
         } finally {
             State::setRequestLanguageOverride('');
             State::resetRequestPathLocalizationCache();
@@ -228,8 +228,8 @@ class StateTest extends TestCore
             \Weline\Framework\Runtime\RequestContext::setWelineUserLang('en_US');
             \Weline\Framework\Runtime\RequestContext::setWelineUserCurrency('USD');
 
-            self::assertSame('en_US', State::getLang());
-            self::assertSame('USD', State::getCurrency());
+            self::assertSame('en_US', WelineEnv::getLang());
+            self::assertSame('USD', WelineEnv::getCurrency());
         } finally {
             State::resetRequestPathLocalizationCache();
             Context::leave();
@@ -264,8 +264,8 @@ class StateTest extends TestCore
             // Writer absorbs path (not query) into RC — same as App synchronize path-first policy.
             State::writeLocalizationHintsFromUri('/CNY/zh_Hans_CN/catalog/category/home');
 
-            self::assertSame('zh_Hans_CN', State::getLang());
-            self::assertSame('CNY', State::getCurrency());
+            self::assertSame('zh_Hans_CN', WelineEnv::getLang());
+            self::assertSame('CNY', WelineEnv::getCurrency());
         } finally {
             State::resetRequestPathLocalizationCache();
             Context::leave();
@@ -304,7 +304,7 @@ class StateTest extends TestCore
             ]);
             State::writeLocalizationHintsFromUri('/api/CNY/zh_Hans_CN/catalog/product/demo');
 
-            self::assertSame('CNY', State::getCurrency());
+            self::assertSame('CNY', WelineEnv::getCurrency());
         } finally {
             State::resetRequestPathLocalizationCache();
             Context::leave();
@@ -336,7 +336,7 @@ class StateTest extends TestCore
             State::resetRequestPathLocalizationCache();
             self::seedAllowedCurrencyCodes(['USD']);
 
-            self::assertSame('USD', State::getCurrency());
+            self::assertSame('USD', WelineEnv::getCurrency());
         } finally {
             State::resetRequestPathLocalizationCache();
             if ($hadContext) {
@@ -365,8 +365,8 @@ class StateTest extends TestCore
             // App::prime writes from ORIGIN URI into RequestContext; readers do not re-scan.
             State::writeLocalizationHintsFromUri('/CNY/zh_Hans_CN/catalog/category/home/furniture/sofas');
 
-            self::assertSame('zh_Hans_CN', State::getLang());
-            self::assertSame('CNY', State::getCurrency());
+            self::assertSame('zh_Hans_CN', WelineEnv::getLang());
+            self::assertSame('CNY', WelineEnv::getCurrency());
         } finally {
             State::resetRequestPathLocalizationCache();
             Context::leave();
@@ -406,8 +406,8 @@ class StateTest extends TestCore
                 true,
             ));
 
-            self::assertSame('zh_Hans_CN', State::getLang());
-            self::assertSame('CNY', State::getCurrency());
+            self::assertSame('zh_Hans_CN', WelineEnv::getLang());
+            self::assertSame('CNY', WelineEnv::getCurrency());
         } finally {
             State::resetLangLocalCache();
             State::resetRequestPathLocalizationCache();
@@ -451,8 +451,8 @@ class StateTest extends TestCore
                 true,
             ));
 
-            self::assertSame('zh_Hans_CN', State::getLang());
-            self::assertSame('CNY', State::getCurrency());
+            self::assertSame('zh_Hans_CN', WelineEnv::getLang());
+            self::assertSame('CNY', WelineEnv::getCurrency());
         } finally {
             State::resetLangLocalCache();
             State::resetRequestPathLocalizationCache();

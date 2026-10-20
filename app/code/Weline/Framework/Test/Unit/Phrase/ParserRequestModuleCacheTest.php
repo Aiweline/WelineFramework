@@ -52,7 +52,7 @@ final class ParserRequestModuleCacheTest extends TestCase
         $request = ObjectManager::getInstance(Request::class);
         $request->setModules(['Weline_Customer']);
 
-        self::assertSame('en_US', State::getLangLocal());
+        self::assertSame('en_US', WelineEnv::getLangLocal());
 
         $initialModules = $this->currentLayerModules();
         self::assertContains('Weline_Customer', $initialModules);

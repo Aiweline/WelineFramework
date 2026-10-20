@@ -237,7 +237,7 @@ $resolveFieldOptions = static function (array $field) use ($parseOptions): array
         try {
             /** @var \Weline\I18n\Model\I18n $i18n */
             $i18n = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\I18n::class);
-            $locale = (string)(\Weline\Framework\App\State::getLangLocal() ?: 'zh_Hans_CN');
+            $locale = (string)(\Weline\Framework\Env\WelineEnv::getLangLocal() ?: 'zh_Hans_CN');
             $countries = $i18n->getCountries($locale);
             if (is_array($countries) && $countries !== []) {
                 $resolved = [];

@@ -548,7 +548,7 @@ final class CheckoutDeliveryContextService
         try {
             /** @var I18n $i18n */
             $i18n = ObjectManager::getInstance(I18n::class);
-            $locale = Cookie::getLangLocal() ?: 'zh_Hans_CN';
+            $locale = WelineEnv::getLangLocal() ?: 'zh_Hans_CN';
             $raw = $i18n->getCountries($locale);
             if (is_array($raw)) {
                 $names = $raw;
@@ -1094,7 +1094,7 @@ final class CheckoutDeliveryContextService
         $candidates = [];
 
         try {
-            $lang = trim((string)\Weline\Framework\App\State::getLang());
+            $lang = trim((string)\Weline\Framework\Env\WelineEnv::getLang());
             if ($lang !== '') {
                 $candidates[] = $lang;
             }
@@ -1102,7 +1102,7 @@ final class CheckoutDeliveryContextService
         }
 
         try {
-            $locale = trim((string)Cookie::getLangLocal());
+            $locale = trim((string)WelineEnv::getLangLocal());
             // getLangLocal 可能含 currency 后缀；取语言段
             if ($locale !== '' && str_contains($locale, '|')) {
                 $locale = trim((string)explode('|', $locale, 2)[0]);
@@ -1276,7 +1276,7 @@ final class CheckoutDeliveryContextService
             try {
                 /** @var I18n $i18n */
                 $i18n = ObjectManager::getInstance(I18n::class);
-                $locale = Cookie::getLangLocal() ?: 'zh_Hans_CN';
+                $locale = WelineEnv::getLangLocal() ?: 'zh_Hans_CN';
                 $countries = $i18n->getCountries($locale);
                 if (is_array($countries)) {
                     $name = (string)($countries[$countryCode] ?? $countries[strtolower($countryCode)] ?? '');

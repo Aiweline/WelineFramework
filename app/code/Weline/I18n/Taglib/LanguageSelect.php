@@ -16,6 +16,9 @@ use Weline\I18n\Model\Locals;
 
 class LanguageSelect implements TaglibInterface
 {
+    /** 进程袋身份（显式命名，禁止匿名登记）。 */
+    private const BAG_ITEMS = 'i18n.taglib.language_select.items';
+
     private static array $itemsCache = [];
 
     /** @var array<string, array<string, string>> displayLocale => UPPER_ISO2 => name */
@@ -253,7 +256,7 @@ class LanguageSelect implements TaglibInterface
         $__wls_name = $text($attributes['name'] ?? '');
         $__wls_display_locale = $text(
             $attributes['display-locale'] ?? '',
-            \Weline\Framework\App\State::getLang() ?: \Weline\Framework\App\State::getLangLocal() ?: 'zh_Hans_CN'
+            \Weline\Framework\Env\WelineEnv::getLang() ?: \Weline\Framework\Env\WelineEnv::getLangLocal() ?: 'zh_Hans_CN'
         );
         $__wls_catalog = \strtolower($text($attributes['catalog'] ?? '', 'installed'));
         if (!\in_array($__wls_catalog, ['installed', 'global'], true)) {
@@ -368,11 +371,11 @@ DOC;
             $catalog . '|' . $displayLocale . '|' . implode(',', $translationLocales),
             $translationLocales,
         );
-        if (isset(DictionaryCacheNamespace::localCache(self::$itemsCache, 128, $translationLocales)[$cacheKey])) {
-            return DictionaryCacheNamespace::localCache(self::$itemsCache, 128, $translationLocales)[$cacheKey];
+        if (isset(DictionaryCacheNamespace::processBag(self::BAG_ITEMS, self::$itemsCache, 128, $translationLocales)[$cacheKey])) {
+            return DictionaryCacheNamespace::processBag(self::BAG_ITEMS, self::$itemsCache, 128, $translationLocales)[$cacheKey];
         }
         if ($catalog === 'global') {
-            return DictionaryCacheNamespace::localCache(self::$itemsCache, 128, $translationLocales)[$cacheKey] = self::buildGlobalLanguageItems($displayLocale);
+            return DictionaryCacheNamespace::processBag(self::BAG_ITEMS, self::$itemsCache, 128, $translationLocales)[$cacheKey] = self::buildGlobalLanguageItems($displayLocale);
         }
 
         /** @var I18n $i18n */
@@ -501,7 +504,7 @@ DOC;
             return $name !== 0 ? $name : \strnatcasecmp((string)($a['code'] ?? ''), (string)($b['code'] ?? ''));
         });
 
-        return DictionaryCacheNamespace::localCache(self::$itemsCache, 128, $translationLocales)[$cacheKey] = $items;
+        return DictionaryCacheNamespace::processBag(self::BAG_ITEMS, self::$itemsCache, 128, $translationLocales)[$cacheKey] = $items;
     }
 
     public static function getLanguageItemsJson(
@@ -511,7 +514,7 @@ DOC;
     ): string {
         $displayLocale = trim($displayLocale) !== ''
             ? trim($displayLocale)
-            : (State::getLang() ?: State::getLangLocal() ?: 'zh_Hans_CN');
+            : (WelineEnv::getLang() ?: WelineEnv::getLangLocal() ?: 'zh_Hans_CN');
         $json = \json_encode(
             self::resolveLanguageItems($displayLocale, $catalog, $allowedValues),
             JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT,

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\ElFinderFileManager\Controller\Backend;
 
+
+use Weline\Framework\Env\WelineEnv;
 use elFinder;
 use Weline\ElFinderFileManager\Service\ConnectorOptionsBuilder;
 use Weline\FileManager\Api\MimeTypes;
@@ -92,7 +94,7 @@ class Connector extends BackendController
             $rootPath = PUB . 'media';
             $rootUrl = '/pub/media';
             $startPath = $this->request->getParam('startPath');
-            $local = Cookie::getLangLocal();
+            $local = WelineEnv::getLangLocal();
 
             /** @var ConnectorOptionsBuilder $builder */
             $builder = ObjectManager::getInstance(ConnectorOptionsBuilder::class);

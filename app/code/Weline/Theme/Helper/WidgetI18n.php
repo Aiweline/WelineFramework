@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Helper;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
@@ -64,11 +66,11 @@ final class WidgetI18n
 
     /**
      * Current storefront locale for chrome/Phrase.
-     * Sole authority: State::getLang() → request override + RequestContext (App init writers).
+     * Sole authority: WelineEnv::getLang() → request override + RequestContext (App init writers).
      */
     public static function storefrontLocale(): string
     {
-        return State::getLang();
+        return WelineEnv::getLang();
     }
 
     /** 已知文案集合先批量解析，后续 label() 保持原有输出及参数替换。 */

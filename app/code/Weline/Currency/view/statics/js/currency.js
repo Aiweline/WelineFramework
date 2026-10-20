@@ -549,6 +549,15 @@
                 return;
             }
 
+            if (currencyOption.getAttribute('data-i18n-authoritative-href') === '1') {
+                const href = currencyOption.getAttribute('href') || '';
+                if (href && href !== '#' && href !== '#!') {
+                    e.preventDefault();
+                    window.location.assign(href);
+                }
+                return;
+            }
+
             // 阻止默认跳转行为
             e.preventDefault();
             e.stopPropagation();
@@ -591,7 +600,32 @@
         init: initCurrencySwitcher
     };
 
+    function openUnsupportedCurrencyDialog() {
+        document.querySelectorAll('[data-currency-surface="dialog"]').forEach(function (root) {
+            const dialog = root.closest('dialog');
+            if (dialog instanceof HTMLDialogElement && !dialog.open && typeof dialog.showModal === 'function') {
+                dialog.showModal();
+            }
+            const search = root.querySelector('[data-w-choice-search]');
+            if (search && search.getAttribute('data-unsupported-bound') !== '1') {
+                search.setAttribute('data-unsupported-bound', '1');
+                search.addEventListener('input', function () {
+                    const query = String(search.value || '').trim().toLowerCase();
+                    root.querySelectorAll('[data-currency-option]').forEach(function (option) {
+                        const hay = String(option.getAttribute('data-w-search') || option.textContent || '').toLowerCase();
+                        option.hidden = query !== '' && hay.indexOf(query) === -1;
+                    });
+                });
+            }
+        });
+    }
+
     // 自动初始化
     initCurrencySwitcher();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', openUnsupportedCurrencyDialog);
+    } else {
+        openUnsupportedCurrencyDialog();
+    }
 
 })(window, document);

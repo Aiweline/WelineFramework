@@ -382,7 +382,7 @@ final class MenuTreeNormalizer
     private function resolveStorefrontLocale(): string
     {
         try {
-            $lang = trim(\Weline\Framework\App\State::getLangLocal());
+            $lang = trim(\Weline\Framework\Env\WelineEnv::getLangLocal());
         } catch (\Throwable) {
             $lang = '';
         }

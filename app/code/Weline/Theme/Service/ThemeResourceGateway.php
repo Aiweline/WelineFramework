@@ -50,7 +50,7 @@ final class ThemeResourceGateway
         $relative = trim($namespace, '/') . '/Weline/Theme/widget-assets/' . $hash . '.' . $extension;
 
         return [
-            'path' => rtrim(BP, '/\\') . '/pub/static/' . $relative,
+            'path' => $this->absolutePublishedPath('/pub/static/' . $relative),
             'url' => $this->buildStaticUrl($relative, false),
         ];
     }
@@ -82,7 +82,7 @@ final class ThemeResourceGateway
         $relative = trim($namespace, '/') . '/Weline/Theme/theme-head/' . $hash . '.' . $extension;
 
         return [
-            'path' => rtrim(BP, '/\\') . '/pub/static/' . $relative,
+            'path' => $this->absolutePublishedPath('/pub/static/' . $relative),
             'url' => $this->buildStaticUrl($relative, false),
         ];
     }
@@ -170,8 +170,7 @@ final class ThemeResourceGateway
             . '/'
             . str_replace(DIRECTORY_SEPARATOR, '/', $relativePath);
 
-        $publishedFile = rtrim(BP, '\\/') . DIRECTORY_SEPARATOR
-            . ltrim(str_replace('/', DIRECTORY_SEPARATOR, $publicRelativePath), '\\/');
+        $publishedFile = $this->absolutePublishedPath($publicRelativePath);
         if (!$this->publishResolvedFile($resolvedFile, $publishedFile)) {
             return null;
         }
@@ -193,8 +192,7 @@ final class ThemeResourceGateway
             . '/'
             . str_replace(DIRECTORY_SEPARATOR, '/', $relativePath);
 
-        $publishedFile = rtrim(BP, '\\/') . DIRECTORY_SEPARATOR
-            . ltrim(str_replace('/', DIRECTORY_SEPARATOR, $publicRelativePath), '\\/');
+        $publishedFile = $this->absolutePublishedPath($publicRelativePath);
         if (!$this->publishResolvedFile($sourceFile, $publishedFile)) {
             return null;
         }
@@ -223,8 +221,7 @@ final class ThemeResourceGateway
             . '/view/statics/'
             . str_replace(DIRECTORY_SEPARATOR, '/', $relativePath);
 
-        $publishedFile = rtrim(BP, '\\/') . DIRECTORY_SEPARATOR
-            . ltrim(str_replace('/', DIRECTORY_SEPARATOR, $publicRelativePath), '\\/');
+        $publishedFile = $this->absolutePublishedPath($publicRelativePath);
         if (!$this->publishResolvedFile($sourceFile, $publishedFile)) {
             return null;
         }
@@ -530,6 +527,22 @@ final class ThemeResourceGateway
         }
 
         return null;
+    }
+
+    /**
+     * Disk root follows the open deploy staging tree so a later rename-swap
+     * does not drop files written to the live pub/static.
+     */
+    private function absolutePublishedPath(string $publicRelativePath): string
+    {
+        $relative = ltrim(str_replace('\\', '/', $publicRelativePath), '/');
+        if (str_starts_with($relative, 'pub/static/')) {
+            $relative = substr($relative, strlen('pub/static/'));
+        }
+
+        return rtrim(\Weline\Framework\Deploy\DeployStagingSession::staticRoot(), '/\\')
+            . DIRECTORY_SEPARATOR
+            . str_replace('/', DIRECTORY_SEPARATOR, $relative);
     }
 
     private function normalizeRequestPath(string $requestPath): string

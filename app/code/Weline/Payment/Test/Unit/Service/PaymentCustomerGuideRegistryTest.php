@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Payment\Test\Unit\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use PHPUnit\Framework\TestCase;
 use Weline\Payment\Extends\Module\Weline_Payment\PaymentCustomerGuide\FakeCardCustomerGuide;
 use Weline\Payment\Extends\Module\Weline_Payment\PaymentCustomerGuide\PayPalCustomerGuide;
@@ -89,7 +91,7 @@ final class PaymentCustomerGuideRegistryTest extends TestCase
         $src = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/PaymentCustomerGuideRegistry.php');
         self::assertStringContainsString('cachedLocalizedEntries', $src);
         self::assertStringContainsString('Parser::prefetchWords', $src);
-        self::assertStringContainsString('State::getLangLocal()', $src);
+        self::assertStringContainsString('WelineEnv::getLangLocal()', $src);
         self::assertStringNotContainsString('private ?array $cachedEntries = null;', $src);
     }
 }

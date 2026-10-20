@@ -16,6 +16,7 @@ namespace Weline\Server\Console\Server;
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Framework\System\Process\Processer;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\IPC\ControlMessage;
@@ -88,38 +89,63 @@ class Reload extends CommandAbstract
 
         $targetInfo = $manager->getPersistedInstanceInfo($instanceName);
         $targetStats = $targetInfo !== null
-            ? $manager->probeRuntimeStatsForInstance($targetInfo, 6.0)
-            : ['workers' => 0, 'ipc_success' => false, 'ipc_message' => 'instance endpoint not found'];
+            ? $this->probeInstanceRuntime($manager, $targetInfo)
+            : [
+                'workers' => 0,
+                'ipc_success' => false,
+                'ipc_timed_out' => false,
+                'ipc_message' => 'instance endpoint not found',
+            ];
         $targetRunningWorkers = (int)($targetStats['workers'] ?? 0);
+        $controlPlaneBusy = false;
         if ($targetRunningWorkers <= 0) {
             if ($targetInfo !== null && !((bool)($targetStats['ipc_success'] ?? false))) {
                 $message = (string)($targetStats['ipc_message'] ?? '');
-                $this->printer->warning('Master IPC is unreachable; reload is not safe.');
-                if ($message !== '') {
-                    $this->printer->note($message);
-                }
-                $this->printer->note('This does not mean there are no workers. Check server:status and Master control-plane health first.');
-                return 1;
-            }
-            $globalStats = $manager->getRunningStats();
-            if (($globalStats['workers'] ?? 0) > 0) {
-                $this->printer->warning(__('实例 [%{1}] 未检测到运行中的 WLS Worker', [$requestedInstanceName]));
-                if ($manager->hasInstance($instanceName)) {
-                    $this->printer->note(__('可执行 server:listing -r 查看当前运行中的实例'));
-                } else {
-                    $suggestions = $manager->suggestPersistedInstanceNames($requestedInstanceName);
-                    if ($suggestions !== []) {
-                        $this->printer->note(__('你可能想要的实例：%{1}', [\implode(', ', $suggestions)]));
-                        $this->printer->note(__('如需重载最接近的实例，可执行 server:reload %{1}', [$suggestions[0]]));
-                    } else {
-                        $this->printer->note(__('请确认实例名称，或执行 server:listing 查看所有实例'));
+                if ($this->masterIsAliveButBusy($targetInfo, $targetStats)) {
+                    // The control port accepted the connection and the command
+                    // was written, but the Master's single control loop did not
+                    // answer within the probe budget. That is a busy Master, not
+                    // a missing one — and refusing here used to leave operators
+                    // with no path except a full stop/start. The control port
+                    // queues commands, so dispatch the reload asynchronously.
+                    $this->printer->warning(__(
+                        '实例 [%{1}] 的 Master 控制面在探测预算内未响应（进程存活，控制循环繁忙）。',
+                        [$instanceName],
+                    ));
+                    if ($message !== '') {
+                        $this->printer->note($message);
                     }
+                    $this->printer->note(__('改为异步下发重载：命令将排队，Master 控制循环空闲后执行。'));
+                    $controlPlaneBusy = true;
+                } else {
+                    $this->printer->warning('Master IPC is unreachable; reload is not safe.');
+                    if ($message !== '') {
+                        $this->printer->note($message);
+                    }
+                    $this->printer->note('This does not mean there are no workers. Check server:status and Master control-plane health first.');
+                    return 1;
                 }
+            } else {
+                $globalStats = $manager->getRunningStats();
+                if (($globalStats['workers'] ?? 0) > 0) {
+                    $this->printer->warning(__('实例 [%{1}] 未检测到运行中的 WLS Worker', [$requestedInstanceName]));
+                    if ($manager->hasInstance($instanceName)) {
+                        $this->printer->note(__('可执行 server:listing -r 查看当前运行中的实例'));
+                    } else {
+                        $suggestions = $manager->suggestPersistedInstanceNames($requestedInstanceName);
+                        if ($suggestions !== []) {
+                            $this->printer->note(__('你可能想要的实例：%{1}', [\implode(', ', $suggestions)]));
+                            $this->printer->note(__('如需重载最接近的实例，可执行 server:reload %{1}', [$suggestions[0]]));
+                        } else {
+                            $this->printer->note(__('请确认实例名称，或执行 server:listing 查看所有实例'));
+                        }
+                    }
+                    return 1;
+                }
+                $this->printer->warning(__('未检测到运行中的 WLS Worker'));
+                $this->printer->note(__('请先启动服务器：php bin/w server:start'));
                 return 1;
             }
-            $this->printer->warning(__('未检测到运行中的 WLS Worker'));
-            $this->printer->note(__('请先启动服务器：php bin/w server:start'));
-            return 1;
         }
 
         $this->printer->note(__('当前操作实例：%{1}', [$instanceName]));
@@ -135,7 +161,11 @@ class Reload extends CommandAbstract
         }
         $this->printer->note(__('Worker 数：%{1}', [$totalWorkers]));
         
-        if ($waitMode) {
+        if ($controlPlaneBusy) {
+            // Waiting for completion requires a responsive control plane, which
+            // is exactly what we do not have right now. Queue and return.
+            $exitCode = $this->executeReloadAsync($instanceName, $reloadType, $forceMode);
+        } elseif ($waitMode) {
             $exitCode = $this->executeReloadAndWait($instanceName, $totalWorkers, $reloadType);
             // Worker rolling reload alone does not rewrite managed nginx.conf.
             // Edge policy (e.g. |fpc2 / FPC MISS → proxy_no_cache) only lands when
@@ -161,6 +191,52 @@ class Reload extends CommandAbstract
         }
     }
     
+    /**
+     * 探测实例运行态；控制面繁忙时重试，避免单次抖动直接判定为「不可重载」。
+     *
+     * @return array<string, mixed>
+     */
+    protected function probeInstanceRuntime(ServerInstanceManager $manager, $targetInfo): array
+    {
+        $attempts = 3;
+        $stats = [];
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+            $stats = $manager->probeRuntimeStatsForInstance($targetInfo, 6.0);
+            if (!empty($stats['ipc_success']) || (int)($stats['workers'] ?? 0) > 0) {
+                return $stats;
+            }
+            if ($attempt < $attempts) {
+                SchedulerSystem::usleep(250_000);
+            }
+        }
+
+        return $stats;
+    }
+
+    /**
+     * 区分「Master 已死」与「Master 活着但控制循环繁忙」。
+     *
+     * 只有连接失败才证明控制面不存在；读超时说明控制端口已接受连接并写入命令，
+     * 只是单线程控制循环没在预算内应答。
+     *
+     * @param array<string, mixed> $stats
+     */
+    protected function masterIsAliveButBusy($targetInfo, array $stats): bool
+    {
+        if (empty($stats['ipc_timed_out'])) {
+            return false;
+        }
+
+        $masterPid = (int)($targetInfo->masterPid ?? 0);
+        if ($masterPid <= 0 || !Processer::isRunningByPid($masterPid)) {
+            return false;
+        }
+
+        $controlPort = (int)($targetInfo->controlPort ?? 0);
+
+        return $controlPort > 0;
+    }
+
     /**
      * 发送 reload_wait 命令并等待完成
      */

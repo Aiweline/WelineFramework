@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Block\Backend\Page;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Admin\Api\Localization\BackendLocaleCatalogInterface;
 use Weline\Backend\Api\Auth\BackendUserContext;
 use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
@@ -50,7 +52,7 @@ class Topbar extends \Weline\Framework\View\Block
         // 使用默认宽高24x18，autoSize=true使SVG自适应按钮大小
         $localeCatalog = $this->runtimeProviderResolver->resolve(BackendLocaleCatalogInterface::class);
         $languages = $localeCatalog instanceof BackendLocaleCatalogInterface
-            ? $localeCatalog->selectable(Cookie::getLangLocal(), 24, 18, true)
+            ? $localeCatalog->selectable(WelineEnv::getLangLocal(), 24, 18, true)
             : [];
         $websiteId = (int)($this->request->getData('website_id') ?? 0);
         if ($websiteId > 0) {
@@ -78,9 +80,9 @@ class Topbar extends \Weline\Framework\View\Block
         }
         $this->assign('languages', $languages);
         $current_language = ['code' => 'zh_Hans_CN', 'name' => '中文', 'flag' => ''];
-        if (isset($languages[Cookie::getLang()])) {
-            $current_language = $languages[Cookie::getLang()];
-            $current_language['code'] = Cookie::getLang();
+        if (isset($languages[WelineEnv::getLang()])) {
+            $current_language = $languages[WelineEnv::getLang()];
+            $current_language['code'] = WelineEnv::getLang();
         }
         $this->assign('current_language', $current_language);
 

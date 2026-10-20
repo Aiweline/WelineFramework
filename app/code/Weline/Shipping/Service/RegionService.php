@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Shipping\Service;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Shipping\Model\Region;
@@ -1254,7 +1256,7 @@ class RegionService
 
     private function currentLocale(): string
     {
-        return Cookie::getLangLocal() ?: 'zh_Hans_CN';
+        return WelineEnv::getLangLocal() ?: 'zh_Hans_CN';
     }
 
     private function localizedCountryName(string $countryCode, string $defaultName): string

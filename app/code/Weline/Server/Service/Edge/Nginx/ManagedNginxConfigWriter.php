@@ -19,6 +19,8 @@ use Weline\Server\Service\SslCertificateService;
  * access_log off. Business HTML is not proxy_cached (disk or @wls origin).
  * Non-HTML surfaces (BinQuery / REST / admin area prefixes / SSE) proxy_pass
  * directly — they never publish index.html.br and must not pay try_files.
+ * Nginx-synthesized upstream failure (refused, premature close, timeout) is
+ * rewritten to 503; an application status of 502 is left unchanged.
  */
 final class ManagedNginxConfigWriter
 {
@@ -646,6 +648,7 @@ NGINX;
 {$locationProtocolHeaders}
         }
         location @wls_static_origin {
+            error_page 502 504 =503 @wls_origin_unavailable;
             proxy_pass http://wls_backend;
             proxy_http_version 1.1;
             proxy_set_header Upgrade \$wls_business_upstream_upgrade;
@@ -684,6 +687,7 @@ NGINX;
             : $this->buildWlsUpstreamBlock($upstreamServers, $upstreamKeepalive, $upstreamKeepaliveTimeoutSec);
         $acmeChallengeLocationBlock = $this->buildAcmeChallengeLocation($fpmOrigin, $quotedAcmeRoot);
         $internalProbeLocationBlock = $this->buildInternalProbeLocation($fpmOrigin, $configGeneration);
+        [$originUnavailableServerDirectives, $originUnavailableLocation] = $this->buildOriginUnavailableEdgeFragments();
 
         $conf = <<<NGINX
 worker_processes  {$workerProcesses};
@@ -726,6 +730,7 @@ http {
         server_name {$nameList};
 {$serverNginxConfigHeader}
 {$serverProtocolHeaders}
+{$originUnavailableServerDirectives}
         location = /_wls/nginx/tls-session-probe {
             allow 127.0.0.1;
             allow ::1;
@@ -761,6 +766,7 @@ http {
         location @wls_html_origin {
             # Avoid stacking gzip_vary Accept-Encoding on upstream's merged Vary.
             gzip_vary off;
+            error_page 502 504 =503 @wls_origin_unavailable;
 {$edgeLimitLocation}            proxy_pass http://wls_backend;
             proxy_http_version 1.1;
 {$httpRedirectLocation}
@@ -791,6 +797,7 @@ http {
             proxy_cache off;
 {$locationProtocolHeaders}
         }
+{$originUnavailableLocation}
     }
 {$apexRedirectBlock}{$distinctHostBlocks}
     include {$quotedConfDGlob};
@@ -1333,6 +1340,7 @@ NGINX;
                 upstreamHostHeader: '$wls_upstream_authority',
                 emptyUpstreamConnection: false,
             );
+            [$originUnavailableServerDirectives, $originUnavailableLocation] = $this->buildOriginUnavailableEdgeFragments();
             $blocks[] = <<<NGINX
 
     # WLS distinct-certificate host (SNI exact leaf for {$host})
@@ -1348,7 +1356,7 @@ NGINX;
         ssl_session_tickets on;
         ssl_buffer_size     4k;
         server_name {$host};
-
+{$originUnavailableServerDirectives}
         location ^~ /.well-known/acme-challenge/ {
             proxy_pass http://wls_backend;
             proxy_http_version 1.1;
@@ -1373,6 +1381,7 @@ NGINX;
         }
         location @wls_html_origin_distinct_{$originName} {
             gzip_vary off;
+            error_page 502 504 =503 @wls_origin_unavailable;
 {$edgeLimitLocation}            proxy_pass http://wls_backend;
             proxy_http_version 1.1;
             proxy_set_header Upgrade \$wls_business_upstream_upgrade;
@@ -1389,6 +1398,7 @@ NGINX;
             proxy_buffering on;
             proxy_cache off;
         }
+{$originUnavailableLocation}
     }
 NGINX;
         }
@@ -1501,6 +1511,7 @@ NGINX;
             upstreamHostHeader: '$host',
             emptyUpstreamConnection: true,
         );
+        [$originUnavailableServerDirectives, $originUnavailableLocation] = $this->buildOriginUnavailableEdgeFragments();
 
         return <<<NGINX
 
@@ -1508,7 +1519,7 @@ NGINX;
     server {
         listen {$ports['http']}{$reuse};{$sslListen}
         server_name {$nameList};
-
+{$originUnavailableServerDirectives}
         location ^~ /.well-known/acme-challenge/ {
             proxy_pass http://wls_backend;
             proxy_http_version 1.1;
@@ -1524,6 +1535,7 @@ NGINX;
             add_header Cache-Control "no-store" always;
             return 301 https://{$wwwHost}\$request_uri;
         }
+{$originUnavailableLocation}
     }
 NGINX;
     }
@@ -2496,6 +2508,42 @@ PARAMS;
     }
 
 NGINX;
+    }
+
+    /**
+     * Edge-synthesized origin outage is temporary unavailability, not a bad gateway.
+     *
+     * proxy_intercept_errors stays off so a real upstream 502 is not rewritten.
+     * recursive_error_pages is on because HTML and static misses already sit
+     * inside error_page 418/419 named locations; without recursion nginx would
+     * still emit 502 from those internal redirects.
+     *
+     * @return array{0:string,1:string} server directives, named location
+     */
+    private function buildOriginUnavailableEdgeFragments(): array
+    {
+        $server = <<<'NGINX'
+        # Origin down / upstream closed / timeout → 503 (crawlers retry).
+        # Do not enable proxy_intercept_errors: application 502 stays 502.
+        recursive_error_pages on;
+        error_page 502 504 =503 @wls_origin_unavailable;
+
+NGINX;
+        $location = <<<'NGINX'
+        location @wls_origin_unavailable {
+            internal;
+            default_type text/html;
+            charset utf-8;
+            add_header Retry-After 60 always;
+            add_header Cache-Control "no-store" always;
+            add_header CDN-Cache-Control "no-store" always;
+            add_header X-Wls-Edge-Unavailable "origin" always;
+            return 503 '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Service Unavailable</title></head><body><p>服务暂时不可用，请稍后再试。 Service temporarily unavailable.</p></body></html>';
+        }
+
+NGINX;
+
+        return [$server, $location];
     }
 
     private function buildWlsUpstreamBlock(

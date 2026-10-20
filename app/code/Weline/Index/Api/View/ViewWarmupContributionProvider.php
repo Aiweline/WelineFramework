@@ -11,7 +11,8 @@ use Weline\Framework\Runtime\Preload\ViewWarmupContributionProviderInterface;
 /**
  * Non-default locale homepage roots. Default-locale `/` is owned by Framework
  * deferred storefront warmup; prefixed locales need their own FPC keys.
- * Default-language prefixes are omitted — App 301-strips them to `/`.
+ * Default-language prefixes are not warmed here; `/` already covers that homepage.
+ * Visiting `/{default-locale}/` still serves in place (no 301).
  */
 final class ViewWarmupContributionProvider implements ViewWarmupContributionProviderInterface
 {

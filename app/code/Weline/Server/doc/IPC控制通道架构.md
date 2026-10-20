@@ -139,7 +139,7 @@ Framework 的 `RuntimeNamespaceInvalidationPublisherInterface` 只向每个存�
 
 Worker 只在共享 `WorkerNamespaceGenerationApplier` 中验证严格 v1 帧、幂等推进进程快照并回传权威时钟/代际。Master 以接收操作时快照的 `client + role + worker + slot + lease + slot_generation + PID` 审计 ACK；断线、身份换代、缺能力、时钟落后、代际不足或超时都是结构化失败。三个 Worker 入口共用同一 applier，旧 `cache_clear` 协议与清理语义保持不变。
 
-Worker 每次初始 READY、重连 READY、replacement/surge 准入前都从 DB 重建 namespace 快照，并上报 `cache_namespace_invalidation_v1` 能力和 `namespace_authority_clock`。Master 在发布最终 READY/路由前再次与 DB 权威时钟比对，落后 Worker fail closed。混合控制面必须保留 Supervisor 认证后的 source identity，不得用 Worker 自报字段替代。
+Worker 每次初始 READY、重连 READY、replacement/surge 准入前都从 DB 重建 namespace 快照，并上报 `cache_namespace_invalidation_v1` 能力和 `namespace_authority_clock`。Master 控制循环不查询代际表。它只把失效帧或 `namespace_authority_clock` 通知里的时钟记成内存水位，READY 时做整数比较，上报值低于水位则 fail closed。Worker 自报时钟不能抬高水位。`publisher_enabled=false` 时仍发送这条时钟通知，失效帧扇出仍由该开关决定。混合控制面必须保留 Supervisor 认证后的 source identity，不得用 Worker 自报字段替代。
 
 #### v1 wire
 

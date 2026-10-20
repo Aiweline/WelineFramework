@@ -33,6 +33,9 @@ final class MailUnitContractsTest extends TestCase
             'MailSiteSetupTask::testMailSetupTaskProviderRegistersViaExtends' => function () {
             $this->assert_MailSiteSetupTask_testMailSetupTaskProviderRegistersViaExtends();
         },
+            'MailInboxMenuSignal::testUnreadMailPublishesMenuDeepLink' => function () {
+            $this->assert_MailInboxMenuSignal_testUnreadMailPublishesMenuDeepLink();
+        },
         ];
     }
 
@@ -57,5 +60,24 @@ private function assert_MailSiteSetupTask_testMailSetupTaskProviderRegistersViaE
     self::assertStringContainsString('勿手搓二进制', $provider);
     self::assertStringContainsString('SetupTaskProviderInterface::class', $extends);
     self::assertStringContainsString('MailSetupTaskProvider::class', $extends);
+}
+
+private function assert_MailInboxMenuSignal_testUnreadMailPublishesMenuDeepLink(): void
+{
+    $root = '/Users/weline/Project/Official/框架/app/code/Weline/Mail';
+    $provider = (string) file_get_contents($root . '/extends/module/Weline_Admin/BackendMenuSignalProvider/MailInboxMenuSignalProvider.php');
+    $publisher = (string) file_get_contents($root . '/Service/Mailbox/MailMenuSignalPublisher.php');
+    $controller = (string) file_get_contents($root . '/Controller/Backend/Index.php');
+    $inbox = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Admin/Service/BackendMenuSignalInbox.php');
+    self::assertStringContainsString('MailMenuSignalPublisher::MENU_SOURCE_ID', $provider);
+    self::assertStringContainsString("'unread' => true", $publisher);
+    self::assertStringContainsString("MENU_SOURCE_ID = 'Weline_Mail::mail'", $publisher);
+    self::assertStringContainsString("getBackendUrl('weline_mail/backend'", $publisher);
+    self::assertStringContainsString("'message' => \$messageId", $publisher);
+    self::assertStringContainsString('publishLiveUnread', $publisher);
+    self::assertStringContainsString('touchMailMenuSignal', $controller);
+    self::assertStringContainsString('function markUnread', $inbox);
+    $js = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/js/backend-menu-signals.js');
+    self::assertStringNotContainsString('weline_mail/backend', $js);
 }
 }

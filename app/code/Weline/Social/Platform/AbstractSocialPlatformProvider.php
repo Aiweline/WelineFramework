@@ -9,6 +9,7 @@ use Weline\Social\Interface\SocialPlatformConfigTesterInterface;
 use Weline\Social\Interface\SocialPlatformProviderInterface;
 use Weline\Social\Service\SocialHttpClient;
 use Weline\Social\Service\SocialPlatformAppConfig;
+use Weline\Social\Service\SocialPlatformSignupUrl;
 
 abstract class AbstractSocialPlatformProvider implements SocialPlatformProviderInterface, SocialPlatformConfigTesterInterface
 {
@@ -48,6 +49,14 @@ abstract class AbstractSocialPlatformProvider implements SocialPlatformProviderI
         if (!\array_key_exists('supports_one_click_auth', $definition)) {
             $definition['supports_one_click_auth'] = \in_array('oauth2', $definition['auth_modes'], true);
         }
+        $signup = \trim((string)($definition['account_signup_url'] ?? ''));
+        if ($signup !== '' && !\str_starts_with($signup, 'https://')) {
+            $signup = '';
+        }
+        if ($signup === '') {
+            $signup = SocialPlatformSignupUrl::templateFor((string)$definition['code']);
+        }
+        $definition['account_signup_url'] = $signup;
 
         return $definition;
     }

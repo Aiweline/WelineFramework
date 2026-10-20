@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Extends\Module\Weline_Framework\Query;
 
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\Parser;
@@ -111,7 +113,7 @@ class I18nQueryProvider implements QueryProviderInterface
     #[BinQueryParam(name: 'installed', type: 'bool', required: false, cacheKey: true)]
     private function getInstalledLocales(array $params): array
     {
-        $displayLocale = (string)($params['display_locale_code'] ?? Cookie::getLangLocal() ?? 'zh_Hans_CN');
+        $displayLocale = (string)($params['display_locale_code'] ?? WelineEnv::getLangLocal() ?? 'zh_Hans_CN');
         $installed = (bool)($params['installed'] ?? true);
 
         $list = [];
@@ -311,7 +313,7 @@ class I18nQueryProvider implements QueryProviderInterface
     private function getLocaleName(array $params): string
     {
         $code = (string)($params['code'] ?? '');
-        $displayLocale = (string)($params['display_locale_code'] ?? Cookie::getLangLocal() ?? 'zh_Hans_CN');
+        $displayLocale = (string)($params['display_locale_code'] ?? WelineEnv::getLangLocal() ?? 'zh_Hans_CN');
         if ($code === '') {
             return '';
         }
@@ -363,7 +365,7 @@ class I18nQueryProvider implements QueryProviderInterface
                 'message' => (string)__('当前请求没有可用的商城 Scope'),
             ];
         }
-        $locale = trim((string)($params['locale_code'] ?? Cookie::getLangLocal() ?? 'zh_Hans_CN'));
+        $locale = trim((string)($params['locale_code'] ?? WelineEnv::getLangLocal() ?? 'zh_Hans_CN'));
         if ($locale === '') {
             $locale = 'zh_Hans_CN';
         }
