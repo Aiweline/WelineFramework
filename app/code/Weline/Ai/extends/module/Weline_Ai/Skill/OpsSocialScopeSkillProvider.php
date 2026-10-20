@@ -53,7 +53,8 @@ final class OpsSocialScopeSkillProvider implements SkillProviderInterface
 
 - 不要注册新平台账号，不要开通社媒邮箱，不要改融媒体绑定。
 - 不要把凭据、令牌、密码写进回复或创意正文。
-- 不要调用 `createPublishBatch`，不要把内容送进发布队列。公开外发仍须运营审批。
+- 用户要把内容发出去时，改走技能 `weline-social-content-publish`：名单以该站网站柜里已经在用的社媒账户为准，按柜中顺序逐个发图片或视频。
+- 不要调用 `createPublishBatch`，不要把未开发布的账户送进发布队列。公开外发仍须用户这次明确要求发布。
 - 博客草稿不使用这份平台清单，除非任务明确是把同一内容转到社媒。
 
 ## 回复
