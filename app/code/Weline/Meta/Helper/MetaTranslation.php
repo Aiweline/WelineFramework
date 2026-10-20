@@ -11,6 +11,7 @@ declare(strict_types=1);
 namespace Weline\Meta\Helper;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Meta\Model\Meta;
 use Weline\Meta\Model\MetaLocal;
 use Weline\Meta\Service\MetaLocalGcService;
@@ -21,6 +22,14 @@ use Weline\Meta\Service\MetaLocalWordParser;
  */
 class MetaTranslation
 {
+    private const REQUEST_MEMO_KEY = 'meta.translation.row_memo';
+
+    private const REQUEST_MEMO_LIMIT = 512;
+
+    private const REQUEST_PARAM_MAP_KEY = 'meta.translation.param_map';
+
+    private const REQUEST_PARAM_MAP_LIMIT = 128;
+
     public static function getTranslatedValue(
         string $metaIdentify,
         string $configKey,
@@ -188,6 +197,7 @@ class MetaTranslation
                     MetaLocal::schema_fields_VERSION_ID => $versionId,
                 ])->fetch();
             }
+            self::forgetRequestMemo();
             return true;
         } catch (\Throwable $e) {
             if (php_sapi_name() === 'cli') {
@@ -245,23 +255,14 @@ class MetaTranslation
         if ($parsed === null) {
             return null;
         }
-        /** @var MetaLocal $localModel */
-        $localModel = ObjectManager::getInstance(MetaLocal::class);
-        $localModel->reset()
-            ->whereNaturalKey(
-                $parsed['meta_identify'],
-                $locale,
-                $parsed['config_key'],
-                $parsed['scope'],
-                max(0, $versionId),
-            )
-            ->find()
-            ->fetch();
-        if (!$localModel->getMetaIdentify()) {
-            return null;
-        }
 
-        return (string)($localModel->getConfigValue() ?? '');
+        return self::findRowValue(
+            $parsed['meta_identify'],
+            $locale,
+            $parsed['config_key'],
+            $parsed['scope'],
+            max(0, $versionId),
+        );
     }
 
     public static function deleteTranslatedValueWithScope(
@@ -292,6 +293,7 @@ class MetaTranslation
                 return true;
             }
             $localModel->delete();
+            self::forgetRequestMemo();
             return true;
         } catch (\Throwable $e) {
             if (php_sapi_name() === 'cli') {
@@ -452,16 +454,147 @@ class MetaTranslation
         string $scope,
         int $versionId,
     ): string {
+        return self::findRowValue($metaIdentify, $locale, $configKey, $scope, $versionId) ?? '';
+    }
+
+    /**
+     * Return the stored value, or null when the natural key has no row.
+     * Null is distinct from '' because an empty MetaLocal value is a valid
+     * explicit translation and must stop scope/locale fallback.
+     */
+    private static function findRowValue(
+        string $metaIdentify,
+        string $locale,
+        string $configKey,
+        string $scope,
+        int $versionId,
+    ): ?string {
+        // Match MetaLocal::whereNaturalKey() normalization so the bag query and
+        // the per-key fallback address the same natural key.
+        $scope = trim($scope);
+        if ($scope === '') {
+            $scope = MetaLocal::DEFAULT_SCOPE;
+        }
+        $versionId = max(0, $versionId);
+
+        // Widget params are resolved one by one (param.enabled, param.title, …).
+        // Load every param.* row for this widget once so the scope/locale
+        // fallback chain costs one query instead of one query per combination.
+        if (\str_starts_with($configKey, 'param.')) {
+            $paramMaps = self::loadParamMap($metaIdentify);
+            if ($paramMaps !== null) {
+                return $paramMaps[$locale][$scope][$versionId][$configKey] ?? null;
+            }
+        }
+
+        $memoKey = $metaIdentify . "\0" . $locale . "\0" . $configKey . "\0" . $scope . "\0" . $versionId;
+        $memo = null;
+        if (RequestContext::isInitialized()) {
+            $memo = RequestContext::get(self::REQUEST_MEMO_KEY, []);
+            if (!\is_array($memo)) {
+                $memo = [];
+            }
+            if (\array_key_exists($memoKey, $memo)) {
+                return $memo[$memoKey] === null ? null : (string)$memo[$memoKey];
+            }
+        }
+
         /** @var MetaLocal $localModel */
         $localModel = ObjectManager::getInstance(MetaLocal::class);
         $localModel->reset()
             ->whereNaturalKey($metaIdentify, $locale, $configKey, $scope, $versionId)
             ->find()
             ->fetch();
-        if (!$localModel->getMetaIdentify()) {
-            return '';
+        $value = null;
+        if ($localModel->getMetaIdentify()) {
+            $value = trim((string)($localModel->getConfigValue() ?? ''));
         }
-        return trim((string)($localModel->getConfigValue() ?? ''));
+
+        if (\is_array($memo)) {
+            if (\count($memo) >= self::REQUEST_MEMO_LIMIT) {
+                \array_shift($memo);
+            }
+            $memo[$memoKey] = $value;
+            RequestContext::set(self::REQUEST_MEMO_KEY, $memo);
+        }
+
+        return $value;
+    }
+
+    /**
+     * Request-scoped param.* bag for one widget, indexed by locale/scope/version.
+     * One query loads every locale/scope/version row for the widget, so the
+     * caller's scope/locale fallback chain never issues a per-combination query.
+     * Returns null when the Context is unavailable or the query fails, so the
+     * caller falls back to per-key lookup.
+     *
+     * @return array<string, array<string, array<int, array<string, string>>>>|null
+     */
+    private static function loadParamMap(
+        string $metaIdentify,
+    ): ?array {
+        if (!RequestContext::isInitialized()) {
+            return null;
+        }
+        $maps = RequestContext::get(self::REQUEST_PARAM_MAP_KEY, []);
+        if (!\is_array($maps)) {
+            $maps = [];
+        }
+        if (\array_key_exists($metaIdentify, $maps)) {
+            return \is_array($maps[$metaIdentify]) ? $maps[$metaIdentify] : null;
+        }
+
+        try {
+            /** @var MetaLocal $localModel */
+            $localModel = ObjectManager::getInstance(MetaLocal::class);
+            $rows = $localModel->reset()
+                ->where(MetaLocal::schema_fields_META_IDENTIFY, $metaIdentify)
+                ->where(MetaLocal::schema_fields_CONFIG_KEY, 'param.%', 'LIKE')
+                ->select()
+                ->fetchArray();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $map = [];
+        foreach (\is_array($rows) ? $rows : [] as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $rowLocale = (string)($row[MetaLocal::schema_fields_LOCALE_CODE] ?? '');
+            $key = (string)($row[MetaLocal::schema_fields_CONFIG_KEY] ?? '');
+            if ($rowLocale === '' || $key === '') {
+                continue;
+            }
+            $scope = \trim((string)($row[MetaLocal::schema_fields_SCOPE] ?? ''));
+            if ($scope === '') {
+                $scope = MetaLocal::DEFAULT_SCOPE;
+            }
+            $versionId = \max(0, (int)($row[MetaLocal::schema_fields_VERSION_ID] ?? 0));
+            $map[$rowLocale][$scope][$versionId][$key] = \trim(
+                (string)($row[MetaLocal::schema_fields_CONFIG_VALUE] ?? '')
+            );
+        }
+
+        if (\count($maps) >= self::REQUEST_PARAM_MAP_LIMIT) {
+            \array_shift($maps);
+        }
+        $maps[$metaIdentify] = $map;
+        RequestContext::set(self::REQUEST_PARAM_MAP_KEY, $maps);
+
+        return $map;
+    }
+
+    /**
+     * Drop the request memo after a write so a later read in the same request
+     * cannot reuse a pre-write value (including empty fallback rows).
+     */
+    private static function forgetRequestMemo(): void
+    {
+        if (RequestContext::isInitialized()) {
+            RequestContext::set(self::REQUEST_MEMO_KEY, []);
+            RequestContext::set(self::REQUEST_PARAM_MAP_KEY, []);
+        }
     }
 
     private static function resolveMetaId(string $metaIdentify): ?int
