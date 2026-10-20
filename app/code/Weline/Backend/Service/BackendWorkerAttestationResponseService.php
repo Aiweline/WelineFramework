@@ -308,27 +308,52 @@ final class BackendWorkerAttestationResponseService
         if ($context === null) {
             return false;
         }
-        $mode = \strtolower(\trim((string)$context->server('HTTP_SEC_FETCH_MODE', '')));
-        $dest = \strtolower(\trim((string)$context->server('HTTP_SEC_FETCH_DEST', '')));
-        $user = \trim((string)$context->server('HTTP_SEC_FETCH_USER', ''));
+        $purpose = \strtolower(\trim((string)(
+            $context->server('HTTP_SEC_PURPOSE', '')
+            ?: $context->server('HTTP_PURPOSE', '')
+        )));
+
+        return self::shouldMintDocumentProof(
+            (string)$context->server('HTTP_SEC_FETCH_MODE', ''),
+            (string)$context->server('HTTP_SEC_FETCH_DEST', ''),
+            (string)$context->server('HTTP_SEC_FETCH_USER', ''),
+            $purpose,
+            \defined('DEV') && DEV,
+        );
+    }
+
+    /**
+     * Real top-level HTML navigations must mint a backend Worker proof.
+     * Reload and post-login redirects often omit Sec-Fetch-User; requiring it
+     * leaves the inert bootstrap slot, and every auth=backend query-bin call
+     * then returns 403. Headerless probes stay DEV-only. Prefetch, prerender,
+     * iframe, and XHR never mint.
+     */
+    public static function shouldMintDocumentProof(
+        string $mode,
+        string $dest,
+        string $user,
+        string $purpose,
+        bool $dev,
+    ): bool {
+        $mode = \strtolower(\trim($mode));
+        $dest = \strtolower(\trim($dest));
+        $user = \trim($user);
+        $purpose = \strtolower(\trim($purpose));
         if ($mode === '' && $dest === '' && $user === '') {
-            // Local DEV HTTP probes and legacy Browser harnesses may not supply
-            // Fetch Metadata. Production never mints a backend proof without a
-            // positively identified user-activated top-level navigation.
-            return \defined('DEV') && DEV;
+            return $dev;
         }
         if ($mode !== 'navigate' || $dest !== 'document') {
             return false;
         }
-        if ($user === '?1') {
-            return true;
+        if ($purpose !== '' && (
+            \str_contains($purpose, 'prefetch')
+            || \str_contains($purpose, 'prerender')
+        )) {
+            return false;
         }
-        // Post-login 302→Theme Editor often omits Sec-Fetch-User while remaining
-        // a top-level document navigation. Under scope_kernel mode=on, an empty
-        // backend bootstrap slot makes QueryBin fail with scope_binding_required
-        // and the editor stays read-only. Local/dev may mint; production still
-        // requires the positive user-activation signal above.
-        return \defined('DEV') && DEV;
+        // Only the spec value, or a browser that simply omitted the header.
+        return $user === '?1' || $user === '';
     }
 
     private function applyNoStore(Response $response): void

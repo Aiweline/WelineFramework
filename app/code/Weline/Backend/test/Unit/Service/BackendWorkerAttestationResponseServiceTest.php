@@ -74,43 +74,106 @@ final class BackendWorkerAttestationResponseServiceTest extends TestCase
         self::assertStringContainsString('<title>A</title>', $out);
     }
 
+    public function testProductionDocumentNavigationMintsWithoutSecFetchUser(): void
+    {
+        self::assertTrue(BackendWorkerAttestationResponseService::shouldMintDocumentProof(
+            'navigate',
+            'document',
+            '',
+            '',
+            false,
+        ));
+        self::assertTrue(BackendWorkerAttestationResponseService::shouldMintDocumentProof(
+            'navigate',
+            'document',
+            '?1',
+            '',
+            false,
+        ));
+        self::assertFalse(BackendWorkerAttestationResponseService::shouldMintDocumentProof(
+            'navigate',
+            'document',
+            '',
+            'prefetch',
+            false,
+        ));
+        self::assertFalse(BackendWorkerAttestationResponseService::shouldMintDocumentProof(
+            'navigate',
+            'document',
+            '?1',
+            'prerender',
+            false,
+        ));
+        self::assertFalse(BackendWorkerAttestationResponseService::shouldMintDocumentProof(
+            '',
+            '',
+            '',
+            '',
+            false,
+        ));
+        self::assertTrue(BackendWorkerAttestationResponseService::shouldMintDocumentProof(
+            '',
+            '',
+            '',
+            '',
+            true,
+        ));
+        self::assertFalse(BackendWorkerAttestationResponseService::shouldMintDocumentProof(
+            'cors',
+            'empty',
+            '',
+            '',
+            false,
+        ));
+        self::assertFalse(BackendWorkerAttestationResponseService::shouldMintDocumentProof(
+            'navigate',
+            'iframe',
+            '?1',
+            '',
+            false,
+        ));
+    }
+
     public function testDevAllowsPostLoginNavigateWithoutSecFetchUser(): void
     {
-        if (!\defined('DEV')) {
-            \define('DEV', true);
-        }
-        self::assertTrue(DEV);
-
         $service = $this->service();
         $method = new \ReflectionMethod($service, 'isTopLevelDocumentNavigation');
         $method->setAccessible(true);
 
         $hadContext = \Weline\Framework\Context::hasCurrent();
         $context = \Weline\Framework\Context::current();
-        $keys = [
-            'input.server.HTTP_SEC_FETCH_MODE',
-            'input.server.HTTP_SEC_FETCH_DEST',
-            'input.server.HTTP_SEC_FETCH_USER',
-        ];
-        $previous = [];
-        foreach ($keys as $key) {
-            $previous[$key] = $context->get($key);
-        }
+        $previous = $context->get('input.server');
         try {
-            $context->set('input.server.HTTP_SEC_FETCH_MODE', 'navigate');
-            $context->set('input.server.HTTP_SEC_FETCH_DEST', 'document');
-            $context->set('input.server.HTTP_SEC_FETCH_USER', '');
+            $context->set('input.server', [
+                'HTTP_SEC_FETCH_MODE' => 'navigate',
+                'HTTP_SEC_FETCH_DEST' => 'document',
+                'HTTP_SEC_FETCH_USER' => '',
+            ]);
             self::assertTrue($method->invoke($service));
 
-            $context->set('input.server.HTTP_SEC_FETCH_USER', '?1');
+            $context->set('input.server', [
+                'HTTP_SEC_FETCH_MODE' => 'navigate',
+                'HTTP_SEC_FETCH_DEST' => 'document',
+                'HTTP_SEC_FETCH_USER' => '?1',
+            ]);
             self::assertTrue($method->invoke($service));
 
-            $context->set('input.server.HTTP_SEC_FETCH_DEST', 'iframe');
+            $context->set('input.server', [
+                'HTTP_SEC_FETCH_MODE' => 'navigate',
+                'HTTP_SEC_FETCH_DEST' => 'document',
+                'HTTP_SEC_FETCH_USER' => '',
+                'HTTP_SEC_PURPOSE' => 'prefetch',
+            ]);
+            self::assertFalse($method->invoke($service));
+
+            $context->set('input.server', [
+                'HTTP_SEC_FETCH_MODE' => 'navigate',
+                'HTTP_SEC_FETCH_DEST' => 'iframe',
+                'HTTP_SEC_FETCH_USER' => '?1',
+            ]);
             self::assertFalse($method->invoke($service));
         } finally {
-            foreach ($previous as $key => $value) {
-                $context->set($key, $value);
-            }
+            $context->set('input.server', \is_array($previous) ? $previous : []);
             if (!$hadContext) {
                 \Weline\Framework\Context::leave();
             }
