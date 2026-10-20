@@ -8,6 +8,7 @@ use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Test\Service\E2eBrowserCleanupService;
+use Weline\Framework\Test\Service\E2eGatePreflight;
 use Weline\Framework\Test\Service\TestCollectionService;
 
 class Run extends CommandAbstract
@@ -57,6 +58,16 @@ class Run extends CommandAbstract
                     return 1;
                 }
                 $extraEnv['MODULE_FILTER'] = $control['module'];
+            } elseif ($control['case_id'] !== '') {
+                // Resolve case ids to files before Playwright collection. Collecting every
+                // spec and filtering with --grep makes one illegal spec→spec import abort
+                // the whole run with "should not import test file".
+                $filesToRun = $this->resolveCaseFiles($control['case_id'], $collected);
+                if ($filesToRun === []) {
+                    $this->printer->error(__('未找到 case id %{1} 对应的 E2E 文件。', [$control['case_id']]));
+                    return 1;
+                }
+                $this->printer->note(__('case %{1}：%{2} 个 spec', [$control['case_id'], (string)count($filesToRun)]));
             } elseif (isset($collected['all_test_files']) && is_array($collected['all_test_files'])) {
                 $filesToRun = array_values(array_filter(
                     $collected['all_test_files'],
@@ -77,7 +88,26 @@ class Run extends CommandAbstract
             $extraEnv[$envKey] = $envValue;
         }
 
+        // 门禁前置体检（架构级）：单实例租约 + 残留浏览器 + 负载 + 站点/schema 探活。
+        // 套件（发布门禁）强制负载阈值；单 spec 调试可用 --allow-busy 放行。
+        $preflight = new E2eGatePreflight();
+        $preflightOk = $preflight->run([
+            'suite' => $control['suite'],
+            'allow_busy' => $control['allow_busy'] || $control['suite'] === '',
+            'force_unlock' => $control['force_unlock'],
+            'skip_browser_cleanup' => $control['skip_browser_cleanup'],
+        ]);
+        $this->printer->note($preflight->render());
+        echo "\n";
+        if (!$preflightOk) {
+            $preflight->release();
+            return 1;
+        }
+        $extraEnv['WELINE_E2E_GATE_ACTIVE'] = '1';
+        $preflight->lock()?->heartbeat(['phase' => 'playwright', 'files' => count($filesToRun ?? [])]);
+
         if (!$this->ensurePlaywrightRuntime($e2eDir)) {
+            $preflight->release();
             return 1;
         }
 
@@ -92,6 +122,8 @@ class Run extends CommandAbstract
         // Always reap orphaned automation browsers even when the suite fails.
         // Playwright globalTeardown also runs this; the PHP pass covers crashes / skipped teardown.
         $this->cleanupOrphanedBrowsersAfterRun();
+        // 门禁结束立刻交还数据库共享租约与单实例租约，避免挡住后续 setup:upgrade。
+        $preflight->release();
 
         echo "\n";
         if ($exitCode === 0) {
@@ -153,6 +185,9 @@ class Run extends CommandAbstract
                 '--ui' => __('Playwright UI 模式'),
                 '--grep=PATTERN' => __('按测试名过滤'),
                 '--workers=N' => __('并发 worker 数'),
+                '--allow-busy' => __('跳过负载阈值体检（仅调试用；发布门禁不要加）'),
+                '--force-unlock' => __('终止残留的 e2e:run 进程并清理门禁租约（谨慎）'),
+                '--skip-browser-cleanup' => __('跳过启动前的浏览器残留清理（需人工保留现场时）'),
             ],
             [],
             [
@@ -201,6 +236,12 @@ class Run extends CommandAbstract
             'refresh_collection' => true,
             'refresh-collection' => true,
             'rc' => true,
+            'allow_busy' => true,
+            'allow-busy' => true,
+            'force_unlock' => true,
+            'force-unlock' => true,
+            'skip_browser_cleanup' => true,
+            'skip-browser-cleanup' => true,
         ];
         $hasGrep = false;
 
@@ -664,7 +705,46 @@ class Run extends CommandAbstract
             'list_modules' => isset($args['list_modules']) || isset($args['list-modules']),
             'list_suites' => isset($args['list_suites']) || isset($args['list-suites']),
             'refresh_collection' => isset($args['refresh_collection']) || isset($args['refresh-collection']) || isset($args['rc']),
+            'allow_busy' => isset($args['allow_busy']) || isset($args['allow-busy']),
+            'force_unlock' => isset($args['force_unlock']) || isset($args['force-unlock']),
+            'skip_browser_cleanup' => isset($args['skip_browser_cleanup']) || isset($args['skip-browser-cleanup']),
         ];
+    }
+
+    /**
+     * Resolve `--case-id` to the spec files that declare the tag.
+     *
+     * Specs tag cases via `[case:ID]` (moduleCase) or `id: 'ID'`. Scanning the
+     * collected file list keeps Playwright collection narrow: a broken
+     * spec→spec import elsewhere can no longer abort a filtered run.
+     *
+     * @param array<string, mixed> $collected
+     * @return list<string>
+     */
+    private function resolveCaseFiles(string $caseId, array $collected): array
+    {
+        $caseId = trim($caseId);
+        if ($caseId === '') {
+            return [];
+        }
+        $files = [];
+        foreach ((array)($collected['all_test_files'] ?? []) as $file) {
+            if (!is_string($file) || $file === '' || !is_file($file)) {
+                continue;
+            }
+            $source = @file_get_contents($file, false, null, 0, 2_000_000);
+            if (!is_string($source) || $source === '') {
+                continue;
+            }
+            if (str_contains($source, '[case:' . $caseId . ']')
+                || str_contains($source, "'" . $caseId . "'")
+                || str_contains($source, '"' . $caseId . '"')
+            ) {
+                $files[] = $file;
+            }
+        }
+
+        return array_values(array_unique($files));
     }
 
     /**

@@ -35,6 +35,7 @@
 1. **先有用例**：URL、步骤、期望结果（来自 `doc/需求.md` 或 TaskContract）；禁止先写代码后补「随便点一下」。
 2. **起真实 WLS**（测试实例），确认 Worker/静态资源已加载本次改动。
 3. **打开当前宿主可用的真实 Browser，且打开即禁用 HTTP 缓存（硬，`browser_cache_disabled_on_open`）**，再按用例逐步操作（点击、填写、提交、看 Toast/跳转）。
+3a0c. **Google Chrome 连接前先复用（硬契约，`google_chrome_reuse_before_connect`）**：要操作**用户本机已登录的 Google Chrome**（chrome-devtools、CDP、社媒、邮箱、第三方站）时，导航、点击、填写或脚本之前必须先读 `~/.cursor/chrome-devtools-grant.json`。`owner_pid` 还在且 `socket` 还在 → 只调用已经挂上的 MCP `user-chrome-devtools`。禁止 `puppeteer.connect`、禁止直连 `ws_endpoint` 或 `127.0.0.1:9222`、禁止再起 `chrome-devtools-mcp`、禁止 `--autoConnect` 或新的 `--wsEndpoint`。记录没有或主人已死，仍然禁止自己开连接，只走启动器 `chrome-devtools-reuse.mjs`（它桥接，或向 Chrome 申请一次）。MCP 失败或 `list_pages` 为空就停，禁止改走 CDP/JS 直连。每一条新的调试连接都会再问「要允许远程调试吗」，Chrome 不会记住。不要点掉顶栏里关掉远程调试的控件。编辑器内置验收 Browser 不走本条。
 3a0. **用户 Chrome 按功能使用标签组（硬，`browser_tab_group_identity`）**：Agent 操作**用户本机 Google Chrome**（chrome-devtools 连上的那个，含社媒注册、邮箱、第三方站）时，先开或复用**一个**标签组，标题就是这次功能的身份，形如 `AI·{功能短名}`。一个功能一组。新开的页只放进这一组，也只操作这一组里的页。禁止把页开进用户看不见的隔离上下文，禁止在用户原有标签里混着点。不要为了建组去把 Chrome 整窗抢到前台。这一功能收口（做完、停住或放弃）时删掉该组及其标签。编辑器内置验收 Browser 没有 Chrome 标签组，不走本条。建不出组就停，不要把无组标签当成已经分组。
 3a. **操作员 Browser 默认虚拟平面 / 非抢占后台（硬，`browser_operator_non_preemptive`）**：WB-OP（及同类自动化：默认无头 Playwright 等）是**一套虚拟操作面**——在宿主 Browser / webview / 工具通道内完成点击与填写，**禁止**与用户抢 OS/IDE 焦点、鼠标、键盘。Cursor ide-browser：`browser_navigate` **省略** `position`（后台开页、保留用户焦点）；**禁止**默认传 `position:"active"`、把 Browser 面板/有头 Chromium 强行拉到前台，或用会夺取指针/按键的系统级键鼠注入去点验收页。后台 ≠ 免测——仍须按用例跑完 WB-OP。仅当用户**明确**要求观看/聚焦 Browser 时才可前台（与 `e2e_playwright_headless_default` 同精神）。
 3b. **打开即抹掉自动化检测标志（硬，`browser_strip_automation_flags`）**：与禁缓存同序、在页面脚本跑人机验证之前执行。WB-OP / Playwright 必须像真人浏览器，否则云端 reCAPTCHA / 人机验证会按「自动化」拦截登录与提交。
@@ -67,6 +68,24 @@
 9. 与 WB-OP 关系：操作员 Browser（WB-OP）**不能替代**本门禁；两者都需要时都要做。
 
 证据须含可机读信号之一：`e2e:run` / `playwright` / `.spec.js` / `passed(N)`。
+
+### A2.1 门禁前置体检与单实例（硬，架构级）
+
+`php bin/w e2e:run` 在启动 Playwright 前会跑前置体检（`Weline\Framework\Test\Service\E2eGatePreflight`）：
+
+| 检查 | 行为 | 为什么 |
+|------|------|--------|
+| 单实例租约 | `var/process/e2e_release_gate.lock`（flock）被占用即 fail-closed，并打印持有者 pid/suite/command | 并发跑两个门禁会互抢 WLS Worker、FPC 构建锁与主题布局编译锁，把功能用例变成 `worker_timeout` 假失败 |
+| 浏览器残留 | 启动前清理 `chrome-headless-shell` 等残留 | 上一轮崩溃留下的浏览器会持续吃 CPU/内存 |
+| 本机负载 | 1 分钟负载 / 核数 > `WELINE_E2E_MAX_LOAD_PER_CPU`（默认 2.0）→ 套件运行 fail-closed；单 spec 调试可 `--allow-busy` | 高负载下 15s 的 Worker 请求超时会先于断言触发 |
+| 站点探活 | 跑 `tests/e2e/framework/runtime-info.php`，目标 origin 不可达 → fail-closed | WLS 没起就开跑只会得到一屏超时 |
+| 主题探针 | `websites_theme_application` 权威解析；`database_error` → fail-closed | 主题表 schema 漂移会让整站渲染降级，用例失败却看不出原因 |
+
+**后台任务让路（硬）**：租约持有期间，`cron:task:run` 与 `queue:run` 主动跳过（缓存预热、AI 翻译重试、CDN 预热会持续抢 Worker 与数据库）。租约随 `e2e:run` 进程退出自动释放，崩溃也由 flock 兜底，不需要人工恢复。
+
+**夹具超时（硬）**：`execFileSync` 调 PHP 夹具（带 stdin）默认 180s 超时（`WELINE_E2E_FIXTURE_TIMEOUT_MS`）。夹具卡死时用例以可读错误失败，而不是把整轮门禁同步冻住。
+
+**过滤运行（硬）**：`--case-id` 先解析到声明该 `[case:ID]` 的 spec 文件，再交给 Playwright。禁止「收集全部 spec + `--grep`」——一个非法的 spec→spec `require` 会让所有过滤运行一起报 `should not import test file`。`E2eCollectionContractTest` 守住这条契约。
 
 ### 打开即禁用缓存（WB-CACHE，硬）
 

@@ -179,40 +179,60 @@ function readActiveThemes(array $env): array
             return $result;
         }
 
-        $tableName = quoteSqlIdentifier($prefix . 'weline_theme', $type);
-        $supportsAreaFlags = true;
-
-        try {
-            $sql = "SELECT id, name, path, is_active, is_active_frontend, is_active_backend FROM {$tableName} WHERE is_active = 1 OR is_active_frontend = 1 OR is_active_backend = 1 ORDER BY id ASC";
-            $rows = $pdo->query($sql)->fetchAll();
-        } catch (\Throwable) {
-            $supportsAreaFlags = false;
-            $fallbackSql = "SELECT id, name, path, is_active FROM {$tableName} WHERE is_active = 1 ORDER BY id ASC";
-            $rows = $pdo->query($fallbackSql)->fetchAll();
+        $themeTable = quoteSqlIdentifier($prefix . 'weline_theme', $type);
+        $applicationTable = quoteSqlIdentifier($prefix . 'websites_theme_application', $type);
+        $themesById = readThemeRowsById($pdo, $themeTable);
+        if ($themesById === null) {
+            throw new \RuntimeException('weline_theme unreadable: ' . $themeTable);
         }
 
-        foreach ((array)$rows as $row) {
-            if (!\is_array($row)) {
+        // 正式店面权威：websites_theme_application → theme_id（is_active* 已退役）。
+        $applied = readThemeApplications($pdo, $applicationTable);
+        foreach ($applied as $area => $themeId) {
+            $theme = $themesById[$themeId] ?? null;
+            if ($theme === null) {
                 continue;
             }
-
-            $theme = [
-                'id' => (int)($row['id'] ?? 0),
-                'name' => (string)($row['name'] ?? ''),
-                'path' => (string)($row['path'] ?? ''),
-                'is_active' => (int)($row['is_active'] ?? 0),
-                'is_active_frontend' => $supportsAreaFlags ? (int)($row['is_active_frontend'] ?? 0) : (int)($row['is_active'] ?? 0),
-                'is_active_backend' => $supportsAreaFlags ? (int)($row['is_active_backend'] ?? 0) : (int)($row['is_active'] ?? 0),
+            $result['active'][$area] = $theme + [
+                'is_active' => 1,
+                'is_active_frontend' => $area === 'frontend' ? 1 : 0,
+                'is_active_backend' => $area === 'backend' ? 1 : 0,
             ];
+        }
+        if ($result['active']['frontend'] !== null || $result['active']['backend'] !== null) {
+            $result['source'] = 'theme_application';
+        }
 
-            if ($theme['is_active'] === 1) {
-                $result['active']['global'] = $theme;
+        // 兼容旧库：只有存在 is_active* 列时才读旧标记，不再把缺列当数据库故障。
+        if ($result['source'] !== 'theme_application') {
+            $legacyRows = readLegacyActiveThemeRows($pdo, $themeTable);
+            foreach ($legacyRows as $row) {
+                $theme = [
+                    'id' => (int)($row['id'] ?? 0),
+                    'name' => (string)($row['name'] ?? ''),
+                    'path' => (string)($row['path'] ?? ''),
+                    'is_active' => (int)($row['is_active'] ?? 0),
+                    'is_active_frontend' => (int)($row['is_active_frontend'] ?? $row['is_active'] ?? 0),
+                    'is_active_backend' => (int)($row['is_active_backend'] ?? $row['is_active'] ?? 0),
+                ];
+                if ($theme['id'] < 1) {
+                    continue;
+                }
+                if ($theme['is_active'] === 1) {
+                    $result['active']['global'] = $theme;
+                }
+                if ($theme['is_active_frontend'] === 1) {
+                    $result['active']['frontend'] = $theme;
+                }
+                if ($theme['is_active_backend'] === 1) {
+                    $result['active']['backend'] = $theme;
+                }
             }
-            if ($theme['is_active_frontend'] === 1) {
-                $result['active']['frontend'] = $theme;
-            }
-            if ($theme['is_active_backend'] === 1) {
-                $result['active']['backend'] = $theme;
+            if ($result['active']['global'] !== null
+                || $result['active']['frontend'] !== null
+                || $result['active']['backend'] !== null
+            ) {
+                $result['source'] = 'database';
             }
         }
 
@@ -222,8 +242,14 @@ function readActiveThemes(array $env): array
         if ($result['active']['backend'] === null) {
             $result['active']['backend'] = $result['active']['global'];
         }
+        if ($result['active']['global'] === null) {
+            $result['active']['global'] = $result['active']['frontend'] ?? $result['active']['backend'];
+        }
 
-        $result['source'] = 'database';
+        if ($result['source'] === 'unavailable') {
+            // 表可读但没有应用记录：这是「未绑定主题」，不是 schema 故障。
+            $result['source'] = 'database';
+        }
     } catch (\Throwable $throwable) {
         $result['source'] = 'database_error';
         $result['error'] = $throwable->getMessage();
@@ -231,6 +257,103 @@ function readActiveThemes(array $env): array
 
     return $result;
 }
+
+/**
+ * @return array<int, array{id:int, name:string, path:string}>|null
+ */
+function readThemeRowsById(\PDO $pdo, string $table): ?array
+{
+    try {
+        $rows = $pdo->query('SELECT id, name, path FROM ' . $table . ' ORDER BY id ASC')->fetchAll();
+    } catch (\Throwable) {
+        return null;
+    }
+
+    $themes = [];
+    foreach ((array)$rows as $row) {
+        if (!\is_array($row)) {
+            continue;
+        }
+        $id = (int)($row['id'] ?? 0);
+        if ($id < 1) {
+            continue;
+        }
+        $themes[$id] = [
+            'id' => $id,
+            'name' => (string)($row['name'] ?? ''),
+            'path' => (string)($row['path'] ?? ''),
+        ];
+    }
+
+    return $themes;
+}
+
+/**
+ * @return array{frontend?:int, backend?:int}
+ */
+function readThemeApplications(\PDO $pdo, string $table): array
+{
+    try {
+        $rows = $pdo->query(
+            'SELECT area, store_mode, reference_json FROM ' . $table
+            . " WHERE area IN ('frontend', 'backend')"
+        )->fetchAll();
+    } catch (\Throwable) {
+        return [];
+    }
+
+    $resolved = [];
+    $scores = [];
+    foreach ((array)$rows as $row) {
+        if (!\is_array($row)) {
+            continue;
+        }
+        $area = \strtolower(\trim((string)($row['area'] ?? '')));
+        if (!\in_array($area, ['frontend', 'backend'], true)) {
+            continue;
+        }
+        $reference = \json_decode((string)($row['reference_json'] ?? ''), true);
+        $themeId = \is_array($reference) ? (int)($reference['theme_id'] ?? 0) : 0;
+        if ($themeId < 1) {
+            continue;
+        }
+        // store_mode=normal 优先；其它模式（如 b2b）只在没有 normal 时兜底。
+        $score = (string)($row['store_mode'] ?? '') === 'normal' ? 2 : 1;
+        if (!isset($scores[$area]) || $score > $scores[$area]) {
+            $scores[$area] = $score;
+            $resolved[$area] = $themeId;
+        }
+    }
+
+    return $resolved;
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function readLegacyActiveThemeRows(\PDO $pdo, string $table): array
+{
+    try {
+        $rows = $pdo->query(
+            'SELECT id, name, path, is_active, is_active_frontend, is_active_backend FROM ' . $table
+            . ' WHERE is_active = 1 OR is_active_frontend = 1 OR is_active_backend = 1 ORDER BY id ASC'
+        )->fetchAll();
+        return \is_array($rows) ? $rows : [];
+    } catch (\Throwable) {
+        // 旧库没有 area 标记时退到单 is_active。
+    }
+
+    try {
+        $rows = $pdo->query(
+            'SELECT id, name, path, is_active FROM ' . $table . ' WHERE is_active = 1 ORDER BY id ASC'
+        )->fetchAll();
+        return \is_array($rows) ? $rows : [];
+    } catch (\Throwable) {
+        // is_active* 列已退役：不是错误，交由 theme_application 权威解析。
+        return [];
+    }
+}
+
 
 /**
  * @return array<string, mixed>|null

@@ -28,7 +28,7 @@ use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Phrase\DatabaseFreeTranslator;
 use Weline\Framework\Setup\Lock\SetupDatabaseAccessLock;
 use Weline\Framework\Setup\Lock\SetupUpgradeIntent;
-use Weline\Framework\System\OS\Win;
+use Weline\Framework\Test\Service\E2eGateLock;use Weline\Framework\System\OS\Win;
 use Weline\SystemConfig\Model\SystemConfig;
 
 
@@ -53,6 +53,21 @@ class Run implements CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
+        // 发布门禁运行期间让路（架构级）：缓存预热、AI 翻译重试、CDN 预热会抢 WLS
+        // Worker 与数据库，把功能门禁变成 worker_timeout 假失败。租约由
+        // `e2e:run --suite` 持有，进程退出即释放，不需要人工恢复。
+        if (E2eGateLock::isHeld()) {
+            $explicitRun = (bool)($args['p'] ?? $args['process'] ?? $args['f'] ?? $args['force'] ?? false);
+            if ($explicitRun) {
+                $this->printing->note(DatabaseFreeTranslator::translate(
+                    'E2E 发布门禁正在运行，本次显式计划任务已跳过。',
+                    'Weline_Cron',
+                ));
+                return CommandResult::shortCircuit(75);
+            }
+            return CommandResult::shortCircuit(0);
+        }
+
         $bootstrapLease = SetupDatabaseAccessLock::borrowCliBootstrapSharedLease();
         $databaseAccessLock = $bootstrapLease ?? new SetupDatabaseAccessLock();
         if ($bootstrapLease === null && !$databaseAccessLock->acquireShared()) {

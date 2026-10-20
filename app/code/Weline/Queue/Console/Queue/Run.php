@@ -19,6 +19,7 @@ use Weline\Framework\Console\CommandInterface;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Test\Service\E2eGateLock;
 use Weline\Queue\Api\QueueConsumerInterface;
 use Weline\Queue\Exception\QueueDeferredCompletionException;
 use Weline\Queue\Model\Queue;
@@ -52,6 +53,13 @@ class Run implements \Weline\Framework\Console\CommandInterface
     public function execute(array $args = [], array $data = []): string
     {
         $this->disableCliExecutionTimeout();
+
+        // 发布门禁运行期间队列消费让路：AI 翻译/缓存类任务会持续占数据库与 CPU，
+        // 让功能门禁出现 worker_timeout 假失败。租约随 e2e:run 进程退出自动释放。
+        if (E2eGateLock::isHeld()) {
+            $this->printing->note(__('E2E 发布门禁正在运行，队列消费本轮跳过。'));
+            return '';
+        }
 
         $id = $args['id'] ?? 0;
         $force = !empty($args['f']) || !empty($args['force']);
