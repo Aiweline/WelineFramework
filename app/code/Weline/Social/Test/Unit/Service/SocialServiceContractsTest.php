@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Social\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Mail\Model\MailAccount;
+use Weline\Social\Service\SocialScopeMailboxService;
 
 
 /**
@@ -53,6 +55,9 @@ final class SocialServiceContractsTest extends TestCase
         },
             'SocialWebsiteScopeBind::testWidgetPassesCurrentWebsiteId' => function () {
             $this->assert_SocialWebsiteScopeBind_testWidgetPassesCurrentWebsiteId();
+        },
+            'SocialScopeMailbox::testSocialLocalPartIsMailSystemAccount' => function () {
+            $this->assert_SocialScopeMailbox_testSocialLocalPartIsMailSystemAccount();
         },
         ];
     }
@@ -125,5 +130,17 @@ private function assert_SocialWebsiteScopeBind_testWidgetPassesCurrentWebsiteId(
     $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Social' . '/view/theme/frontend/widgets/social/social-accounts/default.phtml');
     self::assertStringContainsString('RequestContext::websiteId()', $src);
     self::assertStringContainsString("'website_id' => \$websiteId", $src);
+}
+
+private function assert_SocialScopeMailbox_testSocialLocalPartIsMailSystemAccount(): void
+{
+    self::assertSame('social', SocialScopeMailboxService::LOCAL_PREFIX);
+    $local = SocialScopeMailboxService::LOCAL_PREFIX . '-default';
+    self::assertTrue(MailAccount::isSocialMailboxLocalPart($local));
+    self::assertTrue(MailAccount::isGeneratedSystemLocalPart($local));
+    self::assertFalse(MailAccount::isReservedSystemLocalPart($local));
+    $ensure = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Mail/Service/MailAccountEnsureService.php');
+    self::assertStringContainsString('isSocialMailboxLocalPart', $ensure);
+    self::assertStringContainsString('schema_fields_IS_SYSTEM', $ensure);
 }
 }

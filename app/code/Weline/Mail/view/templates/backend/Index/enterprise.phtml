@@ -2667,7 +2667,7 @@ if ($oauthCfError === 'invalid_scope') {
                         <?= __('共 %{1} 个账号 · 第 %{2} / %{3} 页', [$accountListTotal, $accountPage, $accountPageCount]) ?>
                     </p>
                     <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;" data-testid="mail-account-system-hint">
-                        <?= __('标有「系统账号」的邮箱（如 contact@ 人收、smtp@ 提交/代理）由启用域名或 Smtp 自动创建，不可编辑身份、暂停、改密或删除；仍可查看邮件与配置外投。') ?>
+                        <?= __('标有「系统账号」的邮箱不能删除。contact@、smtp@ 由启用域名或 Smtp 创建，也不能改密。social- 开头的社媒邮箱由融媒体开通，会出现在本列表，可以重置密码，不能删除。') ?>
                     </p>
                     <div class="w-table-wrap">
                         <table class="w-table" data-testid="mail-account-table">
@@ -2708,8 +2708,11 @@ if ($oauthCfError === 'invalid_scope') {
                                         $obPort = (int)($account['outbound_relay_port'] ?? 0);
                                         $obUser = trim((string)($account['outbound_relay_username'] ?? ''));
                                         $obTls = trim((string)($account['outbound_relay_tls'] ?? '')) ?: 'starttls';
+                                        $acctLocal = MailAccount::emailLocalPart($email);
+                                        $isSocialSystem = MailAccount::isSocialMailboxLocalPart($acctLocal);
                                         $isSystemAcct = !empty($account['is_system'])
-                                            || MailAccount::isReservedSystemLocalPart(MailAccount::emailLocalPart($email));
+                                            || MailAccount::isReservedSystemLocalPart($acctLocal)
+                                            || $isSocialSystem;
                                         $systemRoleLabel = trim((string)($account['system_role_label'] ?? ''));
                                         if ($isSystemAcct && $systemRoleLabel === '') {
                                             $systemRoleLabel = MailAccount::systemRoleLabelForLocal(MailAccount::emailLocalPart($email));
@@ -2730,10 +2733,13 @@ if ($oauthCfError === 'invalid_scope') {
                                         $obPort = (int)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_PORT);
                                         $obUser = trim((string)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_USERNAME));
                                         $obTls = trim((string)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_TLS)) ?: 'starttls';
+                                        $acctLocal = MailAccount::emailLocalPart($email);
+                                        $isSocialSystem = MailAccount::isSocialMailboxLocalPart($acctLocal);
                                         $isSystemAcct = method_exists($account, 'isSystemAccount')
                                             ? (bool)$account->isSystemAccount()
                                             : ((int)$account->getData(MailAccount::schema_fields_IS_SYSTEM) === 1
-                                                || MailAccount::isReservedSystemLocalPart(MailAccount::emailLocalPart($email)));
+                                                || MailAccount::isReservedSystemLocalPart($acctLocal)
+                                                || $isSocialSystem);
                                         $systemRoleLabel = $isSystemAcct
                                             ? (method_exists($account, 'systemRoleLabel')
                                                 ? (string)$account->systemRoleLabel()
@@ -2777,7 +2783,7 @@ if ($oauthCfError === 'invalid_scope') {
                                                 <span class="w-badge" data-tone="info" data-size="sm"
                                                       data-testid="mail-account-system-badge-<?= $acctId ?>"><?= __('系统账号') ?></span>
                                                 <span class="w-text" data-tone="muted" data-size="sm"
-                                                      data-testid="mail-account-system-role-<?= $acctId ?>"><?= $escape($systemRoleLabel) ?> · <?= __('不可删改') ?></span>
+                                                      data-testid="mail-account-system-role-<?= $acctId ?>"><?= $escape($systemRoleLabel) ?> · <?= $isSocialSystem ? __('不可删除') : __('不可删改') ?></span>
                                             <?php endif; ?>
                                             <br>
                                             <span class="w-text" data-tone="muted" data-size="sm"><?= $escape($displayName) ?></span>
@@ -2807,7 +2813,7 @@ if ($oauthCfError === 'invalid_scope') {
                                                 <?php endif; ?>
                                             </div>
                                             <div class="mail-enterprise__actions" style="--w-mt:var(--weline-space-2);">
-                                                <?php if (!$isSystemAcct): ?>
+                                                <?php if (!$isSystemAcct || $isSocialSystem): ?>
                                                     <button class="w-button" data-variant="outline" data-size="sm" type="button"
                                                             data-testid="mail-account-reset-open-<?= $acctId ?>"
                                                             data-account-reset-open><?= __('开通/重置密码') ?></button>

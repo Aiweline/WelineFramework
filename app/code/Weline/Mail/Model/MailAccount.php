@@ -39,11 +39,12 @@ class MailAccount extends Model
     #[Col('varchar', 32, default: 'pending', comment: '账号状态')]
     public const schema_fields_STATUS = 'status';
 
-    /** 启域/Ensure 创建的系统邮箱（contact@ 人收、smtp@ 提交代理等）：禁止删改身份与改密。 */
+    /** contact@ 人收、smtp@ 提交代理：禁止删改身份与改密。social-{站code}@ 由融媒体开通：禁止删除与改身份，仍可重置密码。 */
     public const SYSTEM_LOCAL_CONTACT = 'contact';
     public const SYSTEM_LOCAL_SMTP = 'smtp';
+    public const SYSTEM_LOCAL_SOCIAL_PREFIX = 'social-';
 
-    #[Col('tinyint', default: 0, comment: '系统固定账号：禁止删除、改身份与改密')]
+    #[Col('tinyint', default: 0, comment: '系统固定账号：禁止删除；contact/smtp 另禁止改密')]
     public const schema_fields_IS_SYSTEM = 'is_system';
 
     #[Col('tinyint', default: 0, comment: '该邮箱是否走外投 smarthost')]
@@ -96,6 +97,25 @@ class MailAccount extends Model
         return $local !== '' && in_array($local, self::reservedSystemLocalParts(), true);
     }
 
+    /**
+     * 融媒体开通的社媒专用邮箱 local_part：social-{网站code}。
+     */
+    public static function isSocialMailboxLocalPart(string $localPart): bool
+    {
+        $local = strtolower(trim($localPart));
+        $prefix = self::SYSTEM_LOCAL_SOCIAL_PREFIX;
+
+        return $local !== ''
+            && str_starts_with($local, $prefix)
+            && strlen($local) > strlen($prefix);
+    }
+
+    public static function isGeneratedSystemLocalPart(string $localPart): bool
+    {
+        return self::isReservedSystemLocalPart($localPart)
+            || self::isSocialMailboxLocalPart($localPart);
+    }
+
     public static function emailLocalPart(string $email): string
     {
         $email = strtolower(trim($email));
@@ -112,7 +132,12 @@ class MailAccount extends Model
      */
     public static function systemRoleLabelForLocal(string $localPart): string
     {
-        return match (strtolower(trim($localPart))) {
+        $local = strtolower(trim($localPart));
+        if (self::isSocialMailboxLocalPart($local)) {
+            return (string)__('社媒注册（系统）');
+        }
+
+        return match ($local) {
             self::SYSTEM_LOCAL_CONTACT => (string)__('站点联系（人收）'),
             self::SYSTEM_LOCAL_SMTP => (string)__('SMTP 提交/代理'),
             default => (string)__('系统固定账号'),
@@ -125,7 +150,7 @@ class MailAccount extends Model
             return true;
         }
 
-        return self::isReservedSystemLocalPart(
+        return self::isGeneratedSystemLocalPart(
             self::emailLocalPart((string)$this->getData(self::schema_fields_EMAIL))
         );
     }

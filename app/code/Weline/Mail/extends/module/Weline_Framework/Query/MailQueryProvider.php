@@ -129,6 +129,16 @@ class MailQueryProvider implements QueryProviderInterface
         if ($local === '' && $email !== '') {
             $local = MailAccount::emailLocalPart($email);
         }
+        if (MailAccount::isSocialMailboxLocalPart($local)) {
+            return [
+                'success' => false,
+                'message' => (string)__(
+                    '社媒专用邮箱 %{1}@ 由融媒体开通，会出现在账户列表里，系统生成，不能在这里手工新建或删除。',
+                    [$local]
+                ),
+                'code' => 422,
+            ];
+        }
         if (MailAccount::isReservedSystemLocalPart($local)) {
             return [
                 'success' => false,

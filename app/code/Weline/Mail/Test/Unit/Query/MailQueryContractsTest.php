@@ -105,13 +105,22 @@ final class MailQueryContractsTest extends TestCase
         self::assertStringContainsString('batchDelete(', $src);
         self::assertStringContainsString('Weline_Mail::mail_accounts_manage', $src);
         self::assertStringContainsString('isReservedSystemLocalPart', $src);
+        self::assertStringContainsString('isSocialMailboxLocalPart', $src);
         self::assertStringContainsString('系统账号', $src);
 
         $model = (string) file_get_contents(BP . '/app/code/Weline/Mail/Model/MailAccount.php');
         self::assertStringContainsString('schema_fields_IS_SYSTEM', $model);
         self::assertStringContainsString('function isSystemAccount', $model);
+        self::assertStringContainsString('function isSocialMailboxLocalPart', $model);
+        self::assertStringContainsString("SYSTEM_LOCAL_SOCIAL_PREFIX = 'social-'", $model);
+        self::assertTrue(\Weline\Mail\Model\MailAccount::isSocialMailboxLocalPart('social-default'));
+        self::assertTrue(\Weline\Mail\Model\MailAccount::isGeneratedSystemLocalPart('social-default'));
+        self::assertFalse(\Weline\Mail\Model\MailAccount::isReservedSystemLocalPart('social-default'));
+        self::assertFalse(\Weline\Mail\Model\MailAccount::isSocialMailboxLocalPart('social'));
         $mgmt = (string) file_get_contents(BP . '/app/code/Weline/Mail/Service/MailAccountManagementService.php');
         self::assertStringContainsString('assertSystemMutable', $mgmt);
+        self::assertStringContainsString('isGeneratedSystemLocalPart', $mgmt);
         self::assertStringContainsString("'is_system'", $mgmt);
+        self::assertStringContainsString("\$action === 'reset_password'", $mgmt);
     }
 }

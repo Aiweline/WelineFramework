@@ -438,7 +438,7 @@ private function assert_MailComposeDeeplink_testBackendComposePrefillAndSendEven
 private function assert_MailComposeDeeplink_testModuleVersion(): void
 {
     $module = include BP . 'app/code/Weline/Mail/etc/module.php';
-    self::assertSame('0.2.45', $module['version'] ?? null);
+    self::assertSame('0.2.46', $module['version'] ?? null);
 }
 
 private function assert_MailDkimLocalEnsureService_testEnsureGeneratesReusablePublicKey(): void

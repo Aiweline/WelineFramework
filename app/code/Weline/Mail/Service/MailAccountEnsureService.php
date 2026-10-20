@@ -349,7 +349,20 @@ final class MailAccountEnsureService
         $existing = $model->clear()->where(MailAccount::schema_fields_EMAIL, $email)->find()->fetch();
         if ($existing->getId()) {
             $status = (string)$existing->getData(MailAccount::schema_fields_STATUS);
-            if ($status !== 'active') {
+            if (MailAccount::isSocialMailboxLocalPart($localPart)) {
+                $dirty = false;
+                if ((int)$existing->getData(MailAccount::schema_fields_IS_SYSTEM) !== 1) {
+                    $existing->setData(MailAccount::schema_fields_IS_SYSTEM, 1);
+                    $dirty = true;
+                }
+                if ($status !== 'active') {
+                    $existing->setData(MailAccount::schema_fields_STATUS, 'active');
+                    $dirty = true;
+                }
+                if ($dirty) {
+                    $existing->setData(MailAccount::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))->save();
+                }
+            } elseif ($status !== 'active') {
                 $activated = $this->accounts()->setStatus((int)$existing->getId(), 'active');
                 if (empty($activated['success'])) {
                     $empty['message'] = (string)($activated['message'] ?? __('无法启用已有邮箱账号'));

@@ -56,8 +56,8 @@ final class MailAccountManagementService
                     ->provisionAccount($email, $password, $quotaMb);
             }
 
-            $isSystem = MailAccount::isReservedSystemLocalPart($localPart)
-                || MailAccount::isReservedSystemLocalPart(MailAccount::emailLocalPart($email));
+            $isSystem = MailAccount::isGeneratedSystemLocalPart($localPart)
+                || MailAccount::isGeneratedSystemLocalPart(MailAccount::emailLocalPart($email));
             $now = date('Y-m-d H:i:s');
             $model->clear()
                 ->setData(MailAccount::schema_fields_DOMAIN_ID, $domainId)
@@ -456,6 +456,12 @@ final class MailAccountManagementService
         }
         $this->healSystemFlag($account);
         $email = (string)$account->getData(MailAccount::schema_fields_EMAIL);
+        if (
+            $action === 'reset_password'
+            && MailAccount::isSocialMailboxLocalPart(MailAccount::emailLocalPart($email))
+        ) {
+            return null;
+        }
         $label = $email !== '' ? $email : ('#' . (int)$account->getId());
 
         return match ($action) {
@@ -473,7 +479,7 @@ final class MailAccountManagementService
         if ((int)$account->getData(MailAccount::schema_fields_IS_SYSTEM) === 1) {
             return;
         }
-        if (!MailAccount::isReservedSystemLocalPart(
+        if (!MailAccount::isGeneratedSystemLocalPart(
             MailAccount::emailLocalPart((string)$account->getData(MailAccount::schema_fields_EMAIL))
         )) {
             return;
