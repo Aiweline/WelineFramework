@@ -61,6 +61,10 @@ $checks['coldstart mdc hard-default-use AOCI after prepare'] = str_contains($mdc
     && str_contains($mdc, 'aoci_overview')
     && str_contains($mdc, '禁止')
     && str_contains($mdc, '可选');
+$checks['coldstart mdc carries no_error_masking_or_patch_workaround'] = str_contains($mdc, 'no_error_masking_or_patch_workaround')
+    && str_contains($mdc, '根因修复')
+    && str_contains($mdc, '空/静默 `catch`')
+    && str_contains($mdc, '验收未完成');
 
 $tmpRoot = sys_get_temp_dir() . '/weline-host-editor-rules-' . bin2hex(random_bytes(4));
 mkdir($tmpRoot, 0775, true);

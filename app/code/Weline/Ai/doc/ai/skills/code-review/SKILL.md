@@ -56,6 +56,8 @@ aliases:
 逻辑正确性 · 安全 · 可维护性 · 复用；PHP 可对照 `reference/php-checklist.md`（上游精简）。  
 **每条涉及 `app/code` 的新增/改动**都过一遍污染清单。
 
+**错误掩盖 / 补丁式修复（`no_error_masking_or_patch_workaround`，blocking）**：空/静默 `catch`、`catch` 后返回默认值当成功、`@` 抑制、静默降级/假数据、删/弱化/跳过断言与测试、`--no-verify`、单站 `if`/白名单绕校验、绕 Provider·Taglib·Event·Service、改 `generated/`·`vendor/`、复制逻辑不修机制 —— 任一命中即 `blocking`，必须 `request_changes`，禁止 pass。
+
 ### Phase 4 · 结论
 
 - `pass` / `comment` / `request_changes`  

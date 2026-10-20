@@ -27,7 +27,7 @@
 
 - 保留无关工作区改动，只修改任务授权范围。
 - MCP 自愈、宿主重载、插件代次刷新与崩溃恢复必须保留任务开始前已存在的 tracked、staged、untracked 与 ignored 脏改；**宿主 Agent Shell 禁止**为「清场 / 对齐 HEAD」执行 `git checkout --` / `restore` / `clean` / `stash` 擦脏。编辑前必须 **dirty-load** 当前磁盘脏改再改；禁止用会话历史/其它会话旧版本写回导致相互覆盖。MCP 内部只允许只读 Git 检查，禁止包括分支切换在内的全部 Git 写操作，也禁止 config/helper/pager 命令注入及任何 force/discard 变体。**提交范围**另受 `concurrent_session_commit_hygiene` 约束：只按显式路径暂存、提交前对账声明集、他会话在飞脏改一律不夹带（详见 [规则/00](./规则/00-MCP调用与会话.md) §7b）。权威：`preserve_dirty_workspace` / `concurrent_session_commit_hygiene` / [AI硬规则索引](./AI硬规则索引.md)。
-- 不使用假数据、隐藏开关、静默降级、弱化断言或切换 Provider/账号来制造成功。
+- **根因修复，禁掩盖、禁打补丁**（`no_error_masking_or_patch_workaround`）：错误必须真实暴露并保留原因链（异常/日志/HTTP 状态/UI 错误态）；**禁止**空/静默 `catch`、`catch` 后返回默认值当成功、`@`/`error_reporting(0)` 抑制、静默降级、隐藏开关、假数据、弱化/删除/跳过断言与测试、`--no-verify`、注释掉校验，或切换 Provider/账号来制造成功；**禁止**单站/单 id `if`、硬编码白名单绕校验、绕过 Provider/Taglib/Event/Service 扩展点、改 `generated/`·`vendor/`、复制逻辑不修机制的补丁式修复。做不到根因修复就停手说明，不得以补丁冒充完成。细则见 [规则/10 §5.1](./规则/10-工程流程与验收.md)。
 - 不在文档、会话指令或索引反馈中保存凭据和个人/生产数据。
 - 本地可回退实现和隔离验证可作为正常开发步骤；提交、推送、发布、部署、外部消息及生产数据变更仍需要用户明确授权。
 - 生成物由源文件或生成器更新，不能直接编辑为长期修复。

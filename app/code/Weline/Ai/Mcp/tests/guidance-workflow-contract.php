@@ -848,6 +848,16 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'preserve_dirty_workspace')),
         false,
     ),
+    'hard_constraints include no_error_masking_or_patch_workaround' => array_reduce(
+        is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'no_error_masking_or_patch_workaround'
+            && str_contains((string) ($rule['summary'] ?? ''), 'NO NEGATIVE ERROR MASKING')
+            && str_contains((string) ($rule['summary'] ?? ''), 'NO PATCH-STYLE FIX')
+            && str_contains((string) ($rule['summary'] ?? ''), 'ALLOWED (not masking)')
+            && str_contains((string) ($rule['summary'] ?? ''), 'agent_self_verify_before_done')),
+        false,
+    ),
     'mandatory_before_code includes prepare_project_hard_constraints_when_mcp_attached' => in_array(
         'prepare_project_hard_constraints_when_mcp_attached',
         is_array($contract['mandatory_before_code'] ?? null) ? $contract['mandatory_before_code'] : [],

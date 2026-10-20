@@ -120,6 +120,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 
 - 先有需求拆解与架构映射，再宿主原生编辑。
 - 只改任务授权范围；保留用户无关工作区改动。
+- **根因修复（`no_error_masking_or_patch_workaround`）**：错误必须真实暴露并保留原因链；禁止吞异常、静默降级、删/弱化断言、单站 `if`/白名单/绕扩展点等补丁式修复（细则 [规则/10 §5.1](./规则/10-工程流程与验收.md)）。
 
 ### 5. 复审（始终三维 + 每触发专席合规复审）
 
@@ -130,6 +131,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - **UI 复审**（UI in_scope）：功能在页面上完整可用 + 审美过审图 / 原型标准。
 - **i18n 复审**（文案 in_scope）：`@lang` / `__()` / Taglib 用法、源串简中、CSV、`i18n:collect`。
 - **废弃清理复审（硬门槛，`no_legacy_code_accumulation_on_change`）**：逐项核对本次替换是否**只加不删**——被取代的旧实现/死代码/不可达分支/新旧**双路径**/废弃类·方法·函数·常量·配置键·DI 注册项/孤儿模板·partial·部件 JSON·Hook·Event·路由·迁移·库列/注释掉的代码/未用 `use`·变量·CSS·JS 声明·i18n 词条/重复平行实现，必须**同一变更集内删除**且**全仓 grep 零引用**（文档/i18n/注册表同回合对齐）；跨模块改契约须迁移孤儿消费方；确实必须保留的旧路径带 `@deprecated` + 原因 + 删除计划并登记。任一未清理且无登记 → 不得进入验收。
+- **根因与错误暴露复审（硬门槛，`no_error_masking_or_patch_workaround`）**：核对 diff 无空/静默 `catch`、`catch`→默认值当成功、`@` 抑制、静默降级/假数据/隐藏开关、删·弱化·跳过断言与测试、`--no-verify`；无单站 `if`/白名单绕校验/绕 Provider·Taglib·Event·Service/改 `generated`·`vendor`/复制逻辑的补丁式修复；错误路径有测试或真实运行证据。任一命中 → 不得进入验收。细则见 [规则/10 §5.1](./规则/10-工程流程与验收.md)。
 ### 6. 分层测试与验收
 
 **自行验证（硬门槛，`agent_self_verify_before_done` + `acceptance_phase_requires_shentu`）**：动手前完成需求拆解与架构映射；实现按 **TDD**（红→绿→重构）；结束后 Agent **必须亲自执行**测试命令并按验收层级验证，再标 acceptance / 向用户宣称完成。禁止「只改代码就收口」。`unit` 的 `passed` evidence 须含可识别的真实跑测输出；否则不可宣称完成。未完成只能报告「代码已改，TDD/测试未跑通」。
