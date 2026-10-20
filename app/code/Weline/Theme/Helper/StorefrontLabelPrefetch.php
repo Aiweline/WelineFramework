@@ -9,8 +9,9 @@ namespace Weline\Theme\Helper;
  *
  * A cold non-default locale storefront used to issue one
  * `w_i18n_locale_dictionary` query per `WidgetI18n::label()` call. The shared
- * header renders before the body, so one batch prefetch here covers the shell
- * and first-screen widgets through the request memo.
+ * header renders before the body, so one batch prefetch here seeds both the
+ * main Fiber's request memo and the process-level base-label bag; child widget
+ * Fibers (which do not share the main Fiber's request memo) reuse the bag.
  *
  * Keep only stable Chinese UI sources. Catalog/category names and other
  * dynamic values are prefetched by their own renderers.
