@@ -3445,7 +3445,14 @@ class SharedStateServiceManager
             $role,
             $previousRuntime,
         );
-        if ($candidateBound || $runtimeAuthorityBound) {
+        // A live authenticated registry authority must advance a fresh sidecar
+        // past its generation even when neither the candidate nor the stale
+        // runtime file carries a complete binding.
+        $authorityBound = SharedStateServiceRegistry::hasExactLifecycleBinding(
+            $role,
+            $authority,
+        );
+        if ($candidateBound || $runtimeAuthorityBound || $authorityBound) {
             $runtime = SharedStateServiceRegistry::bindLifecycleGeneration(
                 $role,
                 $runtime,
