@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Cache\Contract\NamespaceGenerationInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\DictionaryCacheNamespace;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Theme\Model\ThemeScopeVersion;
 use Weline\Theme\Model\ThemeScopeVersionSelection;
@@ -31,6 +33,19 @@ final class ThemeScopeVersionService
     private const SHARED_CHROME_BY_SLOT_KEYS = 'theme.shared_chrome.by_slot.v1.keys';
     private const SNAPSHOT_MISS = '__theme_scope_version_snapshot_miss__';
 
+    /**
+     * 发布内容代次锚点：所有版本行/selection 行写入后 bump。
+     * 读侧用同一命名空间的 fingerprint 作为跨 Worker L1 的失效键。
+     */
+    public const GENERATION_NAMESPACE = 'global/storefront/theme/scope_version';
+
+    /** 跨 Worker 已发布解析 L1：值只存 version id / miss，命中后仍校验行归属。 */
+    private const RESOLVED_BAG = 'theme.scope_version.resolved';
+    private const RESOLVED_BAG_MAX = 4096;
+
+    /** @var array<string, mixed> */
+    private static array $processResolved = [];
+
     public function __construct(
         private readonly ThemeScopeVersion $versionModel,
     ) {
@@ -50,6 +65,27 @@ final class ThemeScopeVersionService
             self::forgetChromeDecodeMemo($versionId);
         }
         self::forgetSharedChromeBySlot($themeId, $area, $scope);
+        self::bumpGeneration();
+    }
+
+    /**
+     * 发布内容变更后推进代次，令其它 Worker 的跨 Worker L1 失效。
+     * 失败只记录日志：保存本身已提交，不能因缓存代次写入失败回滚业务写入。
+     */
+    public static function bumpGeneration(): void
+    {
+        try {
+            ObjectManager::getInstance(NamespaceGenerationInterface::class)
+                ->bump(self::GENERATION_NAMESPACE);
+        } catch (\Throwable $exception) {
+            if (\function_exists('w_log_error')) {
+                \w_log_error(
+                    'theme.scope_version.generation_bump_failed',
+                    ['error' => $exception->getMessage()],
+                    'cache',
+                );
+            }
+        }
     }
 
     /** Register a shared-chrome bySlot request memo key for owner invalidation. */
@@ -328,8 +364,34 @@ final class ThemeScopeVersionService
             );
         }
 
+        $bagKey = $this->resolvedBagKey($resolvedKey);
+        $bag = null;
+        if ($bagKey !== null) {
+            $bag = &DictionaryCacheNamespace::processBag(
+                self::RESOLVED_BAG,
+                self::$processResolved,
+                self::RESOLVED_BAG_MAX,
+            );
+            if (\array_key_exists($bagKey, $bag)) {
+                $cached = $bag[$bagKey];
+                $hydrated = $this->hydrateResolvedVersion($cached, $themeId, $scope, $storeMode, $area);
+                if ($cached === self::SNAPSHOT_MISS || $hydrated instanceof ThemeScopeVersion) {
+                    $this->rememberResolvedId($resolvedKey, $cached);
+
+                    return $hydrated;
+                }
+                // 代次未变却解析不到归属行：视为脏条目，回落权威解析。
+                unset($bag[$bagKey]);
+            }
+        }
+
         $version = $this->resolvePublishedUncached($themeId, $scope, $storeMode, $area);
         $this->rememberResolved($resolvedKey, $version);
+        if ($bag !== null && $bagKey !== null) {
+            $bag[$bagKey] = $version instanceof ThemeScopeVersion
+                ? $version->getVersionId()
+                : self::SNAPSHOT_MISS;
+        }
 
         return $version;
     }
@@ -1144,6 +1206,37 @@ final class ThemeScopeVersionService
                 ? $version->getVersionId()
                 : self::SNAPSHOT_MISS,
         );
+    }
+
+    private function rememberResolvedId(string $resolvedKey, mixed $cached): void
+    {
+        if (!RequestContext::isInitialized()) {
+            return;
+        }
+        RequestContext::set(
+            $resolvedKey,
+            $cached === self::SNAPSHOT_MISS ? self::SNAPSHOT_MISS : (int)$cached,
+        );
+    }
+
+    /**
+     * 跨 Worker L1 键：主题代次 fingerprint + owner 解析键。
+     * fingerprint 与 Phrase 共用 NamespaceGenerationSnapshot；每请求最多一次
+     * 代次读取，进程快照命中时 0 查。
+     */
+    private function resolvedBagKey(string $resolvedKey): ?string
+    {
+        try {
+            $fingerprint = ObjectManager::getInstance(NamespaceGenerationInterface::class)
+                ->fingerprint([self::GENERATION_NAMESPACE]);
+        } catch (\Throwable) {
+            return null;
+        }
+        if ($fingerprint === '') {
+            return null;
+        }
+
+        return $fingerprint . '|' . $resolvedKey;
     }
 
     private function hydrateResolvedVersion(

@@ -45,6 +45,7 @@
 | `currency.local_names` | `Currency` | 币种本地名；保存/删除时 `clearProcessCache` |
 | `shipping.region_names` / `shipping.street_names` / `shipping.postal_place_names` | `Shipping` | 地址展示名（`locale\|id` 扁平键）；`ProcessCacheResetter` 清理 |
 | `product.*` | `Product` | PDP/店铺页渲染袋（buy box、defer SSR 卡片、页面分配） |
+| `theme.scope_version.resolved` | `Theme` | published 解析 L1（version id / miss，4096）；版本行/selection 的 `save_after()` 与 `invalidateOwner()` bump 主题代次 |
 | `storefront.render_context.v1` | `Storefront` | 渲染上下文袋 |
 
 `i18n.repository.locale.installed_active` / `i18n.repository.country.rows` 由 locale 目录观察者 `LocaleCatalogChangedClearActiveLocales` 失效。

@@ -8,6 +8,7 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Theme\Service\ThemeScopeVersionService;
 
 /**
  * Unique published/draft selection per version owner.
@@ -110,5 +111,12 @@ final class ThemeScopeVersionSelection extends Model
             $this->setData(self::schema_fields_CREATE_TIME, $now);
         }
         $this->setData(self::schema_fields_UPDATE_TIME, $now);
+    }
+
+    public function save_after(): void
+    {
+        parent::save_after();
+        // selection 是已发布/草稿指针的权威：指针写入同样推进主题代次。
+        ThemeScopeVersionService::bumpGeneration();
     }
 }

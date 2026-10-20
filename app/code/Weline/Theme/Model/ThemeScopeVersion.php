@@ -518,4 +518,11 @@ final class ThemeScopeVersion extends Model
         }
         $this->setData(self::schema_fields_UPDATE_TIME, $now);
     }
+
+    public function save_after(): void
+    {
+        parent::save_after();
+        // 版本行写入即发布内容可能变化：推进主题代次，令跨 Worker L1 失效。
+        ThemeScopeVersionService::bumpGeneration();
+    }
 }
