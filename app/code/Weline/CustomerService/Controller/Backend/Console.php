@@ -233,7 +233,11 @@ class Console extends BackendController
                 $rawMessages
             );
 
-            if ($markRead && $session->getAgentId() == $agent->getId() && $beforeMessageId <= 0) {
+            $sessionAgentId = (int)$session->getAgentId();
+            $viewerAgentId = (int)$agent->getId();
+            $waitingPool = $session->getStatus() === ChatSession::STATUS_WAITING
+                && ($sessionAgentId === 0 || $sessionAgentId === $viewerAgentId);
+            if ($markRead && $beforeMessageId <= 0 && ($sessionAgentId === $viewerAgentId || $waitingPool)) {
                 $this->chatService->markSessionReadByAgent($sessionId);
             }
 

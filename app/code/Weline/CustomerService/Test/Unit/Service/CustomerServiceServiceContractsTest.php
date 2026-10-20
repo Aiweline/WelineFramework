@@ -121,13 +121,13 @@ private function assert_BackendMenuSignalProvider_testChatServiceCountUnreadForA
     self::assertStringContainsString('function unreadCountsBySessionForAgent', $src);
     $start = strpos($src, 'function unreadCountsBySessionForAgent');
     self::assertNotFalse($start);
-    $body = substr($src, (int) $start, 2200);
+    $body = substr($src, (int) $start, 4500);
     self::assertStringContainsString('STATUS_ACTIVE', $body);
+    self::assertStringContainsString('STATUS_WAITING', $body);
     self::assertStringContainsString('SENDER_TYPE_CUSTOMER', $body);
     self::assertStringContainsString('schema_fields_LAST_READ_TIME', $body);
     self::assertStringContainsString('schema_fields_TRANSFERRED_AT', $body);
     self::assertStringContainsString('1970-01-01 00:00:00', $body);
-    self::assertStringNotContainsString('STATUS_WAITING', $body);
     self::assertStringNotContainsString('ON CONFLICT', $body);
     self::assertStringNotContainsString('ON DUPLICATE', $body);
     self::assertStringNotContainsString('DATE_FORMAT', $body);

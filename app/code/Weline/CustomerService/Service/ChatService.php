@@ -517,14 +517,15 @@ class ChatService
     }
 
     /**
-     * Aggregate unread customer messages for an agent's active sessions.
+     * Aggregate unread customer messages for menu signals.
      *
      * Same read floor as enrichConsoleSessionRows:
      * last_read_time ?? transferred_at ?? 1970-01-01 00:00:00;
-     * only sender_type=customer; only status=active for this agent_id;
-     * waiting pool is excluded.
+     * only sender_type=customer.
+     * Includes this agent's active sessions and the shared waiting pool
+     * (unassigned, or waiting rows already pinned to this agent).
      *
-     * Uses two portable ORM queries (sessions then messages) instead of per-session COUNT.
+     * Uses portable ORM queries (sessions then messages) instead of per-session COUNT.
      */
     public function countUnreadForAgent(int $agentId): int
     {
@@ -537,7 +538,9 @@ class ChatService
     }
 
     /**
-     * Unread sessions for menu deep links (active agent sessions only).
+     * Unread sessions for menu deep links.
+     *
+     * Active sessions of this agent, plus waiting-pool sessions the console can open.
      *
      * @return list<array{session_id: int, unread_count: int, list_title: string}>
      */
@@ -554,11 +557,11 @@ class ChatService
             return [];
         }
 
+        $sessionIds = array_keys($counts);
         /** @var ChatSession $session */
         $session = ObjectManager::getInstance(ChatSession::class);
         $sessionRows = $session->reset()
-            ->where(ChatSession::schema_fields_AGENT_ID, $agentId)
-            ->where(ChatSession::schema_fields_STATUS, ChatSession::STATUS_ACTIVE)
+            ->where(ChatSession::schema_fields_ID, $sessionIds, 'in')
             ->select()
             ->fetchArray();
         if (!is_array($sessionRows) || $sessionRows === []) {
@@ -610,7 +613,10 @@ class ChatService
     }
 
     /**
-     * Per-session unread counts for an agent's active sessions.
+     * Per-session unread counts for menu signals.
+     *
+     * Active sessions owned by this agent, plus waiting sessions with no agent
+     * or already pinned to this agent. Closed history is excluded.
      *
      * @return array<int, int> session_id => unread message count
      */
@@ -623,12 +629,32 @@ class ChatService
 
         /** @var ChatSession $session */
         $session = ObjectManager::getInstance(ChatSession::class);
-        $sessionRows = $session->reset()
+        $activeRows = $session->reset()
             ->where(ChatSession::schema_fields_AGENT_ID, $agentId)
             ->where(ChatSession::schema_fields_STATUS, ChatSession::STATUS_ACTIVE)
             ->select()
             ->fetchArray();
-        if (!is_array($sessionRows) || $sessionRows === []) {
+        $waitingRows = $session->reset()
+            ->where(ChatSession::schema_fields_STATUS, ChatSession::STATUS_WAITING)
+            ->select()
+            ->fetchArray();
+        $sessionRows = [];
+        foreach (is_array($activeRows) ? $activeRows : [] as $row) {
+            if (is_array($row)) {
+                $sessionRows[] = $row;
+            }
+        }
+        foreach (is_array($waitingRows) ? $waitingRows : [] as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $pinnedAgent = (int)($row[ChatSession::schema_fields_AGENT_ID] ?? $row['agent_id'] ?? 0);
+            if ($pinnedAgent !== 0 && $pinnedAgent !== $agentId) {
+                continue;
+            }
+            $sessionRows[] = $row;
+        }
+        if ($sessionRows === []) {
             return [];
         }
 
