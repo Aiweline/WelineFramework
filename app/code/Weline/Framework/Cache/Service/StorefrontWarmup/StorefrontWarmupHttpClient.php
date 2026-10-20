@@ -117,6 +117,35 @@ final class StorefrontWarmupHttpClient
     }
 
     /**
+     * Visitor-path GET for a priority home: no pierce/bypass headers, so a MISS
+     * renders and publishes shared html-disk + homepage bag, while a warm receipt
+     * stays a cheap HIT. Used to seed the first real visitor's path without
+     * marking the response no-store.
+     *
+     * @return array{ok:bool,status:int,body:string,fpc:string,reason:string,url:string}
+     */
+    public function getVisitor(string $path): array
+    {
+        $path = \trim($path);
+        if ($path === '' || $path[0] !== '/') {
+            $path = '/' . \ltrim($path, '/');
+        }
+        $last = ['ok' => false, 'status' => 0, 'body' => '', 'fpc' => '', 'reason' => 'no_target', 'url' => ''];
+        foreach ($this->resolveTargets() as $target) {
+            $last = $this->requestTarget($target, $path, [
+                'pierce' => false,
+                'bypass' => false,
+                'return_body' => false,
+            ]);
+            if ($last['ok']) {
+                return $last;
+            }
+        }
+
+        return $last;
+    }
+
+    /**
      * Parallel path warm via curl_multi (falls back to serial get()).
      *
      * @param list<string> $paths

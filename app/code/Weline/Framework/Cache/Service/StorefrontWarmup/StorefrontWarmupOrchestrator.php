@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Cache\Service\StorefrontWarmup;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FpcWarmupProviderInterface;
+use Weline\Websites\Data\WebsiteData;
+use Weline\Websites\Model\Website;
 
 /**
  * Framework-owned storefront FPC warm orchestration (phases A→B→C→D).
@@ -16,6 +19,13 @@ final class StorefrontWarmupOrchestrator
 {
     private const LOCK_NAME = 'storefront_warmup_orchestrator.lock';
     private const OFFER_DRAIN_PER_SLICE = 3;
+    /**
+     * Locale homepage roots are warmed before the sitemap crawl. A cold locale
+     * home is a full SSR (multi-second) while the sitemap cursor may be tens of
+     * thousands of locs away; one priority home per slice bounds the extra work.
+     */
+    private const PRIORITY_HOME_BUDGET_PER_SLICE = 1;
+    private const PRIORITY_HOME_MAX = 8;
 
     public function __construct(
         private readonly StorefrontWarmupProgressLedger $ledger = new StorefrontWarmupProgressLedger(),
@@ -66,6 +76,7 @@ final class StorefrontWarmupOrchestrator
             if (($state['backoff_until'] ?? 0) > 0) {
                 $state['backoff_until'] = 0.0;
             }
+            $state = $this->syncPriorityHomes($state);
 
             $busy = $this->busyGate->sample();
             $capacity = $this->capacityPlanner->plan($state, $busy);
@@ -104,6 +115,9 @@ final class StorefrontWarmupOrchestrator
             $skipped = 0;
             $failed = 0;
             $samples = [];
+            // One priority-home attempt per slice: on failure keep the cursor so
+            // the next cron tick retries instead of waiting for a full cycle.
+            $priorityAttemptedThisSlice = false;
 
             // Priority: Changed / event ad-hoc offers before phased A–D crawl.
             $offerBudget = self::OFFER_DRAIN_PER_SLICE;
@@ -147,6 +161,31 @@ final class StorefrontWarmupOrchestrator
                     $state['backoff_until'] = 0.0;
                     $this->ledger->write($state);
                     break;
+                }
+
+                if (!$priorityAttemptedThisSlice && $this->hasPendingPriorityHomes($state)) {
+                    $priorityAttemptedThisSlice = true;
+                    $priorityRoom = $shard - ($warmed + $skipped + $failed);
+                    $priority = $this->advancePriorityHomes(
+                        $state,
+                        \max(1, \min(self::PRIORITY_HOME_BUDGET_PER_SLICE, $priorityRoom))
+                    );
+                    $state = $priority['state'];
+                    foreach ($priority['samples'] as $sample) {
+                        $samples[] = $sample;
+                        if (($sample['status'] ?? '') === 'ok') {
+                            $warmed++;
+                            $state['ok'] = (int)$state['ok'] + 1;
+                        } elseif (($sample['status'] ?? '') === 'skip') {
+                            $skipped++;
+                            $state['skip'] = (int)$state['skip'] + 1;
+                        } elseif (($sample['status'] ?? '') === 'fail') {
+                            $failed++;
+                            $state['fail'] = (int)$state['fail'] + 1;
+                        }
+                    }
+                    $this->ledger->write($state);
+                    continue;
                 }
 
                 $room = $shard - ($warmed + $skipped + $failed);
@@ -200,6 +239,182 @@ final class StorefrontWarmupOrchestrator
         } finally {
             $this->releaseLock($lock);
         }
+    }
+
+    /**
+     * Keep the persisted priority-home queue in sync with configuration.
+     *
+     * @param array<string, mixed> $state
+     * @return array<string, mixed>
+     */
+    private function syncPriorityHomes(array $state): array
+    {
+        $paths = $this->priorityHomePaths();
+        $existing = \is_array($state['priority_homes'] ?? null) ? $state['priority_homes'] : [];
+        if ($paths !== $existing) {
+            $state['priority_homes'] = $paths;
+            $state['priority_home_cursor'] = 0;
+        }
+
+        return $state;
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    private function hasPendingPriorityHomes(array $state): bool
+    {
+        $paths = \is_array($state['priority_homes'] ?? null) ? $state['priority_homes'] : [];
+
+        return (int)($state['priority_home_cursor'] ?? 0) < \count($paths);
+    }
+
+    /**
+     * Warm the next priority locale home(s) before the long sitemap crawl.
+     *
+     * @param array<string, mixed> $state
+     * @return array{state:array<string,mixed>,samples:list<array<string,mixed>>}
+     */
+    private function advancePriorityHomes(array $state, int $n): array
+    {
+        $paths = \is_array($state['priority_homes'] ?? null) ? $state['priority_homes'] : [];
+        $cursor = (int)($state['priority_home_cursor'] ?? 0);
+        if ($cursor >= \count($paths)) {
+            return ['state' => $state, 'samples' => []];
+        }
+
+        $samples = [];
+        $processed = 0;
+        while ($processed < \max(1, $n) && $cursor < \count($paths)) {
+            $raw = (string)$paths[$cursor];
+            $cursor++;
+            $processed++;
+            $gate = $this->excludeGate->evaluate($raw);
+            if (!$gate['allow']) {
+                $samples[] = ['status' => 'skip', 'url' => $raw, 'reason' => $gate['reason'], 'phase' => 'priority_home'];
+                $state['last_url'] = $raw;
+                $state['last_status'] = 'skip';
+                $state['last_reason'] = $gate['reason'];
+                continue;
+            }
+            // Visitor path: a MISS renders/publishes; a warm receipt stays a
+            // cheap HIT. Pierce/bypass would mark the response no-store.
+            $fetch = $this->http->getVisitor($gate['path']);
+            $status = ($fetch['ok'] ?? false) ? 'ok' : 'fail';
+            $reason = ($fetch['ok'] ?? false)
+                ? (((string)($fetch['fpc'] ?? '')) !== '' ? (string)$fetch['fpc'] : 'http_ok')
+                : (string)($fetch['reason'] ?? 'fail');
+            $state['last_url'] = $gate['path'];
+            $state['last_status'] = $status;
+            $state['last_reason'] = $reason;
+            $samples[] = ['status' => $status, 'url' => $gate['path'], 'reason' => $reason, 'phase' => 'priority_home'];
+            if ($status === 'fail') {
+                // Keep this priority home pending; next cron slice retries it.
+                $cursor--;
+                break;
+            }
+        }
+        $state['priority_home_cursor'] = $cursor;
+
+        return ['state' => $state, 'samples' => $samples];
+    }
+
+    /**
+     * Priority locale homepage roots. Explicit config wins; otherwise the first
+     * enabled non-default language is used so a cold multi-locale storefront does
+     * not wait for its sitemap loc to come up.
+     *
+     * @return list<string>
+     */
+    private function priorityHomePaths(): array
+    {
+        $configured = [];
+        try {
+            $configured = Env::get('wls.storefront_warmup.priority_home_paths', []);
+        } catch (\Throwable) {
+            $configured = [];
+        }
+        if (\is_string($configured)) {
+            $decoded = \json_decode($configured, true);
+            $configured = \is_array($decoded)
+                ? $decoded
+                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+        }
+
+        $paths = [];
+        if (\is_array($configured)) {
+            foreach ($configured as $raw) {
+                if (!\is_scalar($raw)) {
+                    continue;
+                }
+                $path = $this->excludeGate->normalizePath((string)$raw);
+                if ($path === '' || $path === '/') {
+                    continue;
+                }
+                $gate = $this->excludeGate->evaluate($path);
+                if (!$gate['allow']) {
+                    continue;
+                }
+                $paths[$gate['path']] = $gate['path'];
+            }
+        }
+
+        if ($paths === []) {
+            foreach ($this->fallbackPriorityHomePaths() as $path) {
+                $paths[$path] = $path;
+            }
+        }
+
+        return \array_slice(\array_values($paths), 0, self::PRIORITY_HOME_MAX);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function fallbackPriorityHomePaths(): array
+    {
+        try {
+            return $this->selectFallbackPriorityHome(
+                WebsiteData::languageCodesForWebsite(Website::ID_DEFAULT),
+                (string)(WebsiteData::defaultLanguageForWebsite(Website::ID_DEFAULT) ?? '')
+            );
+        } catch (\Throwable) {
+        }
+
+        return [];
+    }
+
+    /**
+     * English is the common international entry: prefer en_GB, then any en_*,
+     * then the first enabled non-default language.
+     *
+     * @param list<string> $codes
+     * @return list<string>
+     */
+    private function selectFallbackPriorityHome(array $codes, string $default): array
+    {
+        $normalizedDefault = \strtolower(\str_replace('-', '_', $default));
+        $nonDefault = [];
+        foreach ($codes as $code) {
+            $code = \trim((string)$code, '/');
+            $normalized = \strtolower(\str_replace('-', '_', $code));
+            if ($normalized === '' || $normalized === $normalizedDefault) {
+                continue;
+            }
+            $nonDefault[] = $code;
+        }
+        foreach ($nonDefault as $code) {
+            if (\strtolower(\str_replace('-', '_', $code)) === 'en_gb') {
+                return ['/' . $code . '/'];
+            }
+        }
+        foreach ($nonDefault as $code) {
+            if (\str_starts_with(\strtolower(\str_replace('-', '_', $code)), 'en_')) {
+                return ['/' . $code . '/'];
+            }
+        }
+
+        return $nonDefault !== [] ? ['/' . $nonDefault[0] . '/'] : [];
     }
 
     /**

@@ -164,8 +164,12 @@ final class StorefrontWarmupCapacityPlanner
         $extras = \is_array($state['extras'] ?? null) ? $state['extras'] : [];
         $extraCursor = (int)($state['extras_cursor'] ?? 0);
         $extraLeft = \max(0, \count($extras) - $extraCursor);
+        $priorityHomes = \is_array($state['priority_homes'] ?? null) ? $state['priority_homes'] : [];
+        $priorityCursor = (int)($state['priority_home_cursor'] ?? 0);
+        $priorityLeft = \max(0, \count($priorityHomes) - $priorityCursor);
 
-        return $locLeft + $docLeft + $extraLeft + ($phase === StorefrontWarmupProgressLedger::PHASE_A_HOMEPAGE ? 1 : 0);
+        return $locLeft + $docLeft + $extraLeft + $priorityLeft
+            + ($phase === StorefrontWarmupProgressLedger::PHASE_A_HOMEPAGE ? 1 : 0);
     }
 
     private function detectNproc(): int
