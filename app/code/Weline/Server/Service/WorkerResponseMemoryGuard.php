@@ -70,6 +70,19 @@ final class WorkerResponseMemoryGuard
     private const LOOP_SHELL_TRIM_BYTES = 24 * 1024 * 1024;
     /** used above this → soft rebuildable process-cache reclaim (busy-safe OM when peers). */
     private const LOOP_USED_SOFT_RECLAIM_BYTES = 96 * 1024 * 1024;
+    /** 1G Worker: used 25% (256MiB) and shell 5% (51MiB) before loop reclaim. */
+    private const LOOP_USED_SOFT_RECLAIM_LIMIT_FRACTION = 0.25;
+    private const LOOP_SHELL_TRIM_LIMIT_FRACTION = 0.05;
+    private const LOOP_USED_SOFT_RECLAIM_CAP_BYTES = 384 * 1024 * 1024;
+    private const LOOP_SHELL_TRIM_CAP_BYTES = 128 * 1024 * 1024;
+    /**
+     * A loop shed that frees less than this is a no-op on the current heap shape
+     * (usually the framework floor); do not repeat it every scheduler tick.
+     */
+    private const LOOP_SHED_MIN_GAIN_BYTES = 4 * 1024 * 1024;
+    /** After a no-gain shed, wait for this much used growth or the cooldown. */
+    private const LOOP_SHED_RETRY_GROWTH_BYTES = 16 * 1024 * 1024;
+    private const LOOP_SHED_RETRY_COOLDOWN_SECONDS = 60.0;
 
     private static ?array $runtimeCacheThresholds = null;
     /** Pressure denominator from Worker `--memory-limit` (ignore DevTool-inflated ini). */
@@ -92,6 +105,11 @@ final class WorkerResponseMemoryGuard
     private static float $lastPressure = 0.0;
     private static int $admissionMemoryRejects = 0;
     private static int $lastAbsoluteHeadroomBytes = 0;
+    /** Loop-shed hysteresis: avoid clearing rebuildable caches when the last attempt freed nothing. */
+    private static float $lastLoopShedAt = 0.0;
+    private static int $lastLoopShedUsed = 0;
+    private static int $lastLoopShedGain = 0;
+    private static bool $loopShedSuppressedLogged = false;
 
     /** Consecutive incomplete Fiber cancels before Worker quarantine. */
     public const INCOMPLETE_REQUEST_FIBER_CANCEL_QUARANTINE_STREAK = 3;
@@ -856,18 +874,92 @@ final class WorkerResponseMemoryGuard
     }
 
     /**
+     * Absolute used threshold for loop reclaim, scaled to the Worker budget.
+     * A fixed 96MiB floor was calibrated for small Workers; on a 1G Worker it
+     * fired at ~10% usage and repeatedly cleared caches that immediately rebuilt.
+     */
+    public static function loopUsedSoftReclaimBytesForLimit(int $limitBytes): int
+    {
+        if ($limitBytes <= 0) {
+            return self::LOOP_USED_SOFT_RECLAIM_BYTES;
+        }
+        $scaled = (int)\floor($limitBytes * self::LOOP_USED_SOFT_RECLAIM_LIMIT_FRACTION);
+
+        return \max(
+            self::LOOP_USED_SOFT_RECLAIM_BYTES,
+            \min(self::LOOP_USED_SOFT_RECLAIM_CAP_BYTES, $scaled)
+        );
+    }
+
+    /**
+     * Zend shell threshold for allocator trim, scaled to the Worker budget.
+     */
+    public static function loopShellTrimBytesForLimit(int $limitBytes): int
+    {
+        if ($limitBytes <= 0) {
+            return self::LOOP_SHELL_TRIM_BYTES;
+        }
+        $scaled = (int)\floor($limitBytes * self::LOOP_SHELL_TRIM_LIMIT_FRACTION);
+
+        return \max(
+            self::LOOP_SHELL_TRIM_BYTES,
+            \min(self::LOOP_SHELL_TRIM_CAP_BYTES, $scaled)
+        );
+    }
+
+    /**
+     * Hysteresis for absolute (not ratio/headroom/force) loop sheds: if the last
+     * attempt freed less than {@see LOOP_SHED_MIN_GAIN_BYTES}, require either
+     * {@see LOOP_SHED_RETRY_GROWTH_BYTES} of new used memory or the cooldown.
+     */
+    public static function shouldSuppressLoopShed(
+        int $usedBefore,
+        float $pressure,
+        float $softThreshold,
+        bool $lowHeadroom,
+        bool $force = false
+    ): bool {
+        if ($force || $lowHeadroom || $pressure >= $softThreshold) {
+            return false;
+        }
+        if (self::$lastLoopShedAt <= 0.0 || self::$lastLoopShedGain >= self::LOOP_SHED_MIN_GAIN_BYTES) {
+            return false;
+        }
+        if ((\microtime(true) - self::$lastLoopShedAt) >= self::LOOP_SHED_RETRY_COOLDOWN_SECONDS) {
+            return false;
+        }
+
+        return $usedBefore < (self::$lastLoopShedUsed + self::LOOP_SHED_RETRY_GROWTH_BYTES);
+    }
+
+    /**
+     * A shed's real relief includes allocator/shell trims that lower Zend-real
+     * without lowering used. Used by the no-op hysteresis.
+     */
+    public static function loopShedTotalGain(int $usedGain, int $allocatorTrimmed, int $hotTrimmed): int
+    {
+        return \max(0, $usedGain) + \max(0, $allocatorTrimmed) + \max(0, $hotTrimmed);
+    }
+
+    /**
      * Worker event-loop shed: free headroom for *new* requests while peer Fibers
      * may still be running. Does NOT require {@see WlsConcurrency::canCompactProcessCaches()}.
      * Does NOT request Worker suicide/drain — slow miss is OK; OOM is not.
      *
      * @return array{
      *   triggered:bool,
+     *   suppressed:bool,
      *   pressure:float,
      *   locales_evicted:list<string>,
      *   hotcache_trimmed_bytes:int,
      *   allocator_trimmed_bytes:int,
+     *   process_caches_cleared:int,
      *   used_before:int,
-     *   used_after:int
+     *   used_after:int,
+     *   gain?:int,
+     *   total_gain?:int,
+     *   used_threshold?:int,
+     *   shell_threshold?:int
      * }
      */
     public static function compactForNewRequestHeadroom(bool $force = false): array
@@ -881,10 +973,13 @@ final class WorkerResponseMemoryGuard
         $limitBytes = self::getMemoryLimitBytes();
         $absoluteHeadroom = $limitBytes > 0 ? \max(0, $limitBytes - $realBefore) : \PHP_INT_MAX;
         $lowHeadroom = $absoluteHeadroom < self::LOOP_HEADROOM_SHED_BYTES;
-        $shellHigh = $shellBefore >= self::LOOP_SHELL_TRIM_BYTES;
-        $usedHigh = $usedBefore >= self::LOOP_USED_SOFT_RECLAIM_BYTES;
+        $usedThreshold = self::loopUsedSoftReclaimBytesForLimit($limitBytes);
+        $shellThreshold = self::loopShellTrimBytesForLimit($limitBytes);
+        $shellHigh = $shellBefore >= $shellThreshold;
+        $usedHigh = $usedBefore >= $usedThreshold;
         $empty = [
             'triggered' => false,
+            'suppressed' => false,
             'pressure' => $pressure,
             'locales_evicted' => [],
             'hotcache_trimmed_bytes' => 0,
@@ -897,9 +992,28 @@ final class WorkerResponseMemoryGuard
         if (!$force && $pressure < $thresholds['soft'] && !$lowHeadroom && !$shellHigh && !$usedHigh) {
             return $empty;
         }
+        if (self::shouldSuppressLoopShed($usedBefore, $pressure, $thresholds['soft'], $lowHeadroom, $force)) {
+            if (!self::$loopShedSuppressedLogged) {
+                self::$loopShedSuppressedLogged = true;
+                if (\class_exists(\Weline\Framework\Runtime\MemDiag::class, false)
+                    || \class_exists(\Weline\Framework\Runtime\MemDiag::class)
+                ) {
+                    \Weline\Framework\Runtime\MemDiag::event('worker_loop_shed_suppressed', [
+                        'pressure' => $pressure,
+                        'used' => $usedBefore,
+                        'last_shed_used' => self::$lastLoopShedUsed,
+                        'last_shed_gain' => self::$lastLoopShedGain,
+                        'retry_growth_bytes' => self::LOOP_SHED_RETRY_GROWTH_BYTES,
+                        'cooldown_s' => self::LOOP_SHED_RETRY_COOLDOWN_SECONDS,
+                    ]);
+                }
+            }
+            $empty['suppressed'] = true;
 
-        $shedBags = $force || $lowHeadroom || $pressure >= $thresholds['soft']
-            || $usedBefore >= self::LOOP_USED_SOFT_RECLAIM_BYTES;
+            return $empty;
+        }
+
+        $shedBags = $force || $lowHeadroom || $pressure >= $thresholds['soft'] || $usedHigh;
         $localesEvicted = [];
         $hotTrimmed = 0;
         $processCachesCleared = 0;
@@ -913,8 +1027,9 @@ final class WorkerResponseMemoryGuard
             if (\class_exists(\Weline\Framework\Phrase\DictionaryCacheNamespace::class, false)
                 || \class_exists(\Weline\Framework\Phrase\DictionaryCacheNamespace::class)
             ) {
+                // keepWarm=0 表示冷语种全丢。shed 把 maxDrop<=0 当成「只丢一半」，这里改传全部。
                 $shed = \Weline\Framework\Phrase\DictionaryCacheNamespace::shedColdLocalesForHeadroom(
-                    $keepWarmLocales
+                    $keepWarmLocales === 0 ? \PHP_INT_MAX : $keepWarmLocales
                 );
                 $localesEvicted = $shed['evicted'];
             }
@@ -930,7 +1045,7 @@ final class WorkerResponseMemoryGuard
 
             // Rebuildable reclaim when used climbs (no drain). Near ceiling + idle → hard;
             // peers → OM soft only; otherwise soft Facade + Resetter.
-            if ($usedBefore >= self::LOOP_USED_SOFT_RECLAIM_BYTES || $pressure >= $thresholds['soft'] || $lowHeadroom) {
+            if ($usedHigh || $pressure >= $thresholds['soft'] || $lowHeadroom) {
                 $aggressive = $lowHeadroom && $absoluteHeadroom < (56 * 1024 * 1024);
                 if (WlsConcurrency::canCompactProcessCaches()) {
                     $runtime = self::compactRuntimeCaches($aggressive);
@@ -957,11 +1072,23 @@ final class WorkerResponseMemoryGuard
         }
 
         $usedAfter = \memory_get_usage(false);
+        $gain = \max(0, $usedBefore - $usedAfter);
+        // Allocator trim lowers Zend-real/RSS without lowering used; count it as
+        // relief so a beneficial trim does not trigger the no-op hysteresis.
+        $totalGain = self::loopShedTotalGain($gain, $allocatorTrimmed, $hotTrimmed);
+        self::$lastLoopShedAt = \microtime(true);
+        self::$lastLoopShedUsed = $usedBefore;
+        self::$lastLoopShedGain = $totalGain;
+        if ($totalGain >= self::LOOP_SHED_MIN_GAIN_BYTES) {
+            self::$loopShedSuppressedLogged = false;
+        }
         if (\class_exists(\Weline\Framework\Runtime\MemDiag::class, false)
             || \class_exists(\Weline\Framework\Runtime\MemDiag::class)
         ) {
             \Weline\Framework\Runtime\MemDiag::event('worker_loop_headroom_shed', [
                 'pressure' => $pressure,
+                'used_threshold' => $usedThreshold,
+                'shell_threshold' => $shellThreshold,
                 'locales_evicted' => $localesEvicted,
                 'hotcache_trimmed_bytes' => $hotTrimmed,
                 'allocator_trimmed_bytes' => $allocatorTrimmed,
@@ -969,11 +1096,15 @@ final class WorkerResponseMemoryGuard
                 'shell_before' => $shellBefore,
                 'peers' => WlsConcurrency::getOtherSuspendedRequestFiberCount(),
                 'delta_used' => $usedBefore - $usedAfter,
+                'gain' => $gain,
+                'total_gain' => $totalGain,
+                'next_suppressed' => $totalGain < self::LOOP_SHED_MIN_GAIN_BYTES,
             ]);
         }
 
         return [
             'triggered' => true,
+            'suppressed' => false,
             'pressure' => $pressure,
             'locales_evicted' => $localesEvicted,
             'hotcache_trimmed_bytes' => $hotTrimmed,
@@ -981,6 +1112,10 @@ final class WorkerResponseMemoryGuard
             'process_caches_cleared' => $processCachesCleared,
             'used_before' => $usedBefore,
             'used_after' => $usedAfter,
+            'gain' => $gain,
+            'total_gain' => $totalGain,
+            'used_threshold' => $usedThreshold,
+            'shell_threshold' => $shellThreshold,
         ];
     }
 
@@ -1131,6 +1266,10 @@ final class WorkerResponseMemoryGuard
         self::$admissionMemoryRejects = 0;
         self::$lastAbsoluteHeadroomBytes = 0;
         self::$lastPressure = 0.0;
+        self::$lastLoopShedAt = 0.0;
+        self::$lastLoopShedUsed = 0;
+        self::$lastLoopShedGain = 0;
+        self::$loopShedSuppressedLogged = false;
         if (\class_exists(AdaptiveFiberMaxActive::class, false)
             || \class_exists(AdaptiveFiberMaxActive::class)
         ) {
