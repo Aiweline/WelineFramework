@@ -965,22 +965,6 @@ class ObjectManager implements ManagerInterface
     
 
     /**
-     * @deprecated 使用 {@see getInstance()}。origin 桶已移除（生产零调用），本方法仅作兼容薄壳。
-     *
-     * @param string $class 类
-     * @param array $arguments __construct()初始化参数
-     * @param bool $shared 是否共享
-     * @param bool $cache 是否缓存
-     * @return mixed
-     * @throws Exception
-     * @throws \ReflectionException
-     */
-    public static function getOriginInstance(string $class, array $arguments = [], bool $shared = true, bool $cache = false): mixed
-    {
-        return self::getInstance($class, $arguments, $shared, $cache);
-    }
-
-    /**
      * @DESC          # 设置实例
      *
      * @AUTH    秋枫雁飞
@@ -1099,7 +1083,7 @@ class ObjectManager implements ManagerInterface
      * request-local shared instances after a Fiber finishes without touching
      * process-level instances or rebuildable metadata caches.
      */
-    public static function clearCurrentFiberInstances(bool $includeOrigin = true): void
+    public static function clearCurrentFiberInstances(): void
     {
         if (self::$fiberInstances === null) {
             return;

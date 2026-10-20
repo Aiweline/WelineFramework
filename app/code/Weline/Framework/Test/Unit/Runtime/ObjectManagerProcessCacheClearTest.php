@@ -50,11 +50,11 @@ final class ObjectManagerProcessCacheClearTest extends TestCase
         $fiber = new \Fiber(static function () use ($request, $events, $acl): string {
             ObjectManager::setInstance(Request::class, $request);
             ObjectManager::setInstance(EventsManager::class, $events);
-            $origin = ObjectManager::getOriginInstance(ProcessCacheClearOrigin::class);
+            $scoped = ObjectManager::getInstance(ProcessCacheClearScoped::class);
             \Fiber::suspend();
 
             self::assertSame($request, ObjectManager::getInstance(Request::class));
-            self::assertSame($origin, ObjectManager::getOriginInstance(ProcessCacheClearOrigin::class));
+            self::assertSame($scoped, ObjectManager::getInstance(ProcessCacheClearScoped::class));
             return $acl->execute();
         });
         $fiber->start();
@@ -67,7 +67,7 @@ final class ObjectManagerProcessCacheClearTest extends TestCase
     }
 }
 
-final class ProcessCacheClearOrigin
+final class ProcessCacheClearScoped
 {
     /** 非空类：ObjectManager 会拒绝实例化“静态类”（无公共实例方法）。 */
     public function ping(): string

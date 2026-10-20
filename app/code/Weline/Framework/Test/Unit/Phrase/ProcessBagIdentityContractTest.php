@@ -112,17 +112,6 @@ final class ProcessBagIdentityContractTest extends TestCase
         self::assertSame($before, DictionaryCacheNamespace::registeredBagNames());
     }
 
-    public function testDeprecatedLocalCacheKeepsRequestSemantics(): void
-    {
-        $before = DictionaryCacheNamespace::registeredBagNames();
-        $bag = [];
-        $words = &DictionaryCacheNamespace::localCache($bag, 1024, ['zh_Hans_CN']);
-        $words['fp|zh_Hans_CN|x'] = 'x';
-
-        self::assertSame($before, DictionaryCacheNamespace::registeredBagNames());
-        self::assertSame(['fp|zh_Hans_CN|x' => 'x'], $bag);
-    }
-
     public function testProcessBagLocaleMarkerIsCoalescedAcrossUnchangedCalls(): void
     {
         $store = DictionaryCacheNamespace::processMemoryStore();

@@ -104,22 +104,14 @@ final class ObjectManagerFiberScopedInstancesTest extends TestCase
             return ObjectManager::_getInstance(ObjectManagerFiberScopedTestDouble::class);
         });
 
-        $fiberB = new \Fiber(static function (): array {
+        $fiberB = new \Fiber(static function (): ?ObjectManagerFiberScopedTestDouble {
             $instance = new ObjectManagerFiberScopedTestDouble();
             $instance->owner = 'fiber-b';
             ObjectManager::setInstance(ObjectManagerFiberScopedTestDouble::class, $instance);
 
-            $originBefore = ObjectManager::getOriginInstance(ObjectManagerFiberScopedOriginTestDouble::class);
-            $originBefore->owner = 'origin-b';
-
             ObjectManager::clearCurrentFiberInstances();
-            $originAfter = ObjectManager::getOriginInstance(ObjectManagerFiberScopedOriginTestDouble::class);
 
-            return [
-                'shared' => ObjectManager::_getInstance(ObjectManagerFiberScopedTestDouble::class),
-                'origin_same' => $originBefore === $originAfter,
-                'origin_owner' => $originAfter->owner,
-            ];
+            return ObjectManager::_getInstance(ObjectManagerFiberScopedTestDouble::class);
         });
 
         self::assertNull($fiberA->start());
@@ -127,9 +119,7 @@ final class ObjectManagerFiberScopedInstancesTest extends TestCase
 
         self::assertNull($fiberB->start());
         self::assertTrue($fiberB->isTerminated());
-        self::assertNull($fiberB->getReturn()['shared']);
-        self::assertFalse($fiberB->getReturn()['origin_same']);
-        self::assertNull($fiberB->getReturn()['origin_owner']);
+        self::assertNull($fiberB->getReturn());
 
         self::assertNull($fiberA->resume());
         self::assertTrue($fiberA->isTerminated());
@@ -337,15 +327,6 @@ final class ObjectManagerFiberScopedInstancesTest extends TestCase
 }
 
 final class ObjectManagerFiberScopedTestDouble
-{
-    public ?string $owner = null;
-
-    public function __construct()
-    {
-    }
-}
-
-final class ObjectManagerFiberScopedOriginTestDouble
 {
     public ?string $owner = null;
 

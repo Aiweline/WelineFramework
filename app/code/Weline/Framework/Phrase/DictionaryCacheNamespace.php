@@ -48,7 +48,6 @@ final class DictionaryCacheNamespace
     private static array $localeLru = [];
     /** @var array<string, int> */
     private static array $localeBucketPins = [];
-    private static bool $legacyLocalCacheWarned = false;
 
     /** 纯函数：语言依赖只保留叶子，祖先由统一 NamespaceGenerationRepository 展开。 */
     public static function namespacePaths(array $locales = []): array
@@ -175,26 +174,6 @@ final class DictionaryCacheNamespace
         self::trimBag($bag, $maxEntries);
 
         return $bag;
-    }
-
-    /**
-     * @deprecated 使用 {@see processBag()}（进程级）或 {@see requestBag()}（请求级）。
-     *             保留给本仓外消费方迁移；语义已降为请求袋（不登记、不写 Store）。
-     *             删除计划：仓外调用点清零后删除（见 dev/session/process-bag-unify.md）。
-     *
-     * @param array<string, mixed> $cache
-     * @return array<string, mixed>
-     */
-    public static function &localCache(array &$cache, int $maxEntries = 32768, array $locales = []): array
-    {
-        if (!self::$legacyLocalCacheWarned) {
-            self::$legacyLocalCacheWarned = true;
-            if (\function_exists('w_log_warning')) {
-                \w_log_warning('DictionaryCacheNamespace::localCache() is deprecated; use processBag()/requestBag().');
-            }
-        }
-
-        return self::requestBag($cache, $maxEntries, $locales);
     }
 
     /**
@@ -339,8 +318,8 @@ final class DictionaryCacheNamespace
 
     /**
      * Locales that still have keys in bound Phrase bags (Parser / GlobalDictionary).
-     * May include locales absent from {@see localeBucketResidents()} when bags were
-     * filled via {@see localCache()} without {@see touchLocaleBucket()}.
+     * May include locales absent from {@see localeBucketResidents()} when a bound bag was
+     * filled directly without {@see touchLocaleBucket()}.
      *
      * @return list<string>
      */

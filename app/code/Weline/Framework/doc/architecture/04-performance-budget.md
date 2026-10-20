@@ -172,7 +172,7 @@ WLS 禁止在 Worker READY 或普通请求阶段加载某个 locale 的全模块
 
 ### 进程袋（命名 L1）预算与门禁
 
-- **统一 API**：Worker 常驻缓存必须用 `DictionaryCacheNamespace::processBag(<显式名>, $bag, $maxEntries, $locales)`；请求级数组用 `requestBag()`；旧 `localCache()` 已 `@deprecated` 且语义降为请求袋。
+- **统一 API**：Worker 常驻缓存必须用 `DictionaryCacheNamespace::processBag(<显式名>, $bag, $maxEntries, $locales)`；请求级数组用 `requestBag()`。
 - **身份与容量**：空名不得登记（禁止匿名 `anon_N`）；每袋必须声明 `maxEntries`；满袋一次削到 90%，locale 记账只在袋尺寸变化时写 Store。
 - **读链**：上下文获取固定 **R0 `RequestContext` → R1 请求袋 → L1 命名袋 → L2 `ScopeSharedMemo`/`w_cache` → DB 仅 miss**。目录/本地化仓库（`i18n.repository.*`）、`WebsiteCatalog::count`、EAV 元数据（LRU）已按此收敛；不得在热路径重复读库。
 - **观测**：`MemDiag::cacheSnapshot()` 输出 `process_bags`（name → entries/bytes）、`process_bag_entries`、`process_bag_bytes`、`process_bag_heavy` / `process_bag_heavy_names`（`> 20` 条）；登记条目不随请求数增长。重袋阈值是观测信号，豁免清单见 `WLS-Fiber上下文与进程缓存边界.md`「进程袋契约」第 6 条。

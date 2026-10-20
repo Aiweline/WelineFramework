@@ -28,7 +28,7 @@ Root 已通过 43 tests / 171 assertions 有效回归，并统一编译、滚动
 
 `DictionaryCacheNamespace::namespacePaths(array $locales = [])` 是不访问存储的统一叶子规范化入口。有效语言经 `LocaleFallbackChain::normalize()` 处理后，去重排序为 `global/i18n/{locale}`；祖先 `global/i18n` 由核心代次仓库展开。没有有效语言或存在畸形输入时保守使用 `CONTENT_NAMESPACE`（`global/i18n/content`），保留旧无参消费者在任意翻译内容改变时失效的语义。写端须将实际语言叶子与 content 同批提升；全词库清理仍提升父代次。
 
-`fingerprint($locales)`、`cacheKey($key, $locales)`、`localCache($cache, $maxEntries, $locales)` 与 `scopedPool($pool, $locales)` 复用同一规则。指纹按依赖集合挂在框架 RequestContext，事务读取继续禁止发布公共 L1；无请求 ID 的 CLI 继续使用进程指纹。没有新增独立版本存储。
+`fingerprint($locales)`、`cacheKey($key, $locales)`、`requestBag($cache, $maxEntries, $locales)` 与 `scopedPool($pool, $locales)` 复用同一规则。指纹按依赖集合挂在框架 RequestContext，事务读取继续禁止发布公共 L1；无请求 ID 的 CLI 继续使用进程指纹。没有新增独立版本存储。
 
 进程袋底层委托 `ProcessMemoryStore`（语言维 `bucket=locale`）：重语种驻留默认 **≤1**（可 `phrase_heavy_locale_resident_max`；其它语种权威在 `phrase` Shared Memory / Memory Service）；超限踢最冷 locale 桶；可挂 `ProcessMemoryReclaimableAdapter`（经 `PhraseProcessMemoryReclaimable`）参与压力回收；`Parser::clearWorkerCaches()` 同步清空 Store。Store **不**实现 `MemoryStoreInterface`，也不经 CachePool `processStore`。Worker 最终译文进程工作集默认 **≤1024**（`phrase_worker_translated_word_cache_max`，硬顶 2048）；模块/单词大块跨请求权威读写走 Shared Memory，禁止抬高进程袋「抗压」。
 

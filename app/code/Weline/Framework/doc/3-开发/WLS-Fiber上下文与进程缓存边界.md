@@ -20,7 +20,6 @@
 |-----|------|-----------|
 | `processBag($name, &$bag, $maxEntries, $locales)` | Worker 常驻 L1；`$name` 是显式身份 | 是（同名幂等，只移引用） |
 | `requestBag(&$bag, $maxEntries, $locales)` | 请求级袋；随 `Parser::reset` / Fiber 释放 | **否** |
-| `localCache(...)`（`@deprecated`） | 旧 API，语义已降为请求袋，仅供仓外迁移 | **否** |
 
 硬规则：
 
