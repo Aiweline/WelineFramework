@@ -471,9 +471,11 @@ class AiTranslationService
         $wordPrefix = trim($wordPrefix);
         $this->candidateSourceModules = [];
         $words = [];
-        $offset = 0;
         $pageSize = self::PENDING_READ_PAGE_SIZE;
-        // Skip-store can hide the first rows of a page. Bound the walk; do not scan the table.
+        $afterWord = '';
+        // Skip-store can hide rows, so walk forward until the batch is full.
+        // Keyset paging (word > last seen) never re-reads the rows already judged;
+        // OFFSET made every page re-run the locale anti-join from the first word.
         $maxPages = (int)ceil(($limit + AiTranslationWordSkipStore::MAX_ENTRIES_PER_LOCALE) / $pageSize) + 1;
 
         for ($page = 0; $page < $maxPages && count($words) < $limit; $page++) {
@@ -482,12 +484,17 @@ class AiTranslationService
                 $wordPrefix,
                 $allowKeyOnlyWords,
                 $pageSize,
-                $offset,
+                $afterWord,
             );
             if ($rows === []) {
                 break;
             }
-            $offset += count($rows);
+            $lastRow = $rows[count($rows) - 1];
+            $nextAfterWord = (string)($lastRow['word'] ?? '');
+            if ($nextAfterWord === '' || $nextAfterWord === $afterWord) {
+                break;
+            }
+            $afterWord = $nextAfterWord;
             foreach ($rows as $row) {
                 $word = trim((string)($row['word'] ?? ''));
                 if ($word === '' || $this->wordSkipStore->shouldSkip($targetLocale, $word)) {
@@ -520,28 +527,16 @@ class AiTranslationService
             return 0;
         }
 
-        $pageSize = self::PENDING_READ_PAGE_SIZE;
-        $total = 0;
-        $offset = 0;
-        $maxOffset = $pageSize * 2000;
+        // One aggregate. Paging this anti-join repeats a full locale heap scan per page
+        // and saturates the disk that storefront checkout shares.
+        $sql = 'SELECT COUNT(*) AS c FROM '
+            . $this->dictionary->getTable()
+            . ' d WHERE '
+            . $this->pendingDictionaryWhereSql($targetLocale, trim($wordPrefix), $allowKeyOnlyWords);
+        $rows = $this->fetchSqlRows($sql);
+        $first = $rows[0] ?? [];
 
-        while ($offset <= $maxOffset) {
-            $rows = $this->queryPendingDictionaryRows(
-                $targetLocale,
-                trim($wordPrefix),
-                $allowKeyOnlyWords,
-                $pageSize,
-                $offset,
-            );
-            $count = count($rows);
-            $total += $count;
-            if ($count < $pageSize) {
-                break;
-            }
-            $offset += $count;
-        }
-
-        return $total;
+        return (int)($first['c'] ?? $first['C'] ?? 0);
     }
 
     /**
@@ -554,15 +549,14 @@ class AiTranslationService
         string $wordPrefix,
         bool $allowKeyOnlyWords,
         int $limit,
-        int $offset,
+        string $afterWord,
     ): array {
         $limit = max(1, $limit);
-        $offset = max(0, $offset);
         $sql = 'SELECT d.word AS word, d.module AS module FROM '
             . $this->dictionary->getTable()
             . ' d WHERE '
-            . $this->pendingDictionaryWhereSql($targetLocale, $wordPrefix, $allowKeyOnlyWords)
-            . ' ORDER BY d.word LIMIT ' . $limit . ' OFFSET ' . $offset;
+            . $this->pendingDictionaryWhereSql($targetLocale, $wordPrefix, $allowKeyOnlyWords, $afterWord)
+            . ' ORDER BY d.word LIMIT ' . $limit;
 
         $rows = [];
         foreach ($this->fetchSqlRows($sql) as $row) {
@@ -579,12 +573,17 @@ class AiTranslationService
         string $targetLocale,
         string $wordPrefix,
         bool $allowKeyOnlyWords,
+        string $afterWord = '',
     ): string {
         $locale = $this->sqlQuote($targetLocale);
         $where = 'NOT EXISTS (SELECT 1 FROM '
             . $this->localeDictionary->getTable()
             . ' l WHERE l.locale_code = ' . $locale
             . ' AND l.word = d.word AND TRIM(l.translate) <> \'\' AND l.translate <> d.word)';
+
+        if ($afterWord !== '') {
+            $where .= ' AND d.word > ' . $this->sqlQuote($afterWord);
+        }
 
         if ($wordPrefix !== '') {
             $where .= ' AND d.word LIKE ' . $this->sqlQuote($this->escapeLike($wordPrefix) . '%');

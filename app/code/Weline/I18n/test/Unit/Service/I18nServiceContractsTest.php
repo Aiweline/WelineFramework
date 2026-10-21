@@ -381,6 +381,9 @@ private function assert_AiTranslationLocaleIndexPaging_testPendingWordsUseSqlLim
     self::assertStringNotContainsString('function appendDictionaryWords', $source);
     self::assertStringNotContainsString('->pagination(', $source);
     self::assertStringContainsString('ORDER BY d.word LIMIT ', $source);
+    self::assertStringContainsString('$afterWord', $source);
+    self::assertStringContainsString('AND d.word > ', $source);
+    self::assertStringNotContainsString("LIMIT ' . \$limit . ' OFFSET '", $source);
 }
 
 private function assert_AiTranslationLocaleIndexPaging_testCountUntranslatedWordsSkipsSourceLocale(): void
@@ -388,6 +391,8 @@ private function assert_AiTranslationLocaleIndexPaging_testCountUntranslatedWord
     $service = $this->read_AiTranslationLocaleIndexPaging('app/code/Weline/I18n/Service/AiTranslationService.php');
     $controller = $this->read_AiTranslationLocaleIndexPaging('app/code/Weline/I18n/Controller/Backend/AiTranslation.php');
     self::assertStringContainsString('if ($targetLocale === \'\' || ($targetLocale === $sourceLocale && !$allowKeyOnlyWords))', $service);
+    self::assertStringContainsString('SELECT COUNT(*) AS c FROM', $service);
+    self::assertStringNotContainsString('$maxOffset = $pageSize * 2000', $service);
     self::assertStringContainsString('$pending = $isSource', $controller);
 }
 

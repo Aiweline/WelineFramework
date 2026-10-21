@@ -46,6 +46,13 @@
 - AI 翻译页面不再单独渲染 `Weline_Component::message.phtml`，避免和后台全局布局重复输出。
 - 后台默认布局和 blank 布局的消息区域补充 `wf-system-messages` 容器类，统一使用主题消息条样式。
 
+## 待译词读取（1.0.157）
+
+- `w_i18n_locale_dictionary` 增加 `(locale_code, word)` 复合索引 `idx_locale_word`；反连接按「语种 + 词」命中索引，不再逐页扫该语种全部分区。
+- `AiTranslationService::getUntranslatedWords()` 使用 keyset：每页 `d.word > 上一页末词`，不再用 `OFFSET`；`countUntranslatedWords()` 用单条 `COUNT(*)` 聚合。
+- 文件收集（`TranslationCollector`）不在这条路径上；i18n 编译期仍按模块/主题目录递归收集，本次未改。
+- 验证：`AiTranslationPendingKeysetIntegrationTest`（pgsql fixture，250 词与直连反连接逐词一致，0 缺失/0 多余/0 已译）；`DictionarySchemaTest`（索引声明）。
+
 ## 验证记录
 
 - `php -l` 已覆盖新增和修改的 Controller、Service、Adapter、Queue、Observer、模板文件。

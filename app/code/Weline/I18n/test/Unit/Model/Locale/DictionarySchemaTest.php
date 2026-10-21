@@ -10,7 +10,7 @@ use Weline\I18n\Model\Locale\Dictionary;
 
 final class DictionarySchemaTest extends TestCase
 {
-    public function testLocaleModuleDictionaryIndexIsDeclaredAlongsideLocaleIndex(): void
+    public function testLocaleWordIndexIsDeclaredAlongsideLocaleIndexes(): void
     {
         // Exercise the actual declaration parser without constructing a database-backed Model.
         $parseIndexes = new \ReflectionMethod(SchemaParser::class, 'parseIndexes');
@@ -26,5 +26,7 @@ final class DictionarySchemaTest extends TestCase
         self::assertSame('BTREE', $indexes['idx_locale_module']->method);
         self::assertArrayHasKey('idx_code', $indexes);
         self::assertSame(['locale_code'], $indexes['idx_code']->columns);
+        self::assertArrayHasKey('idx_locale_word', $indexes);
+        self::assertSame(['locale_code', 'word'], $indexes['idx_locale_word']->columns);
     }
 }
