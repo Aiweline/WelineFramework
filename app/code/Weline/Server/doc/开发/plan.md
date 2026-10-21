@@ -645,8 +645,11 @@
 - **完成证据**：
   - 测试：`WorkerResponseMemoryGuardCompactionTest` + `…ConfiguredBudgetTest` + `…LoopThresholdTest` → `OK (24 tests, 156 assertions)`。
   - `server:reload default` 滚动重载 11.9s，6 Worker 全 READY；重载后健康：7/7 Running，Worker 内存 60-170MB（此前 158-230MB），无 drain/OOM。
-  - 冷请求复测（各 2 轮预热、6 Worker 覆盖）：`/` 服务端 p50 **107.1 → 72.3ms**、p95 **154.8 → 92.6ms**；`/checkout` p50 **939.6 → 448.2ms**、p95 **1876.2 → 500.8ms**。
+  - 冷请求复测（各 2-3 轮预热、6 Worker 覆盖）：`/` 服务端 p50 **107.1 → 53.3ms**、p95 **154.8 → 66.5ms**；`/checkout` p50 **939.6 → 362.4ms**、p95 **1876.2 → 579.2ms**。
+  - 官方 `server:benchmark:first-render --mode=dynamic --paths=/ --target-ms=70`：**3569ms FAIL → 66.66 / 53.70 / 65.41ms 连续 3 次 PASS**。
   - 采样复验：checkout 窗口 `zend_mm_gc` **423 → 12**；剩余热点为 `poll`(DB 等待) 185、`SHA256` 8、`__recvfrom` 6。
+  - 吞吐（`-p 9555 --ssl --authority-host … --path / --no-keepalive -c 20 -n 400`）：**QPS 234.33**、0 错误、Median 65.1ms / P95 151.2ms / P99 434.1ms，6 Worker 分布 15.75%-17.5% 均衡。
+  - 回归：全量 `OK (3506 tests, 137202 assertions, 12 skipped)`，0 errors / 0 failures。
   - 版本 `2.0.233 → 2.0.234`，开发日志已补。
 - **回滚**：单文件 revert + `server:reload`。
 
@@ -881,4 +884,7 @@ WLS-001 → WLS-002 → WLS-010（版本/依赖基线）
 | Service 层 38 处空 `catch` | 多数为 best-effort 清理；逐条审计成本高、收益不确定 | 观察项，出现故障时再定点加日志 |
 | `MasterCleanupBootstrap` 依赖 `lsof` | 无 lsof 时端口清理退化；`$port` 为 int，无注入风险 | 观察项，跨平台安装时再处理 |
 | `bin/wls_gateway_controller.php` 50k 行 | 体量债，见 WLS-016 | 拆分路线，不在本轮重构 |
+| checkout 阶段归因：`shipping`（运费报价）主导 | 对 `CheckoutQueryProvider::getData()` 临时插入阶段计时（wall + CPU 两版，均已回退）：在宿主 load>100 的窗口里 shipping 阶段占绝对多数（p50 51.3s / total 54.6s；cart 0.5s、payment 2.3s、browse 0.5s、tax 0.6ms），但绝对值为调度饥饿放大，需空闲宿主用 CPU 时间复测 | 下一步：空闲时用 `getrusage` 版阶段计时复测；若 shipping 仍主导，则优化报价（空车跳过、短 TTL 缓存、按行重量批量化） |
+| checkout 剩余耗时属 PHP 编排（非 DB/模板） | 20ms 阈值 timing 采样（并发 8）：`/checkout` total p50 2289ms 中 `action_execute` 2247ms（98%），模板 include 合计仅 289ms（13%，且嵌套计入 action）；SQL 已按 Web Worker 后端归因为 ~115 条/请求。结论：耗时在 `CheckoutQueryProvider::getData()` 的 PHP 编排（cart/shipping/payment/tax/html 渲染） | 下一步需函数级剖析（Xdebug/SPX 或对 getData 做阶段计时改造），并在宿主空闲时复测 |
+| SQL 归因口径修正 + EAV memo 负结果（已回退） | 按 `pg_stat_database`/`pg_stat_user_tables` 全库增量曾得出「checkout ~3,060 条 SQL/请求、`attribute_value` 4,490 次索引查询」，实际被后台 cron/CLI 连接污染。改用 **Web Worker 的 PG 后端 PID**（`lsof` → `pg_stat_activity.client_port`）归因后：12 次 checkout 共 1,381 条（**~115 条/请求**；other 1,047、cache_ns 111、theme 89、theme_scope 134），`attribute_value` 0 条。据此给 `AttributeValueRepository::loadRows()` 加的请求级 memo 无收益（数组袋还引发 O(n²) 复制，改 `ArrayObject` 仍无效），已完整回退、Product 模块零改动 | 负结果与口径修正登记；checkout 剩余耗时属 PHP 侧（渲染/服务编排），下一步应做 PHP 级剖析（Xdebug/SPX 或 JIT 实验），不是批量 EAV |
 | 源码字符串断言测试偏多 | 多个契约测试用 `file_get_contents` + 正则断言源码文本，重构即碎；本次 96 项失败中不少属此类 | 观察项，后续逐步改为行为/契约测试 |
