@@ -8,6 +8,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Setup\Lock\SoakExclusiveGate;
 use Weline\Maintenance\Helper\MaintenanceEdgeFlag;
+use Weline\Maintenance\Helper\MaintenanceSessionMarker;
 use Weline\Maintenance\Helper\WlsMaintenanceSync;
 
 /**
@@ -32,6 +33,8 @@ final class MaintenanceModeToggleService
         }
 
         Env::getInstance()->setConfig('system.maintenance', true);
+        // 记录「谁开的维护」，进程被 kill 后 maintenance:status 才能判断残留。
+        (new MaintenanceSessionMarker())->start($soakAction);
         if (!MaintenanceEdgeFlag::enable()) {
             $printing->warning(__(
                 '未能写入边缘维护标志 %{1}；托管 Nginx 可能仍对店面 html-disk 返回 HIT。',
@@ -52,6 +55,7 @@ final class MaintenanceModeToggleService
     public function disableRuntimeGate(Printing $printing, array $args = []): void
     {
         Env::getInstance()->setConfig('system.maintenance', false);
+        (new MaintenanceSessionMarker())->clear();
         if (!MaintenanceEdgeFlag::disable()) {
             $printing->warning(__(
                 '未能删除边缘维护标志 %{1}；托管 Nginx 可能仍跳过店面 html-disk。',
