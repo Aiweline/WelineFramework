@@ -31,6 +31,15 @@ final class StaticCachePolicyTest extends TestCase
         self::assertFalse(StaticPublicSurface::isVersionedStaticUrl('/pub/media/a.jpg', 'v=1'));
     }
 
+    public function testThemeAssetUrlsCarryBuildGeneration(): void
+    {
+        $gateway = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Service/ThemeResourceGateway.php');
+        self::assertStringContainsString('StaticBuildId::versionedPath', $gateway);
+
+        $pack = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Service/ThemeHeadChromeCssPack.php');
+        self::assertStringContainsString('StaticBuildId::versionedPath', $pack);
+    }
+
     public function testRouterUsesVersionedStaticCachePolicy(): void
     {
         $src = (string)\file_get_contents(BP . 'app/code/Weline/Framework/Router/Core.php');

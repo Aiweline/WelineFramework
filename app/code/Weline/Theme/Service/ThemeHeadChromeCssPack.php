@@ -6,6 +6,7 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Compilation\AtomicCompiledFilePublisher;
+use Weline\Framework\Deploy\StaticBuildId;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\Framework\View\Data\DataInterface;
@@ -899,7 +900,7 @@ final class ThemeHeadChromeCssPack
             $url = $this->fetchThemeUrl('Weline_Theme::theme/' . $relativeUnderTheme);
         }
         if ($url === '') {
-            $url = '/static/Weline/Theme/view/theme/' . $relativeUnderTheme;
+            $url = StaticBuildId::versionedPath('/static/Weline/Theme/view/theme/' . $relativeUnderTheme);
         }
 
         return [
@@ -959,7 +960,7 @@ final class ThemeHeadChromeCssPack
         }
         $url = $this->fetchStaticsUrl('Weline_Theme::' . $relativeUnderStatics);
         if ($url === '') {
-            $url = '/static/Weline/Theme/' . $relativeUnderStatics;
+            $url = StaticBuildId::versionedPath('/static/Weline/Theme/' . $relativeUnderStatics);
         }
 
         return [

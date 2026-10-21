@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Deploy\StaticBuildId;
 use Weline\Framework\Deploy\StaticPublishExclusion;
 use Weline\Framework\Http\Fpc\StaticAssetBrotliSidecar;
 use Weline\Framework\Http\Request;
@@ -423,7 +424,7 @@ final class ThemeResourceGateway
 
     private function buildStaticUrl(string $publicRelativePath, bool $absolute): string
     {
-        $url = '/static/' . ltrim(str_replace('\\', '/', $publicRelativePath), '/');
+        $url = StaticBuildId::versionedPath('/static/' . ltrim(str_replace('\\', '/', $publicRelativePath), '/'));
         if ($absolute) {
             $url = $this->buildAbsoluteUrl($url);
         }
