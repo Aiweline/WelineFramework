@@ -303,23 +303,27 @@
         }
 
         getScriptUrl(url) {
-            const isDev = runtimeConfig.debug ||
-                window.DEV ||
-                window.location.hostname === 'localhost' ||
-                window.location.hostname === '127.0.0.1';
-            if (!isDev) {
-                return url;
-            }
-            if (url.indexOf('_weline_dev=') !== -1) {
+            if (url.indexOf('_weline_dev=') !== -1 || url.indexOf('weline_asset=') !== -1) {
                 return url;
             }
             const assetVersion = encodeURIComponent(String(
                 runtimeConfig.assetVersion ||
                 runtimeConfig.deployVersion ||
                 runtimeConfig.deploy_version ||
-                'dev'
-            ));
+                ''
+            ).trim());
+            if (!assetVersion) {
+                return url;
+            }
+            const isDev = runtimeConfig.debug ||
+                window.DEV ||
+                window.location.hostname === 'localhost' ||
+                window.location.hostname === '127.0.0.1';
             const separator = url.indexOf('?') === -1 ? '?' : '&';
+            // 生产静态 immutable 长缓存：版本查询是唯一能换掉老客户端 JS 的手段。
+            if (!isDev) {
+                return `${url}${separator}weline_asset=${assetVersion}`;
+            }
             return `${url}${separator}_weline_dev=${assetVersion}`;
         }
 
@@ -354,7 +358,8 @@
                     if (isDevHost) {
                         return modulePath;
                     }
-                    return `/static/${vendorName}/${moduleNamePart}/${filePath}${querySuffix}`;
+                    const staticRoot = String(runtimeConfig.staticBaseUrl || '/static').replace(/\/+$/, '');
+                    return `${staticRoot}/${vendorName}/${moduleNamePart}/${filePath}${querySuffix}`;
                 }
                 return modulePath;
             }
@@ -385,7 +390,8 @@
             if (isDev) {
                 return `/${normalizedModuleName}/view/statics/${filePath}${querySuffix}`;
             }
-            return `/static/${normalizedModuleName}/${filePath}${querySuffix}`;
+            const staticRoot = String(runtimeConfig.staticBaseUrl || '/static').replace(/\/+$/, '');
+            return `${staticRoot}/${normalizedModuleName}/${filePath}${querySuffix}`;
         }
 
         ensureModulesConfig() {

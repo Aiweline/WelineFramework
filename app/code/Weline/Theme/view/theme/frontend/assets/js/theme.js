@@ -1167,19 +1167,24 @@
                 runtimeConfig.assetVersion ||
                 runtimeConfig.deployVersion ||
                 runtimeConfig.deploy_version ||
-                'dev'
-            ));
+                ''
+            ).trim());
         }
 
         getScriptUrl(url) {
-            if (!isDev) {
+            if (url.indexOf('_weline_dev=') !== -1 || url.indexOf('weline_asset=') !== -1) {
                 return url;
             }
-            if (url.indexOf('_weline_dev=') !== -1) {
+            const assetVersion = this.getDevAssetVersion();
+            if (!assetVersion) {
                 return url;
             }
             const separator = url.indexOf('?') === -1 ? '?' : '&';
-            return `${url}${separator}_weline_dev=${this.getDevAssetVersion()}`;
+            // 生产静态 immutable 长缓存：版本查询是唯一能换掉老客户端 JS 的手段。
+            if (!isDev) {
+                return `${url}${separator}weline_asset=${assetVersion}`;
+            }
+            return `${url}${separator}_weline_dev=${assetVersion}`;
         }
 
         loadScript(url, forceFresh = false) {

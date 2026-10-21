@@ -107,7 +107,14 @@ $frontendJsMtime = max(
     (int)$miniCartQtyHitCssMtime,
     (int)$workerJsMtime
 );
-$frontendAssetVersion = $deployVersion . ($frontendJsMtime > 0 ? ('-' . (string)$frontendJsMtime) : '');
+$staticBuildId = '';
+try {
+    $staticBuildId = \Weline\Framework\Deploy\StaticBuildId::current();
+} catch (\Throwable) {
+}
+$frontendAssetVersion = $staticBuildId !== ''
+    ? $staticBuildId
+    : ($deployVersion . ($frontendJsMtime > 0 ? ('-' . (string)$frontendJsMtime) : ''));
 $modulesJsMtime = @filemtime(BP . 'app/code/Weline/Frontend/view/statics/base/weline.modules.js');
 $modulesConfigUrl = PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/base/weline.modules.js');
 if ($modulesJsMtime) {
@@ -154,6 +161,7 @@ $runtime = [
     'miniCartQtyHitCss' => PublicStaticUrl::fromDevWebPath('/Weline/Cart/view/statics/css/mini-cart-drawer-qty-hit.css'),
     'storefrontPlaceholderUrl' => PublicStaticUrl::fromDevWebPath('/Weline/Theme/view/statics/images/storefront-placeholder/default.svg'),
     'assetVersion' => $frontendAssetVersion,
+    'staticBaseUrl' => $staticBuildId !== '' ? '/static/' . $staticBuildId : '',
 
     'deployVersion' => $deployVersion,
     'workerBuildId' => $workerBuildId,

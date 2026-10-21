@@ -161,10 +161,9 @@ class QueryBin extends FrontendRestController
                 'code' => $errorCode,
                 'message' => $exception->getMessage(),
             ];
-            // Scope / theme-generation expiry: return locale tip for toast + browser cache.
+            // Scope / theme-generation expiry: tip is toast/browser-cache copy only — never replace the real reason.
             $tip = FrontendScopeReloadTip::build($errorCode);
             if ($tip !== null) {
-                $errorPayload['message'] = $tip['message'];
                 $errorPayload['tip'] = $tip;
             }
             $payload = [
