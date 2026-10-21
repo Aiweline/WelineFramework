@@ -109,6 +109,8 @@ final class ScopeTokenServiceTest extends TestCase
         $wrongHost = $this->service->verify($token, 'other.example.test', $this->scope, 4_001);
         self::assertSame(ScopeTokenVerification::STATUS_CONTEXT_CONFLICT, $wrongHost->status);
         self::assertSame('host_mismatch', $wrongHost->reason);
+        // Token 声明的 Host 必须随拒绝结果带出，排障时才能与请求 authority 对照。
+        self::assertSame('shop.example.test', $wrongHost->host);
 
         $payload = $this->payloadFromToken($token);
         $payload['aud'] = 'another.audience';

@@ -7,6 +7,7 @@ namespace Weline\Websites\Integration\Framework;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Runtime\FrontendWorkerScopeException;
 use Weline\Framework\Runtime\FrontendWorkerScopeProviderInterface;
+use Weline\Framework\Runtime\RequestAuthority;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeContext;
 use Weline\Framework\Runtime\ScopeIdentity;
@@ -456,6 +457,21 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
     private function verificationFailure(
         ScopeTokenVerification $verification,
     ): FrontendWorkerScopeException {
+        // 排障：被拒时留下结构化原因（不含 Token / 签名），便于区分 host / audience 冲突。
+        if (\function_exists('w_log_warning')) {
+            \w_log_warning(
+                '[FrontendWorkerScope] token verification failed: {status} ({reason}) authority={authority} fingerprint={fingerprint}',
+                [
+                    'status' => $verification->status,
+                    'reason' => $verification->reason,
+                    'authority' => RequestAuthority::current(),
+                    'claimed_host' => $verification->host,
+                    'fingerprint' => $verification->tokenFingerprint,
+                ],
+                'worker_scope',
+            );
+        }
+
         return match ($verification->status) {
             ScopeTokenVerification::STATUS_EXPIRED => new FrontendWorkerScopeException(
                 'scope_token_expired',

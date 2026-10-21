@@ -197,7 +197,7 @@ final class ScopeTokenService
             return ScopeTokenVerification::rejected(ScopeTokenVerification::STATUS_CONTEXT_CONFLICT, 'audience_mismatch', $fingerprint, $kid);
         }
         if (!hash_equals($expectedHost, $claimedHost)) {
-            return ScopeTokenVerification::rejected(ScopeTokenVerification::STATUS_CONTEXT_CONFLICT, 'host_mismatch', $fingerprint, $kid);
+            return ScopeTokenVerification::rejected(ScopeTokenVerification::STATUS_CONTEXT_CONFLICT, 'host_mismatch', $fingerprint, $kid, $claimedHost);
         }
         try {
             $canonicalPayload = $this->encodeCanonicalPayload($scope, $claimedHost, $iat, $nbf, $exp);

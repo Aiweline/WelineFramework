@@ -48,12 +48,12 @@ final readonly class ScopeTokenVerification
         return new self(self::STATUS_EXPIRED, 'expired', $scope, $kid, $issuedAt, $expiresAt, $host, $fingerprint);
     }
 
-    public static function rejected(string $status, string $reason, string $fingerprint, ?string $kid = null): self
+    public static function rejected(string $status, string $reason, string $fingerprint, ?string $kid = null, ?string $host = null): self
     {
         if (!in_array($status, [self::STATUS_INVALID, self::STATUS_CONTEXT_CONFLICT, self::STATUS_SERVICE_UNAVAILABLE], true)) {
             throw new \InvalidArgumentException('Scope Token 拒绝状态无效');
         }
-        return new self($status, $reason, null, $kid, null, null, null, $fingerprint);
+        return new self($status, $reason, null, $kid, null, null, $host, $fingerprint);
     }
 
     public function isValid(): bool
