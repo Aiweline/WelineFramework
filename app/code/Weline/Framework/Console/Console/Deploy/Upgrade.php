@@ -18,6 +18,7 @@ use Weline\Framework\Deploy\DeployFpcInvalidation;
 use Weline\Framework\Deploy\DeployStagingSession;
 use Weline\Framework\Deploy\FlatStaticRuntimeFilesProviderInterface;
 use Weline\Framework\Deploy\HostProcessPoolPolicy;
+use Weline\Framework\Deploy\StaticBuildPublisher;
 use Weline\Framework\Deploy\StaticPublishExclusion;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -168,6 +169,12 @@ class Upgrade extends CommandAbstract
         // Provider 白名单降级为补充/兼容路径：与整树幂等双写，不再承担防 404 主路径。
         $this->publishFlatStaticRuntimeFiles($modules);
         $normalizePermissions($staticRoot);
+        try {
+            $buildId = StaticBuildPublisher::publish($staticRoot);
+            $this->printer->note(__('静态资源构建号：%{1}', [$buildId]));
+        } catch (\Throwable $exception) {
+            $this->printer->warning(__('静态资源版本目录发布失败（不影响 legacy 树）：') . $exception->getMessage());
+        }
         $this->printer->success('静态文件部署完毕！');
     }
 
@@ -627,7 +634,9 @@ class Upgrade extends CommandAbstract
         $raw = @file_get_contents($sourcePath);
         if ($raw === false) {
             $existed = is_file($targetPath);
-            if (!@copy($sourcePath, $targetPath)) {
+            $temporary = $targetPath . '.tmp-' . \bin2hex(\random_bytes(4));
+            if (!@copy($sourcePath, $temporary) || !$this->replaceFile($temporary, $targetPath)) {
+                @unlink($temporary);
                 throw new \RuntimeException('Unable to publish static asset: ' . $sourcePath);
             }
             if (!$existed) {
@@ -660,10 +669,28 @@ class Upgrade extends CommandAbstract
                 return;
             }
         }
-        if (@file_put_contents($targetPath, $content) === false) {
+        $temporary = $targetPath . '.tmp-' . \bin2hex(\random_bytes(4));
+        if (@file_put_contents($temporary, $content) === false || !$this->replaceFile($temporary, $targetPath)) {
+            @unlink($temporary);
             throw new \RuntimeException('Unable to write static asset: ' . $targetPath);
         }
         $this->treeChanged = true;
+    }
+
+    /**
+     * 原子替换目标文件：先 rename，Windows 下目标存在时回退 unlink+rename。
+     * 不能用 file_put_contents 原地写：版本目录与 legacy 树是硬链接，原地写会污染旧代。
+     */
+    private function replaceFile(string $temporary, string $target): bool
+    {
+        if (@\rename($temporary, $target)) {
+            return true;
+        }
+        if (\is_file($target)) {
+            @\unlink($target);
+        }
+
+        return @\rename($temporary, $target);
     }
 
     public function tip(): string

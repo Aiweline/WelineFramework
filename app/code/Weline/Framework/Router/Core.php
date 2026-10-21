@@ -1564,14 +1564,14 @@ class Core
             $ifModifiedSince = $this->getRequestHeaderValue($this->getRequestHeaders(), 'If-Modified-Since');
             if ($ifModifiedSince === $fileModificationTime) {
                 $response304 = (new Response(true))
-                    ->setHeaders($this->buildCacheHeaders($fileModificationTime, $filename))
+                    ->setHeaders($this->buildCacheHeaders($fileModificationTime, $filename, $url))
                     ->setHttpResponseCode(304)
                     ->setBody('');
                 throw new \Weline\Framework\Http\ResponseTerminateException($response304);
             }
             
             // 构建缓存响应头
-            $cacheHeaders = $this->buildCacheHeaders($fileModificationTime, $filename);
+            $cacheHeaders = $this->buildCacheHeaders($fileModificationTime, $filename, $url);
 
             $filename_arr = explode('.', $filename);
             $file_ext = end($filename_arr);
@@ -1692,7 +1692,7 @@ class Core
      * @param string $filename 文件名
      * @return array 响应头数组
      */
-    private function buildCacheHeaders(string $fileModificationTime, string $filename): array
+    private function buildCacheHeaders(string $fileModificationTime, string $filename, string $requestPath = ''): array
     {
         $headers = [];
         $filename_arr = explode('.', $filename);
@@ -1700,9 +1700,16 @@ class Core
         
         // 根据环境设置缓存策略
         if (PROD) {
-            // 生产环境：长缓存
-            $headers['Cache-Control'] = 'public, max-age=31536000';
-            $headers['Expires'] = gmdate('D, d M Y H:i:s', time() + 31536000) . ' GMT';
+            $queryString = (string)($_SERVER['QUERY_STRING'] ?? '');
+            $isStaticTree = \str_starts_with($requestPath, '/static/');
+            $versioned = \Weline\Framework\Deploy\StaticPublicSurface::isVersionedStaticUrl($requestPath, $queryString);
+            if ($isStaticTree && !$versioned) {
+                // legacy /static/**：协商缓存，避免旧 FPC 引用被永久钉死
+                $headers['Cache-Control'] = 'public, max-age=0, must-revalidate';
+            } else {
+                $headers['Cache-Control'] = 'public, max-age=31536000';
+                $headers['Expires'] = gmdate('D, d M Y H:i:s', time() + 31536000) . ' GMT';
+            }
         } else {
             // 开发环境：短缓存，方便调试
             $headers['Cache-Control'] = 'public, max-age=60';

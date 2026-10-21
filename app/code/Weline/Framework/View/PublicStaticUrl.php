@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\View;
 
 use Weline\Framework\Deploy\DeployPublicUrlMode;
+use Weline\Framework\Deploy\StaticBuildId;
 
 /**
  * Single authority for module static public URLs.
@@ -35,7 +36,7 @@ final class PublicStaticUrl
         }
         $path = '/' . ltrim($raw, '/');
         if (str_starts_with($path, '/static/')) {
-            return $path . $query;
+            return StaticBuildId::versionedPath($path . $query);
         }
         if (!DeployPublicUrlMode::useProduction()) {
             return $path . $query;
@@ -47,13 +48,13 @@ final class PublicStaticUrl
         ) === 1) {
             $rest = ltrim((string)$m['rest'], '/');
 
-            return '/static/' . $m['vendor'] . '/' . $m['module']
+            return StaticBuildId::versionedPath('/static/' . $m['vendor'] . '/' . $m['module']
                 . ($rest !== '' ? '/' . $rest : '')
-                . $query;
+                . $query);
         }
 
         // Non-module path: keep leading slash under /static as last-resort prefix.
-        return '/static' . $path . $query;
+        return StaticBuildId::versionedPath('/static' . $path . $query);
     }
 
     /**

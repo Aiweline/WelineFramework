@@ -266,4 +266,26 @@ final class StaticPublicSurface
 
         return implode('/', $segments);
     }
+    /**
+     * 长缓存只给内容寻址的静态 URL：/static/{12位hex}/... 或带版本查询。
+     * 模块命名空间（Weline/Aiweline/Codex）不是 12 位 hex，不会被误判。
+     */
+    public static function isVersionedStaticUrl(string $path, string $query = ''): bool
+    {
+        $queryPos = \strpos($path, '?');
+        if ($queryPos !== false) {
+            if ($query === '') {
+                $query = \substr($path, $queryPos + 1);
+            }
+            $path = \substr($path, 0, $queryPos);
+        }
+        if (!\str_starts_with($path, '/static/')) {
+            return false;
+        }
+        if (\preg_match('#^/static/[0-9a-f]{12}(?:/|$)#', $path) === 1) {
+            return true;
+        }
+
+        return $query !== '' && \preg_match('/(?:^|&)(?:v|weline_asset|_weline_dev)=/', $query) === 1;
+    }
 }

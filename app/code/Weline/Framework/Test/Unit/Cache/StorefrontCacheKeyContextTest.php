@@ -62,6 +62,19 @@ final class StorefrontCacheKeyContextTest extends TestCase
         }
     }
 
+    public function testKeyDimensionsCarryStaticBuildGeneration(): void
+    {
+        $authority = new TestNamespaceGenerationAuthority();
+        $resolver = new StorefrontCacheKeyContextResolver($authority, new NamespacePath());
+        $this->enterScope('shop_a', 'retail', 'web', ScopeIdentity::MODE_NORMAL);
+        $dimensions = $resolver->freezeCurrent()->keyDimensions();
+        self::assertArrayHasKey('static_generation', $dimensions);
+        self::assertSame(
+            \Weline\Framework\Deploy\StaticBuildId::current(),
+            $dimensions['static_generation'],
+        );
+    }
+
     public function testScopeAndVersionAreFrozenOnceAndSharedByAllKeyBuilders(): void
     {
         $authority = new TestNamespaceGenerationAuthority();

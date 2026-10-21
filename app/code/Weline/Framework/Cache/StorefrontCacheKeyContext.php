@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Cache;
 
 use Weline\Framework\Context;
+use Weline\Framework\Deploy\StaticBuildId;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
@@ -236,6 +237,7 @@ final readonly class StorefrontCacheKeyContext
             'currency' => $this->currency,
             'namespace_fingerprint' => $this->namespaceFingerprint ?? '',
             'cache_key_fingerprint' => $this->cacheKeyFingerprint,
+            'static_generation' => StaticBuildId::current(),
         ];
     }
 

@@ -37,6 +37,7 @@ final class CssTag
                 'rel' => AttributeSpec::any(),
                 'id' => AttributeSpec::any(),
                 'class' => AttributeSpec::any(),
+                'nonblocking' => AttributeSpec::any(),
             ],
             paired: true,
             selfClosing: true,
@@ -56,7 +57,11 @@ final class CssTag
             $path = \trim((string)($attributes['href'] ?? $attributes['path'] ?? ''));
         }
 
-        return new RawPhpStmt(self::linkTag($path, $context), $node->span());
+        $attributes = $node->attributes();
+        $nonblocking = \array_key_exists('nonblocking', $attributes)
+            || \str_contains((string)($attributes['rel'] ?? ''), 'preload');
+
+        return new RawPhpStmt(self::linkTag($path, $context, $nonblocking), $node->span());
     }
 
     private static function lowerInline(InlineNode $node, mixed $context): Stmt
@@ -64,7 +69,7 @@ final class CssTag
         return new RawPhpStmt(self::linkTag(\trim($node->bodyRaw()), $context), $node->span());
     }
 
-    private static function linkTag(string $path, mixed $context): string
+    private static function linkTag(string $path, mixed $context, bool $nonblocking = false): string
     {
         $path = \trim($path);
         if ($path === '') {
@@ -80,6 +85,12 @@ final class CssTag
 
         // 旧 css callback 只在 raw1 不是路径时把 raw1 当属性；正常 `<css>path</css>`
         // 不会输出任何属性（media 等会被忽略），这里保持同字节。
+        if ($nonblocking) {
+            $safe = \htmlspecialchars((string)$url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            return "<link rel=\"preload\" as=\"style\" href='" . $safe . "' onload=\"this.onload=null;this.rel='stylesheet'\"/>"
+                . "<noscript><link rel=\"stylesheet\" href='" . $safe . "'/></noscript>";
+        }
+
         return "<link href='" . $url . "' rel=\"stylesheet\" type=\"text/css\"/>";
     }
 

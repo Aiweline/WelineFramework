@@ -2788,7 +2788,20 @@ class Taglib
                         }
                         // 成对标签 <css>path</css>：编译期 raw1=路径；运行时 raw1=rawAttributes、raw2=路径，取有路径语义的一方
                         $path = ($raw1 !== '' && (str_contains($raw1, '::') || str_contains($raw1, '/'))) ? $raw1 : ($raw2 !== '' ? $raw2 : $raw1);
-                        return "<link{$filteredAttrs} href='{$template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($path))}' rel=\"stylesheet\" type=\"text/css\"/>";
+                        $nonblocking = str_contains($raw1, 'nonblocking')
+                            || str_contains($raw2, 'nonblocking')
+                            || (\is_array($attributes) && \array_key_exists('nonblocking', $attributes))
+                            || str_contains((string)($tag_data[0] ?? ''), 'nonblocking');
+                        if ($nonblocking) {
+                            $filteredAttrs = trim((string)preg_replace('/\b(?:data-)?nonblocking\b/', '', $filteredAttrs));
+                            $filteredAttrs = $filteredAttrs !== '' ? ' ' . $filteredAttrs : '';
+                        }
+                        $href = $template->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, trim($path));
+                        if ($nonblocking) {
+                            $safe = htmlspecialchars((string)$href, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                            return "<link rel=\"preload\" as=\"style\" href='{$safe}'{$filteredAttrs} onload=\"this.onload=null;this.rel='stylesheet'\"/><noscript><link rel=\"stylesheet\" href='{$safe}'{$filteredAttrs}/></noscript>";
+                        }
+                        return "<link{$filteredAttrs} href='{$href}' rel=\"stylesheet\" type=\"text/css\"/>";
                     }
             ],
             // lang/trans：一律运行期输出（点译会话可包标记；禁止编译期烤死单语译文）
