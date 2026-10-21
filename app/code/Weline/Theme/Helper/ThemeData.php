@@ -522,44 +522,6 @@ class ThemeData
         return null;
     }
 
-    /**
-     * @param list<MetaConfigRecord> $records
-     * @return array<string, string>
-     */
-    private static function resolveConfigMap(array $records, ?string $locale = null): array
-    {
-        $locale = self::currentConfigLocale($locale);
-        $values = [];
-        $ranks = [];
-
-        foreach ($records as $record) {
-            if (!$record instanceof MetaConfigRecord) {
-                continue;
-            }
-            $rank = self::localeRank($record->locale, $locale);
-            if ($rank === null || (isset($ranks[$record->configKey]) && $rank >= $ranks[$record->configKey])) {
-                continue;
-            }
-            $ranks[$record->configKey] = $rank;
-            $values[$record->configKey] = $record->value;
-        }
-
-        return $values;
-    }
-
-    private static function localeRank(?string $recordLocale, string $requestedLocale): ?int
-    {
-        $locales = array_values(array_unique([$requestedLocale, 'zh_Hans_CN'], SORT_STRING));
-        $locales[] = null;
-        foreach ($locales as $rank => $locale) {
-            if ($recordLocale === $locale) {
-                return $rank;
-            }
-        }
-
-        return null;
-    }
-
     private static function findMetadataRecord(string $identify): ?MetadataRecord
     {
         $records = self::metadataRepository()->search(new MetadataSearch(
@@ -1511,19 +1473,17 @@ class ThemeData
                 try {
                     $themeConfigs = [];
                     $readChain = self::scopeReadChain($scope, $state->currentArea ?? 'frontend');
-                    // Merge farthest to nearest so each child owns only the keys
-                    // it actually provides; empty/false/zero remain real values.
-                    foreach (array_reverse($readChain) as $candidateScope) {
-                        $records = self::metaConfigRepository()->search(new MetaConfigSearch(
-                            namespace: $namespace,
-                            scope: $candidateScope,
-                            allLocales: true,
-                            identifyId: (string)$themeId,
-                        ));
-                        $themeConfigs = array_replace(
-                            $themeConfigs,
-                            self::resolveConfigMap($records, $locale),
+                    if ($readChain !== []) {
+                        $records = self::metaConfigRepository()->searchScopes(
+                            new MetaConfigSearch(
+                                namespace: $namespace,
+                                scope: $readChain[0],
+                                allLocales: true,
+                                identifyId: (string)$themeId,
+                            ),
+                            $readChain,
                         );
+                        $themeConfigs = ScopedMetaConfigMap::merge($records, $readChain, $locale);
                     }
                     $state->performanceCache[$key] = $themeConfigs;
                     self::setRuntimeCache('performance:' . $key, $themeConfigs);
