@@ -441,6 +441,9 @@ final class ThemeLayoutEntityContractsTest extends TestCase
             'ThemeLayoutEntityUpgradePurge::testThemeUpgradeCommandWiresLayoutSolidify' => function () {
             $this->assert_ThemeLayoutEntityUpgradePurge_testThemeUpgradeCommandWiresLayoutSolidify();
         },
+            'ThemeLayoutEntityUpgradePurge::testCutoverOnlyFullClearsWhenExplicitlyRequested' => function () {
+            $this->assert_ThemeLayoutEntityUpgradePurge_testCutoverOnlyFullClearsWhenExplicitlyRequested();
+        },
             'ThemeLayoutEntityUpgradePurge::testDeployUpgradeAndCoreUpdateDispatchLifecyclePurgeEvents' => function () {
             $this->assert_ThemeLayoutEntityUpgradePurge_testDeployUpgradeAndCoreUpdateDispatchLifecyclePurgeEvents();
         },
@@ -2457,6 +2460,23 @@ private function assert_ThemeLayoutEntityUpgradePurge_testThemeUpgradeCommandWir
     self::assertStringContainsString('ThemeLayoutEntityUpgradeSolidifyService', $src);
     self::assertStringContainsString('cutoverFromThemeCommand', $src);
     self::assertStringContainsString('purge 旧布局固化物', $src);
+    // Routine theme upgrade = layout-scoped URL invalidation, never full clear.
+    self::assertStringContainsString("cache_invalidation'] = 'none'", $src);
+    self::assertStringContainsString('purgeLayoutsForThemeTargets', $src);
+    self::assertStringContainsString('theme_upgrade_scoped', $src);
+    self::assertStringContainsString('flushScopedStorefrontCaches', $src);
+}
+
+private function assert_ThemeLayoutEntityUpgradePurge_testCutoverOnlyFullClearsWhenExplicitlyRequested(): void
+{
+    $path = '/Users/weline/Project/Official/框架/app/code/Weline/Theme'
+        . '/Service/LayoutEntity/ThemeLayoutEntityUpgradeSolidifyService.php';
+    $src = (string) \file_get_contents($path);
+    self::assertStringContainsString("\$options['cache_invalidation'] ?? 'all'", $src);
+    self::assertMatchesRegularExpression(
+        '/if\s*\(\s*\$invalidation\s*===\s*[\'"]all[\'"]\s*\)\s*\{[^}]*clearAllThemeRelatedCaches\s*\(/s',
+        $src,
+    );
 }
 
 private function assert_ThemeLayoutEntityUpgradePurge_testDeployUpgradeAndCoreUpdateDispatchLifecyclePurgeEvents(): void

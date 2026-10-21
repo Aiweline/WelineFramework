@@ -21,12 +21,15 @@ use Weline\Framework\Http\Fpc\StaticAssetBrotliSidecar;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\File\Scan;
+use Weline\Theme\Helper\LayoutScanner;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityUpgradeSolidifyService;
+use Weline\Theme\Service\ThemeApplicationUsageService;
 use Weline\Theme\Service\ThemeDesignImageStaticUrl;
 use Weline\Theme\Service\ThemeResourceGateway;
 use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 use Weline\Theme\Service\ThemeStaticNamespaceService;
+use Weline\Theme\Service\ThemeStorefrontSlugFpcPublisher;
 
 class Upgrade implements \Weline\Framework\Console\CommandInterface
 {
@@ -106,6 +109,10 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         if ($layoutOption !== '') {
             $solidifyOptions['layout_option'] = $layoutOption;
         }
+        // Never let the solidify cutover do a site-wide clear here. A theme
+        // upgrade invalidates only the layouts it re-bakes; -f is the explicit
+        // full-clear escape hatch and runs after the cutover.
+        $solidifyOptions['cache_invalidation'] = 'none';
         $this->printing->warning(__('开始 purge 旧布局固化物并重固（generated/theme-layout-entities）…'));
         if ($allVersions) {
             $this->printing->note(__('版本范围：全部历史版本（--all）'));
@@ -135,12 +142,147 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             ]
         ));
 
-        // Opt-in：默认不碰 html-disk / Shared FPC / CDN；发版上线皮肤时加 -f 强制清并重烤。
+        // 默认只按本次涉及的主题/布局清店面 FPC 叶子与 CDN URL；
+        // -f 才是显式的全量 FPC/Shared/CDN 清理（故障恢复用，不是日常发版路径）。
         if ($flushStorefrontFpc) {
             $this->flushStorefrontFpcAfterUpgrade(
                 $theme_name !== '' ? ($themes[0] ?? null) : null,
             );
+        } else {
+            $this->flushScopedStorefrontCaches($themes, $scopeFilter, $layoutType, $layoutOption);
         }
+    }
+
+    /**
+     * 主题发版的默认失效面：本次升级主题的全部（或 -l/-o 过滤后的）前端布局。
+     * `ThemeStorefrontSlugFpcPublisher` 产出 impact.urls/slugs，Changed 管道只清
+     * 这些 URL 的 FPC + CDN，并只 bump 对应 scope 的 Theme 世代；不触碰全站 CDN。
+     *
+     * @param list<WelineTheme> $themes
+     */
+    private function flushScopedStorefrontCaches(
+        array $themes,
+        string $scopeFilter,
+        string $layoutType,
+        string $layoutOption,
+    ): void {
+        /** @var ThemeStorefrontSlugFpcPublisher $publisher */
+        $publisher = ObjectManager::getInstance(ThemeStorefrontSlugFpcPublisher::class);
+        /** @var ThemeApplicationUsageService $usage */
+        $usage = ObjectManager::getInstance(ThemeApplicationUsageService::class);
+
+        $emitted = 0;
+        foreach ($themes as $theme) {
+            if (!$theme instanceof WelineTheme) {
+                continue;
+            }
+            $themeId = (int)$theme->getId();
+            if ($themeId < 1) {
+                continue;
+            }
+            $layouts = $this->resolveScopedLayouts($theme, $layoutType, $layoutOption);
+            if ($layouts === []) {
+                $this->printing->warning(__('主题 #%{id} 无可解析前端布局，跳过 scoped FPC/CDN 清理。', [
+                    'id' => $themeId,
+                ]));
+                continue;
+            }
+            $targets = $usage->ownSolidifyTargetsForTheme($themeId);
+            if ($scopeFilter !== '') {
+                $targets = \array_values(\array_filter(
+                    $targets,
+                    static fn(array $target): bool => \strcasecmp(
+                        \trim((string)($target['version_owner_scope'] ?? '')),
+                        $scopeFilter,
+                    ) === 0,
+                ));
+            }
+            if ($targets === []) {
+                $this->printing->warning(__('主题 #%{id} 无前端站点绑定，跳过 scoped FPC/CDN 清理。', [
+                    'id' => $themeId,
+                ]));
+                continue;
+            }
+            $result = $publisher->purgeLayoutsForThemeTargets(
+                $themeId,
+                $layouts,
+                $targets,
+                'theme_upgrade_scoped',
+            );
+            if (!($result['ok'] ?? false)) {
+                $this->printing->warning(__('主题 #%{id} scoped FPC/CDN 清理跳过：%{reason}', [
+                    'id' => $themeId,
+                    'reason' => (string)($result['skipped'] ?? 'unknown'),
+                ]));
+                continue;
+            }
+            $emitted += (int)($result['target_count'] ?? 0);
+        }
+
+        if ($emitted < 1) {
+            $this->printing->warning(__(
+                '未清理任何边缘 HTML；旧页面会在边缘 TTL（默认 300 秒）内自然过期，'
+                . '或检查主题是否绑定到前端站点。'
+            ));
+            return;
+        }
+        $this->printing->success(__('按布局清理店面 FPC/CDN URL 完成：%{count} 个 scope。', [
+            'count' => $emitted,
+        ]));
+    }
+
+    /**
+     * @return list<array{type:string,option:string}>
+     */
+    private function resolveScopedLayouts(
+        WelineTheme $theme,
+        string $layoutType,
+        string $layoutOption,
+    ): array {
+        if ($layoutType !== '' && $layoutOption !== '') {
+            return [['type' => $layoutType, 'option' => $layoutOption]];
+        }
+        try {
+            $catalog = LayoutScanner::scanLayouts($theme, 'frontend');
+        } catch (\Throwable) {
+            $catalog = [];
+        }
+        $out = [];
+        foreach ($catalog as $type => $options) {
+            $type = \trim((string)$type);
+            if ($type === '' || ($layoutType !== '' && $type !== $layoutType)) {
+                continue;
+            }
+            if (!\is_array($options) || $options === []) {
+                $out[] = ['type' => $type, 'option' => 'default'];
+                continue;
+            }
+            foreach ($options as $option) {
+                if (\is_array($option)) {
+                    $option = (string)($option['value'] ?? $option['option'] ?? 'default');
+                }
+                $option = \trim((string)$option);
+                if ($option === '') {
+                    $option = 'default';
+                }
+                $out[] = ['type' => $type, 'option' => $option];
+            }
+        }
+        if ($out === [] && $layoutType !== '') {
+            $out[] = ['type' => $layoutType, 'option' => 'default'];
+        }
+        $seen = [];
+        $unique = [];
+        foreach ($out as $layout) {
+            $key = $layout['type'] . '/' . $layout['option'];
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $unique[] = $layout;
+        }
+
+        return $unique;
     }
 
     /**
@@ -178,6 +320,18 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->printing->warning(
                 __('步骤失败：') . (string)$step . ($detail !== '' ? ' — ' . $detail : '')
             );
+        }
+        if (isset($failures['cdn_full_page_purge'])) {
+            // `-f` means "I need the edge invalidated now". A warning plus
+            // exit 0 here is the exact false-success that made operators
+            // believe Cloudflare had been cleared while it kept serving old
+            // HTML. Promoted artifacts are intentionally not rolled back;
+            // only the command result turns red.
+            throw new ConsoleException(__(
+                'CDN 全页缓存清理失败，边缘可能继续返回旧 HTML。已 promote 的产物不会回滚；'
+                . '请配置 CDN API 令牌后重试，或等待边缘 HTML TTL（默认 300 秒）自然过期。详情：%{detail}',
+                ['detail' => \trim((string)$failures['cdn_full_page_purge'])]
+            ));
         }
         $this->printing->success(__(
             '店面 FPC/CDN 清理完成：成功 %{ok}，失败 %{fail}',
@@ -600,7 +754,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     public function tip(): string
     {
-        return __('更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿；-f 另清店面 FPC/CDN）');
+        return __('更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿；默认只按布局清 FPC/CDN URL，-f 才全量清）');
     }
 
     public function help(): array|string
@@ -615,7 +769,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '-l, --layout <type>' => '仅固化指定布局类型（如 homepage / checkout）；省略则处理全部布局',
                 '-o, --option <name>' => '仅固化该布局下指定选项（如 default）；须同时提供 -l；省略 -o 则处理该布局下全部选项',
                 '-a, --all' => '部署并编译该主题（或全部站绑主题）下全部历史版本；默认仅当前正式版+草稿',
-                '-f, --force' => '升级后强制清理店面 FPC / Shared FPC / CDN 全页缓存并 staging→warm→promote（默认不加则只发静态+固化物）',
+                '-f, --force' => '显式全量清理店面 FPC / Shared FPC / CDN 全页缓存并 staging→warm→promote（仅故障恢复；日常发版默认只按布局清 FPC/CDN URL）',
             ],
             [
                 'module...' => '可选：只处理设计主题下指定模块目录（如 Weline_Theme）',
@@ -628,7 +782,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '指定布局+选项' => 'php bin/w theme:upgrade -t hanfu -l homepage -o default',
                 '全部历史版本' => 'php bin/w theme:upgrade --all -t hanfu',
                 '指定主题+模块过滤' => 'php bin/w theme:upgrade -t daocharms Weline_Theme',
-                '升级并清店面 FPC/CDN' => 'php bin/w theme:upgrade -t hanfu -f',
+                '主题发版（按布局清 FPC/CDN URL）' => 'php bin/w theme:upgrade -t hanfu',
+                '显式全量清（故障恢复）' => 'php bin/w theme:upgrade -t hanfu -f',
             ]
         );
     }

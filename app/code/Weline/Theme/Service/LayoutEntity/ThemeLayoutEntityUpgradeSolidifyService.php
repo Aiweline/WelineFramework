@@ -141,7 +141,7 @@ final class ThemeLayoutEntityUpgradeSolidifyService
     }
 
     /**
-     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string} $options
+     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string,cache_invalidation?:string} $options
      */
     public function cutoverFromThemeCommand(?WelineTheme $theme = null, array $options = []): array
     {
@@ -149,7 +149,7 @@ final class ThemeLayoutEntityUpgradeSolidifyService
     }
 
     /**
-     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string} $options
+     * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string,cache_invalidation?:string} $options
      */
     private function cutover(?WelineTheme $theme, string $reason, array $options = []): array
     {
@@ -173,10 +173,17 @@ final class ThemeLayoutEntityUpgradeSolidifyService
         if ($theme === null) {
             $legacy += $this->paths->purgeLegacyVarEntities();
         }
-        $result = $this->cacheCleaner->clearAllThemeRelatedCaches($theme?->getId(), trim($reason) ?: 'theme_layout_phtml_rebuilt');
-        foreach ((array)($result['failures'] ?? []) as $step => $message) {
-            if (!str_starts_with((string)$step, 'cdn_') && !str_contains((string)$message, 'cdn_')) {
-                throw new \RuntimeException('layout_entities_cache_clear_partial_failure:' . $step . '=' . $message);
+        // `theme:upgrade` must not clear every website's FPC/CDN for a layout
+        // release. It passes cache_invalidation=none and performs layout-scoped
+        // URL invalidation in the command. setup:upgrade keeps the historical
+        // full clear (cache_invalidation defaults to all).
+        $invalidation = \strtolower(\trim((string)($options['cache_invalidation'] ?? 'all')));
+        if ($invalidation === 'all') {
+            $result = $this->cacheCleaner->clearAllThemeRelatedCaches($theme?->getId(), trim($reason) ?: 'theme_layout_phtml_rebuilt');
+            foreach ((array)($result['failures'] ?? []) as $step => $message) {
+                if (!str_starts_with((string)$step, 'cdn_') && !str_contains((string)$message, 'cdn_')) {
+                    throw new \RuntimeException('layout_entities_cache_clear_partial_failure:' . $step . '=' . $message);
+                }
             }
         }
         $this->printing->success(sprintf(

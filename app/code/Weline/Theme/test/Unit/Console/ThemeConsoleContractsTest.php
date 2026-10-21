@@ -225,7 +225,12 @@ private function assert_ThemeUpgradeCommand_testParseArgumentsRecognizesForceFlu
     self::assertStringContainsString('clearAllThemeRelatedCaches', $source);
     self::assertStringContainsString('theme_upgrade_force_fpc', $source);
     self::assertStringContainsString('-f, --force', $source);
-    self::assertStringContainsString('升级并清店面 FPC/CDN', $source);
+    self::assertStringContainsString('显式全量清（故障恢复）', $source);
+    self::assertStringContainsString("failures['cdn_full_page_purge']", $source);
+    self::assertStringContainsString('CDN 全页缓存清理失败', $source);
+    self::assertStringContainsString('theme_upgrade_scoped', $source);
+    self::assertStringContainsString('purgeLayoutsForThemeTargets', $source);
+    self::assertStringContainsString("cache_invalidation'] = 'none'", $source);
 }
 
 private function assert_ThemeUpgradeCommand_testParseArgumentsRejectsOptionWithoutLayout(): void
