@@ -6,6 +6,10 @@
   }
 
   var DEFAULT_ENDPOINT = "/server/test/wls-security-probes";
+  // Diagnostic probes must hit arbitrary paths with custom methods/headers and
+  // inspect raw status codes; published QueryProviders cannot express that, so
+  // this dev panel intentionally keeps a same-origin raw fetch (no business data).
+  // All user feedback goes through notify() -> Weline.UI.toast, never alert().
   var STYLE_ID = "weline-security-probes-panel-style";
 
   function escapeHtml(value) {
@@ -15,6 +19,33 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
+  }
+
+  function notify(root, message, tone) {
+    var text = String(message == null ? "" : message);
+    var ui = window.Weline && window.Weline.UI;
+    if (ui && ui.toast && typeof ui.toast.show === "function") {
+      try {
+        ui.toast.show(text, { tone: tone || "info", duration: 4000 });
+        return;
+      } catch (e) {
+        /* fall through to the inline notice */
+      }
+    }
+    if (!root) {
+      return;
+    }
+    var notice = root.querySelector("[data-wsp-notice]");
+    if (!notice) {
+      notice = document.createElement("div");
+      notice.setAttribute("data-wsp-notice", "");
+      notice.setAttribute("role", "status");
+      notice.style.cssText =
+        "margin:8px 0;padding:10px 12px;border-radius:8px;" +
+        "background:rgba(56,189,248,.12);color:inherit;font-size:13px;white-space:pre-wrap;";
+      root.insertBefore(notice, root.firstChild);
+    }
+    notice.textContent = text;
   }
 
   function ensureStyles() {
@@ -512,15 +543,17 @@
           var ip = (result.payload && result.payload.client_ip) || clientIp;
           setBanState(!!(result.payload && result.payload.banned), ip);
           if (!result.ok || !(result.payload && result.payload.success)) {
-            window.alert(
-              (result.payload && result.payload.message) || "解封失败，请刷新会话后重试。"
+            notify(
+              root,
+              (result.payload && result.payload.message) || "解封失败，请刷新会话后重试。",
+              "error"
             );
             return;
           }
-          window.alert((result.payload && result.payload.message) || "已解封本机 IP。");
+          notify(root, (result.payload && result.payload.message) || "已解封本机 IP。", "success");
         })
         .catch(function (err) {
-          window.alert((err && err.message) || String(err));
+          notify(root, (err && err.message) || String(err), "error");
         })
         .then(function () {
           if (btn) {
@@ -533,7 +566,7 @@
       liveToggle.addEventListener("change", function () {
         liveBanEnabled = !!liveToggle.checked;
         if (liveBanEnabled && !liveBanToken) {
-          window.alert("缺少实战封禁凭证，请先点「刷新会话」。");
+          notify(root, "缺少实战封禁凭证，请先点「刷新会话」。", "warning");
           liveToggle.checked = false;
           liveBanEnabled = false;
         }
