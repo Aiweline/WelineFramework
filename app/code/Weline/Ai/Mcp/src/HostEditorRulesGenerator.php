@@ -74,6 +74,7 @@ alwaysApply: true
 11. 按需：`resolve_task_context` / `resolve_skill` / `get_skill`（检索仍可按需，**prepare 与强制 AOCI 不可跳**）。
 12. MCP 挂不上：用宿主 Read 打开 `AI硬规则索引.md` 继续；不得编造规则，不得假装已遵守 MCP。
 13. **根因修复（`no_error_masking_or_patch_workaround`，硬）**：错误必须真实暴露并保留原因链；**禁止**空/静默 `catch`、`catch` 后返回默认值当成功、`@` 抑制、静默降级/假数据/隐藏开关、删·弱化·跳过断言与测试、`--no-verify`、单站 `if`/白名单绕校验、绕 Provider·Taglib·Event·Service、改 `generated`·`vendor`、复制逻辑不修机制的补丁式修复。仍失败只能如实报「代码已改，验收未完成」+ 真实报错 + 阻塞原因。
+14. **Google Chrome 先复用再连接（`google_chrome_reuse_before_connect`，硬）**：操作本机已登录 Google Chrome 之前，先读 `~/.cursor/chrome-devtools-grant.json`。记录有效则只走已挂 MCP `user-chrome-devtools`。**禁止** `puppeteer.connect`、直连 `9222`/`ws_endpoint`、再起 `chrome-devtools-mcp`、`--autoConnect` 或新的 `--wsEndpoint`。记录没有或主人已死，仍禁止自己开连接，只走复用启动器。MCP 失败禁止改走 CDP。编辑器内置 Browser 不走本条。
 
 ## 非工程
 

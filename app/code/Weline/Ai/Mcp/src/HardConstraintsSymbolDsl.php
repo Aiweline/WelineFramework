@@ -16,8 +16,8 @@ final class HardConstraintsSymbolDsl
 
     public const GLOSS_MAX = 64;
 
-    /** Raised 9200→9400 when browser_tab_group_identity entered the hot package (2026-10-20); 9400→9500 for no_error_masking_or_patch_workaround (2026-10-21). */
-    public const PACKAGE_TOKEN_BUDGET = 9500;
+    /** Raised 9200→9400 when browser_tab_group_identity entered the hot package (2026-10-20); 9400→9500 for no_error_masking_or_patch_workaround (2026-10-21); 9500→9700 for google_chrome_reuse_before_connect (2026-10-21). */
+    public const PACKAGE_TOKEN_BUDGET = 9700;
 
     public const EXPAND_IDS_MAX = 20;
 
@@ -180,14 +180,24 @@ final class HardConstraintsSymbolDsl
             'BrDone' => ['gloss_zh' => '该功能浏览器操作收口', 'rule_ids' => ['browser_tab_group_identity']],
             'DropGrp' => ['gloss_zh' => '删除该标签组及其标签', 'rule_ids' => ['browser_tab_group_identity']],
             'BrOp' => ['gloss_zh' => '导航、点击或填写', 'rule_ids' => ['browser_tab_group_identity']],
+            'GChrome' => ['gloss_zh' => '要操作本机已登录 Google Chrome', 'rule_ids' => ['google_chrome_reuse_before_connect']],
+            'ChrGrant' => ['gloss_zh' => '先读 chrome-devtools-grant.json', 'rule_ids' => ['google_chrome_reuse_before_connect']],
+            'ReuseOk' => ['gloss_zh' => 'owner 还在且 socket 还在', 'rule_ids' => ['google_chrome_reuse_before_connect']],
+            'McpOnly' => ['gloss_zh' => '只调用已挂的 user-chrome-devtools', 'rule_ids' => ['google_chrome_reuse_before_connect']],
+            'RawCdp' => ['gloss_zh' => '自己 puppeteer 或直连 9222 或新 autoConnect', 'rule_ids' => ['google_chrome_reuse_before_connect']],
             'Accept' => [
                 'gloss_zh' => '本机验收证据已齐',
                 'rule_ids' => [
                     'requirement_acceptance_always',
                     'user_facing_brief_plain_report',
                     'plan_complete_self_review_then_implement',
+                    'plan_ledger_progress_and_acceptance',
                 ],
             ],
+            'Plan' => ['gloss_zh' => '多任务计划/计划书', 'rule_ids' => ['plan_ledger_progress_and_acceptance']],
+            'Ledger' => ['gloss_zh' => '计划书进度台账', 'rule_ids' => ['plan_ledger_progress_and_acceptance']],
+            'Item' => ['gloss_zh' => '计划中的一项任务', 'rule_ids' => ['plan_ledger_progress_and_acceptance']],
+            'Done' => ['gloss_zh' => '该项实现完成', 'rule_ids' => ['plan_ledger_progress_and_acceptance']],
             'ReportDone' => [
                 'gloss_zh' => '对用户宣称完成/PASS',
                 'rule_ids' => [
@@ -484,6 +494,11 @@ final class HardConstraintsSymbolDsl
                 'gloss_zh' => '外部Chrome按功能开标签组，只组内操作，收口删组',
                 'cluster' => '§✓',
             ],
+            'google_chrome_reuse_before_connect' => [
+                'formula' => 'GChrome→□ChrGrant∧(ReuseOk→□McpOnly)∧¬RawCdp',
+                'gloss_zh' => '连Chrome前先读复用记录，有效只走MCP，禁止直连',
+                'cluster' => '§✓',
+            ],
             'browser_operator_self_test' => [
                 'formula' => 'WebTouch→□WBOP∧(¬WBOP→¬Pass)',
                 'gloss_zh' => 'Web改须禁缓存+抹自动+点选+截图Read',
@@ -532,6 +547,11 @@ final class HardConstraintsSymbolDsl
             'plan_complete_self_review_then_implement' => [
                 'formula' => 'PlanDone→□(三视角)∧Pass→□Impl|(ReportDone→□Accept)',
                 'gloss_zh' => '自审通过即开发；宣称完成前须真机验收',
+                'cluster' => '§Π',
+            ],
+            'plan_ledger_progress_and_acceptance' => [
+                'formula' => 'Plan→□Ledger∧∀i(Item(i)→(Done(i)→□Accept(i)))',
+                'gloss_zh' => '计划书即台账；逐项完成→验收→记进度%；未清尾不验收',
                 'cluster' => '§Π',
             ],
             'user_facing_brief_plain_report' => [

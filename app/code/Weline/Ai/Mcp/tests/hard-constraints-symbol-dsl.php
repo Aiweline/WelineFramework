@@ -81,6 +81,11 @@ $checks = [
     'lookup atom' => is_array($lookupAtom)
         && ($lookupAtom['sym'] ?? '') === 'Arch'
         && in_array('architecture_grade_change_only', $lookupAtom['rule_ids'] ?? [], true),
+    'google chrome reuse contract' => ($chromeReuse = HardConstraintsSymbolDsl::lookup('google_chrome_reuse_before_connect'))
+        && str_contains((string) ($chromeReuse['summary'] ?? ''), 'chrome-devtools-grant.json')
+        && str_contains((string) ($chromeReuse['summary'] ?? ''), 'puppeteer.connect')
+        && str_contains((string) ($chromeReuse['formula'] ?? ''), 'ChrGrant')
+        && str_contains((string) ($chromeReuse['formula'] ?? ''), '¬RawCdp'),
     'full form still has summary' => ($full['form'] ?? '') === 'full'
         && isset($full['rules'][0]['summary']),
     'lifecycle gate present' => $hasLifecycle,

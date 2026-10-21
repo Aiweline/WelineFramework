@@ -65,6 +65,9 @@ $checks['coldstart mdc carries no_error_masking_or_patch_workaround'] = str_cont
     && str_contains($mdc, '根因修复')
     && str_contains($mdc, '空/静默 `catch`')
     && str_contains($mdc, '验收未完成');
+$checks['coldstart mdc carries google_chrome_reuse_before_connect'] = str_contains($mdc, 'google_chrome_reuse_before_connect')
+    && str_contains($mdc, 'chrome-devtools-grant.json')
+    && str_contains($mdc, 'puppeteer.connect');
 
 $tmpRoot = sys_get_temp_dir() . '/weline-host-editor-rules-' . bin2hex(random_bytes(4));
 mkdir($tmpRoot, 0775, true);
