@@ -127,4 +127,6 @@ Weline,Weline
 检测到渠道或店铺切换，正在刷新页面。,"A channel or store switch was detected. Refreshing the page."
 商城范围冲突,"Store scope conflict"
 当前请求与页面商城范围不一致，正在刷新页面。,"This request does not match the page store scope. Refreshing the page."
+当前页面商城范围凭证已过期，正在重新获取。,"This page's store scope credential expired. Re-acquiring it now."
+当前页面商城范围与请求上下文不一致，正在重新获取。,"This page's store scope does not match the request context. Re-acquiring it now."
 站点已更新,"Site updated"

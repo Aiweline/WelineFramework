@@ -16,8 +16,31 @@ final class FrontendScopeReloadTipTest extends TestCase
         self::assertTrue(FrontendScopeReloadTip::isTipCode('scope_binding_required'));
         self::assertTrue(FrontendScopeReloadTip::isTipCode('scope_context_conflict'));
         self::assertTrue(FrontendScopeReloadTip::isTipCode('request_scope_already_conflicts'));
+        self::assertTrue(FrontendScopeReloadTip::isTipCode('scope_token_expired'));
+        self::assertTrue(FrontendScopeReloadTip::isTipCode('scope_token_context_conflict'));
         self::assertTrue(FrontendScopeReloadTip::isTipCode('scope_bootstrap_waiting'));
         self::assertFalse(FrontendScopeReloadTip::isTipCode('protocol_error'));
+    }
+
+    public function testClientRePunchesScopeTokenBeforeGuardedReload(): void
+    {
+        $script = (string)file_get_contents(dirname(__DIR__, 3) . '/view/statics/js/weline-api.js');
+        self::assertMatchesRegularExpression(
+            "/const isScopeStampRecoverableError = \(error\) => \{[\s\S]*?code === 'scope_token_expired'[\s\S]*?code === 'scope_token_context_conflict'[\s\S]*?\n    \};/",
+            $script,
+        );
+        self::assertDoesNotMatchRegularExpression(
+            "/const isScopeStampRecoverableError = \(error\) => \{[\s\S]*?scope_token_invalid[\s\S]*?\n    \};/",
+            $script,
+        );
+        self::assertMatchesRegularExpression(
+            "/scope_token_expired: \{[\s\S]*?autoReload: true,/",
+            $script,
+        );
+        self::assertMatchesRegularExpression(
+            "/scope_token_context_conflict: \{[\s\S]*?autoReload: true,/",
+            $script,
+        );
     }
 
     public function testScopeBootstrapWaitingUsesPleaseWaitPhrase(): void

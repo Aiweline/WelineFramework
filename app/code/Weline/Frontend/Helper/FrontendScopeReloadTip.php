@@ -22,6 +22,8 @@ final class FrontendScopeReloadTip
         'scope_binding_required',
         'scope_context_conflict',
         'request_scope_already_conflicts',
+        'scope_token_expired',
+        'scope_token_context_conflict',
         'deploy_reload_required',
         'scope_bootstrap_waiting',
     ];
@@ -49,6 +51,14 @@ final class FrontendScopeReloadTip
             'request_scope_already_conflicts' => [
                 '商城范围冲突',
                 '当前请求与页面商城范围不一致，正在刷新页面。',
+            ],
+            'scope_token_expired' => [
+                '商城范围已变更',
+                '当前页面商城范围凭证已过期，正在重新获取。',
+            ],
+            'scope_token_context_conflict' => [
+                '商城范围冲突',
+                '当前页面商城范围与请求上下文不一致，正在重新获取。',
             ],
             'deploy_reload_required' => [
                 '站点已更新',
