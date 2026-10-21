@@ -17,5 +17,8 @@
         <observer name="Weline_Mail::certificate_issued_stalwart_tls"
                   instance="Weline\Mail\Observer\CertificateIssuedStalwartTls"
                   sort="200"/>
+        <observer name="Weline_Mail::certificate_issued_mail_web_vhost"
+                  instance="Weline\Mail\Observer\CertificateIssuedMailWebVhost"
+                  sort="210"/>
     </event>
 </config>

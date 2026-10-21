@@ -93,6 +93,8 @@ final class MailDomainAdminService
             return $this->fail(__('邮箱域名不存在'), 404);
         }
 
+        $hostname = strtolower(trim((string)$domain->getData(MailDomain::schema_fields_HOSTNAME)));
+
         $domainName = (string)$domain->getData(MailDomain::schema_fields_DOMAIN_NAME);
         $isFake = ObjectManager::getInstance(MailCustomerAccountService::class)->isFakeDomain($domain);
 
@@ -122,6 +124,13 @@ final class MailDomainAdminService
                 $deletedAccounts++;
             }
             $domain->delete();
+            if (str_starts_with($hostname, 'mail.')) {
+                try {
+                    ObjectManager::getInstance(\Weline\Mail\Service\MailWebVhostService::class)->removeForHostname($hostname);
+                } catch (\Throwable $vhostEx) {
+                    w_log_warning('[Mail] ' . __('删除邮箱域名后移除邮件 Web 代理失败：%{1}', [$vhostEx->getMessage()]), ['hostname' => $hostname], 'mail');
+                }
+            }
         } catch (\InvalidArgumentException|\DomainException $exception) {
             return $this->fail($exception->getMessage());
         } catch (\Throwable) {

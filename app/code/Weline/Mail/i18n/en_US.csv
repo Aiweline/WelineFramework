@@ -141,6 +141,7 @@ id属性不能为空,id属性不能为空
 "mail:account:select 当前仅支持单选","mail:account:select 当前仅支持单选"
 请选择邮箱,"Please select a mailbox"
 搜索邮箱或显示名,"Search by email or display name"
+"证书签发后配置邮件 Web 代理失败：%{1}","证书签发后配置邮件 Web 代理失败：%{1}"
 "证书签发后导入 Stalwart 失败：%{1}","证书签发后导入 Stalwart 失败：%{1}"
 请先登录,"Please sign in first"
 请选择已绑定的本机企业邮箱,"Select a bound local business email"
@@ -218,6 +219,8 @@ id属性不能为空,id属性不能为空
 已入域名池并申请证书。,已入域名池并申请证书。
 域名池/证书同步未完成。,域名池/证书同步未完成。
 "入池后 Stalwart TLS 同步失败：%{1}","入池后 Stalwart TLS 同步失败：%{1}"
+"邮件 Web 代理已生效：%{1}","邮件 Web 代理已生效：%{1}"
+"邮件 Web 代理配置失败：%{1}","邮件 Web 代理配置失败：%{1}"
 "DNS 通后入域名池失败：%{1}","DNS 通后入域名池失败：%{1}"
 "DNS 已同步，但入域名池/证书失败：%{1}","DNS 已同步，但入域名池/证书失败：%{1}"
 企业邮局,"Enterprise Mail"
@@ -253,22 +256,16 @@ composer,composer
 我的企业邮箱,"My enterprise mailbox"
 这里只显示与你当前账号绑定且已启用的邮箱。,"Only active mailboxes explicitly linked to your current account are shown."
 当前邮箱,"Current mailbox"
-邮件列表,"Message list"
 收件箱暂无邮件。,"The inbox is empty."
 发件人,Sender
 含附件,"Has attachments"
-邮件正文预览,"Mail body preview"
 选择一封邮件查看正文。,"Select a message to read it."
-待同步,"Pending sync"
-已启用,Active
-已暂停,Suspended
 邮箱服务尚未开启,"Mail service is not enabled"
 站点管理员需要先完成原生邮件服务安装、端口检测，并开启至少一个邮箱域名后，用户才能申请企业邮箱账号。,"The site administrator must install the native mail service, verify the required ports, and enable at least one mail domain before users can apply for mailbox accounts."
 暂无可申请域名,"No available mail domains"
 当前没有已开启的邮箱域名，请稍后再试。,"No mail domains are currently enabled. Please try again later."
 邮箱账号,"Mailbox account"
 仅支持小写字母、数字、点、下划线和短横线。,"Only lowercase letters, numbers, dots, underscores, and hyphens are supported."
-例如：业务邮箱,"For example: business mailbox"
 申请邮箱账号,"Apply for mailbox"
 您还没有申请邮箱账号。,"You have not applied for any mailbox accounts yet."
 暂停,Suspend
@@ -280,13 +277,19 @@ composer,composer
 收件箱,Inbox
 已发送,Sent
 暂无已发送邮件。,"No sent messages yet."
-邮件夹,"Mail folder"
+邮件列表,"Message list"
+邮件正文预览,"Mail body preview"
+例如：业务邮箱,"For example: business mailbox"
+待同步,"Pending sync"
+已启用,Active
+已暂停,Suspended
 刷新,Refresh
 写邮件,Compose
 发送邮件,"Send message"
 这个邮件夹暂无邮件。,"This folder is empty."
-（无主题）,"(No subject)"
 回复,Reply
+邮件夹,"Mail folder"
+（无主题）,"(No subject)"
 申请本站企业邮箱,"Apply for site business email"
 注册并登录后可申请本站企业邮箱；开启辅助验证时须验证真人邮箱。,"After register/login you can apply for site business email; when secondary verify is on, verify a human email."
 邮箱前缀,"Email prefix"
@@ -301,7 +304,6 @@ composer,composer
 刷新收件箱,"Refresh inbox"
 尚无已启用的企业邮箱账号，请先到设置页创建账号。,"No active enterprise mailbox exists. Create one on the settings page first."
 "最近 %{1} 封收件","Latest %{1} messages"
-系统服务,"System services"
 "已开启 %{1} 个","%{1} opened"
 按域名统一管理,"Unified management by domain name"
 "Websites 候选域名","Websites candidate domain names"
@@ -770,6 +772,7 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 邮箱域名已存在,"Email domain name already exists"
 邮箱域名已创建，可在域名列表中开启或继续创建邮箱账号,"The email domain name has been created. You can open it in the domain name list or continue to create an email account."
 "邮箱域名 ID 无效","邮箱域名 ID 无效"
+"删除邮箱域名后移除邮件 Web 代理失败：%{1}","删除邮箱域名后移除邮件 Web 代理失败：%{1}"
 "邮箱域名删除失败，请检查 Stalwart 管理连接","邮箱域名删除失败，请检查 Stalwart 管理连接"
 "已移除邮箱域名配置 %{1}（账号 %{2} 个）。网站域名本身未删除。","已移除邮箱域名配置 %{1}（账号 %{2} 个）。网站域名本身未删除。"
 邮件已提交发送,"Message submitted"
@@ -955,6 +958,8 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 未删除任何规则,未删除任何规则
 "已删除 %{1} 条规则并下发路由","已删除 %{1} 条规则并下发路由"
 已删除规则，但路由下发失败,已删除规则，但路由下发失败
+"mail web vhost: ready=%{1} needs_cert=%{2} errors=%{3}","mail web vhost: ready=%{1} needs_cert=%{2} errors=%{3}"
+"同步邮箱域名 Web 反代 vhost","同步邮箱域名 Web 反代 vhost"
 "========== 企业邮箱环境检测 ==========","========== Enterprise mailbox environment detection =========="
 平台：%{1},"Platform: %{1}"
 引擎：%{1},"Engine: %{1}"
@@ -990,6 +995,7 @@ STARTTLS；客户端发信主端口。,"STARTTLS; primary client submission port
 "检测企业邮箱 DNS 记录","Detect corporate email DNS records"
 "检测 MX/SPF/DKIM/DMARC 记录是否存在","Check if MX/SPF/DKIM/DMARC records exist"
 邮件服务主机名,"Mail service host name"
+系统服务,"System services"
 "%1 封未读","%1 封未读"
 "%1 封未读在收件箱（对方回信不会出现在「已发送」）。","%1 封未读在收件箱（对方回信不会出现在「已发送」）。"
 打开收件箱,打开收件箱

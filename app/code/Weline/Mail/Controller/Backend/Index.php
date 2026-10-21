@@ -2300,7 +2300,33 @@ class Index extends BackendController
                 );
             }
 
-            return $baseMsg;
+            $vhostMessage = '';
+            foreach ($hostnames as $h) {
+                if (!str_starts_with($h, 'mail.')) {
+                    continue;
+                }
+                try {
+                    $vhost = ObjectManager::getInstance(\Weline\Mail\Service\MailWebVhostService::class)
+                        ->ensureForHostname($h);
+                    if (($vhost['status'] ?? '') === 'ready') {
+                        $vhostMessage .= ' ' . __('邮件 Web 代理已生效：%{1}', [$h]);
+                    } elseif (($vhost['status'] ?? '') === 'error') {
+                        w_log_warning(
+                            '[Mail] ' . __('邮件 Web 代理配置失败：%{1}', [$vhost['message'] ?? '']),
+                            ['hostname' => $h],
+                            'mail'
+                        );
+                    }
+                } catch (\Throwable $vhostEx) {
+                    w_log_warning(
+                        '[Mail] ' . __('邮件 Web 代理配置失败：%{1}', [$vhostEx->getMessage()]),
+                        ['hostname' => $h],
+                        'mail'
+                    );
+                }
+            }
+
+            return $baseMsg . $vhostMessage;
         } catch (\Throwable $e) {
             w_log_error(
                 '[Mail] ' . __('DNS 通后入域名池失败：%{1}', [$e->getMessage()]),
