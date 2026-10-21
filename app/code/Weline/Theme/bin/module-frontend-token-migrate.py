@@ -51,6 +51,7 @@ PROP_ROLES: dict[str, set[str]] = {
     "color": {"text"},
     "-webkit-text-fill-color": {"text"},
     "caret-color": {"text"},
+    "accent-color": {"text"},
     "background": {"bg"},
     "background-color": {"bg"},
     "background-image": {"bg", "other"},
@@ -465,6 +466,60 @@ CURATED_ROLE_COLORS = {
     "#f0c14b": {"text": "--color-primary", "border": "--color-primary", "bg": "--color-primary"},
     "#febd69": {"text": "--color-primary", "border": "--color-primary", "bg": "--color-primary"},
     "#856404": {"text": "--color-warning", "border": "--color-warning"},
+    # 第二批策展（r15）：浅灰/深灰/浅红浅绿边框/蓝系
+    "#a8b2d1": {"text": "--color-text-faint"},
+    "#a6a6a6": {"text": "--color-text-faint", "border": "--color-border-light"},
+    "#7f8c8d": {"text": "--color-text-muted", "border": "--color-border-default"},
+    "#667085": {"text": "--color-text-muted", "border": "--color-border-default"},
+    "#e0e0e0": {"text": "--color-text-faint", "border": "--color-border-light"},
+    "#dddddd": {"text": "--color-text-faint"},
+    "#404040": {"bg": "--color-bg-dark", "border": "--color-border-default"},
+    "#3d3d3d": {"bg": "--color-bg-dark", "border": "--color-border-default"},
+    "#5a6268": {"bg": "--color-bg-dark", "border": "--color-border-default"},
+    "#343a40": {"bg": "--color-bg-dark", "border": "--color-border-default"},
+    "#fecaca": {"border": "--color-danger", "bg": "--color-danger-bg-subtle", "text": "--color-danger"},
+    "#a7f3d0": {"border": "--color-success", "bg": "--color-success-bg-subtle"},
+    "#059669": {"border": "--color-success", "text": "--color-success", "bg": "--color-success"},
+    "#80bdff": {"border": "--color-link", "text": "--color-link"},
+    "#60a5fa": {"border": "--color-link", "text": "--color-link", "bg": "--color-info"},
+    "#f9fafb": {"bg": "--color-bg-muted", "border": "--color-border-light", "text": "--color-bg-primary"},
+    "#0f766e": {"text": "--color-success", "border": "--color-success", "bg": "--color-success"},
+    "#94a3b8": {"text": "--color-text-faint", "border": "--color-border-light", "bg": "--color-bg-tertiary"},
+    "#fff8ea": {"bg": "--color-bg-primary", "text": "--color-text"},
+    "#fed7aa": {"bg": "--color-warning-bg-subtle", "border": "--color-warning"},
+    "#f3dfaf": {"border": "--color-warning", "bg": "--color-warning-bg-subtle"},
+    "#fcd200": {"text": "--color-warning", "border": "--color-warning", "bg": "--color-warning"},
+    "#0d6efd": {"text": "--color-link", "border": "--color-link", "bg": "--color-info"},
+    "#fa709a": {"text": "--color-danger", "border": "--color-danger", "bg": "--color-danger"},
+    "#e77600": {"text": "--color-primary", "border": "--color-primary", "bg": "--color-primary"},
+    "#f7f8f8": {"bg": "--color-bg-muted", "border": "--color-border-light"},
+    "#e3e6e6": {"bg": "--color-bg-tertiary", "border": "--color-border-light"},
+    "#0f1111": {"text": "--color-text", "border": "--color-border-default"},
+    "#000000": {"border": "--color-border-default", "text": "--color-text", "bg": "--color-bg-dark"},
+    "#b7f0d8": {"bg": "--color-success-bg-subtle", "border": "--color-success"},
+    "#064e3b": {"text": "--color-success", "bg": "--color-success"},
+    "#b8e8ef": {"bg": "--color-info-bg-subtle", "border": "--color-info"},
+    "#bbdefb": {"bg": "--color-info-bg-subtle", "border": "--color-info"},
+    "#1d4ed8": {"text": "--color-link", "bg": "--color-info"},
+    "#fca5a5": {"bg": "--color-danger-bg-subtle", "border": "--color-danger"},
+    "#f0ad4e": {"text": "--color-warning", "border": "--color-warning", "bg": "--color-warning"},
+    "#eeeeee": {"bg": "--color-bg-tertiary", "border": "--color-border-light"},
+    "#444444": {"text": "--color-text-secondary", "bg": "--color-bg-dark"},
+    "#818cf8": {"text": "--color-link", "border": "--color-link", "bg": "--color-info"},
+    "#c084fc": {"text": "--color-primary", "border": "--color-primary", "bg": "--color-primary"},
+    "#16333f": {"text": "--color-text", "bg": "--color-bg-dark"},
+    "#5c6b74": {"text": "--color-text-muted", "border": "--color-border-default"},
+    "#b0b3b3": {"text": "--color-text-faint", "border": "--color-border-light"},
+    "#f3efe6": {"bg": "--color-bg-secondary", "border": "--color-border-light"},
+    "#bfdbfe": {"bg": "--color-info-bg-subtle", "border": "--color-info"},
+    "#b7e4d8": {"bg": "--color-success-bg-subtle", "border": "--color-success"},
+    "#e7b92e": {"text": "--color-warning", "border": "--color-warning", "bg": "--color-warning"},
+    "#b8e4c7": {"bg": "--color-success-bg-subtle"},
+    "#f5b8bd": {"bg": "--color-danger-bg-subtle"},
+    "#f5c242": {"text": "--color-warning", "bg": "--color-warning"},
+    "#0b1220": {"bg": "--color-bg-dark", "text": "--color-text"},
+    "#fff3cd": {"bg": "--color-warning-bg-subtle"},
+    "#f5c6cb": {"bg": "--color-danger-bg-subtle"},
 }
 
 
@@ -482,7 +537,7 @@ def _nearest_alpha(alpha: float, table):
         delta = abs(value - alpha)
         if best is None or delta < best[0]:
             best = (delta, token)
-    return best[1] if best and best[0] <= 0.03 else None
+    return best[1] if best and best[0] <= 0.09 else None
 
 
 def pick_alpha_token(rgb: tuple[int, int, int], alpha: float, prop: str) -> str | None:
@@ -518,6 +573,72 @@ def pick_alpha_token(rgb: tuple[int, int, int], alpha: float, prop: str) -> str 
         if "bg" in allowed:
             return "--color-info-bg-subtle"
         return "--color-link"
+    if abs(r - 34) <= 20 and abs(g - 197) <= 25 and abs(b - 94) <= 45:     # bright green
+        if "bg" in allowed:
+            return "--color-success-bg-subtle"
+        return "--color-success"
+    if abs(r - 239) <= 20 and abs(g - 68) <= 20 and abs(b - 68) <= 20:     # bright red
+        if "bg" in allowed:
+            return "--color-danger-bg-subtle"
+        return "--color-danger"
+    if r <= 12 and abs(g - 123) <= 25 and abs(b - 255) <= 20:              # azure
+        if "bg" in allowed:
+            return "--color-info-bg-subtle"
+        return "--color-link"
+    if abs(r - 196) <= 12 and abs(g - 163) <= 12 and abs(b - 90) <= 15:    # brand gold
+        if "bg" in allowed:
+            return "--color-warning-bg-subtle"
+        return "--color-warning"
+    if abs(r - 52) <= 12 and abs(g - 58) <= 12 and abs(b - 64) <= 12:      # charcoal glass
+        if "bg" in allowed:
+            return "--color-bg-dark"
+        return "--color-text"
+    if max(rgb) <= 12 and alpha >= 0.5:                                    # black scrim
+        return "--color-overlay-50"
+    if abs(r - 96) <= 20 and abs(g - 165) <= 25 and abs(b - 250) <= 20:    # blue-400
+        return "--color-info-bg-subtle" if "bg" in allowed else "--color-link"
+    if abs(r - 59) <= 15 and abs(g - 130) <= 20 and abs(b - 246) <= 20:    # blue-500
+        return "--color-info-bg-subtle" if "bg" in allowed else "--color-link"
+    if abs(r - 199) <= 20 and abs(g - 81) <= 20 and abs(b - 31) <= 25:     # burnt orange
+        return "--color-warning-bg-subtle" if "bg" in allowed else "--color-warning"
+    if r >= 250 and g >= 240 and b >= 210:                                 # warm paper
+        return "--color-bg-secondary" if "bg" in allowed else "--color-text"
+    if abs(r - 15) <= 6 and abs(g - 17) <= 6 and abs(b - 17) <= 6 and alpha >= 0.7:
+        return "--color-bg-dark" if "bg" in allowed else "--color-text"
+    if abs(r - 17) <= 8 and abs(g - 24) <= 8 and abs(b - 39) <= 8:         # slate-900 glass
+        return "--color-bg-dark" if "bg" in allowed else "--color-text"
+    if alpha >= 0.85:
+        if abs(r - 15) <= 6 and abs(g - 17) <= 6 and abs(b - 17) <= 6:     # near-opaque ink
+            return "--color-bg-dark" if "bg" in allowed else "--color-text"
+        if min(rgb) >= 245:                                                # near-opaque white
+            return "--color-on-dark-92"
+    if abs(r - 16) <= 20 and abs(g - 185) <= 25 and abs(b - 129) <= 25:    # emerald
+        if "bg" in allowed:
+            return "--color-success-bg-subtle"
+        return "--color-success"
+    if abs(r - 240) <= 20 and abs(g - 193) <= 20 and abs(b - 75) <= 30:    # amber gold
+        if "bg" in allowed:
+            return "--color-warning-bg-subtle"
+        return "--color-warning"
+    if abs(r - 15) <= 8 and abs(g - 15) <= 8 and abs(b - 35) <= 12:        # navy glass
+        if "bg" in allowed:
+            return "--color-bg-dark"
+        return "--color-overlay-medium"
+    if abs(r - 0) <= 12 and abs(g - 242) <= 20 and abs(b - 254) <= 20:     # cyan
+        if "bg" in allowed:
+            return "--color-info-bg-subtle"
+        return "--color-link"
+    if abs(r - 243) <= 8 and abs(g - 239) <= 8 and abs(b - 230) <= 10:     # warm paper
+        if "bg" in allowed:
+            return "--color-bg-secondary"
+        return "--color-text"
+    if abs(r - 0) <= 10 and abs(g - 113) <= 15 and abs(b - 133) <= 15:     # teal ink
+        if "bg" in allowed:
+            return "--color-info-bg-subtle"
+        return "--color-info"
+    if abs(r - 15) <= 4 and abs(g - 23) <= 4 and abs(b - 42) <= 6:         # slate ink overlay
+        token = _nearest_alpha(alpha, ALPHA_OVERLAY)
+        return token if token else None
     if abs(r - 245) <= 15 and abs(g - 158) <= 20 and abs(b - 11) <= 25:    # amber
         if "bg" in allowed:
             return "--color-warning-bg-subtle"
@@ -563,7 +684,9 @@ def pick_token_for_color(value_hex: str, prop: str, colors: dict[str, list[str]]
                          resolved: dict[str, str] | None = None) -> str | None:
     allowed = PROP_ROLES.get(prop)
     if allowed is None:
-        return None
+        if not prop.startswith("--"):
+            return None
+        allowed = {"bg", "text", "border"}   # 私有/局部自定义属性：按策展优先 bg
     for role_name, token_name in CURATED_ROLE_COLORS.get(value_hex, {}).items():
         if role_name in allowed and token_name in (resolved or {}):
             return token_name

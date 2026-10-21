@@ -891,7 +891,6 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-关闭通知,"Close notification"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -1159,6 +1158,7 @@ Logo,Logo
 展开明细,"Expand details"
 零售,Retail
 迷你购物车金额小计,"Mini-cart money summary"
+关闭通知,"Close notification"
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
 订单跟踪,"Order Tracking"
@@ -1229,14 +1229,6 @@ Logo,Logo
 "当前显示为继承上级或 Theme 默认；保存时选择主题将写入本店专属应用引用。","当前显示为继承上级或 Theme 默认；保存时选择主题将写入本店专属应用引用。"
 本店已配置专属主题应用引用。,本店已配置专属主题应用引用。
 本店范围尚无已发布主题版本；可在主题编辑器发布后再选。,本店范围尚无已发布主题版本；可在主题编辑器发布后再选。
-CSS变量配置,"CSS variable configuration"
-选择色盘：,"Select Color Palette:"
-不使用色盘,"No color palette"
-应用色盘,"Apply Color Palette"
-保存配置,"Save configuration"
-未知错误,"Unknown error"
-提示,Tip
-应用失败,"Application Failed"
 目录路径,"Directory path"
 当前配置的目录路径,"Directory path of the current configuration"
 选择布局,"Select Layout"
@@ -1260,7 +1252,9 @@ CSS变量配置,"CSS variable configuration"
 该目录下没有可用的组件文件,"No component files available in this directory"
 该目录下没有可用的变量文件,"No variable files available in this directory"
 该目录下没有可用的配置项,"No configuration items available in this directory"
+提示,Tip
 正在读取颜色变量...,"Reading color variables..."
+保存配置,"Save configuration"
 未找到颜色变量,"Color variable not found"
 保存中...,Saving...
 请重试,"Please try again"
@@ -1275,6 +1269,7 @@ CSS变量配置,"CSS variable configuration"
 开始扫描,"Start scanning"
 扫描完成,"Scan complete"
 扫描失败,"Scan failed"
+未知错误,"Unknown error"
 色系,"Color Scheme"
 变量,Variable
 组件,Component
@@ -1297,23 +1292,13 @@ CSS变量配置,"CSS variable configuration"
 保存并预览,"Save and preview"
 预览,Preview
 保存成功，预览已更新,"Saved successfully, preview updated"
-配置进度,"Configuration Progress"
-"点击""配置变量""按钮编辑变量文件中的变量值","Click the ""Configure Variables"" button to edit the variable values in the variable file"
-请先选择主题,"Please select a theme first"
-配置变量文件,"Configuration Variable File"
-正在加载变量数据...,"Loading variable data..."
-点击色盘选择色系，点击齿轮图标配置色系变量,"Click the color wheel to select a color scheme, then click the gear icon to configure color scheme variables."
-加载弹窗失败,"Failed to load popup"
 配置色系变量,"Configure color scheme variables"
-正在加载色盘变量...,"Loading palette variables..."
-参数,parameter
-"点击""配置参数""按钮编辑组件的参数值","Click the ""Configure Parameters"" button to edit the parameter values of the component"
-配置组件参数,"Configure component parameters"
-正在加载组件参数...,"Loading component parameters..."
 该色盘没有可配置的变量,"This color palette has no configurable variables"
 默认值,"default value"
 重置,reset
+配置变量文件,"Configuration Variable File"
 该变量文件没有可配置的变量,"This variable file has no configurable variables."
+配置组件参数,"Configure component parameters"
 该组件没有可配置的参数,"This component has no configurable parameters"
 是,yes
 否,no
@@ -1322,23 +1307,8 @@ CSS变量配置,"CSS variable configuration"
 主题布局配置,"Theme layout configuration"
 前端配置,"Frontend Configuration"
 后端配置,"Backend Configuration"
-主题配置编辑,"Theme Configuration Edit"
-系统,system
-主题配置,"Theme Settings"
-主题,Theme
-Scope,Scope
-加载,Loading
-前端,Frontend
-后端,Backend
-暂无可用色盘,"No color palettes available"
-展开/收缩预览,"Expand/Collapse preview"
-主题预览,"Theme Preview"
-亮色,"bright color"
-暗色,"dark color"
-全屏,Fullscreen
-正在加载预览...,"Loading preview..."
-请先选择一个主题以开始配置。,"Please select a theme to start configuration."
 组件预览,"Component Preview"
+主题,Theme
 区域,area
 必填,Required
 默认值：%{value},"Default Value: %{value}"
@@ -1356,6 +1326,7 @@ Scope,Scope
 选择,Select
 JSON格式数组,"JSON format array"
 请使用JSON格式输入,"Please use JSON format"
+主题预览,"Theme Preview"
 请选择一个主题,"Select a theme"
 在左上角选择要编辑的主题，开始可视化编辑,"Select the theme to edit in the top-left corner to start visual editing."
 主题编辑器,"Theme Editor"
@@ -1413,6 +1384,7 @@ JSON格式数组,"JSON format array"
 恢复原始布局,"Restore Original Layout"
 "清理 Theme 缓存","Clear Theme Cache"
 刷新预览,"Refresh Preview"
+全屏,Fullscreen
 全屏预览,"Fullscreen Preview"
 编辑面板,"Edit panel"
 配置,Configuration
@@ -1616,6 +1588,8 @@ AI目录加载失败,"AI directory loading failed"
 "-- 选择主题 --","-- Select Theme --"
 （已启用）,(enabled)
 默认（全语言）,"Default (all languages)"
+前端,Frontend
+后端,Backend
 部件库加载中...,"Loading widgets..."
 未命名部件,"Unnamed part"
 可拖拽到页面插槽的基础组件,"Basic components that can be dragged into page slots"
@@ -2331,6 +2305,32 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+CSS变量配置,"CSS variable configuration"
+选择色盘：,"Select Color Palette:"
+不使用色盘,"No color palette"
+应用色盘,"Apply Color Palette"
+应用失败,"Application Failed"
+配置进度,"Configuration Progress"
+"点击""配置变量""按钮编辑变量文件中的变量值","Click the ""Configure Variables"" button to edit the variable values in the variable file"
+请先选择主题,"Please select a theme first"
+正在加载变量数据...,"Loading variable data..."
+点击色盘选择色系，点击齿轮图标配置色系变量,"Click the color wheel to select a color scheme, then click the gear icon to configure color scheme variables."
+加载弹窗失败,"Failed to load popup"
+正在加载色盘变量...,"Loading palette variables..."
+参数,parameter
+"点击""配置参数""按钮编辑组件的参数值","Click the ""Configure Parameters"" button to edit the parameter values of the component"
+正在加载组件参数...,"Loading component parameters..."
+主题配置编辑,"Theme Configuration Edit"
+系统,system
+主题配置,"Theme Settings"
+Scope,Scope
+加载,Loading
+暂无可用色盘,"No color palettes available"
+展开/收缩预览,"Expand/Collapse preview"
+亮色,"bright color"
+暗色,"dark color"
+正在加载预览...,"Loading preview..."
+请先选择一个主题以开始配置。,"Please select a theme to start configuration."
 "Weline Admin","Weline Admin"
 管理后台,"Admin Panel"
 后台Logo,"Background Logo"

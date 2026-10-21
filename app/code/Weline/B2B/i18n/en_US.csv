@@ -326,10 +326,6 @@ settings,settings
 已完成,Completed
 批发价按数量档与会员等级计价；当前无适用档位时显示站内参考价。,"Wholesale prices follow quantity tiers and membership level; when no tier applies, the storefront reference price is shown."
 批发起订与阶梯价,"Wholesale MOQ and tier pricing"
-"起订 %{1} · 步进 %{2}","MOQ %{1} · step %{2}"
-"%{1} 件 %{2} %{3}/件","%{1} pcs %{2} %{3}/pc"
-"每件低 %{1} %{2}","As low as %{1} %{2} each"
-"省 %{1} %{2}","Save %{1} %{2}"
 收起沟通,"Collapse chat"
 留言,Message
 发送,Send
@@ -599,6 +595,10 @@ settings,settings
 "apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","Checkpoint ID returned by apply (required for verify, allowlist, and rollback)"
 "目标 Website ID；0 是合法系统默认站点","Target Website ID; 0 is the valid system default Website"
 显示本帮助,"Show this help"
+"起订 %{1} · 步进 %{2}","MOQ %{1} · step %{2}"
+"%{1} 件 %{2} %{3}/件","%{1} pcs %{2} %{3}/pc"
+"每件低 %{1} %{2}","As low as %{1} %{2} each"
+"省 %{1} %{2}","Save %{1} %{2}"
 零售车,"Retail cart"
 批发车,"Wholesale cart"
 批发车是空的,"Wholesale cart is empty"

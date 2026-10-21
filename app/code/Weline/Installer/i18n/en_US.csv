@@ -66,26 +66,26 @@
 进入后台,"Go to Admin"
 例如：admin_secret_key,"e.g.: admin_secret_key"
 例如：api_secret_key,"e.g.: api_secret_key"
-开始环境检测...,"Starting environment check..."
-"环境检测通过 ✓","Environment check passed ✓"
-环境检测未通过,"Environment check failed"
-通过,Passed
-未通过,Failed
-缺失扩展,"Missing extensions"
-被禁用函数,"Disabled functions"
-检测失败,"Check failed"
-请求失败,"Request failed"
+"API 后台密钥","API Admin Key"
 位置,Location
-操作,Action
 修复完成,"Fix complete"
-部分问题仍需手动处理,"Some issues still need manual fix"
-连接中断,"Connection lost"
-测试中...,Testing...
-连接成功！,"Connection successful!"
-连接失败,"Connection failed"
+后台入口密钥,"Admin URL Key"
+后台地址,"Admin URL"
 安装中...,Installing...
 安装失败,"Installation failed"
-后台入口密钥,"Admin URL Key"
-"API 后台密钥","API Admin Key"
-后台地址,"Admin URL"
+开始环境检测...,"Starting environment check..."
+操作,Action
+未通过,Failed
+检测失败,"Check failed"
+测试中...,Testing...
+环境检测未通过,"Environment check failed"
+"环境检测通过 ✓","Environment check passed ✓"
+缺失扩展,"Missing extensions"
+被禁用函数,"Disabled functions"
+请求失败,"Request failed"
+连接中断,"Connection lost"
+连接失败,"Connection failed"
+连接成功！,"Connection successful!"
+通过,Passed
+部分问题仍需手动处理,"Some issues still need manual fix"
 返回首页,"Back to Home"

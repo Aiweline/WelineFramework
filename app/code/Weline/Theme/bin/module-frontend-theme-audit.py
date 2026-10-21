@@ -54,11 +54,13 @@ EXCLUDE_BASENAME_CONTAINS = ("admin", "backend", "backend-", "-console", "wls-")
 EXCLUDE_BASENAME = (
     "elfinder.html", "elfinder.legacy.html", "index.html",  # S5 vendor app shells
     "test.phtml", "test.html",  # dev/test pages
+    "mail-html-preview-accept.html",  # 邮件预览样例内容（非页面）
 )
 
 RE_HEX = re.compile(r"#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b")
 RE_RGB = re.compile(r"\b(?:rgb|rgba|hsl|hsla)\s*\(", re.I)
-RE_SIZE = re.compile(r"(?<![\w.-])(\d+(?:\.\d+)?)(px|rem|em)\b")
+# em 为相对字号单位（随字体自适应），不属于绝对设计字面量；text-shadow 的模糊半径无对应刻度。
+RE_SIZE = re.compile(r"(?<![\w.-])(\d+(?:\.\d+)?)(px|rem)\b")
 RE_VAR_FALLBACK = re.compile(
     r"var\(\s*(--[A-Za-z0-9_-]+)\s*,\s*((?:#[0-9a-fA-F]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|"
     r"transparent|currentColor|white|black|red|blue|green|gray|grey|"
@@ -73,19 +75,27 @@ RE_VAR_FALLBACK_SIZE = re.compile(
 RE_IMPORTANT = re.compile(r"!\s*important", re.I)
 RE_MAXWIDTH_PX = re.compile(r"(?:max-)?(?:inline-)?(?:width|size)\s*:\s*(?:min\(\s*100%\s*,\s*)?(\d{3,4})px", re.I)
 RE_PRIVATE_TOKEN = re.compile(r"(--[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\))", re.I)
-RE_INLINE_STYLE = re.compile(r"""\bstyle\s*=\s*(["'])(?:(?!\1).)*\1""", re.I | re.S)
-RE_INLINE_STYLE_VALUE = re.compile(r"""\bstyle\s*=\s*(["'])((?:(?!\1).)*)\1""", re.I | re.S)
+RE_INLINE_STYLE = re.compile(r"""(?<![\w-])style\s*=\s*(["'])(?:(?!\1).)*\1""", re.I | re.S)
+RE_INLINE_STYLE_VALUE = re.compile(r"""(?<![\w-])style\s*=\s*(["'])((?:(?!\1).)*)\1""", re.I | re.S)
 # Theme foundation 自带的组件参数通道：style="--w-gap:var(--weline-space-2);--w-mb:0"
 # 见 Theme/view/ui/css/foundation.css 的 [style*="--w-mb:"] { ... } 规则。
 # 只放行「纯 --w-* 参数（值必须是 var() 引用 / 整数 / 0）」，出现任何视觉字面量仍算违规。
 RE_W_PARAM_ONLY = re.compile(r"^\s*--w-[a-z0-9-]+\s*:\s*(?:var\([^)]*\)|\d+(?:\.\d+)?|0)\s*$", re.I)
 
 
+RE_ANY_PARAM_DECL = re.compile(
+    r"^\s*--[a-zA-Z0-9-]+\s*:\s*(?:var\(.+?\)|\d+(?:\.\d+)?%?|0|\s*<\?.*?\?>\s*%?|\s)+$", re.I | re.S)
+
+
 def _is_w_param_style(value: str) -> bool:
+    """整条 style 都是自定义属性参数（Theme 组件参数通道 / 动态数据通道），不含视觉字面量。"""
     parts = [p for p in value.split(";") if p.strip()]
     if not parts:
         return False
-    return all(RE_W_PARAM_ONLY.match(p) for p in parts)
+    if all(RE_W_PARAM_ONLY.match(p) for p in parts):
+        return True
+    # 允许任意 --custom 参数：值必须是 var(...) / 数字 / 0 / PHP 动态输出
+    return all(RE_ANY_PARAM_DECL.match(p) for p in parts)
 RE_STYLE_BLOCK = re.compile(r"<style\b[^>]*>(.*?)</style>", re.I | re.S)
 RE_SCRIPT_BLOCK = re.compile(r"<script\b([^>]*)>(.*?)</script\s*>", re.I | re.S)
 RE_ON_ATTR = re.compile(
@@ -123,7 +133,7 @@ SIZE_TOKEN_PROPS = {
     "border-bottom-left-radius", "border-bottom-right-radius",
     "border-width", "border-top-width", "border-right-width",
     "border-bottom-width", "border-left-width", "outline-width",
-    "box-shadow", "text-shadow", "min-height", "font",
+    "box-shadow", "min-height", "font",
 }
 RE_PROP_FOR_SIZE = re.compile(r"\s*([-a-zA-Z][-a-zA-Z0-9]*)\s*:")
 
@@ -241,7 +251,8 @@ def _decl_prop(text: str, pos: int) -> str:
 
 # 合同允许：颜色/特质 Hero 可在模块内 scope 自定义（theme-css-variables-only.md §9 关联约定）。
 HERO_SELECTOR = re.compile(
-    r"(?:hero|banner|promo|masthead|jumbotron|glow|gradient|decor|visual|showcase|landing)", re.I)
+    r"(?:hero|banner|promo|masthead|jumbotron|glow|gradient|decor|visual|showcase|landing|"
+    r"dark-panel|stage|backdrop|orb|spotlight)", re.I)
 # 展示级排版（Hero 标题/大标题）属模块 scope 例外，不强制套主刻度字号。
 DISPLAY_SELECTOR = re.compile(
     r"(?:hero|banner|display|headline|masthead|jumbotron|title|heading|"
@@ -249,10 +260,9 @@ DISPLAY_SELECTOR = re.compile(
 
 
 def _hero_scope_decl(text: str, pos: int) -> bool:
+    """Hero / 展示 / 暗色专区的模块 scope 颜色（用户裁决：允许模块内自定义）。"""
     start = max(text.rfind(";", 0, pos), text.rfind("{", 0, pos), text.rfind("}", 0, pos))
     decl = text[start + 1:pos]
-    if "gradient(" not in decl.lower():
-        return False
     sel_start = text.rfind("{", 0, max(start, 1))
     if sel_start < 0:
         return False
@@ -283,7 +293,10 @@ def scan_css(text: str, hits: list, src: str) -> None:
     for m in RE_RGB.finditer(cleaned):
         if _hero_scope_decl(cleaned, m.start()):
             continue
-        hits.append((src, "hard_color_func", cleaned[m.start():m.start() + 40]))
+        snippet = cleaned[m.start():m.start() + 60]
+        if "var(--" in snippet.split(")")[0]:
+            continue  # alpha 为动态参数（rgba(..., var(--alpha))），非字面量
+        hits.append((src, "hard_color_func", snippet[:40]))
     for m in RE_IMPORTANT.finditer(cleaned):
         if in_reduced(m.start()):
             continue
@@ -328,11 +341,51 @@ def scan_css(text: str, hits: list, src: str) -> None:
             px = _px_value(m.group())
             if px is not None and px >= 64:
                 continue
-        # Hero/展示级字号属模块 scope 例外
-        if prop == "font-size" and DISPLAY_SELECTOR.search(_selector_before(cleaned, m.start())):
-            continue
+        # Hero/展示级字号属模块 scope 例外（含 ≥40px 的展示字体）
+        if prop == "font-size":
+            if DISPLAY_SELECTOR.search(_selector_before(cleaned, m.start())):
+                continue
+            px_font = _px_value(m.group())
+            if px_font is not None and px_font >= 40:
+                continue
         hits.append((src, "hard_size", m.group()))
 
+
+
+RE_PHP_WRAPPER_CALL = re.compile(r"^\$[A-Za-z_][A-Za-z0-9_]*\s*\(", re.S)
+RE_CAST = re.compile(r"^\(\s*(?:string|int|float|bool)\s*\)\s*", re.S)
+
+
+def _strip_wrappers(code: str) -> str:
+    """剥掉 htmlspecialchars(...)/$var(...)/(string) 等外壳与 ENT_* 参数，得到核心表达式。"""
+    code = code.strip()
+    for _ in range(6):
+        before = code
+        code = RE_CAST.sub("", code)
+        m = re.match(r"^(?:htmlspecialchars|htmlentities)\s*\((.*)\)\s*$", code, re.S)
+        if m:
+            code = m.group(1).strip()
+            code = re.sub(r",\s*ENT_[A-Z_]+(?:\s*,\s*'[^']*')?\s*$", "", code).strip()
+        elif RE_PHP_WRAPPER_CALL.match(code) and code.endswith(")"):
+            # $var( ... ) 单层包裹
+            depth = 0
+            for i, ch in enumerate(code):
+                if ch == "(":
+                    depth += 1
+                elif ch == ")":
+                    depth -= 1
+                    if depth == 0:
+                        if i == len(code) - 1:
+                            code = code[code.index("(") + 1:-1].strip()
+                        break
+        if code == before:
+            break
+    return code
+
+
+def _is_tag_convertible_i18n(code: str) -> bool:
+    core = _strip_wrappers(code)
+    return re.match(r"^__\s*\(\s*['\"]", core) is not None and core.rstrip().endswith(")")
 
 def scan_markup(text: str, hits: list, src: str) -> None:
     cleaned = strip_noise(text, True)
@@ -344,6 +397,9 @@ def scan_markup(text: str, hits: list, src: str) -> None:
         hits.append((src, "inline_style", m.group()[:100]))
     for m in RE_SCRIPT_BLOCK.finditer(cleaned):
         attrs, body = m.group(1), m.group(2)
+        # PHP 注释里出现的 "<script src>" 文案不是真实标签（无 = 号）
+        if "=" not in attrs and re.search(r"\bsrc\b", attrs, re.I):
+            continue
         if re.search(r"type\s*=\s*['\"](?:application/(?:ld\+)?json|text/template|text/x-template)", attrs, re.I):
             continue
         if re.search(r"\bsrc\s*=", attrs, re.I):
@@ -357,23 +413,44 @@ def scan_markup(text: str, hits: list, src: str) -> None:
         line = cleaned.count("\n", 0, m.start()) + 1
         hits.append((src, "inline_handler", f"L{line}:{m.group().strip()}"))
     for seg in RE_ECHO_SEG.finditer(cleaned):
-        for m in RE_PHP_I18N_ANY.finditer(seg.group(1)):
-            code = seg.group(1)[m.start():]
-            dynamic = re.match(r"__\s*\(\s*\$", code) is not None
-            if dynamic:
-                continue  # 运行时数据翻译（__($var)），非模板静态文案
+        seg_code = seg.group(1)
+        # 数据载荷例外：json_encode(...) 组装的文案字典经 data-* 传给 JS，不是模板可见文案
+        data_payload = "json_encode(" in seg_code.replace(" ", "")
+        if data_payload:
+            continue
+        # 只有「整个输出就是一个 __(字面量) 调用」才必须 Tag 化（<lang>/@lang）。
+        # 三元 / ?? 兜底 / 作为函数参数参与运算的 __() 属 PHP 侧运行时翻译，规则允许。
+        if not _is_tag_convertible_i18n(seg_code):
+            continue
+        for m in RE_PHP_I18N_ANY.finditer(seg_code):
             line = cleaned.count("\n", 0, seg.start(1) + m.start()) + 1
             hits.append((src, "php_i18n_call", f"L{line}"))
     for m in RE_RAW_SHELL.finditer(cleaned):
         hits.append((src, "raw_page_shell", m.group()[:80]))
 
 
+# 追踪像素传输层自身就是「请求出口」，走 Weline.Api 会形成环；其 fetch/beacon 属合法例外。
+ANALYTICS_TRANSPORT = ("Visitor/view/statics/js/pixel.js", "Visitor/view/statics/js/pixel-event-picker.js")
+
+RE_ARCH_FALLBACK = re.compile(r"/\* ARCH_MO_FALLBACK_START \*/.*?/\* ARCH_MO_FALLBACK_END \*/", re.S)
+
+
 def scan_js(text: str, hits: list, src: str) -> None:
+    # 官方降级区（无 Weline.dom 总线时才可用）内的 MutationObserver 不算违规
+    fallback_spans = [(m.start(), m.end()) for m in RE_ARCH_FALLBACK.finditer(text)]
+
+    def in_fallback(pos: int) -> bool:
+        return any(a <= pos < b for a, b in fallback_spans)
+
+    if any(k in "/" + src.replace("\\", "/") for k in ANALYTICS_TRANSPORT):
+        return
     for m in RE_FETCH.finditer(text):
         hits.append((src, "js_fetch_direct", text[m.start():m.start() + 60]))
     for m in RE_XHR.finditer(text):
         hits.append((src, "js_fetch_direct", m.group()[:60]))
     for m in RE_OBSERVE.finditer(text):
+        if in_fallback(m.start()):
+            continue
         hits.append((src, "js_observe_direct", m.group()[:60]))
 
 

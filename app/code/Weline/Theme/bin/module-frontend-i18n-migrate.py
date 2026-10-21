@@ -60,6 +60,8 @@ RE_ECHO = re.compile(r"<\?=\s*(.*?)\s*\?>", re.S)
 RE_WRAPPED = (
     re.compile(r"^(?:htmlspecialchars|htmlentities)\s*\(\s*(?:\(string\)\s*)?__\(\s*(['\"])((?:(?!\1).)*)\1\s*\)(?:\s*,[^)]*)?\)$", re.S),
     re.compile(r"^\$[A-Za-z_][A-Za-z0-9_]*\s*\(\s*__\(\s*(['\"])((?:(?!\1).)*)\1\s*\)\s*\)$", re.S),
+    re.compile(r"^(?:htmlspecialchars|htmlentities)\s*\(\s*(?:\(string\)\s*)*\(\(string\)\s*__\(\s*(['\"])((?:(?!\1).)*)\1\s*\)\)(?:\s*,[^)]*)?\)$", re.S),
+    re.compile(r"^\$[A-Za-z_][A-Za-z0-9_]*\s*\(\s*\(string\)\s*__\(\s*(['\"])((?:(?!\1).)*)\1\s*\)\s*\)$", re.S),
     re.compile(r"^(?:\(string\)\s*)?__\(\s*(['\"])((?:(?!\1).)*)\1\s*\)$", re.S),
 )
 
@@ -88,6 +90,38 @@ def convert_wrapped(text: str, stats: Counter, review: list[dict], src: str) -> 
 
     return RE_ECHO.sub(repl, text)
 
+
+
+# <?= $w(__('TEXT', ARGS)) ?> / $w((string)__('TEXT', ARGS)) -> <lang args="ARGS">TEXT</lang> 或 @lang('TEXT', ARGS)
+RE_WRAPPED_ARGS = re.compile(
+    r"<\?=\s*"
+    r"(?:htmlspecialchars\s*\(\s*)?"
+    r"(?:\$[A-Za-z_][A-Za-z0-9_]*\s*\()?"
+    r"\s*(?:\(string\)\s*)?__\(\s*(?P<q>['\"])(?P<text>(?:(?!(?P=q))[^\\]|\\.)*)(?P=q)\s*,"
+    r"\s*(?P<args>\[[^\[\]]*(?:\[[^\[\]]*\][^\[\]]*)*\])\s*\)"
+    r"(?:\s*\))?"
+    r"(?:\s*,\s*ENT_[A-Z_]+(?:\s*,\s*'[^']*')?\s*\))?"
+    r"\s*\?>", re.S)
+
+
+def convert_wrapped_args(text: str, stats: Counter, review: list[dict], src: str) -> str:
+    def repl(m: re.Match) -> str:
+        quote, src_text, args = m.group('q'), m.group('text'), m.group('args')
+        if "$" in src_text or "<" in src_text or ">" in src_text:
+            review.append({"src": src, "reason": "wrapped-args-dynamic", "match": m.group(0)[:120]})
+            return m.group(0)
+        out = src_text.replace("\\" + quote, quote)
+        args_clean = re.sub(r"\s+", " ", args.strip())
+        if '"' in args_clean:
+            review.append({"src": src, "reason": "args-quote", "match": m.group(0)[:120]})
+            return m.group(0)
+        if in_html_attribute(text, m.start()):
+            stats["attribute_at_lang_args"] += 1
+            return f"@lang('{out}', {args_clean})"
+        stats["lang_with_args"] += 1
+        return f'<lang args="{args_clean}">{out}</lang>'
+
+    return RE_WRAPPED_ARGS.sub(repl, text)
 
 def transform(text: str, stats: Counter, review: list[dict], src: str) -> str:
     def repl(m: re.Match) -> str:
@@ -121,7 +155,8 @@ def transform(text: str, stats: Counter, review: list[dict], src: str) -> str:
         return f"<lang>{text_out}</lang>"
 
     text = RE_FLAT.sub(repl, text)
-    return convert_wrapped(text, stats, review, src)
+    text = convert_wrapped(text, stats, review, src)
+    return convert_wrapped_args(text, stats, review, src)
 
 
 def main() -> int:

@@ -380,6 +380,7 @@ grid,grid
 请输入邮箱地址,"Please enter email address"
 请输入邮政编码,"Please enter postal code"
 "门牌号 / 楼栋单元等","Building / unit number, etc."
+同时用作收货地址,"Also use as shipping address"
 选择收货地址,"Select a shipping address"
 名,名
 姓,姓
@@ -393,7 +394,6 @@ grid,grid
 收起地址列表,"Hide address list"
 地址列表加载失败，请稍后重试。,"Failed to load addresses. Please try again."
 该地址所在地区暂不支持配送（禁运）。,"This address is in an embargoed area and cannot be shipped to."
-同时用作收货地址,"Also use as shipping address"
 请填写收货人。,"Please enter the recipient name."
 请填写电话。,"Please enter a phone number."
 电话号码格式不正确,"Invalid phone number format"

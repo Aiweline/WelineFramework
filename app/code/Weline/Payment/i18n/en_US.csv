@@ -335,7 +335,6 @@ More,More
 未指定,Unspecified
 未标记,Unmarked
 或使用下方结账,"Or continue below"
-"使用 %{1} 快捷支付","Pay with %{1}"
 快捷支付已关闭。,"Express checkout is closed."
 该商品仅支持询价，暂无快捷支付。,"This product supports inquiry only; quick payment is not available."
 使用支付商账户直接付款，地址可由支付商带回,"Pay with your payment account; address can be returned by the provider"
@@ -741,6 +740,7 @@ More,More
 "PayPal Developer Sandbox REST App Client ID","PayPal Developer Sandbox REST App Client ID"
 "PayPal Developer Sandbox REST App Secret","PayPal Developer Sandbox REST App Secret"
 仅检查平台沙箱凭据是否已就绪,"Only check if the platform sandbox credentials are ready"
+"使用 %{1} 快捷支付","Pay with %{1}"
 "共 %{1} 个支付供应商","%{1} payment provider(s)"
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
 收起悬浮,"Collapse float"
