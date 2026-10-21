@@ -50,6 +50,9 @@ final class WebsitesTaglibContractsTest extends TestCase
             'DomainSelectSelectedCapsule::testWebsiteFormPassesSelectedDomainNamesInsteadOfCountSummary' => function () {
             $this->assert_DomainSelectSelectedCapsule_testWebsiteFormPassesSelectedDomainNamesInsteadOfCountSummary();
         },
+            'SearchableCodeSelectInlineScript::testSearchableCodeSelectInlineScriptIsComplete' => function () {
+            $this->assert_SearchableCodeSelectInlineScript_testSearchableCodeSelectInlineScriptIsComplete();
+        },
             'SearchableCodeSelectThemeTokens::testSearchableCodeSelectStylesPreferThemeTokensOverHardcodedLightPalette' => function () {
             $this->assert_SearchableCodeSelectThemeTokens_testSearchableCodeSelectStylesPreferThemeTokensOverHardcodedLightPalette();
         },
@@ -320,4 +323,31 @@ private function mockTemplate_WebsitesSelectRuntimeCallback(array $bag): Templat
     });
     return $template;
 }
+
+    /**
+     * 历史回归：setValue() 之后的脚本生成行曾被截断，导致所有使用
+     * <w:websites:store:select> 的后台页面抛 "Unexpected token ')'" 的 pageerror。
+     * 这里锁住生成的内联脚本必须完整、绑定触发器、花括号配平。
+     */
+    private function assert_SearchableCodeSelectInlineScript_testSearchableCodeSelectInlineScriptIsComplete(): void
+    {
+        $markup = SearchableCodeSelect::buildMarkup([
+            'id' => 'scs-contract-test',
+            'name' => 'store_id',
+            'options' => [['value' => '1', 'label' => 'Test Store']],
+            'allow-empty' => true,
+            'clearable' => true,
+        ]);
+        self::assertMatchesRegularExpression('/<script>\(function\(\)\{.*?\}\)\(\);<\/script>/s', $markup);
+        preg_match('/<script>(.*?)<\/script>/s', $markup, $matches);
+        $js = trim((string)($matches[1] ?? ''));
+        self::assertStringContainsString('trigger.addEventListener("click"', $js, 'Select 脚本必须绑定触发器点击事件（脚本被截断的历史回归）。');
+        self::assertStringContainsString('function renderList(', $js);
+        self::assertStringEndsWith('})();', $js, 'Select 内联脚本必须以 IIFE 收尾。');
+        self::assertSame(
+            0,
+            substr_count($js, '{') - substr_count($js, '}'),
+            'Select 内联脚本花括号必须配平（setValue 缺少闭合大括号会导致页面 pageerror）。'
+        );
+    }
 }
