@@ -125,7 +125,7 @@ $customerServiceJsHref = rtrim($customerServiceJsHref, '?&');
             <path d="M7 9h10v2H7zm0-3h10v2H7zm0 6h7v2H7z"/>
         </svg>
         <span class="cs-presence-dot" id="cs-presence-dot" hidden aria-hidden="true"></span>
-        <spanclass="cs-badge cs-float-hidden" id="cs-unread-badge">0</span>
+        <span class="cs-badge cs-float-hidden" id="cs-unread-badge">0</span>
     </div>
 
     <?php
@@ -163,7 +163,7 @@ $customerServiceJsHref = rtrim($customerServiceJsHref, '?&');
             </div>
         </div>
 
-        <divclass="cs-settings-panel w-panel-body cs-settings-panel--compact cs-float-hidden" id="cs-settings-panel">
+        <div class="cs-settings-panel w-panel-body cs-settings-panel--compact cs-float-hidden" id="cs-settings-panel">
             <div class="cs-settings-item">
                 <label for="cs-locale-select">
                     <svg class="cs-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
@@ -306,5 +306,10 @@ $csFloatConfig = [
 ?>
 <script type="application/json" id="cs-float-config"><?= json_encode($csFloatConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
    <style>
-        .cs-float-hidden { display: none }
+        /* 这些节点默认隐藏，由 customer-service.js 在打开时移除 class。
+           用 ID+class 提高特异性：部件 CSS 在 body-end 注入，等特异性会输给 .cs-chat-window{display:flex}。 */
+        #customer-service-widget .cs-chat-window.cs-float-hidden,
+        #customer-service-widget .cs-settings-panel.cs-float-hidden,
+        #customer-service-widget .cs-badge.cs-float-hidden,
+        #cs-bind-modal.cs-float-hidden { display: none; }
     </style>
