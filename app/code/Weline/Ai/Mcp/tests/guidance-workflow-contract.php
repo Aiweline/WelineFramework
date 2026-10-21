@@ -1252,17 +1252,17 @@ $checks = [
             'requirement_session_dashboard',
             'pm_plan_lifecycle',
         ],
-        array_values(array_filter(array_map(
+        array_values(array_merge(array_filter(array_map(
             static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
             is_array($teamSurface['norms'] ?? null) ? $teamSurface['norms'] : [],
-        ))),
+        )), array_map('strval', is_array($teamSurface['norm_ids'] ?? null) ? $teamSurface['norm_ids'] : []))),
     )) === 17,
     'engineering team surface norms include seat_closed_reports_related_web_urls' => in_array(
         'seat_closed_reports_related_web_urls',
-        array_values(array_filter(array_map(
+        array_values(array_merge(array_filter(array_map(
             static fn (mixed $norm): string => is_array($norm) ? (string) ($norm['id'] ?? '') : '',
             is_array($teamSurface['norms'] ?? null) ? $teamSurface['norms'] : [],
-        ))),
+        )), array_map('strval', is_array($teamSurface['norm_ids'] ?? null) ? $teamSurface['norm_ids'] : []))),
         true,
     ),
     'hard_constraints include api_rest_in_owning_module' => array_reduce(
@@ -1279,7 +1279,7 @@ $checks = [
         false,
     ),
     'api_sdk_development surface exists' => ($apiSdkSurface['id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_API_SDK_DEVELOPMENT
-        && str_contains((string) ($apiSdkSurface['authoritative_doc'] ?? ''), 'align-freeze'),
+        && str_contains((string) ($apiSdkSurface['authoritative_doc'] ?? ''), 'API接口开发规范'),
     'api_sdk_development surface includes shared query core norms' => count(array_intersect(
         ['api_shared_query_core', 'api_per_entry_permission_matrix'],
         array_values(array_filter(array_map(

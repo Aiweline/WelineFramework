@@ -27,7 +27,7 @@
 | **按 UI 开发**（本指令） | 用户明确要按设计稿/参考 UI **边做边对稿**；开发过程中主动截图对稿 |
 | **审图**（`dev/ai-command/theme/审图.md`） | 用户**附图/粘贴截图**，或验收阶段 `acceptance_phase_requires_shentu` |
 
-对稿发现的视觉/人性化 fail → **同回合**转入审图联合流水线（线稿 → `prototype` → `frontend-design` → `weline-theme-development`）修到 pass。  
+对稿发现的视觉/人性化 fail → **同回合**转入审图联合流水线（线稿 → `prototype` → `design_taste`（6 问）→ `frontend-design` → `weline-theme-development`）修到 pass。  
 用户附图仍优先走审图硬触发，不因本指令而跳过。
 
 ---
@@ -35,7 +35,7 @@
 ## 开工前（硬）
 
 1. **钉参考 UI**：用户给的设计稿 / Figma 导出 / 竞品或目标截图 / 线稿。没有参考稿 → **先问用户要参考**，禁止凭感觉「假装对稿」。
-2. **齐读技能**（Web UI）：`weline-theme-development`（`get_skill`）+ `frontend-design` + `prototype` + `local-browser-urls`。缺 UI/原型宿主技能 → 按审图同款提示并自行装入 Agent Store。
+2. **齐读技能**（Web UI）：`weline-theme-development`（`get_skill`）+ `design_taste`（`taste`）+ `frontend-design` + `prototype` + `local-browser-urls`。缺 UI/原型/品味宿主技能 → 按审图同款提示并自行装入 Agent Store。
 3. **切功能切片**：一次只做一个可截图验收的功能面（一个区块 / 一个交互态 / 一个断点视图），禁止一口气做完整页再第一次截图。
 4. 既有页上加功能：先遵守审图里的 `feature_add_requires_current_ui_review`（先拍当前页再落位）。
 

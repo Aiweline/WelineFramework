@@ -53,8 +53,8 @@ $check(
     str_contains((string) file_get_contents(dirname(__DIR__) . '/src/IndexRefreshScheduler.php'), 'proc_nice'),
     'scheduler source applies proc_nice to detached workers',
 );
-$check((int) $config->get('index.refresh_worker_max_seconds', 0) === 900, 'default refresh_worker_max_seconds is 900');
-$check((int) $config->get('index.refresh_worker_nice', -1) === 10, 'default refresh_worker_nice is 10');
+$check((int) $config->get('index.refresh_worker_max_seconds', 0) === 120, 'default refresh_worker_max_seconds is 120');
+$check((int) $config->get('index.refresh_worker_nice', -1) === 19, 'default refresh_worker_nice is 19');
 $deadline = IndexRefreshScheduler::defaultDeadlineEpoch($config);
 $check($deadline >= time() + 60, 'defaultDeadlineEpoch is at least 60s ahead');
 

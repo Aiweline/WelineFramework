@@ -115,7 +115,7 @@ try {
     check($legacyUnknownConfig->get('not_a_real_section') === null, 'unknown top-level config sections are ignored without failing load');
     check($config->duration('privacy.raw_session_ttl') === 14 * 86_400, 'raw session TTL defaults to fourteen days');
     check($config->duration('privacy.tombstone_ttl') === 14 * 86_400, 'ordinary tombstones default to fourteen days');
-    check($config->duration('index.refresh_interval') === 10 * 60, 'interactive index refresh interval defaults to ten minutes');
+    check($config->duration('index.refresh_interval') === 30 * 60, 'background index refresh interval defaults to thirty minutes');
     check($config->duration('index.gc.retention') === 14 * 86_400, 'derived index inactivity retention defaults to fourteen days');
     check($config->duration('index.gc.dry_run_period') === 86_400, 'index GC requires a full-day observation before quarantine');
     check($config->duration('index.gc.quarantine_period') === 86_400, 'index GC quarantine keeps a full-day recovery window');
@@ -779,7 +779,7 @@ try {
     $sortedNames = $names;
     sort($sortedNames);
     check($sortedNames === $indexTools, 'compact tool surface equals the nine index/knowledge tools');
-    check(ToolService::VERSION === '0.13.21', 'tool service version is 0.13.21');
+    check(ToolService::VERSION === '0.13.30', 'tool service version is 0.13.30');
     check(str_contains(substr(ToolService::instructions(), 0, 512), 'prepare_project'), 'first 512 instruction characters contain prepare_project');
     check(str_contains(ToolService::instructions(), 'resolve_task_context'), 'instructions mention resolve_task_context');
     check(str_contains(ToolService::instructions(), 'resolve_skill'), 'instructions mention resolve_skill');
@@ -872,8 +872,8 @@ try {
         'host_codex_delegation requires user-visible Codex-working status',
     );
     check(
-        str_contains(HardConstraintsCatalog::mcpInstructions(), 'Codex 正在工作'),
-        'mcp instructions mention Codex-working announce',
+        str_contains(HardConstraintsCatalog::mcpInstructions(), 'host_codex_delegation'),
+        'mcp instructions point at the opt-in host_codex_delegation rule',
     );
     $planTpl = (string) ($hostDelegation['plan_command_template'] ?? '');
     $reviewTpl = (string) ($hostDelegation['review_command_template'] ?? '');
@@ -1117,7 +1117,9 @@ SH);
     $initInstructions = (string) ($responses[1]['result']['instructions'] ?? '');
     check(str_contains($initInstructions, 'prepare_project'), 'initialize exposes prepare_project instructions');
     check(
-        (str_contains($initInstructions, 'mandatory hard-rule gate') || str_contains($initInstructions, 'MANDATORY ensure'))
+        (str_contains($initInstructions, 'mandatory hard-rule gate')
+            || str_contains($initInstructions, 'MANDATORY ensure')
+            || str_contains($initInstructions, 'HC-SL'))
             && str_contains($initInstructions, 'host-native'),
         'initialize instructions require hard-rule gate with host-native coding',
     );

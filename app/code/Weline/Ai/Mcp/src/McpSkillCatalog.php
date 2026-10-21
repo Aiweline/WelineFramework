@@ -24,6 +24,10 @@ final class McpSkillCatalog
      */
     private const HOST_SHELL_ALIASES = [
         'weline-theme-development' => GuidanceWorkflowCatalog::SURFACE_FRONTEND_DEVELOPMENT,
+        'taste' => GuidanceWorkflowCatalog::SURFACE_DESIGN_TASTE,
+        'design-taste' => GuidanceWorkflowCatalog::SURFACE_DESIGN_TASTE,
+        'design_taste' => GuidanceWorkflowCatalog::SURFACE_DESIGN_TASTE,
+        'weline-taste' => GuidanceWorkflowCatalog::SURFACE_DESIGN_TASTE,
         'local-browser-urls' => GuidanceWorkflowCatalog::SURFACE_WEBUI_BROWSER_CLOSEOUT,
         'weline-taglib-first' => GuidanceWorkflowCatalog::SURFACE_TAGLIB_UI_CONTROL,
         'weline-req-clarify' => GuidanceWorkflowCatalog::SURFACE_REQUIREMENT_CLARIFY_USE_CASE,
@@ -98,7 +102,7 @@ final class McpSkillCatalog
                 'Do not treat host editor SKILL.md as authoritative over MCP skill bodies.',
                 'Host shells (e.g. Cursor Agent Skills) may exist only as thin reminders to call MCP.',
                 'Full task docs still come from resolve_task_context; skills are procedural checklists.',
-                'Whenever the task mentions CSS or 主题/theme: load UI skill frontend-design, prototype skill prototype, and theme skill weline-theme-development (get_skill) before styling.',
+                'Whenever the task mentions CSS or 主题/theme: load UI skill frontend-design, prototype skill prototype, taste skill taste (get_skill design_taste) and theme skill weline-theme-development (get_skill) before styling.',
                 'HARD: At requirement start classify work_kind + fe_be_scope (requirement_fe_be_scope_analysis), then run Spec Kit/Kiro-style clarify + use-case when needed (requirement_clarify_use_case_spec). Enable host Plan Mode (host_plan_mode_for_planning) UNLESS simple plan_skip with rationale≥24; plan body ONLY 背景+方案+细节 (plan_content_focus_only). Non-simple/complex requirements: the parent itself chooses team mode (engineering_team_for_new_requirements) and seats; parent utters ONLY Team:项目经理:; ONE_SEAT_ONE_AGENT (real subagent per seat; forbid parent roleplay); PEER_TALK_VIA_CHANNEL (channel/{thread}.md + resume peers); relay Team:架构师: only from real subagent reports. Simple plan_skip uses 监工: and must not use Team:. Complex team MUST obey framework_first + dual_track_all specialty seats + component_reuse_or_negotiate + team_flow_on_contracts (对齐冻结会钉 UC+contracts+deps；依赖唤醒；禁止开发完才补主路径用例) + ui_prototype_gate_before_test (UI+原型先审可打回→过签才测→PM汇审才汇报). Content-ops exempt. EVERY ask MUST have real acceptance (requirement_acceptance_always)—Web touches need local Browser WB-OP visual+logic even without Playwright e2e. Feature UCs MUST close via covers_use_cases + passed evidence (requirement_use_case_closed_loop_acceptance)—orphan UC or generic e2e without UC coverage → only 「代码已改，需求用例闭环验收未完成」. Layout/humanization/吐槽/审图 force prototype+frontend-design adjustments (ui_skill_surface_signal_gate). Then analyze implicit requirements; decide ui_skill_decision. When participate: prototype+frontend-design+weline-theme-development + type=shentu. Closeout MUST write huishen_notes 汇审 (closeout_requires_huishen).',
                 'HARD: Any user message with an image/screenshot attachment (admin/CMS/error/storefront—not only retail/B2B) MUST run MCP command 审图 (dev/ai-command/theme/审图.md) immediately; do not wait for the word 审图. Classify error_shot vs ui_shot: non-error (ui_shot) defaults to UI modification required. HARD SEATING: web_ui/confirmed frontend_candidate image → FORCE ui_skill_decision=participate; visual UI + prototype MUST come online (skills always; complex team MUST staff seats 原型+UI+前端+主题开发工程师; simple 监工 still loads those skills). Same-turn joint pipeline: extract wireframe/line sketch → prototype adjustments (prototype) → frontend-design humanization + aesthetic standards → weline-theme-development CSS/tokens; fix fails (do not critique-only). Shot-only/silent screenshot: UI+prototype audit—NOT confirming prior chat. If host skills frontend-design or prototype are missing: prompt visibly and self-install into Cursor Agent Store before E/F pass (image_attachment_shentu_bundle.missing_host_skills_gate).',
                 'HARD: When the user asks 按UI开发 / 对照UI开发 / design to code / ui-driven: Read+follow MCP command 按UI开发 (dev/ai-command/theme/按UI开发.md) / get_skill(ui_driven_development|weline-ui-driven-dev). After EACH feature slice: cache-off Browser screenshot → Read image → diff vs reference UI → fix until aligned before the next slice. No reference mock → ask user first; forbid fake alignment. Visual fails → same-turn 审图 joint pipeline. Bundle ui_driven_development_bundle.',
@@ -116,6 +120,7 @@ final class McpSkillCatalog
                 'required_when' => 'ui_skill_decision=participate',
                 'required' => [
                     ['role' => 'prototype', 'host_skill' => 'prototype'],
+                    ['role' => 'taste', 'host_skill' => 'taste', 'mcp_skill_id' => GuidanceWorkflowCatalog::SURFACE_DESIGN_TASTE, 'fetch' => 'get_skill'],
                     ['role' => 'ui', 'host_skill' => 'frontend-design'],
                 ],
                 'also_require_acceptance_type' => 'shentu',
@@ -206,6 +211,7 @@ final class McpSkillCatalog
                 'required' => [
                     ['role' => 'ui', 'host_skill' => 'frontend-design'],
                     ['role' => 'prototype', 'host_skill' => 'prototype'],
+                    ['role' => 'taste', 'host_skill' => 'taste', 'mcp_skill_id' => GuidanceWorkflowCatalog::SURFACE_DESIGN_TASTE, 'fetch' => 'get_skill'],
                     [
                         'role' => 'theme',
                         'host_skill' => 'weline-theme-development',
@@ -282,6 +288,7 @@ final class McpSkillCatalog
                 'required_skills_for_web_ui' => [
                     ['role' => 'ui', 'host_skill' => 'frontend-design'],
                     ['role' => 'prototype', 'host_skill' => 'prototype'],
+                    ['role' => 'taste', 'host_skill' => 'taste', 'mcp_skill_id' => GuidanceWorkflowCatalog::SURFACE_DESIGN_TASTE, 'fetch' => 'get_skill'],
                     [
                         'role' => 'theme',
                         'host_skill' => 'weline-theme-development',
@@ -348,6 +355,7 @@ final class McpSkillCatalog
                 'required_skills_for_web_ui' => [
                     ['role' => 'ui', 'host_skill' => 'frontend-design'],
                     ['role' => 'prototype', 'host_skill' => 'prototype'],
+                    ['role' => 'taste', 'host_skill' => 'taste', 'mcp_skill_id' => GuidanceWorkflowCatalog::SURFACE_DESIGN_TASTE, 'fetch' => 'get_skill'],
                     [
                         'role' => 'theme',
                         'host_skill' => 'weline-theme-development',
@@ -591,6 +599,7 @@ final class McpSkillCatalog
         $apiSdk = GuidanceWorkflowCatalog::SURFACE_API_SDK_DEVELOPMENT;
         $widget = GuidanceWorkflowCatalog::SURFACE_WIDGET_DEVELOPMENT;
         $themeDev = GuidanceWorkflowCatalog::SURFACE_THEME_DEVELOPMENT;
+        $taste = GuidanceWorkflowCatalog::SURFACE_DESIGN_TASTE;
         $payment = GuidanceWorkflowCatalog::SURFACE_PAYMENT_DEVELOPMENT;
         $visitor = GuidanceWorkflowCatalog::SURFACE_VISITOR_DATA_ANALYTICS;
         $ecommerce = GuidanceWorkflowCatalog::SURFACE_ECOMMERCE_ADVISOR;
@@ -759,8 +768,7 @@ final class McpSkillCatalog
                         'app/code/Weline/Theme/doc/组件Meta信息格式规范.md',
                         'app/code/Weline/Theme/doc/部件开发指南.md',
                         'app/code/Weline/Theme/doc/开发/spec/required-default-always-present.md',
-                        'app/code/Weline/Ai/doc/开发/team/theme-engineer-charter/meetings/align-freeze.md',
-                        'app/code/Weline/Ai/doc/开发/team/theme-engineer-charter/meetings/席位底线补钉.md',
+                        'dev/ai-command/ai/主题开发.md',
                         'dev/ai-command/ai/工程团队.md',
                     ],
                     'must_query_scope' => 'area frontend|backend；四层；必装永远存在(user_deleted)；席位底线>他席优化；Weline.Api禁fetch；JS declare-only；浮层；Editor双入口/预览同构；layoutType斜杠；结构缓存键；scan≠disk:compile；publish-not-found；ui:audit；Factory Reset禁区；websites_theme_application→Default；语义色+度量Token；weline-code；版心',
@@ -768,10 +776,11 @@ final class McpSkillCatalog
                 ],
                 'UI' => [
                     'kind' => 'core',
-                    'mcp_skill_ids' => [$fe, $webui],
-                    'host_skills' => ['frontend-design', 'prototype', 'weline-theme-development', 'weline-ui-shentu'],
+                    'mcp_skill_ids' => [$fe, $webui, $taste],
+                    'host_skills' => ['frontend-design', 'prototype', 'taste', 'weline-theme-development', 'weline-ui-shentu'],
                     'authoritative_docs' => [
                         'dev/ai-command/theme/审图.md',
+                        'app/code/Weline/Theme/doc/设计品味.md',
                         'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
                         'app/code/Weline/Theme/doc/theme-css-variables-only.md',
                     ],
@@ -780,11 +789,12 @@ final class McpSkillCatalog
                 ],
                 '原型' => [
                     'kind' => 'core',
-                    'mcp_skill_ids' => [$clarify, $fe],
-                    'host_skills' => ['prototype', 'frontend-design', 'weline-theme-development'],
+                    'mcp_skill_ids' => [$clarify, $fe, $taste],
+                    'host_skills' => ['prototype', 'taste', 'frontend-design', 'weline-theme-development'],
                     'authoritative_docs' => [
                         'dev/ai-command/theme/审图.md',
                         'dev/ai-command/ai/需求澄清与用例规格.md',
+                        'app/code/Weline/Theme/doc/设计品味.md',
                         'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
                         'app/code/Weline/Theme/doc/theme-css-variables-only.md',
                     ],
@@ -1025,7 +1035,7 @@ final class McpSkillCatalog
                     'mcp_skill_ids' => [$apiSdk],
                     'host_skills' => ['weline-api-sdk'],
                     'authoritative_docs' => [
-                        'app/code/Weline/Ai/doc/开发/team/api-seat-charter/meetings/align-freeze.md',
+                        'app/code/Weline/Ai/doc/规则/30-后端与数据.md',
                         'app/code/Weline/Framework/doc/BinQuery/Provider开发指南.md',
                         'app/code/Weline/Framework/doc/3-开发/API接口开发规范.md',
                         'app/code/Weline/Framework/doc/BinQuery/README.md',
@@ -1356,6 +1366,14 @@ final class McpSkillCatalog
             'template_surface_rules' => is_array($surface['template_surface_rules'] ?? null)
                 ? $surface['template_surface_rules']
                 : [],
+            'spec' => (string) ($surface['spec'] ?? ''),
+            'when' => self::stringList($surface['when'] ?? null),
+            'inputs' => self::stringList($surface['inputs'] ?? null),
+            'procedure' => self::stringList($surface['procedure'] ?? null),
+            'checklist' => self::stringList($surface['checklist'] ?? null),
+            'anti_patterns' => self::stringList($surface['anti_patterns'] ?? null),
+            'evidence' => self::stringList($surface['evidence'] ?? null),
+            'norm_ids' => self::stringList($surface['norm_ids'] ?? null),
             'feature_delivery_urls' => $surfaceId === GuidanceWorkflowCatalog::SURFACE_WEBUI_BROWSER_CLOSEOUT
                 ? GuidanceWorkflowCatalog::featureDeliveryUrls()
                 : null,
@@ -1383,6 +1401,14 @@ final class McpSkillCatalog
             'triggers' => $skill['triggers'] ?? [],
             'authoritative_docs' => $skill['authoritative_docs'] ?? [],
             'norms' => $skill['norms'] ?? [],
+            'spec' => $skill['spec'] ?? '',
+            'when' => $skill['when'] ?? [],
+            'inputs' => $skill['inputs'] ?? [],
+            'procedure' => $skill['procedure'] ?? [],
+            'checklist' => $skill['checklist'] ?? [],
+            'anti_patterns' => $skill['anti_patterns'] ?? [],
+            'evidence' => $skill['evidence'] ?? [],
+            'norm_ids' => $skill['norm_ids'] ?? [],
             'provider' => self::PROVIDER,
             'static_skill_files' => false,
             'kind' => $kind,
@@ -1428,29 +1454,29 @@ final class McpSkillCatalog
         if (($skill['aliases'] ?? []) !== []) {
             $lines[] = '- host shell aliases（可选薄壳）: `' . implode('`, `', $skill['aliases']) . '`';
         }
-        $lines[] = '';
-        $lines[] = '## 权威文档';
-        $lines[] = '';
-        foreach ($skill['authoritative_docs'] ?? [] as $doc) {
-            $lines[] = '- `' . $doc . '`';
+        if ((string) ($skill['spec'] ?? '') !== '') {
+            $lines[] = '- spec: `' . (string) $skill['spec'] . '`';
         }
-        if (($skill['authoritative_docs'] ?? []) === []) {
-            $lines[] = '- （见 AI硬规则索引与对应 workflow surface）';
-        }
-        $lines[] = '';
-        $lines[] = '## 规范要点';
-        $lines[] = '';
-        foreach ($skill['norms'] ?? [] as $norm) {
-            if (!is_array($norm)) {
+
+        // skill-v2 executable sections first: when -> inputs -> procedure -> checklist.
+        $sections = [
+            ['## 何时使用', self::stringList($skill['when'] ?? null), false],
+            ['## 输入', self::stringList($skill['inputs'] ?? null), false],
+            ['## 步骤', self::stringList($skill['procedure'] ?? null), true],
+            ['## 检查清单', self::stringList($skill['checklist'] ?? null), false],
+        ];
+        foreach ($sections as [$heading, $items, $ordered]) {
+            if ($items === []) {
                 continue;
             }
-            $id = trim((string) ($norm['id'] ?? ''));
-            $summary = trim((string) ($norm['summary'] ?? ''));
-            if ($summary === '') {
-                continue;
+            $lines[] = '';
+            $lines[] = $heading;
+            $lines[] = '';
+            foreach ($items as $index => $item) {
+                $lines[] = ($ordered ? ($index + 1) . '. ' : '- ') . $item;
             }
-            $lines[] = '- ' . ($id !== '' ? '`' . $id . '` — ' : '') . $summary;
         }
+
         $rules = is_array($skill['template_surface_rules'] ?? null) ? $skill['template_surface_rules'] : [];
         $required = is_array($rules['required'] ?? null) ? $rules['required'] : [];
         $forbidden = is_array($rules['forbidden'] ?? null) ? $rules['forbidden'] : [];
@@ -1462,14 +1488,57 @@ final class McpSkillCatalog
                 $lines[] = '- ' . $item;
             }
         }
-        if ($forbidden !== []) {
+        $forbiddenAll = array_merge(self::stringList($skill['anti_patterns'] ?? null), array_map('strval', $forbidden));
+        if ($forbiddenAll !== []) {
             $lines[] = '';
             $lines[] = '## 禁止';
             $lines[] = '';
-            foreach ($forbidden as $item) {
+            foreach ($forbiddenAll as $item) {
                 $lines[] = '- ' . $item;
             }
         }
+
+        $normLines = [];
+        foreach ($skill['norms'] ?? [] as $norm) {
+            if (!is_array($norm)) {
+                continue;
+            }
+            $id = trim((string) ($norm['id'] ?? ''));
+            $summary = trim((string) ($norm['summary'] ?? ''));
+            if ($summary === '') {
+                continue;
+            }
+            $normLines[] = '- ' . ($id !== '' ? '`' . $id . '` — ' : '') . $summary;
+        }
+        if ($normLines !== []) {
+            $lines[] = '';
+            $lines[] = '## 规范要点';
+            $lines[] = '';
+            foreach ($normLines as $line) {
+                $lines[] = $line;
+            }
+        }
+
+        $normIds = self::stringList($skill['norm_ids'] ?? null);
+        if ($normIds !== []) {
+            $lines[] = '';
+            $lines[] = '## 规则索引';
+            $lines[] = '';
+            $lines[] = '指针：`' . implode('`, `', $normIds) . '`';
+            $lines[] = '';
+            $lines[] = '在 `HardConstraintsCatalog` 内的 id 用 `resolve_task_context(hard_constraint_ids=[…])` 展开；其余按对应指令文件（`dev/ai-command/ai/*.md`）与权威文档小节执行，不在此展开。';
+        }
+
+        $evidence = self::stringList($skill['evidence'] ?? null);
+        if ($evidence !== []) {
+            $lines[] = '';
+            $lines[] = '## 证据';
+            $lines[] = '';
+            foreach ($evidence as $item) {
+                $lines[] = '- ' . $item;
+            }
+        }
+
         $commands = is_array($skill['verification_commands'] ?? null) ? $skill['verification_commands'] : [];
         if ($commands !== []) {
             $lines[] = '';
@@ -1479,6 +1548,17 @@ final class McpSkillCatalog
                 $lines[] = '- `' . $command . '`';
             }
         }
+
+        $lines[] = '';
+        $lines[] = '## 权威文档';
+        $lines[] = '';
+        foreach ($skill['authoritative_docs'] ?? [] as $doc) {
+            $lines[] = '- `' . $doc . '`';
+        }
+        if (($skill['authoritative_docs'] ?? []) === []) {
+            $lines[] = '- （见 AI硬规则索引与对应 workflow surface）';
+        }
+
         $lines[] = '';
         $lines[] = '## 取用方式';
         $lines[] = '';
@@ -1487,5 +1567,35 @@ final class McpSkillCatalog
         $lines[] = '3. 任务文档片段仍用 `resolve_task_context`';
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * @param mixed $value
+     *
+     * @return list<string>
+     */
+    private static function stringList(mixed $value): array
+    {
+        if (!is_array($value)) {
+            return [];
+        }
+        $out = [];
+        foreach ($value as $item) {
+            if (is_string($item)) {
+                $item = trim($item);
+                if ($item !== '') {
+                    $out[] = $item;
+                }
+                continue;
+            }
+            if (is_array($item)) {
+                $text = trim((string) ($item['text'] ?? $item['summary'] ?? $item['id'] ?? ''));
+                if ($text !== '') {
+                    $out[] = $text;
+                }
+            }
+        }
+
+        return $out;
     }
 }

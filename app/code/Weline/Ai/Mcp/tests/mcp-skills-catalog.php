@@ -83,6 +83,20 @@ $taglib = McpSkillCatalog::get(GuidanceWorkflowCatalog::SURFACE_TAGLIB_UI_CONTRO
 skillCheck(is_array($taglib), 'get by canonical surface id');
 skillCheck(in_array('weline-taglib-first', $taglib['aliases'] ?? [], true), 'taglib skill exposes host alias');
 
+$taste = McpSkillCatalog::get('taste', true);
+skillCheck(is_array($taste), 'get by host alias taste');
+skillCheck(($taste['skill_id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_DESIGN_TASTE, 'taste alias maps to design_taste');
+skillCheck(($taste['spec'] ?? '') === \LearningMcp\SkillSurfaceV2::SPEC, 'taste surface is skill-v2');
+skillCheck(is_array($taste['procedure'] ?? null) && count($taste['procedure']) >= 3, 'taste exposes ordered procedure');
+skillCheck(is_array($taste['checklist'] ?? null) && count($taste['checklist']) >= 3, 'taste exposes binary checklist');
+skillCheck(is_array($taste['evidence'] ?? null) && ($taste['evidence'] ?? []) !== [], 'taste declares evidence artifacts');
+$tasteBody = (string) ($taste['content'] ?? '');
+skillCheck(str_contains($tasteBody, '## 步骤') && str_contains($tasteBody, '## 检查清单'), 'taste body renders procedure + checklist sections');
+skillCheck(str_contains($tasteBody, '--weline-space-') && str_contains($tasteBody, '--weline-font-size-'), 'taste body binds Theme token families');
+skillCheck(str_contains($tasteBody, '设计品味.md'), 'taste body points at 设计品味.md authority');
+$tasteResolved = array_column(McpSkillCatalog::resolve('设计品味 审美 层级', 5, false), 'skill_id');
+skillCheck(in_array(GuidanceWorkflowCatalog::SURFACE_DESIGN_TASTE, $tasteResolved, true), 'resolve matches design_taste by 设计品味/审美');
+
 $matched = McpSkillCatalog::resolve('Theme 部件 phtml 前端样式', 5, false);
 skillCheck($matched !== [], 'resolve matches frontend task');
 skillCheck(($matched[0]['skill_id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_FRONTEND_DEVELOPMENT, 'frontend task ranks theme skill first');
@@ -99,7 +113,8 @@ skillCheck($hasMcpSkillsRule, 'hard constraints include mcp_skills_fetch_from_mc
 
 $bundle = $policy['css_or_theme_skill_bundle'] ?? [];
 skillCheck(($bundle['rule_id'] ?? '') === 'css_or_theme_requires_ui_prototype_theme_skills', 'policy exposes css_or_theme skill bundle');
-skillCheck(is_array($bundle['required'] ?? null) && count($bundle['required']) === 3, 'css_or_theme bundle lists three skills');
+skillCheck(is_array($bundle['required'] ?? null) && count($bundle['required']) === 4, 'css_or_theme bundle lists ui+prototype+taste+theme skills');
+skillCheck(in_array(GuidanceWorkflowCatalog::SURFACE_DESIGN_TASTE, array_column(is_array($bundle['required'] ?? null) ? $bundle['required'] : [], 'mcp_skill_id'), true), 'css_or_theme bundle requires design_taste');
 
 $featureBundle = $policy['feature_skill_bundle'] ?? [];
 skillCheck(($featureBundle['rule_id'] ?? '') === 'requirement_implicit_analysis_skill_decision', 'policy exposes feature_skill_bundle');
@@ -107,7 +122,8 @@ skillCheck(($featureBundle['clarify_rule_id'] ?? '') === 'requirement_clarify_us
 skillCheck(($featureBundle['clarify_skill_id'] ?? '') === GuidanceWorkflowCatalog::SURFACE_REQUIREMENT_CLARIFY_USE_CASE, 'feature bundle links clarify skill');
 skillCheck(($featureBundle['required_when'] ?? '') === 'ui_skill_decision=participate', 'feature bundle gated by ui_skill_decision');
 skillCheck(($featureBundle['also_require_acceptance_type'] ?? '') === 'shentu', 'feature bundle requires shentu acceptance');
-skillCheck(is_array($featureBundle['required'] ?? null) && count($featureBundle['required']) === 2, 'feature bundle lists prototype+UI');
+skillCheck(is_array($featureBundle['required'] ?? null) && count($featureBundle['required']) === 3, 'feature bundle lists prototype+taste+UI');
+skillCheck(in_array('taste', array_column(is_array($featureBundle['required'] ?? null) ? $featureBundle['required'] : [], 'host_skill'), true), 'feature bundle includes taste skill');
 
 $teamBundle = $policy['engineering_team_bundle'] ?? [];
 skillCheck(($teamBundle['rule_id'] ?? '') === 'engineering_team_for_new_requirements', 'policy exposes engineering_team_bundle');
@@ -236,7 +252,7 @@ $apiDocs = is_array($apiSeat['authoritative_docs'] ?? null) ? $apiSeat['authorit
 skillCheck(in_array('app/code/Weline/Framework/doc/3-开发/API接口开发规范.md', $apiDocs, true), 'API mirror docs include API接口开发规范');
 skillCheck(in_array('app/code/Weline/Framework/doc/BinQuery/Provider开发指南.md', $apiDocs, true), 'API mirror docs include BinQuery Provider开发指南');
 skillCheck(in_array('app/code/Weline/Framework/doc/BinQuery/README.md', $apiDocs, true), 'API mirror docs include BinQuery README');
-skillCheck(in_array('app/code/Weline/Ai/doc/开发/team/api-seat-charter/meetings/align-freeze.md', $apiDocs, true), 'API mirror docs include align-freeze architecture charter');
+skillCheck(in_array('app/code/Weline/Ai/doc/规则/30-后端与数据.md', $apiDocs, true), 'API mirror docs include backend API rule book');
 $apiPrompt = (string) ($apiSeat['prompt_increment'] ?? '');
 skillCheck(str_contains($apiPrompt, '归属') || str_contains($apiPrompt, 'Vendor_Module') || str_contains($apiPrompt, 'align-freeze'), 'API prompt_increment mentions owning module or charter');
 skillCheck(str_contains($apiPrompt, 'BinQuery') && str_contains($apiPrompt, 'QueryProvider'), 'API prompt_increment covers BinQuery/QueryProvider');
@@ -271,7 +287,7 @@ skillCheck(str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''),
     && str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), 'escalate')
     && str_contains((string) ($themeEngineerSeat['prompt_increment'] ?? ''), '驳回'), '主题开发工程师 prompt mandates seat integrity over peer requests with veto');
 skillCheck(in_array('app/code/Weline/Theme/doc/开发/spec/required-default-always-present.md', is_array($themeEngineerSeat['authoritative_docs'] ?? null) ? $themeEngineerSeat['authoritative_docs'] : [], true), '主题开发工程师 docs include required-default-always-present spec');
-skillCheck(in_array('app/code/Weline/Ai/doc/开发/team/theme-engineer-charter/meetings/席位底线补钉.md', is_array($themeEngineerSeat['authoritative_docs'] ?? null) ? $themeEngineerSeat['authoritative_docs'] : [], true), '主题开发工程师 docs include 席位底线补钉 meeting');
+skillCheck(in_array('dev/ai-command/ai/主题开发.md', is_array($themeEngineerSeat['authoritative_docs'] ?? null) ? $themeEngineerSeat['authoritative_docs'] : [], true), '主题开发工程师 docs include 主题开发 command');
 $themePrompt = (string) ($themeEngineerSeat['prompt_increment'] ?? '');
 skillCheck(
     (str_contains($themePrompt, 'frontend') && str_contains($themePrompt, 'backend'))

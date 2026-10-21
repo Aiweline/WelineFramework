@@ -10,6 +10,7 @@ require_once __DIR__ . '/HostEditorRulesGenerator.php';
 require_once __DIR__ . '/HostCursorHooksGenerator.php';
 require_once __DIR__ . '/CursorLearningHookAdapter.php';
 require_once __DIR__ . '/SystemConfigTermRouting.php';
+require_once __DIR__ . '/SkillSurfaceV2.php';
 require_once __DIR__ . '/GuidanceWorkflowCatalog.php';
 require_once __DIR__ . '/McpSkillCatalog.php';
 require_once __DIR__ . '/DocSkillCatalog.php';

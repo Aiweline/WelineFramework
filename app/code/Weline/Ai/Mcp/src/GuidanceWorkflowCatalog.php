@@ -60,6 +60,9 @@ final class GuidanceWorkflowCatalog
 
     public const SURFACE_CODE_REVIEW = 'code_review';
 
+    /** 设计品味：UI/原型/审图的判断层（不产出 CSS；Token 落地仍归 frontend_development）。 */
+    public const SURFACE_DESIGN_TASTE = 'design_taste';
+
     /** @return list<string> Repository-relative pinned doc paths. */
     public static function pinnedDocumentPaths(): array
     {
@@ -857,7 +860,7 @@ final class GuidanceWorkflowCatalog
     /** @return array<string, array<string, mixed>> */
     public static function allSurfaces(): array
     {
-        return [
+        $surfaces = [
             self::SURFACE_FRONTEND_DEVELOPMENT => self::frontendDevelopmentSurface(),
             self::SURFACE_TAGLIB_UI_CONTROL => self::taglibUiControlSurface(),
             self::SURFACE_HOOK_EXTENSION => self::hookExtensionSurface(),
@@ -883,6 +886,9 @@ final class GuidanceWorkflowCatalog
             self::SURFACE_DOCUMENTATION_ENGINEER => self::documentationEngineerSurface(),
             self::SURFACE_CODE_REVIEW => self::codeReviewSurface(),
         ];
+
+        // skill-v2: compact executable bodies (src/SkillSurfaceV2/*.php). Adds design_taste.
+        return SkillSurfaceV2::apply($surfaces);
     }
 
     /**

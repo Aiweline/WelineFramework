@@ -1,0 +1,130 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * skill-v2 surface: engineering_team（工程团队 / 父会话当项目经理的组队编排）
+ *
+ * 父会话选模式（监工 | team），team 只由父会话打 `Team:项目经理:`；每席真实子智能体、席间通道互聊。
+ * 政策边界在 hard_constraints（engineering_team_for_new_requirements 等），本文件只给可执行编排与门禁顺序。
+ * 标准：app/code/Weline/Ai/doc/AI技能编写标准.md
+ */
+return [
+    'id' => 'engineering_team',
+    'spec' => 'skill-v2',
+    'label' => '工程团队',
+    'description' => '父会话自选模式：简单用监工（每句 `监工:`）；复杂进 team，父会话只打 `Team:项目经理:`，每席真实子智能体（one_seat_one_agent），席间经 dev/team/{slug}/channel/{thread}.md + resume 互聊。框架优先、专席双轨；验收硬顺序：专席复审→UI/原型双签→测试→文档→PM 汇审才汇报（ui_prototype_gate_before_test）。内容运营不套。',
+    'triggers' => [
+        '工程团队', '大型团队', '子智能体', '停工汇报', '技术方案会', '问题上报',
+        '拉起项目经理', '请立刻组队解决', 'findings_wake_pm', '甩手掌柜',
+        'waiting_acceptance', 'issuer_acceptance', '框架专席', '合规复审',
+        '组件协商', '验收签收', '席间互聊', '一席一智能体', 'align-freeze',
+        'engineering team', 'stop-work', 'dual track', 'peer talk', 'one seat one agent',
+        'API席', '部件开发工程师', '主题开发工程师', '支付开发工程师', '数据分析',
+        '电商顾问', '性能检查工程师', '提示词优化工程师', '翻译工程师', '文档工程师',
+        '文档同步', 'documentation_review_pass', 'Team:项目经理:', '监工', '双轨', '验收门禁',
+    ],
+    'authoritative_skill' => 'weline-engineering-team',
+    'authoritative_doc' => 'dev/ai-command/ai/工程团队.md',
+    'authoritative_docs' => [
+        'dev/ai-command/ai/工程团队.md',
+        'app/code/Weline/Ai/doc/AI工程交付流程.md',
+        'app/code/Weline/Ai/doc/AI硬规则索引.md',
+        'app/code/Weline/Framework/doc/3-开发/扩展点选型.md',
+    ],
+    'when' => [
+        '复杂编码/工程需求要组队；用户说工程团队/大型团队/子智能体',
+        '要开对齐冻结会、技术方案会或写停工汇报',
+        '要按触发表派专席并跑双轨复审',
+        '要判定验收门禁顺序（UI/原型→测试→文档→汇审）',
+        '查出问题要立刻拉起项目经理组队',
+        '排除：内容运营（产品优化/详情/主图/新建文章）与闲聊，禁打两种前缀',
+    ],
+    'inputs' => [
+        '需求原文 + plan_complexity（simple 须 ≥24 字理由）',
+        '归属 Vendor_Module 与 {slug}（模块 spec 与 dev/session 同 slug）',
+        '触发面：UI / 电商 / 热路径缓存 / 提示词 / i18n / 契约变更 / REST / 部件 / 支付 / Visitor',
+        '续跑时：既有 SESSION、contracts.md、deps.md 与上一波回报单',
+    ],
+    'procedure' => [
+        '定模式：simple → 监工（每句 `监工:`）；否则 team（父会话仅 `Team:项目经理:`）；内容运营不套。',
+        '立项即建 dev/session/{slug}.md（仅 PM 维护）与 dev/team/{slug}/roster.md（seat/agent_id/status）。',
+        '立项波：需求分析 ∥ 领域探查；对齐冻结会由测试主持，钉死可执行 UC + contracts.md + deps.md，未冻结禁施工。',
+        '技术方案会：架构师+扩展点出 surfaces.md；UI in_scope 出 components.md，组件不足先原型∥UI 协商再冻结。',
+        '按触发派施工席：Theme/壳→主题开发工程师；部件/注入→部件开发工程师；REST/BinQuery→API；支付→支付开发工程师；Visitor→数据分析。',
+        '按触发派专席：电商面→电商顾问(禁写码)；热路径/缓存→性能检查工程师；技能/提示词→提示词优化工程师；文案/i18n→翻译工程师；行为变更→文档工程师。',
+        '门禁顺序：专席复审 pass → UI/原型双签 → 测试执行真机 UC → 文档 documentation_review_pass → PM 汇审 → 才汇报（附交付地址）。',
+    ],
+    'checklist' => [
+        'simple 全 `监工:`，team 仅父会话 `Team:项目经理:`，他席行来自真实子智能体？',
+        'dev/session/{slug}.md 与 roster.md 已建且仅 PM 维护？',
+        '每席都粘了该席 prompt_increment，且开工前 get_skill/Read 本席文档？',
+        '每个触发专席都有施工轨 + 合规复审轨 pass/fail 纪要？',
+        'UI in_scope：UI/原型双签（acceptance-ui.md）早于测试执行？',
+        'PR/diff 已派代码复审并写 module_boundary？',
+        'REST/Query 落在归属 Vendor_Module，未跨模块代写？',
+        '测试 pass → 文档 review pass → PM 汇审后才汇报，且附交付地址？',
+    ],
+    'anti_patterns' => [
+        '简单需求打 `Team:`，或复杂需求只用 `监工:` 敷衍',
+        '父会话换前缀扮演架构师/后端，伪造多席对白',
+        '子智能体只发通用骨架，未粘该席 prompt_increment',
+        'UC/contracts 未冻结就并行改同一文件或开施工',
+        'UI/原型未双签就让测试跑 e2e/WB',
+        '测试绿了就跳过文档工程师与 PM 汇审直接汇报',
+        '发现问题只写长文或建 Issue 列表，不 escalate 拉 PM',
+        '把 SESSION/team/排查笔记写进模块 doc/',
+    ],
+    'evidence' => [
+        'dev/session/{slug}.md：计划项 / 未完成清单 / 审查索引 / 交付通知日志',
+        'dev/team/{slug}/：roster.md、channel/{thread}.md、meetings/（align-freeze、{席位}-review）',
+        'PM 汇审纪要（含「汇审」）+ 汇报「交付地址」小节（related_web_urls + 测试探活地址）',
+    ],
+    'norms' => [
+        ['id' => 'framework_first', 'summary' => '需求/设计/施工/复审先映射框架机制、组件与扩展点，再谈业务补丁；禁跨模块直调。'],
+        ['id' => 'one_seat_one_agent', 'summary' => '每个上场席位=一个真实宿主子智能体；禁父会话换前缀扮演、代写结论或代签。'],
+        ['id' => 'dual_track_all_specialty_seats', 'summary' => '全专席双轨：每个触发专席一律施工轨+复审轨（顾问禁写码；性能=设计+复审；提示词=压缩+语义复审；文档=执笔+契约复审）；fail 即返工。'],
+        ['id' => 'acceptance_ui_and_prototype_signoff', 'summary' => 'UI/原型按「亲自对照活页/截图」判定并可否决；否决→resume 开发子智能体返工再审；形式出席或代签不算。'],
+        ['id' => 'ui_prototype_gate_before_test', 'summary' => 'UI in_scope 顺序固定：专席复审→UI/原型双签→测试→文档→汇审→汇报；禁抢跑与跳步。'],
+        ['id' => 'peer_talk_via_channel', 'summary' => '席间经 dev/team/{slug}/channel/{thread}.md + resume 对端真实子智能体互聊；PM 只做交换机与记账。'],
+        ['id' => 'seat_skill_mirrors_required', 'summary' => '拉席=通用骨架+该席 prompt_increment+mcp_skill_ids/authoritative_docs；该席开工前 get_skill/Read 本席文档。'],
+        ['id' => 'requirement_session_dashboard', 'summary' => '立项即建 dev/session/{slug}.md（与模块 spec 同 slug），仅 PM 维护；无 SESSION 禁施工，未完成清单非「无」禁报完成。'],
+        ['id' => 'pm_plan_lifecycle', 'summary' => 'PM：审缺口→派人→监控→DoD 检查→测后复检→关项；deps 可并行；PM 检查不替代架构/专席/代码复审。'],
+        ['id' => 'findings_wake_pm', 'summary' => '查出问题立刻 escalate + `@项目经理：请立刻组队解决`，PM 同回合组队；禁用 Issue 列表；重大矛盾写 stop-work.md。'],
+        ['id' => 'requirement_issuer_owns_acceptance', 'summary' => '发起方 escalate 后转 waiting_acceptance，读 SESSION+PM 进度写 issuer_acceptance=pass|fail；禁甩手；缺签收禁汇审。'],
+    ],
+    'norm_ids' => [
+        'staff_before_code',
+        'parent_is_pm',
+        'framework_seats_by_trigger',
+        'ecommerce_advisor_required_for_commerce',
+        'performance_engineer_required_for_hot_path',
+        'prompt_engineer_required_for_skill_prompt',
+        'translation_engineer_required_for_i18n',
+        'documentation_engineer_required_on_behavior_change',
+        'documentation_engineer_owns_durable_docs',
+        'widget_work_assigns_widget_engineer',
+        'theme_work_assigns_theme_engineer',
+        'payment_work_assigns_payment_engineer',
+        'visitor_work_assigns_data_analytics',
+        'api_rest_in_owning_module',
+        'component_reuse_or_negotiate',
+        'surfaces_md_required',
+        'documentation_review_before_huishen',
+        'parallel_only_when_disjoint',
+        'escalate_then_meet',
+        'seat_closed_reports_related_web_urls',
+        'stop_on_architecture_conflict',
+        'persist_team_minutes',
+        'module_doc_forbids_ephemeral_work_artifacts',
+    ],
+    'template_surface_rules' => [
+        'required' => [],
+        'forbidden' => [],
+    ],
+    'verification_commands' => [
+        'test -f dev/ai-command/ai/工程团队.md',
+        'test -f dev/ai-command/ai/templates/requirement-session.md',
+        'rg -n "ui_prototype_gate_before_test" app/code/Weline/Ai/Mcp/src',
+    ],
+];
