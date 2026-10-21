@@ -113,15 +113,42 @@ class Clear implements \Weline\Framework\Console\CommandInterface
      */
     public function clear(string $module_name, string $base_path, bool $silent = false): bool
     {
+        $cleared = false;
         $tplDir = $base_path . DataInterface::dir . DS . DataInterface::dir_type_TEMPLATE_COMPILE;
         if (is_dir($tplDir)) {
             $this->system->exec('rm -rf ' . \escapeshellarg($tplDir));
-            if (!$silent) {
-                $this->printing->note(__('清理完成：%{1}', $module_name));
-            }
-            return true;
+            $cleared = true;
         }
-        return false;
+
+        // PROD/部署态编译产物在 generated/complicate/<Vendor>/<Module>/view，不在模块 view/tpl。
+        // 只清该模块子树，避免整树 1.9G 重编译。
+        $complicateDir = $this->complicateModuleViewDir($base_path);
+        if ($complicateDir !== null && is_dir($complicateDir)) {
+            $this->system->exec('rm -rf ' . \escapeshellarg($complicateDir));
+            $cleared = true;
+        }
+
+        if ($cleared && !$silent) {
+            $this->printing->note(__('清理完成：%{1}', [$module_name]));
+        }
+
+        return $cleared;
+    }
+
+    private function complicateModuleViewDir(string $basePath): ?string
+    {
+        $basePath = \rtrim(\str_replace('\\', '/', $basePath), '/');
+        $appCode = \rtrim(\str_replace('\\', '/', BP . 'app/code'), '/') . '/';
+        if (!\str_starts_with($basePath, $appCode)) {
+            return null;
+        }
+        $relative = \substr($basePath, \strlen($appCode));
+        if ($relative === '' || \str_contains($relative, '..')) {
+            return null;
+        }
+
+        return \rtrim(\Weline\Framework\App\Env::path_COMPLICATE_GENERATED_DIR, '/\\')
+            . DS . $relative . DS . DataInterface::dir . DS;
     }
 
     /**
