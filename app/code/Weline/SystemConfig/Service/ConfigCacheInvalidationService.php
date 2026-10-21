@@ -343,6 +343,7 @@ final class ConfigCacheInvalidationService
                 RequestContext::remove($this->requestKey('module_rows', $module, $area, null, $touchScope, $touchLocale));
                 RequestContext::remove($this->requestKey('module_map', $module, $area, null, $touchScope, $touchLocale));
                 RequestContext::remove($this->requestKey('module_exact_rows', $module, $area, null, $touchScope, $touchLocale));
+                RequestContext::remove($this->requestKey('module_snapshot', $module, $area, null, $touchScope, $touchLocale));
             }
         }
 

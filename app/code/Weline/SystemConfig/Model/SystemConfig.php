@@ -86,14 +86,24 @@ class SystemConfig extends \Weline\Framework\Database\Model
     public const area_BACKEND = 'backend';
     public const area_FRONTEND = 'frontend';
 
+    /**
+     * Request-local write generation. A module snapshot may only prove absence
+     * of a key when it was loaded at the current generation and is complete
+     * (a DB read, or a still-valid non-empty cache snapshot); any write bumps
+     * the generation and forces the strong exact-row fallback.
+     */
+    private const MUTATION_GENERATION_KEY = 'system_config.mutation_generation';
+
     public array $_index_sort_keys = ['module', 'area', 'scope', 'locale', 'key'];
     public array $_unit_primary_keys = ['module', 'area', 'key', 'scope', 'locale'];
 
     /**
      * 进程级 module rows：area → module → rowsCacheKey → rows。
+     * 叶子既可能是 list<row>（单 scope/locale），也可能是
+     * [scope][locale] => list<row>（批量读取）。
      * 键含 scope/locale/versionVector；模块变更时 unset 整块 [$area][$module]。
      *
-     * @var array<string, array<string, array<string, list<array<string, mixed>>>>>
+     * @var array<string, array<string, array<string, mixed>>>
      */
     public static array $configs = [];
 
@@ -120,6 +130,97 @@ class SystemConfig extends \Weline\Framework\Database\Model
                 unset(self::$configs[$areaKey]);
             }
         }
+    }
+
+    /**
+     * Record how the module snapshot used by this request was obtained.
+     *
+     * A DB snapshot at the current write generation proves that a key is
+     * absent. A cache snapshot proves absence only when it is complete
+     * (non-empty): the process/shared keys embed the scope version vector, so a
+     * valid non-empty snapshot is the same read contract that already serves
+     * present values. Empty/negative cache entries stay non-authoritative and
+     * keep the exact-row fallback, so a row inserted before invalidation
+     * reaches this worker is never hidden by a negative cache.
+     */
+    private function markModuleSnapshot(
+        string $module,
+        string $area,
+        string $scope,
+        string $locale,
+        string $source,
+        bool $complete = true,
+    ): void {
+        $key = $this->buildRequestCacheKey('module_snapshot', $module, $area, null, $scope, $locale);
+        $generation = $this->mutationGeneration();
+        $existing = RequestContext::get($key);
+        if (\is_array($existing)
+            && (int)($existing['generation'] ?? -1) === $generation
+            && (($existing['source'] ?? '') === 'db' || ($existing['complete'] ?? false) === true)
+        ) {
+            // Do not downgrade a snapshot that was already loaded in this
+            // request just because a later read reused the process cache.
+            return;
+        }
+
+        RequestContext::set($key, [
+            'source' => $source,
+            'generation' => $generation,
+            'complete' => $complete,
+        ]);
+    }
+
+    private function isModuleSnapshotAuthoritative(
+        string $module,
+        string $area,
+        string $scope,
+        string $locale,
+    ): bool {
+        $marker = RequestContext::get(
+            $this->buildRequestCacheKey('module_snapshot', $module, $area, null, $scope, $locale),
+        );
+        if (!\is_array($marker)) {
+            return false;
+        }
+
+        return (int)($marker['generation'] ?? -1) === $this->mutationGeneration()
+            && (($marker['source'] ?? '') === 'db' || ($marker['complete'] ?? false) === true);
+    }
+
+    private function mutationGeneration(): int
+    {
+        return max(0, (int)RequestContext::get(self::MUTATION_GENERATION_KEY, 0));
+    }
+
+    /**
+     * Any write in this request invalidates the authority of snapshots loaded
+     * before it. The next read either rebuilds from the database or falls back
+     * to the exact-row reader.
+     */
+    private function bumpMutationGeneration(): void
+    {
+        RequestContext::set(self::MUTATION_GENERATION_KEY, $this->mutationGeneration() + 1);
+    }
+
+    private function rememberExactBatchSource(string $requestCacheKey, string $source): void
+    {
+        RequestContext::set($requestCacheKey . ':source', [
+            'source' => $source,
+            'generation' => $this->mutationGeneration(),
+        ]);
+    }
+
+    private function readExactBatchSource(string $requestCacheKey): string
+    {
+        $marker = RequestContext::get($requestCacheKey . ':source');
+        if (\is_array($marker)
+            && ($marker['source'] ?? '') === 'db'
+            && (int)($marker['generation'] ?? -1) === $this->mutationGeneration()
+        ) {
+            return 'db';
+        }
+
+        return 'cache';
     }
 
     public function __init()
@@ -198,6 +299,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
         ) {
             $rows = self::$configs[$area][$module][$processKey];
             RequestContext::set($requestCacheKey, $rows);
+            $this->markModuleSnapshot($module, $area, $scope, $locale, 'cache', $rows !== []);
             return $rows;
         }
 
@@ -208,13 +310,18 @@ class SystemConfig extends \Weline\Framework\Database\Model
         if ($cacheEntry['hit'] && \is_array($cacheEntry['value']) && $cacheEntry['value'] !== []) {
             self::$configs[$area][$module][$processKey] = $cacheEntry['value'];
             RequestContext::set($requestCacheKey, $cacheEntry['value']);
+            $this->markModuleSnapshot($module, $area, $scope, $locale, 'cache', true);
             return $cacheEntry['value'];
         }
 
         $rowsByKey = [];
-        foreach ($this->getFallbackScopes($scope) as $fallbackScope) {
-            foreach ($this->getFallbackLocales($locale) as $fallbackLocale) {
-                foreach ($this->getExactModuleRows($module, $area, $fallbackScope, $fallbackLocale) as $row) {
+        $fallbackScopes = $this->getFallbackScopes($scope);
+        $fallbackLocales = $this->getFallbackLocales($locale);
+        $exact = $this->getExactModuleRowsForScopes($module, $area, $fallbackScopes, $fallbackLocales);
+        $exactRows = $exact['rows'];
+        foreach ($fallbackScopes as $fallbackScope) {
+            foreach ($fallbackLocales as $fallbackLocale) {
+                foreach ($exactRows[$fallbackScope][$fallbackLocale] ?? [] as $row) {
                     $rowKey = (string)($row[self::schema_fields_KEY] ?? '');
                     if ($rowKey === '' || isset($rowsByKey[$rowKey])) {
                         continue;
@@ -236,6 +343,14 @@ class SystemConfig extends \Weline\Framework\Database\Model
         if ($rows !== []) {
             $this->writeCacheEnvelope($cache, $processKey, $rows);
         }
+        $this->markModuleSnapshot(
+            $module,
+            $area,
+            $scope,
+            $locale,
+            $exact['source'],
+            $exact['source'] === 'db' || $rows !== [],
+        );
 
         return $rows;
     }
@@ -431,10 +546,13 @@ class SystemConfig extends \Weline\Framework\Database\Model
         $locale = $this->normalizeLocale($locale);
         /** @var \Weline\SystemConfig\Service\SystemConfigScopeResolver $resolver */
         $resolver = ObjectManager::getInstance(\Weline\SystemConfig\Service\SystemConfigScopeResolver::class);
+        $storageScopes = $resolver->chainFromIdentity($identity);
+        $fallbackLocales = $this->getFallbackLocales($locale);
+        $exactRows = $this->getExactModuleRowsForScopes($module, $area, $storageScopes, $fallbackLocales)['rows'];
         $records = [];
-        foreach ($resolver->chainFromIdentity($identity) as $storageScope) {
-            foreach ($this->getFallbackLocales($locale) as $fallbackLocale) {
-                $row = $this->findExactModuleRow($key, $module, $area, $storageScope, $fallbackLocale);
+        foreach ($storageScopes as $storageScope) {
+            foreach ($fallbackLocales as $fallbackLocale) {
+                $row = $this->findRowByKey($key, $exactRows[$storageScope][$fallbackLocale] ?? []);
                 if ($row === null) {
                     continue;
                 }
@@ -574,6 +692,10 @@ class SystemConfig extends \Weline\Framework\Database\Model
                 fn(): array => $this->saveScopeConfig($module, $area, $values, $scope, $locale, $options),
             );
         }
+        // This request may now contain uncommitted rows. Snapshots captured
+        // before this point must not be used to prove absence.
+        $this->bumpMutationGeneration();
+
         if (isset($options['scope_identity']) && $options['scope_identity'] instanceof \Weline\Framework\Runtime\ScopeIdentity) {
             /** @var \Weline\Framework\Runtime\ScopeIdentity $identity */
             $identity = $options['scope_identity'];
@@ -812,6 +934,9 @@ class SystemConfig extends \Weline\Framework\Database\Model
                 fn(): array => $this->rollbackScopeConfigVersion($versionId, $options),
             );
         }
+        // Rollback also mutates config; invalidate any snapshot captured earlier
+        // in this request before reading the version record.
+        $this->bumpMutationGeneration();
         /** @var SystemConfigVersion $version */
         $version = ObjectManager::getInstance(SystemConfigVersion::class);
         $rows = $version->clear()->reset()
@@ -1052,6 +1177,32 @@ class SystemConfig extends \Weline\Framework\Database\Model
     }
 
     /**
+     * Exact module rows for a scope/locale chain in one query.
+     * Callers merge inheritance in PHP; this method never applies fallback precedence.
+     *
+     * @param list<string> $scopes
+     * @param list<string> $locales
+     * @return list<array<string, mixed>>
+     */
+    protected function loadConfigRowsByModuleScopes(
+        string $module,
+        string $area,
+        array $scopes,
+        array $locales
+    ): array {
+        return $this->clear()
+            ->reset()
+            ->where([
+                [self::schema_fields_AREA, $area],
+                [self::schema_fields_MODULE, $module],
+            ])
+            ->where(self::schema_fields_SCOPE, $scopes, 'IN')
+            ->where(self::schema_fields_LOCALE, $locales, 'IN')
+            ->select()
+            ->fetchArray();
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
     protected function loadSingleConfigRow(string $key, string $module, string $area, string $scope, string $locale): ?array
@@ -1111,8 +1262,15 @@ class SystemConfig extends \Weline\Framework\Database\Model
             }
         }
 
-        // Module snapshot can be empty/stale (negative cache or mid-request drift).
-        // Exact row reads bypass that snapshot — same authority as getScopedConfigRow.
+        // A complete snapshot covers the whole fallback chain, so absence is
+        // conclusive. A DB snapshot is always complete; a cache snapshot is
+        // complete when it is non-empty and still valid for the current scope
+        // version vector. Empty/negative snapshots and snapshots from before a
+        // write keep the strong exact-row path.
+        if ($this->isModuleSnapshotAuthoritative($module, $area, $scope, $locale)) {
+            return null;
+        }
+
         foreach ($this->getFallbackScopes($scope) as $fallbackScope) {
             foreach ($this->getFallbackLocales($locale) as $fallbackLocale) {
                 $row = $this->loadExactConfigRow($key, $module, $area, $fallbackScope, $fallbackLocale);
@@ -1172,6 +1330,225 @@ class SystemConfig extends \Weline\Framework\Database\Model
     }
 
     /**
+     * Exact module rows for a fallback scope/locale chain, loaded with one SQL.
+     * The result is keyed [scope][locale] so callers can keep the existing
+     * scope-major, locale-minor inheritance order.
+     *
+     * @param list<string> $scopes
+     * @param list<string> $locales
+     * @return array{
+     *     rows: array<string, array<string, list<array<string, mixed>>>>,
+     *     source: 'db'|'cache'
+     * }
+     */
+    private function getExactModuleRowsForScopes(
+        string $module,
+        string $area,
+        array $scopes,
+        array $locales,
+    ): array {
+        $scopes = array_values(array_unique(array_map(
+            fn(string $scope): string => $this->normalizeScope($scope),
+            $scopes
+        )));
+        $locales = array_values(array_unique(array_map(
+            fn(string $locale): string => $this->normalizeLocale($locale),
+            $locales
+        )));
+        if ($scopes === [] || $locales === []) {
+            return ['rows' => [], 'source' => 'db'];
+        }
+
+        $requestCacheKey = $this->buildBatchRequestCacheKey('module_exact_rows_batch', $module, $area, $scopes, $locales);
+        if (RequestContext::has($requestCacheKey)) {
+            $cached = RequestContext::get($requestCacheKey);
+
+            return [
+                'rows' => \is_array($cached) ? $cached : [],
+                'source' => $this->readExactBatchSource($requestCacheKey),
+            ];
+        }
+
+        $cachedPairs = $this->readExactModuleRowsFromRequestCache($module, $area, $scopes, $locales);
+        if ($cachedPairs !== null) {
+            RequestContext::set($requestCacheKey, $cachedPairs);
+            $this->rememberExactBatchSource($requestCacheKey, 'cache');
+
+            return ['rows' => $cachedPairs, 'source' => 'cache'];
+        }
+
+        $processKey = $this->buildBatchModuleRowsCacheKey($module, $area, $scopes, $locales);
+        if (isset(self::$configs[$area][$module][$processKey])
+            && \is_array(self::$configs[$area][$module][$processKey])
+        ) {
+            $batch = self::$configs[$area][$module][$processKey];
+            $this->seedExactModuleRowsRequestCache($module, $area, $batch);
+            RequestContext::set($requestCacheKey, $batch);
+            $this->rememberExactBatchSource($requestCacheKey, 'cache');
+
+            return ['rows' => $batch, 'source' => 'cache'];
+        }
+
+        $cache = $this->scopedConfigCache(
+            $module,
+            $area,
+            (string)($scopes[0] ?? self::SCOPE_GLOBAL),
+            (string)($locales[0] ?? self::LOCALE_DEFAULT)
+        );
+        $cacheEntry = $this->readCacheEnvelope($cache, $processKey);
+        // Empty envelopes are not durable hits: a prior negative cache must not
+        // hide rows inserted after the empty snapshot was written.
+        if ($cacheEntry['hit'] && \is_array($cacheEntry['value']) && $cacheEntry['value'] !== []) {
+            $batch = $cacheEntry['value'];
+            self::$configs[$area][$module][$processKey] = $batch;
+            $this->seedExactModuleRowsRequestCache($module, $area, $batch);
+            RequestContext::set($requestCacheKey, $batch);
+            $this->rememberExactBatchSource($requestCacheKey, 'cache');
+
+            return ['rows' => $batch, 'source' => 'cache'];
+        }
+
+        try {
+            $rows = $this->loadConfigRowsByModuleScopes($module, $area, $scopes, $locales);
+        } catch (\Throwable $e) {
+            if ($this->isSystemConfigTableMissing($e)) {
+                $rows = [];
+            } elseif ($this->isSystemConfigScopeSchemaMissing($e)) {
+                // Legacy schema: preserve the per-pair reader (and its
+                // global/default-only gate) instead of guessing column support.
+                $batch = [];
+                foreach ($scopes as $fallbackScope) {
+                    foreach ($locales as $fallbackLocale) {
+                        $batch[$fallbackScope][$fallbackLocale] = $this->loadConfigRowsByModuleIfAvailable(
+                            $module,
+                            $area,
+                            $fallbackScope,
+                            $fallbackLocale
+                        );
+                    }
+                }
+                $this->storeExactModuleRowsBatch($module, $area, $processKey, $cache, $requestCacheKey, $batch);
+                $this->rememberExactBatchSource($requestCacheKey, 'db');
+
+                return ['rows' => $batch, 'source' => 'db'];
+            } else {
+                throw $e;
+            }
+        }
+
+        $batch = [];
+        foreach ($scopes as $fallbackScope) {
+            foreach ($locales as $fallbackLocale) {
+                $batch[$fallbackScope][$fallbackLocale] = [];
+            }
+        }
+        foreach (\is_array($rows) ? $rows : [] as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $rowScope = (string)($row[self::schema_fields_SCOPE] ?? '');
+            $rowLocale = (string)($row[self::schema_fields_LOCALE] ?? '');
+            if ($rowScope === '' || $rowLocale === '' || !isset($batch[$rowScope][$rowLocale])) {
+                continue;
+            }
+            $batch[$rowScope][$rowLocale][] = $row;
+        }
+
+        $this->storeExactModuleRowsBatch($module, $area, $processKey, $cache, $requestCacheKey, $batch);
+        $this->rememberExactBatchSource($requestCacheKey, 'db');
+
+        return ['rows' => $batch, 'source' => 'db'];
+    }
+
+    /**
+     * @param array<string, array<string, list<array<string, mixed>>>> $batch
+     */
+    private function storeExactModuleRowsBatch(
+        string $module,
+        string $area,
+        string $processKey,
+        mixed $cache,
+        string $requestCacheKey,
+        array $batch,
+    ): void {
+        self::$configs[$area][$module][$processKey] = $batch;
+        $this->seedExactModuleRowsRequestCache($module, $area, $batch);
+        RequestContext::set($requestCacheKey, $batch);
+
+        $hasRows = false;
+        foreach ($batch as $byLocale) {
+            foreach ($byLocale as $rows) {
+                if ($rows !== []) {
+                    $hasRows = true;
+                    break 2;
+                }
+            }
+        }
+        if ($hasRows) {
+            $this->writeCacheEnvelope($cache, $processKey, $batch);
+        }
+    }
+
+    /**
+     * Keep the existing single-pair request cache warm so exact-row readers
+     * (findExactModuleRow, administrative reads) do not re-query.
+     *
+     * @param array<string, array<string, list<array<string, mixed>>>> $batch
+     */
+    private function seedExactModuleRowsRequestCache(string $module, string $area, array $batch): void
+    {
+        foreach ($batch as $scope => $byLocale) {
+            foreach ($byLocale as $locale => $rows) {
+                if (!\is_array($rows)) {
+                    continue;
+                }
+                $key = $this->buildRequestCacheKey(
+                    'module_exact_rows',
+                    $module,
+                    $area,
+                    null,
+                    (string)$scope,
+                    (string)$locale
+                );
+                RequestContext::set($key, $rows);
+            }
+        }
+    }
+
+    /**
+     * @param list<string> $scopes
+     * @param list<string> $locales
+     * @return array<string, array<string, list<array<string, mixed>>>>|null
+     */
+    private function readExactModuleRowsFromRequestCache(
+        string $module,
+        string $area,
+        array $scopes,
+        array $locales,
+    ): ?array {
+        $batch = [];
+        foreach ($scopes as $scope) {
+            foreach ($locales as $locale) {
+                $key = $this->buildRequestCacheKey(
+                    'module_exact_rows',
+                    $module,
+                    $area,
+                    null,
+                    $scope,
+                    $locale
+                );
+                if (!RequestContext::has($key)) {
+                    return null;
+                }
+                $rows = RequestContext::get($key);
+                $batch[$scope][$locale] = \is_array($rows) ? $rows : [];
+            }
+        }
+
+        return $batch;
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
     private function findExactModuleRow(
@@ -1181,7 +1558,16 @@ class SystemConfig extends \Weline\Framework\Database\Model
         string $scope,
         string $locale,
     ): ?array {
-        foreach ($this->getExactModuleRows($module, $area, $scope, $locale) as $row) {
+        return $this->findRowByKey($key, $this->getExactModuleRows($module, $area, $scope, $locale));
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return array<string, mixed>|null
+     */
+    private function findRowByKey(string $key, array $rows): ?array
+    {
+        foreach ($rows as $row) {
             if (!\is_array($row)) {
                 continue;
             }
@@ -1747,6 +2133,54 @@ class SystemConfig extends \Weline\Framework\Database\Model
         $vector = ObjectManager::getInstance(ScopeConfigCacheInvalidator::class)->versionVectorFor($scope);
 
         return 'system_config_exact_rows_' . sha1(implode('|', [$area, $module, $scope, $locale, $vector]));
+    }
+
+    /**
+     * @param list<string> $scopes
+     * @param list<string> $locales
+     */
+    private function buildBatchModuleRowsCacheKey(
+        string $module,
+        string $area,
+        array $scopes,
+        array $locales
+    ): string {
+        $vector = ObjectManager::getInstance(ScopeConfigCacheInvalidator::class)
+            ->versionVectorFor((string)($scopes[0] ?? self::SCOPE_GLOBAL));
+
+        return 'system_config_exact_rows_batch_' . sha1(implode('|', [
+            $area,
+            $module,
+            implode(',', $scopes),
+            implode(',', $locales),
+            $vector,
+        ]));
+    }
+
+    /**
+     * @param list<string> $scopes
+     * @param list<string> $locales
+     */
+    private function buildBatchRequestCacheKey(
+        string $type,
+        string $module,
+        string $area,
+        array $scopes,
+        array $locales
+    ): string {
+        $vector = ObjectManager::getInstance(ScopeConfigCacheInvalidator::class)
+            ->versionVectorFor((string)($scopes[0] ?? self::SCOPE_GLOBAL));
+
+        return implode(':', [
+            'system_config',
+            $type,
+            $area,
+            $module,
+            implode(',', $scopes),
+            implode(',', $locales),
+            $vector,
+            'g' . $this->mutationGeneration(),
+        ]);
     }
 
     private function buildModuleMapCacheKey(

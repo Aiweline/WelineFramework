@@ -28,6 +28,7 @@ final class SystemConfigReadWriteCacheTest extends TestCase
     {
         Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'fpm']]));
         \w_cache('system_config')->clear();
+        SystemConfig::clearProcessCache();
         $this->config = new InMemorySystemConfigRows();
         $model = $this->config;
         ObjectManager::setInstance(SystemConfig::class, $model);
@@ -48,6 +49,140 @@ final class SystemConfigReadWriteCacheTest extends TestCase
         self::assertSame('old', $this->config->resolveTypedConfig('title', self::MODULE, self::AREA, ScopeIdentity::channel(2, 'shop', 'main', 'app', ScopeIdentity::MODE_NORMAL), 'default')->value);
         self::assertSame($reads, $this->config->moduleReads);
         self::assertSame(0, $this->config->singleReads);
+    }
+
+    public function testMissingKeyAfterCompleteModuleSnapshotSkipsExactReads(): void
+    {
+        self::assertSame('old', $this->map()['title']);
+        $result = $this->config->resolveConfig('missing', self::MODULE, self::AREA, self::SCOPE, 'default', 'fallback');
+
+        self::assertFalse($result['found']);
+        self::assertSame('fallback', $result['value']);
+        self::assertSame(0, $this->config->singleReads, 'a complete DB module snapshot must prove absence');
+    }
+
+    public function testWriteGenerationDisablesSnapshotAbsenceAuthority(): void
+    {
+        $this->map();
+        $this->config->rows[] = $this->row('added', 'added', 1);
+        $this->config->testConnection = $this->createStub(ConnectionFactory::class);
+        $transactions = $this->createStub(TransactionCoordinatorInterface::class);
+        $transactions->method('isActive')->willReturn(true);
+        ObjectManager::setInstance(TransactionCoordinatorInterface::class, $transactions);
+        $guard = (new \ReflectionClass(SecurityPolicyConfigGuard::class))->newInstanceWithoutConstructor();
+        ObjectManager::setInstance(SecurityPolicyConfigGuard::class, $guard);
+
+        $save = $this->config->saveScopeConfig(
+            self::MODULE,
+            self::AREA,
+            ['title' => 'edit'],
+            self::SCOPE,
+            'default',
+            ['base_versions' => ['title' => 0]],
+        );
+        self::assertSame('conflict', $save['status']);
+
+        $result = $this->config->resolveConfig('added', self::MODULE, self::AREA, self::SCOPE, 'default');
+        self::assertTrue($result['found']);
+        self::assertSame('added', $result['value']);
+        self::assertGreaterThan(0, $this->config->singleReads);
+    }
+
+    public function testWarmCompleteSnapshotProvesAbsenceAcrossRequestBoundary(): void
+    {
+        self::assertSame('old', $this->map()['title']);
+        $moduleReads = $this->config->moduleReads;
+
+        // Simulate the next request on a warm WLS worker: request caches are
+        // gone, the process-level module snapshot remains under the same
+        // version vector.
+        RequestContext::cleanup();
+
+        $result = $this->config->resolveConfig('missing', self::MODULE, self::AREA, self::SCOPE, 'default', 'fallback');
+
+        self::assertFalse($result['found']);
+        self::assertSame('fallback', $result['value']);
+        self::assertSame($moduleReads, $this->config->moduleReads, 'warm snapshot must serve the whole module');
+        self::assertSame(0, $this->config->singleReads, 'a complete non-empty cache snapshot must prove absence');
+    }
+
+    public function testEmptySnapshotStillFallsBackToExactRead(): void
+    {
+        $this->config->rows = [];
+        self::assertSame([], $this->config->getConfigByModule(self::MODULE, self::AREA, self::SCOPE, 'default'));
+
+        RequestContext::cleanup();
+
+        // A row inserted by another worker before invalidation reaches this
+        // process must not be hidden by the empty (negative) snapshot.
+        $this->config->rows = [$this->row('late', 'late', 1)];
+        $result = $this->config->resolveConfig('late', self::MODULE, self::AREA, self::SCOPE, 'default');
+
+        self::assertTrue($result['found']);
+        self::assertSame('late', $result['value']);
+        self::assertGreaterThan(0, $this->config->singleReads);
+    }
+
+    public function testModuleBatchReadsScopeAndLocaleChainOnce(): void
+    {
+        $this->config->rows = [
+            $this->row('title', 'app-default', 1),
+            array_replace($this->row('parent_only', 'parent', 1), ['scope' => 'shop.main.default']),
+            array_replace($this->row('en_only', 'en', 1), ['locale' => 'en_US']),
+        ];
+
+        $map = $this->config->getConfigMapByModule(self::MODULE, self::AREA, self::SCOPE, 'en_US');
+
+        self::assertSame(1, $this->config->moduleReads, 'scope/locale chain must use one batch read');
+        self::assertSame('en', $map['en_only']);
+        self::assertSame('app-default', $map['title']);
+        self::assertSame('parent', $map['parent_only']);
+    }
+
+    public function testModuleBatchSkipsInactiveAndSuppressedRows(): void
+    {
+        $this->config->rows = [
+            array_replace($this->row('inactive', 'inactive', 1), ['is_active' => 0]),
+            array_replace($this->row('suppressed', 'suppressed', 1), [
+                'metadata' => json_encode([SystemConfigLockService::META_SUPPRESSED_BY => 7]),
+            ]),
+            $this->row('ok', 'ok', 1),
+        ];
+
+        $map = $this->config->getConfigMapByModule(self::MODULE, self::AREA, self::SCOPE, 'default');
+
+        self::assertSame(1, $this->config->moduleReads);
+        self::assertArrayNotHasKey('inactive', $map);
+        self::assertArrayNotHasKey('suppressed', $map);
+        self::assertSame('ok', $map['ok']);
+    }
+
+    public function testModuleBatchRequestCacheServesRepeatedReads(): void
+    {
+        $this->config->rows = [$this->row('title', 'cached', 1)];
+
+        self::assertSame('cached', $this->config->getConfigMapByModule(self::MODULE, self::AREA, self::SCOPE, 'default')['title']);
+        self::assertSame('cached', $this->config->getConfigMapByModule(self::MODULE, self::AREA, self::SCOPE, 'default')['title']);
+        self::assertSame(1, $this->config->moduleReads);
+    }
+
+    public function testTypedReadBatchesEveryScopeAndLocalePairOnce(): void
+    {
+        $this->config->rows = [
+            $this->row('title', 'app', 1),
+            array_replace($this->row('parent_only', 'parent', 1), ['scope' => 'shop.main.default']),
+        ];
+
+        $result = $this->config->resolveTypedConfig(
+            'title',
+            self::MODULE,
+            self::AREA,
+            ScopeIdentity::channel(2, 'shop', 'main', 'app', ScopeIdentity::MODE_NORMAL),
+            'default',
+        );
+
+        self::assertSame(1, $this->config->moduleReads, 'typed scope chain must use one batch read');
+        self::assertSame('app', $result->value);
     }
 
     public function testExactAdministrativeReadIgnoresEarlierReaderSnapshot(): void
@@ -175,6 +310,16 @@ final class InMemorySystemConfigRows extends SystemConfig
     {
         ++$this->moduleReads;
         return array_values(array_filter($this->rows, static fn(array $row): bool => $row['module'] === $module && $row['area'] === $area && $row['scope'] === $scope && $row['locale'] === $locale));
+    }
+
+    protected function loadConfigRowsByModuleScopes(string $module, string $area, array $scopes, array $locales): array
+    {
+        ++$this->moduleReads;
+
+        return array_values(array_filter($this->rows, static fn(array $row): bool => $row['module'] === $module
+            && $row['area'] === $area
+            && in_array($row['scope'], $scopes, true)
+            && in_array($row['locale'], $locales, true)));
     }
 
     protected function loadSingleConfigRow(string $key, string $module, string $area, string $scope, string $locale): ?array
