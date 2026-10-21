@@ -20,5 +20,11 @@
               action="database/backend/admin/index?tab=sql"
               icon="terminal"
               order="20"/>
+        <menu source="Weline_Database::database_admin_index"
+              name="database_admin_index"
+              title="索引管理"
+              action="database/backend/schema-index/index"
+              icon="list"
+              order="30"/>
     </menu>
 </menus>

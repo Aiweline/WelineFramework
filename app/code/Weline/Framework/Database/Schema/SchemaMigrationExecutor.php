@@ -17,6 +17,7 @@ use Weline\Framework\Setup\Model\Migration;
 use Weline\Framework\Database\Service\BackupService;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Model\MigrationBackup;
 
 /**
@@ -117,7 +118,27 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
             return $pa <=> $pb;
         });
 
+        $tableOps = [];
         foreach ($ops as $op) {
+            $tableOps[$op->tableName][] = $op;
+        }
+        $schemaIndexChangeSink = $this->resolveSchemaIndexChangeSink($context);
+
+        foreach ($ops as $op) {
+            if ($schemaIndexChangeSink !== null
+                && in_array($op->kind, [SchemaDiffOp::KIND_ADD_INDEX, SchemaDiffOp::KIND_DROP_INDEX], true)
+                && $schemaIndexChangeSink->handleIndexOp(
+                    $connector,
+                    $op,
+                    $tableOps[$op->tableName] ?? [$op],
+                    $context,
+                )
+            ) {
+                // The sink recorded/deferred this index; table/column DDL above
+                // stays synchronous, and the async applier owns only this index.
+                continue;
+            }
+
             $rollbackSql = $this->buildRollbackDdl($connector, $op);
             $forwardSql = $this->buildDdl($connector, $op);
 
@@ -1305,6 +1326,33 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
     }
 
     /** @return array{name:string,columns:list<string>,type:string,method:string,comment:string} */
+    /** @param array<string,mixed> $context */
+    private function resolveSchemaIndexChangeSink(array $context): ?SchemaIndexChangeSinkInterface
+    {
+        $sink = $context['schema_index_change_sink'] ?? null;
+        if ($sink instanceof SchemaIndexChangeSinkInterface) {
+            return $sink;
+        }
+
+        try {
+            $sink = ObjectManager::getInstance(SchemaIndexChangeSinkInterface::class);
+        } catch (\Throwable) {
+            // First setup run after adding the provider may not have compiled
+            // provides yet; use the optional owning-module implementation.
+            $fallback = 'Weline\\Database\\Service\\Index\\SchemaIndexChangeSink';
+            if (!class_exists($fallback)) {
+                return null;
+            }
+            try {
+                $sink = ObjectManager::getInstance($fallback);
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        return $sink instanceof SchemaIndexChangeSinkInterface ? $sink : null;
+    }
+
     private function idxToArray(IndexDefinition $idx): array
     {
         return [

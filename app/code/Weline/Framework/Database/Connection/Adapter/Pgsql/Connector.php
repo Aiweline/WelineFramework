@@ -23,6 +23,7 @@ use Weline\Framework\Database\Connection\Adapter\Pgsql\Table\Create;
 use Weline\Framework\Database\Connection\Api\AtomicPhysicalTableChangeInterface;
 use Weline\Framework\Database\Connection\Api\AtomicPhysicalViewChangeInterface;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Connection\Api\ConcurrentIndexBuildInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
 use Weline\Framework\Database\Connection\Api\PhysicalTableIdentityProviderInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableKeysetReaderInterface;
@@ -56,7 +57,8 @@ final class Connector extends Query implements
     PhysicalTableSnapshotInterface,
     PhysicalViewMetadataInterface,
     AtomicPhysicalViewChangeInterface,
-    PhysicalViewSnapshotInterface
+    PhysicalViewSnapshotInterface,
+    ConcurrentIndexBuildInterface
 {
     use CreatesTableFromSchemaTrait;
 
@@ -1790,6 +1792,135 @@ SQL);
         $t = $this->getDialect()->quoteTable($table);
         $c = $comment !== '' ? "'" . str_replace("'", "''", $comment) . "'" : 'NULL';
         return "COMMENT ON TABLE {$t} IS {$c}";
+    }
+
+    public function supportsConcurrentIndexBuild(): bool
+    {
+        return true;
+    }
+
+    public function buildAddIndexConcurrentlySql(string $table, array $idx): string
+    {
+        $sql = $this->buildAddIndexSql($table, $idx);
+        $concurrent = preg_replace(
+            '/^(\s*)CREATE (UNIQUE )?INDEX /i',
+            '$1CREATE $2INDEX CONCURRENTLY ',
+            $sql,
+            1,
+        );
+        if (!is_string($concurrent) || $concurrent === $sql) {
+            throw new \RuntimeException('pgsql_concurrent_index_sql_unavailable');
+        }
+
+        return $concurrent;
+    }
+
+    public function buildDropIndexConcurrentlySql(string $table, string $indexName): string
+    {
+        $sql = $this->buildDropIndexSql($table, $indexName);
+        $concurrent = preg_replace(
+            '/^(\s*)DROP INDEX /i',
+            '$1DROP INDEX CONCURRENTLY ',
+            $sql,
+            1,
+        );
+        if (!is_string($concurrent) || $concurrent === $sql) {
+            throw new \RuntimeException('pgsql_concurrent_drop_index_sql_unavailable');
+        }
+
+        return $concurrent;
+    }
+
+    public function configureConcurrentIndexBuild(array $options): void
+    {
+        $allowed = [
+            'application_name',
+            'lock_timeout',
+            'statement_timeout',
+            'maintenance_work_mem',
+            'max_parallel_maintenance_workers',
+        ];
+        foreach ($options as $key => $value) {
+            $key = (string)$key;
+            if (!in_array($key, $allowed, true)) {
+                continue;
+            }
+            if ($key === 'max_parallel_maintenance_workers') {
+                $workers = max(0, min(32, (int)$value));
+                $this->query('SET max_parallel_maintenance_workers = ' . $workers)->fetch();
+                continue;
+            }
+            $literal = trim((string)$value);
+            if ($key === 'application_name') {
+                $literal = preg_replace('/[^A-Za-z0-9_.:-]/', '_', $literal) ?: 'weline-index';
+                $literal = substr($literal, 0, 63);
+            } elseif ($key === 'maintenance_work_mem') {
+                if (preg_match('/^\d+(kB|MB|GB)?$/i', $literal) !== 1) {
+                    continue;
+                }
+            } elseif (preg_match('/^\d+(ms|s|min)?$/i', $literal) !== 1) {
+                continue;
+            }
+            $quoted = $this->quote($literal);
+            if (!is_string($quoted) || $quoted === '') {
+                throw new \RuntimeException('pgsql_concurrent_index_setting_quote_failed:' . $key);
+            }
+            $this->query('SET ' . $key . ' = ' . $quoted)->fetch();
+        }
+    }
+
+    public function resetConcurrentIndexBuild(): void
+    {
+        foreach ([
+            'application_name',
+            'lock_timeout',
+            'statement_timeout',
+            'maintenance_work_mem',
+            'max_parallel_maintenance_workers',
+        ] as $name) {
+            $this->query('RESET ' . $name)->fetch();
+        }
+    }
+
+    public function tryAcquireIndexBuildLock(string $table): bool
+    {
+        $statement = $this->getWrappedConnection()->prepare(
+            'SELECT pg_try_advisory_lock(hashtext(:lock_key)) AS locked'
+        );
+        $statement->execute([':lock_key' => 'weline:index:' . $table]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+
+        return is_array($row) && !empty($row['locked']);
+    }
+
+    public function releaseIndexBuildLock(string $table): void
+    {
+        $statement = $this->getWrappedConnection()->prepare(
+            'SELECT pg_advisory_unlock(hashtext(:lock_key))'
+        );
+        $statement->execute([':lock_key' => 'weline:index:' . $table]);
+        $statement->fetch(PDO::FETCH_ASSOC);
+    }
+
+    public function isIndexValid(string $table, string $indexName): bool
+    {
+        [$schema, $physicalTable] = $this->parseSchemaTable($table);
+        $statement = $this->getWrappedConnection()->prepare(
+            'SELECT ix.indisvalid AS valid '
+            . 'FROM pg_catalog.pg_index ix '
+            . 'JOIN pg_catalog.pg_class i ON i.oid = ix.indexrelid '
+            . 'JOIN pg_catalog.pg_class t ON t.oid = ix.indrelid '
+            . 'JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace '
+            . 'WHERE n.nspname = :schema AND t.relname = :table AND i.relname = :index'
+        );
+        $statement->execute([
+            ':schema' => $schema,
+            ':table' => $physicalTable,
+            ':index' => $indexName,
+        ]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+
+        return is_array($row) && !empty($row['valid']);
     }
 
     /** @inheritDoc */

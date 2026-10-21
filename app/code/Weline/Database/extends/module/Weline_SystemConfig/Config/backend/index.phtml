@@ -1,0 +1,29 @@
+<?php
+/**
+ * @meta.title {default="索引管理",description="异步 schema 索引的全局开关、窗口与构建限流"}
+ * @meta.description {default="默认启用；升级只记录索引变更，由 cron/queue 在窗口内增量构建。"}
+ * @config.area {backend}
+ * @config.sort {78}
+ * @config.acl {Weline_Database::database_admin_index}
+ */
+?>
+<w:config:group code="schema_index" label="异步索引" description="升级记录索引变更；cron/queue 按窗口与负载增量执行，避免阻塞店面查询。" sort="10">
+    <w:config:field key="index/auto_apply" label="启用自动索引" type="switch" value-type="bool" default="1" scope="global"
+                    description="默认启用。关闭后待索引任务保留，不会自动构建。"/>
+    <w:config:field key="index/defer_on_upgrade" label="升级时异步记录索引" type="switch" value-type="bool" default="1" scope="global"
+                    description="开启后 setup:upgrade 只记录普通性能索引变更；UNIQUE/主键/外键仍同步执行。"/>
+    <w:config:field key="index/window" label="索引窗口" type="text" value-type="string" default="01:00-05:00" scope="global"
+                    description="HH:MM-HH:MM；支持跨夜。填 * 表示不限时间。"/>
+    <w:config:field key="index/max_concurrent" label="全局并发" type="number" value-type="int" default="1" scope="global"
+                    validation="min:1|max:4" description="同时构建的索引任务上限。"/>
+    <w:config:field key="index/cooldown_seconds" label="同表冷却秒数" type="number" value-type="int" default="300" scope="global"
+                    validation="min:0|max:86400" description="同一张表两次索引构建之间的等待时间。"/>
+    <w:config:field key="index/load_threshold" label="负载阈值" type="number" value-type="float" default="3" scope="global"
+                    validation="min:0.1|max:1000" description="系统 load average 超过该值时暂停自动索引。"/>
+    <w:config:field key="index/maintenance_work_mem" label="maintenance_work_mem" type="text" value-type="string" default="256MB" scope="global"
+                    description="PostgreSQL 索引构建内存；过大会挤占缓存。"/>
+    <w:config:field key="index/max_parallel_workers" label="并行维护 worker" type="number" value-type="int" default="0" scope="global"
+                    validation="min:0|max:32" description="默认 0，降低索引构建的 CPU 峰值。"/>
+    <w:config:field key="index/retry_limit" label="失败重试次数" type="number" value-type="int" default="3" scope="global"
+                    validation="min:0|max:10" description="失败任务在升级窗口内最多重试次数。"/>
+</w:config:group>

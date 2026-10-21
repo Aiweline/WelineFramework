@@ -31,6 +31,16 @@ class FrameworkDbBootstrapStage extends AbstractStage
         ModuleBackup::class,
     ];
 
+    /**
+     * Optional module-owned bootstrap tables. They must exist before schema_diff
+     * so a deferred index job can be written during the same setup run.
+     * Class names are strings to keep Framework free of a hard module dependency.
+     */
+    private const OPTIONAL_BOOTSTRAP_MODELS = [
+        'Weline\\Database\\Model\\SchemaIndexJob',
+        'Weline\\Database\\Model\\SchemaIndexState',
+    ];
+
     public function __construct(
         private readonly ConnectionFactory $connectionFactory,
         private readonly SchemaParser $schemaParser,
@@ -68,7 +78,10 @@ class FrameworkDbBootstrapStage extends AbstractStage
 
         $connector = $this->connectionFactory->getConnector();
 
-        foreach (self::BOOTSTRAP_MODELS as $modelClass) {
+        foreach (array_merge(self::BOOTSTRAP_MODELS, self::OPTIONAL_BOOTSTRAP_MODELS) as $modelClass) {
+            if (!class_exists($modelClass)) {
+                continue;
+            }
             /** @var \Weline\Framework\Database\AbstractModel $model */
             $model = ObjectManager::getInstance($modelClass);
             $tableName = $model->getTable();

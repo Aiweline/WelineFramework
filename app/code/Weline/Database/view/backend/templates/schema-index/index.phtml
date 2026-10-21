@@ -1,0 +1,219 @@
+<?php
+/**
+ * Async schema index management page.
+ *
+ * @var array<string,mixed> $summary
+ * @var list<array<string,mixed>> $jobs
+ * @var list<array<string,mixed>> $states
+ */
+$summary = is_array($summary ?? null) ? $summary : (array)($this->getData('summary') ?? []);
+$jobs = is_array($jobs ?? null) ? $jobs : (array)($this->getData('jobs') ?? []);
+$states = is_array($states ?? null) ? $states : (array)($this->getData('states') ?? []);
+$available = !empty($summary['available']);
+$jobCounts = is_array($summary['jobs'] ?? null) ? $summary['jobs'] : [];
+$stateCounts = is_array($summary['states'] ?? null) ? $summary['states'] : [];
+$pending = (int)($jobCounts['pending'] ?? 0) + (int)($jobCounts['blocked'] ?? 0);
+$active = (int)($jobCounts['queued'] ?? 0) + (int)($jobCounts['running'] ?? 0);
+$failed = (int)($jobCounts['failed'] ?? 0) + (int)($stateCounts['failed'] ?? 0);
+$applied = (int)($stateCounts['applied'] ?? 0);
+$statusTone = static function (string $status): string {
+    return match ($status) {
+        'done', 'applied' => 'success',
+        'running', 'queued' => 'info',
+        'failed', 'drifted' => 'danger',
+        'blocked' => 'warning',
+        default => 'muted',
+    };
+};
+$h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$statusLabel = static fn(string $status): string => match ($status) {
+    'pending' => (string)__('待处理'),
+    'queued' => (string)__('已入队'),
+    'running' => (string)__('构建中'),
+    'done' => (string)__('已完成'),
+    'applied' => (string)__('已应用'),
+    'failed' => (string)__('失败'),
+    'blocked' => (string)__('已阻塞'),
+    'drifted' => (string)__('漂移'),
+    'removed' => (string)__('已移除'),
+    'untracked' => (string)__('未跟踪'),
+    default => $status,
+};
+?>
+<div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+    <div style="--w-span-lg:3;--w-span-md:6;">
+        <div class="w-card" data-w-height="full">
+            <div class="w-card__body">
+                <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><lang>待索引</lang></p>
+                <h3 style="--w-mb:0;"><?= $pending ?></h3>
+            </div>
+        </div>
+    </div>
+    <div style="--w-span-lg:3;--w-span-md:6;">
+        <div class="w-card" data-w-height="full">
+            <div class="w-card__body">
+                <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><lang>运行中</lang></p>
+                <h3 style="--w-mb:0;"><?= $active ?></h3>
+            </div>
+        </div>
+    </div>
+    <div style="--w-span-lg:3;--w-span-md:6;">
+        <div class="w-card" data-w-height="full">
+            <div class="w-card__body">
+                <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><lang>已应用</lang></p>
+                <h3 style="--w-mb:0;"><?= $applied ?></h3>
+            </div>
+        </div>
+    </div>
+    <div style="--w-span-lg:3;--w-span-md:6;">
+        <div class="w-card" data-w-height="full">
+            <div class="w-card__body">
+                <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-1);"><lang>失败/漂移</lang></p>
+                <h3 style="--w-mb:0;"><?= $failed ?></h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php if (!$available): ?>
+    <div class="w-alert" data-tone="warning" data-w-border="none">
+        <w:icon name="warning" size="sm"></w:icon>
+        <lang>索引任务表尚未初始化，请执行 setup:upgrade -m Weline_Database。</lang>
+    </div>
+<?php endif; ?>
+
+<div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+    <div style="--w-span-lg:8;">
+        <div class="w-card">
+            <div class="w-card__header">
+                <h5 class="w-card__title" style="--w-mb:var(--weline-space-1);"><lang>自动索引</lang></h5>
+                <p class="w-text" data-tone="muted" style="--w-mb:0;"><lang>默认启用；关闭后待索引任务保留，不会自动构建。</lang></p>
+            </div>
+            <div class="w-card__body">
+                <w:config:embed module="Weline_Database" field="index/auto_apply" layout="inline" />
+            </div>
+        </div>
+    </div>
+    <div style="--w-span-lg:4;">
+        <div class="w-card" data-w-height="full">
+            <div class="w-card__header">
+                <h5 class="w-card__title" style="--w-mb:var(--weline-space-1);"><lang>调度参数</lang></h5>
+            </div>
+            <div class="w-card__body">
+                <p class="w-text" style="--w-mb:var(--weline-space-2);">
+                    <span data-tone="muted"><lang>窗口</lang>：</span><?= $h((string)($summary['window'] ?? '-')) ?>
+                </p>
+                <p class="w-text" style="--w-mb:var(--weline-space-2);">
+                    <span data-tone="muted"><lang>全局并发</lang>：</span><?= $h((string)($summary['max_concurrent'] ?? '-')) ?>
+                </p>
+                <p class="w-text" style="--w-mb:0;">
+                    <span data-tone="muted"><lang>负载阈值</lang>：</span><?= $h((string)($summary['load_threshold'] ?? '-')) ?>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="w-card" style="--w-mb:var(--weline-space-4);">
+    <div class="w-card__header w-cluster" data-align="center" data-justify="between" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+        <div>
+            <h5 class="w-card__title" style="--w-mb:var(--weline-space-1);"><lang>待索引</lang></h5>
+            <p class="w-text" data-tone="muted" style="--w-mb:0;"><lang>升级只记录索引变更；cron/queue 按窗口和负载增量执行。</lang></p>
+        </div>
+        <span class="w-badge w-text" data-w-background="muted" data-tone="muted"><?= count($jobs) ?></span>
+    </div>
+    <div class="w-card__body">
+        <?php if ($jobs === []): ?>
+            <div class="w-alert" data-tone="muted" data-w-border="none"><lang>没有待索引任务。</lang></div>
+        <?php else: ?>
+            <div class="w-table-wrap">
+                <table class="w-table w-text" data-size="sm">
+                    <thead>
+                    <tr>
+                        <th>#</th>
+                        <th><lang>模块</lang></th>
+                        <th><lang>表 / 索引</lang></th>
+                        <th><lang>动作</lang></th>
+                        <th><lang>状态</lang></th>
+                        <th><lang>尝试</lang></th>
+                        <th><lang>更新时间</lang></th>
+                        <th><lang>错误</lang></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($jobs as $job): ?>
+                        <?php
+                        $status = (string)($job['status'] ?? '');
+                        $tone = $statusTone($status);
+                        ?>
+                        <tr>
+                            <td><?= (int)($job['job_id'] ?? 0) ?></td>
+                            <td><?= $h((string)($job['module'] ?? '-')) ?></td>
+                            <td>
+                                <code data-w-block="true"><?= $h((string)($job['table_name'] ?? '')) ?></code>
+                                <code data-w-block="true"><?= $h((string)($job['index_name'] ?? '')) ?></code>
+                            </td>
+                            <td><?= $h((string)($job['action'] ?? '')) ?></td>
+                            <td><span class="w-badge" data-tone="<?= $h($tone) ?>"><?= $h($statusLabel($status)) ?></span></td>
+                            <td><?= (int)($job['attempts'] ?? 0) ?>/<?= (int)($job['max_attempts'] ?? 0) ?></td>
+                            <td><?= $h((string)($job['update_time'] ?? '')) ?></td>
+                            <td class="w-text" data-tone="muted" data-size="sm"><?= $h((string)($job['last_error'] ?? '')) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="w-card">
+    <div class="w-card__header w-cluster" data-align="center" data-justify="between" data-wrap="true" style="--w-gap:var(--weline-space-2);">
+        <div>
+            <h5 class="w-card__title" style="--w-mb:var(--weline-space-1);"><lang>索引状态</lang></h5>
+            <p class="w-text" data-tone="muted" style="--w-mb:0;"><lang>声明索引的物理应用状态；不扫描 Model，只读状态表。</lang></p>
+        </div>
+        <span class="w-badge w-text" data-w-background="muted" data-tone="muted"><?= count($states) ?></span>
+    </div>
+    <div class="w-card__body">
+        <?php if ($states === []): ?>
+            <div class="w-alert" data-tone="muted" data-w-border="none"><lang>暂无索引状态记录。</lang></div>
+        <?php else: ?>
+            <div class="w-table-wrap">
+                <table class="w-table w-text" data-size="sm">
+                    <thead>
+                    <tr>
+                        <th><lang>模块</lang></th>
+                        <th><lang>表 / 索引</lang></th>
+                        <th><lang>状态</lang></th>
+                        <th><lang>物理索引</lang></th>
+                        <th><lang>应用时间</lang></th>
+                        <th><lang>最后检查</lang></th>
+                        <th><lang>错误</lang></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($states as $state): ?>
+                        <?php
+                        $status = (string)($state['status'] ?? '');
+                        $tone = $statusTone($status);
+                        ?>
+                        <tr>
+                            <td><?= $h((string)($state['module'] ?? '-')) ?></td>
+                            <td>
+                                <code data-w-block="true"><?= $h((string)($state['table_name'] ?? '')) ?></code>
+                                <code data-w-block="true"><?= $h((string)($state['index_name'] ?? '')) ?></code>
+                            </td>
+                            <td><span class="w-badge" data-tone="<?= $h($tone) ?>"><?= $h($statusLabel($status)) ?></span></td>
+                            <td><code><?= $h((string)($state['physical_name'] ?? '-')) ?></code></td>
+                            <td><?= $h((string)($state['applied_at'] ?? '-')) ?></td>
+                            <td><?= $h((string)($state['last_checked_at'] ?? '-')) ?></td>
+                            <td class="w-text" data-tone="muted" data-size="sm"><?= $h((string)($state['last_error'] ?? '')) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
