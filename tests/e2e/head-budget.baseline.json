@@ -1,0 +1,21 @@
+{
+  "baseUrl": "https://p05113ef3.test.weline.com:9555",
+  "updatedAt": "2026-10-21T20:22:18.623Z",
+  "pages": {
+    "/": {
+      "headExternalMax": 4,
+      "headJsBytesMax": 366290,
+      "lcpMsMax": 3000
+    },
+    "/cart": {
+      "headExternalMax": 4,
+      "headJsBytesMax": 366290,
+      "lcpMsMax": 3000
+    },
+    "/products": {
+      "headExternalMax": 4,
+      "headJsBytesMax": 366290,
+      "lcpMsMax": 3000
+    }
+  }
+}

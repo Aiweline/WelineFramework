@@ -68,7 +68,7 @@ class ThemeJs implements TaglibInterface, StaticMirrorCapableInterface
                 // 声明加载：不直出 <script src>，只留标记，由 theme.js 在 DOMContentLoaded 后按序加载。
                 $markerAttrsPhp = var_export(self::buildLoadMarkerAttrs(is_array($attributes) ? $attributes : [], $attrs), true);
 
-                return "<?php \$__themeJsSrc = \$this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_THEME, {$contentPhp});"
+                return "<?php \$__themeJsSrc = \Weline\Theme\Taglib\ThemeJs::resolveGenerationFallbackPublic((string)\$this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_THEME, {$contentPhp}));"
                     . " if (\$__themeJsSrc !== '') { echo '<script type=\'application/x-weline-theme-js\' data-weline-theme-js=\''"
                     . " . htmlspecialchars((string)\$__themeJsSrc, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')"
                     . " . '\'' . {$markerAttrsPhp} . '></script>'; } ?>";
@@ -108,6 +108,7 @@ class ThemeJs implements TaglibInterface, StaticMirrorCapableInterface
         if ($src === '') {
             return '';
         }
+        $src = self::resolveGenerationFallback($src);
 
         if (self::hasLoadAttribute($attributes, $attrs)) {
             return '<script type="application/x-weline-theme-js" data-weline-theme-js="'
@@ -131,6 +132,42 @@ class ThemeJs implements TaglibInterface, StaticMirrorCapableInterface
      *
      * @param array<string, mixed> $attributes
      */
+    /**
+     * 主题更新代次根（/static/tu-<gen>/...）可能在代次轮换后被清理：
+     * 烘焙/运行期若发现该文件已不存在，回退到规范路径（并加构建代次）。
+     */
+    public static function fallbackGenerationUrl(string $url, callable $exists): string
+    {
+        if (\preg_match('#^/static/tu-[A-Za-z0-9-]+/(.+)$#', $url, $m) !== 1) {
+            return $url;
+        }
+        $query = \str_contains($url, '?') ? '?' . \explode('?', $url, 2)[1] : '';
+        $generationPath = \strtok($url, '?');
+        if ($exists($generationPath)) {
+            return $url;
+        }
+        // 正则会把 query 一起吞进来，规范路径必须去掉 query 再判存在/加代次。
+        $canonical = '/static/' . \strtok($m[1], '?');
+        if (!$exists($canonical)) {
+            return $url;
+        }
+
+        return \Weline\Framework\Deploy\StaticBuildId::versionedPath($canonical) . $query;
+    }
+
+    public static function resolveGenerationFallbackPublic(string $url): string
+    {
+        return self::resolveGenerationFallback($url);
+    }
+
+    private static function resolveGenerationFallback(string $url): string
+    {
+        return self::fallbackGenerationUrl(
+            $url,
+            static fn(string $publicPath): bool => \is_file(PUB . \ltrim($publicPath, '/')),
+        );
+    }
+
     /** 是否声明加载：<theme:js load>（运行期属性或编译期 raw 属性均可）。 */
     private static function hasLoadAttribute(array $attributes, string $rawAttrs = ''): bool
     {

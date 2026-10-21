@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
 
 final class PreviewBootstrapAssetInjector
@@ -12,6 +13,7 @@ final class PreviewBootstrapAssetInjector
     public function __construct(
         private readonly Template $template,
         private readonly Url $url,
+        private readonly ?PreviewTokenService $previewTokenService = null,
     ) {
     }
 
@@ -22,6 +24,11 @@ final class PreviewBootstrapAssetInjector
         }
 
         if (\str_contains($html, 'data-w-preview-bootstrap')) {
+            return $html;
+        }
+
+        // 仅预览模式需要 Bootstrap 资源；普通店面页不得加载（head 预算）。
+        if (!$this->isPreviewRequest()) {
             return $html;
         }
 
@@ -45,4 +52,15 @@ HTML;
 
         return \str_ireplace('</head>', $snippet . "\n</head>", $html);
     }
+    private function isPreviewRequest(): bool
+    {
+        try {
+            $service = $this->previewTokenService ?? ObjectManager::getInstance(PreviewTokenService::class);
+
+            return $service->isPreviewMode();
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
 }

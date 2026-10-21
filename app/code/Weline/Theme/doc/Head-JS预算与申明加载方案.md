@@ -121,21 +121,35 @@ cd tests/e2e && npx playwright test head-budget --project=chromium
 | P1-1 hanfu | ✅ | `<theme:js>` 新增 `load` 声明模式（输出 `data-weline-theme-js` 标记）；`weline.js` / `theme.js` 在 DOM ready 后按 `data-order` 插入；hanfu 8 个皮肤 JS 已迁移 |
 | P1-2 其它设计主题 | ✅ | 各设计主题 head 已无 `<theme:js defer>`；playinginchina / daocharms-3d 的 head 直出业务 JS 已改声明标记；门禁已覆盖设计主题 |
 | P2 widget 包 | ✅ | `WidgetAssetOptimizer::publishBatch()`：head 内 widget JS 改声明标记；运行时包 `data-order=20`、业务包 `30`（运行时按发布内容识别），DOM ready 后按序插入 |
+| P5 指标门禁 | ✅ | 新增 `tests/e2e/head-budget.mjs` + 基线 `head-budget.baseline.json`：head 外链数 / head JS 解码字节 / LCP（3 次中位数）三指标按页棘轮；页面本体非 2xx 才失败，子资源 4xx 由 `check_404_site.mjs` 单独把关 |
+| P4 预览/分析门控 | ✅ | `PreviewBootstrapAssetInjector` 仅预览模式注入（普通店面 head 不再有 preview-bootstrap）；GTM 容器加载补营销同意门控（GA4 原有 analytics 门控），同意变化后重估加载 |
 | P3 框架依赖合并 | ✅ | 新增 `Framework/Deploy/WelineCoreBundle`：把 runtime.js / dom-observer.js / weline-api-business.js / url-frontend.js 合并为 `weline-core.js`；生产 header 只加载 1 个（DEV 仍逐文件）；deploy 生成、构建树版本化 |
 
 **实测（`p05113ef3.test.weline.com:9555`，2026-10-22 03:00）**
 
 | 页面 | head 服务端直出外链 | 声明标记 | 运行时验证 |
 |---|---|---|---|
-| 首页 | **20 → 5** | 13（8 皮肤 + 5 widget） | 5 个 widget 包 + 8 个皮肤 JS 全部加载，`WelineWidgetAssets` 初始化，0 个 4xx / 0 console error |
+| 首页 | **20 → 4** | 13（8 皮肤 + 5 widget） | 5 个 widget 包 + 8 个皮肤 JS 全部加载，`WelineWidgetAssets` 初始化，0 个 4xx / 0 console error |
 | 购物车 | — | 11 | 3 个 widget 包加载，0 个 4xx |
 
 - 门禁：`ThemeHeadScriptBudgetTest` 2/2、`ThemeStaticVersionContractTest` 4/4 通过；
-- 最终 head 外链 5 个 = `weline-core.js`（4 依赖合并） + `weline.js` + theme-head JS 包 + `weline-ui.js` + preview-bootstrap；
+- 最终 head 外链 4 个 = `weline-core.js`（4 依赖合并） + `weline.js` + theme-head JS 包 + `weline-ui.js`；
 - 稳定性验证（首页/购物车/商品页）：`Weline.__initialized`、`Weline.dom.observe`、`Weline.Api`、购物车 API 全部正常，0 个 4xx、0 console error。
 
 ## 5. 下一步
 
-1. P4：preview-bootstrap 仅预览模式输出；gtag/pixel 同意门控；
-2. P5：指标看板（head 外链数 / head JS 字节 / LCP p75）写入门禁阈值；
-3. 已知修复（本轮顺手）：`deploy:upgrade` 恢复 exit 0 —— purge 目标改回规范根、`pub/static/tu-*` 主题更新代次根不参与权限归一/构建哈希/版本树复制；`static_generation`（主题代次）与 `static_build`（部署构建号）拆分为两个缓存维度。
+1. P5：指标看板（head 外链数 / head JS 字节 / LCP p75）写入门禁阈值；
+2. 已修：主题更新代次根（`/static/tu-*`）轮换后旧烘焙 URL 404 —— `ThemeJs::fallbackGenerationUrl()` 在代次文件缺失时回退规范路径并加构建代次（含单测 4/4）；
+3. 待决策：当前站点未启用同意模块（`consent.enabled=false`）→ 分析脚本按“默认允许”加载；若要“默认拒绝直到显式同意”，需改 `pixel.js` 的 granted() 回退语义或打开同意模块；
+4. 已知修复（本轮顺手）：`deploy:upgrade` 恢复 exit 0 —— purge 目标改回规范根、`pub/static/tu-*` 主题更新代次根不参与权限归一/构建哈希/版本树复制；`static_generation`（主题代次）与 `static_build`（部署构建号）拆分为两个缓存维度。
+
+## 6. 指标门禁用法
+
+```bash
+cd tests/e2e
+node head-budget.mjs                      # 按基线校验（exit 1 = 超阈值）
+node head-budget.mjs --update-baseline    # 发布后棘轮收紧基线
+node head-budget.mjs --json               # 机器可读输出
+```
+
+基线字段（每页）：`headExternalMax` / `headJsBytesMax`（解码字节，稳定口径）/ `lcpMsMax`（3 次中位数 ×1.5，下限 3000ms）。
