@@ -200,12 +200,14 @@ class ControllerFetchFileAfter implements ObserverInterface
                         $contentHtml,
                         &$finalLayoutTemplate
                     ): string {
+                        $cfRenderStart = \microtime(true);
                         [$html, $final] = $this->renderLayoutChain(
                             $template,
                             $layoutTemplate,
                             $contentTemplate,
                             $contentHtml
                         );
+                        $cfRenderMs = (\microtime(true) - $cfRenderStart) * 1000;
                         $finalLayoutTemplate = $final;
                         $html = \is_string($html) ? $html : '';
                         if ($html === '') {
@@ -215,9 +217,25 @@ class ControllerFetchFileAfter implements ObserverInterface
                         $finalizer = ObjectManager::getInstance(StorefrontLayoutHtmlFinalizer::class);
 
                         // Bag payload must be post hard-cut (safety_net complete).
-                        return $finalizer->finalizeHardCut($html, 'frontend', [
+                        $cfFinalizeStart = \microtime(true);
+                        $cfOut = $finalizer->finalizeHardCut($html, 'frontend', [
                             'skip_dev_diagnostics' => true,
                         ]);
+                        $cfFinalizeMs = (\microtime(true) - $cfFinalizeStart) * 1000;
+                        if ($cfRenderMs + $cfFinalizeMs >= 500.0) {
+                            $cfPerfCount = (int)($GLOBALS['welineCfAfterPerfCount'] ?? 0) + 1;
+                            $GLOBALS['welineCfAfterPerfCount'] = $cfPerfCount;
+                            if ($cfPerfCount <= 20) {
+                                \error_log('[CFAfterPerf] ' . \json_encode([
+                                    'layout' => $layoutTemplate,
+                                    'content' => $contentTemplate,
+                                    'render_ms' => \round($cfRenderMs, 2),
+                                    'finalize_ms' => \round($cfFinalizeMs, 2),
+                                    'uri' => (string)(\w_env('full_request_uri', \w_env('request.uri', '')) ?? ''),
+                                ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+                            }
+                        }
+                        return $cfOut;
                     }
                 );
                 $this->markStorefrontHtmlPreFinalized();
@@ -240,12 +258,14 @@ class ControllerFetchFileAfter implements ObserverInterface
                         $contentHtml,
                         &$finalLayoutTemplate
                     ): string {
+                        $cfRenderStart = \microtime(true);
                         [$html, $final] = $this->renderLayoutChain(
                             $template,
                             $layoutTemplate,
                             $contentTemplate,
                             $contentHtml
                         );
+                        $cfRenderMs = (\microtime(true) - $cfRenderStart) * 1000;
                         $finalLayoutTemplate = $final;
                         $html = \is_string($html) ? $html : '';
                         if ($html === '') {
@@ -255,9 +275,25 @@ class ControllerFetchFileAfter implements ObserverInterface
                         $finalizer = ObjectManager::getInstance(StorefrontLayoutHtmlFinalizer::class);
 
                         // Bag payload must be post hard-cut (safety_net complete).
-                        return $finalizer->finalizeHardCut($html, 'frontend', [
+                        $cfFinalizeStart = \microtime(true);
+                        $cfOut = $finalizer->finalizeHardCut($html, 'frontend', [
                             'skip_dev_diagnostics' => true,
                         ]);
+                        $cfFinalizeMs = (\microtime(true) - $cfFinalizeStart) * 1000;
+                        if ($cfRenderMs + $cfFinalizeMs >= 500.0) {
+                            $cfPerfCount = (int)($GLOBALS['welineCfAfterPerfCount'] ?? 0) + 1;
+                            $GLOBALS['welineCfAfterPerfCount'] = $cfPerfCount;
+                            if ($cfPerfCount <= 20) {
+                                \error_log('[CFAfterPerf] ' . \json_encode([
+                                    'layout' => $layoutTemplate,
+                                    'content' => $contentTemplate,
+                                    'render_ms' => \round($cfRenderMs, 2),
+                                    'finalize_ms' => \round($cfFinalizeMs, 2),
+                                    'uri' => (string)(\w_env('full_request_uri', \w_env('request.uri', '')) ?? ''),
+                                ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+                            }
+                        }
+                        return $cfOut;
                     }
                 );
                 $this->markStorefrontHtmlPreFinalized();
