@@ -8,6 +8,8 @@ use LearningMcp\{Config,ProcessRunner,ProjectIndex,ProjectReadinessService,Proje
 $temporary = sys_get_temp_dir() . '/weline-readiness-scope-' . bin2hex(random_bytes(5));
 $root = $temporary . '/project';
 mkdir($root . '/app/code/Acme/Demo/doc', 0700, true);
+// Readiness only inventories real modules (register.php or composer.json).
+file_put_contents($root . '/app/code/Acme/Demo/register.php', "<?php\nreturn [];\n");
 foreach (['README.md', '需求.md', '开发日志.md'] as $name) {
     file_put_contents($root . '/app/code/Acme/Demo/doc/' . $name, "# Demo\n\nInitial document.\n");
 }
@@ -18,7 +20,7 @@ file_put_contents($root . '/' . $target, $before);
 file_put_contents($temporary . '/config.json', json_encode([
     'data_dir' => $temporary . '/data',
     'analysis' => ['provider' => 'none'],
-    'index' => ['sidecar_enabled' => false, 'refresh_interval' => '1s'],
+    'index' => ['sidecar_enabled' => false, 'refresh_interval' => '1s', 'allowed_roots' => ['*']],
 ], JSON_THROW_ON_ERROR));
 $config = Config::load($temporary . '/config.json', $temporary . '/data');
 $index = new ProjectIndex($config, ProjectResolver::resolve($root, false));

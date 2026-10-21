@@ -17,7 +17,7 @@ file_put_contents($root . '/src/Consumer.php', "<?php\nclass Consumer extends Ba
 file_put_contents($temporary . '/config.json', json_encode([
     'data_dir' => $temporary . '/data',
     'analysis' => ['provider' => 'none'],
-    'index' => ['sidecar_enabled' => false, 'refresh_interval' => '60s'],
+    'index' => ['sidecar_enabled' => false, 'refresh_interval' => '60s', 'allowed_roots' => ['*']],
 ], JSON_THROW_ON_ERROR));
 
 $config = Config::load($temporary . '/config.json', $temporary . '/data');

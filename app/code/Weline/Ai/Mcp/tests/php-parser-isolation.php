@@ -36,7 +36,7 @@ try {
     file_put_contents($configPath, json_encode([
         'data_dir' => $temporary . '/data',
         'analysis' => ['provider' => 'none'],
-        'index' => ['max_file_bytes' => 8_388_608],
+        'index' => ['max_file_bytes' => 8_388_608, 'allowed_roots' => ['*']],
     ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
     $config = Config::load($configPath);
     $sourcePath = $temporary . '/project/src/Large.php';
