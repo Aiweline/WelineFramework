@@ -87,6 +87,9 @@ final class ServerViewContractsTest extends TestCase
             'WlsPanelHostEmbed::testStandaloneShellUsesMainColumnScrollport' => function () {
             $this->assert_WlsPanelHostEmbed_testStandaloneShellUsesMainColumnScrollport();
         },
+            'ServerStatics::testPanelScriptsAvoidNativeDialogs' => function () {
+            $this->assert_ServerStatics_testPanelScriptsAvoidNativeDialogs();
+        },
         ];
     }
 
@@ -268,6 +271,15 @@ private function moduleRoot_WlsPanelHostEmbed(): string
     return '/Users/weline/Project/Official/框架/app/code/Weline/Server';
 }
 
+private function stylesheet_WlsPanelHostEmbed(string $name): string
+{
+    // Panel styling is extracted to module stylesheets; contracts follow the
+    // template's <css> reference instead of asserting inline <style> blocks.
+    $path = $this->moduleRoot_WlsPanelHostEmbed() . '/view/statics/css/backend/' . $name;
+    self::assertFileExists($path);
+    return (string) \file_get_contents($path);
+}
+
 private function assert_WlsPanelHostEmbed_testMenuPointsToHostAction(): void
 {
     $path = $this->moduleRoot_WlsPanelHostEmbed() . '/etc/backend/menu.xml';
@@ -298,10 +310,12 @@ private function assert_WlsPanelHostEmbed_testHostTemplateHasIframeAndModeHooks(
     self::assertStringContainsString("setMode('float')", $src);
     self::assertStringContainsString('wlsPanelHostFrameUrl', $src);
     self::assertStringContainsString('wlsPanelHostStandaloneUrl', $src);
-    self::assertStringContainsString('z-index: 13000', $src);
-    self::assertStringContainsString('html:has(.wls-panel-host-shell[data-mode="float"])', $src);
-    self::assertStringContainsString('overscroll-behavior: contain', $src);
-    self::assertStringContainsString('max-height: 100dvh', $src);
+    self::assertStringContainsString('Weline_Server::css/backend/wls-panel-host.css', $src);
+    $css = $this->stylesheet_WlsPanelHostEmbed('wls-panel-host.css');
+    self::assertStringContainsString('z-index: 13000', $css);
+    self::assertStringContainsString('html:has(.wls-panel-host-shell[data-mode="float"])', $css);
+    self::assertStringContainsString('overscroll-behavior: contain', $css);
+    self::assertStringContainsString('max-height: 100dvh', $css);
     // 默认布局已渲染 H1 页标题；宿主工具条禁止再叠同名 h1/h2/h3/h4
     self::assertDoesNotMatchRegularExpression('/<h[1-4][^>]*>\s*<\?=\s*__\(\s*[\'"]WLS 面板[\'"]\s*\)/u', $src);
 }
@@ -326,11 +340,36 @@ private function assert_WlsPanelHostEmbed_testStandaloneShellUsesMainColumnScrol
     self::assertFileExists($path);
     $src = (string) \file_get_contents($path);
     self::assertStringContainsString("panelEmbedded ? ' is-embedded' : ''", $src);
-    self::assertStringContainsString('grid-template-rows: minmax(0, 1fr)', $src);
-    self::assertStringContainsString('html:has(.wls-standalone-shell)', $src);
-    self::assertStringContainsString('.w-backend-standalone', $src);
-    self::assertStringContainsString('#main-content', $src);
-    self::assertMatchesRegularExpression('/\.wls-shell-main\s*\{[^}]*overflow-y:\s*auto/s', $src);
-    self::assertMatchesRegularExpression('/\.wls-shell-main\s*\{[^}]*min-height:\s*0/s', $src);
+    self::assertStringContainsString('Weline_Server::css/backend/wls-panel.css', $src);
+    $css = $this->stylesheet_WlsPanelHostEmbed('wls-panel.css');
+    self::assertStringContainsString('grid-template-rows: minmax(0, 1fr)', $css);
+    self::assertStringContainsString('html:has(.wls-standalone-shell)', $css);
+    self::assertStringContainsString('.w-backend-standalone', $css);
+    self::assertStringContainsString('#main-content', $css);
+    self::assertMatchesRegularExpression('/\.wls-shell-main\s*\{[^}]*overflow-y:\s*auto/s', $css);
+    self::assertMatchesRegularExpression('/\.wls-shell-main\s*\{[^}]*min-height:\s*0/s', $css);
+}
+private function assert_ServerStatics_testPanelScriptsAvoidNativeDialogs(): void
+{
+    $root = $this->moduleRoot_WlsPanelHostEmbed() . '/view/statics';
+    $iterator = new \RecursiveIteratorIterator(
+        new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+    );
+    $offenders = [];
+    foreach ($iterator as $file) {
+        if (!$file instanceof \SplFileInfo || !$file->isFile()) {
+            continue;
+        }
+        if (\strtolower($file->getExtension()) !== 'js') {
+            continue;
+        }
+        $source = (string) \file_get_contents($file->getPathname());
+        foreach (['window.alert(', 'window.confirm(', 'window.prompt('] as $needle) {
+            if (\str_contains($source, $needle)) {
+                $offenders[] = \str_replace($root . '/', '', $file->getPathname()) . ': ' . $needle;
+            }
+        }
+    }
+    self::assertSame([], $offenders, \implode("\n", $offenders));
 }
 }

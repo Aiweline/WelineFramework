@@ -15,7 +15,11 @@ final class ServiceUnavailablePageTest extends TestCase
 
         self::assertStringContainsString('HTTP/1.1 503 Service Unavailable', $response);
         self::assertStringContainsString('Content-Type: text/html; charset=UTF-8', $response);
-        self::assertStringContainsString('网站维护', $response);
+        // The body may come from a published maintenance snapshot in any
+        // configured language; this contract only proves framework HTML (not
+        // the old plain-text 503) is returned.
+        self::assertStringContainsString('<!DOCTYPE html', $response);
+        self::assertMatchesRegularExpression('/<h1[^>]*>.+<\/h1>/u', $response);
         self::assertStringNotContainsString("\r\n\r\nService Unavailable", $response);
     }
 

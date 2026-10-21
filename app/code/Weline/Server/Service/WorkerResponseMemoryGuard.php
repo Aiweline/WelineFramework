@@ -84,6 +84,17 @@ final class WorkerResponseMemoryGuard
     private const LOOP_SHED_RETRY_GROWTH_BYTES = 16 * 1024 * 1024;
     private const LOOP_SHED_RETRY_COOLDOWN_SECONDS = 60.0;
 
+    /**
+     * Zend allocator sweep (gc_mem_caches) + cycle collector are the top cold
+     * request CPU cost once a Worker heap sits under hard ratio pressure: the
+     * sweep walks every free chunk and was executed per response (up to 4×).
+     * Trim only when the heap actually grew or the cooldown expired; keep an
+     * emergency path for true OOM headroom.
+     */
+    private const ALLOCATOR_TRIM_COOLDOWN_SECONDS = 2.0;
+    private const ALLOCATOR_TRIM_MIN_GROWTH_BYTES = 8 * 1024 * 1024;
+    private const ALLOCATOR_TRIM_EMERGENCY_HEADROOM_BYTES = 32 * 1024 * 1024;
+
     private static ?array $runtimeCacheThresholds = null;
     /** Pressure denominator from Worker `--memory-limit` (ignore DevTool-inflated ini). */
     private static ?int $pressureLimitBytes = null;
@@ -110,6 +121,8 @@ final class WorkerResponseMemoryGuard
     private static int $lastLoopShedUsed = 0;
     private static int $lastLoopShedGain = 0;
     private static bool $loopShedSuppressedLogged = false;
+    private static float $lastAllocatorTrimAt = 0.0;
+    private static int $lastAllocatorTrimReal = 0;
 
     /** Consecutive incomplete Fiber cancels before Worker quarantine. */
     public const INCOMPLETE_REQUEST_FIBER_CANCEL_QUARANTINE_STREAK = 3;
@@ -705,6 +718,37 @@ final class WorkerResponseMemoryGuard
         return self::compactMemory($forceSoftReclaim, $forceAggressive);
     }
 
+    private static function allocatorTrimDue(int $realBefore, bool $emergency = false): bool
+    {
+        if ($emergency) {
+            self::$lastAllocatorTrimAt = \microtime(true);
+            self::$lastAllocatorTrimReal = $realBefore;
+
+            return true;
+        }
+        $now = \microtime(true);
+        $cooldownElapsed = self::$lastAllocatorTrimAt <= 0.0
+            || ($now - self::$lastAllocatorTrimAt) >= self::ALLOCATOR_TRIM_COOLDOWN_SECONDS;
+        $shellGrew = ($realBefore - self::$lastAllocatorTrimReal) >= self::ALLOCATOR_TRIM_MIN_GROWTH_BYTES;
+        if (!$cooldownElapsed && !$shellGrew) {
+            return false;
+        }
+        self::$lastAllocatorTrimAt = $now;
+        self::$lastAllocatorTrimReal = $realBefore;
+
+        return true;
+    }
+
+    private static function allocatorHeadroomEmergency(): bool
+    {
+        $limit = self::getMemoryLimitBytes();
+        if ($limit <= 0) {
+            return false;
+        }
+
+        return \max(0, $limit - \memory_get_usage(true)) < self::ALLOCATOR_TRIM_EMERGENCY_HEADROOM_BYTES;
+    }
+
     private static function compactMemory(
         bool $forceSoftReclaim,
         bool $forceAggressive,
@@ -736,14 +780,16 @@ final class WorkerResponseMemoryGuard
         $forcedReclaim = $forceSoftReclaim || $forceAggressive || $forceAllocatorTrim;
         $cycles = 0;
         $trimmedBytes = 0;
+        $realBefore = \memory_get_usage(true);
+        $trimDue = self::allocatorTrimDue($realBefore, self::allocatorHeadroomEmergency());
         // Skip cycle collect only under true hard *ratio* pressure (STW risk).
         // Forced aggressive after large responses still runs GC — keep-warm needs it.
-        if (!$criticalHard) {
+        if (!$criticalHard && $trimDue) {
             $cycles = \gc_collect_cycles();
         }
-        if (\function_exists('gc_mem_caches')) {
+        if ($trimDue && \function_exists('gc_mem_caches')) {
             $trimmedBytes = \max(0, (int) \gc_mem_caches());
-            if ($forcedReclaim) {
+            if ($forcedReclaim && self::allocatorHeadroomEmergency()) {
                 $trimmedBytes += \max(0, (int) \gc_mem_caches());
             }
         }
@@ -1060,11 +1106,14 @@ final class WorkerResponseMemoryGuard
         }
 
         // Allocator freelist trim — primary fix for 256M shell balloon; no bag wipe, no drain.
-        \gc_collect_cycles();
+        // Gated: sweeping every free chunk on each loop tick is the top cold-request CPU cost.
         $allocatorTrimmed = 0;
-        if (\function_exists('gc_mem_caches')) {
-            $allocatorTrimmed = \max(0, (int)\gc_mem_caches());
-            $allocatorTrimmed += \max(0, (int)\gc_mem_caches());
+        $trimDue = self::allocatorTrimDue($realBefore, self::allocatorHeadroomEmergency());
+        if ($trimDue) {
+            \gc_collect_cycles();
+            if (\function_exists('gc_mem_caches')) {
+                $allocatorTrimmed = \max(0, (int)\gc_mem_caches());
+            }
         }
 
         if ($localesEvicted !== [] || $hotTrimmed > 0 || $allocatorTrimmed > 0 || $processCachesCleared > 0) {
