@@ -12,6 +12,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: '询盘提交')]
 #[Index(name: 'idx_inquiry_submission_idempotency', columns: ['form_id', 'idempotency_key'], type: 'UNIQUE')]
 #[Index(name: 'idx_inquiry_submission_form_created', columns: ['form_id', 'created_at'])]
+#[Index(name: 'idx_inquiry_submission_website_created', columns: ['website_id', 'created_at'])]
 class Submission extends Model
 {
     public const schema_table = 'weline_inquiry_submission';
@@ -20,6 +21,8 @@ class Submission extends Model
     public const schema_fields_ID = 'submission_id';
     #[Col('int', nullable: false, comment: '表单 ID')]
     public const schema_fields_FORM_ID = 'form_id';
+    #[Col('int', default: 0, comment: '归属网站 ID')]
+    public const schema_fields_WEBSITE_ID = 'website_id';
     #[Col('int', nullable: false, comment: '版本 ID')]
     public const schema_fields_VERSION_ID = 'version_id';
     #[Col('varchar', 32, nullable: false, comment: '提交语言')]

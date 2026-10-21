@@ -1,6 +1,7 @@
 ﻿"Inquiry 查询器不支持：%{1}","Inquiry 查询器不支持：%{1}"
 询盘表单,"Inquiry forms"
 "已发布表单查询、公共提交和受 ACL 保护的后台编辑","Published form query, public submit, and ACL-protected backend editing"
+询盘,Inquiry
 编辑询盘表单,"Edit inquiry form"
 circle,circle
 管理询盘表单,"Manage inquiry forms"
@@ -15,7 +16,16 @@ edit,edit
 code,code
 编辑已受系统开关控制的可信脚本,"Edit trusted scripts that are already controlled by system switches"
 询盘提交记录,询盘提交记录
+询盘不存在或不属于当前站点,"Inquiry not found or outside the current website"
+企业邮箱模块未启用,"The enterprise mailbox module is not enabled"
+该询盘无有效邮箱，无法站内回复,"This inquiry has no valid email for an in-site reply"
+主题和正文不能为空,"Subject and body are required"
+请选择可用的站内发件邮箱,"Select an available sender mailbox"
 查看询盘提交记录,查看询盘提交记录
+回复询盘,回复询盘
+reply,reply
+发送站内回复,发送站内回复
+查看询盘沟通线程,查看询盘沟通线程
 供应商申请,"Supplier application"
 合作说明,"Partnership guide"
 "长安 · 供应合作","Chang'an · Supplier partnerships"
@@ -126,11 +136,20 @@ code,code
 已发布,Published
 草稿已保存,"Draft saved"
 保存失败,"Save failed"
+范围筛选,Scope
+全部站点,"All websites"
+未归属,Unassigned
+筛选,Filter
+当前站点：,"Current website:"
+站点,Website
 表单,表单
 语言,语言
 内容摘要,内容摘要
 提交时间,提交时间
+回复,Reply
 详情,详情
+站内回复,"Reply in site"
+站外回复,"Reply via mail app"
 展开,展开
 暂无提交记录,暂无提交记录
 人机验证失败或已过期，请重试,"Human verification failed or expired. Please try again."
@@ -151,11 +170,22 @@ code,code
 提交失败，请稍后重试。,"Submission failed. Please try again later."
 人机验证加载失败，请稍后重试,"Failed to load human verification. Please try again later."
 "请选择国家 / 地区","Please select a country / region"
+该询盘无有效邮箱,"This inquiry has no valid email"
+未开通本机企业邮箱，请使用站外回复,"No local mailbox is available; use external reply"
+可选择发件邮箱（可搜索）,"Choose a sender mailbox (searchable)"
+使用本人邮箱,"Use my mailbox"
+"Re: %{1} #%{2}","Re: %{1} #%{2}"
+"Hi %{1},","Hi %{1},"
+"Hello,","Hello,"
+"Thank you for contacting PlayingInChina. Here is our reply:","Thank you for contacting PlayingInChina. Here is our reply:"
+"Your message:","Your message:"
+"Best regards,","Best regards,"
 "表单名称和 code 不合法","Form name or code is invalid"
 表单不存在,"Form not found"
 "表单首次发布后 code 不可修改","Form code cannot change after first publish"
 没有可发布的草稿,"No draft available to publish"
 默认语言必须填写表单标题和提交按钮文案,"Default language must include title and submit label"
+新询盘,"New inquiry"
 默认语言不能为空,"Default language required"
 默认语言翻译为空，请先填写母本文案,"Default-language translation empty; fill source copy first"
 默认语言没有可翻译的文案叶子,"Default language has no translatable copy leaves"
@@ -164,6 +194,10 @@ code,code
 "AI 翻译调用失败","AI translation call failed"
 "AI 翻译未返回可用结果","AI translation returned no usable result"
 "已填充 %{1} 条文案到 %{2} 个语言","Filled %{1} copy items into %{2} languages"
+该询盘无有效邮箱，无法邮件回复,"This inquiry has no valid email for a reply"
+尚未开通本机企业邮箱，请使用站外回复,"No local mailbox is available; use external reply"
+可选择本机企业邮箱代发；发件邮箱可输入搜索,"Choose a local mailbox; type to search sender"
+使用本人站内邮箱回复,"Reply from your own site mailbox"
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
 可视化编辑询盘表单,"Visual inquiry form editor"
 字段,Fields

@@ -1,5 +1,12 @@
 <?php
-/** @var array $submissions @var array $form_names */
+/** @var array $submissions @var array $form_names @var array $websites @var array $website_names */
+$focusId = (int)($focus_submission_id ?? 0);
+$scope = (string)($scope_website_id ?? 'all');
+$canSwitchScope = !empty($can_switch_scope);
+$currentWebsiteId = (int)($current_website_id ?? 0);
+$websites = is_array($websites ?? null) ? $websites : [];
+$websiteNames = is_array($website_names ?? null) ? $website_names : [];
+$currentSiteName = (string)($websiteNames[$currentWebsiteId] ?? ('#' . $currentWebsiteId));
 $esc = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 $decode = static function ($json): array {
     if (!is_string($json) || $json === '') {
@@ -8,7 +15,39 @@ $decode = static function ($json): array {
     $decoded = json_decode($json, true);
     return is_array($decoded) ? $decoded : [];
 };
+$replyUrl = '';
+$threadUrl = '';
+try {
+    $url = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
+    $replyUrl = (string)$url->getBackendUrl('inquiry/backend/submission/reply');
+    $threadUrl = (string)$url->getBackendUrl('inquiry/backend/submission/getThread');
+} catch (\Throwable $e) {
+    w_log_warning('Inquiry reply URL resolve failed: ' . $e->getMessage(), [], 'inquiry');
+}
 ?>
+<w:mail-composer area="backend"/>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var root = document.querySelector('[data-w-component="mail-composer"]');
+    if (root) {
+        root.setAttribute('data-send-url', <?= json_encode($replyUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
+        root.setAttribute('data-thread-url', <?= json_encode($threadUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
+    }
+    document.querySelectorAll('[data-inquiry-mail-open]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var payload = {};
+            try {
+                payload = JSON.parse(button.getAttribute('data-composer') || '{}');
+            } catch (e) {
+                return;
+            }
+            if (window.WelineMailComposer) {
+                window.WelineMailComposer.open(payload);
+            }
+        });
+    });
+});
+</script>
 <div class="w-grid" data-testid="inquiry-submissions">
     <div style="--w-span:12;">
         <div class="w-backend-page__heading w-cluster" data-justify="between">
@@ -17,14 +56,36 @@ $decode = static function ($json): array {
         </div>
         <div class="w-card">
             <div class="w-card__body">
+                <form method="get" action="@backend-url{'inquiry/backend/submission'}" class="w-cluster" style="--w-gap:var(--weline-space-2);margin-block-end:var(--weline-space-4);" data-testid="inquiry-scope-filter">
+                    <?php if ($canSwitchScope): ?>
+                        <label class="w-field" style="margin:0;min-inline-size:14rem;">
+                            <span class="w-field__label"><?= __('范围筛选') ?></span>
+                            <select class="w-select" name="website_id">
+                                <option value="all" <?= $scope === 'all' ? 'selected' : '' ?>><?= __('全部站点') ?></option>
+                                <option value="unassigned" <?= $scope === 'unassigned' ? 'selected' : '' ?>><?= __('未归属') ?></option>
+                                <?php foreach ($websites as $site): ?>
+                                    <?php $siteId = (string)(int)($site['website_id'] ?? 0); ?>
+                                    <option value="<?= $esc($siteId) ?>" <?= $scope === $siteId ? 'selected' : '' ?>>
+                                        <?= $esc($site['name'] ?? ('#' . $siteId)) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <button class="w-button" type="submit" data-tone="primary"><?= __('筛选') ?></button>
+                    <?php else: ?>
+                        <span class="w-text" data-tone="muted"><?= __('当前站点：') ?><?= $esc($currentSiteName) ?></span>
+                    <?php endif; ?>
+                </form>
                 <table class="w-table">
                     <thead>
                     <tr>
                         <th>#</th>
+                        <th><?= __('站点') ?></th>
                         <th><?= __('表单') ?></th>
                         <th><?= __('语言') ?></th>
                         <th><?= __('内容摘要') ?></th>
                         <th><?= __('提交时间') ?></th>
+                        <th><?= __('回复') ?></th>
                         <th><?= __('详情') ?></th>
                     </tr>
                     </thead>
@@ -33,11 +94,25 @@ $decode = static function ($json): array {
                         <?php
                         $payload = $decode($row['payload_json'] ?? '');
                         $formId = (int)($row['form_id'] ?? 0);
+                        $sid = (int)($row['submission_id'] ?? 0);
+                        $rowWebsiteId = (int)($row['website_id'] ?? 0);
+                        $siteLabel = $rowWebsiteId > 0
+                            ? (string)($websiteNames[$rowWebsiteId] ?? ('#' . $rowWebsiteId))
+                            : (string)__('未归属');
+                        $isFocus = $focusId > 0 && $focusId === $sid;
                         $summary = trim((string)($payload['name'] ?? $payload['contact_name'] ?? $payload['company'] ?? ''));
                         $email = trim((string)($payload['email'] ?? ''));
+                        $mailReply = is_array($row['mail_reply'] ?? null) ? $row['mail_reply'] : [];
+                        $mailMode = (string)($mailReply['mode'] ?? 'hidden');
+                        $mailMailto = (string)($mailReply['mailto_url'] ?? '');
+                        $mailComposer = is_array($mailReply['composer'] ?? null) ? $mailReply['composer'] : [];
+                        $composerJson = $mailComposer !== []
+                            ? (string)json_encode($mailComposer, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)
+                            : '';
                         ?>
-                        <tr>
-                            <td><?= (int)($row['submission_id'] ?? 0) ?></td>
+                        <tr id="inquiry-submission-<?= $sid ?>" data-submission-id="<?= $sid ?>"<?= $isFocus ? ' style="background:var(--color-warning-soft, #fffbeb);scroll-margin-top:6rem"' : '' ?>>
+                            <td><?= $sid ?></td>
+                            <td><?= $esc($siteLabel) ?></td>
                             <td><code><?= $esc($form_names[$formId] ?? ('#' . $formId)) ?></code></td>
                             <td><?= $esc($row['locale'] ?? '') ?></td>
                             <td>
@@ -47,6 +122,25 @@ $decode = static function ($json): array {
                                 <?php endif; ?>
                             </td>
                             <td><?= $esc($row['created_at'] ?? '') ?></td>
+                            <td>
+                                <div style="display:flex;flex-direction:column;gap:var(--weline-space-1);align-items:flex-start;min-inline-size:8rem;">
+                                    <?php if ($mailMode === 'own' || $mailMode === 'pick'): ?>
+                                        <button type="button" class="w-button" data-size="sm" data-tone="primary"
+                                                style="white-space:nowrap;"
+                                                data-inquiry-mail-open
+                                                data-composer="<?= $esc($composerJson) ?>"
+                                                data-testid="inquiry-mail-open-<?= $sid ?>">
+                                            <?= __('站内回复') ?>
+                                        </button>
+                                        <div class="w-text" data-size="sm" data-tone="muted" style="margin:0;max-inline-size:13rem;"><?= $esc($mailReply['message'] ?? '') ?></div>
+                                    <?php elseif ($mailMode === 'unavailable' || $mailMode === 'external'): ?>
+                                        <div class="w-text" data-size="sm" data-tone="muted" style="margin:0;max-inline-size:13rem;"><?= $esc($mailReply['message'] ?? '') ?></div>
+                                    <?php endif; ?>
+                                    <?php if ($mailMailto !== ''): ?>
+                                        <a href="<?= $esc($mailMailto) ?>" style="white-space:nowrap;" data-testid="inquiry-mailto-<?= $sid ?>"><?= __('站外回复') ?></a>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
                             <td>
                                 <details>
                                     <summary><?= __('展开') ?></summary>
@@ -62,7 +156,7 @@ $decode = static function ($json): array {
                     <?php endforeach; ?>
                     <?php if (empty($submissions)): ?>
                         <tr>
-                            <td colspan="6"><?= __('暂无提交记录') ?></td>
+                            <td colspan="8"><?= __('暂无提交记录') ?></td>
                         </tr>
                     <?php endif; ?>
                     </tbody>

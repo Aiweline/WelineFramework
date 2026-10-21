@@ -51,6 +51,27 @@ final class InquiryRenderer implements InquiryRendererInterface
         return $html;
     }
 
+    private function websiteId(): int
+    {
+        try {
+            if (class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                $websiteId = \Weline\Websites\Data\WebsiteData::getWebsiteId();
+                if ($websiteId !== null) {
+                    return max(0, (int)$websiteId);
+                }
+            }
+        } catch (\Throwable $e) {
+            w_log_warning('Inquiry renderer website resolve failed: ' . $e->getMessage(), [], 'inquiry');
+        }
+
+        try {
+            return max(0, \Weline\Framework\Runtime\RequestContext::getWelineWebsiteId());
+        } catch (\Throwable $e) {
+            w_log_warning('Inquiry renderer request website resolve failed: ' . $e->getMessage(), [], 'inquiry');
+            return 0;
+        }
+    }
+
     private function skin(string $input): string
     {
         $input = strtolower(trim($input));
@@ -79,6 +100,7 @@ final class InquiryRenderer implements InquiryRendererInterface
         $config = json_encode([
             'id' => $id,
             'code' => $code,
+            'website_id' => $this->websiteId(),
             'mode' => $mode,
             'skin' => $skin,
             'selector' => preg_match('/^[#.][A-Za-z][A-Za-z0-9_:-]{0,127}$/', $selector) ? $selector : '',
@@ -308,7 +330,7 @@ function render(data){
       dataForm.forEach(function(v,k){var m=/^values\[([^\]]+)\](\[\])?$/.exec(k);if(!m)return;if(m[2]){(values[m[1]]||(values[m[1]]=[])).push(v)}else{values[m[1]]=v}});
       return Promise.resolve().then(function(){return Weline.load("api")}).then(function(api){
         var key=(window.crypto&&crypto.randomUUID)?crypto.randomUUID().replace(/-/g,""):String(Date.now())+Math.random().toString(16).slice(2);
-        var payload={code:c.code,values:values,idempotency_key:key};
+        var payload={code:c.code,values:values,idempotency_key:key,website_id:Number(c.website_id||0)||0};
         if(c.captchaEnabled){Object.assign(payload,captchaPayload(dataForm));}
         return api.resource("inquiry").submit(payload);
       }).then(function(result){message.textContent=result.message||copy.success_message||c.submitted;form.reset();if(window.WelineThemeAddress&&typeof window.WelineThemeAddress.boot==="function"){window.WelineThemeAddress.boot();}mountInquiryForm(form);if(c.captchaEnabled){ensureInquiryCaptcha(form).catch(function(){});}});

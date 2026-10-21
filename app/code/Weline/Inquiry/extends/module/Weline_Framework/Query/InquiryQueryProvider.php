@@ -72,6 +72,7 @@ final class InquiryQueryProvider implements QueryProviderInterface
                     ['name' => 'code', 'type' => 'string', 'required' => true],
                     ['name' => 'values', 'type' => 'array', 'required' => true],
                     ['name' => 'idempotency_key', 'type' => 'string', 'required' => true],
+                    ['name' => 'website_id', 'type' => 'int', 'required' => false, 'min' => 0],
                     ['name' => 'captcha_provider', 'type' => 'string', 'required' => false, 'max_length' => 64],
                     ['name' => 'captcha_token', 'type' => 'string', 'required' => false, 'max_length' => 128],
                     ['name' => 'captcha_response', 'type' => 'string', 'required' => false, 'max_length' => 4096],

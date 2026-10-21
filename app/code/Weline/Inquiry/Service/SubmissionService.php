@@ -14,6 +14,8 @@ final class SubmissionService
         private readonly Submission $submission,
         private readonly Attachment $attachment,
         private readonly InquirySubmissionCaptchaGuard $captchaGuard,
+        private readonly SubmissionMenuSignalPublisher $menuSignalPublisher,
+        private readonly InquiryWebsiteScopeService $websiteScope,
     ) {}
 
     /** @param array<string,mixed> $params @return array<string,mixed> */
@@ -31,12 +33,14 @@ final class SubmissionService
         if ($existing !== []) { return ['accepted' => true, 'duplicate' => true, 'submission_id' => (int)($existing[0]['submission_id'] ?? 0)]; }
         $clean = $this->validate((array)$resolved['schema'], $values);
         $submission = $this->submission->clear()->setData([
-            Submission::schema_fields_FORM_ID => (int)$form['form_id'], Submission::schema_fields_VERSION_ID => (int)$version['version_id'], Submission::schema_fields_LOCALE => (string)$resolved['locale'], Submission::schema_fields_IDEMPOTENCY_KEY => $idempotencyKey,
+            Submission::schema_fields_FORM_ID => (int)$form['form_id'], Submission::schema_fields_WEBSITE_ID => $this->resolveSubmissionWebsiteId($params), Submission::schema_fields_VERSION_ID => (int)$version['version_id'], Submission::schema_fields_LOCALE => (string)$resolved['locale'], Submission::schema_fields_IDEMPOTENCY_KEY => $idempotencyKey,
             Submission::schema_fields_PAYLOAD_JSON => json_encode($clean, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), Submission::schema_fields_SCHEMA_SNAPSHOT_JSON => json_encode(['schema' => $resolved['schema'], 'copy' => $resolved['copy']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
             Submission::schema_fields_SOURCE_FINGERPRINT => hash('sha256', (string)($_SERVER['REMOTE_ADDR'] ?? '')), Submission::schema_fields_CREATED_AT => date('Y-m-d H:i:s'),
         ]);
         $submission->save();
         $this->saveAttachments((int)$submission->getId(), $values['_attachments'] ?? []);
+        try { $this->menuSignalPublisher->publish((int)$submission->getId(), (array)$form, $clean); }
+        catch (\Throwable $e) { w_log_error('Inquiry menu signal publish failed: ' . $e->getMessage(), [], 'inquiry_menu_signal'); }
         return ['accepted' => true, 'duplicate' => false, 'submission_id' => (int)$submission->getId(), 'message' => (string)($resolved['copy']['success_message'] ?? __('提交成功，我们会尽快联系您。'))];
     }
 
@@ -57,6 +61,17 @@ final class SubmissionService
         }
         return $result;
     }
+    /** 服务端 Host/Scope 优先；查询 API 无上下文时用前台渲染注入的 website_id。 */
+    private function resolveSubmissionWebsiteId(array $params): int
+    {
+        $serverWebsiteId = $this->websiteScope->currentWebsiteId();
+        if ($serverWebsiteId > 0) {
+            return $serverWebsiteId;
+        }
+
+        return max(0, (int)($params['website_id'] ?? 0));
+    }
+
     /** @param mixed $attachments */
     private function saveAttachments(int $submissionId, mixed $attachments): void
     {
@@ -65,4 +80,5 @@ final class SubmissionService
             $this->attachment->clear()->setData([Attachment::schema_fields_SUBMISSION_ID => $submissionId, Attachment::schema_fields_UPLOAD_TICKET => (string)$file['ticket'], Attachment::schema_fields_FILENAME => mb_substr((string)($file['name'] ?? ''), 0, 255), Attachment::schema_fields_MIME_TYPE => mb_substr((string)($file['mime'] ?? ''), 0, 127), Attachment::schema_fields_SIZE => max(0, (int)($file['size'] ?? 0)), Attachment::schema_fields_CREATED_AT => date('Y-m-d H:i:s')])->save();
         }
     }
+
 }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Inquiry',
-    'version' => '1.0.25',
+    'version' => '1.0.27',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Backend' => '*',
@@ -12,9 +12,11 @@ return [
         'Weline_Taglib' => '*',
         'Weline_Widget' => '*',
         'Weline_SystemConfig' => '*',
+        'Weline_Websites' => '*',
     ],
     'optional' => [
         'Weline_Acl' => '*',
+        'Weline_Admin' => '*',
         'Weline_Captcha' => '*',
         'Weline_MediaManager' => '*',
     ],

@@ -39,8 +39,8 @@ final class InquiryServiceContractsTest extends TestCase
             'InquiryContactForm::testInstallAndUpgradeBothSeedContactForm' => function () {
             $this->assert_InquiryContactForm_testInstallAndUpgradeBothSeedContactForm();
         },
-            'InquiryContactForm::testBackendSubmissionControllerIsReadOnlyList' => function () {
-            $this->assert_InquiryContactForm_testBackendSubmissionControllerIsReadOnlyList();
+            'InquiryContactForm::testBackendSubmissionControllerKeepsInquiryDataReadOnly' => function () {
+            $this->assert_InquiryContactForm_testBackendSubmissionControllerKeepsInquiryDataReadOnly();
         },
             'InquiryContactForm::testBackendMenuExposesSubmissionsEntry' => function () {
             $this->assert_InquiryContactForm_testBackendMenuExposesSubmissionsEntry();
@@ -98,7 +98,7 @@ private function assert_InquiryContactForm_testInstallAndUpgradeBothSeedContactF
     }
 }
 
-private function assert_InquiryContactForm_testBackendSubmissionControllerIsReadOnlyList(): void
+private function assert_InquiryContactForm_testBackendSubmissionControllerKeepsInquiryDataReadOnly(): void
 {
     $path = '/Users/weline/Project/Official/框架/app/code/Weline/Inquiry' . '/Controller/Backend/Submission.php';
     self::assertFileExists($path);
@@ -107,8 +107,9 @@ private function assert_InquiryContactForm_testBackendSubmissionControllerIsRead
     self::assertStringContainsString("Acl('Weline_Inquiry::submissions'", $src);
     self::assertStringContainsString('SubmissionModel::schema_fields_CREATED_AT', $src);
     self::assertStringContainsString('getItems()', $src);
-    // 只读列表：不得出现写动作方法。
-    self::assertStringNotContainsString('function post', $src);
+    // 询盘数据只读：除 postReply 外不得出现其它 post 写动作。
+    self::assertDoesNotMatchRegularExpression('/function post(?!Reply\b)/', $src);
+    self::assertStringContainsString('function postReply', $src);
 }
 
 private function assert_InquiryContactForm_testBackendMenuExposesSubmissionsEntry(): void
