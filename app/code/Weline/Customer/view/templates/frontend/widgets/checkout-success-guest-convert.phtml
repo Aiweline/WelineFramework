@@ -113,14 +113,14 @@ $loginUrl = '@url{\'customer/account/login\'}';
          data-order-uuid="<?= $esc($orderUuid) ?>"
          data-checkout-token="<?= $esc($checkoutToken) ?>">
     <div class="checkout-success-guest-convert__copy">
-        <strong><?= $esc((string)__('保存订单到我的账户')) ?></strong>
+        <strong><lang>保存订单到我的账户</lang></strong>
         <?php if ($email !== ''): ?>
-        <p><?= $esc((string)__('将使用结账邮箱')) ?> <em><?= $esc($email) ?></em></p>
+        <p><lang>将使用结账邮箱</lang> <em><?= $esc($email) ?></em></p>
         <?php endif; ?>
         <?php if ($outcome === 'login_required'): ?>
-        <p><?= $esc((string)__('该邮箱已有账户，请登录后查看订单。')) ?></p>
+        <p><lang>该邮箱已有账户，请登录后查看订单。</lang></p>
         <?php else: ?>
-        <p><?= $esc((string)__('一键创建账户并保存本单，随后请设置密码。')) ?></p>
+        <p><lang>一键创建账户并保存本单，随后请设置密码。</lang></p>
         <?php endif; ?>
     </div>
     <div class="checkout-success-guest-convert__actions">

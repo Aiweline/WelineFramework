@@ -21,7 +21,7 @@ $lines = $share['selection_snapshot']['lines'] ?? [];
         </p>
     </header>
     <div class="w-helppay-panel">
-        <ul class="w-stack" style="--w-gap:var(--weline-space-2, var(--space-2)); margin:0; padding-inline-start:1.25rem;" data-testid="selection-share-lines">
+        <ul class="w-stack help-pay-list"  style="--w-gap:var(--weline-space-2)" data-testid="selection-share-lines">
             <?php if (is_array($lines)): foreach ($lines as $line): ?>
                 <li class="w-text"><?= $escape(($line['sku'] ?? $line['title'] ?? 'item') . ' × ' . ($line['qty'] ?? 1)) ?></li>
             <?php endforeach; endif; ?>

@@ -36,7 +36,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             aria-label="@lang('订单确认进度')"
             data-testid="payment-handoff-progress">
             <div class="payment-handoff__progress-track">
-                <div id="payment-handoff-progress-bar" class="payment-handoff__progress-bar" style="width:12%"></div>
+                <div id="payment-handoff-progress-bar" class="payment-handoff__progress-bar payment-handoff__bar" ></div>
             </div>
         </div>
     </header>
@@ -66,7 +66,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
     --amz-border: var(--color-border-muted);
     --amz-panel-bg: var(--color-bg-primary);
     --amz-banner-bg: var(--color-bg-slate);
-    --amz-pending: #c7511f;
+    --amz-pending: var(--color-warning);
     --amz-pending-soft: var(--color-primary-bg-subtle);
     --amz-success: var(--color-success);
     box-sizing: border-box;
@@ -83,7 +83,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
 .payment-handoff *::after { box-sizing: border-box; }
 .payment-handoff__hero {
     background:
-        radial-gradient(120% 90% at 0% 0%, rgba(199, 81, 31, 0.08), transparent 55%),
+        radial-gradient(120% 90% at 0% 0%, var(--color-warning-bg-subtle), transparent 55%),
         var(--amz-banner-bg);
     border: var(--border-width-thin) solid var(--amz-border);
     border-radius: var(--radius-xl);
@@ -113,7 +113,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    border: var(--loader-border-width) solid rgba(199, 81, 31, 0.22);
+    border: var(--loader-border-width) solid var(--color-warning);
     border-top-color: var(--amz-pending);
     animation: payment-handoff-spin 0.85s linear infinite;
 }
@@ -180,7 +180,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    border: var(--border-width-medium) solid #b0b3b3;
+    border: var(--border-width-medium) solid var(--color-border-light);
     background: var(--color-bg-primary);
     flex-shrink: 0;
 }
@@ -237,4 +237,5 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
     .payment-handoff__hero-inner { padding: var(--spacing-4_5) var(--spacing-4) var(--spacing-3_5); }
     .payment-handoff__progress { padding: 0 var(--spacing-4) var(--spacing-4); }
 }
-</style>
+        .payment-handoff__bar { width: 12%; }
+    </style>

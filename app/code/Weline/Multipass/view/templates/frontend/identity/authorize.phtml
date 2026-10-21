@@ -37,15 +37,15 @@ if ($redirectUri !== '') {
 }
 ?>
 <style>
-.multipass-auth{--mp-primary: var(--color-primary);--mp-primary-strong: var(--color-primary);--mp-warning: var(--color-warning);--mp-panel: var(--color-bg-primary);--mp-muted:#64748b;--mp-border: var(--color-border-slate);--mp-text:#0f172a;width:min(100%,760px);margin:0 auto;color:var(--mp-text)}
+.multipass-auth{--mp-primary: var(--color-primary);--mp-primary-strong: var(--color-primary);--mp-warning: var(--color-warning);--mp-panel: var(--color-bg-primary);--mp-muted:var(--color-text-muted);--mp-border: var(--color-border-slate);--mp-text:var(--color-text);width:min(100%,760px);margin:0 auto;color:var(--mp-text)}
 .multipass-auth__card{background:var(--mp-panel);border:var(--border-width-thin) solid var(--mp-border);border-radius:var(--radius-lg);box-shadow: var(--weline-shadow-md);overflow:hidden}
 .multipass-auth__header{padding:var(--spacing-7) var(--spacing-7) var(--spacing-6);background:linear-gradient(135deg,var(--color-bg-panel) 0%,var(--color-bg-slate) 68%,var(--color-success-bg-soft) 100%);border-bottom:var(--border-width-thin) solid var(--mp-border)}
 .multipass-auth__eyebrow{margin:0 0 var(--spacing-2);color:var(--mp-primary-strong);font-size:var(--font-size-13);font-weight:800}
 .multipass-auth__title{margin:0;color:var(--mp-text);font-size:var(--font-size-3xl);line-height:1.25;letter-spacing:0}
 .multipass-auth__subtitle{margin:var(--spacing-2_5) 0 0;max-width:620px;color:var(--color-product-label-demo-text);font-size:var(--font-size-sm);line-height:1.7}
 .multipass-auth__body{padding:var(--spacing-7) var(--spacing-7) var(--spacing-7)}
-.multipass-auth__notice{margin-bottom:var(--spacing-4_5);padding:var(--spacing-3_5) var(--spacing-4);border:var(--border-width-thin) solid #fed7aa;border-radius:var(--radius-lg);background:var(--color-bg-canvas);color:var(--color-text-muted);font-size:var(--font-size-sm);line-height:1.6}
-.multipass-auth__notice--error{border-color:#fecaca;background:var(--color-bg-canvas);color:var(--color-link)}
+.multipass-auth__notice{margin-bottom:var(--spacing-4_5);padding:var(--spacing-3_5) var(--spacing-4);border:var(--border-width-thin) solid var(--color-warning);border-radius:var(--radius-lg);background:var(--color-bg-canvas);color:var(--color-text-muted);font-size:var(--font-size-sm);line-height:1.6}
+.multipass-auth__notice--error{border-color:var(--color-danger);background:var(--color-bg-canvas);color:var(--color-link)}
 .multipass-auth__section{padding:var(--spacing-4_5) 0;border-bottom:var(--border-width-thin) solid var(--color-border-slate)}
 .multipass-auth__section:first-of-type{padding-top:0}
 .multipass-auth__section:last-of-type{border-bottom:0}

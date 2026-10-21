@@ -212,7 +212,7 @@ if ($products === []) {
     <div class="wrv-stage" data-wrv-stage>
         <div class="wrv-viewport" data-wrv-viewport>
             <?php if ($layout === 'carousel'): ?>
-                <button class="wrv-nav wrv-nav--prev" type="button" data-wrv-prev aria-label="<?= $esc((string)__('上一组')) ?>">
+                <button class="wrv-nav wrv-nav--prev" type="button" data-wrv-prev aria-label="@lang('上一组')">
                     <span aria-hidden="true">‹</span>
                 </button>
             <?php endif; ?>
@@ -220,7 +220,7 @@ if ($products === []) {
                 <w:product:card ids="products" density="standard" show-price="showPrice" show-rating="false" show-add-to-cart="true" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" show-sku="true" class="cardClass" wishlist-pixel="true" />
             </div>
             <?php if ($layout === 'carousel'): ?>
-                <button class="wrv-nav wrv-nav--next" type="button" data-wrv-next aria-label="<?= $esc((string)__('下一组')) ?>">
+                <button class="wrv-nav wrv-nav--next" type="button" data-wrv-next aria-label="@lang('下一组')">
                     <span aria-hidden="true">›</span>
                 </button>
             <?php endif; ?>

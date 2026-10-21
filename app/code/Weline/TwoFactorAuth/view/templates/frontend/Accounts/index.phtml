@@ -28,7 +28,7 @@
         }
         
         .container {
-            max-width: 900px;
+            width: min(100%, var(--weline-layout-content-max-width));
             margin: 0 auto;
             padding: var(--spacing-0_95) var(--spacing-2_5);
             min-height: 100vh;
@@ -317,11 +317,11 @@
         }
         
         .countdown-circle .progress-bg {
-            stroke: #e0e0e0;
+            stroke: var(--color-text-faint);
         }
         
         .countdown-circle .progress-bar {
-            stroke: #007bff;
+            stroke: var(--color-link);
             stroke-linecap: round;
             transition: stroke-dashoffset 0.1s linear;
         }
@@ -603,7 +603,7 @@
         }
         
         .btn-secondary:hover {
-            background: #5a6268;
+            background: var(--color-bg-dark);
         }
         
         .import-tab-content {
@@ -714,11 +714,11 @@
                         <p class="tfa-mt-4 tfa-muted">点击上传或拖拽二维码图片</p>
                         <input type="file" id="qrFileInput" accept="image/*" class="tfa-hidden" data-twofa-change="handle-file-upload">
                     </div>
-                    <div class="camera-section" class="tfa-mt-5 tfa-center">
+                    <div class="camera-section tfa-mt-5 tfa-center" >
                         <video id="cameraVideo" autoplay playsinline class="tfa-hidden tfa-w-full tfa-radius"></video>
                         <button class="w-button" id="startCameraBtn" type="button" data-twofa-action="start-camera" data-tone="neutral">📷 打开摄像头扫描</button>
                     </div>
-                    <div class="preview-section" id="previewSection" class="tfa-hidden tfa-center">
+                    <div class="preview-section tfa-hidden tfa-center" id="previewSection" >
                         <img id="previewImage" class="tfa-max-w-full tfa-radius tfa-mb-2">
                         <p id="previewText"></p>
                     </div>
@@ -756,7 +756,7 @@
             <div id="uriTab" class="w-tabs__content">
                 <div class="w-field">
                     <label>选择导入方式</label>
-                    <div class="tabs" class="tfa-mb-4">
+                    <div class="tabs tfa-mb-4" >
                         <button type="button" class="tab active" data-twofa-action="switch-import-tab" data-import-tab="file">从文件导入</button>
                         <button type="button" class="tab" data-twofa-action="switch-import-tab" data-import-tab="uri">手动URI导入</button>
                     </div>
@@ -772,7 +772,7 @@
                         <input type="file" id="importFileInput" accept=".json,.csv,.txt" class="tfa-hidden" data-twofa-change="handle-import-file">
                         <small class="tfa-faint tfa-fs-xs">支持格式：JSON、CSV、TXT（Google/Microsoft/Authy/双因素身份验证导出）</small>
                     </div>
-                    <div id="importFilePreview" class="preview-section" class="tfa-hidden tfa-center tfa-mt-4">
+                    <div id="importFilePreview" class="preview-section tfa-hidden tfa-center tfa-mt-4" >
                         <p id="importFileText"></p>
                     </div>
                 </div>

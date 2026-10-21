@@ -149,7 +149,7 @@ $gridClass = static function (string $resolved): string {
     <header class="storefront-search__header">
         <h1 class="storefront-search__title" data-search-title><?= $esc($titleText) ?></h1>
         <p class="storefront-search__meta" data-search-meta role="status"><?= $esc($metaText) ?></p>
-        <nav class="storefront-search__breadcrumb" aria-label="<?= $esc((string)__('分类面包屑')) ?>" data-search-breadcrumb<?= $q === '' ? ' hidden' : '' ?>>
+        <nav class="storefront-search__breadcrumb" aria-label="@lang('分类面包屑')" data-search-breadcrumb<?= $q === '' ? ' hidden' : '' ?>>
             <ol class="storefront-search__breadcrumb-list" data-search-breadcrumb-list></ol>
         </nav>
     </header>

@@ -73,7 +73,7 @@ $vipGroups = is_array($ladder['groups'] ?? null) ? $ladder['groups'] : [];
                         <?php if ($gDesc !== ''): ?>
                             <p class="w-text" data-size="sm" data-tone="muted" style="--w-mb:var(--weline-space-2);"><?= $escape($gDesc) ?></p>
                         <?php endif; ?>
-                        <ul class="w-stack" style="--w-gap:0.35rem; margin:0; padding-inline-start:1.25rem;">
+                        <ul class="w-stack b2b-wholesale__list"  style="--w-gap:var(--spacing-1_5)">
                             <li class="w-text" data-size="sm" data-testid="b2b-faq-vip-spend">
                                 <lang>消费门槛</lang>：
                                 <?= $escape($currencyCode) ?> <?= $escape($spendMajor) ?>

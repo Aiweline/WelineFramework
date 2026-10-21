@@ -304,13 +304,13 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
 
     .search-layout__recommendations .btn-add-to-cart {
         background: var(--color-primary);
-        border-color: #fcd200;
+        border-color: var(--color-warning);
         color: var(--weline-theme-color-text);
     }
 
     .search-layout__recommendations .btn-add-to-cart:hover {
         background: linear-gradient(180deg, var(--color-warning) 0%, var(--color-warning) 100%);
-        border-color: #e7b92e;
+        border-color: var(--color-warning);
         color: var(--weline-theme-color-text);
     }
 
@@ -527,10 +527,8 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         width: 0.95rem;
         height: 0.95rem;
         accent-color: var(--weline-theme-primary, var(--color-primary));
-    }
-
-    .storefront-search__type-children[hidden] {
-        display: none !important;
+    }.storefront-search__type-children[hidden]{
+        display: none;
     }
 
     .storefront-search__type-tree--nested .storefront-search__type-option {
@@ -681,7 +679,7 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         z-index: 2;
         margin-top: var(--spacing-1_5);
         min-height: var(--control-height-xs);
-        border: var(--border-width-thin) solid #fcd200;
+        border: var(--border-width-thin) solid var(--color-warning);
         border-radius: var(--weline-theme-radius-2xl);;
         background: var(--color-primary);
         color: var(--weline-theme-color-text);
@@ -778,7 +776,7 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         z-index: 2;
         padding: var(--spacing-0_5) var(--spacing-2);
         border-radius: var(--radius-full);
-        background: rgba(15, 17, 17, 0.78);
+        background: var(--color-bg-dark);
         color: var(--color-text-light);
         font-size: var(--font-size-xs);
         font-weight: 600;

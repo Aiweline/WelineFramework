@@ -55,7 +55,7 @@ $pick = static function (array $item, array $keys, mixed $fallback = ''): mixed 
             <?= $escape($lede !== '' ? $lede : __('甄选近期上架的商品与配饰，按上新时间发现新品。')) ?>
         </p>
         <p class="new-arrivals-page__count" data-testid="storefront-new-arrivals-count">
-            <?= $escape(__('共 %{1} 件新品', [$count])) ?>
+            <lang args="[$count]">共 %{1} 件新品</lang>
         </p>
     </header>
 

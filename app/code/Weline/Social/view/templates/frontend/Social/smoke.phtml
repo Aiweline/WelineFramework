@@ -21,10 +21,10 @@ $h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUO
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= $h((string)__('Weline Social Fake Smoke')) ?></title>
+    <title><lang>Weline Social Fake Smoke</lang></title>
     <style>
         body { margin: 0; font-family: Arial, sans-serif; background: var(--color-bg-panel); color: var(--color-text); }
-        main { max-width: 920px; margin: var(--weline-space-10) auto; padding: 0 var(--spacing-4_5); }
+        main { width: min(100%, var(--weline-layout-content-max-width)); margin: var(--weline-space-10) auto; padding: 0 var(--spacing-4_5); }
         .panel { background: var(--color-bg-primary); border: var(--border-width-thin) solid var(--color-border-muted); border-radius: var(--radius-lg); padding: var(--spacing-5_5); box-shadow: var(--weline-shadow-md); }
         .status { display: inline-flex; align-items: center; gap: var(--spacing-2); padding: var(--spacing-2) var(--spacing-3); border-radius: var(--radius-full); font-weight: 700; }
         .passed { background: var(--color-bg-muted); color: var(--color-text-secondary); }

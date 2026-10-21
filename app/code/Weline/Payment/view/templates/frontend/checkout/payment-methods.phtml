@@ -366,7 +366,7 @@ if ($isFakeMode) {
 
 .payment-method-card:hover,
 .payment-method-card:focus-within {
-    border-color: #059669;
+    border-color: var(--color-success);
     box-shadow: var(--weline-shadow-md);
 }
 
@@ -466,13 +466,13 @@ if ($isFakeMode) {
 
 .payment-methods__action:hover,
 .payment-methods__action:focus {
-    border-color: #059669;
+    border-color: var(--color-success);
     color: var(--color-success-title);
 }
 
 .payment-methods__action--primary {
     background: var(--color-success);
-    border-color: #059669;
+    border-color: var(--color-success);
     color: var(--color-text-light);
 }
 
@@ -556,7 +556,7 @@ if ($isFakeMode) {
 
 .payment-methods__notice {
     background: var(--color-bg-panel);
-    border: var(--border-width-thin) solid #bfdbfe;
+    border: var(--border-width-thin) solid var(--color-info);
     border-radius: var(--radius-lg);
     color: var(--color-text-faint);
     padding: var(--spacing-3);

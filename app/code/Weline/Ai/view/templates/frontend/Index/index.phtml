@@ -63,7 +63,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
 
         /* 导航栏 */
         .navbar {
-            background: rgba(15, 15, 35, 0.8);
+            background: var(--color-bg-dark);
             backdrop-filter: blur(10px);
             border-bottom: var(--border-width-thin) solid var(--color-link);
             padding: var(--weline-space-4) 0;
@@ -79,11 +79,11 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            text-shadow: 0 0 30px rgba(102, 126, 234, 0.5);
+            text-shadow: 0 0 30px var(--color-info);
         }
 
         .nav-link {
-            color: #a8b2d1;
+            color: var(--color-text-faint);
             transition: all 0.3s;
             position: relative;
             padding: var(--weline-space-2) var(--weline-space-4);
@@ -128,13 +128,13 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         }
 
         @keyframes glow {
-            from { filter: drop-shadow(0 0 10px rgba(102, 126, 234, 0.5)); }
+            from { filter: drop-shadow(0 0 10px var(--color-info)); }
             to { filter: drop-shadow(0 0 20px rgba(102, 126, 234, 0.8)); }
         }
 
         .hero-subtitle {
             font-size: var(--weline-font-size-2xl);
-            color: #a8b2d1;
+            color: var(--color-text-faint);
             margin-bottom: var(--weline-space-10);
         }
 
@@ -159,7 +159,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             left: 50%;
             width: 0;
             height: 0;
-            background: rgba(255, 255, 255, 0.2);
+            background: var(--color-on-dark-15);
             border-radius: 50%;
             transform: translate(-50%, -50%);
             transition: width 0.6s, height 0.6s;
@@ -235,7 +235,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         }
 
         .stat-label {
-            color: #a8b2d1;
+            color: var(--color-text-faint);
             font-size: var(--weline-font-size-base);
         }
 
@@ -320,7 +320,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         }
 
         .model-description {
-            color: #a8b2d1;
+            color: var(--color-text-faint);
             font-size: var(--font-size-base);
             line-height: 1.6;
             margin-bottom: var(--weline-space-4);
@@ -331,8 +331,8 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             align-items: center;
             gap: var(--weline-space-2);
             padding: var(--spacing-0_4) var(--weline-space-4);
-            background: rgba(0, 242, 254, 0.1);
-            border: var(--border-width-thin) solid rgba(0, 242, 254, 0.3);
+            background: var(--color-info-bg-subtle);
+            border: var(--border-width-thin) solid var(--color-link);
             border-radius: var(--weline-theme-radius-2xl);;
             color: var(--color-link);
             font-size: var(--font-size-sm);
@@ -353,11 +353,11 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
 
         /* 页脚 */
         .footer {
-            background: rgba(15, 15, 35, 0.9);
+            background: var(--color-bg-dark);
             border-top: var(--border-width-thin) solid var(--color-link);
             padding: var(--weline-space-8) 0;
             text-align: center;
-            color: #a8b2d1;
+            color: var(--color-text-faint);
             margin-top: var(--spacing-5rem);
         }
 
@@ -387,6 +387,8 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             opacity: 1;
             transform: translateY(0);
         }
+            .ai-hero-note { color: var(--color-text-faint) }
+        .ai-title-gradient { background: linear-gradient(135deg, var(--color-link), var(--color-info)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
     </style>
 </head>
 <body>
@@ -468,7 +470,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             <h2 class="section-title fade-in">🤖 可用AI模型</h2>
             <div class="models-grid">
                 <?php if (empty($models)): ?>
-                    <div class="w-text" style="color: #a8b2d1;" data-align="center">
+                    <div class="w-text ai-hero-note"  data-align="center">
                         <w:icon name="circle" size="sm"></w:icon>
                         <p>暂无可用模型</p>
                     </div>
@@ -496,7 +498,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
     <div class="footer">
         <div class="w-container">
             <p>&copy; 2025 AI助手平台. All rights reserved.</p>
-            <p>由 <span style="background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">WelineFramework</span> 驱动</p>
+            <p>由 <span class="ai-title-gradient">WelineFramework</span> 驱动</p>
         </div>
     </div>
 

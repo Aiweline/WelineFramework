@@ -152,12 +152,12 @@ if ($products === []) {
     <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
     <header class="wpr-header">
         <h2 class="wpr-title"><?= $esc($widgetTitle) ?></h2>
-        <p class="wpr-subtitle"><?= $esc((string)__('Customers also viewed')) ?></p>
+        <p class="wpr-subtitle"><lang>Customers also viewed</lang></p>
     </header>
 
     <div class="wpr-stage" data-wpr-stage>
         <?php if ($layout === 'carousel'): ?>
-            <button class="wpr-nav wpr-nav--prev" type="button" data-wpr-prev aria-label="<?= $esc((string)__('上一组')) ?>">
+            <button class="wpr-nav wpr-nav--prev" type="button" data-wpr-prev aria-label="@lang('上一组')">
                 <span aria-hidden="true">‹</span>
             </button>
         <?php endif; ?>
@@ -169,7 +169,7 @@ if ($products === []) {
         </div>
 
         <?php if ($layout === 'carousel'): ?>
-            <button class="wpr-nav wpr-nav--next" type="button" data-wpr-next aria-label="<?= $esc((string)__('下一组')) ?>">
+            <button class="wpr-nav wpr-nav--next" type="button" data-wpr-next aria-label="@lang('下一组')">
                 <span aria-hidden="true">›</span>
             </button>
         <?php endif; ?>

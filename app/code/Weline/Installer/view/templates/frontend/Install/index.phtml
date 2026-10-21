@@ -16,10 +16,10 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
             --bg-color: var(--color-header-bg);
             --card-bg: var(--color-header-bg-hover);
             --text-color: var(--color-info-soft);
-            --text-muted: #94a3b8;
-            --border-color: #334155;
+            --text-muted: var(--color-text-faint);
+            --border-color: var(--color-border-default);
             --terminal-bg: var(--color-bg-dark-secondary);
-            --terminal-text: #22c55e;
+            --terminal-text: var(--color-success);
         }
         
         * {
@@ -38,7 +38,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         }
         
         .container {
-            max-width: 900px;
+            width: min(100%, var(--weline-layout-content-max-width));
             margin: 0 auto;
             padding: var(--weline-space-8);
             flex: 1;
@@ -52,7 +52,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         .header h1 {
             font-size: var(--weline-font-size-4xl);
             margin-bottom: var(--weline-space-2);
-            background: linear-gradient(90deg, #818cf8, #c084fc);
+            background: linear-gradient(90deg, var(--color-info), var(--color-primary));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -237,12 +237,12 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         }
         
         .status-badge.success {
-            background: rgba(34, 197, 94, 0.2);
+            background: var(--color-success-bg-subtle);
             color: var(--success-color);
         }
         
         .status-badge.error {
-            background: rgba(239, 68, 68, 0.2);
+            background: var(--color-danger-bg-subtle);
             color: var(--error-color);
         }
         
@@ -255,9 +255,9 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
             display: block;
             margin-top: var(--weline-space-4);
             padding: var(--weline-space-3) var(--weline-space-4);
-            border: var(--border-width-thin) solid rgba(96, 165, 250, 0.35);
+            border: var(--border-width-thin) solid var(--color-link);
             border-radius: var(--border-radius-lg);
-            background: rgba(96, 165, 250, 0.12);
+            background: var(--color-info-bg-subtle);
             color: var(--text-color);
             line-height: 1.5;
         }
@@ -267,14 +267,14 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         }
 
         .inline-message.success {
-            border-color: rgba(34, 197, 94, 0.45);
-            background: rgba(34, 197, 94, 0.14);
+            border-color: var(--color-success);
+            background: var(--color-success-bg-subtle);
             color: var(--success-color);
         }
 
         .inline-message.error {
-            border-color: rgba(239, 68, 68, 0.45);
-            background: rgba(239, 68, 68, 0.14);
+            border-color: var(--color-danger);
+            background: var(--color-danger-bg-subtle);
             color: var(--error-color);
         }
 
@@ -407,8 +407,8 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
                 
                 <div class="w-button-group">
                     <button class="w-button" id="btn-check-env" data-tone="primary"><lang>开始检测</lang></button>
-                    <button class="w-button" id="btn-fix-env" class="s-hidden" data-tone="primary"><lang>尝试修复</lang></button>
-                    <button class="w-button" id="btn-next-db" class="s-hidden" data-tone="success"><lang>下一步</lang></button>
+                    <button class="w-button s-hidden" id="btn-fix-env"  data-tone="primary"><lang>尝试修复</lang></button>
+                    <button class="w-button s-hidden" id="btn-next-db"  data-tone="success"><lang>下一步</lang></button>
                 </div>
             </div>
         </div>
@@ -512,7 +512,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         <!-- 步骤 4: 安装完成 -->
         <div class="step-panel" id="panel-complete">
             <div class="w-card">
-                <div class="w-card__title" class="s-ok">
+                <div class="w-card__title s-ok" >
                     ✓ <lang>安装完成</lang>
                 </div>
                 

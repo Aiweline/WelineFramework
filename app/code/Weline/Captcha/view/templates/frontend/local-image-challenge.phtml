@@ -23,12 +23,12 @@ $esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES |
         <div class="weline-captcha-stack">
             <div class="weline-captcha-visual weline-captcha-row">
                 <?= $image ?>
-                <button type="button" class="w-button weline-captcha-refresh" data-weline-captcha-refresh data-tone="quiet" data-size="sm" aria-label="<?= $esc((string)__('刷新验证码')) ?>" title="<?= $esc((string)__('刷新验证码')) ?>">
+                <button type="button" class="w-button weline-captcha-refresh" data-weline-captcha-refresh data-tone="quiet" data-size="sm" aria-label="@lang('刷新验证码')" title="<lang>刷新验证码</lang>">
                     <lang>刷新</lang>
                 </button>
             </div>
             <span class="weline-captcha-field">
-                <input class="w-input" id="<?= $esc($inputId) ?>" type="text" name="captcha_response" required maxlength="6" autocapitalize="characters" autocomplete="off" spellcheck="false" inputmode="text" aria-label="<?= $esc((string)__('请输入图片中的验证码')) ?>" placeholder="······">
+                <input class="w-input" id="<?= $esc($inputId) ?>" type="text" name="captcha_response" required maxlength="6" autocapitalize="characters" autocomplete="off" spellcheck="false" inputmode="text" aria-label="<lang>请输入图片中的验证码</lang>" placeholder="······">
             </span>
         </div>
     </div>

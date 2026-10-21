@@ -31,7 +31,7 @@
         }
         
         .container {
-            max-width: 800px;
+            width: min(100%, var(--weline-layout-content-max-width));
             margin: 0 auto;
         }
         
@@ -100,7 +100,7 @@
             min-height: 250px;
             max-width: 250px;
             max-height: 250px;
-            border: var(--border-width-medium) solid #000000;
+            border: var(--border-width-medium) solid var(--color-border-default);
             padding: var(--spacing-5);
             background: var(--color-bg-primary);
             border-radius: var(--radius-lg);
@@ -135,7 +135,7 @@
         }
         
         .backup-codes {
-            background: #fff3cd;
+            background: var(--color-warning-bg-subtle);
             border: var(--border-width-medium) solid var(--color-warning);
             padding: var(--spacing-5);
             border-radius: var(--radius-lg);
@@ -227,7 +227,7 @@
         }
         
         .btn-secondary:hover {
-            background: #5a6268;
+            background: var(--color-bg-dark);
         }
         
         .warning {
@@ -236,7 +236,7 @@
             padding: var(--spacing-0_95);
             border-radius: var(--radius-lg);
             margin: var(--spacing-5) 0;
-            border: var(--border-width-thin) solid #f5c6cb;
+            border: var(--border-width-thin) solid var(--color-danger-bg-subtle);
         }
         
         .warning strong {
@@ -398,7 +398,7 @@
                     <button class="copy-btn" type="button" data-twofa-action="copy-backup-codes">
                         📋 <lang>复制所有备份码</lang>
                     </button>
-                    <button class="copy-btn" type="button" data-twofa-action="download-backup-codes" class="s-success-bg">
+                    <button class="copy-btn s-success-bg" type="button" data-twofa-action="download-backup-codes" >
                         💾 <lang>下载保存</lang>
                     </button>
                 </div>

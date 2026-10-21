@@ -147,7 +147,7 @@ if ($payableText === '') {
          <?= $hideShippingInitially ? 'hidden' : '' ?>>
         <span data-money-summary-shipping-label
               data-helppay-ship-label
-              data-label-base="<?= $escape((string) __('运费')) ?>"><?= $escape($labelShipping) ?></span>
+              data-label-base="@lang('运费')"><?= $escape($labelShipping) ?></span>
         <strong data-money-summary-shipping
                 data-shipping-amount=""
                 data-express-shipping

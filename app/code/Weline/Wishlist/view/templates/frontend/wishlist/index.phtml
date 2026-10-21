@@ -27,8 +27,8 @@ $wishlistAccountCss = (string)$this->fetchTagSource(
 <div class="account-card storefront-wishlist"
      data-testid="storefront-wishlist-page"
      data-weline-load="wishlist,api"
-     data-i18n-remove-failed="<?= $esc((string)__('移除失败，请稍后重试')) ?>"
-     data-i18n-added-cart="<?= $esc((string)__('已加入购物车')) ?>"
+     data-i18n-remove-failed="@lang('移除失败，请稍后重试')"
+     data-i18n-added-cart="<lang>已加入购物车</lang>"
      weline-code="wishlist.page.section_1">
     <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
     <header class="account-card__header storefront-wishlist__header">

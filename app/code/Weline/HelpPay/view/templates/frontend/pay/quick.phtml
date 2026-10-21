@@ -60,7 +60,7 @@ if ($shareUrl !== '' && !str_starts_with($shareUrl, 'http') && $host !== '') {
             <lang>立即支付</lang>
         </button>
         <?php if ($preferredMethod === ''): ?>
-            <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:var(--weline-space-2, var(--space-2)) 0 0;">
+            <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:var(--weline-space-2) 0 0">
                 <lang>暂无可用支付方式，请稍后再试或联系客服。</lang>
             </p>
         <?php endif; ?>

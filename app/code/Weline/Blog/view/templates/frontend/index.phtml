@@ -18,7 +18,7 @@ $count = count($articles);
             <?php if ($subtitle !== ''): ?>
                 <p class="amazon-blog-listing__subtitle"><?= $escape($subtitle) ?></p>
             <?php endif; ?>
-            <p class="amazon-blog-listing__meta"><?= $escape((string)__('共 %{1} 条', [(string)$count])) ?></p>
+            <p class="amazon-blog-listing__meta"><lang args="[(string)$count]">共 %{1} 条</lang></p>
         </div>
         <?php if ($rssUrl !== ''): ?>
             <div class="amazon-blog-listing__actions">
@@ -36,7 +36,7 @@ $count = count($articles);
             <a class="amazon-blog-listing__back" href="@url{'blog'}"><lang>返回博客</lang></a>
         </div>
     <?php else: ?>
-        <h2 class="amazon-blog-listing__section-title" id="blog-articles-heading"><?= $escape((string)__('文章列表')) ?></h2>
+        <h2 class="amazon-blog-listing__section-title" id="blog-articles-heading"><lang>文章列表</lang></h2>
         <div class="amazon-blog-listing__grid" data-testid="blog-list-grid" aria-labelledby="blog-articles-heading">
             <?php foreach ($articles as $article): ?>
                 <?php

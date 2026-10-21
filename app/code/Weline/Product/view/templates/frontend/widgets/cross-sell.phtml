@@ -105,7 +105,7 @@ if ($deferCards) {
          aria-busy="true">
     <header class="wpf-header">
         <h2 class="wpf-title"><?= $esc($widgetTitle) ?></h2>
-        <p class="wpf-subtitle"><?= $esc((string)__('Buy these items together')) ?></p>
+        <p class="wpf-subtitle"><lang>Buy these items together</lang></p>
     </header>
     <div class="wpf-body is-skeleton" data-wpf-hydrate-root>
         <?php for ($i = 0, $n = max(1, min(3, $companionLimit)); $i < $n; $i++): ?>
@@ -164,16 +164,16 @@ foreach ($products as $product) {
          data-weline-load="crossSell"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
-         data-msg-select-one="<?= $esc((string)__('请至少选择一个商品')) ?>"
-         data-msg-added="<?= $esc((string)__('已添加')) ?>"
-         data-msg-success="<?= $esc((string)__('已加入购物车')) ?>"
-         data-msg-add-all="<?= $esc((string)__('全部加入购物车')) ?>"
-         data-msg-loading="<?= $esc((string)__('正在加入购物车...')) ?>"
-         data-msg-error="<?= $esc((string)__('加入购物车失败')) ?>"
+         data-msg-select-one="<lang>请至少选择一个商品</lang>"
+         data-msg-added="<lang>已添加</lang>"
+         data-msg-success="<lang>已加入购物车</lang>"
+         data-msg-add-all="<lang>全部加入购物车</lang>"
+         data-msg-loading="<lang>正在加入购物车...</lang>"
+         data-msg-error="<lang>加入购物车失败</lang>"
          data-cart-url="@url{'cart'}">
     <header class="wpf-header">
         <h2 class="wpf-title"><?= $esc($widgetTitle) ?></h2>
-        <p class="wpf-subtitle"><?= $esc((string)__('Buy these items together')) ?></p>
+        <p class="wpf-subtitle"><lang>Buy these items together</lang></p>
     </header>
 
     <div class="wpf-body">
@@ -226,7 +226,7 @@ foreach ($products as $product) {
                         <div class="wpf-price-row">
                             <div class="wpf-price">¥<?= number_format($price, 2) ?></div>
                             <?php if ($isSeed): ?>
-                                <div class="wpf-badge"><?= $esc((string)__('当前商品')) ?></div>
+                                <div class="wpf-badge"><lang>当前商品</lang></div>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -237,7 +237,7 @@ foreach ($products as $product) {
         <aside class="wpf-summary">
             <?php if ($showTotalPrice): ?>
                 <div class="wpf-total">
-                    <span class="wpf-total-label"><?= $esc((string)__('总价')) ?></span>
+                    <span class="wpf-total-label"><lang>总价</lang></span>
                     <span class="wpf-total-value" data-wpf-total>¥<?= number_format($totalPrice, 2) ?></span>
                 </div>
             <?php endif; ?>
@@ -249,7 +249,7 @@ foreach ($products as $product) {
                         <i class="wpf-cta__ripple"></i>
                     </span>
                     <span class="wpf-cta__waves" aria-hidden="true"></span>
-                    <span class="wpf-cta__label" data-wpf-cta-label><?= $esc((string)__('全部加入购物车')) ?></span>
+                    <span class="wpf-cta__label" data-wpf-cta-label><lang>全部加入购物车</lang></span>
                 </button>
             <?php endif; ?>
             <div class="wpf-status" data-wpf-status role="status" aria-live="polite"></div>

@@ -145,6 +145,7 @@ if (is_array($selectedMessage)) {
 @media (max-width:767px){.weline-mail-client__hero,.weline-mail-client__meta,.weline-mail-client__account{flex-direction:column;grid-template-columns:1fr}.weline-mail-client__toolbar,.weline-mail-client__layout,.weline-mail-client__compose-grid{grid-template-columns:1fr}}
 @media (min-width:768px) and (max-width:1023px){.weline-mail-client__layout{grid-template-columns:minmax(15rem,1fr) minmax(18rem,1.4fr)}}
 @media (min-width:1024px){.weline-mail-client__layout{min-height:34rem}}
+        .mail-client-auto-height { min-height: auto }
 </style>
 <div class="weline-mail-client" data-w-component="account-mail-client">
     <header class="weline-mail-client__hero">
@@ -256,7 +257,7 @@ if (is_array($selectedMessage)) {
         <summary class="weline-mail-client__compose"><lang>邮箱账号</lang></summary>
         <div class="weline-mail-client__compose">
             <?php if ($managedAccounts === []): ?>
-                <p class="weline-mail-client__empty" style="min-height:auto"><lang>您还没有申请邮箱账号。</lang></p>
+                <p class="weline-mail-client__empty mail-client-auto-height" ><lang>您还没有申请邮箱账号。</lang></p>
             <?php else: ?>
                 <div class="weline-mail-client__accounts">
                     <?php foreach ($managedAccounts as $account): ?>

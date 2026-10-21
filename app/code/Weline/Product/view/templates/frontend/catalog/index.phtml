@@ -250,7 +250,7 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
         justify-content:center;
     }
     .product-storefront__pager-item.is-current {
-        border-color:#0f1111;
+        border-color:var(--color-border-default);
         background:var(--color-bg-dark-secondary);
         color:var(--color-text-light);
     }
@@ -287,8 +287,7 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
         font-size:var(--font-size-13);
         font-weight:600;
         line-height:1.35;
-    }
-    .storefront-listing-loading[hidden] { display:none !important; }
+    }.storefront-listing-loading[hidden]{ display: none; }
     .product-storefront.is-listing-loading [data-listing-stage] {
         opacity:.45;
         pointer-events:none;

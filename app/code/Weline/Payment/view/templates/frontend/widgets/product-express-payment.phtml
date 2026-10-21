@@ -163,10 +163,10 @@ if ($logoFileHtml === '' && $logoRaw === '') {
                 data-product-express-pay
                 data-pixel-event="express_pay"
                 data-method-code="<?= $esc($code) ?>"
-                data-method-label="<?= $esc((string) __('使用 %{1} 快捷支付', [$label])) ?>"
+                data-method-label="<lang args="[$label]">使用 %{1} 快捷支付</lang>"
                 data-product-id="<?= (int) $productId ?>"
                 data-testid="product-express-<?= $esc($code) ?>"
-                aria-label="<?= $esc((string) __('使用 %{1} 快捷支付', [$label])) ?>"
+                aria-label="<lang args="[$label]">使用 %{1} 快捷支付</lang>"
                 <?= ($sellable || $isPreviewMode) ? '' : 'disabled' ?>>
             <?php if ($btnLogoHtml !== ''): ?>
                 <span class="w-payment-express__logo" aria-hidden="true"><?= $btnLogoHtml ?></span>

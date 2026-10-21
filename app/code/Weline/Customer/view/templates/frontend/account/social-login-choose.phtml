@@ -32,29 +32,31 @@ if ($suggestedEmail !== '' && str_ends_with(strtolower($suggestedEmail), '@socia
     min-height: var(--control-height-md); border-radius: var(--radius-full); border: var(--border-width-thin) solid var(--color-border-muted); background: var(--color-bg-primary);
     font-weight: 700; cursor: pointer;
 }
-.social-choose__btn--primary { border-color: #0f172a; background: var(--color-header-bg); color: var(--color-text-light); }
+.social-choose__btn--primary { border-color: var(--color-text); background: var(--color-header-bg); color: var(--color-text-light); }
 .social-choose__divider {
     display: grid; grid-template-columns: 1fr auto 1fr; gap: var(--weline-space-3); align-items: center;
-    color: #94a3b8; font-size: var(--weline-font-size-xs);
+    color: var(--color-text-faint); font-size: var(--weline-font-size-xs);
 }
 .social-choose__divider::before, .social-choose__divider::after {
     content: ""; height: 1px; background: var(--color-secondary-bg-subtle);
 }
 .social-choose__alert {
-    margin: 0; padding: var(--weline-space-3) var(--spacing-0_9); border-radius: var(--radius-lg); border: var(--border-width-thin) solid #fecaca;
+    margin: 0; padding: var(--weline-space-3) var(--spacing-0_9); border-radius: var(--radius-lg); border: var(--border-width-thin) solid var(--color-danger);
     background: var(--color-bg-canvas); color: var(--color-link); font-size: var(--weline-font-size-sm);
 }
 .social-choose__hint {
     margin: 0; padding: var(--weline-space-3) var(--spacing-0_9); border-radius: var(--radius-lg); border: var(--border-width-thin) solid var(--color-border-slate);
     background: var(--color-bg-slate); color: var(--color-product-label-demo-text); font-size: var(--font-size-13);
 }
+        .cs-social-choice-text { font-size: var(--weline-font-size-base) }
+        .cs-social-choice-text { font-size: var(--weline-font-size-base) }
 </style>
 
 <section class="social-choose" weline-code="customer.account.social_login_choose">
     <header class="social-choose__card">
         <h1 class="social-choose__title"><lang>完成社媒登录</lang></h1>
         <p class="social-choose__desc">
-            <?= $safe((string) __('首次使用 %{1} 登录：可绑定已有账户，或新建账户并自动登录。', [$provider !== '' ? $provider : (string) __('社媒')])) ?>
+            <lang args="[$provider !== '' ? $provider : (string) __('社媒')]">首次使用 %{1} 登录：可绑定已有账户，或新建账户并自动登录。</lang>
         </p>
         <?php if ($displayName !== '' || $emailHint !== ''): ?>
             <p class="social-choose__meta">
@@ -67,7 +69,7 @@ if ($suggestedEmail !== '' && str_ends_with(strtolower($suggestedEmail), '@socia
     </header>
 
     <form class="social-choose__card" method="post" action="@url{'customer/account/social-login/bind-existing'}">
-        <h2 class="social-choose__title" style="font-size:1rem"><lang>绑定已有账户</lang></h2>
+        <h2 class="social-choose__title cs-social-choice-text" ><lang>绑定已有账户</lang></h2>
         <p class="social-choose__desc"><lang>登录已有账户后，将自动关联本次社媒授权。</lang></p>
         <?php if ($bindHint !== ''): ?>
             <p class="social-choose__hint"><?= $safe($bindHint) ?></p>
@@ -76,13 +78,13 @@ if ($suggestedEmail !== '' && str_ends_with(strtolower($suggestedEmail), '@socia
         <div class="w-field social-choose__field">
             <label class="w-field__label" for="social-choose-username"><lang>本站用户名或邮箱</lang></label>
             <input class="w-input" id="social-choose-username" name="username" type="text" required autocomplete="username"
-                   placeholder="<?= $safe((string) __('例如本站已注册邮箱')) ?>"
+                   placeholder="@lang('例如本站已注册邮箱')"
                    value="<?= $safe($suggestedEmail) ?>">
         </div>
         <div class="w-field social-choose__field">
             <label class="w-field__label" for="social-choose-password"><lang>本站密码</lang></label>
             <input class="w-input" id="social-choose-password" name="password" type="password" required autocomplete="current-password"
-                   placeholder="<?= $safe((string) __('不是 Google 密码')) ?>">
+                   placeholder="@lang('不是 Google 密码')">
         </div>
         <div class="social-choose__actions">
             <button type="submit" class="social-choose__btn social-choose__btn--primary"><lang>绑定并登录</lang></button>
@@ -92,7 +94,7 @@ if ($suggestedEmail !== '' && str_ends_with(strtolower($suggestedEmail), '@socia
     <div class="social-choose__divider"><span><lang>或</lang></span></div>
 
     <form class="social-choose__card" method="post" action="@url{'customer/account/social-login/create-new'}">
-        <h2 class="social-choose__title" style="font-size:1rem"><lang>新建账户</lang></h2>
+        <h2 class="social-choose__title cs-social-choice-text" ><lang>新建账户</lang></h2>
         <p class="social-choose__desc"><lang>使用本次社媒身份创建新账户并立即登录。</lang></p>
         <input type="hidden" name="token" value="<?= $safe($token) ?>">
         <div class="social-choose__actions">

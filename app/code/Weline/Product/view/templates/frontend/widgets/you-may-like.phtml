@@ -191,7 +191,7 @@ if ($products === []) {
 
     <div class="wym-stage" data-wym-stage>
         <?php if ($layout === 'carousel'): ?>
-            <button class="wym-nav wym-nav--prev" type="button" data-wym-prev aria-label="<?= $esc((string)__('上一组')) ?>">
+            <button class="wym-nav wym-nav--prev" type="button" data-wym-prev aria-label="@lang('上一组')">
                 <span aria-hidden="true">‹</span>
             </button>
         <?php endif; ?>
@@ -203,7 +203,7 @@ if ($products === []) {
         </div>
 
         <?php if ($layout === 'carousel'): ?>
-            <button class="wym-nav wym-nav--next" type="button" data-wym-next aria-label="<?= $esc((string)__('下一组')) ?>">
+            <button class="wym-nav wym-nav--next" type="button" data-wym-next aria-label="@lang('下一组')">
                 <span aria-hidden="true">›</span>
             </button>
         <?php endif; ?>

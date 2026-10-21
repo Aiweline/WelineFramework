@@ -142,7 +142,7 @@ foreach ($children as $child) {
         gap: var(--spacing-4);
         margin: 0 0 var(--spacing-5);
         /* 左侧略加内边距，减少悬浮社媒条压住标题首字 */
-        padding: var(--spacing-5) var(--spacing-4) var(--spacing-5) clamp(1.1rem, 3vw, 1.75rem);
+        padding: var(--spacing-5) var(--spacing-4) var(--spacing-5) clamp(var(--weline-space-4), 3vw, var(--spacing-7));
         border: var(--border-width-thin) solid var(--weline-theme-border);
         border-radius: var(--weline-theme-radius-md, var(--weline-theme-radius-sm));
         background: var(--weline-theme-surface-muted, var(--color-bg-secondary));
@@ -230,7 +230,7 @@ foreach ($children as $child) {
         padding: var(--spacing-0_45) var(--spacing-0_55);
         font-size: var(--font-size-13);
         font-weight: 650;
-        background: linear-gradient(to top, rgba(0, 0, 0, 0.62), transparent);
+        background: linear-gradient(to top, var(--color-overlay-50), transparent);
     }
     .storefront-categories-hub__mosaic-link:hover img {
         transform: scale(1.04);

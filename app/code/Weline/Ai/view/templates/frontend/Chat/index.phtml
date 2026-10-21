@@ -36,7 +36,7 @@ $is_logged_in = $this->is_logged_in ?? false;
             font-family: 'Microsoft YaHei', Arial, sans-serif;
         }
         .navbar {
-            background: rgba(15, 15, 35, 0.8);
+            background: var(--color-bg-dark);
             backdrop-filter: blur(10px);
             border-bottom: var(--border-width-thin) solid var(--color-link);
             box-shadow: var(--weline-shadow-md);
@@ -49,7 +49,7 @@ $is_logged_in = $this->is_logged_in ?? false;
             -webkit-text-fill-color: transparent;
         }
         .navbar-nav .nav-link {
-            color: #a8b2d1;
+            color: var(--color-text-faint);
             margin: 0 var(--spacing-2_5);
             transition: all 0.3s;
         }
@@ -118,8 +118,8 @@ $is_logged_in = $this->is_logged_in ?? false;
         }
         
         .message-assistant .message-content {
-            background: rgba(0, 242, 254, 0.1);
-            border: var(--border-width-thin) solid rgba(0, 242, 254, 0.3);
+            background: var(--color-info-bg-subtle);
+            border: var(--border-width-thin) solid var(--color-link);
             color: var(--color-text-light);
         }
         
@@ -160,7 +160,8 @@ $is_logged_in = $this->is_logged_in ?? false;
             transform: translateY(-3px);
             box-shadow: var(--weline-shadow-md);
         }
-    </style>
+            .ai-chat-hidden { display: none }
+</style>
 </head>
 <body>
 
@@ -209,7 +210,7 @@ $is_logged_in = $this->is_logged_in ?? false;
             </div>
         </div>
 
-        <div class="settings-panel" id="settingsPanel" style="display: none;">
+        <div class="settings-panel ai-chat-hidden" id="settingsPanel" >
             <div class="w-grid">
                 <div style="--w-span-md:6;">
                     <div class="w-field">
@@ -277,7 +278,32 @@ $is_logged_in = $this->is_logged_in ?? false;
     </div>
 </div>
 
+<?php
+$jsI18n = [
+    '可恢复任务 API 不可用。' => (string)__('可恢复任务 API 不可用。'),
+    '后台任务启动响应无效。' => (string)__('后台任务启动响应无效。'),
+    '欢迎使用AI聊天助手！' => (string)__('欢迎使用AI聊天助手！'),
+    '请输入您的问题，我会尽力为您解答。' => (string)__('请输入您的问题，我会尽力为您解答。'),
+    '确定要清空聊天记录吗？' => (string)__('确定要清空聊天记录吗？'),
+    '取消' => (string)__('取消'),
+    '清空' => (string)__('清空'),
+    '请求失败：' => (string)__('请求失败：'),
+    '无法启动后台任务。' => (string)__('无法启动后台任务。'),
+    '恢复订阅失败：' => (string)__('恢复订阅失败：'),
+    '请稍后重试。' => (string)__('请稍后重试。'),
+    '生成未完成：' => (string)__('生成未完成：'),
+    '生成失败。' => (string)__('生成失败。'),
+    '已取消生成。' => (string)__('已取消生成。'),
+    '客户端失联超时，任务已停止。' => (string)__('客户端失联超时，任务已停止。'),
+    '任务无法安全恢复。' => (string)__('任务无法安全恢复。'),
+    '任务事件已达到资源上限。' => (string)__('任务事件已达到资源上限。'),
+    '连接暂时中断，正在重连…' => (string)__('连接暂时中断，正在重连…'),
+];
+?>
+<script type="application/json" id="ai-chat-i18n"><?= json_encode($jsI18n, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 <script>
+    var I18N = (function () { try { var el = document.getElementById('ai-chat-i18n'); return el ? JSON.parse(el.textContent || '{}') : {}; } catch (e) { return {}; } }());
+
 let isProcessing = false;
 let runtimeApiPromise = null;
 let activeChatStream = null;
@@ -292,7 +318,7 @@ function getRuntimeApi() {
             }
             if (!api || typeof api.resource !== 'function'
                 || typeof api.createStream !== 'function') {
-                throw new Error('<?= addslashes(__('可恢复任务 API 不可用。')) ?>');
+                throw new Error(I18N["可恢复任务 API 不可用。"]);
             }
             return api;
         })();
@@ -357,7 +383,7 @@ function normalizeChatTaskHandle(value) {
     const handle = value && typeof value === 'object' ? value : null;
     if (!handle || typeof handle.task_id !== 'string' || typeof handle.lease_id !== 'string'
         || typeof handle.stream_channel !== 'string' || handle.task_id === '' || handle.lease_id === '') {
-        throw new Error('<?= addslashes(__('后台任务启动响应无效。')) ?>');
+        throw new Error(I18N["后台任务启动响应无效。"]);
     }
     return {
         task_id: handle.task_id,
@@ -428,10 +454,10 @@ function createWelcomeMessage() {
     icon.textContent = 'AI';
 
     const title = document.createElement('h4');
-    title.textContent = '<?= addslashes(__('欢迎使用AI聊天助手！')) ?>';
+    title.textContent = I18N["欢迎使用AI聊天助手！"];
 
     const copy = document.createElement('p');
-    copy.textContent = '<?= addslashes(__('请输入您的问题，我会尽力为您解答。')) ?>';
+    copy.textContent = I18N["请输入您的问题，我会尽力为您解答。"];
 
     wrapper.appendChild(icon);
     wrapper.appendChild(title);
@@ -450,7 +476,7 @@ function confirmClearChat() {
         dialog.setAttribute('aria-modal', 'true');
 
         const message = document.createElement('p');
-        message.textContent = '<?= addslashes(__('确定要清空聊天记录吗？')) ?>';
+        message.textContent = I18N["确定要清空聊天记录吗？"];
 
         const actions = document.createElement('div');
         actions.className = 'chat-confirm-actions';
@@ -458,12 +484,12 @@ function confirmClearChat() {
         const cancel = document.createElement('button');
         cancel.type = 'button';
         cancel.className = 'btn btn-sm btn-outline-secondary';
-        cancel.textContent = '<?= addslashes(__('取消')) ?>';
+        cancel.textContent = I18N["取消"];
 
         const clear = document.createElement('button');
         clear.type = 'button';
         clear.className = 'btn btn-sm btn-danger';
-        clear.textContent = '<?= addslashes(__('清空')) ?>';
+        clear.textContent = I18N["清空"];
 
         const close = function(value) {
             overlay.remove();
@@ -585,8 +611,8 @@ async function sendMessage() {
         appendTextMessage(
             aiContentDiv,
             'text-danger',
-            '<?= addslashes(__('请求失败：')) ?>',
-            error && error.message ? error.message : '<?= addslashes(__('无法启动后台任务。')) ?>'
+            I18N["请求失败："],
+            error && error.message ? error.message : I18N["无法启动后台任务。"]
         );
         activeChatStream = null;
         setChatProcessing(false);
@@ -616,8 +642,8 @@ async function restoreActiveChatTask() {
         appendTextMessage(
             aiContentDiv,
             'text-danger',
-            '<?= addslashes(__('恢复订阅失败：')) ?>',
-            error && error.message ? error.message : '<?= addslashes(__('请稍后重试。')) ?>'
+            I18N["恢复订阅失败："],
+            error && error.message ? error.message : I18N["请稍后重试。"]
         );
         activeChatStream = null;
         setChatProcessing(false);
@@ -713,27 +739,27 @@ async function attachChatTask(api, task, target) {
     });
 
     const terminalFailure = function(event, fallback) {
-        appendTextMessage(target, 'text-danger', '<?= addslashes(__('生成未完成：')) ?>', taskFailureMessage(streamPayload(event), fallback));
+        appendTextMessage(target, 'text-danger', I18N["生成未完成："], taskFailureMessage(streamPayload(event), fallback));
         finish();
     };
     stream.addEventListener('failed', function(event) {
-        terminalFailure(event, '<?= addslashes(__('生成失败。')) ?>');
+        terminalFailure(event, I18N["生成失败。"]);
     });
     stream.addEventListener('cancelled', function(event) {
-        terminalFailure(event, '<?= addslashes(__('已取消生成。')) ?>');
+        terminalFailure(event, I18N["已取消生成。"]);
     });
     stream.addEventListener('expired', function(event) {
-        terminalFailure(event, '<?= addslashes(__('客户端失联超时，任务已停止。')) ?>');
+        terminalFailure(event, I18N["客户端失联超时，任务已停止。"]);
     });
     stream.addEventListener('recovery_unsafe', function(event) {
-        terminalFailure(event, '<?= addslashes(__('任务无法安全恢复。')) ?>');
+        terminalFailure(event, I18N["任务无法安全恢复。"]);
     });
     stream.addEventListener('event_backlog_limit', function(event) {
-        terminalFailure(event, '<?= addslashes(__('任务事件已达到资源上限。')) ?>');
+        terminalFailure(event, I18N["任务事件已达到资源上限。"]);
     });
     stream.addEventListener('error', function() {
         if (!sawChunk && target.textContent === '') {
-            target.textContent = '<?= addslashes(__('连接暂时中断，正在重连…')) ?>';
+            target.textContent = I18N["连接暂时中断，正在重连…"];
         }
     });
     stream.addEventListener('terminal', function() {
@@ -927,7 +953,7 @@ function scrollToBottom() {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0,0,0,0.45);
+    background: var(--color-overlay-50);
 }
 
 .chat-confirm-dialog {

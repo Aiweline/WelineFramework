@@ -31,7 +31,7 @@ $affiliateTdLabel = static function (string $source): string {
                 <input class="weline-affiliate-account-card__link" data-affiliate-custom-target type="text" value="<?= htmlspecialchars($homeUrl, ENT_QUOTES) ?>" placeholder="<lang>输入本站页面地址，例如 /product/airpods-pro-magsafe</lang>">
                 <button type="button" class="weline-affiliate-account-card__button weline-affiliate-account-card__button--primary" data-affiliate-generate-link><lang>生成推广链接</lang></button>
             </div>
-            <div class="weline-affiliate-account-card__target-row" style="margin-top: 10px;">
+            <div class="weline-affiliate-account-card__target-row affiliate-workbench-note" >
                 <input class="weline-affiliate-account-card__link" data-affiliate-generated-link type="text" readonly value="">
                 <button type="button" class="weline-affiliate-account-card__button" data-affiliate-copy-source="[data-affiliate-generated-link]"><lang>复制新链接</lang></button>
             </div>
@@ -381,4 +381,6 @@ $affiliateTdLabel = static function (string $source): string {
             </table>
         </div>
     <?php endif; ?>
-</div>
+</div>    <style>
+        .affiliate-workbench-note { margin-top: var(--spacing-2_5) }
+    </style>

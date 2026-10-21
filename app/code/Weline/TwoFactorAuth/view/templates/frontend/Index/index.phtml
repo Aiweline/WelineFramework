@@ -28,7 +28,7 @@
         }
         
         .container {
-            max-width: 1000px;
+            width: min(100%, var(--weline-layout-content-max-width));
             margin: 0 auto;
         }
         
@@ -143,7 +143,7 @@
         }
         
         .btn-secondary:hover {
-            background: #5a6268;
+            background: var(--color-bg-dark);
         }
         
         .feature-list {
@@ -306,7 +306,7 @@
         <div class="app-link">
             <h2>📱 使用我们自己的验证器APP</h2>
             <p>完全自主开发，无需依赖第三方应用</p>
-            <button type="button" data-twofa-action="show-authenticator-app-modal" class="w-button" class="s-pointer">打开验证器APP</button>
+            <button type="button" data-twofa-action="show-authenticator-app-modal" class="w-button s-pointer" >打开验证器APP</button>
         </div>
 
         <div class="feature-list">
@@ -601,4 +601,3 @@
     </script>
 </body>
 </html>
-

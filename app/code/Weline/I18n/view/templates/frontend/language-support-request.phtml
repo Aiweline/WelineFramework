@@ -24,12 +24,12 @@ $max_locales = (int)($max_locales ?? 20);
     class="w-stack"
     data-language-request-form-shell
     data-max-locales="<?= $h((string)$max_locales) ?>"
-    data-msg-name-required="<?= $h((string)__('请填写名和姓')) ?>"
-    data-msg-locales-required="<?= $h((string)__('请选择 1 到 20 种语言')) ?>"
-    data-msg-submitting="<?= $h((string)__('正在提交...')) ?>"
-    data-msg-success="<?= $h((string)__('语言支持申请已提交')) ?>"
-    data-msg-fail="<?= $h((string)__('提交失败，请稍后重试')) ?>"
-    data-msg-captcha-fail="<?= $h((string)__('人机验证加载失败，请稍后重试')) ?>"
+    data-msg-name-required="<lang>请填写名和姓</lang>"
+    data-msg-locales-required="<lang>请选择 1 到 20 种语言</lang>"
+    data-msg-submitting="<lang>正在提交...</lang>"
+    data-msg-success="<lang>语言支持申请已提交</lang>"
+    data-msg-fail="<lang>提交失败，请稍后重试</lang>"
+    data-msg-captcha-fail="<lang>人机验证加载失败，请稍后重试</lang>"
 >
     <p class="w-text" data-tone="muted"><lang>没有找到需要的语言？可一次申请多种语言，我们会在语言资源准备完成后通知网站管理员。</lang></p>
     <w:form

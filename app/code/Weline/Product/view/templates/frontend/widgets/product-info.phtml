@@ -700,7 +700,7 @@ if ($productBreadcrumbs === []) {
                         <a class="product-native-detail__rating-link" href="#product-reviews">
                             <span class="product-native-detail__stars"
                                   data-widget-style="--rating: <?= $escape((string)$reviewRating) ?>"
-                                  aria-label="<?= $escape(__('平均 %{1} 星', [number_format($reviewRating, 1)])) ?>">
+                                  aria-label="<lang args="[number_format($reviewRating, 1)]">平均 %{1} 星</lang>">
                                 <span class="product-native-detail__stars-track" aria-hidden="true">
                                     <?php for ($starIndex = 0; $starIndex < 5; $starIndex++): ?>
                                         <svg class="product-native-detail__star" viewBox="0 0 20 20" fill="currentColor">
@@ -718,7 +718,7 @@ if ($productBreadcrumbs === []) {
                             </span>
                             <span class="product-native-detail__rating-value"><?= $escape(number_format($reviewRating, 1)) ?></span>
                             <span class="product-native-detail__rating-count">
-                                <?= $escape(__('%{1} 条评价', [$reviewCount])) ?>
+                                <lang args="[$reviewCount]">%{1} 条评价</lang>
                             </span>
                         </a>
                     <?php else: ?>

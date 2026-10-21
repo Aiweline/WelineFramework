@@ -85,7 +85,7 @@ $tiers = [];
      aria-label="@lang('批发起订与阶梯价')"
      <?= $tiersHidden ? 'hidden' : '' ?>>
     <p class="b2b-qty-tiers__moq" data-testid="b2b-qty-tiers-moq">
-        <?= $escape(__('起订 %{1} · 步进 %{2}', [$moq, $step])) ?>
+        <lang args="[$moq, $step]">起订 %{1} · 步进 %{2}</lang>
     </p>
     <?php if ($tiers !== []): ?>
         <?php
@@ -116,20 +116,14 @@ $tiers = [];
                     data-unit-save-minor="<?= $saveVsRetail ?>"
                     data-total-save-minor="<?= $totalSaveMinor ?>">
                     <span class="b2b-qty-tiers__price">
-                        <?= $escape(__('%{1} 件 %{2} %{3}/件', [$qty, $currency, $unit])) ?>
+                        <lang args="[$qty, $currency, $unit]">%{1} 件 %{2} %{3}/件</lang>
                     </span>
                     <?php if ($saveVsRetail > 0): ?>
                         <span class="b2b-qty-tiers__delta" data-testid="b2b-qty-tiers-drop">
-                            <?= $escape(__('每件低 %{1} %{2}', [
-                                $currency,
-                                number_format($saveVsRetail / 100, 2, '.', ''),
-                            ])) ?>
+                            <lang args="[ $currency, number_format($saveVsRetail / 100, 2, '.', ''), ]">每件低 %{1} %{2}</lang>
                         </span>
                         <span class="b2b-qty-tiers__save" data-testid="b2b-qty-tiers-save">
-                            <?= $escape(__('省 %{1} %{2}', [
-                                $currency,
-                                number_format($totalSaveMinor / 100, 2, '.', ''),
-                            ])) ?>
+                            <lang args="[ $currency, number_format($totalSaveMinor / 100, 2, '.', ''), ]">省 %{1} %{2}</lang>
                         </span>
                     <?php endif; ?>
                 </li>
