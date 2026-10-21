@@ -5,7 +5,7 @@
     bottom: 0;
     z-index: var(--weline-z-overlay, 900);
     padding: var(--weline-space-3) var(--weline-space-4) calc(var(--weline-space-3) + env(safe-area-inset-bottom, 0px));
-    background: rgba(15, 17, 17, 0.94);
+    background: var(--color-bg-dark);
     color: var(--color-text-light);
     box-shadow: var(--weline-shadow-md);
 }
@@ -50,7 +50,7 @@
     height: 3rem;
     object-fit: cover;
     border-radius: var(--border-radius-lg);
-    border: var(--border-width-thin) solid rgba(255, 255, 255, 0.2);
+    border: var(--border-width-thin) solid var(--color-on-dark-15);
     background: var(--color-bg-primary);
 }
 
@@ -72,9 +72,9 @@
     width: 1.125rem;
     height: 1.125rem;
     padding: 0;
-    border: var(--border-width-thin) solid rgba(255, 255, 255, 0.85);
+    border: var(--border-width-thin) solid var(--color-on-dark-92);
     border-radius: var(--radius-full);
-    background: rgba(15, 17, 17, 0.94);
+    background: var(--color-bg-dark);
     color: var(--color-text-light);
     font-size: var(--font-size-13);
     line-height: 1;

@@ -110,7 +110,7 @@
     color: var(--color-text-light);
 }
 .customer-social-bindings__btn--danger {
-    border-color: #fecaca;
+    border-color: var(--color-danger);
     color: var(--color-link);
     background: var(--color-bg-primary);
 }

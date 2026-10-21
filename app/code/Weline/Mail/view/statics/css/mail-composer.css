@@ -7,8 +7,7 @@
   justify-content: center;
   padding: var(--weline-space-4);
   background: color-mix(in srgb, var(--color-bg-inverse) 45%, transparent);
-}
-.w-mail-composer[hidden] { display: none !important; }
+}.w-mail-composer[hidden]{ display: none; }
 .w-mail-composer__panel {
   width: min(44rem, 100%);
   max-height: min(90vh, 52rem);

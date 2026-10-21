@@ -16,10 +16,8 @@
     color: var(--color-text-light);
     box-shadow: var(--weline-shadow-md);
     font: var(--font-size-sm)/1.5 "Amazon Ember", "Helvetica Neue", Arial, sans-serif;
-}
-
-.w-consent-banner[hidden] {
-    display: none !important;
+}.w-consent-banner[hidden]{
+    display: none;
 }
 
 .w-consent-banner__inner {

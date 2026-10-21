@@ -6,13 +6,13 @@
     --promo-canvas: var(--color-primary-bg-subtle);
     --promo-surface: var(--color-bg-primary);
     --promo-border: var(--color-border-default);
-    --promo-text: #24211d;
+    --promo-text: var(--color-text);
     --promo-muted: var(--color-text-gray-mid);
     --promo-link: var(--color-link);
-    --promo-price: #8a3029;
-    --promo-cinnabar: #8a342c;
+    --promo-price: var(--color-primary);
+    --promo-cinnabar: var(--color-primary);
     --promo-cta-bg: var(--promo-cinnabar);
-    --promo-cta-bg-hover: #6f2822;
+    --promo-cta-bg-hover: var(--color-primary);
     --promo-cta-border: var(--promo-cinnabar);
     --promo-nav-underline: var(--promo-cinnabar);
     --promo-rail-pad-inline: clamp(1.5rem, 4vw, 2.75rem);
@@ -62,7 +62,7 @@
     gap: var(--weline-space-1) var(--weline-space-5);
     margin: 0 0 var(--weline-space-4);
     /* Keep first tab off the white rail edge and aligned with hero copy. */
-    padding-block: 0.65rem;
+    padding-block: var(--spacing-2_5);
     padding-inline: var(--promo-rail-pad-inline);
     border-bottom: var(--border-width-thin) solid var(--promo-border);
     background: var(--promo-surface);
@@ -108,7 +108,7 @@
     border: var(--border-width-thin) solid var(--promo-border);
     border-radius: var(--weline-radius-lg);
     background:
-        linear-gradient(var(--promo-hero-gradient-angle), rgba(250, 247, 239, 0.97) 0%, rgba(250, 247, 239, 0.9) 46%, rgba(250, 247, 239, 0.2) 76%, rgba(250, 247, 239, 0.06) 100%),
+        linear-gradient(var(--promo-hero-gradient-angle), var(--color-bg-secondary) 0%, var(--color-bg-secondary) 46%, var(--color-bg-secondary) 76%, var(--color-bg-secondary) 100%),
         url("/pub/media/catalog/hanfu/r2/homepage/taoyuan-qingmeng.webp") var(--promo-hero-focus-x) 38% / cover no-repeat;
     color: var(--promo-text);
 }

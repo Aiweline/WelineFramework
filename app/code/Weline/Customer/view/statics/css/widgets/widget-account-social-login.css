@@ -4,18 +4,16 @@
     width: 100%;
     margin: 0;
     padding: 0;
-}
-.account-social-login[data-w-component="account-social-login"] .account-social-login__list,
-.account-social-login[data-w-component="account-social-login"] .account-social-login__list--logos {
-    display: flex !important;
-    flex-direction: row !important;
+}.account-social-login[data-w-component="account-social-login"] .account-social-login__list.account-social-login__list, .account-social-login[data-w-component="account-social-login"] .account-social-login__list--logos.account-social-login__list--logos{
+    display: flex;
+    flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;
     align-items: center;
     gap: var(--spacing-0_85);
     margin: 0;
     padding: var(--token-size-0-15rem) 0 var(--token-size-0-35rem);
-    list-style: none !important;
+    list-style: none;
 }.account-social-login[data-w-component="account-social-login"] .account-social-login__item.account-social-login__item{
     display: block;
     margin: 0;
@@ -25,17 +23,16 @@
 }.account-social-login[data-w-component="account-social-login"] .account-social-login__item::marker{
     content: "";
     font-size: 0;
-}
-.account-social-login[data-w-component="account-social-login"] a.account-social-login__btn--logo {
+}.account-social-login[data-w-component="account-social-login"] a.account-social-login__btn--logo.account-social-login__btn--logo{
     box-sizing: border-box;
-    display: inline-flex !important;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: var(--spacing-11) !important;
-    height: var(--spacing-11) !important;
-    min-width: var(--spacing-11) !important;
-    max-width: var(--spacing-11) !important;
-    min-height: var(--spacing-11) !important;
+    width: var(--spacing-11);
+    height: var(--spacing-11);
+    min-width: var(--spacing-11);
+    max-width: var(--spacing-11);
+    min-height: var(--spacing-11);
     margin: 0;
     padding: 0;
     border: var(--border-width-thin) solid var(--color-literal-d5d9d9);

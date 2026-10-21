@@ -209,10 +209,8 @@
     justify-content: center;
     gap: var(--spacing-3);
     margin-top: var(--spacing-3);
-}
-
-.weline-review__pager[hidden] {
-    display: none !important;
+}.weline-review__pager[hidden]{
+    display: none;
 }
 
 .weline-review__pager-btn {

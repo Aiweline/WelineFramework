@@ -49,6 +49,5 @@
     line-height: var(--spacing-4_5);
     text-align: center;
     font-weight: 700;
-}
-.wc-theme_widget_wishlist_icon .wishlist-count[hidden] { display: none !important; }
+}.wc-theme_widget_wishlist_icon .wishlist-count[hidden]{ display: none; }
 /* Icon-only: label removed from markup; tip = data-w-tooltip / title / aria-label */

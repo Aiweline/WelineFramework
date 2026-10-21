@@ -22,13 +22,13 @@
 }
 
 .twofa-message--success {
-    border: var(--border-width-thin) solid #b8e4c7;
+    border: var(--border-width-thin) solid var(--color-success-bg-subtle);
     background: var(--color-bg-muted);
     color: var(--color-text-secondary);
 }
 
 .twofa-message--error {
-    border: var(--border-width-thin) solid #f5b8bd;
+    border: var(--border-width-thin) solid var(--color-danger-bg-subtle);
     background: var(--color-bg-canvas);
     color: var(--color-link);
 }
@@ -147,14 +147,14 @@
 }
 
 .twofa-form-row input:focus {
-    border-color: #f5c242;
+    border-color: var(--color-warning);
     box-shadow: var(--weline-shadow-md);
 }
 
 .twofa-backup-codes {
     margin-top: var(--spacing-4_5);
     padding: var(--spacing-4);
-    border: var(--border-width-thin) solid #f3dfaf;
+    border: var(--border-width-thin) solid var(--color-warning);
     border-radius: var(--sidebar-radius);
     background: var(--color-bg-canvas);
 }
@@ -210,7 +210,7 @@
 .twofa-backup-result {
     margin-top: var(--spacing-4);
     padding: var(--spacing-4);
-    border: var(--border-width-thin) solid #f3dfaf;
+    border: var(--border-width-thin) solid var(--color-warning);
     border-radius: var(--sidebar-radius);
     background: var(--color-bg-canvas);
 }
@@ -239,7 +239,7 @@
 
 .twofa-app-card p {
     margin: var(--spacing-1) 0 0;
-    color: rgba(17, 24, 39, 0.72);
+    color: var(--color-text);
 }
 
 .account-btn {
@@ -285,7 +285,7 @@
 .twofa-app-card .account-btn,
 .twofa-app-card .account-btn--secondary {
     flex: 0 0 auto;
-    border: var(--border-width-thin) solid rgba(17, 24, 39, 0.14);
+    border: var(--border-width-thin) solid var(--color-overlay-medium);
     background: var(--color-bg-amazon);
     color: var(--color-text-light);
     box-shadow: var(--weline-shadow-md);
@@ -297,7 +297,7 @@
 .twofa-app-card .account-btn--secondary:visited,
 .twofa-app-card .account-btn--secondary:hover,
 .twofa-app-card .account-btn--secondary:focus {
-    background: #0b1220;
+    background: var(--color-bg-dark);
     color: var(--color-text-light);
     text-decoration: none;
 }

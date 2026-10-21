@@ -107,13 +107,10 @@
     border: var(--border-width-thin) solid var(--weline-theme-border);
     border-radius: var(--weline-radius-md);
     background: var(--weline-theme-surface);
-    box-shadow: var(--weline-shadow-xs, 0 1px 2px color-mix(in srgb, #0f172a 6%, transparent));
+    box-shadow: var(--weline-shadow-xs);
     color: var(--weline-theme-text-muted);
-}
-
-.weline-captcha-google-trust[hidden],
-.weline-captcha-google-trust[data-sdk-ready="0"] {
-    display: none !important;
+}.weline-captcha-google-trust[hidden], .weline-captcha-google-trust[data-sdk-ready="0"]{
+    display: none;
 }
 
 .weline-captcha-google-trust__mark {

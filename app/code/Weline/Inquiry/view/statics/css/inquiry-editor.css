@@ -4,7 +4,7 @@
   --iq-ink: var(--weline-color-text);
   --iq-muted: var(--weline-color-text-muted);
   --iq-accent: var(--weline-color-primary);
-  --iq-country: color-mix(in srgb, var(--iq-accent) 55%, #0f766e);
+  --iq-country: color-mix(in srgb, var(--iq-accent) 55%, var(--color-success));
   display: grid;
   gap: var(--weline-space-4);
   min-width: 0;

@@ -45,7 +45,7 @@ display: inline-flex;
 align-items: center;
 min-height: var(--control-height-xs);
 padding: var(--spacing-xs) var(--spacing-2_5);
-border: var(--border-width-thin) solid rgba(0, 113, 133, 0.25);
+border: var(--border-width-thin) solid var(--color-info);
 border-radius: var(--radius-full);
 color: var(--color-primary);
 font-size: var(--font-size-xs);

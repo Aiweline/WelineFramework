@@ -5,13 +5,13 @@
 .w-inquiry-suppliers--atelier {
     --ink: var(--weline-theme-color-text);
     --ink-soft: var(--color-text);
-    --gold: #c4a35a;
-    --gold-dim: rgba(196, 163, 90, 0.35);
+    --gold: var(--color-warning);
+    --gold-dim: var(--color-warning-bg-subtle);
     --paper: var(--color-bg-canvas);
     --paper-card: var(--color-bg-primary);
     --muted: var(--color-text-gray-mid);
     --line: var(--color-border-default);
-    --focus: #8a6b2e;
+    --focus: var(--color-warning);
     --cta: var(--color-bg-dark);
     --cta-text: var(--color-text-inverse);
     box-sizing: border-box;
@@ -38,10 +38,10 @@
     align-self: stretch;
     padding: clamp(var(--weline-space-6), 3vw, var(--weline-space-10));
     background:
-        linear-gradient(165deg, rgba(196, 163, 90, 0.12), transparent 42%),
+        linear-gradient(165deg, var(--color-warning-bg-subtle), transparent 42%),
         radial-gradient(ellipse at 20% 0%, var(--color-on-dark-06), transparent 55%),
         var(--ink);
-    color: #f3efe6;
+    color: var(--color-bg-secondary);
     /* Match the form column via grid stretch; never clip shorter than the application card. */
     max-height: none;
     overflow: visible;
@@ -70,7 +70,7 @@
     font-size: clamp(var(--weline-font-size-3xl), 3.2vw, 2.35rem);
     font-weight: 600;
     line-height: 1.25;
-    color: #fff8ea;
+    color: var(--color-text);
 }
 
 .w-inquiry-suppliers--atelier .w-inquiry-suppliers__story-lead {
@@ -78,7 +78,7 @@
     max-width: 36ch;
     font-size: var(--font-size-sm);
     line-height: 1.65;
-    color: rgba(243, 239, 230, 0.78);
+    color: var(--color-text);
 }
 
 .w-inquiry-suppliers--atelier .w-inquiry-suppliers__toc {
@@ -86,12 +86,12 @@
     gap: var(--weline-space-1);
     margin: 0 0 var(--weline-space-5);
     padding: var(--weline-space-3) 0;
-    border-top: var(--border-width-thin) solid rgba(196, 163, 90, 0.28);
-    border-bottom: var(--border-width-thin) solid rgba(196, 163, 90, 0.28);
+    border-top: var(--border-width-thin) solid var(--color-warning);
+    border-bottom: var(--border-width-thin) solid var(--color-warning);
 }
 
 .w-inquiry-suppliers--atelier .w-inquiry-suppliers__toc a {
-    color: rgba(243, 239, 230, 0.82);
+    color: var(--color-text);
     text-decoration: none;
     font-size: var(--font-size-13);
     line-height: 1.4;
@@ -119,7 +119,7 @@
     border-left: var(--border-width-thick) solid var(--gold);
     font-size: var(--font-size-sm);
     font-weight: 650;
-    color: #fff8ea;
+    color: var(--color-text);
 }
 
 .w-inquiry-suppliers--atelier .w-inquiry-suppliers__section p,
@@ -127,7 +127,7 @@
     margin: 0 0 var(--spacing-0_55);
     font-size: var(--font-size-13);
     line-height: 1.6;
-    color: rgba(243, 239, 230, 0.72);
+    color: var(--color-text);
 }
 
 .w-inquiry-suppliers--atelier .w-inquiry-suppliers__section ul {
@@ -151,7 +151,7 @@
     align-items: start;
     font-size: var(--font-size-13);
     line-height: 1.45;
-    color: rgba(243, 239, 230, 0.72);
+    color: var(--color-text);
 }
 
 .w-inquiry-suppliers--atelier .w-inquiry-suppliers__process-list li::before {
@@ -161,7 +161,7 @@
     place-items: center;
     width: 1.25rem;
     height: 1.25rem;
-    border: var(--border-width-thin) solid rgba(196, 163, 90, 0.45);
+    border: var(--border-width-thin) solid var(--color-warning);
     font-size: var(--font-size-xs);
     font-weight: 700;
     color: var(--gold);
@@ -179,11 +179,8 @@
     inset: auto;
     padding: 0;
     place-items: unset;
-}
-
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon.weline-inquiry--inline .weline-inquiry__backdrop,
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon.weline-inquiry--inline .weline-inquiry__close {
-    display: none !important;
+}.w-inquiry-suppliers--atelier .weline-inquiry--amazon.weline-inquiry--inline .weline-inquiry__backdrop.weline-inquiry__backdrop, .w-inquiry-suppliers--atelier .weline-inquiry--amazon.weline-inquiry--inline .weline-inquiry__close.weline-inquiry__close{
+    display: none;
 }
 
 .w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__dialog {

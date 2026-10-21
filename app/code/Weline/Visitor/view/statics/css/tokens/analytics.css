@@ -1,31 +1,31 @@
 @layer tokens {
     :root {
         --weline-theme-visitor-chart-primary: var(--color-primary);
-        --weline-theme-visitor-chart-primary-soft: rgba(49, 94, 231, 0.12);
+        --weline-theme-visitor-chart-primary-soft: var(--color-info-bg-subtle);
         --weline-theme-visitor-chart-success: var(--color-success);
-        --weline-theme-visitor-chart-success-soft: rgba(22, 122, 77, 0.12);
-        --weline-theme-visitor-chart-neutral: #637083;
-        --weline-theme-visitor-chart-neutral-soft: rgba(99, 112, 131, 0.12);
+        --weline-theme-visitor-chart-success-soft: var(--color-success-bg-subtle);
+        --weline-theme-visitor-chart-neutral: var(--color-text-secondary);
+        --weline-theme-visitor-chart-neutral-soft: var(--color-bg-tertiary);
         --weline-theme-visitor-chart-warning: var(--color-warning);
         --weline-theme-visitor-chart-danger: var(--color-danger);
         --weline-theme-visitor-chart-info: var(--color-info);
-        --weline-theme-visitor-chart-purple: #7b54c6;
-        --weline-theme-visitor-chart-pink: #c84b8f;
-        --weline-theme-visitor-chart-orange: #d96f28;
-        --weline-theme-visitor-chart-teal: #179c82;
-        --weline-theme-visitor-dashboard-canvas: #0a0e27;
-        --weline-theme-visitor-dashboard-panel: #1a1e37;
+        --weline-theme-visitor-chart-purple: var(--color-primary);
+        --weline-theme-visitor-chart-pink: var(--color-danger);
+        --weline-theme-visitor-chart-orange: var(--color-warning);
+        --weline-theme-visitor-chart-teal: var(--color-success);
+        --weline-theme-visitor-dashboard-canvas: var(--color-bg-dark);
+        --weline-theme-visitor-dashboard-panel: var(--color-bg-dark);
         --weline-theme-visitor-dashboard-text: var(--color-text-inverse);
         --weline-theme-visitor-dashboard-brand-start: var(--color-primary);
-        --weline-theme-visitor-dashboard-brand-start-soft: rgba(102, 126, 234, 0.12);
+        --weline-theme-visitor-dashboard-brand-start-soft: var(--color-info-bg-subtle);
         --weline-theme-visitor-dashboard-brand-end: var(--color-primary);
-        --weline-theme-visitor-dashboard-brand-end-soft: rgba(118, 75, 162, 0.12);
-        --weline-theme-visitor-dashboard-surface: rgba(255, 255, 255, 0.1);
-        --weline-theme-visitor-dashboard-surface-subtle: rgba(255, 255, 255, 0.05);
-        --weline-theme-visitor-dashboard-border: rgba(255, 255, 255, 0.2);
-        --weline-theme-visitor-dashboard-shadow: rgba(0, 0, 0, 0.2);
-        --weline-theme-visitor-dashboard-shadow-strong: rgba(0, 0, 0, 0.3);
-        --weline-theme-visitor-dashboard-positive: #4ade80;
-        --weline-theme-visitor-dashboard-negative: #f87171;
+        --weline-theme-visitor-dashboard-brand-end-soft: var(--color-primary-bg-subtle);
+        --weline-theme-visitor-dashboard-surface: var(--color-on-dark-10);
+        --weline-theme-visitor-dashboard-surface-subtle: var(--color-on-dark-06);
+        --weline-theme-visitor-dashboard-border: var(--color-on-dark-15);
+        --weline-theme-visitor-dashboard-shadow: var(--color-overlay-medium);
+        --weline-theme-visitor-dashboard-shadow-strong: var(--color-overlay-50);
+        --weline-theme-visitor-dashboard-positive: var(--color-success);
+        --weline-theme-visitor-dashboard-negative: var(--color-danger);
     }
 }

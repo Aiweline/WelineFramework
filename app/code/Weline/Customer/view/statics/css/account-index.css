@@ -7,8 +7,7 @@
 } @media (max-width: 480px) { .account-index__header-actions { width: 100%; margin-inline-start: 0; } .account-index__logout { justify-content: center; width: 100%; }
 } .account-index__avatar { position: relative; width: 80px; height: 80px; flex-shrink: 0;
 } .account-index__avatar-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: var(--border-width-thick) solid var(--color-bg-primary);
-} .account-index__avatar-img[hidden],
-.account-index__avatar-fallback[hidden] { display: none !important;
+}.account-index__avatar-img[hidden], .account-index__avatar-fallback[hidden]{ display: none;
 } .account-index__avatar-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--color-bg-primary); color: var(--color-primary-dark); font-size: var(--weline-font-size-4xl); font-weight: 700;
 } .account-index__user-info { flex: 1; min-width: 0; max-width: 100%;
 } .account-index__username { font-size: var(--weline-font-size-2xl); font-weight: 700; color: var(--weline-theme-on-primary, var(--color-on-primary)); margin: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-word;
@@ -20,12 +19,10 @@
 } .account-card__header { padding: var(--weline-space-5) var(--ai-gutter); background: var(--color-bg-secondary); border-bottom: var(--border-width-thin) solid var(--color-border-light);
 } .account-card__title { font-size: var(--weline-font-size-lg); font-weight: 700; color: var(--color-text-primary); margin: 0;
 } .account-card__body { padding: var(--ai-gutter);
-} .account-index [hidden],
-.account-index .d-none,
-.account-card__alert:empty { display: none !important;
+}.account-index [hidden], .account-index .d-none.d-none, .account-card__alert.account-card__alert:empty{ display: none;
 } .account-card__alert { padding: var(--weline-space-4); border-radius: var(--border-radius-lg); margin-bottom: var(--weline-space-6); font-size: var(--weline-font-size-sm);
-} .account-card__alert--success { background: var(--color-secondary-bg-subtle); color: var(--color-success-strong); border: var(--border-width-thin) solid #a7f3d0;
-} .account-card__alert--danger { background: var(--color-product-label-sale-bg); color: var(--color-link); border: var(--border-width-thin) solid #fecaca;
+} .account-card__alert--success { background: var(--color-secondary-bg-subtle); color: var(--color-success-strong); border: var(--border-width-thin) solid var(--color-success);
+} .account-card__alert--danger { background: var(--color-product-label-sale-bg); color: var(--color-link); border: var(--border-width-thin) solid var(--color-danger);
 } .account-form { display: flex; flex-direction: column; gap: var(--weline-space-6); width: min(100%, 860px);
 } .account-form__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 240px); gap: var(--weline-space-4) var(--weline-space-5); align-items: start;
 } @media (max-width: 640px) { .account-form__row { grid-template-columns: 1fr; }
@@ -36,11 +33,11 @@
 } .account-form__input { width: 100%; min-height: var(--control-height-xl); padding: var(--weline-space-3) var(--weline-space-4); font-size: var(--font-size-sm); color: var(--color-text-primary); background: linear-gradient(180deg, var(--color-bg-slate) 0%, var(--color-bg-panel) 100%); border: var(--border-width-thin) solid var(--color-border-default); border-radius: var(--border-radius-xl); transition: var(--ai-transition); box-shadow: var(--weline-shadow-md);
 } .account-form__input:hover { border-color: var(--color-border-default);
 } .account-form__input:focus { outline: none; border-color: var(--color-primary); background: var(--color-bg-primary); box-shadow: var(--weline-shadow-md);
-} .account-form__input:disabled { background: linear-gradient(180deg, var(--color-bg-primary) 0%, var(--color-bg-primary) 100%); color: rgba(15, 23, 42, 0.88); cursor: not-allowed;
+} .account-form__input:disabled { background: linear-gradient(180deg, var(--color-bg-primary) 0%, var(--color-bg-primary) 100%); color: var(--color-overlay-medium); cursor: not-allowed;
 } .account-form__display { display: flex; align-items: center; min-height: var(--control-height-xl); padding: var(--weline-space-1) 0; border-bottom: var(--border-width-thin) solid var(--color-border-default); color: var(--color-text-primary); font-size: var(--weline-font-size-base); font-weight: 600; line-height: 1.5; word-break: break-word;
-} .account-form__display--soft { padding-inline: var(--spacing-0_5); color: rgba(15, 23, 42, 0.88); font-weight: 500;
+} .account-form__display--soft { padding-inline: var(--spacing-0_5); color: var(--color-overlay-medium); font-weight: 500;
 } .account-identity { display: inline-flex; align-items: center; gap: var(--weline-space-3); flex-wrap: wrap; min-height: var(--control-height-xl); padding: var(--spacing-0_2) 0;
-} .account-identity__badge { display: inline-flex; align-items: center; justify-content: center; min-width: 4rem; min-height: var(--control-height-sm); padding: var(--spacing-0_4) var(--spacing-0_8); border-radius: var(--radius-full); background: rgba(240, 193, 75, 0.14); color: var(--color-primary-dark); font-size: var(--font-size-base); font-weight: 700; letter-spacing: var(--letter-spacing-wide);
+} .account-identity__badge { display: inline-flex; align-items: center; justify-content: center; min-width: 4rem; min-height: var(--control-height-sm); padding: var(--spacing-0_4) var(--spacing-0_8); border-radius: var(--radius-full); background: var(--color-warning-bg-subtle); color: var(--color-primary-dark); font-size: var(--font-size-base); font-weight: 700; letter-spacing: var(--letter-spacing-wide);
 } .account-identity__name { font-size: var(--font-size-lg); font-weight: 700; color: var(--color-text-primary); line-height: 1.3;
 } .account-form__input-group { display: flex; align-items: stretch; gap: var(--spacing-2_5); width: 100%;
 } .account-form__input-group .account-form__input { flex: 1;
@@ -50,20 +47,16 @@
 } .account-form__btn--primary { background: var(--color-primary); color: var(--color-text-dark); border-color: var(--color-primary);
 } .account-form__btn--primary:hover { background: var(--color-primary-dark); border-color: var(--color-primary-dark); transform: translateY(-2px);
 } .account-form__btn--outline { background: var(--color-on-dark-92); color: var(--color-text-primary); border-color: var(--color-border-default); white-space: nowrap;
-} .account-form__btn--outline:hover { border-color: var(--color-primary); color: var(--color-primary-dark); background: rgba(255, 248, 225, 0.9);
+} .account-form__btn--outline:hover { border-color: var(--color-primary); color: var(--color-primary-dark); background: var(--color-bg-secondary);
 } .account-info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--weline-space-5);
 } @media (max-width: 640px) { .account-info-grid { grid-template-columns: 1fr; }
 } .account-info-item { display: flex; flex-direction: column; gap: var(--weline-space-2);
 } .account-info-item__label { font-size: var(--weline-font-size-sm); font-weight: 500; color: var(--color-text-secondary);
 } .account-info-item__value { font-size: var(--font-size-sm); font-weight: 600; color: var(--color-text-primary); word-break: break-all;
 } @media (max-width: 640px) { .account-index__header { flex-direction: column; text-align: center; padding: var(--weline-space-6); } .account-index__email { justify-content: center; } .account-card__body { padding: var(--weline-space-5); } .account-form { width: 100%; } .account-form__group, .account-form__group--small, .account-form__group--medium, .account-form__group--wide { max-width: 100%; } .account-form__input-group { flex-direction: column; } .account-form__btn--outline { width: 100%; }
-}
-
-/* Hash-target pending section: hide default profile until module syncs. */
-html[data-account-pending-section]:not([data-account-pending-section=""]) .account-index [data-account-section="profile"],
-html[data-account-pending-section]:not([data-account-pending-section=""]) .account-index [data-account-section="security"],
-html[data-account-pending-section]:not([data-account-pending-section=""]) .account-index [data-account-section="login-info"] {
-    display: none !important;
+}/* Hash-target pending section: hide default profile until module syncs. */
+html[data-account-pending-section]:not([data-account-pending-section=""]) .account-index [data-account-section="profile"], html[data-account-pending-section]:not([data-account-pending-section=""]) .account-index [data-account-section="security"], html[data-account-pending-section]:not([data-account-pending-section=""]) .account-index [data-account-section="login-info"]{
+    display: none;
 }
 
 .account-index__section-loading {

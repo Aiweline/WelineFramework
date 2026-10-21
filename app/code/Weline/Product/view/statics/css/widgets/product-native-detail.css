@@ -899,8 +899,7 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     width: 100%;
     margin-bottom: var(--token-size-10px);
 }
-.product-native-detail__quote:hover:not(:disabled) { background: var(--color-surface-hover); }
-.product-native-detail__quote[hidden] { display: none !important; }
+.product-native-detail__quote:hover:not(:disabled) { background: var(--color-surface-hover); }.product-native-detail__quote[hidden]{ display: none; }
 .product-native-detail__buy-now {
     border-color: var(--color-primary-dark);
     background: var(--amz-btn-buy);
@@ -1911,9 +1910,7 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     .product-native-detail__hero-grid { grid-template-columns: 1fr; }
     .product-native-detail__buy-column { grid-template-columns: 1fr; }
     .product-native-detail__buybox { max-width: var(--size-panel-360); }
-    .product-native-detail__stage { cursor: default; }
-    .product-native-detail__zoom-lens,
-    .product-native-detail__zoom-result { display: none !important; }
+    .product-native-detail__stage { cursor: default; }.product-native-detail__zoom-lens.product-native-detail__zoom-lens, .product-native-detail__zoom-result.product-native-detail__zoom-result{ display: none; }
 }
 @media (max-width: 640px) {
     .product-native-detail__gallery,
@@ -1947,8 +1944,7 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     .product-native-detail__spec-clamp {
         --product-spec-clamp-max: var(--token-size-13-5rem);
     }
-}
-.product-native-detail__quote-modal[hidden] { display: none !important; }
+}.product-native-detail__quote-modal[hidden]{ display: none; }
 .product-native-detail__quote-modal {
     position: fixed;
     inset: 0;
@@ -2070,9 +2066,8 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     backdrop-filter: blur(var(--spacing-2));
     border-top: var(--border-width-thin) solid var(--color-border-default, var(--amz-border));
     box-shadow: 0 calc(-1 * var(--spacing-2)) var(--spacing-6) color-mix(in srgb, var(--color-text-primary) 12%, transparent);
-}
-.product-native-detail__sticky-purchase[hidden] {
-    display: none !important;
+}.product-native-detail__sticky-purchase[hidden]{
+    display: none;
 }
 .product-native-detail__sticky-purchase-inner {
     display: flex;
@@ -2099,9 +2094,8 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     margin-inline-start: auto;
     overflow-x: auto;
     scrollbar-width: thin;
-}
-.product-native-detail__sticky-purchase-specs[hidden] {
-    display: none !important;
+}.product-native-detail__sticky-purchase-specs[hidden]{
+    display: none;
 }
 .product-native-detail__sticky-purchase-chip {
     display: inline-flex;
@@ -2157,9 +2151,8 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
 }
 .product-native-detail__sticky-purchase-jump:hover {
     background: var(--color-bg-secondary, var(--amz-bg-soft));
-}
-.product-native-detail__sticky-purchase-jump[hidden] {
-    display: none !important;
+}.product-native-detail__sticky-purchase-jump[hidden]{
+    display: none;
 }
 .product-native-detail__sticky-purchase-meta {
     display: grid;
@@ -2206,18 +2199,16 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     overflow: hidden;
     border: var(--border-width-thin) solid var(--color-border-default, var(--amz-border));
     background: var(--color-bg-secondary, var(--amz-bg-soft));
-}
-.product-native-detail__sticky-purchase-media[hidden] {
-    display: none !important;
+}.product-native-detail__sticky-purchase-media[hidden]{
+    display: none;
 }
 .product-native-detail__sticky-purchase-primary {
     display: block;
     width: 100%;
     height: 100%;
     object-fit: cover;
-}
-.product-native-detail__sticky-purchase-primary[hidden] {
-    display: none !important;
+}.product-native-detail__sticky-purchase-primary[hidden]{
+    display: none;
 }
 .product-native-detail__variant-axes {
     scroll-margin-top: var(--token-size-5-5rem);

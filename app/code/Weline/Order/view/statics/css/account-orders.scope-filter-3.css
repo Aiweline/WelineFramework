@@ -250,10 +250,8 @@
 /* Embedded in card accordion: hide nested chat toggle; panel stays open with the card. */
 [data-account-orders="true"] .account-orders__hang[data-chat-embedded="1"] .b2b-order-chat__toolbar {
     display: none;
-}
-
-[data-account-orders="true"] .account-orders__accordion[open] .account-orders__hang[data-chat-embedded="1"] .b2b-order-chat__panel[hidden] {
-    display: flex !important;
+}[data-account-orders="true"] .account-orders__accordion[open] .account-orders__hang[data-chat-embedded="1"] .b2b-order-chat__panel[hidden]{
+    display: flex;
 }
 
 [data-account-orders="true"] .account-orders__summary > strong {
@@ -275,7 +273,7 @@
     padding: var(--spacing-0_2) var(--spacing-0_65);
     border: var(--border-width-thin) solid var(--color-border-default);
     border-radius: var(--radius-full);
-    background: rgba(15, 23, 42, 0.04);
+    background: var(--color-bg-dark);
     color: var(--ao-text);
     font-size: var(--weline-font-size-xs);
     font-weight: 800;
@@ -319,8 +317,8 @@
 
 [data-account-orders="true"] .account-orders__badge[data-status="paid"],
 [data-account-orders="true"] .account-orders__badge[data-status="completed"] {
-    background: rgba(16, 185, 129, 0.12);
-    border-color: rgba(16, 185, 129, 0.35);
+    background: var(--color-success-bg-subtle);
+    border-color: var(--color-success);
     color: var(--color-success-strong);
 }
 
@@ -393,7 +391,7 @@
     min-width: 6.5rem;
     padding: var(--spacing-0_45) var(--spacing-4_5);
     border-radius: var(--border-radius-lg);
-    border: var(--border-width-thin) solid color-mix(in srgb, var(--color-primary) 70%, #000);
+    border: var(--border-width-thin) solid color-mix(in srgb, var(--color-primary) 70%, var(--color-border-default));
     background: var(--color-primary);
     color: var(--color-on-primary);
     text-decoration: none;
@@ -709,7 +707,7 @@
 }
 
 [data-account-orders="true"] .account-order-detail__back:hover {
-    background: rgba(240, 193, 75, 0.22);
+    background: var(--color-warning-bg-subtle);
     color: var(--color-primary-dark);
 }
 

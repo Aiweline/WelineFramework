@@ -7,13 +7,13 @@
 :root {
     --primary-color: var(--color-primary);
     --primary-dark: var(--color-primary);
-    --secondary-color: #6c757d;
+    --secondary-color: var(--color-text-muted);
     --success-color: var(--color-success);
     --danger-color: var(--color-danger);
     --warning-color: var(--color-warning);
     --light-bg: var(--color-bg-panel);
     --border-color: var(--color-border-muted);
-    --text-color: #333;
+    --text-color: var(--color-text);
     --text-muted: var(--color-text-tertiary);
 }
 
@@ -123,7 +123,7 @@ body {
 }
 
 .feature-badge {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--color-on-dark-15);
     padding: var(--spacing-2) var(--spacing-0_95);
     border-radius: var(--weline-theme-radius-2xl);;
     font-size: var(--font-size-sm);
@@ -192,7 +192,7 @@ body {
 }
 
 .code {
-    font-size: 36px;
+    font-size: var(--weline-font-size-4xl);
     font-weight: bold;
     color: var(--primary-color);
     letter-spacing: var(--spacing-2);
@@ -505,7 +505,7 @@ body {
 }
 
 .w-button:hover {
-    background: #5a6268;
+    background: var(--color-bg-dark);
 }
 
 .scan-info {
@@ -579,7 +579,7 @@ body {
     bottom: 100px;
     left: 50%;
     transform: translateX(-50%) translateY(100px);
-    background: rgba(0, 0, 0, 0.85);
+    background: var(--color-overlay-50);
     color: white;
     padding: var(--spacing-0_95) var(--spacing-lg);
     border-radius: var(--sidebar-radius);

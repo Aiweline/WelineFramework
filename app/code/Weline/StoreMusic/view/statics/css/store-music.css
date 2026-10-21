@@ -42,10 +42,8 @@
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
-}
-
-.w-store-music__panel[hidden] {
-  display: none !important;
+}.w-store-music__panel[hidden]{
+  display: none;
 }
 
 .w-store-music__shell {
@@ -237,11 +235,8 @@
 .w-store-music__hint:focus-visible {
   outline: var(--border-width-medium) solid var(--w-store-music-accent);
   outline-offset: 2px;
-}
-
-.w-store-music.is-open .w-store-music__hint,
-.w-store-music.is-playing .w-store-music__hint {
-  display: none !important;
+}.w-store-music.is-open .w-store-music__hint.w-store-music__hint, .w-store-music.is-playing .w-store-music__hint.w-store-music__hint{
+  display: none;
 }
 
 .w-store-music__panel {
@@ -480,10 +475,8 @@
   text-align: center;
   font-size: var(--font-size-xs);
   color: var(--w-store-music-muted);
-}
-
-.w-store-music__search-empty[hidden] {
-  display: none !important;
+}.w-store-music__search-empty[hidden]{
+  display: none;
 }
 
 .w-store-music__playlist {
@@ -616,11 +609,9 @@
   margin: 0;
   font-size: var(--font-size-xs);
   color: var(--w-store-music-muted);
-}
-
-/* Panel open = user is choosing here; never let cross-tab nag compete with the playlist. */
-.w-store-music.is-open .w-store-music__status {
-  display: none !important;
+}/* Panel open = user is choosing here; never let cross-tab nag compete with the playlist. */
+.w-store-music.is-open .w-store-music__status.w-store-music__status{
+  display: none;
 }
 
 .w-store-music__sr {
@@ -651,10 +642,8 @@
 
   .w-store-music.is-playing.is-avatar-spin .w-store-music__face {
     transform: none;
-  }
-
-  .w-store-music__spectrum {
-    display: none !important;
+  }.w-store-music__spectrum.w-store-music__spectrum{
+    display: none;
   }
 }
 

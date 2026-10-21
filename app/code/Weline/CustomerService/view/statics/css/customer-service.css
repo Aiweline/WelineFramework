@@ -23,8 +23,8 @@
         --cs-info: var(--color-info);
         --cs-radius-window: 8px;
         --cs-radius-control: 4px;
-        --cs-shadow: 0 4px 16px rgba(15, 17, 17, 0.15);
-        --cs-shadow-lg: 0 8px 28px rgba(15, 17, 17, 0.2);
+        --cs-shadow: 0 4px 16px var(--color-overlay-medium);
+        --cs-shadow-lg: 0 8px 28px var(--color-overlay-dark);
     }
 
     .cs-icon {
@@ -144,10 +144,8 @@
         box-shadow: var(--focus-ring);
         pointer-events: none;
         z-index: 2;
-    }
-
-    .cs-presence-dot[hidden] {
-        display: none !important;
+    }.cs-presence-dot[hidden]{
+        display: none;
     }
 
     .cs-badge {
@@ -167,10 +165,8 @@
         font-weight: 700;
         line-height: 1;
         z-index: 3;
-    }
-
-    .cs-badge.is-visible {
-        display: flex !important;
+    }.cs-badge.is-visible.is-visible{
+        display: flex;
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -283,12 +279,12 @@
 
     .cs-chat-header .cs-status-label.cs-status-online {
         background-color: color-mix(in srgb, var(--cs-success) 24%, transparent);
-        color: #b7f0d8;
+        color: var(--color-success-bg-subtle);
     }
 
     .cs-chat-header .cs-status-label.cs-status-ai {
         background-color: color-mix(in srgb, var(--cs-info) 24%, transparent);
-        color: #b8e8ef;
+        color: var(--color-info-bg-subtle);
     }
 
     .cs-chat-header .cs-status-label.cs-status-offline {
@@ -644,10 +640,8 @@
         background: var(--cs-surface-muted);
         max-height: 8rem;
         overflow: auto;
-    }
-
-    .cs-composer-panel[hidden] {
-        display: none !important;
+    }.cs-composer-panel[hidden]{
+        display: none;
     }
 
     /* WeChat-style: select on live page first */
@@ -666,7 +660,7 @@
     }
 
     .cs-shot-crop--live .cs-shot-crop__stage {
-        background: rgba(15, 23, 42, 0.35);
+        background: var(--color-bg-dark);
     }
 
     .cs-shot-crop__stage {
@@ -692,7 +686,7 @@
         text-align: center;
         font-size: var(--weline-theme-font-size-sm);
         color: var(--color-on-dark-92);
-        background: rgba(15, 23, 42, 0.82);
+        background: var(--color-bg-dark);
     }
 
     .cs-shot-crop__bar {
@@ -701,7 +695,7 @@
         gap: var(--weline-theme-space-3);
         padding: var(--weline-theme-space-3) var(--weline-theme-space-4)
             calc(var(--weline-theme-space-4) + env(safe-area-inset-bottom, 0px));
-        background: rgba(15, 23, 42, 0.9);
+        background: var(--color-bg-dark);
         transition: background 0.2s ease, box-shadow 0.2s ease;
     }
 
@@ -718,7 +712,7 @@
     }
 
     .cs-shot-crop--ready .cs-shot-crop__bar {
-        background: rgba(15, 23, 42, 0.96);
+        background: var(--color-bg-dark);
         box-shadow: var(--weline-shadow-md);
     }
 
@@ -739,7 +733,7 @@
         transform: scale(1.06);
         color: var(--color-text-light);
         background: var(--weline-theme-color-brand, var(--w-color-brand));
-        border: var(--border-width-thin) solid rgba(255, 255, 255, 0.85);
+        border: var(--border-width-thin) solid var(--color-on-dark-92);
         box-shadow: var(--weline-shadow-lg);
         animation: cs-shot-confirm-pulse 1.4s ease-in-out infinite;
     }
@@ -781,10 +775,8 @@
         border-radius: var(--cs-radius-control);
         background: var(--cs-surface-muted);
         color: var(--cs-text-muted);
-    }
-
-    .cs-guest-send-gate[hidden] {
-        display: none !important;
+    }.cs-guest-send-gate[hidden]{
+        display: none;
     }
 
     .cs-guest-send-gate__text {
@@ -1149,10 +1141,8 @@
 
     .cs-modal-body.w-modal-body {
         padding: var(--weline-space-5);
-    }
-
-    .customer-service-widget.is-open .cs-chat-button {
-        display: none !important;
+    }.customer-service-widget.is-open .cs-chat-button.cs-chat-button{
+        display: none;
     }
 
     .cs-notice-alert {

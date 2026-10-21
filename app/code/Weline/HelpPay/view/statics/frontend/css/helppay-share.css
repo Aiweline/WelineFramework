@@ -270,10 +270,8 @@
 }/* Hosted inside native showModal() purchase panel: do not clip the nested overlay. */
 dialog.w-product-purchase-panel:has(> .w-helppay-dialog), .w-dialog.w-product-purchase-panel:has(> .w-helppay-dialog), dialog:has(> .w-helppay-dialog){
   overflow: visible;
-}
-
-.w-helppay-dialog[hidden] {
-  display: none !important;
+}.w-helppay-dialog[hidden]{
+  display: none;
 }
 
 .w-helppay-dialog__panel {
@@ -511,20 +509,13 @@ dialog.w-product-purchase-panel:has(> .w-helppay-dialog), .w-dialog.w-product-pu
 .w-helppay-address-pick__body [data-shipping-checkout-address],
 .w-helppay-address-pick__body [data-helppay-address-host] {
   display: block;
-}
-
-[data-helppay-step="address-pick"] [data-billing-section],
-[data-testid="help-pay-billing"] [data-billing-section] {
-  display: none !important;
-}
-
-/* Page already titles「付款账单地址」; hide duplicate widget heading. */
-[data-testid="help-pay-billing"] [data-shipping-section] > .w-shipping-checkout-address__heading {
-  display: none !important;
-}
-
-[data-helppay-billing-msg][hidden] {
-  display: none !important;
+}[data-helppay-step="address-pick"] [data-billing-section], [data-testid="help-pay-billing"] [data-billing-section]{
+  display: none;
+}/* Page already titles「付款账单地址」; hide duplicate widget heading. */
+[data-testid="help-pay-billing"] [data-shipping-section] > .w-shipping-checkout-address__heading.w-shipping-checkout-address__heading{
+  display: none;
+}[data-helppay-billing-msg][hidden]{
+  display: none;
 }
 
 .w-helppay-payer__billing [data-helppay-billing-mount] {
@@ -669,18 +660,14 @@ dialog.w-product-purchase-panel:has(> .w-helppay-dialog), .w-dialog.w-product-pu
 
 .w-helppay-payer__method input {
   margin: 0;
-}
-
-[data-helppay-billing-panel][hidden] {
-  display: none !important;
+}[data-helppay-billing-panel][hidden]{
+  display: none;
 }
 
 [data-helppay-step="address-pick"] [data-helppay-confirm-quick] {
   justify-self: stretch;
-}
-
-[data-helppay-address-msg][hidden] {
-  display: none !important;
+}[data-helppay-address-msg][hidden]{
+  display: none;
 }
 
 .w-helppay-dialog__close {

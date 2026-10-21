@@ -107,8 +107,6 @@
     border-radius: var(--backend-border-radius-md);
     background: var(--backend-color-sidebar-bg);
     color: var(--backend-color-text-secondary);
-}
-
-.w-local-bulk-dialog__footer[hidden] {
-    display: none !important;
+}.w-local-bulk-dialog__footer[hidden]{
+    display: none;
 }

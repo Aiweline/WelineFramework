@@ -202,11 +202,8 @@
 
 .b2b-selling-mode__hint {
     margin: 0;
-}
-
-.b2b-selling-mode__hint[hidden],
-.b2b-selling-mode__cta[hidden] {
-    display: none !important;
+}.b2b-selling-mode__hint[hidden], .b2b-selling-mode__cta[hidden]{
+    display: none;
 }
 
 /* Soft info: preferred tob + retail-only SKU — same compact text line as soft CTA. */
@@ -224,10 +221,8 @@
     color: var(--weline-theme-text-muted, var(--color-text-secondary));
     font-size: var(--weline-font-size-sm);
     line-height: 1.45;
-}
-
-.b2b-retail-only-hint[hidden] {
-    display: none !important;
+}.b2b-retail-only-hint[hidden]{
+    display: none;
 }
 
 .b2b-retail-only-hint .b2b-selling-mode__soft-link {
@@ -243,11 +238,8 @@
     margin: var(--spacing-1) 0 var(--spacing-2);
     font-size: var(--weline-font-size-sm);
     line-height: 1.45;
-}
-
-.b2b-selling-mode__soft-cta[hidden],
-.b2b-selling-mode__segment[hidden] {
-    display: none !important;
+}.b2b-selling-mode__soft-cta[hidden], .b2b-selling-mode__segment[hidden]{
+    display: none;
 }
 
 .b2b-selling-mode__segment {
@@ -314,11 +306,8 @@
 .b2b-membership-apply .w-field__control,
 .b2b-account-identity-apply .w-field__control {
     display: block;
-}
-
-.b2b-membership-apply[hidden],
-.b2b-membership-apply-wrap[hidden] {
-    display: none !important;
+}.b2b-membership-apply[hidden], .b2b-membership-apply-wrap[hidden]{
+    display: none;
 }
 
 .b2b-account-identity {
@@ -965,12 +954,8 @@
 .w-b2b-checkout-credit.is-toc-unavailable .w-b2b-checkout-credit__links {
     opacity: 1;
     pointer-events: auto;
-}
-
-.b2b-checkout-deposit-note[hidden],
-.w-b2b-checkout-credit[hidden],
-.b2b-account-hang[hidden] {
-    display: none !important;
+}.b2b-checkout-deposit-note[hidden], .w-b2b-checkout-credit[hidden], .b2b-account-hang[hidden]{
+    display: none;
 }
 
 .b2b-account-hang {
@@ -1029,10 +1014,8 @@
     display: flex;
     flex-direction: column;
     gap: var(--weline-theme-space-3);
-}
-
-.b2b-order-chat__panel[hidden] {
-    display: none !important;
+}.b2b-order-chat__panel[hidden]{
+    display: none;
 }
 
 .b2b-order-chat__status {
@@ -1156,21 +1139,13 @@
     -webkit-text-fill-color: var(--color-primary, var(--amz-drawer-cta-bg, var(--weline-theme-primary)));
     background: var(--amz-drawer-surface-muted, var(--weline-theme-surface-muted));
     box-shadow: var(--weline-shadow-lg);
-}
-
-.header-cart[data-cart-type="tob"] [data-mini-cart-discount-breakdown],
-.header-cart.is-cart-type-tob [data-mini-cart-discount-breakdown],
-[data-weline-cart][data-cart-type="tob"] [data-cart-discount-breakdown],
-[data-weline-cart].is-cart-type-tob [data-cart-discount-breakdown] {
-    display: none !important;
-}
-
-/* tob：强制 extras 可见；页签结构与零售一致，不藏 tablist / 不堆叠双面板 */
-.header-cart[data-cart-type="tob"] .mini-cart-drawer__extras {
-    display: flex !important;
-}
-.header-cart.is-cart-type-tob .mini-cart-drawer__extras {
-    display: flex !important;
+}.header-cart[data-cart-type="tob"] [data-mini-cart-discount-breakdown], .header-cart.is-cart-type-tob [data-mini-cart-discount-breakdown], [data-weline-cart][data-cart-type="tob"] [data-cart-discount-breakdown], [data-weline-cart].is-cart-type-tob [data-cart-discount-breakdown]{
+    display: none;
+}/* tob：强制 extras 可见；页签结构与零售一致，不藏 tablist / 不堆叠双面板 */
+.header-cart[data-cart-type="tob"] .mini-cart-drawer__extras.mini-cart-drawer__extras{
+    display: flex;
+}.header-cart.is-cart-type-tob .mini-cart-drawer__extras.mini-cart-drawer__extras{
+    display: flex;
 }
 
 /* tob：优惠券灰化不可用，保留零售页签 */
@@ -1206,28 +1181,14 @@
 
 .b2b-cart-page-type-seg {
     margin: 0 0 var(--weline-space-3);
-}
-
-/* toc fail-closed: never paint wholesale credit chrome before/without tob elevate */
-[data-weline-cart][data-cart-type="toc"] .weline-cart-shell__credit-slot,
-[data-weline-cart][data-cart-type="toc"] [data-b2b-checkout-credit],
-[data-weline-checkout][data-cart-type="toc"] .weline-checkout__credit-slot,
-[data-weline-checkout][data-cart-type="toc"] [data-b2b-checkout-credit],
-.weline-checkout[data-cart-type="toc"] .weline-checkout__credit-slot,
-.weline-checkout[data-cart-type="toc"] [data-b2b-checkout-credit],
-.header-cart[data-cart-type="toc"] [data-b2b-checkout-credit],
-.header-cart:not([data-cart-type="tob"]):not(.is-cart-type-tob) [data-b2b-checkout-credit] {
-    display: none !important;
-}
-
-/* tob 结账：保留优惠券页签（与迷你车同构），仅隐藏优惠金额行 */
-.weline-checkout[data-cart-type="tob"] [data-checkout-discount-row] {
-    display: none !important;
-}
-
-.weline-checkout[data-cart-type="tob"] .weline-checkout__coupon-slot,
-.weline-checkout.is-cart-type-tob .weline-checkout__coupon-slot {
-    display: block !important;
+}/* toc fail-closed: never paint wholesale credit chrome before/without tob elevate */
+[data-weline-cart][data-cart-type="toc"] .weline-cart-shell__credit-slot.weline-cart-shell__credit-slot, [data-weline-cart][data-cart-type="toc"] [data-b2b-checkout-credit], [data-weline-checkout][data-cart-type="toc"] .weline-checkout__credit-slot.weline-checkout__credit-slot, [data-weline-checkout][data-cart-type="toc"] [data-b2b-checkout-credit], .weline-checkout[data-cart-type="toc"] .weline-checkout__credit-slot.weline-checkout__credit-slot, .weline-checkout[data-cart-type="toc"] [data-b2b-checkout-credit], .header-cart[data-cart-type="toc"] [data-b2b-checkout-credit], .header-cart:not([data-cart-type="tob"]):not(.is-cart-type-tob) [data-b2b-checkout-credit]{
+    display: none;
+}/* tob 结账：保留优惠券页签（与迷你车同构），仅隐藏优惠金额行 */
+.weline-checkout[data-cart-type="tob"] [data-checkout-discount-row]{
+    display: none;
+}.weline-checkout[data-cart-type="tob"] .weline-checkout__coupon-slot.weline-checkout__coupon-slot, .weline-checkout.is-cart-type-tob .weline-checkout__coupon-slot.weline-checkout__coupon-slot{
+    display: block;
 }
 
 .weline-checkout[data-cart-type="tob"] .w-marketing-checkout-coupon.is-tob-unavailable .w-marketing-checkout-coupon__input,
@@ -1324,10 +1285,8 @@
     border: var(--border-width-thin) solid var(--weline-theme-border);
     border-radius: var(--weline-theme-radius-md);
     background: var(--weline-theme-surface);
-}
-
-.b2b-hang-payment__order[hidden] {
-    display: none !important;
+}.b2b-hang-payment__order[hidden]{
+    display: none;
 }
 
 .b2b-hang-payment__meta {
@@ -1500,19 +1459,15 @@
 
 .b2b-hang-payment.is-hang-completed .b2b-hang-payment__totals-payable {
     color: var(--weline-theme-success-emphasis, var(--weline-theme-success));
-}
-
-.b2b-hang-payment__status[hidden] {
-    display: none !important;
+}.b2b-hang-payment__status[hidden]{
+    display: none;
 }
 
 .b2b-hang-payment__methods {
     display: grid;
     gap: var(--weline-theme-space-2);
-}
-
-.b2b-hang-payment__methods[hidden] {
-    display: none !important;
+}.b2b-hang-payment__methods[hidden]{
+    display: none;
 }
 
 .b2b-hang-payment__method {
@@ -1528,12 +1483,7 @@
 
 .b2b-hang-payment__method input {
     margin: 0;
-}
-
-/* Hang deposit/balance checkout: never show retail empty-cart chrome. */
-.weline-checkout[data-b2b-hang-mode] [data-checkout-empty],
-.weline-checkout[data-b2b-hang-mode] [data-checkout-payment-recovery],
-.weline-checkout[data-b2b-hang-mode] [data-checkout-form],
-.weline-checkout[data-b2b-hang-mode] [data-checkout-express-host] {
-    display: none !important;
+}/* Hang deposit/balance checkout: never show retail empty-cart chrome. */
+.weline-checkout[data-b2b-hang-mode] [data-checkout-empty], .weline-checkout[data-b2b-hang-mode] [data-checkout-payment-recovery], .weline-checkout[data-b2b-hang-mode] [data-checkout-form], .weline-checkout[data-b2b-hang-mode] [data-checkout-express-host]{
+    display: none;
 }

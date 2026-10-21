@@ -80,10 +80,8 @@
 .storefront-wishlist__cta:hover {
     background: var(--color-primary-dark);
     color: var(--color-text-dark);
-}
-
-.storefront-wishlist__grid {
-    display: grid !important;
+}.storefront-wishlist__grid.storefront-wishlist__grid{
+    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--weline-space-3);
     width: 100%;

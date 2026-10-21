@@ -28,10 +28,8 @@
     color: var(--weline-theme-color-text, var(--color-text));
     font-size: var(--weline-font-size-sm);
     line-height: 1.4;
-}
-
-.w-storefront-money-summary__row[hidden] {
-    display: none !important;
+}.w-storefront-money-summary__row[hidden]{
+    display: none;
 }
 
 .w-storefront-money-summary__row span:first-child {
@@ -124,10 +122,8 @@
     font-size: var(--weline-font-size-xs);
     line-height: 1.4;
     opacity: 1;
-}
-
-.w-storefront-money-summary__note[hidden] {
-    display: none !important;
+}.w-storefront-money-summary__note[hidden]{
+    display: none;
 }
 
 /* 结账摘要壳兼容 */

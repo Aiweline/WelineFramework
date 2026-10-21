@@ -31,7 +31,7 @@ tr.selected {
 }
 
 tr.selected:hover {
-    background-color: #bbdefb;
+    background-color: var(--color-info-bg-subtle);
 }
 
 /* 删除确认对话框样式 */
@@ -90,7 +90,7 @@ tr.selected:hover {
 }
 
 .resize-handle:hover {
-    background: rgba(0, 123, 255, 0.3);
+    background: var(--color-info-bg-subtle);
 }
 
 /* 表头增强样式 */
@@ -249,13 +249,13 @@ th.sortable:hover {
 /* 暗色主题支持 */
 @media (prefers-color-scheme: dark) {
     .batch-action-toolbar {
-        background: #343a40;
+        background: var(--color-bg-dark);
         border-color: var(--color-border-default);
         color: var(--color-text-light);
     }
 
     .loading-overlay {
-        background: rgba(52, 58, 64, 0.9);
+        background: var(--color-bg-dark);
         color: var(--color-text-light);
     }
 
@@ -268,7 +268,7 @@ th.sortable:hover {
     }
 
     .multi-table-group {
-        background: #343a40;
+        background: var(--color-bg-dark);
         border-color: var(--color-border-default);
         color: var(--color-text-light);
     }
@@ -307,7 +307,7 @@ th.sortable:hover {
 
 /* 表格斑马纹增强 */
 .table-striped tbody tr:nth-of-type(odd) {
-    background-color: rgba(0, 0, 0, 0.02);
+    background-color: var(--color-overlay-05);
 }
 
 .table-hover tbody tr:hover {
@@ -640,7 +640,7 @@ th.sortable:hover {
 }
 
 .w-form-control:focus {
-    border-color: #80bdff;
+    border-color: var(--color-link);
     outline: 0;
     box-shadow: var(--weline-shadow-md);
 }
@@ -667,52 +667,52 @@ th.sortable:hover {
 @media (prefers-color-scheme: dark) {
     .w-file-list {
         background-color: var(--color-bg-dark);
-        border-color: #404040;
+        border-color: var(--color-border-default);
     }
 
     .w-file-item {
-        background-color: #3d3d3d;
-        border-color: #404040;
-        color: #e0e0e0;
+        background-color: var(--color-bg-dark);
+        border-color: var(--color-border-default);
+        color: var(--color-text-faint);
     }
 
     .w-image-placeholder {
         background-color: var(--color-bg-dark);
-        border-color: #404040;
-        color: #e0e0e0;
+        border-color: var(--color-border-default);
+        color: var(--color-text-faint);
     }
 
     .w-image-placeholder:hover {
-        background-color: #3d3d3d;
+        background-color: var(--color-bg-dark);
     }
 
     .w-progress-bar {
-        background-color: #404040;
+        background-color: var(--color-bg-dark);
     }
 
     .w-form-modal-container {
         background-color: var(--color-bg-dark);
-        color: #e0e0e0;
+        color: var(--color-text-faint);
     }
 
     .w-form-header {
-        background-color: #343a40;
+        background-color: var(--color-bg-dark);
         border-color: var(--color-border-default);
     }
 
     .w-form-footer {
-        background-color: #343a40;
+        background-color: var(--color-bg-dark);
         border-color: var(--color-border-default);
     }
 
     .w-form-control {
-        background-color: #3d3d3d;
+        background-color: var(--color-bg-dark);
         border-color: var(--color-border-default);
-        color: #e0e0e0;
+        color: var(--color-text-faint);
     }
 
     .w-form-control:focus {
-        border-color: #80bdff;
+        border-color: var(--color-link);
         box-shadow: var(--weline-shadow-md);
     }
 }

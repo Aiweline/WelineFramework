@@ -288,7 +288,7 @@ select.w-form-control {
 .w-checkbox-item input[type="checkbox"] {
     width: 16px;
     height: 16px;
-    accent-color: #3b82f6;
+    accent-color: var(--color-link);
     cursor: pointer;
 }
 
@@ -315,7 +315,7 @@ select.w-form-control {
 .w-radio-item input[type="radio"] {
     width: 16px;
     height: 16px;
-    accent-color: #3b82f6;
+    accent-color: var(--color-link);
     cursor: pointer;
 }
 
@@ -446,7 +446,7 @@ select.w-form-control {
 
 .w-btn-primary:hover:not(:disabled) {
     background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
-    border-color: #1d4ed8;
+    border-color: var(--color-link);
     box-shadow: var(--weline-shadow-md);
     transform: translateY(-1px);
 }
@@ -491,13 +491,13 @@ select.w-form-control {
 .w-form-message-success {
     background: var(--color-success-bg-soft);
     color: var(--color-success-strong);
-    border: var(--border-width-thin) solid #a7f3d0;
+    border: var(--border-width-thin) solid var(--color-success);
 }
 
 .w-form-message-error {
     background: var(--color-bg-canvas);
     color: var(--color-link);
-    border: var(--border-width-thin) solid #fecaca;
+    border: var(--border-width-thin) solid var(--color-danger);
 }
 
 .w-form-message i {
@@ -614,12 +614,12 @@ select.w-form-control {
         border-bottom-color: var(--color-border-default);
     }
     .w-form-title {
-        color: #f9fafb;
+        color: var(--color-bg-primary);
     }
     .w-form-control {
         background: var(--color-info);
         border-color: var(--color-border-default);
-        color: #f9fafb;
+        color: var(--color-bg-primary);
     }
     .w-form-control:focus {
         border-color: var(--color-link);
@@ -670,7 +670,7 @@ body[data-sidebar="dark"] .w-form-inline-container,
 body[data-topbar="dark"] .w-form-inline-container {
     background: var(--color-bg-dark);
     border-color: var(--color-border-default);
-    color: #f9fafb;
+    color: var(--color-bg-primary);
 }
 
 body[data-sidebar="dark"] .w-form-header,
@@ -681,7 +681,7 @@ body[data-topbar="dark"] .w-form-header {
 
 body[data-sidebar="dark"] .w-form-title,
 body[data-topbar="dark"] .w-form-title {
-    color: #f9fafb;
+    color: var(--color-bg-primary);
 }
 
 body[data-sidebar="dark"] .w-form-title i,
@@ -697,13 +697,13 @@ body[data-topbar="dark"] .w-form-close {
 body[data-sidebar="dark"] .w-form-close:hover,
 body[data-topbar="dark"] .w-form-close:hover {
     background: var(--color-on-dark-10);
-    color: #f9fafb;
+    color: var(--color-bg-primary);
 }
 
 body[data-sidebar="dark"] .w-form-body,
 body[data-topbar="dark"] .w-form-body {
     background: var(--color-bg-dark);
-    color: #f9fafb;
+    color: var(--color-bg-primary);
 }
 
 body[data-sidebar="dark"] .w-form-control,
@@ -716,12 +716,12 @@ body[data-topbar="dark"] textarea.w-form-control,
 body[data-topbar="dark"] select.w-form-control {
     background: var(--color-info);
     border-color: var(--color-border-default);
-    color: #f9fafb;
+    color: var(--color-bg-primary);
 }
 
 body[data-sidebar="dark"] .w-form-control:focus,
 body[data-topbar="dark"] .w-form-control:focus {
-    border-color: #60a5fa;
+    border-color: var(--color-link);
     box-shadow: var(--weline-shadow-md);
 }
 
@@ -784,15 +784,15 @@ body[data-topbar="dark"] .w-loading-fields {
 
 body[data-sidebar="dark"] .w-form-message-success,
 body[data-topbar="dark"] .w-form-message-success {
-    background: #064e3b;
+    background: var(--color-success);
     color: var(--color-text-faint);
-    border-color: #059669;
+    border-color: var(--color-success);
 }
 
 body[data-sidebar="dark"] .w-form-message-error,
 body[data-topbar="dark"] .w-form-message-error {
     background: var(--color-danger);
-    color: #fca5a5;
+    color: var(--color-danger-bg-subtle);
     border-color: var(--color-danger);
 }
 
@@ -1152,7 +1152,7 @@ body[data-sidebar="dark"] .w-file-field:hover,
 body[data-topbar="dark"] .w-file-field:hover,
 body[data-sidebar="dark"] .w-image-field:hover,
 body[data-topbar="dark"] .w-image-field:hover {
-    border-color: #60a5fa;
+    border-color: var(--color-link);
     background: var(--color-bg-dark);
 }
 
