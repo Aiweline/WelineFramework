@@ -34,8 +34,16 @@ final class DesignSystemContractTest extends TestCase
         $expected = [
             'css/foundation.css',
             'css/tokens/apple.css',
+            'css/components/button.css',
+            'css/components/field.css',
+            'css/components/selection.css',
+            'css/components/navigation.css',
+            'css/components/surface.css',
+            'css/components/feedback.css',
         ];
         $componentBundles = [
+            'ui-tokens' => 'css/tokens/apple.css',
+            'ui-critical' => 'css/critical-utilities.css',
             'ui-button' => 'css/components/button.css',
             'ui-field' => 'css/components/field.css',
             'ui-selection' => 'css/components/selection.css',
@@ -53,7 +61,7 @@ final class DesignSystemContractTest extends TestCase
         );
         self::assertIsArray($manifest, 'weline-ui-assets.json must be valid JSON.');
         $sources = $manifest['bundles']['foundation']['sources'] ?? [];
-        self::assertSame($expected, $sources, 'foundation bundle keeps only foundation + tokens; component CSS must move to its own bundles.');
+        self::assertSame($expected, $sources, 'foundation bundle order: foundation → tokens → components (single critical pack).');
         foreach ($componentBundles as $bundle => $source) {
             self::assertFileExists(self::uiCss() . '/' . substr($source, 4));
             self::assertSame([$source], $manifest['bundles'][$bundle]['sources'] ?? [], 'Component bundle source mismatch: ' . $bundle);
@@ -70,7 +78,10 @@ final class DesignSystemContractTest extends TestCase
             true
         );
         $files = [];
-        foreach (($manifest['bundles'] ?? []) as $bundle) {
+        foreach (($manifest['bundles'] ?? []) as $bundleName => $bundle) {
+            if (!is_string($bundleName) || !str_starts_with($bundleName, 'ui-')) {
+                continue;
+            }
             foreach ((array)($bundle['sources'] ?? []) as $relative) {
                 if (is_string($relative) && str_starts_with($relative, 'css/components/')) {
                     $files[] = self::uiCss() . '/' . substr($relative, 4);
@@ -130,13 +141,50 @@ final class DesignSystemContractTest extends TestCase
         self::assertContains('button', $usage['areas']['backend']);
 
         $service = new \Weline\Theme\Service\Ui\ComponentUsageService();
+        $keys = $service->componentKeysForArea('backend');
+        self::assertContains('button', $keys);
+        self::assertContains('selection', $keys);
         $inline = $service->renderInlineStyle('backend');
-        self::assertStringContainsString('data-weline-ui-components="backend"', $inline);
+        self::assertStringContainsString('--weline-control-height', $inline, 'Inline critical CSS must carry semantic tokens.');
+        self::assertStringContainsString('.w-grid', $inline, 'Inline critical CSS must carry core layout utilities.');
         self::assertStringContainsString('.w-button', $inline);
-        self::assertStringContainsString('.w-switch', $inline);
 
+        // 组件 CSS 已合并进单一关键包（一次请求、可缓存），并单独编译出 per-component 产物供后续按部件拆分。
         $foundation = (string)file_get_contents(BP . 'app/code/Weline/Theme/view/statics/ui/weline-foundation.css');
-        self::assertStringNotContainsString('.w-switch', $foundation, 'Component CSS must not stay in the blocking foundation pack.');
+        self::assertStringContainsString('.w-switch', $foundation, 'Component layer must stay in the single critical foundation pack for correct cascade.');
+    }
+
+    public function testCriticalCssHeadContractIsAggressive(): void
+    {
+        $pack = (string)file_get_contents(BP . 'app/code/Weline/Theme/Service/ThemeHeadChromeCssPack.php');
+        self::assertStringContainsString('function tryInlineCssHtml', $pack);
+        self::assertStringContainsString('function tryPreloadLinkHtml', $pack);
+        self::assertStringContainsString("rel=\"preload\" as=\"style\"", $pack);
+
+        // 页面级 CSS 通道：<css nonblocking> + 设计主题皮肤 preload
+        $taglib = (string)file_get_contents(BP . 'app/code/Weline/Framework/View/Taglib.php');
+        self::assertStringContainsString('nonblocking', $taglib, '<css nonblocking> support is required for module page CSS.');
+        $hanfuSkin = (string)file_get_contents(
+            BP . 'app/design/Weline/hanfu/frontend/partials/head/hanfu-skin.phtml'
+        );
+        self::assertStringContainsString('rel="preload" as="style"', $hanfuSkin);
+        self::assertStringContainsString('<noscript>', $hanfuSkin);
+        self::assertStringNotContainsString('<link rel="stylesheet" href="/static/Weline/hanfu/frontend/assets/css/hanfu-commerce.css', $hanfuSkin);
+
+        $backendHead = (string)file_get_contents(
+            BP . 'app/code/Weline/Theme/view/theme/backend/partials/head/default.phtml'
+        );
+        self::assertStringContainsString('tryPreloadLinkHtml', $backendHead);
+        self::assertStringContainsString('tryInlineCssHtml', $backendHead);
+        self::assertStringContainsString("renderInlineStyle('backend')", $backendHead);
+
+        $frontendPrefix = (string)file_get_contents(
+            BP . 'app/code/Weline/Theme/view/theme/frontend/partials/head/assets-prefix.phtml'
+        );
+        self::assertStringContainsString('tryPreloadLinkHtml', $frontendPrefix);
+        self::assertStringContainsString('tryInlineCssHtml', $frontendPrefix);
+        self::assertStringContainsString("renderInlineStyle('frontend')", $frontendPrefix);
+        self::assertStringNotContainsString("tryLinkHtml(\n        'frontend',\n        \\Weline\\Theme\\Service\\ThemeHeadChromeCssPack::PACK_STOREFRONT", $frontendPrefix);
     }
 
     public function testTagStagesSeparateStaticAndDynamicRendering(): void

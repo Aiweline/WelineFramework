@@ -66,6 +66,9 @@ final class ThemeHeadChromeCssPack
      */
     private array $emittedPacks = [];
 
+    /** @var array<string, string> inline pack CSS keyed by raw-source sha (worker-safe) */
+    private static array $inlineCssCache = [];
+
     public function __construct(
         private readonly ThemeResourceConfig $resourceConfig,
         private readonly ThemeContextService $themeContext,
@@ -309,20 +312,7 @@ final class ThemeHeadChromeCssPack
             return '';
         }
         if (!is_file($target['path'])) {
-            $chunks = [];
-            foreach ($sources as $source) {
-                $content = $source['content'];
-                try {
-                    $content = $this->publisher->rewriteCssUrls($content, $source['url']);
-                } catch (\Throwable) {
-                    // Keep original relative URLs when rewrite cannot prove safety.
-                }
-                if ($minify) {
-                    $content = $this->minifier->minifyFileContent($content, 'css');
-                }
-                $chunks[] = '/* ' . $source['label'] . ' */' . "\n" . $content;
-            }
-            $body = implode("\n", $chunks);
+            $body = $this->composeSources($sources, $minify);
             if ($body === '') {
                 return '';
             }
@@ -330,6 +320,98 @@ final class ThemeHeadChromeCssPack
         }
 
         return $target['url'];
+    }
+
+    /**
+     * 首屏内联：与 PACK_* 同一份 sources，内联到 head（关键 CSS，不产生阻塞请求）。
+     */
+    public function tryInlineCssHtml(string $area, string $pack, array $options = []): ?string
+    {
+        $area = $this->themeContext->normalizeArea($area);
+        if (!$this->isEnabled($area)) {
+            return null;
+        }
+        try {
+            $theme = $this->resolveTheme($area);
+            $layoutType = $pack === self::PACK_OVERLAY ? $this->resolveLayoutType($options) : '';
+            $sources = $this->collectSources($area, $pack, $theme, $options + ['layout_type' => $layoutType]);
+            if ($sources === []) {
+                return null;
+            }
+            $minify = !empty($this->resourceConfig->resolve($theme, $area)['css_minify']);
+            $raw = $this->composeSources($sources, false);
+            $rawKey = $minify ? hash('sha256', $raw) : '';
+            if ($rawKey !== '' && isset(self::$inlineCssCache[$rawKey])) {
+                $css = self::$inlineCssCache[$rawKey];
+            } else {
+                $css = $this->composeSources($sources, $minify);
+                if ($rawKey !== '') {
+                    self::$inlineCssCache[$rawKey] = $css;
+                }
+            }
+            if ($css === '') {
+                return null;
+            }
+            $this->markPackEmitted($area, $pack);
+            return '<style data-weline-theme-head-pack="' . htmlspecialchars($pack, ENT_QUOTES) . '" data-weline-inline-pack="1">'
+                . str_replace('</style', '<\\/style', $css) . '</style>';
+        } catch (\Throwable $e) {
+            if (function_exists('w_log_warning')) {
+                w_log_warning('Theme head chrome CSS inline failed: ' . $e->getMessage());
+            }
+            return null;
+        }
+    }
+
+    /**
+     * 非阻塞主包：preload + onload 切换为 stylesheet；noscript 回退阻塞。
+     * 仅用于已内联关键 CSS（layout-critical + tokens + components）之后的主题主包。
+     */
+    public function tryPreloadLinkHtml(string $area, string $pack, array $options = []): ?string
+    {
+        $area = $this->themeContext->normalizeArea($area);
+        if (!$this->isEnabled($area)) {
+            return null;
+        }
+        try {
+            $url = $this->publishPack($area, $pack, $options);
+        } catch (\Throwable $e) {
+            if (function_exists('w_log_warning')) {
+                w_log_warning('Theme head chrome CSS pack failed: ' . $e->getMessage());
+            }
+            return null;
+        }
+        if ($url === '') {
+            return null;
+        }
+        $safe = htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $attrs = ' data-weline-theme-head-pack="' . htmlspecialchars($pack, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"';
+        $this->markPackEmitted($area, $pack);
+        return '<link rel="preload" as="style" href="' . $safe . '"' . $attrs
+            . ' onload="this.onload=null;this.rel=\'stylesheet\'">'
+            . '<noscript><link rel="stylesheet" href="' . $safe . '"' . $attrs . '></noscript>';
+    }
+
+    /**
+     * @param list<array{label:string,content:string,url:string}> $sources
+     */
+    private function composeSources(array $sources, bool $minify): string
+    {
+        $chunks = [];
+        foreach ($sources as $source) {
+            $content = $source['content'];
+            try {
+                $content = $this->publisher->rewriteCssUrls($content, $source['url']);
+            } catch (\Throwable) {
+                // Keep original relative URLs when rewrite cannot prove safety.
+            }
+            if ($minify) {
+                $content = $this->minifier->minifyFileContent($content, 'css');
+            }
+            $chunks[] = '/* ' . $source['label'] . ' */' . "\n" . $content;
+        }
+
+        return implode("\n", $chunks);
     }
 
     /**

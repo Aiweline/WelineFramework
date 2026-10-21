@@ -3,6 +3,7 @@
 @layer components {
     .w-tabs__list {
         display: inline-flex;
+        box-sizing: border-box;
         flex-wrap: nowrap;
         gap: var(--weline-space-1);
         max-width: 100%;
@@ -39,7 +40,7 @@
     }
     .w-tabs__tab:focus-visible { outline: 0; box-shadow: var(--weline-theme-focus-ring); }
 
-    .w-pagination { gap: var(--weline-space-1); }
+    .w-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: var(--weline-space-1); margin: 0; padding: 0; list-style: none; }
     .w-pagination__link {
         border: 1px solid transparent;
         border-radius: var(--weline-radius-sm);
@@ -61,6 +62,8 @@
     .w-breadcrumb a:hover { color: var(--weline-theme-text); }
 
     .w-menu {
+        display: block;
+        box-sizing: border-box;
         padding: var(--weline-space-1);
         border: 1px solid color-mix(in srgb, var(--weline-theme-border) 72%, transparent);
         border-radius: var(--weline-radius-md);

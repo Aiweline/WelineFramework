@@ -1,6 +1,8 @@
 /* Weline UI · Surface（Card / Table / Dialog / Empty，Apple 风格） */
 @layer components {
     .w-card {
+        display: block;
+        box-sizing: border-box;
         border: 1px solid color-mix(in srgb, var(--weline-theme-border) 72%, transparent);
         border-radius: var(--weline-radius-lg);
         background: var(--weline-theme-surface);
@@ -26,10 +28,20 @@
     .w-card__title { margin: 0; color: var(--weline-theme-text); font-size: var(--weline-font-size-md); font-weight: 650; letter-spacing: var(--weline-letter-tight); }
 
     .w-table-wrap {
+        display: block;
+        box-sizing: border-box;
+        max-inline-size: 100%;
+        overflow: auto;
         border: 1px solid color-mix(in srgb, var(--weline-theme-border) 72%, transparent);
         border-radius: var(--weline-radius-lg);
         background: var(--weline-theme-surface);
         box-shadow: var(--weline-theme-shadow-xs);
+    }
+    .w-table {
+        display: table;
+        inline-size: 100%;
+        border-collapse: collapse;
+        border-spacing: 0;
     }
     .w-table th,
     .w-table td { padding: var(--weline-space-3) var(--weline-space-4); border-block-end: 1px solid color-mix(in srgb, var(--weline-theme-border) 64%, transparent); }

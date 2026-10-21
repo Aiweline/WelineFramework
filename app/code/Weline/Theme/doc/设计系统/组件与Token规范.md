@@ -93,29 +93,17 @@ app/code/Weline/Theme/view/ui/css/
 规则：控件高度只允许取三档；同一行内按钮/输入/选择器高度必须一致；
 间距不得写裸 `px`（用 `--weline-space-*`）；圆角不得写裸值。
 
-### 2.3 编译期组件 CSS：按用量合并 + 首屏内联（避免阻塞）
+### 2.3 编译期组件 CSS：用量分析 + 首屏内联 + 主包非阻塞
 
-目标：**首屏不做组件 CSS 的额外阻塞请求**，且只发送页面真正用到的组件字节。
+详细契约见 [`CSS关键路径契约.md`](./CSS关键路径契约.md)。要点：
 
-1. **注册**：`view/ui/css/components/<component>.css` 各自成为一个 bundle
-   （`ui-button` / `ui-field` / `ui-selection` / `ui-navigation` / `ui-surface` / `ui-feedback`）；
-   `foundation` bundle 只保留 `foundation.css + tokens/apple.css`，不再打包组件。
-2. **编译期分析**：`php bin/w resource:compile welineUi` 结束时，
-   `ComponentUsageService::analyzeAndWrite()` 扫描 `app/code/*/*/view/{templates,theme,blocks,widgets,hooks,components}`
-   的 `class="…"`，按 `frontend/backend` 两个区域写
-   `view/statics/ui/components/usage.json`（文件数 + 区域组件清单）。
-3. **首屏内联**：head 调用 `ComponentUsageService::renderInlineStyle($area)`，
-   把该区域用到的组件 CSS **合并 + 压缩**成 `<style data-weline-ui-components="area">`，
-   紧随 `layout-critical` 之后、阻塞主包之前输出。组件 CSS 因此不占阻塞请求、无 FOUC。
-4. **主包**：`PACK_BACKEND` / `PACK_STOREFRONT` 仍保持阻塞（壳层/皮肤/Token），
-   但体积已减去组件部分；widget 的常用 source 合包与 `media=print` 延迟合包规则不变。
-5. **旧 `fetchBase` 页**：`Weline_Admin::common/head.phtml` 同样内联组件 CSS，
-   保证 Event/Hook 等旧壳页面不丢组件样式。
-6. **新增组件**：加 `components/<component>.css` → 在 `weline-ui-assets.json` 加 bundle →
-   在 `ComponentUsageService::COMPONENTS` 登记 class/output → `resource:compile welineUi` →
-   `DesignSystemContractTest` 会校验 usage.json、内联产物与 foundation 不含组件。
-7. **验收**：head 中出现 `data-weline-ui-components`；`weline-foundation.css` 不再含
-   `.w-switch`/`.w-button` 规则；组件文件仍是唯一源；改组件 CSS 只需重编译。
+1. 组件各自成 bundle（`ui-button`…），并保持 `foundation → tokens → components` 顺序进入主包（noscript/兜底）。
+2. `resource:compile welineUi` 扫描模板 `class` 使用，写 `usage.json`（区域清单 + 字节）。
+3. head 输出：`preload 主包` → `layout-critical` 内联 → `语义 Token` 内联 → `首屏布局原语` 内联 → `组件 CSS` 内联；
+   内联在 preload 之后，源顺序覆盖主包历史规则；主包不再阻塞渲染。
+4. 只内联该区域用到的组件；无法判定时回退全量，禁止静默缺样式。
+   组件 CSS 必须**自足**（不依赖 foundation 同名基础规则），否则主包未到达时首屏会塌。
+5. 禁止：内联放在 preload 之前、组件层写 `!important`/字面量、JS 开启页面出现阻塞主包。
 
 ---
 

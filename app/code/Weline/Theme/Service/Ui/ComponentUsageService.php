@@ -76,9 +76,19 @@ final class ComponentUsageService
             sort($components);
             $areas[$area] = $components;
         }
+        $sizes = [];
+        $totalBytes = 0;
+        foreach (self::COMPONENTS as $key => $meta) {
+            $file = BP . 'app/code/Weline/Theme/view/statics/ui/' . $meta['output'];
+            $bytes = \is_readable($file) ? (int)\filesize($file) : 0;
+            $sizes[$key] = $bytes;
+            $totalBytes += $bytes;
+        }
         $payload = [
             'areas' => $areas,
             'files' => $files,
+            'components' => $sizes,
+            'components_total_bytes' => $totalBytes,
             'generated_at' => \date('c'),
         ];
         $target = BP . self::USAGE_RELATIVE;
@@ -109,11 +119,31 @@ final class ComponentUsageService
     public function renderInlineStyle(string $area): string
     {
         $area = $area === 'backend' ? 'backend' : 'frontend';
-        if (isset(self::$inlineCache[$area])) {
-            return self::$inlineCache[$area];
+        $keys = $this->componentKeysForArea($area);
+        $stamp = 0;
+        $tokensFile = BP . 'app/code/Weline/Theme/view/statics/ui/components/weline-ui-tokens.css';
+        $stamp = \max($stamp, \is_readable($tokensFile) ? (int)\filemtime($tokensFile) : 0);
+        $criticalFile = BP . 'app/code/Weline/Theme/view/statics/ui/components/weline-ui-critical.css';
+        $stamp = \max($stamp, \is_readable($criticalFile) ? (int)\filemtime($criticalFile) : 0);
+        foreach ($keys as $key) {
+            $file = BP . 'app/code/Weline/Theme/view/statics/ui/' . self::COMPONENTS[$key]['output'];
+            $stamp = \max($stamp, \is_readable($file) ? (int)\filemtime($file) : 0);
+        }
+        $cacheKey = $area . '@' . $stamp;
+        if (isset(self::$inlineCache[$cacheKey])) {
+            return self::$inlineCache[$cacheKey];
         }
         $css = '';
-        foreach ($this->componentKeysForArea($area) as $key) {
+        // 语义 Token 必须先于组件：首屏在主包未到达时也要有完整变量。
+        $tokensFile = BP . 'app/code/Weline/Theme/view/statics/ui/components/weline-ui-tokens.css';
+        if (\is_readable($tokensFile)) {
+            $css .= (string)\file_get_contents($tokensFile) . "\n";
+        }
+        $criticalFile = BP . 'app/code/Weline/Theme/view/statics/ui/components/weline-ui-critical.css';
+        if (\is_readable($criticalFile)) {
+            $css .= (string)\file_get_contents($criticalFile) . "\n";
+        }
+        foreach ($keys as $key) {
             $output = self::COMPONENTS[$key]['output'];
             $file = BP . 'app/code/Weline/Theme/view/statics/ui/' . $output;
             if (\is_readable($file)) {
@@ -127,7 +157,7 @@ final class ComponentUsageService
         $html = $css === ''
             ? ''
             : '<style data-weline-ui-components="' . $area . '">' . \str_replace('</style', '<\\/style', $css) . '</style>';
-        self::$inlineCache[$area] = $html;
+        self::$inlineCache[$cacheKey] = $html;
         return $html;
     }
 

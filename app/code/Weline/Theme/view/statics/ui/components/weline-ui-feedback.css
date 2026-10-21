@@ -2,6 +2,11 @@
 /* Weline UI · Feedback（Badge / Alert / Loading / Skeleton，Apple 风格） */
 @layer components {
     .w-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--weline-space-1);
+        flex-shrink: 0;
+        white-space: nowrap;
         padding: 0.2rem 0.55rem;
         border-radius: var(--weline-radius-round);
         font-size: var(--weline-font-size-xs);
@@ -11,7 +16,7 @@
     .w-badge[data-tone="primary"] { background: color-mix(in srgb, var(--weline-theme-primary) 12%, var(--weline-theme-surface)); color: var(--weline-theme-primary); }
     .w-badge[data-tone="muted"] { background: var(--weline-theme-surface-muted); color: var(--weline-theme-text-muted); }
 
-    .w-alert { padding: var(--weline-space-4); border-radius: var(--weline-radius-md); }
+    .w-alert { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: var(--weline-space-3); box-sizing: border-box; padding: var(--weline-space-4); border-radius: var(--weline-radius-md); }
     .w-alert[data-tone="info"] { background: color-mix(in srgb, var(--weline-theme-info) 8%, var(--weline-theme-surface)); border-color: color-mix(in srgb, var(--weline-theme-info) 28%, transparent); color: var(--weline-theme-text); }
     .w-alert[data-tone="success"] { background: color-mix(in srgb, var(--weline-theme-success) 8%, var(--weline-theme-surface)); border-color: color-mix(in srgb, var(--weline-theme-success) 28%, transparent); color: var(--weline-theme-text); }
     .w-alert[data-tone="warning"] { background: color-mix(in srgb, var(--weline-theme-warning) 10%, var(--weline-theme-surface)); border-color: color-mix(in srgb, var(--weline-theme-warning) 32%, transparent); color: var(--weline-theme-text); }

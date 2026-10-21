@@ -17,18 +17,33 @@ try {
 }
 $headPack = null;
 $backendPackHtml = null;
+$backendTokensInline = null;
 try {
     $headPack = \Weline\Framework\Manager\ObjectManager::getInstance(
         \Weline\Theme\Service\ThemeHeadChromeCssPack::class
     );
-    $backendPackHtml = $headPack->tryLinkHtml(
+    $backendPackHtml = $headPack->tryPreloadLinkHtml(
         'backend',
         \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_BACKEND,
         ['include_disk' => true, 'layout_css' => true]
     );
+    $backendTokensInline = $headPack->tryInlineCssHtml(
+        'backend',
+        \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_TOKENS_BACKEND,
+        ['include_disk' => false, 'include_theme_overlay' => false]
+    );
 } catch (\Throwable $e) {
     $headPack = null;
     $backendPackHtml = null;
+    $backendTokensInline = null;
+}
+$welineComponentCssInline = '';
+try {
+    $welineComponentCssInline = \Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Theme\Service\Ui\ComponentUsageService::class
+    )->renderInlineStyle('backend');
+} catch (\Throwable) {
+    $welineComponentCssInline = '';
 }
 $diskAbsorbed = $headPack instanceof \Weline\Theme\Service\ThemeHeadChromeCssPack
     && $backendPackHtml !== null
@@ -48,18 +63,14 @@ try {
     $afterCssJsHtml = null;
 }
 ?>
-<?php
-$welineComponentCssInline = '';
-try {
-    $welineComponentCssInline = \Weline\Framework\Manager\ObjectManager::getInstance(
-        \Weline\Theme\Service\Ui\ComponentUsageService::class
-    )->renderInlineStyle('backend');
-} catch (\Throwable) {
-    $welineComponentCssInline = '';
-}
-?>
 <w:template>Weline_Theme::templates/partials/head/css-fouc-bootstrap.phtml</w:template>
+<?php if ($backendPackHtml !== null): ?>
+<?= $backendPackHtml ?>
+<?php endif; ?>
 <theme:layout-critical area="backend"/>
+<?php if ($backendTokensInline !== null): ?>
+<?= $backendTokensInline ?>
+<?php endif; ?>
 <?= $welineComponentCssInline ?>
 <?php if ($earlyJsHtml !== null): ?>
 <?= $earlyJsHtml ?>
@@ -68,9 +79,7 @@ try {
 <?php endif; ?>
 <w:theme:font src="Weline_Theme::NotoSansSC-Regular.ttf" family="Noto Sans SC" weight="400" display="swap"/>
 <w:theme:font src="Weline_Theme::NotoSansSC-Bold.ttf" family="Noto Sans SC" weight="700" display="swap"/>
-<?php if ($backendPackHtml !== null): ?>
-<?= $backendPackHtml ?>
-<?php else: ?>
+<?php if ($backendPackHtml === null): ?>
 <theme:css>Weline_Theme::theme/backend/colors/_default.css</theme:css>
 <theme:css>Weline_Theme::theme/backend/colors/_light.css</theme:css>
 <theme:css>Weline_Theme::theme/backend/colors/_dark.css</theme:css>

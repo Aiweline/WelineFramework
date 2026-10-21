@@ -4,6 +4,15 @@
  */
 @layer components {
     .w-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        line-height: 1;
+        text-decoration: none;
+        white-space: nowrap;
+        cursor: pointer;
+        font-family: inherit;
         gap: var(--weline-control-gap);
         min-block-size: var(--weline-control-height);
         padding-inline: calc(var(--weline-control-padding-inline) + 0.125rem);

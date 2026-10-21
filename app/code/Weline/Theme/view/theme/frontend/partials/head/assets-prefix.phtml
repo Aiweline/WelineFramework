@@ -40,17 +40,17 @@ try {
     $headPack = \Weline\Framework\Manager\ObjectManager::getInstance(
         \Weline\Theme\Service\ThemeHeadChromeCssPack::class
     );
-    $tokensPackHtml = $headPack->tryLinkHtml(
+    $tokensPackHtml = $headPack->tryInlineCssHtml(
         'frontend',
         \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_TOKENS,
         ['include_disk' => false, 'include_theme_overlay' => false]
     );
-    $storefrontPackHtml = $headPack->tryLinkHtml(
+    $storefrontPackHtml = $headPack->tryPreloadLinkHtml(
         'frontend',
         \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_STOREFRONT,
         ['include_disk' => true, 'include_theme_overlay' => false]
     );
-    $overlayPackHtml = $headPack->tryLinkHtml(
+    $overlayPackHtml = $headPack->tryPreloadLinkHtml(
         'frontend',
         \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_OVERLAY,
         ['include_disk' => false, 'include_theme_overlay' => true]
@@ -60,6 +60,14 @@ try {
     $tokensPackHtml = null;
     $storefrontPackHtml = null;
     $overlayPackHtml = null;
+}
+$welineComponentCssInline = '';
+try {
+    $welineComponentCssInline = \Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Theme\Service\Ui\ComponentUsageService::class
+    )->renderInlineStyle('frontend');
+} catch (\Throwable) {
+    $welineComponentCssInline = '';
 }
 $diskAbsorbed = $headPack instanceof \Weline\Theme\Service\ThemeHeadChromeCssPack
     && $storefrontPackHtml !== null
@@ -78,6 +86,7 @@ $overlayAbsorbed = $headPack instanceof \Weline\Theme\Service\ThemeHeadChromeCss
 <?php endif; ?>
 <?php if ($storefrontPackHtml !== null): ?>
 <?= $storefrontPackHtml ?>
+<?= $welineComponentCssInline ?>
 <?php else: ?>
 <?php if ($tokensPackHtml === null): ?>
 <theme:css>Weline_Theme::theme/frontend/variables/_spacing.css</theme:css>

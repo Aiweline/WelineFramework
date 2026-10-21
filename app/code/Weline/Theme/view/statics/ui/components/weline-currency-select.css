@@ -205,10 +205,8 @@
         background: var(--weline-theme-surface-raised, var(--weline-theme-surface));
         box-shadow: var(--weline-theme-shadow-md);
         color: var(--weline-theme-text);
-    }
-
-    .w-currency-select__popover[hidden] {
-        display: none !important;
+    }.w-currency-select__popover[hidden]{
+        display: none;
     }
 
     .w-currency-select__popover[data-w-floating-positioned] {

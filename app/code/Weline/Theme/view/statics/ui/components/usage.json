@@ -18,5 +18,14 @@
         ]
     },
     "files": 1134,
-    "generated_at": "2026-10-21T12:44:03+00:00"
+    "components": {
+        "button": 4156,
+        "field": 3903,
+        "selection": 3943,
+        "navigation": 3628,
+        "surface": 4471,
+        "feedback": 2600
+    },
+    "components_total_bytes": 22701,
+    "generated_at": "2026-10-21T13:48:16+00:00"
 }

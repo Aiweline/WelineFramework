@@ -8,7 +8,13 @@
             "output": "weline-foundation.css",
             "sources": [
                 "css/foundation.css",
-                "css/tokens/apple.css"
+                "css/tokens/apple.css",
+                "css/components/button.css",
+                "css/components/field.css",
+                "css/components/selection.css",
+                "css/components/navigation.css",
+                "css/components/surface.css",
+                "css/components/feedback.css"
             ]
         },
         "backend": {
@@ -720,6 +726,20 @@
             "output": "components/weline-ui-feedback.css",
             "sources": [
                 "css/components/feedback.css"
+            ]
+        },
+        "ui-tokens": {
+            "type": "css",
+            "output": "components/weline-ui-tokens.css",
+            "sources": [
+                "css/tokens/apple.css"
+            ]
+        },
+        "ui-critical": {
+            "type": "css",
+            "output": "components/weline-ui-critical.css",
+            "sources": [
+                "css/critical-utilities.css"
             ]
         }
     },

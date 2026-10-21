@@ -1,0 +1,68 @@
+/* Weline UI source: css/critical-utilities.css */
+/* Weline UI · 首屏布局原语（critical inline）
+ * 与 foundation.css 的 @layer layout/utilities 保持同一语义；仅覆盖首屏可见结构，
+ * 完整规则仍以 foundation.css 为准。主包 preload 到达后同源规则不会改变结果。
+ */
+@layer layout {
+    .w-container {
+        box-sizing: border-box;
+        inline-size: min(100%, var(--weline-layout-content-max-width, 80rem));
+        max-inline-size: 100%;
+        min-inline-size: 0;
+        margin-inline: auto;
+        padding-inline: var(--weline-layout-content-padding-inline, var(--weline-space-5, 1.25rem));
+    }
+    .w-grid {
+        display: grid;
+        grid-template-columns: repeat(var(--w-columns, 12), minmax(0, 1fr));
+        gap: var(--w-row-gap, var(--w-gap, var(--weline-space-4, 1rem)))
+            var(--w-column-gap, var(--w-gap, var(--weline-space-4, 1rem)));
+    }
+    .w-grid > * { grid-column: span var(--w-span, 12); min-inline-size: 0; }
+    .w-auto-grid,
+    .w-stat-tiles {
+        display: grid;
+        inline-size: 100%;
+        max-inline-size: 100%;
+        min-inline-size: 0;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--w-auto-grid-min, var(--w-stat-tile-min, 8rem))), 1fr));
+        gap: var(--w-row-gap, var(--w-gap, var(--weline-space-4, 1rem)))
+            var(--w-column-gap, var(--w-gap, var(--weline-space-4, 1rem)));
+        align-items: stretch;
+    }
+    .w-auto-grid > *, .w-stat-tiles > * { min-inline-size: 0; max-inline-size: 100%; }
+    .w-auto-grid.w-grid, .w-stat-tiles.w-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--w-auto-grid-min, var(--w-stat-tile-min, 8rem))), 1fr)); }
+    .w-auto-grid.w-grid > *, .w-stat-tiles.w-grid > * { grid-column: auto; }
+    .w-stack { display: flex; flex-direction: column; gap: var(--w-gap, var(--weline-space-4, 1rem)); }
+    .w-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--w-gap, var(--weline-space-3, 0.75rem)); }
+    :where(.w-stack, .w-cluster)[data-align="start"] { align-items: flex-start; }
+    :where(.w-stack, .w-cluster)[data-align="end"] { align-items: flex-end; }
+    :where(.w-stack, .w-cluster)[data-align="stretch"] { align-items: stretch; }
+    :where(.w-stack, .w-cluster)[data-justify="center"] { justify-content: center; }
+    :where(.w-stack, .w-cluster)[data-justify="end"] { justify-content: flex-end; }
+    :where(.w-stack, .w-cluster)[data-justify="between"] { justify-content: space-between; }
+    .w-cluster[data-wrap="false"] { flex-wrap: nowrap; }
+    [data-self="start"] { align-self: flex-start; }
+    [data-self="center"] { align-self: center; }
+    [data-self="end"] { align-self: flex-end; }
+    [data-self="stretch"] { align-self: stretch; }
+    [data-grow="true"] { flex-grow: 1; min-inline-size: 0; }
+    [data-shrink="false"] { flex-shrink: 0; }
+}
+
+@layer utilities {
+    .w-text { color: var(--weline-theme-text); }
+    .w-text[data-size="sm"] { font-size: var(--weline-font-size-sm); }
+    .w-text[data-size="lg"] { font-size: var(--weline-font-size-lg); }
+    .w-text[data-weight="strong"] { font-weight: 700; }
+    .w-text[data-weight="medium"] { font-weight: 550; }
+    .w-text[data-tone="muted"] { color: var(--weline-theme-text-muted); }
+    .w-text[data-tone="primary"] { color: var(--weline-theme-primary); }
+    .w-text[data-tone="success"] { color: var(--weline-theme-success); }
+    .w-text[data-tone="warning"] { color: var(--weline-theme-warning); }
+    .w-text[data-tone="danger"] { color: var(--weline-theme-danger); }
+    .w-text[data-tone="info"] { color: var(--weline-theme-info); }
+    .w-text[data-tone="inverse"] { color: var(--weline-theme-on-primary); }
+    .w-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--weline-space-3, 0.75rem); }
+    .w-empty { display: grid; min-block-size: 12rem; place-items: center; gap: var(--weline-space-3, 0.75rem); padding: var(--weline-space-8, 2rem); color: var(--weline-theme-text-muted); text-align: center; }
+}
