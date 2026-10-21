@@ -88,15 +88,36 @@ final class LocalTemplatePricingService
             $boxes = [$quoteLines];
         }
 
+        // Cold checkout can match hundreds of lanes; loading service + template
+        // per lane turns one quote into 2×N queries and blocks the worker for
+        // tens of seconds. Batch both tables once and index by primary key.
+        $serviceIds = [];
+        foreach ($matchedServices as $summary) {
+            $serviceId = (int)($summary['service_id'] ?? 0);
+            if ($serviceId > 0) {
+                $serviceIds[$serviceId] = $serviceId;
+            }
+        }
+        $servicesById = $this->loadShippingServicesById(\array_values($serviceIds));
+        $templateIds = [];
+        foreach ($servicesById as $service) {
+            $templateId = (int)$service->getData(ShippingService::schema_fields_RATE_TEMPLATE_ID);
+            if ($templateId > 0) {
+                $templateIds[$templateId] = $templateId;
+            }
+        }
+        $templatesById = $this->loadRateTemplatesById(\array_values($templateIds));
+
         foreach ($matchedServices as $summary) {
             $serviceId = (int)($summary['service_id'] ?? 0);
             $serviceCode = trim((string)($summary['service_code'] ?? ''));
             if ($serviceId <= 0 || $serviceCode === '') {
                 continue;
             }
-            /** @var ShippingService $service */
-            $service = $this->objectManager->getInstance(ShippingService::class, [], false)->load($serviceId);
-            if (!$service->getId()
+            /** @var ShippingService|null $service */
+            $service = $servicesById[$serviceId] ?? null;
+            if (!$service instanceof ShippingService
+                || !$service->getId()
                 || !(bool)$service->getData(ShippingService::schema_fields_IS_ACTIVE)
             ) {
                 continue;
@@ -114,9 +135,10 @@ final class LocalTemplatePricingService
                 if ($templateId <= 0) {
                     continue;
                 }
-                /** @var RateTemplate $template */
-                $template = $this->objectManager->getInstance(RateTemplate::class, [], false)->load($templateId);
-                if (!$template->getId()
+                /** @var RateTemplate|null $template */
+                $template = $templatesById[$templateId] ?? null;
+                if (!$template instanceof RateTemplate
+                    || !$template->getId()
                     || !(bool)$template->getData(RateTemplate::schema_fields_IS_ACTIVE)
                 ) {
                     continue;
@@ -364,5 +386,65 @@ final class LocalTemplatePricingService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * @param list<int> $serviceIds
+     * @return array<int, ShippingService>
+     */
+    private function loadShippingServicesById(array $serviceIds): array
+    {
+        if ($serviceIds === []) {
+            return [];
+        }
+        $rows = $this->objectManager->getInstance(ShippingService::class, [], false)
+            ->reset()
+            ->where(ShippingService::schema_fields_ID, $serviceIds, 'IN')
+            ->select()
+            ->fetchArray();
+        $services = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $service = $this->objectManager->getInstance(ShippingService::class, [], false);
+            $service->setData($row);
+            $id = (int)$service->getId();
+            if ($id > 0) {
+                $services[$id] = $service;
+            }
+        }
+
+        return $services;
+    }
+
+    /**
+     * @param list<int> $templateIds
+     * @return array<int, RateTemplate>
+     */
+    private function loadRateTemplatesById(array $templateIds): array
+    {
+        if ($templateIds === []) {
+            return [];
+        }
+        $rows = $this->objectManager->getInstance(RateTemplate::class, [], false)
+            ->reset()
+            ->where(RateTemplate::schema_fields_ID, $templateIds, 'IN')
+            ->select()
+            ->fetchArray();
+        $templates = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $template = $this->objectManager->getInstance(RateTemplate::class, [], false);
+            $template->setData($row);
+            $id = (int)$template->getId();
+            if ($id > 0) {
+                $templates[$id] = $template;
+            }
+        }
+
+        return $templates;
     }
 }
