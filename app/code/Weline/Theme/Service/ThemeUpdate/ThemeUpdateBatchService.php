@@ -226,8 +226,9 @@ final class ThemeUpdateBatchService
             $deleted[] = $batchId;
         }
 
-        // 被删代次的静态前缀可能仍被店面缓存/编译产物引用 → 定向失效，避免出现 404 资源
+        // 被删代次的静态前缀可能仍被店面缓存/编译产物引用 → 定向失效 + 清理，避免出现 404 资源
         if ($deleted !== []) {
+            $this->purgeArtifactReferences($deleted);
             $this->invalidateThemeCaches($themeId, 'theme_update_gc');
         }
 
@@ -452,5 +453,66 @@ final class ThemeUpdateBatchService
         } catch (\Throwable) {
             // 同上：best-effort
         }
+    }
+
+    /**
+     * 清理引用了已删除代次的编译产物与页面缓存文件（否则会出现 `/static/<dead-batch>/…` 404）。
+     *
+     * 扫描范围：`generated/complicate/**`（taglib 编译产物）与 `var/cache/**`（不含 fpc 大目录）。
+     *
+     * @param list<string> $batchIds 已删除的代次ID
+     * @return int 清理的文件数
+     */
+    private function purgeArtifactReferences(array $batchIds): int
+    {
+        $batchIds = array_values(array_filter(array_map('strval', $batchIds)));
+        if ($batchIds === []) {
+            return 0;
+        }
+        $needles = array_map(static fn(string $id): string => '/static/' . $id . '/', $batchIds);
+        $roots = [
+            rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR . 'generated' . DIRECTORY_SEPARATOR . 'complicate',
+            rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'cache',
+        ];
+
+        $removed = 0;
+        foreach ($roots as $root) {
+            if (!is_dir($root)) {
+                continue;
+            }
+            $stack = [$root];
+            while ($stack !== []) {
+                $current = (string)array_pop($stack);
+                // 不进入 pub/static 或代次产物目录（它们由代次目录自身管理）
+                if (str_contains(str_replace('\\', '/', $current), '/theme-layout-entities/')) {
+                    continue;
+                }
+                $items = @scandir($current) ?: [];
+                foreach ($items as $item) {
+                    if ($item === '.' || $item === '..') {
+                        continue;
+                    }
+                    $path = $current . DIRECTORY_SEPARATOR . $item;
+                    if (is_dir($path) && !is_link($path)) {
+                        $stack[] = $path;
+                        continue;
+                    }
+                    $content = @file_get_contents($path, false, null, 0, 262144);
+                    if (!is_string($content) || $content === '') {
+                        continue;
+                    }
+                    foreach ($needles as $needle) {
+                        if (str_contains($content, $needle)) {
+                            if (@unlink($path)) {
+                                $removed++;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        return $removed;
     }
 }
