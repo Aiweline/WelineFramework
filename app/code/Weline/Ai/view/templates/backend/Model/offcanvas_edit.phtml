@@ -28,7 +28,7 @@ $modelCodeJsFallback = json_encode($model ? (string)$model->getData('model_code'
 if (!is_string($modelCodeJsFallback)) { $modelCodeJsFallback = '""';
 }
 ?>
-<css>Weline_Ai::css/backend/ai-admin.css</css>  <!-- 模型编辑表单 -->
+<css nonblocking>Weline_Ai::css/backend/ai-admin.css</css>  <!-- 模型编辑表单 -->
 <div class="weline-ai-model-edit-offcanvas">
 <w:form id="modelEditForm" method="post" action="@backend-url{'*/backend/model/save'}">
 <?php if ($isEdit): ?>

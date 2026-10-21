@@ -5,7 +5,7 @@ $agents = \is_array($agents ?? null) ? $agents : [];
 $agentI18n = [ 'apiUnavailable' => (string)__('前端 API 不可用，请刷新页面后重试。'), 'loading' => (string)__('加载中...'), 'catalogLoadFailed' => (string)__('智能体目录加载失败'), 'noMatch' => (string)__('没有智能体符合当前筛选。'), 'agentDetail' => (string)__('智能体详情'), 'noSelection' => (string)__('未选择'), 'saving' => (string)__('正在保存...'), 'saved' => (string)__('已保存。'), 'saveFailed' => (string)__('保存失败'), 'updatingStatus' => (string)__('正在更新状态...'), 'statusUpdated' => (string)__('状态已更新。'), 'statusUpdateFailed' => (string)__('状态更新失败'), 'scanning' => (string)__('正在扫描智能体...'), 'scanFailed' => (string)__('扫描智能体失败'), 'scanConfirm' => (string)__('确定要扫描智能体吗？这将发现所有模块中的智能体并更新数据库记录，不会覆盖人工描述与启停。'), 'scanTitle' => (string)__('扫描智能体'), 'scanConfirmText' => (string)__('确定扫描'), 'cancelText' => (string)__('取消'), 'confirmUnavailable' => (string)__('确认组件不可用，请刷新页面后重试。'), 'activeLabel' => (string)__('启用'), 'disabledLabel' => (string)__('禁用'), 'missingLabel' => (string)__('缺失'), 'readonlySource' => (string)__('源描述（只读）'), 'overrideHint' => (string)__('留空则回退为源描述'), 'enableAgent' => (string)__('启用智能体'), 'disableAgent' => (string)__('禁用智能体'), 'enableTool' => (string)__('启用工具'), 'disableTool' => (string)__('禁用工具'), 'saveOverride' => (string)__('保存覆盖'), 'untitledAgent' => (string)__('未命名智能体'), 'noTools' => (string)__('该智能体尚未注册工具。'),
 ];
 ?>
-<css>Weline_Ai::css/backend/ai-admin.css</css>
+<css nonblocking>Weline_Ai::css/backend/ai-admin.css</css>
 <?php if (empty($embed)): ?> <?= $this->fetch('Weline_Ai::templates/backend/Manager/tabs.phtml', ['activeTab' => 'agent']) ?>
 <?php endif; ?>  <div class="w-container weline-ai-agent-page" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
 <?php
