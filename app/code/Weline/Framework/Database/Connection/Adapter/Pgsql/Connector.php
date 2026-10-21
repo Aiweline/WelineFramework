@@ -1904,7 +1904,7 @@ SQL);
 
     public function isIndexValid(string $table, string $indexName): bool
     {
-        [$schema, $physicalTable] = $this->parseSchemaTable($table);
+        [$schema, $physicalTable] = $this->parseSchemaTable($this->formatTableName($table));
         $statement = $this->getWrappedConnection()->prepare(
             'SELECT ix.indisvalid AS valid '
             . 'FROM pg_catalog.pg_index ix '
@@ -1924,6 +1924,76 @@ SQL);
     }
 
     /** @inheritDoc */
+    public function isIndexPresent(string $table, string $indexName): bool
+    {
+        [$schema, $physicalTable] = $this->parseSchemaTable($this->formatTableName($table));
+        $statement = $this->getWrappedConnection()->prepare(
+            'SELECT 1 AS present '
+            . 'FROM pg_catalog.pg_index ix '
+            . 'JOIN pg_catalog.pg_class i ON i.oid = ix.indexrelid '
+            . 'JOIN pg_catalog.pg_class t ON t.oid = ix.indrelid '
+            . 'JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace '
+            . 'WHERE n.nspname = :schema AND t.relname = :table AND i.relname = :index'
+        );
+        $statement->execute([
+            ':schema' => $schema,
+            ':table' => $physicalTable,
+            ':index' => $indexName,
+        ]);
+
+        return $statement->fetch(PDO::FETCH_ASSOC) !== false;
+    }
+
+    public function dropInvalidIndex(string $table, string $indexName): bool
+    {
+        $sql = $this->buildDropIndexConcurrentlySql($table, $indexName);
+        $this->query($sql)->fetch();
+
+        return !$this->isIndexPresent($table, $indexName);
+    }
+
+    public function renameIndex(string $table, string $fromPhysicalName, string $toLogicalName): bool
+    {
+        [$schema, $physicalTable] = $this->parseSchemaTable($this->formatTableName($table));
+        $exactTable = $schema . '.' . $physicalTable;
+        $target = PgsqlIndexName::canonicalPhysical($exactTable, $toLogicalName);
+        $sql = 'ALTER INDEX ' . $this->quoteIdentifier($schema) . '.' . $this->quoteIdentifier($fromPhysicalName)
+            . ' RENAME TO ' . $this->quoteIdentifier($target);
+        $this->query($sql)->fetch();
+
+        return true;
+    }
+
+    public function cancelIndexBuild(string $applicationName): bool
+    {
+        $statement = $this->getWrappedConnection()->prepare(
+            'SELECT pg_cancel_backend(pid) AS canceled '
+            . 'FROM pg_catalog.pg_stat_activity '
+            . 'WHERE application_name = :application_name AND pid <> pg_backend_pid()'
+        );
+        $statement->execute([':application_name' => $applicationName]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+
+        return is_array($row) && !empty($row['canceled']);
+    }
+
+    public function indexBuildProgress(string $applicationName): array
+    {
+        $statement = $this->getWrappedConnection()->prepare(
+            'SELECT a.pid AS pid, p.phase AS phase, '
+            . 'p.blocks_total AS blocks_total, p.blocks_done AS blocks_done, '
+            . 'p.tuples_total AS tuples_total, p.tuples_done AS tuples_done '
+            . 'FROM pg_catalog.pg_stat_activity a '
+            . 'LEFT JOIN pg_catalog.pg_stat_progress_create_index p ON p.pid = a.pid '
+            . 'WHERE a.application_name = :application_name '
+            . 'ORDER BY a.pid DESC LIMIT 1'
+        );
+        $statement->execute([':application_name' => $applicationName]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+
+        return is_array($row) ? $row : [];
+    }
+
     public function buildAddIndexSql(string $table, array $idx): string
     {
         [$schema, $physicalTable] = $this->parseSchemaTable($table);

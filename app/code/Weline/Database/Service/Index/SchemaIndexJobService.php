@@ -20,7 +20,7 @@ final class SchemaIndexJobService
     }
 
     /** @return array<string,mixed>|null */
-    public function nextPendingJob(): ?array
+    public function nextPendingJob(int $cooldownSeconds = 0, int $maxPerTableWindow = 0): ?array
     {
         $model = ObjectManager::getInstance(SchemaIndexJob::class);
         $rows = $model->clear()->reset()
@@ -48,11 +48,43 @@ final class SchemaIndexJobService
             if ($scheduled !== '' && strtotime($scheduled) > $now) {
                 continue;
             }
+            $table = (string)($row[SchemaIndexJob::schema_fields_TABLE_NAME] ?? '');
+            if ($table === '' || $this->isTableActive($table)) {
+                continue;
+            }
+            if ($cooldownSeconds > 0 && $this->isTableCooling($table, $cooldownSeconds)) {
+                continue;
+            }
+            if ($maxPerTableWindow > 0 && $this->tableDoneCountSince($table, 86400) >= $maxPerTableWindow) {
+                continue;
+            }
 
             return $row;
         }
 
         return null;
+    }
+
+    /** @return list<array<string,mixed>> */
+    public function runningJobs(): array
+    {
+        $rows = ObjectManager::getInstance(SchemaIndexJob::class)->clear()->reset()
+            ->where(SchemaIndexJob::schema_fields_STATUS, SchemaIndexJob::STATUS_RUNNING)
+            ->order(SchemaIndexJob::schema_fields_STARTED_AT, 'ASC')
+            ->select()
+            ->fetchArray();
+
+        return is_array($rows) ? array_values(array_filter($rows, 'is_array')) : [];
+    }
+
+    public function markPendingAfterCancel(int $jobId, string $message): void
+    {
+        $this->update($jobId, [
+            SchemaIndexJob::schema_fields_STATUS => SchemaIndexJob::STATUS_PENDING,
+            SchemaIndexJob::schema_fields_LAST_ERROR => mb_substr($message, 0, 2000),
+            SchemaIndexJob::schema_fields_SCHEDULED_AT => date('Y-m-d H:i:s', time() + 60),
+            SchemaIndexJob::schema_fields_HEARTBEAT_AT => date('Y-m-d H:i:s'),
+        ]);
     }
 
     public function activeCount(): int
@@ -83,6 +115,21 @@ final class SchemaIndexJobService
         ]);
     }
 
+    public function resetAttempts(int $jobId): void
+    {
+        $this->update($jobId, [
+            SchemaIndexJob::schema_fields_ATTEMPTS => 0,
+            SchemaIndexJob::schema_fields_SCHEDULED_AT => null,
+        ]);
+    }
+
+    public function markPriority(int $jobId, int $priority): void
+    {
+        $this->update($jobId, [
+            SchemaIndexJob::schema_fields_PRIORITY => max(0, min(9999, $priority)),
+        ]);
+    }
+
     public function markQueued(int $jobId): void
     {
         $this->update($jobId, [
@@ -98,6 +145,95 @@ final class SchemaIndexJobService
             SchemaIndexJob::schema_fields_LAST_ERROR => mb_substr($error, 0, 2000),
             SchemaIndexJob::schema_fields_SCHEDULED_AT => date('Y-m-d H:i:s', time() + 60),
         ]);
+    }
+
+    private function isTableActive(string $table): bool
+    {
+        $rows = ObjectManager::getInstance(SchemaIndexJob::class)->clear()->reset()
+            ->where(SchemaIndexJob::schema_fields_TABLE_NAME, $table)
+            ->select()
+            ->fetchArray();
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $status = (string)($row[SchemaIndexJob::schema_fields_STATUS] ?? '');
+            if (in_array($status, [SchemaIndexJob::STATUS_QUEUED, SchemaIndexJob::STATUS_RUNNING], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isTableCooling(string $table, int $cooldownSeconds): bool
+    {
+        $last = $this->lastTableBuildAt($table);
+        if ($last <= 0) {
+            return false;
+        }
+
+        return (time() - $last) < $cooldownSeconds;
+    }
+
+    private function lastTableBuildAt(string $table): int
+    {
+        $rows = ObjectManager::getInstance(SchemaIndexJob::class)->clear()->reset()
+            ->where(SchemaIndexJob::schema_fields_TABLE_NAME, $table)
+            ->where(SchemaIndexJob::schema_fields_STATUS, SchemaIndexJob::STATUS_DONE)
+            ->order(SchemaIndexJob::schema_fields_FINISHED_AT, 'DESC')
+            ->limit(1)
+            ->select()
+            ->fetchArray();
+        $first = is_array($rows) ? ($rows[0] ?? null) : null;
+        if (is_array($first)) {
+            $finished = trim((string)($first[SchemaIndexJob::schema_fields_FINISHED_AT] ?? ''));
+            $time = $finished !== '' ? strtotime($finished) : false;
+            if ($time !== false) {
+                return $time;
+            }
+        }
+
+        $stateModel = ObjectManager::getInstance(\Weline\Database\Model\SchemaIndexState::class);
+        $states = $stateModel->clear()->reset()
+            ->where(\Weline\Database\Model\SchemaIndexState::schema_fields_TABLE_NAME, $table)
+            ->order(\Weline\Database\Model\SchemaIndexState::schema_fields_APPLIED_AT, 'DESC')
+            ->limit(1)
+            ->select()
+            ->fetchArray();
+        $state = is_array($states) ? ($states[0] ?? null) : null;
+        if (is_array($state)) {
+            $applied = trim((string)($state[\Weline\Database\Model\SchemaIndexState::schema_fields_APPLIED_AT] ?? ''));
+            $time = $applied !== '' ? strtotime($applied) : false;
+            if ($time !== false) {
+                return $time;
+            }
+        }
+
+        return 0;
+    }
+
+    private function tableDoneCountSince(string $table, int $seconds): int
+    {
+        $threshold = time() - max(1, $seconds);
+        $rows = ObjectManager::getInstance(SchemaIndexJob::class)->clear()->reset()
+            ->where(SchemaIndexJob::schema_fields_TABLE_NAME, $table)
+            ->where(SchemaIndexJob::schema_fields_STATUS, SchemaIndexJob::STATUS_DONE)
+            ->select()
+            ->fetchArray();
+        $count = 0;
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $finished = trim((string)($row[SchemaIndexJob::schema_fields_FINISHED_AT] ?? ''));
+            $time = $finished !== '' ? strtotime($finished) : false;
+            if ($time !== false && $time >= $threshold) {
+                $count++;
+            }
+        }
+
+        return $count;
     }
 
     /** @param array<string,mixed> $data */

@@ -35,4 +35,19 @@ interface ConcurrentIndexBuildInterface
     public function releaseIndexBuildLock(string $table): void;
 
     public function isIndexValid(string $table, string $indexName): bool;
+
+    public function isIndexPresent(string $table, string $indexName): bool;
+
+    public function dropInvalidIndex(string $table, string $indexName): bool;
+
+    public function cancelIndexBuild(string $applicationName): bool;
+
+    public function renameIndex(string $table, string $fromPhysicalName, string $toLogicalName): bool;
+
+    /**
+     * Snapshot of pg_stat_progress_create_index for one application_name.
+     *
+     * @return array<string,mixed>
+     */
+    public function indexBuildProgress(string $applicationName): array;
 }

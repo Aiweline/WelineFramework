@@ -61,6 +61,7 @@
 - `app/code/Weline/Database/doc/开发/数据库迁移系统开发文档.md`
 - `app/code/Weline/Database/doc/开发/模块代码与数据库一致性回滚.md`
 - `app/code/Weline/Database/doc/用户/数据库迁移系统使用手册.md`
+- `app/code/Weline/Database/doc/用户/异步索引管道.md`
 
 ## 维护规则
 

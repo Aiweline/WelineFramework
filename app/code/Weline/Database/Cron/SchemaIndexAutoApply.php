@@ -56,7 +56,10 @@ final class SchemaIndexAutoApply implements CronTaskInterface
             return (string)__('已有索引构建运行中，达到并发上限 %{1}，本轮跳过。', [(string)$this->config->maxConcurrent()]);
         }
 
-        $job = $this->jobService->nextPendingJob();
+        $job = $this->jobService->nextPendingJob(
+            $this->config->cooldownSeconds(),
+            $this->config->maxPerTableWindow(),
+        );
         if ($job === null) {
             return (string)__('没有待索引任务。');
         }

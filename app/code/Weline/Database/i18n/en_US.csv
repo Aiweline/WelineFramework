@@ -1,4 +1,8 @@
-﻿"operation_id 长度不能超过 64 字符","operation_id length cannot exceed 64 characters"
+﻿"缺少 job_id","缺少 job_id"
+索引任务不存在：%{1},索引任务不存在：%{1}
+任务已在队列/运行/完成，无需重复入队,任务已在队列/运行/完成，无需重复入队
+"已入队 #%{1}","已入队 #%{1}"
+"operation_id 长度不能超过 64 字符","operation_id length cannot exceed 64 characters"
 "迁移检查：共 %{count} 个激活模块","Migration check: %{count} active modules total"
 "迁移检查进度 %{i}/%{total} · %{module} · 已用 %{sec}s","Migration check progress %{i}/%{total} · %{module} · elapsed %{sec}s"
 "▶ %{module}：%{count} 个待执行迁移","▶ %{module}: %{count} pending migrations"
@@ -66,6 +70,47 @@ download,download
 "在已下载备份后执行 SQL 文件导入","Perform SQL file import after backup has been downloaded"
 结构管理,"Structure management"
 字段索引视图结构管理,"Field index view structure management"
+索引管理,"Index Management"
+list,list
+"查看异步 schema 索引开关、待索引与索引状态","查看异步 schema 索引开关、待索引与索引状态"
+待索引,"Pending indexes"
+运行中,Running
+已应用,Applied
+失败/漂移,"Failed / drifted"
+"索引任务表尚未初始化，请执行 setup:upgrade -m Weline_Database。","Index job tables are not initialized. Run setup:upgrade -m Weline_Database."
+自动索引,"Automatic indexing"
+默认启用；关闭后待索引任务保留，不会自动构建。,"Enabled by default; when off, pending jobs stay queued and are not built automatically."
+调度参数,Schedule
+窗口,Window
+全局并发,"Global concurrency"
+负载阈值,"Load threshold"
+构建进度,"Build progress"
+"升级只记录索引变更；cron/queue 按窗口和负载增量执行。","Upgrade only records index changes; cron/queue builds incrementally by window and load."
+没有待索引任务。,"No pending index jobs."
+模块,Module
+"表 / 索引","Table / index"
+动作,Action
+状态,Status
+尝试,Attempts
+更新时间,Updated
+错误,Error
+操作,Action
+立即索引,"Index now"
+索引状态,"Index state"
+"声明索引的物理应用状态；不扫描 Model，只读状态表。","Physical application state of declared indexes; reads the state table only, never scans Models."
+暂无索引状态记录。,"No index state rows yet."
+物理索引,"Physical index"
+应用时间,"Applied at"
+最后检查,"Last checked"
+待处理,Pending
+已入队,Queued
+构建中,Building
+已完成,Done
+失败,Failed
+已阻塞,Blocked
+漂移,Drifted
+已移除,Removed
+未跟踪,Untracked
 数据库,Database
 当前数据表,"Current data table"
 已选数据库,"Selected database"
@@ -73,7 +118,6 @@ download,download
 数据浏览,"Data browsing"
 "SQL 控制台","SQL console"
 "SQL 导入","SQL import"
-模块,Module
 数据表,"Data table"
 查看结构,"View Structure"
 行数据,"Row Data"
@@ -138,6 +182,10 @@ download,download
 列,Column.
 引用,Reference
 刷新,refresh
+"验证失败：缺少 job_id。","验证失败：缺少 job_id。"
+"验证失败：索引任务 #%{1} 不存在。","验证失败：索引任务 #%{1} 不存在。"
+"索引任务 #%{1} 已结束，跳过。","索引任务 #%{1} 已结束，跳过。"
+"索引任务 #%{1}：%{2}（%{3}ms）%{4}","索引任务 #%{1}：%{2}（%{3}ms）%{4}"
 "缺少版本 %{1} 的精确代码制品","Missing exact code artifact for version %{1}"
 模块名或目标版本无效,"Invalid module name or target version"
 "运行基础模块 %{1} 不允许在 ModuleManager 内回滚，请交由 Weline_Deploy 执行整站版本回滚","Running basic module %{1} does not allow rollback in ModuleManager. Please let Weline_Deploy perform rollback of the entire site version."
@@ -355,6 +403,19 @@ download,download
 "当前版本 %{1} 已经是最新或更高版本","Current version %{1} is already latest or higher"
 "模块 %{1} 版本已升级: %{2} -> %{3}","Module %{1} version upgraded: %{2} -> %{3}"
 "记录版本历史失败: %{1}","Failed to record version history: %{1}"
+物理索引存在但状态不一致,物理索引存在但状态不一致
+物理索引缺失,物理索引缺失
+"CONCURRENTLY 索引 DDL 不能在事务中执行","CONCURRENTLY 索引 DDL 不能在事务中执行"
+"当前适配器不支持同名索引 rebuild","当前适配器不支持同名索引 rebuild"
+"rebuild 临时索引无效：%{1}","rebuild 临时索引无效：%{1}"
+"rebuild 重命名后索引无效：%{1}","rebuild 重命名后索引无效：%{1}"
+索引构建后物理回读无效：%{1},索引构建后物理回读无效：%{1}
+索引删除后仍存在：%{1},索引删除后仍存在：%{1}
+"索引任务定义 JSON 无效：#%{1}","索引任务定义 JSON 无效：#%{1}"
+索引任务定义缺少名称：#%{1},索引任务定义缺少名称：#%{1}
+索引任务定义缺少字段：#%{1},索引任务定义缺少字段：#%{1}
+异步索引任务表声明不可解析：%{1},异步索引任务表声明不可解析：%{1}
+"索引定义 JSON 编码失败：%{1}","索引定义 JSON 编码失败：%{1}"
 不可用,"Not available"
 "本地没有模块 %{1} 版本 %{2} 的不可变快照","There is no immutable snapshot of module %{1} version %{2} locally."
 "模块目录不存在: %{1}","Module directory does not exist: %{1}"
@@ -372,6 +433,17 @@ download,download
 "无法创建制品目录: %{1}","Unable to create product catalog: %{1}"
 "复制模块制品失败: %{1}","Failed to copy module artifacts: %{1}"
 "拒绝删除非受管模块制品临时目录: %{1}","Refuse to delete unmanaged module artifact temporary directory: %{1}"
+没有运行中的索引构建。,没有运行中的索引构建。
+"运行中 %{1} 个索引构建，负载正常。","运行中 %{1} 个索引构建，负载正常。"
+适配器不支持取消索引构建，跳过看门狗。,适配器不支持取消索引构建，跳过看门狗。
+"负载超过阈值 %{1}，已取消 %{2}/%{3} 个索引构建并延后重试。","负载超过阈值 %{1}，已取消 %{2}/%{3} 个索引构建并延后重试。"
+自动索引未启用，跳过。,自动索引未启用，跳过。
+当前不在索引窗口（%{1}），跳过。,当前不在索引窗口（%{1}），跳过。
+"系统负载超过索引阈值 %{1}，本轮跳过。","系统负载超过索引阈值 %{1}，本轮跳过。"
+"已有索引构建运行中，达到并发上限 %{1}，本轮跳过。","已有索引构建运行中，达到并发上限 %{1}，本轮跳过。"
+"待索引任务数据异常，缺少 job_id。","待索引任务数据异常，缺少 job_id。"
+"索引任务 #%{1} 已入队 #%{2}。","索引任务 #%{1} 已入队 #%{2}。"
+"索引任务 #%{1} 入队失败：%{2}","索引任务 #%{1} 入队失败：%{2}"
 "请指定 --operation-id","Please specify --operation-id"
 执行持久化模块代码与数据库联动回滚任务,"Execute persistence module code and database linkage rollback tasks"
 "回滚任务 ID","Rollback task ID"
@@ -440,7 +512,6 @@ download,download
 "发现 %{1} 个失败的迁移，请检查日志","Found %{1} failed migrations, please check logs"
 已安装,Installed
 已回滚,"Rolled back"
-失败,Failed
 待执行,Pending
 数据库迁移状态查询命令,"Database migration status query command"
 "版本号 (可选)","Version number (optional)"
@@ -454,6 +525,15 @@ download,download
 数据库迁移备份恢复命令,"Database migration backup restore command"
 "备份记录 ID（恢复单条备份）","Backup record ID (restore single backup)"
 "迁移记录 ID（恢复该迁移的所有备份）","Migration record ID (restore all backups for this migration)"
+"请指定 --job=<job_id> 或 --pending","请指定 --job=<job_id> 或 --pending"
+"执行异步 schema 索引任务（默认 CREATE INDEX CONCURRENTLY）。","执行异步 schema 索引任务（默认 CREATE INDEX CONCURRENTLY）。"
+"索引任务 ID","索引任务 ID"
+取下一条待索引任务执行,取下一条待索引任务执行
+"巡检声明索引的物理状态；--fix 时为漂移项入队修复任务。","巡检声明索引的物理状态；--fix 时为漂移项入队修复任务。"
+只巡检指定表（逻辑表名）,只巡检指定表（逻辑表名）
+为漂移索引入队修复任务,为漂移索引入队修复任务
+"输出 JSON（默认即 JSON）","输出 JSON（默认即 JSON）"
+"CREATE INDEX CONCURRENTLY 不能在事务中执行","CREATE INDEX CONCURRENTLY 不能在事务中执行"
 "迁移检查 [%{i}/%{total}] %{module}","Migration check [%{i}/%{total}] %{module}"
 "迁移检查完成：共 %{total} · 空闲 %{idle}（无待执行 %{none} / 已执行跳过 %{skip}）· 执行 %{work} 模块 %{migrations} 条 · 游标延后 %{defer} · 失败 %{failed}","Migration check done: %{total} total · idle %{idle} (none pending %{none} / executed skip %{skip}) · run %{work} modules %{migrations} rows · cursor defer %{defer} · failed %{failed}"
 加载数据,"Loading data"
@@ -482,40 +562,3 @@ download,download
 "回滚前无法备份表 %{1} 的结构","Unable to back up the structure of table %{1} before rollback"
 """迁移返回失败状态: %{1}""","""Migration returned failure status: %{1}"""
 总览,Overview
-
-"索引管理","Index Management"
-"待索引","Pending indexes"
-"运行中","Running"
-"已应用","Applied"
-"失败/漂移","Failed / drifted"
-"自动索引","Automatic indexing"
-"调度参数","Schedule"
-"窗口","Window"
-"全局并发","Global concurrency"
-"负载阈值","Load threshold"
-"模块","Module"
-"表 / 索引","Table / index"
-"动作","Action"
-"状态","Status"
-"尝试","Attempts"
-"更新时间","Updated"
-"错误","Error"
-"索引状态","Index state"
-"物理索引","Physical index"
-"应用时间","Applied at"
-"最后检查","Last checked"
-"没有待索引任务。","No pending index jobs."
-"暂无索引状态记录。","No index state rows yet."
-"索引任务表尚未初始化，请执行 setup:upgrade -m Weline_Database。","Index job tables are not initialized. Run setup:upgrade -m Weline_Database."
-"默认启用；关闭后待索引任务保留，不会自动构建。","Enabled by default; when off, pending jobs stay queued and are not built automatically."
-"升级只记录索引变更；cron/queue 按窗口和负载增量执行。","Upgrade only records index changes; cron/queue builds incrementally by window and load."
-"声明索引的物理应用状态；不扫描 Model，只读状态表。","Physical application state of declared indexes; reads the state table only, never scans Models."
-"待处理","Pending"
-"已入队","Queued"
-"构建中","Building"
-"已完成","Done"
-"失败","Failed"
-"已阻塞","Blocked"
-"漂移","Drifted"
-"已移除","Removed"
-"未跟踪","Untracked"
