@@ -247,6 +247,10 @@ class Crontab implements \Weline\Cron\Schedule\ScheduleInterface
         }
         $lockPath = $normalizedBase . DIRECTORY_SEPARATOR . 'var'
             . DIRECTORY_SEPARATOR . 'cron-main.lock';
+        // Cron 需要在一次进程里跑完所有到期任务（含队列派发、发布轮询），
+        // 128M 的 CLI 默认值会在 DataObject/QueryAst 上 OOM 并把整轮 cron 打死。
+        // 用 -d 只抬 CLI 派发器，不改 WLS/FPM 的 worker 内存上限。
+        $memoryLimit = $this->resolveCliMemoryLimit();
 
         return '#!/bin/sh' . PHP_EOL
             . 'CRON_PROJECT_DIR=' . escapeshellarg($normalizedBase) . PHP_EOL
@@ -256,15 +260,30 @@ class Crontab implements \Weline\Cron\Schedule\ScheduleInterface
             . 'cd "$CRON_PROJECT_DIR" || exit 1' . PHP_EOL
             . 'if command -v lockf >/dev/null 2>&1; then' . PHP_EOL
             . '    exec lockf -k -t 0 "$CRON_LOCK_FILE" "$CRON_PHP_BINARY"'
+            . ' -d memory_limit=' . $memoryLimit
             . ' bin/w cron:task:run >> "$CRON_LOG" 2>&1' . PHP_EOL
             . 'fi' . PHP_EOL
             . 'if command -v flock >/dev/null 2>&1; then' . PHP_EOL
             . '    exec flock -n "$CRON_LOCK_FILE" "$CRON_PHP_BINARY"'
+            . ' -d memory_limit=' . $memoryLimit
             . ' bin/w cron:task:run >> "$CRON_LOG" 2>&1' . PHP_EOL
             . 'fi' . PHP_EOL
             . 'printf \'%s\\n\' \'Cron skipped: lockf/flock is unavailable.\''
             . ' >> "$CRON_LOG"' . PHP_EOL
             . 'exit 75' . PHP_EOL;
+    }
+
+    /**
+     * CLI 派发器内存下限；可用 WELINE_CRON_MEMORY_LIMIT 覆盖（如 1G）。
+     */
+    private function resolveCliMemoryLimit(): string
+    {
+        $value = trim((string)(getenv('WELINE_CRON_MEMORY_LIMIT') ?: '512M'));
+        if ($value === '' || preg_match('/^[1-9][0-9]*[KMG]?$/i', $value) !== 1) {
+            return '512M';
+        }
+
+        return strtoupper($value);
     }
 
     private function removeLegacyProjectCronEntries(string $name): void

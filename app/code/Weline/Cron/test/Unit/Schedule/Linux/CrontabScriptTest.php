@@ -31,6 +31,11 @@ final class CrontabScriptTest extends TestCase
         self::assertStringContainsString('exec flock -n "$CRON_LOCK_FILE"', $script);
         self::assertSame(
             2,
+            \substr_count($script, '-d memory_limit=512M'),
+            'Both lockf and flock branches must raise the CLI dispatcher memory limit.',
+        );
+        self::assertSame(
+            2,
             \substr_count($script, 'bin/w cron:task:run'),
             'Only the lockf and flock branches may start a dispatcher.',
         );
