@@ -3,16 +3,10 @@ declare(strict_types=1);
 
 namespace Weline\Server\Console\Server;
 
-if (!\function_exists(__NAMESPACE__ . '\__')) {
-    function __(string $text, array $args = []): string
-    {
-        return $text;
-    }
-}
-
 namespace Weline\Server\Test\Unit\Console;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\Test\Unit\Support\PinsChinesePhraseLocale;
 use Weline\Server\Console\Server\Listing;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Runtime\RuntimeSelection;
@@ -22,6 +16,8 @@ use Weline\Server\Service\Runtime\RuntimeSelection;
  */
 final class ListingCommandTest extends TestCase
 {
+    use PinsChinesePhraseLocale;
+
     public function testMasterRuntimeStateFallsBackToManagedPidWhenIpcIsUnavailable(): void
     {
         $listing = new class extends Listing {

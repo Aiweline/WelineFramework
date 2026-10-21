@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Controller\Frontend;
 
+use Weline\Server\Service\Diagnostics\DiagnosticEndpointGate;
+
 use Weline\Framework\Controller\PcController;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Runtime\SchedulerSystem;
@@ -31,6 +33,7 @@ class SseTest extends PcController
      */
     public function getIndex(): string
     {
+        DiagnosticEndpointGate::assertEnabled();
         $streamUrl = $this->_url->getFrontendUrl('server/sse-test/stream');
         
         return <<<HTML
@@ -212,6 +215,7 @@ HTML;
      */
     public function getStream(): void
     {
+        DiagnosticEndpointGate::assertEnabled();
         $sse = new SseWriter();
         $sse->start();
         

@@ -64,6 +64,12 @@ final class HostGatewayPackageManagerTest extends TestCase
     public function testPackageLockContentionCannotOutliveLifecycleDeadline(): void
     {
         $this->paths->ensureDirectories();
+        // Warm first-use class compilation and the uncontended lock path so the
+        // measured window below reflects lock contention only; otherwise a cold
+        // PHP process can spend the entire budget autoloading the package
+        // manager and fail with the outer platform deadline error instead.
+        (new HostGatewayPackageManager($this->paths))
+            ->assertNoActiveRebootstrap('deadline warmup');
         $lockFile = $this->paths->trustDir() . DIRECTORY_SEPARATOR
             . 'package-install.lock';
         $handle = \fopen($lockFile, 'c+b');
@@ -4897,7 +4903,6 @@ final class HostGatewayPackageManagerTest extends TestCase
         self::assertStringContainsString('wlsMkdirExclusive(', $fixture);
         self::assertStringContainsString('wlsWriteExclusive(', $fixture);
         self::assertStringNotContainsString('WLS_WINDOWS_TEST_SERVICE', $fixture);
-        self::assertStringNotContainsString('service-test', $fixture);
         self::assertStringContainsString('Broad-readable private key was accepted', $fixture);
         self::assertStringContainsString(
             'Unrelated readable SID on a private key was accepted',
@@ -4947,8 +4952,8 @@ final class HostGatewayPackageManagerTest extends TestCase
             'WLS_RUN_NATIVE_GATEWAY_WINDOWS_PATH_INTEGRATION: "1"',
             $workflow,
         );
-        self::assertStringNotContainsString('Windows SCM recovery integration', $workflow);
-        self::assertStringNotContainsString(
+        self::assertStringContainsString('Windows SCM recovery integration', $workflow);
+        self::assertStringContainsString(
             'WLS_RUN_NATIVE_GATEWAY_WINDOWS_SERVICE_INTEGRATION: "1"',
             $workflow,
         );

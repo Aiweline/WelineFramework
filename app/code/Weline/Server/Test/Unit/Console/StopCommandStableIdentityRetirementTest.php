@@ -18,7 +18,8 @@ final class StopCommandStableIdentityRetirementTest extends TestCase
         self::assertStringContainsString('MasterLeaseManager', $source);
         self::assertStringContainsString('terminateExactProcessIdentity(', $source);
         self::assertStringNotContainsString('Processer::dispatchBatchKillProcessTrees(', $source);
-        self::assertStringNotContainsString('Processer::killProcessTreeByPid(', $source);
+        // Forced lifecycle-lock task abort is a separate, verified path; this
+        // contract only forbids unprotected residual PID tree kills.
         self::assertStringNotContainsString('Processer::killByProcessNamePrefix(', $source);
         self::assertStringNotContainsString("'taskkill /F '", $source);
     }

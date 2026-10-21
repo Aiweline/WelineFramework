@@ -77,7 +77,9 @@ final class SharedStopCommandFailureTest extends TestCase
         self::assertStringContainsString('not confirmed', $printer->warnings[0]);
         self::assertStringContainsString('graceful_shutdown_sent_but_port_still_held', $printer->warnings[0]);
         self::assertStringContainsString('pid=4242', $printer->warnings[0]);
-        self::assertSame(['Memory Service stopped'], $printer->successes);
+        // The command may resolve __() before this assertion, and its Context
+        // reset can drop a pinned locale; compare against the same resolver.
+        self::assertSame([(string)\__('Memory Service stopped')], $printer->successes);
         self::assertStringNotContainsString(
             'already stopped',
             \implode("\n", [...$printer->successes, ...$printer->warnings]),

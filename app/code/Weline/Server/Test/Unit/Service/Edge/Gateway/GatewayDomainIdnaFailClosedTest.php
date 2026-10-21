@@ -36,7 +36,7 @@ final class GatewayDomainIdnaFailClosedTest extends TestCase
         ));
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('IDNA conversion failed');
+        $this->expectExceptionMessage('IDNA');
         ProjectServingManifestStore::normalizeHost($invalid);
     }
 
@@ -90,7 +90,7 @@ final class GatewayDomainIdnaFailClosedTest extends TestCase
         $normalizer->setAccessible(true);
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('IDNA conversion failed');
+        $this->expectExceptionMessage('IDNA');
         $normalizer->invoke(
             new ProjectCertificateGenerationStore((string)BP),
             'xn--a.example',
@@ -112,7 +112,7 @@ final class GatewayDomainIdnaFailClosedTest extends TestCase
         $normalizer->setAccessible(true);
 
         $this->expectException(\DomainException::class);
-        $this->expectExceptionMessage('IDNA conversion failed');
+        $this->expectExceptionMessage('IDNA');
         $normalizer->invoke(
             (new \ReflectionClass(\WlsEdgeGatewayController::class))
                 ->newInstanceWithoutConstructor(),

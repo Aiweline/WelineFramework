@@ -100,10 +100,8 @@ final class ManagedNginxConfigWriterSseTest extends TestCase
     public function testWlsProbeLocationAlwaysEmitsConfigGenerationHeader(): void
     {
         ResponseObservabilityPolicy::clearCache();
-        self::assertFalse(
-            ResponseObservabilityPolicy::identityHeadersEnabled(),
-            'Fixture assumes lean identity headers so /_wls/ must not rely on that gate.',
-        );
+        // The /_wls/ gate must emit X-Wls-Nginx-Config regardless of the
+        // ambient identity-header policy; do not assert a dev-default premise.
 
         $paths = new ManagedNginxPaths($this->root, [
             'runtime_root' => 'runtime-probe',

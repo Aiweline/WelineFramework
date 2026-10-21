@@ -3113,12 +3113,12 @@ while (true) {
     if ($maxRequests > 0
         && $requestCount >= $maxRequests
         && !$shouldExit
-        && (\microtime(true) - $maxRequestsRecycleReportAt) >= 10.0
+        && (\wlsWorkerMonotonicNow() - $maxRequestsRecycleReportAt) >= 10.0
     ) {
         WlsLogger::info_("已处理 {$requestCount} 个请求，达到上限 {$maxRequests}，请求 Master 安排优雅重启");
         $plannedExitReason = "max_requests_recycle:worker={$workerId},requests={$requestCount},limit={$maxRequests}";
         if ($ipcClient && $ipcClient->isConnected()) {
-            $maxRequestsRecycleReportAt = \microtime(true);
+            $maxRequestsRecycleReportAt = \wlsWorkerMonotonicNow();
             @$ipcClient->send(\Weline\Server\IPC\ControlMessage::exitReason($plannedExitReason, 0));
         } else {
             $shouldExit = true;
@@ -3844,7 +3844,7 @@ function wlsResumeOrphanEditorCanvasFibers(
             unset($activeFibers[$connId]['orphan_since']);
             continue;
         }
-        $now = \microtime(true);
+        $now = \wlsWorkerMonotonicNow();
         $since = (float) ($afData['orphan_since'] ?? 0.0);
         if ($since <= 0.0) {
             $activeFibers[$connId]['orphan_since'] = $now;
@@ -4724,8 +4724,8 @@ function wlsHttpBounceTlsClientHelloToPublicOriginIfNeeded(
 
     // Best-effort: read request line/headers for path-preserving Location.
     $raw = '';
-    $deadline = \microtime(true) + 1.0;
-    while (\microtime(true) < $deadline && !\str_contains($raw, "\r\n\r\n") && \strlen($raw) < 16384) {
+    $deadline = \wlsWorkerMonotonicNow() + 1.0;
+    while (\wlsWorkerMonotonicNow() < $deadline && !\str_contains($raw, "\r\n\r\n") && \strlen($raw) < 16384) {
         $chunk = @\fread($conn, 8192);
         if ($chunk === false || $chunk === '') {
             break;

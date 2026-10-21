@@ -1784,6 +1784,73 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
      * the response and peers can hydrate their process cache from the shared
      * payload instead of independently rendering the same page.
      */
+    /**
+     * Critical storefront warmup paths.
+     *
+     * The runtime must not name a business route. `/` is structural; any other
+     * critical path comes from `wls.worker.storefront_critical_paths` or from
+     * the FPC provider's ordered paths (first non-locale path acts as the
+     * directory representative).
+     *
+     * @param array<string,string> $availablePaths
+     * @return list<string>
+     */
+    private function storefrontCriticalWarmupPaths(array $availablePaths = []): array
+    {
+        $critical = ['/'];
+        $configured = Env::get('wls.worker.storefront_critical_paths', []);
+        if (\is_string($configured)) {
+            $decoded = \json_decode($configured, true);
+            $configured = \is_array($decoded)
+                ? $decoded
+                : (\preg_split('/[,\s]+/', $configured, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+        }
+        if (\is_array($configured)) {
+            foreach ($configured as $path) {
+                if (!\is_scalar($path)) {
+                    continue;
+                }
+                $path = \trim((string)$path);
+                if ($path === '') {
+                    continue;
+                }
+                if ($path[0] !== '/') {
+                    $path = '/' . $path;
+                }
+                if (!\in_array($path, $critical, true)) {
+                    $critical[] = $path;
+                }
+            }
+        }
+        if (\count($critical) > 1) {
+            return $critical;
+        }
+        foreach ($availablePaths as $path => $_) {
+            $path = (string)$path;
+            $trimmed = \trim($path, '/');
+            if ($path === '/' || $trimmed === '') {
+                continue;
+            }
+            // Locale/currency roots and their prefixed homes stay on the
+            // locale ledger; they are not the directory representative.
+            if (\preg_match('/^(?:[A-Z]{3}\/)?[a-z]{2}(?:_[A-Z][A-Za-z]+){1,2}$/', $trimmed) === 1) {
+                continue;
+            }
+            $critical[] = $path;
+            break;
+        }
+
+        return $critical;
+    }
+
+    /**
+     * @param array<string,string> $availablePaths
+     */
+    private function isStorefrontCriticalWarmupPath(string $path, array $availablePaths = []): bool
+    {
+        return \in_array($path, $this->storefrontCriticalWarmupPaths($availablePaths), true);
+    }
+
     private function runDeferredStorefrontCriticalWarmup(): void
     {
         $startedAt = \microtime(true);
@@ -1795,10 +1862,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             && (bool)($this->readyGateHomepageFpcProof['hit'] ?? false);
         $needsCriticalPrime = $this->isHomepageReadyGateFailOpen() || !$homepageProofHit;
         if ($needsCriticalPrime) {
-            // Force both critical slots even when the provider omits `/products`
-            // so Shared HotCache/FPC exist before the first public/probe MISS.
-            $paths['/'] = '/';
-            $paths['/products'] = '/products';
+            // Force the configured critical slots so Shared HotCache/FPC exist
+            // before the first public/probe MISS. Business paths never come
+            // from this orchestrator; they come from the provider or env.
+            foreach ($this->storefrontCriticalWarmupPaths() as $criticalPath) {
+                $paths[$criticalPath] = $criticalPath;
+            }
         }
         // Prefer raw provider paths with normalizeInternalWarmupPath so locale
         // homes keep their trailing slash (`/ar_SA/` → FPC key). Drop paths that
@@ -1824,15 +1893,14 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $paths[$path] = $path;
             }
         }
-        // Hot-path reserve: `/` + directory representative `/products` always
+        // Hot-path reserve: `/` + Provider-declared directory representative
         // take slots before locale homes (public_origin Host already selected
         // below). Locale extras fill the remaining max_paths budget only.
         $critical = [];
-        if (isset($paths['/'])) {
-            $critical['/'] = '/';
-        }
-        if (isset($paths['/products'])) {
-            $critical['/products'] = '/products';
+        foreach ($this->storefrontCriticalWarmupPaths($paths) as $criticalPath) {
+            if (isset($paths[$criticalPath])) {
+                $critical[$criticalPath] = $paths[$criticalPath];
+            }
         }
         $localeExtras = [];
         foreach ($paths as $path => $value) {
@@ -2833,7 +2901,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $paths = [];
                 foreach ($ranked as $rawPath) {
                     $path = $this->filterDeferredStorefrontWarmupPath((string)$rawPath);
-                    if ($path === null || $path === '' || $path === '/' || $path === '/products') {
+                    if ($path === null || $path === ''
+                        || $this->isStorefrontCriticalWarmupPath($path)
+                    ) {
                         continue;
                     }
                     $pathOnly = (string)(\parse_url($path, \PHP_URL_PATH) ?: $path);
@@ -3874,7 +3944,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             }
             foreach ($criticalPaths as $path) {
                 $path = (string)$path;
-                if ($path !== '/' && $path !== '/products') {
+                if (!$this->isStorefrontCriticalWarmupPath($path, \array_combine($criticalPaths, $criticalPaths) ?: [])) {
                     continue;
                 }
                 $sequence++;
@@ -4038,7 +4108,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $skipRemainingLocales = false;
             foreach ($paths as $path) {
                 $path = (string)$path;
-                $isCriticalPath = ($path === '/' || $path === '/products');
+                $isCriticalPath = $this->isStorefrontCriticalWarmupPath($path, \array_combine($paths, $paths) ?: []);
                 if ($skipRemainingLocales && !$isCriticalPath) {
                     continue;
                 }

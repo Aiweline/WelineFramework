@@ -24,7 +24,9 @@ use Weline\Framework\Runtime\SchedulerSystem;
  * 缺点：
  * - 性能相对较低（8,000-12,000 QPS）
  * - 文件描述符数量有限制（通常 1024）
- */
+  *
+ * @deprecated WLS 2.0 serves requests through bin/worker.php + bin/worker_ssl.php; this legacy async stack is unused and scheduled for removal (see doc/开发/plan.md WLS-014).
+*/
 class Select implements EventInterface
 {
     private static function monotonicSeconds(): float

@@ -174,6 +174,30 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
     public function testMissedTranslationBroadcastRejectsWarmReceiptAtNextAuthorityClock(): void
     {
         $authority = new WorkerReceiptSqliteAuthority();
+        // 本用例用 SQLite 夹具计权威时钟读取次数。框架的 FPC 策略快照与
+        // CDN 开发模式开关都会读取命名空间指纹；若它们走生产仓库，夹具
+        // 快照会被生产状态占用、夹具的 bump 也观测不到。测试期内把热缓存
+        // 绑定到同一个夹具权威，并固定 CDN 开关为关闭。
+        $previousHotCache = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Framework\Cache\Service\StorefrontScopeHotCache::class,
+        );
+        \Weline\Framework\Manager\ObjectManager::setInstance(
+            \Weline\Framework\Cache\Service\StorefrontScopeHotCache::class,
+            new \Weline\Framework\Cache\Service\StorefrontScopeHotCache(generations: $authority),
+        );
+        $cdnDevModeFlag = new class implements \Weline\Framework\Http\Fpc\CdnFpcDevModeFlagResolverInterface {
+            public function isEnabledForCurrentRequest(): bool
+            {
+                return false;
+            }
+        };
+        $previousCdnDevModeFlag = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Framework\Http\Fpc\CdnFpcDevModeFlagResolverInterface::class,
+        );
+        \Weline\Framework\Manager\ObjectManager::setInstance(
+            \Weline\Framework\Http\Fpc\CdnFpcDevModeFlagResolverInterface::class,
+            $cdnDevModeFlag,
+        );
         $resolver = new \Weline\Framework\Cache\StorefrontCacheKeyContextResolver(
             $authority,
             new \Weline\Framework\Cache\Namespace\NamespacePath(),
@@ -223,6 +247,18 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
         } finally {
             FullPageCacheCoordinator::clearProcessCache();
             if (Context::hasCurrent()) { RequestContext::cleanup(); Context::leave(); }
+            if (\is_object($previousHotCache)) {
+                \Weline\Framework\Manager\ObjectManager::setInstance(
+                    \Weline\Framework\Cache\Service\StorefrontScopeHotCache::class,
+                    $previousHotCache,
+                );
+            }
+            if (\is_object($previousCdnDevModeFlag)) {
+                \Weline\Framework\Manager\ObjectManager::setInstance(
+                    \Weline\Framework\Http\Fpc\CdnFpcDevModeFlagResolverInterface::class,
+                    $previousCdnDevModeFlag,
+                );
+            }
         }
     }
 
@@ -888,6 +924,8 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
                 null,
                 new RuntimeProviderResolver(new ServiceProviderRegistry($registryFile)),
             );
+            // 清掉本机残留的 cold-disk durable 叶，保证 fixture 只暴露 generic Shared 查找。
+            \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::purgeUrls(['https://example.test/']);
             self::assertNull($coordinator->getFormattedCachedResponseForFullUri(
                 'https://example.test/',
                 'GET',

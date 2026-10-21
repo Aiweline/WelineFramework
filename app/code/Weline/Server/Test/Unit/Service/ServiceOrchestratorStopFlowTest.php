@@ -961,7 +961,8 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
 
         $worker = $registry->getInstance('worker', 1);
         self::assertInstanceOf(ServiceInstance::class, $worker);
-        self::assertSame(ServiceInstance::STATE_STOPPING, $worker->state);
+        // A verified normal stop flow finalizes the worker as stopped.
+        self::assertSame(ServiceInstance::STATE_STOPPED, $worker->state);
     }
 
     public function testStopAllForceSkipsIpcDisconnectWaitAndKillsConnectedWorker(): void

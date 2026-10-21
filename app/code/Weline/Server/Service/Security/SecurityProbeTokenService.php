@@ -26,6 +26,10 @@ final class SecurityProbeTokenService
 
     private const MAX_TTL_SECONDS = 1800;
 
+    private const SECRET_FILE = 'security_probe_secret';
+
+    private static ?string $secretCache = null;
+
     /**
      * @return array{token:string,header:string,expires_at:int,ttl_seconds:int,issued_at:int}
      */
@@ -57,8 +61,12 @@ final class SecurityProbeTokenService
             'jti' => \bin2hex(\random_bytes(16)),
             'purpose' => $purpose,
         ];
+        $secret = self::resolveSecret();
+        if ($secret === '') {
+            throw new \RuntimeException('WLS security probe secret is unavailable.');
+        }
         $body = self::base64UrlEncode((string)\json_encode($payload, \JSON_UNESCAPED_SLASHES));
-        $sig = \hash_hmac('sha256', $body, self::resolveSecret(), true);
+        $sig = \hash_hmac('sha256', $body, $secret, true);
         $token = $body . '.' . self::base64UrlEncode($sig);
 
         return [
@@ -90,8 +98,12 @@ final class SecurityProbeTokenService
         if ($body === '' || $sig === '') {
             return false;
         }
+        $secret = self::resolveSecret();
+        if ($secret === '') {
+            return false;
+        }
         $expected = self::base64UrlEncode(
-            \hash_hmac('sha256', $body, self::resolveSecret(), true)
+            \hash_hmac('sha256', $body, $secret, true)
         );
         if (!\hash_equals($expected, $sig)) {
             return false;
@@ -156,23 +168,79 @@ final class SecurityProbeTokenService
         return false;
     }
 
+    /**
+     * Resolve the probe-token signing secret.
+     *
+     * Priority: explicit `wls.security_probe_secret`, then `crypt.key`, then a
+     * per-project random secret persisted under `var/server`. The project path
+     * is never used as key material; a missing/unreadable secret fails closed.
+     */
     private static function resolveSecret(): string
     {
+        if (self::$secretCache !== null) {
+            return self::$secretCache;
+        }
         try {
             $configured = Env::getInstance()->getConfig('wls.security_probe_secret');
             if (\is_string($configured) && $configured !== '') {
-                return $configured;
+                return self::$secretCache = $configured;
             }
             $crypt = Env::getInstance()->getConfig('crypt.key');
             if (\is_string($crypt) && $crypt !== '') {
-                return \hash('sha256', $crypt . '|wls-security-probe', true);
+                return self::$secretCache = \hash(
+                    'sha256',
+                    $crypt . '|wls-security-probe',
+                    true,
+                );
+            }
+            $persisted = self::resolvePersistedSecret();
+            if ($persisted !== '') {
+                return self::$secretCache = $persisted;
             }
         } catch (\Throwable) {
-            // Worker 热路径兜底：仍要有稳定密钥。
+            // Fail closed below.
         }
 
-        $seed = (\defined('BP') ? (string)BP : '') . '|wls-security-probe-fallback';
-        return \hash('sha256', $seed, true);
+        return '';
+    }
+
+    private static function resolvePersistedSecret(): string
+    {
+        try {
+            $directory = \Weline\Framework\App\Env::varDir() . 'server';
+        } catch (\Throwable) {
+            return '';
+        }
+        if (!\is_dir($directory)) {
+            @\mkdir($directory, 0700, true);
+        }
+        $path = \rtrim($directory, '/\\') . \DIRECTORY_SEPARATOR . self::SECRET_FILE;
+
+        // Exclusive create avoids a cross-process race producing two secrets.
+        $handle = @\fopen($path, 'x');
+        if (\is_resource($handle)) {
+            try {
+                $secret = \random_bytes(32);
+                \fwrite($handle, \bin2hex($secret));
+                \fflush($handle);
+            } finally {
+                \fclose($handle);
+                @\chmod($path, 0600);
+            }
+            return $secret;
+        }
+
+        $raw = @\file_get_contents($path);
+        if (!\is_string($raw)) {
+            return '';
+        }
+        $hex = \strtolower(\trim($raw));
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $hex) !== 1) {
+            return '';
+        }
+        $decoded = \hex2bin($hex);
+
+        return \is_string($decoded) ? $decoded : '';
     }
 
     private static function base64UrlEncode(string $raw): string

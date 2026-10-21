@@ -3,13 +3,6 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
-if (!\function_exists(__NAMESPACE__ . '\__')) {
-    function __(string $text, array $args = []): string
-    {
-        return $text;
-    }
-}
-
 namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Console;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\Test\Unit\Support\PinsChinesePhraseLocale;
 use Weline\Server\Console\Server\CacheClear;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\ServerInstanceManager;
@@ -23,6 +24,8 @@ use Weline\Framework\Output\Printing;
  */
 class CacheClearCommandTest extends TestCase
 {
+    use PinsChinesePhraseLocale;
+
     /**
      * 测试：命令应正确解析默认实例名称
      */

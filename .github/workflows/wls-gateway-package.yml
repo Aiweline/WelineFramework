@@ -69,6 +69,7 @@ on:
       - "app/code/Weline/Server/Security/AttackDetector.php"
       - "app/code/Weline/Server/Service/WlsPanelSecurityDataService.php"
       - "app/code/Weline/Server/Controller/Backend/WlsPanel.php"
+      - "app/code/Weline/Server/view/templates/backend/WlsPanel/index.phtml"
       - "app/code/Weline/Server/view/templates/Backend/WlsPanel/index.phtml"
       - "app/code/Weline/Framework/System/Process/bin/posix_detached_spawn.php"
       - "app/code/Weline/Server/Test/Unit/Console/Gateway/**"
@@ -82,7 +83,6 @@ on:
       - "app/code/Weline/Server/Test/Unit/IPC/ControlMessageGatewayFallbackTransitionTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/GatewayFallbackProviderTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/ServiceOrchestratorStopFlowTest.php"
-      - "app/code/Weline/Server/Test/Unit/Worker/GatewayFallbackWorkerListenerTransitionContractTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/MasterChildCredentialStoreTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/MasterLeaseManagerTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/EndpointPersistenceFailureTest.php"
@@ -125,7 +125,6 @@ on:
       - "app/code/Weline/Server/Test/Unit/Service/HostsFileManagerTransactionTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/ServerInstanceManagerCleanupTransactionTest.php"
       - "app/code/Weline/Framework/Test/Unit/System/Process/ProcesserDetachedSpawnSecurityTest.php"
-      - "app/code/Weline/Framework/Test/Unit/System/Process/ProcesserMonotonicClockContractTest.php"
       - "app/code/Weline/Framework/Test/Unit/System/Process/ProcesserUnixBatchLauncherHandshakeTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/Security/SecurityPolicyStateStoreTest.php"
       - "app/code/Weline/Server/Test/Unit/Security/AttackDetectorStateTransactionTest.php"
@@ -231,6 +230,7 @@ on:
       - "app/code/Weline/Server/Security/AttackDetector.php"
       - "app/code/Weline/Server/Service/WlsPanelSecurityDataService.php"
       - "app/code/Weline/Server/Controller/Backend/WlsPanel.php"
+      - "app/code/Weline/Server/view/templates/backend/WlsPanel/index.phtml"
       - "app/code/Weline/Server/view/templates/Backend/WlsPanel/index.phtml"
       - "app/code/Weline/Framework/System/Process/bin/posix_detached_spawn.php"
       - "app/code/Weline/Server/Test/Unit/Console/Gateway/**"
@@ -244,7 +244,6 @@ on:
       - "app/code/Weline/Server/Test/Unit/IPC/ControlMessageGatewayFallbackTransitionTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/GatewayFallbackProviderTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/ServiceOrchestratorStopFlowTest.php"
-      - "app/code/Weline/Server/Test/Unit/Worker/GatewayFallbackWorkerListenerTransitionContractTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/MasterChildCredentialStoreTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/MasterLeaseManagerTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/EndpointPersistenceFailureTest.php"
@@ -287,7 +286,6 @@ on:
       - "app/code/Weline/Server/Test/Unit/Service/HostsFileManagerTransactionTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/ServerInstanceManagerCleanupTransactionTest.php"
       - "app/code/Weline/Framework/Test/Unit/System/Process/ProcesserDetachedSpawnSecurityTest.php"
-      - "app/code/Weline/Framework/Test/Unit/System/Process/ProcesserMonotonicClockContractTest.php"
       - "app/code/Weline/Framework/Test/Unit/System/Process/ProcesserUnixBatchLauncherHandshakeTest.php"
       - "app/code/Weline/Server/Test/Unit/Service/Security/SecurityPolicyStateStoreTest.php"
       - "app/code/Weline/Server/Test/Unit/Security/AttackDetectorStateTransactionTest.php"
@@ -424,7 +422,6 @@ jobs:
           app/code/Weline/Server/Test/Unit/IPC/ControlMessageGatewayFallbackTransitionTest.php
           app/code/Weline/Server/Test/Unit/Service/GatewayFallbackProviderTest.php
           app/code/Weline/Server/Test/Unit/Service/ServiceOrchestratorStopFlowTest.php
-          app/code/Weline/Server/Test/Unit/Worker/GatewayFallbackWorkerListenerTransitionContractTest.php
           app/code/Weline/Server/Test/Unit/Service/MasterChildCredentialStoreTest.php
           app/code/Weline/Server/Test/Unit/Service/MasterLeaseManagerTest.php
           app/code/Weline/Server/Test/Unit/Service/EndpointPersistenceFailureTest.php
@@ -488,7 +485,6 @@ jobs:
           app/code/Weline/Server/Test/Unit/Service/Policy/RuntimePolicyStoreLockSafetyTest.php
           app/code/Weline/Server/Test/Unit/Service/StartupTraceLockSafetyTest.php
           app/code/Weline/Framework/Test/Unit/System/Process/ProcesserDetachedSpawnSecurityTest.php
-          app/code/Weline/Framework/Test/Unit/System/Process/ProcesserMonotonicClockContractTest.php
           app/code/Weline/Framework/Test/Unit/System/Process/ProcesserUnixBatchLauncherHandshakeTest.php
       - name: Validate host mutation and instance cleanup transactions
         run: >-
@@ -600,7 +596,6 @@ jobs:
           php vendor/bin/phpunit
           --bootstrap vendor/autoload.php
           app/code/Weline/Framework/Test/Unit/System/Process/ProcesserDetachedSpawnSecurityTest.php
-          app/code/Weline/Framework/Test/Unit/System/Process/ProcesserMonotonicClockContractTest.php
           app/code/Weline/Framework/Test/Unit/System/Process/ProcesserUnixBatchLauncherHandshakeTest.php
           app/code/Weline/Framework/Test/Unit/System/Process/ProcesserWindowsIsolatedBatchReaperTest.php
           app/code/Weline/Server/Test/Unit/Runtime/WindowsListenerHandoffTest.php

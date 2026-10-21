@@ -67,6 +67,15 @@ class SslCertificateService
     private const LOCAL_CA_SERIAL_FILENAME = 'serial.txt';
     /** Workspace-owned SHA-1 fingerprints previously issued by THIS project; only these may be deleted from the shared macOS keychain. */
     private const LOCAL_CA_RETIRED_FINGERPRINTS_FILENAME = 'retired_sha1_fingerprints.txt';
+    /**
+     * 本仓 Local CA 来源台账：记录每个 CA 指纹是「本仓生成 / 从整机共享目录继承 /
+     * 历史遗留」，是否已共享给其他项目，以及本仓可证明由它签发的域名。
+     * 整机共享信任库只允许删除台账里 origin=generated、未共享、且有本仓签发证据的指纹。
+     */
+    private const LOCAL_CA_PROVENANCE_FILENAME = 'local_ca_provenance.json';
+    private const MAX_LOCAL_CA_PROVENANCE_ENTRIES = 512;
+    private const MAX_LOCAL_CA_RETIRED_ENTRIES = 4096;
+    private const MAX_LOCAL_CA_ISSUED_LEAF_PROBES = 512;
     private const GLOBAL_LOCAL_CA_VENDOR_DIR = 'Weline';
     private const GLOBAL_LOCAL_CA_APP_DIR = 'WLS';
 
@@ -830,6 +839,22 @@ class SslCertificateService
             }
             return;
         }
+        if ($leaf === self::LOCAL_CA_RETIRED_FINGERPRINTS_FILENAME) {
+            $lines = \preg_split('/\R/', \trim($contents)) ?: [];
+            if (\count($lines) > self::MAX_LOCAL_CA_RETIRED_ENTRIES) {
+                throw new \RuntimeException('Local CA retired fingerprint state is too large.');
+            }
+            foreach ($lines as $line) {
+                if (\preg_match('/\A[A-F0-9]{40}\z/D', \trim((string)$line)) !== 1) {
+                    throw new \RuntimeException('Local CA retired fingerprint state is malformed.');
+                }
+            }
+            return;
+        }
+        if ($leaf === self::LOCAL_CA_PROVENANCE_FILENAME) {
+            $this->assertLocalCaProvenanceContents($contents);
+            return;
+        }
         if (\preg_match(
             '/\Aopenssl_(?:local_ca|leaf_[a-f0-9]{32})\.cnf\z/D',
             $leaf,
@@ -838,6 +863,54 @@ class SslCertificateService
             return;
         }
         throw new \RuntimeException('Local CA state target leaf is not managed.');
+    }
+
+    private function assertLocalCaProvenanceContents(string $contents): void
+    {
+        $decoded = \json_decode($contents, true);
+        if (!\is_array($decoded)
+            || (string)($decoded['schema'] ?? '') !== LocalCaOwnershipPolicy::SCHEMA
+            || !\is_array($decoded['fingerprints'] ?? null)
+            || \count($decoded['fingerprints']) > self::MAX_LOCAL_CA_PROVENANCE_ENTRIES
+        ) {
+            throw new \RuntimeException('Local CA provenance state is malformed.');
+        }
+        $allowedOrigins = [
+            LocalCaOwnershipPolicy::ORIGIN_GENERATED,
+            LocalCaOwnershipPolicy::ORIGIN_ADOPTED_GLOBAL,
+            LocalCaOwnershipPolicy::ORIGIN_LEGACY_UNKNOWN,
+        ];
+        foreach ($decoded['fingerprints'] as $fingerprint => $facts) {
+            if (\preg_match('/\A[A-F0-9]{40}\z/D', (string)$fingerprint) !== 1
+                || !\is_array($facts)
+                || !\in_array((string)($facts['origin'] ?? ''), $allowedOrigins, true)
+                || !\is_bool($facts['shared'] ?? null)
+            ) {
+                throw new \RuntimeException('Local CA provenance entry is malformed.');
+            }
+            if (isset($facts['project_root'])
+                && (!\is_string($facts['project_root'])
+                    || \strlen($facts['project_root']) > 4096)
+            ) {
+                throw new \RuntimeException('Local CA provenance project root is malformed.');
+            }
+            if (isset($facts['recorded_at']) && !\is_int($facts['recorded_at'])) {
+                throw new \RuntimeException('Local CA provenance timestamp is malformed.');
+            }
+            if (!isset($facts['domains'])) {
+                continue;
+            }
+            if (!\is_array($facts['domains'])
+                || \count($facts['domains']) > self::MAX_LOCAL_CA_ISSUED_LEAF_PROBES
+            ) {
+                throw new \RuntimeException('Local CA provenance domains are malformed.');
+            }
+            foreach ($facts['domains'] as $domain) {
+                if (!\is_string($domain) || $domain === '' || \strlen($domain) > 255) {
+                    throw new \RuntimeException('Local CA provenance domain is malformed.');
+                }
+            }
+        }
     }
 
     private function assertPrivateKeyPem(string $contents): void
@@ -2494,9 +2567,319 @@ CNF;
                 $body,
                 0600,
             );
-        } catch (\Throwable) {
-            // Retirement bookkeeping must not block CA regeneration.
+        } catch (\Throwable $throwable) {
+            // Retirement bookkeeping must not block CA regeneration, but a silent
+            // write failure previously hid the fact that the retirement list was
+            // never persisted (unknown Local CA state leaf). Always surface it.
+            w_log_warning(
+                __('[SslCertificateService] 无法写入 Local CA 退役指纹清单：%{1}', [
+                    $throwable->getMessage(),
+                ]),
+                [],
+                'ssl_cert',
+            );
         }
+    }
+
+    protected function getLocalCaProvenancePath(): string
+    {
+        return $this->getLocalCaDir() . self::LOCAL_CA_PROVENANCE_FILENAME;
+    }
+
+    /**
+     * 本仓 Local CA 来源台账。
+     *
+     * @return array<string,array{origin:string,shared:bool,project_root:string,recorded_at:int,domains:list<string>}>
+     */
+    protected function loadLocalCaProvenance(): array
+    {
+        $raw = self::readRegularFileNoFollow(
+            $this->getLocalCaProvenancePath(),
+            self::MAX_CERTIFICATE_MATERIAL_BYTES,
+            false,
+            true,
+        );
+        if (!\is_string($raw) || \trim($raw) === '') {
+            return [];
+        }
+
+        $decoded = \json_decode($raw, true);
+        if (!\is_array($decoded)
+            || (string)($decoded['schema'] ?? '') !== LocalCaOwnershipPolicy::SCHEMA
+            || !\is_array($decoded['fingerprints'] ?? null)
+        ) {
+            return [];
+        }
+
+        $provenance = [];
+        foreach ($decoded['fingerprints'] as $fingerprint => $facts) {
+            $normalized = $this->normalizeCertificateFingerprint((string)$fingerprint);
+            if ($normalized === '' || !\is_array($facts)) {
+                continue;
+            }
+            $provenance[$normalized] = [
+                'origin' => (string)($facts['origin'] ?? LocalCaOwnershipPolicy::ORIGIN_LEGACY_UNKNOWN),
+                'shared' => (bool)($facts['shared'] ?? false),
+                'project_root' => (string)($facts['project_root'] ?? ''),
+                'recorded_at' => (int)($facts['recorded_at'] ?? 0),
+                'domains' => LocalCaOwnershipPolicy::normalizeDomains($facts['domains'] ?? []),
+            ];
+        }
+
+        return $provenance;
+    }
+
+    /**
+     * 记录/刷新单个 CA 指纹的来源与签发证据。写失败只告警，绝不阻断签发流程。
+     *
+     * @param array{origin?:string,shared?:bool,domains?:list<string>} $facts
+     */
+    protected function recordLocalCaProvenance(string $fingerprint, array $facts): void
+    {
+        $fingerprint = $this->normalizeCertificateFingerprint($fingerprint);
+        $origin = (string)($facts['origin'] ?? '');
+        if ($fingerprint === ''
+            || !\in_array($origin, [
+                LocalCaOwnershipPolicy::ORIGIN_GENERATED,
+                LocalCaOwnershipPolicy::ORIGIN_ADOPTED_GLOBAL,
+                LocalCaOwnershipPolicy::ORIGIN_LEGACY_UNKNOWN,
+            ], true)
+        ) {
+            return;
+        }
+
+        try {
+            $this->withLocalCaStateDirectoryLock(
+                $this->getLocalCaDir(),
+                function () use ($fingerprint, $facts, $origin): void {
+                    $provenance = $this->loadLocalCaProvenance();
+                    $current = $provenance[$fingerprint] ?? [];
+                    $domains = LocalCaOwnershipPolicy::normalizeDomains(\array_merge(
+                        (array)($current['domains'] ?? []),
+                        (array)($facts['domains'] ?? []),
+                    ));
+                    if (\count($domains) > self::MAX_LOCAL_CA_ISSUED_LEAF_PROBES) {
+                        $domains = \array_slice($domains, -self::MAX_LOCAL_CA_ISSUED_LEAF_PROBES);
+                    }
+                    $projectRoot = \defined('BP') ? (string)BP : (string)\getcwd();
+                    $provenance[$fingerprint] = [
+                        'origin' => $origin,
+                        'shared' => (bool)($facts['shared'] ?? ($current['shared'] ?? false)),
+                        'project_root' => \rtrim($projectRoot, '/\\'),
+                        'recorded_at' => \time(),
+                        'domains' => $domains,
+                    ];
+                    if (\count($provenance) > self::MAX_LOCAL_CA_PROVENANCE_ENTRIES) {
+                        $provenance = \array_slice($provenance, -self::MAX_LOCAL_CA_PROVENANCE_ENTRIES, null, true);
+                    }
+                    $payload = \json_encode(
+                        ['schema' => LocalCaOwnershipPolicy::SCHEMA, 'fingerprints' => $provenance],
+                        JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+                    );
+                    if (!\is_string($payload) || $payload === '') {
+                        throw new \RuntimeException('Local CA provenance cannot be encoded.');
+                    }
+                    $this->writeLocalCaStateAtomically(
+                        $this->getLocalCaProvenancePath(),
+                        $payload . "\n",
+                        0600,
+                    );
+                },
+            );
+        } catch (\Throwable $throwable) {
+            w_log_warning(
+                __('[SslCertificateService] 无法登记 Local CA 来源台账（不会影响证书签发）：%{1}', [
+                    $throwable->getMessage(),
+                ]),
+                [],
+                'ssl_cert',
+            );
+        }
+    }
+
+    /**
+     * 本仓 CA 已发布到整机共享目录后，标记为共享：其他项目可能继承它，
+     * 之后即使本仓换新 CA，也不得把这个共享根从系统信任库删除。
+     */
+    protected function markLocalCaProvenanceSharedWithGlobal(string $fingerprint): void
+    {
+        $fingerprint = $this->normalizeCertificateFingerprint($fingerprint);
+        if ($fingerprint === '') {
+            return;
+        }
+        $provenance = $this->loadLocalCaProvenance();
+        $current = $provenance[$fingerprint] ?? null;
+        if (!\is_array($current) || !empty($current['shared'])) {
+            return;
+        }
+
+        $this->recordLocalCaProvenance($fingerprint, [
+            'origin' => (string)($current['origin'] ?? LocalCaOwnershipPolicy::ORIGIN_LEGACY_UNKNOWN),
+            'shared' => true,
+            'domains' => (array)($current['domains'] ?? []),
+        ]);
+    }
+
+    /**
+     * 本仓签发过、且可由给定 CA 验证的域名（数据库为准，磁盘叶证兜底）。
+     *
+     * @return list<string>
+     */
+    protected function resolveWorkspaceDomainsSignedByLocalCa(string $caCertPath): array
+    {
+        $caPem = self::readRegularFileNoFollow($caCertPath);
+        if ($caPem === null) {
+            return [];
+        }
+        $publicKey = @\openssl_pkey_get_public($caPem);
+        if ($publicKey === false) {
+            return [];
+        }
+
+        $domains = [];
+        foreach ($this->resolveWorkspaceLocalCaLeaves() as $leaf) {
+            if (@\openssl_x509_verify($leaf, $publicKey) !== 1) {
+                continue;
+            }
+            $subject = @\openssl_x509_parse($leaf);
+            $domain = \is_array($subject)
+                ? \strtolower(\trim((string)($subject['subject']['CN'] ?? '')))
+                : '';
+            if ($domain === '' || \strlen($domain) > 255) {
+                continue;
+            }
+            $domains[$domain] = $domain;
+            if (\count($domains) >= self::MAX_LOCAL_CA_ISSUED_LEAF_PROBES) {
+                break;
+            }
+        }
+
+        return \array_values($domains);
+    }
+
+    /**
+     * 本仓已签发的 Local CA 叶证 PEM 列表（数据库优先，磁盘兜底）。
+     *
+     * @return list<string>
+     */
+    protected function resolveWorkspaceLocalCaLeaves(): array
+    {
+        $leaves = [];
+        try {
+            $this->ensureCertificateStorageReady();
+            $rows = $this->certificateModel()
+                ->clearQuery()
+                ->select()
+                ->fetchArray();
+            foreach ((array)$rows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $issuer = (string)($row[SslCertificate::schema_fields_ISSUER] ?? '');
+                if ($issuer === '' || \stripos($issuer, self::ISSUER_LOCAL_CA) === false) {
+                    continue;
+                }
+                $pem = (string)($row[SslCertificate::schema_fields_CERT_PEM] ?? '');
+                if ($pem === '') {
+                    $path = (string)($row[SslCertificate::schema_fields_CERT_PATH] ?? '');
+                    $pem = $path !== '' ? (string)self::readRegularFileNoFollow($path) : '';
+                }
+                if (!\str_contains($pem, 'BEGIN CERTIFICATE')) {
+                    continue;
+                }
+                $leaves[] = $pem;
+                if (\count($leaves) >= self::MAX_LOCAL_CA_ISSUED_LEAF_PROBES) {
+                    return $leaves;
+                }
+            }
+        } catch (\Throwable $throwable) {
+            w_log_warning(
+                __('[SslCertificateService] 读取本仓已签发 Local CA 叶证失败，改用磁盘证书记录：%{1}', [
+                    $throwable->getMessage(),
+                ]),
+                [],
+                'ssl_cert',
+            );
+        }
+        if ($leaves !== []) {
+            return $leaves;
+        }
+
+        try {
+            $base = $this->ensureCertificateBaseDirectory();
+            $entries = $this->boundedDirectoryEntries(
+                $base,
+                self::MAX_CERTIFICATE_SOURCE_DIRECTORIES,
+                'local CA issued certificate',
+            );
+            foreach ($entries as $entry) {
+                if ($entry === '' || $entry === '.' || $entry === '..' || \str_starts_with($entry, '.')) {
+                    continue;
+                }
+                $candidate = \rtrim($base, '/\\') . DS . $entry . DS . 'fullchain.pem';
+                if (!\is_file($candidate) || \is_link($candidate)) {
+                    continue;
+                }
+                $pem = (string)self::readRegularFileNoFollow($candidate);
+                if (!\str_contains($pem, 'BEGIN CERTIFICATE')) {
+                    continue;
+                }
+                $parsed = @\openssl_x509_parse($pem);
+                $issuerCn = \is_array($parsed)
+                    ? (string)($parsed['issuer']['CN'] ?? '')
+                    : '';
+                if ($issuerCn !== self::ISSUER_LOCAL_CA) {
+                    continue;
+                }
+                $leaves[] = $pem;
+                if (\count($leaves) >= self::MAX_LOCAL_CA_ISSUED_LEAF_PROBES) {
+                    break;
+                }
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return $leaves;
+    }
+
+    /**
+     * 该 CA 指纹是否允许从整机共享信任库删除：本仓生成 + 未共享 + 有本仓签发证据。
+     *
+     * HARD (machine_shared_side_effects_require_workspace_scope)：CN 同名不代表归属，
+     * `retired_sha1_fingerprints.txt` 只是候选清单，最终必须过来源台账与签发证据。
+     */
+    protected function isLocalCaFingerprintWorkspaceOwned(string $fingerprint): bool
+    {
+        $fingerprint = $this->normalizeCertificateFingerprint($fingerprint);
+        if ($fingerprint === '') {
+            return false;
+        }
+
+        $provenance = $this->loadLocalCaProvenance();
+        $facts = $provenance[$fingerprint] ?? null;
+        $proofDomains = \is_array($facts) && ($facts['domains'] ?? []) !== []
+            ? (array)$facts['domains']
+            : $this->resolveLiveProofDomainsForLocalCaFingerprint($fingerprint);
+
+        return LocalCaOwnershipPolicy::deletionDecision(
+            \is_array($facts) ? $facts : null,
+            $proofDomains,
+            $fingerprint,
+        )['retireable'];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveLiveProofDomainsForLocalCaFingerprint(string $fingerprint): array
+    {
+        $certPath = $this->getLocalCaCertPath();
+        if ($this->getCertificateSha1Fingerprint($certPath) !== $fingerprint) {
+            return [];
+        }
+
+        return $this->resolveWorkspaceDomainsSignedByLocalCa($certPath);
     }
 
     /**
@@ -2514,7 +2897,36 @@ CNF;
             return;
         }
 
-        $this->recordLocalCaRetiredFingerprint($fingerprint);
+        $provenance = $this->loadLocalCaProvenance();
+        $facts = $provenance[$fingerprint] ?? null;
+        $proofDomains = $this->resolveWorkspaceDomainsSignedByLocalCa($certPath);
+
+        if (\is_array($facts)) {
+            $this->recordLocalCaProvenance($fingerprint, [
+                'origin' => (string)($facts['origin'] ?? LocalCaOwnershipPolicy::ORIGIN_LEGACY_UNKNOWN),
+                'shared' => (bool)($facts['shared'] ?? false),
+                'domains' => $proofDomains,
+            ]);
+            if ($this->isLocalCaFingerprintWorkspaceOwned($fingerprint)) {
+                $this->recordLocalCaRetiredFingerprint($fingerprint);
+            }
+            return;
+        }
+
+        // 来源不明（本功能上线前的旧 CA，或从兄弟项目/整机共享目录继承的 CA）：
+        // 只登记证据备查，不写入 retired 清单，永远不会进入共享信任库的删除流程。
+        $this->recordLocalCaProvenance($fingerprint, [
+            'origin' => LocalCaOwnershipPolicy::ORIGIN_LEGACY_UNKNOWN,
+            'shared' => false,
+            'domains' => $proofDomains,
+        ]);
+        w_log_warning(
+            __('[SslCertificateService] 检测到来源不明的同名 Local CA，已保留、不会从系统信任库删除：%{1}', [
+                $fingerprint,
+            ]),
+            [],
+            'ssl_cert',
+        );
     }
 
     protected function getGlobalLocalCaDir(bool $create = true): string
@@ -2691,6 +3103,23 @@ CNF;
             return $this->certificateFilesHaveSameFingerprint($certPath, $globalCertPath);
         }
 
+        // 整机共享目录里已有文件但不可用（过期/损坏/只写了一半/来源不可考）：
+        // 可能是别的项目留下的 CA，一律不覆盖，本仓继续用自己生成的 CA；
+        // 只有共享目录里根本没有 CA 时才发布本仓 CA。
+        $globalHasCert = self::readRegularFileNoFollow($globalCertPath) !== null;
+        $globalHasKey = self::readPrivateKeyFileNoFollow($globalKeyPath) !== null;
+        if ($globalHasCert || $globalHasKey) {
+            w_log_warning(
+                __('[SslCertificateService] 整机共享目录已有 Local CA 但当前不可用，保留不动（不覆盖其他项目），本仓继续使用自己的 CA：%{1}', [
+                    \dirname($globalCertPath),
+                ]),
+                [],
+                'ssl_cert',
+            );
+
+            return false;
+        }
+
         $certPem = self::readRegularFileNoFollow($certPath);
         $keyPem = self::readPrivateKeyFileNoFollow($keyPath);
         try {
@@ -2800,6 +3229,13 @@ CNF;
         ) {
             return null;
         }
+        // 继承整机共享 CA：来源不是本仓。登记 adopted_global + shared，
+        // 之后本仓无论怎样换 CA，都不得把这个共享根从系统信任库删除。
+        $this->recordLocalCaProvenance($this->getCertificateSha1Fingerprint($certPath), [
+            'origin' => LocalCaOwnershipPolicy::ORIGIN_ADOPTED_GLOBAL,
+            'shared' => true,
+            'domains' => [],
+        ]);
         w_log_info(__('[SslCertificateService] Reusing global Weline local CA for this project'));
 
         return [
@@ -3159,7 +3595,18 @@ CNF;
                 'message' => __('Published local CA certificate and key did not verify'),
             ];
         }
-        $this->syncGlobalLocalCertificateAuthority($certPath, $keyPath);
+
+        // 先登记「本仓生成」，再决定是否共享给整机：只有本仓生成且未共享的 CA
+        // 将来才允许从系统信任库删除（已共享 = 可能有兄弟项目在继承）。
+        $newFingerprint = $this->getCertificateSha1Fingerprint($certPath);
+        $this->recordLocalCaProvenance($newFingerprint, [
+            'origin' => LocalCaOwnershipPolicy::ORIGIN_GENERATED,
+            'shared' => false,
+            'domains' => [],
+        ]);
+        if ($this->syncGlobalLocalCertificateAuthority($certPath, $keyPath)) {
+            $this->markLocalCaProvenanceSharedWithGlobal($newFingerprint);
+        }
 
         $caMs = (int) \round((\hrtime(true) - $caGenStart) / 1_000_000.0);
         w_log_info(\sprintf('[SslCertificateService] local CA generated in %dms', $caMs));
@@ -3714,13 +4161,22 @@ CNF;
      */
     protected function resolveLinuxLocalCaInstallPlan(string $caCertPath): ?array
     {
+        // 系统信任锚文件名带本 CA 指纹：同机多个项目各写各的锚，
+        // 不会像历史固定文件名那样互相覆盖（覆盖 = 把别人的 CA 从系统信任库里顶掉）。
+        $fingerprint = $this->getCertificateSha1Fingerprint($caCertPath);
+        if ($fingerprint === '') {
+            // 指纹不可得时用证书内容摘要兜底，仍保持「一 CA 一文件名」。
+            $digest = \is_file($caCertPath) ? @\hash_file('sha256', $caCertPath) : false;
+            $fingerprint = \is_string($digest) ? $digest : $caCertPath;
+        }
+        $anchorFilename = LocalCaOwnershipPolicy::linuxTrustAnchorFilename($fingerprint);
         $install = $this->resolveTrustExecutable('install');
         $updateCaCertificates = $this->resolveTrustExecutable('update-ca-certificates');
         if ($install !== ''
             && $updateCaCertificates !== ''
             && \is_dir('/usr/local/share/ca-certificates')
         ) {
-            $dest = '/usr/local/share/ca-certificates/weline-local-development-ca.crt';
+            $dest = '/usr/local/share/ca-certificates/' . $anchorFilename;
 
             return [
                 'dest' => $dest,
@@ -3736,7 +4192,7 @@ CNF;
             && $updateCaTrust !== ''
             && \is_dir('/etc/pki/ca-trust/source/anchors')
         ) {
-            $dest = '/etc/pki/ca-trust/source/anchors/weline-local-development-ca.crt';
+            $dest = '/etc/pki/ca-trust/source/anchors/' . $anchorFilename;
 
             return [
                 'dest' => $dest,
@@ -3958,6 +4414,18 @@ CNF;
             if ($fingerprint === $currentFingerprint || !isset($retireable[$fingerprint])) {
                 continue;
             }
+            // 候选清单只说明「本仓换过这把 CA」，最终仍要过来源台账 + 本仓签发证据；
+            // 继承自整机共享目录或来源不明的指纹一律保留。
+            if (!$this->isLocalCaFingerprintWorkspaceOwned($fingerprint)) {
+                w_log_warning(
+                    __('[SslCertificateService] 保留非本仓签发的同名 Local CA（不会从 System Keychain 删除）：%{1}', [
+                        $fingerprint,
+                    ]),
+                    [],
+                    'ssl_cert',
+                );
+                continue;
+            }
             $retire[] = $fingerprint;
         }
 
@@ -4104,11 +4572,16 @@ CNF;
     }
 
     /**
-     * Remove only Local CA fingerprints this workspace previously retired.
+     * Remove only Local CA fingerprints this workspace itself issued.
      *
      * HARD (machine_shared_side_effects_require_workspace_scope): same CN across sibling
-     * repos does NOT mean ownership. Never delete a fingerprint that is not listed in
-     * this project's `var/server/_local_ca/retired_sha1_fingerprints.txt`.
+     * repos does NOT mean ownership. A fingerprint is deletable only when ALL hold:
+     * 1. it is listed in this project's `var/server/_local_ca/retired_sha1_fingerprints.txt`;
+     * 2. `var/server/_local_ca/local_ca_provenance.json` records it as `origin=generated`;
+     * 3. it is not shared to the machine-wide `_local_ca` directory (`shared=false`);
+     * 4. this project's database/leaf records prove it actually signed our domains.
+     * CAs inherited from the shared directory, generated by sibling repos, or of unknown
+     * origin are preserved — never "cleaned up together" because the CN matches.
      */
     protected function removeStaleLocalCertificateAuthoritiesFromMacosKeychain(
         string $keychainPath,
@@ -4149,6 +4622,28 @@ CNF;
                 // Sibling-project or unknown same-CN CA — leave it alone.
                 $messages[] = 'Preserved foreign/sibling Weline Local Development CA in keychain'
                     . ' (not owned by this workspace): ' . $fingerprint;
+                w_log_info(
+                    __('[SslCertificateService] 钥匙串存在非本仓签发的同名 Local CA，已保留（不会删除）：%{1} @ %{2}', [
+                        $fingerprint,
+                        \basename($keychainPath),
+                    ]),
+                    [],
+                    'ssl_cert',
+                );
+                continue;
+            }
+
+            if (!$this->isLocalCaFingerprintWorkspaceOwned($fingerprint)) {
+                // Candidate list alone never proves ownership (shared/adopted/legacy CA).
+                $messages[] = 'Preserved same-CN Weline Local Development CA without this workspace'
+                    . ' generation+issuance proof: ' . $fingerprint;
+                w_log_warning(
+                    __('[SslCertificateService] 保留未被本仓签发证据覆盖的 Local CA（不会删除）：%{1}', [
+                        $fingerprint,
+                    ]),
+                    [],
+                    'ssl_cert',
+                );
                 continue;
             }
 
@@ -9363,21 +9858,9 @@ CNF;
             $this->waitForGatewayAcmePublishRetry($attempt++, $remainingSeconds);
         }
 
-        // The shared host gateway control plane is unavailable or this project
-        // is not enrolled on it (REGISTER_REPLAY_REQUIRED / unenrolled): fall
-        // back to pure-WLS serving, where the project desired state and
-        // per-domain compatibility projections are authoritative for the
-        // Dispatcher/worker HTTP-01 responders.
-        try {
-            $hostStatus = (new \Weline\Server\Service\Edge\Gateway\GatewayHostManager())
-                ->status(0.0, $deadline);
-        } catch (\Throwable) {
-            $hostStatus = ['ok' => false];
-        }
-        if (($hostStatus['ok'] ?? false) !== true) {
-            return true;
-        }
-
+        // A failed publication is authoritative: do not notify the CA until the
+        // HTTP-01 challenge is actually served. Pure-WLS publication returns
+        // true above, so reaching this point is always fail-closed.
         if ($this->lastAcmeError === '') {
             $this->lastAcmeError = (string)__(
                 '网关未在 %{1} 秒内确认 ACME HTTP-01 challenge 发布。',

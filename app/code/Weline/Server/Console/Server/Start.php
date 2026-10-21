@@ -5813,11 +5813,14 @@ class Start extends CommandAbstract
             // Usable public_host that differs from bind host is never "derived"
             // from listen (e.g. host=127.0.0.1 + public_host=www.…). Loopback /
             // 0.0.0.0 equality with a public name is also not treated as derived.
+            // A public_host equal to the previous bind host is tracking that
+            // host (even when it is a usable public name), so an explicit CLI
+            // host override must refresh it. A public_host that differs from
+            // the bind host is independent identity and stays untouched.
             $publicHostWasDerived = $previousPublicHost === ''
                 || (
                     $previousHost !== ''
                     && \strcasecmp($previousPublicHost, $previousHost) === 0
-                    && !$this->isUsablePublicHost($previousPublicHost)
                 );
             $publicOriginParts = $previousPublicOrigin !== '' ? \parse_url($previousPublicOrigin) : false;
             $previousPublicOriginHost = \is_array($publicOriginParts)
@@ -5827,8 +5830,7 @@ class Start extends CommandAbstract
                 || ($previousPublicOriginHost !== ''
                     && (($previousHost !== '' && \strcasecmp($previousPublicOriginHost, $previousHost) === 0)
                         || ($previousPublicHost !== ''
-                            && \strcasecmp($previousPublicOriginHost, $previousPublicHost) === 0))
-                    && !$this->isUsablePublicHost($previousPublicOriginHost));
+                            && \strcasecmp($previousPublicOriginHost, $previousPublicHost) === 0)));
 
             $newHost = \trim((string)$args['host']);
             $config['host'] = $newHost;

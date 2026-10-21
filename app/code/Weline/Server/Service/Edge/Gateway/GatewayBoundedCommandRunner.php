@@ -18,6 +18,14 @@ final class GatewayBoundedCommandRunner
     private const MAX_TIMEOUT_SECONDS = 3600.0;
     private const TERMINATE_GRACE_SECONDS = 2.0;
     private const KILL_GRACE_SECONDS = 2.0;
+    // The tiny POSIX wrapper must prove its own session before the parent may
+    // signal a process group. That proof is normally available in tens of
+    // milliseconds, but a heavily loaded host (package decryption, ACL sealing,
+    // concurrent service transactions) can delay a cold PHP CLI start past the
+    // old two-second window and turn a healthy command into a fail-closed 125.
+    // Keep the fail-fast window generous yet still bounded by the caller's
+    // execution deadline so an unproven process is never signalled as a group.
+    private const POSIX_GROUP_READY_TIMEOUT_SECONDS = 10.0;
     private const POSIX_NATURAL_DESCENDANT_EXIT_GRACE_SECONDS = 0.25;
     private const SELECT_MICROSECONDS = 100_000;
     private const MAX_DRAIN_BYTES_PER_PIPE_CYCLE = 65_536;
@@ -1043,7 +1051,10 @@ PHP;
             $remainingBudget,
         );
         $executionDeadline = $deadline - $terminateGrace - $killGrace;
-        $launchDeadline = \min($executionDeadline, $startedAt + 2.0);
+        $launchDeadline = \min(
+            $executionDeadline,
+            $startedAt + self::POSIX_GROUP_READY_TIMEOUT_SECONDS,
+        );
         $status = ['running' => true, 'exitcode' => -1];
         $provenExited = false;
         $groupReady = false;

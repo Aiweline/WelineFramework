@@ -3,12 +3,14 @@ declare(strict_types=1);
 
 namespace Weline\Server\Test\Unit\Service;
 
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\WlsConcurrency;
 use Weline\Framework\View\TemplateCacheManager;
 use Weline\Server\Service\WorkerResponseMemoryGuard;
 
+#[RunTestsInSeparateProcesses]
 final class WorkerResponseMemoryGuardConfiguredBudgetTest extends TestCase
 {
     private string $previousLimit;

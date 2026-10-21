@@ -1,0 +1,64 @@
+name: WLS unit and syntax
+
+on:
+  push:
+    paths:
+      - "app/code/Weline/Server/**"
+      - "app/code/Weline/Framework/**"
+      - "app/bootstrap_phpunit.php"
+      - "composer.json"
+      - "composer.lock"
+      - ".github/workflows/wls-unit.yml"
+  pull_request:
+    paths:
+      - "app/code/Weline/Server/**"
+      - "app/code/Weline/Framework/**"
+      - "app/bootstrap_phpunit.php"
+      - "composer.json"
+      - "composer.lock"
+      - ".github/workflows/wls-unit.yml"
+
+concurrency:
+  group: wls-unit-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    name: PHP syntax of Weline_Server
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # 2.37.1
+        with:
+          php-version: "8.4"
+          extensions: sodium, openssl, intl, pdo_pgsql, pcntl
+          coverage: none
+      - name: Install locked PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Lint every Weline_Server PHP file
+        run: find app/code/Weline/Server -name '*.php' -print0 | xargs -0 -n1 -P4 php -l
+
+  unit:
+    name: WLS unit suite
+    needs: syntax
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@7c071dfe9dc99bdf297fa79cb49ea005b9fcadbc # 2.37.1
+        with:
+          php-version: "8.4"
+          extensions: sodium, openssl, intl, pdo_pgsql, pcntl
+          coverage: none
+      - name: Install locked PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Run WLS unit suite
+        run: php vendor/bin/phpunit --bootstrap app/bootstrap_phpunit.php --colors=never app/code/Weline/Server/Test/Unit

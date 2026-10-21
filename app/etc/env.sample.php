@@ -283,6 +283,12 @@ return [
             'fpc_publish_grace_wait_ms' => 10000,
             // Soft-stale window (Process / grace). Cap 31536000 (1y). Anonymous Shared store uses CachePool ttl=-1 (forever until purge).
             'fpc_stale_ttl_seconds' => 86400,
+            // 边缘 HTML TTL 上限（秒）。与源站 FPC policy TTL 解耦：默认 300，
+            // 即使 CDN purge 失败也最多 5 分钟后自愈；0 = 不让 CDN 缓存 HTML。
+            'fpc_edge_max_age_seconds' => 300,
+            // 静态 rename-swap 时保留旧可服务文件的窗口（天）。默认覆盖历史
+            // 一年 HTML 边缘 TTL；只对发布树缺失的路径生效，新树文件优先。
+            'static_carry_retention_days' => 400,
             'fpc_serve_stale_before_build' => true,
             'runtime_log_file' => 'var/log/wls/runtime.log',
             'timing_log_file' => 'var/log/wls/timing.log',

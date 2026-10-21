@@ -16,7 +16,9 @@ use Weline\Server\Connection\TcpConnection;
  * ProtocolInterface - 协议接口
  * 
  * 所有应用层协议必须实现此接口
- */
+  *
+ * @deprecated WLS 2.0 serves requests through bin/worker.php + bin/worker_ssl.php; this legacy async stack is unused and scheduled for removal (see doc/开发/plan.md WLS-014).
+*/
 interface ProtocolInterface
 {
     /**

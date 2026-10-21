@@ -12,19 +12,6 @@ if (!\defined('DS')) {
     \define('DS', DIRECTORY_SEPARATOR);
 }
 
-if (!\function_exists(__NAMESPACE__ . '\\__')) {
-    function __(string $message, array $args = []): string
-    {
-        $translated = $message;
-        foreach (\array_values($args) as $index => $value) {
-            $translated = \str_replace('%{' . ($index + 1) . '}', (string)$value, $translated);
-            $translated = \str_replace('%' . ($index + 1), (string)$value, $translated);
-        }
-
-        return $translated;
-    }
-}
-
 if (!\function_exists(__NAMESPACE__ . '\\stopTestRuntimeSelection')) {
     function stopTestRuntimeSelection(bool $dispatcher = false): \Weline\Server\Service\Runtime\RuntimeSelection
     {

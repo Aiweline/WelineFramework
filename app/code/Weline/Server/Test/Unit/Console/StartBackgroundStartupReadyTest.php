@@ -3,22 +3,18 @@ declare(strict_types=1);
 
 namespace Weline\Server\Console\Server;
 
-if (!\function_exists(__NAMESPACE__ . '\__')) {
-    function __(string $text, array $args = []): string
-    {
-        return $text;
-    }
-}
-
 \defined('IS_WIN') || \define('IS_WIN', \PHP_OS_FAMILY === 'Windows');
 
 namespace Weline\Server\Test\Unit\Console;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\Test\Unit\Support\PinsChinesePhraseLocale;
 use Weline\Server\Console\Server\Start;
 
 final class StartBackgroundStartupReadyTest extends TestCase
 {
+    use PinsChinesePhraseLocale;
+
     public function testWaitForBackgroundStartupReadyRequiresRunningPhase(): void
     {
         $file = $this->createTempInstanceFile(['startup_phase' => 'bootstrapping']);

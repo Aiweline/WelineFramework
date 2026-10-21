@@ -18,7 +18,9 @@ use Weline\Server\Connection\TcpConnection;
  * Text - 文本协议
  * 
  * 每条消息以 \n 结尾
- */
+  *
+ * @deprecated WLS 2.0 serves requests through bin/worker.php + bin/worker_ssl.php; this legacy async stack is unused and scheduled for removal (see doc/开发/plan.md WLS-014).
+*/
 class Text implements ProtocolInterface
 {
     /**

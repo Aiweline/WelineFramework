@@ -6,11 +6,14 @@ namespace Weline\Server\Test\Unit\Console;
 require_once __DIR__ . '/stop_test_bootstrap.php';
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\Test\Unit\Support\PinsChinesePhraseLocale;
 use Weline\Server\Console\Server\Stop;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 
 final class StopCommandResidualCleanupRetryTest extends TestCase
 {
+    use PinsChinesePhraseLocale;
+
     public function testResidualCleanupRetriesWhileVerificationStillFindsAResidualPid(): void
     {
         $info = new ServerInstanceInfo(

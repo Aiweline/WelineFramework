@@ -1156,10 +1156,9 @@ PHP,PHP
 "未能解析 WLS 面板嵌入地址。","未能解析 WLS 面板嵌入地址。"
 全屏,全屏
 "WLS 面板内嵌区域","WLS 面板内嵌区域"
-反向代理配置,反向代理配置
-"配置 WLS Gateway 的域名路由规则","配置 WLS Gateway 的域名路由规则"
 总规则数,总规则数
 禁用,禁用
+反向代理配置,反向代理配置
 新建规则,新建规则
 应用配置,应用配置
 后端地址,后端地址
@@ -1193,6 +1192,24 @@ PHP,PHP
 后端端口为项目实际监听端口,后端端口为项目实际监听端口
 保存失败,保存失败
 请先填写后端主机和端口,请先填写后端主机和端口
+暂无进程明细数据,暂无进程明细数据
+"展开 Fiber 列表","展开 Fiber 列表"
+暂无状态日志,暂无状态日志
+暂无流量数据,暂无流量数据
+闲,闲
+忙,忙
+"无 Fiber",无纤维
+"连接 ID","连接 ID"
+协议,协议
+"请先输入压测目标 URL。","请先输入压测目标 URL。"
+压测执行中，请稍候...,压测执行中，请稍候...
+压测失败：请检查网络连接后重试。,压测失败：请检查网络连接后重试。
+"确定要清理过期日志吗？状态日志保留 7 天，攻击日志保留 30 天。","确定要清理过期日志吗？状态日志保留 7 天，攻击日志保留 30 天。"
+清理过期日志,清理过期日志
+确认清理,确认清理
+正在清理...,正在清理...
+清理失败,清理失败
+状态日志,状态日志
 "运行中 Workers","运行中 工人"
 总连接数,总连接数
 总请求数,总请求数
@@ -1242,7 +1259,6 @@ Fiber,纤维
 "Host 分组流量（最近5分钟）","Host 分组流量（最近5分钟）"
 Host,主持人
 平均延迟(ms),平均延迟(ms)
-暂无流量数据,暂无流量数据
 "压测目标 URL，例如 http://127.0.0.1:9981/_wls/health","压测目标 URL，例如 http://127.0.0.1:9981/_wls/health"
 开始压测,开始压测
 "输入参数：目标 URL / 并发 / 请求数","输入参数：目标 URL / 并发 / 请求数"
@@ -1251,22 +1267,6 @@ Host,主持人
 快速操作,快速操作
 服务器管理,服务器管理
 "API 文档","API 文档"
-清理过期日志,清理过期日志
-暂无进程明细数据,暂无进程明细数据
-"展开 Fiber 列表","展开 Fiber 列表"
-闲,闲
-忙,忙
-"无 Fiber",无纤维
-"连接 ID","连接 ID"
-协议,协议
-暂无状态日志,暂无状态日志
-"请先输入压测目标 URL。","请先输入压测目标 URL。"
-压测执行中，请稍候...,压测执行中，请稍候...
-压测失败：请检查网络连接后重试。,压测失败：请检查网络连接后重试。
-"确定要清理过期日志吗？状态日志保留 7 天，攻击日志保留 30 天。","确定要清理过期日志吗？状态日志保留 7 天，攻击日志保留 30 天。"
-确认清理,确认清理
-正在清理...,正在清理...
-清理失败,清理失败
 "WLS 安全规则可视化配置","WLS 安全规则可视化配置"
 "类似 Cloudflare 规则面板：开关、阈值、列表可直接编辑，保存后自动下发运行中 WLS。","类似 Cloudflare 规则面板：开关、阈值、列表可直接编辑，保存后自动下发运行中 WLS。"
 全局限流（rate_limit）,全局限流（rate_limit）
@@ -1330,6 +1330,11 @@ URI,统一资源标识符
 "子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接使用泛域证书","子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接使用泛域证书"
 "HTTPS 已在此域名禁用","HTTPS 已在此域名禁用"
 使用已有证书,使用已有证书
+"[SslCertificateService] 无法写入 Local CA 退役指纹清单：%{1}","[SslCertificateService] 无法写入 Local CA 退役指纹清单：%{1}"
+"[SslCertificateService] 无法登记 Local CA 来源台账（不会影响证书签发）：%{1}","[SslCertificateService] 无法登记 Local CA 来源台账（不会影响证书签发）：%{1}"
+"[SslCertificateService] 读取本仓已签发 Local CA 叶证失败，改用磁盘证书记录：%{1}","[SslCertificateService] 读取本仓已签发 Local CA 叶证失败，改用磁盘证书记录：%{1}"
+"[SslCertificateService] 检测到来源不明的同名 Local CA，已保留、不会从系统信任库删除：%{1}","[SslCertificateService] 检测到来源不明的同名 Local CA，已保留、不会从系统信任库删除：%{1}"
+"[SslCertificateService] 整机共享目录已有 Local CA 但当前不可用，保留不动（不覆盖其他项目），本仓继续使用自己的 CA：%{1}","[SslCertificateService] 整机共享目录已有 Local CA 但当前不可用，保留不动（不覆盖其他项目），本仓继续使用自己的 CA：%{1}"
 "[SslCertificateService] Failed to persist reusable global local CA files to %{1}","[SslCertificateService] 无法将可重用的全局本地 CA 文件持久保存到 %{1}"
 "[SslCertificateService] Local CA is now reusable across projects from %{1}","[SslCertificateService] 本地 CA 现在可以在 %{1} 的项目之间重复使用"
 "[SslCertificateService] Failed to restore project local CA files from global reusable CA","[SslCertificateService] 无法从全局可重用 CA 恢复项目本地 CA 文件"
@@ -1356,6 +1361,9 @@ URI,统一资源标识符
 "Local CA imported into macOS login Keychain","本地 CA 导入 macOS 登录钥匙串"
 "macOS System Keychain trust needs an interactive Terminal approval; WLS has already tried the user login Keychain. Run the command below from Terminal if a browser still rejects the certificate.","macOS 系统钥匙串信任需要交互式终端批准； WLS已经尝试过用户登录Keychain。如果浏览器仍然拒绝证书，请从终端运行以下命令。"
 "Run the command below to approve Keychain trust.",运行以下命令以批准钥匙串信任。
+"[SslCertificateService] 保留非本仓签发的同名 Local CA（不会从 System Keychain 删除）：%{1}","[SslCertificateService] 保留非本仓签发的同名 Local CA（不会从 System Keychain 删除）：%{1}"
+"[SslCertificateService] 钥匙串存在非本仓签发的同名 Local CA，已保留（不会删除）：%{1} @ %{2}","[SslCertificateService] 钥匙串存在非本仓签发的同名 Local CA，已保留（不会删除）：%{1} @ %{2}"
+"[SslCertificateService] 保留未被本仓签发证据覆盖的 Local CA（不会删除）：%{1}","[SslCertificateService] 保留未被本仓签发证据覆盖的 Local CA（不会删除）：%{1}"
 "Local CA certificate file is missing: %{1}","本地 CA 证书文件丢失：%{1}"
 "Local CA generated; Windows trust-store import skipped during WLS startup. Import %{1} manually or set WLS_SSL_TRUST_WINDOWS_LOCAL_CA=1 to opt in.","本地CA生成； WLS 启动期间跳过 Windows 信任存储导入。手动导入 %{1} 或设置 WLS_SSL_TRUST_WINDOWS_LOCAL_CA=1 以选择加入。"
 "Local CA is already trusted by the current Windows user","本地 CA 已被当前 Windows 用户信任"
@@ -3115,6 +3123,7 @@ Previous：%{1},上一篇：%{1}
 无法证明受管代次时拒绝发送任何终止信号,无法证明受管代次时拒绝发送任何终止信号
 "已退役：console:server:start 不再启动 PHP 内置 Web Server。","已退役：console:server:start 不再启动 PHP 内置 Web Server。"
 "已退役：PHP 内置 Web Server 启动入口","已退役：PHP 内置 Web Server 启动入口"
+"配置 WLS Gateway 的域名路由规则","配置 WLS Gateway 的域名路由规则"
 "托管 Nginx fastcgi → pub/index.php；不需要 Worker / Session / Memory；不写系统 /etc nginx","托管 Nginx fastcgi → pub/index.php；不需要 Worker / Session / Memory；不写系统 /etc nginx"
 "切回 proxy_pass wls_backend；需按现网拉起 Worker（及既有侧车策略）","切回 proxy_pass wls_backend；需按现网拉起 Worker（及既有侧车策略）"
 "查看店面 FPC 诊断打穿章","查看店面 FPC 诊断打穿章"
@@ -3152,7 +3161,6 @@ WLS错误扫描,WLS错误扫描
 "[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器(开发)","[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器(开发)"
 "最大挂起 Fiber 数，0=不限制","最大挂起 Fiber 数，0=不限制"
 "HTTP 监听：%{1}，HTTPS 监听：%{2}（offset=%{3}）","HTTP 监听：%{1}，HTTPS 监听：%{2}（offset=%{3}）"
-强制停止：中止占用生命周期锁的同实例后台任务（purpose=%{1},pid=%{2}）。
 "已回收子进程 PID %{1} (%{2})","已回收子进程 PID %{1} (%{2})"
 "Session Server stop was not confirmed; runtime identity was retained for retry/repair.",未确认会话服务器停止；保留运行时身份以进行重试/修复。
 "Memory Service stop was not confirmed; runtime identity was retained for retry/repair.",未确认内存服务停止；保留运行时身份以进行重试/修复。

@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Console;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\Test\Unit\Support\PinsChinesePhraseLocale;
 use Weline\Server\Console\Server\Reload;
 
 final class ReloadCommandInstanceParseTest extends TestCase
 {
+    use PinsChinesePhraseLocale;
+
     public function testParseInstanceNameFromPositionalArgument(): void
     {
         $reload = new Reload();

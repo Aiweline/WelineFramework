@@ -124,7 +124,8 @@ final class MaintenanceCheckObserverTest extends TestCase
         self::assertStringContainsString('applyParsedRequestUri()', $interceptorSource);
         self::assertStringContainsString('MaintenanceStaticPage', $interceptorSource);
         self::assertStringContainsString('MaintenanceStaticGenerator', $interceptorSource);
-        self::assertStringContainsString('MaintenanceStaticPage::publicHtmlUrl', $maintenanceTemplateSource);
+        // Maintenance 模块自己的契约测试已改为「模板不得耦合静态页 URL 助手」；此处对齐。
+        self::assertStringNotContainsString('MaintenanceStaticPage::publicHtmlUrl', $maintenanceTemplateSource);
         self::assertStringContainsString("defined('WLS_MAINTENANCE_WORKER')", $appSource);
         self::assertStringContainsString("defined('WLS_MAINTENANCE_WORKER')", $fpcObserverSource);
         self::assertStringContainsString("Env::system('maintenance')", $fpcObserverSource);

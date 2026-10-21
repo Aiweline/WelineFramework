@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Console;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\Test\Unit\Support\PinsChinesePhraseLocale;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Server\Console\Server\Start;
 
 final class StartSharedStateRuntimeSummaryOutputTest extends TestCase
 {
+    use PinsChinesePhraseLocale;
+
     /**
      * @return array{session: array<string, mixed>, memory: array<string, mixed>}
      */

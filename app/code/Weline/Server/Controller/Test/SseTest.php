@@ -2,6 +2,8 @@
 
 namespace Weline\Server\Controller\Test;
 
+use Weline\Server\Service\Diagnostics\DiagnosticEndpointGate;
+
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Runtime\SchedulerSystem;
@@ -19,6 +21,7 @@ class SseTest extends FrontendController
      */
     public function getTest(): void
     {
+        DiagnosticEndpointGate::assertEnabled();
         $sse = new SseWriter();
         $sse->start();
 

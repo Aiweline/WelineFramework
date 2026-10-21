@@ -540,6 +540,12 @@ final class GatewayControllerPortTakenRecoveryTest extends TestCase
         return new \WlsEdgeGatewayController(
             $home,
             'unix://' . $run . DIRECTORY_SEPARATOR . 'controller.sock',
+            null,
+            null,
+            // Deterministic broker boot identity keeps this recovery test
+            // independent of the host platform while still exercising the
+            // controller's boot-identity validation path.
+            \str_repeat('a', 64),
         );
     }
 

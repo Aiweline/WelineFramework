@@ -58,7 +58,7 @@ Windows/MSVC/SCM 与冷重启、macOS system-domain 冷重启、专用 Windows �
 | 首页预热、常驻内存、请求长尾 | [WLS 运行时架构](WLS架构图.md) |
 | Fiber I/O 等待、共享缓存 RPC 延迟 | [统一缓存范围与性能计时](../../Framework/doc/统一缓存范围与性能优化.md) |
 | Session/Memory 服务异常 | [共享服务架构](WLS_Session共享服务架构.md) |
-| SSE/长连接 | [SSE 无阻塞检测方法](SSE无阻塞检测方法.md) |
+| SSE/长连接 | [SSE 无阻塞检测方法](SSE无阻塞检测方法.md)；H2 SSE DATA-frame 未实现，见[能力矩阵](WLS当前能力与验收状态.md) |
 | Worker 扩缩容 | [Worker 动态扩缩容架构](WLS-Worker动态扩缩容架构设计.md)、[用户手册](WLS-Worker扩缩容用户手册.md) |
 | 多实例隔离 | [WLS 实例隔离机制](WLS实例隔离机制.md) |
 | 安全与规则 | [WLS 安全与规则配置推演](WLS安全与规则配置推演.md) |

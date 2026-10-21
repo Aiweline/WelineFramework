@@ -40,7 +40,9 @@ private function assert_WlsFpcStoreAdapterPurgeUrls_testPurgeUrlsDelegatesToCoor
 {
     $src = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Server' . '/extends/module/Weline_Framework/Fpc/Store/WlsFpcStoreAdapter.php');
     self::assertStringContainsString('FullPageCacheCoordinator::purgeUrls', $src);
-    self::assertStringContainsString('router-fpc-path-index', $src);
-    self::assertStringContainsString('RecursiveDirectoryIterator', $src);
+    // 路径索引遍历已下沉到 Framework 的 FpcHtmlDiskStore；适配器只保留
+    // 「委托 + 失败回退清进程缓存」契约。
+    self::assertStringContainsString('clearProcessCache()', $src);
+    self::assertStringContainsString('FpcHtmlDiskStore::purgeSlugs', $src);
 }
 }

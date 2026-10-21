@@ -93,6 +93,13 @@ final class WorkerFullPageCacheFastPath
             return null;
         }
 
+        // Cookie-bearing requests must return to Framework: the probe Context
+        // cannot prove a guest receipt still matches the caller's cookies, and
+        // a shared/process hit would bypass per-visitor personalization.
+        if (\trim((string)($headers['cookie'] ?? '')) !== '') {
+            return null;
+        }
+
         if (TransactionContext::activeTransactionConnectionCount() > 0) {
             return null;
         }
@@ -121,6 +128,9 @@ final class WorkerFullPageCacheFastPath
                     $cookieHeader,
                 );
                 if (\is_array($receipt)) {
+                    if (!$this->coordinator->isInternalHomepageReceiptCurrent($receipt)) {
+                        return null;
+                    }
                     $this->prepareReceiptResponseContext($probeContext, $decision, $scheme, $host, $requestUri, $fullUri);
                     RequestContext::installScopeIdentity(ScopeIdentity::fromArray($receipt['scope_identity']));
                     RequestContext::setWelineArea(RequestContext::AREA_FRONTEND);
@@ -169,6 +179,9 @@ final class WorkerFullPageCacheFastPath
                 );
                 $cached = null;
                 if (\is_array($localizedReceipt)) {
+                    if (!$this->coordinator->isInternalHomepageReceiptCurrent($localizedReceipt)) {
+                        return null;
+                    }
                     $this->prepareReceiptResponseContext($probeContext, $decision, $scheme, $host, $requestUri, $fullUri);
                     RequestContext::installScopeIdentity(ScopeIdentity::fromArray($localizedReceipt['scope_identity']));
                     RequestContext::setWelineArea(RequestContext::AREA_FRONTEND);

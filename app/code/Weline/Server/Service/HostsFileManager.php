@@ -1336,7 +1336,7 @@ class HostsFileManager
         int $effectiveUid,
     ): bool {
         return $osFamily !== 'Windows'
-            && $effectiveUid >= 0
+            && $effectiveUid > 0
             && (int)($status['uid'] ?? -1) === $effectiveUid;
     }
 

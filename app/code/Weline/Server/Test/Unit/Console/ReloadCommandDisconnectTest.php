@@ -4,11 +4,14 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\Console;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\Test\Unit\Support\PinsChinesePhraseLocale;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Server\Console\Server\Reload;
 
 final class ReloadCommandDisconnectTest extends TestCase
 {
+    use PinsChinesePhraseLocale;
+
     public function testWaitForCompletionStopsWhenControlSocketEofIsDetected(): void
     {
         $printer = new class extends Printing {

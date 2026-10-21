@@ -7,6 +7,7 @@ namespace Weline\Server\Test\Unit\Console;
 require_once \dirname(__DIR__, 7) . '/app/bootstrap_phpunit.php';
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\Test\Unit\Support\PinsChinesePhraseLocale;
 use Weline\Server\Console\Server\Start;
 use Weline\Server\Console\Server\StartupChangingArgsInspector;
 
@@ -45,6 +46,8 @@ final class StartupChangingArgsInspectorProbe
 
 final class StartRestartDelegationTest extends TestCase
 {
+    use PinsChinesePhraseLocale;
+
     public function testRollingRestartDecisionRequiresRunningInstanceWithoutForceOrChangingArgs(): void
     {
         $probe = new StartRestartDelegationProbe();

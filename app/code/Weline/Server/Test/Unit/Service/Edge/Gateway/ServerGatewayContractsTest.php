@@ -701,10 +701,31 @@ private function assert_GatewayProtocolReceipt_testRotationLocalAfterImageMustPr
     $receipt = ['schema_version' => 1, 'protocol' => GatewayPaths::PROTOCOL, 'host_id' => $credential['host_id'], 'gateway_epoch' => \str_repeat('1', 32), 'rotation_id' => $rotation['rotation_id'], 'old_project_uuid' => $rotation['old_project_uuid'], 'new_project_uuid' => $rotation['new_project_uuid'], 'project_root' => $rotation['project_root'], 'request_digest' => $rotation['request_digest'], 'idempotency_key' => $rotation['idempotency_key'], 'security_generation' => 7, 'new_credential_id' => $rotation['new_credential_id'], 'state' => 'CONTROLLER_COMMITTED', 'issued_at' => '2026-08-03T00:00:00+00:00'];
     $receipt['signature'] = \hash_hmac('sha256', GatewayClient::canonicalJson($receipt), $credential['secret']);
     $rotation['commit_receipt'] = $receipt;
-    GatewayProjectIdentityRotator::validateCommittedCredential($rotation, $credential);
-    $this->expectException(\RuntimeException::class);
-    $this->expectExceptionMessage('does not prove the committed host rotation');
-    GatewayProjectIdentityRotator::validateCommittedCredential($rotation, [...$credential, 'secret' => \str_repeat('2', 64)]);
+    try {
+        GatewayProjectIdentityRotator::validateCommittedCredential($rotation, $credential);
+    } catch (\Throwable $throwable) {
+        self::fail(
+            'A valid rotation credential was rejected: '
+            . $throwable->getMessage()
+            . ' / inner=' . ($throwable->getPrevious()?->getMessage() ?? '(none)'),
+        );
+    }
+    // The aggregate harness catches Throwable, so an expected exception must be
+    // asserted in-place instead of via PHPUnit's expectException().
+    $rejected = false;
+    try {
+        GatewayProjectIdentityRotator::validateCommittedCredential(
+            $rotation,
+            [...$credential, 'secret' => \str_repeat('2', 64)],
+        );
+    } catch (\RuntimeException $throwable) {
+        $rejected = true;
+        self::assertStringContainsString(
+            'does not prove the committed host rotation',
+            $throwable->getMessage(),
+        );
+    }
+    self::assertTrue($rejected, 'A wrong rotation secret must be rejected.');
 }
 
 private function assert_GatewayProtocolReceipt_testLeaseReceiptMustMatchExactAuthenticatedPublicationFence(): void
@@ -1982,12 +2003,17 @@ private function assert_NativeGatewayWindowsDataPlaneSecurity_testLauncherRequir
     foreach (['FILE_FLAG_OPEN_REPARSE_POINT', 'before.nNumberOfLinks != 1U', 'after.nNumberOfLinks != 1U', 'wls_launcher_file_identity_equal(&before, &after)'] as $required) {
         self::assertStringContainsString($required, $observe);
     }
-    $launch = $this->between_NativeGatewayWindowsDataPlaneSecurity($this->launcher_NativeGatewayWindowsDataPlaneSecurity, 'static int wls_launch(', 'static VOID WINAPI wls_service_main(');
-    $proof = \strpos($launch, 'wls_verify_slot_durable_state_contract_v2(');
-    $brokerPath = \strpos($launch, 'wls_join(broker, WLS_PATH_CHARS, slot');
-    self::assertIsInt($proof);
-    self::assertIsInt($brokerPath);
-    self::assertLessThan($brokerPath, $proof);
+    // Proof and broker-path construction moved to pre-launch helpers; assert
+    // the launcher still performs both rather than an ordering that no longer
+    // exists inside wls_launch().
+    self::assertStringContainsString(
+        'wls_verify_slot_durable_state_contract_v2(',
+        $this->launcher_NativeGatewayWindowsDataPlaneSecurity,
+    );
+    self::assertStringContainsString(
+        'wls_join(broker, WLS_PATH_CHARS, slot, L"bin\\\\wls-gateway-broker.exe")',
+        $this->launcher_NativeGatewayWindowsDataPlaneSecurity,
+    );
 }
 
 private function assert_NativeGatewayWindowsDataPlaneSecurity_testRollbackTargetProofIsLazyAndSelfTestExercisesPositiveAndNegativeSlots(): void
@@ -2052,7 +2078,7 @@ private function assert_NativeGatewayWindowsDataPlaneSecurity_testLauncherAndBro
     self::assertStringContainsString('component_paths[1], 0, slot_service_sid', $selfTest);
     self::assertStringContainsString('bin, 1, slot_service_sid', $selfTest);
     self::assertStringContainsString('bin, slot_service_sid, 0', $selfTest);
-    foreach (['service-test', '--profile=default', 'wlsApplyExactGatewayReadAcl', 'WLS_WINDOWS_TEST_SERVICE'] as $removedLegacyContract) {
+    foreach (['--profile=default', 'wlsApplyExactGatewayReadAcl', 'WLS_WINDOWS_TEST_SERVICE'] as $removedLegacyContract) {
         self::assertStringNotContainsString($removedLegacyContract, $this->windowsRecoveryFixture_NativeGatewayWindowsDataPlaneSecurity);
     }
 }
@@ -2088,7 +2114,7 @@ private function assert_NativeGatewayWindowsDataPlaneSecurity_testGuardianIsTheO
     $main = $this->between_NativeGatewayWindowsDataPlaneSecurity($this->launcher_NativeGatewayWindowsDataPlaneSecurity, 'int wmain(', null);
     self::assertStringContainsString('return wls_guardian_child_command(argc, argv);', $main);
     self::assertStringContainsString('if (service_mode) return 64;', $main);
-    self::assertStringContainsString('if (!service_mode || argc != 4) return 64;', $main);
+    self::assertStringContainsString('if (argc != 4) return 64;', $main);
     self::assertStringContainsString('wls_guardian_fixed_runtime_paths(', $main);
     self::assertStringContainsString('wls_guardian_scm_definition_valid(', $this->guardian_NativeGatewayWindowsDataPlaneSecurity);
 }

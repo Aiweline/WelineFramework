@@ -3,12 +3,14 @@ declare(strict_types=1);
 
 namespace Weline\Server\Test\Unit\Service;
 
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\WorkerResponseMemoryGuard;
 
 /**
  * Loop-layer reclaim must scale to the Worker budget and stop no-op churn.
  */
+#[RunTestsInSeparateProcesses]
 final class WorkerResponseMemoryGuardLoopThresholdTest extends TestCase
 {
     private const MIB = 1048576;

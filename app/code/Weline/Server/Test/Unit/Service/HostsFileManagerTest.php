@@ -97,14 +97,17 @@ HOSTS;
         }
     }
 
-    public function testRootWriterIsRestrictedToARootOwnedPosixTarget(): void
+    public function testDirectWriterIsRestrictedToItsOwnPosixTarget(): void
     {
         $method = new ReflectionMethod(HostsFileManager::class, 'directWriterIdentityAllowed');
         $method->setAccessible(true);
 
-        self::assertTrue($method->invoke(null, ['uid' => 0], 'Darwin', 0));
+        // Root direct writes bypass the guarded administrator path, so they are
+        // rejected exactly like foreign owners and Windows.
+        self::assertFalse($method->invoke(null, ['uid' => 0], 'Darwin', 0));
         self::assertFalse($method->invoke(null, ['uid' => 501], 'Darwin', 0));
         self::assertFalse($method->invoke(null, ['uid' => 0], 'Windows', 0));
+        self::assertTrue($method->invoke(null, ['uid' => 501], 'Darwin', 501));
     }
 
     public function testPermissionDeniedResultRequestsBoundedAdministratorAuthorization(): void

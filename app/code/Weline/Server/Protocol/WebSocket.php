@@ -14,7 +14,9 @@ use Weline\Server\Connection\TcpConnection;
 
 /**
  * WebSocket - WebSocket 协议实现
- */
+  *
+ * @deprecated WLS 2.0 serves requests through bin/worker.php + bin/worker_ssl.php; this legacy async stack is unused and scheduled for removal (see doc/开发/plan.md WLS-014).
+*/
 class WebSocket implements ProtocolInterface
 {
     /**

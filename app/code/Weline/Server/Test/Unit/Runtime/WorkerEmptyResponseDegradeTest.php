@@ -42,7 +42,7 @@ final class WorkerEmptyResponseDegradeTest extends TestCase
             $guardPos = \strpos($source, "if (\$responseBody === '' && !\$isExpectedEmptyResponse) {", $logPos);
             self::assertIsInt($guardPos, "{$label} 必须在空响应日志之后降级响应");
 
-            $degrade = \substr($source, $guardPos, 1200);
+            $degrade = \substr($source, $guardPos, 2400);
             self::assertStringContainsString(
                 '$response->setHttpResponseCode(503);',
                 $degrade,

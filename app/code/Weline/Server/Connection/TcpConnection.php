@@ -17,7 +17,9 @@ use Weline\Server\Event\EventInterface;
  * TcpConnection - TCP 连接管理
  * 
  * 负责管理单个 TCP 连接的读写和状态
- */
+  *
+ * @deprecated WLS 2.0 serves requests through bin/worker.php + bin/worker_ssl.php; this legacy async stack is unused and scheduled for removal (see doc/开发/plan.md WLS-014).
+*/
 class TcpConnection implements ConnectionInterface
 {
     /**

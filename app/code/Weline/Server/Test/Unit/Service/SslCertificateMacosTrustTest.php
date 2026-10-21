@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\AdministratorAuthorizationSession;
+use Weline\Server\Service\LocalCaOwnershipPolicy;
 use Weline\Server\Service\SslCertificateService;
 
 require_once dirname(__DIR__, 6) . '/bootstrap_phpunit.php';
@@ -121,8 +122,16 @@ final class SslCertificateMacosTrustTest extends TestCase
             ],
             '/Users/unit/Library/Keychains/login.keychain-db' => [self::LOGIN_STALE_FINGERPRINT],
         ];
-        // Only the prior generation of THIS workspace may be deleted.
+        // Only the prior generation of THIS workspace may be deleted:
+        // retired list + origin=generated + not shared + workspace issuance proof.
         $service->retiredFingerprints = [self::SYSTEM_STALE_FINGERPRINT];
+        $service->provenance = [
+            self::SYSTEM_STALE_FINGERPRINT => [
+                'origin' => LocalCaOwnershipPolicy::ORIGIN_GENERATED,
+                'shared' => false,
+                'domains' => ['unit-retired.test.weline.com'],
+            ],
+        ];
         $service->caSelfVerifyTrusted = true;
         $service->leafSystemVerifyTrusted = false;
         $service->opensslChainValid = true;
@@ -186,6 +195,104 @@ final class SslCertificateMacosTrustTest extends TestCase
         }
     }
 
+    /**
+     * 候选清单（retired_sha1_fingerprints.txt）不足以证明归属：
+     * 从整机共享目录继承来的 CA 即使被登记为候选，也必须保留。
+     */
+    public function testMacosTrustImportPreservesAdoptedGlobalCaEvenWhenListedAsRetired(): void
+    {
+        $caPath = $this->writeTempFile('rootCA.pem', 'current-ca');
+        $leafPath = $this->writeTempFile('fullchain.pem', 'current-leaf');
+        $service = $this->macosTrustService($caPath, $leafPath);
+        $service->keychainFingerprints = [
+            '/Library/Keychains/System.keychain' => [self::SYSTEM_STALE_FINGERPRINT],
+            '/Users/unit/Library/Keychains/login.keychain-db' => [self::LOGIN_STALE_FINGERPRINT],
+        ];
+        $service->retiredFingerprints = [self::SYSTEM_STALE_FINGERPRINT];
+        $service->provenance = [
+            self::SYSTEM_STALE_FINGERPRINT => [
+                'origin' => LocalCaOwnershipPolicy::ORIGIN_ADOPTED_GLOBAL,
+                'shared' => true,
+                'domains' => ['unit-adopted.test.weline.com'],
+            ],
+        ];
+
+        $result = $service->trust($caPath);
+
+        self::assertTrue((bool)($result['trusted'] ?? false));
+        self::assertNotContains(
+            self::SYSTEM_STALE_FINGERPRINT,
+            $service->deletedFingerprints,
+            'A CA inherited from the machine-wide _local_ca directory must never be deleted.',
+        );
+        self::assertContains(
+            self::SYSTEM_STALE_FINGERPRINT,
+            $service->keychainFingerprints['/Library/Keychains/System.keychain'] ?? [],
+        );
+    }
+
+    /**
+     * 本仓生成但已共享给其他项目的 CA：兄弟项目可能正在继承，换新 CA 时也必须保留。
+     */
+    public function testMacosTrustImportPreservesSharedWorkspaceCa(): void
+    {
+        $caPath = $this->writeTempFile('rootCA.pem', 'current-ca');
+        $leafPath = $this->writeTempFile('fullchain.pem', 'current-leaf');
+        $service = $this->macosTrustService($caPath, $leafPath);
+        $service->keychainFingerprints = [
+            '/Library/Keychains/System.keychain' => [self::SYSTEM_STALE_FINGERPRINT],
+            '/Users/unit/Library/Keychains/login.keychain-db' => [],
+        ];
+        $service->retiredFingerprints = [self::SYSTEM_STALE_FINGERPRINT];
+        $service->provenance = [
+            self::SYSTEM_STALE_FINGERPRINT => [
+                'origin' => LocalCaOwnershipPolicy::ORIGIN_GENERATED,
+                'shared' => true,
+                'domains' => ['unit-shared.test.weline.com'],
+            ],
+        ];
+
+        $result = $service->trust($caPath);
+
+        self::assertTrue((bool)($result['trusted'] ?? false));
+        self::assertNotContains(
+            self::SYSTEM_STALE_FINGERPRINT,
+            $service->deletedFingerprints,
+            'A workspace CA already published for sibling projects must be preserved.',
+        );
+    }
+
+    /**
+     * 本仓生成、未共享，但拿不出「该 CA 签发过本仓域名」的证据：保留（宁可不清理）。
+     */
+    public function testMacosTrustImportPreservesWorkspaceCaWithoutIssuanceProof(): void
+    {
+        $caPath = $this->writeTempFile('rootCA.pem', 'current-ca');
+        $leafPath = $this->writeTempFile('fullchain.pem', 'current-leaf');
+        $service = $this->macosTrustService($caPath, $leafPath);
+        $service->keychainFingerprints = [
+            '/Library/Keychains/System.keychain' => [self::SYSTEM_STALE_FINGERPRINT],
+            '/Users/unit/Library/Keychains/login.keychain-db' => [],
+        ];
+        $service->retiredFingerprints = [self::SYSTEM_STALE_FINGERPRINT];
+        $service->provenance = [
+            self::SYSTEM_STALE_FINGERPRINT => [
+                'origin' => LocalCaOwnershipPolicy::ORIGIN_GENERATED,
+                'shared' => false,
+                'domains' => [],
+            ],
+        ];
+
+        $result = $service->trust($caPath);
+
+        self::assertTrue((bool)($result['trusted'] ?? false));
+        self::assertNotContains(
+            self::SYSTEM_STALE_FINGERPRINT,
+            $service->deletedFingerprints,
+            'Without DB/leaf issuance proof the CA must be preserved.',
+        );
+    }
+
     public function testMacosTrustCacheDoesNotPinAFailedImport(): void
     {
         $caPath = $this->writeTempFile('rootCA.pem', 'current-ca');
@@ -246,6 +353,10 @@ final class MacosTrustSslCertificateService extends SslCertificateService
     public array $deletedFingerprints = [];
     /** @var list<string> */
     public array $retiredFingerprints = [];
+    /** @var array<string,array<string,mixed>> */
+    public array $provenance = [];
+    /** @var list<string> */
+    public array $issuanceProofDomains = [];
     public bool $caSelfVerifyTrusted = false;
     public bool $leafSystemVerifyTrusted = false;
     public bool $opensslChainValid = true;
@@ -307,6 +418,18 @@ final class MacosTrustSslCertificateService extends SslCertificateService
             ),
             $this->retiredFingerprints,
         )));
+    }
+
+    protected function loadLocalCaProvenance(): array
+    {
+        return $this->provenance;
+    }
+
+    protected function resolveWorkspaceDomainsSignedByLocalCa(string $caCertPath): array
+    {
+        unset($caCertPath);
+
+        return $this->issuanceProofDomains;
     }
 
     protected function resolveLocalDevelopmentProbeLeafPath(): string

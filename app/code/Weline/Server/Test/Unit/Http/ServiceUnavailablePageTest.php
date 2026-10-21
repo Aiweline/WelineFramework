@@ -36,7 +36,10 @@ final class ServiceUnavailablePageTest extends TestCase
         );
 
         self::assertStringContainsString('Content-Type: application/json; charset=utf-8', $response);
-        self::assertStringContainsString('"code":"maintenance"', $response);
+        $body = \substr($response, (int)\strpos($response, "\r\n\r\n") + 4);
+        $payload = \json_decode($body, true);
+        self::assertIsArray($payload);
+        self::assertSame('maintenance', $payload['code'] ?? null);
         self::assertStringContainsString('X-Weline-Maintenance: 1', $response);
         self::assertStringContainsString('Set-Cookie: weline_mw_gate=', $response);
         self::assertStringNotContainsString('<html', $response);

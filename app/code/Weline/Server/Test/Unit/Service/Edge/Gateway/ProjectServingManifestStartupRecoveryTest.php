@@ -191,27 +191,27 @@ final class ProjectServingManifestStartupRecoveryTest extends TestCase
             'path' => [
                 'expected' => ['path' => (string)$publication['path'] . '.stale'],
                 'fence' => [],
-                'message' => 'binding is stale or inconsistent',
+                'message' => '绑定已过期或不一致',
             ],
             'generation' => [
                 'expected' => ['generation' => (int)$publication['generation'] + 1],
                 'fence' => [],
-                'message' => 'binding is stale or inconsistent',
+                'message' => '绑定已过期或不一致',
             ],
             'digest' => [
                 'expected' => ['digest' => \str_repeat('d', 64)],
                 'fence' => [],
-                'message' => 'binding is stale or inconsistent',
+                'message' => '绑定已过期或不一致',
             ],
             'project UUID' => [
                 'expected' => ['project_uuid' => '223e4567-e89b-42d3-a456-426614174000'],
                 'fence' => [],
-                'message' => 'binding is stale or inconsistent',
+                'message' => '绑定已过期或不一致',
             ],
             'request digest' => [
                 'expected' => ['request_digest' => \str_repeat('e', 64)],
                 'fence' => [],
-                'message' => 'binding is stale or inconsistent',
+                'message' => '绑定已过期或不一致',
             ],
             'trust profile' => [
                 'expected' => [
@@ -219,17 +219,17 @@ final class ProjectServingManifestStartupRecoveryTest extends TestCase
                         => ProjectCertificateGenerationStore::TRUST_PROFILE_PRODUCTION,
                 ],
                 'fence' => [],
-                'message' => 'binding is stale or inconsistent',
+                'message' => '绑定已过期或不一致',
             ],
             'instance generation' => [
                 'expected' => [],
                 'fence' => ['instance_generation' => 12],
-                'message' => 'master fence',
+                'message' => '栅栏已过期',
             ],
             'launch ID' => [
                 'expected' => [],
                 'fence' => ['launch_id' => \str_repeat('f', 32)],
-                'message' => 'instance launch',
+                'message' => '实例启动',
             ],
         ];
 

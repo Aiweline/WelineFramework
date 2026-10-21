@@ -90,7 +90,13 @@ final class GatewayCommandJsonOutputTest extends TestCase
         self::assertStringContainsString('server:gateway:rebootstrap', $help);
         self::assertStringContainsString('--nonce', $help);
         self::assertStringContainsString('--confirm', $help);
-        self::assertStringContainsString('同一 package、nonce 与 profile', $help);
+        // Compare through the same resolver so order-dependent locale drift
+        // cannot turn the localized help into a failure.
+        self::assertStringContainsString(
+            (string)\__('32 位小写十六进制事务标识；恢复时必须复用'),
+            $help,
+        );
+        self::assertStringContainsString('--profile', $help);
 
         \ob_start();
         $exit = $command->execute([

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Test\Unit\Service\Edge\Nginx;
 
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPaths;
 use Weline\Server\Service\Edge\Nginx\ManagedNginxPublicPortProbe;
@@ -13,6 +14,7 @@ use Weline\Server\Service\Edge\Nginx\ManagedNginxPublicPortProbeInterface;
  * 公网端口探测必须用**通配地址**判定占用，并且能区分「被外人占着」和
  * 「被本项目自己的托管 Nginx 占着」—— 后者是重载/证书续期路径，绝不能回退。
  */
+#[RunTestsInSeparateProcesses]
 final class ManagedNginxPublicPortProbeTest extends TestCase
 {
     private string $root = '';

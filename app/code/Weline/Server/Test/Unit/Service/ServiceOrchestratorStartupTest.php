@@ -1681,7 +1681,8 @@ class ServiceOrchestratorStartupTest extends TestCase
         $orchestrator = new ServiceOrchestrator();
 
         $normalBatches = $this->invokePrivateWithArgs($orchestrator, 'getWorkerRestartBatches', [[1, 2, 3, 4], false]);
-        self::assertSame([[1, 2], [3, 4]], $normalBatches);
+        // Default worker_reload_batch_count is 3: 4 workers split into 2+1+1.
+        self::assertSame([[1, 2], [3], [4]], $normalBatches);
 
         $forceBatches = $this->invokePrivateWithArgs($orchestrator, 'getWorkerRestartBatches', [[1, 2, 3, 4], true]);
         self::assertSame([[1, 2, 3, 4]], $forceBatches);

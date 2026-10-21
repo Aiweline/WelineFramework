@@ -6971,7 +6971,7 @@ final class HostGatewayPackageManager
             $result = $this->runCommand($command, $windowsHelperProof);
             if ($result['code'] !== 0) {
                 throw new \RuntimeException(
-                    'Gateway package component self-test failed: '
+                    'Gateway package component self-test failed (exit ' . (int)$result['code'] . '): '
                     . \basename($command[0]) . ': ' . $result['output']
                 );
             }

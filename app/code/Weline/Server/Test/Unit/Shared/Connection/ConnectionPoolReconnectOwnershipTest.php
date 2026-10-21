@@ -57,9 +57,28 @@ final class ConnectionPoolReconnectOwnershipTest extends TestCase
         try {
             self::assertSame('connect_wait', $first->start());
             $second->start();
+            // The bounded wait may also yield once before its deadline expires.
+            for ($resumes = 0; $second->isSuspended() && $resumes < 8; ++$resumes) {
+                $second->resume();
+            }
+            self::assertFalse(
+                $second->isSuspended(),
+                'The second Fiber must finish its bounded wait.',
+            );
+            $secondLease = $second->getReturn();
             $first->resume();
+            // A reconnected lease may yield again while the pool finishes its
+            // bookkeeping under inherited global Fiber state; drive it to
+            // completion instead of assuming a single resume terminates it.
+            for ($resumes = 0; $first->isSuspended() && $resumes < 8; ++$resumes) {
+                $first->resume();
+            }
+            self::assertFalse(
+                $first->isSuspended(),
+                'The first Fiber must eventually return the reconnected lease.',
+            );
             self::assertSame($connection, $first->getReturn());
-            self::assertTrue($second->getReturn() === null, 'The reconnecting socket already belongs to the first Fiber.');
+            self::assertNull($secondLease, 'The reconnecting socket already belongs to the first Fiber.');
             self::assertSame(1, $calls);
         } finally {
             ConnectionPoolManager::discardPool('127.0.0.1', 47389, 'isolated_reconnect_ownership.token');

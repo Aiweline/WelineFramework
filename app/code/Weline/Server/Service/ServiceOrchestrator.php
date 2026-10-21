@@ -944,7 +944,7 @@ class ServiceOrchestrator
         $this->pendingStopProgressClientId = $progressClientId;
         $this->setStopStage(self::STOP_STAGE_REQUESTED);
 
-        $trace = $msgId !== '' ? $msgId : ('stop-' . \getmypid() . '-' . \time());
+        $trace = $msgId !== '' ? $msgId : ('stop-' . \getmypid() . '-' . (new \DateTimeImmutable('now'))->getTimestamp());
         $this->activeStopTraceId = $trace;
         $this->appendStopTraceLine('accepted', ['reason' => $reason, 'skip_drain' => $skipDrain]);
 
@@ -3665,7 +3665,7 @@ class ServiceOrchestrator
         }
 
         $instanceFile = Env::varDir() . 'server' . DS . 'instances' . DS . $context->instanceName . '.json';
-        $now = \time();
+        $now = (new \DateTimeImmutable('now'))->getTimestamp();
         $at = \date('Y-m-d H:i:s', $now);
 
         $diagnosticPublished = ServerInstanceManager::updateJsonFileAtomically(
@@ -33703,7 +33703,7 @@ class ServiceOrchestrator
         $baseline = $this->resolveBaselineWorkerCount();
         $envelope = CapacityScaleApplier::resolveEnvelope($baseline);
         $current = \max(1, (int)($this->desiredState[ControlMessage::ROLE_WORKER] ?? $baseline));
-        $now = \microtime(true);
+        $now = self::diagnosticWallSeconds();
         if ($activeSum <= 0) {
             if ($this->capacityIdleSince <= 0.0) {
                 $this->capacityIdleSince = $now;
@@ -34245,7 +34245,7 @@ class ServiceOrchestrator
             . ' ceiling=' . $ceiling
             . ' via CapacityScaleApplier'
         );
-        $this->lastCapacityScaleUpAt = \microtime(true);
+        $this->lastCapacityScaleUpAt = self::diagnosticWallSeconds();
 
         return true;
     }

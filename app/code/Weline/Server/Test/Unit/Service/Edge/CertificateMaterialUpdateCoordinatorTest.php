@@ -261,9 +261,11 @@ final class CertificateMaterialUpdateCoordinatorTest extends TestCase
     public function testStaticContractRequiresLiveLegacyMasterBeforeManagedReload(): void
     {
         $source = $this->source();
-        $legacy = \strpos($source, 'if ($explicitLegacy)');
+        // Legacy-managed reload is now keyed by the managed-Nginx edge
+        // projection, not the retired $explicitLegacy flag.
+        $legacy = \strpos($source, 'if ($managedNginxEdge) {');
         self::assertIsInt($legacy);
-        $legacyBlock = \substr($source, $legacy, 2300);
+        $legacyBlock = \substr($source, $legacy, 2600);
         $lease = \strpos($legacyBlock, 'validateRunningLease(');
         $authorize = \strpos($legacyBlock, "['authorized']");
         $enableReload = \strpos($legacyBlock, '$legacyManaged = true');
@@ -286,12 +288,8 @@ final class CertificateMaterialUpdateCoordinatorTest extends TestCase
             'legacy managed Nginx is not installed or no longer owned',
             $source,
         );
-        self::assertStringContainsString(
-            "catch (\\Throwable \$throwable) {\n"
-                . "                if (\$legacyManaged) {\n"
-                . "                    \$failures[] = 'legacy managed Nginx: '",
-            $source,
-        );
+        self::assertStringContainsString("if (\$legacyManaged) {", $source);
+        self::assertStringContainsString("'legacy managed Nginx: '", $source);
     }
 
     public function testAdaptersDeclareTheirCertificateUpdateSourceMode(): void

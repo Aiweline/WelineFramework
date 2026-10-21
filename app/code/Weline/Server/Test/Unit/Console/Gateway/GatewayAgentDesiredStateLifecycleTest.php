@@ -390,7 +390,7 @@ final class GatewayAgentDesiredStateLifecycleTest extends TestCase
             $source,
         );
         self::assertMatchesRegularExpression(
-            '/->replayPendingCertificateRetirements\(\s*75\.0,\s*8,\s*'
+            '/->replayPendingCertificateRetirements\(\s*75\.0,\s*16,\s*'
                 . '\$mutationDeadline,\s*\);/',
             $source,
         );

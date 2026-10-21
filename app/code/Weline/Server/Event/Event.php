@@ -23,7 +23,9 @@ namespace Weline\Server\Event;
  * 缺点：
  * - 需要安装 event 扩展（pecl install event）
  * - Windows 支持有限
- */
+  *
+ * @deprecated WLS 2.0 serves requests through bin/worker.php + bin/worker_ssl.php; this legacy async stack is unused and scheduled for removal (see doc/开发/plan.md WLS-014).
+*/
 class Event implements EventInterface
 {
     /**

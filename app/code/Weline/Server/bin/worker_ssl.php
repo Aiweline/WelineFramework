@@ -6318,13 +6318,13 @@ while (true) {
     if ($maxRequests > 0
         && $requestCount >= $maxRequests
         && !$shouldExit
-        && (\microtime(true) - $maxRequestsRecycleReportAt) >= 10.0
+        && (\wlsWorkerMonotonicNow() - $maxRequestsRecycleReportAt) >= 10.0
     ) {
         WlsLogger::info_("SSL Worker 已处理 {$requestCount} 个请求，达到上限 {$maxRequests}，请求 Master 安排优雅重启");
         $plannedExitReason = "max_requests_recycle:worker={$workerId},requests={$requestCount},limit={$maxRequests}";
         $wlsWorkerGracefulExitReason = $plannedExitReason;
         if ($ipcClient && $ipcClient->isConnected()) {
-            $maxRequestsRecycleReportAt = \microtime(true);
+            $maxRequestsRecycleReportAt = \wlsWorkerMonotonicNow();
             @$ipcClient->send(\Weline\Server\IPC\ControlMessage::exitReason($plannedExitReason, 0));
         } else {
             // Without a Master, preserve the previous autonomous recovery path.
