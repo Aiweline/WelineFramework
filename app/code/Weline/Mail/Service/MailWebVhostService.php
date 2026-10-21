@@ -35,11 +35,39 @@ final class MailWebVhostService
         );
         $this->reload = $reload ?? static function (string $confDir): array {
             $service = ManagedNginxService::fromEnv();
-            if ($service->runtimeRunningSnapshot()['running'] === false) {
+            $paths = $service->paths();
+            $pidFile = $paths->pidFile();
+            $pid = is_file($pidFile) ? (int) trim((string) file_get_contents($pidFile)) : 0;
+            $alive = $pid > 0 && @posix_kill($pid, 0);
+            $snapshotRunning = ($service->runtimeRunningSnapshot()['running'] ?? false) === true;
+            if (!$snapshotRunning && !$alive) {
                 return ['ok' => true, 'message' => 'nginx not running'];
             }
 
-            return $service->reload();
+            $result = $snapshotRunning
+                ? $service->reload()
+                : ['ok' => false, 'message' => 'managed nginx owner mismatch'];
+            if (($result['ok'] ?? false) === true) {
+                return $result;
+            }
+
+            // Local/manual managed-Nginx starts may not carry the WLS edge owner
+            // identity yet. Reload only the PID/binary recorded by this project.
+            $binary = $paths->binary();
+            if ($alive && is_executable($binary)) {
+                $prefix = rtrim($paths->runtimeRoot(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+                $command = escapeshellarg($binary)
+                    . ' -p ' . escapeshellarg($prefix)
+                    . ' -c conf/nginx.conf -s reload 2>&1';
+                $output = [];
+                $code = 0;
+                @exec($command, $output, $code);
+                if ($code === 0) {
+                    return ['ok' => true, 'message' => 'fallback nginx reload'];
+                }
+            }
+
+            return $result;
         };
         $this->confDir = $confDir ?? ManagedNginxService::fromEnv()->paths()->confDir() . DIRECTORY_SEPARATOR . 'conf.d';
         $this->nginxConf = $nginxConf ?? dirname($this->confDir) . DIRECTORY_SEPARATOR . 'nginx.conf';
