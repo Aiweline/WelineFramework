@@ -4769,6 +4769,57 @@ class Taglib
         if ($result === null) {
             return '';
         }
+        if (!\is_string($result)) {
+            return (string)$result;
+        }
+        // 自定义标签（file-manager 等）的 callback 契约是「返回可拼进编译产物的 PHP」。
+        // 属性里一旦有 @lang / {{ }}，StageResolver 会改走本方法并把返回值 echo 成 HTML。
+        // 浏览器把 `<?` 当成处理指令，在 `=>` 的第一个 `>` 处截断，属性源码就漏到页面上。
+        // 这里只认 framework_view_process_block(...) 这一条拼接形态，在模板数据作用域里执行。
+        $realized = $this->realizeSplicedBlockEcho($template, $result);
+        if ($realized !== null) {
+            return $realized;
+        }
+
+        return $result;
+    }
+
+    /**
+     * 把编译期拼接用的 `<?php echo framework_view_process_block(...);?>` 在当前模板数据上执行。
+     *
+     * 只接受整段就是这一次调用的字符串。其它 PHP 片段保持原样返回，避免把任意回调输出送进 eval。
+     * `$vars=['name'=>&$name]` 依赖 extract 后的模板数据；控制器 assign 的变量因此可见。
+     */
+    private function realizeSplicedBlockEcho(Template $template, string $php): ?string
+    {
+        $trimmed = \trim($php);
+        if (\preg_match(
+            '/^<\?(?:php|=)\s*echo\s+(framework_view_process_block\s*\(.*\))\s*;\s*\?>$/s',
+            $trimmed,
+            $matches
+        ) !== 1) {
+            return null;
+        }
+
+        $expression = $matches[1];
+        $data = $template->getData();
+        if (!\is_array($data)) {
+            $data = [];
+        }
+        if (\preg_match_all('/&\$([A-Za-z_][A-Za-z0-9_]*)/', $expression, $names) > 0) {
+            foreach ($names[1] as $name) {
+                if (!\array_key_exists($name, $data)) {
+                    $data[$name] = null;
+                }
+            }
+        }
+
+        $result = (static function (array $__weline_tpl_data, string $__weline_expr): mixed {
+            \extract($__weline_tpl_data, EXTR_SKIP);
+
+            return eval('return ' . $__weline_expr . ';');
+        })($data, $expression);
+
         return \is_string($result) ? $result : (string)$result;
     }
 
