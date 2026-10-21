@@ -10,8 +10,8 @@
      */
     margin: var(--weline-space-3) 0 0;
     padding: var(--weline-space-3) 0 0;
-    /* Width fallback: --border-width-thin may be absent when _borders.css is off theme-head. */
-    border-top: var(--border-width-thin, 1px) solid var(
+    /* --border-width-thin is a Theme variables leaf (variables/_borders.css). */
+    border-top: var(--border-width-thin) solid var(
         --weline-theme-border,
         var(--weline-theme-color-border, var(--color-border))
     );
@@ -38,7 +38,7 @@
     /* Paper secondary — never inherit inverse cream muted as “missing” ink. */
     color: var(
         --amz-drawer-muted,
-        var(--weline-chrome-body-text-secondary, var(--weline-theme-color-text-muted, var(--color-text-muted, #565959)))
+        var(--weline-chrome-body-text-secondary, var(--weline-theme-color-text-muted, var(--color-text-muted)))
     );
     flex: 1 1 auto;
     min-width: 0;
@@ -54,7 +54,7 @@
     white-space: nowrap;
     color: var(
         --amz-drawer-text,
-        var(--weline-chrome-body-text, var(--weline-theme-color-text, var(--color-text, #0f1111)))
+        var(--weline-chrome-body-text, var(--weline-theme-color-text, var(--color-text)))
     );
 }
 
@@ -62,7 +62,7 @@
 .w-storefront-money-summary__row--order-total {
     margin-top: var(--weline-space-1);
     padding-top: var(--weline-space-2);
-    border-top: var(--border-width-thin, 1px) solid var(
+    border-top: var(--border-width-thin) solid var(
         --weline-theme-border,
         var(--weline-theme-color-border, var(--color-border))
     );
@@ -76,7 +76,7 @@
 .w-storefront-money-summary__row--payable {
     margin-top: var(--weline-space-1);
     padding-top: var(--weline-space-2);
-    border-top: var(--border-width-thin, 1px) solid var(
+    border-top: var(--border-width-thin) solid var(
         --weline-theme-border,
         var(--weline-theme-color-border, var(--color-border))
     );
@@ -115,11 +115,11 @@
     /* Foundation secondary (#565959) — cream paper must stay readable (审图). */
     color: var(
         --amz-drawer-muted,
-        var(--weline-chrome-body-text-secondary, var(--weline-theme-color-text-muted, var(--color-text-muted, #565959)))
+        var(--weline-chrome-body-text-secondary, var(--weline-theme-color-text-muted, var(--color-text-muted)))
     );
     -webkit-text-fill-color: var(
         --amz-drawer-muted,
-        var(--weline-chrome-body-text-secondary, var(--weline-theme-color-text-muted, var(--color-text-muted, #565959)))
+        var(--weline-chrome-body-text-secondary, var(--weline-theme-color-text-muted, var(--color-text-muted)))
     );
     font-size: var(--weline-font-size-xs);
     line-height: 1.4;

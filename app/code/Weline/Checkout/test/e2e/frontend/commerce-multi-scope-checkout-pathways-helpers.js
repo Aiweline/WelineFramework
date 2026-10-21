@@ -122,6 +122,9 @@ async function addToCartMode(page, gotoFrontend, pdpPath, mode) {
     pinTheme();
     let api = window.Weline && window.Weline.Api;
     if (!api || api.__full !== true || typeof api.resource !== 'function') {
+      if (!window.Weline || typeof window.Weline.load !== 'function') {
+        return { success: false, message: 'weline_api_missing', error: 'window.Weline.load unavailable' };
+      }
       const loaded = await window.Weline.load('api');
       if (loaded && loaded.__full === true) {
         window.Weline.Api = loaded;
@@ -129,6 +132,9 @@ async function addToCartMode(page, gotoFrontend, pdpPath, mode) {
       } else {
         api = loaded || api;
       }
+    }
+    if (!api || typeof api.resource !== 'function') {
+      return { success: false, message: 'weline_api_missing', error: 'Weline.Api.resource unavailable' };
     }
     pinTheme();
     // Prefer the main PDP purchase root — related/recommend cards also expose
@@ -288,6 +294,9 @@ async function applyCouponViaApi(page, code = COUPON, mode = 'toc') {
     /* theme stamp adopted by evaluateWithThemeReload/neutralize — do not clear */
     let api = window.Weline && window.Weline.Api;
     if (!api || api.__full !== true || typeof api.resource !== 'function') {
+      if (!window.Weline || typeof window.Weline.load !== 'function') {
+        return { success: false, message: 'weline_api_missing', error: 'window.Weline.load unavailable' };
+      }
       const loaded = await window.Weline.load('api');
       if (loaded && loaded.__full === true) {
         window.Weline.Api = loaded;
@@ -295,6 +304,9 @@ async function applyCouponViaApi(page, code = COUPON, mode = 'toc') {
       } else {
         api = loaded || api;
       }
+    }
+    if (!api || typeof api.resource !== 'function') {
+      return { success: false, message: 'weline_api_missing', error: 'Weline.Api.resource unavailable' };
     }
     if (api && typeof api.bootstrapScope === 'function') {
       try { await api.bootstrapScope(); } catch (_) {}
@@ -565,7 +577,13 @@ async function submitCheckoutCaptureEvidence(page, meta = {}) {
       /* theme stamp adopted by evaluateWithThemeReload/neutralize — do not clear */
       let api = window.Weline && window.Weline.Api;
       if (!api || typeof api.resource !== 'function') {
+        if (!window.Weline || typeof window.Weline.load !== 'function') {
+          return { success: false, message: 'weline_api_missing', error: 'window.Weline.load unavailable' };
+        }
         api = await window.Weline.load('api');
+      }
+      if (!api || typeof api.resource !== 'function') {
+        return { success: false, message: 'weline_api_missing', error: 'Weline.Api.resource unavailable' };
       }
       if (typeof api.bootstrapScope === 'function') {
         try { await api.bootstrapScope(); } catch (_) {}

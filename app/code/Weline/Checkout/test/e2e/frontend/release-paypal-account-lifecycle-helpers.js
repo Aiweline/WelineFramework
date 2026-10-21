@@ -452,6 +452,12 @@ function isThemeGenerationStaleMessage(msg) {
     .test(String(msg || ''));
 }
 
+function resultLooksApiNotReady(result) {
+  if (!result || typeof result !== 'object') return false;
+  const message = String(result.message || result.error || result.__error || '');
+  return /weline_api_missing|window\.Weline\.load unavailable|Weline\.Api\.resource unavailable/i.test(message);
+}
+
 function resultLooksThemeStale(result) {
   if (!result || typeof result !== 'object') return false;
   if (isThemeGenerationStaleMessage(result.error)
@@ -611,9 +617,24 @@ async function evaluateWithThemeReload(page, fn, arg) {
   await rewarmScopeAfterThemeRefresh(page).catch(() => {});
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     await page.evaluate(() => { window.__WELINE_E2E_RELOAD_REQUESTED = false; }).catch(() => {});
-    await waitForWelineApi(page).catch(() => {});
+    const apiReady = await waitForWelineApi(page, 20000).then(() => true).catch(() => false);
+    if (!apiReady) {
+      if (attempt >= maxAttempts - 1) {
+        throw new Error('weline_api_missing');
+      }
+      if (attempt >= 1) {
+        await hardRefreshStorefront(page);
+      } else {
+        await page.waitForLoadState('domcontentloaded').catch(() => {});
+      }
+      continue;
+    }
     try {
       const result = await page.evaluate(fn, arg);
+      if (resultLooksApiNotReady(result) && attempt < maxAttempts - 1) {
+        await page.waitForLoadState('domcontentloaded').catch(() => {});
+        continue;
+      }
       const reloadRequested = await page.evaluate(() => !!window.__WELINE_E2E_RELOAD_REQUESTED).catch(() => false);
       if ((resultLooksThemeStale(result) || reloadRequested) && attempt < maxAttempts - 1) {
         // Soft stamp clear first; if Worker generation already advanced (sibling
