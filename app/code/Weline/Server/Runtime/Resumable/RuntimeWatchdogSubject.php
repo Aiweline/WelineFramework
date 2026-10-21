@@ -32,6 +32,12 @@ final class RuntimeWatchdogSubject
          * is ambiguous because a platform launcher can still be starting it.
          */
         public readonly bool $runnerLeaseReleased = false,
+        /**
+         * Recovery was enabled by policy but the attempt budget is exhausted.
+         * The watchdog must terminalize the task instead of inspecting it on
+         * every tick forever.
+         */
+        public readonly bool $recoveryExhausted = false,
     ) {
         if (trim($this->taskId) === '') {
             throw new InvalidArgumentException('Runtime watchdog subject task id is required.');

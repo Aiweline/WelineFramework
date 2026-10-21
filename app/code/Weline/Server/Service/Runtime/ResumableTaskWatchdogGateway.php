@@ -49,9 +49,7 @@ final class ResumableTaskWatchdogGateway implements RuntimeWatchdogGatewayInterf
                 $launchId = 'released-' . $generation;
             }
             $processName = (string)($row['runner_process_name'] ?? '');
-            if ($processName === '') {
-                $processName = RuntimeProcessIdentity::buildProcessName($taskId, $generation);
-            }
+            $processName = self::canonicalProcessName($taskId, $generation, $processName);
             $process = new RuntimeProcessIdentity(
                 taskId: $taskId,
                 generation: $generation,
@@ -90,6 +88,8 @@ final class ResumableTaskWatchdogGateway implements RuntimeWatchdogGatewayInterf
                     && $status !== 'cancel_requested'
                     && (!$requiresClientLease || $hasActiveClientLease),
                 runnerLeaseReleased: $leaseReleased,
+                recoveryExhausted: $policy->recoveryEnabled
+                    && (int)$row['attempt'] >= (int)$row['max_attempts'],
             );
         }
     }
@@ -289,6 +289,20 @@ final class ResumableTaskWatchdogGateway implements RuntimeWatchdogGatewayInterf
             bytesLimit: $policy->maxEventBacklogBytes,
             runnerId: (string)($terminal['runner_id'] ?? '') ?: null,
         );
+    }
+
+    /**
+     * Persisted names from older rows may lag the fencing generation (for
+     * example, a recovery bump that stored the previous generation's name).
+     * Rebuild the canonical name so one stale row cannot abort the whole
+     * watchdog tick. A live runner with a different --name still fails the
+     * supervisor's canonical argument check, so termination stays fail-closed.
+     */
+    private static function canonicalProcessName(string $taskId, int $generation, string $persisted): string
+    {
+        $canonical = RuntimeProcessIdentity::buildProcessName($taskId, $generation);
+
+        return $persisted === $canonical ? $persisted : $canonical;
     }
 
     private function timestamp(string $value): ?int

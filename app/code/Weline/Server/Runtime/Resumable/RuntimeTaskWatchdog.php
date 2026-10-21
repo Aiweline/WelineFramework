@@ -61,6 +61,17 @@ final class RuntimeTaskWatchdog
                 continue;
             }
 
+            // Recovery is enabled but the attempt budget is gone. Terminalize
+            // once instead of re-inspecting the row on every watchdog tick.
+            // This must run before cooperative-stop finalization: a stale
+            // recovering row may already carry recovery_stop_requested while
+            // its status never reached cancel_requested.
+            if (!$this->shutdownDrain && $probe->allowsRecovery() && $subject->recoveryExhausted) {
+                $this->gateway->recordRecoveryBlocked($subject, 'recovery_exhausted', $now);
+                $report->recoveriesBlocked++;
+                continue;
+            }
+
             if ($subject->stopRequested) {
                 $this->handleCooperativeStop($subject, $probe, $now, $report);
                 continue;
