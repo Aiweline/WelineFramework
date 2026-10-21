@@ -699,9 +699,23 @@ class Order extends BackendPageController
         $this->redirect('*/backend/order/edit?id=' . $orderId);
     }
 
+    private function menuSignalActorId(): int
+    {
+        try {
+            $users = ObjectManager::getInstance(\Weline\Backend\Api\Auth\BackendUserContextProviderInterface::class);
+            $actor = $users->current();
+            if ($actor !== null && (int)$actor->getId() > 0) {
+                return (int)$actor->getId();
+            }
+        } catch (\Throwable) {
+        }
+
+        return max(0, (int)$this->getLoginUserId());
+    }
+
     private function markOrderMenuMessageRead(int $orderId): void
     {
-        $userId = (int)$this->getLoginUserId();
+        $userId = $this->menuSignalActorId();
         if ($orderId <= 0 || $userId <= 0 || !class_exists(\Weline\Admin\Service\BackendMenuSignalInbox::class)) {
             return;
         }

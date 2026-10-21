@@ -95,6 +95,10 @@ private function assert_BackendMenuSignalDeepLink_testSidebarHostsSignalPanelAnd
     self::assertStringContainsString('primary_href', $js);
     self::assertStringContainsString('openSignalPanel', $js);
     self::assertStringContainsString('navigateToLeaf', $js);
+    self::assertStringContainsString('function noteViewed()', $js);
+    self::assertStringContainsString('function releaseViewed()', $js);
+    self::assertStringContainsString('omitViewedItems', $js);
+    self::assertStringContainsString('viewedHrefKeys', $js);
     self::assertStringContainsString('anchorSignalTriggerToBadge', $js);
     self::assertStringContainsString('is-clickable', $js);
     self::assertStringContainsString('expandOverlay', $js);

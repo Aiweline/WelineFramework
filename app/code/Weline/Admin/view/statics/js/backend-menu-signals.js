@@ -17,7 +17,13 @@
     var pollTimer = null;
     var visibilityBound = false;
     var clickBound = false;
+    var historyBound = false;
+    var notedInitialView = false;
+    var refreshSeq = 0;
     var lastByCode = {};
+    var lastRawByCode = {};
+    var viewedHrefKeys = Object.create(null);
+    var reopenedHrefKeys = Object.create(null);
     var lastLeavesByBadge = typeof WeakMap === 'function' ? new WeakMap() : null;
 
     function ensureWelineApi() {
@@ -664,9 +670,150 @@
         }, true);
     }
 
+    function hrefKey(href) {
+        try {
+            var parsed = new global.URL(String(href || ''), global.location.href);
+            var path = normalizePath(parsed.pathname);
+            var params = [];
+            parsed.searchParams.forEach(function (value, key) {
+                if (String(value) === '') {
+                    return;
+                }
+                params.push(String(key) + '=' + String(value));
+            });
+            params.sort();
+            return path + (params.length > 0 ? '?' + params.join('&') : '');
+        } catch (_error) {
+            return String(href || '').trim();
+        }
+    }
+
+    function hrefMatchesLocation(href) {
+        try {
+            var current = new global.URL(global.location.href);
+            var target = new global.URL(String(href || ''), global.location.href);
+            if (normalizePath(current.pathname) !== normalizePath(target.pathname)) {
+                return false;
+            }
+            var required = 0;
+            var matched = true;
+            target.searchParams.forEach(function (value, key) {
+                if (String(value) === '') {
+                    return;
+                }
+                required += 1;
+                if (current.searchParams.get(key) !== value) {
+                    matched = false;
+                }
+            });
+            return required > 0 && matched;
+        } catch (_error) {
+            return false;
+        }
+    }
+
+    function forEachSignalHref(byCode, visit) {
+        var codes = byCode && typeof byCode === 'object' ? Object.keys(byCode) : [];
+        for (var i = 0; i < codes.length; i += 1) {
+            var entry = normalizeCodeEntry(byCode[codes[i]]);
+            if (entry.primary_href) {
+                visit(entry.primary_href);
+            }
+            var items = entry.items || [];
+            for (var j = 0; j < items.length; j += 1) {
+                if (items[j] && items[j].href) {
+                    visit(items[j].href);
+                }
+            }
+        }
+    }
+
+    function isViewedHref(href) {
+        var key = hrefKey(href);
+        if (key === '' || reopenedHrefKeys[key]) {
+            return false;
+        }
+        return viewedHrefKeys[key] === true;
+    }
+
+    function omitViewedItems(byCode) {
+        var out = {};
+        var codes = byCode && typeof byCode === 'object' ? Object.keys(byCode) : [];
+        for (var i = 0; i < codes.length; i += 1) {
+            var code = codes[i];
+            var entry = normalizeCodeEntry(byCode[code]);
+            if (entry.items.length === 0) {
+                if (entry.count > 0 && entry.primary_href && isViewedHref(entry.primary_href)) {
+                    continue;
+                }
+                if (entry.count > 0) {
+                    out[code] = byCode[code];
+                }
+                continue;
+            }
+            var items = [];
+            for (var j = 0; j < entry.items.length; j += 1) {
+                if (isViewedHref(entry.items[j].href)) {
+                    continue;
+                }
+                items.push(entry.items[j]);
+            }
+            if (items.length === 0) {
+                continue;
+            }
+            var count = 0;
+            for (var k = 0; k < items.length; k += 1) {
+                count += items[k].count || 1;
+            }
+            out[code] = {
+                count: count,
+                items: items,
+                primary_href: String(items[0].href || ''),
+            };
+        }
+        return out;
+    }
+
+    function rememberViewedFromRaw() {
+        forEachSignalHref(lastRawByCode, function (href) {
+            if (!hrefMatchesLocation(href)) {
+                return;
+            }
+            var key = hrefKey(href);
+            if (key === '') {
+                return;
+            }
+            viewedHrefKeys[key] = true;
+            delete reopenedHrefKeys[key];
+        });
+    }
+
+    function noteViewed() {
+        rememberViewedFromRaw();
+        return paintBackendMenuSignals({ total: 0, by_code: lastRawByCode });
+    }
+
+    function releaseViewed() {
+        function reopen(href) {
+            if (!hrefMatchesLocation(href)) {
+                return;
+            }
+            var key = hrefKey(href);
+            if (key === '') {
+                return;
+            }
+            delete viewedHrefKeys[key];
+            reopenedHrefKeys[key] = true;
+        }
+        forEachSignalHref(lastRawByCode, reopen);
+        Object.keys(viewedHrefKeys).forEach(reopen);
+        return paintBackendMenuSignals({ total: 0, by_code: lastRawByCode });
+    }
+
     function paintBackendMenuSignals(signals) {
         var payload = unwrapPayload(signals);
-        var byCode = payload.by_code;
+        lastRawByCode = payload.by_code;
+        var byCode = omitViewedItems(payload.by_code);
         lastByCode = byCode;
         var nodes = global.document.querySelectorAll('[data-backend-menu-signal]');
         for (var i = 0; i < nodes.length; i += 1) {
@@ -685,6 +832,7 @@
     }
 
     function refreshBackendMenuSignals() {
+        var seq = ++refreshSeq;
         return getAdminApi()
             .then(function (api) {
                 if (!api || typeof api.menuSignals !== 'function') {
@@ -693,7 +841,15 @@
                 return api.menuSignals({}, { silent: true, keepBusinessResult: true });
             })
             .then(function (result) {
-                return paintBackendMenuSignals(unwrapPayload(result));
+                if (seq !== refreshSeq) {
+                    return unwrapPayload(result);
+                }
+                var painted = paintBackendMenuSignals(unwrapPayload(result));
+                if (!notedInitialView) {
+                    notedInitialView = true;
+                    return noteViewed();
+                }
+                return painted;
             })
             .catch(function (error) {
                 if (global.console && typeof global.console.warn === 'function') {
@@ -734,12 +890,23 @@
         });
     }
 
+    function bindHistory() {
+        if (historyBound || !global.addEventListener) {
+            return;
+        }
+        historyBound = true;
+        global.addEventListener('popstate', function () {
+            noteViewed();
+        });
+    }
+
     function boot() {
         if (!global.document.getElementById('w-backend-sidebar')
             && !global.document.querySelector('[data-backend-menu-signal]')) {
             return;
         }
         bindVisibility();
+        bindHistory();
         bindBadgeInteractions();
         refreshBackendMenuSignals().catch(function () {});
         startPolling();
@@ -747,6 +914,8 @@
 
     var api = {
         refresh: refreshBackendMenuSignals,
+        noteViewed: noteViewed,
+        releaseViewed: releaseViewed,
         paint: paintBackendMenuSignals,
         clear: clearBackendMenuSignals,
         startPolling: startPolling,

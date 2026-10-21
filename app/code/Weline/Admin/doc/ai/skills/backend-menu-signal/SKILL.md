@@ -32,8 +32,9 @@ description: >-
 3. 角标只表示**未读**。不要把全部待办/历史单据都算进去。
 4. 写入统一收件箱 `Weline\Admin\Service\BackendMenuSignalInbox`：
    - `publish($code, $itemId, $title, $href, $unread)` 新消息 `$unread=true`
-   - 打开或标已读时 `markRead($code, $itemId, $backendUserId)`
-   - 用户把一条重新标成未读时 `markUnread`。`publish` 不会把已读行翻回去
+   - 打开或标已读时 `markRead($code, $itemId, $backendUserId)`。用户 ID 用 `BackendUserContext`（与 `admin.menuSignals` 同一人）
+   - 打开对应记录后立刻 `Weline.BackendMenuSignals.noteViewed()`，并 `refresh()`。不要等 30 秒轮询才消角标
+   - 用户把当前这条再标成未读时 `markUnread`，并 `releaseViewed()`。`publish` 不会把已读行翻回去
    - 列表只用 `unreadItems()` / `unreadCount()`
 5. `items()` 每条必须带 `unread: true`。没有这个标志，或已读，聚合器直接丢掉，角标不加。
    - `href` 只用归属模块自己的后台 URL（`UrlInterface::getBackendUrl`）
