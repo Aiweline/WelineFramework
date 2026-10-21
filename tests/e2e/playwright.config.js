@@ -293,6 +293,34 @@ const globalTeardownBrowserCleanupPath = path.join(__dirname, 'global-teardown-b
 // 截图、trace、失败产物等统一落在 tests/e2e/test-results（勿用仓库根 test-results）
 const e2eTestResultsDir = path.join(__dirname, 'test-results');
 
+// 发布门禁额外产出 JSON 报告，供 e2e:run 核对「跳过预算」。
+// 只有套件运行（WELINE_E2E_GATE_ACTIVE=1）才加，普通调试不写额外文件。
+function buildReporters() {
+  const reporters = process.env.PLAYWRIGHT_HTML_REPORT === '0' || process.env.CI
+    ? [['list']]
+    : [
+        ['list'],
+        [
+          'html',
+          {
+            outputFolder: path.join(__dirname, 'playwright-report'),
+            open: 'never',
+          },
+        ],
+      ];
+  if (process.env.WELINE_E2E_GATE_ACTIVE === '1') {
+    reporters.push([
+      'json',
+      {
+        outputFile: process.env.WELINE_E2E_GATE_JSON_FILE
+          || path.join(e2eTestResultsDir, 'gate-summary.json'),
+      },
+    ]);
+  }
+
+  return reporters;
+}
+
 module.exports = defineConfig({
   rootDir,
   globalSetup: process.env.PLAYWRIGHT_E2E_HOSTS_FQDN ? globalSetupHostsPath : undefined,
@@ -320,18 +348,7 @@ module.exports = defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: resolvedWorkers,
-  reporter: process.env.PLAYWRIGHT_HTML_REPORT === '0' || process.env.CI
-    ? [['list']]
-    : [
-        ['list'],
-        [
-          'html',
-          {
-            outputFolder: path.join(__dirname, 'playwright-report'),
-            open: 'never',
-          },
-        ],
-      ],
+  reporter: buildReporters(),
   // 默认复用已存在的 e2e 代理；如果端口被占用，proxy-server.js 会自动换到下一个可用端口。
   // 需要强制独占启动新代理时设置：PLAYWRIGHT_FORCE_NEW_PROXY=1
   webServer: process.env.PLAYWRIGHT_DISABLE_PROXY === '1' ? undefined : {

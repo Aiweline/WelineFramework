@@ -123,6 +123,8 @@ final class E2eRunArgumentsTest extends TestCase
         self::assertSame('controllable', $resolved['env']['WELINE_E2E_PAYMENT_DRIVER'] ?? null);
         self::assertSame('fake_card', $resolved['env']['FORCE_PAYMENT_METHOD'] ?? null);
         self::assertNotEmpty($resolved['files']);
+        self::assertArrayHasKey('REL-PAYPAL-QUICK-001', $resolved['allowed_skips'] ?? []);
+        self::assertArrayHasKey('HELPPAY-CHECKOUT-ADDR-EDIT-001', $resolved['allowed_skips'] ?? []);
     }
 
     public function testResolveSuitePaypalSandboxInjectsWalletFailFastEnv(): void

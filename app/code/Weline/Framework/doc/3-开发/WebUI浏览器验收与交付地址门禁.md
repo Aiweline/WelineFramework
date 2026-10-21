@@ -87,6 +87,8 @@
 
 **过滤运行（硬）**：`--case-id` 先解析到声明该 `[case:ID]` 的 spec 文件，再交给 Playwright。禁止「收集全部 spec + `--grep`」——一个非法的 spec→spec `require` 会让所有过滤运行一起报 `should not import test file`。`E2eCollectionContractTest` 守住这条契约。
 
+**跳过预算（硬）**：套件运行会额外产出 JSON 报告（`tests/e2e/test-results/gate-summary.json`），`e2e:run` 按 `[case:ID]` 对账。只有清单 `allowed_skips` 里显式声明原因的用例才允许 `test.skip`；出现新的静默跳过一个就让门禁失败（`Weline\Framework\Test\Service\E2eGateSkipBudget`）。豁免必须带原因，修好后删除豁免。
+
 ### 打开即禁用缓存（WB-CACHE，硬）
 
 每次**打开或导航**验收页之前必须禁用该会话的 HTTP 缓存；**默认磁盘缓存会导致本回合 CSS/JS/HTML 误判 PASS**（旧 bundle 仍画出「已修好」的假象）。不要求清空整个浏览器用户配置缓存（宿主常禁止）。

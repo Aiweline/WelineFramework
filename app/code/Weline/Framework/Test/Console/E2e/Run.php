@@ -9,6 +9,7 @@ use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Test\Service\E2eBrowserCleanupService;
 use Weline\Framework\Test\Service\E2eGatePreflight;
+use Weline\Framework\Test\Service\E2eGateSkipBudget;
 use Weline\Framework\Test\Service\TestCollectionService;
 
 class Run extends CommandAbstract
@@ -37,12 +38,14 @@ class Run extends CommandAbstract
         }
 
         $extraEnv = [];
+        $suiteAllowedSkips = [];
         if ($control['spec'] === '') {
             $filesToRun = [];
             if ($control['suite'] !== '') {
                 try {
                     $suiteResolved = $this->resolveSuite($control['suite'], $e2eDir);
                     $filesToRun = $suiteResolved['files'];
+                    $suiteAllowedSkips = $suiteResolved['allowed_skips'];
                     foreach ($suiteResolved['env'] as $envKey => $envValue) {
                         $extraEnv[(string)$envKey] = (string)$envValue;
                     }
@@ -50,6 +53,12 @@ class Run extends CommandAbstract
                     $this->printer->error($exception->getMessage());
                     return 1;
                 }
+                // 门禁跑完后用 JSON 报告核对「跳过预算」，防止条件跳过悄悄放水。
+                $gateJsonFile = $e2eDir . DIRECTORY_SEPARATOR . 'test-results' . DIRECTORY_SEPARATOR . 'gate-summary.json';
+                if (!is_dir(dirname($gateJsonFile)) && !@mkdir(dirname($gateJsonFile), 0775, true) && !is_dir(dirname($gateJsonFile))) {
+                    $this->printer->warning(__('无法创建门禁 JSON 报告目录：%{1}', [dirname($gateJsonFile)]));
+                }
+                $extraEnv['WELINE_E2E_GATE_JSON_FILE'] = $gateJsonFile;
                 $this->printer->note(__('套件 %{1}：%{2} 个通路 spec', [$control['suite'], (string)count($filesToRun)]));
             } elseif ($control['module'] !== '') {
                 $filesToRun = $this->resolveModuleFiles($control['module'], $collected);
@@ -103,7 +112,10 @@ class Run extends CommandAbstract
             $preflight->release();
             return 1;
         }
-        $extraEnv['WELINE_E2E_GATE_ACTIVE'] = '1';
+        if ($control['suite'] !== '') {
+            // 只有套件才产出跳过预算 JSON；单 spec 调试不写额外报告。
+            $extraEnv['WELINE_E2E_GATE_ACTIVE'] = '1';
+        }
         $preflight->lock()?->heartbeat(['phase' => 'playwright', 'files' => count($filesToRun ?? [])]);
 
         if (!$this->ensurePlaywrightRuntime($e2eDir)) {
@@ -118,6 +130,10 @@ class Run extends CommandAbstract
         echo "\n";
 
         $exitCode = $this->runPlaywrightCommand($e2eDir, $playwrightArgs, $extraEnv, $command);
+
+        if ($control['suite'] !== '') {
+            $exitCode = $this->enforceSkipBudget($e2eDir, $suiteAllowedSkips, $exitCode);
+        }
 
         // Always reap orphaned automation browsers even when the suite fails.
         // Playwright globalTeardown also runs this; the PHP pass covers crashes / skipped teardown.
@@ -828,7 +844,70 @@ class Run extends CommandAbstract
         return [
             'files' => array_values(array_unique($files)),
             'env' => $env,
+            'allowed_skips' => E2eGateSkipBudget::allowedFromManifest($decoded),
         ];
+    }
+
+    /**
+     * 门禁跳过预算：只允许清单 allowed_skips 中声明的用例跳过。
+     *
+     * @param array<string, string> $allowed
+     */
+    private function enforceSkipBudget(string $e2eDir, array $allowed, int $exitCode): int
+    {
+        $jsonFile = (string)(getenv('WELINE_E2E_GATE_JSON_FILE') ?: '');
+        if ($jsonFile === '') {
+            $jsonFile = $e2eDir . DIRECTORY_SEPARATOR . 'test-results' . DIRECTORY_SEPARATOR . 'gate-summary.json';
+        }
+        if (!is_file($jsonFile)) {
+            // fail-closed：报告缺失就无法证明「没有静默跳过」，不能当通过。
+            $this->printer->error(__(
+                '门禁跳过预算失败：未生成 JSON 报告（%{1}），无法核对是否有用例被静默跳过。'
+                . ' 检查 playwright.config.js 的 JSON reporter 与 WELINE_E2E_GATE_ACTIVE。',
+                [$jsonFile]
+            ));
+            return $exitCode === 0 ? 1 : $exitCode;
+        }
+
+        $raw = (string)@file_get_contents($jsonFile);
+        $report = \json_decode($raw, true);
+        if (!\is_array($report)) {
+            $this->printer->error(__('门禁跳过预算失败：JSON 报告无法解析（%{1}）。', [$jsonFile]));
+            return $exitCode === 0 ? 1 : $exitCode;
+        }
+
+        $skips = E2eGateSkipBudget::collectSkips($report);
+        if ($skips === []) {
+            $this->printer->note(__('门禁跳过预算：无跳过用例。'));
+            return $exitCode;
+        }
+
+        $partition = E2eGateSkipBudget::partition($skips, $allowed);
+        foreach ($partition['declared'] as $skip) {
+            $this->printer->note(__('已声明跳过：%{1} — %{2}', [
+                $skip['case'] !== '' ? $skip['case'] : $skip['title'],
+                $skip['reason'],
+            ]));
+        }
+        foreach ($partition['undeclared'] as $skip) {
+            $this->printer->error(__('未声明跳过：%{1} — %{2}', [
+                $skip['case'] !== '' ? $skip['case'] : $skip['title'],
+                $skip['reason'],
+            ]));
+        }
+
+        if ($partition['undeclared'] !== []) {
+            $this->printer->error(__(
+                '门禁跳过预算未通过：%{1} 个用例被静默跳过。'
+                . ' 在套件清单 allowed_skips 里声明原因，或修好该通路后取消跳过。',
+                [(string)count($partition['undeclared'])]
+            ));
+            return $exitCode === 0 ? 1 : $exitCode;
+        }
+
+        $this->printer->note(__('门禁跳过预算通过：%{1} 个跳过用例均已在清单声明。', [(string)count($skips)]));
+
+        return $exitCode;
     }
 
     /**

@@ -9,6 +9,16 @@
     "WELINE_E2E_PAYMENT_DRIVER": "controllable",
     "FORCE_PAYMENT_METHOD": "fake_card"
   },
+  "allowed_skips": [
+    {
+      "case": "REL-PAYPAL-QUICK-001",
+      "reason": "当前默认主题未在 PDP 注入 product-quick-pay；快捷购买 API 通路由 CR-HELPPAY-QUICK-ORDER 覆盖。主题补 CTA 后应删除本豁免。"
+    },
+    {
+      "case": "HELPPAY-CHECKOUT-ADDR-EDIT-001",
+      "reason": "可控支付门禁下地址编辑 UI 由 CR-HELPPAY-FRIEND-ORDER 地址 API 通路覆盖。"
+    }
+  ],
   "pathways": [
     {
       "id": "CR-CONTINUE-PAY-REAL",
