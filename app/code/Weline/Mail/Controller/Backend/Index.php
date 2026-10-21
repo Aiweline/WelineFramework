@@ -2138,7 +2138,12 @@ class Index extends BackendController
             if ($actor !== null && (int)$actor->getId() > 0) {
                 return (int)$actor->getId();
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
+            w_log_warning(
+                '邮件菜单信号操作者解析失败，回退登录用户：' . $exception->getMessage(),
+                ['exception' => $exception::class],
+                'mail'
+            );
         }
 
         return max(0, (int)$this->getLoginUserId());

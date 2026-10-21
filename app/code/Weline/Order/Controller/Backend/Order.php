@@ -707,7 +707,12 @@ class Order extends BackendPageController
             if ($actor !== null && (int)$actor->getId() > 0) {
                 return (int)$actor->getId();
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
+            w_log_warning(
+                '订单菜单信号操作者解析失败，回退登录用户：' . $exception->getMessage(),
+                ['exception' => $exception::class],
+                'order'
+            );
         }
 
         return max(0, (int)$this->getLoginUserId());
