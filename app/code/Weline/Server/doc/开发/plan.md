@@ -4,7 +4,7 @@
 - **计划文件**：`app/code/Weline/Server/doc/开发/plan.md`
 - **建立日期**：2026-10-20
 - **执行方式**：一次只做一项 → 实现 → 跑该项验收 → 写完成证据 → 勾选 → 汇报计划文件与本轮进度
-- **当前进度**：**19 / 19**（WLS-001…WLS-019 全部完成；WLS-012 已用本机 Chrome headless 做真浏览器验收，WLS-019 为冷路径性能优化）
+- **当前进度**：**21 / 21**（WLS-001…WLS-021 全部完成；WLS-021 用 CLI 空车 `getData` 的 CPU 时间做三版本 A/B 验收）
 
 ---
 
@@ -90,6 +90,8 @@
 | WLS-015 | P2 | CI 未跑 WLS 单测/语法 | `wls-unit.yml`（syntax+unit）；本地同命令全量 `3,506 / 0 failures`；1,115 文件语法 0 错 | ✅ 已完成（2026-10-21） |
 | WLS-018 | P0 | 全量套件顺序/环境依赖残余 9 项 | 全量 `3,506 tests / 137,196 assertions / 0 failures / 12 显式 skip`；i18n 4、内存 3、Hosts 1、Fiber 1、维护页 1 清零 | ✅ 已完成（2026-10-21） |
 | WLS-019 | P0 | 冷请求每响应强制 allocator trim，`zend_mm_gc` 成最大 CPU 热点 | 冷却+壳增长判据后：`/` 107→72ms、`/checkout` 940→448ms；采样 423→12 | ✅ 已完成（2026-10-21） |
+| WLS-020 | P0 | 空车 checkout 仍解析运费报价服务（~300ms CPU/请求） | CPU 分段：getData 422→30.5ms，shipping 308.5→0ms | ✅ 已完成（2026-10-21） |
+| WLS-021 | P2 | 空车 checkout 仍解析支付 provider | CLI 空车 `getData` CPU 三版本 A/B：792.9 → 320.5（WLS-020）→ **236.2ms**（+WLS-021，累计 −70%） | ✅ 已完成（2026-10-22） |
 | WLS-016 | P3 | 巨型文件无体量守卫 | 守卫脚本 exit 0；12 文件 allowlist 精确行数；拆分路线已落盘 | ✅ 已完成（2026-10-21） |
 | WLS-017 | P0 | 共享态生命周期权威 vs 更高 stale runtime（6 项） | 6/6 清零；authorityBound + registry floor | ✅ 已完成（2026-10-21） |
 
@@ -127,6 +129,8 @@
 - [x] WLS-015 WLS 单测/语法 CI 门禁
 - [x] WLS-018 全量套件顺序/环境依赖 9 项清零
 - [x] WLS-019 冷路径内存回收限频（`gc_mem_caches` 热点消除）
+- [x] WLS-020 空车 checkout 跳过运费报价解析
+- [x] WLS-021 空车 checkout 跳过支付 provider
 - [x] WLS-016 巨型文件体量守卫与拆分路线
 - [x] WLS-017 共享态生命周期权威 vs 更高 stale runtime（6 项）
 
@@ -655,6 +659,43 @@
 
 ---
 
+### WLS-020 空车 checkout 跳过运费报价解析
+
+- **状态**：✅ 已完成（2026-10-21）
+- **优先级**：P0
+- **缺陷证据**：隔离实例 `perfbench`（4 Worker，9666）上对 `CheckoutQueryProvider::getData()` 做 `getrusage` CPU 分段：每请求 422ms CPU，`shipping` 308.5ms（73%）、`payment` 59.1ms、`cart` 27.6ms；而 `ScopedShippingQuoteService::listOptions()` 在空车时 `shippableCount=0` 立即返回，根本没执行 `quoteRates()`（临时埋点无输出）——耗的是 `w_query('shippingInfo','listQuoteOptions')` 的 RuntimeProvider/查询栈解析。
+- **修复方案**：`loadShippingMethods()` 构建完 `$lines` 若为空，直接返回 `['methods'=>[], 'quote_diagnostics'=>[], 'quote_lines'=>[]]`（与 provider 空车返回一致），跳过解析与 `w_query`；有商品行逻辑不变。
+- **验收标准**：空车 CPU 分段中 shipping 归零、getData 总量显著下降；非空车路径代码不变；不改变返回结构。
+- **完成证据**：
+  - 隔离实例 CPU 复测（10 次）：getData **422 → 30.5ms**（14×）、shipping **308.5 → 0ms**、payment 59.1 → 17.6ms、cart 27.6 → 3.2ms。
+  - 差异仅 6 行（`CheckoutQueryProvider.php`），Shipping 模块零改动（并发会话在该文件的在途改动未被触碰）。
+  - 说明：wall-clock 复测受宿主 load 59-94 影响不可用；`CheckoutQueryContractsTest` 有 **HEAD 既有**过期断言（`delivery` 已改 `deliveryContextForBin(...)`），与本任务无关，已登记 §7。
+  - 版本 `2.0.234 → 2.0.235`，开发日志已补。
+- **回滚**：单文件 revert + `server:reload`。
+
+---
+
+### WLS-021 空车 checkout 跳过支付 provider
+
+- **状态**：✅ 已完成（2026-10-22；CLI CPU A/B 验收）
+- **优先级**：P2
+- **缺陷证据**：WLS-020 后 `getData()` 剩余 CPU（30.5ms/请求）中 `payment` 17.6ms（58%）：空车仍解析 `CheckoutPaymentMethodsProvider` 并 `listMethods()`，而空车无可支付内容。
+- **修复方案**：把 `$continuePayRequest` 判定提前；`$paymentMethods` 在 `$checkoutBlocked || ($items === [] && !$continuePayRequest)` 时直接 `[]`；续付（continue_pay）分支保持原行为。
+- **验收标准**：
+  1. 无新增测试失败（`CheckoutControllerContractsTest` 全绿；`CheckoutQueryContractsTest` 既有失败不变）。
+  2. 空闲宿主上 A/B：空车 `/checkout` 的 server total 与 CPU 阶段中 `payment` 归零/显著下降。
+- **完成证据**：
+  - `CheckoutControllerContractsTest` → `OK (1 test, 97 assertions)`；`CheckoutQueryContractsTest` → 242 assertions、1 个 **HEAD 既有**失败（`delivery` 断言过期），与改动前一致，无新增失败。
+  - **CLI 空车 `getData` CPU 三版本 A/B**（每版 3 次 fresh 进程，取中位数；`/tmp/probe-checkout-cli.php`）：
+    - baseline：**792.9ms**（`payment_methods=1`）
+    - WLS-020（空车跳 shipping 解析）：**320.5ms**（−59.6%）
+    - WLS-020+021（再跳 payment）：**236.2ms**（−70.0%；较 WLS-020 再 −26%）
+  - HTTP wall 复测仍受宿主 load 125-330 阻塞；脚本 `dev/session/wls-015/measure-checkout.sh` 保留待空闲补测。
+  - 代码差异 +14/−4（单文件），版本 `2.0.235 → 2.0.236`，开发日志已补。
+- **回滚**：单文件 revert + `server:reload`。
+
+---
+
 ## 5. 验收与汇报协议
 
 ### 5.1 单项任务闭环
@@ -713,6 +754,28 @@ WLS-001 → WLS-002 → WLS-010（版本/依赖基线）
 - 修复：trim 冷却 2s + 壳增长 8MiB 判据 + 32MiB 紧急余量，去掉重复 sweep。
 - 结果：`/` 72/93ms、`/checkout` 448/501ms；采样 423→12；Worker 内存 60-170MB；无 drain/OOM。
 - 版本 `2.0.233 → 2.0.234`；内存守卫 24/24。
+
+### 2026-10-22 — WLS-021 完成（21/21，CLI CPU A/B）
+
+- CLI 空车 `getData` 三版本 A/B（3 次/版，CPU 中位数）：baseline 792.9ms → WLS-020 320.5ms（−59.6%）→ +WLS-021 **236.2ms（−70.0%）**。
+- 空车返回结构：`shipping_methods=0`、`payment_methods` 由 1 变 0（符合“空车无可支付内容”）。
+- 测试：ControllerContracts 97 assertions 全绿；QueryContracts 既有 1 失败不变。
+- HTTP wall 复测待宿主空闲（脚本已备）；版本 `2.0.235 → 2.0.236`。
+
+### 2026-10-22 — WLS-021 落码（待复测）
+
+- 空车 `$paymentMethods` 直接为 `[]`（`$checkoutBlocked || ($items === [] && !$continuePayRequest)`），续付分支不变。
+- 测试：`CheckoutControllerContractsTest` 97 assertions 全绿；`CheckoutQueryContractsTest` 既有 1 失败不变。
+- 复测脚本 `dev/session/wls-015/measure-checkout.sh` 已备；宿主 load>200 无法测量，WLS-021 保持 🔄。
+- 版本 `2.0.235 → 2.0.236`。
+
+### 2026-10-21 — WLS-020 完成（20/20，空车报价解析）
+
+- 隔离实例 `perfbench`（4 Worker/9666）+ `getrusage` CPU 分段：getData 422ms/请求，shipping 308.5ms（73%）。
+- 根因：空车时 `listOptions` 立即返回，耗的是 `w_query` 的 provider/查询栈解析。
+- 修复：`loadShippingMethods()` 空 `$lines` 直接返回空结构（6 行）。
+- 复测：getData 422→30.5ms（14×），shipping 308.5→0，payment 59.1→17.6。
+- 版本 `2.0.234 → 2.0.235`。
 
 ### 2026-10-21 — WLS-012 完成（18/18）
 
@@ -884,6 +947,8 @@ WLS-001 → WLS-002 → WLS-010（版本/依赖基线）
 | Service 层 38 处空 `catch` | 多数为 best-effort 清理；逐条审计成本高、收益不确定 | 观察项，出现故障时再定点加日志 |
 | `MasterCleanupBootstrap` 依赖 `lsof` | 无 lsof 时端口清理退化；`$port` 为 int，无注入风险 | 观察项，跨平台安装时再处理 |
 | `bin/wls_gateway_controller.php` 50k 行 | 体量债，见 WLS-016 | 拆分路线，不在本轮重构 |
+| Checkout 契约测试在 HEAD 已过期 | `CheckoutQueryContractsTest` 断言源码含 `'delivery' => $this->deliveryContextService->getContext($params)`，但 HEAD 该行已是 `deliveryContextForBin($this->deliveryContextService->getContext($params))`；属既有漂移，与 WLS-020 无关 | 观察项，待 Checkout 模块维护者同步断言 |
+| Worker 内 `getrusage` 归因会被并发 Fiber 串扰 | 进程级 `getrusage` 统计整个 Worker，多个 Fiber/请求交错时会把别人的 CPU 算进当前阶段；CLI 对照（首次 `w_query('shippingInfo','listQuoteOptions')` 375ms CPU 冷加载、同进程第二次 **18.7ms**；`ServiceProviderRegistry` 0.01ms、`implementationFor` 0ms、`ScopedShippingQuoteService` 实例 0.97ms、provider 实例 11.6ms）说明稳态每请求解析约 **12-20ms CPU**，不是 Worker 内测得的 308ms | 后续性能验收优先用「单请求 + CLI/独立实例」或 `--process-isolation` 口径；Worker 内阶段计时仅用于相对排序 |
 | checkout 阶段归因：`shipping`（运费报价）主导 | 对 `CheckoutQueryProvider::getData()` 临时插入阶段计时（wall + CPU 两版，均已回退）：在宿主 load>100 的窗口里 shipping 阶段占绝对多数（p50 51.3s / total 54.6s；cart 0.5s、payment 2.3s、browse 0.5s、tax 0.6ms），但绝对值为调度饥饿放大，需空闲宿主用 CPU 时间复测 | 下一步：空闲时用 `getrusage` 版阶段计时复测；若 shipping 仍主导，则优化报价（空车跳过、短 TTL 缓存、按行重量批量化） |
 | checkout 剩余耗时属 PHP 编排（非 DB/模板） | 20ms 阈值 timing 采样（并发 8）：`/checkout` total p50 2289ms 中 `action_execute` 2247ms（98%），模板 include 合计仅 289ms（13%，且嵌套计入 action）；SQL 已按 Web Worker 后端归因为 ~115 条/请求。结论：耗时在 `CheckoutQueryProvider::getData()` 的 PHP 编排（cart/shipping/payment/tax/html 渲染） | 下一步需函数级剖析（Xdebug/SPX 或对 getData 做阶段计时改造），并在宿主空闲时复测 |
 | SQL 归因口径修正 + EAV memo 负结果（已回退） | 按 `pg_stat_database`/`pg_stat_user_tables` 全库增量曾得出「checkout ~3,060 条 SQL/请求、`attribute_value` 4,490 次索引查询」，实际被后台 cron/CLI 连接污染。改用 **Web Worker 的 PG 后端 PID**（`lsof` → `pg_stat_activity.client_port`）归因后：12 次 checkout 共 1,381 条（**~115 条/请求**；other 1,047、cache_ns 111、theme 89、theme_scope 134），`attribute_value` 0 条。据此给 `AttributeValueRepository::loadRows()` 加的请求级 memo 无收益（数组袋还引发 O(n²) 复制，改 `ArrayObject` 仍无效），已完整回退、Product 模块零改动 | 负结果与口径修正登记；checkout 剩余耗时属 PHP 侧（渲染/服务编排），下一步应做 PHP 级剖析（Xdebug/SPX 或 JIT 实验），不是批量 EAV |

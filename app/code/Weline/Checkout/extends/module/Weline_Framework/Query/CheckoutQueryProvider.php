@@ -1084,12 +1084,16 @@ class CheckoutQueryProvider implements QueryProviderInterface
         $shippingEmptyMessage = (string)($shippingEmpty['message'] ?? '');
         $shippingEmptyTitle = (string)($shippingEmpty['title'] ?? '');
         $shippingEmptyReason = (string)($shippingEmpty['reason_code'] ?? '');
-        $paymentMethods = $checkoutBlocked ? [] : $this->loadPaymentMethods($params + [
-            'currency' => $currency,
-            'amount' => (float)($cart['grand_total'] ?? $cart['subtotal'] ?? 0),
-        ]);
         $continuePayRequest = !empty($params['continue_pay'])
             || strtolower(trim((string)($params['payment_mode'] ?? ''))) === 'continue_pay';
+        // Empty cart: nothing is payable, and resolving the payment provider costs
+        // ~18ms CPU per load. Continue-pay still needs the bound method rendered.
+        $paymentMethods = ($checkoutBlocked || ($items === [] && !$continuePayRequest))
+            ? []
+            : $this->loadPaymentMethods($params + [
+                'currency' => $currency,
+                'amount' => (float)($cart['grand_total'] ?? $cart['subtotal'] ?? 0),
+            ]);
         // Unified money channel: always honour client-selected payment/shipping for
         // money_summary + HTML selected_code. Continue-pay still injects bound methods below.
         $selectedPayment = strtolower(trim((string)($params['payment_method'] ?? '')));
@@ -2091,6 +2095,12 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 }
             }
             $lines[] = $line;
+        }
+        if ($lines === []) {
+            // No shippable lines: the quote provider would return [] anyway, but
+            // resolving the quote service through the runtime provider/query stack
+            // costs ~300ms CPU per empty-cart checkout load. Fail fast here.
+            return ['methods' => [], 'quote_diagnostics' => [], 'quote_lines' => []];
         }
 
         try {
