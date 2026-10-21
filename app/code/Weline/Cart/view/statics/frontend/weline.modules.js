@@ -16,5 +16,13 @@ Object.assign(window.WelineModulesConfig.modules, {
         globalVar: "WelineCartPurchaseActions",
         load: "defer",
         description: "万能购物车：优惠券事件 / 游客续期 / 加购交互 / remove_from_cart 像素标记 / shopper toast"
+    },
+    cartPage: {
+        paths: [
+            "Weline_Cart::js/cart-page.js?v=20261021-cart-page-1"
+        ],
+        globalVar: null,
+        load: "eager",
+        description: "购物车页交互应用"
     }
 });

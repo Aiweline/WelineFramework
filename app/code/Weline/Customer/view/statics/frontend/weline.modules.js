@@ -22,6 +22,7 @@ Object.assign(window.WelineModulesConfig.modules, {
             "Weline_Customer::js/account-index.js?v=20261009-scope-css-hoist-retry"
         ],
         globalVar: "WelineCustomerAccount",
+        load: "eager",
         description: "前台用户中心账户页交互"
     },
     customerLogout: {

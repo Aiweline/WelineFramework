@@ -161,6 +161,7 @@
             origin_paths: ["app/code/Weline/Customer/view/statics/js/account-index.js?v=20261009-scope-css-hoist-retry"],
             paths: ["Weline_Customer::js/account-index.js?v=20261009-scope-css-hoist-retry"],
             globalVar: "WelineCustomerAccount",
+            load: "eager",
             description: "前台用户中心账户页交互"
         },
         customerLogout: {
@@ -247,6 +248,13 @@
             globalVar: null,
             load: "eager",
             description: "支付方式选择与提交"
+        },
+        paymentPixel: {
+            origin_paths: ["app/code/Weline/Payment/view/statics/js/payment-pixel.js?v=20261021-payment-pixel-1"],
+            paths: ["Weline_Payment::js/payment-pixel.js?v=20261021-payment-pixel-1"],
+            globalVar: null,
+            load: "eager",
+            description: "支付成功像素埋点（payload 由 JSON 配置块提供）"
         },
         orderNotice: {
             origin_paths: ["app/code/Weline/Order/view/statics/js/widgets/order-notice.js"],
@@ -336,6 +344,20 @@
             globalVar: "CustomerServiceWidget",
             description: "前台客服聊天部件"
         },
+        customerServiceFloat: {
+            origin_paths: ["app/code/Weline/CustomerService/view/statics/js/customer-service-float.js?v=20261021-cs-float-1"],
+            paths: ["Weline_CustomerService::js/customer-service-float.js?v=20261021-cs-float-1"],
+            globalVar: null,
+            load: "eager",
+            description: "浮动客服部件启动（懒加载 customer-service.js）"
+        },
+        csBindVerify: {
+            origin_paths: ["app/code/Weline/CustomerService/view/statics/js/cs-bind-verify.js?v=20261021-cs-bind-verify-1"],
+            paths: ["Weline_CustomerService::js/cs-bind-verify.js?v=20261021-cs-bind-verify-1"],
+            globalVar: null,
+            load: "eager",
+            description: "邮箱绑定验证结果页（BroadcastChannel/localStorage 同步）"
+        },
         geo: {
             origin_paths: ["app/code/Weline/Geo/view/statics/frontend/js/geo.js"],
             paths: ["Weline_Geo::frontend/js/geo.js"],
@@ -372,6 +394,13 @@
             globalVar: "WelineCartPurchaseActions",
             load: "defer",
             description: "万能购物车：优惠券事件 / 游客续期 / 加购交互 / remove_from_cart 像素标记 / shopper toast"
+        },
+        cartPage: {
+            origin_paths: ["app/code/Weline/Cart/view/statics/js/cart-page.js?v=20261021-cart-page-1"],
+            paths: ["Weline_Cart::js/cart-page.js?v=20261021-cart-page-1"],
+            globalVar: null,
+            load: "eager",
+            description: "购物车页交互应用"
         },
         checkoutLifecycle: {
             origin_paths: ["app/code/Weline/Checkout/view/statics/js/checkout-lifecycle.js?v=20260910-checkout-lifecycle3"],

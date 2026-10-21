@@ -46,6 +46,14 @@ Object.assign(window.WelineModulesConfig.modules, {
         load: "eager",
         description: "支付方式选择与提交"
     },
+    paymentPixel: {
+        paths: [
+            "Weline_Payment::js/payment-pixel.js?v=20261021-payment-pixel-1"
+        ],
+        globalVar: null,
+        load: "eager",
+        description: "支付成功像素埋点（payload 由 JSON 配置块提供）"
+    }
 });
 
 Object.assign(window.WelineModulesConfig.moduleAliases, {

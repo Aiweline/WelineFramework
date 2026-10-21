@@ -18,9 +18,9 @@ $pixelValue = $transaction ? (string) $transaction->getData('amount') : '';
 $pixelCurrency = $transaction ? (string) $transaction->getData('currency') : '';
 ?>
 <main class="amz-order-confirm amz-order-confirm--success weline-pixel::payment_success"
-    weline-code="payment.checkout_success_l1"
-    data-testid="payment-success"
-    data-weline-load="cart,paymentLifecycle"
+      weline-code="payment.checkout_success_l1"
+      data-testid="payment-success"
+      data-weline-load="cart,paymentLifecycle,paymentPixel"
     data-payment-lifecycle="paid"
     data-payment-outcome="paid"
     data-payment-event-source="payment-success-page"
@@ -66,32 +66,13 @@ $pixelCurrency = $transaction ? (string) $transaction->getData('currency') : '';
         </div>
     </section>
 </main>
-<script>
-(function () {
-    if (!<?= json_encode($transactionNo !== '') ?>) {
-        return;
-    }
-    var attempts = 0;
-    var maxAttempts = 80;
-    function fire() {
-        attempts += 1;
-        if (typeof window.WelinePixel === 'undefined' || typeof window.WelinePixel.track !== 'function') {
-            if (attempts < maxAttempts) {
-                window.setTimeout(fire, 50);
-            }
-            return;
-        }
-        window.WelinePixel.track('payment_success', {
-            transaction_id: <?= json_encode($transactionNo, JSON_UNESCAPED_UNICODE) ?>,
-            value: <?= json_encode($pixelValue, JSON_UNESCAPED_UNICODE) ?>,
-            currency: <?= json_encode($pixelCurrency, JSON_UNESCAPED_UNICODE) ?>,
-            payment_method: <?= json_encode($paymentMethodLabel, JSON_UNESCAPED_UNICODE) ?>
-        });
-    }
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', fire);
-    } else {
-        fire();
-    }
-})();
-</script>
+<?php
+$paymentPixelPayload = [
+    'transaction_id' => $transactionNo,
+    'value' => $pixelValue,
+    'currency' => $pixelCurrency,
+    'payment_method' => $paymentMethodLabel,
+];
+$paymentPixelConfig = ['enabled' => $transactionNo !== '', 'event' => 'payment_success', 'payload' => $paymentPixelPayload];
+?>
+<script type="application/json" id="payment-pixel-config"><?= json_encode($paymentPixelConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>

@@ -158,7 +158,7 @@ if ($paymentReturnCancelled) {
 <main class="amz-order-confirm amz-order-confirm--<?= $escape($heroTone) ?><?= $paymentSuccessTerminal ? ' weline-pixel::payment_success' : '' ?>"
     weline-code="payment.checkout_return"
     data-testid="payment-return"
-    data-weline-load="cart,paymentLifecycle"
+    data-weline-load="cart,paymentLifecycle,paymentPixel"
     <?php if ($paymentLifecycle !== ''): ?>
     data-payment-lifecycle="<?= $escape($paymentLifecycle) ?>"
     data-payment-outcome="<?= $escape($paymentLifecycle === 'cancelled' ? 'cancel' : $paymentLifecycle) ?>"
@@ -566,7 +566,7 @@ if ($paymentReturnCancelled) {
 
 .amz-order-confirm__status-pill--paid {
     color: var(--amz-success);
-    border-color: #b7e4d8;
+    border-color: var(--color-success);
     background: var(--color-bg-muted);
 }
 
@@ -797,34 +797,17 @@ if ($paymentReturnCancelled) {
 }
 </style>
 <?php if ($paymentSuccessTerminal && $transactionNo !== ''): ?>
-<script>
-(function () {
-    var attempts = 0;
-    var maxAttempts = 80;
-    function fire() {
-        attempts += 1;
-        if (typeof window.WelinePixel === 'undefined' || typeof window.WelinePixel.track !== 'function') {
-            if (attempts < maxAttempts) {
-                window.setTimeout(fire, 50);
-            }
-            return;
-        }
-        window.WelinePixel.track('payment_success', {
-            transaction_id: <?= json_encode($transactionNo, JSON_UNESCAPED_UNICODE) ?>,
-            order_uuid: <?= json_encode($orderUuid, JSON_UNESCAPED_UNICODE) ?>,
-            order_id: <?= json_encode($orderV2DisplayNumber !== '' ? $orderV2DisplayNumber : $orderUuid, JSON_UNESCAPED_UNICODE) ?>,
-            value: <?= json_encode($pixelValue !== '' ? (float) $pixelValue : null, JSON_UNESCAPED_UNICODE) ?>,
-            currency: <?= json_encode($pixelCurrency, JSON_UNESCAPED_UNICODE) ?>,
-            grand_total: <?= json_encode($pixelValue !== '' ? (float) $pixelValue : null, JSON_UNESCAPED_UNICODE) ?>,
-            items: <?= json_encode($pixelItems, JSON_UNESCAPED_UNICODE) ?>,
-            payment_method: <?= json_encode($paymentMethodLabel, JSON_UNESCAPED_UNICODE) ?>
-        });
-    }
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', fire);
-    } else {
-        fire();
-    }
-})();
-</script>
+<?php
+$paymentPixelPayload = [
+    'transaction_id' => $transactionNo,
+    'order_uuid' => $orderUuid,
+    'order_id' => $orderV2DisplayNumber !== '' ? $orderV2DisplayNumber : $orderUuid,
+    'value' => $pixelValue !== '' ? (float) $pixelValue : null,
+    'currency' => $pixelCurrency,
+    'grand_total' => $pixelValue !== '' ? (float) $pixelValue : null,
+    'items' => $pixelItems,
+];
+$paymentPixelConfig = ['enabled' => true, 'event' => 'payment_success', 'payload' => $paymentPixelPayload];
+?>
+<script type="application/json" id="payment-pixel-config"><?= json_encode($paymentPixelConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 <?php endif; ?>

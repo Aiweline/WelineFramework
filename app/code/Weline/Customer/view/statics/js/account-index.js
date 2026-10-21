@@ -6,6 +6,18 @@
     }
     window.__welineAccountIndexInitialized = true;
 
+    // Pre-paint bootstrap (moved from the template inline script): mark the hash
+    // target section before the account UI initialises so CSS can avoid a flash.
+    (function bootstrapPendingSection() {
+        try {
+            var raw = String(window.location.hash || '').replace(/^#/, '');
+            var section = raw ? raw.split('?')[0] : '';
+            if (section && section !== 'profile') {
+                document.documentElement.setAttribute('data-account-pending-section', section);
+            }
+        } catch (e) { /* noop */ }
+    }());
+
     function readAccountConfig() {
         var el = document.getElementById('weline-account-index-config');
         if (!el) {

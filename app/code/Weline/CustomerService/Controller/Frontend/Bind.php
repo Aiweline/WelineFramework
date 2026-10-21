@@ -22,6 +22,9 @@ use Weline\Framework\Cache\SharedResponseCachePolicy;
  */
 class Bind extends FrontendController
 {
+    /** 绑定验证结果页：独立全屏壳（Theme blank/full），消费默认主题 head。 */
+    protected ?string $layoutType = 'blank';
+
     public function __construct(
         private readonly EmailBindingService $emailBindingService,
         private readonly BindCaptchaGuard $bindCaptchaGuard,
@@ -159,6 +162,7 @@ class Bind extends FrontendController
      */
     public function verify(): string
     {
+        $this->request->setGet('layout_option', 'full');
         try {
             $token = trim($this->request->getParam('token', ''));
 

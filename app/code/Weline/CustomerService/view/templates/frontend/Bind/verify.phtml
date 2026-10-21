@@ -17,13 +17,7 @@ $boundPayload = [
     'ts' => time() * 1000,
 ];
 ?>
-<!DOCTYPE html>
-<html lang="<?= $this->getLocale() ?>">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><lang>邮箱绑定验证</lang></title>
-    <style>
+<style>
         :root {
             --cs-verify-bg: var(--weline-theme-surface-muted);
             --cs-verify-card: var(--weline-theme-surface);
@@ -143,13 +137,10 @@ $boundPayload = [
 
         .help-text a {
             color: var(--cs-verify-primary);
-        }
-
-        [hidden] { display: none !important; }
+        }[hidden]{ display: none; }
     </style>
-</head>
-<body>
-    <div class="verify-container">
+
+    <div class="verify-container" data-weline-load="csBindVerify">
         <?php if ($success): ?>
             <div class="verify-icon success" aria-hidden="true">✓</div>
             <h1 class="verify-title"><lang>邮箱已绑定</lang></h1>
@@ -186,75 +177,14 @@ $boundPayload = [
         <?php endif; ?>
     </div>
 
-    <script>
-    (function () {
-        var SUCCESS = <?= $success ? 'true' : 'false' ?>;
-        var PAYLOAD = <?= json_encode($boundPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-        var STORAGE_KEY = 'cs_email_bound_v1';
-        var CHANNEL = 'weline-cs-email-bound';
-        var HOME = <?= json_encode($homeUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-
-        function publishBound() {
-            if (!SUCCESS || !PAYLOAD || !PAYLOAD.email) {
-                return;
-            }
-            PAYLOAD.ts = Date.now();
-            try {
-                if (typeof BroadcastChannel !== 'undefined') {
-                    var channel = new BroadcastChannel(CHANNEL);
-                    channel.postMessage(PAYLOAD);
-                    channel.close();
-                }
-            } catch (_e) {}
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(PAYLOAD));
-                // Retrigger storage listeners in other tabs even if value identical.
-                localStorage.removeItem(STORAGE_KEY);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(PAYLOAD));
-            } catch (_e2) {}
-        }
-
-        function tryClose() {
-            var status = document.getElementById('cs-verify-status');
-            var closeBtn = document.getElementById('cs-verify-close');
-            try {
-                window.close();
-            } catch (_e) {}
-            setTimeout(function () {
-                if (!window.closed) {
-                    if (status) {
-                        status.textContent = <?= json_encode((string)__('已同步。可关闭此页，返回原页面继续聊天。'), JSON_UNESCAPED_UNICODE) ?>;
-                    }
-                    if (closeBtn) {
-                        closeBtn.hidden = false;
-                        closeBtn.addEventListener('click', function () {
-                            try { window.close(); } catch (_e3) {}
-                            window.location.href = HOME;
-                        });
-                    }
-                }
-            }, 450);
-        }
-
-        if (SUCCESS) {
-            publishBound();
-            tryClose();
-        }
-
-        document.addEventListener('click', function (event) {
-            var backTrigger = event.target.closest('[data-cs-bind-back]');
-            if (backTrigger) {
-                event.preventDefault();
-                history.back();
-                return;
-            }
-            var chatTrigger = event.target.closest('[data-cs-bind-open-chat]');
-            if (chatTrigger) {
-                event.preventDefault();
-                window.location.href = HOME;
-            }
-        });
-    })();
-    </script>
-</body>
-</html>
+<?php
+$csBindVerifyConfig = [
+    'success' => $success,
+    'payload' => $boundPayload,
+    'home' => $homeUrl,
+    'i18n' => [
+        '已同步。可关闭此页，返回原页面继续聊天。' => (string)__('已同步。可关闭此页，返回原页面继续聊天。'),
+    ],
+];
+?>
+<script type="application/json" id="cs-bind-verify-config"><?= json_encode($csBindVerifyConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
