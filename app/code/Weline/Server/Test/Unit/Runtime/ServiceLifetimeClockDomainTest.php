@@ -13,7 +13,11 @@ final class ServiceLifetimeClockDomainTest extends TestCase
 {
     public function testLiveServiceUptimeUsesMonotonicStartWhileWallStartRemainsSerializable(): void
     {
-        $startedMonotonic = (\hrtime(true) / 1_000_000_000) - 5.0;
+        // Bound the assertion by the test's own monotonic elapsed time instead
+        // of a fixed 0.25s delta: this stays deterministic under CI/load spikes
+        // while still proving the 500s wall-clock start is not used.
+        $t0 = \hrtime(true) / 1_000_000_000;
+        $startedMonotonic = $t0 - 5.0;
         $instance = new ServiceInstance(
             role: 'worker',
             instanceId: 1,
@@ -22,8 +26,15 @@ final class ServiceLifetimeClockDomainTest extends TestCase
         );
         $info = ServiceInfo::fromServiceInstance($instance, 'Worker');
 
-        self::assertEqualsWithDelta(5.0, $instance->getUptime(), 0.25);
-        self::assertEqualsWithDelta(5.0, $info->getUptime(), 0.25);
+        $instanceUptime = $instance->getUptime();
+        $infoUptime = $info->getUptime();
+        $maxExpected = 5.0 + ((\hrtime(true) / 1_000_000_000) - $t0);
+
+        self::assertGreaterThanOrEqual(5.0, $instanceUptime);
+        self::assertLessThanOrEqual($maxExpected + 1e-6, $instanceUptime);
+        self::assertGreaterThanOrEqual(5.0, $infoUptime);
+        self::assertLessThanOrEqual($maxExpected + 1e-6, $infoUptime);
+        self::assertLessThan(60.0, $instanceUptime, 'uptime must not fall back to the 500s wall clock');
         self::assertSame($instance->startedAt, $info->toArray()['started_at']);
         self::assertSame($startedMonotonic, $info->toArray()['started_monotonic']);
     }
