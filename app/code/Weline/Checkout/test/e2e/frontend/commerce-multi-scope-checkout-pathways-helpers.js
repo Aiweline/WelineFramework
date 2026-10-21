@@ -99,7 +99,13 @@ async function addToCartMode(page, gotoFrontend, pdpPath, mode) {
   const selling = mode === 'tob' ? 'tob' : 'toc';
   await gotoMultiScope(page, pdpPath, gotoFrontend);
   await neutralizeStaleThemeStamp(page);
-  await waitForWelineApi(page);
+  // Login → PDP under load can miss the first Weline bootstrap window; one hard
+  // refresh then re-wait (hardRefreshStorefront itself ends with waitForWelineApi).
+  try {
+    await waitForWelineApi(page, 45000);
+  } catch (_) {
+    await hardRefreshStorefront(page);
+  }
   await reloadIfThemeGenerationStale(page);
   await neutralizeStaleThemeStamp(page);
   await dismissStorefrontNoise(page).catch(() => {});

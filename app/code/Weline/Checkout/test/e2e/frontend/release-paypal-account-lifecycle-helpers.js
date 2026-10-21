@@ -426,11 +426,21 @@ async function ensureFullWelineApiInPage() {
   return !!(window.Weline.Api && window.Weline.Api.__full === true);
 }
 
-async function waitForWelineApi(page, timeout = 90000) {
-  await page.waitForFunction(() => !!(window.Weline && (
-    (window.Weline.Api && typeof window.Weline.Api.resource === 'function')
-    || typeof window.Weline.load === 'function'
-  )), null, { timeout });
+async function waitForWelineApi(page, timeout = 90000, options = {}) {
+  // Long bootstrap waits miss the first Weline window under load. One hard
+  // refresh, then stop: hardRefreshStorefront ends by calling this again.
+  // Short waits (evaluateWithThemeReload's 20s probe) stay fail-fast.
+  const refreshOnMiss = options.refreshOnMiss !== false && timeout >= 45000;
+  try {
+    await page.waitForFunction(() => !!(window.Weline && (
+      (window.Weline.Api && typeof window.Weline.Api.resource === 'function')
+      || typeof window.Weline.load === 'function'
+    )), null, { timeout });
+  } catch (err) {
+    if (!refreshOnMiss) throw err;
+    await hardRefreshStorefront(page);
+    return;
+  }
   await page.evaluate(async () => {
     let api = window.Weline && window.Weline.Api;
     if (api && api.__full === true && typeof api.resource === 'function') {
@@ -501,7 +511,7 @@ async function hardRefreshStorefront(page) {
   // Neutralize BEFORE waitForWelineApi/warmup so the first handshake is not pinned
   // to a stale html-disk themePublishedVersionId.
   await neutralizeStaleThemeStamp(page);
-  await waitForWelineApi(page);
+  await waitForWelineApi(page, 90000, { refreshOnMiss: false });
 }
 
 /**
@@ -1419,12 +1429,31 @@ async function claimGuestOrderOnSuccess(page, gotoFrontend, email, password) {
   await loginAsCustomerApi(page, gotoFrontend, email, password);
 }
 
+async function pageIsBareForbidden(page) {
+  const text = await page.locator('body').innerText().catch(() => '');
+  return text.trim() === 'Forbidden';
+}
+
 async function adminTransitionOrderStatus(page, loginAsAdmin, gotoBackend, waitForBackendShellReady, orderId, toStatus) {
-  await loginAsAdmin(page, { timeout: 90000, settleMs: 800 });
-  await gotoBackend(page, `order/backend/order/edit?id=${orderId}`, { timeout: 90000, settleMs: 800 });
-  await waitForBackendShellReady(page);
+  const openEditor = async () => {
+    await loginAsAdmin(page, { timeout: 90000, settleMs: 800 });
+    await gotoBackend(page, `order/backend/order/edit?id=${orderId}`, { timeout: 90000, settleMs: 800 });
+    await waitForBackendShellReady(page);
+  };
+  await openEditor();
+  // A WLS Forbidden body is not the login form, so session bootstrap treats it as
+  // authenticated and the status card never mounts. Retry the open once.
+  if (await pageIsBareForbidden(page)) {
+    await page.waitForTimeout(1500);
+    await openEditor();
+  }
   const actions = page.locator('[data-testid="order-edit-status-actions"]');
-  await actions.waitFor({ state: 'visible', timeout: 30000 });
+  const seen = await actions.waitFor({ state: 'visible', timeout: 30000 }).then(() => true).catch(() => false);
+  if (!seen) {
+    const url = page.url();
+    const text = await page.locator('body').innerText().catch(() => '');
+    throw new Error(`order-edit-status-actions missing url=${url} body=${String(text).trim().slice(0, 180)}`);
+  }
   await actions.locator('select[name="status"]').selectOption(toStatus);
   await actions.locator('input[name="comment"]').fill(`e2e-rel-paypal→${toStatus}`);
   await Promise.all([

@@ -115,12 +115,16 @@ async function gotoPdp(page, gotoFrontend, pdpPath) {
     await gotoFrontend(page, pdpPath, { timeout: 90000, settleMs: 600, useProxy: false });
   }
   await neutralizeStaleThemeStamp(page);
-  await waitForWelineApi(page);
+  try {
+    await waitForWelineApi(page, 45000);
+  } catch (_) {
+    await hardRefreshStorefront(page);
+  }
   await reloadIfThemeGenerationStale(page);
   await neutralizeStaleThemeStamp(page);
   await dismissNoise(page).catch(() => {});
   const cta = page.locator(
-    '[data-testid="product-quick-pay"], [data-helppay-quick-pay], [data-testid="product-help-pay"], [data-action="buy-now"][data-product-id]',
+    '[data-testid="product-quick-pay"], [data-helppay-quick-pay], [data-testid="product-help-pay"], [data-action="buy-now"][data-product-id], [data-testid="product-add-to-cart"][data-product-id]',
   ).first();
   await cta.waitFor({ state: 'attached', timeout: 60000 });
   await dismissNoise(page).catch(() => {});
@@ -183,23 +187,45 @@ async function forceRevealHelpPayCtas(page) {
 
 /**
  * Read PDP product pricing + id for HelpPay create payloads.
+ * Align with production helppay-share.js readQuickProductId: HelpPay slot injection
+ * may paint `data-product-id="0"` when the widget offer bag is empty; never treat 0
+ * as resolved — fall back to the main PDP purchase root (not related cards).
  * @param {import('@playwright/test').Page} page
  */
 async function readPdpProductContext(page) {
   return evaluateWithThemeReload(page, () => {
-    const btn = document.querySelector('[data-helppay-quick-pay], [data-testid="product-quick-pay"]')
-      || document.querySelector('[data-helppay-open], [data-testid="help-pay-open"]')
-      || document.querySelector('[data-action="buy-now"][data-product-id]')
-      || document.querySelector('[data-testid="product-buy-now"][data-product-id]');
-    const productId = Number(
-      (btn && (btn.getAttribute('data-product-id') || btn.dataset.productId))
-      || (document.querySelector('[data-product-id]') || {}).getAttribute?.('data-product-id')
-      || 0
-    ) || 0;
-    const qtyEl = document.querySelector('[data-testid="product-qty"]');
+    const positiveId = (raw) => {
+      const n = Number(raw || 0) || 0;
+      return n > 0 ? n : 0;
+    };
+    const qsAttr = (el) => {
+      if (!el) return 0;
+      return positiveId(el.getAttribute('data-product-id') || (el.dataset && el.dataset.productId) || 0);
+    };
+    const root = document.querySelector('.product-native-detail')
+      || document.querySelector('[data-testid="storefront-product-detail"]')
+      || document.querySelector('[data-testid="product-detail"]')
+      || document.querySelector('main')
+      || document;
+    const quickBtn = root.querySelector('[data-helppay-quick-pay], [data-testid="product-quick-pay"]')
+      || root.querySelector('[data-helppay-open], [data-testid="help-pay-open"], [data-testid="product-help-pay"]');
+    let productId = qsAttr(quickBtn);
+    if (!productId) {
+      productId = positiveId(root.getAttribute('data-product-id') || (root.dataset && root.dataset.productId) || 0);
+    }
+    if (!productId) {
+      const buyNow = root.querySelector('[data-testid="product-add-to-cart"][data-product-id]')
+        || root.querySelector('[data-testid="product-buy-now"][data-product-id]')
+        || root.querySelector('[data-action="add"][data-product-id]')
+        || root.querySelector('[data-action="buy-now"][data-product-id]');
+      productId = qsAttr(buyNow);
+    }
+    const qtyEl = root.querySelector('[data-testid="product-qty"]')
+      || document.querySelector('[data-testid="product-qty"]');
     const qty = qtyEl ? Math.max(1, Number(qtyEl.value || 1) || 1) : 1;
     let goodsMinor = 0;
-    const priceEl = document.querySelector('[data-testid="product-price"], [data-product-price], .product-price [data-amount-minor]');
+    const priceEl = root.querySelector('[data-testid="product-price"], [data-product-price], .product-price [data-amount-minor]')
+      || document.querySelector('[data-testid="product-price"], [data-product-price], .product-price [data-amount-minor]');
     if (priceEl) {
       goodsMinor = Math.max(0, Number(priceEl.getAttribute('data-amount-minor') || priceEl.dataset.amountMinor || 0) || 0);
     }
