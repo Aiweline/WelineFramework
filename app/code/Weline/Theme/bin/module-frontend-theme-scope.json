@@ -1,0 +1,90 @@
+{
+  "schema": "module-frontend-theme-scope.v1",
+  "contract": "模块前端页面修改标准（默认主题消费合同）",
+  "decided": "2026-10-21 · 用户裁决 D1：后台管理 UI 默认排除，只做前台消费面",
+  "rules": {
+    "S1": "view/templates/frontend/** · view/theme/frontend/** · view/statics/frontend/** —— 核心范围",
+    "S2": "模块根视图/静态资源，被前台页面/layout/bake 引用的 —— 需引用证据（include_paths 列举）",
+    "S3": "后台 area（view/templates/backend/**、view/theme/backend/**、后台菜单页）—— 合同禁止改，排除",
+    "S4": "prototype / 演示 / Test —— 排除（非交付页面）",
+    "S5": "第三方 app 壳（elFinder、twofa-app、CDN script）—— 排除，另立技术债",
+    "S2b": "模块若有 view/templates/frontend/，只扫描 frontend/ + view/statics/ + view/theme/frontend/ 路径；根级 Block/analytics/Widget 等后台部件目录不扫"
+  },
+  "exclude_modules": [
+    "Weline/Api",
+    "Weline/Component",
+    "Weline/SystemConfig",
+    "Weline/TranslationService",
+    "Weline/Maintenance",
+    "Weline/MediaManager",
+    "Weline/RdpWrapper",
+    "Weline/CacheManager",
+    "Weline/CKEditorEditorManager",
+    "Weline/Server",
+    "Weline/SessionManager",
+    "Weline/Dashboard",
+    "Weline/FileManager",
+    "Weline/SiteSetupAssistant",
+    "Weline/SampleModule",
+    "Weline/Agent",
+    "Weline/Dropship",
+    "Weline/WidgetDemo",
+    "Weline/Queue",
+    "Weline/Acl",
+    "Weline/Taglib",
+    "Weline/ElFinderFileManager",
+    "Weline/Frontend",
+    "Weline/Seo",
+    "Weline/Eav"
+  ],
+  "exclude_module_reasons": {
+    "Weline/Api": "framework worker smoke 页，非店面页面",
+    "Weline/Component": "后台表单 / Offcanvas 组件层（组件提供方，非消费方）",
+    "Weline/SystemConfig": "后台配置页",
+    "Weline/TranslationService": "后台翻译服务",
+    "Weline/Maintenance": "后台维护面（frontend 目录仅资产）",
+    "Weline/MediaManager": "后台媒体管理器",
+    "Weline/RdpWrapper": "后台 RDP 管理面",
+    "Weline/CacheManager": "后台缓存管理",
+    "Weline/CKEditorEditorManager": "后台编辑器管理（vendor 资源）",
+    "Weline/Server": "后台服务器面板",
+    "Weline/SessionManager": "后台会话管理",
+    "Weline/Dashboard": "后台仪表盘",
+    "Weline/FileManager": "后台文件管理",
+    "Weline/SiteSetupAssistant": "后台站点助手浮窗（widget 亦为后台）",
+    "Weline/SampleModule": "示例模块",
+    "Weline/Agent": "后台 Agent 管理",
+    "Weline/Dropship": "后台代发面板",
+    "Weline/WidgetDemo": "演示面板",
+    "Weline/Queue": "后台队列监控",
+    "Weline/Acl": "后台权限管理",
+    "Weline/Taglib": "后台标签库工具",
+    "Weline/ElFinderFileManager": "S5：elFinder 第三方 app 壳 + vendor CSS",
+    "Weline/Frontend": "框架加载器/基础资产提供方（weline.js），属 provider 不做消费者改造",
+    "Weline/Seo": "后台 SEO 控制台（seo-inspector/seo-admin.css）+ 后台账户部件，非店面页面",
+    "Weline/Eav": "EAV 属性/集合管理 widget 为后台部件"
+  },
+  "include_paths": {
+    "Weline/Widget": [
+      "Weline/Widget/view/templates/widgets/"
+    ],
+    "Weline/Index": [
+      "Weline/Index/view/templates/Index.phtml",
+      "Weline/Index/view/statics/js/"
+    ],
+    "Weline/DataTable": [
+      "Weline/DataTable/view/templates/frontend/",
+      "Weline/DataTable/view/statics/css/"
+    ]
+  },
+  "include_path_reasons": {
+    "Weline/Widget": "部件渲染模板（前台消费面）",
+    "Weline/Index": "首页模板 Index.phtml（前端）+ 首页脚本；view/templates/Index/*.html 为静态演示页，排除",
+    "Weline/DataTable": "前台数据表部件（模板 + CSS）"
+  },
+  "theme_providers": [
+    "Weline/Theme",
+    "Weline/ThemeFancy",
+    "Weline/BackendThemeUpzet"
+  ]
+}

@@ -1,0 +1,514 @@
+#!/usr/bin/env python3
+"""Module frontend surfaces vs the default-theme consumption contract (read-only).
+
+Contract: 模块前端页面修改标准（默认主题消费合同）
+  - visual literals must be theme tokens (colors / spacing / font-size / radius / shadow / control-height)
+  - no inline styles, no inline executable <script>, no on*=, no direct <script src> for module JS
+  - module JS registers in view/statics/frontend/weline.modules.js (Weline.declare / data-weline-load)
+  - width: .w-container or min(100%, var(--weline-layout-content-max-width))
+  - i18n via <lang>/@lang, not __()
+  - no module-private palette/token definitions, no !important
+
+Scope (S1/S2): app/code/{Vendor}/{Module}/view/{templates,theme,statics}/** frontend surfaces.
+Excluded: backend area (S3), prototypes (S4), vendor app shells (S5), tests/generated/doc/vendor,
+          and Weline_Theme itself (the provider is guarded by Theme's own suites).
+
+Allow-listed exceptions (per Theme docs, not "debt"):
+  - inverse paper ink pins: #0f1111 / #565959 / #666666 bound to --weline-chrome-body-text* / --amz-drawer-text / *paper-text
+  - @media breakpoint literals
+  - !important on [hidden] { display: none } and inside @media (prefers-reduced-motion: reduce)
+
+Usage:
+  python3 module-frontend-theme-audit.py                 # human summary
+  python3 module-frontend-theme-audit.py --json          # full JSON
+  python3 module-frontend-theme-audit.py --module Weline_Compare
+  python3 module-frontend-theme-audit.py --baseline app/code/Weline/Theme/test/fixtures/module-frontend-theme-baseline.json
+  python3 module-frontend-theme-audit.py --write-baseline <path>
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from collections import Counter, defaultdict
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[5]  # .../框架
+CODE = ROOT / "app" / "code"
+# Theme providers, not consumers: the default theme + design-theme packs.
+THEME_PROVIDERS = ("Weline/Theme", "Weline/ThemeFancy", "Weline/BackendThemeUpzet")
+
+EXCLUDE_SUBSTR = (
+    "/backend/", "/Backend/", "/admin/", "/Admin/", "/BackendThemeUpzet/",
+    "/view/tpl/", "/generated/", "/Test/", "/test/", "/tests/", "/e2e/", "/doc/",
+    "/node_modules/", "/vendor/", "/libs/", "/tinymce/", "/bootstrap",
+    "/theme-editor/", "/visual-editor/", "/editor-mode/", "/widget-config/",
+    "/prototype/", "/prototypes/", "/DeveloperWorkspace/", "/account-login",
+    "/account-recovery/", "/backend-theme/", "/backend-menu/", "/datatable-form/",
+)
+EXCLUDE_BASENAME_PREFIX = ("prototype", "prototype-")
+EXCLUDE_BASENAME = (
+    "elfinder.html", "elfinder.legacy.html", "index.html",  # S5 vendor app shells
+    "test.phtml", "test.html",  # dev/test pages
+)
+
+RE_HEX = re.compile(r"#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b")
+RE_RGB = re.compile(r"\b(?:rgb|rgba|hsl|hsla)\s*\(", re.I)
+RE_SIZE = re.compile(r"(?<![\w.-])(\d+(?:\.\d+)?)(px|rem|em)\b")
+RE_VAR_FALLBACK = re.compile(
+    r"var\(\s*(--[A-Za-z0-9_-]+)\s*,\s*((?:#[0-9a-fA-F]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|"
+    r"transparent|currentColor|white|black|red|blue|green|gray|grey|"
+    r"\d+(?:\.\d+)?(?:px|rem|em)))\s*\)",
+    re.I,
+)
+RE_VAR_FALLBACK_COLOR = re.compile(
+    r"var\(\s*--[^,)]+\s*,\s*(?:#[0-9a-fA-F]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|"
+    r"white|black|red|transparent)\s*\)", re.I)
+RE_VAR_FALLBACK_SIZE = re.compile(
+    r"var\(\s*--[^,)]+\s*,\s*\d+(?:\.\d+)?(?:px|rem|em)\s*\)", re.I)
+RE_IMPORTANT = re.compile(r"!\s*important", re.I)
+RE_MAXWIDTH_PX = re.compile(r"(?:max-)?(?:inline-)?(?:width|size)\s*:\s*(?:min\(\s*100%\s*,\s*)?(\d{3,4})px", re.I)
+RE_PRIVATE_TOKEN = re.compile(r"(--[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\))", re.I)
+RE_INLINE_STYLE = re.compile(r"""\bstyle\s*=\s*(["'])(?:(?!\1).)*\1""", re.I | re.S)
+RE_STYLE_BLOCK = re.compile(r"<style\b[^>]*>(.*?)</style>", re.I | re.S)
+RE_SCRIPT_BLOCK = re.compile(r"<script\b([^>]*)>(.*?)</script\s*>", re.I | re.S)
+RE_ON_ATTR = re.compile(
+    r"""\s(?:onclick|onchange|oninput|onsubmit|onload|onerror|onkeyup|onkeydown|onblur|onfocus|"""
+    r"""onmouseover|onmouseout|onscroll|onselect|onreset|ontoggle)\s*=\s*(["'])""", re.I)
+RE_PHP_I18N = re.compile(r"(?<![\w>$])__\(\s*['\"]")
+RE_RAW_SHELL = re.compile(
+    r"""class\s*=\s*(["'])[^"']*(?:container|container-fluid|breadcrumb|site-header|site-footer)\b""", re.I)
+RE_FETCH = re.compile(r"\bfetch\s*\(\s*[`'\"]", re.I)
+RE_XHR = re.compile(r"new\s+XMLHttpRequest|\.ajax\s*\(\s*\$?\(", re.I)
+RE_OBSERVE = re.compile(
+    r"new\s+MutationObserver\s*\(|document\.addEventListener\s*\(\s*['\"]DOMContentLoaded|"
+    r"document\.querySelectorAll?\s*\(", re.I)
+RE_WELINE_USE = re.compile(r"Weline\s*\.\s*(?:declare|load|dom|Api|mount|use)\b")
+RE_DATA_WELINE = re.compile(r"data-weline-(?:load|declare|mount)\s*=", re.I)
+RE_BAKE_CHANNEL = re.compile(r"data-weline-widget-asset|data-weline-source-position", re.I)
+RE_COMMENT_CSS = re.compile(r"/\*.*?\*/", re.S)
+RE_COMMENT_HTML = re.compile(r"<!--.*?-->", re.S)
+RE_DATA_URL = re.compile(r"url\(\s*['\"]?data:[^)]+\)", re.I)
+RE_MEDIA = re.compile(r"@media[^{]+\{", re.I)
+RE_REDUCED_MOTION = re.compile(r"@media[^{]*prefers-reduced-motion[^{]*\{", re.I)
+RE_ZERO = re.compile(r"(?<![\w-])0(?:px|rem|em)\b")
+RE_PAPER_PIN = re.compile(
+    r"--[A-Za-z0-9_-]*(?:chrome-body-text|amz-drawer-text|paper-text|paper-|_paper)", re.I)
+
+CSS_EXT = {".css", ".less", ".scss"}
+MARKUP_EXT = {".phtml", ".html", ".htm"}
+JS_EXT = {".js"}
+
+PAPER_PINS = {"#0f1111", "#565959", "#666666"}
+
+SEVERITY = {
+    "layout_key_collision": "P0", "private_theme_json": "P0",
+    "inline_script_exec": "P0", "inline_handler": "P0", "direct_script_src": "P0",
+    "php_i18n_call": "P1", "raw_page_shell": "P1",
+    "hard_color_hex": "P1", "hard_color_func": "P1", "important": "P1",
+    "var_fallback_color": "P1", "var_fallback_size": "P1",
+    "private_token_def": "P1", "hard_max_width_px": "P1",
+    "inline_style": "P2", "hard_size": "P2",
+    "js_fetch_direct": "P1", "js_observe_direct": "P2",
+}
+
+
+def module_of(path: Path) -> str:
+    parts = path.relative_to(CODE).parts
+    return "/".join(parts[:2]) if len(parts) >= 2 else "/".join(parts)
+
+
+def in_scope(p: Path) -> bool:
+    s = "/" + str(p.relative_to(CODE)).replace("\\", "/")
+    if any(s.startswith("/" + tp + "/") for tp in THEME_PROVIDERS):
+        return False
+    if not any(k in s for k in ("/view/templates/", "/view/theme/", "/view/statics/")):
+        return False
+    if any(k in s for k in EXCLUDE_SUBSTR):
+        return False
+    if p.name.startswith(EXCLUDE_BASENAME_PREFIX) or p.name in EXCLUDE_BASENAME:
+        return False
+    if p.name.endswith((".min.css", ".min.js")):
+        return False
+    return p.suffix.lower() in CSS_EXT | MARKUP_EXT | JS_EXT
+
+
+def strip_noise(text: str, html: bool) -> str:
+    text = RE_DATA_URL.sub("url()", text)
+    text = RE_COMMENT_CSS.sub("", text)
+    if html:
+        text = RE_COMMENT_HTML.sub("", text)
+    return text
+
+
+def _block_ranges(text: str, opener: re.Pattern) -> list[tuple[int, int]]:
+    """Brace-matched ranges for blocks whose header matches `opener`."""
+    out: list[tuple[int, int]] = []
+    for m in opener.finditer(text):
+        depth, i, start = 0, m.end() - 1, m.end() - 1
+        while i < len(text):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    out.append((start, i + 1))
+                    break
+            i += 1
+    return out
+
+
+def _decl_before(text: str, pos: int) -> tuple[str, str]:
+    """Return (selector, declaration-so-far) for the position."""
+    decl_start = max(text.rfind(";", 0, pos), text.rfind("{", 0, pos))
+    decl = text[decl_start + 1:pos]
+    sel_start = text.rfind("}", 0, max(decl_start, 1))
+    selector = text[sel_start + 1:decl_start] if sel_start >= 0 else text[:decl_start]
+    return selector, decl
+
+
+def scan_css(text: str, hits: list, src: str) -> None:
+    cleaned = strip_noise(text, False)
+    media = [(m.start(), m.end()) for m in RE_MEDIA.finditer(cleaned)]
+    reduced = _block_ranges(cleaned, RE_REDUCED_MOTION)
+
+    def in_media(i: int) -> bool:
+        return any(a <= i < b for a, b in media)
+
+    def in_reduced(i: int) -> bool:
+        return any(a <= i < b for a, b in reduced)
+
+    for m in RE_HEX.finditer(cleaned):
+        if m.group().lower() in PAPER_PINS:
+            selector, decl = _decl_before(cleaned, m.start())
+            if RE_PAPER_PIN.search(decl) or RE_PAPER_PIN.search(selector):
+                continue
+        hits.append((src, "hard_color_hex", m.group()))
+    for m in RE_RGB.finditer(cleaned):
+        hits.append((src, "hard_color_func", cleaned[m.start():m.start() + 40]))
+    for m in RE_IMPORTANT.finditer(cleaned):
+        if in_reduced(m.start()):
+            continue
+        selector, decl = _decl_before(cleaned, m.start())
+        if re.search(r"\[\s*hidden\s*\]", selector) and re.search(r"display\s*:\s*none", decl, re.I):
+            continue
+        hits.append((src, "important", cleaned[max(0, m.start() - 40):m.start() + 12]))
+    for m in RE_VAR_FALLBACK_COLOR.finditer(cleaned):
+        hits.append((src, "var_fallback_color", m.group()[:80]))
+    for m in RE_VAR_FALLBACK_SIZE.finditer(cleaned):
+        hits.append((src, "var_fallback_size", m.group()[:80]))
+    for m in RE_PRIVATE_TOKEN.finditer(cleaned):
+        selector, decl = _decl_before(cleaned, m.start())
+        if RE_PAPER_PIN.search(decl):
+            continue
+        hits.append((src, "private_token_def", m.group()[:80]))
+    for m in RE_MAXWIDTH_PX.finditer(cleaned):
+        if m.group(1) in {"100", "0"}:
+            continue
+        line = cleaned.count("\n", 0, m.start()) + 1
+        hits.append((src, "hard_max_width_px", f"L{line}:{m.group()}"))
+    for m in RE_SIZE.finditer(cleaned):
+        if RE_ZERO.fullmatch(m.group()) or in_media(m.start()):
+            continue
+        hits.append((src, "hard_size", m.group()))
+
+
+def scan_markup(text: str, hits: list, src: str) -> None:
+    cleaned = strip_noise(text, True)
+    for m in RE_STYLE_BLOCK.finditer(cleaned):
+        scan_css(m.group(1), hits, src + "#<style>")
+    for m in RE_INLINE_STYLE.finditer(cleaned):
+        hits.append((src, "inline_style", m.group()[:100]))
+    for m in RE_SCRIPT_BLOCK.finditer(cleaned):
+        attrs, body = m.group(1), m.group(2)
+        if re.search(r"type\s*=\s*['\"](?:application/(?:ld\+)?json|text/template|text/x-template)", attrs, re.I):
+            continue
+        if re.search(r"\bsrc\s*=", attrs, re.I):
+            if RE_BAKE_CHANNEL.search(attrs):
+                continue  # widget bake channel (layout-source/source) is allowed
+            hits.append((src, "direct_script_src", attrs.strip()[:100]))
+            continue
+        if body.strip():
+            hits.append((src, "inline_script_exec", body.strip()[:100]))
+    for m in RE_ON_ATTR.finditer(cleaned):
+        line = cleaned.count("\n", 0, m.start()) + 1
+        hits.append((src, "inline_handler", f"L{line}:{m.group().strip()}"))
+    for m in RE_PHP_I18N.finditer(cleaned):
+        line = cleaned.count("\n", 0, m.start()) + 1
+        hits.append((src, "php_i18n_call", f"L{line}"))
+    for m in RE_RAW_SHELL.finditer(cleaned):
+        hits.append((src, "raw_page_shell", m.group()[:80]))
+
+
+def scan_js(text: str, hits: list, src: str) -> None:
+    for m in RE_FETCH.finditer(text):
+        hits.append((src, "js_fetch_direct", text[m.start():m.start() + 60]))
+    for m in RE_XHR.finditer(text):
+        hits.append((src, "js_fetch_direct", m.group()[:60]))
+    for m in RE_OBSERVE.finditer(text):
+        hits.append((src, "js_observe_direct", m.group()[:60]))
+
+
+def has_frontend_surface(module: str) -> bool:
+    base = CODE / module
+    return any((base / d).is_dir() for d in (
+        "view/templates/frontend", "view/theme/frontend", "view/statics/frontend"))
+
+
+def load_scope() -> dict:
+    cfg = Path(__file__).with_name("module-frontend-theme-scope.json")
+    if not cfg.is_file():
+        return {"exclude_modules": [], "include_paths": {}}
+    return json.loads(cfg.read_text(encoding="utf-8"))
+
+
+def collect(module_filter: str | None = None, use_scope: bool = True) -> dict:
+    scope = load_scope() if use_scope else {"exclude_modules": [], "include_paths": {}}
+    excluded_modules = {m for m in scope.get("exclude_modules", [])}
+    include_paths = scope.get("include_paths", {})
+    out_of_scope: Counter = Counter()
+    theme_layouts = set()
+    tl = CODE / "Weline/Theme" / "view/theme/frontend/layouts"
+    if tl.is_dir():
+        theme_layouts = {p.name for p in tl.iterdir() if p.is_dir()}
+
+    per_module: dict[str, Counter] = defaultdict(Counter)
+    per_file: list[dict] = []
+    examples: dict[tuple[str, str], list[str]] = defaultdict(list)
+    js_info: dict[str, dict] = defaultdict(dict)
+    modules_seen: set[str] = set()
+    scanned = 0
+
+    for p in sorted(CODE.rglob("*")):
+        if not p.is_file() or not in_scope(p):
+            continue
+        mod = module_of(p)
+        if module_filter and mod.replace("/", "_") != module_filter and mod != module_filter:
+            continue
+        if mod in excluded_modules:
+            out_of_scope[mod] += 1
+            continue
+        rel_posix = "/" + str(p.relative_to(CODE)).replace("\\", "/")
+        # S2b: modules that ship a real frontend area only consume frontend surfaces;
+        # root-level Block/analytics/Widget dirs are backend widgets.
+        if (CODE / mod / "view/templates/frontend").is_dir() and not (
+                "/frontend/" in rel_posix or "/view/statics/" in rel_posix):
+            out_of_scope[mod] += 1
+            continue
+        allowed = include_paths.get(mod)
+        if allowed is not None:
+            if not any(a in rel_posix or a in str(p) for a in allowed):
+                out_of_scope[mod] += 1
+                continue
+        modules_seen.add(mod)
+        scanned += 1
+        rel = str(p.relative_to(ROOT))
+        raw = p.read_text(encoding="utf-8", errors="replace")
+        hits: list[tuple[str, str, str]] = []
+        suffix = p.suffix.lower()
+        if suffix in CSS_EXT:
+            scan_css(raw, hits, rel)
+        elif suffix in MARKUP_EXT:
+            scan_markup(raw, hits, rel)
+        else:
+            scan_js(raw, hits, rel)
+            js_info[mod]["js_files"] = js_info[mod].get("js_files", 0) + 1
+        if suffix in MARKUP_EXT:
+            if RE_WELINE_USE.search(raw) or RE_DATA_WELINE.search(raw):
+                js_info[mod]["templates_using_loader"] = js_info[mod].get("templates_using_loader", 0) + 1
+        if hits:
+            codes = Counter(h[1] for h in hits)
+            per_file.append({
+                "path": rel, "module": mod, "hits": len(hits), "by_code": dict(codes),
+            })
+            for _src, code, match in hits:
+                per_module[mod][code] += 1
+                if len(examples[(mod, code)]) < 3:
+                    examples[(mod, code)].append(f"{_src} :: {match}")
+
+    for mod in list(modules_seen):
+        reg = CODE / mod / "view/statics/frontend/weline.modules.js"
+        js_info[mod]["registered"] = reg.is_file()
+        lay = CODE / mod / "view/theme/frontend/layouts"
+        if lay.is_dir():
+            for d in sorted(lay.iterdir()):
+                if d.is_dir() and d.name in theme_layouts:
+                    per_module[mod]["layout_key_collision"] += 1
+                    per_file.append({
+                        "path": str(d.relative_to(ROOT)), "module": mod, "hits": 1,
+                        "by_code": {"layout_key_collision": 1},
+                    })
+                    examples[(mod, "layout_key_collision")].append(
+                        f"layout key '{d.name}' collides with Weline_Theme default layout")
+        for cand in ("theme.json", "etc/theme.json"):
+            if (CODE / mod / cand).is_file():
+                per_module[mod]["private_theme_json"] += 1
+                examples[(mod, "private_theme_json")].append(str((CODE / mod / cand).relative_to(ROOT)))
+
+    rows = []
+    for mod, codes in per_module.items():
+        sev = Counter()
+        for code, n in codes.items():
+            sev[SEVERITY.get(code, "P2")] += n
+        rows.append({
+            "module": mod,
+            "module_id": mod.replace("/", "_"),
+            "frontend_surface": has_frontend_surface(mod),
+            "violations": sum(codes.values()),
+            "files": len([f for f in per_file if f["module"] == mod]),
+            "P0": sev["P0"], "P1": sev["P1"], "P2": sev["P2"],
+            "by_code": dict(sorted(codes.items(), key=lambda kv: -kv[1])),
+            "examples": {c: examples[(mod, c)] for c in codes},
+            "js": js_info.get(mod, {}),
+        })
+    rows.sort(key=lambda r: (-r["P0"], -r["P1"], -r["violations"]))
+
+    by_code_global = Counter()
+    for r in rows:
+        for code, n in r["by_code"].items():
+            by_code_global[code] += n
+
+    return {
+        "schema": "module-frontend-theme-audit.v1",
+        "contract": "模块前端页面修改标准（默认主题消费合同）",
+        "modules_scanned": len(modules_seen),
+        "files_scanned": scanned,
+        "total_violations": sum(r["violations"] for r in rows),
+        "bad_files": len(per_file),
+        "modules_with_violations": len(rows),
+        "frontend_surface_modules": len([r for r in rows if r["frontend_surface"]]),
+        "ok": sum(r["violations"] for r in rows) == 0,
+        "scope": {
+            "mode": "frontend_consumption" if use_scope else "all",
+            "excluded_modules": sorted(excluded_modules),
+            "out_of_scope_files": dict(out_of_scope),
+        },
+        "by_code": dict(by_code_global.most_common()),
+        "by_severity": {
+            "P0": sum(r["P0"] for r in rows),
+            "P1": sum(r["P1"] for r in rows),
+            "P2": sum(r["P2"] for r in rows),
+        },
+        "rows": rows,
+    }
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--module", default=None, help="e.g. Weline_Compare")
+    ap.add_argument("--all", action="store_true", help="ignore scope config (audit every module)")
+    ap.add_argument("--baseline", default=None)
+    ap.add_argument("--write-baseline", default=None)
+    ap.add_argument("--md", default=None, help="write markdown summary here")
+    args = ap.parse_args()
+
+    report = collect(args.module, use_scope=not args.all)
+
+    if args.write_baseline:
+        snapshot = {
+            "schema": "module-frontend-theme-baseline.v1",
+            "note": "棘轮基线：只许降不许升。每次迁移后由 --write-baseline 下调。",
+            "total_violations": report["total_violations"],
+            "by_code": report["by_code"],
+            "by_severity": report["by_severity"],
+            "by_module": {r["module"]: r["violations"] for r in report["rows"]},
+            "by_module_code": {r["module"]: r["by_code"] for r in report["rows"]},
+        }
+        Path(args.write_baseline).write_text(
+            json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"baseline written: {args.write_baseline} total={report['total_violations']}")
+
+    exit_code = 0
+    if args.baseline:
+        base = json.loads(Path(args.baseline).read_text(encoding="utf-8"))
+        problems = []
+        for code, limit in base.get("by_code", {}).items():
+            current = report["by_code"].get(code, 0)
+            if current > limit:
+                problems.append(f"{code}: {current} > baseline {limit}")
+        for mod, limit in base.get("by_module", {}).items():
+            current = next((r["violations"] for r in report["rows"] if r["module"] == mod), 0)
+            if current > limit:
+                problems.append(f"{mod}: {current} > baseline {limit}")
+        for code, limit in base.get("by_severity", {}).items():
+            current = report["by_severity"].get(code, 0)
+            if current > limit:
+                problems.append(f"severity {code}: {current} > baseline {limit}")
+        if problems:
+            print("RATCHET FAIL:\n  " + "\n  ".join(problems), file=sys.stderr)
+            exit_code = 1
+        report["ratchet"] = {"ok": not problems, "problems": problems}
+
+    if args.md:
+        lines = [
+            f"# 模块前端主题合规扫描（{report['modules_with_violations']}/{report['modules_scanned']} 模块有命中）",
+            "",
+            f"- 命中总数：**{report['total_violations']}**（P0 {report['by_severity']['P0']} / "
+            f"P1 {report['by_severity']['P1']} / P2 {report['by_severity']['P2']}）",
+            f"- 涉及文件：{report['bad_files']}",
+            "",
+            "| 模块 | 命中 | P0 | P1 | P2 | 文件 | 主要类型 |",
+            "|---|---:|---:|---:|---:|---:|---|",
+        ]
+        for r in report["rows"]:
+            top = ", ".join(f"{k}×{v}" for k, v in list(r["by_code"].items())[:4])
+            lines.append(
+                f"| {r['module']} | {r['violations']} | {r['P0']} | {r['P1']} | {r['P2']} | "
+                f"{r['files']} | {top} |")
+        scope = report.get("scope", {})
+        lines += [
+            "",
+            "## 范围（机器可读配置：`module-frontend-theme-scope.json`）",
+            "",
+            f"- 扫描模式：`{scope.get('mode')}`",
+            f"- 排除模块：{len(scope.get('excluded_modules', []))} 个 —— "
+            + "、".join(m.replace("Weline/", "") for m in scope.get("excluded_modules", [])),
+            "- 排除依据：后台 area（合同禁止）/ prototype / 第三方 app 壳 / 框架提供方",
+            "",
+            "| 模块 | 命中 | 路径白名单 |",
+            "|---|---:|---|",
+        ]
+        for mod, paths in sorted(load_scope().get("include_paths", {}).items()):
+            hits = next((r["violations"] for r in report["rows"] if r["module"] == mod), 0)
+            lines.append(f"| {mod} | {hits} | {'<br>'.join(paths)} |")
+        lines += [
+            "",
+            "## 例外白名单（不计违规，依据 Theme 文档）",
+            "",
+            "| 例外 | 依据 |",
+            "|---|---|",
+            "| 纸面钉 `#0f1111` / `#565959` / `#666666` 绑 `--weline-chrome-body-text*` / `--amz-drawer-text` / `*paper-text` | theme-css-variables-only.md §8 |",
+            "| `@media` 断点字面量 | theme-css-variables-only.md §7 |",
+            "| `[hidden] { display: none !important }` | theme-css-variables-only.md 例外表 |",
+            "| `@media (prefers-reduced-motion: reduce)` 内 `!important` | theme-css-variables-only.md 例外表 |",
+            "| 部件 bake 通道 `<script ... data-weline-widget-asset / data-weline-source-position>` | 前端JS模块加载规范.md §1.5 |",
+            "",
+            "## 用法",
+            "",
+            "```bash",
+            "python3 app/code/Weline/Theme/bin/module-frontend-theme-audit.py                 # 汇总",
+            "python3 app/code/Weline/Theme/bin/module-frontend-theme-audit.py --module Weline_Compare",
+            "python3 app/code/Weline/Theme/bin/module-frontend-theme-audit.py --json",
+            "python3 app/code/Weline/Theme/bin/module-frontend-theme-audit.py --baseline app/code/Weline/Theme/test/fixtures/module-frontend-theme-baseline.json",
+            "python3 app/code/Weline/Theme/bin/module-frontend-theme-audit.py --write-baseline app/code/Weline/Theme/test/fixtures/module-frontend-theme-baseline.json  # 迁移后下调",
+            "```",
+        ]
+        Path(args.md).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    elif not args.write_baseline:
+        print(f"modules={report['modules_scanned']} files={report['files_scanned']} "
+              f"bad_files={report['bad_files']} hits={report['total_violations']} "
+              f"P0={report['by_severity']['P0']} P1={report['by_severity']['P1']} "
+              f"P2={report['by_severity']['P2']} ok={report['ok']}")
+        print(json.dumps(report["by_code"], ensure_ascii=False))
+        for r in report["rows"][:15]:
+            print(f"  {r['violations']:6d} {r['module']}")
+    return exit_code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
