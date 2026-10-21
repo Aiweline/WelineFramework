@@ -981,9 +981,8 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         $d = $this->getDialect();
         $t = $d->quoteTable($table);
         $name = $d->quoteIdentifier($idx['name'] ?? '');
-        $cols = array_map(fn (string $c) => $d->quoteIdentifier($c), $idx['columns'] ?? []);
-        $colList = implode(',', $cols);
-        $type = strtoupper($idx['type'] ?? 'INDEX');
+        $type = strtoupper((string)($idx['type'] ?? 'INDEX'));
+        $colList = $this->mysqlAddIndexColumnList($table, $idx, $type);
         if ($type === 'UNIQUE') {
             return "ALTER TABLE {$t} ADD UNIQUE {$name} ({$colList})";
         }
@@ -991,6 +990,51 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
             return "ALTER TABLE {$t} ADD FULLTEXT INDEX {$name} ({$colList})";
         }
         return "ALTER TABLE {$t} ADD INDEX {$name} ({$colList})";
+    }
+
+    /**
+     * InnoDB utf8mb4 单键上限 3072 字节。TEXT/BLOB 不带前缀时，MariaDB 会按最大前缀
+     * 拼进复合索引，再叠加 varchar 就会报 key too long。与建表 addIndex 一样收成 191。
+     * FULLTEXT/SPATIAL 不加前缀。调用方可传 columnTypes 免查库；否则读当前表列类型。
+     *
+     * @param array{columns?:list<string>,columnTypes?:array<string,string>} $idx
+     */
+    private function mysqlAddIndexColumnList(string $table, array $idx, string $indexType): string
+    {
+        $d = $this->getDialect();
+        $types = [];
+        $given = $idx['columnTypes'] ?? null;
+        if (is_array($given)) {
+            foreach ($given as $name => $type) {
+                $types[strtolower((string)$name)] = strtolower((string)$type);
+            }
+        } elseif (!in_array($indexType, ['FULLTEXT', 'SPATIAL'], true)) {
+            foreach ($this->getTableColumns($table) as $column) {
+                $types[strtolower((string)($column['name'] ?? ''))] = strtolower((string)($column['type'] ?? ''));
+            }
+        }
+        $parts = [];
+        foreach ($idx['columns'] ?? [] as $column) {
+            $clean = trim(str_replace('`', '', (string)$column));
+            if ($clean === '') {
+                continue;
+            }
+            $explicit = '';
+            if (preg_match('/^(.+)\((\d+)\)$/', $clean, $match) === 1) {
+                $clean = $match[1];
+                $explicit = '(' . $match[2] . ')';
+            }
+            $quoted = $d->quoteIdentifier($clean);
+            if ($explicit !== '') {
+                $parts[] = $quoted . $explicit;
+                continue;
+            }
+            $baseType = $types[strtolower($clean)] ?? '';
+            $needsPrefix = !in_array($indexType, ['FULLTEXT', 'SPATIAL'], true)
+                && (preg_match('/^(tiny|medium|long)?(text|blob)$/', $baseType) === 1 || $baseType === 'json');
+            $parts[] = $needsPrefix ? $quoted . '(191)' : $quoted;
+        }
+        return implode(',', $parts);
     }
 
     /** @inheritDoc */
