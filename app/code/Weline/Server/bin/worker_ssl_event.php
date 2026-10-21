@@ -2050,6 +2050,22 @@ function wlsEventHandleStaticFile(
         }
         $lastModified = \gmdate('D, d M Y H:i:s', $mtime) . ' GMT';
         $etag = '"' . \md5($candidate . $mtime) . '"';
+        // 长缓存只给内容寻址的 /static 资源；legacy 路径必须协商，避免旧 FPC 被永久钉死。
+        $cacheControl = 'public, max-age=31536000';
+        $cacheTtl = 31_536_000;
+        if (\str_starts_with($path, '/static/')) {
+            $queryString = '';
+            $queryPos = \strpos($requestTarget, '?');
+            if ($queryPos !== false) {
+                $queryString = \substr($requestTarget, $queryPos + 1);
+            }
+            if (\Weline\Framework\Deploy\StaticPublicSurface::isVersionedStaticUrl($path, $queryString)) {
+                $cacheControl = 'public, max-age=31536000, immutable';
+            } else {
+                $cacheControl = 'public, max-age=0, must-revalidate';
+                $cacheTtl = 0;
+            }
+        }
         $keepAlive = $decision->keepAlive();
         $connection = $keepAlive ? 'keep-alive' : 'close';
         $ifNoneMatch = \trim((string)($decision->headers['if-none-match'] ?? ''));
@@ -2090,7 +2106,7 @@ function wlsEventHandleStaticFile(
             return "HTTP/1.1 206 Partial Content\r\n"
                 . "Content-Range: bytes {$range['start']}-{$range['end']}/{$fileSize}\r\n"
                 . "Content-Type: {$mime}\r\nContent-Length: {$range['length']}\r\n"
-                . "Cache-Control: public, max-age=31536000\r\nETag: {$etag}\r\n"
+                . "Cache-Control: {$cacheControl}\r\nETag: {$etag}\r\n"
                 . "Last-Modified: {$lastModified}\r\nAccept-Ranges: bytes\r\n"
                 . "X-WLS-Static-Cache: DISK\r\nConnection: {$connection}\r\n\r\n"
                 . ($decision->method === 'HEAD' ? '' : $content);
@@ -2101,18 +2117,18 @@ function wlsEventHandleStaticFile(
             return null;
         }
         $response = "HTTP/1.1 200 OK\r\nContent-Type: {$mime}\r\nContent-Length: {$fileSize}"
-            . "\r\nCache-Control: public, max-age=31536000\r\nETag: {$etag}\r\n"
+            . "\r\nCache-Control: {$cacheControl}\r\nETag: {$etag}\r\n"
             . "Last-Modified: {$lastModified}\r\nAccept-Ranges: bytes\r\n"
             . "X-WLS-Static-Cache: MISS\r\n"
             . "Connection: {$connection}\r\n\r\n" . $content;
-        if ($decision->method === 'GET') {
+        if ($decision->method === 'GET' && $cacheTtl > 0) {
             \Weline\Server\Service\WorkerStaticResponseL1::publish(
                 $requestTarget,
                 $response,
                 $candidate,
                 $etag,
                 $lastModified,
-                31_536_000,
+                $cacheTtl,
             );
         }
 

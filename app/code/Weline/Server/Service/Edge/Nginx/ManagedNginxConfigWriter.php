@@ -303,6 +303,19 @@ NGINX;
     include {$quotedFpcPierceMap};
     include {$quotedFpcQueryAllowlistMap};
     include {$quotedSitemapEdgeMap};
+    # 静态长缓存只给内容寻址 URL：/static/{12位hex}/... 或带版本查询。
+    map \$uri \$wls_static_versioned {
+        default 0;
+        "~^/static/[0-9a-f]{12}(?:/|\$)" 1;
+    }
+    map \$args \$wls_static_arg_versioned {
+        default 0;
+        "~*(?:^|&)(?:v|weline_asset|_weline_dev)=" 1;
+    }
+    map "\$wls_static_versioned\$wls_static_arg_versioned" \$wls_static_cache_control {
+        default "public, max-age=0, must-revalidate";
+        "~1" "public, max-age=31536000, immutable";
+    }
     map \$http_authorization \$wls_fpc_html_bypass_auth {
         default 0;
         "~." 1;
@@ -482,7 +495,7 @@ NGINX;
         // Cache-Control only: `expires` also emits Cache-Control max-age and would duplicate.
         $staticBrHitHeaders = <<<NGINX
             access_log off;
-            add_header Cache-Control "public, max-age=31536000, immutable" always;
+            add_header Cache-Control \$wls_static_cache_control always;
             add_header X-Wls-Static-Disk "1" always;
             error_page 418 = @wls_static_pub_plain;
             if (\$wls_fpc_accepts_br = 0) {
@@ -540,7 +553,7 @@ NGINX;
                 default_type text/plain;
             }
             access_log off;
-            add_header Cache-Control "public, max-age=31536000, immutable" always;
+            add_header Cache-Control \$wls_static_cache_control always;
             add_header X-Wls-Static-Disk "1" always;
             try_files \$uri @wls_static_origin;
 {$locationProtocolHeaders}
@@ -548,7 +561,7 @@ NGINX;
         location @wls_static_pub_plain {
             root {$quotedPubRoot};
             access_log off;
-            add_header Cache-Control "public, max-age=31536000, immutable" always;
+            add_header Cache-Control \$wls_static_cache_control always;
             add_header X-Wls-Static-Disk "1" always;
             try_files \$uri @wls_static_origin;
 {$locationProtocolHeaders}

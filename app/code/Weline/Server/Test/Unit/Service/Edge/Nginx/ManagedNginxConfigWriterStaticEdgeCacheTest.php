@@ -181,8 +181,20 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
             'expires must not stack a second Cache-Control alongside add_header immutable.',
         );
         self::assertStringContainsString(
-            'Cache-Control "public, max-age=31536000, immutable" always;',
+            'Cache-Control $wls_static_cache_control always;',
             $staticBlock,
+            'Static cache policy must come from the version map, not a fixed immutable header.',
+        );
+        self::assertStringContainsString('map $uri $wls_static_versioned', $config);
+        self::assertStringContainsString('map $args $wls_static_arg_versioned', $config);
+        self::assertStringContainsString(
+            'map "$wls_static_versioned$wls_static_arg_versioned" $wls_static_cache_control',
+            $config,
+        );
+        self::assertStringContainsString(
+            'default "public, max-age=0, must-revalidate";',
+            $config,
+            'Unversioned /static/** must revalidate so stale FPC references cannot pin old bytes.',
         );
         self::assertStringContainsString(
             'proxy_set_header Cookie "";',
