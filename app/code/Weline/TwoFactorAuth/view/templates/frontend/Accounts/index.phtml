@@ -21,7 +21,7 @@
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft YaHei", sans-serif;
-            background: #f5f5f5;
+            background: var(--color-bg-muted);
             margin: 0;
             padding: 0;
             min-height: 100vh;
@@ -30,81 +30,81 @@
         .container {
             max-width: 900px;
             margin: 0 auto;
-            padding: 15px 10px;
+            padding: var(--spacing-0_95) var(--spacing-2_5);
             min-height: 100vh;
         }
         
         @media (min-width: 480px) {
             .container {
-                padding: 20px 15px;
+                padding: var(--spacing-5) var(--spacing-0_95);
             }
         }
         
         @media (min-width: 768px) {
             .container {
-                padding: 20px;
+                padding: var(--spacing-5);
             }
         }
         
         .header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 15px;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            padding: var(--spacing-0_95);
+            border-radius: var(--sidebar-radius);
+            margin-bottom: var(--spacing-0_95);
+            box-shadow: var(--weline-shadow-md);
         }
         
         @media (min-width: 480px) {
             .header {
-                padding: 20px;
+                padding: var(--spacing-5);
             }
         }
         
         @media (min-width: 768px) {
             .header {
-                padding: 30px;
-                margin-bottom: 20px;
+                padding: var(--spacing-7);
+                margin-bottom: var(--spacing-5);
             }
         }
         
         .header h1 {
-            margin-bottom: 10px;
-            font-size: clamp(20px, 5vw, 28px);
+            margin-bottom: var(--spacing-2_5);
+            font-size: clamp(var(--font-size-xl), 5vw, var(--font-size-3xl));
         }
         
         .header p {
             opacity: 0.9;
-            font-size: clamp(14px, 3vw, 16px);
+            font-size: clamp(var(--font-size-sm), 3vw, var(--font-size-base));
         }
         
         .actions {
             display: flex;
-            gap: 8px;
-            margin-bottom: 15px;
+            gap: var(--spacing-2);
+            margin-bottom: var(--spacing-0_95);
             justify-content: center;
             flex-wrap: wrap;
         }
         
         @media (min-width: 480px) {
             .actions {
-                gap: 10px;
-                margin-bottom: 20px;
+                gap: var(--spacing-2_5);
+                margin-bottom: var(--spacing-5);
             }
         }
         
         @media (min-width: 768px) {
             .actions {
-                gap: 15px;
-                margin-bottom: 25px;
+                gap: var(--spacing-0_95);
+                margin-bottom: var(--spacing-lg);
             }
         }
         
         .btn {
-            padding: 10px 16px;
+            padding: var(--spacing-2_5) var(--spacing-4);
             border: none;
-            border-radius: 8px;
-            font-size: clamp(13px, 3.5vw, 15px);
+            border-radius: var(--radius-lg);
+            font-size: clamp(var(--font-size-13), 3.5vw, var(--font-size-sm));
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
@@ -112,16 +112,16 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 4px;
+            gap: var(--spacing-1);
             width: 100%;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            box-shadow: var(--weline-shadow-md);
         }
         
         @media (min-width: 480px) {
             .btn {
-                padding: 12px 20px;
-                border-radius: 10px;
-                gap: 6px;
+                padding: var(--spacing-3) var(--spacing-5);
+                border-radius: var(--sidebar-radius);
+                gap: var(--spacing-1_5);
             }
         }
         
@@ -135,9 +135,9 @@
         
         @media (min-width: 768px) {
             .btn {
-                padding: 14px 32px;
-                border-radius: 12px;
-                gap: 8px;
+                padding: var(--spacing-3_5) var(--spacing-8);
+                border-radius: var(--radius-xl);
+                gap: var(--spacing-2);
             }
         }
         
@@ -148,17 +148,17 @@
         
         .btn-primary:hover {
             transform: translateY(-3px);
-            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+            box-shadow: var(--weline-shadow-md);
         }
         
         .btn-success {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            background: linear-gradient(135deg, #11998e 0%, var(--color-success) 100%);
             color: white;
         }
         
         .btn-success:hover {
             transform: translateY(-3px);
-            box-shadow: 0 8px 24px rgba(17, 153, 142, 0.4);
+            box-shadow: var(--weline-shadow-md);
         }
         
         .btn-secondary {
@@ -168,34 +168,34 @@
         
         .btn-secondary:hover {
             transform: translateY(-3px);
-            box-shadow: 0 8px 24px rgba(118, 75, 162, 0.4);
+            box-shadow: var(--weline-shadow-md);
         }
         
         .btn-danger {
-            background: #dc3545;
+            background: var(--color-danger);
             color: white;
         }
         
         .btn-danger:hover {
-            background: #c82333;
+            background: var(--color-danger);
         }
         
         .accounts-grid {
             display: grid;
-            gap: 10px;
+            gap: var(--spacing-2_5);
         }
         
         @media (min-width: 480px) {
             .accounts-grid {
-                gap: 15px;
+                gap: var(--spacing-0_95);
             }
         }
         
         .account-card {
             background: white;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            padding: var(--spacing-0_95);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--weline-shadow-md);
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -204,8 +204,8 @@
         
         @media (min-width: 480px) {
             .account-card {
-                padding: 20px;
-                border-radius: 10px;
+                padding: var(--spacing-5);
+                border-radius: var(--sidebar-radius);
             }
         }
         
@@ -220,7 +220,7 @@
             .account-card {
                 flex-direction: column;
                 align-items: flex-start;
-                gap: 12px;
+                gap: var(--spacing-3);
             }
             
             .account-card-header {
@@ -245,7 +245,7 @@
         
         .account-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.12);
+            box-shadow: var(--weline-shadow-md);
         }
         
         .account-info {
@@ -253,29 +253,29 @@
         }
         
         .account-name {
-            font-size: clamp(16px, 4vw, 20px);
+            font-size: clamp(var(--font-size-base), 4vw, var(--font-size-xl));
             font-weight: bold;
             color: #333;
-            margin-bottom: 5px;
+            margin-bottom: var(--spacing-xs);
         }
         
         .account-issuer {
-            color: #666;
-            font-size: clamp(12px, 3vw, 14px);
+            color: var(--color-text-gray-mid);
+            font-size: clamp(var(--font-size-xs), 3vw, var(--font-size-sm));
         }
         
         .account-code-wrapper {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-right: 15px;
+            gap: var(--spacing-2);
+            margin-right: var(--spacing-0_95);
             flex-wrap: wrap;
         }
         
         @media (min-width: 480px) {
             .account-code-wrapper {
-                gap: 12px;
-                margin-right: 20px;
+                gap: var(--spacing-3);
+                margin-right: var(--spacing-5);
                 flex-wrap: nowrap;
             }
         }
@@ -288,8 +288,8 @@
             }
             
             .copy-code-btn {
-                font-size: 12px;
-                padding: 6px 10px;
+                font-size: var(--font-size-xs);
+                padding: var(--spacing-1_5) var(--spacing-2_5);
             }
         }
         
@@ -297,12 +297,12 @@
             width: clamp(40px, 10vw, 50px);
             height: clamp(40px, 10vw, 50px);
             border-radius: 50%;
-            border: 3px solid #ddd;
+            border: var(--border-width-thick) solid var(--color-border-muted);
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
-            background: #f9f9f9;
+            background: var(--color-bg-panel);
         }
         
         .countdown-circle svg {
@@ -328,46 +328,46 @@
         
         .countdown-number {
             position: absolute;
-            font-size: clamp(10px, 2.5vw, 12px);
+            font-size: clamp(var(--font-size-xs), 2.5vw, var(--font-size-xs));
             font-weight: bold;
-            color: #007bff;
+            color: var(--color-text-faint);
         }
         
         .account-code {
-            font-size: clamp(24px, 6vw, 32px);
+            font-size: clamp(var(--font-size-2xl), 6vw, var(--font-size-4xl));
             font-weight: bold;
             font-family: 'Courier New', monospace;
-            color: #007bff;
-            letter-spacing: clamp(2px, 1vw, 4px);
+            color: var(--color-text-faint);
+            letter-spacing: clamp(var(--spacing-0_5), 1vw, var(--spacing-1));
             cursor: pointer;
             user-select: all;
             transition: all 0.3s;
         }
         
         .account-code:hover {
-            color: #0056b3;
+            color: var(--color-text-muted);
             transform: scale(1.05);
         }
         
         .copy-code-btn {
-            background: #007bff;
+            background: var(--color-info);
             color: white;
             border: none;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 14px;
+            padding: var(--spacing-2) var(--spacing-3);
+            border-radius: var(--border-radius-md);
+            font-size: var(--font-size-sm);
             cursor: pointer;
             transition: all 0.3s;
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: var(--spacing-1);
             white-space: nowrap;
         }
         
         .copy-code-btn:hover {
-            background: #0056b3;
+            background: var(--color-info);
             transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+            box-shadow: var(--weline-shadow-md);
         }
         
         .copy-code-btn:active {
@@ -375,33 +375,33 @@
         }
         
         .copy-code-btn.copied {
-            background: #28a745;
+            background: var(--color-success);
         }
         
         .copy-code-btn.copied:hover {
-            background: #218838;
+            background: var(--color-success);
         }
         
         .account-actions {
             display: flex;
-            gap: 10px;
+            gap: var(--spacing-2_5);
             position: relative;
         }
         
         .more-actions-btn {
             background: white;
-            border: 2px solid #ddd;
-            color: #666;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 18px;
+            border: var(--border-width-medium) solid var(--color-border-muted);
+            color: var(--color-text-gray-mid);
+            padding: var(--spacing-2) var(--spacing-3);
+            border-radius: var(--border-radius-md);
+            font-size: var(--font-size-lg);
             cursor: pointer;
             transition: all 0.3s;
         }
         
         .more-actions-btn:hover {
             border-color: #007bff;
-            color: #007bff;
+            color: var(--color-text-faint);
             transform: scale(1.05);
         }
         
@@ -410,14 +410,14 @@
             top: 100%;
             right: 0;
             background: white;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            padding: 8px 0;
+            border: var(--border-width-thin) solid var(--color-border-muted);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--weline-shadow-md);
+            padding: var(--spacing-2) 0;
             min-width: 150px;
             z-index: 1000;
             display: none;
-            margin-top: 5px;
+            margin-top: var(--spacing-xs);
         }
         
         .dropdown-menu.show {
@@ -425,50 +425,50 @@
         }
         
         .dropdown-item {
-            padding: 10px 20px;
-            color: #666;
+            padding: var(--spacing-2_5) var(--spacing-5);
+            color: var(--color-text-gray-mid);
             cursor: pointer;
             transition: all 0.2s;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: var(--spacing-2);
         }
         
         .dropdown-item:hover {
-            background: #f5f5f5;
+            background: var(--color-bg-muted);
             color: #333;
         }
         
         .dropdown-item.delete {
-            color: #dc3545;
+            color: var(--color-text-faint);
         }
         
         .dropdown-item.delete:hover {
-            background: #fee;
-            color: #c82333;
+            background: var(--color-bg-canvas);
+            color: var(--color-link);
         }
         
         .empty-state {
             text-align: center;
-            padding: 60px 20px;
+            padding: var(--spacing-15) var(--spacing-5);
             background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            border-radius: var(--sidebar-radius);
+            box-shadow: var(--weline-shadow-md);
         }
         
         .empty-state-icon {
             font-size: 80px;
-            margin-bottom: 20px;
+            margin-bottom: var(--spacing-5);
         }
         
         .empty-state h2 {
-            color: #666;
-            margin-bottom: 10px;
+            color: var(--color-text-gray-mid);
+            margin-bottom: var(--spacing-2_5);
         }
         
         .empty-state p {
-            color: #999;
-            margin-bottom: 30px;
+            color: var(--color-text-faint);
+            margin-bottom: var(--spacing-7);
         }
         
         .modal {
@@ -490,8 +490,8 @@
         
         .modal-content {
             background: white;
-            padding: 30px;
-            border-radius: 10px;
+            padding: var(--spacing-7);
+            border-radius: var(--sidebar-radius);
             max-width: 500px;
             width: 90%;
             max-height: 90vh;
@@ -502,7 +502,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: var(--spacing-5);
         }
         
         .modal-header h2 {
@@ -512,18 +512,18 @@
         .close-btn {
             background: none;
             border: none;
-            font-size: 24px;
+            font-size: var(--font-size-2xl);
             cursor: pointer;
-            color: #666;
+            color: var(--color-text-gray-mid);
         }
         
         .w-field {
-            margin-bottom: 20px;
+            margin-bottom: var(--spacing-5);
         }
         
         .w-field label {
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: var(--spacing-2);
             color: #333;
             font-weight: 500;
         }
@@ -532,10 +532,10 @@
         .w-field textarea,
         .w-field select {
             width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 16px;
+            padding: var(--spacing-3);
+            border: var(--border-width-medium) solid var(--color-border-muted);
+            border-radius: var(--radius-lg);
+            font-size: var(--font-size-base);
             transition: border-color 0.3s;
         }
         
@@ -548,24 +548,24 @@
         
         .tabs {
             display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #e0e0e0;
+            gap: var(--spacing-2_5);
+            margin-bottom: var(--spacing-5);
+            border-bottom: var(--border-width-medium) solid var(--color-border-muted);
         }
         
         .tab {
-            padding: 10px 20px;
+            padding: var(--spacing-2_5) var(--spacing-5);
             background: none;
             border: none;
             cursor: pointer;
-            font-size: 16px;
-            color: #666;
+            font-size: var(--font-size-base);
+            color: var(--color-text-gray-mid);
             transition: all 0.3s;
         }
         
         .tab.active {
-            color: #007bff;
-            border-bottom: 2px solid #007bff;
+            color: var(--color-text-faint);
+            border-bottom: var(--border-width-medium) solid #007bff;
             font-weight: bold;
         }
         
@@ -578,22 +578,22 @@
         }
         
         .upload-area {
-            border: 2px dashed #ddd;
-            border-radius: 8px;
-            padding: 40px;
+            border: var(--border-width-medium) dashed var(--color-border-muted);
+            border-radius: var(--radius-lg);
+            padding: var(--weline-space-10);
             text-align: center;
             cursor: pointer;
             transition: all 0.3s;
-            background: #fafafa;
+            background: var(--color-bg-slate);
         }
         
         .upload-area:hover {
             border-color: #007bff;
-            background: #f0f8ff;
+            background: var(--color-bg-panel);
         }
         
         .upload-area p {
-            color: #666;
+            color: var(--color-text-gray-mid);
             margin: 0;
         }
         
@@ -613,6 +613,24 @@
         .import-tab-content.active {
             display: block;
         }
+    </style>
+    <style>
+.tfa-dim { opacity: 0.3; }
+.tfa-hidden { display: none; }
+.tfa-center { text-align: center; }
+.tfa-w-full { width: 100%; }
+.tfa-max-w-full { max-width: 100%; }
+.tfa-radius { border-radius: var(--weline-theme-radius-lg); }
+.tfa-mt-4 { margin-top: var(--weline-space-4); }
+.tfa-mt-5 { margin-top: var(--weline-space-5); }
+.tfa-mb-4 { margin-bottom: var(--weline-space-4); }
+.tfa-mb-2 { margin-bottom: var(--spacing-2_5); }
+.tfa-flex-gap { display: flex; gap: var(--spacing-2_5); }
+.tfa-muted { color: var(--color-text-muted); }
+.tfa-faint { color: var(--color-text-faint); }
+.tfa-fs-xs { font-size: var(--weline-font-size-xs); }
+.tfa-status-ok { color: var(--color-success); }
+.tfa-status-error { color: var(--color-danger); }
     </style>
     <js>Weline_TwoFactorAuth::twofa-app/jsQR.min.js</js>
 </head>
@@ -689,23 +707,23 @@
             <div id="qrTab" class="w-tabs__content" data-state="active">
                 <div class="qr-scanner-container">
                     <div class="upload-area" id="uploadArea" data-twofa-action="trigger-file-input" data-target-input="qrFileInput" role="button" tabindex="0">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="opacity:0.3;">
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="tfa-dim">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
                         </svg>
-                        <p style="margin-top:15px; color:#666;">点击上传或拖拽二维码图片</p>
-                        <input type="file" id="qrFileInput" accept="image/*" style="display:none;" data-twofa-change="handle-file-upload">
+                        <p class="tfa-mt-4 tfa-muted">点击上传或拖拽二维码图片</p>
+                        <input type="file" id="qrFileInput" accept="image/*" class="tfa-hidden" data-twofa-change="handle-file-upload">
                     </div>
-                    <div class="camera-section" style="margin-top:20px; text-align:center;">
-                        <video id="cameraVideo" autoplay playsinline style="display:none; width:100%; border-radius:8px;"></video>
+                    <div class="camera-section" class="tfa-mt-5 tfa-center">
+                        <video id="cameraVideo" autoplay playsinline class="tfa-hidden tfa-w-full tfa-radius"></video>
                         <button class="w-button" id="startCameraBtn" type="button" data-twofa-action="start-camera" data-tone="neutral">📷 打开摄像头扫描</button>
                     </div>
-                    <div class="preview-section" id="previewSection" style="display:none; text-align:center;">
-                        <img id="previewImage" style="max-width:100%; border-radius:8px; margin-bottom:10px;">
+                    <div class="preview-section" id="previewSection" class="tfa-hidden tfa-center">
+                        <img id="previewImage" class="tfa-max-w-full tfa-radius tfa-mb-2">
                         <p id="previewText"></p>
                     </div>
                 </div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <div class="tfa-flex-gap tfa-mt-5">
                     <button type="button" class="w-button" data-twofa-action="close-modal" data-modal-id="addModal" data-tone="neutral">取消</button>
                 </div>
             </div>
@@ -714,21 +732,21 @@
                 <w:form id="addForm" data-twofa-submit="add-account">
                     <div class="w-field">
                         <label>账户名称 *</label>
-                        <input type="text" name="name" required placeholder="例如：Gmail">
+                        <input type="text" name="name" required app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml="例如：Gmail">
                     </div>
                     
                     <div class="w-field">
                         <label>发行者（可选）</label>
-                        <input type="text" name="issuer" placeholder="例如：Google">
+                        <input type="text" name="issuer" app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml="例如：Google">
                     </div>
                     
                     <div class="w-field">
                         <label>密钥（Base32） *</label>
-                        <input type="text" name="secret" required placeholder="例如：JBSWY3DPEHPK3PXP">
-                        <small style="color: #666; font-size: 12px;">输入Base32格式的密钥，去掉空格</small>
+                        <input type="text" name="secret" required app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml="例如：JBSWY3DPEHPK3PXP">
+                        <small class="tfa-muted tfa-fs-xs">输入Base32格式的密钥，去掉空格</small>
                     </div>
                     
-                    <div style="display: flex; gap: 10px;">
+                    <div class="tfa-flex-gap">
                         <button type="button" class="w-button" data-twofa-action="close-modal" data-modal-id="addModal" data-tone="neutral">取消</button>
                         <button type="submit" class="w-button" data-tone="primary">添加</button>
                     </div>
@@ -738,7 +756,7 @@
             <div id="uriTab" class="w-tabs__content">
                 <div class="w-field">
                     <label>选择导入方式</label>
-                    <div class="tabs" style="margin-bottom: 15px;">
+                    <div class="tabs" class="tfa-mb-4">
                         <button type="button" class="tab active" data-twofa-action="switch-import-tab" data-import-tab="file">从文件导入</button>
                         <button type="button" class="tab" data-twofa-action="switch-import-tab" data-import-tab="uri">手动URI导入</button>
                     </div>
@@ -747,14 +765,14 @@
                 <!-- 文件导入 -->
                 <div id="fileImportTab" class="import-tab-content active">
                     <div class="upload-area" id="importUploadArea" data-twofa-action="trigger-file-input" data-target-input="importFileInput" role="button" tabindex="0">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="opacity:0.3;">
+<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="tfa-dim">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                         </svg>
-                        <p style="margin-top:15px; color:#666;">点击上传或拖拽导入文件</p>
-                        <input type="file" id="importFileInput" accept=".json,.csv,.txt" style="display:none;" data-twofa-change="handle-import-file">
-                        <small style="color: #999; font-size: 12px;">支持格式：JSON、CSV、TXT（Google/Microsoft/Authy/双因素身份验证导出）</small>
+                        <p class="tfa-mt-4 tfa-muted">点击上传或拖拽导入文件</p>
+                        <input type="file" id="importFileInput" accept=".json,.csv,.txt" class="tfa-hidden" data-twofa-change="handle-import-file">
+                        <small class="tfa-faint tfa-fs-xs">支持格式：JSON、CSV、TXT（Google/Microsoft/Authy/双因素身份验证导出）</small>
                     </div>
-                    <div id="importFilePreview" class="preview-section" style="display:none; text-align:center; margin-top:15px;">
+                    <div id="importFilePreview" class="preview-section" class="tfa-hidden tfa-center tfa-mt-4">
                         <p id="importFileText"></p>
                     </div>
                 </div>
@@ -764,10 +782,10 @@
                     <w:form id="importForm" data-twofa-submit="import-account">
                         <div class="w-field">
                             <label>otpauth:// URI</label>
-                            <textarea name="uri" rows="4" required placeholder="例如：otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP&issuer=Example"></textarea>
+                            <textarea name="uri" rows="4" required app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml="例如：otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP&issuer=Example"></textarea>
                         </div>
                         
-                        <div style="display: flex; gap: 10px;">
+                        <div class="tfa-flex-gap">
                             <button type="button" class="w-button" data-twofa-action="close-modal" data-modal-id="addModal" data-tone="neutral">取消</button>
                             <button type="submit" class="w-button" data-tone="primary">导入</button>
                         </div>
@@ -852,9 +870,9 @@
                 }
                 Weline.UI.dialog.request({
                     tone: result.fail > 0 ? 'warning' : 'success',
-                    title: '<?= __('提示') ?>',
+                    title: '<lang>提示</lang>',
                     message: message,
-                    confirmLabel: '<?= __('确定') ?>',
+                    confirmLabel: '<lang>确定</lang>',
                     size: 'lg'
                 });
                 if (result.success > 0) {
@@ -925,11 +943,11 @@
                             if (previewEl && previewSection) {
                                 if (data.count === 0) {
                                     previewEl.innerHTML = 
-                                        `<span style="color:orange;">⚠ 未找到有效的账户数据。请检查文件格式是否正确。</span><br>
-                                        <small style="color:#999;">支持格式：JSON(Google/Microsoft/Authy/2FAS/双因素身份验证)、CSV、TXT</small>`;
+                                        `<span class="tfa-status-warn">⚠ 未找到有效的账户数据。请检查文件格式是否正确。</span><br>
+                                        <small class="tfa-faint">支持格式：JSON(Google/Microsoft/Authy/2FAS/双因素身份验证)、CSV、TXT</small>`;
                                 } else {
                                     previewEl.innerHTML = 
-                                        `<span style="color:green;">✓ 解析成功，找到 ${data.count} 个账户</span>`;
+                                        `<span class="tfa-status-ok">✓ 解析成功，找到 ${data.count} 个账户</span>`;
                                     // 存储解析结果，用于后续导入
                                     window._importAccounts = data.accounts;
                                     // 自动开始导入
@@ -947,8 +965,8 @@
                             const errorSection = document.getElementById('importFilePreview');
                             if (errorEl && errorSection) {
                                 errorEl.innerHTML = 
-                                    `<span style="color:red;">✗ 解析失败：${data.error}</span><br>
-                                    <small style="color:#999;">请检查文件格式是否正确</small>`;
+                                    `<span class="tfa-status-error">✗ 解析失败：${data.error}</span><br>
+                                    <small class="tfa-faint">请检查文件格式是否正确</small>`;
                                 errorSection.style.display = 'block';
                             }
                             break;
@@ -1228,12 +1246,12 @@
             const code = jsQR(imageData.data, imageData.width, imageData.height);
             
             if (code) {
-                document.getElementById('previewText').innerHTML = '<span style="color:green;">✓ 二维码解析成功！</span>';
+                document.getElementById('previewText').innerHTML = '<span class="tfa-status-ok">✓ 二维码解析成功！</span>';
                 setTimeout(() => {
                     handleQRCodeURI(code.data);
                 }, 500);
             } else {
-                document.getElementById('previewText').innerHTML = '<span style="color:red;">✗ 无法识别二维码，请重试</span>';
+                document.getElementById('previewText').innerHTML = '<span class="tfa-status-error">✗ 无法识别二维码，请重试</span>';
             }
         }
         
@@ -1270,9 +1288,9 @@
                 .catch(err => {
                     Weline.UI.dialog.request({
                         tone: 'danger',
-                        title: '<?= __('无法访问摄像头') ?>',
+                        title: '<lang>无法访问摄像头</lang>',
                         message: err.message,
-                        confirmLabel: '<?= __('确定') ?>'
+                        confirmLabel: '<lang>确定</lang>'
                     });
                 });
         }
@@ -1296,9 +1314,9 @@
             if (!uri.startsWith('otpauth://')) {
                 Weline.UI.dialog.request({
                     tone: 'danger',
-                    title: '<?= __('错误') ?>',
-                    message: '<?= __('无效的二维码格式') ?>',
-                    confirmLabel: '<?= __('确定') ?>'
+                    title: '<lang>错误</lang>',
+                    message: '<lang>无效的二维码格式</lang>',
+                    confirmLabel: '<lang>确定</lang>'
                 });
                 return;
             }
@@ -1321,8 +1339,8 @@
                 if (result.success) {
                     Weline.UI.dialog.request({
                         tone: 'success',
-                        title: '<?= __('成功') ?>',
-                        message: '<?= __('账户添加成功') ?>',
+                        title: '<lang>成功</lang>',
+                        message: '<lang>账户添加成功</lang>',
                         duration: 2000,
                         confirmable: false
                     }).then(() => {
@@ -1332,17 +1350,17 @@
                 } else {
                     Weline.UI.dialog.request({
                         tone: 'danger',
-                        title: '<?= __('添加失败') ?>',
-                        message: result.message || '<?= __('请重试') ?>',
-                        confirmLabel: '<?= __('确定') ?>'
+                        title: '<lang>添加失败</lang>',
+                        message: result.message || '<lang>请重试</lang>',
+                        confirmLabel: '<lang>确定</lang>'
                     });
                 }
             } catch (error) {
                 Weline.UI.dialog.request({
                     tone: 'danger',
-                    title: '<?= __('添加失败') ?>',
-                    message: '<?= __('请重试') ?>',
-                    confirmLabel: '<?= __('确定') ?>'
+                    title: '<lang>添加失败</lang>',
+                    message: '<lang>请重试</lang>',
+                    confirmLabel: '<lang>确定</lang>'
                 });
             }
         }
@@ -1366,8 +1384,8 @@
                 if (result.success) {
                     Weline.UI.dialog.request({
                         tone: 'success',
-                        title: '<?= __('成功') ?>',
-                        message: '<?= __('账户添加成功') ?>',
+                        title: '<lang>成功</lang>',
+                        message: '<lang>账户添加成功</lang>',
                         duration: 2000,
                         confirmable: false
                     }).then(() => {
@@ -1377,17 +1395,17 @@
                 } else {
                     Weline.UI.dialog.request({
                         tone: 'danger',
-                        title: '<?= __('添加失败') ?>',
+                        title: '<lang>添加失败</lang>',
                         message: result.message,
-                        confirmLabel: '<?= __('确定') ?>'
+                        confirmLabel: '<lang>确定</lang>'
                     });
                 }
             } catch (error) {
                 Weline.UI.dialog.request({
                     tone: 'danger',
-                    title: '<?= __('添加失败') ?>',
-                    message: '<?= __('请重试') ?>',
-                    confirmLabel: '<?= __('确定') ?>'
+                    title: '<lang>添加失败</lang>',
+                    message: '<lang>请重试</lang>',
+                    confirmLabel: '<lang>确定</lang>'
                 });
             }
         }
@@ -1405,8 +1423,8 @@
                 if (result.success) {
                     Weline.UI.dialog.request({
                         tone: 'success',
-                        title: '<?= __('成功') ?>',
-                        message: '<?= __('账户导入成功') ?>',
+                        title: '<lang>成功</lang>',
+                        message: '<lang>账户导入成功</lang>',
                         duration: 2000,
                         confirmable: false
                     }).then(() => {
@@ -1416,17 +1434,17 @@
                 } else {
                     Weline.UI.dialog.request({
                         tone: 'danger',
-                        title: '<?= __('导入失败') ?>',
+                        title: '<lang>导入失败</lang>',
                         message: result.message,
-                        confirmLabel: '<?= __('确定') ?>'
+                        confirmLabel: '<lang>确定</lang>'
                     });
                 }
             } catch (error) {
                 Weline.UI.dialog.request({
                     tone: 'danger',
-                    title: '<?= __('导入失败') ?>',
-                    message: '<?= __('请重试') ?>',
-                    confirmLabel: '<?= __('确定') ?>'
+                    title: '<lang>导入失败</lang>',
+                    message: '<lang>请重试</lang>',
+                    confirmLabel: '<lang>确定</lang>'
                 });
             }
         }
@@ -1483,25 +1501,25 @@
                     TotpWorkerManager.removeAccount(accountId);
                     Weline.UI.dialog.request({
                         tone: 'success',
-                        title: '<?= __('成功') ?>',
-                        message: '<?= __('账户已删除') ?>',
+                        title: '<lang>成功</lang>',
+                        message: '<lang>账户已删除</lang>',
                         duration: 2000,
                         confirmable: false
                     }).then(() => location.reload());
                 } else {
                     Weline.UI.dialog.request({
                         tone: 'danger',
-                        title: '<?= __('删除失败') ?>',
+                        title: '<lang>删除失败</lang>',
                         message: result.message,
-                        confirmLabel: '<?= __('确定') ?>'
+                        confirmLabel: '<lang>确定</lang>'
                     });
                 }
             } catch (error) {
                 Weline.UI.dialog.request({
                     tone: 'danger',
-                    title: '<?= __('删除失败') ?>',
-                    message: '<?= __('请重试') ?>',
-                    confirmLabel: '<?= __('确定') ?>'
+                    title: '<lang>删除失败</lang>',
+                    message: '<lang>请重试</lang>',
+                    confirmLabel: '<lang>确定</lang>'
                 });
             }
         }
@@ -1571,14 +1589,14 @@
                     
                     if (accounts.length === 0) {
                         document.getElementById('importFileText').innerHTML = 
-                            `<span style="color:orange;">⚠ 未找到有效的账户数据。请检查文件格式是否正确。</span><br>
-                            <small style="color:#999;">支持格式：JSON(Google/Microsoft/Authy/2FAS/双因素身份验证)、CSV、TXT</small>`;
+                            `<span class="tfa-status-warn">⚠ 未找到有效的账户数据。请检查文件格式是否正确。</span><br>
+                            <small class="tfa-faint">支持格式：JSON(Google/Microsoft/Authy/2FAS/双因素身份验证)、CSV、TXT</small>`;
                         document.getElementById('importFilePreview').style.display = 'block';
                         return;
                     }
                     
                     document.getElementById('importFileText').innerHTML = 
-                        `<span style="color:green;">✓ 解析成功，找到 ${accounts.length} 个账户</span>`;
+                        `<span class="tfa-status-ok">✓ 解析成功，找到 ${accounts.length} 个账户</span>`;
                     document.getElementById('importFilePreview').style.display = 'block';
                     
                     // 批量导入账户
@@ -1587,8 +1605,8 @@
                 } catch (error) {
                     console.error('解析错误:', error);
                     document.getElementById('importFileText').innerHTML = 
-                        `<span style="color:red;">✗ 解析失败：${error.message}</span><br>
-                        <small style="asilkan:#999;">请检查文件格式是否正确</small>`;
+                        `<span class="tfa-status-error">✗ 解析失败：${error.message}</span><br>
+                        <small class="tfa-faint">请检查文件格式是否正确</small>`;
                     document.getElementById('importFilePreview').style.display = 'block';
                 }
             };
@@ -1634,9 +1652,9 @@
             if (code === '---- --' || code === '' || code.length < 6) {
                 Weline.UI.dialog.request({
                     tone: 'info',
-                    title: '<?= __('提示') ?>',
-                    message: '<?= __('验证码尚未生成，请稍候...') ?>',
-                    confirmLabel: '<?= __('确定') ?>'
+                    title: '<lang>提示</lang>',
+                    message: '<lang>验证码尚未生成，请稍候...</lang>',
+                    confirmLabel: '<lang>确定</lang>'
                 });
                 return;
             }
@@ -1686,9 +1704,9 @@
                     } catch (err) {
                         Weline.UI.dialog.request({
                             tone: 'warning',
-                            title: '<?= __('复制失败') ?>',
-                            message: '<?= __('请手动复制：') ?>' + code,
-                            confirmLabel: '<?= __('确定') ?>'
+                            title: '<lang>复制失败</lang>',
+                            message: '<lang>请手动复制：</lang>' + code,
+                            confirmLabel: '<lang>确定</lang>'
                         });
                     }
                     
@@ -1698,9 +1716,9 @@
                 console.error('复制失败:', error);
                 Weline.UI.dialog.request({
                     tone: 'warning',
-                    title: '<?= __('复制失败') ?>',
-                    message: '<?= __('请手动复制：') ?>' + code,
-                    confirmLabel: '<?= __('确定') ?>'
+                    title: '<lang>复制失败</lang>',
+                    message: '<lang>请手动复制：</lang>' + code,
+                    confirmLabel: '<lang>确定</lang>'
                 });
             }
         }

@@ -370,7 +370,7 @@ $this->assign('meta', $meta);
     /* ---- 页面主体（本页未必加载完整 spacing token；间距给 rem/字面兜底） ---- */
     .products-layout__main {
         width: 100%;
-        padding: var(--spacing-3, 0.75rem) 0 var(--spacing-5, 1.25rem);
+        padding: var(--spacing-3) 0 var(--spacing-5);
     }
 
     .products-layout__container {
@@ -379,13 +379,13 @@ $this->assign('meta', $meta);
         margin: 0 auto;
         /* 视口≈版心时 content-padding 归零会使侧栏/主列贴边；保留 gutter 地板 */
         padding: 0 max(
-            var(--weline-layout-content-padding-inline, 0px),
-            var(--spacing-container-padding, var(--weline-space-5, 1.25rem))
+            var(--weline-layout-content-padding-inline),
+            var(--spacing-container-padding, var(--weline-space-5))
         );
         box-sizing: border-box;
         display: grid;
         grid-template-columns: 240px minmax(0, 1fr);
-        gap: var(--spacing-4, 1rem);
+        gap: var(--spacing-4);
         align-items: start;
     }
 
@@ -406,8 +406,8 @@ $this->assign('meta', $meta);
         position: sticky;
         /* 只留小间距。勿再叠 --header-height：顶栏悬浮菜单易打断自身 sticky，
            预留高度会在「部门」上方留下空洞。 */
-        top: var(--spacing-3, 0.75rem);
-        max-height: calc(100vh - var(--spacing-6, 1.5rem));
+        top: var(--spacing-3);
+        max-height: calc(100vh - var(--spacing-6));
         overflow-y: auto;
         overscroll-behavior: contain;
     }
@@ -416,30 +416,30 @@ $this->assign('meta', $meta);
         display: none;
         align-items: center;
         justify-content: space-between;
-        padding: var(--spacing-4, 1rem) var(--spacing-5, 1.25rem);
-        border-bottom: 1px solid var(--color-border-light, #e7e7e7);
-        background-color: var(--color-bg-primary, #fff);
+        padding: var(--spacing-4) var(--spacing-5);
+        border-bottom: var(--border-width-thin) solid var(--color-border-light);
+        background-color: var(--color-bg-primary);
         position: sticky;
         top: 0;
         z-index: 10;
     }
 
     .products-layout__sidebar-title {
-        font-size: var(--font-size-lg, 1.125rem);
+        font-size: var(--font-size-lg);
         font-weight: 600;
         margin: 0;
-        color: var(--color-text-primary, #0f1111);
+        color: var(--color-text-primary);
     }
 
     .products-layout__sidebar-close {
-        width: var(--size-control-sm, 35px);
-        height: var(--size-control-sm, 35px);
+        width: var(--size-control-sm);
+        height: var(--size-control-sm);
         padding: 0;
         background: none;
         border: none;
-        border-radius: var(--radius-md, 0.5rem);
+        border-radius: var(--radius-md);
         cursor: pointer;
-        color: var(--color-text-secondary, #565959);
+        color: var(--color-text-secondary);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -447,12 +447,12 @@ $this->assign('meta', $meta);
     }
 
     .products-layout__sidebar-close:hover {
-        background-color: var(--color-bg-secondary, #f0f2f2);
-        color: var(--color-text-primary, #0f1111);
+        background-color: var(--color-bg-secondary);
+        color: var(--color-text-primary);
     }
 
     .products-layout__sidebar-content {
-        padding: var(--spacing-2, 0.5rem) 0 var(--spacing-4, 1rem);
+        padding: var(--spacing-2) 0 var(--spacing-4);
     }
 
     /* ---- 主内容区域 ---- */
@@ -464,28 +464,28 @@ $this->assign('meta', $meta);
     .products-layout__filter-toggle {
         display: none;
         align-items: center;
-        gap: var(--spacing-2, 0.5rem);
-        padding: var(--spacing-2, 0.5rem) var(--spacing-4, 1rem);
-        background-color: var(--color-bg-primary, #fff);
-        border: 1px solid var(--color-border-light, #d5d9d9);
-        border-radius: 999px;
+        gap: var(--spacing-2);
+        padding: var(--spacing-2) var(--spacing-4);
+        background-color: var(--color-bg-primary);
+        border: var(--border-width-thin) solid var(--color-border-light);
+        border-radius: var(--radius-full);
         cursor: pointer;
-        color: var(--color-text-primary, #0f1111);
-        font-size: var(--font-size-sm, 0.875rem);
+        color: var(--color-text-primary);
+        font-size: var(--font-size-sm);
         font-weight: 500;
-        box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08);
+        box-shadow: var(--weline-shadow-md);
         transition: all 0.2s ease;
-        margin-bottom: var(--spacing-4, 1rem);
+        margin-bottom: var(--spacing-4);
     }
 
     .products-layout__filter-toggle:hover {
-        background-color: var(--color-bg-secondary, #f0f2f2);
+        background-color: var(--color-bg-secondary);
     }
 
     .products-layout__filter-toggle[aria-expanded="true"] {
-        background-color: var(--color-accent, #232f3e);
-        border-color: var(--color-accent, #232f3e);
-        color: #fff;
+        background-color: var(--color-accent);
+        border-color: var(--color-accent);
+        color: var(--color-text-light);
     }
 
     .products-layout__filter-icon {
@@ -496,7 +496,7 @@ $this->assign('meta', $meta);
 
     /* ---- 工具栏 ---- */
     .products-layout__toolbar {
-        margin-bottom: var(--spacing-4, 1rem);
+        margin-bottom: var(--spacing-4);
         padding: 0;
         background-color: transparent;
         border-radius: 0;
@@ -505,14 +505,14 @@ $this->assign('meta', $meta);
 
     /* ---- 产品网格 ---- */
     .products-layout__grid {
-        margin-bottom: var(--spacing-6, 1.5rem);
+        margin-bottom: var(--spacing-6);
     }
 
     /* ---- 分页 ---- */
     .products-layout__pagination {
         display: flex;
         justify-content: center;
-        padding: var(--spacing-4, 1rem) 0;
+        padding: var(--spacing-4) 0;
     }
 
     .products-layout__pagination:has(.products-layout__placeholder) {
@@ -524,10 +524,10 @@ $this->assign('meta', $meta);
         grid-column: 2 / -1;
         width: 100%;
         min-width: 0;
-        margin-top: var(--spacing-6, 1.5rem);
-        padding: var(--spacing-5, 1.25rem) 0 0;
+        margin-top: var(--spacing-6);
+        padding: var(--spacing-5) 0 0;
         background: transparent;
-        border-top: 1px solid var(--color-border-light, #e7e7e7);
+        border-top: var(--border-width-thin) solid var(--color-border-light);
         box-sizing: border-box;
     }
 
@@ -560,22 +560,22 @@ $this->assign('meta', $meta);
     .products-layout__recommendations .weline-product-recommended .wpc-header,
     .products-layout__recommendations .weline-product-recommended[data-layout="grid"] .wpc-header {
         padding-inline: 0;
-        margin-bottom: 0.75rem;
+        margin-bottom: var(--weline-space-3);
     }
 
     .products-layout__recommendations .weline-product-recommended .wpc-track {
         padding: 0;
-        gap: var(--spacing-4, 1rem);
+        gap: var(--spacing-4);
     }
 
     .products-layout__recommendations .weline-product-recommended[data-layout="grid"] .wpc-card {
-        border-color: #e7e7e7;
+        border-color: var(--color-border-soft);
         box-shadow: none;
     }
 
     .products-layout__recommendations .weline-product-recommended[data-layout="grid"] .wpc-card:hover {
-        border-color: #c8cccc;
-        box-shadow: 0 1px 4px rgba(15, 17, 17, 0.06);
+        border-color: var(--color-border-faint);
+        box-shadow: var(--weline-shadow-md);
         transform: none;
     }
 
@@ -583,7 +583,7 @@ $this->assign('meta', $meta);
     .products-layout__overlay {
         position: fixed;
         inset: 0;
-        background-color: color-mix(in srgb, #0f1111 50%, transparent);
+        background-color: color-mix(in srgb, var(--color-bg-dark-secondary) 50%, transparent);
         z-index: var(--z-index-overlay, 998);
         opacity: 0;
         visibility: hidden;
@@ -601,18 +601,18 @@ $this->assign('meta', $meta);
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: var(--spacing-4, 1rem);
-        padding: var(--spacing-8, 2rem) var(--spacing-4, 1rem);
+        gap: var(--spacing-4);
+        padding: var(--spacing-8) var(--spacing-4);
         text-align: center;
-        color: var(--color-text-tertiary, #879596);
+        color: var(--color-text-tertiary);
     }
 
     .products-layout__placeholder-icon {
-        color: var(--color-text-disabled, #bbb);
+        color: var(--color-text-disabled);
     }
 
     .products-layout__placeholder-text {
-        font-size: var(--font-size-sm, 0.875rem);
+        font-size: var(--font-size-sm);
     }
 
     /* ---- 编辑模式样式由 editor-mode.css 统一管理 ---- */
@@ -621,13 +621,13 @@ $this->assign('meta', $meta);
     @media (max-width: 992px) {
         .products-layout__container {
             grid-template-columns: 1fr;
-            padding: 0 var(--spacing-4, 1rem);
+            padding: 0 var(--spacing-4);
         }
 
         .products-layout__recommendations {
             grid-column: 1 / -1;
-            margin-top: var(--spacing-5, 1.25rem);
-            padding-top: var(--spacing-4, 1rem);
+            margin-top: var(--spacing-5);
+            padding-top: var(--spacing-4);
         }
 
         .products-layout__filter-toggle {
@@ -643,8 +643,8 @@ $this->assign('meta', $meta);
             max-height: 100vh;
             border-radius: 0;
             border: none;
-            border-right: 1px solid var(--color-border-light, #e7e7e7);
-            background-color: #fff;
+            border-right: var(--border-width-thin) solid var(--color-border-light);
+            background-color: var(--color-bg-primary);
             z-index: var(--z-index-drawer, 1045);
             transform: translateX(-100%);
             transition: transform 0.3s ease;
@@ -666,11 +666,11 @@ $this->assign('meta', $meta);
             overflow-y: auto;
             overscroll-behavior: contain;
             /* 抽屉标题栏已有 padding；避免再与 .w-filters padding-block 叠成大块空白 */
-            padding: var(--spacing-2, 0.5rem) var(--spacing-5, 1.25rem) var(--spacing-4, 1rem);
+            padding: var(--spacing-2) var(--spacing-5) var(--spacing-4);
         }
 
         .products-layout__sidebar.is-open .w-filters {
-            padding-block-start: var(--spacing-2, 0.5rem);
+            padding-block-start: var(--spacing-2);
         }
 
         .products-layout__overlay {
@@ -680,11 +680,11 @@ $this->assign('meta', $meta);
 
     @media (max-width: 768px) {
         .products-layout__main {
-            padding: var(--spacing-3, 0.75rem) 0;
+            padding: var(--spacing-3) 0;
         }
 
         .products-layout__container {
-            padding: 0 var(--spacing-3, 0.75rem);
+            padding: 0 var(--spacing-3);
         }
 
         .products-layout__toolbar {
@@ -692,8 +692,8 @@ $this->assign('meta', $meta);
         }
 
         .products-layout__recommendations {
-            margin-top: var(--spacing-4, 1rem);
-            padding-top: var(--spacing-3, 0.75rem);
+            margin-top: var(--spacing-4);
+            padding-top: var(--spacing-3);
         }
     }
     </style>

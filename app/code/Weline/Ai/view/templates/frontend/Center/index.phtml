@@ -15,81 +15,81 @@ $user = $this->user ?? [];
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= __('个人中心') ?> - AI助手平台</title>
+    <title><lang>个人中心</lang> - AI助手平台</title>
     <w:template>Weline_Frontend::templates/public/head.phtml</w:template>
     <css>Weline_Theme::ui/weline-foundation.css</css>
     <css>Weline_Theme::ui/weline-frontend.css</css>
     <js type="module">Weline_Theme::ui/weline-ui.js</js>
     <style>
         body {
-            background-color: #f5f7fa;
+            background-color: var(--color-bg-panel);
             font-family: 'Microsoft YaHei', Arial, sans-serif;
         }
         .navbar {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: var(--weline-shadow-md);
         }
         .navbar-brand {
-            color: white !important;
+            color: white;
             font-weight: bold;
-            font-size: 1.5rem;
+            font-size: var(--weline-font-size-2xl);
         }
         .navbar-nav .nav-link {
-            color: rgba(255,255,255,0.9) !important;
-            margin: 0 10px;
+            color: rgba(255,255,255,0.9);
+            margin: 0 var(--spacing-2_5);
         }
         .navbar-nav .nav-link:hover {
-            color: white !important;
+            color: white;
         }
         .container-main {
             box-sizing: border-box;
             width: min(100%, var(--weline-layout-content-max-width));
             max-width: 100%;
-            margin: 40px auto;
+            margin: var(--weline-space-10) auto;
             padding: 0 var(--weline-layout-content-padding-inline);
         }
         .page-header {
             background: white;
-            border-radius: 12px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-7);
+            margin-bottom: var(--spacing-7);
+            box-shadow: var(--weline-shadow-md);
         }
         .page-header h1 {
             margin: 0;
-            color: #2c3e50;
-            font-size: 2rem;
+            color: var(--color-text-secondary);
+            font-size: var(--weline-font-size-4xl);
         }
         .page-header p {
-            margin: 10px 0 0 0;
+            margin: var(--spacing-2_5) 0 0 0;
             color: #7f8c8d;
         }
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 24px;
-            margin-bottom: 30px;
+            gap: var(--spacing-6);
+            margin-bottom: var(--spacing-7);
         }
         .stat-card {
             background: white;
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-6);
+            box-shadow: var(--weline-shadow-md);
             transition: transform 0.2s, box-shadow 0.2s;
         }
         .stat-card:hover {
             transform: translateY(-4px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+            box-shadow: var(--weline-shadow-md);
         }
         .stat-card .icon {
             width: 60px;
             height: 60px;
-            border-radius: 12px;
+            border-radius: var(--radius-xl);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 28px;
-            margin-bottom: 16px;
+            font-size: var(--font-size-3xl);
+            margin-bottom: var(--spacing-4);
         }
         .stat-card .icon.blue {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -100,14 +100,14 @@ $user = $this->user ?? [];
             color: white;
         }
         .stat-card .icon.orange {
-            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            background: linear-gradient(135deg, #fa709a 0%, var(--color-warning) 100%);
             color: white;
         }
         .stat-card h3 {
-            font-size: 2rem;
+            font-size: var(--weline-font-size-4xl);
             font-weight: bold;
-            color: #2c3e50;
-            margin: 0 0 8px 0;
+            color: var(--color-text-secondary);
+            margin: 0 0 var(--spacing-2) 0;
         }
         .stat-card p {
             color: #7f8c8d;
@@ -115,15 +115,15 @@ $user = $this->user ?? [];
         }
         .action-card {
             background: white;
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            margin-bottom: 24px;
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-6);
+            box-shadow: var(--weline-shadow-md);
+            margin-bottom: var(--spacing-6);
         }
         .action-card h4 {
-            color: #2c3e50;
-            margin-bottom: 20px;
-            font-size: 1.3rem;
+            color: var(--color-text-secondary);
+            margin-bottom: var(--spacing-5);
+            font-size: var(--font-size-xl);
         }
         .action-list {
             list-style: none;
@@ -131,26 +131,26 @@ $user = $this->user ?? [];
             margin: 0;
         }
         .action-list li {
-            padding: 16px;
-            border-bottom: 1px solid #ecf0f1;
+            padding: var(--spacing-4);
+            border-bottom: var(--border-width-thin) solid var(--color-border-soft);
             transition: background 0.2s;
         }
         .action-list li:last-child {
             border-bottom: none;
         }
         .action-list li:hover {
-            background: #f8f9fa;
+            background: var(--color-bg-panel);
         }
         .action-list a {
             text-decoration: none;
-            color: #2c3e50;
+            color: var(--color-text-secondary);
             display: flex;
             align-items: center;
             justify-content: space-between;
         }
         .action-list a i {
-            font-size: 24px;
-            margin-right: 12px;
+            font-size: var(--font-size-2xl);
+            margin-right: var(--spacing-3);
         }
         .action-list .action-content {
             display: flex;
@@ -159,11 +159,11 @@ $user = $this->user ?? [];
         }
         .action-list .action-title {
             font-weight: 600;
-            margin-bottom: 4px;
+            margin-bottom: var(--spacing-1);
         }
         .action-list .action-desc {
-            font-size: 0.9rem;
-            color: #95a5a6;
+            font-size: var(--font-size-sm);
+            color: var(--color-text-faint);
         }
     </style>
 </head>
@@ -182,17 +182,17 @@ $user = $this->user ?? [];
             <ul class="navbar-nav ms-auto">
                 <li>
                     <a href="@url{'*/frontend/index'}">
-                        <w:icon name="home" size="sm"></w:icon> <?= __('首页') ?>
+                        <w:icon name="home" size="sm"></w:icon> <lang>首页</lang>
                     </a>
                 </li>
                 <li>
                     <a href="@url{'*/frontend/chat'}">
-                        <w:icon name="circle" size="sm"></w:icon> <?= __('聊天') ?>
+                        <w:icon name="circle" size="sm"></w:icon> <lang>聊天</lang>
                     </a>
                 </li>
                 <li>
                     <a href="@url{'*/frontend/center'}" data-state="active">
-                        <w:icon name="user" size="sm"></w:icon> <?= __('个人中心') ?>
+                        <w:icon name="user" size="sm"></w:icon> <lang>个人中心</lang>
                     </a>
                 </li>
             </ul>
@@ -203,8 +203,8 @@ $user = $this->user ?? [];
 <div class="container-main">
     <!-- 页面标题 -->
     <div class="page-header">
-        <h1><w:icon name="user" size="sm"></w:icon> <?= __('个人中心') ?></h1>
-        <p><?= __('管理您的API密钥和个人设置') ?></p>
+        <h1><w:icon name="user" size="sm"></w:icon> <lang>个人中心</lang></h1>
+        <p><lang>管理您的API密钥和个人设置</lang></p>
     </div>
 
     <!-- 统计卡片 -->
@@ -214,7 +214,7 @@ $user = $this->user ?? [];
                 <w:icon name="key" size="sm"></w:icon>
             </div>
             <h3><?= number_format($api_key_count) ?></h3>
-            <p><?= __('API密钥') ?></p>
+            <p><lang>API密钥</lang></p>
         </div>
 
         <div class="stat-card">
@@ -222,21 +222,21 @@ $user = $this->user ?? [];
                 <w:icon name="chart" size="sm"></w:icon>
             </div>
             <h3>0</h3>
-            <p><?= __('今日使用次数') ?></p>
+            <p><lang>今日使用次数</lang></p>
         </div>
     </div>
 
     <!-- 快速操作 -->
     <div class="action-card">
-        <h4><w:icon name="bolt" size="sm"></w:icon> <?= __('快速操作') ?></h4>
+        <h4><w:icon name="bolt" size="sm"></w:icon> <lang>快速操作</lang></h4>
         <ul class="action-list">
             <li>
                 <a href="@url{'*/frontend/center/apikeys'}">
                     <div class="action-content">
                         <w:icon name="key" size="sm"></w:icon>
                         <div>
-                            <div class="action-title"><?= __('管理API密钥') ?></div>
-                            <div class="action-desc"><?= __('创建、查看和管理您的API密钥') ?></div>
+                            <div class="action-title"><lang>管理API密钥</lang></div>
+                            <div class="action-desc"><lang>创建、查看和管理您的API密钥</lang></div>
                         </div>
                     </div>
                     <w:icon name="chevron-right" size="sm"></w:icon>
@@ -247,8 +247,8 @@ $user = $this->user ?? [];
                     <div class="action-content">
                         <w:icon name="circle" size="sm"></w:icon>
                         <div>
-                            <div class="action-title"><?= __('AI聊天') ?></div>
-                            <div class="action-desc"><?= __('使用AI模型进行对话') ?></div>
+                            <div class="action-title"><lang>AI聊天</lang></div>
+                            <div class="action-desc"><lang>使用AI模型进行对话</lang></div>
                         </div>
                     </div>
                     <w:icon name="chevron-right" size="sm"></w:icon>
@@ -259,8 +259,8 @@ $user = $this->user ?? [];
                     <div class="action-content">
                         <w:icon name="settings" size="sm"></w:icon>
                         <div>
-                            <div class="action-title"><?= __('个人设置') ?></div>
-                            <div class="action-desc"><?= __('修改个人信息和偏好设置') ?></div>
+                            <div class="action-title"><lang>个人设置</lang></div>
+                            <div class="action-desc"><lang>修改个人信息和偏好设置</lang></div>
                         </div>
                     </div>
                     <w:icon name="chevron-right" size="sm"></w:icon>
@@ -271,10 +271,10 @@ $user = $this->user ?? [];
 
     <!-- 最近活动 -->
     <div class="action-card">
-        <h4><w:icon name="history" size="sm"></w:icon> <?= __('最近活动') ?></h4>
+        <h4><w:icon name="history" size="sm"></w:icon> <lang>最近活动</lang></h4>
         <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
             <w:icon name="info" size="sm"></w:icon>
-            <p style="--w-mt:var(--weline-space-4);"><?= __('暂无活动记录') ?></p>
+            <p style="--w-mt:var(--weline-space-4);"><lang>暂无活动记录</lang></p>
         </div>
     </div>
 </div>

@@ -13,27 +13,13 @@ $platformNames = is_array($platform_names ?? null) ? $platform_names : [];
 $scheduledFailures = is_array($scheduled_failures ?? null) ? $scheduled_failures : [];
 $failureCount = count($scheduledFailures);
 ?>
-<style>
-/* 运营页不展示统一配置技术 key（data-config-key 仍保留在 DOM） */
-.geo-push-schedule-embed .w-config-embed__key { display: none; }
-.geo-push-fail-band {
-    border: 1px solid color-mix(in srgb, var(--color-warning, #c9a227) 45%, transparent);
-    border-radius: var(--weline-theme-radius-md, var(--weline-radius-md, 0.5rem));
-    background: color-mix(in srgb, var(--color-warning, #c9a227) 8%, var(--weline-theme-surface, #fff));
-    padding: var(--weline-theme-space-4, 1rem);
-    margin-bottom: var(--weline-theme-space-4, 1rem);
-}
-.geo-push-fail-band__error {
-    max-inline-size: 28rem;
-}
-</style>
 <div class="content-header">
-    <div class="w-stack" data-gap="sm" style="margin-bottom: var(--weline-theme-space-4, 1rem);">
+    <div class="w-stack" data-gap="sm" style="margin-bottom: var(--weline-space-4);">
         <p class="w-text" data-tone="muted" style="margin:0;">
             <?= __('本页「一键推送」为人工立即推送。定时推送由下方统一配置开关控制，默认每天 02:00 执行一次。若定时推送失败，会优先列在下方便于处理。') ?>
         </p>
         <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
-            <div class="geo-push-schedule-embed w-stack" data-gap="xs" style="min-inline-size:min(100%,22rem);">
+            <div class="geo-push-schedule-embed w-stack" data-gap="xs" style="min-inline-size:100%;">
                 <w:config:embed
                     module="Weline_Geo"
                     area="backend"
@@ -50,11 +36,11 @@ $failureCount = count($scheduledFailures);
 
 <div class="content-body">
     <?php if ($failureCount > 0): ?>
-        <section class="geo-push-fail-band" data-testid="geo-scheduled-failures" aria-labelledby="geo-scheduled-failures-title">
+        <section class="w-alert" data-tone="warning" data-testid="geo-scheduled-failures" aria-labelledby="geo-scheduled-failures-title">
             <div class="w-stack" data-gap="sm">
                 <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);">
                     <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
-                        <h2 id="geo-scheduled-failures-title" class="w-text" style="margin:0;font-size:1.05rem;font-weight:600;">
+                        <h2 id="geo-scheduled-failures-title" class="w-text" class="w-text" data-size="lg" data-weight="strong">
                             <?= __('定时推送失败') ?>
                         </h2>
                         <span class="w-badge" data-tone="warning" data-shrink="false"><?= (int)$failureCount ?></span>
@@ -101,7 +87,7 @@ $failureCount = count($scheduledFailures);
                                         <span class="w-text" data-truncate="true" title="<?= $escape($failPlatformLabel) ?>"><?= $escape($failPlatformLabel) ?></span>
                                     </td>
                                     <td>
-                                        <span class="w-text geo-push-fail-band__error" data-truncate="true" data-tone="danger" title="<?= $escape($failError) ?>"><?= $escape($failError) ?></span>
+                                        <span class="w-text" data-truncate="true" data-tone="danger" title="<?= $escape($failError) ?>"><?= $escape($failError) ?></span>
                                     </td>
                                     <td><?= $escape($failTime) ?></td>
                                     <td>
@@ -123,8 +109,8 @@ $failureCount = count($scheduledFailures);
         </section>
     <?php endif; ?>
 
-    <div class="w-stack" data-gap="xs" style="margin-bottom: var(--weline-theme-space-2, 0.5rem);">
-        <h2 class="w-text" style="margin:0;font-size:1.05rem;font-weight:600;"><?= __('全部推送历史') ?></h2>
+    <div class="w-stack" data-gap="xs" style="margin-bottom: var(--weline-space-2);">
+        <h2 class="w-text" class="w-text" data-size="lg" data-weight="strong"><?= __('全部推送历史') ?></h2>
     </div>
 
     <div class="w-table-wrap">
@@ -145,7 +131,7 @@ $failureCount = count($scheduledFailures);
                 <?php if (empty($logs)): ?>
                     <tr>
                         <td colspan="8">
-                            <div class="w-stack" data-gap="sm" data-align="center" style="padding: var(--weline-theme-space-6, 1.5rem) 0;">
+                            <div class="w-stack" data-gap="sm" data-align="center" style="padding-block:var(--weline-space-6);">
                                 <div class="w-text"><?= __('还没有推送记录。') ?></div>
                                 <div class="w-text" data-tone="muted">
                                     <?= __('请先在「平台管理」配置账户密钥，确认「内容源」已启用，再点「一键推送」。推送成功或失败后都会出现在这里。') ?>

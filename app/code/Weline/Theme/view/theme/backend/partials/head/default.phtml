@@ -39,8 +39,10 @@ try {
     $jsPack = \Weline\Framework\Manager\ObjectManager::getInstance(
         \Weline\Theme\Service\ThemeHeadChromeJsPack::class
     );
-    $earlyJsHtml = $jsPack->tryScriptHtml('backend', \Weline\Theme\Service\ThemeHeadChromeJsPack::PACK_EARLY);
-    $afterCssJsHtml = $jsPack->tryScriptHtml('backend', \Weline\Theme\Service\ThemeHeadChromeJsPack::PACK_AFTER_CSS);
+    // PACK_EARLY（prepaint）必须首次绘制前执行：走内联正文，去掉一次 head 阻塞请求；
+    // PACK_AFTER_CSS（css-ready）只做样式就绪标记，可 defer，不再阻塞解析。
+    $earlyJsHtml = $jsPack->tryInlineScriptHtml('backend', \Weline\Theme\Service\ThemeHeadChromeJsPack::PACK_EARLY);
+    $afterCssJsHtml = $jsPack->tryScriptHtml('backend', \Weline\Theme\Service\ThemeHeadChromeJsPack::PACK_AFTER_CSS, true);
 } catch (\Throwable $e) {
     $earlyJsHtml = null;
     $afterCssJsHtml = null;
@@ -68,6 +70,6 @@ try {
 <?php if ($afterCssJsHtml !== null): ?>
 <?= $afterCssJsHtml ?>
 <?php else: ?>
-<script src="@static(Weline_Theme::ui/weline-css-ready.js)"></script>
+<script defer src="@static(Weline_Theme::ui/weline-css-ready.js)"></script>
 <?php endif; ?>
 <script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>

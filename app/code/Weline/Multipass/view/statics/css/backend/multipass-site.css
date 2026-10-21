@@ -1,0 +1,22 @@
+/* Multipass backend page private CSS — 后端主题开发标准 §6.2.
+   Token-only, no !important, scoped in @layer page. */
+@layer page {
+.weline-multipass-site-card { border: 1px solid var(--backend-color-border-default); border-radius: var(--weline-radius-md); padding: var(--weline-space-5); margin-bottom: var(--weline-space-4); background: var(--backend-color-card-bg); transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.weline-multipass-site-card:hover { border-color: var(--backend-color-primary); box-shadow: var(--backend-shadow-md));
+}
+.weline-multipass-site-status { display: inline-flex; align-items: center; padding: var(--weline-space-1) var(--weline-space-3); border-radius: var(--weline-radius-round); font-size: var(--weline-font-size-xs); font-weight: 500;
+}
+.weline-multipass-site-status.enabled { background: var(--backend-color-success-bg); color: var(--backend-color-success);
+}
+.weline-multipass-site-status.disabled { background: var(--backend-color-danger-bg); color: var(--backend-color-danger);
+}
+.weline-multipass-site-type { display: inline-flex; align-items: center; padding: var(--weline-space-1) var(--weline-space-3); border-radius: var(--weline-radius-sm); font-size: var(--weline-font-size-xs); font-weight: 500;
+}
+.weline-multipass-site-type.backend { background: var(--backend-color-primary-bg); color: var(--backend-color-primary);
+}
+.weline-multipass-site-type.frontend { background: var(--backend-color-warning-bg); color: var(--backend-color-warning);
+}
+.weline-multipass-secret-key { font-family: monospace; background: var(--backend-color-card-bg-secondary); padding: var(--weline-space-2) var(--weline-space-3); border-radius: var(--weline-radius-sm); word-break: break-all; font-size: var(--weline-font-size-xs);
+}
+}

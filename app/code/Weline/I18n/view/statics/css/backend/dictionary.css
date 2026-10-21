@@ -1,0 +1,73 @@
+@layer page {
+    #dictionary-entries-body tr.dictionary-entry-row {
+        cursor: pointer;
+    }
+
+    #dictionary-edit-ai-progress-message[data-tone="danger"] {
+        color: var(--weline-theme-danger);
+        font-weight: 600;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    #dictionary-edit-ai-progress-message[data-tone="success"] {
+        color: var(--weline-theme-success);
+    }
+
+    .i18n-dictionary-collect-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 10050;
+        display: none;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .i18n-dictionary-collect-modal.is-open {
+        display: flex;
+    }
+
+    .i18n-dictionary-collect-modal-backdrop {
+        position: absolute;
+        inset: 0;
+        background: var(--backend-color-bg-overlay);
+    }
+
+    .i18n-dictionary-collect-modal-dialog {
+        position: relative;
+        width: 92%;
+        max-width: 45rem;
+        max-height: 90vh;
+        background: var(--backend-color-card-bg);
+        border-radius: var(--weline-radius-md);
+        box-shadow: var(--weline-shadow-lg);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .i18n-dictionary-collect-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--weline-space-3) var(--weline-space-4);
+        border-bottom: 1px solid var(--weline-theme-border);
+    }
+
+    .i18n-dictionary-collect-modal-body {
+        padding: var(--weline-space-3) var(--weline-space-4);
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+    }
+
+    .i18n-dictionary-collect-modal-footer {
+        padding: var(--weline-space-3) var(--weline-space-4);
+        border-top: 1px solid var(--weline-theme-border);
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--weline-space-2);
+        align-items: center;
+        justify-content: flex-end;
+    }
+}

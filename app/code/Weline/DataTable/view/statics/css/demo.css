@@ -119,7 +119,7 @@
     .w-datatable-demo__link-icon[data-tone="warning"] { color: var(--weline-theme-warning); }
     .w-datatable-demo__link-icon[data-tone="info"] { color: var(--weline-theme-info); }
     .w-datatable-demo__case > .w-card__body { min-width: 0; }
-    .w-datatable-demo__case fieldset { min-width: 0; margin: 0; padding: var(--weline-space-4); border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-md); }
+    .w-datatable-demo__case fieldset { min-width: 0; margin: 0; padding: var(--weline-space-4); border: var(--border-width-thin) solid var(--weline-theme-border); border-radius: var(--weline-radius-md); }
     .w-datatable-demo__case fieldset + fieldset { margin-block-start: var(--weline-space-4); }
     .w-datatable-demo__case legend { padding-inline: var(--weline-space-2); font-weight: 700; }
 
@@ -199,7 +199,7 @@
         display: grid;
         gap: var(--weline-space-1);
         padding: var(--weline-space-3);
-        border: 1px solid var(--weline-theme-border);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
         border-radius: var(--weline-radius-md);
         color: inherit;
         text-decoration: none;
@@ -223,7 +223,7 @@
         margin: 0;
         padding: var(--weline-space-4);
         overflow: auto;
-        border: 1px solid var(--weline-theme-border);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
         border-radius: var(--weline-radius-md);
         background: var(--weline-theme-surface-muted);
         color: var(--weline-theme-text);

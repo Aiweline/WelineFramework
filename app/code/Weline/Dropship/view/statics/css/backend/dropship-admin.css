@@ -1,0 +1,201 @@
+/* Weline Dropship 后台页面私有布局/尺寸（Token-only，见后端主题开发标准 §6.2） */
+@layer page {
+    /* 履约订单：可展开行 */
+    [data-dropship-admin="orders"] .ds-order-row[data-order-expandable="1"] {
+        cursor: pointer;
+    }
+
+    [data-dropship-admin="orders"] .ds-order-row[data-order-expandable="1"]:hover {
+        background: var(--weline-theme-surface-muted);
+    }
+
+    [data-dropship-admin="orders"] .ds-order-row__hint {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--weline-space-1);
+        margin-block-start: var(--weline-space-1);
+        color: var(--weline-theme-text-muted);
+        font-size: var(--weline-font-size-sm);
+    }
+
+    [data-dropship-admin="orders"] .ds-order-row__hint .w-icon {
+        transition: transform .18s ease;
+        flex: 0 0 auto;
+    }
+
+    [data-dropship-admin="orders"] .ds-order-detail-row:not(.is-open) {
+        display: none;
+    }
+
+    [data-dropship-admin="orders"] .ds-order-detail-row.is-open {
+        display: table-row;
+    }
+
+    [data-dropship-admin="orders"] .ds-order-detail-row > td {
+        padding: 0;
+        border-block-start: 0;
+        background: var(--weline-theme-surface-muted);
+    }
+
+    [data-dropship-admin="orders"] .ds-order-detail {
+        padding: var(--weline-space-3) var(--weline-space-4) var(--weline-space-4);
+        border-block-start: 1px solid var(--weline-theme-border);
+    }
+
+    /* 仓库映射 */
+    [data-dropship-admin="warehouses"] .ds-wh-layout {
+        display: grid;
+        grid-template-columns: minmax(calc(var(--weline-space-12) * 4), calc(var(--weline-space-12) * 5)) minmax(0, 1fr);
+        gap: var(--weline-space-4);
+        align-items: start;
+    }
+
+    [data-dropship-admin="warehouses"] .ds-wh-rail {
+        background: var(--weline-theme-surface);
+        color: var(--weline-theme-text);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-theme-radius-lg);
+        padding: var(--weline-space-3);
+    }
+
+    [data-dropship-admin="warehouses"] .ds-wh-rail a {
+        display: block;
+        color: inherit;
+        text-decoration: none;
+        border-radius: var(--weline-theme-radius-md);
+        padding: var(--weline-space-3);
+        margin-block-end: var(--weline-space-1);
+        border-inline-start: 3px solid transparent;
+        transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+    }
+
+    [data-dropship-admin="warehouses"] .ds-wh-rail a:hover {
+        background: var(--weline-theme-primary-surface);
+    }
+
+    [data-dropship-admin="warehouses"] .ds-wh-rail a[aria-current="true"] {
+        background: var(--weline-theme-primary);
+        color: var(--weline-theme-on-primary);
+        border-inline-start-color: var(--weline-theme-primary-hover);
+        font-weight: 600;
+    }
+
+    [data-dropship-admin="warehouses"] .ds-wh-rail a[aria-current="true"] .w-text {
+        opacity: .92;
+        color: inherit;
+    }
+
+    [data-dropship-admin="warehouses"] .ds-wh-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--weline-space-3);
+        margin-block-end: var(--weline-space-4);
+    }
+
+    [data-dropship-admin="warehouses"] .ds-wh-stat {
+        border: 1px dashed var(--weline-theme-border);
+        border-radius: var(--weline-theme-radius-md);
+        padding: var(--weline-space-3);
+    }
+
+    [data-dropship-admin="warehouses"] .ds-wh-stat b {
+        display: block;
+        font-size: var(--weline-font-size-xl);
+        line-height: 1.2;
+    }
+
+    [data-dropship-admin="warehouses"] .ds-wh-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(calc(var(--weline-space-12) * 4), 1.3fr) auto auto;
+        gap: var(--weline-space-3);
+        align-items: center;
+        padding: var(--weline-space-3) 0;
+        border-block-end: 1px solid var(--weline-theme-border);
+    }
+
+    [data-dropship-admin="warehouses"] .ds-wh-row:last-child {
+        border-block-end: 0;
+    }
+
+    [data-dropship-admin="warehouses"] .ds-wh-pager {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--weline-space-3);
+        flex-wrap: wrap;
+        margin-block-start: var(--weline-space-4);
+    }
+
+    @media (max-width: 960px) {
+        [data-dropship-admin="warehouses"] .ds-wh-layout,
+        [data-dropship-admin="warehouses"] .ds-wh-row,
+        [data-dropship-admin="warehouses"] .ds-wh-stats {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* 货源 DevRelay 说明页 */
+    .dropship-relay-card {
+        margin-block-end: var(--weline-space-4);
+        padding: var(--weline-space-4);
+    }
+
+    .dropship-relay-label {
+        display: block;
+        margin-block-end: var(--weline-space-1);
+    }
+
+    .dropship-relay-list {
+        margin: 0;
+        padding-inline-start: var(--weline-space-5);
+    }
+
+    .dropship-relay-note {
+        margin-block: var(--weline-space-4) 0;
+    }
+
+    /* 通用筛选/空态/统计 */
+    .dropship-filter__field {
+        min-inline-size: min(100%, calc(var(--weline-space-12) * 4));
+        flex: 0 1 calc(var(--weline-space-12) * 4);
+        margin: 0;
+    }
+
+    .dropship-field-grow {
+        flex: 1 1 calc(var(--weline-space-12) * 5);
+    }
+
+    .dropship-field-select {
+        max-inline-size: calc(var(--weline-space-12) * 7);
+    }
+
+    .dropship-empty {
+        min-block-size: calc(var(--weline-space-12) * 3);
+    }
+
+    .dropship-empty--lg {
+        min-block-size: calc(var(--weline-space-12) * 5);
+    }
+
+    .dropship-empty__hint {
+        max-inline-size: calc(var(--weline-space-12) * 7);
+        text-align: center;
+    }
+
+    .dropship-stat-card {
+        display: flex;
+        flex-direction: column;
+        gap: var(--weline-space-1);
+        flex: 1 1 calc(var(--weline-space-12) * 3);
+        min-inline-size: calc(var(--weline-space-12) * 3);
+        padding: var(--weline-space-3);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+    }
+
+    .dropship-filter-input {
+        width: auto;
+        max-inline-size: calc(var(--weline-space-12) * 5);
+        flex: 0 1 calc(var(--weline-space-12) * 5);
+    }
+}

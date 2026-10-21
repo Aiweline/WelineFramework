@@ -64,8 +64,8 @@ sync,sync
 立即执行多源税率同步,"Run multi-source tax rate sync now"
 "需要填写税号 / VAT？","Need a tax ID / VAT?"
 "欧盟 VAT 税号（可选）","EU VAT number (optional)"
-例如：DE123456789,"e.g. DE123456789"
 账单国家为欧盟时可选填写；仅做格式校验，不改变应付税额。,"Optional when the billing country is in the EU; format check only, does not change the amount due."
+例如：DE123456789,"e.g. DE123456789"
 只读诊断,"Read-only diagnostics"
 可配置,Configurable
 "此页面只读取当前数据库事实；迁移及生产切流仍只能通过受控 CLI 执行。","This page only reads the current database facts; migrations and production cutoffs can still only be performed through the controlled CLI."

@@ -796,6 +796,8 @@ commit：%{1}（%{2}）,commit：%{1}（%{2}）
 "密钥已保存到后台「部署配置 > Webhook 密钥」。","The key has been saved to the background ""Deployment Configuration > Webhook Key""."
 密钥保存失败，请手动写入后台部署配置。,"Key saving failed, please manually write the background deployment configuration."
 --no-save：未写入后台配置，请自行保存下方密钥与路径。,"--no-save: The background configuration is not written, please save the key and path below."
+"Webhook 入口已启用。","Webhook 入口已启用。"
+"当前触发模式：%{1}（Tag 模式推 tag 才发布；Branch 模式推分支才发布）。","当前触发模式：%{1}（Tag 模式推 tag 才发布；Branch 模式推分支才发布）。"
 "Webhook 公网路径（随机，~wh~ 前缀）","Webhook public network path (random, ~wh~ prefix)"
 "Git 平台 Webhook 部署地址（完整 URL）","Git platform Webhook deployment address (full URL)"
 "站点根 URL 来源：%{1}","Site Root URL Source: %{1}"
@@ -880,6 +882,15 @@ tag：%{1},"Tag: %{1}"
 部署时间：%{1},"Deployed at: %{1}"
 部署模式：%{1},"Deploy mode: %{1}"
 最近发布历史,"Recent Release History"
+"工作区不是可读的 Git 仓库，无法核对 HEAD 与版本戳。","工作区不是可读的 Git 仓库，无法核对 HEAD 与版本戳。"
+工作区诊断,工作区诊断
+HEAD：%{1}（%{2}）,HEAD：%{1}（%{2}）
+"游离 HEAD","游离 HEAD"
+"版本戳 commit：%{1}","版本戳 commit：%{1}"
+"版本戳缺少 commit，无法判断工作区是否领先版本戳。","版本戳缺少 commit，无法判断工作区是否领先版本戳。"
+"工作区有 %{1} 个未提交改动；发布前先确认要不要保留（core:update 不会替你提交）。","工作区有 %{1} 个未提交改动；发布前先确认要不要保留（core:update 不会替你提交）。"
+工作区无未提交改动。,工作区无未提交改动。
+工作区诊断不可用：%{1},工作区诊断不可用：%{1}
 "等待指定版本生效（用于 CI 门禁）","Wait for the specified version to take effect (for CI access control)"
 "缺少 --expect 参数","Missing --expect parameter"
 "等待版本：%{1}（超时 %{2} 秒）","Waiting for version: %{1} (timeout %{2}s)"

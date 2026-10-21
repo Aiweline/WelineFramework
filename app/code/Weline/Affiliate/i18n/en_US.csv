@@ -100,16 +100,30 @@ settings,settings
 复制,Copy
 分享,Share
 分享到社交平台,"Share to social platforms"
-当前访问范围,"Current scope"
-账户范围,"Account scope"
-分销数据暂时无法加载，请稍后重试。,"Affiliate data is temporarily unavailable. Please try again later."
 Affiliate,Affiliate
 分销中心,"Affiliate Center"
+当前访问范围,"Current scope"
+账户范围,"Account scope"
+待结算,Pending
+已确认,Approved
+累计佣金,"Total commission"
+平台流量与成交,"Platform traffic and conversions"
+按分享平台汇总发出、点击、注册、订单与佣金，仅统计当前范围账户。,"Aggregate outbound, clicks, registrations, orders and commission by share platform for the current scope account only."
+平台,Platform
+发出,Outbound
+点击,Clicks
+注册,Registrations
+订单,Orders
+支付,Paid
+佣金,Commission
+分销邀请链接,"Affiliate invite link"
+复制链接,"Copy link"
+去分享商品,"Share products"
+分销转化漏斗,"Affiliate conversion funnel"
+分销数据暂时无法加载，请稍后重试。,"Affiliate data is temporarily unavailable. Please try again later."
 已申请,Requested
 处理中,Processing
 已驳回,Rejected
-待结算,Pending
-已确认,Approved
 已打款,Paid
 已取消,Cancelled
 已冲销,Reversed
@@ -117,11 +131,9 @@ Affiliate,Affiliate
 已停用,Disabled
 部分确认,"Partially confirmed"
 暂无数据,"No data yet"
-点击,Clicks
 收藏,Wishlist
 加购,"Add to cart"
 下单,Orders
-支付,Paid
 暂无可复制链接,"No link to copy"
 生成中,Generating
 "分销 API 不支持自定义链接","Affiliate API does not support custom links"
@@ -140,18 +152,6 @@ Affiliate,Affiliate
 上一页,Previous
 下一页,Next
 没有匹配记录,"No matching records."
-累计佣金,"Total commission"
-分销转化漏斗,"Affiliate conversion funnel"
-平台流量与成交,"Platform traffic and conversions"
-按分享平台汇总发出、点击、注册、订单与佣金，仅统计当前范围账户。,"Aggregate outbound, clicks, registrations, orders and commission by share platform for the current scope account only."
-平台,Platform
-发出,Outbound
-注册,Registrations
-订单,Orders
-佣金,Commission
-分销邀请链接,"Affiliate invite link"
-复制链接,"Copy link"
-去分享商品,"Share products"
 推广链接管理,"Promotion link management"
 "默认推广首页，也可以生成任意本站页面的独立分销链接；点击后按 30 天末触归因记录后续注册、互动和订单。","The default target is the homepage. You can also generate a separate affiliate link for any page on this site. Clicks start a 30-day last-touch attribution window for registrations, engagement, and orders."
 默认首页推广链接,"Default homepage promotion link"
@@ -164,8 +164,6 @@ Affiliate,Affiliate
 条记录,records
 可提现金额,"Withdrawable amount"
 申请提现,"Request withdrawal"
-提现金额,"Withdrawal amount"
-收款账号或备注,"Payment account or note"
 提交提现,"Submit withdrawal"
 申请时间,"Requested at"
 金额,Amount
@@ -225,6 +223,8 @@ SKU,SKU
 鍩烘暟,"Base value"
 姣斾緥,Ratio
 鍘熷洜,Reason
+提现金额,"Withdrawal amount"
+收款账号或备注,"Payment account or note"
 "配置写入当前作用范围；切换范围后页面会按新范围加载。关闭后商品详情不再展示分销分享。保存后经 SystemConfig 变更事件清理店面配置缓存。","Config writes to current scope; after switching scope the page reloads. When off, product detail no longer shows distribution share. After save, clear storefront config cache via SystemConfig change event."
 在统一配置中心打开,"Open in unified config center"
 作用范围,Scope

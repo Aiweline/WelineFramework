@@ -1,3 +1,4 @@
+<css>Weline_CacheManager::css/backend/full-page-cache.css</css>
 <?php
 /**
  * @var \Weline\Framework\View\Template $this
@@ -24,33 +25,6 @@ $noticeMap = [
 ];
 $noticeText = $noticeMap[$notice] ?? '';
 ?>
-
-<style>
-    .fpc-page { display: flex; flex-direction: column; gap: 18px; }
-    .fpc-hero { background: linear-gradient(135deg, #0f172a, #1e3a5f); color: #fff; border-radius: 18px; padding: 24px; box-shadow: 0 18px 45px rgba(15, 23, 42, .18); }
-    .fpc-hero h2 { color: #fff; margin: 0 0 8px; font-size: 26px; font-weight: 800; }
-    .fpc-hero p { margin: 0; max-width: 880px; color: rgba(255, 255, 255, .82); line-height: 1.7; }
-    .fpc-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 20px; box-shadow: 0 10px 32px rgba(15, 23, 42, .06); }
-    .fpc-card h3 { margin: 0 0 6px; font-size: 18px; font-weight: 750; color: #111827; }
-    .fpc-card > p { margin: 0 0 16px; color: #64748b; line-height: 1.6; }
-    .fpc-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid #f1f5f9; }
-    .fpc-row:first-of-type { border-top: 0; padding-top: 0; }
-    .fpc-row h4 { margin: 0 0 4px; font-size: 15px; color: #0f172a; }
-    .fpc-row p { margin: 0; color: #64748b; font-size: 13px; line-height: 1.5; max-width: 520px; }
-    .fpc-switch { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: #0f172a; white-space: nowrap; }
-    .fpc-switch input { width: 18px; height: 18px; }
-    .fpc-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 8px; }
-    .fpc-metric { background: #f8fafc; border: 1px solid #edf2f7; border-radius: 12px; padding: 12px; }
-    .fpc-metric span { display: block; color: #64748b; font-size: 12px; margin-bottom: 6px; }
-    .fpc-metric strong { word-break: break-all; font-size: 13px; color: #0f172a; }
-    .fpc-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 16px; }
-    .fpc-actions button, .fpc-btn { border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 750; cursor: pointer; }
-    .fpc-btn-primary { background: #0f766e; color: #fff; }
-    .fpc-btn-secondary { background: #e2e8f0; color: #0f172a; }
-    .fpc-notice { border-radius: 12px; padding: 12px 14px; background: #ecfdf5; color: #065f46; font-weight: 650; }
-    .fpc-notice.is-error { background: #fef2f2; color: #991b1b; }
-    .fpc-hint { font-size: 12px; color: #94a3b8; margin-top: 8px; }
-</style>
 
 <div class="fpc-page">
     <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
@@ -142,15 +116,15 @@ $noticeText = $noticeMap[$notice] ?? '';
                 <button type="submit" class="fpc-btn fpc-btn-primary"><?= __('轮换打穿章') ?></button>
             </form>
             <form method="post" action="@backend-url{'admin/system/full-page-cache/issue-pierce-cookie'}"
-                  style="display:inline-flex;gap:8px;align-items:center;">
+                  style="display:inline-flex;gap:var(--weline-space-2);align-items:center;">
                 <label for="fpc-pierce-ttl" class="fpc-hint" style="margin:0;"><?= __('Cookie TTL（秒）') ?></label>
                 <input id="fpc-pierce-ttl" type="number" name="ttl_sec" min="300" max="604800" value="28800"
-                       style="width:7rem;padding:0.35rem 0.5rem;border:1px solid #cbd5e1;border-radius:8px;">
+                       style="max-inline-size:18ch;">
                 <button type="submit" class="fpc-btn fpc-btn-secondary"><?= __('签发本机 Cookie') ?></button>
             </form>
         </div>
         <?php if ($suffix !== ''): ?>
-            <p class="fpc-hint" style="margin-top:14px;">
+            <p class="fpc-hint" style="--w-mt:var(--weline-space-4);">
                 <?= __('手动诊断示例') ?>：
                 <code>?_wb_nc=1&amp;<?= \htmlspecialchars($suffix) ?></code>
             </p>

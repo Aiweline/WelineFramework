@@ -28,9 +28,9 @@ $basePath = defined('BP') ? BP : Env::getInstance()->getBasePath();
     
     <!-- 本地路径 -->
     <div class="mb-3">
-        <label class="form-label"><?= __('本地路径') ?> <span class="text-danger">*</span></label>
+        <label class="w-field__label"><?= __('本地路径') ?> <span class="text-danger">*</span></label>
         <div class="input-group">
-            <input type="text" name="local_path" id="local_path" class="form-control" 
+            <input type="text" name="local_path" id="local_path" class="w-input" 
                    value="<?= htmlspecialchars($mapping ? $mapping->getData(SyncMapping::fields_LOCAL_PATH) : $basePath) ?>" 
                    placeholder="<?= htmlspecialchars($basePath) ?>" required>
             <button type="button" class="btn btn-outline-secondary" onclick="browseLocalDirectory()">
@@ -39,7 +39,7 @@ $basePath = defined('BP') ? BP : Env::getInstance()->getBasePath();
         </div>
         <small class="form-text text-muted"><?= __('选择本地项目根目录') ?></small>
         <!-- 本地目录树 -->
-        <div id="local_directory_tree" class="mt-2 border rounded p-2" style="max-height: 200px; overflow-y: auto; display: none;">
+        <div id="local_directory_tree" class="mt-2 border rounded p-2 async-tree--scroll" hidden>
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <small class="text-muted"><?= __('勾选要同步的目录') ?></small>
                 <button type="button" class="btn btn-sm btn-link p-0" onclick="toggleAllLocalDirectories()">
@@ -52,9 +52,9 @@ $basePath = defined('BP') ? BP : Env::getInstance()->getBasePath();
 
     <!-- 远程路径 -->
     <div class="mb-3">
-        <label class="form-label"><?= __('远程路径') ?> <span class="text-danger">*</span></label>
+        <label class="w-field__label"><?= __('远程路径') ?> <span class="text-danger">*</span></label>
         <div class="input-group">
-            <input type="text" name="remote_path" id="remote_path" class="form-control" 
+            <input type="text" name="remote_path" id="remote_path" class="w-input" 
                    value="<?= htmlspecialchars($mapping ? $mapping->getData(SyncMapping::fields_REMOTE_PATH) : '') ?>" 
                    placeholder="/var/www/html/project" required>
             <button type="button" class="btn btn-outline-secondary" onclick="browseRemoteDirectory()">
@@ -63,7 +63,7 @@ $basePath = defined('BP') ? BP : Env::getInstance()->getBasePath();
         </div>
         <small class="form-text text-muted"><?= __('远程服务器上的目录路径') ?></small>
         <!-- 远程目录树 -->
-        <div id="remote_directory_tree" class="mt-2 border rounded p-2" style="max-height: 200px; overflow-y: auto; display: none;">
+        <div id="remote_directory_tree" class="mt-2 border rounded p-2 async-tree--scroll" hidden>
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <small class="text-muted"><?= __('远程目录结构') ?></small>
             </div>
@@ -74,7 +74,7 @@ $basePath = defined('BP') ? BP : Env::getInstance()->getBasePath();
     <!-- 要同步的目录 -->
     <div class="mb-3">
         <label class="form-label"><?= __('要同步的目录') ?></label>
-        <ul class="nav nav-tabs mb-2" role="tablist">
+        <ul class="nav w-tabs__list mb-2" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" type="button" data-bs-toggle="tab" data-bs-target="#include_tree_tab">
                     <i class="mdi mdi-folder-multiple"></i> <?= __('目录选择') ?>
@@ -88,7 +88,7 @@ $basePath = defined('BP') ? BP : Env::getInstance()->getBasePath();
         </ul>
         <div class="tab-content">
             <div class="tab-pane fade show active" id="include_tree_tab">
-                <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                <div class="border rounded p-2 async-tree--scroll">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <small class="text-muted"><?= __('从本地目录树中勾选要同步的目录') ?></small>
                         <button type="button" class="btn btn-sm btn-link p-0" onclick="toggleAllIncludeDirectories()">
@@ -101,7 +101,7 @@ $basePath = defined('BP') ? BP : Env::getInstance()->getBasePath();
                 </div>
             </div>
             <div class="tab-pane fade" id="include_text_tab">
-                <textarea name="include_paths" id="include_paths" class="form-control" rows="3" 
+                <textarea name="include_paths" id="include_paths" class="w-input" rows="3" 
                           placeholder="app/code/Weline/Async&#10;view/templates"><?php
                     if ($mapping) {
                         $paths = $mapping->getIncludePathsArray();
@@ -117,8 +117,8 @@ $basePath = defined('BP') ? BP : Env::getInstance()->getBasePath();
 
     <!-- 排除模式 -->
     <div class="mb-3">
-        <label class="form-label"><?= __('排除模式') ?></label>
-        <ul class="nav nav-tabs mb-2" role="tablist">
+        <label class="w-field__label"><?= __('排除模式') ?></label>
+        <ul class="nav w-tabs__list mb-2" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" type="button" data-bs-toggle="tab" data-bs-target="#exclude_tree_tab">
                     <i class="mdi mdi-folder-multiple"></i> <?= __('目录选择') ?>
@@ -132,7 +132,7 @@ $basePath = defined('BP') ? BP : Env::getInstance()->getBasePath();
         </ul>
         <div class="tab-content">
             <div class="tab-pane fade show active" id="exclude_tree_tab">
-                <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                <div class="border rounded p-2 async-tree--scroll">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <small class="text-muted"><?= __('从本地目录树中勾选要排除的目录') ?></small>
                         <button type="button" class="btn btn-sm btn-link p-0" onclick="toggleAllExcludeDirectories()">
@@ -145,7 +145,7 @@ $basePath = defined('BP') ? BP : Env::getInstance()->getBasePath();
                 </div>
             </div>
             <div class="tab-pane fade" id="exclude_text_tab">
-                <textarea name="exclude_patterns" id="exclude_patterns" class="form-control" rows="5" 
+                <textarea name="exclude_patterns" id="exclude_patterns" class="w-input" rows="5" 
                           placeholder="node_modules&#10;.git&#10;*.log"><?php
                     if ($mapping) {
                         $patterns = $mapping->getExcludePatternsArray();
@@ -159,8 +159,8 @@ $basePath = defined('BP') ? BP : Env::getInstance()->getBasePath();
 
     <!-- 状态 -->
     <div class="mb-3">
-        <label class="form-label"><?= __('状态') ?></label>
-        <select name="status" class="form-select">
+        <label class="w-field__label"><?= __('状态') ?></label>
+        <select name="status" class="w-select">
             <option value="0" <?= ($mapping && (int)$mapping->getData(SyncMapping::fields_STATUS) === 0) ? 'selected' : '' ?>><?= __('关闭') ?></option>
             <option value="1" <?= (!$mapping || (int)$mapping->getData(SyncMapping::fields_STATUS) === 1) ? 'selected' : '' ?>><?= __('开启') ?></option>
         </select>

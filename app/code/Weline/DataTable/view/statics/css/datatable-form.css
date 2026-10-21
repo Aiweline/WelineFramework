@@ -14,7 +14,7 @@
     display: none;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: var(--spacing-5);
     box-sizing: border-box;
 }
 
@@ -39,8 +39,8 @@
     max-height: calc(90vh - 40px);
     display: flex;
     flex-direction: column;
-    border-radius: 12px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--weline-shadow-md);
     animation: modalSlideIn 0.3s ease;
 }
 
@@ -67,8 +67,8 @@
 
 /* 表单容器 */
 .w-form-container {
-    background: #ffffff;
-    border-radius: 12px;
+    background: var(--color-bg-primary);
+    border-radius: var(--radius-xl);
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -79,13 +79,13 @@
 
 /* 表单头部 */
 .w-form-header {
-    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-    padding: 24px 28px;
-    border-bottom: 1px solid #e5e7eb;
+    background: linear-gradient(135deg, var(--color-bg-slate) 0%, var(--color-secondary-bg-subtle) 100%);
+    padding: var(--spacing-6) var(--spacing-7);
+    border-bottom: var(--border-width-thin) solid var(--color-border-soft);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 20px;
+    gap: var(--spacing-5);
     flex-shrink: 0;
     min-height: 64px;
 }
@@ -93,11 +93,11 @@
 .w-form-close {
     background: none;
     border: none;
-    font-size: 1.25rem;
+    font-size: var(--weline-font-size-xl);
     color: #6b7280;
     cursor: pointer;
-    padding: 10px;
-    border-radius: 6px;
+    padding: var(--spacing-2_5);
+    border-radius: var(--border-radius-md);
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
@@ -109,23 +109,23 @@
 
 .w-form-close:hover {
     background: rgba(0, 0, 0, 0.1);
-    color: #374151;
+    color: var(--color-text-secondary);
 }
 
 .w-form-title {
     margin: 0;
-    font-size: 1.375rem;
+    font-size: var(--font-size-2_5xl);
     font-weight: 600;
-    color: #1f2937;
+    color: var(--color-text);
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--spacing-3);
     line-height: 1.5;
 }
 
 .w-form-title i {
-    color: #3b82f6;
-    font-size: 1.125rem;
+    color: var(--color-text-faint);
+    font-size: var(--weline-font-size-lg);
     display: inline-flex;
     align-items: center;
 }
@@ -133,12 +133,12 @@
 .w-form-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--spacing-3);
 }
 
 /* 表单主体 */
 .w-form-body {
-    padding: 24px 28px;
+    padding: var(--spacing-6) var(--spacing-7);
     flex: 1;
     overflow-y: auto;
     min-height: 100px;
@@ -149,14 +149,14 @@
 .w-form-fields {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--spacing-4);
 }
 
 /* 自动字段区域 - 流式布局 */
 .w-auto-fields {
     display: flex;
     flex-wrap: wrap;
-    gap: 16px 20px;
+    gap: var(--spacing-4) var(--spacing-5);
     align-items: flex-start;
 }
 
@@ -167,14 +167,14 @@
     max-width: 100%;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--spacing-2);
 }
 
 /* 单列布局的字段容器 */
 .w-form-fields > .w-form-field {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--spacing-2);
     min-width: 0;
 }
 
@@ -196,18 +196,18 @@
 }
 
 .w-field-label {
-    font-size: 0.9375rem;
+    font-size: var(--font-size-sm);
     font-weight: 500;
-    color: #374151;
+    color: var(--color-text-secondary);
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin-bottom: 2px;
+    gap: var(--spacing-1_5);
+    margin-bottom: var(--spacing-0_5);
     line-height: 1.5;
 }
 
 .w-required-mark {
-    color: #ef4444;
+    color: var(--color-text-faint);
     font-weight: 600;
 }
 
@@ -217,22 +217,22 @@
 
 .w-form-control {
     width: 100%;
-    padding: 12px 16px;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    font-size: 0.9375rem;
-    color: #374151;
-    background: #ffffff;
+    padding: var(--spacing-3) var(--spacing-4);
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    background: var(--color-bg-primary);
     transition: all 0.2s ease;
     box-sizing: border-box;
     line-height: 1.5;
-    min-height: 44px;
+    min-height: var(--control-height-lg);
 }
 
 .w-form-control:focus {
     outline: none;
     border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    box-shadow: var(--weline-shadow-md);
 }
 
 .w-form-control:hover {
@@ -240,13 +240,13 @@
 }
 
 .w-form-control:disabled {
-    background: #f9fafb;
-    color: #9ca3af;
+    background: var(--color-bg-slate);
+    color: var(--color-text-faint);
     cursor: not-allowed;
 }
 
 .w-form-control:readonly {
-    background: #f9fafb;
+    background: var(--color-bg-slate);
 }
 
 /* 文本域 */
@@ -255,34 +255,34 @@ textarea.w-form-control {
     resize: vertical;
     min-height: 100px;
     font-family: inherit;
-    padding: 12px 16px;
+    padding: var(--spacing-3) var(--spacing-4);
     line-height: 1.6;
 }
 
 /* 下拉选择 */
 select.w-form-control {
     cursor: pointer;
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+    background-image: url();
     background-position: right 8px center;
     background-repeat: no-repeat;
     background-size: 16px;
-    padding-right: 32px;
+    padding-right: var(--spacing-8);
 }
 
 /* 复选框组 */
 .w-checkbox-group {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--spacing-2);
 }
 
 .w-checkbox-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--spacing-2);
     cursor: pointer;
-    font-size: 0.875rem;
-    color: #374151;
+    font-size: var(--weline-font-size-sm);
+    color: var(--color-text-secondary);
 }
 
 .w-checkbox-item input[type="checkbox"] {
@@ -300,16 +300,16 @@ select.w-form-control {
 .w-radio-group {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--spacing-2);
 }
 
 .w-radio-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--spacing-2);
     cursor: pointer;
-    font-size: 0.875rem;
-    color: #374151;
+    font-size: var(--weline-font-size-sm);
+    color: var(--color-text-secondary);
 }
 
 .w-radio-item input[type="radio"] {
@@ -325,48 +325,48 @@ select.w-form-control {
 
 /* 字段帮助文本 */
 .w-field-help {
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
     color: #6b7280;
-    margin-top: 6px;
+    margin-top: var(--spacing-1_5);
     line-height: 1.5;
 }
 
 /* 字段验证 */
 .w-field-validation {
-    font-size: 0.8125rem;
-    margin-top: 6px;
+    font-size: var(--font-size-13);
+    margin-top: var(--spacing-1_5);
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--spacing-1_5);
     line-height: 1.5;
 }
 
 .w-field-validation.w-field-error {
-    color: #ef4444;
+    color: var(--color-text-faint);
 }
 
 .w-field-validation i {
-    font-size: 0.875rem;
+    font-size: var(--weline-font-size-sm);
 }
 
 /* 字段错误状态 */
 .w-form-field.w-field-error .w-form-control {
     border-color: #ef4444;
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+    box-shadow: var(--weline-shadow-md);
 }
 
 .w-form-field.w-field-error .w-field-label {
-    color: #ef4444;
+    color: var(--color-text-faint);
 }
 
 /* 表单底部 */
 .w-form-footer {
-    background: #f9fafb;
-    padding: 24px 28px;
-    border-top: 1px solid #e5e7eb;
+    background: var(--color-bg-slate);
+    padding: var(--spacing-6) var(--spacing-7);
+    border-top: var(--border-width-thin) solid var(--color-border-soft);
     display: flex;
     justify-content: flex-end;
-    gap: 16px;
+    gap: var(--spacing-4);
     flex-shrink: 0;
     min-height: 72px;
     align-items: center;
@@ -377,11 +377,11 @@ select.w-form-control {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    padding: 12px 24px;
-    border: 1px solid transparent;
-    border-radius: 8px;
-    font-size: 0.9375rem;
+    gap: var(--spacing-2_5);
+    padding: var(--spacing-3) var(--spacing-6);
+    border: var(--border-width-thin) solid transparent;
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-sm);
     font-weight: 600;
     text-decoration: none;
     cursor: pointer;
@@ -389,14 +389,14 @@ select.w-form-control {
     background: none;
     outline: none;
     box-sizing: border-box;
-    min-height: 44px;
+    min-height: var(--control-height-lg);
     line-height: 1.5;
     white-space: nowrap;
     user-select: none;
 }
 
 .w-btn i {
-    font-size: 1rem;
+    font-size: var(--weline-font-size-base);
     display: inline-flex;
     align-items: center;
     width: 1.2em;
@@ -405,27 +405,27 @@ select.w-form-control {
 
 /* 表单触发按钮 */
 .w-form-trigger {
-    margin: 16px 0;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin: var(--spacing-4) 0;
+    box-shadow: var(--weline-shadow-md);
     font-weight: 600;
-    letter-spacing: 0.025em;
-    min-height: 44px;
-    padding: 12px 24px;
+    letter-spacing: var(--letter-spacing-wide);
+    min-height: var(--control-height-lg);
+    padding: var(--spacing-3) var(--spacing-6);
 }
 
 .w-form-trigger:hover {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--weline-shadow-md);
     transform: translateY(-1px);
 }
 
 .w-form-trigger:active {
     transform: translateY(0);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--weline-shadow-md);
 }
 
 .w-form-trigger i {
-    font-size: 1rem;
-    margin-right: 6px;
+    font-size: var(--weline-font-size-base);
+    margin-right: var(--spacing-1_5);
     width: 1.2em;
     display: inline-flex;
     align-items: center;
@@ -438,70 +438,70 @@ select.w-form-control {
 }
 
 .w-btn-primary {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-    color: #ffffff;
+    background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
+    color: var(--color-text-light);
     border-color: #3b82f6;
-    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+    box-shadow: var(--weline-shadow-md);
 }
 
 .w-btn-primary:hover:not(:disabled) {
-    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
     border-color: #1d4ed8;
-    box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4);
+    box-shadow: var(--weline-shadow-md);
     transform: translateY(-1px);
 }
 
 .w-btn-primary:active:not(:disabled) {
     transform: translateY(0);
-    box-shadow: 0 1px 2px rgba(59, 130, 246, 0.3);
+    box-shadow: var(--weline-shadow-md);
 }
 
 .w-btn-secondary {
-    background: #ffffff;
-    color: #374151;
-    border: 1px solid #d1d5db;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    background: var(--color-bg-primary);
+    color: var(--color-text-secondary);
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    box-shadow: var(--weline-shadow-md);
 }
 
 .w-btn-secondary:hover:not(:disabled) {
-    background: #f9fafb;
+    background: var(--color-bg-slate);
     border-color: #9ca3af;
-    color: #1f2937;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    color: var(--color-text);
+    box-shadow: var(--weline-shadow-md);
     transform: translateY(-1px);
 }
 
 .w-btn-secondary:active:not(:disabled) {
     transform: translateY(0);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-    background: #f3f4f6;
+    box-shadow: var(--weline-shadow-md);
+    background: var(--color-bg-muted);
 }
 
 /* 表单消息 */
 .w-form-message {
-    padding: 12px 16px;
-    border-radius: 6px;
-    margin: 16px 24px 0 24px;
-    font-size: 0.875rem;
+    padding: var(--spacing-3) var(--spacing-4);
+    border-radius: var(--border-radius-md);
+    margin: var(--spacing-4) var(--spacing-6) 0 var(--spacing-6);
+    font-size: var(--weline-font-size-sm);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--spacing-2);
 }
 
 .w-form-message-success {
-    background: #ecfdf5;
-    color: #065f46;
-    border: 1px solid #a7f3d0;
+    background: var(--color-success-bg-soft);
+    color: var(--color-success-strong);
+    border: var(--border-width-thin) solid #a7f3d0;
 }
 
 .w-form-message-error {
-    background: #fef2f2;
-    color: #991b1b;
-    border: 1px solid #fecaca;
+    background: var(--color-bg-canvas);
+    color: var(--color-link);
+    border: var(--border-width-thin) solid #fecaca;
 }
 
 .w-form-message i {
-    font-size: 1rem;
+    font-size: var(--weline-font-size-base);
 }
 
 /* 加载字段提示 */
@@ -509,11 +509,11 @@ select.w-form-control {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    padding: 32px 24px;
+    gap: var(--spacing-3);
+    padding: var(--spacing-8) var(--spacing-6);
     color: #6b7280;
-    font-size: 0.9375rem;
-    margin: 16px 0;
+    font-size: var(--font-size-sm);
+    margin: var(--spacing-4) 0;
 }
 
 .w-loading-fields i {
@@ -529,7 +529,7 @@ select.w-form-control {
 .w-form-horizontal .w-form-field {
     flex-direction: row;
     align-items: center;
-    gap: 16px;
+    gap: var(--spacing-4);
 }
 
 .w-form-horizontal .w-field-label {
@@ -568,19 +568,19 @@ select.w-form-control {
     .w-form-header {
         flex-direction: column;
         align-items: flex-start;
-        gap: 12px;
-        padding: 16px 20px;
+        gap: var(--spacing-3);
+        padding: var(--spacing-4) var(--spacing-5);
     }
     .w-form-actions {
         width: 100%;
         justify-content: flex-end;
     }
     .w-form-body {
-        padding: 16px 20px;
+        padding: var(--spacing-4) var(--spacing-5);
         max-height: calc(60vh - 120px);
     }
     .w-form-fields {
-        gap: 16px;
+        gap: var(--spacing-4);
     }
     .w-auto-fields {
         flex-direction: column;
@@ -590,12 +590,12 @@ select.w-form-control {
         min-width: 100%;
     }
     .w-form-footer {
-        padding: 16px 20px;
+        padding: var(--spacing-4) var(--spacing-5);
     }
     .w-form-horizontal .w-form-field {
         flex-direction: column;
         align-items: flex-start;
-        gap: 8px;
+        gap: var(--spacing-2);
     }
     .w-form-horizontal .w-field-label {
         min-width: auto;
@@ -610,30 +610,30 @@ select.w-form-control {
         border-color: #4b5563;
     }
     .w-form-header {
-        background: linear-gradient(135deg, #374151 0%, #4b5563 100%);
+        background: linear-gradient(135deg, var(--color-info) 0%, #4b5563 100%);
         border-bottom-color: #4b5563;
     }
     .w-form-title {
         color: #f9fafb;
     }
     .w-form-control {
-        background: #374151;
+        background: var(--color-info);
         border-color: #4b5563;
         color: #f9fafb;
     }
     .w-form-control:focus {
         border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        box-shadow: var(--weline-shadow-md);
     }
     .w-form-control:hover {
         border-color: #6b7280;
     }
     .w-form-control:disabled {
-        background: #374151;
+        background: var(--color-info);
         color: #6b7280;
     }
     .w-form-control:readonly {
-        background: #374151;
+        background: var(--color-info);
     }
     .w-field-label {
         color: #d1d5db;
@@ -643,14 +643,14 @@ select.w-form-control {
         color: #d1d5db;
     }
     .w-field-help {
-        color: #9ca3af;
+        color: var(--color-text-faint);
     }
     .w-form-footer {
-        background: #374151;
+        background: var(--color-info);
         border-top-color: #4b5563;
     }
     .w-btn-secondary {
-        background: #374151;
+        background: var(--color-info);
         color: #d1d5db;
         border-color: #4b5563;
     }
@@ -659,7 +659,7 @@ select.w-form-control {
         border-color: #6b7280;
     }
     .w-loading-fields {
-        color: #9ca3af;
+        color: var(--color-text-faint);
     }
 }
 
@@ -675,7 +675,7 @@ body[data-topbar="dark"] .w-form-inline-container {
 
 body[data-sidebar="dark"] .w-form-header,
 body[data-topbar="dark"] .w-form-header {
-    background: linear-gradient(135deg, #374151 0%, #4b5563 100%);
+    background: linear-gradient(135deg, var(--color-info) 0%, #4b5563 100%);
     border-bottom-color: #4b5563;
 }
 
@@ -686,12 +686,12 @@ body[data-topbar="dark"] .w-form-title {
 
 body[data-sidebar="dark"] .w-form-title i,
 body[data-topbar="dark"] .w-form-title i {
-    color: #60a5fa;
+    color: var(--color-text-faint);
 }
 
 body[data-sidebar="dark"] .w-form-close,
 body[data-topbar="dark"] .w-form-close {
-    color: #9ca3af;
+    color: var(--color-text-faint);
 }
 
 body[data-sidebar="dark"] .w-form-close:hover,
@@ -714,7 +714,7 @@ body[data-sidebar="dark"] select.w-form-control,
 body[data-topbar="dark"] input.w-form-control,
 body[data-topbar="dark"] textarea.w-form-control,
 body[data-topbar="dark"] select.w-form-control {
-    background: #374151;
+    background: var(--color-info);
     border-color: #4b5563;
     color: #f9fafb;
 }
@@ -722,7 +722,7 @@ body[data-topbar="dark"] select.w-form-control {
 body[data-sidebar="dark"] .w-form-control:focus,
 body[data-topbar="dark"] .w-form-control:focus {
     border-color: #60a5fa;
-    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+    box-shadow: var(--weline-shadow-md);
 }
 
 body[data-sidebar="dark"] .w-form-control:hover,
@@ -732,13 +732,13 @@ body[data-topbar="dark"] .w-form-control:hover {
 
 body[data-sidebar="dark"] .w-form-control:disabled,
 body[data-topbar="dark"] .w-form-control:disabled {
-    background: #374151;
+    background: var(--color-info);
     color: #6b7280;
 }
 
 body[data-sidebar="dark"] .w-form-control:readonly,
 body[data-topbar="dark"] .w-form-control:readonly {
-    background: #374151;
+    background: var(--color-info);
 }
 
 body[data-sidebar="dark"] .w-field-label,
@@ -755,18 +755,18 @@ body[data-topbar="dark"] .w-radio-item {
 
 body[data-sidebar="dark"] .w-field-help,
 body[data-topbar="dark"] .w-field-help {
-    color: #9ca3af;
+    color: var(--color-text-faint);
 }
 
 body[data-sidebar="dark"] .w-form-footer,
 body[data-topbar="dark"] .w-form-footer {
-    background: #374151;
+    background: var(--color-info);
     border-top-color: #4b5563;
 }
 
 body[data-sidebar="dark"] .w-btn-secondary,
 body[data-topbar="dark"] .w-btn-secondary {
-    background: #374151;
+    background: var(--color-info);
     color: #d1d5db;
     border-color: #4b5563;
 }
@@ -779,19 +779,19 @@ body[data-topbar="dark"] .w-btn-secondary:hover:not(:disabled) {
 
 body[data-sidebar="dark"] .w-loading-fields,
 body[data-topbar="dark"] .w-loading-fields {
-    color: #9ca3af;
+    color: var(--color-text-faint);
 }
 
 body[data-sidebar="dark"] .w-form-message-success,
 body[data-topbar="dark"] .w-form-message-success {
     background: #064e3b;
-    color: #6ee7b7;
+    color: var(--color-text-faint);
     border-color: #059669;
 }
 
 body[data-sidebar="dark"] .w-form-message-error,
 body[data-topbar="dark"] .w-form-message-error {
-    background: #7f1d1d;
+    background: var(--color-danger);
     color: #fca5a5;
     border-color: #dc2626;
 }
@@ -846,148 +846,148 @@ body[data-topbar="dark"] .w-form-message-error {
 
 /* Inline 表单容器样式 */
 .w-form-inline-container {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    background: var(--color-bg-primary);
+    border: var(--border-width-thin) solid var(--color-border-soft);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--weline-shadow-md);
     overflow: hidden;
-    margin: 20px 0;
+    margin: var(--spacing-5) 0;
     max-height: 80vh;
     display: flex;
     flex-direction: column;
 }
 
 .w-form-inline-container .w-form-header {
-    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-    padding: 20px 24px;
-    border-bottom: 1px solid #e5e7eb;
-    min-height: 56px;
+    background: linear-gradient(135deg, var(--color-bg-slate) 0%, var(--color-secondary-bg-subtle) 100%);
+    padding: var(--spacing-5) var(--spacing-6);
+    border-bottom: var(--border-width-thin) solid var(--color-border-soft);
+    min-height: var(--control-height-2xl);
     flex-shrink: 0;
 }
 
 .w-form-inline-container .w-form-body {
-    padding: 24px;
+    padding: var(--spacing-6);
     min-height: 150px;
     flex: 1;
     overflow-y: auto;
 }
 
 .w-form-inline-container .w-form-footer {
-    background: #f9fafb;
-    padding: 16px 24px;
-    border-top: 1px solid #e5e7eb;
+    background: var(--color-bg-slate);
+    padding: var(--spacing-4) var(--spacing-6);
+    border-top: var(--border-width-thin) solid var(--color-border-soft);
     display: flex;
     justify-content: flex-end;
-    gap: 16px;
-    min-height: 60px;
+    gap: var(--spacing-4);
+    min-height: var(--control-height-2xl);
     align-items: center;
     flex-shrink: 0;
 }
 
 /* 文件字段样式 */
 .w-file-field {
-    border: 2px dashed #d1d5db;
-    border-radius: 8px;
-    padding: 16px;
-    background: #f9fafb;
+    border: var(--border-width-medium) dashed var(--color-border-muted);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-4);
+    background: var(--color-bg-slate);
     transition: all 0.2s ease;
 }
 
 .w-file-field:hover {
     border-color: #3b82f6;
-    background: #f0f9ff;
+    background: var(--color-bg-panel);
 }
 
 .w-file-selector {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--spacing-3);
     flex-wrap: wrap;
 }
 
 .w-file-btn {
-    background: #ffffff;
-    border: 1px solid #d1d5db;
-    padding: 8px 16px;
-    border-radius: 6px;
+    background: var(--color-bg-primary);
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    padding: var(--spacing-2) var(--spacing-4);
+    border-radius: var(--border-radius-md);
     cursor: pointer;
-    font-size: 0.875rem;
+    font-size: var(--weline-font-size-sm);
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--spacing-1_5);
     transition: all 0.2s ease;
 }
 
 .w-file-btn:hover {
-    background: #f3f4f6;
+    background: var(--color-bg-muted);
     border-color: #9ca3af;
 }
 
 .w-file-info {
     color: #6b7280;
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
 }
 
 .w-file-list {
-    margin-top: 12px;
+    margin-top: var(--spacing-3);
 }
 
 .w-file-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    margin-bottom: 8px;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-3);
+    background: var(--color-bg-primary);
+    border: var(--border-width-thin) solid var(--color-border-soft);
+    border-radius: var(--border-radius-md);
+    margin-bottom: var(--spacing-2);
 }
 
 .w-file-name {
     flex: 1;
-    font-size: 0.875rem;
-    color: #374151;
+    font-size: var(--weline-font-size-sm);
+    color: var(--color-text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .w-file-size {
-    color: #9ca3af;
-    font-size: 0.75rem;
+    color: var(--color-text-faint);
+    font-size: var(--weline-font-size-xs);
 }
 
 .w-file-remove {
     background: none;
     border: none;
-    color: #ef4444;
+    color: var(--color-text-faint);
     cursor: pointer;
-    padding: 4px;
-    border-radius: 4px;
+    padding: var(--spacing-1);
+    border-radius: var(--radius-md);
 }
 
 .w-file-remove:hover {
-    background: #fef2f2;
+    background: var(--color-bg-canvas);
 }
 
 .w-file-placeholder {
-    color: #9ca3af;
-    font-size: 0.875rem;
+    color: var(--color-text-faint);
+    font-size: var(--weline-font-size-sm);
     font-style: italic;
 }
 
 /* 图片字段样式 */
 .w-image-field {
-    border: 2px dashed #d1d5db;
-    border-radius: 8px;
-    padding: 16px;
-    background: #f9fafb;
+    border: var(--border-width-medium) dashed var(--color-border-muted);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-4);
+    background: var(--color-bg-slate);
     transition: all 0.2s ease;
 }
 
 .w-image-field:hover {
     border-color: #3b82f6;
-    background: #f0f9ff;
+    background: var(--color-bg-panel);
 }
 
 .w-image-preview {
@@ -999,7 +999,7 @@ body[data-topbar="dark"] .w-form-message-error {
 
 .w-image-placeholder {
     text-align: center;
-    padding: 24px;
+    padding: var(--spacing-6);
     cursor: pointer;
     color: #6b7280;
 }
@@ -1007,67 +1007,67 @@ body[data-topbar="dark"] .w-form-message-error {
 .w-image-placeholder i {
     font-size: 2.5rem;
     color: #d1d5db;
-    margin-bottom: 8px;
+    margin-bottom: var(--spacing-2);
     display: block;
 }
 
 .w-placeholder-text {
-    font-size: 0.9375rem;
-    margin-bottom: 4px;
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--spacing-1);
 }
 
 .w-placeholder-info {
-    font-size: 0.75rem;
-    color: #9ca3af;
+    font-size: var(--weline-font-size-xs);
+    color: var(--color-text-faint);
 }
 
 .w-image-preview-img {
     max-width: 100%;
     max-height: 200px;
-    border-radius: 6px;
+    border-radius: var(--border-radius-md);
     object-fit: contain;
 }
 
 .w-image-actions {
     display: flex;
-    gap: 8px;
-    margin-top: 12px;
+    gap: var(--spacing-2);
+    margin-top: var(--spacing-3);
     justify-content: center;
 }
 
 /* 上传进度条 */
 .w-upload-progress {
-    margin-top: 12px;
+    margin-top: var(--spacing-3);
 }
 
 .w-progress-bar {
     height: 6px;
-    background: #e5e7eb;
-    border-radius: 3px;
+    background: var(--color-bg-secondary);
+    border-radius: var(--radius-sm);
     overflow: hidden;
 }
 
 .w-progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
-    border-radius: 3px;
+    background: linear-gradient(90deg, var(--color-info) 0%, var(--color-info) 100%);
+    border-radius: var(--radius-sm);
     transition: width 0.3s ease;
 }
 
 .w-progress-text {
     text-align: center;
-    font-size: 0.75rem;
+    font-size: var(--weline-font-size-xs);
     color: #6b7280;
-    margin-top: 4px;
+    margin-top: var(--spacing-1);
 }
 
 /* 按钮组增强 */
 .w-form-actions {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: var(--spacing-4);
     flex-wrap: wrap;
-    margin-top: 4px;
+    margin-top: var(--spacing-1);
 }
 
 .w-form-actions .w-btn {
@@ -1076,14 +1076,14 @@ body[data-topbar="dark"] .w-form-message-error {
 
 /* 改进加载状态样式 */
 .w-auto-fields .w-loading-fields {
-    background: #f9fafb;
-    border-radius: 8px;
-    border: 1px dashed #d1d5db;
-    margin: 8px 0;
+    background: var(--color-bg-slate);
+    border-radius: var(--radius-lg);
+    border: var(--border-width-thin) dashed var(--color-border-muted);
+    margin: var(--spacing-2) 0;
 }
 
 .w-loading-fields i {
-    font-size: 1.125rem;
+    font-size: var(--weline-font-size-lg);
 }
 
 /* 改进图标显示 */
@@ -1099,43 +1099,43 @@ body[data-topbar="dark"] .w-form-message-error {
 
 /* 按钮焦点状态 */
 .w-btn:focus-visible {
-    outline: 2px solid #3b82f6;
+    outline: var(--border-width-medium) solid #3b82f6;
     outline-offset: 2px;
 }
 
 /* 暗色主题下的按钮改进 */
 body[data-sidebar="dark"] .w-form-trigger,
 body[data-topbar="dark"] .w-form-trigger {
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--weline-shadow-md);
 }
 
 body[data-sidebar="dark"] .w-form-trigger:hover,
 body[data-topbar="dark"] .w-form-trigger:hover {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--weline-shadow-md);
 }
 
 body[data-sidebar="dark"] .w-form-inline-container,
 body[data-topbar="dark"] .w-form-inline-container {
     background: #1f2937;
     border-color: #4b5563;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--weline-shadow-md);
 }
 
 body[data-sidebar="dark"] .w-btn-primary,
 body[data-topbar="dark"] .w-btn-primary {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.4);
+    background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
+    box-shadow: var(--weline-shadow-md);
 }
 
 body[data-sidebar="dark"] .w-btn-primary:hover:not(:disabled),
 body[data-topbar="dark"] .w-btn-primary:hover:not(:disabled) {
-    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-    box-shadow: 0 4px 8px rgba(59, 130, 246, 0.5);
+    background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
+    box-shadow: var(--weline-shadow-md);
 }
 
 body[data-sidebar="dark"] .w-loading-fields,
 body[data-topbar="dark"] .w-loading-fields {
-    background: #374151;
+    background: var(--color-info);
     border-color: #4b5563;
 }
 
@@ -1144,7 +1144,7 @@ body[data-sidebar="dark"] .w-file-field,
 body[data-topbar="dark"] .w-file-field,
 body[data-sidebar="dark"] .w-image-field,
 body[data-topbar="dark"] .w-image-field {
-    background: #374151;
+    background: var(--color-info);
     border-color: #4b5563;
 }
 
@@ -1165,7 +1165,7 @@ body[data-topbar="dark"] .w-file-btn {
 
 body[data-sidebar="dark"] .w-file-btn:hover,
 body[data-topbar="dark"] .w-file-btn:hover {
-    background: #374151;
+    background: var(--color-info);
     border-color: #6b7280;
 }
 
@@ -1182,7 +1182,7 @@ body[data-topbar="dark"] .w-file-name {
 
 body[data-sidebar="dark"] .w-image-placeholder,
 body[data-topbar="dark"] .w-image-placeholder {
-    color: #9ca3af;
+    color: var(--color-text-faint);
 }
 
 body[data-sidebar="dark"] .w-image-placeholder i,

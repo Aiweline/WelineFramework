@@ -6,6 +6,7 @@
 
 1. [`需求.md`](./需求.md)
 2. [`开发日志.md`](./开发日志.md)
+2b. **后台默认主题开发标准（现行）**：[`backend/后端主题开发标准.md`](./backend/后端主题开发标准.md) — 后台 layout/partial/w-* 原语/Token/异步资源/页面骨架唯一标准；工具页例外登记见 [`backend/工具页迁移清单.md`](./backend/工具页迁移清单.md)
 3. [`开发/Theme开发总指南.md`](./开发/Theme开发总指南.md)
 4. **主题开发与店面世代（发布如何变成前端身份）**：[`架构/主题开发与店面世代.md`](./架构/主题开发与店面世代.md) — 开发者维护必读
 5. [`theme-inheritance-and-file-conventions.md`](./theme-inheritance-and-file-conventions.md)

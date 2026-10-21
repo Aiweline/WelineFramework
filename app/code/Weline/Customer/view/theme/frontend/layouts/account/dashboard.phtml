@@ -55,15 +55,15 @@ $this->assign('meta', $meta);
             min-height: 100vh;
         }
         .account-dashboard-layout .weline-main-content {
-            --account-page-background: var(--weline-layout-surface-secondary, var(--color-bg-secondary, #f3f3f3));
+            --account-page-background: var(--weline-layout-surface-secondary, var(--color-bg-secondary));
             --account-page-top-gap: clamp(1.5rem, 2.2vw, 2.25rem);
-            --account-page-bottom-gap: var(--spacing-xl, 2rem);
+            --account-page-bottom-gap: var(--spacing-xl);
             flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
             background: var(--account-page-background);
-            box-shadow: inset 0 10px 14px -16px rgba(15, 23, 42, 0.55);
+            box-shadow: var(--weline-shadow-md);
         }
         .account-dashboard {
             min-height: 100vh;
@@ -83,23 +83,23 @@ $this->assign('meta', $meta);
             padding-inline: var(--weline-layout-content-padding-inline);
             padding-block: var(--account-page-top-gap) var(--account-page-bottom-gap);
             /* 前台 head 不加载 theme.css；无 fallback 时大屏 gap 会塌成 0 */
-            gap: var(--weline-layout-spacing-xl, var(--spacing-xl, 2rem));
+            gap: var(--weline-layout-spacing-xl, var(--spacing-xl));
         }
         .account-sidebar {
-            width: var(--sidebar-width, 280px);
+            width: var(--sidebar-width);
             flex-shrink: 0;
             background: var(--weline-layout-surface-primary);
             border-radius: var(--weline-layout-radius-lg);
             box-shadow: var(--shadow-sm);
-            padding: var(--weline-layout-spacing-lg, var(--spacing-lg, 1.5rem));
+            padding: var(--weline-layout-spacing-lg, var(--spacing-lg));
             height: fit-content;
             position: sticky;
-            top: var(--weline-layout-spacing-lg, var(--spacing-lg, 1.5rem));
+            top: var(--weline-layout-spacing-lg, var(--spacing-lg));
             transition: all 0.3s ease;
         }
         .account-sidebar.collapsed {
             width: var(--sidebar-collapsed-width);
-            padding: var(--weline-layout-spacing-md, var(--spacing-md, 1rem));
+            padding: var(--weline-layout-spacing-md, var(--spacing-md));
         }
         .account-sidebar.collapsed .account-sidebar__nav-text,
         .account-sidebar.collapsed .account-sidebar__user-info {
@@ -115,8 +115,8 @@ $this->assign('meta', $meta);
         }
         @media (min-width: 768px) and (max-width: 1024px) {
             .account-main-content {
-                gap: var(--spacing-md, 1rem);
-                padding-block: var(--weline-space-5, 1.25rem);
+                gap: var(--spacing-md);
+                padding-block: var(--weline-space-5);
                 padding-inline: var(--weline-layout-content-padding-inline);
             }
 
@@ -127,15 +127,15 @@ $this->assign('meta', $meta);
         @media (max-width: 767px) {
             .account-main-content {
                 flex-direction: column;
-                padding-block: var(--weline-layout-spacing-md, var(--spacing-md, 1rem));
+                padding-block: var(--weline-layout-spacing-md, var(--spacing-md));
                 padding-inline: var(--weline-layout-content-padding-inline);
-                gap: var(--weline-layout-spacing-md, var(--spacing-md, 1rem));
+                gap: var(--weline-layout-spacing-md, var(--spacing-md));
             }
             .account-sidebar {
                 width: 100%;
                 position: static;
                 border-radius: var(--weline-layout-radius-md);
-                padding: var(--weline-layout-spacing-md, var(--spacing-md, 1rem));
+                padding: var(--weline-layout-spacing-md, var(--spacing-md));
             }
             .account-sidebar.collapsed {
                 width: 100%;

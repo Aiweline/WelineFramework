@@ -14,30 +14,11 @@ $mappingListParams = ['host_id' => $hostId];
 ?>
 <div class="row">
     <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= $isEdit ? __('编辑映射') : __('新增映射') ?></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item">
-                        <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
-                    </li>
-                    <li class="breadcrumb-item">
-                        <a href="@backend-url{'async/backend/host'}"><?= __('同步主机管理') ?></a>
-                    </li>
-                    <li class="breadcrumb-item active"><?= $isEdit ? __('编辑') : __('新增') ?></li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-12">
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0"><?= $isEdit ? __('编辑映射') : __('新增映射') ?></h5>
             </div>
-            <div class="card-body">
+            <div class="w-card__body">
                 <?php if ($host): ?>
                     <div class="alert alert-info mb-3">
                         <strong><?= __('主机') ?>:</strong> <?= htmlspecialchars($host->getData(SyncHost::fields_NAME)) ?> 
@@ -52,8 +33,8 @@ $mappingListParams = ['host_id' => $hostId];
                     <input type="hidden" name="host_id" value="<?= $hostId ?>">
                     
                     <div class="mb-3">
-                        <label class="form-label"><?= __('本地路径') ?> <span class="text-danger">*</span></label>
-                        <input type="text" name="local_path" class="form-control" 
+                        <label class="w-field__label"><?= __('本地路径') ?> <span class="text-danger">*</span></label>
+                        <input type="text" name="local_path" class="w-input" 
                                value="<?= htmlspecialchars($mapping ? $mapping->getData(SyncMapping::fields_LOCAL_PATH) : '') ?>" 
                                placeholder="/path/to/local/directory" required>
                         <small class="form-text text-muted d-block mb-1"><?= __('本地目录的完整路径') ?></small>
@@ -63,16 +44,16 @@ $mappingListParams = ['host_id' => $hostId];
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label"><?= __('远程路径') ?> <span class="text-danger">*</span></label>
-                        <input type="text" name="remote_path" class="form-control" 
+                        <label class="w-field__label"><?= __('远程路径') ?> <span class="text-danger">*</span></label>
+                        <input type="text" name="remote_path" class="w-input" 
                                value="<?= htmlspecialchars($mapping ? $mapping->getData(SyncMapping::fields_REMOTE_PATH) : '') ?>" 
                                placeholder="/path/to/remote/directory" required>
                         <small class="form-text text-muted"><?= __('远程服务器上的目录路径') ?></small>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label"><?= __('要同步的目录') ?></label>
-                        <textarea name="include_paths" class="form-control" rows="3" 
+                        <label class="w-field__label"><?= __('要同步的目录') ?></label>
+                        <textarea name="include_paths" class="w-input" rows="3" 
                                   placeholder="app/code/Weline/Async&#10;view/templates"><?php
                             if ($mapping) {
                                 $paths = $mapping->getIncludePathsArray();
@@ -85,8 +66,8 @@ $mappingListParams = ['host_id' => $hostId];
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label"><?= __('排除模式') ?></label>
-                        <textarea name="exclude_patterns" class="form-control" rows="5" 
+                        <label class="w-field__label"><?= __('排除模式') ?></label>
+                        <textarea name="exclude_patterns" class="w-input" rows="5" 
                                   placeholder="node_modules&#10;.git&#10;*.log"><?php
                             if ($mapping) {
                                 $patterns = $mapping->getExcludePatternsArray();
@@ -97,8 +78,8 @@ $mappingListParams = ['host_id' => $hostId];
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label"><?= __('状态') ?></label>
-                        <select name="status" class="form-select">
+                        <label class="w-field__label"><?= __('状态') ?></label>
+                        <select name="status" class="w-select">
                             <option value="0" <?= (!$mapping || (int)$mapping->getData(SyncMapping::fields_STATUS) === 0) ? 'selected' : '' ?>><?= __('关闭') ?></option>
                             <option value="1" <?= ($mapping && (int)$mapping->getData(SyncMapping::fields_STATUS) === 1) ? 'selected' : '' ?>><?= __('开启') ?></option>
                         </select>

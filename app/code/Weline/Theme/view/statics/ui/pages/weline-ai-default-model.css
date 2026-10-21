@@ -6,7 +6,7 @@
     .w-ai-default__priority { inline-size: 6rem; }
     .w-ai-default__protected { min-block-size: 5rem; }
     .w-ai-default__protected-list { display: grid; gap: var(--weline-space-2); margin: 0; padding: 0; list-style: none; }
-    .w-ai-default__protected-item { justify-content: space-between; padding: var(--weline-space-3); border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-md); }
+    .w-ai-default__protected-item { justify-content: space-between; padding: var(--weline-space-3); border: var(--border-width-thin) solid var(--weline-theme-border); border-radius: var(--weline-radius-md); }
 
     @media (max-width: 48rem) {
         .w-ai-default__table th:nth-child(3),

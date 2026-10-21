@@ -44,11 +44,11 @@ foreach ($children as $child) {
             <p class="storefront-categories-hub__actions">
                 <a class="storefront-categories-hub__cta"
                    data-testid="storefront-categories-hub-products"
-                   href="@url{'products'}"><?= $escape(__('浏览全部商品')) ?></a>
+                   href="@url{'products'}"><lang>浏览全部商品</lang></a>
             </p>
         </div>
         <?php if ($mosaic !== []): ?>
-            <ul class="storefront-categories-hub__mosaic" aria-label="<?= $escape(__('热门部门')) ?>">
+            <ul class="storefront-categories-hub__mosaic" aria-label="@lang('热门部门')">
                 <?php foreach ($mosaic as $tile): ?>
                     <li>
                         <a class="storefront-categories-hub__mosaic-link" href="<?= $escape($tile['url']) ?>">
@@ -68,7 +68,7 @@ foreach ($children as $child) {
 
     <?php if ($children === []): ?>
         <p class="storefront-categories-hub__empty" data-testid="storefront-categories-hub-empty">
-            <?= $escape(__('暂无可用分类，请先从全部商品浏览。')) ?>
+            <lang>暂无可用分类，请先从全部商品浏览。</lang>
         </p>
     <?php else: ?>
         <ul class="storefront-categories-hub__grid" data-testid="storefront-categories-hub-grid">
@@ -103,7 +103,7 @@ foreach ($children as $child) {
                         <span class="storefront-categories-hub__name"><?= $escape($name) ?></span>
                     </a>
                     <?php if ($kids !== []): ?>
-                        <ul class="storefront-categories-hub__chips" aria-label="<?= $escape(__('子分类')) ?>">
+                        <ul class="storefront-categories-hub__chips" aria-label="@lang('子分类')">
                             <?php foreach (array_slice($kids, 0, 8) as $kid): ?>
                                 <?php
                                 if (!is_array($kid)) {
@@ -132,20 +132,20 @@ foreach ($children as $child) {
         grid-template-columns: minmax(0, 1fr);
     }
     .storefront-categories-hub {
-        width: min(100%, var(--weline-layout-content-max-width, 1280px));
+        width: min(100%, var(--weline-layout-content-max-width));
         margin: 0 auto;
-        padding: var(--spacing-3, 0.75rem) 0 var(--spacing-6, 2rem);
+        padding: var(--spacing-3) 0 var(--spacing-6);
         box-sizing: border-box;
     }
     .storefront-categories-hub__header {
         display: grid;
-        gap: var(--spacing-4, 1rem);
-        margin: 0 0 var(--spacing-5, 1.5rem);
+        gap: var(--spacing-4);
+        margin: 0 0 var(--spacing-5);
         /* 左侧略加内边距，减少悬浮社媒条压住标题首字 */
-        padding: var(--spacing-5, 1.25rem) var(--spacing-4, 1rem) var(--spacing-5, 1.25rem) clamp(1.1rem, 3vw, 1.75rem);
-        border: 1px solid var(--weline-theme-border, #d8d2c8);
-        border-radius: var(--weline-theme-radius-md, var(--weline-theme-radius-sm, 4px));
-        background: var(--weline-theme-surface-muted, var(--color-bg-secondary, #f3efe8));
+        padding: var(--spacing-5) var(--spacing-4) var(--spacing-5) clamp(1.1rem, 3vw, 1.75rem);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
+        border-radius: var(--weline-theme-radius-md, var(--weline-theme-radius-sm));
+        background: var(--weline-theme-surface-muted, var(--color-bg-secondary));
         box-sizing: border-box;
     }
     .storefront-categories-hub__header--split {
@@ -159,17 +159,17 @@ foreach ($children as $child) {
         gap: 0;
         min-width: 0;
         max-width: 36rem;
-        padding-top: var(--spacing-2, 0.35rem);
+        padding-top: var(--spacing-2);
     }
     .storefront-categories-hub__title {
-        margin: 0 0 var(--spacing-2, 0.5rem);
-        font-size: clamp(1.7rem, 2.4vw, 2.35rem);
+        margin: 0 0 var(--spacing-2);
+        font-size: clamp(var(--font-size-3xl), 2.4vw, 2.35rem);
         line-height: 1.18;
         letter-spacing: -0.01em;
         color: var(--color-text-primary, inherit);
     }
     .storefront-categories-hub__lede {
-        margin: 0 0 var(--spacing-4, 1rem);
+        margin: 0 0 var(--spacing-4);
         line-height: 1.6;
         color: var(--color-text-secondary, inherit);
         opacity: 0.95;
@@ -178,11 +178,11 @@ foreach ($children as $child) {
     .storefront-categories-hub__cta {
         display: inline-flex;
         align-items: center;
-        min-height: 2.5rem;
-        padding: 0.5rem 1.15rem;
-        border-radius: var(--weline-theme-radius-sm, 4px);
-        background: var(--weline-theme-accent, var(--color-primary, #b84a3c));
-        color: var(--color-text-on-accent, #fff);
+        min-height: var(--control-height-md);
+        padding: var(--weline-space-2) var(--spacing-4_5);
+        border-radius: var(--weline-theme-radius-sm);
+        background: var(--weline-theme-accent, var(--color-primary));
+        color: var(--color-text-on-accent);
         text-decoration: none;
         font-weight: 650;
         transition: filter 0.15s ease, transform 0.15s ease;
@@ -191,7 +191,7 @@ foreach ($children as $child) {
         filter: brightness(1.05);
     }
     .storefront-categories-hub__cta:focus-visible {
-        outline: 2px solid var(--weline-theme-accent, #b84a3c);
+        outline: var(--border-width-medium) solid var(--weline-theme-accent);
         outline-offset: 2px;
     }
     .storefront-categories-hub__mosaic {
@@ -200,7 +200,7 @@ foreach ($children as $child) {
         padding: 0;
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.45rem;
+        gap: var(--spacing-0_45);
         min-height: 11.5rem;
         align-items: start;
     }
@@ -210,11 +210,11 @@ foreach ($children as $child) {
         display: block;
         min-height: 5.5rem;
         overflow: hidden;
-        border-radius: var(--weline-theme-radius-sm, 4px);
+        border-radius: var(--weline-theme-radius-sm);
         text-decoration: none;
-        color: #fff;
-        background: var(--weline-theme-surface, #fff);
-        border: 1px solid var(--weline-theme-border, #d8d2c8);
+        color: var(--color-text-light);
+        background: var(--weline-theme-surface);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
     }
     .storefront-categories-hub__mosaic-link img {
         width: 100%;
@@ -227,21 +227,21 @@ foreach ($children as $child) {
     .storefront-categories-hub__mosaic-link span {
         position: absolute;
         inset: auto 0 0 0;
-        padding: 0.45rem 0.55rem;
-        font-size: 0.82rem;
+        padding: var(--spacing-0_45) var(--spacing-0_55);
+        font-size: var(--font-size-13);
         font-weight: 650;
         background: linear-gradient(to top, rgba(0, 0, 0, 0.62), transparent);
     }
     .storefront-categories-hub__mosaic-link:hover img {
         transform: scale(1.04);
     }
-    .storefront-categories-hub__empty { margin: 1.5rem 0; opacity: 0.85; }
+    .storefront-categories-hub__empty { margin: var(--weline-space-6) 0; opacity: 0.85; }
     .storefront-categories-hub__grid {
         list-style: none;
         margin: 0;
         padding: 0;
         display: grid;
-        gap: var(--spacing-4, 1.15rem);
+        gap: var(--spacing-4);
         align-items: start;
         grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
     }
@@ -249,7 +249,7 @@ foreach ($children as $child) {
         margin: 0;
         display: flex;
         flex-direction: column;
-        gap: 0.55rem;
+        gap: var(--spacing-0_55);
         align-self: start;
         height: auto;
     }
@@ -260,21 +260,21 @@ foreach ($children as $child) {
         flex: 0 0 auto;
         text-decoration: none;
         color: inherit;
-        border: 1px solid var(--weline-theme-border, #d8d2c8);
-        border-radius: var(--weline-theme-radius-sm, 4px);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
+        border-radius: var(--weline-theme-radius-sm);
         overflow: hidden;
-        background: var(--weline-theme-surface, #fff);
+        background: var(--weline-theme-surface);
         transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
     .storefront-categories-hub__link:hover {
-        border-color: var(--weline-theme-accent, #b84a3c);
-        box-shadow: var(--weline-theme-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.08));
+        border-color: var(--weline-theme-accent);
+        box-shadow: var(--weline-shadow-md);
     }
     .storefront-categories-hub__media-wrap {
         display: block;
         aspect-ratio: 4 / 3;
         overflow: hidden;
-        background: var(--weline-theme-surface-muted, #f3efe8);
+        background: var(--weline-theme-surface-muted);
     }
     .storefront-categories-hub__media-wrap--empty { min-height: 10rem; }
     .storefront-categories-hub__media {
@@ -291,10 +291,10 @@ foreach ($children as $child) {
     .storefront-categories-hub__name {
         display: block;
         font-weight: 700;
-        font-size: 1.05rem;
-        padding: 0.85rem 0.95rem;
+        font-size: var(--font-size-base);
+        padding: var(--spacing-0_85) var(--spacing-0_95);
         flex: 0 0 auto;
-        letter-spacing: 0.01em;
+        letter-spacing: var(--letter-spacing-wide);
     }
     .storefront-categories-hub__chips {
         list-style: none;
@@ -302,25 +302,25 @@ foreach ($children as $child) {
         padding: 0;
         display: flex;
         flex-wrap: wrap;
-        gap: 0.35rem;
+        gap: var(--spacing-1_5);
         align-items: start;
     }
     .storefront-categories-hub__chips a {
         display: inline-flex;
         align-items: center;
-        min-height: 1.75rem;
-        padding: 0.15rem 0.6rem;
-        border: 1px solid var(--weline-theme-border, #d8d2c8);
-        border-radius: var(--weline-theme-radius-sm, 4px);
+        min-height: var(--control-height-xs);
+        padding: var(--spacing-0_5) var(--spacing-2_5);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
+        border-radius: var(--weline-theme-radius-sm);
         text-decoration: none;
         color: var(--color-text-secondary, inherit);
-        font-size: 0.82rem;
-        background: var(--weline-theme-surface, #fff);
+        font-size: var(--font-size-13);
+        background: var(--weline-theme-surface);
         transition: border-color 0.15s ease, color 0.15s ease;
     }
     .storefront-categories-hub__chips a:hover {
-        border-color: var(--weline-theme-accent, #b84a3c);
-        color: var(--weline-theme-accent, #b84a3c);
+        border-color: var(--weline-theme-accent);
+        color: var(--weline-theme-accent);
     }
     @media (max-width: 720px) {
         .storefront-categories-hub__header--split {

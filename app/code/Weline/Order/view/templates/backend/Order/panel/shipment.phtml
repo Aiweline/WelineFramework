@@ -20,6 +20,8 @@ $locked = $channel === 'provider';
 $defaultCarrierId = (int)($shipping_ref['checkout_carrier_id'] ?? 0);
 $serviceName = (string)($shipping_ref['service_name'] ?? '');
 ?>
+<css>Weline_Order::css/backend/order-admin.css</css>
+
 <div class="w-stack" style="--w-gap:var(--weline-space-4);" data-testid="order-edit-panel-shipment">
   <div class="w-stack" style="--w-gap:var(--weline-space-1);">
     <p class="w-text" data-size="sm" style="--w-mb:0;" data-testid="shipment-checkout-ref">
@@ -135,7 +137,7 @@ $serviceName = (string)($shipping_ref['service_name'] ?? '');
                     <input type="hidden" name="package_lines[<?= $escape($lineKey) ?>][line_key]" value="<?= $escape($lineKey) ?>">
                     <label class="w-label" style="--w-mb:0;">
                       <span class="w-text" data-size="sm"><?= __('数量') ?></span>
-                      <input class="w-input"
+                      <input
                              type="number"
                              min="0"
                              max="<?= $lineRemain ?>"
@@ -143,7 +145,7 @@ $serviceName = (string)($shipping_ref['service_name'] ?? '');
                              value="<?= $precheck ? min($lineRemain, max(1, (int)($row['remaining_qty_minor'] ?? 1))) : 0 ?>"
                              data-size="sm"
                              data-testid="shipment-package-line-qty"
-                             style="width:5.5rem;">
+                             class="w-input w-order-inline-input--qty">
                     </label>
                   </div>
                 <?php endforeach; ?>
@@ -219,7 +221,7 @@ $serviceName = (string)($shipping_ref['service_name'] ?? '');
                     <?php if (!empty($pline['sku'])): ?><code><?= $escape((string)$pline['sku']) ?></code><?php endif; ?>
                   </label>
                   <input type="hidden" name="package_lines[<?= $escape($lineKey) ?>][line_key]" value="<?= $escape($lineKey) ?>">
-                  <input class="w-input" type="number" min="0" max="<?= $lineRemain ?>" name="package_lines[<?= $escape($lineKey) ?>][qty_minor]" value="<?= $precheck ? min($lineRemain, max(1, (int)($row['remaining_qty_minor'] ?? 1))) : 0 ?>" data-size="sm" style="width:5.5rem;">
+                  <input class="w-input w-order-inline-input--qty" type="number" min="0" max="<?= $lineRemain ?>" name="package_lines[<?= $escape($lineKey) ?>][qty_minor]" value="<?= $precheck ? min($lineRemain, max(1, (int)($row['remaining_qty_minor'] ?? 1))) : 0 ?>" data-size="sm">
                 </div>
               <?php endforeach; ?>
             </div>

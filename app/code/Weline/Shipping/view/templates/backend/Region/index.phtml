@@ -39,53 +39,7 @@ foreach ($currentCountryCodes as $seedCode) {
 }
 $listApiUrl = (string)w_url('/shipping/frontend/region/list', [], 'frontend');
 ?>
-<style>
-/* 筛选：必须用 theme:address multi；chips 贴控件、限宽降空白（Manager iframe 勿强制竖排） */
-[data-testid="shipping-region-filter-address"] {
-    width: 100%;
-    max-width: 40rem;
-    box-sizing: border-box;
-    margin-block-end: var(--weline-space-2, 0.5rem);
-}
-[data-testid="shipping-region-filter-address"] .w-address,
-[data-testid="shipping-region-filter-address"] .w-address__multi {
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-}
-[data-testid="shipping-region-filter-address"] .w-address__multi {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: var(--weline-space-2, 0.5rem) !important;
-}
-[data-testid="shipping-region-filter-address"] .w-address__multi-chips {
-    margin: 0;
-    min-height: 0;
-}
-[data-testid="shipping-region-filter-address"] .w-address__multi > .w-address.w-address--multi {
-    display: grid !important;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-    gap: var(--weline-space-2, 0.5rem) !important;
-    width: 100%;
-}
-#shipping-region-create-dialog .w-dialog__surface,
-#shipping-region-create-dialog .w-dialog__body {
-    overflow: visible;
-}
-#shipping-region-create-dialog .w-dialog__body {
-    max-height: none;
-}
-[data-testid="shipping-region-create-country"] .w-address {
-    width: 100%;
-    max-width: 28rem;
-}
-[data-testid="shipping-region-create-section-title"] {
-    margin: 0;
-    font-size: var(--weline-layout-font-size-sm, 13px);
-    font-weight: var(--weline-layout-font-weight-semibold, 600);
-    color: var(--weline-theme-text-muted, #667085);
-}
-</style>
+<css>Weline_Shipping::css/backend/shipping-admin.css</css>
 <?php if (empty($embed)): ?>
 <div class="w-grid" data-testid="shipping-region-management">
                     <div style="--w-span:12;">
@@ -112,14 +66,14 @@ if (!is_array($countrySortRows)) {
 }
 $saveCountrySortUrl = (string)w_url('shipping/backend/region/saveCountrySort');
 ?>
-                <div class="w-grid" style="--w-mb:var(--weline-space-4,1rem);">
+                <div class="w-grid" style="--w-mb:var(--weline-space-4);">
                     <div style="--w-span:12;">
                         <div class="w-card" data-testid="shipping-country-sort-card">
                             <div class="w-card__header">
                                 <h5 class="w-card__title" style="--w-mb:0;"><?= __('热门国家排序') ?></h5>
                             </div>
                             <div class="w-card__body">
-                                <p class="w-text" style="--w-mb:var(--weline-space-3,0.75rem);color:var(--weline-theme-text-muted,#667085);">
+                                <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-3);">
                                     <?= __('数字越小越靠前。用于结账邮编多国待选与国家下拉，避免热门市场被冷门同码国家挤到后面。') ?>
                                 </p>
                                 <?php if ($countrySortRows === []): ?>
@@ -129,7 +83,7 @@ $saveCountrySortUrl = (string)w_url('shipping/backend/region/saveCountrySort');
                                     <?php if (!empty($embed)): ?>
                                         <input type="hidden" name="embed" value="1">
                                     <?php endif; ?>
-                                    <div class="w-table-wrap" style="--w-mb:var(--weline-space-3,0.75rem);max-block-size:22rem;overflow:auto;">
+                                    <div class="w-table-wrap shipping-region-sort-table" data-w-overflow="auto" style="--w-mb:var(--weline-space-3);">
                                         <table class="w-table" data-testid="shipping-country-sort-table">
                                             <thead>
                                                 <tr>
@@ -153,7 +107,7 @@ $saveCountrySortUrl = (string)w_url('shipping/backend/region/saveCountrySort');
                                                             <?= $cc ?>
                                                             <input type="hidden" name="country_code[]" value="<?= $cc ?>">
                                                         </td>
-                                                        <td style="--w-max-inline-size:7rem;">
+                                                        <td>
                                                             <input class="w-input" type="number" min="0" name="sort_order[]" value="<?= $sort ?>" data-testid="shipping-country-sort-<?= $cc ?>">
                                                         </td>
                                                         <td><?= $inMarket ? __('是') : __('否') ?></td>
@@ -196,7 +150,7 @@ $saveCountrySortUrl = (string)w_url('shipping/backend/region/saveCountrySort');
                                         code="shipping-region-filter"
                                     />
                                 </div>
-                                <p class="w-text" data-tone="muted" data-region-list-hint style="--w-mb:var(--weline-space-2);--w-font-size:var(--weline-layout-font-size-sm,13px);">
+                                <p class="w-text" data-tone="muted" data-region-list-hint data-size="sm" style="--w-mb:var(--weline-space-2);">
                                     <?= __('列表仅展示省份（浅层）。市/区请用上方筛选按需加载，避免整国地址树一次渲染过大。') ?>
                                 </p>
                                 <div class="w-alert" data-tone="info" data-region-list-status hidden style="--w-mb:var(--weline-space-2);"></div>
@@ -276,7 +230,7 @@ $saveCountrySortUrl = (string)w_url('shipping/backend/region/saveCountrySort');
                                 </div>
                             </div>
                         </div>
-                        <div class="w-field" style="--w-max-inline-size:8rem;">
+                        <div class="w-field shipping-region-hours-field">
                                     <label class="w-field__label" for="shipping-region-sort-order"><?= __('排序（数字越小越靠前）') ?></label>
                             <input class="w-input" type="number" min="0" name="sort_order" id="shipping-region-sort-order" value="0" placeholder="<?= __('影响结账热门位次') ?>">
                         </div>

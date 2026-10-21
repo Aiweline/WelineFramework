@@ -248,38 +248,38 @@ try {
     <w:hook>seo::head</w:hook>
     <style>
         :root {
-            --wf-bg: var(--weline-theme-canvas, #f4f6fa);
-            --wf-surface: var(--weline-theme-surface, #ffffff);
-            --wf-surface-soft: var(--weline-theme-surface-muted, #eef1f6);
-            --wf-text: var(--weline-theme-text, #182230);
-            --wf-muted: var(--weline-theme-text-muted, #637083);
-            --wf-border: var(--weline-theme-border, #d7dde7);
-            --wf-blue: var(--weline-theme-primary, #315ee7);
-            --wf-red: var(--weline-theme-danger, #b42338);
-            --wf-green: var(--weline-theme-success, #167a4d);
-            --wf-ink: var(--weline-theme-text, #182230);
-            --wf-brand-bg: var(--weline-theme-primary, #315ee7);
-            --wf-brand-text: var(--weline-theme-on-primary, #ffffff);
-            --wf-primary-bg: var(--weline-theme-primary, #315ee7);
-            --wf-primary-bg-hover: var(--weline-theme-primary-hover, #244bc4);
-            --wf-primary-text: var(--weline-theme-on-primary, #ffffff);
-            --wf-secondary-bg: var(--weline-theme-surface, #ffffff);
-            --wf-secondary-bg-hover: var(--weline-theme-primary-surface, color-mix(in srgb, var(--weline-theme-primary, #315ee7) 14%, transparent));
-            --wf-secondary-text: var(--weline-theme-text, #182230);
-            --wf-secondary-text-hover: var(--weline-theme-primary-emphasis, var(--weline-theme-primary-hover, #244bc4));
-            --wf-code-bg: var(--weline-theme-surface-muted, #eef1f6);
-            --wf-code-text: var(--weline-theme-text, #182230);
+            --wf-bg: var(--weline-theme-canvas);
+            --wf-surface: var(--weline-theme-surface);
+            --wf-surface-soft: var(--weline-theme-surface-muted);
+            --wf-text: var(--weline-theme-text);
+            --wf-muted: var(--weline-theme-text-muted);
+            --wf-border: var(--weline-theme-border);
+            --wf-blue: var(--weline-theme-primary);
+            --wf-red: var(--weline-theme-danger);
+            --wf-green: var(--weline-theme-success);
+            --wf-ink: var(--weline-theme-text);
+            --wf-brand-bg: var(--weline-theme-primary);
+            --wf-brand-text: var(--weline-theme-on-primary);
+            --wf-primary-bg: var(--weline-theme-primary);
+            --wf-primary-bg-hover: var(--weline-theme-primary-hover);
+            --wf-primary-text: var(--weline-theme-on-primary);
+            --wf-secondary-bg: var(--weline-theme-surface);
+            --wf-secondary-bg-hover: var(--weline-theme-primary-surface, color-mix(in srgb, var(--weline-theme-primary) 14%, transparent));
+            --wf-secondary-text: var(--weline-theme-text);
+            --wf-secondary-text-hover: var(--weline-theme-primary-emphasis, var(--weline-theme-primary-hover));
+            --wf-code-bg: var(--weline-theme-surface-muted);
+            --wf-code-text: var(--weline-theme-text);
             --wf-shadow: var(--weline-theme-shadow-lg);
             --wf-shadow-hover: var(--weline-theme-shadow-md);
             --wf-shadow-control: var(--weline-theme-shadow-sm);
-            --wf-focus-outline: var(--weline-theme-focus, #315ee7);
-            --wf-primary-wash: var(--weline-theme-primary-surface, color-mix(in srgb, var(--weline-theme-primary, #315ee7) 14%, transparent));
-            --wf-danger-wash: var(--weline-theme-danger-surface, #fdecef);
-            --wf-success-wash: var(--weline-theme-success-surface, #e8f7ef);
-            --wf-warning: var(--weline-theme-warning, #8a5a00);
-            --wf-warning-wash: var(--weline-theme-warning-surface, #fff5d6);
-            --wf-hover-border: var(--weline-theme-primary-border, color-mix(in srgb, var(--weline-theme-primary, #315ee7) 34%, transparent));
-            --wf-danger-border: var(--weline-theme-danger-border, color-mix(in srgb, var(--weline-theme-danger, #b42338) 34%, transparent));
+            --wf-focus-outline: var(--weline-theme-focus);
+            --wf-primary-wash: var(--weline-theme-primary-surface, color-mix(in srgb, var(--weline-theme-primary) 14%, transparent));
+            --wf-danger-wash: var(--weline-theme-danger-surface);
+            --wf-success-wash: var(--weline-theme-success-surface);
+            --wf-warning: var(--weline-theme-warning);
+            --wf-warning-wash: var(--weline-theme-warning-surface);
+            --wf-hover-border: var(--weline-theme-primary-border, color-mix(in srgb, var(--weline-theme-primary) 34%, transparent));
+            --wf-danger-border: var(--weline-theme-danger-border, color-mix(in srgb, var(--weline-theme-danger) 34%, transparent));
             --wf-radius: 8px;
             --wf-radius-sm: 6px;
         }
@@ -312,7 +312,7 @@ try {
 
         a:focus-visible,
         button:focus-visible {
-            outline: 3px solid var(--wf-focus-outline);
+            outline: var(--border-width-thick) solid var(--wf-focus-outline);
             outline-offset: 3px;
         }
 
@@ -338,14 +338,14 @@ try {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 24px;
+            gap: var(--spacing-6);
             min-height: 76px;
         }
 
         .wf-brand {
             display: inline-flex;
             align-items: center;
-            gap: 12px;
+            gap: var(--spacing-3);
             font-weight: 800;
             color: var(--wf-ink);
         }
@@ -364,20 +364,20 @@ try {
             align-items: center;
             justify-content: flex-end;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: var(--spacing-2);
         }
 
         .wf-nav__links > a,
         .wf-btn {
-            min-height: 40px;
+            min-height: var(--weline-theme-control-height-md);
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: var(--spacing-2);
             border-radius: var(--wf-radius-sm);
-            padding: 0 14px;
-            border: 1px solid transparent;
-            font-size: 0.94rem;
+            padding: 0 var(--spacing-3_5);
+            border: var(--border-width-thin) solid transparent;
+            font-size: var(--font-size-base);
             font-weight: 700;
             cursor: pointer;
             transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
@@ -395,7 +395,7 @@ try {
         .wf-nav__lang {
             position: relative;
             z-index: 90;
-            margin-left: 4px;
+            margin-left: var(--spacing-1);
         }
 
         .wf-nav__lang:has(.weline-choice-open),
@@ -405,11 +405,11 @@ try {
 
         .wf-nav__lang .weline-choice-switcher,
         .wf-nav__lang .language-switcher {
-            min-height: 40px;
+            min-height: var(--weline-theme-control-height-md);
             min-width: 72px;
-            padding: 0.35rem 0.7rem;
+            padding: var(--spacing-1_5) var(--spacing-0_7);
             border-radius: var(--wf-radius-sm);
-            border: 1px solid var(--wf-border);
+            border: var(--border-width-thin) solid var(--wf-border);
             color: var(--wf-ink);
             background: var(--wf-surface);
         }
@@ -462,21 +462,21 @@ try {
             display: grid;
             grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.72fr);
             align-items: center;
-            gap: 34px;
-            padding: 54px 0 28px;
+            gap: var(--spacing-xl);
+            padding: var(--spacing-13) 0 var(--spacing-7);
         }
 
         .wf-kicker {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            margin: 0 0 18px;
-            padding: 6px 10px;
-            border: 1px solid var(--wf-danger-border);
-            border-radius: 999px;
+            gap: var(--spacing-2);
+            margin: 0 0 var(--spacing-4_5);
+            padding: var(--spacing-1_5) var(--spacing-2_5);
+            border: var(--border-width-thin) solid var(--wf-danger-border);
+            border-radius: var(--radius-full);
             color: var(--wf-red);
             background: var(--wf-danger-wash);
-            font-size: 0.88rem;
+            font-size: var(--font-size-sm);
             font-weight: 800;
         }
 
@@ -499,58 +499,58 @@ try {
 
         .wf-hero__lead {
             max-width: 720px;
-            margin: 20px 0 0;
+            margin: var(--spacing-5) 0 0;
             color: var(--wf-muted);
-            font-size: 1.1rem;
+            font-size: var(--font-size-lg);
         }
 
         .wf-hero__actions {
             display: flex;
             flex-wrap: wrap;
-            gap: 12px;
-            margin-top: 28px;
+            gap: var(--spacing-3);
+            margin-top: var(--spacing-7);
         }
 
         .wf-hero__note {
-            margin-top: 22px;
+            margin-top: var(--spacing-5_5);
             color: var(--wf-muted);
-            font-size: 0.94rem;
+            font-size: var(--font-size-base);
         }
 
         .wf-status {
-            border: 1px solid var(--wf-border);
+            border: var(--border-width-thin) solid var(--wf-border);
             border-radius: var(--wf-radius);
             background: var(--wf-surface);
             box-shadow: var(--wf-shadow);
-            padding: 20px;
+            padding: var(--spacing-5);
         }
 
         .wf-status__title {
-            margin: 0 0 14px;
+            margin: 0 0 var(--spacing-3_5);
             color: var(--wf-ink);
-            font-size: 1rem;
+            font-size: var(--weline-font-size-base);
             font-weight: 800;
         }
 
         .wf-status__figure {
-            margin: 0 0 16px;
+            margin: 0 0 var(--spacing-4);
             overflow: visible;
-            border: 1px solid var(--wf-border);
+            border: var(--border-width-thin) solid var(--wf-border);
             border-radius: var(--wf-radius-sm);
             background: var(--wf-surface-soft);
-            padding: 12px;
+            padding: var(--spacing-3);
         }
 
         .wf-og-card {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: var(--spacing-3);
             box-sizing: border-box;
             width: 100%;
             min-height: 0;
-            padding: 20px 20px 18px;
-            border: 1px solid var(--wf-border);
-            border-radius: 18px;
+            padding: var(--spacing-5) var(--spacing-5) var(--spacing-4_5);
+            border: var(--border-width-thin) solid var(--wf-border);
+            border-radius: var(--border-radius-2xl);
             background: var(--wf-surface);
             color: var(--wf-ink);
             box-shadow: var(--wf-shadow-control);
@@ -560,7 +560,7 @@ try {
         .wf-og-card__brand {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: var(--spacing-3);
             min-width: 0;
         }
 
@@ -569,7 +569,7 @@ try {
             flex: 0 0 auto;
             width: 44px;
             height: 44px;
-            border-radius: 12px;
+            border-radius: var(--radius-xl);
             object-fit: contain;
             background: transparent;
         }
@@ -581,25 +581,25 @@ try {
         .wf-og-card__name {
             margin: 0;
             color: var(--wf-ink);
-            font-size: clamp(1rem, 2.8vw, 1.35rem);
+            font-size: clamp(var(--weline-font-size-base), 2.8vw, var(--font-size-2_5xl));
             font-weight: 800;
             line-height: 1.2;
             overflow-wrap: anywhere;
         }
 
         .wf-og-card__tagline {
-            margin: 4px 0 0;
+            margin: var(--spacing-1) 0 0;
             color: var(--wf-blue);
-            font-size: clamp(0.75rem, 2vw, 0.9rem);
+            font-size: clamp(var(--weline-font-size-xs), 2vw, var(--font-size-sm));
             font-weight: 700;
             line-height: 1.35;
             overflow-wrap: anywhere;
         }
 
         .wf-og-card__headline {
-            margin: 4px 0 0;
+            margin: var(--spacing-1) 0 0;
             color: var(--wf-ink);
-            font-size: clamp(0.92rem, 2.6vw, 1.1rem);
+            font-size: clamp(var(--font-size-sm), 2.6vw, var(--font-size-lg));
             font-weight: 800;
             line-height: 1.4;
             overflow-wrap: anywhere;
@@ -608,7 +608,7 @@ try {
         .wf-og-card__features {
             margin: 0;
             color: var(--wf-muted);
-            font-size: clamp(0.72rem, 2vw, 0.82rem);
+            font-size: clamp(var(--font-size-xs), 2vw, var(--font-size-13));
             line-height: 1.5;
             overflow-wrap: anywhere;
         }
@@ -616,20 +616,20 @@ try {
         .wf-og-card__pills {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 4px;
-            padding-bottom: 2px;
+            gap: var(--spacing-2);
+            margin-top: var(--spacing-1);
+            padding-bottom: var(--spacing-0_5);
         }
 
         .wf-og-card__pill {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-height: 28px;
-            padding: 4px 12px;
-            border: 1px solid transparent;
-            border-radius: 999px;
-            font-size: 0.72rem;
+            min-height: var(--control-height-xs);
+            padding: var(--spacing-1) var(--spacing-3);
+            border: var(--border-width-thin) solid transparent;
+            border-radius: var(--radius-full);
+            font-size: var(--font-size-xs);
             font-weight: 700;
             line-height: 1.2;
             white-space: nowrap;
@@ -655,21 +655,21 @@ try {
 
         .wf-status__grid {
             display: grid;
-            gap: 10px;
+            gap: var(--spacing-2_5);
         }
 
         .wf-status__item {
             display: grid;
-            gap: 3px;
-            padding: 12px;
-            border: 1px solid var(--wf-border);
+            gap: var(--spacing-0_2);
+            padding: var(--spacing-3);
+            border: var(--border-width-thin) solid var(--wf-border);
             border-radius: var(--wf-radius-sm);
             background: var(--wf-surface);
         }
 
         .wf-status__label {
             color: var(--wf-muted);
-            font-size: 0.78rem;
+            font-size: var(--font-size-xs);
             font-weight: 800;
         }
 
@@ -677,23 +677,23 @@ try {
             overflow-wrap: anywhere;
             color: var(--wf-ink);
             font-family: Consolas, "JetBrains Mono", monospace;
-            font-size: 0.92rem;
+            font-size: var(--font-size-sm);
             font-weight: 700;
         }
 
         .wf-section {
-            padding: 42px 0;
+            padding: var(--spacing-11) 0;
         }
 
         .wf-section__header {
             display: grid;
-            gap: 8px;
-            margin-bottom: 22px;
+            gap: var(--spacing-2);
+            margin-bottom: var(--spacing-5_5);
         }
 
         .wf-section__eyebrow {
             color: var(--wf-red);
-            font-size: 0.82rem;
+            font-size: var(--font-size-13);
             font-weight: 900;
             text-transform: uppercase;
         }
@@ -701,7 +701,7 @@ try {
         .wf-section h2 {
             margin: 0;
             color: var(--wf-ink);
-            font-size: 2rem;
+            font-size: var(--weline-font-size-4xl);
             line-height: 1.18;
             letter-spacing: 0;
         }
@@ -715,14 +715,14 @@ try {
         .wf-card-grid {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 14px;
+            gap: var(--spacing-3_5);
         }
 
         .wf-link-card,
         .wf-feature-card,
         .wf-step,
         .wf-account {
-            border: 1px solid var(--wf-border);
+            border: var(--border-width-thin) solid var(--wf-border);
             border-radius: var(--wf-radius);
             background: var(--wf-surface);
         }
@@ -731,7 +731,7 @@ try {
             display: grid;
             align-content: space-between;
             min-height: 180px;
-            padding: 18px;
+            padding: var(--spacing-4_5);
             transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
         }
 
@@ -744,7 +744,7 @@ try {
         .wf-link-card__tone {
             width: 42px;
             height: 6px;
-            border-radius: 999px;
+            border-radius: var(--radius-full);
             background: var(--wf-blue);
         }
 
@@ -764,9 +764,9 @@ try {
         .wf-feature-card h3,
         .wf-step h3,
         .wf-account h2 {
-            margin: 14px 0 8px;
+            margin: var(--spacing-3_5) 0 var(--spacing-2);
             color: var(--wf-ink);
-            font-size: 1.04rem;
+            font-size: var(--font-size-base);
             line-height: 1.3;
         }
 
@@ -776,11 +776,11 @@ try {
         .wf-account p {
             margin: 0;
             color: var(--wf-muted);
-            font-size: 0.94rem;
+            font-size: var(--font-size-base);
         }
 
         .wf-link-card__cta {
-            margin-top: 18px;
+            margin-top: var(--spacing-4_5);
             color: var(--wf-blue);
             font-weight: 800;
         }
@@ -788,11 +788,11 @@ try {
         .wf-feature-grid {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 14px;
+            gap: var(--spacing-3_5);
         }
 
         .wf-feature-card {
-            padding: 18px;
+            padding: var(--spacing-4_5);
             min-height: 190px;
         }
 
@@ -802,44 +802,44 @@ try {
             justify-content: center;
             min-width: 36px;
             height: 26px;
-            padding: 0 8px;
-            border-radius: 999px;
+            padding: 0 var(--spacing-2);
+            border-radius: var(--radius-full);
             background: var(--wf-surface-soft);
             color: var(--wf-muted);
             font-family: Consolas, "JetBrains Mono", monospace;
-            font-size: 0.8rem;
+            font-size: var(--font-size-13);
             font-weight: 800;
         }
 
         .wf-steps {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 14px;
+            gap: var(--spacing-3_5);
         }
 
         .wf-step {
-            padding: 18px;
+            padding: var(--spacing-4_5);
             min-height: 238px;
         }
 
         .wf-step__num {
             color: var(--wf-red);
             font-family: Consolas, "JetBrains Mono", monospace;
-            font-size: 0.9rem;
+            font-size: var(--font-size-sm);
             font-weight: 900;
         }
 
         .wf-code {
             display: block;
             width: 100%;
-            margin: 14px 0;
-            padding: 10px 12px;
+            margin: var(--spacing-3_5) 0;
+            padding: var(--spacing-2_5) var(--spacing-3);
             overflow-x: auto;
             border-radius: var(--wf-radius-sm);
             background: var(--wf-code-bg);
             color: var(--wf-code-text);
             font-family: Consolas, "JetBrains Mono", monospace;
-            font-size: 0.88rem;
+            font-size: var(--font-size-sm);
             white-space: nowrap;
         }
 
@@ -847,8 +847,8 @@ try {
             display: grid;
             grid-template-columns: minmax(0, 1fr) auto;
             align-items: center;
-            gap: 18px;
-            padding: 20px;
+            gap: var(--spacing-4_5);
+            padding: var(--spacing-5);
             background: linear-gradient(135deg, var(--wf-success-wash), var(--wf-primary-wash)), var(--wf-surface);
         }
 
@@ -856,7 +856,7 @@ try {
             display: flex;
             flex-wrap: wrap;
             justify-content: flex-end;
-            gap: 10px;
+            gap: var(--spacing-2_5);
         }
 
         .wf-repos {
@@ -864,24 +864,24 @@ try {
             align-items: center;
             justify-content: space-between;
             flex-wrap: wrap;
-            gap: 16px;
-            padding: 24px 0 56px;
+            gap: var(--spacing-4);
+            padding: var(--spacing-6) 0 56px;
         }
 
         .wf-repos__links {
             display: flex;
             align-items: center;
             flex-wrap: wrap;
-            gap: 12px;
+            gap: var(--spacing-3);
         }
 
         .wf-repo-link {
             display: inline-flex;
             align-items: center;
-            gap: 10px;
-            min-height: 44px;
-            padding: 6px 12px 6px 6px;
-            border: 1px solid var(--wf-border);
+            gap: var(--spacing-2_5);
+            min-height: var(--control-height-lg);
+            padding: var(--spacing-1_5) var(--spacing-3) var(--spacing-1_5) var(--spacing-1_5);
+            border: var(--border-width-thin) solid var(--wf-border);
             border-radius: var(--wf-radius-sm);
             background: var(--wf-surface);
             color: var(--wf-ink);
@@ -908,7 +908,7 @@ try {
         @media (max-width: 980px) {
             .wf-hero {
                 grid-template-columns: 1fr;
-                padding-top: 34px;
+                padding-top: var(--spacing-xl);
             }
 
             .wf-card-grid,
@@ -926,7 +926,7 @@ try {
             .wf-nav {
                 align-items: flex-start;
                 flex-direction: column;
-                padding: 14px 0 4px;
+                padding: var(--spacing-3_5) 0 var(--spacing-1);
             }
 
             .wf-nav__links {
@@ -952,7 +952,7 @@ try {
             }
 
             .wf-section {
-                padding: 32px 0;
+                padding: var(--spacing-8) 0;
             }
         }
 

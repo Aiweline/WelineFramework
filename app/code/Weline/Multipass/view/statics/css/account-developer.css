@@ -1,14 +1,14 @@
 .multipass-developer {
     display: grid;
-    gap: 18px;
+    gap: var(--spacing-4_5);
     min-width: 0;
 }
 
 .multipass-developer__intro,
 .multipass-developer__panel {
-    border: 1px solid #d7dee8;
-    border-radius: 8px;
-    background: #fff;
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-primary);
     min-width: 0;
 }
 
@@ -16,29 +16,29 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 16px;
-    padding: 20px;
-    background: linear-gradient(135deg, #eef6ff 0%, #f7fbf5 100%);
+    gap: var(--spacing-4);
+    padding: var(--spacing-5);
+    background: linear-gradient(135deg, var(--color-bg-panel) 0%, var(--color-bg-panel) 100%);
 }
 
 .multipass-developer__eyebrow {
-    margin: 0 0 6px;
-    color: #2563eb;
-    font-size: 12px;
+    margin: 0 0 var(--spacing-1_5);
+    color: var(--color-text-faint);
+    font-size: var(--font-size-xs);
     font-weight: 800;
 }
 
 .multipass-developer__title {
     margin: 0;
-    color: #102033;
-    font-size: 22px;
+    color: var(--color-text);
+    font-size: var(--font-size-2_5xl);
     font-weight: 800;
 }
 
 .multipass-developer__desc {
-    margin: 8px 0 0;
-    color: #4b5f76;
-    font-size: 14px;
+    margin: var(--spacing-2) 0 0;
+    color: var(--color-link);
+    font-size: var(--font-size-sm);
     line-height: 1.65;
 }
 
@@ -48,73 +48,73 @@
 .multipass-developer__scopes span {
     display: inline-flex;
     align-items: center;
-    border-radius: 999px;
-    font-size: 12px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
     font-weight: 800;
     white-space: nowrap;
 }
 
 .multipass-developer__badge {
-    background: #fff7ed;
-    color: #9a3412;
-    padding: 6px 10px;
+    background: var(--color-bg-canvas);
+    color: var(--color-text-muted);
+    padding: var(--spacing-1_5) var(--spacing-2_5);
 }
 
 .multipass-developer__panel {
-    padding: 20px;
+    padding: var(--spacing-5);
 }
 
 .multipass-developer__panel-head {
     display: flex;
     justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 16px;
+    gap: var(--spacing-4);
+    margin-bottom: var(--spacing-4);
 }
 
 .multipass-developer__panel-head h3 {
     margin: 0;
-    color: #102033;
-    font-size: 17px;
+    color: var(--color-text);
+    font-size: var(--font-size-base);
     font-weight: 800;
 }
 
 .multipass-developer__panel-head p {
-    margin: 5px 0 0;
-    color: #64748b;
-    font-size: 13px;
+    margin: var(--spacing-xs) 0 0;
+    color: var(--color-link);
+    font-size: var(--font-size-13);
 }
 
 .multipass-developer__empty {
     display: grid;
-    gap: 6px;
-    border: 1px dashed #b8c4d4;
-    border-radius: 8px;
-    padding: 22px;
-    background: #f8fafc;
-    color: #64748b;
+    gap: var(--spacing-1_5);
+    border: var(--border-width-thin) dashed var(--color-border-faint);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-5_5);
+    background: var(--color-bg-slate);
+    color: var(--color-link);
 }
 
 .multipass-developer__empty strong {
-    color: #102033;
+    color: var(--color-text);
 }
 
 .multipass-developer__list {
     display: grid;
-    gap: 12px;
+    gap: var(--spacing-3);
 }
 
 .multipass-developer__card {
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 16px;
-    background: #fbfdff;
+    border: var(--border-width-thin) solid var(--color-border-slate);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-4);
+    background: var(--color-bg-slate);
     min-width: 0;
 }
 
 .multipass-developer__card-head {
     display: flex;
     justify-content: space-between;
-    gap: 14px;
+    gap: var(--spacing-3_5);
     align-items: flex-start;
     min-width: 0;
 }
@@ -125,15 +125,15 @@
 
 .multipass-developer__card h4 {
     margin: 0;
-    color: #0f172a;
-    font-size: 16px;
+    color: var(--color-text);
+    font-size: var(--font-size-base);
     font-weight: 800;
 }
 
 .multipass-developer__card p {
-    margin: 5px 0 0;
-    color: #64748b;
-    font-size: 13px;
+    margin: var(--spacing-xs) 0 0;
+    color: var(--color-link);
+    font-size: var(--font-size-13);
     word-break: break-word;
 }
 
@@ -141,60 +141,60 @@
     display: inline-flex;
     flex-wrap: wrap;
     justify-content: flex-end;
-    gap: 6px;
+    gap: var(--spacing-1_5);
 }
 
 .multipass-developer__status,
 .multipass-developer__runtime {
-    padding: 5px 9px;
+    padding: var(--spacing-xs) var(--spacing-0_55);
 }
 
 .multipass-developer__status--pending {
-    background: #fff7ed;
-    color: #9a3412;
+    background: var(--color-bg-canvas);
+    color: var(--color-text-muted);
 }
 
 .multipass-developer__status--approved {
-    background: #ecfdf5;
-    color: #166534;
+    background: var(--color-success-bg-soft);
+    color: var(--color-text-secondary);
 }
 
 .multipass-developer__status--rejected {
-    background: #fef2f2;
-    color: #b91c1c;
+    background: var(--color-bg-canvas);
+    color: var(--color-link);
 }
 
 .multipass-developer__runtime {
-    background: #eef2f7;
-    color: #475569;
+    background: var(--color-bg-muted);
+    color: var(--color-product-label-demo-text);
 }
 
 .multipass-developer__runtime--active {
-    background: #e0f2fe;
-    color: #075985;
+    background: var(--color-bg-muted);
+    color: var(--color-text-secondary);
 }
 
 .multipass-developer__meta {
     display: grid;
-    gap: 10px;
-    margin: 14px 0 0;
+    gap: var(--spacing-2_5);
+    margin: var(--spacing-3_5) 0 0;
 }
 
 .multipass-developer__meta div {
     display: grid;
-    gap: 4px;
+    gap: var(--spacing-1);
 }
 
 .multipass-developer__meta-label {
-    color: #64748b;
-    font-size: 12px;
+    color: var(--color-link);
+    font-size: var(--font-size-xs);
     font-weight: 800;
 }
 
 .multipass-developer__meta-value {
-    color: #102033;
+    color: var(--color-text);
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 12px;
+    font-size: var(--font-size-xs);
     overflow-wrap: anywhere;
     word-break: break-word;
 }
@@ -202,49 +202,49 @@
 .multipass-developer__scopes {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 14px;
+    gap: var(--spacing-2);
+    margin-top: var(--spacing-3_5);
 }
 
 .multipass-developer__scopes span {
-    background: #eef2ff;
-    color: #3730a3;
-    padding: 4px 9px;
+    background: var(--color-bg-panel);
+    color: var(--color-link);
+    padding: var(--spacing-1) var(--spacing-0_55);
 }
 
 .multipass-developer__hint {
-    margin-top: 14px;
-    border-left: 3px solid #60a5fa;
-    padding-left: 10px;
-    color: #475569;
-    font-size: 13px;
+    margin-top: var(--spacing-3_5);
+    border-left: var(--border-width-thick) solid #60a5fa;
+    padding-left: var(--spacing-2_5);
+    color: var(--color-product-label-demo-text);
+    font-size: var(--font-size-13);
 }
 
 .multipass-developer__hint--danger {
     border-left-color: #ef4444;
-    color: #991b1b;
+    color: var(--color-link);
 }
 
 .multipass-developer__form {
     display: grid;
-    gap: 16px;
+    gap: var(--spacing-4);
 }
 
 .multipass-developer__grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
+    gap: var(--spacing-3_5);
 }
 
 .multipass-developer__field {
     display: grid;
-    gap: 7px;
+    gap: var(--spacing-0_45);
 }
 
 .multipass-developer__field span,
 .multipass-developer__fieldset legend {
-    color: #102033;
-    font-size: 13px;
+    color: var(--color-text);
+    font-size: var(--font-size-13);
     font-weight: 800;
 }
 
@@ -252,48 +252,48 @@
 .multipass-developer__field select {
     box-sizing: border-box;
     width: 100%;
-    min-height: 42px;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    background: #fff;
-    color: #0f172a;
-    padding: 0 12px;
+    min-height: var(--control-height);
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-primary);
+    color: var(--color-text);
+    padding: 0 var(--spacing-3);
     transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .multipass-developer__field input:focus,
 .multipass-developer__field select:focus {
     border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+    box-shadow: var(--weline-shadow-md);
     outline: none;
 }
 
 .multipass-developer__field small {
-    color: #64748b;
-    font-size: 12px;
+    color: var(--color-link);
+    font-size: var(--font-size-xs);
 }
 
 .multipass-developer__fieldset {
-    border: 1px solid #dbe4ef;
-    border-radius: 8px;
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    border-radius: var(--radius-lg);
     margin: 0;
-    padding: 14px;
+    padding: var(--spacing-3_5);
 }
 
 .multipass-developer__checks {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 10px;
+    gap: var(--spacing-2_5);
+    margin-top: var(--spacing-2_5);
 }
 
 .multipass-developer__checks label {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    color: #334155;
+    gap: var(--spacing-2);
+    color: var(--color-secondary-text-emphasis);
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--font-size-13);
 }
 
 .multipass-developer__checks input {
@@ -304,36 +304,36 @@
 
 .multipass-developer__notice {
     display: grid;
-    gap: 4px;
-    border: 1px solid #fed7aa;
-    border-radius: 8px;
-    background: #fff7ed;
-    color: #9a3412;
-    padding: 12px;
-    font-size: 13px;
+    gap: var(--spacing-1);
+    border: var(--border-width-thin) solid #fed7aa;
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-canvas);
+    color: var(--color-text-muted);
+    padding: var(--spacing-3);
+    font-size: var(--font-size-13);
 }
 
 .multipass-developer__submit {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: var(--spacing-2);
     width: fit-content;
-    min-height: 42px;
+    min-height: var(--control-height);
     border: 0;
-    border-radius: 8px;
-    background: #2563eb;
-    color: #fff;
+    border-radius: var(--radius-lg);
+    background: var(--color-info);
+    color: var(--color-text-light);
     cursor: pointer;
     font-weight: 800;
-    padding: 0 18px;
+    padding: 0 var(--spacing-4_5);
     transition: background-color 180ms ease, box-shadow 180ms ease;
 }
 
 .multipass-developer__submit:hover,
 .multipass-developer__submit:focus {
-    background: #1d4ed8;
-    box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24);
+    background: var(--color-info);
+    box-shadow: var(--weline-shadow-md);
     outline: none;
 }
 
@@ -345,33 +345,33 @@
 
     .multipass-developer__intro,
     .multipass-developer__panel {
-        padding: 14px;
+        padding: var(--spacing-3_5);
     }
 
     .multipass-developer__title {
-        font-size: 20px;
+        font-size: var(--font-size-xl);
         line-height: 1.25;
     }
 
     .multipass-developer__desc {
-        font-size: 13px;
+        font-size: var(--font-size-13);
         line-height: 1.55;
     }
 
     .multipass-developer__panel-head {
-        margin-bottom: 12px;
+        margin-bottom: var(--spacing-3);
     }
 
     .multipass-developer__panel-head h3 {
-        font-size: 16px;
+        font-size: var(--font-size-base);
     }
 
     .multipass-developer__card {
-        padding: 12px;
+        padding: var(--spacing-3);
     }
 
     .multipass-developer__card h4 {
-        font-size: 15px;
+        font-size: var(--font-size-sm);
     }
 
     .multipass-developer__status-stack {
@@ -390,45 +390,45 @@
 
 @media (max-width: 480px) {
     .multipass-developer {
-        gap: 12px;
+        gap: var(--spacing-3);
     }
 
     .multipass-developer__intro {
-        gap: 10px;
+        gap: var(--spacing-2_5);
     }
 
     .multipass-developer__badge {
-        padding: 5px 9px;
+        padding: var(--spacing-xs) var(--spacing-0_55);
     }
 
     .multipass-developer__meta {
-        gap: 8px;
-        margin-top: 12px;
+        gap: var(--spacing-2);
+        margin-top: var(--spacing-3);
     }
 
     .multipass-developer__meta-value {
-        font-size: 11px;
+        font-size: var(--font-size-xs);
         line-height: 1.5;
     }
 
     .multipass-developer__scopes {
-        gap: 6px;
-        margin-top: 12px;
+        gap: var(--spacing-1_5);
+        margin-top: var(--spacing-3);
     }
 
     .multipass-developer__scopes span {
-        padding: 4px 8px;
+        padding: var(--spacing-1) var(--spacing-2);
     }
 
     .multipass-developer__fieldset {
-        padding: 12px;
+        padding: var(--spacing-3);
     }
 
     .multipass-developer__checks {
-        gap: 8px;
+        gap: var(--spacing-2);
     }
 
     .multipass-developer__notice {
-        padding: 10px;
+        padding: var(--spacing-2_5);
     }
 }

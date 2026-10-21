@@ -17,17 +17,8 @@
  */
 
 /** @var \Weline\Framework\View\Template $this */
-$storageJsUrl = $this->getStaticUrl('Weline_Shipping::frontend/js/shipping-storage.js') ?? '';
-$locationJsUrl = $this->getStaticUrl('Weline_Shipping::frontend/js/shipping-location.js') ?? '';
-$priceCalculatorJsUrl = $this->getStaticUrl('Weline_Shipping::frontend/js/shipping-price-calculator.js') ?? '';
 ?>
+<?php /* 前置缺陷（既有，非本改造引入）：原实现用 $this->getStaticUrl() 解析三个 shipping 脚本，但 Template 无此方法，
+         条件恒为假 → 脚本从未输出（已在 / /cart /checkout /products 实测 0 次）。按合同删除死代码；
+         配送地址/定位/价格脚本的正式接入需走 weline.modules.js 登记或部件 bake，另立任务。 */ ?>
 <span hidden data-testid="shipping-storefront-tail" aria-hidden="true"></span>
-<?php if ($storageJsUrl): ?>
-<script src="<?= htmlspecialchars($storageJsUrl) ?>" defer></script>
-<?php endif; ?>
-<?php if ($locationJsUrl): ?>
-<script src="<?= htmlspecialchars($locationJsUrl) ?>" defer></script>
-<?php endif; ?>
-<?php if ($priceCalculatorJsUrl): ?>
-<script src="<?= htmlspecialchars($priceCalculatorJsUrl) ?>" defer></script>
-<?php endif; ?>

@@ -1,0 +1,81 @@
+/* Weline Cdn 后台页面私有布局/尺寸（Token-only，见后端主题开发标准 §6.2） */
+@layer page {
+    .cdn-filter__field {
+        min-inline-size: calc(var(--weline-space-12) * 2);
+    }
+
+    .cdn-filter__search {
+        inline-size: min(100%, calc(var(--weline-space-12) * 4));
+        flex: 1 1 calc(var(--weline-space-12) * 3);
+        min-inline-size: calc(var(--weline-space-12) * 2);
+    }
+
+    .cdn-filter__select {
+        flex: 0 1 calc(var(--weline-space-12) * 3);
+        min-inline-size: calc(var(--weline-space-12) * 2);
+    }
+
+    .cdn-filter-bar {
+        gap: var(--weline-space-2);
+        max-inline-size: min(100%, calc(var(--weline-space-12) * 14));
+    }
+
+    .cdn-account-filter-bar {
+        gap: var(--weline-space-2);
+        max-inline-size: min(100%, calc(var(--weline-space-12) * 12));
+    }
+
+    .cdn-domain-filter-bar {
+        gap: var(--weline-space-2);
+        max-inline-size: min(100%, calc(var(--weline-space-12) * 14));
+    }
+
+    .cdn-filter-bar .w-field,
+    .cdn-account-filter-bar .w-field,
+    .cdn-domain-filter-bar .w-field {
+        margin-block-end: 0;
+        flex: 1 1 calc(var(--weline-space-12) * 5);
+        max-inline-size: calc(var(--weline-space-12) * 8);
+    }
+
+    /* 回调地址 / 只读代码块 */
+    .cdn-code-chip {
+        display: block;
+        max-inline-size: 100%;
+        min-inline-size: 0;
+        padding: var(--weline-space-2) var(--weline-space-3);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-sm);
+        background: var(--weline-theme-surface-muted);
+        font-family: var(--weline-font-mono);
+        font-size: var(--weline-font-size-sm);
+        overflow: auto;
+    }
+
+    /* 表单内虚线分组 */
+    .cdn-form-panel {
+        display: flex;
+        flex-direction: column;
+        gap: var(--weline-space-3);
+        padding: var(--weline-space-4);
+        border: 1px dashed var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface-muted);
+    }
+
+    .cdn-inline-field {
+        flex: 1 1 calc(var(--weline-space-12) * 3);
+        min-inline-size: calc(var(--weline-space-12) * 2);
+    }
+
+    /* 规则预览列表 */
+    .cdn-rules-preview {
+        max-block-size: calc(var(--weline-space-12) * 8);
+        overflow-y: auto;
+    }
+
+    /* 预热页警告块 */
+    .cdn-warmup-notice {
+        border: 1px solid var(--weline-theme-border);
+    }
+}

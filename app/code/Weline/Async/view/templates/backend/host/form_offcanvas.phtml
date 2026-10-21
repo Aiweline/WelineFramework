@@ -14,43 +14,43 @@ $isEdit = $host && $host->getId();
     <?php endif; ?>
     
     <div class="mb-3">
-        <label class="form-label"><?= __('主机名称') ?> <span class="text-danger">*</span></label>
-        <input type="text" name="name" class="form-control" 
+        <label class="w-field__label"><?= __('主机名称') ?> <span class="text-danger">*</span></label>
+        <input type="text" name="name" class="w-input" 
                value="<?= htmlspecialchars($host && $host->getId() ? ($host->getData(SyncHost::fields_NAME) ?: '') : '') ?>" 
                required>
     </div>
 
     <div class="mb-3">
-        <label class="form-label"><?= __('主机地址') ?> <span class="text-danger">*</span></label>
-        <input type="text" name="host" class="form-control" 
+        <label class="w-field__label"><?= __('主机地址') ?> <span class="text-danger">*</span></label>
+        <input type="text" name="host" class="w-input" 
                value="<?= htmlspecialchars($host && $host->getId() ? ($host->getData(SyncHost::fields_HOST) ?: '') : '') ?>" 
                placeholder="192.168.1.100 或 example.com" required>
     </div>
 
     <div class="mb-3">
-        <label class="form-label"><?= __('SSH端口') ?></label>
-        <input type="number" name="port" class="form-control" 
+        <label class="w-field__label"><?= __('SSH端口') ?></label>
+        <input type="number" name="port" class="w-input" 
                value="<?= htmlspecialchars($host && $host->getId() ? ($host->getData(SyncHost::fields_PORT) ?: 22) : 22) ?>" 
                min="1" max="65535">
     </div>
 
     <div class="mb-3">
-        <label class="form-label"><?= __('SSH用户名') ?> <span class="text-danger">*</span></label>
-        <input type="text" name="user" class="form-control" 
+        <label class="w-field__label"><?= __('SSH用户名') ?> <span class="text-danger">*</span></label>
+        <input type="text" name="user" class="w-input" 
                value="<?= htmlspecialchars($host && $host->getId() ? ($host->getData(SyncHost::fields_USER) ?: '') : '') ?>" 
                required>
     </div>
 
     <div class="mb-3">
-        <label class="form-label"><?= __('SSH密码') ?></label>
-        <input type="password" name="password" class="form-control" 
+        <label class="w-field__label"><?= __('SSH密码') ?></label>
+        <input type="password" name="password" class="w-input" 
                placeholder="<?= $isEdit ? __('留空则不修改密码') : __('请输入SSH密码') ?>">
         <small class="form-text text-muted"><?= __('如果使用密钥认证，可留空') ?></small>
     </div>
 
     <div class="mb-3">
-        <label class="form-label"><?= __('SSH密钥') ?></label>
-        <ul class="nav nav-tabs mb-2" role="tablist">
+        <label class="w-field__label"><?= __('SSH密钥') ?></label>
+        <ul class="nav w-tabs__list mb-2" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" type="button" data-bs-toggle="tab" data-bs-target="#key_file_tab">
                     <i class="mdi mdi-file"></i> <?= __('选择文件') ?>
@@ -65,7 +65,7 @@ $isEdit = $host && $host->getId();
         <div class="tab-content">
             <div class="tab-pane fade show active" id="key_file_tab">
                 <div class="input-group">
-                    <input type="text" name="key_path" id="host_key_path" class="form-control" 
+                    <input type="text" name="key_path" id="host_key_path" class="w-input" 
                            placeholder="/path/to/id_rsa">
                     <button type="button" class="btn btn-outline-secondary" onclick="selectHostKeyFile()">
                         <i class="mdi mdi-folder-open"></i> <?= __('选择文件') ?>
@@ -75,7 +75,7 @@ $isEdit = $host && $host->getId();
                 <small class="form-text text-muted"><?= __('选择SSH私钥文件，系统将自动提取密钥内容保存') ?></small>
             </div>
             <div class="tab-pane fade" id="key_text_tab">
-                <textarea name="key_content" id="host_key_content" class="form-control" rows="8" 
+                    <textarea name="key_content" id="host_key_content" class="w-input" rows="8" 
                           placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END RSA PRIVATE KEY-----"><?php
                     if ($host && $host->getData(SyncHost::fields_KEY_CONTENT)) {
                         echo htmlspecialchars($host->getDecryptedKeyContent());
@@ -87,8 +87,8 @@ $isEdit = $host && $host->getId();
     </div>
 
     <div class="mb-3">
-        <label class="form-label"><?= __('描述') ?></label>
-        <textarea name="description" class="form-control" rows="3"><?= htmlspecialchars($host && $host->getId() ? ($host->getData(SyncHost::fields_DESCRIPTION) ?: '') : '') ?></textarea>
+        <label class="w-field__label"><?= __('描述') ?></label>
+        <textarea name="description" class="w-input" rows="3"><?= htmlspecialchars($host && $host->getId() ? ($host->getData(SyncHost::fields_DESCRIPTION) ?: '') : '') ?></textarea>
     </div>
 
     <div class="d-flex justify-content-end gap-2">

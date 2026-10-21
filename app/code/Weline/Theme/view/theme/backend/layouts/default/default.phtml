@@ -64,10 +64,7 @@ $extraClasses = array_values(array_filter(
             <w:hook>Weline_Theme::backend::layouts::base::content-after</w:hook>
 
             <?php if ($showFooter): ?>
-                <footer class="w-backend-footer">
-                    <span><?= date('Y') ?> &copy; Weline.</span>
-                    <a href="https://www.aiweline.com/">aiweline.com</a>
-                </footer>
+                <w:block class="Weline\Theme\Block\Partials" area="backend" type="footer" default-option="standard"/>
             <?php endif; ?>
         </div>
     </div>

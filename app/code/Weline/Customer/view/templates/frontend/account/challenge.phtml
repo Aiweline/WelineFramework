@@ -24,10 +24,10 @@ $safe = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_
          data-weline-load="api,account"
          data-challenge-token="<?= $safe($challengeToken) ?>"
          weline-code="customer.account.challenge"
-         data-code-required-message="<?= $safe(__('请输入6位身份验证器验证码或8位备用恢复码。')) ?>"
-         data-token-required-message="<?= $safe(__('登录验证令牌缺失，请返回登录后重试。')) ?>"
-         data-verify-failure-message="<?= $safe(__('验证失败，请重新输入验证码')) ?>"
-         data-request-failure-message="<?= $safe(__('验证请求失败，请稍后重试')) ?>">
+         data-code-required-message="<lang>请输入6位身份验证器验证码或8位备用恢复码。</lang>"
+         data-token-required-message="<lang>登录验证令牌缺失，请返回登录后重试。</lang>"
+         data-verify-failure-message="<lang>验证失败，请重新输入验证码</lang>"
+         data-request-failure-message="<lang>验证请求失败，请稍后重试</lang>">
     <header class="w-auth-login__header">
         <h1 class="w-auth-login__title">
             <?php if ($heading !== ''): ?>
@@ -69,7 +69,7 @@ $safe = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_
             </label>
             <input class="w-input w-auth-login__otp" type="text" id="code" name="code"
                    required autocomplete="one-time-code" inputmode="numeric"
-                   placeholder="<?= $safe(__('123456 或 1234-5678')) ?>"
+                   placeholder="@lang('123456 或 1234-5678')"
                    maxlength="9" aria-describedby="codeHelp"
                    data-w-challenge-code autofocus>
             <p class="w-field__help" id="codeHelp"><lang>备用恢复码每个只能使用一次。</lang></p>

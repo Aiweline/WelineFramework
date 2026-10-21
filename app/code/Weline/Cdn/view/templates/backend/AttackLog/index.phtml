@@ -1,3 +1,4 @@
+<css>Weline_Cdn::css/backend/cdn-admin.css</css>
 <?php
 /**
  * CDN攻击日志列表页
@@ -71,7 +72,7 @@ $kpis = [
         <section
             class="w-stat-tiles w-grid"
             aria-label="<?= $escapeAttr(__('攻击概览')) ?>"
-            style="--w-stat-tile-min:9rem;--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);"
+            style="--w-stat-tile-min:calc(var(--weline-space-12) * 3);--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);"
         >
             <?php foreach ($kpis as $kpi): ?>
                 <article class="w-card" data-w-height="full" data-w-shadow="sm">
@@ -109,7 +110,7 @@ $kpis = [
                     aria-label="<?= $escapeAttr(__('搜索域名或IP')) ?>"
                     data-align="center"
                     data-wrap="true"
-                    style="--w-gap:var(--weline-space-2);max-inline-size:min(100%,48rem);"
+                    class="w-cluster cdn-filter-bar"
                 >
                     <label class="w-visually-hidden" for="cdn-attack-search-input"><?= __('搜索域名或IP') ?></label>
                     <input
@@ -121,10 +122,10 @@ $kpis = [
                         placeholder="<?= $escapeAttr(__('搜索域名或IP')) ?>"
                         value="<?= $escapeAttr($search) ?>"
                         autocomplete="off"
-                        style="inline-size:min(100%,10rem);flex:1 1 7rem;min-inline-size:6rem;"
+                        class="cdn-filter__search"
                     >
                     <label class="w-visually-hidden" for="cdn-attack-status-filter"><?= __('所有状态') ?></label>
-                    <select id="cdn-attack-status-filter" name="status" class="w-select" data-size="sm" style="flex:0 1 8rem;min-inline-size:6rem;" aria-label="<?= $escapeAttr(__('所有状态')) ?>">
+                    <select id="cdn-attack-status-filter" name="status" class="w-select cdn-filter__select" data-size="sm" aria-label="<?= $escapeAttr(__('所有状态')) ?>">
                         <option value=""><?= __('所有状态') ?></option>
                         <?php foreach ($statuses as $key => $label): ?>
                             <option value="<?= $escapeAttr($key) ?>" <?= $status === $key ? 'selected' : '' ?>>
@@ -133,7 +134,7 @@ $kpis = [
                         <?php endforeach; ?>
                     </select>
                     <label class="w-visually-hidden" for="cdn-attack-type-filter"><?= __('所有类型') ?></label>
-                    <select id="cdn-attack-type-filter" name="attack_type" class="w-select" data-size="sm" style="flex:0 1 8rem;min-inline-size:6rem;" aria-label="<?= $escapeAttr(__('所有类型')) ?>">
+                    <select id="cdn-attack-type-filter" name="attack_type" class="w-select cdn-filter__select" data-size="sm" aria-label="<?= $escapeAttr(__('所有类型')) ?>">
                         <option value=""><?= __('所有类型') ?></option>
                         <?php foreach ($attackTypes as $key => $label): ?>
                             <option value="<?= $escapeAttr($key) ?>" <?= $attackType === $key ? 'selected' : '' ?>>
@@ -164,18 +165,18 @@ $kpis = [
                         <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                             <thead>
                                 <tr>
-                                    <th style="width:2.5rem;">
+                                    <th style="width:4%;">
                                         <input type="checkbox" id="selectAll" data-cdn-attack-log-action="select-all" aria-label="<?= $escapeAttr(__('全选')) ?>">
                                     </th>
-                                    <th style="width:4rem;"><?= __('ID') ?></th>
+                                    <th style="width:6%;"><?= __('ID') ?></th>
                                     <th><?= __('域名') ?></th>
-                                    <th style="width:6.5rem;"><?= __('攻击类型') ?></th>
-                                    <th style="width:8rem;"><?= __('攻击者IP') ?></th>
-                                    <th style="width:4.5rem;"><?= __('次数') ?></th>
-                                    <th style="width:5.5rem;"><?= __('状态') ?></th>
-                                    <th style="width:6.5rem;"><?= __('持续时间') ?></th>
-                                    <th style="width:9rem;"><?= __('开始时间') ?></th>
-                                    <th class="w-text" data-align="end" style="width:7rem;"><?= __('操作') ?></th>
+                                    <th style="width:9%;"><?= __('攻击类型') ?></th>
+                                    <th style="width:11%;"><?= __('攻击者IP') ?></th>
+                                    <th style="width:6%;"><?= __('次数') ?></th>
+                                    <th style="width:8%;"><?= __('状态') ?></th>
+                                    <th style="width:9%;"><?= __('持续时间') ?></th>
+                                    <th style="width:12%;"><?= __('开始时间') ?></th>
+                                    <th class="w-text" data-align="end" style="width:10%;"><?= __('操作') ?></th>
                                 </tr>
                             </thead>
                             <tbody>

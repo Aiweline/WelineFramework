@@ -33,17 +33,17 @@ $payments = $recordsService->listForPayable('order', $orderUuid);
          data-order-uuid="<?= $esc($orderUuid) ?>"
          aria-labelledby="account-order-payments-title"
          weline-code="payment.account.order.payment_records">
-    <h4 id="account-order-payments-title"><?= __('支付历史') ?></h4>
+    <h4 id="account-order-payments-title"><lang>支付历史</lang></h4>
     <?php if ($payments === []): ?>
-        <p class="account-order-detail__payments-empty" data-testid="account-order-payments-empty"><?= __('暂无支付记录') ?></p>
+        <p class="account-order-detail__payments-empty" data-testid="account-order-payments-empty"><lang>暂无支付记录</lang></p>
     <?php else: ?>
-        <div class="account-order-detail__payments-table" role="table" aria-label="<?= __('支付历史') ?>">
+        <div class="account-order-detail__payments-table" role="table" aria-label="@lang('支付历史')">
             <div class="account-order-detail__payments-row account-order-detail__payments-row--head" role="row">
-                <span role="columnheader"><?= __('支付方式') ?></span>
-                <span role="columnheader"><?= __('来源') ?></span>
-                <span role="columnheader"><?= __('金额') ?></span>
-                <span role="columnheader"><?= __('状态') ?></span>
-                <span role="columnheader"><?= __('时间') ?></span>
+                <span role="columnheader"><lang>支付方式</lang></span>
+                <span role="columnheader"><lang>来源</lang></span>
+                <span role="columnheader"><lang>金额</lang></span>
+                <span role="columnheader"><lang>状态</lang></span>
+                <span role="columnheader"><lang>时间</lang></span>
             </div>
             <?php foreach ($payments as $payment): ?>
                 <?php
@@ -70,18 +70,18 @@ $payments = $recordsService->listForPayable('order', $orderUuid);
                      data-testid="account-order-payment-row"
                      data-payment-entry="<?= $esc($entryCode) ?>"
                      data-status="<?= $esc((string)($payment['status'] ?? '')) ?>">
-                    <span role="cell" data-label="<?= __('支付方式') ?>" data-testid="account-order-payment-method"><?= $esc($methodLabel) ?></span>
-                    <span role="cell" data-label="<?= __('来源') ?>">
+                    <span role="cell" data-label="@lang('支付方式')" data-testid="account-order-payment-method"><?= $esc($methodLabel) ?></span>
+                    <span role="cell" data-label="@lang('来源')">
                         <span class="account-orders__badge"
                               data-tone="<?= $esc($entryTone) ?>"
                               data-payment-entry="<?= $esc($entryCode) ?>"
                               data-testid="account-order-payment-entry"><?= $esc($entryLabel) ?></span>
                     </span>
-                    <span role="cell" data-label="<?= __('金额') ?>" data-testid="account-order-payment-amount"><?= $esc($currency . ' ' . $amount) ?></span>
-                    <span role="cell" data-label="<?= __('状态') ?>" data-testid="account-order-payment-status">
+                    <span role="cell" data-label="@lang('金额')" data-testid="account-order-payment-amount"><?= $esc($currency . ' ' . $amount) ?></span>
+                    <span role="cell" data-label="@lang('状态')" data-testid="account-order-payment-status">
                         <?= OutcomeChipMarkup::render($statusChip, 'account-order-payment-status-chip') ?>
                     </span>
-                    <span role="cell" data-label="<?= __('时间') ?>" data-testid="account-order-payment-time"><?= $esc($paidAt !== '' ? $paidAt : '—') ?></span>
+                    <span role="cell" data-label="@lang('时间')" data-testid="account-order-payment-time"><?= $esc($paidAt !== '' ? $paidAt : '—') ?></span>
                 </div>
             <?php endforeach; ?>
         </div>

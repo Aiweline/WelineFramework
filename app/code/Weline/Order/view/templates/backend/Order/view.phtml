@@ -36,6 +36,8 @@ if ($orderTypeTone === 'muted') {
     $orderTypeTone = 'info';
 }
 ?>
+<css>Weline_Order::css/backend/order-admin.css</css>
+
 <?php
 // 顶栏壳（Theme main-content）已提供 H1「订单编辑」+ 菜单面包屑；正文不再重复一套「系统/订单详情」。
 ?>
@@ -183,7 +185,7 @@ if ($orderTypeTone === 'muted') {
                                     <option value="<?= htmlspecialchars($transition) ?>"><?= htmlspecialchars(Order::getStatusLabel($transition)) ?></option>
                                 <?php endforeach; ?>
                             </select>
-                            <input type="text" name="comment" class="w-input" style="width: 200px;" placeholder="<?= __('备注') ?>" data-w-display="inline-block">
+                            <input type="text" name="comment" class="w-input w-order-inline-input--comment" placeholder="<?= __('备注') ?>" data-w-display="inline-block">
                             <button type="submit" class="w-button" data-tone="primary" data-size="sm"><?= __('更新状态') ?></button>
                         </w:form>
                     </div>
@@ -427,13 +429,13 @@ if ($orderTypeTone === 'muted') {
                                                         height="40"
                                                         loading="lazy"
                                                         data-testid="order-view-item-image"
-                                                        style="width:2.5rem;height:2.5rem;object-fit:cover;border-radius:var(--weline-radius-sm,0.25rem);background:var(--backend-color-bg-muted,transparent);flex-shrink:0;"
+                                                        class="w-order-line-thumb"
                                                     >
                                                 <?php else: ?>
                                                     <span
                                                         data-testid="order-view-item-image-empty"
                                                         aria-hidden="true"
-                                                        style="display:inline-block;width:2.5rem;height:2.5rem;border-radius:var(--weline-radius-sm,0.25rem);background:var(--backend-color-bg-muted,transparent);border:1px solid var(--backend-color-border-default,transparent);flex-shrink:0;"
+                                                        class="w-order-line-thumb w-order-line-thumb--empty"
                                                     ></span>
                                                 <?php endif; ?>
                                                 <div style="min-width:0;">

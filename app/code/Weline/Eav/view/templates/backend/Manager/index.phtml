@@ -18,7 +18,7 @@ $entityScopeError = trim((string)($this->getData('entityScopeError') ?? ''));
                 <w:icon name="layers" size="lg" />
             </div>
             <div class="w-eav-manager-page__hero-copy">
-                <h1><?= $escape((string)__('%{1} 属性管理', $entityScope['name'])) ?></h1>
+                <h2 class="w-text" data-weight="strong" data-size="xl" style="--w-mb:var(--weline-space-1);"><?= $escape((string)__('%{1} 属性管理', $entityScope['name'])) ?></h2>
                 <p><?= $escape((string)__('管理 %{1}（%{2}）的属性集、属性组与属性', [$entityScope['name'], $entityScope['code']])) ?></p>
             </div>
             <code class="w-eav-manager-page__hero-code"><?= $escape($entityScope['code']) ?></code>

@@ -150,18 +150,7 @@ $listBaseQuery = \Weline\Visitor\Service\PixelStatisticsService::buildListDrilld
 $listUrl = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/list', $listBaseQuery);
 $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/detail');
 ?>
-<style>
-.weline-pixel-insight { color: var(--backend-color-text-primary, #212529); }
-.weline-pixel-insight .card { border: 1px solid var(--backend-color-border-light, #e9ecef); border-radius: 10px; box-shadow: 0 1px 8px rgba(15,23,42,.05); }
-.weline-pixel-kpi { min-height: 118px; }
-.weline-pixel-kpi .label { color: #64748b; font-size: 12px; }
-.weline-pixel-kpi .value { font-size: 28px; font-weight: 700; line-height: 1.15; }
-.weline-pixel-kpi .sub { color: #64748b; font-size: 12px; }
-.weline-pixel-bar { height: 8px; border-radius: 999px; background: #f1f5f9; overflow: hidden; }
-.weline-pixel-bar > i { display: block; height: 100%; background: linear-gradient(90deg, #06b6d4, #2563eb); }
-.weline-pixel-json { max-height: 220px; overflow: auto; background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 12px; font-size: 12px; }
-.weline-pixel-muted { color: #64748b; }
-</style>
+<css>Weline_Visitor::css/backend/pixel-dashboard.css</css>
 
 <div class="weline-pixel-insight">
     <div class="w-cluster" data-wrap="true" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
@@ -264,7 +253,7 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                             <tbody>
                             <?php foreach ($pages as $page): ?>
                                 <tr>
-                                    <td class="w-text" style="max-width:280px" title="<?= $h($page['path'] ?? '') ?>" data-truncate="true"><?= $h($page['path'] ?? '/') ?></td>
+                                    <td class="w-text" title="<?= $h($page['path'] ?? '') ?>" data-truncate="true"><?= $h($page['path'] ?? '/') ?></td>
                                     <td class="w-text" data-align="end"><?= $num($page['views'] ?? 0) ?></td>
                                     <td class="w-text" data-align="end"><?= $num($page['events'] ?? 0) ?></td>
                                     <td class="w-text" data-align="end"><?= $num($page['users'] ?? 0) ?></td>
@@ -333,7 +322,7 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                     <th class="w-text" data-align="end"><?= __('会话数') ?></th>
                                     <th class="w-text" data-align="end"><?= __('相对浏览') ?></th>
                                     <th class="w-text" data-align="end"><?= __('相对上步流失') ?></th>
-                                    <th style="min-width:160px"><?= __('占比条') ?></th>
+                                    <th><?= __('占比条') ?></th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -358,7 +347,7 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                                 : $h(number_format($dropoff * 100, 1) . '%') ?>
                                         </td>
                                         <td>
-                                            <div class="w-progress" style="height:8px">
+                                            <div class="w-progress">
                                                 <div class="w-progress__bar" role="progressbar" style="width: <?= $h((string)max(0, min(100, $pct))) ?>%" aria-valuenow="<?= $h((string)$pct) ?>" aria-valuemin="0" aria-valuemax="100"></div>
                                             </div>
                                         </td>
@@ -577,7 +566,7 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                             <th><?= __('落地页') ?></th>
                                             <th class="w-text" data-align="end"><?= __('会话数') ?></th>
                                             <th class="w-text" data-align="end"><?= __('单页离站') ?></th>
-                                            <th style="min-width:220px"><?= __('主要次页') ?></th>
+                                            <th><?= __('主要次页') ?></th>
                                         </tr>
                                         </thead>
                                         <tbody>
@@ -932,7 +921,7 @@ $detailFormAction = $this->getBackendUrlPath('visitor/backend/pixel-dashboard/de
                                 <tr>
                                     <td class="w-text" data-wrap="false" data-tone="muted" data-size="sm"><?= $h($row['created_at'] ?? '') ?></td>
                                     <td class="w-text" data-weight="strong"><?= $h($row['event'] ?? '') ?></td>
-                                    <td class="w-text" style="max-width:180px" title="<?= $h($row['path'] ?? '') ?>" data-truncate="true" data-size="sm"><?= $h($row['path'] ?? '') ?></td>
+                                    <td class="w-text" title="<?= $h($row['path'] ?? '') ?>" data-truncate="true" data-size="sm"><?= $h($row['path'] ?? '') ?></td>
                                     <td class="w-text" data-size="sm"><?= $h($row['device'] ?? '-') ?></td>
                                     <td class="w-text" data-size="sm"><?= $num(($row['dwell_ms'] ?? 0) / 1000, 1) ?>s</td>
                                     <td class="w-text" data-align="end">

@@ -142,7 +142,7 @@ if ($offerUuid === '' && !$isPreviewMode) {
          data-entity-uuid=""
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>">
-    <p class="weline-review__unavailable-message"><?= __('商品评论暂不可用') ?></p>
+    <p class="weline-review__unavailable-message"><lang>商品评论暂不可用</lang></p>
 </section>
     <?php
     return;
@@ -208,35 +208,35 @@ $messages = [
          data-js-ns="<?= $esc($scope->jsNs) ?>">
     <div class="weline-review__heading">
         <div>
-            <p class="weline-review__kicker"><?= __('商品评论') ?></p>
+            <p class="weline-review__kicker"><lang>商品评论</lang></p>
             <h2><?= $esc($widgetTitle) ?></h2>
             <p class="weline-review__intro"><?= $esc($widgetIntro) ?></p>
         </div>
         <div class="weline-review__summary" aria-live="polite">
             <strong data-review-average>—</strong>
-            <span data-review-count><?= __('正在加载评论...') ?></span>
+            <span data-review-count><lang>正在加载评论...</lang></span>
         </div>
     </div>
 
-    <div class="weline-review__media-capabilities" aria-label="<?= $esc(__('支持的评论媒体')) ?>">
-        <span><b>IMG</b><?= __('最多 6 张图片') ?></span>
-        <span><b>VID</b><?= __('最多 2 个视频') ?></span>
-        <span><b>TXT</b><?= __('文字与五星评分') ?></span>
+    <div class="weline-review__media-capabilities" aria-label="@lang('支持的评论媒体')">
+        <span><b>IMG</b><lang>最多 6 张图片</lang></span>
+        <span><b>VID</b><lang>最多 2 个视频</lang></span>
+        <span><b>TXT</b><lang>文字与五星评分</lang></span>
     </div>
 
     <div class="weline-review__layout">
         <div class="weline-review__listing">
             <div class="weline-review__items" data-review-items aria-live="polite">
-                <p class="weline-review__empty"><?= __('正在加载评论...') ?></p>
+                <p class="weline-review__empty"><lang>正在加载评论...</lang></p>
             </div>
-            <nav class="weline-review__pager" data-review-pager hidden aria-label="<?= $esc(__('评论分页')) ?>"></nav>
+            <nav class="weline-review__pager" data-review-pager hidden aria-label="@lang('评论分页')"></nav>
             <?php if ($formCollapsed): ?>
                 <button type="button"
                         class="weline-review__write-toggle"
                         data-review-write-toggle
                         aria-expanded="false"
                         aria-controls="weline-review-form-<?= $esc($scope->uid) ?>">
-                    <?= __('写评论') ?>
+                    <lang>写评论</lang>
                 </button>
             <?php endif; ?>
         </div>
@@ -245,24 +245,24 @@ $messages = [
               data-review-form
               novalidate
               <?= $formCollapsed ? 'hidden' : '' ?>>
-            <p class="weline-review__form-kicker"><?= __('分享真实体验') ?></p>
+            <p class="weline-review__form-kicker"><lang>分享真实体验</lang></p>
             <div class="weline-review__form-head">
-                <h3><?= __('撰写图文 / 视频评论') ?></h3>
+                <h3><lang>撰写图文 / 视频评论</lang></h3>
                 <?php if ($formCollapsed): ?>
                     <button type="button"
                             class="weline-review__form-collapse"
                             data-review-form-collapse
                             aria-controls="weline-review-form-<?= $esc($scope->uid) ?>">
-                        <?= __('收起评论表单') ?>
+                        <lang>收起评论表单</lang>
                     </button>
                 <?php endif; ?>
             </div>
             <div class="weline-review__dynamic-fields" data-review-fields aria-live="polite">
-                <p class="weline-review__form-loading"><?= __('正在加载评论表单...') ?></p>
+                <p class="weline-review__form-loading"><lang>正在加载评论表单...</lang></p>
             </div>
             <div class="weline-review__preview" data-review-preview aria-live="polite"></div>
-            <button type="submit" disabled data-review-submit><?= __('提交评论') ?></button>
-            <p class="weline-review__notice"><?= __('支持匿名或登录评论；媒体与扩展字段会和评论一起进入审核。') ?></p>
+            <button type="submit" disabled data-review-submit><lang>提交评论</lang></button>
+            <p class="weline-review__notice"><lang>支持匿名或登录评论；媒体与扩展字段会和评论一起进入审核。</lang></p>
             <p class="weline-review__message" data-review-message aria-live="polite"></p>
         </form>
     </div>
@@ -277,13 +277,13 @@ $messages = [
             <header class="w-dialog__header">
                 <h2 class="w-dialog__title"
                     id="weline-review-media-title-<?= $esc($scope->uid) ?>"
-                    data-review-media-dialog-title><?= __('评论媒体预览') ?></h2>
+                    data-review-media-dialog-title><lang>评论媒体预览</lang></h2>
                 <button type="button"
                         class="w-button"
                         data-w-action="dialog.close"
                         data-tone="quiet"
                         data-size="sm"
-                        aria-label="<?= $esc(__('关闭预览')) ?>">×</button>
+                        aria-label="@lang('关闭预览')">×</button>
             </header>
             <div class="w-dialog__body w-review-media__dialog-body"
                  data-review-lightbox-stage

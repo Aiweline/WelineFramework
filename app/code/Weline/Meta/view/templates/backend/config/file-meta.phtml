@@ -26,6 +26,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
     $currentNamespace = $namespaceList[0];
 }
 ?>
+<css>Weline_Meta::css/backend/meta-file-config.css</css>
 
 <div class="meta-config-page" id="meta-config-app"
      data-tree-url="@url{'meta/backend/config/file/tree'}"
@@ -138,7 +139,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                                     <h5 style="--w-mb:0;"><?= __('元数据文件树') ?></h5>
                                     <small class="w-text" id="meta-tree-count" data-tone="muted"></small>
                                 </div>
-                                <div class="w-card__body" style="max-height: calc(100vh - 300px); overflow-y: auto;">
+                                <div class="w-card__body meta-file-pane">
                                     <div id="meta-file-tree" class="meta-tree">
                                         <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><?= __('请先加载文件树') ?></div>
                                     </div>
@@ -150,7 +151,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                                 <div class="w-card__header">
                                     <h5 style="--w-mb:0;"><?= __('元数据详情') ?></h5>
                                 </div>
-                                <div class="w-card__body" id="meta-file-editor" style="max-height: calc(100vh - 300px); overflow-y: auto;">
+                                <div class="w-card__body meta-file-pane" id="meta-file-editor">
                                     <div class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
                                         <w:icon name="file" size="sm"></w:icon>
                                         <p style="--w-mt:var(--weline-space-4);--w-mb:0;"><?= __('请选择左侧文件以查看详情') ?></p>
@@ -209,128 +210,6 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
     </div>
 </div>
 
-<style>
-    .meta-tree ul {
-        list-style: none;
-        padding-left: 1rem;
-        margin-bottom: 0;
-    }
-    .meta-tree li {
-        margin: 0.2rem 0;
-    }
-    .meta-tree .tree-label {
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 0.35rem;
-        padding: 0.2rem 0.3rem;
-        border-radius: 4px;
-    }
-    .meta-tree .tree-label:hover {
-        background: var(--backend-color-primary-bg, rgba(13,110,253,0.08));
-    }
-    .meta-tree .tree-label.active {
-        background: var(--backend-color-primary-bg-active, rgba(13,110,253,0.15));
-        color: var(--backend-color-primary, #0d6efd);
-        font-weight: 600;
-    }
-    .meta-tree .tree-node-children {
-        margin-left: 1rem;
-    }
-    .meta-tree .collapsed {
-        display: none;
-    }
-    .meta-param-list .list-group-item {
-        border-left: none;
-        border-right: none;
-    }
-    .meta-param-list .list-group-item:first-child {
-        border-top: none;
-    }
-    .meta-param-list .list-group-item:last-child {
-        border-bottom: none;
-    }
-
-    /* 文件树滚动条样式 - 兼容亮色/暗色主题 */
-    /* 文件树容器滚动条 - 针对包含 #meta-file-tree 的 .card-body */
-    #meta-config-app .col-lg-4 .card-body[style*="overflow-y"] {
-        /* Firefox滚动条 */
-        scrollbar-width: thin !important;
-        scrollbar-color: var(--scrollbar-thumb, #a2adb7) var(--scrollbar-track, transparent) !important;
-    }
-
-    /* Webkit浏览器滚动条（Chrome, Safari, Edge） */
-    #meta-config-app .col-lg-4 .card-body[style*="overflow-y"]::-webkit-scrollbar {
-        width: 6px !important;
-        height: 6px !important;
-    }
-
-    #meta-config-app .col-lg-4 .card-body[style*="overflow-y"]::-webkit-scrollbar-track {
-        background: var(--scrollbar-track, transparent) !important;
-        border-radius: 3px;
-    }
-
-    #meta-config-app .col-lg-4 .card-body[style*="overflow-y"]::-webkit-scrollbar-thumb {
-        background: var(--scrollbar-thumb, #a2adb7) !important;
-        border-radius: 3px;
-        transition: background 0.2s ease;
-    }
-
-    #meta-config-app .col-lg-4 .card-body[style*="overflow-y"]::-webkit-scrollbar-thumb:hover {
-        background: var(--scrollbar-thumb-hover, #8590a5) !important;
-    }
-
-    /* 元数据详情编辑器滚动条 */
-    #meta-file-editor[style*="overflow-y"] {
-        scrollbar-width: thin !important;
-        scrollbar-color: var(--scrollbar-thumb, #a2adb7) var(--scrollbar-track, transparent) !important;
-    }
-
-    #meta-file-editor[style*="overflow-y"]::-webkit-scrollbar {
-        width: 6px !important;
-        height: 6px !important;
-    }
-
-    #meta-file-editor[style*="overflow-y"]::-webkit-scrollbar-track {
-        background: var(--scrollbar-track, transparent) !important;
-        border-radius: 3px;
-    }
-
-    #meta-file-editor[style*="overflow-y"]::-webkit-scrollbar-thumb {
-        background: var(--scrollbar-thumb, #a2adb7) !important;
-        border-radius: 3px;
-        transition: background 0.2s ease;
-    }
-
-    #meta-file-editor[style*="overflow-y"]::-webkit-scrollbar-thumb:hover {
-        background: var(--scrollbar-thumb-hover, #8590a5) !important;
-    }
-
-    /* 暗色主题滚动条样式 */
-    [data-theme="dark"] #meta-config-app .col-lg-4 .card-body[style*="overflow-y"] {
-        scrollbar-color: var(--scrollbar-thumb, #8590a5) var(--scrollbar-track, transparent) !important;
-    }
-
-    [data-theme="dark"] #meta-config-app .col-lg-4 .card-body[style*="overflow-y"]::-webkit-scrollbar-thumb {
-        background: var(--scrollbar-thumb, #8590a5) !important;
-    }
-
-    [data-theme="dark"] #meta-config-app .col-lg-4 .card-body[style*="overflow-y"]::-webkit-scrollbar-thumb:hover {
-        background: var(--scrollbar-thumb-hover, #a2adb7) !important;
-    }
-
-    [data-theme="dark"] #meta-file-editor[style*="overflow-y"] {
-        scrollbar-color: var(--scrollbar-thumb, #8590a5) var(--scrollbar-track, transparent) !important;
-    }
-
-    [data-theme="dark"] #meta-file-editor[style*="overflow-y"]::-webkit-scrollbar-thumb {
-        background: var(--scrollbar-thumb, #8590a5) !important;
-    }
-
-    [data-theme="dark"] #meta-file-editor[style*="overflow-y"]::-webkit-scrollbar-thumb:hover {
-        background: var(--scrollbar-thumb-hover, #a2adb7) !important;
-    }
-</style>
 
 
 
@@ -785,7 +664,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                 const value = item.value ?? '';
                 html += '<div class="w-list-group__item">';
                 html += '<div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-1);">';
-                html += '<div><strong>' + escapeHtml(item.label || item.name) + '</strong> <code class="w-text" style="font-size: 11px;" data-tone="muted">' + escapeHtml(item.name) + '</code> <button type="button" class="w-button param-translate-btn" data-meta-identify="' + escapeAttr(meta.meta_identify || '') + '" data-param="' + escapeAttr(item.name) + '" data-scope="' + escapeAttr(params.get('scope') || 'default') + '" title="<?= __('翻译参数') ?>" data-tone="neutral" data-variant="outline" data-size="sm"><w:icon name="language" size="sm"></w:icon></button></div>';
+                html += '<div><strong>' + escapeHtml(item.label || item.name) + '</strong> <code class="w-text" data-size="xs" data-tone="muted">' + escapeHtml(item.name) + '</code> <button type="button" class="w-button param-translate-btn" data-meta-identify="' + escapeAttr(meta.meta_identify || '') + '" data-param="' + escapeAttr(item.name) + '" data-scope="' + escapeAttr(params.get('scope') || 'default') + '" title="<?= __('翻译参数') ?>" data-tone="neutral" data-variant="outline" data-size="sm"><w:icon name="language" size="sm"></w:icon></button></div>';
                 html += '</div>';
                 if (item.description) {
                     html += '<div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);">' + escapeHtml(item.description) + '</div>';

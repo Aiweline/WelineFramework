@@ -39,7 +39,7 @@ $panelId = 'b2b-order-chat-' . substr(hash('sha256', $orderRef . ':' . $chatRole
                 <span class="account-menu-signal-badge b2b-order-chat__unread"
                       data-account-menu-signal-badge="1"
                       data-testid="b2b-order-chat-unread"
-                      aria-label="<?= $escape(__('未读消息')) ?>">
+                      aria-label="@lang('未读消息')">
                     <?= $escape((string)$chatUnread) ?>
                 </span>
             <?php endif; ?>
@@ -59,7 +59,7 @@ $panelId = 'b2b-order-chat-' . substr(hash('sha256', $orderRef . ':' . $chatRole
                           rows="3"
                           maxlength="4000"
                           data-b2b-order-chat-input
-                          placeholder="<?= $escape(__('输入与商家/客户的沟通内容')) ?>"
+                          placeholder="@lang('输入与商家/客户的沟通内容')"
                           required></textarea>
             </label>
             <button type="submit"

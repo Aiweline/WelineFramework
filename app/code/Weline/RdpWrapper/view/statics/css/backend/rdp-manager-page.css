@@ -1,0 +1,8 @@
+/**
+ * Weline_RdpWrapper 后台页面私有布局（卡片内容区间距）。
+ */
+@layer page {
+    .rdp-panelBody {
+        padding: var(--weline-space-5);
+    }
+}

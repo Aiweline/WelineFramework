@@ -1,0 +1,32 @@
+/* Weline Order 后台页面组件（只消费 Token，不写页面内联视觉） */
+@layer page {
+    .w-order-line-thumb {
+        inline-size: var(--weline-space-10);
+        block-size: var(--weline-space-10);
+        object-fit: cover;
+        border-radius: var(--weline-radius-sm);
+        background: var(--weline-theme-surface-muted);
+        flex-shrink: 0;
+    }
+
+    .w-order-line-thumb--empty {
+        display: inline-block;
+        border: 1px solid var(--weline-theme-border);
+    }
+
+    .w-order-inline-input--comment {
+        inline-size: calc(var(--weline-space-12) * 4 + var(--weline-space-6) + var(--weline-space-1));
+    }
+
+    .w-order-inline-input--qty {
+        inline-size: calc(var(--weline-space-12) + var(--weline-space-10));
+    }
+
+    .w-order-inline-input--reason {
+        inline-size: calc(var(--weline-space-12) * 2 + var(--weline-space-8));
+    }
+
+    .w-order-shipment-actions {
+        padding-block-start: var(--weline-space-6);
+    }
+}

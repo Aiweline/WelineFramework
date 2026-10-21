@@ -80,7 +80,7 @@ $showQuickview = true;
         <div class="best-sellers-page__grid weline-product-card-shelf"
              data-testid="storefront-best-sellers-grid"
              role="list"
-             aria-label="<?= $escape(__('热销商品')) ?>">
+             aria-label="@lang('热销商品')">
             <?php foreach ($batchProducts as $product): ?>
                 <?php
                 $productId = (int)($product['id'] ?? 0);
@@ -101,7 +101,7 @@ $showQuickview = true;
                           aria-label="<?= $escape(__('排名') . ' ' . $rank) ?>">#<?= $rank ?></span>
                     <?= $cardHtml ?>
                     <?php if ($sales > 0): ?>
-                        <p class="best-sellers-page__sales"><?= __('已售 %{1}', [$sales]) ?></p>
+                        <p class="best-sellers-page__sales"><lang args="[$sales]">已售 %{1}</lang></p>
                     <?php endif; ?>
                 </div>
             <?php endforeach; ?>
@@ -112,20 +112,20 @@ $showQuickview = true;
 <style>
 .best-sellers-page {
     display: grid;
-    gap: var(--weline-space-7, 1.75rem);
-    color: var(--weline-theme-text, var(--color-text-primary, #0f1111));
+    gap: var(--weline-space-7);
+    color: var(--weline-theme-text, var(--color-text-primary));
 }
 .best-sellers-page__empty {
-    padding: var(--weline-space-8, 2rem);
+    padding: var(--weline-space-8);
     text-align: center;
-    color: var(--weline-theme-text-muted, var(--color-text-secondary, #565959));
-    border: var(--weline-theme-border-width, 1px) dashed var(--weline-theme-border, var(--color-border-default, #ddd));
-    border-radius: var(--weline-radius-md, 8px);
+    color: var(--weline-theme-text-muted, var(--color-text-secondary));
+    border: var(--weline-theme-border-width) dashed var(--weline-theme-border, var(--color-border-default));
+    border-radius: var(--weline-radius-md);
 }
 .best-sellers-page__grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: var(--weline-space-5, 1.25rem);
+    gap: var(--weline-space-5);
     align-items: stretch;
 }
 .best-sellers-page__item {
@@ -133,7 +133,7 @@ $showQuickview = true;
     display: flex;
     min-width: 0;
     flex-direction: column;
-    gap: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
 }
 .best-sellers-page__item > .weline-product-card {
     height: 100%;
@@ -141,33 +141,33 @@ $showQuickview = true;
 }
 .best-sellers-page__rank {
     position: absolute;
-    top: var(--weline-space-3, 0.75rem);
-    left: var(--weline-space-3, 0.75rem);
+    top: var(--weline-space-3);
+    left: var(--weline-space-3);
     z-index: 3;
     min-width: 2.25rem;
-    padding: 0.2rem 0.45rem;
-    border-radius: 999px;
-    background: var(--color-bg-dark, #232f3e);
-    color: #fff;
+    padding: var(--spacing-0_2) var(--spacing-0_45);
+    border-radius: var(--radius-full);
+    background: var(--color-bg-dark);
+    color: var(--color-text-light);
     font-weight: var(--weline-font-weight-bold, 700);
-    font-size: var(--weline-font-size-sm, 0.85rem);
+    font-size: var(--weline-font-size-sm);
     text-align: center;
     pointer-events: none;
-    box-shadow: var(--weline-theme-shadow-sm, 0 2px 8px rgba(15, 17, 17, 0.16));
+    box-shadow: var(--weline-shadow-md);
 }
 .best-sellers-page__item--1 .best-sellers-page__rank {
-    background: var(--color-danger, #b12704);
+    background: var(--color-danger);
 }
 .best-sellers-page__item--2 .best-sellers-page__rank {
-    background: var(--weline-theme-text-muted, #565959);
+    background: var(--weline-theme-text-muted);
 }
 .best-sellers-page__item--3 .best-sellers-page__rank {
-    background: #8b5a2b;
+    background: var(--color-warning);
 }
 .best-sellers-page__sales {
     margin: 0;
-    color: var(--weline-theme-text-muted, var(--color-text-secondary, #565959));
-    font-size: var(--weline-font-size-sm, 0.9rem);
+    color: var(--weline-theme-text-muted, var(--color-text-secondary));
+    font-size: var(--weline-font-size-sm);
 }
 @media (max-width: 68rem) {
     .best-sellers-page__grid {
@@ -177,7 +177,7 @@ $showQuickview = true;
 @media (max-width: 48rem) {
     .best-sellers-page__grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: var(--weline-space-4, 1rem);
+        gap: var(--weline-space-4);
     }
 }
 @media (max-width: 32rem) {
@@ -187,6 +187,6 @@ $showQuickview = true;
 }
 :dir(rtl) .best-sellers-page__rank {
     left: auto;
-    right: var(--weline-space-3, 0.75rem);
+    right: var(--weline-space-3);
 }
 </style>

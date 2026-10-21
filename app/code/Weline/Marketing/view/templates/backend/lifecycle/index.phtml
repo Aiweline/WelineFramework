@@ -1,3 +1,4 @@
+<css>Weline_Marketing::css/backend/marketing-admin.css</css>
 <?php
 $campaigns = is_array($campaigns ?? null) ? $campaigns : [];
 $load_error = $load_error ?? '';
@@ -31,7 +32,7 @@ $typeLabels = [
     <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="marketing-lifecycle-website-filter">
       <div class="w-card__body">
         <form method="get" id="marketing-lifecycle-website-form" class="w-cluster" data-align="end" data-wrap="true" style="--w-gap:var(--weline-space-3);">
-          <div class="w-field" style="min-width:min(100%,18rem); flex:1 1 16rem;">
+          <div class="w-field marketing-filter__field">
             <label class="w-field__label" for="marketing-lifecycle-website"><?= __('站点范围') ?></label>
             <w:websites:website:select
               id="marketing-lifecycle-website"

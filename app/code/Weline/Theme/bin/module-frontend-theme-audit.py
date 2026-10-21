@@ -71,21 +71,59 @@ RE_IMPORTANT = re.compile(r"!\s*important", re.I)
 RE_MAXWIDTH_PX = re.compile(r"(?:max-)?(?:inline-)?(?:width|size)\s*:\s*(?:min\(\s*100%\s*,\s*)?(\d{3,4})px", re.I)
 RE_PRIVATE_TOKEN = re.compile(r"(--[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\))", re.I)
 RE_INLINE_STYLE = re.compile(r"""\bstyle\s*=\s*(["'])(?:(?!\1).)*\1""", re.I | re.S)
+RE_INLINE_STYLE_VALUE = re.compile(r"""\bstyle\s*=\s*(["'])((?:(?!\1).)*)\1""", re.I | re.S)
+# Theme foundation 自带的组件参数通道：style="--w-gap:var(--weline-space-2);--w-mb:0"
+# 见 Theme/view/ui/css/foundation.css 的 [style*="--w-mb:"] { ... } 规则。
+# 只放行「纯 --w-* 参数（值必须是 var() 引用 / 整数 / 0）」，出现任何视觉字面量仍算违规。
+RE_W_PARAM_ONLY = re.compile(r"^\s*--w-[a-z0-9-]+\s*:\s*(?:var\([^)]*\)|\d+(?:\.\d+)?|0)\s*$", re.I)
+
+
+def _is_w_param_style(value: str) -> bool:
+    parts = [p for p in value.split(";") if p.strip()]
+    if not parts:
+        return False
+    return all(RE_W_PARAM_ONLY.match(p) for p in parts)
 RE_STYLE_BLOCK = re.compile(r"<style\b[^>]*>(.*?)</style>", re.I | re.S)
 RE_SCRIPT_BLOCK = re.compile(r"<script\b([^>]*)>(.*?)</script\s*>", re.I | re.S)
 RE_ON_ATTR = re.compile(
     r"""\s(?:onclick|onchange|oninput|onsubmit|onload|onerror|onkeyup|onkeydown|onblur|onfocus|"""
     r"""onmouseover|onmouseout|onscroll|onselect|onreset|ontoggle)\s*=\s*(["'])""", re.I)
+# 硬规则 template_lang_not_php_i18n：前台 .phtml「HTML 内禁止 <?= __() ?>」。
+# `<?php ?>` 块内对动态数据做 __($key) 属数据侧翻译，不在本规则范围。
 RE_PHP_I18N = re.compile(r"(?<![\w>$])__\(\s*['\"]")
+RE_PHP_I18N_ANY = re.compile(r"(?<![\w>$])__\(")
+RE_ECHO_SEG = re.compile(r"<\?=\s*(.*?)\?>", re.S)
 RE_RAW_SHELL = re.compile(
-    r"""class\s*=\s*(["'])[^"']*(?:container|container-fluid|breadcrumb|site-header|site-footer)\b""", re.I)
+    r"""class\s*=\s*(["'])(?:(?!\1).)*?(?<![\w-])(?:container|container-fluid|breadcrumb|site-header|site-footer)(?![\w-])""",
+    re.I | re.S)
+# bare bootstrap-style page container in CSS is a self-built shell regardless of width
+RE_BARE_CONTAINER_SEL = re.compile(r"(?:^|[\s,>+~])\.container(?:-fluid)?\s*$", re.I)
 RE_FETCH = re.compile(r"\bfetch\s*\(\s*[`'\"]", re.I)
 RE_XHR = re.compile(r"new\s+XMLHttpRequest|\.ajax\s*\(\s*\$?\(", re.I)
 RE_OBSERVE = re.compile(
-    r"new\s+MutationObserver\s*\(|document\.addEventListener\s*\(\s*['\"]DOMContentLoaded|"
-    r"document\.querySelectorAll?\s*\(", re.I)
+    r"new\s+MutationObserver\s*\([^)]*\)[\s\S]{0,400}?\.observe\s*\(\s*"
+    r"(?:document(?:\.documentElement|\.body)?)\b", re.I)
 RE_WELINE_USE = re.compile(r"Weline\s*\.\s*(?:declare|load|dom|Api|mount|use)\b")
 RE_DATA_WELINE = re.compile(r"data-weline-(?:load|declare|mount)\s*=", re.I)
+# Token-domain properties only (contract: 颜色/间距/字号/圆角/阴影/控件高).
+# Layout dimensions (width/height/top/left/transform/...) are NOT token-scoped.
+SIZE_TOKEN_PROPS = {
+    "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
+    "margin-inline", "margin-inline-start", "margin-inline-end",
+    "margin-block", "margin-block-start", "margin-block-end",
+    "padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
+    "padding-inline", "padding-inline-start", "padding-inline-end",
+    "padding-block", "padding-block-start", "padding-block-end",
+    "gap", "row-gap", "column-gap", "grid-gap",
+    "font-size", "line-height", "letter-spacing", "word-spacing",
+    "border-radius", "border-top-left-radius", "border-top-right-radius",
+    "border-bottom-left-radius", "border-bottom-right-radius",
+    "border-width", "border-top-width", "border-right-width",
+    "border-bottom-width", "border-left-width", "outline-width",
+    "box-shadow", "text-shadow", "min-height", "font",
+}
+RE_PROP_FOR_SIZE = re.compile(r"\s*([-a-zA-Z][-a-zA-Z0-9]*)\s*:")
+
 RE_BAKE_CHANNEL = re.compile(r"data-weline-widget-asset|data-weline-source-position", re.I)
 RE_COMMENT_CSS = re.compile(r"/\*.*?\*/", re.S)
 RE_COMMENT_HTML = re.compile(r"<!--.*?-->", re.S)
@@ -94,7 +132,7 @@ RE_MEDIA = re.compile(r"@media[^{]+\{", re.I)
 RE_REDUCED_MOTION = re.compile(r"@media[^{]*prefers-reduced-motion[^{]*\{", re.I)
 RE_ZERO = re.compile(r"(?<![\w-])0(?:px|rem|em)\b")
 RE_PAPER_PIN = re.compile(
-    r"--[A-Za-z0-9_-]*(?:chrome-body-text|amz-drawer-text|paper-text|paper-|_paper)", re.I)
+    r"--[A-Za-z0-9_-]*(?:chrome-body-text|amz-drawer|paper-text|paper-|_paper)", re.I)
 
 CSS_EXT = {".css", ".less", ".scss"}
 MARKUP_EXT = {".phtml", ".html", ".htm"}
@@ -168,6 +206,55 @@ def _decl_before(text: str, pos: int) -> tuple[str, str]:
     return selector, decl
 
 
+PAGE_SHELL_SELECTOR = re.compile(
+    r"(?:^|[\s,>+~])(?:[a-z-]*)?(?:page|container|shell|layout|main|wrapper)[-_a-z0-9]*\s*$", re.I)
+
+
+def _px_value(value: str) -> float | None:
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)(px|rem|em)", value.strip().lower())
+    if not m:
+        return None
+    n = float(m.group(1))
+    return n * 16 if m.group(2) in ("rem", "em") else n
+
+
+def _selector_before(text: str, pos: int) -> str:
+    decl_start = max(text.rfind(";", 0, pos), text.rfind("{", 0, pos), text.rfind("}", 0, pos))
+    sel_end = text.rfind("{", 0, decl_start + 1)
+    if sel_end < 0:
+        return ""
+    sel_start = text.rfind("}", 0, sel_end)
+    return text[sel_start + 1:sel_end].strip()
+
+
+def _decl_prop(text: str, pos: int) -> str:
+    start = max(text.rfind(";", 0, pos), text.rfind("{", 0, pos), text.rfind("}", 0, pos))
+    m = RE_PROP_FOR_SIZE.match(text[start + 1:pos])
+    return m.group(1).lower() if m else ""
+
+
+# 合同允许：颜色/特质 Hero 可在模块内 scope 自定义（theme-css-variables-only.md §9 关联约定）。
+HERO_SELECTOR = re.compile(
+    r"(?:hero|banner|promo|masthead|jumbotron|glow|gradient|decor|visual|showcase|landing)", re.I)
+# 展示级排版（Hero 标题/大标题）属模块 scope 例外，不强制套主刻度字号。
+DISPLAY_SELECTOR = re.compile(
+    r"(?:hero|banner|display|headline|masthead|jumbotron|title|heading|"
+    r"\bh[1-3]\b|stat|count|number|timer|countdown|amount|score)", re.I)
+
+
+def _hero_scope_decl(text: str, pos: int) -> bool:
+    start = max(text.rfind(";", 0, pos), text.rfind("{", 0, pos), text.rfind("}", 0, pos))
+    decl = text[start + 1:pos]
+    if "gradient(" not in decl.lower():
+        return False
+    sel_start = text.rfind("{", 0, max(start, 1))
+    if sel_start < 0:
+        return False
+    prev_end = text.rfind("}", 0, sel_start)
+    selector = text[prev_end + 1:sel_start]
+    return HERO_SELECTOR.search(selector) is not None
+
+
 def scan_css(text: str, hits: list, src: str) -> None:
     cleaned = strip_noise(text, False)
     media = [(m.start(), m.end()) for m in RE_MEDIA.finditer(cleaned)]
@@ -180,12 +267,16 @@ def scan_css(text: str, hits: list, src: str) -> None:
         return any(a <= i < b for a, b in reduced)
 
     for m in RE_HEX.finditer(cleaned):
+        if _hero_scope_decl(cleaned, m.start()):
+            continue
         if m.group().lower() in PAPER_PINS:
             selector, decl = _decl_before(cleaned, m.start())
             if RE_PAPER_PIN.search(decl) or RE_PAPER_PIN.search(selector):
                 continue
         hits.append((src, "hard_color_hex", m.group()))
     for m in RE_RGB.finditer(cleaned):
+        if _hero_scope_decl(cleaned, m.start()):
+            continue
         hits.append((src, "hard_color_func", cleaned[m.start():m.start() + 40]))
     for m in RE_IMPORTANT.finditer(cleaned):
         if in_reduced(m.start()):
@@ -204,12 +295,35 @@ def scan_css(text: str, hits: list, src: str) -> None:
             continue
         hits.append((src, "private_token_def", m.group()[:80]))
     for m in RE_MAXWIDTH_PX.finditer(cleaned):
+        value = int(m.group(1))
         if m.group(1) in {"100", "0"}:
+            continue
+        if in_media(m.start()):
+            continue  # @media breakpoint literals are allowed (theme-css-variables-only.md §7)
+        # Only page content shells are contract-scoped (theme-layout-content-width.md):
+        #  - selector looks like a page shell AND width >= 900px, or
+        #  - explicit page formula width: min(100%, Npx) with N >= 900px.
+        selector = _selector_before(cleaned, m.start())
+        is_shell_formula = re.match(r"width\s*:\s*min\(\s*100%\s*,", m.group(0).strip(), re.I) is not None
+        if not (is_shell_formula and value >= 900) and not (
+                value >= 900 and PAGE_SHELL_SELECTOR.search(selector)) and not (
+                RE_BARE_CONTAINER_SEL.search(selector)):
             continue
         line = cleaned.count("\n", 0, m.start()) + 1
         hits.append((src, "hard_max_width_px", f"L{line}:{m.group()}"))
     for m in RE_SIZE.finditer(cleaned):
         if RE_ZERO.fullmatch(m.group()) or in_media(m.start()):
+            continue
+        prop = _decl_prop(cleaned, m.start())
+        if prop not in SIZE_TOKEN_PROPS:
+            continue
+        # min-height >64px 是布局高度，不是控件高（控件高走 --weline-theme-control-height*）
+        if prop in ("min-height", "height"):
+            px = _px_value(m.group())
+            if px is not None and px >= 64:
+                continue
+        # Hero/展示级字号属模块 scope 例外
+        if prop == "font-size" and DISPLAY_SELECTOR.search(_selector_before(cleaned, m.start())):
             continue
         hits.append((src, "hard_size", m.group()))
 
@@ -218,7 +332,9 @@ def scan_markup(text: str, hits: list, src: str) -> None:
     cleaned = strip_noise(text, True)
     for m in RE_STYLE_BLOCK.finditer(cleaned):
         scan_css(m.group(1), hits, src + "#<style>")
-    for m in RE_INLINE_STYLE.finditer(cleaned):
+    for m in RE_INLINE_STYLE_VALUE.finditer(cleaned):
+        if _is_w_param_style(m.group(2)):
+            continue
         hits.append((src, "inline_style", m.group()[:100]))
     for m in RE_SCRIPT_BLOCK.finditer(cleaned):
         attrs, body = m.group(1), m.group(2)
@@ -234,9 +350,14 @@ def scan_markup(text: str, hits: list, src: str) -> None:
     for m in RE_ON_ATTR.finditer(cleaned):
         line = cleaned.count("\n", 0, m.start()) + 1
         hits.append((src, "inline_handler", f"L{line}:{m.group().strip()}"))
-    for m in RE_PHP_I18N.finditer(cleaned):
-        line = cleaned.count("\n", 0, m.start()) + 1
-        hits.append((src, "php_i18n_call", f"L{line}"))
+    for seg in RE_ECHO_SEG.finditer(cleaned):
+        for m in RE_PHP_I18N_ANY.finditer(seg.group(1)):
+            code = seg.group(1)[m.start():]
+            dynamic = re.match(r"__\s*\(\s*\$", code) is not None
+            if dynamic:
+                continue  # 运行时数据翻译（__($var)），非模板静态文案
+            line = cleaned.count("\n", 0, seg.start(1) + m.start()) + 1
+            hits.append((src, "php_i18n_call", f"L{line}"))
     for m in RE_RAW_SHELL.finditer(cleaned):
         hits.append((src, "raw_page_shell", m.group()[:80]))
 
@@ -263,6 +384,38 @@ def load_scope() -> dict:
     return json.loads(cfg.read_text(encoding="utf-8"))
 
 
+def iter_scope_files(use_scope: bool = True, module_filter: str | None = None,
+                     out_of_scope: Counter | None = None):
+    """Yield (path, module) for files inside the contract scope."""
+    scope = load_scope() if use_scope else {"exclude_modules": [], "include_paths": {}}
+    excluded_modules = {m for m in scope.get("exclude_modules", [])}
+    include_paths = scope.get("include_paths", {})
+    for p in sorted(CODE.rglob("*")):
+        if not p.is_file() or not in_scope(p):
+            continue
+        mod = module_of(p)
+        if module_filter and mod.replace("/", "_") != module_filter and mod != module_filter:
+            continue
+        if mod in excluded_modules:
+            if out_of_scope is not None:
+                out_of_scope[mod] += 1
+            continue
+        rel_posix = "/" + str(p.relative_to(CODE)).replace("\\", "/")
+        # S2b: modules that ship a real frontend area only consume frontend surfaces;
+        # root-level Block/analytics/Widget dirs are backend widgets.
+        if (CODE / mod / "view/templates/frontend").is_dir() and not (
+                "/frontend/" in rel_posix or "/view/statics/" in rel_posix):
+            if out_of_scope is not None:
+                out_of_scope[mod] += 1
+            continue
+        allowed = include_paths.get(mod)
+        if allowed is not None and not any(a in rel_posix or a in str(p) for a in allowed):
+            if out_of_scope is not None:
+                out_of_scope[mod] += 1
+            continue
+        yield p, mod
+
+
 def collect(module_filter: str | None = None, use_scope: bool = True) -> dict:
     scope = load_scope() if use_scope else {"exclude_modules": [], "include_paths": {}}
     excluded_modules = {m for m in scope.get("exclude_modules", [])}
@@ -280,27 +433,7 @@ def collect(module_filter: str | None = None, use_scope: bool = True) -> dict:
     modules_seen: set[str] = set()
     scanned = 0
 
-    for p in sorted(CODE.rglob("*")):
-        if not p.is_file() or not in_scope(p):
-            continue
-        mod = module_of(p)
-        if module_filter and mod.replace("/", "_") != module_filter and mod != module_filter:
-            continue
-        if mod in excluded_modules:
-            out_of_scope[mod] += 1
-            continue
-        rel_posix = "/" + str(p.relative_to(CODE)).replace("\\", "/")
-        # S2b: modules that ship a real frontend area only consume frontend surfaces;
-        # root-level Block/analytics/Widget dirs are backend widgets.
-        if (CODE / mod / "view/templates/frontend").is_dir() and not (
-                "/frontend/" in rel_posix or "/view/statics/" in rel_posix):
-            out_of_scope[mod] += 1
-            continue
-        allowed = include_paths.get(mod)
-        if allowed is not None:
-            if not any(a in rel_posix or a in str(p) for a in allowed):
-                out_of_scope[mod] += 1
-                continue
+    for p, mod in iter_scope_files(use_scope, module_filter, out_of_scope):
         modules_seen.add(mod)
         scanned += 1
         rel = str(p.relative_to(ROOT))

@@ -22,19 +22,19 @@ $boundPayload = [
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= __('邮箱绑定验证') ?></title>
+    <title><lang>邮箱绑定验证</lang></title>
     <style>
         :root {
-            --cs-verify-bg: var(--weline-theme-surface-muted, #f4f1ec);
-            --cs-verify-card: var(--weline-theme-surface, #ffffff);
-            --cs-verify-text: var(--weline-theme-text, #1c1917);
-            --cs-verify-muted: var(--weline-theme-text-muted, #78716c);
-            --cs-verify-primary: var(--weline-theme-primary, #9a3412);
-            --cs-verify-ok: var(--weline-theme-success, #15803d);
-            --cs-verify-bad: var(--weline-theme-danger, #b91c1c);
-            --cs-verify-border: var(--weline-theme-border, #e7e5e4);
-            --cs-verify-radius: var(--weline-radius-lg, 16px);
-            --cs-verify-space: var(--weline-space-4, 1rem);
+            --cs-verify-bg: var(--weline-theme-surface-muted);
+            --cs-verify-card: var(--weline-theme-surface);
+            --cs-verify-text: var(--weline-theme-text);
+            --cs-verify-muted: var(--weline-theme-text-muted);
+            --cs-verify-primary: var(--weline-theme-primary);
+            --cs-verify-ok: var(--weline-theme-success);
+            --cs-verify-bad: var(--weline-theme-danger);
+            --cs-verify-border: var(--weline-theme-border);
+            --cs-verify-radius: var(--weline-radius-lg);
+            --cs-verify-space: var(--weline-space-4);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -54,50 +54,50 @@ $boundPayload = [
 
         .verify-container {
             background: var(--cs-verify-card);
-            border: 1px solid var(--cs-verify-border);
+            border: var(--border-width-thin) solid var(--cs-verify-border);
             border-radius: var(--cs-verify-radius);
             padding: calc(var(--cs-verify-space) * 2.5);
             max-width: 28rem;
             width: 100%;
             text-align: center;
-            box-shadow: var(--weline-shadow-lg, 0 18px 40px rgba(28, 25, 23, 0.12));
+            box-shadow: var(--weline-shadow-md);
         }
 
         .verify-icon {
             width: 4.5rem;
             height: 4.5rem;
-            border-radius: 999px;
+            border-radius: var(--radius-full);
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 1.25rem;
-            font-size: 2rem;
-            color: #fff;
+            margin: 0 auto var(--weline-space-5);
+            font-size: var(--weline-font-size-4xl);
+            color: var(--color-text-light);
         }
 
         .verify-icon.success { background: var(--cs-verify-ok); }
         .verify-icon.error { background: var(--cs-verify-bad); }
 
         .verify-title {
-            font-size: 1.35rem;
+            font-size: var(--font-size-2_5xl);
             font-weight: 650;
-            margin-bottom: 0.65rem;
+            margin-bottom: var(--spacing-0_65);
         }
 
         .verify-message {
-            font-size: 0.98rem;
+            font-size: var(--font-size-base);
             color: var(--cs-verify-muted);
             line-height: 1.6;
-            margin-bottom: 1.1rem;
+            margin-bottom: var(--spacing-4_5);
         }
 
         .verify-email {
             background: color-mix(in srgb, var(--cs-verify-bg) 88%, var(--cs-verify-primary));
-            border: 1px solid var(--cs-verify-border);
-            padding: 0.75rem 1rem;
-            border-radius: var(--weline-radius-md, 10px);
-            font-size: 0.92rem;
-            margin-bottom: 1.25rem;
+            border: var(--border-width-thin) solid var(--cs-verify-border);
+            padding: var(--weline-space-3) var(--weline-space-4);
+            border-radius: var(--weline-radius-md);
+            font-size: var(--font-size-sm);
+            margin-bottom: var(--weline-space-5);
             display: inline-block;
             word-break: break-all;
         }
@@ -107,25 +107,25 @@ $boundPayload = [
         .verify-actions {
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
+            gap: var(--weline-space-3);
         }
 
         .btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 0.75rem 1.1rem;
-            border-radius: var(--weline-radius-md, 10px);
-            font-size: 0.98rem;
+            padding: var(--weline-space-3) var(--spacing-4_5);
+            border-radius: var(--weline-radius-md);
+            font-size: var(--font-size-base);
             font-weight: 560;
             text-decoration: none;
             cursor: pointer;
-            border: 1px solid transparent;
+            border: var(--border-width-thin) solid transparent;
         }
 
         .btn-primary {
             background: var(--cs-verify-primary);
-            color: #fff;
+            color: var(--color-text-light);
         }
 
         .btn-secondary {
@@ -135,8 +135,8 @@ $boundPayload = [
         }
 
         .help-text {
-            margin-top: 1.25rem;
-            font-size: 0.88rem;
+            margin-top: var(--weline-space-5);
+            font-size: var(--font-size-sm);
             color: var(--cs-verify-muted);
             line-height: 1.5;
         }
@@ -152,36 +152,36 @@ $boundPayload = [
     <div class="verify-container">
         <?php if ($success): ?>
             <div class="verify-icon success" aria-hidden="true">✓</div>
-            <h1 class="verify-title"><?= __('邮箱已绑定') ?></h1>
+            <h1 class="verify-title"><lang>邮箱已绑定</lang></h1>
             <p class="verify-message" id="cs-verify-status">
-                <?= __('正在同步到客服聊天窗口…') ?>
+                <lang>正在同步到客服聊天窗口…</lang>
             </p>
             <?php if ($email !== ''): ?>
                 <div class="verify-email">
-                    <?= __('已绑定邮箱') ?>: <strong><?= htmlspecialchars($email, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></strong>
+                    <lang>已绑定邮箱</lang>: <strong><?= htmlspecialchars($email, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></strong>
                 </div>
             <?php endif; ?>
             <div class="verify-actions">
                 <a href="<?= htmlspecialchars($homeUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" class="btn btn-primary" data-cs-verify-home>
-                    <?= __('回到商城继续聊天') ?>
+                    <lang>回到商城继续聊天</lang>
                 </a>
                 <button type="button" class="btn btn-secondary" id="cs-verify-close" hidden>
-                    <?= __('关闭此页') ?>
+                    <lang>关闭此页</lang>
                 </button>
             </div>
             <p class="help-text" id="cs-verify-help">
-                <?= __('原页面客服窗口将自动显示已绑定邮箱；若未自动关闭，请关闭本页返回继续聊天。') ?>
+                <lang>原页面客服窗口将自动显示已绑定邮箱；若未自动关闭，请关闭本页返回继续聊天。</lang>
             </p>
         <?php else: ?>
             <div class="verify-icon error" aria-hidden="true">✗</div>
-            <h1 class="verify-title"><?= __('验证失败') ?></h1>
+            <h1 class="verify-title"><lang>验证失败</lang></h1>
             <p class="verify-message"><?= htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p>
             <div class="verify-actions">
-                <a href="<?= htmlspecialchars($homeUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" class="btn btn-primary"><?= __('返回首页') ?></a>
-                <button class="btn btn-secondary" type="button" data-cs-bind-back><?= __('返回上一页') ?></button>
+                <a href="<?= htmlspecialchars($homeUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" class="btn btn-primary"><lang>返回首页</lang></a>
+                <button class="btn btn-secondary" type="button" data-cs-bind-back><lang>返回上一页</lang></button>
             </div>
             <p class="help-text">
-                <?= __('如有问题，请') ?> <a href="<?= htmlspecialchars($homeUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" data-cs-bind-open-chat><?= __('联系客服') ?></a>
+                <lang>如有问题，请</lang> <a href="<?= htmlspecialchars($homeUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" data-cs-bind-open-chat><lang>联系客服</lang></a>
             </p>
         <?php endif; ?>
     </div>

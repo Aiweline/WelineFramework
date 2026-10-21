@@ -1,3 +1,4 @@
+<css>Weline_Inventory::css/backend/inventory-admin.css</css>
 <?php
 /** @var string $title @var string $section @var int $website_id @var array $rows @var array $columns @var string $error */
 /** @var array<string,string> $column_labels */
@@ -158,10 +159,11 @@ $websiteDisplay = isset($websiteSelectDisplay) ? trim((string)$websiteSelectDisp
                                     data-country-code="<?= $escape($countryCode) ?>"
                                     data-region-code="<?= $escape($regionCode) ?>"
                                     data-is-seed="<?= $isSeed ? '1' : '0' ?>"
-                                    style="<?= $depth > 0 ? 'box-shadow: inset ' . ($depth * 0.75) . 'rem 0 0 color-mix(in srgb, var(--weline-theme-border, #d0d5dd) 80%, transparent);' : '' ?>"
+                                    class="inventory-tree__row"
+                                    style="--inventory-tree-depth:<?= (int)$depth ?>;"
                                 >
                                     <td>
-                                        <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);padding-inline-start:<?= $pad ?>rem;">
+                                        <div class="w-cluster inventory-tree__cell" data-align="center" style="--w-gap:var(--weline-space-2);--inventory-tree-pad:<?= (int)$pad ?>;">
                                             <?php if ($isSeed): ?>
                                                 <span class="w-badge" data-tone="neutral" data-testid="inventory-warehouse-seed-badge"><lang>系统</lang></span>
                                             <?php endif; ?>
@@ -180,15 +182,15 @@ $websiteDisplay = isset($websiteSelectDisplay) ? trim((string)$websiteSelectDisp
                                     </td>
                                     <td>
                                         <span class="w-text"><?= $escape($kindPair['label']) ?></span>
-                                        <code class="w-text" data-tone="muted" style="--w-font-size:var(--weline-layout-font-size-xs,12px);margin-inline-start:var(--weline-space-1);"><?= $escape($kindPair['code']) ?></code>
+                                        <code class="w-text inventory-tree__code" data-tone="muted" data-size="xs"><?= $escape($kindPair['code']) ?></code>
                                     </td>
                                     <td>
                                         <span class="w-text"><?= $escape($modePair['label']) ?></span>
-                                        <code class="w-text" data-tone="muted" style="--w-font-size:var(--weline-layout-font-size-xs,12px);margin-inline-start:var(--weline-space-1);"><?= $escape($modePair['code']) ?></code>
+                                        <code class="w-text inventory-tree__code" data-tone="muted" data-size="xs"><?= $escape($modePair['code']) ?></code>
                                     </td>
                                     <td>
                                         <span class="w-text"><?= $escape($typePair['label']) ?></span>
-                                        <code class="w-text" data-tone="muted" style="--w-font-size:var(--weline-layout-font-size-xs,12px);margin-inline-start:var(--weline-space-1);"><?= $escape($typePair['code']) ?></code>
+                                        <code class="w-text inventory-tree__code" data-tone="muted" data-size="xs"><?= $escape($typePair['code']) ?></code>
                                     </td>
                                     <td>
                                         <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
@@ -381,7 +383,7 @@ $websiteDisplay = isset($websiteSelectDisplay) ? trim((string)$websiteSelectDisp
                                         <tr data-label-id="<?= $labelId ?>" data-code-group="<?= $escape((string)($labelRow['code_group'] ?? '')) ?>" data-code="<?= $escape((string)($labelRow['code'] ?? '')) ?>">
                                             <td>
                                                 <span class="w-text"><?= $escape((string)($labelRow['group_title'] ?? '')) ?></span>
-                                                <code class="w-text" data-tone="muted" style="--w-font-size:var(--weline-layout-font-size-xs,12px);margin-inline-start:var(--weline-space-1);"><?= $escape((string)($labelRow['code_group'] ?? '')) ?></code>
+                                                <code class="w-text inventory-tree__code" data-tone="muted" data-size="xs"><?= $escape((string)($labelRow['code_group'] ?? '')) ?></code>
                                             </td>
                                             <td><code class="w-text"><?= $escape((string)($labelRow['code'] ?? '')) ?></code></td>
                                             <td>
@@ -537,7 +539,7 @@ $websiteDisplay = isset($websiteSelectDisplay) ? trim((string)$websiteSelectDisp
                                 $name = (string)($authRow['warehouse_name'] ?? '');
                                 $typePair = \Weline\Inventory\Service\WarehouseCodeAlias::pair('warehouse_type', (string)($authRow['warehouse_type'] ?? ''));
                                 ?>
-                                <details class="w-card" data-testid="inventory-authorization-warehouse-<?= $warehouseId ?>" style="--w-mb:0;border:1px solid var(--weline-theme-border, #d0d5dd);">
+                                <details class="w-card inventory-auth-warehouse" data-testid="inventory-authorization-warehouse-<?= $warehouseId ?>">
                                     <summary class="w-card__body" style="cursor:pointer;list-style:none;">
                                         <div class="w-cluster" data-align="center" data-justify="between">
                                             <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
@@ -557,7 +559,7 @@ $websiteDisplay = isset($websiteSelectDisplay) ? trim((string)$websiteSelectDisp
                                             </div>
                                         </div>
                                     </summary>
-                                    <div class="w-card__body" style="border-top:1px solid color-mix(in srgb, var(--weline-theme-border, #d0d5dd) 80%, transparent);">
+                                    <div class="w-card__body inventory-auth-warehouse__body">
                                         <?php if ($stores === []): ?>
                                             <div class="w-text" data-tone="muted"><lang>尚未授权任何店铺。用下方「授权 / 改绑」挂店铺。</lang></div>
                                         <?php else: ?>

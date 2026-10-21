@@ -49,10 +49,10 @@ $subheading = trim((string)($this->getData('login_widget_subtitle') ?? ''));
          data-w-auth-return="<?= $safe($redirectUrl) ?>"
          data-weline-load="api,account"
          weline-code="customer.account.login"
-         data-username-required-message="<?= $safe(__('请输入用户名或邮箱')) ?>"
-         data-password-required-message="<?= $safe(__('请输入密码')) ?>"
-         data-login-failure-message="<?= $safe(__('登录失败，请检查用户名和密码')) ?>"
-         data-request-failure-message="<?= $safe(__('登录请求失败，请稍后重试')) ?>">
+         data-username-required-message="<lang>请输入用户名或邮箱</lang>"
+         data-password-required-message="<lang>请输入密码</lang>"
+         data-login-failure-message="<lang>登录失败，请检查用户名和密码</lang>"
+         data-request-failure-message="<lang>登录请求失败，请稍后重试</lang>">
     <header class="w-auth-login__header">
         <h1 class="w-auth-login__title">
             <?php if ($heading !== ''): ?>
@@ -81,7 +81,7 @@ $subheading = trim((string)($this->getData('login_widget_subtitle') ?? ''));
     // redirect_url stays on the login root (data-w-auth-return); the widget resolves return URL itself.
     ?>
     <div class="w-auth-login__split">
-        <aside class="w-auth-login__social w-auth-login__social--quick" aria-label="<?= $safe(__('快捷登录')) ?>">
+        <aside class="w-auth-login__social w-auth-login__social--quick" aria-label="@lang('快捷登录')">
             <p class="w-auth-login__social-title"><lang>快捷登录</lang></p>
             <w:slot id="account-login-social-providers"
                     weline-code="customer.account.login.social_providers"
@@ -113,7 +113,7 @@ $subheading = trim((string)($this->getData('login_widget_subtitle') ?? ''));
                     <w:icon name="user" size="md"></w:icon><lang>用户名或邮箱</lang>
                 </label>
                 <input class="w-input" type="text" id="username" name="username"
-                       placeholder="<?= $safe(__('请输入用户名或邮箱')) ?>"
+                       placeholder="@lang('请输入用户名或邮箱')"
                        required autocomplete="username" autofocus>
             </div>
 
@@ -123,11 +123,11 @@ $subheading = trim((string)($this->getData('login_widget_subtitle') ?? ''));
                 </label>
                 <div class="w-auth-login__password">
                     <input class="w-input" type="password" id="password" name="password"
-                           placeholder="<?= $safe(__('请输入密码')) ?>"
+                           placeholder="@lang('请输入密码')"
                            required autocomplete="current-password">
                     <button type="button" class="w-button" data-w-password-toggle data-w-password-target="password"
-                            data-label-show="<?= $safe(__('显示密码')) ?>" data-label-hide="<?= $safe(__('隐藏密码')) ?>"
-                            data-tone="quiet" data-size="sm" aria-label="<?= $safe(__('显示密码')) ?>" aria-pressed="false">
+                            data-label-show="@lang('显示密码')" data-label-hide="<lang>隐藏密码</lang>"
+                            data-tone="quiet" data-size="sm" aria-label="<lang>显示密码</lang>" aria-pressed="false">
                         <span data-w-password-show>
                             <w:icon name="eye" size="md"></w:icon>
                         </span>
@@ -144,7 +144,7 @@ $subheading = trim((string)($this->getData('login_widget_subtitle') ?? ''));
                         <label class="w-field__label" for="remember_duration">
                             <w:icon name="clock" size="md"></w:icon><lang>记住</lang>
                         </label>
-                        <select class="w-select" id="remember_duration" name="remember_duration" aria-label="<?= $safe(__('记住登录状态')) ?>">
+                        <select class="w-select" id="remember_duration" name="remember_duration" aria-label="@lang('记住登录状态')">
                             <option value="0"><lang>本次会话</lang></option>
                             <option value="21600"><lang>6小时</lang></option>
                             <option value="86400"><lang>1天</lang></option>

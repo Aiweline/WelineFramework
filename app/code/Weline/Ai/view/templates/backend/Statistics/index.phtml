@@ -11,128 +11,90 @@ $modelRanking = $modelRanking ?? [];
 $periodRange = $periodRange ?? ['', ''];
 $period = $period ?? 'day';
 ?>
-<template>Weline_Ai::backend/Manager/tabs.phtml</template>
 <?php if (empty($embed)): ?>
-<div class="row">
-    <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0">
-                <i class="mdi mdi-chart-box-outline me-2"></i>
-                <lang>统计面板</lang>
-            </h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="javascript:void(0);"><lang>AI 中心</lang></a></li>
-                    <li class="breadcrumb-item active"><lang>统计面板</lang></li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</div>
+<?= $this->fetch('Weline_Ai::templates/backend/Manager/page-header.phtml', [
+    'pageHeading' => (string)__('统计面板'),
+    'pageBreadcrumbs' => [
+        ['title' => (string)__('AI 中心')],
+        ['title' => (string)__('统计面板'), 'active' => true],
+    ],
+]) ?>
 <?php endif; ?>
-
-<style>
-.weline-ai-stats-card { border-left: 4px solid; }
-.weline-ai-stats-card.requests { border-left-color: var(--backend-color-primary, #0d6efd); }
-.weline-ai-stats-card.tokens { border-left-color: var(--backend-color-success, #198754); }
-.weline-ai-stats-card.cost { border-left-color: var(--backend-color-warning, #ffc107); }
-.weline-ai-stats-period .nav-link { color: var(--backend-color-text-secondary); }
-.weline-ai-stats-period .nav-link.active { color: var(--backend-color-primary); font-weight: 600; }
-</style>
+<template>Weline_Ai::backend/Manager/tabs.phtml</template>
 
 <!-- 周期 Tab：今日 / 本周 / 本月 / 本年 -->
-<div class="row mb-3">
-    <div class="col-12">
-        <ul class="nav nav-pills weline-ai-stats-period" role="tablist">
-            <li class="nav-item">
-                <a class="nav-link <?= $period === 'day' ? 'active' : '' ?>" href="@backend-url{'ai/backend/statistics'}?period=day<?= !empty($embed) ? '&embed=1' : '' ?>"><lang>今日</lang></a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link <?= $period === 'week' ? 'active' : '' ?>" href="@backend-url{'ai/backend/statistics'}?period=week<?= !empty($embed) ? '&embed=1' : '' ?>"><lang>本周</lang></a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link <?= $period === 'month' ? 'active' : '' ?>" href="@backend-url{'ai/backend/statistics'}?period=month<?= !empty($embed) ? '&embed=1' : '' ?>"><lang>本月</lang></a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link <?= $period === 'year' ? 'active' : '' ?>" href="@backend-url{'ai/backend/statistics'}?period=year<?= !empty($embed) ? '&embed=1' : '' ?>"><lang>本年</lang></a>
-            </li>
-        </ul>
-        <?php if (!empty($periodRange[0])): ?>
-        <p class="text-muted small mt-2 mb-0"><lang>统计区间</lang>: <?= htmlspecialchars($periodRange[0]) ?> ~ <?= htmlspecialchars($periodRange[1]) ?></p>
-        <?php endif; ?>
-    </div>
-</div>
+<nav class="w-tabs__list weline-ai-stats-period" role="tablist" style="--w-mb:var(--weline-space-4);">
+    <a class="w-tabs__tab <?= $period === 'day' ? 'active' : '' ?>" role="tab" aria-selected="<?= $period === 'day' ? 'true' : 'false' ?>" href="@backend-url{'ai/backend/statistics'}?period=day<?= !empty($embed) ? '&embed=1' : '' ?>"><lang>今日</lang></a>
+    <a class="w-tabs__tab <?= $period === 'week' ? 'active' : '' ?>" role="tab" aria-selected="<?= $period === 'week' ? 'true' : 'false' ?>" href="@backend-url{'ai/backend/statistics'}?period=week<?= !empty($embed) ? '&embed=1' : '' ?>"><lang>本周</lang></a>
+    <a class="w-tabs__tab <?= $period === 'month' ? 'active' : '' ?>" role="tab" aria-selected="<?= $period === 'month' ? 'true' : 'false' ?>" href="@backend-url{'ai/backend/statistics'}?period=month<?= !empty($embed) ? '&embed=1' : '' ?>"><lang>本月</lang></a>
+    <a class="w-tabs__tab <?= $period === 'year' ? 'active' : '' ?>" role="tab" aria-selected="<?= $period === 'year' ? 'true' : 'false' ?>" href="@backend-url{'ai/backend/statistics'}?period=year<?= !empty($embed) ? '&embed=1' : '' ?>"><lang>本年</lang></a>
+</nav>
+<?php if (!empty($periodRange[0])): ?>
+<p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);"><lang>统计区间</lang>: <?= htmlspecialchars($periodRange[0]) ?> ~ <?= htmlspecialchars($periodRange[1]) ?></p>
+<?php endif; ?>
 
 <!-- 汇总卡片 -->
-<div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card weline-ai-stats-card requests">
-            <div class="card-body">
-                <h6 class="text-muted mb-2"><lang>总请求数</lang></h6>
-                <h3 class="mb-0"><?= (int)($summary['total_requests'] ?? 0) ?></h3>
-            </div>
+<div class="w-stat-tiles" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-6);">
+    <div class="w-card">
+        <div class="w-card__body">
+            <div class="w-text" data-tone="muted" data-size="sm"><lang>总请求数</lang></div>
+            <div class="w-text" data-size="lg" data-weight="strong"><?= (int)($summary['total_requests'] ?? 0) ?></div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card weline-ai-stats-card tokens">
-            <div class="card-body">
-                <h6 class="text-muted mb-2"><lang>总令牌数</lang></h6>
-                <h3 class="mb-0"><?= number_format((int)($summary['total_tokens'] ?? 0)) ?></h3>
-            </div>
+    <div class="w-card">
+        <div class="w-card__body">
+            <div class="w-text" data-tone="muted" data-size="sm"><lang>总令牌数</lang></div>
+            <div class="w-text" data-size="lg" data-weight="strong"><?= number_format((int)($summary['total_tokens'] ?? 0)) ?></div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card weline-ai-stats-card cost">
-            <div class="card-body">
-                <h6 class="text-muted mb-2"><lang>约花费</lang></h6>
-                <h3 class="mb-0">¥ <?= htmlspecialchars($summary['total_cost_formatted'] ?? '0.00') ?></h3>
-            </div>
+    <div class="w-card">
+        <div class="w-card__body">
+            <div class="w-text" data-tone="muted" data-size="sm"><lang>约花费</lang></div>
+            <div class="w-text" data-size="lg" data-weight="strong">¥ <?= htmlspecialchars($summary['total_cost_formatted'] ?? '0.00') ?></div>
         </div>
     </div>
 </div>
 
 <!-- 按模型排名（倒序：消耗 tokens 最多在前） -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="mdi mdi-format-list-numbered me-2"></i><lang>按模型消耗排名</lang></h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th><lang>排名</lang></th>
-                                <th><lang>模型</lang></th>
-                                <th><lang>总令牌数</lang></th>
-                                <th><lang>约花费</lang></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php
-                            $rank = 1;
-                            foreach ($modelRanking as $row):
-                                $code = $row['model_code'] ?? '';
-                                $tokens = (int)($row['total_tokens'] ?? 0);
-                                $costFormatted = $row['total_cost_formatted'] ?? '0.00';
-                            ?>
-                            <tr>
-                                <td><?= $rank++ ?></td>
-                                <td><code><?= htmlspecialchars($code) ?></code></td>
-                                <td><?= number_format($tokens) ?></td>
-                                <td>¥ <?= htmlspecialchars($costFormatted) ?></td>
-                            </tr>
-                            <?php endforeach; ?>
-                            <?php if (empty($modelRanking)): ?>
-                            <tr>
-                                <td colspan="4" class="text-center text-muted"><lang>暂无数据</lang></td>
-                            </tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+<section class="w-card">
+    <header class="w-card__header">
+        <h2 class="w-card__title"><lang>按模型消耗排名</lang></h2>
+    </header>
+    <div class="w-card__body">
+        <div class="w-table-wrap">
+            <table class="w-table">
+                <thead>
+                    <tr>
+                        <th><lang>排名</lang></th>
+                        <th><lang>模型</lang></th>
+                        <th><lang>总令牌数</lang></th>
+                        <th><lang>约花费</lang></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                    $rank = 1;
+                    foreach ($modelRanking as $row):
+                        $code = $row['model_code'] ?? '';
+                        $tokens = (int)($row['total_tokens'] ?? 0);
+                        $costFormatted = $row['total_cost_formatted'] ?? '0.00';
+                    ?>
+                    <tr>
+                        <td><?= $rank++ ?></td>
+                        <td><code><?= htmlspecialchars($code) ?></code></td>
+                        <td><?= number_format($tokens) ?></td>
+                        <td>¥ <?= htmlspecialchars($costFormatted) ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    <?php if (empty($modelRanking)): ?>
+                    <tr>
+                        <td colspan="4">
+                            <div class="w-empty"><lang>暂无数据</lang></div>
+                        </td>
+                    </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
         </div>
     </div>
-</div>
+</section>

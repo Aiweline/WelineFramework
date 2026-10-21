@@ -46,7 +46,7 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
                 <w:icon name="arrow-left" size="sm"></w:icon><lang>返回列表</lang>
             </a>
             <div class="w-cluster">
-                <h1 class="w-seo-embed__title"><w:icon name="file" size="sm"></w:icon><?= $escape($subject['title'] ?? __('主体详情')) ?></h1>
+                <h2 class="w-seo-embed__title"><w:icon name="file" size="sm"></w:icon><?= $escape($subject['title'] ?? __('主体详情')) ?></h2>
                 <span class="w-badge" data-tone="<?= (int)($subject['status'] ?? 0) === 1 ? 'success' : 'neutral' ?>">
                     <?= (int)($subject['status'] ?? 0) === 1 ? __('启用') : __('禁用') ?>
                 </span>

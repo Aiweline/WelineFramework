@@ -1,270 +1,247 @@
 <?php
-/** @var \Weline\Framework\View\Template $this */
-/** @var \Weline\Theme\Model\WelineTheme $theme */
-/** @var string $area */
-/** @var string $scope */
-/** @var array $variableFiles */
-
+/**
+ * 变量文件配置（内容模板）
+ *
+ * 页面骨架（main / h1 / 面包屑）由 backend layout + partials/layout/main-content 统一输出。
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array|\Weline\Theme\Model\WelineTheme $theme
+ * @var string $area
+ * @var string $scope
+ * @var array<string, array{name:string, variables:array, configured_count:int}> $variableFiles
+ * @var string $scanUrl
+ */
+$themeData = is_array($theme ?? null)
+    ? $theme
+    : (is_object($theme ?? null) && method_exists($theme, 'getData') ? (array)$theme->getData() : []);
+$themeId = (int)($themeData['id'] ?? 0);
+$area = (string)($area ?? 'frontend') ?: 'frontend';
+$scope = (string)($scope ?? 'default') ?: 'default';
+$h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$variableFiles = is_array($variableFiles ?? null) ? $variableFiles : [];
 $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_UNESCAPED_SLASHES
     | JSON_HEX_TAG
     | JSON_HEX_APOS
     | JSON_HEX_AMP
     | JSON_HEX_QUOT;
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-$area = $area ?: 'frontend';
-$scope = $scope ?: 'default';
-
-// API URLs
-$getVariableFilePath = 'theme/backend/config/variables/getVariableFile';
 ?>
-<!DOCTYPE html>
-<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><lang>变量文件配置</lang> - <?= htmlspecialchars($theme->getName() ?? '主题') ?></title>
-    <style>
-        .variable-files-container {
-            padding: 20px;
-        }
-        .variable-files-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-        .variable-file-card {
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 20px;
-            background: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: box-shadow 0.3s;
-        }
-        .variable-file-card:hover {
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-        }
-        .variable-file-card h3 {
-            margin: 0 0 10px 0;
-            font-size: 18px;
-            color: #333;
-        }
-        .variable-file-card .file-info {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 15px;
-        }
-        .variable-file-card .btn-config {
-            width: 100%;
-            padding: 10px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .btn-config:hover {
-            background: #0056b3;
-        }
-        .btn-scan {
-            margin-bottom: 20px;
-            padding: 10px 20px;
-            background: #28a745;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-    </style>
-</head>
-<body>
-    @template(Weline_Admin::common/body.phtml)
-    
-    <div class="variable-files-container">
-        <h1><lang>变量文件配置</lang> - <?= htmlspecialchars($theme->getName() ?? '主题') ?></h1>
-        
-        <div>
-            <button type="button" class="btn-scan" data-variable-file-action="scan">
-                <lang>扫描变量文件</lang>
+<div class="w-stack theme-variable-files-config" data-testid="theme-variable-files">
+    <div class="w-toolbar">
+        <div class="w-cluster" data-justify="end">
+            <button type="button" class="w-button" data-tone="primary" data-variable-file-action="scan">
+                <w:icon name="search" size="sm"></w:icon>
+                <?= $h(__('扫描变量文件')) ?>
             </button>
         </div>
-        
-        <div class="variable-files-grid">
-            <?php foreach ($variableFiles as $file => $fileInfo): ?>
-            <div class="variable-file-card">
-                <h3><?= htmlspecialchars($fileInfo['name']) ?></h3>
-                <div class="file-info">
-                    <div><lang>变量数量：</lang><strong><?= count($fileInfo['variables'] ?? []) ?></strong></div>
-                    <div><lang>已配置：</lang><strong style="color: <?= ($fileInfo['configured_count'] ?? 0) > 0 ? '#28a745' : '#999' ?>"><?= $fileInfo['configured_count'] ?? 0 ?></strong></div>
-                    <?php if (($fileInfo['configured_count'] ?? 0) < count($fileInfo['variables'] ?? [])): ?>
-                    <div style="font-size: 12px; color: #ffc107; margin-top: 5px;">
-                        <lang>还有 <?= count($fileInfo['variables'] ?? []) - ($fileInfo['configured_count'] ?? 0) ?> 个变量使用默认值</lang>
+    </div>
+
+    <?php if ($variableFiles === []): ?>
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-empty">
+                    <span class="w-empty__icon"><w:icon name="palette" size="lg"></w:icon></span>
+                    <p class="w-empty__title"><?= $h(__('暂无可用变量文件')) ?></p>
+                    <div class="w-empty__actions">
+                        <button type="button" class="w-button" data-tone="primary" data-size="sm" data-variable-file-action="scan">
+                            <w:icon name="search" size="sm"></w:icon>
+                            <?= $h(__('扫描变量文件')) ?>
+                        </button>
                     </div>
-                    <?php endif; ?>
                 </div>
-                <button type="button" class="btn-config" data-variable-file-action="configure" data-variable-file-name="<?= htmlspecialchars((string)$file, ENT_QUOTES, 'UTF-8') ?>">
-                    <lang>配置变量</lang>
-                </button>
             </div>
+        </div>
+    <?php else: ?>
+        <div class="w-auto-grid" style="--w-auto-grid-min:18rem;">
+            <?php foreach ($variableFiles as $file => $fileInfo): ?>
+                <?php
+                $file = (string)$file;
+                $fileInfo = is_array($fileInfo) ? $fileInfo : [];
+                $fileVariables = is_array($fileInfo['variables'] ?? null) ? $fileInfo['variables'] : [];
+                $variableCount = count($fileVariables);
+                $configuredCount = (int)($fileInfo['configured_count'] ?? 0);
+                $defaultCount = max(0, $variableCount - $configuredCount);
+                ?>
+                <section class="w-card" data-variable-file="<?= $h($file) ?>">
+                    <header class="w-card__header">
+                        <h3 class="w-card__title"><?= $h($fileInfo['name'] ?? $file) ?></h3>
+                        <?php if ($defaultCount > 0): ?>
+                            <span class="w-badge" data-w-background="warning"><?= $h(__('还有 %{1} 个变量使用默认值', [$defaultCount])) ?></span>
+                        <?php else: ?>
+                            <span class="w-badge" data-w-background="success"><?= $h(__('已配置：')) ?><?= $configuredCount ?></span>
+                        <?php endif; ?>
+                    </header>
+                    <div class="w-card__body">
+                        <dl class="w-stack" style="--w-gap:var(--weline-space-2);margin:0;">
+                            <div class="w-cluster" data-justify="between">
+                                <dt class="w-text" data-tone="muted" data-size="sm"><?= $h(__('变量数量：')) ?></dt>
+                                <dd class="w-text" data-size="sm" data-weight="strong" style="margin:0;"><?= $variableCount ?></dd>
+                            </div>
+                            <div class="w-cluster" data-justify="between">
+                                <dt class="w-text" data-tone="muted" data-size="sm"><?= $h(__('已配置：')) ?></dt>
+                                <dd class="w-text" data-size="sm" data-weight="strong" style="margin:0;"><?= $configuredCount ?></dd>
+                            </div>
+                        </dl>
+                    </div>
+                    <footer class="w-card__footer">
+                        <span class="w-text" data-tone="muted" data-size="xs"><?= $h($file) ?></span>
+                        <button
+                            type="button"
+                            class="w-button"
+                            data-tone="primary"
+                            data-variant="outline"
+                            data-size="sm"
+                            data-variable-file-action="configure"
+                            data-variable-file-name="<?= $h($file) ?>"
+                        >
+                            <w:icon name="edit" size="sm"></w:icon>
+                            <?= $h(__('配置变量')) ?>
+                        </button>
+                    </footer>
+                </section>
             <?php endforeach; ?>
         </div>
-    </div>
-    
-    <!-- SweetAlert2 CSS -->
-    <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-    <!-- SweetAlert2 JS -->
-    <script>
-(function(g){if(g.WelineThemeBinQuery)return;g.WelineThemeBinQuery={request:function(url,options){options=options||{};var method=String(options.method||'GET').toUpperCase();var body='';if(options.body!=null){if(typeof options.body==='string')body=options.body;else if(typeof FormData!=='undefined'&&options.body instanceof FormData){var p=new URLSearchParams();options.body.forEach(function(v,k){if(!(typeof File!=='undefined'&&v instanceof File))p.append(k,String(v));});body=p.toString();}else{try{body=JSON.stringify(options.body);}catch(e){body='';}}}var run=function(api){return api.resource('theme').editorRequest({url:url,method:method,headers:options.headers||{},body:body}).then(function(data){return (function(d){var b=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);return (b&&typeof b.wrapAdminBridgeResult==='function')?b.wrapAdminBridgeResult(d):d;})(data);});};if(g.Weline&&g.Weline.load)return g.Weline.load('api').then(run);return Promise.resolve(run(g.Weline.Api));}};})(window);
-</script>
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-    <script>
-        const variableFileConfig = {
-            getVariableFileUrl: "@url{$getVariableFilePath}",
-            themeId: <?= json_encode((string)($theme->getId() ?? ''), $jsonForScriptFlags) ?>,
-            area: <?= json_encode((string)$area, $jsonForScriptFlags) ?>,
-            scope: <?= json_encode((string)$scope, $jsonForScriptFlags) ?>,
-            scanUrl: <?= json_encode((string)($scanUrl ?? ''), $jsonForScriptFlags) ?>
-        };
-        const variableFileMessages = {
-            confirmTitle: <?= json_encode((string)__('确认操作'), $jsonForScriptFlags) ?>,
-            scanConfirm: <?= json_encode((string)__('确定要扫描变量文件吗？这将更新Meta数据库中的变量信息。'), $jsonForScriptFlags) ?>,
-            scanConfirmButton: <?= json_encode((string)__('开始扫描'), $jsonForScriptFlags) ?>,
-            cancel: <?= json_encode((string)__('取消'), $jsonForScriptFlags) ?>,
-            confirmUnavailable: <?= json_encode((string)__('确认组件不可用，请刷新页面后重试'), $jsonForScriptFlags) ?>,
-            success: <?= json_encode((string)__('成功'), $jsonForScriptFlags) ?>,
-            scanComplete: <?= json_encode((string)__('扫描完成'), $jsonForScriptFlags) ?>,
-            scanFailed: <?= json_encode((string)__('扫描失败'), $jsonForScriptFlags) ?>,
-            unknownError: <?= json_encode((string)__('未知错误'), $jsonForScriptFlags) ?>,
-            ok: <?= json_encode((string)__('确定'), $jsonForScriptFlags) ?>,
-            networkError: <?= json_encode((string)__('网络错误'), $jsonForScriptFlags) ?>
-        };
+    <?php endif; ?>
+</div>
 
-        function openVariableConfig(file) {
-            const params = new URLSearchParams({
-                theme_id: variableFileConfig.themeId,
-                area: variableFileConfig.area,
-                scope: variableFileConfig.scope,
-                file: file
-            });
-            const url = variableFileConfig.getVariableFileUrl + '?' + params.toString();
-            
-            // 直接跳转到配置页面
-            window.location.href = url;
-        }
+<script>
+(function () {
+    'use strict';
 
-        function showScanError(message) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: variableFileMessages.scanFailed,
-                    text: message || variableFileMessages.unknownError,
-                    confirmButtonText: variableFileMessages.ok
-                });
-                return;
-            }
-            if (window.BackendToast && typeof window.BackendToast.error === 'function') {
-                window.BackendToast.error(message || variableFileMessages.unknownError);
-                return;
-            }
-            console.error(variableFileMessages.scanFailed + ': ' + (message || variableFileMessages.unknownError));
-        }
-
-        function confirmScanVariableFiles(onConfirm) {
-            if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-                window.BackendConfirm.show(variableFileMessages.scanConfirm, {
-                    title: variableFileMessages.confirmTitle,
-                    type: 'warning',
-                    confirmText: variableFileMessages.scanConfirmButton,
-                    cancelText: variableFileMessages.cancel
-                }).then(function (confirmed) {
-                    if (confirmed) {
-                        onConfirm();
-                    }
-                });
-                return;
-            }
-
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: variableFileMessages.confirmTitle,
-                    text: variableFileMessages.scanConfirm,
-                    showCancelButton: true,
-                    confirmButtonText: variableFileMessages.scanConfirmButton,
-                    cancelButtonText: variableFileMessages.cancel
-                }).then(function (result) {
-                    if (result && result.isConfirmed) {
-                        onConfirm();
-                    }
-                });
-                return;
-            }
-
-            showScanError(variableFileMessages.confirmUnavailable);
-        }
-
-        function scanVariableFiles() {
-            confirmScanVariableFiles(function () {
-                if (!variableFileConfig.scanUrl) {
-                    showScanError(variableFileMessages.unknownError);
-                    return;
-                }
-
-                // 触发Meta扫描事件
-                const formData = new FormData();
-                formData.append('scan_path', 'Weline_Theme::view/theme/' + variableFileConfig.area + '/variables');
-                formData.append('namespace', 'theme');
-                formData.append('strict_mode', 'false');
-
-                WelineThemeBinQuery.request(variableFileConfig.scanUrl, { method: 'POST', body: formData })
-                .then(function(response) {
-                    var data = (function(r){ var b=window.WelineApiBusiness||(window.Weline&&window.Weline.ApiBusiness); return (b&&typeof b.unwrapBusiness==='function')?b.unwrapBusiness(r):r.data; })(response);
-                    if (response.ok && (data && (data.code === 200 || data.success))) {
-                        if (typeof Swal !== 'undefined') {
-                            Swal.fire({
-                                icon: 'success',
-                                title: variableFileMessages.success,
-                                text: variableFileMessages.scanComplete,
-                                timer: 2000,
-                                showConfirmButton: false
-                            }).then(() => location.reload());
-                        } else {
-                            console.log(variableFileMessages.scanComplete);
-                            location.reload();
-                        }
+    // 页面级初始化：变量文件扫描与配置入口。
+    (function (g) {
+        if (g.WelineThemeBinQuery) return;
+        g.WelineThemeBinQuery = {
+            request: function (url, options) {
+                options = options || {};
+                var method = String(options.method || 'GET').toUpperCase();
+                var body = '';
+                if (options.body != null) {
+                    if (typeof options.body === 'string') {
+                        body = options.body;
+                    } else if (typeof FormData !== 'undefined' && options.body instanceof FormData) {
+                        var p = new URLSearchParams();
+                        options.body.forEach(function (v, k) {
+                            if (!(typeof File !== 'undefined' && v instanceof File)) p.append(k, String(v));
+                        });
+                        body = p.toString();
                     } else {
-                        showScanError((data && data.msg) || variableFileMessages.unknownError);
+                        try { body = JSON.stringify(options.body); } catch (e) { body = ''; }
                     }
-                })
-                .catch(function(error) {
-                    console.error('Error:', error);
-                    var msg = error && error.message ? error.message : variableFileMessages.networkError;
-                    showScanError(msg);
-                });
+                }
+                var run = function (api) {
+                    return api.resource('theme').editorRequest({ url: url, method: method, headers: options.headers || {}, body: body })
+                        .then(function (data) {
+                            var b = g.WelineApiBusiness || (g.Weline && g.Weline.ApiBusiness);
+                            return (b && typeof b.wrapAdminBridgeResult === 'function') ? b.wrapAdminBridgeResult(data) : data;
+                        });
+                };
+                if (g.Weline && g.Weline.load) return g.Weline.load('api').then(run);
+                return Promise.resolve(run(g.Weline.Api));
+            }
+        };
+    })(window);
+
+    var config = {
+        getVariableFileUrl: '@url{'theme/backend/config/variables/getVariableFile'}',
+        themeId: <?= json_encode((string)$themeId, $jsonForScriptFlags) ?>,
+        area: <?= json_encode($area, $jsonForScriptFlags) ?>,
+        scope: <?= json_encode($scope, $jsonForScriptFlags) ?>,
+        scanUrl: <?= json_encode((string)($scanUrl ?? ''), $jsonForScriptFlags) ?>
+    };
+    var text = {
+        confirmTitle: <?= json_encode((string)__('确认操作'), $jsonForScriptFlags) ?>,
+        scanConfirm: <?= json_encode((string)__('确定要扫描变量文件吗？这将更新Meta数据库中的变量信息。'), $jsonForScriptFlags) ?>,
+        scanConfirmButton: <?= json_encode((string)__('开始扫描'), $jsonForScriptFlags) ?>,
+        cancel: <?= json_encode((string)__('取消'), $jsonForScriptFlags) ?>,
+        scanComplete: <?= json_encode((string)__('扫描完成'), $jsonForScriptFlags) ?>,
+        scanFailed: <?= json_encode((string)__('扫描失败'), $jsonForScriptFlags) ?>,
+        unknownError: <?= json_encode((string)__('未知错误'), $jsonForScriptFlags) ?>,
+        networkError: <?= json_encode((string)__('网络错误'), $jsonForScriptFlags) ?>
+    };
+
+    function ui() {
+        return (window.Weline && window.Weline.UI) || null;
+    }
+
+    function toast(type, message) {
+        var api = ui();
+        if (api && api.toast && typeof api.toast[type] === 'function') {
+            api.toast[type](message);
+            return;
+        }
+        console[type === 'error' ? 'error' : 'log'](message);
+    }
+
+    function confirmDialog(message) {
+        var api = ui();
+        if (api && api.dialog && typeof api.dialog.confirm === 'function') {
+            return api.dialog.confirm(message, {
+                title: text.confirmTitle,
+                confirmLabel: text.scanConfirmButton,
+                cancelLabel: text.cancel
             });
         }
+        return Promise.resolve(window.confirm(message));
+    }
 
-        document.addEventListener('click', function(event) {
-            const actionButton = event.target.closest('[data-variable-file-action]');
-            if (!actionButton) {
-                return;
-            }
-
-            const action = actionButton.getAttribute('data-variable-file-action');
-            if (action === 'scan') {
-                scanVariableFiles();
-                return;
-            }
-
-            if (action === 'configure') {
-                const fileName = actionButton.getAttribute('data-variable-file-name');
-                if (fileName) {
-                    openVariableConfig(fileName);
-                }
-            }
+    function openVariableConfig(file) {
+        var params = new URLSearchParams({
+            theme_id: config.themeId,
+            area: config.area,
+            scope: config.scope,
+            file: file
         });
-    </script>
-</body>
-</html>
+        window.location.href = config.getVariableFileUrl + '?' + params.toString();
+    }
 
+    function scanVariableFiles() {
+        confirmDialog(text.scanConfirm).then(function (confirmed) {
+            if (!confirmed) return;
+            if (!config.scanUrl) {
+                toast('error', text.unknownError);
+                return;
+            }
+
+            var formData = new FormData();
+            formData.append('scan_path', 'Weline_Theme::view/theme/' + config.area + '/variables');
+            formData.append('namespace', 'theme');
+            formData.append('strict_mode', 'false');
+
+            WelineThemeBinQuery.request(config.scanUrl, { method: 'POST', body: formData })
+                .then(function (response) {
+                    var data = (function (r) {
+                        var b = window.WelineApiBusiness || (window.Weline && window.Weline.ApiBusiness);
+                        return (b && typeof b.unwrapBusiness === 'function') ? b.unwrapBusiness(r) : (r && r.data !== undefined ? r.data : r);
+                    })(response);
+                    var ok = (response && (response.ok === true || response.success === true))
+                        || (data && (data.code === 200 || data.success === true));
+                    if (!ok) {
+                        toast('error', (data && (data.msg || data.message)) || text.unknownError);
+                        return;
+                    }
+                    toast('success', text.scanComplete);
+                    setTimeout(function () { location.reload(); }, 600);
+                })
+                .catch(function (error) {
+                    toast('error', (error && error.message) || text.networkError);
+                });
+        });
+    }
+
+    document.addEventListener('click', function (event) {
+        var actionButton = event.target.closest('[data-variable-file-action]');
+        if (!actionButton) return;
+
+        var action = actionButton.getAttribute('data-variable-file-action');
+        if (action === 'scan') {
+            scanVariableFiles();
+            return;
+        }
+        if (action === 'configure') {
+            var fileName = actionButton.getAttribute('data-variable-file-name');
+            if (fileName) openVariableConfig(fileName);
+        }
+    });
+})();
+</script>

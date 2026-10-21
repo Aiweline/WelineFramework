@@ -1,0 +1,20 @@
+/* Framework 测试管理页私有 CSS — 后端主题开发标准 §6.2（Token-only，无 !important）。 */
+@layer page {
+  .framework-test-run-stats { --w-gap: var(--weline-space-3); margin-block-end: var(--weline-space-3); }
+  .framework-test-progress { block-size: var(--weline-space-3); margin-block-end: var(--weline-space-3); }
+  .framework-test-log {
+    display: block;
+    min-block-size: 18rem;
+    max-block-size: 28rem;
+    overflow: auto;
+    white-space: pre-wrap;
+    padding: var(--weline-space-4);
+    border: 1px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-md);
+    background: var(--weline-theme-surface-muted);
+    color: var(--weline-theme-text);
+    font-family: var(--weline-font-mono, ui-monospace, monospace);
+  }
+  .framework-test-divider { margin-block: var(--weline-space-6); border: 0; border-block-start: 1px solid var(--weline-theme-border); }
+  .w-tabs__tab.active { color: var(--weline-theme-primary); border-block-end-color: var(--weline-theme-primary); }
+}

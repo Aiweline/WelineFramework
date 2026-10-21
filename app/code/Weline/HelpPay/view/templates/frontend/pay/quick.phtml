@@ -29,7 +29,7 @@ if ($shareUrl !== '' && !str_starts_with($shareUrl, 'http') && $host !== '') {
          weline-code="helppay.quick.page">
     <header class="w-helppay-quick__head w-stack" style="--w-gap:var(--weline-space-2, var(--space-2));">
         <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;"><lang>本人快捷购买</lang></p>
-        <h1 class="w-text" data-weight="strong" style="--w-m:0;"><?= $escape(__('快捷购买')) ?></h1>
+        <h1 class="w-text" data-weight="strong" style="--w-m:0;"><lang>快捷购买</lang></h1>
         <p class="w-text" data-tone="muted" style="--w-m:0;">
             <lang>订单归属你本人。请在此页完成支付。</lang>
         </p>
@@ -57,7 +57,7 @@ if ($shareUrl !== '' && !str_starts_with($shareUrl, 'http') && $host !== '') {
                 data-helppay-quick-self-pay="1"
                 data-payment-method="<?= $escape($preferredMethod) ?>"
                 data-token="<?= $escape($token) ?>">
-            <?= $escape(__('立即支付')) ?>
+            <lang>立即支付</lang>
         </button>
         <?php if ($preferredMethod === ''): ?>
             <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:var(--weline-space-2, var(--space-2)) 0 0;">

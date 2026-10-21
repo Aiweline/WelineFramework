@@ -41,7 +41,7 @@ $renderHiddenFields = static function (array $fields): string {
 
 ?>
 <link rel="stylesheet" href="@static(Weline_I18n::css/backend-admin.css)">
-<script src="@static(Weline_I18n::js/backend-admin.js)"></script>
+<script src="@static(Weline_I18n::js/backend-admin.js)" defer></script>
 <div class="i18n-admin-page">
 <div class="w-grid">
     <div style="--w-span:12;">
@@ -49,7 +49,7 @@ $renderHiddenFields = static function (array $fields): string {
     </div>
 </div>
 
-<div class="w-stat-tiles i18n-admin-stat-tiles" style="--w-stat-tile-min:7.5rem;--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);">
+<div class="w-stat-tiles i18n-admin-stat-tiles" style="--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);">
     <div class="w-card" data-w-shadow="sm" data-w-border="none">
         <div class="w-card__body">
             <div class="w-text" data-tone="muted" data-size="sm"><?= __('总计:') ?></div>
@@ -216,17 +216,17 @@ $renderHiddenFields = static function (array $fields): string {
             <table class="w-table" data-w-vertical="middle" style="--w-mb:0;">
                 <thead>
                 <tr>
-                    <th class="w-text" style="width: 48px;" data-align="center">
+                    <th class="w-text" data-align="center">
                         <input type="checkbox" id="locale-select-all">
                     </th>
-                    <th style="width: 150px;"><?= __('代码') ?></th>
-                    <th style="width: 110px;"><?= __('简码') ?></th>
-                    <th style="width: 100px;">ISO2</th>
-                    <th style="width: 100px;">ISO3</th>
-                    <th style="width: 90px;"><?= __('国家代码') ?></th>
+                    <th><?= __('代码') ?></th>
+                    <th><?= __('简码') ?></th>
+                    <th>ISO2</th>
+                    <th>ISO3</th>
+                    <th><?= __('国家代码') ?></th>
                     <th><?= __('名称') ?></th>
-                    <th style="width: 120px;" class="w-text" data-align="center"><?= __('状态') ?></th>
-                    <th style="width: 280px;" class="w-text" data-align="center"><?= __('操作') ?></th>
+                    <th class="w-text" data-align="center"><?= __('状态') ?></th>
+                    <th class="w-text" data-align="center"><?= __('操作') ?></th>
                 </tr>
                 </thead>
                 <tbody>

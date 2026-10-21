@@ -1,3 +1,4 @@
+/* Weline UI source: css/currency-select.css */
 @layer components {
     .w-currency-select {
         position: relative;
@@ -20,7 +21,7 @@
         justify-content: space-between;
         gap: var(--weline-space-2);
         padding: var(--weline-space-2) var(--weline-space-3);
-        border: 1px solid var(--weline-theme-border-strong);
+        border: var(--border-width-thin) solid var(--weline-theme-border-strong);
         border-radius: var(--weline-radius-md);
         background: var(--weline-theme-surface);
         color: var(--weline-theme-text);
@@ -35,7 +36,7 @@
 
     .w-currency-select__trigger:focus-visible {
         border-color: var(--weline-theme-focus);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--weline-theme-focus) 20%, transparent);
+        box-shadow: var(--focus-ring);
         outline: 0;
     }
 
@@ -86,7 +87,7 @@
         align-items: center;
         gap: var(--weline-space-1);
         padding: 0 var(--weline-space-2);
-        border: 1px solid var(--weline-theme-border);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
         border-radius: var(--weline-radius-sm);
         background: var(--weline-theme-surface-muted);
         color: var(--weline-theme-text);
@@ -100,7 +101,7 @@
 
     .w-currency-select__tag.is-sortable:hover {
         border-color: color-mix(in srgb, var(--weline-theme-primary) 45%, transparent);
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--weline-theme-primary) 28%, transparent);
+        box-shadow: var(--focus-ring);
     }
 
     /* :active 禁止 pointer-events:none —— 按下瞬间就会取消 HTML5 dragstart（拖不动） */
@@ -116,7 +117,7 @@
     }
 
     .w-currency-select__tag.is-drop-target {
-        box-shadow: 0 0 0 2px color-mix(in srgb, var(--weline-theme-primary) 55%, transparent);
+        box-shadow: var(--focus-ring);
     }
 
     .w-currency-select__drag-handle {
@@ -126,10 +127,10 @@
         justify-content: center;
         inline-size: 0.9rem;
         block-size: 1rem;
-        margin-inline-end: 0.05rem;
+        margin-inline-end: var(--spacing-px);
         opacity: 0.85;
-        color: var(--weline-theme-text-muted, currentColor);
-        font-size: 1rem;
+        color: var(--weline-theme-text-muted);
+        font-size: var(--weline-font-size-base);
         line-height: 1;
         letter-spacing: -0.06em;
         pointer-events: none;
@@ -142,7 +143,7 @@
 
     .w-currency-select__tag.is-sortable:hover .w-currency-select__drag-handle {
         opacity: 1;
-        color: var(--weline-theme-primary, currentColor);
+        color: var(--weline-theme-primary);
     }
 
     .w-currency-select__tag[data-readonly="true"] {
@@ -160,7 +161,7 @@
     .w-currency-select__code {
         color: var(--weline-theme-text-muted);
         font-size: var(--weline-font-size-xs);
-        letter-spacing: 0.04em;
+        letter-spacing: var(--letter-spacing-wide);
     }
 
     .w-currency-select__remove {
@@ -193,13 +194,13 @@
         display: flex;
         flex-direction: column;
         gap: var(--weline-space-2);
-        min-inline-size: min(var(--w-currency-select-anchor-width, 16rem), var(--w-floating-max-inline-size, calc(100dvw - 1rem)));
+        min-inline-size: min(var(--w-currency-select-anchor-width), var(--w-floating-max-inline-size, calc(100dvw - 1rem)));
         max-inline-size: var(--w-floating-max-inline-size, calc(100dvw - 1rem));
         max-block-size: var(--w-floating-max-block-size, calc(100dvh - 1rem));
         padding: var(--weline-space-2);
         overflow: hidden;
         overscroll-behavior: contain;
-        border: 1px solid var(--weline-theme-border);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
         border-radius: var(--weline-radius-lg);
         background: var(--weline-theme-surface-raised, var(--weline-theme-surface));
         box-shadow: var(--weline-theme-shadow-md);
@@ -264,7 +265,7 @@
         min-width: 0;
         flex: 1;
         flex-direction: column;
-        gap: 0.125rem;
+        gap: var(--spacing-0_5);
     }
 
     .w-currency-select__option-copy strong,
@@ -292,7 +293,7 @@
         }
 
         .w-currency-select__option {
-            min-height: 2.75rem;
+            min-height: var(--control-height-lg);
         }
     }
 }

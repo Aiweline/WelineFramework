@@ -1,0 +1,27 @@
+/* Multipass backend page private CSS — 后端主题开发标准 §6.2.
+   Token-only, no !important, scoped in @layer page. */
+@layer page {
+.weline-multipass-app-card { border: 1px solid var(--backend-color-border-default); border-radius: var(--weline-radius-md); padding: var(--weline-space-5); margin-bottom: var(--weline-space-4); background: var(--backend-color-card-bg);
+}
+.weline-multipass-app-card:hover { border-color: var(--backend-color-primary); box-shadow: var(--backend-shadow-md));
+}
+.weline-multipass-status { display: inline-flex; align-items: center; gap: var(--weline-space-1); padding: var(--weline-space-1) var(--weline-space-3); border-radius: var(--weline-radius-round); font-size: var(--weline-font-size-xs); font-weight: 600;
+}
+.weline-multipass-status.active { background: var(--backend-color-success-bg); color: var(--backend-color-success);
+}
+.weline-multipass-status.disabled,
+.weline-multipass-status.deleted { background: var(--backend-color-danger-bg); color: var(--backend-color-danger);
+}
+.weline-multipass-application-status { display: inline-flex; align-items: center; padding: var(--weline-space-1) var(--weline-space-3); border-radius: var(--weline-radius-round); font-size: var(--weline-font-size-xs); font-weight: 600; background: var(--backend-color-card-bg-secondary); color: var(--backend-color-text-secondary);
+}
+.weline-multipass-application-status.pending { background: var(--backend-color-warning-bg); color: var(--backend-color-warning);
+}
+.weline-multipass-application-status.approved { background: var(--backend-color-success-bg); color: var(--backend-color-success);
+}
+.weline-multipass-application-status.rejected { background: var(--backend-color-danger-bg); color: var(--backend-color-danger);
+}
+.weline-multipass-client { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: var(--backend-color-card-bg-secondary); border-radius: var(--weline-radius-sm); padding: var(--weline-space-2) var(--weline-space-3); word-break: break-all;
+}
+.weline-multipass-secret-panel { display: none; border: 1px solid var(--backend-color-warning); border-radius: var(--weline-radius-md); background: var(--backend-color-warning-bg); padding: var(--weline-space-4); margin-bottom: var(--weline-space-5);
+}
+}

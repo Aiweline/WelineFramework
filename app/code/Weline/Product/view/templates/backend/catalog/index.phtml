@@ -231,7 +231,7 @@ foreach ($websiteOptionsForScope as $websiteOpt) {
         <div class="w-card__body w-cluster" data-align="start" data-justify="between" data-wrap="true">
             <div class="w-stack" data-gap="sm">
                 <p class="w-product-admin__eyebrow"><lang>Catalog workspace</lang></p>
-                <h1 class="w-card__title w-product-admin__title"><?= $escape($title) ?></h1>
+                <h2 class="w-card__title w-product-admin__title"><?= $escape($title) ?></h2>
                 <p class="w-text w-product-admin__subtitle" data-tone="muted">
                     <?php if ($section === 'products'): ?>
                         <lang>商品主体、销售规格、价格、Store 与发布诊断集中管理</lang>
@@ -267,7 +267,7 @@ foreach ($websiteOptionsForScope as $websiteOpt) {
     <?php if ($section === 'products'): ?>
         <script type="application/json" id="product-admin-state" data-no-extract="true"><?= $product_admin_state_json ?></script>
 
-        <div class="w-stat-tiles" aria-label="@lang(商品概览)" style="--w-stat-tile-min:10rem;--w-gap:var(--weline-space-5);">
+        <div class="w-stat-tiles" aria-label="@lang(商品概览)" style="--w-gap:var(--weline-space-5);">
             <div class="w-card" data-w-height="full">
                 <div class="w-card__body">
                     <div class="w-text" data-tone="muted" data-size="sm"><lang>当前筛选商品</lang></div>
@@ -1121,7 +1121,7 @@ foreach ($websiteOptionsForScope as $websiteOpt) {
         </div>
     <?php endif; ?>
 </div>
-<script src="@static(Weline_FileManager::js/w-scope.js)"></script>
-<script src="@static(Weline_FileManager::js/media-identity-picker.js)"></script>
+<script defer src="@static(Weline_FileManager::js/w-scope.js)"></script>
+<script defer src="@static(Weline_FileManager::js/media-identity-picker.js)"></script>
 <script type="module" src="@static(Weline_Theme::ui/pages/weline-eav-manager.js)"></script>
 <script src="@static(Weline_Product::js/backend/product-admin.js)?v=20260916-media-identity" defer data-no-extract="true"></script>

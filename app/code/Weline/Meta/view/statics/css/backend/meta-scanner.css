@@ -1,0 +1,8 @@
+/* Weline_Meta 扫描页私有布局（后端主题标准 §6.2）。 */
+@layer page {
+    .scan-card-icon {
+        inline-size: var(--weline-space-12);
+        block-size: var(--weline-space-12);
+        border-radius: var(--weline-radius-lg);
+    }
+}

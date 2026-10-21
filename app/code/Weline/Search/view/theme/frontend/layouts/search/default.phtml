@@ -90,7 +90,7 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
                     position="content"
                     class="search-main__content-root-slot">
                 <div class="<?= htmlspecialchars($searchBodyClass, ENT_QUOTES, 'UTF-8') ?>">
-                    <aside class="search-layout__filters" aria-label="<?= htmlspecialchars((string)__('搜索筛选'), ENT_QUOTES, 'UTF-8') ?>">
+                    <aside class="search-layout__filters" aria-label="@lang('搜索筛选')">
                         <?php if ($showSearchTypeFilter): ?>
                             <?php
                             echo $this->fetch('Weline_Search::templates/frontend/partials/type-filter.phtml', [
@@ -190,7 +190,7 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
 <style>
     .weline-page-wrapper.search-layout {
         color: var(--w-surface-fg, var(--weline-theme-body-text, var(--color-text-primary)));
-        background-color: var(--w-surface-bg, var(--weline-theme-body-bg, #ffffff));
+        background-color: var(--w-surface-bg, var(--weline-theme-body-bg));
     }
 
     .search-layout .search-main,
@@ -206,11 +206,11 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
     .search-layout__body {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        gap: var(--weline-space-5, 1.25rem);
+        gap: var(--weline-space-5);
         width: min(100%, var(--weline-layout-content-max-width));
         max-width: 100%;
         margin: 0 auto;
-        padding: var(--weline-space-5, 1.25rem) var(--weline-layout-content-padding-inline) var(--weline-space-6, 1.5rem);
+        padding: var(--weline-space-5) var(--weline-layout-content-padding-inline) var(--weline-space-6);
         box-sizing: border-box;
         align-items: start;
         color: inherit;
@@ -230,9 +230,9 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
 
     .search-layout__filters {
         position: sticky;
-        top: calc(var(--theme-header-height, 4rem) + var(--weline-space-4, 1rem));
+        top: calc(var(--theme-header-height) + var(--weline-space-4));
         display: grid;
-        gap: var(--weline-space-4, 1rem);
+        gap: var(--weline-space-4);
         align-content: start;
         align-self: start;
         color: var(--weline-theme-body-text, var(--color-text-primary));
@@ -249,29 +249,29 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         display: block;
         position: relative;
         z-index: 0;
-        padding: var(--weline-space-5, 1.25rem) var(--weline-space-6, 1.5rem);
-        border: 1px solid var(--weline-theme-border-subtle, #e7e7e7);
-        border-radius: var(--weline-radius-lg, 12px);
-        background: var(--weline-chrome-bg-primary, #ffffff);
-        box-shadow: var(--weline-theme-shadow-sm, 0 1px 3px rgba(15, 23, 42, 0.06));
+        padding: var(--weline-space-5) var(--weline-space-6);
+        border: var(--border-width-thin) solid var(--weline-theme-border-subtle);
+        border-radius: var(--weline-radius-lg);
+        background: var(--weline-chrome-bg-primary);
+        box-shadow: var(--weline-shadow-md);
     }
 
     .search-layout__recommendations {
         width: min(100%, var(--weline-layout-content-max-width));
         max-width: 100%;
-        margin: var(--weline-space-2, 0.5rem) auto 0;
-        padding: 0 var(--weline-layout-content-padding-inline) var(--weline-space-8, 2rem);
+        margin: var(--weline-space-2) auto 0;
+        padding: 0 var(--weline-layout-content-padding-inline) var(--weline-space-8);
         box-sizing: border-box;
         color: inherit;
     }
 
     .search-layout__recommendations > .widget-wrapper,
     .search-layout__recommendations > .weline-template-widget {
-        padding: var(--weline-space-5, 1.25rem) var(--weline-space-6, 1.5rem);
-        border: 1px solid var(--weline-theme-border-subtle, #e7e7e7);
-        border-radius: var(--weline-radius-lg, 12px);
-        background: var(--weline-chrome-bg-primary, #ffffff);
-        box-shadow: var(--weline-theme-shadow-sm, 0 1px 3px rgba(15, 23, 42, 0.06));
+        padding: var(--weline-space-5) var(--weline-space-6);
+        border: var(--border-width-thin) solid var(--weline-theme-border-subtle);
+        border-radius: var(--weline-radius-lg);
+        background: var(--weline-chrome-bg-primary);
+        box-shadow: var(--weline-shadow-md);
         overflow: hidden;
         box-sizing: border-box;
     }
@@ -282,9 +282,9 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
     }
 
     .search-layout__recommendations .product-card {
-        background: var(--weline-chrome-bg-primary, #ffffff);
+        background: var(--weline-chrome-bg-primary);
         color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, var(--color-text-primary)));
-        border-color: var(--weline-theme-border-subtle, #e7e7e7);
+        border-color: var(--weline-theme-border-subtle);
     }
 
     .search-layout__recommendations .product-info,
@@ -295,23 +295,23 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
     .search-layout__recommendations .product-rating,
     .search-layout__recommendations .review-count,
     .search-layout__recommendations .price-original {
-        color: var(--weline-theme-body-text-muted, #565959);
+        color: var(--weline-theme-body-text-muted);
     }
 
     .search-layout__recommendations .price-current {
-        color: #b12704;
+        color: var(--color-link);
     }
 
     .search-layout__recommendations .btn-add-to-cart {
         background: var(--color-primary);
         border-color: #fcd200;
-        color: #0f1111;
+        color: var(--weline-theme-color-text);
     }
 
     .search-layout__recommendations .btn-add-to-cart:hover {
-        background: linear-gradient(180deg, #f7ca00 0%, #f0b800 100%);
+        background: linear-gradient(180deg, var(--color-warning) 0%, var(--color-warning) 100%);
         border-color: #e7b92e;
-        color: #0f1111;
+        color: var(--weline-theme-color-text);
     }
 
     .storefront-search {
@@ -319,23 +319,23 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
     }
 
     .storefront-search__header {
-        margin-bottom: var(--weline-space-5, 1.25rem);
-        padding-bottom: var(--weline-space-4, 1rem);
-        border-bottom: 1px solid var(--weline-theme-border-subtle, #e7e7e7);
+        margin-bottom: var(--weline-space-5);
+        padding-bottom: var(--weline-space-4);
+        border-bottom: var(--border-width-thin) solid var(--weline-theme-border-subtle);
     }
 
     .storefront-search__title {
-        margin: 0 0 var(--weline-space-2, 0.5rem);
-        font-size: clamp(1.35rem, 2vw, 1.75rem);
+        margin: 0 0 var(--weline-space-2);
+        font-size: clamp(var(--font-size-2_5xl), 2vw, var(--weline-font-size-3xl));
         font-weight: 700;
         line-height: 1.25;
         color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, var(--color-text-primary)));
     }
 
     .storefront-search__meta {
-        margin: 0 0 var(--weline-space-3, 0.75rem);
-        color: var(--weline-theme-body-text-secondary, var(--weline-theme-body-text-muted, #565959));
-        font-size: var(--weline-font-size-sm, 0.875rem);
+        margin: 0 0 var(--weline-space-3);
+        color: var(--weline-theme-body-text-secondary, var(--weline-theme-body-text-muted));
+        font-size: var(--weline-font-size-sm);
         line-height: 1.5;
     }
 
@@ -347,19 +347,19 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 0.35rem 0.15rem;
+        gap: var(--spacing-1_5) var(--spacing-0_5);
         list-style: none;
         margin: 0;
         padding: 0;
-        font-size: var(--weline-font-size-sm, 0.875rem);
+        font-size: var(--weline-font-size-sm);
         line-height: 1.45;
-        color: var(--weline-theme-body-text-secondary, #565959);
+        color: var(--weline-theme-body-text-secondary);
     }
 
     .storefront-search__breadcrumb-item {
         display: inline-flex;
         align-items: center;
-        gap: 0.35rem;
+        gap: var(--spacing-1_5);
         min-width: 0;
     }
 
@@ -368,9 +368,9 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         display: inline-block;
         width: 0.35rem;
         height: 0.35rem;
-        margin-inline: 0.2rem 0.1rem;
-        border-right: 1.5px solid currentColor;
-        border-top: 1.5px solid currentColor;
+        margin-inline: var(--spacing-0_2) var(--spacing-0_5);
+        border-right: var(--weshop-border-width) solid currentColor;
+        border-top: var(--weshop-border-width) solid currentColor;
         transform: rotate(45deg);
         opacity: 0.45;
     }
@@ -378,7 +378,7 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
     .storefront-search__breadcrumb-item a {
         color: var(--weline-theme-body-link, var(--color-link));
         text-decoration: none;
-        border-radius: 0.25rem;
+        border-radius: var(--border-radius-md);
     }
 
     .storefront-search__breadcrumb-item a:hover {
@@ -387,30 +387,30 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
     }
 
     .storefront-search__breadcrumb-item.is-current span {
-        color: var(--weline-theme-body-text-heading, #0f1111);
+        color: var(--weline-theme-body-text-heading);
         font-weight: 600;
     }
 
     .storefront-search__filter-panel,
     .storefront-search__filter-group {
-        padding: var(--weline-space-4, 1rem);
-        border: 1px solid var(--weline-theme-border-subtle, #e7e7e7);
-        border-radius: var(--weline-radius-lg, 12px);
-        background: var(--weline-chrome-bg-primary, #ffffff);
-        box-shadow: var(--weline-theme-shadow-sm, 0 1px 3px rgba(15, 23, 42, 0.06));
+        padding: var(--weline-space-4);
+        border: var(--border-width-thin) solid var(--weline-theme-border-subtle);
+        border-radius: var(--weline-radius-lg);
+        background: var(--weline-chrome-bg-primary);
+        box-shadow: var(--weline-shadow-md);
     }
 
     .storefront-search__filter-panel--tree {
-        padding: var(--weline-space-4, 1rem) var(--weline-space-3, 0.75rem);
+        padding: var(--weline-space-4) var(--weline-space-3);
     }
 
     .storefront-search__filter-title {
-        margin: 0 0 var(--weline-space-3, 0.75rem);
-        padding: 0 var(--weline-space-2, 0.5rem) var(--weline-space-2, 0.5rem);
-        border-bottom: 1px solid var(--weline-theme-border-subtle, #e7e7e7);
-        font-size: var(--weline-font-size-sm, 0.875rem);
+        margin: 0 0 var(--weline-space-3);
+        padding: 0 var(--weline-space-2) var(--weline-space-2);
+        border-bottom: var(--border-width-thin) solid var(--weline-theme-border-subtle);
+        font-size: var(--weline-font-size-sm);
         font-weight: 700;
-        letter-spacing: 0.04em;
+        letter-spacing: var(--letter-spacing-wide);
         text-transform: uppercase;
         line-height: 1.3;
         overflow-wrap: anywhere;
@@ -422,14 +422,14 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         margin: 0;
         padding: 0;
         display: grid;
-        gap: 0.15rem;
+        gap: var(--spacing-0_5);
     }
 
     .storefront-search__type-tree--nested {
-        margin-top: 0.15rem;
-        padding-left: 0.15rem;
-        border-left: 1px solid color-mix(in srgb, var(--weline-theme-border-subtle, #e7e7e7) 85%, transparent);
-        margin-left: 0.7rem;
+        margin-top: var(--spacing-0_5);
+        padding-left: var(--spacing-0_5);
+        border-left: var(--border-width-thin) solid color-mix(in srgb, var(--weline-theme-border-subtle) 85%, transparent);
+        margin-left: var(--spacing-0_7);
     }
 
     .storefront-search__type-node {
@@ -440,7 +440,7 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         display: grid;
         grid-template-columns: 1.35rem minmax(0, 1fr);
         align-items: center;
-        gap: 0.15rem;
+        gap: var(--spacing-0_5);
     }
 
     .storefront-search__type-toggle,
@@ -457,22 +457,22 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         margin: 0;
         padding: 0;
         border: 0;
-        border-radius: 0.35rem;
+        border-radius: var(--border-radius-md);
         background: transparent;
-        color: var(--weline-theme-body-text-muted, #6b7280);
+        color: var(--weline-theme-body-text-muted);
         cursor: pointer;
     }
 
     .storefront-search__type-toggle:hover {
-        background: var(--weline-theme-surface-muted, #f1f5f9);
+        background: var(--weline-theme-surface-muted);
         color: var(--weline-theme-body-link, var(--color-link));
     }
 
     .storefront-search__type-toggle-icon {
         width: 0.4rem;
         height: 0.4rem;
-        border-right: 1.6px solid currentColor;
-        border-bottom: 1.6px solid currentColor;
+        border-right: var(--border-width-2) solid currentColor;
+        border-bottom: var(--border-width-2) solid currentColor;
         transform: rotate(-45deg);
         transition: transform 0.15s ease;
     }
@@ -484,27 +484,27 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
     .storefront-search__type-option {
         display: flex;
         align-items: center;
-        gap: var(--weline-space-2, 0.5rem);
+        gap: var(--weline-space-2);
         min-width: 0;
-        padding: 0.4rem 0.55rem;
-        border-radius: var(--weline-radius-md, 8px);
+        padding: var(--spacing-0_4) var(--spacing-0_55);
+        border-radius: var(--weline-radius-md);
         cursor: pointer;
         color: var(--weline-theme-body-text, var(--color-text-primary));
-        font-size: var(--weline-font-size-sm, 0.875rem);
+        font-size: var(--weline-font-size-sm);
         line-height: 1.35;
         transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
     }
 
     .storefront-search__type-option:hover {
-        background: var(--weline-theme-surface-muted, #f1f5f9);
+        background: var(--weline-theme-surface-muted);
         color: var(--weline-theme-body-link, var(--color-link));
     }
 
     .storefront-search__type-option.is-active {
-        background: color-mix(in srgb, var(--weline-theme-primary, var(--color-primary)) 12%, #ffffff);
+        background: color-mix(in srgb, var(--weline-theme-primary, var(--color-primary)) 12%, var(--color-bg-primary));
         color: var(--weline-theme-body-text, var(--color-text-primary));
         font-weight: 600;
-        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--weline-theme-primary, var(--color-primary)) 40%, transparent);
+        box-shadow: var(--weline-shadow-lg);
     }
 
     .storefront-search__type-option.is-active:hover {
@@ -534,31 +534,31 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
     }
 
     .storefront-search__type-tree--nested .storefront-search__type-option {
-        font-size: var(--weline-font-size-xs, 0.8125rem);
+        font-size: var(--weline-font-size-xs);
     }
 
     .storefront-search__empty,
     .storefront-search__error {
-        padding: var(--weline-space-10, 2.5rem) var(--weline-space-6, 1.5rem);
-        border-radius: var(--weline-radius-lg, 12px);
+        padding: var(--weline-space-10) var(--weline-space-6);
+        border-radius: var(--weline-radius-lg);
         text-align: center;
-        color: var(--weline-theme-body-text-secondary, var(--weline-theme-body-text, #565959));
-        background: var(--weline-theme-surface-muted, #f8fafc);
-        border: 1px dashed var(--weline-theme-border-subtle, #e7e7e7);
+        color: var(--weline-theme-body-text-secondary, var(--weline-theme-body-text));
+        background: var(--weline-theme-surface-muted);
+        border: var(--border-width-thin) dashed var(--weline-theme-border-subtle);
     }
 
     .storefront-search__empty::before {
         content: "🔍";
         display: block;
-        margin-bottom: var(--weline-space-3, 0.75rem);
-        font-size: 1.75rem;
+        margin-bottom: var(--weline-space-3);
+        font-size: var(--weline-font-size-3xl);
         line-height: 1;
     }
 
     .storefront-search__error {
-        color: var(--weline-theme-danger, #dc2626);
+        color: var(--weline-theme-danger);
         text-align: left;
-        background: color-mix(in srgb, var(--weline-theme-danger, #dc2626) 6%, #ffffff);
+        background: color-mix(in srgb, var(--weline-theme-danger) 6%, var(--color-bg-primary));
         border-style: solid;
     }
 
@@ -569,12 +569,12 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
     .storefront-search__grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-        gap: var(--weline-space-4, 1rem);
+        gap: var(--weline-space-4);
     }
 
     .storefront-search__grid--product {
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
+        gap: var(--spacing-3);
         align-items: stretch;
     }
 
@@ -584,9 +584,9 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         flex-direction: column;
         min-width: 0;
         overflow: hidden;
-        border: 1px solid #d5d9d9;
-        border-radius: 8px;
-        background: #fff;
+        border: var(--border-width-thin) solid var(--color-border-faint);
+        border-radius: var(--radius-lg);
+        background: var(--color-bg-primary);
     }
 
     .storefront-search__grid--product .product-storefront__card.is-clickable {
@@ -594,7 +594,7 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
     }
 
     .storefront-search__grid--product .product-storefront__card.is-clickable:hover {
-        border-color: #bbb;
+        border-color: var(--color-border-faint);
     }
 
     .storefront-search__grid--product .product-storefront__card-hit {
@@ -611,7 +611,7 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         height: 160px;
         max-height: 160px;
         overflow: hidden;
-        background: #fff;
+        background: var(--color-bg-primary);
     }
 
     .storefront-search__grid--product .product-storefront__media img {
@@ -630,7 +630,7 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         z-index: 2;
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: var(--spacing-1_5);
         opacity: 0;
         transition: opacity 0.2s ease;
     }
@@ -644,34 +644,34 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         position: relative;
         z-index: 1;
         display: grid;
-        gap: 4px;
-        padding: 8px 10px 10px;
+        gap: var(--spacing-1);
+        padding: var(--spacing-2) var(--spacing-2_5) var(--spacing-2_5);
         flex: 1;
         align-content: start;
-        background: #fff;
+        background: var(--color-bg-primary);
     }
 
     .storefront-search__grid--product .product-storefront__body h2 {
         margin: 0;
-        font-size: 13px;
+        font-size: var(--font-size-13);
         font-weight: 400;
         line-height: 1.35;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
-        min-height: 2.5em;
+        min-height: var(--control-height-md);
     }
 
     .storefront-search__grid--product .product-storefront__sku {
         margin: 0;
-        color: #565959;
-        font-size: 11px;
+        color: var(--color-text-gray);
+        font-size: var(--font-size-xs);
     }
 
     .storefront-search__grid--product .product-storefront__price {
-        margin: 2px 0 0;
-        font-size: 16px;
+        margin: var(--spacing-0_5) 0 0;
+        font-size: var(--font-size-base);
         font-weight: 700;
         line-height: 1.2;
     }
@@ -679,26 +679,26 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
     .storefront-search__grid--product .product-storefront__add {
         position: relative;
         z-index: 2;
-        margin-top: 6px;
-        min-height: 30px;
-        border: 1px solid #fcd200;
-        border-radius: 20px;
+        margin-top: var(--spacing-1_5);
+        min-height: var(--control-height-xs);
+        border: var(--border-width-thin) solid #fcd200;
+        border-radius: var(--weline-theme-radius-2xl);;
         background: var(--color-primary);
-        color: #0f1111;
+        color: var(--weline-theme-color-text);
         font: inherit;
-        font-size: 12px;
+        font-size: var(--font-size-xs);
         font-weight: 600;
         cursor: pointer;
     }
 
     .storefront-search__grid--product .product-storefront__add:hover {
-        background: #f7ca00;
+        background: var(--color-warning);
     }
 
     .storefront-search__grid--product .product-storefront__add:disabled {
-        border-color: #d5d9d9;
-        background: #f0f2f2;
-        color: #9a9a9a;
+        border-color: var(--color-border-faint);
+        background: var(--color-bg-muted);
+        color: var(--color-text-faint);
         cursor: not-allowed;
     }
 
@@ -722,7 +722,7 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
 
     .storefront-search__grid--blog {
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
+        gap: var(--spacing-3);
         align-items: stretch;
     }
 
@@ -732,9 +732,9 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         flex-direction: column;
         min-width: 0;
         overflow: hidden;
-        border: 1px solid #d5d9d9;
-        border-radius: 8px;
-        background: #fff;
+        border: var(--border-width-thin) solid var(--color-border-faint);
+        border-radius: var(--radius-lg);
+        background: var(--color-bg-primary);
     }
 
     .storefront-search__grid--blog .blog-storefront__card.is-clickable {
@@ -742,7 +742,7 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
     }
 
     .storefront-search__grid--blog .blog-storefront__card.is-clickable:hover {
-        border-color: #bbb;
+        border-color: var(--color-border-faint);
     }
 
     .storefront-search__grid--blog .blog-storefront__card-hit {
@@ -759,7 +759,7 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         height: 160px;
         max-height: 160px;
         overflow: hidden;
-        background: #f3f4f6;
+        background: var(--color-bg-muted);
     }
 
     .storefront-search__grid--blog .blog-storefront__media img {
@@ -776,11 +776,11 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         top: 8px;
         left: 8px;
         z-index: 2;
-        padding: 2px 8px;
-        border-radius: 999px;
+        padding: var(--spacing-0_5) var(--spacing-2);
+        border-radius: var(--radius-full);
         background: rgba(15, 17, 17, 0.78);
-        color: #fff;
-        font-size: 11px;
+        color: var(--color-text-light);
+        font-size: var(--font-size-xs);
         font-weight: 600;
         line-height: 1.4;
     }
@@ -789,41 +789,41 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         position: relative;
         z-index: 1;
         display: grid;
-        gap: 4px;
-        padding: 8px 10px 10px;
+        gap: var(--spacing-1);
+        padding: var(--spacing-2) var(--spacing-2_5) var(--spacing-2_5);
         flex: 1;
         align-content: start;
-        background: #fff;
+        background: var(--color-bg-primary);
     }
 
     .storefront-search__grid--blog .blog-storefront__body h2 {
         margin: 0;
-        font-size: 13px;
+        font-size: var(--font-size-13);
         font-weight: 600;
         line-height: 1.35;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
-        min-height: 2.5em;
-        color: var(--weline-theme-body-text-heading, #0f1111);
+        min-height: var(--control-height-md);
+        color: var(--weline-theme-body-text-heading);
     }
 
     .storefront-search__grid--blog .blog-storefront__meta {
         margin: 0;
-        color: #565959;
-        font-size: 11px;
+        color: var(--color-text-gray);
+        font-size: var(--font-size-xs);
         line-height: 1.35;
         display: flex;
         flex-wrap: wrap;
-        gap: 0.25rem;
+        gap: var(--weline-space-1);
         align-items: center;
     }
 
     .storefront-search__grid--blog .blog-storefront__excerpt {
-        margin: 2px 0 0;
-        color: #565959;
-        font-size: 12px;
+        margin: var(--spacing-0_5) 0 0;
+        color: var(--color-text-gray);
+        font-size: var(--font-size-xs);
         line-height: 1.4;
         display: -webkit-box;
         -webkit-line-clamp: 3;
@@ -850,34 +850,34 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
     }
 
     .storefront-search__section + .storefront-search__section {
-        margin-top: var(--weline-space-6, 1.5rem);
-        padding-top: var(--weline-space-6, 1.5rem);
-        border-top: 1px solid var(--weline-theme-border-subtle, #e7e7e7);
+        margin-top: var(--weline-space-6);
+        padding-top: var(--weline-space-6);
+        border-top: var(--border-width-thin) solid var(--weline-theme-border-subtle);
     }
 
     .storefront-search__section-title {
-        margin: 0 0 var(--weline-space-3, 0.75rem);
-        font-size: var(--weline-font-size-lg, 1.125rem);
+        margin: 0 0 var(--weline-space-3);
+        font-size: var(--weline-font-size-lg);
         font-weight: 600;
         color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, var(--color-text-primary)));
     }
 
     .storefront-search__card {
-        padding: var(--weline-space-4, 1rem);
-        border: 1px solid var(--weline-theme-border, #e2e8f0);
-        border-radius: var(--weline-radius-lg, 12px);
-        background: var(--weline-theme-surface-raised, #fff);
+        padding: var(--weline-space-4);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-lg);
+        background: var(--weline-theme-surface-raised);
         transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
     .storefront-search__card:hover {
-        border-color: color-mix(in srgb, var(--weline-theme-primary, var(--color-primary)) 45%, var(--weline-theme-border, #e2e8f0));
-        box-shadow: var(--weline-theme-shadow-sm, 0 2px 8px rgba(15, 23, 42, 0.08));
+        border-color: color-mix(in srgb, var(--weline-theme-primary, var(--color-primary)) 45%, var(--weline-theme-border));
+        box-shadow: var(--weline-shadow-md);
     }
 
     .storefront-search__card h3 {
         margin: 0;
-        font-size: var(--weline-font-size-base, 1rem);
+        font-size: var(--weline-font-size-base);
         color: var(--weline-theme-body-text, var(--color-text-primary));
     }
 
@@ -892,7 +892,7 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
 
     .storefront-search__section-more a {
         color: var(--weline-theme-body-link, var(--color-link));
-        font-size: var(--weline-font-size-sm, 0.875rem);
+        font-size: var(--weline-font-size-sm);
         font-weight: 600;
         text-decoration: none;
     }
@@ -903,9 +903,9 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
 
     .storefront-search__section-empty {
         margin: 0;
-        padding: var(--weline-space-3, 0.75rem) 0;
-        color: var(--weline-theme-body-muted, var(--color-text-secondary, #666));
-        font-size: var(--weline-font-size-sm, 0.875rem);
+        padding: var(--weline-space-3) 0;
+        color: var(--weline-theme-body-muted, var(--color-text-secondary));
+        font-size: var(--weline-font-size-sm);
     }
 
     @media (max-width: 900px) {
@@ -918,12 +918,12 @@ $bodyClassAttr = \htmlspecialchars(\implode(' ', $bodyClasses), ENT_QUOTES, 'UTF
         }
 
         .search-layout__results {
-            padding: var(--weline-space-4, 1rem);
+            padding: var(--weline-space-4);
         }
 
         .search-layout__recommendations > .widget-wrapper,
         .search-layout__recommendations > .weline-template-widget {
-            padding: var(--weline-space-4, 1rem);
+            padding: var(--weline-space-4);
         }
     }
 </style>

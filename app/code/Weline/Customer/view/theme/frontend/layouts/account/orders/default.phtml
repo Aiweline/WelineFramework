@@ -99,8 +99,8 @@ layoutType=account/orders，option=default → layouts/account/orders/default.ph
                     Weline_Theme::frontend::layouts::account_orders::sidebar
                     <else/>
                 <nav class="weline-card">
-                    <strong><?= __('账户中心') ?></strong>
-                    <p class="weline-muted"><?= __('这里预留账户导航 slot，可由会员模块接入真实菜单。') ?></p>
+                    <strong><lang>账户中心</lang></strong>
+                    <p class="weline-muted"><lang>这里预留账户导航 slot，可由会员模块接入真实菜单。</lang></p>
                 </nav>
                 </w:hook>
             </w:slot>
@@ -137,8 +137,8 @@ layoutType=account/orders，option=default → layouts/account/orders/default.ph
                         {{meta.content}}
                     <else/>
                         <section class="weline-layout-surface" weline-code="theme.account_orders.section_1">
-                            <h1><?= __('我的订单') ?></h1>
-                            <p class="weline-muted"><?= __('这里是订单列表的默认占位。订单模块接入后，会替换为真实订单表格、状态和操作入口。') ?></p>
+                            <h1><lang>我的订单</lang></h1>
+                            <p class="weline-muted"><lang>这里是订单列表的默认占位。订单模块接入后，会替换为真实订单表格、状态和操作入口。</lang></p>
                         </section>
                     </if>
                     </w:slot>

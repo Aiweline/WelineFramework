@@ -175,11 +175,11 @@ $this->assign('title', $title);
                 <div class="success-icon">
                     <w:icon name="check" size="xl"></w:icon>
                 </div>
-                <h1 class="success-title"><?= __('订单提交成功！') ?></h1>
+                <h1 class="success-title"><lang>订单提交成功！</lang></h1>
 
                 <?php if ($orderNumber): ?>
                     <p class="order-number">
-                        <?= __('订单号：') ?><strong><?= htmlspecialchars($orderNumber) ?></strong>
+                        <lang>订单号：</lang><strong><?= htmlspecialchars($orderNumber) ?></strong>
                     </p>
                 <?php endif; ?>
 
@@ -192,11 +192,11 @@ $this->assign('title', $title);
                 <div class="success-actions">
                     <?php if ($viewOrder): ?>
                         <a href="<?= htmlspecialchars($viewOrder) ?>" class="w-btn w-btn-primary">
-                            <?= __('查看订单') ?>
+                            <lang>查看订单</lang>
                         </a>
                     <?php endif; ?>
                     <a href="<?= htmlspecialchars($continueShopping) ?>" class="w-btn w-btn-secondary">
-                        <?= __('继续购物') ?>
+                        <lang>继续购物</lang>
                     </a>
                 </div>
             </div>

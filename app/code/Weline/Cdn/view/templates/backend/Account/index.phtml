@@ -1,3 +1,4 @@
+<css>Weline_Cdn::css/backend/cdn-admin.css</css>
 <?php
 /**
  * CDN账户管理列表页
@@ -245,9 +246,9 @@ $kpis = [
                         <code
                             id="cdn-oauth-callback-url-ready-<?= $escapeAttr($oauthCode) ?>"
                             data-testid="cdn-oauth-callback-url-ready"
-                            class="w-text"
+                            class="w-text cdn-code-chip"
                             data-size="sm"
-                            style="display:block;max-inline-size:100%;min-inline-size:0;padding:var(--weline-space-2) var(--weline-space-3);border:1px solid var(--weline-theme-border);border-radius:var(--weline-radius-sm);background:var(--weline-theme-surface);color:var(--weline-theme-text);overflow-x:auto;overflow-wrap:anywhere;white-space:pre-wrap;user-select:all;"
+                            style="overflow-wrap:anywhere;white-space:pre-wrap;user-select:all;"
                         ><?= $escapeAttr($callbackUrl) ?></code>
                         <?php if ($oauthCode === 'cloudflare'): ?>
                             <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;" data-testid="cdn-oauth-scopes-gate-hint">
@@ -311,7 +312,7 @@ $kpis = [
                         <p class="w-text" data-size="sm" style="--w-mb:0;">
                             <?= __('创建 Client 时回调 URL 请填：') ?>
                         </p>
-                        <code data-testid="<?= $escapeAttr($callbackTestid) ?>" class="w-text" data-size="sm" style="display:block;max-inline-size:100%;min-inline-size:0;padding:var(--weline-space-2) var(--weline-space-3);border:1px solid var(--weline-theme-border);border-radius:var(--weline-radius-sm);background:var(--weline-theme-surface);color:var(--weline-theme-text);overflow-x:auto;overflow-wrap:anywhere;white-space:pre-wrap;user-select:all;"><?= $escapeAttr($hintCallback) ?></code>
+                        <code data-testid="<?= $escapeAttr($callbackTestid) ?>" class="w-text cdn-code-chip" data-size="sm" style="overflow-wrap:anywhere;white-space:pre-wrap;user-select:all;"><?= $escapeAttr($hintCallback) ?></code>
                         <div class="w-cluster">
                             <a class="w-button" href="<?= $escapeAttr($hintActionUrl) ?>" data-tone="primary" data-size="sm" data-testid="<?= $escapeAttr($btnTestid) ?>">
                                 <w:icon name="settings" size="sm"></w:icon> <?= $escapeAttr($hintActionLabel) ?>
@@ -325,7 +326,7 @@ $kpis = [
         <section
             class="w-stat-tiles w-grid"
             aria-label="<?= $escapeAttr(__('账户概览')) ?>"
-            style="--w-stat-tile-min:9rem;--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);"
+            style="--w-stat-tile-min:calc(var(--weline-space-12) * 3);--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);"
         >
             <?php foreach ($kpis as $kpi): ?>
                 <article class="w-card" data-w-height="full" data-w-shadow="sm">
@@ -363,7 +364,7 @@ $kpis = [
                     aria-label="<?= $escapeAttr(__('搜索账户')) ?>"
                     data-align="center"
                     data-wrap="true"
-                    style="--w-gap:var(--weline-space-2);max-inline-size:min(100%,36rem);"
+                    class="w-cluster cdn-account-filter-bar"
                     data-testid="cdn-account-search"
                 >
                     <label class="w-visually-hidden" for="cdn-account-search-input"><?= __('搜索账户名称或描述') ?></label>
@@ -376,7 +377,7 @@ $kpis = [
                         placeholder="<?= $escapeAttr(__('搜索账户名称或描述')) ?>"
                         value="<?= $escapeAttr($search) ?>"
                         autocomplete="off"
-                        style="inline-size:min(100%,12rem);flex:1 1 8rem;min-inline-size:7rem;"
+                        class="cdn-filter__search"
                     >
                     <label class="w-visually-hidden" for="cdn-account-adapter-filter"><?= __('所有适配器') ?></label>
                     <select
@@ -384,7 +385,7 @@ $kpis = [
                         name="adapter"
                         class="w-select"
                         data-size="sm"
-                        style="flex:0 1 9rem;min-inline-size:7rem;"
+                        class="cdn-filter__select"
                         aria-label="<?= $escapeAttr(__('所有适配器')) ?>"
                     >
                         <option value=""><?= __('所有适配器') ?></option>
@@ -415,14 +416,14 @@ $kpis = [
                         <table class="w-table" data-w-vertical="middle" style="--w-mb:0;" data-testid="cdn-account-table">
                             <thead>
                                 <tr>
-                                    <th style="width:4.5rem;"><?= __('ID') ?></th>
+                                    <th style="width:6%;"><?= __('ID') ?></th>
                                     <th><?= __('账户名称') ?></th>
-                                    <th style="width:7.5rem;"><?= __('适配器') ?></th>
+                                    <th style="width:10%;"><?= __('适配器') ?></th>
                                     <th><?= __('描述') ?></th>
-                                    <th style="width:5.5rem;"><?= __('状态') ?></th>
-                                    <th style="width:6rem;"><?= __('默认账户') ?></th>
-                                    <th style="width:9rem;"><?= __('创建时间') ?></th>
-                                    <th class="w-text" data-align="end" style="width:16rem;"><?= __('操作') ?></th>
+                                    <th style="width:8%;"><?= __('状态') ?></th>
+                                    <th style="width:8%;"><?= __('默认账户') ?></th>
+                                    <th style="width:12%;"><?= __('创建时间') ?></th>
+                                    <th class="w-text" data-align="end" style="width:18%;"><?= __('操作') ?></th>
                                 </tr>
                             </thead>
                             <tbody>

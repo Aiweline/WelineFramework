@@ -133,7 +133,7 @@ if ($offer === []) {
          data-widget-code="product-info"
          data-uid="<?= $escape($scope->uid) ?>"
          weline-code="<?= $escape($scope->code) ?>">
-    <p class="product-native-detail__unavailable-message"><?= __('商品信息暂不可用') ?></p>
+    <p class="product-native-detail__unavailable-message"><lang>商品信息暂不可用</lang></p>
 </section>
     <?php
     return;
@@ -544,7 +544,7 @@ if ($productBreadcrumbs === []) {
           hidden
           aria-hidden="true"></span>
     <?php if ($showBreadcrumb && !$quickAdd && $productBreadcrumbs !== []): ?>
-    <nav class="product-native-detail__crumb" aria-label="<?= $escape(__('面包屑')) ?>" data-testid="product-breadcrumb">
+    <nav class="product-native-detail__crumb" aria-label="@lang('面包屑')" data-testid="product-breadcrumb">
         <?php foreach ($productBreadcrumbs as $i => $crumb): ?>
             <?php
             if (!is_array($crumb)) {
@@ -568,15 +568,15 @@ if ($productBreadcrumbs === []) {
     </nav>
     <?php elseif ($showBreadcrumb && !$quickAdd): ?>
     <a class="product-native-detail__back" href="@url{'products'}">
-        <span aria-hidden="true">←</span> <?= __('返回商品目录') ?>
+        <span aria-hidden="true">←</span> <lang>返回商品目录</lang>
     </a>
     <?php endif; ?>
 
     <div class="product-native-detail__hero-grid">
         <div class="product-native-detail__media-column">
-        <div class="product-native-detail__gallery" aria-label="<?= $escape(__('商品图片')) ?>" data-testid="product-gallery">
+        <div class="product-native-detail__gallery" aria-label="@lang('商品图片')" data-testid="product-gallery">
             <?php if (count($galleryItems) > 1): ?>
-                <div class="product-native-detail__thumbs" role="tablist" aria-label="<?= $escape(__('选择图片或视频')) ?>">
+                <div class="product-native-detail__thumbs" role="tablist" aria-label="@lang('选择图片或视频')">
                     <?php foreach ($galleryItems as $index => $galleryItem): ?>
                         <?php
                         $itemType = (string)($galleryItem['type'] ?? 'image');
@@ -654,7 +654,7 @@ if ($productBreadcrumbs === []) {
                         <?php if ($initialType === 'video' && in_array($initialProvider, ['youtube', 'vimeo'], true)): ?>
                             <iframe class="product-native-detail__video-frame"
                                     src="<?= $escape($initialSrc) ?>"
-                                    title="<?= $escape(__('商品视频')) ?>"
+                                    title="<lang>商品视频</lang>"
                                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                                     allowfullscreen
                                     loading="lazy"
@@ -684,7 +684,7 @@ if ($productBreadcrumbs === []) {
             <div class="product-native-detail__summary-panel">
                 <?php if ($showBrand && $brandName !== ''): ?>
                     <p class="product-native-detail__brand" data-testid="product-brand">
-                        <?= __('品牌') ?>:
+                        <lang>品牌</lang>:
                         <span><?= $escape($brandName) ?></span>
                     </p>
                 <?php elseif ($showBrand && $attributeSetLabel !== ''): ?>
@@ -723,7 +723,7 @@ if ($productBreadcrumbs === []) {
                         </a>
                     <?php else: ?>
                         <a class="product-native-detail__reviews-link" href="#product-reviews">
-                            <?= __('查看买家评价') ?>
+                            <lang>查看买家评价</lang>
                         </a>
                     <?php endif; ?>
                     <span class="product-native-detail__meta-divider" aria-hidden="true">|</span>
@@ -733,10 +733,10 @@ if ($productBreadcrumbs === []) {
                 <hr class="product-native-detail__divider">
 
                 <?php if ($currencyUnavailable): ?>
-                    <p class="product-native-detail__unavailable" data-testid="currency-unavailable"><?= __('当前货币暂不可用') ?></p>
+                    <p class="product-native-detail__unavailable" data-testid="currency-unavailable"><lang>当前货币暂不可用</lang></p>
                 <?php elseif ($minor > 0): ?>
                     <div class="product-native-detail__price-block">
-                        <span class="product-native-detail__price-label"><?= __('价格') ?>:</span>
+                        <span class="product-native-detail__price-label"><lang>价格</lang>:</span>
                         <span class="product-native-detail__price">
                             <span class="product-native-detail__price-symbol"><?= $escape($currencySymbol) ?></span>
                             <span class="product-native-detail__price-whole"><?= $priceWhole ?></span>
@@ -762,7 +762,7 @@ if ($productBreadcrumbs === []) {
                                                 data-testid="product-price-campaign"
                                                 aria-expanded="false"
                                                 aria-haspopup="listbox"
-                                                aria-label="<?= $escape(__('选择优惠活动')) ?>">
+                                                aria-label="@lang('选择优惠活动')">
                                             <span data-campaign-label><?= $escape($campaignLabel) ?></span>
                                             <span class="product-native-detail__campaign-chevron" aria-hidden="true"></span>
                                         </button>
@@ -796,15 +796,15 @@ if ($productBreadcrumbs === []) {
                         <?php endif; ?>
                     </div>
                     <?php if ($quoteOnly): ?>
-                        <p class="product-native-detail__quote-price"><?= __('仅询价商品：以上为参考活动价，不可直接加购') ?></p>
+                        <p class="product-native-detail__quote-price"><lang>仅询价商品：以上为参考活动价，不可直接加购</lang></p>
                     <?php endif; ?>
                 <?php elseif ($quoteOnly): ?>
-                    <p class="product-native-detail__quote-price"><?= __('联系询价') ?></p>
+                    <p class="product-native-detail__quote-price"><lang>联系询价</lang></p>
                 <?php endif; ?>
 
                 <?php /* 售卖提示放价格下、规格上：简单文字不占规格区 */ ?>
                 <w:slot id="product-selling-mode"
-                        name="<?= $escape(__('售卖模式')) ?>"
+                        name="@lang('售卖模式')"
                         accept="layout-product-selling-mode,product-selling-mode,b2b-selling-mode"
                         multiple="true"
                         position="content"
@@ -942,14 +942,14 @@ if ($productBreadcrumbs === []) {
                           action="@url{$selectorRoute}"
                           data-testid="product-offer-selector">
                         <label class="product-native-detail__variant-label" for="<?= $escape($selectorId) ?>">
-                            <?= $escape(__('规格')) ?>:
+                            <lang>规格</lang>:
                         </label>
                         <select class="product-native-detail__variant-select"
                                 id="<?= $escape($selectorId) ?>"
                                 name="offer"
                                 required
                                 aria-required="true">
-                            <option value=""><?= $escape(__('请选择规格')) ?></option>
+                            <option value=""><lang>请选择规格</lang></option>
                             <?php foreach ($storefrontOffers as $variant): ?>
                                 <?php
                                 $variantUuid = trim((string)($variant['global_offer_uuid'] ?? ''));
@@ -974,14 +974,14 @@ if ($productBreadcrumbs === []) {
                             <?php endforeach; ?>
                         </select>
                         <button class="product-native-detail__variant-submit" type="submit">
-                            <?= $escape(__('查看此规格')) ?>
+                            <lang>查看此规格</lang>
                         </button>
                     </form>
                 <?php endif; ?>
             </div>
 
             <aside class="product-native-detail__buybox"
-                   aria-label="<?= $escape(__('购买选项')) ?>"
+                   aria-label="@lang('购买选项')"
                    data-deal-type="<?= $escape($dealDiscountType) ?>"
                    data-deal-value="<?= $escape((string)$dealDiscountValue) ?>">
                 <?php if ($minor > 0 && !$currencyUnavailable): ?>
@@ -1016,7 +1016,7 @@ if ($productBreadcrumbs === []) {
 
                 <?php if ($showSupplier && $supplierName !== ''): ?>
                     <p class="product-native-detail__supplier" data-testid="product-supplier">
-                        <?= __('供应商') ?>:
+                        <lang>供应商</lang>:
                         <span><?= $escape($supplierName) ?></span>
                     </p>
                 <?php endif; ?>
@@ -1025,7 +1025,7 @@ if ($productBreadcrumbs === []) {
                     <?= $escape($stockLabel) ?>
                 </p>
                 <w:slot id="product-delivery-mode"
-                        name="<?= $escape(__('配送模式提示')) ?>"
+                        name="@lang('配送模式提示')"
                         accept="layout-product-delivery-mode,product-delivery-mode,shipping-delivery-mode"
                         multiple="true"
                         position="content"
@@ -1036,9 +1036,9 @@ if ($productBreadcrumbs === []) {
                 <?php if ($currencyUnavailable || !$sellable): ?>
                 <p class="product-native-detail__delivery">
                     <?php if ($currencyUnavailable): ?>
-                        <?= __('当前货币暂不可用') ?>
+                        <lang>当前货币暂不可用</lang>
                     <?php else: ?>
-                        <?= __('当前规格暂不可售') ?>
+                        <lang>当前规格暂不可售</lang>
                     <?php endif; ?>
                 </p>
                 <?php endif; ?>
@@ -1064,7 +1064,7 @@ if ($productBreadcrumbs === []) {
                     <div class="product-native-detail__qty-row"<?= $sellable ? '' : ' hidden' ?>>
                         <div class="product-native-detail__qty-controls">
                             <label class="product-native-detail__qty-label" for="<?= $escape($qtyFieldId) ?>">
-                                <?= __('数量') ?>:
+                                <lang>数量</lang>:
                             </label>
                             <select id="<?= $escape($qtyFieldId) ?>"
                                     class="product-native-detail__qty-select"
@@ -1074,7 +1074,7 @@ if ($productBreadcrumbs === []) {
                                     data-qty-max="<?= (int)$maxQty ?>"
                                     data-tob-moq="<?= (int)$tobMoq ?>"
                                     data-tob-qty-step="<?= (int)$tobStep ?>"
-                                    aria-label="<?= $escape(__('购买数量')) ?>">
+                                    aria-label="<lang>购买数量</lang>">
                                 <?php for ($quantity = 1; $quantity <= $maxQty; $quantity++): ?>
                                     <option value="<?= $quantity ?>"><?= $quantity ?></option>
                                 <?php endfor; ?>
@@ -1103,7 +1103,7 @@ if ($productBreadcrumbs === []) {
                 <?php endif; ?>
 
                 <w:slot id="product-purchase-actions"
-                        name="<?= $escape(__('购买操作')) ?>"
+                        name="@lang('购买操作')"
                         accept="layout-product-purchase-actions,product-purchase-actions,product-add-to-cart,product-buy-now,add-to-cart,product-help-pay,product-selection-share,product-quick-pay,help-pay,helppay,selection-share,quick-pay"
                         multiple="true"
                         position="content"
@@ -1113,14 +1113,14 @@ if ($productBreadcrumbs === []) {
                     <?php if ($isPreviewMode): ?>
                         <?php if ($quoteOnly): ?>
                             <button type="button" class="product-native-detail__quote" disabled>
-                                <?= __('提交询价') ?>
+                                <lang>提交询价</lang>
                             </button>
                         <?php else: ?>
                             <button type="button" class="product-native-detail__add" disabled>
                                 <?= __($addToCartPhrase) ?>
                             </button>
                             <button type="button" class="product-native-detail__buy-now" disabled>
-                                <?= __('立即结账') ?>
+                                <lang>立即结账</lang>
                             </button>
                         <?php endif; ?>
                     <?php endif; ?>
@@ -1142,11 +1142,11 @@ if ($productBreadcrumbs === []) {
                              data-weline-load="cart"
                              data-widget-module="Weline_Cart"
                              data-widget-code="product-add-to-cart"
-                             data-purchase-loading="<?= $escape(__('正在加入购物车...')) ?>"
-                             data-purchase-success="<?= $escape(__('已加入购物车')) ?>"
-                             data-purchase-error="<?= $escape(__('加入购物车失败')) ?>"
+                             data-purchase-loading="@lang('正在加入购物车...')"
+                             data-purchase-success="<lang>已加入购物车</lang>"
+                             data-purchase-error="<lang>加入购物车失败</lang>"
                              data-cart-url="@url{'cart'}"
-                             data-cart-link-text="<?= $escape(__('前往购物车')) ?>">
+                             data-cart-link-text="<lang>前往购物车</lang>">
                             <button type="button"
                                     class="product-native-detail__add weline-pixel::add_to_cart"
                                     data-action="add"
@@ -1165,9 +1165,9 @@ if ($productBreadcrumbs === []) {
                              data-weline-load="cart"
                              data-widget-module="Weline_Checkout"
                              data-widget-code="product-buy-now"
-                             data-purchase-loading="<?= $escape(__('正在前往结账...')) ?>"
-                             data-purchase-success="<?= $escape(__('正在前往结账...')) ?>"
-                             data-purchase-error="<?= $escape(__('结账准备失败')) ?>">
+                             data-purchase-loading="@lang('正在前往结账...')"
+                             data-purchase-success="<lang>正在前往结账...</lang>"
+                             data-purchase-error="<lang>结账准备失败</lang>">
                             <button type="button"
                                     class="product-native-detail__buy-now weline-pixel::buy-now"
                                     data-action="buy-now"
@@ -1178,13 +1178,13 @@ if ($productBreadcrumbs === []) {
                                     data-checkout-url="@url{'checkout'}"
                                     data-qty="1"
                                     <?= $failsafeAddEnabled ? '' : 'disabled' ?>>
-                                <?= __('立即结账') ?>
+                                <lang>立即结账</lang>
                             </button>
                         </div>
                     </div>
                 <?php endif; ?>
                 <w:slot id="product-express-payment"
-                        name="<?= $escape(__('快捷支付')) ?>"
+                        name="@lang('快捷支付')"
                         accept="layout-product-express-payment,product-express-payment,express-checkout,express-payment,payment"
                         multiple="true"
                         position="content"
@@ -1207,10 +1207,10 @@ if ($productBreadcrumbs === []) {
                         data-campaign-label="<?= $escape($campaignLabel) ?>"
                         data-product-url="<?= $escape((string)($_SERVER['REQUEST_URI'] ?? '')) ?>"
                         data-selection-label="">
-                    <?= __('提交询价') ?>
+                    <lang>提交询价</lang>
                 </button>
                 <?php endif; ?>
-                <p class="product-native-detail__secure"><?= __('安全交易保障') ?></p>
+                <p class="product-native-detail__secure"><lang>安全交易保障</lang></p>
                 <p class="product-native-detail__message" data-testid="detail-message" aria-live="polite"></p>
             </aside>
         </div>
@@ -1222,7 +1222,7 @@ if ($productBreadcrumbs === []) {
                 <section class="product-native-detail__specifications"
                          data-testid="product-specifications"
                          weline-code="product.frontend.detail.specifications">
-                    <h2><?= __('技术细节') ?></h2>
+                    <h2><lang>技术细节</lang></h2>
                     <div class="product-native-detail__spec-clamp"
                          data-testid="product-specifications-clamp"
                          data-collapsed="1">
@@ -1247,11 +1247,11 @@ if ($productBreadcrumbs === []) {
                         <button type="button"
                                 class="product-native-detail__spec-more"
                                 data-testid="product-specifications-more"
-                                data-label-more="<?= $escape(__('展示更多')) ?>"
-                                data-label-less="<?= $escape(__('收起')) ?>"
+                                data-label-more="@lang('展示更多')"
+                                data-label-less="<lang>收起</lang>"
                                 hidden
                                 aria-expanded="false">
-                            <?= __('展示更多') ?>
+                            <lang>展示更多</lang>
                         </button>
                     </div>
                 </section>
@@ -1264,7 +1264,7 @@ if ($productBreadcrumbs === []) {
                          data-widget-module="Weline_Product"
                          data-widget-code="product-info-detail-reveal"
                          weline-code="product.frontend.detail.description">
-                    <h2><?= __('关于该商品') ?></h2>
+                    <h2><lang>关于该商品</lang></h2>
                     <div class="product-native-detail__description-body" data-testid="product-description-body"><?=
                         $descriptionHtml !== '' ? $descriptionHtml : nl2br($escape($description), false)
                     ?></div>
@@ -1280,22 +1280,22 @@ if ($productBreadcrumbs === []) {
          data-testid="product-quote-modal">
         <div class="product-native-detail__quote-backdrop" data-product-quote-close></div>
         <div class="product-native-detail__quote-dialog" role="dialog" aria-modal="true" aria-labelledby="product-quote-title-<?= (int)$productId ?>">
-            <button type="button" class="product-native-detail__quote-close" data-product-quote-close aria-label="<?= $escape(__('关闭')) ?>">×</button>
-            <h2 id="product-quote-title-<?= (int)$productId ?>"><?= __('提交询价') ?></h2>
+            <button type="button" class="product-native-detail__quote-close" data-product-quote-close aria-label="@lang('关闭')">×</button>
+            <h2 id="product-quote-title-<?= (int)$productId ?>"><lang>提交询价</lang></h2>
             <p class="product-native-detail__quote-context">
                 <span data-quote-field="sku-label"><?= $escape(WidgetI18n::label('SKU', 'SKU')) ?>: <strong data-quote-field="sku"><?= $escape((string)($offer['sku'] ?? '')) ?></strong></span>
                 <span data-quote-field="selection-wrap" hidden> · <span data-quote-field="selection"></span></span>
-                <span data-quote-field="price-wrap" <?= $minor > 0 ? '' : 'hidden' ?>> · <?= __('参考价') ?> <strong data-quote-field="price"><?= $escape(($offer['currency'] ?? 'CNY') . ' ' . number_format($minor / 100, 2)) ?></strong></span>
+                <span data-quote-field="price-wrap" <?= $minor > 0 ? '' : 'hidden' ?>> · <lang>参考价</lang> <strong data-quote-field="price"><?= $escape(($offer['currency'] ?? 'CNY') . ' ' . number_format($minor / 100, 2)) ?></strong></span>
                 <span data-quote-field="campaign-wrap" <?= $campaignLabel !== '' ? '' : 'hidden' ?>> · <strong data-quote-field="campaign"><?= $escape($campaignLabel) ?></strong></span>
             </p>
             <form class="product-native-detail__quote-form" data-product-quote-form id="product-quote-request-form">
-                <label><?= __('联系人') ?> *
+                <label><lang>联系人</lang> *
                     <input type="text" name="contact_name" required maxlength="128" autocomplete="name">
                 </label>
-                <label><?= __('邮箱') ?>
+                <label><lang>邮箱</lang>
                     <input type="email" name="email" maxlength="255" autocomplete="email">
                 </label>
-                <label><?= __('手机') ?>
+                <label><lang>手机</lang>
                     <input type="tel" name="phone" maxlength="64" autocomplete="tel">
                 </label>
                 <div class="product-native-detail__quote-address" data-testid="product-quote-address">
@@ -1309,10 +1309,10 @@ if ($productBreadcrumbs === []) {
                         postal-lookup="true"
                         detail="true" />
                 </div>
-                <label><?= __('需求数量') ?>
+                <label><lang>需求数量</lang>
                     <input type="number" name="quantity" min="1" max="9999" value="1">
                 </label>
-                <label><?= __('备注') ?>
+                <label><lang>备注</lang>
                     <textarea name="message" rows="3" maxlength="2000"></textarea>
                 </label>
                 <?php if ($quoteCaptchaHtml !== ''): ?>
@@ -1321,11 +1321,11 @@ if ($productBreadcrumbs === []) {
                     </div>
                 <?php endif; ?>
                 <input type="text" name="company_website" class="product-native-detail__quote-honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
-                <p class="product-native-detail__quote-hint"><?= __('请至少填写邮箱或手机号。提交后我们会尽快联系您。') ?></p>
+                <p class="product-native-detail__quote-hint"><lang>请至少填写邮箱或手机号。提交后我们会尽快联系您。</lang></p>
                 <p class="product-native-detail__quote-form-message" data-product-quote-message aria-live="polite"></p>
                 <div class="product-native-detail__quote-actions">
-                    <button type="button" class="product-native-detail__quote-cancel" data-product-quote-close><?= __('取消') ?></button>
-                    <button type="submit" class="product-native-detail__quote-submit"><?= __('提交询价') ?></button>
+                    <button type="button" class="product-native-detail__quote-cancel" data-product-quote-close><lang>取消</lang></button>
+                    <button type="submit" class="product-native-detail__quote-submit"><lang>提交询价</lang></button>
                 </div>
             </form>
         </div>
@@ -1381,9 +1381,9 @@ if ($productBreadcrumbs === []) {
                             class="product-native-detail__sticky-purchase-jump"
                             data-sticky-jump-variants
                             data-testid="product-sticky-jump-variants"
-                            data-empty-label="<?= $escape(__('请选择规格')) ?>"
+                            data-empty-label="@lang('请选择规格')"
                             <?= $interactiveVariantAxes === [] ? 'hidden' : '' ?>>
-                        <?= __('选规格') ?>
+                        <lang>选规格</lang>
                     </button>
                     <div class="product-native-detail__sticky-purchase-actions">
                         <button type="button"
@@ -1397,8 +1397,8 @@ if ($productBreadcrumbs === []) {
                                 class="product-native-detail__buy-now"
                                 data-sticky-proxy="buy-now"
                                 data-testid="product-sticky-buy-now"
-                                data-default-label="<?= $escape(__('立即结账')) ?>">
-                            <?= __('立即结账') ?>
+                                data-default-label="@lang('立即结账')">
+                            <lang>立即结账</lang>
                         </button>
                     </div>
                 </div>

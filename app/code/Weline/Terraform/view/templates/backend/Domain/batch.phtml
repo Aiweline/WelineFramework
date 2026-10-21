@@ -3,153 +3,137 @@
  * Terraform 批量绑定页面
  *
  * @var \Weline\Framework\View\Template $this
+ * @var array $websites
  */
 /** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
 
 $websites = $this->getData('websites') ?: [];
 ?>
-<div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0">
-                                <i class="mdi mdi-terraform text-primary"></i>
-                                <lang>Terraform批量绑定</lang>
-                            </h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="@backend-url{'admin'}"><lang>首页</lang></a></li>
-                                    <li class="breadcrumb-item"><a href="@backend-url{'cdn/backend/domain/index'}"><lang>CDN管理</lang></a></li>
-                                    <li class="breadcrumb-item active"><lang>批量绑定</lang></li>
-                                </ol>
+<div class="w-stack">
+    <section class="w-card">
+        <header class="w-card__header">
+            <h2 class="w-card__title"><lang>Terraform批量绑定</lang></h2>
+        </header>
+        <div class="w-card__body">
+            <form id="terraformBatchForm" class="w-stack"
+                  action="@backend-url{'*/backend/domain/batch-bind'}" method="post">
+                <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                    <div class="w-field" style="--w-span-md:6;">
+                        <label class="w-field__label" for="cdn_provider">
+                            <lang>供应商</lang> <span class="w-text" data-tone="danger">*</span>
+                        </label>
+                        <w:select:provider id="cdn_provider" name="provider" />
+                        <div class="w-field__hint"><lang>先选择供应商，再选择账户</lang></div>
+                    </div>
+                    <div class="w-field" style="--w-span-md:6;">
+                        <label class="w-field__label" for="cdn_account">
+                            <lang>供应商账户</lang> <span class="w-text" data-tone="danger">*</span>
+                        </label>
+                        <w:select:account id="cdn_account" name="account_id" provider_input="cdn_provider_code" />
+                        <div class="w-field__hint"><lang>账户只属于一个供应商</lang></div>
+                    </div>
+                </div>
+
+                <h3 class="w-card__title"><lang>DNS记录</lang></h3>
+                <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                    <div class="w-field" style="--w-span-md:4;">
+                                                <select id="dns_record_type" name="dns_record_type" class="w-select">
+                            <option value=""><lang>不创建记录</lang></option>
+                            <option value="CNAME">CNAME</option>
+                            <option value="A">A</option>
+                            <option value="AAAA">AAAA</option>
+                            <option value="TXT">TXT</option>
+                        </select>
+                    </div>
+                    <div class="w-field" style="--w-span-md:8;">
+                                                <input type="text" id="dns_record_value" name="dns_record_value" class="w-input"
+                               placeholder="<?= __('记录值，如 example.cdn.com 或 1.2.3.4') ?>">
+                        <div class="w-field__hint"><lang>如需创建解析记录，请选择类型并填写值</lang></div>
+                    </div>
+                </div>
+
+                <div class="w-tabs" data-w-component="tabs">
+                    <ul class="w-tabs__list" role="tablist">
+                        <li role="presentation">
+                            <button class="w-tabs__tab" id="manual-tab" type="button" role="tab"
+                                    data-w-target="#manual-pane" data-state="active" aria-controls="manual-pane" aria-selected="true">
+                                <lang>手动输入</lang>
+                            </button>
+                        </li>
+                        <li role="presentation">
+                            <button class="w-tabs__tab" id="website-tab" type="button" role="tab"
+                                    data-w-target="#website-pane" aria-controls="website-pane" aria-selected="false">
+                                <lang>选择网站</lang>
+                            </button>
+                        </li>
+                    </ul>
+                    <div class="w-tabs__content" style="--w-pt:var(--weline-space-4);">
+                        <div class="w-tabs__panel" id="manual-pane" role="tabpanel" aria-labelledby="manual-tab" data-state="active">
+                            <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                                <div class="w-field" style="--w-span-md:5;">
+                                    <label class="w-field__label" for="manual_site_id"><lang>绑定网站</lang></label>
+                                    <select id="manual_site_id" name="manual_site_id" class="w-select">
+                                        <option value=""><lang>请选择网站</lang></option>
+                                        <?php foreach ($websites as $website): ?>
+                                            <option value="<?= (int)$website['website_id'] ?>"
+                                                    data-url="<?= htmlspecialchars((string)($website['url'] ?? '')) ?>">
+                                                <?= htmlspecialchars((string)($website['name'] ?? '')) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <div class="w-field__hint"><lang>手动输入域名时必须选择网站</lang></div>
+                                </div>
+                                <div class="w-field" style="--w-span-md:7;">
+                                    <label class="w-field__label" for="domains_text"><lang>域名列表</lang></label>
+                                    <textarea id="domains_text" name="domains_text" rows="6" class="w-textarea"
+                                              placeholder="<?= __('每行一个域名，例如 example.com') ?>"></textarea>
+                                </div>
                             </div>
+                        </div>
+                        <div class="w-tabs__panel" id="website-pane" role="tabpanel" aria-labelledby="website-tab" hidden>
+                            <div class="w-table-wrap">
+                                <table class="w-table" data-w-vertical="middle">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:5%"></th>
+                                            <th><lang>网站名称</lang></th>
+                                            <th><lang>网站地址</lang></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($websites as $website): ?>
+                                            <tr>
+                                                <td>
+                                                    <input type="checkbox" class="w-check" name="website_ids[]"
+                                                           value="<?= (int)$website['website_id'] ?>">
+                                                </td>
+                                                <td><?= htmlspecialchars((string)($website['name'] ?? '')) ?></td>
+                                                <td><code class="w-text" data-family="mono" data-size="sm"><?= htmlspecialchars((string)($website['url'] ?? '')) ?></code></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="w-field__hint"><lang>选择网站后将使用其URL解析域名</lang></div>
                         </div>
                     </div>
                 </div>
 
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <form id="terraformBatchForm">
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><lang>供应商</lang> <span class="text-danger">*</span></label>
-                                        <div class="col-md-10">
-                                            <w:select:provider id="cdn_provider" name="provider" />
-                                            <small class="form-text text-muted"><lang>先选择供应商，再选择账户</lang></small>
-                                        </div>
-                                    </div>
-
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><lang>供应商账户</lang> <span class="text-danger">*</span></label>
-                                        <div class="col-md-10">
-                                            <w:select:account id="cdn_account" name="account_id" provider_input="cdn_provider_code" />
-                                            <small class="form-text text-muted"><lang>账户只属于一个供应商</lang></small>
-                                        </div>
-                                    </div>
-
-                                    <div class="row mb-3">
-                                        <label class="col-md-2 col-form-label"><lang>DNS记录</lang></label>
-                                        <div class="col-md-10">
-                                            <div class="row">
-                                                <div class="col-md-3">
-                                                    <select name="dns_record_type" class="form-select">
-                                                        <option value=""><lang>不创建记录</lang></option>
-                                                        <option value="CNAME">CNAME</option>
-                                                        <option value="A">A</option>
-                                                        <option value="AAAA">AAAA</option>
-                                                        <option value="TXT">TXT</option>
-                                                    </select>
-                                                </div>
-                                                <div class="col-md-9">
-                                                    <input type="text" name="dns_record_value" class="form-control" placeholder="<?= __('记录值，如 example.cdn.com 或 1.2.3.4') ?>">
-                                                </div>
-                                            </div>
-                                            <small class="form-text text-muted"><lang>如需创建解析记录，请选择类型并填写值</lang></small>
-                                        </div>
-                                    </div>
-
-                                    <ul class="nav nav-tabs" role="tablist">
-                                        <li class="nav-item" role="presentation">
-                                            <button class="nav-link active" id="manual-tab" data-bs-toggle="tab" data-bs-target="#manual-pane" type="button" role="tab">
-                                                <lang>手动输入</lang>
-                                            </button>
-                                        </li>
-                                        <li class="nav-item" role="presentation">
-                                            <button class="nav-link" id="website-tab" data-bs-toggle="tab" data-bs-target="#website-pane" type="button" role="tab">
-                                                <lang>选择网站</lang>
-                                            </button>
-                                        </li>
-                                    </ul>
-                                    <div class="tab-content border border-top-0 p-3 mb-3">
-                                        <div class="tab-pane fade show active" id="manual-pane" role="tabpanel">
-                                            <div class="row mb-3">
-                                                <label class="col-md-2 col-form-label"><lang>绑定网站</lang></label>
-                                                <div class="col-md-10">
-                                                    <select name="manual_site_id" class="form-select">
-                                                        <option value=""><lang>请选择网站</lang></option>
-                                                        <?php foreach ($websites as $website): ?>
-                                                            <option value="<?= (int)$website['website_id'] ?>" data-url="<?= htmlspecialchars((string)($website['url'] ?? '')) ?>">
-                                                                <?= htmlspecialchars((string)($website['name'] ?? '')) ?>
-                                                            </option>
-                                                        <?php endforeach; ?>
-                                                    </select>
-                                                    <small class="form-text text-muted"><lang>手动输入域名时必须选择网站</lang></small>
-                                                </div>
-                                            </div>
-                                            <div class="row mb-3">
-                                                <label class="col-md-2 col-form-label"><lang>域名列表</lang></label>
-                                                <div class="col-md-10">
-                                                    <textarea name="domains_text" rows="6" class="form-control" placeholder="<?= __('每行一个域名，例如 example.com') ?>"></textarea>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="tab-pane fade" id="website-pane" role="tabpanel">
-                                            <div class="row">
-                                                <div class="col-12">
-                                                    <div class="table-responsive">
-                                                        <table class="table table-sm table-hover">
-                                                            <thead>
-                                                                <tr>
-                                                                    <th style="width:40px;"></th>
-                                                                    <th><lang>网站名称</lang></th>
-                                                                    <th><lang>网站地址</lang></th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                <?php foreach ($websites as $website): ?>
-                                                                    <tr>
-                                                                        <td>
-                                                                            <input type="checkbox" class="form-check-input" name="website_ids[]" value="<?= (int)$website['website_id'] ?>">
-                                                                        </td>
-                                                                        <td><?= htmlspecialchars((string)($website['name'] ?? '')) ?></td>
-                                                                        <td><?= htmlspecialchars((string)($website['url'] ?? '')) ?></td>
-                                                                    </tr>
-                                                                <?php endforeach; ?>
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                    <small class="form-text text-muted"><lang>选择网站后将使用其URL解析域名</lang></small>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="row">
-                                        <div class="col-md-10 offset-md-2">
-                                            <button type="submit" class="btn btn-primary" id="batchSubmitBtn">
-                                                <i class="mdi mdi-play-circle-outline"></i> <lang>开始批量绑定</lang>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-
-                        <div class="card mt-3" id="batchResultCard" style="display:none;">
-                            <div class="card-body">
-                                <h5 class="card-title"><lang>执行结果</lang></h5>
-                                <div id="batchResult"></div>
-                            </div>
-                        </div>
-                    </div>
+                <div class="w-cluster">
+                    <button type="submit" class="w-button" id="batchSubmitBtn" data-tone="primary">
+                        <w:icon name="play" size="sm"></w:icon><lang>开始批量绑定</lang>
+                    </button>
                 </div>
+            </form>
+        </div>
+    </section>
+
+    <section class="w-card" id="batchResultCard" hidden>
+        <header class="w-card__header">
+            <h2 class="w-card__title"><lang>执行结果</lang></h2>
+        </header>
+        <div class="w-card__body">
+            <div id="batchResult"></div>
+        </div>
+    </section>
+</div>

@@ -49,21 +49,21 @@ $this->assign('meta', $meta);
     <w:hook>seo::head</w:hook>
     <style>
         .weline-page-wrapper.blog-layout {
-            background: #eaeded;
-            color: #0f1111;
+            background: var(--color-bg-muted);
+            color: var(--weline-theme-color-text);
         }
         .blog-layout__main {
             width: min(100%, var(--weline-layout-content-max-width));
             max-width: 100%;
             margin: 0 auto;
-            padding: var(--weline-space-4, 1rem) var(--weline-layout-content-padding-inline) var(--weline-space-8, 2rem);
+            padding: var(--weline-space-4) var(--weline-layout-content-padding-inline) var(--weline-space-8);
             box-sizing: border-box;
         }
         .blog-layout__panel {
-            background: #fff;
-            border: 1px solid #d5d9d9;
-            border-radius: 8px;
-            padding: 1rem 1.25rem 1.5rem;
+            background: var(--color-bg-primary);
+            border: var(--border-width-thin) solid var(--color-border-faint);
+            border-radius: var(--radius-lg);
+            padding: var(--weline-space-4) var(--weline-space-5) var(--weline-space-6);
         }
         /* 正文内面包屑已撤；只保留 layout Theme breadcrumb block */
         .amazon-blog-article__title-row {
@@ -71,36 +71,36 @@ $this->assign('meta', $meta);
             flex-wrap: wrap;
             align-items: flex-start;
             justify-content: space-between;
-            gap: var(--weline-space-3, 0.75rem);
-            margin: 0 0 0.5rem;
+            gap: var(--weline-space-3);
+            margin: 0 0 var(--weline-space-2);
         }
         .amazon-blog-article__title-row .amazon-blog-article__title { margin: 0; flex: 1 1 12rem; }
         .amazon-blog-article__title-row .amazon-blog-listing__rss { flex-shrink: 0; text-decoration: none; }
         .amazon-blog-article__title {
-            margin: 0 0 0.5rem;
-            font-size: clamp(1.5rem, 2.2vw, 1.875rem);
+            margin: 0 0 var(--weline-space-2);
+            font-size: clamp(var(--weline-font-size-2xl), 2.2vw, var(--font-size-3xl));
             font-weight: 700;
             line-height: 1.25;
-            color: #0f1111;
+            color: var(--weline-theme-color-text);
         }
         .amazon-blog-article__byline {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.75rem;
-            margin: 0 0 0.75rem;
-            color: #565959;
-            font-size: 13px;
+            gap: var(--weline-space-3);
+            margin: 0 0 var(--weline-space-3);
+            color: var(--color-text-gray);
+            font-size: var(--font-size-13);
         }
         .amazon-blog-article__author-card {
             display: grid;
             grid-template-columns: auto minmax(0, 1fr);
-            gap: 0.75rem 1rem;
+            gap: var(--weline-space-3) var(--weline-space-4);
             align-items: start;
-            margin: 0 0 1rem;
-            padding: 0.875rem 1rem;
-            border: 1px solid #d5d9d9;
-            border-radius: 8px;
-            background: #f7fafa;
+            margin: 0 0 var(--weline-space-4);
+            padding: var(--spacing-3_5) var(--weline-space-4);
+            border: var(--border-width-thin) solid var(--color-border-faint);
+            border-radius: var(--radius-lg);
+            background: var(--color-bg-panel);
         }
         .amazon-blog-article__author-avatar {
             width: 48px;
@@ -109,54 +109,54 @@ $this->assign('meta', $meta);
             display: grid;
             place-items: center;
             background: #232f3e;
-            color: #fff;
-            font-size: 18px;
+            color: var(--color-text-light);
+            font-size: var(--font-size-lg);
             font-weight: 700;
             line-height: 1;
         }
         .amazon-blog-article__author-body { min-width: 0; }
         .amazon-blog-article__author-label {
-            margin: 0 0 0.15rem;
-            color: #565959;
-            font-size: 12px;
+            margin: 0 0 var(--spacing-0_5);
+            color: var(--color-text-gray);
+            font-size: var(--font-size-xs);
             text-transform: uppercase;
-            letter-spacing: 0.03em;
+            letter-spacing: var(--letter-spacing-wide);
         }
         .amazon-blog-article__author-name {
-            margin: 0 0 0.5rem;
-            font-size: 15px;
+            margin: 0 0 var(--weline-space-2);
+            font-size: var(--font-size-sm);
             font-weight: 700;
-            color: #0f1111;
+            color: var(--weline-theme-color-text);
         }
         .amazon-blog-article__meta-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-            gap: 0.35rem 1rem;
+            gap: var(--spacing-1_5) var(--weline-space-4);
             margin: 0;
-            font-size: 12px;
-            color: #565959;
+            font-size: var(--font-size-xs);
+            color: var(--color-text-gray);
         }
         .amazon-blog-article__meta-grid dt {
             margin: 0;
             font-weight: 600;
-            color: #0f1111;
+            color: var(--weline-theme-color-text);
         }
         .amazon-blog-article__meta-grid dd { margin: 0; }
         .amazon-blog-article__keywords {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.35rem;
-            margin: 0 0 1rem;
+            gap: var(--spacing-1_5);
+            margin: 0 0 var(--weline-space-4);
         }
         .amazon-blog-article__keyword {
             display: inline-flex;
             align-items: center;
-            padding: 0.2rem 0.55rem;
-            border-radius: 999px;
-            border: 1px solid #d5d9d9;
-            background: #fff;
+            padding: var(--spacing-0_2) var(--spacing-0_55);
+            border-radius: var(--radius-full);
+            border: var(--border-width-thin) solid var(--color-border-faint);
+            background: var(--color-bg-primary);
             color: var(--color-link);
-            font-size: 12px;
+            font-size: var(--font-size-xs);
             text-decoration: none;
         }
         .amazon-blog-article__keyword:hover {
@@ -165,7 +165,7 @@ $this->assign('meta', $meta);
         }
         /* 评论槽仅作布局壳：白底边框交给 .weline-review，禁止套第二层卡片 */
         .blog-layout__reviews {
-            margin-top: var(--spacing-4, 1rem);
+            margin-top: var(--spacing-4);
         }
         .blog-layout__reviews-container {
             background: transparent;
@@ -175,7 +175,7 @@ $this->assign('meta', $meta);
         }
         @media (max-width: 768px) {
             .blog-layout__reviews {
-                margin-top: var(--spacing-3, 0.75rem);
+                margin-top: var(--spacing-3);
             }
             .blog-layout__reviews .weline-review {
                 margin-top: 0;
@@ -188,17 +188,17 @@ $this->assign('meta', $meta);
         }
         .amazon-blog-article__category:hover { color: var(--color-link-hover); text-decoration: underline; }
         .amazon-blog-article__excerpt {
-            margin: 0 0 1rem;
-            color: #0f1111;
-            font-size: 15px;
+            margin: 0 0 var(--weline-space-4);
+            color: var(--weline-theme-color-text);
+            font-size: var(--font-size-sm);
             line-height: 1.5;
         }
         .amazon-blog-article__cover {
-            margin: 0 0 1.25rem;
-            border-radius: 8px;
+            margin: 0 0 var(--weline-space-5);
+            border-radius: var(--radius-lg);
             overflow: hidden;
-            border: 1px solid #d5d9d9;
-            background: #f3f4f6;
+            border: var(--border-width-thin) solid var(--color-border-faint);
+            background: var(--color-bg-muted);
         }
         .amazon-blog-article__cover img {
             display: block;
@@ -207,20 +207,20 @@ $this->assign('meta', $meta);
             object-fit: cover;
         }
         .amazon-blog-article__content {
-            font-size: 15px;
+            font-size: var(--font-size-sm);
             line-height: 1.7;
-            color: #0f1111;
+            color: var(--weline-theme-color-text);
         }
-        .amazon-blog-article__content p { margin: 0 0 1rem; }
-        .amazon-blog-article__content img { max-width: 100%; height: auto; border-radius: 4px; }
+        .amazon-blog-article__content p { margin: 0 0 var(--weline-space-4); }
+        .amazon-blog-article__content img { max-width: 100%; height: auto; border-radius: var(--radius-md); }
         .amazon-blog-article__content .hanfu-article-figure {
             max-width: 100%;
-            margin: 1.5rem 0;
+            margin: var(--weline-space-6) 0;
             overflow: hidden;
             box-sizing: border-box;
-            border: 1px solid #d5d9d9;
-            border-radius: 8px;
-            background: #f7fafa;
+            border: var(--border-width-thin) solid var(--color-border-faint);
+            border-radius: var(--radius-lg);
+            background: var(--color-bg-panel);
         }
         .amazon-blog-article__content .hanfu-article-figure img {
             display: block;
@@ -231,15 +231,15 @@ $this->assign('meta', $meta);
             border-radius: 0;
         }
         .amazon-blog-article__content .hanfu-article-figure figcaption {
-            padding: 0.75rem 1rem;
-            color: #565959;
-            font-size: clamp(0.8125rem, 1.8vw, 0.875rem);
+            padding: var(--weline-space-3) var(--weline-space-4);
+            color: var(--color-text-gray);
+            font-size: clamp(var(--font-size-13), 1.8vw, var(--weline-font-size-sm));
             line-height: 1.5;
             overflow-wrap: anywhere;
         }
         .amazon-blog-article__content .hanfu-article-figure__provenance {
-            color: #565959;
-            font-size: 0.875em;
+            color: var(--color-text-gray);
+            font-size: var(--font-size-sm);
             overflow-wrap: anywhere;
         }
         .amazon-blog-article__content .hanfu-article-figure a {
@@ -251,29 +251,29 @@ $this->assign('meta', $meta);
             color: var(--color-link-hover);
         }
         .amazon-blog-article__content .hanfu-article-figure a:focus-visible {
-            outline: 2px solid var(--color-link);
+            outline: var(--border-width-medium) solid var(--color-link);
             outline-offset: 2px;
         }
         .amazon-blog-article__content h2,
         .amazon-blog-article__content h3 {
-            margin: 1.5rem 0 0.75rem;
+            margin: var(--weline-space-6) 0 var(--weline-space-3);
             line-height: 1.3;
         }
         .amazon-blog-article__related {
-            margin-top: 2rem;
-            padding-top: 1.25rem;
-            border-top: 1px solid #e7e7e7;
+            margin-top: var(--weline-space-8);
+            padding-top: var(--weline-space-5);
+            border-top: var(--border-width-thin) solid var(--color-border-soft);
         }
         .amazon-blog-article__related h2 {
-            margin: 0 0 0.75rem;
-            font-size: 1.125rem;
+            margin: 0 0 var(--weline-space-3);
+            font-size: var(--weline-font-size-lg);
             font-weight: 700;
         }
         .amazon-blog-listing__grid--related,
         .amazon-blog-listing__grid {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 12px;
+            gap: var(--spacing-3);
         }
         .blog-storefront__card {
             position: relative;
@@ -281,17 +281,17 @@ $this->assign('meta', $meta);
             flex-direction: column;
             min-width: 0;
             overflow: hidden;
-            border: 1px solid #d5d9d9;
-            border-radius: 8px;
-            background: #fff;
+            border: var(--border-width-thin) solid var(--color-border-faint);
+            border-radius: var(--radius-lg);
+            background: var(--color-bg-primary);
         }
         .blog-storefront__card.is-clickable { cursor: pointer; }
-        .blog-storefront__card.is-clickable:hover { border-color: #bbb; }
+        .blog-storefront__card.is-clickable:hover { border-color: var(--color-border-faint); }
         .blog-storefront__card-hit { position: absolute; inset: 0; z-index: 1; }
         .blog-storefront__media {
             position: relative;
             overflow: hidden;
-            background: #f3f4f6;
+            background: var(--color-bg-muted);
         }
         /* 布局稳定：挂 .w-frame 后用 aspect-ratio，禁止定高抢几何 */
         .blog-storefront__media:not(.w-frame) { height: 140px; }
@@ -302,26 +302,26 @@ $this->assign('meta', $meta);
         }
         .blog-storefront__body {
             position: relative; z-index: 1;
-            display: grid; gap: 4px;
-            padding: 8px 10px 10px;
+            display: grid; gap: var(--spacing-1);
+            padding: var(--spacing-2) var(--spacing-2_5) var(--spacing-2_5);
         }
         .blog-storefront__body h2,
         .blog-storefront__body h3,
         .blog-storefront__card-title {
             margin: 0;
-            font-size: 13px;
+            font-size: var(--font-size-13);
             font-weight: 600;
             line-height: 1.35;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
-            min-height: 2.5em;
+            min-height: var(--control-height-md);
         }
         .blog-storefront__excerpt {
             margin: 0;
-            color: #565959;
-            font-size: 12px;
+            color: var(--color-text-gray);
+            font-size: var(--font-size-xs);
             line-height: 1.4;
             display: -webkit-box;
             -webkit-line-clamp: 3;
@@ -333,16 +333,16 @@ $this->assign('meta', $meta);
         }
         @media (max-width: 768px) {
             .amazon-blog-listing__grid--related { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-            .blog-layout__panel { padding: 0.875rem 0.875rem 1.25rem; }
+            .blog-layout__panel { padding: var(--spacing-3_5) var(--spacing-3_5) var(--weline-space-5); }
         }
         @media (max-width: 520px) {
             .amazon-blog-listing__grid--related { grid-template-columns: 1fr; }
             .amazon-blog-article__content .hanfu-article-figure {
-                margin: 1.25rem 0;
-                border-radius: 6px;
+                margin: var(--weline-space-5) 0;
+                border-radius: var(--border-radius-md);
             }
             .amazon-blog-article__content .hanfu-article-figure figcaption {
-                padding: 0.625rem 0.75rem;
+                padding: var(--spacing-2_5) var(--weline-space-3);
             }
         }
     </style>

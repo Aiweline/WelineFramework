@@ -1,3 +1,4 @@
+<css>Weline_Server::css/backend/server-monitor-security-rules.css</css>
 <?php
 /** @var \Weline\Framework\View\Template $this */
 $rulesJson = (string) $this->getData('rulesJson');
@@ -16,21 +17,6 @@ $rulesJson = (string)\json_encode(
 $rulesGeneration = \max(0, (int)$this->getData('rulesGeneration'));
 $rulesDigest = \trim((string)$this->getData('rulesDigest'));
 ?>
-<style>
-.wls-security-rules-panel { background: var(--backend-color-card-bg); border: 1px solid var(--backend-color-border-default); border-radius: var(--backend-border-radius-md); }
-.wls-security-rules-grid { display: grid; gap: var(--backend-spacing-md, 1rem); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-.wls-security-rules-card { border: 1px solid var(--backend-color-border-default); border-radius: var(--backend-border-radius); background: var(--backend-color-card-bg); padding: var(--backend-spacing-md); }
-.wls-security-rules-card-title { margin: 0 0 var(--backend-spacing-sm); color: var(--backend-color-text-primary); font-size: .95rem; font-weight: 600; }
-.wls-security-rules-form-row { display: grid; gap: var(--backend-spacing-sm); grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: var(--backend-spacing-sm); }
-.wls-security-rules-table-wrap { overflow-x: auto; border: 1px solid var(--backend-color-border-default); border-radius: var(--backend-border-radius); }
-.wls-security-rules-table { width: 100%; border-collapse: collapse; }
-.wls-security-rules-table th, .wls-security-rules-table td { border-bottom: 1px solid var(--backend-color-border-light); padding: var(--backend-spacing-sm); font-size: .85rem; vertical-align: middle; }
-.wls-security-rules-tag { display: inline-block; padding: .15rem .5rem; border-radius: 999px; background: var(--backend-color-info-bg-subtle); color: var(--backend-color-text-primary); font-size: .75rem; }
-.wls-security-rules-list { display: flex; flex-direction: column; gap: var(--backend-spacing-xs); }
-.wls-security-rules-list-item { display: grid; gap: var(--backend-spacing-xs); grid-template-columns: 1fr auto; }
-.wls-security-rules-actions { display: flex; gap: var(--backend-spacing-sm); flex-wrap: wrap; }
-.wls-security-rules-json { min-height: 220px; font-family: Consolas, Monaco, monospace; font-size: .8rem; }
-</style>
 
 <div class="w-card wls-security-rules-panel">
     <div class="w-card__header w-cluster" data-justify="between" data-align="center">

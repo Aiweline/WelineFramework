@@ -1,51 +1,51 @@
 /* Account center — social login bind/unbind cards (lazy sidebar safe; no inline <style>). */
 .customer-social-bindings {
     display: grid;
-    gap: 18px;
+    gap: var(--spacing-4_5);
 }
 .customer-social-bindings__intro {
-    border: 1px solid #dbeafe;
-    border-radius: 8px;
-    background: #f0f9ff;
-    padding: 18px;
+    border: var(--border-width-thin) solid var(--color-border-slate);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-panel);
+    padding: var(--spacing-4_5);
 }
 .customer-social-bindings__title {
-    margin: 0 0 6px;
-    color: #0c4a6e;
-    font-size: 18px;
+    margin: 0 0 var(--spacing-1_5);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-lg);
     font-weight: 800;
 }
 .customer-social-bindings__desc {
     margin: 0;
-    color: #475569;
-    font-size: 14px;
+    color: var(--color-product-label-demo-text);
+    font-size: var(--font-size-sm);
 }
 .customer-social-bindings__list {
     display: grid;
-    gap: 12px;
+    gap: var(--spacing-3);
 }
 .customer-social-bindings__card {
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    background: #fff;
-    padding: 18px;
+    border: var(--border-width-thin) solid var(--color-border-slate);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-primary);
+    padding: var(--spacing-4_5);
     display: flex;
     justify-content: space-between;
-    gap: 16px;
+    gap: var(--spacing-4);
     align-items: center;
 }
 .customer-social-bindings__identity {
     display: flex;
-    gap: 14px;
+    gap: var(--spacing-3_5);
     align-items: flex-start;
     min-width: 0;
 }
 .customer-social-bindings__logo {
     width: 44px;
     height: 44px;
-    border-radius: 999px;
-    border: 1px solid #e2e8f0;
-    background: #fff;
+    border-radius: var(--radius-full);
+    border: var(--border-width-thin) solid var(--color-border-slate);
+    background: var(--color-bg-primary);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -59,68 +59,68 @@
 }
 .customer-social-bindings__name {
     margin: 0;
-    color: #0f172a;
-    font-size: 16px;
+    color: var(--color-text);
+    font-size: var(--font-size-base);
     font-weight: 800;
 }
 .customer-social-bindings__meta {
-    margin: 4px 0 0;
-    color: #64748b;
-    font-size: 13px;
+    margin: var(--spacing-1) 0 0;
+    color: var(--color-link);
+    font-size: var(--font-size-13);
     word-break: break-word;
 }
 .customer-social-bindings__badge {
     display: inline-block;
-    margin-top: 8px;
-    border-radius: 999px;
-    padding: 3px 10px;
-    font-size: 12px;
+    margin-top: var(--spacing-2);
+    border-radius: var(--radius-full);
+    padding: var(--spacing-0_2) var(--spacing-2_5);
+    font-size: var(--font-size-xs);
     font-weight: 700;
 }
 .customer-social-bindings__badge--on {
-    background: #ecfdf5;
-    color: #166534;
+    background: var(--color-success-bg-soft);
+    color: var(--color-text-secondary);
 }
 .customer-social-bindings__badge--off {
-    background: #f1f5f9;
-    color: #64748b;
+    background: var(--color-bg-muted);
+    color: var(--color-link);
 }
 .customer-social-bindings__actions {
     display: flex;
-    gap: 8px;
+    gap: var(--spacing-2);
     flex-shrink: 0;
 }
 .customer-social-bindings__btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 36px;
-    padding: 0 14px;
-    border-radius: 8px;
-    border: 1px solid #cbd5e1;
-    background: #fff;
-    color: #0f172a;
+    min-height: var(--control-height-sm);
+    padding: 0 var(--spacing-3_5);
+    border-radius: var(--radius-lg);
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    background: var(--color-bg-primary);
+    color: var(--color-text);
     font-weight: 700;
     text-decoration: none;
     cursor: pointer;
 }
 .customer-social-bindings__btn--primary {
     border-color: #2563eb;
-    background: #2563eb;
-    color: #fff;
+    background: var(--color-info);
+    color: var(--color-text-light);
 }
 .customer-social-bindings__btn--danger {
     border-color: #fecaca;
-    color: #b91c1c;
-    background: #fff;
+    color: var(--color-link);
+    background: var(--color-bg-primary);
 }
 .customer-social-bindings__empty {
-    border: 1px dashed #cbd5e1;
-    border-radius: 8px;
-    padding: 24px;
+    border: var(--border-width-thin) dashed var(--color-border-muted);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-6);
     text-align: center;
-    color: #64748b;
-    background: #f8fafc;
+    color: var(--color-link);
+    background: var(--color-bg-slate);
 }
 @media (max-width: 640px) {
     .customer-social-bindings__card {

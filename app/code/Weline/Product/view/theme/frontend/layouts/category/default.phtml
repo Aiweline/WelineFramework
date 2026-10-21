@@ -198,23 +198,23 @@ if (!$isEditorPreview) {
                                     $prevUrl = (string)($paginationData['prev_url'] ?? '');
                                     $nextUrl = (string)($paginationData['next_url'] ?? '');
                                     ?>
-                                    <nav class="category-pagination" aria-label="<?= htmlspecialchars((string)__('Pagination'), ENT_QUOTES, 'UTF-8') ?>">
+                                    <nav class="category-pagination" aria-label="@lang('Pagination')">
                                         <a
                                             href="<?= htmlspecialchars($prevUrl !== '' ? $prevUrl : '#', ENT_QUOTES, 'UTF-8') ?>"
                                             class="category-pagination__link <?= $prevUrl !== '' ? '' : 'is-disabled' ?>"
                                             aria-disabled="<?= $prevUrl !== '' ? 'false' : 'true' ?>"
                                         >
-                                            <?= __('Previous') ?>
+                                            <lang>Previous</lang>
                                         </a>
                                         <span class="category-pagination__status">
-                                            <?= __('Page %{1} of %{2}', [$currentPage, $totalPages]) ?>
+                                            <lang args="[$currentPage, $totalPages]">Page %{1} of %{2}</lang>
                                         </span>
                                         <a
                                             href="<?= htmlspecialchars($nextUrl !== '' ? $nextUrl : '#', ENT_QUOTES, 'UTF-8') ?>"
                                             class="category-pagination__link <?= $nextUrl !== '' ? '' : 'is-disabled' ?>"
                                             aria-disabled="<?= $nextUrl !== '' ? 'false' : 'true' ?>"
                                         >
-                                            <?= __('Next') ?>
+                                            <lang>Next</lang>
                                         </a>
                                     </nav>
                                 <?php endif; ?>
@@ -281,7 +281,7 @@ if (!$isEditorPreview) {
         width: min(100%, var(--weline-layout-content-max-width));
         max-width: 100%;
         margin: 0 auto;
-        padding: 0 var(--weline-layout-content-padding-inline) var(--spacing-5, 1.25rem);
+        padding: 0 var(--weline-layout-content-padding-inline) var(--spacing-5);
         box-sizing: border-box;
     }
 
@@ -289,7 +289,7 @@ if (!$isEditorPreview) {
     /* 本页未必加载完整 spacing token；所有间距给 rem 兜底，避免 gap/padding/max-width 塌成 normal/0/none */
     .category-layout__main {
         width: 100%;
-        padding: var(--spacing-3, 0.75rem) 0 var(--spacing-5, 1.25rem);
+        padding: var(--spacing-3) 0 var(--spacing-5);
     }
 
     /* 无侧栏（根 /category 落地等）必须单列：否则唯一子项会落入首列 220px，正文被挤成窄条 */
@@ -299,7 +299,7 @@ if (!$isEditorPreview) {
         margin: 0 auto;
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        gap: var(--spacing-4, 1rem);
+        gap: var(--spacing-4);
         align-items: start;
         padding: 0 var(--weline-layout-content-padding-inline);
         box-sizing: border-box;
@@ -319,8 +319,8 @@ if (!$isEditorPreview) {
         position: sticky;
         /* 只留小间距。勿再叠 --header-height：顶栏悬浮菜单易打断自身 sticky，
            预留高度会在「部门」上方留下空洞。 */
-        top: var(--spacing-3, 0.75rem);
-        max-height: calc(100vh - var(--spacing-6, 1.5rem));
+        top: var(--spacing-3);
+        max-height: calc(100vh - var(--spacing-6));
         overflow-y: auto;
         overscroll-behavior: contain;
     }
@@ -653,14 +653,14 @@ if (!$isEditorPreview) {
         .category-layout__container--no-filters,
         .category-layout__container:has(> .category-layout__sidebar) {
             grid-template-columns: minmax(0, 1fr);
-            padding: 0 var(--spacing-4, 1rem);
+            padding: 0 var(--spacing-4);
         }
 
         .category-layout__filter-toggle {
             display: inline-flex;
             position: fixed;
-            bottom: var(--spacing-6, 1.5rem);
-            right: var(--spacing-4, 1rem);
+            bottom: var(--spacing-6);
+            right: var(--spacing-4);
             z-index: var(--z-index-sticky, 100);
         }
 
@@ -695,7 +695,7 @@ if (!$isEditorPreview) {
             flex: 1;
             overflow-y: auto;
             overscroll-behavior: contain;
-            padding: var(--spacing-2, 0.5rem) var(--spacing-5, 1.25rem) var(--spacing-4, 1rem);
+            padding: var(--spacing-2) var(--spacing-5) var(--spacing-4);
         }
 
         .category-layout__overlay {
@@ -705,40 +705,40 @@ if (!$isEditorPreview) {
 
     @media screen and (max-width: 768px) {
         .category-layout__main {
-            padding: var(--spacing-3, 0.75rem) 0 var(--spacing-8, 2rem);
+            padding: var(--spacing-3) 0 var(--spacing-8);
         }
 
         .category-layout__container {
-            padding: 0 var(--spacing-3, 0.75rem);
-            gap: var(--spacing-3, 0.75rem);
+            padding: 0 var(--spacing-3);
+            gap: var(--spacing-3);
         }
 
         .category-layout__products > * + * {
-            margin-top: var(--spacing-6, 1.5rem);
+            margin-top: var(--spacing-6);
         }
 
         .category-layout__filter-toggle {
-            bottom: var(--spacing-5, 1.25rem);
-            right: var(--spacing-3, 0.75rem);
+            bottom: var(--spacing-5);
+            right: var(--spacing-3);
         }
     }
 
     @media screen and (max-width: 480px) {
         .category-layout__main {
-            padding: var(--spacing-2, 0.5rem) 0 var(--spacing-7, 1.75rem);
+            padding: var(--spacing-2) 0 var(--spacing-7);
         }
 
         .category-layout__container {
-            padding: 0 var(--spacing-2, 0.5rem);
-            gap: var(--spacing-2, 0.5rem);
+            padding: 0 var(--spacing-2);
+            gap: var(--spacing-2);
         }
 
         .category-layout__products > * + * {
-            margin-top: var(--spacing-5, 1.25rem);
+            margin-top: var(--spacing-5);
         }
 
         .category-layout__filter-toggle {
-            bottom: var(--spacing-4, 1rem);
+            bottom: var(--spacing-4);
             right: var(--spacing-2);
             padding: var(--spacing-2) var(--spacing-3);
         }

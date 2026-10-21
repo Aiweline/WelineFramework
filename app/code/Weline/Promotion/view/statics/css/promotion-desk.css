@@ -18,7 +18,7 @@
     color: var(--weline-theme-text-muted);
     font-size: var(--weline-font-size-sm);
     margin: var(--weline-space-3) 0 0;
-    padding-inline-start: 1.125rem;
+    padding-inline-start: var(--spacing-4_5);
 }
 
 .w-promotion-desk__checks li + li {
@@ -28,7 +28,7 @@
 .w-promotion-desk__rhythm-item + .w-promotion-desk__rhythm-item {
     margin-top: var(--weline-space-3);
     padding-top: var(--weline-space-3);
-    border-top: 1px solid var(--weline-theme-border);
+    border-top: var(--border-width-thin) solid var(--weline-theme-border);
 }
 
 .w-promotion-desk__card-actions {

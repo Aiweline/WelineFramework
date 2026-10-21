@@ -1,0 +1,7 @@
+/**
+ * Weline_Deploy 后台页面私有布局（Release/index）。
+ * 只承载页面私有布局/尺寸/定位；只消费主题 Token；无 !important；统一在 @layer page 内。
+ */
+@layer page {
+.weline-release-history .wrh-alert { background: var(--backend-color-bg-secondary); border: 1px solid var(--backend-color-border); color: var(--backend-color-text); }
+}

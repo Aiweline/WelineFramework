@@ -17,7 +17,7 @@
     justify-content: space-between;
     gap: var(--weline-space-2);
     padding: var(--weline-space-2) var(--weline-space-3);
-    border: 1px solid var(--weline-theme-border-strong);
+    border: var(--border-width-thin) solid var(--weline-theme-border-strong);
     border-radius: var(--weline-radius-md);
     background: var(--weline-theme-surface);
     color: var(--weline-theme-text);
@@ -32,7 +32,7 @@
 
 .w-language-select[data-w-component="customer-select"] .w-language-select__trigger:focus-visible {
     border-color: var(--weline-theme-focus);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--weline-theme-focus) 20%, transparent);
+    box-shadow: var(--focus-ring);
     outline: 0;
 }
 
@@ -79,7 +79,7 @@
     align-items: center;
     gap: var(--weline-space-1);
     padding: var(--weline-space-1) var(--weline-space-2);
-    border: 1px solid color-mix(in srgb, var(--weline-theme-primary) 22%, transparent);
+    border: var(--border-width-thin) solid color-mix(in srgb, var(--weline-theme-primary) 22%, transparent);
     border-radius: var(--weline-radius-round);
     background: color-mix(in srgb, var(--weline-theme-primary) 12%, var(--weline-theme-surface));
     color: var(--weline-theme-primary);
@@ -98,7 +98,7 @@
     z-index: var(--weline-z-menu);
     display: grid;
     inline-size: min(28rem, var(--w-floating-max-inline-size, calc(100dvw - 1rem)));
-    min-inline-size: min(var(--w-language-select-anchor-width, 16rem), var(--w-floating-max-inline-size, calc(100dvw - 1rem)));
+    min-inline-size: min(var(--w-language-select-anchor-width), var(--w-floating-max-inline-size, calc(100dvw - 1rem)));
     max-inline-size: var(--w-floating-max-inline-size, calc(100dvw - 1rem));
     max-block-size: var(--w-floating-max-block-size, calc(100dvh - 1rem));
     grid-template-rows: auto auto minmax(0, 1fr);
@@ -106,7 +106,7 @@
     padding: var(--weline-space-3);
     overflow: hidden;
     overscroll-behavior: contain;
-    border: 1px solid var(--weline-theme-border);
+    border: var(--border-width-thin) solid var(--weline-theme-border);
     border-radius: var(--weline-radius-lg);
     background: var(--weline-theme-surface-raised);
     color: var(--weline-theme-text);
@@ -131,12 +131,12 @@
 
 .w-language-select__popover[data-w-customer-select-panel] .w-language-select__list {
     min-height: 0;
-    max-height: max(4rem, min(22rem, calc(var(--w-floating-max-block-size, 28rem) - 4.5rem)));
+    max-height: max(4rem, min(22rem, calc(var(--w-floating-max-block-size) - 4.5rem)));
     overflow: auto;
     overscroll-behavior: contain;
     scrollbar-color: var(--weline-theme-border-strong) var(--weline-theme-surface-muted);
     scrollbar-width: thin;
-    border: 1px solid var(--weline-theme-border);
+    border: var(--border-width-thin) solid var(--weline-theme-border);
     border-radius: var(--weline-radius-md);
     background: var(--weline-theme-surface);
 }

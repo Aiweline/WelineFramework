@@ -22,9 +22,9 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
                 <span class="payment-handoff__spinner-ring"></span>
             </span>
             <div class="amz-order-confirm__banner-copy">
-                <p class="payment-handoff__eyebrow"><?= $escape(__('确认进度')) ?></p>
-                <h1><?= $escape(__('正在确认订单…')) ?></h1>
-                <p id="payment-handoff-message"><?= $escape(__('支付已成功，我们正在同步订单信息。')) ?></p>
+                <p class="payment-handoff__eyebrow"><lang>确认进度</lang></p>
+                <h1><lang>正在确认订单…</lang></h1>
+                <p id="payment-handoff-message"><lang>支付已成功，我们正在同步订单信息。</lang></p>
             </div>
         </div>
         <div class="payment-handoff__progress"
@@ -32,7 +32,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
             aria-valuemin="0"
             aria-valuemax="100"
             aria-valuenow="12"
-            aria-label="<?= $escape(__('订单确认进度')) ?>"
+            aria-label="@lang('订单确认进度')"
             data-testid="payment-handoff-progress">
             <div class="payment-handoff__progress-track">
                 <div id="payment-handoff-progress-bar" class="payment-handoff__progress-bar" style="width:12%"></div>
@@ -44,37 +44,37 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
         <ol class="payment-handoff__step-list" data-testid="payment-handoff-steps">
             <li class="payment-handoff__step is-done" data-step="paid">
                 <span class="payment-handoff__step-dot" aria-hidden="true"></span>
-                <span class="payment-handoff__step-label"><?= $escape(__('支付已确认')) ?></span>
+                <span class="payment-handoff__step-label"><lang>支付已确认</lang></span>
             </li>
             <li class="payment-handoff__step is-active" data-step="sync" id="payment-handoff-step-sync">
                 <span class="payment-handoff__step-dot" aria-hidden="true"></span>
-                <span class="payment-handoff__step-label"><?= $escape(__('正在同步订单')) ?></span>
+                <span class="payment-handoff__step-label"><lang>正在同步订单</lang></span>
             </li>
             <li class="payment-handoff__step" data-step="redirect" id="payment-handoff-step-redirect">
                 <span class="payment-handoff__step-dot" aria-hidden="true"></span>
-                <span class="payment-handoff__step-label"><?= $escape(__('即将跳转结果页')) ?></span>
+                <span class="payment-handoff__step-label"><lang>即将跳转结果页</lang></span>
             </li>
         </ol>
-        <p class="payment-handoff__hint"><?= $escape(__('请稍候，请勿关闭本页')) ?></p>
+        <p class="payment-handoff__hint"><lang>请稍候，请勿关闭本页</lang></p>
     </section>
 </main>
 <style>
 .payment-handoff {
-    --amz-text: #0f1111;
-    --amz-muted: #565959;
-    --amz-border: #d5d9d9;
-    --amz-panel-bg: #fff;
-    --amz-banner-bg: #f7fafa;
+    --amz-text: var(--weline-theme-color-text);
+    --amz-muted: var(--color-text-gray);
+    --amz-border: var(--color-border-muted);
+    --amz-panel-bg: var(--color-bg-primary);
+    --amz-banner-bg: var(--color-bg-slate);
     --amz-pending: #c7511f;
-    --amz-pending-soft: #fff4ed;
-    --amz-success: #067d62;
+    --amz-pending-soft: var(--color-primary-bg-subtle);
+    --amz-success: var(--color-success);
     box-sizing: border-box;
     width: min(100%, var(--weline-layout-content-max-width));
     max-width: 720px;
     margin: 0 auto;
-    padding: 28px var(--weline-layout-content-padding-inline) 56px;
+    padding: var(--spacing-7) var(--weline-layout-content-padding-inline) 56px;
     color: var(--amz-text);
-    font-size: 14px;
+    font-size: var(--font-size-sm);
     line-height: 1.5;
 }
 .payment-handoff *,
@@ -84,16 +84,16 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
     background:
         radial-gradient(120% 90% at 0% 0%, rgba(199, 81, 31, 0.08), transparent 55%),
         var(--amz-banner-bg);
-    border: 1px solid var(--amz-border);
-    border-radius: 12px;
-    margin-bottom: 14px;
+    border: var(--border-width-thin) solid var(--amz-border);
+    border-radius: var(--radius-xl);
+    margin-bottom: var(--spacing-3_5);
     overflow: hidden;
 }
 .payment-handoff__hero-inner {
     display: flex;
     align-items: flex-start;
-    gap: 16px;
-    padding: 24px 22px 18px;
+    gap: var(--spacing-4);
+    padding: var(--spacing-6) var(--spacing-5_5) var(--spacing-4_5);
 }
 .payment-handoff__spinner {
     position: relative;
@@ -112,75 +112,75 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    border: 2.5px solid rgba(199, 81, 31, 0.22);
+    border: var(--loader-border-width) solid rgba(199, 81, 31, 0.22);
     border-top-color: var(--amz-pending);
     animation: payment-handoff-spin 0.85s linear infinite;
 }
 .payment-handoff__eyebrow {
-    margin: 0 0 4px;
+    margin: 0 0 var(--spacing-1);
     color: var(--amz-pending);
-    font-size: 12px;
+    font-size: var(--font-size-xs);
     font-weight: 700;
-    letter-spacing: 0.04em;
+    letter-spacing: var(--letter-spacing-wide);
     text-transform: uppercase;
 }
 .payment-handoff h1,
 .payment-handoff h2,
 .payment-handoff p { margin: 0; color: inherit; }
 .payment-handoff__hero .amz-order-confirm__banner-copy h1 {
-    font-size: 24px;
+    font-size: var(--font-size-2xl);
     font-weight: 700;
     line-height: 1.25;
 }
 .payment-handoff__hero .amz-order-confirm__banner-copy > #payment-handoff-message {
-    margin-top: 8px;
+    margin-top: var(--spacing-2);
     color: var(--amz-muted);
-    font-size: 15px;
+    font-size: var(--font-size-sm);
 }
 .payment-handoff__progress {
-    padding: 0 22px 20px;
+    padding: 0 var(--spacing-5_5) var(--spacing-5);
 }
 .payment-handoff__progress-track {
     height: 6px;
-    border-radius: 999px;
-    background: #e7e9e9;
+    border-radius: var(--radius-full);
+    background: var(--color-bg-secondary);
     overflow: hidden;
 }
 .payment-handoff__progress-bar {
     height: 100%;
     width: 12%;
     border-radius: inherit;
-    background: linear-gradient(90deg, #e47911 0%, var(--amz-pending) 55%, #f5a05a 100%);
+    background: linear-gradient(90deg, var(--color-warning) 0%, var(--amz-pending) 55%, var(--color-warning) 100%);
     background-size: 200% 100%;
     animation: payment-handoff-shimmer 1.4s ease-in-out infinite;
     transition: width 0.45s ease;
 }
 .payment-handoff__steps {
     background: var(--amz-panel-bg);
-    border: 1px solid var(--amz-border);
-    border-radius: 12px;
-    padding: 18px 20px 16px;
+    border: var(--border-width-thin) solid var(--amz-border);
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-4_5) var(--spacing-5) var(--spacing-4);
 }
 .payment-handoff__step-list {
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 12px;
+    gap: var(--spacing-3);
 }
 .payment-handoff__step {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--spacing-3);
     color: var(--amz-muted);
-    font-size: 14px;
+    font-size: var(--font-size-sm);
 }
 .payment-handoff__step-dot {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    border: 2px solid #b0b3b3;
-    background: #fff;
+    border: var(--border-width-medium) solid #b0b3b3;
+    background: var(--color-bg-primary);
     flex-shrink: 0;
 }
 .payment-handoff__step.is-done {
@@ -190,7 +190,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
 .payment-handoff__step.is-done .payment-handoff__step-dot {
     border-color: var(--amz-success);
     background: var(--amz-success);
-    box-shadow: inset 0 0 0 2px #fff;
+    box-shadow: var(--weline-shadow-md);
 }
 .payment-handoff__step.is-active {
     color: var(--amz-text);
@@ -199,15 +199,15 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
 .payment-handoff__step.is-active .payment-handoff__step-dot {
     border-color: var(--amz-pending);
     background: var(--amz-pending);
-    box-shadow: 0 0 0 4px rgba(199, 81, 31, 0.14);
+    box-shadow: var(--weline-shadow-md);
     animation: payment-handoff-pulse 1.2s ease-in-out infinite;
 }
 .payment-handoff__hint {
-    margin-top: 14px;
-    padding-top: 12px;
-    border-top: 1px solid #eee;
+    margin-top: var(--spacing-3_5);
+    padding-top: var(--spacing-3);
+    border-top: var(--border-width-thin) solid var(--color-border-soft);
     color: var(--amz-muted);
-    font-size: 13px;
+    font-size: var(--font-size-13);
 }
 .payment-handoff.is-ready .payment-handoff__spinner-ring {
     animation: none;
@@ -228,14 +228,14 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string) $value, E
     100% { background-position: -100% 0; }
 }
 @keyframes payment-handoff-pulse {
-    0%, 100% { box-shadow: 0 0 0 4px rgba(199, 81, 31, 0.12); }
-    50% { box-shadow: 0 0 0 7px rgba(199, 81, 31, 0.08); }
+    0%, 100% { box-shadow: var(--weline-shadow-md); }
+    50% { box-shadow: var(--weline-shadow-md); }
 }
 @media (max-width: 640px) {
-    .payment-handoff { padding-top: 18px; }
-    .payment-handoff__hero .amz-order-confirm__banner-copy h1 { font-size: 20px; }
-    .payment-handoff__hero-inner { padding: 18px 16px 14px; }
-    .payment-handoff__progress { padding: 0 16px 16px; }
+    .payment-handoff { padding-top: var(--spacing-4_5); }
+    .payment-handoff__hero .amz-order-confirm__banner-copy h1 { font-size: var(--font-size-xl); }
+    .payment-handoff__hero-inner { padding: var(--spacing-4_5) var(--spacing-4) var(--spacing-3_5); }
+    .payment-handoff__progress { padding: 0 var(--spacing-4) var(--spacing-4); }
 }
 </style>
 <script>

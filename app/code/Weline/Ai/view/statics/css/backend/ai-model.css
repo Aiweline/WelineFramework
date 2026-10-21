@@ -1,0 +1,16 @@
+@layer page {
+.weline-ai-model-table .w-button[aria-busy="true"] { pointer-events: none; opacity: 0.85; }
+.weline-ai-model-table .w-button[aria-busy="true"] .w-spinner { width: 1em; height: 1em; display: inline-block; vertical-align: middle; }
+.weline-ai-model-result-dialog .model-result-pre { white-space: pre-wrap; word-break: break-word; font-size: var(--weline-font-size-sm); margin: 0; max-height: 50vh; overflow: auto; }
+.weline-ai-model-table .model-info-cell { min-width: 15rem; max-width: 30rem; }
+.weline-ai-model-table .model-info-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--weline-space-2); margin-bottom: var(--weline-space-1); }
+.weline-ai-model-table .model-info-meta,
+.weline-ai-model-table .model-info-vendor,
+.weline-ai-model-table .model-info-price,
+.weline-ai-model-table .model-status-stack { display: flex; flex-wrap: wrap; align-items: center; gap: var(--weline-space-1) var(--weline-space-2); margin-top: var(--weline-space-1); }
+.weline-ai-model-table .model-status-stack { flex-direction: column; align-items: flex-start; gap: var(--weline-space-1); min-width: 8.75rem; max-width: 13.75rem; }
+.weline-ai-model-table .model-status-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--weline-space-1); }
+.weline-ai-model-table .model-actions-cell { width: 1%; white-space: nowrap; }
+.weline-ai-model-table code.model-code { font-size: 0.8em; word-break: break-all; }
+.weline-ai-model-result-img { max-height: 17.5rem; width: 100%; object-fit: contain; background: var(--weline-theme-surface); }
+}

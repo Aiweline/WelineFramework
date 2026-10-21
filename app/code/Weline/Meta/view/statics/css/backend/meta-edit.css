@@ -1,0 +1,26 @@
+/* Weline_Meta 元数据编辑页私有布局（后端主题标准 §6.2）。
+ * 颜色全部取主题 Token；不使用强制优先级。
+ */
+@layer page {
+    .meta-edit .json-textarea {
+        font-family: var(--weline-font-mono);
+        min-height: 17.5rem;
+        line-height: 1.55;
+        font-size: var(--weline-font-size-sm);
+    }
+
+    .meta-edit .meta-key-box {
+        font-family: var(--weline-font-mono);
+        font-size: var(--weline-font-size-xs);
+        word-break: break-all;
+    }
+
+    .meta-edit .w-field__error {
+        display: none;
+    }
+
+    .meta-edit .w-input:user-invalid + .w-field__error,
+    .meta-edit .w-textarea:user-invalid + .w-field__error {
+        display: block;
+    }
+}

@@ -7,7 +7,7 @@ $escape = static fn ($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'U
          data-testid="selection-share-invalid"
          weline-code="helppay.selection.invalid">
     <div class="w-helppay-panel">
-        <h1 class="w-text" data-weight="strong"><?= $escape(__('分享链接不可用')) ?></h1>
-        <a class="w-button w-button--primary" href="/"><?= $escape(__('返回首页')) ?></a>
+        <h1 class="w-text" data-weight="strong"><lang>分享链接不可用</lang></h1>
+        <a class="w-button w-button--primary" href="/"><lang>返回首页</lang></a>
     </div>
 </section>

@@ -1,485 +1,272 @@
 {
   "schema": "module-frontend-theme-baseline.v1",
   "note": "棘轮基线：只许降不许升。每次迁移后由 --write-baseline 下调。",
-  "total_violations": 13391,
+  "total_violations": 1132,
   "by_code": {
-    "hard_size": 6430,
-    "hard_color_hex": 2072,
-    "php_i18n_call": 1631,
-    "var_fallback_size": 868,
-    "var_fallback_color": 793,
-    "hard_color_func": 469,
-    "js_observe_direct": 262,
-    "hard_max_width_px": 230,
-    "important": 221,
-    "inline_style": 162,
-    "private_token_def": 146,
-    "raw_page_shell": 53,
-    "inline_script_exec": 36,
+    "hard_color_hex": 353,
+    "hard_color_func": 265,
+    "php_i18n_call": 195,
+    "important": 129,
+    "private_token_def": 55,
+    "hard_size": 43,
+    "inline_style": 39,
+    "inline_script_exec": 33,
     "js_fetch_direct": 10,
-    "inline_handler": 4,
-    "direct_script_src": 3,
-    "layout_key_collision": 1
+    "hard_max_width_px": 5,
+    "js_observe_direct": 3,
+    "inline_handler": 2
   },
   "by_severity": {
-    "P0": 44,
-    "P1": 6493,
-    "P2": 6854
+    "P0": 35,
+    "P1": 1012,
+    "P2": 85
   },
   "by_module": {
-    "Weline/Customer": 1153,
-    "Weline/Payment": 564,
-    "Weline/Shipping": 571,
-    "Weline/CustomerService": 778,
-    "Weline/TwoFactorAuth": 950,
-    "Weline/Search": 320,
-    "Weline/Ai": 410,
-    "Weline/Mail": 262,
-    "Weline/Product": 1037,
-    "Weline/B2B": 712,
-    "Weline/Cart": 339,
-    "Weline/Blog": 273,
-    "Weline/Installer": 200,
-    "Weline/Consent": 50,
-    "Weline/Daocharms3d": 1,
-    "Weline/Order": 1145,
-    "Weline/Visitor": 531,
-    "Weline/DataTable": 667,
-    "Weline/Affiliate": 395,
-    "Weline/I18n": 509,
-    "Weline/HelpPay": 454,
-    "Weline/Multipass": 323,
-    "Weline/Inquiry": 245,
-    "Weline/Checkout": 88,
-    "Weline/Compare": 155,
-    "Weline/Index": 214,
-    "Weline/Promotion": 162,
-    "Weline/Faq": 119,
-    "Weline/Wishlist": 83,
-    "Weline/Review": 51,
-    "Weline/Marketing": 96,
-    "Weline/Demo": 93,
-    "Weline/Currency": 92,
-    "Weline/Captcha": 70,
-    "Weline/Social": 61,
-    "Weline/Newsletter": 23,
-    "Weline/StoreMusic": 146,
-    "Weline/Cms": 5,
-    "Weline/Tax": 4,
-    "Weline/Websites": 36,
-    "Weline/RecentlyViewed": 3,
-    "Weline/Widget": 1
+    "Weline/Customer": 157,
+    "Weline/Payment": 31,
+    "Weline/CustomerService": 29,
+    "Weline/TwoFactorAuth": 82,
+    "Weline/Search": 10,
+    "Weline/Ai": 105,
+    "Weline/Shipping": 31,
+    "Weline/Product": 80,
+    "Weline/Installer": 51,
+    "Weline/B2B": 19,
+    "Weline/Cart": 10,
+    "Weline/DataTable": 128,
+    "Weline/Order": 85,
+    "Weline/Visitor": 60,
+    "Weline/I18n": 58,
+    "Weline/Inquiry": 22,
+    "Weline/Checkout": 20,
+    "Weline/Promotion": 18,
+    "Weline/Multipass": 13,
+    "Weline/Mail": 14,
+    "Weline/Newsletter": 13,
+    "Weline/Social": 12,
+    "Weline/Captcha": 11,
+    "Weline/Blog": 9,
+    "Weline/StoreMusic": 10,
+    "Weline/HelpPay": 18,
+    "Weline/Compare": 6,
+    "Weline/Consent": 6,
+    "Weline/Wishlist": 6,
+    "Weline/Demo": 5,
+    "Weline/Faq": 3,
+    "Weline/Marketing": 3,
+    "Weline/RecentlyViewed": 2,
+    "Weline/Affiliate": 4,
+    "Weline/Index": 1
   },
   "by_module_code": {
     "Weline/Customer": {
-      "hard_size": 695,
-      "php_i18n_call": 135,
-      "hard_color_hex": 75,
-      "important": 69,
-      "hard_color_func": 62,
-      "var_fallback_size": 32,
-      "js_observe_direct": 31,
-      "hard_max_width_px": 23,
+      "hard_color_func": 56,
+      "important": 47,
+      "php_i18n_call": 20,
+      "hard_color_hex": 13,
       "inline_script_exec": 12,
-      "raw_page_shell": 11,
-      "var_fallback_color": 5,
-      "inline_style": 2,
-      "layout_key_collision": 1
+      "hard_size": 7,
+      "inline_style": 2
     },
     "Weline/Payment": {
-      "hard_size": 256,
-      "php_i18n_call": 142,
-      "hard_color_hex": 103,
-      "private_token_def": 23,
-      "hard_color_func": 9,
-      "important": 8,
-      "hard_max_width_px": 8,
-      "js_observe_direct": 5,
+      "hard_color_hex": 13,
       "inline_script_exec": 5,
-      "var_fallback_color": 3,
-      "inline_style": 1,
-      "raw_page_shell": 1
-    },
-    "Weline/Shipping": {
-      "hard_size": 239,
-      "php_i18n_call": 169,
-      "hard_color_hex": 78,
-      "inline_style": 26,
-      "hard_color_func": 15,
-      "var_fallback_size": 11,
-      "hard_max_width_px": 10,
-      "js_observe_direct": 9,
-      "var_fallback_color": 8,
-      "direct_script_src": 3,
-      "inline_script_exec": 2,
-      "important": 1
+      "php_i18n_call": 5,
+      "private_token_def": 2,
+      "hard_color_func": 2,
+      "hard_size": 2,
+      "important": 1,
+      "inline_style": 1
     },
     "Weline/CustomerService": {
-      "hard_size": 452,
-      "var_fallback_size": 119,
-      "hard_color_hex": 73,
-      "var_fallback_color": 59,
-      "php_i18n_call": 23,
-      "hard_color_func": 22,
-      "js_observe_direct": 10,
-      "hard_max_width_px": 4,
+      "hard_color_func": 10,
+      "hard_size": 5,
       "inline_script_exec": 4,
       "inline_style": 4,
-      "private_token_def": 3,
-      "raw_page_shell": 3,
-      "important": 2
+      "hard_color_hex": 3,
+      "important": 2,
+      "php_i18n_call": 1
     },
     "Weline/TwoFactorAuth": {
-      "hard_size": 503,
-      "hard_color_hex": 190,
-      "php_i18n_call": 104,
-      "inline_style": 60,
-      "hard_color_func": 36,
-      "hard_max_width_px": 30,
-      "private_token_def": 10,
-      "js_observe_direct": 9,
-      "raw_page_shell": 4,
+      "hard_color_hex": 55,
+      "hard_color_func": 9,
+      "php_i18n_call": 8,
+      "hard_max_width_px": 3,
       "inline_script_exec": 3,
-      "important": 1
+      "private_token_def": 2,
+      "hard_size": 2
     },
     "Weline/Search": {
-      "hard_size": 144,
-      "hard_color_hex": 59,
-      "var_fallback_size": 49,
-      "var_fallback_color": 30,
-      "php_i18n_call": 17,
-      "hard_max_width_px": 7,
-      "hard_color_func": 5,
-      "js_observe_direct": 4,
-      "raw_page_shell": 2,
+      "php_i18n_call": 3,
+      "hard_color_hex": 3,
       "inline_handler": 2,
-      "inline_script_exec": 1
+      "inline_script_exec": 1,
+      "hard_color_func": 1
     },
     "Weline/Ai": {
-      "hard_size": 195,
-      "hard_color_hex": 81,
-      "php_i18n_call": 52,
-      "hard_color_func": 51,
-      "raw_page_shell": 11,
-      "important": 8,
-      "inline_style": 8,
+      "hard_color_hex": 47,
+      "hard_color_func": 34,
+      "php_i18n_call": 18,
+      "inline_style": 3,
       "inline_script_exec": 2,
-      "hard_max_width_px": 2
+      "hard_size": 1
     },
-    "Weline/Mail": {
-      "hard_size": 125,
-      "php_i18n_call": 71,
-      "hard_color_hex": 18,
-      "var_fallback_size": 15,
-      "var_fallback_color": 11,
-      "hard_color_func": 8,
-      "hard_max_width_px": 7,
-      "js_observe_direct": 3,
-      "inline_style": 2,
-      "inline_handler": 2
+    "Weline/Shipping": {
+      "hard_color_hex": 13,
+      "hard_color_func": 10,
+      "php_i18n_call": 6,
+      "inline_script_exec": 2
     },
     "Weline/Product": {
-      "hard_size": 370,
-      "php_i18n_call": 227,
-      "hard_color_hex": 137,
-      "var_fallback_size": 123,
-      "var_fallback_color": 67,
-      "hard_max_width_px": 45,
-      "important": 25,
-      "hard_color_func": 13,
-      "js_observe_direct": 13,
-      "raw_page_shell": 11,
+      "php_i18n_call": 44,
+      "important": 16,
+      "hard_size": 6,
       "inline_style": 5,
+      "hard_color_func": 4,
+      "hard_color_hex": 4,
+      "inline_script_exec": 1
+    },
+    "Weline/Installer": {
+      "php_i18n_call": 25,
+      "hard_color_func": 12,
+      "hard_color_hex": 7,
+      "private_token_def": 5,
+      "hard_max_width_px": 1,
       "inline_script_exec": 1
     },
     "Weline/B2B": {
-      "hard_size": 237,
-      "var_fallback_size": 153,
-      "var_fallback_color": 108,
-      "hard_color_hex": 97,
-      "php_i18n_call": 55,
-      "js_observe_direct": 35,
-      "important": 12,
-      "inline_style": 6,
-      "hard_color_func": 4,
-      "hard_max_width_px": 4,
+      "important": 9,
+      "php_i18n_call": 8,
+      "inline_style": 1,
       "inline_script_exec": 1
     },
     "Weline/Cart": {
-      "hard_size": 176,
-      "php_i18n_call": 55,
-      "hard_color_hex": 38,
-      "var_fallback_color": 27,
-      "var_fallback_size": 12,
-      "js_observe_direct": 10,
-      "hard_color_func": 6,
-      "private_token_def": 5,
-      "hard_max_width_px": 5,
+      "hard_color_hex": 3,
       "important": 3,
+      "private_token_def": 1,
+      "hard_size": 1,
       "inline_script_exec": 1,
-      "raw_page_shell": 1
-    },
-    "Weline/Blog": {
-      "hard_size": 144,
-      "php_i18n_call": 58,
-      "hard_color_hex": 53,
-      "var_fallback_size": 8,
-      "hard_max_width_px": 7,
-      "js_observe_direct": 1,
-      "inline_script_exec": 1,
-      "raw_page_shell": 1
-    },
-    "Weline/Installer": {
-      "hard_size": 77,
-      "php_i18n_call": 56,
-      "hard_color_hex": 25,
-      "private_token_def": 18,
-      "hard_color_func": 12,
-      "inline_style": 7,
-      "hard_max_width_px": 3,
-      "inline_script_exec": 1,
-      "raw_page_shell": 1
-    },
-    "Weline/Consent": {
-      "hard_size": 22,
-      "hard_color_hex": 16,
-      "var_fallback_color": 6,
-      "hard_color_func": 3,
-      "hard_max_width_px": 2,
-      "inline_script_exec": 1
-    },
-    "Weline/Daocharms3d": {
-      "inline_script_exec": 1
-    },
-    "Weline/Order": {
-      "hard_size": 606,
-      "hard_color_hex": 231,
-      "var_fallback_color": 154,
-      "hard_color_func": 75,
-      "var_fallback_size": 54,
-      "important": 9,
-      "php_i18n_call": 6,
-      "hard_max_width_px": 4,
-      "private_token_def": 4,
-      "js_observe_direct": 2
-    },
-    "Weline/Visitor": {
-      "hard_size": 188,
-      "var_fallback_color": 95,
-      "hard_color_hex": 85,
-      "hard_color_func": 46,
-      "var_fallback_size": 32,
-      "private_token_def": 27,
-      "important": 25,
-      "js_observe_direct": 25,
-      "hard_max_width_px": 7,
-      "js_fetch_direct": 1
-    },
-    "Weline/DataTable": {
-      "hard_size": 356,
-      "hard_color_hex": 261,
-      "hard_color_func": 32,
-      "hard_max_width_px": 11,
-      "important": 6,
-      "var_fallback_size": 1
-    },
-    "Weline/Affiliate": {
-      "php_i18n_call": 155,
-      "hard_size": 128,
-      "hard_color_hex": 53,
-      "var_fallback_color": 45,
-      "var_fallback_size": 5,
-      "hard_max_width_px": 3,
-      "js_observe_direct": 3,
-      "hard_color_func": 2,
-      "inline_style": 1
-    },
-    "Weline/I18n": {
-      "hard_size": 214,
-      "hard_color_hex": 67,
-      "js_observe_direct": 63,
-      "var_fallback_color": 58,
-      "var_fallback_size": 34,
-      "hard_color_func": 23,
-      "private_token_def": 23,
-      "js_fetch_direct": 9,
-      "php_i18n_call": 7,
-      "hard_max_width_px": 5,
-      "important": 3,
-      "inline_style": 3
-    },
-    "Weline/HelpPay": {
-      "hard_size": 212,
-      "var_fallback_size": 116,
-      "php_i18n_call": 69,
-      "inline_style": 29,
-      "var_fallback_color": 8,
-      "hard_color_hex": 6,
-      "important": 6,
-      "hard_max_width_px": 4,
-      "hard_color_func": 2,
-      "js_observe_direct": 2
-    },
-    "Weline/Multipass": {
-      "hard_size": 186,
-      "hard_color_hex": 96,
-      "php_i18n_call": 25,
-      "private_token_def": 7,
-      "hard_max_width_px": 6,
-      "hard_color_func": 3
-    },
-    "Weline/Inquiry": {
-      "hard_size": 150,
-      "hard_color_hex": 27,
-      "var_fallback_size": 26,
-      "private_token_def": 12,
-      "var_fallback_color": 11,
-      "hard_color_func": 11,
-      "hard_max_width_px": 6,
-      "important": 2
-    },
-    "Weline/Checkout": {
-      "php_i18n_call": 60,
-      "var_fallback_color": 6,
-      "private_token_def": 4,
-      "raw_page_shell": 4,
-      "var_fallback_size": 3,
-      "hard_size": 3,
-      "js_observe_direct": 3,
-      "hard_max_width_px": 3,
-      "hard_color_hex": 2
-    },
-    "Weline/Compare": {
-      "hard_size": 72,
-      "hard_color_hex": 32,
-      "php_i18n_call": 15,
-      "var_fallback_size": 13,
-      "hard_color_func": 10,
-      "var_fallback_color": 7,
-      "js_observe_direct": 3,
-      "hard_max_width_px": 2,
-      "important": 1
-    },
-    "Weline/Index": {
-      "hard_size": 145,
-      "hard_color_hex": 29,
-      "var_fallback_color": 29,
-      "hard_max_width_px": 6,
-      "php_i18n_call": 5
-    },
-    "Weline/Promotion": {
-      "hard_size": 94,
-      "php_i18n_call": 18,
-      "hard_color_hex": 17,
-      "hard_color_func": 13,
-      "private_token_def": 10,
-      "var_fallback_size": 5,
-      "var_fallback_color": 3,
-      "hard_max_width_px": 2
-    },
-    "Weline/Faq": {
-      "hard_size": 66,
-      "hard_color_hex": 34,
-      "php_i18n_call": 6,
-      "hard_color_func": 5,
-      "important": 3,
-      "var_fallback_color": 2,
-      "hard_max_width_px": 2,
-      "raw_page_shell": 1
-    },
-    "Weline/Wishlist": {
-      "hard_size": 27,
-      "hard_color_hex": 18,
-      "var_fallback_color": 18,
-      "important": 7,
-      "js_observe_direct": 4,
-      "var_fallback_size": 3,
-      "hard_max_width_px": 3,
-      "php_i18n_call": 3
-    },
-    "Weline/Review": {
-      "php_i18n_call": 46,
-      "hard_max_width_px": 3,
-      "js_observe_direct": 2
-    },
-    "Weline/Marketing": {
-      "hard_size": 48,
-      "var_fallback_size": 19,
-      "hard_color_hex": 14,
-      "var_fallback_color": 8,
-      "php_i18n_call": 4,
-      "js_observe_direct": 2,
-      "inline_style": 1
-    },
-    "Weline/Demo": {
-      "hard_size": 47,
-      "hard_color_hex": 20,
-      "php_i18n_call": 18,
-      "var_fallback_color": 3,
-      "js_observe_direct": 2,
-      "inline_style": 2,
-      "var_fallback_size": 1
-    },
-    "Weline/Currency": {
-      "hard_size": 43,
-      "var_fallback_size": 19,
-      "hard_color_hex": 10,
-      "var_fallback_color": 10,
-      "js_observe_direct": 8,
-      "hard_max_width_px": 1,
       "php_i18n_call": 1
     },
-    "Weline/Captcha": {
-      "hard_size": 29,
-      "var_fallback_size": 12,
-      "hard_color_hex": 11,
-      "var_fallback_color": 9,
-      "important": 5,
-      "php_i18n_call": 3,
+    "Weline/DataTable": {
+      "hard_color_hex": 117,
+      "hard_color_func": 9,
+      "important": 1,
+      "hard_size": 1
+    },
+    "Weline/Order": {
+      "hard_color_func": 63,
+      "hard_color_hex": 18,
+      "important": 3,
+      "php_i18n_call": 1
+    },
+    "Weline/Visitor": {
+      "private_token_def": 19,
+      "hard_color_func": 15,
+      "important": 11,
+      "hard_color_hex": 9,
+      "hard_size": 4,
+      "js_fetch_direct": 1,
       "js_observe_direct": 1
     },
-    "Weline/Social": {
-      "hard_size": 25,
-      "php_i18n_call": 18,
-      "hard_color_hex": 13,
-      "inline_style": 3,
-      "hard_color_func": 1,
-      "hard_max_width_px": 1
+    "Weline/I18n": {
+      "hard_color_func": 17,
+      "private_token_def": 17,
+      "js_fetch_direct": 9,
+      "php_i18n_call": 6,
+      "hard_color_hex": 5,
+      "hard_size": 2,
+      "js_observe_direct": 2
     },
-    "Weline/Newsletter": {
-      "important": 16,
-      "js_observe_direct": 3,
-      "hard_max_width_px": 2,
+    "Weline/Inquiry": {
+      "hard_color_func": 10,
+      "hard_color_hex": 6,
+      "private_token_def": 3,
+      "important": 2,
+      "hard_size": 1
+    },
+    "Weline/Checkout": {
+      "php_i18n_call": 20
+    },
+    "Weline/Promotion": {
+      "hard_color_hex": 7,
+      "private_token_def": 4,
+      "hard_color_func": 3,
+      "hard_size": 3,
+      "php_i18n_call": 1
+    },
+    "Weline/Multipass": {
+      "hard_color_hex": 10,
+      "private_token_def": 2,
+      "php_i18n_call": 1
+    },
+    "Weline/Mail": {
+      "hard_color_hex": 5,
+      "php_i18n_call": 4,
+      "hard_color_func": 3,
       "inline_style": 2
     },
-    "Weline/StoreMusic": {
-      "hard_size": 124,
-      "important": 9,
-      "js_observe_direct": 6,
-      "hard_color_hex": 3,
-      "var_fallback_color": 3,
+    "Weline/Newsletter": {
+      "important": 11,
+      "inline_style": 2
+    },
+    "Weline/Social": {
+      "php_i18n_call": 8,
+      "inline_style": 3,
       "hard_max_width_px": 1
     },
-    "Weline/Cms": {
-      "php_i18n_call": 2,
-      "js_observe_direct": 1,
-      "hard_max_width_px": 1,
-      "raw_page_shell": 1
+    "Weline/Captcha": {
+      "important": 5,
+      "php_i18n_call": 3,
+      "hard_size": 2,
+      "hard_color_hex": 1
     },
-    "Weline/Tax": {
-      "php_i18n_call": 4
+    "Weline/Blog": {
+      "php_i18n_call": 7,
+      "hard_color_hex": 2
     },
-    "Weline/Websites": {
-      "hard_size": 32,
-      "var_fallback_size": 3,
-      "js_observe_direct": 1
+    "Weline/StoreMusic": {
+      "important": 8,
+      "hard_size": 2
+    },
+    "Weline/HelpPay": {
+      "inline_style": 12,
+      "important": 6
+    },
+    "Weline/Compare": {
+      "hard_color_func": 5,
+      "php_i18n_call": 1
+    },
+    "Weline/Consent": {
+      "hard_color_hex": 5,
+      "hard_color_func": 1
+    },
+    "Weline/Wishlist": {
+      "important": 4,
+      "php_i18n_call": 2
+    },
+    "Weline/Demo": {
+      "hard_color_hex": 3,
+      "inline_style": 2
+    },
+    "Weline/Faq": {
+      "hard_color_hex": 2,
+      "hard_size": 1
+    },
+    "Weline/Marketing": {
+      "hard_color_hex": 2,
+      "inline_style": 1
     },
     "Weline/RecentlyViewed": {
-      "php_i18n_call": 2,
-      "js_observe_direct": 1
+      "php_i18n_call": 2
     },
-    "Weline/Widget": {
-      "raw_page_shell": 1
+    "Weline/Affiliate": {
+      "hard_size": 2,
+      "hard_color_func": 1,
+      "inline_style": 1
+    },
+    "Weline/Index": {
+      "hard_size": 1
     }
   }
 }

@@ -10,148 +10,47 @@
 
 $accounts = $this->getData('accounts') ?: [];
 $totalAccounts = is_array($accounts) ? count($accounts) : 0;
+$escapeHtml = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<style>
-    .weline-2fa-stat-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 20px;
-        border-radius: 12px;
-        position: relative;
-        overflow: hidden;
-        border: none;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-    }
-    
-    .weline-2fa-stat-card::before {
-        content: '';
-        position: absolute;
-        top: -50%;
-        right: -30px;
-        width: 150px;
-        height: 150px;
-        background: rgba(255,255,255,0.1);
-        border-radius: 50%;
-    }
-    
-    .weline-2fa-stat-card.success {
-        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-        box-shadow: 0 4px 15px rgba(17, 153, 142, 0.3);
-    }
-    
-    .weline-2fa-stat-card.warning {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);
-    }
-    
-    .weline-2fa-stat-card.info {
-        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-        box-shadow: 0 4px 15px rgba(79, 172, 254, 0.3);
-    }
-    
-    .weline-2fa-stat-number {
-        font-size: 2rem;
-        font-weight: 700;
-        margin: 8px 0;
-    }
-    
-    .weline-2fa-stat-label {
-        font-size: 0.9rem;
-        opacity: 0.9;
-    }
-    
-    .weline-2fa-stat-icon {
-        position: absolute;
-        right: 20px;
-        top: 50%;
-        transform: translateY(-50%);
-        font-size: 2.5rem;
-        opacity: 0.3;
-    }
-    
-    .weline-2fa-account-card {
-        border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        transition: all 0.3s ease;
-        border: none;
-        margin-bottom: 20px;
-    }
-    
-    .weline-2fa-account-card:hover {
-        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-        transform: translateY(-2px);
-    }
-</style>
-
-<!-- Page Title -->
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-            <h4 style="--w-mb-sm:0;">
-                <w:icon name="user" size="sm"></w:icon>
-                <lang>2FA账户管理</lang>
-            </h4>
-            <div class="w-cluster">
-                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                    <li class="w-breadcrumb__item"><span><lang>双因素认证</lang></span></li>
-                    <li class="w-breadcrumb__item" data-state="active"><lang>账户管理</lang></li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</div>
-
 <div class="w-grid">
     <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
     </div>
 </div>
 
-<!-- 统计卡片 -->
-<div class="w-grid">
-    <div style="--w-span-lg:3;--w-span-md:6;--w-mb:var(--weline-space-4);">
-        <div class="weline-2fa-stat-card">
-            <w:icon name="check" size="sm"></w:icon>
-            <div class="weline-2fa-stat-label"><lang>总账户数</lang></div>
-            <div class="weline-2fa-stat-number"><?= $totalAccounts ?></div>
+<div class="w-auto-grid">
+    <div class="w-card">
+        <div class="w-card__body">
+            <div class="w-text" data-tone="muted" data-size="sm"><lang>总账户数</lang></div>
+            <div class="w-text" data-weight="strong" data-size="lg"><?= $totalAccounts ?></div>
         </div>
     </div>
-
-    <div style="--w-span-lg:3;--w-span-md:6;--w-mb:var(--weline-space-4);">
-        <div class="weline-2fa-stat-card success">
-            <w:icon name="phone" size="sm"></w:icon>
-            <div class="weline-2fa-stat-label"><lang>TOTP账户</lang></div>
-            <div class="weline-2fa-stat-number"><?= $totalAccounts ?></div>
+    <div class="w-card">
+        <div class="w-card__body">
+            <div class="w-text" data-tone="muted" data-size="sm"><lang>TOTP账户</lang></div>
+            <div class="w-text" data-weight="strong" data-size="lg" data-tone="primary"><?= $totalAccounts ?></div>
         </div>
     </div>
-
-    <div style="--w-span-lg:3;--w-span-md:6;--w-mb:var(--weline-space-4);">
-        <div class="weline-2fa-stat-card warning">
-            <w:icon name="users" size="sm"></w:icon>
-            <div class="weline-2fa-stat-label"><lang>活跃用户</lang></div>
-            <div class="weline-2fa-stat-number"><?= $totalAccounts ?></div>
+    <div class="w-card">
+        <div class="w-card__body">
+            <div class="w-text" data-tone="muted" data-size="sm"><lang>活跃用户</lang></div>
+            <div class="w-text" data-weight="strong" data-size="lg"><?= $totalAccounts ?></div>
         </div>
     </div>
-
-    <div style="--w-span-lg:3;--w-span-md:6;--w-mb:var(--weline-space-4);">
-        <div class="weline-2fa-stat-card info">
-            <w:icon name="shield" size="sm"></w:icon>
-            <div class="weline-2fa-stat-label"><lang>安全状态</lang></div>
-            <div class="weline-2fa-stat-number">正常</div>
+    <div class="w-card">
+        <div class="w-card__body">
+            <div class="w-text" data-tone="muted" data-size="sm"><lang>安全状态</lang></div>
+            <div class="w-text" data-weight="strong" data-size="lg" data-tone="success"><lang>正常</lang></div>
         </div>
     </div>
 </div>
 
-<!-- TOTP账户列表 -->
 <div class="w-grid">
     <div style="--w-span:12;">
         <div class="w-card">
             <div class="w-card__header">
-                <div class="w-cluster" data-align="center" data-justify="between">
-                    <h4 style="--w-mb:0;">
-                        <w:icon name="lock" size="sm"></w:icon>
-                        <lang>验证器账户列表</lang>
-                    </h4>
+                <h2 class="w-card__title"><w:icon name="lock" size="sm"></w:icon> <lang>验证器账户列表</lang></h2>
+                <div class="w-card__actions">
                     <a href="@frontend-url{'two-factor-auth/frontend/accounts'}" class="w-button" target="_blank" data-tone="primary" data-size="sm">
                         <w:icon name="circle" size="sm"></w:icon>
                         <lang>打开前端管理</lang>
@@ -160,37 +59,38 @@ $totalAccounts = is_array($accounts) ? count($accounts) : 0;
             </div>
             <div class="w-card__body">
                 <?php if (empty($accounts)): ?>
-                    <div class="w-alert" data-tone="info">
-                        <w:icon name="info" size="sm"></w:icon>
-                        <lang>暂无账户数据</lang>
+                    <div class="w-empty">
+                        <w:icon name="shield" size="sm"></w:icon>
+                        <p class="w-empty__title"><lang>暂无账户数据</lang></p>
+                        <p class="w-empty__hint"><lang>用户启用 TOTP 验证器后，账户会显示在这里。</lang></p>
                     </div>
                 <?php else: ?>
                     <div class="w-grid">
                         <?php foreach ($accounts as $account): ?>
                         <div style="--w-span-md:6;--w-span-lg:4;--w-mb:var(--weline-space-4);">
-                            <div class="weline-2fa-account-card w-card">
+                            <div class="w-card">
                                 <div class="w-card__body">
                                     <div class="w-cluster" data-justify="between" data-align="start" style="--w-mb:var(--weline-space-4);">
                                         <div>
-                                            <h5 style="--w-mb:var(--weline-space-1);"><?= htmlspecialchars($account['name'] ?? '未命名') ?></h5>
-                                            <small class="w-text" data-tone="muted"><?= htmlspecialchars($account['issuer'] ?? '通用验证器') ?></small>
+                                            <h3 class="w-card__title" style="--w-mb:var(--weline-space-1);"><?= $escapeHtml($account['name'] ?? '未命名') ?></h3>
+                                            <small class="w-text" data-tone="muted"><?= $escapeHtml($account['issuer'] ?? '通用验证器') ?></small>
                                         </div>
                                         <span class="w-badge" data-w-background="primary">TOTP</span>
                                     </div>
-                                    
+
                                     <div style="--w-mb:var(--weline-space-4);">
                                         <small class="w-text" data-w-display="block" data-tone="muted" style="--w-mb:var(--weline-space-1);"><lang>密钥</lang></small>
-                                        <code class="w-text" data-tone="primary" data-size="sm"><?= htmlspecialchars(substr($account['secret'] ?? '', 0, 20)) ?>...</code>
+                                        <code class="w-text" data-tone="primary" data-size="sm"><?= $escapeHtml(substr((string)($account['secret'] ?? ''), 0, 20)) ?>...</code>
                                     </div>
-                                    
+
                                     <div class="w-cluster" data-justify="between" data-align="center">
                                         <div>
                                             <small class="w-text" data-w-display="block" data-tone="muted"><lang>创建时间</lang></small>
-                                            <small class="w-text" data-tone="muted"><?= htmlspecialchars($account['created_at'] ?? '未知') ?></small>
+                                            <small class="w-text" data-tone="muted"><?= $escapeHtml($account['created_at'] ?? '未知') ?></small>
                                         </div>
                                         <div>
                                             <small class="w-text" data-w-display="block" data-tone="muted"><lang>算法</lang></small>
-                                            <span class="w-badge" data-w-background="info"><?= htmlspecialchars($account['algorithm'] ?? 'SHA1') ?></span>
+                                            <span class="w-badge" data-w-background="info"><?= $escapeHtml($account['algorithm'] ?? 'SHA1') ?></span>
                                         </div>
                                     </div>
                                 </div>
@@ -204,7 +104,6 @@ $totalAccounts = is_array($accounts) ? count($accounts) : 0;
     </div>
 </div>
 
-<!-- 提示卡片 -->
 <div class="w-grid">
     <div style="--w-span:12;">
         <div class="w-alert" data-tone="info">

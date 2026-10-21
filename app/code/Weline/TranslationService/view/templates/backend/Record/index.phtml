@@ -27,7 +27,6 @@ $confirmMessages = [
 ?>
 <div class="translation-record-page">
     <div class="page-header" style="--w-mb:var(--weline-space-6);">
-        <h1><?= __('翻译记录管理') ?></h1>
         <p class="w-text" data-tone="muted"><?= __('查看和管理翻译服务的使用记录和统计信息') ?></p>
     </div>
 
@@ -204,13 +203,13 @@ $confirmMessages = [
                                         <code><?= htmlspecialchars($record->getData('provider_code')) ?></code>
                                     </td>
                                     <td>
-                                        <div style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" 
+                                        <div class="w-text" data-truncate="true"
                                              title="<?= htmlspecialchars($record->getData('source_text')) ?>">
                                             <?= htmlspecialchars(mb_substr($record->getData('source_text'), 0, 50)) ?>
                                         </div>
                                     </td>
                                     <td>
-                                        <div style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" 
+                                        <div class="w-text" data-truncate="true"
                                              title="<?= htmlspecialchars($record->getData('translated_text')) ?>">
                                             <?= htmlspecialchars(mb_substr($record->getData('translated_text'), 0, 50)) ?>
                                         </div>

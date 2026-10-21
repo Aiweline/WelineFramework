@@ -1,5 +1,5 @@
 
-<script src="@static(Weline_FileManager::js/w-scope.js)"></script>
+<script src="@static(Weline_FileManager::js/w-scope.js)" defer></script>
 <script>
 (function(g){
   if(g.__bqAdmin_eav_admin) return;
@@ -473,7 +473,7 @@
 
                     <div class='row'>
                         <div class='col-lg-12'>
-                            <div class="table-responsive">
+                            <div class="w-table-wrap">
                                 <!--生成一个表，记录属性options -->
                                 <table class='table table-active table-editable table-nowrap align-middle table-edits'
                                        id="attribute-options">
@@ -517,13 +517,12 @@
                                         <td v-text="scope.value"></td>
                                         <!-- 颜色 -->
                                         <td v-if="activeAttrItem.swatch_color">
-                                            <div class="input-group-addon"
-                                                 :style="{backgroundColor:scope.swatch_color}"></div>
+                                            <span class="w-badge" :style="{backgroundColor:scope.swatch_color}"></span>
                                         </td>
                                         <!-- 图片 -->
                                         <td v-if="activeAttrItem.swatch_image">
                                             <img :src="'/media/image/'+scope.swatch_image" alt=""
-                                                 style="width:50px;">
+                                                 width="50" height="50" loading="lazy">
                                         </td>
                                         <!-- 文本 -->
                                         <td v-if="activeAttrItem.swatch_text" v-text="scope.swatch_text"></td>
@@ -604,7 +603,7 @@
                                         <div id="swatch_color_picker" class="input-group colorpicker-component">
                                             <input type="text" v-model="addParams.swatch_color"
                                                    :style="{backgroundColor:addParams.swatch_color}"
-                                                   placeholder='@lang{请选择}' class="form-control"/>
+                                                   placeholder='@lang{请选择}' class="w-input"/>
                                         </div>
 
                                     </div>
@@ -616,7 +615,7 @@
                                             <lang>图片</lang>
                                         </label>
 
-                                        <div class='form-control' style="padding:0px;">
+                                        <div class="w-field__control">
                                             <img :src="'/media/image/'+ addParams.swatch_image + '?w=50&h=50'"
                                                  alt="" v-if="addParams.swatch_image">
                                             <button type="button"
@@ -1260,12 +1259,3 @@
 </js:part>
 <w:scope url="@backend-url('backend/user-data')" container-id="product" event="input change click"/>
 
-<style>
-.input-group-addon {
-    display: inline-block;
-    width: 40px;
-    height: 38px;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-}
-</style>

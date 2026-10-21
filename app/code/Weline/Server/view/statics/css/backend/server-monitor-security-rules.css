@@ -1,0 +1,84 @@
+/**
+ * Weline_Server 安全规则可视化配置页页面私有布局。
+ * 只承载本页分组/表格布局，外观交给 w-card / w-table 等默认主题原语。
+ */
+@layer page {
+    .wls-security-rules-grid {
+        display: grid;
+        gap: var(--weline-space-4);
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+    }
+
+    .wls-security-rules-card {
+        padding: var(--weline-space-4);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface);
+    }
+
+    .wls-security-rules-card-title {
+        margin: 0 0 var(--weline-space-2);
+        color: var(--weline-theme-text);
+        font-size: var(--weline-font-size-md);
+        font-weight: 600;
+    }
+
+    .wls-security-rules-form-row {
+        display: grid;
+        gap: var(--weline-space-2);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin-block-end: var(--weline-space-2);
+    }
+
+    .wls-security-rules-table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+    }
+
+    .wls-security-rules-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .wls-security-rules-table th,
+    .wls-security-rules-table td {
+        padding: var(--weline-space-2);
+        border-block-end: 1px solid var(--weline-theme-border);
+        font-size: var(--weline-font-size-sm);
+        vertical-align: middle;
+    }
+
+    .wls-security-rules-tag {
+        display: inline-block;
+        padding: var(--weline-space-1) var(--weline-space-2);
+        border-radius: var(--weline-radius-round);
+        background: var(--weline-theme-info-surface);
+        color: var(--weline-theme-text);
+        font-size: var(--weline-font-size-xs);
+    }
+
+    .wls-security-rules-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--weline-space-1);
+    }
+
+    .wls-security-rules-list-item {
+        display: grid;
+        gap: var(--weline-space-1);
+        grid-template-columns: 1fr auto;
+    }
+
+    .wls-security-rules-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--weline-space-2);
+    }
+
+    .wls-security-rules-json {
+        min-height: 14rem;
+        font-family: var(--weline-font-mono);
+        font-size: var(--weline-font-size-xs);
+    }
+}

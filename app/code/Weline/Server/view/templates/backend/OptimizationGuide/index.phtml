@@ -32,70 +32,32 @@
     <div id="content-container" hidden></div>
 </div>
 
-<style>
-.guide-header {
-    padding: 2rem;
-    background: linear-gradient(135deg, var(--w-box-bg) 0%, var(--bs-primary-bg-subtle) 100%);
-    border-radius: 8px;
-}
-.guide-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .65rem;
-    align-items: center;
-    margin-top: 1rem;
-    margin-bottom: 0;
-}
-.guide-badge {
-    display: inline-flex;
-    align-items: center;
-    min-height: 2rem;
-    padding: .45rem .85rem;
-    border-radius: 999px;
-    font-weight: 700;
-    line-height: 1;
-    border: 1px solid transparent;
-}
-.guide-badge-time {
-    color: #084298;
-    background: #cfe2ff;
-    border-color: #9ec5fe;
-}
-.guide-badge-platform {
-    color: #243447;
-    background: #f1f5f9;
-    border-color: #cbd5e1;
-}
-.guide-badge-local {
-    color: #0f5132;
-    background: #d1e7dd;
-    border-color: #a3cfbb;
-}
-.step-card {
-    background: var(--w-box-bg);
-}
-.user-select-all {
-    user-select: all;
-}
-.optimization-card {
-    transition: all 0.3s ease;
-}
-.optimization-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-</style>
-
 <script>
 const API_URL = '@backend-url{'*/backend/optimization-guide/api-data'}';
 
-// 页面加载时获取数据
+// 页面加载时获取数据（等待后台 API 桥接脚本就绪，避免早于 defer 核心脚本执行）
+function whenGuideWelineReady(callback) {
+    let tries = 0;
+    (function tick() {
+        if (window.Weline && typeof window.Weline.adminRequest === 'function') {
+            callback();
+            return;
+        }
+        tries += 1;
+        if (tries > 120) {
+            console.error('Weline admin API is unavailable; optimization guide will not load.');
+            return;
+        }
+        setTimeout(tick, 50);
+    })();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('optimization-guide-container');
     if (container) {
         container.addEventListener('click', handleGuideClick);
     }
-    loadGuideData();
+    whenGuideWelineReady(loadGuideData);
 });
 
 function handleGuideClick(event) {
@@ -172,13 +134,13 @@ function renderContent(data) {
     
     let html = `
         <!-- 标题 -->
-        <div class="guide-header" style="--w-mb:var(--weline-space-6);">
+        <div class="w-stack" style="--w-mb:var(--weline-space-6);--w-gap:var(--weline-space-2);">
             <h2><w:icon name="circle" size="sm"></w:icon> <?= __('Weline Server 性能优化指南') ?></h2>
             <p class="w-text" data-tone="muted"><?= __('基于您当前的 PHP 环境自动生成的优化建议') ?></p>
-            <p class="w-text guide-meta" data-size="sm">
-                <span class="guide-badge guide-badge-time"><?= __('生成时间') ?>: ${new Date().toLocaleString()}</span>
-                <span class="guide-badge guide-badge-platform"><?= __('操作系统') ?>: ${escapeHtml(php_info.os)} (${escapeHtml(php_info.arch)})</span>
-                <span class="guide-badge guide-badge-local"><?= __('本地访问') ?> ✓</span>
+            <p class="w-text w-cluster" data-size="sm">
+                <span class="w-badge" data-w-background="info"><?= __('生成时间') ?>: ${new Date().toLocaleString()}</span>
+                <span class="w-badge" data-w-background="muted"><?= __('操作系统') ?>: ${escapeHtml(php_info.os)} (${escapeHtml(php_info.arch)})</span>
+                <span class="w-badge" data-w-background="success"><?= __('本地访问') ?> ✓</span>
             </p>
         </div>
         
@@ -197,7 +159,7 @@ function renderContent(data) {
                         <tr>
                             <th><?= __('PHP 可执行文件') ?></th>
                             <td>
-                                <code class="user-select-all">${escapeHtml(php_info.binary)}</code>
+                                <code>${escapeHtml(php_info.binary)}</code>
                                 <button class="w-button" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(php_info.binary || ''))}" data-tone="neutral" data-variant="outline" data-size="sm">
                                     <w:icon name="circle" size="sm"></w:icon>
                                 </button>
@@ -206,7 +168,7 @@ function renderContent(data) {
                         <tr>
                             <th><?= __('php.ini 配置文件') ?></th>
                             <td>
-                                <code class="user-select-all">${escapeHtml(php_info.ini_path)}</code>
+                                <code>${escapeHtml(php_info.ini_path)}</code>
                                 <button class="w-button" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(php_info.ini_path || ''))}" data-tone="neutral" data-variant="outline" data-size="sm">
                                     <w:icon name="circle" size="sm"></w:icon>
                                 </button>
@@ -215,7 +177,7 @@ function renderContent(data) {
                         <tr>
                             <th><?= __('扩展目录') ?></th>
                             <td>
-                                <code class="user-select-all">${escapeHtml(php_info.ext_dir)}</code>
+                                <code>${escapeHtml(php_info.ext_dir)}</code>
                                 <button class="w-button" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(php_info.ext_dir || ''))}" data-tone="neutral" data-variant="outline" data-size="sm">
                                     <w:icon name="circle" size="sm"></w:icon>
                                 </button>
@@ -272,7 +234,7 @@ function renderContent(data) {
         const iconClass = isInstalled ? 'check' : 'warning';
         
         html += `
-            <div class="w-card optimization-card" id="${key}" style="--w-mb:var(--weline-space-6);">
+            <div class="w-card" id="${key}" style="--w-mb:var(--weline-space-6);">
                 <div class="w-card__header ${headerClass}">
                     <div class="w-cluster" data-justify="between" data-align="center">
                         <h5 style="--w-mb:0;">
@@ -317,7 +279,7 @@ function renderContent(data) {
                 <p><?= __('完成以上优化后，需要重启服务器使配置生效：') ?></p>
                 
                 <div class="w-text" data-w-background="muted" data-w-radius="md" data-tone="muted" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);--w-mb:var(--weline-space-4);">
-                    <code class="user-select-all fs-5">php bin/w server:stop && php bin/w server:start</code>
+                    <code>php bin/w server:stop && php bin/w server:start</code>
                 </div>
                 
                 <button class="w-button" data-guide-action="copy" data-copy-text="php%20bin%2Fw%20server%3Astop%20%26%26%20php%20bin%2Fw%20server%3Astart" data-tone="primary">
@@ -340,7 +302,7 @@ function renderInstallSteps(steps, phpInfo) {
     let html = `<h6 style="--w-mt:var(--weline-space-6);--w-mb:var(--weline-space-4);"><w:icon name="list" size="sm"></w:icon><?= __('安装步骤') ?></h6><div class="installation-steps">`;
     
     for (const step of steps) {
-        html += `<div class="step-card" data-w-border="border" data-w-radius="md" style="--w-mb:var(--weline-space-4);--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">`;
+        html += `<div data-w-border="border" data-w-radius="md" style="--w-mb:var(--weline-space-4);--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">`;
         html += `<h6 class="w-text" data-tone="primary">${escapeHtml(step.title || '')}</h6>`;
         
         if (step.description) {
@@ -351,7 +313,7 @@ function renderInstallSteps(steps, phpInfo) {
             html += `
                 <div style="--w-mb:var(--weline-space-2);">
                     <strong><?= __('文件位置：') ?></strong>
-                    <code class="user-select-all">${escapeHtml(step.path)}</code>
+                    <code>${escapeHtml(step.path)}</code>
                     <button class="w-button" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(step.path || ''))}" data-tone="neutral" data-variant="outline" data-size="sm">
                         <w:icon name="circle" size="sm"></w:icon>
                     </button>
@@ -363,7 +325,7 @@ function renderInstallSteps(steps, phpInfo) {
             html += `
                 <div style="--w-mb:var(--weline-space-2);">
                     <strong><?= __('添加内容：') ?></strong>
-                    <pre class="w-text user-select-all" data-w-background="muted" data-w-radius="md" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">${escapeHtml(step.content)}</pre>
+                    <pre class="w-text" data-w-background="muted" data-w-radius="md" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">${escapeHtml(step.content)}</pre>
                     <button class="w-button" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(step.content || ''))}" data-tone="primary" data-variant="outline" data-size="sm">
                         <w:icon name="circle" size="sm"></w:icon> <?= __('复制') ?>
                     </button>
@@ -375,7 +337,7 @@ function renderInstallSteps(steps, phpInfo) {
             html += `
                 <div style="--w-mb:var(--weline-space-2);">
                     <strong><?= __('执行命令：') ?></strong>
-                    <pre class="w-text user-select-all" data-w-background="muted" data-w-radius="md" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">${escapeHtml(step.command)}</pre>
+                    <pre class="w-text" data-w-background="muted" data-w-radius="md" data-tone="muted" style="--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-2);">${escapeHtml(step.command)}</pre>
                     <button class="w-button" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(step.command || ''))}" data-tone="primary" data-variant="outline" data-size="sm">
                         <w:icon name="circle" size="sm"></w:icon> <?= __('复制') ?>
                     </button>
@@ -389,7 +351,7 @@ function renderInstallSteps(steps, phpInfo) {
                 html += `
                     <div style="--w-mb:var(--weline-space-2);">
                         <span class="w-badge" data-w-background="info">${escapeHtml(os)}</span>
-                        <code class="user-select-all">${escapeHtml(cmd)}</code>
+                        <code>${escapeHtml(cmd)}</code>
                         <button class="w-button" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(cmd || ''))}" data-tone="neutral" data-variant="outline" data-size="sm">
                             <w:icon name="circle" size="sm"></w:icon>
                         </button>

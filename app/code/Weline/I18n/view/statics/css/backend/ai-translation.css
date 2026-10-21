@@ -1,0 +1,9 @@
+@layer page {
+    .i18n-ai-translation__search {
+        min-width: 14rem;
+    }
+
+    .i18n-ai-translation__col-actions {
+        width: 4.5rem;
+    }
+}

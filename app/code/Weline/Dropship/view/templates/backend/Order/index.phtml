@@ -1,3 +1,4 @@
+<css>Weline_Dropship::css/backend/dropship-admin.css</css>
 <?php
 /**
  * 履约订单：对齐 Channel 页 w-card / w-table / w-badge；行可展开商品手风琴。
@@ -9,61 +10,6 @@ $orderLinesUrl = (string)$this->getData('order_lines_url');
 $escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $colspan = 6;
 ?>
-<style>
-[data-dropship-admin="orders"] .ds-order-row[data-order-expandable="1"]{
-  cursor:pointer;
-}
-[data-dropship-admin="orders"] .ds-order-row[data-order-expandable="1"]:hover{
-  background:var(--weline-theme-surface-hover, var(--color-surface-hover, rgba(0,0,0,.03)));
-}
-[data-dropship-admin="orders"] .ds-order-row__hint{
-  display:inline-flex;
-  align-items:center;
-  gap:var(--weline-space-1);
-  margin-top:var(--weline-space-1);
-  color:var(--weline-theme-text-muted, var(--color-text-muted));
-  font-size:var(--weline-font-size-sm, .85rem);
-}
-[data-dropship-admin="orders"] .ds-order-row__hint .w-icon{
-  transition:transform .18s ease;
-  flex:0 0 auto;
-}
-[data-dropship-admin="orders"] .ds-order-detail-row:not(.is-open){
-  display:none !important;
-}
-[data-dropship-admin="orders"] .ds-order-detail-row.is-open{
-  display:table-row !important;
-}
-[data-dropship-admin="orders"] .ds-order-detail-row > td{
-  padding:0;
-  border-top:none;
-  background:var(--weline-theme-surface-subtle, var(--color-surface-subtle, rgba(0,0,0,.02)));
-}
-[data-dropship-admin="orders"] .ds-order-detail{
-  padding:var(--weline-space-3) var(--weline-space-4) var(--weline-space-4);
-  border-top:1px solid var(--weline-theme-border, var(--color-border));
-}
-[data-dropship-admin="orders"] .ds-order-line__product{
-  display:flex;
-  align-items:center;
-  gap:var(--weline-space-2);
-  min-width:0;
-}
-[data-dropship-admin="orders"] .ds-order-line__thumb,
-[data-dropship-admin="orders"] .ds-order-line__thumb-ph{
-  width:2.5rem;
-  height:2.5rem;
-  flex:0 0 auto;
-  border-radius:var(--weline-radius-sm, .35rem);
-  border:1px solid var(--weline-theme-border, var(--color-border));
-  object-fit:cover;
-  background:var(--weline-theme-surface-subtle, var(--color-surface-subtle, rgba(0,0,0,.04)));
-  display:inline-block;
-}
-[data-dropship-admin="orders"] .ds-order-line__product .w-text{
-  min-width:0;
-}
-</style>
 <div class="w-grid"
      data-dropship-admin="orders"
      data-testid="dropship-orders"
@@ -93,7 +39,7 @@ $colspan = 6;
       </div>
       <div class="w-card__body">
         <?php if ($fulfillments === []): ?>
-          <div class="w-empty" style="min-height:8rem;" data-testid="dropship-orders-empty">
+          <div class="w-empty dropship-empty" data-testid="dropship-orders-empty">
             <div class="w-text" data-tone="muted" data-size="sm"><?= __('暂无履约单。支付成功并推送后会出现在此。') ?></div>
           </div>
         <?php else: ?>
@@ -132,7 +78,7 @@ $colspan = 6;
                     aria-expanded="false"
                     <?= $expandable ? 'tabindex="0"' : '' ?>>
                   <td>
-                    <div class="w-stack" style="--w-gap:0.15rem;">
+                    <div class="w-stack" style="--w-gap:var(--weline-space-1);">
                       <span class="w-text" data-weight="strong"><?= $escape($providerTitle) ?></span>
                       <?php if ($providerCode !== '' && strcasecmp($providerTitle, $providerCode) !== 0): ?>
                         <span class="w-text" data-tone="muted" data-size="sm"><code><?= $escape($providerCode) ?></code></span>
@@ -140,7 +86,7 @@ $colspan = 6;
                     </div>
                   </td>
                   <td>
-                    <div class="w-stack" style="--w-gap:0.15rem;">
+                    <div class="w-stack" style="--w-gap:var(--weline-space-1);">
                       <span class="w-text" data-weight="strong" data-testid="dropship-order-display"><?= $escape($orderDisplay !== '' ? $orderDisplay : '—') ?></span>
                       <?php if ($isSandbox): ?>
                         <span class="w-badge" data-tone="warning" data-testid="dropship-order-sandbox"><?= __('测试单') ?></span>
@@ -176,7 +122,7 @@ $colspan = 6;
                   </td>
                   <td>
                     <?php if ($tracking !== '' || $carrier !== ''): ?>
-                      <div class="w-stack" style="--w-gap:0.15rem;">
+                      <div class="w-stack" style="--w-gap:var(--weline-space-1);">
                         <?php if ($carrier !== ''): ?>
                           <span class="w-text" data-size="sm"><?= $escape($carrier) ?></span>
                         <?php endif; ?>
@@ -225,7 +171,7 @@ $colspan = 6;
       </div>
       <div class="w-card__body">
         <?php if ($outbox === []): ?>
-          <div class="w-empty" style="min-height:8rem;" data-testid="dropship-outbox-empty">
+          <div class="w-empty dropship-empty" data-testid="dropship-outbox-empty">
             <div class="w-text" data-tone="muted" data-size="sm"><?= __('暂无推送记录') ?></div>
           </div>
         <?php else: ?>

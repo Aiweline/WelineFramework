@@ -157,16 +157,16 @@ if ($isFakeMode) {
 <div class="payment-methods<?= $isFakeMode ? ' payment-methods--fake' : '' ?>"
      data-fake-mode="<?= $isFakeMode ? '1' : '0' ?>"
      data-fake-scenarios='<?= $esc($json($fakeScenarioPayload)) ?>'
-     data-message-select="<?= $esc(__('Select a payment method to continue.')) ?>"
-     data-message-terms="<?= $esc(__('Please agree to the payment terms before continuing.')) ?>"
-     data-label-selected="<?= $esc(__('Selected payment method:')) ?>"
-     data-label-status="<?= $esc(__('状态')) ?>"
-     data-label-reference="<?= $esc(__('交易号')) ?>"
-     data-label-amount="<?= $esc(__('支付金额')) ?>">
+     data-message-select="<lang>Select a payment method to continue.</lang>"
+     data-message-terms="<lang>Please agree to the payment terms before continuing.</lang>"
+     data-label-selected="<lang>Selected payment method:</lang>"
+     data-label-status="<lang>状态</lang>"
+     data-label-reference="<lang>交易号</lang>"
+     data-label-amount="<lang>支付金额</lang>">
     <div class="payment-methods__head">
-        <h3><?= __('支付方式') ?></h3>
+        <h3><lang>支付方式</lang></h3>
         <?php if ($isFakeMode): ?>
-            <p><?= __('Used by browser verification only.') ?></p>
+            <p><lang>Used by browser verification only.</lang></p>
         <?php endif; ?>
     </div>
 
@@ -175,7 +175,7 @@ if ($isFakeMode) {
     <div class="payment-methods-list">
         <?php if (empty($methods)): ?>
             <div class="payment-methods__notice" role="status">
-                <?= __('No payment method is available for the current payable object.') ?>
+                <lang>No payment method is available for the current payable object.</lang>
             </div>
         <?php else: ?>
             <div class="payment-methods__grid">
@@ -214,7 +214,7 @@ if ($isFakeMode) {
                                     <?php endif; ?>
                                     <span class="payment-method-name"><?= $esc($methodName) ?></span>
                                     <?php if ($isFakeMode): ?>
-                                        <span class="payment-method-card__badge"><?= __('支付待处理') ?></span>
+                                        <span class="payment-method-card__badge"><lang>支付待处理</lang></span>
                                     <?php endif; ?>
                                 </span>
                                 <?php if ($description !== ''): ?>
@@ -237,23 +237,23 @@ if ($isFakeMode) {
         <div class="payment-methods__terms">
             <label class="payment-methods__terms-label">
                 <input type="checkbox" class="payment-methods__terms-input" data-payment-terms>
-                <span><?= __('I agree to the payment terms.') ?></span>
+                <span><lang>I agree to the payment terms.</lang></span>
             </label>
             <div class="payment-methods__feedback" data-payment-feedback aria-live="polite"></div>
         </div>
 
-        <div class="payment-methods__actions" aria-label="<?= $esc(__('支付状态')) ?>">
+        <div class="payment-methods__actions" aria-label="@lang('支付状态')">
             <button type="button" class="payment-methods__action payment-methods__action--primary" data-fake-action="paid">
-                <?= __('支付成功') ?>
+                <lang>支付成功</lang>
             </button>
             <button type="button" class="payment-methods__action" data-fake-action="failed">
-                <?= __('支付失败') ?>
+                <lang>支付失败</lang>
             </button>
             <button type="button" class="payment-methods__action" data-fake-action="cancelled">
-                <?= __('取消') ?>
+                <lang>取消</lang>
             </button>
             <button type="button" class="payment-methods__action" data-fake-action="refunded">
-                <?= __('已退款') ?>
+                <lang>已退款</lang>
             </button>
         </div>
 
@@ -261,19 +261,19 @@ if ($isFakeMode) {
             <div class="payment-methods__result-status" data-payment-result-title></div>
             <dl class="payment-methods__result-list">
                 <div>
-                    <dt><?= __('支付方式') ?></dt>
+                    <dt><lang>支付方式</lang></dt>
                     <dd data-payment-result-method></dd>
                 </div>
                 <div>
-                    <dt><?= __('支付状态') ?></dt>
+                    <dt><lang>支付状态</lang></dt>
                     <dd data-payment-result-status></dd>
                 </div>
                 <div>
-                    <dt><?= __('交易号') ?></dt>
+                    <dt><lang>交易号</lang></dt>
                     <dd data-payment-result-reference></dd>
                 </div>
                 <div>
-                    <dt><?= __('支付金额') ?></dt>
+                    <dt><lang>支付金额</lang></dt>
                     <dd data-payment-result-amount></dd>
                 </div>
             </dl>
@@ -281,7 +281,7 @@ if ($isFakeMode) {
         </section>
 
         <section class="payment-methods__more" weline-code="payment.payment_methods.section_2">
-            <h4><?= __('More') ?></h4>
+            <h4><lang>More</lang></h4>
             <div class="payment-methods__asset-grid">
                 <?php foreach ($fakeUnavailableItems as $item): ?>
                     <article class="payment-methods__asset" aria-disabled="true">
@@ -403,12 +403,12 @@ document.addEventListener('DOMContentLoaded', function() {
 <style>
 .payment-methods {
     display: grid;
-    gap: 16px;
+    gap: var(--spacing-4);
 }
 
 .payment-methods__head {
     display: grid;
-    gap: 4px;
+    gap: var(--spacing-1);
 }
 
 .payment-methods__head h3,
@@ -419,8 +419,8 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .payment-methods__head h3 {
-    color: #111827;
-    font-size: 20px;
+    color: var(--color-text-slate);
+    font-size: var(--font-size-xl);
     line-height: 1.3;
 }
 
@@ -429,7 +429,7 @@ document.addEventListener('DOMContentLoaded', function() {
 .payment-methods__asset p,
 .payment-methods__asset em {
     color: #4b5563;
-    font-size: 13px;
+    font-size: var(--font-size-13);
     line-height: 1.45;
     unicode-bidi: isolate;
 }
@@ -437,34 +437,34 @@ document.addEventListener('DOMContentLoaded', function() {
 .payment-methods__grid,
 .payment-methods__asset-grid {
     display: grid;
-    gap: 12px;
+    gap: var(--spacing-3);
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .payment-method-card,
 .payment-methods__asset,
 .payment-methods__result {
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    background: #ffffff;
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-primary);
 }
 
 .payment-method-card {
     cursor: pointer;
     display: block;
     min-height: 112px;
-    padding: 14px;
+    padding: var(--spacing-3_5);
     transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
 }
 
 .payment-method-card:hover,
 .payment-method-card:focus-within {
     border-color: #059669;
-    box-shadow: 0 8px 24px rgba(5, 150, 105, 0.14);
+    box-shadow: var(--weline-shadow-md);
 }
 
 .payment-method-card--disabled {
-    background: #f9fafb;
+    background: var(--color-bg-slate);
     cursor: not-allowed;
     opacity: 0.72;
 }
@@ -473,7 +473,7 @@ document.addEventListener('DOMContentLoaded', function() {
 .payment-method-card__body,
 .payment-method-card__title-row {
     display: flex;
-    gap: 10px;
+    gap: var(--spacing-2_5);
 }
 
 .payment-method-card__body {
@@ -487,7 +487,7 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .payment-method-card__input {
-    margin-top: 3px;
+    margin-top: var(--spacing-0_2);
 }
 
 .payment-method-icon {
@@ -496,48 +496,48 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .payment-method-name {
-    color: #111827;
+    color: var(--color-text-slate);
     font-weight: 600;
 }
 
 .payment-method-card__badge,
 .payment-method-card__reason,
 .payment-methods__asset span {
-    border-radius: 999px;
+    border-radius: var(--radius-full);
     display: inline-flex;
-    font-size: 12px;
+    font-size: var(--font-size-xs);
     line-height: 1;
-    padding: 5px 8px;
+    padding: var(--spacing-xs) var(--spacing-2);
 }
 
 .payment-method-card__badge {
-    background: #ecfdf5;
-    color: #047857;
+    background: var(--color-success-bg-soft);
+    color: var(--color-success-title);
 }
 
 .payment-method-card__reason {
     align-self: flex-start;
-    background: #fef2f2;
-    color: #b91c1c;
+    background: var(--color-bg-canvas);
+    color: var(--color-link);
 }
 
 .payment-methods__terms,
 .payment-methods__actions,
 .payment-methods__more {
     display: grid;
-    gap: 10px;
+    gap: var(--spacing-2_5);
 }
 
 .payment-methods__terms-label {
     align-items: center;
-    color: #111827;
+    color: var(--color-text-slate);
     cursor: pointer;
     display: flex;
-    gap: 8px;
+    gap: var(--spacing-2);
 }
 
 .payment-methods__feedback {
-    color: #b45309;
+    color: var(--color-warning-ink);
     min-height: 20px;
 }
 
@@ -546,39 +546,39 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .payment-methods__action {
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    background: #ffffff;
-    color: #111827;
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-primary);
+    color: var(--color-text-slate);
     cursor: pointer;
     font-weight: 600;
-    min-height: 40px;
-    padding: 8px 12px;
+    min-height: var(--weline-theme-control-height-md);
+    padding: var(--spacing-2) var(--spacing-3);
     transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
 }
 
 .payment-methods__action:hover,
 .payment-methods__action:focus {
     border-color: #059669;
-    color: #047857;
+    color: var(--color-success-title);
 }
 
 .payment-methods__action--primary {
-    background: #059669;
+    background: var(--color-success);
     border-color: #059669;
-    color: #ffffff;
+    color: var(--color-text-light);
 }
 
 .payment-methods__action--primary:hover,
 .payment-methods__action--primary:focus {
-    background: #047857;
-    color: #ffffff;
+    background: var(--color-success);
+    color: var(--color-text-light);
 }
 
 .payment-methods__result {
     display: grid;
-    gap: 12px;
-    padding: 16px;
+    gap: var(--spacing-3);
+    padding: var(--spacing-4);
 }
 
 .payment-methods__result[hidden] {
@@ -586,19 +586,19 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .payment-methods__result-status {
-    color: #047857;
-    font-size: 18px;
+    color: var(--color-success-title);
+    font-size: var(--font-size-lg);
     font-weight: 700;
 }
 
 .payment-methods__result[data-status="failed"] .payment-methods__result-status,
 .payment-methods__result[data-status="cancelled"] .payment-methods__result-status {
-    color: #b91c1c;
+    color: var(--color-link);
 }
 
 .payment-methods__result-list {
     display: grid;
-    gap: 8px;
+    gap: var(--spacing-2);
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     margin: 0;
 }
@@ -606,53 +606,53 @@ document.addEventListener('DOMContentLoaded', function() {
 .payment-methods__result-list div,
 .payment-methods__asset {
     display: grid;
-    gap: 6px;
+    gap: var(--spacing-1_5);
 }
 
 .payment-methods__result-list dt {
     color: #6b7280;
-    font-size: 12px;
+    font-size: var(--font-size-xs);
 }
 
 .payment-methods__result-list dd {
-    color: #111827;
-    font-size: 14px;
+    color: var(--color-text-slate);
+    font-size: var(--font-size-sm);
     font-weight: 600;
     margin: 0;
     overflow-wrap: anywhere;
 }
 
 .payment-methods__asset {
-    padding: 14px;
+    padding: var(--spacing-3_5);
 }
 
 .payment-methods__asset div {
     align-items: center;
     display: flex;
-    gap: 8px;
+    gap: var(--spacing-2);
     justify-content: space-between;
 }
 
 .payment-methods__asset strong {
-    color: #111827;
+    color: var(--color-text-slate);
 }
 
 .payment-methods__asset span {
-    background: #f3f4f6;
-    color: #374151;
+    background: var(--color-bg-muted);
+    color: var(--color-text-secondary);
 }
 
 .payment-methods__asset em {
-    color: #b45309;
+    color: var(--color-warning-ink);
     font-style: normal;
 }
 
 .payment-methods__notice {
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    border-radius: 8px;
-    color: #1d4ed8;
-    padding: 12px;
+    background: var(--color-bg-panel);
+    border: var(--border-width-thin) solid #bfdbfe;
+    border-radius: var(--radius-lg);
+    color: var(--color-text-faint);
+    padding: var(--spacing-3);
 }
 
 @media (max-width: 520px) {

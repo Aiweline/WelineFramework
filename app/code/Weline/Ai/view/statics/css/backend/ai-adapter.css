@@ -1,0 +1,155 @@
+@layer page {
+    .weline-adapter-page .adapter-stat-icon {
+        width: 3rem;
+        height: 3rem;
+        flex: 0 0 3rem;
+        border-radius: var(--weline-radius-md);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .weline-adapter-page .adapter-stat-icon[data-w-background="primary"] {
+        background: var(--weline-theme-primary-surface);
+        color: var(--weline-theme-primary);
+    }
+    .weline-adapter-page .adapter-stat-icon[data-w-background="muted"] {
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text-muted);
+        border: 1px solid var(--weline-theme-border);
+    }
+    .weline-adapter-page .adapter-stat-value {
+        display: block;
+        color: var(--weline-theme-text);
+        font-size: var(--weline-font-size-xl);
+        font-weight: 700;
+        line-height: 1.2;
+    }
+    .weline-adapter-page .adapter-table {
+        border-radius: var(--weline-radius-md);
+        overflow: hidden;
+    }
+    .weline-adapter-page .adapter-table th {
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text);
+        font-weight: 600;
+        white-space: nowrap;
+        padding: var(--weline-space-3) var(--weline-space-4);
+    }
+    .weline-adapter-page .adapter-table td {
+        vertical-align: middle;
+        padding: var(--weline-space-3) var(--weline-space-4);
+        color: var(--weline-theme-text);
+        border-color: var(--weline-theme-border);
+    }
+    .weline-adapter-page .adapter-code {
+        font-family: var(--weline-font-mono);
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text);
+        padding: var(--weline-space-0_5, 0.125rem) var(--weline-space-1);
+        border-radius: var(--weline-radius-sm);
+        font-size: 0.8em;
+    }
+    .weline-adapter-page .adapter-info-cell {
+        min-width: 13.75rem;
+        max-width: 26.25rem;
+    }
+    .weline-adapter-page .adapter-info-title {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--weline-space-2);
+        margin-bottom: var(--weline-space-1);
+    }
+    .weline-adapter-page .adapter-info-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--weline-space-1) var(--weline-space-2);
+        margin-bottom: var(--weline-space-1);
+    }
+    .weline-adapter-page .adapter-desc {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        line-height: 1.4;
+        color: var(--weline-theme-text-muted);
+    }
+    .weline-adapter-page .adapter-model-bindings {
+        display: flex;
+        flex-direction: column;
+        gap: var(--weline-space-1);
+        min-width: 10rem;
+        max-width: 17.5rem;
+    }
+    .weline-adapter-page .adapter-bind-row {
+        display: flex;
+        align-items: center;
+        gap: var(--weline-space-1);
+        min-width: 0;
+    }
+    .weline-adapter-page .adapter-bind-row .adapter-code {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 12.5rem;
+    }
+    .weline-adapter-page .adapter-actions-cell {
+        width: 1%;
+        white-space: nowrap;
+    }
+    .weline-adapter-page .batch-toolbar {
+        background: var(--weline-theme-surface);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        padding: var(--weline-space-3) var(--weline-space-4);
+        margin-bottom: var(--weline-space-4);
+        display: none;
+    }
+    .weline-adapter-page .batch-toolbar.show {
+        display: flex;
+    }
+    .weline-adapter-page .select-count {
+        font-weight: 600;
+        color: var(--weline-theme-primary);
+    }
+    .weline-adapter-page .adapter-search {
+        min-width: 17.5rem;
+    }
+    .weline-adapter-page .checkbox-cell {
+        width: 2.5rem;
+        text-align: center;
+    }
+    .weline-adapter-page .adapter-search-empty {
+        display: none;
+        padding: var(--weline-space-8) var(--weline-space-5);
+        text-align: center;
+        color: var(--weline-theme-text-muted);
+    }
+    .weline-adapter-page .adapter-search-empty.show {
+        display: block;
+    }
+    .weline-adapter-page .empty-state {
+        padding: 3.75rem var(--weline-space-5);
+        text-align: center;
+    }
+    .weline-adapter-page .empty-state .w-icon,
+    .weline-adapter-page .empty-state i {
+        font-size: 4rem;
+        color: var(--weline-theme-text-muted);
+        margin-bottom: var(--weline-space-4);
+    }
+    .weline-adapter-page .adapter-version-badge {
+        background: var(--weline-theme-info-surface);
+        color: var(--weline-theme-info);
+    }
+    .weline-adapter-page .adapter-status-badge--active {
+        background: var(--weline-theme-success-surface);
+        color: var(--weline-theme-success);
+    }
+    .weline-adapter-page .adapter-status-badge--inactive {
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text-muted);
+    }
+}

@@ -4,7 +4,7 @@
     gap: var(--spacing-3);
 }
 .dashboard-widget-pixel header {
-    margin-bottom: 0 !important;
+    margin-bottom: 0;
 }
 .pixel-overview-grid {
     display: grid;

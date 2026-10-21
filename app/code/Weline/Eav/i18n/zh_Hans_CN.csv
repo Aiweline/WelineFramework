@@ -234,7 +234,6 @@ ID,ID
 关闭,关闭
 保存更改,保存更改
 确认删除,确认删除
-确认,确认
 属性代码,属性代码
 属性配置项,属性配置项
 暂无配置项。,暂无配置项。
@@ -454,6 +453,7 @@ EAV属性依赖解析缺少必要参数：%{1},EAV属性依赖解析缺少必要
 类型不存在:%{1},类型不存在:%{1}
 "属性类型添加失败 %{1}","属性类型添加失败 %{1}"
 "EAV Scope 工具：help/preflight/ensure-columns（apply 仅隔离 clone，经 scope:migrate-p1a）","EAV 范围工具：help/preflight/ensure-columns（应用单一隔离克隆，经范围:migrate-p1a）"
+确认,确认
 Eav>属性管理,Eav>属性管理
 Eav实体-属性管理,Eav实体-属性管理
 管理实体的属性,管理实体的属性

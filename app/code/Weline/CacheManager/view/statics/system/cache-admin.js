@@ -769,5 +769,16 @@
     bindSelection();
     bindPoolActions();
     bindToolbar();
-    refreshSummary().catch(function () {});
+
+    // 后台 API 桥接脚本为 defer 加载；等待其就绪后再拉取摘要，避免首屏 TypeError。
+    (function whenApiReady(attempt) {
+        if (window.Weline && typeof window.Weline.adminRequest === 'function') {
+            refreshSummary().catch(function () {});
+            return;
+        }
+        if (attempt > 120) {
+            return;
+        }
+        window.setTimeout(function () { whenApiReady(attempt + 1); }, 50);
+    })(0);
 })(window, document);

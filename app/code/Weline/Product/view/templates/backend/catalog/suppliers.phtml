@@ -154,7 +154,7 @@ if ($supplierMediaIdentityCode === '' || str_contains($supplierMediaIdentityCode
         <div class="w-cluster" data-gap="sm" data-align="center">
             <form method="get" id="product-supplier-website-filter-form" class="w-cluster" data-align="center" data-gap="sm">
                 <label class="w-visually-hidden" for="product-supplier-website-id"><lang>Website</lang></label>
-                <div class="w-product-admin__website-select" style="min-inline-size:12rem;">
+                <div class="w-product-admin__website-select">
                     <w:websites:website:select
                         id="product-supplier-website-id"
                         name="website_id"
@@ -410,9 +410,9 @@ if ($supplierMediaIdentityCode === '' || str_contains($supplierMediaIdentityCode
         </div>
     </dialog>
 </div>
-<script src="@static(Weline_FileManager::js/w-scope.js)"></script>
-<script src="@static(Weline_FileManager::js/media-identity-picker.js)"></script>
-<script src="@static(Weline_Product::js/backend/catalog-entity-media.js)?v=20260916-media-identity"></script>
+<script defer src="@static(Weline_FileManager::js/w-scope.js)"></script>
+<script defer src="@static(Weline_FileManager::js/media-identity-picker.js)"></script>
+<script defer src="@static(Weline_Product::js/backend/catalog-entity-media.js)?v=20260916-media-identity"></script>
 <script>
 (function () {
     'use strict';

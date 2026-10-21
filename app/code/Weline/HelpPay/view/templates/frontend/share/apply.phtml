@@ -13,10 +13,10 @@ $lines = $share['selection_snapshot']['lines'] ?? [];
          weline-code="helppay.selection.apply">
     <header class="w-stack" style="--w-gap:var(--weline-space-2, var(--space-2));">
         <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;"><lang>纯分享</lang></p>
-        <h1 class="w-text" data-weight="strong" style="--w-m:0;"><?= $escape(__('朋友帮你选好了规格')) ?></h1>
+        <h1 class="w-text" data-weight="strong" style="--w-m:0;"><lang>朋友帮你选好了规格</lang></h1>
         <p class="w-text" data-tone="muted" style="--w-m:0;">
             <a href="<?= $escape($help) ?>" data-testid="selection-share-help">
-                <?= $escape(__('了解分享给朋友')) ?>
+                <lang>了解分享给朋友</lang>
             </a>
         </p>
     </header>
@@ -27,10 +27,10 @@ $lines = $share['selection_snapshot']['lines'] ?? [];
             <?php endforeach; endif; ?>
         </ul>
         <p class="w-text" data-size="sm" data-tone="muted">
-            <?= $escape(__('将加入你自己的购物车并进入你的结账，订单归你。')) ?>
+            <lang>将加入你自己的购物车并进入你的结账，订单归你。</lang>
         </p>
     </div>
     <a class="w-button w-button--primary"
        data-testid="selection-share-checkout"
-       href="<?= $escape($checkout) ?>"><?= $escape(__('加入我的车并结账')) ?></a>
+       href="<?= $escape($checkout) ?>"><lang>加入我的车并结账</lang></a>
 </section>

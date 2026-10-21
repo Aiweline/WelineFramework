@@ -63,12 +63,12 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
          data-listing-ssr-filtered="<?= $ssrFiltered ? '1' : '0' ?>"
          data-weline-load="storefrontListing"
          data-weline-load-when="idle"
-         data-listing-loading-label="<?= $escape(__('加载中…')) ?>"
+         data-listing-loading-label="<lang>加载中…</lang>"
          weline-code="product.frontend.category.section_1">
 
     <?php if ($breadcrumbs !== []): ?>
-        <nav class="amz-plp__crumb" aria-label="<?= $escape(__('面包屑')) ?>">
-            <a href="@url{'/'}"><?= __('首页') ?></a>
+        <nav class="amz-plp__crumb" aria-label="@lang('面包屑')">
+            <a href="@url{'/'}"><lang>首页</lang></a>
             <?php foreach ($breadcrumbs as $i => $crumb): ?>
                 <?php
                 if (!is_array($crumb)) {
@@ -148,9 +148,9 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
     <div class="amz-plp__results-bar" data-testid="storefront-category-toolbar">
         <h2 class="amz-plp__results-text" data-listing-count>
             <?php if ($visibleCount > 0): ?>
-                <?= __('第 %{1}–%{2} 件，共 %{3} 件结果', [$from, $to, $visibleCount]) ?>
+                <lang args="[$from, $to, $visibleCount]">第 %{1}–%{2} 件，共 %{3} 件结果</lang>
             <?php else: ?>
-                <?= __('0 件结果') ?>
+                <lang>0 件结果</lang>
             <?php endif; ?>
             <span class="amz-plp__results-query">
                 <?= $escape($categoryName) ?>
@@ -159,7 +159,7 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
         </h2>
         <?php if ($sortOptions !== []): ?>
             <label class="amz-plp__sort">
-                <span><?= __('排序') ?>:</span>
+                <span><lang>排序</lang>:</span>
                 <select class="amz-plp__sort-select"
                         data-testid="storefront-category-sort"
                         data-listing-sort>
@@ -198,7 +198,7 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
     <div data-listing-stage>
     <?php if ($offers === []): ?>
         <div class="amz-plp__empty" data-testid="storefront-category-empty" data-listing-empty>
-            <?= __('该分类下暂无已发布商品。') ?>
+            <lang>该分类下暂无已发布商品。</lang>
         </div>
     <?php else: ?>
         <div class="amz-plp__grid weline-product-card-shelf" data-testid="storefront-category-grid" data-listing-grid>
@@ -272,12 +272,12 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
 </section>
 
 <style>
-.amz-plp { width: 100%; min-width: 0; color: #0f1111; }
+.amz-plp { width: 100%; min-width: 0; color: var(--weline-theme-color-text); }
 .amz-plp__banner {
-    margin: 0 0 14px;
-    border-radius: 8px;
+    margin: 0 0 var(--spacing-3_5);
+    border-radius: var(--radius-lg);
     overflow: hidden;
-    background: #f0f2f2;
+    background: var(--color-bg-muted);
     max-height: 280px;
 }
 .amz-plp__banner:not(.w-frame) { aspect-ratio: 5 / 1; }
@@ -289,86 +289,86 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
     object-fit: cover;
 }
 .amz-plp__intro {
-    margin: 0 0 14px;
+    margin: 0 0 var(--spacing-3_5);
 }
 .amz-plp__heading {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin: 0 0 6px;
-    font-size: 22px;
+    gap: var(--spacing-2_5);
+    margin: 0 0 var(--spacing-1_5);
+    font-size: var(--font-size-2_5xl);
     font-weight: 700;
     line-height: 1.25;
 }
 .amz-plp__heading-icon {
     width: 40px;
     height: 40px;
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     object-fit: cover;
     flex: 0 0 auto;
 }
 .amz-plp__summary {
-    margin: 0 0 8px;
-    color: #565959;
-    font-size: 14px;
+    margin: 0 0 var(--spacing-2);
+    color: var(--color-text-gray);
+    font-size: var(--font-size-sm);
     line-height: 1.45;
 }
 .amz-plp__description {
     margin: 0;
-    color: #0f1111;
-    font-size: 13px;
+    color: var(--weline-theme-color-text);
+    font-size: var(--font-size-13);
     line-height: 1.55;
 }
 .amz-plp__children {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
-    margin: 0 0 14px;
+    gap: var(--spacing-2_5);
+    margin: 0 0 var(--spacing-3_5);
 }
 .amz-plp__child {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 10px 6px 6px;
-    border: 1px solid #d5d9d9;
-    border-radius: 999px;
-    background: #fff;
-    color: #0f1111;
+    gap: var(--spacing-2);
+    padding: var(--spacing-1_5) var(--spacing-2_5) var(--spacing-1_5) var(--spacing-1_5);
+    border: var(--border-width-thin) solid var(--color-border-faint);
+    border-radius: var(--radius-full);
+    background: var(--color-bg-primary);
+    color: var(--weline-theme-color-text);
     text-decoration: none;
-    font-size: 13px;
+    font-size: var(--font-size-13);
 }
-.amz-plp__child:hover { border-color: #c45500; color: #c45500; }
+.amz-plp__child:hover { border-color: #c45500; color: var(--color-link); }
 .amz-plp__child img {
     width: 32px;
     height: 32px;
-    border-radius: 999px;
+    border-radius: var(--radius-full);
     object-fit: cover;
 }
 .amz-plp__crumb {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
-    margin: 0 0 10px;
-    font-size: 12px;
-    color: #565959;
+    gap: var(--spacing-1_5);
+    margin: 0 0 var(--spacing-2_5);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-gray);
 }
 .amz-plp__crumb a {
-    color: #2162a1;
+    color: var(--color-link);
     text-decoration: none;
 }
-.amz-plp__crumb a:hover { color: #c45500; text-decoration: underline; }
+.amz-plp__crumb a:hover { color: var(--color-link); text-decoration: underline; }
 .amz-plp__crumb-sep { opacity: .55; }
 .amz-plp__results-bar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 10px 16px;
-    margin: 0 0 14px;
-    padding: 8px 0 10px;
+    gap: var(--spacing-2_5) var(--spacing-4);
+    margin: 0 0 var(--spacing-3_5);
+    padding: var(--spacing-2) 0 var(--spacing-2_5);
     border: 0;
-    border-bottom: 1px solid #e3e6e6;
+    border-bottom: var(--border-width-thin) solid var(--color-border-muted);
     border-radius: 0;
     background: transparent;
 }
@@ -376,38 +376,38 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
     margin: 0;
     flex: 1 1 auto;
     min-width: 0;
-    font-size: 14px;
+    font-size: var(--font-size-sm);
     font-weight: 400;
     line-height: 1.4;
 }
 .amz-plp__results-query { font-weight: 700; }
 .amz-plp__results-hint {
-    margin-left: 6px;
-    color: #565959;
+    margin-left: var(--spacing-1_5);
+    color: var(--color-text-gray);
     font-weight: 400;
 }
 .amz-plp__sort {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--spacing-1_5);
     margin: 0 0 0 auto;
-    font-size: 13px;
-    color: #565959;
+    font-size: var(--font-size-13);
+    color: var(--color-text-gray);
     white-space: nowrap;
     flex: 0 0 auto;
 }
 .amz-plp__sort-select {
-    min-height: 32px;
-    padding: 4px 28px 4px 10px;
-    border: 1px solid #d5d9d9;
-    border-radius: 8px;
-    background: #f0f2f2;
+    min-height: var(--control-height-sm);
+    padding: var(--spacing-1) var(--spacing-7) var(--spacing-1) var(--spacing-2_5);
+    border: var(--border-width-thin) solid var(--color-border-faint);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-muted);
     color: inherit;
     font: inherit;
-    box-shadow: 0 2px 5px rgba(15, 17, 17, .05);
+    box-shadow: var(--weline-shadow-md);
 }
-.amz-plp__notice { min-height: 0; margin: 0 0 10px; color: #067d62; font-size: 13px; }
-.amz-plp__notice.is-error { color: #b12704; }
+.amz-plp__notice { min-height: 0; margin: 0 0 var(--spacing-2_5); color: var(--color-text-secondary); font-size: var(--font-size-13); }
+.amz-plp__notice.is-error { color: var(--color-link); }
 .amz-plp__grid > .weline-product-card {
     min-width: 0;
     height: 100%;
@@ -415,28 +415,28 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
 .amz-plp__grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
+    gap: var(--spacing-3);
     align-items: stretch;
 }
 /* 购买操作布局已由 .weline-product-card .wpc-cta 拥有；PLP 仅保证格子拉伸 */
 .amz-plp__pager {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--weline-space-2, 0.5rem);
-    margin: var(--weline-space-5, 1.125rem) 0 0;
+    gap: var(--weline-space-2);
+    margin: var(--weline-space-5) 0 0;
     align-items: center;
     justify-content: center;
 }
 .amz-plp__pager-item {
     min-width: 34px;
-    min-height: 34px;
-    padding: 0 10px;
-    border: 1px solid #d5d9d9;
-    border-radius: 8px;
-    background: #fff;
-    color: #0f1111;
+    min-height: var(--control-height-sm);
+    padding: 0 var(--spacing-2_5);
+    border: var(--border-width-thin) solid var(--color-border-faint);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-primary);
+    color: var(--weline-theme-color-text);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--font-size-13);
     font-weight: 600;
     text-decoration: none;
     cursor: pointer;
@@ -446,40 +446,40 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
 }
 .amz-plp__pager-item.is-current {
     border-color: #0f1111;
-    background: #0f1111;
-    color: #fff;
+    background: var(--color-bg-dark-secondary);
+    color: var(--color-text-light);
 }
 .amz-plp__pager-item.is-ellipsis {
     border: 0;
     background: transparent;
     min-width: auto;
-    padding: 0 4px;
-    color: #565959;
+    padding: 0 var(--spacing-1);
+    color: var(--color-text-gray);
     font-weight: 500;
     cursor: default;
 }
 .amz-plp__pager-item.is-nav {
-    padding: 0 12px;
+    padding: 0 var(--spacing-3);
 }
 .amz-plp__pager-item.is-disabled {
     opacity: .45;
     cursor: not-allowed;
 }
 .amz-plp__empty {
-    padding: 28px 16px;
-    border: 1px dashed #d5d9d9;
-    border-radius: 8px;
-    color: #565959;
+    padding: var(--spacing-7) var(--spacing-4);
+    border: var(--border-width-thin) dashed var(--color-border-faint);
+    border-radius: var(--radius-lg);
+    color: var(--color-text-gray);
     text-align: center;
-    background: #fff;
+    background: var(--color-bg-primary);
 }
 .storefront-listing-loading {
-    margin: 0 0 10px;
-    padding: 8px 12px;
-    border-radius: 8px;
-    background: #f0f2f2;
-    color: #565959;
-    font-size: 13px;
+    margin: 0 0 var(--spacing-2_5);
+    padding: var(--spacing-2) var(--spacing-3);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-muted);
+    color: var(--color-text-gray);
+    font-size: var(--font-size-13);
     font-weight: 600;
     line-height: 1.35;
 }

@@ -23,10 +23,10 @@
      * theme.css [data-surface=inverse] .delivery-panel (attr+class), so a broken
      * seed wins and erases Theme's #0f1111 raised rebind.
      */
-    --weline-chrome-body-text: #0f1111;
-    --weline-chrome-body-text-secondary: #565959;
-    --weline-chrome-body-text-muted: #666666;
-    --weline-chrome-body-text-heading: #0f1111;
+    --weline-chrome-body-text: var(--weline-theme-color-text);
+    --weline-chrome-body-text-secondary: var(--color-text-gray);
+    --weline-chrome-body-text-muted: var(--color-text-gray-mid);
+    --weline-chrome-body-text-heading: var(--weline-theme-color-text);
     --amz-drawer-text: var(--weline-chrome-body-text);
     --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
     --_paper-text: var(--amz-drawer-text);

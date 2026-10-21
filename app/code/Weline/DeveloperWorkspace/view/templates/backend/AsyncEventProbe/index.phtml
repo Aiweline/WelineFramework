@@ -1,18 +1,9 @@
+<css>Weline_DeveloperWorkspace::css/backend/async-event-probe.css</css>
 <?php /** @var \Weline\Framework\View\Template $this */ ?>
-<style>
-    .async-probe .probe-steps { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.75rem; }
-    .async-probe .probe-step { border:1px solid color-mix(in srgb,currentColor 18%,transparent); border-radius:.7rem; padding:1rem; }
-    .async-probe .probe-step[data-state="passed"] { border-color:#198754; background:color-mix(in srgb,#198754 8%,transparent); }
-    .async-probe .probe-step[data-state="active"] { border-color:#0d6efd; background:color-mix(in srgb,#0d6efd 8%,transparent); }
-    .async-probe .probe-code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }
-    .async-probe pre { max-height:24rem; overflow:auto; white-space:pre-wrap; }
-    @media(max-width:900px){.async-probe .probe-steps{grid-template-columns:1fr 1fr}}
-    @media(max-width:560px){.async-probe .probe-steps{grid-template-columns:1fr}}
-</style>
 <div class="async-probe" id="async-event-probe-app" data-provider="async_event_probe">
     <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
         <div>
-            <h4 class="w-text" style="--w-mb:var(--weline-space-1);--w-font-size:1.125rem;"><lang>异步资源变更验收台</lang></h4>
+            <h4 class="w-text" style="--w-mb:var(--weline-space-1);--w-font-size:var(--weline-font-size-lg);"><lang>异步资源变更验收台</lang></h4>
             <p class="w-text" data-tone="muted" style="--w-mb:0;"><lang>真实调用 w_changed()，展示 Outbox → Delivery → Queue → Observer 完整证据。</lang></p>
         </div>
         <div class="w-cluster" style="--w-gap:var(--weline-space-2);">

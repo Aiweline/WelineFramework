@@ -1,3 +1,4 @@
+<css>Weline_CacheManager::css/backend/cache-policy.css</css>
 <?php
 /**
  * @var \Weline\Framework\View\Template $this
@@ -37,28 +38,6 @@ $field = function (string $path, string $label, string $unit, string $help, stri
 };
 
 ?>
-
-<style>
-    .cache-policy-page { display: flex; flex-direction: column; gap: 18px; }
-    .cache-policy-hero { background: linear-gradient(135deg, #0f172a, #164e63); color: #fff; border-radius: 18px; padding: 24px; box-shadow: 0 18px 45px rgba(15, 23, 42, .18); }
-    .cache-policy-hero h2 { color: #fff; margin: 0 0 8px; font-size: 26px; font-weight: 800; }
-    .cache-policy-hero p { margin: 0; max-width: 860px; color: rgba(255, 255, 255, .82); line-height: 1.7; }
-    .cache-policy-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 20px; box-shadow: 0 10px 32px rgba(15, 23, 42, .06); }
-    .cache-policy-card h3 { margin: 0 0 6px; font-size: 18px; font-weight: 750; color: #111827; }
-    .cache-policy-card > p { margin: 0 0 18px; color: #64748b; }
-    .cache-policy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-    .cache-policy-field { border: 1px solid #edf2f7; border-radius: 14px; padding: 14px; background: #f8fafc; }
-    .cache-policy-field label { display: block; color: #0f172a; font-weight: 700; margin-bottom: 10px; }
-    .cache-policy-input-row { display: flex; align-items: center; gap: 10px; }
-    .cache-policy-input-row input { width: 150px; border: 1px solid #cbd5e1; border-radius: 10px; padding: 9px 10px; font-size: 14px; background: #fff; }
-    .cache-policy-input-row span { color: #475569; font-weight: 650; }
-    .cache-policy-field p { margin: 10px 0 0; color: #64748b; font-size: 12px; line-height: 1.5; }
-    .cache-policy-actions { display: flex; align-items: center; gap: 12px; position: sticky; bottom: 14px; background: rgba(255, 255, 255, .92); backdrop-filter: blur(10px); border: 1px solid #e5e7eb; border-radius: 14px; padding: 12px; }
-    .cache-policy-actions button { border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 750; background: #0f766e; color: #fff; cursor: pointer; }
-    .cache-policy-actions button:disabled { cursor: wait; opacity: .65; }
-    .cache-policy-message { color: #0f766e; font-weight: 650; }
-    .cache-policy-message.is-error { color: #b91c1c; }
-</style>
 
 <div class="cache-policy-page">
     <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">

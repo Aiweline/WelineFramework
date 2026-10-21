@@ -52,7 +52,7 @@ $showRegisterTabs = trim(strip_tags(preg_replace('/<!--.*?-->/s', '', $mailRegis
 
     <?php if ($showRegisterTabs): ?>
     <div class="w-auth-login__register-modes" data-w-component="tabs">
-        <nav class="w-tabs__list" data-variant="soft" role="tablist" aria-label="<?= $safe(__('注册方式')) ?>">
+        <nav class="w-tabs__list" data-variant="soft" role="tablist" aria-label="@lang('注册方式')">
             <button class="w-tabs__tab" id="customer-register-tab" type="button" role="tab"
                     aria-controls="customer-register-panel" aria-selected="true">
                 <w:icon name="user" size="sm"></w:icon><span><lang>账户注册</lang></span>
@@ -82,7 +82,7 @@ $showRegisterTabs = trim(strip_tags(preg_replace('/<!--.*?-->/s', '', $mailRegis
                 </label>
                 <input class="w-input" type="text" id="firstname" name="firstname"
                        required autocomplete="given-name"
-                       placeholder="<?= $safe(__('请输入名')) ?>">
+                       placeholder="@lang('请输入名')">
             </div>
             <div class="w-field">
                 <label class="w-field__label" for="lastname">
@@ -90,7 +90,7 @@ $showRegisterTabs = trim(strip_tags(preg_replace('/<!--.*?-->/s', '', $mailRegis
                 </label>
                 <input class="w-input" type="text" id="lastname" name="lastname"
                        required autocomplete="family-name"
-                       placeholder="<?= $safe(__('请输入姓')) ?>">
+                       placeholder="@lang('请输入姓')">
             </div>
         </div>
 
@@ -100,7 +100,7 @@ $showRegisterTabs = trim(strip_tags(preg_replace('/<!--.*?-->/s', '', $mailRegis
             </label>
             <input class="w-input" type="email" id="email" name="email"
                    required autocomplete="email"
-                   placeholder="<?= $safe(__('请输入邮箱地址')) ?>">
+                   placeholder="@lang('请输入邮箱地址')">
         </div>
 
         <div class="w-field">
@@ -110,10 +110,10 @@ $showRegisterTabs = trim(strip_tags(preg_replace('/<!--.*?-->/s', '', $mailRegis
             <div class="w-auth-login__password">
                 <input class="w-input" type="password" id="password" name="password"
                        required minlength="8" autocomplete="new-password"
-                       placeholder="<?= $safe(__('至少8位，包含字母和数字')) ?>">
+                       placeholder="@lang('至少8位，包含字母和数字')">
                 <button type="button" class="w-button" data-w-password-toggle data-w-password-target="password"
-                        data-label-show="<?= $safe(__('显示密码')) ?>" data-label-hide="<?= $safe(__('隐藏密码')) ?>"
-                        data-tone="quiet" data-size="sm" aria-label="<?= $safe(__('显示密码')) ?>" aria-pressed="false">
+                        data-label-show="@lang('显示密码')" data-label-hide="<lang>隐藏密码</lang>"
+                        data-tone="quiet" data-size="sm" aria-label="<lang>显示密码</lang>" aria-pressed="false">
                     <span data-w-password-show>
                         <w:icon name="eye" size="md"></w:icon>
                     </span>
@@ -131,10 +131,10 @@ $showRegisterTabs = trim(strip_tags(preg_replace('/<!--.*?-->/s', '', $mailRegis
             <div class="w-auth-login__password">
                 <input class="w-input" type="password" id="confirm_password" name="confirm_password"
                        required autocomplete="new-password"
-                       placeholder="<?= $safe(__('请再次输入密码')) ?>">
+                       placeholder="@lang('请再次输入密码')">
                 <button type="button" class="w-button" data-w-password-toggle data-w-password-target="confirm_password"
-                        data-label-show="<?= $safe(__('显示密码')) ?>" data-label-hide="<?= $safe(__('隐藏密码')) ?>"
-                        data-tone="quiet" data-size="sm" aria-label="<?= $safe(__('显示密码')) ?>" aria-pressed="false">
+                        data-label-show="@lang('显示密码')" data-label-hide="<lang>隐藏密码</lang>"
+                        data-tone="quiet" data-size="sm" aria-label="<lang>显示密码</lang>" aria-pressed="false">
                     <span data-w-password-show>
                         <w:icon name="eye" size="md"></w:icon>
                     </span>

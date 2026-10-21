@@ -44,8 +44,8 @@ if (!is_array($affiliateResponse) || empty($affiliateResponse['success'])) {
          data-testid="affiliate-account-unavailable">
     <div class="weline-affiliate-account-card__header">
         <div>
-            <p class="weline-affiliate-account-card__eyebrow"><?= __('Affiliate') ?></p>
-            <h2 class="weline-affiliate-account-card__title"><?= __('分销中心') ?></h2>
+            <p class="weline-affiliate-account-card__eyebrow"><lang>Affiliate</lang></p>
+            <h2 class="weline-affiliate-account-card__title"><lang>分销中心</lang></h2>
         </div>
     </div>
     <div class="weline-affiliate-account-card__body">
@@ -165,8 +165,8 @@ if (!is_string($affiliateAccountI18nJson)) {
          data-affiliate-i18n="<?= htmlspecialchars($affiliateAccountI18nJson, ENT_QUOTES) ?>">
 <div class="weline-affiliate-account-card__header">
         <div>
-            <p class="weline-affiliate-account-card__eyebrow"><?= __('Affiliate') ?></p>
-            <h2 class="weline-affiliate-account-card__title"><?= __('分销中心') ?></h2>
+            <p class="weline-affiliate-account-card__eyebrow"><lang>Affiliate</lang></p>
+            <h2 class="weline-affiliate-account-card__title"><lang>分销中心</lang></h2>
         </div>
         <span class="weline-affiliate-account-card__status"><?= htmlspecialchars((string) ($affiliate['status'] ?? 'active'), ENT_QUOTES) ?></span>
     </div>
@@ -183,20 +183,20 @@ if (!is_string($affiliateAccountI18nJson)) {
     <div class="weline-affiliate-account-card__body" id="<?= htmlspecialchars($rootId, ENT_QUOTES) ?>">
         <div class="weline-affiliate-account-card__money">
             <div class="weline-affiliate-account-card__metric">
-                <span class="weline-affiliate-account-card__metric-label"><?= __('待结算') ?></span>
+                <span class="weline-affiliate-account-card__metric-label"><lang>待结算</lang></span>
                 <strong class="weline-affiliate-account-card__metric-value"><?= $formatAmount($affiliate['pending_commission'] ?? 0, $summaryCurrency) ?></strong>
             </div>
             <div class="weline-affiliate-account-card__metric">
-                <span class="weline-affiliate-account-card__metric-label"><?= __('已确认') ?></span>
+                <span class="weline-affiliate-account-card__metric-label"><lang>已确认</lang></span>
                 <strong class="weline-affiliate-account-card__metric-value"><?= $formatAmount($affiliate['approved_commission'] ?? 0, $summaryCurrency) ?></strong>
             </div>
             <div class="weline-affiliate-account-card__metric">
-                <span class="weline-affiliate-account-card__metric-label"><?= __('累计佣金') ?></span>
+                <span class="weline-affiliate-account-card__metric-label"><lang>累计佣金</lang></span>
                 <strong class="weline-affiliate-account-card__metric-value"><?= $formatAmount($affiliate['total_commission'] ?? 0, $summaryCurrency) ?></strong>
             </div>
         </div>
 
-        <div class="weline-affiliate-account-card__funnel" aria-label="<?= htmlspecialchars((string) __('分销转化漏斗'), ENT_QUOTES) ?>">
+        <div class="weline-affiliate-account-card__funnel" aria-label="@lang('分销转化漏斗')">
             <?php foreach ($stats as $stat): ?>
                 <div class="weline-affiliate-account-card__funnel-item">
                     <span class="weline-affiliate-account-card__funnel-value"><?= (int) $stat['value'] ?></span>
@@ -209,21 +209,21 @@ if (!is_string($affiliateAccountI18nJson)) {
             <div class="weline-affiliate-account-card__subsection">
                 <div class="weline-affiliate-account-card__section-head">
                     <div>
-                        <h3 class="weline-affiliate-account-card__section-title"><?= __('平台流量与成交') ?></h3>
-                        <p class="weline-affiliate-account-card__section-note"><?= __('按分享平台汇总发出、点击、注册、订单与佣金，仅统计当前范围账户。') ?></p>
+                        <h3 class="weline-affiliate-account-card__section-title"><lang>平台流量与成交</lang></h3>
+                        <p class="weline-affiliate-account-card__section-note"><lang>按分享平台汇总发出、点击、注册、订单与佣金，仅统计当前范围账户。</lang></p>
                     </div>
                 </div>
                 <div class="weline-affiliate-account-card__table-wrap">
                     <table class="weline-affiliate-account-card__table" data-affiliate-platform-funnel-table>
                         <thead>
                         <tr>
-                            <th><?= __('平台') ?></th>
-                            <th><?= __('发出') ?></th>
-                            <th><?= __('点击') ?></th>
-                            <th><?= __('注册') ?></th>
-                            <th><?= __('订单') ?></th>
-                            <th><?= __('支付') ?></th>
-                            <th><?= __('佣金') ?></th>
+                            <th><lang>平台</lang></th>
+                            <th><lang>发出</lang></th>
+                            <th><lang>点击</lang></th>
+                            <th><lang>注册</lang></th>
+                            <th><lang>订单</lang></th>
+                            <th><lang>支付</lang></th>
+                            <th><lang>佣金</lang></th>
                         </tr>
                         </thead>
                         <tbody>
@@ -250,11 +250,11 @@ if (!is_string($affiliateAccountI18nJson)) {
                    type="text"
                    readonly
                    value="<?= htmlspecialchars($referralLink, ENT_QUOTES) ?>"
-                   aria-label="<?= htmlspecialchars((string) __('分销邀请链接'), ENT_QUOTES) ?>">
+                   aria-label="<lang>分销邀请链接</lang>">
             <button type="button"
                     class="weline-affiliate-account-card__button"
                     data-affiliate-copy-link>
-                <?= __('复制链接') ?>
+                <lang>复制链接</lang>
             </button>
         </div>
         <div class="weline-affiliate-account-card__notice" data-affiliate-copy-status aria-live="polite"></div>
@@ -262,7 +262,7 @@ if (!is_string($affiliateAccountI18nJson)) {
         <div class="weline-affiliate-account-card__actions">
             <a class="weline-affiliate-account-card__button weline-affiliate-account-card__button--primary"
                href="<?= htmlspecialchars($catalogUrl, ENT_QUOTES) ?>">
-                <?= __('去分享商品') ?>
+                <lang>去分享商品</lang>
             </a>
         </div>
 

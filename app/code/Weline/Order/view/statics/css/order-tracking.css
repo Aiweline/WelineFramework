@@ -3,20 +3,20 @@
  * Bust: bump ?v= on account orders @static / sidebar <css> when changing this file.
  */
 .order-tracking-result {
-    --otr-primary: var(--color-primary, #ff9900);
-    --otr-primary-dark: var(--color-primary-dark, #c45500);
-    --otr-text: var(--color-text-primary, #0f1111);
-    --otr-muted: var(--color-text-secondary, #565959);
-    --otr-line: #d5d9d9;
-    --otr-done: #067d62;
-    --otr-surface: #fff;
-    --otr-panel: #f0f2f2;
+    --otr-primary: var(--color-primary);
+    --otr-primary-dark: var(--color-primary-dark);
+    --otr-text: var(--color-text-primary);
+    --otr-muted: var(--color-text-secondary);
+    --otr-line: var(--color-border-muted);
+    --otr-done: var(--color-success);
+    --otr-surface: var(--color-bg-primary);
+    --otr-panel: var(--color-bg-muted);
     box-sizing: border-box;
     width: 100%;
     max-width: 100%;
     min-width: 0;
     color: var(--otr-text);
-    font-size: 0.9375rem;
+    font-size: var(--font-size-sm);
     line-height: 1.45;
 }
 
@@ -29,10 +29,10 @@
 .order-tracking-result__head {
     display: flex;
     align-items: flex-start;
-    gap: 0.75rem;
+    gap: var(--weline-space-3);
     width: 100%;
     min-width: 0;
-    margin: 0 0 0.85rem;
+    margin: 0 0 var(--spacing-0_85);
 }
 
 .order-tracking-result__icon {
@@ -40,7 +40,7 @@
     flex: 0 0 2.25rem;
     width: 2.25rem;
     height: 2.25rem;
-    border-radius: 0.5rem;
+    border-radius: var(--border-radius-lg);
     object-fit: cover;
     background: var(--otr-panel);
 }
@@ -52,7 +52,7 @@
 
 .order-tracking-result__provider-title {
     margin: 0;
-    font-size: 1rem;
+    font-size: var(--weline-font-size-base);
     font-weight: 800;
     color: var(--otr-text);
     line-height: 1.35;
@@ -61,21 +61,21 @@
 
 .order-tracking-result__provider-desc,
 .order-tracking-result__tips {
-    margin: 0.3rem 0 0;
+    margin: var(--spacing-xs) 0 0;
     color: var(--otr-muted);
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
     line-height: 1.55;
     overflow-wrap: break-word;
 }
 
 .order-tracking-result__tips[data-tone="danger"] {
-    color: #b12704;
+    color: var(--color-link);
     font-weight: 700;
 }
 
 .order-tracking-result__summary {
-    margin: 0 0 0.65rem;
-    font-size: clamp(1.15rem, 2.4vw, 1.4rem);
+    margin: 0 0 var(--spacing-0_65);
+    font-size: clamp(var(--font-size-lg), 2.4vw, var(--font-size-2_5xl));
     font-weight: 800;
     color: var(--otr-text);
     letter-spacing: -0.015em;
@@ -84,33 +84,33 @@
 }
 
 .order-tracking-result__tracking-no {
-    margin: 0 0 1rem;
+    margin: 0 0 var(--weline-space-4);
     color: var(--otr-muted);
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
 }
 
 .order-tracking-result__tracking-no code {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
     color: var(--otr-text);
     background: var(--otr-panel);
-    padding: 0.12rem 0.4rem;
-    border-radius: 0.25rem;
+    padding: var(--spacing-0_5) var(--spacing-0_4);
+    border-radius: var(--border-radius-md);
 }
 
 /* —— Stepper —— */
 .order-tracking-result__stages {
     list-style: none;
-    margin: 0 0 1.15rem;
-    padding: 1rem 0.75rem 0.85rem;
+    margin: 0 0 var(--spacing-4_5);
+    padding: var(--weline-space-4) var(--weline-space-3) var(--spacing-0_85);
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: 0;
     width: 100%;
-    border: 1px solid var(--otr-line);
-    border-radius: 0.65rem;
-    background: linear-gradient(180deg, #fff 0%, var(--otr-panel) 100%);
+    border: var(--border-width-thin) solid var(--otr-line);
+    border-radius: var(--sidebar-radius);
+    background: linear-gradient(180deg, var(--color-bg-primary) 0%, var(--otr-panel) 100%);
     overflow: visible;
 }
 
@@ -120,9 +120,9 @@
     flex: 1 1 0;
     flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--weline-space-2);
     min-width: 0;
-    padding: 0 0.25rem;
+    padding: 0 var(--weline-space-1);
     text-align: center;
 }
 
@@ -152,9 +152,9 @@
     width: 1.4rem;
     height: 1.4rem;
     border-radius: 50%;
-    border: 0.18rem solid var(--otr-line);
+    border: var(--loader-border-width) solid var(--otr-line);
     background: var(--otr-surface);
-    box-shadow: 0 0 0 0.18rem #fff;
+    box-shadow: var(--focus-ring);
 }
 
 .order-tracking-result__stage[data-state="done"] .order-tracking-result__dot {
@@ -169,22 +169,22 @@
     top: 0.18rem;
     width: 0.3rem;
     height: 0.55rem;
-    border: solid #fff;
-    border-width: 0 0.15rem 0.15rem 0;
+    border: solid var(--color-border-soft);
+    border-width: 0 var(--border-width-2) var(--border-width-2) 0;
     transform: rotate(45deg);
 }
 
 .order-tracking-result__stage[data-state="current"] .order-tracking-result__dot {
     border-color: var(--otr-primary);
     background: var(--otr-primary);
-    box-shadow: 0 0 0 0.22rem color-mix(in srgb, var(--otr-primary) 22%, transparent), 0 0 0 0.18rem #fff;
+    box-shadow: var(--focus-ring);
 }
 
 .order-tracking-result__meta {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.12rem;
+    gap: var(--spacing-0_5);
     width: 100%;
     min-width: 0;
 }
@@ -194,7 +194,7 @@
     width: 100%;
     max-width: 100%;
     color: var(--otr-muted);
-    font-size: 0.75rem;
+    font-size: var(--weline-font-size-xs);
     font-weight: 700;
     line-height: 1.3;
     overflow-wrap: break-word;
@@ -213,32 +213,32 @@
 
 .order-tracking-result__current-tag {
     display: inline-block;
-    font-size: 0.6875rem;
+    font-size: var(--font-size-xs);
     font-weight: 800;
-    letter-spacing: 0.02em;
+    letter-spacing: var(--letter-spacing-wide);
 }
 
 /* —— Timeline —— */
 .order-tracking-result__nodes {
     list-style: none;
     margin: 0;
-    padding: 0.25rem 0 0;
+    padding: var(--weline-space-1) 0 0;
     display: grid;
     gap: 0;
-    border-top: 1px solid var(--otr-line);
+    border-top: var(--border-width-thin) solid var(--otr-line);
 }
 
 .order-tracking-result__node {
     position: relative;
     display: grid;
     grid-template-columns: 1.25rem minmax(0, 1fr);
-    column-gap: 0.85rem;
-    padding: 0.9rem 0 0.9rem 0.1rem;
+    column-gap: var(--spacing-0_85);
+    padding: var(--spacing-0_9) 0 var(--spacing-0_9) var(--spacing-0_5);
     min-width: 0;
 }
 
 .order-tracking-result__node:not(:last-child) {
-    border-bottom: 1px solid #eceff1;
+    border-bottom: var(--border-width-thin) solid var(--color-border-soft);
 }
 
 .order-tracking-result__node-rail {
@@ -259,11 +259,11 @@
     z-index: 1;
     width: 0.7rem;
     height: 0.7rem;
-    margin-top: 0.35rem;
-    margin-left: 0.2rem;
+    margin-top: var(--spacing-1_5);
+    margin-left: var(--spacing-0_2);
     border-radius: 50%;
     background: var(--otr-line);
-    box-shadow: 0 0 0 0.2rem #fff;
+    box-shadow: var(--focus-ring);
 }
 
 .order-tracking-result__node[data-latest="1"] .order-tracking-result__node-dot {
@@ -277,7 +277,7 @@
 .order-tracking-result__node-text {
     margin: 0;
     color: var(--otr-text);
-    font-size: 0.9rem;
+    font-size: var(--font-size-sm);
     font-weight: 700;
     line-height: 1.4;
     overflow-wrap: break-word;
@@ -289,9 +289,9 @@
 
 .order-tracking-result__node-time {
     display: block;
-    margin-top: 0.25rem;
+    margin-top: var(--weline-space-1);
     color: var(--otr-muted);
-    font-size: 0.75rem;
+    font-size: var(--weline-font-size-xs);
 }
 
 @media (max-width: 720px) {
@@ -299,15 +299,15 @@
         flex-direction: column;
         align-items: stretch;
         gap: 0;
-        padding: 0.35rem 0.9rem;
+        padding: var(--spacing-1_5) var(--spacing-0_9);
     }
 
     .order-tracking-result__stage {
         flex-direction: row;
         align-items: center;
         justify-content: flex-start;
-        gap: 0.85rem;
-        padding: 0.7rem 0;
+        gap: var(--spacing-0_85);
+        padding: var(--spacing-0_7) 0;
         text-align: start;
     }
 
@@ -329,28 +329,28 @@
         flex-wrap: wrap;
         align-items: baseline;
         justify-content: flex-start;
-        gap: 0.4rem;
+        gap: var(--spacing-0_4);
         width: auto;
     }
 
     .order-tracking-result__label {
         width: auto;
-        font-size: 0.875rem;
+        font-size: var(--weline-font-size-sm);
     }
 }
 
 .order-tracking-result__shipments {
-  margin: 0.75rem 0 0;
+  margin: var(--weline-space-3) 0 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--spacing-0_4);
 }
 .order-tracking-result__shipments li {
-  font-size: 0.875rem;
+  font-size: var(--weline-font-size-sm);
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem 0.6rem;
+  gap: var(--spacing-1_5) var(--spacing-2_5);
   align-items: center;
 }

@@ -29,7 +29,7 @@
     max-inline-size: 5.5rem;
     text-align: center;
     font-weight: 700;
-    letter-spacing: 0.04em;
+    letter-spacing: var(--letter-spacing-wide);
     background: var(--weline-theme-surface-muted);
     color: var(--weline-theme-text);
     cursor: default;

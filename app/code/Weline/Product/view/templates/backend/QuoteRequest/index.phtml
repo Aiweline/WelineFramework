@@ -15,11 +15,12 @@ $labelOf = static function (string $status) use ($statusLabels): string {
     return (string)($statusLabels[$status] ?? $status);
 };
 ?>
+<css>Weline_Product::css/backend/quote-request-admin.css</css>
 <w:mail-composer area="backend"/>
-<div class="w-card" weline-code="product.backend.quote_request.index">
-    <div class="w-card__header" style="display:flex;gap:1rem;align-items:center;justify-content:space-between;flex-wrap:wrap;">
-        <h1 class="w-card__title" style="margin:0;"><?= $escape(__('商品询价')) ?></h1>
-        <form method="get" action="@backend-url{'*/backend/quote-request/index'}" class="w-cluster" style="gap:.5rem;">
+<div class="w-card" weline-code="product.backend.quote_request.index" data-weline-load="productQuoteMail">
+    <div class="w-card__header w-quote-request__header">
+        <h2 class="w-card__title"><?= $escape(__('商品询价')) ?></h2>
+        <form method="get" action="@backend-url{'*/backend/quote-request/index'}" class="w-cluster" style="--w-gap:var(--weline-space-2);">
             <select class="w-select" name="status">
                 <option value=""><?= $escape(__('全部状态')) ?></option>
                 <?php foreach ($statuses as $statusCode): ?>
@@ -31,11 +32,11 @@ $labelOf = static function (string $status) use ($statusLabels): string {
             <button class="w-button" type="submit"><?= $escape(__('筛选')) ?></button>
         </form>
     </div>
-    <div class="w-card__body" style="overflow:auto;">
+    <div class="w-card__body w-table-wrap">
         <?php if ($items === []): ?>
             <p class="w-text" data-tone="muted"><?= $escape(__('暂无询价单')) ?></p>
         <?php else: ?>
-            <table class="w-table" style="width:100%;border-collapse:collapse;">
+            <table class="w-table">
                 <thead>
                 <tr>
                     <th><?= $escape(__('时间')) ?></th>
@@ -100,9 +101,9 @@ $labelOf = static function (string $status) use ($statusLabels): string {
                                 : '';
                             ?>
                             <?php if (($mailMode === 'own' || $mailMode === 'pick') && $composerJson !== ''): ?>
-                                <div class="w-cluster" style="gap:.35rem;margin-bottom:.35rem;flex-wrap:wrap;" data-quote-mail-pick="<?= $id ?>">
+                                <div class="w-cluster w-quote-request__mail-pick" data-quote-mail-pick="<?= $id ?>">
                                     <?php if ($mailMode === 'pick'): ?>
-                                        <select class="w-select" data-size="sm" data-quote-mail-account style="max-width:12rem;">
+                                        <select class="w-select w-quote-request__mail-account" data-size="sm" data-quote-mail-account>
                                             <?php foreach ($mailboxes as $mailbox): ?>
                                                 <?php
                                                 $mbId = (int)($mailbox['account_id'] ?? 0);
@@ -122,21 +123,21 @@ $labelOf = static function (string $status) use ($statusLabels): string {
                                     </button>
                                 </div>
                             <?php elseif ($mailMode === 'external'): ?>
-                                <div class="w-text" data-tone="muted" data-size="sm" style="margin-bottom:.35rem;">
+                                <div class="w-text w-quote-request__mail-hint" data-tone="muted" data-size="sm">
                                     <?= $escape($mailMsg !== '' ? $mailMsg : __('当前账号邮箱不是本机企业邮箱，需外部发送')) ?>
                                     <?php if ($mailMailto !== ''): ?>
                                         · <a href="<?= $escape($mailMailto) ?>"><?= $escape(__('外部邮件客户端')) ?></a>
                                     <?php endif; ?>
                                 </div>
                             <?php elseif ($mailMode === 'unavailable'): ?>
-                                <div class="w-text" data-tone="muted" data-size="sm" style="margin-bottom:.35rem;">
+                                <div class="w-text w-quote-request__mail-hint" data-tone="muted" data-size="sm">
                                     <?= $escape($mailMsg) ?>
                                 </div>
                             <?php endif; ?>
                             <?php if ($next === []): ?>
                                 <span class="w-text" data-tone="muted">—</span>
                             <?php else: ?>
-                                <div class="w-cluster" style="gap:.35rem;flex-wrap:wrap;">
+                                <div class="w-cluster" style="--w-gap:var(--weline-space-1);">
                                     <?php foreach ($next as $toStatus): ?>
                                         <w:form method="post" action="@backend-url{'*/backend/quote-request/transition'}" csrf="auto" style="display:inline;">
                                             <input type="hidden" name="quote_request_id" value="<?= $id ?>">
@@ -156,22 +157,3 @@ $labelOf = static function (string $status) use ($statusLabels): string {
         <?php endif; ?>
     </div>
 </div>
-<script>
-(function () {
-  document.querySelectorAll('[data-quote-mail-open]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var raw = btn.getAttribute('data-composer') || '{}';
-      var payload = {};
-      try { payload = JSON.parse(raw); } catch (e) { payload = {}; }
-      var wrap = btn.closest('[data-quote-mail-pick]');
-      var select = wrap ? wrap.querySelector('[data-quote-mail-account]') : null;
-      if (select) {
-        payload.account_id = parseInt(select.value || '0', 10) || payload.account_id || 0;
-      }
-      if (window.WelineMailComposer && typeof window.WelineMailComposer.open === 'function') {
-        window.WelineMailComposer.open(payload);
-      }
-    });
-  });
-})();
-</script>

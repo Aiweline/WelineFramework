@@ -16,10 +16,6 @@ $backupTypes = $backup_types ?? [
     'files' => __('仅关联文件'),
 ];
 $escapeHtml = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
-$jsonForScript = static function (mixed $value): string {
-    $json = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE);
-    return $json === false ? 'null' : $json;
-};
 $formatBytes = static function (int $bytes): string {
     if ($bytes <= 0) {
         return '0 B';
@@ -36,92 +32,6 @@ $websiteSelectValue = '';
 $websiteSelectDisplay = '';
 $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
 ?>
-<style>
-    .website-backup-scope {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
-        margin-bottom: 20px;
-    }
-
-    .website-backup-scope__item {
-        border: 1px solid rgba(128, 148, 174, .28);
-        border-radius: 8px;
-        padding: 14px 16px;
-        min-height: 104px;
-        background: rgba(255, 255, 255, .02);
-    }
-
-    .website-backup-scope__icon {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 30px;
-        height: 30px;
-        border-radius: 6px;
-        margin-bottom: 10px;
-        color: #5bd5ff;
-        background: rgba(91, 213, 255, .12);
-    }
-
-    .website-backup-scope__title {
-        display: block;
-        margin-bottom: 6px;
-        font-weight: 600;
-    }
-
-    .website-backup-scope__text {
-        margin: 0;
-        color: var(--bs-secondary-color, #8d9db5);
-        line-height: 1.55;
-        font-size: 13px;
-    }
-
-    .website-backup-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-
-    .website-backup-empty {
-        min-height: 220px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-    }
-
-    .website-backup-empty .mdi {
-        font-size: 48px;
-        color: #9ab6dc;
-    }
-
-    @media (max-width: 1199.98px) {
-        .website-backup-scope {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-    }
-
-    @media (max-width: 575.98px) {
-        .website-backup-scope {
-            grid-template-columns: 1fr;
-        }
-
-        .website-backup-actions .btn {
-            width: 100%;
-        }
-    }
-</style>
-
-<div class="w-grid" data-testid="website-backup-management">
-    <div style="--w-span:12;">
-        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-            <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;"><lang>网站备份</lang></h4>
-        </div>
-    </div>
-</div>
-
 <div class="w-grid">
     <div style="--w-span:12;">
         <template>Weline_Component::message.phtml</template>
@@ -143,27 +53,27 @@ $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UN
         <div class="w-card">
             <div class="w-card__body">
                 <h4 class="w-card__title" style="--w-mb:var(--weline-space-6);"><lang>备份范围</lang></h4>
-                <div class="website-backup-scope" aria-label="<?= $escapeHtml(__('备份范围')) ?>">
-                    <div class="website-backup-scope__item">
-                        <span class="website-backup-scope__icon"><w:icon name="globe" size="sm"></w:icon></span>
-                        <span class="website-backup-scope__title"><lang>站点资料</lang></span>
-                        <p class="website-backup-scope__text"><lang>网站名称、代码、URL、默认语言、默认货币、时区和默认站点 ID。</lang></p>
-                    </div>
-                    <div class="website-backup-scope__item">
-                        <span class="website-backup-scope__icon"><w:icon name="database" size="sm"></w:icon></span>
-                        <span class="website-backup-scope__title"><lang>站点数据</lang></span>
-                        <p class="website-backup-scope__text"><lang>自动导出所有带 website_id 字段的数据表记录，包含域名、语言、货币、CMS、SEO、主题等站点级数据。</lang></p>
-                    </div>
-                    <div class="website-backup-scope__item">
-                        <span class="website-backup-scope__icon"><w:icon name="image" size="sm"></w:icon></span>
-                        <span class="website-backup-scope__title"><lang>关联文件</lang></span>
-                        <p class="website-backup-scope__text"><lang>归档站点记录中引用的媒体、source、sitemap、PageBuilder 与导出文件，并记录缺失文件。</lang></p>
-                    </div>
-                    <div class="website-backup-scope__item">
-                        <span class="website-backup-scope__icon"><w:icon name="check" size="sm"></w:icon></span>
-                        <span class="website-backup-scope__title"><lang>审计清单</lang></span>
-                        <p class="website-backup-scope__text"><lang>每个归档包含 manifest.json、database/*.json、files/* 和 checksums.json，便于恢复前审计。</lang></p>
-                    </div>
+                <div class="w-grid" aria-label="<?= $escapeHtml(__('备份范围')) ?>">
+                    <div class="w-card" style="--w-span-md:6;--w-span-lg:3;"><div class="w-card__body">
+                        <div class="w-text" data-tone="primary" style="--w-mb:var(--weline-space-2);"><w:icon name="globe" size="sm"></w:icon></div>
+                        <div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-1);"><lang>站点资料</lang></div>
+                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;"><lang>网站名称、代码、URL、默认语言、默认货币、时区和默认站点 ID。</lang></p>
+                    </div></div>
+                    <div class="w-card" style="--w-span-md:6;--w-span-lg:3;"><div class="w-card__body">
+                        <div class="w-text" data-tone="primary" style="--w-mb:var(--weline-space-2);"><w:icon name="database" size="sm"></w:icon></div>
+                        <div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-1);"><lang>站点数据</lang></div>
+                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;"><lang>自动导出所有带 website_id 字段的数据表记录，包含域名、语言、货币、CMS、SEO、主题等站点级数据。</lang></p>
+                    </div></div>
+                    <div class="w-card" style="--w-span-md:6;--w-span-lg:3;"><div class="w-card__body">
+                        <div class="w-text" data-tone="primary" style="--w-mb:var(--weline-space-2);"><w:icon name="image" size="sm"></w:icon></div>
+                        <div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-1);"><lang>关联文件</lang></div>
+                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;"><lang>归档站点记录中引用的媒体、source、sitemap、PageBuilder 与导出文件，并记录缺失文件。</lang></p>
+                    </div></div>
+                    <div class="w-card" style="--w-span-md:6;--w-span-lg:3;"><div class="w-card__body">
+                        <div class="w-text" data-tone="primary" style="--w-mb:var(--weline-space-2);"><w:icon name="check" size="sm"></w:icon></div>
+                        <div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-1);"><lang>审计清单</lang></div>
+                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:0;"><lang>每个归档包含 manifest.json、database/*.json、files/* 和 checksums.json，便于恢复前审计。</lang></p>
+                    </div></div>
                 </div>
 
                 <w:form id="backupForm" autocomplete="off">
@@ -265,7 +175,7 @@ $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UN
                                         <td><?= $formatBytes((int)($backup['size'] ?? 0)) ?></td>
                                         <td><?= $escapeHtml($backup['created_at'] ?? '-') ?></td>
                                         <td>
-                                            <div class="website-backup-actions">
+                                            <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
                                                 <button type="button" class="w-button" data-backup-action="download" data-backup-filename="<?= $escapeHtml($filename) ?>" data-tone="primary" data-size="sm">
                                                     <w:icon name="download" size="sm"></w:icon><lang>下载</lang>
                                                 </button>
@@ -280,10 +190,10 @@ $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UN
                         </table>
                     </div>
                 <?php else: ?>
-                    <div class="website-backup-empty w-text" data-align="center" data-tone="muted">
+                    <div class="w-empty">
                         <w:icon name="store" size="sm"></w:icon>
-                        <p style="--w-mb:0;"><lang>暂无备份文件</lang></p>
-                        <small><lang>选择网站和备份类型后即可生成第一份可下载归档。</lang></small>
+                        <p class="w-text" data-tone="muted" style="--w-mb:0;"><lang>暂无备份文件</lang></p>
+                        <small class="w-text" data-tone="muted"><lang>选择网站和备份类型后即可生成第一份可下载归档。</lang></small>
                     </div>
                 <?php endif; ?>
             </div>
@@ -292,195 +202,23 @@ $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UN
 </div>
 
 
-<script>
-(function() {
-    'use strict';
-
-    var config = {
-        createUrl: "@backend-url{$createPath}",
-        deleteUrl: "@backend-url{$deletePath}",
-        downloadUrl: "@backend-url{$downloadPath}",
-        text: {
-            creating: <?= $jsonForScript((string)__('正在创建...')) ?>,
-            createDefault: <?= $jsonForScript((string)__('创建备份')) ?>,
-            createFail: <?= $jsonForScript((string)__('创建备份失败')) ?>,
-            deleteConfirm: <?= $jsonForScript((string)__('确定要删除这个备份吗？删除后无法从列表恢复。')) ?>,
-            deleteFail: <?= $jsonForScript((string)__('删除备份失败')) ?>,
-            apiUnavailable: <?= $jsonForScript((string)__('后台请求组件不可用，请刷新页面后重试。')) ?>,
-            confirmUnavailable: <?= $jsonForScript((string)__('确认组件不可用，请刷新页面后重试。')) ?>,
-            websiteRequired: <?= $jsonForScript((string)__('请选择网站')) ?>
-        }
-    };
-
-    function toast(type, message) {
-        if (window.Weline.UI.toast && typeof window.Weline.UI.toast[type] === 'function') {
-            window.Weline.UI.toast[type](message);
-            return;
-        }
-        if (window.console && typeof window.console.log === 'function') {
-            window.console.log(message);
-        }
-    }
-
-    function unwrapResponse(response) {
-        var _biz = window.WelineApiBusiness || (window.Weline && window.Weline.ApiBusiness);
-        if (_biz && typeof _biz.unwrapBusiness === 'function') {
-            return _biz.unwrapBusiness(response) || {};
-        }
-        if (response && typeof response === 'object' && response.data && typeof response.data.success !== 'undefined') {
-            return response.data;
-        }
-        return response || {};
-    }
-
-    function ensureApi() {
-        return !!(
-            window.Weline
-            && (
-                typeof window.Weline.load === 'function'
-                || (window.Weline.Api && typeof window.Weline.Api.resource === 'function')
-            )
-        );
-    }
-
-    function manageBackup(action, payload) {
-        payload = payload || {};
-        payload.action = action;
-        var invoke = function(api) {
-            return api.resource('websites').manageWebsiteBackup(
-                payload,
-                { requestTimeoutMs: 300000 }
-            );
-        };
-        return window.Weline.load
-            ? window.Weline.load('api').then(invoke)
-            : Promise.resolve(invoke(window.Weline.Api));
-    }
-
-    function markBackupFailure(submit, message) {
-        if (!submit) {
-            return;
-        }
-        submit.setAttribute('data-backup-state', 'failed');
-        submit.setAttribute('data-backup-error', String(message || config.text.createFail));
-    }
-
-    function appendQuery(url, key, value) {
-        var separator = url.indexOf('?') === -1 ? '?' : '&';
-        return url + separator + encodeURIComponent(key) + '=' + encodeURIComponent(value);
-    }
-
-    var form = document.getElementById('backupForm');
-    if (form) {
-        form.addEventListener('submit', function(event) {
-            event.preventDefault();
-            if (!ensureApi()) {
-                toast('error', config.text.apiUnavailable);
-                return;
-            }
-
-            var websiteIdInput = form.querySelector('#website_id_value');
-            var websiteId = websiteIdInput ? String(websiteIdInput.value || '').trim() : '';
-            if (websiteId === '') {
-                toast('error', config.text.websiteRequired);
-                return;
-            }
-
-            var submit = form.querySelector('[data-backup-submit]');
-            var submitLabel = submit ? submit.querySelector('span') : null;
-            if (submit) {
-                submit.disabled = true;
-                submit.setAttribute('data-backup-state', 'pending');
-                submit.removeAttribute('data-backup-error');
-                submit.removeAttribute('data-backup-filename');
-            }
-            if (submitLabel) {
-                submitLabel.textContent = config.text.creating;
-            }
-
-            manageBackup('create', {
-                website_id: websiteId,
-                backup_type: form.querySelector('#backup_type').value
-            }).then(function(response) {
-                var data = unwrapResponse(response);
-                if (data.success) {
-                    if (submit) {
-                        submit.setAttribute('data-backup-state', 'created');
-                        submit.setAttribute(
-                            'data-backup-filename',
-                            String(data.data && data.data.backup && data.data.backup.filename || '')
-                        );
-                    }
-                    toast('success', data.message || config.text.createDefault);
-                    window.setTimeout(function() {
-                        window.location.reload();
-                    }, 800);
-                    return;
-                }
-                var message = data.message || config.text.createFail;
-                markBackupFailure(submit, message);
-                toast('error', message);
-            }).catch(function(error) {
-                var message = (error && error.message) || config.text.createFail;
-                markBackupFailure(submit, message);
-                toast('error', message);
-            }).finally(function() {
-                if (submit) {
-                    submit.disabled = false;
-                }
-                if (submitLabel) {
-                    submitLabel.textContent = config.text.createDefault;
-                }
-            });
-        });
-    }
-
-    document.addEventListener('click', function(event) {
-        var trigger = event.target.closest('[data-backup-action]');
-        if (!trigger) {
-            return;
-        }
-        event.preventDefault();
-
-        var filename = trigger.getAttribute('data-backup-filename') || '';
-        var action = trigger.getAttribute('data-backup-action') || '';
-        if (!filename) {
-            return;
-        }
-
-        if (action === 'download') {
-            var downloadUrl = appendQuery(config.downloadUrl, 'backup_action', 'download');
-            window.location.href = appendQuery(downloadUrl, 'filename', filename);
-            return;
-        }
-
-        if (action !== 'delete') {
-            return;
-        }
-
-        Weline.UI.dialog.confirm(config.text.deleteConfirm).then(function(confirmed) {
-            if (!confirmed) {
-                return;
-            }
-            if (!ensureApi()) {
-                toast('error', config.text.apiUnavailable);
-                return;
-            }
-
-            manageBackup('delete', { filename: filename }).then(function(response) {
-                var data = unwrapResponse(response);
-                if (data.success) {
-                    toast('success', data.message || '');
-                    window.setTimeout(function() {
-                        window.location.reload();
-                    }, 500);
-                    return;
-                }
-                toast('error', data.message || config.text.deleteFail);
-            }).catch(function(error) {
-                toast('error', (error && error.message) || config.text.deleteFail);
-            });
-        });
-    });
-})();
-</script>
+<?php
+$backupJsConfig = [
+    'createUrl' => (string)$this->getBackendUrl($createPath),
+    'deleteUrl' => (string)$this->getBackendUrl($deletePath),
+    'downloadUrl' => (string)$this->getBackendUrl($downloadPath),
+    'text' => [
+        'creating' => (string)__('正在创建...'),
+        'createDefault' => (string)__('创建备份'),
+        'createFail' => (string)__('创建备份失败'),
+        'deleteConfirm' => (string)__('确定要删除这个备份吗？删除后无法从列表恢复。'),
+        'deleteFail' => (string)__('删除备份失败'),
+        'apiUnavailable' => (string)__('后台请求组件不可用，请刷新页面后重试。'),
+        'confirmUnavailable' => (string)__('确认组件不可用，请刷新页面后重试。'),
+        'websiteRequired' => (string)__('请选择网站'),
+    ],
+];
+$backupJsConfigJson = json_encode($backupJsConfig, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+$backupJsConfigJson = is_string($backupJsConfigJson) ? $backupJsConfigJson : '{}';
+?>
+<script type="application/json" id="website-backup-config"><?= $backupJsConfigJson ?></script>

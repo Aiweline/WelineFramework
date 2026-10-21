@@ -8,18 +8,18 @@
 
 .w-local-bulk-dialog .w-dialog__body {
     display: grid;
-    gap: var(--weline-space-4, 1rem);
+    gap: var(--weline-space-4);
 }
 
 .w-local-bulk-dialog__summary {
     display: grid;
-    gap: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
 }
 
 .w-local-bulk-dialog__progress-track {
     block-size: 8px;
-    border-radius: 999px;
-    background: var(--backend-color-bg-tertiary, #e9ecef);
+    border-radius: var(--radius-full);
+    background: var(--backend-color-bg-tertiary);
     overflow: hidden;
 }
 
@@ -27,32 +27,32 @@
     block-size: 100%;
     inline-size: 0;
     border-radius: inherit;
-    background: var(--backend-color-primary, #556ee6);
+    background: var(--backend-color-primary);
     transition: inline-size 0.25s ease;
 }
 
 .w-local-bulk-dialog__progress-text {
-    font-size: 0.875rem;
-    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: var(--weline-font-size-sm);
+    color: var(--backend-color-text-secondary);
 }
 
 .w-local-bulk-dialog__steps {
     display: grid;
-    gap: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
     max-block-size: 280px;
     overflow: auto;
-    padding-inline-end: 4px;
+    padding-inline-end: var(--spacing-1);
 }
 
 .w-local-bulk-step {
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
     align-items: start;
-    padding: 10px 12px;
-    border: 1px solid var(--backend-color-border-light, #e9ecef);
-    border-radius: var(--backend-border-radius-md, 8px);
-    background: var(--backend-color-card-bg, #fff);
+    padding: var(--spacing-2_5) var(--spacing-3);
+    border: var(--border-width-thin) solid var(--backend-color-border-light);
+    border-radius: var(--backend-border-radius-md);
+    background: var(--backend-color-card-bg);
 }
 
 .w-local-bulk-step__icon {
@@ -61,52 +61,52 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 999px;
-    background: var(--backend-color-bg-tertiary, #e9ecef);
-    color: var(--backend-color-text-muted, #adb5bd);
+    border-radius: var(--radius-full);
+    background: var(--backend-color-bg-tertiary);
+    color: var(--backend-color-text-muted);
 }
 
 .w-local-bulk-step__label {
     font-weight: 600;
-    font-size: 0.875rem;
+    font-size: var(--weline-font-size-sm);
 }
 
 .w-local-bulk-step__message {
     grid-column: 2;
-    font-size: 0.8125rem;
-    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: var(--font-size-13);
+    color: var(--backend-color-text-secondary);
 }
 
 .w-local-bulk-step.is-running {
-    border-color: var(--backend-color-primary, #556ee6);
+    border-color: var(--backend-color-primary);
 }
 
 .w-local-bulk-step.is-running .w-local-bulk-step__icon {
-    background: var(--backend-color-primary-light, #e8f4fd);
-    color: var(--backend-color-primary, #556ee6);
+    background: var(--backend-color-primary-light);
+    color: var(--backend-color-primary);
 }
 
 .w-local-bulk-step.is-success .w-local-bulk-step__icon,
 .w-local-bulk-step.is-skipped .w-local-bulk-step__icon {
-    background: var(--backend-color-success-light, #daf4ea);
-    color: var(--backend-color-success, #34c38f);
+    background: var(--backend-color-success-light);
+    color: var(--backend-color-success);
 }
 
 .w-local-bulk-step.is-failed .w-local-bulk-step__icon {
-    background: var(--backend-color-danger-light, #fde8e8);
-    color: var(--backend-color-danger, #f46a6a);
+    background: var(--backend-color-danger-light);
+    color: var(--backend-color-danger);
 }
 
 .w-local-bulk-dialog__log {
     font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-    font-size: 12px;
+    font-size: var(--font-size-xs);
     line-height: 1.5;
     max-block-size: 120px;
     overflow: auto;
-    padding: 10px 12px;
-    border-radius: var(--backend-border-radius-md, 8px);
-    background: var(--backend-color-sidebar-bg, #212529);
-    color: var(--backend-color-text-secondary, #ced4da);
+    padding: var(--spacing-2_5) var(--spacing-3);
+    border-radius: var(--backend-border-radius-md);
+    background: var(--backend-color-sidebar-bg);
+    color: var(--backend-color-text-secondary);
 }
 
 .w-local-bulk-dialog__footer[hidden] {

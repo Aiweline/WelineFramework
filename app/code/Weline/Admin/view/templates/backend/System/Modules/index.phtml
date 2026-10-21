@@ -2,64 +2,77 @@
 /**
  * 模组管理页面（内容模板）
  *
+ * 本页未注册后台菜单，布局层无法解析页面标题（BackendPageHeaderResolver 返回空），
+ * 故由内容模板输出唯一 h1 作为 fallback（标准 §3；known debt：菜单补项后回归布局 h1）。
+ *
  * @var \Weline\Framework\View\Template $this
  */
+$modules = $this->getData('modules') ?: [];
 ?>
+<div class="w-stack">
+    <header class="w-backend-page__heading">
+        <div class="w-backend-page__title">
+            <h1><?= __('模组管理') ?></h1>
+            <p class="w-backend-page__subtitle"><?= __('系统中安装的模组。') ?></p>
+        </div>
+    </header>
 
-<div class="w-grid">
-    <template>Weline_Component::message.phtml</template>
-</div>
-
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <div class="w-card">
-            <div class="w-card__body">
-                <h4 class="w-card__title"><?= __('模组管理') ?></h4>
-                <p class="w-text" data-tone="muted"><?= __('系统中安装的模组。') ?></p>
-                <?php
-                $modules = $this->getData('modules');
-                ?>
-                <div class="weline-table-rep-plugin">
-                    <div class="w-table-wrap" data-pattern='priority-columns' style="--w-mb:0;">
-                        <table id='tech-companies-1' class="w-table">
-                            <thead>
-                            <tr>
-                                <th data-priority='1'><?= __('模组名') ?></th>
-                                <th data-priority='3'><?= __('状态') ?></th>
-                                <th data-priority='1'><?= __('命名空间') ?></th>
-                                <th data-priority='3'><?= __('安装位置') ?></th>
-                                <th data-priority='3'><?= __('目录') ?></th>
-                                <th data-priority='3'><?= __('路由') ?></th>
-                                <th data-priority='3'><?= __('版本') ?></th>
-                                <th data-priority='3'><?= __('描述') ?></th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <?php
-                            foreach ($modules as $name => $info) :
-                                ?>
-                                <tr>
-                                    <td></td>
-                                    <th colspan="4" class='co-name'><?= $name ?></th>
-                                </tr>
-                                <tr>
-                                    <td></td>
-                                    <td><?= $info['status'] ?></td>
-                                    <td><?= $info['namespace_path'] ?></td>
-                                    <td><?= $info['base_path'] ?></td>
-                                    <td><?= $info['path'] ?></td>
-                                    <td><?= $info['router'] ?></td>
-                                    <td><?= $info['version'] ?></td>
-                                    <td><?= $info['description'] ?></td>
-                                </tr>
-                            <?php
-                            endforeach;
-                            ?>
-                            </tbody>
-                        </table>
+    <section class="w-card">
+        <div class="w-card__body">
+            <?php if (empty($modules)): ?>
+                <div class="w-empty">
+                    <w:icon name="box" size="lg"></w:icon>
+                    <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                        <p class="w-text" data-weight="strong"><lang>暂无模组</lang></p>
+                        <p class="w-text" data-tone="muted"><lang>系统中还没有安装任何模组。</lang></p>
                     </div>
                 </div>
-            </div>
+            <?php else: ?>
+                <div class="w-table-wrap">
+                    <table class="w-table">
+                        <thead>
+                        <tr>
+                            <th scope="col"><lang>模组名</lang></th>
+                            <th scope="col"><lang>状态</lang></th>
+                            <th scope="col"><lang>命名空间</lang></th>
+                            <th scope="col"><lang>安装位置</lang></th>
+                            <th scope="col"><lang>目录</lang></th>
+                            <th scope="col"><lang>路由</lang></th>
+                            <th scope="col"><lang>版本</lang></th>
+                            <th scope="col"><lang>描述</lang></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($modules as $name => $info): ?>
+                            <?php
+                            $statusText = (string)($info['status'] ?? '');
+                            $statusTone = match (strtolower($statusText)) {
+                                'enabled', 'active', '1', '已启用', '启用' => 'success',
+                                'disabled', 'inactive', '0', '已禁用', '禁用' => 'muted',
+                                default => 'info',
+                            };
+                            ?>
+                            <tr>
+                                <th scope="row"><span class="w-text" data-weight="strong"><?= htmlspecialchars((string)$name) ?></span></th>
+                                <td>
+                                    <?php if ($statusText !== ''): ?>
+                                        <span class="w-badge" data-w-background="<?= $statusTone ?>"><?= htmlspecialchars($statusText) ?></span>
+                                    <?php else: ?>
+                                        <span class="w-text" data-tone="muted">—</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="w-text" data-size="sm"><?= htmlspecialchars((string)($info['namespace_path'] ?? '')) ?></td>
+                                <td class="w-text" data-size="sm"><?= htmlspecialchars((string)($info['base_path'] ?? '')) ?></td>
+                                <td class="w-text" data-size="sm"><?= htmlspecialchars((string)($info['path'] ?? '')) ?></td>
+                                <td class="w-text" data-size="sm"><?= htmlspecialchars((string)($info['router'] ?? '')) ?></td>
+                                <td class="w-text" data-size="sm"><?= htmlspecialchars((string)($info['version'] ?? '')) ?></td>
+                                <td class="w-text" data-tone="muted" data-size="sm"><?= htmlspecialchars((string)($info['description'] ?? '')) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
         </div>
-    </div>
+    </section>
 </div>

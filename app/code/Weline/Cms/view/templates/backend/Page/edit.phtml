@@ -400,6 +400,7 @@ $contextFullTitle = trim(
     </div>
 </div>
 
+<!-- Weline backend theme: tool-internal styles, see 后端主题开发标准 §12 (pending migration) -->
 <style>
 .cms-page-workbench {
     --cms-edit-surface: var(--backend-color-card-bg, #ffffff);
@@ -892,5 +893,5 @@ body[data-theme="dark"] .cms-page-settings-bar .w-input::placeholder,
     $cmsEditorState,
     JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
 ) ?></script>
-<script src="@static(Weline_Theme::js/cms-preview-bridge.js)"></script>
-<script src="@static(Weline_Cms::js/cms-page-editor.js)"></script>
+<script defer src="@static(Weline_Theme::js/cms-preview-bridge.js)"></script>
+<script defer src="@static(Weline_Cms::js/cms-page-editor.js)"></script>

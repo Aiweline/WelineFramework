@@ -16,7 +16,15 @@ $listScopeContext = \is_array($list_scope_context ?? null)
     ];
 $colspan = $canReorder ? 9 : 8;
 ?>
-<div class="w-grid" data-testid="payment-method-management" data-target-scope="<?= htmlspecialchars($listTargetScope, ENT_QUOTES) ?>">
+<css>Weline_Payment::css/backend/payment-admin.css</css>
+<div class="w-grid"
+     data-testid="payment-method-management"
+     data-target-scope="<?= htmlspecialchars($listTargetScope, ENT_QUOTES) ?>"
+     data-text-sync-success="<?= htmlspecialchars((string)__('支付提供商同步成功'), ENT_QUOTES) ?>"
+     data-text-sync-fail="<?= htmlspecialchars((string)__('支付提供商同步失败'), ENT_QUOTES) ?>"
+     data-text-reorder-saved="<?= htmlspecialchars((string)__('支付方式排序已保存'), ENT_QUOTES) ?>"
+     data-text-reorder-fail="<?= htmlspecialchars((string)__('支付方式排序保存失败'), ENT_QUOTES) ?>"
+     data-weline-load="paymentMethodAdmin">
     <div style="--w-span:12;">
         <div class="w-card">
             <?php if (!empty($can_register_providers)): ?>
@@ -40,7 +48,7 @@ $colspan = $canReorder ? 9 : 8;
                         <thead>
                             <tr>
                                 <?php if ($canReorder): ?>
-                                    <th style="inline-size:2.5rem;"><?= __('拖拽') ?></th>
+                                    <th class="payment-method-sort-col"><?= __('拖拽') ?></th>
                                 <?php endif; ?>
                                 <th><?= __('图标') ?></th>
                                 <th><?= __('支付方式代码') ?></th>
@@ -111,7 +119,7 @@ $colspan = $canReorder ? 9 : 8;
                                                      alt="<?= htmlspecialchars((string)$method->getData('name'), ENT_QUOTES, 'UTF-8') ?>"
                                                      width="48"
                                                      height="32"
-                                                     style="object-fit:contain;max-inline-size:48px;max-block-size:32px;"
+                                                     class="payment-method-icon"
                                                      data-testid="payment-method-icon"
                                                      data-method-code="<?= htmlspecialchars($methodCode, ENT_QUOTES, 'UTF-8') ?>"
                                                      draggable="false">
@@ -177,148 +185,4 @@ $colspan = $canReorder ? 9 : 8;
     </div>
 </div>
 
-<style>
-.payment-method-sort-row.is-dragging { opacity: 0.55; }
-.payment-method-sort-row.is-drop-target > td { box-shadow: inset 0 2px 0 var(--weline-color-primary, #3b82f6); }
-</style>
 
-<script>
-(function () {
-    'use strict';
-
-    function initSyncProviders() {
-        var button = document.getElementById('payment-method-sync-providers');
-        if (!button) return;
-        button.addEventListener('click', function () {
-            button.disabled = true;
-            button.dataset.state = 'pending';
-            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
-                .then(function (api) {
-                    return api.resource('payment').registerProviders({
-                        target_scope: button.dataset.targetScope,
-                        expected_grant_version: button.dataset.grantVersion
-                    });
-                })
-                .then(function (data) {
-                    if (!data || data.success === false) throw new Error((data && data.message) || 'provider_sync_failed');
-                    button.dataset.state = 'success';
-                    button.dataset.registered = String(data.providers_registered || 0);
-                    if (typeof Weline.UI.toast !== 'undefined') Weline.UI.toast.success('<?= __('支付提供商同步成功') ?>');
-                })
-                .catch(function (error) {
-                    button.dataset.state = 'error';
-                    console.error('Payment provider sync failed:', error);
-                    if (typeof Weline.UI.toast !== 'undefined') Weline.UI.toast.error('<?= __('支付提供商同步失败') ?>');
-                })
-                .finally(function () { button.disabled = false; });
-        });
-    }
-
-    function initDragSort() {
-        var list = document.getElementById('payment-method-sort-list');
-        if (!list || list.dataset.canReorder !== '1') return;
-
-        var dragging = null;
-        var saveTimer = null;
-        var saving = false;
-
-        function rows() {
-            return Array.prototype.slice.call(list.querySelectorAll('tr.payment-method-sort-row'));
-        }
-
-        function orderedCodes() {
-            return rows().map(function (row) { return row.dataset.methodCode || ''; }).filter(Boolean);
-        }
-
-        function applySortValues(map) {
-            if (!map || typeof map !== 'object') return;
-            rows().forEach(function (row) {
-                var code = row.dataset.methodCode || '';
-                var cell = row.querySelector('.payment-method-sort-value');
-                if (cell && Object.prototype.hasOwnProperty.call(map, code)) {
-                    cell.textContent = String(map[code]);
-                }
-            });
-        }
-
-        function persistOrder() {
-            if (saving) return;
-            saving = true;
-            list.dataset.sortState = 'pending';
-            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
-                .then(function (api) {
-                    return api.resource('payment').reorderPaymentMethods({
-                        target_scope: list.dataset.targetScope,
-                        expected_grant_version: list.dataset.grantVersion,
-                        ordered_codes: orderedCodes()
-                    });
-                })
-                .then(function (data) {
-                    if (!data || data.success === false) {
-                        throw new Error((data && data.message) || 'reorder_failed');
-                    }
-                    applySortValues(data.sort_orders || {});
-                    list.dataset.sortState = 'success';
-                    if (typeof Weline.UI.toast !== 'undefined') {
-                        Weline.UI.toast.success(data.message || '<?= __('支付方式排序已保存') ?>');
-                    }
-                })
-                .catch(function (error) {
-                    list.dataset.sortState = 'error';
-                    console.error('Payment method reorder failed:', error);
-                    if (typeof Weline.UI.toast !== 'undefined') {
-                        Weline.UI.toast.error('<?= __('支付方式排序保存失败') ?>');
-                    }
-                })
-                .finally(function () { saving = false; });
-        }
-
-        function schedulePersist() {
-            if (saveTimer) clearTimeout(saveTimer);
-            saveTimer = setTimeout(persistOrder, 280);
-        }
-
-        list.addEventListener('dragstart', function (event) {
-            var row = event.target && event.target.closest ? event.target.closest('tr.payment-method-sort-row') : null;
-            if (!row || !list.contains(row)) return;
-            dragging = row;
-            row.classList.add('is-dragging');
-            if (event.dataTransfer) {
-                event.dataTransfer.effectAllowed = 'move';
-                try { event.dataTransfer.setData('text/plain', row.dataset.methodCode || ''); } catch (e) {}
-            }
-        });
-
-        list.addEventListener('dragend', function () {
-            rows().forEach(function (row) {
-                row.classList.remove('is-dragging', 'is-drop-target');
-            });
-            dragging = null;
-            schedulePersist();
-        });
-
-        list.addEventListener('dragover', function (event) {
-            event.preventDefault();
-            var row = event.target && event.target.closest ? event.target.closest('tr.payment-method-sort-row') : null;
-            if (!dragging || !row || row === dragging) return;
-            rows().forEach(function (r) { r.classList.toggle('is-drop-target', r === row); });
-            var rect = row.getBoundingClientRect();
-            var before = (event.clientY - rect.top) < (rect.height / 2);
-            if (before) {
-                list.insertBefore(dragging, row);
-            } else {
-                list.insertBefore(dragging, row.nextSibling);
-            }
-        });
-
-        list.addEventListener('drop', function (event) {
-            event.preventDefault();
-        });
-    }
-
-    document.addEventListener('DOMContentLoaded', function () {
-        initSyncProviders();
-        initDragSort();
-    });
-})();
-</script>

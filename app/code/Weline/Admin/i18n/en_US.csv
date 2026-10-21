@@ -202,9 +202,6 @@ AJAX分配角色,"AJAX assign role"
 确认删除,"Confirm Delete"
 激活用户,"Activate User"
 禁用用户,"Disable User"
-角色归配,"Role Assignment"
-系统,System
-管理员,Administrator
 返回列表,"Back to List"
 选择角色后自动保存，无需手动提交。当前用户无法修改自己的角色。,"Roles are saved automatically after selection. You cannot modify your own role."
 当前角色,"Current Role"
@@ -212,6 +209,10 @@ AJAX分配角色,"AJAX assign role"
 未分配,Unassigned
 （当前登录）,"(Currently logged in)"
 已分配,Assigned
+调整搜索条件后重试，或先在管理员列表新增用户。,调整搜索条件后重试，或先在管理员列表新增用户。
+搜索用户名或邮箱,搜索用户名或邮箱
+系统管理员,系统管理员
+用户名、邮箱与密码用于后台登录，邮箱需唯一。,用户名、邮箱与密码用于后台登录，邮箱需唯一。
 用户名称验证成功,"Username validation successful"
 请输入用户名称,"Please enter username"
 邮箱验证成功,"Email validation successful"
@@ -221,16 +222,15 @@ AJAX分配角色,"AJAX assign role"
 提交,Submit
 插件管理,"Plugin Management"
 查看系统中所有已注册的插件（拦截器），了解函数修改情况,"View all registered plugins (interceptors) in the system to understand function modifications"
-配置文件,"Configuration file"
-插件数,"Number of plugins"
-已启用,Enabled
-涉及模块,"Involved modules"
-搜索插件类、实例类、名称...,"Search Plugin Class, Instance Class, Name..."
-所有状态,"All Statuses"
-所有模块,"All Modules"
 展开全部,"Expand all"
 折叠全部,"Collapse All"
+搜索插件类、实例类、名称...,"Search Plugin Class, Instance Class, Name..."
+清除搜索,"Clear search"
+所有状态,"All Statuses"
+已启用,Enabled
+所有模块,"All Modules"
 暂无插件配置,"No plugin configuration"
+系统中还没有注册任何插件。,系统中还没有注册任何插件。
 个拦截器,interceptor
 插件：,Plugin:
 拦截器名,"Interceptor name"
@@ -238,22 +238,24 @@ AJAX分配角色,"AJAX assign role"
 实例类,"Instance Class"
 排序,Sort
 模块,Module.
+配置文件,"Configuration file"
+插件数,"Number of plugins"
+涉及模块,"Involved modules"
 找到,Found
 个拦截器，来自,"interceptors from"
 个配置文件,"configuration files"
+没有匹配项,"No matches"
+马上就好！,马上就好！
+有兴趣可以一起参与！,有兴趣可以一起参与！
 Cms内容管理,"CMS Content Management"
-内容管理,"Content Management"
 后台可视化建设页面等的内容管理。,"Content management for backend visual page building, etc."
-菜单管理,"Menu Management"
 菜单树,"Menu tree"
+按层级维护后台导航菜单，双击节点可展开或收起。,按层级维护后台导航菜单，双击节点可展开或收起。
 搜索菜单...,"Search Menu..."
+搜索,搜索
 新增菜单,"Add Menu"
 暂无菜单数据,"No menu data"
-菜单代码,"Menu Code"
-资源标识,"Resource identifier"
-自定义,Custom
-添加子菜单,"Add Submenu"
-系统菜单无法删除,"System menu cannot be deleted"
+系统中还没有注册菜单，可新增一个开始配置。,系统中还没有注册菜单，可新增一个开始配置。
 总计,Total
 系统菜单,"System Menu"
 自定义菜单,"Custom Menu"
@@ -261,31 +263,40 @@ Cms内容管理,"CMS Content Management"
 编辑菜单,"Edit Menu"
 菜单名称,"Menu Name"
 菜单标题,"Menu title"
+资源标识,"Resource identifier"
 父级资源,"Parent Resource"
 无（顶级菜单）,"None (top-level menu)"
 动作URL,"Action URL"
 所属模块,"Parent Module"
 图标类,"Icon class"
 启用,Enable
+展开子菜单,"Expand submenu"
+菜单代码,"Menu Code"
+系统,System
+自定义,Custom
+添加子菜单,"Add Submenu"
+系统菜单无法删除,"System menu cannot be deleted"
 获取菜单信息失败,"Failed to fetch menu information"
 请求失败,"Request failed"
 确定要删除菜单,"Are you sure you want to delete the menu"
 吗？,?
+关闭,closure
 系统事件,"System Events"
 查看系统中所有已注册的事件和观察者，方便开发者使用观察者模式订阅系统事件,"View all registered events and observers in the system, making it easy for developers to subscribe to system events using the observer pattern"
-事件类型,"Event type"
-观察者总数,"Total Observers"
 搜索事件名、观察者、实例类...,"Search event name, observer, instance class..."
 所有事件,"All Events"
 暂无事件配置,"No Event Configuration"
+系统中还没有注册任何事件观察者。,系统中还没有注册任何事件观察者。
 个事件,events
 个观察者,observer
 观察者名,"Observer Name"
 共享,Shared
-独占,Exclusive
+事件类型,"Event type"
+观察者总数,"Total Observers"
 个观察者，来自,"observers from"
-模组管理,"Module Management"
-系统中安装的模组。,"Modules installed in the system."
+独占,Exclusive
+暂无模组,暂无模组
+系统中还没有安装任何模组。,系统中还没有安装任何模组。
 模组名,"Module Name"
 命名空间,Namespace
 安装位置,"Installation Location"
@@ -293,20 +304,23 @@ Cms内容管理,"CMS Content Management"
 路由,Route
 版本,Version
 描述,Description
+模组管理,"Module Management"
+系统中安装的模组。,"Modules installed in the system."
 路由管理,"Route management"
 查看和管理系统中所有已注册的路由，支持按模块分组浏览,"View and manage all registered routes in the system, supports browsing grouped by module"
-路由总数,"Total routes"
-"GET 路由","GET route"
-"POST 路由","POST routing"
 搜索路由路径、控制器...,"Search route path, controller..."
 所有方法,"All Methods"
 暂无路由数据,"No routing data"
+系统中还没有注册任何路由。,系统中还没有注册任何路由。
 条路由,"items of routes"
 方法,Method
 路由路径,"Route path"
 控制器信息,"Controller Information"
 控制器,Controller
 设为首页,"Set as Homepage"
+路由总数,"Total routes"
+"GET 路由","GET route"
+"POST 路由","POST routing"
 条路由，来自,"items of routes, from"
 个模块,modules
 后台主导航,"Backend main navigation"
@@ -324,7 +338,6 @@ Cms内容管理,"CMS Content Management"
 网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。,"The website may be undergoing system upgrades, or most of the content is being changed. Our developers are maintaining or upgrading data to provide better services."
 大部分的网站升级活动都只有几分钟甚至几秒钟的时间。,"Most website upgrade activities only take a few minutes or even seconds."
 如果你长期看到这个页面，对网站存在疑惑，请联系：,"If you see this page for a long time and have questions about the website, please contact:"
-关闭,closure
 系统维护,"System maintenance"
 面板,Dashboard
 后台,Backend
@@ -354,6 +367,7 @@ Cms内容管理,"CMS Content Management"
 后台登录,"Backend login"
 "登录 %{name} 管理面板","Login to %{name} Admin Panel"
 安全管理入口,"Security management entrance"
+管理员,Administrator
 请输入管理员账号,"Please enter the admin account"
 验证码,"Verification code"
 请输入验证码,"Please enter the verification code"
@@ -378,6 +392,9 @@ WelineFramework,WelineFramework
 认证设备服务不可用。,"Authenticated device service is unavailable."
 最近访问,"Recently Visited"
 访问最多,"Most Visited"
+角色归配,"Role Assignment"
+内容管理,"Content Management"
+菜单管理,"Menu Management"
 搜索菜单或配置,"Search menu or config"
 搜索菜单或配置…,"Search menu or config…"
 没有匹配的菜单或配置,"No matching menu or config"

@@ -1,3 +1,4 @@
+<css>Weline_Faq::css/backend/faq-admin.css</css>
 <?php
 /**
  * Faq backend listing: pages grouped by website — Weline UI 2.0.
@@ -33,7 +34,7 @@ $statusTone = static function (string $st): string {
     <form method="get" action="<?= $escape($listingUrl) ?>" class="w-cluster" data-align="center" data-wrap="true"
           style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);" data-testid="faq-page-filters">
         <select class="w-select" name="website_id" aria-label="<?= $escape(__('网站')) ?>" data-size="sm"
-                style="width:auto;max-inline-size:16rem;flex:0 1 14rem;">
+                class="faq-filter__select--lg">
             <option value=""><?= $escape(__('全部网站')) ?></option>
             <?php foreach ($websites as $website): ?>
                 <?php if (!is_array($website)) { continue; } ?>
@@ -46,9 +47,9 @@ $statusTone = static function (string $st): string {
         <input class="w-input" type="search" name="search" value="<?= $escape($search) ?>"
                aria-label="<?= $escape(__('搜索')) ?>"
                placeholder="<?= $escape(__('搜索标题/slug')) ?>"
-               data-size="sm" style="width:auto;max-inline-size:16rem;flex:1 1 12rem;">
+               data-size="sm" class="faq-filter__search">
         <select class="w-select" name="status" aria-label="<?= $escape(__('状态')) ?>" data-size="sm"
-                style="width:auto;max-inline-size:10rem;flex:0 1 8rem;">
+                class="faq-filter__select--sm">
             <option value=""><?= $escape(__('全部状态')) ?></option>
             <?php foreach ($statusLabels as $value => $label): ?>
                 <option value="<?= $escape($value) ?>" <?= $status === $value ? 'selected' : '' ?>><?= $escape($label) ?></option>
@@ -61,9 +62,9 @@ $statusTone = static function (string $st): string {
     </form>
 
     <?php if ($siteGroups === []): ?>
-        <div class="w-empty" data-testid="faq-page-empty-sites" style="min-height:max(14rem, calc(100dvh - 16rem));">
+        <div class="w-empty faq-empty" data-testid="faq-page-empty-sites">
             <w:icon name="globe" size="lg"></w:icon>
-            <div style="max-inline-size:24rem;">
+            <div class="faq-empty__body faq-empty__body--wide">
                 <div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-1);"><?= $escape(__('暂无网站')) ?></div>
                 <div class="w-text" data-tone="muted" data-size="sm"><?= $escape(__('请先在 Websites 模块配置站点，然后再管理帮助中心页面。')) ?></div>
             </div>
@@ -97,9 +98,9 @@ $statusTone = static function (string $st): string {
             </div>
 
             <?php if ($pages === []): ?>
-                <div class="w-empty" data-testid="faq-page-empty-site" style="min-height:10rem;">
+                <div class="w-empty faq-empty--compact" data-testid="faq-page-empty-site">
                     <w:icon name="file" size="md"></w:icon>
-                    <div style="max-inline-size:22rem;">
+                    <div class="faq-empty__body">
                         <div class="w-text" data-weight="strong" style="--w-mb:var(--weline-space-1);"><?= $escape(__('该网站暂无帮助文章')) ?></div>
                         <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-3);"><?= $escape(__('新建后可在可视化编辑器中编排 faq 布局内容。')) ?></div>
                         <?php if ($newUrl !== ''): ?>

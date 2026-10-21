@@ -1,0 +1,23 @@
+/**
+ * Weline_Server SSL 证书管理页页面私有布局（批量操作条）。
+ */
+@layer page {
+    .ssl-cert-batch-bar {
+        padding: var(--weline-space-3) var(--weline-space-4);
+        margin-block-end: var(--weline-space-4);
+        border: 1px solid var(--weline-theme-primary);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface);
+        box-shadow: var(--weline-theme-shadow-sm);
+    }
+
+    .ssl-cert-batch-count {
+        color: var(--weline-theme-text-muted);
+        font-size: var(--weline-font-size-sm);
+    }
+
+    .ssl-cert-batch-count strong {
+        color: var(--weline-theme-primary);
+        font-size: var(--weline-font-size-md);
+    }
+}

@@ -1,0 +1,98 @@
+/* Weline B2B 后台页面私有布局/尺寸（Token-only，见后端主题开发标准 §6.2） */
+@layer page {
+    /* 控制中心：挂起订单瀑布卡 */
+    .commerce-control-center .b2b-hang-waterfall {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--weline-space-2);
+        inline-size: 100%;
+        max-inline-size: calc(var(--weline-space-12) * 16);
+    }
+
+    .commerce-control-center .b2b-hang-waterfall .b2b-hang-card {
+        gap: var(--weline-space-2);
+        padding: var(--weline-space-2) var(--weline-space-3);
+    }
+
+    .commerce-control-center .b2b-hang-waterfall .b2b-hang-card[data-severity="danger"] {
+        border-color: var(--weline-theme-danger);
+        box-shadow: inset 3px 0 0 var(--weline-theme-danger);
+    }
+
+    .commerce-control-center .b2b-hang-waterfall .b2b-hang-card[data-severity="warning"] {
+        border-color: var(--weline-theme-warning);
+        box-shadow: inset 3px 0 0 var(--weline-theme-warning);
+    }
+
+    .commerce-control-center .b2b-hang-waterfall .b2b-hang-card[data-severity="info"] {
+        border-color: var(--weline-theme-info);
+        box-shadow: inset 3px 0 0 var(--weline-theme-info);
+    }
+
+    .commerce-control-center .b2b-hang-waterfall .b2b-hang-admin-chat .b2b-order-chat {
+        display: grid;
+        gap: var(--weline-space-2);
+        inline-size: 100%;
+    }
+
+    .commerce-control-center .b2b-hang-waterfall .b2b-hang-admin-chat .b2b-order-chat__toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--weline-space-2);
+    }
+
+    .commerce-control-center .b2b-hang-waterfall .b2b-hang-admin-chat .b2b-order-chat__panel:not([hidden]) {
+        display: grid;
+        gap: var(--weline-space-2);
+        inline-size: 100%;
+        padding: var(--weline-space-2);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface-muted);
+    }
+
+    .b2b-field-grow {
+        flex: 1 1 calc(var(--weline-space-12) * 4);
+    }
+
+    .b2b-hang-tabs {
+        gap: var(--weline-space-2);
+        flex-wrap: wrap;
+        margin-block-end: var(--weline-space-2);
+    }
+
+    /* 控制中心：成员面板 */
+    .b2b-group-members-panel {
+        padding-inline: 0;
+        padding-block-start: var(--weline-space-3);
+        border-block-start: 1px solid var(--weline-theme-border);
+    }
+
+    /* 销售模式配置：隐藏原始 JSON 载荷（仅机器读取，不展示给运营） */
+    [data-testid="b2b-selling-mode-config"] [data-config-key="b2b_default_tier_policy_json"] {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        clip-path: inset(50%);
+        white-space: nowrap;
+        border: 0;
+        opacity: 0;
+        pointer-events: none;
+    }
+}
+
+@layer page {
+    .b2b-field-select {
+        max-inline-size: calc(var(--weline-space-12) * 7);
+    }
+
+    .b2b-scope-toolbar__field {
+        min-inline-size: calc(var(--weline-space-12) * 5);
+        max-inline-size: calc(var(--weline-space-12) * 8);
+    }
+}

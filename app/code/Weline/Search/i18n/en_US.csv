@@ -63,8 +63,8 @@ chart,chart
 暂无匹配商品，可换词或浏览分类,"No matching products — try another keyword or browse categories"
 请输入关键词开始搜索,"Enter a keyword to start searching"
 分类面包屑,"Category breadcrumb"
-展开/收起,"Expand / collapse"
 搜索类型,"Search type"
+展开/收起,"Expand / collapse"
 是,yes
 否,no
 只读诊断,"Read-only diagnostics"
@@ -78,7 +78,6 @@ chart,chart
 影子比对,"shadow comparison"
 保存安全模式,"Save safe mode"
 当前没有记录。,"There are currently no records."
-"搜索管理 · 性能慢日志","Search Management · Slow Performance Logs"
 阈值,Threshold
 时间,Time
 "近 24h","Within the last 24 hours."
@@ -90,7 +89,6 @@ chart,chart
 耗时分布,"Time distribution."
 慢请求列表,"Slow Request List"
 "该 Scope 近期无慢请求","This scope has not experienced any slow requests recently."
-"搜索管理 · 搜索报告","Search Management · Search Reports"
 "近 24 小时","Approximately 24 hours."
 引擎只读,"Read-only engine."
 请求量,"Request volume"
@@ -172,6 +170,8 @@ chart,chart
 显示帮助,"Show help"
 "重建全部 Provider 索引","Rebuild all provider indexes"
 "仅重建 Blog 索引","Rebuild Blog index only"
+"搜索管理 · 性能慢日志","Search Management · Slow Performance Logs"
+"搜索管理 · 搜索报告","Search Management · Search Reports"
 收起悬浮,"Collapse float"
 展开悬浮,"Expand float"
 迷你购物车,迷你购物车

@@ -13,7 +13,7 @@
     <form id="push-form" class="form-horizontal">
         <div class="form-group">
             <label class="control-label"><?= __('选择Feed') ?></label>
-            <select name="feed_id" class="form-control" required>
+            <select name="feed_id" class="w-select" required>
                 <option value=""><?= __('请选择Feed') ?></option>
                 <?php foreach ($feeds as $feed): ?>
                     <option value="<?= $feed['id'] ?>"><?= htmlspecialchars($feed['feed_name']) ?></option>
@@ -40,13 +40,13 @@
         </div>
     </form>
 
-    <div id="push-result" style="display: none; margin-top: 20px;"></div>
+    <div id="push-result" style="display:none;margin-top:var(--weline-space-5);"></div>
 </div>
 
 <!-- SweetAlert2 CSS -->
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
 <!-- SweetAlert2 JS -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+<script defer src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 document.getElementById('push-form').addEventListener('submit', function(e) {
     e.preventDefault();

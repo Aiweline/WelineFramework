@@ -148,7 +148,7 @@
 .weline-product-fbt .wpf-checkbox:checked + .wpf-check-ui {
   background: var(--color-info);
   border-color: var(--color-info);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%23fff' d='M10.1 2.3 4.6 8.5 1.9 5.7l-.9.9 3.6 3.7 6.4-7.2z'/%3E%3C/svg%3E");
+  background-image: url();
   background-size: var(--weline-space-3);
   background-repeat: no-repeat;
   background-position: center;
@@ -279,7 +279,7 @@
   border: var(--border-width-thin) solid var(--color-literal-e85d04);
   border-radius: var(--spacing-5);
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' preserveAspectRatio='none'%3E%3Cpath d='M0 8 Q15 2 30 8 T60 8 T90 8 T120 8' fill='none' stroke='rgba(255,255,255,0.28)' stroke-width='1.5'/%3E%3Cpath d='M0 10 Q15 4 30 10 T60 10 T90 10 T120 10' fill='none' stroke='var(--color-literal-rgba-255-255-255-0-16)' stroke-width='1'/%3E%3C/svg%3E") center 78% / 100% var(--spacing-0_55) no-repeat,
+    url()' stroke-width='1.5'/%3E%3Cpath d='M0 10 Q15 4 30 10 T60 10 T90 10 T120 10' fill='none' stroke='var(--color-literal-rgba-255-255-255-0-16)' stroke-width='1'/%3E%3C/svg%3E") center 78% / 100% var(--spacing-0_55) no-repeat,
     linear-gradient(180deg, var(--color-literal-ffb347) 0%, var(--wpf-cta) 48%, var(--wpf-cta-hover) 100%);
   color: var(--color-bg-primary);
   font-size: var(--token-size-0-84rem);
@@ -288,9 +288,7 @@
   padding: var(--token-size-0-52rem) var(--spacing-0_95);
   cursor: pointer;
   width: 100%;
-  box-shadow:
-    0 var(--spacing-1) var(--token-size-14px) var(--wpf-cta-glow),
-    inset 0 var(--border-width-thin) 0 var(--color-literal-rgba-255-255-255-0-35);
+  box-shadow: var(--weline-shadow-lg);
   animation: wpf-cta-wave-bounce 2.6s ease-in-out infinite;
   transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
 }
@@ -341,7 +339,7 @@
       var(--color-literal-rgba-255-255-255-0-22) var(--size-scrollbar),
       var(--color-literal-rgba-255-255-255-0-22) var(--token-size-7px)
     );
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 8'%3E%3Cpath d='M0 4 Q12.5 0 25 4 T50 4 T75 4 T100 4' fill='none' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E");
+  mask-image: url();
   mask-size: var(--token-size-2-4rem) 100%;
   mask-repeat: repeat-x;
   animation: wpf-cta-wave-lines 3.2s linear infinite;
@@ -349,9 +347,7 @@
 
 .weline-product-fbt .wpf-cta:hover {
   filter: brightness(1.04);
-  box-shadow:
-    0 var(--size-scrollbar) var(--token-size-18px) var(--color-literal-rgba-255-107-0-0-48),
-    inset 0 var(--border-width-thin) 0 var(--color-literal-rgba-255-255-255-0-4);
+  box-shadow: var(--weline-shadow-lg);
 }
 
 .weline-product-fbt .wpf-cta[data-state="loading"],

@@ -4,7 +4,7 @@ $apiBase = (string)($api_base ?? '/rest/v1/platform');
 $escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
 <div class="w-container" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
-    <h1 class="h4" style="--w-mb:var(--weline-space-1);"><?= __('API配置') ?></h1>
+    <h2 class="h4" style="--w-mb:var(--weline-space-1);"><?= __('API配置') ?></h2>
     <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);"><?= __('子站 AppStore 调用的平台 API 入口说明。') ?></div>
     <div class="w-card" style="--w-mb:var(--weline-space-4);">
         <div class="w-card__body">

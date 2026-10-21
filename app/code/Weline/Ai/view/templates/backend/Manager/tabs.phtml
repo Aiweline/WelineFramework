@@ -34,35 +34,6 @@ $styleLabel = $h(__('风格'));
 $customVendorLabel = $h(__('本地供应商'));
 $accountLabel = $h(__('供应商账户'));
 ?>
-<style>
-/* AI 管理 Tab：强制图标+文案横排、垂直居中（不依赖外部 CSS 缓存） */
-.weline-ai-manager-tabs.w-tabs__list {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: stretch;
-    gap: var(--weline-space-1);
-    overflow-x: auto;
-}
-.weline-ai-manager-tabs .w-tabs__tab {
-    display: inline-flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    align-items: center !important;
-    justify-content: center;
-    gap: var(--weline-space-2);
-    white-space: nowrap;
-}
-.weline-ai-manager-tabs .w-tabs__tab > .w-icon,
-.weline-ai-manager-tabs .w-tabs__tab > svg {
-    display: block;
-    flex: 0 0 auto;
-}
-.weline-ai-manager-tabs .w-tabs__tab > span {
-    display: inline;
-    line-height: 1.2;
-}
-</style>
 <nav class="w-tabs__list weline-ai-manager-tabs" data-variant="soft" role="tablist" aria-label="<?= $tabsAriaLabel ?>" style="--w-mb:var(--weline-space-5);">
     <a class="w-tabs__tab" href="@backend-url{'ai/backend/model'}" role="tab" aria-selected="<?= $modelSelected ?>" tabindex="<?= $modelTabIndex ?>">
         <w:icon name="robot"></w:icon>

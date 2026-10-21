@@ -61,7 +61,7 @@ $this->assign('attributes', $attributes);
             <w:icon name="tag" size="lg" />
         </div>
         <div class="w-eav-attribute-list__hero-copy">
-            <h1><lang>属性管理</lang></h1>
+            <h2 class="w-text" data-weight="strong" data-size="xl" style="--w-mb:var(--weline-space-1);"><lang>属性管理</lang></h2>
             <p>
                 <lang>管理实体的属性定义、启用状态与本地化名称</lang>
                 <notempty name="entity">
@@ -242,7 +242,7 @@ $this->assign('attributes', $attributes);
             </div>
             <div class="modal-body">
                 <h5><lang>配置属性的配置项</lang></h5>
-                <div class="table-responsive">
+                <div class="w-table-wrap">
                     <table class="table table-sm table-hover align-middle">
                         <thead>
                         <tr>
@@ -271,56 +271,41 @@ $this->assign('attributes', $attributes);
 </div>
 
 <js:part>
-(function() {
+(function () {
     'use strict';
 
-    $('#optionConfig').on('show.bs.modal', function (event) {
-        if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.show();
-        var button = event.relatedTarget;
-        var attribute_code = button.getAttribute('data-code');
-        var eav_entity_id = button.getAttribute('data-eav_entity_id');
-        var url = '@backend-url("*/backend/attribute/option/search")?eav_entity_id={eav_entity_id}&attribute_code={attribute_code}'
-            .replace('{eav_entity_id}', eav_entity_id).replace('{attribute_code}', attribute_code);
-        var req = bqAdmin['eav_admin'](url, { silent: true });
-        req.then(function(res) {
-            var resData = (res && res.data) || res;
-            var attributeOption = $('#attributeOption');
-            attributeOption.empty();
-            var options = (resData && resData['option']) || resData;
-            if (options && typeof options === 'object') {
-                for (var opt in options) {
-                    attributeOption.append('');
-                }
+    document.addEventListener('click', function (event) {
+        var trigger = event.target.closest('.ajax-delete');
+        if (!trigger) {
+            return;
+        }
+        event.preventDefault();
+        var url = trigger.getAttribute('data-href');
+        if (!url) {
+            return;
+        }
+        window.Weline.UI.dialog.confirm('@lang{确认删除}').then(function (confirmed) {
+            if (!confirmed) {
+                return;
             }
-        }).catch(function() {}).finally(function() { if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.hide(); });
-    });
-
-    $('.ajax-delete').on('click', function (e) {
-        e.preventDefault();
-        var self = this;
-        Swal.fire({
-            title: '<lang>确认删除</lang>',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#3085d6',
-            cancelButtonColor: '#d33',
-            confirmButtonText: '<lang>确认</lang>',
-            cancelButtonText: '<lang>取消</lang>',
-            reverseButtons: true
-        }).then(function(result) {
-            if (result.isConfirmed) {
-                if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.show();
-                var delUrl = $(self).data('href');
-                var req = bqAdmin['eav_admin'](delUrl, { silent: true });
-                req.then(function(res) {
-                    var data = (res && res.data) || res;
-                    if (data && data['code'] == 1) {
-                        if (typeof Swal !== 'undefined') {
-                            Swal.fire({ title: '<lang>删除成功</lang>', icon: 'success', timer: 2000, confirmButtonColor: '#3085d6', confirmButtonText: '<lang>确认</lang>' }).then(function() { location.reload(); });
-                        } else { location.reload(); }
+            if (window.Weline.UI.loading && typeof window.Weline.UI.loading.show === 'function') {
+                window.Weline.UI.loading.show();
+            }
+            var req = window.bqAdmin['eav_admin'](url, { silent: true });
+            req.then(function (res) {
+                var data = (res && res.data) || res || {};
+                if (data && (data.code == 1 || data.success === true)) {
+                    if (window.Weline.UI.toast && typeof window.Weline.UI.toast.success === 'function') {
+                        window.Weline.UI.toast.success('@lang{删除成功}');
                     }
-                }).catch(function() {}).finally(function() { if (window.Weline && Weline.UI && Weline.UI.loading) Weline.UI.loading.hide(); });
-            }
+                    window.setTimeout(function () { window.location.reload(); }, 800);
+                }
+            }).catch(function () {
+            }).finally(function () {
+                if (window.Weline.UI.loading && typeof window.Weline.UI.loading.hide === 'function') {
+                    window.Weline.UI.loading.hide();
+                }
+            });
         });
     });
 })();

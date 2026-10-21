@@ -42,14 +42,14 @@ $renderedTemplateContent = trim($rawContent) === '' && $contentTemplate !== ''
             padding: var(--weline-layout-spacing-2xl) var(--weline-layout-content-padding-inline) var(--weline-layout-spacing-3xl);
         }
         .w-theme-promotion-bottom:not(:has(*)) { display: none; }
-        .w-theme-promotion-empty { position: relative; overflow: hidden; display: grid; gap: 1rem; padding: clamp(2rem, 6vw, 4.75rem); border: 1px solid color-mix(in srgb, var(--weline-layout-text-primary) 14%, transparent); border-radius: 1rem; background: linear-gradient(135deg, color-mix(in srgb, var(--weline-layout-surface-primary) 94%, #d8ccb7), var(--weline-layout-surface-primary)); box-shadow: 0 1.25rem 4rem rgba(30, 27, 22, .08); }
+        .w-theme-promotion-empty { position: relative; overflow: hidden; display: grid; gap: var(--weline-space-4); padding: clamp(var(--weline-space-8), 6vw, 4.75rem); border: var(--border-width-thin) solid color-mix(in srgb, var(--weline-layout-text-primary) 14%, transparent); border-radius: var(--border-radius-2xl); background: linear-gradient(135deg, color-mix(in srgb, var(--weline-layout-surface-primary) 94%, #d8ccb7), var(--weline-layout-surface-primary)); box-shadow: var(--weline-shadow-md); }
         .w-theme-promotion-empty::after { content: ''; position: absolute; inset: auto -8% -45% auto; width: min(26rem, 55vw); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(131, 43, 36, .11), transparent 68%); pointer-events: none; }
-        .w-theme-promotion-empty__eyebrow { margin: 0; color: #83302a; font-size: .78rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
-        .w-theme-promotion-empty h1 { margin: 0; max-width: 18ch; font-family: "Noto Serif SC", "Songti SC", serif; font-size: clamp(1.8rem, 4vw, 3.2rem); line-height: 1.2; font-weight: 600; }
+        .w-theme-promotion-empty__eyebrow { margin: 0; color: var(--color-text-muted); font-size: .78rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+        .w-theme-promotion-empty h1 { margin: 0; max-width: 18ch; font-family: "Noto Serif SC", "Songti SC", serif; font-size: clamp(var(--font-size-3xl), 4vw, 3.2rem); line-height: 1.2; font-weight: 600; }
         .w-theme-promotion-empty p { margin: 0; max-width: 42rem; color: var(--weline-layout-text-secondary); line-height: 1.8; }
         .w-theme-promotion-empty__actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .25rem; }
-        .w-theme-promotion-empty__link { display: inline-flex; min-height: 2.75rem; align-items: center; justify-content: center; padding-inline: 1.2rem; border: 1px solid currentColor; border-radius: 999px; color: var(--weline-layout-text-primary); text-decoration: none; font-weight: 700; }
-        .w-theme-promotion-empty__link--primary { border-color: #83302a; background: #83302a; color: #fff; }
+        .w-theme-promotion-empty__link { display: inline-flex; min-height: var(--control-height-lg); align-items: center; justify-content: center; padding-inline: var(--spacing-1_2); border: var(--border-width-thin) solid currentColor; border-radius: var(--radius-full); color: var(--weline-layout-text-primary); text-decoration: none; font-weight: 700; }
+        .w-theme-promotion-empty__link--primary { border-color: #83302a; background: var(--color-danger); color: var(--color-text-light); }
     </style>
     <w:hook>seo::head</w:hook>
 </head>
@@ -80,12 +80,12 @@ $renderedTemplateContent = trim($rawContent) === '' && $contentTemplate !== ''
                             <?= $renderedTemplateContent ?>
                         <?php else: ?>
                             <section weline-code="theme-promotion-empty" class="w-theme-promotion-empty" data-testid="storefront-promotion-empty" aria-labelledby="promotion-empty-title">
-                                <p class="w-theme-promotion-empty__eyebrow"><?= $escape(__('时令新章')) ?></p>
-                                <h1 id="promotion-empty-title"><?= $escape(__('新的活动正在筹备')) ?></h1>
-                                <p><?= $escape(__('当前没有可展示的限时活动。您仍可浏览在售商品、配饰与本季新作；活动上线后会在此处集中呈现。')) ?></p>
+                                <p class="w-theme-promotion-empty__eyebrow"><lang>时令新章</lang></p>
+                                <h1 id="promotion-empty-title"><lang>新的活动正在筹备</lang></h1>
+                                <p><lang>当前没有可展示的限时活动。您仍可浏览在售商品、配饰与本季新作；活动上线后会在此处集中呈现。</lang></p>
                                 <div class="w-theme-promotion-empty__actions">
-                                    <a class="w-theme-promotion-empty__link w-theme-promotion-empty__link--primary" href="@url{'categories'}"><?= $escape(__('浏览全部商品')) ?></a>
-                                    <a class="w-theme-promotion-empty__link" href="@url{'faq'}"><?= $escape(__('查看购物帮助')) ?></a>
+                                    <a class="w-theme-promotion-empty__link w-theme-promotion-empty__link--primary" href="@url{'categories'}"><lang>浏览全部商品</lang></a>
+                                    <a class="w-theme-promotion-empty__link" href="@url{'faq'}"><lang>查看购物帮助</lang></a>
                                 </div>
                             </section>
                         <?php endif; ?>

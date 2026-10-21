@@ -1,3 +1,4 @@
+<css>Weline_Dropship::css/backend/dropship-admin.css</css>
 <?php
 /**
  * 售后异常：对齐 Channel/Order 的 w-card 层次；空态给出下一步。
@@ -23,7 +24,7 @@ $filtered = $pf !== '';
         <form method="get" class="w-cluster" data-align="end" data-wrap="true"
               data-testid="dropship-aftersale-filter"
               style="--w-gap:var(--weline-space-2);margin:0;">
-          <div class="w-field" style="min-width:min(100%,14rem);flex:0 1 14rem;margin:0;">
+          <div class="w-field dropship-filter__field">
             <label class="w-label" for="dropship-aftersale-provider"><?= __('平台代码') ?></label>
             <div class="w-field__control">
               <input class="w-input" id="dropship-aftersale-provider" name="provider" data-size="sm"
@@ -47,12 +48,12 @@ $filtered = $pf !== '';
     </div>
     <div class="w-card__body">
       <?php if ($rows === []): ?>
-        <div class="w-empty" style="min-height:14rem;" data-testid="dropship-aftersale-empty">
+        <div class="w-empty dropship-empty--lg" data-testid="dropship-aftersale-empty">
           <w:icon name="inbox" size="lg"></w:icon>
           <div class="w-text" data-weight="strong">
             <?= $filtered ? __('该平台暂无售后记录') : __('暂无售后记录') ?>
           </div>
-          <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);max-inline-size:28rem;text-align:center;">
+          <div class="w-text dropship-empty__hint" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);">
             <?= $filtered
               ? __('换一个平台代码试试，或清除筛选查看全部。推单失败、跳过或无法履约终态会出现在此。')
               : __('目前没有需要处理的推单失败。有异常时会出现在此；也可先核对履约订单或退款开关。') ?>

@@ -13,15 +13,15 @@ $dialogMessages = [
 ?>
 <div class="delivery-address-list">
     <div class="page-header" style="--w-mb:var(--weline-space-6);">
-        <h2><?= __('收货地址管理') ?></h2>
+        <h2><lang>收货地址管理</lang></h2>
         <a href="@url{'shipping/delivery/form'}" class="w-button" data-tone="primary">
-            <w:icon name="plus" size="sm"></w:icon> <?= __('新增地址') ?>
+            <w:icon name="plus" size="sm"></w:icon> <lang>新增地址</lang>
         </a>
     </div>
 
     <?php if (empty($addresses)): ?>
         <div class="w-alert" data-tone="info">
-            <w:icon name="info" size="sm"></w:icon> <?= __('暂无地址，请添加收货地址') ?>
+            <w:icon name="info" size="sm"></w:icon> <lang>暂无地址，请添加收货地址</lang>
         </div>
     <?php else: ?>
         <div class="address-grid">
@@ -30,28 +30,28 @@ $dialogMessages = [
                     <div class="address-header">
                         <h4><?= htmlspecialchars($address->getData('name')) ?></h4>
                         <?php if ($address->isDefault()): ?>
-                            <span class="w-badge" data-w-background="primary"><?= __('默认') ?></span>
+                            <span class="w-badge" data-w-background="primary"><lang>默认</lang></span>
                         <?php endif; ?>
                     </div>
                     <div class="address-content">
-                        <p><strong><?= __('收货人') ?>:</strong> <?= htmlspecialchars($address->getData('contact_name')) ?></p>
-                        <p><strong><?= __('电话') ?>:</strong> <?= htmlspecialchars($address->getData('contact_phone')) ?></p>
-                        <p><strong><?= __('地址') ?>:</strong> <?= htmlspecialchars($address->getFullAddress()) ?></p>
+                        <p><strong><lang>收货人</lang>:</strong> <?= htmlspecialchars($address->getData('contact_name')) ?></p>
+                        <p><strong><lang>电话</lang>:</strong> <?= htmlspecialchars($address->getData('contact_phone')) ?></p>
+                        <p><strong><lang>地址</lang>:</strong> <?= htmlspecialchars($address->getFullAddress()) ?></p>
                         <?php if ($address->getData('postal_code')): ?>
-                            <p><strong><?= __('邮编') ?>:</strong> <?= htmlspecialchars($address->getData('postal_code')) ?></p>
+                            <p><strong><lang>邮编</lang>:</strong> <?= htmlspecialchars($address->getData('postal_code')) ?></p>
                         <?php endif; ?>
                     </div>
                     <div class="address-actions">
                         <a href="@url{'shipping/delivery/form'|['id' => $address->getId()]}" class="w-button" data-tone="primary" data-variant="outline" data-size="sm">
-                            <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
+                            <w:icon name="edit" size="sm"></w:icon> <lang>编辑</lang>
                         </a>
                         <?php if (!$address->isDefault()): ?>
                             <button type="button" class="w-button set-default-btn" data-id="<?= $address->getId() ?>" data-tone="success" data-variant="outline" data-size="sm">
-                                <w:icon name="star" size="sm"></w:icon> <?= __('设为默认') ?>
+                                <w:icon name="star" size="sm"></w:icon> <lang>设为默认</lang>
                             </button>
                         <?php endif; ?>
                         <button type="button" class="w-button delete-btn" data-id="<?= $address->getId() ?>" data-tone="danger" data-variant="outline" data-size="sm">
-                            <w:icon name="trash" size="sm"></w:icon> <?= __('删除') ?>
+                            <w:icon name="trash" size="sm"></w:icon> <lang>删除</lang>
                         </button>
                     </div>
                 </div>
@@ -179,9 +179,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     showAddressError(data.message); /*
                         Weline.UI.dialog.request({
                             tone: 'danger',
-                            title: '<?= __('操作失败') ?>',
+                            title: '<lang>操作失败</lang>',
                             message: data.message,
-                            confirmLabel: '<?= __('确定') ?>'
+                            confirmLabel: '<lang>确定</lang>'
                         });
                     } else {
                         console.error(data.message); */
@@ -210,9 +210,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     showAddressError(data.message); /*
                         Weline.UI.dialog.request({
                             tone: 'danger',
-                            title: '<?= __('操作失败') ?>',
+                            title: '<lang>操作失败</lang>',
                             message: data.message,
-                            confirmLabel: '<?= __('确定') ?>'
+                            confirmLabel: '<lang>确定</lang>'
                         });
                     } else {
                         console.error(data.message); */
@@ -228,7 +228,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <style>
 .delivery-address-list {
-    padding: 20px;
+    padding: var(--spacing-5);
 }
 .page-header {
     display: flex;
@@ -238,31 +238,31 @@ document.addEventListener('DOMContentLoaded', function() {
 .address-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
+    gap: var(--spacing-5);
+    margin-top: var(--spacing-5);
 }
 .address-card {
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 20px;
-    background: #fff;
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-5);
+    background: var(--color-bg-primary);
 }
 .address-card.default-address {
     border-color: #0d6efd;
-    background: #f0f8ff;
+    background: var(--color-bg-panel);
 }
 .address-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 15px;
+    margin-bottom: var(--spacing-0_95);
 }
 .address-content p {
-    margin: 8px 0;
+    margin: var(--spacing-2) 0;
 }
 .address-actions {
-    margin-top: 15px;
+    margin-top: var(--spacing-0_95);
     display: flex;
-    gap: 10px;
+    gap: var(--spacing-2_5);
 }
 </style>

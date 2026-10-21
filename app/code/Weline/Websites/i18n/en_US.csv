@@ -1954,8 +1954,6 @@ Windows,Windows
 返回网站列表,"Return to website list"
 授权网站,"Authorized website"
 授权来源,"Authorized source"
-一站式配置订单,"One-stop configuration order"
-配置订单,"Configure order"
 搜索域名,"Search Domain"
 搜索,Search
 重置,Reset
@@ -3358,6 +3356,8 @@ download,download
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","Processing completed: %d illegal records"
+一站式配置订单,"One-stop configuration order"
+配置订单,"Configure order"
 语种成员与排序已保存,语种成员与排序已保存
 网站层无「恢复继承」；请直接编辑关联语种,网站层无「恢复继承」；请直接编辑关联语种
 已恢复继承上级语种,已恢复继承上级语种

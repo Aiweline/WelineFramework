@@ -1,180 +1,218 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Theme\Model\WelineTheme $theme */
-/**@var array $frontendPartials */
-/**@var array $backendPartials */
-/**@var array $frontendConfig */
-/**@var array $backendConfig */
-?>
-<div class="theme-partials-config">
-    <div class="page-header">
-        <h1><?= __('主题 Partials 配置') ?></h1>
-        <p class="text-muted"><?= __('主题：%{name}', ['name' => $theme->getName()]) ?></p>
+/**
+ * 主题 Partials 配置（内容模板）
+ *
+ * 页面骨架（main / h1 / 面包屑）由 backend layout + partials/layout/main-content 统一输出。
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array|\Weline\Theme\Model\WelineTheme $theme
+ * @var array<string, list<string>> $frontendPartials
+ * @var array<string, list<string>> $backendPartials
+ * @var array<string, string> $frontendConfig
+ * @var array<string, string> $backendConfig
+ */
+$themeData = is_array($theme ?? null)
+    ? $theme
+    : (is_object($theme ?? null) && method_exists($theme, 'getData') ? (array)$theme->getData() : []);
+$themeId = (int)($themeData['id'] ?? 0);
+$themeName = trim((string)($themeData['name'] ?? ''));
+$h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$frontendPartials = is_array($frontendPartials ?? null) ? $frontendPartials : [];
+$backendPartials = is_array($backendPartials ?? null) ? $backendPartials : [];
+$frontendConfig = is_array($frontendConfig ?? null) ? $frontendConfig : [];
+$backendConfig = is_array($backendConfig ?? null) ? $backendConfig : [];
+
+$renderPartialFieldset = static function (string $area, array $partials, array $config) use ($h): void {
+    if ($partials === []) {
+        ?>
+        <div class="w-empty">
+            <span class="w-empty__icon"><w:icon name="layout" size="lg"></w:icon></span>
+            <p class="w-empty__title"><?= $h(__($area === 'backend' ? '该主题暂无后端 partials 选项' : '该主题暂无前端 partials 选项')) ?></p>
+            <div class="w-empty__actions">
+                <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" onclick="location.reload()">
+                    <w:icon name="refresh" size="sm"></w:icon> <?= $h(__('刷新')) ?>
+                </button>
+            </div>
+        </div>
+        <?php
+        return;
+    }
+    ?>
+    <div class="w-stack">
+        <?php foreach ($partials as $type => $options): ?>
+            <?php
+            $type = (string)$type;
+            $options = is_array($options) ? $options : [];
+            $fieldId = 'partial-' . $area . '-' . preg_replace('/[^A-Za-z0-9_-]/', '-', $type);
+            $current = (string)($config[$type] ?? 'default');
+            ?>
+            <div class="w-field">
+                <label class="w-field__label" for="<?= $h($fieldId) ?>"><?= $h(ucfirst($type)) ?></label>
+                <select
+                    name="<?= $h($area . '_partials[' . $type . ']') ?>"
+                    id="<?= $h($fieldId) ?>"
+                    class="w-select"
+                    data-area="<?= $h($area) ?>"
+                    data-type="<?= $h($type) ?>"
+                >
+                    <?php foreach ($options as $option): ?>
+                        <?php $option = (string)$option; ?>
+                        <option value="<?= $h($option) ?>" <?= $current === $option ? 'selected' : '' ?>>
+                            <?= $h(ucfirst($option)) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        <?php endforeach; ?>
     </div>
+    <?php
+};
+?>
+<div class="w-stack theme-partials-config">
+    <section class="w-card" data-testid="theme-partials-config">
+        <header class="w-card__header">
+            <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                <h2 class="w-card__title"><?= $h(__('主题 Partials 配置')) ?></h2>
+                <?php if ($themeName !== ''): ?>
+                    <p class="w-text" data-tone="muted" data-size="sm">
+                        <?= $h(__('主题：%{name}', ['name' => $themeName])) ?>
+                    </p>
+                <?php endif; ?>
+            </div>
+        </header>
 
-    <w:form id="partials-config-form" method="post" action="@url{'theme/backend/config/partials/save'}">
-        <input type="hidden" name="theme_id" value="<?= $theme->getId() ?>" id="theme-id">
-        
-        <div class="row">
-            <!-- 前端配置 -->
-            <div class="col-md-6">
-                <div class="card" id="frontend-config-card">
-                    <div class="card-header">
-                        <h3><?= __('前端 Partials') ?></h3>
+        <div class="w-card__body">
+            <w:form id="partials-config-form" method="post" action="@url{'theme/backend/config/partials/save'}">
+                <input type="hidden" name="theme_id" value="<?= $themeId ?>" id="theme-id">
+
+                <div class="w-grid">
+                    <div class="w-stack" style="--w-span:6;">
+                        <h3 class="w-text" data-size="md" data-weight="strong"><?= $h(__('前端 Partials')) ?></h3>
+                        <div class="w-stack" id="frontend-config-card" data-config-area="frontend">
+                            <?php $renderPartialFieldset('frontend', $frontendPartials, $frontendConfig); ?>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <?php if (empty($frontendPartials)): ?>
-                            <p class="text-muted"><?= __('该主题暂无前端 partials 选项') ?></p>
-                        <?php else: ?>
-                            <?php foreach ($frontendPartials as $type => $options): ?>
-                                <div class="form-group mb-3">
-                                    <label for="partial-frontend-<?= $type ?>"><?= ucfirst($type) ?></label>
-                                    <select name="frontend_partials[<?= $type ?>]" id="partial-frontend-<?= $type ?>" class="form-control" data-area="frontend" data-type="<?= $type ?>">
-                                        <?php foreach ($options as $option): ?>
-                                            <option value="<?= htmlspecialchars($option) ?>" 
-                                                    <?= ($frontendConfig[$type] ?? 'default') === $option ? 'selected' : '' ?>>
-                                                <?= ucfirst($option) ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
+                    <div class="w-stack" style="--w-span:6;">
+                        <h3 class="w-text" data-size="md" data-weight="strong"><?= $h(__('后端 Partials')) ?></h3>
+                        <div class="w-stack" id="backend-config-card" data-config-area="backend">
+                            <?php $renderPartialFieldset('backend', $backendPartials, $backendConfig); ?>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- 后端配置 -->
-            <div class="col-md-6">
-                <div class="card" id="backend-config-card">
-                    <div class="card-header">
-                        <h3><?= __('后端 Partials') ?></h3>
-                    </div>
-                    <div class="card-body">
-                        <?php if (empty($backendPartials)): ?>
-                            <p class="text-muted"><?= __('该主题暂无后端 partials 选项') ?></p>
-                        <?php else: ?>
-                            <?php foreach ($backendPartials as $type => $options): ?>
-                                <div class="form-group mb-3">
-                                    <label for="partial-backend-<?= $type ?>"><?= ucfirst($type) ?></label>
-                                    <select name="backend_partials[<?= $type ?>]" id="partial-backend-<?= $type ?>" class="form-control" data-area="backend" data-type="<?= $type ?>">
-                                        <?php foreach ($options as $option): ?>
-                                            <option value="<?= htmlspecialchars($option) ?>" 
-                                                    <?= ($backendConfig[$type] ?? 'default') === $option ? 'selected' : '' ?>>
-                                                <?= ucfirst($option) ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </div>
+                <div class="w-cluster" data-justify="end" style="--w-mt:var(--weline-space-6);">
+                    <a href="@url{'theme/backend'}" class="w-button" data-tone="neutral" data-variant="outline">
+                        <?= $h(__('返回')) ?>
+                    </a>
+                    <button type="submit" class="w-button" data-tone="primary">
+                        <w:icon name="check" size="sm"></w:icon> <?= $h(__('保存配置')) ?>
+                    </button>
                 </div>
-            </div>
+            </w:form>
         </div>
-
-        <div class="form-actions mt-4">
-            <button type="submit" class="btn btn-primary"><?= __('保存配置') ?></button>
-            <a href="@url{'theme/backend/index'}" class="btn btn-secondary"><?= __('返回') ?></a>
-        </div>
-    </w:form>
+    </section>
 </div>
 
-<!-- SweetAlert2 CSS -->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
 <script>
-(function(g){if(g.WelineThemeBinQuery)return;g.WelineThemeBinQuery={request:function(url,options){options=options||{};var method=String(options.method||'GET').toUpperCase();var body='';if(options.body!=null){if(typeof options.body==='string')body=options.body;else if(typeof FormData!=='undefined'&&options.body instanceof FormData){var p=new URLSearchParams();options.body.forEach(function(v,k){if(!(typeof File!=='undefined'&&v instanceof File))p.append(k,String(v));});body=p.toString();}else{try{body=JSON.stringify(options.body);}catch(e){body='';}}}var run=function(api){return api.resource('theme').editorRequest({url:url,method:method,headers:options.headers||{},body:body}).then(function(data){return (function(d){var b=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);return (b&&typeof b.wrapAdminBridgeResult==='function')?b.wrapAdminBridgeResult(d):d;})(data);});};if(g.Weline&&g.Weline.load)return g.Weline.load('api').then(run);return Promise.resolve(run(g.Weline.Api));}};})(window);
-</script>
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-<script>
-// 分别处理前端和后端配置的保存
-document.getElementById('partials-config-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const themeId = document.getElementById('theme-id').value;
-    
-    // 收集前端配置
-    const frontendPartials = {};
-    const frontendSelects = document.querySelectorAll('#frontend-config-card select[data-area="frontend"]');
-    frontendSelects.forEach(select => {
-        const type = select.getAttribute('data-type');
-        frontendPartials[type] = select.value;
-    });
-    
-    // 收集后端配置
-    const backendPartials = {};
-    const backendSelects = document.querySelectorAll('#backend-config-card select[data-area="backend"]');
-    backendSelects.forEach(select => {
-        const type = select.getAttribute('data-type');
-        backendPartials[type] = select.value;
-    });
-    
-    // 保存前端配置
-    const frontendData = new FormData();
-    frontendData.append('theme_id', themeId);
-    frontendData.append('area', 'frontend');
-    Object.keys(frontendPartials).forEach(key => {
-        frontendData.append(`partials[${key}]`, frontendPartials[key]);
-    });
-    
-    // 保存后端配置
-    const backendData = new FormData();
-    backendData.append('theme_id', themeId);
-    backendData.append('area', 'backend');
-    Object.keys(backendPartials).forEach(key => {
-        backendData.append(`partials[${key}]`, backendPartials[key]);
-    });
-    
-    var url = '@url{'theme/backend/config/partials/save'}';
-    var req = WelineThemeBinQuery.request(url, { method: 'POST', body: frontendData });
-    req.then(function(res) {
-        var data = (res && res.data) || res;
-        if (data.status === 'success') {
-            var req2 = WelineThemeBinQuery.request(url, { method: 'POST', body: backendData });
-            return req2.then(function(r) { return (r && r.data) || r; });
-        } else {
-            throw new Error(data.message || '<?= __('保存失败') ?>');
-        }
-    }).then(function(data) {
-        if (data.status === 'success') {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'success',
-                    title: '<?= __('成功') ?>',
-                    text: '<?= __('配置保存成功') ?>',
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => location.reload());
-            } else {
-                console.log('<?= __('配置保存成功') ?>');
-                location.reload();
-            }
-        } else {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('保存失败') ?>',
-                    text: data.message || '<?= __('保存失败') ?>',
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error(data.message || '<?= __('保存失败') ?>');
-            }
-        }
-    }).catch(error => {
-        console.error('Error:', error);
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'error',
-                title: '<?= __('保存失败') ?>',
-                text: error.message,
-                confirmButtonText: '<?= __('确定') ?>'
-            });
-        } else {
-            console.error('<?= __('保存失败') ?>: ' + error.message);
-        }
-    });
-});
-</script>
+(function () {
+    'use strict';
 
+    // 页面级初始化：Partials 配置保存（后台 admin bridge；通知走 Weline.UI.toast）。
+    (function (g) {
+        if (g.WelineThemeBinQuery) return;
+        g.WelineThemeBinQuery = {
+            request: function (url, options) {
+                options = options || {};
+                var method = String(options.method || 'GET').toUpperCase();
+                var body = '';
+                if (options.body != null) {
+                    if (typeof options.body === 'string') {
+                        body = options.body;
+                    } else if (typeof FormData !== 'undefined' && options.body instanceof FormData) {
+                        var p = new URLSearchParams();
+                        options.body.forEach(function (v, k) {
+                            if (!(typeof File !== 'undefined' && v instanceof File)) p.append(k, String(v));
+                        });
+                        body = p.toString();
+                    } else {
+                        try { body = JSON.stringify(options.body); } catch (e) { body = ''; }
+                    }
+                }
+                var run = function (api) {
+                    return api.resource('theme').editorRequest({ url: url, method: method, headers: options.headers || {}, body: body })
+                        .then(function (data) {
+                            var b = g.WelineApiBusiness || (g.Weline && g.Weline.ApiBusiness);
+                            return (b && typeof b.wrapAdminBridgeResult === 'function') ? b.wrapAdminBridgeResult(data) : data;
+                        });
+                };
+                if (g.Weline && g.Weline.load) return g.Weline.load('api').then(run);
+                return Promise.resolve(run(g.Weline.Api));
+            }
+        };
+    })(window);
+
+    function notify(type, message) {
+        var ui = window.Weline && window.Weline.UI;
+        if (ui && ui.toast && typeof ui.toast[type] === 'function') {
+            ui.toast[type](message);
+            return;
+        }
+        console[type === 'error' ? 'error' : 'log'](message);
+    }
+
+    var form = document.getElementById('partials-config-form');
+    if (!form) return;
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        var themeIdInput = document.getElementById('theme-id');
+        var themeId = themeIdInput ? themeIdInput.value : '';
+        var saveBtn = form.querySelector('button[type="submit"]');
+        var originalBtnHtml = saveBtn ? saveBtn.innerHTML : '';
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="w-spinner" data-size="sm" aria-hidden="true"></span>';
+        }
+
+        function collect(area) {
+            var container = document.getElementById(area + '-config-card');
+            var data = new FormData();
+            data.append('theme_id', themeId);
+            data.append('area', area);
+            if (!container) return data;
+            container.querySelectorAll('select[data-type]').forEach(function (select) {
+                data.append('partials[' + select.getAttribute('data-type') + ']', select.value);
+            });
+            return data;
+        }
+
+        var saveUrl = '@url{'theme/backend/config/partials/save'}';
+        WelineThemeBinQuery.request(saveUrl, { method: 'POST', body: collect('frontend') })
+            .then(function (res) {
+                var data = (res && res.data !== undefined) ? res.data : res;
+                if (!data || data.status !== 'success') {
+                    throw new Error((data && data.message) || '<?= addslashes((string)__('保存失败')) ?>');
+                }
+                return WelineThemeBinQuery.request(saveUrl, { method: 'POST', body: collect('backend') });
+            })
+            .then(function (res) {
+                var data = (res && res.data !== undefined) ? res.data : res;
+                if (data && data.status === 'success') {
+                    notify('success', '<?= addslashes((string)__('配置保存成功')) ?>');
+                    setTimeout(function () { location.reload(); }, 600);
+                    return;
+                }
+                throw new Error((data && data.message) || '<?= addslashes((string)__('保存失败')) ?>');
+            })
+            .catch(function (error) {
+                notify('error', (error && error.message) || '<?= addslashes((string)__('保存失败')) ?>');
+            })
+            .finally(function () {
+                if (!saveBtn) return;
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalBtnHtml;
+            });
+    });
+})();
+</script>

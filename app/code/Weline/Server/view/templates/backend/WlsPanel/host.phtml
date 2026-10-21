@@ -1,100 +1,10 @@
+<css>Weline_Server::css/backend/wls-panel-host.css</css>
 <?php
 /** @var \Weline\Framework\View\Template $this */
 $frameUrl = \trim((string)$this->getData('wlsPanelHostFrameUrl'));
 $standaloneUrl = \trim((string)$this->getData('wlsPanelHostStandaloneUrl'));
 $escapeHtml = static fn (mixed $value): string => \htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
-<style>
-.wls-panel-host-page {
-    display: flex;
-    flex-direction: column;
-    gap: var(--backend-spacing-md, var(--weline-space-3, 0.75rem));
-    min-height: calc(100vh - 10rem);
-}
-.wls-panel-host-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--backend-spacing-sm, var(--weline-space-2, 0.5rem));
-}
-.wls-panel-host-toolbar__meta {
-    display: flex;
-    flex-direction: column;
-    gap: var(--weline-space-1, 0.25rem);
-    min-width: 0;
-}
-.wls-panel-host-toolbar__actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--backend-spacing-sm, var(--weline-space-2, 0.5rem));
-}
-.wls-panel-host-shell {
-    position: relative;
-    flex: 1 1 auto;
-    min-height: clamp(28rem, 70vh, 56rem);
-    border: 1px solid var(--backend-color-border-default, var(--color-border, #d8e2ea));
-    border-radius: var(--backend-border-radius-md, var(--weline-radius-md, 0.5rem));
-    background: var(--backend-color-card-bg, var(--color-surface, #fff));
-    overflow: hidden;
-}
-.wls-panel-host-shell[data-mode="float"] {
-    position: fixed;
-    inset: 0;
-    z-index: 13000;
-    min-height: 100vh;
-    border-radius: 0;
-    border: 0;
-    display: flex;
-    flex-direction: column;
-    background: var(--backend-color-card-bg, var(--color-surface, #fff));
-    box-shadow: none;
-}
-/* 全屏浮层期间隐藏建站助手 FAB，避免压住面板操作 */
-body:has(.wls-panel-host-shell[data-mode="float"]) #ssa-float-root {
-    visibility: hidden !important;
-    pointer-events: none !important;
-}
-.wls-panel-host-shell[data-mode="float"] .wls-panel-host-floatbar {
-    display: flex;
-}
-.wls-panel-host-floatbar {
-    display: none;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--backend-spacing-sm, var(--weline-space-2, 0.5rem));
-    padding: var(--backend-spacing-sm, var(--weline-space-2, 0.5rem)) var(--backend-spacing-md, var(--weline-space-3, 0.75rem));
-    border-bottom: 1px solid var(--backend-color-border-default, var(--color-border, #d8e2ea));
-    background: var(--backend-color-card-bg, var(--color-surface, #fff));
-    color: var(--backend-color-text-primary, var(--color-text, #0f1111));
-    flex: 0 0 auto;
-}
-.wls-panel-host-frame {
-    display: block;
-    width: 100%;
-    height: 100%;
-    min-height: inherit;
-    border: 0;
-    background: var(--backend-color-card-bg, var(--color-surface, #fff));
-    /* 阻止 iframe 内滚轮链式滚到后台壳 / 整页 */
-    overscroll-behavior: contain;
-}
-.wls-panel-host-shell[data-mode="float"] .wls-panel-host-frame {
-    flex: 1 1 auto;
-    min-height: 0;
-}
-.wls-panel-host-empty {
-    padding: var(--backend-spacing-lg, var(--weline-space-6, 1.5rem));
-}
-/* 须同时锁 html：仅 body overflow:hidden 时 html 仍可能高出视口被整页拖动 */
-html:has(.wls-panel-host-shell[data-mode="float"]),
-body:has(.wls-panel-host-shell[data-mode="float"]) {
-    height: 100% !important;
-    max-height: 100dvh !important;
-    overflow: hidden !important;
-    overscroll-behavior: none;
-}
-</style>
 
 <div class="w-backend-page wls-panel-host-page" data-testid="wls-panel-host-page">
     <div class="wls-panel-host-toolbar">

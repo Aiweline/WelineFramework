@@ -77,7 +77,7 @@ $renderNodes = static function (
                             data-blog-filter-toggle
                             aria-expanded="<?= $isOpen ? 'true' : 'false' ?>"
                             aria-controls="<?= $escape($itemId) ?>"
-                            title="<?= $escape((string)__('展开/收起')) ?>">
+                            title="@lang('展开/收起')">
                         <span class="amazon-blog-filter__toggle-icon" aria-hidden="true"></span>
                     </button>
                 <?php else: ?>
@@ -106,7 +106,8 @@ $renderNodes = static function (
 ?>
 <div class="amazon-blog-filter"
      data-testid="blog-category-filter"
-     data-blog-category-filter>
+     data-blog-category-filter
+     data-weline-load="blogCategoryFilter">
     <?php /* Non-heading label: must not precede page H1 in the SEO outline. */ ?>
     <p class="amazon-blog-filter__title"><lang>博客分类</lang></p>
     <ul class="amazon-blog-filter__list" role="list">
@@ -120,28 +121,3 @@ $renderNodes = static function (
         <?php $renderNodes($categories, $activeId, 1, $escape, $containsId, $buildUrl); ?>
     </ul>
 </div>
-<script>
-(function () {
-    var root = document.currentScript && document.currentScript.previousElementSibling;
-    if (!root || !root.getAttribute || root.getAttribute('data-blog-category-filter') === null) {
-        root = document.querySelector('[data-blog-category-filter]');
-    }
-    if (!root) return;
-    root.addEventListener('click', function (event) {
-        var toggle = event.target && event.target.closest ? event.target.closest('[data-blog-filter-toggle]') : null;
-        if (!toggle || !root.contains(toggle)) return;
-        event.preventDefault();
-        var node = toggle.closest('[data-blog-filter-node]');
-        if (!node) return;
-        var children = node.querySelector('[data-blog-filter-children]');
-        var open = node.getAttribute('data-state') !== 'open';
-        node.setAttribute('data-state', open ? 'open' : 'closed');
-        node.classList.toggle('is-open', open);
-        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-        if (children) {
-            if (open) children.removeAttribute('hidden');
-            else children.setAttribute('hidden', '');
-        }
-    });
-})();
-</script>

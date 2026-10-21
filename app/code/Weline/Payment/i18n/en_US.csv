@@ -252,12 +252,6 @@ settings,settings
 "最终扣款金额、币种与支付工具以您在 Stripe 支付页确认的内容为准。您应确保支付工具可用且有权使用。","The final charge amount, currency, and payment instrument are those you confirm on the Stripe payment page. You must ensure the payment instrument is available and that you are authorized to use it."
 "银行卡安全、银行验证与 Stripe 侧拒付/风控由发卡机构及 Stripe 按其规则处理；本站负责订单履约、退款申请受理及与支付结果相关的订单状态更新。","Card security, bank verification, and Stripe-side chargebacks/risk controls are handled by the card issuer and Stripe under their rules; this site handles order fulfillment, refund request intake, and order status updates related to payment results."
 "除本协议外，您还须遵守 Stripe 服务条款、隐私声明及当地适用法律。若条款冲突，涉及支付清算与账户安全的部分以 Stripe 及发卡机构规则为准。","In addition to this agreement, you must comply with Stripe's terms of service, privacy policy, and applicable local laws. If terms conflict, rules from Stripe and the card issuer prevail for payment clearing and account security."
-待处理,Pending
-处理中,Processing
-已支付,Paid
-已发货,Shipped
-已完成,Completed
-已退款,Refunded
 该支付已取消，无需再次操作。,"This payment is already cancelled. No further action is needed."
 支付已取消成功，订单尚未完成付款。可返回结账页重新选择支付方式。,"Payment cancelled successfully. The order is not paid yet. You can return to checkout and choose a payment method again."
 当前没有可查询的支付交易号。若刚从网关返回，请确认回跳参数完整。,"No payment transaction number is available to query. If you just returned from a gateway, confirm the return parameters are complete."
@@ -281,21 +275,38 @@ settings,settings
 订单信息,"Order info"
 订单状态,"Order status"
 支付摘要,"Payment summary."
-订单操作,"Order operations."
 查看或管理订单,"View or manage orders."
 继续购物,"Continue Shopping"
 返回结账,"Return to checkout"
+订单操作,"Order operations."
+待处理,Pending
+处理中,Processing
+已支付,Paid
+已发货,Shipped
+已完成,Completed
+已退款,Refunded
 您的支付已完成。,"Your payment has been completed."
 "Continue to Stripe","Continue to Stripe"
 "Stripe Checkout will open after you confirm payment.","Stripe Checkout will open after you confirm payment."
 确认进度,"Confirmation progress"
 正在确认订单…,"Confirming order..."
 支付已成功，我们正在同步订单信息。,"Payment successful, we are synchronizing order information."
-订单确认进度,"Order confirmation progress"
 支付已确认,"Payment confirmed"
 正在同步订单,"Syncing your order"
 即将跳转结果页,"Redirecting to your result"
 请稍候，请勿关闭本页,"Please wait and keep this page open"
+订单确认进度,"Order confirmation progress"
+"Select a payment method to continue.","Select a payment method to continue."
+"Please agree to the payment terms before continuing.","Please agree to the payment terms before continuing."
+"Selected payment method:","Selected payment method:"
+状态,Status
+"Used by browser verification only.","Used by browser verification only."
+"No payment method is available for the current payable object.","No payment method is available for the current payable object."
+"I agree to the payment terms.","I agree to the payment terms."
+支付失败,Failed
+取消,Cancel
+支付状态,"Payment Status"
+More,More
 "Credit Asset","Credit Asset"
 "Requires exchange ratio and payable permission before checkout.","Requires exchange ratio and payable permission before checkout."
 "This asset is not enabled for payment.","This asset is not enabled for payment."
@@ -308,19 +319,8 @@ settings,settings
 "Can partially deduct payable amount when enabled.","Can partially deduct payable amount when enabled."
 "Current customer country is not supported.","Current customer country is not supported."
 "Payment provider is not ready.","Payment provider is not ready."
-支付失败,Failed
 支付未完成，请重试,"Payment incomplete, please try again"
-取消,Cancel
-"Select a payment method to continue.","Select a payment method to continue."
-"Please agree to the payment terms before continuing.","Please agree to the payment terms before continuing."
-"Selected payment method:","Selected payment method:"
-状态,Status
-"Used by browser verification only.","Used by browser verification only."
-"No payment method is available for the current payable object.","No payment method is available for the current payable object."
 支付方式当前不可用,"Payment method is currently unavailable"
-"I agree to the payment terms.","I agree to the payment terms."
-支付状态,"Payment Status"
-More,More
 "使用 PayPal 账户或卡完成支付。支持 Google Pay / Apple Pay（可在后台关闭）。","Complete payment with a PayPal account or card. Supports Google Pay / Apple Pay (can be disabled in admin)."
 "若设备支持，将显示 Google Pay / Apple Pay。也可继续使用下方 PayPal 跳转。","If the device supports it, Google Pay / Apple Pay will be shown. You can also continue with the PayPal redirect below."
 "Continue to PayPal","Continue to PayPal"
@@ -509,6 +509,10 @@ More,More
 否,No
 此工作台仅显示脱敏支付事实，不触发真实资金、修复或退款动作。,"This workbench only displays desensitized payment facts and does not trigger real funds, repair or refund actions."
 当前没有记录。,"There are currently no records."
+支付提供商同步成功,"Payment provider sync successful"
+支付提供商同步失败,"Payment provider sync failed"
+支付方式排序已保存,"Payment method order saved"
+支付方式排序保存失败,"Failed to save payment method order"
 同步支付提供商,"Synchronized payment provider"
 "拖拽左侧手柄调整顺序；排序仅对当前 Scope 生效，结账页按此顺序展示支付方式。","Drag the handle to reorder. Order applies to the current Scope only; checkout lists payment methods in this order."
 拖拽,Drag
@@ -522,10 +526,6 @@ More,More
 拖拽排序,"Drag to reorder"
 查看配置,"View Config"
 配置深度链接,"Config Deep Link"
-支付提供商同步成功,"Payment provider sync successful"
-支付提供商同步失败,"Payment provider sync failed"
-支付方式排序已保存,"Payment method order saved"
-支付方式排序保存失败,"Failed to save payment method order"
 支付方式配置入口,"Payment Method Configuration Entry"
 "支付方式普通配置、scope 选择、继承来源、保存、校验和缓存失效由系统配置中心统一处理。","SystemConfig owns ordinary payment method configuration, scope selection, inherited source display, save, validation, and cache invalidation."
 "配置 scope","Configure scope"

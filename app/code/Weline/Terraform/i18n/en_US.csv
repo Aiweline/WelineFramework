@@ -1,9 +1,6 @@
 ﻿无效的请求方法,"Invalid request method"
 执行失败：%{error},"Execution failed: %{error}"
 Terraform批量绑定,"Terraform Batch Bind"
-首页,Home
-CDN管理,"CDN Management"
-批量绑定,"Batch Bind"
 供应商,Provider
 先选择供应商，再选择账户,"Select a provider first, then choose an account"
 供应商账户,"Provider Account"
@@ -45,3 +42,6 @@ DNS记录值不能为空,"DNS record value is required"
 输出失败,"Output failed"
 "解析 Terraform 输出失败","Failed to parse Terraform output"
 %{prefix}：%{detail},%{prefix}：%{detail}
+首页,Home
+CDN管理,"CDN Management"
+批量绑定,"Batch Bind"

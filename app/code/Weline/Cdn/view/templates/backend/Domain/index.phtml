@@ -1,3 +1,4 @@
+<css>Weline_Cdn::css/backend/cdn-admin.css</css>
 <?php
 /**
  * CDN域名管理列表页
@@ -96,7 +97,7 @@ $escapeAttr = static function (mixed $value): string {
                     aria-label="<?= $escapeAttr(__('搜索域名')) ?>"
                     data-align="center"
                     data-wrap="true"
-                    style="--w-gap:var(--weline-space-2);max-inline-size:min(100%,42rem);"
+                    class="w-cluster cdn-domain-filter-bar"
                 >
                     <label class="w-visually-hidden" for="cdn-domain-search-input"><?= __('搜索域名') ?></label>
                     <input
@@ -108,7 +109,7 @@ $escapeAttr = static function (mixed $value): string {
                         placeholder="<?= $escapeAttr(__('搜索域名')) ?>"
                         value="<?= $escapeAttr($search) ?>"
                         autocomplete="off"
-                        style="inline-size:min(100%,12rem);flex:1 1 8rem;min-inline-size:7rem;"
+                        class="cdn-filter__search"
                     >
                     <label class="w-visually-hidden" for="cdn-domain-adapter-filter"><?= __('所有适配器') ?></label>
                     <select
@@ -116,7 +117,7 @@ $escapeAttr = static function (mixed $value): string {
                         name="adapter"
                         class="w-select"
                         data-size="sm"
-                        style="flex:0 1 9rem;min-inline-size:7rem;"
+                        class="cdn-filter__select"
                         aria-label="<?= $escapeAttr(__('所有适配器')) ?>"
                     >
                         <option value=""><?= __('所有适配器') ?></option>
@@ -132,7 +133,7 @@ $escapeAttr = static function (mixed $value): string {
                         name="enabled"
                         class="w-select"
                         data-size="sm"
-                        style="flex:0 1 7rem;min-inline-size:5.5rem;"
+                        class="cdn-filter__select"
                         aria-label="<?= $escapeAttr(__('全部状态')) ?>"
                     >
                         <option value=""><?= __('全部状态') ?></option>
@@ -160,14 +161,14 @@ $escapeAttr = static function (mixed $value): string {
                         <table class="w-table" data-w-vertical="middle" style="--w-mb:0;" data-testid="cdn-domain-table">
                             <thead>
                                 <tr>
-                                    <th style="width:4.5rem;"><?= __('ID') ?></th>
+                                    <th style="width:6%;"><?= __('ID') ?></th>
                                     <th><?= __('域名名称') ?></th>
                                     <th><?= __('网站名称') ?></th>
-                                    <th style="width:7.5rem;"><?= __('适配器') ?></th>
+                                    <th style="width:10%;"><?= __('适配器') ?></th>
                                     <th><?= __('Zone ID') ?></th>
-                                    <th style="width:5.5rem;"><?= __('状态') ?></th>
-                                    <th style="width:9rem;"><?= __('创建时间') ?></th>
-                                    <th class="w-text" data-align="end" style="width:18rem;"><?= __('操作') ?></th>
+                                    <th style="width:8%;"><?= __('状态') ?></th>
+                                    <th style="width:12%;"><?= __('创建时间') ?></th>
+                                    <th class="w-text" data-align="end" style="width:20%;"><?= __('操作') ?></th>
                                 </tr>
                             </thead>
                             <tbody>

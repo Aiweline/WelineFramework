@@ -38,7 +38,7 @@
     <div class='card-body overflow-hidden'>
         <w:form action="@backend-url('*/backend/attribute/edit')" class="form-horizontal bg-transparent p-tb-20">
             <div class="row g-3 align-items-center">
-                <div class="col-lg-4 col-md-6 col-sm-12">
+                <div style="--w-span-lg:4;--w-span-md:6;--w-span:12;">
                     <!--代码-->
                     <div class='form-group'>
                         <label class='visually-hidden' for='code'>
@@ -50,7 +50,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-lg-4 col-md-6 col-sm-12">
+                <div style="--w-span-lg:4;--w-span-md:6;--w-span:12;">
                     <!--名称-->
                     <div class='form-group'>
                         <label class='visually-hidden' for='name'>
@@ -508,12 +508,12 @@
                         offcanvasOptionAdd.find('#option-code').val('');
                         offcanvasOptionAdd.find('#option-name').val('');
                         var create_time = new Date().toLocaleString();
-                        var $row = $('<tr data-id="' + code + '" style="cursor: pointer;">' +
-                            '<td data-field="code" style="width: 80px">' + code + '</td>' +
+                        var $row = $('<tr data-id="' + code + '">' +
+                            '<td data-field="code" width="80">' + code + '</td>' +
                             '<td data-field="name">' + name + '</td>' +
                             '<td data-field="update_time">' + create_time + '</td>' +
                             '<td data-field="create_time">' + create_time + '</td>' +
-                            '<td style="width: 100px">' +
+                            '<td width="100">' +
                             '<a class="btn btn-outline-secondary btn-sm edit" title="Edit">' +
                             '<i class="fas fa-pencil-alt"></i></a>' +
                             '<a class="btn btn-outline-secondary btn-sm delete" title="@lang{删除}">' +

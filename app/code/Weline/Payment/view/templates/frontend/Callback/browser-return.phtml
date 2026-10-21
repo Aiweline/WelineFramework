@@ -18,14 +18,14 @@ $pageTitle = $title !== '' ? $title : (string) __('支付浏览器回跳入口')
     <style>
         :root {
             color-scheme: light;
-            --pr-bg: #eef2f7;
-            --pr-card: #ffffff;
-            --pr-ink: #111827;
+            --pr-bg: var(--color-bg-muted);
+            --pr-card: var(--color-bg-primary);
+            --pr-ink: var(--color-text-slate);
             --pr-muted: #4b5563;
-            --pr-line: #e5e7eb;
-            --pr-ok: #047857;
-            --pr-ok-bg: #ecfdf5;
-            --pr-btn: #111827;
+            --pr-line: var(--color-border-soft);
+            --pr-ok: var(--color-success);
+            --pr-ok-bg: var(--color-success-bg-soft);
+            --pr-btn: var(--color-bg-amazon);
         }
         * { box-sizing: border-box; }
         html, body {
@@ -40,25 +40,25 @@ $pageTitle = $title !== '' ? $title : (string) __('支付浏览器回跳入口')
             display: flex;
             justify-content: center;
             min-height: 100vh;
-            padding: 28px 16px 36px;
+            padding: var(--spacing-7) var(--spacing-4) var(--spacing-9);
         }
         .weline-payment-return__panel {
             background: var(--pr-card);
-            border: 1px solid var(--pr-line);
-            border-radius: 16px;
-            box-shadow: 0 18px 40px rgba(17, 24, 39, 0.08);
+            border: var(--border-width-thin) solid var(--pr-line);
+            border-radius: var(--radius-2xl);
+            box-shadow: var(--weline-shadow-md);
             display: grid;
-            gap: 14px;
+            gap: var(--spacing-3_5);
             justify-items: center;
             max-width: 520px;
-            padding: 32px 28px 36px;
+            padding: var(--spacing-8) var(--spacing-7) var(--spacing-9);
             text-align: center;
             width: 100%;
         }
         .weline-payment-return__badge {
             align-items: center;
             background: var(--pr-ok-bg);
-            border-radius: 999px;
+            border-radius: var(--radius-full);
             color: var(--pr-ok);
             display: inline-flex;
             height: 56px;
@@ -71,47 +71,47 @@ $pageTitle = $title !== '' ? $title : (string) __('支付浏览器回跳入口')
         }
         .weline-payment-return__title {
             color: var(--pr-ink);
-            font-size: 1.5rem;
+            font-size: var(--weline-font-size-2xl);
             font-weight: 700;
             line-height: 1.35;
             margin: 0;
         }
         .weline-payment-return__lead {
             color: var(--pr-muted);
-            font-size: 0.98rem;
+            font-size: var(--font-size-base);
             line-height: 1.65;
             margin: 0;
             max-width: 34rem;
         }
         .weline-payment-return__meta {
             color: #6b7280;
-            font-size: 0.875rem;
+            font-size: var(--weline-font-size-sm);
             margin: 0;
         }
         .weline-payment-return__meta code {
-            background: #f3f4f6;
-            border-radius: 6px;
+            background: var(--color-bg-muted);
+            border-radius: var(--border-radius-md);
             color: var(--pr-ink);
             font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-            font-size: 0.85em;
-            padding: 0.15em 0.45em;
+            font-size: var(--font-size-sm);
+            padding: var(--spacing-0_5) var(--spacing-0_45);
         }
         .weline-payment-return__actions {
-            margin-top: 10px;
+            margin-top: var(--spacing-2_5);
         }
         .weline-payment-return__btn {
             background: var(--pr-btn);
-            border-radius: 10px;
-            color: #fff !important;
+            border-radius: var(--sidebar-radius);
+            color: var(--color-text-light);
             display: inline-block;
-            font-size: 0.95rem;
+            font-size: var(--font-size-base);
             font-weight: 600;
-            padding: 12px 20px;
+            padding: var(--spacing-3) var(--spacing-5);
             text-decoration: none;
         }
         .weline-payment-return__btn:hover {
             background: #1f2937;
-            color: #fff !important;
+            color: var(--color-text-light);
         }
     </style>
 </head>

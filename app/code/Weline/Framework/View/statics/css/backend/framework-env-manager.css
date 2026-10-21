@@ -1,0 +1,13 @@
+/* Framework 后台页私有 CSS — 后端主题开发标准 §6.2（Token-only，无 !important）。 */
+@layer page {
+.env-card { margin-bottom: var(--weline-space-6); }
+.env-card .w-card__header { font-weight: 600; }
+.status-badge { font-size: var(--weline-font-size-sm); }
+.guide-section { display: none; }
+.guide-section.active { display: block; }
+.guide-tab.active { background: var(--weline-theme-primary); color: var(--weline-theme-on-primary); }
+.platform-tag { font-size: var(--weline-font-size-xs); padding: var(--weline-space-1) var(--weline-space-2); border-radius: var(--weline-radius-sm); background: color-mix(in srgb, var(--weline-theme-info) 12%, transparent); color: var(--weline-theme-info); }
+.ext-table td, .ext-table th { vertical-align: middle; }
+.env-platform-select { inline-size: 8.75rem; }
+.env-hint { font-size: var(--weline-font-size-xs); }
+}

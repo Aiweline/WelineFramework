@@ -375,9 +375,9 @@ SKU,SKU
 总价,"Total Price"
 折扣,Discount
 返回列表,"Back to List"
-订单确认,"Order confirmation"
 订单提交成功！,"Order submitted successfully!"
 订单号：,"Order number:"
+订单确认,"Order confirmation"
 这里是单页结账的表单区域。接入结账模块后，会替换为真实地址、配送、支付和确认步骤。,"This is the single-page checkout form area. After the checkout module is connected, it will be replaced with real address, shipping, payment, and confirmation steps."
 联系信息与收货地址,"Contact details and shipping address"
 支付与订单确认,"Payment and order confirmation"

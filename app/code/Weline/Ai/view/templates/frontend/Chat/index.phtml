@@ -21,7 +21,7 @@ $is_logged_in = $this->is_logged_in ?? false;
     <css>Weline_Theme::ui/weline-foundation.css</css>
     <css>Weline_Theme::ui/weline-frontend.css</css>
     <js type="module">Weline_Theme::ui/weline-ui.js</js>
-    <title><?= __('AI聊天') ?> - AI助手平台</title>
+    <title><lang>AI聊天</lang> - AI助手平台</title>
     <style>
         * {
             margin: 0;
@@ -32,51 +32,51 @@ $is_logged_in = $this->is_logged_in ?? false;
         body {
             background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
             min-height: 100vh;
-            color: #ffffff;
+            color: var(--color-text-light);
             font-family: 'Microsoft YaHei', Arial, sans-serif;
         }
         .navbar {
             background: rgba(15, 15, 35, 0.8);
             backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(102, 126, 234, 0.2);
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+            border-bottom: var(--border-width-thin) solid rgba(102, 126, 234, 0.2);
+            box-shadow: var(--weline-shadow-md);
         }
         .navbar-brand {
-            font-size: 1.5rem;
+            font-size: var(--weline-font-size-2xl);
             font-weight: bold;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
         .navbar-nav .nav-link {
-            color: #a8b2d1 !important;
-            margin: 0 10px;
+            color: #a8b2d1;
+            margin: 0 var(--spacing-2_5);
             transition: all 0.3s;
         }
         .navbar-nav .nav-link:hover {
-            color: #667eea !important;
+            color: var(--color-text-faint);
             transform: translateY(-2px);
         }
         .ai-chat-page {
             box-sizing: border-box;
             width: min(100%, var(--weline-layout-content-max-width));
             max-width: 100%;
-            margin: 20px auto;
+            margin: var(--spacing-5) auto;
             padding: 0 var(--weline-layout-content-padding-inline);
         }
         
         .chat-container {
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(102, 126, 234, 0.3);
-            border-radius: 20px;
+            border: var(--border-width-thin) solid rgba(102, 126, 234, 0.3);
+            border-radius: var(--weline-theme-radius-2xl);;
             overflow: hidden;
         }
         
         .chat-header {
             background: rgba(102, 126, 234, 0.1);
-            border-bottom: 1px solid rgba(102, 126, 234, 0.2);
-            padding: 1.5rem;
+            border-bottom: var(--border-width-thin) solid rgba(102, 126, 234, 0.2);
+            padding: var(--weline-space-6);
         }
         
         .chat-header h3 {
@@ -87,11 +87,11 @@ $is_logged_in = $this->is_logged_in ?? false;
         .chat-messages {
             height: 500px;
             overflow-y: auto;
-            padding: 2rem;
+            padding: var(--weline-space-8);
         }
         
         .message {
-            margin-bottom: 1.5rem;
+            margin-bottom: var(--weline-space-6);
             animation: fadeIn 0.5s;
         }
         
@@ -107,8 +107,8 @@ $is_logged_in = $this->is_logged_in ?? false;
         .message-content {
             display: inline-block;
             max-width: 70%;
-            padding: 1rem 1.5rem;
-            border-radius: 15px;
+            padding: var(--weline-space-4) var(--weline-space-6);
+            border-radius: var(--border-radius-2xl);
             position: relative;
         }
         
@@ -119,23 +119,23 @@ $is_logged_in = $this->is_logged_in ?? false;
         
         .message-assistant .message-content {
             background: rgba(0, 242, 254, 0.1);
-            border: 1px solid rgba(0, 242, 254, 0.3);
-            color: #ffffff;
+            border: var(--border-width-thin) solid rgba(0, 242, 254, 0.3);
+            color: var(--color-text-light);
         }
         
         .chat-input-area {
-            padding: 1.5rem;
-            border-top: 1px solid rgba(102, 126, 234, 0.2);
+            padding: var(--weline-space-6);
+            border-top: var(--border-width-thin) solid rgba(102, 126, 234, 0.2);
             background: rgba(102, 126, 234, 0.05);
         }
         
         .chat-input {
             width: 100%;
             background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(102, 126, 234, 0.3);
-            color: #ffffff;
-            padding: 1rem;
-            border-radius: 25px;
+            border: var(--border-width-thin) solid rgba(102, 126, 234, 0.3);
+            color: var(--color-text-light);
+            padding: var(--weline-space-4);
+            border-radius: var(--weline-theme-radius-full);;
             transition: all 0.3s;
         }
         
@@ -143,22 +143,22 @@ $is_logged_in = $this->is_logged_in ?? false;
             background: rgba(255, 255, 255, 0.15);
             border-color: #667eea;
             outline: none;
-            box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+            box-shadow: var(--weline-shadow-md);
         }
         
         .weline-btn-send {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border: none;
             color: white;
-            padding: 1rem 2rem;
-            border-radius: 25px;
+            padding: var(--weline-space-4) var(--weline-space-8);
+            border-radius: var(--weline-theme-radius-full);;
             transition: all 0.3s;
-            box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+            box-shadow: var(--weline-shadow-md);
         }
         
         .weline-btn-send:hover {
             transform: translateY(-3px);
-            box-shadow: 0 0 40px rgba(102, 126, 234, 0.8);
+            box-shadow: var(--weline-shadow-md);
         }
     </style>
 </head>
@@ -177,17 +177,17 @@ $is_logged_in = $this->is_logged_in ?? false;
             <ul class="navbar-nav ms-auto">
                 <li>
                     <a href="@url{'*/frontend/index'}">
-                        <w:icon name="home" size="sm"></w:icon> <?= __('首页') ?>
+                        <w:icon name="home" size="sm"></w:icon> <lang>首页</lang>
                     </a>
                 </li>
                 <li>
                     <a href="@url{'*/frontend/chat'}" data-state="active">
-                        <w:icon name="circle" size="sm"></w:icon> <?= __('聊天') ?>
+                        <w:icon name="circle" size="sm"></w:icon> <lang>聊天</lang>
                     </a>
                 </li>
                 <li>
                     <a href="@url{'*/frontend/center'}">
-                        <w:icon name="user" size="sm"></w:icon> <?= __('个人中心') ?>
+                        <w:icon name="user" size="sm"></w:icon> <lang>个人中心</lang>
                     </a>
                 </li>
             </ul>
@@ -198,13 +198,13 @@ $is_logged_in = $this->is_logged_in ?? false;
 <div class="ai-chat-page">
     <div class="chat-container">
         <div class="chat-header">
-            <h3><w:icon name="robot" size="sm"></w:icon> <?= __('AI聊天助手') ?></h3>
+            <h3><w:icon name="robot" size="sm"></w:icon> <lang>AI聊天助手</lang></h3>
             <div class="chat-settings">
                 <button type="button" class="w-button" data-ai-chat-action="toggle-settings" data-tone="neutral" data-variant="outline" data-size="sm">
-                    <w:icon name="settings" size="sm"></w:icon> <?= __('设置') ?>
+                    <w:icon name="settings" size="sm"></w:icon> <lang>设置</lang>
                 </button>
                 <button type="button" class="w-button" data-ai-chat-action="clear-chat" data-tone="danger" data-variant="outline" data-size="sm">
-                    <w:icon name="trash" size="sm"></w:icon> <?= __('清空') ?>
+                    <w:icon name="trash" size="sm"></w:icon> <lang>清空</lang>
                 </button>
             </div>
         </div>
@@ -213,10 +213,10 @@ $is_logged_in = $this->is_logged_in ?? false;
             <div class="w-grid">
                 <div style="--w-span-md:6;">
                     <div class="w-field">
-                        <label><?= __('选择模型') ?></label>
+                        <label><lang>选择模型</lang></label>
                         <select class="w-input" id="modelSelect">
                             <?php $fallbackModelCode = (string)($this->fallback_model_code ?? ''); ?>
-                            <option value=""<?= $fallbackModelCode === '' ? ' selected' : '' ?>><?= __('使用默认模型') ?></option>
+                            <option value=""<?= $fallbackModelCode === '' ? ' selected' : '' ?>><lang>使用默认模型</lang></option>
                             <?php foreach ($models as $model): ?>
                                 <?php
                                 $modelCode = (string) (is_array($model) ? ($model['model_code'] ?? '') : $model->getData('model_code'));
@@ -234,9 +234,9 @@ $is_logged_in = $this->is_logged_in ?? false;
                 </div>
                 <div style="--w-span-md:6;">
                     <div class="w-field">
-                        <label><?= __('场景适配器') ?></label>
+                        <label><lang>场景适配器</lang></label>
                         <select class="w-input" id="scenarioSelect">
-                            <option value=""><?= __('无') ?></option>
+                            <option value=""><lang>无</lang></option>
                             <?php foreach ($adapters as $adapter): ?>
                                 <?php
                                 $adapterCode = is_array($adapter) ? ($adapter['code'] ?? '') : (method_exists($adapter, 'getCode') ? $adapter->getCode() : '');
@@ -255,18 +255,18 @@ $is_logged_in = $this->is_logged_in ?? false;
         <div class="chat-messages" id="chatMessages">
             <div class="welcome-message">
                 <w:icon name="circle" size="sm"></w:icon>
-                <h4><?= __('欢迎使用AI聊天助手！') ?></h4>
-                <p><?= __('请输入您的问题，我会尽力为您解答。') ?></p>
+                <h4><lang>欢迎使用AI聊天助手！</lang></h4>
+                <p><lang>请输入您的问题，我会尽力为您解答。</lang></p>
             </div>
         </div>
 
         <div class="chat-input-container">
             <w:form id="chatForm">
                 <div class="w-field__control w-cluster" data-align="end" style="--w-gap:var(--weline-space-2);">
-                    <textarea class="w-textarea" id="messageInput" placeholder="<?= __('请输入您的消息...') ?>" rows="1" data-grow="true"></textarea>
-                    <button class="w-button" type="button" id="cancelButton" disabled title="<?= __('取消生成') ?>" aria-label="<?= __('取消生成') ?>" data-tone="neutral" data-variant="outline">
+                    <textarea class="w-textarea" id="messageInput" placeholder="@lang('请输入您的消息...')" rows="1" data-grow="true"></textarea>
+                    <button class="w-button" type="button" id="cancelButton" disabled title="@lang('取消生成')" aria-label="<lang>取消生成</lang>" data-tone="neutral" data-variant="outline">
                         <w:icon name="stop" size="sm"></w:icon>
-                        <span class="w-visually-hidden"><?= __('取消生成') ?></span>
+                        <span class="w-visually-hidden"><lang>取消生成</lang></span>
                     </button>
                     <button class="w-button" type="submit" id="sendButton" data-tone="primary">
                         <w:icon name="arrow-right" size="sm"></w:icon>
@@ -800,8 +800,8 @@ function scrollToBottom() {
 <style>
 .ai-chat-page {
     height: calc(100vh - 60px);
-    padding: 20px;
-    background-color: #f5f5f5;
+    padding: var(--spacing-5);
+    background-color: var(--color-bg-muted);
 }
 
 .chat-container {
@@ -811,15 +811,15 @@ function scrollToBottom() {
     margin-inline: auto;
     height: 100%;
     background: white;
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    border-radius: var(--sidebar-radius);
+    box-shadow: var(--weline-shadow-md);
     display: flex;
     flex-direction: column;
 }
 
 .chat-header {
-    padding: 20px;
-    border-bottom: 1px solid #e0e0e0;
+    padding: var(--spacing-5);
+    border-bottom: var(--border-width-thin) solid var(--color-border-muted);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -831,35 +831,35 @@ function scrollToBottom() {
 
 .chat-settings {
     display: flex;
-    gap: 10px;
+    gap: var(--spacing-2_5);
 }
 
 .settings-panel {
-    padding: 20px;
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #e0e0e0;
+    padding: var(--spacing-5);
+    background-color: var(--color-bg-panel);
+    border-bottom: var(--border-width-thin) solid var(--color-border-muted);
 }
 
 .chat-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
+    padding: var(--spacing-5);
 }
 
 .welcome-message {
     text-align: center;
-    padding: 60px 20px;
-    color: #999;
+    padding: var(--spacing-15) var(--spacing-5);
+    color: var(--color-text-faint);
 }
 
 .welcome-message i {
-    color: #667eea;
-    margin-bottom: 20px;
+    color: var(--color-text-faint);
+    margin-bottom: var(--spacing-5);
 }
 
 .message {
     display: flex;
-    margin-bottom: 20px;
+    margin-bottom: var(--spacing-5);
     animation: fadeIn 0.3s;
 }
 
@@ -875,7 +875,7 @@ function scrollToBottom() {
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-right: 15px;
+    margin-right: var(--spacing-0_95);
     flex-shrink: 0;
 }
 
@@ -885,14 +885,14 @@ function scrollToBottom() {
 }
 
 .message-ai .message-avatar {
-    background-color: #f0f0f0;
-    color: #666;
+    background-color: var(--color-bg-muted);
+    color: var(--color-text-gray-mid);
 }
 
 .message-content {
     flex: 1;
-    padding: 12px 16px;
-    border-radius: 10px;
+    padding: var(--spacing-3) var(--spacing-4);
+    border-radius: var(--sidebar-radius);
     line-height: 1.6;
     white-space: pre-wrap;
 }
@@ -905,14 +905,14 @@ function scrollToBottom() {
 }
 
 .message-ai .message-content {
-    background-color: #f0f0f0;
+    background-color: var(--color-bg-muted);
     color: #333;
     max-width: 80%;
 }
 
 .chat-input-container {
-    padding: 20px;
-    border-top: 1px solid #e0e0e0;
+    padding: var(--spacing-5);
+    border-top: var(--border-width-thin) solid var(--color-border-muted);
 }
 
 .chat-input-container textarea {
@@ -932,21 +932,21 @@ function scrollToBottom() {
 
 .chat-confirm-dialog {
     width: min(320px, calc(100vw - 40px));
-    padding: 18px;
-    border-radius: 10px;
-    background: #fff;
+    padding: var(--spacing-4_5);
+    border-radius: var(--sidebar-radius);
+    background: var(--color-bg-primary);
     color: #333;
-    box-shadow: 0 12px 32px rgba(0,0,0,0.2);
+    box-shadow: var(--weline-shadow-md);
 }
 
 .chat-confirm-dialog p {
-    margin: 0 0 14px;
+    margin: 0 0 var(--spacing-3_5);
 }
 
 .chat-confirm-actions {
     display: flex;
     justify-content: flex-end;
-    gap: 10px;
+    gap: var(--spacing-2_5);
 }
 
 #sendButton,

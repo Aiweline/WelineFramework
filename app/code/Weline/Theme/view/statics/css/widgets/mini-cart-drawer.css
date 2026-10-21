@@ -26,10 +26,10 @@
      * ghost titles/tabs/「查看购物车」. Pin foundation literals HERE so the chain
      * cannot recurse into inverse ink (same hex as weline-foundation.css).
      */
-    --weline-chrome-body-text: #0f1111;
-    --weline-chrome-body-text-secondary: #565959;
-    --weline-chrome-body-text-muted: #666666;
-    --weline-chrome-body-text-heading: #0f1111;
+    --weline-chrome-body-text: var(--weline-theme-color-text);
+    --weline-chrome-body-text-secondary: var(--color-text-gray);
+    --weline-chrome-body-text-muted: var(--color-text-gray-mid);
+    --weline-chrome-body-text-heading: var(--weline-theme-color-text);
     --amz-drawer-text: var(--weline-chrome-body-text);
     --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
     --amz-drawer-link: var(--color-literal-2162a1);
@@ -196,7 +196,7 @@
 .header-cart.is-drawer-open .mini-cart-drawer.is-open,
 .header-cart .mini-cart-drawer[aria-hidden="false"] {
     transform: none;
-    width: min(var(--size-panel-400, 25rem), 100%);
+    width: min(var(--size-panel-400), 100%);
     max-width: 100%;
     min-width: 0;
     padding: 0;
@@ -1016,21 +1016,21 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
 .weline-checkout__extras .mini-cart-drawer__extras-tabs {
     display: flex;
     flex-direction: column;
-    gap: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
 }
 
 .weline-cart-shell__summary-extras .mini-cart-drawer__extras-tablist,
 .weline-checkout__extras .mini-cart-drawer__extras-tablist {
     display: flex;
     align-items: stretch;
-    gap: var(--weline-space-1, 0.25rem);
+    gap: var(--weline-space-1);
     overflow-x: auto;
     overscroll-behavior-x: contain;
     scroll-snap-type: x proximity;
     -webkit-overflow-scrolling: touch;
     margin: 0;
     padding: 0;
-    border-bottom: var(--border-width-thin, 1px) solid var(--weline-theme-border, #e5e7eb);
+    border-bottom: var(--border-width-thin) solid var(--weline-theme-border);
 }
 
 /* Match theme-head `body .weline-cart-shell--amazon …` specificity so underline rail wins over pill chrome. */
@@ -1043,15 +1043,15 @@ body .weline-checkout .weline-checkout__extras .mini-cart-drawer__extras-tab,
     scroll-snap-align: start;
     margin: 0;
     min-height: 0;
-    padding: var(--weline-space-2, 0.5rem) var(--weline-space-3, 0.75rem);
+    padding: var(--weline-space-2) var(--weline-space-3);
     border: 0;
     border-radius: 0;
-    border-bottom: var(--border-width-medium, 2px) solid transparent;
+    border-bottom: var(--border-width-medium) solid transparent;
     background: transparent;
     color: var(--weline-theme-text-muted, var(--weline-chrome-body-text-secondary, #565959));
     -webkit-text-fill-color: var(--weline-theme-text-muted, var(--weline-chrome-body-text-secondary, #565959));
     font: inherit;
-    font-size: var(--weline-font-size-xs, 13px);
+    font-size: var(--weline-font-size-xs);
     line-height: 1.2;
     white-space: nowrap;
     cursor: pointer;
@@ -1077,7 +1077,7 @@ body .weline-checkout .weline-checkout__extras .mini-cart-drawer__extras-tab.is-
 
 .weline-cart-shell__summary-extras .mini-cart-drawer__extras-tab:focus-visible,
 .weline-checkout__extras .mini-cart-drawer__extras-tab:focus-visible {
-    outline: var(--border-width-medium, 2px) solid var(--color-primary, var(--weline-theme-primary));
+    outline: var(--border-width-medium) solid var(--color-primary, var(--weline-theme-primary));
     outline-offset: 2px;
 }
 
@@ -1114,7 +1114,7 @@ body .weline-checkout .weline-checkout__extras .mini-cart-drawer__extras-tab.is-
 .weline-checkout__extras .mini-cart-drawer__extras-tabs .w-marketing-checkout-coupon__controls {
     display: flex;
     align-items: center;
-    gap: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
     width: 100%;
 }
 
@@ -1127,7 +1127,7 @@ body .weline-checkout .weline-checkout__extras .mini-cart-drawer__extras-tab.is-
 .weline-cart-shell__summary-extras .mini-cart-drawer__extras-tabs .w-order-notice__input,
 .weline-checkout__extras .mini-cart-drawer__extras-tabs .w-order-notice__input {
     width: 100%;
-    min-height: var(--weline-space-10, 2.5rem);
+    min-height: var(--weline-space-10);
     max-height: 4.5rem;
 }
 

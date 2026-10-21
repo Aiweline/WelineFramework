@@ -446,6 +446,7 @@ ID,ID
 "Queue Scope 映射工具：help/preflight/quarantine/verify（禁止 apply；信封 cutover 归 TASK-MIG-P1A）","Queue Scope 映射工具：help/preflight/quarantine/verify（禁止 apply；信封 cutover 归 TASK-MIG-P1A）"
 "队列并发数必须是大于 0 的整数。","队列并发数必须是大于 0 的整数。"
 "队列并发数已更新为 %{1}","队列并发数已更新为 %{1}"
+"E2E 发布门禁正在运行，队列消费本轮跳过。","E2E 发布门禁正在运行，队列消费本轮跳过。"
 请输入队列ID。,请输入队列ID。
 "Queue Worker 启动身份参数无效，未读取或执行队列。","Queue Worker 启动身份参数无效，未读取或执行队列。"
 "Queue 派发令牌无效或已过期，Worker 不执行任何消费者。","Queue 派发令牌无效或已过期，Worker 不执行任何消费者。"

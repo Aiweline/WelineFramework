@@ -69,7 +69,7 @@ $logTone = static function (string $status): string {
 };
 ?>
 <div class="w-stack" data-testid="ops-task-admin-page" style="--w-gap:var(--weline-space-4);">
-    <p class="w-text" data-tone="secondary" style="--w-mb:0;max-width:42rem;">
+    <p class="w-text" data-tone="secondary" style="--w-mb:0;max-inline-size:45ch;">
         <?= __('查看调度产生的任务，审批外发；运行日志在旁边页签。') ?>
     </p>
 
@@ -155,11 +155,11 @@ $logTone = static function (string $status): string {
                         <table class="w-table">
                             <thead>
                             <tr>
-                                <th style="width:4rem;"><?= __('ID') ?></th>
+                                <th style="width:8%;"><?= __('ID') ?></th>
                                 <th><?= __('任务') ?></th>
-                                <th style="width:7rem;"><?= __('状态') ?></th>
-                                <th style="width:8rem;"><?= __('会话') ?></th>
-                                <th style="width:8rem;"><?= __('操作') ?></th>
+                                <th style="width:14%;"><?= __('状态') ?></th>
+                                <th style="width:16%;"><?= __('会话') ?></th>
+                                <th style="width:16%;"><?= __('操作') ?></th>
                             </tr>
                             </thead>
                             <tbody>
@@ -277,7 +277,7 @@ $logTone = static function (string $status): string {
                                 <li class="w-cluster" data-align="start" data-wrap="true" style="--w-gap:var(--weline-space-2);">
                                     <span class="w-badge" data-tone="info" data-size="sm"><?= $escape($kind !== '' ? $kind : '—') ?></span>
                                     <span class="w-badge" data-tone="<?= $escape($logTone($logStatus)) ?>" data-size="sm"><?= $escape($logStatus !== '' ? $logStatus : '—') ?></span>
-                                    <div class="w-stack" style="--w-gap:2px;flex:1;min-width:12rem;">
+                                    <div class="w-stack" style="--w-gap:var(--weline-space-1);flex:1;min-inline-size:30%;">
                                         <span title="<?= $escape($summary) ?>"><?= $escape($summaryShort !== '' ? $summaryShort : '—') ?></span>
                                         <span class="w-text" data-tone="secondary" data-size="sm"><?= $escape((string)($log['created_at'] ?? '')) ?></span>
                                     </div>

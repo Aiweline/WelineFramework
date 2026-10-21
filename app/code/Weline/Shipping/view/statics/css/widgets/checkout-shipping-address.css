@@ -70,20 +70,20 @@
 
 .w-shipping-checkout-address__card.is-selected {
   border-color: var(--color-border-focus);
-  box-shadow: 0 0 0 var(--border-width-thin) var(--color-border-focus);
+  box-shadow: var(--focus-ring);
   background: var(--color-literal-fffaf0);
 }
 
 /* 禁运：红框优先于选中橙框（主题 danger token） */
 .w-shipping-checkout-address__card.is-embargoed {
   border-color: var(--color-danger, var(--color-error));
-  box-shadow: 0 0 0 var(--border-width-thin) var(--color-danger, var(--color-error));
+  box-shadow: var(--focus-ring);
   background: var(--color-danger-bg-subtle, var(--color-error-light));
 }
 
 .w-shipping-checkout-address__card.is-embargoed.is-selected {
   border-color: var(--color-danger, var(--color-error));
-  box-shadow: 0 0 0 var(--border-width-thin) var(--color-danger, var(--color-error));
+  box-shadow: var(--focus-ring);
   background: var(--color-danger-bg-subtle, var(--color-error-light));
 }
 
@@ -223,7 +223,7 @@
 .w-shipping-checkout-address__field .w-input:focus {
   outline: 0;
   border-color: var(--sca-focus);
-  box-shadow: 0 0 0 var(--border-width-thick) var(--color-literal-rgba-0-113-133-0-25);
+  box-shadow: var(--focus-ring);
 }
 
 .w-shipping-checkout-address__editor-actions {
@@ -276,7 +276,7 @@
 .w-shipping-checkout-address__field .w-form-control.is-invalid,
 .w-shipping-checkout-address__field .w-input.is-invalid {
   border-color: var(--weline-theme-danger);
-  box-shadow: 0 0 0 var(--border-width-thin) var(--weline-theme-danger);
+  box-shadow: var(--focus-ring);
 }
 
 .w-shipping-checkout-address__captcha:empty {
@@ -354,7 +354,7 @@
 
 .w-shipping-checkout-address .w-shipping-checkout-address__primary-btn.is-loading,
 .w-shipping-checkout-address__primary-btn.is-loading {
-  color: transparent !important;
+  color: transparent;
 }
 
 .w-shipping-checkout-address .w-shipping-checkout-address__primary-btn.is-loading::before,

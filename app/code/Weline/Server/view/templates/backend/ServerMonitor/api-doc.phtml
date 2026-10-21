@@ -39,15 +39,15 @@
             </div>
             <div class="w-card__body">
                 <?php foreach ($category['apis'] as $api): ?>
-                    <div class="api-item" style="--w-mb:var(--weline-space-6);">
+                    <div  style="--w-mb:var(--weline-space-6);">
                         <div class="w-cluster" data-align="center" style="--w-mb:var(--weline-space-2);">
-                            <span class="w-badge bg-<?= strpos($api['method'], 'POST') !== false ? 'warning' : 'success' ?> me-2">
+                            <span class="w-badge" data-w-background="<?= strpos($api['method'], 'POST') !== false ? 'warning' : 'success' ?>">
                                 <?= $api['method'] ?>
                             </span>
                             <h6 style="--w-mb:0;"><?= $api['name'] ?></h6>
                         </div>
                         <div style="--w-mb:var(--weline-space-2);">
-                            <code class="fs-6"><?= htmlspecialchars($api['path']) ?></code>
+                            <code><?= htmlspecialchars($api['path']) ?></code>
                         </div>
                         <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-2);"><?= $api['description'] ?></p>
                         <div class="w-text" data-w-background="muted" data-w-radius="md" data-tone="muted" style="--w-pt:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-pb:var(--weline-space-4);--w-ps:var(--weline-space-4);">
@@ -97,16 +97,3 @@ if ($response !== false) {
     </div>
 </div>
 
-<style>
-.api-item {
-    padding: 1rem;
-    border-radius: 8px;
-    background: var(--w-box-bg);
-}
-.api-item:hover {
-    background: var(--bs-secondary-bg-subtle);
-}
-pre code {
-    font-size: 0.85rem;
-}
-</style>

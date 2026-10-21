@@ -87,6 +87,8 @@
 任何标准验证器,"Any Standard Authenticator"
 扫描二维码,"Scan QR Code"
 "在验证器应用中选择""添加账户""或""扫描二维码""，然后扫描下方二维码：","In the authenticator app, select ""Add Account"" or ""Scan QR Code,"" then scan the QR code below:"
+调试信息（开发环境）,"Debug Info (Development Environment)"
+URI:,URI:
 或者手动输入密钥（可选）,"Or Manually Enter Secret Key (Optional)"
 如果无法扫描二维码，可以手动输入以下密钥：,"If you cannot scan the QR code, you can manually enter the following secret key:"
 点击密钥可复制,"Click secret key to copy"
@@ -99,6 +101,12 @@
 请务必保存好备份码！如果丢失手机且没有备份码，您将无法登录账户。,"Please save your backup codes! If you lose your phone and don't have backup codes, you will not be able to log in to your account."
 在验证器应用中找到刚添加的账户，输入显示的6位数字验证码：,"In your authenticator app, find the account you just added and enter the displayed 6-digit verification code:"
 确认启用,"Confirm Enable"
+提示,Tip
+"请在新打开的页面中点击""安装到桌面""按钮","In the newly opened page, click the ""Install to Desktop"" button."
+确定,Sure
+成功,success
+应用安装成功,"Application Installed Successfully"
+安装已取消,"Installation canceled"
 密钥已复制到剪贴板,"Secret key copied to clipboard"
 "备份码已复制到剪贴板\n请妥善保存！","Backup codes copied to clipboard\nPlease save them properly!"
 双因素身份验证备份码,"Two-Factor Authentication Backup Codes"
@@ -114,14 +122,6 @@
 "双因素身份验证已成功启用！\n\n请确保已保存备份码，然后点击确定返回管理页面。","Two-factor authentication has been successfully enabled!\n\nPlease make sure you have saved the backup codes, then click OK to return to the management page."
 请检查验证码是否正确，注意验证码每30秒会更新。,"Please check if the verification code is correct. Note that the verification code updates every 30 seconds."
 操作失败，请重试,"Operation failed, please try again"
-调试信息（开发环境）,"Debug Info (Development Environment)"
-URI:,URI:
-提示,Tip
-"请在新打开的页面中点击""安装到桌面""按钮","In the newly opened page, click the ""Install to Desktop"" button."
-确定,Sure
-成功,success
-应用安装成功,"Application Installed Successfully"
-安装已取消,"Installation canceled"
 复制成功,"Copied successfully"
 下载成功,"Download successful"
 失败,fail
@@ -134,17 +134,17 @@ URI:,URI:
 请重试,"Please try again"
 账户导入成功,"Account imported successfully"
 导入失败,"Import failed"
-删除验证器账户,"Delete validator account"
-此操作不可撤销，确定要删除这个验证器账户吗？,"This operation is irreversible. Are you sure you want to delete this validator account?"
-删除,delete
 账户已删除,"Account deleted"
 删除失败,"Deletion failed"
-选择导出格式,"Select export format"
-请选择要导出的验证器账户文件格式。,"Please select the validator account file format to export."
-导出,Export
 验证码尚未生成，请稍候...,"Verification code not yet generated, please wait..."
 复制失败,"Copy failed"
 请手动复制：,"Please manually copy:"
+删除验证器账户,"Delete validator account"
+此操作不可撤销，确定要删除这个验证器账户吗？,"This operation is irreversible. Are you sure you want to delete this validator account?"
+删除,delete
+选择导出格式,"Select export format"
+请选择要导出的验证器账户文件格式。,"Please select the validator account file format to export."
+导出,Export
 iOS设备安装步骤：,"iOS Device Installation Steps:"
 "点击下方""打开验证器""按钮","Click the ""Open Validator"" button below."
 "在Safari浏览器中，点击底部""分享""按钮","In Safari browser, click the ""Share"" button at the bottom"
@@ -158,6 +158,25 @@ Android设备安装步骤：,"Android Device Installation Steps:"
 "在浏览器地址栏右侧，点击""安装""图标","In the browser address bar, click the ""Install"" icon on the right"
 "或使用浏览器的""添加到主屏幕""功能","or use the browser's ""Add to Home Screen"" feature"
 安装后即可像应用一样使用,"After installation, it can be used like an app"
+验证器应用未部署,验证器应用未部署
+请运行部署命令：,请运行部署命令：
+总账户数,"Total Accounts"
+TOTP账户,"TOTP Accounts"
+活跃用户,"Active Users"
+安全状态,"Security Status"
+正常,正常
+验证器账户列表,"Authenticator Account List"
+打开前端管理,"Open Frontend Management"
+暂无账户数据,"No account data"
+"用户启用 TOTP 验证器后，账户会显示在这里。","用户启用 TOTP 验证器后，账户会显示在这里。"
+密钥,"Secret Key"
+创建时间,"creation time"
+算法,Algorithm
+这里是后台账户管理页面，您可以查看所有用户的TOTP账户。要添加或管理账户，请使用前端管理界面。,"This is the backend account management page where you can view all users' TOTP accounts. To add or manage accounts, please use the frontend management interface."
+点击进入前端管理,"Click to Enter Frontend Management"
+"The login challenge is invalid or has expired.","The login challenge is invalid or has expired."
+"Please enter the verification code.","Please enter the verification code."
+"Verification code is incorrect.","Verification code is incorrect."
 "Google Authenticator","Google Authenticator"
 "Microsoft Authenticator","Microsoft Authenticator"
 备份码已复制到剪贴板，请妥善保存,"The backup code has been copied to the clipboard, please save it properly"
@@ -173,21 +192,6 @@ Android设备安装步骤：,"Android Device Installation Steps:"
 2FA账户管理,"2FA Account Management"
 双因素认证,"Two-factor authentication"
 账户管理,"Account Management"
-总账户数,"Total Accounts"
-TOTP账户,"TOTP Accounts"
-活跃用户,"Active Users"
-安全状态,"Security Status"
-验证器账户列表,"Authenticator Account List"
-打开前端管理,"Open Frontend Management"
-暂无账户数据,"No account data"
-密钥,"Secret Key"
-创建时间,"creation time"
-算法,Algorithm
-这里是后台账户管理页面，您可以查看所有用户的TOTP账户。要添加或管理账户，请使用前端管理界面。,"This is the backend account management page where you can view all users' TOTP accounts. To add or manage accounts, please use the frontend management interface."
-点击进入前端管理,"Click to Enter Frontend Management"
-"The login challenge is invalid or has expired.","The login challenge is invalid or has expired."
-"Please enter the verification code.","Please enter the verification code."
-"Verification code is incorrect.","Verification code is incorrect."
 """Code data loaded.""","Code data loaded."
 确认组件不可用，请刷新页面后重试,"Confirm that the component is unavailable, please refresh the page and try again"
 "确认组件不可用，默认导出 JSON 格式","Confirm that the component is unavailable and export JSON format by default"

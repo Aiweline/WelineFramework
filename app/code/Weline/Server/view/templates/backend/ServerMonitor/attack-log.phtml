@@ -146,12 +146,12 @@ use Weline\Server\Model\AttackLog;
                                         <code class="w-text" data-size="sm"><?= htmlspecialchars($attack[AttackLog::schema_fields_IP] ?: '-') ?></code>
                                     </td>
                                     <td>
-                                        <small class="w-text" style="max-width: 120px;" title="<?= htmlspecialchars($attack[AttackLog::schema_fields_DOMAIN]) ?>" data-truncate="true" data-w-display="inline-block">
+                                        <small class="w-text" data-w-width="25" title="<?= htmlspecialchars($attack[AttackLog::schema_fields_DOMAIN]) ?>" data-truncate="true" data-w-display="inline-block">
                                             <?= htmlspecialchars($attack[AttackLog::schema_fields_DOMAIN] ?: '-') ?>
                                         </small>
                                     </td>
                                     <td>
-                                        <code class="w-text" style="max-width: 200px;" title="<?= htmlspecialchars($attack[AttackLog::schema_fields_URI]) ?>" data-truncate="true" data-w-display="inline-block" data-size="sm">
+                                        <code class="w-text" data-w-width="40" title="<?= htmlspecialchars($attack[AttackLog::schema_fields_URI]) ?>" data-truncate="true" data-w-display="inline-block" data-size="sm">
                                             <?= htmlspecialchars(substr($attack[AttackLog::schema_fields_URI] ?: '-', 0, 50)) ?>
                                         </code>
                                         <?php if (!empty($attack[AttackLog::schema_fields_REASON])): ?>
@@ -199,14 +199,6 @@ use Weline\Server\Model\AttackLog;
     </div>
 </div>
 
-<style>
-.stat-card {
-    transition: transform 0.2s ease;
-}
-.stat-card:hover {
-    transform: translateY(-2px);
-}
-</style>
 
 <script>
 document.addEventListener('change', function(event) {

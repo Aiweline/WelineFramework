@@ -36,41 +36,7 @@ ksort($typeOptions);
 $metaTotal = count($metas);
 $hasResults = $metaTotal > 0;
 ?>
-<style>
-    .meta-list .table thead th {
-        white-space: nowrap;
-    }
-
-    .meta-list .meta-name {
-        font-weight: 600;
-    }
-
-    .meta-list .meta-path {
-        font-family: "Fira Code", Monaco, Consolas, monospace;
-        font-size: 12px;
-    }
-
-    .meta-list .weline-weline-badge-space {
-        text-transform: none;
-        font-size: 12px;
-    }
-
-    .meta-json-preview {
-        max-height: 65vh;
-        overflow: auto;
-        background: var(--backend-color-card-bg);
-        color: var(--backend-color-text-primary);
-        border-radius: 0.75rem;
-        font-family: "Fira Code", Monaco, Consolas, monospace;
-        font-size: 13px;
-    }
-
-    .filter-card .w-input,
-    .filter-card .w-select {
-        border-radius: 999px;
-        padding-left: 1.2rem;
-    }
-</style>
+<css>Weline_Meta::css/backend/meta-index.css</css>
 
 <div class="w-grid">
     <div style="--w-span:12;">
@@ -96,7 +62,7 @@ $hasResults = $metaTotal > 0;
     <div style="--w-span-lg:3;--w-span-md:6;">
         <div class="w-card" data-w-border="border" data-w-shadow="sm" data-w-height="full">
             <div class="w-card__body w-cluster" data-align="center">
-                <div class="w-cluster" data-w-avatar="true" data-w-background="primary" data-w-radius="round" data-align="center" data-justify="center" style="--w-avatar-size:2rem;">
+                <div class="w-cluster" data-w-avatar="true" data-w-background="primary" data-w-radius="round" data-align="center" data-justify="center" style="--w-avatar-size:var(--weline-space-8);">
                     <w:icon name="search" size="sm"></w:icon>
                 </div>
                 <div>
@@ -109,7 +75,7 @@ $hasResults = $metaTotal > 0;
     <div style="--w-span-lg:3;--w-span-md:6;">
         <div class="w-card" data-w-border="border" data-w-shadow="sm" data-w-height="full">
             <div class="w-card__body w-cluster" data-align="center">
-                <div class="w-cluster" data-w-avatar="true" data-w-background="success" data-w-radius="round" data-align="center" data-justify="center" style="--w-avatar-size:2rem;">
+                <div class="w-cluster" data-w-avatar="true" data-w-background="success" data-w-radius="round" data-align="center" data-justify="center" style="--w-avatar-size:var(--weline-space-8);">
                     <w:icon name="circle" size="sm"></w:icon>
                 </div>
                 <div>
@@ -122,7 +88,7 @@ $hasResults = $metaTotal > 0;
     <div style="--w-span-lg:3;--w-span-md:6;">
         <div class="w-card" data-w-border="border" data-w-shadow="sm" data-w-height="full">
             <div class="w-card__body w-cluster" data-align="center">
-                <div class="w-cluster" data-w-avatar="true" data-w-background="warning" data-w-radius="round" data-align="center" data-justify="center" style="--w-avatar-size:2rem;">
+                <div class="w-cluster" data-w-avatar="true" data-w-background="warning" data-w-radius="round" data-align="center" data-justify="center" style="--w-avatar-size:var(--weline-space-8);">
                     <w:icon name="grid" size="sm"></w:icon>
                 </div>
                 <div>

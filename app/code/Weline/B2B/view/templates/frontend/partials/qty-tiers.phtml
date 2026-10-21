@@ -82,7 +82,7 @@ $tiers = [];
      data-b2b-qty-tiers="1"
      data-b2b-qty-ladder="0"
      role="region"
-     aria-label="<?= $escape(__('批发起订与阶梯价')) ?>"
+     aria-label="@lang('批发起订与阶梯价')"
      <?= $tiersHidden ? 'hidden' : '' ?>>
     <p class="b2b-qty-tiers__moq" data-testid="b2b-qty-tiers-moq">
         <?= $escape(__('起订 %{1} · 步进 %{2}', [$moq, $step])) ?>
@@ -137,7 +137,7 @@ $tiers = [];
         </ul>
     <?php else: ?>
         <p class="b2b-qty-tiers__hint">
-            <?= $escape(__('批发价按数量档与会员等级计价；当前无适用档位时显示站内参考价。')) ?>
+            <lang>批发价按数量档与会员等级计价；当前无适用档位时显示站内参考价。</lang>
         </p>
     <?php endif; ?>
 </div>

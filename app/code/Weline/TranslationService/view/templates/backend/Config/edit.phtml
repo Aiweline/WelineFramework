@@ -11,9 +11,6 @@ $supportedLanguages = $provider ? $provider->getSupportedLanguages() : [];
 $config = $provider ? $provider->getConfig() : [];
 ?>
 <div class="translation-service-config-edit-page">
-    <div class="page-header" style="--w-mb:var(--weline-space-6);">
-        <h1><?= $isEdit ? __('编辑渠道配置') : __('添加渠道配置') ?></h1>
-    </div>
 
     <w:form method="post" action="@backend-url{'*/backend/config/save'}">
         <?php if ($isEdit): ?>

@@ -252,12 +252,6 @@ settings,settings
 "最终扣款金额、币种与支付工具以您在 Stripe 支付页确认的内容为准。您应确保支付工具可用且有权使用。","最终扣款金额、币种与支付工具以您在 Stripe 支付页确认的内容为准。您应确保支付工具可用且有权使用。"
 "银行卡安全、银行验证与 Stripe 侧拒付/风控由发卡机构及 Stripe 按其规则处理；本站负责订单履约、退款申请受理及与支付结果相关的订单状态更新。","银行卡安全、银行验证与 Stripe 侧拒付/风控由发卡机构及 Stripe 按其规则处理；本站负责订单履约、退款申请受理及与支付结果相关的订单状态更新。"
 "除本协议外，您还须遵守 Stripe 服务条款、隐私声明及当地适用法律。若条款冲突，涉及支付清算与账户安全的部分以 Stripe 及发卡机构规则为准。","除本协议外，您还须遵守 Stripe 服务条款、隐私声明及当地适用法律。若条款冲突，涉及支付清算与账户安全的部分以 Stripe 及发卡机构规则为准。"
-待处理,待处理
-处理中,处理中
-已支付,已支付
-已发货,已发货
-已完成,已完成
-已退款,已退款
 该支付已取消，无需再次操作。,该支付已取消，无需再次操作。
 支付已取消成功，订单尚未完成付款。可返回结账页重新选择支付方式。,支付已取消成功，订单尚未完成付款。可返回结账页重新选择支付方式。
 当前没有可查询的支付交易号。若刚从网关返回，请确认回跳参数完整。,当前没有可查询的支付交易号。若刚从网关返回，请确认回跳参数完整。
@@ -281,21 +275,38 @@ settings,settings
 订单信息,订单信息
 订单状态,订单状态
 支付摘要,支付摘要
-订单操作,订单操作
 查看或管理订单,查看或管理订单
 继续购物,继续购物
 返回结账,返回结账
+订单操作,订单操作
+待处理,待处理
+处理中,处理中
+已支付,已支付
+已发货,已发货
+已完成,已完成
+已退款,已退款
 您的支付已完成。,您的支付已完成。
 "Continue to Stripe","Continue to Stripe"
 "Stripe Checkout will open after you confirm payment.","Stripe Checkout will open after you confirm payment."
 确认进度,确认进度
 正在确认订单…,正在确认订单…
 支付已成功，我们正在同步订单信息。,支付已成功，我们正在同步订单信息。
-订单确认进度,订单确认进度
 支付已确认,支付已确认
 正在同步订单,正在同步订单
 即将跳转结果页,即将跳转结果页
 请稍候，请勿关闭本页,请稍候，请勿关闭本页
+订单确认进度,订单确认进度
+"Select a payment method to continue.",选择付款方式以继续。
+"Please agree to the payment terms before continuing.",请先同意付款条款，然后再继续。
+"Selected payment method:",选择的付款方式：
+状态,状态
+"Used by browser verification only.",仅用于浏览器验证。
+"No payment method is available for the current payable object.",当前应付对象没有可用的付款方式。
+"I agree to the payment terms.",我同意付款条件。
+支付失败,支付失败
+取消,取消
+支付状态,支付状态
+More,更多的
 "Credit Asset",信贷资产
 "Requires exchange ratio and payable permission before checkout.",结账前需要兑换比例和付款许可。
 "This asset is not enabled for payment.",该资产未启用支付功能。
@@ -308,19 +319,8 @@ settings,settings
 "Can partially deduct payable amount when enabled.",启用后可以部分扣除应付金额。
 "Current customer country is not supported.",不支持当前客户所在国家/地区。
 "Payment provider is not ready.",支付提供商尚未准备好。
-支付失败,支付失败
 支付未完成，请重试,支付未完成，请重试
-取消,取消
-"Select a payment method to continue.",选择付款方式以继续。
-"Please agree to the payment terms before continuing.",请先同意付款条款，然后再继续。
-"Selected payment method:",选择的付款方式：
-状态,状态
-"Used by browser verification only.",仅用于浏览器验证。
-"No payment method is available for the current payable object.",当前应付对象没有可用的付款方式。
 支付方式当前不可用,支付方式当前不可用
-"I agree to the payment terms.",我同意付款条件。
-支付状态,支付状态
-More,更多的
 "使用 PayPal 账户或卡完成支付。支持 Google Pay / Apple Pay（可在后台关闭）。","使用 PayPal 账户或卡完成支付。支持 Google Pay / Apple Pay（可在后台关闭）。"
 "若设备支持，将显示 Google Pay / Apple Pay。也可继续使用下方 PayPal 跳转。","若设备支持，将显示 Google Pay / Apple Pay。也可继续使用下方 PayPal 跳转。"
 "Continue to PayPal","前往 PayPal 支付"
@@ -509,6 +509,10 @@ More,更多的
 否,否
 此工作台仅显示脱敏支付事实，不触发真实资金、修复或退款动作。,此工作台仅显示脱敏支付事实，不触发真实资金、修复或退款动作。
 当前没有记录。,当前没有记录。
+支付提供商同步成功,支付提供商同步成功
+支付提供商同步失败,支付提供商同步失败
+支付方式排序已保存,支付方式排序已保存
+支付方式排序保存失败,支付方式排序保存失败
 同步支付提供商,同步支付提供商
 "拖拽左侧手柄调整顺序；排序仅对当前 Scope 生效，结账页按此顺序展示支付方式。","拖拽左侧手柄调整顺序；排序仅对当前 Scope 生效，结账页按此顺序展示支付方式。"
 拖拽,拖拽
@@ -522,10 +526,6 @@ More,更多的
 拖拽排序,拖拽排序
 查看配置,查看配置
 配置深度链接,配置深度链接
-支付提供商同步成功,支付提供商同步成功
-支付提供商同步失败,支付提供商同步失败
-支付方式排序已保存,支付方式排序已保存
-支付方式排序保存失败,支付方式排序保存失败
 支付方式配置入口,支付方式配置入口
 "支付方式普通配置、scope 选择、继承来源、保存、校验和缓存失效由系统配置中心统一处理。","支付方式普通配置、scope 选择、继承来源、保存、校验和缓存失效由系统配置中心统一处理。"
 "配置 scope",配置范围

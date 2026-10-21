@@ -3,12 +3,12 @@
     .w-auth-recovery { width: min(27.5rem, calc(100% - 2rem)); margin-inline: auto; overflow: hidden; animation: w-auth-recovery-enter 240ms ease-out; }
     .w-auth-recovery__header { display: grid; justify-items: center; gap: var(--weline-space-2); padding: var(--weline-space-8) var(--weline-space-6) var(--weline-space-4); text-align: center; }
     .w-auth-recovery__icon { display: grid; width: 4rem; height: 4rem; place-items: center; border-radius: var(--weline-radius-lg); background: var(--weline-theme-primary-surface); color: var(--weline-theme-primary); }
-    .w-auth-recovery__title { font-size: clamp(var(--weline-font-size-xl), 5vw, 1.875rem); }
+    .w-auth-recovery__title { font-size: clamp(var(--weline-font-size-xl), 5vw, var(--font-size-3xl)); }
     .w-auth-recovery__subtitle { margin: 0; color: var(--weline-theme-text-muted); }
     .w-auth-recovery__messages,
     .w-auth-recovery__form { display: grid; gap: var(--weline-space-4); padding-inline: var(--weline-space-6); }
     .w-auth-recovery__password { position: relative; }
-    .w-auth-recovery__password .w-input { padding-inline-end: 3.25rem; }
+    .w-auth-recovery__password .w-input { padding-inline-end: var(--spacing-13); }
     .w-auth-recovery__password > .w-button { position: absolute; inset-block-start: 50%; inset-inline-end: var(--weline-space-1); translate: 0 -50%; }
     .w-auth-recovery__submit { width: 100%; }
     .w-auth-recovery__footer { display: flex; justify-content: center; margin-block-start: var(--weline-space-6); padding: var(--weline-space-4) var(--weline-space-6); border-block-start: 1px solid var(--weline-theme-border); }

@@ -257,7 +257,7 @@ Weline UI 的原生 `input`、`select`、`textarea` 必须以包含块宽度为�
   - 后端：`--backend-theme-*` / `--backend-color-*`
 - **基础组件禁止私写色**：`w-button` / `w-input` / `w-alert` 等只消费上述语义 Token；品牌主题只改 `colors/_*.css` 叶子（MCP `theme_base_components_token_only`）
 - **跨区组件必须按区域切换 token**：同一套 UI 若同时出现在前台与后台，须用明确 area 属性切换，并在组件根上强制标题/正文颜色；禁止在后台页面误用 `--weline-theme-*`（未注入时会回退成浅色底，再叠加 `bootstrap-dark` 的浅色 `h1–h6`，出现白底白字）
-- 后台模块页优先复用 Admin 壳：`page-title-box` + `card`/`card-body`
+- 后台模块页必须按《[后端主题开发标准](../backend/后端主题开发标准.md)》使用 `w-backend-page` + `w-card`/`w-table`/`w-button` 等语义类；`page-title-box`/`card`/`card-body` 只保留在 `theme.css` 兼容层，新模板禁止再写
 - 组件变量应引用主题 token，不要重新发明第二套不兼容变量体系
 
 推荐：

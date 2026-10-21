@@ -6,8 +6,8 @@
 $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
 <div class="content-header">
-    <div class="w-cluster" data-align="start" data-justify="between" style="--w-gap:var(--weline-space-3);margin-bottom:var(--weline-theme-space-4,1rem);">
-        <p class="w-text" data-tone="muted" style="margin:0;max-inline-size:min(100%,36rem);">
+    <div class="w-cluster" data-align="start" data-justify="between" style="--w-gap:var(--weline-space-3);margin-bottom:var(--weline-space-4);">
+        <p class="w-text" data-tone="muted" style="--w-mt:0;--w-mb:0;max-inline-size:min(100%,90ch);">
             <?= __('选择内置平台即可使用官方推送地址；密钥在各平台「账户」中配置（暂无一键 OAuth）。') ?>
         </p>
         <a href="@url{'geo/backend/platform/edit'}" class="w-button" data-tone="primary" data-shrink="false">
@@ -32,7 +32,7 @@ $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES
                 <?php if (empty($platforms)): ?>
                     <tr>
                         <td colspan="5">
-                            <div class="w-stack" data-gap="sm" style="padding:var(--weline-theme-space-6,1.5rem) 0;">
+                            <div class="w-stack" data-gap="sm" style="padding:var(--weline-space-6) 0;">
                                 <div class="w-text"><?= __('还没有平台。先添加一个平台并配置账户，才能主动推送。') ?></div>
                                 <div>
                                     <a href="@url{'geo/backend/platform/edit'}" class="w-button" data-tone="primary" data-size="sm" data-shrink="false">
@@ -81,7 +81,7 @@ $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES
         </table>
     </div>
     <?php if (!empty($platforms)): ?>
-        <p class="w-text" data-tone="muted" data-size="sm" style="margin-top:var(--weline-theme-space-3,0.75rem);">
+        <p class="w-text" data-tone="muted" data-size="sm" style="margin-top:var(--weline-space-3);">
             <?= __('推送 API 地址请在「编辑」中查看；本页用于开关与账户配置。') ?>
         </p>
     <?php endif; ?>

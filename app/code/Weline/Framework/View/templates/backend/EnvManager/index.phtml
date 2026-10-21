@@ -19,16 +19,7 @@ $statusLabels = [
 $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
 ?>
 
-<style>
-.env-card { margin-bottom: 1.5rem; }
-.env-card .card-header { font-weight: 600; }
-.status-badge { font-size: 0.85em; }
-.guide-section { display: none; }
-.guide-section.active { display: block; }
-.guide-tab.active { background: var(--bs-primary); color: #fff !important; }
-.platform-tag { font-size: 0.75em; padding: 2px 6px; border-radius: 3px; background: var(--bs-info-bg-subtle); color: var(--bs-info-text-emphasis); }
-.ext-table td, .ext-table th { vertical-align: middle; }
-</style>
+<link rel="stylesheet" href="@static(Weline_Framework::css/backend/framework-env-manager.css)">
 
 <!-- 页面标题 -->
 <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-6);">
@@ -49,15 +40,15 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
         <div class="w-grid">
             <div style="--w-span-md:6;">
                 <table class="w-table" style="--w-mb:0;">
-                    <tr><th style="width:140px"><?= __('操作系统') ?></th><td><?= htmlspecialchars($system_info['os_family'] . ' (' . $system_info['os'] . ')') ?></td></tr>
+                    <tr><th class="env-platform-select"><?= __('操作系统') ?></th><td><?= htmlspecialchars($system_info['os_family'] . ' (' . $system_info['os'] . ')') ?></td></tr>
                     <tr><th>PHP <?= __('版本') ?></th><td><?= htmlspecialchars($system_info['php_version']) ?></td></tr>
                     <tr><th>PHP SAPI</th><td><?= htmlspecialchars($system_info['sapi']) ?></td></tr>
                 </table>
             </div>
             <div style="--w-span-md:6;">
                 <table class="w-table" style="--w-mb:0;">
-                    <tr><th style="width:140px">php.ini</th><td><code style="font-size:0.8em"><?= htmlspecialchars($system_info['php_ini']) ?></code></td></tr>
-                    <tr><th><?= __('扩展目录') ?></th><td><code style="font-size:0.8em"><?= htmlspecialchars($system_info['ext_dir']) ?></code></td></tr>
+                    <tr><th class="env-platform-select">php.ini</th><td><code class="env-hint"><?= htmlspecialchars($system_info['php_ini']) ?></code></td></tr>
+                    <tr><th><?= __('扩展目录') ?></th><td><code class="env-hint"><?= htmlspecialchars($system_info['ext_dir']) ?></code></td></tr>
                     <tr><th><?= __('已加载扩展') ?></th><td><?= count($system_info['loaded_exts']) ?> <?= __('个') ?></td></tr>
                 </table>
             </div>

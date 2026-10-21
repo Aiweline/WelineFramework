@@ -6,19 +6,19 @@ $redirectUrl = trim((string)$this->getData('redirect_url'));
 ?>
 <section class="weline-payment-stripe" weline-code="payment.checkout.stripe">
     <header class="weline-payment-stripe__header">
-        <h2><?= __('Stripe') ?></h2>
-        <p><?= __('使用 Stripe Checkout 完成卡与本地支付方式。') ?></p>
+        <h2><lang>Stripe</lang></h2>
+        <p><lang>使用 Stripe Checkout 完成卡与本地支付方式。</lang></p>
     </header>
 
     <?php if ($redirectUrl !== ''): ?>
         <div class="weline-payment-stripe__action">
             <a class="w-button" data-tone="primary" href="<?= $esc($redirectUrl) ?>">
-                <?= __('Continue to Stripe') ?>
+                <lang>Continue to Stripe</lang>
             </a>
         </div>
     <?php else: ?>
         <div class="w-alert" data-tone="info">
-            <?= __('Stripe Checkout will open after you confirm payment.') ?>
+            <lang>Stripe Checkout will open after you confirm payment.</lang>
         </div>
     <?php endif; ?>
 </section>
@@ -27,17 +27,17 @@ $redirectUrl = trim((string)$this->getData('redirect_url'));
 .weline-payment-stripe {
     box-sizing: border-box;
     display: grid;
-    gap: 16px;
-    padding: 16px 0;
+    gap: var(--spacing-4);
+    padding: var(--spacing-4) 0;
 }
 .weline-payment-stripe__header h2 {
-    font-size: 20px;
+    font-size: var(--font-size-xl);
     line-height: 1.3;
-    margin: 0 0 6px;
+    margin: 0 0 var(--spacing-1_5);
 }
 .weline-payment-stripe__header p {
-    color: #57606a;
-    font-size: 14px;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
     line-height: 1.5;
     margin: 0;
 }

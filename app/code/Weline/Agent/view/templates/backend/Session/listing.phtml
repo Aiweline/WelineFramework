@@ -24,12 +24,11 @@ $get = static function (mixed $item, string $key, mixed $default = ''): mixed {
 };
 ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-agent-admin.css)">
-<script src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
+<script defer src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
 
 <section class="w-agent-admin">
     <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
         <div class="w-agent-admin__intro">
-            <h1><w:icon name="list" size="sm" /> <?= $escape(__('会话管理')) ?></h1>
             <p class="w-agent-admin__kicker"><?= $escape(__('查看人与智能体的对话记录，便于回放和排查。')) ?></p>
         </div>
         <a class="w-button" data-tone="neutral" data-variant="outline" href="@backend-url{'*/backend/chat/index'}">

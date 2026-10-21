@@ -34,44 +34,7 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AM
 </div>
 <?= $this->fetch('Weline_Shipping::templates/backend/partials/manager-tabs.phtml', ['activeTab' => 'systemembargo']) ?>
 <?php endif; ?>
-<style>
-#system-embargo-add-dialog .w-dialog__surface,
-#system-embargo-add-dialog .w-dialog__body {
-    overflow: visible;
-}
-#system-embargo-add-dialog .w-dialog__body {
-    max-height: none;
-}
-[data-testid="system-embargo-country"] .w-address {
-    width: 100%;
-    max-width: 28rem;
-}
-[data-testid="shipping-system-embargo"] .w-card__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--weline-space-3, 0.75rem);
-}
-[data-testid="shipping-system-embargo"] .w-card__title {
-    margin: 0;
-}
-[data-testid="system-embargo-row-actions"],
-[data-testid="system-embargo-reason-actions"] {
-    display: inline-flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--weline-space-2, 0.5rem);
-}
-[data-testid="system-embargo-reason-card"] .w-card__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--weline-space-3, 0.75rem);
-}
-[data-testid="system-embargo-reason-card"] .w-card__title {
-    margin: 0;
-}
-</style>
+<css>Weline_Shipping::css/backend/shipping-admin.css</css>
 <div class="w-stack" data-gap="md" data-testid="shipping-system-embargo">
     <div class="w-alert" data-tone="warning">
         <w:icon name="alert-triangle" size="sm"></w:icon>
@@ -94,7 +57,7 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AM
             ><lang>新增原因</lang></button>
         </header>
         <div class="w-card__body">
-            <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-3,0.75rem);">
+            <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-3);">
                 <lang>原因名称支持多语言（LocalModel）。列表「原因」列与新增下拉均读取此处配置。</lang>
             </p>
             <table class="w-table" data-testid="system-embargo-reason-table">

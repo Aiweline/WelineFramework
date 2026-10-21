@@ -29,12 +29,6 @@ foreach ($pageBreadcrumbs as $crumb) {
 }
 ?>
 <?php if ($pageHeading !== ''): ?>
-<style>
-/* 主题 main-content 已输出模块名页头；本页用真实标题替换，故隐藏前者 */
-main.w-backend-page > header.w-backend-page__heading:first-of-type {
-    display: none !important;
-}
-</style>
 <div class="w-grid">
     <div style="--w-span:12;">
         <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">

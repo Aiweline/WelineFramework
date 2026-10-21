@@ -1,0 +1,6 @@
+@layer page {
+    .async-tree--scroll {
+        max-height: 12.5rem;
+        overflow-y: auto;
+    }
+}

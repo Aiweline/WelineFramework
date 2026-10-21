@@ -1,0 +1,24 @@
+/* Weline_Meta 元数据列表页私有布局（后端主题标准 §6.2）。
+ * 颜色全部取主题 Token；不使用强制优先级。
+ */
+@layer page {
+    .meta-list .w-table thead th {
+        white-space: nowrap;
+    }
+
+    .meta-list .meta-name {
+        font-weight: var(--weline-font-weight-semibold, 600);
+    }
+
+    .meta-list .meta-path {
+        font-family: var(--weline-font-mono);
+        font-size: var(--weline-font-size-xs);
+    }
+
+    .meta-json-preview {
+        max-height: 65vh;
+        overflow: auto;
+        font-family: var(--weline-font-mono);
+        font-size: var(--weline-font-size-sm);
+    }
+}

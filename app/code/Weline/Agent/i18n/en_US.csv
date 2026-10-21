@@ -113,7 +113,6 @@
 成功,Success
 "会话 ID 无效","Invalid session ID"
 历史已清除,"History cleared"
-调度管理,"Schedule Management"
 让智能体按时间自动执行任务，适合巡检、汇总和定期清理。,"Let the agent run tasks on a schedule—ideal for inspections, summaries, and periodic cleanup."
 新建调度,"New Schedule"
 任务,Tasks
@@ -370,6 +369,7 @@
 回复已生成,"Reply generated"
 "AI 建议不可用，已应用模板草稿。","AI suggestion unavailable, applied template draft."
 未找到可用模型，已应用模板草稿。,"No active model found, applied template draft."
+调度管理,"Schedule Management"
 完整对话体验即将接入,"Full conversation experience coming soon"
 当前可先确认左侧角色是否齐全。流式聊天与工具调用面板会在此展开。,"For now, confirm that the roles on the left are complete. The streaming chat and tool-call panel will expand here."
 查看历史会话,"View conversation history"

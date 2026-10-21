@@ -1,3 +1,4 @@
+/* Weline UI source: js/website-form.js */
 function safeRegisterComponent(mod, UI) {
     if (!mod || typeof mod.register !== 'function' || !UI) {
         return;

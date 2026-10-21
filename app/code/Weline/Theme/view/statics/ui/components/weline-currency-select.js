@@ -1,3 +1,4 @@
+/* Weline UI source: js/currency-select.js */
 function parseValues(value) {
     try {
         const parsed = JSON.parse(String(value || '[]'));

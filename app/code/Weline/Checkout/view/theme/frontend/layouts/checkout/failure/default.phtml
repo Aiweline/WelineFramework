@@ -74,8 +74,8 @@ $this->assign('title', $title);
             align-items: center;
             justify-content: center;
             border-radius: var(--weline-layout-radius-full);
-            background: color-mix(in srgb, var(--weline-theme-danger, #83302a) 12%, var(--weline-layout-surface-primary));
-            color: var(--weline-theme-danger, #83302a);
+            background: color-mix(in srgb, var(--weline-theme-danger) 12%, var(--weline-layout-surface-primary));
+            color: var(--weline-theme-danger);
         }
 
         .failure-icon .w-icon,
@@ -180,20 +180,20 @@ $this->assign('title', $title);
                 </div>
                 <?php if ($errorCode): ?>
                     <p class="error-code">
-                        <?= __('错误代码：') ?><code><?= htmlspecialchars((string)$errorCode) ?></code>
+                        <lang>错误代码：</lang><code><?= htmlspecialchars((string)$errorCode) ?></code>
                     </p>
                 <?php endif; ?>
                 <div class="failure-actions">
                     <?php if ($retryUrl): ?>
                         <a href="<?= htmlspecialchars((string)$retryUrl) ?>" class="w-btn w-btn-primary">
-                            <?= __('重试结算') ?>
+                            <lang>重试结算</lang>
                         </a>
                     <?php endif; ?>
                     <a href="<?= htmlspecialchars((string)$backToCart) ?>" class="w-btn w-btn-primary">
-                        <?= __('返回购物车') ?>
+                        <lang>返回购物车</lang>
                     </a>
                     <a href="@url{'faq'}" class="w-btn w-btn-secondary">
-                        <?= __('查看帮助中心') ?>
+                        <lang>查看帮助中心</lang>
                     </a>
                 </div>
             </div>

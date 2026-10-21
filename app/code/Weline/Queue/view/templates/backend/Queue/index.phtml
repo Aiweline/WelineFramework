@@ -26,10 +26,6 @@ $config = [
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-queue-admin.css)">
 
 <main class="w-queue-admin w-stack" data-w-component="queue-admin" data-testid="queue-list-management">
-    <header class="w-queue-admin__heading">
-        <h1><w:icon name="list" size="sm" /> <?= $escape($title ?? __('消息队列')) ?></h1>
-    </header>
-
     <template>Weline_Component::message.phtml</template>
 
     <section class="w-queue-admin__regions" data-w-queue-stats aria-live="polite">

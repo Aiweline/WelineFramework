@@ -1,3 +1,4 @@
+<css>Weline_B2B::css/backend/b2b-admin.css</css>
 <?php
 /**
  * 批发配置：嵌入统一配置声明的售卖模式启用开关（支持 URL 范围）。
@@ -22,7 +23,7 @@ $centerUrl = $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig
         </a>
     </div>
 
-    <div class="w-field" style="--w-max-inline-size:22rem;">
+    <div class="w-field b2b-field-select">
         <label class="w-field__label" for="b2b-config-scope"><lang>作用范围</lang></label>
         <div class="w-field__control">
             <w:scope
@@ -69,24 +70,6 @@ $centerUrl = $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig
         </div>
     </div>
 </div>
-<style>
-    /* Persist JSON via embed control but never show raw payload to operators. */
-    [data-testid="b2b-selling-mode-config"] [data-config-key="b2b_default_tier_policy_json"],
-    [data-testid="b2b-selling-mode-config"] [data-config-key="b2b_default_tier_policy_json"][data-b2b-json-hidden="1"] {
-        position: absolute !important;
-        width: 1px !important;
-        height: 1px !important;
-        padding: 0 !important;
-        margin: -1px !important;
-        overflow: hidden !important;
-        clip: rect(0, 0, 0, 0) !important;
-        clip-path: inset(50%) !important;
-        white-space: nowrap !important;
-        border: 0 !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-    }
-</style>
 <script>
 (function () {
     var root = document.getElementById('b2b-config-scope');

@@ -5,20 +5,20 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= __('系统安装') ?> - Weline Framework</title>
+    <title><lang>系统安装</lang> - Weline Framework</title>
     <style>
         :root {
-            --primary-color: #4f46e5;
-            --primary-hover: #4338ca;
-            --success-color: #22c55e;
-            --warning-color: #f59e0b;
-            --error-color: #ef4444;
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --text-color: #f8fafc;
+            --primary-color: var(--color-primary);
+            --primary-hover: var(--color-primary);
+            --success-color: var(--color-success);
+            --warning-color: var(--color-warning);
+            --error-color: var(--color-danger);
+            --bg-color: var(--color-header-bg);
+            --card-bg: var(--color-header-bg-hover);
+            --text-color: var(--color-info-soft);
             --text-muted: #94a3b8;
             --border-color: #334155;
-            --terminal-bg: #0c0c0c;
+            --terminal-bg: var(--color-bg-dark-secondary);
             --terminal-text: #22c55e;
         }
         
@@ -30,7 +30,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, var(--bg-color) 0%, #1e1b4b 100%);
+            background: linear-gradient(135deg, var(--bg-color) 0%, var(--color-info) 100%);
             color: var(--text-color);
             min-height: 100vh;
             display: flex;
@@ -40,18 +40,18 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         .container {
             max-width: 900px;
             margin: 0 auto;
-            padding: 2rem;
+            padding: var(--weline-space-8);
             flex: 1;
         }
         
         .header {
             text-align: center;
-            margin-bottom: 2rem;
+            margin-bottom: var(--weline-space-8);
         }
         
         .header h1 {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
+            font-size: var(--weline-font-size-4xl);
+            margin-bottom: var(--weline-space-2);
             background: linear-gradient(90deg, #818cf8, #c084fc);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -65,19 +65,19 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         .steps {
             display: flex;
             justify-content: center;
-            gap: 1rem;
-            margin-bottom: 2rem;
+            gap: var(--weline-space-4);
+            margin-bottom: var(--weline-space-8);
             flex-wrap: wrap;
         }
         
         .step {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.75rem 1.5rem;
+            gap: var(--weline-space-2);
+            padding: var(--weline-space-3) var(--weline-space-6);
             background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 9999px;
+            border: var(--border-width-thin) solid var(--border-color);
+            border-radius: var(--radius-full);
             color: var(--text-muted);
             transition: all 0.3s;
         }
@@ -102,27 +102,27 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         /* 卡片 */
         .card {
             background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 1rem;
-            padding: 2rem;
-            margin-bottom: 1.5rem;
+            border: var(--border-width-thin) solid var(--border-color);
+            border-radius: var(--border-radius-2xl);
+            padding: var(--weline-space-8);
+            margin-bottom: var(--weline-space-6);
         }
         
         .card-title {
-            font-size: 1.25rem;
-            margin-bottom: 1rem;
+            font-size: var(--weline-font-size-xl);
+            margin-bottom: var(--weline-space-4);
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: var(--weline-space-2);
         }
         
         /* 终端样式 */
         .terminal {
             background: var(--terminal-bg);
-            border-radius: 0.5rem;
-            padding: 1rem;
+            border-radius: var(--border-radius-lg);
+            padding: var(--weline-space-4);
             font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 0.875rem;
+            font-size: var(--weline-font-size-sm);
             line-height: 1.5;
             height: 300px;
             overflow-y: auto;
@@ -130,7 +130,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         }
         
         .terminal-line {
-            margin-bottom: 0.25rem;
+            margin-bottom: var(--weline-space-1);
             white-space: pre-wrap;
             word-break: break-all;
         }
@@ -148,29 +148,29 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         }
         
         .terminal-line.info {
-            color: #60a5fa;
+            color: var(--color-text-faint);
         }
         
         /* 表单 */
         .w-field {
-            margin-bottom: 1rem;
+            margin-bottom: var(--weline-space-4);
         }
         
         .form-label {
             display: block;
-            margin-bottom: 0.5rem;
+            margin-bottom: var(--weline-space-2);
             color: var(--text-muted);
-            font-size: 0.875rem;
+            font-size: var(--weline-font-size-sm);
         }
         
         .form-input {
             width: 100%;
-            padding: 0.75rem 1rem;
+            padding: var(--weline-space-3) var(--weline-space-4);
             background: var(--bg-color);
-            border: 1px solid var(--border-color);
-            border-radius: 0.5rem;
+            border: var(--border-width-thin) solid var(--border-color);
+            border-radius: var(--border-radius-lg);
             color: var(--text-color);
-            font-size: 1rem;
+            font-size: var(--weline-font-size-base);
             transition: border-color 0.3s;
         }
         
@@ -182,7 +182,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         .form-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 1rem;
+            gap: var(--weline-space-4);
         }
         
         /* 按钮 */
@@ -190,11 +190,11 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 0.5rem;
-            padding: 0.75rem 1.5rem;
+            gap: var(--weline-space-2);
+            padding: var(--weline-space-3) var(--weline-space-6);
             border: none;
-            border-radius: 0.5rem;
-            font-size: 1rem;
+            border-radius: var(--border-radius-lg);
+            font-size: var(--weline-font-size-base);
             font-weight: 500;
             cursor: pointer;
             transition: all 0.3s;
@@ -221,18 +221,18 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         
         .btn-group {
             display: flex;
-            gap: 1rem;
-            margin-top: 1.5rem;
+            gap: var(--weline-space-4);
+            margin-top: var(--weline-space-6);
         }
         
         /* 状态指示 */
         .status-badge {
             display: inline-flex;
             align-items: center;
-            gap: 0.25rem;
-            padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
+            gap: var(--weline-space-1);
+            padding: var(--weline-space-1) var(--weline-space-3);
+            border-radius: var(--radius-full);
+            font-size: var(--weline-font-size-xs);
             font-weight: 500;
         }
         
@@ -253,10 +253,10 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
 
         .inline-message {
             display: block;
-            margin-top: 1rem;
-            padding: 0.75rem 1rem;
-            border: 1px solid rgba(96, 165, 250, 0.35);
-            border-radius: 0.5rem;
+            margin-top: var(--weline-space-4);
+            padding: var(--weline-space-3) var(--weline-space-4);
+            border: var(--border-width-thin) solid rgba(96, 165, 250, 0.35);
+            border-radius: var(--border-radius-lg);
             background: rgba(96, 165, 250, 0.12);
             color: var(--text-color);
             line-height: 1.5;
@@ -293,8 +293,8 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0.75rem 0;
-            border-bottom: 1px solid var(--border-color);
+            padding: var(--weline-space-3) 0;
+            border-bottom: var(--border-width-thin) solid var(--border-color);
         }
         
         .check-item:last-child {
@@ -304,7 +304,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         .check-item-name {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: var(--weline-space-2);
         }
         
         /* 隐藏的步骤面板 */
@@ -319,16 +319,16 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         /* 完成页面 */
         .complete-info {
             background: var(--bg-color);
-            border-radius: 0.5rem;
-            padding: 1rem;
-            margin-top: 1rem;
+            border-radius: var(--border-radius-lg);
+            padding: var(--weline-space-4);
+            margin-top: var(--weline-space-4);
         }
         
         .complete-info-item {
             display: flex;
             justify-content: space-between;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid var(--border-color);
+            padding: var(--weline-space-2) 0;
+            border-bottom: var(--border-width-thin) solid var(--border-color);
         }
         
         .complete-info-item:last-child {
@@ -344,7 +344,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         .spinner {
             width: 20px;
             height: 20px;
-            border: 2px solid var(--border-color);
+            border: var(--border-width-medium) solid var(--border-color);
             border-top-color: var(--primary-color);
             border-radius: 50%;
             animation: spin 1s linear infinite;
@@ -365,13 +365,18 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
                 align-items: center;
             }
         }
+            .s-hidden-mt { display:none;margin-top:var(--weline-space-4) }
+        .s-mb-2 { margin-bottom:var(--weline-space-2) }
+        .s-hidden { display:none }
+        .s-muted { color:var(--color-text-muted) }
+        .s-ok { color:var(--color-success) }
     </style>
 </head>
 <body>
     <div class="w-container">
         <div class="header">
-            <h1><?= __('Weline Framework') ?></h1>
-            <p><?= __('系统安装向导') ?></p>
+            <h1><lang>Weline Framework</lang></h1>
+            <p><lang>系统安装向导</lang></p>
         </div>
         
         <!-- 步骤指示器 -->
@@ -387,23 +392,23 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         <div class="step-panel active" id="panel-env">
             <div class="w-card">
                 <div class="w-card__title">
-                    <span><?= __('环境检测') ?></span>
+                    <span><lang>环境检测</lang></span>
                     <span id="env-status"></span>
                 </div>
                 
                 <div class="terminal" id="terminal">
-                    <div class="terminal-line info"><?= __('点击下方按钮开始检测环境...') ?></div>
+                    <div class="terminal-line info"><lang>点击下方按钮开始检测环境...</lang></div>
                 </div>
                 
-                <div id="env-result" style="display: none; margin-top: 1rem;">
-                    <h4 style="margin-bottom: 0.5rem;"><?= __('检测结果') ?></h4>
+                <div id="env-result" class="s-hidden-mt">
+                    <h4 class="s-mb-2"><lang>检测结果</lang></h4>
                     <ul class="check-list" id="check-list"></ul>
                 </div>
                 
                 <div class="w-button-group">
-                    <button class="w-button" id="btn-check-env" data-tone="primary"><?= __('开始检测') ?></button>
-                    <button class="w-button" id="btn-fix-env" style="display: none;" data-tone="primary"><?= __('尝试修复') ?></button>
-                    <button class="w-button" id="btn-next-db" style="display: none;" data-tone="success"><?= __('下一步') ?></button>
+                    <button class="w-button" id="btn-check-env" data-tone="primary"><lang>开始检测</lang></button>
+                    <button class="w-button" id="btn-fix-env" class="s-hidden" data-tone="primary"><lang>尝试修复</lang></button>
+                    <button class="w-button" id="btn-next-db" class="s-hidden" data-tone="success"><lang>下一步</lang></button>
                 </div>
             </div>
         </div>
@@ -411,13 +416,13 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         <!-- 步骤 2: 数据库配置 -->
         <div class="step-panel" id="panel-db">
             <div class="w-card">
-                <div class="w-card__title"><?= __('数据库配置') ?></div>
+                <div class="w-card__title"><lang>数据库配置</lang></div>
                 
                 <w:form id="form-db" csrf="off">
                     <input type="hidden" name="form_key" value="<?= $form_key ?>">
                     
                     <div class="w-field">
-                        <label class="w-field__label"><?= __('数据库类型') ?></label>
+                        <label class="w-field__label"><lang>数据库类型</lang></label>
                         <select class="form-input" name="type" id="db-type">
                             <option value="mysql">MySQL</option>
                             <option value="pgsql">PostgreSQL</option>
@@ -428,41 +433,41 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
                     <div id="db-connection-fields">
                         <div class="form-row">
                             <div class="w-field">
-                                <label class="w-field__label"><?= __('主机地址') ?></label>
+                                <label class="w-field__label"><lang>主机地址</lang></label>
                                 <input type="text" class="form-input" name="hostname" value="localhost">
                             </div>
                             <div class="w-field">
-                                <label class="w-field__label"><?= __('端口') ?></label>
+                                <label class="w-field__label"><lang>端口</lang></label>
                                 <input type="text" class="form-input" name="hostport" value="3306">
                             </div>
                         </div>
                         
                         <div class="w-field">
-                            <label class="w-field__label"><?= __('数据库名') ?></label>
+                            <label class="w-field__label"><lang>数据库名</lang></label>
                             <input type="text" class="form-input" name="database" value="weline">
                         </div>
                         
                         <div class="form-row">
                             <div class="w-field">
-                                <label class="w-field__label"><?= __('用户名') ?></label>
+                                <label class="w-field__label"><lang>用户名</lang></label>
                                 <input type="text" class="form-input" name="username" value="root">
                             </div>
                             <div class="w-field">
-                                <label class="w-field__label"><?= __('密码') ?></label>
+                                <label class="w-field__label"><lang>密码</lang></label>
                                 <input type="password" class="form-input" name="password">
                             </div>
                         </div>
                     </div>
                     
-                    <div id="db-sqlite-fields" style="display: none;">
+                    <div id="db-sqlite-fields" class="s-hidden">
                         <div class="w-field">
-                            <label class="w-field__label"><?= __('数据库文件路径') ?></label>
+                            <label class="w-field__label"><lang>数据库文件路径</lang></label>
                             <input type="text" class="form-input" name="sqlite_path" value="<?= APP_PATH ?>etc/db.sqlite">
                         </div>
                     </div>
                     
                     <div class="w-field">
-                        <label class="w-field__label"><?= __('表前缀') ?></label>
+                        <label class="w-field__label"><lang>表前缀</lang></label>
                         <input type="text" class="form-input" name="prefix" value="w_">
                     </div>
                 </w:form>
@@ -470,8 +475,8 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
                 <div class="inline-message" id="db-message" role="status" aria-live="polite" hidden></div>
                 
                 <div class="w-button-group">
-                    <button class="w-button" id="btn-test-db" data-tone="primary"><?= __('测试连接') ?></button>
-                    <button class="w-button" id="btn-next-admin" disabled data-tone="success"><?= __('下一步') ?></button>
+                    <button class="w-button" id="btn-test-db" data-tone="primary"><lang>测试连接</lang></button>
+                    <button class="w-button" id="btn-next-admin" disabled data-tone="success"><lang>下一步</lang></button>
                 </div>
             </div>
         </div>
@@ -479,27 +484,27 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         <!-- 步骤 3: 管理员设置 -->
         <div class="step-panel" id="panel-admin">
             <div class="w-card">
-                <div class="w-card__title"><?= __('管理员设置') ?></div>
+                <div class="w-card__title"><lang>管理员设置</lang></div>
                 
                 <w:form id="form-admin" csrf="off">
                     <input type="hidden" name="form_key" value="<?= $form_key ?>">
                     
                     <div class="w-field">
-                        <label class="w-field__label"><?= __('后台入口密钥（留空自动生成）') ?></label>
-                        <input type="text" class="form-input" name="admin_key" placeholder="<?= __('例如：admin_secret_key') ?>">
-                        <small style="color: var(--text-muted);"><?= __('访问后台的 URL 路径，如：/your_key/login') ?></small>
+                        <label class="w-field__label"><lang>后台入口密钥（留空自动生成）</lang></label>
+                        <input type="text" class="form-input" name="admin_key" placeholder="@lang('例如：admin_secret_key')">
+                        <small class="s-muted"><lang>访问后台的 URL 路径，如：/your_key/login</lang></small>
                     </div>
                     
                     <div class="w-field">
-                        <label class="w-field__label"><?= __('API 后台入口密钥（留空自动生成）') ?></label>
-                        <input type="text" class="form-input" name="api_admin_key" placeholder="<?= __('例如：api_secret_key') ?>">
+                        <label class="w-field__label"><lang>API 后台入口密钥（留空自动生成）</lang></label>
+                        <input type="text" class="form-input" name="api_admin_key" placeholder="@lang('例如：api_secret_key')">
                     </div>
                 </w:form>
 
                 <div class="inline-message" id="install-message" role="alert" aria-live="assertive" hidden></div>
                 
                 <div class="w-button-group">
-                    <button class="w-button" id="btn-complete" data-tone="success"><?= __('完成安装') ?></button>
+                    <button class="w-button" id="btn-complete" data-tone="success"><lang>完成安装</lang></button>
                 </div>
             </div>
         </div>
@@ -507,16 +512,16 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         <!-- 步骤 4: 安装完成 -->
         <div class="step-panel" id="panel-complete">
             <div class="w-card">
-                <div class="w-card__title" style="color: var(--success-color);">
-                    ✓ <?= __('安装完成') ?>
+                <div class="w-card__title" class="s-ok">
+                    ✓ <lang>安装完成</lang>
                 </div>
                 
-                <p><?= __('恭喜！系统已成功安装。请妥善保存以下信息：') ?></p>
+                <p><lang>恭喜！系统已成功安装。请妥善保存以下信息：</lang></p>
                 
                 <div class="complete-info" id="complete-info"></div>
                 
                 <div class="w-button-group">
-                    <a class="w-button" id="btn-goto-admin" href="#" data-tone="primary"><?= __('进入后台') ?></a>
+                    <a class="w-button" id="btn-goto-admin" href="#" data-tone="primary"><lang>进入后台</lang></a>
                 </div>
             </div>
         </div>

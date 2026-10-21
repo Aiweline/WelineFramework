@@ -17,5 +17,5 @@ $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES
 $href = $this->getUrl('customer/account/create');
 ?>
 <div class="w-mkt-welcome-gift" data-testid="marketing-welcome-gift">
-  <a href="<?= $escape($href) ?>"><?= __('注册领取见面礼') ?></a>
+  <a href="<?= $escape($href) ?>"><lang>注册领取见面礼</lang></a>
 </div>

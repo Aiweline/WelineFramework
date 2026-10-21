@@ -1,3 +1,4 @@
+<css>Weline_Faq::css/backend/faq-admin.css</css>
 <?php
 /**
  * Faq page edit hub — Weline UI 2.0（主任务：可视化编辑）.
@@ -24,7 +25,7 @@ $statusTone = match ($status) {
     default => 'neutral',
 };
 ?>
-<div class="w-container faq-page-edit" style="--w-pt:0;--w-pb:var(--weline-space-4);max-inline-size:42rem;" data-testid="faq-page-edit">
+<div class="w-container faq-page-edit" data-testid="faq-page-edit">
     <div class="w-toolbar" style="--w-mb:var(--weline-space-4);">
         <a class="w-button" href="<?= $escape($listingUrl) ?>" data-tone="neutral" data-variant="ghost" data-size="sm">
             <w:icon name="arrow-left" size="sm"></w:icon><?= $escape(__('返回该网站列表')) ?>

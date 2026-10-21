@@ -66,12 +66,11 @@ $totalRoles = count($roles);
 $templateCount = count($roleTemplates);
 ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-agent-admin.css)">
-<script src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
+<script defer src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
 
 <section class="w-agent-admin" data-agent-role-listing data-variant="<?= $escape($variant) ?>">
     <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
         <div class="w-agent-admin__intro">
-            <h1><w:icon name="robot" size="sm" /> <?= $escape(__('角色管理')) ?></h1>
             <p class="w-agent-admin__kicker"><?= $escape(__('选一个场景起步，再按需要细调权限与技能。')) ?></p>
         </div>
         <div class="w-cluster" data-gap="sm">

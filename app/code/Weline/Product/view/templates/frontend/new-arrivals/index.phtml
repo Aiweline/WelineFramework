@@ -34,7 +34,7 @@ $pick = static function (array $item, array $keys, mixed $fallback = ''): mixed 
          data-testid="storefront-new-arrivals"
          weline-code="product.frontend.new_arrivals.section_1">
     <header class="new-arrivals-page__hero">
-        <p class="new-arrivals-page__eyebrow"><?= $escape(__('新作入藏')) ?></p>
+        <p class="new-arrivals-page__eyebrow"><lang>新作入藏</lang></p>
         <div class="new-arrivals-page__title-row">
             <h1 class="new-arrivals-page__title"><?= $escape($pageTitle) ?></h1>
             <?php if ($rssHref !== ''): ?>
@@ -46,7 +46,7 @@ $pick = static function (array $item, array $keys, mixed $fallback = ''): mixed 
                    type="application/rss+xml"
                    rel="alternate"
                    data-testid="new-arrivals-rss-subscribe">
-                    <?= $escape(__('订阅 RSS')) ?>
+                    <lang>订阅 RSS</lang>
                 </a>
             <?php endif; ?>
         </div>
@@ -97,7 +97,7 @@ $pick = static function (array $item, array $keys, mixed $fallback = ''): mixed 
                     <?php endif; ?>
                     <div class="new-arrivals-page__body">
                         <div class="new-arrivals-page__meta">
-                            <span class="new-arrivals-page__badge"><?= $escape(__('新品')) ?></span>
+                            <span class="new-arrivals-page__badge"><lang>新品</lang></span>
                             <?php if ($sku !== ''): ?>
                                 <span class="new-arrivals-page__sku"><?= $escape($sku) ?></span>
                             <?php endif; ?>
@@ -109,7 +109,7 @@ $pick = static function (array $item, array $keys, mixed $fallback = ''): mixed 
                             <p class="new-arrivals-page__price"><?= $escape($price) ?></p>
                         <?php endif; ?>
                         <a class="new-arrivals-page__action" href="<?= $escape($url) ?>">
-                            <?= $escape(__('查看商品')) ?>
+                            <lang>查看商品</lang>
                         </a>
                     </div>
                 </article>
@@ -117,8 +117,8 @@ $pick = static function (array $item, array $keys, mixed $fallback = ''): mixed 
         </div>
     <?php else: ?>
         <div class="new-arrivals-page__empty" data-testid="storefront-new-arrivals-empty">
-            <h2><?= $escape(__('新品正在整理')) ?></h2>
-            <a class="new-arrivals-page__action" href="/products"><?= $escape(__('浏览全部商品')) ?></a>
+            <h2><lang>新品正在整理</lang></h2>
+            <a class="new-arrivals-page__action" href="/products"><lang>浏览全部商品</lang></a>
         </div>
     <?php endif; ?>
 </section>
@@ -164,7 +164,7 @@ $pick = static function (array $item, array $keys, mixed $fallback = ''): mixed 
 .new-arrivals-page__title {
     color: var(--weline-theme-heading);
     font-family: var(--weline-font-family-heading);
-    font-size: clamp(2rem, 5vw, 3.75rem);
+    font-size: clamp(var(--weline-font-size-4xl), 5vw, 3.75rem);
     line-height: 1.08;
 }
 .new-arrivals-page__lede {
@@ -241,7 +241,7 @@ $pick = static function (array $item, array $keys, mixed $fallback = ''): mixed 
     white-space: nowrap;
 }
 .new-arrivals-page__name {
-    min-height: 3em;
+    min-height: var(--control-height-xl);
     color: var(--weline-theme-heading);
     font-size: var(--weline-font-size-base);
     line-height: 1.5;

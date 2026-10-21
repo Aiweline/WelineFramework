@@ -1,60 +1,30 @@
 <?php
 /**
- * CMS内容管理页面（内容模板）
+ * CMS 内容管理页面（内容模板）
+ *
+ * 本页未注册后台菜单，布局层无法解析页面标题（BackendPageHeaderResolver 返回空），
+ * 故由内容模板输出唯一 h1 作为 fallback（标准 §3；known debt：菜单补项后回归布局 h1）。
  *
  * @var \Weline\Framework\View\Template $this
  */
 ?>
-
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-            <h4 style="--w-mb-sm:0;"><?= __('Cms内容管理') ?></h4>
-            <div class="w-cluster">
-                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                    <li class="w-breadcrumb__item"><span><?= __('系统') ?></span></li>
-                    <li class="w-breadcrumb__item" data-state="active"><?= __('内容管理') ?></li>
-                </ol>
-            </div>
+<div class="w-stack">
+    <header class="w-backend-page__heading">
+        <div class="w-backend-page__title">
+            <h1><?= __('Cms内容管理') ?></h1>
+            <p class="w-backend-page__subtitle"><?= __('后台可视化建设页面等的内容管理。') ?></p>
         </div>
-    </div>
-</div>
+    </header>
 
-<div class="w-grid">
-    <template>Weline_Component::message.phtml</template>
-</div>
-
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <div class="w-card">
-            <div class="w-card__body">
-                <h4 class="w-card__title"><?= __('Cms内容管理') ?></h4>
-                <p class="w-text" data-tone="muted"><?= __('后台可视化建设页面等的内容管理。') ?></p>
-                <div style="--w-span-lg:12;">
-                    <div class="w-card w-alert" data-w-border="border" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;--w-mb:0;">
-                        <div class="w-card__header" data-w-background="success">
-                            <div class="w-cluster">
-                                <div data-grow="true">
-                                    <h5 class="w-text" data-tone="success" style="--w-font-size:1rem;--w-mt:var(--weline-space-1);--w-mb:var(--weline-space-1);">等待开发中...</h5>
-                                </div>
-                                <div data-shrink="false">
-                                    <button type='button' class="w-button" aria-label='Close' data-w-action="element.remove" data-w-close="" data-tone="quiet" data-size="sm"></button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="w-card__body">
-                            <div class="w-text" data-align="center">
-                                <div style="--w-mb:var(--weline-space-6);">
-                                    <w:icon name="check" size="sm"></w:icon>
-                                </div>
-                                <h4 class="weline-alert-heading w-text" style="--w-font-size:1.125rem;">马上就好！</h4>
-                                <p style="--w-mb:0;">有兴趣可以一起参与！</p>
-                            </div>
-                        </div>
-                    </div>
+    <section class="w-card">
+        <div class="w-card__body">
+            <div class="w-empty">
+                <w:icon name="check" size="lg"></w:icon>
+                <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                    <p class="w-text" data-weight="strong"><lang>马上就好！</lang></p>
+                    <p class="w-text" data-tone="muted"><lang>有兴趣可以一起参与！</lang></p>
                 </div>
             </div>
         </div>
-    </div>
+    </section>
 </div>

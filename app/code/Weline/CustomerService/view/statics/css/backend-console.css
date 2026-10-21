@@ -4,20 +4,20 @@
 .cs-console,
 .customer-service-console {
     --cs-border: var(--weline-theme-border, var(--color-border));
-    --cs-surface: var(--weline-theme-surface, var(--color-surface, #fff));
+    --cs-surface: var(--weline-theme-surface, var(--color-surface));
     --cs-muted: var(--weline-theme-surface-muted, var(--color-surface-muted));
     --cs-canvas: var(--weline-theme-canvas, var(--color-bg, var(--cs-muted)));
     --cs-text: var(--weline-theme-text, var(--color-text));
     --cs-text-muted: var(--weline-theme-text-muted, var(--color-text-muted));
     --cs-text-subtle: var(--weline-theme-text-subtle, var(--color-text-subtle, var(--cs-text-muted)));
     --cs-primary: var(--weline-theme-primary, var(--color-primary));
-    --cs-on-primary: var(--weline-theme-on-primary, var(--color-on-primary, #fff));
+    --cs-on-primary: var(--weline-theme-on-primary, var(--color-on-primary));
     --cs-warning: var(--weline-theme-warning, var(--color-warning));
     --cs-danger: var(--weline-theme-danger, var(--color-danger));
     --cs-success: var(--weline-theme-success, var(--color-success));
     --cs-info: var(--weline-theme-info, var(--color-info, var(--cs-primary)));
-    --cs-radius: var(--weline-radius-lg, 12px);
-    --cs-radius-md: var(--weline-radius-md, 8px);
+    --cs-radius: var(--weline-radius-lg);
+    --cs-radius-md: var(--weline-radius-md);
     --cs-shadow: var(--weline-theme-shadow-sm, var(--weline-shadow-sm, none));
     /* 后台顶栏 + 页头/统计占用；聊天网格锁在剩余视口内（原型 A） */
     --cs-console-chrome: 8rem;
@@ -26,7 +26,7 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: var(--weline-space-5, 1.25rem);
+    gap: var(--weline-space-5);
     background: transparent;
 }
 
@@ -40,7 +40,7 @@
 .cs-console__header h1,
 .console-header h1 {
     margin: 0;
-    font-size: 1.25rem;
+    font-size: var(--weline-font-size-xl);
     font-weight: 650;
     line-height: 1.3;
 }
@@ -50,14 +50,14 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
 }
 
 .cs-console__layout,
 .console-layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(17rem, 22rem);
-    gap: var(--weline-space-4, 1rem);
+    gap: var(--weline-space-4);
     flex: 1 1 auto;
     min-height: 20rem;
     height: calc(100vh - var(--cs-layout-offset));
@@ -74,7 +74,7 @@
     min-height: 0;
     overflow: hidden;
     background: var(--cs-surface);
-    border: 1px solid var(--cs-border);
+    border: var(--border-width-thin) solid var(--cs-border);
     border-radius: var(--cs-radius);
     box-shadow: var(--cs-shadow);
 }
@@ -84,16 +84,16 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: var(--weline-space-3, 0.75rem);
-    padding: var(--weline-space-3, 0.75rem) var(--weline-space-4, 1rem);
-    border-bottom: 1px solid var(--cs-border);
+    gap: var(--weline-space-3);
+    padding: var(--weline-space-3) var(--weline-space-4);
+    border-bottom: var(--border-width-thin) solid var(--cs-border);
     background: var(--cs-muted);
 }
 
 .sidebar-header h2,
 .cs-console__sidebar .w-card__title {
     margin: 0;
-    font-size: 0.95rem;
+    font-size: var(--font-size-base);
     font-weight: 650;
 }
 
@@ -109,7 +109,7 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
-    padding: var(--weline-space-2, 0.5rem);
+    padding: var(--weline-space-2);
     display: flex;
     flex-direction: column;
 }
@@ -140,13 +140,13 @@
 }
 
 .cs-session-group__trigger {
-    min-height: var(--weline-control-height-md, 2.25rem);
-    padding: var(--weline-space-2, 0.5rem) var(--weline-space-3, 0.75rem);
+    min-height: var(--weline-control-height-md);
+    padding: var(--weline-space-2) var(--weline-space-3);
     background: color-mix(in srgb, var(--cs-muted) 70%, var(--cs-surface));
     color: var(--cs-text);
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
     font-weight: 650;
-    letter-spacing: 0.02em;
+    letter-spacing: var(--letter-spacing-wide);
 }
 
 .cs-session-group__label {
@@ -210,13 +210,13 @@
 
 .section-title {
     margin: 0;
-    padding: var(--weline-space-2, 0.5rem) var(--weline-space-4, 1rem);
-    font-size: 0.75rem;
+    padding: var(--weline-space-2) var(--weline-space-4);
+    font-size: var(--weline-font-size-xs);
     font-weight: 650;
-    letter-spacing: 0.02em;
+    letter-spacing: var(--letter-spacing-wide);
     color: var(--cs-text-muted);
     background: color-mix(in srgb, var(--cs-muted) 70%, var(--cs-surface));
-    border-bottom: 1px solid var(--cs-border);
+    border-bottom: var(--border-width-thin) solid var(--cs-border);
 }
 
 .session-list {
@@ -227,8 +227,8 @@
 }
 
 .session-item {
-    padding: var(--weline-space-3, 0.75rem) var(--weline-space-4, 1rem);
-    border-bottom: 1px solid var(--cs-border);
+    padding: var(--weline-space-3) var(--weline-space-4);
+    border-bottom: var(--border-width-thin) solid var(--cs-border);
     cursor: pointer;
     transition: background-color var(--weline-motion-fast, 0.15s) ease;
     position: relative;
@@ -241,7 +241,7 @@
 
 .session-item.active {
     background: color-mix(in srgb, var(--cs-primary) 10%, var(--cs-surface));
-    box-shadow: inset 3px 0 0 var(--cs-primary);
+    box-shadow: var(--weline-shadow-md);
 }
 
 .session-item.unread {
@@ -250,7 +250,7 @@
 
 .session-item.cs-session-alert {
     animation: cs-session-alert-pulse 1.2s ease-in-out 2;
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--cs-warning) 55%, transparent);
+    box-shadow: var(--focus-ring);
 }
 
 @keyframes cs-session-alert-pulse {
@@ -274,14 +274,14 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: var(--weline-space-2, 0.5rem);
-    margin-bottom: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
+    margin-bottom: var(--weline-space-2);
 }
 
 .session-id {
     font-weight: 650;
     color: var(--cs-text);
-    font-size: 0.875rem;
+    font-size: var(--weline-font-size-sm);
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -291,7 +291,7 @@
 .session-header-meta {
     display: inline-flex;
     align-items: center;
-    gap: var(--weline-space-1, 0.25rem);
+    gap: var(--weline-space-1);
     flex-shrink: 0;
 }
 
@@ -300,8 +300,8 @@
 }
 
 .session-transfer-from {
-    margin: 0 0 var(--weline-space-1, 0.25rem);
-    font-size: 0.75rem;
+    margin: 0 0 var(--weline-space-1);
+    font-size: var(--weline-font-size-xs);
     line-height: 1.35;
     color: color-mix(in srgb, var(--cs-primary) 72%, var(--cs-text));
     font-weight: 560;
@@ -309,10 +309,10 @@
 
 .unread-badge {
     background: var(--cs-danger);
-    color: var(--weline-theme-on-danger, #fff);
-    border-radius: var(--weline-radius-pill, 999px);
-    padding: 0.1rem 0.45rem;
-    font-size: 0.6875rem;
+    color: var(--weline-theme-on-danger);
+    border-radius: var(--weline-radius-pill);
+    padding: var(--spacing-0_5) var(--spacing-0_45);
+    font-size: var(--font-size-xs);
     font-weight: 650;
     min-width: 1.15rem;
     text-align: center;
@@ -322,9 +322,9 @@
 .badge-waiting {
     display: inline-flex;
     align-items: center;
-    padding: 0.15rem 0.5rem;
-    border-radius: var(--weline-radius-sm, 4px);
-    font-size: 0.6875rem;
+    padding: var(--spacing-0_5) var(--weline-space-2);
+    border-radius: var(--weline-radius-sm);
+    font-size: var(--font-size-xs);
     font-weight: 650;
     background: color-mix(in srgb, var(--cs-warning) 18%, var(--cs-surface));
     color: var(--cs-warning);
@@ -334,13 +334,13 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
 }
 
 .last-message {
     margin: 0;
     color: var(--cs-text-muted);
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -348,24 +348,24 @@
 }
 
 .last-time {
-    font-size: 0.6875rem;
+    font-size: var(--font-size-xs);
     color: var(--cs-text-subtle);
     flex-shrink: 0;
 }
 
 .session-actions {
-    margin-top: var(--weline-space-3, 0.75rem);
+    margin-top: var(--weline-space-3);
 }
 
 .empty-state,
 .cs-console .w-empty {
-    padding: var(--weline-space-8, 2rem) var(--weline-space-5, 1.25rem);
+    padding: var(--weline-space-8) var(--weline-space-5);
     text-align: center;
     color: var(--cs-text-muted);
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
 }
 
 .empty-state p,
@@ -380,7 +380,7 @@
     min-height: 0;
     overflow: hidden;
     background: var(--cs-surface);
-    border: 1px solid var(--cs-border);
+    border: var(--border-width-thin) solid var(--cs-border);
     border-radius: var(--cs-radius);
     box-shadow: var(--cs-shadow);
 }
@@ -399,8 +399,8 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    gap: var(--weline-space-3, 0.75rem);
-    padding: var(--weline-space-8, 2rem);
+    gap: var(--weline-space-3);
+    padding: var(--weline-space-8);
     color: var(--cs-text-muted);
     text-align: center;
 }
@@ -423,24 +423,24 @@
 
 .chat-header {
     flex-shrink: 0;
-    padding: var(--weline-space-3, 0.75rem) var(--weline-space-5, 1.25rem);
-    border-bottom: 1px solid var(--cs-border);
+    padding: var(--weline-space-3) var(--weline-space-5);
+    border-bottom: var(--border-width-thin) solid var(--cs-border);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: var(--weline-space-3, 0.75rem);
+    gap: var(--weline-space-3);
     background: var(--cs-muted);
 }
 
 .chat-header-info h3 {
     margin: 0;
-    font-size: 1rem;
+    font-size: var(--weline-font-size-base);
     font-weight: 650;
 }
 
 .chat-header-actions {
     display: flex;
-    gap: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
 }
 
 .chat-messages {
@@ -450,15 +450,15 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
-    padding: var(--weline-space-5, 1.25rem);
+    padding: var(--weline-space-5);
     background: var(--cs-canvas);
 }
 
 .cs-chat-history-hint,
 .cs-chat-loading {
     text-align: center;
-    margin: 0 0 var(--weline-space-3, 0.75rem);
-    padding: var(--weline-space-2, 0.5rem) 0;
+    margin: 0 0 var(--weline-space-3);
+    padding: var(--weline-space-2) 0;
 }
 
 .cs-chat-history-hint[hidden] {
@@ -466,7 +466,7 @@
 }
 
 .message-item {
-    margin-bottom: var(--weline-space-4, 1rem);
+    margin-bottom: var(--weline-space-4);
     display: flex;
     flex-direction: column;
 }
@@ -476,58 +476,58 @@
 
 .message-bubble {
     max-width: min(70%, 36rem);
-    padding: var(--weline-space-3, 0.75rem) var(--weline-space-4, 1rem);
-    border-radius: var(--weline-radius-lg, 12px);
+    padding: var(--weline-space-3) var(--weline-space-4);
+    border-radius: var(--weline-radius-lg);
     word-wrap: break-word;
 }
 
 .message-item.customer .message-bubble {
     background: var(--cs-muted);
     color: var(--cs-text);
-    border: 1px solid var(--cs-border);
-    border-bottom-left-radius: var(--weline-radius-sm, 4px);
+    border: var(--border-width-thin) solid var(--cs-border);
+    border-bottom-left-radius: var(--weline-radius-sm);
 }
 
 .message-item.agent .message-bubble {
     background: var(--cs-primary);
     color: var(--cs-on-primary);
-    border-bottom-right-radius: var(--weline-radius-sm, 4px);
+    border-bottom-right-radius: var(--weline-radius-sm);
 }
 
 .message-content {
     margin: 0;
-    font-size: 0.875rem;
+    font-size: var(--weline-font-size-sm);
     line-height: 1.5;
 }
 
 .message-time {
-    font-size: 0.6875rem;
+    font-size: var(--font-size-xs);
     color: var(--cs-text-subtle);
-    margin-top: var(--weline-space-1, 0.25rem);
-    padding: 0 var(--weline-space-1, 0.25rem);
+    margin-top: var(--weline-space-1);
+    padding: 0 var(--weline-space-1);
 }
 
 .message-item.agent .message-time { text-align: right; }
 
 .chat-input-area {
     flex-shrink: 0;
-    padding: var(--weline-space-4, 1rem) var(--weline-space-5, 1.25rem);
-    border-top: 1px solid var(--cs-border);
+    padding: var(--weline-space-4) var(--weline-space-5);
+    border-top: var(--border-width-thin) solid var(--cs-border);
     background: var(--cs-surface);
 }
 
 .cs-composer-toolbar {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--weline-space-2, 0.5rem);
-    margin-bottom: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
+    margin-bottom: var(--weline-space-2);
 }
 
 .cs-composer-panel {
-    margin-bottom: var(--weline-space-2, 0.5rem);
-    padding: var(--weline-space-3, 0.75rem);
-    border: 1px solid var(--cs-border);
-    border-radius: var(--weline-radius-md, 8px);
+    margin-bottom: var(--weline-space-2);
+    padding: var(--weline-space-3);
+    border: var(--border-width-thin) solid var(--cs-border);
+    border-radius: var(--weline-radius-md);
     background: var(--cs-surface-muted, var(--cs-muted));
     max-height: 12rem;
     overflow: auto;
@@ -544,7 +544,7 @@
 .cs-phrase-shell {
     display: flex;
     flex-direction: column;
-    gap: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
 }
 
 .cs-phrase-search-label {
@@ -566,19 +566,19 @@
 .cs-phrase-tabs {
     display: flex;
     flex-wrap: nowrap;
-    gap: var(--weline-space-1, 0.25rem);
+    gap: var(--weline-space-1);
     overflow-x: auto;
-    padding-bottom: var(--weline-space-1, 0.25rem);
+    padding-bottom: var(--weline-space-1);
 }
 
 .cs-phrase-tab {
     flex: 0 0 auto;
-    border: 1px solid var(--cs-border);
-    border-radius: var(--weline-radius-full, 999px);
+    border: var(--border-width-thin) solid var(--cs-border);
+    border-radius: var(--weline-radius-full);
     background: var(--cs-surface);
     color: var(--cs-text, inherit);
-    padding: 0.2rem 0.7rem;
-    font-size: 0.75rem;
+    padding: var(--spacing-0_2) var(--spacing-0_7);
+    font-size: var(--weline-font-size-xs);
     line-height: 1.4;
     cursor: pointer;
 }
@@ -603,55 +603,55 @@
 .cs-emoji-item {
     border: 0;
     background: transparent;
-    font-size: 1.25rem;
+    font-size: var(--weline-font-size-xl);
     line-height: 1.4;
     cursor: pointer;
-    padding: 0.15rem;
+    padding: var(--spacing-0_5);
 }
 
 .cs-phrase-item {
     display: flex;
-    gap: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
     align-items: stretch;
-    margin-bottom: var(--weline-space-2, 0.5rem);
+    margin-bottom: var(--weline-space-2);
 }
 
 .cs-phrase-item[data-phrase-hit="1"] .cs-phrase-use {
     border-color: var(--color-primary, var(--weline-theme-color-primary, var(--weline-theme-primary)));
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary, var(--weline-theme-primary)) 35%, transparent);
+    box-shadow: var(--focus-ring);
 }
 
 .cs-phrase-use {
     flex: 1;
     text-align: left;
-    border: 1px solid var(--cs-border);
-    border-radius: var(--weline-radius-md, 8px);
+    border: var(--border-width-thin) solid var(--cs-border);
+    border-radius: var(--weline-radius-md);
     background: var(--cs-surface);
-    padding: var(--weline-space-2, 0.5rem) var(--weline-space-3, 0.75rem);
+    padding: var(--weline-space-2) var(--weline-space-3);
     cursor: pointer;
 }
 
 .cs-phrase-use strong {
     display: block;
-    font-size: 0.8125rem;
+    font-size: var(--font-size-13);
 }
 
 .cs-phrase-use span {
     display: block;
-    margin-top: 0.15rem;
+    margin-top: var(--spacing-0_5);
     color: var(--cs-text-muted);
-    font-size: 0.75rem;
+    font-size: var(--weline-font-size-xs);
 }
 
 .cs-phrase-cat {
     display: inline-block;
-    margin-top: 0.25rem;
+    margin-top: var(--weline-space-1);
     font-style: normal;
-    font-size: 0.6875rem;
+    font-size: var(--font-size-xs);
     color: var(--cs-text-muted);
-    border: 1px solid var(--cs-border);
-    border-radius: var(--weline-radius-sm, 4px);
-    padding: 0 0.35rem;
+    border: var(--border-width-thin) solid var(--cs-border);
+    border-radius: var(--weline-radius-sm);
+    padding: 0 var(--spacing-1_5);
 }
 
 .cs-phrase-del {
@@ -672,26 +672,26 @@
     display: block;
     max-width: min(100%, 16rem);
     max-height: 12rem;
-    border-radius: var(--weline-radius-md, 8px);
+    border-radius: var(--weline-radius-md);
 }
 
 .cs-msg-file {
     display: inline-flex;
     flex-direction: column;
-    gap: 0.15rem;
+    gap: var(--spacing-0_5);
     color: inherit;
     text-decoration: underline;
 }
 
 .cs-msg-file__size {
-    font-size: 0.75rem;
+    font-size: var(--weline-font-size-xs);
     opacity: 0.8;
     text-decoration: none;
 }
 
 .chat-input-wrapper {
     display: flex;
-    gap: var(--weline-space-3, 0.75rem);
+    gap: var(--weline-space-3);
     align-items: flex-end;
 }
 
@@ -699,12 +699,12 @@
 .chat-input-area .w-textarea {
     flex: 1;
     width: auto;
-    border: 1px solid var(--weline-theme-border-strong, var(--cs-border));
-    border-radius: var(--weline-radius-round, 999px);
-    padding: var(--weline-space-2, 0.5rem) var(--weline-space-4, 1rem);
-    font-size: var(--weline-font-size-sm, 0.875rem);
+    border: var(--border-width-thin) solid var(--weline-theme-border-strong, var(--cs-border));
+    border-radius: var(--weline-radius-round);
+    padding: var(--weline-space-2) var(--weline-space-4);
+    font-size: var(--weline-font-size-sm);
     resize: none;
-    min-height: 2.5rem;
+    min-height: var(--control-height-md);
     max-height: 7.5rem;
     height: auto;
     font-family: inherit;
@@ -723,7 +723,7 @@
 .chat-input-area .w-textarea:focus {
     outline: 0;
     border-color: var(--weline-theme-focus, var(--cs-primary));
-    box-shadow: var(--weline-theme-focus-ring, 0 0 0 3px color-mix(in srgb, var(--cs-primary) 25%, transparent));
+    box-shadow: var(--weline-shadow-lg);
 }
 
 .btn-send,
@@ -747,7 +747,7 @@
 .chat-messages::-webkit-scrollbar-thumb,
 .session-list::-webkit-scrollbar-thumb {
     background: color-mix(in srgb, var(--cs-text) 25%, transparent);
-    border-radius: 999px;
+    border-radius: var(--radius-full);
 }
 
 @media (max-width: 960px) {
@@ -774,7 +774,7 @@
 @media (prefers-reduced-motion: reduce) {
     .cs-console *,
     .customer-service-console * {
-        transition: none !important;
+        transition: none;
     }
 }
 

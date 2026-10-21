@@ -14,7 +14,7 @@
         justify-content: space-between;
         gap: var(--weline-space-3);
         padding: var(--weline-space-3) var(--weline-space-4);
-        border: 1px solid var(--weline-theme-border);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
         border-radius: var(--weline-radius-lg);
         background: var(--weline-theme-surface-raised);
     }
@@ -103,7 +103,7 @@
     }
 
     .w-datatable .w-table {
-        min-width: max(100%, calc(var(--w-datatable-column-count, 1) * var(--w-datatable-column-min, 8rem)));
+        min-width: max(100%, calc(var(--w-datatable-column-count, 1) * var(--w-datatable-column-min)));
     }
 
     .w-datatable .w-table th,
@@ -149,7 +149,7 @@
     .w-datatable-form :is(button, input, select, textarea):focus-visible,
     .w-datatable-write-plan :is(button, input, select, textarea):focus-visible,
     .w-datatable__body tr:focus-visible {
-        outline: 2px solid var(--weline-theme-primary);
+        outline: var(--border-width-medium) solid var(--weline-theme-primary);
         outline-offset: 2px;
     }
 
@@ -321,7 +321,7 @@
         margin: 0;
         padding: var(--weline-space-2);
         overflow: auto;
-        border: 1px solid var(--weline-theme-border);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
         border-radius: var(--weline-radius-md);
         background: var(--weline-theme-surface);
         list-style: none;
@@ -333,7 +333,7 @@
         align-items: center;
         gap: var(--weline-space-2);
         padding: var(--weline-space-2) var(--weline-space-3);
-        border: 1px solid var(--weline-theme-border);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
         border-radius: var(--weline-radius-sm);
         background: var(--weline-theme-surface-raised);
     }
@@ -378,7 +378,7 @@
         display: grid;
         gap: var(--weline-space-2);
         padding: var(--weline-space-4);
-        border: 1px dashed var(--weline-theme-border-strong);
+        border: var(--border-width-thin) dashed var(--weline-theme-border-strong);
         border-radius: var(--weline-radius-md);
         background: var(--weline-theme-surface-muted);
     }
@@ -395,7 +395,7 @@
         width: 5rem;
         height: 5rem;
         object-fit: cover;
-        border: 1px solid var(--weline-theme-border);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
         border-radius: var(--weline-radius-sm);
     }
 
@@ -414,7 +414,7 @@
     .w-datatable-form__readonly {
         margin: 0 0 var(--weline-space-3);
         padding: var(--weline-space-3);
-        border: 1px solid var(--weline-theme-border);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
         border-radius: var(--weline-radius-md);
         background: var(--weline-theme-surface-muted);
         color: var(--weline-theme-text-muted);
@@ -429,7 +429,7 @@
 
     .w-datatable-write-plan__targets li {
         padding: var(--weline-space-2) var(--weline-space-3);
-        border: 1px solid var(--weline-theme-border);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
         border-radius: var(--weline-radius-md);
         background: var(--weline-theme-surface-muted);
         overflow-wrap: anywhere;
@@ -544,7 +544,7 @@
         }
 
         .w-datatable__toolbar .w-button {
-            min-height: 2.75rem;
+            min-height: var(--control-height-lg);
         }
 
         .w-datatable__filter .w-cluster,

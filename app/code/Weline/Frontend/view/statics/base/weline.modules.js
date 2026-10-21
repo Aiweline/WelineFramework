@@ -282,6 +282,13 @@
             globalVar: null,
             description: "最近浏览轮播/网格"
         },
+        mailAccountSelect: {
+            origin_paths: ["app/code/Weline/Mail/view/statics/js/mail-account-select.js?v=20261021-mail-account-select-1"],
+            paths: ["Weline_Mail::js/mail-account-select.js?v=20261021-mail-account-select-1"],
+            globalVar: "WelineMailAccountSelect",
+            load: "eager",
+            description: "邮箱账户切换（下拉变更即提交）"
+        },
         location: {
             origin_paths: ["app/code/Weline/Location/view/statics/frontend/js/location.js"],
             paths: ["Weline_Location::frontend/js/location.js"],
@@ -340,6 +347,13 @@
             load: "eager",
             description: "店面金额小计：统一 paint 商品/运费/税费/优惠/应付"
         },
+        blogCategoryFilter: {
+            origin_paths: ["app/code/Weline/Blog/view/statics/js/blog-category-filter.js?v=20261021-blog-category-filter-1"],
+            paths: ["Weline_Blog::js/blog-category-filter.js?v=20261021-blog-category-filter-1"],
+            globalVar: "WelineBlogCategoryFilter",
+            load: "eager",
+            description: "博客分类侧栏两级树展开"
+        },
         b2bSellingMode: {
             origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js?v=20261010-shell-toc-wins1", "app/code/Weline/B2B/view/statics/js/selling-mode.js?v=20261014-extras-boot-preserve1"],
             paths: ["Weline_B2B::js/checkout-tob.js?v=20261010-shell-toc-wins1", "Weline_B2B::js/selling-mode.js?v=20261014-extras-boot-preserve1"],
@@ -357,6 +371,13 @@
             paths: ["Weline_B2B::js/order-chat-accordion.js?v=20260912-order-chat4"],
             globalVar: "WelineB2BOrderChat",
             description: "B2B order chat accordion (account + backend same thread)"
+        },
+        consentBanner: {
+            origin_paths: ["app/code/Weline/Consent/view/statics/js/consent-banner.js?v=20261021-consent-banner-1"],
+            paths: ["Weline_Consent::js/consent-banner.js?v=20261021-consent-banner-1"],
+            globalVar: "WelineConsentBanner",
+            load: "eager",
+            description: "店面 Cookie 同意横幅"
         },
         productReviews: {
             origin_paths: ["app/code/Weline/Review/view/statics/js/widgets/product-reviews.v20260904-pager2.js"],

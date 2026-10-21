@@ -1,0 +1,5849 @@
+{
+  "schema": "module-frontend-token-map.v1",
+  "module_filter": null,
+  "files_scanned": 538,
+  "colors": {
+    "distinct": 319,
+    "occurrences": 1393,
+    "mapped_occurrences": 893,
+    "coverage": 0.6411,
+    "rows": [
+      {
+        "value": "#000000 (alpha)",
+        "count": 63,
+        "token": "--color-text-primary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#ffffff (alpha)",
+        "count": 54,
+        "token": "--color-bg-primary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#94a3b8 (alpha)",
+        "count": 51,
+        "token": "--color-secondary-border-subtle",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Customer/view/statics/css/account-index.css"
+        ]
+      },
+      {
+        "value": "#0f1111 (alpha)",
+        "count": 45,
+        "token": "--color-text-primary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css"
+        ]
+      },
+      {
+        "value": "#667eea (alpha)",
+        "count": 29,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#0f172a (alpha)",
+        "count": 29,
+        "token": "--color-text-inverse",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Cart/view/theme/frontend/layouts/mini-cart/default.phtml#<style>",
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Customer/view/statics/css/account-index.css"
+        ]
+      },
+      {
+        "value": "#667eea",
+        "count": 27,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#007bff",
+        "count": 27,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#d5d9d9",
+        "count": 26,
+        "token": "--color-literal-d5d9d9",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#374151",
+        "count": 23,
+        "token": "--color-bg-dark-tertiary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#4b5563",
+        "count": 22,
+        "token": "--color-text-secondary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#333333",
+        "count": 21,
+        "token": "--color-literal-333333",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#d1d5db",
+        "count": 19,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#764ba2",
+        "count": 18,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#64748b",
+        "count": 18,
+        "token": "--color-text-disabled",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css",
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css",
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css"
+        ]
+      },
+      {
+        "value": "#dddddd",
+        "count": 18,
+        "token": "--color-border-default",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Demo/view/templates/frontend/slot-dup.phtml#<style>",
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>",
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f8f9fa",
+        "count": 17,
+        "token": "--color-bg-secondary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#6c757d",
+        "count": 17,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#6b7280",
+        "count": 17,
+        "token": "--color-text-tertiary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#f9fafb",
+        "count": 16,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#2563eb",
+        "count": 14,
+        "token": "--color-accent-hover",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css",
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#9ca3af",
+        "count": 14,
+        "token": "--color-text-placeholder",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#ffffff",
+        "count": 13,
+        "token": "--color-bg-primary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Captcha/view/statics/css/captcha-local.css",
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css",
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css"
+        ]
+      },
+      {
+        "value": "#0f172a",
+        "count": 13,
+        "token": "--color-text-inverse",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Captcha/view/statics/css/captcha-local.css",
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css",
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css"
+        ]
+      },
+      {
+        "value": "#f8fafc (alpha)",
+        "count": 13,
+        "token": "--color-bg-slate",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css",
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css"
+        ]
+      },
+      {
+        "value": "#f59e0b (alpha)",
+        "count": 13,
+        "token": "--color-warning",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css",
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>",
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#e3e6e6",
+        "count": 12,
+        "token": "--color-literal-e3e6e6",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>",
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f0c14b (alpha)",
+        "count": 12,
+        "token": "--color-primary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css"
+        ]
+      },
+      {
+        "value": "#495057",
+        "count": 12,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#3b82f6",
+        "count": 12,
+        "token": "--color-accent",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#e0e0e0",
+        "count": 11,
+        "token": "--token-color-e0e0e0",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#000000",
+        "count": 11,
+        "token": "--color-text-primary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Order/view/statics/css/account-orders.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.css"
+        ]
+      },
+      {
+        "value": "#232f3e",
+        "count": 10,
+        "token": "--color-bg-dark",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Consent/view/statics/css/consent-banner.css",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/auth.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#e7e7e7",
+        "count": 10,
+        "token": "--color-bg-tertiary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Compare/view/templates/frontend/compare/index.phtml#<style>",
+          "app/code/Weline/Compare/view/templates/frontend/compare/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#007185",
+        "count": 10,
+        "token": "--color-info",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/Compare/view/templates/frontend/compare/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#c45500",
+        "count": 10,
+        "token": "--color-primary-text-emphasis",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/Compare/view/statics/css/product-shopper-chrome.css"
+        ]
+      },
+      {
+        "value": "#1f2937",
+        "count": 10,
+        "token": "--color-bg-dark",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#00f2fe",
+        "count": 9,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f3f4f6",
+        "count": 9,
+        "token": "--color-bg-secondary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f0f2f2",
+        "count": 9,
+        "token": "--color-bg-secondary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Consent/view/statics/css/consent-banner.css",
+          "app/code/Weline/Order/view/statics/css/order-tracking.css",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/return.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#e5e7eb",
+        "count": 9,
+        "token": "--color-border-light",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#f7fafa",
+        "count": 8,
+        "token": "--color-literal-f7fafa",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#b91c1c",
+        "count": 8,
+        "token": "--color-danger",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Compare/view/templates/frontend/compare/index.phtml#<style>",
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css",
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css"
+        ]
+      },
+      {
+        "value": "#fbfdff",
+        "count": 8,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.css"
+        ]
+      },
+      {
+        "value": "#fffdf8",
+        "count": 8,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.scope-filter-2.css"
+        ]
+      },
+      {
+        "value": "#dc3545",
+        "count": 8,
+        "token": "--color-error",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#ef4444",
+        "count": 8,
+        "token": "--color-error-hover",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#3b82f6 (alpha)",
+        "count": 8,
+        "token": "--color-accent",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#0f1111",
+        "count": 7,
+        "token": "--color-text-primary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Checkout/view/statics/css/widgets/widget-header-checkout-delivery-context-default.css",
+          "app/code/Weline/Checkout/view/statics/css/widgets/widget-header-checkout-delivery-context-default.css"
+        ]
+      },
+      {
+        "value": "#b12704",
+        "count": 7,
+        "token": "--color-danger",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Order/view/statics/css/order-tracking.css"
+        ]
+      },
+      {
+        "value": "#fecaca",
+        "count": 7,
+        "token": "--color-danger-soft",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css",
+          "app/code/Weline/Customer/view/templates/frontend/account/social-login-choose.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#10b981 (alpha)",
+        "count": 7,
+        "token": "--color-literal-10b981",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.css"
+        ]
+      },
+      {
+        "value": "#fafafa",
+        "count": 7,
+        "token": "--color-literal-fafafa",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Demo/view/templates/frontend/slot-dup.phtml#<style>",
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>",
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#0056b3",
+        "count": 7,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/twofa-app/style.css",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml#<style>",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#a8b2d1",
+        "count": 6,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f5f5f5",
+        "count": 6,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/CustomerService/view/templates/frontend/Bind/modal.phtml#<style>",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#111111",
+        "count": 6,
+        "token": "--color-text-primary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Compare/view/templates/frontend/compare/index.phtml#<style>",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/Demo/view/templates/frontend/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#991b1b",
+        "count": 6,
+        "token": "--color-danger-hover",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Customer/view/templates/frontend/account/social-login-choose.phtml#<style>",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#cbd5e1",
+        "count": 6,
+        "token": "--color-text-muted",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css",
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css",
+          "app/code/Weline/Customer/view/templates/frontend/account/social-login-choose.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#94a3b8",
+        "count": 6,
+        "token": "--color-secondary-border-subtle",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/templates/frontend/account/social-login-choose.phtml#<style>",
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css",
+          "app/code/Weline/I18n/view/statics/css/local-translation.css"
+        ]
+      },
+      {
+        "value": "#fef2f2",
+        "count": 6,
+        "token": "--color-product-label-sale-bg",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/templates/frontend/account/social-login-choose.phtml#<style>",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#067d62",
+        "count": 6,
+        "token": "--color-literal-067d62",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/Order/view/statics/css/order-tracking.css",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/handoff.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#1d4ed8",
+        "count": 6,
+        "token": "--color-primary-hover",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#c4a35a (alpha)",
+        "count": 6,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css",
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css",
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css"
+        ]
+      },
+      {
+        "value": "#16a34a",
+        "count": 6,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Order/view/statics/css/account-orders.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.scope-filter-2.css"
+        ]
+      },
+      {
+        "value": "#d97706",
+        "count": 6,
+        "token": "--color-warning-amber-2",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Order/view/statics/css/account-orders.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.scope-filter-2.css"
+        ]
+      },
+      {
+        "value": "#0284c7",
+        "count": 6,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Order/view/statics/css/account-orders.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.scope-filter-2.css"
+        ]
+      },
+      {
+        "value": "#28a745",
+        "count": 5,
+        "token": "--color-success",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/TwoFactorAuth/view/statics/twofa-app/style.css"
+        ]
+      },
+      {
+        "value": "#007bff (alpha)",
+        "count": 5,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#60a5fa",
+        "count": 5,
+        "token": "--color-accent-hover",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#059669",
+        "count": 5,
+        "token": "--color-success-strong-2",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/payment-methods.phtml#<style>",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/payment-methods.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#ef4444 (alpha)",
+        "count": 5,
+        "token": "--color-error-hover",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>",
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#febd69",
+        "count": 5,
+        "token": "--color-primary-light",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>",
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>",
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#2563eb (alpha)",
+        "count": 5,
+        "token": "--color-accent-hover",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css",
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css",
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css"
+        ]
+      },
+      {
+        "value": "#667085",
+        "count": 5,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Mail/view/templates/frontend/account/mail.phtml#<style>",
+          "app/code/Weline/Mail/view/templates/frontend/account/mail.phtml#<style>",
+          "app/code/Weline/Mail/view/templates/frontend/account/mail.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#102033",
+        "count": 5,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css",
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css",
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css"
+        ]
+      },
+      {
+        "value": "#111827 (alpha)",
+        "count": 5,
+        "token": "--color-text-slate",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/Callback/browser-return.phtml#<style>",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/fake.phtml#<style>",
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#c7511f (alpha)",
+        "count": 5,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/checkout/handoff.phtml#<style>",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/handoff.phtml#<style>",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/handoff.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#2c3e50",
+        "count": 4,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#00f2fe (alpha)",
+        "count": 4,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f0f0f0",
+        "count": 4,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Compare/view/templates/frontend/compare/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#bbbbbb",
+        "count": 4,
+        "token": "--color-literal-bbbbbb",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/Search/view/theme/frontend/layouts/search/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f0f9ff",
+        "count": 4,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#166534",
+        "count": 4,
+        "token": "--color-success-hover",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css",
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css",
+          "app/code/Weline/Multipass/view/templates/frontend/account/identity-bridge.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#343a40",
+        "count": 4,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#404040",
+        "count": 4,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#60a5fa (alpha)",
+        "count": 4,
+        "token": "--color-accent-hover",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css",
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#eeeeee",
+        "count": 4,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Demo/view/statics/mail-html-preview-accept.html#<style>",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/handoff.phtml#<style>",
+          "app/code/Weline/Shipping/view/templates/frontend/delivery-address/view.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f3efe6 (alpha)",
+        "count": 4,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css",
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css",
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css"
+        ]
+      },
+      {
+        "value": "#9a3412",
+        "count": 4,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css",
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css",
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css"
+        ]
+      },
+      {
+        "value": "#15803d",
+        "count": 4,
+        "token": "--color-success",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Order/view/statics/css/account-orders.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.scope-filter-2.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.scope-filter-3.css"
+        ]
+      },
+      {
+        "value": "#57606a",
+        "count": 4,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/checkout/fake.phtml#<style>",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/paypal.phtml#<style>",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/paypal.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#faf7ef (alpha)",
+        "count": 4,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css",
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css",
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css"
+        ]
+      },
+      {
+        "value": "#c82333",
+        "count": 4,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/twofa-app/style.css",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml#<style>",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#5a6268",
+        "count": 4,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/twofa-app/style.css",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml#<style>",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Index/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#0f0f23 (alpha)",
+        "count": 3,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#eaeded",
+        "count": 3,
+        "token": "--color-bg-secondary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#e7e9e9",
+        "count": 3,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/handoff.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#565959",
+        "count": 3,
+        "token": "--color-text-gray",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Checkout/view/statics/css/widgets/widget-header-checkout-delivery-context-default.css",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/handoff.phtml#<style>",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/return.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#a7f3d0",
+        "count": 3,
+        "token": "--token-color-a7f3d0",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/Shipping/view/statics/frontend/css/account-address.css"
+        ]
+      },
+      {
+        "value": "#ffc107",
+        "count": 3,
+        "token": "--color-warning",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/TwoFactorAuth/view/statics/twofa-app/style.css",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Setup/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f8d7da",
+        "count": 3,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Setup/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#2d2d2d",
+        "count": 3,
+        "token": "--color-bg-secondary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#3d3d3d",
+        "count": 3,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#444444",
+        "count": 3,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Demo/view/statics/mail-html-preview-accept.html#<style>",
+          "app/code/Weline/Demo/view/templates/frontend/index.phtml#<style>",
+          "app/code/Weline/Demo/view/templates/frontend/slot-dup.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#ff9900 (alpha)",
+        "count": 3,
+        "token": "--color-primary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>",
+          "app/code/Weline/Shipping/view/templates/frontend/guide/returns.phtml#<style>",
+          "app/code/Weline/Shipping/view/templates/frontend/guide/shipping.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#0f766e",
+        "count": 3,
+        "token": "--color-primary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Inquiry/view/statics/css/inquiry-editor.css",
+          "app/code/Weline/Payment/view/templates/frontend/dev-relay/demo.phtml#<style>",
+          "app/code/Weline/Shipping/view/statics/frontend/css/account-address.css"
+        ]
+      },
+      {
+        "value": "#22c55e (alpha)",
+        "count": 3,
+        "token": "--color-success-active",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>",
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>",
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#c7511f",
+        "count": 3,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/checkout/handoff.phtml#<style>",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/return.phtml#<style>",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/return.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#382d24 (alpha)",
+        "count": 3,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css",
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css",
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css"
+        ]
+      },
+      {
+        "value": "#83302a",
+        "count": 3,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/theme/frontend/layouts/promotion/default.phtml#<style>",
+          "app/code/Weline/Promotion/view/theme/frontend/layouts/promotion/default.phtml#<style>",
+          "app/code/Weline/Promotion/view/theme/frontend/layouts/promotion/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f0f8ff",
+        "count": 3,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Shipping/view/templates/frontend/delivery-address/index.phtml#<style>",
+          "app/code/Weline/Shipping/view/templates/frontend/shipping-address/index.phtml#<style>",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#7f8c8d",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#0f0f23",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#1a1a2e",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#16213e",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f7f8f8",
+        "count": 2,
+        "token": "--color-bg-secondary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css"
+        ]
+      },
+      {
+        "value": "#adb1b8",
+        "count": 2,
+        "token": "--color-border-emphasis",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Consent/view/statics/css/consent-banner.css"
+        ]
+      },
+      {
+        "value": "#dc2626",
+        "count": 2,
+        "token": "--color-danger-hot",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Compare/view/statics/css/product-shopper-chrome.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#e47911",
+        "count": 2,
+        "token": "--color-literal-e47911",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Compare/view/statics/css/product-shopper-chrome.css",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/handoff.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#eef2ff",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Compare/view/templates/frontend/compare/index.phtml#<style>",
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css"
+        ]
+      },
+      {
+        "value": "#3730a3",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Compare/view/templates/frontend/compare/index.phtml#<style>",
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css"
+        ]
+      },
+      {
+        "value": "#0c4a6e",
+        "count": 2,
+        "token": "--color-info-active",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css",
+          "app/code/Weline/Multipass/view/templates/frontend/account/identity-bridge.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#80bdff",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#856404",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Demo/view/templates/frontend/slot-dup.phtml#<style>",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Setup/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f7f5f0",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css",
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css"
+        ]
+      },
+      {
+        "value": "#fff8ea",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css",
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css"
+        ]
+      },
+      {
+        "value": "#4f46e5",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>",
+          "app/code/Weline/Installer/view/templates/frontend/Install/installed.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#4338ca",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>",
+          "app/code/Weline/Installer/view/templates/frontend/Install/installed.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#22c55e",
+        "count": 2,
+        "token": "--color-success-active",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>",
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f59e0b",
+        "count": 2,
+        "token": "--color-warning",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>",
+          "app/code/Weline/Installer/view/templates/frontend/Install/installed.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#1e293b",
+        "count": 2,
+        "token": "--color-secondary-active",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>",
+          "app/code/Weline/Installer/view/templates/frontend/Install/installed.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f8fafc",
+        "count": 2,
+        "token": "--color-bg-slate",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>",
+          "app/code/Weline/Installer/view/templates/frontend/Install/installed.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#334155",
+        "count": 2,
+        "token": "--color-secondary-hover",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>",
+          "app/code/Weline/Installer/view/templates/frontend/Install/installed.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#1e1b4b",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>",
+          "app/code/Weline/Installer/view/templates/frontend/Install/installed.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#eaecf0",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Mail/view/templates/frontend/account/mail.phtml#<style>",
+          "app/code/Weline/Mail/view/templates/frontend/account/mail.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#16333f",
+        "count": 2,
+        "token": "--color-literal-16333f",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Marketing/view/statics/css/marketing-progress.css",
+          "app/code/Weline/Marketing/view/statics/css/marketing-progress.css"
+        ]
+      },
+      {
+        "value": "#eef2f7",
+        "count": 2,
+        "token": "--color-literal-eef2f7",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css",
+          "app/code/Weline/Payment/view/templates/frontend/Callback/browser-return.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#fed7aa",
+        "count": 2,
+        "token": "--color-warning-soft-4",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css",
+          "app/code/Weline/Multipass/view/templates/frontend/identity/authorize.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#111827",
+        "count": 2,
+        "token": "--color-text-slate",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/Callback/browser-return.phtml#<style>",
+          "app/code/Weline/Payment/view/templates/frontend/Callback/browser-return.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#047857",
+        "count": 2,
+        "token": "--color-success-title",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/Callback/browser-return.phtml#<style>",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/payment-methods.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#fcd200",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Search/view/theme/frontend/layouts/search/default.phtml#<style>",
+          "app/code/Weline/Search/view/theme/frontend/layouts/search/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f7ca00",
+        "count": 2,
+        "token": "--color-literal-f7ca00",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Search/view/theme/frontend/layouts/search/default.phtml#<style>",
+          "app/code/Weline/Search/view/theme/frontend/layouts/search/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#0d6efd",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Shipping/view/templates/frontend/delivery-address/index.phtml#<style>",
+          "app/code/Weline/Shipping/view/templates/frontend/shipping-address/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#131921",
+        "count": 2,
+        "token": "--color-bg-dark-secondary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Shipping/view/templates/frontend/guide/returns.phtml#<style>",
+          "app/code/Weline/Shipping/view/templates/frontend/guide/shipping.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#37475a",
+        "count": 2,
+        "token": "--color-literal-37475a",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Shipping/view/templates/frontend/guide/returns.phtml#<style>",
+          "app/code/Weline/Shipping/view/templates/frontend/guide/shipping.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#ff9900",
+        "count": 2,
+        "token": "--color-primary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Shipping/view/templates/frontend/guide/returns.phtml#<style>",
+          "app/code/Weline/Shipping/view/templates/frontend/guide/shipping.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#e8edf3",
+        "count": 2,
+        "token": "--color-literal-e8edf3",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css",
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#f5c242",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css",
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#f3dfaf",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css",
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#218838",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/twofa-app/style.css",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#764ba2 (alpha)",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml#<style>",
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#d4edda",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Setup/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#155724",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Setup/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#721c24",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Setup/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#132135 (alpha)",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css"
+        ]
+      },
+      {
+        "value": "#007185 (alpha)",
+        "count": 1,
+        "token": "--color-info",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css"
+        ]
+      },
+      {
+        "value": "#f5f7fa",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#4facfe",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#fa709a",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#fee140",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#ecf0f1",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#95a5a6",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#e77600",
+        "count": 1,
+        "token": "--color-border-focus",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#fff5f3",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css"
+        ]
+      },
+      {
+        "value": "#f5c2b5",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css"
+        ]
+      },
+      {
+        "value": "#666666",
+        "count": 1,
+        "token": "--color-text-gray-mid",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Checkout/view/statics/css/widgets/widget-header-checkout-delivery-context-default.css"
+        ]
+      },
+      {
+        "value": "#3a4553",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Consent/view/statics/css/consent-banner.css"
+        ]
+      },
+      {
+        "value": "#7cb9ff",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Consent/view/statics/css/consent-banner.css"
+        ]
+      },
+      {
+        "value": "#b8d8ff",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Consent/view/statics/css/consent-banner.css"
+        ]
+      },
+      {
+        "value": "#1c1c1c (alpha)",
+        "count": 1,
+        "token": "--color-text-primary",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Consent/view/statics/css/consent-banner.css"
+        ]
+      },
+      {
+        "value": "#f4f7fb",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css"
+        ]
+      },
+      {
+        "value": "#f1f5f9 (alpha)",
+        "count": 1,
+        "token": "--color-text-dark",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css"
+        ]
+      },
+      {
+        "value": "#fff8e1 (alpha)",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css"
+        ]
+      },
+      {
+        "value": "#10b981",
+        "count": 1,
+        "token": "--color-literal-10b981",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css"
+        ]
+      },
+      {
+        "value": "#f1f5f9",
+        "count": 1,
+        "token": "--color-text-dark",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css"
+        ]
+      },
+      {
+        "value": "#b7f0d8",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "#b8e8ef",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "#4caf50",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/CustomerService/view/templates/frontend/Bind/modal.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f44336",
+        "count": 1,
+        "token": "--color-error",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/templates/frontend/Bind/modal.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#5568d3",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/CustomerService/view/templates/frontend/Bind/modal.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#1c1917 (alpha)",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/CustomerService/view/templates/frontend/Bind/verify.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#e3f2fd",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#bbdefb",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#17a2b8",
+        "count": 1,
+        "token": "--color-info",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#1e3a5f",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#2c5282",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#ced4da",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#343a40 (alpha)",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "#064e3b",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#6ee7b7",
+        "count": 1,
+        "token": "--token-color-6ee7b7",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#7f1d1d",
+        "count": 1,
+        "token": "--color-danger-deep",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#fca5a5",
+        "count": 1,
+        "token": "--color-danger-border-subtle",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "#f0ad4e",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Demo/view/templates/frontend/slot-dup.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#fff8e6",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Demo/view/templates/frontend/slot-dup.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f3a847",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f5f7fb",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css"
+        ]
+      },
+      {
+        "value": "#f3f6fb",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css"
+        ]
+      },
+      {
+        "value": "#243041",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css"
+        ]
+      },
+      {
+        "value": "#e2e8f0",
+        "count": 1,
+        "token": "--color-secondary-bg-subtle",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css"
+        ]
+      },
+      {
+        "value": "#0ea5e9",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css"
+        ]
+      },
+      {
+        "value": "#16a34a (alpha)",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css"
+        ]
+      },
+      {
+        "value": "#dc2626 (alpha)",
+        "count": 1,
+        "token": "--color-danger-hot",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css"
+        ]
+      },
+      {
+        "value": "#1e293b (alpha)",
+        "count": 1,
+        "token": "--color-secondary-active",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css"
+        ]
+      },
+      {
+        "value": "#020617 (alpha)",
+        "count": 1,
+        "token": "--color-bg-canvas",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css"
+        ]
+      },
+      {
+        "value": "#4ade80 (alpha)",
+        "count": 1,
+        "token": "--color-success",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css"
+        ]
+      },
+      {
+        "value": "#fbbf24 (alpha)",
+        "count": 1,
+        "token": "--color-warning-active",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css"
+        ]
+      },
+      {
+        "value": "#f87171 (alpha)",
+        "count": 1,
+        "token": "--token-color-f87171",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css"
+        ]
+      },
+      {
+        "value": "#0ea5e9 (alpha)",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css"
+        ]
+      },
+      {
+        "value": "#141413",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css"
+        ]
+      },
+      {
+        "value": "#2a2926",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css"
+        ]
+      },
+      {
+        "value": "#c4a35a",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css"
+        ]
+      },
+      {
+        "value": "#fffcf7",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css"
+        ]
+      },
+      {
+        "value": "#6b6760",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css"
+        ]
+      },
+      {
+        "value": "#ddd6c8",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css"
+        ]
+      },
+      {
+        "value": "#8a6b2e",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css"
+        ]
+      },
+      {
+        "value": "#1f1e1b",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css"
+        ]
+      },
+      {
+        "value": "#f3efe6",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css"
+        ]
+      },
+      {
+        "value": "#0c0c0c",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#818cf8",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#c084fc",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Installer/view/templates/frontend/Install/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#e4e7ec",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Mail/view/templates/frontend/account/mail.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f4f7ff",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Mail/view/templates/frontend/account/mail.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#e6eef1",
+        "count": 1,
+        "token": "--color-literal-e6eef1",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Marketing/view/statics/css/marketing-progress.css"
+        ]
+      },
+      {
+        "value": "#5c6b74",
+        "count": 1,
+        "token": "--color-literal-5c6b74",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Marketing/view/statics/css/marketing-progress.css"
+        ]
+      },
+      {
+        "value": "#d7e3e8",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Marketing/view/statics/css/marketing-progress.css"
+        ]
+      },
+      {
+        "value": "#f4f8f9",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Marketing/view/statics/css/marketing-progress.css"
+        ]
+      },
+      {
+        "value": "#d7dee8",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css"
+        ]
+      },
+      {
+        "value": "#eef6ff",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css"
+        ]
+      },
+      {
+        "value": "#f7fbf5",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css"
+        ]
+      },
+      {
+        "value": "#4b5f76",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css"
+        ]
+      },
+      {
+        "value": "#b8c4d4",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css"
+        ]
+      },
+      {
+        "value": "#e0f2fe",
+        "count": 1,
+        "token": "--color-info-bg-subtle",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css"
+        ]
+      },
+      {
+        "value": "#075985",
+        "count": 1,
+        "token": "--color-info-hover",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css"
+        ]
+      },
+      {
+        "value": "#dbe4ef",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css"
+        ]
+      },
+      {
+        "value": "#b45309",
+        "count": 1,
+        "token": "--color-warning-ink",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Multipass/view/templates/frontend/identity/authorize.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#dbeafe",
+        "count": 1,
+        "token": "--color-info-soft-2",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Multipass/view/templates/frontend/identity/authorize.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#eceff1",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Order/view/statics/css/order-tracking.css"
+        ]
+      },
+      {
+        "value": "#ecfdf5",
+        "count": 1,
+        "token": "--color-success-soft",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/Callback/browser-return.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#fff4ed",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/checkout/handoff.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f5a05a",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/checkout/handoff.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#b0b3b3",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/checkout/handoff.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#bfdbfe",
+        "count": 1,
+        "token": "--color-primary-text-emphasis",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/checkout/payment-methods.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#059669 (alpha)",
+        "count": 1,
+        "token": "--color-success-strong-2",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/checkout/payment-methods.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#b7e4d8",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/checkout/return.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f0faf7",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/checkout/return.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#8b5a2b",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Product/view/templates/frontend/best-sellers/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#2162a1",
+        "count": 1,
+        "token": "--color-literal-2162a1",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Product/view/templates/frontend/category/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#c8cccc",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Product/view/theme/frontend/layouts/products/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f5f0e7",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css"
+        ]
+      },
+      {
+        "value": "#d8cfbf",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css"
+        ]
+      },
+      {
+        "value": "#24211d",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css"
+        ]
+      },
+      {
+        "value": "#6b6258",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css"
+        ]
+      },
+      {
+        "value": "#7d352e",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css"
+        ]
+      },
+      {
+        "value": "#8a3029",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css"
+        ]
+      },
+      {
+        "value": "#8a342c",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css"
+        ]
+      },
+      {
+        "value": "#6f2822",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css"
+        ]
+      },
+      {
+        "value": "#6e2b24 (alpha)",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css"
+        ]
+      },
+      {
+        "value": "#d8ccb7",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/theme/frontend/layouts/promotion/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#1e1b16 (alpha)",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/theme/frontend/layouts/promotion/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#832b24 (alpha)",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/theme/frontend/layouts/promotion/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f0b800",
+        "count": 1,
+        "token": "--color-literal-f0b800",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Search/view/theme/frontend/layouts/search/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#e7b92e",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Search/view/theme/frontend/layouts/search/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#9a9a9a",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Search/view/theme/frontend/layouts/search/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#fffdf4",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Shipping/view/statics/frontend/css/account-address.css"
+        ]
+      },
+      {
+        "value": "#f6f8fb",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Social/view/templates/frontend/Social/smoke.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#162033",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Social/view/templates/frontend/Social/smoke.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#dce5f2",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Social/view/templates/frontend/Social/smoke.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#e8f8ef",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Social/view/templates/frontend/Social/smoke.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#087443",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Social/view/templates/frontend/Social/smoke.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#feecec",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Social/view/templates/frontend/Social/smoke.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#b42318",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Social/view/templates/frontend/Social/smoke.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#eef4ff",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Social/view/templates/frontend/Social/smoke.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#cfe8f3",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#eef9fc",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#0f5f73",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#b8e4c7",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#eaf8ef",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#176532",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#f5b8bd",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#fff0f1",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#a61d2a",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#fffaf0",
+        "count": 1,
+        "token": "--color-literal-fffaf0",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#ecfdf3",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#dcfce7",
+        "count": 1,
+        "token": "--color-success-bg-subtle",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#d3dae6",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#7c6b36",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#f8c944",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#eab308",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#0b1220",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#f5c242 (alpha)",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "#dee2e6",
+        "count": 1,
+        "token": "--color-border-muted",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/twofa-app/style.css"
+        ]
+      },
+      {
+        "value": "#28a745 (alpha)",
+        "count": 1,
+        "token": "--color-success",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/twofa-app/style.css"
+        ]
+      },
+      {
+        "value": "#11998e",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#38ef7d",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f9f9f9",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#ffeeee",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#11998e (alpha)",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#fff3cd",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Setup/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#f5c6cb",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Setup/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "#315ee7",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#167a4d",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#637083",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#d58a00",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#d83a52",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#168aae",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#7b54c6",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#c84b8f",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#d96f28",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#179c82",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#0a0e27",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#1a1e37",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#4ade80",
+        "count": 1,
+        "token": "--color-success",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#f87171",
+        "count": 1,
+        "token": "--token-color-f87171",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#315ee7 (alpha)",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#167a4d (alpha)",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#637083 (alpha)",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tokens/analytics.css"
+        ]
+      },
+      {
+        "value": "#0c0e14 (alpha)",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tracking-vendor-admin.css"
+        ]
+      },
+      {
+        "value": "#2f6fed (alpha)",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/tracking-vendor-admin.css"
+        ]
+      }
+    ]
+  },
+  "sizes": {
+    "distinct": 246,
+    "occurrences": 1997,
+    "mapped_occurrences": 1891,
+    "coverage": 0.9469,
+    "rows": [
+      {
+        "value": "2px",
+        "count": 85,
+        "token": "--border-width-medium",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "1px",
+        "count": 84,
+        "token": "--border-width-thin",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/Captcha/view/statics/css/captcha-local.css",
+          "app/code/Weline/Captcha/view/statics/css/captcha-local.css"
+        ]
+      },
+      {
+        "value": "2rem",
+        "count": 53,
+        "token": "--weline-space-8",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/statics/css/ai-model-select.css",
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css"
+        ]
+      },
+      {
+        "value": "10px",
+        "count": 52,
+        "token": "--token-size-10px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css",
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "8px",
+        "count": 52,
+        "token": "--spacing-2",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "22rem",
+        "count": 43,
+        "token": "--token-size-22rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/statics/css/ai-model-select.css",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Customer/view/statics/ui/components/weline-customer-select.css"
+        ]
+      },
+      {
+        "value": "4px",
+        "count": 39,
+        "token": "--spacing-1",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/Compare/view/statics/css/product-shopper-chrome.css"
+        ]
+      },
+      {
+        "value": "5px",
+        "count": 37,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css",
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css",
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "3px",
+        "count": 37,
+        "token": "--border-width-thick",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css"
+        ]
+      },
+      {
+        "value": "640px",
+        "count": 35,
+        "token": "--size-content-640",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css"
+        ]
+      },
+      {
+        "value": "768px",
+        "count": 32,
+        "token": "--breakpoint-md",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "30px",
+        "count": 30,
+        "token": "--token-size-30px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "1.75rem",
+        "count": 30,
+        "token": "--spacing-7",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Captcha/view/statics/css/captcha-local.css",
+          "app/code/Weline/Captcha/view/statics/css/captcha-local.css",
+          "app/code/Weline/Customer/view/statics/css/account-index.css"
+        ]
+      },
+      {
+        "value": "1rem",
+        "count": 29,
+        "token": "--weline-space-4",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Currency/view/statics/css/currency-select.css",
+          "app/code/Weline/Currency/view/statics/css/currency-select.css",
+          "app/code/Weline/Currency/view/statics/css/currency-select.css"
+        ]
+      },
+      {
+        "value": "2.5rem",
+        "count": 26,
+        "token": "--weline-space-10",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "12rem",
+        "count": 25,
+        "token": "--token-size-12rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "6px",
+        "count": 24,
+        "token": "--size-scrollbar",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Compare/view/statics/css/product-shopper-chrome.css"
+        ]
+      },
+      {
+        "value": "0.9375rem",
+        "count": 24,
+        "token": "--token-size-0-9375rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/Customer/view/statics/css/account-index.css"
+        ]
+      },
+      {
+        "value": "18rem",
+        "count": 23,
+        "token": "--token-size-18rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/statics/css/ai-model-select.css",
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/Currency/view/statics/css/currency-select.css"
+        ]
+      },
+      {
+        "value": "40px",
+        "count": 23,
+        "token": "--control-height-md",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "32px",
+        "count": 23,
+        "token": "--spacing-8",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Consent/view/statics/css/consent-banner.css",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/auth.phtml#<style>"
+        ]
+      },
+      {
+        "value": "0.95rem",
+        "count": 23,
+        "token": "--spacing-0_95",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/CustomerService/view/statics/css/backend-console.css"
+        ]
+      },
+      {
+        "value": "28rem",
+        "count": 23,
+        "token": "--token-size-28rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css"
+        ]
+      },
+      {
+        "value": "900px",
+        "count": 22,
+        "token": "--size-content-900",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css"
+        ]
+      },
+      {
+        "value": "20px",
+        "count": 21,
+        "token": "--spacing-5",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "3rem",
+        "count": 21,
+        "token": "--weline-space-12",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/Compare/view/statics/css/product-shopper-chrome.css",
+          "app/code/Weline/Compare/view/statics/css/product-shopper-chrome.css"
+        ]
+      },
+      {
+        "value": "1.25rem",
+        "count": 20,
+        "token": "--weline-space-5",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "15px",
+        "count": 19,
+        "token": "--token-size-15px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "16rem",
+        "count": 19,
+        "token": "--token-size-16rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css"
+        ]
+      },
+      {
+        "value": "40rem",
+        "count": 19,
+        "token": "--token-size-40rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Compare/view/statics/css/product-shopper-chrome.css",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/auth.phtml#<style>",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/challenge.phtml#<style>"
+        ]
+      },
+      {
+        "value": "5rem",
+        "count": 18,
+        "token": "--spacing-5rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/statics/css/default-model.css",
+          "app/code/Weline/CustomerService/view/statics/css/backend-console.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "4.5rem",
+        "count": 18,
+        "token": "--token-size-4-5rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Compare/view/statics/css/product-shopper-chrome.css",
+          "app/code/Weline/Customer/view/statics/ui/components/weline-customer-select.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "2.25rem",
+        "count": 18,
+        "token": "--weline-space-9",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/dashboard.phtml#<style>",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "5.5rem",
+        "count": 18,
+        "token": "--token-size-5-5rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/Inquiry/view/statics/css/inquiry-editor.css"
+        ]
+      },
+      {
+        "value": "48rem",
+        "count": 17,
+        "token": "--breakpoint-md",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/statics/css/ai-model-select.css",
+          "app/code/Weline/Ai/view/statics/css/default-model.css",
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css"
+        ]
+      },
+      {
+        "value": "480px",
+        "count": 17,
+        "token": "--auth-container-width",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Customer/view/statics/css/account-index.css"
+        ]
+      },
+      {
+        "value": "14rem",
+        "count": 16,
+        "token": "--weline-skeleton-card-min-h",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/statics/css/ai-model-select.css",
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable.css"
+        ]
+      },
+      {
+        "value": "24px",
+        "count": 16,
+        "token": "--spacing-6",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Compare/view/statics/css/product-shopper-chrome.css",
+          "app/code/Weline/CustomerService/view/statics/css/backend-agent.css",
+          "app/code/Weline/I18n/view/statics/css/local-bulk-translation.css"
+        ]
+      },
+      {
+        "value": "14px",
+        "count": 16,
+        "token": "--token-size-14px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/auth.phtml#<style>",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/challenge.phtml#<style>",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/dashboard.phtml#<style>"
+        ]
+      },
+      {
+        "value": "720px",
+        "count": 16,
+        "token": "--size-content-720",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>",
+          "app/code/Weline/Order/view/statics/css/account-orders.css"
+        ]
+      },
+      {
+        "value": "36rem",
+        "count": 15,
+        "token": "--token-size-36rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/auth.phtml#<style>",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/forgot-password/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "3.5rem",
+        "count": 14,
+        "token": "--token-size-3-5rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css"
+        ]
+      },
+      {
+        "value": "767px",
+        "count": 14,
+        "token": "--token-bp-767px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Consent/view/statics/css/consent-banner.css",
+          "app/code/Weline/Currency/view/statics/css/currency-select.css",
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css"
+        ]
+      },
+      {
+        "value": "4rem",
+        "count": 14,
+        "token": "--spacing-3xl",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Customer/view/statics/css/account-recovery.css",
+          "app/code/Weline/Customer/view/statics/css/account-recovery.css"
+        ]
+      },
+      {
+        "value": "8rem",
+        "count": 13,
+        "token": "--token-size-8rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/CustomerService/view/statics/css/backend-console.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "1.5rem",
+        "count": 13,
+        "token": "--weline-space-6",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Cart/view/theme/frontend/layouts/mini-cart/default.phtml#<style>",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/dashboard.phtml#<style>",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "1.05rem",
+        "count": 13,
+        "token": "--spacing-1_05",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/auth.phtml#<style>",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/challenge.phtml#<style>",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/forgot-password/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "18px",
+        "count": 12,
+        "token": "--token-size-18px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css",
+          "app/code/Weline/Consent/view/statics/css/consent-banner.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "12px",
+        "count": 12,
+        "token": "--spacing-3",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/CustomerService/view/statics/css/backend-agent.css",
+          "app/code/Weline/CustomerService/view/statics/css/backend-agent.css"
+        ]
+      },
+      {
+        "value": "16px",
+        "count": 12,
+        "token": "--spacing-4",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "0.5rem",
+        "count": 12,
+        "token": "--weline-space-2",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Cart/view/theme/frontend/layouts/mini-cart/default.phtml#<style>",
+          "app/code/Weline/Compare/view/statics/css/product-shopper-chrome.css",
+          "app/code/Weline/Compare/view/statics/css/product-shopper-chrome.css"
+        ]
+      },
+      {
+        "value": "0.65rem",
+        "count": 12,
+        "token": "--spacing-0_65",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Order/view/statics/css/account-orders.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.scope-filter-2.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.scope-filter-3.css"
+        ]
+      },
+      {
+        "value": "36px",
+        "count": 11,
+        "token": "--token-size-36px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css",
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css"
+        ]
+      },
+      {
+        "value": "34px",
+        "count": 11,
+        "token": "--token-size-34px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css",
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>",
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "50px",
+        "count": 11,
+        "token": "--size-control-50",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/Multipass/view/templates/frontend/identity/authorize.phtml#<style>",
+          "app/code/Weline/Multipass/view/templates/frontend/identity/authorize.phtml#<style>"
+        ]
+      },
+      {
+        "value": "56px",
+        "count": 11,
+        "token": "--control-height-2xl",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css",
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css"
+        ]
+      },
+      {
+        "value": "0.6875rem",
+        "count": 11,
+        "token": "--token-size-11px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css",
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css",
+          "app/code/Weline/CustomerService/view/statics/css/backend-console.css"
+        ]
+      },
+      {
+        "value": "6.5rem",
+        "count": 10,
+        "token": "--token-size-6-5rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "120px",
+        "count": 10,
+        "token": "--size-panel-120",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "300px",
+        "count": 9,
+        "token": "--size-panel-300",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "520px",
+        "count": 9,
+        "token": "--token-size-520px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css"
+        ]
+      },
+      {
+        "value": "28px",
+        "count": 9,
+        "token": "--control-height-xs",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css"
+        ]
+      },
+      {
+        "value": "1.125rem",
+        "count": 9,
+        "token": "--font-size-lg",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Compare/view/statics/css/product-shopper-chrome.css",
+          "app/code/Weline/Compare/view/statics/css/product-shopper-chrome.css",
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css"
+        ]
+      },
+      {
+        "value": "80px",
+        "count": 9,
+        "token": "--sidebar-collapsed-width",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Installer/view/templates/frontend/Install/installed.phtml#<style>"
+        ]
+      },
+      {
+        "value": "47.99rem",
+        "count": 9,
+        "token": "--token-size-47-99rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/auth.phtml#<style>",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/challenge.phtml#<style>",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/forgot-password/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "22px",
+        "count": 8,
+        "token": "--token-size-22px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css",
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css",
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css"
+        ]
+      },
+      {
+        "value": "200px",
+        "count": 8,
+        "token": "--size-panel-200",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "160px",
+        "count": 8,
+        "token": "--token-size-160px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/payment-methods.phtml#<style>"
+        ]
+      },
+      {
+        "value": "44px",
+        "count": 8,
+        "token": "--auth-input-height",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css",
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css",
+          "app/code/Weline/Customer/view/statics/css/account-social-bindings.css"
+        ]
+      },
+      {
+        "value": "0.7rem",
+        "count": 8,
+        "token": "--spacing-0_7",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "0.75rem",
+        "count": 8,
+        "token": "--weline-space-3",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/backend-agent.css",
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css",
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css"
+        ]
+      },
+      {
+        "value": "20rem",
+        "count": 8,
+        "token": "--token-size-20rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/backend-console.css",
+          "app/code/Weline/DataTable/view/statics/css/demo.css",
+          "app/code/Weline/DataTable/view/statics/css/demo.css"
+        ]
+      },
+      {
+        "value": "1.4rem",
+        "count": 8,
+        "token": "--token-size-1-4rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Order/view/statics/css/account-orders.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.scope-filter-2.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.scope-filter-3.css"
+        ]
+      },
+      {
+        "value": "560px",
+        "count": 7,
+        "token": "--size-hero-height",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "24rem",
+        "count": 7,
+        "token": "--token-size-24rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/statics/css/ai-model-select.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/HelpPay/view/statics/css/helppay-share.css"
+        ]
+      },
+      {
+        "value": "60px",
+        "count": 7,
+        "token": "--weline-space-15",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "250px",
+        "count": 7,
+        "token": "--token-size-250px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Setup/index.phtml#<style>",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Setup/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "10rem",
+        "count": 7,
+        "token": "--token-size-10rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable.css",
+          "app/code/Weline/HelpPay/view/statics/css/helppay-share.css"
+        ]
+      },
+      {
+        "value": "48px",
+        "count": 7,
+        "token": "--auth-btn-height",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css"
+        ]
+      },
+      {
+        "value": "1024px",
+        "count": 7,
+        "token": "--token-bp-1024px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/dashboard.phtml#<style>"
+        ]
+      },
+      {
+        "value": "0.68rem",
+        "count": 7,
+        "token": "--token-size-0-68rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Captcha/view/statics/css/captcha-local.css",
+          "app/code/Weline/Shipping/view/statics/frontend/css/account-address.css",
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css"
+        ]
+      },
+      {
+        "value": "42rem",
+        "count": 7,
+        "token": "--token-size-42rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/theme/frontend/layouts/account/challenge.phtml#<style>",
+          "app/code/Weline/Demo/view/templates/frontend/index.phtml#<style>",
+          "app/code/Weline/Demo/view/templates/frontend/slot-dup.phtml#<style>"
+        ]
+      },
+      {
+        "value": "32rem",
+        "count": 7,
+        "token": "--token-size-32rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/backend-agent.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable.css",
+          "app/code/Weline/HelpPay/view/statics/css/helppay-share.css"
+        ]
+      },
+      {
+        "value": "0.4rem",
+        "count": 7,
+        "token": "--spacing-0_4",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/HelpPay/view/statics/css/helppay-share.css",
+          "app/code/Weline/HelpPay/view/statics/css/helppay-share.css",
+          "app/code/Weline/HelpPay/view/statics/frontend/css/helppay-share.css"
+        ]
+      },
+      {
+        "value": "7rem",
+        "count": 7,
+        "token": "--token-size-7rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/local-translation.css",
+          "app/code/Weline/Inquiry/view/statics/css/inquiry-editor.css",
+          "app/code/Weline/Inquiry/view/statics/css/inquiry-editor.css"
+        ]
+      },
+      {
+        "value": "2.35rem",
+        "count": 7,
+        "token": "--token-size-2-35rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>",
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.css"
+        ]
+      },
+      {
+        "value": "11px",
+        "count": 6,
+        "token": "--token-size-11px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css"
+        ]
+      },
+      {
+        "value": "52rem",
+        "count": 6,
+        "token": "--token-size-52rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/Compare/view/statics/css/product-shopper-chrome.css",
+          "app/code/Weline/Demo/view/statics/mail-html-preview-accept.html#<style>"
+        ]
+      },
+      {
+        "value": "1.1rem",
+        "count": 6,
+        "token": "--token-size-1-1rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "1200px",
+        "count": 6,
+        "token": "--breakpoint-xl",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/Product/view/templates/frontend/catalog/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "220px",
+        "count": 6,
+        "token": "--size-panel-220",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/payment-methods.phtml#<style>",
+          "app/code/Weline/Product/view/theme/frontend/layouts/category/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "2.75rem",
+        "count": 6,
+        "token": "--spacing-11",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css",
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css"
+        ]
+      },
+      {
+        "value": "1.65rem",
+        "count": 6,
+        "token": "--token-size-1-65rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>",
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css",
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css"
+        ]
+      },
+      {
+        "value": "0.85rem",
+        "count": 6,
+        "token": "--spacing-0_85",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.css",
+          "app/code/Weline/Order/view/statics/css/account-orders.scope-filter-2.css"
+        ]
+      },
+      {
+        "value": "760px",
+        "count": 5,
+        "token": "--token-size-760px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css",
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>",
+          "app/code/Weline/Mail/view/templates/frontend/account/mail.phtml#<style>"
+        ]
+      },
+      {
+        "value": "500px",
+        "count": 5,
+        "token": "--token-size-500px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/CustomerService/view/templates/frontend/Bind/modal.phtml#<style>",
+          "app/code/Weline/Installer/view/templates/frontend/Install/installed.phtml#<style>"
+        ]
+      },
+      {
+        "value": "150px",
+        "count": 5,
+        "token": "--size-panel-150",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "100px",
+        "count": 5,
+        "token": "--token-size-100px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "860px",
+        "count": 5,
+        "token": "--size-modal-lg",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Customer/view/theme/frontend/layouts/contact/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "0.15em",
+        "count": 5,
+        "token": "--token-size-0-15rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/HelpPay/view/statics/css/helppay-share.css",
+          "app/code/Weline/HelpPay/view/statics/css/helppay-share.css"
+        ]
+      },
+      {
+        "value": "0.22rem",
+        "count": 5,
+        "token": "--token-size-0-22rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Order/view/statics/css/order-tracking.css",
+          "app/code/Weline/Order/view/statics/css/order-tracking.css"
+        ]
+      },
+      {
+        "value": "7.5rem",
+        "count": 5,
+        "token": "--token-size-7-5rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/backend-console.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "3.75rem",
+        "count": 5,
+        "token": "--weline-space-15",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/Product/view/templates/frontend/new-arrivals/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "64px",
+        "count": 5,
+        "token": "--auth-icon-size",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/templates/frontend/Bind/modal.phtml#<style>",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/return.phtml#<style>"
+        ]
+      },
+      {
+        "value": "0.375rem",
+        "count": 5,
+        "token": "--spacing-1_5",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css"
+        ]
+      },
+      {
+        "value": "992px",
+        "count": 5,
+        "token": "--breakpoint-lg",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/Product/view/statics/css/widgets/product-native-detail.css",
+          "app/code/Weline/Product/view/statics/css/widgets/textile-heritage.css"
+        ]
+      },
+      {
+        "value": "11rem",
+        "count": 5,
+        "token": "--token-size-11rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable.css",
+          "app/code/Weline/HelpPay/view/statics/css/helppay-share.css",
+          "app/code/Weline/HelpPay/view/statics/frontend/css/helppay-share.css"
+        ]
+      },
+      {
+        "value": "26rem",
+        "count": 5,
+        "token": "--token-size-26rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/demo.css",
+          "app/code/Weline/I18n/view/statics/css/header-choice-selector.css",
+          "app/code/Weline/Promotion/view/theme/frontend/layouts/promotion/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "0.94rem",
+        "count": 5,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>",
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>",
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "1023px",
+        "count": 5,
+        "token": "--token-size-1023px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Mail/view/templates/frontend/account/mail-client.phtml#<style>",
+          "app/code/Weline/Product/view/statics/css/widgets/cross-sell.css",
+          "app/code/Weline/Product/view/statics/css/widgets/recommended-products.css"
+        ]
+      },
+      {
+        "value": "96px",
+        "count": 4,
+        "token": "--token-size-96px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css",
+          "app/code/Weline/Compare/view/templates/frontend/compare/index.phtml#<style>",
+          "app/code/Weline/Compare/view/templates/frontend/compare/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "280px",
+        "count": 4,
+        "token": "--sidebar-width",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Consent/view/statics/css/consent-banner.css",
+          "app/code/Weline/I18n/view/statics/css/local-bulk-translation.css"
+        ]
+      },
+      {
+        "value": "1.3rem",
+        "count": 4,
+        "token": "--token-size-1-3rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Center/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/Shipping/view/templates/frontend/guide/returns.phtml#<style>"
+        ]
+      },
+      {
+        "value": "25px",
+        "count": 4,
+        "token": "--token-size-25px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/TwoFactorAuth/view/statics/twofa-app/style.css"
+        ]
+      },
+      {
+        "value": "0.3rem",
+        "count": 4,
+        "token": "--token-size-0-3rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/Inquiry/view/statics/css/inquiry-editor.css",
+          "app/code/Weline/Order/view/statics/css/order-tracking.css"
+        ]
+      },
+      {
+        "value": "1.2rem",
+        "count": 4,
+        "token": "--spacing-1_2",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Index/index.phtml#<style>",
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>",
+          "app/code/Weline/I18n/view/statics/css/local-translation.css"
+        ]
+      },
+      {
+        "value": "46rem",
+        "count": 4,
+        "token": "--token-size-46rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>",
+          "app/code/Weline/Shipping/view/templates/frontend/guide/returns.phtml#<style>"
+        ]
+      },
+      {
+        "value": "42px",
+        "count": 4,
+        "token": "--control-height",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css",
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css",
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "1.15rem",
+        "count": 4,
+        "token": "--token-size-1-15rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/backend-console.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "960px",
+        "count": 4,
+        "token": "--size-content-960",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/backend-console.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/Visitor/view/statics/css/tracking-vendor-admin.css"
+        ]
+      },
+      {
+        "value": "0.92rem",
+        "count": 4,
+        "token": "--token-size-0-92rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/templates/frontend/Bind/verify.phtml#<style>",
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>",
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "0.2rem",
+        "count": 4,
+        "token": "--spacing-0_2",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/Order/view/statics/css/order-tracking.css"
+        ]
+      },
+      {
+        "value": "1.85rem",
+        "count": 4,
+        "token": "--token-size-1-85rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>",
+          "app/code/Weline/Promotion/view/statics/css/promotion-hub.css",
+          "app/code/Weline/Shipping/view/templates/frontend/guide/returns.phtml#<style>"
+        ]
+      },
+      {
+        "value": "9rem",
+        "count": 4,
+        "token": "--token-size-9rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>",
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css",
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css"
+        ]
+      },
+      {
+        "value": "0.55rem",
+        "count": 4,
+        "token": "--spacing-0_55",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css",
+          "app/code/Weline/Order/view/statics/css/order-tracking.css",
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css"
+        ]
+      },
+      {
+        "value": "34rem",
+        "count": 4,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/header-choice-selector.css",
+          "app/code/Weline/Mail/view/templates/frontend/account/mail-client.phtml#<style>",
+          "app/code/Weline/Payment/view/templates/frontend/Callback/browser-return.phtml#<style>"
+        ]
+      },
+      {
+        "value": "0.35rem",
+        "count": 4,
+        "token": "--token-size-0-35rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/local-translation.css",
+          "app/code/Weline/Search/view/theme/frontend/layouts/search/default.phtml#<style>",
+          "app/code/Weline/Search/view/theme/frontend/layouts/search/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "1.35rem",
+        "count": 4,
+        "token": "--token-size-1-35rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/local-translation.css",
+          "app/code/Weline/Search/view/theme/frontend/layouts/search/default.phtml#<style>",
+          "app/code/Weline/Search/view/theme/frontend/layouts/search/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "800px",
+        "count": 4,
+        "token": "--token-size-800px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Mail/view/templates/frontend/account/mail.phtml#<style>",
+          "app/code/Weline/Shipping/view/templates/frontend/delivery-address/form.phtml#<style>",
+          "app/code/Weline/Shipping/view/templates/frontend/shipping-address/form.phtml#<style>"
+        ]
+      },
+      {
+        "value": "180px",
+        "count": 3,
+        "token": "--size-panel-180",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css",
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "6rem",
+        "count": 3,
+        "token": "--token-size-6rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/statics/css/default-model.css",
+          "app/code/Weline/HelpPay/view/statics/css/helppay-share.css",
+          "app/code/Weline/HelpPay/view/statics/frontend/css/helppay-share.css"
+        ]
+      },
+      {
+        "value": "320px",
+        "count": 3,
+        "token": "--token-size-320px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Ai/view/templates/frontend/Chat/index.phtml#<style>",
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>",
+          "app/code/Weline/Product/view/theme/frontend/layouts/product/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "1.875rem",
+        "count": 3,
+        "token": "--token-size-30px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Customer/view/statics/css/account-recovery.css",
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css"
+        ]
+      },
+      {
+        "value": "240px",
+        "count": 3,
+        "token": "--token-size-240px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Product/view/theme/frontend/layouts/products/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "31px",
+        "count": 3,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css"
+        ]
+      },
+      {
+        "value": "115px",
+        "count": 3,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css"
+        ]
+      },
+      {
+        "value": "88px",
+        "count": 3,
+        "token": "--token-size-88px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css",
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css"
+        ]
+      },
+      {
+        "value": "2.95rem",
+        "count": 3,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Customer/view/statics/css/account-index.css",
+          "app/code/Weline/Customer/view/statics/css/account-index.css"
+        ]
+      },
+      {
+        "value": "17rem",
+        "count": 3,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/backend-console.css",
+          "app/code/Weline/DataTable/view/statics/css/demo.css",
+          "app/code/Weline/Mail/view/templates/frontend/account/mail-client.phtml#<style>"
+        ]
+      },
+      {
+        "value": "37.5rem",
+        "count": 3,
+        "token": "--token-size-600px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/backend-statistics.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "0.625rem",
+        "count": 3,
+        "token": "--spacing-2_5",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/Visitor/view/statics/css/analytics-dashboard.css"
+        ]
+      },
+      {
+        "value": "600px",
+        "count": 3,
+        "token": "--token-size-600px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-enhancements.css",
+          "app/code/Weline/TwoFactorAuth/view/statics/twofa-app/style.css",
+          "app/code/Weline/TwoFactorAuth/view/statics/twofa-app/style.css"
+        ]
+      },
+      {
+        "value": "1em",
+        "count": 3,
+        "token": "--weline-space-4",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/Product/view/statics/css/frontend/product-card.css",
+          "app/code/Weline/Product/view/statics/css/frontend/product-card.css"
+        ]
+      },
+      {
+        "value": "64rem",
+        "count": 3,
+        "token": "--token-bp-1024px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable.css",
+          "app/code/Weline/Visitor/view/statics/css/analytics-dashboard.css",
+          "app/code/Weline/Visitor/view/statics/css/analytics-panel.css"
+        ]
+      },
+      {
+        "value": "2.55rem",
+        "count": 3,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>",
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css",
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css"
+        ]
+      },
+      {
+        "value": "45px",
+        "count": 3,
+        "token": "--token-size-45px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css",
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css",
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css"
+        ]
+      },
+      {
+        "value": "68rem",
+        "count": 3,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Inquiry/view/statics/css/supplier-application-atelier.css",
+          "app/code/Weline/Product/view/templates/frontend/best-sellers/index.phtml#<style>",
+          "app/code/Weline/Product/view/templates/frontend/new-arrivals/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "0.18rem",
+        "count": 3,
+        "token": "--token-size-0-18rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Order/view/statics/css/order-tracking.css",
+          "app/code/Weline/Order/view/statics/css/order-tracking.css",
+          "app/code/Weline/Order/view/statics/css/order-tracking.css"
+        ]
+      },
+      {
+        "value": "1.55rem",
+        "count": 3,
+        "token": "--token-size-1-55rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Order/view/statics/css/order-tracking.css",
+          "app/code/Weline/Shipping/view/templates/frontend/guide/returns.phtml#<style>",
+          "app/code/Weline/Shipping/view/templates/frontend/guide/shipping.phtml#<style>"
+        ]
+      },
+      {
+        "value": "90px",
+        "count": 3,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/twofa-app/style.css",
+          "app/code/Weline/TwoFactorAuth/view/statics/twofa-app/style.css",
+          "app/code/Weline/TwoFactorAuth/view/statics/twofa-app/style.css"
+        ]
+      },
+      {
+        "value": "26px",
+        "count": 2,
+        "token": "--token-size-26px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css",
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "1100px",
+        "count": 2,
+        "token": "--token-size-1100px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css",
+          "app/code/Weline/Wishlist/view/statics/css/wishlist-account.css"
+        ]
+      },
+      {
+        "value": "420px",
+        "count": 2,
+        "token": "--size-modal-sm",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>",
+          "app/code/Weline/Product/view/theme/frontend/layouts/product/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "0.28rem",
+        "count": 2,
+        "token": "--token-size-0-28rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>",
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "0.9rem",
+        "count": 2,
+        "token": "--spacing-0_9",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Currency/view/statics/css/currency-select.css",
+          "app/code/Weline/I18n/view/statics/css/language-select.css"
+        ]
+      },
+      {
+        "value": "27.5rem",
+        "count": 2,
+        "token": "--token-size-440px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-recovery.css",
+          "app/code/Weline/Customer/view/statics/css/account-recovery.css"
+        ]
+      },
+      {
+        "value": "39.99rem",
+        "count": 2,
+        "token": "--token-size-39-99rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-recovery.css",
+          "app/code/Weline/Customer/view/statics/css/widgets/widget-account-login.css"
+        ]
+      },
+      {
+        "value": "8.5rem",
+        "count": 2,
+        "token": "--token-size-8-5rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/backend-console.css",
+          "app/code/Weline/I18n/view/statics/css/backend-admin.css"
+        ]
+      },
+      {
+        "value": "0.15rem",
+        "count": 2,
+        "token": "--token-size-0-15rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "23.75rem",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css",
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "72px",
+        "count": 2,
+        "token": "--token-size-72px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "1.2em",
+        "count": 2,
+        "token": "--token-size-1-2em",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css",
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "1.7rem",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>",
+          "app/code/Weline/Product/view/templates/frontend/catalog/categories.phtml#<style>"
+        ]
+      },
+      {
+        "value": "2.85rem",
+        "count": 2,
+        "token": "--token-size-2-85rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>",
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "0.55em",
+        "count": 2,
+        "token": "--spacing-0_55",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/HelpPay/view/statics/css/helppay-share.css",
+          "app/code/Weline/HelpPay/view/statics/frontend/css/helppay-share.css"
+        ]
+      },
+      {
+        "value": "9.5rem",
+        "count": 2,
+        "token": "--token-size-9-5rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/HelpPay/view/statics/css/helppay-share.css",
+          "app/code/Weline/HelpPay/view/statics/frontend/css/helppay-share.css"
+        ]
+      },
+      {
+        "value": "1.45em",
+        "count": 2,
+        "token": "--token-size-1-45em",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/HelpPay/view/statics/css/helppay-share.css",
+          "app/code/Weline/HelpPay/view/statics/frontend/css/helppay-share.css"
+        ]
+      },
+      {
+        "value": "1.25em",
+        "count": 2,
+        "token": "--weline-space-5",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/HelpPay/view/statics/css/helppay-share.css",
+          "app/code/Weline/HelpPay/view/statics/frontend/css/helppay-share.css"
+        ]
+      },
+      {
+        "value": "22.5rem",
+        "count": 2,
+        "token": "--token-size-22-5rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/HelpPay/view/statics/css/helppay-share.css",
+          "app/code/Weline/HelpPay/view/statics/frontend/css/helppay-share.css"
+        ]
+      },
+      {
+        "value": "38px",
+        "count": 2,
+        "token": "--token-size-38px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>",
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "980px",
+        "count": 2,
+        "token": "--token-bp-980px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>",
+          "app/code/Weline/Payment/view/templates/frontend/checkout/return.phtml#<style>"
+        ]
+      },
+      {
+        "value": "1.8rem",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/theme/frontend/layouts/promotion/default.phtml#<style>",
+          "app/code/Weline/Shipping/view/statics/frontend/css/account-address.css"
+        ]
+      },
+      {
+        "value": "0.32rem",
+        "count": 2,
+        "token": "--token-size-0-32em",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Shipping/view/statics/frontend/css/account-address.css",
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css"
+        ]
+      },
+      {
+        "value": "1.22rem",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Shipping/view/statics/frontend/css/account-address.css",
+          "app/code/Weline/Shipping/view/statics/frontend/css/account-address.css"
+        ]
+      },
+      {
+        "value": "0.82rem",
+        "count": 2,
+        "token": "--token-size-0-82rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Shipping/view/statics/frontend/css/account-address.css",
+          "app/code/Weline/Shipping/view/statics/frontend/css/account-address.css"
+        ]
+      },
+      {
+        "value": "2.1rem",
+        "count": 2,
+        "token": "--token-size-2-1rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Shipping/view/templates/frontend/guide/returns.phtml#<style>",
+          "app/code/Weline/Shipping/view/templates/frontend/guide/shipping.phtml#<style>"
+        ]
+      },
+      {
+        "value": "1.5px",
+        "count": 2,
+        "token": "--token-size-1-5px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css",
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css"
+        ]
+      },
+      {
+        "value": "0.62rem",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css",
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css"
+        ]
+      },
+      {
+        "value": "479px",
+        "count": 2,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml#<style>",
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Accounts/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "0.25rem",
+        "count": 2,
+        "token": "--weline-space-1",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/analytics-dashboard.css",
+          "app/code/Weline/Visitor/view/statics/css/analytics-dashboard.css"
+        ]
+      },
+      {
+        "value": "18.75rem",
+        "count": 2,
+        "token": "--size-panel-300",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Visitor/view/statics/css/analytics-panel.css",
+          "app/code/Weline/Visitor/view/statics/css/analytics-panel.css"
+        ]
+      },
+      {
+        "value": "184px",
+        "count": 1,
+        "token": "--token-size-11-5rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css"
+        ]
+      },
+      {
+        "value": "82px",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Affiliate/view/statics/css/affiliate-account.css"
+        ]
+      },
+      {
+        "value": "1.1em",
+        "count": 1,
+        "token": "--token-size-1-1em",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css"
+        ]
+      },
+      {
+        "value": "0.95em",
+        "count": 1,
+        "token": "--spacing-0_95",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css"
+        ]
+      },
+      {
+        "value": "2.5em",
+        "count": 1,
+        "token": "--token-size-2-5em",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/B2B/view/statics/css/b2b-storefront.css"
+        ]
+      },
+      {
+        "value": "140px",
+        "count": 1,
+        "token": "--token-size-8-75rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "0.38rem",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Blog/view/theme/frontend/layouts/blog_category/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "3.25rem",
+        "count": 1,
+        "token": "--spacing-13",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Captcha/view/statics/css/captcha-local.css"
+        ]
+      },
+      {
+        "value": "21px",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Cart/view/statics/css/cart-page-amazon.css"
+        ]
+      },
+      {
+        "value": "31rem",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-index.css"
+        ]
+      },
+      {
+        "value": "232px",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Customer/view/statics/css/account-sidebar.css"
+        ]
+      },
+      {
+        "value": "12.5rem",
+        "count": 1,
+        "token": "--token-size-12-5rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/backend-statistics.css"
+        ]
+      },
+      {
+        "value": "10.5rem",
+        "count": 1,
+        "token": "--token-size-168px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "9999px",
+        "count": 1,
+        "token": "--border-radius-full",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "31.25rem",
+        "count": 1,
+        "token": "--token-size-500px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "26.25rem",
+        "count": 1,
+        "token": "--size-modal-sm",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/CustomerService/view/statics/css/customer-service.css"
+        ]
+      },
+      {
+        "value": "1280px",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable-form.css"
+        ]
+      },
+      {
+        "value": "30rem",
+        "count": 1,
+        "token": "--auth-container-width",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/DataTable/view/statics/css/datatable.css"
+        ]
+      },
+      {
+        "value": "2.4rem",
+        "count": 1,
+        "token": "--token-size-2-4rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "2.45rem",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Faq/view/theme/frontend/layouts/faq/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "76px",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "54px",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "820px",
+        "count": 1,
+        "token": "--token-bp-820px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "3.45rem",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "1.04rem",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "190px",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "238px",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "1180px",
+        "count": 1,
+        "token": "--size-content-1180",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Index/view/templates/Index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "899px",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Inquiry/view/statics/css/inquiry-editor.css"
+        ]
+      },
+      {
+        "value": "44rem",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Mail/view/statics/css/mail-composer.css"
+        ]
+      },
+      {
+        "value": "15rem",
+        "count": 1,
+        "token": "--token-size-15rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Mail/view/templates/frontend/account/mail-client.phtml#<style>"
+        ]
+      },
+      {
+        "value": "21rem",
+        "count": 1,
+        "token": "--token-size-21rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Mail/view/templates/frontend/account/mail.phtml#<style>"
+        ]
+      },
+      {
+        "value": "17px",
+        "count": 1,
+        "token": "--token-size-17px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Multipass/view/statics/css/account-developer.css"
+        ]
+      },
+      {
+        "value": "70px",
+        "count": 1,
+        "token": "--layout-header-height",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Multipass/view/templates/frontend/identity/authorize.phtml#<style>"
+        ]
+      },
+      {
+        "value": "620px",
+        "count": 1,
+        "token": "--token-size-620px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Multipass/view/templates/frontend/identity/authorize.phtml#<style>"
+        ]
+      },
+      {
+        "value": "23px",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Multipass/view/templates/frontend/identity/authorize.phtml#<style>"
+        ]
+      },
+      {
+        "value": "0.36rem",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Order/view/statics/css/order-tracking.css"
+        ]
+      },
+      {
+        "value": "0.52rem",
+        "count": 1,
+        "token": "--token-size-0-52rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Order/view/statics/css/order-tracking.css"
+        ]
+      },
+      {
+        "value": "0.14rem",
+        "count": 1,
+        "token": "--token-size-0-14em",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Order/view/statics/css/order-tracking.css"
+        ]
+      },
+      {
+        "value": "1040px",
+        "count": 1,
+        "token": "--token-size-65rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/checkout/fake.phtml#<style>"
+        ]
+      },
+      {
+        "value": "7px",
+        "count": 1,
+        "token": "--token-size-7px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/checkout/handoff.phtml#<style>"
+        ]
+      },
+      {
+        "value": "112px",
+        "count": 1,
+        "token": "--token-size-7rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Payment/view/templates/frontend/checkout/payment-methods.phtml#<style>"
+        ]
+      },
+      {
+        "value": "5.2em",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Product/view/statics/css/frontend/product-card.css"
+        ]
+      },
+      {
+        "value": "11.5rem",
+        "count": 1,
+        "token": "--token-size-11-5rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Product/view/templates/frontend/catalog/categories.phtml#<style>"
+        ]
+      },
+      {
+        "value": "840px",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Product/view/theme/frontend/layouts/product/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "360px",
+        "count": 1,
+        "token": "--size-panel-360",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Product/view/theme/frontend/layouts/products/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "4.75rem",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/theme/frontend/layouts/promotion/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "3.2rem",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Promotion/view/theme/frontend/layouts/promotion/default.phtml#<style>"
+        ]
+      },
+      {
+        "value": "270px",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Shipping/view/statics/frontend/css/account-address.css"
+        ]
+      },
+      {
+        "value": "2.15rem",
+        "count": 1,
+        "token": "--token-size-2-15em",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Shipping/view/statics/frontend/css/account-address.css"
+        ]
+      },
+      {
+        "value": "920px",
+        "count": 1,
+        "token": "--token-size-920px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/Social/view/templates/frontend/Social/smoke.phtml#<style>"
+        ]
+      },
+      {
+        "value": "210px",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/Social/view/templates/frontend/Social/smoke.phtml#<style>"
+        ]
+      },
+      {
+        "value": "0.45px",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css"
+        ]
+      },
+      {
+        "value": "0.09rem",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css"
+        ]
+      },
+      {
+        "value": "17.5rem",
+        "count": 1,
+        "token": "--sidebar-width",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css"
+        ]
+      },
+      {
+        "value": "0.12em",
+        "count": 1,
+        "token": "--token-size-0-12em",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css"
+        ]
+      },
+      {
+        "value": "2.2rem",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css"
+        ]
+      },
+      {
+        "value": "0.1em",
+        "count": 1,
+        "token": "--token-size-0-1rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css"
+        ]
+      },
+      {
+        "value": "15.5rem",
+        "count": 1,
+        "token": "--token-size-15-5rem",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css"
+        ]
+      },
+      {
+        "value": "6.2rem",
+        "count": 1,
+        "token": null,
+        "status": "gap",
+        "sites": [
+          "app/code/Weline/StoreMusic/view/statics/css/store-music.css"
+        ]
+      },
+      {
+        "value": "260px",
+        "count": 1,
+        "token": "--token-size-260px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "46px",
+        "count": 1,
+        "token": "--token-size-46px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "9px",
+        "count": 1,
+        "token": "--token-size-9px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/statics/frontend/css/account-two-factor.css"
+        ]
+      },
+      {
+        "value": "1000px",
+        "count": 1,
+        "token": "--token-size-1000px",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Index/index.phtml#<style>"
+        ]
+      },
+      {
+        "value": "400px",
+        "count": 1,
+        "token": "--size-panel-400",
+        "status": "mapped",
+        "sites": [
+          "app/code/Weline/TwoFactorAuth/view/templates/frontend/Index/index.phtml#<style>"
+        ]
+      }
+    ]
+  },
+  "existing_theme_tokens": 898,
+  "per_module": {
+    "Weline/Affiliate": {
+      "color_literals": 2,
+      "size_literals": 17
+    },
+    "Weline/Ai": {
+      "size_literals": 96,
+      "color_literals": 124
+    },
+    "Weline/B2B": {
+      "size_literals": 34
+    },
+    "Weline/Blog": {
+      "color_literals": 26,
+      "size_literals": 31
+    },
+    "Weline/Captcha": {
+      "color_literals": 2,
+      "size_literals": 7
+    },
+    "Weline/Cart": {
+      "color_literals": 16,
+      "size_literals": 47
+    },
+    "Weline/Checkout": {
+      "color_literals": 4,
+      "size_literals": 3
+    },
+    "Weline/Cms": {
+      "size_literals": 1
+    },
+    "Weline/Compare": {
+      "color_literals": 22,
+      "size_literals": 28
+    },
+    "Weline/Consent": {
+      "color_literals": 10,
+      "size_literals": 7
+    },
+    "Weline/Currency": {
+      "size_literals": 12
+    },
+    "Weline/Customer": {
+      "color_literals": 99,
+      "size_literals": 205
+    },
+    "Weline/CustomerService": {
+      "size_literals": 165,
+      "color_literals": 32
+    },
+    "Weline/DataTable": {
+      "color_literals": 263,
+      "size_literals": 128
+    },
+    "Weline/Demo": {
+      "color_literals": 11,
+      "size_literals": 7
+    },
+    "Weline/Faq": {
+      "color_literals": 22,
+      "size_literals": 27
+    },
+    "Weline/HelpPay": {
+      "size_literals": 74
+    },
+    "Weline/I18n": {
+      "color_literals": 32,
+      "size_literals": 100
+    },
+    "Weline/Index": {
+      "size_literals": 45
+    },
+    "Weline/Inquiry": {
+      "color_literals": 26,
+      "size_literals": 48
+    },
+    "Weline/Installer": {
+      "color_literals": 37,
+      "size_literals": 10
+    },
+    "Weline/Mail": {
+      "color_literals": 13,
+      "size_literals": 55
+    },
+    "Weline/Marketing": {
+      "size_literals": 8,
+      "color_literals": 6
+    },
+    "Weline/Multipass": {
+      "color_literals": 66,
+      "size_literals": 29
+    },
+    "Weline/Newsletter": {
+      "size_literals": 2
+    },
+    "Weline/Order": {
+      "color_literals": 111,
+      "size_literals": 116
+    },
+    "Weline/Payment": {
+      "color_literals": 80,
+      "size_literals": 57
+    },
+    "Weline/Product": {
+      "color_literals": 46,
+      "size_literals": 132
+    },
+    "Weline/Promotion": {
+      "color_literals": 26,
+      "size_literals": 39
+    },
+    "Weline/Review": {
+      "size_literals": 4
+    },
+    "Weline/Search": {
+      "color_literals": 20,
+      "size_literals": 42
+    },
+    "Weline/Shipping": {
+      "size_literals": 48,
+      "color_literals": 67
+    },
+    "Weline/Social": {
+      "color_literals": 11,
+      "size_literals": 4
+    },
+    "Weline/StoreMusic": {
+      "size_literals": 69
+    },
+    "Weline/TwoFactorAuth": {
+      "color_literals": 185,
+      "size_literals": 187
+    },
+    "Weline/Visitor": {
+      "size_literals": 88,
+      "color_literals": 34
+    },
+    "Weline/Websites": {
+      "size_literals": 22
+    },
+    "Weline/Wishlist": {
+      "size_literals": 3
+    }
+  }
+}

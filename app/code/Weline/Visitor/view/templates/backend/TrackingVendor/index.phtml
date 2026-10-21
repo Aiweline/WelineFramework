@@ -54,6 +54,7 @@ if ($selected === null && $vendorsRuntime !== []) {
     $selectedCode = (string)$selected['code'];
 }
 ?>
+<css>Weline_Visitor::css/backend/tracking-vendor.css</css>
 <link rel="stylesheet" href="<?= $h($cssUrl) ?>">
 <link rel="stylesheet" href="<?= $h($cmCss) ?>">
 <link rel="stylesheet" href="<?= $h($cmThemeInk) ?>">
@@ -62,7 +63,7 @@ if ($selected === null && $vendorsRuntime !== []) {
     <div class="tvp-topbar" data-testid="tv-topbar">
         <?= $this->fetch('Weline_Visitor::templates/backend/TrackingVendor/partials/scope-toolbar.phtml') ?>
         <div class="tvp-toolbar" data-testid="tv-toolbar">
-            <span class="tvp-field__hint" id="tv-config-revision" data-testid="tv-config-revision" title="当前配置范围与事件配置版本（编辑后 bump，沙盒/助手对齐）" style="align-self:center;white-space:nowrap;max-width:min(52vw,420px);overflow:hidden;text-overflow:ellipsis;">
+            <span class="tvp-field__hint" id="tv-config-revision" data-testid="tv-config-revision" title="当前配置范围与事件配置版本（编辑后 bump，沙盒/助手对齐）" class="vendor-page-url">
                 <strong data-tv-scope-version-label><?= $h(
                     '站点 ' . (string)(($scopeQuery['website_code'] ?? '') !== '' ? $scopeQuery['website_code'] : ('website.' . (int)$websiteId))
                     . ' · 店铺 ' . ((($scopeQuery['store_code'] ?? '') !== '') ? (string)$scopeQuery['store_code'] : 'default')
@@ -406,7 +407,7 @@ if ($selected === null && $vendorsRuntime !== []) {
                                                 </div>
                                             </div>
                                             <div class="tvp-custom-toolbar w-cluster" style="--w-gap:var(--weline-space-2);flex-wrap:wrap;align-items:center;" data-testid="tv-custom-toolbar">
-                                                <label class="tvp-field tvp-custom-search" style="margin:0;flex:1 1 12rem;min-inline-size:10rem;">
+                                                <label class="tvp-field tvp-custom-search" class="vendor-filter-field">
                                                     <span class="visually-hidden"><lang>搜索自定义事件</lang></span>
                                                     <input type="search" id="tv-custom-search" class="w-input" data-size="sm" data-testid="tv-custom-search" placeholder="<?= $h(__('搜索事件名 / 匹配条件')) ?>" autocomplete="off">
                                                 </label>
@@ -561,7 +562,7 @@ if ($selected === null && $vendorsRuntime !== []) {
     </div>
 </div>
 
-<dialog id="tv-create-dialog" style="padding:var(--weline-space-4);border:1px solid var(--weline-color-border);border-radius:var(--weline-radius-sm);">
+<dialog id="tv-create-dialog" class="vendor-summary-card">
     <form method="post" action="<?= $h($createUrl) ?>">
         <?= $csrfField ?>
         <input type="hidden" name="website_id" value="<?= (int)$websiteId ?>">

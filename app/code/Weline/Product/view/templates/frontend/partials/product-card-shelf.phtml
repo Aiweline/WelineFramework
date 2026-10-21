@@ -161,9 +161,9 @@ $hrefAttr = 'href="' . $esc($resolvedHref !== '' ? $resolvedHref : '#') . '"';
         <?php if ($showPrice): ?>
             <div class="wpc-price">
                 <?php if ($currencyUnavailable): ?>
-                    <span class="wpc-price-quote"><?= __('当前货币暂不可用') ?></span>
+                    <span class="wpc-price-quote"><lang>当前货币暂不可用</lang></span>
                 <?php elseif ($quoteOnly || $price <= 0 || $priceFormatted === '0.00'): ?>
-                    <span class="wpc-price-quote"><?= __('联系询价') ?></span>
+                    <span class="wpc-price-quote"><lang>联系询价</lang></span>
                 <?php else: ?>
                     <span class="wpc-price-now weline-pixel::add_to_cart:value"
                           data-pixel-value="<?= $esc((string)$price) ?>">
@@ -186,7 +186,7 @@ $hrefAttr = 'href="' . $esc($resolvedHref !== '' ? $resolvedHref : '#') . '"';
         <?php if ($showAddToCart): ?>
             <div class="wpc-cta">
                 <?php if ($currencyUnavailable): ?>
-                    <span class="wpc-detail-link" aria-disabled="true"><?= __('当前货币暂不可用') ?></span>
+                    <span class="wpc-detail-link" aria-disabled="true"><lang>当前货币暂不可用</lang></span>
                 <?php elseif ($sellable && $offerUuid !== '' && !$quoteOnly): ?>
                     <?= ProductCardAddToCartParams::renderSlot($this, $product, [
                         'wrapper_class' => 'wpc-cart-wrap',
@@ -194,7 +194,7 @@ $hrefAttr = 'href="' . $esc($resolvedHref !== '' ? $resolvedHref : '#') . '"';
                         'css_owned_by_card' => true,
                     ]) ?>
                 <?php else: ?>
-                    <a class="wpc-detail-link" <?= $hrefAttr ?>><?= __('查看详情') ?></a>
+                    <a class="wpc-detail-link" <?= $hrefAttr ?>><lang>查看详情</lang></a>
                 <?php endif; ?>
             </div>
         <?php endif; ?>

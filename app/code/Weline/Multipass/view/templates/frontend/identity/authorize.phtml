@@ -37,58 +37,58 @@ if ($redirectUri !== '') {
 }
 ?>
 <style>
-.multipass-auth{--mp-primary:#2563eb;--mp-primary-strong:#1d4ed8;--mp-warning:#b45309;--mp-panel:#fff;--mp-muted:#64748b;--mp-border:#dbeafe;--mp-text:#0f172a;width:min(100%,760px);margin:0 auto;color:var(--mp-text)}
-.multipass-auth__card{background:var(--mp-panel);border:1px solid var(--mp-border);border-radius:8px;box-shadow:0 22px 70px rgba(15,23,42,.14);overflow:hidden}
-.multipass-auth__header{padding:30px 30px 24px;background:linear-gradient(135deg,#eff6ff 0%,#f8fafc 68%,#ecfdf5 100%);border-bottom:1px solid var(--mp-border)}
-.multipass-auth__eyebrow{margin:0 0 8px;color:var(--mp-primary-strong);font-size:13px;font-weight:800}
-.multipass-auth__title{margin:0;color:var(--mp-text);font-size:28px;line-height:1.25;letter-spacing:0}
-.multipass-auth__subtitle{margin:10px 0 0;max-width:620px;color:#475569;font-size:14px;line-height:1.7}
-.multipass-auth__body{padding:28px 30px 30px}
-.multipass-auth__notice{margin-bottom:18px;padding:14px 16px;border:1px solid #fed7aa;border-radius:8px;background:#fff7ed;color:#9a3412;font-size:14px;line-height:1.6}
-.multipass-auth__notice--error{border-color:#fecaca;background:#fef2f2;color:#991b1b}
-.multipass-auth__section{padding:18px 0;border-bottom:1px solid #e2e8f0}
+.multipass-auth{--mp-primary: var(--color-primary);--mp-primary-strong: var(--color-primary);--mp-warning: var(--color-warning);--mp-panel: var(--color-bg-primary);--mp-muted:#64748b;--mp-border: var(--color-border-slate);--mp-text:#0f172a;width:min(100%,760px);margin:0 auto;color:var(--mp-text)}
+.multipass-auth__card{background:var(--mp-panel);border:var(--border-width-thin) solid var(--mp-border);border-radius:var(--radius-lg);box-shadow: var(--weline-shadow-md);overflow:hidden}
+.multipass-auth__header{padding:var(--spacing-7) var(--spacing-7) var(--spacing-6);background:linear-gradient(135deg,var(--color-bg-panel) 0%,var(--color-bg-slate) 68%,var(--color-success-bg-soft) 100%);border-bottom:var(--border-width-thin) solid var(--mp-border)}
+.multipass-auth__eyebrow{margin:0 0 var(--spacing-2);color:var(--mp-primary-strong);font-size:var(--font-size-13);font-weight:800}
+.multipass-auth__title{margin:0;color:var(--mp-text);font-size:var(--font-size-3xl);line-height:1.25;letter-spacing:0}
+.multipass-auth__subtitle{margin:var(--spacing-2_5) 0 0;max-width:620px;color:var(--color-product-label-demo-text);font-size:var(--font-size-sm);line-height:1.7}
+.multipass-auth__body{padding:var(--spacing-7) var(--spacing-7) var(--spacing-7)}
+.multipass-auth__notice{margin-bottom:var(--spacing-4_5);padding:var(--spacing-3_5) var(--spacing-4);border:var(--border-width-thin) solid #fed7aa;border-radius:var(--radius-lg);background:var(--color-bg-canvas);color:var(--color-text-muted);font-size:var(--font-size-sm);line-height:1.6}
+.multipass-auth__notice--error{border-color:#fecaca;background:var(--color-bg-canvas);color:var(--color-link)}
+.multipass-auth__section{padding:var(--spacing-4_5) 0;border-bottom:var(--border-width-thin) solid var(--color-border-slate)}
 .multipass-auth__section:first-of-type{padding-top:0}
 .multipass-auth__section:last-of-type{border-bottom:0}
-.multipass-auth__label{margin:0 0 10px;color:#334155;font-size:13px;font-weight:800}
-.multipass-auth__identity{display:flex;align-items:center;gap:14px}
-.multipass-auth__mark,.multipass-auth__avatar,.multipass-auth__avatar-fallback{width:50px;height:50px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;background:var(--mp-primary);color:#fff;font-weight:900}
+.multipass-auth__label{margin:0 0 var(--spacing-2_5);color:var(--color-secondary-text-emphasis);font-size:var(--font-size-13);font-weight:800}
+.multipass-auth__identity{display:flex;align-items:center;gap:var(--spacing-3_5)}
+.multipass-auth__mark,.multipass-auth__avatar,.multipass-auth__avatar-fallback{width:50px;height:50px;border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;flex:0 0 auto;background:var(--mp-primary);color:var(--color-text-light);font-weight:900}
 .multipass-auth__avatar,.multipass-auth__avatar-fallback{border-radius:50%}
 .multipass-auth__avatar{object-fit:cover}
-.multipass-auth__name{margin:0;color:var(--mp-text);font-size:16px;font-weight:800}
-.multipass-auth__meta{margin:4px 0 0;color:var(--mp-muted);font-size:13px;line-height:1.5;word-break:break-word}
-.multipass-auth__scope-list{display:grid;gap:10px}
-.multipass-auth__scope{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start;padding:14px 0;border-bottom:1px solid #e2e8f0}
+.multipass-auth__name{margin:0;color:var(--mp-text);font-size:var(--font-size-base);font-weight:800}
+.multipass-auth__meta{margin:var(--spacing-1) 0 0;color:var(--mp-muted);font-size:var(--font-size-13);line-height:1.5;word-break:break-word}
+.multipass-auth__scope-list{display:grid;gap:var(--spacing-2_5)}
+.multipass-auth__scope{display:grid;grid-template-columns:1fr auto;gap:var(--spacing-3);align-items:start;padding:var(--spacing-3_5) 0;border-bottom:var(--border-width-thin) solid var(--color-border-slate)}
 .multipass-auth__scope:last-child{border-bottom:0}
-.multipass-auth__scope-title{margin:0 0 4px;color:var(--mp-text);font-size:14px;font-weight:800}
-.multipass-auth__scope-desc{margin:0;color:var(--mp-muted);font-size:13px;line-height:1.55}
-.multipass-auth__risk{min-width:56px;padding:4px 9px;border-radius:999px;background:#ecfdf5;color:#166534;font-size:12px;font-weight:800;text-align:center}
-.multipass-auth__risk[data-risk=medium],.multipass-auth__risk[data-risk=high]{background:#fff7ed;color:var(--mp-warning)}
-.multipass-auth__actions{display:flex;justify-content:flex-end;gap:12px;margin-top:24px}
-.multipass-auth__button,.multipass-auth__link{min-height:44px;padding:0 18px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;text-decoration:none;cursor:pointer}
-.multipass-auth__button{border:1px solid var(--mp-primary);background:var(--mp-primary);color:#fff}
+.multipass-auth__scope-title{margin:0 0 var(--spacing-1);color:var(--mp-text);font-size:var(--font-size-sm);font-weight:800}
+.multipass-auth__scope-desc{margin:0;color:var(--mp-muted);font-size:var(--font-size-13);line-height:1.55}
+.multipass-auth__risk{min-width:56px;padding:var(--spacing-1) var(--spacing-0_55);border-radius:var(--radius-full);background:var(--color-success-bg-soft);color:var(--color-text-secondary);font-size:var(--font-size-xs);font-weight:800;text-align:center}
+.multipass-auth__risk[data-risk=medium],.multipass-auth__risk[data-risk=high]{background:var(--color-bg-canvas);color:var(--mp-warning)}
+.multipass-auth__actions{display:flex;justify-content:flex-end;gap:var(--spacing-3);margin-top:var(--spacing-6)}
+.multipass-auth__button,.multipass-auth__link{min-height:var(--control-height-lg);padding:0 var(--spacing-4_5);border-radius:var(--radius-lg);display:inline-flex;align-items:center;justify-content:center;font-weight:800;text-decoration:none;cursor:pointer}
+.multipass-auth__button{border:var(--border-width-thin) solid var(--mp-primary);background:var(--mp-primary);color:var(--color-text-light)}
 .multipass-auth__button:hover{background:var(--mp-primary-strong)}
-.multipass-auth__link{border:1px solid #cbd5e1;background:#fff;color:#334155}
-.multipass-auth__footnote{margin:16px 0 0;color:var(--mp-muted);font-size:12px;line-height:1.6}
-@media (max-width:640px){.multipass-auth__header,.multipass-auth__body{padding-left:20px;padding-right:20px}.multipass-auth__title{font-size:23px}.multipass-auth__actions{flex-direction:column-reverse}.multipass-auth__button,.multipass-auth__link{width:100%}}
+.multipass-auth__link{border:var(--border-width-thin) solid var(--color-border-muted);background:var(--color-bg-primary);color:var(--color-secondary-text-emphasis)}
+.multipass-auth__footnote{margin:var(--spacing-4) 0 0;color:var(--mp-muted);font-size:var(--font-size-xs);line-height:1.6}
+@media (max-width:640px){.multipass-auth__header,.multipass-auth__body{padding-left:var(--spacing-5);padding-right:var(--spacing-5)}.multipass-auth__title{font-size:var(--font-size-2xl)}.multipass-auth__actions{flex-direction:column-reverse}.multipass-auth__button,.multipass-auth__link{width:100%}}
 </style>
 
 <section class="multipass-auth" aria-labelledby="multipass-auth-title" weline-code="multipass.identity.multipass_auth_title">
     <div class="multipass-auth__card">
         <header class="multipass-auth__header">
-            <p class="multipass-auth__eyebrow"><?= htmlspecialchars((string) __('Weline 账号授权'), ENT_QUOTES, 'UTF-8') ?></p>
-            <h1 class="multipass-auth__title" id="multipass-auth-title"><?= htmlspecialchars((string) __('授权应用访问你的 Weline 账号'), ENT_QUOTES, 'UTF-8') ?></h1>
-            <p class="multipass-auth__subtitle"><?= htmlspecialchars((string) __('请确认应用来源和请求权限。授权后，该应用可以用你的 Weline 账号完成登录和账号关联。'), ENT_QUOTES, 'UTF-8') ?></p>
+            <p class="multipass-auth__eyebrow"><lang>Weline 账号授权</lang></p>
+            <h1 class="multipass-auth__title" id="multipass-auth-title"><lang>授权应用访问你的 Weline 账号</lang></h1>
+            <p class="multipass-auth__subtitle"><lang>请确认应用来源和请求权限。授权后，该应用可以用你的 Weline 账号完成登录和账号关联。</lang></p>
         </header>
 
         <div class="multipass-auth__body">
             <?php if ($error !== ''): ?>
                 <div class="multipass-auth__notice multipass-auth__notice--error"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
             <?php elseif (!$user): ?>
-                <div class="multipass-auth__notice"><?= htmlspecialchars((string) __('你还没有登录。登录后会回到这里继续确认授权。'), ENT_QUOTES, 'UTF-8') ?></div>
+                <div class="multipass-auth__notice"><lang>你还没有登录。登录后会回到这里继续确认授权。</lang></div>
             <?php endif; ?>
 
             <div class="multipass-auth__section">
-                <p class="multipass-auth__label"><?= htmlspecialchars((string) __('请求授权的应用'), ENT_QUOTES, 'UTF-8') ?></p>
+                <p class="multipass-auth__label"><lang>请求授权的应用</lang></p>
                 <div class="multipass-auth__identity">
                     <div class="multipass-auth__mark" aria-hidden="true">ID</div>
                     <div>
@@ -99,7 +99,7 @@ if ($redirectUri !== '') {
             </div>
 
             <div class="multipass-auth__section">
-                <p class="multipass-auth__label"><?= htmlspecialchars((string) __('当前 Weline 账号'), ENT_QUOTES, 'UTF-8') ?></p>
+                <p class="multipass-auth__label"><lang>当前 Weline 账号</lang></p>
                 <?php if ($user): ?>
                     <div class="multipass-auth__identity">
                         <?php if ($avatar !== ''): ?>
@@ -113,12 +113,12 @@ if ($redirectUri !== '') {
                         </div>
                     </div>
                 <?php else: ?>
-                    <p class="multipass-auth__meta"><?= htmlspecialchars((string) __('登录后将显示你的账号信息，并由你决定是否继续授权。'), ENT_QUOTES, 'UTF-8') ?></p>
+                    <p class="multipass-auth__meta"><lang>登录后将显示你的账号信息，并由你决定是否继续授权。</lang></p>
                 <?php endif; ?>
             </div>
 
             <div class="multipass-auth__section">
-                <p class="multipass-auth__label"><?= htmlspecialchars((string) __('应用请求的权限'), ENT_QUOTES, 'UTF-8') ?></p>
+                <p class="multipass-auth__label"><lang>应用请求的权限</lang></p>
                 <div class="multipass-auth__scope-list">
                     <?php foreach ($requestedScopeDetails as $scope): ?>
                         <?php
@@ -148,18 +148,18 @@ if ($redirectUri !== '') {
                     <input type="hidden" name="scopes" value="<?= htmlspecialchars(implode(',', $requestedScopes), ENT_QUOTES, 'UTF-8') ?>">
                     <input type="hidden" name="state" value="<?= htmlspecialchars($state, ENT_QUOTES, 'UTF-8') ?>">
                     <div class="multipass-auth__actions">
-                        <a class="multipass-auth__link" href="<?= htmlspecialchars($cancelUrl, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string) __('取消'), ENT_QUOTES, 'UTF-8') ?></a>
-                        <button class="multipass-auth__button" type="submit"><?= htmlspecialchars((string) __('同意并继续'), ENT_QUOTES, 'UTF-8') ?></button>
+                        <a class="multipass-auth__link" href="<?= htmlspecialchars($cancelUrl, ENT_QUOTES, 'UTF-8') ?>"><lang>取消</lang></a>
+                        <button class="multipass-auth__button" type="submit"><lang>同意并继续</lang></button>
                     </div>
                 </w:form>
             <?php else: ?>
                 <div class="multipass-auth__actions">
-                    <a class="multipass-auth__link" href="<?= htmlspecialchars($cancelUrl, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string) __('取消'), ENT_QUOTES, 'UTF-8') ?></a>
-                    <a class="multipass-auth__button" href="<?php if ($loginUrl !== ''): ?><?= htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') ?><?php else: ?>@url{$loginPath}<?php endif; ?>"><?= htmlspecialchars((string) __('登录后继续'), ENT_QUOTES, 'UTF-8') ?></a>
+                    <a class="multipass-auth__link" href="<?= htmlspecialchars($cancelUrl, ENT_QUOTES, 'UTF-8') ?>"><lang>取消</lang></a>
+                    <a class="multipass-auth__button" href="<?php if ($loginUrl !== ''): ?><?= htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') ?><?php else: ?>@url{$loginPath}<?php endif; ?>"><lang>登录后继续</lang></a>
                 </div>
             <?php endif; ?>
 
-            <p class="multipass-auth__footnote"><?= htmlspecialchars((string) __('如果你不认识这个应用或域名，请取消授权。'), ENT_QUOTES, 'UTF-8') ?></p>
+            <p class="multipass-auth__footnote"><lang>如果你不认识这个应用或域名，请取消授权。</lang></p>
         </div>
     </div>
 </section>

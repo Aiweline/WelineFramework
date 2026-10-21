@@ -1,3 +1,4 @@
+<css>Weline_RdpWrapper::css/backend/rdp-manager-page.css</css>
 <?php
 /**
  * RDP Wrapper 远程桌面管理后台页面
@@ -37,7 +38,7 @@
                                     <i class="mdi mdi-refresh me-1"></i><lang>刷新状态</lang>
                                 </button>
                             </div>
-                            <div class="rdp-card-body">
+                            <div class="rdp-panelBody">
                                 <div class="rdp-status-grid" id="statusPanel">
                                     <!-- 操作系统 -->
                                     <div class="rdp-status-item">
@@ -156,7 +157,7 @@
                                         <p class="mb-1">
                                             <lang>请在 Windows 设置中启用"允许远程连接"，或点击上方的"启用"按钮自动开启。</lang>
                                         </p>
-                                        <p class="mb-0" style="font-size: 0.85rem;">
+                                        <p class="mb-0" >
                                             <lang>手动设置路径：设置 → 系统 → 远程桌面 → 开启"启用远程桌面"开关</lang>
                                         </p>
                                     </div>
@@ -177,9 +178,9 @@
                                     <i class="mdi mdi-account-plus me-1"></i><lang>添加用户</lang>
                                 </button>
                             </div>
-                            <div class="rdp-card-body">
+                            <div class="rdp-panelBody">
                                 <!-- 用户列表表格 -->
-                                <div class="table-responsive">
+                                <div class="w-table-wrap">
                                     <table class="rdp-table" id="userTable">
                                         <thead>
                                             <tr>
@@ -273,7 +274,7 @@
                                 <h5><i class="mdi mdi-book-open-variant me-2"></i><lang>远程桌面使用指南</lang></h5>
                                 <i class="mdi mdi-chevron-down" id="guideToggleIcon"></i>
                             </div>
-                            <div class="rdp-card-body" id="guideContent">
+                            <div class="rdp-panelBody" id="guideContent">
 
                                 <!-- 步骤 1 -->
                                 <div class="rdp-guide-step">

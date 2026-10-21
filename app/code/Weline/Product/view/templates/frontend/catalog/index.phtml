@@ -42,7 +42,7 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
          data-listing-ssr-filtered="<?= $ssrFiltered ? '1' : '0' ?>"
          data-weline-load="storefrontListing"
          data-weline-load-when="idle"
-         data-listing-loading-label="<?= $escape(__('加载中…')) ?>"
+         data-listing-loading-label="<lang>加载中…</lang>"
          weline-code="product.frontend.catalog.section_1">
     <header class="product-storefront__header">
         <h1><?= $escape($heading) ?></h1>
@@ -52,15 +52,15 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
     <div class="product-storefront__toolbar" data-testid="storefront-products-toolbar">
         <p class="product-storefront__count" data-listing-count>
             <?php if ($visibleCount > 0): ?>
-                <?= __('第 %{1}–%{2} 件，共 %{3} 件商品', [$from, $to, $visibleCount]) ?>
+                <lang args="[$from, $to, $visibleCount]">第 %{1}–%{2} 件，共 %{3} 件商品</lang>
             <?php else: ?>
-                <?= __('0 件商品') ?>
+                <lang>0 件商品</lang>
             <?php endif; ?>
             <span class="product-storefront__count-hint" data-listing-count-hint hidden></span>
         </p>
         <?php if ($sortOptions !== []): ?>
             <label class="product-storefront__sort">
-                <span><?= __('排序') ?>:</span>
+                <span><lang>排序</lang>:</span>
                 <select class="product-storefront__sort-select"
                         data-testid="storefront-products-sort"
                         data-listing-sort>
@@ -99,7 +99,7 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
     <div data-listing-stage>
     <?php if ($offers === []): ?>
         <div class="product-storefront__empty" data-testid="storefront-product-empty" data-listing-empty>
-            <?= __('当前网站暂无已发布商品。') ?>
+            <lang>当前网站暂无已发布商品。</lang>
         </div>
     <?php else: ?>
         <div class="product-storefront__grid weline-product-card-shelf" data-listing-grid>
@@ -172,52 +172,52 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
     </div>
 
     <a class="product-storefront__cart" href="@url{'cart'}" data-testid="view-cart" hidden>
-        <?= __('查看购物车') ?>
+        <lang>查看购物车</lang>
     </a>
 </section>
 
 <style>
-    .product-storefront { width:100%; min-width:0; margin:0; padding:0 0 48px; color:#0f1111; }
-    .product-storefront__header { margin:0 0 8px; }
-    .product-storefront__header h1 { margin:0; font-size:22px; font-weight:700; line-height:1.25; }
-    .product-storefront__lede { margin:6px 0 0; color:#565959; font-size:13px; line-height:1.4; }
+    .product-storefront { width:100%; min-width:0; margin:0; padding:0 0 var(--spacing-2xl); color:var(--weline-theme-color-text); }
+    .product-storefront__header { margin:0 0 var(--spacing-2); }
+    .product-storefront__header h1 { margin:0; font-size:var(--font-size-2_5xl); font-weight:700; line-height:1.25; }
+    .product-storefront__lede { margin:var(--spacing-1_5) 0 0; color:var(--color-text-gray); font-size:var(--font-size-13); line-height:1.4; }
     .product-storefront__toolbar {
         display:flex;
         flex-wrap:wrap;
         align-items:center;
         justify-content:space-between;
-        gap:10px 16px;
-        margin:0 0 14px;
-        padding:8px 0 10px;
-        border-bottom:1px solid #e3e6e6;
+        gap:var(--spacing-2_5) var(--spacing-4);
+        margin:0 0 var(--spacing-3_5);
+        padding:var(--spacing-2) 0 var(--spacing-2_5);
+        border-bottom:var(--border-width-thin) solid var(--color-border-muted);
     }
-    .product-storefront__count { margin:0; font-size:14px; color:#0f1111; }
-    .product-storefront__count-hint { margin-left:6px; color:#565959; }
+    .product-storefront__count { margin:0; font-size:var(--font-size-sm); color:var(--weline-theme-color-text); }
+    .product-storefront__count-hint { margin-left:var(--spacing-1_5); color:var(--color-text-gray); }
     .product-storefront__sort {
         display:inline-flex;
         align-items:center;
-        gap:6px;
+        gap:var(--spacing-1_5);
         margin:0 0 0 auto;
-        font-size:13px;
-        color:#565959;
+        font-size:var(--font-size-13);
+        color:var(--color-text-gray);
         white-space:nowrap;
     }
     .product-storefront__sort-select {
-        min-height:32px;
-        padding:4px 28px 4px 10px;
-        border:1px solid #d5d9d9;
-        border-radius:8px;
-        background:#f0f2f2;
+        min-height:var(--control-height-sm);
+        padding:var(--spacing-1) var(--spacing-7) var(--spacing-1) var(--spacing-2_5);
+        border:var(--border-width-thin) solid var(--color-border-faint);
+        border-radius:var(--radius-lg);
+        background:var(--color-bg-muted);
         color:inherit;
         font:inherit;
-        box-shadow:0 2px 5px rgba(15,17,17,.05);
+        box-shadow: var(--weline-shadow-md);
     }
-    .product-storefront__notice { min-height:0; margin:0 0 10px; color:#067d62; font-size:13px; }
-    .product-storefront__notice.is-error { color:#b12704; }
+    .product-storefront__notice { min-height:0; margin:0 0 var(--spacing-2_5); color:var(--color-text-secondary); font-size:var(--font-size-13); }
+    .product-storefront__notice.is-error { color:var(--color-link); }
     .product-storefront__grid {
         display:grid;
         grid-template-columns:repeat(4, minmax(0, 1fr));
-        gap:12px;
+        gap:var(--spacing-3);
         align-items:stretch;
     }
     .product-storefront__grid > .weline-product-card {
@@ -227,21 +227,21 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
     .product-storefront__pager {
         display:flex;
         flex-wrap:wrap;
-        gap:8px;
-        margin:18px 0 0;
+        gap:var(--spacing-2);
+        margin:var(--spacing-4_5) 0 0;
         align-items:center;
         justify-content:center;
     }
     .product-storefront__pager-item {
         min-width:34px;
-        min-height:34px;
-        padding:0 10px;
-        border:1px solid #d5d9d9;
-        border-radius:8px;
-        background:#fff;
-        color:#0f1111;
+        min-height:var(--control-height-sm);
+        padding:0 var(--spacing-2_5);
+        border:var(--border-width-thin) solid var(--color-border-faint);
+        border-radius:var(--radius-lg);
+        background:var(--color-bg-primary);
+        color:var(--weline-theme-color-text);
         font:inherit;
-        font-size:13px;
+        font-size:var(--font-size-13);
         font-weight:600;
         text-decoration:none;
         cursor:pointer;
@@ -251,40 +251,40 @@ $ssrFiltered = (bool)StorefrontPageAssignBag::coalesce(
     }
     .product-storefront__pager-item.is-current {
         border-color:#0f1111;
-        background:#0f1111;
-        color:#fff;
+        background:var(--color-bg-dark-secondary);
+        color:var(--color-text-light);
     }
     .product-storefront__pager-item.is-ellipsis {
         border:0;
         background:transparent;
         min-width:auto;
-        padding:0 4px;
-        color:#565959;
+        padding:0 var(--spacing-1);
+        color:var(--color-text-gray);
         font-weight:500;
         cursor:default;
     }
     .product-storefront__pager-item.is-nav {
-        padding:0 12px;
+        padding:0 var(--spacing-3);
     }
     .product-storefront__pager-item.is-disabled {
         opacity:.45;
         cursor:not-allowed;
     }
     .product-storefront__empty {
-        padding:28px 16px;
-        border:1px dashed #d5d9d9;
-        border-radius:8px;
-        color:#565959;
+        padding:var(--spacing-7) var(--spacing-4);
+        border:var(--border-width-thin) dashed var(--color-border-faint);
+        border-radius:var(--radius-lg);
+        color:var(--color-text-gray);
         text-align:center;
-        background:#fff;
+        background:var(--color-bg-primary);
     }
     .storefront-listing-loading {
-        margin:0 0 10px;
-        padding:8px 12px;
-        border-radius:8px;
-        background:#f0f2f2;
-        color:#565959;
-        font-size:13px;
+        margin:0 0 var(--spacing-2_5);
+        padding:var(--spacing-2) var(--spacing-3);
+        border-radius:var(--radius-lg);
+        background:var(--color-bg-muted);
+        color:var(--color-text-gray);
+        font-size:var(--font-size-13);
         font-weight:600;
         line-height:1.35;
     }

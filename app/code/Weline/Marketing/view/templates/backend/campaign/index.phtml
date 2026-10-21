@@ -11,7 +11,7 @@ $escapeHtml = static fn(mixed $value): string => htmlspecialchars(
 );
 ?>
 <div class="marketing-campaign-list" data-testid="marketing-campaign-management">
-    <h1><?= __('促销活动列表') ?></h1>
+    <h2><?= __('促销活动列表') ?></h2>
     <div class="toolbar">
         <a href="@backend-url{'marketing/backend/campaign/add'}" class="w-button" data-testid="marketing-campaign-create" data-tone="primary"><?= __('添加活动') ?></a>
     </div>

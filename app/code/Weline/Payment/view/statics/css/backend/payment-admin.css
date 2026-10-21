@@ -1,0 +1,77 @@
+/* Weline Payment 后台页面私有布局/尺寸（Token-only，见后端主题开发标准 §6.2） */
+@layer page {
+    /* 支付方式管理：拖拽排序状态与列宽 */
+    .payment-method-sort-row.is-dragging {
+        opacity: .55;
+    }
+
+    .payment-method-sort-row.is-drop-target > td {
+        box-shadow: inset 0 2px 0 var(--weline-theme-primary);
+    }
+
+    .payment-method-sort-col {
+        inline-size: var(--weline-space-10);
+    }
+
+    .payment-method-icon {
+        object-fit: contain;
+        max-inline-size: var(--weline-space-12);
+        max-block-size: var(--weline-space-8);
+    }
+
+    /* 交易详情：只读文本块 */
+    .weline-payment-pre {
+        display: block;
+        background: var(--weline-theme-surface-muted);
+        padding: var(--weline-space-4);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        color: var(--weline-theme-text);
+        overflow: auto;
+    }
+
+    /* Dev Relay 配置页 */
+    .payment-dev-relay {
+        max-inline-size: min(calc(var(--weline-space-12) * 14), 100%);
+    }
+
+    .payment-dev-relay__guide-list {
+        padding-inline-start: var(--weline-space-5);
+    }
+
+    .payment-dev-relay__summary-badge {
+        font-size: var(--weline-font-size-lg);
+    }
+
+    .payment-dev-relay__codeblock {
+        font-family: var(--weline-font-mono);
+        font-size: var(--weline-font-size-sm);
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .payment-dev-relay__json {
+        max-block-size: calc(var(--weline-space-12) * 5);
+        overflow: auto;
+    }
+
+    .payment-dev-relay__log {
+        max-block-size: calc(var(--weline-space-12) * 5);
+        overflow: auto;
+        padding: var(--weline-space-3);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface-muted);
+    }
+}
+
+@layer page {
+    /* PayPal 平台沙箱接入步骤列表 */
+    .payment-paypal-setup__steps {
+        padding-inline-start: var(--weline-space-5);
+    }
+
+    .payment-paypal-setup__steps-sub {
+        padding-inline-start: var(--weline-space-4);
+    }
+}

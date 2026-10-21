@@ -1,0 +1,542 @@
+/**
+ * Weline_PhpManager 后台页面私有布局（WlsPhpManager/index）。
+ * 只承载页面私有布局/尺寸/定位；只消费主题 Token；无 !important；统一在 @layer page 内。
+ */
+@layer page {
+.wls-php-manager-shell {
+        --wpm-bg: var(--weline-theme-surface-muted);
+        --wpm-panel: var(--weline-theme-surface);
+        --wpm-panel-soft: var(--weline-theme-surface-muted);
+        --wpm-text: var(--weline-theme-text);
+        --wpm-muted: var(--weline-theme-text-muted);
+        --wpm-border: var(--weline-theme-surface);
+        --wpm-primary: var(--weline-theme-primary);
+        --wpm-primary-strong: var(--weline-theme-text-muted);
+        --wpm-success: var(--weline-theme-text-muted);
+        --wpm-warning: var(--weline-theme-text-muted);
+        --wpm-danger: var(--weline-theme-text-muted);
+        --wpm-shadow: 0 12px 28px var(--weline-theme-text-muted);
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 248px minmax(0, 1fr);
+        background: var(--wpm-bg);
+        color: var(--wpm-text);
+        font-size: 14px;
+    }
+    .wls-php-manager-shell.is-embedded {
+        min-height: auto;
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .wls-php-manager-shell.is-embedded .wpm-sidebar {
+        display: none;
+    }
+    .wls-php-manager-shell.is-embedded .wpm-main {
+        min-height: auto;
+        padding: 0;
+    }
+    .wls-php-manager-shell.is-embedded .wpm-eyebrow,
+    .wls-php-manager-shell.is-embedded .wpm-actions {
+        display: none;
+    }
+    body:has(.wls-php-manager-shell) {
+        margin: 0;
+        background: var(--weline-theme-surface);
+        font-size: 0;
+    }
+    body:has(.wls-php-manager-shell[data-theme="light"]) {
+        background: var(--weline-theme-surface-muted);
+    }
+    .wls-php-manager-fullscreen,
+    .wls-php-manager-fullscreen .backend-main-content {
+        background: var(--wpm-bg);
+    }
+    .wls-php-manager-shell[data-theme="dark"] {
+        --wpm-bg: var(--weline-theme-surface);
+        --wpm-panel: var(--weline-theme-surface-muted);
+        --wpm-panel-soft: var(--weline-theme-surface-muted);
+        --wpm-text: var(--weline-theme-surface-muted);
+        --wpm-muted: var(--weline-theme-text-muted);
+        --wpm-border: var(--weline-theme-text);
+        --wpm-primary: var(--weline-theme-primary);
+        --wpm-primary-strong: var(--weline-theme-surface-muted);
+        --wpm-success: var(--weline-theme-text-muted);
+        --wpm-warning: var(--weline-theme-surface-muted);
+        --wpm-danger: var(--weline-theme-text-muted);
+        --wpm-shadow: 0 18px 36px var(--weline-theme-text-muted);
+    }
+    .wpm-sidebar {
+        background: var(--weline-theme-text);
+        color: var(--weline-theme-surface);
+        padding: 24px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+    .wpm-brand-kicker {
+        color: var(--weline-theme-text-muted);
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .wpm-brand-title {
+        margin-top: 4px;
+        font-size: 22px;
+        line-height: 1.25;
+        font-weight: 850;
+        white-space: nowrap;
+    }
+    .wpm-nav {
+        display: grid;
+        gap: 8px;
+    }
+    .wpm-nav a,
+    .wpm-action,
+    .wpm-theme-button,
+    .wpm-save-button {
+        border: 1px solid transparent;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 9px 12px;
+        font-weight: 750;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .wpm-nav a {
+        color: var(--weline-theme-surface);
+        justify-content: flex-start;
+    }
+    .wpm-nav a.is-active,
+    .wpm-nav a:hover {
+        background: var(--weline-theme-text-muted);
+        border-color: var(--weline-theme-text-muted);
+    }
+    .wpm-sidebar-spacer {
+        flex: 1;
+    }
+    .wpm-theme-button {
+        width: 100%;
+        color: var(--weline-theme-surface);
+        background: var(--weline-theme-text-muted);
+        border-color: var(--weline-theme-text-muted);
+    }
+    .wpm-main {
+        min-width: 0;
+        padding: 28px;
+    }
+    .wpm-topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .wpm-eyebrow {
+        margin: 0 0 6px;
+        color: var(--wpm-primary);
+        font-size: 12px;
+        font-weight: 850;
+        text-transform: uppercase;
+    }
+    .wpm-title {
+        margin: 0;
+        color: var(--wpm-text);
+        font-size: 30px;
+        line-height: 1.2;
+        font-weight: 850;
+    }
+    .wpm-subtitle {
+        margin: 8px 0 0;
+        color: var(--wpm-muted);
+        max-width: 820px;
+        line-height: 1.6;
+    }
+    .wpm-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+    .wpm-action {
+        color: var(--wpm-primary-strong);
+        background: var(--wpm-panel);
+        border-color: var(--wpm-border);
+        box-shadow: var(--weline-theme-shadow-sm);
+    }
+    .wpm-action.is-primary {
+        color: var(--weline-theme-surface);
+        background: var(--wpm-primary);
+        border-color: var(--wpm-primary);
+    }
+    .wpm-alert {
+        margin-bottom: 16px;
+        border: 1px solid var(--wpm-border);
+        border-radius: 8px;
+        padding: 13px 14px;
+        background: var(--wpm-panel);
+        font-weight: 750;
+    }
+    .wpm-alert.is-success {
+        color: var(--wpm-success);
+        border-color: var(--weline-theme-text-muted);
+        background: var(--weline-theme-text-muted);
+    }
+    .wpm-alert.is-danger {
+        color: var(--wpm-danger);
+        border-color: var(--weline-theme-text-muted);
+        background: var(--weline-theme-text-muted);
+    }
+    .wpm-grid,
+    .wpm-form-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+    }
+    .wpm-form-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .wpm-section {
+        margin-bottom: 18px;
+        border: 1px solid var(--wpm-border);
+        border-radius: 8px;
+        padding: 20px;
+        background: var(--wpm-panel);
+        box-shadow: var(--weline-theme-shadow-sm);
+    }
+    .wpm-card,
+    .wpm-field-card {
+        min-width: 0;
+        border: 1px solid var(--wpm-border);
+        border-radius: 8px;
+        padding: 16px;
+        background: var(--wpm-panel-soft);
+    }
+    .wpm-field-card strong,
+    .wpm-field-card code,
+    .wpm-field-card p,
+    .wpm-section-note,
+    .wpm-extension-plan-list li {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+    .wpm-card-label,
+    .wpm-field-label {
+        margin: 0 0 8px;
+        color: var(--wpm-muted);
+        font-size: 12px;
+        font-weight: 850;
+        text-transform: uppercase;
+    }
+    .wpm-weline-card-value {
+        margin: 0;
+        color: var(--wpm-text);
+        font-size: 24px;
+        line-height: 1.2;
+        font-weight: 850;
+        overflow-wrap: anywhere;
+    }
+    .wpm-card-detail,
+    .wpm-section-note {
+        margin: 6px 0 0;
+        color: var(--wpm-muted);
+        line-height: 1.55;
+    }
+    .wpm-section-title {
+        margin: 0 0 8px;
+        color: var(--wpm-text);
+        font-size: 20px;
+        font-weight: 850;
+    }
+    .wpm-context-grid,
+    .wpm-runtime-grid,
+    .wpm-inheritance-summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 16px;
+    }
+    .wpm-form-control,
+    .wpm-form-select,
+    .wpm-form-textarea {
+        width: 100%;
+        border: 1px solid var(--wpm-border);
+        border-radius: 8px;
+        background: var(--wpm-panel);
+        color: var(--wpm-text);
+        min-height: 42px;
+        padding: 10px 12px;
+        box-sizing: border-box;
+    }
+    .wpm-form-textarea {
+        min-height: 94px;
+        resize: vertical;
+    }
+    .wpm-check-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        color: var(--wpm-text);
+        line-height: 1.45;
+    }
+    .wpm-check-row input {
+        margin-top: 3px;
+    }
+    .wpm-save-button {
+        color: var(--weline-theme-surface);
+        background: var(--wpm-primary);
+        border-color: var(--wpm-primary);
+    }
+    .wpm-secondary-button,
+    .wpm-danger-button {
+        border: 1px solid var(--wpm-border);
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 9px 12px;
+        font-weight: 750;
+        cursor: pointer;
+    }
+    .wpm-secondary-button {
+        color: var(--wpm-primary-strong);
+        background: var(--wpm-panel);
+    }
+    .wpm-danger-button {
+        color: var(--weline-theme-surface);
+        background: var(--wpm-danger);
+        border-color: var(--wpm-danger);
+    }
+    .wpm-ini-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 12px;
+        margin-top: 14px;
+    }
+    .wpm-ini-toolbar .wpm-field-card {
+        flex: 1 1 220px;
+    }
+    .wpm-diff-grid {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+    }
+    .wpm-diff-row {
+        display: grid;
+        grid-template-columns: minmax(120px, .7fr) minmax(0, 1fr) minmax(0, 1fr);
+        gap: 10px;
+        border: 1px solid var(--wpm-border);
+        border-radius: 8px;
+        padding: 12px;
+        background: var(--wpm-panel-soft);
+    }
+    .wpm-diff-row code {
+        color: var(--wpm-text);
+        overflow-wrap: anywhere;
+    }
+    .wpm-inheritance-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+    }
+    .wpm-inheritance-row {
+        display: grid;
+        grid-template-columns: minmax(130px, .7fr) minmax(0, 1fr) minmax(0, 1fr) minmax(140px, .6fr);
+        gap: 10px;
+        border: 1px solid var(--wpm-border);
+        border-radius: 8px;
+        padding: 12px;
+        background: var(--wpm-panel-soft);
+    }
+    .wpm-inheritance-value {
+        margin: 0;
+        color: var(--wpm-text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+    .wpm-state {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--wpm-border);
+        border-radius: 999px;
+        min-height: 26px;
+        padding: 2px 9px;
+        color: var(--wpm-primary-strong);
+        background: var(--wpm-panel);
+        font-size: 12px;
+        font-weight: 850;
+    }
+    .wpm-inheritance-row[data-wpm-inheritance-state="profile_override"] .wpm-state {
+        color: var(--wpm-warning);
+        border-color: var(--weline-theme-text-muted);
+        background: var(--weline-theme-text-muted);
+    }
+    .wpm-inheritance-row[data-wpm-inheritance-state="profile_aligned"] .wpm-state,
+    .wpm-inheritance-row[data-wpm-inheritance-state="extension_satisfied"] .wpm-state {
+        color: var(--wpm-success);
+        border-color: var(--weline-theme-text-muted);
+        background: var(--weline-theme-text-muted);
+    }
+    .wpm-inheritance-row[data-wpm-inheritance-state="extension_missing"] .wpm-state {
+        color: var(--wpm-danger);
+        border-color: var(--weline-theme-text-muted);
+        background: var(--weline-theme-text-muted);
+    }
+    .wpm-tag {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--wpm-border);
+        border-radius: 999px;
+        min-height: 26px;
+        padding: 2px 9px;
+        color: var(--wpm-primary-strong);
+        background: var(--wpm-panel-soft);
+        font-size: 12px;
+        font-weight: 850;
+    }
+    .wpm-chip-list,
+    .wpm-audit-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 14px;
+    }
+    .wpm-chip {
+        border: 1px solid var(--wpm-border);
+        border-radius: 999px;
+        padding: 5px 9px;
+        color: var(--wpm-text);
+        background: var(--wpm-panel-soft);
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .wpm-extension-grid,
+    .wpm-extension-checks {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 16px;
+    }
+    .wpm-extension-grid {
+        grid-template-columns: minmax(140px, .7fr) minmax(180px, 1fr) minmax(160px, .8fr) auto;
+        align-items: end;
+    }
+    .wpm-extension-check {
+        border: 1px solid var(--wpm-border);
+        border-radius: 8px;
+        padding: 12px;
+        background: var(--wpm-panel-soft);
+    }
+    .wpm-extension-check[data-wpm-check-state="warning"] .wpm-state,
+    .wpm-extension-check[data-wpm-check-state="attention"] .wpm-state {
+        color: var(--wpm-warning);
+        border-color: var(--weline-theme-text-muted);
+        background: var(--weline-theme-text-muted);
+    }
+    .wpm-extension-check[data-wpm-check-state="blocked"] .wpm-state {
+        color: var(--wpm-danger);
+        border-color: var(--weline-theme-text-muted);
+        background: var(--weline-theme-text-muted);
+    }
+    .wpm-extension-check[data-wpm-check-state="dry_run_only"] .wpm-state {
+        color: var(--wpm-primary-strong);
+        border-color: var(--weline-theme-text-muted);
+        background: var(--weline-theme-text-muted);
+    }
+    .wpm-extension-plan-list {
+        display: grid;
+        gap: 8px;
+        margin: 16px 0 0;
+        padding: 0;
+        list-style: none;
+        counter-reset: wpm-extension-step;
+    }
+    .wpm-extension-plan-list li {
+        counter-increment: wpm-extension-step;
+        border: 1px solid var(--wpm-border);
+        border-radius: 8px;
+        padding: 11px 12px;
+        background: var(--wpm-panel-soft);
+        color: var(--wpm-text);
+        line-height: 1.45;
+    }
+    .wpm-extension-plan-list li::before {
+        content: counter(wpm-extension-step);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        margin-right: 8px;
+        border-radius: 50%;
+        color: var(--weline-theme-surface);
+        background: var(--wpm-primary);
+        font-size: 12px;
+        font-weight: 850;
+    }
+    .wpm-disabled-button {
+        opacity: .58;
+        cursor: not-allowed;
+    }
+    .wpm-audit-list {
+        display: grid;
+    }
+    .wpm-audit-row {
+        border: 1px solid var(--wpm-border);
+        border-radius: 8px;
+        padding: 12px;
+        background: var(--wpm-panel-soft);
+    }
+    .wpm-audit-row strong {
+        color: var(--wpm-text);
+    }
+    .wpm-audit-row span,
+    .wpm-audit-row code {
+        color: var(--wpm-muted);
+        overflow-wrap: anywhere;
+    }
+    @media (max-width: 980px) {
+        .wls-php-manager-shell {
+            display: block;
+        }
+        .wpm-sidebar {
+            border-bottom: 1px solid var(--weline-theme-text-muted);
+        }
+        .wpm-main {
+            padding: 22px 14px;
+        }
+        .wpm-topbar,
+        .wpm-actions {
+            display: grid;
+            justify-content: stretch;
+        }
+        .wpm-grid,
+        .wpm-form-grid,
+        .wpm-context-grid,
+        .wpm-runtime-grid,
+        .wpm-inheritance-summary,
+        .wpm-extension-grid,
+        .wpm-extension-checks,
+        .wpm-inheritance-row,
+        .wpm-diff-row {
+            grid-template-columns: 1fr;
+        }
+        .wpm-ini-toolbar {
+            display: grid;
+        }
+        .wpm-title {
+            font-size: 26px;
+        }
+    }
+}

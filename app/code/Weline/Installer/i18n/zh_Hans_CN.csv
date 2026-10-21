@@ -59,13 +59,13 @@
 表前缀,表前缀
 测试连接,测试连接
 后台入口密钥（留空自动生成）,后台入口密钥（留空自动生成）
-例如：admin_secret_key,例如：admin_secret_key
 "访问后台的 URL 路径，如：/your_key/login","访问后台的 URL 路径，如：/your_key/login"
 "API 后台入口密钥（留空自动生成）","API 后台入口密钥（留空自动生成）"
-例如：api_secret_key,例如：api_secret_key
 完成安装,完成安装
 恭喜！系统已成功安装。请妥善保存以下信息：,恭喜！系统已成功安装。请妥善保存以下信息：
 进入后台,进入后台
+例如：admin_secret_key,例如：admin_secret_key
+例如：api_secret_key,例如：api_secret_key
 开始环境检测...,开始环境检测...
 "环境检测通过 ✓","环境检测通过 ✓"
 环境检测未通过,环境检测未通过

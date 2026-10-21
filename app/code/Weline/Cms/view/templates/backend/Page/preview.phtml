@@ -1,3 +1,4 @@
+<css>Weline_Cms::css/backend/cms-admin.css</css>
 <?php
 /**
  * @var \Weline\Framework\View\Template $this
@@ -23,6 +24,6 @@ $frontendPreviewUrl = (string)($this->getData('frontend_preview_url') ?: '');
     <div style="--w-span:12;">
         <iframe src="<?= htmlspecialchars($frontendPreviewUrl) ?>"
                 title="<?= htmlspecialchars((string)__('CMS 页面预览')) ?>"
-                style="width:100%; min-height:calc(100vh - 170px); border:1px solid var(--bs-border-color); border-radius:6px; background:#fff;"></iframe>
+                class="cms-page-preview__frame"></iframe>
     </div>
 </div>

@@ -322,11 +322,11 @@ SKU,SKU
 暂无子订单明细，请点击查看详情,"No child order lines yet — open order details"
 退货,Return
 与我的订单,"And My Orders"
-查询失败,"Query failed"
 物流单号,"Tracking Number"
 本单全部运单,"All shipments for this order"
 待补运单号,"Tracking pending"
 当前,Current
+查询失败,"Query failed"
 结账配送（参考）,"Checkout shipping (reference)"
 未指定,"Not specified"
 "对齐 Shopify：可先登记发货，运单号可后补；无运单号时不会发送「已发货」邮件。","Aligned with Shopify: register shipment first; tracking can be added later; no ""shipped"" email without tracking."

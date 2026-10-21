@@ -1,3 +1,4 @@
+<css>Weline_Dropship::css/backend/dropship-admin.css</css>
 <?php
 /**
  * Legacy search 模板：深链兼容，正文提示已迁入货源商品 Tab。
@@ -10,7 +11,7 @@ $indexUrl = $this->getBackendUrl('dropship/backend/listing/index', ['tab' => 'se
     <div style="--w-span:12;">
         <div class="w-card">
             <div class="w-card__body">
-                <div class="w-empty" style="min-height:8rem;">
+                <div class="w-empty dropship-empty">
                     <div class="w-text" data-weight="strong"><?= __('搜索已合并到货源商品') ?></div>
                     <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-3);">
                         <?= __('请使用「货源商品」页的「搜索商品」Tab。') ?>

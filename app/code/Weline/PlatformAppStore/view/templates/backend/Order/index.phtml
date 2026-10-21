@@ -4,7 +4,7 @@ $total = (int)($total ?? 0);
 $escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
 <div class="w-container" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
-    <h1 class="h4" style="--w-mb:var(--weline-space-1);"><?= __('订单管理') ?></h1>
+    <h2 class="h4" style="--w-mb:var(--weline-space-1);"><?= __('订单管理') ?></h2>
     <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);"><?= __('共 %{1} 条订单。', [$total]) ?></div>
     <?php if (!$orders): ?>
         <div class="w-card"><div class="w-card__body w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-10);--w-pb:var(--weline-space-10);"><?= __('暂无订单。') ?></div></div>

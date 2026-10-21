@@ -90,7 +90,7 @@ $listDrillUrl = $channelCode !== ''
 <div class="weline-traffic-channel-detail">
     <div class="w-cluster" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-4);">
         <div>
-            <h1 class="h4" style="--w-mb:var(--weline-space-1);"><lang>渠道详情</lang></h1>
+            <h2 class="w-text" data-weight="strong" data-size="xl" style="--w-mb:var(--weline-space-1);"><lang>渠道详情</lang></h2>
             <div class="w-text" data-tone="muted">
                 <?= $h($channel['name'] ?? '') ?>
                 · <code><?= $h($channel['code'] ?? '') ?></code>
@@ -201,7 +201,7 @@ $listDrillUrl = $channelCode !== ''
                                 <?= $h(\Weline\Visitor\Service\PixelChannelFunnelMode::baselineLabel($funnelMode)) ?>
                             </th>
                             <th class="w-text" data-align="end"><lang>相对上步流失</lang></th>
-                            <th style="min-width:160px"><lang>占比条</lang></th>
+                            <th><lang>占比条</lang></th>
                         </tr>
                         </thead>
                         <tbody>
@@ -222,7 +222,7 @@ $listDrillUrl = $channelCode !== ''
                                         : $h(number_format($dropoff * 100, 1) . '%') ?>
                                 </td>
                                 <td>
-                                    <div class="w-progress" style="height:8px">
+                                    <div class="w-progress">
                                         <div class="w-progress__bar" role="progressbar" style="width: <?= $h((string)max(0, min(100, $pct))) ?>%" aria-valuenow="<?= $h((string)$pct) ?>" aria-valuemin="0" aria-valuemax="100"></div>
                                     </div>
                                 </td>

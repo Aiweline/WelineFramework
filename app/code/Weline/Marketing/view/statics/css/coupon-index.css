@@ -10,7 +10,7 @@
 }
 
 .marketing-coupon-page .marketing-coupon-header {
-    margin-bottom: var(--weline-space-5, 1.5rem);
+    margin-bottom: var(--weline-space-5);
 }
 
 .marketing-coupon-page .marketing-coupon-header h4 {
@@ -22,8 +22,8 @@
 /* 卡片 */
 .marketing-coupon-page .marketing-coupon-card {
     background: var(--backend-theme-surface, var(--weline-theme-surface));
-    border: 1px solid var(--backend-theme-border, var(--weline-theme-border));
-    border-radius: var(--weline-radius-lg, 0.75rem);
+    border: var(--border-width-thin) solid var(--backend-theme-border, var(--weline-theme-border));
+    border-radius: var(--weline-radius-lg);
     box-shadow: var(--weline-theme-shadow-sm);
     overflow: hidden;
     transition: box-shadow var(--marketing-coupon-transition), border-color var(--marketing-coupon-transition);
@@ -46,7 +46,7 @@
 
 .marketing-coupon-page .marketing-coupon-card-title {
     margin: 0;
-    font-size: var(--weline-font-size-lg, 1.125rem);
+    font-size: var(--weline-font-size-lg);
     font-weight: 700;
     color: var(--backend-theme-text, var(--weline-theme-text));
 }
@@ -59,7 +59,7 @@
     background: var(--weline-theme-primary);
     color: var(--weline-theme-surface);
     border: none;
-    border-radius: var(--weline-radius-md, 0.375rem);
+    border-radius: var(--weline-radius-md);
     font-size: var(--weline-font-size-sm);
     font-weight: 600;
     text-decoration: none;
@@ -72,13 +72,13 @@
     transform: translateY(-1px);
 }
 
-.marketing-coupon-page .marketing-coupon-card-body {
+.marketing-coupon-page .marketing-coupon-card__body {
     padding: 0 var(--weline-space-6) var(--weline-space-6);
 }
 
 .marketing-coupon-page .marketing-coupon-filter {
     padding: var(--weline-space-4) 0 var(--weline-space-2);
-    border-bottom: 1px solid var(--backend-theme-border, var(--weline-theme-border));
+    border-bottom: var(--border-width-thin) solid var(--backend-theme-border, var(--weline-theme-border));
     margin-bottom: var(--weline-space-2);
 }
 
@@ -96,7 +96,7 @@
 .marketing-coupon-page .marketing-coupon-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: var(--weline-font-size-sm, 0.9375rem);
+    font-size: var(--weline-font-size-sm);
     color: var(--backend-theme-text, var(--weline-theme-text));
 }
 
@@ -105,7 +105,7 @@
     color: var(--backend-theme-text, var(--weline-theme-text));
     font-weight: 700;
     padding: var(--weline-space-3) var(--weline-space-4);
-    border-bottom: 1px solid var(--backend-theme-border, var(--weline-theme-border));
+    border-bottom: var(--border-width-thin) solid var(--backend-theme-border, var(--weline-theme-border));
     text-align: start;
     white-space: nowrap;
 }
@@ -118,7 +118,7 @@
 .marketing-coupon-page .marketing-coupon-table td {
     padding: var(--weline-space-4) var(--weline-space-4);
     color: var(--backend-theme-text, var(--weline-theme-text));
-    border-bottom: 1px solid var(--backend-theme-border, var(--weline-theme-border));
+    border-bottom: var(--border-width-thin) solid var(--backend-theme-border, var(--weline-theme-border));
     vertical-align: middle;
 }
 
@@ -138,10 +138,10 @@
 .marketing-coupon-page .marketing-coupon-badge {
     display: inline-flex;
     align-items: center;
-    padding: 0.2em 0.65em;
+    padding: var(--spacing-0_2) var(--spacing-0_65);
     font-size: var(--weline-font-size-xs);
     font-weight: 600;
-    border-radius: var(--weline-radius-round, 50rem);
+    border-radius: var(--weline-radius-round);
     line-height: 1.2;
 }
 
@@ -169,8 +169,8 @@
     padding: 0;
     background: color-mix(in srgb, var(--weline-theme-primary) 10%, var(--backend-theme-surface, var(--weline-theme-surface)));
     color: var(--weline-theme-primary);
-    border: 1px solid color-mix(in srgb, var(--weline-theme-primary) 22%, var(--backend-theme-border, var(--weline-theme-border)));
-    border-radius: var(--weline-radius-md, 0.375rem);
+    border: var(--border-width-thin) solid color-mix(in srgb, var(--weline-theme-primary) 22%, var(--backend-theme-border, var(--weline-theme-border)));
+    border-radius: var(--weline-radius-md);
     text-decoration: none;
     transition: background var(--marketing-coupon-transition), border-color var(--marketing-coupon-transition), color var(--marketing-coupon-transition);
 }

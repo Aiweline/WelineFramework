@@ -70,14 +70,14 @@ if ($icon !== '' && isset($this) && is_object($this) && method_exists($this, 'fe
             <p class="order-tracking-result__summary"><?= $escape($summary) ?></p>
         <?php endif; ?>
         <?php if (!empty($tracking['tracking_number'])): ?>
-            <p class="order-tracking-result__tracking-no"><?= $escape(__('物流单号')) ?>：<code><?= $escape((string) $tracking['tracking_number']) ?></code></p>
+            <p class="order-tracking-result__tracking-no"><lang>物流单号</lang>：<code><?= $escape((string) $tracking['tracking_number']) ?></code></p>
         <?php endif; ?>
 
         <?php if (count($allShipments) > 1): ?>
             <ul class="order-tracking-result__shipments"
                 data-testid="order-tracking-shipments"
                 data-shipment-count="<?= count($allShipments) ?>"
-                aria-label="<?= $escape(__('本单全部运单')) ?>">
+                aria-label="<lang>本单全部运单</lang>">
                 <?php foreach ($allShipments as $shipRow): ?>
                     <?php
                     if (!is_array($shipRow)) {
@@ -100,7 +100,7 @@ if ($icon !== '' && isset($this) && is_object($this) && method_exists($this, 'fe
                         <?php if ($shipTn !== ''): ?>
                             <code data-testid="order-tracking-shipment-tracking"><?= $escape($shipTn) ?></code>
                         <?php else: ?>
-                            <span><?= $escape(__('待补运单号')) ?></span>
+                            <span><lang>待补运单号</lang></span>
                         <?php endif; ?>
                         <?php if ($shipStatus !== ''): ?>
                             <span data-testid="order-tracking-shipment-status"><?= $escape($shipStatus) ?></span>
@@ -129,7 +129,7 @@ if ($icon !== '' && isset($this) && is_object($this) && method_exists($this, 'fe
                         <span class="order-tracking-result__meta">
                             <span class="order-tracking-result__label"><?= $escape($label) ?></span>
                             <?php if ($isCurrent): ?>
-                                <span class="order-tracking-result__current-tag"><?= $escape(__('当前')) ?></span>
+                                <span class="order-tracking-result__current-tag"><lang>当前</lang></span>
                             <?php endif; ?>
                         </span>
                     </li>

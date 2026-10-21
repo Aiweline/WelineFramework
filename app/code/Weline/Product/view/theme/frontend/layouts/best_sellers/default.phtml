@@ -115,22 +115,22 @@ $meta = $this->getData('meta') ?? [];
 .best-sellers-layout {
     margin: 0;
     min-height: 100vh;
-    color: var(--color-text-primary, #0f1111);
-    background: var(--color-bg-canvas, #ffffff);
+    color: var(--color-text-primary);
+    background: var(--color-bg-canvas);
 }
 .best-sellers-layout__main {
     box-sizing: border-box;
     width: min(100%, var(--weline-layout-content-max-width));
     max-width: 100%;
     margin-inline: auto;
-    padding: clamp(1.25rem, 3vw, 2rem) var(--weline-layout-content-padding-inline) clamp(2.5rem, 5vw, 3.5rem);
+    padding: clamp(var(--weline-space-5), 3vw, var(--weline-space-8)) var(--weline-layout-content-padding-inline) clamp(var(--weline-space-10), 5vw, 3.5rem);
 }
 .best-sellers-layout__placeholder {
-    padding: 2rem;
+    padding: var(--weline-space-8);
     text-align: center;
-    color: var(--color-text-secondary, #565959);
-    border: 1px dashed var(--color-border-default, #ddd);
-    border-radius: 8px;
+    color: var(--color-text-secondary);
+    border: var(--border-width-thin) dashed var(--color-border-default);
+    border-radius: var(--radius-lg);
 }
 </style>
     <w:hook>seo::footer</w:hook>

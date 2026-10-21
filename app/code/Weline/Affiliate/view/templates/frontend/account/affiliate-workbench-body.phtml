@@ -13,27 +13,27 @@ $affiliateTdLabel = static function (string $source): string {
 <div class="weline-affiliate-account-card__subsection" data-affiliate-workbench>
     <div class="weline-affiliate-account-card__section-head">
         <div>
-            <h3 class="weline-affiliate-account-card__section-title"><?= __('推广链接管理') ?></h3>
-            <p class="weline-affiliate-account-card__section-note"><?= __('默认推广首页，也可以生成任意本站页面的独立分销链接；点击后按 30 天末触归因记录后续注册、互动和订单。') ?></p>
+            <h3 class="weline-affiliate-account-card__section-title"><lang>推广链接管理</lang></h3>
+            <p class="weline-affiliate-account-card__section-note"><lang>默认推广首页，也可以生成任意本站页面的独立分销链接；点击后按 30 天末触归因记录后续注册、互动和订单。</lang></p>
         </div>
     </div>
     <div class="weline-affiliate-account-card__link-group">
         <div>
-            <label class="weline-affiliate-account-card__field-label"><?= __('默认首页推广链接') ?></label>
+            <label class="weline-affiliate-account-card__field-label"><lang>默认首页推广链接</lang></label>
             <div class="weline-affiliate-account-card__link-row">
                 <input class="weline-affiliate-account-card__link" data-affiliate-default-share-link type="text" readonly value="<?= htmlspecialchars($defaultTrackingUrl, ENT_QUOTES) ?>">
-                <button type="button" class="weline-affiliate-account-card__button" data-affiliate-copy-source="[data-affiliate-default-share-link]"><?= __('复制链接') ?></button>
+                <button type="button" class="weline-affiliate-account-card__button" data-affiliate-copy-source="[data-affiliate-default-share-link]"><lang>复制链接</lang></button>
             </div>
         </div>
         <div>
-            <label class="weline-affiliate-account-card__field-label"><?= __('自定义推广目标') ?></label>
+            <label class="weline-affiliate-account-card__field-label"><lang>自定义推广目标</lang></label>
             <div class="weline-affiliate-account-card__target-row">
-                <input class="weline-affiliate-account-card__link" data-affiliate-custom-target type="text" value="<?= htmlspecialchars($homeUrl, ENT_QUOTES) ?>" placeholder="<?= htmlspecialchars((string) __('输入本站页面地址，例如 /product/airpods-pro-magsafe'), ENT_QUOTES) ?>">
-                <button type="button" class="weline-affiliate-account-card__button weline-affiliate-account-card__button--primary" data-affiliate-generate-link><?= __('生成推广链接') ?></button>
+                <input class="weline-affiliate-account-card__link" data-affiliate-custom-target type="text" value="<?= htmlspecialchars($homeUrl, ENT_QUOTES) ?>" placeholder="<lang>输入本站页面地址，例如 /product/airpods-pro-magsafe</lang>">
+                <button type="button" class="weline-affiliate-account-card__button weline-affiliate-account-card__button--primary" data-affiliate-generate-link><lang>生成推广链接</lang></button>
             </div>
             <div class="weline-affiliate-account-card__target-row" style="margin-top: 10px;">
                 <input class="weline-affiliate-account-card__link" data-affiliate-generated-link type="text" readonly value="">
-                <button type="button" class="weline-affiliate-account-card__button" data-affiliate-copy-source="[data-affiliate-generated-link]"><?= __('复制新链接') ?></button>
+                <button type="button" class="weline-affiliate-account-card__button" data-affiliate-copy-source="[data-affiliate-generated-link]"><lang>复制新链接</lang></button>
             </div>
         </div>
     </div>
@@ -42,22 +42,22 @@ $affiliateTdLabel = static function (string $source): string {
 <div class="weline-affiliate-account-card__subsection" data-affiliate-withdrawals>
     <div class="weline-affiliate-account-card__section-head">
         <div>
-            <h3 class="weline-affiliate-account-card__section-title"><?= __('提现记录') ?></h3>
-            <p class="weline-affiliate-account-card__section-note"><?= __('可提现金额来自已确认且未申请/未打款佣金；提交申请后等待运营审核打款。') ?></p>
+            <h3 class="weline-affiliate-account-card__section-title"><lang>提现记录</lang></h3>
+            <p class="weline-affiliate-account-card__section-note"><lang>可提现金额来自已确认且未申请/未打款佣金；提交申请后等待运营审核打款。</lang></p>
         </div>
-        <span class="weline-affiliate-account-card__badge"><?= count($withdrawalRecords) ?> <?= __('条记录') ?></span>
+        <span class="weline-affiliate-account-card__badge"><?= count($withdrawalRecords) ?> <lang>条记录</lang></span>
     </div>
     <div class="weline-affiliate-account-card__link-group">
         <div>
-            <label class="weline-affiliate-account-card__field-label"><?= __('可提现金额') ?></label>
+            <label class="weline-affiliate-account-card__field-label"><lang>可提现金额</lang></label>
             <div class="weline-affiliate-account-card__muted"><?= $formatAmount($withdrawalSummary['available_amount'] ?? ($affiliate['available_commission'] ?? 0), $summaryCurrency ?? ($affiliate['currency_code'] ?? 'USD')) ?></div>
         </div>
         <div data-affiliate-withdrawal-form>
-            <label class="weline-affiliate-account-card__field-label"><?= __('申请提现') ?></label>
+            <label class="weline-affiliate-account-card__field-label"><lang>申请提现</lang></label>
             <div class="weline-affiliate-account-card__target-row">
-                <input class="weline-affiliate-account-card__link" data-affiliate-withdrawal-amount type="number" min="0.01" step="0.01" placeholder="<?= htmlspecialchars((string) __('提现金额'), ENT_QUOTES) ?>">
-                <input class="weline-affiliate-account-card__link" data-affiliate-withdrawal-account type="text" maxlength="160" placeholder="<?= htmlspecialchars((string) __('收款账号或备注'), ENT_QUOTES) ?>">
-                <button type="button" class="weline-affiliate-account-card__button weline-affiliate-account-card__button--primary" data-affiliate-withdrawal-submit><?= __('提交提现') ?></button>
+                <input class="weline-affiliate-account-card__link" data-affiliate-withdrawal-amount type="number" min="0.01" step="0.01" placeholder="@lang('提现金额')">
+                <input class="weline-affiliate-account-card__link" data-affiliate-withdrawal-account type="text" maxlength="160" placeholder="@lang('收款账号或备注')">
+                <button type="button" class="weline-affiliate-account-card__button weline-affiliate-account-card__button--primary" data-affiliate-withdrawal-submit><lang>提交提现</lang></button>
             </div>
         </div>
     </div>
@@ -65,14 +65,14 @@ $affiliateTdLabel = static function (string $source): string {
         <table class="weline-affiliate-account-card__table" data-affiliate-withdrawals-table>
             <thead>
             <tr>
-                <th><?= __('申请时间') ?></th>
-                <th><?= __('金额') ?></th>
-                <th><?= __('方式') ?></th>
-                <th><?= __('收款账户') ?></th>
-                <th><?= __('状态') ?></th>
-                <th><?= __('处理时间') ?></th>
-                <th><?= __('打款时间') ?></th>
-                <th><?= __('备注') ?></th>
+                <th><lang>申请时间</lang></th>
+                <th><lang>金额</lang></th>
+                <th><lang>方式</lang></th>
+                <th><lang>收款账户</lang></th>
+                <th><lang>状态</lang></th>
+                <th><lang>处理时间</lang></th>
+                <th><lang>打款时间</lang></th>
+                <th><lang>备注</lang></th>
             </tr>
             </thead>
             <tbody>
@@ -100,10 +100,10 @@ $affiliateTdLabel = static function (string $source): string {
 <div class="weline-affiliate-account-card__subsection">
     <div class="weline-affiliate-account-card__section-head">
         <div>
-            <h3 class="weline-affiliate-account-card__section-title"><?= __('链接维度表现') ?></h3>
-            <p class="weline-affiliate-account-card__section-note"><?= __('每条推广链接独立统计发出、点击、注册、互动、订单和佣金，归因窗口为 30 天。') ?></p>
+            <h3 class="weline-affiliate-account-card__section-title"><lang>链接维度表现</lang></h3>
+            <p class="weline-affiliate-account-card__section-note"><lang>每条推广链接独立统计发出、点击、注册、互动、订单和佣金，归因窗口为 30 天。</lang></p>
         </div>
-        <span class="weline-affiliate-account-card__badge"><?= count($shareLinks) ?> <?= __('条链接') ?></span>
+        <span class="weline-affiliate-account-card__badge"><?= count($shareLinks) ?> <lang>条链接</lang></span>
     </div>
     <?php if ($shareLinks === []): ?>
         <div class="weline-affiliate-account-card__empty"><?= htmlspecialchars($emptyText, ENT_QUOTES) ?></div>
@@ -112,14 +112,14 @@ $affiliateTdLabel = static function (string $source): string {
             <table class="weline-affiliate-account-card__table" data-affiliate-share-links-table>
                 <thead>
                 <tr>
-                    <th><?= __('推广目标') ?></th>
-                    <th><?= __('渠道') ?></th>
-                    <th><?= __('点击') ?></th>
-                    <th><?= __('注册') ?></th>
-                    <th><?= __('收藏/加购') ?></th>
-                    <th><?= __('订单') ?></th>
-                    <th><?= __('佣金') ?></th>
-                    <th><?= __('创建时间') ?></th>
+                    <th><lang>推广目标</lang></th>
+                    <th><lang>渠道</lang></th>
+                    <th><lang>点击</lang></th>
+                    <th><lang>注册</lang></th>
+                    <th><lang>收藏/加购</lang></th>
+                    <th><lang>订单</lang></th>
+                    <th><lang>佣金</lang></th>
+                    <th><lang>创建时间</lang></th>
                 </tr>
                 </thead>
                 <tbody>
@@ -147,10 +147,10 @@ $affiliateTdLabel = static function (string $source): string {
 <div class="weline-affiliate-account-card__subsection">
     <div class="weline-affiliate-account-card__section-head">
         <div>
-            <h3 class="weline-affiliate-account-card__section-title"><?= __('分销后注册用户') ?></h3>
-            <p class="weline-affiliate-account-card__section-note"><?= __('邮箱默认脱敏，保留注册时间、订单数、成交金额和最近下单时间。') ?></p>
+            <h3 class="weline-affiliate-account-card__section-title"><lang>分销后注册用户</lang></h3>
+            <p class="weline-affiliate-account-card__section-note"><lang>邮箱默认脱敏，保留注册时间、订单数、成交金额和最近下单时间。</lang></p>
         </div>
-        <span class="weline-affiliate-account-card__badge"><?= count($referredCustomers) ?> <?= __('位客户') ?></span>
+        <span class="weline-affiliate-account-card__badge"><?= count($referredCustomers) ?> <lang>位客户</lang></span>
     </div>
     <?php if ($referredCustomers === []): ?>
         <div class="weline-affiliate-account-card__empty"><?= htmlspecialchars($emptyText, ENT_QUOTES) ?></div>
@@ -159,13 +159,13 @@ $affiliateTdLabel = static function (string $source): string {
             <table class="weline-affiliate-account-card__table" data-affiliate-referred-customers-table>
                 <thead>
                 <tr>
-                    <th><?= __('客户') ?></th>
-                    <th><?= __('来源') ?></th>
-                    <th><?= __('注册时间') ?></th>
-                    <th><?= __('订单数') ?></th>
-                    <th><?= __('支付订单') ?></th>
-                    <th><?= __('成交金额') ?></th>
-                    <th><?= __('最近下单') ?></th>
+                    <th><lang>客户</lang></th>
+                    <th><lang>来源</lang></th>
+                    <th><lang>注册时间</lang></th>
+                    <th><lang>订单数</lang></th>
+                    <th><lang>支付订单</lang></th>
+                    <th><lang>成交金额</lang></th>
+                    <th><lang>最近下单</lang></th>
                 </tr>
                 </thead>
                 <tbody>
@@ -192,10 +192,10 @@ $affiliateTdLabel = static function (string $source): string {
 <div class="weline-affiliate-account-card__subsection">
     <div class="weline-affiliate-account-card__section-head">
         <div>
-            <h3 class="weline-affiliate-account-card__section-title"><?= __('分销商品') ?></h3>
-            <p class="weline-affiliate-account-card__section-note"><?= __('按商品汇总分享、点击、互动、订单和佣金。') ?></p>
+            <h3 class="weline-affiliate-account-card__section-title"><lang>分销商品</lang></h3>
+            <p class="weline-affiliate-account-card__section-note"><lang>按商品汇总分享、点击、互动、订单和佣金。</lang></p>
         </div>
-        <span class="weline-affiliate-account-card__badge"><?= count($promotedProducts) ?> <?= __('个商品') ?></span>
+        <span class="weline-affiliate-account-card__badge"><?= count($promotedProducts) ?> <lang>个商品</lang></span>
     </div>
     <?php if ($promotedProducts === []): ?>
         <div class="weline-affiliate-account-card__empty"><?= htmlspecialchars($emptyText, ENT_QUOTES) ?></div>
@@ -204,13 +204,13 @@ $affiliateTdLabel = static function (string $source): string {
             <table class="weline-affiliate-account-card__table" data-affiliate-products-table>
                 <thead>
                 <tr>
-                    <th><?= __('商品') ?></th>
-                    <th><?= __('SKU') ?></th>
-                    <th><?= __('分享/点击') ?></th>
-                    <th><?= __('浏览/收藏/加购') ?></th>
-                    <th><?= __('订单') ?></th>
-                    <th><?= __('净商品额') ?></th>
-                    <th><?= __('佣金') ?></th>
+                    <th><lang>商品</lang></th>
+                    <th><lang>SKU</lang></th>
+                    <th><lang>分享/点击</lang></th>
+                    <th><lang>浏览/收藏/加购</lang></th>
+                    <th><lang>订单</lang></th>
+                    <th><lang>净商品额</lang></th>
+                    <th><lang>佣金</lang></th>
                 </tr>
                 </thead>
                 <tbody>
@@ -234,35 +234,35 @@ $affiliateTdLabel = static function (string $source): string {
 <div class="weline-affiliate-account-card__subsection">
     <div class="weline-affiliate-account-card__section-head">
         <div>
-            <h3 class="weline-affiliate-account-card__section-title"><?= __('分销订单') ?></h3>
-            <p class="weline-affiliate-account-card__section-note"><?= __('按订单汇总买家、商品、订单金额、结算基数和佣金。') ?></p>
+            <h3 class="weline-affiliate-account-card__section-title"><lang>分销订单</lang></h3>
+            <p class="weline-affiliate-account-card__section-note"><lang>按订单汇总买家、商品、订单金额、结算基数和佣金。</lang></p>
         </div>
-        <span class="weline-affiliate-account-card__badge"><?= count($affiliateOrders) ?> <?= __('笔订单') ?></span>
+        <span class="weline-affiliate-account-card__badge"><?= count($affiliateOrders) ?> <lang>笔订单</lang></span>
     </div>
     <?php if ($affiliateOrders === []): ?>
         <div class="weline-affiliate-account-card__table-wrap">
             <table class="weline-affiliate-account-card__table" data-affiliate-orders-table>
                 <thead>
                 <tr>
-                    <th><?= __('订单') ?></th>
-                    <th><?= __('买家') ?></th>
-                    <th><?= __('商品') ?></th>
-                    <th><?= __('订单金额') ?></th>
-                    <th><?= __('结算基数') ?></th>
-                    <th><?= __('佣金') ?></th>
-                    <th><?= __('状态') ?></th>
-                    <th><?= __('下单时间') ?></th>
+                    <th><lang>订单</lang></th>
+                    <th><lang>买家</lang></th>
+                    <th><lang>商品</lang></th>
+                    <th><lang>订单金额</lang></th>
+                    <th><lang>结算基数</lang></th>
+                    <th><lang>佣金</lang></th>
+                    <th><lang>状态</lang></th>
+                    <th><lang>下单时间</lang></th>
                 </tr>
                 <?php /* ?>
                 <tr>
-                    <th><?= __('璁㈠崟') ?></th>
-                    <th><?= __('涔板') ?></th>
-                    <th><?= __('鍟嗗搧') ?></th>
-                    <th><?= __('璁㈠崟閲戦') ?></th>
-                    <th><?= __('缁撶畻鍩烘暟') ?></th>
-                    <th><?= __('浣ｉ噾') ?></th>
+                    <th><lang>璁㈠崟</lang></th>
+                    <th><lang>涔板</lang></th>
+                    <th><lang>鍟嗗搧</lang></th>
+                    <th><lang>璁㈠崟閲戦</lang></th>
+                    <th><lang>缁撶畻鍩烘暟</lang></th>
+                    <th><lang>浣ｉ噾</lang></th>
                     <th><?= __('鐘舵€?) ?></th>
-                    <th><?= __('涓嬪崟鏃堕棿') ?></th>
+                    <th><lang>涓嬪崟鏃堕棿</lang></th>
                 </tr>
                 <?php */ ?>
                 </thead>
@@ -276,14 +276,14 @@ $affiliateTdLabel = static function (string $source): string {
             <table class="weline-affiliate-account-card__table" data-affiliate-orders-table>
                 <thead>
                 <tr>
-                    <th><?= __('订单') ?></th>
-                    <th><?= __('买家') ?></th>
-                    <th><?= __('商品') ?></th>
-                    <th><?= __('订单金额') ?></th>
-                    <th><?= __('结算基数') ?></th>
-                    <th><?= __('佣金') ?></th>
-                    <th><?= __('状态') ?></th>
-                    <th><?= __('下单时间') ?></th>
+                    <th><lang>订单</lang></th>
+                    <th><lang>买家</lang></th>
+                    <th><lang>商品</lang></th>
+                    <th><lang>订单金额</lang></th>
+                    <th><lang>结算基数</lang></th>
+                    <th><lang>佣金</lang></th>
+                    <th><lang>状态</lang></th>
+                    <th><lang>下单时间</lang></th>
                 </tr>
                 </thead>
                 <tbody>
@@ -308,37 +308,37 @@ $affiliateTdLabel = static function (string $source): string {
 <div class="weline-affiliate-account-card__subsection">
     <div class="weline-affiliate-account-card__section-head">
         <div>
-            <h3 class="weline-affiliate-account-card__section-title"><?= __('佣金流水') ?></h3>
-            <p class="weline-affiliate-account-card__section-note"><?= __('逐订单项记录佣金基数、比例、金额、状态和状态原因。') ?></p>
+            <h3 class="weline-affiliate-account-card__section-title"><lang>佣金流水</lang></h3>
+            <p class="weline-affiliate-account-card__section-note"><lang>逐订单项记录佣金基数、比例、金额、状态和状态原因。</lang></p>
         </div>
-        <span class="weline-affiliate-account-card__badge"><?= count($commissionLedger) ?> <?= __('条流水') ?></span>
+        <span class="weline-affiliate-account-card__badge"><?= count($commissionLedger) ?> <lang>条流水</lang></span>
     </div>
     <?php if ($commissionLedger === []): ?>
         <div class="weline-affiliate-account-card__table-wrap">
             <table class="weline-affiliate-account-card__table" data-affiliate-commissions-table>
                 <thead>
                 <tr>
-                    <th><?= __('时间') ?></th>
-                    <th><?= __('订单') ?></th>
-                    <th><?= __('商品') ?></th>
-                    <th><?= __('买家') ?></th>
-                    <th><?= __('基数') ?></th>
-                    <th><?= __('比例') ?></th>
-                    <th><?= __('佣金') ?></th>
-                    <th><?= __('状态') ?></th>
-                    <th><?= __('原因') ?></th>
+                    <th><lang>时间</lang></th>
+                    <th><lang>订单</lang></th>
+                    <th><lang>商品</lang></th>
+                    <th><lang>买家</lang></th>
+                    <th><lang>基数</lang></th>
+                    <th><lang>比例</lang></th>
+                    <th><lang>佣金</lang></th>
+                    <th><lang>状态</lang></th>
+                    <th><lang>原因</lang></th>
                 </tr>
                 <?php /* ?>
                 <tr>
-                    <th><?= __('鏃堕棿') ?></th>
-                    <th><?= __('璁㈠崟') ?></th>
-                    <th><?= __('鍟嗗搧') ?></th>
-                    <th><?= __('涔板') ?></th>
-                    <th><?= __('鍩烘暟') ?></th>
-                    <th><?= __('姣斾緥') ?></th>
-                    <th><?= __('浣ｉ噾') ?></th>
+                    <th><lang>鏃堕棿</lang></th>
+                    <th><lang>璁㈠崟</lang></th>
+                    <th><lang>鍟嗗搧</lang></th>
+                    <th><lang>涔板</lang></th>
+                    <th><lang>鍩烘暟</lang></th>
+                    <th><lang>姣斾緥</lang></th>
+                    <th><lang>浣ｉ噾</lang></th>
                     <th><?= __('鐘舵€?) ?></th>
-                    <th><?= __('鍘熷洜') ?></th>
+                    <th><lang>鍘熷洜</lang></th>
                 </tr>
                 <?php */ ?>
                 </thead>
@@ -352,15 +352,15 @@ $affiliateTdLabel = static function (string $source): string {
             <table class="weline-affiliate-account-card__table" data-affiliate-commissions-table>
                 <thead>
                 <tr>
-                    <th><?= __('时间') ?></th>
-                    <th><?= __('订单') ?></th>
-                    <th><?= __('商品') ?></th>
-                    <th><?= __('买家') ?></th>
-                    <th><?= __('基数') ?></th>
-                    <th><?= __('比例') ?></th>
-                    <th><?= __('佣金') ?></th>
-                    <th><?= __('状态') ?></th>
-                    <th><?= __('原因') ?></th>
+                    <th><lang>时间</lang></th>
+                    <th><lang>订单</lang></th>
+                    <th><lang>商品</lang></th>
+                    <th><lang>买家</lang></th>
+                    <th><lang>基数</lang></th>
+                    <th><lang>比例</lang></th>
+                    <th><lang>佣金</lang></th>
+                    <th><lang>状态</lang></th>
+                    <th><lang>原因</lang></th>
                 </tr>
                 </thead>
                 <tbody>

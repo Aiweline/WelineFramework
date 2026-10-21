@@ -7,12 +7,12 @@
 $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
 <div class="content-body">
-    <p class="w-text" data-tone="muted" style="margin-bottom: var(--weline-theme-space-4, 1rem);">
+    <p class="w-text" data-tone="muted" style="margin-bottom: var(--weline-space-4);">
         <?= __('此页仅人工立即推送。定时推送请回到「推送管理」用统一配置开关开启（每天一次）。') ?>
     </p>
 
     <?php if (empty($feeds) || empty($platforms)): ?>
-        <div class="w-stack" data-gap="sm" style="padding: var(--weline-theme-space-4, 1rem) 0;">
+        <div class="w-stack" data-gap="sm" style="padding: var(--weline-space-4) 0;">
             <?php if (empty($feeds)): ?>
                 <div class="w-text"><?= __('没有已启用的内容源。请先到内容源管理开启。') ?></div>
                 <a href="@url{'geo/backend/feed'}" class="w-button" data-tone="primary" data-size="sm"><?= __('内容源管理') ?></a>
@@ -54,7 +54,7 @@ $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES
             </div>
         </w:form>
 
-        <div id="push-result" style="display: none; margin-top: var(--weline-theme-space-4, 1rem);"></div>
+        <div id="push-result" style="display: none; margin-top: var(--weline-space-4);"></div>
     <?php endif; ?>
 </div>
 

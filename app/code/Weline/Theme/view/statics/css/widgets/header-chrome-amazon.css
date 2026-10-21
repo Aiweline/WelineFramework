@@ -649,9 +649,9 @@
     border-radius: var(--weline-theme-radius-md);
     transition: box-shadow 0.2s ease;
     background: transparent;
-    --weline-chrome-body-text: #0f1111;
-    --weline-chrome-body-text-secondary: #565959;
-    --weline-chrome-body-text-muted: #666666;
+    --weline-chrome-body-text: var(--weline-theme-color-text);
+    --weline-chrome-body-text-secondary: var(--color-text-gray);
+    --weline-chrome-body-text-muted: var(--color-text-gray-mid);
     --amz-drawer-text: var(--weline-chrome-body-text);
     --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
     --_paper-text: var(--amz-drawer-text, #0f1111);
@@ -673,7 +673,7 @@
     --weline-theme-color-text-muted: var(--_paper-muted);
     --w-surface-fg: var(--_paper-text);
     --w-surface-fg-muted: var(--_paper-muted);
-    color: var(--_paper-text);
+    color: var(--_paper-text, #0f1111);
 }
 
 .weline-header .header-search-form:focus-within,
@@ -815,8 +815,8 @@
  */
 .w-menu.search-type-menu.search-category-menu,
 .search-type-menu.search-category-menu {
-    --weline-chrome-body-text: #0f1111;
-    --weline-chrome-body-text-secondary: #565959;
+    --weline-chrome-body-text: var(--weline-theme-color-text);
+    --weline-chrome-body-text-secondary: var(--color-text-gray);
     --amz-drawer-text: var(--weline-chrome-body-text);
     --amz-drawer-muted: var(--weline-chrome-body-text-secondary);
     --_paper-text: var(--amz-drawer-text, #0f1111);
@@ -827,8 +827,8 @@
 /* Category tree flies right; opaque paper surface (not transparent inline stack). */
 .w-menu.search-type-menu.search-category-menu .search-type-submenu,
 .search-type-menu.search-category-menu .search-type-submenu {
-    background: var(--color-bg-primary, #fff);
-    color: var(--_paper-text, #0f1111);
+    background: var(--color-bg-primary);
+    color: var(--_paper-text);
     box-shadow: var(--weline-shadow-lg);
 }
 
@@ -1021,7 +1021,7 @@
     content: '';
     width: var(--spacing-5_5);
     height: var(--spacing-5_5);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+    background-image: url();
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;

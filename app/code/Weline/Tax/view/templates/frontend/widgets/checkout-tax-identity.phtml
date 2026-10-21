@@ -26,10 +26,10 @@ $euCsv = htmlspecialchars(implode(',', BuyerTaxIdentityService::EU_COUNTRIES), E
      hidden>
   <details class="weline-checkout-tax-identity__details" data-tax-identity-details>
     <summary class="weline-checkout-tax-identity__summary" data-tax-identity-summary>
-      <?= __('需要填写税号 / VAT？') ?>
+      <lang>需要填写税号 / VAT？</lang>
     </summary>
     <div class="weline-checkout-tax-identity__body">
-      <label class="w-label" for="checkout-buyer-vat-id"><?= __('欧盟 VAT 税号（可选）') ?></label>
+      <label class="w-label" for="checkout-buyer-vat-id"><lang>欧盟 VAT 税号（可选）</lang></label>
       <input class="w-input"
              id="checkout-buyer-vat-id"
              type="text"
@@ -38,10 +38,10 @@ $euCsv = htmlspecialchars(implode(',', BuyerTaxIdentityService::EU_COUNTRIES), E
              autocomplete="off"
              data-tax-vat-id
              data-tax-identity-field="tax_id"
-             placeholder="<?= __('例如：DE123456789') ?>"
+             placeholder="@lang('例如：DE123456789')"
              aria-describedby="checkout-buyer-vat-hint">
       <p id="checkout-buyer-vat-hint" class="w-text" data-tone="muted" data-size="sm" data-widget-style-class="9c7ef75bea1eccd2">
-        <?= __('账单国家为欧盟时可选填写；仅做格式校验，不改变应付税额。') ?>
+        <lang>账单国家为欧盟时可选填写；仅做格式校验，不改变应付税额。</lang>
       </p>
     </div>
   </details>

@@ -214,16 +214,12 @@ class WorkerBootstrapWarmup implements ObserverInterface
             'Weline_Theme::theme/backend/partials/topbar/default.phtml',
             'Weline_Theme::theme/backend/partials/topnav/default.phtml',
             'Weline_Theme::theme/backend/partials/sidebar/left.phtml',
-            'Weline_Theme::theme/backend/partials/sidebar/default.phtml',
             'Weline_Theme::theme/backend/partials/right-sidebar/default.phtml',
             'Weline_Theme::theme/backend/partials/layout/main-content.phtml',
             'Weline_Theme::theme/backend/partials/layout/content.phtml',
-            'Weline_Theme::theme/backend/partials/scripts/default.phtml',
-            'Weline_Theme::theme/backend/partials/footer/default.phtml',
             'Weline_Theme::theme/backend/components/card.phtml',
             'Weline_Theme::theme/backend/components/table.phtml',
             'Weline_Theme::theme/backend/components/button.phtml',
-            'Weline_Theme::theme/backend/components/form-group.phtml',
         ] as $fileName) {
             $this->warmViewTemplate($template, $fileName);
             SchedulerSystem::yield();

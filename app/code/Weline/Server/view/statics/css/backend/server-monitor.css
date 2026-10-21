@@ -1,0 +1,106 @@
+/**
+ * Weline_Server 服务器监控页页面私有布局（仅本页使用）。
+ * 规则：只承载布局/尺寸/定位；只消费主题 Token；无 !important；统一在 @layer page 内。
+ */
+@layer page {
+    .server-monitor .stat-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--weline-space-12);
+        height: var(--weline-space-12);
+        border-radius: var(--weline-radius-md);
+        font-size: var(--weline-font-size-lg);
+    }
+
+    .server-monitor .process-status-card {
+        padding: var(--weline-space-4);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+    }
+
+    .server-monitor .process-status-card.running {
+        border-color: var(--weline-theme-success);
+        background: var(--weline-theme-success-surface);
+    }
+
+    .server-monitor .process-status-card.stopped {
+        border-color: var(--weline-theme-border-strong);
+        background: var(--weline-theme-surface-muted);
+    }
+
+    .server-monitor .worker-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+        gap: var(--weline-space-4);
+    }
+
+    .server-monitor .worker-card {
+        padding: var(--weline-space-3);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface);
+    }
+
+    .server-monitor .worker-card.running {
+        border-color: var(--weline-theme-success);
+    }
+
+    .server-monitor .worker-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-block-end: var(--weline-space-2);
+    }
+
+    .server-monitor .worker-id {
+        font-size: var(--weline-font-size-md);
+        font-weight: 650;
+    }
+
+    .server-monitor .worker-stats {
+        font-size: var(--weline-font-size-xs);
+    }
+
+    .server-monitor .stat-row {
+        display: flex;
+        justify-content: space-between;
+        padding-block: var(--weline-space-1);
+        border-block-end: 1px dashed var(--weline-theme-border);
+    }
+
+    .server-monitor .stat-row:last-child {
+        border-block-end: 0;
+    }
+
+    .server-monitor .stat-row .label {
+        color: var(--weline-theme-text-muted);
+    }
+
+    .server-monitor .stat-row .value {
+        font-family: var(--weline-font-mono);
+        font-weight: 600;
+    }
+
+    .server-monitor .attack-stat-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-block: var(--weline-space-2);
+        border-block-end: 1px dashed var(--weline-theme-border);
+    }
+
+    .server-monitor .attack-stat-row:last-child {
+        border-block-end: 0;
+    }
+
+    .server-monitor .attack-stat-row .value {
+        font-size: var(--weline-font-size-lg);
+        font-weight: 700;
+    }
+
+    .server-monitor .process-detail-table-memory {
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+}

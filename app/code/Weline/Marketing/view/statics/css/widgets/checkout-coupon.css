@@ -148,7 +148,7 @@
     line-height: 1.2;
     white-space: nowrap;
     cursor: pointer;
-    box-shadow: 0 var(--border-width-medium) var(--token-size-5px) var(--color-literal-rgba-213-217-217-0-5);
+    box-shadow: var(--weline-shadow-md);
 }
 
 .w-marketing-checkout-coupon__apply:hover {

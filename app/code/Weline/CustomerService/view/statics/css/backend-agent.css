@@ -3,7 +3,7 @@
  */
 .cs-agent-page {
     --cs-agent-border: var(--weline-theme-border, var(--color-border));
-    --cs-agent-surface: var(--weline-theme-surface, var(--color-surface, #fff));
+    --cs-agent-surface: var(--weline-theme-surface, var(--color-surface));
     --cs-agent-muted: var(--weline-theme-surface-muted, var(--color-surface-muted));
     --cs-agent-text: var(--weline-theme-text, var(--color-text));
     --cs-agent-text-muted: var(--weline-theme-text-muted, var(--color-text-muted));
@@ -20,12 +20,12 @@
 .cs-agent-page__table thead th {
     padding: var(--weline-space-3) var(--weline-space-4);
     background: var(--cs-agent-muted); color: var(--cs-agent-text-muted);
-    font-size: 0.75rem; font-weight: 650; letter-spacing: 0.02em;
-    text-align: left; white-space: nowrap; border-bottom: 1px solid var(--cs-agent-border);
+    font-size: var(--weline-font-size-xs); font-weight: 650; letter-spacing: var(--letter-spacing-wide);
+    text-align: left; white-space: nowrap; border-bottom: var(--border-width-thin) solid var(--cs-agent-border);
 }
 .cs-agent-page__table tbody td {
     padding: var(--weline-space-3) var(--weline-space-4);
-    border-bottom: 1px solid var(--cs-agent-border); vertical-align: middle;
+    border-bottom: var(--border-width-thin) solid var(--cs-agent-border); vertical-align: middle;
     background: var(--cs-agent-surface);
 }
 .cs-agent-page__table tbody tr:last-child td { border-bottom: 0; }
@@ -35,7 +35,7 @@
 .cs-agent-page__table thead th:last-child,
 .cs-agent-page__table tbody td.cs-agent-page__actions-cell {
     position: sticky; right: 0; z-index: 1;
-    box-shadow: -0.5rem 0 0.75rem color-mix(in srgb, var(--cs-agent-text) 6%, transparent);
+    box-shadow: var(--weline-shadow-lg);
 }
 .cs-agent-page__table thead th:last-child {
     background: var(--cs-agent-muted); z-index: 2;
@@ -77,7 +77,7 @@
     white-space: nowrap;
 }
 .cs-agent-page__action-text {
-    font-size: 0.75rem;
+    font-size: var(--weline-font-size-xs);
     font-weight: 600;
     line-height: 1;
 }
@@ -94,69 +94,69 @@
 .cs-agent-modal-overlay {
     position: fixed; inset: 0; z-index: 9999; display: flex;
     align-items: center; justify-content: center; padding: var(--weline-space-4);
-    background: color-mix(in srgb, var(--weline-theme-text, #000) 45%, transparent);
+    background: color-mix(in srgb, var(--weline-theme-text) 45%, transparent);
 }
 .cs-agent-modal {
     width: min(32rem, 100%); max-height: min(90vh, 48rem); overflow: auto;
-    border: 1px solid var(--cs-agent-border);
-    border-radius: var(--weline-radius-lg, 12px);
+    border: var(--border-width-thin) solid var(--cs-agent-border);
+    border-radius: var(--weline-radius-lg);
     background: var(--cs-agent-surface);
-    box-shadow: var(--weline-theme-shadow-md, var(--weline-shadow-md, 0 12px 40px color-mix(in srgb, var(--weline-theme-text, #000) 18%, transparent)));
+    box-shadow: var(--weline-theme-shadow-md, var(--weline-shadow-md, 0 12px 40px color-mix(in srgb, var(--weline-theme-text) 18%, transparent)));
 }
 .cs-agent-modal__header, .cs-agent-modal__footer {
     display: flex; align-items: center; gap: var(--weline-space-3);
     padding: var(--weline-space-4) var(--weline-space-5); border-color: var(--cs-agent-border);
 }
-.cs-agent-modal__header { justify-content: space-between; border-bottom: 1px solid var(--cs-agent-border); }
-.cs-agent-modal__header h3 { margin: 0; font-size: 1.05rem; }
+.cs-agent-modal__header { justify-content: space-between; border-bottom: var(--border-width-thin) solid var(--cs-agent-border); }
+.cs-agent-modal__header h3 { margin: 0; font-size: var(--font-size-base); }
 .cs-agent-modal__close {
     display: inline-grid; place-items: center; width: 2rem; height: 2rem; padding: 0; border: 0;
-    border-radius: var(--weline-radius-md, 8px); background: transparent;
+    border-radius: var(--weline-radius-md); background: transparent;
     color: var(--cs-agent-text-muted); cursor: pointer;
 }
 .cs-agent-modal__close:hover { background: var(--cs-agent-muted); color: var(--cs-agent-text); }
 .cs-agent-modal__body { display: grid; gap: var(--weline-space-4); padding: var(--weline-space-5); }
 .cs-agent-modal__footer {
-    justify-content: flex-end; border-top: 1px solid var(--cs-agent-border); background: var(--cs-agent-muted);
+    justify-content: flex-end; border-top: var(--border-width-thin) solid var(--cs-agent-border); background: var(--cs-agent-muted);
 }
 .cs-agent-modal .w-field__hint {
     display: block; margin-top: var(--weline-space-1);
-    color: var(--cs-agent-text-muted); font-size: 0.75rem;
+    color: var(--cs-agent-text-muted); font-size: var(--weline-font-size-xs);
 }
 .cs-agent-stats-modal {
     position: fixed; inset: 0; z-index: 9999; display: flex;
     align-items: center; justify-content: center; padding: var(--weline-space-4);
-    background: color-mix(in srgb, var(--weline-theme-text, #000) 45%, transparent);
+    background: color-mix(in srgb, var(--weline-theme-text) 45%, transparent);
 }
 .cs-agent-stats-modal .w-dialog__surface {
-    width: min(28rem, 100%); border: 1px solid var(--cs-agent-border);
-    border-radius: var(--weline-radius-lg, 12px); background: var(--cs-agent-surface);
-    box-shadow: var(--weline-theme-shadow-md, var(--weline-shadow-md, 0 12px 40px color-mix(in srgb, var(--weline-theme-text, #000) 18%, transparent)));
+    width: min(28rem, 100%); border: var(--border-width-thin) solid var(--cs-agent-border);
+    border-radius: var(--weline-radius-lg); background: var(--cs-agent-surface);
+    box-shadow: var(--weline-theme-shadow-md, var(--weline-shadow-md, 0 12px 40px color-mix(in srgb, var(--weline-theme-text) 18%, transparent)));
     overflow: hidden;
 }
 .cs-agent-stats-modal .w-dialog__header {
     display: flex; align-items: center; justify-content: space-between;
     gap: var(--weline-space-3); padding: var(--weline-space-4) var(--weline-space-5);
-    border-bottom: 1px solid var(--cs-agent-border);
+    border-bottom: var(--border-width-thin) solid var(--cs-agent-border);
 }
 .cs-agent-stats-modal .w-dialog__header h3 { margin: 0; }
 .cs-agent-stats-modal .w-dialog__body { display: grid; gap: var(--weline-space-4); padding: var(--weline-space-5); }
-.cs-agent-stats-modal .stat-detail-section h4 { margin: 0 0 var(--weline-space-2); color: var(--cs-agent-text); font-size: 0.9rem; }
-.cs-agent-stats-modal .stat-detail-section p { margin: var(--weline-space-1) 0; color: var(--cs-agent-text-muted); font-size: 0.875rem; }
+.cs-agent-stats-modal .stat-detail-section h4 { margin: 0 0 var(--weline-space-2); color: var(--cs-agent-text); font-size: var(--font-size-sm); }
+.cs-agent-stats-modal .stat-detail-section p { margin: var(--weline-space-1) 0; color: var(--cs-agent-text-muted); font-size: var(--weline-font-size-sm); }
 .cs-agent-stats-modal .close-btn {
     display: inline-grid; place-items: center; width: 2rem; height: 2rem; padding: 0; border: 0;
-    border-radius: var(--weline-radius-md, 8px); background: transparent;
-    color: var(--cs-agent-text-muted); cursor: pointer; font-size: 1.25rem; line-height: 1;
+    border-radius: var(--weline-radius-md); background: transparent;
+    color: var(--cs-agent-text-muted); cursor: pointer; font-size: var(--weline-font-size-xl); line-height: 1;
 }
 #cs-agent-toast-error {
     position: fixed; left: 50%; top: var(--weline-space-5); z-index: 10050; max-width: 92vw;
     padding: var(--weline-space-3) var(--weline-space-4);
-    border-radius: var(--weline-radius-md, 8px);
-    background: var(--weline-theme-danger, var(--color-danger, #b91c1c));
-    color: var(--weline-theme-on-danger, #fff);
-    box-shadow: var(--weline-theme-shadow-md, 0 8px 24px color-mix(in srgb, var(--weline-theme-text, #000) 15%, transparent));
+    border-radius: var(--weline-radius-md);
+    background: var(--weline-theme-danger, var(--color-danger));
+    color: var(--weline-theme-on-danger);
+    box-shadow: var(--weline-shadow-lg);
     white-space: pre-wrap; transform: translateX(-50%); opacity: 0; transition: opacity 0.15s ease-in-out;
 }
 @media (prefers-reduced-motion: reduce) {
-    .cs-agent-page *, #cs-agent-toast-error { transition: none !important; }
+    .cs-agent-page *, #cs-agent-toast-error { transition: none; }
 }

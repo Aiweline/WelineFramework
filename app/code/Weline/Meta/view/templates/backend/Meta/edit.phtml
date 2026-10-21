@@ -39,29 +39,7 @@ $defaultMetaJson = json_encode([
     ],
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 ?>
-<style>
-    .meta-edit .json-textarea {
-        font-family: "Fira Code", Monaco, Consolas, monospace;
-        min-height: 280px;
-        line-height: 1.55;
-        font-size: 13px;
-    }
-
-    .meta-edit .meta-key-box {
-        font-family: "Fira Code", Monaco, Consolas, monospace;
-        font-size: 12px;
-        word-break: break-all;
-    }
-
-    .meta-edit .w-field__error {
-        display: none;
-    }
-
-    .meta-edit .w-input:user-invalid + .w-field__error,
-    .meta-edit .w-textarea:user-invalid + .w-field__error {
-        display: block;
-    }
-</style>
+<css>Weline_Meta::css/backend/meta-edit.css</css>
 
 <div class="meta-edit">
     <div class="w-grid" style="--w-mb:var(--weline-space-4);">

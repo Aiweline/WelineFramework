@@ -1,0 +1,54 @@
+/* Weline CustomerService 后台页面私有布局/尺寸（Token-only，见后端主题开发标准 §6.2） */
+@layer page {
+    /* 会话详情：聊天记录气泡 */
+    .cs-chat__messages {
+        display: flex;
+        flex-direction: column;
+        gap: var(--weline-space-4);
+        max-block-size: calc(var(--weline-space-12) * 12);
+        overflow-y: auto;
+        padding: var(--weline-space-2);
+    }
+
+    .cs-chat__message {
+        display: flex;
+        flex-direction: column;
+        gap: var(--weline-space-2);
+        max-inline-size: 72%;
+        padding: var(--weline-space-3);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface-muted);
+    }
+
+    .cs-chat__message--customer {
+        align-self: flex-start;
+        border-color: var(--weline-theme-info);
+        background: var(--weline-theme-info-surface);
+    }
+
+    .cs-chat__message--agent {
+        align-self: flex-end;
+    }
+
+    .cs-chat__meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--weline-space-2);
+        color: var(--weline-theme-text-muted);
+        font-size: var(--weline-font-size-xs);
+    }
+
+    .cs-chat__content {
+        font-size: var(--weline-font-size-md);
+    }
+
+    .cs-chat__translated {
+        margin-block-start: var(--weline-space-2);
+        padding-block-start: var(--weline-space-2);
+        border-block-start: 1px dashed var(--weline-theme-border);
+        color: var(--weline-theme-text-muted);
+        font-size: var(--weline-font-size-sm);
+    }
+}

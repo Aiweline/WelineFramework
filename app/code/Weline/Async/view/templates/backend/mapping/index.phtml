@@ -8,28 +8,9 @@ $host = $this->getData('host');
 $mappings = $this->getData('mappings') ?? [];
 
 ?>
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0"><?= __('目录映射管理') ?></h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item">
-                                        <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
-                                    </li>
-                                    <li class="breadcrumb-item">
-                                        <a href="@backend-url{'async/backend/host'}"><?= __('同步主机管理') ?></a>
-                                    </li>
-                                    <li class="breadcrumb-item active"><?= __('目录映射') ?></li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <?php if ($host): ?>
-                    <div class="row mb-3">
-                        <div class="col-12">
+                    <div class="w-grid mb-3">
+                        <div style="--w-span:12;">
                             <div class="alert alert-info">
                                 <strong><?= __('主机') ?>:</strong> <?= htmlspecialchars($host->getData(SyncHost::fields_NAME)) ?> 
                                 (<?= htmlspecialchars($host->getData(SyncHost::fields_HOST)) ?>)
@@ -38,28 +19,28 @@ $mappings = $this->getData('mappings') ?? [];
                     </div>
                 <?php endif; ?>
 
-                <div class="row">
-                    <div class="col-12">
+                    <div class="w-grid">
+                    <div style="--w-span:12;">
                         <div class="card">
                             <div class="card-header">
-                                <div class="row align-items-center">
-                                    <div class="col-md-6">
+                                <div class="w-grid align-items-center">
+                                    <div style="--w-span-md:6;">
                                         <h5 class="card-title mb-0"><?= __('映射列表') ?></h5>
                                     </div>
-                                    <div class="col-md-6 text-end">
+                                    <div class="text-end" style="--w-span-md:6;">
                                         <button type="button" class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#mappingOffcanvas" onclick="loadMappingForm(<?= $host->getId() ?>, null)">
                                             <i class="mdi mdi-plus"></i> <?= __('新增映射') ?>
                                         </button>
                                     </div>
                                 </div>
                             </div>
-                            <div class="card-body">
+                            <div class="w-card__body">
                                 <?php if (empty($mappings)): ?>
                                     <div class="alert alert-info mb-0">
                                         <?= __('当前暂无目录映射，请点击"新增映射"按钮添加。') ?>
                                     </div>
                                 <?php else: ?>
-                                    <div class="table-responsive">
+                                    <div class="w-table-wrap">
                                         <table class="table table-bordered table-hover align-middle">
                                             <thead>
                                                 <tr>

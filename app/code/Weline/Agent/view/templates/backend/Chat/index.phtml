@@ -34,15 +34,14 @@ if ($defaultRoleCode === '' && !empty($roles)) {
 }
 ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-agent-admin.css)">
-<script src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
-<script src="@static(Weline_Theme::ui/pages/weline-agent-admin-chat.js)"></script>
+<script defer src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
+<script defer src="@static(Weline_Theme::ui/pages/weline-agent-admin-chat.js)"></script>
 
 <section class="w-agent-admin" id="agentChatConsole"
          data-default-role="<?= $escape($defaultRoleCode) ?>"
          data-session-view-base="@backend-url{'*/backend/session/view'}">
     <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
         <div class="w-agent-admin__intro">
-            <h1><w:icon name="robot" size="sm" /> <?= $escape(__('聊天控制台')) ?></h1>
             <p class="w-agent-admin__kicker"><?= $escape(__('选一个已启用角色，开始对话或验证技能是否可用。')) ?></p>
         </div>
         <div class="w-cluster" data-gap="sm">

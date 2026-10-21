@@ -1,0 +1,23 @@
+/* Weline Product 询价后台（token 消费，无字面量） */
+@layer page {
+    .w-quote-request__header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--weline-space-4);
+    }
+
+    .w-quote-request__mail-pick {
+        gap: var(--weline-space-1);
+        margin-block-end: var(--weline-space-1);
+    }
+
+    .w-quote-request__mail-account {
+        max-inline-size: 12rem;
+    }
+
+    .w-quote-request__mail-hint {
+        margin-block-end: var(--weline-space-1);
+    }
+}

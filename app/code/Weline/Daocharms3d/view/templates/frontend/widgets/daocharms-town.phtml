@@ -33,7 +33,7 @@ $cartTown = $this->getUrl('cart');
 $storefrontTown = $this->getFrontendUrl('');
 $bootstrapTown = $this->fetchTagSource('statics', 'Weline_Daocharms3d::js/bootstrap.js');
 ?>
-<section class="daocharms-town" weline-code="daocharms-town" data-daocharms-town data-storefront-url="<?= $escapeTown($storefrontTown) ?>" data-account-url="<?= $escapeTown($accountTown) ?>" data-cart-url="<?= $escapeTown($cartTown) ?>" data-checkout-url="<?= $escapeTown($checkoutTown) ?>" data-account-label="<lang>我的院落</lang>" data-cart-label="<lang>购物袋账房</lang>" data-checkout-label="<lang>结账柜台</lang>" data-weline-load="cart,api,account" data-request-error="<lang>请求暂未完成，请稍后重试。</lang>" data-fallback="<lang>三维场景暂不可用，您仍可使用下方完整商城。</lang>" data-travel-label="<lang>正在前往摊位</lang>" data-market-label="<lang>沿河市集</lang>" data-model-label="<lang>立体示意，以商品原图为准</lang>" data-empty-label="<lang>没有找到商品</lang>" data-enter-label="<lang>进入柜台</lang>" data-inspect-label="<lang>查看商品与规格</lang>">
+<section class="daocharms-town" weline-code="daocharms-town" data-daocharms-town data-storefront-url="<?= $escapeTown($storefrontTown) ?>" data-account-url="<?= $escapeTown($accountTown) ?>" data-cart-url="<?= $escapeTown($cartTown) ?>" data-checkout-url="<?= $escapeTown($checkoutTown) ?>" data-account-label="<lang>我的院落</lang>" data-cart-label="<lang>购物袋账房</lang>" data-checkout-label="<lang>结账柜台</lang>" data-weline-load="cart,api,account,daocharmsTown" data-request-error="<lang>请求暂未完成，请稍后重试。</lang>" data-fallback="<lang>三维场景暂不可用，您仍可使用下方完整商城。</lang>" data-travel-label="<lang>正在前往摊位</lang>" data-market-label="<lang>沿河市集</lang>" data-model-label="<lang>立体示意，以商品原图为准</lang>" data-empty-label="<lang>没有找到商品</lang>" data-enter-label="<lang>进入柜台</lang>" data-inspect-label="<lang>查看商品与规格</lang>">
 <header class="daocharms-town__toolbar">
 <h2><lang>道韵古镇</lang></h2>
 <form data-town-search><input class="w-input" name="q" aria-label="<lang>搜索镇内商品</lang>" placeholder="<lang>搜索镇内商品</lang>"><button class="w-button" type="submit"><lang>搜索</lang></button></form>
@@ -64,13 +64,3 @@ $bootstrapTown = $this->fetchTagSource('statics', 'Weline_Daocharms3d::js/bootst
 <?php endforeach; ?>
 </div></details>
 </section>
-
-<script data-no-extract="true">
-(function () {
-    const startTown = function () {
-        Weline.declare('daocharmsTown', {load: 'eager', path: <?= json_encode($bootstrapTown, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>});
-    };
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startTown, {once: true});
-    else startTown();
-}());
-</script>

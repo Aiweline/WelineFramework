@@ -28,7 +28,7 @@ foreach ($locals as $local) {
 }
 ?>
 <link rel="stylesheet" href="@static(Weline_I18n::css/backend-admin.css)">
-<script src="@static(Weline_I18n::js/backend-admin.js)"></script>
+<script src="@static(Weline_I18n::js/backend-admin.js)" defer></script>
 
 <div class="i18n-admin-page">
     <div class="w-grid">
@@ -47,7 +47,7 @@ foreach ($locals as $local) {
     </div>
 
     <div class="i18n-admin-shell">
-        <div class="w-card i18n-admin-card i18n-admin-hero">
+        <div class="w-card i18n-admin-hero">
             <div class="w-card__body w-stack" style="--w-gap:var(--weline-space-4);">
                 <div class="w-cluster" data-wrap="true" data-justify="between" data-align="start" style="--w-gap:var(--weline-space-4);">
                     <div class="i18n-admin-hero-copy">
@@ -84,7 +84,7 @@ foreach ($locals as $local) {
             </div>
         </div>
 
-        <div class="w-card i18n-admin-card">
+        <div class="w-card">
             <div class="w-card__body">
                 <div class="i18n-admin-note" style="--w-mb:var(--weline-space-6);">
                     <div class="fs-4 w-text" data-tone="info">i</div>
@@ -98,13 +98,13 @@ foreach ($locals as $local) {
                     <table class="w-table i18n-admin-table" data-w-vertical="middle" style="--w-mb:0;">
                         <thead>
                         <tr>
-                            <th style="width: 80px;"><?= __('排序') ?></th>
-                            <th style="width: 120px;"><?= __('语言代码') ?></th>
-                            <th style="width: 100px;"><?= __('国旗') ?></th>
+                            <th><?= __('排序') ?></th>
+                            <th><?= __('语言代码') ?></th>
+                            <th><?= __('国旗') ?></th>
                             <th><?= __('语言名') ?></th>
-                            <th style="width: 120px;"><?= __('是否禁用') ?></th>
-                            <th style="width: 120px;"><?= __('是否安装') ?></th>
-                            <th style="width: 180px;" class="w-text" data-align="center"><?= __('操作') ?></th>
+                            <th><?= __('是否禁用') ?></th>
+                            <th><?= __('是否安装') ?></th>
+                            <th class="w-text" data-align="center"><?= __('操作') ?></th>
                         </tr>
                         </thead>
                         <tbody>

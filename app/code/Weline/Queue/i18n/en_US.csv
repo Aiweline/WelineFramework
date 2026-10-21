@@ -446,6 +446,7 @@ ID,ID
 "Queue Scope 映射工具：help/preflight/quarantine/verify（禁止 apply；信封 cutover 归 TASK-MIG-P1A）","Queue Scope mapping tool: help/preflight/quarantine/verify (apply disabled; envelope cutover belongs to TASK-MIG-P1A)"
 "队列并发数必须是大于 0 的整数。","The number of queue concurrency must be an integer greater than 0."
 "队列并发数已更新为 %{1}","Queue concurrency number has been updated to %{1}"
+"E2E 发布门禁正在运行，队列消费本轮跳过。","E2E 发布门禁正在运行，队列消费本轮跳过。"
 请输入队列ID。,"Please enter the queue ID."
 "Queue Worker 启动身份参数无效，未读取或执行队列。","The Queue Worker startup identity parameter is invalid and the queue is not read or executed."
 "Queue 派发令牌无效或已过期，Worker 不执行任何消费者。","The Queue dispatch token is invalid or expired, and the Worker does not execute any consumers."

@@ -233,7 +233,7 @@
 .wc-theme_widget_newsletter_popup.is-preview {
     position: relative !important;
     display: block !important;
-    background: transparent !important;
+    background: transparent;
     height: auto;
 }
 
@@ -250,10 +250,10 @@
     top: auto !important;
     left: auto !important;
     transform: none !important;
-    opacity: 1 !important;
+    opacity: 1;
     width: min(var(--token-size-21rem), 100%) !important;
     max-width: min(var(--token-size-21rem), 100%) !important;
-    margin: 0 auto !important;
+    margin: 0 auto;
 }
 
 .wc-theme_widget_newsletter_popup.editor-preview-mode .popup-close,
@@ -265,9 +265,9 @@
 .wc-theme_widget_newsletter_popup.editor-preview-mode .letter-shell__form,
 .widget-preview-canvas .wc-theme_widget_newsletter_popup .letter-shell__form,
 .wc-theme_widget_newsletter_popup.is-preview .letter-shell__form {
-    opacity: 1 !important;
+    opacity: 1;
     transform: none !important;
-    transition: none !important;
+    transition: none;
 }
 
 @media (max-width: 480px) {

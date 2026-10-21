@@ -5,7 +5,7 @@ $totalEarnings = (float)($total_earnings ?? 0);
 $escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
 <div class="w-container" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
-    <h1 class="h4" style="--w-mb:var(--weline-space-1);"><?= __('收益管理') ?></h1>
+    <h2 class="h4" style="--w-mb:var(--weline-space-1);"><?= __('收益管理') ?></h2>
     <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-4);"><?= __('按开发者汇总余额与累计收益。') ?></div>
     <div class="w-grid" style="--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
         <div style="--w-span:12;--w-span-md:6;">

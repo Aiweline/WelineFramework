@@ -1,3 +1,4 @@
+<css>Weline_Cdn::css/backend/cdn-admin.css</css>
 <?php
 /**
  * CDN 账户表单字段（列表抽屉 / 整页编辑共用，无 iframe）
@@ -185,7 +186,7 @@ $accountId = $isEdit ? (int)$account->getData('account_id') : 0;
                 class="w-stack"
                 data-testid="cdn-account-connection-test"
                 <?= $isEdit ? '' : 'hidden' ?>
-                style="--w-gap:var(--weline-space-3);padding:var(--weline-space-4);border:1px dashed var(--weline-theme-border);border-radius:var(--weline-radius-md);background:var(--weline-theme-surface-muted);"
+                class="cdn-form-panel"
             >
                 <div class="w-stack" style="--w-gap:var(--weline-space-1);">
                     <strong class="w-text" data-weight="strong"><?= __('连通性测试（不会保存）') ?></strong>
@@ -196,7 +197,7 @@ $accountId = $isEdit ? (int)$account->getData('account_id') : 0;
                 <div class="w-field" style="--w-mb:0;" data-floating-label="0">
                     <label class="w-field__label" for="connectionZoneId"><?= __('临时 Zone ID') ?></label>
                     <div class="w-field__control w-cluster" data-align="center" data-wrap="true" style="--w-gap:var(--weline-space-2);">
-                        <input type="text" id="connectionZoneId" class="w-input" autocomplete="off" placeholder="<?= $escapeAttr(__('粘贴 Zone ID 后点测试')) ?>" style="flex:1 1 12rem;min-inline-size:8rem;">
+                        <input type="text" id="connectionZoneId" class="w-input" autocomplete="off" placeholder="<?= $escapeAttr(__('粘贴 Zone ID 后点测试')) ?>" class="cdn-inline-field">
                         <button type="button" id="testConnectionButton" class="w-button" data-tone="primary" data-variant="outline" data-size="sm" data-account-id="<?= $accountId ?>"><?= __('测试连接') ?></button>
                     </div>
                 </div>

@@ -27,13 +27,13 @@
 模块数,"Number of Modules"
 分类数,"Number of Categories"
 快速搜索,"Quick Search"
-输入组件名、模块名、分类...,"Enter component name, module name, category..."
 模块筛选,"Filter by Module"
 全部模块,"All Modules"
 分类筛选,"Filter by Category"
 全部分类,"All Categories"
 应用筛选,"Apply Filter"
 重置,Reset
+组件列表,组件列表
 共找到,Found
 个组件,components
 暂无组件信息,"No component information available"
@@ -43,13 +43,14 @@
 分类,Category
 命名空间,Namespace
 操作,Actions
-其他,Other
-查看详情,"View Details"
 详情,Details
 加载详情失败,"Failed to load details"
 暂无文档,"No documentation available"
 完整类名,"Full Class Name"
 使用文档,"Usage Documentation"
+其他,Other
+输入组件名、模块名、分类...,"Enter component name, module name, category..."
+查看详情,"View Details"
 搜索组件：快速构建搜索框,"Search Component: Quickly build a search box"
 回车搜索,"Press Enter to search"
 OffCanvas组件：侧边栏弹出窗,"OffCanvas Component: Sidebar popup window"

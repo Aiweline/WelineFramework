@@ -35,7 +35,7 @@ $classes = array_values(array_filter(
         ?>
     </div>
     <?php if (($meta['showFooter'] ?? false) !== false): ?>
-        <w:block class="Weline\Theme\Block\Partials" area="backend" type="footer" default-option="default"/>
+        <w:block class="Weline\Theme\Block\Partials" area="backend" type="footer" default-option="standard"/>
     <?php endif; ?>
     <w:hook>Weline_Theme::backend::layouts::fullscreen::body-end</w:hook>
     <w:hook>Weline_Theme::backend::layouts::base::body-end</w:hook>

@@ -19,6 +19,7 @@ $detailUrl = $this->getBackendUrlPath('visitor/backend/pixel-error-monitor/detai
 $disposeUrl = $this->getBackendUrlPath('visitor/backend/pixel-error-monitor/postDispose');
 $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
 ?>
+<css>Weline_Visitor::css/backend/pixel-error-monitor.css</css>
 <div class="weline-pixel-error-monitor" style="--w-p:var(--weline-space-4);">
     <?php if ($loadError !== ''): ?>
         <div class="w-alert" data-tone="warning" style="--w-mb:var(--weline-space-4);">
@@ -130,7 +131,7 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
                             default => 'var(--weline-theme-danger)',
                         };
                         ?>
-                        <tr style="box-shadow: inset 3px 0 0 <?= $h($accent) ?>;">
+                        <tr style="--event-accent:<?= $h($accent) ?>;" data-event-accent>
                             <td><?= $h((string)($data['created_at'] ?? '')) ?></td>
                             <td>
                                 <span class="w-badge" data-tone="<?= $h($severityTone) ?>" data-size="sm">
@@ -312,10 +313,10 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
             }).join('') + '</div>'
             : '<p class="w-text" data-tone="muted" data-size="sm">' + escapeHtml(i18n.none) + '</p>';
         var formHtml = Object.keys(form).length
-            ? '<pre class="w-text" data-size="sm" style="white-space:pre-wrap;margin:0;">' + escapeHtml(JSON.stringify(form, null, 2)) + '</pre>'
+            ? '<pre class="w-text data-size-sm pixel-error-pre">' + escapeHtml(JSON.stringify(form, null, 2)) + '</pre>'
             : '<p class="w-text" data-tone="muted" data-size="sm">' + escapeHtml(i18n.none) + '</p>';
         var stackHtml = data.error_stack
-            ? '<pre class="w-text" data-size="sm" style="white-space:pre-wrap;overflow:auto;max-height:240px;margin:0;">' + escapeHtml(data.error_stack) + '</pre>'
+            ? '<pre class="w-text data-size-sm pixel-error-pre pixel-error-pre--scroll">' + escapeHtml(data.error_stack) + '</pre>'
             : '<p class="w-text" data-tone="muted" data-size="sm">' + escapeHtml(i18n.none) + '</p>';
         var pageShort = shortPath(data.page_url);
         var pageHtml = data.page_url

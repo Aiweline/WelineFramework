@@ -3,7 +3,7 @@
  * Challenge HTML fetched via AJAX must not rely on inline <style> (replaceAnchor drops siblings).
  */
 .weline-captcha {
-    margin-block: var(--weline-space-4, 1rem);
+    margin-block: var(--weline-space-4);
     max-width: 100%;
 }
 
@@ -19,7 +19,7 @@
     translate: none;
     display: block;
     max-inline-size: none;
-    margin: 0 0 var(--weline-space-2, 0.5rem);
+    margin: 0 0 var(--weline-space-2);
     padding: 0;
     overflow: visible;
     background: transparent;
@@ -33,7 +33,7 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: var(--weline-space-3, 0.75rem);
+    gap: var(--weline-space-3);
     width: fit-content;
     max-width: 100%;
 }
@@ -44,7 +44,7 @@
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--weline-space-3, 0.75rem);
+    gap: var(--weline-space-3);
     width: auto;
     max-width: 100%;
     min-width: 0;
@@ -57,14 +57,14 @@
     width: auto;
     min-width: 0;
     max-width: 100%;
-    height: var(--weline-control-height, 2.5rem);
+    height: var(--weline-control-height);
     aspect-ratio: 168 / 40;
     object-fit: contain;
     object-position: left center;
-    border: 1px solid var(--weline-theme-border, #cbd5e1);
-    border-radius: var(--weline-radius-md, 0.5rem);
-    background: var(--weline-theme-surface, #f8fafc);
-    box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 28%, transparent);
+    border: var(--border-width-thin) solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-md);
+    background: var(--weline-theme-surface);
+    box-shadow: var(--weline-shadow-lg);
 }
 
 .weline-captcha-refresh {
@@ -89,9 +89,9 @@
     max-width: 100% !important;
     min-width: 0;
     height: 100%;
-    min-height: var(--weline-control-height, 2.5rem);
+    min-height: var(--weline-control-height);
     box-sizing: border-box;
-    letter-spacing: 0.28em;
+    letter-spacing: var(--spacing-xs);
     text-align: center;
     text-transform: uppercase;
     font-weight: 650;
@@ -99,20 +99,20 @@
 
 /* Google Enterprise invisible attribution / trust chip */
 .weline-captcha-google {
-    margin-block: var(--weline-space-3, 0.75rem);
+    margin-block: var(--weline-space-3);
 }
 
 .weline-captcha-google-trust {
     display: inline-flex;
     align-items: flex-start;
-    gap: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
     max-width: 100%;
-    padding: var(--weline-space-2, 0.5rem) var(--weline-space-3, 0.75rem);
-    border: 1px solid var(--weline-theme-border, #e2e8f0);
-    border-radius: var(--weline-radius-md, 0.5rem);
-    background: var(--weline-theme-surface, #fff);
+    padding: var(--weline-space-2) var(--weline-space-3);
+    border: var(--border-width-thin) solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-md);
+    background: var(--weline-theme-surface);
     box-shadow: var(--weline-shadow-xs, 0 1px 2px color-mix(in srgb, #0f172a 6%, transparent));
-    color: var(--weline-theme-text-muted, #64748b);
+    color: var(--weline-theme-text-muted);
 }
 
 .weline-captcha-google-trust[hidden],
@@ -127,9 +127,9 @@
     justify-content: center;
     width: 1.75rem;
     height: 1.75rem;
-    border-radius: 999px;
-    background: var(--weline-theme-surface-raised, #f8fafc);
-    border: 1px solid var(--weline-theme-border, #e2e8f0);
+    border-radius: var(--radius-full);
+    background: var(--weline-theme-surface-raised);
+    border: var(--border-width-thin) solid var(--weline-theme-border);
 }
 
 .weline-captcha-google-trust__logo {
@@ -139,32 +139,32 @@
 .weline-captcha-google-trust__body {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
+    gap: var(--spacing-0_5);
     min-width: 0;
     line-height: 1.35;
 }
 
 .weline-captcha-google-trust__brand {
-    font-size: 0.75rem;
+    font-size: var(--weline-font-size-xs);
     font-weight: 650;
-    letter-spacing: 0.01em;
-    color: var(--weline-theme-text, #0f172a);
+    letter-spacing: var(--letter-spacing-wide);
+    color: var(--weline-theme-text);
 }
 
 .weline-captcha-google-trust__notice {
-    font-size: 0.72rem;
+    font-size: var(--font-size-xs);
     color: inherit;
 }
 
 .weline-captcha-google-trust__links {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    font-size: 0.68rem;
+    gap: var(--spacing-1_5);
+    font-size: var(--font-size-xs);
 }
 
 .weline-captcha-google-trust__links a {
-    color: var(--weline-theme-link, #2563eb);
+    color: var(--weline-theme-link);
     text-decoration: none;
 }
 

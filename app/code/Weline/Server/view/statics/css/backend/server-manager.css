@@ -1,0 +1,79 @@
+/**
+ * Weline_Server 服务器管理页页面私有布局（统计块、动作组、Session 预览）。
+ * 只承载布局/尺寸；外观交给默认主题组件与 Token。
+ */
+@layer page {
+    .server-manager .stat-card {
+        padding: var(--weline-space-4);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface);
+        text-align: center;
+    }
+
+    .server-manager .stat-value {
+        font-size: var(--weline-font-size-xl);
+        font-weight: 700;
+    }
+
+    .server-manager .stat-label {
+        color: var(--weline-theme-text-muted);
+        font-size: var(--weline-font-size-sm);
+    }
+
+    .server-manager .optimization-card {
+        padding: var(--weline-space-4);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+    }
+
+    .server-manager .server-action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--weline-space-1);
+        min-width: 0;
+        padding-inline: var(--weline-space-2);
+        white-space: nowrap;
+    }
+
+    .server-manager .server-action-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--weline-space-1);
+        min-inline-size: 16rem;
+    }
+
+    .server-manager .server-action-label {
+        font-size: var(--weline-font-size-sm);
+        line-height: 1;
+    }
+
+    .server-manager .weline-session-preview summary {
+        cursor: pointer;
+    }
+
+    .server-manager .weline-session-preview-cell {
+        max-inline-size: 20rem;
+        min-inline-size: 11rem;
+    }
+
+    .server-manager .sm-code-truncate {
+        max-inline-size: 20rem;
+    }
+
+    .server-manager .sm-session-id {
+        max-inline-size: 9rem;
+    }
+
+    .server-manager .sm-preview-box {
+        max-inline-size: 28rem;
+        max-block-size: 12.5rem;
+        overflow-y: auto;
+    }
+
+    .server-manager .sm-json {
+        max-inline-size: 36rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+}

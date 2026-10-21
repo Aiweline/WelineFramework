@@ -11,7 +11,7 @@ $search = trim((string)($this->getData('search') ?? ''));
             <w:icon name="folder" size="lg" />
         </div>
         <div class="w-eav-manager-page__hero-copy">
-            <h1><lang>属性组</lang></h1>
+            <h2 class="w-text" data-weight="strong" data-size="lg" style="--w-mb:var(--weline-space-1);"><lang>属性组</lang></h2>
             <p><lang>将属性归组，便于在属性集内组织与管理</lang></p>
         </div>
         <nav class="w-cluster" aria-label="@lang{面包屑}">
@@ -33,15 +33,15 @@ $search = trim((string)($this->getData('search') ?? ''));
             </div>
         </div>
         <div class="w-card__body w-stack" data-gap="md">
-            <div class="w-cluster" style="justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:1rem;">
-                <form class="w-cluster" method="get" action="@backend-url('*/backend/attribute/group')" style="flex:1 1 18rem;align-items:flex-end;flex-wrap:wrap;gap:0.75rem;">
-                    <label class="w-field" style="flex:1 1 14rem;min-width:12rem;">
+            <div class="w-cluster" data-justify="between" data-align="end">
+                <form class="w-cluster" method="get" action="@backend-url('*/backend/attribute/group')" data-align="end">
+                    <label class="w-field">
                         <span class="w-field__label"><lang>关键词</lang></span>
                         <input class="w-input" type="search" name="search" value="<?= $escape($search) ?>"
                                placeholder="@lang{请输入属性组名称、代码或实体关键词}"
                                maxlength="200" autocomplete="off">
                     </label>
-                    <div class="w-cluster" style="gap:0.5rem;">
+                    <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
                         <button class="w-button" type="submit" data-tone="primary">
                             <w:icon name="search" size="sm" /> <lang>搜索</lang>
                         </button>
@@ -72,8 +72,8 @@ $search = trim((string)($this->getData('search') ?? ''));
                 </div>
             </div>
 
-            <div class="table-responsive mb-0" data-pattern="priority-columns">
-                <table class="table table-striped table-bordered w-table" id="eav-attribute-group-table">
+            <div class="w-table-wrap" data-pattern="priority-columns">
+                <table class="w-table" id="eav-attribute-group-table">
                     <thead>
                     <tr>
                         <th data-priority="1"><lang>ID</lang></th>
@@ -110,7 +110,7 @@ $search = trim((string)($this->getData('search') ?? ''));
                             <td class="co-name">{{group.create_time}}</td>
                             <td class="co-name">{{group.update_time}}</td>
                             <td class="co-name">
-                                <div class="w-cluster" style="gap:0.5rem;">
+                                <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
                                     <block class="Weline\Component\Block\OffCanvas"
                                            template="Weline_Component::off-canvas.phtml"
                                            cache="0"
@@ -139,7 +139,7 @@ $search = trim((string)($this->getData('search') ?? ''));
                     </tbody>
                 </table>
                 <empty name="groups">
-                    <div class="w-stack" data-gap="sm" style="padding:2rem 1rem;text-align:center;">
+                    <div class="w-empty">
                         <w:icon name="folder" size="lg" />
                         <strong><lang>暂无属性组</lang></strong>
                         <p class="w-text" data-tone="muted"><lang>可点击「添加组」创建，或先在属性集中组织结构。</lang></p>

@@ -11,23 +11,18 @@ declare(strict_types=1);
 
 namespace Weline\Component\Controller\Backend;
 
-use Weline\Admin\Api\Controller\BaseController;
 use Weline\Component\Service\ComponentScanner;
+use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 组件库控制器
+ *
+ * 后端模板标准：使用标准 BackendController 布局（默认 default.default），
+ * 不再用 fetchBase 的旧 page-layout 壳（缺失 theme-head CSS）。
  */
-class Components extends BaseController
+class Components extends BackendController
 {
-    /**
-     * 重写 fetch 方法，使用 BaseController 的布局包装
-     */
-    public function fetch(string $fileName = '', array $data = []): string
-    {
-        return $this->fetchBase($fileName, $data);
-    }
-    
     /**
      * 组件库首页
      */

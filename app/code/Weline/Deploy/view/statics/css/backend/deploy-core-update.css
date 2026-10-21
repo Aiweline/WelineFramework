@@ -1,0 +1,7 @@
+/**
+ * Weline_Deploy 后台页面私有布局（CoreUpdate/index）。
+ * 只承载页面私有布局/尺寸/定位；只消费主题 Token；无 !important；统一在 @layer page 内。
+ */
+@layer page {
+.weline-core-update .wcu-alert { background: var(--backend-color-bg-secondary); border: 1px solid var(--backend-color-border); color: var(--backend-color-text); } .weline-core-update .wcu-output { background: var(--backend-color-bg-tertiary); color: var(--backend-color-text); border: 1px solid var(--backend-color-border); border-radius: .375rem; padding: 1rem; max-height: 420px; overflow: auto; white-space: pre-wrap; font-family: var(--bs-font-monospace); font-size: .85rem; }
+}

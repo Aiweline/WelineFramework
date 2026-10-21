@@ -55,7 +55,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
 $isEdit = !empty($roleData['role_id']);
 ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-agent-admin.css)">
-<script src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
+<script defer src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
 
 <section class="w-agent-admin">
     <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
@@ -170,7 +170,7 @@ $isEdit = !empty($roleData['role_id']);
                         <?php if (!empty($guideSteps)): ?>
                         <div class="w-stack" data-gap="xs">
                             <strong><?= $escape(__('建议步骤')) ?></strong>
-                            <ol class="w-text" data-tone="muted" style="margin:0;padding-inline-start:1.25rem;">
+                            <ol class="w-text" data-tone="muted" style="margin:0;padding-inline-start:var(--weline-space-6);">
                                 <?php foreach ($guideSteps as $step): ?>
                                     <li><?= $escape((string)__((string)$step)) ?></li>
                                 <?php endforeach; ?>

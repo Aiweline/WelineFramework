@@ -47,10 +47,10 @@ $escape = static fn (mixed $value): string => htmlspecialchars((string) $value, 
                     </div>
                 <?php endif; ?>
 
-                <ol class="w-text" style="--w-mb:var(--weline-space-4); padding-left:1.25rem;">
+                <ol class="w-text payment-paypal-setup__steps" style="--w-mb:var(--weline-space-4);">
                     <li style="--w-mb:var(--weline-space-2);">
                         <lang>在同一 Default Application（Sandbox）页向下找到 Features → Add-on services →「Log in with PayPal」：勾选后点 Manage / Advanced Settings，在 Return URL 中只登记下面这一条支付模块统一回调（不要填页面底部的 Sandbox Webhooks；也不要登记多条 paypal/return 或后台 callback）。</lang>
-                        <ul style="margin-top:var(--weline-space-2); padding-left:1.1rem;">
+                        <ul class="payment-paypal-setup__steps-sub" style="--w-mt:var(--weline-space-2);">
                             <?php foreach ($redirect_uris as $uri): ?>
                                 <?php if ($uri === '' || str_contains((string) $uri, 'localhost')) {
                                     continue;

@@ -12,7 +12,7 @@ $escape = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT
 <div class="w-container" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">
     <div class="w-toolbar" style="--w-mb:var(--weline-space-4);">
         <div>
-            <h1 class="h4" style="--w-mb:var(--weline-space-1);"><?= __('新建模块') ?></h1>
+            <h2 class="h4" style="--w-mb:var(--weline-space-1);"><?= __('新建模块') ?></h2>
             <div class="w-text" data-tone="muted" data-size="sm"><?= __('创建草稿后可在列表中继续完善版本与定价。') ?></div>
         </div>
         <a class="w-button" href="<?= $escape($listUrl) ?>" data-tone="neutral" data-variant="outline" data-size="sm"><?= __('返回列表') ?></a>

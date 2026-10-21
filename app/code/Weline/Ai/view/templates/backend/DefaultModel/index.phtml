@@ -30,15 +30,12 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-ai-default-model.css)">
 
 <section class="w-ai-default" data-ai-default-model>
-    <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-        <div class="w-stack" data-gap="sm">
-            <h1><w:icon name="settings" size="sm" /> <?= $escape(__('默认模型管理')) ?></h1>
-            <p class="w-text" data-tone="muted"><?= $escape(__('为每种 AI 服务能力选择系统默认模型')) ?></p>
-        </div>
+    <div class="w-cluster" data-wrap="true" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-4);">
+        <p class="w-text" data-tone="muted" style="--w-mb:0;"><?= $escape(__('为每种 AI 服务能力选择系统默认模型')) ?></p>
         <button type="button" class="w-button" data-ai-default-action="init">
             <w:icon name="refresh" size="sm" /> <?= $escape(__('初始化默认配置')) ?>
         </button>
-    </header>
+    </div>
 
     <div class="w-alert" data-tone="info">
         <w:icon name="info" size="sm" />

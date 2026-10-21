@@ -1,3 +1,4 @@
+<css>Weline_B2B::css/backend/b2b-admin.css</css>
 <?php
 /** @var \Weline\Framework\View\Template $this */
 $selectedScope = (string)($this->getData('selected_scope') ?? $this->getData('target_scope') ?? 'default.default.default');
@@ -17,13 +18,13 @@ if ($scopeKind !== 'global') {
 }
 $globalHint = (string)__('Global 表示全部站点；选择具体网站 / 店铺 / 渠道后本页列表按范围过滤。');
 ?>
-<div class="w-cluster" data-align="end" data-justify="between" style="--w-gap:var(--weline-space-3);--w-flex:1;" data-testid="b2b-work-scope-toolbar">
-    <div class="w-stack" style="--w-gap:var(--weline-space-1);--w-flex:1;">
+<div class="w-cluster" data-align="end" data-justify="between" style="--w-gap:var(--weline-space-3);" data-testid="b2b-work-scope-toolbar">
+    <div class="w-stack" style="--w-gap:var(--weline-space-1);">
         <p class="w-text" data-tone="muted" data-size="xs" style="--w-m:0;" data-testid="b2b-work-scope-meta">
             <?= __('当前：%{1}', [\implode(' · ', $metaParts)]) ?>
         </p>
     </div>
-    <div class="w-field" style="--w-min-inline-size:16rem;--w-max-inline-size:24rem;--w-mb:0;">
+    <div class="w-field b2b-scope-toolbar__field" style="--w-mb:0;">
         <label class="w-field__label" for="b2b-work-scope" style="--w-mb:0;"><?= __('作用范围') ?></label>
         <div class="w-field__control">
             <w:scope

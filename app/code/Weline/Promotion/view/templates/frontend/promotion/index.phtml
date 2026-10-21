@@ -24,7 +24,7 @@ $heroCtaUrl = $pageType === 'index'
 
 <div class="w-promotion-page weline-product-card-shelf" data-testid="storefront-promotion-page" data-page-type="<?= $esc($pageType) ?>">
     <?= ProductCardRenderer::emitStylesheetLinkOnce() ?>
-    <nav class="w-promotion-page__nav" aria-label="<?= $esc(__('活动中心')) ?>" weline-code="promotion.page.nav">
+    <nav class="w-promotion-page__nav" aria-label="@lang('活动中心')" weline-code="promotion.page.nav">
         <?php foreach ($navTabs as $tab): ?>
             <?php
             $tabSlug = (string)($tab['active_key'] ?? $tab['slug'] ?? '');
@@ -43,15 +43,15 @@ $heroCtaUrl = $pageType === 'index'
         <div class="w-promotion-page__hero-inner">
             <h1 class="w-promotion-page__brand"><?= $esc($pageTitle) ?></h1>
             <p class="w-promotion-page__lede"><?= $esc($heroLede) ?></p>
-            <a class="w-promotion-page__cta" href="<?= $esc($heroCtaUrl) ?>"><?= __('浏览活动商品') ?></a>
-            <p class="w-promotion-page__meta"><?= __('匹配商品') ?> · <?= $total ?></p>
+            <a class="w-promotion-page__cta" href="<?= $esc($heroCtaUrl) ?>"><lang>浏览活动商品</lang></a>
+            <p class="w-promotion-page__meta"><lang>匹配商品</lang> · <?= $total ?></p>
         </div>
     </section>
 
     <?php if ($promotions !== []): ?>
         <section class="w-promotion-page__section" weline-code="promotion.page.entries" aria-labelledby="promotion-entries-title">
             <div class="w-promotion-page__section-head">
-                <h2 class="w-promotion-page__section-title" id="promotion-entries-title"><?= __('活动入口') ?></h2>
+                <h2 class="w-promotion-page__section-title" id="promotion-entries-title"><lang>活动入口</lang></h2>
             </div>
             <div class="w-promotion-page__entries">
                 <?php foreach ($promotions as $promotion): ?>
@@ -69,8 +69,8 @@ $heroCtaUrl = $pageType === 'index'
 
     <section class="w-promotion-page__section" id="promotion-products" weline-code="promotion.page.products" aria-labelledby="promotion-products-title">
         <div class="w-promotion-page__section-head">
-            <h2 class="w-promotion-page__section-title" id="promotion-products-title"><?= __('活动商品') ?></h2>
-            <p class="w-promotion-page__section-note"><?= __('货架展示真实可售商品成交价，不虚构折扣。') ?></p>
+            <h2 class="w-promotion-page__section-title" id="promotion-products-title"><lang>活动商品</lang></h2>
+            <p class="w-promotion-page__section-note"><lang>货架展示真实可售商品成交价，不虚构折扣。</lang></p>
         </div>
         <w:hook name="Weline_Promotion::frontend::layouts::promotion::page-before"/>
         <?php if ($items !== []): ?>
@@ -106,9 +106,9 @@ $heroCtaUrl = $pageType === 'index'
             </div>
         <?php else: ?>
             <div class="w-promotion-page__empty">
-                <h3 class="w-promotion-page__empty-title"><?= __('暂无活动商品') ?></h3>
-                <p class="w-promotion-page__empty-text"><?= __('当前视图没有可展示商品，请稍后再试或从商品列表继续购物。') ?></p>
-                <a href="@url{'products'}" class="w-promotion-page__cta"><?= __('浏览商品') ?></a>
+                <h3 class="w-promotion-page__empty-title"><lang>暂无活动商品</lang></h3>
+                <p class="w-promotion-page__empty-text"><lang>当前视图没有可展示商品，请稍后再试或从商品列表继续购物。</lang></p>
+                <a href="@url{'products'}" class="w-promotion-page__cta"><lang>浏览商品</lang></a>
             </div>
         <?php endif; ?>
         <w:hook name="Weline_Promotion::frontend::layouts::promotion::page-after"/>

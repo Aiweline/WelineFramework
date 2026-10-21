@@ -1,0 +1,753 @@
+/**
+ * Weline_DbManager 后台页面私有布局（WlsDbManager/index）。
+ * 只承载页面私有布局/尺寸/定位；只消费主题 Token；无 !important；统一在 @layer page 内。
+ */
+@layer page {
+.wls-db-manager-shell {
+        --wdb-bg: var(--weline-theme-surface-muted);
+        --wdb-panel: var(--weline-theme-surface);
+        --wdb-panel-soft: var(--weline-theme-surface-muted);
+        --wdb-text: var(--weline-theme-text);
+        --wdb-muted: var(--weline-theme-text-muted);
+        --wdb-border: var(--weline-theme-surface);
+        --wdb-primary: var(--weline-theme-primary);
+        --wdb-primary-strong: var(--weline-theme-text-muted);
+        --wdb-success: var(--weline-theme-text-muted);
+        --wdb-warning: var(--weline-theme-text-muted);
+        --wdb-danger: var(--weline-theme-text-muted);
+        --wdb-shadow: 0 12px 28px var(--weline-theme-text-muted);
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 248px minmax(0, 1fr);
+        background: var(--wdb-bg);
+        color: var(--wdb-text);
+        font-size: 14px;
+    }
+    .wls-db-manager-shell.is-embedded {
+        min-height: auto;
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .wls-db-manager-shell.is-embedded .wdb-sidebar {
+        display: none;
+    }
+    .wls-db-manager-shell.is-embedded .wdb-main {
+        min-height: auto;
+        padding: 0;
+    }
+    .wls-db-manager-shell.is-embedded .wdb-eyebrow,
+    .wls-db-manager-shell.is-embedded .wdb-actions {
+        display: none;
+    }
+    body:has(.wls-db-manager-shell) {
+        margin: 0;
+        background: var(--weline-theme-surface);
+        font-size: 0;
+    }
+    body:has(.wls-db-manager-shell[data-theme="light"]) {
+        background: var(--weline-theme-surface-muted);
+    }
+    body[data-theme="dark"]:has(.wls-db-manager-shell),
+    body[data-sidebar="dark"]:has(.wls-db-manager-shell),
+    body[data-weline-topbar="dark"]:has(.wls-db-manager-shell),
+    html[data-theme="dark"] body:has(.wls-db-manager-shell),
+    html[data-theme="dark"] body:has(.wls-db-manager-shell),
+    body:has(.wls-db-manager-shell[data-theme="dark"]) {
+        background: var(--weline-theme-surface);
+    }
+    .wls-db-manager-fullscreen,
+    .wls-db-manager-fullscreen .backend-main-content {
+        background: var(--wdb-bg);
+    }
+    body[data-theme="dark"] .wls-db-manager-shell,
+    body[data-sidebar="dark"] .wls-db-manager-shell,
+    body[data-weline-topbar="dark"] .wls-db-manager-shell,
+    html[data-theme="dark"] .wls-db-manager-shell,
+    html[data-theme="dark"] .wls-db-manager-shell,
+    .wls-db-manager-shell[data-theme="dark"] {
+        --wdb-bg: var(--weline-theme-surface);
+        --wdb-panel: var(--weline-theme-surface-muted);
+        --wdb-panel-soft: var(--weline-theme-surface-muted);
+        --wdb-text: var(--weline-theme-surface-muted);
+        --wdb-muted: var(--weline-theme-text-muted);
+        --wdb-border: var(--weline-theme-text);
+        --wdb-primary: var(--weline-theme-primary);
+        --wdb-primary-strong: var(--weline-theme-surface-muted);
+        --wdb-success: var(--weline-theme-text-muted);
+        --wdb-warning: var(--weline-theme-surface-muted);
+        --wdb-danger: var(--weline-theme-text-muted);
+        --wdb-shadow: 0 18px 36px var(--weline-theme-text-muted);
+    }
+    .wdb-sidebar {
+        background: var(--weline-theme-text);
+        color: var(--weline-theme-surface);
+        padding: 24px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+    .wdb-brand-kicker {
+        color: var(--weline-theme-text-muted);
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .wdb-brand-title {
+        margin-top: 4px;
+        font-size: 22px;
+        line-height: 1.25;
+        font-weight: 850;
+        white-space: nowrap;
+    }
+    .wdb-nav {
+        display: grid;
+        gap: 8px;
+    }
+    .wdb-nav a,
+    .wdb-action,
+    .wdb-theme-button,
+    .wdb-test-button {
+        border: 1px solid transparent;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 9px 12px;
+        font-weight: 750;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .wdb-nav a {
+        color: var(--weline-theme-surface);
+        justify-content: flex-start;
+    }
+    .wdb-nav a.is-active,
+    .wdb-nav a:hover {
+        background: var(--weline-theme-text-muted);
+        border-color: var(--weline-theme-text-muted);
+    }
+    .wdb-sidebar-spacer {
+        flex: 1;
+    }
+    .wdb-theme-button {
+        width: 100%;
+        color: var(--weline-theme-surface);
+        background: var(--weline-theme-text-muted);
+        border-color: var(--weline-theme-text-muted);
+    }
+    .wdb-main {
+        min-width: 0;
+        padding: 28px;
+    }
+    .wdb-topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .wdb-eyebrow {
+        margin: 0 0 6px;
+        color: var(--wdb-primary);
+        font-size: 12px;
+        font-weight: 850;
+        text-transform: uppercase;
+    }
+    .wdb-title {
+        margin: 0;
+        color: var(--wdb-text);
+        font-size: 30px;
+        line-height: 1.2;
+        font-weight: 850;
+    }
+    .wdb-subtitle {
+        margin: 8px 0 0;
+        color: var(--wdb-muted);
+        max-width: 780px;
+        line-height: 1.6;
+    }
+    .wdb-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+    .wdb-action {
+        color: var(--wdb-primary-strong);
+        background: var(--wdb-panel);
+        border-color: var(--wdb-border);
+        box-shadow: var(--weline-theme-shadow-sm);
+    }
+    .wdb-action.is-primary {
+        color: var(--weline-theme-surface);
+        background: var(--wdb-primary);
+        border-color: var(--wdb-primary);
+    }
+    .wdb-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
+    }
+    .wdb-card,
+    .wdb-panel {
+        background: var(--wdb-panel);
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        box-shadow: var(--weline-theme-shadow-sm);
+    }
+    .wdb-card {
+        padding: 18px;
+    }
+    .wdb-card-label,
+    .wdb-field-label {
+        color: var(--wdb-muted);
+        font-size: 12px;
+        font-weight: 750;
+        text-transform: uppercase;
+    }
+    .wdb-weline-card-value {
+        margin-top: 8px;
+        color: var(--wdb-text);
+        font-size: 24px;
+        font-weight: 850;
+        overflow-wrap: anywhere;
+    }
+    .wdb-panel {
+        margin-top: 18px;
+        padding: 20px;
+    }
+    .wdb-panel-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    .wdb-panel-title {
+        margin: 0;
+        color: var(--wdb-text);
+        font-size: 18px;
+        line-height: 1.35;
+        font-weight: 850;
+    }
+    .wdb-panel-note {
+        margin: 5px 0 0;
+        color: var(--wdb-muted);
+        line-height: 1.5;
+    }
+    .wdb-alert {
+        margin-bottom: 16px;
+        border-radius: 8px;
+        padding: 12px 14px;
+        line-height: 1.5;
+        font-weight: 700;
+    }
+    .wdb-alert.is-success {
+        color: var(--wdb-success);
+        background: color-mix(in srgb, var(--wdb-success) 10%, transparent);
+        border: 1px solid color-mix(in srgb, var(--wdb-success) 28%, transparent);
+    }
+    .wdb-alert.is-danger {
+        color: var(--wdb-danger);
+        background: color-mix(in srgb, var(--wdb-danger) 10%, transparent);
+        border: 1px solid color-mix(in srgb, var(--wdb-danger) 28%, transparent);
+    }
+    .wdb-alert.is-warning {
+        color: var(--wdb-warning);
+        background: color-mix(in srgb, var(--wdb-warning) 10%, transparent);
+        border: 1px solid color-mix(in srgb, var(--wdb-warning) 28%, transparent);
+    }
+    .wdb-context {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .wdb-context-item,
+    .wdb-field,
+    .wdb-test-box {
+        background: var(--wdb-panel-soft);
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        padding: 12px;
+        min-width: 0;
+    }
+    .wdb-context-value,
+    .wdb-field-value {
+        margin-top: 6px;
+        color: var(--wdb-text);
+        font-weight: 750;
+        overflow-wrap: anywhere;
+    }
+    .wdb-profile-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .wdb-profile-tab {
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel-soft);
+        color: var(--wdb-text);
+        min-height: 38px;
+        padding: 9px 12px;
+        text-decoration: none;
+        font-weight: 750;
+    }
+    .wdb-profile-tab.is-active {
+        color: var(--weline-theme-surface);
+        background: var(--wdb-primary);
+        border-color: var(--wdb-primary);
+    }
+    .wdb-profile-detail {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--wdb-border);
+    }
+    .wdb-profile-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .wdb-badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        border: 1px solid var(--wdb-border);
+        color: var(--wdb-muted);
+        min-height: 26px;
+        padding: 4px 9px;
+        font-size: 12px;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+    .wdb-badge.is-ready {
+        color: var(--wdb-success);
+        border-color: color-mix(in srgb, var(--wdb-success) 38%, var(--wdb-border));
+        background: color-mix(in srgb, var(--wdb-success) 9%, transparent);
+    }
+    .wdb-badge.is-attention {
+        color: var(--wdb-warning);
+        border-color: color-mix(in srgb, var(--wdb-warning) 38%, var(--wdb-border));
+        background: color-mix(in srgb, var(--wdb-warning) 10%, transparent);
+    }
+    .wdb-test-form {
+        display: grid;
+        gap: 12px;
+    }
+    .wdb-test-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: end;
+    }
+    .wdb-select {
+        width: 100%;
+        min-height: 42px;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel);
+        color: var(--wdb-text);
+        padding: 8px 10px;
+    }
+    .wdb-test-button {
+        color: var(--weline-theme-surface);
+        background: var(--wdb-primary);
+        border-color: var(--wdb-primary);
+        min-width: 148px;
+    }
+    .wdb-form {
+        display: grid;
+        gap: 16px;
+    }
+    .wdb-form-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .wdb-form-field {
+        min-width: 0;
+        display: grid;
+        gap: 7px;
+    }
+    .wdb-form-field.is-wide {
+        grid-column: span 2;
+    }
+    .wdb-form-field.is-full {
+        grid-column: 1 / -1;
+    }
+    .wdb-form-field label,
+    .wdb-check span {
+        color: var(--wdb-muted);
+        font-size: 12px;
+        font-weight: 760;
+    }
+    .wdb-form-field input,
+    .wdb-form-field select,
+    .wdb-form-field textarea {
+        width: 100%;
+        min-height: 42px;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel-soft);
+        color: var(--wdb-text);
+        padding: 9px 11px;
+        font: inherit;
+        box-sizing: border-box;
+        outline: none;
+    }
+    .wdb-form-field textarea {
+        min-height: 82px;
+        resize: vertical;
+    }
+    .wdb-form-field input:focus,
+    .wdb-form-field select:focus,
+    .wdb-form-field textarea:focus {
+        border-color: var(--wdb-primary);
+        box-shadow: var(--weline-theme-shadow-sm);
+    }
+    .wdb-field-help,
+    .wdb-audit-meta {
+        margin: 0;
+        color: var(--wdb-muted);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .wdb-check-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .wdb-check {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 10px 12px;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel-soft);
+        cursor: pointer;
+    }
+    .wdb-check input {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--wdb-primary);
+    }
+    .wdb-save-button {
+        justify-self: start;
+        border: 1px solid var(--wdb-primary);
+        border-radius: 8px;
+        min-height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 14px;
+        color: var(--weline-theme-surface);
+        background: var(--wdb-primary);
+        font-weight: 800;
+        cursor: pointer;
+    }
+    .wdb-secondary-button {
+        justify-self: start;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        min-height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 14px;
+        color: var(--wdb-primary-strong);
+        background: var(--wdb-panel);
+        font-weight: 800;
+        cursor: pointer;
+    }
+    .wdb-danger-button {
+        justify-self: start;
+        border: 1px solid var(--wdb-danger);
+        border-radius: 8px;
+        min-height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 14px;
+        color: var(--weline-theme-surface);
+        background: var(--wdb-danger);
+        font-weight: 800;
+        cursor: pointer;
+    }
+    .wdb-save-button:disabled,
+    .wdb-secondary-button:disabled,
+    .wdb-danger-button:disabled,
+    .wdb-test-button:disabled {
+        cursor: not-allowed;
+        opacity: .55;
+    }
+    .wdb-lifecycle-grid,
+    .wdb-lifecycle-checks {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .wdb-lifecycle-grid {
+        align-items: end;
+    }
+    .wdb-lifecycle-check {
+        background: var(--wdb-panel-soft);
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        padding: 12px;
+        min-width: 0;
+    }
+    .wdb-lifecycle-check[data-wdb-check-state="blocked"] .wdb-badge {
+        color: var(--wdb-danger);
+        border-color: color-mix(in srgb, var(--wdb-danger) 38%, var(--wdb-border));
+        background: color-mix(in srgb, var(--wdb-danger) 10%, transparent);
+    }
+    .wdb-lifecycle-check[data-wdb-check-state="attention"] .wdb-badge {
+        color: var(--wdb-warning);
+        border-color: color-mix(in srgb, var(--wdb-warning) 38%, var(--wdb-border));
+        background: color-mix(in srgb, var(--wdb-warning) 10%, transparent);
+    }
+    .wdb-lifecycle-check[data-wdb-check-state="dry_run_only"] .wdb-badge,
+    .wdb-lifecycle-check[data-wdb-check-state="ready_to_execute"] .wdb-badge,
+    .wdb-lifecycle-check[data-wdb-check-state="ready"] .wdb-badge {
+        color: var(--wdb-success);
+        border-color: color-mix(in srgb, var(--wdb-success) 38%, var(--wdb-border));
+        background: color-mix(in srgb, var(--wdb-success) 9%, transparent);
+    }
+    .wdb-plan-list {
+        display: grid;
+        gap: 8px;
+        margin: 16px 0 0;
+        padding: 0;
+        list-style: none;
+        counter-reset: wdb-plan-step;
+    }
+    .wdb-plan-list li {
+        counter-increment: wdb-plan-step;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        padding: 11px 12px;
+        background: var(--wdb-panel-soft);
+        color: var(--wdb-text);
+        line-height: 1.45;
+    }
+    .wdb-plan-list li::before {
+        content: counter(wdb-plan-step);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        margin-right: 8px;
+        border-radius: 50%;
+        color: var(--weline-theme-surface);
+        background: var(--wdb-primary);
+        font-size: 12px;
+        font-weight: 850;
+    }
+    .wdb-sql-plan {
+        display: grid;
+        gap: 12px;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--wdb-border);
+    }
+    .wdb-sql-summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .wdb-sql-list {
+        display: grid;
+        gap: 10px;
+    }
+    .wdb-sql-item {
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel-soft);
+        padding: 12px;
+        min-width: 0;
+    }
+    .wdb-sql-item pre {
+        margin: 8px 0 0;
+        padding: 10px;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel);
+        color: var(--wdb-text);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+        font-size: 12px;
+        line-height: 1.45;
+    }
+    .wdb-env-summary,
+    .wdb-env-toolbar {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .wdb-env-toolbar {
+        margin-top: 14px;
+        align-items: end;
+    }
+    .wdb-slave-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+    }
+    .wdb-slave-row {
+        display: grid;
+        grid-template-columns: minmax(160px, .8fr) repeat(3, minmax(0, .55fr)) minmax(260px, 1.4fr);
+        gap: 10px;
+        align-items: end;
+        padding: 12px;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel-soft);
+        min-width: 0;
+    }
+    .wdb-inline-form {
+        display: grid;
+        grid-template-columns: minmax(120px, 1fr) minmax(150px, .8fr) auto;
+        gap: 10px;
+        align-items: end;
+        min-width: 0;
+    }
+    .wdb-inline-form .wdb-form-field,
+    .wdb-inline-form .wdb-check {
+        min-width: 0;
+    }
+    .wdb-execution-guard {
+        margin-top: 14px;
+        padding: 14px;
+        border: 1px solid color-mix(in srgb, var(--wdb-warning) 36%, var(--wdb-border));
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--wdb-warning) 8%, var(--wdb-panel));
+    }
+    .wdb-execution-guard .wdb-form-field input[type="text"] {
+        font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+        letter-spacing: 0;
+    }
+    .wdb-diff-grid {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+    }
+    .wdb-diff-row {
+        display: grid;
+        grid-template-columns: minmax(120px, .7fr) minmax(0, 1fr) minmax(0, 1fr);
+        gap: 10px;
+        align-items: center;
+        padding: 12px;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel-soft);
+    }
+    .wdb-diff-row code {
+        color: var(--wdb-text);
+        overflow-wrap: anywhere;
+    }
+    .wdb-audit-list {
+        display: grid;
+        gap: 10px;
+    }
+    .wdb-audit-row {
+        display: grid;
+        grid-template-columns: minmax(120px, .5fr) minmax(120px, .6fr) minmax(0, 1fr);
+        gap: 10px;
+        align-items: center;
+        padding: 12px;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel-soft);
+    }
+    .wdb-code {
+        font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+        font-size: 12px;
+        overflow-wrap: anywhere;
+    }
+    .wdb-empty {
+        color: var(--wdb-muted);
+        border: 1px dashed var(--wdb-border);
+        border-radius: 8px;
+        padding: 18px;
+    }
+    @media (max-width: 1024px) {
+        .wls-db-manager-shell {
+            grid-template-columns: 1fr;
+        }
+        .wdb-sidebar {
+            position: static;
+            padding: 16px;
+        }
+        .wdb-nav {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+        .wdb-sidebar-spacer {
+            display: none;
+        }
+        .wdb-grid,
+        .wdb-context,
+        .wdb-profile-grid,
+        .wdb-form-grid,
+        .wdb-check-grid,
+        .wdb-lifecycle-grid,
+        .wdb-lifecycle-checks,
+        .wdb-sql-summary,
+        .wdb-env-summary,
+        .wdb-env-toolbar,
+        .wdb-slave-row,
+        .wdb-inline-form {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 640px) {
+        .wdb-main {
+            padding: 18px 14px;
+        }
+        .wdb-topbar,
+        .wdb-panel-head,
+        .wdb-test-row {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+        .wdb-actions {
+            justify-content: stretch;
+        }
+        .wdb-action,
+        .wdb-test-button {
+            width: 100%;
+        }
+        .wdb-grid,
+        .wdb-context,
+        .wdb-profile-grid,
+        .wdb-form-grid,
+        .wdb-check-grid,
+        .wdb-lifecycle-grid,
+        .wdb-lifecycle-checks,
+        .wdb-sql-summary,
+        .wdb-env-summary,
+        .wdb-env-toolbar,
+        .wdb-diff-row,
+        .wdb-slave-row,
+        .wdb-inline-form,
+        .wdb-audit-row,
+        .wdb-nav {
+            grid-template-columns: 1fr;
+        }
+        .wdb-form-field.is-wide {
+            grid-column: 1 / -1;
+        }
+        .wdb-title {
+            font-size: 24px;
+        }
+    }
+}

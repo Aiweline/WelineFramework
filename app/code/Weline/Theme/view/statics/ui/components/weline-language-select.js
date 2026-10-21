@@ -1,3 +1,4 @@
+/* Weline UI source: js/language-select.js */
 function parseValues(value) {
     try {
         const parsed = JSON.parse(String(value || '[]'));
@@ -501,7 +502,6 @@ export function register(UI) {
             commit(selectedValues.filter((value) => value !== remove.dataset.wRemoveCode));
         });
         if (multiple && !displayOnly) {
-            // 胶囊按下时勿让 trigger 的 pointerdown/click 抢手势（否则拖不动 / 误开下拉）
             listen(tags, 'pointerdown', (event) => {
                 const tag = event.target instanceof Element ? event.target.closest('.w-language-select__tag.is-sortable') : null;
                 if (!(tag instanceof HTMLElement) || !tags.contains(tag)) return;

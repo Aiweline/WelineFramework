@@ -52,7 +52,7 @@ $sessionListTitle = static function (array $session): string {
 <div class="cs-console customer-service-console" data-testid="customer-service-console">
     <header class="cs-console__header console-header w-cluster" data-justify="between" data-align="center">
         <div class="w-stack" style="--w-gap:var(--weline-space-1);">
-            <h1><?= __('客服工作台') ?></h1>
+            <h2 class="w-card__title"><?= __('客服工作台') ?></h2>
             <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
                 <?= __('接单等待中的会话，并在左侧聊天区回复客户。') ?>
             </p>
@@ -373,9 +373,10 @@ $sessionListTitle = static function (array $session): string {
     </div>
 </div>
 
-<script src="@static(Weline_CustomerService::js/backend-console.js)"></script>
-<script src="@static(Weline_CustomerService::js/backend-statistics.js)"></script>
+<script defer src="@static(Weline_CustomerService::js/backend-console.js)"></script>
+<script defer src="@static(Weline_CustomerService::js/backend-statistics.js)"></script>
 <script>
+document.addEventListener('DOMContentLoaded', function () {
     const consoleConfig = {
         consoleUrl: "@backend-url{$consolePath}",
         agentId: <?= json_encode((int)($agent['agent_id'] ?? 0), $jsonForScriptFlags) ?>,
@@ -387,4 +388,5 @@ $sessionListTitle = static function (array $session): string {
         consoleUrl: "@backend-url{$consolePath}",
         currentPeriod: 'today'
     });
+});
 </script>

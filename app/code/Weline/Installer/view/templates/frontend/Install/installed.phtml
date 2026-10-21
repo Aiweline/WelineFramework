@@ -6,12 +6,12 @@
     <title><?= $title ?> - Weline Framework</title>
     <style>
         :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --text-color: #f8fafc;
+            --bg-color: var(--color-header-bg);
+            --card-bg: var(--color-header-bg-hover);
+            --text-color: var(--color-info-soft);
             --text-muted: #94a3b8;
             --border-color: #334155;
-            --warning-color: #f59e0b;
+            --warning-color: var(--color-warning);
         }
         
         * {
@@ -22,7 +22,7 @@
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, var(--bg-color) 0%, #1e1b4b 100%);
+            background: linear-gradient(135deg, var(--bg-color) 0%, var(--color-info) 100%);
             color: var(--text-color);
             min-height: 100vh;
             display: flex;
@@ -32,9 +32,9 @@
         
         .card {
             background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 1rem;
-            padding: 3rem;
+            border: var(--border-width-thin) solid var(--border-color);
+            border-radius: var(--border-radius-2xl);
+            padding: var(--weline-space-12);
             max-width: 500px;
             text-align: center;
         }
@@ -47,13 +47,13 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 1.5rem;
-            font-size: 2rem;
+            margin: 0 auto var(--weline-space-6);
+            font-size: var(--weline-font-size-4xl);
         }
         
         h1 {
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
+            font-size: var(--weline-font-size-2xl);
+            margin-bottom: var(--weline-space-4);
             color: var(--warning-color);
         }
         
@@ -64,17 +64,17 @@
         
         .btn {
             display: inline-block;
-            margin-top: 1.5rem;
-            padding: 0.75rem 1.5rem;
-            background: #4f46e5;
+            margin-top: var(--weline-space-6);
+            padding: var(--weline-space-3) var(--weline-space-6);
+            background: var(--color-info);
             color: white;
             text-decoration: none;
-            border-radius: 0.5rem;
+            border-radius: var(--border-radius-lg);
             transition: background 0.3s;
         }
         
         .btn:hover {
-            background: #4338ca;
+            background: var(--color-info);
         }
     </style>
 </head>
@@ -83,7 +83,7 @@
         <div class="icon">🔒</div>
         <h1><?= $title ?></h1>
         <p><?= $message ?></p>
-        <a href="@url{'/'}" class="w-button"><?= __('返回首页') ?></a>
+        <a href="@url{'/'}" class="w-button"><lang>返回首页</lang></a>
     </div>
 </body>
 </html>

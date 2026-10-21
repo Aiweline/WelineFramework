@@ -12,10 +12,11 @@ $statusFilter = (string)($status_filter ?? '');
 $statusNew = (string)($status_new ?? 'new');
 $statusProcessed = (string)($status_processed ?? 'processed');
 ?>
+<css>Weline_Product::css/backend/quote-request-admin.css</css>
 <div class="w-card" weline-code="product.backend.quote_request.index">
-    <div class="w-card__header" style="display:flex;gap:1rem;align-items:center;justify-content:space-between;flex-wrap:wrap;">
-        <h1 class="w-card__title" style="margin:0;"><?= $escape(__('商品询价')) ?></h1>
-        <form method="get" action="@backend-url{'*/backend/quote-request/index'}" class="w-cluster" style="gap:.5rem;">
+    <div class="w-card__header w-quote-request__header">
+        <h2 class="w-card__title"><?= $escape(__('商品询价')) ?></h2>
+        <form method="get" action="@backend-url{'*/backend/quote-request/index'}" class="w-cluster" style="--w-gap:var(--weline-space-2);">
             <select class="w-select" name="status">
                 <option value=""><?= $escape(__('全部状态')) ?></option>
                 <option value="<?= $escape($statusNew) ?>" <?= $statusFilter === $statusNew ? 'selected' : '' ?>><?= $escape(__('待处理')) ?></option>
@@ -24,11 +25,11 @@ $statusProcessed = (string)($status_processed ?? 'processed');
             <button class="w-button" type="submit"><?= $escape(__('筛选')) ?></button>
         </form>
     </div>
-    <div class="w-card__body" style="overflow:auto;">
+    <div class="w-card__body w-table-wrap">
         <?php if ($items === []): ?>
             <p class="w-text" data-tone="muted"><?= $escape(__('暂无询价单')) ?></p>
         <?php else: ?>
-            <table class="w-table" style="width:100%;border-collapse:collapse;">
+            <table class="w-table">
                 <thead>
                 <tr>
                     <th><?= $escape(__('时间')) ?></th>

@@ -166,21 +166,21 @@ grid,grid
 查看融媒体管理页面,"View Fusion Media Management Page"
 暂无社媒账户,"No social media accounts available."
 请先保存网站，再管理本站社媒账户与发布。,"Save the website first, then manage this site's social accounts and publishing."
-"Fake 验证通过","Fake verification passed"
-"Fake 验证失败","Fake verification failed"
 "Weline_Social Fake 模式","Weline_Social Fake Mode"
-"该页面只验证 fake 账户与站点默认社媒关系，不创建发布批次。","This page only verifies the fake account and website default social relation, without creating a publish batch."
-"该页面只调用 fake_browser Provider，不访问任何外部社媒平台。","This page only calls the fake_browser Provider and does not access external social platforms."
 账户,Account
 站点,Websites
 站点社媒关系,"Website social relation"
-已打通,Connected
-未打通,"Not connected"
 默认发布账户,"Default publish accounts"
 创意草稿,"Creative Drafts"
 发布批次,"Publish batch"
 目标结果,"Target result"
 社媒账户部件,"Social Account Widget"
+"Fake 验证通过","Fake verification passed"
+"Fake 验证失败","Fake verification failed"
+"该页面只验证 fake 账户与站点默认社媒关系，不创建发布批次。","This page only verifies the fake account and website default social relation, without creating a publish batch."
+"该页面只调用 fake_browser Provider，不访问任何外部社媒平台。","This page only calls the fake_browser Provider and does not access external social platforms."
+已打通,Connected
+未打通,"Not connected"
 请选择站点,"Please select a site"
 搜索站点名称或编码,"Search site name or encoding"
 配置融媒体平台应用,"Configure social platform apps"

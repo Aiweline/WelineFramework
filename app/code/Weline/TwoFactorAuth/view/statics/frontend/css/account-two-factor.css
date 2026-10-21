@@ -5,79 +5,79 @@
 .twofa-notice {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    margin-bottom: 20px;
-    padding: 14px 16px;
-    border: 1px solid #cfe8f3;
-    border-radius: 12px;
-    background: #eef9fc;
-    color: #0f5f73;
+    gap: var(--spacing-1);
+    margin-bottom: var(--spacing-5);
+    padding: var(--spacing-3_5) var(--spacing-4);
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    border-radius: var(--radius-xl);
+    background: var(--color-bg-muted);
+    color: var(--color-text-secondary);
 }
 
 .twofa-message {
-    margin-bottom: 16px;
-    padding: 12px 14px;
-    border-radius: 10px;
+    margin-bottom: var(--spacing-4);
+    padding: var(--spacing-3) var(--spacing-3_5);
+    border-radius: var(--sidebar-radius);
     font-weight: 600;
 }
 
 .twofa-message--success {
-    border: 1px solid #b8e4c7;
-    background: #eaf8ef;
-    color: #176532;
+    border: var(--border-width-thin) solid #b8e4c7;
+    background: var(--color-bg-muted);
+    color: var(--color-text-secondary);
 }
 
 .twofa-message--error {
-    border: 1px solid #f5b8bd;
-    background: #fff0f1;
-    color: #a61d2a;
+    border: var(--border-width-thin) solid #f5b8bd;
+    background: var(--color-bg-canvas);
+    color: var(--color-link);
 }
 
 .twofa-status-card {
     display: flex;
     align-items: flex-start;
-    gap: 16px;
-    margin-bottom: 24px;
-    padding: 18px;
-    border: 1px solid #e8edf3;
-    border-radius: 16px;
-    background: linear-gradient(135deg, #fffaf0 0%, #ffffff 70%);
+    gap: var(--spacing-4);
+    margin-bottom: var(--spacing-6);
+    padding: var(--spacing-4_5);
+    border: var(--border-width-thin) solid var(--color-border-soft);
+    border-radius: var(--radius-2xl);
+    background: linear-gradient(135deg, var(--color-bg-canvas) 0%, var(--color-bg-primary) 70%);
 }
 
 .twofa-status-card h3 {
-    margin: 0 0 6px;
-    color: #111827;
-    font-size: 20px;
+    margin: 0 0 var(--spacing-1_5);
+    color: var(--color-text-slate);
+    font-size: var(--font-size-xl);
 }
 
 .twofa-status-card p {
     margin: 0;
-    color: #64748b;
+    color: var(--color-link);
     line-height: 1.7;
 }
 
 .twofa-status-card--enabled {
-    background: linear-gradient(135deg, #ecfdf3 0%, #ffffff 70%);
+    background: linear-gradient(135deg, var(--color-bg-muted) 0%, var(--color-bg-primary) 70%);
 }
 
 .twofa-status-pill {
     flex: 0 0 auto;
-    padding: 6px 12px;
-    border-radius: 999px;
-    background: #fee2e2;
-    color: #b91c1c;
+    padding: var(--spacing-1_5) var(--spacing-3);
+    border-radius: var(--radius-full);
+    background: var(--color-product-label-sale-bg);
+    color: var(--color-link);
     font-weight: 700;
 }
 
 .twofa-status-pill--enabled {
-    background: #dcfce7;
-    color: #15803d;
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
 }
 
 .twofa-setup-grid {
     display: grid;
     grid-template-columns: 260px minmax(0, 1fr);
-    gap: 24px;
+    gap: var(--spacing-6);
     align-items: start;
 }
 
@@ -85,13 +85,13 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
-    padding: 22px;
-    border: 1px solid #e5e7eb;
-    border-radius: 18px;
-    background: #ffffff;
-    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
-    color: #64748b;
+    gap: var(--spacing-3);
+    padding: var(--spacing-5_5);
+    border: var(--border-width-thin) solid var(--color-border-soft);
+    border-radius: var(--border-radius-2xl);
+    background: var(--color-bg-primary);
+    box-shadow: var(--weline-shadow-md);
+    color: var(--color-link);
     text-align: center;
 }
 
@@ -99,37 +99,37 @@
     width: 200px;
     max-width: 100%;
     height: auto;
-    border-radius: 12px;
+    border-radius: var(--radius-xl);
 }
 
 .twofa-setup-form,
 .twofa-inline-form {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--spacing-2_5);
 }
 
 .twofa-setup-form label,
 .twofa-inline-form label {
-    color: #111827;
+    color: var(--color-text-slate);
     font-weight: 700;
 }
 
 .twofa-secret {
-    margin-bottom: 10px;
-    padding: 13px 14px;
-    border: 1px dashed #d3dae6;
-    border-radius: 12px;
-    background: #f8fafc;
-    color: #334155;
+    margin-bottom: var(--spacing-2_5);
+    padding: var(--spacing-0_8) var(--spacing-3_5);
+    border: var(--border-width-thin) dashed var(--color-border-muted);
+    border-radius: var(--radius-xl);
+    background: var(--color-bg-slate);
+    color: var(--color-secondary-text-emphasis);
     font-family: Consolas, Monaco, monospace;
-    letter-spacing: 1px;
+    letter-spacing: var(--spacing-px);
     word-break: break-all;
 }
 
 .twofa-form-row {
     display: flex;
-    gap: 10px;
+    gap: var(--spacing-2_5);
     align-items: center;
 }
 
@@ -137,45 +137,45 @@
     min-width: 0;
     flex: 1 1 auto;
     height: 46px;
-    padding: 0 14px;
-    border: 1px solid #d6dde8;
-    border-radius: 12px;
-    background: #fbfdff;
-    color: #0f172a;
-    font-size: 15px;
+    padding: 0 var(--spacing-3_5);
+    border: var(--border-width-thin) solid var(--color-border-panel);
+    border-radius: var(--radius-xl);
+    background: var(--color-bg-slate);
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
     outline: none;
 }
 
 .twofa-form-row input:focus {
     border-color: #f5c242;
-    box-shadow: 0 0 0 3px rgba(245, 194, 66, 0.2);
+    box-shadow: var(--weline-shadow-md);
 }
 
 .twofa-backup-codes {
-    margin-top: 18px;
-    padding: 16px;
-    border: 1px solid #f3dfaf;
-    border-radius: 14px;
-    background: #fffbeb;
+    margin-top: var(--spacing-4_5);
+    padding: var(--spacing-4);
+    border: var(--border-width-thin) solid #f3dfaf;
+    border-radius: var(--sidebar-radius);
+    background: var(--color-bg-canvas);
 }
 
 .twofa-backup-codes p {
-    margin: 6px 0 12px;
-    color: #7c6b36;
+    margin: var(--spacing-1_5) 0 var(--spacing-3);
+    color: var(--color-text-muted);
 }
 
 .twofa-backup-code-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 8px;
+    gap: var(--spacing-2);
 }
 
 .twofa-backup-code-grid span,
 .twofa-backup-result span {
-    padding: 8px 10px;
-    border-radius: 9px;
-    background: #ffffff;
-    color: #111827;
+    padding: var(--spacing-2) var(--spacing-2_5);
+    border-radius: var(--border-radius-lg);
+    background: var(--color-bg-primary);
+    color: var(--color-text-slate);
     font-family: Consolas, Monaco, monospace;
     text-align: center;
 }
@@ -184,61 +184,61 @@
 .twofa-action-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-    margin-bottom: 20px;
+    gap: var(--spacing-4);
+    margin-bottom: var(--spacing-5);
 }
 
 .twofa-meta-item,
 .twofa-inline-form {
-    padding: 16px;
-    border: 1px solid #e8edf3;
-    border-radius: 14px;
-    background: #ffffff;
+    padding: var(--spacing-4);
+    border: var(--border-width-thin) solid var(--color-border-soft);
+    border-radius: var(--sidebar-radius);
+    background: var(--color-bg-primary);
 }
 
 .twofa-meta-item span {
     display: block;
-    margin-bottom: 6px;
-    color: #64748b;
+    margin-bottom: var(--spacing-1_5);
+    color: var(--color-link);
 }
 
 .twofa-meta-item strong {
-    color: #111827;
-    font-size: 18px;
+    color: var(--color-text-slate);
+    font-size: var(--font-size-lg);
 }
 
 .twofa-backup-result {
-    margin-top: 16px;
-    padding: 16px;
-    border: 1px solid #f3dfaf;
-    border-radius: 14px;
-    background: #fffbeb;
+    margin-top: var(--spacing-4);
+    padding: var(--spacing-4);
+    border: var(--border-width-thin) solid #f3dfaf;
+    border-radius: var(--sidebar-radius);
+    background: var(--color-bg-canvas);
 }
 
 .twofa-backup-result h3 {
-    margin: 0 0 12px;
+    margin: 0 0 var(--spacing-3);
 }
 
 .twofa-backup-result__grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 8px;
+    gap: var(--spacing-2);
 }
 
 .twofa-app-card {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    margin-top: 24px;
-    padding: 18px;
-    border-radius: 16px;
-    background: linear-gradient(135deg, #f8c944 0%, #eab308 100%);
-    color: #111827;
+    gap: var(--spacing-4);
+    margin-top: var(--spacing-6);
+    padding: var(--spacing-4_5);
+    border-radius: var(--radius-2xl);
+    background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning) 100%);
+    color: var(--color-text-slate);
 }
 
 .twofa-app-card p {
-    margin: 4px 0 0;
+    margin: var(--spacing-1) 0 0;
     color: rgba(17, 24, 39, 0.72);
 }
 
@@ -246,12 +246,12 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 44px;
-    padding: 0 18px;
+    min-height: var(--control-height-lg);
+    padding: 0 var(--spacing-4_5);
     border: 0;
-    border-radius: 10px;
-    background: #f5c242;
-    color: #111827;
+    border-radius: var(--sidebar-radius);
+    background: var(--color-warning);
+    color: var(--color-text-slate);
     font-weight: 700;
     text-decoration: none;
     cursor: pointer;
@@ -261,34 +261,34 @@
 .account-btn:visited,
 .account-btn:hover,
 .account-btn:focus {
-    color: #111827;
+    color: var(--color-text-slate);
     text-decoration: none;
 }
 
 .account-btn--secondary {
-    border: 1px solid #d6dde8;
-    background: #ffffff;
-    color: #111827;
+    border: var(--border-width-thin) solid var(--color-border-panel);
+    background: var(--color-bg-primary);
+    color: var(--color-text-slate);
 }
 
 .account-btn--danger {
-    background: #ef4444;
-    color: #ffffff;
+    background: var(--color-danger);
+    color: var(--color-text-light);
 }
 
 .account-btn--danger:visited,
 .account-btn--danger:hover,
 .account-btn--danger:focus {
-    color: #ffffff;
+    color: var(--color-text-light);
 }
 
 .twofa-app-card .account-btn,
 .twofa-app-card .account-btn--secondary {
     flex: 0 0 auto;
-    border: 1px solid rgba(17, 24, 39, 0.14);
-    background: #111827;
-    color: #ffffff;
-    box-shadow: 0 8px 18px rgba(17, 24, 39, 0.16);
+    border: var(--border-width-thin) solid rgba(17, 24, 39, 0.14);
+    background: var(--color-bg-amazon);
+    color: var(--color-text-light);
+    box-shadow: var(--weline-shadow-md);
 }
 
 .twofa-app-card .account-btn:visited,
@@ -298,7 +298,7 @@
 .twofa-app-card .account-btn--secondary:hover,
 .twofa-app-card .account-btn--secondary:focus {
     background: #0b1220;
-    color: #ffffff;
+    color: var(--color-text-light);
     text-decoration: none;
 }
 

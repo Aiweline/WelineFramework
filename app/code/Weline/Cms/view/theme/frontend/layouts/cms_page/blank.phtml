@@ -50,8 +50,8 @@ $rawContent = (string)$this->getData('content');
             <?php else: ?>
                 <w:hook name="Weline_Theme::frontend::layouts::cms_page::blank::content">
                     <div class="cms-page-blank__placeholder" data-placeholder="content">
-                        <span class="cms-page-blank__placeholder-title"><?= __('拖拽部件或容器到此处') ?></span>
-                        <span class="cms-page-blank__placeholder-hint"><?= __('空白布局不会渲染 header、footer 或面包屑') ?></span>
+                        <span class="cms-page-blank__placeholder-title"><lang>拖拽部件或容器到此处</lang></span>
+                        <span class="cms-page-blank__placeholder-hint"><lang>空白布局不会渲染 header、footer 或面包屑</lang></span>
                     </div>
                 </w:hook>
             <?php endif; ?>

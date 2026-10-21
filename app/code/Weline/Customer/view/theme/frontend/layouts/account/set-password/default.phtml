@@ -149,8 +149,8 @@ layoutType=account/set-password，option=default → layouts/account/set-passwor
         }
         /* Bare Customer auth form (no stage widget): breathe from header/footer */
         .account-auth-shell.auth-login-card {
-            padding-block: clamp(3.5rem, 8vh, 5rem);
-            padding-inline: clamp(0.75rem, 3vw, 1.5rem);
+            padding-block: clamp(3.5rem, 8vh, var(--spacing-5rem));
+            padding-inline: clamp(var(--weline-space-3), 3vw, var(--weline-space-6));
             box-sizing: border-box;
             justify-content: center;
             align-items: center;
@@ -183,8 +183,8 @@ layoutType=account/set-password，option=default → layouts/account/set-passwor
             display: grid;
             grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
             align-items: start;
-            column-gap: clamp(1rem, 3vw, 2.5rem);
-            padding: clamp(1rem, 3vh, 2rem) clamp(1rem, 4vw, 3rem) clamp(1.5rem, 4vh, 2.5rem);
+            column-gap: clamp(var(--weline-space-4), 3vw, var(--weline-space-10));
+            padding: clamp(var(--weline-space-4), 3vh, var(--weline-space-8)) clamp(var(--weline-space-4), 4vw, var(--weline-space-12)) clamp(var(--weline-space-6), 4vh, var(--weline-space-10));
             overflow: visible;
             background: var(--account-login-promo-bg, var(--color-bg-dark));
         }
@@ -219,34 +219,34 @@ layoutType=account/set-password，option=default → layouts/account/set-passwor
             grid-column: 1;
             max-width: 40rem;
             width: 100%;
-            padding: 0.35rem 0 0;
-            color: #fff;
+            padding: var(--spacing-1_5) 0 0;
+            color: var(--color-text-light);
             display: grid;
-            gap: 0.55rem;
+            gap: var(--spacing-0_55);
             align-content: start;
         }
         .account-login-widget__eyebrow {
             margin: 0;
-            font-size: 0.75rem;
-            letter-spacing: 0.08em;
+            font-size: var(--weline-font-size-xs);
+            letter-spacing: var(--spacing-px);
             text-transform: uppercase;
             color: rgba(255,255,255,0.75);
         }
         .account-login-widget__promo-title {
             margin: 0;
-            font-size: clamp(2rem, 3.6vw, 3rem);
+            font-size: clamp(var(--weline-font-size-4xl), 3.6vw, 3rem);
             font-weight: 700;
             line-height: 1.15;
         }
         .account-login-widget__promo-subtitle {
             margin: 0;
             max-width: 22rem;
-            font-size: 1.05rem;
+            font-size: var(--font-size-base);
             color: rgba(255,255,255,0.92);
         }
         .account-login-widget__promo-trust {
-            margin: 0.25rem 0 0;
-            font-size: 0.8125rem;
+            margin: var(--weline-space-1) 0 0;
+            font-size: var(--font-size-13);
             color: rgba(255,255,255,0.72);
         }
         .account-login-widget__dock {
@@ -266,28 +266,28 @@ layoutType=account/set-password，option=default → layouts/account/set-passwor
         .account-login-widget .w-auth-login--amazon {
             width: 100%;
             margin: 0;
-            border-radius: 12px;
+            border-radius: var(--radius-xl);
             overflow: hidden;
         }
         .account-login-widget .w-auth-login--amazon .w-auth-login__header {
-            gap: 0.25rem;
-            padding: 1rem 1.15rem 0.35rem;
+            gap: var(--weline-space-1);
+            padding: var(--weline-space-4) var(--spacing-4_5) var(--spacing-1_5);
         }
         .account-login-widget .w-auth-login--amazon .w-auth-login__form {
-            gap: 0.65rem;
-            padding-inline: 1.15rem;
+            gap: var(--spacing-0_65);
+            padding-inline: var(--spacing-4_5);
         }
         .account-login-widget .w-auth-login--amazon .w-auth-login__footer {
-            margin-block-start: 0.5rem;
-            padding: 0.1rem 1.15rem 0.95rem;
+            margin-block-start: var(--weline-space-2);
+            padding: var(--spacing-0_5) var(--spacing-4_5) var(--spacing-0_95);
         }
         @media (max-width: 47.99rem) {
             .account-login-widget {
                 min-height: 0;
                 grid-template-columns: 1fr;
-                padding: 2rem 1rem 3rem;
+                padding: var(--weline-space-8) var(--weline-space-4) var(--weline-space-12);
             }
-            .account-login-widget__rail { grid-column: 1; max-width: none; padding: 0 0.25rem 2.75rem; }
+            .account-login-widget__rail { grid-column: 1; max-width: none; padding: 0 var(--weline-space-1) var(--spacing-11); }
             .account-login-widget__dock {
                 grid-column: 1;
                 justify-self: center;
@@ -328,7 +328,7 @@ layoutType=account/set-password，option=default → layouts/account/set-passwor
                                 position="content"
                                 class="account-auth__content-slot">
                             <?php if ($isAuthStagePage && !$showHeader): ?>
-                                <div class="auth-login-toolbar" aria-label="<?= htmlspecialchars((string) __('登录页工具'), ENT_QUOTES) ?>">
+                                <div class="auth-login-toolbar" aria-label="@lang('登录页工具')">
                                     <div class="auth-login-language">
                                         <w:i18n:switcher for="js" />
                                     </div>

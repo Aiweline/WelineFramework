@@ -282,9 +282,6 @@ $presenter = match ($code) {
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-queue-admin.css)">
 
 <main class="w-queue-diagnostics w-stack" data-testid="queue-<?= $escape($code) ?>-management">
-    <header class="w-queue-admin__heading">
-        <h1><w:icon name="<?= $escape((string)$empty['icon']) ?>" size="sm" /> <?= $escape($title) ?></h1>
-    </header>
     <div class="w-alert" role="status" data-tone="info">
         <w:icon name="info" size="sm" />
         <div class="w-alert__content"><?= $escape(__('此工作台仅显示脱敏运行事实，不执行消费、重试、删除或投递。')) ?></div>

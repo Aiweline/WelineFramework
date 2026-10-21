@@ -112,7 +112,7 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
 <link rel="stylesheet" href="@static(Weline_Product::css/backend/product-category-admin.css)?v=20260905-layout-dialog-pad">
 
 <section
-    class="w-backend-page w-catalog-admin w-product-category-admin"
+    class="w-catalog-admin w-product-category-admin w-stack"
     data-catalog-admin
     data-website-id="<?= $escape($websiteId) ?>"
     data-text-save-success="<?= $escape(__('分类已保存')) ?>"
@@ -127,15 +127,16 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
     data-text-drop-before="<?= $escape(__('插入到上方')) ?>"
     data-text-drop-after="<?= $escape(__('插入到下方')) ?>"
 >
-    <header class="w-backend-page__heading">
-        <div class="w-stack">
-            <h1><w:icon name="tree" size="md"></w:icon><?= $escape(__('商品分类')) ?></h1>
-            <p class="w-text" data-tone="muted"><?= $escape(__('左侧树形列表支持拖拽排序与挂靠；右侧编辑名称、父级与启用状态')) ?></p>
+    <div class="w-card w-catalog-admin__hero">
+        <div class="w-card__body w-cluster" data-align="center" data-justify="between" data-wrap="true">
+        <div class="w-stack" data-gap="xs">
+            <h2 class="w-card__title"><w:icon name="tree" size="md"></w:icon><?= $escape(__('商品分类')) ?></h2>
+            <p class="w-text" data-tone="muted" data-size="sm"><?= $escape(__('左侧树形列表支持拖拽排序与挂靠；右侧编辑名称、父级与启用状态')) ?></p>
         </div>
         <nav class="w-cluster" aria-label="<?= $escape(__('分类管理操作')) ?>">
             <form method="get" class="w-cluster" style="--w-gap:var(--weline-space-2);">
                 <label class="w-visually-hidden" for="product-website-id"><lang>Website</lang></label>
-                <div class="w-product-admin__website-select" style="min-inline-size:12rem;">
+                <div class="w-product-admin__website-select">
                     <w:websites:website:select
                         id="product-website-id"
                         name="website_id"
@@ -153,7 +154,8 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
             <a class="w-button" data-tone="primary" href="@backend-url{$catalogPath|$catalogPageParams(['new' => 1])}"><w:icon name="plus" size="sm"></w:icon><?= $escape(__('添加顶级分类')) ?></a>
             <a class="w-button" data-tone="neutral" href="@admin-url('*/backend/catalog/products')"><w:icon name="arrow-left" size="sm"></w:icon><?= $escape(__('返回商品')) ?></a>
         </nav>
-    </header>
+        </div>
+    </div>
 
     <?php if ($error !== ''): ?>
         <div class="w-alert" data-tone="danger" role="alert"><?= $escape($error) ?></div>

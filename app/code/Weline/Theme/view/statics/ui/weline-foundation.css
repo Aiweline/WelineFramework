@@ -1,4 +1,5 @@
 /* Weline UI source: css/foundation.css */
+/* Weline UI source: css/foundation.css */
 @layer reset, tokens, base, layout, components, utilities, page;
 
 @layer tokens {
@@ -2186,8 +2187,27 @@
 }
 
 @layer utilities {
-    .w-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+    .w-visually-hidden { position: absolute; inset-block-start: 0; inset-inline-start: 0; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
     [data-w-scroll-locked="true"] { overflow: hidden; }
+    /*
+     * Attribute utilities are declared in @layer layout earlier in this file.
+     * Components layer comes after layout, so a bare `.w-badge` / `.w-card`
+     * background would win over `[data-w-background]`. Re-declare the
+     * component-overriding subset here in @layer utilities (which is after
+     * components) so semantic tone/background/avatar markers always win.
+     */
+    [data-w-background="primary"] { background: var(--weline-theme-primary); color: var(--weline-theme-on-primary); }
+    [data-w-background="secondary"] { background: var(--weline-theme-secondary-surface); color: var(--weline-theme-secondary-emphasis, var(--weline-theme-secondary)); }
+    [data-w-background="success"] { background: var(--weline-theme-success-surface); color: var(--weline-theme-success); }
+    [data-w-background="warning"] { background: var(--weline-theme-warning-surface); color: var(--weline-theme-warning); }
+    [data-w-background="danger"] { background: var(--weline-theme-danger-surface); color: var(--weline-theme-danger); }
+    [data-w-background="info"] { background: var(--weline-theme-info-surface); color: var(--weline-theme-info); }
+    [data-w-background="muted"] { background: var(--weline-theme-surface-muted); }
+    [data-w-avatar="true"] { width: var(--w-avatar-size, 2.5rem); height: var(--w-avatar-size, 2.5rem); flex: 0 0 var(--w-avatar-size, 2.5rem); overflow: hidden; border-radius: var(--weline-radius-round); }
+    [data-w-avatar-content="true"] { display: grid; width: 100%; height: 100%; place-items: center; background: var(--weline-theme-surface-muted); }
+    [data-w-radius="md"] { border-radius: var(--weline-radius-md); }
+    [data-w-radius="round"] { border-radius: var(--weline-radius-round); }
+    [data-w-border="none"] { border: 0; }
     /*
      * Width utilities must live above @layer components so they beat
      * .w-input/.w-select/.w-textarea { inline-size: 100% } in filter toolbars

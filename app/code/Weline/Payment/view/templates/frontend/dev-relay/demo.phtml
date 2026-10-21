@@ -14,15 +14,15 @@ $probe_path = (string) ($probe_path ?? '/payment/dev-relay/probe');
     <title>DevRelay Probe Demo</title>
     <style>
         :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, sans-serif; }
-        body { max-width: 720px; margin: 40px auto; padding: 0 16px; line-height: 1.5; }
-        label { display: block; font-weight: 600; margin: 12px 0 6px; }
-        input, button, textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; font: inherit; }
-        button { cursor: pointer; margin-top: 16px; background: #0f766e; color: #fff; border: 0; border-radius: 8px; }
+        body { max-width: 720px; margin: var(--weline-space-10) auto; padding: 0 var(--spacing-4); line-height: 1.5; }
+        label { display: block; font-weight: 600; margin: var(--spacing-3) 0 var(--spacing-1_5); }
+        input, button, textarea { width: 100%; box-sizing: border-box; padding: var(--spacing-2_5) var(--spacing-3); font: inherit; }
+        button { cursor: pointer; margin-top: var(--spacing-4); background: #0f766e; color: var(--color-text-light); border: 0; border-radius: var(--radius-lg); }
         button:disabled { opacity: .6; cursor: wait; }
-        pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow: auto; font-size: 12px; }
-        .hint { color: #64748b; font-size: 13px; }
-        .ok { color: #059669; }
-        .bad { color: #dc2626; }
+        pre { background: var(--color-header-bg); color: var(--weline-theme-info-subtle); padding: var(--spacing-3); border-radius: var(--radius-lg); overflow: auto; font-size: var(--font-size-xs); }
+        .hint { color: var(--color-link); font-size: var(--font-size-13); }
+        .ok { color: var(--color-success-strong-2); }
+        .bad { color: var(--color-danger-hot); }
     </style>
 </head>
 <body>

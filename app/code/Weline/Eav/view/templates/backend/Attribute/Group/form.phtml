@@ -46,20 +46,20 @@
         </div>
         <div class="w-card__body">
             <w:form class="w-stack needs-validation" data-gap="md" novalidate="" action="{{action}}" method="post">
-                <div class="w-cluster" style="flex-wrap:wrap;align-items:flex-start;gap:1rem;">
-                    <label class="w-field" style="flex:1 1 12rem;min-width:10rem;">
+                <div class="w-grid" data-align="end" style="--w-gap:var(--weline-space-4);">
+                    <label class="w-field" style="--w-span-md:6;--w-span-lg:3;">
                         <span class="w-field__label" for="validationName"><lang>组名</lang></span>
                         <input class="w-input" type="text" maxlength="60" data-parsley-minlength="3"
                                id="validationName" placeholder="@lang{组名}"
                                value="{{group.name}}" name="name" required="">
                     </label>
-                    <label class="w-field" style="flex:1 1 12rem;min-width:10rem;">
+                    <label class="w-field" style="--w-span-md:6;--w-span-lg:3;">
                         <span class="w-field__label" for="validationCode"><lang>组代码</lang></span>
                         <input class="w-input" type="text" maxlength="60" data-parsley-minlength="3"
                                id="validationCode" placeholder="@lang{组代码}"
                                value="{{group.code}}" name="code" required="">
                     </label>
-                    <label class="w-field" style="flex:1 1 12rem;min-width:10rem;">
+                    <label class="w-field" style="--w-span-md:6;--w-span-lg:3;">
                         <span class="w-field__label" for="validationEntity"><lang>实体</lang></span>
                         <select class="w-select" name="eav_entity_id" id="validationEntity" required="">
                             <foreach name="entities">
@@ -67,7 +67,7 @@
                             </foreach>
                         </select>
                     </label>
-                    <label class="w-field" style="flex:1 1 12rem;min-width:10rem;">
+                    <label class="w-field" style="--w-span-md:6;--w-span-lg:3;">
                         <span class="w-field__label" for="validationSet"><lang>属性集</lang></span>
                         <select class="w-select" name="set_id" id="validationSet" required="required" data-selected="{{group.set_id}}">
                             <if condition="group_set">
@@ -76,7 +76,7 @@
                         </select>
                     </label>
                 </div>
-                <div class="w-cluster" style="gap:0.5rem;">
+                <div class="w-cluster" style="--w-gap:var(--weline-space-2);">
                     <button class="w-button" data-tone="primary" type="submit">
                         <empty name="group"><lang>添加</lang><else/><lang>保存</lang></empty>
                     </button>
@@ -92,35 +92,46 @@
 </div>
 
 <js:part>
-(function() {
+(function () {
     'use strict';
 
-    var validationEntity = $('#validationEntity');
-    var validationSet = $('#validationSet');
-
-    validationEntity.change(function () {
-        var selectedOption = $(this).find(':selected').val();
-        renderAttributeSet(selectedOption);
-    });
-
-    var initSelected = validationEntity.find(':selected').val();
-    if(!validationSet.find(':selected').val()){
-        renderAttributeSet(initSelected);
+    var entitySelect = document.getElementById('validationEntity');
+    var setSelect = document.getElementById('validationSet');
+    if (!entitySelect || !setSelect) {
+        return;
     }
 
-    function renderAttributeSet(eav_entity_id) {
-        bqAdmin['eav_admin']((function(cfg){return typeof cfg==='string'?cfg:(cfg&&cfg.url);})("@backend-url('*/backend/attribute/set/api-search')?eav_entity_id=" + eav_entity_id).then(function(res) {
-            var items = res['items'];
-            validationSet.empty();
-            for (var itemsKey in items) {
-                var item = items[itemsKey];
-                var selected = '';
-                if (validationSet.attr('data-selected') === item.set_id) {
-                    selected = 'selected';
+    function renderAttributeSet(entityId) {
+        if (!entityId) {
+            return;
+        }
+        var url = "@backend-url('*/backend/attribute/set/api-search')?eav_entity_id=" + encodeURIComponent(entityId);
+        var req = window.bqAdmin['eav_admin'](url, { silent: true });
+        req.then(function (res) {
+            var payload = (res && res.data) ? res.data : res;
+            var items = (payload && payload.items) ? payload.items : {};
+            var selectedValue = setSelect.getAttribute('data-selected') || '';
+            setSelect.innerHTML = '';
+            Object.keys(items).forEach(function (key) {
+                var item = items[key] || {};
+                var option = document.createElement('option');
+                option.value = String(item.set_id);
+                option.textContent = String(item.name);
+                if (String(item.set_id) === selectedValue) {
+                    option.selected = true;
                 }
-                validationSet.append("<option value='" + item.set_id + "' " + selected + ">" + window.lang(item.name) + "</option>");
-            }
+                setSelect.appendChild(option);
+            });
+        }).catch(function () {
         });
+    }
+
+    entitySelect.addEventListener('change', function () {
+        renderAttributeSet(entitySelect.value);
+    });
+
+    if (!setSelect.value) {
+        renderAttributeSet(entitySelect.value);
     }
 })();
 </js:part>

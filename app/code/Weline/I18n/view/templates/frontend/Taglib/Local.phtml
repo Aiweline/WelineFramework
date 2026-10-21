@@ -14,7 +14,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 <head>
     @template(Weline_Admin::common/head.phtml)
     <link rel="stylesheet" href="@static(Weline_I18n::css/local-translation.css)">
-    <title><?= __('I18n翻译') ?></title>
+    <title><lang>I18n翻译</lang></title>
 </head>
 
 <body <?= $themeConfig->getLayouts() ?? ''; ?>>

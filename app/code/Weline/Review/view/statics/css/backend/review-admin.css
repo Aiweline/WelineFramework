@@ -1,0 +1,23 @@
+/* Weline Review 后台页面私有布局/尺寸（Token-only，见后端主题开发标准 §6.2） */
+@layer page {
+    .w-review-media {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(calc(var(--weline-space-12) * 2), 1fr));
+        gap: var(--weline-space-2);
+    }
+
+    .w-review-media__item {
+        margin: 0;
+        min-inline-size: 0;
+    }
+
+    .w-review-media__item img,
+    .w-review-media__item video {
+        display: block;
+        inline-size: 100%;
+        block-size: calc(var(--weline-space-12) * 2);
+        object-fit: cover;
+        border-radius: var(--weline-radius-sm);
+        background: var(--weline-theme-surface-muted);
+    }
+}

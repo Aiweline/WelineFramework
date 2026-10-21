@@ -1,3 +1,4 @@
+<css>Weline_Dropship::css/backend/dropship-admin.css</css>
 <?php
 /**
  * 货源履约仓对接（原型变体 A）：货源轨 + 远程覆盖行内绑定 + 翻页。
@@ -32,88 +33,6 @@ $queryBase = static function (array $extra = []) use ($selectedProvider, $select
     return http_build_query($params, '', '&', PHP_QUERY_RFC3986);
 };
 ?>
-<style data-dropship-wh-layout="1">
-[data-dropship-admin="warehouses"] .ds-wh-layout{
-  display:grid;
-  grid-template-columns:minmax(200px,240px) minmax(0,1fr);
-  gap:var(--weline-space-4);
-  align-items:start;
-}
-[data-dropship-admin="warehouses"] .ds-wh-rail{
-  background:var(--weline-theme-surface,var(--color-surface));
-  color:var(--weline-theme-on-surface,var(--color-on-surface,inherit));
-  border:1px solid var(--weline-theme-border,var(--color-border));
-  border-radius:var(--weline-theme-radius-lg,12px);
-  padding:var(--weline-space-3);
-}
-[data-dropship-admin="warehouses"] .ds-wh-rail a{
-  display:block;
-  color:inherit;
-  text-decoration:none;
-  border-radius:var(--weline-theme-radius-md,8px);
-  padding:var(--weline-space-3);
-  margin-bottom:var(--weline-space-1);
-  border-left:3px solid transparent;
-  transition:background-color .15s ease,border-color .15s ease,color .15s ease;
-}
-[data-dropship-admin="warehouses"] .ds-wh-rail a:hover{
-  background:var(--weline-theme-primary-surface);
-}
-[data-dropship-admin="warehouses"] .ds-wh-rail a[aria-current="true"]{
-  background:var(--weline-theme-primary);
-  color:var(--weline-theme-on-primary);
-  border-left-color:var(--weline-theme-primary-hover,var(--weline-theme-primary));
-  box-shadow:none;
-  font-weight:600;
-}
-[data-dropship-admin="warehouses"] .ds-wh-rail a[aria-current="true"] .w-text{
-  opacity:.92;
-  color:inherit;
-}
-[data-dropship-admin="warehouses"] .ds-wh-stats{
-  display:grid;
-  grid-template-columns:repeat(3,minmax(0,1fr));
-  gap:var(--weline-space-3);
-  margin-bottom:var(--weline-space-4);
-}
-[data-dropship-admin="warehouses"] .ds-wh-stat{
-  border:1px dashed var(--weline-theme-border,var(--color-border));
-  border-radius:var(--weline-theme-radius-md,8px);
-  padding:var(--weline-space-3);
-}
-[data-dropship-admin="warehouses"] .ds-wh-stat b{
-  display:block;
-  font-size:1.35rem;
-  line-height:1.2;
-}
-[data-dropship-admin="warehouses"] .ds-wh-row{
-  display:grid;
-  grid-template-columns:minmax(0,1.1fr) minmax(220px,1.3fr) auto auto;
-  gap:var(--weline-space-3);
-  align-items:center;
-  padding:var(--weline-space-3) 0;
-  border-bottom:1px solid var(--weline-theme-border,var(--color-border));
-}
-[data-dropship-admin="warehouses"] .ds-wh-row:last-child{border-bottom:0;}
-[data-dropship-admin="warehouses"] .ds-wh-pager{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:var(--weline-space-3);
-  flex-wrap:wrap;
-  margin-top:var(--weline-space-4);
-}
-[data-dropship-admin="warehouses"] .w-select{
-  height:var(--weline-theme-control-height,38px);
-  min-height:var(--weline-theme-control-height,38px);
-  box-sizing:border-box;
-}
-@media (max-width:960px){
-  [data-dropship-admin="warehouses"] .ds-wh-layout{grid-template-columns:1fr;}
-  [data-dropship-admin="warehouses"] .ds-wh-row{grid-template-columns:1fr;}
-  [data-dropship-admin="warehouses"] .ds-wh-stats{grid-template-columns:1fr;}
-}
-</style>
 <div class="w-grid" data-dropship-admin="warehouses" data-testid="dropship-warehouse-map"
      data-selected-scope="<?= $escape($selectedScope) ?>"
      data-selected-provider="<?= $escape($selectedProvider) ?>"
@@ -142,7 +61,7 @@ $queryBase = static function (array $extra = []) use ($selectedProvider, $select
                            aria-current="<?= $code === $selectedProvider ? 'true' : 'false' ?>"
                            data-testid="dropship-wh-rail-<?= $escape($code) ?>">
                             <strong><?= $escape($title) ?></strong>
-                            <div class="w-text" data-size="sm" style="opacity:.75;margin-top:2px;">
+                            <div class="w-text" data-size="sm" style="opacity:.75;margin-block-start:var(--weline-space-1);">
                                 <?= $escape($code) ?> · <?= __('远程') ?> <?= $remoteTotal ?> · <?= __('已绑') ?> <?= $boundCount ?> · <?= __('缺口') ?> <?= $gapCount ?>
                             </div>
                         </a>

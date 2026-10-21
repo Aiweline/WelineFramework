@@ -9,13 +9,7 @@ $defaultPath = $request->getPost('scan_path', 'Weline_Theme::view/theme/frontend
 $defaultNamespace = $request->getPost('namespace', 'theme');
 $strictMode = (bool)$request->getPost('strict_mode', true);
 ?>
-<style>
-    .scan-card-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 16px;
-    }
-</style>
+<css>Weline_Meta::css/backend/meta-scanner.css</css>
 
 <div class="w-grid" style="--w-mb:var(--weline-space-4);">
     <div style="--w-span:12;">

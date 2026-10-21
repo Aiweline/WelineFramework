@@ -28,7 +28,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         body {
             background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
             min-height: 100vh;
-            color: #ffffff;
+            color: var(--color-text-light);
             font-family: 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif;
             overflow-x: hidden;
             position: relative;
@@ -65,16 +65,16 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         .navbar {
             background: rgba(15, 15, 35, 0.8);
             backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(102, 126, 234, 0.2);
-            padding: 1rem 0;
+            border-bottom: var(--border-width-thin) solid rgba(102, 126, 234, 0.2);
+            padding: var(--weline-space-4) 0;
             position: sticky;
             top: 0;
             z-index: 1000;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+            box-shadow: var(--weline-shadow-md);
         }
 
         .navbar-brand {
-            font-size: 1.5rem;
+            font-size: var(--weline-font-size-2xl);
             font-weight: bold;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             -webkit-background-clip: text;
@@ -83,14 +83,14 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         }
 
         .nav-link {
-            color: #a8b2d1 !important;
+            color: #a8b2d1;
             transition: all 0.3s;
             position: relative;
-            padding: 0.5rem 1rem !important;
+            padding: var(--weline-space-2) var(--weline-space-4);
         }
 
         .nav-link:hover {
-            color: #667eea !important;
+            color: var(--color-text-faint);
             transform: translateY(-2px);
         }
 
@@ -112,7 +112,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
 
         /* 英雄区域 */
         .hero-section {
-            padding: 80px 0;
+            padding: var(--spacing-5rem) 0;
             position: relative;
             z-index: 1;
         }
@@ -120,7 +120,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         .hero-title {
             font-size: 3.5rem;
             font-weight: 700;
-            margin-bottom: 1.5rem;
+            margin-bottom: var(--weline-space-6);
             background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #00f2fe 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -133,9 +133,9 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         }
 
         .hero-subtitle {
-            font-size: 1.5rem;
+            font-size: var(--weline-font-size-2xl);
             color: #a8b2d1;
-            margin-bottom: 2.5rem;
+            margin-bottom: var(--weline-space-10);
         }
 
         /* 科技感按钮 */
@@ -143,13 +143,13 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border: none;
             color: white;
-            padding: 14px 40px;
-            font-size: 1.1rem;
-            border-radius: 50px;
+            padding: var(--spacing-3_5) var(--weline-space-10);
+            font-size: var(--font-size-lg);
+            border-radius: var(--weline-theme-radius-full);;
             position: relative;
             overflow: hidden;
             transition: all 0.3s;
-            box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+            box-shadow: var(--weline-shadow-md);
         }
 
         .weline-btn-tech::before {
@@ -167,7 +167,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
 
         .weline-btn-tech:hover {
             transform: translateY(-3px);
-            box-shadow: 0 0 40px rgba(102, 126, 234, 0.8), 0 5px 20px rgba(0, 0, 0, 0.3);
+            box-shadow: var(--weline-shadow-lg);
         }
 
         .weline-btn-tech:hover::before {
@@ -179,8 +179,8 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         .stats-container {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 2rem;
-            margin: 60px 0;
+            gap: var(--weline-space-8);
+            margin: var(--spacing-15) 0;
             position: relative;
             z-index: 1;
         }
@@ -188,9 +188,9 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         .stat-card {
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(102, 126, 234, 0.3);
-            border-radius: 20px;
-            padding: 2rem;
+            border: var(--border-width-thin) solid rgba(102, 126, 234, 0.3);
+            border-radius: var(--weline-theme-radius-2xl);;
+            padding: var(--weline-space-8);
             text-align: center;
             transition: all 0.3s;
             position: relative;
@@ -212,7 +212,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         .stat-card:hover {
             transform: translateY(-10px);
             border-color: rgba(102, 126, 234, 0.8);
-            box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+            box-shadow: var(--weline-shadow-md);
         }
 
         .stat-card:hover::before {
@@ -224,24 +224,24 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             background: linear-gradient(135deg, #667eea, #764ba2);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            margin-bottom: 1rem;
+            margin-bottom: var(--weline-space-4);
         }
 
         .stat-number {
             font-size: 2.5rem;
             font-weight: bold;
             color: #00f2fe;
-            margin-bottom: 0.5rem;
+            margin-bottom: var(--weline-space-2);
         }
 
         .stat-label {
             color: #a8b2d1;
-            font-size: 1rem;
+            font-size: var(--weline-font-size-base);
         }
 
         /* AI模型卡片 */
         .models-section {
-            padding: 60px 0;
+            padding: var(--spacing-15) 0;
             position: relative;
             z-index: 1;
         }
@@ -250,7 +250,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             font-size: 2.5rem;
             font-weight: 700;
             text-align: center;
-            margin-bottom: 3rem;
+            margin-bottom: var(--weline-space-12);
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -259,15 +259,15 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         .models-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 2rem;
+            gap: var(--weline-space-8);
         }
 
         .model-card {
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(102, 126, 234, 0.2);
-            border-radius: 16px;
-            padding: 1.5rem;
+            border: var(--border-width-thin) solid rgba(102, 126, 234, 0.2);
+            border-radius: var(--radius-2xl);
+            padding: var(--weline-space-6);
             transition: all 0.3s;
             cursor: pointer;
             position: relative;
@@ -288,7 +288,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         .model-card:hover {
             transform: translateY(-5px);
             border-color: rgba(102, 126, 234, 0.6);
-            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+            box-shadow: var(--weline-shadow-md);
         }
 
         .model-card:hover::after {
@@ -299,43 +299,43 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             display: inline-block;
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
-            padding: 0.3rem 0.8rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            margin-bottom: 1rem;
+            padding: var(--spacing-xs) var(--spacing-0_8);
+            border-radius: var(--weline-theme-radius-2xl);;
+            font-size: var(--font-size-sm);
+            margin-bottom: var(--weline-space-4);
         }
 
         .model-name {
-            font-size: 1.3rem;
+            font-size: var(--font-size-xl);
             font-weight: 600;
-            color: #ffffff;
-            margin-bottom: 0.5rem;
+            color: var(--color-text-light);
+            margin-bottom: var(--weline-space-2);
         }
 
         .model-code {
             color: #00f2fe;
             font-family: 'Courier New', monospace;
-            font-size: 0.9rem;
-            margin-bottom: 1rem;
+            font-size: var(--font-size-sm);
+            margin-bottom: var(--weline-space-4);
         }
 
         .model-description {
             color: #a8b2d1;
-            font-size: 0.95rem;
+            font-size: var(--font-size-base);
             line-height: 1.6;
-            margin-bottom: 1rem;
+            margin-bottom: var(--weline-space-4);
         }
 
         .model-status {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.4rem 1rem;
+            gap: var(--weline-space-2);
+            padding: var(--spacing-0_4) var(--weline-space-4);
             background: rgba(0, 242, 254, 0.1);
-            border: 1px solid rgba(0, 242, 254, 0.3);
-            border-radius: 20px;
+            border: var(--border-width-thin) solid rgba(0, 242, 254, 0.3);
+            border-radius: var(--weline-theme-radius-2xl);;
             color: #00f2fe;
-            font-size: 0.85rem;
+            font-size: var(--font-size-sm);
         }
 
         .status-dot {
@@ -347,18 +347,18 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         }
 
         @keyframes pulse {
-            0%, 100% { opacity: 1; box-shadow: 0 0 10px #00f2fe; }
-            50% { opacity: 0.5; box-shadow: 0 0 5px #00f2fe; }
+            0%, 100% { opacity: 1; box-shadow: var(--weline-shadow-md); }
+            50% { opacity: 0.5; box-shadow: var(--weline-shadow-md); }
         }
 
         /* 页脚 */
         .footer {
             background: rgba(15, 15, 35, 0.9);
-            border-top: 1px solid rgba(102, 126, 234, 0.2);
-            padding: 2rem 0;
+            border-top: var(--border-width-thin) solid rgba(102, 126, 234, 0.2);
+            padding: var(--weline-space-8) 0;
             text-align: center;
             color: #a8b2d1;
-            margin-top: 80px;
+            margin-top: var(--spacing-5rem);
         }
 
         /* 响应式设计 */
@@ -368,7 +368,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             }
 
             .hero-subtitle {
-                font-size: 1.2rem;
+                font-size: var(--font-size-xl);
             }
 
             .models-grid {

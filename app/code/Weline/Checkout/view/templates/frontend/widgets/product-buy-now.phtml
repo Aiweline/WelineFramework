@@ -66,9 +66,9 @@ $buttonEnabled = $isPreviewMode ? false : ($sellable && $offerUuid !== '');
      data-widget-module="Weline_Checkout"
      data-widget-code="product-buy-now"
      data-uid="<?= $escape($scope->uid) ?>"
-     data-purchase-loading="<?= $escape(__('正在前往结账...')) ?>"
-     data-purchase-success="<?= $escape(__('正在前往结账...')) ?>"
-     data-purchase-error="<?= $escape(__('结账准备失败')) ?>"
+     data-purchase-loading="<lang>正在前往结账...</lang>"
+     data-purchase-success="<lang>正在前往结账...</lang>"
+     data-purchase-error="<lang>结账准备失败</lang>"
      weline-code="<?= $escape($scope->code) ?>">
     <button type="button"
             class="product-native-detail__buy-now weline-pixel::buy-now"
@@ -80,6 +80,6 @@ $buttonEnabled = $isPreviewMode ? false : ($sellable && $offerUuid !== '');
             data-checkout-url="@url{'checkout'}"
             data-qty="1"
             <?= $buttonEnabled ? '' : 'disabled' ?>>
-        <?= __('立即结账') ?>
+        <lang>立即结账</lang>
     </button>
 </div>

@@ -234,7 +234,6 @@ ID,ID
 关闭,Close
 保存更改,"Save changes"
 确认删除,"Confirm deletion"
-确认,Confirm
 属性代码,"Attribute Code"
 属性配置项,"Attribute configuration item"
 暂无配置项。,"No configuration items."
@@ -454,6 +453,7 @@ EAV属性依赖解析缺少必要参数：%{1},"Missing required EAV attribute d
 类型不存在:%{1},"Type does not exist: %{1}"
 "属性类型添加失败 %{1}","Failed to add attribute type %{1}"
 "EAV Scope 工具：help/preflight/ensure-columns（apply 仅隔离 clone，经 scope:migrate-p1a）","EAV Scope tool: help/preflight/ensure-columns (apply only isolate clone, via scope:migrate-p1a)"
+确认,Confirm
 Eav>属性管理,"Eav>Attribute Management"
 Eav实体-属性管理,"Eav entity-attribute management"
 管理实体的属性,"Manage Entity Attributes"

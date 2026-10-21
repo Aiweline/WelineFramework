@@ -1,0 +1,19 @@
+/* Weline_Visitor 像素错误监控页私有布局（后端主题标准 §6.2）。
+ * 颜色全部取主题 Token；不使用强制优先级。
+ */
+@layer page {
+    tr[data-event-accent] {
+        box-shadow: inset 3px 0 0 var(--event-accent);
+    }
+
+    .pixel-error-pre {
+        margin: 0;
+        white-space: pre-wrap;
+        font-family: var(--weline-font-mono);
+    }
+
+    .pixel-error-pre--scroll {
+        max-height: 15rem;
+        overflow: auto;
+    }
+}

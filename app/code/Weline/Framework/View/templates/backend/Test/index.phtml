@@ -6,7 +6,8 @@ $runId = isset($run_id) ? (int)$run_id : 0;
 $uiEnabled = !empty($ui_enabled);
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
-<div class="framework-test-shell card"
+<link rel="stylesheet" href="@static(Weline_Framework::css/backend/framework-test.css)">
+<div class="framework-test-shell w-card"
      id="framework-test-app"
      data-provider="test"
      data-page="<?= $escape($page) ?>"
@@ -31,7 +32,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
      data-text-ui-saved-on="<?= $escape(__('已保存：UI 测试开启')) ?>"
      data-text-ui-saved-off="<?= $escape(__('已保存：UI 测试关闭')) ?>"
      data-text-error="<?= $escape(__('操作失败：%{1}')) ?>">
-    <div class="card-body">
+    <div class="w-card__body">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
             <div>
                 <h4 class="mb-1"><lang>测试管理</lang></h4>
@@ -42,24 +43,24 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                     <input class="form-check-input mt-0" type="checkbox" role="switch" id="ft-ui-enabled"<?= $uiEnabled ? ' checked' : '' ?>>
                     <label class="form-check-label ms-2" for="ft-ui-enabled"><lang>UI 测试</lang></label>
                 </div>
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="ft-refresh">
+                <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" id="ft-refresh">
                     <i class="mdi mdi-refresh me-1" aria-hidden="true"></i><lang>刷新目录</lang>
                 </button>
-                <a class="btn btn-outline-primary btn-sm" href="@url{'*/backend/test'}">
+                <a class="w-button" data-tone="primary" data-variant="outline" data-size="sm" href="@url{'*/backend/test'}">
                     <i class="mdi mdi-view-list me-1" aria-hidden="true"></i><lang>模块总览</lang>
                 </a>
             </div>
         </div>
 
-        <div class="alert alert-info py-2" role="status">
+        <div class="w-alert" data-tone="info" role="status">
             <lang>「UI 测试」开启后，总览直跑 / 详情运行都会以 headed 启动；偏好保存在系统配置。服务器无图形界面时请关闭。</lang>
         </div>
 
-        <div class="ft-status alert" id="ft-status" role="status" aria-live="polite" hidden></div>
+        <div class="ft-status w-alert" id="ft-status" role="status" aria-live="polite" hidden></div>
 
         <div id="ft-panel-modules" <?= $page === 'modules' ? '' : 'hidden' ?>>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
+            <div class="w-table-wrap">
+                <table class="w-table" data-w-vertical="middle">
                     <thead>
                     <tr>
                         <th><lang>模块</lang></th>
@@ -83,24 +84,24 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                     <small class="text-muted" id="ft-module-counts"></small>
                 </div>
             </div>
-            <ul class="nav nav-tabs mb-3" role="tablist">
-                <li class="nav-item"><button type="button" class="nav-link active" data-ft-tab="e2e"><lang>E2E</lang></button></li>
-                <li class="nav-item"><button type="button" class="nav-link" data-ft-tab="unit"><lang>单元</lang></button></li>
-                <li class="nav-item"><button type="button" class="nav-link" data-ft-tab="integration"><lang>集成</lang></button></li>
+            <ul class="w-tabs__list" role="tablist">
+                <li role="presentation"><button type="button" class="w-tabs__tab active" data-ft-tab="e2e"><lang>E2E</lang></button></li>
+                <li role="presentation"><button type="button" class="w-tabs__tab" data-ft-tab="unit"><lang>单元</lang></button></li>
+                <li role="presentation"><button type="button" class="w-tabs__tab" data-ft-tab="integration"><lang>集成</lang></button></li>
             </ul>
             <div class="d-flex flex-wrap gap-2 mb-2">
-                <button type="button" class="btn btn-primary btn-sm ft-run-action" id="ft-run-selected">
+                <button type="button" class="w-button ft-run-action" data-tone="primary" data-size="sm" id="ft-run-selected">
                     <lang>运行选中</lang> (0)
                 </button>
-                <button type="button" class="btn btn-outline-primary btn-sm ft-run-action" id="ft-run-all">
+                <button type="button" class="w-button ft-run-action" data-tone="primary" data-variant="outline" data-size="sm" id="ft-run-all">
                     <lang>运行整个模块</lang>
                 </button>
             </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle">
+            <div class="w-table-wrap">
+                <table class="w-table">
                     <thead>
                     <tr>
-                        <th style="width:2rem">
+                        <th style="inline-size:var(--weline-space-8);">
                             <input type="checkbox" id="ft-check-all" aria-label="<?= $escape(__('选择全部用例')) ?>">
                         </th>
                         <th><lang>用例文件</lang></th>
@@ -113,26 +114,26 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
         </div>
 
         <div id="ft-panel-run" <?= $page === 'run' ? '' : 'hidden' ?>>
-            <div class="row g-3 mb-3">
-                <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted small"><lang>状态</lang></div><strong id="ft-run-status">—</strong></div></div>
-                <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted small"><lang>进度</lang></div><strong id="ft-run-percent">0%</strong></div></div>
-                <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted small"><lang>通过/失败</lang></div><strong id="ft-run-score">0 / 0</strong></div></div>
-                <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted small"><lang>当前</lang></div><strong class="d-block text-truncate" id="ft-run-current">—</strong></div></div>
+            <div class="w-grid framework-test-run-stats">
+                <div style="--w-span-md:3;"><div class="w-card"><div class="w-card__body"><div class="w-text" data-tone="muted" data-size="sm"><lang>状态</lang></div><strong id="ft-run-status">—</strong></div></div>
+                <div style="--w-span-md:3;"><div class="w-card"><div class="w-card__body"><div class="w-text" data-tone="muted" data-size="sm"><lang>进度</lang></div><strong id="ft-run-percent">0%</strong></div></div>
+                <div style="--w-span-md:3;"><div class="w-card"><div class="w-card__body"><div class="w-text" data-tone="muted" data-size="sm"><lang>通过/失败</lang></div><strong id="ft-run-score">0 / 0</strong></div></div>
+                <div style="--w-span-md:3;"><div class="w-card"><div class="w-card__body"><div class="w-text" data-tone="muted" data-size="sm"><lang>当前</lang></div><strong class="w-text" data-truncate="true" id="ft-run-current">—</strong></div></div>
             </div>
-            <div class="progress mb-3" style="height: .75rem;">
-                <div class="progress-bar" id="ft-run-bar" style="width:0%"></div>
+            <div class="w-progress framework-test-progress">
+                <div class="w-progress__bar" id="ft-run-bar" style="width:0%"></div>
             </div>
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h6 class="mb-0"><lang>实时日志</lang></h6>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="ft-rerun" hidden><lang>再次运行</lang></button>
+                <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" id="ft-rerun" hidden><lang>再次运行</lang></button>
             </div>
-            <pre class="border rounded bg-dark text-light p-3" id="ft-run-log" style="min-height:18rem;max-height:28rem;overflow:auto;white-space:pre-wrap;"></pre>
+            <pre class="framework-test-log" id="ft-run-log"></pre>
         </div>
 
-        <hr class="my-4">
+        <hr class="framework-test-divider">
         <h6><lang>最近运行</lang></h6>
-        <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
+        <div class="w-table-wrap">
+            <table class="w-table">
                 <thead>
                 <tr>
                     <th>ID</th>

@@ -315,7 +315,7 @@
 
 .weline-review__media-thumb:hover {
     border-color: var(--wr-accent);
-    box-shadow: 0 0 0 var(--border-width-medium) var(--wr-accent-soft);
+    box-shadow: var(--focus-ring);
 }
 
 .weline-review__media-thumb:focus-visible {

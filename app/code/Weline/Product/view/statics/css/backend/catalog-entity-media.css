@@ -75,3 +75,8 @@
     block-size: 100%;
     border: 0;
 }
+
+/* Website 切换器（品牌/供应商后台复用商品管理选择器尺寸） */
+.w-product-admin__website-select {
+    min-inline-size: 12rem;
+}

@@ -29,12 +29,12 @@ $hasPersona = is_array($persona);
     <div style="--w-span:12;">
         <?php // 页题由后台 chrome 输出；站点切换放页头右侧（全局上下文），勿再占主列大卡 ?>
         <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between" data-wrap="true" style="--w-gap:var(--weline-space-3); --w-mb:var(--weline-space-4);" data-testid="ops-desk-heading">
-            <p class="w-backend-page__subtitle" style="--w-mb:0; flex:1 1 14rem;">
+            <p class="w-backend-page__subtitle" style="--w-mb:0;flex:1 1 30ch;">
                 <?= __('AI 运营默认关闭，需本页手动开启。开启后：画像、社媒/GSC/站内事件连接、任务中心与日更派工才生效。') ?>
             </p>
             <form method="get" id="ops-desk-website-form" class="w-cluster" data-align="center" data-wrap="true" data-testid="ops-desk-website-form" style="--w-gap:var(--weline-space-2); flex:0 1 auto;">
                 <label class="w-field__label" for="ops-desk-website" style="--w-mb:0; white-space:nowrap;"><?= __('网站') ?></label>
-                <div style="min-width:min(100%,16rem); width:min(22rem,100%);" data-testid="ops-desk-website-select">
+                <div style="min-inline-size:min(100%,40ch);width:min(40ch,100%);" data-testid="ops-desk-website-select">
                     <w:websites:website:select
                         id="ops-desk-website"
                         name="website_id"

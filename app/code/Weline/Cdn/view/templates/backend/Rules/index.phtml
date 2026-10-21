@@ -1,3 +1,4 @@
+<css>Weline_Cdn::css/backend/cdn-admin.css</css>
 <?php
 /**
  * CDN规则管理列表页
@@ -43,7 +44,7 @@ $escapeAttr = static function (mixed $value): string {
                     data-wrap="true"
                     style="--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);"
                 >
-                    <div class="w-field" style="--w-mb:0;flex:1 1 16rem;max-inline-size:24rem;">
+                    <div class="w-field cdn-filter__field" style="--w-mb:0;">
                         <label class="w-field__label" for="domainSelect"><?= __('选择域名') ?></label>
                         <div class="w-field__control">
                             <select id="domainSelect" class="w-select" data-cdn-rules-action="load">
@@ -135,7 +136,7 @@ $escapeAttr = static function (mixed $value): string {
                     <div
                         id="pushLogContainer"
                         class="w-text"
-                        style="max-block-size:25rem;overflow-y:auto;background:var(--backend-color-bg-secondary);"
+                        class="cdn-rules-preview" style="background:var(--backend-color-bg-secondary);"
                         data-family="mono"
                         data-w-radius="md"
                         data-size="sm"

@@ -1,0 +1,30 @@
+/**
+ * Weline_CacheManager 后台页面私有布局（System/FullPageCache/index）。
+ * 只承载页面私有布局/尺寸/定位；只消费主题 Token；无 !important；统一在 @layer page 内。
+ */
+@layer page {
+.fpc-page { display: flex; flex-direction: column; gap: 18px; }
+    .fpc-hero { background: var(--weline-theme-surface-muted); color: var(--weline-theme-surface); border-radius: 18px; padding: 24px; box-shadow: var(--weline-theme-shadow-sm); }
+    .fpc-hero h2 { color: var(--weline-theme-surface); margin: 0 0 8px; font-size: 26px; font-weight: 800; }
+    .fpc-hero p { margin: 0; max-width: 880px; color: var(--weline-theme-text-muted); line-height: 1.7; }
+    .fpc-card { background: var(--weline-theme-surface); border: 1px solid var(--weline-theme-border); border-radius: 16px; padding: 20px; box-shadow: var(--weline-theme-shadow-sm); }
+    .fpc-card h3 { margin: 0 0 6px; font-size: 18px; font-weight: 750; color: var(--weline-theme-text); }
+    .fpc-card > p { margin: 0 0 16px; color: var(--weline-theme-text-muted); line-height: 1.6; }
+    .fpc-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--weline-theme-surface-muted); }
+    .fpc-row:first-of-type { border-top: 0; padding-top: 0; }
+    .fpc-row h4 { margin: 0 0 4px; font-size: 15px; color: var(--weline-theme-text); }
+    .fpc-row p { margin: 0; color: var(--weline-theme-text-muted); font-size: 13px; line-height: 1.5; max-width: 520px; }
+    .fpc-switch { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--weline-theme-text); white-space: nowrap; }
+    .fpc-switch input { width: 18px; height: 18px; }
+    .fpc-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 8px; }
+    .fpc-metric { background: var(--weline-theme-surface); border: 1px solid var(--weline-theme-surface); border-radius: 12px; padding: 12px; }
+    .fpc-metric span { display: block; color: var(--weline-theme-text-muted); font-size: 12px; margin-bottom: 6px; }
+    .fpc-metric strong { word-break: break-all; font-size: 13px; color: var(--weline-theme-text); }
+    .fpc-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 16px; }
+    .fpc-actions button, .fpc-btn { border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 750; cursor: pointer; }
+    .fpc-btn-primary { background: var(--weline-theme-text-muted); color: var(--weline-theme-surface); }
+    .fpc-btn-secondary { background: var(--weline-theme-border); color: var(--weline-theme-text); }
+    .fpc-notice { border-radius: 12px; padding: 12px 14px; background: var(--weline-theme-surface); color: var(--weline-theme-success); font-weight: 650; }
+    .fpc-notice.is-error { background: var(--weline-theme-surface); color: var(--weline-theme-text); }
+    .fpc-hint { font-size: 12px; color: var(--weline-theme-text-muted); margin-top: 8px; }
+}

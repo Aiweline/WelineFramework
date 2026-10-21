@@ -76,46 +76,46 @@ $defaultMethodIndex = (int) ($this->getData('payment_method_default_index') ?? 0
          weline-code="helppay.payer.page">
     <header class="w-helppay-payer__head w-stack" style="--w-gap:var(--weline-space-2, var(--space-2));">
         <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;"><lang>帮我付</lang></p>
-        <h1 class="w-text" data-weight="strong" style="--w-m:0;"><?= $escape(__('帮他人付款')) ?></h1>
+        <h1 class="w-text" data-weight="strong" style="--w-m:0;"><lang>帮他人付款</lang></h1>
         <p class="w-text" data-tone="muted" style="--w-m:0;">
-            <a data-testid="help-pay-payer-rules" href="<?= $escape($rulesUrl) ?>" target="_blank" rel="noopener noreferrer"><?= $escape(__('付款说明')) ?></a>
+            <a data-testid="help-pay-payer-rules" href="<?= $escape($rulesUrl) ?>" target="_blank" rel="noopener noreferrer"><lang>付款说明</lang></a>
             ·
-            <a data-testid="help-pay-payer-privacy" href="<?= $escape($privacyUrl) ?>" target="_blank" rel="noopener noreferrer"><?= $escape(__('隐私说明')) ?></a>
+            <a data-testid="help-pay-payer-privacy" href="<?= $escape($privacyUrl) ?>" target="_blank" rel="noopener noreferrer"><lang>隐私说明</lang></a>
         </p>
     </header>
 
     <div class="w-helppay-payer__grid" data-testid="help-pay-payer-grid">
         <div class="w-helppay-payer__main w-stack" style="--w-gap:var(--weline-space-4, var(--space-4));">
             <div class="w-helppay-panel" data-testid="help-pay-summary">
-                <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;"><?= $escape(__('应付金额')) ?></p>
+                <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;"><lang>应付金额</lang></p>
                 <p class="w-helppay-panel__amount" style="--w-m:0;">
                     <strong data-helppay-payable-amount><?= $escape($currency) ?> <?= $escape(number_format($amount, 2)) ?></strong>
                 </p>
                 <p class="w-text" data-size="sm" data-tone="muted" data-testid="help-pay-shipping-redacted-note">
-                    <?= $escape(__('收货地址已由发起人确认。')) ?>
+                    <lang>收货地址已由发起人确认。</lang>
                 </p>
             </div>
 
             <div class="w-helppay-panel" data-testid="help-pay-shipping-method">
-                <h2 class="w-text" data-weight="strong"><?= $escape(__('物流方式')) ?></h2>
+                <h2 class="w-text" data-weight="strong"><lang>物流方式</lang></h2>
                 <p class="w-text" data-size="sm" data-tone="muted">
-                    <?= $escape(__('请选择物流（仅影响运费，不展示收货地址）。')) ?>
+                    <lang>请选择物流（仅影响运费，不展示收货地址）。</lang>
                 </p>
                 <?php if ($missingWeight): ?>
                     <div class="w-alert" data-tone="warning" role="alert" data-testid="help-pay-shipping-missing-weight">
                         <div class="w-alert__content">
-                            <p><?= $escape(__('商品缺少重量，无法计算运费。请联系发起人或客服后再试。')) ?></p>
+                            <p><lang>商品缺少重量，无法计算运费。请联系发起人或客服后再试。</lang></p>
                         </div>
                     </div>
                 <?php elseif ($normalizedOptions === []): ?>
                     <div class="w-alert" data-tone="warning" role="alert" data-testid="help-pay-shipping-empty">
                         <div class="w-alert__content">
-                            <p><?= $escape(__('该地址暂无可用配送方式，请联系发起人更换地址后重试。')) ?></p>
+                            <p><lang>该地址暂无可用配送方式，请联系发起人更换地址后重试。</lang></p>
                         </div>
                     </div>
                 <?php else: ?>
                     <label class="w-field">
-                        <span class="w-field__label"><?= $escape(__('配送方式')) ?></span>
+                        <span class="w-field__label"><lang>配送方式</lang></span>
                         <select class="w-select" data-helppay-shipping-method data-testid="help-pay-shipping-select">
                             <?php foreach ($normalizedOptions as $option): ?>
                                 <option value="<?= $escape((string) $option['service_code']) ?>"
@@ -132,16 +132,16 @@ $defaultMethodIndex = (int) ($this->getData('payment_method_default_index') ?? 0
         </div>
 
         <aside class="w-helppay-payer__pay w-helppay-panel" data-testid="help-pay-payment">
-            <h2 class="w-text" data-weight="strong"><?= $escape(__('支付方式')) ?></h2>
+            <h2 class="w-text" data-weight="strong"><lang>支付方式</lang></h2>
             <p class="w-text" data-size="sm" data-tone="muted">
-                <?= $escape(__('请选择适合您的支付方式完成付款。')) ?>
+                <lang>请选择适合您的支付方式完成付款。</lang>
             </p>
 
             <fieldset class="w-stack w-helppay-payer__methods weline-checkout__options"
                       style="--w-gap:var(--weline-space-2, var(--space-2)); border:0; margin:0; padding:0;"
                       data-testid="help-pay-payment-methods"
                       data-helppay-payment-methods>
-                <legend class="w-text" data-weight="strong" style="--w-m:0;"><?= $escape(__('选择支付方式')) ?></legend>
+                <legend class="w-text" data-weight="strong" style="--w-m:0;"><lang>选择支付方式</lang></legend>
                 <?php if ($paymentMethodsHtml !== ''): ?>
                     <?= $paymentMethodsHtml ?>
                 <?php elseif ($paymentMethods !== []): ?>
@@ -176,8 +176,8 @@ $defaultMethodIndex = (int) ($this->getData('payment_method_default_index') ?? 0
                 <?php else: ?>
                     <div class="w-alert" data-tone="warning" role="alert" data-testid="help-pay-payment-empty">
                         <div class="w-alert__content">
-                            <div class="w-alert__title"><?= $escape(__('暂无可用支付方式')) ?></div>
-                            <p><?= $escape(__('暂无可用支付方式。')) ?></p>
+                            <div class="w-alert__title"><lang>暂无可用支付方式</lang></div>
+                            <p><lang>暂无可用支付方式。</lang></p>
                         </div>
                     </div>
                 <?php endif; ?>
@@ -196,27 +196,27 @@ $defaultMethodIndex = (int) ($this->getData('payment_method_default_index') ?? 0
                          data-money-summary-mode="helppay"
                          data-discounts-disabled="1">
                         <div class="w-storefront-money-summary__row w-storefront-money-summary__row--goods" role="listitem" data-money-summary-row="goods">
-                            <span><?= $escape(__('商品小计')) ?></span>
+                            <span><lang>商品小计</lang></span>
                             <strong data-money-summary-goods data-helppay-goods-amount data-testid="helppay-payment-goods-amount">
                                 <?= $escape($currency) ?> <?= $escape(number_format($goods, 2)) ?>
                             </strong>
                         </div>
                         <div class="w-storefront-money-summary__row w-storefront-money-summary__row--shipping" role="listitem" data-money-summary-row="shipping">
-                            <span data-money-summary-shipping-label data-helppay-ship-label data-label-base="<?= $escape(__('运费')) ?>">
-                                <?= $escape(__('运费')) ?><?= $serviceLabel !== '' ? ' · ' . $escape($serviceLabel) : '' ?>
+                            <span data-money-summary-shipping-label data-helppay-ship-label data-label-base="@lang('运费')">
+                                <lang>运费</lang><?= $serviceLabel !== '' ? ' · ' . $escape($serviceLabel) : '' ?>
                             </span>
                             <strong data-money-summary-shipping data-helppay-ship-amount data-testid="helppay-payment-ship-amount">
                                 <?= $escape($currency) ?> <?= $escape(number_format($ship, 2)) ?>
                             </strong>
                         </div>
                         <div class="w-storefront-money-summary__row w-storefront-money-summary__row--tax" role="listitem" data-money-summary-row="tax" data-checkout-tax-row <?= $tax > 0 ? '' : 'hidden' ?>>
-                            <span data-money-summary-tax-label><?= $escape(__('税费')) ?></span>
+                            <span data-money-summary-tax-label><lang>税费</lang></span>
                             <strong data-money-summary-tax data-tax-amount="">
                                 <?= $escape($currency) ?> <?= $escape(number_format($tax, 2)) ?>
                             </strong>
                         </div>
                         <div class="w-storefront-money-summary__row w-storefront-money-summary__row--payable" role="listitem" data-money-summary-row="payable">
-                            <span data-money-summary-payable-label><?= $escape(__('应付')) ?></span>
+                            <span data-money-summary-payable-label><lang>应付</lang></span>
                             <strong data-money-summary-payable data-helppay-total-amount data-testid="helppay-payment-total">
                                 <?= $escape($currency) ?> <?= $escape(number_format($amount, 2)) ?>
                             </strong>
@@ -230,16 +230,16 @@ $defaultMethodIndex = (int) ($this->getData('payment_method_default_index') ?? 0
                  data-testid="help-pay-billing"
                  data-helppay-billing-panel
                  <?= $billingRequiredInitially ? '' : 'hidden' ?>>
-                <h3 class="w-text" data-weight="strong" style="--w-m:0;"><?= $escape(__('付款账单地址')) ?></h3>
+                <h3 class="w-text" data-weight="strong" style="--w-m:0;"><lang>付款账单地址</lang></h3>
                 <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;">
-                    <?= $escape(__('卡支付时填写付款人自己的账单地址，不会写回收货地址。')) ?>
+                    <lang>卡支付时填写付款人自己的账单地址，不会写回收货地址。</lang>
                 </p>
                 <div data-helppay-billing-mount data-testid="helppay-billing-mount">
                     <?php if ($billingHtml !== ''): ?>
                         <?= $billingHtml ?>
                     <?php else: ?>
                         <p class="w-text" data-tone="danger" data-size="sm" data-testid="helppay-billing-unavailable" role="alert">
-                            <?= $escape(__('账单地址组件暂不可用，请稍后重试。')) ?>
+                            <lang>账单地址组件暂不可用，请稍后重试。</lang>
                         </p>
                     <?php endif; ?>
                 </div>
@@ -248,7 +248,7 @@ $defaultMethodIndex = (int) ($this->getData('payment_method_default_index') ?? 0
             <div class="w-helppay-payer__actions">
                 <p class="w-text" data-size="sm" data-helppay-pay-msg hidden role="alert" data-testid="help-pay-confirm-msg"></p>
                 <button type="button" class="w-button w-button--primary" data-helppay-pay data-testid="help-pay-confirm">
-                    <?= $escape(__('确认付款')) ?>
+                    <lang>确认付款</lang>
                 </button>
             </div>
         </aside>

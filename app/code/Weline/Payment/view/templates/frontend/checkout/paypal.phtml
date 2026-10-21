@@ -66,8 +66,8 @@ $showWallet = $sdkSrc !== '' && ($googleOn || $appleOn);
          data-paypal-apple-pay="<?= $appleOn ? '1' : '0' ?>"
          <?php if ($sdkSrc !== ''): ?>data-paypal-sdk-src="<?= $esc($sdkSrc) ?>"<?php endif; ?>>
     <header class="weline-payment-paypal__header">
-        <h2><?= __('PayPal') ?></h2>
-        <p><?= __('使用 PayPal 账户或卡完成支付。支持 Google Pay / Apple Pay（可在后台关闭）。') ?></p>
+        <h2><lang>PayPal</lang></h2>
+        <p><lang>使用 PayPal 账户或卡完成支付。支持 Google Pay / Apple Pay（可在后台关闭）。</lang></p>
     </header>
 
     <?php if ($showWallet): ?>
@@ -76,19 +76,19 @@ $showWallet = $sdkSrc !== '' && ($googleOn || $appleOn);
              data-weline-load="paypalWalletButtons"
              data-paypal-sdk-src="<?= $esc($sdkSrc) ?>">
             <div id="paypal-button-container" class="weline-payment-paypal__buttons"></div>
-            <p class="weline-payment-paypal__wallet-hint"><?= __('若设备支持，将显示 Google Pay / Apple Pay。也可继续使用下方 PayPal 跳转。') ?></p>
+            <p class="weline-payment-paypal__wallet-hint"><lang>若设备支持，将显示 Google Pay / Apple Pay。也可继续使用下方 PayPal 跳转。</lang></p>
         </div>
     <?php endif; ?>
 
     <?php if ($redirectUrl !== ''): ?>
         <div class="weline-payment-paypal__action">
             <a class="w-button" data-tone="primary" href="<?= $esc($redirectUrl) ?>">
-                <?= __('Continue to PayPal') ?>
+                <lang>Continue to PayPal</lang>
             </a>
         </div>
     <?php else: ?>
         <div class="w-alert" data-tone="info">
-            <?= __('PayPal checkout will open after you confirm payment.') ?>
+            <lang>PayPal checkout will open after you confirm payment.</lang>
         </div>
     <?php endif; ?>
 </section>
@@ -97,26 +97,26 @@ $showWallet = $sdkSrc !== '' && ($googleOn || $appleOn);
 .weline-payment-paypal {
     box-sizing: border-box;
     display: grid;
-    gap: 16px;
-    padding: 16px 0;
+    gap: var(--spacing-4);
+    padding: var(--spacing-4) 0;
 }
 .weline-payment-paypal__header h2 {
-    font-size: 20px;
+    font-size: var(--font-size-xl);
     line-height: 1.3;
-    margin: 0 0 6px;
+    margin: 0 0 var(--spacing-1_5);
 }
 .weline-payment-paypal__header p {
-    color: #57606a;
-    font-size: 14px;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
     line-height: 1.5;
     margin: 0;
 }
 .weline-payment-paypal__wallet-hint {
-    color: #57606a;
-    font-size: 13px;
-    margin: 8px 0 0;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-13);
+    margin: var(--spacing-2) 0 0;
 }
 .weline-payment-paypal__buttons {
-    min-height: 40px;
+    min-height: var(--weline-theme-control-height-md);
 }
 </style>

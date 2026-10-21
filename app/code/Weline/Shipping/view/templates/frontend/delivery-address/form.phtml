@@ -7,7 +7,7 @@ $isEdit = $address && $address->getId();
     <div class="page-header" style="--w-mb:var(--weline-space-6);">
         <h2><?= $isEdit ? __('编辑收货地址') : __('新增收货地址') ?></h2>
         <a href="@url{'shipping/delivery/index'}" class="w-button" data-tone="neutral">
-            <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回列表') ?>
+            <w:icon name="arrow-left" size="sm"></w:icon> <lang>返回列表</lang>
         </a>
     </div>
 
@@ -17,66 +17,66 @@ $isEdit = $address && $address->getId();
         <?php endif; ?>
 
         <div class="w-field" style="--w-mb:var(--weline-space-4);">
-            <label for="name" class="w-field__label"><?= __('地址名称') ?> <span class="w-text" data-tone="danger">*</span></label>
+            <label for="name" class="w-field__label"><lang>地址名称</lang> <span class="w-text" data-tone="danger">*</span></label>
             <input type="text" class="w-input" id="name" name="name" value="<?= $address ? htmlspecialchars($address->getData('name')) : '' ?>" required>
-            <small class="w-field__hint w-text" data-tone="muted"><?= __('例如：家、公司、学校等') ?></small>
+            <small class="w-field__hint w-text" data-tone="muted"><lang>例如：家、公司、学校等</lang></small>
         </div>
 
         <div class="w-grid">
             <div class="w-field"  style="--w-span-md:6;--w-mb:var(--weline-space-4);">
-                <label for="contact_name" class="w-field__label"><?= __('收货人姓名') ?> <span class="w-text" data-tone="danger">*</span></label>
+                <label for="contact_name" class="w-field__label"><lang>收货人姓名</lang> <span class="w-text" data-tone="danger">*</span></label>
                 <input type="text" class="w-input" id="contact_name" name="contact_name" value="<?= $address ? htmlspecialchars($address->getData('contact_name')) : '' ?>" required>
             </div>
             <div class="w-field"  style="--w-span-md:6;--w-mb:var(--weline-space-4);">
-                <label for="contact_phone" class="w-field__label"><?= __('联系电话') ?> <span class="w-text" data-tone="danger">*</span></label>
+                <label for="contact_phone" class="w-field__label"><lang>联系电话</lang> <span class="w-text" data-tone="danger">*</span></label>
                 <input type="tel" class="w-input" id="contact_phone" name="contact_phone" value="<?= $address ? htmlspecialchars($address->getData('contact_phone')) : '' ?>" required>
             </div>
         </div>
 
         <div class="w-grid">
             <div class="w-field"  style="--w-span-md:4;--w-mb:var(--weline-space-4);">
-                <label for="country" class="w-field__label"><?= __('国家') ?></label>
+                <label for="country" class="w-field__label"><lang>国家</lang></label>
                 <input type="text" class="w-input" id="country" name="country" value="<?= $address ? htmlspecialchars($address->getData('country') ?: '中国') : '中国' ?>">
             </div>
             <div class="w-field"  style="--w-span-md:4;--w-mb:var(--weline-space-4);">
-                <label for="province" class="w-field__label"><?= __('省份') ?> <span class="w-text" data-tone="danger">*</span></label>
+                <label for="province" class="w-field__label"><lang>省份</lang> <span class="w-text" data-tone="danger">*</span></label>
                 <input type="text" class="w-input" id="province" name="province" value="<?= $address ? htmlspecialchars($address->getData('province')) : '' ?>" required>
             </div>
             <div class="w-field"  style="--w-span-md:4;--w-mb:var(--weline-space-4);">
-                <label for="city" class="w-field__label"><?= __('城市') ?> <span class="w-text" data-tone="danger">*</span></label>
+                <label for="city" class="w-field__label"><lang>城市</lang> <span class="w-text" data-tone="danger">*</span></label>
                 <input type="text" class="w-input" id="city" name="city" value="<?= $address ? htmlspecialchars($address->getData('city')) : '' ?>" required>
             </div>
         </div>
 
         <div class="w-grid">
             <div class="w-field"  style="--w-span-md:6;--w-mb:var(--weline-space-4);">
-                <label for="district" class="w-field__label"><?= __('区县') ?></label>
+                <label for="district" class="w-field__label"><lang>区县</lang></label>
                 <input type="text" class="w-input" id="district" name="district" value="<?= $address ? htmlspecialchars($address->getData('district')) : '' ?>">
             </div>
             <div class="w-field"  style="--w-span-md:6;--w-mb:var(--weline-space-4);">
-                <label for="postal_code" class="w-field__label"><?= __('邮政编码') ?></label>
+                <label for="postal_code" class="w-field__label"><lang>邮政编码</lang></label>
                 <input type="text" class="w-input" id="postal_code" name="postal_code" value="<?= $address ? htmlspecialchars($address->getData('postal_code')) : '' ?>" pattern="[0-9]{6}" maxlength="6">
             </div>
         </div>
 
         <div class="w-field" style="--w-mb:var(--weline-space-4);">
-            <label for="street" class="w-field__label"><?= __('街道地址') ?> <span class="w-text" data-tone="danger">*</span></label>
+            <label for="street" class="w-field__label"><lang>街道地址</lang> <span class="w-text" data-tone="danger">*</span></label>
             <textarea class="w-textarea" id="street" name="street" rows="3" required><?= $address ? htmlspecialchars($address->getData('street')) : '' ?></textarea>
         </div>
 
         <div class="w-check" style="--w-mb:var(--weline-space-4);">
             <input type="checkbox" id="is_default" name="is_default" value="1" <?= $address && $address->isDefault() ? 'checked' : '' ?>>
             <label for="is_default">
-                <?= __('设为默认地址') ?>
+                <lang>设为默认地址</lang>
             </label>
         </div>
 
         <div class="form-actions">
             <button type="submit" class="w-button" data-tone="primary">
-                <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
+                <w:icon name="save" size="sm"></w:icon> <lang>保存</lang>
             </button>
             <a href="@url{'shipping/delivery/index'}" class="w-button" data-tone="neutral">
-                <?= __('取消') ?>
+                <lang>取消</lang>
             </a>
         </div>
     </w:form>
@@ -84,7 +84,7 @@ $isEdit = $address && $address->getId();
 
 <style>
 .delivery-address-form {
-    padding: 20px;
+    padding: var(--spacing-5);
     max-width: 800px;
 }
 .page-header {
@@ -93,9 +93,9 @@ $isEdit = $address && $address->getId();
     align-items: center;
 }
 .form-actions {
-    margin-top: 20px;
+    margin-top: var(--spacing-5);
     display: flex;
-    gap: 10px;
+    gap: var(--spacing-2_5);
 }
 </style>
 

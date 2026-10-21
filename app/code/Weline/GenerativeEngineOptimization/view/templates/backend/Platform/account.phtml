@@ -23,7 +23,7 @@ $docsUrl = trim((string)($guide['docs_url'] ?? ''));
 $docsLabel = (string)($guide['docs_label'] ?? __('官方文档'));
 ?>
 <div class="content-header">
-    <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);margin-bottom:var(--weline-theme-space-4,1rem);">
+    <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);margin-bottom:var(--weline-space-4);">
         <p class="w-text" data-tone="muted" style="margin:0;"><?= $escape($platformName) ?></p>
         <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
             <button
@@ -61,7 +61,7 @@ $docsLabel = (string)($guide['docs_label'] ?? __('官方文档'));
                 <?php if (empty($accounts)): ?>
                     <tr>
                         <td colspan="7">
-                            <div class="w-stack" data-gap="sm" style="padding:var(--weline-theme-space-6,1.5rem) 0;">
+                            <div class="w-stack" data-gap="sm" style="padding:var(--weline-space-6) 0;">
                                 <div class="w-text"><?= __('还没有账户。添加密钥后才能推送。') ?></div>
                                 <div>
                                     <button
@@ -166,9 +166,9 @@ $docsLabel = (string)($guide['docs_label'] ?? __('官方文档'));
                                     <p class="w-text" data-tone="muted" style="margin:0;"><?= $escape($guideSummary) ?></p>
                                 <?php endif; ?>
                                 <?php if ($guideSteps !== []): ?>
-                                    <ol class="w-text" style="margin:0;padding-left:1.25rem;">
+                                    <ol class="w-text" style="margin:0;padding-inline-start:var(--weline-space-5);">
                                         <?php foreach ($guideSteps as $step): ?>
-                                            <li style="margin-bottom:0.35rem;"><?= $escape((string)$step) ?></li>
+                                            <li style="margin-bottom:var(--weline-space-1);"><?= $escape((string)$step) ?></li>
                                         <?php endforeach; ?>
                                     </ol>
                                 <?php endif; ?>

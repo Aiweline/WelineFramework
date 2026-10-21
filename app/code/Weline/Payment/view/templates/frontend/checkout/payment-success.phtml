@@ -32,17 +32,17 @@ $pixelCurrency = $transaction ? (string) $transaction->getData('currency') : '';
         <div class="amz-order-confirm__banner-inner">
             <span class="amz-order-confirm__check" aria-hidden="true">✓</span>
             <div class="amz-order-confirm__banner-copy">
-                <h1><?= $escape(__('支付成功')) ?></h1>
-                <p><?= $escape(__('您的支付已完成。')) ?></p>
+                <h1><lang>支付成功</lang></h1>
+                <p><lang>您的支付已完成。</lang></p>
                 <?php if ($transactionNo !== ''): ?>
                     <p class="amz-order-confirm__order-no">
-                        <?= $escape(__('交易号')) ?>：
+                        <lang>交易号</lang>：
                         <strong><?= $escape($transactionNo) ?></strong>
                     </p>
                 <?php endif; ?>
                 <?php if ($orderV2DisplayNumber !== ''): ?>
                     <p class="amz-order-confirm__order-no">
-                        <?= $escape(__('订单号')) ?>：
+                        <lang>订单号</lang>：
                         <strong><?= $escape($orderV2DisplayNumber) ?></strong>
                     </p>
                 <?php endif; ?>
@@ -52,15 +52,15 @@ $pixelCurrency = $transaction ? (string) $transaction->getData('currency') : '';
     <section class="amz-order-confirm__panel" weline-code="payment.checkout_success_l1.panel">
         <div class="amz-order-confirm__meta-grid">
             <div class="amz-order-confirm__meta-block">
-                <h2><?= $escape(__('支付信息')) ?></h2>
+                <h2><lang>支付信息</lang></h2>
                 <?php if ($paymentMethodLabel !== ''): ?>
-                    <p><span class="amz-order-confirm__meta-label"><?= $escape(__('支付方式')) ?></span> <?= $escape($paymentMethodLabel) ?></p>
+                    <p><span class="amz-order-confirm__meta-label"><lang>支付方式</lang></span> <?= $escape($paymentMethodLabel) ?></p>
                 <?php endif; ?>
                 <?php if ($transactionAmountLabel !== ''): ?>
-                    <p><span class="amz-order-confirm__meta-label"><?= $escape(__('支付金额')) ?></span> <?= $escape($transactionAmountLabel) ?></p>
+                    <p><span class="amz-order-confirm__meta-label"><lang>支付金额</lang></span> <?= $escape($transactionAmountLabel) ?></p>
                 <?php endif; ?>
                 <?php if ($paymentPaidAtLabel !== ''): ?>
-                    <p><span class="amz-order-confirm__meta-label"><?= $escape(__('支付时间')) ?></span> <?= $escape($paymentPaidAtLabel) ?></p>
+                    <p><span class="amz-order-confirm__meta-label"><lang>支付时间</lang></span> <?= $escape($paymentPaidAtLabel) ?></p>
                 <?php endif; ?>
             </div>
         </div>

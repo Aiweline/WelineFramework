@@ -1,0 +1,13 @@
+/* Weline Marketing 后台页面私有布局/尺寸（Token-only，见后端主题开发标准 §6.2） */
+@layer page {
+    .marketing-filter__field {
+        min-inline-size: min(100%, calc(var(--weline-space-12) * 6));
+        flex: 1 1 calc(var(--weline-space-12) * 5);
+    }
+
+    .marketing-coupon-card__body {
+        display: flex;
+        flex-direction: column;
+        gap: var(--weline-space-4);
+    }
+}

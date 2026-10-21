@@ -14,8 +14,22 @@
 审核评论,"Moderate reviews"
 通过或拒绝评论,"Approve or reject reviews"
 商品评论暂不可用,"Product reviews are unavailable"
+商品评论,"Product reviews"
 正在加载评论...,"Loading reviews..."
+"最多 6 张图片","Up to 6 photos"
+"最多 2 个视频","Up to 2 videos"
+文字与五星评分,"Text and five-star rating"
+写评论,"Write a review"
+分享真实体验,"Share a real experience"
+"撰写图文 / 视频评论","Write a photo / video review"
+收起评论表单,"Hide review form"
+正在加载评论表单...,"Loading review form..."
+提交评论,"Submit review"
+支持匿名或登录评论；媒体与扩展字段会和评论一起进入审核。,"Guest and signed-in reviews are supported; media and extra fields are moderated together."
+评论媒体预览,"Review media preview"
+支持的评论媒体,"Supported review media"
 评论分页,"Review pagination"
+关闭预览,"Close preview"
 上一页,Previous
 下一页,Next
 第,#
@@ -33,28 +47,14 @@
 评论图片,"Review photo"
 视频,Video
 移除,Remove
-提交评论,"Submit review"
 请选择所有必填评分。,"Select every required rating."
-写评论,"Write a review"
-收起评论表单,"Hide review form"
 查看图片,"View photo"
 播放视频,"Play video"
-关闭预览,"Close preview"
-评论媒体预览,"Review media preview"
-商品评论,"Product reviews"
-支持的评论媒体,"Supported review media"
-"最多 6 张图片","Up to 6 photos"
-"最多 2 个视频","Up to 2 videos"
-文字与五星评分,"Text and five-star rating"
-分享真实体验,"Share a real experience"
-"撰写图文 / 视频评论","Write a photo / video review"
-正在加载评论表单...,"Loading review form..."
-支持匿名或登录评论；媒体与扩展字段会和评论一起进入审核。,"Guest and signed-in reviews are supported; media and extra fields are moderated together."
-统一管理文字、图片与视频评论,"Manage text, photo, and video reviews in one place"
 网站,Website
 店铺,Store
 状态,Status
 筛选,Filter
+统一管理文字、图片与视频评论,"Manage text, photo, and video reviews in one place"
 "等待 AI 预审","Waiting for AI review"
 "AI 审核待人工","AI review needs a human decision"
 已通过,Approved

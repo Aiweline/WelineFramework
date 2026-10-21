@@ -2,15 +2,15 @@
 
 /* 批量操作工具栏 */
 .batch-action-toolbar {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 0.375rem;
-    padding: 0.75rem;
-    margin-bottom: 1rem;
+    background: var(--color-bg-panel);
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    border-radius: var(--border-radius-md);
+    padding: var(--weline-space-3);
+    margin-bottom: var(--weline-space-4);
 }
 
 .batch-action-toolbar .selected-count {
-    color: #495057;
+    color: var(--color-text-secondary);
     font-weight: 500;
 }
 
@@ -18,7 +18,7 @@
 .checkbox-column {
     width: 40px !important;
     text-align: center;
-    padding: 0.5rem !important;
+    padding: var(--weline-space-2);
 }
 
 .checkbox-column .form-check {
@@ -29,34 +29,34 @@
 
 /* 表格行选中状态 */
 tr.selected {
-    background-color: #e3f2fd !important;
+    background-color: var(--color-bg-muted);
 }
 
 tr.selected:hover {
-    background-color: #bbdefb !important;
+    background-color: #bbdefb;
 }
 
 /* 删除确认对话框样式 */
 .delete-details {
-    margin-top: 1rem;
+    margin-top: var(--weline-space-4);
 }
 
 .delete-details .card {
-    border: 1px solid #dee2e6;
-    border-radius: 0.375rem;
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    border-radius: var(--border-radius-md);
 }
 
 .delete-details .card-body {
-    font-size: 0.875rem;
+    font-size: var(--weline-font-size-sm);
     color: #6c757d;
 }
 
 .row-list {
     max-height: 200px;
     overflow-y: auto;
-    border: 1px solid #dee2e6;
-    border-radius: 0.375rem;
-    padding: 0.5rem;
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    border-radius: var(--border-radius-md);
+    padding: var(--weline-space-2);
 }
 
 /* 加载覆盖层 */
@@ -71,7 +71,7 @@ tr.selected:hover {
     align-items: center;
     justify-content: center;
     z-index: 1000;
-    border-radius: 0.375rem;
+    border-radius: var(--border-radius-md);
 }
 
 .loading-overlay .spinner-border {
@@ -106,19 +106,19 @@ th.sortable {
 }
 
 th.sortable:hover {
-    background-color: #f8f9fa;
+    background-color: var(--color-bg-panel);
 }
 
 /* 排序图标样式 */
 .sort-icon {
-    margin-left: 0.5rem;
+    margin-left: var(--weline-space-2);
     color: #6c757d;
     cursor: pointer;
     transition: color 0.2s;
 }
 
 .sort-icon:hover {
-    color: #007bff;
+    color: var(--color-text-faint);
 }
 
 .sort-icon.asc::before {
@@ -133,14 +133,14 @@ th.sortable:hover {
 
 /* 编辑图标样式 */
 .edit-icon {
-    margin-left: 0.25rem;
+    margin-left: var(--weline-space-1);
     color: #6c757d;
     cursor: pointer;
     transition: color 0.2s;
 }
 
 .edit-icon:hover {
-    color: #28a745;
+    color: var(--color-link);
 }
 
 /* 单元格编辑样式 */
@@ -150,14 +150,14 @@ th.sortable:hover {
 }
 
 .editable-cell:hover {
-    background-color: #f8f9fa;
+    background-color: var(--color-bg-panel);
 }
 
 .editable-cell .edit-overlay {
     position: absolute;
     top: 0;
     right: 0;
-    padding: 0.25rem;
+    padding: var(--weline-space-1);
     opacity: 0;
     transition: opacity 0.2s;
 }
@@ -168,7 +168,7 @@ th.sortable:hover {
 
 .edit-overlay i {
     color: #6c757d;
-    font-size: 0.75rem;
+    font-size: var(--weline-font-size-xs);
 }
 
 /* 操作按钮样式 */
@@ -178,7 +178,7 @@ th.sortable:hover {
 }
 
 .actions-cell .btn {
-    margin-right: 0.25rem;
+    margin-right: var(--weline-space-1);
 }
 
 .actions-cell .btn:last-child {
@@ -187,31 +187,31 @@ th.sortable:hover {
 
 /* 导出按钮样式 */
 .export-excel-btn i {
-    color: #28a745;
+    color: var(--color-link);
 }
 
 .export-csv-btn i {
-    color: #ffc107;
+    color: var(--color-text-faint);
 }
 
 .export-json-btn i {
-    color: #17a2b8;
+    color: var(--color-link);
 }
 
 /* 多表分组样式 */
 .multi-table-group {
-    border: 1px solid #dee2e6;
-    border-radius: 0.375rem;
-    margin-bottom: 1rem;
-    padding: 1rem;
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    border-radius: var(--border-radius-md);
+    margin-bottom: var(--weline-space-4);
+    padding: var(--weline-space-4);
 }
 
 .multi-table-group legend {
     font-weight: 600;
-    color: #495057;
-    border-bottom: 1px solid #dee2e6;
-    padding-bottom: 0.5rem;
-    margin-bottom: 1rem;
+    color: var(--color-text-secondary);
+    border-bottom: var(--border-width-thin) solid var(--color-border-muted);
+    padding-bottom: var(--weline-space-2);
+    margin-bottom: var(--weline-space-4);
     width: 100%;
 }
 
@@ -228,7 +228,7 @@ th.sortable:hover {
 @media (max-width: 768px) {
     .batch-action-toolbar .d-flex {
         flex-direction: column;
-        gap: 0.5rem;
+        gap: var(--weline-space-2);
     }
 
     .batch-action-toolbar .btn-group {
@@ -253,26 +253,26 @@ th.sortable:hover {
     .batch-action-toolbar {
         background: #343a40;
         border-color: #495057;
-        color: #fff;
+        color: var(--color-text-light);
     }
 
     .loading-overlay {
         background: rgba(52, 58, 64, 0.9);
-        color: #fff;
+        color: var(--color-text-light);
     }
 
     tr.selected {
-        background-color: #1e3a5f !important;
+        background-color: var(--color-info);
     }
 
     tr.selected:hover {
-        background-color: #2c5282 !important;
+        background-color: var(--color-info);
     }
 
     .multi-table-group {
         background: #343a40;
         border-color: #495057;
-        color: #fff;
+        color: var(--color-text-light);
     }
 }
 
@@ -322,7 +322,7 @@ th.sortable:hover {
 }
 
 .w-field-item:hover {
-    background-color: #f8f9fa;
+    background-color: var(--color-bg-panel);
     border-color: #007bff;
 }
 
@@ -333,63 +333,63 @@ th.sortable:hover {
 
 /* 文件字段样式 */
 .w-file-field {
-    margin-bottom: 1rem;
+    margin-bottom: var(--weline-space-4);
 }
 
 .w-file-selector {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
+    gap: var(--weline-space-2);
+    margin-bottom: var(--weline-space-2);
 }
 
 .w-file-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    padding: 0.5rem 1rem;
-    border: 1px solid #007bff;
+    gap: var(--weline-space-1);
+    padding: var(--weline-space-2) var(--weline-space-4);
+    border: var(--border-width-thin) solid #007bff;
     background-color: transparent;
-    color: #007bff;
-    border-radius: 0.25rem;
+    color: var(--color-text-faint);
+    border-radius: var(--border-radius-md);
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .w-file-btn:hover {
-    background-color: #007bff;
+    background-color: var(--color-info);
     color: white;
 }
 
 .w-file-info {
-    font-size: 0.875rem;
+    font-size: var(--weline-font-size-sm);
     color: #6c757d;
 }
 
 .w-file-list {
-    border: 1px solid #dee2e6;
-    border-radius: 0.25rem;
-    padding: 0.5rem;
-    min-height: 2.5rem;
-    background-color: #f8f9fa;
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    border-radius: var(--border-radius-md);
+    padding: var(--weline-space-2);
+    min-height: var(--control-height-md);
+    background-color: var(--color-bg-panel);
 }
 
 .w-file-placeholder {
     color: #6c757d;
     font-style: italic;
     text-align: center;
-    padding: 0.5rem;
+    padding: var(--weline-space-2);
 }
 
 .w-file-item {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.25rem 0.5rem;
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-1) var(--weline-space-2);
     background-color: white;
-    border: 1px solid #dee2e6;
-    border-radius: 0.25rem;
-    margin-bottom: 0.25rem;
+    border: var(--border-width-thin) solid var(--color-border-muted);
+    border-radius: var(--border-radius-md);
+    margin-bottom: var(--weline-space-1);
 }
 
 .w-file-item:last-child {
@@ -403,33 +403,33 @@ th.sortable:hover {
 
 .w-file-size {
     color: #6c757d;
-    font-size: 0.875rem;
+    font-size: var(--weline-font-size-sm);
 }
 
 .w-file-remove {
     background: none;
     border: none;
-    color: #dc3545;
+    color: var(--color-text-faint);
     cursor: pointer;
-    padding: 0.25rem;
-    border-radius: 0.25rem;
+    padding: var(--weline-space-1);
+    border-radius: var(--border-radius-md);
     transition: background-color 0.2s ease;
 }
 
 .w-file-remove:hover {
-    background-color: #f8d7da;
+    background-color: var(--color-bg-secondary);
 }
 
 /* 图片字段样式 */
 .w-image-field {
-    margin-bottom: 1rem;
+    margin-bottom: var(--weline-space-4);
 }
 
 .w-image-preview {
-    border: 2px dashed #dee2e6;
-    border-radius: 0.5rem;
+    border: var(--border-width-medium) dashed var(--color-border-muted);
+    border-radius: var(--border-radius-lg);
     overflow: hidden;
-    margin-bottom: 0.5rem;
+    margin-bottom: var(--weline-space-2);
 }
 
 .w-image-placeholder {
@@ -437,31 +437,31 @@ th.sortable:hover {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 2rem;
+    padding: var(--weline-space-8);
     cursor: pointer;
     transition: all 0.2s ease;
-    background-color: #f8f9fa;
+    background-color: var(--color-bg-panel);
 }
 
 .w-image-placeholder:hover {
-    background-color: #e9ecef;
+    background-color: var(--color-product-label-demo-bg);
     border-color: #007bff;
 }
 
 .w-image-placeholder i {
-    font-size: 2rem;
+    font-size: var(--weline-font-size-4xl);
     color: #6c757d;
-    margin-bottom: 0.5rem;
+    margin-bottom: var(--weline-space-2);
 }
 
 .w-placeholder-text {
     font-weight: 500;
-    color: #495057;
-    margin-bottom: 0.25rem;
+    color: var(--color-text-secondary);
+    margin-bottom: var(--weline-space-1);
 }
 
 .w-placeholder-info {
-    font-size: 0.875rem;
+    font-size: var(--weline-font-size-sm);
     color: #6c757d;
 }
 
@@ -475,31 +475,31 @@ th.sortable:hover {
 
 .w-image-actions {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--weline-space-2);
 }
 
 /* 上传进度样式 */
 .w-upload-progress {
-    margin-top: 0.5rem;
+    margin-top: var(--weline-space-2);
 }
 
 .w-progress-bar {
     width: 100%;
     height: 0.5rem;
-    background-color: #e9ecef;
-    border-radius: 0.25rem;
+    background-color: var(--color-product-label-demo-bg);
+    border-radius: var(--border-radius-md);
     overflow: hidden;
-    margin-bottom: 0.25rem;
+    margin-bottom: var(--weline-space-1);
 }
 
 .w-progress-fill {
     height: 100%;
-    background-color: #007bff;
+    background-color: var(--color-info);
     transition: width 0.3s ease;
 }
 
 .w-progress-text {
-    font-size: 0.875rem;
+    font-size: var(--weline-font-size-sm);
     color: #6c757d;
     text-align: center;
 }
@@ -537,8 +537,8 @@ th.sortable:hover {
     width: 90%;
     max-height: 90%;
     background-color: white;
-    border-radius: 0.5rem;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--weline-shadow-md);
     overflow: hidden;
     animation: modalSlideIn 0.3s ease-out;
 }
@@ -559,70 +559,70 @@ th.sortable:hover {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid #dee2e6;
-    background-color: #f8f9fa;
+    padding: var(--weline-space-4) var(--weline-space-6);
+    border-bottom: var(--border-width-thin) solid var(--color-border-muted);
+    background-color: var(--color-bg-panel);
 }
 
 .w-form-title {
     margin: 0;
-    font-size: 1.25rem;
+    font-size: var(--weline-font-size-xl);
     font-weight: 500;
-    color: #495057;
+    color: var(--color-text-secondary);
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--weline-space-2);
 }
 
 .w-form-close {
     background: none;
     border: none;
-    font-size: 1.5rem;
+    font-size: var(--weline-font-size-2xl);
     color: #6c757d;
     cursor: pointer;
-    padding: 0.25rem;
-    border-radius: 0.25rem;
+    padding: var(--weline-space-1);
+    border-radius: var(--border-radius-md);
     transition: all 0.2s ease;
 }
 
 .w-form-close:hover {
-    color: #495057;
-    background-color: #e9ecef;
+    color: var(--color-text-secondary);
+    background-color: var(--color-product-label-demo-bg);
 }
 
 .w-form-body {
-    padding: 1.5rem;
+    padding: var(--weline-space-6);
     max-height: 60vh;
     overflow-y: auto;
 }
 
 .w-form-footer {
-    padding: 1rem 1.5rem;
-    border-top: 1px solid #dee2e6;
-    background-color: #f8f9fa;
+    padding: var(--weline-space-4) var(--weline-space-6);
+    border-top: var(--border-width-thin) solid var(--color-border-muted);
+    background-color: var(--color-bg-panel);
 }
 
 .w-form-actions {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--weline-space-2);
     justify-content: flex-end;
 }
 
 /* 表单字段样式 */
 .w-form-field {
-    margin-bottom: 1rem;
+    margin-bottom: var(--weline-space-4);
 }
 
 .w-field-label {
     display: block;
-    margin-bottom: 0.5rem;
+    margin-bottom: var(--weline-space-2);
     font-weight: 500;
-    color: #495057;
+    color: var(--color-text-secondary);
 }
 
 .w-required-mark {
-    color: #dc3545;
-    margin-left: 0.25rem;
+    color: var(--color-text-faint);
+    margin-left: var(--weline-space-1);
 }
 
 .w-field-control {
@@ -631,20 +631,20 @@ th.sortable:hover {
 
 .w-form-control {
     width: 100%;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid #ced4da;
-    border-radius: 0.25rem;
-    font-size: 1rem;
+    padding: var(--weline-space-2) var(--weline-space-3);
+    border: var(--border-width-thin) solid var(--color-border-faint);
+    border-radius: var(--border-radius-md);
+    font-size: var(--weline-font-size-base);
     line-height: 1.5;
-    color: #495057;
-    background-color: #fff;
+    color: var(--color-text-secondary);
+    background-color: var(--color-bg-primary);
     transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
 
 .w-form-control:focus {
     border-color: #80bdff;
     outline: 0;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    box-shadow: var(--weline-shadow-md);
 }
 
 .w-form-control.is-invalid {
@@ -652,23 +652,23 @@ th.sortable:hover {
 }
 
 .w-field-help {
-    font-size: 0.875rem;
+    font-size: var(--weline-font-size-sm);
     color: #6c757d;
-    margin-top: 0.25rem;
+    margin-top: var(--weline-space-1);
 }
 
 .invalid-feedback {
     display: block;
     width: 100%;
-    margin-top: 0.25rem;
-    font-size: 0.875rem;
-    color: #dc3545;
+    margin-top: var(--weline-space-1);
+    font-size: var(--weline-font-size-sm);
+    color: var(--color-text-faint);
 }
 
 /* 暗色主题文件字段样式 */
 @media (prefers-color-scheme: dark) {
     .w-file-list {
-        background-color: #2d2d2d;
+        background-color: var(--color-bg-dark);
         border-color: #404040;
     }
 
@@ -679,7 +679,7 @@ th.sortable:hover {
     }
 
     .w-image-placeholder {
-        background-color: #2d2d2d;
+        background-color: var(--color-bg-dark);
         border-color: #404040;
         color: #e0e0e0;
     }
@@ -693,7 +693,7 @@ th.sortable:hover {
     }
 
     .w-form-modal-container {
-        background-color: #2d2d2d;
+        background-color: var(--color-bg-dark);
         color: #e0e0e0;
     }
 
@@ -715,6 +715,6 @@ th.sortable:hover {
 
     .w-form-control:focus {
         border-color: #80bdff;
-        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        box-shadow: var(--weline-shadow-md);
     }
 }

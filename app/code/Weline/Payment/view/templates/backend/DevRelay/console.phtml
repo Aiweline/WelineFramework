@@ -14,6 +14,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title><lang>Dev Relay SSE 终端</lang></title>
+    <!-- Weline backend theme: tool-internal styles, see 后端主题开发标准 §12 (pending migration) -->
     <style>
         body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; background: #0f172a; color: #e2e8f0; }
         .wrap { padding: 16px; max-width: 960px; margin: 0 auto; }
@@ -33,8 +34,9 @@
     </div>
     <pre id="dev-relay-sse-log"></pre>
 </div>
-<script src="@static(Weline_Payment::js/backend/dev-relay-console.js)"></script>
+<script defer src="@static(Weline_Payment::js/backend/dev-relay-console.js)"></script>
 <script>
+document.addEventListener('DOMContentLoaded', function () {
 window.WelinePaymentDevRelayConsole && window.WelinePaymentDevRelayConsole.init({
     sessionCode: <?= json_encode($session_code, JSON_UNESCAPED_UNICODE) ?>,
     token: <?= json_encode($token, JSON_UNESCAPED_UNICODE) ?>,
@@ -44,6 +46,7 @@ window.WelinePaymentDevRelayConsole && window.WelinePaymentDevRelayConsole.init(
     mode: <?= json_encode($mode, JSON_UNESCAPED_UNICODE) ?>,
     localInboundUrl: <?= json_encode($local_inbound_url, JSON_UNESCAPED_UNICODE) ?>,
     outboundMode: <?= json_encode($outbound_mode, JSON_UNESCAPED_UNICODE) ?>
+});
 });
 </script>
 </body>

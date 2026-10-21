@@ -25,10 +25,6 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-queue-admin.css)">
 
 <main class="w-queue-type-admin w-stack" data-w-component="queue-type-admin" data-testid="queue-type-management">
-    <header class="w-queue-type-admin__heading">
-        <h1><w:icon name="settings" size="sm" /> <?= $escape($title ?? __('队列类型')) ?></h1>
-    </header>
-
     <template>Weline_Component::message.phtml</template>
 
     <section class="w-card">

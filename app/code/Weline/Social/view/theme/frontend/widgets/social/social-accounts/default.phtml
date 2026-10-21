@@ -92,7 +92,7 @@ $rootStyle = '--wc-social-size:' . ($sizeMap[$iconSize] ?? '38px') . ';';
 
     <div class="social-list">
         <?php if ($accounts === [] && $isPreviewMode): ?>
-            <span class="social-placeholder"><?= __('暂无社媒账户') ?></span>
+            <span class="social-placeholder"><lang>暂无社媒账户</lang></span>
         <?php else: ?>
             <?php foreach ($accounts as $account): ?>
                 <?php

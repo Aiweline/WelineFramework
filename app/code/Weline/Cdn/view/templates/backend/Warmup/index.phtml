@@ -1,3 +1,4 @@
+<css>Weline_Cdn::css/backend/cdn-admin.css</css>
 <?php
 /**
  * CDN 预热管理：<w:scope> 范围 + Provider 折叠 + 已入队 URL 异步分页
@@ -47,7 +48,7 @@ $escapeAttr = static function (mixed $value): string {
 
         <section class="w-card" data-w-shadow="sm" style="--w-mb:var(--weline-space-4);">
             <div class="w-card__body w-cluster" data-align="end" data-wrap="true" style="--w-gap:var(--weline-space-3);">
-                <div class="w-field" style="--w-mb:0;flex:1 1 16rem;max-inline-size:24rem;">
+                <div class="w-field cdn-filter__field" style="--w-mb:0;">
                     <label class="w-field__label" for="cdn-warmup-scope"><?= __('作用范围') ?></label>
                     <div class="w-field__control">
                         <w:scope
@@ -76,7 +77,7 @@ $escapeAttr = static function (mixed $value): string {
             class="w-stat-tiles w-grid"
             id="cdn-warmup-kpi"
             aria-label="<?= $escapeAttr(__('预热概览')) ?>"
-            style="--w-stat-tile-min:9rem;--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);"
+            style="--w-stat-tile-min:calc(var(--weline-space-12) * 3);--w-gap:var(--weline-space-3);--w-mb:var(--weline-space-4);"
         ></section>
 
         <section class="w-card" data-w-shadow="sm">
@@ -105,7 +106,7 @@ $escapeAttr = static function (mixed $value): string {
                                 class="w-card"
                                 data-w-shadow="none"
                                 data-cdn-warmup-provider="<?= $escapeAttr($fqcn) ?>"
-                                style="border:1px solid var(--weline-border-color, rgba(255,255,255,.08));"
+                                class="cdn-warmup-notice"
                             >
                                 <div class="w-card__header w-cluster" data-align="center" data-justify="between" data-wrap="true" style="--w-gap:var(--weline-space-2);">
                                     <button

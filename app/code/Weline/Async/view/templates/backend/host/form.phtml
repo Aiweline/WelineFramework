@@ -9,74 +9,55 @@ $isEdit = $host && $host->getId();
 ?>
 <div class="row">
     <div class="col-12">
-        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= $isEdit ? __('编辑主机') : __('新增主机') ?></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item">
-                        <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
-                    </li>
-                    <li class="breadcrumb-item">
-                        <a href="@backend-url{'async/backend/host'}"><?= __('同步主机管理') ?></a>
-                    </li>
-                    <li class="breadcrumb-item active"><?= $isEdit ? __('编辑') : __('新增') ?></li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-12">
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0"><?= $isEdit ? __('编辑主机') : __('新增主机') ?></h5>
             </div>
-            <div class="card-body">
+            <div class="w-card__body">
                 <form method="post" action="@backend-url{'async/backend/host/save'}">
                     <?php if ($isEdit): ?>
                         <input type="hidden" name="id" value="<?= $host->getId() ?>">
                     <?php endif; ?>
                     
                     <div class="mb-3">
-                        <label class="form-label"><?= __('主机名称') ?> <span class="text-danger">*</span></label>
-                        <input type="text" name="name" class="form-control" 
+                        <label class="w-field__label"><?= __('主机名称') ?> <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="w-input" 
                                value="<?= htmlspecialchars($host ? $host->getData(SyncHost::fields_NAME) : '') ?>" 
                                required>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label"><?= __('主机地址') ?> <span class="text-danger">*</span></label>
-                        <input type="text" name="host" class="form-control" 
+                        <label class="w-field__label"><?= __('主机地址') ?> <span class="text-danger">*</span></label>
+                        <input type="text" name="host" class="w-input" 
                                value="<?= htmlspecialchars($host ? $host->getData(SyncHost::fields_HOST) : '') ?>" 
                                placeholder="192.168.1.100 或 example.com" required>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label"><?= __('SSH端口') ?></label>
-                        <input type="number" name="port" class="form-control" 
+                        <label class="w-field__label"><?= __('SSH端口') ?></label>
+                        <input type="number" name="port" class="w-input" 
                                value="<?= htmlspecialchars($host ? ($host->getData(SyncHost::fields_PORT) ?: 22) : 22) ?>" 
                                min="1" max="65535">
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label"><?= __('SSH用户名') ?> <span class="text-danger">*</span></label>
-                        <input type="text" name="user" class="form-control" 
+                        <label class="w-field__label"><?= __('SSH用户名') ?> <span class="text-danger">*</span></label>
+                        <input type="text" name="user" class="w-input" 
                                value="<?= htmlspecialchars($host ? $host->getData(SyncHost::fields_USER) : '') ?>" 
                                required>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label"><?= __('SSH密码') ?></label>
-                        <input type="password" name="password" class="form-control" 
+                        <label class="w-field__label"><?= __('SSH密码') ?></label>
+                        <input type="password" name="password" class="w-input" 
                                placeholder="<?= $isEdit ? __('留空则不修改密码') : __('请输入SSH密码') ?>">
                         <small class="form-text text-muted"><?= __('如果使用密钥认证，可留空') ?></small>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label"><?= __('SSH密钥路径') ?></label>
+                        <label class="w-field__label"><?= __('SSH密钥路径') ?></label>
                         <div class="input-group">
-                            <input type="text" name="key_path" id="key_path" class="form-control" 
+                            <input type="text" name="key_path" id="key_path" class="w-input" 
                                    value="<?= htmlspecialchars($host ? ($host->getData(SyncHost::fields_KEY_PATH) ?: '') : '') ?>" 
                                    placeholder="/path/to/id_rsa">
                             <button type="button" class="btn btn-outline-secondary" onclick="AsyncHostForm.selectKeyFile()">
@@ -88,8 +69,8 @@ $isEdit = $host && $host->getId();
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label"><?= __('描述') ?></label>
-                        <textarea name="description" class="form-control" rows="3"><?= htmlspecialchars($host ? ($host->getData(SyncHost::fields_DESCRIPTION) ?: '') : '') ?></textarea>
+                        <label class="w-field__label"><?= __('描述') ?></label>
+                        <textarea name="description" class="w-input" rows="3"><?= htmlspecialchars($host ? ($host->getData(SyncHost::fields_DESCRIPTION) ?: '') : '') ?></textarea>
                     </div>
 
                     <div class="text-end">

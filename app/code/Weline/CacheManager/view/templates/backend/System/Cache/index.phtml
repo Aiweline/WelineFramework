@@ -363,4 +363,4 @@ $cachePageConfigTailBody = \substr($cachePageConfigTail, 1); // drop leading "{"
 </div>
 
 <script id="weline-cache-page-config" type="application/json">{"urls":{"status":"@backend-url{'admin/system/cache/status'}","status_batch":"@backend-url{'admin/system/cache/status-batch'}","clear":"@backend-url{'admin/system/cache/clear'}","clear_all":"@backend-url{'admin/system/cache/clearAll'}","stats":"@backend-url{'admin/system/cache/stats'}","pool_stats":"@backend-url{'admin/system/cache/pool-stats'}","run_cron":"@backend-url{'admin/system/cache/run-cron-task'}"},<?= $cachePageConfigTailBody ?></script>
-<script src="@static(Weline_CacheManager::system/cache-admin.js)"></script>
+<script src="@static(Weline_CacheManager::system/cache-admin.js)" defer></script>

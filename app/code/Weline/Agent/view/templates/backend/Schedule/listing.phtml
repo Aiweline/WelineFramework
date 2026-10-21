@@ -22,12 +22,11 @@ $get = static function (mixed $item, string $key, mixed $default = ''): mixed {
 };
 ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-agent-admin.css)">
-<script src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
+<script defer src="@static(Weline_Theme::ui/pages/weline-agent-admin-api.js)"></script>
 
 <section class="w-agent-admin">
     <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
         <div class="w-agent-admin__intro">
-            <h1><w:icon name="clock" size="sm" /> <?= $escape(__('调度管理')) ?></h1>
             <p class="w-agent-admin__kicker"><?= $escape(__('让智能体按时间自动执行任务，适合巡检、汇总和定期清理。')) ?></p>
         </div>
         <a href="@backend-url{'*/backend/schedule/add'}" class="w-button">

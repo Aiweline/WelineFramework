@@ -53,11 +53,11 @@ $title = (string)__('本单发货记录（共 %{1} 笔）', [$shipmentCount]);
     </h4>
     <?php if ($shipmentCount >= 2): ?>
         <p class="account-order-detail__shipments-hint"
-           data-testid="account-order-shipments-multi-hint"><?= __('同单多笔发货，仅本子订单') ?></p>
+           data-testid="account-order-shipments-multi-hint"><lang>同单多笔发货，仅本子订单</lang></p>
     <?php endif; ?>
     <?php if ($shipments === []): ?>
         <p class="account-order-detail__shipments-empty"
-           data-testid="account-order-shipments-empty"><?= __('本子订单暂无发货记录') ?></p>
+           data-testid="account-order-shipments-empty"><lang>本子订单暂无发货记录</lang></p>
     <?php else: ?>
         <div class="account-order-detail__shipments-list" role="list">
             <?php foreach ($shipments as $row):
@@ -87,7 +87,7 @@ $title = (string)__('本单发货记录（共 %{1} 笔）', [$shipmentCount]);
                             <span data-testid="account-order-shipment-carrier"><?= $esc($carrier) ?></span>
                         <?php endif; ?>
                         <?php if ($tn === ''): ?>
-                            <span class="account-orders__badge" data-tone="warning"><?= __('待补运单号') ?></span>
+                            <span class="account-orders__badge" data-tone="warning"><lang>待补运单号</lang></span>
                         <?php else: ?>
                             <code data-testid="account-order-shipment-tracking"><?= $esc($tn) ?></code>
                         <?php endif; ?>
@@ -96,17 +96,17 @@ $title = (string)__('本单发货记录（共 %{1} 笔）', [$shipmentCount]);
                               data-testid="account-order-shipment-status"><?= $esc($statusLabel) ?></span>
                     </div>
                     <p class="account-order-detail__shipment-times">
-                        <?= __('发货时间') ?>：<?= $esc($shippedAt !== '' ? $shippedAt : '—') ?>
-                        · <?= __('送达') ?>：<?= $esc($deliveredAt !== '' ? $deliveredAt : '—') ?>
+                        <lang>发货时间</lang>：<?= $esc($shippedAt !== '' ? $shippedAt : '—') ?>
+                        · <lang>送达</lang>：<?= $esc($deliveredAt !== '' ? $deliveredAt : '—') ?>
                     </p>
                     <?php
                     $contents = \is_array($row['contents'] ?? null) ? $row['contents'] : [];
                     ?>
                     <div class="account-order-detail__shipment-contents"
                          data-testid="account-order-shipment-contents">
-                        <h5><?= __('包裹内商品') ?></h5>
+                        <h5><lang>包裹内商品</lang></h5>
                         <?php if ($contents === []): ?>
-                            <p data-testid="account-order-shipment-contents-empty"><?= __('未记录包裹内商品') ?></p>
+                            <p data-testid="account-order-shipment-contents-empty"><lang>未记录包裹内商品</lang></p>
                         <?php else: ?>
                             <ul data-testid="account-order-shipment-contents-list">
                                 <?php foreach ($contents as $cline):
@@ -129,14 +129,14 @@ $title = (string)__('本单发货记录（共 %{1} 笔）', [$shipmentCount]);
                     <?php if ($tn !== '' && $sid > 0): ?>
                         <div class="account-order-detail__shipment-progress"
                              data-testid="account-order-shipment-progress">
-                            <h5><?= __('物流进程记录') ?></h5>
+                            <h5><lang>物流进程记录</lang></h5>
                             <?php if (!$trackOk): ?>
                                 <p data-testid="account-order-shipment-progress-empty">
                                     <?= $esc($trackMessage !== '' ? $trackMessage : (string)__('暂无物流进程')) ?>
                                 </p>
                             <?php elseif ($progress === []): ?>
                                 <p data-testid="account-order-shipment-progress-empty">
-                                    <?= __('承运方尚未回传轨迹节点') ?>
+                                    <lang>承运方尚未回传轨迹节点</lang>
                                 </p>
                             <?php else: ?>
                                 <ol data-testid="account-order-shipment-progress-list">
@@ -165,7 +165,7 @@ $title = (string)__('本单发货记录（共 %{1} 笔）', [$shipmentCount]);
                                     <a href="<?= $esc($trackingUrl) ?>"
                                        target="_blank"
                                        rel="noopener noreferrer"
-                                       data-testid="account-order-shipment-track-url"><?= __('打开承运商轨迹页') ?></a>
+                                       data-testid="account-order-shipment-track-url"><lang>打开承运商轨迹页</lang></a>
                                 </p>
                             <?php endif; ?>
                         </div>

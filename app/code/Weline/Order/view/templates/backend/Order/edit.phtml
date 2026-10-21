@@ -79,6 +79,8 @@ $availableTransitions = $this->getData('available_transitions') ?? [];
 $orderCustomerSelectValue = (string)($this->getData('orderCustomerSelectValue') ?? '');
 $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDisplay') ?? '');
 ?>
+<css>Weline_Order::css/backend/order-admin.css</css>
+
 <?php
 // 顶栏壳已提供 H1 + 菜单面包屑；正文只保留订单号副标题，避免第二套「系统/…」面包屑。
 ?>
@@ -134,7 +136,7 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
                     return htmlspecialchars($summaryCurrency) . ' ' . number_format($amount, 2);
                 };
                 ?>
-                <div class="w-stat-tiles" style="--w-gap:var(--weline-space-2);--w-stat-tile-min:9rem;" data-testid="order-edit-summary-grid">
+                <div class="w-stat-tiles" style="--w-gap:var(--weline-space-2);--w-stat-tile-min:calc(var(--weline-space-12) * 3);" data-testid="order-edit-summary-grid">
                     <div class="w-cluster" style="--w-gap:var(--weline-space-2);" data-align="baseline">
                         <span class="w-text" data-tone="muted" data-size="sm"><?= __('订单号') ?></span>
                         <span><?= htmlspecialchars((string)($orderData[Order::schema_fields_ORDER_NUMBER] ?? '')) ?></span>
@@ -313,7 +315,7 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
                                 <option value="<?= htmlspecialchars((string)$transition) ?>"><?= htmlspecialchars(Order::getStatusLabel((string)$transition)) ?></option>
                             <?php endforeach; ?>
                         </select>
-                        <input type="text" name="comment" class="w-input" style="width:220px;" placeholder="<?= __('状态备注') ?>">
+                        <input type="text" name="comment" class="w-input w-order-inline-input--comment" placeholder="<?= __('状态备注') ?>">
                         <label class="w-check"><input type="checkbox" name="notify_customer" value="1"> <?= __('通知客户') ?></label>
                         <button type="submit" class="w-button" data-tone="primary" data-size="sm"><?= __('更新状态') ?></button>
                     </div>
@@ -467,13 +469,13 @@ $orderCustomerSelectDisplay = (string)($this->getData('orderCustomerSelectDispla
                                                         height="40"
                                                         loading="lazy"
                                                         data-testid="order-edit-item-image"
-                                                        style="width:2.5rem;height:2.5rem;object-fit:cover;border-radius:var(--weline-radius-sm,0.25rem);background:var(--backend-color-bg-muted,transparent);flex-shrink:0;"
+                                                        class="w-order-line-thumb"
                                                     >
                                                 <?php else: ?>
                                                     <span
                                                         data-testid="order-edit-item-image-empty"
                                                         aria-hidden="true"
-                                                        style="display:inline-block;width:2.5rem;height:2.5rem;border-radius:var(--weline-radius-sm,0.25rem);background:var(--backend-color-bg-muted,transparent);border:1px solid var(--backend-color-border-default,transparent);flex-shrink:0;"
+                                                        class="w-order-line-thumb w-order-line-thumb--empty"
                                                     ></span>
                                                 <?php endif; ?>
                                                 <div style="min-width:0;">

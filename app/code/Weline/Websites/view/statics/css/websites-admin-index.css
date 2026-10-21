@@ -45,7 +45,7 @@
         max-width: 100%;
         min-height: var(--weline-control-height-sm);
         padding: 0 var(--weline-space-3);
-        border: 1px solid var(--weline-theme-border);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
         border-radius: var(--weline-radius-round);
         background: var(--weline-theme-surface-muted);
         color: var(--weline-theme-text-muted);
@@ -65,7 +65,7 @@
         min-width: 0;
         margin: 0;
         padding: var(--weline-space-3) var(--weline-space-4);
-        border: 1px solid var(--weline-theme-border);
+        border: var(--border-width-thin) solid var(--weline-theme-border);
         border-radius: var(--weline-radius-lg);
         background: var(--weline-theme-surface-raised);
     }
@@ -109,7 +109,7 @@
     }
 
     .w-website-admin__guide-toggle:focus-visible {
-        outline: 3px solid var(--weline-theme-primary);
+        outline: var(--border-width-thick) solid var(--weline-theme-primary);
         outline-offset: 4px;
         border-radius: var(--weline-radius-sm);
     }
@@ -157,7 +157,7 @@
 
     .w-website-admin__pagination {
         padding: var(--weline-space-4);
-        border-top: 1px solid var(--weline-theme-border);
+        border-top: var(--border-width-thin) solid var(--weline-theme-border);
     }
 
     /* 站点范围树：折叠箭头对齐分类/EAV（无边框方钮，展开旋转） */
@@ -185,7 +185,7 @@
     }
 
     .w-websites-scope-admin .w-catalog-tree__toggle:focus-visible {
-        outline: 2px solid color-mix(in srgb, var(--weline-theme-primary) 55%, transparent);
+        outline: var(--border-width-medium) solid color-mix(in srgb, var(--weline-theme-primary) 55%, transparent);
         outline-offset: 1px;
     }
 
