@@ -27,8 +27,8 @@ final class SystemConfigQueryProviderAuthorizationTest extends TestCase
     {
         $systemConfig = $this->createMock(SystemConfig::class);
         $systemConfig->expects(self::once())
-            ->method('setScopedConfig')
-            ->willReturn(true);
+            ->method('saveScopeConfig')
+            ->willReturn(['status' => 'applied', 'version_id' => 1]);
         $guard = $this->createMock(BackendObjectAuthorizationGuardInterface::class);
         $guard->expects(self::once())
             ->method('requireSubmitForQuery')
@@ -51,13 +51,13 @@ final class SystemConfigQueryProviderAuthorizationTest extends TestCase
             'expected_grant_version' => 12,
         ]);
 
-        self::assertTrue($result);
+        self::assertSame('applied', $result['status']);
     }
 
     public function testMissingGrantVersionIsPassedAsZeroAndDeniedBeforeMutation(): void
     {
         $systemConfig = $this->createMock(SystemConfig::class);
-        $systemConfig->expects(self::never())->method('setScopedConfig');
+        $systemConfig->expects(self::never())->method('saveScopeConfig');
         $guard = $this->createMock(BackendObjectAuthorizationGuardInterface::class);
         $guard->expects(self::once())
             ->method('requireSubmitForQuery')

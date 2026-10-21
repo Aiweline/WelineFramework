@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\SystemConfig\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\App\State;
 use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Context;
 use Weline\SystemConfig\Model\SystemConfig;
@@ -19,6 +20,19 @@ use Weline\SystemConfig\Service\SystemConfigCenterService;
  */
 final class SystemConfigServiceContractsTest extends TestCase
 {
+    private string $previousLanguage = '';
+
+    protected function setUp(): void
+    {
+        $this->previousLanguage = State::getRequestLanguageOverride();
+        State::setRequestLanguageOverride('zh_Hans_CN');
+    }
+
+    protected function tearDown(): void
+    {
+        State::setRequestLanguageOverride($this->previousLanguage);
+    }
+
     public function testAllSystemConfigServiceContractsPass(): void
     {
         $failures = [];

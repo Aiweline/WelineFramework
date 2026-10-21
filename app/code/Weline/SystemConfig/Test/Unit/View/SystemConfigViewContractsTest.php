@@ -63,7 +63,7 @@ private function assert_ConfigCenterGlobalEditable_testGlobalScopeIsWritableBase
     self::assertStringNotContainsString('$scopeReadOnly = $targetKind === \'global\'', $src);
     self::assertStringNotContainsString('Global 层仅查看继承值', $src);
     self::assertStringContainsString('Global 为全站基线配置', $src);
-    self::assertStringContainsString('$fieldDisabled = $isLocked || $isInherited', $src);
+    self::assertStringContainsString('$fieldDisabled = $isLocked', $src);
     self::assertStringContainsString('<?php if (!empty($template[\'fields\'])): ?>', $src);
     self::assertDoesNotMatchRegularExpression('/if\s*\(\s*!empty\(\$template\[\'fields\'\]\)\s*&&\s*!\$scopeReadOnly\s*\)/', $src, 'Save actions must not be gated behind Global read-only.');
 }

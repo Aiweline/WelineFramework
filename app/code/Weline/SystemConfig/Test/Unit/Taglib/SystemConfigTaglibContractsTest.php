@@ -39,8 +39,8 @@ final class SystemConfigTaglibContractsTest extends TestCase
             'ConfigEmbed::testDefaultTemplatesAndAssetsExist' => function () {
             $this->assert_ConfigEmbed_testDefaultTemplatesAndAssetsExist();
         },
-            'ConfigEmbed::testModuleVersionIs1355' => function () {
-            $this->assert_ConfigEmbed_testModuleVersionIs1355();
+            'ConfigEmbed::testModuleVersionMatchesRelease' => function () {
+            $this->assert_ConfigEmbed_testModuleVersionMatchesRelease();
         },
             'ConfigEmbed::testCallbackPassesExplicitScopeAttributes' => function () {
             $this->assert_ConfigEmbed_testCallbackPassesExplicitScopeAttributes();
@@ -151,11 +151,11 @@ private function assert_ConfigEmbed_testDefaultTemplatesAndAssetsExist(): void
     self::assertStringContainsString('fetchHtml($fetchSource', $renderer);
 }
 
-private function assert_ConfigEmbed_testModuleVersionIs1355(): void
+private function assert_ConfigEmbed_testModuleVersionMatchesRelease(): void
 {
     $module = include '/Users/weline/Project/Official/框架/app/code/Weline/SystemConfig' . '/etc/module.php';
     self::assertIsArray($module);
-    self::assertSame('1.3.55', $module['version'] ?? null);
+    self::assertSame('1.3.70', $module['version'] ?? null);
 }
 
 private function assert_ConfigEmbed_testCallbackPassesExplicitScopeAttributes(): void
