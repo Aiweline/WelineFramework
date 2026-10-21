@@ -68,8 +68,15 @@ final class ThemeUpdateBuildService
             $entityCopied = 0;
             $this->linkCurrentEntityTree($entityDir, $batchId, $entityCopied);
             ThemeLayoutEntityPaths::forceRoot($entityDir);
-            // 让固化期产出的静态 URL 指向本代次前缀（批次目录是完整静态树快照）
-            \Weline\Framework\Deploy\StaticBuildId::override($batchId);
+            // 固化/编译期把「本代次」作为静态前缀来源：编译产物烘焙的是本批次前缀，
+            // 这样后续 GC 删旧批次不会让产物 404。
+            \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::forceBatch([
+                'batch_id' => $batchId,
+                'static_ns' => $batchId,
+                'entity_root' => $batchId,
+                'theme_prefix' => $themePrefix,
+                'epoch' => 1,
+            ]);
             try {
                 /** @var ThemeLayoutEntityUpgradeSolidifyService $solidify */
                 $solidify = ObjectManager::getInstance(ThemeLayoutEntityUpgradeSolidifyService::class);
@@ -88,7 +95,7 @@ final class ThemeUpdateBuildService
                 $solidify->solidifyTheme($themeId, null, $solidifyOptions);
             } finally {
                 ThemeLayoutEntityPaths::forceRoot(null);
-                \Weline\Framework\Deploy\StaticBuildId::override(null);
+                \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::forceBatch(null);
             }
             $entityFiles = $this->countFiles($entityDir);
             $rewritten = $this->rewriteEntityStaticPrefixes($entityDir, $batchId, $themePrefix);

@@ -27,6 +27,16 @@ final class ThemeUpdateRuntime
     /** @var array{at:int,map:array<string,mixed>,epoch:int}|null */
     private static ?array $pointerFileCache = null;
 
+    /** 构建期强制代次（让编译产物烘焙「正在构建的批次」前缀）。 */
+    private static ?array $forced = null;
+
+    /** @param array{batch_id:string,static_ns:string,entity_root:string,theme_prefix:string,epoch:int}|null $active */
+    public static function forceBatch(?array $active): void
+    {
+        self::$forced = $active;
+        RequestContext::remove(self::REQUEST_STATE_KEY);
+    }
+
     /**
      * 当前请求生效的代次；无代次返回 null。
      *
@@ -34,6 +44,9 @@ final class ThemeUpdateRuntime
      */
     public static function active(): ?array
     {
+        if (self::$forced !== null) {
+            return self::$forced;
+        }
         if (RequestContext::has(self::REQUEST_STATE_KEY)) {
             $cached = RequestContext::get(self::REQUEST_STATE_KEY);
             return \is_array($cached) && $cached !== [] ? $cached : null;
@@ -109,6 +122,7 @@ final class ThemeUpdateRuntime
     public static function reset(): void
     {
         RequestContext::remove(self::REQUEST_STATE_KEY);
+        self::$forced = null;
         StaticBuildId::override(null);
     }
 

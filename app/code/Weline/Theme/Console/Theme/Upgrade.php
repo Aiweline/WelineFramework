@@ -85,6 +85,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             throw new ConsoleException(__('未找到范围已绑定主题，请用 -t/--theme 指定主题名。'));
         }
 
+        // 主题更新代次（原子切换）：构建进新代次目录 → 校验 → 只翻指针。不 purge、不开维护模式。
+        if ($this->isBatchMode($args)) {
+            $this->runBatchUpgrade($themes, $layoutType, $layoutOption);
+            return;
+        }
+
         /** @var StaticAssetMode $staticAssetMode */
         $staticAssetMode = ObjectManager::getInstance(StaticAssetMode::class);
         // Registry may be stale until the next framework compile; keep the direct path.
@@ -770,6 +776,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '-o, --option <name>' => '仅固化该布局下指定选项（如 default）；须同时提供 -l；省略 -o 则处理该布局下全部选项',
                 '-a, --all' => '部署并编译该主题（或全部站绑主题）下全部历史版本；默认仅当前正式版+草稿',
                 '-f, --force' => '显式全量清理店面 FPC / Shared FPC / CDN 全页缓存并 staging→warm→promote（仅故障恢复；日常发版默认只按布局清 FPC/CDN URL）',
+                '--inplace' => '旧流程：就地 purge+固化（需维护模式；仅应急/兼容）。默认走原子代次通道',
+                '--batch, --atomic' => '（默认）原子代次：构建进新代次目录→校验→只翻指针；不 purge、不需要维护模式',
             ],
             [
                 'module...' => '可选：只处理设计主题下指定模块目录（如 Weline_Theme）',
@@ -783,6 +791,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '全部历史版本' => 'php bin/w theme:upgrade --all -t hanfu',
                 '指定主题+模块过滤' => 'php bin/w theme:upgrade -t daocharms Weline_Theme',
                 '主题发版（按布局清 FPC/CDN URL）' => 'php bin/w theme:upgrade -t hanfu',
+                '原子代次更新（推荐）' => 'php bin/w theme:upgrade -t hanfu --batch',
                 '显式全量清（故障恢复）' => 'php bin/w theme:upgrade -t hanfu -f',
             ]
         );
@@ -876,5 +885,84 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $destinationFile = $staticRoot . '/' . $publicThemePath . '/' . $relativePath;
 
         return str_replace('/', DS, dirname($destinationFile));
+    }
+
+    /**
+     * 是否走「主题更新代次」通道。
+     *
+     * 默认走代次（原子切换、不 purge、不需要维护模式）；
+     * `--inplace` 或 `--maintenance` 保留旧的就地 purge+固化流程（仅应急/兼容）。
+     */
+    private function isBatchMode(array $args): bool
+    {
+        $inplace = false;
+        foreach ($args as $key => $value) {
+            if (\is_int($key)) {
+                $arg = (string)$value;
+                if (\in_array($arg, ['--inplace', '--maintenance'], true)) {
+                    $inplace = true;
+                }
+                if (\in_array($arg, ['--batch', '--atomic'], true)) {
+                    return true;
+                }
+                continue;
+            }
+            if (\in_array((string)$key, ['inplace', 'maintenance'], true) && $value) {
+                $inplace = true;
+            }
+            if (\in_array((string)$key, ['batch', 'atomic'], true) && $value) {
+                return true;
+            }
+        }
+
+        return !$inplace;
+    }
+
+    /**
+     * 构建新代次并原子切换（不 purge、不需要维护模式）。
+     *
+     * @param list<WelineTheme> $themes
+     */
+    private function runBatchUpgrade(array $themes, string $layoutType, string $layoutOption): void
+    {
+        $buildOptions = [];
+        if ($layoutType !== '') {
+            $buildOptions['layouts'] = [$layoutType];
+            if ($layoutOption !== '') {
+                $buildOptions['options'] = [$layoutOption];
+            }
+        }
+
+        /** @var \Weline\Theme\Service\ThemeUpdate\ThemeUpdateBuildService $builder */
+        $builder = ObjectManager::getInstance(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateBuildService::class);
+        /** @var \Weline\Theme\Service\ThemeUpdate\ThemeUpdateBatchService $batches */
+        $batches = ObjectManager::getInstance(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateBatchService::class);
+
+        foreach ($themes as $theme) {
+            if (!$theme instanceof WelineTheme) {
+                continue;
+            }
+            $themeId = (int)$theme->getId();
+            if ($themeId < 1) {
+                continue;
+            }
+            $this->printing->note(__('主题 #%{id}：构建更新代次（不影响线上）…', ['id' => $themeId]));
+            $result = $builder->build($themeId, $buildOptions);
+            $manifest = $result['manifest'] ?? [];
+            if (($manifest['verify']['ok'] ?? false) !== true) {
+                $this->printing->error(__('主题 #%{id} 构建校验未通过，未切换：%{batch}', [
+                    'id' => $themeId,
+                    'batch' => $result['batch_id'],
+                ]));
+                continue;
+            }
+            $state = $batches->promote($result['batch_id']);
+            $this->printing->success(__('主题 #%{id} 已切到代次 %{batch}（epoch=%{epoch}，previous=%{prev}）', [
+                'id' => $themeId,
+                'batch' => $state['current'],
+                'epoch' => $state['epoch'],
+                'prev' => $state['previous'] !== '' ? $state['previous'] : '-',
+            ]));
+        }
     }
 }

@@ -31,7 +31,7 @@ if [ -z "$batch" ]; then
   bad "构建失败：未拿到 batch_id"
   exit 1
 fi
-echo "  batch_id=$batch"
+echo "  batch_id=${batch}"
 echo "$build_out" | grep -q '构建完成且校验通过' && ok "构建校验通过" || bad "构建校验未通过"
 after="$(prefix_set)"
 [ "$before" = "$after" ] && ok "构建期线上静态前缀未变化" || bad "构建期线上静态前缀发生变化"
@@ -81,12 +81,12 @@ echo "$maint" | grep -qiE 'Maintenance mode:?\s*(Close|关闭|off)' && ok "维�
 echo "== 6. 主题扫描与单测 =="
 audit_out="$(python3 app/code/Weline/Theme/bin/module-frontend-theme-audit.py 2>/dev/null | head -1)"
 if echo "$audit_out" | grep -q 'P0=0'; then
-  ok "主题扫描 P0=0（$audit_out）"
+  ok "主题扫描 P0=0（${audit_out}）"
   if ! echo "$audit_out" | grep -q 'hits=0'; then
-    echo "  [WARN] 存在非 P0 命中（可能来自并发会话新增文件）：$audit_out"
+    echo "  [WARN] 存在非 P0 命中（可能来自并发会话新增文件）：${audit_out}"
   fi
 else
-  bad "主题扫描出现 P0 命中：$audit_out"
+  bad "主题扫描出现 P0 命中：${audit_out}"
 fi
 vendor/bin/phpunit --no-coverage app/code/Weline/Theme/test/Unit/Service/ThemeUpdate/ >/tmp/tu_phpunit.txt 2>&1 \
   && ok "代次单测通过" || bad "代次单测失败（见 /tmp/tu_phpunit.txt）"

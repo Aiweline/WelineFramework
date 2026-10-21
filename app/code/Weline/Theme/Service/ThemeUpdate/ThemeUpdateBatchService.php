@@ -226,6 +226,11 @@ final class ThemeUpdateBatchService
             $deleted[] = $batchId;
         }
 
+        // 被删代次的静态前缀可能仍被店面缓存/编译产物引用 → 定向失效，避免出现 404 资源
+        if ($deleted !== []) {
+            $this->invalidateThemeCaches($themeId, 'theme_update_gc');
+        }
+
         return $deleted;
     }
 
