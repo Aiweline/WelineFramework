@@ -642,6 +642,8 @@ class ShippingServiceManager
         $services = $query->select()->fetch()->getItems();
         $facts = [];
         $serviceIds = [];
+        $templateIds = [];
+        $ruleIds = [];
         foreach ($services as $service) {
             if (!$service instanceof ShippingService) {
                 continue;
@@ -651,13 +653,25 @@ class ShippingServiceManager
                 $serviceIds[$serviceId] = true;
             }
             $templateId = (int)$service->getData(ShippingService::schema_fields_RATE_TEMPLATE_ID);
+            if ($templateId > 0) {
+                $templateIds[$templateId] = $templateId;
+            }
             $ruleId = (int)$service->getData(ShippingService::schema_fields_FREE_SHIPPING_RULE_ID);
-            $template = $templateId > 0
-                ? $this->objectManager->getInstance(RateTemplate::class, [], false)->load($templateId)
-                : null;
-            $rule = $ruleId > 0
-                ? $this->objectManager->getInstance(FreeShippingRule::class, [], false)->load($ruleId)
-                : null;
+            if ($ruleId > 0) {
+                $ruleIds[$ruleId] = $ruleId;
+            }
+        }
+        $templatesById = $this->loadRateTemplatesById(\array_values($templateIds));
+        $rulesById = $this->loadFreeShippingRulesById(\array_values($ruleIds));
+
+        foreach ($services as $service) {
+            if (!$service instanceof ShippingService) {
+                continue;
+            }
+            $templateId = (int)$service->getData(ShippingService::schema_fields_RATE_TEMPLATE_ID);
+            $ruleId = (int)$service->getData(ShippingService::schema_fields_FREE_SHIPPING_RULE_ID);
+            $template = $templateId > 0 ? ($templatesById[$templateId] ?? null) : null;
+            $rule = $ruleId > 0 ? ($rulesById[$ruleId] ?? null) : null;
             $facts[] = [
                 'service' => $this->pickFactFields((array)$service->getData(), [
                     ShippingService::schema_fields_ID,
@@ -734,6 +748,66 @@ class ShippingServiceManager
         );
 
         return $this->quoteConfigVersionMemo[$memoKey] = $version;
+    }
+
+    /**
+     * @param list<int> $templateIds
+     * @return array<int, RateTemplate>
+     */
+    private function loadRateTemplatesById(array $templateIds): array
+    {
+        if ($templateIds === []) {
+            return [];
+        }
+        $rows = $this->objectManager->getInstance(RateTemplate::class, [], false)
+            ->reset()
+            ->where(RateTemplate::schema_fields_ID, $templateIds, 'IN')
+            ->select()
+            ->fetchArray();
+        $templates = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $template = $this->objectManager->getInstance(RateTemplate::class, [], false);
+            $template->setData($row);
+            $id = (int)$template->getId();
+            if ($id > 0) {
+                $templates[$id] = $template;
+            }
+        }
+
+        return $templates;
+    }
+
+    /**
+     * @param list<int> $ruleIds
+     * @return array<int, FreeShippingRule>
+     */
+    private function loadFreeShippingRulesById(array $ruleIds): array
+    {
+        if ($ruleIds === []) {
+            return [];
+        }
+        $rows = $this->objectManager->getInstance(FreeShippingRule::class, [], false)
+            ->reset()
+            ->where(FreeShippingRule::schema_fields_ID, $ruleIds, 'IN')
+            ->select()
+            ->fetchArray();
+        $rules = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $rule = $this->objectManager->getInstance(FreeShippingRule::class, [], false);
+            $rule->setData($row);
+            $id = (int)$rule->getId();
+            if ($id > 0) {
+                $rules[$id] = $rule;
+            }
+        }
+
+        return $rules;
     }
 
     /**
