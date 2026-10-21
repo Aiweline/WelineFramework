@@ -39,9 +39,10 @@ final class SecurityPolicyConfigGuardTest extends TestCase
     public function testMutationRequiresMatchingDurableLkg(): void
     {
         $guard = $this->guard();
+        $baseline = $this->policyService()->baselineFromEnv();
         $values = [
-            SecurityPolicyConfigGuard::KEY_CSP => "default-src 'self'",
-            SecurityPolicyConfigGuard::KEY_CORS_ORIGINS => 'https://shop.example',
+            SecurityPolicyConfigGuard::KEY_CSP => $baseline['csp'],
+            SecurityPolicyConfigGuard::KEY_CORS_ORIGINS => $baseline['cors_origins'],
         ];
 
         $this->expectException(\RuntimeException::class);
@@ -59,9 +60,10 @@ final class SecurityPolicyConfigGuardTest extends TestCase
     public function testRegisteredCandidateCanActivateButDifferentDigestCannot(): void
     {
         $guard = $this->guard();
+        $baseline = $this->policyService()->baselineFromEnv();
         $values = [
-            SecurityPolicyConfigGuard::KEY_CSP => "default-src 'self'",
-            SecurityPolicyConfigGuard::KEY_CORS_ORIGINS => 'https://shop.example',
+            SecurityPolicyConfigGuard::KEY_CSP => $baseline['csp'],
+            SecurityPolicyConfigGuard::KEY_CORS_ORIGINS => $baseline['cors_origins'],
         ];
         $record = $guard->registerLkg(
             SystemConfig::SCOPE_GLOBAL,
@@ -87,10 +89,18 @@ final class SecurityPolicyConfigGuardTest extends TestCase
             SystemConfig::SCOPE_GLOBAL,
             SystemConfig::LOCALE_DEFAULT,
             [
-                SecurityPolicyConfigGuard::KEY_CSP => "default-src 'none'",
+                SecurityPolicyConfigGuard::KEY_CSP => $baseline['csp'],
                 SecurityPolicyConfigGuard::KEY_CORS_ORIGINS => 'https://shop.example',
             ],
             [],
+        );
+    }
+
+    private function policyService(): SecurityHeaderPolicyService
+    {
+        return new SecurityHeaderPolicyService(
+            lkgGate: new SecurityPolicyLkgGate(new InMemorySecurityPolicyLkgRepository()),
+            overrideProvider: new EmptySecurityHeaderPolicyOverrideProvider(),
         );
     }
 
@@ -108,12 +118,6 @@ final class SecurityPolicyConfigGuardTest extends TestCase
         );
         $systemConfig->method('getConfig')->willReturn('');
 
-        return new SecurityPolicyConfigGuard(
-            $systemConfig,
-            new SecurityHeaderPolicyService(
-                lkgGate: new SecurityPolicyLkgGate(new InMemorySecurityPolicyLkgRepository()),
-                overrideProvider: new EmptySecurityHeaderPolicyOverrideProvider(),
-            ),
-        );
+        return new SecurityPolicyConfigGuard($systemConfig, $this->policyService());
     }
 }

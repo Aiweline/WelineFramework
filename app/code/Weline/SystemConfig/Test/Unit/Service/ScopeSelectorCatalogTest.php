@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\SystemConfig\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\App\State;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
 use Weline\SystemConfig\Service\ScopeSelectorCatalog;
@@ -12,6 +13,19 @@ use Weline\SystemConfig\Service\SystemConfigScopeResolver;
 
 final class ScopeSelectorCatalogTest extends TestCase
 {
+    private string $previousLanguage = '';
+
+    protected function setUp(): void
+    {
+        $this->previousLanguage = State::getRequestLanguageOverride();
+        State::setRequestLanguageOverride('zh_Hans_CN');
+    }
+
+    protected function tearDown(): void
+    {
+        State::setRequestLanguageOverride($this->previousLanguage);
+    }
+
     public function testBuildsCanonicalGlobalWebsiteStoreAndChannelTree(): void
     {
         $service = new ScopeSelectorCatalog(new SystemConfigScopeResolver(), new SelectorCatalogFixture());

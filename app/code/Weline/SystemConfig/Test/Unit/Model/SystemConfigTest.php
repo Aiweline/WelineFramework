@@ -6,176 +6,213 @@ namespace Weline\SystemConfig\Test\Unit\Model;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
+use Weline\Framework\Context;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\SystemConfig\Model\SystemConfig;
 
 final class SystemConfigTest extends TestCase
 {
+    private const MODULE = 'Weline_Backend';
+    private const AREA = SystemConfig::area_BACKEND;
+    private const SCOPE = 'default.default.default';
+    private const LOCALE = 'default';
+
     protected function setUp(): void
     {
-        RequestContext::cleanup();
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'fpm']]));
+        \w_cache('system_config')->clear();
+        SystemConfig::clearProcessCache();
     }
 
     protected function tearDown(): void
     {
+        SystemConfig::clearProcessCache();
         RequestContext::cleanup();
+        Context::leave();
     }
 
-    public function testGetConfigCachesResultAcrossRequests(): void
+    public function testCompleteModuleSnapshotIsCachedAcrossRequests(): void
     {
         $cache = new SystemConfigTestCachePool('system_config');
-        $counter = (object) ['singleLoads' => 0, 'rowsLoads' => 0];
+        $counter = (object) ['batchReads' => 0, 'singleReads' => 0];
 
-        $first = $this->createConfigModel($cache, $counter, 'logo-dark.png');
-        self::assertSame('logo-dark.png', $first->getConfig('logo_dark', 'Weline_Backend', SystemConfig::area_BACKEND));
-        self::assertSame(1, $counter->singleLoads);
-
-        RequestContext::cleanup();
-
-        $second = $this->createConfigModel($cache, $counter, 'logo-dark-updated.png');
-        self::assertSame('logo-dark.png', $second->getConfig('logo_dark', 'Weline_Backend', SystemConfig::area_BACKEND));
-        self::assertSame(1, $counter->singleLoads);
-    }
-
-    public function testGetConfigRechecksCachedNullMissesAcrossRequests(): void
-    {
-        $cache = new SystemConfigTestCachePool('system_config');
-        $counter = (object) ['singleLoads' => 0, 'rowsLoads' => 0];
-
-        $first = $this->createConfigModel($cache, $counter, null);
-        self::assertNull($first->getConfig('missing_key', 'Weline_Backend', SystemConfig::area_BACKEND));
-        self::assertSame(1, $counter->singleLoads);
+        $first = $this->createConfigModel($cache, $counter, [$this->row('logo_dark', 'logo-dark.png')]);
+        self::assertSame('logo-dark.png', $first->getConfig('logo_dark', self::MODULE, self::AREA, locale: self::LOCALE));
+        self::assertSame(1, $counter->batchReads);
 
         RequestContext::cleanup();
 
-        $second = $this->createConfigModel($cache, $counter, 'should-not-load');
-        self::assertSame('should-not-load', $second->getConfig('missing_key', 'Weline_Backend', SystemConfig::area_BACKEND));
-        self::assertSame(2, $counter->singleLoads);
+        $second = $this->createConfigModel($cache, $counter, [$this->row('logo_dark', 'changed.png')]);
+        self::assertSame('logo-dark.png', $second->getConfig('logo_dark', self::MODULE, self::AREA, locale: self::LOCALE));
+        self::assertSame(1, $counter->batchReads, 'a warm module snapshot must not reload the module');
+        self::assertSame(0, $counter->singleReads);
     }
 
-    public function testGetConfigMapByModuleNormalizesRowsAndCachesThem(): void
+    public function testMissingKeyIsNotHiddenByEmptySnapshotAcrossRequests(): void
     {
         $cache = new SystemConfigTestCachePool('system_config');
-        $counter = (object) ['singleLoads' => 0, 'rowsLoads' => 0];
+        $counter = (object) ['batchReads' => 0, 'singleReads' => 0];
+
+        $first = $this->createConfigModel($cache, $counter, []);
+        self::assertNull($first->getConfig('missing_key', self::MODULE, self::AREA, locale: self::LOCALE));
+        self::assertSame(1, $counter->batchReads);
+
+        RequestContext::cleanup();
+
+        $second = $this->createConfigModel($cache, $counter, [$this->row('missing_key', 'should-not-load')]);
+        self::assertSame('should-not-load', $second->getConfig('missing_key', self::MODULE, self::AREA, locale: self::LOCALE));
+        self::assertSame(1, $counter->batchReads);
+        self::assertSame(1, $counter->singleReads, 'empty snapshots must keep the exact-row fallback');
+    }
+
+    public function testConfigMapIsCachedAcrossRequests(): void
+    {
+        $cache = new SystemConfigTestCachePool('system_config');
+        $counter = (object) ['batchReads' => 0, 'singleReads' => 0];
         $rows = [
-            [
-                SystemConfig::schema_fields_KEY => 'logo_dark',
-                SystemConfig::schema_fields_VALUE => 'logo-dark.png',
-            ],
-            [
-                SystemConfig::schema_fields_KEY => 'site_name',
-                SystemConfig::schema_fields_VALUE => 'Weline',
-            ],
+            $this->row('logo_dark', 'logo-dark.png'),
+            $this->row('site_name', 'Weline'),
         ];
 
-        $first = $this->createConfigModel($cache, $counter, null, $rows);
+        $first = $this->createConfigModel($cache, $counter, $rows);
         self::assertSame(
             ['logo_dark' => 'logo-dark.png', 'site_name' => 'Weline'],
-            $first->getConfigMapByModule('Weline_Backend', SystemConfig::area_BACKEND)
+            $first->getConfigMapByModule(self::MODULE, self::AREA, locale: self::LOCALE)
         );
-        self::assertSame(1, $counter->rowsLoads);
+        self::assertSame(1, $counter->batchReads);
 
         RequestContext::cleanup();
 
-        $second = $this->createConfigModel($cache, $counter, null, [
-            [
-                SystemConfig::schema_fields_KEY => 'logo_dark',
-                SystemConfig::schema_fields_VALUE => 'changed.png',
-            ],
-        ]);
+        $second = $this->createConfigModel($cache, $counter, [$this->row('logo_dark', 'changed.png')]);
         self::assertSame(
             ['logo_dark' => 'logo-dark.png', 'site_name' => 'Weline'],
-            $second->getConfigMapByModule('Weline_Backend', SystemConfig::area_BACKEND)
+            $second->getConfigMapByModule(self::MODULE, self::AREA, locale: self::LOCALE)
         );
-        self::assertSame(1, $counter->rowsLoads);
+        self::assertSame(1, $counter->batchReads, 'a warm map envelope must not reload the module');
     }
 
     public function testGetConfigTreatsMissingSystemConfigTableAsUnconfigured(): void
     {
         $cache = new SystemConfigTestCachePool('system_config');
-        $counter = (object) ['singleLoads' => 0, 'rowsLoads' => 0];
+        $counter = (object) ['batchReads' => 0, 'singleReads' => 0];
+        $model = $this->createConfigModel(
+            $cache,
+            $counter,
+            [],
+            new \PDOException('SQLSTATE[HY000]: General error: 1 no such table: w_system_config')
+        );
 
-        $model = new class($cache, $counter) extends SystemConfig {
-            public function __construct(
-                CachePoolInterface $cache,
-                private readonly object $counter
-            ) {
-                $this->_cache = $cache;
-            }
-
-            protected function loadSingleConfigValue(string $key, string $module, string $area): mixed
-            {
-                $this->counter->singleLoads++;
-                throw new \PDOException('SQLSTATE[HY000]: General error: 1 no such table: system_config');
-            }
-
-            protected function dispatchConfigGetEvent(string $key, string $module, string $area, mixed $value): mixed
-            {
-                return $value;
-            }
-        };
-
-        self::assertNull($model->getConfig('start_page_path', 'Weline_Backend', SystemConfig::area_BACKEND));
-        self::assertSame(1, $counter->singleLoads);
+        self::assertNull($model->getConfig('start_page_path', self::MODULE, self::AREA, locale: self::LOCALE));
+        self::assertSame(1, $counter->batchReads);
+        self::assertSame(0, $counter->singleReads);
     }
 
     public function testGetConfigMapTreatsMissingSystemConfigTableAsEmpty(): void
     {
         $cache = new SystemConfigTestCachePool('system_config');
-        $counter = (object) ['singleLoads' => 0, 'rowsLoads' => 0];
+        $counter = (object) ['batchReads' => 0, 'singleReads' => 0];
+        $model = $this->createConfigModel(
+            $cache,
+            $counter,
+            [],
+            new \PDOException('SQLSTATE[HY000]: General error: 1 no such table: w_system_config')
+        );
 
-        $model = new class($cache, $counter) extends SystemConfig {
-            public function __construct(
-                CachePoolInterface $cache,
-                private readonly object $counter
-            ) {
-                $this->_cache = $cache;
-            }
-
-            protected function loadConfigRowsByModule(string $module, string $area): array
-            {
-                $this->counter->rowsLoads++;
-                throw new \PDOException('SQLSTATE[HY000]: General error: 1 no such table: system_config');
-            }
-        };
-
-        self::assertSame([], $model->getConfigMapByModule('Weline_Backend', SystemConfig::area_BACKEND));
-        self::assertSame(1, $counter->rowsLoads);
+        self::assertSame([], $model->getConfigMapByModule(self::MODULE, self::AREA, locale: self::LOCALE));
+        self::assertSame(1, $counter->batchReads);
     }
 
+    /**
+     * @param list<array<string, mixed>> $rows
+     */
     private function createConfigModel(
         CachePoolInterface $cache,
         object $counter,
-        mixed $singleValue,
-        array $rows = []
+        array $rows,
+        ?\Throwable $loadException = null
     ): SystemConfig {
-        return new class($cache, $counter, $singleValue, $rows) extends SystemConfig {
+        return new class($cache, $counter, $rows, $loadException) extends SystemConfig {
             public function __construct(
                 CachePoolInterface $cache,
                 private readonly object $counter,
-                private readonly mixed $singleValue,
-                private readonly array $rows
+                private readonly array $rows,
+                private readonly ?\Throwable $loadException
             ) {
                 $this->_cache = $cache;
             }
 
-            protected function loadSingleConfigValue(string $key, string $module, string $area): mixed
-            {
-                $this->counter->singleLoads++;
-                return $this->singleValue;
+            protected function loadConfigRowsByModuleScopes(
+                string $module,
+                string $area,
+                array $scopes,
+                array $locales
+            ): array {
+                ++$this->counter->batchReads;
+                if ($this->loadException !== null) {
+                    throw $this->loadException;
+                }
+
+                return array_values(array_filter(
+                    $this->rows,
+                    static fn(array $row): bool => \in_array($row['scope'] ?? '', $scopes, true)
+                        && \in_array($row['locale'] ?? '', $locales, true)
+                ));
             }
 
-            protected function loadConfigRowsByModule(string $module, string $area): array
-            {
-                $this->counter->rowsLoads++;
-                return $this->rows;
+            protected function loadSingleConfigRow(
+                string $key,
+                string $module,
+                string $area,
+                string $scope,
+                string $locale
+            ): ?array {
+                ++$this->counter->singleReads;
+                if ($this->loadException !== null) {
+                    throw $this->loadException;
+                }
+                foreach ($this->rows as $row) {
+                    if (($row['key'] ?? '') === $key
+                        && ($row['scope'] ?? '') === $scope
+                        && ($row['locale'] ?? '') === $locale
+                    ) {
+                        return $row;
+                    }
+                }
+
+                return null;
             }
 
-            protected function dispatchConfigGetEvent(string $key, string $module, string $area, mixed $value): mixed
-            {
+            protected function dispatchConfigGetEvent(
+                string $key,
+                string $module,
+                string $area,
+                mixed $value,
+                string $scope,
+                string $locale
+            ): mixed {
                 return $value;
             }
         };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function row(string $key, mixed $value): array
+    {
+        return [
+            SystemConfig::schema_fields_KEY => $key,
+            SystemConfig::schema_fields_VALUE => $value,
+            SystemConfig::schema_fields_VALUE_TYPE => SystemConfig::VALUE_TYPE_STRING,
+            SystemConfig::schema_fields_MODULE => self::MODULE,
+            SystemConfig::schema_fields_AREA => self::AREA,
+            SystemConfig::schema_fields_SCOPE => self::SCOPE,
+            SystemConfig::schema_fields_LOCALE => self::LOCALE,
+            SystemConfig::schema_fields_IS_ACTIVE => 1,
+            SystemConfig::schema_fields_IS_SENSITIVE => 0,
+            SystemConfig::schema_fields_VERSION => 1,
+            SystemConfig::schema_fields_METADATA => null,
+        ];
     }
 }
 
@@ -214,7 +251,7 @@ final class SystemConfigTestCachePool implements CachePoolInterface
 
     public function has(string $key): bool
     {
-        return array_key_exists($key, $this->storage);
+        return \array_key_exists($key, $this->storage);
     }
 
     public function getIdentity(): string
@@ -255,6 +292,49 @@ final class SystemConfigTestCachePool implements CachePoolInterface
             $this->delete((string) $key);
         }
         return true;
+    }
+
+    public function getCustom(
+        string $key,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): mixed {
+        return $this->get($this->customKey($key, $website, $lang, $currency));
+    }
+
+    public function setCustom(
+        string $key,
+        mixed $value,
+        int $ttl = 0,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): bool {
+        return $this->set($this->customKey($key, $website, $lang, $currency), $value, $ttl);
+    }
+
+    public function deleteCustom(
+        string $key,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): bool {
+        return $this->delete($this->customKey($key, $website, $lang, $currency));
+    }
+
+    public function hasCustom(
+        string $key,
+        bool $website = false,
+        bool $lang = false,
+        bool $currency = false
+    ): bool {
+        return $this->has($this->customKey($key, $website, $lang, $currency));
+    }
+
+    private function customKey(string $key, bool $website, bool $lang, bool $currency): string
+    {
+        return $key . '|' . (int) $website . (int) $lang . (int) $currency;
     }
 
     public function getStats(): array
