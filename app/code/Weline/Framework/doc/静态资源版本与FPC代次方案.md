@@ -203,7 +203,42 @@ pub/static/<legacy 原路径>            ← 兼容旧 HTML / 第三方硬编码
 
 生成的托管 Nginx 配置已通过 `nginx -t`（临时目录生成验证）。
 
-### 6.3 尚未做
+### 6.3 主题资产与内容寻址
 
-- 主题固定名资产（非内容哈希）未进版本目录的引用改造 → P2 剩余。
-- `deploy:static:gc`（旧代保留 7~30 天）与 `deploy:verify-assets` → P5/P6。
+- `ThemeResourceGateway::buildStaticUrl()`、`ThemeHeadChromeCssPack` 两处兜底已接入 `StaticBuildId`；
+- **内容寻址文件（32~64 位 hex 文件名）不加 build 前缀**，直接按内容哈希长缓存：
+  - `StaticBuildId::versionedPath()` 跳过；
+  - `StaticPublicSurface::isVersionedStaticUrl()` 判为已版本化；
+  - Nginx `$wls_static_versioned` 增加哈希文件名规则。
+  这样运行时生成的主题包（`widget-assets/<sha>.css`）不会因为晚于构建快照而 404。
+
+### 6.3.1 主题侧硬编码与 CSS 内部 url()
+
+- 设计主题里历史硬编码的 `/static/Weline/<theme>/...`（`hanfu-skin.phtml`、瓦片/hero 部件）已改为走 `StaticBuildId::versionedPath()`；
+- `WidgetAssetArtifactPublisher::rewriteCssUrls()` 在把 CSS 相对 `url()` 改写为绝对路径时**同步加构建代次**（可选 `$buildId` 参数，测试显式传 `''` 保持纯形状断言）；
+- CSS 包键（`ThemeHeadChromeCssPack` v11 / 组件包）与 **policy 缓存键**（`KeyBuilder::policyDimensions()`）都并入 `static_generation`，
+  静态发布后主题 chrome / 组件 CSS 不会继续内嵌旧构建 URL；
+- 实测 `p05113ef3.test.weline.com:9555`：首页/购物车/结账/商品页运行时静态引用 **NONE=0**，404=0。
+
+仍待迁移：`playinginchina`、`daocharms` 等其它设计主题里同类的硬编码 `/static/` 引用（当前站点未使用）。
+
+### 6.3.2 默认主题（Theme 模块前后端）契约
+
+- `app/code/Weline/Theme/view/theme/{frontend,backend}` 模板已确认**无裸 `/static/`**，主题资产走 `<theme:css>` / `<theme:js>` / `PublicStaticUrl`；
+- 主题 `view/statics/**/*.css` 只用相对 `url()`，无绝对 `/static/`；
+- `weline-ui.js` 图标 sprite 改为继承 `import.meta.url` 的 `?v=`，随 UI 包发布更新；
+- 新增守卫：`Theme/Test/Unit/View/ThemeStaticVersionContractTest.php`（模板/CSS/图标三条规则）；
+- 主题开发规范：`app/code/Weline/Theme/doc/静态资源版本契约.md`。
+
+### 6.4 运维命令（P5/P6，已实现）
+
+| 命令 | 行为 |
+|---|---|
+| `php bin/w deploy:static:gc [--keep-days=7] [--keep-last=2] [--dry-run]` | 只清理带 `.weline-build-id` 的 12 位 hex 版本目录与超龄 `.tmp-*`；当前代、最近 N 代、保留窗口内一律保留；legacy 树不动 |
+| `php bin/w deploy:verify:assets --url=... [--insecure]` | 抓页面 HTML，校验每个本站 `/static` 资源：200 且已版本化（12 位构建段 / 32~64 位内容哈希 / 版本查询）；未版本化或非 200 → 退出码 1 |
+
+实测：`deploy:static:gc --dry-run` 正常列出保留/删除；`deploy:verify:assets` 对本地商城返回「全部资源校验通过」。
+
+### 6.5 尚未做
+
+- WLS 热重载当前被并发生命周期操作占用，代码改动需下一次 `server:reload` 才在运行时生效。

@@ -1,0 +1,451 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Weline\Theme\Service\ThemeUpdate;
+
+use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Model\ThemeUpdateBatch;
+use Weline\Theme\Model\ThemeUpdatePointer;
+
+/**
+ * 主题更新代次的构建/切换/回滚/GC。
+ *
+ * 设计要点（见 doc/主题更新代次与原子切换.md）：
+ * - 构建期只写代次自己的目录（`pub/static/<batch>` 与 `generated/theme-layout-entities/<batch>`），不碰线上字节；
+ * - 切换 = 指针行的 CAS 更新（`WHERE epoch = 期望值`），成功即生效，不需要 purge，也不需要维护模式；
+ * - 回滚 = 用同一机制把 previous 换回 current；
+ * - 每次切换 `epoch + 1`，写入 Env 供 Worker 感知（≤10s）。
+ */
+final class ThemeUpdateBatchService
+{
+    public const CONFIG_CURRENT_MAP = 'theme_update_current';
+    public const CONFIG_EPOCH = 'theme_update_epoch';
+    /** 指针文件（Worker ≤10s 生效，不依赖进程内 Env 缓存重载）。 */
+    public const POINTER_FILE_RELATIVE = 'var/theme-update/current.json';
+    public const AREA_FRONTEND = 'frontend';
+
+    public function __construct(
+        private readonly ThemeUpdateBatch $batch,
+        private readonly ThemeUpdatePointer $pointer,
+    ) {
+    }
+
+    // ---------------------------------------------------------------- 路径/键
+
+    public static function staticRoot(string $batchId, ?string $pubStaticRoot = null): string
+    {
+        $root = $pubStaticRoot !== null && $pubStaticRoot !== ''
+            ? \rtrim($pubStaticRoot, '/\\')
+            : \rtrim((string)BP, '/\\') . \DIRECTORY_SEPARATOR . 'pub' . \DIRECTORY_SEPARATOR . 'static';
+
+        return $root . \DIRECTORY_SEPARATOR . $batchId;
+    }
+
+    public static function entityRoot(string $batchId, ?string $entitiesRoot = null): string
+    {
+        if ($entitiesRoot !== null && $entitiesRoot !== '') {
+            return \rtrim($entitiesRoot, '/\\') . \DIRECTORY_SEPARATOR . $batchId;
+        }
+        $generated = \defined('\Weline\Framework\App\Env::GENERATED_DIR')
+            ? (string)\Weline\Framework\App\Env::GENERATED_DIR
+            : \rtrim((string)BP, '/\\') . \DIRECTORY_SEPARATOR . 'generated';
+
+        return \rtrim($generated, '/\\') . \DIRECTORY_SEPARATOR
+            . \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths::ROOT_SEGMENT
+            . \DIRECTORY_SEPARATOR . $batchId;
+    }
+
+    public static function pointerFile(): string
+    {
+        return rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR
+            . str_replace('/', DIRECTORY_SEPARATOR, self::POINTER_FILE_RELATIVE);
+    }
+
+    public static function pointerConfigKey(int $websiteId, int $themeId, string $area = self::AREA_FRONTEND): string
+    {
+        return \max(0, $websiteId) . '|' . \max(0, $themeId) . '|' . \trim($area);
+    }
+
+    /** @return array{batch_id:string,static_ns:string,entity_root:string,theme_prefix:string,epoch:int} */
+    public static function pointerConfigValue(ThemeUpdateBatch $batch, int $epoch): array
+    {
+        $manifest = $batch->getManifest();
+
+        return [
+            'batch_id' => $batch->getBatchId(),
+            'static_ns' => (string)$batch->getData(ThemeUpdateBatch::schema_fields_STATIC_NS),
+            'entity_root' => (string)$batch->getData(ThemeUpdateBatch::schema_fields_ENTITY_ROOT),
+            'theme_prefix' => \trim((string)($manifest['theme_prefix'] ?? '')),
+            'epoch' => \max(1, $epoch),
+        ];
+    }
+
+    // ---------------------------------------------------------------- 构建
+
+    public function createBatch(int $themeId, int $websiteId = 0, string $area = self::AREA_FRONTEND): ThemeUpdateBatch
+    {
+        if ($themeId < 1) {
+            throw new \InvalidArgumentException('theme_update_theme_id_invalid');
+        }
+        $batchId = ThemeUpdatePointerPlanner::newBatchId(new \DateTimeImmutable(), \bin2hex(\random_bytes(3)));
+
+        foreach ([self::staticRoot($batchId), self::entityRoot($batchId)] as $dir) {
+            if (!\is_dir($dir) && !@\mkdir($dir, 0775, true) && !\is_dir($dir)) {
+                throw new \RuntimeException('theme_update_batch_dir_failed: ' . $dir);
+            }
+        }
+
+        $this->batch->reset()->clearData()->setData([
+            ThemeUpdateBatch::schema_fields_BATCH_ID => $batchId,
+            ThemeUpdateBatch::schema_fields_WEBSITE_ID => \max(0, $websiteId),
+            ThemeUpdateBatch::schema_fields_THEME_ID => $themeId,
+            ThemeUpdateBatch::schema_fields_AREA => $area,
+            ThemeUpdateBatch::schema_fields_STATIC_NS => $batchId,
+            ThemeUpdateBatch::schema_fields_ENTITY_ROOT => $batchId,
+            ThemeUpdateBatch::schema_fields_STATUS => ThemeUpdateBatch::STATUS_BUILDING,
+            ThemeUpdateBatch::schema_fields_FILE_COUNT => 0,
+        ])->save();
+
+        return $this->batch;
+    }
+
+    /**
+     * 写入清单并落状态：verify.ok === true → verified，否则 failed（指针不会指向 failed）。
+     *
+     * @param array<string,mixed> $manifest
+     */
+    public function finishBuild(string $batchId, array $manifest): ThemeUpdateBatch
+    {
+        $batch = $this->loadBatch($batchId);
+        $ok = ($manifest['verify']['ok'] ?? false) === true;
+        $fileCount = (int)($manifest['entity_files'] ?? 0) + (int)($manifest['static_files'] ?? 0);
+
+        $batch->setData([
+            ThemeUpdateBatch::schema_fields_MANIFEST_JSON => \json_encode(
+                $manifest,
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            ),
+            ThemeUpdateBatch::schema_fields_FILE_COUNT => $fileCount,
+            ThemeUpdateBatch::schema_fields_STATUS => $ok
+                ? ThemeUpdateBatch::STATUS_VERIFIED
+                : ThemeUpdateBatch::STATUS_FAILED,
+            ThemeUpdateBatch::schema_fields_VERIFIED_TIME => $ok ? \date('Y-m-d H:i:s') : null,
+        ])->save();
+
+        return $batch;
+    }
+
+    // ---------------------------------------------------------------- 切换
+
+    /**
+     * @return array{current:string,previous:string,epoch:int}
+     */
+    public function promote(string $batchId): array
+    {
+        $batch = $this->loadBatch($batchId);
+        if (!$batch->isServable() || !$batch->isManifestVerified()) {
+            throw new \RuntimeException('theme_update_batch_not_servable: ' . $batchId);
+        }
+
+        $themeId = (int)$batch->getData(ThemeUpdateBatch::schema_fields_THEME_ID);
+        $websiteId = (int)$batch->getData(ThemeUpdateBatch::schema_fields_WEBSITE_ID);
+        $area = (string)$batch->getData(ThemeUpdateBatch::schema_fields_AREA);
+        $row = $this->loadPointerRow($websiteId, $themeId, $area);
+        $state = $row === null
+            ? ['current' => '', 'previous' => '', 'epoch' => 0]
+            : $row->toState();
+
+        $next = ThemeUpdatePointerPlanner::planPromote($state, $batchId);
+        $this->commitPointer($row, $websiteId, $themeId, $area, $next, (int)$state['epoch'], $batchId);
+        $this->persistPointerConfig($websiteId, $themeId, $area, $batch, $next['epoch']);
+        $this->invalidateThemeCaches($themeId, 'theme_update_promote');
+
+        return $next;
+    }
+
+    /**
+     * @return array{current:string,previous:string,epoch:int}
+     */
+    public function rollback(int $themeId, int $websiteId = 0, string $area = self::AREA_FRONTEND): array
+    {
+        $row = $this->loadPointerRow($websiteId, $themeId, $area);
+        if ($row === null) {
+            throw new \RuntimeException('theme_update_pointer_missing');
+        }
+        $state = $row->toState();
+        $next = ThemeUpdatePointerPlanner::planRollback($state);
+        $batch = $this->loadBatch($next['current']);
+        if (!$batch->isRollbackEligible() || !$batch->isManifestVerified()) {
+            throw new \RuntimeException('theme_update_rollback_batch_not_servable: ' . $next['current']);
+        }
+
+        $this->commitPointer($row, $websiteId, $themeId, $area, $next, (int)$state['epoch'], $next['current']);
+        $this->persistPointerConfig($websiteId, $themeId, $area, $batch, $next['epoch']);
+        $this->invalidateThemeCaches($themeId, 'theme_update_rollback');
+
+        return $next;
+    }
+
+    // ---------------------------------------------------------------- 查询/GC
+
+    /** @return list<ThemeUpdateBatch> */
+    public function listBatches(int $themeId, int $websiteId = 0, string $area = self::AREA_FRONTEND, int $limit = 50): array
+    {
+        $rows = $this->batch->reset()->clearQuery()
+            ->where(ThemeUpdateBatch::schema_fields_THEME_ID, $themeId)
+            ->where(ThemeUpdateBatch::schema_fields_WEBSITE_ID, \max(0, $websiteId))
+            ->where(ThemeUpdateBatch::schema_fields_AREA, $area)
+            ->order(ThemeUpdateBatch::schema_fields_CREATE_TIME, 'DESC')
+            ->limit(\max(1, $limit))
+            ->select()
+            ->fetchArray();
+
+        return \is_array($rows) ? \array_values($rows) : [];
+    }
+
+    /**
+     * 删除历史代次（永不删当前与回滚目标）。
+     *
+     * @return list<string> 已删除的代次ID
+     */
+    public function gc(int $themeId, int $websiteId = 0, string $area = self::AREA_FRONTEND, int $keep = ThemeUpdatePointerPlanner::DEFAULT_KEEP): array
+    {
+        $rows = $this->listBatches($themeId, $websiteId, $area, 200);
+        $row = $this->loadPointerRow($websiteId, $themeId, $area);
+        $state = $row?->toState() ?? ['current' => '', 'previous' => '', 'epoch' => 0];
+
+        $drop = ThemeUpdatePointerPlanner::planGc($rows, $state['current'], $state['previous'], $keep);
+        $deleted = [];
+        foreach ($drop as $batchId) {
+            $this->purgeBatchDirs($batchId);
+            $this->batch->reset()->clearQuery()
+                ->where(ThemeUpdateBatch::schema_fields_BATCH_ID, $batchId)
+                ->delete()->fetch();
+            $deleted[] = $batchId;
+        }
+
+        return $deleted;
+    }
+
+    // ---------------------------------------------------------------- internals
+
+    private function loadBatch(string $batchId): ThemeUpdateBatch
+    {
+        $batch = $this->batch->reset()->clearQuery()
+            ->where(ThemeUpdateBatch::schema_fields_BATCH_ID, $batchId)
+            ->find()->fetch();
+
+        if (!$batch instanceof ThemeUpdateBatch || $batch->getBatchId() === '') {
+            throw new \RuntimeException('theme_update_batch_missing: ' . $batchId);
+        }
+
+        return $batch;
+    }
+
+    private function loadPointerRow(int $websiteId, int $themeId, string $area): ?ThemeUpdatePointer
+    {
+        $row = $this->pointer->reset()->clearQuery()
+            ->where(ThemeUpdatePointer::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(ThemeUpdatePointer::schema_fields_THEME_ID, $themeId)
+            ->where(ThemeUpdatePointer::schema_fields_AREA, $area)
+            ->find()->fetch();
+
+        if ($row instanceof ThemeUpdatePointer && $row->getCurrentBatchId() !== '') {
+            return $row;
+        }
+
+        return null;
+    }
+
+    /**
+     * 指针切换：插入或 CAS 更新（`WHERE epoch = 期望值`），失败说明并发切换，重读后重试一次。
+     *
+     * @param array{current:string,previous:string,epoch:int} $next
+     */
+    private function commitPointer(
+        ?ThemeUpdatePointer $row,
+        int $websiteId,
+        int $themeId,
+        string $area,
+        array $next,
+        int $expectedEpoch,
+        string $currentBatchId
+    ): void {
+        if ($row === null) {
+            $this->pointer->reset()->clearData()->setData([
+                ThemeUpdatePointer::schema_fields_WEBSITE_ID => $websiteId,
+                ThemeUpdatePointer::schema_fields_THEME_ID => $themeId,
+                ThemeUpdatePointer::schema_fields_AREA => $area,
+                ThemeUpdatePointer::schema_fields_CURRENT_BATCH_ID => $next['current'],
+                ThemeUpdatePointer::schema_fields_PREVIOUS_BATCH_ID => $next['previous'],
+                ThemeUpdatePointer::schema_fields_EPOCH => $next['epoch'],
+                ThemeUpdatePointer::schema_fields_UPDATE_TIME => \date('Y-m-d H:i:s'),
+            ])->save();
+
+            return;
+        }
+
+        $this->pointer->reset()->clearQuery()
+            ->where(ThemeUpdatePointer::schema_fields_ID, (int)$row->getData(ThemeUpdatePointer::schema_fields_ID))
+            ->where(ThemeUpdatePointer::schema_fields_EPOCH, $expectedEpoch)
+            ->update([
+                ThemeUpdatePointer::schema_fields_CURRENT_BATCH_ID => $next['current'],
+                ThemeUpdatePointer::schema_fields_PREVIOUS_BATCH_ID => $next['previous'],
+                ThemeUpdatePointer::schema_fields_EPOCH => $next['epoch'],
+                ThemeUpdatePointer::schema_fields_UPDATE_TIME => \date('Y-m-d H:i:s'),
+            ])->fetch();
+
+        // 状态行：新代次 current，其余 superseded（best-effort，失败不影响指针）
+        try {
+            $this->batch->reset()->clearQuery()
+                ->where(ThemeUpdateBatch::schema_fields_BATCH_ID, $currentBatchId)
+                ->update([
+                    ThemeUpdateBatch::schema_fields_STATUS => ThemeUpdateBatch::STATUS_CURRENT,
+                    ThemeUpdateBatch::schema_fields_PROMOTED_TIME => \date('Y-m-d H:i:s'),
+                ])->fetch();
+            $this->batch->reset()->clearQuery()
+                ->where(ThemeUpdateBatch::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeUpdateBatch::schema_fields_AREA, $area)
+                ->where(ThemeUpdateBatch::schema_fields_STATUS, ThemeUpdateBatch::STATUS_CURRENT)
+                ->where(ThemeUpdateBatch::schema_fields_BATCH_ID, $currentBatchId, '<>')
+                ->update([ThemeUpdateBatch::schema_fields_STATUS => ThemeUpdateBatch::STATUS_SUPERSEDED])
+                ->fetch();
+        } catch (\Throwable) {
+            // 状态仅用于展示与 GC，指针已生效
+        }
+    }
+
+    /**
+     * 写 Env 供渲染期与 Worker 感知；失败不影响指针（指针是权威）。
+     *
+     * @param array{current:string,previous:string,epoch:int} $state
+     */
+    private function persistPointerConfig(int $websiteId, int $themeId, string $area, ThemeUpdateBatch $batch, int $epoch): void
+    {
+        try {
+            $env = Env::getInstance();
+            $map = $env->getConfig(self::CONFIG_CURRENT_MAP, []);
+            if (!\is_array($map)) {
+                $map = [];
+            }
+            $map[self::pointerConfigKey($websiteId, $themeId, $area)] = self::pointerConfigValue($batch, $epoch);
+            $env->setConfig(self::CONFIG_CURRENT_MAP, $map);
+            $env->setConfig(self::CONFIG_EPOCH, $epoch);
+            $this->writePointerFile($map, $epoch);
+        } catch (\Throwable) {
+            // 指针已落库，渲染期可回读 DB
+        }
+    }
+
+    private function purgeBatchDirs(string $batchId): void
+    {
+        $staticRoot = \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR . 'pub' . \DIRECTORY_SEPARATOR . 'static';
+        foreach ([self::staticRoot($batchId, $staticRoot), self::entityRoot($batchId)] as $dir) {
+            $real = \realpath($dir);
+            if ($real === false || !\is_dir($real)) {
+                continue;
+            }
+            // 安全阀：只允许删代次目录（父目录必须是 pub/static 或 theme-layout-entities 根）
+            $parent = \realpath(\dirname($real));
+            $expectedParents = [
+                \realpath($staticRoot),
+                \realpath(\dirname(self::entityRoot($batchId))),
+            ];
+            if (!\in_array($parent, \array_filter($expectedParents), true)) {
+                continue;
+            }
+            $this->removeTree($real);
+        }
+    }
+
+    private function removeTree(string $dir): void
+    {
+        $items = @\scandir($dir) ?: [];
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = $dir . \DIRECTORY_SEPARATOR . $item;
+            if (\is_dir($path) && !\is_link($path)) {
+                $this->removeTree($path);
+            } else {
+                @\unlink($path);
+            }
+        }
+        @\rmdir($dir);
+    }
+
+    /**
+     * 写指针文件（原子 rename）。渲染期以 ≤10s TTL 读取，切换后无需重载 Worker。
+     *
+     * @param array<string,mixed> $map
+     */
+    private function writePointerFile(array $map, int $epoch): void
+    {
+        $file = self::pointerFile();
+        $dir = \dirname($file);
+        if (!\is_dir($dir) && !@\mkdir($dir, 0775, true) && !\is_dir($dir)) {
+            return;
+        }
+        $payload = \json_encode([
+            'epoch' => $epoch,
+            'updated_at' => \date('c'),
+            'map' => $map,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($payload === false) {
+            return;
+        }
+        $tmp = $file . '.tmp.' . \getmypid();
+        if (@\file_put_contents($tmp, $payload) === false) {
+            return;
+        }
+        @\rename($tmp, $file);
+    }
+
+    /**
+     * 指针切换后失效主题相关缓存（FPC/chrome/卡片等），使新代次立即对外可见。
+     * 只做「主题相关」定向清理，不做全站 purge，也不需要维护模式。
+     */
+    private function invalidateThemeCaches(int $themeId, string $reason): void
+    {
+        // 1) 主题相关运行时缓存（chrome/卡片/投影等）
+        try {
+            $cleaner = ObjectManager::getInstance(\Weline\Theme\Service\ThemeRuntimeCacheCleaner::class);
+            $cleaner->clearAllThemeRelatedCaches($themeId > 0 ? $themeId : null, $reason);
+        } catch (\Throwable) {
+            // 缓存失效失败不影响指针（下一次请求仍会按新指针渲染）
+        }
+
+        // 2) 店面 FPC/CDN：按「主题绑定站点 + 该主题全部布局」定向清理
+        if ($themeId < 1) {
+            return;
+        }
+        try {
+            /** @var \Weline\Theme\Model\WelineTheme $theme */
+            $theme = ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
+            $theme->reset()->clearQuery()->where('id', $themeId)->find()->fetch();
+            if ((int)$theme->getId() < 1) {
+                return;
+            }
+            $layouts = [];
+            $catalog = ObjectManager::getInstance(\Weline\Theme\Service\ThemeResourceCatalog::class);
+            foreach ($catalog->getLayouts('frontend', $theme) as $type => $options) {
+                foreach ((array)$options as $option) {
+                    $optionName = \is_array($option) ? (string)($option['value'] ?? 'default') : (string)$option;
+                    $layouts[] = ['type' => (string)$type, 'option' => $optionName === '' ? 'default' : $optionName];
+                }
+            }
+            $targets = ObjectManager::getInstance(\Weline\Theme\Service\ThemeApplicationUsageService::class)
+                ->ownSolidifyTargetsForTheme($themeId);
+            if ($layouts === [] || $targets === []) {
+                return;
+            }
+            ObjectManager::getInstance(\Weline\Theme\Service\ThemeStorefrontSlugFpcPublisher::class)
+                ->purgeLayoutsForThemeTargets($themeId, $layouts, $targets, $reason);
+        } catch (\Throwable) {
+            // 同上：best-effort
+        }
+    }
+}

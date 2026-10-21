@@ -53,7 +53,7 @@
                 if (cfg && cfg.env && cfg.env.useProductionPublicUrls) {
                     var m = String(devPath).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);
                     if (m) {
-                        return '/static/' + m[1] + '/' + m[2] + '/' + m[3];
+                        return (cfg.staticBaseUrl || '/static') + '/' + m[1] + '/' + m[2] + '/' + m[3];
                     }
                 }
             }

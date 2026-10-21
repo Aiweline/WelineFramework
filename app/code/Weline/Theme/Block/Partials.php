@@ -2813,7 +2813,44 @@ class Partials extends Block
             );
         }
 
-        return $this->ob_file($compiledFile, $dictionary);
+        $watchdogStartNs = Runtime::isPersistent() ? \hrtime(true) : 0;
+        try {
+            return $this->ob_file($compiledFile, $dictionary);
+        } finally {
+            $this->recordPartialRenderWatchdog($fileName, $compiledFile, $watchdogStartNs);
+        }
+    }
+
+    /**
+     * Observable-only guard for compiled partial includes (header, category
+     * menu, widgets). A CPU-bound include blocks the Fiber scheduler just like
+     * a stream_file include; never changes render output.
+     */
+    private function recordPartialRenderWatchdog(string $fileName, string $compiledFile, int $startNs): void
+    {
+        if ($startNs <= 0) {
+            return;
+        }
+        $elapsedMs = (\hrtime(true) - $startNs) / 1_000_000;
+        if ($elapsedMs < 1000.0) {
+            return;
+        }
+        try {
+            $requestId = RequestContext::getId() ?? '';
+            $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+            \w_log_warning(
+                '[WLS] template_fiber_hog source=partial'
+                . ' elapsed_ms=' . \round($elapsedMs, 2)
+                . ' request_id=' . \substr((string)$requestId, 0, 128)
+                . ' uri=' . \substr($uri, 0, 200)
+                . ' file=' . \substr($fileName, 0, 300)
+                . ' compiled=' . \substr($compiledFile, 0, 300),
+                [],
+                'wls_fiber_hog',
+            );
+        } catch (\Throwable) {
+            // Observation must never alter render output.
+        }
     }
     
     /**

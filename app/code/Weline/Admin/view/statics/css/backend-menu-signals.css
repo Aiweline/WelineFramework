@@ -14,7 +14,7 @@
     margin-inline-start: auto;
     border-radius: var(--weline-radius-round, 999px);
     background: var(--backend-color-danger, var(--weline-theme-danger));
-    color: var(--backend-color-on-danger, var(--weline-theme-on-danger, #fff));
+    color: var(--weline-theme-text-on-dark, #fff);
     font-size: var(--weline-font-size-xs, 0.75rem);
     font-weight: 700;
     line-height: 1.15;

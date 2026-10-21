@@ -36,7 +36,7 @@ final class PublicStaticUrl
         }
         $path = '/' . ltrim($raw, '/');
         if (str_starts_with($path, '/static/')) {
-            return StaticBuildId::versionedPath($path . $query);
+            return self::versioned($path . $query);
         }
         if (!DeployPublicUrlMode::useProduction()) {
             return $path . $query;
@@ -48,13 +48,13 @@ final class PublicStaticUrl
         ) === 1) {
             $rest = ltrim((string)$m['rest'], '/');
 
-            return StaticBuildId::versionedPath('/static/' . $m['vendor'] . '/' . $m['module']
+            return self::versioned('/static/' . $m['vendor'] . '/' . $m['module']
                 . ($rest !== '' ? '/' . $rest : '')
                 . $query);
         }
 
         // Non-module path: keep leading slash under /static as last-resort prefix.
-        return StaticBuildId::versionedPath('/static' . $path . $query);
+        return self::versioned('/static' . $path . $query);
     }
 
     /**
@@ -75,5 +75,13 @@ final class PublicStaticUrl
         $web = '/' . str_replace('_', '/', $module) . '/view/statics/' . $rel;
 
         return self::fromDevWebPath($web);
+    }
+
+    /**
+     * 静态 URL 版本化：主题自有资源走当前更新代次前缀，其余沿用部署构建号。
+     */
+    private static function versioned(string $path): string
+    {
+        return StaticBuildId::versionedPath($path);
     }
 }

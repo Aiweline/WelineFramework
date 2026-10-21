@@ -319,6 +319,66 @@
         --weline-theme-focus: var(--backend-color-primary, var(--weline-theme-focus));
         /* Drawer/dialog scrim must follow backend palette; otherwise list text stays sharp behind OffCanvas. */
         --weline-theme-overlay: var(--backend-color-bg-overlay, var(--backend-theme-overlay, var(--weline-theme-overlay)));
+        /* Legacy backend components still use generic --color-* names. The backend palette
+         * only provides --color-bg-primary/secondary/canvas, so popover/modal backgrounds
+         * and text would otherwise resolve to transparent/empty. Keep old components readable
+         * by mapping the missing legacy names onto the backend semantic tokens. */
+        --color-bg-surface: var(--weline-theme-surface-raised);
+        --color-bg-muted: var(--weline-theme-surface-muted);
+        --color-bg-slate: var(--weline-theme-surface-muted);
+        --color-bg-panel: var(--weline-theme-surface-raised);
+        --color-bg-dark: var(--weline-theme-bg-dark, #131921);
+        --color-bg-inverse: var(--weline-theme-bg-dark, #131921);
+        --color-text: var(--weline-theme-text);
+        --color-text-primary: var(--weline-theme-text);
+        --color-text-secondary: var(--weline-theme-text-muted);
+        --color-text-muted: var(--weline-theme-text-muted);
+        --color-text-faint: var(--weline-theme-text-subtle);
+        --color-text-light: var(--weline-theme-text-on-dark);
+        --color-border: var(--weline-theme-border);
+        --color-border-default: var(--weline-theme-border);
+        --color-border-soft: var(--weline-theme-border);
+        --color-border-muted: var(--weline-theme-border);
+        --color-border-light: var(--weline-theme-border);
+        --color-overlay-50: color-mix(in srgb, var(--weline-theme-overlay) 70%, transparent);
+        --color-surface: var(--weline-theme-surface-raised);
+        --color-surface-hover: var(--weline-theme-surface-hover);
+        --color-link: var(--backend-color-primary, #7c9dff);
+        --color-info: var(--backend-color-primary, #7c9dff);
+        /* Avoid cycle: --weline-theme-danger/success/warning fall back to --color-* themselves. */
+        --color-danger: var(--backend-color-danger, #ff8e9c);
+        --color-success: var(--backend-color-success, #67d6a4);
+        --color-warning: var(--backend-color-warning, #f5c15c);
+        /* Legacy spacing/radius/type tokens are also absent in backend; map the common
+         * ones so old modals keep their intended padding, borders and shadows. */
+        --border-width-thin: 1px;
+        --border-width-medium: 2px;
+        --spacing-0_5: calc(var(--weline-space-1, .25rem) * .5);
+        --spacing-1: var(--weline-space-1, .25rem);
+        --spacing-1_5: calc(var(--weline-space-1, .25rem) * 1.5);
+        --spacing-2: var(--weline-space-2, .5rem);
+        --spacing-2_5: calc(var(--weline-space-1, .25rem) * 2.5);
+        --spacing-3: var(--weline-space-3, .75rem);
+        --spacing-4: var(--weline-space-4, 1rem);
+        --spacing-5: var(--weline-space-5, 1.25rem);
+        --spacing-6: var(--weline-space-6, 1.5rem);
+        --spacing-7: var(--weline-space-7, 1.75rem);
+        --spacing-8: var(--weline-space-8, 2rem);
+        --radius-sm: var(--weline-radius-sm, .25rem);
+        --radius-md: var(--weline-radius-md, .5rem);
+        --radius-lg: var(--weline-radius-lg, .75rem);
+        --radius-xl: var(--weline-radius-xl, 1rem);
+        --border-radius-md: var(--weline-radius-md, .5rem);
+        --font-size-sm: var(--weline-font-size-sm, .875rem);
+        --font-size-lg: var(--weline-font-size-lg, 1.125rem);
+        --font-size-xl: var(--weline-font-size-xl, 1.25rem);
+        --font-size-2_5xl: var(--weline-font-size-2xl, 1.5rem);
+        --font-size-13: 13px;
+        --control-height-lg: var(--weline-control-height-lg, 2.5rem);
+        --control-height-2xl: var(--weline-control-height-2xl, 3rem);
+        --letter-spacing-wide: .03em;
+        --weline-shadow-md: var(--weline-theme-shadow-md);
+        --weline-shadow-lg: var(--weline-theme-shadow-lg);
 
         --backend-theme-canvas: var(--weline-theme-canvas);
         --backend-theme-surface: var(--weline-theme-surface);
@@ -332,6 +392,20 @@
         --backend-theme-sidebar-width: 16.5rem;
         --backend-theme-sidebar-collapsed-width: 4.375rem;
         --backend-theme-topbar-height: 4rem;
+    }
+}
+
+/* Dark backend raised surface: backend palette bridge keeps --backend-color-bg-primary
+ * light even when [data-theme="dark"], which made .w-menu popovers white with light text. */
+[data-w-area="backend"][data-theme="dark"],
+[data-w-area="backend"][data-theme-mode="dark"],
+[data-w-area="backend"][data-layout-mode="dark"] {
+    --weline-theme-surface-raised: #202c3c;
+}
+
+@media (prefers-color-scheme: dark) {
+    [data-w-area="backend"]:not([data-theme="light"]):not([data-theme-preference="light"]) {
+        --weline-theme-surface-raised: #202c3c;
     }
 }
 
@@ -639,25 +713,8 @@
     .w-card__title { margin: 0; font-size: var(--weline-font-size-lg); }
     .w-card[data-tone="muted"] { background: var(--weline-theme-surface-muted); box-shadow: none; }
 
-    .w-button {
-        display: inline-flex;
-        min-height: var(--weline-control-height);
-        align-items: center;
-        justify-content: center;
-        gap: var(--weline-space-2);
-        padding: 0 var(--weline-space-4);
-        border: 1px solid var(--weline-theme-primary);
-        border-radius: var(--weline-radius-md);
-        background: var(--weline-theme-primary);
-        color: var(--weline-theme-on-primary);
-        font-weight: 650;
-        line-height: 1;
-        text-decoration: none;
-        white-space: nowrap;
-        cursor: pointer;
-        transition: background-color var(--weline-motion-fast), border-color var(--weline-motion-fast), color var(--weline-motion-fast), box-shadow var(--weline-motion-fast);
-    }
-    .w-button:hover { background: var(--weline-theme-primary-hover); border-color: var(--weline-theme-primary-hover); color: var(--weline-theme-on-primary); }
+    
+    
     .w-button[data-tone="neutral"] { background: var(--weline-theme-surface); border-color: var(--weline-theme-border-strong); color: var(--weline-theme-text); }
     .w-button[data-tone="neutral"]:hover { background: var(--weline-theme-surface-hover); }
     .w-button[data-tone="secondary"] { background: var(--weline-theme-secondary); border-color: var(--weline-theme-secondary); color: var(--weline-theme-on-secondary); }
@@ -702,7 +759,7 @@
         min-inline-size: var(--weline-control-height-lg);
         inline-size: var(--weline-control-height-lg);
     }
-    .w-button:disabled, .w-button[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
+    
     /* busy = 灰面 + spinner；禁止只降 opacity 仍显实色蓝（用户可见「没变灰」） */
     .w-button[aria-busy="true"] {
         position: relative;
@@ -766,155 +823,9 @@
     }
 
     .w-form { display: grid; min-width: 0; min-inline-size: 0; max-width: 100%; max-inline-size: 100%; gap: var(--weline-space-5); }
-    .w-field { display: grid; min-width: 0; min-inline-size: 0; max-width: 100%; max-inline-size: 100%; gap: var(--weline-space-2); }
     :where(.w-form, .w-field, .w-field__control, .w-grid, .w-stack, .w-cluster) > * {
         min-inline-size: 0;
         max-inline-size: 100%;
-    }
-    .w-field__label { color: var(--weline-theme-text); font-size: var(--weline-font-size-sm); font-weight: 650; }
-    /* w-field--outlined-notch + floating label:
-       default (empty input/textarea): label rests as in-field placeholder;
-       :focus-within / :not(:placeholder-shown) / select: float to top-border notch.
-       Opt out: data-floating-label="0" (always notch). */
-    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
-        :has(> .w-check),
-        :has(> .w-switch),
-        .w-theme-disk-field--inline,
-        [data-label-layout="stacked"],
-        [data-label-layout="inline"],
-        .w-search-inline,
-        .w-search-bar
-    ) {
-        position: relative;
-    }
-    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
-        :has(> .w-check),
-        :has(> .w-switch),
-        .w-theme-disk-field--inline,
-        [data-label-layout="stacked"],
-        [data-label-layout="inline"],
-        .w-search-inline,
-        .w-search-bar
-    ) > .w-field__label {
-        position: absolute;
-        z-index: 1;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.25rem;
-        inset-block-start: 0;
-        inset-inline-start: var(--weline-space-3);
-        translate: 0 -50%;
-        max-inline-size: calc(100% - (var(--weline-space-3) * 2));
-        margin: 0;
-        padding-inline: var(--weline-space-1);
-        overflow: hidden;
-        color: var(--weline-theme-text-muted);
-        background: var(--weline-theme-field-label-bg, var(--weline-theme-surface));
-        font-size: var(--weline-font-size-xs);
-        font-weight: 650;
-        line-height: 1.2;
-        white-space: nowrap;
-        text-overflow: ellipsis;
-        pointer-events: none;
-        transition:
-            color var(--weline-motion-fast),
-            font-size var(--weline-motion-fast),
-            font-weight var(--weline-motion-fast),
-            inset-block-start var(--weline-motion-fast),
-            translate var(--weline-motion-fast),
-            background-color var(--weline-motion-fast),
-            padding-inline var(--weline-motion-fast);
-    }
-    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
-        :has(> .w-check),
-        :has(> .w-switch),
-        .w-theme-disk-field--inline,
-        [data-label-layout="stacked"],
-        [data-label-layout="inline"],
-        .w-search-inline,
-        .w-search-bar
-    ) > .w-field__label .w-icon {
-        width: 1em;
-        height: 1em;
-        min-width: 1em;
-        min-height: 1em;
-        flex: 0 0 1em;
-    }
-    /* Resting: empty text controls act as in-field placeholder (select stays notched).
-       language-select 弹层内空 search 不算字段值；有胶囊时靠 .has-value / [data-has-value=true] 上浮. */
-    .w-field:has(> .w-field__label):has(:is(.w-input, .w-textarea)):not(
-        :has(> .w-check),
-        :has(> .w-switch),
-        .w-theme-disk-field--inline,
-        [data-label-layout="stacked"],
-        [data-label-layout="inline"],
-        [data-floating-label="0"],
-        .w-search-inline,
-        .w-search-bar,
-        :has(.w-language-select)
-    ):has(:is(.w-input, .w-textarea):placeholder-shown):not(:focus-within) > .w-field__label {
-        /* Relative to control height — not 50% of .w-field (hint/error would sink the label). */
-        inset-block-start: calc(var(--weline-control-height) / 2);
-        translate: 0 -50%;
-        padding-inline: 0;
-        color: var(--weline-theme-text-subtle);
-        background: transparent;
-        font-size: var(--weline-font-size-sm);
-        font-weight: 500;
-    }
-    .w-field:has(> .w-field__label):has(.w-language-select):not(
-        :has(> .w-check),
-        :has(> .w-switch),
-        .w-theme-disk-field--inline,
-        [data-label-layout="stacked"],
-        [data-label-layout="inline"],
-        [data-floating-label="0"],
-        .w-search-inline,
-        .w-search-bar
-    ):has(.w-language-select:not([data-has-value="true"])):not(:focus-within) > .w-field__label {
-        inset-block-start: calc(var(--weline-control-height) / 2);
-        translate: 0 -50%;
-        padding-inline: 0;
-        color: var(--weline-theme-text-subtle);
-        background: transparent;
-        font-size: var(--weline-font-size-sm);
-        font-weight: 500;
-    }
-    .w-field:has(> .w-field__label):has(.w-language-select):not(
-        :has(> .w-check),
-        :has(> .w-switch),
-        .w-theme-disk-field--inline,
-        [data-label-layout="stacked"],
-        [data-label-layout="inline"],
-        [data-floating-label="0"],
-        .w-search-inline,
-        .w-search-bar
-    ):has(.w-language-select:not([data-has-value="true"])):not(:focus-within) .w-language-select__placeholder {
-        color: transparent;
-        -webkit-text-fill-color: transparent;
-        opacity: 0;
-    }
-    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
-        :has(> .w-check),
-        :has(> .w-switch),
-        .w-theme-disk-field--inline,
-        [data-label-layout="stacked"],
-        [data-label-layout="inline"],
-        .w-search-inline,
-        .w-search-bar
-    ):focus-within > .w-field__label {
-        color: var(--weline-theme-primary);
-    }
-    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control)[aria-invalid="true"]):not(
-        :has(> .w-check),
-        :has(> .w-switch),
-        .w-theme-disk-field--inline,
-        [data-label-layout="stacked"],
-        [data-label-layout="inline"],
-        .w-search-inline,
-        .w-search-bar
-    ) > .w-field__label {
-        color: var(--weline-theme-danger);
     }
     @media (prefers-reduced-motion: reduce) {
         .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
@@ -929,8 +840,6 @@
             transition: none;
         }
     }
-    .w-field__hint { color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-sm); }
-    .w-field__error { color: var(--weline-theme-danger); font-size: var(--weline-font-size-sm); }
     .w-input, .w-select, .w-textarea {
         box-sizing: border-box;
         inline-size: 100%;
@@ -980,36 +889,6 @@
         box-shadow: 0 0 0 1000px var(--weline-theme-surface) inset;
         transition: background-color 99999s ease-out 0s;
     }
-    /* Floating label: rest = label is the cue (hide native placeholder); float/focus = show placeholder hint. */
-    .w-field:has(> .w-field__label):has(:is(.w-input, .w-textarea)):not(
-        :has(> .w-check),
-        :has(> .w-switch),
-        .w-theme-disk-field--inline,
-        [data-label-layout="stacked"],
-        [data-label-layout="inline"],
-        [data-floating-label="0"],
-        .w-search-inline,
-        .w-search-bar,
-        :has(.w-language-select)
-    ):has(:is(.w-input, .w-textarea):placeholder-shown):not(:focus-within) :is(.w-input, .w-textarea)::placeholder {
-        color: transparent;
-        -webkit-text-fill-color: transparent;
-        opacity: 0;
-    }
-    .w-field:has(> .w-field__label):has(:is(.w-input, .w-textarea)):not(
-        :has(> .w-check),
-        :has(> .w-switch),
-        .w-theme-disk-field--inline,
-        [data-label-layout="stacked"],
-        [data-label-layout="inline"],
-        [data-floating-label="0"],
-        .w-search-inline,
-        .w-search-bar
-    ):focus-within :is(.w-input, .w-textarea)::placeholder {
-        color: var(--weline-theme-text-subtle);
-        -webkit-text-fill-color: var(--weline-theme-text-subtle);
-        opacity: 1;
-    }
     .w-input:hover, .w-select:hover, .w-textarea:hover { border-color: var(--weline-theme-primary); }
     .w-input:focus, .w-select:focus, .w-textarea:focus { border-color: var(--weline-theme-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--weline-theme-focus) 20%, transparent); outline: 0; }
     :where(.w-input, .w-select, .w-textarea)[aria-invalid="true"] { border-color: var(--weline-theme-danger); }
@@ -1020,18 +899,7 @@
         caret-color: var(--weline-theme-text-muted);
         cursor: not-allowed;
     }
-    .w-check { display: inline-flex; align-items: center; gap: var(--weline-space-2); cursor: pointer; }
-    .w-check > input { inline-size: 1.1rem; block-size: 1.1rem; accent-color: var(--weline-theme-primary); }
-    .w-switch { display: inline-flex; align-items: center; gap: var(--weline-space-2); cursor: pointer; }
-    .w-switch > input { appearance: none; inline-size: 2.4rem; block-size: 1.35rem; margin: 0; border: 1px solid var(--weline-theme-border-strong); border-radius: var(--weline-radius-round); background: var(--weline-theme-surface-muted); cursor: inherit; transition: background-color var(--weline-motion-fast); }
-    .w-switch > input::before { content: ""; display: block; inline-size: 0.95rem; block-size: 0.95rem; margin: 0.14rem; border-radius: 50%; background: var(--weline-theme-text-muted); transition: translate var(--weline-motion-fast), background-color var(--weline-motion-fast); }
-    .w-switch > input:checked { background: var(--weline-theme-primary); border-color: var(--weline-theme-primary); }
-    .w-switch > input:checked::before { translate: 1rem; background: var(--weline-theme-on-primary); }
-    .w-file { display: grid; gap: var(--weline-space-2); padding: var(--weline-space-5); border: 1px dashed var(--weline-theme-border-strong); border-radius: var(--weline-radius-lg); background: var(--weline-theme-surface-muted); text-align: center; }
-    .w-field__control { display: flex; min-width: 0; min-inline-size: 0; max-width: 100%; max-inline-size: 100%; align-items: stretch; flex-wrap: wrap; }
-    .w-field__control > :where(.w-input, .w-select, .w-textarea) { min-width: 0; min-inline-size: 0; flex: 1 1 min(100%, 12rem); }
-    .w-field__addon { display: inline-flex; align-items: center; padding-inline: var(--weline-space-3); border: 1px solid var(--weline-theme-border-strong); background: var(--weline-theme-surface-muted); color: var(--weline-theme-text-muted); }
-    .w-field__control > .w-field__addon { align-self: stretch; display: flex; align-items: center; justify-content: center; min-block-size: var(--weline-control-height); }
+                                .w-file { display: grid; gap: var(--weline-space-2); padding: var(--weline-space-5); border: 1px dashed var(--weline-theme-border-strong); border-radius: var(--weline-radius-lg); background: var(--weline-theme-surface-muted); text-align: center; }
 
     .app-search.w-search-inline {
         display: block;
@@ -2263,6 +2131,8 @@
         --weline-theme-surface-raised: var(--color-bg-raised, #ffffff);
         --weline-theme-surface-muted: var(--color-bg-subtle, #f5f5f7);
         --weline-theme-surface-hover: var(--color-surface-hover, #f0f0f2);
+        --weline-theme-active-bg: color-mix(in srgb, var(--weline-theme-primary) 14%, var(--weline-theme-surface));
+        --weline-theme-active-text: var(--color-primary-text-emphasis, var(--weline-theme-primary));
         --weline-theme-text: var(--color-text-primary, #1d1d1f);
         --weline-theme-text-muted: var(--color-text-secondary, #6e6e73);
         --weline-theme-text-subtle: var(--color-text-tertiary, #86868b);
@@ -2322,6 +2192,15 @@
         --weline-motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
+    /* 暗色：hover/active 用暗色语义，禁止回落到前台浅色 palette；active 文本不用纯白。 */
+    [data-theme="dark"],
+    [data-theme-mode="dark"],
+    [data-layout-mode="dark"] {
+        --weline-theme-surface-hover: var(--backend-color-surface-hover, color-mix(in srgb, #ffffff 8%, var(--weline-theme-surface)));
+        --weline-theme-active-bg: var(--backend-color-sidebar-active, color-mix(in srgb, var(--weline-theme-primary) 24%, var(--weline-theme-surface)));
+        --weline-theme-active-text: var(--backend-color-primary-text-emphasis, #dbe4ff);
+    }
+
     /* 后台：保留工作界面的无衬线字体栈与更紧凑的信息密度；
      * 颜色仍走同一语义层（后台色盘 --backend-color-* 优先）。 */
     [data-w-area="backend"] {
@@ -2335,6 +2214,9 @@
         --weline-theme-on-primary: var(--backend-color-on-primary, var(--color-on-primary, #ffffff));
         --weline-theme-surface: var(--backend-color-card-bg, var(--color-bg-primary, #ffffff));
         --weline-theme-surface-muted: var(--backend-color-bg-secondary, var(--color-bg-subtle, #f5f5f7));
+        --weline-theme-surface-hover: var(--backend-color-surface-hover, var(--color-surface-hover, #f0f0f2));
+        --weline-theme-active-bg: var(--backend-color-sidebar-active, var(--backend-color-primary-bg-subtle, color-mix(in srgb, var(--weline-theme-primary) 14%, var(--weline-theme-surface))));
+        --weline-theme-active-text: var(--backend-color-primary-text-emphasis, var(--weline-theme-primary));
         --weline-theme-text: var(--backend-color-text-primary, var(--color-text-primary, #1d1d1f));
         --weline-theme-text-muted: var(--backend-color-text-secondary, var(--color-text-secondary, #6e6e73));
         --weline-theme-border: var(--backend-color-border-default, var(--color-border-default, #d2d2d7));
@@ -2431,18 +2313,210 @@
     .w-button[data-icon-only="true"] { border-radius: var(--weline-radius-round); }
     .w-button[data-icon-only="true"]:hover { box-shadow: var(--weline-theme-shadow-sm); }
     .w-button:disabled,
-    .w-button[aria-disabled="true"] { box-shadow: none; transform: none; }
+    .w-button[aria-disabled="true"] {
+        opacity: 0.55;
+        cursor: not-allowed;
+        pointer-events: none;
+        box-shadow: none;
+        transform: none;
+    }
     .w-button .w-icon,
     .w-button > w-icon,
     .w-button > svg { flex: 0 0 auto; }
     .w-button-group[data-density="icon"] { border-radius: var(--weline-radius-md); box-shadow: var(--weline-theme-shadow-xs); }
     .w-button-group > .w-button:first-child { border-start-start-radius: var(--weline-radius-md); border-end-start-radius: var(--weline-radius-md); }
     .w-button-group > .w-button:last-child { border-start-end-radius: var(--weline-radius-md); border-end-end-radius: var(--weline-radius-md); }
+    /* 显式 .w-spinner 已存在时，不再用 ::after 生成第二个 spinner（登录按钮双 loading 修复）。 */
+    .w-button[aria-busy="true"]:has(.w-spinner)::after { content: none; }
 }
 
 /* Weline UI source: css/components/field.css */
 /* Weline UI · Field / Input / Select / Textarea（Apple 风格） */
 @layer components {
+    /* migrated from foundation.css (layout-first split) */
+    .w-field { display: grid; min-width: 0; min-inline-size: 0; max-width: 100%; max-inline-size: 100%; gap: var(--weline-space-2); }
+    .w-field__label { color: var(--weline-theme-text); font-size: var(--weline-font-size-sm); font-weight: 650; }
+    /* w-field--outlined-notch + floating label:
+           default (empty input/textarea): label rests as in-field placeholder;
+           :focus-within / :not(:placeholder-shown) / select: float to top-border notch.
+           Opt out: data-floating-label="0" (always notch). */
+        .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            .w-search-inline,
+            .w-search-bar
+        ) {
+            position: relative;
+        }
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            .w-search-inline,
+            .w-search-bar
+        ) > .w-field__label {
+            position: absolute;
+            z-index: 1;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            inset-block-start: 0;
+            inset-inline-start: var(--weline-space-3);
+            translate: 0 -50%;
+            max-inline-size: calc(100% - (var(--weline-space-3) * 2));
+            margin: 0;
+            padding-inline: var(--weline-space-1);
+            overflow: hidden;
+            color: var(--weline-theme-text-muted);
+            background: var(--weline-theme-field-label-bg, var(--weline-theme-surface));
+            font-size: var(--weline-font-size-xs);
+            font-weight: 650;
+            line-height: 1.2;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            pointer-events: none;
+            transition:
+                color var(--weline-motion-fast),
+                font-size var(--weline-motion-fast),
+                font-weight var(--weline-motion-fast),
+                inset-block-start var(--weline-motion-fast),
+                translate var(--weline-motion-fast),
+                background-color var(--weline-motion-fast),
+                padding-inline var(--weline-motion-fast);
+        }
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            .w-search-inline,
+            .w-search-bar
+        ) > .w-field__label .w-icon {
+            width: 1em;
+            height: 1em;
+            min-width: 1em;
+            min-height: 1em;
+            flex: 0 0 1em;
+        }
+    /* Resting: empty text controls act as in-field placeholder (select stays notched).
+           language-select 弹层内空 search 不算字段值；有胶囊时靠 .has-value / [data-has-value=true] 上浮. */
+        .w-field:has(> .w-field__label):has(:is(.w-input, .w-textarea)):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            [data-floating-label="0"],
+            .w-search-inline,
+            .w-search-bar,
+            :has(.w-language-select)
+        ):has(:is(.w-input, .w-textarea):placeholder-shown):not(:focus-within) > .w-field__label {
+            /* Relative to control height — not 50% of .w-field (hint/error would sink the label). */
+            inset-block-start: calc(var(--weline-control-height) / 2);
+            translate: 0 -50%;
+            padding-inline: 0;
+            color: var(--weline-theme-text-subtle);
+            background: transparent;
+            font-size: var(--weline-font-size-sm);
+            font-weight: 500;
+        }
+    .w-field:has(> .w-field__label):has(.w-language-select):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            [data-floating-label="0"],
+            .w-search-inline,
+            .w-search-bar
+        ):has(.w-language-select:not([data-has-value="true"])):not(:focus-within) > .w-field__label {
+            inset-block-start: calc(var(--weline-control-height) / 2);
+            translate: 0 -50%;
+            padding-inline: 0;
+            color: var(--weline-theme-text-subtle);
+            background: transparent;
+            font-size: var(--weline-font-size-sm);
+            font-weight: 500;
+        }
+    .w-field:has(> .w-field__label):has(.w-language-select):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            [data-floating-label="0"],
+            .w-search-inline,
+            .w-search-bar
+        ):has(.w-language-select:not([data-has-value="true"])):not(:focus-within) .w-language-select__placeholder {
+            color: transparent;
+            -webkit-text-fill-color: transparent;
+            opacity: 0;
+        }
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            .w-search-inline,
+            .w-search-bar
+        ):focus-within > .w-field__label {
+            color: var(--weline-theme-primary);
+        }
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control)[aria-invalid="true"]):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            .w-search-inline,
+            .w-search-bar
+        ) > .w-field__label {
+            color: var(--weline-theme-danger);
+        }
+    .w-field__hint { color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-sm); }
+    .w-field__error { color: var(--weline-theme-danger); font-size: var(--weline-font-size-sm); }
+    /* Floating label: rest = label is the cue (hide native placeholder); float/focus = show placeholder hint. */
+        .w-field:has(> .w-field__label):has(:is(.w-input, .w-textarea)):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            [data-floating-label="0"],
+            .w-search-inline,
+            .w-search-bar,
+            :has(.w-language-select)
+        ):has(:is(.w-input, .w-textarea):placeholder-shown):not(:focus-within) :is(.w-input, .w-textarea)::placeholder {
+            color: transparent;
+            -webkit-text-fill-color: transparent;
+            opacity: 0;
+        }
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-textarea)):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            [data-floating-label="0"],
+            .w-search-inline,
+            .w-search-bar
+        ):focus-within :is(.w-input, .w-textarea)::placeholder {
+            color: var(--weline-theme-text-subtle);
+            -webkit-text-fill-color: var(--weline-theme-text-subtle);
+            opacity: 1;
+        }
+    .w-field__control { display: flex; min-width: 0; min-inline-size: 0; max-width: 100%; max-inline-size: 100%; align-items: stretch; flex-wrap: wrap; }
+    .w-field__control > :where(.w-input, .w-select, .w-textarea) { min-width: 0; min-inline-size: 0; flex: 1 1 min(100%, 12rem); }
+    .w-field__addon { display: inline-flex; align-items: center; padding-inline: var(--weline-space-3); border: 1px solid var(--weline-theme-border-strong); background: var(--weline-theme-surface-muted); color: var(--weline-theme-text-muted); }
+    .w-field__control > .w-field__addon { align-self: stretch; display: flex; align-items: center; justify-content: center; min-block-size: var(--weline-control-height); }
+
     .w-field { gap: var(--weline-space-2); }
     .w-field__label { font-size: var(--weline-font-size-sm); font-weight: 590; letter-spacing: var(--weline-letter-tight); }
     .w-field__hint { color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-xs); line-height: 1.45; }
@@ -2536,7 +2610,10 @@
 /* Weline UI · Selection controls（Switch / Checkbox / Radio，Apple 风格） */
 @layer components {
     .w-switch {
+        display: inline-flex;
+        align-items: center;
         gap: var(--weline-space-2);
+        cursor: pointer;
         min-block-size: var(--weline-control-height-sm);
         font-size: var(--weline-font-size-sm);
         user-select: none;
@@ -2546,6 +2623,9 @@
         --w-switch-height: 1.9375rem;  /* 31px */
         --w-switch-knob: calc(var(--w-switch-height) - 0.25rem);
         position: relative;
+        appearance: none;
+        margin: 0;
+        cursor: inherit;
         flex: 0 0 var(--w-switch-width);
         inline-size: var(--w-switch-width);
         block-size: var(--w-switch-height);
@@ -2580,7 +2660,10 @@
     .w-switch:has(> input:disabled) { color: var(--weline-theme-text-muted); cursor: not-allowed; }
 
     .w-check {
+        display: inline-flex;
+        align-items: center;
         gap: var(--weline-space-2);
+        cursor: pointer;
         min-block-size: var(--weline-control-height-sm);
         font-size: var(--weline-font-size-sm);
     }
@@ -2683,6 +2766,11 @@
     .w-breadcrumb a { color: var(--weline-theme-text-muted); text-decoration: none; }
     .w-breadcrumb a:hover { color: var(--weline-theme-text); }
 
+    .w-menu__item[data-state="active"],
+    .w-menu__item[aria-selected="true"] {
+        background: var(--weline-theme-active-bg);
+        color: var(--weline-theme-active-text);
+    }
     .w-menu {
         display: block;
         box-sizing: border-box;

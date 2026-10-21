@@ -169,7 +169,7 @@ final class WidgetAssetOptimizationTest extends TestCase
     {
         $publisher = new WidgetAssetArtifactPublisher();
         $css = '.x{background:url("images/icon(2).png")} .x::after{content:"url(icon.png)"}/* url(ignore.png) */';
-        $output = $publisher->rewriteCssUrls($css, 'https://shop.test/static/theme/css/widget.css');
+        $output = $publisher->rewriteCssUrls($css, 'https://shop.test/static/theme/css/widget.css', '');
         self::assertStringContainsString('url("https://shop.test/static/theme/css/images/icon(2).png")', $output);
         self::assertStringContainsString('content:"url(icon.png)"', $output);
         self::assertStringContainsString('/* url(ignore.png) */', $output);
@@ -179,7 +179,7 @@ final class WidgetAssetOptimizationTest extends TestCase
     {
         $publisher = new WidgetAssetArtifactPublisher();
         $css = 'a{background:url(../img/a.png)}b{src:url("/fixed.woff")}c{background:url(data:image/png;base64,xyz)}';
-        $rewritten = $publisher->rewriteCssUrls($css, 'https://cdn.example.test/pkg/css/a.css?v=1');
+        $rewritten = $publisher->rewriteCssUrls($css, 'https://cdn.example.test/pkg/css/a.css?v=1', '');
         self::assertStringContainsString('https://cdn.example.test/pkg/img/a.png', $rewritten);
         self::assertStringContainsString('url("/fixed.woff")', $rewritten);
         self::assertStringContainsString('url(data:image/png;base64,xyz)', $rewritten);
@@ -190,7 +190,7 @@ final class WidgetAssetOptimizationTest extends TestCase
         $publisher = new WidgetAssetArtifactPublisher();
         $css = '.x{background:url("../images/component-kit/backgrounds/header-mountains.webp")}';
         $base = 'https://shop.test/static/Weline/hanfu/Weline/Theme/view/theme/frontend/assets/css/hanfu-ink.css';
-        $rewritten = $publisher->rewriteCssUrls($css, $base);
+        $rewritten = $publisher->rewriteCssUrls($css, $base, '');
         self::assertStringContainsString(
             'url("https://shop.test/static/Weline/hanfu/frontend/assets/images/component-kit/backgrounds/header-mountains.webp")',
             $rewritten,
@@ -201,12 +201,24 @@ final class WidgetAssetOptimizationTest extends TestCase
         );
     }
 
+    public function testCssUrlTargetsCarryBuildGeneration(): void
+    {
+        $publisher = new WidgetAssetArtifactPublisher();
+        $css = '.x{background:url("../images/ink/shanshui-paper.webp")}';
+        $base = 'https://shop.test/static/Weline/hanfu/Weline/Theme/view/theme/frontend/assets/css/hanfu-ink.css';
+        $rewritten = $publisher->rewriteCssUrls($css, $base, 'abc123def456');
+        self::assertStringContainsString(
+            'url("https://shop.test/static/abc123def456/Weline/hanfu/frontend/assets/images/ink/shanshui-paper.webp")',
+            $rewritten,
+        );
+    }
+
     public function testCssAbsoluteModuleThemeImageUrlsRemapToDesignArea(): void
     {
         $publisher = new WidgetAssetArtifactPublisher();
         $css = '.x{background:url("/Weline/Theme/view/theme/frontend/assets/images/ink/ox-cloth-caravan.webp?v=20260921-ox1")}';
         $base = 'https://shop.test/static/Weline/hanfu/Weline/Theme/view/theme/frontend/assets/css/hanfu-account.css';
-        $rewritten = $publisher->rewriteCssUrls($css, $base);
+        $rewritten = $publisher->rewriteCssUrls($css, $base, '');
         self::assertStringContainsString(
             'url("https://shop.test/static/Weline/hanfu/frontend/assets/images/ink/ox-cloth-caravan.webp?v=20260921-ox1")',
             $rewritten,

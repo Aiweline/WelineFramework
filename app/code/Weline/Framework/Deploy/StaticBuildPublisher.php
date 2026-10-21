@@ -44,19 +44,7 @@ final class StaticBuildPublisher
     {
         $root = \rtrim($staticRoot, '/\\');
         $hashes = [];
-        $skipRoots = [];
-        foreach (@\scandir($root) ?: [] as $entry) {
-            if ($entry === '.' || $entry === '..') {
-                continue;
-            }
-            $path = $root . '/' . $entry;
-            if (is_dir($path) && (str_starts_with($entry, '.tmp-') || is_file($path . '/' . StaticBuildId::BUILD_MARKER))) {
-                $skipRoots[$entry] = true;
-            }
-        }
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
-        );
+        $iterator = self::iterateSourceTree($root);
         foreach ($iterator as $item) {
             /** @var \SplFileInfo $item */
             if (!$item->isFile() || $item->isLink()) {
@@ -66,7 +54,6 @@ final class StaticBuildPublisher
             $relative = \str_replace(DIRECTORY_SEPARATOR, '/', $relative);
             if ($relative === StaticBuildId::MANIFEST
                 || $relative === StaticBuildId::MANIFEST . '.tmp'
-                || $skipRoots[\explode('/', $relative)[0]] ?? false
             ) {
                 continue;
             }
@@ -85,9 +72,7 @@ final class StaticBuildPublisher
 
     private static function linkTree(string $root, string $staging): void
     {
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
-        );
+        $iterator = self::iterateSourceTree($root);
         foreach ($iterator as $item) {
             /** @var \SplFileInfo $item */
             if (!$item->isFile() || $item->isLink()) {
@@ -97,7 +82,6 @@ final class StaticBuildPublisher
             $relative = \str_replace(DIRECTORY_SEPARATOR, '/', $relative);
             if ($relative === StaticBuildId::MANIFEST
                 || $relative === StaticBuildId::MANIFEST . '.tmp'
-                || self::isSkippedTopDir($root, \explode('/', $relative)[0])
             ) {
                 continue;
             }
@@ -109,10 +93,38 @@ final class StaticBuildPublisher
         }
     }
 
-    private static function isSkippedTopDir(string $root, string $entry): bool
+    /**
+     * 只遍历当前发布树：旧代目录与 .tmp-* 在「进入前」就被排除，
+     * 否则每次发布都会把所有旧代整树重扫一遍（代次越多越慢）。
+     */
+    private static function iterateSourceTree(string $root): \RecursiveIteratorIterator
     {
-        return \str_starts_with($entry, '.tmp-')
-            || is_file($root . '/' . $entry . '/' . StaticBuildId::BUILD_MARKER);
+        $filter = new \RecursiveCallbackFilterIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+            static function (\SplFileInfo $item) use ($root): bool {
+                if (!$item->isDir()) {
+                    return true;
+                }
+                $name = $item->getFilename();
+                if (\str_starts_with($name, '.tmp-')) {
+                    return false;
+                }
+                // 主题更新代次根（pub/static/tu-*）不参与构建哈希与版本树复制。
+                if (\str_starts_with($name, 'tu-')
+                    && \rtrim(\str_replace('\\', '/', \dirname($item->getPathname())), '/') === \rtrim(\str_replace('\\', '/', $root), '/')
+                ) {
+                    return false;
+                }
+                if (\preg_match('/^[0-9a-f]{12}$/', $name) === 1
+                    && \is_file($item->getPathname() . '/' . StaticBuildId::BUILD_MARKER)) {
+                    return false;
+                }
+
+                return true;
+            },
+        );
+
+        return new \RecursiveIteratorIterator($filter);
     }
 
     private static function writeManifest(string $root, string $id): void

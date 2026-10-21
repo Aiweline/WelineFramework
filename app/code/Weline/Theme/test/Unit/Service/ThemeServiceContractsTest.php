@@ -3563,7 +3563,7 @@ private function assert_ThemeHeadChromeCssPack_testStorefrontPackIsBaseOnlyAndTo
     self::assertStringContainsString('PACK_TOKENS', $src);
     self::assertStringContainsString('PACK_STOREFRONT', $src);
     self::assertStringContainsString('PACK_BACKEND', $src);
-    self::assertStringContainsString('theme-head-chrome-v10', $src);
+    self::assertStringContainsString('theme-head-chrome-v12', $src);
     self::assertStringContainsString('normalizeOverlayManifest', $src);
     self::assertStringContainsString('resolveOverlayLeavesForLayout', $src);
     self::assertStringContainsString('selectOverlayLeaves', $src);
@@ -3603,7 +3603,7 @@ private function assert_ThemeHeadChromeCssPack_testStorefrontPackIsBaseOnlyAndTo
     $beBlock = substr($src, $sfEnd, $beEnd - $sfEnd);
     self::assertLessThan(strpos($beBlock, 'colors/_default.css'), strpos($beBlock, 'colors/_light.css'));
     self::assertLessThan(strpos($beBlock, 'colors/_light.css'), strpos($beBlock, 'colors/_dark.css'));
-    self::assertStringContainsString('theme-head-chrome-v10', $src);
+    self::assertStringContainsString('theme-head-chrome-v12', $src);
     $tryLinkAttrs = $this->extractTryLinkAttrsSnippet_ThemeHeadChromeCssPack($src);
     self::assertDoesNotMatchRegularExpression('/\$attrs\s*\.=\s*[\'"] data-weline-layout-css/', $tryLinkAttrs, 'theme pack link must not set data-weline-layout-css');
     // Pin attribute assignment only — comments may mention media="print" as forbidden.

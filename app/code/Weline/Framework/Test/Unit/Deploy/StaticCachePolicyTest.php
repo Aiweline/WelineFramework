@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Deploy;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Deploy\StaticBuildId;
 use Weline\Framework\Deploy\StaticPublicSurface;
 
 /**
@@ -38,6 +39,40 @@ final class StaticCachePolicyTest extends TestCase
 
         $pack = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Service/ThemeHeadChromeCssPack.php');
         self::assertStringContainsString('StaticBuildId::versionedPath', $pack);
+    }
+
+    public function testContentAddressedAssetsNeedNoBuildPrefixAndStayLongCached(): void
+    {
+        $hash = \str_repeat('a', 64);
+        $path = '/static/Weline/T/w/Weline/Theme/widget-assets/' . $hash . '.css';
+        self::assertSame($path, StaticBuildId::versionedPath($path, 'abc123def456'));
+        self::assertTrue(StaticPublicSurface::isVersionedStaticUrl($path));
+
+        $config = (string)\file_get_contents(
+            BP . 'app/code/Weline/Server/Service/Edge/Nginx/ManagedNginxConfigWriter.php',
+        );
+        self::assertStringContainsString('[0-9a-f]{32,64}', $config);
+    }
+
+    public function testThemeUpdateGenerationRootsAreNotBuildPrefixed(): void
+    {
+        $path = '/static/tu-20261021-193951-e0b9a1/Weline/hanfu/frontend/assets/images/ink/a.webp';
+        self::assertSame($path, StaticBuildId::versionedPath($path, 'abc123def456'));
+        self::assertTrue(StaticPublicSurface::isVersionedStaticUrl($path));
+    }
+
+    public function testVersionedPathPreservesTrailingSlash(): void
+    {
+        self::assertSame(
+            '/static/abc123def456/Weline/hanfu/frontend/assets/images/',
+            StaticBuildId::versionedPath('/static/Weline/hanfu/frontend/assets/images/', 'abc123def456'),
+        );
+    }
+
+    public function testPolicyCacheKeysCarryStaticGeneration(): void
+    {
+        $src = (string)\file_get_contents(BP . 'app/code/Weline/Framework/Cache/KeyBuilder.php');
+        self::assertStringContainsString("'static_generation'", $src);
     }
 
     public function testRouterUsesVersionedStaticCachePolicy(): void

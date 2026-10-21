@@ -19,6 +19,7 @@ use Weline\Framework\Deploy\DeployStagingSession;
 use Weline\Framework\Deploy\FlatStaticRuntimeFilesProviderInterface;
 use Weline\Framework\Deploy\HostProcessPoolPolicy;
 use Weline\Framework\Deploy\StaticBuildPublisher;
+use Weline\Framework\Deploy\WelineCoreBundle;
 use Weline\Framework\Deploy\StaticPublishExclusion;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -123,21 +124,37 @@ class Upgrade extends CommandAbstract
                 @chgrp($path, $staticGroup);
             }
         };
-        $normalizePermissions = static function (string $path) use ($applyPermissions): void {
+        $normalizePermissions = static function (string $path) use (&$normalizePermissions, $applyPermissions, $staticRoot): void {
             if (!is_dir($path)) {
                 $applyPermissions($path);
                 return;
             }
-            $iterator = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
-                \RecursiveIteratorIterator::SELF_FIRST
-            );
-            foreach ($iterator as $item) {
-                if (!$item->isLink()) {
-                    $applyPermissions($item->getPathname());
+            $applyPermissions($path);
+            $entries = @scandir($path);
+            if (!is_array($entries)) {
+                return;
+            }
+            $isStaticRoot = rtrim($path, '/\\') === rtrim($staticRoot, '/\\');
+            foreach ($entries as $entry) {
+                if ($entry === '.' || $entry === '..') {
+                    continue;
+                }
+                // 主题更新代次根（tu-*）由代次机制管理，可能并发 cutover；不参与权限归一。
+                if ($isStaticRoot && str_starts_with($entry, 'tu-')) {
+                    continue;
+                }
+                $child = $path . DIRECTORY_SEPARATOR . $entry;
+                if (is_link($child)) {
+                    continue;
+                }
+                if (is_dir($child)) {
+                    $normalizePermissions($child);
+                    continue;
+                }
+                if (is_file($child)) {
+                    $applyPermissions($child);
                 }
             }
-            $applyPermissions($path);
         };
 
         $themeAssetExtensions = [
@@ -168,6 +185,13 @@ class Upgrade extends CommandAbstract
 
         // Provider 白名单降级为补充/兼容路径：与整树幂等双写，不再承担防 404 主路径。
         $this->publishFlatStaticRuntimeFiles($modules);
+        $coreBundle = WelineCoreBundle::publish($staticRoot);
+        if (($coreBundle['path'] ?? null) !== null) {
+            if (($coreBundle['changed'] ?? false)) {
+                $this->treeChanged = true;
+            }
+            $this->printer->note(__('前端核心脚本已合并：%{1}', [$coreBundle['path']]));
+        }
         $normalizePermissions($staticRoot);
         try {
             $buildId = StaticBuildPublisher::publish($staticRoot);

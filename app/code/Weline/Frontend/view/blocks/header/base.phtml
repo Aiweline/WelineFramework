@@ -329,9 +329,20 @@ $welineBootDev = defined('DEV') ? (bool)DEV : null;
 })(window);
 </script>
 <script type="application/json" id="weline-frontend-runtime-config" data-weline-runtime-config>{"baseUrl":"@url{'/'}",<?= $runtimeJsonTailBody ?></script>
+<?php
+// 生产：4 个启动依赖合并为 weline-core.js，head 外链 -3；DEV 仍逐文件加载便于调试。
+$welineCoreAvailable = \is_file(PUB . 'static/Weline/Frontend/js/weline-core.js');
+$welineCoreProd = $useProdPublicUrls && $welineCoreAvailable;
+if ($welineCoreProd):
+    $welineCoreSrc = PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/js/weline-core.js');
+    $welineCoreSrc .= (str_contains($welineCoreSrc, '?') ? '&' : '?') . 'v=' . rawurlencode((string)$frontendAssetVersion);
+    ?>
+<script defer src="<?= htmlspecialchars($welineCoreSrc, ENT_QUOTES) ?>"></script>
+<?php else: ?>
 <js defer>Weline_Frontend::js/runtime.js</js>
 <js defer>Weline_Framework::js/dom-observer.js</js>
 <js defer>Weline_Frontend::js/weline-api-business.js</js>
+<?php endif; ?>
 <?php
 // Bust sticky theme_static_version so weline.js edits are not stuck in WLS static cache.
 $welineJsSrc = PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/js/weline.js');
@@ -339,5 +350,7 @@ $welineJsSrc .= (str_contains($welineJsSrc, '?') ? '&' : '?') . 'v=' . rawurlenc
 ?>
 <?php // defer：早期调用（declare/load/dom.observe）由 head 的 weline-boot-stub 排队，本文件初始化后回放 ?>
 <script defer src="<?= htmlspecialchars($welineJsSrc, ENT_QUOTES) ?>"></script>
+<?php if (!$welineCoreProd): ?>
 <js defer>Weline_Framework::js/url-frontend.js</js>
+<?php endif; ?>
 <meta name="weline-worker-frontend-bootstrap-slot" content="">

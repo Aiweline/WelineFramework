@@ -307,6 +307,8 @@ NGINX;
     map \$uri \$wls_static_versioned {
         default 0;
         "~^/static/[0-9a-f]{12}(?:/|\$)" 1;
+        "~^/static/tu-[A-Za-z0-9-]+(?:/|\$)" 1;
+        "~*/[0-9a-f]{32,64}\.(?:css|js|mjs|map|json|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|eot|txt|xml|wasm|mp4|webm|mp3|ogg|wav)\$" 1;
     }
     map \$args \$wls_static_arg_versioned {
         default 0;

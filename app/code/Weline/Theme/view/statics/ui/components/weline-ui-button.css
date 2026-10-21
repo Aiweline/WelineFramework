@@ -76,11 +76,19 @@
     .w-button[data-icon-only="true"] { border-radius: var(--weline-radius-round); }
     .w-button[data-icon-only="true"]:hover { box-shadow: var(--weline-theme-shadow-sm); }
     .w-button:disabled,
-    .w-button[aria-disabled="true"] { box-shadow: none; transform: none; }
+    .w-button[aria-disabled="true"] {
+        opacity: 0.55;
+        cursor: not-allowed;
+        pointer-events: none;
+        box-shadow: none;
+        transform: none;
+    }
     .w-button .w-icon,
     .w-button > w-icon,
     .w-button > svg { flex: 0 0 auto; }
     .w-button-group[data-density="icon"] { border-radius: var(--weline-radius-md); box-shadow: var(--weline-theme-shadow-xs); }
     .w-button-group > .w-button:first-child { border-start-start-radius: var(--weline-radius-md); border-end-start-radius: var(--weline-radius-md); }
     .w-button-group > .w-button:last-child { border-start-end-radius: var(--weline-radius-md); border-end-end-radius: var(--weline-radius-md); }
+    /* 显式 .w-spinner 已存在时，不再用 ::after 生成第二个 spinner（登录按钮双 loading 修复）。 */
+    .w-button[aria-busy="true"]:has(.w-spinner)::after { content: none; }
 }

@@ -13,6 +13,8 @@
         --weline-theme-surface-raised: var(--color-bg-raised, #ffffff);
         --weline-theme-surface-muted: var(--color-bg-subtle, #f5f5f7);
         --weline-theme-surface-hover: var(--color-surface-hover, #f0f0f2);
+        --weline-theme-active-bg: color-mix(in srgb, var(--weline-theme-primary) 14%, var(--weline-theme-surface));
+        --weline-theme-active-text: var(--color-primary-text-emphasis, var(--weline-theme-primary));
         --weline-theme-text: var(--color-text-primary, #1d1d1f);
         --weline-theme-text-muted: var(--color-text-secondary, #6e6e73);
         --weline-theme-text-subtle: var(--color-text-tertiary, #86868b);
@@ -72,6 +74,15 @@
         --weline-motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
+    /* 暗色：hover/active 用暗色语义，禁止回落到前台浅色 palette；active 文本不用纯白。 */
+    [data-theme="dark"],
+    [data-theme-mode="dark"],
+    [data-layout-mode="dark"] {
+        --weline-theme-surface-hover: var(--backend-color-surface-hover, color-mix(in srgb, #ffffff 8%, var(--weline-theme-surface)));
+        --weline-theme-active-bg: var(--backend-color-sidebar-active, color-mix(in srgb, var(--weline-theme-primary) 24%, var(--weline-theme-surface)));
+        --weline-theme-active-text: var(--backend-color-primary-text-emphasis, #dbe4ff);
+    }
+
     /* 后台：保留工作界面的无衬线字体栈与更紧凑的信息密度；
      * 颜色仍走同一语义层（后台色盘 --backend-color-* 优先）。 */
     [data-w-area="backend"] {
@@ -85,6 +96,9 @@
         --weline-theme-on-primary: var(--backend-color-on-primary, var(--color-on-primary, #ffffff));
         --weline-theme-surface: var(--backend-color-card-bg, var(--color-bg-primary, #ffffff));
         --weline-theme-surface-muted: var(--backend-color-bg-secondary, var(--color-bg-subtle, #f5f5f7));
+        --weline-theme-surface-hover: var(--backend-color-surface-hover, var(--color-surface-hover, #f0f0f2));
+        --weline-theme-active-bg: var(--backend-color-sidebar-active, var(--backend-color-primary-bg-subtle, color-mix(in srgb, var(--weline-theme-primary) 14%, var(--weline-theme-surface))));
+        --weline-theme-active-text: var(--backend-color-primary-text-emphasis, var(--weline-theme-primary));
         --weline-theme-text: var(--backend-color-text-primary, var(--color-text-primary, #1d1d1f));
         --weline-theme-text-muted: var(--backend-color-text-secondary, var(--color-text-secondary, #6e6e73));
         --weline-theme-border: var(--backend-color-border-default, var(--color-border-default, #d2d2d7));

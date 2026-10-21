@@ -289,7 +289,7 @@ final class ThemeHeadChromeCssPack
         $key = hash('sha256', json_encode([
             // v9: palette merge order = default → brand/ink → light → dark（未覆盖继承 default）
             // v10: design-theme leaf URLs must use active theme static namespace (not bare Weline/Theme).
-            'theme-head-chrome-v10',
+            'theme-head-chrome-v12', // v12: tu-* 代次根不再套构建前缀
             $area,
             $pack,
             $layoutType,
@@ -298,6 +298,7 @@ final class ThemeHeadChromeCssPack
             $themeIdentity,
             $scopeFp,
             array_column($sources, 'hash'),
+            \Weline\Framework\Deploy\StaticBuildId::current(),
         ], JSON_THROW_ON_ERROR));
         // Force the same theme object used for sources — never re-resolve to another namespace.
         $target = $this->gateway->buildHeadChromeArtifact($key, $area, 'css', $theme);

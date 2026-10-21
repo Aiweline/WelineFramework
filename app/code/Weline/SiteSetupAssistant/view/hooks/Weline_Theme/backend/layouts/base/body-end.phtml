@@ -61,14 +61,14 @@ $withV = static function (string $href, string $v): string {
     return $href . (str_contains($href, '?') ? '&' : '?') . 'v=' . rawurlencode($v);
 };
 ?>
-<link rel="stylesheet"
-      href="<?= $h($withV($cssHref, $cssV)) ?>"
-      data-no-extract="true"
-      data-weline-ssa-float="1">
-<link rel="stylesheet"
-      href="<?= $h($withV($instanceCssHref, $instanceCssV)) ?>"
-      data-no-extract="true"
-      data-weline-ssa-float="1">
+<?php
+$ssaCss = static function (string $href): string {
+    $safe = htmlspecialchars($href, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    return '<link rel="stylesheet" href="' . $safe . '" data-no-extract="true" data-weline-ssa-float="1">';
+};
+?>
+<?= $ssaCss($withV($cssHref, $cssV)) ?>
+<?= $ssaCss($withV($instanceCssHref, $instanceCssV)) ?>
 <?= $this->fetch('Weline_SiteSetupAssistant::templates/backend/widgets/site-setup-assistant-float.phtml') ?>
 <script src="<?= $h($withV($runtimeHref, $runtimeV)) ?>"
         data-no-extract="true"

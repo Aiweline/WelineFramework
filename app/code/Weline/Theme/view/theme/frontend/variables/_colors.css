@@ -423,4 +423,11 @@
 
     /* widget migrate fixup colors */
     --color-literal-rgba-213-217-217-0-65: rgba(213, 217, 217, 0.65);
+
+    /* 默认前台主题兼容别名：旧组件仍在用通用 --color-* 名称。
+     * 自定义主题保留自己的色盘覆盖；这里只引用当前激活色盘的叶子 token。 */
+    --color-bg-surface: var(--color-surface, var(--color-bg-primary));
+    --color-bg-inverse: var(--color-bg-dark, #1f2937);
+    --color-border-default: var(--color-border-soft, var(--color-border-light, #d2d2d7));
+    --color-border: var(--color-border-default);
 }

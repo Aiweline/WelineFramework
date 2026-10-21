@@ -152,39 +152,89 @@ final class DesignSystemContractTest extends TestCase
         // 组件 CSS 已合并进单一关键包（一次请求、可缓存），并单独编译出 per-component 产物供后续按部件拆分。
         $foundation = (string)file_get_contents(BP . 'app/code/Weline/Theme/view/statics/ui/weline-foundation.css');
         self::assertStringContainsString('.w-switch', $foundation, 'Component layer must stay in the single critical foundation pack for correct cascade.');
+
+        // 登录按钮双 loading 回归：显式 .w-spinner 存在时，禁止 ::after 再生成一个 spinner。
+        $buttonCss = (string)file_get_contents(BP . 'app/code/Weline/Theme/view/ui/css/components/button.css');
+        self::assertStringContainsString(':has(.w-spinner)::after', $buttonCss);
+        self::assertStringContainsString(':has(.w-spinner)::after', $foundation, 'Compiled foundation must carry the double-spinner fix.');
+
+        // 暗色 hover/active 对比度契约：active 走语义 token，禁止回落到前台浅色 hover，禁止纯白 active 文本。
+        $tokens = (string)file_get_contents(BP . 'app/code/Weline/Theme/view/ui/css/tokens/apple.css');
+        self::assertStringContainsString('--weline-theme-active-bg', $tokens);
+        self::assertStringContainsString('--weline-theme-active-text', $tokens);
+        self::assertStringContainsString('var(--backend-color-surface-hover', $tokens, 'Backend hover must map to backend palette, not frontend light fallback.');
+        self::assertStringContainsString('#dbe4ff', $tokens, 'Dark active text must be soft lavender, not pure white.');
+        $backendCss = (string)file_get_contents(BP . 'app/code/Weline/Theme/view/ui/css/backend.css');
+        self::assertStringContainsString('var(--weline-theme-active-bg)', $backendCss);
+        self::assertStringContainsString('var(--weline-theme-active-text)', $backendCss);
     }
 
-    public function testCriticalCssHeadContractIsAggressive(): void
+    public function testCriticalCssHeadKeepsLayoutBlocking(): void
     {
         $pack = (string)file_get_contents(BP . 'app/code/Weline/Theme/Service/ThemeHeadChromeCssPack.php');
+        // 非阻塞能力保留为可选 API，但布局 CSS 必须走阻塞主包。
         self::assertStringContainsString('function tryInlineCssHtml', $pack);
         self::assertStringContainsString('function tryPreloadLinkHtml', $pack);
-        self::assertStringContainsString("rel=\"preload\" as=\"style\"", $pack);
-
-        // 页面级 CSS 通道：<css nonblocking> + 设计主题皮肤 preload
-        $taglib = (string)file_get_contents(BP . 'app/code/Weline/Framework/View/Taglib.php');
-        self::assertStringContainsString('nonblocking', $taglib, '<css nonblocking> support is required for module page CSS.');
-        $hanfuSkin = (string)file_get_contents(
-            BP . 'app/design/Weline/hanfu/frontend/partials/head/hanfu-skin.phtml'
-        );
-        self::assertStringContainsString('rel="preload" as="style"', $hanfuSkin);
-        self::assertStringContainsString('<noscript>', $hanfuSkin);
-        self::assertStringNotContainsString('<link rel="stylesheet" href="/static/Weline/hanfu/frontend/assets/css/hanfu-commerce.css', $hanfuSkin);
+        self::assertStringContainsString('rel="preload" as="style"', $pack);
 
         $backendHead = (string)file_get_contents(
             BP . 'app/code/Weline/Theme/view/theme/backend/partials/head/default.phtml'
         );
-        self::assertStringContainsString('tryPreloadLinkHtml', $backendHead);
-        self::assertStringContainsString('tryInlineCssHtml', $backendHead);
-        self::assertStringContainsString("renderInlineStyle('backend')", $backendHead);
+        self::assertStringContainsString('tryLinkHtml', $backendHead);
+        self::assertStringContainsString('theme:layout-critical', $backendHead);
+        self::assertStringNotContainsString('tryPreloadLinkHtml', $backendHead, 'Layout pack must stay render-blocking.');
+        self::assertStringNotContainsString('renderInlineStyle', $backendHead);
 
         $frontendPrefix = (string)file_get_contents(
             BP . 'app/code/Weline/Theme/view/theme/frontend/partials/head/assets-prefix.phtml'
         );
-        self::assertStringContainsString('tryPreloadLinkHtml', $frontendPrefix);
-        self::assertStringContainsString('tryInlineCssHtml', $frontendPrefix);
-        self::assertStringContainsString("renderInlineStyle('frontend')", $frontendPrefix);
-        self::assertStringNotContainsString("tryLinkHtml(\n        'frontend',\n        \\Weline\\Theme\\Service\\ThemeHeadChromeCssPack::PACK_STOREFRONT", $frontendPrefix);
+        self::assertStringContainsString('tryLinkHtml', $frontendPrefix);
+        self::assertStringNotContainsString('tryPreloadLinkHtml', $frontendPrefix, 'Storefront layout pack must stay render-blocking.');
+        self::assertStringNotContainsString('renderInlineStyle', $frontendPrefix);
+
+        // 设计主题皮肤与后台 widget CSS 必须阻塞，避免 LCP/骨架闪屏。
+        $hanfuSkin = (string)file_get_contents(
+            BP . 'app/design/Weline/hanfu/frontend/partials/head/hanfu-skin.phtml'
+        );
+        self::assertStringContainsString("return '<link rel=\"stylesheet\"", $hanfuSkin);
+        self::assertStringNotContainsString('rel="preload" as="style"', $hanfuSkin);
+        $ssa = (string)file_get_contents(
+            BP . 'app/code/Weline/SiteSetupAssistant/view/hooks/Weline_Theme/backend/layouts/base/body-end.phtml'
+        );
+        self::assertStringContainsString("'<link rel=\"stylesheet\"", $ssa);
+        self::assertStringNotContainsString('rel="preload" as="style"', $ssa);
+
+        // 页面级非阻塞能力保留，但默认 css_merge_start 仍为 6（布局优先）。
+        $taglib = (string)file_get_contents(BP . 'app/code/Weline/Framework/View/Taglib.php');
+        self::assertStringContainsString('nonblocking', $taglib);
+        $config = (string)file_get_contents(BP . 'app/code/Weline/Theme/Service/ThemeResourceConfig.php');
+        self::assertStringContainsString("'default', 6", $config);
+        self::assertStringContainsString('max(1, (int)$value)', $config);
+    }
+
+    public function testAllDesignThemesFollowLayoutFirstHeadContract(): void
+    {
+        $headFiles = glob(BP . 'app/design/*/**/frontend/partials/head/*.phtml') ?: [];
+        $headFiles = array_merge($headFiles, glob(BP . 'app/design/*/frontend/partials/head/*.phtml') ?: []);
+        self::assertNotEmpty($headFiles, 'Design theme head partials must exist.');
+        $themesWithCritical = [];
+        foreach ($headFiles as $file) {
+            $src = (string)file_get_contents($file);
+            $rel = str_replace(BP, '', $file);
+            // 注释里的 PACK_* 提及不算发射；只在真实代码上断言。
+            $code = (string)preg_replace(['#/\*.*?\*/#s', '#//[^\n]*#'], '', $src);
+            self::assertStringNotContainsString('tryPreloadLinkHtml', $code, 'Design theme must not preload layout CSS: ' . $rel);
+            self::assertStringNotContainsString('tryInlineCssHtml', $code, 'Design theme must not inline pack CSS: ' . $rel);
+            self::assertStringNotContainsString('renderInlineStyle', $code, 'Design theme must not inline component CSS: ' . $rel);
+            if (str_contains($code, 'PACK_STOREFRONT') && preg_match('/->try[A-Za-z]*LinkHtml\(/', $code) === 1) {
+                self::assertStringContainsString('tryLinkHtml', $code, 'Pack-emitting theme head must stay blocking: ' . $rel);
+            }
+            if (str_contains($src, 'theme:layout-critical')) {
+                $parts = explode('/frontend/partials/head/', $rel);
+                $themesWithCritical[$parts[0]] = true;
+            }
+        }
+        self::assertNotEmpty($themesWithCritical, 'Every design theme needs an inline layout-critical head.');
     }
 
     public function testTagStagesSeparateStaticAndDynamicRendering(): void

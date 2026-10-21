@@ -1,6 +1,190 @@
 /* Weline UI source: css/components/field.css */
 /* Weline UI · Field / Input / Select / Textarea（Apple 风格） */
 @layer components {
+    /* migrated from foundation.css (layout-first split) */
+    .w-field { display: grid; min-width: 0; min-inline-size: 0; max-width: 100%; max-inline-size: 100%; gap: var(--weline-space-2); }
+    .w-field__label { color: var(--weline-theme-text); font-size: var(--weline-font-size-sm); font-weight: 650; }
+    /* w-field--outlined-notch + floating label:
+           default (empty input/textarea): label rests as in-field placeholder;
+           :focus-within / :not(:placeholder-shown) / select: float to top-border notch.
+           Opt out: data-floating-label="0" (always notch). */
+        .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            .w-search-inline,
+            .w-search-bar
+        ) {
+            position: relative;
+        }
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            .w-search-inline,
+            .w-search-bar
+        ) > .w-field__label {
+            position: absolute;
+            z-index: 1;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            inset-block-start: 0;
+            inset-inline-start: var(--weline-space-3);
+            translate: 0 -50%;
+            max-inline-size: calc(100% - (var(--weline-space-3) * 2));
+            margin: 0;
+            padding-inline: var(--weline-space-1);
+            overflow: hidden;
+            color: var(--weline-theme-text-muted);
+            background: var(--weline-theme-field-label-bg, var(--weline-theme-surface));
+            font-size: var(--weline-font-size-xs);
+            font-weight: 650;
+            line-height: 1.2;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            pointer-events: none;
+            transition:
+                color var(--weline-motion-fast),
+                font-size var(--weline-motion-fast),
+                font-weight var(--weline-motion-fast),
+                inset-block-start var(--weline-motion-fast),
+                translate var(--weline-motion-fast),
+                background-color var(--weline-motion-fast),
+                padding-inline var(--weline-motion-fast);
+        }
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            .w-search-inline,
+            .w-search-bar
+        ) > .w-field__label .w-icon {
+            width: 1em;
+            height: 1em;
+            min-width: 1em;
+            min-height: 1em;
+            flex: 0 0 1em;
+        }
+    /* Resting: empty text controls act as in-field placeholder (select stays notched).
+           language-select 弹层内空 search 不算字段值；有胶囊时靠 .has-value / [data-has-value=true] 上浮. */
+        .w-field:has(> .w-field__label):has(:is(.w-input, .w-textarea)):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            [data-floating-label="0"],
+            .w-search-inline,
+            .w-search-bar,
+            :has(.w-language-select)
+        ):has(:is(.w-input, .w-textarea):placeholder-shown):not(:focus-within) > .w-field__label {
+            /* Relative to control height — not 50% of .w-field (hint/error would sink the label). */
+            inset-block-start: calc(var(--weline-control-height) / 2);
+            translate: 0 -50%;
+            padding-inline: 0;
+            color: var(--weline-theme-text-subtle);
+            background: transparent;
+            font-size: var(--weline-font-size-sm);
+            font-weight: 500;
+        }
+    .w-field:has(> .w-field__label):has(.w-language-select):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            [data-floating-label="0"],
+            .w-search-inline,
+            .w-search-bar
+        ):has(.w-language-select:not([data-has-value="true"])):not(:focus-within) > .w-field__label {
+            inset-block-start: calc(var(--weline-control-height) / 2);
+            translate: 0 -50%;
+            padding-inline: 0;
+            color: var(--weline-theme-text-subtle);
+            background: transparent;
+            font-size: var(--weline-font-size-sm);
+            font-weight: 500;
+        }
+    .w-field:has(> .w-field__label):has(.w-language-select):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            [data-floating-label="0"],
+            .w-search-inline,
+            .w-search-bar
+        ):has(.w-language-select:not([data-has-value="true"])):not(:focus-within) .w-language-select__placeholder {
+            color: transparent;
+            -webkit-text-fill-color: transparent;
+            opacity: 0;
+        }
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control, .w-language-select)):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            .w-search-inline,
+            .w-search-bar
+        ):focus-within > .w-field__label {
+            color: var(--weline-theme-primary);
+        }
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-select, .w-textarea, .w-field__control)[aria-invalid="true"]):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            .w-search-inline,
+            .w-search-bar
+        ) > .w-field__label {
+            color: var(--weline-theme-danger);
+        }
+    .w-field__hint { color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-sm); }
+    .w-field__error { color: var(--weline-theme-danger); font-size: var(--weline-font-size-sm); }
+    /* Floating label: rest = label is the cue (hide native placeholder); float/focus = show placeholder hint. */
+        .w-field:has(> .w-field__label):has(:is(.w-input, .w-textarea)):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            [data-floating-label="0"],
+            .w-search-inline,
+            .w-search-bar,
+            :has(.w-language-select)
+        ):has(:is(.w-input, .w-textarea):placeholder-shown):not(:focus-within) :is(.w-input, .w-textarea)::placeholder {
+            color: transparent;
+            -webkit-text-fill-color: transparent;
+            opacity: 0;
+        }
+    .w-field:has(> .w-field__label):has(:is(.w-input, .w-textarea)):not(
+            :has(> .w-check),
+            :has(> .w-switch),
+            .w-theme-disk-field--inline,
+            [data-label-layout="stacked"],
+            [data-label-layout="inline"],
+            [data-floating-label="0"],
+            .w-search-inline,
+            .w-search-bar
+        ):focus-within :is(.w-input, .w-textarea)::placeholder {
+            color: var(--weline-theme-text-subtle);
+            -webkit-text-fill-color: var(--weline-theme-text-subtle);
+            opacity: 1;
+        }
+    .w-field__control { display: flex; min-width: 0; min-inline-size: 0; max-width: 100%; max-inline-size: 100%; align-items: stretch; flex-wrap: wrap; }
+    .w-field__control > :where(.w-input, .w-select, .w-textarea) { min-width: 0; min-inline-size: 0; flex: 1 1 min(100%, 12rem); }
+    .w-field__addon { display: inline-flex; align-items: center; padding-inline: var(--weline-space-3); border: 1px solid var(--weline-theme-border-strong); background: var(--weline-theme-surface-muted); color: var(--weline-theme-text-muted); }
+    .w-field__control > .w-field__addon { align-self: stretch; display: flex; align-items: center; justify-content: center; min-block-size: var(--weline-control-height); }
+
     .w-field { gap: var(--weline-space-2); }
     .w-field__label { font-size: var(--weline-font-size-sm); font-weight: 590; letter-spacing: var(--weline-letter-tight); }
     .w-field__hint { color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-xs); line-height: 1.45; }

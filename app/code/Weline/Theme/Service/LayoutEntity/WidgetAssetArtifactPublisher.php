@@ -199,7 +199,7 @@ class WidgetAssetArtifactPublisher
                 $sources[] = $source;
             }
             $type = $assets[0]['type'];
-            $key = hash('sha256', json_encode([$this->implementationVersion(), $type, $minify, array_column($sources, 'hash'), array_column($assets, 'url')], JSON_THROW_ON_ERROR));
+            $key = hash('sha256', json_encode([$this->implementationVersion(), 'url-rewrite-v2', $type, $minify, array_column($sources, 'hash'), array_column($assets, 'url'), \Weline\Framework\Deploy\StaticBuildId::current()], JSON_THROW_ON_ERROR));
             $theme = $this->resolvePublishTheme($theme);
             $gateway = ObjectManager::getInstance(ThemeResourceGateway::class);
             $target = $gateway->buildWidgetAssetArtifact(
@@ -375,8 +375,9 @@ class WidgetAssetArtifactPublisher
         return false;
     }
 
-    public function rewriteCssUrls(string $content, string $sourceUrl): string
+    public function rewriteCssUrls(string $content, string $sourceUrl, ?string $buildId = null): string
     {
+        $buildId = $buildId ?? \Weline\Framework\Deploy\StaticBuildId::current();
         $output = '';
         $length = strlen($content);
         for ($i = 0; $i < $length;) {
@@ -429,8 +430,18 @@ class WidgetAssetArtifactPublisher
             if (str_starts_with($value, '/')) {
                 $remapped = \Weline\Theme\Service\ThemeDesignImageStaticUrl::remapModuleThemePathToDesignArea($value, $nsHint);
                 if ($remapped === $value) {
-                    $output .= substr($content, $start, $i - $start);
+                    $versioned = $buildId !== ''
+                        ? \Weline\Framework\Deploy\StaticBuildId::versionedPath($value, $buildId)
+                        : $value;
+                    if ($versioned === $value) {
+                        $output .= substr($content, $start, $i - $start);
+                        continue;
+                    }
+                    $output .= 'url("' . ($origin !== '' ? $origin . $versioned : $versioned) . '")';
                     continue;
+                }
+                if ($buildId !== '') {
+                    $remapped = \Weline\Framework\Deploy\StaticBuildId::versionedPath($remapped, $buildId);
                 }
                 $output .= 'url("' . ($origin !== '' && str_starts_with($remapped, '/') ? $origin . $remapped : $remapped) . '")';
                 continue;
@@ -444,6 +455,9 @@ class WidgetAssetArtifactPublisher
             $resolvedPath = '/' . implode('/', $segments);
             // Design images use the area publish path, not the Theme-module dual-write URL.
             $resolvedPath = \Weline\Theme\Service\ThemeDesignImageStaticUrl::remapModuleThemePathToDesignArea($resolvedPath, $nsHint);
+            if ($buildId !== '') {
+                $resolvedPath = \Weline\Framework\Deploy\StaticBuildId::versionedPath($resolvedPath, $buildId);
+            }
             $output .= 'url("' . ($origin !== '' ? $origin . $resolvedPath : $resolvedPath) . '")';
         }
         return $output;

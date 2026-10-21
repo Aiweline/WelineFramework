@@ -19,13 +19,13 @@
     },
     "files": 1134,
     "components": {
-        "button": 4156,
-        "field": 3903,
-        "selection": 3943,
-        "navigation": 3628,
+        "button": 4456,
+        "field": 12697,
+        "selection": 4181,
+        "navigation": 3815,
         "surface": 4471,
         "feedback": 2600
     },
-    "components_total_bytes": 22701,
-    "generated_at": "2026-10-21T13:48:16+00:00"
+    "components_total_bytes": 32220,
+    "generated_at": "2026-10-21T18:08:19+00:00"
 }

@@ -5101,7 +5101,7 @@ private function assert_ThemeColorMode_testHeadsLoadOnlyExplicitUiTwoAssetsAndNo
     self::assertLessThan(strpos($backend, 'colors/_light.css'), strpos($backend, 'colors/_dark.css'), 'Backend: light before dark; uncovered leaves inherit default.');
     self::assertLessThan(strpos($backend, 'weline-foundation.css'), strpos($backend, 'colors/_default.css'), 'Backend palette must load before foundation CSS.');
     $packSrc = $this->read_ThemeColorMode('app/code/Weline/Theme/Service/ThemeHeadChromeCssPack.php');
-    self::assertStringContainsString('theme-head-chrome-v10', $packSrc);
+    self::assertStringContainsString('theme-head-chrome-v12', $packSrc);
     $packTokens = strpos($packSrc, 'self::PACK_TOKENS => [');
     $packSf = strpos($packSrc, 'self::PACK_STOREFRONT => [');
     self::assertNotFalse($packTokens);

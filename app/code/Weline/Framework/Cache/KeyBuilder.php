@@ -235,6 +235,18 @@ class KeyBuilder
                 $dimensions['channel'] = (string)$identity->channelCode;
             }
         }
+        // 静态构建代次变化 → 会内嵌静态 URL 的 policy 缓存（主题 chrome 等）必须换键。
+        // 主题更新代次生效时，代次参与构建号（FPC/策略缓存随之隔离）。
+        $staticGeneration = null;
+        try {
+            if (class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
+                $staticGeneration = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::cacheGeneration();
+            }
+        } catch (\Throwable) {
+            $staticGeneration = null;
+        }
+        $dimensions['static_generation'] = $staticGeneration ?? \Weline\Framework\Deploy\StaticBuildId::current();
+        $dimensions['static_build'] = \Weline\Framework\Deploy\StaticBuildId::current();
         foreach ($policy->vary as $dimension) {
             $dimensions[$dimension] = match ($dimension) {
                 'lang' => $context->lang,

@@ -64,6 +64,15 @@ class ThemeJs implements TaglibInterface, StaticMirrorCapableInterface
             }
 
             $contentPhp = self::buildRuntimeSourceExpression($content);
+            if (self::hasLoadAttribute(is_array($attributes) ? $attributes : [], $attrs)) {
+                // 声明加载：不直出 <script src>，只留标记，由 theme.js 在 DOMContentLoaded 后按序加载。
+                $markerAttrsPhp = var_export(self::buildLoadMarkerAttrs(is_array($attributes) ? $attributes : [], $attrs), true);
+
+                return "<?php \$__themeJsSrc = \$this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_THEME, {$contentPhp});"
+                    . " if (\$__themeJsSrc !== '') { echo '<script type=\'application/x-weline-theme-js\' data-weline-theme-js=\''"
+                    . " . htmlspecialchars((string)\$__themeJsSrc, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')"
+                    . " . '\'' . {$markerAttrsPhp} . '></script>'; } ?>";
+            }
             $attrsPhp = var_export($attrs !== '' ? ' ' . trim($attrs) : '', true);
 
             return "<?php \$__themeJsSrc = \$this->fetchTagSource(\\Weline\\Framework\\View\\Data\\DataInterface::dir_type_THEME, {$contentPhp});"
@@ -100,6 +109,12 @@ class ThemeJs implements TaglibInterface, StaticMirrorCapableInterface
             return '';
         }
 
+        if (self::hasLoadAttribute($attributes, $attrs)) {
+            return '<script type="application/x-weline-theme-js" data-weline-theme-js="'
+                . htmlspecialchars($src, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                . '"' . self::buildLoadMarkerAttrs($attributes, $attrs) . '></script>';
+        }
+
         return '<script' . self::buildMirrorAttrPart($attrs, $attributes) . ' src=\''
             . htmlspecialchars($src, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
             . '\'></script>';
@@ -116,6 +131,41 @@ class ThemeJs implements TaglibInterface, StaticMirrorCapableInterface
      *
      * @param array<string, mixed> $attributes
      */
+    /** 是否声明加载：<theme:js load>（运行期属性或编译期 raw 属性均可）。 */
+    private static function hasLoadAttribute(array $attributes, string $rawAttrs = ''): bool
+    {
+        foreach ($attributes as $name => $value) {
+            if (\strtolower(\trim((string)$name)) === 'load') {
+                return true;
+            }
+        }
+
+        return \preg_match('/(?:^|\s)load(?:\s|=|$)/', \trim($rawAttrs)) === 1;
+    }
+
+    /** 声明加载标记只保留普通属性（data-* / nonce / data-order），去掉 load/defer。 */
+    private static function buildLoadMarkerAttrs(array $attributes, string $rawAttrs = ''): string
+    {
+        $parts = [];
+        foreach ($attributes as $name => $value) {
+            $name = \trim((string)$name);
+            if ($name === '' || \preg_match('/^[a-zA-Z_:][\w:.-]*$/', $name) !== 1) {
+                continue;
+            }
+            $lower = \strtolower($name);
+            if ($lower === 'load' || $lower === 'defer') {
+                continue;
+            }
+            if ($value === true || $value === '' || $value === null) {
+                $parts[] = $name;
+                continue;
+            }
+            $parts[] = $name . '="' . \htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"';
+        }
+
+        return $parts === [] ? '' : ' ' . \implode(' ', $parts);
+    }
+
     private static function buildMirrorAttrPart(string $rawAttrs, array $attributes): string
     {
         $filtered = trim((string)preg_replace('/[a-zA-Z_][\w]*::[^\s>]*/u', '', trim($rawAttrs)));

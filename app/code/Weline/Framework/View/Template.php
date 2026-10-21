@@ -2264,6 +2264,7 @@ class Template extends DataObject implements RequestLocalInterface
         $temporaryTemplateData = $this->pushTemporaryTemplateData($dictionary);
         $previousSourceOrigin = $this->activeSourceOrigin;
         $this->activeSourceOrigin = $this->compiledSourceOrigins[$filename] ?? '';
+        $watchdogStartNs = Runtime::isPersistent() ? \hrtime(true) : 0;
         try {
             $this->softBindRequestForNestedRender();
             $block = $this;
@@ -2283,9 +2284,41 @@ class Template extends DataObject implements RequestLocalInterface
             include $filename;
             self::cooperativeTemplateYield();
         } finally {
+            $this->recordTemplateRenderWatchdog($filename, $watchdogStartNs);
             $this->popTemporaryTemplateData($temporaryTemplateData);
             $this->activeSourceOrigin = $previousSourceOrigin;
             TemplateRenderRouteTrace::end('stream_file', $routeIdentity);
+        }
+    }
+
+    /**
+     * Observable-only guard: a CPU-bound template include that never yields can
+     * starve the Fiber scheduler, so other Fibers' I/O deadlines are not checked
+     * until it returns. Never changes rendering behavior.
+     */
+    private function recordTemplateRenderWatchdog(string $filename, int $startNs): void
+    {
+        if ($startNs <= 0) {
+            return;
+        }
+        $elapsedMs = (\hrtime(true) - $startNs) / 1_000_000;
+        if ($elapsedMs < 1000.0) {
+            return;
+        }
+        try {
+            $requestId = RequestContext::getId() ?? '';
+            $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+            \w_log_warning(
+                '[WLS] template_fiber_hog'
+                . ' elapsed_ms=' . \round($elapsedMs, 2)
+                . ' request_id=' . \substr((string)$requestId, 0, 128)
+                . ' uri=' . \substr($uri, 0, 200)
+                . ' file=' . \substr($filename, 0, 300),
+                [],
+                'wls_fiber_hog',
+            );
+        } catch (\Throwable) {
+            // Observation must never alter render output.
         }
     }
 

@@ -169,7 +169,8 @@ let floatingPortalOrder = 0;
 let observer = null;
 let toastRegion = null;
 let floatingViewportFrame = 0;
-const iconSpriteUrl = new URL('./weline-icons.svg', import.meta.url).href;
+// 继承模块脚本自身的版本查询（?v=...），静态长缓存下图标也会随发布更新。
+const iconSpriteUrl = new URL('./weline-icons.svg' + new URL(import.meta.url).search, import.meta.url).href;
 const ICON_SPRITE_HOST_ID = 'weline-ui-icon-sprite';
 let iconSpritePromise = null;
 

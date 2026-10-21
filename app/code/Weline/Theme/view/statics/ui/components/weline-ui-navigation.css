@@ -61,6 +61,11 @@
     .w-breadcrumb a { color: var(--weline-theme-text-muted); text-decoration: none; }
     .w-breadcrumb a:hover { color: var(--weline-theme-text); }
 
+    .w-menu__item[data-state="active"],
+    .w-menu__item[aria-selected="true"] {
+        background: var(--weline-theme-active-bg);
+        color: var(--weline-theme-active-text);
+    }
     .w-menu {
         display: block;
         box-sizing: border-box;

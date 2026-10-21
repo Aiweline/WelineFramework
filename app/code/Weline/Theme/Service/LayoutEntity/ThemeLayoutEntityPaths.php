@@ -23,10 +23,38 @@ final class ThemeLayoutEntityPaths
     ) {
     }
 
+    /** 进程级强制根（批构建用）：非空时优先于实例 rootOverride 与部署 staging。 */
+    private static ?string $forcedRoot = null;
+
+    /** @param string|null $root 传 null 取消强制根 */
+    public static function forceRoot(?string $root): void
+    {
+        $root = $root === null ? '' : \trim($root);
+        self::$forcedRoot = $root === '' ? null : \rtrim($root, '/\\') . \DIRECTORY_SEPARATOR;
+    }
+
+    public static function forcedRoot(): ?string
+    {
+        return self::$forcedRoot;
+    }
+
     public function root(): string
     {
+        if (self::$forcedRoot !== null) {
+            return self::$forcedRoot;
+        }
         if ($this->rootOverride !== null && $this->rootOverride !== '') {
             return \rtrim($this->rootOverride, '/\\') . \DIRECTORY_SEPARATOR;
+        }
+
+        // 主题更新代次：指针指向的批目录存在时，渲染期直接读批根。
+        try {
+            $runtimeRoot = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::entityRoot();
+            if ($runtimeRoot !== null && \is_dir($runtimeRoot)) {
+                return \rtrim($runtimeRoot, '/\\') . \DIRECTORY_SEPARATOR;
+            }
+        } catch (\Throwable) {
+            // 代次机制不可用时回落线上根
         }
 
         // Mode\Set prod staging pipeline: write entities under staging before rename-swap.
@@ -334,7 +362,11 @@ final class ThemeLayoutEntityPaths
     /** Retire every pre-scope-root derivative after replacement PHTML has been built. */
     public function purgeLegacyDerivedTrees(?int $themeId = null): int
     {
-        $root = \rtrim($this->root(), '/\\');
+        // 清理只针对线上规范根；主题更新代次根（tu-*）由代次机制管理，不能作为 purge 目标。
+        $generated = \defined('\Weline\Framework\App\Env::GENERATED_DIR')
+            ? (string)\Weline\Framework\App\Env::GENERATED_DIR
+            : (\rtrim((string)BP, '/\\') . \DIRECTORY_SEPARATOR . 'generated');
+        $root = \rtrim($generated, '/\\') . \DIRECTORY_SEPARATOR . self::ROOT_SEGMENT;
         if (!\is_dir($root)) {
             return 0;
         }

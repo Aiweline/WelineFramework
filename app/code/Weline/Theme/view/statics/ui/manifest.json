@@ -11,7 +11,7 @@
             "ui-core"
         ]
     },
-    "build_id": "1ed804abff16b44e4259c91fa7711a7370cea8b167df3bb9f87668c2c4361a75",
+    "build_id": "8fafc54efeebad3df691912ea7dfcd7dab3edd6b750bb96565f28d76f221f674",
     "bundles": {
         "acl-role-assign-css": {
             "bytes": 2931,
@@ -105,10 +105,10 @@
             "type": "js"
         },
         "backend": {
-            "bytes": 62862,
+            "bytes": 62834,
             "file": "weline-backend.css",
-            "gzip_bytes": 10295,
-            "sha256": "308c50c7cae78d151ac6741af422a11314990944070a63226467b628263335ef",
+            "gzip_bytes": 10305,
+            "sha256": "870bac95be36c0ea5f89caa04cc96742480b2c3f9c90ba092a07eabf361590a8",
             "type": "css"
         },
         "choice-selector-css": {
@@ -336,10 +336,10 @@
             "type": "js"
         },
         "foundation": {
-            "bytes": 163397,
+            "bytes": 163938,
             "file": "weline-foundation.css",
-            "gzip_bytes": 24967,
-            "sha256": "d1983c8e6dde78b11c9c9b08d7320f3fb91ecc8dba8812320f3abf9574f082d2",
+            "gzip_bytes": 25358,
+            "sha256": "89028bc939dde3cd92b818e07c8fb8038017c4669d6ddc12190fe25ef9adb9db",
             "type": "css"
         },
         "frontend": {
@@ -588,17 +588,17 @@
             "type": "js"
         },
         "ui-button": {
-            "bytes": 4156,
+            "bytes": 4456,
             "file": "components/weline-ui-button.css",
-            "gzip_bytes": 1091,
-            "sha256": "270007f1b81478ad2e194521034e066f22e3efc0927cec80ad7e02c579443d37",
+            "gzip_bytes": 1251,
+            "sha256": "5c9404b8bc48d83062e5d6e349a9c6224b4162cb01be89a3037bde934d9bbfab",
             "type": "css"
         },
         "ui-core": {
-            "bytes": 177709,
+            "bytes": 177849,
             "file": "weline-ui.js",
-            "gzip_bytes": 37781,
-            "sha256": "f8efd8915bbf053aa90764e1e5864661c10989e0f08ae3f6e30970f641751663",
+            "gzip_bytes": 37941,
+            "sha256": "e936625e10f012a5a655506b98e0bb03138e4d321352329628955479e72ef045",
             "type": "js"
         },
         "ui-critical": {
@@ -616,24 +616,24 @@
             "type": "css"
         },
         "ui-field": {
-            "bytes": 3903,
+            "bytes": 12697,
             "file": "components/weline-ui-field.css",
-            "gzip_bytes": 1027,
-            "sha256": "7db85be74929799cf0cda88de9a50ab6a9e731a70d651679d038ab1e57939d92",
+            "gzip_bytes": 2241,
+            "sha256": "251dae63f5470799d8df1149e63f281a3063bafad7df7e4a6c98072d85daad8c",
             "type": "css"
         },
         "ui-navigation": {
-            "bytes": 3628,
+            "bytes": 3815,
             "file": "components/weline-ui-navigation.css",
-            "gzip_bytes": 901,
-            "sha256": "6ea0f5e133b346c28909d985572f6de53078207a23e97c8671cceb86b687bff2",
+            "gzip_bytes": 926,
+            "sha256": "9db8b845c3557d00937eb8068b539bdb17f00cbe7ec864697124d79188dad098",
             "type": "css"
         },
         "ui-selection": {
-            "bytes": 3943,
+            "bytes": 4181,
             "file": "components/weline-ui-selection.css",
-            "gzip_bytes": 968,
-            "sha256": "d3e0bb2ebb90ce85f293e4d1dd72763791155828d8039a1f706ef6faf7c4d51e",
+            "gzip_bytes": 1008,
+            "sha256": "bec916aaa806f7ee2177ea0a3a3f8b50e7f40bc68aadece6e39f9f9147a73922",
             "type": "css"
         },
         "ui-surface": {
@@ -644,10 +644,10 @@
             "type": "css"
         },
         "ui-tokens": {
-            "bytes": 6123,
+            "bytes": 7341,
             "file": "components/weline-ui-tokens.css",
-            "gzip_bytes": 1788,
-            "sha256": "a173b94a8983e74ecc121ef39cbdf095c9b2bd7e69df0de9652dd912fe9505e8",
+            "gzip_bytes": 2017,
+            "sha256": "81b5cf8cc4031b83e336d0387e0c7a6f504b7900f04e2948e458a6368c7786aa",
             "type": "css"
         },
         "websites-admin-css": {

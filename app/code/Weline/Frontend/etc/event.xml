@@ -9,6 +9,9 @@
         <observer name="Weline_Frontend::static_error_runtime_transport"
                   instance="Weline\Frontend\Observer\StaticErrorRuntimeTransport"
                   disabled="false" shared="true" sort="50"/>
+        <observer name="Weline_Frontend::static_asset_response_rewriter"
+                  instance="Weline\Frontend\Observer\StaticAssetResponseRewriter"
+                  disabled="false" shared="true" sort="60"/>
     </event>
     <event name="Framework_View::footer">
         <observer name="Weline_Frontend::footer" instance="Weline\Frontend\Observer\Footer" disabled="false" shared="true" sort="0"/>

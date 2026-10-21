@@ -128,6 +128,14 @@ $runtime = [
         'themeConfig' => $backendThemeConfig,
     ],
 ];
+$staticBuildId = '';
+try {
+    $staticBuildId = \Weline\Framework\Deploy\StaticBuildId::current();
+} catch (\Throwable) {
+}
+$runtime['staticBaseUrl'] = $staticBuildId !== '' ? '/static/' . $staticBuildId : '';
+$runtime['assetVersion'] = $staticBuildId !== '' ? $staticBuildId : ($runtime['assetVersion'] ?? '');
+
 $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP
     | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
 $runtimeJson = json_encode($runtime, $jsonFlags);

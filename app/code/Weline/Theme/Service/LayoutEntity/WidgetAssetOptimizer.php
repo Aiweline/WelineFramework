@@ -160,6 +160,25 @@ final class WidgetAssetOptimizer
         if ($deferredCss && $type === 'css') {
             $asset['tag'] = $this->applyDeferredCss($asset['tag'], $url);
         }
+        if ($type === 'js' && (string)($asset['position'] ?? '') === 'head') {
+            // head 内的 widget JS 改声明加载：运行时包（data-order=20）先于业务包（30），
+            // 由 weline.js 在 DOM ready 后按序插入，不再占用 head 外链。
+            $isRuntimePack = false;
+            $publishedProbe = '';
+            if (str_starts_with($url, '/')) {
+                $publishedProbe = (string)@file_get_contents(BP . 'pub' . strtok($url, '?'));
+            }
+            if ($publishedProbe !== '') {
+                $definesWidgetRuntime = str_contains($publishedProbe, 'WelineWidgetInstanceStyles')
+                    || (str_contains($publishedProbe, 'WelineWidgetAssets') && !str_contains($publishedProbe, '.register('));
+                if ($definesWidgetRuntime) {
+                    $isRuntimePack = true;
+                }
+            }
+            $asset['tag'] = '<script type="application/x-weline-theme-js" data-weline-theme-js="'
+                . htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                . '" data-order="' . ($isRuntimePack ? '20' : '30') . '"></script>';
+        }
         $asset['module_source'] = '';
         $asset['url'] = $url;
 

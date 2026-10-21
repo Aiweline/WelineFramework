@@ -1928,6 +1928,37 @@
     })();
 
     /**
+     * 声明加载：<theme:js load> 输出 data-weline-theme-js 标记，
+     * DOM ready 后按 data-order 顺序插入真实脚本（不占 head、不阻塞解析）。
+     */
+    (function autoLoadDeclaredThemeJs() {
+        const run = () => {
+            const nodes = Array.from(document.querySelectorAll('script[data-weline-theme-js]'));
+            if (nodes.length === 0) {
+                return;
+            }
+            nodes.sort((a, b) => (parseInt(a.getAttribute('data-order') || '0', 10) || 0)
+                - (parseInt(b.getAttribute('data-order') || '0', 10) || 0));
+            nodes.forEach((node) => {
+                const url = String(node.getAttribute('data-weline-theme-js') || '').trim();
+                node.removeAttribute('data-weline-theme-js');
+                if (url === '') {
+                    return;
+                }
+                const script = document.createElement('script');
+                script.src = url;
+                script.async = false;
+                const nonce = node.getAttribute('nonce');
+                if (nonce) {
+                    script.setAttribute('nonce', nonce);
+                }
+                (node.parentNode || document.head).appendChild(script);
+            });
+        };
+        whenDomReady(run);
+    })();
+
+    /**
      * Prefetch the official API module after DOM ready. Do NOT call bootstrapScope /
      * hole-punch here — Worker session demand owns when a new Scope visa is required.
      */

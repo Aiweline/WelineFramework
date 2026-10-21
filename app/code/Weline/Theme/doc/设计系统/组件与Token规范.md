@@ -93,17 +93,17 @@ app/code/Weline/Theme/view/ui/css/
 规则：控件高度只允许取三档；同一行内按钮/输入/选择器高度必须一致；
 间距不得写裸 `px`（用 `--weline-space-*`）；圆角不得写裸值。
 
-### 2.3 编译期组件 CSS：用量分析 + 首屏内联 + 主包非阻塞
+### 2.3 组件 CSS 与关键路径（Layout-First）
 
 详细契约见 [`CSS关键路径契约.md`](./CSS关键路径契约.md)。要点：
 
-1. 组件各自成 bundle（`ui-button`…），并保持 `foundation → tokens → components` 顺序进入主包（noscript/兜底）。
-2. `resource:compile welineUi` 扫描模板 `class` 使用，写 `usage.json`（区域清单 + 字节）。
-3. head 输出：`preload 主包` → `layout-critical` 内联 → `语义 Token` 内联 → `首屏布局原语` 内联 → `组件 CSS` 内联；
-   内联在 preload 之后，源顺序覆盖主包历史规则；主包不再阻塞渲染。
-4. 只内联该区域用到的组件；无法判定时回退全量，禁止静默缺样式。
-   组件 CSS 必须**自足**（不依赖 foundation 同名基础规则），否则主包未到达时首屏会塌。
-5. 禁止：内联放在 preload 之前、组件层写 `!important`/字面量、JS 开启页面出现阻塞主包。
+1. 组件各自成 bundle，并按 `foundation → tokens → components` 顺序进入**单一阻塞 Theme Pack**；
+   布局/骨架 CSS 必须首屏立即阻塞生效，禁止改成 preload/延迟。
+2. `resource:compile welineUi` 扫描模板 `class` 使用，写 `usage.json`（区域清单 + 字节），
+   用于后续按部件拆分与预算审计。
+3. 组件 CSS 必须**自足**（不依赖 foundation 同名基础规则），便于未来按需拆分。
+4. 显式 `.w-spinner` 存在时禁止 `::after` 再生成 spinner（双 loading 回归规则）。
+5. 禁止：把 Theme Pack/设计主题皮肤/widget layout 改成延迟；组件层写 `!important` 或颜色字面量。
 
 ---
 
@@ -212,6 +212,24 @@ Weline 模板编译器 v3 用 `TagDescriptor::$stage` 决定**何时** Lower：
 > 现状（2026-10-21）：`BuiltinRegistry` 中 25 个 compile 标签、1 个 runtime（`form`）。
 > 其中 `url`/`lang`/`block`/`hook`/`css`/`js` 属 compiled-PHP；`static`/纯结构标签属
 > static。新增标签时按上表归类，并在本文件登记。
+
+## 4.5 暗色 hover / active 语义（硬）
+
+- 新增语义 Token：
+  - `--weline-theme-active-bg`：当前项背景（浅色 `primary-bg-subtle`，暗色 `sidebar-active` 半透明蓝紫）；
+  - `--weline-theme-active-text`：当前项文本（浅色 `primary-text-emphasis` `#3730a3`，暗色 `#c7d2fe`）；
+  - `--weline-theme-surface-hover`：后台必须映射 `--backend-color-surface-hover`，禁止回落到前台浅色。
+- 规则：
+  1. active 文本**禁止纯白**；暗色用 `#c7d2fe`/`#dbe4ff` 一类柔和强调色。
+  2. active 背景禁止直接用主色实心（大面积刺眼）；用 14–24% 主色混入 surface。
+  3. hover 用 `surface-hover`（暗色 #1b2940），文本用 `--weline-theme-text`，不用 primary。
+  4. 导航、菜单、选项卡、分页的 active 状态统一消费上面两个 Token。
+- 对比度实测（WCAG）：
+  - 浅色 active `#e0e7ff` / `#3730a3` = **8.06:1**
+  - 暗色 active 合成背景 `#1e314f` / `#c7d2fe` = **8.8:1**
+  - 暗色 hover `#1b2940` / `#e6eef8` = **12.48:1**
+- 根因备忘：`tokens/apple.css` 的 `:root` 曾重新定义 `surface-hover` 并覆盖 foundation 暗色值，
+  导致暗色 hover 变浅底浅字；修复方式为后台映射 + 暗色覆盖块，且放在 `:root` 之后。
 
 ## 5. 色盘可调性验收（必须可复现）
 

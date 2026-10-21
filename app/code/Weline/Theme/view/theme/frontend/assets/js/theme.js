@@ -998,7 +998,8 @@
                         const vendorName = modulePathParts[0];
                         const moduleNamePart = modulePathParts.slice(1).join('_');
                         const normalizedModuleName = `${vendorName}/${moduleNamePart}`;
-                        return `/static/${normalizedModuleName}/${filePath}`;
+                        const staticBase = String(runtimeConfig.staticBaseUrl || '/static').replace(/\/+$/, '');
+                        return `${staticBase}/${normalizedModuleName}/${filePath}`;
                     }
                 }
             }
@@ -2918,7 +2919,7 @@
                     if (c && c.env && c.env.useProductionPublicUrls) {
                         var m = String(d).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);
                         if (m) {
-                            return '/static/' + m[1] + '/' + m[2] + '/' + m[3];
+                            return (c.staticBaseUrl || '/static') + '/' + m[1] + '/' + m[2] + '/' + m[3];
                         }
                     }
                 } catch (e) { /* keep DEV path */ }
@@ -3044,6 +3045,44 @@
             document.addEventListener('DOMContentLoaded', processDataAttributes);
         } else {
             setTimeout(processDataAttributes, 0);
+        }
+    })();
+
+    /**
+     * 声明加载：<theme:js load> 输出 data-weline-theme-js 标记，
+     * DOMContentLoaded 后按 data-order 顺序插入真实脚本，不占用 head。
+     */
+    (function autoLoadDeclaredThemeJs() {
+        function run() {
+            var nodes = Array.prototype.slice.call(document.querySelectorAll('script[data-weline-theme-js]'));
+            if (!nodes.length) {
+                return;
+            }
+            nodes.sort(function (a, b) {
+                var ao = parseInt(a.getAttribute('data-order') || '0', 10) || 0;
+                var bo = parseInt(b.getAttribute('data-order') || '0', 10) || 0;
+                return ao - bo;
+            });
+            nodes.forEach(function (node) {
+                var url = node.getAttribute('data-weline-theme-js');
+                node.removeAttribute('data-weline-theme-js');
+                if (!url) {
+                    return;
+                }
+                var script = document.createElement('script');
+                script.src = url;
+                script.async = false;
+                var nonce = node.getAttribute('nonce');
+                if (nonce) {
+                    script.setAttribute('nonce', nonce);
+                }
+                (node.parentNode || document.head).appendChild(script);
+            });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', run);
+        } else {
+            setTimeout(run, 0);
         }
     })();
 

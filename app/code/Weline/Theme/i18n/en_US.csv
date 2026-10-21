@@ -1906,6 +1906,27 @@ AI目录加载失败,"AI directory loading failed"
 "可选快照路径；默认使用 var/migration/weline-ui-2.0-icons.json","Optional snapshot path; defaults to var/migration/weline-ui-2.0-icons.json"
 确认执行数据恢复,"Confirm to perform data recovery"
 恢复默认快照,"Restore default snapshot"
+"用法：theme:update promote <batch_id> [--dry-run]","用法：theme:update promote <batch_id> [--dry-run]"
+"dry-run：将把指针切换到 %{1}（未执行）","dry-run：将把指针切换到 %{1}（未执行）"
+"已切换：current=%{1} previous=%{2} epoch=%{3}","已切换：current=%{1} previous=%{2} epoch=%{3}"
+"dry-run：将把主题 %{1} 回滚到上一个代次（未执行）","dry-run：将把主题 %{1} 回滚到上一个代次（未执行）"
+"已回滚：current=%{1} previous=%{2} epoch=%{3}","已回滚：current=%{1} previous=%{2} epoch=%{3}"
+没有可回收的历史代次（keep=%{1}）,没有可回收的历史代次（keep=%{1}）
+"dry-run：将删除 %{1}","dry-run：将删除 %{1}"
+"已回收 %{1} 个代次：%{2}","已回收 %{1} 个代次：%{2}"
+开始构建新代次（不会影响线上）…,开始构建新代次（不会影响线上）…
+代次：%{1},代次：%{1}
+构建校验未通过，代次不会上线：,构建校验未通过，代次不会上线：
+"构建完成且校验通过，可用 theme:update promote %{1} 切换","构建完成且校验通过，可用 theme:update promote %{1} 切换"
+未知子命令：,未知子命令：
+"查看/切换/回滚主题更新代次（不 purge、不需要维护模式）","查看/切换/回滚主题更新代次（不 purge、不需要维护模式）"
+"请用 -t/--theme 指定主题名，例如 -t hanfu","请用 -t/--theme 指定主题名，例如 -t hanfu"
+未找到主题：,未找到主题：
+"该主题尚无更新代次指针（首次可先 theme:upgrade 构建）","该主题尚无更新代次指针（首次可先 theme:upgrade 构建）"
+当前代次：%{1},当前代次：%{1}
+回滚目标：%{1},回滚目标：%{1}
+epoch：%{1},epoch：%{1}
+代次列表：,代次列表：
 "设置了 -t/--theme 参数，但没有提供主题名称！","The -t/--theme parameter was set, but no theme name was provided!"
 已取消操作,"Operation canceled"
 "=== 主题安装 ===","=== Theme Installation ==="
@@ -2305,6 +2326,7 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+"build 子命令尚未接入：请先用 theme:upgrade 构建，后续版本提供 theme:update build。","build 子命令尚未接入：请先用 theme:upgrade 构建，后续版本提供 theme:update build。"
 CSS变量配置,"CSS variable configuration"
 选择色盘：,"Select Color Palette:"
 不使用色盘,"No color palette"

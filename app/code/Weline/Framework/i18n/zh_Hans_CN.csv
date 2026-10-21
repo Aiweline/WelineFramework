@@ -2369,6 +2369,14 @@ source_id与parent_source不能相同！,source_id与parent_source不能相同�
 "正在重载持久 Worker 以绑定新的部署常量（mode=%{mode}）…","正在重载持久 Worker 以绑定新的部署常量（mode=%{mode}）…"
 "部署 staging 已打开（stamp=%{stamp}，root=%{root}）","部署 staging 已打开（stamp=%{stamp}，root=%{root}）"
 部署呈现世代已失效（stamp=%{stamp}，purge_fpc_all=1）,部署呈现世代已失效（stamp=%{stamp}，purge_fpc_all=1）
+"缺少 --url=https://...","缺少 --url=https://..."
+页面获取失败：,页面获取失败：
+"页面获取失败：HTTP %{1}","页面获取失败：HTTP %{1}"
+"页面未发现本站 /static 资源。","页面未发现本站 /static 资源。"
+"无效 --url：","无效 --url："
+未版本化：,未版本化：
+失败：,失败：
+全部资源校验通过。,全部资源校验通过。
 请指定设置类型:,请指定设置类型:
 请指定设置类型：%{1},请指定设置类型：%{1}
 错误的设置类型：%{1},错误的设置类型：%{1}
@@ -2383,6 +2391,11 @@ source_id与parent_source不能相同！,source_id与parent_source不能相同�
 "静态资源版本目录发布失败（不影响 legacy 树）：","静态资源版本目录发布失败（不影响 legacy 树）："
 静态资源部署进程池,静态资源部署进程池
 静态资源部署,静态资源部署
+"静态代 GC 失败：","静态代 GC 失败："
+静态根：%{1},静态根：%{1}
+保留：%{1},保留：%{1}
+%{1}删除：%{2},%{1}删除：%{2}
+[dry-run],[dry-run]
 "同步 path 包 transport-options.symlink（不 update 依赖图）","同步 path 包 transport-options.symlink（不 update 依赖图）"
 "缺少 composer.json 或 composer.lock","缺少 composer.json 或 composer.lock"
 "composer.json 解析失败","composer.json 解析失败"

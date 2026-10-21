@@ -69,9 +69,12 @@ final class StorefrontCacheKeyContextTest extends TestCase
         $this->enterScope('shop_a', 'retail', 'web', ScopeIdentity::MODE_NORMAL);
         $dimensions = $resolver->freezeCurrent()->keyDimensions();
         self::assertArrayHasKey('static_generation', $dimensions);
+        self::assertArrayHasKey('static_build', $dimensions);
+        // static_generation 语义：主题更新代次（tu-*）优先，否则部署构建号。
+        self::assertNotSame('', (string)$dimensions['static_generation']);
         self::assertSame(
             \Weline\Framework\Deploy\StaticBuildId::current(),
-            $dimensions['static_generation'],
+            $dimensions['static_build'],
         );
     }
 

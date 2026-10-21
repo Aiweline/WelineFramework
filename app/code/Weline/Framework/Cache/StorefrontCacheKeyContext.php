@@ -237,7 +237,8 @@ final readonly class StorefrontCacheKeyContext
             'currency' => $this->currency,
             'namespace_fingerprint' => $this->namespaceFingerprint ?? '',
             'cache_key_fingerprint' => $this->cacheKeyFingerprint,
-            'static_generation' => StaticBuildId::current(),
+            'static_generation' => $this->staticGeneration(),
+            'static_build' => \Weline\Framework\Deploy\StaticBuildId::current(),
         ];
     }
 
@@ -267,5 +268,21 @@ final readonly class StorefrontCacheKeyContext
             && $identity->scopeKind !== ScopeIdentity::KIND_GLOBAL
             && $identity->websiteId !== null
             && $identity->websiteCode !== null;
+    }
+
+    /**
+     * 静态代次：主题更新代次生效时取批次前缀（含 FPC 隔离），否则取部署构建号。
+     */
+    private function staticGeneration(): string
+    {
+        try {
+            if (class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
+                return \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::cacheGeneration();
+            }
+        } catch (\Throwable) {
+            // 代次机制不可用时保持部署构建号
+        }
+
+        return StaticBuildId::current();
     }
 }

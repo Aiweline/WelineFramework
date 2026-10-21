@@ -285,6 +285,13 @@ final class StaticPublicSurface
         if (\preg_match('#^/static/[0-9a-f]{12}(?:/|$)#', $path) === 1) {
             return true;
         }
+        if (\preg_match('#^/static/tu-[A-Za-z0-9-]+(?:/|$)#', $path) === 1) {
+            return true;
+        }
+        $basename = \basename($path);
+        if (\preg_match('/^[0-9a-f]{32,64}\.(?:css|js|mjs|map|json|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|eot|txt|xml|wasm|mp4|webm|mp3|ogg|wav)$/i', $basename) === 1) {
+            return true;
+        }
 
         return $query !== '' && \preg_match('/(?:^|&)(?:v|weline_asset|_weline_dev)=/', $query) === 1;
     }

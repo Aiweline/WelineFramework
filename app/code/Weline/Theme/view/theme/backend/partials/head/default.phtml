@@ -17,34 +17,19 @@ try {
 }
 $headPack = null;
 $backendPackHtml = null;
-$backendTokensInline = null;
 try {
     $headPack = \Weline\Framework\Manager\ObjectManager::getInstance(
         \Weline\Theme\Service\ThemeHeadChromeCssPack::class
     );
-    $backendPackHtml = $headPack->tryPreloadLinkHtml(
+    $backendPackHtml = $headPack->tryLinkHtml(
         'backend',
         \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_BACKEND,
         ['include_disk' => true, 'layout_css' => true]
     );
-    $backendTokensInline = $headPack->tryInlineCssHtml(
-        'backend',
-        \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_TOKENS_BACKEND,
-        ['include_disk' => false, 'include_theme_overlay' => false]
-    );
 } catch (\Throwable $e) {
     $headPack = null;
     $backendPackHtml = null;
-    $backendTokensInline = null;
-}
-$welineComponentCssInline = '';
-try {
-    $welineComponentCssInline = \Weline\Framework\Manager\ObjectManager::getInstance(
-        \Weline\Theme\Service\Ui\ComponentUsageService::class
-    )->renderInlineStyle('backend');
-} catch (\Throwable) {
-    $welineComponentCssInline = '';
-}
+        }
 $diskAbsorbed = $headPack instanceof \Weline\Theme\Service\ThemeHeadChromeCssPack
     && $backendPackHtml !== null
     && $headPack->diskIncludedInPack('backend', \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_BACKEND);
@@ -68,10 +53,6 @@ try {
 <?= $backendPackHtml ?>
 <?php endif; ?>
 <theme:layout-critical area="backend"/>
-<?php if ($backendTokensInline !== null): ?>
-<?= $backendTokensInline ?>
-<?php endif; ?>
-<?= $welineComponentCssInline ?>
 <?php if ($earlyJsHtml !== null): ?>
 <?= $earlyJsHtml ?>
 <?php else: ?>

@@ -460,7 +460,8 @@
                         const vendorName = modulePathParts[0];
                         const moduleNamePart = modulePathParts.slice(1).join('_');
                         const normalizedModuleName = `${vendorName}/${moduleNamePart}`;
-                        return `/static/${normalizedModuleName}/${filePath}`;
+                        const staticBase = String(runtimeConfig.staticBaseUrl || '/static').replace(/\/+$/, '');
+                        return `${staticBase}/${normalizedModuleName}/${filePath}`;
                     }
                 }
             }
@@ -533,7 +534,7 @@
                             if (c && c.env && c.env.useProductionPublicUrls) {
                                 var m = String(d).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);
                                 if (m) {
-                                    return '/static/' + m[1] + '/' + m[2] + '/' + m[3];
+                                    return (c.staticBaseUrl || '/static') + '/' + m[1] + '/' + m[2] + '/' + m[3];
                                 }
                             }
                         } catch (e) { /* keep DEV path */ }
@@ -790,7 +791,7 @@
                                     if (c && c.env && c.env.useProductionPublicUrls) {
                                         var m = String(d).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);
                                         if (m) {
-                                            return '/static/' + m[1] + '/' + m[2] + '/' + m[3];
+                                            return (c.staticBaseUrl || '/static') + '/' + m[1] + '/' + m[2] + '/' + m[3];
                                         }
                                     }
                                 } catch (e) { /* keep DEV path */ }
@@ -1864,7 +1865,7 @@
                     if (c && c.env && c.env.useProductionPublicUrls) {
                         var m = String(d).match(/^\/([^/]+)\/([^/]+)\/view\/statics\/(.*)$/);
                         if (m) {
-                            return '/static/' + m[1] + '/' + m[2] + '/' + m[3];
+                            return (c.staticBaseUrl || '/static') + '/' + m[1] + '/' + m[2] + '/' + m[3];
                         }
                     }
                 } catch (e) { /* keep DEV path */ }
