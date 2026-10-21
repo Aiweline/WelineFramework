@@ -267,13 +267,9 @@
   place-items: center;
   padding: var(--weline-space-4, var(--space-4));
   background: color-mix(in srgb, var(--color-text-primary, var(--weline-theme-text)) 42%, transparent);
-}
-
-/* Hosted inside native showModal() purchase panel: do not clip the nested overlay. */
-dialog.w-product-purchase-panel:has(> .w-helppay-dialog),
-.w-dialog.w-product-purchase-panel:has(> .w-helppay-dialog),
-dialog:has(> .w-helppay-dialog) {
-  overflow: visible !important;
+}/* Hosted inside native showModal() purchase panel: do not clip the nested overlay. */
+dialog.w-product-purchase-panel:has(> .w-helppay-dialog), .w-dialog.w-product-purchase-panel:has(> .w-helppay-dialog), dialog:has(> .w-helppay-dialog){
+  overflow: visible;
 }
 
 .w-helppay-dialog[hidden] {

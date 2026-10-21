@@ -25,70 +25,9 @@ $listingQuery = [
 ];
 $listingBase = (string)$this->getBackendUrl('smtp/backend/log/listing', $listingQuery);
 ?>
+<css>Weline_Smtp::css/backend/smtp-admin.css</css>
 
-<style>
-.smtp-log-filters {
-    display: grid;
-    grid-template-columns: minmax(16rem, 22rem) minmax(14rem, 20rem) 1fr;
-    gap: var(--weline-space-3);
-    align-items: end;
-    margin-block-end: var(--weline-space-4);
-}
-@media (max-width: 960px) {
-    .smtp-log-filters {
-        grid-template-columns: 1fr;
-    }
-}
-.smtp-log-subject {
-    font-weight: 600;
-    color: var(--weline-theme-text);
-}
-.smtp-log-meta {
-    margin-block-start: var(--weline-space-1);
-    color: var(--weline-theme-text-muted);
-    font-size: var(--weline-font-size-xs);
-}
-.smtp-log-channel-code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: var(--weline-font-size-xs);
-    color: var(--weline-theme-text-muted);
-}
-.smtp-log-time {
-    white-space: nowrap;
-    font-variant-numeric: tabular-nums;
-}
-.smtp-log-excerpt {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
-    max-inline-size: 18rem;
-    color: var(--weline-theme-text-muted);
-    font-size: var(--weline-font-size-sm);
-    line-height: 1.4;
-    word-break: break-word;
-}
-.smtp-log-excerpt-wrap {
-    display: flex;
-    flex-direction: column;
-    gap: var(--weline-space-1);
-    max-inline-size: 18rem;
-}
-.smtp-log-preview-frame-wrap {
-    min-block-size: 28rem;
-    border: 1px solid var(--weline-theme-border);
-    border-radius: var(--weline-radius-md);
-    overflow: hidden;
-    background: var(--weline-theme-surface, #fff);
-}
-.smtp-log-preview-frame-wrap iframe {
-    display: block;
-    width: 100%;
-    min-height: 28rem;
-    border: 0;
-    background: #fff;
-}
-</style>
+
 
 <div class="w-grid" data-testid="smtp-log-page">
     <div style="--w-span:12;">

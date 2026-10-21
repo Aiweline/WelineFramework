@@ -1,0 +1,72 @@
+/* Weline UI · Navigation（Tabs / Pagination / Breadcrumb / Menu，Apple 风格） */
+@layer components {
+    .w-tabs__list {
+        display: inline-flex;
+        flex-wrap: nowrap;
+        gap: var(--weline-space-1);
+        max-width: 100%;
+        padding: var(--weline-space-1);
+        border: 1px solid color-mix(in srgb, var(--weline-theme-border) 72%, transparent);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface-muted);
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+    .w-tabs__list::-webkit-scrollbar { display: none; }
+    .w-tabs__list > li { display: contents; }
+    .w-tabs__tab {
+        min-height: var(--weline-control-height-sm);
+        padding-inline: var(--weline-space-4);
+        border: 0;
+        border-radius: var(--weline-radius-sm);
+        background: transparent;
+        color: var(--weline-theme-text-muted);
+        font-size: var(--weline-font-size-sm);
+        font-weight: 590;
+        letter-spacing: var(--weline-letter-tight);
+        transition:
+            background-color var(--weline-motion-fast) var(--weline-motion-ease),
+            color var(--weline-motion-fast) var(--weline-motion-ease),
+            box-shadow var(--weline-motion-fast) var(--weline-motion-ease);
+    }
+    .w-tabs__tab:hover { color: var(--weline-theme-text); background: color-mix(in srgb, var(--weline-theme-surface) 55%, transparent); }
+    .w-tabs__tab[aria-selected="true"],
+    .w-tabs__tab.is-active {
+        background: var(--weline-theme-surface);
+        color: var(--weline-theme-text);
+        box-shadow: var(--weline-theme-shadow-xs);
+    }
+    .w-tabs__tab:focus-visible { outline: 0; box-shadow: var(--weline-theme-focus-ring); }
+
+    .w-pagination { gap: var(--weline-space-1); }
+    .w-pagination__link {
+        border: 1px solid transparent;
+        border-radius: var(--weline-radius-sm);
+        background: transparent;
+        color: var(--weline-theme-text-muted);
+        font-size: var(--weline-font-size-sm);
+        transition: background-color var(--weline-motion-fast) var(--weline-motion-ease), color var(--weline-motion-fast) var(--weline-motion-ease);
+    }
+    .w-pagination__link:hover { background: var(--weline-theme-surface-muted); color: var(--weline-theme-text); }
+    .w-pagination__link[aria-current="page"],
+    .w-pagination__item[data-state="active"] > .w-pagination__link {
+        background: var(--weline-theme-primary);
+        border-color: var(--weline-theme-primary);
+        color: var(--weline-theme-on-primary);
+    }
+
+    .w-breadcrumb { gap: var(--weline-space-2); color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-xs); }
+    .w-breadcrumb a { color: var(--weline-theme-text-muted); text-decoration: none; }
+    .w-breadcrumb a:hover { color: var(--weline-theme-text); }
+
+    .w-menu {
+        padding: var(--weline-space-1);
+        border: 1px solid color-mix(in srgb, var(--weline-theme-border) 72%, transparent);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface-raised);
+        box-shadow: var(--weline-theme-shadow-md);
+    }
+    .w-menu__item { border-radius: var(--weline-radius-sm); font-size: var(--weline-font-size-sm); }
+    .w-menu__item:hover { background: var(--weline-theme-surface-hover); }
+    .w-menu__divider { background: var(--weline-theme-border); }
+}

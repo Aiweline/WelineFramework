@@ -67,7 +67,7 @@ $containsCategory = static function (array $nodes, int $targetId) use (&$contain
 
 // Empty category_id must not appear in the GET URL (FPC identity drops empties;
 // submitting category_id= forked a dead ~q leaf vs BinQuery/Worker).
-$onChange = "var f=this.form;var c=f.category_id;if(c){var v=this.getAttribute('data-category-id')||'';if(v){c.disabled=false;c.value=v;}else{c.value='';c.disabled=true;}}f.submit();";
+// The submit behaviour lives in js/search-type-filter.js (no inline handler).
 
 /**
  * @param list<array<string,mixed>> $nodes
@@ -78,7 +78,6 @@ $renderTree = static function (
     int $selectedCategoryId,
     int $depth,
     callable $esc,
-    string $onChange,
     callable $containsCategory,
     callable $localize,
 ) use (&$renderTree): void {
@@ -121,7 +120,7 @@ $renderTree = static function (
                                 data-search-filter-toggle
                                 aria-expanded="<?= $isOpen ? 'true' : 'false' ?>"
                                 aria-controls="<?= $esc($itemId) ?>"
-                                title="<?= $esc((string)__('展开/收起')) ?>">
+                                title="@lang('展开/收起')">
                             <span class="storefront-search__type-toggle-icon" aria-hidden="true"></span>
                         </button>
                     <?php else: ?>
@@ -132,8 +131,8 @@ $renderTree = static function (
                                name="type"
                                value="<?= $esc($typeCode) ?>"
                                data-category-id="<?= $nodeCategoryId > 0 ? $esc((string)$nodeCategoryId) : '' ?>"
-                               <?= $isActive ? 'checked' : '' ?>
-                               onchange="<?= $esc($onChange) ?>">
+                               data-search-type-select
+                               <?= $isActive ? 'checked' : '' ?>>
                         <span class="storefront-search__type-option-text"><?= $esc($nodeLabel) ?></span>
                     </label>
                 </div>
@@ -142,7 +141,7 @@ $renderTree = static function (
                          id="<?= $esc($itemId) ?>"
                          data-search-filter-children
                          <?= $isOpen ? '' : 'hidden' ?>>
-                        <?php $renderTree($children, $typeCode, $selectedCategoryId, $depth + 1, $esc, $onChange, $containsCategory, $localize); ?>
+                        <?php $renderTree($children, $typeCode, $selectedCategoryId, $depth + 1, $esc, $containsCategory, $localize); ?>
                     </div>
                 <?php endif; ?>
             </li>
@@ -153,7 +152,8 @@ $renderTree = static function (
 ?>
 <div class="storefront-search__filter-panel storefront-search__filter-group storefront-search__filter-panel--tree"
      data-testid="storefront-search-type-filter"
-     data-search-type-filter>
+     data-search-type-filter
+     data-weline-load="searchTypeFilter">
     <h2 class="storefront-search__filter-title"><lang>搜索类型</lang></h2>
     <form method="get" action="@url{'search'}" class="storefront-search__type-form">
         <input type="hidden" name="q" value="<?= $esc($q) ?>">
@@ -187,7 +187,7 @@ $renderTree = static function (
                                     data-search-filter-toggle
                                     aria-expanded="<?= $isOpen ? 'true' : 'false' ?>"
                                     aria-controls="<?= $esc($itemId) ?>"
-                                    title="<?= $esc((string)__('展开/收起')) ?>">
+                                    title="@lang('展开/收起')">
                                 <span class="storefront-search__type-toggle-icon" aria-hidden="true"></span>
                             </button>
                         <?php else: ?>
@@ -198,8 +198,8 @@ $renderTree = static function (
                                    name="type"
                                    value="<?= $esc($code) ?>"
                                    data-category-id=""
-                                   <?= $isTypeActive ? 'checked' : '' ?>
-                                   onchange="<?= $esc($onChange) ?>">
+                                   data-search-type-select
+                                   <?= $isTypeActive ? 'checked' : '' ?>>
                             <span class="storefront-search__type-option-text"><?= $esc($label) ?></span>
                         </label>
                     </div>
@@ -208,7 +208,7 @@ $renderTree = static function (
                              id="<?= $esc($itemId) ?>"
                              data-search-filter-children
                              <?= $isOpen ? '' : 'hidden' ?>>
-                            <?php $renderTree($children, $code, $categoryId, 1, $esc, $onChange, $containsCategory, $localize); ?>
+                            <?php $renderTree($children, $code, $categoryId, 1, $esc, $containsCategory, $localize); ?>
                         </div>
                     <?php endif; ?>
                 </li>
@@ -216,31 +216,3 @@ $renderTree = static function (
         </ul>
     </form>
 </div>
-<script>
-(function () {
-    var root = document.currentScript && document.currentScript.previousElementSibling;
-    if (!root || !root.getAttribute || root.getAttribute('data-search-type-filter') === null) {
-        root = document.querySelector('[data-search-type-filter]');
-    }
-    if (!root || root.getAttribute('data-filter-tree-init') === '1') {
-        return;
-    }
-    root.setAttribute('data-filter-tree-init', '1');
-    root.querySelectorAll('[data-search-filter-toggle]').forEach(function (btn) {
-        btn.addEventListener('click', function (event) {
-            event.preventDefault();
-            event.stopPropagation();
-            var node = btn.closest('[data-search-filter-node]');
-            if (!node) return;
-            var children = node.querySelector(':scope > [data-search-filter-children]');
-            var open = node.getAttribute('data-state') !== 'open';
-            node.classList.toggle('is-open', open);
-            node.setAttribute('data-state', open ? 'open' : 'closed');
-            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-            if (children) {
-                children.hidden = !open;
-            }
-        });
-    });
-})();
-</script>

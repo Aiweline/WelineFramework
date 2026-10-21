@@ -108,13 +108,10 @@
     min-width: 0;
     flex-direction: column;
     gap: var(--weline-space-2);
-}
-
-.storefront-wishlist__slot > .weline-product-card,
-.storefront-wishlist__card.weline-product-card {
-    float: none !important;
-    width: auto !important;
-    max-width: none !important;
+}.storefront-wishlist__slot > .weline-product-card.weline-product-card, .storefront-wishlist__card.weline-product-card.weline-product-card{
+    float: none;
+    width: auto;
+    max-width: none;
     min-width: 0;
     margin: 0;
     height: 100%;

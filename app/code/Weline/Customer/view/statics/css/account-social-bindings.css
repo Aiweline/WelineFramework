@@ -105,7 +105,7 @@
     cursor: pointer;
 }
 .customer-social-bindings__btn--primary {
-    border-color: #2563eb;
+    border-color: var(--color-link);
     background: var(--color-info);
     color: var(--color-text-light);
 }

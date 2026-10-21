@@ -53,8 +53,19 @@ try {
 }
 $diskAbsorbed = false;
 ?>
+<?php
+$welineComponentCssInline = '';
+try {
+    $welineComponentCssInline = \Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Theme\Service\Ui\ComponentUsageService::class
+    )->renderInlineStyle('frontend');
+} catch (\Throwable) {
+    $welineComponentCssInline = '';
+}
+?>
 <w:template>Weline_Theme::templates/partials/head/css-fouc-bootstrap.phtml</w:template>
 <theme:layout-critical area="frontend"/>
+<?= $welineComponentCssInline ?>
 <?php if ($tokensPackHtml !== null): ?>
 <?= $tokensPackHtml ?>
 <?php endif; ?>

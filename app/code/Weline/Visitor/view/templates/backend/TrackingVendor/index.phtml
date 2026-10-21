@@ -63,7 +63,7 @@ if ($selected === null && $vendorsRuntime !== []) {
     <div class="tvp-topbar" data-testid="tv-topbar">
         <?= $this->fetch('Weline_Visitor::templates/backend/TrackingVendor/partials/scope-toolbar.phtml') ?>
         <div class="tvp-toolbar" data-testid="tv-toolbar">
-            <span class="tvp-field__hint" id="tv-config-revision" data-testid="tv-config-revision" title="当前配置范围与事件配置版本（编辑后 bump，沙盒/助手对齐）" class="vendor-page-url">
+            <span class="tvp-field__hint vendor-page-url" id="tv-config-revision" data-testid="tv-config-revision" title="当前配置范围与事件配置版本（编辑后 bump，沙盒/助手对齐）" >
                 <strong data-tv-scope-version-label><?= $h(
                     '站点 ' . (string)(($scopeQuery['website_code'] ?? '') !== '' ? $scopeQuery['website_code'] : ('website.' . (int)$websiteId))
                     . ' · 店铺 ' . ((($scopeQuery['store_code'] ?? '') !== '') ? (string)$scopeQuery['store_code'] : 'default')
@@ -407,7 +407,7 @@ if ($selected === null && $vendorsRuntime !== []) {
                                                 </div>
                                             </div>
                                             <div class="tvp-custom-toolbar w-cluster" style="--w-gap:var(--weline-space-2);flex-wrap:wrap;align-items:center;" data-testid="tv-custom-toolbar">
-                                                <label class="tvp-field tvp-custom-search" class="vendor-filter-field">
+                                                <label class="tvp-field tvp-custom-search vendor-filter-field" >
                                                     <span class="visually-hidden"><lang>搜索自定义事件</lang></span>
                                                     <input type="search" id="tv-custom-search" class="w-input" data-size="sm" data-testid="tv-custom-search" placeholder="<?= $h(__('搜索事件名 / 匹配条件')) ?>" autocomplete="off">
                                                 </label>

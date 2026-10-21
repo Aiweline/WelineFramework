@@ -247,7 +247,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         }
         
         .status-badge.warning {
-            background: rgba(245, 158, 11, 0.2);
+            background: var(--color-warning-bg-subtle);
             color: var(--warning-color);
         }
 
@@ -279,8 +279,8 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         }
 
         .inline-message.warning {
-            border-color: rgba(245, 158, 11, 0.45);
-            background: rgba(245, 158, 11, 0.14);
+            border-color: var(--color-warning);
+            background: var(--color-warning-bg-subtle);
             color: var(--warning-color);
         }
         
@@ -527,10 +527,54 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         </div>
     </div>
     
+<?php
+$installerWizardI18n = [
+    'API 后台密钥' => (string)__('API 后台密钥'),
+    '位置' => (string)__('位置'),
+    '修复完成' => (string)__('修复完成'),
+    '后台入口密钥' => (string)__('后台入口密钥'),
+    '后台地址' => (string)__('后台地址'),
+    '安装中...' => (string)__('安装中...'),
+    '安装失败' => (string)__('安装失败'),
+    '完成安装' => (string)__('完成安装'),
+    '开始环境修复...' => (string)__('开始环境修复...'),
+    '开始环境检测...' => (string)__('开始环境检测...'),
+    '操作' => (string)__('操作'),
+    '未通过' => (string)__('未通过'),
+    '检测失败' => (string)__('检测失败'),
+    '测试中...' => (string)__('测试中...'),
+    '测试连接' => (string)__('测试连接'),
+    '环境检测未通过' => (string)__('环境检测未通过'),
+    '环境检测通过 ✓' => (string)__('环境检测通过 ✓'),
+    '缺失扩展' => (string)__('缺失扩展'),
+    '被禁用函数' => (string)__('被禁用函数'),
+    '请求失败' => (string)__('请求失败'),
+    '连接中断' => (string)__('连接中断'),
+    '连接失败' => (string)__('连接失败'),
+    '连接成功！' => (string)__('连接成功！'),
+    '通过' => (string)__('通过'),
+    '部分问题仍需手动处理' => (string)__('部分问题仍需手动处理'),
+];
+$installerWizardConfig = [
+    'formKey' => (string)($form_key ?? ''),
+    'baseUrl' => (string)$this->getUrl('install'),
+    'i18n' => $installerWizardI18n,
+];
+?>
+<script type="application/json" id="installer-wizard-config"><?= json_encode($installerWizardConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+
     <script>
+(function () {
+    'use strict';
+    var CONFIG = (function () {
+        var el = document.getElementById('installer-wizard-config');
+        if (!el) { return { formKey: '', baseUrl: '/install', i18n: {} }; }
+        try { return JSON.parse(el.textContent || '{}'); } catch (e) { return { formKey: '', baseUrl: '/install', i18n: {} }; }
+    }());
+
     (function() {
-        const formKey = '<?= $form_key ?>';
-        const baseUrl = "@url{'install'}";
+        const formKey = CONFIG.formKey;
+        const baseUrl = CONFIG.baseUrl;
         let currentStep = 'env';
         let envPassed = false;
         
@@ -546,31 +590,31 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
         const dbMessage = document.getElementById('db-message');
         const installMessage = document.getElementById('install-message');
         const messages = {
-            startEnvCheck: <?= json_encode((string)__('开始环境检测...'), $jsonForScriptFlags) ?>,
-            envPassed: <?= json_encode((string)__('环境检测通过 ✓'), $jsonForScriptFlags) ?>,
-            envFailed: <?= json_encode((string)__('环境检测未通过'), $jsonForScriptFlags) ?>,
-            passed: <?= json_encode((string)__('通过'), $jsonForScriptFlags) ?>,
-            failed: <?= json_encode((string)__('未通过'), $jsonForScriptFlags) ?>,
-            missingExtensions: <?= json_encode((string)__('缺失扩展'), $jsonForScriptFlags) ?>,
-            disabledFunctions: <?= json_encode((string)__('被禁用函数'), $jsonForScriptFlags) ?>,
-            checkFailed: <?= json_encode((string)__('检测失败'), $jsonForScriptFlags) ?>,
-            requestFailed: <?= json_encode((string)__('请求失败'), $jsonForScriptFlags) ?>,
-            startEnvFix: <?= json_encode((string)__('开始环境修复...'), $jsonForScriptFlags) ?>,
-            guideLocation: <?= json_encode((string)__('位置'), $jsonForScriptFlags) ?>,
-            guideAction: <?= json_encode((string)__('操作'), $jsonForScriptFlags) ?>,
-            fixCompleted: <?= json_encode((string)__('修复完成'), $jsonForScriptFlags) ?>,
-            manualFixNeeded: <?= json_encode((string)__('部分问题仍需手动处理'), $jsonForScriptFlags) ?>,
-            streamInterrupted: <?= json_encode((string)__('连接中断'), $jsonForScriptFlags) ?>,
-            testing: <?= json_encode((string)__('测试中...'), $jsonForScriptFlags) ?>,
-            testConnection: <?= json_encode((string)__('测试连接'), $jsonForScriptFlags) ?>,
-            connectionSuccess: <?= json_encode((string)__('连接成功！'), $jsonForScriptFlags) ?>,
-            connectionFailed: <?= json_encode((string)__('连接失败'), $jsonForScriptFlags) ?>,
-            installing: <?= json_encode((string)__('安装中...'), $jsonForScriptFlags) ?>,
-            installFailed: <?= json_encode((string)__('安装失败'), $jsonForScriptFlags) ?>,
-            completeInstall: <?= json_encode((string)__('完成安装'), $jsonForScriptFlags) ?>,
-            adminKey: <?= json_encode((string)__('后台入口密钥'), $jsonForScriptFlags) ?>,
-            apiAdminKey: <?= json_encode((string)__('API 后台密钥'), $jsonForScriptFlags) ?>,
-            adminUrl: <?= json_encode((string)__('后台地址'), $jsonForScriptFlags) ?>
+            startEnvCheck: CONFIG.i18n["开始环境检测..."],
+            envPassed: CONFIG.i18n["环境检测通过 ✓"],
+            envFailed: CONFIG.i18n["环境检测未通过"],
+            passed: CONFIG.i18n["通过"],
+            failed: CONFIG.i18n["未通过"],
+            missingExtensions: CONFIG.i18n["缺失扩展"],
+            disabledFunctions: CONFIG.i18n["被禁用函数"],
+            checkFailed: CONFIG.i18n["检测失败"],
+            requestFailed: CONFIG.i18n["请求失败"],
+            startEnvFix: CONFIG.i18n["开始环境修复..."],
+            guideLocation: CONFIG.i18n["位置"],
+            guideAction: CONFIG.i18n["操作"],
+            fixCompleted: CONFIG.i18n["修复完成"],
+            manualFixNeeded: CONFIG.i18n["部分问题仍需手动处理"],
+            streamInterrupted: CONFIG.i18n["连接中断"],
+            testing: CONFIG.i18n["测试中..."],
+            testConnection: CONFIG.i18n["测试连接"],
+            connectionSuccess: CONFIG.i18n["连接成功！"],
+            connectionFailed: CONFIG.i18n["连接失败"],
+            installing: CONFIG.i18n["安装中..."],
+            installFailed: CONFIG.i18n["安装失败"],
+            completeInstall: CONFIG.i18n["完成安装"],
+            adminKey: CONFIG.i18n["后台入口密钥"],
+            apiAdminKey: CONFIG.i18n["API 后台密钥"],
+            adminUrl: CONFIG.i18n["后台地址"]
         };
         
         // 终端输出
@@ -834,6 +878,8 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
             }
         });
     })();
+    
+}());
     </script>
 </body>
 </html>

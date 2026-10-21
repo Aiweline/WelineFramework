@@ -29,7 +29,23 @@ Object.assign(window.WelineModulesConfig.modules, {
         globalVar: "WelineModules",
         load: "lazy",
         description: "PayPal JS SDK：Google Pay / Apple Pay funding 按钮容器"
-    }
+    },
+    paymentHandoff: {
+        paths: [
+            "Weline_Payment::js/payment-handoff.js?v=20261021-payment-handoff-1"
+        ],
+        globalVar: null,
+        load: "eager",
+        description: "支付交接页轮询"
+    },
+    paymentMethods: {
+        paths: [
+            "Weline_Payment::js/payment-methods.js?v=20261021-payment-methods-1"
+        ],
+        globalVar: null,
+        load: "eager",
+        description: "支付方式选择与提交"
+    },
 });
 
 Object.assign(window.WelineModulesConfig.moduleAliases, {

@@ -85,7 +85,7 @@
     padding: 0 0.3rem;
     border-radius: 999px;
     background: var(--ssa-primary);
-    color: var(--weline-theme-on-primary, #fff);
+    color: var(--weline-theme-on-primary);
     text-align: center;
     font-size: 0.7rem;
     font-variant-numeric: tabular-nums;

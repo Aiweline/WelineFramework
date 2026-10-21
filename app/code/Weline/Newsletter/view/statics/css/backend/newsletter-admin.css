@@ -1,0 +1,6 @@
+/* Weline_Newsletter 后台页面私有布局（标准 §6.2；Token-only，无 !important） */
+@layer page {
+
+.newsletter-inline-1 { max-inline-size:min(100%,28rem); }
+.newsletter-inline-2 { inline-size:min(100%,14rem);flex:1 1 10rem;min-inline-size:8rem; }
+}

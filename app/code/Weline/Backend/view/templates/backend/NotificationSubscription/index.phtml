@@ -21,6 +21,7 @@ $labelConfigured = __('已配置联系人');
 $labelUnconfigured = __('未配置联系人');
 $labelMinPrefix = __('≥');
 ?>
+<css>Weline_Backend::css/backend/backend-pages.css</css>
 
 <div class="w-grid">
     <div style="--w-span:12;">
@@ -167,111 +168,7 @@ $labelMinPrefix = __('≥');
     </div>
 </div>
 
-<style>
-.weline-subscription-tip {
-    margin-bottom: var(--weline-space-5);
-}
-.weline-subscription-group-title {
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-2);
-    margin: 0 0 var(--weline-space-3);
-    padding: 0 0 var(--weline-space-3);
-    border-bottom: 2px solid var(--weline-theme-primary);
-    color: var(--weline-theme-text);
-    font-size: var(--weline-font-size-md);
-    font-weight: 650;
-}
-.weline-subscription-topic {
-    display: grid;
-    gap: var(--weline-space-4);
-    padding: var(--weline-space-4);
-    border: 1px solid var(--weline-theme-border);
-    border-radius: var(--weline-radius-lg);
-    background: var(--weline-theme-surface);
-    color: var(--weline-theme-text);
-}
-.weline-subscription-topic__icon,
-.weline-subscription-topic__icon-fallback {
-    flex: 0 0 auto;
-    display: grid;
-    place-items: center;
-    inline-size: 2rem;
-    block-size: 2rem;
-    border-radius: var(--weline-radius-md);
-    background: var(--weline-theme-surface-muted);
-    color: var(--weline-theme-primary);
-}
-.weline-subscription-topic__copy {
-    min-inline-size: 0;
-    display: grid;
-    gap: var(--weline-space-1);
-}
-.weline-subscription-topic__copy > strong {
-    font-size: var(--weline-font-size-md);
-    line-height: 1.35;
-    overflow-wrap: anywhere;
-}
-.weline-subscription-topic__copy > p {
-    margin: 0;
-    line-height: 1.45;
-    overflow-wrap: anywhere;
-}
-.weline-subscription-channels {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
-    gap: var(--weline-space-3);
-}
-.weline-subscription-channel {
-    display: grid;
-    gap: var(--weline-space-2);
-    min-inline-size: 0;
-    padding: var(--weline-space-3);
-    border: 1px solid var(--weline-theme-border);
-    border-radius: var(--weline-radius-md);
-    background: var(--weline-theme-surface-muted);
-}
-.weline-subscription-channel.is-enabled {
-    border-color: color-mix(in srgb, var(--weline-theme-primary) 45%, var(--weline-theme-border));
-    background: color-mix(in srgb, var(--weline-theme-primary) 8%, var(--weline-theme-surface));
-}
-.weline-subscription-channel.is-unconfigured:not(.is-enabled) {
-    opacity: 0.88;
-}
-.weline-subscription-channel__head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--weline-space-2);
-    min-inline-size: 0;
-}
-.weline-subscription-channel__label {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--weline-space-2);
-    min-inline-size: 0;
-}
-.weline-subscription-channel__label > span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.weline-subscription-channel__hint {
-    display: block;
-    line-height: 1.3;
-}
-.weline-subscription-channel__level {
-    min-inline-size: 0;
-}
-.weline-subscription-min-type {
-    width: 100%;
-}
-@media (max-width: 40rem) {
-    .weline-subscription-channels {
-        grid-template-columns: 1fr;
-    }
-}
-</style>
+
 
 <script>
 (function() {

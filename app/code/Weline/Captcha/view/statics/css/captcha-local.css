@@ -65,14 +65,12 @@
     border-radius: var(--weline-radius-md);
     background: var(--weline-theme-surface);
     box-shadow: var(--weline-shadow-lg);
-}
-
-.weline-captcha-refresh {
-    flex: 0 0 auto !important;
+}.weline-captcha-refresh.weline-captcha-refresh{
+    flex: 0 0 auto;
     align-self: center;
-    width: auto !important;
+    width: auto;
     min-width: 3.25rem;
-    max-width: none !important;
+    max-width: none;
     white-space: nowrap;
 }
 
@@ -82,11 +80,9 @@
     max-width: 100%;
     min-width: 0;
     align-items: stretch;
-}
-
-.weline-captcha-field .w-input {
-    width: 100% !important;
-    max-width: 100% !important;
+}.weline-captcha-field .w-input.w-input{
+    width: 100%;
+    max-width: 100%;
     min-width: 0;
     height: 100%;
     min-height: var(--weline-control-height);

@@ -163,9 +163,7 @@
 #w-storefront-float-layer
   .w-storefront-float-layer__slot--start.is-edge-collapsed:has(.w-store-music) {
   left: max(0px, env(safe-area-inset-left, 0px));
-}
-
-.w-store-music__face {
+}.w-store-music__face.w-store-music__face{
   /* Fill avatar box only — never keep a separate rem size (homepage may shrink avatar). */
   position: absolute;
   inset: 0;
@@ -173,8 +171,8 @@
   display: block;
   box-sizing: border-box;
   width: 100%;
-  /* Override global img height:auto so HTML ratio cannot oval-stretch the disc. */
-  height: 100% !important;
+  /* Override global img height: auto so HTML ratio cannot oval-stretch the disc. */
+  height: 100%;
   max-width: none;
   max-height: none;
   aspect-ratio: 1;
@@ -256,12 +254,10 @@
   display: grid;
   gap: var(--spacing-0_55);
   line-height: 1.3;
-}
-
-/* Open panel must stay fully visible (some tooling leaves opacity:0.001 on ex-[hidden]). */
-.w-store-music.is-open .w-store-music__panel:not([hidden]) {
+}/* Open panel must stay fully visible (some tooling leaves opacity:0.001 on ex-[hidden]). */
+.w-store-music.is-open .w-store-music__panel:not([hidden]){
   opacity: 1;
-  pointer-events: auto !important;
+  pointer-events: auto;
 }
 
 .w-store-music__head {
@@ -561,7 +557,7 @@
   background: transparent;
   color: var(--w-store-music-accent);
   font: inherit;
-  font-size: 0.62rem;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   cursor: pointer;
   text-decoration: underline;
@@ -569,7 +565,7 @@
 }
 
 .w-store-music__track-mark {
-  font-size: 0.62rem;
+  font-size: var(--font-size-xs);
   color: var(--w-store-music-muted);
 }
 
@@ -649,10 +645,8 @@
   to { transform: rotate(360deg); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .w-store-music__avatar.is-need-gesture,
-  .w-store-music.is-playing.is-avatar-spin .w-store-music__face {
-    animation: none !important;
+@media (prefers-reduced-motion: reduce) {.w-store-music__avatar.is-need-gesture.is-need-gesture, .w-store-music.is-playing.is-avatar-spin .w-store-music__face.w-store-music__face{
+    animation: none;
   }
 
   .w-store-music.is-playing.is-avatar-spin .w-store-music__face {

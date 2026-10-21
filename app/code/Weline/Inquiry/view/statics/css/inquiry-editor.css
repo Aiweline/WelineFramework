@@ -263,16 +263,14 @@
 }
 
 .w-inquiry-editor__message {
-  min-height: 1.25rem;
+  min-height: var(--weline-space-5);
   margin: 0;
   font-size: var(--weline-font-size-sm);
 }
 
 .w-inquiry-editor__message[data-tone="success"] { color: var(--weline-color-success); }
-.w-inquiry-editor__message[data-tone="danger"] { color: var(--weline-color-danger); }
-
-.w-inquiry-editor .visually-hidden {
-  position: absolute !important;
+.w-inquiry-editor__message[data-tone="danger"] { color: var(--weline-color-danger); }.w-inquiry-editor .visually-hidden.visually-hidden{
+  position: absolute;
   width: 1px;
   height: 1px;
   padding: 0;

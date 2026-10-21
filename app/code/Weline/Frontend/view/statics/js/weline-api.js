@@ -320,7 +320,10 @@
 
     /**
      * Stamp / binding expired or missing — re-punch Cookie + re-handshake, then retry.
-     * NOT for scope identity conflicts or theme generation drift (those still autoReload).
+     * Scope Token expired / host-context conflict: the Cookie can only be re-minted by a
+     * fresh scope-bootstrap (trusted Host+URI) + forced re-handshake, never by re-signing
+     * the failed request in place. scope_token_invalid stays non-recoverable.
+     * NOT for theme generation drift (those still autoReload).
      */
     const isScopeStampRecoverableError = (error) => {
         const code = String((error && error.code) || '').toLowerCase();
@@ -329,6 +332,8 @@
             || code === 'scope_reload_required'
             || code === 'scope_bootstrap_invalid'
             || code === 'worker_scope_binding_expired'
+            || code === 'scope_token_expired'
+            || code === 'scope_token_context_conflict'
         ) {
             return true;
         }
@@ -1004,6 +1009,8 @@
         scope_binding_required: true,
         scope_context_conflict: true,
         request_scope_already_conflicts: true,
+        scope_token_expired: true,
+        scope_token_context_conflict: true,
         deploy_reload_required: true,
         scope_bootstrap_waiting: true,
     };
@@ -1237,6 +1244,17 @@
             request_scope_already_conflicts: {
                 title: i18nText('商城范围冲突'),
                 message: i18nText('当前请求与页面商城范围不一致，正在刷新页面。'),
+                autoReload: true,
+            },
+            // Long-lived Scope Cookie is stale: re-punch first; reload only if that fails.
+            scope_token_expired: {
+                title: i18nText('商城范围已变更'),
+                message: i18nText('当前页面商城范围凭证已过期，正在重新获取。'),
+                autoReload: true,
+            },
+            scope_token_context_conflict: {
+                title: i18nText('商城范围冲突'),
+                message: i18nText('当前页面商城范围与请求上下文不一致，正在重新获取。'),
                 autoReload: true,
             },
             deploy_reload_required: {

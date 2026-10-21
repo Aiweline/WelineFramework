@@ -11,6 +11,7 @@ use Weline\Ai\Model\AiModel;
 $model = $this->getData('model');
 $isIframe = $this->request->getGet('isIframe');
 ?>
+<css>Weline_Ai::css/backend/ai-admin.css</css>
 
 <div class="model-copy-container">
     <div class="w-card">
@@ -291,24 +292,4 @@ $isIframe = $this->request->getGet('isIframe');
 })();
 </script>
 
-<style>
-.model-copy-container .card {
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    border: 1px solid var(--backend-color-border);
-}
 
-.model-copy-container .table th {
-    background-color: var(--backend-color-card-header-bg);
-    font-weight: 600;
-}
-
-.model-copy-container .form-control-lg {
-    font-size: 1.1rem;
-    padding: 0.75rem 1rem;
-}
-
-.model-copy-container .form-control:focus {
-    border-color: var(--backend-color-primary);
-    box-shadow: 0 0 0 0.2rem var(--backend-color-primary-light);
-}
-</style>

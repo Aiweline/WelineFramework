@@ -48,8 +48,19 @@ try {
     $afterCssJsHtml = null;
 }
 ?>
+<?php
+$welineComponentCssInline = '';
+try {
+    $welineComponentCssInline = \Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Theme\Service\Ui\ComponentUsageService::class
+    )->renderInlineStyle('backend');
+} catch (\Throwable) {
+    $welineComponentCssInline = '';
+}
+?>
 <w:template>Weline_Theme::templates/partials/head/css-fouc-bootstrap.phtml</w:template>
 <theme:layout-critical area="backend"/>
+<?= $welineComponentCssInline ?>
 <?php if ($earlyJsHtml !== null): ?>
 <?= $earlyJsHtml ?>
 <?php else: ?>

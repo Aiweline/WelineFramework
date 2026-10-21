@@ -26,7 +26,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         }
 
         body {
-            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            background: linear-gradient(135deg, var(--color-bg-dark) 0%, var(--color-bg-dark) 50%, var(--color-bg-dark) 100%);
             min-height: 100vh;
             color: var(--color-text-light);
             font-family: 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif;
@@ -49,7 +49,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             position: absolute;
             width: 2px;
             height: 2px;
-            background: rgba(102, 126, 234, 0.5);
+            background: var(--color-info-bg-subtle);
             border-radius: 50%;
             animation: float 20s infinite;
         }
@@ -65,7 +65,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         .navbar {
             background: rgba(15, 15, 35, 0.8);
             backdrop-filter: blur(10px);
-            border-bottom: var(--border-width-thin) solid rgba(102, 126, 234, 0.2);
+            border-bottom: var(--border-width-thin) solid var(--color-link);
             padding: var(--weline-space-4) 0;
             position: sticky;
             top: 0;
@@ -76,7 +76,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         .navbar-brand {
             font-size: var(--weline-font-size-2xl);
             font-weight: bold;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             text-shadow: 0 0 30px rgba(102, 126, 234, 0.5);
@@ -101,7 +101,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             left: 50%;
             width: 0;
             height: 2px;
-            background: linear-gradient(90deg, #667eea, #764ba2);
+            background: linear-gradient(90deg, var(--color-info), var(--color-info));
             transition: all 0.3s;
             transform: translateX(-50%);
         }
@@ -121,7 +121,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             font-size: 3.5rem;
             font-weight: 700;
             margin-bottom: var(--weline-space-6);
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #00f2fe 100%);
+            background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 50%, var(--color-info) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             animation: glow 2s ease-in-out infinite alternate;
@@ -140,7 +140,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
 
         /* 科技感按钮 */
         .weline-btn-tech {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
             border: none;
             color: white;
             padding: var(--spacing-3_5) var(--weline-space-10);
@@ -186,9 +186,9 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         }
 
         .stat-card {
-            background: rgba(255, 255, 255, 0.05);
+            background: var(--color-on-dark-06);
             backdrop-filter: blur(10px);
-            border: var(--border-width-thin) solid rgba(102, 126, 234, 0.3);
+            border: var(--border-width-thin) solid var(--color-link);
             border-radius: var(--weline-theme-radius-2xl);;
             padding: var(--weline-space-8);
             text-align: center;
@@ -204,14 +204,14 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             left: -50%;
             width: 200%;
             height: 200%;
-            background: linear-gradient(45deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+            background: linear-gradient(45deg, transparent, var(--color-info-bg-subtle), transparent);
             transform: rotate(45deg);
             transition: all 0.6s;
         }
 
         .stat-card:hover {
             transform: translateY(-10px);
-            border-color: rgba(102, 126, 234, 0.8);
+            border-color: var(--color-link);
             box-shadow: var(--weline-shadow-md);
         }
 
@@ -221,7 +221,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
 
         .stat-icon {
             font-size: 3rem;
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            background: linear-gradient(135deg, var(--color-info), var(--color-info));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: var(--weline-space-4);
@@ -230,7 +230,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         .stat-number {
             font-size: 2.5rem;
             font-weight: bold;
-            color: #00f2fe;
+            color: var(--color-link);
             margin-bottom: var(--weline-space-2);
         }
 
@@ -251,7 +251,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             font-weight: 700;
             text-align: center;
             margin-bottom: var(--weline-space-12);
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -263,9 +263,9 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         }
 
         .model-card {
-            background: rgba(255, 255, 255, 0.05);
+            background: var(--color-on-dark-06);
             backdrop-filter: blur(10px);
-            border: var(--border-width-thin) solid rgba(102, 126, 234, 0.2);
+            border: var(--border-width-thin) solid var(--color-link);
             border-radius: var(--radius-2xl);
             padding: var(--weline-space-6);
             transition: all 0.3s;
@@ -281,13 +281,13 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             left: -100%;
             width: 100%;
             height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+            background: linear-gradient(90deg, transparent, var(--color-info-bg-subtle), transparent);
             transition: left 0.5s;
         }
 
         .model-card:hover {
             transform: translateY(-5px);
-            border-color: rgba(102, 126, 234, 0.6);
+            border-color: var(--color-link);
             box-shadow: var(--weline-shadow-md);
         }
 
@@ -297,7 +297,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
 
         .model-vendor {
             display: inline-block;
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            background: linear-gradient(135deg, var(--color-info), var(--color-info));
             color: white;
             padding: var(--spacing-xs) var(--spacing-0_8);
             border-radius: var(--weline-theme-radius-2xl);;
@@ -313,7 +313,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         }
 
         .model-code {
-            color: #00f2fe;
+            color: var(--color-link);
             font-family: 'Courier New', monospace;
             font-size: var(--font-size-sm);
             margin-bottom: var(--weline-space-4);
@@ -334,14 +334,14 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
             background: rgba(0, 242, 254, 0.1);
             border: var(--border-width-thin) solid rgba(0, 242, 254, 0.3);
             border-radius: var(--weline-theme-radius-2xl);;
-            color: #00f2fe;
+            color: var(--color-link);
             font-size: var(--font-size-sm);
         }
 
         .status-dot {
             width: 8px;
             height: 8px;
-            background: #00f2fe;
+            background: var(--color-info);
             border-radius: 50%;
             animation: pulse 2s infinite;
         }
@@ -354,7 +354,7 @@ $adapterCount = $this->getData('adapter_count') ?? 0;
         /* 页脚 */
         .footer {
             background: rgba(15, 15, 35, 0.9);
-            border-top: var(--border-width-thin) solid rgba(102, 126, 234, 0.2);
+            border-top: var(--border-width-thin) solid var(--color-link);
             padding: var(--weline-space-8) 0;
             text-align: center;
             color: #a8b2d1;

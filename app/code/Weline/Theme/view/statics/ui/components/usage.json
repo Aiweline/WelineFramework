@@ -1,0 +1,22 @@
+{
+    "areas": {
+        "frontend": [
+            "button",
+            "feedback",
+            "field",
+            "navigation",
+            "selection",
+            "surface"
+        ],
+        "backend": [
+            "button",
+            "feedback",
+            "field",
+            "navigation",
+            "selection",
+            "surface"
+        ]
+    },
+    "files": 1134,
+    "generated_at": "2026-10-21T12:44:03+00:00"
+}

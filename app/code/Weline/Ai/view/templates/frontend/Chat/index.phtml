@@ -30,7 +30,7 @@ $is_logged_in = $this->is_logged_in ?? false;
         }
 
         body {
-            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            background: linear-gradient(135deg, var(--color-bg-dark) 0%, var(--color-bg-dark) 50%, var(--color-bg-dark) 100%);
             min-height: 100vh;
             color: var(--color-text-light);
             font-family: 'Microsoft YaHei', Arial, sans-serif;
@@ -38,13 +38,13 @@ $is_logged_in = $this->is_logged_in ?? false;
         .navbar {
             background: rgba(15, 15, 35, 0.8);
             backdrop-filter: blur(10px);
-            border-bottom: var(--border-width-thin) solid rgba(102, 126, 234, 0.2);
+            border-bottom: var(--border-width-thin) solid var(--color-link);
             box-shadow: var(--weline-shadow-md);
         }
         .navbar-brand {
             font-size: var(--weline-font-size-2xl);
             font-weight: bold;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -66,21 +66,21 @@ $is_logged_in = $this->is_logged_in ?? false;
         }
         
         .chat-container {
-            background: rgba(255, 255, 255, 0.05);
+            background: var(--color-on-dark-06);
             backdrop-filter: blur(10px);
-            border: var(--border-width-thin) solid rgba(102, 126, 234, 0.3);
+            border: var(--border-width-thin) solid var(--color-link);
             border-radius: var(--weline-theme-radius-2xl);;
             overflow: hidden;
         }
         
         .chat-header {
-            background: rgba(102, 126, 234, 0.1);
-            border-bottom: var(--border-width-thin) solid rgba(102, 126, 234, 0.2);
+            background: var(--color-info-bg-subtle);
+            border-bottom: var(--border-width-thin) solid var(--color-link);
             padding: var(--weline-space-6);
         }
         
         .chat-header h3 {
-            color: #00f2fe;
+            color: var(--color-link);
             margin: 0;
         }
         
@@ -113,7 +113,7 @@ $is_logged_in = $this->is_logged_in ?? false;
         }
         
         .message-user .message-content {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
             color: white;
         }
         
@@ -125,14 +125,14 @@ $is_logged_in = $this->is_logged_in ?? false;
         
         .chat-input-area {
             padding: var(--weline-space-6);
-            border-top: var(--border-width-thin) solid rgba(102, 126, 234, 0.2);
-            background: rgba(102, 126, 234, 0.05);
+            border-top: var(--border-width-thin) solid var(--color-link);
+            background: var(--color-info-bg-subtle);
         }
         
         .chat-input {
             width: 100%;
-            background: rgba(255, 255, 255, 0.1);
-            border: var(--border-width-thin) solid rgba(102, 126, 234, 0.3);
+            background: var(--color-on-dark-10);
+            border: var(--border-width-thin) solid var(--color-link);
             color: var(--color-text-light);
             padding: var(--weline-space-4);
             border-radius: var(--weline-theme-radius-full);;
@@ -140,14 +140,14 @@ $is_logged_in = $this->is_logged_in ?? false;
         }
         
         .chat-input:focus {
-            background: rgba(255, 255, 255, 0.15);
-            border-color: #667eea;
+            background: var(--color-on-dark-15);
+            border-color: var(--color-link);
             outline: none;
             box-shadow: var(--weline-shadow-md);
         }
         
         .weline-btn-send {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
             border: none;
             color: white;
             padding: var(--weline-space-4) var(--weline-space-8);
@@ -880,7 +880,7 @@ function scrollToBottom() {
 }
 
 .message-user .message-avatar {
-    background-color: #667eea;
+    background-color: var(--color-info);
     color: white;
 }
 
@@ -898,7 +898,7 @@ function scrollToBottom() {
 }
 
 .message-user .message-content {
-    background-color: #667eea;
+    background-color: var(--color-info);
     color: white;
     margin-left: auto;
     max-width: 70%;
@@ -906,7 +906,7 @@ function scrollToBottom() {
 
 .message-ai .message-content {
     background-color: var(--color-bg-muted);
-    color: #333;
+    color: var(--color-text-secondary);
     max-width: 80%;
 }
 
@@ -935,7 +935,7 @@ function scrollToBottom() {
     padding: var(--spacing-4_5);
     border-radius: var(--sidebar-radius);
     background: var(--color-bg-primary);
-    color: #333;
+    color: var(--color-text-secondary);
     box-shadow: var(--weline-shadow-md);
 }
 

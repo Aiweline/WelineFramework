@@ -493,10 +493,8 @@ $this->assign('meta', $meta);
     .product-detail-layout__related-slot > .widget-wrapper {
         width: 100%;
         min-width: 0;
-    }
-
-    .product-detail-layout__related-slot > .widget-wrapper > .widget-products {
-        max-width: none !important;
+    }.product-detail-layout__related-slot > .widget-wrapper > .widget-products.widget-products{
+        max-width: none;
         padding-left: 0;
         padding-right: 0;
     }
@@ -616,7 +614,7 @@ $this->assign('meta', $meta);
 
     .product-detail-layout__preview-sku {
         margin: 0;
-        color: #6b7280;
+        color: var(--color-text-muted);
         font-size: var(--font-size-13);
         font-weight: 700;
         letter-spacing: .04em;

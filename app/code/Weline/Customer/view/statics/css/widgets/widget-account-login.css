@@ -2,8 +2,8 @@
 /* Split: 左快捷 / 右账密；≤39.99rem 账密优先再快捷。 */
 /* 禁止 `.var(--…)`：无效声明会被浏览器丢弃，导致卡内贴边。 */
 
-[data-w-component="account-login"].w-auth-login--amazon.w-auth-login--split{
-    width:min(var(--token-size-40rem),calc(100% - var(--weline-space-8)))!important;
+[data-w-component="account-login"].w-auth-login--amazon.w-auth-login--split.w-auth-login--split{
+    width: min(var(--token-size-40rem),calc(100% - var(--weline-space-8)));
     max-width:var(--token-size-40rem);
 }
 
@@ -85,21 +85,20 @@
 }
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember .w-field__label .w-icon{
     width:var(--weline-space-4);height:var(--weline-space-4);min-width:var(--weline-space-4);min-height:var(--weline-space-4);flex:0 0 var(--weline-space-4);
-}
-[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember .w-select{
-    width:100%!important;min-width:0!important;max-width:none!important;
+}[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember .w-select.w-select{
+    width: 100%;min-width: 0;max-width: none;
     border: var(--border-width-thin) solid var(--color-border,var(--weline-theme-border-color));
     border-radius: var(--weline-radius-md);
     background-color: var(--weline-theme-field-label-bg,var(--weline-theme-surface));
     background-image: url();
-    background-repeat:no-repeat!important;
-    background-position:right var(--weline-space-4) center!important;
-    background-size:var(--weline-space-3) var(--weline-space-2)!important;
-    box-shadow: none;min-height:var(--weline-control-height)!important;
-    padding-block: var(--weline-space-2);padding-inline-start:var(--weline-space-3)!important;
-    padding-inline-end:calc(var(--weline-space-4) + var(--token-size-1-15rem))!important;
+    background-repeat: no-repeat;
+    background-position: right var(--weline-space-4) center;
+    background-size: var(--weline-space-3) var(--weline-space-2);
+    box-shadow: none;min-height: var(--weline-control-height);
+    padding-block: var(--weline-space-2);padding-inline-start: var(--weline-space-3);
+    padding-inline-end: calc(var(--weline-space-4) + var(--token-size-1-15rem));
     font-size: var(--weline-font-size-sm);
-    appearance:none!important;-webkit-appearance:none!important;
+    appearance: none;-webkit-appearance: none;
 }
 [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__forgot{
     display:flex!important;flex:0 0 auto!important;width:auto!important;margin: 0;
@@ -132,9 +131,8 @@
 }
 
 /* @media 断点须字面量：自定义属性在 media 条件中不解析，会导致窄屏仍三列挤扁。 */
-@media (max-width: 39.99rem){
-    [data-w-component="account-login"].w-auth-login--amazon.w-auth-login--split{
-        width:min(100% - var(--weline-space-4),var(--token-size-24rem))!important;
+@media (max-width: 39.99rem){[data-w-component="account-login"].w-auth-login--amazon.w-auth-login--split.w-auth-login--split{
+        width: min(100% - var(--weline-space-4),var(--token-size-24rem));
     }
     [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__split{
         grid-template-columns:1fr;
@@ -158,7 +156,5 @@
     [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__social{
         order:3;
         padding: 0 var(--weline-space-4) var(--weline-space-4);
-    }
-    [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__meta-tools{flex-wrap:wrap!important;}
-    [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember{max-width:none!important;}
+    }[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__meta-tools.w-auth-login__meta-tools{flex-wrap: wrap;}[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember.w-auth-login__remember{max-width: none;}
 }

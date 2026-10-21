@@ -43,6 +43,7 @@ if ($hasWebsiteIdentity && $websiteId >= 0) {
 
 $h = static fn(mixed $value): string => \htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
+<css>Weline_Social::css/backend/social-admin.css</css>
 <div
     class="w-disclosure"
     id="<?= $h($sectionId) ?>"
@@ -161,17 +162,4 @@ $h = static fn(mixed $value): string => \htmlspecialchars((string)$value, ENT_QU
 })();
 </script>
 <?php endif; ?>
-<style>
-.website-social-embed-frame-wrap {
-    overflow: hidden;
-    min-block-size: 28rem;
-}
-.website-social-embed-frame {
-    display: block;
-    width: 100%;
-    min-block-size: 36rem;
-    height: min(70vh, 48rem);
-    border: 0;
-    background: var(--weline-theme-surface, var(--backend-theme-surface, #fff));
-}
-</style>
+

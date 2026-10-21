@@ -918,26 +918,11 @@
     min-width: 2.5em;
     /* 迷你车/结账：额度币种须可读，禁止走 tertiary muted（亚马逊色板 #a6a6a6 过浅） */
     color: var(--weline-theme-text, var(--color-text-primary));
-}
-
-/* 信用说明/额度/定金：纸面白底上必须主色墨水；同时覆盖 .w-text[data-tone=muted] 与抽屉 remapped muted */
-.weline-checkout .w-b2b-checkout-credit__fx,
-.w-b2b-checkout-credit__fx,
-.weline-checkout .w-b2b-checkout-credit__blurb,
-.w-b2b-checkout-credit__blurb,
-.weline-checkout .w-b2b-checkout-credit__cash,
-.w-b2b-checkout-credit__cash,
-.header-cart .w-b2b-checkout-credit__fx,
-.header-cart .w-b2b-checkout-credit__blurb,
-.header-cart .w-b2b-checkout-credit__cash,
-.header-cart .w-b2b-checkout-credit__amount-label,
-.header-cart .w-b2b-checkout-credit__currency,
-.weline-cart-shell .w-b2b-checkout-credit__fx,
-.weline-cart-shell .w-b2b-checkout-credit__blurb,
-.weline-cart-shell .w-b2b-checkout-credit__cash {
+}/* 信用说明/额度/定金：纸面白底上必须主色墨水；同时覆盖 .w-text[data-tone=muted] 与抽屉 remapped muted */
+.weline-checkout .w-b2b-checkout-credit__fx.w-b2b-checkout-credit__fx, .w-b2b-checkout-credit__fx.w-b2b-checkout-credit__fx, .weline-checkout .w-b2b-checkout-credit__blurb.w-b2b-checkout-credit__blurb, .w-b2b-checkout-credit__blurb.w-b2b-checkout-credit__blurb, .weline-checkout .w-b2b-checkout-credit__cash.w-b2b-checkout-credit__cash, .w-b2b-checkout-credit__cash.w-b2b-checkout-credit__cash, .header-cart .w-b2b-checkout-credit__fx.w-b2b-checkout-credit__fx, .header-cart .w-b2b-checkout-credit__blurb.w-b2b-checkout-credit__blurb, .header-cart .w-b2b-checkout-credit__cash.w-b2b-checkout-credit__cash, .header-cart .w-b2b-checkout-credit__amount-label.w-b2b-checkout-credit__amount-label, .header-cart .w-b2b-checkout-credit__currency.w-b2b-checkout-credit__currency, .weline-cart-shell .w-b2b-checkout-credit__fx.w-b2b-checkout-credit__fx, .weline-cart-shell .w-b2b-checkout-credit__blurb.w-b2b-checkout-credit__blurb, .weline-cart-shell .w-b2b-checkout-credit__cash.w-b2b-checkout-credit__cash{
     margin: 0 0 var(--weline-theme-space-2, var(--weline-space-2));
     color: var(--amz-drawer-text, var(--weline-theme-text, var(--color-text-primary)));
-    -webkit-text-fill-color: var(--amz-drawer-text, var(--weline-theme-text, var(--color-text-primary))) !important;
+    -webkit-text-fill-color: var(--amz-drawer-text, var(--weline-theme-text, var(--color-text-primary)));
     opacity: 1;
 }
 
@@ -1164,16 +1149,11 @@
 .b2b-mini-cart-type-option:hover {
     background: var(--amz-drawer-surface-muted, var(--weline-theme-surface-muted));
     color: var(--amz-drawer-text, var(--weline-theme-text));
-}
-
-button.b2b-mini-cart-type-option.is-selected,
-.b2b-mini-cart-type-option.is-selected,
-.b2b-mini-cart-type-option[data-state="active"],
-.b2b-mini-cart-type-option[aria-pressed="true"] {
+}button.b2b-mini-cart-type-option.is-selected.is-selected, .b2b-mini-cart-type-option.is-selected.is-selected, .b2b-mini-cart-type-option[data-state="active"], .b2b-mini-cart-type-option[aria-pressed="true"]{
     font-weight: 700;
     /* Active label = primary ink; !important beats inverse button color: inherit. */
     color: var(--color-primary, var(--amz-drawer-cta-bg, var(--weline-theme-primary)));
-    -webkit-text-fill-color: var(--color-primary, var(--amz-drawer-cta-bg, var(--weline-theme-primary))) !important;
+    -webkit-text-fill-color: var(--color-primary, var(--amz-drawer-cta-bg, var(--weline-theme-primary)));
     background: var(--amz-drawer-surface-muted, var(--weline-theme-surface-muted));
     box-shadow: var(--weline-shadow-lg);
 }

@@ -15,7 +15,7 @@
 } .account-address-card__term,
 .account-address-card__postal { color: var(--color-text-secondary); font-size: var(--font-size-13);
 } .account-address-card__value { align-items: center; color: var(--color-text-primary); display: flex; flex-wrap: wrap; gap: var(--spacing-0_4); line-height: 1.55; word-break: break-word;
-} .account-address-part { align-items: center; background: rgba(15, 23, 42, 0.04); border: var(--border-width-thin) solid rgba(148, 163, 184, 0.32); border-radius: var(--radius-full); display: inline-flex; gap: var(--spacing-1_5); max-width: 100%; min-height: var(--control-height-xs); padding: var(--spacing-0_2) var(--spacing-0_55) var(--spacing-0_2) var(--spacing-xs);
+} .account-address-part { align-items: center; background: rgba(15, 23, 42, 0.04); border: var(--border-width-thin) solid var(--color-border-default); border-radius: var(--radius-full); display: inline-flex; gap: var(--spacing-1_5); max-width: 100%; min-height: var(--control-height-xs); padding: var(--spacing-0_2) var(--spacing-0_55) var(--spacing-0_2) var(--spacing-xs);
 } .account-address-part__icon { align-items: center; background: #0f766e; border-radius: var(--radius-full); color: var(--color-text-light); display: inline-flex; flex: 0 0 auto; font-size: var(--font-size-xs); font-weight: 900; height: 1.22rem; justify-content: center; line-height: 1; width: 1.22rem;
 } .account-address-part__icon svg { fill: none; height: 0.82rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.9; width: 0.82rem;
 } .account-address-part__text { overflow-wrap: anywhere;
@@ -23,7 +23,7 @@
 } .account-address-card__action { background: rgba(240, 193, 75, 0.14); border: 0; border-radius: var(--border-radius-lg); color: var(--color-primary-dark); cursor: pointer; font-size: var(--font-size-13); font-weight: 800; min-height: var(--control-height-sm); padding: var(--spacing-0_4) var(--weline-space-3);
 } .account-address-card__action--danger { background: rgba(239, 68, 68, 0.1); color: var(--color-error);
 } .account-address-empty,
-.account-address-message { background: rgba(248, 250, 252, 0.72); border: var(--border-width-thin) dashed rgba(148, 163, 184, 0.45); border-radius: var(--border-radius-xl); color: var(--color-text-secondary); display: grid; gap: var(--spacing-1_5); padding: var(--weline-space-5);
+.account-address-message { background: var(--color-bg-primary); border: var(--border-width-thin) dashed var(--color-border-default); border-radius: var(--border-radius-xl); color: var(--color-text-secondary); display: grid; gap: var(--spacing-1_5); padding: var(--weline-space-5);
 } .account-address-empty { margin-top: var(--weline-space-4);
 } .account-address-empty strong { color: var(--color-text-primary);
 } .account-address-message { border-style: solid; margin-bottom: var(--weline-space-4);
@@ -57,6 +57,6 @@
 } .account-address-form__field textarea { min-height: 5.5rem; resize: vertical;
 } .account-address-form__checkbox { align-items: center; color: var(--color-text-primary); display: inline-flex; font-weight: 800; gap: var(--weline-space-2); margin-top: var(--weline-space-4);
 } .account-address-form__actions { display: flex; flex-wrap: wrap; gap: var(--weline-space-3); margin-top: var(--spacing-4_5);
-} .account-address-form__cancel { background: rgba(148, 163, 184, 0.12); border: 0; border-radius: var(--border-radius-lg); color: var(--color-text-primary); cursor: pointer; font-weight: 800; min-height: var(--control-height-lg); padding: var(--spacing-0_65) var(--spacing-4_5);
+} .account-address-form__cancel { background: var(--color-overlay-dark); border: 0; border-radius: var(--border-radius-lg); color: var(--color-text-primary); cursor: pointer; font-weight: 800; min-height: var(--control-height-lg); padding: var(--spacing-0_65) var(--spacing-4_5);
 } @media (max-width: 640px) { .account-address-panel__action, .account-address-form__submit, .account-address-form__cancel { width: 100%; } .account-address-form__grid { grid-template-columns: 1fr; }
 } 

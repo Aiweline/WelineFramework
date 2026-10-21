@@ -162,7 +162,7 @@
     margin: 0;
     border: 0;
     border-radius: var(--radius-full);
-    background: rgba(255, 255, 255, 0.92);
+    background: var(--color-on-dark-92);
     color: var(--weline-theme-color-text);
     line-height: 1;
     cursor: pointer;

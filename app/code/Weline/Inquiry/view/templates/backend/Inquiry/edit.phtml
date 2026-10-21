@@ -5,37 +5,10 @@ $formId = (int)($form_id ?? 0);
 $formName = (string)(($state['form']['name'] ?? '') ?: '');
 $formCode = (string)(($state['form']['code'] ?? '') ?: '');
 ?>
+<css>Weline_Inquiry::css/backend/inquiry-admin.css</css>
 <css>Weline_Inquiry::css/inquiry-editor.css</css>
 <link rel="stylesheet" href="<?= htmlspecialchars(\Weline\Framework\View\PublicStaticUrl::fromDevWebPath('/Weline/Inquiry/view/statics/css/inquiry-editor.css?v=20260908-chrome-toolbar1'), ENT_QUOTES) ?>" data-inquiry-editor-css="1" data-no-extract="true">
-<style data-inquiry-editor-responsive="1">
-/* Critical responsive field rail (inline bypasses stale WLS static CSS cache) */
-.w-inquiry-editor__field-main{
-  display:grid;
-  grid-template-columns:2rem minmax(0,1fr) auto 2.25rem;
-  grid-template-areas:"ord key key remove" ". type required required";
-  gap:var(--weline-space-2,.5rem);
-  align-items:center;
-}
-.w-inquiry-editor__ord{grid-area:ord}
-.w-inquiry-editor__cell--key{grid-area:key;margin:0;min-width:0}
-.w-inquiry-editor__cell--type{grid-area:type;margin:0;min-width:0}
-.w-inquiry-editor__cell--required{grid-area:required;justify-self:start}
-.w-inquiry-editor__cell--remove{grid-area:remove;justify-self:end;min-width:2.25rem;padding-inline:.35rem}
-.w-inquiry-editor__cell--type .w-select,
-.w-inquiry-editor__cell--key .w-input{width:100%;min-width:0}
-@media (min-width:560px) and (max-width:899px){
-  .w-inquiry-editor__field-main{
-    grid-template-columns:2rem minmax(0,1.2fr) minmax(7.5rem,.9fr) auto 2.25rem;
-    grid-template-areas:"ord key type required remove";
-  }
-}
-@media (min-width:900px){
-  .w-inquiry-editor__field-main{
-    grid-template-columns:2.5rem minmax(0,1.4fr) minmax(7rem,.9fr) 5.5rem 2.5rem;
-    grid-template-areas:"ord key type required remove";
-  }
-}
-</style>
+
 
 <section class="w-backend-page w-inquiry-editor" data-testid="inquiry-editor" weline-code="inquiry.backend.editor">
     <header class="w-inquiry-editor__chrome w-cluster" data-justify="between" data-align="center">
@@ -126,7 +99,7 @@ $formCode = (string)(($state['form']['code'] ?? '') ?: '');
                 <div class="w-inquiry-editor__locale-bar w-cluster" data-justify="between" data-align="center">
                     <div class="w-inquiry-editor__locale-tabs" role="tablist" data-iq-locale-tabs data-testid="inquiry-locale-tabs"></div>
                     <div class="w-cluster" data-gap="sm" data-align="center">
-                        <input class="w-input" data-iq-locale-new style="max-width:10rem;" placeholder="en_US" spellcheck="false" aria-label="<?= __('新语言代码') ?>">
+                        <input class="w-input inquiry-field-compact" data-iq-locale-new placeholder="en_US" spellcheck="false" aria-label="<?= __('新语言代码') ?>">
                         <button class="w-button" type="button" data-iq-locale-add data-variant="outline" data-size="sm"><?= __('添加语言') ?></button>
                     </div>
                 </div>

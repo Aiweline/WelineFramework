@@ -13,6 +13,7 @@ $model = $this->getData('model');
 $config = $this->getData('config') ?? [];
 $proxyInfo = $this->getData('proxyInfo') ?? [];
 ?>
+<css>Weline_Ai::css/backend/ai-admin.css</css>
 
 <!-- 模型详情内容 -->
 <div class="model-detail-offcanvas">
@@ -215,32 +216,5 @@ $proxyInfo = $this->getData('proxyInfo') ?? [];
     
 </div>
 
-<style>
-.model-detail-offcanvas .card {
-    border: 1px solid #dee2e6;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
 
-.model-detail-offcanvas .card-header {
-    padding: 0.75rem 1rem;
-    font-weight: 600;
-}
-
-.model-detail-offcanvas .table th {
-    font-weight: 500;
-    white-space: nowrap;
-}
-
-.model-detail-offcanvas code {
-    background-color: #f8f9fa;
-    padding: 0.2rem 0.4rem;
-    border-radius: 3px;
-    font-size: 0.875rem;
-}
-
-.model-detail-offcanvas .badge {
-    font-size: 0.8rem;
-    font-weight: 500;
-}
-</style>
 

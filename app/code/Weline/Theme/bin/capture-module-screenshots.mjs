@@ -189,7 +189,8 @@ try {
                     + `welineGlobals:Object.keys(window).filter(function(k){return /^Weline[A-Z]/.test(k);}).slice(0,40),`
                     + `loadAttrs:Array.from(document.querySelectorAll('[data-weline-load]')).map(function(e){return e.getAttribute('data-weline-load');}).slice(0,20),`
                     + `consentEntry:(function(){try{var c=(window.WelineModulesConfig||{}).modules||{};return JSON.stringify(c.consentBanner||null);}catch(e){return 'ERR'}})(),`
-                    + `blogEntry:(function(){try{var c=(window.WelineModulesConfig||{}).modules||{};return JSON.stringify(c.blogCategoryFilter||null);}catch(e){return 'ERR'}})()});})()`,
+                    + `blogEntry:(function(){try{var c=(window.WelineModulesConfig||{}).modules||{};return JSON.stringify(c.blogCategoryFilter||null);}catch(e){return 'ERR'}})(),`
+                    + `apiConfigProbe:(function(){var c=window.WelineApiConfig||{};return JSON.stringify({worker:!!c.workerUrl,endpoint:c.endpoint||null,queryBin:c.queryBinUrl||null});})()});})()`,
                 returnByValue: true,
             }, sessionId);
             const tokens = probe?.result?.value ? JSON.parse(probe.result.value) : null;

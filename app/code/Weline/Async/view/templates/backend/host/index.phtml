@@ -9,6 +9,7 @@ $projectConfig = $this->getData('projectConfig');
 $projectStatus = $this->getData('projectStatus');
 
 ?>
+<css>Weline_Async::css/backend/async-admin.css</css>
                 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -169,7 +170,7 @@ $projectStatus = $this->getData('projectStatus');
                     </div>
                 </div>
 <!-- Offcanvas 主机配置侧边栏 -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="hostOffcanvas" aria-labelledby="hostOffcanvasLabel" style="width: 90%; max-width: 600px;">
+<div class="offcanvas offcanvas-end" tabindex="-1" id="hostOffcanvas" aria-labelledby="hostOffcanvasLabel" class="async-dialog-sm">
     <div class="offcanvas-header">
         <h5 class="offcanvas-title" id="hostOffcanvasLabel"><?= __('主机配置') ?></h5>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
@@ -186,7 +187,7 @@ $projectStatus = $this->getData('projectStatus');
 </div>
 
 <!-- Offcanvas 映射列表侧边栏 -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="mappingListOffcanvas" aria-labelledby="mappingListOffcanvasLabel" style="width: 80%; max-width: 800px;">
+<div class="offcanvas offcanvas-end" tabindex="-1" id="mappingListOffcanvas" aria-labelledby="mappingListOffcanvasLabel" class="async-dialog-md">
     <div class="offcanvas-header">
         <h5 class="offcanvas-title" id="mappingListOffcanvasLabel"><?= __('同步映射管理') ?></h5>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
@@ -203,7 +204,7 @@ $projectStatus = $this->getData('projectStatus');
 </div>
 
 <!-- Offcanvas 映射配置侧边栏 -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="mappingOffcanvas" aria-labelledby="mappingOffcanvasLabel" style="width: 90%; max-width: 900px;">
+<div class="offcanvas offcanvas-end" tabindex="-1" id="mappingOffcanvas" aria-labelledby="mappingOffcanvasLabel" class="async-dialog-lg">
     <div class="offcanvas-header">
         <h5 class="offcanvas-title" id="mappingOffcanvasLabel"><?= __('映射配置') ?></h5>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
@@ -220,7 +221,6 @@ $projectStatus = $this->getData('projectStatus');
 </div>
 
 <js:part>
-<script>
 (function() {
     'use strict';
     
@@ -819,7 +819,7 @@ window.browseLocalDirectory = function() {
                                     '<i class="mdi mdi-refresh"></i> <?= __('加载目录树') ?>' +
                                 '</button>' +
                             '</div>' +
-                            '<div class="border rounded p-2" style="max-height: 400px; overflow-y: auto;">' +
+                            '<div class="border rounded p-2" class="async-log-scroll">' +
                                 '<div id="browser_tree_content">' +
                                     '<small class="text-muted"><?= __('点击"加载目录树"按钮查看目录结构') ?></small>' +
                                 '</div>' +
@@ -1068,7 +1068,7 @@ window.loadRemoteDirectoryTree = function(remotePath, hostId) {
             // 显示错误信息
             let errorMsg = data.msg || '<?= __('加载失败') ?>';
             if (data.data && data.data.error) {
-                errorMsg += '<br><small style="color: #dc3545;">' + window.escapeHtml(data.data.error) + '</small>';
+                errorMsg += '<br><small class="w-text" data-tone="danger">' + window.escapeHtml(data.data.error) + '</small>';
             }
             container.innerHTML = '<div class="alert alert-danger"><small>' + errorMsg + '</small></div>';
         }
@@ -1684,46 +1684,5 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 </script>
 
-<style>
-/* 目录树滚动条样式 - 兼容主题滚动条 */
-.async-directory-tree {
-    /* Firefox滚动条 */
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-thumb, #a2adb7) var(--scrollbar-track, transparent);
-}
 
-/* Webkit浏览器滚动条 */
-.async-directory-tree::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-
-.async-directory-tree::-webkit-scrollbar-track {
-    background: var(--scrollbar-track, transparent);
-    border-radius: 3px;
-}
-
-.async-directory-tree::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb, #a2adb7);
-    border-radius: 3px;
-    transition: background 0.2s ease;
-}
-
-.async-directory-tree::-webkit-scrollbar-thumb:hover {
-    background: var(--scrollbar-thumb-hover, #8590a5);
-}
-
-/* 暗色主题支持 */
-[data-theme="dark"] .async-directory-tree {
-    scrollbar-color: var(--scrollbar-thumb, #8590a5) var(--scrollbar-track, transparent);
-}
-
-[data-theme="dark"] .async-directory-tree::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb, #8590a5);
-}
-
-[data-theme="dark"] .async-directory-tree::-webkit-scrollbar-thumb:hover {
-    background: var(--scrollbar-thumb-hover, #a2adb7);
-}
-</style>
 </js:part>

@@ -15,6 +15,7 @@ $modelBindings = method_exists($adapter, 'getModelBindings') ? $adapter->getMode
 $paramTemplate = $adapter->getParamTemplate();
 $examples = $adapter->getExamples();
 ?>
+<css>Weline_Ai::css/backend/ai-admin.css</css>
 
 <!-- 适配器详情内容 -->
 <div class="adapter-detail-offcanvas">
@@ -241,42 +242,5 @@ $examples = $adapter->getExamples();
     
 </div>
 
-<style>
-.adapter-detail-offcanvas .card {
-    border: 1px solid #dee2e6;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
 
-.adapter-detail-offcanvas .card-header {
-    padding: 0.75rem 1rem;
-    font-weight: 600;
-}
-
-.adapter-detail-offcanvas .table th {
-    font-weight: 500;
-    white-space: nowrap;
-}
-
-.adapter-detail-offcanvas code {
-    background-color: #f8f9fa;
-    padding: 0.2rem 0.4rem;
-    border-radius: 3px;
-    font-size: 0.875rem;
-}
-
-.adapter-detail-offcanvas .badge {
-    font-size: 0.8rem;
-    font-weight: 500;
-}
-
-.adapter-detail-offcanvas pre {
-    max-height: 200px;
-    overflow-y: auto;
-}
-
-.adapter-detail-offcanvas .accordion-button {
-    padding: 0.75rem 1rem;
-    font-size: 0.9rem;
-}
-</style>
 

@@ -1,0 +1,59 @@
+/* Weline_Api 后台页面私有布局（标准 §6.2；Token-only，无 ） */
+@layer page {
+.api-config-page {
+    padding: 20px;
+}
+
+.api-config-page .page-header {
+    margin-bottom: 30px;
+}
+
+.api-config-page .page-header h1 {
+    margin-bottom: 10px;
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.api-config-page .card {
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px var(--backend-shadow-sm);
+}
+
+.api-config-page .card-header {
+    background: var(--weline-theme-surface-muted);
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--weline-theme-border);
+}
+
+.api-config-page .card-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.api-config-page .card-body {
+    padding: 20px;
+}
+
+.api-config-page .w-field__label {
+    font-weight: 500;
+    margin-bottom: 5px;
+}
+
+.api-config-page .w-field__label .text-muted {
+    display: block;
+    font-weight: normal;
+    font-size: 0.875em;
+    margin-top: 2px;
+}
+
+.api-config-page .form-text {
+    display: block;
+    margin-top: 5px;
+}
+
+.api-config-page .form-actions {
+    display: flex;
+    gap: 10px;
+}
+}

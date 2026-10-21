@@ -18,7 +18,8 @@ if (!is_string($accountLogoutConfigJson) || $accountLogoutConfigJson === '') { $
 ?>
 <css>Weline_Customer::css/account-sidebar.css</css>
 <script id="weline-account-logout-config" type="application/json"><?= $accountLogoutConfigJson ?></script>
-<div class="account-sidebar-wrapper" data-weline-load="customerLogout">
+<div class="account-sidebar-wrapper"
+     data-weline-load="customerAccountSidebar" data-weline-load="customerLogout">
     <header class="account-sidebar__header">
         <div class="account-sidebar__avatar">
             <img<?= $avatar !== '' ? ' src="' . htmlspecialchars($avatar) . '"' : '' ?> alt="<?= htmlspecialchars($username) ?>" id="sidebarAvatarPreview" class="account-sidebar__avatar-img" hidden>
@@ -99,10 +100,7 @@ if (!is_string($accountLogoutConfigJson) || $accountLogoutConfigJson === '') { $
             accept="account-sidebar-footer,account-footer"
             multiple="true"
             position="footer"></w:slot>
-</div> <script>
-(function() { 'use strict'; function initAccountSidebarMenu() { var root = document.querySelector('.account-sidebar-wrapper'); if (!root) { return; } var toggle = root.querySelector('[data-account-sidebar-toggle]'); var current = root.querySelector('[data-account-sidebar-current]'); if (!toggle || !current) { return; } var mobileQuery = window.matchMedia ? window.matchMedia('(max-width: 767px)') : null; function isMobile() { return mobileQuery ? mobileQuery.matches : window.innerWidth <= 767; } function pruneEmptyGroups() { Array.prototype.forEach.call(root.querySelectorAll('[data-account-nav-group]'), function(group) { var hasLink = !!group.querySelector('.account-hook-nav-link, [data-account-nav-link]'); group.hidden = !hasLink; }); } function getActiveLabel() { var active = root.querySelector('[data-account-nav-link].account-sidebar__nav-link--active, [data-account-nav-link].is-active'); if (!active && window.location.hash) { Array.prototype.some.call(root.querySelectorAll('[data-account-nav-link][href]'), function(link) { var href = link.getAttribute('href') || ''; if (href.slice(-window.location.hash.length) === window.location.hash) { active = link; return true; } return false; }); } var titleNode = active ? (active.querySelector('.account-hook-nav-link__text strong') || active.querySelector('strong') || active.querySelector('span')) : null; var text = titleNode ? (titleNode.innerText || titleNode.textContent || '') : (active ? (active.innerText || active.textContent || '') : ''); text = text.replace(/\s+/g, ' ').trim(); return text || toggle.getAttribute('data-fallback-label') || '账户菜单'; } function setOpen(open) { root.classList.toggle('is-menu-open', open); toggle.setAttribute('aria-expanded', open ? 'true' : 'false'); } function refresh() { pruneEmptyGroups(); var mobile = isMobile(); root.classList.toggle('is-mobile-menu-ready', mobile); current.textContent = getActiveLabel(); if (!mobile) { setOpen(true); } else if (!root.getAttribute('data-account-menu-touched')) { setOpen(false); } } toggle.setAttribute('data-fallback-label', toggle.innerText.replace(/\s+/g, ' ').trim() || '账户菜单'); toggle.addEventListener('click', function() { root.setAttribute('data-account-menu-touched', '1'); setOpen(!root.classList.contains('is-menu-open')); }); root.addEventListener('click', function(event) { var link = event.target && event.target.closest ? event.target.closest('[data-account-nav-link]') : null; if (link && isMobile()) { setOpen(false); window.setTimeout(refresh, 80); } }); window.addEventListener('hashchange', function() { window.setTimeout(refresh, 80); }); window.addEventListener('weline:account-sidebar-content-loaded', refresh); if (mobileQuery && mobileQuery.addEventListener) { mobileQuery.addEventListener('change', refresh); } window.setTimeout(refresh, 0); window.setTimeout(refresh, 160); } if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initAccountSidebarMenu); } else { initAccountSidebarMenu(); }
-})();
-</script> <?php if (false): ?>
+</div><?php if (false): ?>
 <style>
 .account-sidebar-wrapper { --as-border-radius: var(--border-radius-lg); --as-transition: var(--transition-base, 0.2s ease);
 } .account-sidebar__header { display: flex; align-items: center; gap: var(--weline-space-4); padding-bottom: var(--weline-space-6); margin-bottom: var(--weline-space-6); border-bottom: var(--border-width-thin) solid var(--color-border-light);
@@ -128,13 +126,13 @@ if (!is_string($accountLogoutConfigJson) || $accountLogoutConfigJson === '') { $
 } .account-hook-nav-group--developer { order: 90;
 } .account-hook-nav-title { padding: 0 var(--weline-space-4) var(--weline-space-1); font-size: var(--weline-font-size-xs); font-weight: 700; color: var(--color-text-secondary); letter-spacing: var(--letter-spacing-wide);
 } .account-hook-nav-link { display: flex; align-items: center; justify-content: flex-start; gap: var(--weline-space-3); width: 100%; padding: var(--weline-space-3) var(--weline-space-4); border: var(--border-width-thin) solid transparent; border-radius: var(--as-border-radius); background: transparent; color: var(--color-text-primary); text-decoration: none; transition: var(--as-transition); order: 30;
-} .account-hook-nav-link:hover { background: rgba(148, 163, 184, 0.08); color: var(--color-text-primary); text-decoration: none;
+} .account-hook-nav-link:hover { background: var(--color-overlay-dark); color: var(--color-text-primary); text-decoration: none;
 } .account-hook-nav-link.is-active:not([data-account-nav-parent]) { background: var(--color-primary); border-color: transparent; box-shadow: none; color: var(--color-text-dark); font-weight: 700; transform: none;
 } .account-hook-nav-link.is-active:not([data-account-nav-parent]) .account-hook-nav-link__label i,
 .account-hook-nav-link.is-active:not([data-account-nav-parent]) .account-hook-nav-link__text strong { color: var(--color-text-dark);
 } .account-hook-nav-link.is-active:not([data-account-nav-parent]):hover { background: var(--color-primary-dark); color: var(--color-text-dark);
 } .account-hook-nav-link[data-account-nav-parent] { order: 21; width: calc(100% - 1.75rem); margin-left: var(--spacing-7); padding: var(--spacing-2_5) var(--weline-space-3); color: var(--color-text-secondary);
-} .account-hook-nav-link[data-account-nav-parent]:hover { transform: none; background: rgba(148, 163, 184, 0.08); color: var(--color-primary-dark);
+} .account-hook-nav-link[data-account-nav-parent]:hover { transform: none; background: var(--color-overlay-dark); color: var(--color-primary-dark);
 } .account-hook-nav-link[data-account-nav-parent].is-active { background: transparent; border-color: transparent; box-shadow: none; color: var(--color-primary-dark); font-weight: 700; transform: none;
 } .account-hook-nav-link[data-account-nav-parent].is-active .account-hook-nav-link__label i,
 .account-hook-nav-link[data-account-nav-parent].is-active .account-hook-nav-link__text strong { color: var(--color-primary-dark);

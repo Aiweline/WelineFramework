@@ -28,7 +28,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--color-overlay-50);
     backdrop-filter: blur(4px);
 }
 
@@ -94,7 +94,7 @@
     background: none;
     border: none;
     font-size: var(--weline-font-size-xl);
-    color: #6b7280;
+    color: var(--color-text-muted);
     cursor: pointer;
     padding: var(--spacing-2_5);
     border-radius: var(--border-radius-md);
@@ -108,7 +108,7 @@
 }
 
 .w-form-close:hover {
-    background: rgba(0, 0, 0, 0.1);
+    background: var(--color-overlay-light);
     color: var(--color-text-secondary);
 }
 
@@ -231,12 +231,12 @@
 
 .w-form-control:focus {
     outline: none;
-    border-color: #3b82f6;
+    border-color: var(--color-link);
     box-shadow: var(--weline-shadow-md);
 }
 
 .w-form-control:hover {
-    border-color: #9ca3af;
+    border-color: var(--color-border-light);
 }
 
 .w-form-control:disabled {
@@ -326,7 +326,7 @@ select.w-form-control {
 /* 字段帮助文本 */
 .w-field-help {
     font-size: var(--font-size-13);
-    color: #6b7280;
+    color: var(--color-text-muted);
     margin-top: var(--spacing-1_5);
     line-height: 1.5;
 }
@@ -351,7 +351,7 @@ select.w-form-control {
 
 /* 字段错误状态 */
 .w-form-field.w-field-error .w-form-control {
-    border-color: #ef4444;
+    border-color: var(--color-danger);
     box-shadow: var(--weline-shadow-md);
 }
 
@@ -440,7 +440,7 @@ select.w-form-control {
 .w-btn-primary {
     background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
     color: var(--color-text-light);
-    border-color: #3b82f6;
+    border-color: var(--color-link);
     box-shadow: var(--weline-shadow-md);
 }
 
@@ -465,7 +465,7 @@ select.w-form-control {
 
 .w-btn-secondary:hover:not(:disabled) {
     background: var(--color-bg-slate);
-    border-color: #9ca3af;
+    border-color: var(--color-border-light);
     color: var(--color-text);
     box-shadow: var(--weline-shadow-md);
     transform: translateY(-1px);
@@ -511,7 +511,7 @@ select.w-form-control {
     justify-content: center;
     gap: var(--spacing-3);
     padding: var(--spacing-8) var(--spacing-6);
-    color: #6b7280;
+    color: var(--color-text-muted);
     font-size: var(--font-size-sm);
     margin: var(--spacing-4) 0;
 }
@@ -606,57 +606,57 @@ select.w-form-control {
 /* 深色模式支持 - 基于媒体查询 */
 @media (prefers-color-scheme: dark) {
     .w-form-container {
-        background: #1f2937;
-        border-color: #4b5563;
+        background: var(--color-bg-dark);
+        border-color: var(--color-border-default);
     }
     .w-form-header {
-        background: linear-gradient(135deg, var(--color-info) 0%, #4b5563 100%);
-        border-bottom-color: #4b5563;
+        background: linear-gradient(135deg, var(--color-info) 0%, var(--color-bg-dark) 100%);
+        border-bottom-color: var(--color-border-default);
     }
     .w-form-title {
         color: #f9fafb;
     }
     .w-form-control {
         background: var(--color-info);
-        border-color: #4b5563;
+        border-color: var(--color-border-default);
         color: #f9fafb;
     }
     .w-form-control:focus {
-        border-color: #3b82f6;
+        border-color: var(--color-link);
         box-shadow: var(--weline-shadow-md);
     }
     .w-form-control:hover {
-        border-color: #6b7280;
+        border-color: var(--color-border-default);
     }
     .w-form-control:disabled {
         background: var(--color-info);
-        color: #6b7280;
+        color: var(--color-text-muted);
     }
     .w-form-control:readonly {
         background: var(--color-info);
     }
     .w-field-label {
-        color: #d1d5db;
+        color: var(--color-text-faint);
     }
     .w-checkbox-item,
     .w-radio-item {
-        color: #d1d5db;
+        color: var(--color-text-faint);
     }
     .w-field-help {
         color: var(--color-text-faint);
     }
     .w-form-footer {
         background: var(--color-info);
-        border-top-color: #4b5563;
+        border-top-color: var(--color-border-default);
     }
     .w-btn-secondary {
         background: var(--color-info);
-        color: #d1d5db;
-        border-color: #4b5563;
+        color: var(--color-text-faint);
+        border-color: var(--color-border-default);
     }
     .w-btn-secondary:hover:not(:disabled) {
-        background: #4b5563;
-        border-color: #6b7280;
+        background: var(--color-bg-dark);
+        border-color: var(--color-border-default);
     }
     .w-loading-fields {
         color: var(--color-text-faint);
@@ -668,15 +668,15 @@ body[data-sidebar="dark"] .w-form-container,
 body[data-topbar="dark"] .w-form-container,
 body[data-sidebar="dark"] .w-form-inline-container,
 body[data-topbar="dark"] .w-form-inline-container {
-    background: #1f2937;
-    border-color: #4b5563;
+    background: var(--color-bg-dark);
+    border-color: var(--color-border-default);
     color: #f9fafb;
 }
 
 body[data-sidebar="dark"] .w-form-header,
 body[data-topbar="dark"] .w-form-header {
-    background: linear-gradient(135deg, var(--color-info) 0%, #4b5563 100%);
-    border-bottom-color: #4b5563;
+    background: linear-gradient(135deg, var(--color-info) 0%, var(--color-bg-dark) 100%);
+    border-bottom-color: var(--color-border-default);
 }
 
 body[data-sidebar="dark"] .w-form-title,
@@ -696,13 +696,13 @@ body[data-topbar="dark"] .w-form-close {
 
 body[data-sidebar="dark"] .w-form-close:hover,
 body[data-topbar="dark"] .w-form-close:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--color-on-dark-10);
     color: #f9fafb;
 }
 
 body[data-sidebar="dark"] .w-form-body,
 body[data-topbar="dark"] .w-form-body {
-    background: #1f2937;
+    background: var(--color-bg-dark);
     color: #f9fafb;
 }
 
@@ -715,7 +715,7 @@ body[data-topbar="dark"] input.w-form-control,
 body[data-topbar="dark"] textarea.w-form-control,
 body[data-topbar="dark"] select.w-form-control {
     background: var(--color-info);
-    border-color: #4b5563;
+    border-color: var(--color-border-default);
     color: #f9fafb;
 }
 
@@ -727,13 +727,13 @@ body[data-topbar="dark"] .w-form-control:focus {
 
 body[data-sidebar="dark"] .w-form-control:hover,
 body[data-topbar="dark"] .w-form-control:hover {
-    border-color: #6b7280;
+    border-color: var(--color-border-default);
 }
 
 body[data-sidebar="dark"] .w-form-control:disabled,
 body[data-topbar="dark"] .w-form-control:disabled {
     background: var(--color-info);
-    color: #6b7280;
+    color: var(--color-text-muted);
 }
 
 body[data-sidebar="dark"] .w-form-control:readonly,
@@ -743,14 +743,14 @@ body[data-topbar="dark"] .w-form-control:readonly {
 
 body[data-sidebar="dark"] .w-field-label,
 body[data-topbar="dark"] .w-field-label {
-    color: #d1d5db;
+    color: var(--color-text-faint);
 }
 
 body[data-sidebar="dark"] .w-checkbox-item,
 body[data-sidebar="dark"] .w-radio-item,
 body[data-topbar="dark"] .w-checkbox-item,
 body[data-topbar="dark"] .w-radio-item {
-    color: #d1d5db;
+    color: var(--color-text-faint);
 }
 
 body[data-sidebar="dark"] .w-field-help,
@@ -761,20 +761,20 @@ body[data-topbar="dark"] .w-field-help {
 body[data-sidebar="dark"] .w-form-footer,
 body[data-topbar="dark"] .w-form-footer {
     background: var(--color-info);
-    border-top-color: #4b5563;
+    border-top-color: var(--color-border-default);
 }
 
 body[data-sidebar="dark"] .w-btn-secondary,
 body[data-topbar="dark"] .w-btn-secondary {
     background: var(--color-info);
-    color: #d1d5db;
-    border-color: #4b5563;
+    color: var(--color-text-faint);
+    border-color: var(--color-border-default);
 }
 
 body[data-sidebar="dark"] .w-btn-secondary:hover:not(:disabled),
 body[data-topbar="dark"] .w-btn-secondary:hover:not(:disabled) {
-    background: #4b5563;
-    border-color: #6b7280;
+    background: var(--color-bg-dark);
+    border-color: var(--color-border-default);
 }
 
 body[data-sidebar="dark"] .w-loading-fields,
@@ -793,7 +793,7 @@ body[data-sidebar="dark"] .w-form-message-error,
 body[data-topbar="dark"] .w-form-message-error {
     background: var(--color-danger);
     color: #fca5a5;
-    border-color: #dc2626;
+    border-color: var(--color-danger);
 }
 
 /* 动画效果 */
@@ -894,7 +894,7 @@ body[data-topbar="dark"] .w-form-message-error {
 }
 
 .w-file-field:hover {
-    border-color: #3b82f6;
+    border-color: var(--color-link);
     background: var(--color-bg-panel);
 }
 
@@ -920,11 +920,11 @@ body[data-topbar="dark"] .w-form-message-error {
 
 .w-file-btn:hover {
     background: var(--color-bg-muted);
-    border-color: #9ca3af;
+    border-color: var(--color-border-light);
 }
 
 .w-file-info {
-    color: #6b7280;
+    color: var(--color-text-muted);
     font-size: var(--font-size-13);
 }
 
@@ -986,7 +986,7 @@ body[data-topbar="dark"] .w-form-message-error {
 }
 
 .w-image-field:hover {
-    border-color: #3b82f6;
+    border-color: var(--color-link);
     background: var(--color-bg-panel);
 }
 
@@ -1001,12 +1001,12 @@ body[data-topbar="dark"] .w-form-message-error {
     text-align: center;
     padding: var(--spacing-6);
     cursor: pointer;
-    color: #6b7280;
+    color: var(--color-text-muted);
 }
 
 .w-image-placeholder i {
     font-size: 2.5rem;
-    color: #d1d5db;
+    color: var(--color-text-faint);
     margin-bottom: var(--spacing-2);
     display: block;
 }
@@ -1057,7 +1057,7 @@ body[data-topbar="dark"] .w-form-message-error {
 .w-progress-text {
     text-align: center;
     font-size: var(--weline-font-size-xs);
-    color: #6b7280;
+    color: var(--color-text-muted);
     margin-top: var(--spacing-1);
 }
 
@@ -1099,7 +1099,7 @@ body[data-topbar="dark"] .w-form-message-error {
 
 /* 按钮焦点状态 */
 .w-btn:focus-visible {
-    outline: var(--border-width-medium) solid #3b82f6;
+    outline: var(--border-width-medium) solid var(--color-link);
     outline-offset: 2px;
 }
 
@@ -1116,8 +1116,8 @@ body[data-topbar="dark"] .w-form-trigger:hover {
 
 body[data-sidebar="dark"] .w-form-inline-container,
 body[data-topbar="dark"] .w-form-inline-container {
-    background: #1f2937;
-    border-color: #4b5563;
+    background: var(--color-bg-dark);
+    border-color: var(--color-border-default);
     box-shadow: var(--weline-shadow-md);
 }
 
@@ -1136,7 +1136,7 @@ body[data-topbar="dark"] .w-btn-primary:hover:not(:disabled) {
 body[data-sidebar="dark"] .w-loading-fields,
 body[data-topbar="dark"] .w-loading-fields {
     background: var(--color-info);
-    border-color: #4b5563;
+    border-color: var(--color-border-default);
 }
 
 /* 暗色主题下的文件和图片字段 */
@@ -1145,7 +1145,7 @@ body[data-topbar="dark"] .w-file-field,
 body[data-sidebar="dark"] .w-image-field,
 body[data-topbar="dark"] .w-image-field {
     background: var(--color-info);
-    border-color: #4b5563;
+    border-color: var(--color-border-default);
 }
 
 body[data-sidebar="dark"] .w-file-field:hover,
@@ -1153,31 +1153,31 @@ body[data-topbar="dark"] .w-file-field:hover,
 body[data-sidebar="dark"] .w-image-field:hover,
 body[data-topbar="dark"] .w-image-field:hover {
     border-color: #60a5fa;
-    background: #1f2937;
+    background: var(--color-bg-dark);
 }
 
 body[data-sidebar="dark"] .w-file-btn,
 body[data-topbar="dark"] .w-file-btn {
-    background: #1f2937;
-    border-color: #4b5563;
-    color: #d1d5db;
+    background: var(--color-bg-dark);
+    border-color: var(--color-border-default);
+    color: var(--color-text-faint);
 }
 
 body[data-sidebar="dark"] .w-file-btn:hover,
 body[data-topbar="dark"] .w-file-btn:hover {
     background: var(--color-info);
-    border-color: #6b7280;
+    border-color: var(--color-border-default);
 }
 
 body[data-sidebar="dark"] .w-file-item,
 body[data-topbar="dark"] .w-file-item {
-    background: #1f2937;
-    border-color: #4b5563;
+    background: var(--color-bg-dark);
+    border-color: var(--color-border-default);
 }
 
 body[data-sidebar="dark"] .w-file-name,
 body[data-topbar="dark"] .w-file-name {
-    color: #d1d5db;
+    color: var(--color-text-faint);
 }
 
 body[data-sidebar="dark"] .w-image-placeholder,
@@ -1187,10 +1187,10 @@ body[data-topbar="dark"] .w-image-placeholder {
 
 body[data-sidebar="dark"] .w-image-placeholder i,
 body[data-topbar="dark"] .w-image-placeholder i {
-    color: #6b7280;
+    color: var(--color-text-muted);
 }
 
 body[data-sidebar="dark"] .w-progress-bar,
 body[data-topbar="dark"] .w-progress-bar {
-    background: #4b5563;
+    background: var(--color-bg-dark);
 }

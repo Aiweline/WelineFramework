@@ -33,6 +33,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_HEX_QUOT
     | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
+<css>Weline_Backend::css/backend/backend-pages.css</css>
 
 <div class="w-grid">
     <div style="--w-span:12;">
@@ -196,23 +197,14 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                     <span class="w-badge" data-w-background="success"><lang>成功</lang></span>
                     <span class="w-badge" data-w-background="warning"><lang>警告</lang></span>
                     <span class="w-badge" data-w-background="danger"><lang>错误</lang></span>
-                    <span class="w-badge" style="background: #721c24;"><lang>紧急</lang></span>
+                    <span class="w-badge" data-w-background="danger" data-tone="danger"><lang>紧急</lang></span>
                 </p>
             </div>
         </div>
     </div>
 </div>
 
-<style>
-.weline-channel-help-list {
-    padding-left: 1.25rem;
-    margin-bottom: 0;
-}
-.weline-channel-help-list li {
-    margin-bottom: 0.5rem;
-    color: var(--backend-color-text-secondary, #495057);
-}
-</style>
+
 
 
 

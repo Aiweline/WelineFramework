@@ -20,6 +20,7 @@ $scopeLevelLabels = [
     'channel' => (string)__('渠道'),
 ];
 ?>
+<css>Weline_Promotion::css/backend/promotion-admin.css</css>
 <div class="w-grid" data-testid="promotion-theme-index">
     <div style="--w-span:12;">
         <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
@@ -34,7 +35,7 @@ $scopeLevelLabels = [
                 <a class="w-button" href="@admin-url('i18n/backend/aiTranslation/index')" data-tone="neutral"><?= __('I18n AI 翻译') ?></a>
             </div>
         </div>
-        <div class="w-card" style="margin-bottom:16px;" data-testid="promotion-theme-scope-filter">
+        <div class="w-card promotion-theme-toolbar" data-testid="promotion-theme-scope-filter">
             <div class="w-card__body">
                 <form method="get" class="w-grid" data-testid="promotion-theme-filter-form">
                     <div style="--w-span-md:3;--w-mb:var(--weline-space-3);">

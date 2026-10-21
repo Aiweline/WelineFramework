@@ -1,0 +1,4 @@
+/* Weline_StoreMusic 后台页面私有布局（标准 §6.2；Token-only，无 !important） */
+@layer page {
+.store-music-playlist-row { padding: var(--weline-space-3); border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-md); }
+}

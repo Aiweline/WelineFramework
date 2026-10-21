@@ -26,5 +26,13 @@ Object.assign(window.WelineModulesConfig.modules, {
         ],
         globalVar: 'WelineB2BOrderChat',
         description: 'B2B order chat accordion (account + backend same thread)'
-    }
+    },
+    b2bSellingModeBoot: {
+        paths: [
+            "Weline_B2B::js/selling-mode-boot.js?v=20261021-selling-mode-boot-1"
+        ],
+        globalVar: null,
+        load: "eager",
+        description: "B2B 购买方式切换兜底启动（主包缓存失效时仍生效）"
+    },
 });

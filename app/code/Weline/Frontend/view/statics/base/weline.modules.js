@@ -181,6 +181,20 @@
             globalVar: "WelineLoginPanel",
             description: "可挂载完整登录面板（快捷+账密）"
         },
+        customerContactChat: {
+            origin_paths: ["app/code/Weline/Customer/view/statics/js/customer-contact-chat.js?v=20261021-customer-contact-chat-1"],
+            paths: ["Weline_Customer::js/customer-contact-chat.js?v=20261021-customer-contact-chat-1"],
+            globalVar: "WelineCustomerContactChat",
+            load: "eager",
+            description: "联系我们页在线客服触发"
+        },
+        customerAccountSidebar: {
+            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-sidebar-menu.js?v=20261021-account-sidebar-menu-1"],
+            paths: ["Weline_Customer::js/account-sidebar-menu.js?v=20261021-account-sidebar-menu-1"],
+            globalVar: null,
+            load: "eager",
+            description: "用户中心侧栏菜单展开/收起"
+        },
         accountTwoFactor: {
             origin_paths: ["app/code/Weline/TwoFactorAuth/view/statics/frontend/js/account-two-factor-inline-v2.js"],
             paths: ["Weline_TwoFactorAuth::frontend/js/account-two-factor-inline-v2.js"],
@@ -220,6 +234,20 @@
             load: "lazy",
             description: "PayPal JS SDK：Google Pay / Apple Pay funding 按钮容器"
         },
+        paymentHandoff: {
+            origin_paths: ["app/code/Weline/Payment/view/statics/js/payment-handoff.js?v=20261021-payment-handoff-1"],
+            paths: ["Weline_Payment::js/payment-handoff.js?v=20261021-payment-handoff-1"],
+            globalVar: null,
+            load: "eager",
+            description: "支付交接页轮询"
+        },
+        paymentMethods: {
+            origin_paths: ["app/code/Weline/Payment/view/statics/js/payment-methods.js?v=20261021-payment-methods-1"],
+            paths: ["Weline_Payment::js/payment-methods.js?v=20261021-payment-methods-1"],
+            globalVar: null,
+            load: "eager",
+            description: "支付方式选择与提交"
+        },
         orderNotice: {
             origin_paths: ["app/code/Weline/Order/view/statics/js/widgets/order-notice.js"],
             paths: ["Weline_Order::js/widgets/order-notice.js"],
@@ -232,6 +260,13 @@
             globalVar: "WelineStorefrontSearchResults",
             async: true,
             description: "搜索页壳 FPC：异步 BinQuery 填充结果"
+        },
+        searchTypeFilter: {
+            origin_paths: ["app/code/Weline/Search/view/statics/js/search-type-filter.js?v=20261021-search-type-filter-1"],
+            paths: ["Weline_Search::js/search-type-filter.js?v=20261021-search-type-filter-1"],
+            globalVar: "WelineSearchTypeFilter",
+            load: "eager",
+            description: "搜索侧栏类型/分类树折叠与提交"
         },
         relatedProducts: {
             origin_paths: ["app/code/Weline/Product/view/statics/js/widgets/related-products.js"],
@@ -319,6 +354,18 @@
             globalVar: null,
             description: "账户中心发货/收货地址维护"
         },
+        shippingDeliveryAddressPage: {
+            origin_paths: ["app/code/Weline/Shipping/view/statics/js/shipping-delivery-address.js?v=20261021-delivery-address-page-1"],
+            paths: ["Weline_Shipping::js/shipping-delivery-address.js?v=20261021-delivery-address-page-1"],
+            globalVar: null,
+            description: "收货地址列表页交互"
+        },
+        shippingAddressPage: {
+            origin_paths: ["app/code/Weline/Shipping/view/statics/js/shipping-address-page.js?v=20261021-shipping-address-page-1"],
+            paths: ["Weline_Shipping::js/shipping-address-page.js?v=20261021-shipping-address-page-1"],
+            globalVar: null,
+            description: "发货地址列表页交互"
+        },
         cart: {
             origin_paths: ["app/code/Weline/Theme/view/statics/js/storefront-shopper-toast.js?v=20261015-shopper-toast-arch-v1", "app/code/Weline/Cart/view/statics/js/cart.js?v=20261015-qty-hit-fold-v1", "app/code/Weline/Cart/view/statics/js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "app/code/Weline/Cart/view/statics/js/widgets/product-purchase-actions-w18n-v3.js?v=20261015-shopper-toast-v1"],
             paths: ["Weline_Theme::js/storefront-shopper-toast.js?v=20261015-shopper-toast-arch-v1", "Weline_Cart::js/cart.js?v=20261015-qty-hit-fold-v1", "Weline_Cart::js/cart-remove-pixel-stamp.js?v=20260923-remove-from-cart-pixel2", "Weline_Cart::js/widgets/product-purchase-actions-w18n-v3.js?v=20261015-shopper-toast-v1"],
@@ -371,6 +418,13 @@
             paths: ["Weline_B2B::js/order-chat-accordion.js?v=20260912-order-chat4"],
             globalVar: "WelineB2BOrderChat",
             description: "B2B order chat accordion (account + backend same thread)"
+        },
+        b2bSellingModeBoot: {
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/selling-mode-boot.js?v=20261021-selling-mode-boot-1"],
+            paths: ["Weline_B2B::js/selling-mode-boot.js?v=20261021-selling-mode-boot-1"],
+            globalVar: null,
+            load: "eager",
+            description: "B2B 购买方式切换兜底启动（主包缓存失效时仍生效）"
         },
         consentBanner: {
             origin_paths: ["app/code/Weline/Consent/view/statics/js/consent-banner.js?v=20261021-consent-banner-1"],

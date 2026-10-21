@@ -380,13 +380,7 @@ $kpis = [
                         class="cdn-filter__search"
                     >
                     <label class="w-visually-hidden" for="cdn-account-adapter-filter"><?= __('所有适配器') ?></label>
-                    <select
-                        id="cdn-account-adapter-filter"
-                        name="adapter"
-                        class="w-select"
-                        data-size="sm"
-                        class="cdn-filter__select"
-                        aria-label="<?= $escapeAttr(__('所有适配器')) ?>"
+                    <select id="cdn-account-adapter-filter" name="adapter" class="w-select cdn-filter__select" data-size="sm" aria-label="<?= $escapeAttr(__('所有适配器')) ?>"
                     >
                         <option value=""><?= __('所有适配器') ?></option>
                         <?php foreach ($adapters as $adapterCode => $adapterInstance): ?>

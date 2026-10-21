@@ -865,7 +865,7 @@ try {
             justify-content: space-between;
             flex-wrap: wrap;
             gap: var(--spacing-4);
-            padding: var(--spacing-6) 0 56px;
+            padding: var(--spacing-6) 0 var(--spacing-13);
         }
 
         .wf-repos__links {
@@ -959,14 +959,10 @@ try {
         @media (prefers-reduced-motion: reduce) {
             html {
                 scroll-behavior: auto;
-            }
-
-            *,
-            *::before,
-            *::after {
-                transition-duration: 0.01ms !important;
-                animation-duration: 0.01ms !important;
-                animation-iteration-count: 1 !important;
+            }*, *::before, *::after{
+                transition-duration: 0.01ms;
+                animation-duration: 0.01ms;
+                animation-iteration-count: 1;
             }
         }
 

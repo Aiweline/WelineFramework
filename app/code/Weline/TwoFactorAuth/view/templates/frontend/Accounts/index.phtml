@@ -47,7 +47,7 @@
         }
         
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
             color: white;
             padding: var(--spacing-0_95);
             border-radius: var(--sidebar-radius);
@@ -142,7 +142,7 @@
         }
         
         .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
             color: white;
         }
         
@@ -152,7 +152,7 @@
         }
         
         .btn-success {
-            background: linear-gradient(135deg, #11998e 0%, var(--color-success) 100%);
+            background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success) 100%);
             color: white;
         }
         
@@ -162,7 +162,7 @@
         }
         
         .btn-secondary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
             color: white;
         }
         
@@ -255,7 +255,7 @@
         .account-name {
             font-size: clamp(var(--font-size-base), 4vw, var(--font-size-xl));
             font-weight: bold;
-            color: #333;
+            color: var(--color-text-secondary);
             margin-bottom: var(--spacing-xs);
         }
         
@@ -400,7 +400,7 @@
         }
         
         .more-actions-btn:hover {
-            border-color: #007bff;
+            border-color: var(--color-link);
             color: var(--color-text-faint);
             transform: scale(1.05);
         }
@@ -436,7 +436,7 @@
         
         .dropdown-item:hover {
             background: var(--color-bg-muted);
-            color: #333;
+            color: var(--color-text-secondary);
         }
         
         .dropdown-item.delete {
@@ -478,7 +478,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0,0,0,0.5);
+            background: var(--color-overlay-50);
             z-index: 1000;
             align-items: center;
             justify-content: center;
@@ -506,7 +506,7 @@
         }
         
         .modal-header h2 {
-            color: #333;
+            color: var(--color-text-secondary);
         }
         
         .close-btn {
@@ -524,7 +524,7 @@
         .w-field label {
             display: block;
             margin-bottom: var(--spacing-2);
-            color: #333;
+            color: var(--color-text-secondary);
             font-weight: 500;
         }
         
@@ -543,7 +543,7 @@
         .w-field textarea:focus,
         .w-field select:focus {
             outline: none;
-            border-color: #007bff;
+            border-color: var(--color-link);
         }
         
         .tabs {
@@ -565,7 +565,7 @@
         
         .tab.active {
             color: var(--color-text-faint);
-            border-bottom: var(--border-width-medium) solid #007bff;
+            border-bottom: var(--border-width-medium) solid var(--color-link);
             font-weight: bold;
         }
         
@@ -588,7 +588,7 @@
         }
         
         .upload-area:hover {
-            border-color: #007bff;
+            border-color: var(--color-link);
             background: var(--color-bg-panel);
         }
         
@@ -598,7 +598,7 @@
         }
         
         .btn-secondary {
-            background: #6c757d;
+            background: var(--color-bg-muted);
             color: white;
         }
         

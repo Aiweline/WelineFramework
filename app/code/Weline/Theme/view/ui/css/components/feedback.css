@@ -1,0 +1,30 @@
+/* Weline UI · Feedback（Badge / Alert / Loading / Skeleton，Apple 风格） */
+@layer components {
+    .w-badge {
+        padding: 0.2rem 0.55rem;
+        border-radius: var(--weline-radius-round);
+        font-size: var(--weline-font-size-xs);
+        font-weight: 590;
+        letter-spacing: 0.005em;
+    }
+    .w-badge[data-tone="primary"] { background: color-mix(in srgb, var(--weline-theme-primary) 12%, var(--weline-theme-surface)); color: var(--weline-theme-primary); }
+    .w-badge[data-tone="muted"] { background: var(--weline-theme-surface-muted); color: var(--weline-theme-text-muted); }
+
+    .w-alert { padding: var(--weline-space-4); border-radius: var(--weline-radius-md); }
+    .w-alert[data-tone="info"] { background: color-mix(in srgb, var(--weline-theme-info) 8%, var(--weline-theme-surface)); border-color: color-mix(in srgb, var(--weline-theme-info) 28%, transparent); color: var(--weline-theme-text); }
+    .w-alert[data-tone="success"] { background: color-mix(in srgb, var(--weline-theme-success) 8%, var(--weline-theme-surface)); border-color: color-mix(in srgb, var(--weline-theme-success) 28%, transparent); color: var(--weline-theme-text); }
+    .w-alert[data-tone="warning"] { background: color-mix(in srgb, var(--weline-theme-warning) 10%, var(--weline-theme-surface)); border-color: color-mix(in srgb, var(--weline-theme-warning) 32%, transparent); color: var(--weline-theme-text); }
+    .w-alert[data-tone="danger"] { background: color-mix(in srgb, var(--weline-theme-danger) 8%, var(--weline-theme-surface)); border-color: color-mix(in srgb, var(--weline-theme-danger) 30%, transparent); color: var(--weline-theme-text); }
+
+    .w-spinner {
+        border-radius: var(--weline-radius-round);
+        color: var(--weline-theme-primary);
+    }
+    .w-skeleton {
+        border-radius: var(--weline-radius-md);
+        background: linear-gradient(90deg, var(--weline-theme-surface-muted) 25%, var(--weline-theme-surface-hover) 37%, var(--weline-theme-surface-muted) 63%);
+        background-size: 400% 100%;
+    }
+    .w-loading { color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-sm); }
+    .w-loading__backdrop { background: color-mix(in srgb, var(--weline-theme-canvas) 72%, transparent); backdrop-filter: blur(2px); }
+}

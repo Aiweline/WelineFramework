@@ -16,16 +16,14 @@
     margin: 0;
     padding: var(--token-size-0-15rem) 0 var(--token-size-0-35rem);
     list-style: none !important;
-}
-.account-social-login[data-w-component="account-social-login"] .account-social-login__item {
+}.account-social-login[data-w-component="account-social-login"] .account-social-login__item.account-social-login__item{
     display: block;
     margin: 0;
     padding: 0;
     width: auto;
-    list-style: none !important;
-}
-.account-social-login[data-w-component="account-social-login"] .account-social-login__item::marker {
-    content: "" !important;
+    list-style: none;
+}.account-social-login[data-w-component="account-social-login"] .account-social-login__item::marker{
+    content: "";
     font-size: 0;
 }
 .account-social-login[data-w-component="account-social-login"] a.account-social-login__btn--logo {

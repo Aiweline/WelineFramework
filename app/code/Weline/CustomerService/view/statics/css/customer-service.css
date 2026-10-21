@@ -691,7 +691,7 @@
         padding: var(--weline-theme-space-2) var(--weline-theme-space-4);
         text-align: center;
         font-size: var(--weline-theme-font-size-sm);
-        color: rgba(255, 255, 255, 0.95);
+        color: var(--color-on-dark-92);
         background: rgba(15, 23, 42, 0.82);
     }
 
@@ -729,8 +729,8 @@
     .cs-shot-crop--ready [data-cs-shot-cancel],
     .cs-shot-crop--ready [data-cs-shot-reset] {
         color: var(--color-text-light);
-        border: var(--border-width-thin) solid rgba(255, 255, 255, 0.55);
-        background: rgba(255, 255, 255, 0.14);
+        border: var(--border-width-thin) solid var(--color-on-dark-55);
+        background: var(--color-on-dark-15);
     }
 
     .cs-shot-crop--ready .cs-shot-crop__confirm:not(:disabled),

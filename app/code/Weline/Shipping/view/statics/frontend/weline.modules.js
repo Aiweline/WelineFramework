@@ -20,5 +20,19 @@ Object.assign(window.WelineModulesConfig.modules, {
         ],
         globalVar: null,
         description: "账户中心发货/收货地址维护"
-    }
+    },
+    shippingDeliveryAddressPage: {
+        paths: [
+            "Weline_Shipping::js/shipping-delivery-address.js?v=20261021-delivery-address-page-1"
+        ],
+        globalVar: null,
+        description: "收货地址列表页交互"
+    },
+    shippingAddressPage: {
+        paths: [
+            "Weline_Shipping::js/shipping-address-page.js?v=20261021-shipping-address-page-1"
+        ],
+        globalVar: null,
+        description: "发货地址列表页交互"
+    },
 });

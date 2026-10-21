@@ -1,0 +1,85 @@
+/* Weline UI source: css/components/surface.css */
+/* Weline UI · Surface（Card / Table / Dialog / Empty，Apple 风格） */
+@layer components {
+    .w-card {
+        border: 1px solid color-mix(in srgb, var(--weline-theme-border) 72%, transparent);
+        border-radius: var(--weline-radius-lg);
+        background: var(--weline-theme-surface);
+        box-shadow: var(--weline-theme-shadow-sm);
+        overflow: clip;
+    }
+    .w-card__header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--weline-space-3);
+        padding: var(--weline-space-4) var(--weline-space-5);
+        border-block-end: 1px solid color-mix(in srgb, var(--weline-theme-border) 64%, transparent);
+        background: var(--weline-theme-surface);
+    }
+    .w-card__body { padding: var(--weline-space-5); }
+    .w-card__footer {
+        padding: var(--weline-space-3) var(--weline-space-5);
+        border-block-start: 1px solid color-mix(in srgb, var(--weline-theme-border) 64%, transparent);
+        background: var(--weline-theme-surface-muted);
+    }
+    .w-card__title { margin: 0; color: var(--weline-theme-text); font-size: var(--weline-font-size-md); font-weight: 650; letter-spacing: var(--weline-letter-tight); }
+
+    .w-table-wrap {
+        border: 1px solid color-mix(in srgb, var(--weline-theme-border) 72%, transparent);
+        border-radius: var(--weline-radius-lg);
+        background: var(--weline-theme-surface);
+        box-shadow: var(--weline-theme-shadow-xs);
+    }
+    .w-table th,
+    .w-table td { padding: var(--weline-space-3) var(--weline-space-4); border-block-end: 1px solid color-mix(in srgb, var(--weline-theme-border) 64%, transparent); }
+    .w-table thead th {
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text-muted);
+        font-size: var(--weline-font-size-xs);
+        font-weight: 650;
+        letter-spacing: 0.01em;
+    }
+    .w-table tbody tr { transition: background-color var(--weline-motion-fast) var(--weline-motion-ease); }
+    .w-table tbody tr:hover { background: var(--weline-theme-surface-hover); }
+    .w-table tbody tr:last-child td { border-block-end: 0; }
+    .w-table td { font-size: var(--weline-font-size-sm); }
+
+    .w-dialog {
+        border: 1px solid color-mix(in srgb, var(--weline-theme-border) 56%, transparent);
+        border-radius: var(--weline-radius-xl);
+        background: var(--weline-theme-surface-raised);
+        box-shadow: var(--weline-theme-shadow-dialog, var(--weline-theme-shadow-lg));
+    }
+    .w-dialog__header { padding: var(--weline-space-5) var(--weline-space-6); }
+    .w-dialog__body { padding: 0 var(--weline-space-6) var(--weline-space-5); }
+    .w-dialog__footer { padding: var(--weline-space-4) var(--weline-space-6); border-block-start: 1px solid var(--weline-theme-border); }
+    .w-dialog__surface { border-radius: inherit; }
+
+    .w-drawer {
+        border-radius: var(--weline-radius-xl) 0 0 var(--weline-radius-xl);
+        background: var(--weline-theme-surface-raised);
+        box-shadow: var(--weline-theme-shadow-dialog, var(--weline-theme-shadow-lg));
+    }
+    .w-drawer__header { padding: var(--weline-space-5) var(--weline-space-5) var(--weline-space-3); }
+    .w-drawer__body { padding: var(--weline-space-3) var(--weline-space-5) var(--weline-space-5); }
+    .w-drawer__footer { padding: var(--weline-space-4) var(--weline-space-5); border-block-start: 1px solid var(--weline-theme-border); }
+
+    .w-empty {
+        gap: var(--weline-space-3);
+        min-block-size: 11rem;
+        padding: var(--weline-space-8);
+        border-radius: var(--weline-radius-lg);
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text-muted);
+    }
+    .w-empty__title { font-size: var(--weline-font-size-md); font-weight: 650; letter-spacing: var(--weline-letter-tight); }
+
+    .w-alert {
+        border: 1px solid color-mix(in srgb, var(--weline-theme-border) 72%, transparent);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface-muted);
+        box-shadow: none;
+    }
+}

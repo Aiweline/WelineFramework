@@ -340,7 +340,7 @@
   margin: 0;
   padding: var(--spacing-0_2);
   border-radius: var(--radius-full);
-  border: var(--border-width-thin) solid rgba(255, 255, 255, 0.14);
+  border: var(--border-width-thin) solid var(--color-on-dark-15);
   background: rgba(12, 14, 20, 0.88);
   box-shadow: var(--weline-shadow-md);
   opacity: 0.88;
@@ -351,11 +351,9 @@
 .tvp-root .CodeMirror:hover .tvp-js-editor__float,
 .tvp-root .CodeMirror:focus-within .tvp-js-editor__float {
   opacity: 1;
-}
-
-.tvp-root .CodeMirror .tvp-js-theme-btn {
-  appearance: none !important;
-  -webkit-appearance: none !important;
+}.tvp-root .CodeMirror .tvp-js-theme-btn.tvp-js-theme-btn{
+  appearance: none;
+  -webkit-appearance: none;
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
@@ -377,7 +375,7 @@
 
 .tvp-root .CodeMirror .tvp-js-theme-btn:hover {
   color: var(--color-text-light);
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-on-dark-10);
 }
 
 .tvp-root .CodeMirror .tvp-js-theme-btn[data-active="1"] {
@@ -505,10 +503,8 @@
 .tvp-acc-badge[data-tone="dedupe"] {
   color: var(--weline-color-warning);
   background: color-mix(in srgb, var(--weline-color-warning) 18%, transparent);
-}
-
-.visually-hidden {
-  position: absolute !important;
+}.visually-hidden.visually-hidden{
+  position: absolute;
   width: 1px;
   height: 1px;
   padding: 0;

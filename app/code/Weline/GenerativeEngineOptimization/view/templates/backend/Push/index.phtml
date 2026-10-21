@@ -40,7 +40,7 @@ $failureCount = count($scheduledFailures);
             <div class="w-stack" data-gap="sm">
                 <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);">
                     <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);">
-                        <h2 id="geo-scheduled-failures-title" class="w-text" class="w-text" data-size="lg" data-weight="strong">
+                        <h2 id="geo-scheduled-failures-title" class="w-text" data-size="lg" data-weight="strong">
                             <?= __('定时推送失败') ?>
                         </h2>
                         <span class="w-badge" data-tone="warning" data-shrink="false"><?= (int)$failureCount ?></span>
@@ -110,7 +110,7 @@ $failureCount = count($scheduledFailures);
     <?php endif; ?>
 
     <div class="w-stack" data-gap="xs" style="margin-bottom: var(--weline-space-2);">
-        <h2 class="w-text" class="w-text" data-size="lg" data-weight="strong"><?= __('全部推送历史') ?></h2>
+        <h2 class="w-text" data-size="lg" data-weight="strong"><?= __('全部推送历史') ?></h2>
     </div>
 
     <div class="w-table-wrap">

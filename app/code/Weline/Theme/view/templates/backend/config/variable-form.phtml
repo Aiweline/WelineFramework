@@ -41,7 +41,7 @@ $fileName = (string)($data['name'] ?? ucfirst((string)($file ?? '')));
         <div class="w-card__body">
             <div class="w-toolbar">
                 <div class="w-cluster">
-                    <label class="w-field__label" for="search-input" style="position:absolute;inline-size:1px;block-size:1px;overflow:hidden;clip-path:inset(50%);">
+                    <label class="w-field__label w-visually-hidden" for="search-input" >
                         <?= $h(__('搜索变量名...')) ?>
                     </label>
                     <input
@@ -51,7 +51,7 @@ $fileName = (string)($data['name'] ?? ucfirst((string)($file ?? '')));
                         data-variable-filter-control
                         placeholder="<?= $h(__('搜索变量名...')) ?>"
                     >
-                    <label class="w-field__label" for="category-filter" style="position:absolute;inline-size:1px;block-size:1px;overflow:hidden;clip-path:inset(50%);">
+                    <label class="w-field__label w-visually-hidden" for="category-filter" >
                         <?= $h(__('所有分类')) ?>
                     </label>
                     <select id="category-filter" class="w-select" data-variable-filter-control>

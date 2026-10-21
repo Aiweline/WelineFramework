@@ -1,0 +1,29 @@
+/* Weline_Currency 后台页面私有布局（标准 §6.2；Token-only，无 ） */
+@layer page {
+.weline-currency-config .weline-alert-info {
+        background-color: var(--weline-theme-info-surface);
+        border-color: var(--weline-theme-info-border);
+        color: var(--weline-theme-info);
+    }
+    
+    .weline-currency-config .weline-alert-info strong {
+        color: var(--weline-theme-info);
+    }
+    
+    .weline-currency-config .weline-alert-info code {
+        background-color: var(--weline-theme-surface);
+        color: var(--weline-theme-info);
+        border-color: var(--weline-theme-info-border);
+    }
+    
+    .weline-currency-config .weline-card-explain {
+        background-color: var(--weline-theme-surface);
+        border-color: var(--weline-theme-border);
+    }
+    
+    .weline-currency-config .weline-alert-warning {
+        background-color: var(--weline-theme-warning-surface);
+        border-color: var(--weline-theme-warning);
+        color: var(--weline-theme-warning);
+    }
+}

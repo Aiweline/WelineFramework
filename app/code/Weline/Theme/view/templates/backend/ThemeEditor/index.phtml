@@ -332,8 +332,8 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
 <!-- Critical path: discover editor JS while HTML continues parsing (avoid late bottom-of-page waterfall). -->
 <link rel="modulepreload" href="@static(Weline_Theme::ui/pages/weline-theme-editor.js)" fetchpriority="high">
 <link rel="modulepreload" href="@static(Weline_Theme::ui/pages/weline-theme-editor-widget-param.js)" fetchpriority="high">
-<script src="@static(Weline_FileManager::js/w-scope.js)"></script>
-<script src="@static(Weline_FileManager::js/media-identity-picker.js)"></script>
+<script defer src="@static(Weline_FileManager::js/w-scope.js)"></script>
+<script defer src="@static(Weline_FileManager::js/media-identity-picker.js)"></script>
 
 <div class="<?= $editorShellClassSafe ?>" id="themeEditor"
      data-theme-id="<?= $themeIdSafe ?>"
@@ -1357,5 +1357,5 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
 </aside>
 
 <!-- Editor shell first: execute before async widget-param; modulepreload already warmed the fetch. -->
-<script src="@static(Weline_Framework::js/i18n.js)"></script>
+<script defer src="@static(Weline_Framework::js/i18n.js)"></script>
 <script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor.js)"></script>

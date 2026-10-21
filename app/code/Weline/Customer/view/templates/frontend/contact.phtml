@@ -11,7 +11,7 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
                 <lang>订单、配送、退换货和账户问题都可以从这里联系支持团队。请优先说明订单号或问题场景，便于客服更快定位。</lang>
             </p>
             <div class="customer-contact-actions">
-                <a class="customer-contact-button customer-contact-button--primary" href="#customer-service-chat" data-customer-contact-chat>
+                <a class="customer-contact-button customer-contact-button--primary" href="#customer-service-chat" data-customer-contact-chat data-weline-load="customerContactChat">
                     <lang>打开在线客服</lang>
                 </a>
                 <a class="customer-contact-button customer-contact-button--secondary" href="@url{'customer/account'}">
@@ -56,22 +56,3 @@ $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUO
     </div>
 </section>
 
-<script>
-document.addEventListener('click', function (event) {
-    var trigger = event.target.closest('[data-customer-contact-chat]');
-    if (!trigger) {
-        return;
-    }
-
-    event.preventDefault();
-    if (typeof CustomerServiceWidget !== 'undefined' && typeof CustomerServiceWidget.toggleChat === 'function') {
-        CustomerServiceWidget.toggleChat();
-        return;
-    }
-
-    var widgetButton = document.getElementById('cs-chat-button');
-    if (widgetButton) {
-        widgetButton.click();
-    }
-});
-</script>

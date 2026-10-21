@@ -2247,3 +2247,108 @@
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { scroll-behavior: auto; animation-duration: 1ms; animation-iteration-count: 1; transition-duration: 1ms; }
 }
+
+/* Weline UI source: css/tokens/apple.css */
+/* Weline UI · Apple-style semantic token layer
+ * ------------------------------------------------------------------
+ * 唯一来源：本文件只定义「语义 Token」和「组件尺度」，不写具体组件规则。
+ * 调色板（色盘）通过 --color-*（前台）/ --backend-color-*（后台）覆盖本层，
+ * 组件层只消费 --weline-theme-* / --weline-control-* / --weline-radius-*。
+ */
+@layer tokens {
+    :root {
+        /* ---- semantic palette (palette-driven, Apple neutrals as fallback) ---- */
+        --weline-theme-canvas: var(--color-bg-canvas, #f5f5f7);
+        --weline-theme-surface: var(--color-bg-primary, #ffffff);
+        --weline-theme-surface-raised: var(--color-bg-raised, #ffffff);
+        --weline-theme-surface-muted: var(--color-bg-subtle, #f5f5f7);
+        --weline-theme-surface-hover: var(--color-surface-hover, #f0f0f2);
+        --weline-theme-text: var(--color-text-primary, #1d1d1f);
+        --weline-theme-text-muted: var(--color-text-secondary, #6e6e73);
+        --weline-theme-text-subtle: var(--color-text-tertiary, #86868b);
+        --weline-theme-border: var(--color-border-default, #d2d2d7);
+        --weline-theme-border-strong: var(--color-border-strong, #b0b0b5);
+        --weline-theme-primary: var(--color-primary, #0071e3);
+        --weline-theme-primary-hover: var(--color-primary-hover, #0077ed);
+        --weline-theme-on-primary: var(--color-on-primary, #ffffff);
+        --weline-theme-focus: var(--color-primary, #0071e3);
+        --weline-theme-focus-ring: 0 0 0 3px color-mix(in srgb, var(--weline-theme-focus) 32%, transparent);
+        --weline-theme-success: var(--color-success, #248a3d);
+        --weline-theme-warning: var(--color-warning, #b25000);
+        --weline-theme-danger: var(--color-danger, var(--color-error, #d70015));
+        --weline-theme-info: var(--color-info, #0071a4);
+        --weline-theme-overlay: rgba(0, 0, 0, 0.42);
+
+        /* ---- shape: Apple-style continuous corners ---- */
+        --weline-radius-xs: 0.375rem;   /* 6px  – tags, tiny chips */
+        --weline-radius-sm: 0.5rem;     /* 8px  – inline controls */
+        --weline-radius-md: 0.75rem;    /* 12px – buttons, inputs, cards */
+        --weline-radius-lg: 1.125rem;   /* 18px – panels, dialogs */
+        --weline-radius-xl: 1.375rem;   /* 22px – hero surfaces */
+        --weline-radius-round: 999px;
+
+        /* ---- elevation: soft, layered, never harsh ---- */
+        --weline-theme-shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.04);
+        --weline-theme-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 1px rgba(0, 0, 0, 0.03);
+        --weline-theme-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+        --weline-theme-shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.06);
+        --weline-theme-shadow-dialog: 0 28px 80px rgba(0, 0, 0, 0.22);
+
+        /* ---- type: Apple system stack for frontend, Noto Sans SC kept for backend ---- */
+        --weline-font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+            "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+        --weline-font-ui: var(--weline-font-sans);
+        --weline-font-display: var(--weline-font-sans);
+        --weline-font-size-xs: 0.75rem;
+        --weline-font-size-sm: 0.875rem;
+        --weline-font-size-md: 1rem;
+        --weline-font-size-lg: 1.125rem;
+        --weline-font-size-xl: 1.375rem;
+        --weline-font-size-2xl: 1.625rem;
+        --weline-line-height: 1.5;
+        --weline-letter-tight: -0.011em;
+
+        /* ---- controls: one height scale for buttons/inputs/selects/switches ---- */
+        --weline-control-height-sm: 2rem;    /* 32px */
+        --weline-control-height: 2.5rem;     /* 40px */
+        --weline-control-height-lg: 3rem;    /* 48px */
+        --weline-control-padding-inline: 0.875rem;
+        --weline-control-gap: 0.5rem;
+
+        /* ---- motion: short, eased, respects reduced-motion ---- */
+        --weline-motion-fast: 140ms;
+        --weline-motion-normal: 220ms;
+        --weline-motion-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+        --weline-motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* 后台：保留工作界面的无衬线字体栈与更紧凑的信息密度；
+     * 颜色仍走同一语义层（后台色盘 --backend-color-* 优先）。 */
+    [data-w-area="backend"] {
+        --weline-font-sans: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "PingFang SC",
+            "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+        --weline-font-ui: var(--weline-font-sans);
+        --weline-font-display: var(--weline-font-sans);
+        --weline-font-serif: var(--weline-font-sans);
+        --weline-theme-primary: var(--backend-color-primary, var(--color-primary, #0071e3));
+        --weline-theme-primary-hover: var(--backend-color-primary-hover, var(--color-primary-hover, #0077ed));
+        --weline-theme-on-primary: var(--backend-color-on-primary, var(--color-on-primary, #ffffff));
+        --weline-theme-surface: var(--backend-color-card-bg, var(--color-bg-primary, #ffffff));
+        --weline-theme-surface-muted: var(--backend-color-bg-secondary, var(--color-bg-subtle, #f5f5f7));
+        --weline-theme-text: var(--backend-color-text-primary, var(--color-text-primary, #1d1d1f));
+        --weline-theme-text-muted: var(--backend-color-text-secondary, var(--color-text-secondary, #6e6e73));
+        --weline-theme-border: var(--backend-color-border-default, var(--color-border-default, #d2d2d7));
+        --weline-theme-border-strong: var(--backend-color-border-strong, var(--color-border-strong, #b0b0b5));
+        --weline-theme-focus: var(--backend-color-primary, var(--color-primary, #0071e3));
+        --weline-theme-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+        --weline-theme-shadow-md: 0 8px 20px rgba(0, 0, 0, 0.08);
+        --weline-theme-shadow-lg: 0 18px 42px rgba(0, 0, 0, 0.14);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --weline-motion-fast: 0ms;
+        --weline-motion-normal: 0ms;
+    }
+}

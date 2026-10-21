@@ -29,8 +29,8 @@ if ($rawPath !== '' && $rawPath !== '/') {
             padding: clamp(var(--spacing-5_5), 3vw, var(--spacing-7)) clamp(var(--spacing-4_5), 2.5vw, var(--spacing-7));
             border-radius: var(--radius-lg);
             background:
-                radial-gradient(ellipse at top right, rgba(255, 153, 0, .14), transparent 46%),
-                linear-gradient(135deg, #131921 0%, #232f3e 58%, var(--color-info) 100%);
+                radial-gradient(ellipse at top right, var(--color-warning-bg-subtle), transparent 46%),
+                linear-gradient(135deg, var(--color-bg-dark) 0%, var(--color-bg-dark) 58%, var(--color-info) 100%);
             color: var(--color-text-light);
         }
         .amazon-doc__eyebrow { margin: 0 0 .4rem; font-size: .82rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--color-text-faint); }
@@ -54,8 +54,8 @@ if ($rawPath !== '' && $rawPath !== '/') {
         .amazon-doc__body { border-radius: 0 var(--radius-lg) var(--radius-lg) 0; padding: clamp(var(--spacing-4_5), 2.4vw, var(--spacing-7)); }
         .amazon-doc__section { margin-top: var(--spacing-5_5); scroll-margin-top: 12rem; }
         .amazon-doc__section:first-of-type { margin-top: 0; }
-        .amazon-doc__section h2 { margin: 0 0 .7rem; font-size: var(--font-size-lg); border-left: var(--loader-border-width) solid #ff9900; padding-left: .65rem; }
-        .amazon-doc__section p, .amazon-doc__section li { margin: 0 0 .65rem; line-height: 1.7; color: #333; }
+        .amazon-doc__section h2 { margin: 0 0 .7rem; font-size: var(--font-size-lg); border-left: var(--loader-border-width) solid var(--color-primary); padding-left: .65rem; }
+        .amazon-doc__section p, .amazon-doc__section li { margin: 0 0 .65rem; line-height: 1.7; color: var(--color-text-secondary); }
         .amazon-doc__section ul { margin: .3rem 0 .9rem; padding-left: var(--weline-space-5); }
         .amazon-doc__related { margin-top: var(--weline-space-6); padding-top: var(--weline-space-4); border-top: var(--border-width-thin) solid var(--color-border-muted); display: flex; flex-wrap: wrap; gap: .65rem var(--weline-space-4); }
         .amazon-doc__related a { color: var(--color-text-secondary); text-decoration: none; font-size: .92rem; }

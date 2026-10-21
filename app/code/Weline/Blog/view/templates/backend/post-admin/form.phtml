@@ -64,7 +64,7 @@ if ($coverImageValue !== '') {
 }
 ?>
 <link rel="stylesheet" href="@static(Weline_Blog::css/backend/blog-post-admin.css)?v=20260827-cover-picker-v1">
-<script src="@static(Weline_FileManager::js/w-scope.js)"></script>
+<script defer src="@static(Weline_FileManager::js/w-scope.js)"></script>
 <div class="w-blog-post-form" data-testid="blog-admin-form">
     <div class="w-card w-blog-post-form__hero">
         <div class="w-blog-post-form__hero-main">
@@ -368,7 +368,7 @@ if ($coverImageValue !== '') {
     </div>
 </div>
 <?php if ($cmsAvailable): ?>
-<script src="@static(Weline_Theme::js/cms-preview-bridge.js)"></script>
-<script src="@static(Weline_Cms::js/cms-page-editor.js)"></script>
+<script defer src="@static(Weline_Theme::js/cms-preview-bridge.js)"></script>
+<script defer src="@static(Weline_Cms::js/cms-page-editor.js)"></script>
 <?php endif; ?>
-<script src="@static(Weline_Blog::js/blog-post-admin-form.js)?v=20260827-cover-picker-v1"></script>
+<script defer src="@static(Weline_Blog::js/blog-post-admin-form.js)?v=20260827-cover-picker-v1"></script>

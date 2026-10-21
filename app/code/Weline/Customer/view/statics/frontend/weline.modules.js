@@ -44,5 +44,21 @@ Object.assign(window.WelineModulesConfig.modules, {
         ],
         globalVar: "WelineLoginPanel",
         description: "可挂载完整登录面板（快捷+账密）"
-    }
+    },
+    customerContactChat: {
+        paths: [
+            "Weline_Customer::js/customer-contact-chat.js?v=20261021-customer-contact-chat-1"
+        ],
+        globalVar: "WelineCustomerContactChat",
+        load: "eager",
+        description: "联系我们页在线客服触发"
+    },
+    customerAccountSidebar: {
+        paths: [
+            "Weline_Customer::js/account-sidebar-menu.js?v=20261021-account-sidebar-menu-1"
+        ],
+        globalVar: null,
+        load: "eager",
+        description: "用户中心侧栏菜单展开/收起"
+    },
 });

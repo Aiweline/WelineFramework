@@ -48,6 +48,9 @@ EXCLUDE_SUBSTR = (
     "/account-recovery/", "/backend-theme/", "/backend-menu/", "/datatable-form/",
 )
 EXCLUDE_BASENAME_PREFIX = ("prototype", "prototype-")
+# D1: 后台管理 UI 不属前台合同范围。部分后台样式没有 /backend/ 路径段，
+# 但文件名明确是 admin/backend/console 面板 —— 按名排除。
+EXCLUDE_BASENAME_CONTAINS = ("admin", "backend", "backend-", "-console", "wls-")
 EXCLUDE_BASENAME = (
     "elfinder.html", "elfinder.legacy.html", "index.html",  # S5 vendor app shells
     "test.phtml", "test.html",  # dev/test pages
@@ -166,6 +169,9 @@ def in_scope(p: Path) -> bool:
     if any(k in s for k in EXCLUDE_SUBSTR):
         return False
     if p.name.startswith(EXCLUDE_BASENAME_PREFIX) or p.name in EXCLUDE_BASENAME:
+        return False
+    name_low = p.name.lower()
+    if any(k in name_low for k in EXCLUDE_BASENAME_CONTAINS):
         return False
     if p.name.endswith((".min.css", ".min.js")):
         return False

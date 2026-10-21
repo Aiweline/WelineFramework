@@ -1,0 +1,48 @@
+/* Weline_Async 后台页面私有布局（标准 §6.2；Token-only，无 !important） */
+@layer page {
+/* 目录树滚动条样式 - 兼容主题滚动条 */
+.async-directory-tree {
+    /* Firefox滚动条 */
+    scrollbar-width: thin;
+    scrollbar-color: var(--weline-theme-border-strong)) var(--weline-theme-surface-muted);
+}
+
+/* Webkit浏览器滚动条 */
+.async-directory-tree::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.async-directory-tree::-webkit-scrollbar-track {
+    background: var(--weline-theme-surface-muted);
+    border-radius: 3px;
+}
+
+.async-directory-tree::-webkit-scrollbar-thumb {
+    background: var(--weline-theme-border-strong));
+    border-radius: 3px;
+    transition: background 0.2s ease;
+}
+
+.async-directory-tree::-webkit-scrollbar-thumb:hover {
+    background: var(--weline-theme-border-strong));
+}
+
+/* 暗色主题支持 */
+[data-theme="dark"] .async-directory-tree {
+    scrollbar-color: var(--weline-theme-border-strong)) var(--weline-theme-surface-muted);
+}
+
+[data-theme="dark"] .async-directory-tree::-webkit-scrollbar-thumb {
+    background: var(--weline-theme-border-strong));
+}
+
+[data-theme="dark"] .async-directory-tree::-webkit-scrollbar-thumb:hover {
+    background: var(--weline-theme-border-strong));
+}
+
+.async-dialog-sm { inline-size: 90%; max-inline-size: 600px; }
+.async-dialog-md { inline-size: 80%; max-inline-size: 800px; }
+.async-dialog-lg { inline-size: 90%; max-inline-size: 900px; }
+.async-log-scroll { max-block-size: 400px; overflow-y: auto; }
+}

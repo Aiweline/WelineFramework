@@ -25,7 +25,8 @@ $mediaInputId = 'store-music-media-' . substr(hash('sha256', $selectedScope . $p
 $hasMedia = class_exists(\Weline\MediaManager\Block\WelineMedia::class)
     && \function_exists('framework_view_process_block');
 ?>
-<script src="@static(Weline_FileManager::js/w-scope.js)"></script>
+<css>Weline_StoreMusic::css/backend/store-music-admin.css</css>
+<script defer src="@static(Weline_FileManager::js/w-scope.js)"></script>
 <div class="store-music-config w-stack"
      style="--w-gap:var(--weline-space-6);"
      data-testid="store-music-config"
@@ -176,7 +177,7 @@ $hasMedia = class_exists(\Weline\MediaManager\Block\WelineMedia::class)
                 $introJson = (string)json_encode($introMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
                 ?>
                 <div class="w-stack store-music-playlist-row"
-                     style="--w-gap:var(--weline-space-2);padding:var(--weline-space-3);border:1px solid var(--color-border, rgba(0,0,0,.12));border-radius:var(--weline-radius-md, 8px);"
+                     style="--w-gap:var(--weline-space-2);"
                      data-store-music-playlist-row
                      data-w-reorder-item
                      data-url="<?= htmlspecialchars($url, ENT_QUOTES, 'UTF-8') ?>"
@@ -421,7 +422,7 @@ $hasMedia = class_exists(\Weline\MediaManager\Block\WelineMedia::class)
             row.style.setProperty('--w-gap', 'var(--weline-space-2)');
             row.style.padding = 'var(--weline-space-3)';
             row.style.border = '1px solid var(--color-border, rgba(0,0,0,.12))';
-            row.style.borderRadius = 'var(--weline-radius-md, 8px)';
+            row.style.borderRadius = 'var(--weline-radius-md)';
             row.setAttribute('data-store-music-playlist-row', '1');
             row.setAttribute('data-w-reorder-item', '');
             row.dataset.url = track.url;

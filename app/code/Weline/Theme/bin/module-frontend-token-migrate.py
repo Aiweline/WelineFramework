@@ -392,6 +392,138 @@ def pick_hue_token(value_hex: str, prop: str, resolved: dict[str, str]) -> str |
     return best[1] if best else None
 
 
+# 策展：高频遗留色值 → 已有语义 Token（按 CSS 属性角色），依据 theme-semantic-color-matrix.md
+# 只引用主题盘已有 Token，不新增；未列出的值回落到 neutral/hue 吸收或保持原样待人工。
+CURATED_ROLE_COLORS = {
+    # 深灰（文字/深底/描边）
+    "#333333": {"text": "--color-text-secondary", "bg": "--color-bg-dark", "border": "--color-border-default"},
+    "#4b5563": {"text": "--color-text-muted", "bg": "--color-bg-dark", "border": "--color-border-default"},
+    "#6b7280": {"text": "--color-text-muted", "bg": "--color-bg-muted", "border": "--color-border-default"},
+    "#6c757d": {"text": "--color-text-muted", "bg": "--color-bg-muted", "border": "--color-border-default"},
+    "#64748b": {"text": "--color-text-secondary", "bg": "--color-bg-dark", "border": "--color-border-default"},
+    "#495057": {"text": "--color-text-secondary", "bg": "--color-bg-dark", "border": "--color-border-default"},
+    "#374151": {"text": "--color-text-secondary", "bg": "--color-bg-dark", "border": "--color-border-default"},
+    "#9ca3af": {"text": "--color-text-faint", "border": "--color-border-light"},
+    "#95a5a6": {"text": "--color-text-faint", "border": "--color-border-light"},
+    # 浅灰（描边/浅底）
+    "#d1d5db": {"border": "--color-border-light", "bg": "--color-bg-tertiary", "text": "--color-text-faint"},
+    "#dddddd": {"border": "--color-border-light", "bg": "--color-bg-tertiary"},
+    "#e0e0e0": {"border": "--color-border-light", "bg": "--color-bg-tertiary"},
+    "#e5e7eb": {"border": "--color-border-light", "bg": "--color-bg-tertiary"},
+    "#e2e8f0": {"border": "--color-border-light", "bg": "--color-bg-tertiary"},
+    "#ced4da": {"border": "--color-border-light", "bg": "--color-bg-tertiary"},
+    "#dee2e6": {"border": "--color-border-muted", "bg": "--color-bg-tertiary"},
+    # 近白底
+    "#f9fafb": {"bg": "--color-bg-muted"},
+    "#f8f9fa": {"bg": "--color-bg-muted"},
+    "#f5f5f5": {"bg": "--color-bg-muted"},
+    "#f0f0f0": {"bg": "--color-bg-muted"},
+    "#f3f4f6": {"bg": "--color-bg-muted"},
+    "#f7fafa": {"bg": "--color-bg-muted"},
+    "#ffffff": {"bg": "--color-bg-primary", "border": "--color-border-light"},
+    # 黑/深底
+    "#000000": {"text": "--color-text", "bg": "--color-bg-dark"},
+    "#232f3e": {"bg": "--color-bg-dark", "text": "--color-text"},
+    "#1f2937": {"bg": "--color-bg-dark", "text": "--color-text"},
+    "#0f172a": {"bg": "--color-bg-dark", "text": "--color-text"},
+    "#0f0f23": {"bg": "--color-bg-dark", "text": "--color-text"},
+    "#1a1a2e": {"bg": "--color-bg-dark", "text": "--color-text"},
+    "#16213e": {"bg": "--color-bg-dark", "text": "--color-text"},
+    "#131921": {"bg": "--color-bg-dark", "text": "--color-text"},
+    "#111827": {"bg": "--color-bg-dark", "text": "--color-text"},
+    # 蓝（链接/信息）
+    "#007bff": {"text": "--color-link", "border": "--color-link", "bg": "--color-info"},
+    "#3b82f6": {"text": "--color-link", "border": "--color-link", "bg": "--color-info"},
+    "#0284c7": {"text": "--color-link", "border": "--color-link", "bg": "--color-info"},
+    "#2563eb": {"text": "--color-link", "border": "--color-link", "bg": "--color-info"},
+    "#007185": {"text": "--color-link", "border": "--color-link", "bg": "--color-info"},
+    "#00f2fe": {"text": "--color-link", "border": "--color-link", "bg": "--color-info"},
+    "#4facfe": {"text": "--color-link", "border": "--color-link", "bg": "--color-info"},
+    "#667eea": {"text": "--color-link", "border": "--color-link", "bg": "--color-info"},
+    "#764ba2": {"text": "--color-link", "border": "--color-link", "bg": "--color-info"},
+    # 绿（成功）
+    "#16a34a": {"text": "--color-success", "border": "--color-success", "bg": "--color-success"},
+    "#067d62": {"text": "--color-success", "border": "--color-success", "bg": "--color-success"},
+    "#28a745": {"text": "--color-success", "border": "--color-success", "bg": "--color-success"},
+    "#15803d": {"text": "--color-success", "border": "--color-success", "bg": "--color-success"},
+    "#155724": {"text": "--color-success", "border": "--color-success"},
+    "#11998e": {"text": "--color-success", "border": "--color-success", "bg": "--color-success"},
+    # 红（危险）
+    "#dc2626": {"text": "--color-danger", "border": "--color-danger", "bg": "--color-danger"},
+    "#b12704": {"text": "--color-danger", "border": "--color-danger", "bg": "--color-danger"},
+    "#b91c1c": {"text": "--color-danger", "border": "--color-danger", "bg": "--color-danger"},
+    "#c0392b": {"text": "--color-danger", "border": "--color-danger", "bg": "--color-danger"},
+    "#dc3545": {"text": "--color-danger", "border": "--color-danger", "bg": "--color-danger"},
+    "#ef4444": {"text": "--color-danger", "border": "--color-danger", "bg": "--color-danger"},
+    "#c45500": {"text": "--color-danger", "border": "--color-danger"},
+    # 橙/琥珀（警示/品牌主色）
+    "#f59e0b": {"text": "--color-warning", "border": "--color-warning", "bg": "--color-warning"},
+    "#d97706": {"text": "--color-warning", "border": "--color-warning", "bg": "--color-warning"},
+    "#ffc107": {"text": "--color-warning", "border": "--color-warning", "bg": "--color-warning"},
+    "#e47911": {"text": "--color-warning", "border": "--color-warning", "bg": "--color-primary"},
+    "#ff9900": {"text": "--color-primary", "border": "--color-primary", "bg": "--color-primary"},
+    "#f0c14b": {"text": "--color-primary", "border": "--color-primary", "bg": "--color-primary"},
+    "#febd69": {"text": "--color-primary", "border": "--color-primary", "bg": "--color-primary"},
+    "#856404": {"text": "--color-warning", "border": "--color-warning"},
+}
+
+
+# alpha 色族 → 已有 alpha Token（on-dark / overlay / *-bg-subtle），按最近 alpha 档吸附
+ALPHA_ON_DARK = ((0.06, "--color-on-dark-06"), (0.10, "--color-on-dark-10"), (0.12, "--color-on-dark-12"),
+                 (0.15, "--color-on-dark-15"), (0.55, "--color-on-dark-55"), (0.72, "--color-on-dark-72"),
+                 (0.92, "--color-on-dark-92"))
+ALPHA_OVERLAY = ((0.05, "--color-overlay-05"), (0.06, "--color-overlay-soft"), (0.08, "--color-overlay-dark"),
+                 (0.10, "--color-overlay-light"), (0.12, "--color-overlay-medium"), (0.50, "--color-overlay-50"))
+
+
+def _nearest_alpha(alpha: float, table):
+    best = None
+    for value, token in table:
+        delta = abs(value - alpha)
+        if best is None or delta < best[0]:
+            best = (delta, token)
+    return best[1] if best and best[0] <= 0.03 else None
+
+
+def pick_alpha_token(rgb: tuple[int, int, int], alpha: float, prop: str) -> str | None:
+    allowed = PROP_ROLES.get(prop)
+    if not allowed:
+        return None
+    r, g, b = rgb
+    roles_color = allowed & {"text", "border", "bg"}
+    if not roles_color:
+        return None
+    if min(rgb) >= 250:                       # 白族 → on-dark
+        token = _nearest_alpha(alpha, ALPHA_ON_DARK)
+        return token if token else None
+    if max(rgb) <= 10:                        # 黑族 → overlay
+        token = _nearest_alpha(alpha, ALPHA_OVERLAY)
+        return token if token else None
+    if abs(r - 15) <= 6 and abs(g - 17) <= 6 and abs(b - 17) <= 6:   # Amazon ink
+        token = _nearest_alpha(alpha, ALPHA_OVERLAY)
+        return token if token else None
+    if abs(r - 148) <= 12 and abs(g - 163) <= 12 and abs(b - 184) <= 12:   # slate
+        if "border" in allowed:
+            return "--color-border-default"
+        if "bg" in allowed:
+            return "--color-overlay-dark"
+        return None
+    if r >= 240 and g >= 244 and b >= 246:    # near-white glass
+        if "bg" in allowed:
+            return "--color-bg-primary"
+        if "border" in allowed:
+            return "--color-border-light"
+        return None
+    if abs(r - 102) <= 20 and abs(g - 126) <= 20 and abs(b - 234) <= 25:   # indigo brand
+        if "bg" in allowed:
+            return "--color-info-bg-subtle"
+        return "--color-link"
+    if abs(r - 245) <= 15 and abs(g - 158) <= 20 and abs(b - 11) <= 25:    # amber
+        if "bg" in allowed:
+            return "--color-warning-bg-subtle"
+        return "--color-warning"
+    return None
+
 NEUTRAL_MAX_SAT = 0.18
 NEUTRAL_MAX_DIST = 22
 
@@ -432,6 +564,9 @@ def pick_token_for_color(value_hex: str, prop: str, colors: dict[str, list[str]]
     allowed = PROP_ROLES.get(prop)
     if allowed is None:
         return None
+    for role_name, token_name in CURATED_ROLE_COLORS.get(value_hex, {}).items():
+        if role_name in allowed and token_name in (resolved or {}):
+            return token_name
     candidates = colors.get(value_hex, [])
     preferred = migrate.COLOR_OVERRIDES.get(value_hex)
     if preferred in candidates and role_of_token(preferred) in allowed:
@@ -457,7 +592,10 @@ def pick_token_for_size(value: str, prop: str, sizes: dict[str, list[str]]) -> t
         return None, "shadow-composite"  # composite shadow needs a shadow token, not a length
     if allowed == {"control-height"}:
         pxv = px_of(value.lower())
-        if pxv is None or pxv > 64:
+        if pxv is not None and pxv <= 32:
+            # 小 min-height 允许落到 space 刻度（控件高盘没有这么小的档）
+            allowed = {"control-height", "space"}
+        elif pxv is None or pxv > 64:
             return None, "layout-height"  # 大高度是布局尺寸，不是控件高
     value = value.lower()
     # pill radius: any very large radius means "full"
@@ -483,11 +621,11 @@ def pick_token_for_size(value: str, prop: str, sizes: dict[str, list[str]]) -> t
     # 「取最近主刻度」(theme-storefront-token-consumption.md §映射原则 1)：
     # 字号 1px、间距/圆角/描边 2px 内允许吸附到最近刻度；偏差记录在 review，便于人工复核。
     if "font-size" in allowed or "line-height" in allowed:
-        tol = 2.0
+        tol = 3.0
     elif "control-height" in allowed:
         tol = 4.0
     else:
-        tol = 3.0
+        tol = 4.0
     best: tuple[float, str] | None = None
     for cand_value, names in sizes.items():
         cpx = px_of(cand_value)
@@ -538,6 +676,17 @@ def transform(body: str, colors, sizes, stats: Counter, review: list[dict], src:
         prop = decl_property(body, m.start())
         parts = [p for p in m.group(1).split(",")]
         if len(parts) >= 4:
+            try:
+                rgb_t = tuple(int(round(float(x))) for x in parts[:3])
+                alpha_t = float(parts[3])
+                alpha_token = pick_alpha_token(rgb_t, alpha_t, prop)
+            except ValueError:
+                alpha_token = None
+            if alpha_token:
+                stats["alpha_mapped"] += 1
+                review.append({"src": src, "kind": "color-alpha-absorbed", "value": "rgba(" + m.group(1) + ")",
+                               "prop": prop, "token": alpha_token})
+                return f"var({alpha_token})"
             try:
                 if float(parts[3].strip()) < 1.0:
                     review.append({"src": src, "kind": "color-alpha", "value": "rgba(" + m.group(1) + ")", "prop": prop})

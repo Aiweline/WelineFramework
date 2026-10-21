@@ -231,8 +231,24 @@ final class BackendThemeStandardContractTest extends TestCase
                 continue;
             }
             $css = (string)preg_replace('/\/\*.*?\*\//s', '', (string)file_get_contents($file));
-            if (str_contains($css, '!important')) {
-                $offenders[] = $relative . ' -> !important 禁用（改用提高特异性或 @layer page）';
+            // 标准 §2.3 唯一例外：[hidden] { display:none !important }。
+            $importantOffenders = [];
+            $previousNonEmpty = '';
+            foreach (preg_split('/\R/', $css) ?: [] as $lineNo => $line) {
+                $trimmedLine = trim($line);
+                if ($trimmedLine === '') {
+                    continue;
+                }
+                if (str_contains($line, '!important')) {
+                    $context = strtolower($trimmedLine . ' ' . $previousNonEmpty);
+                    if (!str_contains($context, '[hidden]')) {
+                        $importantOffenders[] = ($lineNo + 1) . ': ' . $trimmedLine;
+                    }
+                }
+                $previousNonEmpty = $trimmedLine;
+            }
+            if ($importantOffenders !== []) {
+                $offenders[] = $relative . ' -> !important 禁用（' . implode(' | ', $importantOffenders) . '）';
             }
             if (!in_array($relative, $toolPageLiteralAllowlist, true)
                 && preg_match('/#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/', $css)) {

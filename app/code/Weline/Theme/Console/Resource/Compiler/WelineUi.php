@@ -92,6 +92,17 @@ final class WelineUi implements CompilerInterface
         ) . "\n";
         $this->writeIfChanged($outputRoot . 'manifest.json', $manifestJson);
 
+        // 设计系统组件用量：编译期扫描模板 class 使用，供 head 首屏内联（见 ComponentUsageService）。
+        try {
+            \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Service\Ui\ComponentUsageService::class
+            )->analyzeAndWrite();
+        } catch (\Throwable $e) {
+            if (function_exists('w_log_warning')) {
+                w_log_warning('Weline UI component usage analysis failed: ' . $e->getMessage());
+            }
+        }
+
         return $buildManifest;
     }
 

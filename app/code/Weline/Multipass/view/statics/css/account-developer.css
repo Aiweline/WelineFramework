@@ -221,7 +221,7 @@
 }
 
 .multipass-developer__hint--danger {
-    border-left-color: #ef4444;
+    border-left-color: var(--color-danger);
     color: var(--color-link);
 }
 
@@ -263,7 +263,7 @@
 
 .multipass-developer__field input:focus,
 .multipass-developer__field select:focus {
-    border-color: #2563eb;
+    border-color: var(--color-link);
     box-shadow: var(--weline-shadow-md);
     outline: none;
 }

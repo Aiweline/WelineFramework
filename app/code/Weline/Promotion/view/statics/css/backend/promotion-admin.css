@@ -1,0 +1,4 @@
+/* Weline_Promotion 后台页面私有布局（标准 §6.2；Token-only，无 !important） */
+@layer page {
+.promotion-theme-toolbar { margin-block-end: var(--weline-space-4); }
+}

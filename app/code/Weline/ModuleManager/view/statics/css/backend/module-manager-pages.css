@@ -1,0 +1,56 @@
+/* Weline_ModuleManager 后台页面私有布局（标准 §6.2；Token-only，无 ） */
+@layer page {
+.module-manager-page .module-manager-header { gap: 1rem;
+}
+.module-manager-page .module-filter-panel { background: var(--weline-theme-surface-muted); border: 1px solid var(--weline-theme-border); border-radius: .65rem; padding: 1rem;
+}
+.module-manager-page .module-filter-grid { display: grid; grid-template-columns: minmax(260px, 2fr) repeat(3, minmax(145px, 1fr)) minmax(120px, .75fr) auto; gap: .75rem; align-items: end;
+}
+.module-manager-page .module-filter-field label { color: var(--weline-theme-text-muted); display: block; font-size: .75rem; font-weight: 600; letter-spacing: .02em; margin-bottom: .35rem;
+}
+.module-manager-page .module-search-control { position: relative;
+}
+.module-manager-page .module-search-control .mdi { color: var(--weline-theme-text-muted); left: .75rem; pointer-events: none; position: absolute; top: 50%; transform: translateY(-50%);
+}
+.module-manager-page .module-search-control input { padding-left: 2.25rem;
+}
+.module-manager-page .form-control:focus,
+.module-manager-page .form-select:focus { box-shadow: 0 0 0 .2rem color-mix(in srgb, var(--weline-theme-primary) 18%, transparent);
+}
+.module-manager-page .module-result-bar { gap: .75rem;
+}
+.module-manager-page .module-manager-table { min-width: 1120px;
+}
+.module-manager-page .module-manager-table th { color: var(--weline-theme-text-muted); font-size: .72rem; letter-spacing: .045em; text-transform: uppercase; white-space: nowrap;
+}
+.module-manager-page .module-manager-table td { vertical-align: middle;
+}
+.module-manager-page .module-identity { min-width: 320px; max-width: 430px;
+}
+.module-manager-page .module-description { color: var(--weline-theme-text-muted); display: -webkit-box; font-size: .82rem; line-height: 1.35; margin-top: .35rem; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
+.module-manager-page .module-path { color: var(--weline-theme-text-muted); display: block; font-size: .72rem; margin-top: .25rem; max-width: 410px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.module-manager-page .module-versions { display: grid; gap: .2rem; min-width: 155px;
+}
+.module-manager-page .module-version-row { align-items: center; display: grid; gap: .5rem; grid-template-columns: 3.4rem minmax(0, 1fr);
+}
+.module-manager-page .module-version-row small { color: var(--weline-theme-text-muted);
+}
+.module-manager-page .module-version-row code,
+.module-manager-page .module-router { color: inherit; font-size: .76rem; overflow-wrap: anywhere;
+}
+.module-manager-page .module-warning { color: var(--weline-theme-warning); font-size: .73rem; margin-top: .35rem; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.module-manager-page .module-actions-cell {
+    min-width: 190px;
+}
+.module-manager-page .module-empty-state { padding: 4rem 1rem;
+}
+.module-manager-page .module-empty-state .mdi { color: var(--weline-theme-text-muted); font-size: 3.5rem;
+}
+@media (max-width: 1399.98px) { .module-manager-page .module-filter-grid { grid-template-columns: minmax(240px, 2fr) repeat(2, minmax(150px, 1fr)); }
+}
+@media (max-width: 767.98px) { .module-manager-page .module-filter-grid { grid-template-columns: 1fr; } .module-manager-page .module-filter-actions { display: grid ; grid-template-columns: 1fr 1fr; }
+}
+}

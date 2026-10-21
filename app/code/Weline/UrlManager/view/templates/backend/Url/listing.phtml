@@ -2,6 +2,7 @@
 /**@var \Weline\Framework\View\Template $this */
 $currentQ = $this->getData('current_q') ?? '';
 ?>
+<css>Weline_UrlManager::css/backend/url-manager-admin.css</css>
 <div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div>
@@ -14,7 +15,7 @@ $currentQ = $this->getData('current_q') ?? '';
                     <?= __('管理系统中可访问的 URL，可为关键页面设置更友好的自定义地址，提升 SEO 和可读性。') ?>
                 </p>
                 <w:form method="get" action="@backend-url('url-manager/backend/url/listing')" class="url-listing-search" style="--w-mb:var(--weline-space-6);">
-                    <div class="w-field__control" style="max-width: 360px;">
+                    <div class="w-field__control urlmanager-inline-1" >
                         <input type="text" class="w-input" name="q" value="<?= htmlspecialchars((string)($currentQ ?? '')) ?>" placeholder="<?= __('按路径搜索…') ?>">
                         <button type="submit" class="w-button" data-tone="primary">
                             <w:icon name="search" size="sm"></w:icon> <?= __('搜索') ?>
@@ -25,21 +26,21 @@ $currentQ = $this->getData('current_q') ?? '';
                     <table class="w-table" style="--w-mb:0;">
                         <thead>
                         <tr>
-                            <th style="width: 60px;">#</th>
+                            <th class="urlmanager-inline-2">#</th>
                             <th><?= __('访问路径') ?></th>
                             <th><?= __('路由标识') ?></th>
                             <th><?= __('所属模块') ?></th>
                             <th><?= __('类型') ?></th>
                             <th><?= __('创建时间') ?></th>
                             <th><?= __('更新时间') ?></th>
-                            <th style="width: 100px;"><?= __('操作') ?></th>
+                            <th class="urlmanager-inline-3"><?= __('操作') ?></th>
                         </tr>
                         </thead>
                         <tbody>
                         <foreach name="urls">
                             <tr>
                                 <td>{{v.url_id}}</td>
-                                <td><code style="font-size: 0.9em;" data-w-text-wrap="break">{{v.path}}</code></td>
+                                <td><code class="urlmanager-inline-4" data-w-text-wrap="break">{{v.path}}</code></td>
                                 <td><span class="w-text" data-tone="muted" data-size="sm">{{v.identify}}</span></td>
                                 <td>{{v.module_name}}</td>
                                 <td>

@@ -6,6 +6,7 @@ $providerAdd = ['id' => 0];
 $this->assign('providerAdd', $providerAdd);
 $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT;
 ?>
+<css>Weline_Ai::css/backend/ai-admin.css</css>
 <template>Weline_Ai::backend/Manager/tabs.phtml</template>
 <?php if (empty($embed)): ?>
 <!-- start page title -->
@@ -58,63 +59,7 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
 </div>
 <!-- 供应商账户工作原理结束 -->
 
-<style>
-.weline-ai-provider-logo {
-    width: 32px;
-    height: 32px;
-    object-fit: contain;
-    margin-right: 8px;
-}
-.weline-ai-api-key-masked {
-    font-family: monospace;
-    background-color: var(--backend-color-bg-secondary, #f8f9fa);
-    padding: 2px 6px;
-    border-radius: 3px;
-}
-.weline-ai-balance-low {
-    color: var(--backend-color-danger, #dc3545);
-    font-weight: bold;
-}
-.weline-ai-balance-normal {
-    color: var(--backend-color-success, #198754);
-    font-weight: bold;
-}
-/* 预留右下角建站助手 FAB，避免盖住操作列「连通测试」 */
-.weline-ai-provider-card .w-table-wrap {
-    padding-bottom: var(--weline-space-10, 4.5rem);
-    padding-inline-end: var(--weline-space-8, 3rem);
-}
-.weline-ai-provider-card #accountsTable td:last-child {
-    white-space: nowrap;
-}
-.weline-ai-provider-cell {
-    display: flex;
-    flex-direction: column;
-    gap: var(--weline-space-1, 0.25rem);
-    min-width: 0;
-}
-.weline-ai-provider-cell__title {
-    font-weight: var(--weline-font-weight-semibold, 600);
-    line-height: 1.3;
-}
-.weline-ai-provider-cell__meta {
-    color: var(--backend-color-text-muted, var(--color-text-secondary, #6c757d));
-    font-size: var(--weline-font-size-sm, 0.875rem);
-    line-height: 1.35;
-}
-.weline-ai-provider-cell__row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--weline-space-2, 0.5rem);
-}
-.weline-ai-provider-status-cell {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--weline-space-2, 0.5rem);
-}
-</style>
+
 
 <div class="w-grid">
     <div style="--w-span:12;">
@@ -176,8 +121,8 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
                             <tr>
                                 <th><?= __('账户') ?></th>
                                 <th><?= __('密钥与费用') ?></th>
-                                <th style="width: 9rem;"><?= __('状态') ?></th>
-                                <th style="width: 12rem;"><?= __('操作') ?></th>
+                                <th class="ai-inline-21-1"><?= __('状态') ?></th>
+                                <th class="ai-inline-22-2"><?= __('操作') ?></th>
                             </tr>
                         </thead>
                         <tbody id="accountsList">
@@ -1354,7 +1299,7 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
             var revised = image && image.revised_prompt ? '<div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);">' + escapeHtml(image.revised_prompt) + '</div>' : '';
             return '<div style="--w-span:12;--w-span-md:6;--w-mb:var(--weline-space-2);">'
                 + '<a href="' + safeSrc + '" target="_blank" rel="noopener">'
-                + '<img src="' + safeSrc + '" class="img-fluid" style="max-height: 260px; width: 100%; object-fit: contain; background: #fff;" alt="test image" data-w-radius="md" data-w-border="border">'
+                + '<img src="' + safeSrc + '" class="img-fluid ai-inline-23-3" alt="test image" data-w-radius="md" data-w-border="border">'
                 + '</a>' + revised + '</div>';
         }).join('');
         if (!items) return '';
@@ -1444,7 +1389,7 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
                 tbody.innerHTML = data.data.map(function(r) {
                     return '<tr>' +
                         '<td>' + escapeHtml(r.created_at_formatted || '-') + '</td>' +
-                        '<td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(r.request_id || '-') + '</td>' +
+                        '<td class="ai-inline-24-4">' + escapeHtml(r.request_id || '-') + '</td>' +
                         '<td>' + escapeHtml(r.request_type || '-') + '</td>' +
                         '<td>' + escapeHtml(r.prompt_tokens || 0) + '</td>' +
                         '<td>' + escapeHtml(r.completion_tokens || 0) + '</td>' +

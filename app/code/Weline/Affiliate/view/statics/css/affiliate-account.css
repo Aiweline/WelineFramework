@@ -173,7 +173,7 @@ background: var(--color-primary-dark);
 color: var(--color-text-light);
 }
 .weline-affiliate-account-card__notice {
-min-height: 18px;
+min-height: var(--spacing-4_5);
 margin-top: var(--spacing-2);
 color: var(--color-primary);
 font-size: var(--font-size-xs);
@@ -262,7 +262,7 @@ overflow-wrap: anywhere;
 .weline-affiliate-account-card__badge {
 display: inline-flex;
 align-items: center;
-min-height: 22px;
+min-height: var(--spacing-5_5);
 padding: var(--spacing-0_2) var(--spacing-2);
 border: var(--border-width-thin) solid var(--color-border-light);
 border-radius: var(--radius-full);

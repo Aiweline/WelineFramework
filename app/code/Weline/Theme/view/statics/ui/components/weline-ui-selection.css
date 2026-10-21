@@ -1,0 +1,87 @@
+/* Weline UI source: css/components/selection.css */
+/* Weline UI · Selection controls（Switch / Checkbox / Radio，Apple 风格） */
+@layer components {
+    .w-switch {
+        gap: var(--weline-space-2);
+        min-block-size: var(--weline-control-height-sm);
+        font-size: var(--weline-font-size-sm);
+        user-select: none;
+    }
+    .w-switch > input {
+        --w-switch-width: 3.1875rem;   /* 51px */
+        --w-switch-height: 1.9375rem;  /* 31px */
+        --w-switch-knob: calc(var(--w-switch-height) - 0.25rem);
+        position: relative;
+        flex: 0 0 var(--w-switch-width);
+        inline-size: var(--w-switch-width);
+        block-size: var(--w-switch-height);
+        border: 0;
+        border-radius: var(--weline-radius-round);
+        background: var(--weline-theme-surface-muted);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--weline-theme-text) 8%, transparent);
+        transition: background-color var(--weline-motion-normal) var(--weline-motion-ease);
+    }
+    .w-switch > input::before {
+        content: "";
+        position: absolute;
+        inset-block-start: 0.125rem;
+        inset-inline-start: 0.125rem;
+        inline-size: var(--w-switch-knob);
+        block-size: var(--w-switch-knob);
+        margin: 0;
+        border-radius: 50%;
+        background: var(--weline-theme-surface-raised);
+        box-shadow: 0 3px 8px color-mix(in srgb, var(--weline-theme-text) 18%, transparent), 0 1px 1px color-mix(in srgb, var(--weline-theme-text) 8%, transparent);
+        transition: translate var(--weline-motion-normal) var(--weline-motion-ease);
+    }
+    .w-switch > input:checked {
+        background: var(--weline-theme-primary);
+        box-shadow: none;
+    }
+    .w-switch > input:checked::before {
+        translate: calc(var(--w-switch-width) - var(--w-switch-knob) - 0.25rem) 0;
+    }
+    .w-switch > input:focus-visible { outline: 0; box-shadow: var(--weline-theme-focus-ring); }
+    .w-switch > input:disabled { opacity: 0.5; cursor: not-allowed; }
+    .w-switch:has(> input:disabled) { color: var(--weline-theme-text-muted); cursor: not-allowed; }
+
+    .w-check {
+        gap: var(--weline-space-2);
+        min-block-size: var(--weline-control-height-sm);
+        font-size: var(--weline-font-size-sm);
+    }
+    .w-check > input[type="checkbox"],
+    .w-check > input[type="radio"] {
+        appearance: none;
+        flex: 0 0 auto;
+        inline-size: 1.125rem;
+        block-size: 1.125rem;
+        margin: 0;
+        border: 1px solid var(--weline-theme-border-strong);
+        border-radius: var(--weline-radius-xs);
+        background: var(--weline-theme-surface);
+        box-shadow: inset 0 1px 1px color-mix(in srgb, var(--weline-theme-text) 5%, transparent);
+        transition:
+            background-color var(--weline-motion-fast) var(--weline-motion-ease),
+            border-color var(--weline-motion-fast) var(--weline-motion-ease),
+            box-shadow var(--weline-motion-fast) var(--weline-motion-ease);
+        cursor: inherit;
+    }
+    .w-check > input[type="radio"] { border-radius: 50%; }
+    .w-check > input[type="checkbox"]:checked,
+    .w-check > input[type="radio"]:checked {
+        border-color: var(--weline-theme-primary);
+        background: var(--weline-theme-primary);
+        box-shadow: none;
+    }
+    .w-check > input[type="checkbox"]:checked {
+        background-image: linear-gradient(45deg, transparent 45%, var(--weline-theme-on-primary) 45%),
+            linear-gradient(-45deg, transparent 62%, var(--weline-theme-on-primary) 62%);
+        background-size: 100% 100%;
+        background-position: center;
+        background-repeat: no-repeat;
+    }
+    .w-check > input[type="radio"]:checked { box-shadow: inset 0 0 0 3px var(--weline-theme-surface); }
+    .w-check > input:focus-visible { outline: 0; box-shadow: var(--weline-theme-focus-ring); }
+    .w-check > input:disabled { opacity: 0.5; cursor: not-allowed; }
+}

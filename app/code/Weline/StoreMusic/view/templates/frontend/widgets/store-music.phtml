@@ -123,13 +123,10 @@ $faceUrl = $esc($faceUrl);
 <?php /* Critical float geometry: prefer Theme float-layer slot (relative).
  * Fallback fixed only when rendered outside #w-storefront-float-layer. */ ?>
 <style data-store-music-critical>
-.w-store-music-host[data-store-music-host]{position:static;display:block;width:0;height:0;margin:0;padding:0;border:0;overflow:visible}
-/* Critical geometry: consume Theme variable leaves (--spacing-7 / --token-size-1-65rem),
- * which are guaranteed non-empty by variables/_spacing.css + _auto-literals.css.
+.w-store-music-host[data-store-music-host]{position:static;display:block;width:0;height:0;margin:0;padding:0;border:0;overflow:visible}/* Critical geometry: consume Theme variable leaves (--spacing-7 / --token-size-1-65rem), * which are guaranteed non-empty by variables/_spacing.css + _auto-literals.css.
  * Marker: store-music-critical-bottom-iacvt-v2 */
-.w-store-music[data-store-music]{position:fixed!important;left:max(var(--spacing-7),env(safe-area-inset-left,0px));bottom:max(var(--token-size-1-65rem),env(safe-area-inset-bottom,0px));z-index:2147483001}
-#w-storefront-float-layer .w-store-music-host[data-store-music-host]{width:auto;height:auto;overflow:visible}
-#w-storefront-float-layer .w-store-music[data-store-music]{position:relative!important;left:auto!important;bottom:auto!important}
+.w-store-music[data-store-music]{position: fixed;left:max(var(--spacing-7),env(safe-area-inset-left,0px));bottom:max(var(--token-size-1-65rem),env(safe-area-inset-bottom,0px));z-index:2147483001}
+#w-storefront-float-layer .w-store-music-host[data-store-music-host]{width:auto;height:auto;overflow:visible}#w-storefront-float-layer .w-store-music[data-store-music]{position: relative;left: auto;bottom:auto!important}
 #w-storefront-float-layer .w-storefront-float-layer__slot--start:has(.w-store-music){left:max(var(--spacing-7),env(safe-area-inset-left,0px));bottom:max(var(--token-size-1-65rem),env(safe-area-inset-bottom,0px))}
 #w-storefront-float-layer .w-storefront-float-layer__slot--start.is-edge-collapsed:has(.w-store-music){left:max(0px,env(safe-area-inset-left,0px))}
 .w-store-music.is-playing .w-store-music__spectrum,.w-store-music.is-remote-playing .w-store-music__spectrum{opacity:1;visibility:visible}

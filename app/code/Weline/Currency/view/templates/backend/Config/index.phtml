@@ -8,34 +8,9 @@
  * @var \Weline\Framework\View\Template $this
  */
 ?>
-<style>
-    .weline-currency-config .weline-alert-info {
-        background-color: var(--backend-color-info-light, rgba(23, 162, 184, 0.15));
-        border-color: var(--backend-color-info-border, rgba(23, 162, 184, 0.3));
-        color: var(--backend-color-info-text, #a8d8e6);
-    }
-    
-    .weline-currency-config .weline-alert-info strong {
-        color: var(--backend-color-info-emphasis, #bee5eb);
-    }
-    
-    .weline-currency-config .weline-alert-info code {
-        background-color: var(--backend-color-code-bg, rgba(0, 0, 0, 0.3));
-        color: var(--backend-color-info-text, #a8d8e6);
-        border-color: var(--backend-color-info-border, rgba(23, 162, 184, 0.3));
-    }
-    
-    .weline-currency-config .weline-card-explain {
-        background-color: var(--backend-color-card-bg, #f8f9fa);
-        border-color: var(--backend-color-border, rgba(255, 255, 255, 0.1));
-    }
-    
-    .weline-currency-config .weline-alert-warning {
-        background-color: var(--backend-color-warning-light, rgba(255, 193, 7, 0.15));
-        border-color: var(--backend-color-warning-border, rgba(255, 193, 7, 0.3));
-        color: var(--backend-color-warning-text, #ffd54f);
-    }
-</style>
+<css>Weline_Currency::css/backend/currency-admin.css</css>
+<css>Weline_Currency::css/backend/currency-pages.css</css>
+
 
 <div class="weline-currency-config" data-testid="currency-config-management">
 <!-- 页面标题 -->
@@ -316,7 +291,7 @@
 <!-- 基准货币切换：汇率对照确认（确认前不写库） -->
 <div class="w-dialog" id='baseCurrencyChangeModal' tabindex='-1' aria-labelledby='baseCurrencyChangeModalLabel' aria-hidden='true' data-w-component="dialog" data-state="closed" hidden>
     <div class="w-dialog__frame">
-        <div class="w-dialog__surface" style="max-width:52rem;width:min(96vw,52rem);">
+        <div class="w-dialog__surface currency-inline-1" >
             <div class="w-dialog__header w-text" data-w-background="warning" data-tone="muted">
                 <h5 class="w-dialog__title" id='baseCurrencyChangeModalLabel'>
                     <w:icon name="warning" size="sm"></w:icon>
@@ -339,7 +314,7 @@
                     <lang>正在计算汇率对照…</lang>
                 </div>
                 <div id='modal_rate_preview_error' class="w-alert" data-tone="danger" style="display:none;--w-mb:var(--weline-space-4);"></div>
-                <div style="max-height:22rem;overflow:auto;--w-mb:var(--weline-space-2);">
+                <div class="currency-inline-2">
                     <table class="w-table" id='modal_rate_preview_table' style="width:100%;">
                         <thead>
                             <tr>
@@ -393,7 +368,7 @@
                     </small>
                 </div>
 
-                <div id='update_sse_log' data-w-border="border" data-w-radius="md" style="max-height:14rem;overflow:auto;--w-pt:var(--weline-space-2);--w-pe:var(--weline-space-3);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-3);--w-mb:var(--weline-space-4);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:var(--weline-font-size-sm);"></div>
+                <div id='update_sse_log' data-w-border="border" data-w-radius="md" class="currency-inline-3"></div>
                 
                 <div class="w-grid w-text" data-align="center" style="--w-mt:var(--weline-space-4);">
                     <div style="--w-span:4;">

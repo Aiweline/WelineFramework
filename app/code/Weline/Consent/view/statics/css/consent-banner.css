@@ -12,7 +12,7 @@
     overflow: auto;
     padding: var(--spacing-3_5) var(--spacing-4) calc(var(--spacing-3_5) + env(safe-area-inset-bottom));
     border-top: var(--border-width-thin) solid #3a4553;
-    background: #232f3e;
+    background: var(--color-bg-dark);
     color: var(--color-text-light);
     box-shadow: var(--weline-shadow-md);
     font: var(--font-size-sm)/1.5 "Amazon Ember", "Helvetica Neue", Arial, sans-serif;
@@ -103,7 +103,7 @@
 }
 
 .w-consent-banner__btn--secondary:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--color-on-dark-06);
     border-color: var(--color-border-faint);
     color: var(--color-text-light);
 }

@@ -31,7 +31,7 @@
     box-sizing: border-box;
     width: min(100%, var(--weline-layout-content-max-width));
     margin: 0 auto;
-    padding: var(--spacing-7) var(--weline-layout-content-padding-inline) 56px;
+    padding: var(--spacing-7) var(--weline-layout-content-padding-inline) var(--spacing-13);
 }
 
 .weline-cart-shell--amazon h1,

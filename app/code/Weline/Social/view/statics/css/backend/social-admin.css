@@ -1,3 +1,6 @@
+/* Weline_Social 后台页面私有布局（标准 §6.2；Token-only，无 !important） */
+@layer page {
+.social-embed-preview { max-block-size: 42rem; }
 .weline-social-admin {
     width: 100%;
     min-width: 0;
@@ -233,4 +236,20 @@
 .weline-social-admin--embed[data-scope-locked='1'] [data-social-ss-host][data-disabled='1'] .w-search-select-trigger {
     cursor: not-allowed;
     opacity: 0.72;
+
+/* from backend/partials/website-social-embed-section.phtml */
+
+.website-social-embed-frame-wrap {
+    overflow: hidden;
+    min-block-size: 28rem;
+}
+.website-social-embed-frame {
+    display: block;
+    width: 100%;
+    min-block-size: 36rem;
+    height: min(70vh, 48rem);
+    border: 0;
+    background: var(--weline-theme-surface, var(--backend-theme-surface, var(--weline-theme-text-muted)));
+}
+
 }

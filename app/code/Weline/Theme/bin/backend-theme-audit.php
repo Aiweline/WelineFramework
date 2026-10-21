@@ -35,7 +35,8 @@ $patterns = [
     'style_block' => '/<style\b[^>]*>/i',
     'inline_visual_style' => '/\bstyle\s*=\s*"[^"]*(?:#[0-9a-fA-F]{3,8}\b|rgba?\(|hsl\(|\b\d+(?:\.\d+)?(?:px|rem|em)\b|!important)[^"]*"/i',
     'important' => '/!important/i',
-    'legacy_class' => '/\bclass\s*=\s*"[^"]*\b(?:page-title-box|card-body|form-control|table-responsive|nav-tabs|col-(?:xs|sm|md|lg|xl)-\d+|admin-card)\b[^"]*"/i',
+    // 精确匹配 class token，避免把 w-builder-card-body / backend-form-control 这类自定义类误判为旧 Bootstrap 类。
+    'legacy_class' => '/\bclass\s*=\s*"[^"]*(?:^|\s)(?:page-title-box|card-body|form-control|table-responsive|nav-tabs|col-(?:xs|sm|md|lg|xl)-\d+|admin-card)(?:\s|$)[^"]*"/i',
     // 同步业务脚本：无 defer/async、非 type=module，且不是首屏 prepaint 兜底。
     'sync_script_src' => '/<script\b(?![^>]*\b(?:defer|async)\b)(?![^>]*\btype\s*=\s*["\']module["\'])(?![^>]*weline-theme-prepaint\.js)[^>]*\bsrc\s*=\s*["\'][^"\']*(?:@static|\/static\/)[^"\']*["\'][^>]*>/i',
     'inline_h1' => '/<h1\b/i',
@@ -90,20 +91,34 @@ foreach ($files as $file) {
     $content = (string)@file_get_contents($file);
     $fileHits = [];
     foreach ($patterns as $rule => $regex) {
-        $count = preg_match_all($regex, $content, $matches);
-        if ($count > 0) {
+        if ($rule === 'inline_visual_style') {
+            // 标准 §2.3/§3：style="--w-*: …" 纯变量接线是允许的；只对去掉变量声明后的字面量计数。
+            $count = 0;
+            if (preg_match_all('/\bstyle\s*=\s*"([^"]*)"/i', $content, $styleMatches) > 0) {
+                foreach ($styleMatches[1] as $styleValue) {
+                    $remaining = (string)preg_replace('/--[a-zA-Z0-9_-]+\s*:[^;"]*;?/', '', $styleValue);
+                    if (preg_match('/(?:#[0-9a-fA-F]{3,8}\b|rgba?\(|hsl\(|\b\d+(?:\.\d+)?(?:px|rem|em)\b|!important)/i', $remaining) === 1) {
+                        $count++;
+                    }
+                }
+            }
+        } else {
+            $count = preg_match_all($regex, $content, $matches);
+        }
+        if ($count > 0 && $rule !== 'inline_h1') {
             $summary['rules'][$rule] += $count;
             $fileHits[$rule] = $count;
-            if (count($summary['samples']) < 40 && $rule !== 'inline_h1') {
+            if (count($summary['samples']) < 40) {
                 $summary['samples'][] = ['file' => $relative, 'rule' => $rule, 'count' => $count];
             }
         }
     }
-    // 页面模板里出现第二个 h1 才算违规（布局允许一个）
-    if (($fileHits['inline_h1'] ?? 0) > 1) {
-        $summary['rules']['inline_h1'] += $fileHits['inline_h1'] - 1;
-        $summary['samples'][] = ['file' => $relative, 'rule' => 'multiple_h1', 'count' => $fileHits['inline_h1']];
-        $fileHits['multiple_h1'] = $fileHits['inline_h1'] - 1;
+    // 标准只禁止“第二个 h1”：布局/页面保留唯一 h1 是合法 fallback，不计入违规。
+    $h1Count = (int)preg_match_all($patterns['inline_h1'], $content);
+    if ($h1Count > 1) {
+        $summary['rules']['inline_h1'] += $h1Count - 1;
+        $summary['samples'][] = ['file' => $relative, 'rule' => 'multiple_h1', 'count' => $h1Count];
+        $fileHits['multiple_h1'] = $h1Count - 1;
     }
     if ($fileHits !== []) {
         $summary['files_with_violations']++;

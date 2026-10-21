@@ -1,0 +1,7 @@
+/* Weline_Currency 后台页面私有布局（标准 §6.2；Token-only，无 !important） */
+@layer page {
+
+.currency-inline-1 { max-width:52rem;width:min(96vw,52rem); }
+.currency-inline-2 { max-height:22rem;overflow:auto; }
+.currency-inline-3 { max-height:14rem;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:var(--weline-font-size-sm); }
+}

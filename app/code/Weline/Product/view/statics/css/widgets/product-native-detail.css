@@ -1239,16 +1239,14 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
 }
 .product-native-detail__description-body .weline-detail-figure-stack--caption + .weline-detail-prose {
     padding-top: var(--spacing-md);
-}
-/* 硬禁：同棚三联墙——即便残留 class 也强制单列 */
-.product-native-detail__description-body .weline-detail-figure-row--triptych {
-    grid-template-columns: 1fr !important;
+}/* 硬禁：同棚三联墙——即便残留 class 也强制单列 */
+.product-native-detail__description-body .weline-detail-figure-row--triptych.weline-detail-figure-row--triptych{
+    grid-template-columns: 1fr;
     max-width: 100%;
     margin-inline: 0;
 }
-@media (min-width: 640px) {
-    .product-native-detail__description-body .weline-detail-figure-row--triptych {
-        grid-template-columns: 1fr !important;
+@media (min-width: 640px) {.product-native-detail__description-body .weline-detail-figure-row--triptych.weline-detail-figure-row--triptych{
+        grid-template-columns: 1fr;
     }
 }
 .product-native-detail__description-body .weline-detail-prose--quiet {
@@ -1467,20 +1465,15 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     background: transparent;
     object-fit: contain;
     object-position: center top;
-}
-/* 竖图通栏：满宽优先，仍限高且不裁切（宽随高缩） */
-.product-native-detail__description-body .weline-detail-orient--portrait .weline-detail-figure img,
-.product-native-detail__description-body .weline-detail-orient--portrait .weline-detail-figure-row--solo .weline-detail-figure img,
-.product-native-detail__description-body .weline-detail-orient--portrait .weline-detail-figure-row--pair .weline-detail-figure img,
-.product-native-detail__description-body .weline-detail-figure-stack--fullbleed.weline-detail-orient--portrait img,
-.product-native-detail__description-body .weline-detail-figure-stack--caption.weline-detail-orient--portrait img {
-    width: auto !important;
-    max-width: 100% !important;
-    height: auto !important;
-    max-height: min(72vh, var(--token-size-42rem)) !important;
+}/* 竖图通栏：满宽优先，仍限高且不裁切（宽随高缩） */
+.product-native-detail__description-body .weline-detail-orient--portrait .weline-detail-figure img, .product-native-detail__description-body .weline-detail-orient--portrait .weline-detail-figure-row--solo .weline-detail-figure img, .product-native-detail__description-body .weline-detail-orient--portrait .weline-detail-figure-row--pair .weline-detail-figure img, .product-native-detail__description-body .weline-detail-figure-stack--fullbleed.weline-detail-orient--portrait img, .product-native-detail__description-body .weline-detail-figure-stack--caption.weline-detail-orient--portrait img{
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: min(72vh, var(--token-size-42rem));
     margin-inline: auto;
-    object-fit: contain !important;
-    object-position: center top !important;
+    object-fit: contain;
+    object-position: center top;
     background: transparent;
 }
 /* pair 双列：单格略矮；宽随高缩，禁止 cover/父级裁切 */
@@ -2028,13 +2021,12 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     border: var(--border-width-thin) solid var(--color-text-tertiary);
     border-radius: var(--spacing-1);
     font: inherit;
-}
-.product-native-detail__quote-honeypot {
-    position: absolute !important;
-    left: -9999px !important;
+}.product-native-detail__quote-honeypot.product-native-detail__quote-honeypot{
+    position: absolute;
+    left: -9999px;
     opacity: 0;
-    height: 0 !important;
-    width: 0 !important;
+    height: 0;
+    width: 0;
 }
 .product-native-detail__quote-hint,
 .product-native-detail__quote-form-message {
@@ -2452,18 +2444,13 @@ html.has-product-sticky-purchase body {
     color: var(--color-text-tertiary);
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .product-native-detail__description-body .weline-detail-reveal,
-    .product-native-detail__description-body[data-weline-detail-reveal-booted="1"] .weline-detail-reveal.is-armed:not(.is-in):not([data-inview="1"]) {
+@media (prefers-reduced-motion: reduce) {.product-native-detail__description-body .weline-detail-reveal.weline-detail-reveal, .product-native-detail__description-body[data-weline-detail-reveal-booted="1"] .weline-detail-reveal.is-armed:not(.is-in):not([data-inview="1"]){
         opacity: 1;
-        transform: none !important;
+        transform: none;
         transition: none;
-    }
-    .product-native-detail__description-body .weline-detail-figure,
-    .product-native-detail__description-body .weline-detail-figure:hover,
-    .product-native-detail__description-body .weline-detail-bento__card {
+    }.product-native-detail__description-body .weline-detail-figure.weline-detail-figure, .product-native-detail__description-body .weline-detail-figure.weline-detail-figure:hover, .product-native-detail__description-body .weline-detail-bento__card.weline-detail-bento__card{
         transition: none;
-        transform: none !important;
+        transform: none;
     }
 }
 

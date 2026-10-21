@@ -1,0 +1,86 @@
+/* Weline UI source: css/components/field.css */
+/* Weline UI · Field / Input / Select / Textarea（Apple 风格） */
+@layer components {
+    .w-field { gap: var(--weline-space-2); }
+    .w-field__label { font-size: var(--weline-font-size-sm); font-weight: 590; letter-spacing: var(--weline-letter-tight); }
+    .w-field__hint { color: var(--weline-theme-text-muted); font-size: var(--weline-font-size-xs); line-height: 1.45; }
+    .w-field__error { color: var(--weline-theme-danger); font-size: var(--weline-font-size-xs); }
+
+    .w-input,
+    .w-select,
+    .w-textarea {
+        min-block-size: var(--weline-control-height);
+        padding-inline: var(--weline-control-padding-inline);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface);
+        color: var(--weline-theme-text);
+        font: inherit;
+        font-size: var(--weline-font-size-sm);
+        line-height: 1.35;
+        box-shadow: inset 0 1px 1px color-mix(in srgb, var(--weline-theme-text) 4%, transparent);
+        transition:
+            border-color var(--weline-motion-fast) var(--weline-motion-ease),
+            box-shadow var(--weline-motion-fast) var(--weline-motion-ease),
+            background-color var(--weline-motion-fast) var(--weline-motion-ease);
+    }
+    .w-textarea { min-block-size: calc(var(--weline-control-height) * 2.5); padding-block: var(--weline-space-2); resize: vertical; }
+    .w-input:hover,
+    .w-select:hover,
+    .w-textarea:hover { border-color: var(--weline-theme-border-strong); }
+    .w-input:focus,
+    .w-select:focus,
+    .w-textarea:focus {
+        outline: 0;
+        border-color: var(--weline-theme-focus);
+        box-shadow: var(--weline-theme-focus-ring);
+        background: var(--weline-theme-surface-raised);
+    }
+    .w-input::placeholder,
+    .w-textarea::placeholder { color: var(--weline-theme-text-subtle); }
+    .w-input:disabled,
+    .w-select:disabled,
+    .w-textarea:disabled {
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text-muted);
+        cursor: not-allowed;
+        box-shadow: none;
+    }
+    .w-input[data-size="sm"],
+    .w-select[data-size="sm"] {
+        min-block-size: var(--weline-control-height-sm);
+        padding-inline: var(--weline-space-3);
+        border-radius: var(--weline-radius-sm);
+        font-size: var(--weline-font-size-xs);
+    }
+    .w-input[data-size="lg"],
+    .w-select[data-size="lg"] {
+        min-block-size: var(--weline-control-height-lg);
+        border-radius: var(--weline-radius-lg);
+        font-size: var(--weline-font-size-md);
+    }
+    .w-input[type="color"] {
+        inline-size: calc(var(--weline-control-height) + var(--weline-space-1));
+        padding: var(--weline-space-1);
+        cursor: pointer;
+    }
+    .w-input[type="file"] { padding-block: var(--weline-space-1); }
+    .w-select {
+        appearance: none;
+        padding-inline-end: calc(var(--weline-control-padding-inline) + 1.25rem);
+        background-image: linear-gradient(45deg, transparent 50%, var(--weline-theme-text-muted) 50%),
+            linear-gradient(135deg, var(--weline-theme-text-muted) 50%, transparent 50%);
+        background-position:
+            calc(100% - 1.05rem) 50%,
+            calc(100% - 0.7rem) 50%;
+        background-size: 0.35rem 0.35rem, 0.35rem 0.35rem;
+        background-repeat: no-repeat;
+    }
+    .w-field[data-state="error"] .w-input,
+    .w-field[data-state="error"] .w-select,
+    .w-field[data-state="error"] .w-textarea {
+        border-color: var(--weline-theme-danger);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--weline-theme-danger) 24%, transparent);
+    }
+    .w-field__control { min-width: 0; }
+}

@@ -26,3 +26,13 @@ $headDescription = trim((string)($this->getData('description') ?? '')) ?: (strin
 <?php if ($this->getHeader()): ?>
     <?= $this->getHeader()->getHtml() ?>
 <?php endif; ?>
+<?php
+// 旧 fetchBase 页：设计系统组件 CSS 走首屏内联（编译期按用量合并），
+// 与默认主题 head 保持一致；基础 Token/壳层仍由 foundation 包提供。
+try {
+    echo \Weline\Framework\Manager\ObjectManager::getInstance(
+        \Weline\Theme\Service\Ui\ComponentUsageService::class
+    )->renderInlineStyle('backend');
+} catch (\Throwable) {
+}
+?>

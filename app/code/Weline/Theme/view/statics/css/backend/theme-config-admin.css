@@ -1,0 +1,5 @@
+/* Weline_Theme 后台配置表单私有布局（标准 §6.2；Token-only，无 !important） */
+@layer page {
+    .variable-color-input { inline-size: calc(var(--weline-space-12) + var(--weline-space-3)); block-size: var(--weline-control-height); padding: var(--weline-space-1); cursor: pointer; }
+    .category-group-title { display: flex; align-items: center; gap: var(--weline-space-1); color: var(--weline-theme-text); font-weight: 650; }
+}

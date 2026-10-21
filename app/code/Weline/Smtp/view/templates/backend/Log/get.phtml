@@ -13,6 +13,7 @@ $content = (string)($log_view['content'] ?? '');
 $isHtml = !empty($log_view['is_html_flag']);
 $back = (string)($back_url ?? '');
 ?>
+<css>Weline_Smtp::css/backend/smtp-admin.css</css>
 <div class="w-grid" data-testid="smtp-log-read">
   <div style="--w-span:12;">
     <div class="w-backend-page__heading" style="--w-mb:var(--weline-space-4);">
@@ -61,7 +62,7 @@ $back = (string)($back_url ?? '');
             title="<?= $h(__('邮件正文预览')) ?>"
             sandbox=""
             referrerpolicy="no-referrer"
-            style="width:100%;min-height:28rem;border:1px solid var(--weline-theme-border, #d7e0e5);border-radius:var(--weline-radius-md, 8px);background:#fff;"
+            class="smtp-mail-frame"
             srcdoc="<?= $h($content) ?>"
             data-testid="smtp-log-preview-frame"
           ></iframe>

@@ -46,6 +46,7 @@ if (empty($providerConfig) && !empty($config)) {
 }
 $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
 ?>
+<css>Weline_Ai::css/backend/ai-admin.css</css>
 
 <!-- 面包屑导航 -->
 <div class="w-grid">
@@ -971,7 +972,7 @@ if (!empty($displayConfig)) {
                         return '';
                     }
                     src = escapeHtml(src);
-                    return '<div style="--w-span:6;--w-span-lg:4;"><a href="' + src + '" target="_blank" rel="noopener"><img src="' + src + '" class="img-fluid" style="max-height: 260px; width: 100%; object-fit: contain; background: #fff;" data-w-radius="md" data-w-border="border"></a></div>';
+                    return '<div style="--w-span:6;--w-span-lg:4;"><a href="' + src + '" target="_blank" rel="noopener"><img src="' + src + '" class="img-fluid ai-inline-9-1" data-w-radius="md" data-w-border="border"></a></div>';
                 }).join('');
                 return items ? '<div class="w-grid" style="--w-gap:var(--weline-space-2);--w-mt:var(--weline-space-2);">' + items + '</div>' : '';
             };
@@ -981,11 +982,11 @@ if (!empty($displayConfig)) {
                 var s = r.self_config || {};
                 var p = r.provider_account || {};
                 var pTrace = Array.isArray(p.trace) && p.trace.length
-                    ? ('<hr style="--w-mt:var(--weline-space-2);--w-mb:var(--weline-space-2);"><small class="w-text" data-tone="muted">详细过程：</small><div class="w-alert" style="white-space: pre-wrap; max-height: 240px; overflow-y: auto;" data-tone="muted">' + escapeHtml(p.trace.join('\n')) + '</div>')
+                    ? ('<hr style="--w-mt:var(--weline-space-2);--w-mb:var(--weline-space-2);"><small class="w-text" data-tone="muted">详细过程：</small><div class="w-alert ai-inline-10-2" data-tone="muted">' + escapeHtml(p.trace.join('\n')) + '</div>')
                     : '';
                 var sBadge = s.tested ? (s.success ? '<span class="w-badge" data-w-background="success"><?= __('成功') ?></span>' : '<span class="w-badge" data-w-background="danger"><?= __('失败') ?></span>') : '<span class="w-badge" data-w-background="muted"><?= __('未测') ?></span>';
                 var pBadge = p.tested ? (p.success ? '<span class="w-badge" data-w-background="success"><?= __('成功') ?></span>' : '<span class="w-badge" data-w-background="danger"><?= __('失败') ?></span>') : '<span class="w-badge" data-w-background="muted"><?= __('未测') ?></span>';
-                resultContent.innerHTML = '<div class="w-grid" style="--w-gap:var(--weline-space-2);"><div style="--w-span:12;"><div class="w-alert alert-' + (s.success ? 'success' : (s.tested 'danger' 'secondary')) '" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-mb:var(--weline-space-2);"><strong>自配置</strong> ' + sBadge + '<br>' + (s.tested ? ('<small class="w-text" data-tone="muted">耗时：</small><code>' + escapeHtml(s.duration || 0) + ' ms</code><br><small class="w-text" data-tone="muted">消息：</small>' + escapeTextWithBreaks(s.message || '') + '<br><div class="w-alert" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;" data-tone="muted">' + escapeHtml(s.response || '') + '</div>' + renderTestImages(s)) : '') + '</div></div><div style="--w-span:12;"><div class="w-alert alert-' + (p.success ? 'success' : (p.tested 'danger' 'secondary')) '" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-mb:var(--weline-space-2);"><strong>供应商账户</strong> ' + pBadge + (p.account_name ? ' <span class="w-badge" data-w-background="info">' + escapeHtml(p.account_name) + '</span>' : '') + '<br>' + (p.tested ? ('<small class="w-text" data-tone="muted">耗时：</small><code>' + escapeHtml(p.duration || 0) + ' ms</code><br><small class="w-text" data-tone="muted">消息：</small>' + escapeTextWithBreaks(p.message || '') + '<br><div class="w-alert" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;" data-tone="muted">' + escapeHtml(p.response || '') + '</div>' + renderTestImages(p) + pTrace) : '') + '</div></div></div>';
+                resultContent.innerHTML = '<div class="w-grid" style="--w-gap:var(--weline-space-2);"><div style="--w-span:12;"><div class="w-alert alert-' + (s.success ? 'success' : (s.tested 'danger' 'secondary')) '" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-mb:var(--weline-space-2);"><strong>自配置</strong> ' + sBadge + '<br>' + (s.tested ? ('<small class="w-text" data-tone="muted">耗时：</small><code>' + escapeHtml(s.duration || 0) + ' ms</code><br><small class="w-text" data-tone="muted">消息：</small>' + escapeTextWithBreaks(s.message || '') + '<br><div class="w-alert ai-inline-11-3" data-tone="muted">' + escapeHtml(s.response || '') + '</div>' + renderTestImages(s)) : '') + '</div></div><div style="--w-span:12;"><div class="w-alert alert-' + (p.success ? 'success' : (p.tested 'danger' 'secondary')) '" style="--w-pt:var(--weline-space-2);--w-pb:var(--weline-space-2);--w-ps:var(--weline-space-4);--w-pe:var(--weline-space-4);--w-mb:var(--weline-space-2);"><strong>供应商账户</strong> ' + pBadge + (p.account_name ? ' <span class="w-badge" data-w-background="info">' + escapeHtml(p.account_name) + '</span>' : '') + '<br>' + (p.tested ? ('<small class="w-text" data-tone="muted">耗时：</small><code>' + escapeHtml(p.duration || 0) + ' ms</code><br><small class="w-text" data-tone="muted">消息：</small>' + escapeTextWithBreaks(p.message || '') + '<br><div class="w-alert ai-inline-12-4" data-tone="muted">' + escapeHtml(p.response || '') + '</div>' + renderTestImages(p) + pTrace) : '') + '</div></div></div>';
             } else if (data.success) {
                 resultContent.innerHTML = '<div class="w-alert" data-tone="success"><strong><?= __('测试成功') ?>!</strong> ' + escapeTextWithBreaks(data.message || '') + renderTestImages(data) + '</div>';
             } else {
@@ -1010,44 +1011,4 @@ if (!empty($displayConfig)) {
 })();
 </script>
 
-<style>
-.model-edit-container .card {
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    border: 1px solid var(--backend-color-border);
-}
 
-.model-edit-container .card-header {
-    background-color: var(--backend-color-card-header-bg);
-    border-bottom: 1px solid var(--backend-color-border);
-}
-
-.model-edit-container .card-header h5 {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-}
-
-.model-edit-container .form-label {
-    font-weight: 500;
-    color: var(--backend-color-text-primary);
-    margin-bottom: 0.5rem;
-}
-
-.model-edit-container .form-control:focus {
-    border-color: var(--backend-color-primary);
-    box-shadow: 0 0 0 0.2rem var(--backend-color-primary-light);
-}
-
-.model-edit-container .form-text {
-    display: block;
-    margin-top: 0.25rem;
-}
-
-.model-edit-container .card {
-    margin-bottom: 1.5rem;
-}
-
-.model-edit-container.is-quick-create #model-form > .card.mb-3:not(.quick-model-create-card) {
-    display: none;
-}
-</style>

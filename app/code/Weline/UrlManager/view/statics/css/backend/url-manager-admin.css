@@ -1,0 +1,8 @@
+/* Weline_UrlManager 后台页面私有布局（标准 §6.2；Token-only，无 !important） */
+@layer page {
+
+.urlmanager-inline-1 { max-width: 360px; }
+.urlmanager-inline-2 { width: 60px; }
+.urlmanager-inline-3 { width: 100px; }
+.urlmanager-inline-4 { font-size: 0.9em; }
+}

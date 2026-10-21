@@ -6,6 +6,7 @@
 /** @var string $paletteName */
 /** @var array $palette 色盘数据，包含variables数组 */
 ?>
+<css>Weline_Theme::css/backend/theme-config-admin.css</css>
 <?php
 $themeId = $theme && is_object($theme) && method_exists($theme, 'getId') ? $theme->getId() : ($theme['id'] ?? $theme['identity_id'] ?? null);
 $savePath = 'theme/backend/config/layout/saveColorPaletteVariables';
@@ -39,20 +40,20 @@ foreach ($variables as $varName => $var) {
             </div>
             <div class="modal-body">
                 <?php if (empty($variables)): ?>
-                    <div class="alert alert-info">
+                    <div class="w-alert" data-tone="info">
                         <i class="mdi mdi-information-outline"></i>
                         <?= __('该色盘没有可配置的变量') ?>
                     </div>
                 <?php else: ?>
                     <!-- 搜索和筛选 -->
-                    <div class="mb-3">
-                        <div class="row g-2">
-                            <div class="col-md-6">
-                                <input type="text" class="form-control form-control-sm" id="variable-search" 
+                    <div >
+                        <div class="w-grid" data-gap="sm">
+                            <div class="w-field">
+                                <input type="text" class="w-input" data-size="sm" id="variable-search" 
                                        placeholder="<?= __('搜索变量名...') ?>">
                             </div>
-                            <div class="col-md-6">
-                                <select class="form-select form-select-sm" id="variable-category-filter">
+                            <div class="w-field">
+                                <select class="w-select" data-size="sm" id="variable-category-filter">
                                     <option value=""><?= __('所有分类') ?></option>
                                     <?php foreach (array_keys($groupedVariables) as $cat): ?>
                                         <option value="<?= htmlspecialchars($cat) ?>"><?= htmlspecialchars($cat) ?></option>
@@ -70,33 +71,33 @@ foreach ($variables as $varName => $var) {
                         <input type="hidden" name="palette_name" value="<?= htmlspecialchars($paletteName) ?>">
                         
                         <?php foreach ($groupedVariables as $category => $vars): ?>
-                            <div class="category-group mb-4" data-category="<?= htmlspecialchars($category) ?>">
-                                <h6 class="category-group-title mb-3">
+                            <div class="w-stack category-group" data-gap="md" data-category="<?= htmlspecialchars($category) ?>">
+                                <h6 class="category-group-title">
                                     <i class="mdi mdi-folder-outline me-1"></i>
                                     <?= htmlspecialchars($category) ?>
                                 </h6>
-                                <div class="row g-3">
+                                <div class="w-grid" data-gap="md">
                                     <?php foreach ($vars as $varName => $var): 
                                         $varValue = $var['value'] ?? $var['default'] ?? '';
                                         $varDefault = $var['default'] ?? '';
                                         $varDescription = $var['description'] ?? '';
                                         $isColor = $var['is_color'] ?? false;
                                     ?>
-                                        <div class="col-md-6 col-lg-4 variable-item" 
+                                        <div class="w-field variable-item" 
                                              data-var-name="<?= htmlspecialchars(strtolower($varName)) ?>"
                                              data-category="<?= htmlspecialchars($category) ?>">
-                                            <label class="form-label small fw-bold">
+                                            <label class="w-field__label">
                                                 <code><?= htmlspecialchars($varName) ?></code>
                                             </label>
-                                            <div class="input-group">
+                                            <div class="w-cluster" data-gap="xs">
                                                 <?php if ($isColor): ?>
                                                     <input type="color" 
-                                                           class="form-control form-control-color variable-color-input" 
+                                                           class="w-input variable-color-input" 
                                                            value="<?= htmlspecialchars($varValue) ?>" 
                                                            data-var-name="<?= htmlspecialchars($varName) ?>"
-                                                           style="width: 60px; height: 38px;">
+                                                          >
                                                     <input type="text" 
-                                                           class="form-control variable-text-input" 
+                                                           class="w-input variable-text-input" 
                                                            name="variables[<?= htmlspecialchars($varName) ?>]"
                                                            value="<?= htmlspecialchars($varValue) ?>" 
                                                            data-var-name="<?= htmlspecialchars($varName) ?>"
@@ -104,7 +105,7 @@ foreach ($variables as $varName => $var) {
                                                            pattern="^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$">
                                                 <?php else: ?>
                                                     <input type="text" 
-                                                           class="form-control variable-text-input" 
+                                                           class="w-input variable-text-input" 
                                                            name="variables[<?= htmlspecialchars($varName) ?>]"
                                                            value="<?= htmlspecialchars($varValue) ?>" 
                                                            data-var-name="<?= htmlspecialchars($varName) ?>"
@@ -112,7 +113,7 @@ foreach ($variables as $varName => $var) {
                                                 <?php endif; ?>
                                             </div>
                                             <?php if (!empty($varDescription)): ?>
-                                                <small class="text-muted d-block mt-1"><?= htmlspecialchars($varDescription) ?></small>
+                                                <small class="w-text" data-tone="muted" data-size="sm"><?= htmlspecialchars($varDescription) ?></small>
                                             <?php endif; ?>
                                             <?php if ($varValue !== $varDefault): ?>
                                                 <small class="text-info d-block mt-1">
@@ -161,7 +162,7 @@ foreach ($variables as $varName => $var) {
 <script>
 (function(g){if(g.WelineThemeBinQuery)return;g.WelineThemeBinQuery={request:function(url,options){options=options||{};var method=String(options.method||'GET').toUpperCase();var body='';if(options.body!=null){if(typeof options.body==='string')body=options.body;else if(typeof FormData!=='undefined'&&options.body instanceof FormData){var p=new URLSearchParams();options.body.forEach(function(v,k){if(!(typeof File!=='undefined'&&v instanceof File))p.append(k,String(v));});body=p.toString();}else{try{body=JSON.stringify(options.body);}catch(e){body='';}}}var run=function(api){return api.resource('theme').editorRequest({url:url,method:method,headers:options.headers||{},body:body}).then(function(data){return (function(d){var b=g.WelineApiBusiness||(g.Weline&&g.Weline.ApiBusiness);return (b&&typeof b.wrapAdminBridgeResult==='function')?b.wrapAdminBridgeResult(d):d;})(data);});};if(g.Weline&&g.Weline.load)return g.Weline.load('api').then(run);return Promise.resolve(run(g.Weline.Api));}};})(window);
 </script>
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+<script defer src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 (function() {
     const saveUrl = "@url{$savePath}";

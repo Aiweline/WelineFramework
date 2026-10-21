@@ -12,11 +12,9 @@
 .batch-action-toolbar .selected-count {
     color: var(--color-text-secondary);
     font-weight: 500;
-}
-
-/* 复选框列样式 */
-.checkbox-column {
-    width: 40px !important;
+}/* 复选框列样式 */
+.checkbox-column.checkbox-column{
+    width: 40px;
     text-align: center;
     padding: var(--weline-space-2);
 }
@@ -48,7 +46,7 @@ tr.selected:hover {
 
 .delete-details .card-body {
     font-size: var(--weline-font-size-sm);
-    color: #6c757d;
+    color: var(--color-text-muted);
 }
 
 .row-list {
@@ -66,7 +64,7 @@ tr.selected:hover {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(255, 255, 255, 0.9);
+    background: var(--color-on-dark-92);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -112,7 +110,7 @@ th.sortable:hover {
 /* 排序图标样式 */
 .sort-icon {
     margin-left: var(--weline-space-2);
-    color: #6c757d;
+    color: var(--color-text-muted);
     cursor: pointer;
     transition: color 0.2s;
 }
@@ -134,7 +132,7 @@ th.sortable:hover {
 /* 编辑图标样式 */
 .edit-icon {
     margin-left: var(--weline-space-1);
-    color: #6c757d;
+    color: var(--color-text-muted);
     cursor: pointer;
     transition: color 0.2s;
 }
@@ -167,7 +165,7 @@ th.sortable:hover {
 }
 
 .edit-overlay i {
-    color: #6c757d;
+    color: var(--color-text-muted);
     font-size: var(--weline-font-size-xs);
 }
 
@@ -252,7 +250,7 @@ th.sortable:hover {
 @media (prefers-color-scheme: dark) {
     .batch-action-toolbar {
         background: #343a40;
-        border-color: #495057;
+        border-color: var(--color-border-default);
         color: var(--color-text-light);
     }
 
@@ -271,7 +269,7 @@ th.sortable:hover {
 
     .multi-table-group {
         background: #343a40;
-        border-color: #495057;
+        border-color: var(--color-border-default);
         color: var(--color-text-light);
     }
 }
@@ -313,7 +311,7 @@ th.sortable:hover {
 }
 
 .table-hover tbody tr:hover {
-    background-color: rgba(0, 0, 0, 0.04);
+    background-color: var(--color-overlay-05);
 }
 
 /* 字段配置面板增强 */
@@ -323,7 +321,7 @@ th.sortable:hover {
 
 .w-field-item:hover {
     background-color: var(--color-bg-panel);
-    border-color: #007bff;
+    border-color: var(--color-link);
 }
 
 .w-field-item.dragging {
@@ -348,7 +346,7 @@ th.sortable:hover {
     align-items: center;
     gap: var(--weline-space-1);
     padding: var(--weline-space-2) var(--weline-space-4);
-    border: var(--border-width-thin) solid #007bff;
+    border: var(--border-width-thin) solid var(--color-link);
     background-color: transparent;
     color: var(--color-text-faint);
     border-radius: var(--border-radius-md);
@@ -363,7 +361,7 @@ th.sortable:hover {
 
 .w-file-info {
     font-size: var(--weline-font-size-sm);
-    color: #6c757d;
+    color: var(--color-text-muted);
 }
 
 .w-file-list {
@@ -375,7 +373,7 @@ th.sortable:hover {
 }
 
 .w-file-placeholder {
-    color: #6c757d;
+    color: var(--color-text-muted);
     font-style: italic;
     text-align: center;
     padding: var(--weline-space-2);
@@ -402,7 +400,7 @@ th.sortable:hover {
 }
 
 .w-file-size {
-    color: #6c757d;
+    color: var(--color-text-muted);
     font-size: var(--weline-font-size-sm);
 }
 
@@ -445,12 +443,12 @@ th.sortable:hover {
 
 .w-image-placeholder:hover {
     background-color: var(--color-product-label-demo-bg);
-    border-color: #007bff;
+    border-color: var(--color-link);
 }
 
 .w-image-placeholder i {
     font-size: var(--weline-font-size-4xl);
-    color: #6c757d;
+    color: var(--color-text-muted);
     margin-bottom: var(--weline-space-2);
 }
 
@@ -462,7 +460,7 @@ th.sortable:hover {
 
 .w-placeholder-info {
     font-size: var(--weline-font-size-sm);
-    color: #6c757d;
+    color: var(--color-text-muted);
 }
 
 .w-image-preview-img {
@@ -500,7 +498,7 @@ th.sortable:hover {
 
 .w-progress-text {
     font-size: var(--weline-font-size-sm);
-    color: #6c757d;
+    color: var(--color-text-muted);
     text-align: center;
 }
 
@@ -527,7 +525,7 @@ th.sortable:hover {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: var(--color-overlay-50);
     cursor: pointer;
 }
 
@@ -578,7 +576,7 @@ th.sortable:hover {
     background: none;
     border: none;
     font-size: var(--weline-font-size-2xl);
-    color: #6c757d;
+    color: var(--color-text-muted);
     cursor: pointer;
     padding: var(--weline-space-1);
     border-radius: var(--border-radius-md);
@@ -648,12 +646,12 @@ th.sortable:hover {
 }
 
 .w-form-control.is-invalid {
-    border-color: #dc3545;
+    border-color: var(--color-danger);
 }
 
 .w-field-help {
     font-size: var(--weline-font-size-sm);
-    color: #6c757d;
+    color: var(--color-text-muted);
     margin-top: var(--weline-space-1);
 }
 
@@ -699,17 +697,17 @@ th.sortable:hover {
 
     .w-form-header {
         background-color: #343a40;
-        border-color: #495057;
+        border-color: var(--color-border-default);
     }
 
     .w-form-footer {
         background-color: #343a40;
-        border-color: #495057;
+        border-color: var(--color-border-default);
     }
 
     .w-form-control {
         background-color: #3d3d3d;
-        border-color: #495057;
+        border-color: var(--color-border-default);
         color: #e0e0e0;
     }
 

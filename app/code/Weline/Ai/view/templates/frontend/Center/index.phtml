@@ -26,7 +26,7 @@ $user = $this->user ?? [];
             font-family: 'Microsoft YaHei', Arial, sans-serif;
         }
         .navbar {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
             box-shadow: var(--weline-shadow-md);
         }
         .navbar-brand {
@@ -35,7 +35,7 @@ $user = $this->user ?? [];
             font-size: var(--weline-font-size-2xl);
         }
         .navbar-nav .nav-link {
-            color: rgba(255,255,255,0.9);
+            color: var(--color-on-dark-92);
             margin: 0 var(--spacing-2_5);
         }
         .navbar-nav .nav-link:hover {
@@ -92,11 +92,11 @@ $user = $this->user ?? [];
             margin-bottom: var(--spacing-4);
         }
         .stat-card .icon.blue {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
             color: white;
         }
         .stat-card .icon.green {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info) 100%);
             color: white;
         }
         .stat-card .icon.orange {

@@ -4,6 +4,7 @@
  * 由布局系统自动包裹 HTML 框架
  */
 ?>
+<css>Weline_Ai::css/backend/ai-admin.css</css>
 <!-- 页面标题 -->
 <div class="w-grid">
     <div style="--w-span:12;">
@@ -249,7 +250,7 @@
             var revised = image && image.revised_prompt ? '<div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);">' + escapeHtml(image.revised_prompt) + '</div>' : '';
             return '<div style="--w-span:12;--w-span-md:6;--w-mb:var(--weline-space-2);">'
                 + '<a href="' + safeSrc + '" target="_blank" rel="noopener">'
-                + '<img src="' + safeSrc + '" class="img-fluid" style="max-height: 260px; width: 100%; object-fit: contain; background: #fff;" alt="test image" data-w-radius="md" data-w-border="border">'
+                + '<img src="' + safeSrc + '" class="img-fluid ai-inline-18-1" alt="test image" data-w-radius="md" data-w-border="border">'
                 + '</a>' + revised + '</div>';
         }).join('');
         if (!items) return '';
@@ -285,7 +286,7 @@
             + '<button type="button" class="w-button" data-test-close data-w-close="" data-tone="quiet" data-size="sm"></button>'
             + '</div>'
             + '<div class="w-dialog__body" style="--w-pt:var(--weline-space-4);--w-pb:var(--weline-space-4);">'
-            + '<div class="w-text" data-align="center" style="--w-mb:var(--weline-space-4);"><i class="mdi ' + iconClass + '" style="font-size: 3rem;"></i></div>'
+            + '<div class="w-text" data-align="center" style="--w-mb:var(--weline-space-4);"><i class="mdi ' + iconClass ai-inline-19-2" + iconClass + '" ></i></div>'
             + '<div class="message-content" style="white-space: pre-line; text-align: left;">' + escapeHtml(lines.join('\n')) + '</div>'
             + imagesHtml
             + '</div>'
