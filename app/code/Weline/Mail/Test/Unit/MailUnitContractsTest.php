@@ -76,6 +76,7 @@ private function assert_MailInboxMenuSignal_testUnreadMailPublishesMenuDeepLink(
     self::assertStringContainsString("'message' => \$messageId", $publisher);
     self::assertStringContainsString('publishLiveUnread', $publisher);
     self::assertStringContainsString('touchMailMenuSignal', $controller);
+    self::assertStringContainsString('menuSignalActorId', $controller);
     self::assertStringContainsString('function markUnread', $inbox);
     $js = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Admin/view/statics/js/backend-menu-signals.js');
     self::assertStringNotContainsString('weline_mail/backend', $js);

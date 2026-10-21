@@ -2055,6 +2055,28 @@ if ($oauthCfError === 'invalid_scope') {
                     }
                     return '<div class="mail-enterprise__reader-actions" data-mail-reader-actions data-testid="mail-enterprise-reader-actions">' + btns + '</div>';
                 }
+                function syncMenuAfterRead() {
+                    try {
+                        var signals = window.Weline && window.Weline.BackendMenuSignals;
+                        if (signals && typeof signals.noteViewed === 'function') {
+                            signals.noteViewed();
+                        }
+                        if (typeof window.refreshBackendMenuSignals === 'function') {
+                            window.refreshBackendMenuSignals().catch(function () {});
+                        }
+                    } catch (e) {}
+                }
+                function syncMenuAfterUnread() {
+                    try {
+                        var signals = window.Weline && window.Weline.BackendMenuSignals;
+                        if (signals && typeof signals.releaseViewed === 'function') {
+                            signals.releaseViewed();
+                        }
+                        if (typeof window.refreshBackendMenuSignals === 'function') {
+                            window.refreshBackendMenuSignals().catch(function () {});
+                        }
+                    } catch (e) {}
+                }
                 function markSeenQuiet(messageId) {
                     if (!messageId || folder === 'trash') return;
                     var body = new URLSearchParams();
@@ -2205,6 +2227,11 @@ if ($oauthCfError === 'invalid_scope') {
                               var selectAllEl = workspace.querySelector('[data-mail-select-all]');
                               if (selectAllEl instanceof HTMLInputElement) {
                                   selectAllEl.checked = false;
+                              }
+                              if (action === 'seen') {
+                                  syncMenuAfterRead();
+                              } else if (action === 'unseen') {
+                                  syncMenuAfterUnread();
                               }
                           });
                     };
@@ -2372,6 +2399,7 @@ if ($oauthCfError === 'invalid_scope') {
                                         var next = row.getAttribute('href');
                                         if (next && window.history && window.history.replaceState) window.history.replaceState({}, '', next);
                                     } catch (e) {}
+                                    syncMenuAfterRead();
                                 })
                                 .catch(function (err) {
                                     if (seq !== loadSeq) return;

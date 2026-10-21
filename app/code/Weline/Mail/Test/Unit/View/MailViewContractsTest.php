@@ -328,6 +328,10 @@ private function assert_EnterpriseHtmlReaderPreview_testReaderUsesSandboxedHtmlI
     self::assertStringContainsString('formatMailListTime', $enterprise);
     self::assertStringContainsString('looksLikeHtml', $enterprise);
     self::assertStringContainsString('markSeenQuiet', $enterprise);
+    self::assertStringContainsString('syncMenuAfterRead', $enterprise);
+    self::assertStringContainsString('syncMenuAfterUnread', $enterprise);
+    self::assertStringContainsString('noteViewed', $enterprise);
+    self::assertStringContainsString('releaseViewed', $enterprise);
     self::assertStringContainsString('weline_mail_compose_prefill_v1', $enterprise);
     self::assertStringContainsString('show=unread', $enterprise);
     self::assertStringContainsString('请先选择一封邮件再回复', $enterprise);

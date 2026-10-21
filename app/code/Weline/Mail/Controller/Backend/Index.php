@@ -2130,10 +2130,24 @@ class Index extends BackendController
         );
     }
 
+    private function menuSignalActorId(): int
+    {
+        try {
+            $users = ObjectManager::getInstance(\Weline\Backend\Api\Auth\BackendUserContextProviderInterface::class);
+            $actor = $users->current();
+            if ($actor !== null && (int)$actor->getId() > 0) {
+                return (int)$actor->getId();
+            }
+        } catch (\Throwable) {
+        }
+
+        return max(0, (int)$this->getLoginUserId());
+    }
+
     private function touchMailMenuSignal(int $accountId, string $messageId, bool $unread): void
     {
         $messageId = trim($messageId);
-        $userId = (int)$this->getLoginUserId();
+        $userId = $this->menuSignalActorId();
         if ($accountId <= 0 || $messageId === '' || $userId <= 0) {
             return;
         }
