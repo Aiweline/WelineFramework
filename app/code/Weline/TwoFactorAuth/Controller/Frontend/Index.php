@@ -14,6 +14,9 @@ use Weline\TwoFactorAuth\Service\TwoFactorAuthService;
  */
 class Index extends FrontendController
 {
+    /** 2FA 管理页：独立全屏壳（Theme blank/full），消费默认主题 head。 */
+    protected ?string $layoutType = 'blank';
+
     private TwoFactorAuthService $twoFactorAuthService;
 
     public function __construct(
@@ -27,6 +30,7 @@ class Index extends FrontendController
      */
     public function index()
     {
+        $this->request->setGet('layout_option', 'full');
         // 获取当前登录用户ID（使用继承的 $this->session）
         $userId = $this->session->getUserId() ?? 1;
 

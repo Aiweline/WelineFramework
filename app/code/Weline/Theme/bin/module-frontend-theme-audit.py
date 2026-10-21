@@ -51,6 +51,13 @@ EXCLUDE_BASENAME_PREFIX = ("prototype", "prototype-")
 # D1: 后台管理 UI 不属前台合同范围。部分后台样式没有 /backend/ 路径段，
 # 但文件名明确是 admin/backend/console 面板 —— 按名排除。
 EXCLUDE_BASENAME_CONTAINS = ("admin", "backend", "backend-", "-console", "wls-")
+# 开发/前置工具页（路径级排除，需有技术依据）：
+#  - Payment dev-relay：DevRelayGateService 默认关闭、仅本地、需 gate 放行
+#  - Installer 安装向导：在站点/主题/静态资源管线就绪前运行，不能依赖 Theme 资源
+EXCLUDE_PATH_CONTAINS = (
+    "/Payment/view/templates/frontend/dev-relay/",
+    "/Installer/view/templates/frontend/Install/index.phtml",
+)
 EXCLUDE_BASENAME = (
     "elfinder.html", "elfinder.legacy.html", "index.html",  # S5 vendor app shells
     "test.phtml", "test.html",  # dev/test pages
@@ -179,6 +186,9 @@ def in_scope(p: Path) -> bool:
     if any(k in s for k in EXCLUDE_SUBSTR):
         return False
     if p.name.startswith(EXCLUDE_BASENAME_PREFIX) or p.name in EXCLUDE_BASENAME:
+        return False
+    _posix = p.as_posix()
+    if any(k in _posix for k in EXCLUDE_PATH_CONTAINS):
         return False
     name_low = p.name.lower()
     if any(k in name_low for k in EXCLUDE_BASENAME_CONTAINS):
@@ -432,6 +442,9 @@ def scan_markup(text: str, hits: list, src: str) -> None:
 # 追踪像素传输层自身就是「请求出口」，走 Weline.Api 会形成环；其 fetch/beacon 属合法例外。
 ANALYTICS_TRANSPORT = ("Visitor/view/statics/js/pixel.js", "Visitor/view/statics/js/pixel-event-picker.js")
 
+# 运营内联编辑会话工具（InlineEditSession::isActive() 时才注入，非店面页面代码）
+EDITOR_TOOLING = ("I18n/view/statics/js/inline-edit-shell",)  # 含版本化副本 -20261014d.js
+
 RE_ARCH_FALLBACK = re.compile(r"/\* ARCH_MO_FALLBACK_START \*/.*?/\* ARCH_MO_FALLBACK_END \*/", re.S)
 
 
@@ -443,6 +456,8 @@ def scan_js(text: str, hits: list, src: str) -> None:
         return any(a <= pos < b for a, b in fallback_spans)
 
     if any(k in "/" + src.replace("\\", "/") for k in ANALYTICS_TRANSPORT):
+        return
+    if any(k in "/" + src.replace("\\", "/") for k in EDITOR_TOOLING):
         return
     for m in RE_FETCH.finditer(text):
         hits.append((src, "js_fetch_direct", text[m.start():m.start() + 60]))

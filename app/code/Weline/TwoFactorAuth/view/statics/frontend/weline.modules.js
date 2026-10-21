@@ -12,5 +12,29 @@ Object.assign(window.WelineModulesConfig.modules, {
         ],
         globalVar: null,
         description: "账户中心两步验证面板"
+    },
+    twofaIndex: {
+        paths: [
+            "Weline_TwoFactorAuth::js/twofa-index.js?v=20261021-twofa-index-1"
+        ],
+        globalVar: null,
+        load: "eager",
+        description: "双因素验证管理页交互"
+    },
+    twofaSetup: {
+        paths: [
+            "Weline_TwoFactorAuth::js/twofa-setup.js?v=20261021-twofa-setup-1"
+        ],
+        globalVar: null,
+        load: "eager",
+        description: "双因素验证设置页交互"
+    },
+    twofaAccounts: {
+        paths: [
+            "Weline_TwoFactorAuth::js/twofa-accounts.js?v=20261021-twofa-accounts-1"
+        ],
+        globalVar: null,
+        load: "eager",
+        description: "验证器账户管理页交互"
     }
 });

@@ -28,6 +28,9 @@ use Weline\Framework\App\Controller\FrontendController;
  */
 class Index extends FrontendController
 {
+    /** AI 首页：独立全屏壳（Theme blank/full），消费默认主题 head。 */
+    protected ?string $layoutType = 'blank';
+
     /**
      * @var AiModel
      */
@@ -59,6 +62,7 @@ class Index extends FrontendController
      */
     public function index(): string
     {
+        $this->request->setGet('layout_option', 'full');
         // 获取激活的AI模型列表
         $models = $this->aiModel->reset()
             ->where(AiModel::schema_fields_IS_ACTIVE, 1)

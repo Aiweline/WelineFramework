@@ -125,7 +125,7 @@ $customerServiceJsHref = rtrim($customerServiceJsHref, '?&');
             <path d="M7 9h10v2H7zm0-3h10v2H7zm0 6h7v2H7z"/>
         </svg>
         <span class="cs-presence-dot" id="cs-presence-dot" hidden aria-hidden="true"></span>
-        <span class="cs-badge" id="cs-unread-badge" class="cs-float-hidden">0</span>
+        <spanclass="cs-badge cs-float-hidden" id="cs-unread-badge">0</span>
     </div>
 
     <?php
@@ -134,7 +134,7 @@ $customerServiceJsHref = rtrim($customerServiceJsHref, '?&');
     // WidgetI18n labels inside deferred template content (PHP comment must not contain
     // a question-mark greater-than sequence — it terminates the PHP block).
     ?>
-    <div id="cs-chat-window" class="cs-chat-window w-panel" class="cs-float-hidden" data-cs-shell="chrome-bag">
+    <div id="cs-chat-window" class="cs-chat-window w-panel cs-float-hidden" data-cs-shell="chrome-bag">
         <div class="cs-chat-header w-panel-header">
             <div class="cs-chat-title">
                 <svg class="cs-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
@@ -163,7 +163,7 @@ $customerServiceJsHref = rtrim($customerServiceJsHref, '?&');
             </div>
         </div>
 
-        <div class="cs-settings-panel w-panel-body cs-settings-panel--compact" id="cs-settings-panel" class="cs-float-hidden">
+        <divclass="cs-settings-panel w-panel-body cs-settings-panel--compact cs-float-hidden" id="cs-settings-panel">
             <div class="cs-settings-item">
                 <label for="cs-locale-select">
                     <svg class="cs-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
@@ -234,7 +234,7 @@ $customerServiceJsHref = rtrim($customerServiceJsHref, '?&');
 <?php
 // 用户发送客服消息后再创建真实弹窗节点，避免首屏承担未使用的交互 DOM。
 $bindModalHtml = <<<'BIND_MODAL_HTML'
-<div id="cs-bind-modal" class="cs-modal w-modal" class="cs-float-hidden" data-editor-interactive>
+<div id="cs-bind-modal" class="cs-modal w-modal cs-float-hidden" data-editor-interactive>
     <div class="w-modal-dialog w-modal-sm">
         <div class="cs-modal-content w-modal-content">
             <div class="cs-modal-header w-modal-header">

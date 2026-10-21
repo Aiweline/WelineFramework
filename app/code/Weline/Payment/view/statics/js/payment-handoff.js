@@ -56,12 +56,15 @@
             setProgress(28);
             return;
         }
-        fetch('/payment/handoff/status?checkout_session_code=' + encodeURIComponent(sessionCode) + '&elapsed_ms=' + elapsed, {
-            credentials: 'same-origin',
-            headers: { 'Accept': 'application/json' }
-        }).then(function (response) {
-            return response.json();
-        }).then(function (payload) {
+        var statusUrl = '/payment/handoff/status?checkout_session_code='
+            + encodeURIComponent(sessionCode) + '&elapsed_ms=' + elapsed;
+        var request = (window.Weline && window.Weline.Api && typeof window.Weline.Api.get === 'function')
+            ? window.Weline.Api.get(statusUrl, { silent: true })
+            : fetch(statusUrl, {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            }).then(function (response) { return response.json(); });
+        request.then(function (payload) {
             if (messageEl && payload && payload.message) {
                 messageEl.textContent = payload.message;
             }

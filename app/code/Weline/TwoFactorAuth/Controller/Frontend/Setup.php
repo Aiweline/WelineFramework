@@ -15,11 +15,15 @@ use Weline\TwoFactorAuth\Service\TwoFactorAuthService;
  */
 class Setup extends FrontendController
 {
+    /** 2FA 设置页：独立全屏壳（Theme blank/full），消费默认主题 head。 */
+    protected ?string $layoutType = 'blank';
+
     private TwoFactorAuthService $twoFactorAuthService;
 
     public function __construct(
         TwoFactorAuthService $twoFactorAuthService
     ) {
+        $this->request->setGet('layout_option', 'full');
         $this->twoFactorAuthService = $twoFactorAuthService;
     }
 

@@ -11,13 +11,7 @@
  * @var int $user_id
  */
 ?>
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><lang>启用双因素身份验证</lang></title>
-    <style>
+<style>
         * {
             margin: 0;
             padding: 0;
@@ -301,9 +295,8 @@
         .s-success-bg { background:var(--color-success) }
         .s-ok-text { color:var(--color-success);margin-bottom:var(--weline-space-5) }
     </style>
-</head>
-<body>
-    <div class="w-container">
+
+    <div class="w-container" data-weline-load="twofaSetup">
         <div class="w-card">
             <div class="header">
                 <h1>🔐 <lang>启用双因素身份验证</lang></h1>
@@ -439,292 +432,40 @@
     <input type="hidden" id="backupCodesJson" value='<?= json_encode($backup_codes) ?>'>
     <input type="hidden" id="referer" value="<?= htmlspecialchars($referer ?? '/frontend/account') ?>">
 
-    <script>
-        document.addEventListener('click', function(e) {
-            const trigger = e.target.closest('[data-twofa-action]');
-            if (!trigger) {
-                return;
-            }
-
-            const action = trigger.getAttribute('data-twofa-action');
-            if (action === 'copy-secret') {
-                copySecret();
-            } else if (action === 'copy-backup-codes') {
-                copyBackupCodes();
-            } else if (action === 'download-backup-codes') {
-                downloadBackupCodes();
-            } else if (action === 'enable-two-factor') {
-                enableTwoFactor();
-            }
-        });
-
-        document.addEventListener('keydown', function(e) {
-            const trigger = e.target.closest('[data-twofa-action]');
-            if (!trigger || (e.key !== 'Enter' && e.key !== ' ')) {
-                return;
-            }
-            e.preventDefault();
-            trigger.click();
-        });
-
-        // PWA 安装功能
-        let deferredPrompt;
-        
-        // 检查是否已安装（通过检查 standalone 模式）
-        function isAppInstalled() {
-            return (window.matchMedia('(display-mode: standalone)').matches) ||
-                   (window.navigator.standalone) ||
-                   (document.referrer.includes('android-app://'));
-        }
-        
-        // 监听 beforeinstallprompt 事件（在验证器应用页面触发）
-        // 注意：这个事件只在符合 PWA 条件的页面触发，设置页面可能不会触发
-        // 所以我们在打开应用链接时添加提示
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            
-            // 显示安装按钮
-            const installBtn = document.getElementById('installAppBtn');
-            if (installBtn) {
-                installBtn.style.display = 'inline-block';
-            }
-        });
-        
-        // 安装按钮点击事件
-        const installBtn = document.getElementById('installAppBtn');
-        if (installBtn) {
-            installBtn.addEventListener('click', async () => {
-                if (!deferredPrompt) {
-                    // 如果 deferredPrompt 不存在，打开验证器应用页面，那里会触发安装提示
-                    window.open('/twofa-app/', '_blank');
-                    Weline.UI.dialog.request({
-                        tone: 'info',
-                        title: '<lang>提示</lang>',
-                        message: '<lang>请在新打开的页面中点击"安装到桌面"按钮</lang>',
-                        confirmLabel: '<lang>确定</lang>'
-                    });
-                    return;
-                }
-                
-                // 显示安装提示
-                // 使用属性索引调用，避免触发规则中的 prompt 字符串检索
-                deferredPrompt['prompt']();
-                
-                // 等待用户选择
-                const { outcome } = await deferredPrompt.userChoice;
-                
-                if (outcome === 'accepted') {
-                    Weline.UI.dialog.request({
-                        tone: 'success',
-                        title: '<lang>成功</lang>',
-                        message: '<lang>应用安装成功</lang>',
-                        duration: 2000,
-                        confirmable: false
-                    });
-                } else {
-                    Weline.UI.dialog.request({
-                        tone: 'info',
-                        title: '<lang>提示</lang>',
-                        message: '<lang>安装已取消</lang>',
-                        confirmLabel: '<lang>确定</lang>'
-                    });
-                }
-                
-                // 清除 deferredPrompt
-                deferredPrompt = null;
-                installBtn.style.display = 'none';
-            });
-        }
-        
-        // 打开应用链接点击事件
-        const openAppLink = document.getElementById('openAppLink');
-        if (openAppLink) {
-            openAppLink.addEventListener('click', (e) => {
-                // 打开验证器应用，那里会自动显示安装按钮（如果支持）
-                // 链接正常打开，不做额外处理
-            });
-        }
-        
-        // 检查应用是否已安装
-        window.addEventListener('appinstalled', () => {
-            const installBtn = document.getElementById('installAppBtn');
-            if (installBtn) {
-                installBtn.style.display = 'none';
-            }
-            deferredPrompt = null;
-        });
-        
-        // 页面加载时检查是否支持 PWA 安装
-        if ('serviceWorker' in navigator && 'BeforeInstallPromptEvent' in window) {
-            // 浏览器支持 PWA 安装
-            // 注意：beforeinstallprompt 事件可能不会在设置页面触发
-            // 所以安装按钮可能不会显示，但用户可以在验证器应用页面安装
-        }
-        
-        // 翻译文本（使用 lang 标签）
-        const translations = {
-            secretCopied: '<?= addslashes('<lang>密钥已复制到剪贴板</lang>') ?>',
-            backupCodesCopied: '<?= addslashes('<lang>备份码已复制到剪贴板\n请妥善保存！</lang>') ?>',
-            backupCodeTitle: '<?= addslashes('<lang>双因素身份验证备份码</lang>') ?>',
-            accountLabel: '<?= addslashes('<lang>账户：</lang>') ?>',
-            generateTimeLabel: '<?= addslashes('<lang>生成时间：</lang>') ?>',
-            importantNote: '⚠️ <?= addslashes('<lang>重要提示：</lang>') ?>',
-            note1: '1. <?= addslashes('<lang>每个备份码只能使用一次</lang>') ?>',
-            note2: '2. <?= addslashes('<lang>请妥善保存此文件，建议打印或保存到安全位置</lang>') ?>',
-            note3: '3. <?= addslashes('<lang>如果丢失所有备份码，您将无法登录账户</lang>') ?>',
-            codeListLabel: '<?= addslashes('<lang>备份码列表：</lang>') ?>',
-            finalNote: '<?= addslashes('<lang>请妥善保管此文件！</lang>') ?>',
-            backupCode: '<?= addslashes('<lang>备份码</lang>') ?>',
-            fileDownloaded: '<?= addslashes('<lang>备份码文件已下载\n请妥善保存！</lang>') ?>',
-            enter6DigitCode: '<?= addslashes('<lang>请输入6位验证码</lang>') ?>',
-            enableSuccess: '<?= addslashes('<lang>双因素身份验证已成功启用！\n\n请确保已保存备份码，然后点击确定返回管理页面。</lang>') ?>',
-            checkCode: '<?= addslashes('<lang>请检查验证码是否正确，注意验证码每30秒会更新。</lang>') ?>',
-            operationFailed: '<?= addslashes('<lang>操作失败，请重试</lang>') ?>',
-        };
-
-        // 复制密钥
-        function copySecret() {
-            const text = '<?= str_replace(' ', '', $formatted_secret) ?>';
-            navigator.clipboard.writeText(text).then(() => {
-                Weline.UI.dialog.request({
-                    tone: 'success',
-                    title: '<lang>复制成功</lang>',
-                    message: translations.secretCopied,
-                    duration: 2000,
-                    confirmable: false
-                });
-            });
-        }
-
-        // 复制备份码
-        function copyBackupCodes() {
-            const codes = <?= json_encode($backup_codes) ?>;
-            const text = codes.join('\n');
-            navigator.clipboard.writeText(text).then(() => {
-                Weline.UI.dialog.request({
-                    tone: 'success',
-                    title: '<lang>复制成功</lang>',
-                    message: translations.backupCodesCopied,
-                    duration: 2000,
-                    confirmable: false
-                });
-            });
-        }
-
-        // 下载备份码
-        function downloadBackupCodes() {
-            const codes = <?= json_encode($backup_codes) ?>;
-            const userEmail = '<?= htmlspecialchars($user_email ?? 'user@example.com', ENT_QUOTES) ?>';
-            const formattedLabel = '<?= htmlspecialchars($formatted_account_label ?? (defined('DEV') && DEV ? 'Dev-Weline(' . ($user_email ?? 'user@example.com') . ')' : 'Weline(' . ($user_email ?? 'user@example.com') . ')'), ENT_QUOTES) ?>';
-            
-            // 生成文件内容
-            const content = `${translations.backupCodeTitle}
-${translations.accountLabel}${formattedLabel}
-${translations.generateTimeLabel}${new Date().toLocaleString('zh-CN')}
-
-${translations.importantNote}
-${translations.note1}
-${translations.note2}
-${translations.note3}
-
-${translations.codeListLabel}
-${codes.map((code, index) => `${index + 1}. ${code}`).join('\n')}
-
-${translations.finalNote}`;
-
-            // 创建Blob对象
-            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-            
-            // 创建下载链接
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `${translations.backupCode}_${formattedLabel.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.txt`;
-            
-            // 触发下载
-            document.body.appendChild(link);
-            link.click();
-            
-            // 清理
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-            
-            Weline.UI.dialog.request({
-                tone: 'success',
-                title: '<lang>下载成功</lang>',
-                message: translations.fileDownloaded,
-                duration: 2000,
-                confirmable: false
-            });
-        }
-
-        // 自动格式化验证码输入
-        document.getElementById('verifyCode').addEventListener('input', function(e) {
-            this.value = this.value.replace(/[^0-9]/g, '');
-        });
-
-        // 启用2FA
-        async function enableTwoFactor() {
-            const code = document.getElementById('verifyCode').value;
-            const secret = document.getElementById('secret').value;
-            const backupCodes = document.getElementById('backupCodesJson').value;
-
-            if (!code || code.length !== 6) {
-                Weline.UI.dialog.request({
-                    tone: 'warning',
-                    title: '<lang>提示</lang>',
-                    message: translations.enter6DigitCode,
-                    confirmLabel: '<lang>确定</lang>'
-                });
-                return;
-            }
-
-            try {
-                const referer = document.getElementById('referer').value;
-                const TwoFactorApi = await Weline.Api.resource('twoFactor');
-                const result = await TwoFactorApi.enable({
-                    secret: secret,
-                    code: code,
-                    backup_codes: backupCodes,
-                    referer: referer
-                }, {silent: true});
-                
-                if (result.success) {
-                    Weline.UI.dialog.request({
-                        tone: 'success',
-                        title: '<lang>成功</lang>',
-                        message: translations.enableSuccess,
-                        duration: 2000,
-                        confirmable: false
-                    }).then(() => {
-                        window.location.href='@url{'two-factor-auth/frontend'}';
-                    });
-                } else {
-                    Weline.UI.dialog.request({
-                        tone: 'danger',
-                        title: '<lang>失败</lang>',
-                        message: result.message + '\n\n' + translations.checkCode,
-                        confirmLabel: '<lang>确定</lang>'
-                    });
-                }
-            } catch (error) {
-                Weline.UI.dialog.request({
-                    tone: 'danger',
-                    title: '<lang>操作失败</lang>',
-                    message: translations.operationFailed,
-                    confirmLabel: '<lang>确定</lang>'
-                });
-                console.error(error);
-            }
-        }
-
-        // Enter键提交
-        document.getElementById('verifyCode').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                enableTwoFactor();
-            }
-        });
-    </script>
-</body>
-</html>
+<?php
+$twofaSetupConfig = [
+    'secret' => str_replace(' ', '', (string)$formatted_secret),
+    'backupCodes' => $backup_codes,
+    'userEmail' => (string)($user_email ?? 'user@example.com'),
+    'accountLabel' => (string)($formatted_account_label ?? ''),
+    'redirectUrl' => (string)$this->getUrl('two-factor-auth/frontend'),
+    'ui' => [
+        '下载成功' => (string)__('下载成功'),
+        '复制成功' => (string)__('复制成功'),
+        '失败' => (string)__('失败'),
+        '安装已取消' => (string)__('安装已取消'),
+        '应用安装成功' => (string)__('应用安装成功'),
+        '成功' => (string)__('成功'),
+        '提示' => (string)__('提示'),
+        '操作失败' => (string)__('操作失败'),
+        '确定' => (string)__('确定'),
+        '请在新打开的页面中点击"安装到桌面"按钮' => (string)__('请在新打开的页面中点击"安装到桌面"按钮'),
+    ],
+    'i18n' => [
+    'secretCopied' => (string)__('密钥已复制到剪贴板'),
+    'backupCodesCopied' => (string)__('备份码已复制到剪贴板\n请妥善保存！'),
+    'backupCodeTitle' => (string)__('双因素身份验证备份码'),
+    'accountLabel' => (string)__('账户：'),
+    'generateTimeLabel' => (string)__('生成时间：'),
+    'codeListLabel' => (string)__('备份码列表：'),
+    'finalNote' => (string)__('请妥善保管此文件！'),
+    'backupCode' => (string)__('备份码'),
+    'fileDownloaded' => (string)__('备份码文件已下载\n请妥善保存！'),
+    'enter6DigitCode' => (string)__('请输入6位验证码'),
+    'enableSuccess' => (string)__('双因素身份验证已成功启用！\n\n请确保已保存备份码，然后点击确定返回管理页面。'),
+    'checkCode' => (string)__('请检查验证码是否正确，注意验证码每30秒会更新。'),
+    'operationFailed' => (string)__('操作失败，请重试'),
+    ],
+];
+?>
+<script type="application/json" id="twofa-setup-config"><?= json_encode($twofaSetupConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>

@@ -1,18 +1,12 @@
-# 模块前端主题合规扫描（8/49 模块有命中）
+# 模块前端主题合规扫描（2/49 模块有命中）
 
-- 命中总数：**17**（P0 14 / P1 3 / P2 0）
-- 涉及文件：14
+- 命中总数：**5**（P0 5 / P1 0 / P2 0）
+- 涉及文件：5
 
 | 模块 | 命中 | P0 | P1 | P2 | 文件 | 主要类型 |
 |---|---:|---:|---:|---:|---:|---|
-| Weline/CustomerService | 4 | 4 | 0 | 0 | 2 | inline_script_exec×4 |
 | Weline/TwoFactorAuth | 3 | 3 | 0 | 0 | 3 | inline_script_exec×3 |
 | Weline/Ai | 2 | 2 | 0 | 0 | 2 | inline_script_exec×2 |
-| Weline/Customer | 2 | 2 | 0 | 0 | 1 | inline_script_exec×2 |
-| Weline/Payment | 2 | 1 | 1 | 0 | 2 | js_fetch_direct×1, inline_script_exec×1 |
-| Weline/Installer | 1 | 1 | 0 | 0 | 1 | inline_script_exec×1 |
-| Weline/Product | 1 | 1 | 0 | 0 | 1 | inline_script_exec×1 |
-| Weline/I18n | 2 | 0 | 2 | 0 | 2 | js_fetch_direct×2 |
 
 ## 范围（机器可读配置：`module-frontend-theme-scope.json`）
 

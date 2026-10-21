@@ -19,6 +19,20 @@
             globalVar: null,
             description: "FPC-safe lazy captcha client runtime (Weline.Captcha)"
         },
+        aiIndex: {
+            origin_paths: ["app/code/Weline/Ai/view/statics/js/ai-index.js?v=20261021-ai-index-1"],
+            paths: ["Weline_Ai::js/ai-index.js?v=20261021-ai-index-1"],
+            globalVar: null,
+            load: "eager",
+            description: "AI 首页粒子背景与滚动显现"
+        },
+        aiChat: {
+            origin_paths: ["app/code/Weline/Ai/view/statics/js/ai-chat.js?v=20261021-ai-chat-1"],
+            paths: ["Weline_Ai::js/ai-chat.js?v=20261021-ai-chat-1"],
+            globalVar: null,
+            load: "eager",
+            description: "AI 聊天页应用"
+        },
         themePrepaint: {
             origin_paths: ["app/code/Weline/Theme/view/statics/ui/weline-theme-prepaint.js"],
             paths: ["Weline_Theme::ui/weline-theme-prepaint.js"],
@@ -202,6 +216,27 @@
             globalVar: null,
             description: "账户中心两步验证面板"
         },
+        twofaIndex: {
+            origin_paths: ["app/code/Weline/TwoFactorAuth/view/statics/js/twofa-index.js?v=20261021-twofa-index-1"],
+            paths: ["Weline_TwoFactorAuth::js/twofa-index.js?v=20261021-twofa-index-1"],
+            globalVar: null,
+            load: "eager",
+            description: "双因素验证管理页交互"
+        },
+        twofaSetup: {
+            origin_paths: ["app/code/Weline/TwoFactorAuth/view/statics/js/twofa-setup.js?v=20261021-twofa-setup-1"],
+            paths: ["Weline_TwoFactorAuth::js/twofa-setup.js?v=20261021-twofa-setup-1"],
+            globalVar: null,
+            load: "eager",
+            description: "双因素验证设置页交互"
+        },
+        twofaAccounts: {
+            origin_paths: ["app/code/Weline/TwoFactorAuth/view/statics/js/twofa-accounts.js?v=20261021-twofa-accounts-1"],
+            paths: ["Weline_TwoFactorAuth::js/twofa-accounts.js?v=20261021-twofa-accounts-1"],
+            globalVar: null,
+            load: "eager",
+            description: "验证器账户管理页交互"
+        },
         checkoutCoupon: {
             origin_paths: ["app/code/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js?v=20261007-coupon-no-double-hydrate"],
             paths: ["Weline_Marketing::js/widgets/checkout-coupon.js?v=20261007-coupon-no-double-hydrate"],
@@ -318,6 +353,13 @@
             globalVar: "WelineStorefrontListing",
             async: true,
             description: "PLP path-only：筛选/排序/分页一步 BinQuery 换格"
+        },
+        productCategoryLayout: {
+            origin_paths: ["app/code/Weline/Product/view/statics/js/category-layout.js?v=20261021-category-layout-1"],
+            paths: ["Weline_Product::js/category-layout.js?v=20261021-category-layout-1"],
+            globalVar: null,
+            load: "eager",
+            description: "分类页布局侧栏/筛选抽屉"
         },
         recentlyViewed: {
             origin_paths: ["app/code/Weline/RecentlyViewed/view/statics/js/widgets/recently-viewed.js"],

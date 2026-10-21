@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\LayoutEntity;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 use Weline\Theme\Model\ThemeScopeVersion;
@@ -122,6 +123,42 @@ final class ThemeLayoutEntityMaterializer
                 ?? $resources['partials/' . $type . '/default'] ?? null;
             $origin = is_array($resource) ? (string)($resource['file_path'] ?? '') : '';
             if ($origin === '' || !is_file($origin)) {
+                // 回退：主题目录解析不到时，落到 Theme 模块基础层的同名 partial
+                // （Default 默认主题等「模块默认主题」没有独立设计目录时会发生）。
+                $roots = [];
+                try {
+                    $root = (string)(Env::getInstance()->getModuleInfo('Weline_Theme')['base_path'] ?? '');
+                    if ($root !== '') {
+                        $roots[] = rtrim($root, '/\\');
+                    }
+                } catch (\Throwable) {
+                    // ignore: fall through to path-based candidates
+                }
+                if (defined('BP')) {
+                    $roots[] = rtrim(BP, '/\\') . DS . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Theme';
+                }
+                foreach (array_unique($roots) as $rootBase) {
+                    foreach ([$identity->area, 'frontend'] as $area) {
+                        foreach ([$option, 'default'] as $candidateOption) {
+                            $candidate = $rootBase . DS . 'view' . DS . 'theme' . DS . $area
+                                . DS . 'partials' . DS . $type . DS . $candidateOption . '.phtml';
+                            if (is_file($candidate)) {
+                                $origin = $candidate;
+                                break 3;
+                            }
+                        }
+                    }
+                }
+            }
+            if ($origin === '' || !is_file($origin)) {
+                if ($identity->area === 'backend') {
+                    // 后台主题没有 storefront 的 header partial（如 header/default）；
+                    // 缺失时跳过该 partial，不能让整条发布/固化流水线失败。
+                    if (\function_exists('w_log_warning')) {
+                        \w_log_warning('Theme partial source missing (backend, skipped): ' . $type . '/' . $option);
+                    }
+                    continue;
+                }
                 throw new \RuntimeException('theme_partial_source_missing: ' . $type . '/' . $option);
             }
             $original = $this->readSource($origin);

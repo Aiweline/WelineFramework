@@ -1,47 +1,13 @@
 {
   "schema": "module-frontend-theme-baseline.v1",
   "note": "棘轮基线：只许降不许升。每次迁移后由 --write-baseline 下调。",
-  "total_violations": 12,
-  "by_code": {
-    "inline_script_exec": 9,
-    "js_fetch_direct": 3
-  },
+  "total_violations": 0,
+  "by_code": {},
   "by_severity": {
-    "P0": 9,
-    "P1": 3,
+    "P0": 0,
+    "P1": 0,
     "P2": 0
   },
-  "by_module": {
-    "Weline/TwoFactorAuth": 3,
-    "Weline/Ai": 2,
-    "Weline/Payment": 2,
-    "Weline/CustomerService": 1,
-    "Weline/Installer": 1,
-    "Weline/Product": 1,
-    "Weline/I18n": 2
-  },
-  "by_module_code": {
-    "Weline/TwoFactorAuth": {
-      "inline_script_exec": 3
-    },
-    "Weline/Ai": {
-      "inline_script_exec": 2
-    },
-    "Weline/Payment": {
-      "js_fetch_direct": 1,
-      "inline_script_exec": 1
-    },
-    "Weline/CustomerService": {
-      "inline_script_exec": 1
-    },
-    "Weline/Installer": {
-      "inline_script_exec": 1
-    },
-    "Weline/Product": {
-      "inline_script_exec": 1
-    },
-    "Weline/I18n": {
-      "js_fetch_direct": 2
-    }
-  }
+  "by_module": {},
+  "by_module_code": {}
 }

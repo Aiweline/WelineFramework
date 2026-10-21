@@ -56,5 +56,13 @@ Object.assign(window.WelineModulesConfig.modules, {
         dependencies: ["api"],
         async: true,
         description: "PLP path-only：筛选/排序/分页一步 BinQuery 换格"
+    },
+    productCategoryLayout: {
+        paths: [
+            "Weline_Product::js/category-layout.js?v=20261021-category-layout-1"
+        ],
+        globalVar: null,
+        load: "eager",
+        description: "分类页布局侧栏/筛选抽屉"
     }
 });

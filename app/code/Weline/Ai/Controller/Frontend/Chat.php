@@ -28,6 +28,9 @@ use Weline\Framework\App\Controller\FrontendController;
  */
 class Chat extends FrontendController
 {
+    /** AI 聊天页：独立全屏壳（Theme blank/full），消费默认主题 head。 */
+    protected ?string $layoutType = 'blank';
+
     /**
      * @var AiModel
      */
@@ -59,6 +62,7 @@ class Chat extends FrontendController
      */
     public function index(): string
     {
+        $this->request->setGet('layout_option', 'full');
         // 允许未登录用户访问（演示模式）
         $isLoggedIn = $this->isLoggedIn();
 
