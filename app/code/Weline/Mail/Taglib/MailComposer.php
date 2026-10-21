@@ -72,8 +72,12 @@ final class MailComposer implements TaglibInterface
                 $area = 'auto';
             }
 
-            $cssUrl = htmlspecialchars(self::resolveStatic('Weline_Mail::css/mail-composer.css') . '?v=20260906-1', ENT_QUOTES);
-            $jsUrl = htmlspecialchars(self::resolveStatic('Weline_Mail::js/mail-composer.js') . '?v=20260906-1', ENT_QUOTES);
+            $cssUrl = self::resolveStatic('Weline_Mail::css/mail-composer.css');
+            $cssUrl .= (str_contains($cssUrl, '?') ? '&' : '?') . 'cb=20261022-1';
+            $cssUrl = htmlspecialchars($cssUrl, ENT_QUOTES);
+            $jsUrl = self::resolveStatic('Weline_Mail::js/mail-composer.js');
+            $jsUrl .= (str_contains($jsUrl, '?') ? '&' : '?') . 'cb=20261022-1';
+            $jsUrl = htmlspecialchars($jsUrl, ENT_QUOTES);
 
             $tTitle = htmlspecialchars((string)__('企业邮箱沟通'), ENT_QUOTES);
             $tClose = htmlspecialchars((string)__('关闭'), ENT_QUOTES);
