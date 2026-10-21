@@ -27,9 +27,23 @@ final class MetaConfigRepository implements MetaConfigRepositoryInterface
 
     public function search(MetaConfigSearch $search): array
     {
+        return $this->searchScopes($search, [$search->scope]);
+    }
+
+    /**
+     * @param list<string> $scopes
+     * @return list<MetaConfigRecord>
+     */
+    public function searchScopes(MetaConfigSearch $search, array $scopes): array
+    {
+        $scopes = $this->normalizeSearchScopes($scopes);
+        if ($scopes === []) {
+            return [];
+        }
+
         $query = $this->configs->newQuery()
-            ->where(MetaConfig::schema_fields_NAMESPACE, trim($search->namespace))
-            ->where(MetaConfig::schema_fields_SCOPE, trim($search->scope));
+            ->where(MetaConfig::schema_fields_NAMESPACE, trim($search->namespace));
+        $this->applyIn($query, MetaConfig::schema_fields_SCOPE, $scopes);
 
         $this->applyOwnerIdentity(
             $query,
@@ -55,9 +69,10 @@ final class MetaConfigRepository implements MetaConfigRepositoryInterface
             ->select()
             ->fetchArray();
 
+        $allowedScopes = array_fill_keys($scopes, true);
         $rows = array_values(array_filter(
             is_array($rows) ? $rows : [],
-            fn(mixed $row): bool => $this->searchRowMatches($row, $search),
+            fn(mixed $row): bool => $this->searchRowMatches($row, $search, $allowedScopes),
         ));
         usort($rows, function (mixed $left, mixed $right): int {
             $key = strcmp(
@@ -194,10 +209,13 @@ final class MetaConfigRepository implements MetaConfigRepositoryInterface
         return $scopes;
     }
 
-    private function searchRowMatches(mixed $row, MetaConfigSearch $search): bool
+    /** @param array<string, true> $allowedScopes */
+    private function searchRowMatches(mixed $row, MetaConfigSearch $search, array $allowedScopes): bool
     {
+        $rowScope = $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_SCOPE));
         if ($this->nullableString($this->rowValue($row, MetaConfig::schema_fields_NAMESPACE)) !== trim($search->namespace)
-            || $this->nullableString($this->rowValue($row, MetaConfig::schema_fields_SCOPE)) !== trim($search->scope)
+            || $rowScope === null
+            || !isset($allowedScopes[$rowScope])
             || !$this->requestedOwnerMatches(
                 $row,
                 $search->identifyId,
@@ -621,6 +639,30 @@ final class MetaConfigRepository implements MetaConfigRepositoryInterface
             return;
         }
         $query->where($field, $values, 'IN');
+    }
+
+    /**
+     * @param list<string> $scopes
+     * @return list<string>
+     */
+    private function normalizeSearchScopes(array $scopes): array
+    {
+        $normalized = [];
+        $seen = [];
+        foreach ($scopes as $scope) {
+            if (!is_string($scope)) {
+                throw new \InvalidArgumentException('Meta config search scopes must be strings.');
+            }
+            $scope = trim($scope);
+            MetaConfigIdentity::assertScope($scope);
+            if (isset($seen[$scope])) {
+                continue;
+            }
+            $seen[$scope] = true;
+            $normalized[] = $scope;
+        }
+
+        return $normalized;
     }
 
     private function applyExactLocale(mixed $query, ?string $locale): void

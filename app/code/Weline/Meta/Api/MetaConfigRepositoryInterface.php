@@ -16,6 +16,19 @@ interface MetaConfigRepositoryInterface
     public function search(MetaConfigSearch $search): array;
 
     /**
+     * Read every scope of a resolution chain in one query.
+     *
+     * The search DTO owns namespace, owner, key and locale filters; its scope
+     * value is ignored in favour of $scopes. Empty $scopes returns [] without
+     * touching the database. Rows keep the same ordering as search():
+     * config_key ASC, locale ASC, id ASC.
+     *
+     * @param list<string> $scopes
+     * @return list<MetaConfigRecord>
+     */
+    public function searchScopes(MetaConfigSearch $search, array $scopes): array;
+
+    /**
      * Locale resolution is deterministic: requested locale, zh_Hans_CN, then NULL.
      */
     public function resolve(MetaConfigIdentity $identity): ?MetaConfigRecord;

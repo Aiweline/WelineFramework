@@ -144,6 +144,11 @@ final class InMemoryMetaConfigRepository implements MetaConfigRepositoryInterfac
         return [];
     }
 
+    public function searchScopes(MetaConfigSearch $search, array $scopes): array
+    {
+        return [];
+    }
+
     public function resolve(MetaConfigIdentity $identity): ?MetaConfigRecord
     {
         foreach ($this->records as $record) {
