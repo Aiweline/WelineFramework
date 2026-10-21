@@ -43,6 +43,11 @@ $forbidden = is_array($templateRules['forbidden'] ?? null) ? $templateRules['for
 $hardRulesRef = is_array($contract['hard_rules'] ?? null) ? $contract['hard_rules'] : [];
 $hardRules = $hardRulesFlat;
 $norms = is_array($frontend['norms'] ?? null) ? $frontend['norms'] : [];
+// skill-v2: norms holds <=12 summaries; the rest are rule-id pointers in norm_ids.
+$frontendNormIdSet = array_merge(
+    array_column($norms, 'id'),
+    array_map('strval', is_array($frontend['norm_ids'] ?? null) ? $frontend['norm_ids'] : []),
+);
 $surfaces = is_array($contract['surfaces'] ?? null) ? $contract['surfaces'] : [];
 $pinned = GuidanceWorkflowCatalog::pinnedDocumentPaths();
 
@@ -2988,11 +2993,7 @@ $checks = [
         false,
     ),
     'section identity is one norm among many' => $hasSectionIdentityNorm && count($norms) >= 5,
-    'theme_layout_widget_owner norm exists' => array_reduce(
-        $norms,
-        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'theme_layout_widget_owner'),
-        false,
-    ),
+    'theme_layout_widget_owner norm exists' => in_array('theme_layout_widget_owner', $frontendNormIdSet, true),
     'frontend_development norms include required_default_always_present' => array_reduce(
         $norms,
         static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm)
@@ -3023,19 +3024,9 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule) && str_contains($rule, 'Non-Weline_Theme')),
         false,
     ),
-    'responsive and docs norms exist' => array_reduce(
-        $norms,
-        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'responsive_tablet_pc'),
-        false,
-    ) && array_reduce(
-        $norms,
-        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'docs_reconcile_per_feature'),
-        false,
-    ) && array_reduce(
-        $norms,
-        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'feature_delivery_urls'),
-        false,
-    ),
+    'responsive and docs norms exist' => in_array('responsive_tablet_pc', $frontendNormIdSet, true)
+        && in_array('docs_reconcile_per_feature', $frontendNormIdSet, true)
+        && in_array('feature_delivery_urls', $frontendNormIdSet, true),
     'required rules mention section identity' => array_reduce(
         $required,
         static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule) && str_contains($rule, 'section identity')),

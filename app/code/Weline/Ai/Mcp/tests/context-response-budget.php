@@ -40,7 +40,7 @@ try {
     file_put_contents($configPath, Json::encode([
         'data_dir' => $temporary . '/data',
         'analysis' => ['provider' => 'none'],
-        'index' => ['sidecar_enabled' => false],
+        'index' => ['sidecar_enabled' => false, 'allowed_roots' => ['*']],
     ]));
     $environment = getenv();
     unset($environment['LEARNING_MCP_BOUND_REPOSITORY'], $environment['WELINE_MCP_RESPONSE_FORMAT']);

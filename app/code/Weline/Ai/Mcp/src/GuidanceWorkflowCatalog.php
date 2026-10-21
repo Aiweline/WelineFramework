@@ -342,8 +342,9 @@ final class GuidanceWorkflowCatalog
     /** @return array<string, mixed> */
     public static function contract(): array
     {
-        $frontendDevelopment = self::frontendDevelopmentSurface();
         $surfaces = self::allSurfaces();
+        // Runtime contract must expose the same (skill-v2) body that get_skill serves.
+        $frontendDevelopment = $surfaces[self::SURFACE_FRONTEND_DEVELOPMENT] ?? self::frontendDevelopmentSurface();
 
         return [
             'schema_version' => self::SCHEMA,
