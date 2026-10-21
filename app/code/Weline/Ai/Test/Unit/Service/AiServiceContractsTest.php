@@ -45,6 +45,9 @@ final class AiServiceContractsTest extends TestCase
             'TranslateWordToLocales::testObserverHandlesMultiLocaleMode' => function () {
             $this->assert_TranslateWordToLocales_testObserverHandlesMultiLocaleMode();
         },
+            'TranslationFailureNotify::testCallFailedUsesSingleUnreadDedupe' => function () {
+            $this->assert_TranslationFailureNotify_testCallFailedUsesSingleUnreadDedupe();
+        },
             'TranslationBatchChunking::testModelChunkConstantAndBatchTranslateUsesChunking' => function () {
             $this->assert_TranslationBatchChunking_testModelChunkConstantAndBatchTranslateUsesChunking();
         },
@@ -106,6 +109,16 @@ private function assert_TranslateWordToLocales_testObserverHandlesMultiLocaleMod
     self::assertStringContainsString("mode === 'multi_locale'", $source);
     self::assertStringContainsString('translateWordToLocales', $source);
     self::assertStringContainsString('target_locales', $source);
+}
+
+private function assert_TranslationFailureNotify_testCallFailedUsesSingleUnreadDedupe(): void
+{
+    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Ai' . '/Observer/TranslationRequestObserver.php');
+    $methodPos = strpos($source, 'function sendSystemMessage(');
+    self::assertNotFalse($methodPos);
+    $methodChunk = substr($source, (int) $methodPos, 900);
+    self::assertStringContainsString("'dedupe_key' => 'ai_translation_call_failed'", $methodChunk);
+    self::assertStringContainsString("'skip_if_unread' => true", $methodChunk);
 }
 
 private function assert_TranslationBatchChunking_testModelChunkConstantAndBatchTranslateUsesChunking(): void

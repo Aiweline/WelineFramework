@@ -121,12 +121,20 @@ final class TranslationRequestObserver implements ObserverInterface
     private function sendSystemMessage(string $title, string $content, string $icon): void
     {
         try {
+            // 同一失败未读时只留一条：w_msg 的 dedupe_key + skip_if_unread。
             w_msg(
                 'ai_translation',
                 'warning',
                 $title,
                 $content,
-                ['icon' => $icon, 'source_module' => 'Weline_Ai'],
+                [
+                    'icon' => $icon,
+                    'source_module' => 'Weline_Ai',
+                    'dedupe_key' => 'ai_translation_call_failed',
+                    'metadata' => [
+                        'skip_if_unread' => true,
+                    ],
+                ],
             );
         } catch (\Throwable $throwable) {
             w_log_error(

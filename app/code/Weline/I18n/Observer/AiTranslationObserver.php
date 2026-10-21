@@ -147,12 +147,20 @@ class AiTranslationObserver implements ObserverInterface
     private function sendSystemMessage(string $title, string $content, string $icon = 'ri-translate'): void
     {
         try {
+            // 与 Ai 侧同一键：未读时不另开一条。
             w_msg(
                 'ai_translation',
                 'warning',
                 $title,
                 $content,
-                ['icon' => $icon, 'source_module' => 'Weline_I18n']
+                [
+                    'icon' => $icon,
+                    'source_module' => 'Weline_I18n',
+                    'dedupe_key' => 'ai_translation_call_failed',
+                    'metadata' => [
+                        'skip_if_unread' => true,
+                    ],
+                ]
             );
         } catch (\Exception $e) {
             w_log_error("发送AI翻译事件系统消息失败: " . $e->getMessage(), [], 'i18n');

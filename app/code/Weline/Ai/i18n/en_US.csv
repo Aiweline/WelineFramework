@@ -73,8 +73,8 @@ AI翻译调用失败,"AI translation call failed"
 AI模块资源扫描完成,"AI module resource scanning completed"
 "AI模块资源扫描失败: %{error}","AI module resource scan failed: %{error}"
 "a, b","a, b"
-a,a
 "支持 .ico","Supports .ico files."
+a,a
 ...,...
 …,…
 文章生成适配器,"Article generation adapter"
