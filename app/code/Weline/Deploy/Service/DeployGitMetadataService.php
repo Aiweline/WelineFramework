@@ -32,6 +32,35 @@ class DeployGitMetadataService
         return $result === 'HEAD' ? '' : $result;
     }
 
+    /**
+     * 工作区未提交改动文件数（含未跟踪）。
+     *
+     * 部署版本戳只记录发布时的 commit；用 core:update 同步过的树可能领先 HEAD，
+     * 下一次 force-reset 发布会覆盖这些差异 —— 发布前必须能看见。
+     */
+    public function getDirtyFileCount(?string $root = null): int
+    {
+        $output = $this->readGitOutput(['status', '--porcelain'], $root);
+        if ($output === '') {
+            return 0;
+        }
+
+        $lines = preg_split('/\R/', $output) ?: [];
+        $count = 0;
+        foreach ($lines as $line) {
+            if (trim((string)$line) !== '') {
+                ++$count;
+            }
+        }
+
+        return $count;
+    }
+
+    public function isDetachedHead(?string $root = null): bool
+    {
+        return $this->getCurrentBranch($root) === '';
+    }
+
     public function fetch(bool $tags = false, string $remote = 'origin', ?string $root = null): void
     {
         $root = $this->normalizeRoot($root);

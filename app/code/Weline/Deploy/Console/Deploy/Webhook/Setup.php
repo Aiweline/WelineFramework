@@ -146,6 +146,27 @@ class Setup extends CommandAbstract
             $this->printer->warning(__('--no-save：未写入后台配置，请自行保存下方密钥与路径。'));
         }
 
+        if (!$noSave) {
+            try {
+                $ingressEnabled = $this->setupService->isWebhookIngressEnabled();
+            } catch (\Throwable) {
+                // 缓存/路由探测失败时退到配置开关，不让 setup 因诊断失败而中断。
+                $ingressEnabled = $this->deployConfigService->isWebhookEnabled();
+            }
+            if (!$ingressEnabled) {
+                $this->printer->warning(__(
+                    'Webhook 入口当前未启用：上方 URL / curl 示例会返回 404。'
+                    . ' 请到后台「部署配置」开启 Webhook；保存路径后会自动启用。'
+                ));
+            } else {
+                $this->printer->note(__('Webhook 入口已启用。'));
+            }
+            $this->printer->note(__(
+                '当前触发模式：%{1}（Tag 模式推 tag 才发布；Branch 模式推分支才发布）。',
+                [$this->deployConfigService->getEffectiveTriggerMode()]
+            ));
+        }
+
         $this->printer->note('');
         $this->printer->setup(__('Webhook 公网路径（随机，~wh~ 前缀）'));
         $this->printCopyBlock($pathResult['path']);

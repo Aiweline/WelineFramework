@@ -106,8 +106,42 @@ class DeployWebhookSetupService
     public function saveWebhookPath(string $path): bool
     {
         $settings = $this->deployConfigService->getSettings();
-        $settings['webhook_path'] = $this->routeService->normalizePath($path);
-        return $this->deployConfigService->saveSettings($settings);
+        $normalized = $this->routeService->normalizePath($path);
+        $settings['webhook_path'] = $normalized;
+        // 保存了可用的公网路径即视为启用入口：否则 setup 打印的 URL / curl 示例
+        // 会因 webhook_enabled=0 被 `DeployWebhookRouteService` 直接判为 404。
+        if ($normalized !== '' && !$this->routeService->isLegacyOrEmptyPath($normalized)) {
+            $settings['webhook_enabled'] = '1';
+        }
+
+        $saved = $this->deployConfigService->saveSettings($settings);
+        if ($saved) {
+            // 同进程内已缓存的 null 解析结果会让保存后仍 404。
+            try {
+                $this->routeService->clearCache();
+            } catch (\Throwable) {
+                // 缓存清理失败交给下次请求重建，不阻断配置保存。
+            }
+        }
+
+        return $saved;
+    }
+
+    /**
+     * 当前 Webhook 入口是否真的会解析到发布控制器（路径存在 ≠ 已启用）。
+     */
+    public function isWebhookIngressEnabled(): bool
+    {
+        if (!$this->deployConfigService->isWebhookEnabled()) {
+            return false;
+        }
+
+        try {
+            return $this->routeService->getResolvedPaths() !== null;
+        } catch (\Throwable) {
+            // 路由诊断不可用时不阻断 setup，以配置开关为准。
+            return true;
+        }
     }
 
     public function buildVersionUrl(array $settings, ?string $baseUrlOverride): string
