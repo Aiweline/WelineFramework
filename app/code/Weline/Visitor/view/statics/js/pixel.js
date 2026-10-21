@@ -501,6 +501,12 @@
         }
     } catch (eBc) {}
     window.addEventListener('storage', function (ev) {
+        // 同意状态变化（同意横幅写入 storage）后重估分析/营销加载。
+        try {
+            __loadVisitorGa4();
+            __loadVisitorGtm();
+        } catch (eConsentReload) {
+        }
         if (!ev || ev.key !== 'weline-visitor-tracking-config:ping') {
             return;
         }
@@ -2000,7 +2006,9 @@
         return {
             enabled: enabled,
             configured: configured,
-            containerId: configured ? containerId : ''
+            containerId: configured ? containerId : '',
+            // GTM 容器承载营销/广告标签：未取得营销存储同意前不得加载。
+            consentAllowed: __visitorMarketingConsentAllowsStorage()
         };
     }
 
@@ -2022,7 +2030,7 @@
 
     function __loadVisitorGtm() {
         var runtime = __gtmConfig();
-        if (!runtime.enabled || !runtime.containerId) {
+        if (!runtime.enabled || !runtime.containerId || runtime.consentAllowed !== true) {
             return runtime;
         }
         if (__visitorGtmLoaded === runtime.containerId) {
