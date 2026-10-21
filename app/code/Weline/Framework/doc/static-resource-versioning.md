@@ -8,7 +8,7 @@
 
 **模块静态主 URL（硬）**：`@static` / `<css>` / `<js>` / `TraitTemplate::fetchTagSource(statics)` / `PublicStaticUrl` 在 prod/staging 下**必须**输出扁平 `/static/{Vendor}/{Module}/{rest}`。主题命名空间路径只服务**主题设计资源**（`dir_type_THEME`、colors、design assets）与 overlay 落盘兼容，**不得**再作为模块 `view/statics` 的主公开前缀。
 
-**正式入口**：`php bin/w deploy:mode:set prod`（内联 `Deploy\Upgrade` → `prod_after`）。日常生产变更须经 `setup:upgrade`（!DEV → `SetupUpgradeAfterDeployStatic`）或显式 `deploy:upgrade`；`core:update` / 仅改 env **不算**完成。Orchestrator 空 `POST_DEPLOY` 默认执行 `setup:upgrade`。
+**正式入口**：`php bin/w deploy:mode:set prod`（内联 `Deploy\Upgrade` → `prod_after`）。日常**代码/模块静态**生产变更须经 `setup:upgrade`（!DEV → `SetupUpgradeAfterDeployStatic`）或显式 `deploy:upgrade`；`core:update` / 仅改 env **不算**完成。Orchestrator 空 `POST_DEPLOY` 默认执行 `setup:upgrade`。**主题内容/版本发布不走这条全站静态管道**，见下文「发版闭环 B」。
 
 ## 主题命名空间归一化（发布目标必须与 URL 同源）
 
@@ -164,6 +164,122 @@
 （`.scss` 600 / `.less` 70 / `.lock` 42 / `.hbs` 8 / `Makefile` / `.jshintrc` / `.sql` 等），
 **无任何运行时资源**；且全仓无任何代码以 HTTP 方式取 `.scss` / `.less` / `.hbs`。
 `.well-known/` / `media/` / `errors/` 只套拒绝规则、不套白名单（其中文件可能无扩展名）。
+
+## 静态产物跨发布保留（rename-swap 不变量）
+
+### 事故形态（必须记住）
+
+`deploy:mode:set prod` 的 staging 管道把 `pub/static` **整树 rename**：
+
+```text
+pub/static  →  pub/static.prev.{stamp}  →  purgePrevAndResidue() 删除
+staging/static  →  pub/static
+```
+
+内容哈希产物（`theme-head/{sha256}.css`、`widget-assets/{sha256}.css|js`）的 URL
+**天然不可变**，但它的寿命此前等于「一次发布树」。于是：
+
+1. 边缘仍按旧 TTL 发上一代 HTML，HTML 引用旧哈希；
+2. 新发布 swap 后，旧哈希在源站 404；
+3. 没有 Cloudflare purge 令牌时，旧 HTML 不会被替换，页面看起来像「静态文件丢了」。
+
+**根因不是哈希机制，而是「不可变 URL 的寿命 < 引用它的 HTML 的寿命」。**
+
+### 硬不变量
+
+> **任何可被缓存 HTML 引用的静态字节，其可服务寿命必须 ≥ 该 HTML 的最大缓存寿命 + 余量。**
+
+两类寿命必须一起配置，不能只靠运维记得 purge：
+
+| 变量 | 权威配置 | 默认 | 作用 |
+|------|----------|------|------|
+| HTML 边缘 TTL | `wls.performance.fpc_edge_max_age_seconds` | `300` 秒 | Framework FPC HIT + 托管 Nginx html-disk HIT 共同封顶；`0` = CDN 不缓存 HTML |
+| 静态保留窗口 | `wls.performance.static_carry_retention_days` | `400` 天 | `StaticCarryOver` 保留发布树中缺失的可服务文件；覆盖历史一年边缘 HTML |
+| 源站 FPC policy TTL | `@Extra(type=fpc, ttl=…)` / 默认 | 一年 | 只决定源站 FPC 新鲜度，**不再直接等于边缘 TTL** |
+
+默认 300 秒意味着：即使 CDN purge 完全失败，主题发版最多 5 分钟后也会自愈。
+若把边缘 TTL 调大，必须同时保证保留窗口更长，并保证 purge 能力可用。
+
+Cloudflare 侧若存在**强制 HTML Edge TTL 的自定义 Cache Rule**，它会绕过源站
+`CDN-Cache-Control`；必须改为 Respect origin（或删除该规则），否则源站封顶无效。
+
+### `StaticCarryOver` 做什么
+
+`Weline\Framework\Deploy\StaticCarryOver` 在 `DeployStagingSession::commitSwap()`
+把 live rename 走之前执行：
+
+1. 扫描 live `pub/static` 中**新 staging 不存在**的普通文件；
+2. 只保留 `StaticPublicSurface::isServableUrlPath()` 允许的路径
+   （`.php` / 构建残留 / 发布排除项一律不保留）；
+3. 优先 `link()` 硬链接进 staging，失败才 `copy()`；新 staging 文件永远优先；
+4. 把 tombstone 写入 `var/deploy/static-carry.json`，记录
+   `carried_at / inode / size / mtime`；
+5. `purgePrevAndResidue()` 成功后再按保留窗口 GC；若同名路径已被新树原生文件
+   替换（inode/大小/mtime 变化），只丢弃 manifest 条目，**绝不删除新文件**。
+
+因此发布仍是原子的（staging 完整后才 swap），但旧哈希不会随旧树消失。
+`wls.performance.static_carry_retention_days=0` 可显式关闭携带；安全删除场景
+应使用该开关或手工清理 tombstone，而不是依赖「删源文件 = 全站立即消失」。
+
+### 发版闭环（runbook）
+
+先分清两种发布，**不要把主题发版做成整站发布**。
+
+#### A. 整站代码 / 静态重发（full deploy）
+
+适用：模块 PHP、`pub/static` 全量重建、部署管道切换。
+
+1. `php bin/w deploy:mode:set prod`
+2. `php bin/w server:reload`
+3. `php bin/w server:nginx:reload`（让 html-disk 的 `max-age=300` 生效）
+4. `StaticCarryOver` 在 staging swap 时自动保留旧可服务文件；无需人工补静态文件。
+5. 观察：`curl -I` 首页应见 `X-Weline-Deploy-Version` 与
+   `CDN-Cache-Control: public, max-age=300`；旧哈希资源应仍为 200。
+
+整站发布本来就换整棵 `pub/static`，允许一次全量边缘失效；但**日常主题版本更新不属于 A**。
+
+#### B. 主题版本 / 主题内容发布（routine theme release）
+
+适用：改主题 phtml、CSS/JS、布局、版本发布。
+
+1. **后台主题编辑器点「发布」**（推荐）：Scoped publish 只 bump 当前 Scope 的
+   Theme 世代，并只为受影响布局发 `impact.urls/slugs`；Changed 管道只清这些
+   URL 的 FPC 和 CDN，不 `Purge Everything`。
+2. **CLI 同步主题静态/布局**：
+
+   ```bash
+   php bin/w theme:upgrade -t <theme>   # 默认：按本次布局清 FPC/CDN URL
+   ```
+
+   `theme:upgrade` 默认把 `cache_invalidation=none` 交给固化切流，然后按主题前端
+   布局调用 `ThemeStorefrontSlugFpcPublisher::purgeLayoutsForThemeTargets()`：
+   - 只清受影响页面的 FPC 叶子；
+   - 只对这些页面发 CDN URL purge（`impact.urls`）；
+   - 只 bump 对应 scope 的 Theme 运行时世代；
+   - **不**调用 `clearAllThemeRelatedCaches`，**不** `deploy:mode:set prod`，
+     **不**要求 `Purge Everything`。
+3. 静态资源是内容哈希；旧 HTML 引用的旧包仍在 `pub/static`。若旧包确实已被
+   整站发布清掉，由 A 的 `StaticCarryOver` 兜底。
+4. 观察：新 HTML 应引用新哈希；旧哈希仍 200；边缘最多 300 秒自然换页。
+
+#### C. `theme:upgrade -f`：显式全量失效（仅故障恢复）
+
+`-f` 是逃生门，不是日常主题发版路径。它会 `clearAllThemeRelatedCaches()`：
+全主题命名空间、FPC/Shared FPC、CDN 全页清理，并 staging→warm→promote。
+`cdn_full_page_purge` 失败时**非零退出**（已 promote 的产物不回滚）。
+只有在「边缘必须立刻全量换掉」时才使用。
+
+#### D. 历史遗留 / 本次事故
+
+修复前已用一年 TTL 写入边缘的 HTML 无法被新代码缩短寿命。若旧 HTML 仍引用
+已丢失的旧哈希，需在 Cloudflare 面板执行**一次** `Purge Everything`（或按 URL
+purge 首页/分类页）。这是**一次性**处置，不是长期机制；后续主题发版走 B。
+
+#### E. DEV / 预览
+
+`Response` 出站统一把非生产 HTML 改成
+`Cache-Control: private, no-store` + `CDN-Cache-Control: no-store`，
+防止 `/Weline/.../view/statics/...`、`_weline_dev=` 页面进入共享边缘缓存。
 
 ## 呈现世代 / FPC（C-NS · C-STAMP · C-HELPER）
 

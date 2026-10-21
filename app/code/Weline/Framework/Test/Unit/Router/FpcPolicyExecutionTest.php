@@ -10,6 +10,7 @@ use Weline\Framework\Cache\Contract\NamespaceGenerationInterface;
 use Weline\Framework\Cache\Namespace\NamespacePath;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Cache\StorefrontCacheKeyContext;
+use Weline\Framework\App\Env;
 use Weline\Framework\Cache\StorefrontCacheKeyContextResolver;
 use Weline\Framework\Context;
 use Weline\Framework\Env\WelineEnv;
@@ -154,6 +155,30 @@ final class FpcPolicyExecutionTest extends TestCase
         $wire = $this->invoke('withFormattedResponseConnection', $http, true);
         self::assertStringNotContainsString('X-Weline-Fpc-Fresh-Until', $wire);
         self::assertMatchesRegularExpression('/CDN-Cache-Control: public, max-age=[0-5]\r\n/', $wire);
+    }
+
+    public function testEdgeTtlIsCappedIndependentlyFromOriginPolicy(): void
+    {
+        $env = Env::getInstance();
+        $previous = $env->getConfig('wls.performance.fpc_edge_max_age_seconds');
+        $env->setConfig('wls.performance.fpc_edge_max_age_seconds', 300);
+        try {
+            $response = Response::fromContent('body');
+            $payload = [
+                'fpc_expires_at' => microtime(true) + 31536000,
+                'policy_ttl' => 31536000,
+            ];
+            $this->invoke('applyFpcHitEdgeCacheHeaders', $response, false, $payload);
+
+            self::assertSame('public, max-age=300', $response->getHeader('CDN-Cache-Control'));
+            self::assertSame('public, max-age=300', $response->getHeader('Cloudflare-CDN-Cache-Control'));
+            self::assertSame(
+                'public, max-age=60, must-revalidate',
+                $response->getHeader('Cache-Control'),
+            );
+        } finally {
+            $env->setConfig('wls.performance.fpc_edge_max_age_seconds', $previous);
+        }
     }
 
     public function testFormattedProcessEntryCannotOutlivePublishedFreshness(): void

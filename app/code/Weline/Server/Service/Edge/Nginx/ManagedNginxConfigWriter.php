@@ -35,10 +35,12 @@ final class ManagedNginxConfigWriter
     private const BUSINESS_PROXY_READ_TIMEOUT_SEC = 90;
     private const BUSINESS_PROXY_SEND_TIMEOUT_SEC = 90;
     /**
-     * html-disk HIT CDN edge TTL (seconds). Aligns with Framework Extra FPC year TTL
-     * / FullPageCacheCoordinator::applyFpcHitEdgeCacheHeaders CDN max-age ceiling.
+     * Edge HTML TTL must be a propagation bound, not the origin FPC policy
+     * lifetime. Without a CDN purge token a one-year HTML cache pins stale
+     * pages for a year; 300s self-heals after a missed purge.
      */
-    private const FPC_HTML_DISK_CDN_MAX_AGE_SECONDS = 31536000;
+    private const FPC_HTML_DISK_CDN_MAX_AGE_DEFAULT = 300;
+    private const FPC_HTML_DISK_CDN_MAX_AGE_LIMIT = 86400;
     /** Default browser Cache-Control max-age when Env key is unset. */
     private const FPC_HTML_DISK_BROWSER_MAX_AGE_DEFAULT = 60;
 
@@ -2148,6 +2150,20 @@ NGINX;
      */
     private function buildFpcHtmlDiskHitHeaderBlock(): string
     {
+        $edgeTtl = self::FPC_HTML_DISK_CDN_MAX_AGE_DEFAULT;
+        try {
+            $configuredEdgeTtl = Env::get(
+                'wls.performance.fpc_edge_max_age_seconds',
+                self::FPC_HTML_DISK_CDN_MAX_AGE_DEFAULT,
+            );
+            if (\is_numeric($configuredEdgeTtl)) {
+                $edgeTtl = (int)$configuredEdgeTtl;
+            }
+        } catch (\Throwable) {
+            $edgeTtl = self::FPC_HTML_DISK_CDN_MAX_AGE_DEFAULT;
+        }
+        $edgeTtl = max(0, min($edgeTtl, self::FPC_HTML_DISK_CDN_MAX_AGE_LIMIT));
+
         $browserTtl = self::FPC_HTML_DISK_BROWSER_MAX_AGE_DEFAULT;
         try {
             $browserTtl = (int)Env::get(
@@ -2157,8 +2173,8 @@ NGINX;
         } catch (\Throwable) {
             $browserTtl = self::FPC_HTML_DISK_BROWSER_MAX_AGE_DEFAULT;
         }
-        $browserTtl = max(0, min($browserTtl, self::FPC_HTML_DISK_CDN_MAX_AGE_SECONDS, 86400));
-        $cdnDirective = 'public, max-age=' . self::FPC_HTML_DISK_CDN_MAX_AGE_SECONDS;
+        $browserTtl = max(0, min($browserTtl, $edgeTtl, 86400));
+        $cdnDirective = $edgeTtl > 0 ? 'public, max-age=' . $edgeTtl : 'no-store';
         $browserDirective = $browserTtl > 0
             ? 'public, max-age=' . $browserTtl
             : 'public, max-age=0, must-revalidate';

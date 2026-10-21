@@ -6,6 +6,11 @@
 
 `php bin/w d:m:se prod` 期间**不删、不覆盖**活树 `pub/static`、`generated/complicate`、`generated/theme-layout-entities`；全部产物写入顶层 staging，管道成功后再 `rename` 切换，缩短请求窗口。
 
+> **适用边界**：本管道是**整站代码/静态重发**，不是主题版本发布。
+> 主题内容/版本更新走主题编辑器发布或 `php bin/w theme:upgrade -t <theme>`；
+> 后者默认只按受影响布局清 FPC/CDN URL，**不应**跟 `deploy:mode:set prod`
+> 或 Cloudflare `Purge Everything`。`theme:upgrade -f` 只是显式全量失效的逃生门。
+
 ## 布局
 
 ```text
@@ -27,7 +32,12 @@
 6. `upgrade_after` 主题固化 + Taglib → staging 实体树 + `staging/complicate`  
    - 烘焙期间 **必须** `DeployStagingSession::forcesProductionPublicUrls()`：TraitTemplate / 占位图等发 `/static/{ns}/...`，禁止把 `/Weline/...` 或 `?v=dev_*` 写进 staging 树
 7. `commitSwap`（失败则从 `*.prev.{stamp}` 回滚）
-8. `purgePrevAndResidue`（删 prev；清模块残留 `view/tpl`）
+   - swap 前 `StaticCarryOver` 把 live 中 staging 缺失的可服务文件硬链接进 staging；
+     新 staging 文件优先。旧 HTML 引用的内容哈希（`theme-head/*`、`widget-assets/*`）
+     不会因整树 rename 而立即 404。保留窗口见
+     `wls.performance.static_carry_retention_days`（默认 400 天），manifest 在
+     `var/deploy/static-carry.json`。
+8. `purgePrevAndResidue`（删 prev；按保留窗口 GC tombstone；清模块残留 `view/tpl`）
 9. `FpcStaticDiskStore::purgeAllLive` + FPC stamp + `prod_after`
 10. `server:reload` — 持久 Worker 重绑 `DEV`/`PROD`（define-once；仅改 env.php 不够）
 

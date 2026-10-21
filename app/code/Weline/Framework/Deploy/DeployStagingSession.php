@@ -22,6 +22,7 @@ final class DeployStagingSession
 
     private string $stamp;
     private string $root;
+    private StaticCarryOver $staticCarryOver;
 
     /** @var list<array{live:string,prev:string,tree:string}> */
     private array $committedPrev = [];
@@ -30,6 +31,7 @@ final class DeployStagingSession
     {
         $this->stamp = $stamp;
         $this->root = rtrim($root, '/\\') . DIRECTORY_SEPARATOR;
+        $this->staticCarryOver = new StaticCarryOver();
     }
 
     public static function isActive(): bool
@@ -163,6 +165,21 @@ final class DeployStagingSession
                 if (file_exists($prev) || is_dir($prev) || is_link($prev)) {
                     throw new \RuntimeException('deploy_staging_prev_exists:' . $prev);
                 }
+                if ($pair['tree'] === self::TREE_STATIC) {
+                    // Content-hashed theme packs are immutable by URL, but the
+                    // rename-swap would otherwise make their lifetime exactly
+                    // one release. Carry still-servable old bytes into staging
+                    // before the swap; new staging files always win.
+                    try {
+                        $this->staticCarryOver->carryForward($live, $staging);
+                    } catch (\Throwable $error) {
+                        throw new \RuntimeException(
+                            'deploy_staging_static_carry_failed:' . $error->getMessage(),
+                            0,
+                            $error,
+                        );
+                    }
+                }
                 if (is_dir($live) || is_link($live) || (file_exists($live) && !is_dir($live))) {
                     if (!@rename($live, $prev)) {
                         throw new \RuntimeException('deploy_staging_rename_live_to_prev_failed:' . $pair['tree']);
@@ -199,13 +216,31 @@ final class DeployStagingSession
      */
     public function purgePrevAndResidue(): void
     {
+        $staticLive = '';
         foreach ($this->committedPrev as $item) {
+            if ($item['tree'] === self::TREE_STATIC) {
+                $staticLive = $item['live'];
+            }
             $prev = $item['prev'];
             if (is_dir($prev) || is_link($prev) || file_exists($prev)) {
                 $this->removePath($prev);
             }
         }
         $this->committedPrev = [];
+        if ($staticLive !== '' && is_dir($staticLive)) {
+            // Retention GC runs only after the swap is committed. A failure
+            // here must not turn a successful deploy into a rollback; it only
+            // delays tombstone cleanup to the next deploy.
+            try {
+                $this->staticCarryOver->pruneExpired($staticLive);
+            } catch (\Throwable $error) {
+                try {
+                    Env::log_error('deploy', 'static_carry_prune_failed: ' . $error->getMessage());
+                } catch (\Throwable) {
+                    // Deploy already committed; never fail it from logging.
+                }
+            }
+        }
         $this->purgeModuleTplResidue();
         $this->removePath(rtrim($this->root, '/\\'));
         $this->removeEmptyStagingParent();

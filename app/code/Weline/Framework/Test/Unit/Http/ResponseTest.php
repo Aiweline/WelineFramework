@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Http;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\EventRegistryInterface;
 use Weline\Framework\Event\EventsManager;
@@ -59,6 +60,30 @@ final class ResponseTest extends TestCase
         self::assertSame(200, $response->getStatusCode());
         self::assertSame('text/html; charset=utf-8', $response->getHeader('Content-Type'));
         self::assertSame('<h1>hello</h1>', $response->getBody());
+    }
+
+    public function testDevHtmlResponseForcesEdgeNoStoreAtEmission(): void
+    {
+        $env = Env::getInstance();
+        $previous = $env->getConfig('system.deploy');
+        $env->setConfig('system.deploy', 'dev');
+        try {
+            $response = Response::fromContent('<html><body>dev-preview</body></html>', 200, 'text/html; charset=utf-8');
+            $response->setHeader('CDN-Cache-Control', 'public, max-age=31536000');
+            $response->setHeader('Cloudflare-CDN-Cache-Control', 'public, max-age=31536000');
+            $response->setHeader('Cache-Control', 'public, max-age=3600');
+
+            $response->toHttpString(false);
+
+            self::assertSame('no-store', $response->getHeader('CDN-Cache-Control'));
+            self::assertSame('no-store', $response->getHeader('Cloudflare-CDN-Cache-Control'));
+            self::assertSame(
+                'private, no-store, max-age=0, must-revalidate',
+                $response->getHeader('Cache-Control'),
+            );
+        } finally {
+            $env->setConfig('system.deploy', $previous);
+        }
     }
 
     public function testWqb1BodyIsNotRewrittenByDocumentCspMeta(): void

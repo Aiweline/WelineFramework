@@ -78,6 +78,14 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     /** Align soft-stale window with policy CDN year; hard store uses persist-until-purge. */
     private const MAX_STALE_TTL_SECONDS = 31536000;
     /**
+     * Edge HTML TTL is a propagation-safety knob, independent from origin FPC
+     * policy TTL. A one-year HTML edge TTL is only safe when every deploy can
+     * purge the CDN; without a token a single failed purge pins old HTML for a
+     * year. Keep the default short so a missed purge self-heals in minutes.
+     */
+    private const DEFAULT_FPC_EDGE_MAX_AGE_SECONDS = 300;
+    private const MAX_FPC_EDGE_MAX_AGE_SECONDS = 86400;
+    /**
      * Anonymous storefront Shared store TTL for CachePool.
      * Negative = forever at adapter (CachePool maps <0 → adapter ttl 0).
      * Cleared only by admin purge or Changed purgeUrls (persist-until-purge).
@@ -206,6 +214,18 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
     /** @var array<string, array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string,scope_identity:array,namespace_fingerprint:string}> */
     private static array $processLocalizedHomepageReceipts = [];
+
+    /**
+     * Fingerprint pairs this process actually published for a homepage receipt
+     * cache key. Previous-generation soft-serve is continuity for our own past
+     * publication only; anything else is a forged receipt and must fail closed.
+     *
+     * @var array<string, array<string, true>>
+     */
+    private static array $processHomepageReceiptFingerprints = [];
+
+    private const PROCESS_HOMEPAGE_FINGERPRINT_LEDGER_MAX_CACHE_KEYS = 256;
+    private const PROCESS_HOMEPAGE_FINGERPRINT_LEDGER_MAX_FINGERPRINTS = 4;
 
     /** @var array<string, array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string,scope_identity:array,namespace_fingerprint:string}> */
     private static array $processCriticalCatalogReceipts = [];
@@ -1164,6 +1184,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         self::$processFpcPayloadBytes = [];
         self::$processFpcPayloadTotalBytes = 0;
         self::$processLocalizedHomepageReceipts = [];
+        self::$processHomepageReceiptFingerprints = [];
         self::$processCriticalCatalogReceipts = [];
         self::$processFormattedFpcCache = [];
         self::$processFormattedFpcExpiresAt = [];
@@ -2379,6 +2400,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         // Locale/currency identity lives in full_uri + cache_key/variant.
         // Prefer empty cookie_header so preference cookies are not implied.
         $cookieHeader = '';
+        // FPC-composed fingerprint (base Scope vector ∪ path Extra), not the
+        // path-stable context bag used by Phrase/HotCache.
+        $namespaceFingerprint = $this->fpcNamespaceFingerprint($fullUri);
+        self::rememberHomepageReceiptFingerprint($unifiedCacheKey, $namespaceFingerprint);
 
         return [
             'version' => 2,
@@ -2388,9 +2413,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             'identity_digest' => \hash('sha256', $unifiedCacheKey),
             'cache_key' => $unifiedCacheKey,
             'scope_identity' => $context->scopeIdentity->toArray(),
-            // FPC-composed fingerprint (base Scope vector ∪ path Extra), not the
-            // path-stable context bag used by Phrase/HotCache.
-            'namespace_fingerprint' => $this->fpcNamespaceFingerprint($fullUri),
+            'namespace_fingerprint' => $namespaceFingerprint,
             'policy_fingerprint' => $policy['policy_fingerprint'],
             'policy_path' => $this->policyPath($fullUri),
             'lang' => $context->lang,
@@ -2517,6 +2540,18 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     }
 
     /**
+     * Whether a receipt still belongs to the current namespace/policy/scope
+     * generation. Callers that must fail closed (no previous-generation
+     * soft-serve) use this before serving a process/shared stale payload.
+     *
+     * @param array<string, mixed> $receipt
+     */
+    public function isInternalHomepageReceiptCurrent(array $receipt): bool
+    {
+        return $this->internalHomepageReceiptCacheKey($receipt) !== null;
+    }
+
+    /**
      * Rebuild-window soft-serve: same URI/scope/lang/policy identity may reuse
      * a previous-generation homepage receipt body as STALE only.
      *
@@ -2524,7 +2559,51 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
      */
     private function internalHomepageReceiptSoftServeCacheKey(array $receipt): ?string
     {
+        // Only a fingerprint this process published may open the previous
+        // generation. A caller-supplied random fingerprint is not continuity.
+        if (!self::publishedHomepageReceiptFingerprint($receipt)) {
+            return null;
+        }
+
         return $this->resolveHomepageReceiptCacheKey($receipt, false);
+    }
+
+    private static function rememberHomepageReceiptFingerprint(
+        string $cacheKey,
+        string $fingerprint,
+    ): void {
+        $cacheKey = \strtolower(\trim($cacheKey));
+        $fingerprint = \strtolower(\trim($fingerprint));
+        if (\preg_match('/^[a-f0-9]{16}$/D', $cacheKey) !== 1
+            || \preg_match('/^[a-f0-9]{64}$/D', $fingerprint) !== 1
+        ) {
+            return;
+        }
+
+        $known = self::$processHomepageReceiptFingerprints[$cacheKey] ?? [];
+        unset($known[$fingerprint]);
+        $known[$fingerprint] = true;
+        while (\count($known) > self::PROCESS_HOMEPAGE_FINGERPRINT_LEDGER_MAX_FINGERPRINTS) {
+            \array_shift($known);
+        }
+        unset(self::$processHomepageReceiptFingerprints[$cacheKey]);
+        self::$processHomepageReceiptFingerprints[$cacheKey] = $known;
+        while (\count(self::$processHomepageReceiptFingerprints)
+            > self::PROCESS_HOMEPAGE_FINGERPRINT_LEDGER_MAX_CACHE_KEYS
+        ) {
+            \array_shift(self::$processHomepageReceiptFingerprints);
+        }
+    }
+
+    /** @param array<string, mixed> $receipt */
+    private static function publishedHomepageReceiptFingerprint(array $receipt): bool
+    {
+        $cacheKey = \strtolower(\trim((string)($receipt['cache_key'] ?? '')));
+        $fingerprint = \strtolower(\trim((string)($receipt['namespace_fingerprint'] ?? '')));
+
+        return \preg_match('/^[a-f0-9]{16}$/D', $cacheKey) === 1
+            && \preg_match('/^[a-f0-9]{64}$/D', $fingerprint) === 1
+            && isset(self::$processHomepageReceiptFingerprints[$cacheKey][$fingerprint]);
     }
 
     /**
@@ -4431,13 +4510,28 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
     /**
      * FPC HIT/STALE 出站：
-     * - CDN：一年级（跟 policy_ttl / remaining）
+     * - CDN：policy_ttl / remaining，再按 fpc_edge_max_age_seconds 封顶（默认 300s）
      * - 浏览器：短 TTL（默认 60s），避免语种/货币 Cookie 变体被长缓存；Vary: Cookie 仍由调用方保证
+     *
+     * 源站 FPC 仍可按年保存；边缘 HTML 的 TTL 是独立的“发版传播上限”，
+     * 不能与 purge 能力强绑定。没有 CDN 令牌时，最坏情况是旧 HTML 多活
+     * 一个短窗口，而不是一年。
      */
     private function applyFpcHitEdgeCacheHeaders(Response $response, bool $stale = false, array $payload = []): void
     {
         $remaining = $this->payloadRemainingTtlSeconds($payload) ?? 0;
-        $maxAge = max(0, min((int)($payload['policy_ttl'] ?? 3600), $remaining));
+        $edgeMaxAge = self::DEFAULT_FPC_EDGE_MAX_AGE_SECONDS;
+        if (\defined('BP') && \defined('DS') && \defined('APP_CODE_PATH')) {
+            $configured = Env::get(
+                'wls.performance.fpc_edge_max_age_seconds',
+                self::DEFAULT_FPC_EDGE_MAX_AGE_SECONDS,
+            );
+            if (\is_numeric($configured)) {
+                $edgeMaxAge = (int)$configured;
+            }
+        }
+        $edgeMaxAge = max(0, min($edgeMaxAge, self::MAX_FPC_EDGE_MAX_AGE_SECONDS));
+        $maxAge = max(0, min((int)($payload['policy_ttl'] ?? 3600), $remaining, $edgeMaxAge));
         $directive = $stale || $maxAge <= 0 ? 'no-store' : 'public, max-age=' . $maxAge;
         // Transport fast path serializes this Response directly and never
         // reaches WlsRuntime::currentFpcStatus. Stamp the WLS status here so
@@ -4449,7 +4543,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
         } else {
             // HTML 浏览器短缓存（默认 60s）+ must-revalidate：发版后过期必须回源换世代。
-            // CDN 仍用上面的一年级 maxAge。
+            // CDN 用上面已封顶的 maxAge，不再跟随 origin policy 的一年。
             // 可配：wls.performance.fpc_browser_max_age_seconds（需完整 Env 引导）。
             $browserTtl = 60;
             if (\defined('BP') && \defined('DS') && \defined('APP_CODE_PATH')) {

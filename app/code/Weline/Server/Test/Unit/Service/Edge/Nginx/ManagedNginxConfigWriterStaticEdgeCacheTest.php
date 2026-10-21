@@ -213,12 +213,12 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
             'HTML origin must turn off gzip_vary so upstream Vary is not stacked.',
         );
         self::assertStringContainsString(
-            'CDN-Cache-Control "public, max-age=31536000" always;',
+            'CDN-Cache-Control "public, max-age=300" always;',
             $genericBlock,
-            'html-disk HIT must emit CDN-Cache-Control so CF bypass_by_default can store.',
+            'html-disk HIT must emit a short CDN-Cache-Control so a missed purge self-heals.',
         );
         self::assertStringContainsString(
-            'Cloudflare-CDN-Cache-Control "public, max-age=31536000" always;',
+            'Cloudflare-CDN-Cache-Control "public, max-age=300" always;',
             $genericBlock,
         );
         self::assertStringContainsString('Cache-Control "public, max-age=', $genericBlock);

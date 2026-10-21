@@ -5,6 +5,7 @@ namespace Weline\Framework\Http;
 use Weline\Framework\App\State;
 use Weline\Framework\Container\ContainerRuntime;
 use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Deploy\DeployPublicUrlMode;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Fpc\FpcDevAutoPierceClientScript;
@@ -299,6 +300,7 @@ class Response implements ResponseInterface, RequestLocalInterface
     public function emit(bool $terminate = true): void
     {
         $this->prepareForEmission();
+        $this->enforceNonProductionHtmlEdgeNoStore();
         if ($this->body !== '') {
             $this->synchronizeContentLengthHeader();
         }
@@ -324,6 +326,7 @@ class Response implements ResponseInterface, RequestLocalInterface
     public function toHttpString(bool $keepAlive = true): string
     {
         $this->prepareForEmission();
+        $this->enforceNonProductionHtmlEdgeNoStore();
         if ($this->body !== '') {
             $this->synchronizeContentLengthHeader();
         }
@@ -500,6 +503,34 @@ class Response implements ResponseInterface, RequestLocalInterface
         }
 
         return 'text/plain; charset=utf-8';
+    }
+
+    /**
+     * Non-production HTML (DEV / staging bake preview) must never enter a
+     * shared edge cache.
+     *
+     * FPC runs in DEV too, and its HIT headers used to be indistinguishable
+     * from production. A DEV preview page could therefore be cached by
+     * Cloudflare with `/Weline/.../view/statics/...` and `_weline_dev=` URLs,
+     * then served to public visitors long after the origin switched back to
+     * PROD. The final response is the single chokepoint every transport
+     * (WLS / FPM / tests) goes through, so enforce no-store here instead of
+     * duplicating it in each cache path.
+     */
+    private function enforceNonProductionHtmlEdgeNoStore(): void
+    {
+        if (DeployPublicUrlMode::useProduction()) {
+            return;
+        }
+        $contentType = \strtolower((string)$this->getHeader('Content-Type'));
+        $looksLikeHtml = \str_contains($contentType, 'text/html')
+            || ($contentType === '' && \preg_match('/^\s*(?:<!doctype\s+html|<html\b)/i', $this->body) === 1);
+        if (!$looksLikeHtml) {
+            return;
+        }
+        $this->setHeader('CDN-Cache-Control', 'no-store');
+        $this->setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
+        $this->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
     }
 
     private function prepareForEmission(): void
