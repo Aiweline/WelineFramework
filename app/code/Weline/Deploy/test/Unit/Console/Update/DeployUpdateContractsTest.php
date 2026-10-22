@@ -65,6 +65,9 @@ final class DeployUpdateContractsTest extends TestCase
             'CoreUpdateCache::testTransferSharesOneFiveMinuteBudget' => function () {
             $this->assert_CoreUpdateCache_testTransferSharesOneFiveMinuteBudget();
         },
+            'CoreUpdateCache::testIndexPackRaceKeepsOnlyARealCommit' => function () {
+            $this->assert_CoreUpdateCache_testIndexPackRaceKeepsOnlyARealCommit();
+        },
             'CoreUpdateActivity::testCoreUpdateHoldsSystemUpdateLock' => function () {
             $this->assert_CoreUpdateActivity_testCoreUpdateHoldsSystemUpdateLock();
         },
@@ -151,6 +154,31 @@ private function assert_CoreUpdateCache_testTransferSharesOneFiveMinuteBudget():
     $code = $run->invokeArgs($core, [getcwd() ?: '.', ['--version'], &$output]);
     self::assertSame(124, $code);
     self::assertContains('git transfer budget exhausted', $output);
+}
+
+private function assert_CoreUpdateCache_testIndexPackRaceKeepsOnlyARealCommit(): void
+{
+    $core = new Core($this->createMock(\Weline\Framework\Output\Cli\Printing::class), $this->createMock(\Weline\Framework\App\System::class));
+    $usable = new ReflectionMethod(Core::class, 'shallowCloneUsableAfterIndexPackRace');
+    $usable->setAccessible(true);
+    $fatal = [
+        'fatal: could not open tmp_pack_dyU5xq for reading: No such file or directory',
+        'fatal: fetch-pack: invalid index-pack output',
+    ];
+    $tmp = sys_get_temp_dir() . '/core-update-race-' . bin2hex(random_bytes(4));
+    mkdir($tmp, 0755, true);
+    try {
+        self::assertFalse($usable->invoke($core, $tmp, $fatal));
+        self::assertFalse($usable->invoke($core, $tmp, array_merge($fatal, ['git timed out after 300 seconds'])));
+        $this->git_CoreUpdateScope($tmp, 'init -b dev');
+        file_put_contents($tmp . '/keep.txt', 'ok');
+        $this->git_CoreUpdateScope($tmp, 'add keep.txt');
+        $this->git_CoreUpdateScope($tmp, '-c user.email=core-update@example.test -c user.name=core-update commit -m keep');
+        self::assertTrue($usable->invoke($core, $tmp, $fatal));
+        self::assertFalse($usable->invoke($core, $tmp, ['fatal: fetch-pack: invalid index-pack output']));
+    } finally {
+        $this->removeTree_CoreUpdateScope($tmp);
+    }
 }
 
 private function assert_CoreUpdateActivity_testCoreUpdateHoldsSystemUpdateLock(): void
