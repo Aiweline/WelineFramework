@@ -145,6 +145,53 @@ final class ThemeLayoutEntityOwnerPublicationTest extends TestCase
         } finally { $this->removeDirectory($directory); }
     }
 
+    public function testExclusiveIntentStopsNewSharedReadersUntilWriterEnters(): void
+    {
+        $identity = new ThemeVersionIdentity(999997, 'default_default_default', 'normal', 'frontend', 3, 'formal', 1);
+        $events = [];
+        SchedulerSystem::enableScheduler();
+        SchedulerSystem::setWaitDispatcher(static function (): void {});
+        try {
+            $holder = new \Fiber(static function () use ($identity, &$events): void {
+                ThemeLayoutEntityOwnerLock::read($identity, static function () use (&$events): void {
+                    $events[] = 'shared-held';
+                    \Fiber::suspend();
+                    $events[] = 'shared-released';
+                });
+            });
+            $writer = new \Fiber(static function () use ($identity, &$events): void {
+                ThemeLayoutEntityOwnerLock::write($identity, static function () use (&$events): void {
+                    $events[] = 'exclusive-entered';
+                    \Fiber::suspend();
+                    $events[] = 'exclusive-left';
+                });
+            });
+            $reader = new \Fiber(static function () use ($identity, &$events): void {
+                ThemeLayoutEntityOwnerLock::read($identity, static function () use (&$events): void {
+                    $events[] = 'late-shared';
+                });
+            });
+            $holder->start();
+            self::assertSame(['shared-held'], $events);
+            $writer->start();
+            self::assertSame(['shared-held'], $events);
+            $reader->start();
+            self::assertSame(['shared-held'], $events, 'a new shared reader must yield while exclusive intent is waiting');
+            $holder->resume();
+            self::assertSame(['shared-held', 'shared-released'], $events);
+            $writer->resume();
+            self::assertSame(['shared-held', 'shared-released', 'exclusive-entered'], $events);
+            $reader->resume();
+            self::assertSame(['shared-held', 'shared-released', 'exclusive-entered'], $events);
+            $writer->resume();
+            self::assertSame(['shared-held', 'shared-released', 'exclusive-entered', 'exclusive-left'], $events);
+            $reader->resume();
+            self::assertSame(['shared-held', 'shared-released', 'exclusive-entered', 'exclusive-left', 'late-shared'], $events);
+        } finally {
+            SchedulerSystem::disableScheduler();
+        }
+    }
+
     private function identity(): ThemeVersionIdentity
     {
         return new ThemeVersionIdentity(999998, 'default_default_default', 'normal', 'frontend', 1, 'draft', 1);

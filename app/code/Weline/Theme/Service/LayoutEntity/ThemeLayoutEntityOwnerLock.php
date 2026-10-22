@@ -8,11 +8,19 @@ use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
 
-/** Short source reads and complete saves share this owner lock across Workers. */
+/**
+ * Short source reads and complete saves share this owner lock across Workers.
+ * Exclusive waiters publish an intent first. Shared callers that only poll
+ * LOCK_NB never sit in the kernel queue, so live page reads can renew shared
+ * locks without a gap and starve solidify until theme_layout_owner_lock_timeout.
+ */
 final class ThemeLayoutEntityOwnerLock
 {
     /** @var array<string,array<string,array{handle:resource,pid:int,mode:int}>> */
     private static array $held = [];
+
+    /** @var array<string,true> Intent files this process is still waiting on. */
+    private static array $liveIntents = [];
 
     public static function read(ThemeVersionIdentity $identity, callable $callback): mixed
     {
@@ -57,8 +65,16 @@ final class ThemeLayoutEntityOwnerLock
         // when a sibling promote is still writing a large identity tree.
         $deadline = hrtime(true) + 120_000_000_000;
         $waitStarted = hrtime(true);
+        $intentFile = null;
         try {
-            while (!flock($handle, $mode | LOCK_NB)) {
+            if ($mode === LOCK_EX) {
+                $intentFile = self::publishExclusiveIntent($directory, $key);
+            }
+            while (true) {
+                $sharedYields = $mode === LOCK_SH && self::exclusiveIntentPending($directory, $key);
+                if (!$sharedYields && flock($handle, $mode | LOCK_NB)) {
+                    break;
+                }
                 if (hrtime(true) >= $deadline) {
                     throw new \RuntimeException('theme_layout_owner_lock_timeout');
                 }
@@ -66,6 +82,10 @@ final class ThemeLayoutEntityOwnerLock
                     throw new \RuntimeException('theme_layout_owner_lock_cooperative_wait_unavailable');
                 }
                 SchedulerSystem::yieldDelay(1);
+            }
+            if ($intentFile !== null) {
+                self::clearExclusiveIntent($intentFile);
+                $intentFile = null;
             }
             $waitMs = (hrtime(true) - $waitStarted) / 1_000_000;
             // Timing dig: theme.source.capture often = owner lock wait, not disk I/O.
@@ -94,7 +114,89 @@ final class ThemeLayoutEntityOwnerLock
                 flock($handle, LOCK_UN);
             }
         } finally {
+            if ($intentFile !== null) {
+                self::clearExclusiveIntent($intentFile);
+            }
             fclose($handle);
         }
+    }
+
+    private static function publishExclusiveIntent(string $directory, string $key): string
+    {
+        $intentDirectory = $directory . '/' . $key . '.exwait';
+        if (!is_dir($intentDirectory) && !@mkdir($intentDirectory, 0775, true) && !is_dir($intentDirectory)) {
+            throw new \RuntimeException('theme_layout_owner_lock_directory_failed');
+        }
+        $path = $intentDirectory . '/' . getmypid() . '-' . bin2hex(random_bytes(4));
+        if (file_put_contents($path, '') === false) {
+            throw new \RuntimeException('theme_layout_owner_lock_directory_failed');
+        }
+        self::$liveIntents[$path] = true;
+
+        return $path;
+    }
+
+    private static function clearExclusiveIntent(string $path): void
+    {
+        unset(self::$liveIntents[$path]);
+        if (is_file($path)) {
+            @unlink($path);
+        }
+        $intentDirectory = dirname($path);
+        if (is_dir($intentDirectory)) {
+            @rmdir($intentDirectory);
+        }
+    }
+
+    private static function exclusiveIntentPending(string $directory, string $key): bool
+    {
+        $intentDirectory = $directory . '/' . $key . '.exwait';
+        if (!is_dir($intentDirectory)) {
+            return false;
+        }
+        $self = (int)getmypid();
+        $pending = false;
+        foreach (scandir($intentDirectory) ?: [] as $name) {
+            if ($name === '.' || $name === '..') {
+                continue;
+            }
+            $path = $intentDirectory . '/' . $name;
+            if (!is_file($path)) {
+                continue;
+            }
+            $pid = (int)$name;
+            if ($pid === $self) {
+                if (isset(self::$liveIntents[$path])) {
+                    $pending = true;
+                    continue;
+                }
+                @unlink($path);
+                continue;
+            }
+            if (!self::processAlive($pid)) {
+                @unlink($path);
+                continue;
+            }
+            $pending = true;
+        }
+
+        return $pending;
+    }
+
+    private static function processAlive(int $pid): bool
+    {
+        if ($pid < 1) {
+            return false;
+        }
+        if (\function_exists('posix_kill')) {
+            if (posix_kill($pid, 0)) {
+                return true;
+            }
+            $errno = \function_exists('posix_get_last_error') ? (int)posix_get_last_error() : 0;
+
+            return $errno === 1;
+        }
+
+        return \DIRECTORY_SEPARATOR === '/' && is_dir('/proc/' . $pid);
     }
 }
