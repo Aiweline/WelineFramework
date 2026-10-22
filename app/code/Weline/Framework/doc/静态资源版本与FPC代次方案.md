@@ -230,6 +230,13 @@ pub/static/<legacy 原路径>            ← 兼容旧 HTML / 第三方硬编码
 - 新增守卫：`Theme/Test/Unit/View/ThemeStaticVersionContractTest.php`（模板/CSS/图标三条规则）；
 - 主题开发规范：`app/code/Weline/Theme/doc/静态资源版本契约.md`。
 
+### 6.3.3 FPC 烘焙层集中改写（兜底）
+
+- `FpcHtmlDiskStore::publish()` 在写盘前调用 `StaticAssetHtmlRewriter::rewrite()`：
+  把 HTML 中裸 `/static/...`（含设计主题硬编码）统一加构建代次；brotli 正文改写后重新压缩，避免 br 客户端拿到旧内容；
+- 这一层覆盖所有 FPC 落盘路径（页面、QueryBin、离线烘焙），即使主题包未同步也会自愈；
+- 实测：首页 HTML 静态 URL **0 裸路径**（28 BUILD + 7 HASH）。
+
 ### 6.4 运维命令（P5/P6，已实现）
 
 | 命令 | 行为 |

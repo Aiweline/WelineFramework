@@ -493,4 +493,10 @@
         max-height: 18rem;
         overflow: auto;
     }
+    /* 实心主按钮（页头「新建调度」、空态「创建第一条调度」）：
+       品牌蓝底上文字必须落在 on-primary 语义 token，缺 token 时回落到前台色盘，
+       再缺则白色，避免文字与底色同化导致标签不可读。 */
+    .w-agent-admin .w-button {
+        color: var(--weline-theme-on-primary, var(--color-on-primary, white));
+    }
 }

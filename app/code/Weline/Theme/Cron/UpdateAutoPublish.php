@@ -57,15 +57,20 @@ final class UpdateAutoPublish implements CronTaskInterface
         foreach ($ids as $themeId) {
             try {
                 $result = $this->auto->run($themeId);
+                $reason = (string)($result['skipped'] ?? '');
+                if ($reason === 'coalesced') {
+                    $skipped++;
+                    continue;
+                }
                 $mode = (string)($result['mode'] ?? '');
                 if ($mode === 'dev') {
                     return 'skip:dev_mode';
                 }
-                if (($result['skipped'] ?? '') === 'verify_failed') {
+                if ($reason === 'verify_failed') {
                     $failed[] = $themeId . ':verify';
                     continue;
                 }
-                if (($result['skipped'] ?? '') === 'no_dirty') {
+                if ($reason !== '') {
                     $skipped++;
                     continue;
                 }

@@ -27,6 +27,10 @@ class VisitorTrackingConfig
     private const KEY_CONVERSION_DEDUPE_TTL_DAYS = 'visitor/tracking/conversion_dedupe_ttl_days';
     private const KEY_CONVERSION_DEDUPE_EVENTS = 'visitor/tracking/conversion_dedupe_events';
     private const KEY_CONSENT_MODE_ENABLED = 'visitor/tracking/consent_mode_enabled';
+    /** 同意模块未启用时的默认策略：true=默认拒绝（显式同意才放行），false=旧语义默认放行。 */
+    private const KEY_CONSENT_DEFAULT_DENY = 'visitor/tracking/consent_default_deny';
+    /** 强制默认拒绝的地区（逗号分隔：EEA 组名或 ISO 国家码），这些地区忽略全局开关。 */
+    private const KEY_CONSENT_DEFAULT_DENY_REGIONS = 'visitor/tracking/consent_default_deny_regions';
     private const KEY_STICKY_UTM_TTL_HOURS = 'visitor/tracking/sticky_utm_ttl_hours';
     private const KEY_STICKY_LINKER_ENABLED = 'visitor/tracking/sticky_linker_enabled';
     private const KEY_STICKY_FORM_MERGE_ENABLED = 'visitor/tracking/sticky_form_merge_enabled';
@@ -109,12 +113,7 @@ class VisitorTrackingConfig
                 'source' => 'Weline_Visitor SystemConfig',
             ],
             'conversionDedupe' => $this->buildConversionDedupeRuntime($map),
-            'consent' => [
-                'enabled' => $this->toBool($map[self::KEY_CONSENT_MODE_ENABLED] ?? false, false),
-                // A08 前端门闩读取；A08a 仅注入，不改变现有 JS 行为
-                'marketingStorageKey' => 'ad_storage',
-                'source' => 'Weline_Visitor SystemConfig',
-            ],
+            'consent' => $this->buildConsentRuntime($map),
             'sticky' => [
                 'ttlHours' => $this->boundedInt($map[self::KEY_STICKY_UTM_TTL_HOURS] ?? 24, 24, 1, 8760),
                 'linkerEnabled' => $this->toBool($map[self::KEY_STICKY_LINKER_ENABLED] ?? true, true),
@@ -752,5 +751,102 @@ class VisitorTrackingConfig
         }
 
         return $this->configStore;
+    }
+
+    /** EEA = EU27 + 冰岛/列支敦士登/挪威；GB/CH 由默认地区列表附加。 */
+    public const EEA_COUNTRIES = [
+        'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT',
+        'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'IS', 'LI', 'NO',
+    ];
+
+    /**
+     * 该地区是否强制默认拒绝（忽略全局 defaultDeny 开关）。
+     * 未知地区（空 / XX）按 fail-closed 处理：强制拒绝。
+     *
+     * @param list<string> $denyRegions
+     */
+    public static function isForcedDefaultDenyRegion(string $region, array $denyRegions): bool
+    {
+        $region = \strtoupper(\trim($region));
+        if ($region === '' || $region === 'XX') {
+            return true;
+        }
+        $deny = \array_map(static fn(mixed $v): string => \strtoupper(\trim((string)$v)), $denyRegions);
+        if (\in_array($region, $deny, true)) {
+            return true;
+        }
+
+        return \in_array('EEA', $deny, true) && \in_array($region, self::EEA_COUNTRIES, true);
+    }
+
+    /**
+     * 最终默认拒绝结论：强制地区恒为 true；其余地区取全局开关。
+     *
+     * @param list<string> $denyRegions
+     */
+    public static function effectiveDefaultDeny(string $region, array $denyRegions, bool $globalDefaultDeny): bool
+    {
+        return self::isForcedDefaultDenyRegion($region, $denyRegions) ? true : $globalDefaultDeny;
+    }
+
+    /** @param array<string,mixed> $map */
+    private function buildConsentRuntime(array $map): array
+    {
+        $defaultDeny = $this->toBool($map[self::KEY_CONSENT_DEFAULT_DENY] ?? true, true);
+        $denyRegions = $this->normalizeList(
+            (string)($map[self::KEY_CONSENT_DEFAULT_DENY_REGIONS] ?? 'EEA,GB,CH'),
+            true,
+        );
+        $denyRegions = \array_values(\array_unique(\array_map(
+            static fn(mixed $value): string => \strtoupper(\trim((string)$value)),
+            $denyRegions,
+        )));
+        $denyRegions = \array_values(\array_filter($denyRegions, static fn(string $code): bool => $code !== ''));
+        if ($denyRegions === []) {
+            $denyRegions = ['EEA', 'GB', 'CH'];
+        }
+        return [
+            'enabled' => $this->toBool($map[self::KEY_CONSENT_MODE_ENABLED] ?? false, false),
+            'defaultDeny' => $defaultDeny,
+            'defaultDenyRegions' => $denyRegions,
+            'eeaCountries' => self::EEA_COUNTRIES,
+            // 注意：region / effectiveDefaultDeny 是「每访客」结论，不能烘进可缓存 HTML；
+            // 由前端按 cookie/全局地区提示计算，或由每请求接口（getRequestRegion）下发。
+            // A08 前端门闩读取；A08a 仅注入，不改变现有 JS 行为
+            'marketingStorageKey' => 'ad_storage',
+            'source' => 'Weline_Visitor SystemConfig',
+        ];
+    }
+
+    /** 访客国家码：优先复用 Captcha 的可信头解析，其次常见 CDN 头；无法判定返回 ''（fail-closed 由调用方处理）。 */
+    public function getRequestRegion(): string
+    {
+        $server = \is_array($_SERVER ?? null) ? $_SERVER : [];
+        try {
+            if (\class_exists(\Weline\Captcha\Service\ClientGeoResolver::class)) {
+                $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Captcha\Service\ClientGeoResolver::class,
+                );
+                $code = \strtoupper(\trim((string)$resolver->resolveFromServer($server)));
+                if ($code !== '' && $code !== 'XX' && \preg_match('/^[A-Z]{2}$/', $code) === 1) {
+                    return $code;
+                }
+            }
+        } catch (\Throwable) {
+            // 定位失败按未知处理（fail-closed）
+        }
+        foreach ([
+            'HTTP_CF_IPCOUNTRY',
+            'HTTP_CLOUDFRONT_VIEWER_COUNTRY',
+            'HTTP_X_COUNTRY_CODE',
+            'HTTP_X_GEO_COUNTRY',
+        ] as $key) {
+            $code = \strtoupper(\trim((string)($server[$key] ?? '')));
+            if ($code !== '' && $code !== 'XX' && \preg_match('/^[A-Z]{2}$/', $code) === 1) {
+                return $code;
+            }
+        }
+
+        return '';
     }
 }

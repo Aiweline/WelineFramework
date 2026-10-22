@@ -31,21 +31,23 @@ final class ThemeUpdateBuildService
     }
 
     /**
-     * @param array{layouts?:list<string>,options?:list<string>,all_versions?:bool,skip_static?:bool,skip_entities?:bool} $options
-     * @param callable():bool|null $stillLatest 代次已被后来的更新拨过时返回 false，本次放弃、不切换
-     * @return array{batch_id:string,static_ns:string,entity_root:string,manifest:array<string,mixed>,superseded?:bool}
+     * @param array{layouts?:list<string>,options?:list<string>,all_versions?:bool,skip_static?:bool,skip_entities?:bool,batch_id?:string} $options
+     * @return array{batch_id:string,static_ns:string,entity_root:string,manifest:array<string,mixed>}
      */
-    public function build(int $themeId, array $options = [], ?callable $stillLatest = null): array
+    public function build(int $themeId, array $options = []): array
     {
         if ($themeId < 1) {
             throw new \InvalidArgumentException('theme_update_theme_id_invalid');
         }
-        if ($this->yielded($stillLatest)) {
-            return $this->superseded(null);
-        }
 
-        $batch = $this->batches->createBatch($themeId);
-        $batchId = $batch->getBatchId();
+        $reuse = (string)($options['batch_id'] ?? '');
+        if ($reuse !== '') {
+            $this->batches->ensureBuilding($themeId, $reuse);
+            $batchId = $reuse;
+        } else {
+            $batch = $this->batches->createBatch($themeId);
+            $batchId = $batch->getBatchId();
+        }
         $staticDir = ThemeUpdateBatchService::staticRoot($batchId);
         $entityDir = ThemeUpdateBatchService::entityRoot($batchId);
         $checks = [];
@@ -66,9 +68,6 @@ final class ThemeUpdateBuildService
             ];
         } else {
             $checks[] = ['name' => 'static_tree_ready', 'ok' => true, 'skipped' => true];
-        }
-        if ($this->yielded($stillLatest)) {
-            return $this->superseded($batchId);
         }
 
         // 2) 实体：把固化根切到批根后固化（-l/-o 可限范围）
@@ -126,9 +125,6 @@ final class ThemeUpdateBuildService
                 'rewritten_files' => $rewritten,
             ];
         }
-        if ($this->yielded($stillLatest)) {
-            return $this->superseded($batchId);
-        }
 
         // 3) 校验：静态引用可解析（抽样）+ 产物非空可读
         // 说明：实体 PHTML 是「布局源码派生」，{{…}} 与 <w:…> 属合法内联标记，
@@ -137,10 +133,6 @@ final class ThemeUpdateBuildService
             $checks[] = $this->checkStaticSample($staticDir);
         }
         $checks[] = $this->checkEntitySample($entityDir);
-
-        if ($this->yielded($stillLatest)) {
-            return $this->superseded($batchId);
-        }
 
         $ok = true;
         foreach ($checks as $check) {
@@ -172,32 +164,6 @@ final class ThemeUpdateBuildService
             'static_ns' => $batchId,
             'entity_root' => $batchId,
             'manifest' => $manifest,
-        ];
-    }
-
-    /** @param callable():bool|null $stillLatest */
-    private function yielded(?callable $stillLatest): bool
-    {
-        return $stillLatest !== null && $stillLatest() !== true;
-    }
-
-    /** @return array{batch_id:string,static_ns:string,entity_root:string,manifest:array<string,mixed>,superseded:bool} */
-    private function superseded(?string $batchId): array
-    {
-        if ($batchId !== null && $batchId !== '') {
-            $this->batches->finishBuild($batchId, [
-                'verify' => ['ok' => false, 'superseded' => true],
-                'entity_files' => 0,
-                'static_files' => 0,
-            ]);
-        }
-
-        return [
-            'batch_id' => $batchId ?? '',
-            'static_ns' => $batchId ?? '',
-            'entity_root' => $batchId ?? '',
-            'superseded' => true,
-            'manifest' => ['verify' => ['ok' => false, 'superseded' => true]],
         ];
     }
 

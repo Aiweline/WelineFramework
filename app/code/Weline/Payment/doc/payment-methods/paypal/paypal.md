@@ -75,7 +75,9 @@ php bin/w payment:paypal:sync-tracking --order-uuid=ORDER_UUID --tracking-number
 生产环境应使用 PayPal Webhook ID 验证回调签名。
 
 ## 测试卡/测试账号
-使用 PayPal Sandbox buyer 和 facilitator 账号完成测试。
+沙盒 REST App（Client ID / Secret）提交在 `etc/platform/paypal.sandbox.bundled.php`。local/dev 没有本机覆盖时，`PayPalPlatformCredentialService` 用它跑沙盒支付。本机 `app/etc/payment/paypal.platform.sandbox.php`、`env.php` 或环境变量优先；生产/预发不读 bundled。
+
+沙盒买家登录提交在 `etc/platform/paypal.sandbox.buyer.json`。e2e 经 `tests/e2e/framework/paypal-sandbox-buyer.js` 读取，可用 `PAYPAL_SANDBOX_BUYER_EMAIL` / `PAYPAL_SANDBOX_BUYER_PASSWORD` 覆盖。
 
 ## 上线检查清单
 - live_client_id 和 live_client_secret 已填写。

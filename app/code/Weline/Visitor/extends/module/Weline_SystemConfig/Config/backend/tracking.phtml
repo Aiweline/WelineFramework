@@ -91,6 +91,24 @@
         value-type="bool"
         default="0"
         scope="global,website" />
+
+    <w:config:field
+        key="visitor/tracking/consent_default_deny"
+        label="未启用同意模块时默认拒绝"
+        description="默认开启。⚠️ 仅在访客地区不属于下方「强制默认拒绝地区」时，关闭本项才会恢复“默认放行”；EEA/英国/瑞士依 ePrivacy/GDPR 必须事先同意，本项在这些地区不生效。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website" />
+
+    <w:config:field
+        key="visitor/tracking/consent_default_deny_regions"
+        label="强制默认拒绝地区"
+        description="逗号分隔：EEA（欧盟27国 + 冰岛/列支敦士登/挪威 组名）或 ISO 国家码，默认 EEA,GB,CH。命中即强制默认拒绝（忽略上一项）；访客地区无法判定时同样按拒绝处理（fail-closed）。"
+        type="text"
+        value-type="string"
+        default="EEA,GB,CH"
+        scope="global,website" />
 </w:config:group>
 
 <w:config:group code="visitor_conversion_dedupe" label="转化事件去重" description="结账/支付成功等关键页事件：前后端约定同一套参数，TTL 内重复直接丢弃。" sort="22">

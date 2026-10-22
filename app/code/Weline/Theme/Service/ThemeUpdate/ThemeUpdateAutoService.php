@@ -22,6 +22,7 @@ final class ThemeUpdateAutoService
         private readonly ThemeUpdateBuildService $builder,
         private readonly ThemeUpdateBatchService $batches,
         private readonly ThemeLayoutOriginWatchService $originWatch,
+        private readonly ThemeUpdateFlightRunner $flights = new ThemeUpdateFlightRunner(),
     ) {
     }
 
@@ -47,12 +48,20 @@ final class ThemeUpdateAutoService
                 return ['mode' => 'dev', 'dry_run' => true];
             }
 
-            return ['mode' => 'dev', 'report' => $this->originWatch->run()];
+            return $this->flights->execute('origin-watch', function (string $batchId): array {
+                unset($batchId);
+                $report = $this->originWatch->run();
+                $this->flights->finishProcessing('origin-watch');
+
+                return ['mode' => 'dev', 'report' => $report];
+            });
         }
 
         // 非 dev：发布后原子切换
+        $scope = ThemeUpdateFlight::scopeForTheme($themeId);
         $dirty = ThemeUpdateRuntime::isDirty($themeId);
-        if (!$force && !$dirty) {
+        $waiting = $this->flights->activeBatchId($scope) !== '' || $this->flights->tailBatchId($scope) !== '';
+        if (!$force && !$dirty && !$waiting) {
             return ['mode' => 'batch', 'skipped' => 'no_dirty'];
         }
         if ($dryRun) {
@@ -74,28 +83,44 @@ final class ThemeUpdateAutoService
         if (empty($dirtyLayouts['all']) && $dirtyLayouts['layouts'] !== []) {
             $buildOptions['layout_targets'] = $dirtyLayouts['layouts'];
         }
-        $result = $this->builder->build($themeId, $buildOptions);
-        $manifest = $result['manifest'] ?? [];
-        if (($manifest['verify']['ok'] ?? false) !== true) {
-            // 不清脏标记：下次重试；线上保持旧代次。记录退避窗口，避免每分钟重复失败。
-            $this->writeBackoff($themeId, 'verify_failed');
-            return [
-                'mode' => 'batch',
-                'batch_id' => $result['batch_id'],
-                'skipped' => 'verify_failed',
-            ];
-        }
 
-        $state = $this->batches->promote($result['batch_id']);
-        ThemeUpdateRuntime::clearDirty($themeId);
-        $this->clearBackoff($themeId);
+        return $this->flights->execute(
+            $scope,
+            function (string $batchId) use ($themeId, $buildOptions, $scope): array {
+                $token = ThemeUpdateRuntime::dirtyToken($themeId);
+                $buildOptions['batch_id'] = $batchId;
+                $result = $this->builder->build($themeId, $buildOptions);
+                $manifest = $result['manifest'] ?? [];
+                if (($manifest['verify']['ok'] ?? false) !== true) {
+                    // 不清脏标记、不换版本号：这次还没进入下一步。
+                    $this->writeBackoff($themeId, 'verify_failed');
+                    return [
+                        'mode' => 'batch',
+                        'batch_id' => $batchId,
+                        'skipped' => 'verify_failed',
+                    ];
+                }
+                $moved = ThemeUpdateRuntime::dirtyToken($themeId) !== $token;
+                if ($moved) {
+                    $this->flights->ensureTail($scope);
+                }
 
-        return [
-            'mode' => 'batch',
-            'batch_id' => $result['batch_id'],
-            'state' => $state,
-            'layout_targets' => $buildOptions['layout_targets'] ?? [],
-        ];
+                $state = $this->batches->promote($batchId);
+                $this->flights->finishProcessing($scope);
+                if (ThemeUpdateRuntime::dirtyToken($themeId) === $token) {
+                    ThemeUpdateRuntime::clearDirty($themeId);
+                    $this->clearBackoff($themeId);
+                }
+
+                return [
+                    'mode' => 'batch',
+                    'batch_id' => $batchId,
+                    'state' => $state,
+                    'tail_batch_id' => $this->flights->tailBatchId($scope),
+                    'layout_targets' => $buildOptions['layout_targets'] ?? [],
+                ];
+            }
+        );
     }
 
     /** @return list<int> 有待收敛发布的主题ID */

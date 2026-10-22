@@ -26,8 +26,7 @@ const PDP = process.env.CHECKOUT_PDP_PATH
     ? (process.env.EXPRESS_PDP_PATH
       || '/product/hua-chao-ji-yuan-chuang-han-fu-luo-chuan-tang-zhi-qi-xiong-68a0ecd7/?size=s&style_type=luo-chuan-da')
     : '/product/qi-ta-xin-kuan-hei-shan-cha-han-fu-nu-chun-qiu-ji-he-zi-qun-guo-11ae8001/');
-const BUYER_EMAIL = process.env.PAYPAL_SANDBOX_BUYER_EMAIL || 'sb-4sxrp30216572@personal.example.com';
-const BUYER_PASS = process.env.PAYPAL_SANDBOX_BUYER_PASSWORD || 'weline18';
+const { BUYER_EMAIL, BUYER_PASS } = require(path.resolve(__dirname, '../../../../../../../tests/e2e/framework/paypal-sandbox-buyer.js'));
 
 function moneyFrom(obj) {
   if (!obj || typeof obj !== 'object') return null;

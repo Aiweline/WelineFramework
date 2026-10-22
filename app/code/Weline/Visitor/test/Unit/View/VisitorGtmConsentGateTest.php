@@ -27,6 +27,20 @@ final class VisitorGtmConsentGateTest extends TestCase
         );
     }
 
+    public function testConsentDefaultsToDenyWhenModuleDisabled(): void
+    {
+        foreach ([
+            'app/code/Weline/Visitor/view/statics/js/pixel.js',
+            'app/code/Weline/Visitor/view/taglib/js/pixel.phtml',
+        ] as $relative) {
+            $source = (string)\file_get_contents(BP . $relative);
+            self::assertStringContainsString('var defaultDeny = __visitorConfigBool(defaultDenyFlag, true);', $source, $relative);
+            self::assertStringContainsString('__visitorConsentDenyRegions', $source, $relative);
+            self::assertStringContainsString('return effectiveDefaultDeny ? grantedNow : true;', $source, $relative);
+            self::assertStringContainsString('return consent[key] === true;', $source, $relative);
+        }
+    }
+
     public function testGa4LoaderIsConsentGated(): void
     {
         $source = (string)\file_get_contents(BP . 'app/code/Weline/Visitor/view/statics/js/pixel.js');

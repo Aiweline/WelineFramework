@@ -16,8 +16,7 @@ const { parsePhpFixtureStdout, phpFixtureEnv } = require('./e2e-php-fixture-json
 
 const ROOT_DIR = path.resolve(__dirname, '../../../../../../..');
 const FIXTURE = path.resolve(__dirname, 'release-paypal-account-lifecycle-fixture.php');
-const BUYER_EMAIL = process.env.PAYPAL_SANDBOX_BUYER_EMAIL || 'sb-4sxrp30216572@personal.example.com';
-const BUYER_PASS = process.env.PAYPAL_SANDBOX_BUYER_PASSWORD || 'weline18';
+const { BUYER_EMAIL, BUYER_PASS } = require(path.resolve(__dirname, '../../../../../../../tests/e2e/framework/paypal-sandbox-buyer.js'));
 const PAYMENT_METHOD = paymentMethodCode();
 
 const ADDRESS = {

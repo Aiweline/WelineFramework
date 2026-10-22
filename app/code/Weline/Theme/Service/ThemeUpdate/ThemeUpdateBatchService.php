@@ -114,6 +114,41 @@ final class ThemeUpdateBatchService
     }
 
     /**
+     * 使用已经定下的版本号。号已存在则不另开一版。
+     */
+    public function ensureBuilding(int $themeId, string $batchId, int $websiteId = 0, string $area = self::AREA_FRONTEND): void
+    {
+        if ($themeId < 1) {
+            throw new \InvalidArgumentException('theme_update_theme_id_invalid');
+        }
+        if (!ThemeUpdatePointerPlanner::isBatchIdValid($batchId)) {
+            throw new \InvalidArgumentException('theme_update_batch_id_invalid');
+        }
+        foreach ([self::staticRoot($batchId), self::entityRoot($batchId)] as $dir) {
+            if (!\is_dir($dir) && !\mkdir($dir, 0775, true) && !\is_dir($dir)) {
+                throw new \RuntimeException('theme_update_batch_dir_failed: ' . $dir);
+            }
+        }
+        $found = $this->batch->reset()->clearQuery()
+            ->where(ThemeUpdateBatch::schema_fields_BATCH_ID, $batchId)
+            ->find()
+            ->fetch();
+        if ($found instanceof ThemeUpdateBatch && $found->getBatchId() !== '') {
+            return;
+        }
+        $this->batch->reset()->clearData()->setData([
+            ThemeUpdateBatch::schema_fields_BATCH_ID => $batchId,
+            ThemeUpdateBatch::schema_fields_WEBSITE_ID => \max(0, $websiteId),
+            ThemeUpdateBatch::schema_fields_THEME_ID => $themeId,
+            ThemeUpdateBatch::schema_fields_AREA => $area,
+            ThemeUpdateBatch::schema_fields_STATIC_NS => $batchId,
+            ThemeUpdateBatch::schema_fields_ENTITY_ROOT => $batchId,
+            ThemeUpdateBatch::schema_fields_STATUS => ThemeUpdateBatch::STATUS_BUILDING,
+            ThemeUpdateBatch::schema_fields_FILE_COUNT => 0,
+        ])->save();
+    }
+
+    /**
      * 写入清单并落状态：verify.ok === true → verified，否则 failed（指针不会指向 failed）。
      *
      * @param array<string,mixed> $manifest

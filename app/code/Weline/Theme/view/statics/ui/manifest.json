@@ -11,7 +11,7 @@
             "ui-core"
         ]
     },
-    "build_id": "8fafc54efeebad3df691912ea7dfcd7dab3edd6b750bb96565f28d76f221f674",
+    "build_id": "ed3f574d9acdea7fb52282bfb6329fc487d64c2398fcd2ebc28c721b4986a368",
     "bundles": {
         "acl-role-assign-css": {
             "bytes": 2931,
@@ -49,10 +49,10 @@
             "type": "js"
         },
         "agent-admin-css": {
-            "bytes": 15259,
+            "bytes": 15652,
             "file": "pages/weline-agent-admin.css",
-            "gzip_bytes": 2178,
-            "sha256": "062f712a129fa6c8d78a3142db329431512d94db4bbf09f3547dfbae73f17ce4",
+            "gzip_bytes": 2476,
+            "sha256": "9be1241c901a5c89abfacfde05d8b6e76a1df462360a1f9a9876153b38a19faf",
             "type": "css"
         },
         "agent-admin-prototype-js": {
@@ -336,10 +336,10 @@
             "type": "js"
         },
         "foundation": {
-            "bytes": 163938,
+            "bytes": 168230,
             "file": "weline-foundation.css",
-            "gzip_bytes": 25358,
-            "sha256": "89028bc939dde3cd92b818e07c8fb8038017c4669d6ddc12190fe25ef9adb9db",
+            "gzip_bytes": 26168,
+            "sha256": "239ab7e83357d1854d3b48f1c71e46c9246584a03e5faec9124e4184ae9d590f",
             "type": "css"
         },
         "frontend": {
@@ -588,10 +588,10 @@
             "type": "js"
         },
         "ui-button": {
-            "bytes": 4456,
+            "bytes": 4481,
             "file": "components/weline-ui-button.css",
-            "gzip_bytes": 1251,
-            "sha256": "5c9404b8bc48d83062e5d6e349a9c6224b4162cb01be89a3037bde934d9bbfab",
+            "gzip_bytes": 1257,
+            "sha256": "985dfd89e6f8b591d0047bbf49926538735945af47904517da6bcc7f0c36fefe",
             "type": "css"
         },
         "ui-core": {

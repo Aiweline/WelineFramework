@@ -7,8 +7,7 @@ const { chromium } = require(path.resolve(__dirname, '../../../../../../../tests
 const FRONTEND = process.env.PLAYWRIGHT_TARGET_ORIGIN || 'https://p05113ef3.test.weline.com:9555';
 const PDP = process.env.EXPRESS_PDP_PATH
   || '/product/hua-chao-ji-yuan-chuang-han-fu-luo-chuan-tang-zhi-qi-xiong-68a0ecd7/?size=s&style_type=luo-chuan-da';
-const BUYER_EMAIL = process.env.PAYPAL_SANDBOX_BUYER_EMAIL || 'sb-4sxrp30216572@personal.example.com';
-const BUYER_PASS = process.env.PAYPAL_SANDBOX_BUYER_PASSWORD || 'weline18';
+const { BUYER_EMAIL, BUYER_PASS } = require(path.resolve(__dirname, '../../../../../../../tests/e2e/framework/paypal-sandbox-buyer.js'));
 
 async function loginPayPal(paypal) {
   await paypal.waitForLoadState('domcontentloaded');

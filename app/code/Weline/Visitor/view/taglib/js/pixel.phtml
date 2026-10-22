@@ -547,16 +547,35 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
     function __visitorConsentState() {
         var consentConfig = __visitorConfigSection('consent');
         var enabled = __visitorConfigBool(consentConfig.enabled, false);
+        // 地区策略：EEA/GB/CH（可配置）与无法判定的地区强制默认拒绝；
+        // 其余地区按 defaultDeny（默认 true）。consent.defaultDeny=false 仅对非强制地区生效。
+        var defaultDenyFlag = consentConfig.defaultDeny != null ? consentConfig.defaultDeny : consentConfig.default_deny;
+        var defaultDeny = __visitorConfigBool(defaultDenyFlag, true);
+        var denyRegions = __visitorConsentDenyRegions(consentConfig);
+        var eeaCountries = Array.isArray(consentConfig.eeaCountries)
+            ? consentConfig.eeaCountries.map(function (code) { return String(code).toUpperCase(); })
+            : [];
+        var region = __visitorRegionHint(consentConfig);
+        var effectiveDefaultDeny;
+        if (typeof consentConfig.effectiveDefaultDeny === 'boolean') {
+            effectiveDefaultDeny = consentConfig.effectiveDefaultDeny;
+        } else {
+            var forcedDeny = region === '' || region === 'XX'
+                || denyRegions.indexOf(region) !== -1
+                || (denyRegions.indexOf('EEA') !== -1 && eeaCountries.indexOf(region) !== -1);
+            effectiveDefaultDeny = forcedDeny ? true : defaultDeny;
+        }
         var state = window.__WelineConsentState || window.WelineConsent || {};
         function granted(key) {
-            if (!enabled) {
-                return true;
-            }
             var value = state[key];
             if (value === undefined && key === 'analytics') {
                 value = state.analytics_storage;
             }
-            return value === true || value === 'granted' || value === 'yes' || value === 1;
+            var grantedNow = value === true || value === 'granted' || value === 'yes' || value === 1;
+            if (!enabled) {
+                return effectiveDefaultDeny ? grantedNow : true;
+            }
+            return grantedNow;
         }
         return {
             enabled: enabled,
@@ -567,9 +586,44 @@ $__visitorTrackingConfigJson = (string)($this->getData('visitor_tracking_config_
         };
     }
 
+    /** 每访客地区提示：每请求配置 > cookie > 全局 geo 变量；都没有返回 ''（前端按拒绝处理）。 */
+    function __visitorRegionHint(consentConfig) {
+        var fromConfig = String(consentConfig.region || '').toUpperCase();
+        if (fromConfig) {
+            return fromConfig;
+        }
+        try {
+            var match = document.cookie.match(/(?:^|;\s*)(?:weline_country|cf_country|country)=([A-Za-z]{2})(?:;|$)/);
+            if (match) {
+                return String(match[1]).toUpperCase();
+            }
+        } catch (eCookie) {
+        }
+        var globalRegion = window.__WELINE_COUNTRY__ || (window.WelineGeo && window.WelineGeo.country) || '';
+        return String(globalRegion).toUpperCase();
+    }
+
+    function __visitorConsentDenyRegions(consentConfig) {
+        var raw = consentConfig.defaultDenyRegions != null
+            ? consentConfig.defaultDenyRegions
+            : consentConfig.default_deny_regions;
+        if (!Array.isArray(raw)) {
+            raw = String(raw || 'EEA,GB,CH').split(',');
+        }
+        var out = [];
+        raw.forEach(function (value) {
+            var code = String(value || '').trim().toUpperCase();
+            if (code && out.indexOf(code) === -1) {
+                out.push(code);
+            }
+        });
+        return out.length ? out : ['EEA', 'GB', 'CH'];
+    }
+
     function __visitorConsentAllows(key) {
+        // granted() 已包含“模块未启用时默认拒绝/可回退”的策略，这里只看最终结论。
         var consent = __visitorConsentState();
-        return consent.enabled ? consent[key] === true : true;
+        return consent[key] === true;
     }
 
     function __isPageBuilderPreview() {

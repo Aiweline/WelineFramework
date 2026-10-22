@@ -69,6 +69,24 @@ final class StaticBuildGcTest extends TestCase
         self::assertContains($expired, $result['deleted']);
     }
 
+    public function testZeroKeepDaysPrunesAllButCurrentAndLastN(): void
+    {
+        $ids = ['aaaaaaaaaaaa', 'bbbbbbbbbbbb', 'cccccccccccc', 'dddddddddddd'];
+        foreach ($ids as $index => $id) {
+            $this->makeBuild($id, 0);
+            // 用秒级 mtime 保证“最近 N 代”顺序确定
+            \touch($this->root . '/' . $id, \time() - $index * 60);
+        }
+        \file_put_contents($this->root . '/.build.json', \json_encode(['build_id' => $ids[0]]));
+
+        $result = StaticBuildGc::prune($this->root, 0, 2, false);
+
+        self::assertDirectoryExists($this->root . '/' . $ids[0], '当前代必须保留');
+        self::assertDirectoryExists($this->root . '/' . $ids[1]);
+        self::assertDirectoryDoesNotExist($this->root . '/' . $ids[3], '超出最近 N 代应删除');
+        self::assertContains($ids[3], $result['deleted']);
+    }
+
     private function makeBuild(string $id, int $ageDays): string
     {
         $dir = $this->root . '/' . $id;

@@ -937,6 +937,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $builder = ObjectManager::getInstance(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateBuildService::class);
         /** @var \Weline\Theme\Service\ThemeUpdate\ThemeUpdateBatchService $batches */
         $batches = ObjectManager::getInstance(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateBatchService::class);
+        /** @var \Weline\Theme\Service\ThemeUpdate\ThemeUpdateFlightRunner $flights */
+        $flights = ObjectManager::getInstance(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateFlightRunner::class);
 
         foreach ($themes as $theme) {
             if (!$theme instanceof WelineTheme) {
@@ -947,7 +949,26 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 continue;
             }
             $this->printing->note(__('主题 #%{id}：构建更新代次（不影响线上）…', ['id' => $themeId]));
-            $result = $builder->build($themeId, $buildOptions);
+            $scope = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateFlight::scopeForTheme($themeId);
+            $result = $flights->execute(
+                $scope,
+                function (string $batchId) use ($builder, $batches, $flights, $themeId, $buildOptions, $scope): array {
+                    $buildOptions['batch_id'] = $batchId;
+                    $built = $builder->build($themeId, $buildOptions);
+                    $manifest = $built['manifest'] ?? [];
+                    if (($manifest['verify']['ok'] ?? false) !== true) {
+                        return $built;
+                    }
+                    $state = $batches->promote($batchId);
+                    $flights->finishProcessing($scope);
+
+                    return $built + ['state' => $state];
+                }
+            );
+            if (($result['skipped'] ?? '') === 'coalesced') {
+                $this->printing->note(__('主题 #%{id} 已有更新在进行，本次已并入最后一次。', ['id' => $themeId]));
+                continue;
+            }
             $manifest = $result['manifest'] ?? [];
             if (($manifest['verify']['ok'] ?? false) !== true) {
                 $this->printing->error(__('主题 #%{id} 构建校验未通过，未切换：%{batch}', [
@@ -956,7 +977,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 ]));
                 continue;
             }
-            $state = $batches->promote($result['batch_id']);
+            $state = (array)($result['state'] ?? []);
             $this->printing->success(__('主题 #%{id} 已切到代次 %{batch}（epoch=%{epoch}，previous=%{prev}）', [
                 'id' => $themeId,
                 'batch' => $state['current'],

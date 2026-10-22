@@ -328,6 +328,24 @@ final class FpcHtmlDiskStore
         if ($html === '' && $brotli === '') {
             return false;
         }
+        // 集中修复：烘焙前把裸 /static/ 资产 URL 统一加构建代次（覆盖设计主题硬编码）。
+        // 改写后原 brotli 不再对应正文，丢弃并交由下方按需重新压缩。
+        if ($html === '' && $brotli !== '' && \function_exists('brotli_uncompress')) {
+            $decodedBr = @\brotli_uncompress($brotli);
+            if (\is_string($decodedBr) && $decodedBr !== '') {
+                $rewrittenBr = \Weline\Framework\Deploy\StaticAssetHtmlRewriter::rewrite($decodedBr);
+                if ($rewrittenBr !== $decodedBr) {
+                    $html = $rewrittenBr;
+                    $brotli = '';
+                }
+            }
+        } elseif ($html !== '' && \str_contains($html, '/static/')) {
+            $rewrittenHtml = \Weline\Framework\Deploy\StaticAssetHtmlRewriter::rewrite($html);
+            if ($rewrittenHtml !== $html) {
+                $html = $rewrittenHtml;
+                $brotli = '';
+            }
+        }
         $plainForLocale = $html;
         if ($plainForLocale === '' && $brotli !== '' && \function_exists('brotli_uncompress')) {
             $decoded = @\brotli_uncompress($brotli);

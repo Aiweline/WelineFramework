@@ -19,7 +19,7 @@
         border: 1px solid color-mix(in srgb, var(--weline-theme-primary) 88%, var(--weline-theme-border));
         border-radius: var(--weline-radius-md);
         background: var(--weline-theme-primary);
-        color: var(--weline-theme-on-primary);
+        color: var(--weline-theme-on-primary, var(--color-on-primary));
         font-size: var(--weline-font-size-sm);
         font-weight: 590;
         letter-spacing: var(--weline-letter-tight);

@@ -199,7 +199,7 @@ class WidgetAssetArtifactPublisher
                 $sources[] = $source;
             }
             $type = $assets[0]['type'];
-            $key = hash('sha256', json_encode([$this->implementationVersion(), 'url-rewrite-v2', $type, $minify, array_column($sources, 'hash'), array_column($assets, 'url'), \Weline\Framework\Deploy\StaticBuildId::current()], JSON_THROW_ON_ERROR));
+            $key = hash('sha256', json_encode([$this->implementationVersion(), 'url-rewrite-v2', $type, $minify, array_column($sources, 'hash'), array_column($assets, 'url'), \Weline\Framework\Deploy\StaticBuildId::current(), \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::cacheGeneration()], JSON_THROW_ON_ERROR));
             $theme = $this->resolvePublishTheme($theme);
             $gateway = ObjectManager::getInstance(ThemeResourceGateway::class);
             $target = $gateway->buildWidgetAssetArtifact(
@@ -375,6 +375,26 @@ class WidgetAssetArtifactPublisher
         return false;
     }
 
+    /**
+     * 主题更新代次根（/static/tu-*）可能在代次切换/回收后失效：
+     * 文件缺失时回退规范路径并加构建代次，避免 CSS 里烘焙出 404 URL。
+     */
+    private static function fallbackStaleGenerationUrl(string $path): string
+    {
+        if (\preg_match('#^/static/tu-[A-Za-z0-9-]+/(.+)$#', $path, $m) !== 1) {
+            return $path;
+        }
+        if (\is_file(PUB . \ltrim($path, '/'))) {
+            return $path;
+        }
+        $canonical = '/static/' . \strtok($m[1], '?');
+        if (!\is_file(PUB . \ltrim($canonical, '/'))) {
+            return $path;
+        }
+
+        return \Weline\Framework\Deploy\StaticBuildId::versionedPath($canonical);
+    }
+
     public function rewriteCssUrls(string $content, string $sourceUrl, ?string $buildId = null): string
     {
         $buildId = $buildId ?? \Weline\Framework\Deploy\StaticBuildId::current();
@@ -430,6 +450,7 @@ class WidgetAssetArtifactPublisher
             if (str_starts_with($value, '/')) {
                 $remapped = \Weline\Theme\Service\ThemeDesignImageStaticUrl::remapModuleThemePathToDesignArea($value, $nsHint);
                 if ($remapped === $value) {
+                    $value = self::fallbackStaleGenerationUrl($value);
                     $versioned = $buildId !== ''
                         ? \Weline\Framework\Deploy\StaticBuildId::versionedPath($value, $buildId)
                         : $value;
@@ -440,6 +461,7 @@ class WidgetAssetArtifactPublisher
                     $output .= 'url("' . ($origin !== '' ? $origin . $versioned : $versioned) . '")';
                     continue;
                 }
+                $remapped = self::fallbackStaleGenerationUrl($remapped);
                 if ($buildId !== '') {
                     $remapped = \Weline\Framework\Deploy\StaticBuildId::versionedPath($remapped, $buildId);
                 }
@@ -455,6 +477,7 @@ class WidgetAssetArtifactPublisher
             $resolvedPath = '/' . implode('/', $segments);
             // Design images use the area publish path, not the Theme-module dual-write URL.
             $resolvedPath = \Weline\Theme\Service\ThemeDesignImageStaticUrl::remapModuleThemePathToDesignArea($resolvedPath, $nsHint);
+            $resolvedPath = self::fallbackStaleGenerationUrl($resolvedPath);
             if ($buildId !== '') {
                 $resolvedPath = \Weline\Framework\Deploy\StaticBuildId::versionedPath($resolvedPath, $buildId);
             }

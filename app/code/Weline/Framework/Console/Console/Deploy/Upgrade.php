@@ -196,6 +196,28 @@ class Upgrade extends CommandAbstract
         try {
             $buildId = StaticBuildPublisher::publish($staticRoot);
             $this->printer->note(__('静态资源构建号：%{1}', [$buildId]));
+            // 自愈：不完整构建代（例如 staging 只含变更文件）会让全站版本化 URL 404。
+            $integrity = \Weline\Framework\Deploy\StaticIntegrityGuard::healBuild($staticRoot);
+            if (!empty($integrity['rebuilt'])) {
+                $this->treeChanged = true;
+                $buildId = (string)$integrity['build'];
+                $this->printer->warning(__('静态构建代不完整（缺 %{1}），已重新完整发布：%{2}', [
+                    implode(', ', $integrity['missing']),
+                    $buildId,
+                ]));
+            }
+            // 自愈：主题更新代次目录只有变更文件，旧烘焙页面引用缺失文件会 404。
+            try {
+                if (class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::class)) {
+                    $generation = (string)\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::cacheGeneration();
+                    $backfill = \Weline\Framework\Deploy\StaticIntegrityGuard::backfillGeneration($staticRoot, $generation);
+                    if (($backfill['copied'] ?? 0) > 0) {
+                        $this->printer->note(__('主题代次目录已补齐 %{1} 个文件', [$backfill['copied']]));
+                    }
+                }
+            } catch (\Throwable) {
+                // 代次机制不可用时跳过（不影响主发布）
+            }
         } catch (\Throwable $exception) {
             $this->printer->warning(__('静态资源版本目录发布失败（不影响 legacy 树）：') . $exception->getMessage());
         }

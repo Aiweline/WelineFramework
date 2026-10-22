@@ -91,15 +91,27 @@ async function measure(path) {
   await page.waitForTimeout(2500);
   const lcpSamples = [await readLcp(page)];
   for (let i = 0; i < 2; i++) {
-    await page.reload({ waitUntil: 'load', timeout: 45000 });
-    await page.waitForTimeout(1500);
-    lcpSamples.push(await readLcp(page));
+    try {
+      await page.reload({ waitUntil: 'load', timeout: 45000 });
+      await page.waitForTimeout(1200);
+      lcpSamples.push(await readLcp(page));
+    } catch (e) {
+      break;
+    }
   }
 
   const measured = await page.evaluate(async (srcs) => {
-    const paths = srcs.map((s) => { try { return new URL(s, location.href).pathname; } catch { return s; } });
+    // 只统计 head 里实际引用的脚本（按完整 URL 精确匹配），不把动态 import 的同名脚本算进去。
+    const expected = new Set(srcs.map((s) => { try { return new URL(s, location.href).href; } catch { return s; } }));
+    // 同一 URL 可能被 head 与动态 import 各记一条 resource entry，按 name 去重避免重复计字节。
+    const seen = new Set();
     const resources = performance.getEntriesByType('resource')
-      .filter((r) => paths.some((p) => r.name.includes(p)));
+      .filter((r) => expected.has(r.name))
+      .filter((r) => {
+        if (seen.has(r.name)) return false;
+        seen.add(r.name);
+        return true;
+      });
     const bytes = resources.reduce((sum, r) => sum + (r.decodedBodySize || r.transferSize || 0), 0);
     return { headJsBytes: bytes, headScriptsInDom: document.head.querySelectorAll('script[src]').length };
   }, headSrcs);
@@ -121,11 +133,25 @@ async function measure(path) {
 }
 
 for (const path of PAGES) {
-  let row = await measure(path);
+  let row = null;
+  for (let attempt = 0; attempt < 3 && row === null; attempt++) {
+    try {
+      row = await measure(path);
+    } catch (e) {
+      console.error(`[measure ${path}] ` + String(e && e.message || e).slice(0, 200));
+      await new Promise((r) => setTimeout(r, 4000));
+    }
+  }
+  if (row === null) {
+    row = { path, headExternal: -1, markers: -1, headJsBytes: -1, lcpMs: -1, badResponses: 0, guard403: 0, consoleErrors: 0, docStatus: 0 };
+    failures.push(`${path}: 页面测量失败（浏览器/防护异常）`);
+  }
   // WLS 攻击防护对连续无头访问可能返回 403：冷却后重测一次，避免门禁抖动。
   if (row.docStatus === 403 || (row.badResponses > 0 && row.headExternal === 0)) {
     await new Promise((r) => setTimeout(r, 5000));
-    row = await measure(path);
+    try {
+      row = await measure(path);
+    } catch (e) { /* 保留上一次结果 */ }
   }
   results.push(row);
 

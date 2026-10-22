@@ -194,15 +194,13 @@ class Update extends AbstractConsole
                 $builder = ObjectManager::getInstance(ThemeUpdateBuildService::class);
                 /** @var ThemeUpdateFlightRunner $flights */
                 $flights = ObjectManager::getInstance(ThemeUpdateFlightRunner::class);
+                $scope = ThemeUpdateFlight::scopeForTheme($themeId);
                 $result = $flights->execute(
-                    ThemeUpdateFlight::scopeForTheme($themeId),
-                    function (callable $stillLatest) use ($builder, $themeId, $buildOptions): array {
-                        $built = $builder->build($themeId, $buildOptions, $stillLatest);
-                        if (!$stillLatest() || !empty($built['superseded'])) {
-                            return ['skipped' => 'coalesced'];
-                        }
+                    $scope,
+                    function (string $batchId) use ($builder, $themeId, $buildOptions): array {
+                        $buildOptions['batch_id'] = $batchId;
 
-                        return $built;
+                        return $builder->build($themeId, $buildOptions);
                     }
                 );
                 if (($result['skipped'] ?? '') === 'coalesced') {

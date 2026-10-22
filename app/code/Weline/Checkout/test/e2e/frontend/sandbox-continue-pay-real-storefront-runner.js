@@ -27,8 +27,7 @@ const PDP = process.env.CHECKOUT_PDP_PATH
   || '/product/qi-ta-xin-kuan-hei-shan-cha-han-fu-nu-chun-qiu-ji-he-zi-qun-guo-11ae8001/';
 const CPAY_FIXTURE = path.resolve(__dirname, 'checkout-continue-pay-real-pathway-fixture.php');
 
-const BUYER_EMAIL = process.env.PAYPAL_SANDBOX_BUYER_EMAIL || 'sb-4sxrp30216572@personal.example.com';
-const BUYER_PASS = process.env.PAYPAL_SANDBOX_BUYER_PASSWORD || 'weline18';
+const { BUYER_EMAIL, BUYER_PASS } = require(path.resolve(__dirname, '../../../../../../../tests/e2e/framework/paypal-sandbox-buyer.js'));
 const CUSTOMER_EMAIL = process.env.CPAY_CUSTOMER_EMAIL || 'e2e.customer@weline.local';
 const CUSTOMER_PASS = process.env.CPAY_CUSTOMER_PASSWORD || 'E2eTest!234';
 

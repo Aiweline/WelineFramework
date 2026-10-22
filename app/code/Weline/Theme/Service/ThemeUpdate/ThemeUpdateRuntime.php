@@ -154,12 +154,30 @@ final class ThemeUpdateRuntime
             return;
         }
         $merged = self::mergeDirtyLayouts($file, $layouts);
-        @\file_put_contents($file, \json_encode([
+        $payload = \json_encode([
             'at' => \date('c'),
             'reason' => $reason,
             'layouts' => $merged['layouts'],
             'all' => $merged['all'],
-        ], JSON_UNESCAPED_UNICODE));
+        ], JSON_UNESCAPED_UNICODE);
+        if ($payload === false || \file_put_contents($file, $payload) === false) {
+            return;
+        }
+    }
+
+    /** 脏标记原文。构建前后对比：变了就说明这一轮里又有更新，不能切走旧快照。 */
+    public static function dirtyToken(int $themeId): string
+    {
+        $file = self::dirtyFile($themeId);
+        if ($themeId < 1 || !\is_file($file)) {
+            return '';
+        }
+        $raw = \file_get_contents($file);
+        if ($raw === false) {
+            throw new \RuntimeException('theme_update_dirty_unreadable');
+        }
+
+        return $raw;
     }
 
     public static function isDirty(int $themeId): bool

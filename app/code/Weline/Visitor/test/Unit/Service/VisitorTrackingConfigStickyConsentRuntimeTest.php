@@ -23,6 +23,16 @@ class VisitorTrackingConfigStickyConsentRuntimeTest extends TestCore
         self::assertArrayHasKey('enabled', $runtime['consent']);
         self::assertArrayHasKey('marketingStorageKey', $runtime['consent']);
         self::assertSame('ad_storage', $runtime['consent']['marketingStorageKey']);
+        self::assertArrayHasKey('defaultDeny', $runtime['consent']);
+        self::assertTrue((bool)$runtime['consent']['defaultDeny'], '同意模块未启用时默认拒绝');
+        self::assertArrayHasKey('defaultDenyRegions', $runtime['consent']);
+        self::assertContains('EEA', $runtime['consent']['defaultDenyRegions']);
+        self::assertContains('GB', $runtime['consent']['defaultDenyRegions']);
+        // region / effectiveDefaultDeny 是每访客结论，不得烘进可缓存运行时配置。
+        self::assertArrayNotHasKey('region', $runtime['consent']);
+        self::assertArrayNotHasKey('effectiveDefaultDeny', $runtime['consent']);
+        self::assertContains('DE', $runtime['consent']['eeaCountries']);
+        self::assertContains('NO', $runtime['consent']['eeaCountries']);
 
         self::assertArrayHasKey('sticky', $runtime);
         self::assertArrayHasKey('ttlHours', $runtime['sticky']);

@@ -140,8 +140,64 @@ cd tests/e2e && npx playwright test head-budget --project=chromium
 
 1. P5：指标看板（head 外链数 / head JS 字节 / LCP p75）写入门禁阈值；
 2. 已修：主题更新代次根（`/static/tu-*`）轮换后旧烘焙 URL 404 —— `ThemeJs::fallbackGenerationUrl()` 在代次文件缺失时回退规范路径并加构建代次（含单测 4/4）；
-3. 待决策：当前站点未启用同意模块（`consent.enabled=false`）→ 分析脚本按“默认允许”加载；若要“默认拒绝直到显式同意”，需改 `pixel.js` 的 granted() 回退语义或打开同意模块；
+3. 已实现并实测：同意模块未启用时**默认拒绝**（显式同意才放行分析/营销脚本）
+   - `consent.defaultDeny` 默认 true（SystemConfig `visitor/tracking/consent_default_deny=false` 可按站点回退旧语义）；
+   - 关键修复：`__visitorConsentAllows()` 原在 `enabled=false` 时直接放行，绕过新策略；现统一看 `granted()` 结论；
+   - `pixel.js` 与内联 `pixel.phtml` 同步；
+   - 实测：首页/购物车/商品页 **analytics 请求 0**，`gtag`/`gtm` 均不加载，站点功能正常；
 4. 已知修复（本轮顺手）：`deploy:upgrade` 恢复 exit 0 —— purge 目标改回规范根、`pub/static/tu-*` 主题更新代次根不参与权限归一/构建哈希/版本树复制；`static_generation`（主题代次）与 `static_build`（部署构建号）拆分为两个缓存维度。
+
+## 5.1 同意地区策略（P4 扩展）
+
+欧盟/英国/瑞士对非必要追踪要求「事先同意」，因此默认拒绝必须**按地区强制**，其余地区才允许配置放行：
+
+| 配置（SystemConfig） | 默认 | 语义 |
+|---|---|---|
+| `visitor/tracking/consent_default_deny` | `1` | 非强制地区的默认拒绝开关；`0` 仅对非 EEA/GB/CH 且能判定地区的访客放行 |
+| `visitor/tracking/consent_default_deny_regions` | `EEA,GB,CH` | 强制默认拒绝地区：`EEA` 组名（EU27 + IS/LI/NO）或 ISO 国家码 |
+
+- **每访客结论不进共享缓存**：`region` / `effectiveDefaultDeny` 不得烘进可缓存 HTML（FPC 会让全站共用一份）；
+  运行时配置只下发 `defaultDeny` / `defaultDenyRegions` / `eeaCountries`；
+- 地区来源：前端顺序为「每请求配置 > cookie（`weline_country` / `cf_country` / `country`）> 全局 geo 变量」，
+  都无法判定 → **按拒绝处理（fail-closed）**；服务端保留 `VisitorTrackingConfig::getRequestRegion()`（复用 Captcha 可信头）供接口/非缓存场景使用；
+- 纯函数 `VisitorTrackingConfig::effectiveDefaultDeny(region, denyRegions, globalDefaultDeny)` 已单测覆盖（US+false→放行，DE/GB/''+false→拒绝）；
+- 后台配置项已加警示：「关闭默认拒绝仅在非强制地区生效；EEA/UK/CH 必须事先同意」；
+- 测试：`VisitorConsentRegionPolicyTest`（强制地区、组合决策、前端/后台契约）。
+
+## 5.2 设计主题与 FPC 兜底（T11）
+
+- 设计主题 `app/design/**` 不入本仓：本轮改动打包为 `dev/session/head-js-budget/design-package-patches/`（含 README），需同步到主题包仓库；
+- 兜底：`FpcHtmlDiskStore::publish()` 落盘前统一改写 HTML 静态 URL（见 Framework 文档 §6.3.3），覆盖主题包未同步的情况；
+- 实测首页 HTML：静态 URL **0 裸路径**（BUILD 28 + HASH 7）。
+
+## 5.3 同意地区策略线上验证（T12）
+
+临时 `consent_default_deny=0` + cookie 地区，实测：
+
+| 地区 | 结果 |
+|---|---|
+| `weline_country=US`（非强制） | GA4/GTM 加载（3 个分析请求） |
+| `weline_country=DE`（EEA） | 0 请求 |
+| `weline_country=GB`（强制） | 0 请求 |
+| 无地区（未知） | 0 请求（fail-closed） |
+
+验证后已还原 `consent_default_deny=1`，全部地区恢复默认拒绝。
+
+## 5.4 主题发布与站点代次（T13/T14）
+
+- 发布：`php bin/w theme:upgrade -t <theme>` 原子构建新代次并翻指针（不影响线上，逐站按绑定 scope 生效）；
+- 本轮发布结果：
+
+| 主题 | 当前代次 |
+|---|---|
+| hanfu（website 0） | `tu-20261022-035208-3e8dbb` |
+| daocharms（website 158） | `tu-20261022-034732-367df5` |
+| playinginchina（website 550） | `tu-20261022-034908-b380ac` |
+| grocery（website 544） | `tu-20261022-034942-97a507` |
+
+- 站点验证：`p05113ef3`（hanfu）与 `playinginchina.test` 运行时 0 个 4xx；daocharms 测试域连接被关闭（站点/实例未服务该 host，非主题问题）；
+- 代次切换后 CSS 包可能残留旧 `tu-*` 图片 URL：`WidgetAssetArtifactPublisher::rewriteCssUrls()` 已加**代次回退**（缺失则回退规范路径并加构建代次），CSS 包键并入当前代次强制重建；
+- 指标口径修正：`head-budget.mjs` 的 `headJsBytes` 只统计 head 精确 URL（避免把动态 import 的同名脚本重复计入）。
 
 ## 6. 指标门禁用法
 
@@ -150,6 +206,8 @@ cd tests/e2e
 node head-budget.mjs                      # 按基线校验（exit 1 = 超阈值）
 node head-budget.mjs --update-baseline    # 发布后棘轮收紧基线
 node head-budget.mjs --json               # 机器可读输出
+
+脚本已做健壮化：LCP 采样失败可降级、测量异常自动重试 3 次（防护限流/浏览器抖动不再误报）。
 ```
 
 基线字段（每页）：`headExternalMax` / `headJsBytesMax`（解码字节，稳定口径）/ `lcpMsMax`（3 次中位数 ×1.5，下限 3000ms）。

@@ -32,6 +32,23 @@ final class WidgetAssetOptimizer
         }
         usort($result, static fn(array $a, array $b): int => $a['_order'] <=> $b['_order']);
 
+        // head 内所有 widget JS（合包或单文件）统一改声明加载标记：
+        // 未合并的单文件不会走 publishBatch，这里兜底，保证 head 不直出业务脚本。
+        foreach ($result as &$asset) {
+            if (($asset['type'] ?? '') !== 'js' || (string)($asset['position'] ?? '') !== 'head') {
+                continue;
+            }
+            $tag = (string)($asset['tag'] ?? '');
+            if (preg_match('/\bsrc\s*=\s*["\']([^"\']+)["\']/i', $tag, $match) !== 1) {
+                continue;
+            }
+            $url = \html_entity_decode($match[1], ENT_QUOTES, 'UTF-8');
+            $asset['tag'] = '<script type="application/x-weline-theme-js" data-weline-theme-js="'
+                . \htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                . '" data-order="30"></script>';
+        }
+        unset($asset);
+
         return $result;
     }
 

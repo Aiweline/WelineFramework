@@ -257,4 +257,25 @@ final class DesignSystemContractTest extends TestCase
         self::assertArrayHasKey(TagDescriptor::STAGE_COMPILE, $seen, 'At least one compile-time (static) tag must exist.');
         self::assertArrayHasKey(TagDescriptor::STAGE_RUNTIME, $seen, 'At least one runtime (dynamic) tag must exist.');
     }
+
+    public function testSolidButtonTextStaysReadableOnPrimaryBackground(): void
+    {
+        $buttonCss = (string)file_get_contents(self::uiCss() . '/components/button.css');
+        self::assertStringContainsString(
+            'color: var(--weline-theme-on-primary, var(--color-on-primary',
+            $buttonCss,
+            'Solid .w-button text must chain an on-primary fallback so labels never dissolve into the brand background.'
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/(?<![a-z-])color:\s*transparent/',
+            $buttonCss,
+            'Solid .w-button text must never be transparent.'
+        );
+        $foundation = (string)file_get_contents(BP . 'app/code/Weline/Theme/view/statics/ui/weline-foundation.css');
+        self::assertStringContainsString(
+            '--weline-theme-on-primary: var(--color-on-primary',
+            $foundation,
+            'Compiled weline-foundation.css must carry the solid button contrast fallback.'
+        );
+    }
 }

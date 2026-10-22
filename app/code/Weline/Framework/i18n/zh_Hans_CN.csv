@@ -2387,7 +2387,10 @@ source_id与parent_source不能相同！,source_id与parent_source不能相同�
 "静态树无变更，跳过 FPC deploy ns bump（空跑勿 thrash）","静态树无变更，跳过 FPC deploy ns bump（空跑勿 thrash）"
 "已 bump global/storefront/deploy（日常 Upgrade 优先 bump）","已 bump global/storefront/deploy（日常 Upgrade 优先 bump）"
 主题命名空间无法归一化，已跳过主题域静态发布（扁平树不受影响）：,主题命名空间无法归一化，已跳过主题域静态发布（扁平树不受影响）：
+前端核心脚本已合并：%{1},前端核心脚本已合并：%{1}
 静态资源构建号：%{1},静态资源构建号：%{1}
+"静态构建代不完整（缺 %{1}），已重新完整发布：%{2}","静态构建代不完整（缺 %{1}），已重新完整发布：%{2}"
+"主题代次目录已补齐 %{1} 个文件","主题代次目录已补齐 %{1} 个文件"
 "静态资源版本目录发布失败（不影响 legacy 树）：","静态资源版本目录发布失败（不影响 legacy 树）："
 静态资源部署进程池,静态资源部署进程池
 静态资源部署,静态资源部署
