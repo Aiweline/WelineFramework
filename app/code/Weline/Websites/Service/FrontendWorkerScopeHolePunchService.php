@@ -152,9 +152,18 @@ final class FrontendWorkerScopeHolePunchService
             );
         }
 
-        $cookieName = FrontendWorkerSessionService::SCOPE_COOKIE_NAME;
+        $cookieName = FrontendWorkerSessionService::scopeCookieName();
         $this->expireLegacyScopeBootstrapCookies($response);
-        $response->setCookie($cookieName, $token, $expiresAt, '/', '', true, true, 'Lax');
+        $response->setCookie(
+            $cookieName,
+            $token,
+            $expiresAt,
+            '/',
+            '',
+            FrontendWorkerSessionService::scopeCookieSecure(),
+            true,
+            'Lax',
+        );
         $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
         $response->setHeader('Pragma', 'no-cache');
 
@@ -291,7 +300,7 @@ final class FrontendWorkerScopeHolePunchService
         if ($cookieHeader === '' || \strlen($cookieHeader) > 65536) {
             return '';
         }
-        $needle = FrontendWorkerSessionService::SCOPE_COOKIE_NAME . '=';
+        $needle = FrontendWorkerSessionService::scopeCookieName() . '=';
         foreach (\explode(';', $cookieHeader) as $part) {
             $part = \trim($part);
             if ($part === '' || !\str_starts_with($part, $needle)) {

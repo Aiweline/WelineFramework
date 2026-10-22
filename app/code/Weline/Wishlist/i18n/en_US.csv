@@ -1,4 +1,6 @@
-﻿心愿单接口不支持操作：%{1},"Wishlist operation is not supported: %{1}"
+﻿收藏新增加入后,收藏新增加入后
+"仅当商品首次写入当前收藏时派发。重复加入不派发。载荷 product_id 为店面商品 ID，created 恒为 true。","仅当商品首次写入当前收藏时派发。重复加入不派发。载荷 product_id 为店面商品 ID，created 恒为 true。"
+心愿单接口不支持操作：%{1},"Wishlist operation is not supported: %{1}"
 心愿单,Wishlist
 产品卡片收藏按钮：添加、移除、列表与计数。,"Product card wishlist actions: add"
 账户首页收藏分区,"Account home favorites section"

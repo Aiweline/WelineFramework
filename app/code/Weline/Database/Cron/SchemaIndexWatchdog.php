@@ -6,6 +6,7 @@ namespace Weline\Database\Cron;
 
 use Weline\Database\Service\Index\SchemaIndexConfig;
 use Weline\Database\Service\Index\SchemaIndexJobService;
+use Weline\Framework\App\SystemUpdateActivity;
 use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Framework\Database\Connection\Api\ConcurrentIndexBuildInterface;
 use Weline\Framework\Database\ConnectionFactory;
@@ -50,7 +51,8 @@ final class SchemaIndexWatchdog implements CronTaskInterface
         if ($jobs === []) {
             return (string)__('没有运行中的索引构建。');
         }
-        if ($this->config->isLoadAcceptable()) {
+        $updateRunning = SystemUpdateActivity::inProgress();
+        if ($this->config->isLoadAcceptable() && !$updateRunning) {
             return (string)__('运行中 %{1} 个索引构建，负载正常。', [(string)count($jobs)]);
         }
 
@@ -70,7 +72,9 @@ final class SchemaIndexWatchdog implements CronTaskInterface
                 if ($connector->cancelIndexBuild($applicationName)) {
                     $this->jobService->markPendingAfterCancel(
                         $jobId,
-                        'canceled_by_load_watchdog:load=' . (string)$this->config->loadThreshold(),
+                        $updateRunning
+                            ? 'canceled_by_system_update'
+                            : 'canceled_by_load_watchdog:load=' . (string)$this->config->loadThreshold(),
                     );
                     $canceled++;
                 }
@@ -84,7 +88,9 @@ final class SchemaIndexWatchdog implements CronTaskInterface
         }
 
         return (string)__(
-            '负载超过阈值 %{1}，已取消 %{2}/%{3} 个索引构建并延后重试。',
+            $updateRunning
+                ? '系统正在更新，已取消 %{2}/%{3} 个索引构建并延后到闲时。'
+                : '负载超过阈值 %{1}，已取消 %{2}/%{3} 个索引构建并延后重试。',
             [(string)$this->config->loadThreshold(), (string)$canceled, (string)count($jobs)],
         );
     }

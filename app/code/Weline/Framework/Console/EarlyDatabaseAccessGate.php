@@ -134,8 +134,11 @@ final class EarlyDatabaseAccessGate
             'Weline_Framework',
         ));
 
+        $announcedTerm = false;
+        $announcedKill = false;
         $signaled = self::terminateCronLockHolders(false);
         if ($signaled > 0) {
+            $announcedTerm = true;
             self::writeMessage(str_replace(
                 '%{1}',
                 (string)$signaled,
@@ -159,17 +162,28 @@ final class EarlyDatabaseAccessGate
             $now = hrtime(true);
             if (!$killed && $now >= $killDeadline) {
                 $killed = true;
-                $killCount = self::terminateCronLockHolders(true);
-                if ($killCount > 0) {
-                    self::writeMessage(str_replace(
-                        '%{1}',
-                        (string)$killCount,
-                        DatabaseFreeTranslator::translate(
-                            '计划任务未及时释放门禁，已强制结束 %{1} 个进程。',
-                            'Weline_Framework',
-                        ),
-                    ));
-                }
+            }
+            $again = self::terminateCronLockHolders($killed);
+            if ($again > 0 && $killed && !$announcedKill) {
+                $announcedKill = true;
+                self::writeMessage(str_replace(
+                    '%{1}',
+                    (string)$again,
+                    DatabaseFreeTranslator::translate(
+                        '计划任务未及时释放门禁，已强制结束 %{1} 个进程。',
+                        'Weline_Framework',
+                    ),
+                ));
+            } elseif ($again > 0 && !$killed && !$announcedTerm) {
+                $announcedTerm = true;
+                self::writeMessage(str_replace(
+                    '%{1}',
+                    (string)$again,
+                    DatabaseFreeTranslator::translate(
+                        '已向 %{1} 个占用门禁的计划任务进程发送终止信号。',
+                        'Weline_Framework',
+                    ),
+                ));
             }
 
             if ($now >= $deadline) {
@@ -258,8 +272,25 @@ final class EarlyDatabaseAccessGate
 
     private static function processCommandLine(int $pid): string
     {
+        if ($pid < 1) {
+            return '';
+        }
+        $proc = '/proc/' . $pid . '/cmdline';
+        if (is_readable($proc)) {
+            $raw = @file_get_contents($proc);
+            if (is_string($raw) && $raw !== '') {
+                return trim(str_replace("\0", ' ', $raw));
+            }
+        }
+        $wide = [];
+        @exec('ps -ww -p ' . $pid . ' -o command= 2>/dev/null', $wide);
+        $command = trim(implode(' ', $wide));
+        if ($command !== '') {
+            return $command;
+        }
         $output = [];
-        @exec('ps -p ' . (int)$pid . ' -o command= 2>/dev/null', $output);
+        @exec('ps -p ' . $pid . ' -o command= 2>/dev/null', $output);
+
         return trim(implode(' ', $output));
     }
 

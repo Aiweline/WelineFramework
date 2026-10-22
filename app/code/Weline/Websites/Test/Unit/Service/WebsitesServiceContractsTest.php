@@ -495,7 +495,7 @@ private function assert_FrontendWorkerScopeHolePunchFastPath_testPunchVerifiesEx
 {
     $src = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Websites' . '/Service/FrontendWorkerScopeHolePunchService.php');
     self::assertStringContainsString('readExistingScopeCookie', $src);
-    self::assertStringContainsString('SCOPE_COOKIE_NAME', $src);
+    self::assertStringContainsString('scopeCookieName()', $src);
     self::assertStringContainsString('verifyToken', $src);
     self::assertStringContainsString('Fast path: long HttpOnly Cookie already verifies', $src);
     $fastPos = \strpos($src, 'readExistingScopeCookie');

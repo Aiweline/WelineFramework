@@ -142,6 +142,34 @@ final class RequestAuthority
         return true;
     }
 
+    /**
+     * Plain HTTP is allowed only for loopback and {project}.test.weline.com.
+     * An empty host stays closed so callers cannot omit it.
+     */
+    public static function allowsPlainHttp(string $authority): bool
+    {
+        $host = \strtolower(\trim($authority));
+        if ($host === '') {
+            return false;
+        }
+        if (\str_starts_with($host, '[')) {
+            if (\preg_match('/^\[([^]]+)](?::[0-9]{1,5})?$/D', $host, $matches) !== 1) {
+                return false;
+            }
+
+            return $matches[1] === '::1';
+        }
+        if (\preg_match('/^([^:]+):[0-9]{1,5}$/D', $host, $matches) === 1) {
+            $host = $matches[1];
+        }
+        $host = \rtrim($host, '.');
+        if (\in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
+            return true;
+        }
+
+        return \str_ends_with($host, '.test.weline.com');
+    }
+
     private static function canonicalPort(string $port): ?string
     {
         if ($port === '') {

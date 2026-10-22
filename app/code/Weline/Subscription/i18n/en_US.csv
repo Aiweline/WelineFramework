@@ -13,8 +13,24 @@
 "订阅计费 Provider 不可用：%{1}","Subscription billing provider is unavailable: %{1}"
 "同一订阅计费方案不能绑定多个 Offer","The same subscription billing plan cannot be assigned to multiple Offers."
 "订阅方案引用了不存在的 Offer","The subscription plan references an unknown Offer."
+订阅接口不支持操作：%{1},"Subscription API does not support operation: %{1}"
+请先登录后再查看订阅,"Sign in to view subscriptions"
+请先登录后再开通订阅,"Sign in to start a subscription"
+计费方案不可用,"Billing plan is unavailable"
+请填写有效的方案代码,"Enter a valid plan code"
+订阅请求无效，请刷新页面后重试,"This subscription request is invalid. Refresh and try again"
+请先登录后再续费,"Sign in to renew"
+请先登录后再取消订阅,"Sign in to cancel a subscription"
+订阅已变化，请刷新页面后重试,"This subscription changed. Refresh and try again"
+订阅编号无效,"Invalid subscription id"
+买家订阅,"Buyer subscriptions"
+登录顾客开通、续费和取消自己的订阅。,"Signed-in customers start, renew, and cancel their own subscriptions."
 前台账户订阅分区,"Frontend account subscription section"
 在顾客账户首页注入周期性订阅列表与管理入口。,"Adds recurring subscription status and management links to the customer account home page."
+我的订阅,"My subscriptions"
+续费订阅,"Renew subscription"
+取消订阅,"Cancel subscription"
+请选择要处理的订阅,"Choose a subscription"
 "仅允许 POST 请求。","Only POST requests are allowed."
 操作失败，请稍后重试。参考编号：%{1},"The operation failed. Please try again later. Reference: %{1}"
 数据暂时无法加载。参考编号：%{1},"Data is temporarily unavailable. Reference: %{1}"
@@ -58,9 +74,35 @@ plus,plus
 "Subscription Billing Attempt 非法","Subscription Billing Attempt is invalid"
 "Subscription Billing Attempt active guard 非法","Subscription Billing Attempt active guard is invalid"
 "Subscription Billing Attempt terminal guard 非法","Subscription Billing Attempt terminal guard is invalid"
-我的订阅,"My subscriptions"
 查看订阅周期与账单状态,"View subscription periods and billing status"
-订阅周期订单由系统按期新建，可在此查看状态。,"Period orders are created by the system each cycle; view status here."
+开通、续费和取消都在订阅页面完成。,"Start, renew, and cancel on the subscription pages."
+还没有订阅,"No subscriptions yet"
+开通订阅,"Start subscription"
+续费会为当前到期周期新建一笔订单，不会复用上一期订单。,"Renewal creates a new order for the current due period and does not reuse the previous order."
+取消后不再产生新的续费周期。已经出账的订单仍然保留。,"After cancellation, no new renewal period is created. Orders already billed stay."
+在这里开通订阅，并进入续费或取消。,"Start a subscription here, then renew or cancel it."
+返回我的订阅,"Back to my subscriptions"
+已有订阅,"Current subscriptions"
+方案,方案
+状态,状态
+当前周期,"Current period"
+操作,Actions
+续费,续费
+取消,取消
+不可变更,"Cannot change"
+暂无可用计费方案,"No billing plan is available"
+计费周期,"Billing interval"
+按月,Monthly
+周期,Period
+确认续费,"Confirm renewal"
+确认取消,"Confirm cancellation"
+该订阅当前不能续费或取消。,"This subscription cannot be renewed or cancelled right now."
+正在处理…,Working…
+操作失败，请稍后重试,"Something went wrong. Try again shortly"
+订阅已开通,"Subscription started"
+续费已提交,"Renewal submitted"
+订阅已取消,"Subscription cancelled"
+页面接口尚未就绪，请刷新后重试,"The page API is not ready. Refresh and try again"
 是,yes
 否,no
 只读诊断,"Read-only diagnostics"
@@ -101,6 +143,12 @@ Provider,Provider
 "Subscription Provider 已禁用：%{1}","Subscription Provider is disabled: %{1}"
 订阅已取消：%{1},"Subscription already cancelled: %{1}"
 "Subscription capability mode off，禁止写路径","Subscription capability is mode off; mutations blocked"
+只有生效中的订阅可以续费,"Only an active subscription can be renewed"
+店面续费只接受沙箱订阅,"Storefront renewal accepts sandbox subscriptions only"
+续费未完成：%1,"Renewal did not finish: %1"
+生效中,Active
+已取消,已取消
+已暂停,Paused
 客户无权操作该订阅,"Customer is not the subscription owner"
 "Subscription Payment command 非法","Subscription Payment command is invalid"
 "TASK-P4B-002 只允许 sandbox Payment","TASK-P4B-002 permits sandbox Payment only"
@@ -140,6 +188,7 @@ Provider,Provider
 "apply 输出的 checkpoint ID（verify/allowlist/rollback 必需）","Checkpoint ID returned by apply (required for verify/allowlist/rollback)"
 "目标 Website ID；0 是合法系统默认站点","Target Website ID; 0 is the valid system default Website"
 显示本帮助,"Show this help"
+订阅周期订单由系统按期新建，可在此查看状态。,"Period orders are created by the system each cycle; view status here."
 "网站 ID","Website ID"
 "MIG lease 探针失败","MIG lease probe failed"
 "MIG-P4B：Subscription shadow 到 allowlist（apply 必须 --database=mig_clone_*）","MIG-P4B: move Subscription from shadow to allowlist (apply requires --database=mig_clone_*)"

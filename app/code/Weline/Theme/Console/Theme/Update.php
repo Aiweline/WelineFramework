@@ -19,14 +19,15 @@ use Weline\Theme\Service\ThemeUpdate\ThemeUpdatePointerPlanner;
  * theme:update —— 主题更新代次的查看 / 切换 / 回滚 / 回收。
  *
  * 用法：
+ *   php bin/w theme:update          -t hanfu
  *   php bin/w theme:update status   -t hanfu [--website 0] [--area frontend]
  *   php bin/w theme:update list     -t hanfu
  *   php bin/w theme:update promote  <batch_id> [--dry-run]
  *   php bin/w theme:update rollback -t hanfu [--dry-run]
  *   php bin/w theme:update gc       -t hanfu [--keep 2] [--dry-run]
  *
- * 说明：切换/回滚只改指针行（CAS by epoch）并写 Env，不 purge、不需要维护模式。
- * `build` 子命令（构建新代次）在后续任务中接入。
+ * 不带子命令时与 theme:upgrade 相同：构建新代次、校验、翻指针。
+ * status/list 只查看。切换/回滚只改指针行（CAS by epoch）并写 Env，不 purge、不需要维护模式。
  */
 class Update extends AbstractConsole
 {
@@ -43,9 +44,9 @@ class Update extends AbstractConsole
         if ($raw !== [] && $raw[0] === 'theme:update') {
             \array_shift($raw);
         }
-        $action = 'status';
+        $action = self::resolveAction($raw);
         if ($raw !== [] && !\str_starts_with((string)$raw[0], '-')) {
-            $action = \strtolower((string)\array_shift($raw));
+            \array_shift($raw);
         }
         $options = $this->parseOptions($raw);
         foreach ($args as $key => $value) {
@@ -64,9 +65,13 @@ class Update extends AbstractConsole
         $service = ObjectManager::getInstance(ThemeUpdateBatchService::class);
 
         switch ($action) {
+            case 'apply':
+                $this->applyUpdate($themeName, $options, $dryRun);
+                return;
+
             case 'status':
             case 'list':
-                $this->renderStatus($service, $this->requireThemeId($themeName), $websiteId, $area);
+                $this->renderStatus($service, $this->requireThemeId($themeName), $themeName, $websiteId, $area);
                 return;
 
             case 'promote':
@@ -231,7 +236,7 @@ class Update extends AbstractConsole
 
     public function tip(): string
     {
-        return __('查看/切换/回滚主题更新代次（不 purge、不需要维护模式）');
+        return __('构建并切换主题更新代次；status 只查看（不 purge、不需要维护模式）');
     }
 
     public function help(): array|string
@@ -241,7 +246,7 @@ class Update extends AbstractConsole
             $this->tip(),
             [
                 '-h, --help' => '显示帮助信息',
-                '-t, --theme <name>' => '主题名（如 hanfu）；status/list/rollback/gc 必填',
+                '-t, --theme <name>' => '主题名（如 hanfu）；默认构建、status/list/rollback/gc 都要带',
                 '--website <id>' => '站点ID，默认 0（全站默认）',
                 '--area <area>' => '区域：frontend（默认）/ backend',
                 '--keep <n>' => 'GC 时额外保留的历史代次数量，默认 ' . ThemeUpdatePointerPlanner::DEFAULT_KEEP,
@@ -253,6 +258,7 @@ class Update extends AbstractConsole
                 '--skip-entities' => 'build 时跳过模板产物固化',
             ],
             [
+                '构建并切换（默认）' => 'php bin/w theme:update -t hanfu',
                 '查看当前代次' => 'php bin/w theme:update status -t hanfu',
                 '列代次' => 'php bin/w theme:update list -t hanfu',
                 '切到指定代次' => 'php bin/w theme:update promote tu-20261022-015300-ab12cd',
@@ -261,6 +267,47 @@ class Update extends AbstractConsole
                 '回收旧代次' => 'php bin/w theme:update gc -t hanfu --keep 2',
             ]
         );
+    }
+
+    /**
+     * 不带子命令（只有 -t/--theme 等选项）时执行构建并切换。
+     * 显式 status/list/promote/rollback/gc/auto/build 保持原意。
+     *
+     * @param list<string> $raw 已去掉命令名的位置参数
+     */
+    public static function resolveAction(array $raw): string
+    {
+        if ($raw !== [] && !\str_starts_with((string)$raw[0], '-')) {
+            $action = \strtolower((string)$raw[0]);
+
+            return $action === '' ? 'apply' : $action;
+        }
+
+        return 'apply';
+    }
+
+    /** @param array<string,mixed> $options */
+    private function applyUpdate(string $themeName, array $options, bool $dryRun): void
+    {
+        $this->requireThemeId($themeName);
+        if ($dryRun) {
+            $this->printing->note(__('dry-run：将构建并切换主题 %{1}', [$themeName]));
+
+            return;
+        }
+        $forward = ['theme:upgrade', '-t', $themeName];
+        $layouts = $options['layout'] ?? ($options['l'] ?? '');
+        $layoutList = \is_array($layouts)
+            ? \array_values($layouts)
+            : \array_values(\array_filter(\explode(',', (string)$layouts)));
+        if (isset($layoutList[0]) && (string)$layoutList[0] !== '') {
+            $forward[] = '-l';
+            $forward[] = (string)$layoutList[0];
+        }
+        if (!empty($options['all'])) {
+            $forward[] = '--all';
+        }
+        ObjectManager::getInstance(Upgrade::class)->execute($forward);
     }
 
     /** @return array<string,mixed> */
@@ -309,11 +356,11 @@ class Update extends AbstractConsole
         return $themeId;
     }
 
-    private function renderStatus(ThemeUpdateBatchService $service, int $themeId, int $websiteId, string $area): void
+    private function renderStatus(ThemeUpdateBatchService $service, int $themeId, string $themeName, int $websiteId, string $area): void
     {
         $pointer = $this->currentPointer($themeId, $websiteId, $area);
         if ($pointer === null) {
-            $this->printing->warning(__('该主题尚无更新代次指针（首次可先 theme:upgrade 构建）'));
+            $this->printing->warning(__('该主题尚无更新代次。构建并切换请执行：theme:update -t %{1}', [$themeName]));
             return;
         }
         $this->printing->note(__('当前代次：%{1}', [(string)($pointer['current'] ?? '-')]));

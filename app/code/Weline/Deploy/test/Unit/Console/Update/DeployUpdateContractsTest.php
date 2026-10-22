@@ -50,8 +50,78 @@ final class DeployUpdateContractsTest extends TestCase
             'CoreUpdateScope::testIncrementalSyncOnlyFillsMissingFilesAndDoesNotOverwriteDrift' => function () {
             $this->assert_CoreUpdateScope_testIncrementalSyncOnlyFillsMissingFilesAndDoesNotOverwriteDrift();
         },
+            'CoreUpdateScope::testRequestedForceIsIgnoredWhenCommitsDifferButLocalCoreIsClean' => function () {
+            $this->assert_CoreUpdateScope_testRequestedForceIsIgnoredWhenCommitsDifferButLocalCoreIsClean();
+        },
+            'CoreUpdateScope::testRequestedForceStaysWhenLocalDriftOrCommitsAreIncomparable' => function () {
+            $this->assert_CoreUpdateScope_testRequestedForceStaysWhenLocalDriftOrCommitsAreIncomparable();
+        },
+            'CoreUpdateScope::testRelaxForceUsesCacheCommitAgainstLocalCore' => function () {
+            $this->assert_CoreUpdateScope_testRelaxForceUsesCacheCommitAgainstLocalCore();
+        },
+            'CoreUpdateCache::testBrokenCacheIsReplacedByShallowCloneNotFullInit' => function () {
+            $this->assert_CoreUpdateCache_testBrokenCacheIsReplacedByShallowCloneNotFullInit();
+        },
+            'CoreUpdateActivity::testCoreUpdateHoldsSystemUpdateLock' => function () {
+            $this->assert_CoreUpdateActivity_testCoreUpdateHoldsSystemUpdateLock();
+        },
+            'CoreUpdateRemove::testVanishedChildDirectoryDoesNotAbortForceDelete' => function () {
+            $this->assert_CoreUpdateRemove_testVanishedChildDirectoryDoesNotAbortForceDelete();
+        },
         ];
     }
+
+private function assert_CoreUpdateRemove_testVanishedChildDirectoryDoesNotAbortForceDelete(): void
+{
+    $fileLines = file((string) (new ReflectionMethod(Core::class, 'removeDirectory'))->getFileName()) ?: [];
+    $body = '';
+    foreach (['removeDirectory', 'removeDirectoryEntries'] as $methodName) {
+        $method = new ReflectionMethod(Core::class, $methodName);
+        $body .= implode('', array_slice(
+            $fileLines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1
+        ));
+    }
+    self::assertStringNotContainsString('RecursiveDirectoryIterator', $body);
+    self::assertStringContainsString('opendir', $body);
+
+    $core = new Core($this->createMock(\Weline\Framework\Output\Cli\Printing::class), $this->createMock(\Weline\Framework\App\System::class));
+    $remove = $this->method_CoreUpdateScope('removeDirectory');
+    $tmp = sys_get_temp_dir() . '/core-update-rm-' . bin2hex(random_bytes(4));
+    $debug = $tmp . '/app/code/Weline/Framework/Output/Debug';
+    mkdir($debug . '/nested', 0755, true);
+    file_put_contents($debug . '/nested/a.txt', 'a');
+    file_put_contents($tmp . '/app/code/Weline/Framework/Output/plain.txt', 'b');
+    symlink($tmp . '/missing-target', $tmp . '/app/code/Weline/Framework/Output/Gone');
+    unlink($debug . '/nested/a.txt');
+    rmdir($debug . '/nested');
+    rmdir($debug);
+
+    $remove->invoke($core, $tmp);
+    self::assertFalse(is_dir($tmp));
+    $remove->invoke($core, $tmp);
+    self::assertFalse(file_exists($tmp));
+}
+
+private function assert_CoreUpdateCache_testBrokenCacheIsReplacedByShallowCloneNotFullInit(): void
+{
+    $src = (string) file_get_contents(BP . 'app/code/Weline/Deploy/Console/Update/Core.php');
+    self::assertStringContainsString("'clone', '--depth', '1', '--single-branch'", $src);
+    self::assertStringContainsString('replaceCacheWithFreshClone', $src);
+    self::assertStringContainsString('GIT_TERMINAL_PROMPT', $src);
+    self::assertStringContainsString('git timed out after', $src);
+    self::assertStringNotContainsString("['init']", $src);
+    self::assertStringNotContainsString("['fetch', 'origin']", $src);
+    self::assertStringNotContainsString("['fetch', '--tags']", $src);
+}
+
+private function assert_CoreUpdateActivity_testCoreUpdateHoldsSystemUpdateLock(): void
+{
+    $src = (string) file_get_contents(BP . 'app/code/Weline/Deploy/Console/Update/Core.php');
+    self::assertStringContainsString("SystemUpdateActivity::acquire('core:update')", $src);
+    self::assertStringContainsString("SystemUpdateActivity::release('core:update')", $src);
+}
 
 private function assert_CoreUpdateScope_testCoreUpdatePathsStayInsideWelineAndNecessaryRoots(): void
 {
@@ -122,6 +192,102 @@ private function assert_CoreUpdateScope_testNoisePathsAreSkippedInDriftScan(): v
     self::assertTrue($skip->invoke($core, 'app/code/GuoLaiRen/PageBuilder/X.php'));
     self::assertTrue($skip->invoke($core, 'app/etc/env.php'));
     self::assertFalse($skip->invoke($core, 'app/code/Weline/Deploy/Console/Update/Core.php'));
+}
+
+private function assert_CoreUpdateScope_testRequestedForceIsIgnoredWhenCommitsDifferButLocalCoreIsClean(): void
+{
+    $core = new Core($this->createMock(\Weline\Framework\Output\Cli\Printing::class), $this->createMock(\Weline\Framework\App\System::class));
+    $decide = $this->method_CoreUpdateScope('shouldHonorRequestedForce');
+    $last = str_repeat('a', 40);
+    $remote = str_repeat('b', 40);
+    self::assertFalse($decide->invoke($core, $last, $remote, true, []));
+    self::assertFalse($decide->invoke($core, $last, $last, true, []));
+}
+
+private function assert_CoreUpdateScope_testRequestedForceStaysWhenLocalDriftOrCommitsAreIncomparable(): void
+{
+    $core = new Core($this->createMock(\Weline\Framework\Output\Cli\Printing::class), $this->createMock(\Weline\Framework\App\System::class));
+    $decide = $this->method_CoreUpdateScope('shouldHonorRequestedForce');
+    $last = str_repeat('a', 40);
+    $remote = str_repeat('b', 40);
+    self::assertTrue($decide->invoke($core, $last, $remote, true, ['app/code/Weline/Deploy/Console/Update/Core.php']));
+    self::assertTrue($decide->invoke($core, '', $remote, true, []));
+    self::assertTrue($decide->invoke($core, $last, '', true, []));
+    self::assertTrue($decide->invoke($core, 'deadbeef', $remote, true, []));
+    self::assertTrue($decide->invoke($core, $last, $remote, false, []));
+}
+
+private function assert_CoreUpdateScope_testRelaxForceUsesCacheCommitAgainstLocalCore(): void
+{
+    $root = sys_get_temp_dir() . '/core-up-force-' . bin2hex(random_bytes(4));
+    $bare = $root . '/remote.git';
+    $cache = $root . '/cache';
+    $rel = 'app/code/Weline/Deploy/Console/Update/Core.php';
+    $local = BP . $rel;
+    self::assertTrue(is_file($local));
+    try {
+        $this->git_CoreUpdateScope('', 'init --bare -b dev ' . escapeshellarg($bare));
+        $this->git_CoreUpdateScope('', 'init -b dev ' . escapeshellarg($cache));
+        $cacheFile = $cache . '/' . $rel;
+        mkdir(dirname($cacheFile), 0755, true);
+        copy($local, $cacheFile);
+        $this->git_CoreUpdateScope($cache, 'add -- ' . escapeshellarg($rel));
+        $this->git_CoreUpdateScope($cache, '-c user.email=core-update@example.test -c user.name=core-update commit -m baseline');
+        $this->git_CoreUpdateScope($cache, 'remote add origin ' . escapeshellarg($bare));
+        $this->git_CoreUpdateScope($cache, 'push origin HEAD:dev');
+
+        $core = new Core($this->createMock(\Weline\Framework\Output\Cli\Printing::class), $this->createMock(\Weline\Framework\App\System::class));
+        $relax = $this->method_CoreUpdateScope('relaxForceWhenLocalCoreHasNoConflict');
+        $this->setPrivate_CoreUpdateScope($core, 'repoCandidates', [$bare]);
+        $this->setPrivate_CoreUpdateScope($core, 'forceUpdate', true);
+        $relax->invoke($core, $cache, 'dev');
+        self::assertFalse($this->readPrivate_CoreUpdateScope($core, 'forceUpdate'));
+        self::assertTrue($this->readPrivate_CoreUpdateScope($core, 'forceRelaxedBecauseClean'));
+
+        $ahead = $root . '/ahead';
+        $this->git_CoreUpdateScope('', 'clone ' . escapeshellarg($bare) . ' ' . escapeshellarg($ahead));
+        file_put_contents($ahead . '/README-force-probe.txt', "ahead\n");
+        $this->git_CoreUpdateScope($ahead, 'add -- README-force-probe.txt');
+        $this->git_CoreUpdateScope($ahead, '-c user.email=core-update@example.test -c user.name=core-update commit -m ahead');
+        $this->git_CoreUpdateScope($ahead, 'push origin HEAD:dev');
+        $this->setPrivate_CoreUpdateScope($core, 'forceUpdate', true);
+        $this->setPrivate_CoreUpdateScope($core, 'forceRelaxedBecauseClean', false);
+        $relax->invoke($core, $cache, 'dev');
+        self::assertFalse($this->readPrivate_CoreUpdateScope($core, 'forceUpdate'), 'remote tip ahead of a clean core must not keep -f');
+        self::assertTrue($this->readPrivate_CoreUpdateScope($core, 'forceRelaxedBecauseClean'));
+
+        file_put_contents($cacheFile, "<?php\n// drifted baseline\n");
+        $this->git_CoreUpdateScope($cache, 'add -- ' . escapeshellarg($rel));
+        $this->git_CoreUpdateScope($cache, '-c user.email=core-update@example.test -c user.name=core-update commit -m drift');
+        $this->setPrivate_CoreUpdateScope($core, 'forceUpdate', true);
+        $this->setPrivate_CoreUpdateScope($core, 'forceRelaxedBecauseClean', false);
+        $relax->invoke($core, $cache, 'dev');
+        self::assertTrue($this->readPrivate_CoreUpdateScope($core, 'forceUpdate'));
+        self::assertFalse($this->readPrivate_CoreUpdateScope($core, 'forceRelaxedBecauseClean'));
+    } finally {
+        $this->removeTree_CoreUpdateScope($root);
+    }
+}
+
+private function git_CoreUpdateScope(string $cwd, string $args): void
+{
+    $command = 'git ' . ($cwd !== '' ? '-C ' . escapeshellarg($cwd) . ' ' : '') . $args;
+    exec($command . ' 2>&1', $output, $code);
+    self::assertSame(0, $code, $command . "\n" . implode("\n", $output));
+}
+
+private function setPrivate_CoreUpdateScope(object $object, string $property, mixed $value): void
+{
+    $ref = new \ReflectionProperty($object, $property);
+    $ref->setAccessible(true);
+    $ref->setValue($object, $value);
+}
+
+private function readPrivate_CoreUpdateScope(object $object, string $property): mixed
+{
+    $ref = new \ReflectionProperty($object, $property);
+    $ref->setAccessible(true);
+    return $ref->getValue($object);
 }
 
 private function assert_CoreUpdateScope_testIncrementalSyncOnlyFillsMissingFilesAndDoesNotOverwriteDrift(): void

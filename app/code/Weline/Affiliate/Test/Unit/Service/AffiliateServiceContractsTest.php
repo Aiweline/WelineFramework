@@ -36,8 +36,23 @@ final class AffiliateServiceContractsTest extends TestCase
             'AffiliateStorefrontSettings::testPolicyDefaultsEnabledAndHonorsTestingOverride' => function () {
             $this->assert_AffiliateStorefrontSettings_testPolicyDefaultsEnabledAndHonorsTestingOverride();
         },
+            'AffiliateService::testOutOfScopeShareClickStillStartsAttribution' => function () {
+            $this->assert_AffiliateService_testOutOfScopeShareClickStillStartsAttribution();
+        },
         ];
     }
+
+private function assert_AffiliateService_testOutOfScopeShareClickStillStartsAttribution(): void
+{
+    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Affiliate/Service/AffiliateService.php');
+    $click = substr($source, (int) strpos($source, 'function recordShareClick'), 2200);
+    self::assertStringContainsString('if (!$isSelfClick && $hasAffiliate)', $click);
+    self::assertStringNotContainsString('if (!$isSelfClick && !$scopeMismatch)', $click);
+    $order = substr($source, (int) strpos($source, 'function handleCheckoutOrderCreated'), 1800);
+    self::assertStringNotContainsString('isAffiliateEffectiveInScope($affiliate)', $order);
+    $register = substr($source, (int) strpos($source, 'function handleCustomerRegistered'), 1200);
+    self::assertStringContainsString('isAffiliateEffectiveInScope($affiliate)', $register);
+}
 
 private function assert_AffiliateStorefrontSettings_testProductShareSettingsUsesSystemConfigEmbedAndMenu(): void
 {

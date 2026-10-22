@@ -54,6 +54,15 @@
                   sort="10"
                   delivery="sync"/>
     </event>
+    <event name="Weline_Order::buyer_after_sale_collect_product_return_address">
+        <observer name="Weline_Product::buyer_after_sale_product_return_address"
+                  instance="Weline\Product\Observer\BuyerAftersaleProductReturnAddressObserver"
+                  delivery="sync"
+                  failure="isolated"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
     <event name="Weline_Framework::resource_changed"
            delivery="sync"
            failure="best_effort">

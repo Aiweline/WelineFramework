@@ -9,7 +9,8 @@ declare(strict_types=1);
 return [
     'Weline_Cart::cart_item_added' => [
         'name' => \__('购物车加购成功后'),
-        'description' => \__('购物车加购成功后触发；追加 cart_type + type_payload（非破坏）。'),
+        'description' => \__('购物车加购成功后触发。载荷含 summary/cart，并带本次加购的 product_id、customer_id、quantity、price（非破坏；另有 cart_type + type_payload）。'),
+        'doc' => 'doc/event/cart-item-added.md',
     ],
     'Weline_Cart::cart_cleared' => [
         'name' => \__('购物车清空成功后'),

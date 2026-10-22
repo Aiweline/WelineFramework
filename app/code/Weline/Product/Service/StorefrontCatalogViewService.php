@@ -694,7 +694,7 @@ final class StorefrontCatalogViewService
             $includeListingDetails,
             $includeMedia,
             $boundMax,
-            'offers-v2-bounded',
+            'offers-v3-product-uuid',
         ]);
 
         /** @var list<array<string, mixed>> $rows */
@@ -1166,6 +1166,7 @@ final class StorefrontCatalogViewService
             : $this->products->listByIds($websiteId, $filterIds);
         TraceGate::recordPhase('product.catalog.products', (hrtime(true) - $phaseStartedAt) / 1e6, ['products' => count($products)]);
         $publishedProductIds = [];
+        $productUuidById = [];
 
         foreach ($products as $product) {
             if (\strtolower(\trim((string)($product[Product::schema_fields_STATUS] ?? '')))
@@ -1181,6 +1182,10 @@ final class StorefrontCatalogViewService
                 continue;
             }
             $publishedProductIds[$productId] = true;
+            $productUuid = \trim((string)($product[Product::schema_fields_GLOBAL_PRODUCT_UUID] ?? ''));
+            if ($productUuid !== '') {
+                $productUuidById[$productId] = $productUuid;
+            }
         }
         if ($publishedProductIds === []) {
             return [];
@@ -1295,6 +1300,7 @@ final class StorefrontCatalogViewService
                 'offer_id' => $snapshot->offerId ?? (int)($offer[Offer::schema_fields_ID] ?? 0),
                 'provider_code' => $snapshot->offer->providerCode,
                 'global_offer_uuid' => $snapshot->offer->globalOfferUuid,
+                'global_product_uuid' => $productUuidById[$productId] ?? '',
                 'name' => $snapshot->name,
                 'sku' => $snapshot->sku,
                 'slug' => $this->resolvePublicCatalogSlug(

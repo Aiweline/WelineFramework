@@ -6,6 +6,7 @@ namespace Weline\Websites\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\FrontendWorkerScopeException;
+use Weline\Framework\Runtime\RequestAuthority;
 use Weline\Framework\Service\Query\Value\FrontendWorkerScopeRolloutDecision;
 use Weline\SystemConfig\Api\ConfigReader;
 
@@ -61,7 +62,7 @@ final class ScopeKernelRolloutPolicy
         return $this->load()['mode'];
     }
 
-    public function requiresBinding(string $requestScheme): bool
+    public function requiresBinding(string $requestScheme, string $requestHost = ''): bool
     {
         $scheme = $this->normalizeScheme($requestScheme);
         $mode = $this->load()['mode'];
@@ -76,7 +77,7 @@ final class ScopeKernelRolloutPolicy
             return false;
         }
 
-        $this->assertHttps($scheme);
+        $this->assertHttpsUnlessLocalAcceptance($scheme, $requestHost);
         return true;
     }
 
@@ -115,6 +116,7 @@ final class ScopeKernelRolloutPolicy
         int $channelId,
         string $storeMode,
         string $requestScheme,
+        string $requestHost = '',
     ): FrontendWorkerScopeRolloutDecision {
         if ($websiteId < 0 || $storeId < 0 || $channelId < 0) {
             throw new FrontendWorkerScopeException(
@@ -168,10 +170,11 @@ final class ScopeKernelRolloutPolicy
         }
 
         if ($mode === FrontendWorkerScopeRolloutDecision::MODE_ALLOWLIST) {
-            // Binding is mandatory for every HTTPS storefront in allowlist
+            // Binding is mandatory for every public storefront in allowlist
             // mode. Otherwise an allowlisted page could delete its bootstrap
             // material and fall through to an unbound legacy QueryBin path.
-            $this->assertHttps($scheme);
+            // Loopback and *.test.weline.com stay on HTTP for local acceptance.
+            $this->assertHttpsUnlessLocalAcceptance($scheme, $requestHost);
             if (!isset($config['allowlist'][$this->tupleKey($tuple)])) {
                 return new FrontendWorkerScopeRolloutDecision(
                     $mode,
@@ -203,7 +206,7 @@ final class ScopeKernelRolloutPolicy
             );
         }
 
-        $this->assertHttps($scheme);
+        $this->assertHttpsUnlessLocalAcceptance($scheme, $requestHost);
         return new FrontendWorkerScopeRolloutDecision(
             $mode,
             true,
@@ -361,6 +364,23 @@ final class ScopeKernelRolloutPolicy
             );
         }
         return $normalized;
+    }
+
+    private function assertHttpsUnlessLocalAcceptance(string $scheme, string $requestHost): void
+    {
+        if ($scheme === 'https' || $this->plainHttpAllowed($requestHost)) {
+            return;
+        }
+        $this->assertHttps($scheme);
+    }
+
+    /**
+     * Local acceptance is HTTP on loopback or {project}.test.weline.com.
+     * An empty host stays fail-closed so public callers cannot omit it.
+     */
+    private function plainHttpAllowed(string $requestHost): bool
+    {
+        return RequestAuthority::allowsPlainHttp($requestHost);
     }
 
     private function assertHttps(string $scheme): void

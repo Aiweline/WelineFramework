@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Weline\Wishlist\Service;
 
+use Weline\Framework\Event\EventsManager;
+
 final class WishlistService
 {
     public function __construct(
         private readonly WishlistSessionStore $store,
         private readonly ProductCardSnapshotResolver $snapshots,
+        private readonly EventsManager $events,
     ) {
     }
 
@@ -24,9 +27,11 @@ final class WishlistService
             return $this->failure(__('无效的商品 ID'));
         }
         $ids = $this->pruneInvalidIds();
-        if (!in_array($productId, $ids, true)) {
+        $created = !in_array($productId, $ids, true);
+        if ($created) {
             $ids[] = $productId;
             $this->store->saveIds($ids);
+            $this->publishAdded($productId);
         }
 
         return [
@@ -171,6 +176,26 @@ final class WishlistService
             return;
         }
         $this->store->saveIds($validIds);
+    }
+
+    private function publishAdded(int $productId): void
+    {
+        try {
+            $payload = [
+                'product_id' => $productId,
+                'created' => true,
+                'customer_id' => 0,
+                'wishlist_id' => 0,
+            ];
+            $this->events->dispatch('Weline_Wishlist::add_to_wishlist_after', $payload);
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_error')) {
+                w_log_error('Wishlist add_to_wishlist_after dispatch failed: ' . $e->getMessage(), [
+                    'product_id' => $productId,
+                    'exception' => $e::class,
+                ], 'wishlist');
+            }
+        }
     }
 
     /**

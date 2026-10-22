@@ -6,6 +6,7 @@
     <menu source="Weline_Order::payment_manage" name="payment_manage" title="订单收款记录" action="order/backend/records/payment" parent="Weline_Backend::payment_group" icon="edit" order="15"/>
     <menu source="Weline_Order::shipment_manage" name="shipment_manage" title="订单发货管理" action="order/backend/shipment/index" parent="Weline_Backend::order_group" icon="truck" order="30"/>
     <menu source="Weline_Order::refund_manage" name="refund_manage" title="订单退款管理" action="order/backend/refund/index" parent="Weline_Backend::order_group" icon="circle" order="40"/>
+    <menu source="Weline_Order::buyer_aftersale_manage" name="buyer_aftersale_manage" title="买家退换货" action="order/backend/buyer-aftersale/index" parent="Weline_Backend::order_group" icon="undo" order="45"/>
     <menu source="Weline_Order::invoice_manage" name="invoice_manage" title="订单发票管理" action="order/backend/invoice/index" parent="Weline_Backend::order_group" icon="file" order="50"/>
     <menu source="Weline_Order::status_manage" name="status_manage" title="订单状态管理" action="order/backend/status/index" parent="Weline_Backend::order_group" icon="circle" order="60"/>
     <menu source="Weline_Order::exception_manage" name="exception_manage" title="订单异常与补偿" action="order/backend/records/exceptions" parent="Weline_Backend::order_group" icon="warning" order="70"/>

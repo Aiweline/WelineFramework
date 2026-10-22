@@ -1,0 +1,51 @@
+<?php
+/**
+ * @meta.title {default="买家售后",description="店面买家售后申请与支付联动"}
+ * @meta.description {default="店面：买家售后总闸，以及通过后是否联动既有退款协调。均按范围继承。"}
+ * @config.area {frontend}
+ * @config.sort {40}
+ * @config.acl {Weline_Order::order_manage}
+ */
+?>
+
+<w:config:group
+    code="storefront_buyer_aftersale"
+    label="买家售后"
+    description="顾客发起退货、仅退款或换货申请。支付联动只在总闸与联动闸都开启时，由售后事件交给订单退款协调。均按 channel←store←website←global 继承。"
+    sort="40">
+    <w:config:field
+        key="order/storefront/buyer_aftersale_enabled"
+        label="允许买家售后"
+        description="关闭时，顾客不能提交、取消或登记退货运单；后台也不能推进售后单。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store,channel" />
+
+    <w:config:field
+        key="order/storefront/buyer_aftersale_link_payment"
+        label="售后联动支付退款"
+        description="开启且总闸也开启时，仅退款审核通过、或退货确认收货后，才派发支付联动事件。换货永不联动。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store,channel" />
+
+    <w:config:field
+        key="order/storefront/buyer_aftersale_return_address_custom_enabled"
+        label="使用自定义退货地址"
+        description="关闭时，没有商品退货地址的申请跟该订单的履约仓。开启后才使用下面的地址，并按 channel←store←website←global 继承。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store,channel" />
+
+    <w:config:field
+        key="order/storefront/buyer_aftersale_return_address"
+        label="自定义退货地址"
+        description="仅在上一开关开启且商品没有自己的退货地址时使用。商品退货地址始终优先。"
+        type="textarea"
+        value-type="string"
+        default=""
+        scope="global,website,store,channel" />
+</w:config:group>

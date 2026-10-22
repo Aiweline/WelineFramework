@@ -25,6 +25,24 @@ try {
     w_log_warning('Inquiry reply URL resolve failed: ' . $e->getMessage(), [], 'inquiry');
 }
 ?>
+<style>
+    .w-table tbody tr.inquiry-submission-row.is-focused {
+        background: color-mix(in srgb, var(--weline-theme-primary) 14%, var(--weline-theme-surface));
+        box-shadow: inset 0.2rem 0 0 var(--weline-theme-primary);
+        color: var(--weline-theme-text);
+        scroll-margin-block-start: 6rem;
+    }
+    .w-table tbody tr.inquiry-submission-row.is-focused:hover {
+        background: color-mix(in srgb, var(--weline-theme-primary) 22%, var(--weline-theme-surface));
+    }
+    .w-table tbody tr.inquiry-submission-row.is-focused > td,
+    .w-table tbody tr.inquiry-submission-row.is-focused > td :where(small, code, dt, dd, summary) {
+        color: var(--weline-theme-text);
+    }
+    .w-table tbody tr.inquiry-submission-row.is-focused > td .w-text[data-tone="muted"] {
+        color: var(--weline-theme-text-muted);
+    }
+</style>
 <w:mail-composer area="backend"/>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -110,7 +128,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             ? (string)json_encode($mailComposer, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)
                             : '';
                         ?>
-                        <tr id="inquiry-submission-<?= $sid ?>" data-submission-id="<?= $sid ?>"<?= $isFocus ? ' style="background:var(--color-warning-soft, #fffbeb);scroll-margin-top:6rem"' : '' ?>>
+                        <tr id="inquiry-submission-<?= $sid ?>" data-submission-id="<?= $sid ?>"<?= $isFocus ? ' class="inquiry-submission-row is-focused"' : '' ?>>
                             <td><?= $sid ?></td>
                             <td><?= $esc($siteLabel) ?></td>
                             <td><code><?= $esc($form_names[$formId] ?? ('#' . $formId)) ?></code></td>

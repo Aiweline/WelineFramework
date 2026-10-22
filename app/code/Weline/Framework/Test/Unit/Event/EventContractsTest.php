@@ -728,6 +728,6 @@ private function assert_UpgradeAfterObserverProgress_testSubsequentSilentObserve
     self::assertStringContainsString('website×locale', $generator);
     self::assertStringContainsString('FiberTaskRunner::yield', $generator);
     self::assertStringContainsString('开始发布维护模式静态页', $maintenance);
-    self::assertStringContainsString('开始预热搜索 Provider 索引', $search);
+    self::assertStringContainsString('系统正在更新，搜索索引重建改到闲时再做。', $search);
 }
 }

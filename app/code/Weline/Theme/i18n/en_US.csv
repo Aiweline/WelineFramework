@@ -1927,10 +1927,11 @@ AI目录加载失败,"AI directory loading failed"
 构建校验未通过，代次不会上线：,构建校验未通过，代次不会上线：
 "构建完成且校验通过，可用 theme:update promote %{1} 切换","构建完成且校验通过，可用 theme:update promote %{1} 切换"
 未知子命令：,未知子命令：
-"查看/切换/回滚主题更新代次（不 purge、不需要维护模式）","查看/切换/回滚主题更新代次（不 purge、不需要维护模式）"
+"构建并切换主题更新代次；status 只查看（不 purge、不需要维护模式）","构建并切换主题更新代次；status 只查看（不 purge、不需要维护模式）"
+"dry-run：将构建并切换主题 %{1}","dry-run：将构建并切换主题 %{1}"
 "请用 -t/--theme 指定主题名，例如 -t hanfu","请用 -t/--theme 指定主题名，例如 -t hanfu"
 未找到主题：,未找到主题：
-"该主题尚无更新代次指针（首次可先 theme:upgrade 构建）","该主题尚无更新代次指针（首次可先 theme:upgrade 构建）"
+"该主题尚无更新代次。构建并切换请执行：theme:update -t %{1}","该主题尚无更新代次。构建并切换请执行：theme:update -t %{1}"
 当前代次：%{1},当前代次：%{1}
 回滚目标：%{1},回滚目标：%{1}
 epoch：%{1},epoch：%{1}
@@ -2338,6 +2339,8 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+"查看/切换/回滚主题更新代次（不 purge、不需要维护模式）","查看/切换/回滚主题更新代次（不 purge、不需要维护模式）"
+"该主题尚无更新代次指针（首次可先 theme:upgrade 构建）","该主题尚无更新代次指针（首次可先 theme:upgrade 构建）"
 "build 子命令尚未接入：请先用 theme:upgrade 构建，后续版本提供 theme:update build。","build 子命令尚未接入：请先用 theme:upgrade 构建，后续版本提供 theme:update build。"
 CSS变量配置,"CSS variable configuration"
 选择色盘：,"Select Color Palette:"

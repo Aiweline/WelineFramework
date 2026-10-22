@@ -41,12 +41,12 @@
 
 索引维护：
 
-1. **增量**：业务保存/删除事件（如 `Weline_Blog::post_search_index_changed`）
-2. **定时**：Cron `search_provider_index_rebuild`（`*/15 * * * *`）对 `website_id=0` 及全部站点 `rebuildAll`
-3. **升级**：`setup:upgrade` 后空索引 warmup
-4. **手动**：
+1. **变更流**：业务保存/删除把一条 upsert 或 delete 写入队列（Blog、FAQ）。同一实体只保留最新版本，旧版本不再覆盖。
+2. **消费者**：`SearchProviderIndexQueue` 追平这些变更。系统更新进行中会挂起，更新结束后再写。
+3. **集合变更**：后台菜单这类整组投影，在菜单/权限变更时投递一次 `rebuild`，不是定时扫全库。
+4. **手动修复**：下面的命令会整表替换，只在漂移或冷启动时用。系统更新进行中会拒绝。
 
 ```bash
-php bin/w search:provider-index:rebuild          # 全量重建
+php bin/w search:provider-index:rebuild          # 全量修复
 php bin/w search:provider-index:rebuild -i blog  # 仅 Blog
 ```

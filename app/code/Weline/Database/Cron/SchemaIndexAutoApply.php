@@ -6,6 +6,7 @@ namespace Weline\Database\Cron;
 
 use Weline\Database\Service\Index\SchemaIndexConfig;
 use Weline\Database\Service\Index\SchemaIndexJobService;
+use Weline\Framework\App\SystemUpdateActivity;
 use Weline\Framework\Cron\CronTaskInterface;
 
 /**
@@ -43,6 +44,9 @@ final class SchemaIndexAutoApply implements CronTaskInterface
 
     public function execute(): string
     {
+        if (SystemUpdateActivity::inProgress()) {
+            return (string)__('系统正在更新，索引构建改到闲时再做。');
+        }
         if (!$this->config->autoApply()) {
             return (string)__('自动索引未启用，跳过。');
         }

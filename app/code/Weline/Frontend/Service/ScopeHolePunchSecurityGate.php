@@ -246,8 +246,12 @@ final class ScopeHolePunchSecurityGate
             return true;
         }
         $scheme = \strtolower(\trim((string)WelineEnv::getRequestScheme()));
+        if ($scheme === 'https') {
+            return true;
+        }
 
-        return $scheme === 'https';
+        // Local acceptance hosts stay on HTTP. Public hosts stay fail-closed.
+        return RequestAuthority::allowsPlainHttp(RequestAuthority::current());
     }
 
     private function isSameOrigin(Request $request): bool

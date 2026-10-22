@@ -1,4 +1,6 @@
-﻿评论接口不支持操作：%{1},"The comment interface does not support the operation: %{1}"
+﻿评论已写入,评论已写入
+"评论落库成功后派发。商品评论的 product_id 是店面商品 ID（由 global uuid 映射）；映射不到时为 0，禁止把身份注册表 ID 当作商品 ID。","评论落库成功后派发。商品评论的 product_id 是店面商品 ID（由 global uuid 映射）；映射不到时为 0，禁止把身份注册表 ID 当作商品 ID。"
+评论接口不支持操作：%{1},"The comment interface does not support the operation: %{1}"
 评论服务暂时不可用，请稍后再试。,"The comment service is temporarily unavailable, please try again later."
 通用评论,"Universal reviews"
 按评论类型读取动态表单、提交评论并上传图文视频媒体。,"Load dynamic forms by review type, submit reviews, and upload photo/video media."

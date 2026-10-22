@@ -22,7 +22,9 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Session\SessionFactory;
+use Weline\Framework\View\Engine\RenderContext;
 use Weline\Framework\View\Template;
 
 class AccountQueryProvider implements QueryProviderInterface
@@ -166,9 +168,19 @@ class AccountQueryProvider implements QueryProviderInterface
         $template->setData('user', $user);
         AccountSidebarContentGate::setRequestedSection($section);
         AccountSidebarContentGate::setRequestParams($params);
+        // JSON 要的是字符串。外层已有捕获时 getHook 会改走流式并返回空串。
+        $requireStringKey = RenderContext::REQUIRE_STRING_HOOK;
+        $hadRequireString = RequestContext::has($requireStringKey);
+        $previousRequireString = RequestContext::get($requireStringKey);
+        RequestContext::set($requireStringKey, true);
         try {
             $html = (string)$template->getHook('account.sidebar.content');
         } finally {
+            if ($hadRequireString) {
+                RequestContext::set($requireStringKey, $previousRequireString);
+            } else {
+                RequestContext::remove($requireStringKey);
+            }
             AccountSidebarContentGate::setRequestParams(null);
             AccountSidebarContentGate::setRequestedSection(null);
         }

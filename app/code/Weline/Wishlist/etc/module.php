@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Wishlist',
-    'version' => '1.0.19',
+    'version' => '1.0.20',
     'requires' => [
         'Weline_Framework' => '*',
     ],

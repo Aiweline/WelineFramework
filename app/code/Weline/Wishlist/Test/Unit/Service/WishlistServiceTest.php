@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Wishlist\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Event\EventsManager;
 use Weline\Wishlist\Service\WishlistService;
 use Weline\Wishlist\Service\WishlistSessionStore;
 
@@ -47,11 +48,19 @@ final class WishlistServiceTest extends TestCase
                 return $productId > 0 ? ['product_id' => $productId, 'name' => 'Demo'] : null;
             }
         };
-        $service = new WishlistService($store, $snapshots);
+        $events = $this->events();
+        $service = new WishlistService($store, $snapshots, $events);
 
         $added = $service->add(12);
         self::assertTrue($added['success']);
         self::assertSame(1, $added['wishlist_count']);
+        self::assertSame(['Weline_Wishlist::add_to_wishlist_after'], $events->names);
+        self::assertSame(12, $events->payloads[0]['product_id']);
+        self::assertTrue($events->payloads[0]['created']);
+
+        $again = $service->add(12);
+        self::assertTrue($again['success']);
+        self::assertCount(1, $events->names);
 
         $toggled = $service->toggle(12);
         self::assertFalse($toggled['active']);
@@ -99,7 +108,7 @@ final class WishlistServiceTest extends TestCase
                     : null;
             }
         };
-        $service = new WishlistService($store, $snapshots);
+        $service = new WishlistService($store, $snapshots, $this->events());
 
         $page = $service->listPage();
         self::assertTrue($page['success']);
@@ -123,4 +132,26 @@ final class WishlistServiceTest extends TestCase
         self::assertSame([], $store->ids);
     }
 
+    private function events(): EventsManager
+    {
+        return new class extends EventsManager {
+            /** @var list<string> */
+            public array $names = [];
+
+            /** @var list<array<string, mixed>> */
+            public array $payloads = [];
+
+            public function __construct()
+            {
+            }
+
+            public function dispatch(string $eventName, mixed &$data = []): static
+            {
+                $this->names[] = $eventName;
+                $this->payloads[] = is_array($data) ? $data : [];
+
+                return $this;
+            }
+        };
+    }
 }

@@ -77,6 +77,9 @@ final class InquiryMenuSignalContractsTest extends TestCase
         self::assertStringContainsString('id="inquiry-submission-', $template);
         self::assertStringContainsString('data-submission-id=', $template);
         self::assertStringContainsString('$isFocus', $template);
+        self::assertStringContainsString('inquiry-submission-row is-focused', $template);
+        self::assertStringNotContainsString('color-warning-soft', $template);
+        self::assertStringNotContainsString('#fffbeb', $template);
     }
 
     public function testProviderAndPublisherPublicContracts(): void

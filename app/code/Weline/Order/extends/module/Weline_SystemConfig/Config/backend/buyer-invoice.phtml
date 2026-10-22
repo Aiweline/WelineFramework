@@ -1,0 +1,68 @@
+<?php
+/**
+ * @meta.title {default="买家发票",description="Weline_Order 买家发票 PDF 配置标题"}
+ * @meta.description {default="开启后，买家可下载自己订单上已开具的发票 PDF，并在此填写开票公司信息。"}
+ * @config.area {backend}
+ * @config.sort {46}
+ * @config.acl {Weline_SystemConfig::config}
+ */
+?>
+
+<w:config:group code="buyer_invoice" label="买家发票下载" description="关闭时账户订单不出现下载。开启后请在下面填写开票公司信息；公司名称为空时仍不会提供下载。保存与范围继承由统一配置中心负责。" sort="10">
+    <w:config:field
+        key="order/invoice/buyer_pdf_enabled"
+        label="开启买家发票下载"
+        description="开启后，顾客只能下载自己订单上已经开具的那张发票。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="order/invoice/seller_name"
+        label="开票公司名称"
+        description="印在发票销售方。开启下载后必须填写。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:160" />
+
+    <w:config:field
+        key="order/invoice/seller_tax_id"
+        label="纳税人识别号"
+        description="印在销售方税号。可留空。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:64" />
+
+    <w:config:field
+        key="order/invoice/seller_address"
+        label="公司地址"
+        description="印在销售方地址。可留空。"
+        type="textarea"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:500" />
+
+    <w:config:field
+        key="order/invoice/seller_phone"
+        label="公司电话"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:40" />
+
+    <w:config:field
+        key="order/invoice/seller_email"
+        label="公司邮箱"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:160" />
+</w:config:group>

@@ -406,6 +406,10 @@ final class CartService
         $this->dispatchTypedCartEvent('Weline_Cart::cart_item_added', $summary, [
             'selection_hash' => $serverHash,
             'quantity_adjusted' => $adjusted,
+            'product_id' => (int) ($snapshot->productId ?? $snapshot->offer->legacyProductId ?? 0),
+            'customer_id' => max(0, (int) ($customerId ?? 0)),
+            'quantity' => $qty,
+            'price' => round(((int) ($priced['unit_price_minor'] ?? $snapshot->unitPriceMinor)) / 100, 2),
         ]);
 
         return $summary;
@@ -1578,15 +1582,19 @@ final class CartService
         try {
             /** @var EventsManager $events */
             $events = ObjectManager::getInstance(EventsManager::class);
-        } catch (\Throwable) {
-            return;
+            $payload = CartTypeEventEnvelope::append([
+                'summary' => $summary,
+                'cart' => $summary,
+            ] + $extra, $summary, $this->typeRegistry);
+            $events->dispatch($eventName, $payload);
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_error')) {
+                w_log_error('Cart event dispatch failed: ' . $e->getMessage(), [
+                    'event' => $eventName,
+                    'exception' => $e::class,
+                ], 'cart');
+            }
         }
-
-        $payload = CartTypeEventEnvelope::append([
-            'summary' => $summary,
-            'cart' => $summary,
-        ] + $extra, $summary, $this->typeRegistry);
-        $events->dispatch($eventName, $payload);
     }
 
     /**

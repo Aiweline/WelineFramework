@@ -225,6 +225,7 @@ SKU,SKU
 鍘熷洜,Reason
 提现金额,"Withdrawal amount"
 收款账号或备注,"Payment account or note"
+我要推广,"Advertise with us"
 "配置写入当前作用范围；切换范围后页面会按新范围加载。关闭后商品详情不再展示分销分享。保存后经 SystemConfig 变更事件清理店面配置缓存。","Config writes to current scope; after switching scope the page reloads. When off, product detail no longer shows distribution share. After save, clear storefront config cache via SystemConfig change event."
 在统一配置中心打开,"Open in unified config center"
 作用范围,Scope
@@ -334,6 +335,5 @@ Next,Next
 "Website is required when a store is selected.","Website is required when a store is selected."
 """删除分销记录必须使用 POST 请求。""","Deleting affiliate records requires a POST request."
 "Leave empty for global scope. Select website, then store, then channel.","Leave empty for global scope. Select website, then store, then channel."
-我要推广,"Advertise with us"
 页脚我要推广链接,"Footer promote link"
 "页脚合作信息扩展槽：分销推广入口；默认注入 footer-partner-links。","Footer partnerships extras slot: affiliate promote entry; default-injected into footer-partner-links."

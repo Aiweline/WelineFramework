@@ -711,6 +711,55 @@
     color: var(--color-primary-dark);
 }
 
+[data-account-orders="true"] .account-buyer-aftersale,
+[data-account-orders="true"] .account-buyer-aftersale__form,
+[data-account-orders="true"] .account-buyer-aftersale__reason,
+[data-account-orders="true"] .account-buyer-aftersale__note {
+    display: grid;
+    gap: var(--spacing-0_65);
+    min-width: 0;
+}
+
+[data-account-orders="true"] .account-buyer-aftersale__resolutions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--weline-space-2) var(--weline-space-4);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+}
+
+[data-account-orders="true"] .account-buyer-aftersale__resolutions legend {
+    flex: 1 1 100%;
+    margin: 0;
+    padding: 0;
+}
+
+[data-account-orders="true"] .account-buyer-aftersale__resolutions label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--weline-space-1);
+    min-width: 0;
+}
+
+[data-account-orders="true"] .account-buyer-aftersale select,
+[data-account-orders="true"] .account-buyer-aftersale textarea {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+[data-account-orders="true"] .account-buyer-aftersale textarea {
+    resize: vertical;
+}
+
+[data-account-orders="true"] .account-buyer-aftersale__status {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
 @media (max-width: 720px) {
     [data-account-orders="true"] .account-orders__summary {
         align-items: stretch;

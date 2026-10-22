@@ -8,6 +8,7 @@ use Weline\Framework\Database\Connection\Api\AtomicPhysicalTableChangeInterface;
 use Weline\Framework\Database\Connection\Api\AtomicPhysicalViewChangeInterface;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
+use Weline\Framework\Database\Connection\Api\PhysicalColumnKeysetReaderInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableKeysetReaderInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableMetadataInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableSnapshotInterface;
@@ -360,6 +361,9 @@ class BackupService
         if ($physicalConnector !== null && $this->connectionFactory->getConnector() !== $connector) {
             throw new \RuntimeException('physical column backup connector is not bound to its connection factory');
         }
+        if (!$connector instanceof PhysicalColumnKeysetReaderInterface) {
+            throw new \RuntimeException('physical column keyset capability unavailable');
+        }
         $columns = $connector->getPhysicalTableColumns($identity);
         $primaryKeys = $this->resolvePrimaryKeyColumnsFromMetadata(
             $columns,
@@ -367,36 +371,70 @@ class BackupService
             $identity->canonical(),
             $columnName,
         );
-        $query = $this->physicalQuery($connector, $identity)
-            ->fields(array_merge($primaryKeys, [$columnName]))
-            ->where($columnName, null, 'IS NOT NULL')
-            ->select();
-        // 大表禁止 fetch()：41k+ 行会触发 Unbounded SELECT 门禁并打断 setup:upgrade
-        $data = [];
-        foreach ($query->fetchIterator() as $row) {
-            if (\is_array($row)) {
-                $data[] = $row;
-            }
-        }
-        if ($data === []) {
-            return [];
-        }
-
         $scope = $backupScope ?? (
             strtoupper(trim((string)$reason)) === 'ROLLBACK'
                 ? MigrationBackup::SCOPE_ROLLBACK
                 : MigrationBackup::SCOPE_UPGRADE
         );
-        $this->savePhysicalBackup(
-            $identity,
-            $migrationId,
-            $data,
-            MigrationBackup::TYPE_COLUMN,
-            $columnName,
-            $scope,
-            $operationId,
-        );
-        return $data;
+
+        $spool = fopen('php://temp/maxmemory:0', 'w+b');
+        if ($spool === false) {
+            throw new \RuntimeException('physical column backup stream could not be opened');
+        }
+        try {
+            foreach ($connector->streamPhysicalColumnKeyset(
+                $identity,
+                $primaryKeys,
+                $columnName,
+                null,
+            ) as $row) {
+                $line = json_encode(
+                    $row,
+                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+                );
+                if (fwrite($spool, $line . "\n") === false) {
+                    throw new \RuntimeException('physical column backup stream write failed');
+                }
+                unset($row, $line);
+            }
+            rewind($spool);
+            $pending = '';
+            while (!feof($spool)) {
+                $piece = fread($spool, 65536);
+                if ($piece === false || $piece === '') {
+                    break;
+                }
+                $pending .= $piece;
+                while (($breakAt = strpos($pending, "\n")) !== false) {
+                    $line = substr($pending, 0, $breakAt);
+                    $pending = substr($pending, $breakAt + 1);
+                    if ($line === '') {
+                        continue;
+                    }
+                    $row = json_decode($line, true);
+                    if (!is_array($row)) {
+                        throw new \RuntimeException('physical column backup stream row is invalid');
+                    }
+                    $this->savePhysicalBackup(
+                        $identity,
+                        $migrationId,
+                        [$row],
+                        MigrationBackup::TYPE_COLUMN,
+                        $columnName,
+                        $scope,
+                        $operationId,
+                    );
+                    unset($row, $line);
+                }
+            }
+            if (trim($pending) !== '') {
+                throw new \RuntimeException('physical column backup stream ended inside a row');
+            }
+        } finally {
+            fclose($spool);
+        }
+
+        return [];
     }
 
     public function backupPhysicalTableStructure(
@@ -516,43 +554,45 @@ class BackupService
     ): bool {
         $connector = $this->requirePhysicalConnector();
         $this->assertNotBackupRepositoryTarget($identity, $connector);
-        $backup = $this->getBackupData(
+        $primaryKeys = null;
+        foreach ($this->iterateColumnBackupParts(
             $migrationId,
             $identity->canonical(),
-            MigrationBackup::TYPE_COLUMN,
             $columnName,
             $backupScope,
             $operationId,
             $backupId,
-        );
-        if ($backup === null) {
-            return true;
-        }
-        $rows = json_decode((string)$backup->getData(MigrationBackup::schema_fields_BACKUP_DATA), true);
-        if (!is_array($rows)) {
-            throw new \RuntimeException('invalid physical column backup payload');
-        }
-        if ($rows === []) {
-            $this->markPhysicalBackupRestoredFailClosed($backup);
-            return true;
-        }
-        $primaryKeys = $this->resolvePrimaryKeyColumnsFromMetadata(
-            $connector->getPhysicalTableColumns($identity),
-        );
-        foreach ($rows as $row) {
-            if (!is_array($row) || !array_key_exists($columnName, $row)) {
+        ) as $backup) {
+            $rows = json_decode((string)$backup->getData(MigrationBackup::schema_fields_BACKUP_DATA), true);
+            if (!is_array($rows)) {
+                throw new \RuntimeException('invalid physical column backup payload');
+            }
+            if ($rows === []) {
+                $this->markPhysicalBackupRestoredFailClosed($backup);
                 continue;
             }
-            $update = $this->physicalQuery($connector, $identity);
-            foreach ($primaryKeys as $primaryKey) {
-                if (!array_key_exists($primaryKey, $row)) {
-                    throw new \RuntimeException('physical column restore payload lacks complete primary key');
-                }
-                $update = $update->where($primaryKey, $row[$primaryKey]);
+            if ($primaryKeys === null) {
+                $primaryKeys = $this->resolvePrimaryKeyColumnsFromMetadata(
+                    $connector->getPhysicalTableColumns($identity),
+                );
             }
-            $update->update([$columnName => $row[$columnName]])->fetch();
+            foreach ($rows as $row) {
+                if (!is_array($row) || !array_key_exists($columnName, $row)) {
+                    continue;
+                }
+                $update = $this->physicalQuery($connector, $identity);
+                foreach ($primaryKeys as $primaryKey) {
+                    if (!array_key_exists($primaryKey, $row)) {
+                        throw new \RuntimeException('physical column restore payload lacks complete primary key');
+                    }
+                    $update = $update->where($primaryKey, $row[$primaryKey]);
+                }
+                $update->update([$columnName => $row[$columnName]])->fetch();
+            }
+            $this->markPhysicalBackupRestoredFailClosed($backup);
+            unset($rows);
         }
-        $this->markPhysicalBackupRestoredFailClosed($backup);
+
         return true;
     }
 
@@ -570,29 +610,28 @@ class BackupService
         $result = ['restored' => 0, 'unchanged' => 0, 'conflicts' => 0];
         $connector = $this->requirePhysicalConnector();
         $this->assertNotBackupRepositoryTarget($identity, $connector);
-        $backup = $this->getBackupData(
+        $primaryKeys = null;
+        foreach ($this->iterateColumnBackupParts(
             $migrationId,
             $identity->canonical(),
-            MigrationBackup::TYPE_COLUMN,
             $columnName,
             $backupScope,
             $operationId,
             $backupId,
-        );
-        if ($backup === null) {
-            return $result;
-        }
+        ) as $backup) {
         $rows = json_decode((string)$backup->getData(MigrationBackup::schema_fields_BACKUP_DATA), true);
         if (!is_array($rows)) {
             throw new \RuntimeException('invalid physical column backup payload');
         }
         if ($rows === []) {
             $this->markPhysicalBackupRestoredFailClosed($backup);
-            return $result;
+            continue;
         }
-        $primaryKeys = $this->resolvePrimaryKeyColumnsFromMetadata(
-            $connector->getPhysicalTableColumns($identity),
-        );
+        if ($primaryKeys === null) {
+            $primaryKeys = $this->resolvePrimaryKeyColumnsFromMetadata(
+                $connector->getPhysicalTableColumns($identity),
+            );
+        }
         $conflicts = [];
         foreach ($rows as $row) {
             if (!is_array($row) || !array_key_exists($columnName, $row)) {
@@ -634,6 +673,8 @@ class BackupService
             $result['restored']++;
         }
         $this->finishPhysicalConflictRestore($identity, $migrationId, $backup, $conflicts, $columnName);
+        unset($rows, $conflicts);
+        }
         return $result;
     }
 
@@ -1325,6 +1366,77 @@ class BackupService
         }
         $this->markPhysicalBackupRestoredFailClosed($backup);
         return true;
+    }
+
+    /**
+     * 按主键升序逐份读出列备份。先只取 id，再按 id 装载一份 LONGTEXT，避免一次 SELECT 拉回全表。
+     *
+     * @return \Generator<int, MigrationBackup>
+     */
+    private function iterateColumnBackupParts(
+        int $migrationId,
+        string $tableName,
+        string $columnName,
+        ?string $backupScope,
+        ?string $operationId,
+        ?int $backupId,
+    ): \Generator {
+        $query = (clone $this->backupModel)->reset()
+            ->fields([
+                MigrationBackup::schema_fields_ID,
+                MigrationBackup::schema_fields_COLUMN_NAME,
+            ])
+            ->where(MigrationBackup::schema_fields_MIGRATION_ID, $migrationId)
+            ->where(MigrationBackup::schema_fields_TABLE_NAME, $tableName)
+            ->where(MigrationBackup::schema_fields_BACKUP_TYPE, MigrationBackup::TYPE_COLUMN);
+        if ($backupScope !== null && $backupScope !== '') {
+            $query = $query->where(
+                MigrationBackup::schema_fields_BACKUP_SCOPE,
+                $this->normalizeBackupScope($backupScope)
+            );
+        }
+        if ($operationId !== null && $operationId !== '') {
+            $query = $query->where(MigrationBackup::schema_fields_OPERATION_ID, $operationId);
+        }
+        if ($backupId !== null && $backupId > 0) {
+            $query = $query->where(MigrationBackup::schema_fields_ID, $backupId);
+        }
+        $indexRows = $query
+            ->order(MigrationBackup::schema_fields_ID, 'ASC')
+            ->select()
+            ->fetch()
+            ->getItems();
+        foreach ($indexRows as $indexRow) {
+            if (!$indexRow instanceof MigrationBackup) {
+                continue;
+            }
+            $id = (int)$indexRow->getData(MigrationBackup::schema_fields_ID);
+            if ($id <= 0) {
+                $id = (int)$indexRow->getId();
+            }
+            if ($id <= 0) {
+                continue;
+            }
+            $storedColumn = trim((string)$indexRow->getData(MigrationBackup::schema_fields_COLUMN_NAME));
+            $nameMatches = $columnName === ''
+                || ($storedColumn !== '' && strcasecmp($storedColumn, $columnName) === 0);
+            $legacy = $storedColumn === '' && $columnName !== '';
+            if (!$nameMatches && !$legacy) {
+                continue;
+            }
+            $backup = (clone $this->backupModel)
+                ->setConnection($this->connectionFactory)
+                ->reset()
+                ->where(MigrationBackup::schema_fields_ID, $id);
+            $backup->find()->fetch();
+            if ((int)$backup->getId() !== $id) {
+                throw new \RuntimeException('physical column backup part is missing');
+            }
+            if ($legacy && !$this->backupContainsColumn($backup, $columnName)) {
+                continue;
+            }
+            yield $backup;
+        }
     }
 
     private function getBackupData(

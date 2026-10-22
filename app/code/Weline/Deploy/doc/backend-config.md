@@ -112,10 +112,12 @@ refs/heads/main
 核心仓库用于 `php bin/w update:core`。
 
 推荐直接指定目标分支，例如 `php bin/w core:update master`（仍兼容
-`php bin/w update:core -b master`）。命令在下载和复制任何文件之前检查当前
-项目 Git 工作区；已跟踪、未跟踪或子模块存在未提交变更时默认拒绝更新。
-只有明确接受覆盖风险时才使用 `-f/--force` 绕过该保护。命令不会自动清理、
-恢复或提交本地变更。位置分支会跳过命令名和选项解析，因此
+`php bin/w update:core -b master`）。命令在下载和复制任何文件之前，用缓存仓
+上次同步 commit 对比本地核心文件；本地核心与该基线不一致时默认拒绝更新。
+`-f/--force` 会先对比上次同步 commit 与线上 tip：本地核心无改动、缓存仓可读
+且干净时，`-f` 不生效，仍走增量更新。只有本地核心有私改，或缓存仓/两个提交
+对不上（错乱）时，才删除缓存并完整覆盖。线上 tip 仅仅更新，不算必须强制。
+命令不会自动清理、恢复或提交本地变更。位置分支会跳过命令名和选项解析，因此
 `core:update master -f`、`core:update -f master` 与 `update:core -b master -f`
 都会选择 `master`；没有显式分支时才读取核心默认分支配置。
 

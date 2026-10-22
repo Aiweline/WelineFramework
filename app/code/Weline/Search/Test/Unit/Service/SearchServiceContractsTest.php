@@ -115,7 +115,11 @@ private function assert_SearchProviderIndexService_testServiceClassExistsAndExpo
     $source = (string) file_get_contents($path);
     self::assertStringContainsString('function rebuild(', $source);
     self::assertStringContainsString('function rebuildAll(', $source);
+    self::assertStringContainsString('function enqueueUpsert(', $source);
+    self::assertStringContainsString('function enqueueDelete(', $source);
     self::assertTrue(class_exists(SearchProviderIndexService::class));
+    self::assertTrue(\Weline\Search\Queue\SearchProviderIndexQueue::shouldApply(5, 5));
+    self::assertFalse(\Weline\Search\Queue\SearchProviderIndexQueue::shouldApply(6, 5));
 }
 
 private function assert_SearchProviderLabelSource_testRegistryBuildsAllLabelAsChineseSource(): void
@@ -194,7 +198,7 @@ private function assert_SearchQueryResultTipCacheWarmer_testModuleProvidesTipQue
     $module = require '/Users/weline/Project/Official/框架/app/code/Weline/Search' . '/etc/module.php';
     $provides = $module['provides'] ?? [];
     self::assertSame(SearchQueryResultTipCacheWarmer::class, $provides['cache.warmer.search.query_result_tip'] ?? null);
-    self::assertSame('1.4.30', (string) ($module['version'] ?? ''));
+    self::assertSame('1.4.39', (string) ($module['version'] ?? ''));
 }
 
 private function assert_SearchQueryResultTipCacheWarmer_testWarmerTargetsSearchPoolWithBoundedPriority(): void

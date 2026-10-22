@@ -19,6 +19,9 @@ use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Order\Service\AccountCheckoutGroupLoader;
 use Weline\Order\Service\AccountOrderDetailResolver;
 use Weline\Order\Service\AccountOrderScopePresenter;
+use Weline\Order\Service\BuyerAftersaleConfig;
+use Weline\Order\Service\BuyerInvoiceDownloadService;
+use Weline\Order\Service\BuyerInvoiceSettings;
 use Weline\Order\Service\Tracking\OrderTrackingService;
 
 if (!AccountSidebarContentGate::accepts('orders')) {
@@ -141,6 +144,18 @@ if ($requestedOrderUuid !== '' && $loader !== null && $customerId > 0) {
         }
     }
 }
+$buyerInvoiceOffered = ObjectManager::getInstance(BuyerInvoiceSettings::class)->isOffered();
+$buyerInvoiceDetailReady = false;
+if ($buyerInvoiceOffered && $requestedOrderUuid !== '' && is_array($accountOrderDetail)) {
+    $buyerInvoiceDetailReady = ObjectManager::getInstance(BuyerInvoiceDownloadService::class)
+        ->hasIssuedInvoice($requestedOrderUuid);
+}
+$this->assign('buyerInvoiceOffered', $buyerInvoiceOffered);
+$this->assign('buyerInvoiceDetailReady', $buyerInvoiceDetailReady);
+$this->assign(
+    'buyerAftersaleEnabled',
+    ObjectManager::getInstance(BuyerAftersaleConfig::class)->isBuyerAftersaleEnabled(),
+);
 $this->assign('accountOrderDetail', $accountOrderDetail);
 $this->assign('accountOrderDetailScope', $accountOrderDetailScope);
 $this->assign('accountOrderTracking', $accountOrderTracking);
@@ -152,3 +167,4 @@ $this->assign('requestedOrderUuid', $requestedOrderUuid);
 </section>
 <css>Weline_Order::css/account-orders.scope-filter-3.css?v=20261009-scope-filter-3</css>
 <css>Weline_Order::css/order-tracking.css</css>
+<js>Weline_Order::js/account-buyer-aftersale.js</js>

@@ -26,6 +26,8 @@ use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\Api\ConcurrentIndexBuildInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
 use Weline\Framework\Database\Connection\Api\PhysicalTableIdentityProviderInterface;
+use Weline\Framework\Database\Connection\Adapter\PhysicalColumnKeysetTrait;
+use Weline\Framework\Database\Connection\Api\PhysicalColumnKeysetReaderInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableKeysetReaderInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableMetadataInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableSnapshotInterface;
@@ -53,6 +55,7 @@ final class Connector extends Query implements
     PhysicalTableMetadataInterface,
     AtomicPhysicalTableChangeInterface,
     PhysicalTableKeysetReaderInterface,
+    PhysicalColumnKeysetReaderInterface,
     PhysicalTableIdentityProviderInterface,
     PhysicalTableSnapshotInterface,
     PhysicalViewMetadataInterface,
@@ -61,6 +64,7 @@ final class Connector extends Query implements
     ConcurrentIndexBuildInterface
 {
     use CreatesTableFromSchemaTrait;
+    use PhysicalColumnKeysetTrait;
 
     private PgsqlTableNameStrategy $tableStrategy;
 

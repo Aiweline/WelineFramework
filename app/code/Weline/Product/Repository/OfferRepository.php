@@ -206,6 +206,44 @@ final class OfferRepository extends AbstractWebsiteShardRepository
     }
 
     /**
+     * Page every published offer, including variants, in offer-id order.
+     *
+     * Listing representatives stay on {@see listPublishedRepresentativePage()}.
+     * Catalog feeds need each published offer, so this page does not collapse
+     * to one row per product.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function listPublishedPage(int $websiteId, int $limit, int $afterOfferId = 0): array
+    {
+        $this->assertWebsite($websiteId);
+        $limit = max(1, min(500, $limit));
+        $query = $this->newModel($websiteId)
+            ->clear()
+            ->fields(self::storefrontCardOfferFields())
+            ->where(Offer::schema_fields_STATUS, Offer::STATUS_PUBLISHED);
+        if ($afterOfferId > 0) {
+            $query->where(Offer::schema_fields_ID, $afterOfferId, '>');
+        }
+        $rows = $query
+            ->order(Offer::schema_fields_ID, 'ASC')
+            ->limit($limit)
+            ->select()
+            ->fetchArray();
+        if (!is_array($rows)) {
+            return [];
+        }
+        $out = [];
+        foreach ($rows as $row) {
+            if (is_array($row)) {
+                $out[] = $row;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * @param list<int> $productIds
      * @return list<array<string, mixed>>
      */

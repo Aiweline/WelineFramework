@@ -241,6 +241,8 @@ private function assert_EarlyDatabaseAccessGateUpgradeWait_testForcePathIsDocume
     self::assertStringContainsString('acquireExclusiveForced', $src);
     self::assertStringContainsString('terminateCronLockHolders', $src);
     self::assertStringContainsString('FORCE_EXCLUSIVE_WAIT_MS', $src);
+    self::assertStringContainsString('/proc/', $src);
+    self::assertStringContainsString('cmdline', $src);
 }
 
 private function assert_PhpUnitRunFalseGreen_testLegacyCommandRegistrationResolvesToCanonicalRunner(): void

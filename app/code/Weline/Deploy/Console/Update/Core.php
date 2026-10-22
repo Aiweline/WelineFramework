@@ -16,6 +16,7 @@ namespace Weline\Deploy\Console\Update;
 use Weline\Deploy\Service\DeployConfigService;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
+use Weline\Framework\App\SystemUpdateActivity;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -31,6 +32,18 @@ class Core extends CommandAbstract
 
     /** 默认备用仓库（Gitee），GitHub 不可达时使用 */
     private const DEFAULT_REPO_GITEE = 'https://gitee.com/aiweline/WelineFramework.git';
+
+    /** 本地 git（rev-parse / reset / diff）上限，避免单条命令无期限挂起 */
+    private const GIT_LOCAL_TIMEOUT_SECONDS = 180;
+
+    /** 探测远端 tip：不通就换仓库 */
+    private const GIT_PROBE_TIMEOUT_SECONDS = 8;
+
+    /** 已有缓存仓的增量 fetch；超时视为这个仓不可用 */
+    private const GIT_FETCH_TIMEOUT_SECONDS = 20;
+
+    /** 浅克隆上限。到点杀掉，删目录，换下一个仓库 */
+    private const GIT_CLONE_TIMEOUT_SECONDS = 120;
 
     /**
      * 核心更新允许同步的路径（目录或文件）。
@@ -74,7 +87,9 @@ class Core extends CommandAbstract
     private string $gitCommand = 'git';
 
     private bool $updateAll = false;  // 是否更新整个项目
-    private bool $forceUpdate = false;  // 是否强制更新（删除本地重新拉取）
+    private bool $forceUpdate = false;  // 是否仍走强制覆盖（删除缓存后整包重克）
+    /** 传了 -f，但预检确认本地核心与上次同步一致，已降为增量 */
+    private bool $forceRelaxedBecauseClean = false;
     private int $updatedFiles = 0;  // 更新的文件数
     private int $skippedFiles = 0;  // 跳过的文件数（受保护的配置文件）
     private int $newFiles = 0;  // 新增的文件数
@@ -123,7 +138,7 @@ class Core extends CommandAbstract
                 '-b, --branch=<分支名>' => __('指定分支（未配置默认分支时必填，如：main, master, dev）'),
                 '-t, --tag=<标签名>' => '指定标签版本（可选，如：v1.0.0）',
                 '--repo=<仓库地址>' => __('指定 Git 仓库地址（覆盖配置文件，默认：公用官网或配置的仓库）'),
-                '-f, --force' => '强制更新：重新克隆仓库，完全覆盖核心文件',
+                '-f, --force' => '请求强制覆盖：先对比上次同步 commit 与线上 tip；本地核心无改动则仍按增量更新；本地有改动或缓存/提交错乱才整包重克覆盖',
                 '-h, --help' => '显示帮助信息',
             ],
             [
@@ -133,7 +148,7 @@ class Core extends CommandAbstract
                 '增量更新' => __('默认先对比旧基线做冲突检测，再 git fetch 线上最新；仅把相对旧基线有变更的核心文件覆盖到项目，另补本地缺失文件；已存在但内容不同的本地核心不因与新 tip hash 不一致而被误回刷（私改应由冲突检测拦截）'),
                 '同步范围' => __('仅同步核心仓库路径：app/code/Weline 与必要启动/样例/bin/dev/pub/setup；业务模块不在更新范围内'),
                 '本地冲突检测' => __('只对比「本地核心文件」与 tmp/core-update 缓存仓上次同步的核心 commit；绝不读取业务项目 git status。本地核心相对该基线有私改才拒绝；-f 强制覆盖。业务模块改动完全忽略'),
-                '强制更新' => __('仅显式使用 -f/--force 时跳过本地核心冲突保护，删除缓存并重新克隆后覆盖核心文件；成功后缓存仓 HEAD 即成为下次对比基线'),
+                '强制更新' => __('传 -f 会先对比上次同步 commit 与线上 tip，并检查本地核心。无严重冲突时 -f 不生效，仍走增量更新；本地私改或缓存仓/提交对不上（错乱）才删除缓存并完整覆盖。成功后缓存仓 HEAD 即成为下次对比基线'),
                 '临时目录方式' => '使用临时目录下载，不影响项目 Git 仓库',
                 '版本验证' => '如果指定了标签但不存在，命令会报错并退出',
                 '排除目录' => __('不会拷贝 app/code/Aiweline、GuoLaiRen、WeShop；这些由目标项目自行管理'),
@@ -153,13 +168,15 @@ class Core extends CommandAbstract
 
     public function execute(array $args = [], array $data = [])
     {
+        SystemUpdateActivity::acquire('core:update');
+        try {
         // 检查是否强制更新
         $this->forceUpdate = isset($args['f']) || isset($args['force']);
         
         $this->printer->note('');
         $this->printer->setup('═══════════════════════════════════════════════════════════════');
         if ($this->forceUpdate) {
-            $this->printer->setup(__('框架核心代码更新（强制模式 - 完整重新下载并覆盖）'));
+            $this->printer->setup(__('框架核心代码更新（已指定 -f，先对比上次同步与线上提交）'));
         } else {
             $this->printer->setup(__('框架核心代码更新（增量模式 - 基于 Git diff 更新变化文件）'));
         }
@@ -186,10 +203,18 @@ class Core extends CommandAbstract
         if ($tag) {
             $this->printer->note(__('标签：%{1}', [$tag]));
         }
+        if ($this->forceUpdate) {
+            $this->relaxForceWhenLocalCoreHasNoConflict(
+                Env::backupDir() . 'tmp' . DS . 'core-update',
+                $branch
+            );
+        }
         $this->printer->note(__('更新模式：%{1}', [
             $this->forceUpdate
-                ? '强制完整更新（跳过冲突检测，重克后覆盖）'
-                : '两阶段：旧基线仅做冲突检测 → 拉取线上最新 → 按 diff 同步到项目',
+                ? '强制完整更新（本地核心有差异或缓存/提交无法对比，重克后覆盖）'
+                : ($this->forceRelaxedBecauseClean
+                    ? '增量更新（已指定 -f，但本地核心与上次同步一致，不整包覆盖）'
+                    : '两阶段：旧基线仅做冲突检测 → 拉取线上最新 → 按 diff 同步到项目'),
         ]));
         $this->printer->note('');
 
@@ -250,6 +275,9 @@ class Core extends CommandAbstract
             'args' => $args,
         ];
         $eventsManager->dispatch('Weline_Deploy::core_update_after', $afterPayload);
+        } finally {
+            SystemUpdateActivity::release('core:update');
+        }
     }
 
     /**
@@ -387,12 +415,16 @@ class Core extends CommandAbstract
      * 对比对象：本地磁盘 CORE_UPDATE_PATHS ↔ 该旧基线树同路径内容。
      * 绝不读取业务项目 git；GuoLaiRen 等业务改动完全忽略。
      * 本检查必须在 downloadFramework（拉线上最新）之前完成；通过后旧树才会被前进到新 tip。
-     * 显式 -f/--force 可跳过；首次尚无缓存时跳过。
+     * 显式 -f 且预检确认必须覆盖时可跳过；预检已确认干净时不再扫第二遍。首次尚无缓存时跳过。
      */
     private function assertLocalCoreUnmodifiedSinceLastSyncUnlessForced(string $tmpDir): void
     {
+        if ($this->forceRelaxedBecauseClean) {
+            $this->printer->success(__('✓ -f 预检已确认本地核心与上次同步一致，继续增量更新'));
+            return;
+        }
         if ($this->forceUpdate) {
-            $this->printer->warning(__('⚠ 已显式启用 -f/--force，跳过本地核心冲突保护（将强制覆盖核心文件）'));
+            $this->printer->warning(__('⚠ 已显式启用 -f/--force，本地核心有差异或无法对比，将强制覆盖核心文件'));
             return;
         }
 
@@ -442,6 +474,109 @@ class Core extends CommandAbstract
         $this->printer->note(__('以上仅为核心路径相对缓存仓的内容差异，与业务模块 git 无关'));
         $this->printer->note(__('请先自行处理这些核心改动；确需用仓库版本强制覆盖时执行：php bin/w core:update <分支名> -f'));
         exit(1);
+    }
+
+    /**
+     * 传了 -f 时先对比「上次同步 commit」和「线上 tip」。
+     * 本地核心与上次同步一致、缓存仓可读且干净 → 降为增量，-f 不生效。
+     * 本地有私改，或两个提交/缓存仓对不上（错乱）→ 保持强制整包覆盖。
+     * 线上 tip 仅仅比上次同步新，不算必须强制。
+     */
+    private function relaxForceWhenLocalCoreHasNoConflict(string $tmpDir, string $branch): void
+    {
+        if (!$this->forceUpdate) {
+            return;
+        }
+
+        $gitDir = $tmpDir . DS . '.git';
+        if (!is_dir($gitDir)) {
+            $this->printer->warning(__('⚠ 已请求 -f：没有可对比的上次同步缓存，按强制完整更新'));
+            return;
+        }
+
+        $headOutput = [];
+        $headCode = $this->runGitCommand($tmpDir, ['rev-parse', 'HEAD'], $headOutput);
+        $lastSyncedCommit = ($headCode === 0 && $headOutput !== [])
+            ? strtolower(trim((string)$headOutput[0]))
+            : '';
+
+        $remoteTip = '';
+        foreach ($this->repoCandidates as $candidateRepo) {
+            $remoteTip = $this->lsRemoteBranchTip($candidateRepo, $branch);
+            if ($remoteTip !== '') {
+                break;
+            }
+        }
+
+        $statusOutput = [];
+        $statusCode = $this->runGitCommand($tmpDir, ['status', '--porcelain'], $statusOutput);
+        $cacheWorktreeClean = $statusCode === 0;
+        if ($cacheWorktreeClean) {
+            foreach ($statusOutput as $statusLine) {
+                if (trim((string)$statusLine) !== '') {
+                    $cacheWorktreeClean = false;
+                    break;
+                }
+            }
+        }
+
+        if ($this->isFullGitCommit($lastSyncedCommit) && $this->isFullGitCommit($remoteTip)) {
+            $this->printer->note(__('对比提交：上次同步 %{1} ↔ 线上 tip %{2}', [
+                substr($lastSyncedCommit, 0, 12),
+                substr($remoteTip, 0, 12),
+            ]));
+        }
+
+        $drifted = [];
+        $commitsComparable = $this->isFullGitCommit($lastSyncedCommit) && $this->isFullGitCommit($remoteTip) && $cacheWorktreeClean;
+        if ($commitsComparable) {
+            $drifted = $this->collectLocalCoreDriftAgainstLastSynced($tmpDir);
+        }
+
+        if ($this->shouldHonorRequestedForce($lastSyncedCommit, $remoteTip, $cacheWorktreeClean, $drifted)) {
+            if (!$this->isFullGitCommit($lastSyncedCommit) || !$this->isFullGitCommit($remoteTip) || !$cacheWorktreeClean) {
+                $this->printer->warning(__('⚠ 已请求 -f：缓存仓或两个提交对不上（错乱），按强制完整更新'));
+                return;
+            }
+            $this->printer->warning(__('⚠ 已请求 -f：本地核心相对上次同步有 %{1} 处更改，按强制完整覆盖', [count($drifted)]));
+            foreach (array_slice($drifted, 0, 15) as $path) {
+                $this->printer->note('  ' . $path);
+            }
+            if (count($drifted) > 15) {
+                $this->printer->note(__('  ……另有 %{1} 项未显示', [count($drifted) - 15]));
+            }
+            return;
+        }
+
+        $this->forceUpdate = false;
+        $this->forceRelaxedBecauseClean = true;
+        $this->printer->success(__(
+            '✓ 已指定 -f，但本地核心与上次同步 %{1} 一致，无严重冲突，改为增量更新（线上 tip %{2}）',
+            [substr($lastSyncedCommit, 0, 12), substr($remoteTip, 0, 12)]
+        ));
+    }
+
+    /**
+     * -f 是否仍要整包覆盖。线上 tip 与上次同步不同、但本地无漂移时返回 false。
+     *
+     * @param list<string> $drifted
+     */
+    private function shouldHonorRequestedForce(
+        string $lastSyncedCommit,
+        string $remoteTip,
+        bool $cacheWorktreeClean,
+        array $drifted
+    ): bool {
+        if (!$this->isFullGitCommit($lastSyncedCommit) || !$this->isFullGitCommit($remoteTip) || !$cacheWorktreeClean) {
+            return true;
+        }
+
+        return $drifted !== [];
+    }
+
+    private function isFullGitCommit(string $commit): bool
+    {
+        return preg_match('/^[0-9a-f]{40}$/', strtolower(trim($commit))) === 1;
     }
 
     /**
@@ -739,7 +874,7 @@ class Core extends CommandAbstract
         }
         $cwd = getcwd() ?: BP;
         $output = [];
-        $code = $this->runGitCommand($cwd, ['ls-remote', $repo, 'refs/heads/' . $branch], $output);
+        $code = $this->runGitCommand($cwd, ['ls-remote', $repo, 'refs/heads/' . $branch], $output, self::GIT_PROBE_TIMEOUT_SECONDS);
         if ($code !== 0 || $output === []) {
             return '';
         }
@@ -901,45 +1036,30 @@ class Core extends CommandAbstract
             if ($headCode === 0 && !empty($headOutput)) {
                 $currentHead = trim($headOutput[0]);
             }
-            if ($currentHead !== '') {
-                $this->printer->note(__(
-                    '旧基线 commit %{1}（只用于冲突检测与 diff；更新源是线上最新）',
-                    [substr($currentHead, 0, 8)]
-                ));
+            if ($currentHead === '') {
+                $this->printer->warning(__('缓存仓没有可用提交，删掉后重新浅克隆...'));
+                $this->replaceCacheWithFreshClone($tmpDir, $branch, $tag);
+                return;
             }
+            $this->printer->note(__(
+                '旧基线 commit %{1}（只用于冲突检测与 diff；更新源是线上最新）',
+                [substr($currentHead, 0, 8)]
+            ));
             
-            // 获取远程更新（失败则按候选列表轮换 origin 再试，仍失败才整仓重克）
-            $fetchCode = 1;
-            $output = [];
-            foreach ($this->repoCandidates as $index => $candidateRepo) {
-                if ($index > 0) {
-                    $this->printer->warning(__('fetch 失败，切换备用仓库：%{1}', [$this->maskRepoUrl($candidateRepo)]));
-                    $this->runGitCommand($tmpDir, ['remote', 'set-url', 'origin', $candidateRepo], $output);
-                }
-                $fetchCode = $this->runGitCommand($tmpDir, ['fetch', 'origin'], $output);
-                if ($fetchCode === 0) {
-                    break;
-                }
-            }
-            
+            // 只做限时浅拉取。超时或失败立刻删掉旧缓存仓，换仓库浅克隆，不再在这个目录里初始化。
+            $fetchArgs = $tag
+                ? ['fetch', '--depth', '1', 'origin', 'tag', $tag]
+                : ['fetch', '--depth', '1', 'origin', $branch];
+            $fetchCode = $this->runGitCommand($tmpDir, $fetchArgs, $output, self::GIT_FETCH_TIMEOUT_SECONDS);
+
             if ($fetchCode !== 0) {
-                $this->printer->warning(__('fetch 失败，尝试切换仓库并重新克隆...'));
-                $this->removeDirectory($tmpDir);
-                mkdir($tmpDir, 0755, true);
-                $this->cloneRepository($tmpDir, $branch, $tag);
-                $this->isNewClone = true;
-                $this->changedFiles = [];
+                $this->printer->warning(__('拉取未在时限内完成，删掉旧缓存仓并换仓库浅克隆...'));
+                $this->replaceCacheWithFreshClone($tmpDir, $branch, $tag);
                 return;
             }
             
             // 确定目标引用
             $targetRef = $tag ? $tag : "origin/{$branch}";
-            
-            if ($tag) {
-                // 如果指定了标签，获取所有标签
-                $this->printer->note(__('获取标签...', [$tag]));
-                $tagFetchCode = $this->runGitCommand($tmpDir, ['fetch', '--tags'], $output);
-            }
             
             // 获取 Git diff 变化的文件列表（在 reset 之前）
             if (!empty($currentHead)) {
@@ -953,8 +1073,9 @@ class Core extends CommandAbstract
                 $checkoutCode = $this->runGitCommand($tmpDir, ['checkout', $tag], $output);
                 
                 if ($checkoutCode !== 0) {
-                    $this->printer->error(__('标签不存在: %{1}', [$tag]));
-                    exit(1);
+                    $this->printer->warning(__('标签 %{1} 未取到，删掉旧缓存仓并换仓库浅克隆...', [$tag]));
+                    $this->replaceCacheWithFreshClone($tmpDir, $branch, $tag);
+                    return;
                 }
                 $this->printer->success(__('✓ 已切换到标签 %{1}', [$tag]));
             } else {
@@ -969,8 +1090,9 @@ class Core extends CommandAbstract
                     $createBranchCode = $this->runGitCommand($tmpDir, ['checkout', '-b', $branch, 'origin/' . $branch], $output);
                     
                     if ($createBranchCode !== 0) {
-                        $this->printer->error(__('分支不存在: %{1}', [$branch]));
-                        exit(1);
+                        $this->printer->warning(__('分支 %{1} 未取到，删掉旧缓存仓并换仓库浅克隆...', [$branch]));
+                        $this->replaceCacheWithFreshClone($tmpDir, $branch, $tag);
+                        return;
                     }
                 }
                 
@@ -978,12 +1100,8 @@ class Core extends CommandAbstract
                 $resetCode = $this->runGitCommand($tmpDir, ['reset', '--hard', 'origin/' . $branch], $output);
                 
                 if ($resetCode !== 0) {
-                    $this->printer->warning(__('重置失败，尝试切换仓库并重新克隆...'));
-                    $this->removeDirectory($tmpDir);
-                    mkdir($tmpDir, 0755, true);
-                    $this->cloneRepository($tmpDir, $branch, $tag);
-                    $this->isNewClone = true;
-                    $this->changedFiles = [];
+                    $this->printer->warning(__('重置失败，删掉旧缓存仓并换仓库浅克隆...'));
+                    $this->replaceCacheWithFreshClone($tmpDir, $branch, $tag);
                     return;
                 }
                 
@@ -1065,7 +1183,7 @@ class Core extends CommandAbstract
      */
     private function cloneRepository(string $tmpDir, string $branch, ?string $tag): void
     {
-        $this->printer->note(__('完整克隆仓库...'));
+        $this->printer->note(__('浅克隆仓库...'));
         $lastOutput = [];
 
         foreach ($this->repoCandidates as $index => $repo) {
@@ -1081,7 +1199,7 @@ class Core extends CommandAbstract
             }
         }
 
-        $this->printer->error(__('所有仓库均无法克隆或初始化'));
+        $this->printer->error(__('所有仓库均无法浅克隆'));
         $this->printer->printList($lastOutput);
         exit(1);
     }
@@ -1100,54 +1218,24 @@ class Core extends CommandAbstract
     ): bool {
         $this->printer->note(__('克隆仓库：%{1}', [$this->maskRepoUrl($repo)]));
 
-        $returnCode = $this->runGitCommand($tmpDir, ['clone', '-b', $branch, '--depth', '1', $repo, '.'], $output);
+        $returnCode = $this->runGitCommand(
+            $tmpDir,
+            ['clone', '--depth', '1', '--single-branch', '-b', $branch, $repo, '.'],
+            $output,
+            self::GIT_CLONE_TIMEOUT_SECONDS,
+        );
         $lastOutput = $output;
 
         if ($returnCode !== 0) {
-            $this->printer->warning(__('克隆失败，尝试初始化仓库...'));
-            $this->removeDirectory($tmpDir);
-            mkdir($tmpDir, 0755, true);
-
-            $initCode = $this->runGitCommand($tmpDir, ['init'], $output);
-            $lastOutput = array_merge($lastOutput, $output);
-            $remoteCode = $this->runGitCommand($tmpDir, ['remote', 'add', 'origin', $repo], $output);
-            $lastOutput = array_merge($lastOutput, $output);
-            $fetchCode = $this->runGitCommand($tmpDir, ['fetch', 'origin'], $output);
-            $lastOutput = array_merge($lastOutput, $output);
-
-            if ($fetchCode !== 0) {
-                return false;
-            }
-
-            if ($tag) {
-                $this->printer->note(__('拉取标签 %{1}...', [$tag]));
-                $checkoutCode = $this->runGitCommand($tmpDir, ['checkout', $tag], $output);
-                $lastOutput = array_merge($lastOutput, $output);
-
-                if ($checkoutCode !== 0) {
-                    $this->printer->error(__('标签不存在: %{1}', [$tag]));
-                    exit(1);
-                }
-            } else {
-                $this->printer->note(__('拉取分支 %{1}...', [$branch]));
-                $checkoutCode = $this->runGitCommand($tmpDir, ['checkout', '-b', $branch, 'origin/' . $branch], $output);
-                $lastOutput = array_merge($lastOutput, $output);
-
-                if ($checkoutCode !== 0) {
-                    $this->printer->error(__('分支不存在: %{1}', [$branch]));
-                    exit(1);
-                }
-            }
-
-            $this->printer->success(__('✓ 仓库初始化成功'));
-            return true;
+            $this->printer->warning(__('浅克隆未完成，换下一个仓库'));
+            return false;
         }
 
         $this->printer->success(__('✓ 仓库克隆成功'));
 
         if ($tag) {
             $this->printer->note(__('切换到标签 %{1}...', [$tag]));
-            $returnCode = $this->runGitCommand($tmpDir, ['fetch', '--tags'], $output);
+            $returnCode = $this->runGitCommand($tmpDir, ['fetch', '--depth', '1', 'origin', 'tag', $tag], $output, self::GIT_FETCH_TIMEOUT_SECONDS);
             if ($returnCode === 0) {
                 $returnCode = $this->runGitCommand($tmpDir, ['checkout', $tag], $checkoutOutput);
                 $output = array_merge($output, $checkoutOutput);
@@ -1155,8 +1243,8 @@ class Core extends CommandAbstract
             $lastOutput = $output;
 
             if ($returnCode !== 0) {
-                $this->printer->error(__('标签不存在: %{1}', [$tag]));
-                exit(1);
+                $this->printer->warning(__('标签 %{1} 未取到，换下一个仓库', [$tag]));
+                return false;
             }
 
             $this->printer->success(__('✓ 已切换到标签 %{1}', [$tag]));
@@ -1165,6 +1253,18 @@ class Core extends CommandAbstract
         return true;
     }
     
+    /**
+     * 旧缓存仓不可用时：删掉整个目录，按候选仓库重新浅克隆。
+     */
+    private function replaceCacheWithFreshClone(string $tmpDir, string $branch, ?string $tag): void
+    {
+        $this->removeDirectory($tmpDir);
+        mkdir($tmpDir, 0755, true);
+        $this->cloneRepository($tmpDir, $branch, $tag);
+        $this->isNewClone = true;
+        $this->changedFiles = [];
+    }
+
     /**
      * 显示最新提交信息
      */
@@ -1599,24 +1699,56 @@ class Core extends CommandAbstract
 
     private function removeDirectory(string $dir): void
     {
+        if (is_link($dir)) {
+            @unlink($dir);
+            return;
+        }
         if (!is_dir($dir)) {
             return;
         }
 
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
-        );
-        foreach ($iterator as $item) {
-            $path = $item->getPathname();
-            if ($item->isDir() && !$item->isLink()) {
-                @rmdir($path);
-                continue;
-            }
-            @chmod($path, 0666);
-            @unlink($path);
-        }
+        $this->removeDirectoryEntries($dir);
         @rmdir($dir);
+    }
+
+    /**
+     * 逐项删除。子目录在遍历期间消失（强制清理与缓存仓互相踩）时视为已删完，
+     * 不再交给会重新打开该路径的递归目录迭代器。
+     */
+    private function removeDirectoryEntries(string $dir): void
+    {
+        $handle = @opendir($dir);
+        if ($handle === false) {
+            if (!is_dir($dir)) {
+                return;
+            }
+            $message = error_get_last()['message'] ?? 'opendir failed';
+            throw new \RuntimeException('remove_directory_failed:' . $dir . ':' . $message);
+        }
+
+        try {
+            while (($name = readdir($handle)) !== false) {
+                if ($name === '.' || $name === '..') {
+                    continue;
+                }
+                $path = $dir . \DIRECTORY_SEPARATOR . $name;
+                if (is_link($path) || !file_exists($path)) {
+                    if (is_link($path) || !is_dir($path)) {
+                        @unlink($path);
+                    }
+                    continue;
+                }
+                if (is_dir($path)) {
+                    $this->removeDirectoryEntries($path);
+                    @rmdir($path);
+                    continue;
+                }
+                @chmod($path, 0666);
+                @unlink($path);
+            }
+        } finally {
+            closedir($handle);
+        }
     }
 
     private function commandExists(string $command): bool
@@ -1676,7 +1808,7 @@ class Core extends CommandAbstract
     /**
      * @param string[] $arguments
      */
-    private function runGitCommand(string $workingDirectory, array $arguments, &$output): int
+    private function runGitCommand(string $workingDirectory, array $arguments, &$output, int $timeoutSeconds = self::GIT_LOCAL_TIMEOUT_SECONDS): int
     {
         $output = [];
         $command = array_merge([$this->gitExecutable], $arguments);
@@ -1689,28 +1821,89 @@ class Core extends CommandAbstract
             $descriptorSpec,
             $pipes,
             $workingDirectory,
-            null,
+            $this->gitProcessEnvironment(),
             $this->isWindows ? ['bypass_shell' => true] : []
         );
 
-        if (is_resource($process)) {
-            $stdout = stream_get_contents($pipes[1]);
-            fclose($pipes[1]);
-            $stderr = stream_get_contents($pipes[2]);
-            fclose($pipes[2]);
-            $code = proc_close($process);
-            $combined = trim((string)$stdout . "\n" . (string)$stderr);
-            $output = $combined !== '' ? preg_split('/\R/', $combined) ?: [] : [];
+        if (!is_resource($process)) {
+            $escapedArgs = array_map('escapeshellarg', $arguments);
+            $prefix = (!$this->isWindows && $timeoutSeconds > 0) ? 'timeout ' . $timeoutSeconds . ' ' : '';
+            exec(
+                sprintf('cd %s && %s%s %s 2>&1', escapeshellarg($workingDirectory), $prefix, $this->gitCommand, implode(' ', $escapedArgs)),
+                $output,
+                $code
+            );
             return $code;
         }
 
-        $escapedArgs = array_map('escapeshellarg', $arguments);
-        exec(
-            sprintf('cd %s && %s %s 2>&1', escapeshellarg($workingDirectory), $this->gitCommand, implode(' ', $escapedArgs)),
-            $output,
-            $code
-        );
-        return $code;
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+        $stdout = '';
+        $stderr = '';
+        $startedAt = time();
+        $exitCode = null;
+        while (true) {
+            $stdout .= (string)stream_get_contents($pipes[1]);
+            $stderr .= (string)stream_get_contents($pipes[2]);
+            $status = proc_get_status($process);
+            if (!$status['running']) {
+                $exitCode = (int)$status['exitcode'];
+                break;
+            }
+            if ($timeoutSeconds > 0 && (time() - $startedAt) >= $timeoutSeconds) {
+                $this->stopGitProcess($process);
+                $stdout .= (string)stream_get_contents($pipes[1]);
+                $stderr .= (string)stream_get_contents($pipes[2]);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                proc_close($process);
+                $output = $this->splitProcessOutput($stdout, $stderr);
+                $output[] = 'git timed out after ' . $timeoutSeconds . ' seconds';
+                return 124;
+            }
+            usleep(100000);
+        }
+        $stdout .= (string)stream_get_contents($pipes[1]);
+        $stderr .= (string)stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($process);
+        $output = $this->splitProcessOutput($stdout, $stderr);
+
+        return $exitCode ?? 1;
+    }
+
+    /** @return array<string, string> */
+    private function gitProcessEnvironment(): array
+    {
+        $env = getenv();
+        if (!is_array($env)) {
+            $env = [];
+        }
+        $stringEnv = [];
+        foreach ($env as $key => $value) {
+            if (is_string($key) && (is_string($value) || is_numeric($value))) {
+                $stringEnv[$key] = (string)$value;
+            }
+        }
+        $stringEnv['GIT_TERMINAL_PROMPT'] = '0';
+
+        return $stringEnv;
+    }
+
+    /** @param resource $process */
+    private function stopGitProcess($process): void
+    {
+        $status = proc_get_status($process);
+        $pid = (int)($status['pid'] ?? 0);
+        if ($pid > 1 && !$this->isWindows) {
+            exec('pkill -TERM -P ' . $pid . ' >/dev/null 2>&1');
+        }
+        proc_terminate($process);
+        if ($pid > 1 && !$this->isWindows) {
+            exec('pkill -KILL -P ' . $pid . ' >/dev/null 2>&1');
+        }
+        proc_terminate($process, 9);
     }
 
     /**

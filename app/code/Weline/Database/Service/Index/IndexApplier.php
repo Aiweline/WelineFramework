@@ -6,6 +6,7 @@ namespace Weline\Database\Service\Index;
 
 use Weline\Database\Model\SchemaIndexJob;
 use Weline\Database\Model\SchemaIndexState;
+use Weline\Framework\App\SystemUpdateActivity;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\Api\ConcurrentIndexBuildInterface;
 use Weline\Framework\Database\ConnectionFactory;
@@ -41,6 +42,12 @@ final class IndexApplier
         $status = (string)$job->getData(SchemaIndexJob::schema_fields_STATUS);
         if ($status === SchemaIndexJob::STATUS_DONE) {
             return $this->result(true, $status, $jobId, 'already_done', $started);
+        }
+        if (SystemUpdateActivity::inProgress()) {
+            ObjectManager::getInstance(SchemaIndexJobService::class)
+                ->markPendingAgain($jobId, 'deferred_system_update');
+
+            return $this->result(false, SchemaIndexJob::STATUS_PENDING, $jobId, 'deferred_system_update', $started);
         }
 
         $connector = $this->connectionFactory->getConnector();

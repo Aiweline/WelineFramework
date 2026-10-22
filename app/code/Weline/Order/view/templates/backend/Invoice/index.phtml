@@ -8,6 +8,9 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
     <div class="w-backend-page__heading"><h4 class="w-backend-page__title"><w:icon name="plus" size="sm"></w:icon><?= __('订单发票管理') ?></h4></div>
     <div><template>Weline_Component::message.phtml</template></div>
     <div class="w-alert" data-tone="info"><?= __('只处理 Payment 已生成的确定性 invoice effect；页面不能绕过支付事实手工创建发票。每张已支付订单最多生成一张最小发票。') ?></div>
+    <p style="--w-mb:var(--weline-space-4);">
+      <a class="w-button" data-tone="secondary" data-size="sm" data-testid="buyer-invoice-settings-link" href="@backend-url{'weline_systemconfig/backend/config'|['module' => 'Weline_Order', 'area' => 'backend', 'guide_key' => 'order/invoice/buyer_pdf_enabled']}"><?= __('买家发票下载设置') ?></a>
+    </p>
     <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
       <h5><?= __('开票 effect') ?></h5>
       <div class="w-table-wrap"><table class="w-table" data-w-vertical="middle"><thead><tr><th><?= __('订单') ?></th><th><?= __('Outbox') ?></th><th><?= __('Effect Key') ?></th><th><?= __('状态') ?></th><th><?= __('操作') ?></th></tr></thead><tbody>

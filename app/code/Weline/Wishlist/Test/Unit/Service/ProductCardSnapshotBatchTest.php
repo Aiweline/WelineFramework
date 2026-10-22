@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Wishlist\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Event\EventsManager;
 use Weline\Wishlist\Service\ProductCardSnapshotResolver;
 use Weline\Wishlist\Service\WishlistService;
 use Weline\Wishlist\Service\WishlistSessionStore;
@@ -34,7 +35,17 @@ final class ProductCardSnapshotBatchTest extends TestCase
             public function listIds(): array { return $this->ids; }
             public function saveIds(array $ids): void { $this->ids = $ids; }
         };
-        $service = new WishlistService($store, $resolver);
+        $events = new class extends EventsManager {
+            public function __construct()
+            {
+            }
+
+            public function dispatch(string $eventName, mixed &$data = []): static
+            {
+                return $this;
+            }
+        };
+        $service = new WishlistService($store, $resolver, $events);
         $page = $service->listPage();
         self::assertSame([[8, 9, 7]], $resolver->calls);
         self::assertSame([8, 7], array_column($page['items'], 'product_id'));

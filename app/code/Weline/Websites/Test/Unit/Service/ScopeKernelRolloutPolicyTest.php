@@ -67,6 +67,43 @@ final class ScopeKernelRolloutPolicyTest extends TestCase
         }
     }
 
+    public function testAllowlistAndOnAllowPlainHttpOnLocalAcceptanceHost(): void
+    {
+        foreach (['allowlist', 'on'] as $mode) {
+            $policy = $this->policy(['mode' => $mode, 'allowlist' => [], 'shadow_sample_bp' => 0]);
+            self::assertTrue(
+                $policy->requiresBinding('http', 'p05113ef3.test.weline.com:9555'),
+                $mode,
+            );
+        }
+
+        $on = $this->policy(['mode' => 'on', 'allowlist' => [], 'shadow_sample_bp' => 0]);
+        $onDecision = $on->decide(0, 0, 0, 'normal', 'http', '127.0.0.1');
+        self::assertTrue($onDecision->isAuthoritative());
+        self::assertSame('on', $onDecision->mode);
+
+        $allow = $this->policy([
+            'mode' => 'allowlist',
+            'allowlist' => [['website_id' => 0, 'store_id' => 0, 'channel_id' => 0]],
+            'shadow_sample_bp' => 0,
+        ]);
+        $listed = $allow->decide(0, 0, 0, 'test', 'http', 'localhost');
+        self::assertTrue($listed->isAuthoritative());
+    }
+
+    public function testPublicHostAndEmptyHostStayHttpsOnly(): void
+    {
+        $policy = $this->policy(['mode' => 'on', 'allowlist' => [], 'shadow_sample_bp' => 0]);
+        foreach (['', 'shop.example.com', 'test.weline.com', 'evil.test.weline.com.example.com'] as $host) {
+            try {
+                $policy->requiresBinding('http', $host);
+                self::fail('HTTP was accepted for host ' . $host);
+            } catch (FrontendWorkerScopeException $exception) {
+                self::assertSame('scope_token_https_required', $exception->reason, $host);
+            }
+        }
+    }
+
     public function testOnIsAuthoritativeForEveryValidTuple(): void
     {
         $policy = $this->policy(['mode' => 'on', 'allowlist' => [], 'shadow_sample_bp' => 0]);

@@ -225,6 +225,7 @@ SKU,SKU
 鍘熷洜,鍘熷洜
 提现金额,提现金额
 收款账号或备注,收款账号或备注
+我要推广,我要推广
 "配置写入当前作用范围；切换范围后页面会按新范围加载。关闭后商品详情不再展示分销分享。保存后经 SystemConfig 变更事件清理店面配置缓存。","配置写入当前作用范围；切换范围后页面会按新范围加载。关闭后商品详情不再展示分销分享。保存后经 SystemConfig 变更事件清理店面配置缓存。"
 在统一配置中心打开,在统一配置中心打开
 作用范围,作用范围
@@ -334,6 +335,5 @@ Next,下一页
 "Website is required when a store is selected.",选择店铺前必须先选择网站。
 """删除分销记录必须使用 POST 请求。""","删除分销记录必须使用 POST 请求。"
 "Leave empty for global scope. Select website, then store, then channel.",留空表示全局范围；请依次选择网站、店铺、渠道。
-我要推广,我要推广
 页脚我要推广链接,页脚我要推广链接
 "页脚合作信息扩展槽：分销推广入口；默认注入 footer-partner-links。","页脚合作信息扩展槽：分销推广入口；默认注入 footer-partner-links。"

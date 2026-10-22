@@ -3,11 +3,7 @@
 热搜词已加载,"Trending keywords loaded."
 搜索,Search
 热搜,Trending
-"开始预热搜索 Provider 索引（共 %{count} 个）…","Start warming search Provider indexes (%{count} total)…"
-搜索索引已存在，跳过：%{code},"Search index exists, skipped: %{code}"
-正在重建搜索索引：%{code}…,"Rebuilding search index: %{code}…"
-搜索索引重建完成：%{code},"Search index rebuild done: %{code}"
-"搜索 Provider 索引预热完成：重建 %{rebuilt}，跳过 %{skipped}","Search Provider index warm-up done: rebuilt %{rebuilt}, skipped %{skipped}"
+系统正在更新，搜索索引重建改到闲时再做。,系统正在更新，搜索索引重建改到闲时再做。
 "Search 只接受 ResourceChange v1","Search only accepts ResourceChange v1"
 "Product Search 投影负载无效","Invalid Product Search projection payload"
 "Product Search 投影 Scope kind 无效","Product Search projection Scope kind is invalid"
@@ -99,6 +95,9 @@ chart,chart
 次数,Count
 类型,Type
 零结果词,"Zero-result words."
+"Search 内容索引变更","Search 内容索引变更"
+按版本写入或撤回一条内容索引；系统更新期间挂起,按版本写入或撤回一条内容索引；系统更新期间挂起
+系统正在更新，内容索引变更挂起。,系统正在更新，内容索引变更挂起。
 "Search 增量索引","Search incremental index"
 "从 Product current source 刷新 Website/Store Search 投影","Refresh Website/Store Search projection from Product current source"
 "Search 增量消费者只接受完整 Website 或 Store Scope，当前为 %{1}","Search incremental consumers only accept full Website or Store Scope, currently %{1}"
@@ -113,6 +112,7 @@ chart,chart
 "Search shard 无法进入 provisioning：status=%{1}","Search shard cannot enter provisioning: status=%{1}"
 "Search shard provision 返回身份不匹配","Search shard provision returns identity mismatch"
 "Search shard provision 失败","Search shard provision failed"
+"Search 内容索引 %{1} %{2}","Search 内容索引 %{1} %{2}"
 未知搜索区域：%{1},"Unknown search area: %{1}"
 搜索不接受未知参数,"Search does not accept unknown parameters."
 搜索关键词过长,"Search query too long."
@@ -144,9 +144,9 @@ chart,chart
 "Search 查询参数超过允许长度","A Search request parameter exceeds the allowed length"
 "Search 禁止无来源的成功响应","Search cannot return a successful response without a source"
 "未知 search shard 实体：%{1}","Unknown search shard entity: %{1}"
-"Search Provider 索引重建","Search Provider index rebuild"
-"定时重建 Blog 等 Provider 搜索索引，保证前台只读索引","Periodically rebuild Blog and other Provider search indexes so storefront reads index only"
-"Provider 索引定时重建完成：站点 %{1} 个，文档 %{2} 条","Provider index cron rebuild done: %{1} websites, %{2} documents"
+"Search 内容索引由变更队列追平","Search 内容索引由变更队列追平"
+不再整表重建。保存或删除进入队列，按版本追平；全量只在手动修复命令,不再整表重建。保存或删除进入队列，按版本追平；全量只在手动修复命令
+内容索引由变更队列追平，本任务不整表重建。,内容索引由变更队列追平，本任务不整表重建。
 "MIG-P3C：Search full clone shadow 到持久 alias CAS allowlist","MIG-P3C: Search full clone shadow to persistent alias CAS allowlist"
 打印帮助,"Print help"
 "在登记 full clone 只读清点 Product/Search/alias/rollout 证据","Register full clone read-only inventory Product/Search/alias/rollout evidence"
@@ -162,14 +162,24 @@ chart,chart
 "shadow 观察窗 locale（preflight/apply 必需）","shadow observation window locale (required for preflight/apply)"
 "shadow 观察窗 currency（preflight/apply 必需）","shadow observation window currency (required for preflight/apply)"
 显示本帮助,"Show this help"
+系统正在更新，全量修复改到更新结束后再执行。,系统正在更新，全量修复改到更新结束后再执行。
 "Provider 索引已重建：%{1}（website_id=%{2}，文档 %{3} 条）","Provider index rebuilt: %{1} (website_id=%{2}, %{3} docs)"
 "全部 Provider 索引已重建（website_id=%{1}，文档 %{2} 条）","All provider indexes rebuilt (website_id=%{1}, %{2} docs)"
-"重建 Search Provider 内容索引（Blog 等非 Product 类型）","Rebuild Search provider content index (Blog and other non-Product types)"
+"手动修复 Search Provider 内容索引。日常更新走变更队列，不在这里定时整表重建。","手动修复 Search Provider 内容索引。日常更新走变更队列，不在这里定时整表重建。"
 "仅重建指定 provider code（如 blog）","Rebuild only the specified provider code (e.g. blog)"
 "Website 维度，默认 0","Website scope, default 0"
 显示帮助,"Show help"
 "重建全部 Provider 索引","Rebuild all provider indexes"
 "仅重建 Blog 索引","Rebuild Blog index only"
+"开始预热搜索 Provider 索引（共 %{count} 个）…","Start warming search Provider indexes (%{count} total)…"
+搜索索引已存在，跳过：%{code},"Search index exists, skipped: %{code}"
+正在重建搜索索引：%{code}…,"Rebuilding search index: %{code}…"
+搜索索引重建完成：%{code},"Search index rebuild done: %{code}"
+"搜索 Provider 索引预热完成：重建 %{rebuilt}，跳过 %{skipped}","Search Provider index warm-up done: rebuilt %{rebuilt}, skipped %{skipped}"
+"Search Provider 索引重建","Search Provider index rebuild"
+"定时重建 Blog 等 Provider 搜索索引，保证前台只读索引","Periodically rebuild Blog and other Provider search indexes so storefront reads index only"
+"Provider 索引定时重建完成：站点 %{1} 个，文档 %{2} 条","Provider index cron rebuild done: %{1} websites, %{2} documents"
+"重建 Search Provider 内容索引（Blog 等非 Product 类型）","Rebuild Search provider content index (Blog and other non-Product types)"
 "搜索管理 · 性能慢日志","Search Management · Slow Performance Logs"
 "搜索管理 · 搜索报告","Search Management · Search Reports"
 收起悬浮,"Collapse float"

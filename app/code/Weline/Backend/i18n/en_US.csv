@@ -612,8 +612,9 @@ DI编译失败：%{1},"DI compilation failed: %{1}"
 模板缓存清理失败：%{1},"Template cache cleanup failed: %{1}"
 菜单收集和系统更新完成！菜单已生效。,"Menu collection and system update complete! Menu is now active."
 重建后台菜单搜索索引...,"Rebuilding backend menu search index..."
-"后台菜单搜索索引已重建：%{1} 条","Backend menu search index rebuilt: %{1} entries"
+后台菜单搜索索引已交给变更队列追平,后台菜单搜索索引已交给变更队列追平
 后台菜单搜索索引重建失败：%{1},"Failed to rebuild backend menu search index: %{1}"
+"后台菜单搜索索引已重建：%{1} 条","Backend menu search index rebuilt: %{1} entries"
 关闭,closure
 确定,Sure
 请重试,"Please try again"

@@ -112,4 +112,39 @@ return [
         'description' => \__('解析完整状态信息，允许其他模块扩展状态信息解析。'),
         'doc' => 'domain_resolve_status_info.md',
     ],
+    'Weline_Order::buyer_after_sale_submitted' => [
+        'name' => \__('买家售后已提交'),
+        'description' => \__('买家售后单提交后由服务派发。不复用 order_refunded。'),
+        'doc' => 'buyer_after_sale.md',
+    ],
+    'Weline_Order::buyer_after_sale_approved' => [
+        'name' => \__('买家售后已通过'),
+        'description' => \__('退货或换货审核通过后由服务派发。仅退款不走本事件。'),
+        'doc' => 'buyer_after_sale.md',
+    ],
+    'Weline_Order::buyer_after_sale_collect_product_return_address' => [
+        'name' => \__('收集商品退货地址'),
+        'description' => \__('批准退货或换货前，由商品模块把商品自己的退货地址写回。'),
+        'doc' => 'buyer_after_sale.md',
+    ],
+    'Weline_Order::buyer_after_sale_rejected' => [
+        'name' => \__('买家售后已拒绝'),
+        'description' => \__('买家售后单被拒绝后由服务派发，可供其他模块监听。'),
+        'doc' => 'buyer_after_sale_rejected.md',
+    ],
+    'Weline_Order::buyer_after_sale_cancelled' => [
+        'name' => \__('买家售后已取消'),
+        'description' => \__('买家售后单取消后由服务派发，可供其他模块监听。'),
+        'doc' => 'buyer_after_sale_cancelled.md',
+    ],
+    'Weline_Order::buyer_after_sale_return_received' => [
+        'name' => \__('买家售后退货已收'),
+        'description' => \__('买家售后退货收货后由服务派发，可供其他模块监听。'),
+        'doc' => 'buyer_after_sale_return_received.md',
+    ],
+    'Weline_Order::buyer_after_sale_link_payment' => [
+        'name' => \__('买家售后关联支付'),
+        'description' => \__('两闸都开启，且仅退款已通过或退货已收货时派发。换货不派发。不复用 order_refunded。'),
+        'doc' => 'buyer_after_sale.md',
+    ],
 ];

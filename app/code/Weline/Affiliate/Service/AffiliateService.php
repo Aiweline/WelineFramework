@@ -289,7 +289,9 @@ class AffiliateService
         $shareId = (int) ($share->getId() ?? 0);
         $affiliateId = (int) ($share->getData(AffiliateShare::schema_fields_AFFILIATE_ID) ?? 0);
         $affiliateRow = $this->getAffiliateRowById($affiliateId);
-        $scopeMismatch = !is_array($affiliateRow) || !$this->isAffiliateEffectiveInScope($affiliateRow);
+        $hasAffiliate = is_array($affiliateRow);
+        // 落地店和账户范围不一致只作标记。分享码已经点开，就要开始归因。
+        $scopeMismatch = !$hasAffiliate || !$this->isAffiliateEffectiveInScope($affiliateRow);
         $affiliateCustomerId = (int) ($share->getData(AffiliateShare::schema_fields_CUSTOMER_ID) ?? 0);
         $productId = (int) ($share->getData(AffiliateShare::schema_fields_PRODUCT_ID) ?? 0);
         $isSelfClick = $customerId > 0 && $customerId === $affiliateCustomerId;
@@ -310,7 +312,7 @@ class AffiliateService
         }
 
         $attribution = null;
-        if (!$isSelfClick && !$scopeMismatch) {
+        if (!$isSelfClick && $hasAffiliate) {
             $attribution = $this->startAttribution($share, max(0, $customerId), $visitorKey);
         }
 
@@ -342,7 +344,7 @@ class AffiliateService
         return [
             'share_code' => $shareCode,
             'target_url' => $targetUrl,
-            'attributed' => !$isSelfClick && !$scopeMismatch,
+            'attributed' => !$isSelfClick && $hasAffiliate,
             'duplicate' => $duplicateClick,
             'scope_mismatch' => $scopeMismatch,
         ];
@@ -429,10 +431,6 @@ class AffiliateService
 
         $affiliate = $this->getAffiliateRowById((int) ($attribution[AffiliateAttribution::schema_fields_AFFILIATE_ID] ?? 0));
         if (!is_array($affiliate)) {
-            return;
-        }
-
-        if (!$this->isAffiliateEffectiveInScope($affiliate)) {
             return;
         }
 

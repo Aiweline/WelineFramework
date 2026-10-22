@@ -26,14 +26,24 @@ class WishlistAddAfterObserver implements ObserverInterface
             return;
         }
 
-        $this->affiliateService->recordEngagement(AffiliateService::EVENT_WISHLIST_ADDED, [
-            'product_id' => $productId,
-            'customer_id' => (int) ($event->getData('customer_id') ?? 0),
-            'metadata' => [
-                'source' => 'wishlist_add_after',
-                'wishlist_id' => (int) ($event->getData('wishlist_id') ?? 0),
-            ],
-            'idempotency_key' => (string) ($event->getData('idempotency_key') ?? ''),
-        ]);
+        try {
+            $this->affiliateService->recordEngagement(AffiliateService::EVENT_WISHLIST_ADDED, [
+                'product_id' => $productId,
+                'customer_id' => (int) ($event->getData('customer_id') ?? 0),
+                'metadata' => [
+                    'source' => 'wishlist_add_after',
+                    'wishlist_id' => (int) ($event->getData('wishlist_id') ?? 0),
+                ],
+                'idempotency_key' => (string) ($event->getData('idempotency_key') ?? ''),
+            ]);
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_error')) {
+                w_log_error('Affiliate engagement side-effect failed: ' . $e->getMessage(), [
+                    'source' => 'wishlist_add_after',
+                    'product_id' => $productId,
+                    'exception' => $e::class,
+                ], 'affiliate');
+            }
+        }
     }
 }

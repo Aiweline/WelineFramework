@@ -39,7 +39,7 @@ final class FaqItemSearchIndexObserver implements ObserverInterface
         $action = trim((string)$event->getData('action'));
         $status = (string)($row['status'] ?? '');
         if ($action === 'delete' || $status !== 'enabled') {
-            $indexService->delete('faq', $websiteId, 'item:' . $faqId);
+            $indexService->enqueueDelete('faq', $websiteId, 'item:' . $faqId);
 
             return;
         }
@@ -56,11 +56,11 @@ final class FaqItemSearchIndexObserver implements ObserverInterface
             'updated_at' => (string)($row['updated_at'] ?? date('Y-m-d H:i:s')),
         ]);
         if ($document === null) {
-            $indexService->delete('faq', $websiteId, 'item:' . $faqId);
+            $indexService->enqueueDelete('faq', $websiteId, 'item:' . $faqId);
 
             return;
         }
 
-        $indexService->upsert($document);
+        $indexService->enqueueUpsert($document);
     }
 }

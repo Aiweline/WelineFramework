@@ -22,11 +22,27 @@ class ProductViewedObserver implements ObserverInterface
             return;
         }
 
-        $this->affiliateService->recordEngagement(AffiliateService::EVENT_PRODUCT_VIEWED, [
+        try {
+            $this->affiliateService->recordEngagement(AffiliateService::EVENT_PRODUCT_VIEWED, [
+                'product_id' => $productId,
+                'customer_id' => (int) ($event->getData('customer_id') ?? 0),
+                'metadata' => ['source' => 'product_viewed'],
+                'idempotency_key' => (string) ($event->getData('idempotency_key') ?? ''),
+            ]);
+        } catch (\Throwable $e) {
+            $this->logFailure('product_viewed', $e, $productId);
+        }
+    }
+
+    private function logFailure(string $source, \Throwable $e, int $productId): void
+    {
+        if (!\function_exists('w_log_error')) {
+            return;
+        }
+        w_log_error('Affiliate engagement side-effect failed: ' . $e->getMessage(), [
+            'source' => $source,
             'product_id' => $productId,
-            'customer_id' => (int) ($event->getData('customer_id') ?? 0),
-            'metadata' => ['source' => 'product_viewed'],
-            'idempotency_key' => (string) ($event->getData('idempotency_key') ?? ''),
-        ]);
+            'exception' => $e::class,
+        ], 'affiliate');
     }
 }

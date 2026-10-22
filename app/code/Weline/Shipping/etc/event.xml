@@ -23,4 +23,13 @@
                   shared="true"
                   sort="40"/>
     </event>
+    <event name="Weline_Order::buyer_after_sale_approved">
+        <observer name="Weline_Shipping::buyer_after_sale_return_instruction"
+                  instance="Weline\Shipping\Observer\BuyerAftersaleReturnInstructionObserver"
+                  delivery="sync"
+                  failure="isolated"
+                  sort="40"
+                  shared="true"
+                  disabled="false"/>
+    </event>
 </config>

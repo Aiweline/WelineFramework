@@ -22,7 +22,9 @@ final class BackendMenuSearchIndexRebuilder
             /** @var SearchProviderIndexService $indexService */
             $indexService = ObjectManager::getInstance(SearchProviderIndexService::class);
 
-            return $indexService->rebuild('backend_menu', $websiteId);
+            $indexService->enqueueRebuild('backend_menu', $websiteId);
+
+            return 0;
         } catch (\Throwable) {
             return 0;
         }

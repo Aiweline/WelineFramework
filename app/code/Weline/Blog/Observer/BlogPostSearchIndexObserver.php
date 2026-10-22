@@ -41,18 +41,18 @@ final class BlogPostSearchIndexObserver implements ObserverInterface
         $action = trim((string)$event->getData('action'));
         $status = (string)($row[Post::schema_fields_STATUS] ?? '');
         if ($action === 'delete' || $status !== Post::STATUS_PUBLISHED) {
-            $indexService->delete('blog', $websiteId, 'post:' . $postId);
+            $indexService->enqueueDelete('blog', $websiteId, 'post:' . $postId);
 
             return;
         }
 
         $document = $builder->fromPostRow($row);
         if ($document === null) {
-            $indexService->delete('blog', $websiteId, 'post:' . $postId);
+            $indexService->enqueueDelete('blog', $websiteId, 'post:' . $postId);
 
             return;
         }
 
-        $indexService->upsert($document);
+        $indexService->enqueueUpsert($document);
     }
 }

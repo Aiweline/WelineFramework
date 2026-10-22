@@ -23,20 +23,20 @@
     <event name="Weline_Order::order_cancelled">
         <observer name="weline_affiliate_order_cancelled" instance="Weline\Affiliate\Observer\OrderCancelledObserver" disabled="false" shared="true" sort="100"/>
     </event>
-    <!-- Missing upstream modules: observers kept disabled until Weline events exist -->
+    <!-- Weline_Social 没有商品外发动作；外发记次在 AffiliateQueryProvider::recordOutboundShare。 -->
     <event name="Weline_Social::share_after">
         <observer name="weline_affiliate_social_share_after" instance="Weline\Affiliate\Observer\SocialShareAfterObserver" disabled="true" shared="true" sort="100"/>
     </event>
     <event name="Weline_Product::product_viewed">
-        <observer name="weline_affiliate_product_viewed" instance="Weline\Affiliate\Observer\ProductViewedObserver" disabled="true" shared="true" sort="100"/>
+        <observer name="weline_affiliate_product_viewed" instance="Weline\Affiliate\Observer\ProductViewedObserver" disabled="false" shared="true" sort="100"/>
     </event>
     <event name="Weline_Wishlist::add_to_wishlist_after">
-        <observer name="weline_affiliate_wishlist_add_after" instance="Weline\Affiliate\Observer\WishlistAddAfterObserver" disabled="true" shared="true" sort="100"/>
+        <observer name="weline_affiliate_wishlist_add_after" instance="Weline\Affiliate\Observer\WishlistAddAfterObserver" disabled="false" shared="true" sort="100"/>
     </event>
     <event name="Weline_Review::review_created">
-        <observer name="weline_affiliate_review_created" instance="Weline\Affiliate\Observer\ReviewCreatedObserver" disabled="true" shared="true" sort="100"/>
+        <observer name="weline_affiliate_review_created" instance="Weline\Affiliate\Observer\ReviewCreatedObserver" disabled="false" shared="true" sort="100"/>
     </event>
-    <event name="Weline_Cart::add_to_cart_after">
-        <observer name="weline_affiliate_cart_add_after" instance="Weline\Affiliate\Observer\CartAddAfterObserver" disabled="true" shared="true" sort="100"/>
+    <event name="Weline_Cart::cart_item_added">
+        <observer name="weline_affiliate_cart_add_after" instance="Weline\Affiliate\Observer\CartAddAfterObserver" disabled="false" shared="true" sort="100"/>
     </event>
 </config>

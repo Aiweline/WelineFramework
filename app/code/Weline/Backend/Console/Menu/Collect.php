@@ -148,8 +148,8 @@ class Collect implements CommandInterface
         if (class_exists(\Weline\Admin\Service\BackendMenuSearchIndexRebuilder::class)) {
             $this->printing->note(__('重建后台菜单搜索索引...'));
             try {
-                $indexed = \Weline\Admin\Service\BackendMenuSearchIndexRebuilder::rebuild(0);
-                $this->printing->success(__('后台菜单搜索索引已重建：%{1} 条', [$indexed]));
+                \Weline\Admin\Service\BackendMenuSearchIndexRebuilder::rebuild(0);
+                $this->printing->success(__('后台菜单搜索索引已交给变更队列追平'));
             } catch (\Throwable $e) {
                 $this->printing->warning(__('后台菜单搜索索引重建失败：%{1}', [$e->getMessage()]));
             }

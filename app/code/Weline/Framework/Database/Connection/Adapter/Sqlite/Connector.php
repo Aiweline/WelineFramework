@@ -18,7 +18,9 @@ use PDO;
 use PDOException;
 use Weline\Framework\App\Env;
 use Weline\Framework\Database\Connection\Adapter\Sqlite\Dialect\SqliteIdentifierFormatter;
+use Weline\Framework\Database\Connection\Adapter\PhysicalColumnKeysetTrait;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalColumnKeysetReaderInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
 use Weline\Framework\Database\Connection\Api\PhysicalTableMetadataInterface;
 use Weline\Framework\Database\Compiler\Dialect\SqliteDialect;
@@ -41,9 +43,10 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\SchedulerSystem;
 
-final class Connector extends Query implements ConnectorInterface, PhysicalTableMetadataInterface
+final class Connector extends Query implements ConnectorInterface, PhysicalTableMetadataInterface, PhysicalColumnKeysetReaderInterface
 {
     use CreatesTableFromSchemaTrait;
+    use PhysicalColumnKeysetTrait;
 
     public const REBUILD_MARKER = '/* WELINE_SQLITE_REBUILD */';
     public const DDL_STATEMENT_SEPARATOR = "\n-- WELINE_DDL_STATEMENT\n";

@@ -134,6 +134,12 @@
             origin_paths: ["app/code/Weline/Bt_Center/view/statics/backend/bt-server-form.js?v=1.0.0"],
             paths: ["Weline_Bt_Center::backend/bt-server-form.js?v=1.0.0"],
             description: "BT 服务器表单：密码显隐与异步保存"
+        },
+        feedCatalog: {
+            origin_paths: ["app/code/Weline/Feed/view/statics/backend/feed-catalog.js?v=20261022c"],
+            paths: ["Weline_Feed::backend/feed-catalog.js?v=20261022c"],
+            globalVar: "WelineFeedCatalog",
+            description: "购物目录：列表、弹层新增编辑、分类挂钩、生成、启停与归档"
         }
     });
 

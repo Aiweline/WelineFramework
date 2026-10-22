@@ -92,8 +92,9 @@ IP定位服务响应错误,IP定位服务响应错误
 IP定位失败,IP定位失败
 "IP定位服务不可用: %{1}","IP定位服务不可用: %{1}"
 "GEO 协议与 AI 搜索发现","GEO 协议与 AI 搜索发现"
-"llms.txt / ai.txt","llms.txt / ai.txt"
+"llms.txt 与 AI 引用","llms.txt 与 AI 引用"
 "启用 AI 搜索发现文件","启用 AI 搜索发现文件"
+"关闭后不再允许 ai-input。ai.txt、license.xml、trust.txt 与 tdmrep.json 仍会发布，训练保持关闭。","关闭后不再允许 ai-input。ai.txt、license.xml、trust.txt 与 tdmrep.json 仍会发布，训练保持关闭。"
 "GEO Feed","GEO Feed"
 "启用 JSON Feed / RSS Feed","启用 JSON Feed / RSS Feed"
 自动推送,自动推送
@@ -353,6 +354,7 @@ geojs.io返回空数据,geojs.io返回空数据
 没有可用的定位服务提供者,没有可用的定位服务提供者
 "所有定位服务提供者都失败，最后错误: %{1}","所有定位服务提供者都失败，最后错误: %{1}"
 "请在「平台账户」中填写 API 密钥；暂不支持一键 OAuth 授权。","请在「平台账户」中填写 API 密钥；暂不支持一键 OAuth 授权。"
+"llms.txt / ai.txt","llms.txt / ai.txt"
 "Feed ID","Feed ID"
 "平台 ID","平台 ID"
 平台代码,平台代码
@@ -384,5 +386,3 @@ Geo模块未加载,Geo模块未加载
 中国,中国
 定位中...,定位中...
 生成式搜索引擎优化,生成式搜索引擎优化
-llms.txt 与 AI 引用,llms.txt 与 AI 引用
-关闭后不再允许 ai-input。ai.txt、license.xml、trust.txt 与 tdmrep.json 仍会发布，训练保持关闭。,关闭后不再允许 ai-input。ai.txt、license.xml、trust.txt 与 tdmrep.json 仍会发布，训练保持关闭。

@@ -10,6 +10,7 @@ use Weline\Customer\Service\AccountI18nModuleRegistry;
 use Weline\Customer\Service\AccountSidebarContentGate;
 use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\View\Engine\RenderContext;
 
 /**
  * 个人中心控制器
@@ -233,9 +234,19 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
         $startedAt = microtime(true);
         AccountSidebarContentGate::setRequestedSection($section);
         AccountSidebarContentGate::setRequestParams((array)$this->request->getParams());
+        // JSON 要的是字符串。外层已有捕获时 getHook 会改走流式并返回空串。
+        $requireStringKey = RenderContext::REQUIRE_STRING_HOOK;
+        $hadRequireString = RequestContext::has($requireStringKey);
+        $previousRequireString = RequestContext::get($requireStringKey);
+        RequestContext::set($requireStringKey, true);
         try {
             $html = (string)$this->getTemplate()->getHook('account.sidebar.content');
         } finally {
+            if ($hadRequireString) {
+                RequestContext::set($requireStringKey, $previousRequireString);
+            } else {
+                RequestContext::remove($requireStringKey);
+            }
             AccountSidebarContentGate::setRequestParams(null);
             AccountSidebarContentGate::setRequestedSection(null);
         }

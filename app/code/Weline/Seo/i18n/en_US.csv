@@ -22,6 +22,8 @@
 "Dispatched after an SEO task is enqueued.","Dispatched after an SEO task is enqueued."
 "SEO task completed","SEO task completed"
 "Dispatched after an SEO task is completed.","Dispatched after an SEO task is completed."
+"SEO robots.txt contribution","SEO robots.txt contribution"
+"Dispatched while robots.txt is rendered so other modules can add global or User-agent:* directives.","Dispatched while robots.txt is rendered so other modules can add global or User-agent:* directives."
 "SEO trend sync completed","SEO trend sync completed"
 "Dispatched when trend data sync is completed.","Dispatched when trend data sync is completed."
 "SEO 后台查询器不支持的操作：%{1}","Operations not supported by SEO background query: %{1}"

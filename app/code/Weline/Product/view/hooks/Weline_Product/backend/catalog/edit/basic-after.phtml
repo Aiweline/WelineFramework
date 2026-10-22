@@ -1,0 +1,43 @@
+<?php
+/**
+ * 商品自己的退货地址。随商品编辑保存进属性 return_address。
+ *
+ * @hook-priority 80
+ * @hook-sort-order 20
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Service\ProductReturnAddress;
+
+$escape = static fn (mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$productId = 0;
+$websiteId = 0;
+try {
+    $productId = (int) ($this->getData('productEntityId') ?? $this->getData('product_id') ?? 0);
+    $websiteId = (int) ($this->getData('website_id') ?? 0);
+} catch (\Throwable) {
+}
+
+$returnAddress = '';
+if ($productId > 0 && $websiteId >= 0) {
+    try {
+        $map = ObjectManager::getInstance(ProductReturnAddress::class)->map($websiteId, [$productId]);
+        $returnAddress = (string) ($map[$productId] ?? '');
+    } catch (\Throwable) {
+        $returnAddress = '';
+    }
+}
+?>
+<section class="w-stack" data-gap="sm" data-testid="product-return-address" style="--w-span:12;grid-column:1/-1;">
+    <div class="w-field">
+        <label class="w-field__label" for="product-return-address"><lang>退货地址</lang></label>
+        <textarea id="product-return-address"
+                  class="w-textarea"
+                  rows="3"
+                  data-product-return-address="1"
+                  data-product-id="<?= $productId ?>"
+                  data-attribute-code="return_address"><?= $escape($returnAddress) ?></textarea>
+        <p class="w-field__help"><lang>填写后，该商品的退货优先寄到这里。留空则跟订单履约仓，或使用范围内已开启的自定义退货地址。</lang></p>
+    </div>
+</section>

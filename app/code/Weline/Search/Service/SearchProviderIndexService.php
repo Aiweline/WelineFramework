@@ -19,7 +19,46 @@ final class SearchProviderIndexService
     public function __construct(
         private readonly SearchProviderIndexStorageInterface $store,
         private readonly SearchProviderRegistry $registry,
+        private readonly SearchProviderIndexAdmission $admission,
     ) {
+    }
+
+    public function enqueueUpsert(IndexDocument $document): void
+    {
+        $revision = time();
+        $this->admission->admit([
+            'contract' => \Weline\Search\Queue\SearchProviderIndexQueue::CONTRACT,
+            'op' => 'upsert',
+            'indexer' => $document->indexer,
+            'website_id' => $document->websiteId,
+            'entity_id' => $document->entityId,
+            'revision' => $revision,
+            'document' => $document->withVersion($revision)->toArray(),
+        ]);
+    }
+
+    public function enqueueDelete(string $indexer, int $websiteId, string $entityId): void
+    {
+        $this->admission->admit([
+            'contract' => \Weline\Search\Queue\SearchProviderIndexQueue::CONTRACT,
+            'op' => 'delete',
+            'indexer' => $indexer,
+            'website_id' => $websiteId,
+            'entity_id' => $entityId,
+            'revision' => time(),
+        ]);
+    }
+
+    public function enqueueRebuild(string $indexer, int $websiteId): void
+    {
+        $this->admission->admit([
+            'contract' => \Weline\Search\Queue\SearchProviderIndexQueue::CONTRACT,
+            'op' => 'rebuild',
+            'indexer' => $indexer,
+            'website_id' => $websiteId,
+            'entity_id' => '*',
+            'revision' => time(),
+        ]);
     }
 
     public function upsert(IndexDocument $document): void

@@ -1863,6 +1863,8 @@ private function assert_StorefrontListingShellPathOnly_testCatalogPresentationHy
     self::assertStringContainsString('hydrateListingMedia($offers)', $catalog);
     self::assertStringContainsString('publishedOffersForProductIds(', $catalog);
     self::assertStringContainsString('product.catalog.listing_card_names', $catalog);
+    self::assertStringContainsString("'global_product_uuid' => \$productUuidById[\$productId] ?? ''", $catalog);
+    self::assertStringContainsString('schema_fields_GLOBAL_PRODUCT_UUID', $catalog);
     // Must not invent a second FE card renderer — shell still uses ProductCardRenderer.
     $shell = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Product' . '/Service/StorefrontListingShell.php');
     self::assertStringContainsString('ProductCardRenderer::projectFromOffers', $shell);

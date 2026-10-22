@@ -18,8 +18,10 @@ use PDO;
 use PDOException;
 use Weline\Framework\Database\Connection\Adapter\Mysql\Table\Alter;
 use Weline\Framework\Database\Connection\Adapter\Mysql\Table\Create;
+use Weline\Framework\Database\Connection\Adapter\PhysicalColumnKeysetTrait;
 use Weline\Framework\Database\Connection\Api\AtomicPhysicalTableChangeInterface;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Connection\Api\PhysicalColumnKeysetReaderInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
 use Weline\Framework\Database\Connection\Api\PhysicalTableIdentityProviderInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableMetadataInterface;
@@ -44,10 +46,12 @@ final class Connector extends Query implements
     ConnectorInterface,
     PhysicalTableMetadataInterface,
     AtomicPhysicalTableChangeInterface,
+    PhysicalColumnKeysetReaderInterface,
     PhysicalTableIdentityProviderInterface,
     PhysicalTableSnapshotInterface
 {
     use CreatesTableFromSchemaTrait;
+    use PhysicalColumnKeysetTrait;
 
     public function __construct(
         private readonly ?ConfigProvider $configProvider

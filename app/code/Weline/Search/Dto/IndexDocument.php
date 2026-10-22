@@ -33,6 +33,54 @@ final class IndexDocument
     ) {
     }
 
+    public function withVersion(int $documentVersion): self
+    {
+        return new self(
+            indexer: $this->indexer,
+            entityType: $this->entityType,
+            entityId: $this->entityId,
+            websiteId: $this->websiteId,
+            storeId: $this->storeId,
+            channelId: $this->channelId,
+            locale: $this->locale,
+            currency: $this->currency,
+            title: $this->title,
+            keywords: $this->keywords,
+            url: $this->url,
+            payload: $this->payload,
+            status: $this->status,
+            updatedAt: $this->updatedAt,
+            documentVersion: $documentVersion,
+            payloadHash: $this->payloadHash,
+        );
+    }
+
+    /** @param array<string, mixed> $data */
+    public static function fromArray(array $data): self
+    {
+        $keywords = $data['keywords'] ?? [];
+        $payload = $data['payload'] ?? [];
+
+        return new self(
+            indexer: (string)($data['indexer'] ?? ''),
+            entityType: (string)($data['entity_type'] ?? ''),
+            entityId: (string)($data['entity_id'] ?? ''),
+            websiteId: (int)($data['website_id'] ?? 0),
+            storeId: (int)($data['store_id'] ?? 0),
+            channelId: (int)($data['channel_id'] ?? 0),
+            locale: (string)($data['locale'] ?? ''),
+            currency: (string)($data['currency'] ?? ''),
+            title: (string)($data['title'] ?? ''),
+            keywords: is_array($keywords) ? array_values(array_map('strval', $keywords)) : [],
+            url: (string)($data['url'] ?? ''),
+            payload: is_array($payload) ? $payload : [],
+            status: (string)($data['status'] ?? ''),
+            updatedAt: (string)($data['updated_at'] ?? ''),
+            documentVersion: (int)($data['document_version'] ?? 1),
+            payloadHash: (string)($data['payload_hash'] ?? ''),
+        );
+    }
+
     /** @return array<string, mixed> */
     public function toArray(): array
     {

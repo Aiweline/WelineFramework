@@ -580,6 +580,55 @@ final class PhysicalBackupServicePgsqlTest extends TestCase
         }
     }
 
+    public function testStreamedColumnBackupRestoresEveryRow(): void
+    {
+        $factory = ObjectManager::getInstance(ConnectionFactory::class);
+        $connector = $factory->getConnector();
+        self::assertSame('pgsql', strtolower($connector->getConfigProvider()->getDbType()));
+        $schema = 'weline_col_page_' . bin2hex(random_bytes(5));
+        $identity = new PhysicalTableIdentity($schema, 'unit_probe');
+        $quotedSchema = $connector->quoteIdentifier($schema);
+        $quotedTable = $connector->quotePhysicalTable($identity);
+        $migrationId = random_int(10_000_000, 900_000_000);
+        $service = ObjectManager::getInstance(BackupService::class, [], false);
+        $connector->query("CREATE SCHEMA {$quotedSchema}")->fetch();
+        $connector->query(
+            "CREATE TABLE {$quotedTable} (id INTEGER PRIMARY KEY, tracked TEXT NULL)",
+        )->fetch();
+
+        try {
+            $this->insertPhysical($connector, $identity, ['id' => 1, 'tracked' => 'a']);
+            $this->insertPhysical($connector, $identity, ['id' => 2, 'tracked' => 'b']);
+            $this->insertPhysical($connector, $identity, ['id' => 3, 'tracked' => 'c']);
+            self::assertSame([], $service->backupPhysicalColumnData(
+                $identity,
+                'tracked',
+                $migrationId,
+            ));
+            $columns = array_values(array_filter(
+                $this->backupRecords($migrationId),
+                static fn(MigrationBackup $backup): bool =>
+                    $backup->getData(MigrationBackup::schema_fields_BACKUP_TYPE) === MigrationBackup::TYPE_COLUMN,
+            ));
+            self::assertCount(3, $columns);
+            $connector->query("UPDATE {$quotedTable} SET tracked = 'mutated'")->fetch();
+            self::assertTrue($service->restorePhysicalColumnData($identity, 'tracked', $migrationId));
+            $rows = $connector->query(
+                "SELECT id, tracked FROM {$quotedTable} ORDER BY id",
+            )->fetch();
+            $tracked = [];
+            foreach ($rows as $row) {
+                if (is_array($row)) {
+                    $tracked[(string)$row['id']] = $row['tracked'];
+                }
+            }
+            self::assertSame(['1' => 'a', '2' => 'b', '3' => 'c'], $tracked);
+        } finally {
+            $service->cleanupBackupData($migrationId);
+            $connector->query("DROP SCHEMA {$quotedSchema} CASCADE")->fetch();
+        }
+    }
+
     private function insertPhysical(ConnectorInterface $connector, PhysicalTableIdentity $identity, array $row): void
     {
         $query = $connector->getQuery();

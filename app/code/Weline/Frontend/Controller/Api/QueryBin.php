@@ -372,7 +372,7 @@ class QueryBin extends FrontendRestController
                         503,
                     );
                 }
-                $cookieName = FrontendWorkerSessionService::SCOPE_COOKIE_NAME;
+                $cookieName = FrontendWorkerSessionService::scopeCookieName();
                 $scopeToken = $this->readOptionalSingleCookie($cookieName);
                 if ($scopeToken === null || $scopeToken === '') {
                     throw new FrontendQueryException(

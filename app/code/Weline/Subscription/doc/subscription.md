@@ -43,6 +43,9 @@
 | `Service/SubscriptionMigrationService` | MIG-P4B cutover |
 | `Console/Commerce/MigrateP4bSubscription` | CLI `commerce:migrate-p4b-subscription` |
 | `view/hooks/account.sidebar*.phtml` | Customer 账户布局入口 |
+| `Controller/Frontend/Buyer.php` | 买家订阅、续费、取消页（只渲染） |
+| `extends/module/Weline_Framework/Query/SubscriptionStorefrontQueryProvider.php` | 登录顾客开通 / 续费 / 取消；身份只取会话与请求范围 |
+| `Service/SubscriptionBuyerService.php` | 店面读模型；沙箱续费走 `SubscriptionSandboxBilling`，取消走 CAS |
 
 ## P4B-001 持久化合同
 
@@ -114,5 +117,5 @@ php bin/w commerce:migrate-p4b-subscription rollback \
   --database=mig_clone_p4bsubscription_... --checkpoint=p4bsub-...
 ```
 
-模块版本：`2.3.0`。`TASK-P4B-001..002 = ACCEPTED`；
+模块版本：`2.3.2`。`TASK-P4B-001..002 = ACCEPTED`；
 `TASK-MIG-P4B = ACCEPTED`；独立聚合复验后 `GATE-P4B = GO`。

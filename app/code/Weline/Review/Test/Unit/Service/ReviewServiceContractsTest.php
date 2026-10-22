@@ -51,6 +51,9 @@ final class ReviewServiceContractsTest extends TestCase
             'ReviewFormSchemaI18nPrefetch::testFormSchemaSourcePhrasesCoverBlogAndProductLabels' => function () {
             $this->assert_ReviewFormSchemaI18nPrefetch_testFormSchemaSourcePhrasesCoverBlogAndProductLabels();
         },
+            'ReviewCreatedEvent::testCreatePublishesStorefrontProductId' => function () {
+            $this->assert_ReviewCreatedEvent_testCreatePublishesStorefrontProductId();
+        },
         ];
     }
 
@@ -130,5 +133,15 @@ private function assert_ReviewFormSchemaI18nPrefetch_testFormSchemaSourcePhrases
     foreach (['标题（选填）', '评论内容', '添加图片', '添加视频', '一句话概括您的观点', '一句话概括您的体验', '总体评分', '邮箱（游客选填，不公开）'] as $required) {
         self::assertContains($required, $phrases);
     }
+}
+
+private function assert_ReviewCreatedEvent_testCreatePublishesStorefrontProductId(): void
+{
+    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Review' . '/Service/ReviewService.php');
+    self::assertStringContainsString("dispatch('Weline_Review::review_created'", $source);
+    self::assertStringContainsString('mapIdsByGlobalUuids', $source);
+    self::assertStringContainsString('Registry id is not a storefront product id', $source);
+    $event = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Review' . '/event.php');
+    self::assertStringContainsString('Weline_Review::review_created', $event);
 }
 }

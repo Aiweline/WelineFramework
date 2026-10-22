@@ -102,6 +102,8 @@ private function assert_ScopeHolePunchSecurityGate_testControllerIsPostOnly(): v
     self::assertStringContainsString('function postIndex', $src);
     self::assertStringNotContainsString('function getIndex', $src);
     self::assertStringContainsString('ScopeHolePunchSecurityGate', $src);
+    $gate = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Frontend' . '/Service/ScopeHolePunchSecurityGate.php');
+    self::assertStringContainsString('RequestAuthority::allowsPlainHttp', $gate);
     self::assertStringContainsString("'theme_published_version_id'", $src);
     self::assertStringContainsString('StorefrontGenerationIdentity', $src);
     self::assertStringNotContainsString('currentDeployVersion', $src);

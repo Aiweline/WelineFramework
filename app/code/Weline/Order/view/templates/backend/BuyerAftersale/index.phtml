@@ -1,0 +1,297 @@
+<?php
+$requests = is_array($requests ?? null) ? $requests : [];
+$buyerAftersaleEnabled = !empty($buyerAftersaleEnabled);
+$filterStatus = trim((string)($filterStatus ?? ''));
+$filterKeyword = trim((string)($filterKeyword ?? ''));
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$resolutionLabel = static function (string $code): string {
+    return match ($code) {
+        'return' => (string)__('退货'),
+        'refund_only' => (string)__('仅退款'),
+        'exchange' => (string)__('换货'),
+        default => $code,
+    };
+};
+$statusLabel = static function (string $code): string {
+    return match ($code) {
+        'submitted' => (string)__('待审核'),
+        'approved' => (string)__('已通过'),
+        'rejected' => (string)__('已拒绝'),
+        'cancelled' => (string)__('已取消'),
+        'return_received' => (string)__('已收货'),
+        'awaiting_reship' => (string)__('待重发'),
+        'manual_done' => (string)__('已完成'),
+        default => $code,
+    };
+};
+$reasonLabel = static function (string $code): string {
+    return match ($code) {
+        'quality' => (string)__('质量问题'),
+        'wrong_or_missing' => (string)__('错发漏发'),
+        'transit_damage' => (string)__('运输损坏'),
+        default => $code,
+    };
+};
+$statusOptions = [
+    '' => (string)__('全部状态'),
+    'submitted' => (string)__('待审核'),
+    'approved' => (string)__('已通过'),
+    'return_received' => (string)__('已收货'),
+    'awaiting_reship' => (string)__('待重发'),
+    'manual_done' => (string)__('已完成'),
+    'rejected' => (string)__('已拒绝'),
+    'cancelled' => (string)__('已取消'),
+];
+?>
+<div class="w-grid" data-testid="order-buyer-aftersale-management">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading">
+            <h4 class="w-backend-page__title"><w:icon name="undo" size="sm"></w:icon><?= __('买家退换货') ?></h4>
+        </div>
+        <div><template>Weline_Component::message.phtml</template></div>
+        <?php if (!$buyerAftersaleEnabled): ?>
+            <div class="w-alert" data-tone="warning" data-testid="buyer-aftersale-gate-off"><?= __('买家自助退换货尚未开通。开通前这里只展示已有申请，不能通过、拒绝或确认收货。') ?></div>
+        <?php endif; ?>
+        <div class="w-card" style="--w-mb:var(--weline-space-4);">
+            <div class="w-card__body">
+                <form method="get" class="w-cluster" data-align="end" action="@backend-url{'order/backend/buyer-aftersale/index'}">
+                    <label>
+                        <span class="w-text" data-size="sm"><?= __('状态') ?></span>
+                        <select class="w-input" name="status" data-testid="buyer-aftersale-filter-status">
+                            <?php foreach ($statusOptions as $value => $label): ?>
+                                <option value="<?= $escape($value) ?>"<?= $filterStatus === $value ? ' selected' : '' ?>><?= $escape($label) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+                    <label>
+                        <span class="w-text" data-size="sm"><?= __('单号') ?></span>
+                        <input class="w-input" type="search" name="q" value="<?= $escape($filterKeyword) ?>" placeholder="<?= $escape(__('申请号或订单号')) ?>" data-testid="buyer-aftersale-filter-q">
+                    </label>
+                    <button class="w-button" type="submit" data-tone="primary" data-size="sm"><?= __('筛选') ?></button>
+                </form>
+            </div>
+        </div>
+        <div class="w-cluster" style="--w-mb:var(--weline-space-3);">
+            <button class="w-button" type="button" data-buyer-aftersale-batch="approveBuyerAftersale" data-size="sm"<?= $buyerAftersaleEnabled ? '' : ' disabled' ?>><?= __('批量通过') ?></button>
+            <button class="w-button" type="button" data-buyer-aftersale-batch="rejectBuyerAftersale" data-tone="danger" data-size="sm"<?= $buyerAftersaleEnabled ? '' : ' disabled' ?>><?= __('批量拒绝') ?></button>
+        </div>
+        <div class="w-card">
+            <div class="w-card__body">
+                <div class="w-table-wrap">
+                    <table class="w-table" data-w-vertical="middle">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" data-testid="buyer-aftersale-check-all" aria-label="<?= $escape(__('全选待审核')) ?>"></th>
+                                <th><?= __('申请') ?></th>
+                                <th><?= __('订单') ?></th>
+                                <th><?= __('方式') ?></th>
+                                <th><?= __('原因') ?></th>
+                                <th><?= __('状态') ?></th>
+                                <th><?= __('运单') ?></th>
+                                <th><?= __('操作') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php if ($requests === []): ?>
+                            <tr><td colspan="8" class="w-text" data-align="center" data-tone="muted"><?= __('暂无退换货申请') ?></td></tr>
+                        <?php else: foreach ($requests as $row): ?>
+                            <?php
+                            $requestUuid = trim((string)($row['request_uuid'] ?? ''));
+                            $resolution = trim((string)($row['resolution'] ?? ''));
+                            $status = trim((string)($row['status'] ?? ''));
+                            ?>
+                            <tr data-testid="buyer-aftersale-row" data-request-uuid="<?= $escape($requestUuid) ?>" data-status="<?= $escape($status) ?>" data-resolution="<?= $escape($resolution) ?>">
+                                <td>
+                                    <?php if ($status === 'submitted'): ?>
+                                        <input type="checkbox" data-buyer-aftersale-check="1" value="<?= $escape($requestUuid) ?>" aria-label="<?= $escape(__('选择申请')) ?>">
+                                    <?php endif; ?>
+                                </td>
+                                <td><code><?= $escape($requestUuid) ?></code></td>
+                                <td><code><?= $escape($row['order_uuid'] ?? '') ?></code></td>
+                                <td><?= $escape($resolutionLabel($resolution)) ?></td>
+                                <td><?= $escape($reasonLabel((string)($row['reason_code'] ?? ''))) ?></td>
+                                <td><?= $escape($statusLabel($status)) ?></td>
+                                <td>
+                                    <?= $escape((string)($row['return_tracking_no'] ?? '')) ?>
+                                    <?php if (trim((string)($row['reship_tracking_no'] ?? '')) !== ''): ?>
+                                        <div class="w-text" data-size="sm" data-tone="muted"><?= $escape((string)$row['reship_tracking_no']) ?></div>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div class="w-cluster">
+                                        <?php if ($buyerAftersaleEnabled && $status === 'submitted'): ?>
+                                            <button class="w-button" type="button" data-size="sm" data-buyer-aftersale-op="approveBuyerAftersale"><?= __('通过') ?></button>
+                                            <button class="w-button" type="button" data-size="sm" data-tone="danger" data-buyer-aftersale-op="rejectBuyerAftersale"><?= __('拒绝') ?></button>
+                                        <?php elseif ($buyerAftersaleEnabled && $status === 'approved' && ($resolution === 'return' || $resolution === 'exchange')): ?>
+                                            <button class="w-button" type="button" data-size="sm" data-buyer-aftersale-op="receiveBuyerAftersale"><?= __('确认收货') ?></button>
+                                        <?php elseif ($buyerAftersaleEnabled && $status === 'awaiting_reship' && $resolution === 'exchange'): ?>
+                                            <button class="w-button" type="button" data-size="sm" data-buyer-aftersale-reship="1"><?= __('登记重发') ?></button>
+                                        <?php else: ?>
+                                            <span class="w-text" data-tone="muted">-</span>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="w-dialog" id="buyer-aftersale-reship-dialog" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
+    <div class="w-dialog__frame">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title"><?= __('登记重发运单') ?></h5>
+                <button type="button" class="w-button" aria-label="<?= $escape(__('关闭')) ?>" data-w-action="dialog.close" data-tone="quiet" data-size="sm"></button>
+            </div>
+            <form id="buyer-aftersale-reship-form">
+                <div class="w-dialog__body">
+                    <input type="hidden" name="request_uuid" value="">
+                    <label>
+                        <span class="w-text" data-size="sm"><?= __('重发运单号') ?></span>
+                        <input class="w-input" type="text" name="tracking_no" maxlength="128" required data-testid="buyer-aftersale-reship-tracking">
+                    </label>
+                </div>
+                <div class="w-dialog__footer">
+                    <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><?= __('取消') ?></button>
+                    <button class="w-button" type="submit" data-tone="primary" data-testid="buyer-aftersale-reship-submit"><?= __('保存') ?></button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var enabled = <?= $buyerAftersaleEnabled ? 'true' : 'false' ?>;
+    var root = document.querySelector('[data-testid="order-buyer-aftersale-management"]');
+    if (!root) {
+        return;
+    }
+
+    function api() {
+        return Promise.resolve(window.Weline && window.Weline.load ? window.Weline.load('api') : window.Weline.Api);
+    }
+
+    function toast(ok, text) {
+        if (!window.Weline || !window.Weline.UI || !window.Weline.UI.toast) {
+            return;
+        }
+        if (ok) {
+            window.Weline.UI.toast.success(text);
+            return;
+        }
+        window.Weline.UI.toast.error(text);
+    }
+
+    function runOp(operation, requestUuid, extra) {
+        var payload = Object.assign({ request_uuid: requestUuid }, extra || {});
+        return api().then(function (client) {
+            return client.resource('buyer-aftersale-admin')[operation](payload);
+        });
+    }
+
+    function selectedUuids() {
+        return Array.prototype.map.call(
+            root.querySelectorAll('[data-buyer-aftersale-check="1"]:checked'),
+            function (box) { return box.value; }
+        ).filter(Boolean);
+    }
+
+    root.addEventListener('change', function (event) {
+        var target = event.target;
+        if (!target || target.getAttribute('data-testid') !== 'buyer-aftersale-check-all') {
+            return;
+        }
+        root.querySelectorAll('[data-buyer-aftersale-check="1"]').forEach(function (box) {
+            box.checked = target.checked;
+        });
+    });
+
+    root.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-buyer-aftersale-op], [data-buyer-aftersale-batch], [data-buyer-aftersale-reship]');
+        if (!button || !enabled) {
+            return;
+        }
+        var row = button.closest('[data-request-uuid]');
+        var operation = button.getAttribute('data-buyer-aftersale-op') || button.getAttribute('data-buyer-aftersale-batch');
+        if (button.hasAttribute('data-buyer-aftersale-reship')) {
+            var dialog = document.getElementById('buyer-aftersale-reship-dialog');
+            var form = document.getElementById('buyer-aftersale-reship-form');
+            if (!dialog || !form || !row || !window.Weline || !window.Weline.UI) {
+                return;
+            }
+            form.elements.request_uuid.value = row.getAttribute('data-request-uuid') || '';
+            form.elements.tracking_no.value = '';
+            window.Weline.UI.dialog.open(dialog);
+            return;
+        }
+        if (!operation) {
+            return;
+        }
+        var uuids = button.hasAttribute('data-buyer-aftersale-batch')
+            ? selectedUuids()
+            : [row ? (row.getAttribute('data-request-uuid') || '') : ''];
+        uuids = uuids.filter(Boolean);
+        if (uuids.length === 0) {
+            toast(false, <?= json_encode((string)__('请先选择申请'), JSON_UNESCAPED_UNICODE) ?>);
+            return;
+        }
+        var confirmText = <?= json_encode((string)__('确定处理所选申请吗？'), JSON_UNESCAPED_UNICODE) ?>;
+        if (operation.indexOf('reject') >= 0) {
+            confirmText = <?= json_encode((string)__('确定拒绝所选申请吗？'), JSON_UNESCAPED_UNICODE) ?>;
+        } else if (operation.indexOf('receive') >= 0) {
+            confirmText = <?= json_encode((string)__('确定确认收货吗？'), JSON_UNESCAPED_UNICODE) ?>;
+        } else if (operation.indexOf('approve') >= 0) {
+            confirmText = <?= json_encode((string)__('确定通过所选申请吗？'), JSON_UNESCAPED_UNICODE) ?>;
+        }
+        var go = function () {
+            var chain = Promise.resolve();
+            uuids.forEach(function (uuid) {
+                chain = chain.then(function () { return runOp(operation, uuid); });
+            });
+            chain.then(function () { window.location.reload(); }).catch(function () {
+                toast(false, <?= json_encode((string)__('操作失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>);
+            });
+        };
+        if (window.Weline && window.Weline.UI && window.Weline.UI.dialog) {
+            window.Weline.UI.dialog.confirm(confirmText, {
+                title: <?= json_encode((string)__('确认'), JSON_UNESCAPED_UNICODE) ?>,
+                confirmLabel: <?= json_encode((string)__('确定'), JSON_UNESCAPED_UNICODE) ?>,
+                cancelLabel: <?= json_encode((string)__('取消'), JSON_UNESCAPED_UNICODE) ?>
+            }).then(function (confirmed) {
+                if (confirmed) {
+                    go();
+                }
+            });
+            return;
+        }
+        go();
+    });
+
+    var reshipForm = document.getElementById('buyer-aftersale-reship-form');
+    if (reshipForm) {
+        reshipForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            if (!enabled) {
+                return;
+            }
+            runOp('reshipBuyerAftersale', reshipForm.elements.request_uuid.value, {
+                tracking_no: reshipForm.elements.tracking_no.value
+            }).then(function (data) {
+                if (data && data.success) {
+                    window.location.reload();
+                    return;
+                }
+                toast(false, (data && data.error_code) || <?= json_encode((string)__('保存失败'), JSON_UNESCAPED_UNICODE) ?>);
+            }).catch(function () {
+                toast(false, <?= json_encode((string)__('保存失败'), JSON_UNESCAPED_UNICODE) ?>);
+            });
+        });
+    }
+})();
+</script>

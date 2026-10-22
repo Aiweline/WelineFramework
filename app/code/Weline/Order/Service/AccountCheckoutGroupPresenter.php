@@ -222,6 +222,7 @@ final class AccountCheckoutGroupPresenter
             'currency' => $currency,
             'total_label' => $this->moneyLabel((int)($order['amount_minor'] ?? 0), $currency),
             'refund_label' => $this->customerRefundLabel((string) ($order['refund_status'] ?? 'none')),
+            'invoice_status' => (string) ($order['invoice_status'] ?? 'none'),
             'invoice_label' => $this->customerInvoiceLabel((string) ($order['invoice_status'] ?? 'none')),
             'fulfillment_label' => $this->customerFulfillmentLabel((string) ($order['fulfillment_status'] ?? 'none')),
             'tracking_summary' => $this->trackingSummaryForFulfillment((string) ($order['fulfillment_status'] ?? ''), $status),

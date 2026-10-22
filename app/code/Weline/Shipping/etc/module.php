@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Shipping',
-    "version" => '2.9.66',
+    "version" => '2.9.67',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Currency' => '*',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Search\Console\Search;
 
+use Weline\Framework\App\SystemUpdateActivity;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
@@ -21,6 +22,11 @@ final class ProviderIndexRebuild extends CommandAbstract
     {
         /** @var Printing $printing */
         $printing = ObjectManager::getInstance(Printing::class);
+        if (SystemUpdateActivity::inProgress()) {
+            $printing->warning(__('系统正在更新，全量修复改到更新结束后再执行。'));
+
+            return 1;
+        }
         /** @var SearchProviderIndexService $service */
         $service = ObjectManager::getInstance(SearchProviderIndexService::class);
 
@@ -49,7 +55,7 @@ final class ProviderIndexRebuild extends CommandAbstract
 
     public function tip(): string
     {
-        return __('重建 Search Provider 内容索引（Blog 等非 Product 类型）');
+        return __('手动修复 Search Provider 内容索引。日常更新走变更队列，不在这里定时整表重建。');
     }
 
     public function help(): array|string

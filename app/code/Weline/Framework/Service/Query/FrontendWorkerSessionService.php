@@ -64,6 +64,10 @@ final class FrontendWorkerSessionService
     /** Stable long-lived storefront Scope Token Cookie (HttpOnly). Handshake must not clear it. */
     public const SCOPE_COOKIE_NAME = '__Host-Weline-Worker-Scope';
     /**
+     * Local HTTP acceptance cannot store a `__Host-` cookie. Public hosts never use this name.
+     */
+    public const SCOPE_COOKIE_NAME_LOCAL_HTTP = 'Weline-Worker-Scope';
+    /**
      * @deprecated Storefront opaque bootstrap Cookie prefix. Expire-only during migration;
      *             new storefront path uses {@see self::SCOPE_COOKIE_NAME}.
      */
@@ -81,6 +85,26 @@ final class FrontendWorkerSessionService
     )
     {
         $this->stateStore = $stateStore ?? $this->createConfiguredStateStore();
+    }
+
+    /**
+     * `__Host-` on HTTPS and public hosts. Plain name only for local acceptance HTTP.
+     */
+    public static function scopeCookieName(): string
+    {
+        $scheme = \strtolower(\trim((string)\Weline\Framework\Env\WelineEnv::getRequestScheme()));
+        if ($scheme === 'http' && \Weline\Framework\Runtime\RequestAuthority::allowsPlainHttp(
+            \Weline\Framework\Runtime\RequestAuthority::current(),
+        )) {
+            return self::SCOPE_COOKIE_NAME_LOCAL_HTTP;
+        }
+
+        return self::SCOPE_COOKIE_NAME;
+    }
+
+    public static function scopeCookieSecure(): bool
+    {
+        return self::scopeCookieName() !== self::SCOPE_COOKIE_NAME_LOCAL_HTTP;
     }
 
     public function stateStoreDriver(): string

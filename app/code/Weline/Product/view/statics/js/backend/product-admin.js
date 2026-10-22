@@ -4816,7 +4816,7 @@
                 throw new Error('请输入有效本品免邮额度');
             }
         }
-        payload.attributes = mergeWholesaleSellingModeFlag(payload.attributes || []);
+        payload.attributes = mergeProductReturnAddress(mergeWholesaleSellingModeFlag(payload.attributes || []));
         var priceSelector = payload.offer_matrix
             ? '[data-offer-price]:not([data-variant-price])'
             : '[data-offer-price]';
@@ -4995,6 +4995,36 @@
             scope_state: 'explicit',
             cleared: false,
             value: enabled
+        });
+        return filtered;
+    }
+
+    function mergeProductReturnAddress(rows) {
+        var list = Array.isArray(rows) ? rows.slice() : [];
+        var input = document.querySelector('[data-product-return-address="1"]');
+        if (!input) {
+            return list;
+        }
+        var entityId = parseInt(String(input.getAttribute('data-product-id') || '0'), 10) || 0;
+        if (entityId <= 0) {
+            return list;
+        }
+        var filtered = list.filter(function (row) {
+            return !(row && String(row.attribute_code || '') === 'return_address'
+                && String(row.entity_type || 'product') === 'product'
+                && parseInt(row.store_id || 0, 10) === 0
+                && String(row.locale || '') === '');
+        });
+        filtered.push({
+            entity_type: 'product',
+            entity_id: entityId,
+            store_id: 0,
+            locale: '',
+            attribute_code: 'return_address',
+            value_type: 'string',
+            scope_state: 'explicit',
+            cleared: false,
+            value: String(input.value || '')
         });
         return filtered;
     }

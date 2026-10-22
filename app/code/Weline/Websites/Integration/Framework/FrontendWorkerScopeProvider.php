@@ -44,7 +44,7 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
 
     public function requiresBinding(string $requestScheme): bool
     {
-        return $this->rolloutPolicy->requiresBinding($requestScheme);
+        return $this->rolloutPolicy->requiresBinding($requestScheme, $this->requestHost());
     }
 
     public function rollout(
@@ -63,6 +63,7 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
             $resolved['channel']->id,
             $resolved['store']->storeMode,
             $requestScheme,
+            $this->requestHost(),
         );
     }
 
@@ -85,6 +86,7 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
             $resolved['channel']->id,
             $resolved['store']->storeMode,
             $requestScheme,
+            $this->requestHost(),
         );
         if (!$decision->tokenEnabled) {
             return null;
@@ -135,6 +137,7 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
             $resolved['channel']->id,
             $resolved['store']->storeMode,
             $requestScheme,
+            $this->requestHost(),
         );
         if (!$decision->tokenEnabled) {
             return null;
@@ -157,7 +160,7 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
         ?int $now = null,
     ): ?ScopeIdentity {
         if (!$binding instanceof FrontendWorkerScopeBinding) {
-            if ($this->rolloutPolicy->requiresBinding($requestScheme)) {
+            if ($this->rolloutPolicy->requiresBinding($requestScheme, $this->requestHost())) {
                 throw new FrontendWorkerScopeException(
                     'scope_binding_required',
                     401,
@@ -192,6 +195,7 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
             $resolved['channel']->id,
             $resolved['store']->storeMode,
             $requestScheme,
+            $this->requestHost(),
         );
         if (!$decision->isAuthoritative()) {
             if ($decision->mode === FrontendWorkerScopeRolloutDecision::MODE_ALLOWLIST
@@ -494,6 +498,11 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
                 (string)__('Scope Token 无效'),
             ),
         };
+    }
+
+    private function requestHost(): string
+    {
+        return RequestAuthority::current();
     }
 
     private function catalogConflict(string $reason): FrontendWorkerScopeException

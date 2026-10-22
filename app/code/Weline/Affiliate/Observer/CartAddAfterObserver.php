@@ -22,15 +22,25 @@ class CartAddAfterObserver implements ObserverInterface
             return;
         }
 
-        $this->affiliateService->recordEngagement(AffiliateService::EVENT_ADD_TO_CART, [
-            'product_id' => $productId,
-            'customer_id' => (int) ($event->getData('customer_id') ?? 0),
-            'value' => (float) ($event->getData('price') ?? 0),
-            'metadata' => [
-                'source' => 'cart_add_to_cart_after',
-                'quantity' => (int) ($event->getData('quantity') ?? 1),
-            ],
-            'idempotency_key' => (string) ($event->getData('idempotency_key') ?? ''),
-        ]);
+        try {
+            $this->affiliateService->recordEngagement(AffiliateService::EVENT_ADD_TO_CART, [
+                'product_id' => $productId,
+                'customer_id' => (int) ($event->getData('customer_id') ?? 0),
+                'value' => (float) ($event->getData('price') ?? 0),
+                'metadata' => [
+                    'source' => 'cart_item_added',
+                    'quantity' => (int) ($event->getData('quantity') ?? 1),
+                ],
+                'idempotency_key' => (string) ($event->getData('idempotency_key') ?? ''),
+            ]);
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_error')) {
+                w_log_error('Affiliate engagement side-effect failed: ' . $e->getMessage(), [
+                    'source' => 'cart_item_added',
+                    'product_id' => $productId,
+                    'exception' => $e::class,
+                ], 'affiliate');
+            }
+        }
     }
 }

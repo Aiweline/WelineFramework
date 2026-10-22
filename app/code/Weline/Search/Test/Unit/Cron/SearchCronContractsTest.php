@@ -42,7 +42,9 @@ private function assert_ProviderIndexRebuildCron_testCronImplementsInterfaceAndS
     $cron = new ProviderIndexRebuild();
     self::assertInstanceOf(CronTaskInterface::class, $cron);
     self::assertSame('search_provider_index_rebuild', $cron->execute_name());
-    self::assertSame('*/15 * * * *', $cron->cron_time());
-    self::assertGreaterThanOrEqual(60, $cron->unlock_timeout());
+    self::assertSame('20 3 * * *', $cron->cron_time());
+    self::assertStringNotContainsString('rebuildAll', (string) file_get_contents(
+        dirname(__DIR__, 3) . '/Cron/ProviderIndexRebuild.php'
+    ));
 }
 }

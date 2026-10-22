@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Review\Service;
 
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\Parser;
@@ -45,6 +46,7 @@ final class ReviewService implements ReviewSeoFactsInterface
         private readonly ReviewTypeRegistry $types,
         private readonly ReviewMediaService $media,
         private readonly ReviewCurrentCustomerResolver $customers,
+        private readonly EventsManager $events,
     ) {
     }
 
@@ -137,12 +139,85 @@ final class ReviewService implements ReviewSeoFactsInterface
             throw new \RuntimeException((string)__('评论写入失败。'));
         }
         $this->media->attach($reviewId, $mediaRows);
+        $this->publishCreated(
+            $type->typeCode(),
+            $reviewId,
+            $entity,
+            (int) ($customerId ?? 0),
+            (float) ($normalized['rating'] ?? 0),
+        );
         return [
             'success' => true,
             'review_id' => $reviewId,
             'status' => ProductReview::STATUS_PENDING,
             'message' => __('评论已提交，审核通过后会公开显示。'),
         ];
+    }
+
+    /**
+     * @param array{entity_id:int,entity_uuid:string} $entity
+     */
+    private function publishCreated(
+        string $typeCode,
+        int $reviewId,
+        array $entity,
+        int $customerId,
+        float $rating,
+    ): void {
+        $entityUuid = (string) ($entity['entity_uuid'] ?? '');
+        $productId = $typeCode === 'product' ? $this->storefrontProductId($entityUuid) : 0;
+
+        try {
+            $payload = [
+                'product_id' => $productId,
+                'customer_id' => $customerId,
+                'review_id' => $reviewId,
+                'rating' => $rating,
+                'type_code' => $typeCode,
+                'entity_uuid' => $entityUuid,
+                'idempotency_key' => 'review_created:' . $reviewId,
+            ];
+            $this->events->dispatch('Weline_Review::review_created', $payload);
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_error')) {
+                w_log_error('Review review_created dispatch failed: ' . $e->getMessage(), [
+                    'review_id' => $reviewId,
+                    'exception' => $e::class,
+                ], 'review');
+            }
+        }
+    }
+
+    /**
+     * Catalog product id for affiliate matching. Registry id is not a storefront product id.
+     */
+    private function storefrontProductId(string $entityUuid): int
+    {
+        $entityUuid = trim($entityUuid);
+        $websiteId = RequestContext::getWelineWebsiteId();
+        if ($entityUuid === '' || $websiteId < 0 || !\class_exists(\Weline\Product\Repository\ProductRepository::class)) {
+            return 0;
+        }
+
+        try {
+            $products = ObjectManager::getInstance(\Weline\Product\Repository\ProductRepository::class);
+            if (!\method_exists($products, 'mapIdsByGlobalUuids')) {
+                return 0;
+            }
+            $map = $products->mapIdsByGlobalUuids($websiteId, [$entityUuid]);
+
+            return max(0, (int) ($map[$entityUuid] ?? 0));
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_error')) {
+                w_log_error('Review storefront product id resolve failed: ' . $e->getMessage(), [
+                    'entity_uuid' => $entityUuid,
+                    'website_id' => $websiteId,
+                    'exception' => $e::class,
+                ], 'review');
+            }
+
+            return 0;
+        }
     }
 
     /** @return array<string,mixed> */

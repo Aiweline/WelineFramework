@@ -262,6 +262,45 @@ final class SubscriptionStore
         return count($this->newRecord()->clear()->select()->fetchArray());
     }
 
+    /**
+     * Buyer-owned rows for one website. Identity fields only; callers must strip CAS secrets.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function listForCustomer(string $customerId, int $websiteId): array
+    {
+        $customerId = trim($customerId);
+        SubscriptionState::assertWebsiteId($websiteId);
+        if ($customerId === '') {
+            return [];
+        }
+        if ($this->rows !== null) {
+            $rows = array_values(array_filter(
+                $this->rows,
+                static fn (array $row): bool => (string) ($row['customer_id'] ?? '') === $customerId
+                    && (int) ($row['website_id'] ?? -1) === $websiteId,
+            ));
+        } else {
+            $rows = array_map(
+                fn (array $row): array => $this->normalize($row),
+                $this->newRecord()->clear()
+                    ->where(Subscription::schema_fields_CUSTOMER_ID, $customerId)
+                    ->where(Subscription::schema_fields_WEBSITE_ID, $websiteId)
+                    ->select()
+                    ->fetchArray(),
+            );
+        }
+        usort(
+            $rows,
+            static fn (array $left, array $right): int => strcmp(
+                (string) ($right['created_at'] ?? ''),
+                (string) ($left['created_at'] ?? ''),
+            ),
+        );
+
+        return $rows;
+    }
+
     /** @return array<string, mixed>|null */
     private function find(string $subscriptionId): ?array
     {

@@ -436,7 +436,7 @@ list,list
 没有运行中的索引构建。,没有运行中的索引构建。
 "运行中 %{1} 个索引构建，负载正常。","运行中 %{1} 个索引构建，负载正常。"
 适配器不支持取消索引构建，跳过看门狗。,适配器不支持取消索引构建，跳过看门狗。
-"负载超过阈值 %{1}，已取消 %{2}/%{3} 个索引构建并延后重试。","负载超过阈值 %{1}，已取消 %{2}/%{3} 个索引构建并延后重试。"
+系统正在更新，索引构建改到闲时再做。,系统正在更新，索引构建改到闲时再做。
 自动索引未启用，跳过。,自动索引未启用，跳过。
 当前不在索引窗口（%{1}），跳过。,当前不在索引窗口（%{1}），跳过。
 "系统负载超过索引阈值 %{1}，本轮跳过。","系统负载超过索引阈值 %{1}，本轮跳过。"
@@ -533,6 +533,7 @@ list,list
 只巡检指定表（逻辑表名）,只巡检指定表（逻辑表名）
 为漂移索引入队修复任务,为漂移索引入队修复任务
 "输出 JSON（默认即 JSON）","输出 JSON（默认即 JSON）"
+"负载超过阈值 %{1}，已取消 %{2}/%{3} 个索引构建并延后重试。","负载超过阈值 %{1}，已取消 %{2}/%{3} 个索引构建并延后重试。"
 "CREATE INDEX CONCURRENTLY 不能在事务中执行","CREATE INDEX CONCURRENTLY 不能在事务中执行"
 "迁移检查 [%{i}/%{total}] %{module}","Migration check [%{i}/%{total}] %{module}"
 "迁移检查完成：共 %{total} · 空闲 %{idle}（无待执行 %{none} / 已执行跳过 %{skip}）· 执行 %{work} 模块 %{migrations} 条 · 游标延后 %{defer} · 失败 %{failed}","Migration check done: %{total} total · idle %{idle} (none pending %{none} / executed skip %{skip}) · run %{work} modules %{migrations} rows · cursor defer %{defer} · failed %{failed}"

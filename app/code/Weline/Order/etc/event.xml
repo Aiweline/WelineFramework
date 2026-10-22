@@ -116,6 +116,17 @@
                   shared="true" 
                   sort="10"/>
     </event>
+
+    <!-- 买家售后关联支付 -->
+    <event name="Weline_Order::buyer_after_sale_link_payment">
+        <observer name="Weline_Order::buyer_after_sale_link_payment_bridge"
+                  instance="Weline\Order\Observer\BuyerAftersaleLinkPaymentObserver"
+                  delivery="sync"
+                  failure="isolated"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
     
     <!-- ========== 订单状态查询事件 ========== -->
     

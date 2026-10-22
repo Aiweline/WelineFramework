@@ -22,6 +22,9 @@
 - 重试、重放和并发都回读同一张 Invoice；入口：
   `OrderPaymentEffectConsumer` → `PaymentEffectConsumer` →
   `InvoiceService::ensureFromPaymentEffect()`。
+- 买家 PDF 只是这张已开具 Invoice 的读取投影。开关和销售方公司信息在统一配置
+  `order/invoice/buyer_pdf_enabled` 与 `order/invoice/seller_*`。关闭或公司名称为空时
+  不提供下载，也不另插一张发票。
 
 ## Fulfillment
 

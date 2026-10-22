@@ -22,15 +22,25 @@ class ReviewCreatedObserver implements ObserverInterface
             return;
         }
 
-        $this->affiliateService->recordEngagement(AffiliateService::EVENT_REVIEW_CREATED, [
-            'product_id' => $productId,
-            'customer_id' => (int) ($event->getData('customer_id') ?? 0),
-            'metadata' => [
-                'source' => 'review_created',
-                'review_id' => (int) ($event->getData('review_id') ?? 0),
-                'rating' => (float) ($event->getData('rating') ?? 0),
-            ],
-            'idempotency_key' => (string) ($event->getData('idempotency_key') ?? ''),
-        ]);
+        try {
+            $this->affiliateService->recordEngagement(AffiliateService::EVENT_REVIEW_CREATED, [
+                'product_id' => $productId,
+                'customer_id' => (int) ($event->getData('customer_id') ?? 0),
+                'metadata' => [
+                    'source' => 'review_created',
+                    'review_id' => (int) ($event->getData('review_id') ?? 0),
+                    'rating' => (float) ($event->getData('rating') ?? 0),
+                ],
+                'idempotency_key' => (string) ($event->getData('idempotency_key') ?? ''),
+            ]);
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_error')) {
+                w_log_error('Affiliate engagement side-effect failed: ' . $e->getMessage(), [
+                    'source' => 'review_created',
+                    'product_id' => $productId,
+                    'exception' => $e::class,
+                ], 'affiliate');
+            }
+        }
     }
 }

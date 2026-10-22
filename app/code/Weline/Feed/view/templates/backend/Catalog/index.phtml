@@ -1,0 +1,321 @@
+<?php
+/**
+ * 购物目录列表壳。资料变更只由页面脚本走 Weline.Api / BinQuery。
+ * 控制器只渲染本模板；这里不读取密钥，也不编造目录行。
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$channels = [
+    ['code' => 'google_merchant', 'name' => (string)__('Google Merchant Center')],
+    ['code' => 'microsoft_merchant', 'name' => (string)__('Microsoft Merchant Center（Bing 购物）')],
+    ['code' => 'yandex_market', 'name' => (string)__('Yandex Direct 商品 Feed（YML）')],
+    ['code' => 'meta_catalog', 'name' => (string)__('Meta 商品目录')],
+    ['code' => 'tiktok_catalog', 'name' => (string)__('TikTok Catalog')],
+    ['code' => 'pinterest_catalog', 'name' => (string)__('Pinterest Catalog')],
+    ['code' => 'snapchat_catalog', 'name' => (string)__('Snapchat Catalog')],
+    ['code' => 'criteo', 'name' => (string)__('Criteo')],
+    ['code' => 'vk_ads', 'name' => (string)__('VK Ads')],
+    ['code' => 'naver_shopping', 'name' => (string)__('Naver Shopping')],
+];
+$notice = trim((string)($this->getData('feed_notice') ?? ''));
+$config = [
+    'notice' => $notice,
+    'channels' => $channels,
+        'pageSize' => 500,
+    'query' => [
+        'provider' => 'feed_admin',
+        'operations' => [
+            'listFeeds',
+            'saveFeed',
+            'setFeedEnabled',
+            'archiveFeed',
+            'generateFeed',
+            'listCategoryMaps',
+            'saveCategoryMap',
+            'deleteCategoryMap',
+        ],
+    ],
+    'text' => [
+        'queryUnpublished' => (string)__('购物目录查询尚未发布，列表保持为空，不会标成已连接或已授权。'),
+        'queryFailed' => (string)__('购物目录查询没有成功。'),
+        'queryNoList' => (string)__('查询没有返回目录列表。'),
+        'loading' => (string)__('正在读取目录…'),
+        'empty' => (string)__('还没有目录。先点「新增」，选好平台和站点后再生成。'),
+        'saved' => (string)__('已保存'),
+        'needName' => (string)__('请填写名称。'),
+        'needChannel' => (string)__('请选择渠道。'),
+        'needWebsite' => (string)__('请选择站点。'),
+        'needLocale' => (string)__('这条目录缺少语言、国家或币种。'),
+        'scopeEmpty' => (string)__('这个站点还没有带国家的语言，或还没有币种，所以不能展开目录。'),
+        'createdTree' => (string)__('已按站点已有的语言、国家和币种生成目录。'),
+        'optionsFailed' => (string)__('站点、语言、国家和币种还没取到。'),
+        'notGenerated' => (string)__('尚未生成'),
+        'genSuccess' => (string)__('成功'),
+        'genFailed' => (string)__('失败'),
+        'generateNoResult' => (string)__('生成查询没有返回结果，最近生成保持原样。'),
+        'copied' => (string)__('已复制 Feed 地址'),
+        'copyFailed' => (string)__('没有复制到 Feed 地址。'),
+        'missingId' => (string)__('缺少目录编号'),
+        'disabledMark' => (string)__('已停用'),
+        'statusDisconnected' => (string)__('未连接'),
+        'statusPending' => (string)__('待授权'),
+        'statusIncomplete' => (string)__('授权未完成'),
+        'statusAuthorized' => (string)__('已授权'),
+        'statusReauth' => (string)__('需重新授权'),
+        'copyAddress' => (string)__('复制 Feed 地址'),
+        'authorize' => (string)__('授权'),
+        'reauthorize' => (string)__('重新授权'),
+        'edit' => (string)__('编辑'),
+        'generate' => (string)__('生成'),
+        'categories' => (string)__('分类挂钩'),
+        'disable' => (string)__('停用'),
+        'enable' => (string)__('启用'),
+        'archive' => (string)__('归档'),
+        'createTitle' => (string)__('新增目录'),
+        'editTitle' => (string)__('编辑目录'),
+        'credentialCreateHint' => (string)__('这是你在对应平台上创建应用后拿到的编号和密钥，只给以后授权用。生成商品文件不用填。留空时状态是「未连接」。'),
+        'credentialEditHint' => (string)__('编辑时留空表示保留原值。不在这里填写访问令牌。'),
+        'categoryTitle' => (string)__('分类挂钩'),
+        'categoryLoading' => (string)__('正在读取分类…'),
+        'categoryEmpty' => (string)__('这个站点还没有店内分类。'),
+        'categoryNoList' => (string)__('查询没有返回店内分类。'),
+        'unmapped' => (string)__('未挂钩'),
+        'mapped' => (string)__('已挂钩'),
+        'onlyUnmapped' => (string)__('只看未挂钩'),
+        'showAll' => (string)__('看全部'),
+        'choose' => (string)__('请选择'),
+        'all' => (string)__('全部'),
+        'listReloadFailed' => (string)__('请求已返回，但列表没能重新读取。'),
+    ],
+];
+$configJson = json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?: '{}';
+$h = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+?>
+<div data-weline-load="feedCatalog" data-feed-catalog data-testid="feed-catalog-page">
+    <script type="application/json" id="feed-catalog-config"><?= $configJson ?></script>
+
+    <div class="w-cluster" data-align="start" data-justify="between">
+        <div class="w-stack" style="--w-gap:var(--weline-space-2);">
+            <p class="w-text"><?= __('先点「新增」，选平台，再用搜索选出站点。保存后，系统按这个站点已经启用的语言、国家和币种，自动展开成一组目录。然后点「生成」，复制公开地址交给对应平台。') ?></p>
+            <p class="w-text" data-size="sm" data-tone="muted"><?= __('分类挂钩不是生成的前提。它只把店内分类对应到平台分类。多数平台没挂钩也会带上商品，只是不写分类。Yandex 和 Naver 会跳过没挂钩的商品。') ?></p>
+        </div>
+        <button class="w-button" type="button" data-tone="primary" data-size="sm"
+                data-feed-action="create" data-testid="feed-catalog-create-open"><?= __('新增') ?></button>
+    </div>
+
+    <section class="w-card">
+        <div class="w-card__header">
+            <form class="w-cluster" data-align="end" data-feed-filters data-testid="feed-catalog-filters">
+                <label class="w-field">
+                    <span class="w-field__label"><?= __('名称') ?></span>
+                    <input class="w-input" type="search" name="name" data-feed-filter="name" placeholder="<?= $h(__('按名称检索')) ?>">
+                </label>
+                <label class="w-field">
+                    <span class="w-field__label"><?= __('渠道') ?></span>
+                    <select class="w-select" name="channel_code" data-feed-filter="channel">
+                        <option value=""><?= __('全部') ?></option>
+                        <?php foreach ($channels as $channel): ?>
+                            <option value="<?= $h($channel['code']) ?>"><?= $h($channel['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label class="w-field">
+                    <span class="w-field__label"><?= __('站点') ?></span>
+                    <input class="w-input" name="website_id" data-feed-filter="website" inputmode="numeric" placeholder="<?= $h(__('全部')) ?>">
+                </label>
+                <button class="w-button" type="submit" data-variant="outline" data-size="sm"><?= __('检索') ?></button>
+            </form>
+            <p class="w-text" data-size="sm" data-tone="muted" data-feed-options-note hidden></p>
+        </div>
+        <div class="w-card__body w-stack" style="--w-gap:var(--weline-space-3);">
+            <div class="w-alert" data-tone="danger" data-feed-error hidden></div>
+            <div class="w-table-wrap">
+                <table class="w-table" data-w-vertical="middle" data-testid="feed-catalog-table">
+                    <thead>
+                    <tr>
+                        <th><?= __('名称') ?></th>
+                        <th><?= __('渠道') ?></th>
+                        <th><?= __('站点') ?></th>
+                        <th><?= __('语言/国家/币种') ?></th>
+                        <th><?= __('连接状态') ?></th>
+                        <th><?= __('公开地址') ?></th>
+                        <th><?= __('最近生成') ?></th>
+                        <th><?= __('操作') ?></th>
+                    </tr>
+                    </thead>
+                    <tbody data-feed-rows>
+                    <tr>
+                        <td colspan="8">
+                            <span class="w-text" data-tone="muted"><?= __('正在读取目录…') ?></span>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <nav data-feed-pager hidden></nav>
+        </div>
+    </section>
+
+    <div class="w-dialog" id="feed-catalog-dialog" tabindex="-1" aria-hidden="true"
+         data-w-component="dialog" data-state="closed" hidden data-testid="feed-catalog-dialog">
+        <div class="w-dialog__frame" data-size="md">
+            <div class="w-dialog__surface" style="display:flex; flex-direction:column; max-block-size:inherit; min-block-size:0;">
+                <form id="feed-catalog-form" class="w-stack" data-testid="feed-catalog-form"
+                      style="--w-gap:0; flex:1 1 auto; min-block-size:0; display:flex; flex-direction:column;">
+                    <div class="w-dialog__header" style="flex-shrink:0;">
+                        <h2 class="w-dialog__title" style="--w-m:0;" data-feed-form-title><?= __('新增目录') ?></h2>
+                        <button type="button" class="w-button" aria-label="<?= $h(__('关闭')) ?>"
+                                data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                    </div>
+                    <div class="w-dialog__body w-stack" style="--w-gap:var(--weline-space-3); padding-block-start:var(--weline-space-4); flex:1 1 auto; min-block-size:0; overflow:auto;">
+                        <input type="hidden" name="definition_id" value="" data-feed-field="definition_id">
+                        <label class="w-field">
+                            <span class="w-field__label"><?= __('名称') ?></span>
+                            <input class="w-input" name="name" data-feed-field="name" data-testid="feed-catalog-name">
+                        </label>
+                        <fieldset class="w-stack" style="--w-gap:var(--weline-space-2);" data-feed-channels>
+                            <legend class="w-field__label"><?= __('渠道') ?></legend>
+                            <?php foreach ($channels as $channel): ?>
+                                <div class="w-check">
+                                    <input type="radio" name="channel_code" value="<?= $h($channel['code']) ?>"
+                                           id="feed-catalog-channel-<?= $h($channel['code']) ?>"
+                                           data-testid="feed-catalog-channel-<?= $h($channel['code']) ?>">
+                                    <label for="feed-catalog-channel-<?= $h($channel['code']) ?>"><?= $h($channel['name']) ?></label>
+                                </div>
+                            <?php endforeach; ?>
+                        </fieldset>
+                        <div class="w-stack" data-feed-site-picker style="--w-gap:var(--weline-space-2);">
+                            <span class="w-field__label"><?= __('站点') ?></span>
+                            <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;"><?= __('可搜索，选中后是标签。保存时按站点已有的语言、国家和币种各生成一条，不用手填。') ?></p>
+                            <w:websites:website:select
+                                id="feed-catalog-websites"
+                                name="website_ids"
+                                value=""
+                                options="websiteSelectOptionsJson"
+                                multiple="true"
+                                empty-label="@lang(请选择站点)"
+                                placeholder="@lang(搜索站点名称或域名)"
+                            />
+                        </div>
+                        <p class="w-text" data-size="sm" data-tone="muted" data-feed-scope-lock hidden style="--w-m:0;"></p>
+                        <input type="hidden" name="website_id" value="" data-feed-field="website">
+                        <input type="hidden" name="locale" value="" data-feed-field="locale">
+                        <input type="hidden" name="country" value="" data-feed-field="country">
+                        <input type="hidden" name="currency" value="" data-feed-field="currency">
+                        <div class="w-check">
+                            <input type="checkbox" name="enabled" id="feed-catalog-enabled" data-feed-field="enabled" checked>
+                            <label for="feed-catalog-enabled"><?= __('启用') ?></label>
+                        </div>
+                        <div class="w-stack" data-feed-oauth style="--w-gap:var(--weline-space-3);">
+                            <label class="w-field">
+                                <span class="w-field__label"><?= __('平台应用编号') ?></span>
+                                <input class="w-input" name="client_id" autocomplete="off" data-feed-field="client_id">
+                            </label>
+                            <label class="w-field">
+                                <span class="w-field__label"><?= __('平台应用密钥') ?></span>
+                                <input class="w-input" type="password" name="client_secret" autocomplete="off"
+                                       data-feed-field="client_secret" data-testid="feed-catalog-credentials">
+                                <small class="w-text" data-tone="muted" data-feed-credential-hint></small>
+                            </label>
+                        </div>
+                        <label class="w-field" data-feed-microsoft hidden>
+                            <span class="w-field__label"><?= __('微软开发者令牌') ?></span>
+                            <input class="w-input" type="password" name="developer_token" autocomplete="off"
+                                   data-feed-field="developer_token">
+                            <small class="w-text" data-tone="muted"><?= __('只在接微软广告时填写。这是平台开发者令牌，不是客户密码。编辑时留空表示保留原值。') ?></small>
+                        </label>
+                        <label class="w-field" data-feed-apikey hidden>
+                            <span class="w-field__label"><?= __('平台接口密钥') ?></span>
+                            <input class="w-input" type="password" name="api_key" autocomplete="off" data-feed-field="api_key">
+                            <small class="w-text" data-tone="muted"><?= __('Criteo 和 Naver 用这个密钥拉取目录。不是客户密码。编辑时留空表示保留原值。') ?></small>
+                        </label>
+                        <span class="w-text" data-size="sm" data-tone="danger" data-feed-form-status></span>
+                    </div>
+                    <div class="w-dialog__footer" style="flex-shrink:0;">
+                        <button class="w-button" data-w-action="dialog.close" data-tone="neutral" type="button"><?= __('取消') ?></button>
+                        <button class="w-button" data-tone="primary" type="submit" data-testid="feed-catalog-save"><?= __('保存') ?></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="w-dialog" id="feed-catalog-category-dialog" tabindex="-1" aria-hidden="true"
+         data-w-component="dialog" data-state="closed" hidden data-testid="feed-catalog-category-dialog">
+        <div class="w-dialog__frame" data-size="lg">
+            <div class="w-dialog__surface" style="display:flex; flex-direction:column; max-block-size:inherit; min-block-size:0;">
+                <div class="w-dialog__header" style="flex-shrink:0;">
+                    <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                        <h2 class="w-dialog__title" style="--w-m:0;"><?= __('分类挂钩') ?></h2>
+                        <p class="w-text" data-size="sm" data-tone="muted" data-feed-category-subtitle style="--w-m:0;"></p>
+                    </div>
+                    <button type="button" class="w-button" aria-label="<?= $h(__('关闭')) ?>"
+                            data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                </div>
+                <div class="w-dialog__body w-stack" style="--w-gap:var(--weline-space-3); flex:1 1 auto; min-block-size:0; overflow:auto;">
+                    <div class="w-cluster" data-justify="end">
+                        <button class="w-button" type="button" data-variant="outline" data-size="sm"
+                                data-feed-action="toggle-unmapped" aria-pressed="false"><?= __('只看未挂钩') ?></button>
+                    </div>
+                    <span class="w-text" data-size="sm" data-tone="muted" data-feed-category-status></span>
+                    <div class="w-table-wrap">
+                        <table class="w-table" data-w-vertical="middle">
+                            <thead>
+                            <tr>
+                                <th><?= __('店内分类') ?></th>
+                                <th><?= __('渠道分类编码') ?></th>
+                                <th><?= __('挂钩') ?></th>
+                            </tr>
+                            </thead>
+                            <tbody data-feed-category-rows></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="w-dialog__footer" style="flex-shrink:0;">
+                    <button class="w-button" data-w-action="dialog.close" data-tone="neutral" type="button"><?= __('取消') ?></button>
+                    <button class="w-button" data-tone="primary" type="button" data-feed-action="save-categories"><?= __('保存挂钩') ?></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="w-dialog" id="feed-catalog-disable-dialog" tabindex="-1" aria-hidden="true"
+         data-w-component="dialog" data-state="closed" hidden data-testid="feed-catalog-disable-dialog">
+        <div class="w-dialog__frame" data-size="sm">
+            <div class="w-dialog__surface">
+                <div class="w-dialog__header">
+                    <h2 class="w-dialog__title" style="--w-m:0;"><?= __('停用这条目录') ?></h2>
+                    <button type="button" class="w-button" aria-label="<?= $h(__('关闭')) ?>"
+                            data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                </div>
+                <div class="w-dialog__body">
+                    <p class="w-text" style="--w-m:0;"><?= __('停用后，公开地址将无法打开。') ?></p>
+                </div>
+                <div class="w-dialog__footer">
+                    <button class="w-button" data-w-action="dialog.close" data-tone="neutral" type="button"><?= __('取消') ?></button>
+                    <button class="w-button" data-tone="danger" type="button" data-feed-action="confirm-disable"><?= __('停用') ?></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="w-dialog" id="feed-catalog-archive-dialog" tabindex="-1" aria-hidden="true"
+         data-w-component="dialog" data-state="closed" hidden data-testid="feed-catalog-archive-dialog">
+        <div class="w-dialog__frame" data-size="sm">
+            <div class="w-dialog__surface">
+                <div class="w-dialog__header">
+                    <h2 class="w-dialog__title" style="--w-m:0;"><?= __('归档这条目录') ?></h2>
+                    <button type="button" class="w-button" aria-label="<?= $h(__('关闭')) ?>"
+                            data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                </div>
+                <div class="w-dialog__body">
+                    <p class="w-text" style="--w-m:0;"><?= __('归档后，这条离开在用列表，公开地址不再提供。') ?></p>
+                </div>
+                <div class="w-dialog__footer">
+                    <button class="w-button" data-w-action="dialog.close" data-tone="neutral" type="button"><?= __('取消') ?></button>
+                    <button class="w-button" data-tone="danger" type="button" data-feed-action="confirm-archive"><?= __('归档') ?></button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

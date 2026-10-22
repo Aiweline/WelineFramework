@@ -157,6 +157,9 @@ final class CookieScope
         if (\str_starts_with($name, '__Host-') || \str_starts_with($name, '__Secure-')) {
             return true;
         }
+        if ($name === \Weline\Framework\Service\Query\FrontendWorkerSessionService::SCOPE_COOKIE_NAME_LOCAL_HTTP) {
+            return true;
+        }
         if (\preg_match('/^w_backend_ut(?:_[1-9][0-9]{0,4})?$/D', $name) === 1) {
             return true;
         }
