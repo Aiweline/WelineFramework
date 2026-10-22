@@ -67,11 +67,17 @@ final class ControllerAnnotationRulesCollector
                 continue;
             }
             foreach ($this->scanPhpFiles($dir) as $file) {
+                // macOS AppleDouble sidecars (._*.php) have no PHP open tag.
+                // Executing them prints the xattr blob (com.apple.provenance) and is not a class.
+                if (self::isAppleDoublePath($file)) {
+                    continue;
+                }
                 $class = $this->classFromFile($file, $module);
-                if ($class === '' || !class_exists($class, false)) {
-                    if (is_file($file)) {
-                        require_once $file;
-                    }
+                if ($class === '') {
+                    continue;
+                }
+                if (!class_exists($class, false) && is_file($file)) {
+                    require_once $file;
                 }
                 if ($class === '' || !class_exists($class, false)) {
                     continue;
@@ -268,9 +274,13 @@ final class ControllerAnnotationRulesCollector
         $files = [];
         $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir));
         foreach ($iterator as $file) {
-            if ($file->isFile() && str_ends_with($file->getFilename(), '.php')) {
-                $files[] = $file->getPathname();
+            if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+                continue;
             }
+            if (self::isAppleDoublePath($file->getFilename())) {
+                continue;
+            }
+            $files[] = $file->getPathname();
         }
 
         return $files;
@@ -290,5 +300,16 @@ final class ControllerAnnotationRulesCollector
         }
 
         return trim($ns[1]) . '\\' . $class[2];
+    }
+
+    /**
+     * macOS copies a resource-fork sidecar next to each file. The name is
+     * `._` plus the original filename, and the body is an AppleDouble blob.
+     */
+    public static function isAppleDoublePath(string $path): bool
+    {
+        $name = basename(str_replace('\\', '/', $path));
+
+        return str_starts_with($name, '._');
     }
 }
