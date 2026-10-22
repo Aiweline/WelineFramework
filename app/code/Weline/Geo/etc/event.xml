@@ -57,4 +57,12 @@
                   shared="true"
                   sort="-90"/>
     </event>
+
+    <event name="Weline_Seo::protocol::robots_contribute">
+        <observer name="Weline_Geo::robots_protocol_contributor"
+                  instance="Weline\Geo\Observer\RobotsProtocolContributor"
+                  disabled="false"
+                  shared="true"
+                  sort="20"/>
+    </event>
 </config>

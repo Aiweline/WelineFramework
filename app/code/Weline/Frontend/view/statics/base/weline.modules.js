@@ -535,6 +535,12 @@
             globalVar: "WelineAffiliateProductShare",
             description: "商品详情/加购弹窗分销分享（等账户会话后异步水合）"
         },
+        affiliateFloat: {
+            origin_paths: ["app/code/Weline/Affiliate/view/statics/js/affiliate-float.js"],
+            paths: ["Weline_Affiliate::js/affiliate-float.js"],
+            globalVar: "WelineAffiliateFloat",
+            description: "右侧中悬浮分销面板（storefront-float-side 槽内容）"
+        },
         helpPayShare: {
             origin_paths: ["app/code/Weline/HelpPay/view/statics/js/helppay-share.js?v=20261006-cartamt1"],
             paths: ["Weline_HelpPay::js/helppay-share.js?v=20261006-cartamt1"],

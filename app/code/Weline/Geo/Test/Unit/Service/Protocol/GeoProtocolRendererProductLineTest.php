@@ -38,7 +38,7 @@ class GeoProtocolRendererProductLineTest extends TestCase
 
         self::assertTrue($isProduct->invoke($renderer, $item));
 
-        $line = $productLine->invoke($renderer, $item, false);
+        $line = $productLine->invoke($renderer, $item, false, 'https://shop.test');
 
         self::assertStringContainsString('[Summer Dress](https://shop.test/product/summer-dress)', $line);
         self::assertStringContainsString('Brand: WeShop', $line);

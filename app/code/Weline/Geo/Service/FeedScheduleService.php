@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Weline\Geo\Service;
 
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Geo\Model\Feed;
 use Weline\Geo\Model\FeedItem;
+use Weline\Geo\Service\Protocol\GeoWebsiteFeedScope;
+use Weline\Seo\Service\SeoWebsiteDirectory;
 
 /**
  * Cron-owned GEO feed publish: sync sources, generate only when content changed.
@@ -23,6 +24,8 @@ final class FeedScheduleService
         private readonly FeedGeneratorService $generator,
         private readonly Feed $feed,
         private readonly FeedItem $feedItem,
+        private readonly GeoWebsiteFeedScope $websiteFeedScope,
+        private readonly SeoWebsiteDirectory $websiteDirectory,
     ) {
     }
 
@@ -140,19 +143,21 @@ final class FeedScheduleService
         return $newest > $lastGeneratedAt;
     }
 
-    public function siteJsonPath(): string
+    public function siteJsonPath(int $websiteId = 0): string
     {
-        return rtrim(FeedGeneratorService::FEED_DIR, '/') . '/' . self::SITE_JSON;
+        return $this->websiteFeedScope->siteJsonPath($websiteId);
     }
 
-    public function siteXmlPath(): string
+    public function siteXmlPath(int $websiteId = 0): string
     {
-        return rtrim(FeedGeneratorService::FEED_DIR, '/') . '/' . self::SITE_XML;
+        return $this->websiteFeedScope->siteXmlPath($websiteId);
     }
 
-    public function readSiteFeed(string $format): ?string
+    public function readSiteFeed(string $format, int $websiteId = 0): ?string
     {
-        $path = ($format === 'rss' || $format === 'xml') ? $this->siteXmlPath() : $this->siteJsonPath();
+        $path = ($format === 'rss' || $format === 'xml')
+            ? $this->siteXmlPath($websiteId)
+            : $this->siteJsonPath($websiteId);
         if (!is_file($path) || !is_readable($path)) {
             return null;
         }
@@ -163,22 +168,48 @@ final class FeedScheduleService
     private function publishSiteProtocolFiles(): void
     {
         $feeds = $this->enabledFeeds();
-        $dir = FeedGeneratorService::FEED_DIR;
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0755, true);
+        $root = rtrim(FeedGeneratorService::FEED_DIR, '/');
+        if (!is_dir($root) && !mkdir($root, 0755, true) && !is_dir($root)) {
+            throw new \RuntimeException('Unable to create GEO feed directory: ' . $root);
         }
 
+        foreach ($this->websiteIds() as $websiteId) {
+            $this->publishSiteProtocolFilesForWebsite($websiteId, $feeds);
+        }
+    }
+
+    /**
+     * @param list<Feed> $feeds
+     */
+    private function publishSiteProtocolFilesForWebsite(int $websiteId, array $feeds): void
+    {
+        $dir = $this->websiteFeedScope->siteFeedDirectory($websiteId);
+        if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+            throw new \RuntimeException('Unable to create website GEO feed directory: ' . $dir);
+        }
+
+        $jsonPath = $this->siteJsonPath($websiteId);
+        $xmlPath = $this->siteXmlPath($websiteId);
         if ($feeds === []) {
-            file_put_contents($this->siteJsonPath(), $this->emptyJson());
-            file_put_contents($this->siteXmlPath(), $this->emptyXml());
+            file_put_contents($jsonPath, $this->emptyJson());
+            file_put_contents($xmlPath, $this->emptyXml());
             return;
         }
+
+        $registered = $this->websiteDirectory->getWebsiteById($websiteId, true);
+        $baseUrl = is_array($registered)
+            ? $this->websiteDirectory->effectivePublicBaseUrl($registered)
+            : '';
+        $allowedHosts = $this->websiteFeedScope->allowedHosts($websiteId, $baseUrl);
 
         $channel = $feeds[0];
         $items = [];
         $seen = [];
         foreach ($feeds as $feed) {
             foreach ($this->generator->listPublishedItems($feed) as $item) {
+                if (!$this->websiteFeedScope->itemBelongsToWebsite($item, $websiteId, $allowedHosts)) {
+                    continue;
+                }
                 $url = trim((string)($item[FeedItem::schema_fields_URL] ?? $item['url'] ?? ''));
                 $type = trim((string)($item[FeedItem::schema_fields_ITEM_TYPE] ?? $item['item_type'] ?? ''));
                 $id = (string)($item[FeedItem::schema_fields_ITEM_ID] ?? $item['item_id'] ?? '');
@@ -197,13 +228,38 @@ final class FeedScheduleService
         });
 
         file_put_contents(
-            $this->siteJsonPath(),
+            $jsonPath,
             $this->generator->generateFeedFromItems($channel, $items, 'json_feed')
         );
         file_put_contents(
-            $this->siteXmlPath(),
+            $xmlPath,
             $this->generator->generateFeedFromItems($channel, $items, 'rss')
         );
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function websiteIds(): array
+    {
+        $ids = [0];
+        try {
+            if (!class_exists(\Weline\Websites\Model\Website::class)) {
+                return $ids;
+            }
+            /** @var \Weline\Websites\Model\Website $website */
+            $website = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+            foreach ($website->reset()->select()->fetchArray() as $row) {
+                $id = (int)($row[\Weline\Websites\Model\Website::schema_fields_ID] ?? $row['website_id'] ?? -1);
+                if ($id >= 0) {
+                    $ids[] = $id;
+                }
+            }
+        } catch (\Throwable $e) {
+            throw $e;
+        }
+
+        return array_values(array_unique($ids));
     }
 
     private function emptyJson(): string
@@ -223,7 +279,13 @@ final class FeedScheduleService
 
     private function siteFilesExist(): bool
     {
-        return is_file($this->siteJsonPath()) && is_file($this->siteXmlPath());
+        foreach ($this->websiteIds() as $websiteId) {
+            if (!is_file($this->siteJsonPath($websiteId)) || !is_file($this->siteXmlPath($websiteId))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function siteNeedsRefresh(): bool
@@ -231,23 +293,24 @@ final class FeedScheduleService
         if (!$this->siteFilesExist()) {
             return true;
         }
-        $mtime = min(
-            (int)@filemtime($this->siteJsonPath()),
-            (int)@filemtime($this->siteXmlPath())
-        );
-        if ($mtime <= 0) {
-            return true;
+
+        $oldestMtime = PHP_INT_MAX;
+        foreach ($this->websiteIds() as $websiteId) {
+            $mtime = min(
+                (int)@filemtime($this->siteJsonPath($websiteId)),
+                (int)@filemtime($this->siteXmlPath($websiteId))
+            );
+            if ($mtime <= 0) {
+                return true;
+            }
+            $oldestMtime = min($oldestMtime, $mtime);
         }
 
-        try {
-            $row = $this->feedItem->reset()
-                ->where(FeedItem::schema_fields_IS_PUBLISHED, 1)
-                ->order(FeedItem::schema_fields_UPDATED_AT, 'DESC')
-                ->find()
-                ->fetchArray();
-        } catch (\Throwable) {
-            return false;
-        }
+        $row = $this->feedItem->reset()
+            ->where(FeedItem::schema_fields_IS_PUBLISHED, 1)
+            ->order(FeedItem::schema_fields_UPDATED_AT, 'DESC')
+            ->find()
+            ->fetchArray();
         if (!is_array($row) || $row === []) {
             return false;
         }
@@ -257,7 +320,7 @@ final class FeedScheduleService
             (int)($row[FeedItem::schema_fields_PUBLISHED_AT] ?? 0)
         );
 
-        return $newest > $mtime;
+        return $newest > $oldestMtime;
     }
 
     private function publishedItemCount(int $feedId): int

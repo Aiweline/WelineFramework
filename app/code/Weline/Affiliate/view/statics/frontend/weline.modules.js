@@ -19,5 +19,12 @@ Object.assign(window.WelineModulesConfig.modules, {
         ],
         globalVar: "WelineAffiliateProductShare",
         description: "商品详情/加购弹窗分销分享（等账户会话后异步水合）"
+    },
+    affiliateFloat: {
+        paths: [
+            "Weline_Affiliate::js/affiliate-float.js"
+        ],
+        globalVar: "WelineAffiliateFloat",
+        description: "右侧中悬浮分销面板（storefront-float-side 槽内容）"
     }
 });

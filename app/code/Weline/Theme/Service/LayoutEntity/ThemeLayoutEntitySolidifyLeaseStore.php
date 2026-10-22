@@ -89,7 +89,7 @@ final class ThemeLayoutEntitySolidifyLeaseStore
 
     private function pathFor(ThemeLayoutEntitySolidifySerialKey $key): string
     {
-        return rtrim($this->paths->root(), '/\\')
+        return rtrim($this->paths->stateRoot(), '/\\')
             . DIRECTORY_SEPARATOR . (string)$key->themeId
             . DIRECTORY_SEPARATOR . '.solidify-leases'
             . DIRECTORY_SEPARATOR . $key->slotHash() . '.lease';

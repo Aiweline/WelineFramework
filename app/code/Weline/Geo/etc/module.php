@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Geo',
-    "version" => '1.0.21',
+    "version" => '1.0.23',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',

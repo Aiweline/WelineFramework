@@ -168,6 +168,20 @@ return [
             'result' => ['type' => 'mixed', 'required' => false, 'description' => 'Task result'],
         ],
     ],
+    'Weline_Seo::protocol::robots_contribute' => [
+        'name' => __('SEO robots.txt contribution'),
+        'description' => __('Dispatched while robots.txt is rendered so other modules can add global or User-agent:* directives.'),
+        'doc' => 'integration/robots_contribute.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'global_lines' => ['type' => 'array', 'required' => true, 'description' => 'Directives before the first User-agent group'],
+            'star_lines' => ['type' => 'array', 'required' => true, 'description' => 'Directives inside User-agent: *'],
+            'base_url' => ['type' => 'string', 'required' => true, 'description' => 'Public origin without a trailing slash'],
+            'website_id' => ['type' => 'integer', 'required' => true, 'description' => 'Current website ID'],
+            'robots_enabled' => ['type' => 'boolean', 'required' => true, 'description' => 'Whether crawling is allowed'],
+        ],
+    ],
     'Weline_Seo::application::trend_sync_completed' => [
         'name' => __('SEO trend sync completed'),
         'description' => __('Dispatched when trend data sync is completed.'),

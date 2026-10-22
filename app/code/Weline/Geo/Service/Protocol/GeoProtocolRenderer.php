@@ -19,6 +19,7 @@ class GeoProtocolRenderer
         private readonly FeedItem $feedItem,
         private readonly FeedGeneratorService $feedGenerator,
         private readonly WebsiteProtocolConfig $protocolConfig,
+        private readonly GeoWebsiteFeedScope $websiteFeedScope,
         private readonly ?FeedScheduleService $feedSchedule = null,
     ) {
     }
@@ -42,15 +43,13 @@ class GeoProtocolRenderer
             '## Discovery',
         ];
 
-        if ($baseUrl !== '') {
-            $lines[] = '- Sitemap: ' . $baseUrl . '/sitemap.xml';
-            if ($config->isFeedEnabled()) {
-                $lines[] = '- JSON Feed: ' . $baseUrl . '/geo-feed.json';
-                $lines[] = '- RSS Feed: ' . $baseUrl . '/geo-feed.xml';
-            }
+        foreach (IndustryProtocolDocuments::llmsDiscoveryLines($baseUrl, $config->isFeedEnabled()) as $discoveryLine) {
+            $lines[] = $discoveryLine;
         }
 
-        $items = $config->isFeedEnabled() ? $this->collectItems($full ? 500 : 80, $config->getFeedId()) : [];
+        $items = $config->isFeedEnabled()
+            ? $this->collectItems($full ? 500 : 80, $config->getFeedId(), $website->id, $baseUrl)
+            : [];
         if ($items !== []) {
             $productItems = array_values(array_filter($items, fn (array $item): bool => $this->isProductItem($item)));
             $contentItems = array_values(array_filter($items, fn (array $item): bool => !$this->isProductItem($item)));
@@ -58,7 +57,7 @@ class GeoProtocolRenderer
                 $lines[] = '';
                 $lines[] = '## Products';
                 foreach ($productItems as $item) {
-                    $line = $this->productLine($item, $full);
+                    $line = $this->productLine($item, $full, $baseUrl);
                     if ($line !== '') {
                         $lines[] = $line;
                     }
@@ -87,6 +86,21 @@ class GeoProtocolRenderer
         return implode("\n", $lines) . "\n";
     }
 
+    public function renderLicenseXml(): string
+    {
+        $website = $this->websiteResolver->currentWebsite();
+        $config = $this->loadWebsiteConfig($website->id);
+
+        return IndustryProtocolDocuments::licenseXml($config->isLlmsEnabled());
+    }
+
+    public function renderTrustTxt(): string
+    {
+        $website = $this->websiteResolver->currentWebsite();
+
+        return IndustryProtocolDocuments::trustTxt($this->resolvePublicBaseUrl($website));
+    }
+
     public function renderFeed(string $format = 'json_feed'): string
     {
         $website = $this->websiteResolver->currentWebsite();
@@ -96,7 +110,7 @@ class GeoProtocolRenderer
         }
 
         if ($this->feedSchedule !== null) {
-            $cached = $this->feedSchedule->readSiteFeed($format);
+            $cached = $this->feedSchedule->readSiteFeed($format, $website->id);
             if ($cached !== null && $cached !== '') {
                 return $cached;
             }
@@ -116,16 +130,84 @@ class GeoProtocolRenderer
             return $this->emptyFeed($format);
         }
 
-        $feeds = $this->enabledFeeds();
+        $baseUrl = $this->resolvePublicBaseUrl($website);
+        $feeds = $this->enabledFeedsForConfig($config);
         if ($feeds === []) {
             return $this->emptyFeed($format);
         }
 
         $channel = $this->preferredFeed($config->getFeedId()) ?: $feeds[0];
+        $items = $this->collectPublishedItemsForWebsite($feeds, $website->id, $baseUrl);
+
+        return $this->feedGenerator->generateFeedFromItems($channel, $items, $format);
+    }
+
+    /**
+     * @return list<Feed>
+     */
+    private function enabledFeedsForConfig(WebsiteProtocolConfig $config): array
+    {
+        $preferredId = $config->getFeedId();
+        if ($preferredId > 0) {
+            $preferred = $this->preferredFeed($preferredId);
+            if ($preferred !== null && (int)$preferred->getData(Feed::schema_fields_IS_ENABLED) === 1) {
+                return [$preferred];
+            }
+
+            return [];
+        }
+
+        return $this->enabledFeeds();
+    }
+
+    /**
+     * @return list<Feed>
+     */
+    private function enabledFeeds(): array
+    {
+        try {
+            $rows = $this->feed->reset()
+                ->where(Feed::schema_fields_IS_ENABLED, 1)
+                ->order(Feed::schema_fields_ID, 'ASC')
+                ->select()
+                ->fetchArray();
+        } catch (\Throwable $e) {
+            throw $e;
+        }
+        if (!is_array($rows) || $rows === []) {
+            return [];
+        }
+
+        $feeds = [];
+        foreach ($rows as $row) {
+            $id = (int)($row[Feed::schema_fields_ID] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $model = clone $this->feed;
+            $model->clearData()->reset()->load($id);
+            if ($model instanceof Feed && (int)$model->getId() === $id) {
+                $feeds[] = $model;
+            }
+        }
+
+        return $feeds;
+    }
+
+    /**
+     * @param list<Feed> $feeds
+     * @return list<array<string, mixed>>
+     */
+    private function collectPublishedItemsForWebsite(array $feeds, int $websiteId, string $baseUrl): array
+    {
+        $allowedHosts = $this->websiteFeedScope->allowedHosts($websiteId, $baseUrl);
         $items = [];
         $seen = [];
         foreach ($feeds as $feed) {
             foreach ($this->feedGenerator->listPublishedItems($feed) as $item) {
+                if (!$this->websiteFeedScope->itemBelongsToWebsite($item, $websiteId, $allowedHosts)) {
+                    continue;
+                }
                 $url = trim((string)($item[FeedItem::schema_fields_URL] ?? $item['url'] ?? ''));
                 $type = trim((string)($item[FeedItem::schema_fields_ITEM_TYPE] ?? $item['item_type'] ?? ''));
                 $id = (string)($item[FeedItem::schema_fields_ITEM_ID] ?? $item['item_id'] ?? '');
@@ -144,44 +226,7 @@ class GeoProtocolRenderer
             return $right <=> $left;
         });
 
-        return $this->feedGenerator->generateFeedFromItems($channel, $items, $format);
-    }
-
-    /**
-     * @return list<Feed>
-     */
-    private function enabledFeeds(): array
-    {
-        try {
-            $rows = $this->feed->reset()
-                ->where(Feed::schema_fields_IS_ENABLED, 1)
-                ->order(Feed::schema_fields_ID, 'ASC')
-                ->select()
-                ->fetchArray();
-        } catch (\Throwable) {
-            return [];
-        }
-        if (!is_array($rows) || $rows === []) {
-            return [];
-        }
-
-        $feeds = [];
-        foreach ($rows as $row) {
-            $id = (int)($row[Feed::schema_fields_ID] ?? 0);
-            if ($id <= 0) {
-                continue;
-            }
-            try {
-                $model = clone $this->feed;
-                $model->clearData()->reset()->load($id);
-                if ($model instanceof Feed && (int)$model->getId() === $id) {
-                    $feeds[] = $model;
-                }
-            } catch (\Throwable) {
-            }
-        }
-
-        return $feeds;
+        return $items;
     }
 
     private function emptyFeed(string $format): string
@@ -201,22 +246,27 @@ class GeoProtocolRenderer
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function collectItems(int $limit, int $feedId = 0): array
+    private function collectItems(int $limit, int $feedId, int $websiteId, string $baseUrl): array
     {
-        try {
-            $query = $this->feedItem->reset()
-                ->where(FeedItem::schema_fields_IS_PUBLISHED, 1);
-            if ($feedId > 0) {
-                $query->where(FeedItem::schema_fields_FEED_ID, $feedId);
-            }
+        $query = $this->feedItem->reset()
+            ->where(FeedItem::schema_fields_IS_PUBLISHED, 1);
+        if ($feedId > 0) {
+            $query->where(FeedItem::schema_fields_FEED_ID, $feedId);
+        }
 
-            return $query->order(FeedItem::schema_fields_PUBLISHED_AT, 'DESC')
-                    ->limit($limit)
-                    ->select()
-                    ->fetchArray();
-        } catch (\Throwable) {
+        // Over-fetch then filter in PHP: metadata.website_id is JSON, not a portable SQL column.
+        $rows = $query->order(FeedItem::schema_fields_PUBLISHED_AT, 'DESC')
+            ->limit(max(1, $limit) * 8)
+            ->select()
+            ->fetchArray();
+        if (!is_array($rows) || $rows === []) {
             return [];
         }
+
+        $allowedHosts = $this->websiteFeedScope->allowedHosts($websiteId, $baseUrl);
+        $scoped = $this->websiteFeedScope->filterItems($rows, $websiteId, $allowedHosts);
+
+        return array_slice($scoped, 0, max(1, $limit));
     }
 
     private function preferredFeed(int $feedId): ?Feed
@@ -225,27 +275,8 @@ class GeoProtocolRenderer
             return null;
         }
 
-        try {
-            $row = $this->feed->reset()->load($feedId);
-            return $row instanceof Feed && $row->getId() ? $row : null;
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    private function firstEnabledFeed(): ?Feed
-    {
-        try {
-            $row = $this->feed->reset()
-                ->where(Feed::schema_fields_IS_ENABLED, 1)
-                ->order(Feed::schema_fields_ID, 'ASC')
-                ->find()
-                ->fetch();
-
-            return $row instanceof Feed && $row->getId() ? $row : null;
-        } catch (\Throwable) {
-            return null;
-        }
+        $row = $this->feed->reset()->load($feedId);
+        return $row instanceof Feed && $row->getId() ? $row : null;
     }
 
     private function plain(string $value): string
@@ -268,10 +299,10 @@ class GeoProtocolRenderer
     /**
      * @param array<string, mixed> $item
      */
-    private function productLine(array $item, bool $full): string
+    private function productLine(array $item, bool $full, string $baseUrl = ''): string
     {
         $title = trim((string)($item[FeedItem::schema_fields_TITLE] ?? ''));
-        $url = $this->publicItemUrl(trim((string)($item[FeedItem::schema_fields_URL] ?? '')), $this->resolvePublicBaseUrl($this->websiteResolver->currentWebsite()));
+        $url = $this->publicItemUrl(trim((string)($item[FeedItem::schema_fields_URL] ?? '')), $baseUrl);
         if ($title === '' || $url === '') {
             return '';
         }
@@ -381,14 +412,12 @@ class GeoProtocolRenderer
 
     private function loadWebsiteConfig(int $websiteId): WebsiteProtocolConfig
     {
-        try {
-            if ($websiteId > 0) {
-                return $this->protocolConfig->loadByWebsiteId($websiteId);
-            }
-        } catch (\Throwable) {
+        if ($websiteId < 0) {
+            return $this->protocolConfig->reset();
         }
 
-        return $this->protocolConfig->reset();
+        // website_id=0 is the system default site and must load like any other site.
+        return $this->protocolConfig->loadByWebsiteId($websiteId);
     }
 
     /**

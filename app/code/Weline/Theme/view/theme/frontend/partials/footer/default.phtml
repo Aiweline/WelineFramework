@@ -66,7 +66,9 @@ $floatEdgeRecallLabel = htmlspecialchars(
 #w-storefront-float-layer .w-storefront-float-layer__slot{position:absolute;pointer-events:auto;max-width:min(100vw,28rem);transition:transform var(--weline-theme-duration-normal,.28s) var(--weline-theme-easing-standard,cubic-bezier(.22,1,.36,1));will-change:auto}
 #w-storefront-float-layer .w-storefront-float-layer__slot--start{left:max(.85rem,env(safe-area-inset-left,0px));bottom:max(.95rem,env(safe-area-inset-bottom,0px))}
 #w-storefront-float-layer .w-storefront-float-layer__slot--end{right:max(var(--weline-space-5,1.25rem),env(safe-area-inset-right,0px));bottom:max(var(--weline-space-5,1.25rem),env(safe-area-inset-bottom,0px))}
+#w-storefront-float-layer .w-storefront-float-layer__slot--side{right:max(var(--weline-space-5,1.25rem),env(safe-area-inset-right,0px));top:50%;transform:translateY(-50%);max-height:calc(100vh - 8rem);overflow-y:auto}
 #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed{will-change:transform}
+#w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed[data-float-slot=side]{right:max(0px,env(safe-area-inset-right,0px));transform:translateY(-50%) translateX(100%)}
 #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed[data-float-slot=start],#w-storefront-float-layer .w-storefront-float-layer__slot--start.is-edge-collapsed:has(.w-store-music){left:max(0px,env(safe-area-inset-left,0px));transform:translateX(-100%)}
 #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed[data-float-slot=end]{right:max(0px,env(safe-area-inset-right,0px));transform:translateX(100%)}
 #w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed .w-storefront-float-edge__body,#w-storefront-float-layer .w-storefront-float-layer__slot.is-edge-collapsed .w-storefront-float-edge__body *{visibility:hidden;opacity:0;pointer-events:none}
@@ -104,6 +106,18 @@ $floatEdgeRecallLabel = htmlspecialchars(
             data-edge-dismiss-label="<?= $floatEdgeDismissLabel ?>"
             data-edge-recall-label="<?= $floatEdgeRecallLabel ?>"
             data-testid="storefront-float-end"></w:slot>
+    <w:slot id="storefront-float-side"
+            name="悬浮右侧中"
+            accept="affiliate-float,layout-storefront-float-side,content"
+            reject="header,footer,navigation"
+            multiple="true"
+            append="true"
+            position="footer"
+            class="w-storefront-float-layer__slot w-storefront-float-layer__slot--side"
+            data-float-slot="side"
+            data-edge-dismiss-label="<?= $floatEdgeDismissLabel ?>"
+            data-edge-recall-label="<?= $floatEdgeRecallLabel ?>"
+            data-testid="storefront-float-side"></w:slot>
 </div>
 
 <?php // Guest-neutral tail chrome bag (Compare/Consent/B2B/Theme idle/Geo·Location·Shipping declare). ?>

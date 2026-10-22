@@ -8,5 +8,6 @@ declare(strict_types=1);
  */
 return [
     'Weline_Affiliate::templates/frontend/widgets/affiliate-center.phtml',
+    'Weline_Affiliate::templates/frontend/widgets/affiliate-float.phtml',
     'Weline_Affiliate::templates/frontend/widgets/footer-promote-link.phtml',
 ];

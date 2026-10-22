@@ -126,6 +126,15 @@ final class StaticRequestBypassDecider
         return $path === 'robots.txt'
             || $path === 'robots.xml'
             || $path === 'sitemap.xml'
+            || $path === 'llms.txt'
+            || $path === 'llms-full.txt'
+            || $path === 'ai.txt'
+            || $path === 'license.xml'
+            || $path === 'trust.txt'
+            || $path === 'geo-feed.json'
+            || $path === 'geo-feed.xml'
+            || $path === '.well-known/tdmrep.json'
+            || $path === '.well-known/trust.txt'
             || \str_starts_with($path, 'sitemaps/');
     }
 

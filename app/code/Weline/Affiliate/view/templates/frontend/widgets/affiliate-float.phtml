@@ -1,0 +1,75 @@
+<?php
+/**
+ * @widget.source {Weline_Affiliate::css/affiliate-float.css,Weline_Affiliate::js/affiliate-float.js}
+ * 悬浮右侧中分销部件：默认注入 Theme chrome 槽 storefront-float-side。
+ * 容器（Theme）对业务零感知；本部件为该槽首个注入方，可经可视化卸载或后台删除注入回收。
+ *
+ * @widget.code {affiliate-float}
+ * @widget.cache {3600}
+ * @widget.share {false}
+ * @widget.name {悬浮分销}
+ * @widget.description {右侧中悬浮分销面板：邀请链接复制与佣金速览，未登录仅展示我要推广入口。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {storefront-float-side}
+ * @widget.supports {["affiliate-float","layout-storefront-float-side","content"]}
+ * @widget.default_injections {[{"layout_type":"*","slot":"storefront-float-side","area":"footer","sort_order":100,"required":true,"reason":"店面右侧中悬浮默认展示分销面板；主题重写布局仍注入，仅可视化卸载可省略","config":[]}]}
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+WidgetI18n::prefetchLabels([
+    '我要推广',
+    '分销面板',
+    '邀请链接',
+    '复制链接',
+    '待结算佣金',
+    '进入分销中心',
+    '展开分销',
+    '收起分销',
+]);
+
+$scope = WidgetUiScope::forWidget('affiliate-float');
+$esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+// Guest-safe SSR：登录态与佣金数据在展开时经 BinQuery 拉取；SSR 只输出中性入口。
+$affiliateCenterUrl = (string) $this->getUrl('affiliate/customer/affiliate');
+?>
+<div class="affiliate-float-widget <?= $esc($scope->cssClass) ?>"
+     weline-code="<?= $esc($scope->code) ?>"
+     data-uid="<?= $esc($scope->uid) ?>"
+     data-js-ns="<?= $esc($scope->jsNs) ?>"
+     data-float-side-widget
+     data-affiliate-float
+     data-weline-load="affiliateFloat"
+     data-affiliate-summary-url="@frontend-url{'affiliate/frontend/summary'}"
+     data-affiliate-center-url="<?= $esc($affiliateCenterUrl) ?>"
+     data-testid="affiliate-float-widget">
+    <button type="button"
+            class="affiliate-float-widget__entry"
+            data-affiliate-float-toggle
+            aria-expanded="false"
+            aria-controls="affiliate-float-panel-<?= $esc($scope->uid) ?>"
+            data-testid="affiliate-float-entry">
+        <svg class="affiliate-float-widget__entry-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+            <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
+        </svg>
+        <span class="affiliate-float-widget__entry-label"><lang>我要推广</lang></span>
+    </button>
+    <div class="affiliate-float-widget__panel w-panel"
+         id="affiliate-float-panel-<?= $esc($scope->uid) ?>"
+         data-affiliate-float-panel
+         hidden
+         role="region"
+         aria-label="<lang>分销面板</lang>"
+         data-testid="affiliate-float-panel">
+        <div class="affiliate-float-widget__panel-body" data-affiliate-float-body>
+            <p class="affiliate-float-widget__status" data-affiliate-float-status></p>
+        </div>
+    </div>
+</div>

@@ -124,7 +124,7 @@ final class ThemeLayoutEntitySolidifyJobStore
      */
     public function foldLegacyMultiVersionJobs(): array
     {
-        $root = rtrim($this->paths->root(), '/\\');
+        $root = rtrim($this->paths->stateRoot(), '/\\');
         if (!is_dir($root)) {
             return ['folded' => 0, 'removed' => 0, 'slots' => 0];
         }
@@ -194,7 +194,7 @@ final class ThemeLayoutEntitySolidifyJobStore
      */
     public function listPending(int $limit = 32): array
     {
-        $root = rtrim($this->paths->root(), '/\\');
+        $root = rtrim($this->paths->stateRoot(), '/\\');
         if (!is_dir($root)) {
             return [];
         }
@@ -405,7 +405,7 @@ final class ThemeLayoutEntitySolidifyJobStore
 
     private function pathFor(ThemeLayoutEntitySolidifySerialKey $key): string
     {
-        return rtrim($this->paths->root(), '/\\')
+        return rtrim($this->paths->stateRoot(), '/\\')
             . DIRECTORY_SEPARATOR . (string)$key->themeId
             . DIRECTORY_SEPARATOR . '.solidify-jobs'
             . DIRECTORY_SEPARATOR . $key->slotHash() . '.json';

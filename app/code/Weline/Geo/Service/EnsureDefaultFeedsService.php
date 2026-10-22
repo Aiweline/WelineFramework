@@ -143,12 +143,11 @@ final class EnsureDefaultFeedsService
         foreach ($websiteIds as $websiteId) {
             $row = $this->protocolConfig->loadByWebsiteId($websiteId);
             $llmsIntro = $row->getId() ? $row->getLlmsIntro() : '';
-            // feed_id=0 keeps llms/protocol aggregation across all enabled feeds.
+            // feed_id=0 = all enabled feed types for THIS website only (never cross-site).
             $this->protocolConfig->saveForWebsite($websiteId, [
                 'llms_enabled' => $row->getId() ? (int)$row->getData(WebsiteProtocolConfig::schema_fields_LLMS_ENABLED) : 1,
                 'feed_enabled' => 1,
                 'auto_push' => $row->getId() ? (int)$row->getData(WebsiteProtocolConfig::schema_fields_AUTO_PUSH) : 1,
-                // Keep 0 so protocol/llms aggregates every enabled feed's items.
                 'feed_id' => 0,
                 'llms_intro' => $llmsIntro,
             ]);

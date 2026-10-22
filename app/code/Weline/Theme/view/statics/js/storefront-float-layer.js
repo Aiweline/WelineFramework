@@ -14,6 +14,7 @@
   var LAYER_SEL = '#w-storefront-float-layer';
   var START_SEL = '[data-float-slot="start"]';
   var END_SEL = '[data-float-slot="end"]';
+  var SIDE_SEL = '[data-float-slot="side"]';
   var CS_SEL = '#customer-service-widget, .customer-service-widget';
   var STORAGE_PREFIX = 'weline.storefrontFloat.edgeCollapsed.';
   var boundSlots = typeof WeakSet === 'function' ? new WeakSet() : null;
@@ -29,7 +30,8 @@
     if (!root) {
       return null;
     }
-    return root.querySelector(which === 'end' ? END_SEL : START_SEL);
+    var sel = which === 'end' ? END_SEL : which === 'side' ? SIDE_SEL : START_SEL;
+    return root.querySelector(sel);
   }
 
   function alreadyInSlot(el, slotEl) {
@@ -112,7 +114,7 @@
 
   function sideOf(slotEl) {
     var raw = (slotEl.getAttribute('data-float-slot') || 'start').toLowerCase();
-    return raw === 'end' ? 'end' : 'start';
+    return raw === 'end' || raw === 'side' ? raw : 'start';
   }
 
   function applyShift(slotEl, collapsed) {
@@ -126,7 +128,7 @@
       slotEl.style.removeProperty('transform');
       return;
     }
-    slotEl.style.transform = side === 'end' ? 'translateX(100%)' : 'translateX(-100%)';
+    slotEl.style.transform = side === 'end' ? 'translateX(100%)' : side === 'side' ? 'translateY(-50%) translateX(100%)' : 'translateX(-100%)';
   }
 
   function slotHasDockableContent(slotEl) {
@@ -140,7 +142,8 @@
     return !!body.querySelector(
       '.w-store-music-host[data-store-music-host], ' +
         '.w-store-music[data-store-music]:not([hidden]):not([data-store-music-skipped]), ' +
-        '.customer-service-widget'
+        '.customer-service-widget, ' +
+        '[data-float-side-widget]'
     );
   }
 
@@ -194,7 +197,7 @@
       recall.title = recallLabel;
       recall.innerHTML =
         '<span class="w-storefront-float-edge__recall-icon" aria-hidden="true">' +
-        (side === 'end' ? '‹' : '›') +
+        (side === 'start' ? '›' : '‹') +
         '</span>';
 
       chrome.appendChild(dismiss);
@@ -310,7 +313,7 @@
       parts.recall.setAttribute('aria-label', recallLabel);
       var icon = parts.recall.querySelector('.w-storefront-float-edge__recall-icon');
       if (icon) {
-        icon.textContent = side === 'end' ? '‹' : '›';
+        icon.textContent = side === 'start' ? '›' : '‹';
       }
     }
 
@@ -398,6 +401,7 @@
   function syncDocks() {
     syncDock(slot('start'));
     syncDock(slot('end'));
+    syncDock(slot('side'));
   }
 
   function sync() {

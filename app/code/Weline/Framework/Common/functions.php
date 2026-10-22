@@ -104,10 +104,20 @@ if (!function_exists('weline_is_static_file_path')) {
             'llms.txt',
             'llms-full.txt',
             'ai.txt',
+            'license.xml',
+            'trust.txt',
             'geo-feed.json',
             'geo-feed.xml',
         ];
-        if (!\str_contains($path, '/') && \in_array(\strtolower($path), $rootProtocolFiles, true)) {
+        $nestedProtocolFiles = [
+            '.well-known/tdmrep.json',
+            '.well-known/trust.txt',
+        ];
+        $protocolPath = \strtolower($path);
+        if (
+            (!\str_contains($protocolPath, '/') && \in_array($protocolPath, $rootProtocolFiles, true))
+            || \in_array($protocolPath, $nestedProtocolFiles, true)
+        ) {
             return false;
         }
         // Generated sitemap indexes/shards must go through SEO protocol rewrite so

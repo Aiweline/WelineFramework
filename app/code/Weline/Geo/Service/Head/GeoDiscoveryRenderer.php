@@ -7,6 +7,7 @@ namespace Weline\Geo\Service\Head;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Geo\Model\Feed;
 use Weline\Geo\Model\WebsiteProtocolConfig;
+use Weline\Geo\Service\Protocol\IndustryProtocolDocuments;
 use Weline\Seo\Api\Head\PageContextResolverInterface;
 use Weline\Seo\Api\Protocol\WebsiteProtocolResolverInterface;
 
@@ -33,21 +34,18 @@ class GeoDiscoveryRenderer
         $context = $this->resolver->resolve($template, $options);
         $website = $this->websiteResolver->currentWebsite();
         $config = $this->loadWebsiteConfig($website->id);
-        if (!$config->isLlmsEnabled() && !$config->isFeedEnabled()) {
-            return '';
-        }
-
-        $feedUrl = $this->resolveFeedUrl($template) ?: $this->absoluteUrl($template, '/geo-feed.json');
-        $rssUrl = $this->absoluteUrl($template, '/geo-feed.xml');
-        $llmsUrl = $this->absoluteUrl($template, '/llms.txt');
         $title = $context->siteName !== '' ? $context->siteName : 'GEO Feed';
+        $baseUrl = rtrim($this->absoluteUrl($template, '/'), '/');
         $lines = ['<meta name="weline-geo" content="enabled">'];
+        $policy = IndustryProtocolDocuments::headHtml($baseUrl, $title, $config->isLlmsEnabled(), false);
+        if ($policy !== '') {
+            $lines[] = $policy;
+        }
         if ($config->isFeedEnabled()) {
+            $feedUrl = $this->resolveFeedUrl($template) ?: $this->absoluteUrl($template, '/geo-feed.json');
+            $rssUrl = $this->absoluteUrl($template, '/geo-feed.xml');
             $lines[] = '<link rel="alternate" type="application/feed+json" title="' . $this->escape($title . ' JSON Feed') . '" href="' . $this->escape($feedUrl) . '">';
             $lines[] = '<link rel="alternate" type="application/rss+xml" title="' . $this->escape($title . ' RSS Feed') . '" href="' . $this->escape($rssUrl) . '">';
-        }
-        if ($config->isLlmsEnabled()) {
-            $lines[] = '<link rel="alternate" type="text/plain" title="' . $this->escape($title . ' llms.txt') . '" href="' . $this->escape($llmsUrl) . '">';
         }
 
         return implode("\n", $lines);
@@ -122,13 +120,10 @@ class GeoDiscoveryRenderer
 
     private function loadWebsiteConfig(int $websiteId): WebsiteProtocolConfig
     {
-        try {
-            if ($websiteId > 0) {
-                return $this->protocolConfig->loadByWebsiteId($websiteId);
-            }
-        } catch (\Throwable) {
+        if ($websiteId < 0) {
+            return $this->protocolConfig->reset();
         }
 
-        return $this->protocolConfig->reset();
+        return $this->protocolConfig->loadByWebsiteId($websiteId);
     }
 }

@@ -1,0 +1,144 @@
+/**
+ * Affiliate float widget — storefront-float-side slot content.
+ * Container chrome (positioning / edge dock) belongs to Weline_Theme
+ * storefront-float-layer.css; this file styles widget content only.
+ * Token-driven; no !important (default-theme rule).
+ * Marker: affiliate-float-widget-v1
+ */
+.affiliate-float-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--weline-space-2, 0.5rem);
+  font-family: inherit;
+}
+
+.affiliate-float-widget__entry {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--weline-space-2, 0.5rem);
+  padding: var(--weline-space-2, 0.5rem) var(--weline-space-3, 0.75rem);
+  border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid)
+    color-mix(in srgb, var(--weline-theme-border, #e2e8f0) 70%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--weline-theme-surface-raised, #fff) 92%, transparent);
+  color: var(--weline-theme-text, #111);
+  font-size: 0.875rem;
+  line-height: 1.2;
+  cursor: pointer;
+  appearance: none;
+  box-shadow: var(--weline-theme-shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.08));
+  transition:
+    color var(--weline-theme-duration-fast, 0.16s) var(--weline-theme-easing-standard, ease),
+    background-color var(--weline-theme-duration-fast, 0.16s) var(--weline-theme-easing-standard, ease);
+}
+
+.affiliate-float-widget__entry:is(:hover, :focus-visible) {
+  color: var(--weline-theme-on-primary, #fff);
+  background: var(--weline-theme-primary, #0f766e);
+  outline: none;
+}
+
+.affiliate-float-widget__entry-icon {
+  flex: none;
+}
+
+/* Collapsed widget state: label hidden, pill only (widget-level collapse, mirrors CS FAB). */
+.affiliate-float-widget:not(.is-panel-open) .affiliate-float-widget__entry-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.affiliate-float-widget__panel {
+  width: min(20rem, calc(100vw - 4rem));
+  max-height: min(60vh, 26rem);
+  overflow-y: auto;
+  padding: var(--weline-space-4, 1rem);
+}
+
+.affiliate-float-widget__status:empty {
+  display: none;
+}
+
+.affiliate-float-widget__status {
+  margin: 0 0 var(--weline-space-2, 0.5rem);
+  font-size: 0.8125rem;
+  color: var(--weline-theme-text-muted, #565959);
+}
+
+.affiliate-float-widget__metric {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--weline-space-3, 0.75rem);
+  margin-bottom: var(--weline-space-3, 0.75rem);
+}
+
+.affiliate-float-widget__metric-label {
+  font-size: 0.8125rem;
+  color: var(--weline-theme-text-muted, #565959);
+}
+
+.affiliate-float-widget__metric-value {
+  font-size: 1.125rem;
+  color: var(--weline-theme-text, #111);
+}
+
+.affiliate-float-widget__link-row {
+  display: flex;
+  gap: var(--weline-space-2, 0.5rem);
+  margin-bottom: var(--weline-space-3, 0.75rem);
+}
+
+.affiliate-float-widget__link {
+  flex: 1;
+  min-width: 0;
+  padding: var(--weline-space-2, 0.5rem);
+  border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid)
+    var(--weline-theme-border, #e2e8f0);
+  border-radius: var(--weline-radius-sm, 6px);
+  font-size: 0.8125rem;
+  color: var(--weline-theme-text, #111);
+  background: var(--weline-theme-surface, #fff);
+}
+
+.affiliate-float-widget__copy,
+.affiliate-float-widget__cta {
+  padding: var(--weline-space-2, 0.5rem) var(--weline-space-3, 0.75rem);
+  border: none;
+  border-radius: var(--weline-radius-sm, 6px);
+  background: var(--weline-theme-primary, #0f766e);
+  color: var(--weline-theme-on-primary, #fff);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.affiliate-float-widget__copy {
+  background: color-mix(
+    in srgb,
+    var(--weline-theme-primary, #0f766e) 12%,
+    var(--weline-theme-surface-raised, #fff)
+  );
+  color: var(--weline-theme-primary, #0f766e);
+}
+
+.affiliate-float-widget__cta:is(:hover, :focus-visible),
+.affiliate-float-widget__copy:is(:hover, :focus-visible) {
+  background: var(--weline-theme-primary, #0f766e);
+  color: var(--weline-theme-on-primary, #fff);
+  outline: none;
+}
+
+@media (max-width: 720px) {
+  .affiliate-float-widget__panel {
+    width: min(16rem, calc(100vw - 3rem));
+  }
+}

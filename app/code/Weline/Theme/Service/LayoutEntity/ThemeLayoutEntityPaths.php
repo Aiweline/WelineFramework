@@ -71,6 +71,22 @@ final class ThemeLayoutEntityPaths
         return \rtrim($generated, '/\\') . \DIRECTORY_SEPARATOR . self::ROOT_SEGMENT . \DIRECTORY_SEPARATOR;
     }
 
+    /**
+     * 运行协调态根（solidify jobs/leases/stamps）——永不跟随主题更新代次。
+     * Job/lease/stamp 是请求期与 Cron 排水共享的协调状态，不是代次派生产物；
+     * 请求期可能落在 tu-* 批根（entityRoot()），而 Cron/CLI 无主题上下文回落线上根，
+     * 两者若不同根则排水永远消费不到批次期入队的任务（BYPASS 死锁）。
+     * 派生 PHTML / 页面固化物仍走 root()（真正的代次产物，保持批次隔离）。
+     */
+    public function stateRoot(): string
+    {
+        $generated = \defined('\Weline\Framework\App\Env::GENERATED_DIR')
+            ? (string)\Weline\Framework\App\Env::GENERATED_DIR
+            : (\rtrim((string)BP, '/\\') . \DIRECTORY_SEPARATOR . 'generated');
+
+        return \rtrim($generated, '/\\') . \DIRECTORY_SEPARATOR . self::ROOT_SEGMENT . \DIRECTORY_SEPARATOR;
+    }
+
     /** Pre-R6 disk root (read/migrate/purge only — never the default write root). */
     public function legacyVarRoot(): string
     {

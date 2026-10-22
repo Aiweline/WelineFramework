@@ -75,11 +75,13 @@ final class SharedChromeService
     public const FOOTER_FLOAT_LAYER_SLOTS = [
         'storefront-float-start',
         'storefront-float-end',
+        'storefront-float-side',
     ];
 
     public const FOOTER_NESTED_CHROME_SLOTS = [
         'storefront-float-start',
         'storefront-float-end',
+        'storefront-float-side',
         // Guest-neutral tail chrome (Compare / Consent / B2B / Theme idle) — same bag as float.
         'storefront-tail-chrome',
     ];

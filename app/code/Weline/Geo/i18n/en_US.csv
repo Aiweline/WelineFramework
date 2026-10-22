@@ -384,3 +384,5 @@ Geo模块未加载,"The Geo module has not been loaded."
 中国,China
 定位中...,Locating...
 生成式搜索引擎优化,"Generative engine optimization"
+llms.txt 与 AI 引用,"llms.txt and AI citation"
+关闭后不再允许 ai-input。ai.txt、license.xml、trust.txt 与 tdmrep.json 仍会发布，训练保持关闭。,"Turning this off disallows ai-input. ai.txt, license.xml, trust.txt and tdmrep.json stay published, and training stays off."

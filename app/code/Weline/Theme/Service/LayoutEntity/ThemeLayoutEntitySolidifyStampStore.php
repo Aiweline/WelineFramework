@@ -58,7 +58,7 @@ final class ThemeLayoutEntitySolidifyStampStore
 
     private function pathFor(ThemeLayoutEntitySolidifySerialKey $key): string
     {
-        return rtrim($this->paths->root(), '/\\')
+        return rtrim($this->paths->stateRoot(), '/\\')
             . DIRECTORY_SEPARATOR . (string)$key->themeId
             . DIRECTORY_SEPARATOR . '.solidify-stamps'
             . DIRECTORY_SEPARATOR . $key->slotHash() . '.json';

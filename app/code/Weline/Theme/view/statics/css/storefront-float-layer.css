@@ -48,6 +48,17 @@
   bottom: max(var(--weline-space-5, 1.25rem), env(safe-area-inset-bottom, 0px));
 }
 
+/* Side slot: right-edge vertical mid container (customer-facing, business-agnostic;
+ * widgets enter via default_injections — first use case: affiliate float).
+ * Marker: storefront-float-side-slot-v1 */
+.w-storefront-float-layer__slot--side {
+  right: max(var(--weline-space-5, 1.25rem), env(safe-area-inset-right, 0px));
+  top: 50%;
+  transform: translateY(-50%);
+  max-height: calc(100vh - 8rem);
+  overflow-y: auto;
+}
+
 /* Social quick bar stacks above the end float — lift end slot only */
 body:has(.weline-social-quick-bar:not([hidden]))
   .w-storefront-float-layer__slot--end:not(:has(.customer-service-widget.is-open)) {
@@ -149,7 +160,8 @@ body:has(#weline-consent-banner:not([hidden])):has(.weline-social-quick-bar:not(
   right: -0.15rem;
 }
 
-.w-storefront-float-layer__slot--end .w-storefront-float-edge__dismiss {
+.w-storefront-float-layer__slot--end .w-storefront-float-edge__dismiss,
+.w-storefront-float-layer__slot--side .w-storefront-float-edge__dismiss {
   left: -0.15rem;
 }
 
@@ -211,7 +223,8 @@ body:has(#weline-consent-banner:not([hidden])):has(.weline-social-quick-bar:not(
   border-left: none;
 }
 
-.w-storefront-float-layer__slot--end .w-storefront-float-edge__recall {
+.w-storefront-float-layer__slot--end .w-storefront-float-edge__recall,
+.w-storefront-float-layer__slot--side .w-storefront-float-edge__recall {
   right: 100%;
   border-radius: var(--weline-radius-md, 8px) 0 0 var(--weline-radius-md, 8px);
   border-right: none;
@@ -249,6 +262,12 @@ body:has(#weline-consent-banner:not([hidden])):has(.weline-social-quick-bar:not(
 }
 
 #w-storefront-float-layer
+  .w-storefront-float-layer__slot.is-edge-collapsed[data-float-slot='side'] {
+  right: max(0px, env(safe-area-inset-right, 0px));
+  transform: translateY(-50%) translateX(100%);
+}
+
+#w-storefront-float-layer
   .w-storefront-float-layer__slot.is-edge-collapsed
   .w-storefront-float-edge__body,
 #w-storefront-float-layer
@@ -277,6 +296,10 @@ body:has(#weline-consent-banner:not([hidden])):has(.weline-social-quick-bar:not(
   .w-storefront-float-layer__slot--end {
     right: max(var(--weline-space-3, 0.75rem), env(safe-area-inset-right, 0px));
     bottom: max(var(--weline-space-3, 0.75rem), env(safe-area-inset-bottom, 0px));
+  }
+
+  .w-storefront-float-layer__slot--side {
+    right: max(var(--weline-space-3, 0.75rem), env(safe-area-inset-right, 0px));
   }
 
   body:has(.weline-social-quick-bar:not([hidden]))
