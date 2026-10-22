@@ -5925,6 +5925,17 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             return false;
         }
         $context = $this->currentStorefrontCacheKeyContext();
+        if ($context->isGlobalScopeFallback()) {
+            FpcDiag::event('frozen_scope', [
+                'ok' => true,
+                'reason' => 'global_scope_fallback',
+                'context_cacheable' => true,
+                'context_failure_code' => '',
+                'context_scope_kind' => $context->scopeIdentity?->scopeKind,
+            ]);
+
+            return true;
+        }
         if ($provider->status === RuntimeProviderResolution::NOT_CONFIGURED) {
             FpcDiag::event('frozen_scope', [
                 'ok' => $context->cacheable,
@@ -5967,6 +5978,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private function currentStorefrontCacheKeyContext(): StorefrontCacheKeyContext
     {
         $current = StorefrontCacheKeyContext::current();
+        if ($current instanceof StorefrontCacheKeyContext && $current->isGlobalScopeFallback()) {
+            return $current;
+        }
         if ($current instanceof StorefrontCacheKeyContext && $current->cacheable) {
             $provider = $this->storefrontScopeProviderResolution();
             $identity = RequestContext::scopeIdentity();

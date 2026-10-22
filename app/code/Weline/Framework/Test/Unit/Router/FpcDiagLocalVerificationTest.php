@@ -115,22 +115,22 @@ final class FpcDiagLocalVerificationTest extends TestCase
     }
 
     /**
-     * 关键信号：店面缓存上下文未解析时必须留下 failure_code —— 这正是
-     * 「payload 持续增长却 100% MISS」的成因所在。
+     * 关键契约（2026-10-22 变更）：店面缓存上下文「website/store/channel 全 null」
+     * 时按**全局作用域**缓存（确定性键、可缓存、可读可写），不再是不可缓存的随机
+     * 请求栅栏——后者正是「payload 持续增长却 100% MISS」的成因。
      */
-    public function testMissingStorefrontContextIsReportedAsFence(): void
+    public function testMissingStorefrontContextFallsBackToGlobalScope(): void
     {
         // 本测试刻意不安装任何 StorefrontCacheKeyContext，模拟生产上的降级状态。
         $context = StorefrontCacheKeyContext::currentOrRequestFence('unit_fence_probe');
 
-        self::assertFalse($context->cacheable, '未解析上下文必须不可缓存');
-        self::assertFalse($context->hasCompleteFrozenScope(), '未解析上下文不得被当作完整冻结范围');
+        self::assertTrue($context->cacheable, '全 null 作用域必须按全局作用域缓存');
+        self::assertTrue($context->isGlobalScopeFallback(), '必须识别为全局作用域回退');
+        self::assertTrue($context->hasCompleteFrozenScope(), '全局回退必须可读可写');
+        self::assertSame('frozen', $context->keyDimensions()['scope_state']);
+        self::assertSame('global', $context->keyDimensions()['scope_kind']);
 
-        $fence = $this->firstEvent('storefront_context_fence');
-        self::assertNotNull($fence, '未解析上下文必须留下诊断事件，否则线上无法定位');
-        self::assertSame('unit_fence_probe', $fence['data']['failure_code']);
-        self::assertFalse($fence['data']['context_scope_identity']);
-        self::assertFalse($fence['data']['request_scope_identity']);
+        self::assertNull($this->firstEvent('storefront_context_fence'), '全 null 作用域不得再产生不可缓存栅栏诊断');
     }
 
     /** 发布门槛的诊断必须能区分「可共享」与「不可共享」，并带上实际头部。 */

@@ -25,6 +25,23 @@ final class StorefrontCacheKeyContextResolver implements ProcessSharedInterface
     {
         $identity = RequestContext::scopeIdentity();
         if (!$this->isCompleteChannelIdentity($identity)) {
+            if ($identity === null
+                && RequestContext::getWelineWebsiteId() <= 0
+                && trim(RequestContext::getWelineWebsiteCode()) === ''
+            ) {
+                $existing = StorefrontCacheKeyContext::current();
+                if ($existing instanceof StorefrontCacheKeyContext && $existing->isGlobalScopeFallback()) {
+                    return $existing;
+                }
+                $global = StorefrontCacheKeyContext::globalScopeFallback(
+                    (string)RequestContext::getWelineUserLang(),
+                    (string)RequestContext::getWelineUserCurrency(),
+                );
+                StorefrontCacheKeyContext::install($global);
+
+                return $global;
+            }
+
             return StorefrontCacheKeyContext::currentOrRequestFence('storefront_scope_incomplete');
         }
 

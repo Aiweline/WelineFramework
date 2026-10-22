@@ -127,6 +127,17 @@ final readonly class StorefrontCacheKeyContext
                 }
             }
         }
+        if (!$identity instanceof ScopeIdentity
+            && RequestContext::getWelineWebsiteId() <= 0
+            && trim(RequestContext::getWelineWebsiteCode()) === ''
+        ) {
+            $global = self::globalScopeFallback(
+                (string)RequestContext::getWelineUserLang(),
+                (string)RequestContext::getWelineUserCurrency(),
+            );
+            self::install($global);
+            return $global;
+        }
         $lang = trim(RequestContext::getWelineUserLang());
         $currency = trim(RequestContext::getWelineUserCurrency());
         try {
@@ -212,6 +223,53 @@ final readonly class StorefrontCacheKeyContext
         return $chain;
     }
 
+    public static function globalScopeFallback(
+        string $lang = '',
+        string $currency = '',
+        string $defaultLocale = '',
+        ?array $translationLocales = null,
+    ): self {
+        $lang = trim($lang) !== '' ? trim($lang) : 'zh_Hans_CN';
+        $currency = trim($currency) !== '' ? trim($currency) : 'CNY';
+        $defaultLocale = \Weline\Framework\Phrase\LocaleFallbackChain::normalize(
+            $defaultLocale !== '' ? $defaultLocale : \Weline\Framework\Phrase\LocaleFallbackChain::websiteDefaultLocale()
+        );
+        $translationLocales = $translationLocales
+            ?? \Weline\Framework\Phrase\LocaleFallbackChain::candidates($lang, $defaultLocale);
+        $namespaceFingerprint = hash('sha256', 'storefront-global-namespace|' . self::SCHEMA_VERSION);
+        $static = class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::class)
+            ? \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::cacheGeneration()
+            : StaticBuildId::current();
+        $fingerprint = hash('sha256', implode('|', [
+            'storefront-global-scope-v2',
+            $lang,
+            $currency,
+            $defaultLocale,
+            implode(',', $translationLocales),
+            $namespaceFingerprint,
+            (string)$static,
+        ]));
+
+        return new self(
+            \Weline\Framework\Runtime\ScopeIdentity::global(),
+            $lang,
+            $currency,
+            $namespaceFingerprint,
+            $fingerprint,
+            true,
+            '',
+            $defaultLocale,
+            $translationLocales,
+        );
+    }
+
+    public function isGlobalScopeFallback(): bool
+    {
+        return $this->cacheable
+            && $this->scopeIdentity instanceof ScopeIdentity
+            && $this->scopeIdentity->isGlobal();
+    }
+
     /**
      * @return array{
      *   schema:string,scope_state:string,scope_kind:string,website:string,store:string,
@@ -244,6 +302,7 @@ final readonly class StorefrontCacheKeyContext
 
     public function hasCompleteFrozenScope(): bool
     {
+        if ($this->isGlobalScopeFallback()) { return true; }
         $identity = $this->scopeIdentity;
         return $this->cacheable
             && $identity instanceof ScopeIdentity
