@@ -166,7 +166,8 @@ final class ThemeUpdateBatchService
         $this->invalidateThemeCaches($themeId, 'theme_update_promote');
         // 自动回收历史代次，避免批次目录无界增长（失败静默，不影响切换）
         try {
-            $this->gc($themeId, $websiteId, $area, $this->keepBatches());
+            // 自动 GC 只删目录，不再重复清缓存（promote 本身已清过）
+            $this->gc($themeId, $websiteId, $area, $this->keepBatches(), false, false);
         } catch (\Throwable) {
         }
 
@@ -219,7 +220,14 @@ final class ThemeUpdateBatchService
      *
      * @return list<string> 已删除的代次ID
      */
-    public function gc(int $themeId, int $websiteId = 0, string $area = self::AREA_FRONTEND, int $keep = ThemeUpdatePointerPlanner::DEFAULT_KEEP): array
+    public function gc(
+        int $themeId,
+        int $websiteId = 0,
+        string $area = self::AREA_FRONTEND,
+        int $keep = ThemeUpdatePointerPlanner::DEFAULT_KEEP,
+        bool $purgeArtifacts = true,
+        bool $invalidateCaches = true
+    ): array
     {
         $rows = $this->listBatches($themeId, $websiteId, $area, 200);
         $row = $this->loadPointerRow($websiteId, $themeId, $area);
@@ -237,8 +245,14 @@ final class ThemeUpdateBatchService
 
         // 被删代次的静态前缀可能仍被店面缓存/编译产物引用 → 定向失效 + 清理，避免出现 404 资源
         if ($deleted !== []) {
-            $this->purgeArtifactReferences($deleted);
-            $this->invalidateThemeCaches($themeId, 'theme_update_gc');
+            // 产物扫描很重（遍历 generated/complicate + var/cache）；自动 GC 不做，
+            // 需要时用 `theme:update gc --purge-artifacts` 手动清理。
+            if ($purgeArtifacts) {
+                $this->purgeArtifactReferences($deleted);
+            }
+            if ($invalidateCaches) {
+                $this->invalidateThemeCaches($themeId, 'theme_update_gc');
+            }
         }
 
         return $deleted;
@@ -564,6 +578,35 @@ final class ThemeUpdateBatchService
         if (!is_dir($batchRoot) || !is_dir($deployRoot)) {
             return;
         }
+
+        // 增量镜像：只覆盖本批次真正发布过的文件（避免每次遍历 1.4 万文件）
+        $changed = $this->changedStaticFiles($batchId);
+        if ($changed !== []) {
+            foreach ($changed as $relative) {
+                $from = $batchRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+                $to = $deployRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+                if (!is_file($from)) {
+                    if (is_file($to)) {
+                        @unlink($to);
+                    }
+                    continue;
+                }
+                $dir = dirname($to);
+                if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+                    continue;
+                }
+                if (is_link($to) || is_file($to)) {
+                    @unlink($to);
+                }
+                if (!@link($from, $to)) {
+                    @copy($from, $to);
+                }
+            }
+
+            return;
+        }
+
+        // 兼容：无清单（旧批次）→ 全量镜像主题子树
         $welineBatch = $batchRoot . DIRECTORY_SEPARATOR . 'Weline';
         if (!is_dir($welineBatch)) {
             return;
@@ -632,5 +675,31 @@ final class ThemeUpdateBatchService
                 @copy($from, $to);
             }
         }
+    }
+
+    /**
+     * 读取批次清单里「本批次实际发布的主题静态文件」。
+     *
+     * @return list<string> 相对 pub/static/<batch>/ 的路径
+     */
+    private function changedStaticFiles(string $batchId): array
+    {
+        try {
+            $row = $this->batch->reset()->clearQuery()
+                ->where(ThemeUpdateBatch::schema_fields_BATCH_ID, $batchId)
+                ->find()->fetchArray();
+        } catch (\Throwable) {
+            return [];
+        }
+        if (!is_array($row)) {
+            return [];
+        }
+        $manifest = json_decode((string)($row[ThemeUpdateBatch::schema_fields_MANIFEST_JSON] ?? ''), true);
+        $files = is_array($manifest) ? ($manifest['static_changed_files'] ?? []) : [];
+        if (!is_array($files)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map('strval', $files)));
     }
 }

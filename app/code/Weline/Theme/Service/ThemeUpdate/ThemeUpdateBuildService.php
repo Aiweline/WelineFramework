@@ -32,12 +32,16 @@ final class ThemeUpdateBuildService
 
     /**
      * @param array{layouts?:list<string>,options?:list<string>,all_versions?:bool,skip_static?:bool,skip_entities?:bool} $options
-     * @return array{batch_id:string,static_ns:string,entity_root:string,manifest:array<string,mixed>}
+     * @param callable():bool|null $stillLatest 代次已被后来的更新拨过时返回 false，本次放弃、不切换
+     * @return array{batch_id:string,static_ns:string,entity_root:string,manifest:array<string,mixed>,superseded?:bool}
      */
-    public function build(int $themeId, array $options = []): array
+    public function build(int $themeId, array $options = [], ?callable $stillLatest = null): array
     {
         if ($themeId < 1) {
             throw new \InvalidArgumentException('theme_update_theme_id_invalid');
+        }
+        if ($this->yielded($stillLatest)) {
+            return $this->superseded(null);
         }
 
         $batch = $this->batches->createBatch($themeId);
@@ -51,7 +55,9 @@ final class ThemeUpdateBuildService
         // 1) 静态：只硬链接「主题自有」子树（设计命名空间 + Weline/Theme）
         if (empty($options['skip_static'])) {
             $copied = $this->linkCurrentStaticTree($staticDir, $themePrefix);
-            $published = $this->publishThemeStaticIntoBatch($batchId, $staticDir, $themeId);
+            $publishResult = $this->publishThemeStaticIntoBatch($batchId, $staticDir, $themeId);
+            $published = (int)($publishResult['count'] ?? 0);
+            $changedFiles = (array)($publishResult['files'] ?? []);
             $checks[] = [
                 'name' => 'static_tree_ready',
                 'ok' => $copied >= 0 && $published >= 0,
@@ -60,6 +66,9 @@ final class ThemeUpdateBuildService
             ];
         } else {
             $checks[] = ['name' => 'static_tree_ready', 'ok' => true, 'skipped' => true];
+        }
+        if ($this->yielded($stillLatest)) {
+            return $this->superseded($batchId);
         }
 
         // 2) 实体：把固化根切到批根后固化（-l/-o 可限范围）
@@ -117,6 +126,9 @@ final class ThemeUpdateBuildService
                 'rewritten_files' => $rewritten,
             ];
         }
+        if ($this->yielded($stillLatest)) {
+            return $this->superseded($batchId);
+        }
 
         // 3) 校验：静态引用可解析（抽样）+ 产物非空可读
         // 说明：实体 PHTML 是「布局源码派生」，{{…}} 与 <w:…> 属合法内联标记，
@@ -125,6 +137,10 @@ final class ThemeUpdateBuildService
             $checks[] = $this->checkStaticSample($staticDir);
         }
         $checks[] = $this->checkEntitySample($entityDir);
+
+        if ($this->yielded($stillLatest)) {
+            return $this->superseded($batchId);
+        }
 
         $ok = true;
         foreach ($checks as $check) {
@@ -142,6 +158,8 @@ final class ThemeUpdateBuildService
             'entity_root' => $batchId,
             'layout_targets' => $layoutTargetsUsed ?? [],
             'static_files' => $this->countFiles($staticDir, 200000, true),
+            // 本批次实际发布的主题静态文件（相对 pub/static/<batch>/），供 promote 增量镜像
+            'static_changed_files' => array_slice($changedFiles ?? [], 0, 5000),
             'entity_files' => $entityFiles,
             'checks' => $checks,
             'verify' => ['ok' => $ok, 'checks' => $checks],
@@ -154,6 +172,32 @@ final class ThemeUpdateBuildService
             'static_ns' => $batchId,
             'entity_root' => $batchId,
             'manifest' => $manifest,
+        ];
+    }
+
+    /** @param callable():bool|null $stillLatest */
+    private function yielded(?callable $stillLatest): bool
+    {
+        return $stillLatest !== null && $stillLatest() !== true;
+    }
+
+    /** @return array{batch_id:string,static_ns:string,entity_root:string,manifest:array<string,mixed>,superseded:bool} */
+    private function superseded(?string $batchId): array
+    {
+        if ($batchId !== null && $batchId !== '') {
+            $this->batches->finishBuild($batchId, [
+                'verify' => ['ok' => false, 'superseded' => true],
+                'entity_files' => 0,
+                'static_files' => 0,
+            ]);
+        }
+
+        return [
+            'batch_id' => $batchId ?? '',
+            'static_ns' => $batchId ?? '',
+            'entity_root' => $batchId ?? '',
+            'superseded' => true,
+            'manifest' => ['verify' => ['ok' => false, 'superseded' => true]],
         ];
     }
 
@@ -541,9 +585,9 @@ final class ThemeUpdateBuildService
      * 复用部署链路的 `StaticAssetMode` 贡献者，写到 `DeployStagingSession` 的 staging 根，
      * 再以硬链接覆盖进 `pub/static/<batch>/`。失败时返回 -1（降级为仅用部署目录内容）。
      *
-     * @return int 覆盖进批次的文件数（-1 表示发布失败）
+     * @return array{count:int,files:list<string>} count=-1 表示发布失败
      */
-    private function publishThemeStaticIntoBatch(string $batchId, string $staticDir, int $themeId): int
+    private function publishThemeStaticIntoBatch(string $batchId, string $staticDir, int $themeId): array
     {
         $session = null;
         $stagingRoot = '';
@@ -551,7 +595,7 @@ final class ThemeUpdateBuildService
             /** @var \Weline\Theme\Model\WelineTheme $theme */
             $theme = $this->theme->reset()->clearQuery()->where('id', $themeId)->find()->fetch();
             if ((int)$theme->getId() < 1) {
-                return -1;
+                return ['count' => -1, 'files' => []];
             }
 
             $session = \Weline\Framework\Deploy\DeployStagingSession::open('tu-' . $batchId . '-' . \bin2hex(\random_bytes(2)));
@@ -578,15 +622,16 @@ final class ThemeUpdateBuildService
                 }
             }
             if ($ran === 0 || !is_dir($stagingRoot)) {
-                return -1;
+                return ['count' => -1, 'files' => []];
             }
 
             $overlaid = 0;
-            $this->overlayTree($stagingRoot, $staticDir, $overlaid);
+            $files = [];
+            $this->overlayTree($stagingRoot, $staticDir, $overlaid, $files, '');
 
-            return $overlaid;
+            return ['count' => $overlaid, 'files' => $files];
         } catch (\Throwable) {
-            return -1;
+            return ['count' => -1, 'files' => []];
         } finally {
             if ($session !== null) {
                 try {
@@ -601,8 +646,12 @@ final class ThemeUpdateBuildService
         }
     }
 
-    /** 递归把 $src 覆盖进 $dst（硬链接优先，跨设备则复制）。 */
-    private function overlayTree(string $src, string $dst, int &$count): void
+    /**
+     * 递归把 $src 覆盖进 $dst（硬链接优先，跨设备则复制）。
+     *
+     * @param list<string> $collected 收集被覆盖文件的相对路径（相对 $dst 根）
+     */
+    private function overlayTree(string $src, string $dst, int &$count, array &$collected = [], string $prefix = ''): void
     {
         if (!is_dir($dst) && !@mkdir($dst, 0775, true) && !is_dir($dst)) {
             return;
@@ -617,7 +666,7 @@ final class ThemeUpdateBuildService
                 @unlink($to);
             }
             if (is_dir($from)) {
-                $this->overlayTree($from, $to, $count);
+                $this->overlayTree($from, $to, $count, $collected, $prefix === '' ? $item : ($prefix . '/' . $item));
                 continue;
             }
             if (is_link($to) || is_file($to)) {
@@ -625,6 +674,7 @@ final class ThemeUpdateBuildService
             }
             if (@link($from, $to) || @copy($from, $to)) {
                 $count++;
+                $collected[] = $prefix === '' ? $item : ($prefix . '/' . $item);
             }
         }
     }

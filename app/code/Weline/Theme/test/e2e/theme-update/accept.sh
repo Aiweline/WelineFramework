@@ -39,35 +39,81 @@ after="$(prefix_set)"
 echo "== 2. 切换（promote） =="
 prev_batch="$(php bin/w theme:update status -t "$THEME" 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | sed -n 's/.*当前代次：\(tu-[0-9a-z-]*\).*/\1/p' | head -1)"
 php bin/w theme:update promote "$batch" >/dev/null 2>&1 || bad "promote 失败"
-refs=0
-for _ in $(seq 1 5); do
-  sleep 4
-  page="$(curl_bin "$BASE/")"
-  refs="$(echo "$page" | grep -c "/static/$batch/")"
-  [ "$refs" -gt 0 ] && break
-done
-[ "$refs" -gt 0 ] && ok "页面已指向新代次静态前缀（$refs 处）" || bad "页面仍未使用新代次前缀"
+
+# 生效判据（新一代设计：编译期固定部署构建号 + promote 镜像批次主题子树）
+# 页面主要使用部署前缀，因此用「标记文件内容指纹」证明生效：
+#   部署前缀下的文件 必须与 当前批次目录里的同名文件 一致。
+deploy_id="$(python3 -c "import json;print(json.load(open('pub/static/.build.json'))['build_id'])" 2>/dev/null)"
+PSQL_BIN="${PSQL_BIN:-/Users/weline/Project/Shopify/ManyCartSync/weline/extend/server/pgsql/bin/psql}"
+marker=""
+if [ -n "${PSQL_BIN}" ] && [ -x "$PSQL_BIN" ]; then
+  marker="$(PGPASSWORD="${PGPASSWORD:-weline}" "$PSQL_BIN" -h 127.0.0.1 -U weline -d "${DB_NAME:-mig_clone_productcurrent20260810_20260810022347_e07e}" -tAc \
+    "SELECT manifest_json::json->'static_changed_files'->>0 FROM w_theme_update_batch WHERE batch_id='$batch'" 2>/dev/null | head -1)"
+fi
+if [ -n "$deploy_id" ] && [ -n "$marker" ]; then
+  h_batch="$(shasum -a 256 "pub/static/$batch/$marker" 2>/dev/null | awk '{print $1}')"
+  h_deploy="$(shasum -a 256 "pub/static/$deploy_id/$marker" 2>/dev/null | awk '{print $1}')"
+  if [ -n "$h_batch" ] && [ "$h_batch" = "$h_deploy" ]; then
+    ok "部署前缀已镜像本代次内容（标记文件一致：$(basename "$marker")）"
+  else
+    bad "部署前缀内容未跟随本代次（marker=$marker）"
+  fi
+else
+  # 兼容：无 DB 或旧批次时，退回「页面是否引用本批次前缀」
+  refs=0
+  for _ in $(seq 1 5); do
+    sleep 4
+    page="$(curl_bin "$BASE/")"
+    refs="$(echo "$page" | grep -c "/static/$batch/")"
+    [ "$refs" -gt 0 ] && break
+  done
+  [ "$refs" -gt 0 ] && ok "页面已指向新代次静态前缀（$refs 处）" || bad "页面仍未使用新代次前缀"
+fi
 
 echo "== 3. 静态资源全 200 =="
+page="$(curl_bin "$BASE/")"
 echo "$page" | grep -oE '(src|href)="[^"]*"' | sed 's/^[a-z]*="//; s/"$//' | grep -E '^/static/' | sort -u > /tmp/tu_urls.txt
 non200=0
 while IFS= read -r u; do
   c="$(curl_bin -o /dev/null -w '%{http_code}' "$BASE$u")"
   [ "$c" != "200" ] && { echo "    $c $u"; non200=$((non200+1)); }
 done < /tmp/tu_urls.txt
-[ "$non200" -eq 0 ] && ok "静态 URL 全部 200（$(wc -l < /tmp/tu_urls.txt) 个）" || bad "有 $non200 个静态 URL 非 200"
+total_urls="$(wc -l < /tmp/tu_urls.txt | tr -d ' ')"
+if [ "$total_urls" -eq 0 ]; then
+  bad "页面未解析到任何静态 URL（判为失败，避免假绿）"
+elif [ "$non200" -eq 0 ]; then
+  ok "静态 URL 全部 200（${total_urls} 个）"
+else
+  bad "有 $non200 个静态 URL 非 200（共 ${total_urls} 个）"
+fi
 
 echo "== 4. 回滚 =="
 if [ -n "$prev_batch" ] && [ "$prev_batch" != "$batch" ]; then
   php bin/w theme:update rollback -t "$THEME" >/dev/null 2>&1 || bad "rollback 失败"
-  refs_prev=0
-  for _ in $(seq 1 5); do
-    sleep 4
-    page="$(curl_bin "$BASE/")"
-    refs_prev="$(echo "$page" | grep -c "/static/$prev_batch/")"
-    [ "$refs_prev" -gt 0 ] && break
-  done
-  [ "$refs_prev" -gt 0 ] && ok "回滚后页面指回上一个代次（$refs_prev 处）" || bad "回滚后页面未指回上一个代次"
+  # 回滚判据：部署前缀内容应回退到上一个代次的同名文件内容
+  marker_prev=""
+  if [ -n "${PSQL_BIN}" ] && [ -x "$PSQL_BIN" ]; then
+    marker_prev="$(PGPASSWORD="${PGPASSWORD:-weline}" "$PSQL_BIN" -h 127.0.0.1 -U weline -d "${DB_NAME:-mig_clone_productcurrent20260810_20260810022347_e07e}" -tAc \
+      "SELECT manifest_json::json->'static_changed_files'->>0 FROM w_theme_update_batch WHERE batch_id='$prev_batch'" 2>/dev/null | head -1)"
+  fi
+  if [ -n "$deploy_id" ] && [ -n "$marker_prev" ]; then
+    h_prev="$(shasum -a 256 "pub/static/$prev_batch/$marker_prev" 2>/dev/null | awk '{print $1}')"
+    h_deploy_prev="$(shasum -a 256 "pub/static/$deploy_id/$marker_prev" 2>/dev/null | awk '{print $1}')"
+    if [ -n "$h_prev" ] && [ "$h_prev" = "$h_deploy_prev" ]; then
+      ok "回滚后部署前缀已跟随上一个代次内容"
+    else
+      bad "回滚后部署前缀内容未回退"
+    fi
+  else
+    refs_prev=0
+    for _ in $(seq 1 5); do
+      sleep 4
+      page="$(curl_bin "$BASE/")"
+      refs_prev="$(echo "$page" | grep -c "/static/$prev_batch/")"
+      [ "$refs_prev" -gt 0 ] && break
+    done
+    [ "$refs_prev" -gt 0 ] && ok "回滚后页面指回上一个代次（$refs_prev 处）" || bad "回滚后页面未指回上一个代次"
+  fi
   php bin/w theme:update promote "$batch" >/dev/null 2>&1 || bad "回滚后切回失败"
   sleep 4
 else

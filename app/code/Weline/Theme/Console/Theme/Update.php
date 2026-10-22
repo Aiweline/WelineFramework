@@ -11,6 +11,8 @@ use Weline\Theme\Model\ThemeUpdatePointer;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateBatchService;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateBuildService;
+use Weline\Theme\Service\ThemeUpdate\ThemeUpdateFlight;
+use Weline\Theme\Service\ThemeUpdate\ThemeUpdateFlightRunner;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdatePointerPlanner;
 
 /**
@@ -114,7 +116,8 @@ class Update extends AbstractConsole
                     $this->printing->note(__('dry-run：将删除 %{1}', [\implode(', ', $plan)]));
                     return;
                 }
-                $deleted = $service->gc($themeId, $websiteId, $area, $keep);
+                $purgeArtifacts = !isset($options['no-purge-artifacts']);
+                $deleted = $service->gc($themeId, $websiteId, $area, $keep, $purgeArtifacts);
                 $this->printing->success(__('已回收 %{1} 个代次：%{2}', [
                     (string)\count($deleted),
                     \implode(', ', $deleted),
@@ -127,6 +130,10 @@ class Update extends AbstractConsole
                 /** @var \Weline\Theme\Service\ThemeUpdate\ThemeUpdateAutoService $auto */
                 $auto = ObjectManager::getInstance(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateAutoService::class);
                 $result = $auto->run($themeId, $force, $dryRun);
+                if (($result['skipped'] ?? '') === 'coalesced') {
+                    $this->printing->note(__('已有更新在进行，本次已并入最后一次，不会并行再做一份。'));
+                    return;
+                }
                 $mode = (string)($result['mode'] ?? '');
                 if ($mode === 'dev') {
                     if ($dryRun) {
@@ -185,7 +192,23 @@ class Update extends AbstractConsole
                 $this->printing->note(__('开始构建新代次（不会影响线上）…'));
                 /** @var ThemeUpdateBuildService $builder */
                 $builder = ObjectManager::getInstance(ThemeUpdateBuildService::class);
-                $result = $builder->build($themeId, $buildOptions);
+                /** @var ThemeUpdateFlightRunner $flights */
+                $flights = ObjectManager::getInstance(ThemeUpdateFlightRunner::class);
+                $result = $flights->execute(
+                    ThemeUpdateFlight::scopeForTheme($themeId),
+                    function (callable $stillLatest) use ($builder, $themeId, $buildOptions): array {
+                        $built = $builder->build($themeId, $buildOptions, $stillLatest);
+                        if (!$stillLatest() || !empty($built['superseded'])) {
+                            return ['skipped' => 'coalesced'];
+                        }
+
+                        return $built;
+                    }
+                );
+                if (($result['skipped'] ?? '') === 'coalesced') {
+                    $this->printing->note(__('已有更新在进行，本次已并入最后一次，不会并行再做一份。'));
+                    return;
+                }
                 $manifest = $result['manifest'];
                 $ok = (bool)($manifest['verify']['ok'] ?? false);
                 $this->printing->note(__('代次：%{1}', [$result['batch_id']]));
@@ -224,6 +247,7 @@ class Update extends AbstractConsole
                 '--website <id>' => '站点ID，默认 0（全站默认）',
                 '--area <area>' => '区域：frontend（默认）/ backend',
                 '--keep <n>' => 'GC 时额外保留的历史代次数量，默认 ' . ThemeUpdatePointerPlanner::DEFAULT_KEEP,
+                '--no-purge-artifacts' => '手动 gc 时跳过「清理引用已删代次的编译产物/缓存」（快，但可能残留）',
                 '--dry-run' => '只打印将要做什么，不落库',
                 '--force' => 'auto 子命令：忽略脏标记，强制重建并切换',
                 '-l, --layout <type>' => 'build 时只固化指定布局（如 homepage）',
