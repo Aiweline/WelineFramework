@@ -4,6 +4,9 @@
  * 悬浮右侧中分销部件：默认注入 Theme chrome 槽 storefront-float-side。
  * 容器（Theme）对业务零感知；本部件为该槽首个注入方，可经可视化卸载或后台删除注入回收。
  *
+ * SSR 引子化：只输出入口按钮壳，面板 DOM 由 affiliate-float.js 首次展开时异步渲染
+ * （异步部件引子契约，见 Weline_Affiliate doc）。
+ *
  * @widget.code {affiliate-float}
  * @widget.cache {3600}
  * @widget.share {false}
@@ -26,12 +29,6 @@ use Weline\Theme\Helper\WidgetUiScope;
 WidgetI18n::prefetchLabels([
     '我要推广',
     '分销面板',
-    '邀请链接',
-    '复制链接',
-    '待结算佣金',
-    '进入分销中心',
-    '展开分销',
-    '收起分销',
 ]);
 
 $scope = WidgetUiScope::forWidget('affiliate-float');
@@ -47,7 +44,6 @@ $affiliateCenterUrl = (string) $this->getUrl('affiliate/customer/affiliate');
      data-float-side-widget
      data-affiliate-float
      data-weline-load="affiliateFloat"
-     data-affiliate-summary-url="@frontend-url{'affiliate/frontend/summary'}"
      data-affiliate-center-url="<?= $esc($affiliateCenterUrl) ?>"
      data-testid="affiliate-float-widget">
     <button type="button"
@@ -61,15 +57,4 @@ $affiliateCenterUrl = (string) $this->getUrl('affiliate/customer/affiliate');
         </svg>
         <span class="affiliate-float-widget__entry-label"><lang>我要推广</lang></span>
     </button>
-    <div class="affiliate-float-widget__panel w-panel"
-         id="affiliate-float-panel-<?= $esc($scope->uid) ?>"
-         data-affiliate-float-panel
-         hidden
-         role="region"
-         aria-label="<lang>分销面板</lang>"
-         data-testid="affiliate-float-panel">
-        <div class="affiliate-float-widget__panel-body" data-affiliate-float-body>
-            <p class="affiliate-float-widget__status" data-affiliate-float-status></p>
-        </div>
-    </div>
 </div>

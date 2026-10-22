@@ -202,6 +202,32 @@ class MigrationTest extends TestCore
         // 获取已安装的迁移
         $installedMigrations = $this->migrationModel->getInstalledMigrations($moduleName);
         $this->assertIsArray($installedMigrations);
+
+        $this->migrationModel->recordSchemaDdl(
+            $moduleName,
+            'w_light_probe',
+            'default',
+            str_repeat('ALTER TABLE w_light_probe ADD COLUMN c INT;', 80),
+            'ALTER TABLE w_light_probe DROP COLUMN c;',
+            null,
+            '1.0.2',
+            'light-batch',
+            1,
+            'add_column',
+        );
+        $this->migrationModel->updateStatus(Migration::STATUS_INSTALLED);
+        $fresh = ObjectManager::getInstance(Migration::class, [], false);
+        $listed = $fresh->getInstalledMigrations($moduleName);
+        $probe = null;
+        foreach ($listed as $row) {
+            if ((string)$row->getData(Migration::schema_fields_FILE) === 'schema_diff') {
+                $probe = $row;
+                break;
+            }
+        }
+        $this->assertNotNull($probe);
+        $this->assertSame('', (string)$probe->getData(Migration::schema_fields_FORWARD_DDL));
+        $this->assertSame('', (string)$probe->getData(Migration::schema_fields_ROLLBACK_DDL));
         
         // 检查只返回已安装的迁移
         foreach ($installedMigrations as $migration) {

@@ -1,11 +1,11 @@
 /**
- * Affiliate float widget (storefront-float-side slot):
- * - entry pill toggles the panel (widget-level collapse, mirrors customer-service)
+ * Affiliate float widget (storefront-float-side slot) — async bootstrap (引子).
+ * - SSR renders only the entry pill; the panel DOM is created here on first expand
  * - panel body hydrates commission summary via Weline.Api BinQuery on first expand
  * - guest: neutral promo entry only (no data fetch required to be useful)
  *
  * Owning module: Weline_Affiliate (content only; container/dock is Weline_Theme).
- * Marker: affiliate-float-widget-v1
+ * Marker: affiliate-float-widget-v2-async
  */
 (function (global) {
   'use strict';
@@ -19,22 +19,39 @@
     return cur ? cur + ' ' + text : text;
   }
 
-  function text(el, value) {
-    if (el) {
-      el.textContent = value;
-    }
-  }
-
-  function summaryOf(data) {
-    return (data && data.data && typeof data.data === 'object') ? data.data : (data || {});
-  }
-
   function escapeHtml(value) {
     return String(value == null ? '' : value)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  function summaryOf(data) {
+    return (data && data.data && typeof data.data === 'object') ? data.data : (data || {});
+  }
+
+  /** 首次展开时创建面板壳（引子 → 异步渲染的唯一 DOM 生成点）。 */
+  function ensurePanel(widget) {
+    var panel = widget.querySelector('[data-affiliate-float-panel]');
+    if (panel) {
+      return panel;
+    }
+    var uid = String(widget.getAttribute('data-uid') || 'float');
+    panel = document.createElement('div');
+    panel.className = 'affiliate-float-widget__panel w-panel';
+    panel.id = 'affiliate-float-panel-' + uid;
+    panel.setAttribute('data-affiliate-float-panel', '');
+    panel.hidden = true;
+    panel.setAttribute('role', 'region');
+    panel.setAttribute('aria-label', '分销面板');
+    panel.setAttribute('data-testid', 'affiliate-float-panel');
+    panel.innerHTML =
+      '<div class="affiliate-float-widget__panel-body" data-affiliate-float-body>' +
+      '<p class="affiliate-float-widget__status" data-affiliate-float-status></p>' +
+      '</div>';
+    widget.appendChild(panel);
+    return panel;
   }
 
   function renderSummary(widget, data) {
@@ -143,10 +160,10 @@
     widget.__affiliateFloatBound = true;
     var state = { loading: false, loaded: false };
     var entry = widget.querySelector('[data-affiliate-float-toggle]');
-    var panel = widget.querySelector('[data-affiliate-float-panel]');
-    if (!entry || !panel) {
+    if (!entry) {
       return;
     }
+    var panel = ensurePanel(widget);
     entry.addEventListener('click', function (event) {
       event.preventDefault();
       var open = panel.hidden;

@@ -748,9 +748,139 @@
         return 'rgba(184, 74, 60, ' + alpha + ')';
     }
 
+    /**
+     * 引子 → 异步渲染：SSR 只输出头像入口与 i18n/config 引子，
+     * 面板（含波形 canvas、播放控制、选曲列表）在此一次性构建。
+     * Marker: store-music-async-panel-v1
+     */
+    function ensureStoreMusicPanel(root, cfg) {
+        if (root.querySelector('[data-store-music-panel]')) {
+            return;
+        }
+        var doc = root.ownerDocument || document;
+        var defaultVol = Math.max(0, Math.min(100, Math.round(Number(cfg.default_volume) || 0)));
+
+        var waveCanvas = doc.createElement('canvas');
+        waveCanvas.id = 'weline-store-music-wave';
+        waveCanvas.className = 'w-store-music-wave';
+        waveCanvas.setAttribute('data-store-music-wave', '');
+        waveCanvas.hidden = true;
+        waveCanvas.setAttribute('aria-hidden', 'true');
+
+        var panel = doc.createElement('div');
+        panel.id = 'weline-store-music-panel';
+        panel.className = 'w-store-music__panel';
+        panel.setAttribute('data-store-music-panel', '');
+        panel.hidden = true;
+        panel.setAttribute('data-testid', 'store-music-panel');
+        panel.innerHTML =
+            '<div class="w-store-music__head">' +
+                '<div class="w-store-music__meta">' +
+                    '<span class="w-store-music__title" data-store-music-title data-testid="store-music-track-title"></span>' +
+                    '<div class="w-store-music__intro-wrap" data-store-music-intro-wrap>' +
+                        '<span class="w-store-music__intro" data-store-music-intro data-testid="store-music-track-intro"></span>' +
+                        '<button type="button" class="w-store-music__intro-toggle" data-store-music-intro-toggle data-testid="store-music-intro-toggle" hidden aria-expanded="false"></button>' +
+                    '</div>' +
+                '</div>' +
+                '<button type="button" class="w-store-music__dismiss" data-store-music-close data-testid="store-music-close" aria-label="" title="">×</button>' +
+            '</div>' +
+            '<div class="w-store-music__transport" role="group">' +
+                '<button type="button" class="w-store-music__btn w-store-music__btn--prev" data-store-music-prev data-testid="store-music-prev" hidden>‹</button>' +
+                '<button type="button" class="w-store-music__btn w-store-music__btn--play" data-store-music-play data-testid="store-music-play">▶</button>' +
+                '<button type="button" class="w-store-music__btn w-store-music__btn--pause" data-store-music-pause data-testid="store-music-pause" title="" hidden>❚❚</button>' +
+                '<button type="button" class="w-store-music__btn w-store-music__btn--next" data-store-music-next data-testid="store-music-next" hidden>›</button>' +
+            '</div>' +
+            '<label class="w-store-music__vol">' +
+                '<input type="range" min="0" max="100" step="1" value="' + defaultVol + '" data-store-music-volume data-testid="store-music-volume">' +
+                '<span class="w-store-music__vol-pct" data-store-music-volume-pct>' + defaultVol + '%</span>' +
+            '</label>' +
+            '<div class="w-store-music__compartment" data-store-music-compartment hidden>' +
+                '<div class="w-store-music__compartment-head">' +
+                    '<span class="w-store-music__compartment-label"></span>' +
+                    '<span class="w-store-music__compartment-count" data-store-music-playlist-count></span>' +
+                    '<label class="w-store-music__wave" title="">' +
+                        '<input type="checkbox" data-store-music-wave-toggle data-testid="store-music-wave-toggle"' + (cfg.waveform_default ? ' checked' : '') + '>' +
+                        '<span class="w-store-music__wave-face" aria-hidden="true">〰</span>' +
+                        '<span class="w-store-music__sr" data-store-music-wave-label></span>' +
+                    '</label>' +
+                '</div>' +
+                '<label class="w-store-music__search">' +
+                    '<input type="search" class="w-store-music__search-input" data-store-music-search data-testid="store-music-search" autocomplete="off" enterkeyhint="search">' +
+                '</label>' +
+                '<p class="w-store-music__search-empty" data-store-music-search-empty data-testid="store-music-search-empty" hidden></p>' +
+                '<ul id="weline-store-music-playlist" class="w-store-music__playlist" data-store-music-playlist data-testid="store-music-playlist" role="listbox"></ul>' +
+            '</div>' +
+            '<p class="w-store-music__status" data-store-music-status data-testid="store-music-status" hidden></p>';
+
+        var i18n = cfg._i18n || {};
+        var pick = function (key, fallback) {
+            var v = i18n[key];
+            return (v === undefined || v === null || v === '') ? fallback : String(v);
+        };
+        var closeBtn = panel.querySelector('[data-store-music-close]');
+        if (closeBtn) {
+            closeBtn.setAttribute('aria-label', pick('close', '关闭选曲'));
+            closeBtn.setAttribute('title', pick('close', '关闭选曲'));
+        }
+        var transport = panel.querySelector('.w-store-music__transport');
+        if (transport) {
+            transport.setAttribute('aria-label', pick('controls', '播放控制'));
+        }
+        var prevBtn = panel.querySelector('[data-store-music-prev]');
+        if (prevBtn) { prevBtn.setAttribute('aria-label', pick('prev', '上一首')); }
+        var playBtn = panel.querySelector('[data-store-music-play]');
+        if (playBtn) { playBtn.setAttribute('aria-label', pick('play', '播放')); }
+        var pauseBtn = panel.querySelector('[data-store-music-pause]');
+        if (pauseBtn) {
+            pauseBtn.setAttribute('aria-label', pick('pause', '停止'));
+            pauseBtn.setAttribute('title', pick('pause_title', '停止播放'));
+        }
+        var nextBtn = panel.querySelector('[data-store-music-next]');
+        if (nextBtn) { nextBtn.setAttribute('aria-label', pick('next', '下一首')); }
+        var volSr = panel.querySelector('.w-store-music__vol .w-store-music__sr');
+        if (volSr) { volSr.textContent = pick('volume', '音量'); }
+        var compartmentLabel = panel.querySelector('.w-store-music__compartment-label');
+        if (compartmentLabel) { compartmentLabel.textContent = pick('playlist', '播放列表'); }
+        var waveWrap = panel.querySelector('.w-store-music__wave');
+        if (waveWrap) { waveWrap.setAttribute('title', pick('wave_on', '开启波形')); }
+        var waveLabel = panel.querySelector('[data-store-music-wave-label]');
+        if (waveLabel) { waveLabel.textContent = pick('wave_on', '开启波形'); }
+        var searchInput = panel.querySelector('[data-store-music-search]');
+        if (searchInput) {
+            searchInput.setAttribute('placeholder', pick('search_placeholder', '搜索歌曲…'));
+            searchInput.setAttribute('aria-controls', 'weline-store-music-playlist');
+        }
+        var searchLabel = panel.querySelector('.w-store-music__search .w-store-music__sr');
+        if (searchLabel) { searchLabel.textContent = pick('search_label', '搜索播放列表'); }
+        if (!searchLabel) {
+            searchLabel = doc.createElement('span');
+            searchLabel.className = 'w-store-music__sr';
+            searchLabel.setAttribute('data-store-music-search-label', '');
+            searchLabel.hidden = true;
+            searchLabel.textContent = pick('search_label', '搜索播放列表');
+            searchInput.parentNode.insertBefore(searchLabel, searchInput);
+        }
+        var searchEmpty = panel.querySelector('[data-store-music-search-empty]');
+        if (searchEmpty) { searchEmpty.textContent = pick('search_empty', '未找到匹配曲目'); }
+        var playlist = panel.querySelector('[data-store-music-playlist]');
+        if (playlist) { playlist.setAttribute('aria-label', pick('playlist', '播放列表')); }
+        var titleEl = panel.querySelector('[data-store-music-title]');
+        if (titleEl) { titleEl.textContent = pick('idle', '进店音乐'); }
+        var introEl = panel.querySelector('[data-store-music-intro]');
+        if (introEl) { introEl.textContent = pick('choose_track', '选择曲目聆听'); }
+        var introToggle = panel.querySelector('[data-store-music-intro-toggle]');
+        if (introToggle) { introToggle.textContent = pick('intro_expand', '展开简介'); }
+
+        // Panel belongs after the entry row inside the shell.
+        var shell = root.querySelector('[data-store-music-shell]') || root;
+        shell.appendChild(panel);
+        root.appendChild(waveCanvas);
+    }
+
     function StoreMusic(root) {
         this.root = root;
         this.cfg = parseConfig(root);
+        ensureStoreMusicPanel(root, this.cfg);
         this.tracks = normalizeTracks(this.cfg);
         this.trackIndex = 0;
         this.audio = null;

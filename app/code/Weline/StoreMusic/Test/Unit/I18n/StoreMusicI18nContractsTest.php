@@ -61,8 +61,9 @@ private function assert_HindiTransportAriaCsv_testTransportAriaUsesRuntimeTransl
     $tpl = '/Users/weline/Project/Official/框架/app/code/Weline/StoreMusic' . '/view/templates/frontend/widgets/store-music.phtml';
     self::assertFileExists($tpl);
     $src = (string) file_get_contents($tpl);
-    self::assertStringContainsString("\$t('播放')", $src);
-    self::assertStringContainsString("\$t('下一首')", $src);
+    // 引子化后 transport aria 走 payload _i18n（WidgetI18n::label），JS 面板渲染时落到 aria。
+    self::assertStringContainsString("WidgetI18n::label('播放')", $src);
+    self::assertStringContainsString("WidgetI18n::label('下一首')", $src);
     self::assertStringNotContainsString('aria-label="@lang(播放)"', $src);
     self::assertStringNotContainsString('<lang>', $src);
 }

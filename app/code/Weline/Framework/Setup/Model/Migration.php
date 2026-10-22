@@ -90,12 +90,38 @@ class Migration extends Model implements ModelInterface
     public const STATUS_FAILED = 'failed';
     public const STATUS_MANUAL = 'manual';
 
+    /** 轻量列集：排除 forward_ddl / rollback_ddl / operation_payload 三个 longtext（列表扫描场景无人消费，全量行由单条记录查询按需取） */
+    private const LIGHT_LIST_FIELDS = [
+        self::schema_fields_ID,
+        self::schema_fields_MODULE,
+        self::schema_fields_VERSION,
+        self::schema_fields_FILE,
+        self::schema_fields_DESCRIPTION,
+        self::schema_fields_STATUS,
+        self::schema_fields_EXECUTED_AT,
+        self::schema_fields_ROLLBACK_AT,
+        self::schema_fields_DEPENDENCIES,
+        self::schema_fields_CHECKSUM,
+        self::schema_fields_CREATED_AT,
+        self::schema_fields_UPDATED_AT,
+        self::schema_fields_SCHEMA_TABLE_NAME,
+        self::schema_fields_CONNECTION_NAME,
+        self::schema_fields_BATCH_ID,
+        self::schema_fields_SEQUENCE,
+        self::schema_fields_MIGRATION_TYPE,
+        self::schema_fields_OPERATION_KIND,
+        self::schema_fields_MODEL_CLASS,
+        self::schema_fields_SCHEMA_BEFORE_CHECKSUM,
+        self::schema_fields_SCHEMA_AFTER_CHECKSUM,
+        self::schema_fields_OPERATION_ID,
+    ];
+
     public function getModuleMigrations(string $moduleName): array
     {
         return $this->reset()
             ->where(self::schema_fields_MODULE, $moduleName)
             ->order(self::schema_fields_EXECUTED_AT, 'ASC')
-            ->select()
+            ->select(implode(',', self::LIGHT_LIST_FIELDS))
             ->fetch()
             ->getItems();
     }
@@ -106,7 +132,7 @@ class Migration extends Model implements ModelInterface
             ->where(self::schema_fields_MODULE, $moduleName)
             ->where(self::schema_fields_STATUS, self::STATUS_INSTALLED)
             ->order(self::schema_fields_EXECUTED_AT, 'ASC')
-            ->select()
+            ->select(implode(',', self::LIGHT_LIST_FIELDS))
             ->fetch()
             ->getItems();
     }
@@ -359,7 +385,12 @@ class Migration extends Model implements ModelInterface
             ->where(self::schema_fields_MODULE, $moduleName)
             ->where(self::schema_fields_VERSION, $moduleVersion)
             ->where(self::schema_fields_FILE, self::SCHEMA_CHECKPOINT_SUPERSEDED_FILE)
-            ->select()
+            ->select(implode(',', [
+                self::schema_fields_ID,
+                self::schema_fields_MODULE,
+                self::schema_fields_VERSION,
+                self::schema_fields_CHECKSUM,
+            ]))
             ->fetch()
             ->getItems();
         $out = [];
@@ -472,7 +503,15 @@ class Migration extends Model implements ModelInterface
             ->where(self::schema_fields_MODULE, $moduleName)
             ->where(self::schema_fields_VERSION, $moduleVersion)
             ->where(self::schema_fields_FILE, self::SCHEMA_CHECKPOINT_FILE)
-            ->select()
+            ->select(implode(',', [
+                self::schema_fields_ID,
+                self::schema_fields_STATUS,
+                self::schema_fields_MIGRATION_TYPE,
+                self::schema_fields_OPERATION_KIND,
+                self::schema_fields_CHECKSUM,
+                self::schema_fields_SCHEMA_AFTER_CHECKSUM,
+                self::schema_fields_OPERATION_PAYLOAD,
+            ]))
             ->fetch()
             ->getItems();
         if ($items === []) {

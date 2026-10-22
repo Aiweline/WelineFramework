@@ -250,23 +250,34 @@ private function assert_StoreMusicPlaybackPrefs_testTemplateHasDesignSkinAndClos
     $phtml = (string) \file_get_contents($this->moduleFile_StoreMusicPlaybackPrefs('view/templates/frontend/widgets/store-music.phtml'));
     self::assertFileDoesNotExist($this->moduleFile_StoreMusicPlaybackPrefs('view/hooks/Weline_Theme/frontend/layouts/base/float-slot-start.phtml'));
     self::assertStringContainsString('storefront-float-start', $phtml);
-    self::assertStringContainsString('data-store-music-close', $phtml);
+    // 引子化：close 标记事实源在 store-music.js 面板 DOM（上方 $jsPanel 断言）。
     self::assertStringNotContainsString('data-store-music-dismiss', $phtml);
+    // SSR 引子化（store-music-async-panel-v1）：面板 DOM 标记事实源在 store-music.js
+    // ensureStoreMusicPanel；phtml 只保留入口壳 + config/i18n JSON 引子。
+    $jsPanel = (string) \file_get_contents($this->moduleFile_StoreMusicPlaybackPrefs('view/statics/js/store-music.js'));
+    self::assertStringContainsString('function ensureStoreMusicPanel', $jsPanel);
+    self::assertStringContainsString('store-music-async-panel-v1', $jsPanel);
+    self::assertStringContainsString('data-store-music-close', $jsPanel);
+    self::assertStringContainsString('data-store-music-playlist', $jsPanel);
+    self::assertStringContainsString('data-store-music-intro', $jsPanel);
+    self::assertStringContainsString('data-store-music-intro-wrap', $jsPanel);
+    self::assertStringContainsString('data-store-music-intro-toggle', $jsPanel);
+    self::assertStringContainsString('data-store-music-volume-pct', $jsPanel);
+    self::assertStringContainsString('data-store-music-wave-toggle', $jsPanel);
+    // 引子壳仍须有：host/入口/critical 几何/config+ i18n 引子。
     self::assertStringContainsString('w-store-music--simple', $phtml);
     self::assertStringContainsString('guofeng-cameo.png', $phtml);
-    self::assertStringContainsString('data-store-music-playlist', $phtml);
     self::assertStringContainsString('data-store-music-i18n-playlist-count', $phtml);
     self::assertStringContainsString('共 {n} 首', $phtml);
-    self::assertStringContainsString('data-store-music-intro', $phtml);
-    self::assertStringContainsString('data-store-music-intro-wrap', $phtml);
-    self::assertStringContainsString('data-store-music-intro-toggle', $phtml);
+    self::assertStringContainsString('data-store-music-i18n-intro-expand', $phtml);
     self::assertStringContainsString("\$t('展开简介')", $phtml);
     self::assertStringContainsString("\$t('收起简介')", $phtml);
     self::assertStringContainsString("\$t('播放列表')", $phtml);
+    self::assertStringContainsString('data-store-music-i18n-playlist', $phtml);
+    self::assertStringContainsString("'volume' => WidgetI18n::label('音量')", $phtml);
     self::assertStringNotContainsString('<lang>', $phtml);
     self::assertStringNotContainsString('@lang(', $phtml);
-    self::assertStringContainsString('data-store-music-volume-pct', $phtml);
-    self::assertStringContainsString('data-store-music-wave', $phtml);
+    self::assertStringContainsString('data-store-music-wave-toggle', $jsPanel);
     self::assertStringNotContainsString('music-box-closed.png', $phtml);
     self::assertStringNotContainsString('data-store-music-stage', $phtml);
     self::assertStringContainsString('data-store-music-spectrum', $phtml);

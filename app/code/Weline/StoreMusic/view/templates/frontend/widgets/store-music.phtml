@@ -3,6 +3,10 @@
  * @widget.source {Weline_Theme::js/widgets/widget-assets-runtime.js,Weline_StoreMusic::js/widgets/widget-store-music-0.js,Weline_StoreMusic::js/widgets/widget-store-music-1.js,Weline_StoreMusic::css/widgets/widget-store-music.css,Weline_StoreMusic::css/store-music.css}
  * StoreMusic float — required default_injection into storefront-float-start.
  *
+ * SSR 引子化：只输出头像入口壳 + config/i18n JSON；播放面板、波形 canvas、
+ * 选曲列表由 store-music.js 首帧 ensureStoreMusicPanel 异步渲染
+ * （异步部件引子契约，见 Weline_StoreMusic doc）。
+ *
  * @widget.code {store-music}
  * @widget.cache {3600}
  * @widget.share {true}
@@ -106,8 +110,38 @@ WidgetI18n::prefetchLabels([
     '音量',
 ]);
 $t = static fn (string $word): string => $esc(WidgetI18n::label($word));
+// Panel chrome strings ride the config JSON (single source); JS builds the panel DOM.
+$payload['_i18n'] = [
+    'need_consent' => WidgetI18n::label('请先同意营销 Cookie 后再播放'),
+    'tap_to_play' => WidgetI18n::label('点击开启音乐'),
+    'tap_to_unmute' => WidgetI18n::label('点击开启声音'),
+    'wave_unavailable' => WidgetI18n::label('波形不可用'),
+    'wave_on' => WidgetI18n::label('开启波形'),
+    'wave_off' => WidgetI18n::label('关闭波形'),
+    'playing' => WidgetI18n::label('播放中'),
+    'idle' => WidgetI18n::label('进店音乐'),
+    'choose_track' => WidgetI18n::label('选择曲目聆听'),
+    'format_unsupported' => WidgetI18n::label('当前浏览器暂不支持此音频格式'),
+    'play_error' => WidgetI18n::label('音频加载失败，请换一首曲目或格式'),
+    'dismissed' => WidgetI18n::label('已关闭自动播放，点击播放可重新开启'),
+    'other_tab' => WidgetI18n::label('已在其他页面播放'),
+    'playlist' => WidgetI18n::label('播放列表'),
+    'playlist_count' => WidgetI18n::label('共 {n} 首'),
+    'intro_expand' => WidgetI18n::label('展开简介'),
+    'intro_collapse' => WidgetI18n::label('收起简介'),
+    'search_placeholder' => WidgetI18n::label('搜索歌曲…'),
+    'search_empty' => WidgetI18n::label('未找到匹配曲目'),
+    'search_label' => WidgetI18n::label('搜索播放列表'),
+    'close' => WidgetI18n::label('关闭选曲'),
+    'controls' => WidgetI18n::label('播放控制'),
+    'prev' => WidgetI18n::label('上一首'),
+    'play' => WidgetI18n::label('播放'),
+    'pause' => WidgetI18n::label('停止'),
+    'pause_title' => WidgetI18n::label('停止播放'),
+    'next' => WidgetI18n::label('下一首'),
+    'volume' => WidgetI18n::label('音量'),
+];
 $configJson = $esc((string)json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-$defaultVol = (int)$payload['default_volume'];
 $faceUrl = '';
 try {
     // CSS via @widget.source only — forbid bare <link> dual-emit.
@@ -134,11 +168,6 @@ $faceUrl = $esc($faceUrl);
 <span hidden data-widget-script="storemusic-store-music-0"></span>
 <div class="w-store-music-host" data-store-music-host aria-hidden="false" data-widget-style-class="077587d4f9d73a11">
 
-<canvas id="weline-store-music-wave"
-        class="w-store-music-wave"
-        data-store-music-wave
-        hidden
-        aria-hidden="true"></canvas>
 <aside id="weline-store-music"
        class="w-store-music w-store-music--simple"
        data-store-music
@@ -175,7 +204,6 @@ $faceUrl = $esc($faceUrl);
                     data-store-music-toggle
                     data-testid="store-music-mascot"
                     aria-expanded="false"
-                    aria-controls="weline-store-music-panel"
                     title="<?= $t('进店氛围音乐') ?>">
                 <span class="w-store-music__spectrum" data-store-music-spectrum aria-hidden="true"></span>
                 <span class="w-store-music__face-frame w-frame" data-ratio="1" data-fit="cover">
@@ -193,124 +221,9 @@ $faceUrl = $esc($faceUrl);
                     data-store-music-toggle
                     data-store-music-hint
                     data-testid="store-music-hint"
-                    hidden
-                    aria-controls="weline-store-music-panel">
+                    hidden>
                 <?= $t('点开选曲') ?>
             </button>
-        </div>
-
-        <div id="weline-store-music-panel"
-             class="w-store-music__panel"
-             data-store-music-panel
-             hidden
-             data-testid="store-music-panel">
-            <div class="w-store-music__head">
-                <div class="w-store-music__meta">
-                    <span class="w-store-music__title"
-                          data-store-music-title
-                          data-testid="store-music-track-title"><?= $t('进店音乐') ?></span>
-                    <div class="w-store-music__intro-wrap"
-                         data-store-music-intro-wrap>
-                        <span class="w-store-music__intro"
-                              data-store-music-intro
-                              data-testid="store-music-track-intro"><?= $t('选择曲目聆听') ?></span>
-                        <button type="button"
-                                class="w-store-music__intro-toggle"
-                                data-store-music-intro-toggle
-                                data-testid="store-music-intro-toggle"
-                                hidden
-                                aria-expanded="false">
-                            <?= $t('展开简介') ?>
-                        </button>
-                    </div>
-                </div>
-                <button type="button"
-                        class="w-store-music__dismiss"
-                        data-store-music-close
-                        data-testid="store-music-close"
-                        aria-label="<?= $t('关闭选曲') ?>"
-                        title="<?= $t('关闭选曲') ?>">×</button>
-            </div>
-
-            <div class="w-store-music__transport" role="group" aria-label="<?= $t('播放控制') ?>">
-                <button type="button"
-                        class="w-store-music__btn w-store-music__btn--prev"
-                        data-store-music-prev
-                        data-testid="store-music-prev"
-                        aria-label="<?= $t('上一首') ?>"
-                        hidden>‹</button>
-                <button type="button"
-                        class="w-store-music__btn w-store-music__btn--play"
-                        data-store-music-play
-                        data-testid="store-music-play"
-                        aria-label="<?= $t('播放') ?>">▶</button>
-                <button type="button"
-                        class="w-store-music__btn w-store-music__btn--pause"
-                        data-store-music-pause
-                        data-testid="store-music-pause"
-                        aria-label="<?= $t('停止') ?>"
-                        title="<?= $t('停止播放') ?>"
-                        hidden>❚❚</button>
-                <button type="button"
-                        class="w-store-music__btn w-store-music__btn--next"
-                        data-store-music-next
-                        data-testid="store-music-next"
-                        aria-label="<?= $t('下一首') ?>"
-                        hidden>›</button>
-            </div>
-
-            <label class="w-store-music__vol">
-                <span class="w-store-music__sr"><?= $t('音量') ?></span>
-                <input type="range"
-                       min="0"
-                       max="100"
-                       step="1"
-                       value="<?= $defaultVol ?>"
-                       data-store-music-volume
-                       data-testid="store-music-volume">
-                <span class="w-store-music__vol-pct" data-store-music-volume-pct><?= $defaultVol ?>%</span>
-            </label>
-
-            <div class="w-store-music__compartment" data-store-music-compartment hidden>
-                <div class="w-store-music__compartment-head">
-                    <span class="w-store-music__compartment-label"><?= $t('播放列表') ?></span>
-                    <span class="w-store-music__compartment-count" data-store-music-playlist-count></span>
-                    <label class="w-store-music__wave" title="<?= $t('开启波形') ?>">
-                        <input type="checkbox"
-                               data-store-music-wave-toggle
-                               data-testid="store-music-wave-toggle"
-                               <?= !empty($payload['waveform_default']) ? 'checked' : '' ?>>
-                        <span class="w-store-music__wave-face" aria-hidden="true">〰</span>
-                        <span class="w-store-music__sr" data-store-music-wave-label><?= $t('开启波形') ?></span>
-                    </label>
-                </div>
-                <label class="w-store-music__search">
-                    <span class="w-store-music__sr" data-store-music-search-label><?= $t('搜索播放列表') ?></span>
-                    <input type="search"
-                           class="w-store-music__search-input"
-                           data-store-music-search
-                           data-testid="store-music-search"
-                           placeholder="<?= $t('搜索歌曲…') ?>"
-                           autocomplete="off"
-                           enterkeyhint="search"
-                           aria-controls="weline-store-music-playlist">
-                </label>
-                <p class="w-store-music__search-empty"
-                   data-store-music-search-empty
-                   data-testid="store-music-search-empty"
-                   hidden><?= $t('未找到匹配曲目') ?></p>
-                <ul id="weline-store-music-playlist"
-                    class="w-store-music__playlist"
-                    data-store-music-playlist
-                    data-testid="store-music-playlist"
-                    role="listbox"
-                    aria-label="<?= $t('播放列表') ?>"></ul>
-            </div>
-
-            <p class="w-store-music__status"
-               data-store-music-status
-               data-testid="store-music-status"
-               hidden></p>
         </div>
     </div>
 </aside>

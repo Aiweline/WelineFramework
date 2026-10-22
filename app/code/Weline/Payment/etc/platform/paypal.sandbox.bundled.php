@@ -3,15 +3,15 @@
 declare(strict_types=1);
 
 /**
- * Weline 框架内置 PayPal Sandbox 平台 REST App（local/dev 自动 fallback）。
+ * Weline 框架内置 PayPal Sandbox 平台 REST App（可提交，供沙盒支付测试直接跑通）。
  *
- * 由 Weline 官方在 PayPal Developer 创建一次 Sandbox Platform REST App 后写入此处；
- * App 须登记唯一 OAuth Return URL，例如：
- *   https://{website}.test.weline.com:9555/payment/frontend/callback/paypal
+ * local/dev 下 PayPalPlatformCredentialService 在没有本机覆盖时使用这里的 Client ID / Secret。
+ * 本机 app/etc/payment/paypal.platform.sandbox.php、env.php 或环境变量仍优先。
+ * 生产/预发不会使用本文件。
  *
- * 生产/预发必须通过 app/etc/env.php、环境变量或 app/etc/payment/paypal.platform.sandbox.php 覆盖。
+ * 沙盒买家登录见同目录 paypal.sandbox.buyer.json。
  */
 return [
-    'client_id' => '',
-    'client_secret' => '',
+    'client_id' => 'ASmwWnmY8Wi6Oz2FoY0yuHb03xss9bf7adHgsL9mS5dvUk1TK4lxJJw0GrQhzerZL9IRix5dh4ZNxXvD',
+    'client_secret' => 'EItFCGmqB4czHVGmOQi_TwAd_5gV3ftQ4J-MUKv2E05ze7yQ4obquFnbXJjBi45h-BANefQ3OVz9UGbJ',
 ];

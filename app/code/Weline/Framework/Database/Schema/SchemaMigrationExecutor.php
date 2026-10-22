@@ -938,7 +938,12 @@ final class SchemaMigrationExecutor implements SchemaMigrationExecutorInterface
             ->where(Migration::schema_fields_FILE, 'schema_diff')
             ->where(Migration::schema_fields_STATUS, $status)
             ->order(Migration::schema_fields_ID, 'DESC')
-            ->select()
+            ->select(implode(',', [
+                Migration::schema_fields_ID,
+                Migration::schema_fields_OPERATION_KIND,
+                Migration::schema_fields_SCHEMA_TABLE_NAME,
+                Migration::schema_fields_OPERATION_PAYLOAD,
+            ]))
             ->fetch()
             ->getItems();
 

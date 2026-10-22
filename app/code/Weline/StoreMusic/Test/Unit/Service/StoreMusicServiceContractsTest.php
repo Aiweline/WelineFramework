@@ -141,7 +141,12 @@ private function assert_StoreMusicSettings_testModuleUsesSystemConfigHookAndDeco
     self::assertStringContainsString('frontendPayload($widgetConfig)', $widget);
     self::assertStringContainsString('data-weline-load="storeMusic"', $widget);
     self::assertStringContainsString('data-testid="store-music-widget"', $widget);
-    self::assertStringContainsString('data-store-music-intro', $widget);
+    // 引子化：intro 面板标记事实源在 store-music.js；config 经 data-store-music-config 下发。
+    self::assertStringContainsString('data-store-music-config', $widget);
+    self::assertStringContainsString('_i18n', $widget);
+    self::assertStringContainsString('data-store-music-intro', $js);
+    // 引子化：close 控制标记事实源在 store-music.js 面板 DOM。
+    self::assertStringContainsString('data-store-music-close', $js);
     self::assertStringContainsString('use Weline\Theme\Helper\WidgetI18n;', $widget);
     self::assertStringContainsString("\$t = static fn (string \$word): string => \$esc(WidgetI18n::label(\$word))", $widget);
     self::assertStringNotContainsString("\$esc((string)__(\$word))", $widget);
@@ -171,7 +176,8 @@ private function assert_StoreMusicSettings_testModuleUsesSystemConfigHookAndDeco
     self::assertStringContainsString('indexedDB', $js);
     self::assertStringContainsString('resolveMediaSrc', $js);
     self::assertStringContainsString('stopPlayback', $js);
-    self::assertStringContainsString('data-store-music-close', $widget);
+    // 引子化：close 标记事实源在 store-music.js 面板 DOM；widget 不再输出 dismiss。
+    self::assertStringContainsString('data-store-music-close', $js);
     self::assertStringNotContainsString('data-store-music-dismiss', $widget);
     // Streaming playback intentionally uses preload=auto (HTTP Range progressive).
     self::assertStringContainsString("audio.preload = 'auto'", $js);
