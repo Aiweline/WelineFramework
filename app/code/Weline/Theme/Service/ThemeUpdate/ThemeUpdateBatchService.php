@@ -162,6 +162,7 @@ final class ThemeUpdateBatchService
         $next = ThemeUpdatePointerPlanner::planPromote($state, $batchId);
         $this->commitPointer($row, $websiteId, $themeId, $area, $next, (int)$state['epoch'], $batchId);
         $this->persistPointerConfig($websiteId, $themeId, $area, $batch, $next['epoch']);
+        $this->mirrorThemeStaticToDeploy($batchId);
         $this->invalidateThemeCaches($themeId, 'theme_update_promote');
         // 自动回收历史代次，避免批次目录无界增长（失败静默，不影响切换）
         try {
@@ -190,6 +191,7 @@ final class ThemeUpdateBatchService
 
         $this->commitPointer($row, $websiteId, $themeId, $area, $next, (int)$state['epoch'], $next['current']);
         $this->persistPointerConfig($websiteId, $themeId, $area, $batch, $next['epoch']);
+        $this->mirrorThemeStaticToDeploy($next['current']);
         $this->invalidateThemeCaches($themeId, 'theme_update_rollback');
 
         return $next;
@@ -535,5 +537,100 @@ final class ThemeUpdateBatchService
         }
 
         return self::DEFAULT_KEEP_BATCHES;
+    }
+
+    /**
+     * 把代次的主题静态子树镜像到部署构建目录（硬链接覆盖）。
+     *
+     * 编译产物/烘焙缓存里写的是部署构建号前缀；镜像后这些 URL 自动指向当前代次内容，
+     * 因此预览态与旧编译产物都不会出现指向不存在资源的 404。
+     */
+    private function mirrorThemeStaticToDeploy(string $batchId): void
+    {
+        if ($batchId === '') {
+            return;
+        }
+        $pubStatic = rtrim((string)PUB, '/\\') . DIRECTORY_SEPARATOR . 'static';
+        try {
+            $deployId = (string)\Weline\Framework\Deploy\StaticBuildId::current($pubStatic);
+        } catch (\Throwable) {
+            return;
+        }
+        if ($deployId === '') {
+            return;
+        }
+        $batchRoot = self::staticRoot($batchId, $pubStatic);
+        $deployRoot = $pubStatic . DIRECTORY_SEPARATOR . $deployId;
+        if (!is_dir($batchRoot) || !is_dir($deployRoot)) {
+            return;
+        }
+        $welineBatch = $batchRoot . DIRECTORY_SEPARATOR . 'Weline';
+        if (!is_dir($welineBatch)) {
+            return;
+        }
+        foreach ((array)@scandir($welineBatch) as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $src = $welineBatch . DIRECTORY_SEPARATOR . $item;
+            if (!is_dir($src)) {
+                continue;
+            }
+            // 仅镜像主题相关子树：Weline/Theme 与设计命名空间 Weline/<theme>
+            if ($item !== 'Theme' && !$this->isDesignNamespace($item)) {
+                continue;
+            }
+            $this->overlayTreeTo($src, $deployRoot . DIRECTORY_SEPARATOR . 'Weline' . DIRECTORY_SEPARATOR . $item);
+        }
+    }
+
+    /** 是否为设计命名空间（app/design 下的主题目录，如 hanfu）。 */
+    private function isDesignNamespace(string $name): bool
+    {
+        $designRoot = rtrim((string)\Weline\Framework\App\Env::path_THEME_DESIGN_DIR, '/\\');
+        if ($designRoot === '' || !is_dir($designRoot)) {
+            return false;
+        }
+        foreach ((array)@scandir($designRoot) as $vendor) {
+            if ($vendor === '.' || $vendor === '..') {
+                continue;
+            }
+            if (is_dir($designRoot . DIRECTORY_SEPARATOR . $vendor . DIRECTORY_SEPARATOR . $name)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** 递归硬链接覆盖（目标存在则先删）。 */
+    private function overlayTreeTo(string $src, string $dst): void
+    {
+        if (is_link($dst)) {
+            @unlink($dst);
+        }
+        if (!is_dir($dst) && !@mkdir($dst, 0775, true) && !is_dir($dst)) {
+            return;
+        }
+        foreach ((array)@scandir($src) as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $from = $src . DIRECTORY_SEPARATOR . $item;
+            $to = $dst . DIRECTORY_SEPARATOR . $item;
+            if (is_link($to)) {
+                @unlink($to);
+            }
+            if (is_dir($from)) {
+                $this->overlayTreeTo($from, $to);
+                continue;
+            }
+            if (is_file($to)) {
+                @unlink($to);
+            }
+            if (!@link($from, $to)) {
+                @copy($from, $to);
+            }
+        }
     }
 }

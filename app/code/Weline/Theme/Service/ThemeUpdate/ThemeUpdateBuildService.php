@@ -72,9 +72,11 @@ final class ThemeUpdateBuildService
             ThemeLayoutEntityPaths::forceRoot($entityDir);
             // 固化/编译期把「本代次」作为静态前缀来源：编译产物烘焙的是本批次前缀，
             // 这样后续 GC 删旧批次不会让产物 404。
+            // 编译/烘焙期静态前缀固定为「部署构建号」：promote 会把批次主题子树镜像到该目录，
+            // 于是旧编译产物与预览态都能自动跟随当前代次（预览自身资源仍走 __preview 名空间）。
             \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::forceBatch([
                 'batch_id' => $batchId,
-                'static_ns' => $batchId,
+                'static_ns' => $this->deployStaticBuildId(),
                 'entity_root' => $batchId,
                 'theme_prefix' => $themePrefix,
                 'epoch' => 1,
@@ -107,7 +109,7 @@ final class ThemeUpdateBuildService
                 \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::forceBatch(null);
             }
             $entityFiles = $this->countFiles($entityDir);
-            $rewritten = $this->rewriteEntityStaticPrefixes($entityDir, $batchId, $themePrefix);
+            $rewritten = $this->rewriteEntityStaticPrefixes($entityDir, $this->deployStaticBuildId(), $themePrefix);
             $checks[] = [
                 'name' => 'entity_tree_ready',
                 'ok' => $entityFiles > 0,
@@ -642,5 +644,18 @@ final class ThemeUpdateBuildService
             }
         }
         @rmdir($dir);
+    }
+
+    /** 当前部署静态构建号（pub/static/.build.json）。 */
+    private function deployStaticBuildId(): string
+    {
+        $pubStatic = rtrim((string)PUB, '/\\') . DIRECTORY_SEPARATOR . 'static';
+        try {
+            $id = (string)\Weline\Framework\Deploy\StaticBuildId::current($pubStatic);
+        } catch (\Throwable) {
+            $id = '';
+        }
+
+        return $id;
     }
 }
