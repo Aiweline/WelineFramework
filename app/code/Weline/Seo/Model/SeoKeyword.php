@@ -122,6 +122,92 @@ class SeoKeyword extends Model
     {
         return $this->getStatus() === self::STATUS_ENABLED;
     }
+
+    /**
+     * 详情页按批读取启用关键词。每批只取展示列，读完即丢，不把整个主体装进内存。
+     *
+     * @return \Generator<int, array{keyword: string, priority: int}>
+     */
+    public function streamEnabledBySubject(int $subjectId, int $batchSize = 200): \Generator
+    {
+        $batchSize = max(1, $batchSize);
+        $cursorPriority = null;
+        $cursorId = null;
+        while (true) {
+            $rows = $this->fetchEnabledBatch($subjectId, $batchSize, $cursorPriority, $cursorId);
+            if ($rows === []) {
+                return;
+            }
+            foreach ($rows as $row) {
+                $cursorPriority = (int)($row[self::schema_fields_PRIORITY] ?? 0);
+                $cursorId = (int)($row[self::schema_fields_ID] ?? 0);
+                yield [
+                    'keyword' => (string)($row[self::schema_fields_KEYWORD] ?? ''),
+                    'priority' => $cursorPriority,
+                ];
+            }
+            if (count($rows) < $batchSize) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function fetchEnabledBatch(int $subjectId, int $batchSize, ?int $cursorPriority, ?int $cursorId): array
+    {
+        if ($cursorPriority === null || $cursorId === null) {
+            return $this->selectEnabledSlice($subjectId, $batchSize, null, null);
+        }
+
+        $samePriority = $this->selectEnabledSlice($subjectId, $batchSize, $cursorPriority, $cursorId);
+        if (count($samePriority) >= $batchSize) {
+            return $samePriority;
+        }
+
+        $lowerPriority = $this->selectEnabledSlice(
+            $subjectId,
+            $batchSize - count($samePriority),
+            $cursorPriority,
+            null,
+        );
+
+        return array_merge($samePriority, $lowerPriority);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function selectEnabledSlice(int $subjectId, int $limit, ?int $priority, ?int $idBefore): array
+    {
+        $query = $this->reset()
+            ->fields([
+                self::schema_fields_ID,
+                self::schema_fields_KEYWORD,
+                self::schema_fields_PRIORITY,
+            ])
+            ->where(self::schema_fields_SUBJECT_ID, $subjectId)
+            ->where(self::schema_fields_STATUS, self::STATUS_ENABLED);
+        if ($priority !== null && $idBefore !== null) {
+            $query->where(self::schema_fields_PRIORITY, $priority)
+                ->where(self::schema_fields_ID, $idBefore, '<')
+                ->order(self::schema_fields_ID, 'DESC');
+        } elseif ($priority !== null) {
+            $query->where(self::schema_fields_PRIORITY, $priority, '<')
+                ->order(self::schema_fields_PRIORITY, 'DESC')
+                ->order(self::schema_fields_ID, 'DESC');
+        } else {
+            $query->order(self::schema_fields_PRIORITY, 'DESC')
+                ->order(self::schema_fields_ID, 'DESC');
+        }
+        $rows = $query->limit($limit)->select()->fetchArray();
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        return array_values(array_filter($rows, 'is_array'));
+    }
 }
 
 

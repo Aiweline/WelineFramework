@@ -5,13 +5,15 @@
 /**
  * 变量：
  * @var array $subject 主体信息
- * @var array $keywords 关键词列表
+ * @var \Generator|array $keywords 关键词列表（按批流式，勿整表装入内存）
+ * @var int $keyword_count 启用关键词数量
  * @var array|null $suggestion AI建议
  * @var string $title 页面标题
  */
 
 $subject = $this->getData('subject') ?: [];
 $keywords = $this->getData('keywords') ?: [];
+$keywordCount = (int)($this->getData('keyword_count') ?? (is_array($keywords) ? count($keywords) : 0));
 $suggestion = $this->getData('suggestion');
 $title = $this->getData('seo_page_title') ?: __('主体SEO详情');
 ?>
@@ -96,7 +98,7 @@ $title = $this->getData('seo_page_title') ?: __('主体SEO详情');
                                 <div class="info-item">
                                     <div class="info-label"><lang>关键词数</lang></div>
                                     <div class="info-value">
-                                        <span class="w-badge" data-w-background="info"><?= count($keywords) ?></span>
+                                        <span class="w-badge" data-w-background="info"><?= $keywordCount ?></span>
                                     </div>
                                 </div>
                                 <div class="info-item">
@@ -154,11 +156,11 @@ $title = $this->getData('seo_page_title') ?: __('主体SEO详情');
                                 <h5 class="w-card__title" style="--w-mb:0;">
                                     <w:icon name="circle" size="sm"></w:icon>
                                     <lang>关键词列表</lang>
-                                    <span class="w-badge" data-w-background="muted"><?= count($keywords) ?></span>
+                                    <span class="w-badge" data-w-background="muted"><?= $keywordCount ?></span>
                                 </h5>
                             </div>
                             <div class="w-card__body">
-                                <?php if (empty($keywords)): ?>
+                                <?php if ($keywordCount === 0): ?>
                                     <div class="empty-keywords">
                                         <w:icon name="circle" size="sm"></w:icon>
                                         <p style="--w-mt:var(--weline-space-2);"><lang>该主体暂无关键词</lang></p>

@@ -104,15 +104,13 @@ class Dashboard extends BackendPageController
             return $this->redirect('*/backend/dashboard/subject');
         }
 
-        // 获取关键词列表
         /** @var SeoKeyword $keywordModel */
         $keywordModel = $this->objectManager->getInstance(SeoKeyword::class);
-        $keywords = $keywordModel->reset()
+        $keywordCount = (int)$keywordModel->reset()
             ->where(SeoKeyword::schema_fields_SUBJECT_ID, $subjectId)
             ->where(SeoKeyword::schema_fields_STATUS, SeoKeyword::STATUS_ENABLED)
-            ->order(SeoKeyword::schema_fields_PRIORITY, 'DESC')
-            ->select()
-            ->fetchArray();
+            ->count();
+        $keywords = $keywordModel->streamEnabledBySubject($subjectId);
 
         // 获取AI建议
         /** @var SeoSuggestion $suggestionModel */
@@ -126,6 +124,7 @@ class Dashboard extends BackendPageController
         
         $this->assign('seo_page_title', __('主体SEO详情'));
         $this->assign('subject', $subjectModel->getData());
+        $this->assign('keyword_count', $keywordCount);
         $this->assign('keywords', $keywords);
         $this->assign('suggestion', $suggestion->getId() ? $suggestion->getData() : null);
         
