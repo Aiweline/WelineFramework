@@ -124,32 +124,44 @@ class Update extends AbstractConsole
             case 'auto':
                 $themeId = $this->requireThemeId($themeName);
                 $force = !empty($options['force']);
-                $dirty = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::isDirty($themeId);
-                if (!$force && !$dirty) {
-                    $this->printing->note(__('主题 #%{1} 无发布变更（无脏标记），跳过。', [(string)$themeId]));
+                /** @var \Weline\Theme\Service\ThemeUpdate\ThemeUpdateAutoService $auto */
+                $auto = ObjectManager::getInstance(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateAutoService::class);
+                $result = $auto->run($themeId, $force, $dryRun);
+                $mode = (string)($result['mode'] ?? '');
+                if ($mode === 'dev') {
+                    if ($dryRun) {
+                        $this->printing->note(__('dry-run：dev 模式将走「开发环境自动固化编译」（与 theme_layout_origin_watch 同一实现）'));
+                        return;
+                    }
+                    $report = (array)($result['report'] ?? []);
+                    $this->printing->success(__('dev 模式已就地固化/编译：scanned=%{1} changed=%{2} solidified=%{3} static=%{4} cache_cleared=%{5}', [
+                        (string)($report['themes_scanned'] ?? 0),
+                        (string)($report['changed'] ?? 0),
+                        (string)($report['solidified'] ?? 0),
+                        (string)($report['static_published'] ?? 0),
+                        (string)($report['cache_cleared'] ?? 0),
+                    ]));
                     return;
                 }
-                if ($dryRun) {
+                if (!empty($result['dry_run'])) {
                     $this->printing->note(__('dry-run：将重建并切换主题 #%{1} 的更新代次（dirty=%{2} force=%{3}）', [
                         (string)$themeId,
-                        $dirty ? '1' : '0',
+                        ($result['skipped'] ?? '') === 'no_dirty' ? '0' : '1',
                         $force ? '1' : '0',
                     ]));
                     return;
                 }
-                /** @var ThemeUpdateBuildService $builder */
-                $builder = ObjectManager::getInstance(ThemeUpdateBuildService::class);
-                $this->printing->note(__('主题 #%{1}：构建更新代次（不影响线上）…', [(string)$themeId]));
-                $result = $builder->build($themeId, []);
-                $manifest = $result['manifest'] ?? [];
-                if (($manifest['verify']['ok'] ?? false) !== true) {
-                    throw new ConsoleException(__('构建校验未通过，未切换：') . $result['batch_id']);
+                if (($result['skipped'] ?? '') === 'no_dirty') {
+                    $this->printing->note(__('主题 #%{1} 无发布变更（无脏标记），跳过。', [(string)$themeId]));
+                    return;
                 }
-                $state = $service->promote($result['batch_id']);
-                \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::clearDirty($themeId);
+                if (($result['skipped'] ?? '') === 'verify_failed') {
+                    throw new ConsoleException(__('构建校验未通过，未切换：') . (string)($result['batch_id'] ?? ''));
+                }
+                $state = (array)($result['state'] ?? []);
                 $this->printing->success(__('已切到代次 %{1}（epoch=%{2}）', [
-                    $state['current'],
-                    (string)$state['epoch'],
+                    (string)($state['current'] ?? ''),
+                    (string)($state['epoch'] ?? 0),
                 ]));
                 return;
 

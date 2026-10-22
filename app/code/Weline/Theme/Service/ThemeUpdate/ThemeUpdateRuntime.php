@@ -132,6 +132,14 @@ final class ThemeUpdateRuntime
         if ($themeId < 1) {
             return;
         }
+        // 开发环境：由既有「自动固化编译」（theme_layout_origin_watch）就地刷新，无需代次脏标记
+        try {
+            if ((string)(Env::system('deploy') ?? '') === 'dev') {
+                return;
+            }
+        } catch (\Throwable) {
+            // 忽略：按非 dev 处理
+        }
         $file = self::dirtyFile($themeId);
         $dir = \dirname($file);
         if (!\is_dir($dir) && !@\mkdir($dir, 0775, true) && !\is_dir($dir)) {
