@@ -62,6 +62,9 @@ final class DeployUpdateContractsTest extends TestCase
             'CoreUpdateCache::testBrokenCacheIsReplacedByShallowCloneNotFullInit' => function () {
             $this->assert_CoreUpdateCache_testBrokenCacheIsReplacedByShallowCloneNotFullInit();
         },
+            'CoreUpdateCache::testTransferSharesOneFiveMinuteBudget' => function () {
+            $this->assert_CoreUpdateCache_testTransferSharesOneFiveMinuteBudget();
+        },
             'CoreUpdateActivity::testCoreUpdateHoldsSystemUpdateLock' => function () {
             $this->assert_CoreUpdateActivity_testCoreUpdateHoldsSystemUpdateLock();
         },
@@ -108,12 +111,46 @@ private function assert_CoreUpdateCache_testBrokenCacheIsReplacedByShallowCloneN
 {
     $src = (string) file_get_contents(BP . 'app/code/Weline/Deploy/Console/Update/Core.php');
     self::assertStringContainsString("'clone', '--depth', '1', '--single-branch'", $src);
+    self::assertStringContainsString("'-c', 'pack.threads=1'", $src);
+    self::assertStringContainsString('shallowCloneUsableAfterIndexPackRace', $src);
+    self::assertStringContainsString('invalid index-pack output', $src);
     self::assertStringContainsString('replaceCacheWithFreshClone', $src);
     self::assertStringContainsString('GIT_TERMINAL_PROMPT', $src);
     self::assertStringContainsString('git timed out after', $src);
     self::assertStringNotContainsString("['init']", $src);
     self::assertStringNotContainsString("['fetch', 'origin']", $src);
     self::assertStringNotContainsString("['fetch', '--tags']", $src);
+}
+
+private function assert_CoreUpdateCache_testTransferSharesOneFiveMinuteBudget(): void
+{
+    $src = (string) file_get_contents(BP . 'app/code/Weline/Deploy/Console/Update/Core.php');
+    self::assertStringContainsString('private const GIT_TRANSFER_TIMEOUT_SECONDS = 300;', $src);
+    self::assertStringContainsString('armGitTransferBudget', $src);
+    self::assertStringContainsString('runGitTransfer', $src);
+    self::assertStringNotContainsString('GIT_FETCH_TIMEOUT_SECONDS', $src);
+    self::assertStringNotContainsString('GIT_CLONE_TIMEOUT_SECONDS', $src);
+    self::assertStringNotContainsString('GIT_CLONE_STALL_SECONDS', $src);
+    self::assertStringNotContainsString('git produced no output for', $src);
+
+    $core = new Core($this->createMock(\Weline\Framework\Output\Cli\Printing::class), $this->createMock(\Weline\Framework\App\System::class));
+    $remain = new ReflectionMethod(Core::class, 'gitTransferSecondsRemaining');
+    $remain->setAccessible(true);
+    $left = $remain->invoke($core);
+    self::assertGreaterThan(290, $left);
+    self::assertLessThanOrEqual(300, $left);
+
+    $deadline = new \ReflectionProperty(Core::class, 'gitTransferDeadlineAt');
+    $deadline->setAccessible(true);
+    $deadline->setValue($core, time() - 1);
+    self::assertSame(0, $remain->invoke($core));
+
+    $run = new ReflectionMethod(Core::class, 'runGitTransfer');
+    $run->setAccessible(true);
+    $output = [];
+    $code = $run->invokeArgs($core, [getcwd() ?: '.', ['--version'], &$output]);
+    self::assertSame(124, $code);
+    self::assertContains('git transfer budget exhausted', $output);
 }
 
 private function assert_CoreUpdateActivity_testCoreUpdateHoldsSystemUpdateLock(): void

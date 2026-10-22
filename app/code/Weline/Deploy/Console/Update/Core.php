@@ -39,20 +39,11 @@ class Core extends CommandAbstract
     /** 探测远端 tip：不通就换仓库 */
     private const GIT_PROBE_TIMEOUT_SECONDS = 8;
 
-    /** 已有缓存仓的增量 fetch；超时视为这个仓不可用 */
-    private const GIT_FETCH_TIMEOUT_SECONDS = 20;
-
     /**
-     * 浅克隆绝对上限。dev 的 tip 树约 687MB / 2 万文件，线上直接 git clone 约 103 秒能完成；
-     * 120 秒会把还在传包或 checkout 的成功克隆杀掉，并报成「仓库无法浅克隆」。
+     * 拉包只有这一道总时限（秒）。增量 fetch、换仓浅克隆、标签 fetch 共用同一截止时间，
+     * 不再按命令或「一段时间没有新输出」各卡一刀。
      */
-    private const GIT_CLONE_TIMEOUT_SECONDS = 600;
-
-    /**
-     * 浅克隆无新输出的上限。须配合 clone --progress（进度会刷新）；
-     * 真卡住才换仓库，不能用它代替上面的绝对上限。
-     */
-    private const GIT_CLONE_STALL_SECONDS = 180;
+    private const GIT_TRANSFER_TIMEOUT_SECONDS = 300;
 
     /**
      * 核心更新允许同步的路径（目录或文件）。
@@ -121,6 +112,9 @@ class Core extends CommandAbstract
      * @var string[]
      */
     private array $repoCandidates = [];
+
+    /** 本次拉包阶段的截止时间（unix 秒）。0 表示尚未计时。 */
+    private int $gitTransferDeadlineAt = 0;
 
     public function __construct(
         Printing $printer,
@@ -1030,6 +1024,8 @@ class Core extends CommandAbstract
 
     private function downloadFramework(string $tmpDir, string $branch, ?string $tag): void
     {
+        $this->armGitTransferBudget();
+
         // 检查是否已有 Git 仓库
         $gitDir = $tmpDir . DS . '.git';
         $isExistingRepo = is_dir($gitDir);
@@ -1055,14 +1051,18 @@ class Core extends CommandAbstract
                 [substr($currentHead, 0, 8)]
             ));
             
-            // 只做限时浅拉取。超时或失败立刻删掉旧缓存仓，换仓库浅克隆，不再在这个目录里初始化。
+            // 失败或总时限用尽才换仓库浅克隆，不再在这个目录里初始化。
             $fetchArgs = $tag
                 ? ['fetch', '--depth', '1', 'origin', 'tag', $tag]
                 : ['fetch', '--depth', '1', 'origin', $branch];
-            $fetchCode = $this->runGitCommand($tmpDir, $fetchArgs, $output, self::GIT_FETCH_TIMEOUT_SECONDS);
+            $fetchCode = $this->runGitTransfer($tmpDir, $fetchArgs, $output);
 
             if ($fetchCode !== 0) {
-                $this->printer->warning(__('拉取未在时限内完成，删掉旧缓存仓并换仓库浅克隆...'));
+                if ($this->gitTransferSecondsRemaining() <= 0) {
+                    $this->printer->error(__('拉包超过 5 分钟总时限'));
+                    exit(1);
+                }
+                $this->printer->warning(__('拉取未完成，删掉旧缓存仓并换仓库浅克隆...'));
                 $this->replaceCacheWithFreshClone($tmpDir, $branch, $tag);
                 return;
             }
@@ -1227,16 +1227,14 @@ class Core extends CommandAbstract
     ): bool {
         $this->printer->note(__('克隆仓库：%{1}', [$this->maskRepoUrl($repo)]));
 
-        $returnCode = $this->runGitCommand(
+        $returnCode = $this->runGitTransfer(
             $tmpDir,
             ['clone', '--depth', '1', '--single-branch', '--progress', '-b', $branch, $repo, '.'],
             $output,
-            self::GIT_CLONE_TIMEOUT_SECONDS,
-            self::GIT_CLONE_STALL_SECONDS,
         );
         $lastOutput = $output;
 
-        if ($returnCode !== 0) {
+        if ($returnCode !== 0 && !$this->shallowCloneUsableAfterIndexPackRace($tmpDir, $output)) {
             $this->printer->warning(__('浅克隆未完成，换下一个仓库'));
             $tail = trim((string)($output[array_key_last($output)] ?? ''));
             if ($tail !== '') {
@@ -1244,12 +1242,15 @@ class Core extends CommandAbstract
             }
             return false;
         }
+        if ($returnCode !== 0) {
+            $this->printer->warning(__('浅克隆收尾临时包时退出，提交已在缓存仓里，继续使用'));
+        }
 
         $this->printer->success(__('✓ 仓库克隆成功'));
 
         if ($tag) {
             $this->printer->note(__('切换到标签 %{1}...', [$tag]));
-            $returnCode = $this->runGitCommand($tmpDir, ['fetch', '--depth', '1', 'origin', 'tag', $tag], $output, self::GIT_FETCH_TIMEOUT_SECONDS);
+            $returnCode = $this->runGitTransfer($tmpDir, ['fetch', '--depth', '1', 'origin', 'tag', $tag], $output);
             if ($returnCode === 0) {
                 $returnCode = $this->runGitCommand($tmpDir, ['checkout', $tag], $checkoutOutput);
                 $output = array_merge($output, $checkoutOutput);
@@ -1265,6 +1266,39 @@ class Core extends CommandAbstract
         }
 
         return true;
+    }
+
+    /**
+     * git 报 tmp_pack 读不到时，只有缓存仓里已有真实提交才算这次克隆可用。
+     * 超时、缺分支、包损坏一律仍算失败。
+     *
+     * @param string[] $output
+     */
+    private function shallowCloneUsableAfterIndexPackRace(string $tmpDir, array $output): bool
+    {
+        $text = implode("\n", $output);
+        if (!str_contains($text, 'tmp_pack_') || !str_contains($text, 'invalid index-pack output')) {
+            return false;
+        }
+        if (str_contains($text, 'git timed out after') || str_contains($text, 'git transfer budget exhausted')) {
+            return false;
+        }
+
+        $headOutput = [];
+        if ($this->runGitCommand($tmpDir, ['rev-parse', '--verify', '--quiet', 'HEAD'], $headOutput) !== 0) {
+            return false;
+        }
+        $sha = trim((string)($headOutput[0] ?? ''));
+        if (preg_match('/^[0-9a-f]{40}$/', $sha) !== 1) {
+            return false;
+        }
+
+        $typeOutput = [];
+        if ($this->runGitCommand($tmpDir, ['cat-file', '-t', 'HEAD'], $typeOutput) !== 0) {
+            return false;
+        }
+
+        return trim((string)($typeOutput[0] ?? '')) === 'commit';
     }
     
     /**
@@ -1819,6 +1853,43 @@ class Core extends CommandAbstract
         }
     }
 
+    private function armGitTransferBudget(): void
+    {
+        $this->gitTransferDeadlineAt = time() + self::GIT_TRANSFER_TIMEOUT_SECONDS;
+    }
+
+    private function gitTransferSecondsRemaining(): int
+    {
+        if ($this->gitTransferDeadlineAt <= 0) {
+            $this->armGitTransferBudget();
+        }
+
+        return max(0, $this->gitTransferDeadlineAt - time());
+    }
+
+    /**
+     * 拉包命令共用 downloadFramework 开头的那一个 5 分钟截止时间。
+     *
+     * @param string[] $arguments
+     */
+    private function runGitTransfer(string $workingDirectory, array $arguments, &$output): int
+    {
+        $timeoutSeconds = $this->gitTransferSecondsRemaining();
+        if ($timeoutSeconds <= 0) {
+            $output = ['git transfer budget exhausted'];
+            return 124;
+        }
+
+        // 多线程 index-pack 会在收完后先删 tmp_pack_* 再读，git 2.39 会因此自己退出。
+        // 单线程收包避免这场自删；-c 必须在子命令前。
+        return $this->runGitCommand(
+            $workingDirectory,
+            array_merge(['-c', 'pack.threads=1'], $arguments),
+            $output,
+            $timeoutSeconds,
+        );
+    }
+
     /**
      * @param string[] $arguments
      */
@@ -1827,7 +1898,6 @@ class Core extends CommandAbstract
         array $arguments,
         &$output,
         int $timeoutSeconds = self::GIT_LOCAL_TIMEOUT_SECONDS,
-        int $stallSeconds = 0
     ): int {
         $output = [];
         $command = array_merge([$this->gitExecutable], $arguments);
@@ -1860,7 +1930,6 @@ class Core extends CommandAbstract
         $stdout = '';
         $stderr = '';
         $startedAt = time();
-        $lastOutputAt = $startedAt;
         $exitCode = null;
         while (true) {
             $chunkOut = (string)stream_get_contents($pipes[1]);
@@ -1868,21 +1937,13 @@ class Core extends CommandAbstract
             if ($chunkOut !== '' || $chunkErr !== '') {
                 $stdout .= $chunkOut;
                 $stderr .= $chunkErr;
-                $lastOutputAt = time();
             }
             $status = proc_get_status($process);
             if (!$status['running']) {
                 $exitCode = (int)$status['exitcode'];
                 break;
             }
-            $now = time();
-            $stopReason = '';
-            if ($timeoutSeconds > 0 && ($now - $startedAt) >= $timeoutSeconds) {
-                $stopReason = 'git timed out after ' . $timeoutSeconds . ' seconds';
-            } elseif ($stallSeconds > 0 && ($now - $lastOutputAt) >= $stallSeconds) {
-                $stopReason = 'git produced no output for ' . $stallSeconds . ' seconds';
-            }
-            if ($stopReason !== '') {
+            if ($timeoutSeconds > 0 && (time() - $startedAt) >= $timeoutSeconds) {
                 $this->stopGitProcess($process);
                 $stdout .= (string)stream_get_contents($pipes[1]);
                 $stderr .= (string)stream_get_contents($pipes[2]);
@@ -1890,7 +1951,7 @@ class Core extends CommandAbstract
                 fclose($pipes[2]);
                 proc_close($process);
                 $output = $this->splitProcessOutput($stdout, $stderr);
-                $output[] = $stopReason;
+                $output[] = 'git timed out after ' . $timeoutSeconds . ' seconds';
                 return 124;
             }
             usleep(100000);
