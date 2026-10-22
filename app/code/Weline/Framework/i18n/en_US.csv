@@ -137,6 +137,14 @@
 "执行 %{1} 时表不存在，自动执行 install 安装表...","When executing %{1}, the table does not exist, automatically running install to create the table..."
 数据库操作失败（%{1}）：%{2},"Database operation failed (%{1}): %{2}"
 "数据库更新失败：%{1}。若为连接/版本问题，请查看 var/log/database_version.log。","Database update failed: %{1}. If it is a connection/version issue, please check var/log/database_version.log."
+删列,删列
+改列,改列
+备份列,备份列
+"正在统计 %{1}.%{2}（%{3}）…","正在统计 %{1}.%{2}（%{3}）…"
+"%{1} %{2}.%{3} 表 %{4} 行，该列没有需要备份的值","%{1} %{2}.%{3} 表 %{4} 行，该列没有需要备份的值"
+"用时 %{1} 秒 %{2} %{3}.%{4} 表 %{5} 行 %{6} %{7}/%{8}","用时 %{1} 秒 %{2} %{3}.%{4} 表 %{5} 行 %{6} %{7}/%{8}"
+读取,读取
+写入,写入
 "表 %{1} 没有数据需要备份","Table %{1} has no data to back up"
 "表 %{1} 数据备份完成，共 %{2} 条记录","Table %{1} data backup completed, total %{2} records"
 "备份表数据失败: %{1}","Backup table data failed: %{1}"
@@ -1140,6 +1148,8 @@ operation：%{id},operation：%{id}
 "跳过 composer dump-autoload 与类映射缓存生成。适用：未变更 Composer 依赖/自动加载配置的快速更新","Skip composer dump-autoload and class map cache generation. Use for fast updates when Composer dependencies/autoload config are unchanged"
 "仅跳过 composer dump-autoload。适用：Composer 子进程不可用但需要执行 setup 阶段","Only skip composer dump-autoload. Use when the Composer child process is unavailable but setup stages must run"
 "保留维护模式：收尾不关闭 system.maintenance（供外层 deploy:release 窗拥有生命周期）","保留维护模式：收尾不关闭 system.maintenance（供外层 deploy:release 窗拥有生命周期）"
+"跳过扩展注册表重建（generated/extends.php）；需要时执行 extends:rebuild","跳过扩展注册表重建（generated/extends.php）；需要时执行 extends:rebuild"
+"未安装时免交互：有 db 配置按现有配置安装，否则走开发环境快速安装","未安装时免交互：有 db 配置按现有配置安装，否则走开发环境快速安装"
 升级并强制全量语言包收集,升级并强制全量语言包收集
 部署窗内升级（不关维护）,部署窗内升级（不关维护）
 "仅运行 schema_diff 阶段（测试声明式表）","Only run the schema_diff phase (test declarative tables)"
@@ -2917,7 +2927,7 @@ PHPUnit报告服务器已在后台启动,"PHPUnit reporting server has started i
 "无法执行 lsof，因此列不出占用数据库访问门禁的进程。","lsof is not available, so the processes holding the database access gate cannot be listed."
 "数据库访问门禁仍被占用，但当前用户列不出持有进程。请用该进程所属用户或 root 执行：lsof %{1}","The database access gate is still held, but this user cannot list the holder. Run as the process owner or root: lsof %{1}"
 "进程 %{1} 是当前进程并且占用门禁，不能向自己发信号。","Process %{1} is the current process and holds the gate; it cannot signal itself."
-"有进程占用门禁，但读不到命令行，已跳过，不会结束无法确认身份的进程。","A process holds the gate, but its command line cannot be read; skipped. Processes that cannot be identified are not ended."
+有进程占用门禁，但读不到命令行，已跳过，不会结束无法确认身份的进程。,"A process holds the gate, but its command line cannot be read; skipped. Processes that cannot be identified are not ended."
 "进程 %{1} 是计划任务，但不属于当前应用根，已跳过。","Process %{1} is cron, but it does not belong to the current application root; skipped."
 "进程 %{1} 占用门禁，但不是本站计划任务 cron:task:run，已跳过。命令：%{2}","Process %{1} holds the gate but is not this site's cron:task:run; skipped. Command: %{2}"
 "无法向进程 %{1} 发送信号。当前用户可能没有权限结束该进程。","Could not signal process %{1}. This user may not be allowed to end that process."
