@@ -51,10 +51,12 @@ final class ThemeUpdateBuildService
         // 1) 静态：只硬链接「主题自有」子树（设计命名空间 + Weline/Theme）
         if (empty($options['skip_static'])) {
             $copied = $this->linkCurrentStaticTree($staticDir, $themePrefix);
+            $published = $this->publishThemeStaticIntoBatch($batchId, $staticDir, $themeId);
             $checks[] = [
                 'name' => 'static_tree_ready',
-                'ok' => $copied >= 0,
+                'ok' => $copied >= 0 && $published >= 0,
                 'files' => $copied,
+                'published_theme_files' => $published,
             ];
         } else {
             $checks[] = ['name' => 'static_tree_ready', 'ok' => true, 'skipped' => true];
@@ -174,8 +176,11 @@ final class ThemeUpdateBuildService
         }
 
         $themeSecondLevel = ['Theme'];
-        if ($themePrefix !== '') {
-            $themeSecondLevel[] = trim(str_replace('\\', '/', $themePrefix), '/');
+        $prefixParts = array_values(array_filter(explode('/', trim(str_replace('\\', '/', $themePrefix), '/'))));
+        if (count($prefixParts) >= 2 && $prefixParts[0] === 'Weline') {
+            $themeSecondLevel[] = $prefixParts[1];
+        } elseif ($prefixParts !== []) {
+            $themeSecondLevel[] = $prefixParts[0];
         }
 
         $count = 0;
@@ -526,5 +531,116 @@ final class ThemeUpdateBuildService
         }
 
         return array_values($targets);
+    }
+
+    /**
+     * 把「主题静态（含设计覆盖）」真正发布进批次目录。
+     *
+     * 复用部署链路的 `StaticAssetMode` 贡献者，写到 `DeployStagingSession` 的 staging 根，
+     * 再以硬链接覆盖进 `pub/static/<batch>/`。失败时返回 -1（降级为仅用部署目录内容）。
+     *
+     * @return int 覆盖进批次的文件数（-1 表示发布失败）
+     */
+    private function publishThemeStaticIntoBatch(string $batchId, string $staticDir, int $themeId): int
+    {
+        $session = null;
+        $stagingRoot = '';
+        try {
+            /** @var \Weline\Theme\Model\WelineTheme $theme */
+            $theme = $this->theme->reset()->clearQuery()->where('id', $themeId)->find()->fetch();
+            if ((int)$theme->getId() < 1) {
+                return -1;
+            }
+
+            $session = \Weline\Framework\Deploy\DeployStagingSession::open('tu-' . $batchId . '-' . \bin2hex(\random_bytes(2)));
+            $stagingRoot = $session->staticRoot();
+            $context = new \Weline\Framework\Deploy\StaticAssetModeContext(
+                \Weline\Framework\Deploy\DeployPublicUrlMode::useProduction() ? 'prod' : 'dev',
+                'theme',
+                $stagingRoot,
+                [$theme],
+                []
+            );
+            /** @var \Weline\Framework\Compilation\ServiceProviderRegistry $registry */
+            $registry = ObjectManager::getInstance(\Weline\Framework\Compilation\ServiceProviderRegistry::class);
+            $implementations = $registry->implementationsWithPrefix(\Weline\Framework\Deploy\StaticAssetMode::CAPABILITY_PREFIX);
+            $ran = 0;
+            foreach ($implementations as $implementation) {
+                if (!is_string($implementation) || $implementation === '') {
+                    continue;
+                }
+                $contributor = ObjectManager::getInstance($implementation);
+                if ($contributor instanceof \Weline\Framework\Deploy\StaticAssetModeContributorInterface) {
+                    $contributor->publish($context);
+                    $ran++;
+                }
+            }
+            if ($ran === 0 || !is_dir($stagingRoot)) {
+                return -1;
+            }
+
+            $overlaid = 0;
+            $this->overlayTree($stagingRoot, $staticDir, $overlaid);
+
+            return $overlaid;
+        } catch (\Throwable) {
+            return -1;
+        } finally {
+            if ($session !== null) {
+                try {
+                    $session->abort();
+                } catch (\Throwable) {
+                }
+            }
+            if ($stagingRoot !== '' && is_dir($stagingRoot)) {
+                $base = dirname($stagingRoot);
+                $this->removeTree($base);
+            }
+        }
+    }
+
+    /** 递归把 $src 覆盖进 $dst（硬链接优先，跨设备则复制）。 */
+    private function overlayTree(string $src, string $dst, int &$count): void
+    {
+        if (!is_dir($dst) && !@mkdir($dst, 0775, true) && !is_dir($dst)) {
+            return;
+        }
+        foreach ((array)@scandir($src) as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $from = $src . DIRECTORY_SEPARATOR . $item;
+            $to = $dst . DIRECTORY_SEPARATOR . $item;
+            if (is_link($to)) {
+                @unlink($to);
+            }
+            if (is_dir($from)) {
+                $this->overlayTree($from, $to, $count);
+                continue;
+            }
+            if (is_link($to) || is_file($to)) {
+                @unlink($to);
+            }
+            if (@link($from, $to) || @copy($from, $to)) {
+                $count++;
+            }
+        }
+    }
+
+    /** 递归删除目录树（仅用于清理 staging）。 */
+    private function removeTree(string $dir): void
+    {
+        foreach ((array)@scandir($dir) as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = $dir . DIRECTORY_SEPARATOR . $item;
+            if (is_dir($path) && !is_link($path)) {
+                $this->removeTree($path);
+            } else {
+                @unlink($path);
+            }
+        }
+        @rmdir($dir);
     }
 }
