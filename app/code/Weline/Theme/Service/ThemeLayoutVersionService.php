@@ -378,6 +378,11 @@ readonly class ThemeLayoutVersionService
 
                 $this->markPublishedVersion($themeId, $pageType, $identity, $version);
                 $this->updateStaticVersion($themeId);
+                // 发布成功：标记该主题需要重建更新代次（由 theme:update auto 消费）
+                try {
+                    \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::markDirty($themeId, 'layout_publish');
+                } catch (\Throwable) {
+                }
 
                 return true;
             });

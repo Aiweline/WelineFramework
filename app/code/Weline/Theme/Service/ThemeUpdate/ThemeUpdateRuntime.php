@@ -118,6 +118,41 @@ final class ThemeUpdateRuntime
         return $active === null ? 0 : (int)$active['epoch'];
     }
 
+    // ---------------------------------------------------------------- 发布脏标记
+
+    public static function dirtyFile(int $themeId): string
+    {
+        return rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR
+            . 'theme-update' . DIRECTORY_SEPARATOR . 'dirty' . DIRECTORY_SEPARATOR . max(0, $themeId) . '.json';
+    }
+
+    /** 发布成功后打脏标记：表示「已发布的新内容尚未进入更新代次」。 */
+    public static function markDirty(int $themeId, string $reason = 'publish'): void
+    {
+        if ($themeId < 1) {
+            return;
+        }
+        $file = self::dirtyFile($themeId);
+        $dir = \dirname($file);
+        if (!\is_dir($dir) && !@\mkdir($dir, 0775, true) && !\is_dir($dir)) {
+            return;
+        }
+        @\file_put_contents($file, \json_encode(['at' => \date('c'), 'reason' => $reason], JSON_UNESCAPED_UNICODE));
+    }
+
+    public static function isDirty(int $themeId): bool
+    {
+        return $themeId > 0 && \is_file(self::dirtyFile($themeId));
+    }
+
+    public static function clearDirty(int $themeId): void
+    {
+        $file = self::dirtyFile($themeId);
+        if (\is_file($file)) {
+            @\unlink($file);
+        }
+    }
+
     /** 供测试/Worker 边界重置。 */
     public static function reset(): void
     {

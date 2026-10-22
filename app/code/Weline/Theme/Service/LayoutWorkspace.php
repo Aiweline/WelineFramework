@@ -262,7 +262,7 @@ final class LayoutWorkspace implements LayoutWorkspaceInterface
         ]);
         $this->assertIdentityMatchesContext($identity, $publicationContext);
         $themeId = $this->themeIdForContext($publicationContext);
-        return $this->atomic(
+        $publishResult = $this->atomic(
             'theme_target_variant_publish',
             function () use ($themeId, $pageType, $identity, $publicationContext, $allowEmpty): array {
                 $this->validateResolvedTargetVariant(
@@ -296,6 +296,12 @@ final class LayoutWorkspace implements LayoutWorkspaceInterface
                 return ['success' => true, 'theme_id' => $themeId];
             },
         );
+        try {
+            \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::markDirty($themeId, 'scoped_target_publish');
+        } catch (\Throwable) {
+        }
+
+        return $publishResult;
     }
 
     /**

@@ -121,6 +121,38 @@ class Update extends AbstractConsole
                 ]));
                 return;
 
+            case 'auto':
+                $themeId = $this->requireThemeId($themeName);
+                $force = !empty($options['force']);
+                $dirty = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::isDirty($themeId);
+                if (!$force && !$dirty) {
+                    $this->printing->note(__('主题 #%{1} 无发布变更（无脏标记），跳过。', [(string)$themeId]));
+                    return;
+                }
+                if ($dryRun) {
+                    $this->printing->note(__('dry-run：将重建并切换主题 #%{1} 的更新代次（dirty=%{2} force=%{3}）', [
+                        (string)$themeId,
+                        $dirty ? '1' : '0',
+                        $force ? '1' : '0',
+                    ]));
+                    return;
+                }
+                /** @var ThemeUpdateBuildService $builder */
+                $builder = ObjectManager::getInstance(ThemeUpdateBuildService::class);
+                $this->printing->note(__('主题 #%{1}：构建更新代次（不影响线上）…', [(string)$themeId]));
+                $result = $builder->build($themeId, []);
+                $manifest = $result['manifest'] ?? [];
+                if (($manifest['verify']['ok'] ?? false) !== true) {
+                    throw new ConsoleException(__('构建校验未通过，未切换：') . $result['batch_id']);
+                }
+                $state = $service->promote($result['batch_id']);
+                \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::clearDirty($themeId);
+                $this->printing->success(__('已切到代次 %{1}（epoch=%{2}）', [
+                    $state['current'],
+                    (string)$state['epoch'],
+                ]));
+                return;
+
             case 'build':
                 $themeId = $this->requireThemeId($themeName);
                 $layouts = $options['layout'] ?? ($options['l'] ?? '');
@@ -174,6 +206,7 @@ class Update extends AbstractConsole
                 '--area <area>' => '区域：frontend（默认）/ backend',
                 '--keep <n>' => 'GC 时额外保留的历史代次数量，默认 ' . ThemeUpdatePointerPlanner::DEFAULT_KEEP,
                 '--dry-run' => '只打印将要做什么，不落库',
+                '--force' => 'auto 子命令：忽略脏标记，强制重建并切换',
                 '-l, --layout <type>' => 'build 时只固化指定布局（如 homepage）',
                 '--skip-static' => 'build 时跳过静态批次目录',
                 '--skip-entities' => 'build 时跳过模板产物固化',
@@ -183,6 +216,7 @@ class Update extends AbstractConsole
                 '列代次' => 'php bin/w theme:update list -t hanfu',
                 '切到指定代次' => 'php bin/w theme:update promote tu-20261022-015300-ab12cd',
                 '回滚' => 'php bin/w theme:update rollback -t hanfu',
+                '发布后自动更新（脏标记）' => 'php bin/w theme:update auto -t hanfu',
                 '回收旧代次' => 'php bin/w theme:update gc -t hanfu --keep 2',
             ]
         );
