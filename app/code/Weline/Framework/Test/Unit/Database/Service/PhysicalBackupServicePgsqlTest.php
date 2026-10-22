@@ -604,6 +604,7 @@ final class PhysicalBackupServicePgsqlTest extends TestCase
                 $identity,
                 'tracked',
                 $migrationId,
+                batchRows: 1,
             ));
             $columns = array_values(array_filter(
                 $this->backupRecords($migrationId),
@@ -623,8 +624,20 @@ final class PhysicalBackupServicePgsqlTest extends TestCase
                 }
             }
             self::assertSame(['1' => 'a', '2' => 'b', '3' => 'c'], $tracked);
+
+            $batchedMigrationId = $migrationId + 1;
+            $service->backupPhysicalColumnData($identity, 'tracked', $batchedMigrationId);
+            $batched = array_values(array_filter(
+                $this->backupRecords($batchedMigrationId),
+                static fn(MigrationBackup $backup): bool =>
+                    $backup->getData(MigrationBackup::schema_fields_BACKUP_TYPE) === MigrationBackup::TYPE_COLUMN,
+            ));
+            self::assertCount(1, $batched);
+            $packed = json_decode((string)$batched[0]->getData(MigrationBackup::schema_fields_BACKUP_DATA), true);
+            self::assertCount(3, $packed);
         } finally {
             $service->cleanupBackupData($migrationId);
+            $service->cleanupBackupData($migrationId + 1);
             $connector->query("DROP SCHEMA {$quotedSchema} CASCADE")->fetch();
         }
     }

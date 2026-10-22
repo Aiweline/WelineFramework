@@ -36,6 +36,10 @@ class BackupService
     private Printing $printing;
 
     public const DEFAULT_CHUNK_SIZE = 1000;
+    /** Rows held before one column-backup insert. The read cursor stays one row at a time. */
+    public const COLUMN_BACKUP_BATCH_ROWS = 1000;
+    /** Encoded bytes held before one column-backup insert. One larger cell is stored alone. */
+    public const COLUMN_BACKUP_BATCH_BYTES = 1048576;
     public const LARGE_TABLE_THRESHOLD = 10000;
 
     public function __construct(
@@ -356,6 +360,8 @@ class BackupService
         ?string $backupScope = null,
         string $operationId = '',
         ?ConnectorInterface $physicalConnector = null,
+        int $batchRows = self::COLUMN_BACKUP_BATCH_ROWS,
+        int $batchBytes = self::COLUMN_BACKUP_BATCH_BYTES,
     ): array {
         $connector = $this->requirePhysicalConnector($physicalConnector);
         if ($physicalConnector !== null && $this->connectionFactory->getConnector() !== $connector) {
@@ -363,6 +369,9 @@ class BackupService
         }
         if (!$connector instanceof PhysicalColumnKeysetReaderInterface) {
             throw new \RuntimeException('physical column keyset capability unavailable');
+        }
+        if ($batchRows <= 0 || $batchBytes <= 0) {
+            throw new \InvalidArgumentException('column backup batch size must be positive');
         }
         $columns = $connector->getPhysicalTableColumns($identity);
         $primaryKeys = $this->resolvePrimaryKeyColumnsFromMetadata(
@@ -376,12 +385,74 @@ class BackupService
                 ? MigrationBackup::SCOPE_ROLLBACK
                 : MigrationBackup::SCOPE_UPGRADE
         );
+        $action = match (strtoupper(trim((string)$reason))) {
+            'DROP' => (string)__('删列'),
+            'MODIFY' => (string)__('改列'),
+            default => (string)__('备份列'),
+        };
+        $tableLabel = $identity->table();
+        $this->printing->info((string)__(
+            '正在统计 %{1}.%{2}（%{3}）…',
+            [$tableLabel, $columnName, $action]
+        ));
+        $tableRows = $this->getPhysicalTableRowCountUsing($identity, $connector);
+        $columnRows = (int)$this->physicalQuery($connector, $identity)
+            ->where($columnName, null, 'IS NOT NULL')
+            ->total();
+        if ($columnRows === 0) {
+            $this->printing->info((string)__(
+                '%{1} %{2}.%{3} 表 %{4} 行，该列没有需要备份的值',
+                [$action, $tableLabel, $columnName, (string)$tableRows]
+            ));
+            return [];
+        }
+
+        $startedAt = hrtime(true);
+        $lastPaintKey = '';
+        $progressFinished = false;
+        $paint = function (string $phase, int $phaseCurrent, int $written, bool $finish) use (
+            &$lastPaintKey,
+            &$progressFinished,
+            $startedAt,
+            $action,
+            $tableLabel,
+            $columnName,
+            $tableRows,
+            $columnRows,
+        ): void {
+            $elapsed = max(0, (int)((hrtime(true) - $startedAt) / 1_000_000_000));
+            $paintKey = $finish ? 'done' : $phase . ':' . $elapsed;
+            if (!$finish && $paintKey === $lastPaintKey) {
+                return;
+            }
+            $lastPaintKey = $paintKey;
+            $message = (string)__(
+                '用时 %{1} 秒 %{2} %{3}.%{4} 表 %{5} 行 %{6} %{7}/%{8}',
+                [
+                    (string)$elapsed,
+                    $action,
+                    $tableLabel,
+                    $columnName,
+                    (string)$tableRows,
+                    $phase,
+                    (string)$phaseCurrent,
+                    (string)$columnRows,
+                ]
+            );
+            $current = $finish ? $columnRows : min($written, max(0, $columnRows - 1));
+            $this->printing->progressBar($current, $columnRows, $message);
+            if ($finish) {
+                $progressFinished = true;
+            }
+        };
 
         $spool = fopen('php://temp/maxmemory:0', 'w+b');
         if ($spool === false) {
             throw new \RuntimeException('physical column backup stream could not be opened');
         }
         try {
+            $readRows = 0;
+            $paint((string)__('读取'), 0, 0, false);
             foreach ($connector->streamPhysicalColumnKeyset(
                 $identity,
                 $primaryKeys,
@@ -395,10 +466,43 @@ class BackupService
                 if (fwrite($spool, $line . "\n") === false) {
                     throw new \RuntimeException('physical column backup stream write failed');
                 }
+                $readRows++;
+                $paint((string)__('读取'), $readRows, 0, false);
                 unset($row, $line);
             }
             rewind($spool);
             $pending = '';
+            $batch = [];
+            $batchSize = 0;
+            $storedRows = 0;
+            $flush = function () use (
+                &$batch,
+                &$batchSize,
+                &$storedRows,
+                $paint,
+                $identity,
+                $migrationId,
+                $columnName,
+                $scope,
+                $operationId,
+            ): void {
+                if ($batch === []) {
+                    return;
+                }
+                $storedRows += count($batch);
+                $this->savePhysicalBackup(
+                    $identity,
+                    $migrationId,
+                    $batch,
+                    MigrationBackup::TYPE_COLUMN,
+                    $columnName,
+                    $scope,
+                    $operationId,
+                );
+                $batch = [];
+                $batchSize = 0;
+                $paint((string)__('写入'), $storedRows, $storedRows, false);
+            };
             while (!feof($spool)) {
                 $piece = fread($spool, 65536);
                 if ($piece === false || $piece === '') {
@@ -415,21 +519,26 @@ class BackupService
                     if (!is_array($row)) {
                         throw new \RuntimeException('physical column backup stream row is invalid');
                     }
-                    $this->savePhysicalBackup(
-                        $identity,
-                        $migrationId,
-                        [$row],
-                        MigrationBackup::TYPE_COLUMN,
-                        $columnName,
-                        $scope,
-                        $operationId,
-                    );
+                    $lineBytes = strlen($line) + 1;
+                    if ($batch !== [] && (count($batch) >= $batchRows || $batchSize + $lineBytes > $batchBytes)) {
+                        $flush();
+                    }
+                    $batch[] = $row;
+                    $batchSize += $lineBytes;
                     unset($row, $line);
                 }
             }
             if (trim($pending) !== '') {
                 throw new \RuntimeException('physical column backup stream ended inside a row');
             }
+            $flush();
+            $paint((string)__('写入'), $columnRows, $columnRows, true);
+        } catch (\Throwable $e) {
+            if (!$progressFinished) {
+                $this->printing->finishProgressLine();
+                $progressFinished = true;
+            }
+            throw $e;
         } finally {
             fclose($spool);
         }

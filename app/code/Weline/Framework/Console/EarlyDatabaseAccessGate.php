@@ -203,7 +203,7 @@ final class EarlyDatabaseAccessGate
         if ($command === '') {
             return 'unread_command';
         }
-        if (!str_contains($command, 'cron:task:run')) {
+        if (!self::isSameProjectGatePeer($command)) {
             return 'not_cron';
         }
         $root = rtrim($projectRoot, '/\\');
@@ -212,6 +212,19 @@ final class EarlyDatabaseAccessGate
         }
 
         return '';
+    }
+
+    /**
+     * Cron and setup both hold this flock. A later -f may stop either one
+     * when it belongs to this application root. Other commands stay untouched.
+     */
+    private static function isSameProjectGatePeer(string $command): bool
+    {
+        if (str_contains($command, 'cron:task:run') || str_contains($command, 'setup:upgrade')) {
+            return true;
+        }
+
+        return preg_match('/(?:^|\s)s:up(?:\s|$)/', $command) === 1;
     }
 
     /**
@@ -360,7 +373,7 @@ final class EarlyDatabaseAccessGate
                 'Weline_Framework',
             ),
             default => DatabaseFreeTranslator::translate(
-                '进程 %{1} 占用门禁，但不是本站计划任务 cron:task:run，已跳过。命令：%{2}',
+                '进程 %{1} 占用门禁，但不是本站计划任务或系统升级，已跳过。命令：%{2}',
                 'Weline_Framework',
             ),
         };

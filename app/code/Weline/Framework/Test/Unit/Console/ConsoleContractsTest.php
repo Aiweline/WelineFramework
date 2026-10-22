@@ -267,6 +267,18 @@ private function assert_EarlyDatabaseAccessGateUpgradeWait_testLockHolderSkipRea
         '/usr/bin/php /www/wwwroot/other.com/bin/w cron:task:run',
         $root,
     ));
+    self::assertSame('', EarlyDatabaseAccessGate::lockHolderSkipReason(
+        '/usr/bin/php /www/wwwroot/playinginchina.com/bin/w s:up -f',
+        $root,
+    ));
+    self::assertSame('', EarlyDatabaseAccessGate::lockHolderSkipReason(
+        '/usr/bin/php /www/wwwroot/playinginchina.com/bin/w setup:upgrade -f',
+        $root,
+    ));
+    self::assertSame('other_project', EarlyDatabaseAccessGate::lockHolderSkipReason(
+        '/usr/bin/php /www/wwwroot/changanhanfu.com/bin/w s:up -f',
+        $root,
+    ));
 }
 
 private function assert_PhpUnitRunFalseGreen_testLegacyCommandRegistrationResolvesToCanonicalRunner(): void
