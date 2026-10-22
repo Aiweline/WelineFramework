@@ -446,12 +446,11 @@ final class ThemeUpdateBuildService
     }
 
     /**
-     * 批内实体自洽：把烘焙进模板 HTML 的静态前缀统一改写成当前批次前缀。
+     * 批内实体自洽：把固化产物里的静态前缀归一化成占位符（出 HTML 时再换本代次）。
      *
-     * 主题静态 URL 在固化时写死，而固化在 digest 未变时会跳过写入，
-     * 批内实体可能仍是线上快照（含旧代次/部署构建号前缀）。
-     * 这里只改「主题自有资源」段（`Weline/<theme_prefix>/` 与 `Weline/Theme/`），
-     * 框架/模块静态保持部署构建号。
+     * 主题静态 URL 在固化时可能带旧代次/部署构建号前缀（固化 digest 未变时跳过写入）。
+     * 本次重构后固化物不写具体版号：主题自有资源段写 `__W_PAIR__`，模块段写 `__W_deploy__`。
+     * HTML 出口 {@see \Weline\Framework\Deploy\StaticAssetHtmlRewriter} 统一替换一次。
      *
      * @return int 被改写的文件数
      */
@@ -466,10 +465,12 @@ final class ThemeUpdateBuildService
             $segments[] = 'Weline/' . $themePrefix . '/';
         }
         $alternation = implode('|', array_map(static fn(string $s): string => preg_quote($s, '#'), $segments));
-        // 已带前缀（/static/<old>/Weline/<theme>/…）→ 换成本批次
-        $patternPrefixed = '#/static/[A-Za-z0-9_.-]+/(' . $alternation . ')#';
-        // 裸主题路径（/static/Weline/<theme>/…）→ 补批次前缀
-        $patternFlat = '#(?<!/static/[A-Za-z0-9_.-])/static/(' . $alternation . ')#';
+        $deployPlaceholder = \Weline\Framework\Deploy\StaticAssetHtmlRewriter::DEPLOY_PLACEHOLDER;
+        $pairPlaceholder = \Weline\Framework\Deploy\StaticAssetHtmlRewriter::PAIR_PLACEHOLDER;
+        // 主题自有资源（无论旧前缀形状）→ /static/{PAIR占位符}/Weline/<theme>/…
+        $patternPair = '#/static/(?:[A-Za-z0-9_.-]+/)*(' . $alternation . ')#';
+        // 其余模块静态前缀（/static/<segment>/…，segment 非主题路径）→ /static/{DEPLOY占位符}/…
+        $patternDeploy = '#/static/[A-Za-z0-9_.-]+/#';
 
         $rewritten = 0;
         $stack = [$entityDir];
@@ -489,12 +490,12 @@ final class ThemeUpdateBuildService
                     continue;
                 }
                 $content = @file_get_contents($path);
-                if (!is_string($content) || !str_contains($content, '/static/')) {
+                if (!is_string($content)) {
                     continue;
                 }
-                $next = preg_replace($patternPrefixed, '/static/' . $batchId . '/$1', $content);
-                $next = is_string($next)
-                    ? preg_replace($patternFlat, '/static/' . $batchId . '/$1', $next)
+                $next = preg_replace($patternPair, '/static/' . $pairPlaceholder . '/$1', $content);
+                $next = is_string($next) && str_contains($next, '/static/')
+                    ? preg_replace($patternDeploy, '/static/' . $deployPlaceholder . '/', $next)
                     : $next;
                 if (!is_string($next) || $next === $content) {
                     continue;

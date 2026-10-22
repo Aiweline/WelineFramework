@@ -56,9 +56,40 @@ final class StaticCachePolicyTest extends TestCase
 
     public function testThemeUpdateGenerationRootsAreNotBuildPrefixed(): void
     {
+        // 本次重构 tu-* 退场：旧代次根不再保留，统一换当前部署代次。
         $path = '/static/tu-20261021-193951-e0b9a1/Weline/hanfu/frontend/assets/images/ink/a.webp';
-        self::assertSame($path, StaticBuildId::versionedPath($path, 'abc123def456'));
+        self::assertSame(
+            '/static/abc123def456/Weline/hanfu/frontend/assets/images/ink/a.webp',
+            StaticBuildId::versionedPath($path, 'abc123def456'),
+        );
+    }
+
+    public function testThemeGenerationPairDirectoriesAreLongCached(): void
+    {
+        $path = '/static/hanfu/v3/abc123def456/Weline/hanfu/frontend/assets/css/a.css';
         self::assertTrue(StaticPublicSurface::isVersionedStaticUrl($path));
+        self::assertTrue(StaticPublicSurface::isVersionedStaticUrl('/static/hanfu/v3/abc123def456/'));
+        // 非世代形状不能被误判（v{n} 后无 12 位部署段）
+        self::assertFalse(StaticPublicSurface::isVersionedStaticUrl('/static/hanfu/v3/Weline/x.css'));
+    }
+
+    public function testVersionedPathReplacesDeploySegmentWithoutStacking(): void
+    {
+        // 部署段不同 → 替换，不叠加
+        self::assertSame(
+            '/static/bbb222ccc333/Weline/Frontend/js/a.js',
+            StaticBuildId::versionedPath('/static/aaa111bbb222/Weline/Frontend/js/a.js', 'bbb222ccc333'),
+        );
+        // 主题对目录：保留 code/v{n}，只换部署段
+        self::assertSame(
+            '/static/hanfu/v3/bbb222ccc333/Weline/hanfu/a.css',
+            StaticBuildId::versionedPath('/static/hanfu/v3/aaa111bbb222/Weline/hanfu/a.css', 'bbb222ccc333'),
+        );
+        // 主题对目录同部署段 → 原样
+        self::assertSame(
+            '/static/hanfu/v3/abc123def456/Weline/hanfu/a.css',
+            StaticBuildId::versionedPath('/static/hanfu/v3/abc123def456/Weline/hanfu/a.css', 'abc123def456'),
+        );
     }
 
     public function testVersionedPathPreservesTrailingSlash(): void
@@ -69,10 +100,12 @@ final class StaticCachePolicyTest extends TestCase
         );
     }
 
-    public function testPolicyCacheKeysCarryStaticGeneration(): void
+    public function testPolicyCacheKeysCarryPageGeneration(): void
     {
         $src = (string)\file_get_contents(BP . 'app/code/Weline/Framework/Cache/KeyBuilder.php');
-        self::assertStringContainsString("'static_generation'", $src);
+        self::assertStringContainsString("'page_generation'", $src);
+        $ctx = (string)\file_get_contents(BP . 'app/code/Weline/Framework/Cache/StorefrontCacheKeyContext.php');
+        self::assertStringContainsString("'page_generation'", $ctx);
     }
 
     public function testRouterUsesVersionedStaticCachePolicy(): void

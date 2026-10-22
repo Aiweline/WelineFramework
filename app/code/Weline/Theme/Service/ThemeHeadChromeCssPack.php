@@ -298,8 +298,7 @@ final class ThemeHeadChromeCssPack
             $themeIdentity,
             $scopeFp,
             array_column($sources, 'hash'),
-            \Weline\Framework\Deploy\StaticBuildId::current(),
-            \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::cacheGeneration(),
+            \Weline\Framework\Cache\StorefrontCacheKeyContext::pageGenerationValue(),
         ], JSON_THROW_ON_ERROR));
         // Force the same theme object used for sources — never re-resolve to another namespace.
         $target = $this->gateway->buildHeadChromeArtifact($key, $area, 'css', $theme);

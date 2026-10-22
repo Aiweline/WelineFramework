@@ -339,7 +339,7 @@ final class FpcHtmlDiskStore
                     $brotli = '';
                 }
             }
-        } elseif ($html !== '' && \str_contains($html, '/static/')) {
+        } elseif ($html !== '' && (\str_contains($html, '/static/') || \str_contains($html, \Weline\Framework\Deploy\StaticAssetHtmlRewriter::PAIR_PLACEHOLDER) || \str_contains($html, \Weline\Framework\Deploy\StaticAssetHtmlRewriter::DEPLOY_PLACEHOLDER))) {
             $rewrittenHtml = \Weline\Framework\Deploy\StaticAssetHtmlRewriter::rewrite($html);
             if ($rewrittenHtml !== $html) {
                 $html = $rewrittenHtml;

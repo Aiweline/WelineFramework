@@ -295,9 +295,24 @@ final readonly class StorefrontCacheKeyContext
             'currency' => $this->currency,
             'namespace_fingerprint' => $this->namespaceFingerprint ?? '',
             'cache_key_fingerprint' => $this->cacheKeyFingerprint,
-            'static_generation' => $this->staticGeneration(),
-            'static_build' => \Weline\Framework\Deploy\StaticBuildId::current(),
+            'page_generation' => $this->pageGeneration(),
         ];
+    }
+
+    /**
+     * 页面世代：主题 code + 发布版本号 + 部署构建号（Theme 不可用时退回部署构建号）。
+     */
+    private function pageGeneration(): string
+    {
+        try {
+            if (\class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
+                return \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pageGeneration();
+            }
+        } catch (\Throwable) {
+            // 代次机制不可用时保持部署构建号
+        }
+
+        return \Weline\Framework\Deploy\StaticBuildId::current();
     }
 
     public function hasCompleteFrozenScope(): bool
@@ -322,7 +337,6 @@ final readonly class StorefrontCacheKeyContext
     public function hasWebsiteScope(): bool
     {
         $identity = $this->scopeIdentity;
-
         return $identity instanceof ScopeIdentity
             && $identity->scopeKind !== ScopeIdentity::KIND_GLOBAL
             && $identity->websiteId !== null
@@ -331,6 +345,8 @@ final readonly class StorefrontCacheKeyContext
 
     /**
      * 静态代次：主题更新代次生效时取批次前缀（含 FPC 隔离），否则取部署构建号。
+     *
+     * @deprecated 由 {@see pageGeneration()} 取代。
      */
     private function staticGeneration(): string
     {
@@ -343,5 +359,21 @@ final readonly class StorefrontCacheKeyContext
         }
 
         return StaticBuildId::current();
+    }
+
+    /**
+     * page_generation 值的公共读取口（Framework 内部与 Theme 侧消费点共用）。
+     */
+    public static function pageGenerationValue(): string
+    {
+        try {
+            if (\class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
+                return \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pageGeneration();
+            }
+        } catch (\Throwable) {
+            // 代次机制不可用时保持部署构建号
+        }
+
+        return \Weline\Framework\Deploy\StaticBuildId::current();
     }
 }

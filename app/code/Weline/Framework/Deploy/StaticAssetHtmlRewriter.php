@@ -13,10 +13,22 @@ namespace Weline\Framework\Deploy;
  */
 final class StaticAssetHtmlRewriter
 {
+    /** 主题世代段占位符：/static/__PAIR__/… 出 HTML 时换成 {主题code}/v{版本号}。 */
+    public const PAIR_PLACEHOLDER = '__W_PAIR__';
+
+    /** 部署构建段占位符：/static/__DEPLOY__/… 出 HTML 时换成当前构建号。 */
+    public const DEPLOY_PLACEHOLDER = '__W_deploy__';
+
     public static function rewrite(string $html, ?string $buildId = null): string
     {
         $buildId = $buildId ?? StaticBuildId::current();
-        if ($buildId === '' || $html === '' || !\str_contains($html, '/static/')) {
+        if ($html === '' || (!\str_contains($html, '/static/') && !\str_contains($html, self::PAIR_PLACEHOLDER) && !\str_contains($html, self::DEPLOY_PLACEHOLDER))) {
+            return $html;
+        }
+        if (\str_contains($html, self::PAIR_PLACEHOLDER) || \str_contains($html, self::DEPLOY_PLACEHOLDER)) {
+            $html = self::resolvePlaceholders($html, $buildId);
+        }
+        if ($buildId === '') {
             return $html;
         }
 
@@ -35,5 +47,24 @@ final class StaticAssetHtmlRewriter
             $rewrite,
             $html,
         ) ?? $html;
+    }
+
+    /**
+     * 占位符 → 当前世代。主题段按主题/模块路径区分；无主题世代时退回部署段。
+     */
+    private static function resolvePlaceholders(string $html, string $buildId): string
+    {
+        $pair = '';
+        try {
+            if (\class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
+                $pair = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pairSegment();
+            }
+        } catch (\Throwable) {
+            $pair = '';
+        }
+        $html = \str_replace('/static/' . self::PAIR_PLACEHOLDER . '/', '/static/' . $pair . '/', $html);
+        $deploy = $buildId !== '' ? $buildId : self::DEPLOY_PLACEHOLDER;
+
+        return \str_replace('/static/' . self::DEPLOY_PLACEHOLDER . '/', '/static/' . $deploy . '/', $html);
     }
 }

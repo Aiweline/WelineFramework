@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b2e03f5c62d93a346bc43a602859722d",
+    "content-hash": "7ee8911faa97710a128ddcd9f34634ee",
     "packages": [
         {
             "name": "ardagnsrn/ollama-php",
@@ -9574,7 +9574,7 @@
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
-        "php": "^8.4",
+        "php": "^8.4.27",
         "ext-iconv": "*",
         "ext-json": "*",
         "ext-pdo": "*",

@@ -84,15 +84,18 @@ final class StaticBuildId
             return $path;
         }
         if ($buildId === null) {
-            $buildId = self::themeUpdateBuildId($path);
+            $deploy = self::current();
+            // 主题自有资源 → 主题对目录 `/{code}/v{n}/{buildId}`；其余沿用部署构建号。
+            $pair = self::themePairPrefix($path);
+            if ($pair !== null && $pair['pair'] !== '') {
+                [$code, $version] = explode('/v', $pair['pair'], 2);
+                $buildId = $code . '/v' . $version . '/' . $deploy;
+            } else {
+                $buildId = self::themeUpdateBuildId($path) ?? $deploy;
+            }
         }
         $buildId = $buildId ?? self::current();
         if ($buildId === '' || !\str_starts_with($path, '/static/')) {
-            return $path;
-        }
-        // 主题更新代次根（/static/tu-...）自带代次命名空间，不再套构建前缀。
-        $firstSegment = \explode('/', \trim((string)\strtok($path, '?'), '/'))[1] ?? '';
-        if (\str_starts_with($firstSegment, 'tu-')) {
             return $path;
         }
         // 内容寻址文件（32~64 位 hex 文件名）URL 与字节天然绑定，不需要构建前缀。
@@ -103,11 +106,32 @@ final class StaticBuildId
         [$urlPath, $query] = \str_contains($path, '?') ? \explode('?', $path, 2) : [$path, null];
         $trailingSlash = \str_ends_with((string)$urlPath, '/');
         $parts = \explode('/', trim((string)$urlPath, '/'));
-        if (($parts[1] ?? '') === $buildId) {
+        $first = $parts[1] ?? '';
+        // 主题对目录：/static/{code}/v{n}/{buildId}/…（第二段是 v{n}）。
+        $isThemePair = \preg_match('/^v[0-9]+$/', $parts[2] ?? '') === 1;
+        if ($isThemePair && ($parts[3] ?? '') === $buildId) {
             return $path;
         }
-        $rest = \implode('/', \array_slice($parts, 1));
+        if ($isThemePair) {
+            // 主题段在前：保留 code/v{n}，仅替换部署段。
+            $rest = \implode('/', \array_slice($parts, 4));
+            $result = '/static/' . $first . '/' . $parts[2] . '/' . $buildId . ($rest === '' ? '' : '/' . $rest) . ($trailingSlash ? '/' : '');
+
+            return $query === null ? $result : $result . '?' . $query;
+        }
+        // 代次段形状（旧构建号 / tu-*）→ 替换；命名空间（Weline/...）→ 前置当前代次。
+        $isGenerationSegment = \preg_match('/^[0-9a-f]{12}$/i', $first) === 1
+            || \str_starts_with($first, 'tu-');
+        if ($isGenerationSegment) {
+            if ($first === $buildId) {
+                return $path;
+            }
+            $rest = \implode('/', \array_slice($parts, 2));
+        } else {
+            $rest = \implode('/', \array_slice($parts, 1));
+        }
         $result = '/static/' . $buildId . ($rest === '' ? '' : '/' . $rest) . ($trailingSlash ? '/' : '');
+
         return $query === null ? $result : $result . '?' . $query;
     }
 
@@ -135,5 +159,38 @@ final class StaticBuildId
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * 主题自有资源 → 主题对前缀段（`{code}/v{n}`），非主题资源返回 null。
+     * 弱依赖 Theme；内容寻址文件名不参与。
+     *
+     * @return array{pair:string}|null
+     */
+    private static function themePairPrefix(string $path): ?array
+    {
+        if (!\class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
+            return null;
+        }
+        $normalized = '/' . \ltrim(\str_replace('\\', '/', (string)\strtok($path, '?')), '/');
+        try {
+            $prefix = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::activeThemePrefix();
+        } catch (\Throwable) {
+            $prefix = '';
+        }
+        $code = $prefix !== '' ? \basename($prefix) : '';
+        $isThemeOwned = \str_contains($normalized, '/Weline/Theme/')
+            || ($prefix !== '' && \str_contains($normalized, '/' . $prefix . '/'))
+            || ($code !== '' && \preg_match('#^/static/' . \preg_quote($code, '#') . '(?:/|$)#i', $normalized) === 1);
+        if (!$isThemeOwned) {
+            return null;
+        }
+        try {
+            $pair = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pairSegment();
+        } catch (\Throwable) {
+            $pair = '';
+        }
+
+        return ['pair' => $pair];
     }
 }

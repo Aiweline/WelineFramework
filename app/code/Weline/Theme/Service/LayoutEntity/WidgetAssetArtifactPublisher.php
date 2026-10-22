@@ -199,7 +199,7 @@ class WidgetAssetArtifactPublisher
                 $sources[] = $source;
             }
             $type = $assets[0]['type'];
-            $key = hash('sha256', json_encode([$this->implementationVersion(), 'url-rewrite-v2', $type, $minify, array_column($sources, 'hash'), array_column($assets, 'url'), \Weline\Framework\Deploy\StaticBuildId::current(), \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::cacheGeneration()], JSON_THROW_ON_ERROR));
+            $key = hash('sha256', json_encode([$this->implementationVersion(), 'url-rewrite-v2', $type, $minify, array_column($sources, 'hash'), array_column($assets, 'url'), \Weline\Framework\Cache\StorefrontCacheKeyContext::pageGenerationValue()], JSON_THROW_ON_ERROR));
             $theme = $this->resolvePublishTheme($theme);
             $gateway = ObjectManager::getInstance(ThemeResourceGateway::class);
             $target = $gateway->buildWidgetAssetArtifact(

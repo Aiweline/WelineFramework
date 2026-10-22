@@ -65,6 +65,152 @@ final class ThemeUpdateBatchService
             . str_replace('/', DIRECTORY_SEPARATOR, self::POINTER_FILE_RELATIVE);
     }
 
+    /**
+     * 部署换版后的主题世代目录补齐（供 Framework 部署命令调用）。
+     *
+     * 每个在用主题把上一对主题世代目录硬链接到 `/{主题code}/v{版本号}/{新部署}`，
+     * 再由本次 promote 的镜像覆盖变更文件。无世代段/无旧目录时静默跳过。
+     */
+    public static function backfillThemePairForNewDeploy(string $pubStatic, string $newDeployId): int
+    {
+        $root = \rtrim($pubStatic, '/\\');
+        if ($root === '' || $newDeployId === '' || !\is_dir($root)) {
+            return 0;
+        }
+        $linked = 0;
+        $map = self::pointerFileMap();
+        foreach ($map as $row) {
+            $batchId = \trim((string)($row['batch_id'] ?? ''));
+            $batchRoot = $root . DIRECTORY_SEPARATOR . $batchId;
+            if ($batchId === '' || !\is_dir($batchRoot)) {
+                continue;
+            }
+            $themeId = (int)($row['theme_id'] ?? 0);
+            $pair = self::pairFromThemeId($themeId);
+            if ($pair === []) {
+                continue;
+            }
+            [$themeCode, $versionNumber] = $pair;
+            $target = $root . DIRECTORY_SEPARATOR . $themeCode . DIRECTORY_SEPARATOR
+                . 'v' . $versionNumber . DIRECTORY_SEPARATOR . $newDeployId;
+            if (\is_dir($target)) {
+                continue;
+            }
+            // 上一对主题世代目录；没有则从批次根整棵硬链接。
+            $source = self::latestThemePairRoot($root, $themeCode, $versionNumber);
+            if ($source === '') {
+                continue;
+            }
+            if (!@mkdir(\dirname($target), 0775, true) && !\is_dir(\dirname($target))) {
+                continue;
+            }
+            self::hardLinkTree($source, $target);
+            $linked++;
+        }
+
+        return $linked;
+    }
+
+    /** @return array<string,mixed> 指针 map（batch_id → row） */
+    private static function pointerFileMap(): array
+    {
+        $raw = @\file_get_contents(self::pointerFile());
+        if (!\is_string($raw) || $raw === '') {
+            return [];
+        }
+        $decoded = \json_decode($raw, true);
+        $map = \is_array($decoded) && \is_array($decoded['map'] ?? null) ? $decoded['map'] : [];
+        $rows = [];
+        foreach ($map as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $batchId = \trim((string)($row['batch_id'] ?? ''));
+            if ($batchId !== '') {
+                $rows[$batchId] = $row;
+            }
+        }
+
+        return $rows;
+    }
+
+    /** @return array{0:string,1:int}|[] */
+    private static function pairFromThemeId(int $themeId): array
+    {
+        if ($themeId < 1 || !\class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
+            return [];
+        }
+        try {
+            /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
+            $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class);
+            $identity = $resolver->resolveGenerationIdentity($themeId);
+            $code = \trim((string)($identity['themeCode'] ?? ''));
+            $version = (int)($identity['versionNumber'] ?? 0);
+
+            return ($code !== '' && $version > 0) ? [$code, $version] : [];
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /** 已有的主题世代目录（同 code 任一版本/部署），取最新 mtime 的一个。 */
+    private static function latestThemePairRoot(string $root, string $themeCode, int $versionNumber): string
+    {
+        $best = '';
+        $bestMtime = -1;
+        $codeDir = $root . DIRECTORY_SEPARATOR . $themeCode;
+        foreach ((array)@scandir($codeDir) as $versionDir) {
+            if ($versionDir === '.' || $versionDir === '..' || !\preg_match('/^v[0-9]+$/', (string)$versionDir)) {
+                continue;
+            }
+            $versionPath = $codeDir . DIRECTORY_SEPARATOR . $versionDir;
+            foreach ((array)@scandir($versionPath) as $deployDir) {
+                if ($deployDir === '.' || $deployDir === '..') {
+                    continue;
+                }
+                $candidate = $versionPath . DIRECTORY_SEPARATOR . $deployDir;
+                if (!\is_dir($candidate)) {
+                    continue;
+                }
+                $mtime = (int)@filemtime($candidate);
+                if ($mtime > $bestMtime) {
+                    $bestMtime = $mtime;
+                    $best = $candidate;
+                }
+            }
+        }
+        if ($best !== '') {
+            return $best;
+        }
+        // 没有历史世代目录：回退到当前批次根（完整快照）。
+        return '';
+    }
+
+    /** 递归硬链接树（目标存在则先删）。 */
+    private static function hardLinkTree(string $src, string $dst): void
+    {
+        foreach ((array)@scandir($src) as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $from = $src . DIRECTORY_SEPARATOR . $item;
+            $to = $dst . DIRECTORY_SEPARATOR . $item;
+            if (\is_dir($from) && !\is_link($from)) {
+                if (!\is_dir($to) && !@mkdir($to, 0775, true) && !\is_dir($to)) {
+                    continue;
+                }
+                self::hardLinkTree($from, $to);
+                continue;
+            }
+            if (\is_link($to) || \is_file($to)) {
+                @\unlink($to);
+            }
+            if (!@link($from, $to)) {
+                @\copy($from, $to);
+            }
+        }
+    }
+
     public static function pointerConfigKey(int $websiteId, int $themeId, string $area = self::AREA_FRONTEND): string
     {
         return \max(0, $websiteId) . '|' . \max(0, $themeId) . '|' . \trim($area);
@@ -81,6 +227,7 @@ final class ThemeUpdateBatchService
             'entity_root' => (string)$batch->getData(ThemeUpdateBatch::schema_fields_ENTITY_ROOT),
             'theme_prefix' => \trim((string)($manifest['theme_prefix'] ?? '')),
             'epoch' => \max(1, $epoch),
+            'theme_id' => \max(0, (int)$batch->getData(ThemeUpdateBatch::schema_fields_THEME_ID)),
         ];
     }
 
@@ -589,10 +736,11 @@ final class ThemeUpdateBatchService
     }
 
     /**
-     * 把代次的主题静态子树镜像到部署构建目录（硬链接覆盖）。
+     * 把代次的主题静态子树镜像到主题世代目录（硬链接覆盖）。
      *
-     * 编译产物/烘焙缓存里写的是部署构建号前缀；镜像后这些 URL 自动指向当前代次内容，
-     * 因此预览态与旧编译产物都不会出现指向不存在资源的 404。
+     * 目标：`/static/{主题 code}/v{版本号}/{部署构建号}/…`。
+     * 主题 code 来自主题 path 尾段；版本号取该主题已生效发布版本 version_number。
+     * 没有可用世代段（无发布版本/主题 code）时回退旧部署根镜像，避免主题资源缺失。
      */
     private function mirrorThemeStaticToDeploy(string $batchId): void
     {
@@ -609,9 +757,17 @@ final class ThemeUpdateBatchService
             return;
         }
         $batchRoot = self::staticRoot($batchId, $pubStatic);
-        $deployRoot = $pubStatic . DIRECTORY_SEPARATOR . $deployId;
-        if (!is_dir($batchRoot) || !is_dir($deployRoot)) {
+        $pair = $this->themePairSegment($batchId);
+        if ($pair === '') {
             return;
+        }
+        [$themeCode, $versionNumber] = $pair;
+        $deployRoot = $pubStatic . DIRECTORY_SEPARATOR . $themeCode . DIRECTORY_SEPARATOR
+            . 'v' . $versionNumber . DIRECTORY_SEPARATOR . $deployId;
+        if (!is_dir($batchRoot) || !is_dir($deployRoot)) {
+            if (!is_dir($deployRoot) && !@mkdir($deployRoot, 0775, true) && !is_dir($deployRoot)) {
+                return;
+            }
         }
 
         // 增量镜像：只覆盖本批次真正发布过的文件（避免每次遍历 1.4 万文件）
@@ -662,10 +818,40 @@ final class ThemeUpdateBatchService
         }
     }
 
+    /**
+     * 批次对应的主题世代段：[主题code, 版本号]。读不出时返回 []。
+     *
+     * @return array{0:string,1:int}|[]
+     */
+    private function themePairSegment(string $batchId): array
+    {
+        try {
+            $row = $this->batch->reset()->clearQuery()
+                ->where(ThemeUpdateBatch::schema_fields_BATCH_ID, $batchId)
+                ->find()->fetchArray();
+        } catch (\Throwable) {
+            return [];
+        }
+        $themeId = (int)($row[(string)ThemeUpdateBatch::schema_fields_THEME_ID] ?? 0);
+        if ($themeId < 1 || !\class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
+            return [];
+        }
+        try {
+            /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
+            $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class);
+            $identity = $resolver->resolveGenerationIdentity($themeId);
+            $code = \trim((string)($identity['themeCode'] ?? ''));
+            $versionNumber = (int)($identity['versionNumber'] ?? 0);
+
+            return ($code !== '' && $versionNumber > 0) ? [$code, $versionNumber] : [];
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
     /** 是否为设计命名空间（app/design 下的主题目录，如 hanfu）。 */
     private function isDesignNamespace(string $name): bool
-    {
-        $designRoot = rtrim((string)\Weline\Framework\App\Env::path_THEME_DESIGN_DIR, '/\\');
+    {        $designRoot = rtrim((string)\Weline\Framework\App\Env::path_THEME_DESIGN_DIR, '/\\');
         if ($designRoot === '' || !is_dir($designRoot)) {
             return false;
         }

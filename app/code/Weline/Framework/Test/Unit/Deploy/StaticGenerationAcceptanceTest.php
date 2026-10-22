@@ -108,16 +108,15 @@ final class StaticGenerationAcceptanceTest extends TestCase
         self::assertContains($current, $result['kept']);
     }
 
-    public function testStorefrontKeyDimensionsCarryStaticGeneration(): void
+    public function testStorefrontKeyDimensionsCarryPageGeneration(): void
     {
         $identity = ScopeIdentity::channel(7, 'shop_a', 'default', 'default', ScopeIdentity::MODE_NORMAL);
         $fingerprint = \hash('sha256', 'ns');
         $context = new StorefrontCacheKeyContext($identity, 'zh_Hans_CN', 'CNY', $fingerprint, $fingerprint, true);
         $dimensions = $context->keyDimensions();
 
-        self::assertArrayHasKey('static_generation', $dimensions);
-        self::assertArrayHasKey('static_build', $dimensions);
-        self::assertNotSame('', (string)$dimensions['static_generation']);
-        self::assertSame(StaticBuildId::current(), $dimensions['static_build']);
+        self::assertArrayHasKey('page_generation', $dimensions);
+        self::assertNotSame('', (string)$dimensions['page_generation']);
+        self::assertStringEndsWith(StaticBuildId::current(), (string)$dimensions['page_generation']);
     }
 }

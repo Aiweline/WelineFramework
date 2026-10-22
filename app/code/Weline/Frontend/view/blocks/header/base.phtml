@@ -112,8 +112,16 @@ try {
     $staticBuildId = \Weline\Framework\Deploy\StaticBuildId::current();
 } catch (\Throwable) {
 }
+// 页面世代：主题 code + 发布版本号 + 部署构建号；Theme 侧不可用时退回部署构建号。
+$pageGeneration = $staticBuildId;
+try {
+    if (class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::class)) {
+        $pageGeneration = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pageGeneration();
+    }
+} catch (\Throwable) {
+}
 $frontendAssetVersion = $staticBuildId !== ''
-    ? $staticBuildId
+    ? $pageGeneration
     : ($deployVersion . ($frontendJsMtime > 0 ? ('-' . (string)$frontendJsMtime) : ''));
 $modulesJsMtime = @filemtime(BP . 'app/code/Weline/Frontend/view/statics/base/weline.modules.js');
 $modulesConfigUrl = PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/base/weline.modules.js');
@@ -162,7 +170,6 @@ $runtime = [
     'storefrontPlaceholderUrl' => PublicStaticUrl::fromDevWebPath('/Weline/Theme/view/statics/images/storefront-placeholder/default.svg'),
     'assetVersion' => $frontendAssetVersion,
     'staticBaseUrl' => $staticBuildId !== '' ? '/static/' . $staticBuildId : '',
-
     'deployVersion' => $deployVersion,
     'workerBuildId' => $workerBuildId,
     'themePublishedVersionId' => $themePublishedVersionId,

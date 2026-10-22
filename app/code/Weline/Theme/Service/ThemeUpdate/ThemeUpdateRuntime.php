@@ -6,6 +6,7 @@ namespace Weline\Theme\Service\ThemeUpdate;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Deploy\StaticBuildId;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ThemeApplicationContext;
 
@@ -31,7 +32,7 @@ final class ThemeUpdateRuntime
     private static ?array $forced = null;
 
 
-    /** @param array{batch_id:string,static_ns:string,entity_root:string,theme_prefix:string,epoch:int}|null $active */
+    /** @param array{batch_id:string,static_ns:string,entity_root:string,theme_prefix:string,epoch:int,pair_segment?:string}|null $active */
     public static function forceBatch(?array $active): void
     {
         self::$forced = $active;
@@ -62,15 +63,76 @@ final class ThemeUpdateRuntime
     /**
      * 缓存代次：当前代次存在时用批次ID，否则用部署构建号。
      * 只用于缓存键隔离，不改变 StaticBuildId 的全局行为（避免框架资源被带到批次命名空间）。
+     *
+     * @deprecated 用 {@see pageGeneration()}（主题 code + 版本号 + 部署号三元组）。
      */
     public static function cacheGeneration(): string
     {
-        $active = self::active();
-        if ($active !== null) {
-            return $active['static_ns'];
+        $pair = self::pairSegment();
+        if ($pair !== '') {
+            return $pair;
         }
 
         return StaticBuildId::current();
+    }
+
+    /** 当前主题的路径前缀（如 `Weline/hanfu` / `Weline/Theme`），无上下文返回 ''。 */
+    public static function activeThemePrefix(): string
+    {
+        $active = self::$forced;
+        if ($active !== null) {
+            return \trim((string)($active['theme_prefix'] ?? ''));
+        }
+        $identity = self::generationIdentity();
+        $code = \trim((string)($identity['themeCode'] ?? ''));
+
+        return $code !== '' ? 'Weline/' . $code : '';
+    }
+
+    /**
+     * 主题世代段：`{主题code}/v{版本号}`（占位构建期为 `__PAIR__`）。
+     */
+    public static function pairSegment(): string
+    {
+        $active = self::$forced;
+        if ($active !== null && \trim((string)($active['pair_segment'] ?? '')) !== '') {
+            return \trim((string)$active['pair_segment']);
+        }
+        $identity = self::generationIdentity();
+        $code = \trim((string)($identity['themeCode'] ?? ''));
+        $version = (int)($identity['versionNumber'] ?? 0);
+
+        return ($code !== '' && $version > 0) ? $code . '/v' . $version : '';
+    }
+
+    /**
+     * 页面世代键：主题 code + 发布版本号 + 部署构建号。
+     */
+    public static function pageGeneration(): string
+    {
+        $pair = self::pairSegment();
+
+        return $pair !== '' ? $pair . '~' . StaticBuildId::current() : StaticBuildId::current();
+    }
+
+    /** @return array{themeCode:string,versionNumber:int}|null */
+    private static function generationIdentity(): ?array
+    {
+        if (!\class_exists('\\Weline\\Theme\\Service\\ThemePublishedVersionRuntimeResolver')) {
+            return null;
+        }
+        try {
+            /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
+            $resolver = ObjectManager::getInstance(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class);
+            $identity = $resolver->resolveGenerationIdentity();
+
+            return [
+                'themeCode' => \trim((string)($identity['themeCode'] ?? '')),
+                'versionNumber' => (int)($identity['versionNumber'] ?? 0),
+            ];
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -79,19 +141,8 @@ final class ThemeUpdateRuntime
      */
     public static function staticPrefixForPath(string $urlPath): ?string
     {
-        $active = self::active();
-        if ($active === null) {
-            return null;
-        }
-        $prefix = trim((string)($active['theme_prefix'] ?? ''));
-        $normalized = '/' . ltrim(str_replace('\\', '/', $urlPath), '/');
-        if (str_contains($normalized, '/Weline/Theme/')) {
-            return $active['static_ns'];
-        }
-        if ($prefix !== '' && str_contains($normalized, '/' . $prefix . '/')) {
-            return $active['static_ns'];
-        }
-
+        // 本次重构：主题自有资源走 `/{code}/v{n}/{buildId}` 主题对目录（StaticBuildId::themePairPrefix）。
+        // 保留 tu-* 批次前缀只为预览/旧产物兜底，正式渲染不再产出。
         return null;
     }
 

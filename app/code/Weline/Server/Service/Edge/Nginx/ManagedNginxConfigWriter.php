@@ -303,10 +303,11 @@ NGINX;
     include {$quotedFpcPierceMap};
     include {$quotedFpcQueryAllowlistMap};
     include {$quotedSitemapEdgeMap};
-    # 静态长缓存只给内容寻址 URL：/static/{12位hex}/... 或带版本查询。
+    # 静态长缓存只给内容寻址 URL：/static/{12位hex}/... 或主题世代目录 /static/{code}/v{n}/{build}/...。
     map \$uri \$wls_static_versioned {
         default 0;
         "~^/static/[0-9a-f]{12}(?:/|\$)" 1;
+        "~^/static/[^/]+/v[0-9]+/[0-9a-f]{12}(?:/|\$)" 1;
         "~^/static/tu-[A-Za-z0-9-]+(?:/|\$)" 1;
         "~*/[0-9a-f]{32,64}\.(?:css|js|mjs|map|json|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|eot|txt|xml|wasm|mp4|webm|mp3|ogg|wav)\$" 1;
     }

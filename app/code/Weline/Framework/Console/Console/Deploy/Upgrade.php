@@ -206,10 +206,25 @@ class Upgrade extends CommandAbstract
                     $buildId,
                 ]));
             }
+            // 部署换版：把每个在用主题的上一对主题世代目录硬链接到新部署号下。
+            try {
+                if (class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateBatchService::class)) {
+                    $linked = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateBatchService::backfillThemePairForNewDeploy(
+                        $staticRoot,
+                        (string)$buildId,
+                    );
+                    if ($linked > 0) {
+                        $this->printer->note(__('主题世代目录已随部署换版补齐 %{1} 个', [$linked]));
+                    }
+                }
+            } catch (\Throwable) {
+                // 主题模块不可用时跳过（不影响主发布）
+            }
             // 自愈：主题更新代次目录只有变更文件，旧烘焙页面引用缺失文件会 404。
             try {
                 if (class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::class)) {
-                    $generation = (string)\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::cacheGeneration();
+                    $generation = (string)\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pairSegment();
+                    $generation = $generation !== '' ? $generation : (string)\Weline\Framework\Deploy\StaticBuildId::current();
                     $backfill = \Weline\Framework\Deploy\StaticIntegrityGuard::backfillGeneration($staticRoot, $generation);
                     if (($backfill['copied'] ?? 0) > 0) {
                         $this->printer->note(__('主题代次目录已补齐 %{1} 个文件', [$backfill['copied']]));

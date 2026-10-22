@@ -132,6 +132,128 @@ final class ThemeStorefrontSlugFpcPublisher
     }
 
     /**
+     * Normalize storefront paths/urls into bounded, safe slugs.
+     *
+     * @return array{slugs:list<string>,homepage:bool,rejected:list<string>,truncated:int}
+     */
+    public static function normalizeStorefrontPurgePaths(array $pathsOrUrls): array
+    {
+        $slugs = [];
+        $seen = [];
+        $rejected = [];
+        $homepage = false;
+        $truncated = 0;
+        foreach ($pathsOrUrls as $raw) {
+            $raw = \trim((string)$raw);
+            if ($raw === '') {
+                $rejected[] = (string)$raw;
+                continue;
+            }
+            if ($raw === '/') {
+                $homepage = true;
+                continue;
+            }
+            $path = \parse_url($raw, \PHP_URL_PATH);
+            if (!\is_string($path) || $path === '') {
+                $path = (string)\strtok($raw, '?');
+                $path = (string)\strtok($path, '#');
+            }
+            $slug = \ltrim((string)$path, '/');
+            if ($slug === '' || \str_contains($slug, '..') || \str_starts_with($slug, '~')) {
+                $rejected[] = $raw;
+                continue;
+            }
+            if (isset($seen[$slug])) {
+                continue;
+            }
+            if (\count($slugs) >= 200) {
+                $truncated += 1;
+                continue;
+            }
+            $seen[$slug] = true;
+            $slugs[] = $slug;
+        }
+        return ['slugs' => $slugs, 'homepage' => $homepage, 'rejected' => $rejected, 'truncated' => $truncated];
+    }
+
+    /**
+     * Path-level FPC/CDN purge entry for declared storefront paths.
+     *
+     * @param list<array{version_owner_scope?:string,store_mode?:string,area?:string}> $targets
+     * @return array{ok:bool,path_count:int,slug_count:int,target_count:int,truncated:int,rejected:list<string>,skipped:?string}
+     */
+    public function purgeStorefrontPaths(
+        int $themeId,
+        array $pathsOrUrls,
+        array $targets,
+        string $entry = 'theme_static_path_purge',
+    ): array {
+        $base = ['path_count' => 0, 'slug_count' => 0, 'target_count' => 0, 'truncated' => 0, 'rejected' => []];
+        if ($themeId < 1) {
+            return ['ok' => false] + $base + ['skipped' => 'no_theme'];
+        }
+        $normalized = self::normalizeStorefrontPurgePaths($pathsOrUrls);
+        $rejected = $normalized['rejected'];
+        $truncated = $normalized['truncated'];
+        $slugs = $normalized['slugs'];
+        if ($normalized['homepage']) {
+            $slugs = \array_merge(['/'], $slugs);
+        }
+        if ($slugs === []) {
+            return ['ok' => false, 'path_count' => 0, 'slug_count' => 0, 'target_count' => 0, 'truncated' => $truncated, 'rejected' => $rejected, 'skipped' => 'no_paths'];
+        }
+        $slugList = array_values(array_unique($slugs));
+        $emitted = 0;
+        $seenScopes = [];
+        foreach ($targets as $target) {
+            if (!\is_array($target)) {
+                continue;
+            }
+            $area = \trim((string)($target['area'] ?? ''));
+            if ($area !== 'frontend') {
+                continue;
+            }
+            $ownerScope = \trim((string)($target['version_owner_scope'] ?? ''));
+            if ($ownerScope === '') {
+                continue;
+            }
+            $storeMode = \trim((string)($target['store_mode'] ?? 'normal'));
+            if ($storeMode === '') {
+                $storeMode = 'normal';
+            }
+            $scopeKey = $ownerScope . '|' . $storeMode;
+            if (isset($seenScopes[$scopeKey])) {
+                continue;
+            }
+            $seenScopes[$scopeKey] = true;
+            try {
+                $scope = ThemeContentScope::fromStoredOwner($ownerScope, $storeMode, 'default');
+                $context = new ThemeEditorContext(
+                    scope: $scope,
+                    area: 'frontend',
+                    resourceType: ThemeEditorContext::RESOURCE_LAYOUT,
+                    themeId: $themeId,
+                    layoutType: 'default',
+                    layoutOption: 'default',
+                );
+                $this->emitUpsert($context, $slugList, $entry);
+                ++$emitted;
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+        return [
+            'ok' => $emitted > 0,
+            'path_count' => count($slugList),
+            'slug_count' => count($slugList),
+            'target_count' => $emitted,
+            'truncated' => $truncated,
+            'rejected' => $rejected,
+            'skipped' => $emitted > 0 ? null : 'no_frontend_target',
+        ];
+    }
+
+    /**
      * Origin-watch / layout bake: purge only the storefront FPC leaves for these layouts.
      * Never rotates html-disk generations / never clearAllThemeRelatedCaches.
      *

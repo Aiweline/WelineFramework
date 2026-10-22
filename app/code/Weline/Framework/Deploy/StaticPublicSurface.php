@@ -285,6 +285,10 @@ final class StaticPublicSurface
         if (\preg_match('#^/static/[0-9a-f]{12}(?:/|$)#', $path) === 1) {
             return true;
         }
+        // 主题世代目录：/static/{code}/v{n}/{12位hex部署段}/…（与模块代次段同形，避免误吞命名空间）。
+        if (\preg_match('#^/static/[^/]+/v[0-9]+/[0-9a-f]{12}(?:/|$)#', $path) === 1) {
+            return true;
+        }
         if (\preg_match('#^/static/tu-[A-Za-z0-9-]+(?:/|$)#', $path) === 1) {
             return true;
         }

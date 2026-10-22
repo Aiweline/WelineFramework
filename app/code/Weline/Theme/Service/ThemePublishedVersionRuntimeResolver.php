@@ -85,6 +85,8 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
             'themePublishedVersion' => '',
             'themeId' => 0,
             'canonicalScope' => '',
+            'themeCode' => '',
+            'versionNumber' => 0,
         ];
 
         try {
@@ -119,6 +121,8 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
                         'themePublishedVersion' => $name,
                         'themeId' => $candidateThemeId,
                         'canonicalScope' => (string)$scope,
+                        'themeCode' => self::themeCodeFor($candidateThemeId),
+                        'versionNumber' => \max(1, $published->getVersionNumber()),
                     ];
                 }
             }
@@ -127,6 +131,25 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
         }
 
         return $empty;
+    }
+
+    /**
+     * 主题 code：WelineTheme.path 的最后一段（如 app/design/Weline/hanfu → hanfu）。
+     * 不是 name，也不是 id。
+     */
+    public function themeCodeFor(int $themeId): string
+    {
+        if ($themeId < 1) {
+            return '';
+        }
+        try {
+            $theme = (clone ObjectManager::getInstance(WelineTheme::class))->clearData()->clearQuery()->load($themeId);
+            $path = \str_replace('\\', '/', \trim((string)$theme->getData('path')));
+
+            return $path === '' ? '' : \basename($path);
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /**

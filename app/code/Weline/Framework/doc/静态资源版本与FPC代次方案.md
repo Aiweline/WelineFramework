@@ -246,6 +246,24 @@ pub/static/<legacy 原路径>            ← 兼容旧 HTML / 第三方硬编码
 
 实测：`deploy:static:gc --dry-run` 正常列出保留/删除；`deploy:verify:assets` 对本地商城返回「全部资源校验通过」。
 
-### 6.5 尚未做
+### 6.5 页面世代与主题世代目录（2026-10-22 重构：占位符方案）
+
+页面世代不再是 `static_generation`（`tu-*` 批次）+ `static_build` 双维度，统一为单一
+`page_generation` = `{主题code}/v{版本号}~{buildId}`（主题 code 是 `WelineTheme.path` 尾段，
+版本号是已生效 `ThemeScopeVersion.version_number`；不用 `version_id` / `themeId`）。
+
+| 组件 | 文件 | 行为 |
+|---|---|---|
+| 世代键 | `Framework/Cache/StorefrontCacheKeyContext.php`、`KeyBuilder::policyDimensions()`、`ThemeHeadChromeCssPack`、`WidgetAssetArtifactPublisher` | 四处统一换 `page_generation`，双维度旧键退场 |
+| 地址权威 | `Framework/Deploy/StaticBuildId::versionedPath()` | 模块 `/static/{buildId}/…`；主题 `/static/{code}/v{n}/{buildId}/…`；异世代段**替换不叠加** |
+| 占位符 | `Framework/Deploy/StaticAssetHtmlRewriter` | 固化物/编译产物只写 `__PAIR__`（主题段）/`__DEPLOY__`（模块段）；HTML 出口（`FpcHtmlDiskStore::publish()` / `StaticAssetResponseRewriter`）替换一次 |
+| 固化归一 | `Theme/Service/ThemeUpdate/ThemeUpdateBuildService::rewriteEntityStaticPrefixes()` | 不再烘焙部署号；把实体 PHTML 静态前缀归一成占位符 |
+| 主题世代目录 | `Theme/Service/ThemeUpdate/ThemeUpdateBatchService` | promote 镜像到 `/{code}/v{版本号}/{当前部署}/`；部署换版 `backfillThemePairForNewDeploy()` 把上一对主题世代目录整棵硬链接到新部署号 |
+| 长缓存判定 | `Framework/Deploy/StaticPublicSurface`、Nginx writer | 认 `/{code}/v{n}/{12位hex}/` 主题世代目录 |
+
+已知遗留（有意不做）：`StaticIntegrityGuard::backfillGeneration()` 仍从平铺树回补 `tu-*`；
+部署换版后商品页/分类页 CDN 靠页面自身缓存到期；不为旧地址留兼容层。
+
+### 6.6 尚未做
 
 - WLS 热重载当前被并发生命周期操作占用，代码改动需下一次 `server:reload` 才在运行时生效。

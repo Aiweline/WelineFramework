@@ -27,7 +27,7 @@ final class StaticAssetResponseRewriter implements ObserverInterface
             return;
         }
         $body = $response->getBody();
-        if ($body === '' || !\str_contains($body, '/static/')) {
+        if ($body === '' || (!\str_contains($body, '/static/') && !\str_contains($body, StaticAssetHtmlRewriter::PAIR_PLACEHOLDER) && !\str_contains($body, StaticAssetHtmlRewriter::DEPLOY_PLACEHOLDER))) {
             return;
         }
         $rewritten = StaticAssetHtmlRewriter::rewrite($body);
