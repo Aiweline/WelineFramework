@@ -96,7 +96,7 @@ class Cli extends CliAbstract
                 || $this->isJsonOutputCommand($args);
             if (!$skipFooter) {
                 $this->printer->printing("\n");
-                $this->printer->note(__('执行命令：') . $command_class['command'] . ' ' . ($this->argv[1] ?? '')/*,$this->printer->colorize('CLI-System','red')*/);
+                $this->printer->note(__('执行命令：') . self::formatExecutedCommandLine((string)$command_class['command'], $this->argv));
             }
 
             // Commands may return an integer process status. Keep legacy null/bool/
@@ -108,6 +108,21 @@ class Cli extends CliAbstract
                 $commandResult->finalize();
             }
         }
+    }
+
+    /**
+     * 页脚要带上命令名之后的全部参数。只拼 argv[1] 时，`theme:update -t hanfu` 会印成 `theme:update -t`。
+     *
+     * @param list<mixed> $argv
+     */
+    public static function formatExecutedCommandLine(string $command, array $argv): string
+    {
+        $extra = [];
+        foreach (\array_slice(\array_values($argv), 1) as $arg) {
+            $extra[] = (string)$arg;
+        }
+
+        return $command . ($extra === [] ? '' : ' ' . \implode(' ', $extra));
     }
 
     public function shouldSkipFollowUpCommands(): bool
