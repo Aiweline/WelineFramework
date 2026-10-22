@@ -636,6 +636,12 @@ class Parser
             return $requestState->layeredWords;
         }
 
+        // 事务中不装词典、不把空层写进本请求。已驻留的层只读；没有就先用原文。
+        if (\Weline\Framework\Database\TransactionContext::activeTransactionConnectionCount() > 0) {
+            return self::publishedLayeredWords($lang, $normalizedModules)
+                ?? self::emptyLayeredWords($lang, $normalizedModules, $locales, $requestSignature);
+        }
+
         $layers = self::getLayeredWords($lang, $modules, $locales);
         $requestState->layeredWordsId = $requestId;
         $requestState->layeredWordsKey = (string)($layers['cache_key'] ?? '');
@@ -1225,6 +1231,9 @@ class Parser
     private static function loadModuleWordsWithSharedCache(string $module_name, string $lang, array $sharedModuleWords = []): array
     {
         $module_name = self::getFullModuleName($module_name);
+        if (\Weline\Framework\Database\TransactionContext::activeTransactionConnectionCount() > 0) {
+            return self::publishedModuleWords($lang, $module_name) ?? [];
+        }
         $worker_scope_key = DictionaryCacheNamespace::cacheKey('worker|' . $lang . '|' . $module_name, [$lang]);
         if (Runtime::isPersistent() && isset(DictionaryCacheNamespace::processBag(self::BAG_WORKER_MODULE_WORDS, self::$workerModuleWordsCache, self::WORKER_MODULE_WORDS_CACHE_MAX_ITEMS, [$lang])[$worker_scope_key])) {
             return DictionaryCacheNamespace::processBag(self::BAG_WORKER_MODULE_WORDS, self::$workerModuleWordsCache, self::WORKER_MODULE_WORDS_CACHE_MAX_ITEMS, [$lang])[$worker_scope_key];
@@ -1366,6 +1375,86 @@ class Parser
     }
 
     /**
+     * @param list<string> $modules
+     * @param list<string> $locales
+     * @return array<string, mixed>
+     */
+    private static function emptyLayeredWords(string $lang, array $modules, array $locales, string $signature): array
+    {
+        return [
+            'cache_key' => 'txn|' . $signature,
+            'lang' => $lang,
+            'locales' => $locales,
+            'modules' => $modules,
+            'module_words' => [],
+            'locale_word_layers' => [],
+            'locale_words' => [],
+            'global_words' => [],
+        ];
+    }
+
+    /**
+     * @param list<string> $modules
+     * @return array<string, mixed>|null
+     */
+    private static function publishedLayeredWords(string $lang, array $modules): ?array
+    {
+        foreach (self::$workerLayeredWordsCache as $layers) {
+            if (!\is_array($layers) || (string)($layers['lang'] ?? '') !== $lang) {
+                continue;
+            }
+            $cachedModules = $layers['modules'] ?? [];
+            if (\is_array($cachedModules) && array_values($cachedModules) === $modules) {
+                return $layers;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<string> $modules
+     * @return array<string, string>|null
+     */
+    private static function publishedLocaleWords(string $lang, array $modules): ?array
+    {
+        $suffix = '|' . \implode(',', $modules) . '|file';
+        $langNeedle = '|' . $lang . '|';
+        foreach (self::$workerLocaleWordsCache as $key => $words) {
+            if (!\is_string($key) || !\is_array($words)) {
+                continue;
+            }
+            if (\str_contains($key, $langNeedle) && \str_ends_with($key, $suffix)) {
+                return $words;
+            }
+        }
+
+        return null;
+    }
+
+    /** @return array<string, string>|null */
+    private static function publishedModuleWords(string $lang, string $moduleName): ?array
+    {
+        $needle = '|' . $lang . '|' . $moduleName;
+        $needleLength = \strlen($needle);
+        foreach (self::$workerModuleWordsCache as $key => $words) {
+            if (!\is_string($key) || !\is_array($words)) {
+                continue;
+            }
+            $position = \strpos($key, $needle);
+            if ($position === false) {
+                continue;
+            }
+            $after = $position + $needleLength;
+            if ($after === \strlen($key) || $key[$after] === '|') {
+                return $words;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Non-persistent: load area bags (or legacy union) into a process bag.
      * Persistent Workers MUST NOT include whole-locale `{locale}.php` (request-must-not-die);
      * they load area bags via loadLocaleAreaBagsForWorker + module CSV.
@@ -1374,6 +1463,10 @@ class Parser
     {
         $modules = \array_values(\array_unique(\array_map([self::class, 'getFullModuleName'], $modules)));
         \sort($modules);
+
+        if (\Weline\Framework\Database\TransactionContext::activeTransactionConnectionCount() > 0) {
+            return self::publishedLocaleWords($lang, $modules) ?? [];
+        }
 
         $cache_key = DictionaryCacheNamespace::cacheKey($lang . '|' . self::getWordsCacheVersion($lang, $modules) . '|' . \implode(',', $modules) . '|file', [$lang]);
         if (isset(DictionaryCacheNamespace::processBag(self::BAG_WORKER_LOCALE_WORDS, self::$workerLocaleWordsCache, 1024, [$lang])[$cache_key])) {

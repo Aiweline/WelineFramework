@@ -62,7 +62,7 @@ class UrlRewriteSubmitSyncService
             }
 
             $allAccounts = $this->bindingService->getWebsiteAccountsWithPlatforms($websiteId);
-            $pushAccounts = $this->bindingService->getUrlPushAccounts($websiteId);
+            $pushAccounts = $this->bindingService->getUrlPushAccounts($websiteId, $allAccounts);
             if ($pushAccounts === []) {
                 $stats['skipped_unbound']++;
                 if ($allAccounts === []) {

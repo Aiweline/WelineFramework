@@ -114,8 +114,9 @@ final class SeoAdminAccountService
                 $account->setConfigArray($config);
             }
             $account->save();
-            return $this->result(__('账户保存成功'), ['account_id' => (int)$account->getId()]);
+            return $this->result('账户保存成功', ['account_id' => (int)$account->getId()]);
         });
+        $saved['message'] = (string)__($saved['message']);
 
         if (!array_key_exists('website_ids', $params)) {
             return $saved;

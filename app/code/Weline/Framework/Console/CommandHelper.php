@@ -206,7 +206,7 @@ class CommandHelper
             
             $currentLine = '';
             $currentWidth = 0;
-            $words = preg_split('/\s+/', $line);
+            $words = preg_split('/\s+/u', $line);
             
             foreach ($words as $word) {
                 $wordWidth = self::getStringWidth($word);

@@ -387,6 +387,8 @@ Product,Product
 热销榜内容由控制器渲染,"Best-seller content is rendered by the controller"
 我的询价,"My quotes"
 查看询价进度与回复,"View quote status and replies"
+退货地址,退货地址
+填写后，该商品的退货优先寄到这里。留空则跟订单履约仓，或使用范围内已开启的自定义退货地址。,填写后，该商品的退货优先寄到这里。留空则跟订单履约仓，或使用范围内已开启的自定义退货地址。
 清除筛选条件,"Clear filters"
 意图,INTENT
 浏览全部分类,"Browse all categories."

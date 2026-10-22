@@ -137,6 +137,14 @@ final class PhraseContractsTest extends TestCase
                 $this->tearDown_DictionaryCacheNamespaceProcessCache();
             }
         },
+            'DictionaryCacheNamespaceProcessCache::testOpenTransactionDoesNotReloadDictionary' => function () {
+            $this->setUp_DictionaryCacheNamespaceProcessCache();
+            try {
+                $this->assert_DictionaryCacheNamespaceProcessCache_testOpenTransactionDoesNotReloadDictionary();
+            } finally {
+                $this->tearDown_DictionaryCacheNamespaceProcessCache();
+            }
+        },
             'DictionaryCacheNamespaceProcessCache::testProcessMemoryStoreIsNotMemoryStoreInterface' => function () {
             $this->setUp_DictionaryCacheNamespaceProcessCache();
             try {
@@ -510,6 +518,21 @@ private function assert_DictionaryCacheNamespaceProcessCache_testRequestBagIsEph
     $second =& DictionaryCacheNamespace::requestBag($cache, 1024);
     self::assertArrayNotHasKey('word', $second);
     self::assertSame(['keep' => 1], $cache);
+}
+
+private function assert_DictionaryCacheNamespaceProcessCache_testOpenTransactionDoesNotReloadDictionary(): void
+{
+    $query = $this->createStub(QueryInterface::class);
+    RequestContext::set(self::TX_STATES_KEY_DictionaryCacheNamespaceProcessCache, ['probe' => new TransactionState($query, 1, false)]);
+    self::assertNull(DictionaryCacheNamespace::fingerprint());
+    $started = microtime(true);
+    for ($i = 0; $i < 30; $i++) {
+        $translated = \__('事务内不应装载词典');
+        self::assertIsString($translated);
+        self::assertNotSame('', $translated);
+    }
+    self::assertLessThan(0.2, microtime(true) - $started);
+    self::assertNull(DictionaryCacheNamespace::fingerprint());
 }
 
 private function assert_DictionaryCacheNamespaceProcessCache_testProcessMemoryStoreIsNotMemoryStoreInterface(): void

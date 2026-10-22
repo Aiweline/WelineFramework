@@ -115,7 +115,7 @@ class UrlSubmitService
         }
 
         $allAccounts = $this->bindingService->getWebsiteAccountsWithPlatforms($websiteId);
-        $accounts = $this->bindingService->getUrlPushAccounts($websiteId);
+        $accounts = $this->bindingService->getUrlPushAccounts($websiteId, $allAccounts);
         if ($accounts === []) {
             $reasonKey = $allAccounts === [] ? 'skipped_no_account' : 'skipped_no_push_capability';
             return $this->stats([

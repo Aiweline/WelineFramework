@@ -634,13 +634,35 @@ is_valid_gzip_tarball() {
   return 0
 }
 
+# composer.json 的 "php": "^8.4.27" 只约束最低补丁。低于该补丁的缓存不能当可用源。
+php_patch_floor() {
+  local c="$ROOT/composer.json"
+  local line=""
+  [[ -f "$c" ]] || { echo 0; return; }
+  line=$(grep -E '"php"[[:space:]]*:' "$c" 2>/dev/null | head -1)
+  if [[ "$line" =~ ([0-9]+)\.([0-9]+)\.([0-9]+) ]] && [[ "${BASH_REMATCH[1]}.${BASH_REMATCH[2]}" == "$PHP_VERSION" ]]; then
+    echo "${BASH_REMATCH[3]}"
+    return
+  fi
+  echo 0
+}
+
+php_patch_candidates() {
+  local floor p
+  floor="$(php_patch_floor)"
+  [[ "$floor" =~ ^[0-9]+$ ]] || floor=0
+  for ((p=60; p>=floor; p--)); do
+    printf '%s\n' "$p"
+  done
+}
+
 download_php_source() {
   local tarball="$1"
   local found=""
   local used_cache=""
   mkdir -p "$PHP_SRC_CACHE"
-  # 若缓存中已有该大版本任一补丁，优先用缓存；使用前必须校验，无效则删除并重新下载
-  for p in 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0; do
+  # 从高补丁往下找，且不低于 composer.json 写明的最低补丁；使用前必须校验，无效则删除并重新下载
+  while IFS= read -r p; do
     local ver="${PHP_VERSION}.${p}"
     local cache_file="$PHP_SRC_CACHE/php-${ver}.tar.gz"
     if [[ -f "$cache_file" ]]; then
@@ -655,14 +677,14 @@ download_php_source() {
         rm -f "$cache_file"
       fi
     fi
-  done
+  done < <(php_patch_candidates)
   if [[ -n "$found" ]]; then
     return 0
   fi
   local base="https://www.php.net"
   local connect_timeout="${PHP_CONNECT_TIMEOUT:-15}"
   local max_time="${PHP_DOWNLOAD_TIMEOUT:-120}"
-  for p in 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0; do
+  while IFS= read -r p; do
     local ver="${PHP_VERSION}.${p}"
     local cache_file="$PHP_SRC_CACHE/php-${ver}.tar.gz"
     local url="${base}/distributions/php-${ver}.tar.gz"
@@ -687,7 +709,7 @@ download_php_source() {
       echo "ERROR: curl or wget is required to download php-src." >&2
       return 1
     fi
-  done
+  done < <(php_patch_candidates)
 
   if [[ -z "$found" ]]; then
     echo "下载失败，请开启 VPN 或检查网络后重试。" >&2

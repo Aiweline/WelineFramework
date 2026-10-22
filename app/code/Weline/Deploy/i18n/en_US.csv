@@ -748,7 +748,8 @@ commit：%{1}（%{2}）,commit：%{1}（%{2}）
 "冲突检测已通过：旧缓存仅作基线，开始拉取线上最新 tip...","Conflict detection passed: the old cache is only used as a baseline, and the latest online tips are started to be pulled..."
 缓存仓没有可用提交，删掉后重新浅克隆...,缓存仓没有可用提交，删掉后重新浅克隆...
 "旧基线 commit %{1}（只用于冲突检测与 diff；更新源是线上最新）","Old baseline commit %{1} (only used for conflict detection and diff; the update source is the latest online)"
-拉取未在时限内完成，删掉旧缓存仓并换仓库浅克隆...,拉取未在时限内完成，删掉旧缓存仓并换仓库浅克隆...
+"拉包超过 5 分钟总时限","拉包超过 5 分钟总时限"
+拉取未完成，删掉旧缓存仓并换仓库浅克隆...,拉取未完成，删掉旧缓存仓并换仓库浅克隆...
 "旧基线 → 线上 tip 变更文件：%{1} 个","Old baseline → Online tip change files: %{1}"
 "标签 %{1} 未取到，删掉旧缓存仓并换仓库浅克隆...","标签 %{1} 未取到，删掉旧缓存仓并换仓库浅克隆..."
 "✓ 已切换到标签 %{1}","✓ Switched to tag %{1}"
@@ -762,6 +763,7 @@ commit：%{1}（%{2}）,commit：%{1}（%{2}）
 所有仓库均无法浅克隆,所有仓库均无法浅克隆
 克隆仓库：%{1},"Clone repository: %{1}"
 浅克隆未完成，换下一个仓库,浅克隆未完成，换下一个仓库
+浅克隆收尾临时包时退出，提交已在缓存仓里，继续使用,浅克隆收尾临时包时退出，提交已在缓存仓里，继续使用
 "✓ 仓库克隆成功","✓ Warehouse cloned successfully"
 "切换到标签 %{1}...","Switch to tag %{1}..."
 "标签 %{1} 未取到，换下一个仓库","标签 %{1} 未取到，换下一个仓库"
@@ -908,6 +910,7 @@ HEAD：%{1}（%{2}）,HEAD：%{1}（%{2}）
 "完整发布：Git 更新 + 后置命令 + 写版本戳 + reload","Full release: Git update + post commands + stamp + reload"
 "发布繁忙：已重新排队，等待进行中的发布结束后由 Drain 执行。","发布繁忙：已重新排队，等待进行中的发布结束后由 Drain 执行。"
 生成不执行发布的机器可读部署计划,"Generate a machine-readable deployment plan without executing the deployment."
+拉取未在时限内完成，删掉旧缓存仓并换仓库浅克隆...,拉取未在时限内完成，删掉旧缓存仓并换仓库浅克隆...
 "仅显式使用 -f/--force 时跳过本地核心冲突保护，删除缓存并重新克隆后覆盖核心文件；成功后缓存仓 HEAD 即成为下次对比基线","Only when -f/--force is explicitly used, local core conflict protection is skipped, the cache is deleted and the core file is overwritten after cloning again; after success, the cache warehouse HEAD becomes the next comparison baseline."
 "框架核心代码更新（强制模式 - 完整重新下载并覆盖）","Framework Core Update (Forced Mode - Full Redownload and Overwrite)"
 "⚠ 已显式启用 -f/--force，跳过本地核心冲突保护（将强制覆盖核心文件）","⚠ Explicitly enabled -f/--force, skips local core conflict protection (core files will be forced to be overwritten)"

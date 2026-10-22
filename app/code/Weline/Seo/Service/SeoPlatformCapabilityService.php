@@ -24,6 +24,8 @@ class SeoPlatformCapabilityService
     }
 
     /**
+     * 后台账户表单目录。含各平台配置项文案。
+     *
      * @return array<string, array<string, mixed>>
      */
     public function getCapabilities(): array
@@ -31,22 +33,10 @@ class SeoPlatformCapabilityService
         $platforms = [];
         foreach ($this->sitemapAdapterRegistry->getPlatformInfo() as $code => $info) {
             $code = strtolower((string)$code);
-            $supportsUrlPush = $this->supportsUrlPush($code);
-            $supportsSitemapSubmit = !empty($info['supports_submit']);
-
-            $platforms[$code] = [
-                'code' => $code,
-                'name' => (string)($info['name'] ?? ucfirst($code)),
-                'color' => (string)($info['color'] ?? '#64748b'),
-                'supports_sitemap' => true,
-                'supports_sitemap_submit' => $supportsSitemapSubmit,
-                'supports_submit' => $supportsSitemapSubmit,
-                'supports_url_push' => $supportsUrlPush,
-                'supports_indexnow' => in_array($code, self::INDEXNOW_PLATFORMS, true),
-                'supports_stats' => !empty($info['supports_stats']),
-                'catalog_only' => !$supportsUrlPush && !$supportsSitemapSubmit,
-                'config_fields' => $this->resolveAccountConfigFields($code),
-            ];
+            $capability = $this->getCapability($code);
+            if ($capability !== null) {
+                $platforms[$code] = $capability;
+            }
         }
 
         return $platforms;
@@ -131,17 +121,61 @@ class SeoPlatformCapabilityService
     }
 
     /**
+     * 单个平台的后台账户能力，含该平台自己的配置项文案。
+     *
      * @return array<string, mixed>|null
      */
     public function getCapability(string $platform): ?array
+    {
+        $flags = $this->getSubmissionFlags($platform);
+        if ($flags === null) {
+            return null;
+        }
+        $flags['config_fields'] = $this->resolveAccountConfigFields((string)$flags['code']);
+
+        return $flags;
+    }
+
+    /**
+     * 入队、推送开关。不含账户表单文案。
+     * 商品保存的事务里词典缓存不生效，整表重译会把这次保存拖到响应超时。
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getSubmissionFlags(string $platform): ?array
     {
         $platform = strtolower(trim($platform));
         if ($platform === '') {
             return null;
         }
 
-        $capabilities = $this->getCapabilities();
-        return $capabilities[$platform] ?? null;
+        $info = null;
+        foreach ($this->sitemapAdapterRegistry->getPlatformInfo() as $code => $row) {
+            if (strtolower((string)$code) !== $platform) {
+                continue;
+            }
+            $info = is_array($row) ? $row : [];
+            break;
+        }
+        if ($info === null) {
+            return null;
+        }
+
+        $supportsUrlPush = $this->supportsUrlPush($platform);
+        $supportsSitemapSubmit = !empty($info['supports_submit']);
+
+        return [
+            'code' => $platform,
+            'name' => (string)($info['name'] ?? ucfirst($platform)),
+            'color' => (string)($info['color'] ?? '#64748b'),
+            'supports_sitemap' => true,
+            'supports_sitemap_submit' => $supportsSitemapSubmit,
+            'supports_submit' => $supportsSitemapSubmit,
+            'supports_url_push' => $supportsUrlPush,
+            'supports_indexnow' => in_array($platform, self::INDEXNOW_PLATFORMS, true),
+            'supports_stats' => !empty($info['supports_stats']),
+            'catalog_only' => !$supportsUrlPush && !$supportsSitemapSubmit,
+        ];
     }
 
     public function supportsUrlPush(string $platform): bool
@@ -171,7 +205,7 @@ class SeoPlatformCapabilityService
 
     public function isCatalogOnly(string $platform): bool
     {
-        $capability = $this->getCapability($platform);
+        $capability = $this->getSubmissionFlags($platform);
         return $capability !== null && !empty($capability['catalog_only']);
     }
 }

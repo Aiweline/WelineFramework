@@ -75,6 +75,9 @@ final class ConsoleContractsTest extends TestCase
                 $this->tearDown_EarlyDatabaseAccessGateUpgradeWait();
             }
         },
+            'EarlyDatabaseAccessGateUpgradeWait::testLockHolderSkipReason' => function () {
+            $this->assert_EarlyDatabaseAccessGateUpgradeWait_testLockHolderSkipReason();
+        },
             'PhpUnitRunFalseGreen::testLegacyCommandRegistrationResolvesToCanonicalRunner' => function () {
             $this->assert_PhpUnitRunFalseGreen_testLegacyCommandRegistrationResolvesToCanonicalRunner();
         },
@@ -243,6 +246,27 @@ private function assert_EarlyDatabaseAccessGateUpgradeWait_testForcePathIsDocume
     self::assertStringContainsString('FORCE_EXCLUSIVE_WAIT_MS', $src);
     self::assertStringContainsString('/proc/', $src);
     self::assertStringContainsString('cmdline', $src);
+    self::assertStringContainsString('lockHolderSkipReason', $src);
+    self::assertStringContainsString('无法执行 lsof，因此列不出占用数据库访问门禁的进程。', $src);
+    self::assertStringContainsString('当前用户可能没有权限结束该进程。', $src);
+}
+
+private function assert_EarlyDatabaseAccessGateUpgradeWait_testLockHolderSkipReason(): void
+{
+    $root = '/www/wwwroot/playinginchina.com';
+    self::assertSame('', EarlyDatabaseAccessGate::lockHolderSkipReason(
+        '/usr/bin/php /www/wwwroot/playinginchina.com/bin/w cron:task:run',
+        $root,
+    ));
+    self::assertSame('not_cron', EarlyDatabaseAccessGate::lockHolderSkipReason(
+        '/usr/bin/php vendor/bin/phpunit',
+        $root,
+    ));
+    self::assertSame('unread_command', EarlyDatabaseAccessGate::lockHolderSkipReason('   ', $root));
+    self::assertSame('other_project', EarlyDatabaseAccessGate::lockHolderSkipReason(
+        '/usr/bin/php /www/wwwroot/other.com/bin/w cron:task:run',
+        $root,
+    ));
 }
 
 private function assert_PhpUnitRunFalseGreen_testLegacyCommandRegistrationResolvesToCanonicalRunner(): void

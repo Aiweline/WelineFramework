@@ -22,6 +22,9 @@ trait ParseModuleArgsTrait
         if (is_string($argsModule)) {
             $argsModule = array_filter(array_map('trim', explode(' ', $argsModule)));
         }
+        if (!is_array($argsModule)) {
+            $argsModule = [];
+        }
         if (empty($argsModule)) {
             $positionalArgs = [];
             foreach ($args as $key => $value) {

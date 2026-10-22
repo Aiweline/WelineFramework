@@ -93,7 +93,7 @@ class SeoWebsiteAccountBindingService
 
             $platformCode = $this->resolvePlatformCode($account);
             $adapter = $platformCode !== '' ? $this->sitemapAdapterRegistry->getAdapter($platformCode) : null;
-            $capability = $platformCode !== '' ? $this->capabilityService->getCapability($platformCode) : null;
+            $capability = $platformCode !== '' ? $this->capabilityService->getSubmissionFlags($platformCode) : null;
 
             $result[] = [
                 'account' => $account,
@@ -130,12 +130,13 @@ class SeoWebsiteAccountBindingService
     }
 
     /**
+     * @param list<array<string, mixed>>|null $loaded 已装入的账户时不再查第二遍
      * @return list<array<string, mixed>>
      */
-    public function getUrlPushAccounts(int $websiteId): array
+    public function getUrlPushAccounts(int $websiteId, ?array $loaded = null): array
     {
         $accounts = [];
-        foreach ($this->getWebsiteAccountsWithPlatforms($websiteId) as $info) {
+        foreach ($loaded ?? $this->getWebsiteAccountsWithPlatforms($websiteId) as $info) {
             $account = (array)($info['account'] ?? []);
             $binding = (array)($info['binding'] ?? []);
             $capability = (array)($info['capability'] ?? []);

@@ -44,6 +44,8 @@
 "买家售后单提交后由服务派发。不复用 order_refunded。","买家售后单提交后由服务派发。不复用 order_refunded。"
 买家售后已通过,买家售后已通过
 退货或换货审核通过后由服务派发。仅退款不走本事件。,退货或换货审核通过后由服务派发。仅退款不走本事件。
+收集商品退货地址,收集商品退货地址
+批准退货或换货前，由商品模块把商品自己的退货地址写回。,批准退货或换货前，由商品模块把商品自己的退货地址写回。
 买家售后已拒绝,买家售后已拒绝
 买家售后单被拒绝后由服务派发，可供其他模块监听。,买家售后单被拒绝后由服务派发，可供其他模块监听。
 买家售后已取消,买家售后已取消
@@ -713,7 +715,7 @@ Outbox,Outbox
 买家发票下载未开启,"Buyer invoice download is off"
 请先填写开票公司名称,"Enter the invoicing company name first"
 不能下载他人的发票,"You can only download your own invoice"
-销售发票,"Sales invoice"
+订单发票,"Order invoice"
 开票日期,"Invoice date"
 销售方,Seller
 纳税人识别号,"Tax ID"
@@ -721,8 +723,9 @@ Outbox,Outbox
 公司电话,"Company phone"
 公司邮箱,"Company email"
 购买方,Buyer
+优惠,Discount
 税额,Tax
-价税合计,Total
+合计,Total
 "店铺 #%{1}","Store #%{1}"
 默认店铺,"Default store"
 订单兼容读取来源无效：%{1},"Invalid order compatibility read source: %{1}"
@@ -865,23 +868,22 @@ Outbox,Outbox
 服务器缺少可用于发票的中文字体,"The server has no Chinese font for invoices"
 订单货款,"Order amount"
 续下页,Continued
-联系方式,Contact
-地址,Address
-序号,No.
-此页为该订单已开具发票的阅读副本，金额以订单结算为准。,"This page is a reading copy of the invoice already issued for the order. Amounts follow the order settlement."
-订单发票,"Order invoice"
-合计,Total
-优惠,Discount
-账单地址与收货地址相同,"Billing address matches the shipping address"
 币种,Currency
+联系方式,Contact
 公司,Company
 税号,"Tax ID"
-"此页为该订单已开具发票的阅读副本，不是增值税发票，金额以订单结算为准。","This page is a reading copy of the invoice already issued for this order. It is not a VAT invoice. Amounts follow the order settlement."
+账单地址与收货地址相同,"Billing address matches the shipping address"
+序号,No.
+此页为该订单已开具发票的阅读副本，不是增值税发票，金额以订单结算为准。,"This page is a reading copy of the invoice already issued for this order. It is not a VAT invoice. Amounts follow the order settlement."
 订单已生成发票,"Invoice already generated for this order"
 发票不存在,"Invoice does not exist"
 "旧 Checkout writer 已被 cutover gate 禁止（mode=%{1}）","The old Checkout writer has been disabled by the cutover gate (mode=%{1})"
 "新 Order writer 在当前 mode 不可写（mode=%{1}；shadow 仅允许 plan）","The new Order writer is not writable in the current mode (mode=%{1}; shadow only allows plan)"
 "MIG-P2-ORDER：Checkout→Order 单写切流（仅登记的隔离 clone）","MIG-P2-ORDER: Checkout→Order single write flow (only registered isolation clone)"
+销售发票,"Sales invoice"
+价税合计,Total
+地址,Address
+此页为该订单已开具发票的阅读副本，金额以订单结算为准。,"This page is a reading copy of the invoice already issued for the order. Amounts follow the order settlement."
 订单留言,"Order note"
 如有特殊要求请留言,"Leave a message if you have special requirements"
 数据库标识符不能为空,"Database identifier cannot be empty"

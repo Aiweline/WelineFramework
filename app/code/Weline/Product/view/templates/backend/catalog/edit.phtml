@@ -340,7 +340,7 @@ $attributesJson = json_encode(
     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
 ) ?: '[]';
 $providerUnknownFieldsJson = json_encode(
-    $providerUnknownFields,
+    $providerUnknownFields === [] ? new \stdClass() : $providerUnknownFields,
     JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
 ) ?: '{}';
 $editorTitle = $name !== '' ? $name : (string)__('未命名商品草稿');

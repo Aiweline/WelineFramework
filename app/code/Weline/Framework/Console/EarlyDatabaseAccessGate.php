@@ -136,17 +136,15 @@ final class EarlyDatabaseAccessGate
 
         $announcedTerm = false;
         $announcedKill = false;
-        $signaled = self::terminateCronLockHolders(false);
-        if ($signaled > 0) {
+        $seenNotices = [];
+        $first = self::terminateCronLockHolders(false);
+        self::announceFreshNotices($first['notices'], $seenNotices);
+        if ($first['signaled'] > 0) {
             $announcedTerm = true;
-            self::writeMessage(str_replace(
-                '%{1}',
-                (string)$signaled,
-                DatabaseFreeTranslator::translate(
-                    '已向 %{1} 个占用门禁的计划任务进程发送终止信号。',
-                    'Weline_Framework',
-                ),
-            ));
+            self::writeSignalCount(
+                '已向 %{1} 个占用门禁的计划任务进程发送终止信号。',
+                $first['signaled'],
+            );
         }
 
         $deadline = hrtime(true) + (self::FORCE_EXCLUSIVE_WAIT_MS * 1_000_000);
@@ -164,26 +162,19 @@ final class EarlyDatabaseAccessGate
                 $killed = true;
             }
             $again = self::terminateCronLockHolders($killed);
-            if ($again > 0 && $killed && !$announcedKill) {
+            self::announceFreshNotices($again['notices'], $seenNotices);
+            if ($again['signaled'] > 0 && $killed && !$announcedKill) {
                 $announcedKill = true;
-                self::writeMessage(str_replace(
-                    '%{1}',
-                    (string)$again,
-                    DatabaseFreeTranslator::translate(
-                        '计划任务未及时释放门禁，已强制结束 %{1} 个进程。',
-                        'Weline_Framework',
-                    ),
-                ));
-            } elseif ($again > 0 && !$killed && !$announcedTerm) {
+                self::writeSignalCount(
+                    '计划任务未及时释放门禁，已强制结束 %{1} 个进程。',
+                    $again['signaled'],
+                );
+            } elseif ($again['signaled'] > 0 && !$killed && !$announcedTerm) {
                 $announcedTerm = true;
-                self::writeMessage(str_replace(
-                    '%{1}',
-                    (string)$again,
-                    DatabaseFreeTranslator::translate(
-                        '已向 %{1} 个占用门禁的计划任务进程发送终止信号。',
-                        'Weline_Framework',
-                    ),
-                ));
+                self::writeSignalCount(
+                    '已向 %{1} 个占用门禁的计划任务进程发送终止信号。',
+                    $again['signaled'],
+                );
             }
 
             if ($now >= $deadline) {
@@ -203,71 +194,243 @@ final class EarlyDatabaseAccessGate
     }
 
     /**
+     * Empty string means this command line may be signaled.
+     * Otherwise: unread_command, not_cron, or other_project.
+     */
+    public static function lockHolderSkipReason(string $commandLine, string $projectRoot): string
+    {
+        $command = trim($commandLine);
+        if ($command === '') {
+            return 'unread_command';
+        }
+        if (!str_contains($command, 'cron:task:run')) {
+            return 'not_cron';
+        }
+        $root = rtrim($projectRoot, '/\\');
+        if ($root !== '' && !str_contains($command, $root)) {
+            return 'other_project';
+        }
+
+        return '';
+    }
+
+    /**
      * Signal cron processes that currently hold this project's setup DB access lock.
      *
-     * @return int Number of processes signaled
+     * @return array{signaled:int, notices:list<string>}
      */
-    private static function terminateCronLockHolders(bool $forceKill): int
+    private static function terminateCronLockHolders(bool $forceKill): array
     {
         $lockPath = SetupDatabaseAccessLock::path();
-        $pids = self::listLockHolderPids($lockPath);
-        if ($pids === []) {
-            return 0;
+        $listed = self::listLockHolderPids($lockPath);
+        if ($listed['pids'] === []) {
+            if ($listed['failure'] === '') {
+                return ['signaled' => 0, 'notices' => []];
+            }
+
+            return [
+                'signaled' => 0,
+                'notices' => [self::noticeForListingFailure($listed['failure'], $lockPath)],
+            ];
         }
 
         $self = (int)(getmypid() ?: 0);
-        $bpNeedle = rtrim((string)\BP, DIRECTORY_SEPARATOR);
+        $projectRoot = rtrim((string)\BP, DIRECTORY_SEPARATOR);
         $signaled = 0;
-        foreach ($pids as $pid) {
-            if ($pid < 1 || $pid === $self) {
+        $notices = [];
+        foreach ($listed['pids'] as $pid) {
+            if ($pid < 1) {
+                continue;
+            }
+            if ($pid === $self) {
+                $notices[] = self::noticeForSkip($pid, 'self', '');
                 continue;
             }
             $command = self::processCommandLine($pid);
-            if ($command === '' || !str_contains($command, 'cron:task:run')) {
+            $reason = self::lockHolderSkipReason($command, $projectRoot);
+            if ($reason !== '') {
+                $notices[] = self::noticeForSkip($pid, $reason, $command);
                 continue;
             }
-            if ($bpNeedle !== '' && !str_contains($command, $bpNeedle)) {
-                continue;
-            }
-            $signal = $forceKill ? 9 : 15;
-            if (\function_exists('posix_kill')) {
-                if (@posix_kill($pid, $signal)) {
-                    $signaled++;
-                }
-                continue;
-            }
-            // Best-effort non-posix fallback.
-            $escaped = escapeshellarg((string)$pid);
-            $cmd = $forceKill
-                ? 'kill -9 ' . $escaped
-                : 'kill -TERM ' . $escaped;
-            @exec($cmd . ' 2>/dev/null', $out, $code);
-            if ($code === 0) {
+            $outcome = self::signalProcess($pid, $forceKill ? 9 : 15);
+            if ($outcome === '') {
                 $signaled++;
+                continue;
+            }
+            if ($outcome !== 'gone') {
+                $notices[] = $outcome;
             }
         }
 
-        return $signaled;
+        return ['signaled' => $signaled, 'notices' => $notices];
     }
 
-    /** @return list<int> */
+    /**
+     * @return array{pids:list<int>, failure:string}
+     */
     private static function listLockHolderPids(string $lockPath): array
     {
         if (!is_file($lockPath)) {
-            return [];
+            return ['pids' => [], 'failure' => ''];
         }
-        $escaped = escapeshellarg($lockPath);
+        if (!\function_exists('exec')) {
+            return ['pids' => [], 'failure' => 'lsof_unavailable'];
+        }
         $output = [];
-        @exec('lsof -t ' . $escaped . ' 2>/dev/null', $output);
+        $code = 0;
+        @exec('lsof -t ' . escapeshellarg($lockPath) . ' 2>&1', $output, $code);
+        $joined = strtolower(implode("\n", $output));
         $pids = [];
         foreach ($output as $line) {
-            $pid = (int)trim((string)$line);
-            if ($pid > 0) {
-                $pids[] = $pid;
+            $line = trim((string)$line);
+            if (preg_match('/^[1-9][0-9]*$/D', $line) === 1) {
+                $pids[] = (int)$line;
             }
         }
+        $pids = array_values(array_unique($pids));
+        if ($pids !== []) {
+            return ['pids' => $pids, 'failure' => ''];
+        }
+        if ($code === 127
+            || str_contains($joined, 'not found')
+            || str_contains($joined, 'not recognized')
+        ) {
+            return ['pids' => [], 'failure' => 'lsof_unavailable'];
+        }
 
-        return array_values(array_unique($pids));
+        return ['pids' => [], 'failure' => 'holders_invisible'];
+    }
+
+    /**
+     * @param list<string> $notices
+     * @param array<string, true> $seen
+     */
+    private static function announceFreshNotices(array $notices, array &$seen): void
+    {
+        foreach ($notices as $notice) {
+            if ($notice === '' || isset($seen[$notice])) {
+                continue;
+            }
+            $seen[$notice] = true;
+            self::writeMessage($notice);
+        }
+    }
+
+    private static function writeSignalCount(string $source, int $count): void
+    {
+        self::writeMessage(str_replace(
+            '%{1}',
+            (string)$count,
+            DatabaseFreeTranslator::translate($source, 'Weline_Framework'),
+        ));
+    }
+
+    private static function noticeForListingFailure(string $failure, string $lockPath): string
+    {
+        if ($failure === 'lsof_unavailable') {
+            return DatabaseFreeTranslator::translate(
+                '无法执行 lsof，因此列不出占用数据库访问门禁的进程。',
+                'Weline_Framework',
+            );
+        }
+
+        return str_replace(
+            '%{1}',
+            $lockPath,
+            DatabaseFreeTranslator::translate(
+                '数据库访问门禁仍被占用，但当前用户列不出持有进程。请用该进程所属用户或 root 执行：lsof %{1}',
+                'Weline_Framework',
+            ),
+        );
+    }
+
+    private static function noticeForSkip(int $pid, string $reason, string $command): string
+    {
+        $template = match ($reason) {
+            'self' => DatabaseFreeTranslator::translate(
+                '进程 %{1} 是当前进程并且占用门禁，不能向自己发信号。',
+                'Weline_Framework',
+            ),
+            'unread_command' => DatabaseFreeTranslator::translate(
+                '有进程占用门禁，但读不到命令行，已跳过，不会结束无法确认身份的进程。',
+                'Weline_Framework',
+            ),
+            'other_project' => DatabaseFreeTranslator::translate(
+                '进程 %{1} 是计划任务，但不属于当前应用根，已跳过。',
+                'Weline_Framework',
+            ),
+            default => DatabaseFreeTranslator::translate(
+                '进程 %{1} 占用门禁，但不是本站计划任务 cron:task:run，已跳过。命令：%{2}',
+                'Weline_Framework',
+            ),
+        };
+
+        return str_replace(
+            ['%{1}', '%{2}'],
+            [(string)$pid, self::commandSnippet($command)],
+            $template,
+        );
+    }
+
+    /**
+     * Empty string means the signal was delivered. "gone" means the process
+     * had already exited. Any other string is an operator-facing notice.
+     */
+    private static function signalProcess(int $pid, int $signal): string
+    {
+        if (\function_exists('posix_kill')) {
+            if (posix_kill($pid, $signal)) {
+                return '';
+            }
+            $error = \function_exists('posix_get_last_error') ? posix_get_last_error() : 0;
+            if ($error === 3) {
+                return 'gone';
+            }
+
+            return self::signalDeniedNotice($pid);
+        }
+        if (!\function_exists('exec')) {
+            return self::signalDeniedNotice($pid);
+        }
+        $escaped = escapeshellarg((string)$pid);
+        $command = $signal === 9 ? 'kill -9 ' . $escaped : 'kill -TERM ' . $escaped;
+        $output = [];
+        $code = 1;
+        @exec($command . ' 2>&1', $output, $code);
+        if ($code === 0) {
+            return '';
+        }
+        $joined = strtolower(implode(' ', $output));
+        if (str_contains($joined, 'no such process')) {
+            return 'gone';
+        }
+
+        return self::signalDeniedNotice($pid);
+    }
+
+    private static function signalDeniedNotice(int $pid): string
+    {
+        return str_replace(
+            '%{1}',
+            (string)$pid,
+            DatabaseFreeTranslator::translate(
+                '无法向进程 %{1} 发送信号。当前用户可能没有权限结束该进程。',
+                'Weline_Framework',
+            ),
+        );
+    }
+
+    private static function commandSnippet(string $command): string
+    {
+        $snippet = trim((string)preg_replace('/\s+/', ' ', $command));
+        if ($snippet === '') {
+            return '-';
+        }
+        if (\function_exists('mb_substr')) {
+            return mb_substr($snippet, 0, 160);
+        }
+
+        return substr($snippet, 0, 160);
     }
 
     private static function processCommandLine(int $pid): string

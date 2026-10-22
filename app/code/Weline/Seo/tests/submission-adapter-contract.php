@@ -22,6 +22,7 @@ namespace Weline\Seo\Adapter {
 }
 namespace {
     function __(string $message, ...$args): string {
+        $GLOBALS['phrase_calls'] = ($GLOBALS['phrase_calls'] ?? 0) + 1;
         $args = count($args) === 1 && is_array($args[0]) ? $args[0] : $args;
         foreach ($args as $index => $value) { $message = str_replace('%{' . ($index + 1) . '}', (string)$value, $message); }
         return $message;
@@ -82,6 +83,15 @@ namespace {
     $capability = new \Weline\Seo\Service\SeoPlatformCapabilityService(new \Weline\Seo\Service\SitemapAdapterRegistry(), $registry);
     check($capability->getCapability('indexnow') !== null, 'IndexNow is directly configurable as a backend account platform');
     check(!$capability->supportsUrlPush('google'), 'Google does not expose generic URL push');
+    $flags = $capability->getSubmissionFlags('google');
+    check(is_array($flags) && !array_key_exists('config_fields', $flags) && array_key_exists('supports_url_push', $flags), 'submission flags omit admin form fields');
+    $phraseBeforeRepeat = $GLOBALS['phrase_calls'] ?? 0;
+    for ($repeat = 0; $repeat < 20; $repeat++) {
+        $capability->getSubmissionFlags('google');
+    }
+    check(($GLOBALS['phrase_calls'] ?? 0) === $phraseBeforeRepeat, 'repeated submission flags do not retranslate');
+    $baiduCapability = $capability->getCapability('baidu');
+    check(is_array($baiduCapability) && ($baiduCapability['config_fields'][0]['key'] ?? '') !== '', 'one platform capability still exposes only its own fields');
     $securityClass = \Weline\Seo\Service\SeoAccountConfig::class;
     if (class_exists($securityClass)) {
         $security = new $securityClass();
