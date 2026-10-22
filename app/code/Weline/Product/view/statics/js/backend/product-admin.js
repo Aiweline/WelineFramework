@@ -7238,7 +7238,23 @@
         if (form) {
             form.addEventListener('submit', function (event) {
                 event.preventDefault();
-                if (!form.reportValidity()) {
+                // 关闭中的布局/规格弹层在表单内，其 required 不参与保存草稿。
+                var blocked = false;
+                var controls = form.querySelectorAll('input, select, textarea');
+                for (var i = 0; i < controls.length; i++) {
+                    var control = controls[i];
+                    if (control.closest('dialog') || control.disabled) {
+                        continue;
+                    }
+                    if (typeof control.checkValidity === 'function' && !control.checkValidity()) {
+                        blocked = true;
+                        if (typeof control.reportValidity === 'function') {
+                            control.reportValidity();
+                        }
+                        break;
+                    }
+                }
+                if (blocked) {
                     return;
                 }
                 var payload;

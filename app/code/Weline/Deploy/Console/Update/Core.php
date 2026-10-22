@@ -42,8 +42,17 @@ class Core extends CommandAbstract
     /** 已有缓存仓的增量 fetch；超时视为这个仓不可用 */
     private const GIT_FETCH_TIMEOUT_SECONDS = 20;
 
-    /** 浅克隆上限。到点杀掉，删目录，换下一个仓库 */
-    private const GIT_CLONE_TIMEOUT_SECONDS = 120;
+    /**
+     * 浅克隆绝对上限。dev 的 tip 树约 687MB / 2 万文件，线上直接 git clone 约 103 秒能完成；
+     * 120 秒会把还在传包或 checkout 的成功克隆杀掉，并报成「仓库无法浅克隆」。
+     */
+    private const GIT_CLONE_TIMEOUT_SECONDS = 600;
+
+    /**
+     * 浅克隆无新输出的上限。须配合 clone --progress（进度会刷新）；
+     * 真卡住才换仓库，不能用它代替上面的绝对上限。
+     */
+    private const GIT_CLONE_STALL_SECONDS = 180;
 
     /**
      * 核心更新允许同步的路径（目录或文件）。
@@ -1220,14 +1229,19 @@ class Core extends CommandAbstract
 
         $returnCode = $this->runGitCommand(
             $tmpDir,
-            ['clone', '--depth', '1', '--single-branch', '-b', $branch, $repo, '.'],
+            ['clone', '--depth', '1', '--single-branch', '--progress', '-b', $branch, $repo, '.'],
             $output,
             self::GIT_CLONE_TIMEOUT_SECONDS,
+            self::GIT_CLONE_STALL_SECONDS,
         );
         $lastOutput = $output;
 
         if ($returnCode !== 0) {
             $this->printer->warning(__('浅克隆未完成，换下一个仓库'));
+            $tail = trim((string)($output[array_key_last($output)] ?? ''));
+            if ($tail !== '') {
+                $this->printer->note($tail);
+            }
             return false;
         }
 
@@ -1808,8 +1822,13 @@ class Core extends CommandAbstract
     /**
      * @param string[] $arguments
      */
-    private function runGitCommand(string $workingDirectory, array $arguments, &$output, int $timeoutSeconds = self::GIT_LOCAL_TIMEOUT_SECONDS): int
-    {
+    private function runGitCommand(
+        string $workingDirectory,
+        array $arguments,
+        &$output,
+        int $timeoutSeconds = self::GIT_LOCAL_TIMEOUT_SECONDS,
+        int $stallSeconds = 0
+    ): int {
         $output = [];
         $command = array_merge([$this->gitExecutable], $arguments);
         $descriptorSpec = [
@@ -1841,16 +1860,29 @@ class Core extends CommandAbstract
         $stdout = '';
         $stderr = '';
         $startedAt = time();
+        $lastOutputAt = $startedAt;
         $exitCode = null;
         while (true) {
-            $stdout .= (string)stream_get_contents($pipes[1]);
-            $stderr .= (string)stream_get_contents($pipes[2]);
+            $chunkOut = (string)stream_get_contents($pipes[1]);
+            $chunkErr = (string)stream_get_contents($pipes[2]);
+            if ($chunkOut !== '' || $chunkErr !== '') {
+                $stdout .= $chunkOut;
+                $stderr .= $chunkErr;
+                $lastOutputAt = time();
+            }
             $status = proc_get_status($process);
             if (!$status['running']) {
                 $exitCode = (int)$status['exitcode'];
                 break;
             }
-            if ($timeoutSeconds > 0 && (time() - $startedAt) >= $timeoutSeconds) {
+            $now = time();
+            $stopReason = '';
+            if ($timeoutSeconds > 0 && ($now - $startedAt) >= $timeoutSeconds) {
+                $stopReason = 'git timed out after ' . $timeoutSeconds . ' seconds';
+            } elseif ($stallSeconds > 0 && ($now - $lastOutputAt) >= $stallSeconds) {
+                $stopReason = 'git produced no output for ' . $stallSeconds . ' seconds';
+            }
+            if ($stopReason !== '') {
                 $this->stopGitProcess($process);
                 $stdout .= (string)stream_get_contents($pipes[1]);
                 $stderr .= (string)stream_get_contents($pipes[2]);
@@ -1858,7 +1890,7 @@ class Core extends CommandAbstract
                 fclose($pipes[2]);
                 proc_close($process);
                 $output = $this->splitProcessOutput($stdout, $stderr);
-                $output[] = 'git timed out after ' . $timeoutSeconds . ' seconds';
+                $output[] = $stopReason;
                 return 124;
             }
             usleep(100000);
@@ -1975,8 +2007,18 @@ class Core extends CommandAbstract
      */
     private function splitProcessOutput(string $stdout, string $stderr): array
     {
-        $combined = trim($stdout . "\n" . $stderr);
-        return $combined !== '' ? preg_split('/\R/', $combined) ?: [] : [];
+        $combined = str_replace("\r\n", "\n", $stdout . "\n" . $stderr);
+        $lines = preg_split("/\n/", $combined) ?: [];
+        $result = [];
+        foreach ($lines as $line) {
+            $parts = explode("\r", $line);
+            $last = trim((string)end($parts));
+            if ($last !== '') {
+                $result[] = $last;
+            }
+        }
+
+        return $result;
     }
 
     /**
