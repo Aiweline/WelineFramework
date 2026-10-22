@@ -24,6 +24,8 @@ final class ThemeUpdateBatchService
     public const CONFIG_EPOCH = 'theme_update_epoch';
     /** 指针文件（Worker ≤10s 生效，不依赖进程内 Env 缓存重载）。 */
     public const POINTER_FILE_RELATIVE = 'var/theme-update/current.json';
+    /** 自动 GC 保留的历史代次数（不含 current/previous），可用 Env 配置 theme_update_keep_batches 覆盖。 */
+    public const DEFAULT_KEEP_BATCHES = 3;
     public const AREA_FRONTEND = 'frontend';
 
     public function __construct(
@@ -161,6 +163,11 @@ final class ThemeUpdateBatchService
         $this->commitPointer($row, $websiteId, $themeId, $area, $next, (int)$state['epoch'], $batchId);
         $this->persistPointerConfig($websiteId, $themeId, $area, $batch, $next['epoch']);
         $this->invalidateThemeCaches($themeId, 'theme_update_promote');
+        // 自动回收历史代次，避免批次目录无界增长（失败静默，不影响切换）
+        try {
+            $this->gc($themeId, $websiteId, $area, $this->keepBatches());
+        } catch (\Throwable) {
+        }
 
         return $next;
     }
@@ -514,5 +521,19 @@ final class ThemeUpdateBatchService
         }
 
         return $removed;
+    }
+
+    /** 自动 GC 保留数（Env 可配）。 */
+    private function keepBatches(): int
+    {
+        try {
+            $configured = Env::getInstance()->getConfig('theme_update_keep_batches');
+            if (is_numeric($configured)) {
+                return max(0, (int)$configured);
+            }
+        } catch (\Throwable) {
+        }
+
+        return self::DEFAULT_KEEP_BATCHES;
     }
 }

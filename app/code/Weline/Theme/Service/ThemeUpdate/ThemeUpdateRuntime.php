@@ -30,6 +30,7 @@ final class ThemeUpdateRuntime
     /** 构建期强制代次（让编译产物烘焙「正在构建的批次」前缀）。 */
     private static ?array $forced = null;
 
+
     /** @param array{batch_id:string,static_ns:string,entity_root:string,theme_prefix:string,epoch:int}|null $active */
     public static function forceBatch(?array $active): void
     {
@@ -103,6 +104,9 @@ final class ThemeUpdateRuntime
     /** 当前代次的实体根（绝对路径）；无代次返回 null。 */
     public static function entityRoot(): ?string
     {
+        if (self::previewRequested()) {
+            return null;
+        }
         $active = self::active();
         if ($active === null) {
             return null;
@@ -406,5 +410,25 @@ final class ThemeUpdateRuntime
         }
 
         return ['layouts' => $layouts, 'all' => (bool)($decoded['all'] ?? false)];
+    }
+
+
+    /**
+     * 预览请求判断（零依赖、零服务实例化）：
+     * 只看 uri 路径与查询参数——预览静态始终带 `__preview` 段，实体根不能被代次接管。
+     */
+    private static function previewRequested(): bool
+    {
+        $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        if ($uri !== '' && (str_contains($uri, '/~preview/') || str_contains($uri, '/__preview/'))) {
+            return true;
+        }
+        foreach (['weline_preview_token', 'preview_token'] as $key) {
+            if (isset($_GET[$key]) && is_scalar($_GET[$key]) && (string)$_GET[$key] !== '') {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

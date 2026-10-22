@@ -151,6 +151,13 @@ class Update extends AbstractConsole
                     ]));
                     return;
                 }
+                if (($result['skipped'] ?? '') === 'backoff') {
+                    $this->printing->warning(__('主题 #%{1} 上次构建失败，退避中（重试时间 %{2}），本次跳过。', [
+                        (string)$themeId,
+                        (string)($result['retry_at'] ?? ''),
+                    ]));
+                    return;
+                }
                 if (($result['skipped'] ?? '') === 'no_dirty') {
                     $this->printing->note(__('主题 #%{1} 无发布变更（无脏标记），跳过。', [(string)$themeId]));
                     return;

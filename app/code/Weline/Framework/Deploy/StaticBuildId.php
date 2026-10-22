@@ -78,6 +78,11 @@ final class StaticBuildId
 
     public static function versionedPath(string $path, ?string $buildId = null): string
     {
+        // 预览静态命名空间（/static/__preview/<key>/… 或 /static/<ns>/__preview/…）不可被构建号/代次前缀改写，
+        // 否则预览会丢 __preview 段、看到正式资源。
+        if (\str_contains($path, '/__preview/') || \str_starts_with($path, '/static/__preview')) {
+            return $path;
+        }
         if ($buildId === null) {
             $buildId = self::themeUpdateBuildId($path);
         }

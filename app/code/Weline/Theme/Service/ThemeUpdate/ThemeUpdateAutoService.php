@@ -63,6 +63,12 @@ final class ThemeUpdateAutoService
             ];
         }
 
+        // 失败退避：最近一次构建失败后 N 分钟内不重试，避免每分钟重复失败
+        $backoff = $this->backoffState($themeId);
+        if ($backoff !== null) {
+            return ['mode' => 'batch', 'skipped' => 'backoff', 'retry_at' => $backoff];
+        }
+
         $dirtyLayouts = ThemeUpdateRuntime::dirtyLayouts($themeId);
         $buildOptions = [];
         if (empty($dirtyLayouts['all']) && $dirtyLayouts['layouts'] !== []) {
@@ -71,7 +77,8 @@ final class ThemeUpdateAutoService
         $result = $this->builder->build($themeId, $buildOptions);
         $manifest = $result['manifest'] ?? [];
         if (($manifest['verify']['ok'] ?? false) !== true) {
-            // 不清脏标记：下次重试；线上保持旧代次
+            // 不清脏标记：下次重试；线上保持旧代次。记录退避窗口，避免每分钟重复失败。
+            $this->writeBackoff($themeId, 'verify_failed');
             return [
                 'mode' => 'batch',
                 'batch_id' => $result['batch_id'],
@@ -81,6 +88,7 @@ final class ThemeUpdateAutoService
 
         $state = $this->batches->promote($result['batch_id']);
         ThemeUpdateRuntime::clearDirty($themeId);
+        $this->clearBackoff($themeId);
 
         return [
             'mode' => 'batch',
@@ -115,6 +123,54 @@ final class ThemeUpdateAutoService
             return (string)(Env::system('deploy') ?? '');
         } catch (\Throwable) {
             return '';
+        }
+    }
+
+    /** 退避默认分钟数。 */
+    private const BACKOFF_MINUTES = 5;
+
+    private static function backoffFile(int $themeId): string
+    {
+        return rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR
+            . 'theme-update' . DIRECTORY_SEPARATOR . 'backoff' . DIRECTORY_SEPARATOR . max(0, $themeId) . '.json';
+    }
+
+    /** 退避未过期时返回重试时间，否则 null。 */
+    private function backoffState(int $themeId): ?string
+    {
+        $file = self::backoffFile($themeId);
+        if (!is_file($file)) {
+            return null;
+        }
+        $decoded = json_decode((string)@file_get_contents($file), true);
+        $retryAt = is_array($decoded) ? (string)($decoded['retry_at'] ?? '') : '';
+        $ts = $retryAt !== '' ? strtotime($retryAt) : false;
+        if ($ts === false || $ts <= time()) {
+            @unlink($file);
+            return null;
+        }
+
+        return $retryAt;
+    }
+
+    private function writeBackoff(int $themeId, string $reason): void
+    {
+        $file = self::backoffFile($themeId);
+        $dir = dirname($file);
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+            return;
+        }
+        @file_put_contents($file, (string)json_encode([
+            'reason' => $reason,
+            'retry_at' => date('c', time() + self::BACKOFF_MINUTES * 60),
+        ], JSON_UNESCAPED_UNICODE));
+    }
+
+    private function clearBackoff(int $themeId): void
+    {
+        $file = self::backoffFile($themeId);
+        if (is_file($file)) {
+            @unlink($file);
         }
     }
 }
