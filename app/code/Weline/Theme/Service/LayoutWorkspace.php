@@ -297,7 +297,11 @@ final class LayoutWorkspace implements LayoutWorkspaceInterface
             },
         );
         try {
-            \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::markDirty($themeId, 'scoped_target_publish');
+            \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::markDirty(
+                $themeId,
+                'scoped_target_publish',
+                [['type' => $pageType, 'option' => $identity->layoutOption]]
+            );
         } catch (\Throwable) {
         }
 

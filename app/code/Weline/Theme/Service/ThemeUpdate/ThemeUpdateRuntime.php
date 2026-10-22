@@ -126,8 +126,12 @@ final class ThemeUpdateRuntime
             . 'theme-update' . DIRECTORY_SEPARATOR . 'dirty' . DIRECTORY_SEPARATOR . max(0, $themeId) . '.json';
     }
 
-    /** 发布成功后打脏标记：表示「已发布的新内容尚未进入更新代次」。 */
-    public static function markDirty(int $themeId, string $reason = 'publish'): void
+    /**
+     * 发布成功后打脏标记：表示「已发布的新内容尚未进入更新代次」。
+     *
+     * @param list<array{type?:string,option?:string}> $layouts 受影响布局（用于增量固化；空 = 全量）
+     */
+    public static function markDirty(int $themeId, string $reason = 'publish', array $layouts = []): void
     {
         if ($themeId < 1) {
             return;
@@ -145,7 +149,13 @@ final class ThemeUpdateRuntime
         if (!\is_dir($dir) && !@\mkdir($dir, 0775, true) && !\is_dir($dir)) {
             return;
         }
-        @\file_put_contents($file, \json_encode(['at' => \date('c'), 'reason' => $reason], JSON_UNESCAPED_UNICODE));
+        $merged = self::mergeDirtyLayouts($file, $layouts);
+        @\file_put_contents($file, \json_encode([
+            'at' => \date('c'),
+            'reason' => $reason,
+            'layouts' => $merged['layouts'],
+            'all' => $merged['all'],
+        ], JSON_UNESCAPED_UNICODE));
     }
 
     public static function isDirty(int $themeId): bool
@@ -319,5 +329,82 @@ final class ThemeUpdateRuntime
         }
 
         return \count($matches) === 1 ? $matches[0] : null;
+    }
+
+    /**
+     * 合并受影响布局；条目过多或命中「全量」时置 all=true。
+     *
+     * @param list<array{type?:string,option?:string}> $layouts
+     * @return array{layouts:list<array{type:string,option:string}>,all:bool}
+     */
+    private static function mergeDirtyLayouts(string $file, array $layouts): array
+    {
+        $existing = [];
+        $all = false;
+        if (\is_file($file)) {
+            $raw = (string)@\file_get_contents($file);
+            $decoded = $raw !== '' ? \json_decode($raw, true) : null;
+            if (\is_array($decoded)) {
+                $all = (bool)($decoded['all'] ?? false);
+                foreach ((array)($decoded['layouts'] ?? []) as $row) {
+                    if (!\is_array($row)) {
+                        continue;
+                    }
+                    $type = \trim((string)($row['type'] ?? ''));
+                    if ($type !== '') {
+                        $existing[$type . '/' . \trim((string)($row['option'] ?? ''))] = [
+                            'type' => $type,
+                            'option' => \trim((string)($row['option'] ?? '')),
+                        ];
+                    }
+                }
+            }
+        }
+        foreach ($layouts as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $type = \trim((string)($row['type'] ?? ''));
+            if ($type === '') {
+                continue;
+            }
+            $option = \trim((string)($row['option'] ?? ''));
+            $existing[$type . '/' . $option] = ['type' => $type, 'option' => $option];
+        }
+        $list = \array_values($existing);
+        if (\count($list) > 12) {
+            $all = true;
+        }
+
+        return ['layouts' => $all ? [] : $list, 'all' => $all];
+    }
+
+    /**
+     * 读取脏标记里的受影响布局与全量标记。
+     *
+     * @return array{layouts:list<array{type:string,option:string}>,all:bool}
+     */
+    public static function dirtyLayouts(int $themeId): array
+    {
+        $file = self::dirtyFile($themeId);
+        if (!\is_file($file)) {
+            return ['layouts' => [], 'all' => false];
+        }
+        $decoded = \json_decode((string)@\file_get_contents($file), true);
+        if (!\is_array($decoded)) {
+            return ['layouts' => [], 'all' => false];
+        }
+        $layouts = [];
+        foreach ((array)($decoded['layouts'] ?? []) as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $type = \trim((string)($row['type'] ?? ''));
+            if ($type !== '') {
+                $layouts[] = ['type' => $type, 'option' => \trim((string)($row['option'] ?? ''))];
+            }
+        }
+
+        return ['layouts' => $layouts, 'all' => (bool)($decoded['all'] ?? false)];
     }
 }

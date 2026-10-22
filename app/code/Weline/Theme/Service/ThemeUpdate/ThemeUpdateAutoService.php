@@ -63,7 +63,12 @@ final class ThemeUpdateAutoService
             ];
         }
 
-        $result = $this->builder->build($themeId, []);
+        $dirtyLayouts = ThemeUpdateRuntime::dirtyLayouts($themeId);
+        $buildOptions = [];
+        if (empty($dirtyLayouts['all']) && $dirtyLayouts['layouts'] !== []) {
+            $buildOptions['layout_targets'] = $dirtyLayouts['layouts'];
+        }
+        $result = $this->builder->build($themeId, $buildOptions);
         $manifest = $result['manifest'] ?? [];
         if (($manifest['verify']['ok'] ?? false) !== true) {
             // 不清脏标记：下次重试；线上保持旧代次
@@ -81,6 +86,7 @@ final class ThemeUpdateAutoService
             'mode' => 'batch',
             'batch_id' => $result['batch_id'],
             'state' => $state,
+            'layout_targets' => $buildOptions['layout_targets'] ?? [],
         ];
     }
 

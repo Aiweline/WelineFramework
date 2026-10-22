@@ -80,19 +80,26 @@ final class ThemeUpdateBuildService
             try {
                 /** @var ThemeLayoutEntityUpgradeSolidifyService $solidify */
                 $solidify = ObjectManager::getInstance(ThemeLayoutEntityUpgradeSolidifyService::class);
-                $solidifyOptions = ['cache_invalidation' => 'none'];
-                $layouts = \array_values(\array_filter((array)($options['layouts'] ?? [])));
-                if (\count($layouts) === 1) {
-                    $solidifyOptions['layout_type'] = (string)$layouts[0];
-                    $optionList = \array_values(\array_filter((array)($options['options'] ?? [])));
-                    if (\count($optionList) === 1) {
-                        $solidifyOptions['layout_option'] = (string)$optionList[0];
+                $baseOptions = ['cache_invalidation' => 'none'];
+                if (!empty($options['all_versions'])) {
+                    $baseOptions['all_versions'] = true;
+                }
+                // 增量固化：layout_targets = [['type' => 'homepage', 'option' => 'default'], …]
+                // 为空表示全主题（全布局）固化。
+                $targets = $this->normalizeLayoutTargets($options);
+                if ($targets === []) {
+                    $solidify->solidifyTheme($themeId, null, $baseOptions);
+                } else {
+                    foreach ($targets as $target) {
+                        $one = $baseOptions;
+                        $one['layout_type'] = $target['type'];
+                        if ($target['option'] !== '') {
+                            $one['layout_option'] = $target['option'];
+                        }
+                        $solidify->solidifyTheme($themeId, null, $one);
                     }
                 }
-                if (!empty($options['all_versions'])) {
-                    $solidifyOptions['all_versions'] = true;
-                }
-                $solidify->solidifyTheme($themeId, null, $solidifyOptions);
+                $layoutTargetsUsed = $targets;
             } finally {
                 ThemeLayoutEntityPaths::forceRoot(null);
                 \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::forceBatch(null);
@@ -129,6 +136,7 @@ final class ThemeUpdateBuildService
             'theme_prefix' => $themePrefix,
             'static_ns' => $batchId,
             'entity_root' => $batchId,
+            'layout_targets' => $layoutTargetsUsed ?? [],
             'static_files' => $this->countFiles($staticDir, 200000, true),
             'entity_files' => $entityFiles,
             'checks' => $checks,
@@ -481,5 +489,42 @@ final class ThemeUpdateBuildService
         }
 
         return $rewritten;
+    }
+
+    /**
+     * 归一化「受影响布局」目标：
+     * - `layout_targets`: [['type'=>..,'option'=>..], …]（发布时记录，支持增量）
+     * - 兼容旧参数：`layouts`（类型列表）+ `options`（单选项）
+     *
+     * @param array<string,mixed> $options
+     * @return list<array{type:string,option:string}>
+     */
+    private function normalizeLayoutTargets(array $options): array
+    {
+        $targets = [];
+        foreach ((array)($options['layout_targets'] ?? []) as $target) {
+            if (!is_array($target)) {
+                continue;
+            }
+            $type = trim((string)($target['type'] ?? ''));
+            if ($type === '') {
+                continue;
+            }
+            $option = trim((string)($target['option'] ?? ''));
+            $key = $type . '/' . $option;
+            $targets[$key] = ['type' => $type, 'option' => $option];
+        }
+        if ($targets === []) {
+            $layouts = array_values(array_filter((array)($options['layouts'] ?? [])));
+            if (count($layouts) === 1) {
+                $optionList = array_values(array_filter((array)($options['options'] ?? [])));
+                $targets[(string)$layouts[0] . '/'] = [
+                    'type' => (string)$layouts[0],
+                    'option' => count($optionList) === 1 ? (string)$optionList[0] : '',
+                ];
+            }
+        }
+
+        return array_values($targets);
     }
 }
