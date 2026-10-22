@@ -328,4 +328,71 @@ final class SchemaDiffEngineTest extends TestCase
         $this->expectExceptionMessage('refuse silent rewrite');
         (new SchemaDiffEngine())->diff($declared, $actual, 'pgsql');
     }
+
+    public function testMysqlInformationSchemaNullTokenIsNotAColumnChange(): void
+    {
+        $declared = new TableSchema(
+            tableName: 'backend_activity_log',
+            comment: '',
+            columns: [
+                new ColumnDefinition('request_id', 'varchar', 64, true, false, false, null, '请求ID'),
+                new ColumnDefinition('user_id', 'int', null, true, false, false, null, '用户ID'),
+                new ColumnDefinition('status', 'varchar', 20, true, false, false, 'pending', '状态'),
+            ],
+            indexes: [],
+            foreignKeys: [],
+            modelClass: null
+        );
+        $actual = new TableSchema(
+            tableName: 'backend_activity_log',
+            comment: '',
+            columns: [
+                new ColumnDefinition('request_id', 'varchar', 64, true, false, false, 'NULL', '请求ID'),
+                new ColumnDefinition('user_id', 'int', 11, true, false, false, 'NULL', '用户ID'),
+                new ColumnDefinition('status', 'varchar', 20, true, false, false, "'pending'", '状态'),
+            ],
+            indexes: [],
+            foreignKeys: [],
+            modelClass: null
+        );
+
+        $modify = array_values(array_filter(
+            (new SchemaDiffEngine())->diff($declared, $actual, 'mysql'),
+            static fn (SchemaDiffOp $op): bool => $op->kind === SchemaDiffOp::KIND_MODIFY_COLUMN
+        ));
+
+        self::assertSame([], $modify);
+    }
+
+    public function testMysqlRealDefaultChangeStillModifiesColumn(): void
+    {
+        $declared = new TableSchema(
+            tableName: 'demo',
+            comment: '',
+            columns: [
+                new ColumnDefinition('status', 'varchar', 20, true, false, false, 'pending'),
+            ],
+            indexes: [],
+            foreignKeys: [],
+            modelClass: null
+        );
+        $actual = new TableSchema(
+            tableName: 'demo',
+            comment: '',
+            columns: [
+                new ColumnDefinition('status', 'varchar', 20, true, false, false, 'active'),
+            ],
+            indexes: [],
+            foreignKeys: [],
+            modelClass: null
+        );
+
+        $modify = array_values(array_filter(
+            (new SchemaDiffEngine())->diff($declared, $actual, 'mysql'),
+            static fn (SchemaDiffOp $op): bool => $op->kind === SchemaDiffOp::KIND_MODIFY_COLUMN
+        ));
+
+        self::assertCount(1, $modify);
+        self::assertSame('status', $modify[0]->payload->name);
+    }
 }

@@ -561,6 +561,14 @@ final class SchemaDiffEngine
             return true;
         }
         $isPgsql = \in_array($databaseType, ['pgsql', 'postgres', 'postgresql'], true);
+        if (!$isPgsql && \in_array($databaseType, ['mysql', 'mariadb'], true)) {
+            // MariaDB information_schema.COLUMN_DEFAULT stores SQL NULL as the
+            // unquoted token NULL, and string defaults inside quotes.
+            $observed = $this->decodeMysqlInformationSchemaDefault($observed);
+            if ($expected === $observed) {
+                return true;
+            }
+        }
         if ($isPgsql) {
             $observed = $this->unwrapPgsqlLiteralDefault($observed);
             if ($expected === $observed) {
@@ -585,6 +593,17 @@ final class SchemaDiffEngine
             $observed = \str_replace("''", "'", $matches[1]);
         }
         return $expected === $observed;
+    }
+
+    private function decodeMysqlInformationSchemaDefault(string $observed): string
+    {
+        if (strcasecmp($observed, 'NULL') === 0) {
+            return '';
+        }
+        if (preg_match("/^'(.*)'$/sD", $observed, $matches) === 1) {
+            return str_replace("''", "'", $matches[1]);
+        }
+        return $observed;
     }
 
     private function unwrapPgsqlLiteralDefault(string $observed): string
