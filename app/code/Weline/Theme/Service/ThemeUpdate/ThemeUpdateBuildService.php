@@ -6,6 +6,7 @@ namespace Weline\Theme\Service\ThemeUpdate;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Console\Theme\Upgrade;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityUpgradeSolidifyService;
@@ -130,7 +131,7 @@ final class ThemeUpdateBuildService
         // 说明：实体 PHTML 是「布局源码派生」，{{…}} 与 <w:…> 属合法内联标记，
         // 不能按「未编译残留」判红；编译正确性由渲染 smoke 覆盖（后续任务）。
         if (empty($options['skip_static'])) {
-            $checks[] = $this->checkStaticSample($staticDir);
+            $checks[] = $this->checkStaticSample($staticDir, $themePrefix);
         }
         $checks[] = $this->checkEntitySample($entityDir);
 
@@ -306,16 +307,40 @@ final class ThemeUpdateBuildService
     }
 
     /**
-     * 抽样校验：批目录下主题资源与基础 JS 至少各存在一个。
+     * 抽样路径相对 `pub/static/<batch>/`。
+     * theme.css 的线上地址带设计主题命名空间，不是源码相对路径。
+     *
+     * @return list<string>
+     */
+    public static function staticVerificationSamples(string $themePrefix): array
+    {
+        $samples = ['Weline/Theme/ui/weline-foundation.css'];
+        $prefix = trim(str_replace('\\', '/', $themePrefix), '/');
+        if ($prefix === '') {
+            return $samples;
+        }
+        $relative = ltrim(substr(Upgrade::buildNamespacedModuleThemeRequestPath(
+            $prefix,
+            'Weline',
+            'Theme',
+            'frontend',
+            'assets/css/theme.css',
+        ), strlen('/static/')), '/');
+        if ($relative !== '') {
+            $samples[] = $relative;
+        }
+
+        return $samples;
+    }
+
+    /**
+     * 抽样校验：批目录下基础样式与该主题实际会请求的 theme.css 都在。
      *
      * @return array{name:string,ok:bool,sampled:int,missing:list<string>}
      */
-    private function checkStaticSample(string $staticDir): array
+    private function checkStaticSample(string $staticDir, string $themePrefix): array
     {
-        $samples = [
-            'Weline/Theme/ui/weline-foundation.css',
-            'Weline/Theme/view/theme/frontend/assets/css/theme.css',
-        ];
+        $samples = self::staticVerificationSamples($themePrefix);
         $missing = [];
         $sampled = 0;
         foreach ($samples as $rel) {
