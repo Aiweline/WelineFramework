@@ -32,21 +32,18 @@ class Install implements InstallInterface
         $meta = ObjectManager::getInstance(Meta::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($meta);
-        $meta->setup($modelSetup, $context);
         
         // 安装MetaConfig表
         /** @var MetaConfig $metaConfig */
         $metaConfig = ObjectManager::getInstance(MetaConfig::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($metaConfig);
-        $metaConfig->setup($modelSetup, $context);
         
         // 安装MetaLocal表（Meta多语言翻译表）
         /** @var MetaLocal $metaLocal */
         $metaLocal = ObjectManager::getInstance(MetaLocal::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($metaLocal);
-        $metaLocal->setup($modelSetup, $context);
     }
 }
 

@@ -6793,6 +6793,7 @@ while (true) {
                         $fiberAdmissionWaiters[$http3FiberKey] = true;
                     }
                     $http3ConnectionCount = (int)($http3Runtime->stats()['active_connections'] ?? 0);
+                    $http3HandleStartTime = wlsWorkerMonotonicNow();
                     $requestFiber = new \Fiber(function () use (
                         $rawRequest,
                         $runtime,
@@ -6821,6 +6822,7 @@ while (true) {
                         $fiberMaxActive,
                         $fiberAdmissionQueueWaitMs,
                         $fiberAdmissionQueueSliceMs,
+                        $http3HandleStartTime,
                     ): string {
                         wlsFiberRequestContextEnter(null, $http3FiberKey);
                         try {
@@ -6858,6 +6860,7 @@ while (true) {
                                     return wlsFiberAdmissionUnavailableResponse('memory_pressure');
                                 }
                             }
+                            $admissionWaitMs = \round((wlsWorkerMonotonicNow() - $http3HandleStartTime) * 1000, 2);
                             return handleRequest(
                                 $rawRequest,
                                 $runtime,
@@ -6879,6 +6882,8 @@ while (true) {
                                 $longLivedConnections,
                                 $http2ConnectionAdapters,
                                 $connections,
+                                'https',
+                                $admissionWaitMs,
                             );
                         } catch (\Weline\Framework\Runtime\RequestExitException $exception) {
                             throw $exception;
@@ -9089,6 +9094,7 @@ while (true) {
             }
         }
 
+        $handleStartTime = wlsWorkerMonotonicNow();
         $requestFiber = new \Fiber(function () use (
             $fiberRawRequest,
             $runtime,
@@ -9132,6 +9138,7 @@ while (true) {
             $fiberMaxActive,
             $fiberAdmissionQueueWaitMs,
             $fiberAdmissionQueueSliceMs,
+            $handleStartTime,
         ) {
             try {
                 wlsFiberRequestContextEnter($fiberConn, $fiberConnId);
@@ -9311,6 +9318,7 @@ while (true) {
                 if ($fiberHttp2StreamId <= 0) {
                     \Weline\Server\Service\WorkerMemoryExhaustionResponder::attach($fiberConn);
                 }
+                $admissionWaitMs = \round((wlsWorkerMonotonicNow() - $handleStartTime) * 1000, 2);
                 return handleRequest(
                     $fiberRawRequest,
                     $runtime,
@@ -9333,6 +9341,7 @@ while (true) {
                     $http2ConnectionAdapters,
                     $connections,
                     $publicRequestScheme,
+                    $admissionWaitMs,
                 );
             } catch (\Weline\Framework\Runtime\RequestExitException $e) {
                 throw $e;
@@ -11812,6 +11821,7 @@ function handleRequest(
     array $http2ConnectionAdapters = [],
     array $liveConnections = [],
     string $publicRequestScheme = 'https',
+    float $admissionWaitMs = 0.0,
 ): string {
     $policyDecision = $precomputedPolicyDecision
         ?? \Weline\Server\Security\WorkerPolicyKernel::instance()->evaluate($rawRequest, $transportPeer);
@@ -11819,6 +11829,7 @@ function handleRequest(
         return (string)$policyDecision->response;
     }
     $policyServerInfo = $policyDecision->requestServerInfo();
+    $policyServerInfo['WLS_ADMISSION_WAIT_MS'] = (string)\max(0, $admissionWaitMs);
 
     $uri = $policyDecision->path;
     $method = $policyDecision->method;

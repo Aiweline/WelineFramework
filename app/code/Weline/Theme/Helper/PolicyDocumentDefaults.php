@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Helper;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Service\ThemeDesignDataResolver;
+
 /**
  * Default copy for policy-document widget (Chinese source strings).
  * Empty widget config falls back here so storefront matches pre-widget Theme layouts.
@@ -37,25 +40,16 @@ final class PolicyDocumentDefaults
     }
 
     /**
-     * 站/主题专属政策条款（如汉服措辞）从 design 覆盖，模块保持中性默认。
+     * 站/主题专属政策条款由当前前台主题 data/policy-document-defaults-overrides.v1.php 覆盖，模块保持中性默认。
      *
      * @param array<string,mixed> $defaults
      * @return array<string,mixed>
      */
     private static function applyDesignThemeSectionOverrides(string $page, array $defaults): array
     {
-        if (!self::isHanfuThemeActive()) {
-            return $defaults;
-        }
-        $path = (defined('BP') ? BP : '') . 'app/design/Weline/hanfu/data/policy-document-defaults-overrides.v1.php';
-        if (!is_file($path)) {
-            return $defaults;
-        }
-        /** @var mixed $pack */
-        $pack = require $path;
-        if (!is_array($pack)) {
-            return $defaults;
-        }
+        /** @var ThemeDesignDataResolver $themeData */
+        $themeData = ObjectManager::getInstance(ThemeDesignDataResolver::class);
+        $pack = $themeData->load('policy-document-defaults-overrides.v1');
         $bodies = $pack[$page] ?? null;
         if (!is_array($bodies) || $bodies === []) {
             return $defaults;
@@ -77,19 +71,6 @@ final class PolicyDocumentDefaults
         $defaults['sections'] = $sections;
 
         return $defaults;
-    }
-
-    private static function isHanfuThemeActive(): bool
-    {
-        try {
-            if (!class_exists(\Weline\Websites\Service\WebsiteBrandIdentitySeedService::class)) {
-                return false;
-            }
-
-            return \Weline\Websites\Service\WebsiteBrandIdentitySeedService::isHanfuThemeActive();
-        } catch (\Throwable) {
-            return false;
-        }
     }
 
     /**

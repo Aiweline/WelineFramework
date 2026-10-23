@@ -68,7 +68,7 @@ starting -> running -> completed | failed
 - ticket 只保存服务端构造的 execution area、Scope binding、owner/principal 和已校验参数。页面不得传入或覆盖 area、owner、ACL、website、Session ID 或 binding。
 - Gateway 必须在 `SseWriter::start()` 前完成 descriptor、参数、权限、owner 与 Scope 的全部预检。拒绝时不得先打开 SSE，也不得产生部分 provider 执行。
 - Scope 在 provider 启动前以及每次 yield/heartbeat 前检查到期。流式 provider 必须有界地产生事件或 heartbeat；框架不能硬中断一个长期阻塞且从不 yield 的第三方 provider，因此不得承诺对这类错误实现提供绝对实时的硬截止。
-- `auth=backend` 的普通 QueryProvider stream 当前仍 fail-closed，返回 `backend_stream_disabled`。`runtime_task` 是明确例外：后台页面带着有效 backend binding 时，可签发并消费 `runtime_task.events` ticket（ticket 保留 backend execution context，不降级成 frontend）；授权仍走 type `areas` + 精确 `backend_acl`，以及 task owner/lease。前台 ticket 绝不能因请求同时携带后台 PHP Session Cookie 而升级为后台 owner。
+- `auth=backend` 的普通 QueryProvider stream 当前仍 fail-closed，返回 `backend_stream_disabled`。具名例外只有两条，且都要求后台页面带着有效 backend binding，ticket 保留 backend execution context，不降级成 frontend：`runtime_task.events`（授权仍走 type `areas` + 精确 `backend_acl`，以及 task owner/lease）；`admin.menuSignalWatch`（只读当前 binding 用户的菜单未读，Provider 自己提供条数和深链，订阅窗口结束发 `runtime_rotate` 换新 ticket）。其它 `auth=backend` stream 不得当作已开放。前台 ticket 绝不能因请求同时携带后台 PHP Session Cookie 而升级为后台 owner。
 - 旧 ticket 若缺少 execution area，按 `frontend` 处理，绝不自动升级为后台。
 - 每个浏览器可启动的 `type_code` 必须在 `etc/resumable_tasks.php` 显式声明 `areas`。包含 `backend` 时还必须声明已收集的精确 `backend_acl` source；缺失、未知 area、未知配置字段或非法 source 会让注册失败。
 - `start` 在 handler 实例化和 `prepareStart()` 前授权。`status` 使用持久任务冻结的 `type_code` 重新授权；`touch` / `cancel` 必须先完成同样的 status + owner + type ACL 检查，再产生续租或取消副作用。同一角色的权限被撤销后，旧 Worker Session 也不能继续操作任务。

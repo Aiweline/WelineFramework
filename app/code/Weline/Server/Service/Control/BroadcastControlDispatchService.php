@@ -668,6 +668,19 @@ class BroadcastControlDispatchService
                 continue;
             }
 
+            // 先做毫秒级 pid 预检：master 进程已死时不探测控制口，
+            // 避免无实例场景每次广播都等 connect 超时（3 实例约 12s）。
+            $masterPid = (int)($instance['master_pid'] ?? 0);
+            $masterState = $masterPid > 0
+                ? \Weline\Framework\System\Process\Processer::probeProcessState($masterPid)
+                : \Weline\Framework\System\Process\Processer::PROCESS_STATE_EXITED;
+            if ($masterState === \Weline\Framework\System\Process\Processer::PROCESS_STATE_EXITED) {
+                if ($instance !== null || $this->serverInstanceManager->hasInstance($name)) {
+                    $skippedByInstance[$name] = (string) __('Master 未运行，跳过该实例（请检查 server:start 或 Master 复活状态）。');
+                }
+                continue;
+            }
+
             // 以控制口可达为准：残留 lifecycle=running 但 control_port 已死的记录
             // 不得进入广播目标，否则 cache:clear 等会 Connection refused。
             if ($this->serverInstanceManager->isInstanceIpcControllable($name)) {

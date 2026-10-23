@@ -11,65 +11,28 @@ use Weline\Search\Service\SearchProviderRegistry;
 use Weline\Theme\Service\AllMenu\AllMenuTreeRegistry;
 use Weline\Theme\Service\Storefront\StorefrontRenderContextBag;
 use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
+use Weline\Theme\Service\ThemeDesignDataResolver;
 
 /**
  * 页头商务数据：优先 Query 真实数据；仅在无数据/不可用时回落主题演示默认值。
- * Demo 热搜按当前 website code 分流；非汉服站禁止回落马面裙/明制汉服。
+ * 演示热搜由当前前台主题 data/storefront-defaults.php 的 hot_words 声明，缺省为中性词。
  */
 final class HeaderCommerceData
 {
     /**
      * @return list<string>
      */
-    public static function defaultHotWords(?string $websiteCode = null): array
+    public static function defaultHotWords(): array
     {
-        $code = \strtolower(\trim($websiteCode ?? self::resolveWebsiteCode()));
-        if ($code === 'daocharms') {
-            return self::daocharmsDefaultHotWords();
-        }
-        if ($code === 'grocery') {
-            return self::groceryDefaultHotWords();
-        }
-        if (StorefrontHanfuDemoCatalog::allowed($code)) {
-            return self::hanfuDefaultHotWords();
-        }
+        /** @var ThemeDesignDataResolver $themeData */
+        $themeData = ObjectManager::getInstance(ThemeDesignDataResolver::class);
+        $words = $themeData->stringList('storefront-defaults', 'hot_words');
 
-        return self::neutralDefaultHotWords();
+        return $words !== [] ? $words : self::neutralDefaultHotWords();
     }
 
     /**
-     * Default-website / Hanfu storefront demo keywords (Chinese sources).
-     *
-     * @return list<string>
-     */
-    public static function hanfuDefaultHotWords(): array
-    {
-        return ['马面裙', '明制汉服', '宋制汉服', '齐胸襦裙', '披帛'];
-    }
-
-    /**
-     * DaoCharms ritual-pendant storefront demo keywords (Chinese sources).
-     *
-     * @return list<string>
-     */
-    public static function daocharmsDefaultHotWords(): array
-    {
-        return ['黑曜石', '阴阳', '八卦', '平安扣', '玉石'];
-    }
-
-    /**
-     * Neighborhood grocery storefront demo keywords (Chinese sources).
-     *
-     * @return list<string>
-     */
-    public static function groceryDefaultHotWords(): array
-    {
-        // Align with grocery CJ catalog roots (demo grocery-* aisle copy retired).
-        return ['今日特价', '家居收纳', '女装', '玩具童趣', '美妆护理'];
-    }
-
-    /**
-     * Neutral ecommerce demo keywords for unknown / new website codes.
+     * Neutral ecommerce demo keywords when the theme declares none.
      *
      * @return list<string>
      */
@@ -413,27 +376,6 @@ final class HeaderCommerceData
         }
 
         return 0;
-    }
-
-    private static function resolveWebsiteCode(): string
-    {
-        $fromBag = StorefrontRenderContextBag::websiteCode();
-        if ($fromBag !== null && $fromBag !== '') {
-            return $fromBag;
-        }
-        try {
-            if (\class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
-                $code = \strtolower(\trim(
-                    (string)\Weline\Framework\Runtime\RequestContext::getWelineWebsiteCode()
-                ));
-                if ($code !== '') {
-                    return $code;
-                }
-            }
-        } catch (\Throwable) {
-        }
-
-        return 'default';
     }
 
     /**

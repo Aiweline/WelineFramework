@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Weline\DataTable\Taglib;
 
 use Weline\DataTable\Helper\FrontendAccess;
+use Weline\DataTable\Helper\OwnedChildren;
 use Weline\DataTable\Helper\TableContext;
 use Weline\DataTable\Helper\UiAssets;
 use Weline\DataTable\Service\DataTableResourceRegistry;
 use Weline\Framework\App\Exception;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Taglib\OwnsChildCompilationInterface;
 use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\View\Template;
@@ -69,7 +69,7 @@ final class Form implements TaglibInterface, OwnsChildCompilationInterface
 
     public static function callback(): callable
     {
-        return static function ($tagKey, $config, $tagData, $attributes): string {
+        return static function ($tagKey, $config, $tagData, $attributes, ?Template $template = null): string {
             $tableContext = self::getTableContext() ?? [];
             if (!FrontendAccess::isAllowed($attributes, $tableContext)) {
                 return FrontendAccess::deniedComment('d-form');
@@ -100,12 +100,9 @@ final class Form implements TaglibInterface, OwnsChildCompilationInterface
             TableContext::pushChildTag('d-form', $scope, $formContext);
 
             try {
-                /** @var Template $template */
-                $template = w_obj(Template::class);
                 $content = (string)($tagData[2] ?? '');
                 if (trim($content) !== '') {
-                    $taglib = ObjectManager::getInstance(\Weline\Framework\View\Taglib::class);
-                    $content = $taglib->tagReplace($template, $content);
+                    $content = OwnedChildren::process($content, (array)$config, $template, $formContext);
                 }
                 return self::renderGenerated($attributes, $content, $template);
             } finally {

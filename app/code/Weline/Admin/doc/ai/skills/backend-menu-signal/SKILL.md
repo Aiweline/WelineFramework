@@ -15,7 +15,8 @@ description: >-
 | 层 | 模块 |
 |---|---|
 | 机制 | `Weline_Admin`：`BackendMenuSignalProvider` + 可选 `BackendMenuSignalItemsProvider` |
-| 绘制 | `admin.menuSignals` + `backend-menu-signals.js`（父级自动把子叶数量往上加） |
+| 实时 | `admin.menuSignalWatch`（SSE）。侧栏启动后监听这条流；每个 Provider 仍用自己的 `count()` / `items()` 提供未读。聚合变了才推 `menu_signals`，菜单随事件重画 |
+| 回退 | 流开不起来时才用 `admin.menuSignals` 的 30 秒轮询 |
 | 业务条数与链接 | **归属业务模块**自己的 Provider（订单 `Weline_Order::order_list`，企业邮局 `Weline_Mail::mail`） |
 
 ## 何时用
@@ -33,7 +34,7 @@ description: >-
 4. 写入统一收件箱 `Weline\Admin\Service\BackendMenuSignalInbox`：
    - `publish($code, $itemId, $title, $href, $unread)` 新消息 `$unread=true`
    - 打开或标已读时 `markRead($code, $itemId, $backendUserId)`。用户 ID 用 `BackendUserContext`（与 `admin.menuSignals` 同一人）
-   - 打开对应记录后立刻 `Weline.BackendMenuSignals.noteViewed()`，并 `refresh()`。不要等 30 秒轮询才消角标
+   - 打开对应记录后立刻 `Weline.BackendMenuSignals.noteViewed()`，并 `refresh()`。角标跟随 SSE；不要靠 30 秒轮询才消角标
    - 用户把当前这条再标成未读时 `markUnread`，并 `releaseViewed()`。`publish` 不会把已读行翻回去
    - 列表只用 `unreadItems()` / `unreadCount()`
 5. `items()` 每条必须带 `unread: true`。没有这个标志，或已读，聚合器直接丢掉，角标不加。

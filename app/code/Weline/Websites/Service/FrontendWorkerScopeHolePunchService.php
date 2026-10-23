@@ -77,6 +77,10 @@ final class FrontendWorkerScopeHolePunchService
                 if ($decision->isOff() || $decision->isShadow() || !$decision->tokenEnabled) {
                     return null;
                 }
+                // Fast path still owes the Theme application input: ScopeBootstrap
+                // reads the current generation right after punch, and without the
+                // context it falls back to the module default theme (t1).
+                $this->ensureThemeApplicationContext($existingBinding->scope);
                 $this->expireLegacyScopeBootstrapCookies($response);
                 $response->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
                 $response->setHeader('Pragma', 'no-cache');
@@ -153,6 +157,7 @@ final class FrontendWorkerScopeHolePunchService
         }
 
         $cookieName = FrontendWorkerSessionService::scopeCookieName();
+        $this->ensureThemeApplicationContext($scope);
         $this->expireLegacyScopeBootstrapCookies($response);
         $response->setCookie(
             $cookieName,
@@ -288,6 +293,27 @@ final class FrontendWorkerScopeHolePunchService
             }
             $seen[$name] = true;
             $response->setCookie($name, '', 1, '/', '', true, true, 'Lax');
+        }
+    }
+
+    /**
+     * Install the website Theme application for the verified Scope before callers
+     * read the storefront generation. Fast-path cookie reuse and QueryBin both
+     * need this; otherwise generation falls back to the module default theme.
+     */
+    private function ensureThemeApplicationContext(ScopeIdentity $scope): void
+    {
+        if (\Weline\Framework\Runtime\ThemeApplicationContext::current('frontend') !== null) {
+            return;
+        }
+        try {
+            $events = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+            $events->dispatch('Weline_Framework::App::application_context_ready', [
+                'area' => 'frontend',
+                'navigation_scope' => null,
+                'scope_identity' => $scope,
+            ]);
+        } catch (\Throwable) {
         }
     }
 

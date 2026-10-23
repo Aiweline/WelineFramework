@@ -5538,7 +5538,8 @@ function wlsDispatchRequestFiberStep(
         &$fiberAdmissionWaiters,
         $fiberMaxActive,
         $fiberAdmissionQueueWaitMs,
-        $fiberAdmissionQueueSliceMs
+        $fiberAdmissionQueueSliceMs,
+        $handleStartTime,
     ) {
         try {
             wlsFiberRequestContextEnter($fiberConn, $fiberConnId);
@@ -5626,6 +5627,7 @@ function wlsDispatchRequestFiberStep(
                 }
             );
             \Weline\Server\Service\WorkerMemoryExhaustionResponder::attach($fiberConn);
+            $admissionWaitMs = \round((wlsWorkerMonotonicNow() - $handleStartTime) * 1000, 2);
             return handleRequest(
                 $rawRequest,
                 $runtime,
@@ -5645,6 +5647,8 @@ function wlsDispatchRequestFiberStep(
                 $transportPeer,
                 $policyDecision,
                 $longLivedConnections,
+                0,
+                $admissionWaitMs,
             );
         } catch (\Weline\Framework\Runtime\RequestExitException $e) {
             $fiberResults[$fiberConnId] = [
@@ -6270,6 +6274,7 @@ function handleRequest(
     ?\Weline\Server\Security\WorkerPolicyDecision $precomputedPolicyDecision = null,
     array $longLivedConnections = [],
     int $http2ConnectionCount = 0,
+    float $admissionWaitMs = 0.0,
 ): string {
     $policyDecision = $precomputedPolicyDecision
         ?? \Weline\Server\Security\WorkerPolicyKernel::instance()->evaluate($rawRequest, $transportPeer);
@@ -6277,6 +6282,7 @@ function handleRequest(
         return (string)$policyDecision->response;
     }
     $policyServerInfo = $policyDecision->requestServerInfo();
+    $policyServerInfo['WLS_ADMISSION_WAIT_MS'] = (string)\max(0, $admissionWaitMs);
 
     // Host/Method/URI 已由统一策略内核完成一次解析与验证。
     $uri = $policyDecision->path;

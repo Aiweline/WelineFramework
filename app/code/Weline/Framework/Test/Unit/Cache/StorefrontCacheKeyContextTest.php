@@ -71,7 +71,10 @@ final class StorefrontCacheKeyContextTest extends TestCase
         self::assertArrayHasKey('page_generation', $dimensions);
         // page_generation 语义：主题 code/版本号参与，但至少含部署构建号。
         self::assertNotSame('', (string)$dimensions['page_generation']);
-        self::assertStringEndsWith(\Weline\Framework\Deploy\StaticBuildId::current(), (string)$dimensions['page_generation']);
+        self::assertMatchesRegularExpression(
+            '/' . \preg_quote(\Weline\Framework\Deploy\StaticBuildId::current(), '/') . '(?:~e\d+)?$/',
+            (string)$dimensions['page_generation'],
+        );
     }
 
     public function testScopeAndVersionAreFrozenOnceAndSharedByAllKeyBuilders(): void

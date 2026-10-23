@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Console\Console\Framework;
 
 use Weline\Framework\Compilation\FrameworkCompiler;
+use Weline\Framework\Compilation\GenerationRepairService;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Output\Cli\Printing;
@@ -20,6 +21,25 @@ final class Compile extends CommandAbstract
     public function execute(array $args = [], array $data = []): void
     {
         $output = BP . 'generated' . DS . 'framework';
+
+        if (\in_array('--ensure', $GLOBALS['argv'] ?? [], true)) {
+            $result = (new GenerationRepairService())->ensure(
+                BP . 'app' . DS . 'code' . DS . 'Weline',
+                $output,
+            );
+            $reason = (string)($result['reason'] ?? '');
+            if ($reason === 'valid') {
+                $this->printing->success(__('编译产物已是最新，无需重建。'));
+                return;
+            }
+            if ($reason === 'repaired') {
+                $this->printing->success(__('编译产物已失效，已重建并通过校验。'));
+                return;
+            }
+            $this->printing->error(__('编译产物自愈失败：') . (string)($result['error'] ?? $reason));
+            exit(1);
+        }
+
         $result = $this->compiler->compile(BP . 'app' . DS . 'code' . DS . 'Weline', $output);
 
         $this->printing->success(__(

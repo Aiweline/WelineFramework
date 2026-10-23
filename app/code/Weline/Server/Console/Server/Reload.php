@@ -23,6 +23,7 @@ use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Observer\CliCommandExecutedObserver;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\Edge\Nginx\HostNginxFpcDiskPublisher;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\Runtime\WorkerRestartBatchPlanner;
 use Weline\Server\Service\Runtime\ServerLifecycleOperationLock;
@@ -172,11 +173,13 @@ class Reload extends CommandAbstract
             // ManagedNginxConfigWriter::write + nginx -s reload run after Workers are up.
             if ($exitCode === 0) {
                 $this->refreshManagedNginxAfterWorkerReload();
+                $this->refreshHostNginxFpcDisk($instanceName);
                 $this->adviseSharedSidecarWireRotationIfNeeded();
             }
         } else {
             $exitCode = $this->executeReloadAsync($instanceName, $reloadType, $forceMode);
             if ($exitCode === 0) {
+                $this->refreshHostNginxFpcDisk($instanceName);
                 $this->printer->note(__(
                     '异步重载未刷新托管 Nginx；若改了 Edge 配置请另执行：php bin/w server:nginx:reload'
                 ));
@@ -429,6 +432,45 @@ class Reload extends CommandAbstract
                 'Worker 已重载，但托管 Nginx 刷新异常：%{1}。请项目经理另批：php bin/w server:nginx:reload',
                 [$e->getMessage()],
             ));
+        }
+    }
+
+    /**
+     * Host Nginx (宝塔 / system nginx) owns its own vhost config. After Worker
+     * reload, write the same w_pg map + html-disk location the managed edge has
+     * and reload it, so host-edge rollouts load the current FPC generation too.
+     */
+    protected function refreshHostNginxFpcDisk(string $instanceName): void
+    {
+        try {
+            $manager = ObjectManager::getInstance(ServerInstanceManager::class);
+            $info = $manager->getInstanceInfo($instanceName);
+            $raw = $manager->getRawInstanceData($instanceName);
+            if ($info === null || !\is_array($raw)) {
+                return;
+            }
+            $publicHost = \trim((string)($raw['public_host'] ?? $raw['host'] ?? ''));
+            if ($publicHost === ''
+                || \filter_var($publicHost, FILTER_VALIDATE_IP) !== false
+            ) {
+                return;
+            }
+            $result = (new HostNginxFpcDiskPublisher())->publish((string)\BP, $publicHost, (int)$info->port);
+            if (($result['reloaded'] ?? false) === true) {
+                $this->printer->success(__('宿主 Nginx 已加载当前 FPC 世代配置。'));
+                return;
+            }
+            if (($result['skipped'] ?? false) === true) {
+                return;
+            }
+            if (($result['ok'] ?? false) !== true) {
+                $this->printer->warning(__(
+                    '宿主 Nginx FPC 配置未加载：%{1}',
+                    [(string)($result['message'] ?? 'unknown')],
+                ));
+            }
+        } catch (\Throwable $e) {
+            $this->printer->warning(__('宿主 Nginx FPC 刷新异常：%{1}', [$e->getMessage()]));
         }
     }
 

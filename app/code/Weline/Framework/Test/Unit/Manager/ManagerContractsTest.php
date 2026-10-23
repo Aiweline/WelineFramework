@@ -11,6 +11,7 @@ use Weline\Framework\Runtime\Preload\Provider\ObjectMetadataPreloadProvider;
 use Weline\Framework\Runtime\Preload\WorkerPreloadContext;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeInterface;
+use Weline\Framework\Compilation\ReleaseStamp;
 
 /**
  * Aggregated contract suite (merged from 1 *ContractTest files).
@@ -179,16 +180,16 @@ private function assert_ObjectManagerReflectionArtifact_testPreloadAcceptsV2AndE
 
 private function resetPreloadState_ObjectManagerReflectionArtifact(): void
 {
+    // 这些用例验证逐类校验路径本身，必须显式关闭发布戳信任。
+    ReleaseStamp::set([]);
     $this->writeObjectManagerProperty_ObjectManagerReflectionArtifact('precompiledMetadata', null);
     $this->writeObjectManagerProperty_ObjectManagerReflectionArtifact('precompiledLoaded', false);
     $this->writeObjectManagerProperty_ObjectManagerReflectionArtifact('precompiledMetadataSourceSignatures', []);
     $this->writeObjectManagerProperty_ObjectManagerReflectionArtifact('precompiledMetadataRejectReason', null);
-    $this->writeObjectManagerProperty_ObjectManagerReflectionArtifact('precompiledMetadataTrustedAfterPreload', false);
     $this->writeObjectManagerProperty_ObjectManagerReflectionArtifact('compiledFactories', null);
     $this->writeObjectManagerProperty_ObjectManagerReflectionArtifact('compiledFactoriesLoaded', false);
     $this->writeObjectManagerProperty_ObjectManagerReflectionArtifact('compiledFactorySourceSignatures', []);
     $this->writeObjectManagerProperty_ObjectManagerReflectionArtifact('compiledFactoriesRejectReason', null);
-    $this->writeObjectManagerProperty_ObjectManagerReflectionArtifact('compiledFactoriesTrustedAfterPreload', false);
     $this->writeObjectManagerProperty_ObjectManagerReflectionArtifact('currentSourceSignatures', []);
     $this->writeObjectManagerProperty_ObjectManagerReflectionArtifact('methodParamsMetadata', []);
 }

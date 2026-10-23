@@ -550,7 +550,7 @@ final class LayoutWorkspace implements LayoutWorkspaceInterface
         if ($identity->targetType !== 'cms_page'
             || $identity->targetId !== $pageId
             || $pageId < 1
-            || $storeId < 1
+            || $storeId < 0
             || $scopeIdentity->scopeKind !== ScopeIdentity::KIND_STORE
             || $scopeIdentity->websiteId !== $websiteId
             || !hash_equals($identity->localeCode, $localeCode)

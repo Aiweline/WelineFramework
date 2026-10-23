@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Runtime;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Compilation\ReleaseStamp;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeInterface;
@@ -40,14 +41,14 @@ final class ObjectManagerRuntimeMetadataPreloadTest extends TestCase
 
     private function resetPreloadState(): void
     {
+        // 这些用例验证逐类校验路径本身，必须显式关闭发布戳信任。
+        ReleaseStamp::set([]);
         $this->writeObjectManagerProperty('precompiledMetadata', null);
         $this->writeObjectManagerProperty('precompiledLoaded', false);
         $this->writeObjectManagerProperty('precompiledMetadataRejectReason', null);
-        $this->writeObjectManagerProperty('precompiledMetadataTrustedAfterPreload', false);
         $this->writeObjectManagerProperty('compiledFactories', null);
         $this->writeObjectManagerProperty('compiledFactoriesLoaded', false);
         $this->writeObjectManagerProperty('compiledFactoriesRejectReason', null);
-        $this->writeObjectManagerProperty('compiledFactoriesTrustedAfterPreload', false);
         $this->writeObjectManagerProperty('generatedPluginRegistry', null);
         $this->writeObjectManagerProperty('generatedPluginRegistryMtime', null);
     }

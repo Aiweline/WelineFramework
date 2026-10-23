@@ -25,7 +25,7 @@ final readonly class CmsEditorContext
     ) {
         if (
             $websiteId < 0
-            || $storeId < 1
+            || $storeId < 0
             || $scopeIdentity->scopeKind !== ScopeIdentity::KIND_STORE
             || $scopeIdentity->websiteId !== $websiteId
             || !hash_equals((string)$scopeIdentity->websiteCode, $websiteCode)

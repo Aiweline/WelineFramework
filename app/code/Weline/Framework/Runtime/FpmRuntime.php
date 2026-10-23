@@ -24,9 +24,9 @@ class FpmRuntime implements RuntimeInterface
             return;
         }
 
-        if (\defined('PROD') && PROD) {
-            ContainerRuntime::preflight();
-        }
+        // 编译容器 preflight 必须早于 App::init()（04-performance-budget）。PROD 常量要到
+        // App::init() 内部才定义，所以这里不再用 PROD 做门禁：缺产物由发布戳在引导层 fail-fast。
+        ContainerRuntime::preflight();
         App::init();
         $this->bootstrapped = true;
     }

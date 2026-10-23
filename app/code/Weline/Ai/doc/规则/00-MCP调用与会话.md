@@ -304,6 +304,19 @@ SessionStart / `prepare_project.agent_guidance.learning_conflicts` 出现 `user_
 
 权威：`HardConstraintsCatalog` → `session_learning_knowledge_conflict_gate` / `learning_rule_extraction_must_be_abstract`。
 
+### 6.3 经验台账与自我进化（`session_learning_knowledge_conflict_gate` 的扩展，强制）
+
+| 允许 / 必须 | 禁止 |
+|---|---|
+| 开工先加载经验：Weline 仓内以 MCP 学习库为准（`prepare_project.agent_guidance.learning_conflicts`、`resolve_task_context.rules`、`learningctl`）；跨项目工作法读宿主台账 `~/.dsh/learnings/<project>.jsonl`（`php ~/.dsh/bin/learning.php check --project=<p>`） | 不查经验直接开工；把宿主台账当成项目知识权威 |
+| 收尾/纠偏后记录：`add --rule --evidence`（MCP 用 `learningctl evidence/outcome`）；只记可复用、可被违反、有证据的通则 | 记一次性事实、原样聊天、未验证猜测；把特例写成规则（见 §6.2） |
+| 冲突：新证据 `supersede --id --by --reason`（MCP 标 contested/revised 并等用户裁决），历史保留 | 静默覆盖 validated 知识；手改他人台账行 |
+| 重大不符合：需求违反 active 经验（P0/P1、发布、安全、并发）时，先警告「经验 id + 具体风险 + 替代方案」，用户裁决后再做 | 明知违反仍静默执行 |
+| 用户指定方案：最高权威，`add --source=user` 并 supersede 冲突项（自我进化），后续按新方案执行 | 口头答应但不更新经验，下个会话又回到旧规则 |
+
+- 宿主全局规则：`~/.dsh/AGENTS.md`「自我进化」节；双写镜像 `~/.cursor/rules/learning-ledger-self-evolution.mdc`。
+- 并发安全：append-only + `flock`；不同会话各自追加，冲突用 supersede 表达。
+
 ## 7. 工作区不可丢弃（`preserve_dirty_workspace`，严重）
 
 MCP 的自愈、宿主重载、插件代次刷新、验证回滚和崩溃恢复，以及普通宿主编辑，都必须保留任务开始前已经存在的 tracked、staged、untracked 与 ignored 脏改。

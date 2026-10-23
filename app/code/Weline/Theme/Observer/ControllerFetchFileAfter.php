@@ -900,21 +900,18 @@ HTML;
      */
     private function resolveThemePublishedVersion(): array
     {
-        static $cached = null;
-        if (\is_array($cached)) {
-            return $cached;
-        }
+        // 不能进程级 static 缓存：WLS 下首个请求可能早于 Scope/主题上下文，
+        // 会把默认主题 t1 永久粘到后续所有请求（前端 t1 / API t2 世代分裂）。
         try {
             /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
             $resolver = ObjectManager::getInstance(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class);
-            $cached = $resolver->resolve();
-            return $cached;
+
+            return $resolver->resolve();
         } catch (\Throwable) {
-            $cached = [
+            return [
                 'themePublishedVersionId' => '',
                 'themePublishedVersion' => '',
             ];
-            return $cached;
         }
     }
 

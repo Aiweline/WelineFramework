@@ -262,7 +262,7 @@ private function assert_CompileTimeStaticMirror_testThemeFontLiteralAttrsBakeSty
     self::assertIsString($result);
     self::assertStringContainsString('data-weline-font', $result);
     self::assertStringContainsString('@font-face', $result);
-    self::assertStringContainsString('/pub/media/font-subset/', $result);
+    self::assertStringContainsString('/media/font-subset/', $result);
     self::assertStringNotContainsString('<?php', $result, 'literal theme:font must bake HTML, not emit PHP');
     self::assertStringNotContainsString('FontFaceService', $result);
 }

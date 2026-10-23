@@ -4342,6 +4342,8 @@ private function assert_ThemeLayoutScopeSlotMerge_testThemeRuntimeCacheCleanerPu
     self::assertStringContainsString('function clearScopedCaches(', $cleaner);
     self::assertStringContainsString('function invalidateAfterVersionPublish(', $cleaner);
     self::assertStringContainsString('theme_namespace_generations_all', $cleaner);
+    self::assertStringContainsString('liveWebsiteCodes', $cleaner);
+    self::assertStringContainsString('forgetExact', $cleaner);
     $request = $this->read_ThemeLayoutScopeSlotMerge('app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspaceRequestService.php');
     self::assertStringContainsString('invalidateAfterVersionPublish(', $request);
     self::assertStringNotContainsString('clearAllThemeRelatedCaches(', $request);

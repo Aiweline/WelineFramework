@@ -727,14 +727,20 @@ class Core
             # 如果后缀是静态文件后缀 .css,.js,.jpg,.png,.jpeg,.gif,.svg,.ico,.woff,.woff2,.eot,.ttf,.otf,.ttf2,.woff3,.mp4,.mp3,.m3u8,.webp
             $isStaticFile = $this->isStaticFile();
             if ($isStaticFile) {
-                // 确保 $url 不为 null，缓存未命中时从请求中获取
-                if ($url === null || $url === false || $url === '') {
-                    $url = (string) (\w_env('parser_url', '') ?? '');
+                // 缓存未命中时取请求路径；`parser_url` 是「是否解析 URL」的布尔开关，不是路径。
+                if (!\is_string($url) || $url === '') {
+                    $url = $this->getStrippedUrlPath();
                 }
-                if ($url !== '') {
+                // 只接管模块代码静态（含 view 段）；其它带扩展名的路径继续走路由（RSS、动态 feed 等）。
+                $isCodeStatic = \in_array(
+                    \Weline\Framework\View\Data\DataInterface::dir,
+                    \explode('/', \trim($url, '/')),
+                    true
+                );
+                if ($isCodeStatic) {
                     try {
                         // StaticFile 会抛出 StaticFileException，由 Runtime 层统一处理
-                        $this->StaticFile($url, true);
+                        $this->StaticFile($url);
                     } catch (\Weline\Framework\Http\StaticFileException $e) {
                         // 静态文件响应异常，直接向上抛出由 Runtime 层处理
                         throw $e;
@@ -1504,11 +1510,77 @@ class Core
     }
 
     /**
+     * 输出调用方已解析并限定在自身根目录内的磁盘文件（模块 statics、pub/static、媒体等）。
+     *
+     * `StaticFile()` 的 `$is_media` 只解析媒体根；其它根的预路由处理器须先把请求路径
+     * 解析成真实文件再交给本方法，禁止把 BP 相对路径借媒体模式拼接。
+     *
+     * @throws \Weline\Framework\Http\ResponseTerminateException 200/304 文件响应
+     */
+    public function serveStaticFile(string $filename, string $url): never
+    {
+        Cookie::static_file();
+        if (!\is_file($filename)) {
+            $this->request->getResponse()->noRouter();
+        }
+        // 静态公共面统一口径（唯一权威：Framework\Deploy\StaticPublicSurface）。
+        //
+        // 传输层 `worker(_ssl).php::handleStaticFile()` 的扩展名白名单只是
+        // 「快路径」——不匹配时它 `return null`，请求会落到这里。若此处不设防，
+        // 「传输层不接管」就会被当成「允许」，而原本唯一的守卫是
+        // 「路径含 view」，随后 `file_get_contents()` 原样回吐。
+        // 实测（纯 WLS、不经 nginx）：`/static/.../view/statics/x.php`
+        // → 200 `text/x-php`，PHP 源码泄露。故此处必须执行完整口径。
+        if (!\Weline\Framework\Deploy\StaticPublicSurface::isServableFile($filename)) {
+            $this->request->getResponse()->noRouter();
+        }
+
+        $fileModificationTime = gmdate('D, d M Y H:i:s', filemtime($filename)) . ' GMT';
+        $ifModifiedSince = $this->getRequestHeaderValue($this->getRequestHeaders(), 'If-Modified-Since');
+        if ($ifModifiedSince === $fileModificationTime) {
+            $response304 = (new Response(true))
+                ->setHeaders($this->buildCacheHeaders($fileModificationTime, $filename, $url))
+                ->setHttpResponseCode(304)
+                ->setBody('');
+            throw new \Weline\Framework\Http\ResponseTerminateException($response304);
+        }
+
+        $cacheHeaders = $this->buildCacheHeaders($fileModificationTime, $filename, $url);
+
+        $filename_arr = explode('.', $filename);
+        $file_ext = end($filename_arr);
+        if ($file_ext === 'css') {
+            $mime_type = 'text/css';
+        } elseif ($file_ext === 'js') {
+            $mime_type = 'text/javascript';
+        } elseif (\strtolower((string)$file_ext) === 'm4a') {
+            // finfo 常把 m4a 报成 video/mp4；音频直出统一 audio/mp4 便于 <audio> 播放
+            $mime_type = 'audio/mp4';
+        } elseif (\strtolower((string)$file_ext) === 'aac') {
+            $mime_type = 'audio/aac';
+        } else {
+            $fi = new \finfo(FILEINFO_MIME_TYPE);
+            $mime_type = $fi->file($filename);
+        }
+
+        $responseHeaders = array_merge($cacheHeaders, [
+            'Content-Type' => $mime_type,
+            'Content-Length' => (string)\filesize($filename),
+        ]);
+
+        $fileResponse = (new Response(true))
+            ->setHeaders($responseHeaders)
+            ->setHttpResponseCode(200)
+            ->setBody((string)\file_get_contents($filename));
+        throw new \Weline\Framework\Http\ResponseTerminateException($fileResponse);
+    }
+
+    /**
      * @DESC         |返回开发静态文件
      *
      * 参数区：
      *
-     * @param string $url
+     * @param string $url 模块静态 URL（相对 app/code），`$is_media` 时为媒体 URL（只解析媒体根）
      * @param bool $is_media
      * @return mixed
      * @throws Exception
@@ -1519,6 +1591,10 @@ class Core
     {
         # 卸载Cookie
         Cookie::static_file();
+        $urlPath = (string)\parse_url(\str_replace('\\', '/', $url), PHP_URL_PATH);
+        if (\in_array('..', \explode('/', $urlPath), true) || \str_contains($urlPath, "\0")) {
+            $this->request->getResponse()->noRouter();
+        }
         if ($is_media) {
             $filename = \Weline\Framework\App\DirectoryList::mediaAbsoluteFromUrlPath($url);
             $filename = str_replace('/', DS, $filename);
@@ -1539,67 +1615,17 @@ class Core
             $filename = VENDOR_PATH . trim($url, DS);
             if (!is_file($filename)) {
                 # 检测vendor目录的组件文件
-                $split_array = explode('/', $url);
+                $split_array = explode('/', trim($url, '/'));
                 $module = array_shift($split_array) . '_' . array_shift($split_array);
-                $base_path = Env::getInstance()->getModuleInfo($module)['base_path'] ?? '';
-                $filename = $base_path . trim(implode('/', $split_array), DS);
-                $filename = str_replace('/', DS, $filename);
+                $base_path = (string)(Env::getInstance()->getModuleInfo($module)['base_path'] ?? '');
+                if ($base_path !== '') {
+                    $filename = $base_path . trim(implode('/', $split_array), DS);
+                    $filename = str_replace('/', DS, $filename);
+                }
             }
         }
         if (is_file($filename)) {
-            // 静态公共面统一口径（唯一权威：Framework\Deploy\StaticPublicSurface）。
-            //
-            // 传输层 `worker(_ssl).php::handleStaticFile()` 的扩展名白名单只是
-            // 「快路径」——不匹配时它 `return null`，请求会落到这里。若此处不设防，
-            // 「传输层不接管」就会被当成「允许」，而本方法原本唯一的守卫是
-            // 「路径含 view」，随后 `file_get_contents()` 原样回吐。
-            // 实测（纯 WLS、不经 nginx）：`/static/.../view/statics/x.php`
-            // → 200 `text/x-php`，PHP 源码泄露。故此处必须执行完整口径。
-            if (!\Weline\Framework\Deploy\StaticPublicSurface::isServableFile($filename)) {
-                $this->request->getResponse()->noRouter();
-            }
-
-            // Handle caching
-            $fileModificationTime = gmdate('D, d M Y H:i:s', filemtime($filename)) . ' GMT';
-            $ifModifiedSince = $this->getRequestHeaderValue($this->getRequestHeaders(), 'If-Modified-Since');
-            if ($ifModifiedSince === $fileModificationTime) {
-                $response304 = (new Response(true))
-                    ->setHeaders($this->buildCacheHeaders($fileModificationTime, $filename, $url))
-                    ->setHttpResponseCode(304)
-                    ->setBody('');
-                throw new \Weline\Framework\Http\ResponseTerminateException($response304);
-            }
-            
-            // 构建缓存响应头
-            $cacheHeaders = $this->buildCacheHeaders($fileModificationTime, $filename, $url);
-
-            $filename_arr = explode('.', $filename);
-            $file_ext = end($filename_arr);
-            if ($file_ext === 'css') {
-                $mime_type = 'text/css';
-            } elseif ($file_ext === 'js') {
-                $mime_type = 'text/javascript';
-            } elseif (\strtolower((string)$file_ext) === 'm4a') {
-                // finfo 常把 m4a 报成 video/mp4；音频直出统一 audio/mp4 便于 <audio> 播放
-                $mime_type = 'audio/mp4';
-            } elseif (\strtolower((string)$file_ext) === 'aac') {
-                $mime_type = 'audio/aac';
-            } else {
-                $fi = new \finfo(FILEINFO_MIME_TYPE);
-                $mime_type = $fi->file($filename);
-            }
-
-            // 合并响应头
-            $responseHeaders = array_merge($cacheHeaders, [
-                'Content-Type' => $mime_type,
-                'Content-Length' => (string)\filesize($filename),
-            ]);
-            
-            $fileResponse = (new Response(true))
-                ->setHeaders($responseHeaders)
-                ->setHttpResponseCode(200)
-                ->setBody((string)\file_get_contents($filename));
-            throw new \Weline\Framework\Http\ResponseTerminateException($fileResponse);
+            $this->serveStaticFile($filename, $url);
         }
         // 文件不存在：后缀为 .css/.js 时返回 404 + 对应 MIME，避免浏览器 MIME 严格检查报错
         $url_path = preg_replace('/\?.*/', '', str_replace('\\', '/', trim($url, '/')));

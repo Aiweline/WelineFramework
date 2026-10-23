@@ -6,6 +6,7 @@ namespace Weline\Framework\Test\Unit\Deploy;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Deploy\StaticAssetHtmlRewriter;
+use Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime;
 
 /**
  * 最终 HTML 统一加构建代次：历史硬编码 /static/ 也覆盖；已版本化/内容寻址不重复加。
@@ -37,6 +38,31 @@ final class StaticAssetHtmlRewriterTest extends TestCase
         self::assertSame(1, \substr_count($out, '/static/' . self::ID . '/Weline/Frontend/js/already.js'));
         // 外部 URL 不动
         self::assertStringContainsString('https://cdn.example.com/static/Weline/x.js', $out);
+    }
+
+    public function testRealignsStaleThemePairToAppliedPair(): void
+    {
+        ThemeUpdateRuntime::forceBatch([
+            'batch_id' => 'tu-test',
+            'static_ns' => 'tu-test',
+            'entity_root' => 'tu-test',
+            'theme_prefix' => 'Weline/hanfu',
+            'epoch' => 1,
+            'pair_segment' => 'hanfu/v3',
+        ]);
+        try {
+            $html = '<script src="/static/theme/v1/' . self::ID . '/Weline/Theme/view/theme/frontend/assets/js/a.js?v=1"></script>'
+                . '<script src="/static/' . self::ID . '/Weline/Frontend/js/b.js"></script>';
+            $out = StaticAssetHtmlRewriter::rewrite($html, self::ID);
+            self::assertStringContainsString(
+                '/static/hanfu/v3/' . self::ID . '/Weline/Theme/view/theme/frontend/assets/js/a.js?v=1',
+                $out,
+            );
+            self::assertStringNotContainsString('/static/theme/v1/', $out);
+            self::assertSame(1, \substr_count($out, '/static/' . self::ID . '/Weline/Frontend/js/b.js'));
+        } finally {
+            ThemeUpdateRuntime::reset();
+        }
     }
 
     public function testNoopWithoutBuildIdOrStaticReference(): void

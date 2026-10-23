@@ -1177,6 +1177,38 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
     }
 
     /**
+     * 通用支付方式扩展点：Payment 等模块按 method_code 注册前端 handler，
+     * 结账页不引用任何具体支付方式的全局对象/函数。
+     * handler 契约：{ isActive(paymentMethod): boolean, handleSubmit(ctx): Promise<boolean> }
+     */
+    window.WelineCheckout = window.WelineCheckout || {};
+    if (!window.WelineCheckout.paymentHandlers || typeof window.WelineCheckout.paymentHandlers !== 'object') {
+        window.WelineCheckout.paymentHandlers = {};
+    }
+    if (typeof window.WelineCheckout.registerPaymentHandler !== 'function') {
+        window.WelineCheckout.registerPaymentHandler = function (methodCode, handler) {
+            const code = String(methodCode || '').trim().toLowerCase();
+            if (!code || !handler || typeof handler.handleSubmit !== 'function') {
+                return false;
+            }
+            window.WelineCheckout.paymentHandlers[code] = handler;
+            return true;
+        };
+    }
+    if (typeof window.WelineCheckout.getPaymentHandler !== 'function') {
+        window.WelineCheckout.getPaymentHandler = function (methodCode) {
+            const code = String(methodCode || '').trim().toLowerCase();
+            return code && window.WelineCheckout.paymentHandlers[code]
+                ? window.WelineCheckout.paymentHandlers[code]
+                : null;
+        };
+    }
+    try {
+        document.dispatchEvent(new CustomEvent('weline:checkout:payment-handlers-ready'));
+    } catch (eHandlersReady) {
+    }
+
+    /**
      * Buy-now / retail-only handoff: ?cart_type= | ?type= | ?selling_mode= toc|tob wins for this page view.
      * Sets data-cart-type-handoff so B2B chrome sync does not overwrite with tob cookie.
      * Does not rewrite weline_selling_mode cookie (keep global wholesale preference).
@@ -4179,7 +4211,8 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         if (window.WelineB2BCheckoutTob && typeof window.WelineB2BCheckoutTob.syncFromFrozen === 'function') {
             window.WelineB2BCheckoutTob.syncFromFrozen(frozen);
         }
-        const idempotencyKey = newIdempotencyKey(opts.idempotency_prefix || 'checkout_ui_');
+        const idempotencyKey = text(opts.idempotency_key).trim()
+            || newIdempotencyKey(opts.idempotency_prefix || 'checkout_ui_');
         const submitPayload = {
             quote_token: quoteToken,
             payment_method: paymentMethod,
@@ -4195,9 +4228,17 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         if (opts.express_checkout) {
             submitPayload.express_checkout = true;
         }
+        // Payment method requests a provider-defined browser action instead of a redirect.
+        if (opts.client_action) {
+            submitPayload.client_action = true;
+        }
         const result = await api.submitV2(submitPayload);
         if (!result || result.success === false) {
             throw new Error(text(result && result.message) || copy.load_failed);
+        }
+        // Payment handler owns the post-submit flow (client action + confirmPaymentV2).
+        if (opts.defer_result) {
+            return result;
         }
         handlePaymentResult(result, {
             quote_token: quoteToken,
@@ -4267,6 +4308,44 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
             setMessage(isContinuePayMode()
                 ? (copy.continue_pay_submitting || copy.submitting)
                 : copy.submitting, '');
+            // Generic payment extension point: a payment method may register a handler
+            // for submitV2(client_action) + its own client flow + confirmPaymentV2.
+            // If the handler declines, the normal redirect checkout below still runs.
+            const paymentHandler = window.WelineCheckout
+                && typeof window.WelineCheckout.getPaymentHandler === 'function'
+                ? window.WelineCheckout.getPaymentHandler(paymentMethod)
+                : null;
+            if (paymentHandler
+                && typeof paymentHandler.isActive === 'function'
+                && paymentHandler.isActive(paymentMethod)) {
+                let handled = false;
+                try {
+                    handled = await paymentHandler.handleSubmit({
+                        paymentMethod: paymentMethod,
+                        submitCheckoutPayment: submitCheckoutPayment,
+                        handlePaymentResult: handlePaymentResult,
+                        // Generic confirm callback: payment modules never call Checkout APIs directly.
+                        confirmPayment: async function (payload) {
+                            const api = await getApi();
+                            return api.confirmPaymentV2(payload);
+                        },
+                        showMessage: setMessage,
+                    });
+                } catch (paymentHandlerError) {
+                    setMessage(paymentHandlerError && paymentHandlerError.message
+                        ? paymentHandlerError.message
+                        : copy.load_failed, 'error');
+                }
+                if (handled) {
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                        setText(submitButton, isContinuePayMode()
+                            ? (copy.continue_payment || copy.submit)
+                            : copy.submit);
+                    }
+                    return;
+                }
+            }
             try {
                 const result = await submitCheckoutPayment(paymentMethod, {
                     require_form_validity: true,

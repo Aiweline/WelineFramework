@@ -27,6 +27,7 @@ use Weline\Payment\Interface\ProviderConnectPrepareInterface;
 use Weline\Payment\Interface\ProviderInterface;
 use Weline\Payment\Interface\ProviderShipmentTrackingInterface;
 use Weline\Payment\Service\PayPalApiClient;
+use Weline\Payment\Service\PayPalJsSdkUrlBuilder;
 use Weline\Payment\Service\PayPalPlatformCredentialService;
 use Weline\Payment\Service\PayPalShipmentTrackingSyncService;
 use Weline\Payment\Service\PaymentConfigValidationService;
@@ -73,20 +74,26 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                 'https://www.paypal.com',
                 'https://www.sandbox.paypal.com',
                 'https://www.paypalobjects.com',
+                'https://c.paypal.com',
             ],
             'frame-src' => [
                 'https://www.paypal.com',
                 'https://www.sandbox.paypal.com',
+                'https://c.paypal.com',
             ],
             'connect-src' => [
                 'https://www.paypal.com',
                 'https://www.sandbox.paypal.com',
                 'https://api-m.paypal.com',
                 'https://api-m.sandbox.paypal.com',
+                'https://cors.api.paypal.com',
+                'https://cors.api.sandbox.paypal.com',
+                'https://c.paypal.com',
             ],
             'img-src' => [
                 'https://www.paypalobjects.com',
                 'https://www.paypal.com',
+                'https://c.paypal.com',
             ],
         ];
     }
@@ -109,6 +116,10 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
             'express_checkout' => true,
             'express_modes' => ['redirect'],
             'express_next_action' => 'redirect',
+            // 站内银行卡收银台（PayPal Card Fields / ACDC）；是否呈现由商户资格与
+            // payment/method/paypal/card_fields_enabled 共同决定，前端资格不满足时回退跳转。
+            'card_fields' => true,
+            'card_fields_sca' => 'SCA_WHEN_REQUIRED',
             // CNY/CN：本站默认币种与收货国；Sandbox/部分商户可测，正式以 PayPal 商户能力为准。
             // 欧美主战场 + PayPal 官方可交易币（见 developer.paypal.com/reference/currency-codes）
             'supported_currencies' => [
@@ -322,6 +333,68 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                 $paypalCurrency,
                 $paypalAmountMinor,
             );
+            $useCardFields = !$express
+                && !empty($ctx['client_action'])
+                && $this->canUseCardFields($config, $paypalCurrency, $request->getCurrencyCode());
+            $cardFieldsSdkSrc = '';
+            if ($useCardFields) {
+                $cardFieldsSdkSrc = (new PayPalJsSdkUrlBuilder())->build($config, [
+                    'components' => 'buttons,card-fields,googlepay,applepay',
+                    'currency' => $paypalCurrency,
+                    'intent' => 'capture',
+                ]);
+                // 无 client_id / SDK URL 构建失败时不发卡单，避免产生无法在前端渲染的孤儿订单。
+                $useCardFields = $cardFieldsSdkSrc !== '';
+            }
+            if ($useCardFields) {
+                $order = $this->getApiClient()->createOrder(
+                    $config,
+                    $paypalCurrency,
+                    $paypalAmountMinor,
+                    $referenceId,
+                    $this->resolveShellUrl($request, PaymentOperationRequest::FIELD_RETURN_URL, 'return_url', $config),
+                    $this->resolveShellUrl($request, PaymentOperationRequest::FIELD_CANCEL_URL, 'cancel_url', $config),
+                    array_filter([
+                        'card_fields' => true,
+                        'locale' => (string) ($ctx['locale'] ?? 'en-US'),
+                        'brand_name' => (string) ($config['brand_name'] ?? 'Weline'),
+                        'amount_breakdown' => $breakdown,
+                        'description' => \is_array($breakdown) ? (string) ($breakdown['description'] ?? '') : '',
+                    ], static fn (mixed $v): bool => $v !== null && $v !== ''),
+                );
+
+                return PaymentResult::fromArray([
+                    'status' => PaymentResult::STATUS_REQUIRES_ACTION,
+                    'action_type' => 'card_fields',
+                    'intent_code' => $request->getIntentCode(),
+                    'attempt_code' => $request->getAttemptCode(),
+                    'provider_reference' => $order['order_id'],
+                    'message' => (string) __('PayPal card fields ready.'),
+                    'payload' => [
+                        // 通用客户端动作：Payment 定义 type，Checkout 只透传，不解释。
+                        'client_action' => [
+                            'type' => 'card_fields',
+                            'method_code' => 'paypal',
+                            'provider_code' => 'paypal',
+                            'data' => [
+                                'order_id' => $order['order_id'],
+                                'sdk_src' => $cardFieldsSdkSrc,
+                                'client_id' => (string) ($config['client_id'] ?? ''),
+                                'currency' => $paypalCurrency,
+                                'amount_minor' => $paypalAmountMinor,
+                                'environment' => (string) ($config['environment'] ?? 'sandbox'),
+                                'presentment_currency' => $request->getCurrencyCode(),
+                                'sca_method' => 'SCA_WHEN_REQUIRED',
+                            ],
+                        ],
+                        'order_id' => $order['order_id'],
+                        'environment' => (string) ($config['environment'] ?? 'sandbox'),
+                        'presentment_currency' => $request->getCurrencyCode(),
+                        'paypal_currency' => $paypalCurrency,
+                        'amount_breakdown' => $breakdown,
+                    ],
+                ]);
+            }
             $order = $this->getApiClient()->createOrder(
                 $config,
                 $paypalCurrency,
@@ -366,6 +439,25 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                 'message' => $throwable->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Card Fields 只在「配置开启 + 凭据可用 + 无币种折算」时启用。
+     * 任一不满足都回退 PayPal 跳转，避免卡面金额与订单展示币种不一致。
+     *
+     * @param array<string, mixed> $config
+     */
+    private function canUseCardFields(array $config, string $paypalCurrency, string $presentmentCurrency): bool
+    {
+        $enabled = $config['card_fields_enabled'] ?? '1';
+        if ($enabled === false || $enabled === 0 || $enabled === '0' || $enabled === '' || $enabled === null) {
+            return false;
+        }
+        if (trim((string) ($config['client_id'] ?? '')) === '') {
+            return false;
+        }
+
+        return strtoupper(trim($paypalCurrency)) === strtoupper(trim($presentmentCurrency));
     }
 
     /**

@@ -503,7 +503,7 @@ private function assert_CloudflareHttpClientI18nArgs_testHttpErrorUsesArrayI18nA
 {
     $src = (string) file_get_contents(BP . 'app/code/Weline/Cdn/Service/CloudflareHttpClient.php');
     self::assertStringContainsString("'Cloudflare 请求失败（HTTP %{1}，代码 %{2}）。'", $src);
-    self::assertStringContainsString('[$status, $this->publicErrorCode($decoded)]', $src);
+    self::assertStringContainsString('[$status, $code]', $src);
     self::assertStringNotContainsString("'Cloudflare 请求失败（HTTP %{1}，代码 %{2}）。',\n                    \$status,\n                    \$this->publicErrorCode(\$decoded),", $src);
 }
 

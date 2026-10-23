@@ -88,6 +88,36 @@ $welineProjectAutoloader = static function ($class) {
 };
 \spl_autoload_register($welineProjectAutoloader, true, true);
 
+if (!function_exists('weline_filter_local_classmap')) {
+    /**
+     * @param array<string, mixed> $m
+     * @return array<string, mixed>
+     */
+    function weline_filter_local_classmap(array $m, string $basePath): array
+    {
+        $rootCache = [];
+        foreach ($m as $key => $path) {
+            if (!is_string($path)) {
+                unset($m[$key]);
+                continue;
+            }
+            $relative = str_starts_with($path, $basePath) ? substr($path, strlen($basePath)) : '';
+            $segments = $relative === '' ? [] : explode(DS, $relative);
+            $ownerRoot = count($segments) >= 4
+                ? $basePath . implode(DS, array_slice($segments, 0, 4))
+                : dirname($path);
+            if (!array_key_exists($ownerRoot, $rootCache)) {
+                $rootCache[$ownerRoot] = is_dir($ownerRoot);
+            }
+            if (!$rootCache[$ownerRoot]) {
+                unset($m[$key]);
+            }
+        }
+
+        return $m;
+    }
+}
+
 $autoloader = VENDOR_PATH . 'autoload.php';
 if (\is_file($autoloader)) {
     $composerLoader = require $autoloader;
@@ -123,11 +153,21 @@ if (\is_file($autoloader)) {
     if (\is_file($localClassMapFile) && \method_exists($composerLoader, 'addClassMap')) {
         $localClassMap = @include $localClassMapFile;
         if (\is_array($localClassMap) && $localClassMap !== []) {
-            foreach ($localClassMap as $className => $path) {
-                if (!\is_string($path) || !\is_file($path)) {
-                    unset($localClassMap[$className]);
-                }
+            // 发布戳已覆盖 classmap.php 时直接信任：构建期已做过失效条目治理，
+            // 请求期不再逐条 stat（4–5ms）。DEV/未编译时仍走模块根过滤。
+            $welineTrustClassMap = false;
+            $welineReleaseFile = BP . 'generated' . \DIRECTORY_SEPARATOR . 'framework' . \DIRECTORY_SEPARATOR . 'release.php';
+            if (\is_file($welineReleaseFile)) {
+                $welineRelease = @include $welineReleaseFile;
+                $welineTrustClassMap = \is_array($welineRelease)
+                    && \preg_match('/^[a-f0-9]{64}$/D', (string)($welineRelease['runtime_artifacts']['classmap.php'] ?? '')) === 1;
             }
+            if ($welineTrustClassMap) {
+                \define('WELINE_CLASSMAP_TRUSTED', true);
+            } else {
+                $localClassMap = \weline_filter_local_classmap($localClassMap, BP);
+            }
+            unset($welineRelease, $welineReleaseFile, $welineTrustClassMap);
 
             $composerLoader->addClassMap($localClassMap);
         }

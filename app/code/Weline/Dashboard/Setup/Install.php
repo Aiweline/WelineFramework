@@ -21,7 +21,6 @@ class Install implements InstallInterface
         /** @var ModelSetup $modelSetup */
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($dashboardView);
-        $dashboardView->install($modelSetup, $context);
 
         /** @var DashboardViewService $dashboardViewService */
         $dashboardViewService = ObjectManager::getInstance(DashboardViewService::class);

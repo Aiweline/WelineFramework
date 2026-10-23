@@ -718,8 +718,9 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         if (!$isPrivateSession) {
             $staleCacheKey = $this->buildStaleCacheKey($unifiedCacheKey);
             $staleStoreTtl = self::ANONYMOUS_SHARED_STORE_TTL_SECONDS;
+            // 正文已按 fullUri 外置过一次：stale 键复用同一 body_file，避免重复 rewrite/原子写。
             $stalePayload = $this->stripPlaintextWhenBrotliAuthority(
-                $this->externalizeSharedPayload($staleCacheKey, $payload, $fullUri)
+                $this->externalizeSharedPayload($staleCacheKey, $sharedPayload, $fullUri)
             );
             if ($this->shouldPublishSharedStalePayload($stalePayload)) {
                 self::cooperativeBuildYield();
@@ -727,7 +728,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 self::cooperativeBuildYield();
                 $schemaNeutralStaleKey = $this->buildSchemaNeutralStaleCacheKey($fullUri, $method, $variant);
                 $schemaNeutralStalePayload = $this->stripPlaintextWhenBrotliAuthority(
-                    $this->externalizeSharedPayload($schemaNeutralStaleKey, $payload, $fullUri)
+                    $this->externalizeSharedPayload($schemaNeutralStaleKey, $sharedPayload, $fullUri)
                 );
                 if ($this->shouldPublishSharedStalePayload($schemaNeutralStalePayload)) {
                     $this->cache()->set(
@@ -1327,6 +1328,10 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         if ($method !== 'GET' && $method !== 'HEAD') {
             return null;
         }
+        $requestedGen = \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::requestedPageGeneration($fullUri);
+        if ($requestedGen['present'] && $requestedGen['token'] === null) {
+            return null;
+        }
         $fullUri = $this->canonicalizeFullUriForCacheKey(\trim($fullUri));
         if ($fullUri === '' || !KeyBuilder::isValidFullPageCacheKey($fullUri)) {
             return null;
@@ -1351,6 +1356,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $htmlDisk = FpcHtmlDiskStore::read(
             $fullUri,
             $acceptEncoding !== '' ? $acceptEncoding : $this->clientAcceptEncodingHeader(),
+            $requestedGen['token'],
         );
         if (\is_array($htmlDisk)) {
             $raw = (string)$htmlDisk['body'];
@@ -2419,6 +2425,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             'lang' => $context->lang,
             'default_locale' => $context->defaultLocale,
             'translation_locales' => $context->translationLocales,
+            'page_generation' => StorefrontCacheKeyContext::pageGenerationValue(),
         ];
     }
 
@@ -2675,6 +2682,14 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             } elseif (hash_equals($fingerprint, $currentFingerprint)) {
                 // Soft-serve is only for previous-generation continuity; current
                 // generation must keep using the READY/HIT path.
+                return null;
+            }
+            // 页面世代不同就不用这份回执。旧回执留在内存里，不删，回滚后世代对齐还能命中。
+            $receiptGeneration = \trim((string)($receipt['page_generation'] ?? ''));
+            $currentGeneration = \trim(StorefrontCacheKeyContext::pageGenerationValue());
+            if ($receiptGeneration === '' || $currentGeneration === ''
+                || !\hash_equals($receiptGeneration, $currentGeneration)
+            ) {
                 return null;
             }
         } catch (\Throwable) {
@@ -4995,16 +5010,22 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private function effectiveFpcPolicy(string $fullUri, ?ScopeIdentity $identity = null, ?string $policyPath = null): array
     {
         try {
-            $context = $this->currentStorefrontCacheKeyContext();
-            $identity ??= $context->scopeIdentity;
+            // 调用方已带上回执里的范围时，不要先冻结全局店面上下文。
+            // 那一步会去解析主题页面世代，提前占用本请求的命名空间时钟，
+            // 后面的回执时钟核对就读不到这次请求该看的权威。
+            $context = null;
+            if (!$identity instanceof ScopeIdentity) {
+                $context = $this->currentStorefrontCacheKeyContext();
+                $identity = $context->scopeIdentity;
+            }
             if (!$identity instanceof ScopeIdentity) {
                 // ttl=0 意味着即使发布成功也会立即过期，是「写了却永远读不到」的直接成因之一。
                 FpcDiag::event('fpc_policy', [
                     'fingerprint' => 'scope-unavailable',
                     'ttl' => 0,
                     'enabled' => false,
-                    'context_cacheable' => $context->cacheable,
-                    'context_failure_code' => $context->failureCode,
+                    'context_cacheable' => $context?->cacheable,
+                    'context_failure_code' => $context?->failureCode,
                 ]);
 
                 return ['enabled' => false, 'ttl' => 0, 'policy_fingerprint' => 'scope-unavailable'];
@@ -5231,8 +5252,34 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     }
 
     /**
-     * @return array{response: string, source: string, bytes: int}|null
+     * Html-disk leaf for the generation this request names (`w_pg`), or
+     * `pg/current` when the request does not name one. Does not consult
+     * Shared L2. A named generation with no leaf is a miss.
+     *
+     * @return array{response:string,source:string,bytes:int}|null
      */
+    public function tryFormattedCurrentGenerationDiskHit(
+        string $fullUri,
+        string $method,
+        string $acceptEncoding,
+        string $cookieHeader,
+        bool $keepAlive,
+    ): ?array {
+        $hit = $this->tryFormattedColdDiskDurableHit(
+            $fullUri,
+            $method,
+            $acceptEncoding,
+            $cookieHeader,
+            $keepAlive,
+        );
+        if ($hit === null) {
+            return null;
+        }
+        $hit['source'] = 'html-disk-generation';
+
+        return $hit;
+    }
+
     private function tryFormattedColdDiskDurableHit(
         string $fullUri,
         string $method,
@@ -5880,6 +5927,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             'default_locale',
             'translation_locales',
             'cache_version',
+            'page_generation',
         ] as $field) {
             if (isset($variant[$field]) && (string)$variant[$field] !== '') {
                 $suffix .= '|' . $field . '=' . \rawurlencode((string)$variant[$field]);
@@ -5908,6 +5956,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         $variant['store_mode'] = $dimensions['store_mode'];
         $variant['context_version'] = $dimensions['context_version'];
         $variant['cache_version'] = $dimensions['cache_key_fingerprint'];
+        $variant['page_generation'] = (string)($dimensions['page_generation'] ?? '');
         return $variant;
     }
 

@@ -19,8 +19,6 @@ use Weline\Framework\Database\Connection\Api\Sql\Table\CreateInterface;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
-use Weline\Framework\Setup\Db\AlterWithBackup;
-use Weline\Framework\Setup\Db\Service\FieldBackupService;
 use Weline\Framework\Setup\Data\Context;
 
 /**
@@ -32,7 +30,6 @@ class ModelSetup
 
     private Printing $printing;
     private ?Context $context = null;
-    private ?FieldBackupService $fieldBackupService = null;
 
     /**
      * Setup constructor.
@@ -108,7 +105,7 @@ class ModelSetup
         $alter = $this->model->getConnection()->getConnector()->alterTable()->forTable($this->model->getTable(), $this->model->getPrimaryKey(), $comment, $new_table_name);
         
         // 返回包装类，自动处理字段备份和恢复
-        return new AlterWithBackup($alter, $this);
+        return $alter;
     }
 
     /**
@@ -375,23 +372,6 @@ class ModelSetup
     }
     
     /**
-     * @DESC          # 获取字段备份服务
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 2024/12/XX
-     * 参数区：
-     * @return FieldBackupService
-     */
-    public function getFieldBackupService(): FieldBackupService
-    {
-        if ($this->fieldBackupService === null) {
-            $this->fieldBackupService = ObjectManager::getInstance(FieldBackupService::class);
-        }
-        return $this->fieldBackupService;
-    }
-    
-    /**
      * 获取模型
      */
     public function getModel(): ?AbstractModel
@@ -407,138 +387,4 @@ class ModelSetup
         return $this->context;
     }
     
-    /**
-     * @DESC          # 删除字段（带备份）
-     * 
-     * 在删除字段前自动备份数据，以便后续恢复
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 2024/12/XX
-     * 参数区：
-     * @param string $fieldName 字段名
-     * @param string $moduleName 模块名称（可选，如果未提供则从Context获取）
-     * @param string $version 模块版本（可选，如果未提供则从Context获取）
-     * @return AlterInterface
-     */
-    public function deleteColumnWithBackup(
-        string $fieldName,
-        ?string $moduleName = null,
-        ?string $version = null
-    ): AlterInterface {
-        if ($this->model === null) {
-            throw new \Weline\Framework\App\Exception(__('ModelSetup: Model 未初始化，请先调用 putModel()'));
-        }
-        
-        // 获取模块信息
-        if ($moduleName === null || $version === null) {
-            if ($this->context === null) {
-                throw new \Weline\Framework\App\Exception(__('ModelSetup: 删除字段需要模块信息，请先调用 setContext() 或提供 moduleName 和 version 参数'));
-            }
-            $moduleName = $moduleName ?? $this->context->getModuleName();
-            $version = $version ?? $this->context->getNewVersion();
-        }
-        
-        // 获取主键
-        $primaryKey = $this->model->getPrimaryKey() ?: 'id';
-        
-        // 备份字段数据
-        $backedUp = $this->getFieldBackupService()->backupFieldData(
-            $this->getTable(),
-            $fieldName,
-            $primaryKey,
-            $moduleName,
-            $version
-        );
-        if ($backedUp !== true) {
-            throw new \Weline\Framework\App\Exception(__(
-                '字段 %{1}.%{2} 备份失败，已中止删除列以避免数据丢失',
-                [$this->getTable(), $fieldName]
-            ));
-        }
-        
-        // 删除字段
-        return $this->alterTable()->deleteColumn($fieldName);
-    }
-    
-    /**
-     * @DESC          # 添加字段（带恢复）
-     * 
-     * 在添加字段后自动恢复之前备份的数据
-     *
-     * @AUTH    秋枫雁飞
-     * @EMAIL aiweline@qq.com
-     * @DateTime: 2024/12/XX
-     * 参数区：
-     * @param string $fieldName 字段名
-     * @param string $afterColumn 在哪个字段之后
-     * @param string $type 字段类型
-     * @param string|int $length 长度
-     * @param string $options 配置
-     * @param string $comment 注释
-     * @param string $moduleName 模块名称（可选，如果未提供则从Context获取）
-     * @param string $version 模块版本（可选，如果未提供则从Context获取）
-     * @return AlterInterface
-     */
-    public function addColumnWithRestore(
-        string $fieldName,
-        string $afterColumn,
-        string $type,
-        string|int $length,
-        string $options,
-        string $comment,
-        ?string $moduleName = null,
-        ?string $version = null
-    ): AlterInterface {
-        if ($this->model === null) {
-            throw new \Weline\Framework\App\Exception(__('ModelSetup: Model 未初始化，请先调用 putModel()'));
-        }
-        
-        // 先添加字段
-        $alter = $this->alterTable()->addColumn($fieldName, $afterColumn, $type, $length, $options, $comment);
-        $alter->alter();
-        
-        // 获取模块信息
-        if ($moduleName === null || $version === null) {
-            if ($this->context === null) {
-                // 如果没有上下文，尝试恢复所有版本的备份
-                $this->printing->warning(__('ModelSetup: 无法获取模块信息，将尝试恢复所有版本的备份数据'));
-                $moduleName = $this->getModuleNameFromModel();
-                $version = null; // 恢复所有版本
-            } else {
-                $moduleName = $moduleName ?? $this->context->getModuleName();
-                $version = $version ?? $this->context->getNewVersion();
-            }
-        }
-        
-        // 恢复字段数据（如果有备份）
-        if ($moduleName) {
-            $this->getFieldBackupService()->restoreFieldData(
-                $this->getTable(),
-                $fieldName,
-                $moduleName,
-                $version
-            );
-        }
-        
-        return $alter;
-    }
-    
-    /**
-     * 从模型类名推断模块名称
-     */
-    private function getModuleNameFromModel(): ?string
-    {
-        if ($this->model === null) {
-            return null;
-        }
-        
-        $className = get_class($this->model);
-        // 从命名空间提取模块名。
-        if (preg_match('/^([A-Za-z0-9_]+)\\\\([A-Za-z0-9_]+)\\\\/', $className, $matches)) {
-            return $matches[1] . '_' . $matches[2];
-        }
-        
-        return null;
-    }
 }

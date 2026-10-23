@@ -26,7 +26,12 @@ class CliCommandExecutedObserver implements ObserverInterface
     public function execute(Event &$event): void
     {
         $command = (string)($event->getData('command') ?? '');
+        $args = (array)($event->getData('args') ?? []);
         if ($command === '') {
+            return;
+        }
+        // setup:upgrade 内部调起的优化子命令：父命令收尾统一 reload，子命令跳过。
+        if (\getenv('WELINE_SETUP_CHILD') !== false) {
             return;
         }
 
@@ -49,7 +54,13 @@ class CliCommandExecutedObserver implements ObserverInterface
 
         /** @var Printing $printer */
         $printer = ObjectManager::getInstance(Printing::class);
-        $result = $this->getDispatchService()->reloadAsync(null, ControlMessage::RELOAD_TYPE_CODE);
+        $reloadTimeout = 1.5;
+        try {
+            $reloadTimeout = (float)Env::getInstance()->getConfig('setup.reload_timeout', 1.5);
+        } catch (\Throwable) {
+        }
+        $reloadTimeout = max(0.2, min(30.0, $reloadTimeout));
+        $result = $this->getDispatchService()->reloadAsync(null, ControlMessage::RELOAD_TYPE_CODE, $reloadTimeout);
 
         $message = (string)__('WLS 通知：%{1}', [$result['message']]);
         if (!empty($result['success'])) {
@@ -62,7 +73,9 @@ class CliCommandExecutedObserver implements ObserverInterface
         // Direct 拓扑下 reload/补位可能留下粘性 Worker 门禁；cleanup 也可能未写掉 env。
         // setup: 收尾意图恒为「退出升级 503」：强制写 env=false 并再推一次 disable（禁止因粘 true 直接 return）。
         if ($reloadType === self::RELOAD_TYPE_CODE && \str_starts_with($command, 'setup:')) {
-            $this->reconcileMaintenanceOffAfterSetupReload($printer);
+            if (!$this->shouldSkipMaintenanceReconcile($args)) {
+                $this->reconcileMaintenanceOffAfterSetupReload($printer);
+            }
         }
     }
 
@@ -93,6 +106,19 @@ class CliCommandExecutedObserver implements ObserverInterface
         }
     }
 
+    private function shouldSkipMaintenanceReconcile(array $args): bool
+    {
+        if (array_key_exists('keep-maintenance', $args)) {
+            return true;
+        }
+        foreach (array_keys($args) as $key) {
+            if (is_string($key) && str_contains($key, 'keep-maintenance')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static function triggerReload(string $type = self::RELOAD_TYPE_CODE): void
     {
         $dispatchService = ObjectManager::getInstance(BroadcastControlDispatchService::class);
@@ -101,7 +127,13 @@ class CliCommandExecutedObserver implements ObserverInterface
             return;
         }
 
-        $dispatchService->reloadAsync(null, ControlMessage::RELOAD_TYPE_CODE);
+        $reloadTimeout = 1.5;
+        try {
+            $reloadTimeout = (float)Env::getInstance()->getConfig('setup.reload_timeout', 1.5);
+        } catch (\Throwable) {
+        }
+        $reloadTimeout = max(0.2, min(30.0, $reloadTimeout));
+        $dispatchService->reloadAsync(null, ControlMessage::RELOAD_TYPE_CODE, $reloadTimeout);
     }
 
     /**

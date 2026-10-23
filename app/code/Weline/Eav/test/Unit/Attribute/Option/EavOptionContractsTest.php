@@ -81,10 +81,6 @@ private function assert_AttributeOptionScope_testFilterServiceAndManagerGuardSha
     $manager = file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Eav' . '/Controller/Backend/Manager.php');
     self::assertIsString($manager);
     self::assertStringContainsString('Option::schema_fields_scope_instance_id, Option::SCOPE_SHARED', $manager);
-    $migration = file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Eav' . '/Setup/Db/Migration/add_eav_option_scope_instance_id_20260904-v1.2.4.php');
-    self::assertIsString($migration);
-    self::assertStringContainsString('scope_instance_id', $migration);
-    self::assertStringContainsString('uk_eav_attribute_option_attr_code_scope', $migration);
     $optionsQuery = file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Eav' . '/Service/EavOptionsQuery.php');
     self::assertIsString($optionsQuery);
     self::assertStringContainsString("'scope_instance_id'", $optionsQuery);

@@ -5,13 +5,20 @@ declare(strict_types=1);
 namespace Weline\Websites\Service;
 
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Websites\Api\Theme\ThemeApplicationReference;
 use Weline\Websites\Api\Theme\ThemeApplicationRepositoryInterface;
 use Weline\Websites\Model\ThemeApplication;
 
-/** 使用网站自身 ORM 表和事务保存应用引用；不改 Theme 内容与版本选择。 */
+/**
+ * 使用网站自身 ORM 表和事务保存应用引用；不改 Theme 内容与版本选择。
+ * 读结果在已初始化的请求内做 R0 memo（一次渲染会按多个 scope 反复读）；本仓库写入时失效。
+ */
 final class OrmThemeApplicationRepository implements ThemeApplicationRepositoryInterface
 {
+    private const MEMO_READ_PREFIX = 'websites.theme_application.read.v1:';
+    private const MEMO_AREA_PREFIX = 'websites.theme_application.area.v1:';
+
     public function __construct(
         private readonly ThemeApplication $model,
         private readonly WriteIntentTransactionCoordinatorInterface $transactions,
@@ -20,7 +27,30 @@ final class OrmThemeApplicationRepository implements ThemeApplicationRepositoryI
 
     public function read(string $scopeKey, string $storeMode, string $area): array
     {
-        return $this->record($this->load($scopeKey, $storeMode, $area, false));
+        return $this->memo(
+            self::MEMO_READ_PREFIX . $this->identityHash($scopeKey, $storeMode, $area),
+            fn(): array => $this->record($this->load($scopeKey, $storeMode, $area, false)),
+        );
+    }
+
+    public function listForArea(string $storeMode, string $area): array
+    {
+        return $this->memo(self::MEMO_AREA_PREFIX . $storeMode . '|' . $area, function () use ($storeMode, $area): array {
+            $rows = (clone $this->model)->clear()
+                ->where(ThemeApplication::schema_fields_STORE_MODE, $storeMode)
+                ->where(ThemeApplication::schema_fields_AREA, $area)
+                ->select()
+                ->fetchArray();
+            $out = [];
+            foreach ($rows as $row) {
+                $out[] = [
+                    'scope_key' => (string)$row[ThemeApplication::schema_fields_SCOPE_KEY],
+                    'reference' => $this->reference($row[ThemeApplication::schema_fields_REFERENCE_JSON] ?? null),
+                    'revision' => (int)$row[ThemeApplication::schema_fields_REVISION],
+                ];
+            }
+            return $out;
+        });
     }
 
     public function compareAndSwap(string $scopeKey, string $storeMode, string $area, ?ThemeApplicationReference $reference, int $expectedRevision): array
@@ -28,8 +58,9 @@ final class OrmThemeApplicationRepository implements ThemeApplicationRepositoryI
         if ($expectedRevision < 0) {
             throw new \InvalidArgumentException('website_theme_application_revision_invalid');
         }
+        $this->forget($scopeKey, $storeMode, $area);
         try {
-            return $this->transactions->runWrite($this->model->getConnection(), function () use ($scopeKey, $storeMode, $area, $reference, $expectedRevision): array {
+            $result = $this->transactions->runWrite($this->model->getConnection(), function () use ($scopeKey, $storeMode, $area, $reference, $expectedRevision): array {
                 $row = $this->load($scopeKey, $storeMode, $area, true);
                 $current = $this->record($row);
                 if ($current['revision'] !== $expectedRevision) {
@@ -59,9 +90,12 @@ final class OrmThemeApplicationRepository implements ThemeApplicationRepositoryI
                 }
                 return ['reference' => $reference, 'revision' => $revision];
             });
+            $this->forget($scopeKey, $storeMode, $area);
+            return $result;
         } catch (\Throwable $error) {
             // 唯一键竞争发生时先退出失败事务，再报告数据库已存在的实际修订。
             // 不把磁盘/连接错误转成成功，也不发起自动重试。
+            $this->forget($scopeKey, $storeMode, $area);
             try {
                 $actual = $this->read($scopeKey, $storeMode, $area);
             } catch (\Throwable) {
@@ -99,25 +133,52 @@ final class OrmThemeApplicationRepository implements ThemeApplicationRepositoryI
         if ($row === null) {
             return ['reference' => null, 'revision' => 0];
         }
-        $raw = $row->getData(ThemeApplication::schema_fields_REFERENCE_JSON);
-        $reference = null;
-        if ($raw !== null && $raw !== '') {
-            $data = json_decode((string)$raw, true, 512, JSON_THROW_ON_ERROR);
-            foreach (['theme_id', 'theme_version_id', 'content_revision', 'version_owner_scope', 'version_owner_store_mode', 'area'] as $field) {
-                if (!is_array($data) || !array_key_exists($field, $data)) {
-                    throw new \RuntimeException('website_theme_application_stored_reference_incomplete');
-                }
-            }
-            $reference = new ThemeApplicationReference(
-                themeId: (int)($data['theme_id'] ?? 0),
-                themeVersionId: (int)($data['theme_version_id'] ?? 0),
-                contentRevision: (int)($data['content_revision'] ?? 0),
-                versionOwnerScope: (string)($data['version_owner_scope'] ?? ''),
-                versionOwnerStoreMode: (string)($data['version_owner_store_mode'] ?? ''),
-                area: (string)($data['area'] ?? ''),
-            );
+        return [
+            'reference' => $this->reference($row->getData(ThemeApplication::schema_fields_REFERENCE_JSON)),
+            'revision' => (int)$row->getData(ThemeApplication::schema_fields_REVISION),
+        ];
+    }
+
+    private function reference(mixed $raw): ?ThemeApplicationReference
+    {
+        if ($raw === null || $raw === '') {
+            return null;
         }
-        return ['reference' => $reference, 'revision' => (int)$row->getData(ThemeApplication::schema_fields_REVISION)];
+        $data = json_decode((string)$raw, true, 512, JSON_THROW_ON_ERROR);
+        foreach (['theme_id', 'theme_version_id', 'content_revision', 'version_owner_scope', 'version_owner_store_mode', 'area'] as $field) {
+            if (!is_array($data) || !array_key_exists($field, $data)) {
+                throw new \RuntimeException('website_theme_application_stored_reference_incomplete');
+            }
+        }
+        return new ThemeApplicationReference(
+            themeId: (int)($data['theme_id'] ?? 0),
+            themeVersionId: (int)($data['theme_version_id'] ?? 0),
+            contentRevision: (int)($data['content_revision'] ?? 0),
+            versionOwnerScope: (string)($data['version_owner_scope'] ?? ''),
+            versionOwnerStoreMode: (string)($data['version_owner_store_mode'] ?? ''),
+            area: (string)($data['area'] ?? ''),
+        );
+    }
+
+    /**
+     * @template T
+     * @param callable(): T $builder
+     * @return T
+     */
+    private function memo(string $key, callable $builder): mixed
+    {
+        // CLI / 无请求直通：长驻命令不能把别的进程写入的应用引用当成旧快照。
+        // 用请求 id 判请求：RequestContext::set() 在 CLI 也会把 isInitialized() 置真。
+        if (RequestContext::getRequestId() === null) {
+            return $builder();
+        }
+        return RequestContext::remember($key, $builder);
+    }
+
+    private function forget(string $scopeKey, string $storeMode, string $area): void
+    {
+        RequestContext::remove(self::MEMO_READ_PREFIX . $this->identityHash($scopeKey, $storeMode, $area));
+        RequestContext::remove(self::MEMO_AREA_PREFIX . $storeMode . '|' . $area);
     }
 
     private function identityHash(string $scopeKey, string $storeMode, string $area): string

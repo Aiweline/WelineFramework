@@ -30,6 +30,14 @@ Object.assign(window.WelineModulesConfig.modules, {
         load: "lazy",
         description: "PayPal JS SDK：Google Pay / Apple Pay funding 按钮容器"
     },
+    paypalCardFields: {
+        paths: [
+            "Weline_Payment::js/paypal-card-fields.js?v=20261023-cardfields1"
+        ],
+        globalVar: "WelineModules",
+        load: "eager",
+        description: "PayPal 站内银行卡收银台（Card Fields / ACDC）"
+    },
     paymentHandoff: {
         paths: [
             "Weline_Payment::js/payment-handoff.js?v=20261021-payment-handoff-1"
@@ -60,5 +68,6 @@ Object.assign(window.WelineModulesConfig.moduleAliases, {
     payment: "paymentLifecycle",
     "WelinePayment": "paymentLifecycle",
     productExpressPay: "productExpressPay",
-    paypalWalletButtons: "paypalWalletButtons"
+    paypalWalletButtons: "paypalWalletButtons",
+    paypalCardFields: "paypalCardFields"
 });

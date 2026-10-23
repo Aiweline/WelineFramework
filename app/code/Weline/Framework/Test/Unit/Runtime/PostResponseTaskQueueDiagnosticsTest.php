@@ -31,6 +31,7 @@ final class PostResponseTaskQueueDiagnosticsTest extends TestCase
             'pending' => 0, 'ready' => 0, 'delayed' => 0,
             'next_due_ms' => null, 'draining' => false,
             'capture_full' => 0, 'capture_scope' => 0, 'capture_none' => 0,
+            'dropped' => 0, 'max_pending' => 1024,
         ], PostResponseTaskQueue::getRuntimeDiagnostics());
 
         $executed = [];
@@ -50,6 +51,7 @@ final class PostResponseTaskQueueDiagnosticsTest extends TestCase
         $expected = [
             'pending' => 4, 'ready' => 2, 'delayed' => 2, 'next_due_ms' => 0.0, 'draining' => false,
             'capture_full' => 4, 'capture_scope' => 0, 'capture_none' => 0,
+            'dropped' => 0, 'max_pending' => 1024,
         ];
         self::assertSame($expected, PostResponseTaskQueue::getRuntimeDiagnostics());
         self::assertSame($expected, PostResponseTaskQueue::getRuntimeDiagnostics());
@@ -60,6 +62,7 @@ final class PostResponseTaskQueueDiagnosticsTest extends TestCase
         self::assertSame([
             'pending' => 3, 'ready' => 1, 'delayed' => 2, 'next_due_ms' => 0.0, 'draining' => true,
             'capture_full' => 3, 'capture_scope' => 0, 'capture_none' => 0,
+            'dropped' => 0, 'max_pending' => 1024,
         ], $insideDrain);
 
         $delayed = PostResponseTaskQueue::getRuntimeDiagnostics();
@@ -71,7 +74,7 @@ final class PostResponseTaskQueueDiagnosticsTest extends TestCase
         self::assertFalse($delayed['draining']);
         self::assertSame([
             'pending', 'ready', 'delayed', 'next_due_ms', 'draining',
-            'capture_full', 'capture_scope', 'capture_none',
+            'capture_full', 'capture_scope', 'capture_none', 'dropped', 'max_pending',
         ], array_keys($delayed));
     }
 }

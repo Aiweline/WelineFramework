@@ -258,7 +258,7 @@ pub/static/<legacy 原路径>            ← 兼容旧 HTML / 第三方硬编码
 | 地址权威 | `Framework/Deploy/StaticBuildId::versionedPath()` | 模块 `/static/{buildId}/…`；主题 `/static/{code}/v{n}/{buildId}/…`；异世代段**替换不叠加** |
 | 占位符 | `Framework/Deploy/StaticAssetHtmlRewriter` | 固化物/编译产物只写 `__PAIR__`（主题段）/`__DEPLOY__`（模块段）；HTML 出口（`FpcHtmlDiskStore::publish()` / `StaticAssetResponseRewriter`）替换一次 |
 | 固化归一 | `Theme/Service/ThemeUpdate/ThemeUpdateBuildService::rewriteEntityStaticPrefixes()` | 不再烘焙部署号；把实体 PHTML 静态前缀归一成占位符 |
-| 主题世代目录 | `Theme/Service/ThemeUpdate/ThemeUpdateBatchService` | promote 镜像到 `/{code}/v{版本号}/{当前部署}/`；部署换版 `backfillThemePairForNewDeploy()` 把上一对主题世代目录整棵硬链接到新部署号 |
+| 主题世代目录 | `Theme/Service/ThemeUpdate/ThemeUpdateBatchService` | promote 镜像到 `/{code}/v{版本号}/{当前部署}/`，并删除该主题其余世代目录；部署换版从新部署树生成当前对，旧目录与旧 FPC 一次删除 |
 | 长缓存判定 | `Framework/Deploy/StaticPublicSurface`、Nginx writer | 认 `/{code}/v{n}/{12位hex}/` 主题世代目录 |
 
 已知遗留（有意不做）：`StaticIntegrityGuard::backfillGeneration()` 仍从平铺树回补 `tu-*`；

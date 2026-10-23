@@ -625,7 +625,7 @@ class Parser
         )));
         \sort($normalizedModules);
         $requestSignature = $lang . '|' . \implode(',', $normalizedModules) . '|chain:' . \implode(',', $locales);
-        $requestId = Runtime::isPersistent() ? RequestContext::getId() : null;
+        $requestId = RequestContext::isInitialized() ? RequestContext::getId() : null;
         $requestState = self::requestState();
         if (
             $requestId !== null
@@ -958,15 +958,6 @@ class Parser
             return $translation;
         }
         $maxItems = self::workerTranslatedWordCacheMax();
-        $trimItems = \max(1, (int)\floor($maxItems / 4));
-        if (\count(self::$workerTranslatedWordsCache) >= $maxItems) {
-            self::$workerTranslatedWordsCache = \array_slice(
-                self::$workerTranslatedWordsCache,
-                $trimItems,
-                null,
-                true,
-            );
-        }
         DictionaryCacheNamespace::processBag(self::BAG_WORKER_TRANSLATED_WORDS, self::$workerTranslatedWordsCache, $maxItems, $locales)[$cacheKey] = $translation;
 
         return $translation;

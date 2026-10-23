@@ -24,10 +24,22 @@
 已登录客户,"Signed-in customer"
 编辑,Edit
 全部语言,"All languages"
+"AI 已补齐 %{1} 种语言译文。","AI 已补齐 %{1} 种语言译文。"
+"当前是模拟 AI（fake）：自动补齐只生成预览，未写入数据库。","当前是模拟 AI（fake）：自动补齐只生成预览，未写入数据库。"
+"AI 自动补齐未全部成功：%{1}","AI 自动补齐未全部成功：%{1}"
+"AI 自动补齐失败：%{1}","AI 自动补齐失败：%{1}"
 博客文章已保存。,"Blog post saved."
 "正文编辑器暂未就绪，请确认文章标题、Slug 与站点已保存后再刷新页面。","Body editor is not ready; confirm title, slug, and site are saved, then refresh."
 正文编辑器加载失败：%{1},"Body editor failed to load: %{1}"
 "Slug 已生成","Slug generated"
+翻译未执行,翻译未执行
+"当前是模拟 AI（fake）：已生成预览，但结果不会写入数据库。","当前是模拟 AI（fake）：已生成预览，但结果不会写入数据库。"
+"翻译完成：新建 %{1}，更新 %{2}，跳过 %{3}。","翻译完成：新建 %{1}，更新 %{2}，跳过 %{3}。"
+翻译未全部成功：%{1},翻译未全部成功：%{1}
+没有可翻译的目标语言,没有可翻译的目标语言
+开关未保存,开关未保存
+"已开启 AI 自动补齐","已开启 AI 自动补齐"
+"已关闭 AI 自动补齐","已关闭 AI 自动补齐"
 博客文章已删除。,"Blog post deleted."
 草稿,Draft
 已发布,Published
@@ -40,6 +52,10 @@
 创建或更新博客文章,"Create or update a blog post"
 "AI 生成博客 Slug","AI-generated blog slug"
 "使用翻译 AI 生成博客 slug","Generate blog slug with translation AI"
+"AI 翻译博客文章","AI 翻译博客文章"
+把博客文章翻译并保存为目标语言版本,把博客文章翻译并保存为目标语言版本
+"AI 自动补齐博客译文","AI 自动补齐博客译文"
+开关：保存文章时自动补齐缺失语言译文,开关：保存文章时自动补齐缺失语言译文
 删除博客文章,"Delete Blog Post"
 作者,Author
 更新于,"Updated on"
@@ -132,6 +148,13 @@ Slug,Slug
 无分类,"No Category"
 保存文章设置,"Save post settings"
 新窗口打开编辑器,"Open editor in new window"
+多语言版本,多语言版本
+"选好目标语言后由 AI 翻译标题、摘要、正文与关键词，并保存为对应语言的文章。","选好目标语言后由 AI 翻译标题、摘要、正文与关键词，并保存为对应语言的文章。"
+翻译到,翻译到
+覆盖已有译文,覆盖已有译文
+先存为草稿,先存为草稿
+"AI 翻译并保存","AI 翻译并保存"
+"保存文章时 AI 自动补齐缺失语言","保存文章时 AI 自动补齐缺失语言"
 正文编辑,"Body Editor"
 "使用 Theme 可视化编辑器排版正文内容与区块。","Layout body content and blocks with the Theme visual editor."
 编辑器已就绪,"Editor ready"
@@ -147,6 +170,9 @@ Slug,Slug
 如：行业研究员,"e.g. industry researcher"
 "https 档案链接，逗号分隔","https profile links, comma-separated"
 逗号分隔,"Comma separated"
+先选至少一种目标语言,先选至少一种目标语言
+"AI 翻译中，请稍候…","AI 翻译中，请稍候…"
+翻译请求失败,翻译请求失败
 "Theme 可视化编辑","Theme visual editor"
 分类名称不能为空,"Category name cannot be empty"
 分类不存在,"Category does not exist"

@@ -94,6 +94,7 @@
             storeMode: ['normal', 'dev', 'test'].includes(storeMode) ? storeMode : 'normal',
             locale: normalizeLocale(value.locale),
             layoutOption: normalizeLayoutOption(claim('layoutOption', 'layout_option', '')),
+            publicRoute: boundedText(claim('publicRoute', 'public_route', ''), 512),
         };
     }
 

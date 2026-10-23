@@ -588,6 +588,7 @@ final class ThemeLayoutEntityFormalLocaleCompileService
                 $this->printing->warning(
                     'theme_layout_formal_compile_scoped_purge_skipped:'
                     . (string)($result['skipped'] ?? 'unknown')
+                    . (($result['errors'] ?? []) !== [] ? ' ' . \implode(' | ', (array)$result['errors']) : '')
                 );
             } else {
                 $this->printing->note(sprintf(

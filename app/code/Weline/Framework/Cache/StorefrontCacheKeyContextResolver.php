@@ -146,10 +146,49 @@ final class StorefrontCacheKeyContextResolver implements ProcessSharedInterface
         }
     }
 
+    private const FINGERPRINT_MEMO_KEY = 'storefront.cache.namespace_fingerprint';
+
     /** 复用权威请求快照核对已冻结回执；不信任广播更新的进程向量。 */
     public function fingerprintForIdentity(ScopeIdentity $identity, array $translationLocales = [], ?string $policyPath = null): string
     {
-        return $this->generations->fingerprint($this->namespacePathsForIdentity($identity, $translationLocales, $policyPath));
+        if (!RequestContext::isInitialized()) {
+            return $this->generations->fingerprint(
+                $this->namespacePathsForIdentity($identity, $translationLocales, $policyPath),
+            );
+        }
+
+        // 同一请求内 FPC 键会构建 8–14 次：路径展开 + 逐条 sha256 只做一次。
+        $requestId = RequestContext::getId();
+        $memoKey = $this->fingerprintMemoKey($identity, $translationLocales, $policyPath);
+        $memo = RequestContext::get(self::FINGERPRINT_MEMO_KEY, []);
+        if (!\is_array($memo) || ($memo['request_id'] ?? null) !== $requestId) {
+            $memo = ['request_id' => $requestId, 'values' => []];
+        }
+        $cached = $memo['values'][$memoKey] ?? null;
+        if (\is_string($cached) && $cached !== '') {
+            return $cached;
+        }
+
+        $fingerprint = $this->generations->fingerprint(
+            $this->namespacePathsForIdentity($identity, $translationLocales, $policyPath),
+        );
+        $memo['values'][$memoKey] = $fingerprint;
+        RequestContext::set(self::FINGERPRINT_MEMO_KEY, $memo);
+
+        return $fingerprint;
+    }
+
+    private function fingerprintMemoKey(ScopeIdentity $identity, array $translationLocales, ?string $policyPath): string
+    {
+        return \md5(\implode('|', [
+            (string)$identity->scopeKind,
+            (string)$identity->websiteCode,
+            (string)$identity->storeCode,
+            (string)$identity->channelCode,
+            (string)$identity->storeMode,
+            \implode(',', $translationLocales),
+            (string)$policyPath,
+        ]));
     }
 
     private function translationKeyFingerprint(string $fingerprint, StorefrontCacheKeyContext $context): string

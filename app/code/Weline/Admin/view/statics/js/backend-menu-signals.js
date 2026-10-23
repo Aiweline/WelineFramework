@@ -13,8 +13,12 @@
     'use strict';
 
     var POLL_MS = 30000;
+    var STREAM_CHANNEL = 'admin.menuSignalWatch';
     var adminApiPromise = null;
     var pollTimer = null;
+    var streamHandle = null;
+    var streamParams = { since: '' };
+    var streamWanted = false;
     var visibilityBound = false;
     var clickBound = false;
     var historyBound = false;
@@ -877,6 +881,75 @@
         }, POLL_MS);
     }
 
+    function parseStreamPayload(event) {
+        var data = event && event.data;
+        if (typeof data === 'string') {
+            try {
+                data = JSON.parse(data);
+            } catch (error) {
+                return null;
+            }
+        }
+        return data && typeof data === 'object' ? data : null;
+    }
+
+    function stopStream() {
+        streamWanted = false;
+        var handle = streamHandle;
+        streamHandle = null;
+        if (handle && typeof handle.close === 'function') {
+            handle.close();
+        }
+    }
+
+    function startStream() {
+        if (streamHandle || (global.document && global.document.hidden)) {
+            return Promise.resolve();
+        }
+        stopPolling();
+        streamWanted = true;
+        return ensureWelineApi()
+            .then(function (api) {
+                if (!streamWanted) {
+                    return null;
+                }
+                if (!api || typeof api.createStream !== 'function') {
+                    throw new Error('[BackendMenuSignals] SSE unavailable.');
+                }
+                var handle = api.createStream(STREAM_CHANNEL, streamParams, { cursorParam: false });
+                streamHandle = handle;
+                handle.addEventListener('menu_signals', function (event) {
+                    var payload = parseStreamPayload(event);
+                    if (!payload) {
+                        return;
+                    }
+                    if (payload.fingerprint) {
+                        streamParams.since = String(payload.fingerprint);
+                    }
+                    paintBackendMenuSignals(unwrapPayload(payload));
+                });
+                handle.addEventListener('terminal', function () {
+                    if (!streamWanted) {
+                        return;
+                    }
+                    streamHandle = null;
+                    startPolling();
+                });
+                return handle.start();
+            })
+            .catch(function (error) {
+                if (!streamWanted) {
+                    return null;
+                }
+                if (global.console && typeof global.console.warn === 'function') {
+                    global.console.warn('[BackendMenuSignals] SSE unavailable, polling.', error);
+                }
+                streamHandle = null;
+                startPolling();
+                return refreshBackendMenuSignals();
+            });
+    }
+
     function bindVisibility() {
         if (visibilityBound || !global.document || !global.document.addEventListener) {
             return;
@@ -884,9 +957,11 @@
         visibilityBound = true;
         global.document.addEventListener('visibilitychange', function () {
             if (global.document.hidden) {
+                stopStream();
+                stopPolling();
                 return;
             }
-            refreshBackendMenuSignals().catch(function () {});
+            startStream();
         });
     }
 
@@ -909,7 +984,7 @@
         bindHistory();
         bindBadgeInteractions();
         refreshBackendMenuSignals().catch(function () {});
-        startPolling();
+        startStream();
     }
 
     var api = {
@@ -920,6 +995,8 @@
         clear: clearBackendMenuSignals,
         startPolling: startPolling,
         stopPolling: stopPolling,
+        startStream: startStream,
+        stopStream: stopStream,
         collectContributingLeaves: collectContributingLeaves,
         collectPanelEntries: collectPanelEntries,
         normalizeCodeEntry: normalizeCodeEntry,

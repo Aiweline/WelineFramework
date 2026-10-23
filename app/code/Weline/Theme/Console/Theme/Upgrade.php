@@ -178,6 +178,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $usage = ObjectManager::getInstance(ThemeApplicationUsageService::class);
 
         $emitted = 0;
+        $failedThemes = [];
         foreach ($themes as $theme) {
             if (!$theme instanceof WelineTheme) {
                 continue;
@@ -215,16 +216,31 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $targets,
                 'theme_upgrade_scoped',
             );
+            $emitted += (int)($result['target_count'] ?? 0);
+            if (($result['errors'] ?? []) !== []) {
+                foreach ((array)$result['errors'] as $error) {
+                    $this->printing->error(__('主题 #%{id} scoped FPC/CDN 清理失败：%{error}', [
+                        'id' => $themeId,
+                        'error' => (string)$error,
+                    ]));
+                }
+                $failedThemes[$themeId] = $themeId;
+                continue;
+            }
             if (!($result['ok'] ?? false)) {
                 $this->printing->warning(__('主题 #%{id} scoped FPC/CDN 清理跳过：%{reason}', [
                     'id' => $themeId,
                     'reason' => (string)($result['skipped'] ?? 'unknown'),
                 ]));
-                continue;
             }
-            $emitted += (int)($result['target_count'] ?? 0);
         }
 
+        if ($failedThemes !== []) {
+            throw new ConsoleException(__(
+                '主题 %{ids} 的店面 FPC/CDN 清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。',
+                ['ids' => '#' . \implode(', #', $failedThemes)]
+            ));
+        }
         if ($emitted < 1) {
             $this->printing->warning(__(
                 '未清理任何边缘 HTML；旧页面会在边缘 TTL（默认 300 秒）内自然过期，'
@@ -940,6 +956,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         /** @var \Weline\Theme\Service\ThemeUpdate\ThemeUpdateFlightRunner $flights */
         $flights = ObjectManager::getInstance(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateFlightRunner::class);
 
+        $failedThemes = [];
         foreach ($themes as $theme) {
             if (!$theme instanceof WelineTheme) {
                 continue;
@@ -984,6 +1001,19 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 'epoch' => $state['epoch'],
                 'prev' => $state['previous'] !== '' ? $state['previous'] : '-',
             ]));
+            foreach ((array)($state['post_switch_errors'] ?? []) as $error) {
+                $this->printing->error(__('主题 #%{id} 切换后清理失败：%{error}', [
+                    'id' => $themeId,
+                    'error' => (string)$error,
+                ]));
+                $failedThemes[$themeId] = $themeId;
+            }
+        }
+        if ($failedThemes !== []) {
+            throw new ConsoleException(__(
+                '主题 %{ids} 已切换代次，但缓存/边缘清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。',
+                ['ids' => '#' . \implode(', #', $failedThemes)]
+            ));
         }
     }
 }

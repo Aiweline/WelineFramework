@@ -85,6 +85,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
             'placeOrder', 'createOrder' => $this->placeOrder($params),
             'freezeQuote' => $this->freezeQuote($params),
             'submitV2' => $this->submitV2($params),
+            'confirmPaymentV2' => $this->confirmPaymentV2($params),
             'resumePaymentV2' => $this->resumePaymentV2($params),
             'adoptContinuePaySession' => $this->adoptContinuePaySession($params),
             'releaseContinuePaySession' => $this->releaseContinuePaySession($params),
@@ -278,6 +279,9 @@ class CheckoutQueryProvider implements QueryProviderInterface
                     $payContext['payment_entry'] = \Weline\Payment\Service\PaymentEntry::EXPRESS;
                 } else {
                     $payContext['payment_entry'] = \Weline\Payment\Service\PaymentEntry::CHECKOUT;
+                    if (!empty($params['client_action'])) {
+                        $payContext['client_action'] = true;
+                    }
                 }
                 $guestTokenForPay = trim((string) ($params['guest_token'] ?? ''));
                 if ($guestTokenForPay === '') {
@@ -372,6 +376,64 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'success' => false,
                 'message' => $e->getMessage(),
                 'error_code' => 'checkout_submit_v2_failed',
+            ];
+        }
+    }
+
+    /**
+     * Confirm a provider-defined client action payment after the buyer completes
+     * the provider UI (e.g. card fields + 3DS). Capture is performed by the
+     * Payment shell; this endpoint only validates the checkout binding and
+     * returns the standard payment shape.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function confirmPaymentV2(array $params): array
+    {
+        try {
+            $orderUuid = trim((string) ($params['order_uuid'] ?? ''));
+            $transactionNo = trim((string) ($params['transaction_no'] ?? ''));
+            $quoteToken = trim((string) ($params['quote_token'] ?? ''));
+            $checkoutGroupUuid = trim((string) ($params['checkout_group_uuid'] ?? ''));
+            $orderIdempotencyKey = trim((string) ($params['idempotency_key'] ?? ''));
+            if ($orderUuid === ''
+                || $transactionNo === ''
+                || $quoteToken === ''
+                || $checkoutGroupUuid === ''
+                || $orderIdempotencyKey === ''
+            ) {
+                throw new \InvalidArgumentException('checkout_payment_confirm_params_required');
+            }
+
+            $payment = $this->checkoutOrderPaymentService->confirm(
+                $orderUuid,
+                $transactionNo,
+                $quoteToken,
+                $orderIdempotencyKey,
+                [
+                    'provider_reference' => trim((string) ($params['provider_reference'] ?? '')),
+                    'checkout_token' => $quoteToken,
+                ],
+            );
+
+            return $this->ok((string) __('支付完成'), [
+                'order_uuids' => [$orderUuid],
+                'checkout_group_uuid' => $checkoutGroupUuid,
+                'checkout_token' => $quoteToken,
+                'payment' => $payment,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => 'checkout_payment_confirm_invalid',
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => 'checkout_payment_confirm_failed',
             ];
         }
     }
@@ -3274,10 +3336,32 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'guest_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                         // Optional: traditional checkout omits; express / PayPal smart buttons set true.
                         'express_checkout' => ['type' => 'boolean', 'required' => false],
+                        // Payment method requests a provider-defined browser action instead of a redirect.
+                        'client_action' => ['type' => 'boolean', 'required' => false],
+                        'locale' => ['type' => 'string', 'required' => false, 'max_length' => 16],
                         'b2b_credit_apply_minor' => ['type' => 'integer', 'required' => false],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Submit frozen Checkout V2 quote (config version must match)',
+                ],
+                [
+                    'name' => 'confirmPaymentV2',
+                    'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 5,
+                    'params' => [
+                        'order_uuid' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'checkout_group_uuid' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'quote_token' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'transaction_no' => ['type' => 'string', 'required' => true, 'max_length' => 128],
+                        'idempotency_key' => ['type' => 'string', 'required' => true, 'max_length' => 128],
+                        'provider_reference' => ['type' => 'string', 'required' => false, 'max_length' => 128],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Confirm a provider-defined client action payment for a submitted order',
                 ],
                 [
                     'name' => 'resumePaymentV2',

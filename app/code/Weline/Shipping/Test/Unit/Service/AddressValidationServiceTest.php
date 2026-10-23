@@ -57,6 +57,35 @@ final class AddressValidationServiceTest extends TestCase
         self::assertFalse($this->service->isValidInternationalPhone('+1234567890123456'));
     }
 
+    public function testCountryAwarePhoneRejectsWrongNationalLength(): void
+    {
+        // 12 位在 E.164 总位数内，但不是合法 CN 国内号码
+        self::assertFalse($this->service->isValidInternationalPhone('185766336348', 'CN'));
+        self::assertTrue($this->service->isValidInternationalPhone('18576633634', 'CN'));
+        self::assertFalse($this->service->isValidInternationalPhone('1125550100', 'US'));
+        self::assertTrue($this->service->isValidInternationalPhone('(212) 555-0100', 'US'));
+    }
+
+    public function testCountryAwarePhoneErrorCarriesExampleAndMapsToPhoneField(): void
+    {
+        try {
+            $this->service->validate([
+                'contact_name' => '张三',
+                'contact_phone' => '185766336348',
+                'street' => '信都区',
+                'country_code' => 'CN',
+                'province' => '河北省',
+                'city' => '邢台市',
+            ], ['contact_name', 'contact_phone', 'street']);
+            self::fail('Expected AddressValidationException');
+        } catch (AddressValidationException $exception) {
+            self::assertSame('contact_phone', $exception->getField());
+            self::assertSame('phone', $exception->getFormField());
+            self::assertStringContainsString('示例', $exception->getMessage());
+            self::assertStringContainsString('138 0013 8000', $exception->getMessage());
+        }
+    }
+
     public function testInvalidPhoneMapsToPhoneFormField(): void
     {
         try {

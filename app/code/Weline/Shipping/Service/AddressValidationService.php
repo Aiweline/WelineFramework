@@ -8,7 +8,8 @@ class AddressValidationService
 {
     public function __construct(
         private AddressSchemaProvider $schemaProvider,
-        private AddressFormatter $formatter
+        private AddressFormatter $formatter,
+        private PhoneNumberRuleService $phoneRules = new PhoneNumberRuleService(),
     ) {
     }
 
@@ -32,8 +33,11 @@ class AddressValidationService
         }
 
         $phone = trim((string)($address['contact_phone'] ?? ''));
-        if ($phone !== '' && !$this->isValidInternationalPhone($phone)) {
-            $errors['contact_phone'] = (string)__('电话号码格式不正确');
+        if ($phone !== '') {
+            $analysis = $this->phoneRules->analyze($phone, (string)$address['country_code']);
+            if (!$analysis['valid']) {
+                $errors['contact_phone'] = $this->phoneErrorMessage($analysis);
+            }
         }
 
         $postalCode = trim((string)($address['postal_code'] ?? ''));
@@ -47,30 +51,25 @@ class AddressValidationService
     }
 
     /**
-     * 全球电话：允许 + 与常见分隔符，按 E.164 数字位数 7–15 校验（不绑单一国格式）。
-     * 允许字符：数字、可选前导 +、空格、-、()、.、/
+     * 国际化电话校验（规则权威：PhoneNumberRuleService / data/phone-country-rules.json）。
+     * 允许字符：数字、可选前导 +、空格、-、()、.、/。
+     * 带 + / 00 按区号定位国家规则；否则按 $countryCode 当国内写法校验；无规则回退 E.164 总位数 7–15。
      */
-    public function isValidInternationalPhone(string $phone): bool
+    public function isValidInternationalPhone(string $phone, ?string $countryCode = null): bool
     {
-        $phone = trim($phone);
-        if ($phone === '' || strlen($phone) > 32) {
-            return false;
-        }
-        if (!preg_match('/^\+?[0-9\-\s().\/]+$/', $phone)) {
-            return false;
-        }
-        if (str_contains($phone, '+') && !str_starts_with($phone, '+')) {
-            return false;
-        }
-        if (substr_count($phone, '+') > 1) {
-            return false;
-        }
-        if (!preg_match('/^\+?[0-9]/', $phone)) {
-            return false;
-        }
-        $digits = preg_replace('/\D+/', '', $phone) ?? '';
-        $len = strlen($digits);
+        return $this->phoneRules->isValid($phone, $countryCode);
+    }
 
-        return $len >= 7 && $len <= 15;
+    /**
+     * @param array{reason:string,rule:array<string,mixed>|null} $analysis
+     */
+    private function phoneErrorMessage(array $analysis): string
+    {
+        $example = trim((string)($analysis['rule']['example'] ?? ''));
+        if ($example !== '') {
+            return (string)__('电话号码格式不正确，示例：%{1}', [$example]);
+        }
+
+        return (string)__('电话号码格式不正确');
     }
 }

@@ -1,0 +1,11 @@
+{
+    "name": "Fake Simulator",
+    "code": "fake",
+    "base_url": "local://fake",
+    "models_prefix": ["fake-"],
+    "test_model": "fake-translator",
+    "api_key_field": "api_key",
+    "base_url_field": "base_url",
+    "model_field": "model",
+    "description": "Offline deterministic provider for simulation and tests. Never calls the network."
+}

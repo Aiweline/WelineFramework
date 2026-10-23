@@ -14,6 +14,8 @@ interface RuntimeControlBroadcasterInterface
      */
     public function cacheClearAndWait(?string $instanceName = null, float $timeout = 5.0): array;
 
+    public function reloadAsync(?string $instanceName = null, string $reloadType = 'code', float $timeout = 5.0): array;
+
     /** Return the current persistent-runtime maintenance state when available. */
     public function maintenanceMode(): ?bool;
 

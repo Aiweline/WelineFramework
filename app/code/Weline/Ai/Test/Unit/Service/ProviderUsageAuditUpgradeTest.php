@@ -7,7 +7,6 @@ namespace Weline\Ai\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use Weline\Ai\Model\Provider\UsageRecord;
 use Weline\Ai\Service\Provider\UsageAuditLegacyBackfill;
-use Weline\Ai\Setup\Db\Migration\ProviderUsageAuditIdentity20260730V111;
 use Weline\Framework\Database\Schema\SchemaParser;
 
 final class ProviderUsageAuditUpgradeTest extends TestCase
@@ -120,22 +119,6 @@ final class ProviderUsageAuditUpgradeTest extends TestCase
     {
         yield 'SQLite declarative schema' => ['sqlite'];
         yield 'MySQL declarative schema' => ['mysql'];
-    }
-
-    public function testDataMigrationMetadataKeepsSchemaWorkInDeclarativeModel(): void
-    {
-        require_once BP
-            . 'app/code/Weline/Ai/Setup/Db/Migration/'
-            . 'provider_usage_audit_identity_20260730-v1.1.1.php';
-        $migration = new ProviderUsageAuditIdentity20260730V111(
-            new UsageAuditLegacyBackfill(),
-        );
-
-        self::assertSame('1.1.1', $migration->getVersion());
-        self::assertSame('data_migration', $migration->getType());
-        self::assertSame([UsageRecord::schema_table], $migration->getAffectedTables());
-        self::assertTrue($migration->requiresBackup());
-        self::assertSame('column', $migration->getBackupStrategy()['strategy']);
     }
 
     public function testModuleMetadataVersionIncludesUsageAuditMigration(): void

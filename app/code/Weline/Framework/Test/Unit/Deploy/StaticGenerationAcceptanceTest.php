@@ -117,6 +117,9 @@ final class StaticGenerationAcceptanceTest extends TestCase
 
         self::assertArrayHasKey('page_generation', $dimensions);
         self::assertNotSame('', (string)$dimensions['page_generation']);
-        self::assertStringEndsWith(StaticBuildId::current(), (string)$dimensions['page_generation']);
+        self::assertMatchesRegularExpression(
+            '/' . \preg_quote(StaticBuildId::current(), '/') . '(?:~e\d+)?$/',
+            (string)$dimensions['page_generation'],
+        );
     }
 }

@@ -34,34 +34,29 @@ class Install implements InstallInterface
         $rule = ObjectManager::getInstance(Rule::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($rule);
-        $rule->setup($modelSetup, $context);
 
         /** @var LocalDescription $localDescription */
         $localDescription = ObjectManager::getInstance(LocalDescription::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($localDescription);
-        $localDescription->setup($modelSetup, $context);
         
         // 安装优惠券表
         /** @var Coupon $coupon */
         $coupon = ObjectManager::getInstance(Coupon::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($coupon);
-        $coupon->setup($modelSetup, $context);
         
         // 安装活动表
         /** @var Campaign $campaign */
         $campaign = ObjectManager::getInstance(Campaign::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($campaign);
-        $campaign->setup($modelSetup, $context);
         
         // 安装规则使用记录表
         /** @var RuleUsage $ruleUsage */
         $ruleUsage = ObjectManager::getInstance(RuleUsage::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($ruleUsage);
-        $ruleUsage->setup($modelSetup, $context);
     }
 }
 

@@ -80,6 +80,11 @@
             const message = event.data || {};
             const id = message.id;
             if (!id) return;
+            if (message.type === 'transport-ping') {
+                // Boot handshake: page treats this port as usable only after this answer.
+                port.postMessage({ id, type: 'transport-ready' });
+                return;
+            }
             const workerStartedAt = (typeof performance !== 'undefined' && performance.now)
                 ? performance.now()
                 : Date.now();
@@ -146,6 +151,9 @@
                             message: error instanceof Error ? error.message : String(error),
                             details: error && error.details ? String(error.details) : '',
                             responseKind: error && error.responseKind ? String(error.responseKind) : '',
+                            page_generation_token: error && error.pageGenerationToken
+                                ? String(error.pageGenerationToken)
+                                : '',
                         },
                         request_id: '',
                     },
@@ -944,7 +952,13 @@
             } else if (response.status === 401 || code === 'auth_error') {
                 noteHandshakeSoftBackoff();
             }
-            throw Object.assign(new Error(message), { code, status: response.status });
+            throw Object.assign(new Error(message), {
+                code,
+                status: response.status,
+                pageGenerationToken: body && body.error && body.error.page_generation_token != null
+                    ? String(body.error.page_generation_token).trim()
+                    : '',
+            });
         }
 
         const attestedArea = String(body.data.attested_area || 'frontend');
@@ -1061,6 +1075,10 @@
         if (code === 'deploy_reload_required') {
             return false;
         }
+        if (status === 409 && code === 'scope_token_context_conflict') {
+            sessionsByScopeKey.clear();
+            return true;
+        }
         if (status !== 401) {
             return false;
         }
@@ -1079,6 +1097,7 @@
             || code === 'scope_reload_required'
             || code === 'scope_bootstrap_invalid'
             || code === 'worker_scope_binding_expired'
+            || code === 'scope_token_context_conflict'
         ) {
             return true;
         }

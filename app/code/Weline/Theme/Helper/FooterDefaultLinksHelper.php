@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Helper;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Service\ThemeDesignDataResolver;
+
 /**
  * 默认页脚链接分组 / 分项 / 扩展槽（Partials 兼容 + footer-container 主部件共用）
  *
@@ -255,62 +258,19 @@ final class FooterDefaultLinksHelper
     }
 
     /**
-     * Brand-scoped social defaults. Chang'an Hanfu profiles only apply to the Hanfu
-     * website family — never to DaoCharms / other merchant sites (cross-brand sameAs FAIL).
+     * Brand social profiles declared by the bound frontend theme in
+     * {@code data/storefront-defaults.php} → {@code social_items}. Modules ship none, so a
+     * theme never inherits another brand's profiles (cross-brand sameAs).
      *
      * @return list<array{name:string,icon:string,url:string}>
      */
-    public static function defaultSocialItems(?string $websiteCode = null): array
+    public static function defaultSocialItems(): array
     {
-        if (!self::allowsHanfuSocialDefaults($websiteCode)) {
-            return [];
-        }
+        /** @var ThemeDesignDataResolver $themeData */
+        $themeData = ObjectManager::getInstance(ThemeDesignDataResolver::class);
+        $raw = $themeData->load('storefront-defaults')['social_items'] ?? [];
 
-        // Official Chang'an Hanfu profiles (roster refreshed 2026-10-13). Keep http(s)
-        // so Organization.sameAs / footer launch readiness emit actionable Trust signals — never `#`.
-        // Source of truth for the roster: websites/changanhanfu.com/credentials/social-accounts.md.
-        // Instagram is deliberately absent: @changanhanfu was removed/banned and an appeal is
-        // pending, so advertising it would emit a dead link plus a broken Trust signal. Re-add it
-        // here once the profile is restored and verified.
-        return [
-            ['name' => 'YouTube', 'icon' => 'fab fa-youtube', 'url' => 'https://www.youtube.com/@changanhanfu'],
-            ['name' => 'X', 'icon' => 'fab fa-twitter', 'url' => 'https://x.com/changanhanfu'],
-            ['name' => 'TikTok', 'icon' => 'fab fa-tiktok', 'url' => 'https://www.tiktok.com/@changanhanfu_hq'],
-            ['name' => 'Facebook', 'icon' => 'fab fa-facebook', 'url' => 'https://www.facebook.com/profile.php?id=61595373054093'],
-            ['name' => 'Pinterest', 'icon' => 'fab fa-pinterest', 'url' => 'https://www.pinterest.com/changanhanfu/'],
-            ['name' => 'Bluesky', 'icon' => 'fab fa-bluesky', 'url' => 'https://bsky.app/profile/changanhanfu.bsky.social'],
-        ];
-    }
-
-    /**
-     * Hanfu social defaults are for Website code `default` (长安汉服) and *hanfu* codes only.
-     * DaoCharms and other codes return empty until merchant configures their own profiles.
-     */
-    public static function allowsHanfuSocialDefaults(?string $websiteCode = null): bool
-    {
-        $code = strtolower(trim($websiteCode ?? self::resolveWebsiteCode()));
-        if ($code === 'daocharms') {
-            return false;
-        }
-
-        return $code === '' || $code === 'default' || str_contains($code, 'hanfu');
-    }
-
-    private static function resolveWebsiteCode(): string
-    {
-        try {
-            if (\class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
-                $code = strtolower(trim(
-                    (string)\Weline\Framework\Runtime\RequestContext::getWelineWebsiteCode()
-                ));
-                if ($code !== '') {
-                    return $code;
-                }
-            }
-        } catch (\Throwable) {
-        }
-
-        return 'default';
+        return self::filterActionableSocialItems(is_array($raw) ? array_values($raw) : []);
     }
 
     /**
@@ -379,10 +339,10 @@ final class FooterDefaultLinksHelper
      *
      * @return list<string>
      */
-    public static function defaultSameAsUrls(?string $websiteCode = null): array
+    public static function defaultSameAsUrls(): array
     {
         $urls = [];
-        foreach (self::defaultSocialItems($websiteCode) as $item) {
+        foreach (self::defaultSocialItems() as $item) {
             $url = trim((string)($item['url'] ?? ''));
             if ($url !== '') {
                 $urls[] = $url;

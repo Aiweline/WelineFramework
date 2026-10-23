@@ -214,20 +214,21 @@ PHP;
 <?php
 require __BOOTSTRAP__;
 $moduleNames = array_fill_keys(__MODULE_NAMES__, true);
-$stage = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Setup\Stage\SchemaDiffStage::class);
-$stage->prepare([]);
+$manifestBuilder = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Database\Service\Release\SchemaManifestBuilder::class);
+$manifest = $manifestBuilder->build(array_keys($moduleNames));
+$planner = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Database\Service\Release\SchemaUpgradePlanner::class);
+$plan = $planner->plan('code-switch-check', $manifest);
 $result = [];
-foreach ($stage->getDiffOps() as $op) {
-    $parts = explode('\\', (string)$op->modelClass);
-    $moduleName = ($parts[0] ?? '') . (isset($parts[1]) ? '_' . $parts[1] : '');
+foreach (array_merge($plan['expand'] ?? [], $plan['contract'] ?? []) as $change) {
+    $moduleName = (string)($change['module'] ?? '');
     if (!isset($moduleNames[$moduleName])) {
         continue;
     }
     $result[] = [
         'module_name' => $moduleName,
-        'model_class' => $op->modelClass,
-        'table_name' => $op->tableName,
-        'kind' => $op->kind,
+        'model_class' => '',
+        'table_name' => (string)($change['table'] ?? ''),
+        'kind' => (string)($change['change_type'] ?? ''),
     ];
 }
 echo "__WELINE_SCHEMA_DIFF__" . json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;

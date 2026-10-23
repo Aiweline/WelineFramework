@@ -255,7 +255,10 @@ final class OrmCatalogFeedOfferCandidateSource implements CatalogFeedOfferCandid
             return $path;
         }
         if (str_starts_with(strtolower($path), 'asset://')) {
-            return $this->resolveAsset($path, $websiteId, $websiteCode, $locale);
+            $path = $this->resolveAsset($path, $websiteId, $websiteCode, $locale);
+            if ($path === '' || preg_match('#^https?://#i', $path) === 1) {
+                return $path;
+            }
         }
         if (str_starts_with($path, '/') && $origin !== '') {
             return $origin . $path;

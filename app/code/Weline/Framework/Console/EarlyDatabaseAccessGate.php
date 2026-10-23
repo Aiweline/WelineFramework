@@ -38,16 +38,39 @@ final class EarlyDatabaseAccessGate
         }
 
         $lease = new SetupDatabaseAccessLock();
-        $readOnlySetup = $isSetup && self::hasAnyOption($argv, ['hot', 'h', 'help']);
-        if ($isCron || $readOnlySetup) {
+        $isHelp = $isSetup && self::hasAnyOption($argv, ['help', 'h']);
+        $isHot = $isSetup && self::hasAnyOption($argv, ['hot']);
+        if ($isCron || $isHelp) {
             $acquired = $lease->acquireShared();
             if (!$acquired) {
+                if ($isHelp) {
+                    self::writeMessage(DatabaseFreeTranslator::translate(
+                        '系统升级正在执行，帮助信息仍可查看。',
+                        'Weline_Framework',
+                    ));
+
+                    return 0;
+                }
                 self::writeMessage(DatabaseFreeTranslator::translate(
                     '系统升级正在执行，本次计划任务已跳过且未访问数据库。',
                     'Weline_Cron',
                 ));
 
                 return self::hasAnyOption($argv, ['p', 'process', 'f', 'force']) ? 75 : 0;
+            }
+            SetupDatabaseAccessLock::retainCliBootstrapLease($lease);
+
+            return null;
+        }
+
+        if ($isHot) {
+            if (!$lease->acquireShared()) {
+                echo DatabaseFreeTranslator::translate(
+                    '热更新被系统升级占用，本次未执行。',
+                    'Weline_Framework',
+                ), PHP_EOL;
+
+                return 75;
             }
             SetupDatabaseAccessLock::retainCliBootstrapLease($lease);
 
@@ -215,16 +238,13 @@ final class EarlyDatabaseAccessGate
     }
 
     /**
-     * Cron and setup both hold this flock. A later -f may stop either one
-     * when it belongs to this application root. Other commands stay untouched.
+     * Only cron tasks hold this flock. A later -f terminates cron tasks only
+     * when they belong to this application root; it never stops another
+     * setup:upgrade process. Other commands stay untouched.
      */
     private static function isSameProjectGatePeer(string $command): bool
     {
-        if (str_contains($command, 'cron:task:run') || str_contains($command, 'setup:upgrade')) {
-            return true;
-        }
-
-        return preg_match('/(?:^|\s)s:up(?:\s|$)/', $command) === 1;
+        return str_contains($command, 'cron:task:run');
     }
 
     /**
@@ -303,6 +323,9 @@ final class EarlyDatabaseAccessGate
         $pids = array_values(array_unique($pids));
         if ($pids !== []) {
             return ['pids' => $pids, 'failure' => ''];
+        }
+        if ($code === 1 && trim($joined) === '') {
+            return ['pids' => [], 'failure' => ''];
         }
         if ($code === 127
             || str_contains($joined, 'not found')

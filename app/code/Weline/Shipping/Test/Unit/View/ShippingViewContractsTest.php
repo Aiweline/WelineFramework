@@ -243,7 +243,7 @@ private function assert_CheckoutShippingAddressMount_testVersionedWidgetExportsM
     self::assertStringContainsString("data-shipping-mounted", $src);
     self::assertStringContainsString('mount: mount', $src);
     self::assertStringContainsString("document.querySelector('[data-shipping-checkout-address]')", $src);
-    self::assertStringContainsString('20261007-address-pay-local', $src);
+    self::assertStringContainsString('20261023-phone-intl-1', $src);
     self::assertStringContainsString('ensureCheckoutShippingAddressCss', $src);
     self::assertStringContainsString('data-shipping-checkout-address-css', $src);
     self::assertStringContainsString('checkout-shipping-address.css', $src);
@@ -296,7 +296,7 @@ private function assert_CheckoutShippingAddressQuoteSelected_testWidgetExposesRe
     self::assertStringContainsString('selectedCardPayload', $js);
     self::assertStringContainsString('syncFormFromSelectedCard', $js);
     self::assertStringContainsString('resolveQuoteAddress: resolveQuoteAddress', $js);
-    self::assertStringContainsString('checkout-shipping-address.js?v=20261007-address-pay-local', $modules);
+    self::assertStringContainsString('checkout-shipping-address.js?v=20261023-phone-intl-1', $modules);
 }
 
 private function assert_CheckoutShippingAddressWidget_testWidgetRegistrationPinsCheckoutShippingAddressSlot(): void
@@ -328,7 +328,7 @@ private function assert_CheckoutShippingAddressWidget_testCheckoutShippingAddres
     self::assertStringContainsString('name="address1"', $template);
     self::assertStringContainsString('name="postal_code"', $template);
     self::assertStringContainsString('data-weline-load="shippingCheckoutAddress"', $template);
-    self::assertStringContainsString('checkout-shipping-address.js?v=20261007-address-pay-local', $modules);
+    self::assertStringContainsString('checkout-shipping-address.js?v=20261023-phone-intl-1', $modules);
     self::assertStringContainsString('WelineShippingCheckoutAddress', $modules);
     self::assertStringContainsString('data-field-error-for="phone"', $template);
     self::assertStringContainsString("'err_name'", $template);

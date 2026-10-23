@@ -30,8 +30,14 @@ namespace Weline\Framework\Router\UrlGuard;
 
 class BoundedUrlGuard implements UrlGuardInterface
 {
-    /** @var array<string, mixed> */
-    private array $cachedMatches = [];
+    /**
+     * 只保留最近一次匹配结果：Guard 链里 evaluate() 紧跟 matches()，
+     * 进程级按 URI 建索引会在 WLS 长跑中无界增长。
+     */
+    private ?string $lastMatchUri = null;
+
+    /** @var array<string|int, mixed>|null */
+    private ?array $lastMatchResult = null;
 
     /**
      * @param array{
@@ -63,12 +69,13 @@ class BoundedUrlGuard implements UrlGuardInterface
         }
 
         $matches = [];
+        $this->lastMatchUri = $uri;
         if (\preg_match($pattern, $uri, $matches) !== 1) {
-            $this->cachedMatches[$uri] = null;
+            $this->lastMatchResult = null;
             return false;
         }
 
-        $this->cachedMatches[$uri] = $matches;
+        $this->lastMatchResult = $matches;
         return true;
     }
 
@@ -136,7 +143,7 @@ class BoundedUrlGuard implements UrlGuardInterface
         $source = $this->config['param_source'] ?? 'both';
 
         if ($source === 'pattern' || $source === 'both') {
-            $matches = $this->cachedMatches[$uri] ?? null;
+            $matches = $this->lastMatchUri === $uri ? $this->lastMatchResult : null;
             if (\is_array($matches) && \array_key_exists($paramName, $matches)) {
                 return $matches[$paramName];
             }

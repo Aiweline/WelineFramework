@@ -73,6 +73,21 @@ final class AdminQueryContractsTest extends TestCase
                 self::assertFalse($unknown['success'] ?? true);
                 self::assertStringContainsString('Unsupported admin path', (string)($unknown['message'] ?? ''));
             },
+            'AdminAdminQueryProvider::testMenuSignalWatchIsBackendStream' => function (): void {
+                $descriptor = (new AdminAdminQueryProvider())->getDescriptor();
+                $watch = null;
+                foreach ($descriptor['operations'] as $operation) {
+                    if (($operation['name'] ?? '') === 'menuSignalWatch') {
+                        $watch = $operation;
+                        break;
+                    }
+                }
+                self::assertIsArray($watch);
+                self::assertSame('stream', $watch['mode'] ?? null);
+                self::assertSame('backend', $watch['auth'] ?? null);
+                self::assertSame('self', $watch['backend_acl']['kind'] ?? null);
+                self::assertSame('since', $watch['params'][0]['name'] ?? null);
+            },
             'MenuManagementPresenter::testPresentNodeMapsAclFieldsForUi' => function (): void {
                 $presenter = new MenuManagementPresenter();
                 $presented = $presenter->presentNode([

@@ -180,7 +180,7 @@ final class ThemeStorefrontSlugFpcPublisher
      * Path-level FPC/CDN purge entry for declared storefront paths.
      *
      * @param list<array{version_owner_scope?:string,store_mode?:string,area?:string}> $targets
-     * @return array{ok:bool,path_count:int,slug_count:int,target_count:int,truncated:int,rejected:list<string>,skipped:?string}
+     * @return array{ok:bool,path_count:int,slug_count:int,target_count:int,truncated:int,rejected:list<string>,skipped:?string,errors?:list<string>}
      */
     public function purgeStorefrontPaths(
         int $themeId,
@@ -204,6 +204,7 @@ final class ThemeStorefrontSlugFpcPublisher
         }
         $slugList = array_values(array_unique($slugs));
         $emitted = 0;
+        $errors = [];
         $seenScopes = [];
         foreach ($targets as $target) {
             if (!\is_array($target)) {
@@ -238,18 +239,19 @@ final class ThemeStorefrontSlugFpcPublisher
                 );
                 $this->emitUpsert($context, $slugList, $entry);
                 ++$emitted;
-            } catch (\Throwable) {
-                continue;
+            } catch (\Throwable $e) {
+                $errors[] = self::targetError($ownerScope, $storeMode, $e);
             }
         }
         return [
-            'ok' => $emitted > 0,
+            'ok' => $emitted > 0 && $errors === [],
             'path_count' => count($slugList),
             'slug_count' => count($slugList),
             'target_count' => $emitted,
             'truncated' => $truncated,
             'rejected' => $rejected,
-            'skipped' => $emitted > 0 ? null : 'no_frontend_target',
+            'skipped' => self::skippedReason($emitted, $errors),
+            'errors' => $errors,
         ];
     }
 
@@ -263,7 +265,8 @@ final class ThemeStorefrontSlugFpcPublisher
      *   store_mode?:string,
      *   area?:string
      * }> $targets Application rows that own this theme (frontend preferred).
-     * @return array{ok:bool,slug_count:int,target_count:int,skipped:?string}
+     * @return array{ok:bool,slug_count:int,target_count:int,skipped:?string,errors?:list<string>}
+     *         skipped=emit_failed 时 errors 列出每个失败目标的原因（含 CDN/FPC 清理异常）。
      */
     public function purgeLayoutsForThemeTargets(
         int $themeId,
@@ -305,6 +308,7 @@ final class ThemeStorefrontSlugFpcPublisher
         }
 
         $emitted = 0;
+        $errors = [];
         $seenScopes = [];
         foreach ($targets as $target) {
             if (!\is_array($target)) {
@@ -340,20 +344,33 @@ final class ThemeStorefrontSlugFpcPublisher
                 );
                 $this->emitUpsert($context, $slugs, $entry);
                 ++$emitted;
-            } catch (\Throwable) {
-                continue;
+            } catch (\Throwable $e) {
+                $errors[] = self::targetError($ownerScope, $storeMode, $e);
             }
-        }
-        if ($emitted < 1) {
-            return ['ok' => false, 'slug_count' => \count($slugs), 'target_count' => 0, 'skipped' => 'no_frontend_target'];
         }
 
         return [
-            'ok' => true,
+            'ok' => $emitted > 0 && $errors === [],
             'slug_count' => \count($slugs),
             'target_count' => $emitted,
-            'skipped' => null,
+            'skipped' => self::skippedReason($emitted, $errors),
+            'errors' => $errors,
         ];
+    }
+
+    /** @param list<string> $errors */
+    private static function skippedReason(int $emitted, array $errors): ?string
+    {
+        if ($errors !== []) {
+            return 'emit_failed';
+        }
+
+        return $emitted > 0 ? null : 'no_frontend_target';
+    }
+
+    private static function targetError(string $ownerScope, string $storeMode, \Throwable $e): string
+    {
+        return $ownerScope . '|' . $storeMode . ': ' . \get_class($e) . ': ' . $e->getMessage();
     }
 
     /**
@@ -461,28 +478,20 @@ final class ThemeStorefrontSlugFpcPublisher
         $websiteId = null;
         $websiteCode = null;
         $origin = '';
-        try {
-            $scopeContext = ObjectManager::getInstance(ScopeHierarchyInterface::class)
-                ->fromStorageScope($context->scope->storageScope, true);
-            $identity = $scopeContext->identity ?? null;
-            if ($identity instanceof ScopeIdentity && $identity->websiteId !== null) {
-                $websiteId = (int)$identity->websiteId;
-                $websiteCode = $identity->websiteCode !== null ? (string)$identity->websiteCode : null;
-            }
-        } catch (\Throwable) {
+        $scopeContext = ObjectManager::getInstance(ScopeHierarchyInterface::class)
+            ->fromStorageScope($context->scope->storageScope, true);
+        $identity = $scopeContext->identity ?? null;
+        if ($identity instanceof ScopeIdentity && $identity->websiteId !== null) {
+            $websiteId = (int)$identity->websiteId;
+            $websiteCode = $identity->websiteCode !== null ? (string)$identity->websiteCode : null;
         }
         if ($websiteId !== null) {
-            try {
-                if (\class_exists(InstallLocalStorefrontBaseResolver::class)) {
-                    $resolver = ObjectManager::getInstance(InstallLocalStorefrontBaseResolver::class);
-                    $origin = \trim((string)($resolver->resolveForWebsite(
-                        $websiteId,
-                        (string)($websiteCode ?? '')
-                    ) ?? ''));
-                }
-            } catch (\Throwable) {
-                $origin = '';
-            }
+            // 本机入口只服务本机 FPC 键；公网主机由 FPC/CDN 能力按站点域名自行投影。
+            $resolver = ObjectManager::getInstance(InstallLocalStorefrontBaseResolver::class);
+            $origin = \trim((string)($resolver->resolveForWebsite(
+                $websiteId,
+                (string)($websiteCode ?? '')
+            ) ?? ''));
         }
 
         return [$websiteId, $websiteCode, \rtrim($origin, '/')];

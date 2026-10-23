@@ -225,6 +225,28 @@ final class NamespaceGenerationSnapshot
         return \array_keys($this->processSnapshot['generations']);
     }
 
+    /** @param list<string> $namespaces */
+    public function dropNamespaces(array $namespaces): void
+    {
+        $changed = false;
+        foreach ($namespaces as $namespace) {
+            if (!\is_string($namespace) || $namespace === '' || $namespace === NamespacePath::AUTHORITY_CLOCK) {
+                continue;
+            }
+            if (isset($this->processSnapshot['generations'][$namespace])) {
+                unset($this->processSnapshot['generations'][$namespace]);
+                $changed = true;
+            }
+            if (isset($this->processScopedState['generations'][$namespace])) {
+                unset($this->processScopedState['generations'][$namespace]);
+                $changed = true;
+            }
+        }
+        if ($changed) {
+            $this->forgetProcessScopedState();
+        }
+    }
+
     public function beginRequest(): void
     {
         $this->clear();

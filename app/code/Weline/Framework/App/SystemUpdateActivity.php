@@ -29,23 +29,23 @@ final class SystemUpdateActivity
         return false;
     }
 
-    public static function acquire(string $command): void
+    public static function acquire(string $command): bool
     {
         $path = self::lockPath(self::fileName($command));
         if ($path === '') {
-            return;
+            return false;
         }
         $dir = dirname($path);
         if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
-            return;
+            return false;
         }
         $handle = @fopen($path, 'c+');
         if ($handle === false) {
-            return;
+            return false;
         }
         if (!flock($handle, LOCK_EX | LOCK_NB)) {
             fclose($handle);
-            return;
+            return false;
         }
         ftruncate($handle, 0);
         fwrite($handle, (string)json_encode([
@@ -55,6 +55,8 @@ final class SystemUpdateActivity
         ], JSON_UNESCAPED_UNICODE));
         fflush($handle);
         self::$handles[$command] = $handle;
+
+        return true;
     }
 
     public static function release(string $command): void

@@ -6,7 +6,7 @@ namespace Weline\Cdn\Extends\Module\Weline_Framework\Changed\Capability;
 
 use Weline\Cdn\Model\Domain;
 use Weline\Cdn\Service\CachePurger;
-use Weline\Cdn\Service\UrlSiteResolver;
+use Weline\Cdn\Service\EdgePurgeUrlPlanner;
 use Weline\Framework\Event\Changed\ChangedCapabilityInterface;
 use Weline\Framework\Event\Changed\InvalidationEffect;
 use Weline\Framework\Event\ResourceChange\ResourceChange;
@@ -41,7 +41,7 @@ final class CdnCapability implements ChangedCapabilityInterface
         $cachePurger = ObjectManager::getInstance(CachePurger::class);
 
         $impact = $change->toArray()['impact'] ?? [];
-        $urls = $this->normalizeUrls(array_merge(
+        $rawUrls = $this->stringList(array_merge(
             is_array($effect->payload['urls'] ?? null) ? $effect->payload['urls'] : [],
             is_array($impact['urls'] ?? null) ? $impact['urls'] : [],
             is_array($impact['previous_urls'] ?? null) ? $impact['previous_urls'] : [],
@@ -49,9 +49,11 @@ final class CdnCapability implements ChangedCapabilityInterface
 
         // Website 保存：统一走 purgeWebsiteScope（无绑定域名时本机仍 triggered）
         if ($change->resourceType() === 'website') {
-            $result = $cachePurger->purgeWebsiteScope((int)$change->websiteId(), $urls);
+            $result = $cachePurger->purgeWebsiteScope((int)$change->websiteId(), $this->normalizeUrls($rawUrls));
             if (($result['success'] ?? false) !== true) {
-                throw new \RuntimeException(__('CDN 资源变更清理失败'));
+                throw new \RuntimeException(__('CDN 资源变更清理失败：%{message}', [
+                    'message' => (string)($result['message'] ?? ''),
+                ]));
             }
 
             return;
@@ -76,7 +78,17 @@ final class CdnCapability implements ChangedCapabilityInterface
             return;
         }
 
-        // CDN 用原始 urls，不做 locale×currency 矩阵膨胀；若 payload 带矩阵则仍 purge
+        // 已绑定主机名的绝对 URL 原样清；相对路径与本机/预览主机名的 URL 由规划器投影到
+        // 变更站点的公网入口 × 语言变体（货币不进 URL，不做矩阵膨胀）。
+        $slugs = $this->stringList(is_array($impact['slugs'] ?? null) ? $impact['slugs'] : []);
+        $intentSiteIds = $change->hasWebsiteContext() && (int)$change->websiteId() >= 0
+            ? [(int)$change->websiteId()]
+            : $siteIds;
+        /** @var EdgePurgeUrlPlanner $planner */
+        $planner = ObjectManager::getInstance(EdgePurgeUrlPlanner::class);
+        $planned = $planner->plan(array_values($domains), $rawUrls, $slugs, $intentSiteIds);
+        $hasUrlIntent = $rawUrls !== [] || $slugs !== [];
+
         foreach ($domains as $domain) {
             if (!$domain instanceof Domain) {
                 continue;
@@ -85,18 +97,21 @@ final class CdnCapability implements ChangedCapabilityInterface
             if ($domainId < 1) {
                 continue;
             }
-            $domainUrls = array_values(array_filter($urls, static function (string $url) use ($domains, $domainId): bool {
-                $match = UrlSiteResolver::matchDomainByHost($domains, (string)(parse_url($url, PHP_URL_HOST) ?: ''));
-                return $match !== null && (int)$match->getData(Domain::schema_fields_DOMAIN_ID) === $domainId;
-            }));
-            if ($urls !== [] && $domainUrls === []) {
+            $domainUrls = $planned[$domainId] ?? [];
+            if ($hasUrlIntent && $domainUrls === []) {
                 continue;
             }
-            $result = $domainUrls === []
-                ? $cachePurger->purge($domainId, 'hosts', ['hosts' => [(string)$domain->getData(Domain::schema_fields_DOMAIN_NAME)]])
-                : $cachePurger->purge($domainId, 'urls', ['urls' => $domainUrls]);
-            if (($result['success'] ?? false) !== true) {
-                throw new \RuntimeException(__('CDN 资源变更清理失败'));
+            // 无 URL 意图（全局主题发布等）：清该域名下本站全部公网入口，而不是只清绑定根域。
+            $results = $domainUrls === []
+                ? $cachePurger->purgeDomainPublicScope($domain)
+                : [$cachePurger->purge($domainId, 'urls', ['urls' => $domainUrls])];
+            foreach ($results as $result) {
+                if (($result['success'] ?? false) !== true) {
+                    throw new \RuntimeException(__('CDN 资源变更清理失败：%{domain} %{message}', [
+                        'domain' => (string)$domain->getData(Domain::schema_fields_DOMAIN_NAME),
+                        'message' => (string)($result['message'] ?? ''),
+                    ]));
+                }
             }
         }
     }
@@ -124,6 +139,20 @@ final class CdnCapability implements ChangedCapabilityInterface
         }
 
         return array_values($ids);
+    }
+
+    /** @param array<int,mixed> $values @return list<string> */
+    private function stringList(array $values): array
+    {
+        $out = [];
+        foreach ($values as $value) {
+            $value = trim((string)$value);
+            if ($value !== '') {
+                $out[$value] = $value;
+            }
+        }
+
+        return array_values($out);
     }
 
     /** @param array<int,mixed> $urls @return list<string> */

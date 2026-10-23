@@ -33,13 +33,11 @@ class Install implements \Weline\Framework\Setup\InstallInterface
         /** @var Catalog $catalog */
         $catalog = ObjectManager::getInstance(Catalog::class);
         $modelSetup->putModel($catalog);
-        $catalog->install($modelSetup, $context);
 
         // 2. 安装文档表
         /** @var Document $document */
         $document = ObjectManager::getInstance(Document::class);
         $modelSetup->putModel($document);
-        $document->install($modelSetup, $context);
 
         // 3. 安装种子数据（通过 Model 插入，跨数据库兼容）
         /** @var InstallData $installData */

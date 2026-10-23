@@ -373,10 +373,10 @@ class Compile extends CommandAbstract
         $metadataContent .= " */\n\n";
         $metadataContent .= "return " . var_export($metadataEnvelope, true) . ";\n";
 
-        \file_put_contents($outputFile, $metadataContent);
+        $this->writeAtomically($outputFile, $metadataContent);
 
         $safeCacheContent = "<?php\n/**\n * 安全类验证缓存 - 自动生成，请勿手动编辑\n * 生成时间: " . $safeClassesCache['generated_at'] . "\n * 用途：reflection:compile 复用验证结果，减少子进程次数\n */\nreturn " . \var_export($safeClassesCache, true) . ";\n";
-        \file_put_contents($cacheFile, $safeCacheContent);
+        $this->writeAtomically($cacheFile, $safeCacheContent);
 
         $factoryCount = $this->generateCompiledFactories(
             $factoryCandidates,
@@ -593,9 +593,18 @@ class Compile extends CommandAbstract
         $content = \implode("\n", $lines);
 
         $outputFile = $generatedDir . DIRECTORY_SEPARATOR . 'compiled_factories.php';
-        \file_put_contents($outputFile, $content);
+        $this->writeAtomically($outputFile, $content);
 
         return $count;
+    }
+
+    private function writeAtomically(string $outputFile, string $content): void
+    {
+        $tmp = $outputFile . '.tmp.' . getmypid();
+        if (@file_put_contents($tmp, $content) === false || !@rename($tmp, $outputFile)) {
+            @unlink($tmp);
+            throw new \RuntimeException('无法原子写入文件: ' . $outputFile);
+        }
     }
 
     /**

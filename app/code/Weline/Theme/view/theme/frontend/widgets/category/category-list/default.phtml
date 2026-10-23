@@ -36,7 +36,7 @@ $showImage = (bool)($this->getData('show_image') ?? false);
 $collapsed = (bool)($this->getData('collapsed') ?? false);
 $searchHref = static fn (string $query): string => '/search?q=' . rawurlencode($query);
 
-// 默认主题编辑器占位：中性服饰类目。站专属汉服树见 app/design/Weline/hanfu/.../category-list。
+// 默认主题编辑器占位：中性服饰类目。
 $categories = [
     [
         'id' => 1,

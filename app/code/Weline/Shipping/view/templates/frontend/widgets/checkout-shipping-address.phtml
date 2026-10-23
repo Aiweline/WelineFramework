@@ -99,6 +99,8 @@ $seed = [
 $nameMode = 'single';
 $labelFirst = (string)__('名');
 $labelLast = (string)__('姓');
+/** @var array<string,mixed>|null $phoneRule 初始国家电话规则（country_profile.phone）；换国后由 address.js 事件刷新 */
+$phoneRule = null;
 try {
     $nameProfile = ObjectManager::getInstance(\Weline\Shipping\Service\AddressCountryProfileService::class)
         ->profileFor((string)$seed['country_code']);
@@ -107,6 +109,7 @@ try {
     }
     $labelFirst = (string)($nameProfile['labels']['first_name'] ?? $labelFirst);
     $labelLast = (string)($nameProfile['labels']['last_name'] ?? $labelLast);
+    $phoneRule = is_array($nameProfile['phone'] ?? null) ? $nameProfile['phone'] : null;
 } catch (\Throwable) {
     // schema optional — keep single Recipient field
 }
@@ -164,6 +167,7 @@ $ui = [
     'err_name' => (string)__('请填写收货人。'),
     'err_phone' => (string)__('请填写电话。'),
     'err_phone_invalid' => (string)__('电话号码格式不正确'),
+    'err_phone_invalid_example' => (string)__('电话号码格式不正确，示例：%{1}'),
     'err_address1' => (string)__('请填写详细地址。'),
 ];
 ?>
@@ -182,6 +186,7 @@ $ui = [
          data-is-logged-in="<?= $isLoggedIn ? '1' : '0' ?>"
          data-selected-id="<?= $esc($selectedId) ?>"
          data-initial-address="<?= $esc(json_encode($seed, $jsonFlags) ?: '{}') ?>"
+         data-phone-rule="<?= $esc(json_encode($phoneRule, $jsonFlags) ?: 'null') ?>"
          data-i18n="<?= $esc(json_encode($ui, $jsonFlags) ?: '{}') ?>">
 
     <div class="w-shipping-checkout-address__section" data-shipping-section>

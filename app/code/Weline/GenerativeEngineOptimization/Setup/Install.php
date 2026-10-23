@@ -34,35 +34,30 @@ class Install implements InstallInterface
         $platform = ObjectManager::getInstance(Platform::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($platform);
-        $platform->setup($modelSetup, $context);
         
         // 安装PlatformAccount表
         /** @var PlatformAccount $platformAccount */
         $platformAccount = ObjectManager::getInstance(PlatformAccount::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($platformAccount);
-        $platformAccount->setup($modelSetup, $context);
         
         // 安装Feed表
         /** @var Feed $feed */
         $feed = ObjectManager::getInstance(Feed::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($feed);
-        $feed->setup($modelSetup, $context);
         
         // 安装FeedItem表
         /** @var FeedItem $feedItem */
         $feedItem = ObjectManager::getInstance(FeedItem::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($feedItem);
-        $feedItem->setup($modelSetup, $context);
         
         // 安装PushLog表
         /** @var PushLog $pushLog */
         $pushLog = ObjectManager::getInstance(PushLog::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($pushLog);
-        $pushLog->setup($modelSetup, $context);
 
         // 注册队列类型
         $this->registerQueueTypes();

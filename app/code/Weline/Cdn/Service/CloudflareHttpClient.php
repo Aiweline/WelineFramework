@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Cdn\Service;
 
+use Weline\Cdn\Exception\CloudflareApiException;
+
 /**
  * Small Cloudflare transport with deliberately redacted failures.
  */
@@ -241,16 +243,22 @@ final class CloudflareHttpClient
         }
 
         if ($status < 200 || $status >= 300) {
-            throw new \RuntimeException(
+            $code = $this->publicErrorCode($decoded);
+            throw new CloudflareApiException(
                 (string)__(
                     'Cloudflare 请求失败（HTTP %{1}，代码 %{2}）。',
-                    [$status, $this->publicErrorCode($decoded)],
-                )
+                    [$status, $code],
+                ),
+                $status,
+                $code,
             );
         }
         if ($cloudflareEnvelope && ($decoded['success'] ?? false) !== true) {
-            throw new \RuntimeException(
-                (string)__('Cloudflare API 拒绝请求（代码 %{1}）。', $this->publicErrorCode($decoded))
+            $code = $this->publicErrorCode($decoded);
+            throw new CloudflareApiException(
+                (string)__('Cloudflare API 拒绝请求（代码 %{1}）。', $code),
+                $status,
+                $code,
             );
         }
         if (!$cloudflareEnvelope && isset($decoded['error'])) {

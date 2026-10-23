@@ -134,7 +134,8 @@ probe_http_with_max_time_before_navigate → prefer_background_non_preemptive_na
 | 项 | 规则 |
 |---|---|
 | **默认主 Host** | `{project_hash}.test.weline.com`（例：`p05113ef3.test.weline.com`） |
-| **主链形态** | `http://{project_hash}.test.weline.com:{port}/path`（本机常为 http，勿伪造 https） |
+| **主链形态** | `https://{project_hash}.test.weline.com/path`（托管 Nginx 80/443；http 会 308 到 https） |
+| **禁止带端口** | 本机交付/汇报 URL **一律不带** `:端口`（含 WLS Worker `:9555`）；无端口探活不通则如实报阻塞，禁止改用带端口地址 |
 | **禁止作主验收** | `*.weline.test`（例：`p05113ef3.weline.test`）——即使 `/etc/hosts` 也解析，也不得作为交付主链 |
 | **回退** | 仅当不存在可用的 `*.test.weline.com` 时，才用 `127.0.0.1` / `localhost` |
 | **MCP 契约** | `agent_guidance.feature_delivery_urls`（含 `default_local_host` / `forbidden_primary_hosts`）、`closeout_delivery_reminder`、`hard_constraints.feature_delivery_urls` |
@@ -145,8 +146,8 @@ probe_http_with_max_time_before_navigate → prefer_background_non_preemptive_na
 ```markdown
 ## 交付地址
 
-- [后台系统配置](http://p05113ef3.test.weline.com:9555/后台前缀/system-config/...?w_fpc_pierce=<install_secret>)
-- [前台某某页](http://p05113ef3.test.weline.com:9555/path?w_fpc_pierce=<install_secret>)
+- [后台系统配置](https://p05113ef3.test.weline.com/后台前缀/system-config/...?w_fpc_pierce=<install_secret>)
+- [前台某某页](https://p05113ef3.test.weline.com/path?w_fpc_pierce=<install_secret>)
 - API / Query：`w_query ...` 或 N/A
 ```
 

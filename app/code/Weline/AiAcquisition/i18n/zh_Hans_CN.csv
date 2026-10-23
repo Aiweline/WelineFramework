@@ -1,0 +1,98 @@
+﻿"AI 获客查询器不支持操作：%{1}","AI 获客查询器不支持操作：%{1}"
+"AI 获客服务暂时不可用，请稍后重试。","AI 获客服务暂时不可用，请稍后重试。"
+线索不存在。,线索不存在。
+线索数据格式不正确。,线索数据格式不正确。
+线索不存在或删除失败。,线索不存在或删除失败。
+"内置通用 B2B 获客提示词","内置通用 B2B 获客提示词"
+提示词数据格式不正确。,提示词数据格式不正确。
+提示词代码、名称和正文不能为空。,提示词代码、名称和正文不能为空。
+提示词代码只能包含字母、数字、下划线和短横线。,提示词代码只能包含字母、数字、下划线和短横线。
+内置提示词代码为保留代码，请换一个代码。,内置提示词代码为保留代码，请换一个代码。
+提示词档案不存在。,提示词档案不存在。
+提示词代码已存在。,提示词代码已存在。
+请选择模型。,请选择模型。
+运行参数格式不正确。,运行参数格式不正确。
+运行记录不存在。,运行记录不存在。
+"智能体未注册，请先执行 ai:agent:scan。","智能体未注册，请先执行 ai:agent:scan。"
+"AI 获客","AI 获客"
+"客户线索、获客提示词、AI 模型预估与智能体运行管理。","客户线索、获客提示词、AI 模型预估与智能体运行管理。"
+"参数 %{1} 必须是正整数。","参数 %{1} 必须是正整数。"
+"ids 必须是数组。","ids 必须是数组。"
+请选择至少一条记录。,请选择至少一条记录。
+"AI 获客智能体","AI 获客智能体"
+"在公开网络上检索潜在买家，核实证据并写入线索库；支持站点/产品线/ICP 上下文注入。","在公开网络上检索潜在买家，核实证据并写入线索库；支持站点/产品线/ICP 上下文注入。"
+获客智能体没有可用工具。,获客智能体没有可用工具。
+"AI 提供者不可用：%{1}","AI 提供者不可用：%{1}"
+"AI 调用失败：%{1}","AI 调用失败：%{1}"
+未找到工具：%{1},未找到工具：%{1}
+已达到最大轮次，未得到最终结论。请缩小检索范围后重试。,已达到最大轮次，未得到最终结论。请缩小检索范围后重试。
+创建获客运行,创建获客运行
+查看客户线索,查看客户线索
+公开网络获客,公开网络获客
+线索复核与跟进,线索复核与跟进
+"已入库 %{1} 条线索 · %{2} 次运行","已入库 %{1} 条线索 · %{2} 次运行"
+运行记录不存在,运行记录不存在
+事件拉取失败,事件拉取失败
+"payload 必须是 JSON 对象","payload 必须是 JSON 对象"
+"payload 过大","payload 过大"
+"messages 不能为空","messages 不能为空"
+"messages 数量超出上限","messages 数量超出上限"
+"tools 必须是数组","tools 必须是数组"
+"params 必须是数组","params 必须是数组"
+运行使用的模型不可用,运行使用的模型不可用
+模型调用失败：,模型调用失败：
+"lead 必须是 JSON 对象","lead 必须是 JSON 对象"
+运行状态不合法,运行状态不合法
+"stats 必须是数组","stats 必须是数组"
+请求处理失败，请稍后重试,请求处理失败，请稍后重试
+"仅接受 application/json 请求体","仅接受 application/json 请求体"
+"请求体必须是 JSON 对象","请求体必须是 JSON 对象"
+请求体过大,请求体过大
+缺少票据,缺少票据
+search,search
+"AI 获客智能体运行与浏览器桥","AI 获客智能体运行与浏览器桥"
+查看获客智能体,查看获客智能体
+list,list
+查看获客智能体运行记录,查看获客智能体运行记录
+"AI 获客线索","AI 获客线索"
+users,users
+"AI 获客客户线索库","AI 获客客户线索库"
+"查看 AI 获客客户线索","查看 AI 获客客户线索"
+"运行 ID 无效","运行 ID 无效"
+票据为空或格式不正确,票据为空或格式不正确
+票据无效或已过期,票据无效或已过期
+请求过于频繁，请稍后再试,请求过于频繁，请稍后再试
+事件类型不合法,事件类型不合法
+事件方向不合法,事件方向不合法
+事件负载无法序列化,事件负载无法序列化
+模型不存在或不可用：%{1},模型不存在或不可用：%{1}
+"无法确定模型 %{1} 的供应商，请检查 AI 模型配置。","无法确定模型 %{1} 的供应商，请检查 AI 模型配置。"
+"供应商 %{1} 没有可用账户（需激活且连通成功），请先在 AI 模块添加账户。","供应商 %{1} 没有可用账户（需激活且连通成功），请先在 AI 模块添加账户。"
+"模型 %{1} 无法匹配供应商 %{2}：%{3}","模型 %{1} 无法匹配供应商 %{2}：%{3}"
+模型代码不能为空。,模型代码不能为空。
+模型不存在：%{1},模型不存在：%{1}
+"没有可用的文本模型，请先在 AI 模块配置模型：%{1}","没有可用的文本模型，请先在 AI 模块配置模型：%{1}"
+请先选择要获客的网站。,请先选择要获客的网站。
+网站不存在或尚未配置可用的站点画像。,网站不存在或尚未配置可用的站点画像。
+提示词档案不存在：%{1},提示词档案不存在：%{1}
+运行记录创建失败。,运行记录创建失败。
+"finish 只接受终态，收到：%{1}","finish 只接受终态，收到：%{1}"
+"Open one public page and extract title, meta description, company name, public emails, country hints and a text excerpt. Use it to verify buyer intent before saving a lead.","Open one public page and extract title, meta description, company name, public emails, country hints and a text excerpt. Use it to verify buyer intent before saving a lead."
+"url 不能为空，请给出搜索结果中的公开页面地址。","url 不能为空，请给出搜索结果中的公开页面地址。"
+页面检查失败：%{1},页面检查失败：%{1}
+"Check whether a lead already exists before saving. Searches existing leads by company, email, domain or source URL keyword and returns a short summary.","Check whether a lead already exists before saving. Searches existing leads by company, email, domain or source URL keyword and returns a short summary."
+"keyword 不能为空，请给出公司名、邮箱、域名或来源 URL 关键词。","keyword 不能为空，请给出公司名、邮箱、域名或来源 URL 关键词。"
+查询已有线索失败：%{1},查询已有线索失败：%{1}
+没有匹配的已有线索，可以继续核实并保存。,没有匹配的已有线索，可以继续核实并保存。
+已存在相同或相近线索，请复用并补充证据，不要重复保存。,已存在相同或相近线索，请复用并补充证据，不要重复保存。
+"Save one verified buyer lead with evidence. Requires a public source URL. Returns created=true for a new lead, or created=false when the lead already exists and was merged.","Save one verified buyer lead with evidence. Requires a public source URL. Returns created=true for a new lead, or created=false when the lead already exists and was merged."
+"payload 不能为空，请至少提供来源 URL 与证据摘录。","payload 不能为空，请至少提供来源 URL 与证据摘录。"
+"缺少 5 轴评分（axes）或 ai_score，请先按 0–2 分打分。","缺少 5 轴评分（axes）或 ai_score，请先按 0–2 分打分。"
+"资格分低于 6，按规则不入库；请继续寻找更匹配的买家。","资格分低于 6，按规则不入库；请继续寻找更匹配的买家。"
+线索保存失败：%{1},线索保存失败：%{1}
+已入库，可继续寻找下一条线索；同一轮不要重复保存。,已入库，可继续寻找下一条线索；同一轮不要重复保存。
+该线索已存在，已合并证据并累加命中次数，不要重复保存。,该线索已存在，已合并证据并累加命中次数，不要重复保存。
+"Search the public web for buyer-side leads. Returns title, url, snippet and rank. Empty results mean you must change keywords instead of inventing leads.","Search the public web for buyer-side leads. Returns title, url, snippet and rank. Empty results mean you must change keywords instead of inventing leads."
+"query 不能为空，请给出体现买家意向的检索词。","query 不能为空，请给出体现买家意向的检索词。"
+搜索失败：%{1},搜索失败：%{1}
+没有检索到结果。请更换同义词、买家意向词或来源后重试，不要据此编造线索。,没有检索到结果。请更换同义词、买家意向词或来源后重试，不要据此编造线索。

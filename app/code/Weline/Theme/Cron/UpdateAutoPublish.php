@@ -75,6 +75,10 @@ final class UpdateAutoPublish implements CronTaskInterface
                     continue;
                 }
                 $done++;
+                $postSwitch = (array)($result['state']['post_switch_errors'] ?? []);
+                if ($postSwitch !== []) {
+                    $failed[] = $themeId . ':post_switch:' . \substr((string)$postSwitch[0], 0, 120);
+                }
             } catch (\Throwable $e) {
                 $failed[] = $themeId . ':' . \substr($e->getMessage(), 0, 80);
             }

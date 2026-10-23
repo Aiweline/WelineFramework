@@ -127,12 +127,6 @@ final class SetupContractsTest extends TestCase
             'UpgradeCompileLockCli::testBootstrapRegistryUsesCliPublisher' => function () {
             $this->assert_UpgradeCompileLockCli_testBootstrapRegistryUsesCliPublisher();
         },
-            'UpgradeMigrationsEvent::testMigrationEventIsCataloguedSubscribedAndOrdered' => function () {
-            $this->assert_UpgradeMigrationsEvent_testMigrationEventIsCataloguedSubscribedAndOrdered();
-        },
-            'UpgradeMigrationsEvent::testUpgradeAfterPayloadIsPassedThroughAReferenceCompatibleVariable' => function () {
-            $this->assert_UpgradeMigrationsEvent_testUpgradeAfterPayloadIsPassedThroughAReferenceCompatibleVariable();
-        },
             'UpgradeRouteSchemaRefresh::testRouteOnlySchemaDiffUsesAHandleCreatedAfterModuleRegistryRefresh' => function () {
             $this->assert_UpgradeRouteSchemaRefresh_testRouteOnlySchemaDiffUsesAHandleCreatedAfterModuleRegistryRefresh();
         },
@@ -491,35 +485,6 @@ private function assert_UpgradeCompileLockCli_testBootstrapRegistryUsesCliPublis
     self::assertStringContainsString('formatLockHolder($outputDirectory)', $upgrade);
     self::assertStringContainsString('AtomicCompiledFilePublisher::forCli()', $fileStage);
     self::assertStringNotContainsString('new AtomicCompiledFilePublisher()', $fileStage);
-}
-
-private function assert_UpgradeMigrationsEvent_testMigrationEventIsCataloguedSubscribedAndOrdered(): void
-{
-    $frameworkRoot = '/Users/weline/Project/Official/框架/app/code/Weline/Framework';
-    $databaseRoot = \dirname($frameworkRoot) . '/Database';
-    $catalog = (string) \file_get_contents($frameworkRoot . '/event.php');
-    $upgrade = (string) \file_get_contents($frameworkRoot . '/Setup/Console/Setup/Upgrade.php');
-    $databaseEvents = (string) \file_get_contents($databaseRoot . '/etc/event.xml');
-    self::assertStringContainsString("'Weline_Framework_Setup::upgrade_migrations' => [", $catalog);
-    self::assertSame(1, \preg_match('/<event name="Weline_Framework_Setup::upgrade_migrations">.*?' . 'Weline\\\\Database\\\\Observer\\\\SetupUpgradeObserver.*?<\/event>/s', $databaseEvents));
-    self::assertStringContainsString("\$eventsManager->dispatch('Weline_Framework_Setup::upgrade_migrations'", $upgrade);
-    $migrationCall = \strpos($upgrade, '$this->runDatabaseFileMigrations($args, $argsModule);');
-    self::assertIsInt($migrationCall);
-    $schemaCommit = \strrpos(\substr($upgrade, 0, $migrationCall), '$schemaDiffStage->commit();');
-    $moduleSetupCommit = \strpos($upgrade, '$moduleSetupStage->commit();', $migrationCall);
-    self::assertIsInt($schemaCommit);
-    self::assertIsInt($moduleSetupCommit);
-    self::assertLessThan($migrationCall, $schemaCommit);
-    self::assertLessThan($moduleSetupCommit, $migrationCall);
-}
-
-private function assert_UpgradeMigrationsEvent_testUpgradeAfterPayloadIsPassedThroughAReferenceCompatibleVariable(): void
-{
-    $frameworkRoot = '/Users/weline/Project/Official/框架/app/code/Weline/Framework';
-    $upgrade = (string) \file_get_contents($frameworkRoot . '/Setup/Console/Setup/Upgrade.php');
-    self::assertSame(2, \substr_count($upgrade, '$upgradeAfterPayload = ['));
-    self::assertSame(2, \substr_count($upgrade, "\$eventsManager->dispatch('Weline_Framework_Setup::upgrade_after', \$upgradeAfterPayload);"));
-    self::assertStringNotContainsString("\$eventsManager->dispatch('Weline_Framework_Setup::upgrade_after', [", $upgrade);
 }
 
 private function assert_UpgradeRouteSchemaRefresh_testRouteOnlySchemaDiffUsesAHandleCreatedAfterModuleRegistryRefresh(): void

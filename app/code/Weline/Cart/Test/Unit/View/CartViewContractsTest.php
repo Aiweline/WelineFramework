@@ -138,6 +138,9 @@ final class CartViewContractsTest extends TestCase
             'ProductAddToCartWidget::testPurchasePanelEnsuresProductInfoAssetsOnListingHosts' => function () {
             $this->assert_ProductAddToCartWidget_testPurchasePanelEnsuresProductInfoAssetsOnListingHosts();
         },
+            'ProductAddToCartWidget::testPurchasePanelMountDropsSupersededResponses' => function () {
+            $this->assert_ProductAddToCartWidget_testPurchasePanelMountDropsSupersededResponses();
+        },
             'ProductAddToCartWidget::testAddOfferResolvesCartTypeFromPreferredModeBeforeSsrHtml' => function () {
             $this->assert_ProductAddToCartWidget_testAddOfferResolvesCartTypeFromPreferredModeBeforeSsrHtml();
         },
@@ -831,6 +834,19 @@ private function assert_ProductAddToCartWidget_testPurchasePanelEnsuresProductIn
     self::assertStringContainsString('Weline_Product::css/widgets/product-native-detail.css', $script);
     self::assertStringContainsString('Weline_Product::js/widgets/widget-product-info-0.js', $script);
     self::assertStringContainsString('data-purchase-panel-css', $script);
+}
+
+private function assert_ProductAddToCartWidget_testPurchasePanelMountDropsSupersededResponses(): void
+{
+    $root = '/Users/weline/Project/Official/框架/app/code/Weline/Cart/view/statics/js/widgets/';
+    foreach (['product-purchase-actions.js', 'product-purchase-actions-w18n-v3.js'] as $file) {
+        $script = (string) file_get_contents($root . $file);
+        // A slower earlier response must not overwrite the panel of a newer open (quick view reuses one body).
+        self::assertStringContainsString('body.dataset.purchasePanelMountSeq = mountSeq', $script, $file);
+        self::assertGreaterThanOrEqual(3, substr_count($script, 'return { superseded: true };'), $file);
+    }
+    $compare = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Compare/view/statics/js/product-card-actions.js');
+    self::assertStringContainsString('result.superseded', $compare);
 }
 
 private function assert_ProductAddToCartWidget_testAddOfferResolvesCartTypeFromPreferredModeBeforeSsrHtml(): void

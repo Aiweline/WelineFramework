@@ -1,5 +1,8 @@
+/* Themes may render .weline-header as position:static, where the header lift below
+ * creates no stacking context and this wrapper competes in the root context itself;
+ * it must then carry the modal level, or the storefront float layer paints over the drawer. */
 .weline-header .header-cart.is-drawer-open {
-    z-index: calc(var(--weline-z-overlay, 900) + 2);
+    z-index: var(--weline-z-mini-cart-modal, 2147483010);
 }
 
 /* —— 层叠顺序：迷你购物车是 aria-modal 抽屉，打开时必须盖过店面常驻浮层 ——

@@ -13,6 +13,7 @@ use Weline\Payment\Api\Data\PaymentResult;
 use Weline\Payment\Api\Data\PayableSnapshot;
 use Weline\Payment\Api\Data\QueryRequest;
 use Weline\Payment\Api\Data\RefundResult;
+use Weline\Payment\Api\Data\ResumeRequest;
 use Weline\Payment\Api\PaymentMethodIncentiveQuoteInterface;
 use Weline\Payment\Model\PaymentMethod;
 use Weline\Payment\Model\PaymentRefund;
@@ -170,6 +171,119 @@ class PaymentService
             $methodCode,
             $scope,
         );
+
+        return $transaction;
+    }
+
+    /**
+     * Confirm an existing transaction with its provider (Card Fields capture,
+     * Stripe Checkout resume, etc.). Idempotent: a success transaction is
+     * returned without a second provider call.
+     *
+     * @param array<string, mixed> $context
+     */
+    public function confirmPayment(string $transactionNo, array $context = []): PaymentTransaction
+    {
+        $transactionNo = trim($transactionNo);
+        if ($transactionNo === '') {
+            throw new \InvalidArgumentException('payment_transaction_no_required');
+        }
+
+        /** @var PaymentTransaction $transaction */
+        $transaction = $this->objectManager->getInstance(PaymentTransaction::class);
+        $transaction->load(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo);
+        if (!$transaction->getId()) {
+            throw new \RuntimeException('payment_transaction_not_found');
+        }
+        // Order binding must be checked before the idempotent success return:
+        // a successful transaction for another order must never be replayed.
+        $transactionOrderId = trim((string) $transaction->getData(PaymentTransaction::schema_fields_ORDER_ID));
+        $expectedOrderId = trim((string) ($context['order_uuid'] ?? ''));
+        if ($expectedOrderId !== ''
+            && ($transactionOrderId === '' || !hash_equals($transactionOrderId, $expectedOrderId))
+        ) {
+            throw new \RuntimeException('payment_transaction_order_mismatch');
+        }
+        if ($transaction->isSuccess()) {
+            return $transaction;
+        }
+
+        $methodCode = strtolower(trim((string) $transaction->getData(PaymentTransaction::schema_fields_METHOD_CODE)));
+        $paymentMethod = $this->methodManager->getMethodByCode($methodCode);
+        if (!$paymentMethod) {
+            throw new \RuntimeException((string) __('支付方式 %{code} 不存在或未启用', ['code' => $methodCode]));
+        }
+
+        $requestData = $transaction->getRequestData();
+        $response = $transaction->getResponseData();
+        $context = array_replace($requestData, $context);
+        $scopeConfig = new PaymentScopeConfigService();
+        $scope = $scopeConfig->resolveScope($context);
+        $runtimeConfig = $this->methodManager->getRuntimeConfig($paymentMethod, $scope);
+        $scope['environment'] = $scopeConfig->selectMethodEnvironment(
+            (string) ($scope['environment'] ?? ''),
+            $runtimeConfig,
+        );
+        $runtimeCapabilities = $this->methodManager->getRuntimeCapabilities($paymentMethod, $scope);
+        $context['runtime_config'] = $runtimeConfig;
+        $context['runtime_capabilities'] = $runtimeCapabilities;
+        $context['scope'] = $scope['scope'];
+        $context['environment'] = $scope['environment'];
+
+        $provider = $this->methodManager->getProviderInstance($paymentMethod, $context);
+        if (!$provider) {
+            throw new \RuntimeException('payment_provider_unavailable');
+        }
+
+        // Only trust the provider reference persisted at create time. A client may
+        // echo it back, but it must match exactly; never capture an arbitrary order.
+        $storedReference = trim((string) ($response['provider_reference'] ?? ''));
+        $payload = \is_array($response['payload'] ?? null) ? $response['payload'] : [];
+        $storedOrderId = trim((string) ($payload['order_id'] ?? $payload['client_action']['data']['order_id'] ?? ''));
+        $providerReference = $storedOrderId !== '' ? $storedOrderId : $storedReference;
+        $clientReference = trim((string) ($context['provider_reference'] ?? ''));
+        if ($clientReference !== '' && $providerReference !== '' && !hash_equals($providerReference, $clientReference)) {
+            throw new \RuntimeException('payment_provider_reference_mismatch');
+        }
+        if ($providerReference === '') {
+            throw new \RuntimeException('payment_provider_reference_missing');
+        }
+
+        $amountMinor = (int) ($requestData['amount_minor'] ?? round(((float) ($requestData['amount'] ?? 0)) * 100));
+        $result = $provider->resumePayment(ResumeRequest::fromArray([
+            'intent_code' => (string) ($requestData['intent_code'] ?? $transactionNo),
+            'attempt_code' => (string) ($requestData['attempt_code'] ?? $transactionNo . '-1'),
+            'payable_type' => (string) ($requestData['payable_type'] ?? 'order'),
+            'payable_id' => (string) ($requestData['payable_id'] ?? $requestData['order_id'] ?? ''),
+            'method_code' => $methodCode,
+            'provider_code' => $provider->getProviderCode(),
+            'scope' => (string) ($scope['scope'] ?? 'default.default.default'),
+            'amount_minor' => $amountMinor,
+            'currency_code' => strtoupper((string) ($requestData['currency'] ?? $requestData['currency_code'] ?? '')),
+            'idempotency_key' => (string) ($requestData['idempotency_key'] ?? $transactionNo),
+            'provider_reference' => $providerReference,
+            'return_url' => (string) ($requestData['return_url'] ?? ''),
+            'cancel_url' => (string) ($requestData['cancel_url'] ?? ''),
+            'failure_url' => (string) ($requestData['failure_url'] ?? ''),
+            'context' => $context,
+        ]));
+
+        $merged = $result->getData();
+        $merged['payload'] = array_replace(
+            \is_array($response['payload'] ?? null) ? $response['payload'] : [],
+            \is_array($merged['payload'] ?? null) ? $merged['payload'] : [],
+        );
+        $transaction->setResponseData($merged)
+            ->setData(PaymentTransaction::schema_fields_STATUS, $this->mapPaymentStatus($result))
+            ->save();
+        if ($result->isSuccessful()) {
+            $transaction->setData(PaymentTransaction::schema_fields_PAID_AT, date('Y-m-d H:i:s'))->save();
+        }
+        if ($result->getStatus() === PaymentResult::STATUS_FAILED) {
+            throw new \RuntimeException(
+                (string) ($result->getData(PaymentResult::FIELD_MESSAGE) ?: __('支付确认失败'))
+            );
+        }
 
         return $transaction;
     }

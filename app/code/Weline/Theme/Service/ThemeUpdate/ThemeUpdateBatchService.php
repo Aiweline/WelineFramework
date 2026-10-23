@@ -66,10 +66,11 @@ final class ThemeUpdateBatchService
     }
 
     /**
-     * 部署换版后的主题世代目录补齐（供 Framework 部署命令调用）。
+     * 部署换版后只保留当前主题世代。
      *
-     * 每个在用主题把上一对主题世代目录硬链接到 `/{主题code}/v{版本号}/{新部署}`，
-     * 再由本次 promote 的镜像覆盖变更文件。无世代段/无旧目录时静默跳过。
+     * 新部署号目录从刚发布的平铺树生成（不从旧世代目录拷）。
+     * 当前 `{code}/v{n}/{部署号}` 落地后，删掉该主题其余世代目录，并一次性丢掉旧 FPC。
+     * 指针上没有 pair_segment 的主题不动。
      */
     public static function backfillThemePairForNewDeploy(string $pubStatic, string $newDeployId): int
     {
@@ -77,38 +78,129 @@ final class ThemeUpdateBatchService
         if ($root === '' || $newDeployId === '' || !\is_dir($root)) {
             return 0;
         }
-        $linked = 0;
+        $ready = 0;
         $map = self::pointerFileMap();
         foreach ($map as $row) {
-            $batchId = \trim((string)($row['batch_id'] ?? ''));
-            $batchRoot = $root . DIRECTORY_SEPARATOR . $batchId;
-            if ($batchId === '' || !\is_dir($batchRoot)) {
-                continue;
-            }
-            $themeId = (int)($row['theme_id'] ?? 0);
-            $pair = self::pairFromThemeId($themeId);
+            $pair = self::pairFromPointerRow(\is_array($row) ? $row : []);
             if ($pair === []) {
                 continue;
             }
             [$themeCode, $versionNumber] = $pair;
-            $target = $root . DIRECTORY_SEPARATOR . $themeCode . DIRECTORY_SEPARATOR
-                . 'v' . $versionNumber . DIRECTORY_SEPARATOR . $newDeployId;
-            if (\is_dir($target)) {
+            if (!self::seedThemePairFromNewDeploy($root, $themeCode, $versionNumber, $newDeployId)) {
                 continue;
             }
-            // 上一对主题世代目录；没有则从批次根整棵硬链接。
-            $source = self::latestThemePairRoot($root, $themeCode, $versionNumber);
-            if ($source === '') {
-                continue;
-            }
-            if (!@mkdir(\dirname($target), 0775, true) && !\is_dir(\dirname($target))) {
-                continue;
-            }
-            self::hardLinkTree($source, $target);
-            $linked++;
+            self::retireStaleThemePairDirs($root, $themeCode, $versionNumber, $newDeployId);
+            $ready++;
+        }
+        if ($ready > 0) {
+            self::discardRetiredFpc();
         }
 
-        return $linked;
+        return $ready;
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return array{0:string,1:int}|[]
+     */
+    public static function pairFromPointerRow(array $row): array
+    {
+        $segment = \trim((string)($row['pair_segment'] ?? ''));
+        if (\preg_match('#^([A-Za-z0-9_.-]+)/v([0-9]+)$#', $segment, $match) === 1) {
+            $version = (int)$match[2];
+            if ($version > 0) {
+                return [$match[1], $version];
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * 当前世代目录不存在时，从本次部署平铺树生成。已有内容不覆盖。
+     */
+    public static function seedThemePairFromNewDeploy(
+        string $pubStatic,
+        string $themeCode,
+        int $versionNumber,
+        string $deployId,
+    ): bool {
+        if (!self::isSafePairIdentity($themeCode, $versionNumber, $deployId)) {
+            return false;
+        }
+        $root = \rtrim($pubStatic, '/\\');
+        $target = self::themePairDir($root, $themeCode, $versionNumber, $deployId);
+        if (self::directoryHasFile($target)) {
+            return true;
+        }
+        $flatWeline = $root . \DIRECTORY_SEPARATOR . $deployId . \DIRECTORY_SEPARATOR . 'Weline';
+        if (!\is_dir($flatWeline)) {
+            return false;
+        }
+        if (!\is_dir($target) && !@\mkdir($target, 0775, true) && !\is_dir($target)) {
+            return false;
+        }
+        $themeSrc = $flatWeline . \DIRECTORY_SEPARATOR . 'Theme';
+        if (\is_dir($themeSrc)) {
+            self::hardLinkTree($themeSrc, $target . \DIRECTORY_SEPARATOR . 'Weline' . \DIRECTORY_SEPARATOR . 'Theme');
+        }
+        if ($themeCode !== 'Theme') {
+            $designSrc = $flatWeline . \DIRECTORY_SEPARATOR . $themeCode;
+            if (\is_dir($designSrc)) {
+                self::hardLinkTree($designSrc, $target . \DIRECTORY_SEPARATOR . 'Weline' . \DIRECTORY_SEPARATOR . $themeCode);
+            }
+        }
+
+        return self::directoryHasFile($target);
+    }
+
+    /**
+     * 新世代目录已经有文件时，删除该主题 code 下其余版本和其余部署号。
+     */
+    public static function retireStaleThemePairDirs(
+        string $pubStatic,
+        string $themeCode,
+        int $versionNumber,
+        string $deployId,
+    ): int {
+        if (!self::isSafePairIdentity($themeCode, $versionNumber, $deployId)) {
+            return 0;
+        }
+        $root = \rtrim($pubStatic, '/\\');
+        $keep = self::themePairDir($root, $themeCode, $versionNumber, $deployId);
+        if (!self::directoryHasFile($keep)) {
+            return 0;
+        }
+        $codeDir = $root . \DIRECTORY_SEPARATOR . $themeCode;
+        $keepVersion = 'v' . $versionNumber;
+        $removed = 0;
+        foreach ((array)@\scandir($codeDir) as $versionDir) {
+            if ($versionDir === '.' || $versionDir === '..' || \preg_match('/^v[0-9]+$/', (string)$versionDir) !== 1) {
+                continue;
+            }
+            $versionPath = $codeDir . \DIRECTORY_SEPARATOR . $versionDir;
+            if (!\is_dir($versionPath)) {
+                continue;
+            }
+            if ($versionDir !== $keepVersion) {
+                self::removeTreeStatic($versionPath);
+                $removed++;
+                continue;
+            }
+            foreach ((array)@\scandir($versionPath) as $deployDir) {
+                if ($deployDir === '.' || $deployDir === '..' || $deployDir === $deployId) {
+                    continue;
+                }
+                $candidate = $versionPath . \DIRECTORY_SEPARATOR . $deployDir;
+                if (!\is_dir($candidate)) {
+                    continue;
+                }
+                self::removeTreeStatic($candidate);
+                $removed++;
+            }
+        }
+
+        return $removed;
     }
 
     /** @return array<string,mixed> 指针 map（batch_id → row） */
@@ -134,56 +226,61 @@ final class ThemeUpdateBatchService
         return $rows;
     }
 
-    /** @return array{0:string,1:int}|[] */
-    private static function pairFromThemeId(int $themeId): array
+    private static function themePairDir(string $root, string $themeCode, int $versionNumber, string $deployId): string
     {
-        if ($themeId < 1 || !\class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
-            return [];
-        }
-        try {
-            /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
-            $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class);
-            $identity = $resolver->resolveGenerationIdentity($themeId);
-            $code = \trim((string)($identity['themeCode'] ?? ''));
-            $version = (int)($identity['versionNumber'] ?? 0);
-
-            return ($code !== '' && $version > 0) ? [$code, $version] : [];
-        } catch (\Throwable) {
-            return [];
-        }
+        return $root . \DIRECTORY_SEPARATOR . $themeCode . \DIRECTORY_SEPARATOR
+            . 'v' . $versionNumber . \DIRECTORY_SEPARATOR . $deployId;
     }
 
-    /** 已有的主题世代目录（同 code 任一版本/部署），取最新 mtime 的一个。 */
-    private static function latestThemePairRoot(string $root, string $themeCode, int $versionNumber): string
+    private static function isSafePairIdentity(string $themeCode, int $versionNumber, string $deployId): bool
     {
-        $best = '';
-        $bestMtime = -1;
-        $codeDir = $root . DIRECTORY_SEPARATOR . $themeCode;
-        foreach ((array)@scandir($codeDir) as $versionDir) {
-            if ($versionDir === '.' || $versionDir === '..' || !\preg_match('/^v[0-9]+$/', (string)$versionDir)) {
-                continue;
-            }
-            $versionPath = $codeDir . DIRECTORY_SEPARATOR . $versionDir;
-            foreach ((array)@scandir($versionPath) as $deployDir) {
-                if ($deployDir === '.' || $deployDir === '..') {
+        return \preg_match('/^[A-Za-z0-9_.-]+$/', $themeCode) === 1
+            && $themeCode !== '.'
+            && $themeCode !== '..'
+            && $versionNumber > 0
+            && \preg_match('/^[0-9a-f]{12}$/', $deployId) === 1;
+    }
+
+    private static function directoryHasFile(string $dir): bool
+    {
+        if (!\is_dir($dir)) {
+            return false;
+        }
+        $stack = [$dir];
+        while ($stack !== []) {
+            $current = (string)\array_pop($stack);
+            foreach ((array)@\scandir($current) as $item) {
+                if ($item === '.' || $item === '..') {
                     continue;
                 }
-                $candidate = $versionPath . DIRECTORY_SEPARATOR . $deployDir;
-                if (!\is_dir($candidate)) {
-                    continue;
+                $path = $current . \DIRECTORY_SEPARATOR . $item;
+                if (\is_file($path) || \is_link($path)) {
+                    return true;
                 }
-                $mtime = (int)@filemtime($candidate);
-                if ($mtime > $bestMtime) {
-                    $bestMtime = $mtime;
-                    $best = $candidate;
+                if (\is_dir($path)) {
+                    $stack[] = $path;
                 }
             }
         }
-        if ($best !== '') {
-            return $best;
+
+        return false;
+    }
+
+    /** 新世代已生效后，丢掉上一份及更早的 HTML 盘，只留当前 live。 */
+    private static function discardRetiredFpc(): void
+    {
+        try {
+            \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::rotateToEmptyGeneration();
+            \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::discardAllButLive();
+        } catch (\Throwable) {
+            // 磁盘世代清不掉时，下面的缓存池清理仍然要做。
         }
-        // 没有历史世代目录：回退到当前批次根（完整快照）。
-        return '';
+        try {
+            $cleaner = ObjectManager::getInstance(\Weline\Theme\Service\ThemeRuntimeCacheCleaner::class);
+            $cleaner->clearAllThemeRelatedCaches(null, 'theme_pair_only_current');
+        } catch (\Throwable) {
+            // 池清理失败不回滚已经落地的新世代目录。
+        }
     }
 
     /** 递归硬链接树（目标存在则先删）。 */
@@ -214,6 +311,24 @@ final class ThemeUpdateBatchService
     public static function pointerConfigKey(int $websiteId, int $themeId, string $area = self::AREA_FRONTEND): string
     {
         return \max(0, $websiteId) . '|' . \max(0, $themeId) . '|' . \trim($area);
+    }
+
+    /**
+     * 主题静态构建号：已有 12 位部署号则沿用；否则由批次 ID 稳定派生 12 位 hex。
+     * 不写全局 `pub/static/.build.json`。
+     */
+    public static function themeStaticBuildId(string $batchId, string $deployId = ''): string
+    {
+        $deployId = \strtolower(\trim($deployId));
+        if (\preg_match('/^[0-9a-f]{12}$/', $deployId) === 1) {
+            return $deployId;
+        }
+        $batchId = \trim($batchId);
+        if ($batchId === '') {
+            return '';
+        }
+
+        return \substr(\hash('sha256', $batchId), 0, 12);
     }
 
     /** @return array{batch_id:string,static_ns:string,entity_root:string,theme_prefix:string,epoch:int} */
@@ -324,7 +439,9 @@ final class ThemeUpdateBatchService
     // ---------------------------------------------------------------- 切换
 
     /**
-     * @return array{current:string,previous:string,epoch:int}
+     * 指针切换成功后，缓存失效/边缘清理/自动回收的失败不回滚指针，而是放进 post_switch_errors 交给调用方报错。
+     *
+     * @return array{current:string,previous:string,epoch:int,post_switch_errors:list<string>}
      */
     public function promote(string $batchId): array
     {
@@ -345,19 +462,21 @@ final class ThemeUpdateBatchService
         $this->commitPointer($row, $websiteId, $themeId, $area, $next, (int)$state['epoch'], $batchId);
         $this->persistPointerConfig($websiteId, $themeId, $area, $batch, $next['epoch']);
         $this->mirrorThemeStaticToDeploy($batchId);
-        $this->invalidateThemeCaches($themeId, 'theme_update_promote');
-        // 自动回收历史代次，避免批次目录无界增长（失败静默，不影响切换）
+        $this->rotateStorefrontHtmlGeneration();
+        $errors = $this->invalidateThemeCaches($themeId, 'theme_update_promote');
+        // 自动回收历史代次，避免批次目录无界增长（失败不影响切换，但必须上报）
         try {
             // 自动 GC 只删目录，不再重复清缓存（promote 本身已清过）
             $this->gc($themeId, $websiteId, $area, $this->keepBatches(), false, false);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            $errors[] = 'gc: ' . \get_class($e) . ': ' . $e->getMessage();
         }
 
-        return $next;
+        return $next + ['post_switch_errors' => $errors];
     }
 
     /**
-     * @return array{current:string,previous:string,epoch:int}
+     * @return array{current:string,previous:string,epoch:int,post_switch_errors:list<string>}
      */
     public function rollback(int $themeId, int $websiteId = 0, string $area = self::AREA_FRONTEND): array
     {
@@ -375,9 +494,9 @@ final class ThemeUpdateBatchService
         $this->commitPointer($row, $websiteId, $themeId, $area, $next, (int)$state['epoch'], $next['current']);
         $this->persistPointerConfig($websiteId, $themeId, $area, $batch, $next['epoch']);
         $this->mirrorThemeStaticToDeploy($next['current']);
-        $this->invalidateThemeCaches($themeId, 'theme_update_rollback');
+        $this->rotateStorefrontHtmlGeneration();
 
-        return $next;
+        return $next + ['post_switch_errors' => $this->invalidateThemeCaches($themeId, 'theme_update_rollback')];
     }
 
     // ---------------------------------------------------------------- 查询/GC
@@ -433,7 +552,13 @@ final class ThemeUpdateBatchService
                 $this->purgeArtifactReferences($deleted);
             }
             if ($invalidateCaches) {
-                $this->invalidateThemeCaches($themeId, 'theme_update_gc');
+                $errors = $this->invalidateThemeCaches($themeId, 'theme_update_gc');
+                if ($errors !== []) {
+                    throw new \RuntimeException(
+                        'theme_update_gc_cache_invalidation_failed (deleted: ' . \implode(', ', $deleted) . '): '
+                        . \implode(' | ', $errors)
+                    );
+                }
             }
         }
 
@@ -541,12 +666,31 @@ final class ThemeUpdateBatchService
             if (!\is_array($map)) {
                 $map = [];
             }
-            $map[self::pointerConfigKey($websiteId, $themeId, $area)] = self::pointerConfigValue($batch, $epoch);
+            $value = self::pointerConfigValue($batch, $epoch);
+            $pair = $this->themePairSegment($batch->getBatchId());
+            if ($pair !== []) {
+                $value['pair_segment'] = $pair[0] . '/v' . $pair[1];
+            }
+            $deployId = '';
+            try {
+                $deployId = \Weline\Framework\Deploy\StaticBuildId::current();
+            } catch (\Throwable) {
+                $deployId = '';
+            }
+            $value['static_build'] = self::themeStaticBuildId($batch->getBatchId(), $deployId);
+            $map[self::pointerConfigKey($websiteId, $themeId, $area)] = $value;
             $env->setConfig(self::CONFIG_CURRENT_MAP, $map);
             $env->setConfig(self::CONFIG_EPOCH, $epoch);
             $this->writePointerFile($map, $epoch);
         } catch (\Throwable) {
             // 指针已落库，渲染期可回读 DB
+        }
+        // Drop the request-scoped pointer memo so the same-process FPC warm/rebuild
+        // bakes the new epoch token immediately instead of the pre-switch one.
+        try {
+            ThemeUpdateRuntime::reset();
+        } catch (\Throwable) {
+            // Runtime unavailable (Theme module torn down) — next request resolves fresh.
         }
     }
 
@@ -573,6 +717,11 @@ final class ThemeUpdateBatchService
 
     private function removeTree(string $dir): void
     {
+        self::removeTreeStatic($dir);
+    }
+
+    private static function removeTreeStatic(string $dir): void
+    {
         $items = @\scandir($dir) ?: [];
         foreach ($items as $item) {
             if ($item === '.' || $item === '..') {
@@ -580,7 +729,7 @@ final class ThemeUpdateBatchService
             }
             $path = $dir . \DIRECTORY_SEPARATOR . $item;
             if (\is_dir($path) && !\is_link($path)) {
-                $this->removeTree($path);
+                self::removeTreeStatic($path);
             } else {
                 @\unlink($path);
             }
@@ -618,27 +767,31 @@ final class ThemeUpdateBatchService
     /**
      * 指针切换后失效主题相关缓存（FPC/chrome/卡片等），使新代次立即对外可见。
      * 只做「主题相关」定向清理，不做全站 purge，也不需要维护模式。
+     * 两步各自执行，失败原因逐条返回（不回滚已切换的指针）。
+     *
+     * @return list<string>
      */
-    private function invalidateThemeCaches(int $themeId, string $reason): void
+    private function invalidateThemeCaches(int $themeId, string $reason): array
     {
+        $errors = [];
         // 1) 主题相关运行时缓存（chrome/卡片/投影等）
         try {
             $cleaner = ObjectManager::getInstance(\Weline\Theme\Service\ThemeRuntimeCacheCleaner::class);
             $cleaner->clearAllThemeRelatedCaches($themeId > 0 ? $themeId : null, $reason);
-        } catch (\Throwable) {
-            // 缓存失效失败不影响指针（下一次请求仍会按新指针渲染）
+        } catch (\Throwable $e) {
+            $errors[] = 'theme_runtime_cache: ' . \get_class($e) . ': ' . $e->getMessage();
         }
 
         // 2) 店面 FPC/CDN：按「主题绑定站点 + 该主题全部布局」定向清理
         if ($themeId < 1) {
-            return;
+            return $errors;
         }
         try {
             /** @var \Weline\Theme\Model\WelineTheme $theme */
             $theme = ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
             $theme->reset()->clearQuery()->where('id', $themeId)->find()->fetch();
             if ((int)$theme->getId() < 1) {
-                return;
+                return $errors;
             }
             $layouts = [];
             $catalog = ObjectManager::getInstance(\Weline\Theme\Service\ThemeResourceCatalog::class);
@@ -651,13 +804,18 @@ final class ThemeUpdateBatchService
             $targets = ObjectManager::getInstance(\Weline\Theme\Service\ThemeApplicationUsageService::class)
                 ->ownSolidifyTargetsForTheme($themeId);
             if ($layouts === [] || $targets === []) {
-                return;
+                return $errors;
             }
-            ObjectManager::getInstance(\Weline\Theme\Service\ThemeStorefrontSlugFpcPublisher::class)
+            $result = ObjectManager::getInstance(\Weline\Theme\Service\ThemeStorefrontSlugFpcPublisher::class)
                 ->purgeLayoutsForThemeTargets($themeId, $layouts, $targets, $reason);
-        } catch (\Throwable) {
-            // 同上：best-effort
+            foreach ((array)($result['errors'] ?? []) as $error) {
+                $errors[] = 'storefront_purge: ' . (string)$error;
+            }
+        } catch (\Throwable $e) {
+            $errors[] = 'storefront_purge: ' . \get_class($e) . ': ' . $e->getMessage();
         }
+
+        return $errors;
     }
 
     /**
@@ -736,11 +894,21 @@ final class ThemeUpdateBatchService
     }
 
     /**
+     * 把 Nginx / WLS 共用的 HTML 盘 `live` 翻到空世代。
+     * 新世代还没有 FPC 时，边缘 try_files 落空（418）并回到 Worker 现渲。
+     */
+    private function rotateStorefrontHtmlGeneration(): void
+    {
+        \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::rotateToEmptyGeneration();
+        \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::discardAllButLive();
+    }
+
+    /**
      * 把代次的主题静态子树镜像到主题世代目录（硬链接覆盖）。
      *
-     * 目标：`/static/{主题 code}/v{版本号}/{部署构建号}/…`。
+     * 目标：`/static/{主题 code}/v{版本号}/{构建号}/…`。
+     * 有部署 `.build.json` 时用它；没有时用本批次稳定的 12 位构建号（不写全局 `.build.json`）。
      * 主题 code 来自主题 path 尾段；版本号取该主题已生效发布版本 version_number。
-     * 没有可用世代段（无发布版本/主题 code）时回退旧部署根镜像，避免主题资源缺失。
      */
     private function mirrorThemeStaticToDeploy(string $batchId): void
     {
@@ -751,14 +919,17 @@ final class ThemeUpdateBatchService
         try {
             $deployId = (string)\Weline\Framework\Deploy\StaticBuildId::current($pubStatic);
         } catch (\Throwable) {
-            return;
+            $deployId = '';
+        }
+        if ($deployId === '') {
+            $deployId = self::themeStaticBuildId($batchId);
         }
         if ($deployId === '') {
             return;
         }
         $batchRoot = self::staticRoot($batchId, $pubStatic);
         $pair = $this->themePairSegment($batchId);
-        if ($pair === '') {
+        if ($pair === []) {
             return;
         }
         [$themeCode, $versionNumber] = $pair;
@@ -793,6 +964,8 @@ final class ThemeUpdateBatchService
                     @copy($from, $to);
                 }
             }
+            $this->overlayCompiledThemeUi($batchRoot, $deployRoot);
+            self::retireStaleThemePairDirs($pubStatic, $themeCode, $versionNumber, $deployId);
 
             return;
         }
@@ -816,6 +989,21 @@ final class ThemeUpdateBatchService
             }
             $this->overlayTreeTo($src, $deployRoot . DIRECTORY_SEPARATOR . 'Weline' . DIRECTORY_SEPARATOR . $item);
         }
+        $this->overlayCompiledThemeUi($batchRoot, $deployRoot);
+        self::retireStaleThemePairDirs($pubStatic, $themeCode, $versionNumber, $deployId);
+    }
+
+    /**
+     * 编译后的 Weline UI（weline-backend.css 等）在部署树里，不在设计主题变更清单里。
+     * 页面把 /Weline/Theme/ 改写到主题世代目录，这里必须把 ui 子树镜像进去，否则登录页 404。
+     */
+    private function overlayCompiledThemeUi(string $batchRoot, string $deployRoot): void
+    {
+        $src = $batchRoot . DIRECTORY_SEPARATOR . 'Weline' . DIRECTORY_SEPARATOR . 'Theme' . DIRECTORY_SEPARATOR . 'ui';
+        if (!is_dir($src)) {
+            return;
+        }
+        $this->overlayTreeTo($src, $deployRoot . DIRECTORY_SEPARATOR . 'Weline' . DIRECTORY_SEPARATOR . 'Theme' . DIRECTORY_SEPARATOR . 'ui');
     }
 
     /**

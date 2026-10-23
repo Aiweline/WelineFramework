@@ -1409,7 +1409,9 @@
                     country_code: text(profile.country_code || ''),
                     labels: schemaLabels,
                     name_mode: text(profile.name_mode || 'single') || 'single',
-                    field_order: Array.isArray(profile.field_order) ? profile.field_order.slice() : []
+                    field_order: Array.isArray(profile.field_order) ? profile.field_order.slice() : [],
+                    // 国家电话规则（country_profile.phone，权威 PhoneNumberRuleService）；无规则为 null
+                    phone: profile.phone && typeof profile.phone === 'object' ? profile.phone : null
                 }
             }));
         } catch (e) {

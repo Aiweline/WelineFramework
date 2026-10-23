@@ -9,6 +9,7 @@ use Weline\Cdn\Service\AdapterResolver;
 use Weline\Cdn\Service\CachePurger;
 use Weline\Cdn\Service\RuleManager;
 use Weline\Cdn\Service\UrlSiteResolver;
+use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 
@@ -44,14 +45,17 @@ class CdnRequest implements ObserverInterface
     public function execute(Event &$event): void
     {
         $eventData = $event->getData();
+        $fields = $eventData instanceof DataObject ? $eventData->getData() : (is_array($eventData) ? $eventData : []);
         $action = $event->getData('action');
-        $siteIdProvided = array_key_exists('site_id', $eventData)
-            || array_key_exists('website_id', $eventData);
-        $siteIdValue = array_key_exists('site_id', $eventData)
-            ? $eventData['site_id']
-            : ($eventData['website_id'] ?? null);
+        $siteIdProvided = array_key_exists('site_id', $fields)
+            || array_key_exists('website_id', $fields);
+        $siteIdValue = array_key_exists('site_id', $fields)
+            ? $fields['site_id']
+            : ($fields['website_id'] ?? null);
         $domain = $event->getData('domain');
-        $data = $event->getData('data') ?? [];
+        // Event::getData('data') 返回整个请求包；请求参数在包内的 data 键。
+        $nested = $fields['data'] ?? null;
+        $data = is_array($nested) ? $nested : [];
 
         // 初始化响应
         $response = [

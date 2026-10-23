@@ -5,7 +5,7 @@ namespace Weline\Framework\Test\Unit\Database;
 
 use Weline\Framework\Test\TestCore;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Database\Service\BackupService;
+use Weline\Framework\Database\Service\BackupService;
 use Weline\Database\Model\MigrationBackup;
 
 /**

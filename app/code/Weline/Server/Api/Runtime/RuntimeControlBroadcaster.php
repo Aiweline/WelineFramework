@@ -129,6 +129,11 @@ final class RuntimeControlBroadcaster implements RuntimeControlBroadcasterInterf
         return $result;
     }
 
+    public function reloadAsync(?string $instanceName = null, string $reloadType = 'code', float $timeout = 5.0): array
+    {
+        return $this->dispatch->reloadAsync($instanceName, $reloadType, $timeout);
+    }
+
     public function maintenanceMode(): ?bool
     {
         if ($this->isCurrentProcessMaintenanceWorker()) {

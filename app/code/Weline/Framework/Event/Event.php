@@ -441,6 +441,13 @@ class Event extends \Weline\Framework\DataObject\DataObject
                     }
                 }
                 $observerDurationMs = (microtime(true) - $observerSpanStart) * 1000;
+                if (\getenv('WELINE_SETUP_PROFILE') !== false && $observerDurationMs >= 50.0) {
+                    @\file_put_contents(
+                        \VAR_DIR . 'log' . \DIRECTORY_SEPARATOR . 'setup_profile.log',
+                        sprintf("observer\t%s\t%.0fms\n", \get_class($observer), $observerDurationMs),
+                        FILE_APPEND
+                    );
+                }
                 if ($traceEnabled && $observerSpanName !== null) {
                     TraceGate::recordSpan($observerSpanName, $observerDurationMs, 'observer', 'event::' . $this->getName());
                 }

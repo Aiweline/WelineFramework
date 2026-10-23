@@ -91,10 +91,10 @@ final class FontDiscoveryAndFaceTest extends TestCase
         ]);
         self::assertStringContainsString('@font-face', $css);
         self::assertStringContainsString("font-family:'Demo'", $css);
-        self::assertStringContainsString('/pub/media/font-subset/', $css);
+        self::assertStringContainsString('/media/font-subset/', $css);
 
         $path = $subset->getSubsetPath($absolute, 'en');
-        self::assertStringStartsWith('/pub/media/font-subset/', $subset->pathToUrl($path));
+        self::assertStringStartsWith('/media/font-subset/', $subset->pathToUrl($path));
     }
 
     private function removeTree(string $dir): void

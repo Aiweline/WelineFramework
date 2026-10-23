@@ -451,20 +451,34 @@ final class ThemeUpdateBuildService
             . ThemeLayoutEntityPaths::ROOT_SEGMENT . DIRECTORY_SEPARATOR;
     }
 
+    /**
+     * 主题静态命名空间（如 Weline/hanfu）。
+     * 设计目录下的相对路径原样返回。模块内默认主题是绝对路径，没有设计命名空间，返回空，
+     * 避免把磁盘路径写进抽样 URL 和代次指针。
+     */
+    public static function staticNamespaceFromThemePath(string $path, string $designDir): string
+    {
+        $path = str_replace('\\', '/', trim($path));
+        if ($path === '') {
+            return '';
+        }
+        $designDir = rtrim(str_replace('\\', '/', $designDir), '/') . '/';
+        $absolute = str_starts_with($path, '/') ? $path : $designDir . ltrim($path, '/');
+        if (!str_starts_with($absolute, $designDir)) {
+            return '';
+        }
+
+        return trim(substr($absolute, strlen($designDir)), '/');
+    }
+
     /** 主题对应的静态命名空间前缀（如 Weline/hanfu），用于运行时识别「主题自有资源」。 */
     private function resolveThemePrefix(int $themeId): string
     {
         try {
             $theme = $this->theme->reset()->clearQuery()->where('id', $themeId)->find()->fetch();
             $path = (string)$theme->getData('path');
-            if ($path === '') {
-                return '';
-            }
-            $designDir = rtrim((string)\Weline\Framework\App\Env::path_THEME_DESIGN_DIR, '/\\') . DIRECTORY_SEPARATOR;
-            $abs = str_starts_with($path, '/') ? $path : $designDir . str_replace('/', DIRECTORY_SEPARATOR, $path);
-            $rel = str_starts_with($abs, $designDir) ? substr($abs, strlen($designDir)) : $path;
 
-            return trim(str_replace('\\', '/', $rel), '/');
+            return self::staticNamespaceFromThemePath($path, (string)\Weline\Framework\App\Env::path_THEME_DESIGN_DIR);
         } catch (\Throwable) {
             return '';
         }
@@ -484,18 +498,22 @@ final class ThemeUpdateBuildService
         if (!is_dir($entityDir)) {
             return 0;
         }
-        $themePrefix = trim($themePrefix);
+        $themePrefix = trim($themePrefix, '/');
         $segments = ['Weline/Theme/'];
         if ($themePrefix !== '') {
-            $segments[] = 'Weline/' . $themePrefix . '/';
+            $segments[] = $themePrefix . '/';
         }
         $alternation = implode('|', array_map(static fn(string $s): string => preg_quote($s, '#'), $segments));
         $deployPlaceholder = \Weline\Framework\Deploy\StaticAssetHtmlRewriter::DEPLOY_PLACEHOLDER;
         $pairPlaceholder = \Weline\Framework\Deploy\StaticAssetHtmlRewriter::PAIR_PLACEHOLDER;
         // 主题自有资源（无论旧前缀形状）→ /static/{PAIR占位符}/Weline/<theme>/…
         $patternPair = '#/static/(?:[A-Za-z0-9_.-]+/)*(' . $alternation . ')#';
-        // 其余模块静态前缀（/static/<segment>/…，segment 非主题路径）→ /static/{DEPLOY占位符}/…
-        $patternDeploy = '#/static/[A-Za-z0-9_.-]+/#';
+        // 只去掉真正的构建段（12 位构建号 / tu-*）；Weline 是命名空间，不是构建段。
+        $patternDeploy = '#/static/(?:[0-9a-f]{12}|tu-[A-Za-z0-9_.-]+)/#';
+        // 裸命名空间 /static/Weline/… 也加部署占位，出 HTML 时换成当前构建目录。
+        $patternBareNamespace = '#/static/(?=Weline/)#';
+        // 旧批次的 `__W_deploy__/<code>/` 把 Weline 当构建段吃掉了，重建时补回命名空间。
+        $patternHealVendor = '#/static/' . preg_quote($deployPlaceholder, '#') . '/(?!(?:Weline|theme|pub|media)/)([A-Za-z0-9_.-]+)/#';
 
         $rewritten = 0;
         $stack = [$entityDir];
@@ -519,9 +537,15 @@ final class ThemeUpdateBuildService
                     continue;
                 }
                 $next = preg_replace($patternPair, '/static/' . $pairPlaceholder . '/$1', $content);
-                $next = is_string($next) && str_contains($next, '/static/')
-                    ? preg_replace($patternDeploy, '/static/' . $deployPlaceholder . '/', $next)
-                    : $next;
+                if (is_string($next) && str_contains($next, '/static/')) {
+                    $next = preg_replace($patternHealVendor, '/static/' . $deployPlaceholder . '/Weline/$1/', $next);
+                    $next = is_string($next)
+                        ? preg_replace($patternDeploy, '/static/' . $deployPlaceholder . '/', $next)
+                        : $next;
+                    $next = is_string($next)
+                        ? preg_replace($patternBareNamespace, '/static/' . $deployPlaceholder . '/', $next)
+                        : $next;
+                }
                 if (!is_string($next) || $next === $content) {
                     continue;
                 }

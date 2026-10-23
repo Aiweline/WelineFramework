@@ -1,0 +1,112 @@
+body {
+  margin: 0;
+  padding: 14px;
+  width: 320px;
+  font: 13px/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #1f2933;
+  background: #ffffff;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.field {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.field span {
+  display: block;
+  margin-bottom: 4px;
+  color: #52606d;
+  font-size: 12px;
+}
+
+.field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #cbd2d9;
+  border-radius: 4px;
+  font: inherit;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.actions button {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid #0b6e99;
+  border-radius: 4px;
+  background: #0b6e99;
+  color: #ffffff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.actions button#stop {
+  border-color: #b44d12;
+  background: #b44d12;
+}
+
+.actions button:disabled {
+  border-color: #cbd2d9;
+  background: #e4e7eb;
+  color: #7b8794;
+  cursor: not-allowed;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 2px 8px;
+  margin: 0 0 10px;
+}
+
+.stats dt {
+  color: #52606d;
+}
+
+.stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.hint {
+  margin: 0 0 10px;
+  color: #7b8794;
+  font-size: 12px;
+}
+
+.logs {
+  max-height: 160px;
+  margin: 0 0 10px;
+  padding: 6px 6px 6px 22px;
+  overflow-y: auto;
+  border: 1px solid #e4e7eb;
+  border-radius: 4px;
+  background: #f5f7fa;
+  font-size: 12px;
+  color: #3e4c59;
+}
+
+.logs li {
+  margin-bottom: 2px;
+  word-break: break-word;
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #0b6e99;
+  font: inherit;
+  cursor: pointer;
+}

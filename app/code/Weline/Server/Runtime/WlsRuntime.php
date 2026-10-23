@@ -6477,7 +6477,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             $normalized['namespace_fingerprint'] = $fingerprint;
             // Keep the publication's translation snapshot through READY/IPC.
             // FPC remains the owner of validating required locale evidence.
-            foreach (['policy_fingerprint', 'policy_path', 'lang', 'default_locale', 'translation_locales'] as $field) {
+            foreach (['policy_fingerprint', 'policy_path', 'lang', 'default_locale', 'translation_locales', 'page_generation'] as $field) {
                 if (array_key_exists($field, $receipt)) {
                     $normalized[$field] = $receipt[$field];
                 }
@@ -8187,6 +8187,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             'worker_port' => '',
             'pid' => \function_exists('getmypid') ? (int)\getmypid() : 0,
             'request_count' => $this->requestCount + ($isInternalWarmup ? 0 : 1),
+            'admission_wait_ms' => 0.0,
         ];
 
         if (!$isInternalWarmup) {
@@ -8243,12 +8244,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 $globalsEmulator->emulate($request);
                 $requestMeta = [
                     'method' => (string)($_SERVER['REQUEST_METHOD'] ?? $request->getMethod() ?: 'GET'),
-                    'ip' => (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'),
+                    'ip' => $this->resolveClientIp($request),
                     'instance' => (string)($_SERVER['WLS_INSTANCE_NAME'] ?? $_SERVER['WLS_INSTANCE'] ?? ''),
                     'worker_id' => (string)($_SERVER['WLS_WORKER_ID'] ?? ''),
                     'worker_port' => (string)($_SERVER['WLS_PORT'] ?? ''),
                     'pid' => \function_exists('getmypid') ? (int)\getmypid() : 0,
                     'request_count' => $this->requestCount,
+                    'admission_wait_ms' => $this->resolveAdmissionWaitMs($request),
                 ];
                 // GlobalsEmulator::emulate() 已用当前原始请求建立完整 Context。
                 // 这里不能再次从复用的 ServerBag 重建，否则会用上一请求覆盖
@@ -8805,6 +8807,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 // 添加请求方法、IP等信息
                 $timing['method'] = $requestMeta['method'] ?: 'GET';
                 $timing['ip'] = $requestMeta['ip'] ?: 'unknown';
+                $timing['admission_wait_ms'] = (float)($requestMeta['admission_wait_ms'] ?? 0);
+                $timing['queue_wait_ms'] = $timing['admission_wait_ms'];
                 $timing['timestamp'] = date('Y-m-d H:i:s');
                 $timing['redirect_count'] = (int) ($this->requestServer('WLS_REDIRECT_COUNT') ?? 0);
                 $timing['instance'] = $requestMeta['instance'];
@@ -9488,6 +9492,43 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         unset($language, $currency);
 
         return $response->toHttpString(false);
+    }
+
+    private function resolveClientIp(Request $request): string
+    {
+        foreach ([
+            (string)$request->getServer('WLS_CANONICAL_REMOTE_ADDR'),
+            (string)$request->getServer('REMOTE_ADDR'),
+            (string)($this->requestServer('WLS_CANONICAL_REMOTE_ADDR') ?? ''),
+            (string)($this->requestServer('REMOTE_ADDR') ?? ''),
+            (string)($_SERVER['REMOTE_ADDR'] ?? ''),
+        ] as $candidate) {
+            $ip = \trim($candidate);
+            if ($ip !== '' && $ip !== 'unknown') {
+                return $ip;
+            }
+        }
+
+        return 'unknown';
+    }
+
+    private function resolveAdmissionWaitMs(Request $request): float
+    {
+        $raw = $request->getServer('WLS_ADMISSION_WAIT_MS');
+        if ($raw === null || $raw === '') {
+            $raw = $this->requestServer('WLS_ADMISSION_WAIT_MS', 0);
+        }
+        if (!\is_numeric($raw)) {
+            return 0.0;
+        }
+
+        $ms = \max(0.0, (float)$raw);
+        // Fiber closure must capture handleStartTime; garbage values indicate a worker bug.
+        if ($ms > 600_000.0) {
+            return 0.0;
+        }
+
+        return $ms;
     }
 
     private function requestServer(string $key, mixed $default = null): mixed

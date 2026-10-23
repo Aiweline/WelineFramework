@@ -49,6 +49,7 @@ final class ThemeUpdateBatchServiceContractTest extends TestCase
             'entity_root' => 'tu-20261022-015300-ab12cd',
             'theme_prefix' => '',
             'epoch' => 7,
+            'theme_id' => 0,
         ], ThemeUpdateBatchService::pointerConfigValue($batch, 7));
 
         // epoch 至少为 1（0/负数被纠正）
@@ -61,6 +62,24 @@ final class ThemeUpdateBatchServiceContractTest extends TestCase
         $value = ThemeUpdateBatchService::pointerConfigValue($batch, 3);
         self::assertSame('Weline/hanfu', $value['theme_prefix']);
         self::assertSame(3, $value['epoch']);
+    }
+
+    public function testThemeStaticBuildIdPrefersDeployAndOtherwiseDerivesTwelveHex(): void
+    {
+        self::assertSame(
+            'abc123def456',
+            ThemeUpdateBatchService::themeStaticBuildId('tu-20261022-185504-3909f8', 'abc123def456'),
+        );
+        self::assertSame(
+            'abc123def456',
+            ThemeUpdateBatchService::themeStaticBuildId('tu-20261022-185504-3909f8', 'ABC123DEF456'),
+        );
+        $derived = ThemeUpdateBatchService::themeStaticBuildId('tu-20261022-185504-3909f8', '');
+        self::assertSame(12, strlen($derived));
+        self::assertSame(1, preg_match('/^[0-9a-f]{12}$/', $derived));
+        self::assertSame($derived, ThemeUpdateBatchService::themeStaticBuildId('tu-20261022-185504-3909f8'));
+        self::assertNotSame($derived, ThemeUpdateBatchService::themeStaticBuildId('tu-other'));
+        self::assertSame('', ThemeUpdateBatchService::themeStaticBuildId('', 'not-a-build'));
     }
 
     public function testBatchServableRequiresVerifiedManifest(): void

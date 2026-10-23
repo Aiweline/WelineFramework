@@ -1,0 +1,101 @@
+/*
+ * PayPal Card Fields（A · 行内展开）最终样式。
+ * 规则：只消费 Theme Token（间距/字号/圆角/控件高/颜色），不写裸值。
+ * 结构：PayPal 选项行之后缩进展开；无内层卡片边框/底色，靠顶部细分隔线与间距分组。
+ */
+.weline-paypal-card-fields {
+    box-sizing: border-box;
+    display: grid;
+    gap: var(--weline-space-3);
+    margin: 0 0 var(--weline-space-3);
+    padding: var(--weline-space-3) 0 0 var(--weline-space-6);
+    border-top: var(--weline-theme-border-width) solid var(--color-border-default);
+}
+
+.weline-paypal-card-fields[hidden] {
+    display: none !important;
+}
+
+.weline-paypal-card-fields__fields {
+    display: grid;
+    gap: var(--weline-space-3);
+}
+
+.weline-paypal-card-fields__row {
+    display: grid;
+    gap: var(--weline-space-2);
+}
+
+.weline-paypal-card-fields__row--split {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--weline-space-3);
+}
+
+.weline-paypal-card-fields__col {
+    display: grid;
+    gap: var(--weline-space-2);
+    min-width: 0;
+}
+
+.weline-paypal-card-fields__label {
+    font-size: var(--weline-font-size-sm);
+    line-height: var(--weline-line-height);
+    color: var(--color-text-muted);
+}
+
+.weline-paypal-card-fields__field {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    min-height: var(--weline-theme-control-height-md);
+    padding: 0 var(--weline-space-3);
+    border: var(--weline-theme-border-width) solid var(--color-border-strong);
+    border-radius: var(--weline-theme-radius-md);
+    background: var(--color-surface);
+    transition: border-color var(--transition-fast);
+}
+
+.weline-paypal-card-fields__field:focus-within {
+    border-color: var(--color-border-focus);
+}
+
+.weline-paypal-card-fields__field > * {
+    width: 100%;
+}
+
+.weline-paypal-card-fields__hint {
+    margin: 0;
+    font-size: var(--weline-font-size-xs);
+    line-height: var(--weline-line-height);
+    color: var(--color-text-muted);
+}
+
+.weline-paypal-card-fields__error {
+    margin: 0;
+    font-size: var(--weline-font-size-sm);
+    line-height: var(--weline-line-height);
+    color: var(--color-danger);
+}
+
+.weline-paypal-card-fields__error[hidden] {
+    display: none !important;
+}
+
+@media (max-width: 480px) {
+    .weline-paypal-card-fields {
+        padding-inline-start: 0;
+        border-top: 0;
+        padding-top: 0;
+        margin-top: var(--weline-space-2);
+    }
+
+    .weline-paypal-card-fields__row--split {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .weline-paypal-card-fields__field {
+        transition: none;
+    }
+}

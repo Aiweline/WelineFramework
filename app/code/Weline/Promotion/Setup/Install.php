@@ -28,7 +28,6 @@ class Install implements InstallInterface
             /** @var object $model */
             $model = ObjectManager::getInstance($modelClass);
             $modelSetup->putModel($model);
-            $model->setup($modelSetup, $context);
         }
 
         ObjectManager::getInstance(PromotionActivityThemeService::class)->ensureDefaultThemes();

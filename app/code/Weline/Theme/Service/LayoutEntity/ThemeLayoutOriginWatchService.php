@@ -425,7 +425,8 @@ final class ThemeLayoutOriginWatchService
                 $reason !== '' ? $reason : self::CACHE_CLEAR_REASON,
             );
             if (!($result['ok'] ?? false)) {
-                $messages[] = 'cache_clear_skipped:' . (string)($result['skipped'] ?? 'unknown');
+                $messages[] = 'cache_clear_skipped:' . (string)($result['skipped'] ?? 'unknown')
+                    . (($result['errors'] ?? []) !== [] ? ' ' . \implode(' | ', (array)$result['errors']) : '');
 
                 return 0;
             }

@@ -109,7 +109,7 @@ await stream.start();
 
 `createStream()` 允许页面在第一条重放事件到达前注册监听器。`StreamHandle` 会保存任务、页面租约与最后连续持久事件 ID 到 `sessionStorage`；每次重连重新申请一次性 ticket，并用最后游标重放缺失事件。
 
-stream ticket 继承服务端构造的 execution area、Scope 和 owner/principal，页面不能覆盖。`auth=backend` stream 及后台上下文的 `runtime_task.events` 当前明确禁用并返回 `backend_stream_disabled`；后台长任务可以启动、查询、续租和取消，但实时流开放前不得在页面假设它可用。
+stream ticket 继承服务端构造的 execution area、Scope 和 owner/principal，页面不能覆盖。`auth=backend` stream 默认返回 `backend_stream_disabled`。后台页面在 Worker binding 有效时，只开放 `runtime_task.events` 与 `admin.menuSignalWatch`。其它后台实时流开放前不得在页面假设它可用。后台长任务仍可以启动、查询、续租和取消。
 
 ```javascript
 stream.close();                         // 仅当前实例退订并停止续租
@@ -152,6 +152,19 @@ try {
 - 不要把 transport error、`pagehide` 或 EventSource `error` 映射为 `stream.cancel()`。
 - 监听 `weline:scope-bootstrap-failed` / `weline:backend-bootstrap-failed` 时只恢复页面或提示刷新，禁止把 ID、Cookie 或错误上下文复制到业务请求；失败后不得继续未绑定调用。
 - 查询操作必须先通过 `php bin/w query:help <provider> <operation>` 验证已发布契约；不得猜测 operation 或参数。
+
+### 5.2 调试：请求在哪里看
+
+`Weline.Api` 的业务请求由 Worker 发出，**不会**出现在页面自己的 DevTools Network 面板里。点了按钮「没看到请求」不等于没发请求。
+
+| 传输 | 怎么看 |
+|---|---|
+| SharedWorker（默认） | Chrome 打开 `chrome://inspect/#workers`，找名为 `weline-query-bin` 的 Shared worker → inspect → 它自己的 Network 面板 |
+| Dedicated Worker（回落） | 页面 DevTools → Sources/Console 的 Worker 上下文，或 Network 面板中 Worker 发起的请求 |
+| 开发控制台 | `localStorage.setItem('weline_dev_console', '1')` 后刷新（或页面设 `window.WELINE_DEV_CONSOLE = true`），控制台按 `provider.operation` 打出每次 BinQuery 的耗时与结果 |
+
+- 当前用的是哪种传输：控制台执行 `(await Weline.load('api')).getClient().worker.kind`（`shared` / `dedicated`）。
+- Worker 启动带握手：页面先发 `transport-ping`，Worker 回 `transport-ready` 才算可用；脚本 404、CSP 拦截或解析失败会按 SharedWorker → Blob Worker → URL Worker 顺序回落，全部失败时报错并带上每一步原因（`No QueryBin worker transport booted: …`）。发生回落时控制台会有 `QueryBin worker fell back to … transport` 警告。
 
 ## 六、迁移检查表
 

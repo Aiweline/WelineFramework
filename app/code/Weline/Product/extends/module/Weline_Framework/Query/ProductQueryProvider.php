@@ -9,6 +9,7 @@ use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Product\Model\Shard\Product;
 use Weline\Product\Service\PurchasePanelService;
 use Weline\Product\Service\StorefrontCatalogViewService;
+use Weline\Product\Service\StorefrontVariantAvailabilityService;
 
 /**
  * Cross-module storefront product lookup boundary (provider name: product).
@@ -28,6 +29,7 @@ final class ProductQueryProvider implements QueryProviderInterface
         return match ($operation) {
             'getProductByIds' => $this->getProductByIds($params),
             'getPurchasePanel' => $this->getPurchasePanel($params),
+            'getVariantAvailability' => $this->getVariantAvailability($params),
             default => throw new \InvalidArgumentException(
                 'Product query provider does not support operation: ' . $operation
             ),
@@ -39,7 +41,7 @@ final class ProductQueryProvider implements QueryProviderInterface
         return [
             'provider' => $this->getProviderName(),
             'name' => 'Product',
-            'description' => 'Published product cards and listing purchase-panel HTML for storefront consumers.',
+            'description' => 'Published product cards, listing purchase-panel HTML and live variant availability for storefront consumers.',
             'module' => 'Weline_Product',
             'operations' => [
                 [
@@ -71,6 +73,21 @@ final class ProductQueryProvider implements QueryProviderInterface
                     'returns' => ['type' => 'array'],
                     'summary' => 'Render listing quick-add purchase panel HTML (gallery + specs)',
                 ],
+                [
+                    'name' => 'getVariantAvailability',
+                    'frontend' => true,
+                    'external' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 2,
+                    'auth' => 'any',
+                    'params' => [
+                        ['name' => 'product_id', 'type' => 'int', 'required' => false, 'min' => 0],
+                        ['name' => 'slug', 'type' => 'string', 'required' => false, 'max_length' => 200],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Live per-variant stock/sellability for FPC-cached product pages (never cached)',
+                ],
             ],
         ];
     }
@@ -87,6 +104,26 @@ final class ProductQueryProvider implements QueryProviderInterface
         unset($payload['http_status']);
 
         return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function getVariantAvailability(array $params): array
+    {
+        /** @var StorefrontVariantAvailabilityService $service */
+        $service = ObjectManager::getInstance(StorefrontVariantAvailabilityService::class);
+        $payload = $service->livePayload((string)($params['slug'] ?? ''), (int)($params['product_id'] ?? 0));
+        if ($payload === null) {
+            return [
+                'success' => false,
+                'message' => (string)__('商品未找到'),
+                'offers' => [],
+            ];
+        }
+
+        return ['success' => true] + $payload;
     }
 
     /**

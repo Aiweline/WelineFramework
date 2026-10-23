@@ -30,24 +30,20 @@ final class Upgrade implements UpgradeInterface
         /** @var ProductCatalogAttributeEntity $productEntity */
         $productEntity = ObjectManager::getInstance(ProductCatalogAttributeEntity::class);
         $modelSetup->putModel($productEntity);
-        $productEntity->upgrade($modelSetup, $context);
 
         /** @var CategoryAttributeEntity $categoryEntity */
         $categoryEntity = ObjectManager::getInstance(CategoryAttributeEntity::class);
         $modelSetup->putModel($categoryEntity);
-        $categoryEntity->upgrade($modelSetup, $context);
 
         ObjectManager::getInstance(ProductCategoryEavBootstrap::class)->ensureCategorySchema();
 
         /** @var LocalDescription $categoryLocal */
         $categoryLocal = ObjectManager::getInstance(LocalDescription::class);
         $modelSetup->putModel($categoryLocal);
-        $categoryLocal->upgrade($modelSetup, $context);
 
         /** @var ProductLocalDescription $productLocal */
         $productLocal = ObjectManager::getInstance(ProductLocalDescription::class);
         $modelSetup->putModel($productLocal);
-        $productLocal->upgrade($modelSetup, $context);
 
         $catalogBootstrap = ObjectManager::getInstance(ProductCatalogEavBootstrap::class);
         $catalog = $catalogBootstrap->ensureStorefrontSchema();

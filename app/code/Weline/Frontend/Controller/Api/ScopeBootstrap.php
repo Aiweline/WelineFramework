@@ -105,6 +105,7 @@ class ScopeBootstrap extends FrontendRestController
             // Storefront generation authority = Scope-published theme version (not system deploy).
             'theme_published_version_id' => $generation['theme_published_version_id'],
             'theme_published_version' => $generation['theme_published_version'],
+            'page_generation_token' => \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::pageGenerationToken(),
             // Warm client locale tip cache (hole-punch may detect mismatch without QueryBin tip).
             'tips' => FrontendScopeReloadTip::catalogForCurrentLocale(),
             'tips_locale' => FrontendScopeReloadTip::currentLocale(),

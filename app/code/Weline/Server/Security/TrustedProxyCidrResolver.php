@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Weline\Server\Security;
 
 /**
- * Single source for trusted-proxy CIDRs shared by WLS RuntimePolicy and managed Nginx real_ip.
+ * Single source for trusted-proxy CIDRs shared by WLS RuntimePolicy and managed Nginx
+ * (real_ip and forwarded scheme/port).
  *
- * WLS keeps loopback transport peers; Nginx set_real_ip_from must not.
+ * WLS and nginx forwarded-header trust keep loopback transport peers; Nginx
+ * set_real_ip_from must not.
  */
 final class TrustedProxyCidrResolver
 {
@@ -40,6 +42,20 @@ final class TrustedProxyCidrResolver
     public static function forNginx(array $rules, array $acceptGate = []): array
     {
         return self::withoutLoopback(self::publicTrustedProxyCidrs($rules, $acceptGate));
+    }
+
+    /**
+     * Hops whose X-Forwarded-Proto / X-Forwarded-Port the managed nginx honors:
+     * public CDN / proxy CIDRs plus loopback (a co-resident front proxy such as a
+     * panel nginx terminating TLS). Unlike real_ip, loopback belongs here because
+     * only the public scheme/port is taken from the hop, never the client address.
+     *
+     * @param list<mixed>|array<int|string, mixed> $publicCidrs
+     * @return list<string>
+     */
+    public static function forNginxForwardedHeaders(array $publicCidrs): array
+    {
+        return self::normalizeList(\array_merge($publicCidrs, self::LOOPBACK_TRANSPORT_CIDRS));
     }
 
     /**

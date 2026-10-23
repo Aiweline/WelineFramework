@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Cache\Service\StorefrontWarmup;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FpcWarmupProviderInterface;
 use Weline\Websites\Data\WebsiteData;
@@ -35,6 +36,7 @@ final class StorefrontWarmupOrchestrator
         private readonly StorefrontWarmupSitemapParser $sitemapParser = new StorefrontWarmupSitemapParser(),
         private readonly StorefrontWarmupOfferQueue $offerQueue = new StorefrontWarmupOfferQueue(),
         private readonly StorefrontWarmupCapacityPlanner $capacityPlanner = new StorefrontWarmupCapacityPlanner(),
+        private readonly StorefrontWarmupGenerationFence $generationFence = new StorefrontWarmupGenerationFence(),
     ) {
     }
 
@@ -73,14 +75,25 @@ final class StorefrontWarmupOrchestrator
         try {
             $state = $this->ledger->read();
             // Clear legacy sticky busy backoff so idle ticks resume designed budget.
-            if (($state['backoff_until'] ?? 0) > 0) {
+            $backoffCleared = (float)($state['backoff_until'] ?? 0) > 0;
+            if ($backoffCleared) {
                 $state['backoff_until'] = 0.0;
+            }
+            $aligned = $this->generationFence->align(
+                $state,
+                $this->currentStorefrontGenerationFingerprint(),
+                $this->currentAuthorityClock(),
+            );
+            $state = $aligned['state'];
+            $generationChanged = $aligned['rewarm'];
+            if ($aligned['dirty'] || $backoffCleared) {
+                $this->ledger->write($state);
             }
             $state = $this->syncPriorityHomes($state);
 
             $busy = $this->busyGate->sample();
             $capacity = $this->capacityPlanner->plan($state, $busy);
-            if ($source !== 'clear' && $capacity['band'] === StorefrontWarmupCapacityPlanner::BAND_YIELD) {
+            if ($source !== 'clear' && !$generationChanged && $capacity['band'] === StorefrontWarmupCapacityPlanner::BAND_YIELD) {
                 $state['last_status'] = 'skip';
                 $state['last_reason'] = 'yield_traffic';
                 $state['last_yield_at'] = \microtime(true);
@@ -105,7 +118,7 @@ final class StorefrontWarmupOrchestrator
                     'idle_ratio' => 1.0 - (float)$capacity['ratio'],
                     'remaining' => (int)$capacity['remaining'],
                     'elapsed_ms' => $this->elapsedMs($startedAt),
-                ];
+                ] + $this->generationReport($state, false);
             }
 
             $shard = (int)$capacity['effective_shard'];
@@ -217,7 +230,7 @@ final class StorefrontWarmupOrchestrator
 
             return [
                 'ok' => true,
-                'reason' => 'slice',
+                'reason' => $generationChanged ? 'generation_changed' : 'slice',
                 'source' => $source,
                 'phase' => $state['phase'],
                 'warmed' => $warmed,
@@ -235,7 +248,7 @@ final class StorefrontWarmupOrchestrator
                 'idle_ratio' => 1.0 - (float)$capacity['ratio'],
                 'remaining' => (int)$capacity['remaining'],
                 'elapsed_ms' => $this->elapsedMs($startedAt),
-            ];
+            ] + $this->generationReport($state, $generationChanged);
         } finally {
             $this->releaseLock($lock);
         }
@@ -861,6 +874,7 @@ final class StorefrontWarmupOrchestrator
         $cursor = (int)($state['loc_cursor'] ?? 0);
         if ($cursor >= \count($locs)) {
             $state['phase'] = StorefrontWarmupProgressLedger::PHASE_DONE;
+            $state['needs_rewarm'] = false;
 
             return [
                 'state' => $state,
@@ -989,6 +1003,73 @@ final class StorefrontWarmupOrchestrator
         }
 
         return $fh;
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array{generation_authority_clock:int,storefront_generation_fingerprint:string,needs_rewarm:bool,generation_changed:bool}
+     */
+    private function generationReport(array $state, bool $generationChanged): array
+    {
+        return [
+            'generation_authority_clock' => (int)($state['generation_authority_clock'] ?? 0),
+            'storefront_generation_fingerprint' => (string)($state['storefront_generation_fingerprint'] ?? ''),
+            'needs_rewarm' => (bool)($state['needs_rewarm'] ?? false),
+            'generation_changed' => $generationChanged,
+        ];
+    }
+
+    private function currentAuthorityClock(): int
+    {
+        return ObjectManager::getInstance(NamespaceGenerationRepository::class)->authorityClock();
+    }
+
+    /**
+     * Live storefront theme generations only. Leftover e2e website rows must
+     * not restart warmup when they bump the global @clock.
+     */
+    private function currentStorefrontGenerationFingerprint(): string
+    {
+        $repo = ObjectManager::getInstance(NamespaceGenerationRepository::class);
+        $path = ObjectManager::getInstance(\Weline\Framework\Cache\Namespace\NamespacePath::class);
+        $namespaces = [$path->global('storefront', ['theme'])];
+        foreach ($this->liveWebsiteCodes() as $code) {
+            try {
+                $namespaces[] = $path->website($code, ['theme']);
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+        $vector = $repo->resolveVector($namespaces);
+        $parts = [];
+        foreach ($vector['generations'] as $namespace => $generation) {
+            $parts[] = $namespace . '=' . $generation;
+        }
+        \sort($parts, \SORT_STRING);
+
+        return \hash('sha256', \implode('|', $parts));
+    }
+
+    /** @return list<string> */
+    private function liveWebsiteCodes(): array
+    {
+        if (!\interface_exists(\Weline\Websites\Api\Catalog\WebsiteCatalogInterface::class)) {
+            return [];
+        }
+        try {
+            $catalog = ObjectManager::getInstance(\Weline\Websites\Api\Catalog\WebsiteCatalogInterface::class);
+            $codes = [];
+            foreach ($catalog->all() as $site) {
+                $code = \trim((string)$site->code);
+                if ($code !== '') {
+                    $codes[$code] = true;
+                }
+            }
+
+            return \array_keys($codes);
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**

@@ -35,21 +35,18 @@ class Install implements InstallInterface
         $paymentMethod = ObjectManager::getInstance(PaymentMethod::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($paymentMethod);
-        $paymentMethod->setup($modelSetup, $context);
 
         // 安装支付方式 EAV 值表，不重建支付方式主表
         /** @var PaymentMethodAttributeEntity $paymentMethodAttributeEntity */
         $paymentMethodAttributeEntity = ObjectManager::getInstance(PaymentMethodAttributeEntity::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($paymentMethodAttributeEntity);
-        $paymentMethodAttributeEntity->setup($modelSetup, $context);
         
         // 安装支付交易表
         /** @var PaymentTransaction $paymentTransaction */
         $paymentTransaction = ObjectManager::getInstance(PaymentTransaction::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($paymentTransaction);
-        $paymentTransaction->setup($modelSetup, $context);
 
         foreach ([
             PaymentDevRelaySession::class,

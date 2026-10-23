@@ -59,6 +59,10 @@
     var categoryRows = root.querySelector('[data-feed-category-rows]');
     var categorySubtitle = root.querySelector('[data-feed-category-subtitle]');
     var unmappedButton = root.querySelector('[data-feed-action="toggle-unmapped"]');
+    var oauthFields = root.querySelector('[data-feed-oauth]');
+    var apiKeyField = root.querySelector('[data-feed-apikey]');
+    var sitePicker = root.querySelector('[data-feed-site-picker]');
+    var scopeLock = root.querySelector('[data-feed-scope-lock]');
 
     var state = {
         page: 1,
@@ -306,6 +310,11 @@
         return 'google';
     }
 
+    function diagnosticText(code) {
+        var labels = text.diagnosticLabels || {};
+        return Object.prototype.hasOwnProperty.call(labels, code) ? String(labels[code]) : code;
+    }
+
     function generationText(row) {
         var error = scrubText(row && row.error_code);
         var at = String((row && row.last_generated_at) || '').trim();
@@ -322,6 +331,10 @@
             }
             if (row && row.skipped_count) {
                 line += '/' + row.skipped_count;
+            }
+            var diagnostic = scrubText(row && row.diagnostic_code);
+            if (diagnostic) {
+                line += ' · ' + diagnosticText(diagnostic);
             }
             return line.trim();
         }
@@ -483,7 +496,8 @@
         generatedCell.setAttribute('data-size', 'sm');
         generatedCell.style.whiteSpace = 'nowrap';
         var generated = generationText(row);
-        if (String(row.error_code || '').trim() !== '') {
+        var emptyDocument = row.generated_ok === true && Number(row.item_count || 0) === 0;
+        if (String(row.error_code || '').trim() !== '' || emptyDocument) {
             generatedCell.setAttribute('data-tone', 'danger');
         }
         generatedCell.textContent = generated;
@@ -671,16 +685,14 @@
     function syncSecretFields() {
         var channel = selectedChannel();
         var apiOnly = channel === 'criteo' || channel === 'naver_shopping';
-        var oauth = root.querySelector('[data-feed-oauth]');
-        var apiKey = root.querySelector('[data-feed-apikey]');
-        if (oauth) {
-            oauth.hidden = apiOnly;
+        if (oauthFields) {
+            oauthFields.hidden = apiOnly;
         }
         if (microsoftField) {
             microsoftField.hidden = channel !== 'microsoft_merchant';
         }
-        if (apiKey) {
-            apiKey.hidden = !apiOnly;
+        if (apiKeyField) {
+            apiKeyField.hidden = !apiOnly;
         }
     }
 
@@ -699,26 +711,23 @@
     }
 
     function setScopeMode(creating) {
-        var picker = root.querySelector('[data-feed-site-picker]');
-        var lock = root.querySelector('[data-feed-scope-lock]');
-        if (picker) {
-            picker.hidden = !creating;
+        if (sitePicker) {
+            sitePicker.hidden = !creating;
         }
-        if (lock) {
-            lock.hidden = creating;
+        if (scopeLock) {
+            scopeLock.hidden = creating;
         }
     }
 
     function clearSiteTags() {
-        var picker = root.querySelector('[data-feed-site-picker]');
-        if (!picker) {
+        if (!sitePicker) {
             return;
         }
         var guard = 0;
-        var remove = picker.querySelector('.weline-website-tag-remove');
+        var remove = sitePicker.querySelector('.weline-website-tag-remove');
         while (remove && guard < 40) {
             remove.click();
-            remove = picker.querySelector('.weline-website-tag-remove');
+            remove = sitePicker.querySelector('.weline-website-tag-remove');
             guard += 1;
         }
     }
@@ -768,10 +777,9 @@
         setChannel(String(row.channel_code || ''), true);
         setScopeMode(false);
         fillIdentity(row);
-        var lock = root.querySelector('[data-feed-scope-lock]');
-        if (lock) {
+        if (scopeLock) {
             var siteName = String(row.website_name || row.website_id || '');
-            lock.textContent = siteName + ' · ' + String(row.locale || '') + ' · ' + String(row.country || '') + ' · ' + String(row.currency || '');
+            scopeLock.textContent = siteName + ' · ' + String(row.locale || '') + ' · ' + String(row.country || '') + ' · ' + String(row.currency || '');
         }
         var enabled = formSelect('enabled');
         if (enabled) {
@@ -844,7 +852,10 @@
         saveFeed(payload).then(function (data) {
             closeDialog(formDialog);
             if (data && data.created_count != null) {
-                var note = (text.createdTree || '') + ' ' + String(data.created_count);
+                var note = String(text.createdTree || '').replace('{count}', String(data.created_count));
+                if (Number(data.kept_count) > 0) {
+                    note += ' ' + String(text.keptTree || '').replace('{count}', String(data.kept_count));
+                }
                 if (Array.isArray(data.skipped_locales) && data.skipped_locales.length) {
                     note += ' · ' + data.skipped_locales.join(',');
                 }
@@ -909,6 +920,9 @@
             next.public_url = scrubPublicUrl(data.public_url);
             next.public_label = data.public_url === '' ? (text.notGenerated || '') : '';
         }
+        if (typeof data.last_generated_at === 'string' && data.last_generated_at !== '') {
+            next.last_generated_at = data.last_generated_at;
+        }
         if (data.item_count != null) {
             next.item_count = data.item_count;
         }
@@ -916,10 +930,11 @@
             next.skipped_count = data.skipped_count;
         }
         next.error_code = scrubText(data.error_code || '');
+        next.diagnostic_code = scrubText(data.diagnostic_code || '');
         if (Array.isArray(data.diagnostics)) {
             next.diagnostics = data.diagnostics;
         }
-        next.generated_ok = next.error_code === '';
+        next.generated_ok = data.generated_ok === true;
         replaceRow(next);
     }
 
@@ -971,9 +986,11 @@
             input.type = 'text';
             input.value = codeValue;
             input.setAttribute('data-feed-category-code', '');
+            input.setAttribute('aria-label', String(item.path || item.path_name || item.name || ''));
             codeCell.appendChild(input);
             var flagCell = document.createElement('td');
             flagCell.setAttribute('data-feed-category-flag', '');
+            flagCell.style.whiteSpace = 'nowrap';
             function paint() {
                 var mapped = mappedLabel(input.value);
                 tr.hidden = state.onlyUnmapped && mapped;
@@ -1101,9 +1118,23 @@
         });
     }
 
+    // Weline.UI.dialog moves an open dialog to <body>, outside root; dialogs come first so
+    // a dialog still nested in root is handled by its own listener only.
+    var clickSurfaces = [formDialog, categoryDialog, disableDialog, archiveDialog, root].filter(Boolean);
+
     function onClick(event) {
         var trigger = event.target.closest('[data-feed-action]');
-        if (!trigger || !root.contains(trigger)) {
+        if (!trigger) {
+            return;
+        }
+        var owner = null;
+        for (var i = 0; i < clickSurfaces.length; i++) {
+            if (clickSurfaces[i].contains(trigger)) {
+                owner = clickSurfaces[i];
+                break;
+            }
+        }
+        if (owner !== event.currentTarget) {
             return;
         }
         var action = trigger.getAttribute('data-feed-action') || '';
@@ -1179,7 +1210,9 @@
         }
     }
 
-    root.addEventListener('click', onClick);
+    clickSurfaces.forEach(function (surface) {
+        surface.addEventListener('click', onClick);
+    });
     if (form) {
         form.addEventListener('submit', submitForm);
         form.addEventListener('change', function (event) {
@@ -1190,26 +1223,30 @@
     }
     var filters = root.querySelector('[data-feed-filters]');
     if (filters) {
-        filters.addEventListener('submit', function (event) {
-            event.preventDefault();
+        var readFilters = function () {
+            var website = filters.querySelector('[data-feed-filter-website] [data-website-select-value]');
             state.name = String((filters.querySelector('[data-feed-filter="name"]') || {}).value || '').trim();
             state.channel = String((filters.querySelector('[data-feed-filter="channel"]') || {}).value || '');
-            state.website = String((filters.querySelector('[data-feed-filter="website"]') || {}).value || '');
+            state.website = String((website || {}).value || '').trim();
             state.page = 1;
+        };
+        filters.addEventListener('submit', function (event) {
+            event.preventDefault();
+            readFilters();
             loadList();
         });
         filters.addEventListener('change', function (event) {
-            if (!event.target || !event.target.getAttribute) {
+            var target = event.target;
+            if (!target || !target.getAttribute) {
                 return;
             }
-            var filter = event.target.getAttribute('data-feed-filter');
-            if (filter !== 'channel' && filter !== 'website') {
+            var isChannel = target.getAttribute('data-feed-filter') === 'channel';
+            var isWebsite = target.hasAttribute('data-website-select-value')
+                && !!target.closest('[data-feed-filter-website]');
+            if (!isChannel && !isWebsite) {
                 return;
             }
-            state.name = String((filters.querySelector('[data-feed-filter="name"]') || {}).value || '').trim();
-            state.channel = String((filters.querySelector('[data-feed-filter="channel"]') || {}).value || '');
-            state.website = String((filters.querySelector('[data-feed-filter="website"]') || {}).value || '');
-            state.page = 1;
+            readFilters();
             loadList();
         });
     }

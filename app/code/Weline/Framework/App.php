@@ -885,8 +885,14 @@ class App
             return;
         }
 
-        SessionFactory::getInstance()->createSession()->start('');
-        $this->reassertSessionCookieWire();
+        $session = SessionFactory::getInstance()->createSession();
+        // 只有进入本方法前已经启动（例如 run_before 先行启动）才需要重写 Cookie：
+        // 新建会话时 start() 已按 cookie_lifetime 发过一次，再 reassert 会用 defaultTtl 覆盖 Expires。
+        $wasStarted = $session->isStarted();
+        $session->start('');
+        if ($wasStarted) {
+            $this->reassertSessionCookieWire();
+        }
     }
 
     private function isFrontendQueryBinRequestUri(string $requestUri): bool
@@ -1082,7 +1088,16 @@ class App
             throw new ResponseTerminateException(200, $result, ['Content-Type' => 'application/json']);
         }
 
-        return (string)$result;
+        $output = (string)$result;
+        $rewriter = \Weline\Framework\Deploy\StaticAssetHtmlRewriter::class;
+        if (\str_contains($output, $rewriter::PAIR_PLACEHOLDER)
+            || \str_contains($output, $rewriter::DEPLOY_PLACEHOLDER)
+        ) {
+            // WLS 正常响应不走 response_ready，这里兜底解析主题更新固化物里的占位符。
+            $output = $rewriter::rewrite($output);
+        }
+
+        return $output;
     }
 
     public function broadcastTelemetry(string $result, ?Request $request = null, bool $forceResultMutation = false): string

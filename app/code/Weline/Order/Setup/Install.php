@@ -45,73 +45,61 @@ class Install implements InstallInterface
             $checkoutGroupModel = ObjectManager::getInstance(CheckoutGroup::class);
             $modelSetup = ObjectManager::make(ModelSetup::class);
             $modelSetup->putModel($checkoutGroupModel);
-            $checkoutGroupModel->install($modelSetup, $context);
 
             // 安装订单主表
             $orderModel = ObjectManager::getInstance(Order::class);
             $modelSetup = ObjectManager::make(ModelSetup::class);
             $modelSetup->putModel($orderModel);
-            $orderModel->install($modelSetup, $context);
             
             // 安装订单项表
             $orderItemModel = ObjectManager::getInstance(OrderItem::class);
             $modelSetup = ObjectManager::make(ModelSetup::class);
             $modelSetup->putModel($orderItemModel);
-            $orderItemModel->install($modelSetup, $context);
 
             // 安装履约单元表（P2D-002 stub；仓维行为归 P3）
             $fulfillmentUnitModel = ObjectManager::getInstance(FulfillmentUnit::class);
             $modelSetup = ObjectManager::make(ModelSetup::class);
             $modelSetup->putModel($fulfillmentUnitModel);
-            $fulfillmentUnitModel->install($modelSetup, $context);
 
             // 安装 kind-qualified 展示号注册表（P2D-003 / DEC-017）
             $displayNumberRegistry = ObjectManager::getInstance(DisplayNumberRegistry::class);
             $modelSetup = ObjectManager::make(ModelSetup::class);
             $modelSetup->putModel($displayNumberRegistry);
-            $displayNumberRegistry->install($modelSetup, $context);
             
             // 安装支付记录表
             $orderPaymentModel = ObjectManager::getInstance(OrderPayment::class);
             $modelSetup = ObjectManager::make(ModelSetup::class);
             $modelSetup->putModel($orderPaymentModel);
-            $orderPaymentModel->install($modelSetup, $context);
             
             // 安装发货记录表
             $orderShipmentModel = ObjectManager::getInstance(OrderShipment::class);
             $modelSetup = ObjectManager::make(ModelSetup::class);
             $modelSetup->putModel($orderShipmentModel);
-            $orderShipmentModel->install($modelSetup, $context);
             
             // 安装退款记录表
             $orderRefundModel = ObjectManager::getInstance(OrderRefund::class);
             $modelSetup = ObjectManager::make(ModelSetup::class);
             $modelSetup->putModel($orderRefundModel);
-            $orderRefundModel->install($modelSetup, $context);
             
             // 安装发票表
             $orderInvoiceModel = ObjectManager::getInstance(OrderInvoice::class);
             $modelSetup = ObjectManager::make(ModelSetup::class);
             $modelSetup->putModel($orderInvoiceModel);
-            $orderInvoiceModel->install($modelSetup, $context);
             
             // 安装订单历史表
             $orderHistoryModel = ObjectManager::getInstance(OrderHistory::class);
             $modelSetup = ObjectManager::make(ModelSetup::class);
             $modelSetup->putModel($orderHistoryModel);
-            $orderHistoryModel->install($modelSetup, $context);
             
             // 安装订单状态表
             $orderStatusModel = ObjectManager::getInstance(OrderStatus::class);
             $modelSetup = ObjectManager::make(ModelSetup::class);
             $modelSetup->putModel($orderStatusModel);
-            $orderStatusModel->install($modelSetup, $context);
             
             // 安装订单状态翻译表
             $orderStatusTranslationModel = ObjectManager::getInstance(OrderStatusTranslation::class);
             $modelSetup = ObjectManager::make(ModelSetup::class);
             $modelSetup->putModel($orderStatusTranslationModel);
-            $orderStatusTranslationModel->install($modelSetup, $context);
             
             // 初始化默认订单状态
             $statusService = ObjectManager::getInstance(OrderStatusService::class);

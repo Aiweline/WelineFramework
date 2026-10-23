@@ -86,6 +86,29 @@ final class ResponseTest extends TestCase
         }
     }
 
+    public function testDevFpcHitKeepsEdgeCacheHeaders(): void
+    {
+        $env = Env::getInstance();
+        $previous = $env->getConfig('system.deploy');
+        $env->setConfig('system.deploy', 'dev');
+        try {
+            $response = Response::fromContent('<html><body>fpc-hit</body></html>', 200, 'text/html; charset=utf-8');
+            $response->setHeader('X-Weline-FPC', 'HIT');
+            $response->setHeader('CDN-Cache-Control', 'public, max-age=300');
+            $response->setHeader('Cloudflare-CDN-Cache-Control', 'public, max-age=300');
+            $response->setHeader('Cache-Control', 'public, max-age=60, must-revalidate');
+
+            $response->toHttpString(false);
+
+            self::assertSame('public, max-age=300', $response->getHeader('CDN-Cache-Control'));
+            self::assertSame('public, max-age=300', $response->getHeader('Cloudflare-CDN-Cache-Control'));
+            self::assertSame('public, max-age=60, must-revalidate', $response->getHeader('Cache-Control'));
+            self::assertSame('HIT', $response->getHeader('X-Weline-FPC'));
+        } finally {
+            $env->setConfig('system.deploy', $previous);
+        }
+    }
+
     public function testWqb1BodyIsNotRewrittenByDocumentCspMeta(): void
     {
         // Simulate a query-bin packet that embeds HTML (preview_html) and lost Content-Type.

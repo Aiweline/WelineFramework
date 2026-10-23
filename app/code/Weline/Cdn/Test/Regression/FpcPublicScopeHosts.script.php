@@ -7,7 +7,7 @@ use Weline\Cdn\Adapter\Cloudflare;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Controller\Extra\FpcPolicySnapshot;
-use Weline\Websites\Api\Catalog\{WebsiteCatalogInterface,StoreCatalogInterface,SalesChannelCatalogInterface};
+use Weline\Websites\Api\Catalog\{WebsiteCatalogInterface,StoreCatalogInterface,SalesChannelCatalogInterface,WebsiteDomainCatalogInterface};
 use Weline\Websites\Api\Catalog\Data\{WebsiteSummary,StoreSummary,SalesChannelSummary};
 try {
     $assert=static function(bool $ok,string $why):void{if(!$ok){throw new RuntimeException($why);}};
@@ -30,7 +30,11 @@ try {
     };
     // 生产只读已核输入：一个Domain1/apex/site0，Website0正式public host是www。
     $domain=(new Domain())->setData(['domain_id'=>1,'site_id'=>0,'domain_name'=>'changanhanfu.com','adapter'=>'cloudflare','zone_id'=>'fixture-zone','enabled'=>1,'inherit_default'=>false]);
-    $targets=new FpcPolicyTargetService(new Domain(),$websites,$stores,$om->getInstance(WarmupLocaleUrlExpander::class));
+    $siteDomains=new class implements WebsiteDomainCatalogInterface {
+        public array $bases=[];
+        public function publicBaseUrls(int $id):array{return $id===0?$this->bases:[];}
+    };
+    $targets=new FpcPolicyTargetService(new Domain(),$websites,$stores,$om->getInstance(WarmupLocaleUrlExpander::class),$siteDomains);
     $sync=(new ReflectionClass(FpcPolicySyncService::class))->newInstanceWithoutConstructor();
     foreach(['targets'=>$targets,'rules'=>$om->getInstance(RuleManager::class)] as $field=>$value){(new ReflectionProperty($sync,$field))->setValue($sync,$value);}
     $desiredMethod=new ReflectionMethod($sync,'desiredRules');$adapter=$om->getInstance(Cloudflare::class);
@@ -61,5 +65,10 @@ try {
     $snapshot=['declarations'=>[$id=>$declaration],'scope_chains'=>[],'overrides'=>[],'revision'=>'fixture','source_version'=>1];
     $samples=(new ReflectionMethod($http,'samples'))->invoke($http,[],[$domain],$snapshot);
     $assert(count($samples)===2&&str_starts_with($samples[0]['url'],'https://www.changanhanfu.com/')&&str_starts_with($samples[1]['url'],'https://changanhanfu.com/'),'HTTP样本没有按可信public host优先包含www与apex');
-    echo "PASS actual apex/site0→www: six rules/legacy IDs/stable refs/purge/public samples; foreign hosts excluded; store prefixes preserved\n";
+    $siteDomains->bases=['https://m.changanhanfu.com','https://changanhanfu.com.evil.invalid'];
+    $hosts=array_column($targets->publicEndpoints($domain),'host');
+    $assert(in_array('m.changanhanfu.com',$hosts,true)&&in_array('www.changanhanfu.com',$hosts,true)&&!in_array('changanhanfu.com.evil.invalid',$hosts,true),'站点绑定域名未纳入公网入口或外区域域名混入');
+    $assert($targets->publicEndpoints($domain,ScopeIdentity::store(0,'default','a','normal'))===$scoped,'Store scope不应扩到站点绑定域名');
+    $siteDomains->bases=[];
+    echo "PASS actual apex/site0→www: six rules/legacy IDs/stable refs/purge/public samples; foreign hosts excluded; store prefixes preserved; website domains included\n";
 }catch(Throwable $error){fwrite(STDERR,'FAIL '.$error->getMessage()."\n");exit(1);}

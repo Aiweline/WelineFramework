@@ -245,12 +245,11 @@ final class FrontendQueryGateway
         if (($descriptor['mode'] ?? '') !== 'stream') {
             throw new FrontendQueryException('capability_denied', 'Operation is not a frontend stream.', 403);
         }
-        $isBackendRuntimeTask = $provider === 'runtime_task'
+        $isAttestedBackendStream = self::isAttestedBackendObservationChannel($provider, $operation)
             && $executionContext->area === FrontendWorkerExecutionContext::AREA_BACKEND;
-        if ($isBackendRuntimeTask) {
-            // runtime_task is dual-area. Backend observation is allowed when the
-            // page Worker already carries a live backend binding; type ACL and
-            // task owner/lease checks still run inside prepareEvents.
+        if ($isAttestedBackendStream) {
+            // Named observation channels only. A live backend binding is required;
+            // other auth=backend streams stay fail-closed below.
             if ($executionContext->backendBinding === null) {
                 throw new FrontendQueryException(
                     'auth_error',
@@ -259,9 +258,6 @@ final class FrontendQueryGateway
                 );
             }
         } elseif ($this->isBackendDescriptor($descriptor)) {
-            // Backend-authoritative QueryProvider streams remain fail-closed
-            // until a shared revocation epoch exists. runtime_task is the
-            // explicit exception above.
             throw new FrontendQueryException(
                 'backend_stream_disabled',
                 (string)__('后台实时流暂未启用，请使用普通后台请求。'),
@@ -277,11 +273,18 @@ final class FrontendQueryGateway
             $descriptor,
             $executionContext,
         );
-        if ($isBackendRuntimeTask) {
+        if ($isAttestedBackendStream) {
+            // Keep the attested backend execution context. runtime_task owner
+            // and lease checks stay inside its provider; menu-signal watch
+            // binds the ticket to the same backend principal just restored.
+            $owner = $provider === 'runtime_task'
+                ? null
+                : $this->resolveStreamOwner($descriptor);
+
             return $this->workerSessionService->createStreamTicket(
                 $channel,
                 $params,
-                null,
+                $owner,
                 null,
                 $executionContext,
             );
@@ -333,8 +336,8 @@ final class FrontendQueryGateway
             throw new FrontendQueryException('protocol_error', 'Invalid worker stream execution context.', 400);
         }
         $executionContext = $this->normalizeExecutionContext($scopeBinding, $executionContext);
-        // Backend runtime_task.events tickets keep their attested backend
-        // binding. Type ACL + owner/lease checks authorize inside prepareEvents.
+        // Attested backend observation tickets keep their backend binding.
+        // runtime_task owner/lease checks still run inside prepareEvents.
         $this->installExecutionContext($executionContext);
         $this->requireDescriptorAuthorization(
             $provider,
@@ -345,7 +348,8 @@ final class FrontendQueryGateway
         );
 
         if ($executionContext->area === FrontendWorkerExecutionContext::AREA_BACKEND) {
-            if ($provider !== 'runtime_task' || $executionContext->backendBinding === null) {
+            if (!self::isAttestedBackendObservationChannel($provider, $operation)
+                || $executionContext->backendBinding === null) {
                 throw new FrontendQueryException(
                     'backend_stream_disabled',
                     (string)__('后台实时流暂未启用，请使用普通后台请求。'),
@@ -424,6 +428,16 @@ final class FrontendQueryGateway
                 401,
             );
         }
+    }
+
+    /**
+     * Backend pages may open only these observation streams.
+     * Any other auth=backend stream stays fail-closed.
+     */
+    public static function isAttestedBackendObservationChannel(string $provider, string $operation): bool
+    {
+        return ($provider === 'runtime_task' && $operation === 'events')
+            || ($provider === 'admin' && $operation === 'menuSignalWatch');
     }
 
     /** @param array<string, mixed> $descriptor */

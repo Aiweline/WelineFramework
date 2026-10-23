@@ -18,6 +18,7 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Adapter\FileAdapter;
 use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Compilation\CompiledPhpRegistry;
+use Weline\Framework\Compilation\ReleaseStamp;
 use Weline\Framework\Compilation\ServiceProviderRegistry;
 use Weline\Framework\Manager\Di\ReflectionArtifactContract;
 use Weline\Framework\Manager\FactoryObjectInterface;
@@ -129,12 +130,13 @@ class ObjectManager implements ManagerInterface
      * WLS persistent workers may trust v2 artifacts after successful preload
      * (mirrors canTrustGeneratedPluginRegistryForRuntime) to skip per-class hash_file.
      */
-    private static bool $compiledFactoriesTrustedAfterPreload = false;
 
-    private static bool $precompiledMetadataTrustedAfterPreload = false;
 
     /** @var int Contract/test counter for reflection DI fallback amplification. */
     private static int $parseMethodParamsMetadataCalls = 0;
+
+    /** 实际执行逐类源码签名计算的次数（信任发布戳后应为 0）。 */
+    private static int $sourceSignatureCalls = 0;
 
     private static ?array $generatedPluginRegistry = null;
     private static ?int $generatedPluginRegistryMtime = null;
@@ -2004,11 +2006,6 @@ class ObjectManager implements ManagerInterface
         $reflectionMetadataCount = \is_array(self::$precompiledMetadata) ? \count(self::$precompiledMetadata) : 0;
         $compiledFactoriesCount = \is_array(self::$compiledFactories) ? \count(self::$compiledFactories) : 0;
 
-        if (self::canTrustGeneratedArtifactsForRuntime()) {
-            self::$precompiledMetadataTrustedAfterPreload = $reflectionMetadataCount > 0;
-            self::$compiledFactoriesTrustedAfterPreload = $compiledFactoriesCount > 0;
-        }
-
         return [
             'reflection_metadata' => $reflectionMetadataCount,
             'compiled_factories' => $compiledFactoriesCount,
@@ -2029,6 +2026,16 @@ class ObjectManager implements ManagerInterface
     public static function resetParseMethodParamsMetadataCallCount(): void
     {
         self::$parseMethodParamsMetadataCalls = 0;
+    }
+
+    public static function getSourceSignatureCallCount(): int
+    {
+        return self::$sourceSignatureCalls;
+    }
+
+    public static function resetSourceSignatureCallCount(): void
+    {
+        self::$sourceSignatureCalls = 0;
     }
 
     private static function countNestedScalarValues(array $rows): int
@@ -2054,7 +2061,6 @@ class ObjectManager implements ManagerInterface
         }
         self::$precompiledLoaded = true;
         self::$precompiledMetadataRejectReason = null;
-        self::$precompiledMetadataTrustedAfterPreload = false;
         $file = BP . 'generated' . DIRECTORY_SEPARATOR . 'reflection_metadata.php';
         $payload = CompiledPhpRegistry::load($file);
         if ($payload === null && !\is_file($file)) {
@@ -2083,7 +2089,6 @@ class ObjectManager implements ManagerInterface
         }
         self::$compiledFactoriesLoaded = true;
         self::$compiledFactoriesRejectReason = null;
-        self::$compiledFactoriesTrustedAfterPreload = false;
         $file = BP . 'generated' . DIRECTORY_SEPARATOR . 'compiled_factories.php';
         $payload = CompiledPhpRegistry::load($file);
         if ($payload === null && !\is_file($file)) {
@@ -2103,7 +2108,14 @@ class ObjectManager implements ManagerInterface
 
     private static function canTrustGeneratedArtifactsForRuntime(): bool
     {
-        return \class_exists(Runtime::class, false) && Runtime::isPersistent();
+        // 开发态必须逐类校验：改源码后不重编译也要立刻生效。
+        if (\defined('DEV') && DEV) {
+            return \class_exists(Runtime::class, false) && Runtime::isPersistent();
+        }
+
+        // 生产/预发只认发布戳：编译期已对 DI 产物做过摘要，请求期不再逐类 hash。
+        return ReleaseStamp::hasArtifact('compiled_factories.php')
+            && ReleaseStamp::hasArtifact('reflection_metadata.php');
     }
 
     private static function compiledFactoryIsCurrent(string $className): bool
@@ -2113,7 +2125,7 @@ class ObjectManager implements ManagerInterface
             return false;
         }
 
-        if (self::$compiledFactoriesTrustedAfterPreload && self::canTrustGeneratedArtifactsForRuntime()) {
+        if (self::canTrustGeneratedArtifactsForRuntime()) {
             return true;
         }
 
@@ -2135,7 +2147,7 @@ class ObjectManager implements ManagerInterface
     private static function precompiledMetadataIsCurrent(string $className, string $methodName): bool
     {
         $cacheKey = $className . '::' . $methodName;
-        if (self::$precompiledMetadataTrustedAfterPreload && self::canTrustGeneratedArtifactsForRuntime()) {
+        if (self::canTrustGeneratedArtifactsForRuntime()) {
             return isset(self::$precompiledMetadata[$cacheKey]);
         }
 
@@ -2160,6 +2172,7 @@ class ObjectManager implements ManagerInterface
 
         try {
             $class = self::getReflectionInstance($className);
+            self::$sourceSignatureCalls++;
             return self::$currentSourceSignatures[$cacheKey] = ReflectionArtifactContract::computeSourceSignature(
                 $className,
                 $methodName,

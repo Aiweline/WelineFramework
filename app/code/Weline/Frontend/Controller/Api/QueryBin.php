@@ -166,6 +166,9 @@ class QueryBin extends FrontendRestController
             if ($tip !== null) {
                 $errorPayload['tip'] = $tip;
             }
+            if ($errorCode === 'deploy_reload_required') {
+                $errorPayload['page_generation_token'] = \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::pageGenerationToken();
+            }
             $payload = [
                 'ok' => false,
                 'data' => null,
@@ -784,12 +787,13 @@ class QueryBin extends FrontendRestController
         if ($serverId === '') {
             return;
         }
-        if (\strcasecmp($serverId, $clientThemePublishedVersionId) === 0) {
+        if (\strcasecmp($serverId, \trim($clientThemePublishedVersionId)) === 0) {
             return;
         }
 
-        // Multi-Scope: page may bake Channel published id while a bare resolve briefly
-        // hit another sealed owner — accept any sealed id in the storefront probe set.
+        // Multi-Scope: the page may bake a Channel/Store generation while a bare
+        // request resolves another fallback owner. Accept only that scope's CURRENT
+        // published generation — never an older sealed one.
         $clientId = \trim($clientThemePublishedVersionId);
         if ($clientId !== ''
             && \class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
@@ -798,8 +802,7 @@ class QueryBin extends FrontendRestController
                 $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
                     \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class
                 );
-                $acceptable = $resolver->collectAcceptableStorefrontGenerationIds();
-                if (isset($acceptable[$clientId])) {
+                if ($resolver->isCurrentStorefrontGenerationId($clientId)) {
                     return;
                 }
             } catch (\Throwable) {
@@ -807,6 +810,9 @@ class QueryBin extends FrontendRestController
             }
         }
 
+        // Strict current generation: old/rollback generations are corrected to the
+        // current Scope generation, never silently accepted. The client reloads with
+        // the page_generation_token attached by the catch below.
         throw new FrontendQueryException(
             'deploy_reload_required',
             '主题已发布新版本。请重新加载页面以继续。',

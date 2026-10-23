@@ -126,6 +126,16 @@ final class ThemeApplicationServiceTest extends TestCase
             {
                 return $this->records[$scopeKey][$storeMode][$area] ?? ['reference' => null, 'revision' => 0];
             }
+            public function listForArea(string $storeMode, string $area): array
+            {
+                $out = [];
+                foreach ($this->records as $scopeKey => $byMode) {
+                    if (isset($byMode[$storeMode][$area])) {
+                        $out[] = ['scope_key' => (string)$scopeKey] + $byMode[$storeMode][$area];
+                    }
+                }
+                return $out;
+            }
             public function compareAndSwap(string $scopeKey, string $storeMode, string $area, ?ThemeApplicationReference $reference, int $expectedRevision): array
             {
                 $old = $this->read($scopeKey, $storeMode, $area);

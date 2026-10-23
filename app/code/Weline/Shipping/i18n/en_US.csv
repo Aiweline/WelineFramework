@@ -397,6 +397,7 @@ grid,grid
 请填写收货人。,"Please enter the recipient name."
 请填写电话。,"Please enter a phone number."
 电话号码格式不正确,"Invalid phone number format"
+电话号码格式不正确，示例：%{1},"Invalid phone number format, e.g. %{1}"
 请填写详细地址。,"Please enter the street address."
 确定要删除这个地址吗？,"Are you sure you want to delete this address?"
 系统,System

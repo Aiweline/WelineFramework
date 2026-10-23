@@ -82,6 +82,10 @@ final class FrameworkCompiler
                         $sourceAfter,
                         $outputDirectory,
                     );
+                    $compiled['release'] = $this->compileManifest->writeReleaseStamp(
+                        (array)($compiled['modules']['order'] ?? []),
+                        $outputDirectory,
+                    );
 
                     return $compiled;
                 }

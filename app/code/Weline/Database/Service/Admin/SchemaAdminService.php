@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Database\Service\Admin;
 
-use Weline\Database\Service\BackupService;
+use Weline\Framework\Database\Service\BackupService;
 use Weline\Framework\Database\Connection\Api\AtomicPhysicalTableChangeInterface;
 use Weline\Framework\Database\Connection\Api\AtomicPhysicalViewChangeInterface;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;

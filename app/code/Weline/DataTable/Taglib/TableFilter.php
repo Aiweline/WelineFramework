@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Weline\DataTable\Taglib;
 
 use Weline\DataTable\Helper\FrontendAccess;
+use Weline\DataTable\Helper\OwnedChildren;
 use Weline\DataTable\Helper\TableContext;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Taglib\OwnsChildCompilationInterface;
 use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\View\Template;
@@ -54,7 +54,7 @@ final class TableFilter implements TaglibInterface, OwnsChildCompilationInterfac
 
     public static function callback(): callable
     {
-        return static function ($tagKey, $config, $tagData, $attributes): string {
+        return static function ($tagKey, $config, $tagData, $attributes, ?Template $template = null): string {
             $tableContext = TableContext::getCurrentTableContext() ?? [];
             $attributes = TableContext::inheritTableAttributes($attributes, (string)($attributes['scope'] ?? ''), [
                 'model', 'scope', 'searchable', 'allow-frontend',
@@ -71,11 +71,7 @@ final class TableFilter implements TaglibInterface, OwnsChildCompilationInterfac
                 if (trim($content) === '') {
                     $content = self::defaultFields((string)$attributes['model']);
                 }
-                if (str_contains($content, '<w:')) {
-                    /** @var Template $template */
-                    $template = w_obj(Template::class);
-                    $content = ObjectManager::getInstance(\Weline\Framework\View\Taglib::class)->tagReplace($template, $content);
-                }
+                $content = OwnedChildren::process($content, (array)$config, $template, $context);
                 $hidden = filter_var($attributes['searchable'] ?? true, FILTER_VALIDATE_BOOLEAN) ? '' : ' hidden';
                 $advanced = array_key_exists('advanced', $attributes)
                     ? filter_var($attributes['advanced'], FILTER_VALIDATE_BOOLEAN)

@@ -349,11 +349,28 @@ class RouteUpdateStage extends AbstractStage
         return true;
     }
     
+    private static function cleanupStaleRouterTempFiles(): void
+    {
+        $dirs = [];
+        foreach ((array) \Weline\Framework\App\Env::router_files_PATH as $file) {
+            $dirs[dirname((string) $file)] = true;
+        }
+        foreach (array_keys($dirs) as $dir) {
+            foreach (glob($dir . DIRECTORY_SEPARATOR . '*.tmp.*') ?: [] as $tmpFile) {
+                $mtime = @filemtime($tmpFile);
+                if ($mtime !== false && (time() - $mtime) > 86400) {
+                    @unlink($tmpFile);
+                }
+            }
+        }
+    }
+
     /**
      * @inheritDoc
      */
     public function commit(): void
     {
+        self::cleanupStaleRouterTempFiles();
         if (!$this->prepared) {
             throw new Exception(__('阶段 %{1} 尚未准备，无法提交', [$this->getName()]));
         }

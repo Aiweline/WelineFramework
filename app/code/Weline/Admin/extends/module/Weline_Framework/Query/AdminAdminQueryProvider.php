@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Admin\Extends\Module\Weline_Framework\Query;
 
 use Weline\Admin\Service\BackendMenuSignalAggregator;
+use Weline\Admin\Service\BackendMenuSignalWatch;
 use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
@@ -20,6 +21,7 @@ class AdminAdminQueryProvider implements QueryProviderInterface
         return match ($operation) {
             'adminRequest' => $this->adminRequest($params),
             'menuSignals' => $this->menuSignals(),
+            'menuSignalWatch' => $this->menuSignalWatch($params),
             default => throw new \InvalidArgumentException('Unsupported operation: ' . $operation),
         };
     }
@@ -58,6 +60,18 @@ class AdminAdminQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'params' => [],
                 ],
+                [
+                    'name' => 'menuSignalWatch',
+                    'description' => 'SSE watch of backend menu-signal providers. Each provider supplies its own unread logic; the stream emits menu_signals only when that aggregate changes.',
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'self'],
+                    'mode' => 'stream',
+                    'params' => [
+                        ['name' => 'since', 'type' => 'string', 'required' => false],
+                    ],
+                ],
             ],
         ];
     }
@@ -70,10 +84,7 @@ class AdminAdminQueryProvider implements QueryProviderInterface
      */
     private function menuSignals(): array
     {
-        /** @var BackendUserContextProviderInterface $users */
-        $users = ObjectManager::getInstance(BackendUserContextProviderInterface::class);
-        $actor = $users->current();
-        $userId = $actor !== null ? (int)$actor->getId() : 0;
+        $userId = $this->currentBackendUserId();
         if ($userId <= 0) {
             return [
                 'total' => 0,
@@ -90,6 +101,28 @@ class AdminAdminQueryProvider implements QueryProviderInterface
             // Keep object shape for empty JSON {}; values are {count,items,primary_href}.
             'by_code' => (object)($signals['by_code'] ?? []),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return \Generator<int, array<string, mixed>>
+     */
+    private function menuSignalWatch(array $params): \Generator
+    {
+        $since = trim((string)($params['since'] ?? ''));
+        /** @var BackendMenuSignalWatch $watch */
+        $watch = ObjectManager::getInstance(BackendMenuSignalWatch::class);
+
+        yield from $watch->watch($this->currentBackendUserId(), $since);
+    }
+
+    private function currentBackendUserId(): int
+    {
+        /** @var BackendUserContextProviderInterface $users */
+        $users = ObjectManager::getInstance(BackendUserContextProviderInterface::class);
+        $actor = $users->current();
+
+        return $actor !== null ? (int)$actor->getId() : 0;
     }
 
     /** @param array<string,mixed> $params */

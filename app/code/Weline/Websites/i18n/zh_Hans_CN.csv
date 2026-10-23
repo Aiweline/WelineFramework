@@ -373,8 +373,6 @@ id属性不能为空,id属性不能为空
 "Scope Token 无效","Scope Token 无效"
 "Scope Token 与当前 Website/Store/Channel 事实不一致","Scope Token 与当前 Website/Store/Channel 事实不一致"
 "商城 Scope 目录暂不可用","商城 Scope 目录暂不可用"
-Weline（本地）,微线（本地）
-"本地开发与 E2E 用内置供应商；免对外支付，订单状态机与线上对齐。","本地开发与 E2E 用内置供应商；免对外支付，订单状态机与线上对齐。"
 证书签发后更新配置订单状态失败：%{1},证书签发后更新配置订单状态失败：%{1}
 不能分配超出该站授权包的权限,不能分配超出该站授权包的权限
 "回退 HTTPS 状态失败：%{1}","回退 HTTPS 状态失败：%{1}"
@@ -2694,6 +2692,8 @@ download,下载
 无法创建网站备份目录。,无法创建网站备份目录。
 "备份数据 JSON 编码失败。","备份数据 JSON 编码失败。"
 "健康检查同步根域/池失败 domain_id=%{1}：%{2}","健康检查同步根域/池失败 domain_id=%{1}：%{2}"
+Weline（本地）,微线（本地）
+"本地开发与 E2E 用内置供应商；免对外支付，订单状态机与线上对齐。","本地开发与 E2E 用内置供应商；免对外支付，订单状态机与线上对齐。"
 "website_id 不能为负数（0 是合法默认站）","website_id 不能为负数（0 是合法默认站）"
 默认店铺在锁定复核期间消失,默认店铺在锁定复核期间消失
 默认店铺补种失败,默认店铺补种失败
@@ -2984,6 +2984,7 @@ download,下载
 "站点 %{1}","站点 %{1}"
 "Storefront Scope Token 必须使用完整 Channel Scope","Storefront Scope Token 必须使用完整 Channel Scope"
 "Scope Token 时钟无效","Scope Token 时钟无效"
+"Scope Token 页面世代无效","Scope Token 页面世代无效"
 "Scope Token Host 无效",范围令牌主机无效
 "Scope Token Host 端口无效","Scope Token Host 端口无效"
 网站缓存失效延迟作用域只能在活动事务中开启,网站缓存失效延迟作用域只能在活动事务中开启

@@ -20,6 +20,9 @@ final class SetupUpgradeIntent
     /** Default EarlyDatabaseAccessGate exclusive wait (15 minutes). */
     public const DEFAULT_EXCLUSIVE_WAIT_MS = 900_000;
 
+    private const CORRUPT_RECLAIM_AFTER_SEC = 60;
+    private const STALE_SIBLING_RETENTION_SEC = 3600;
+
     private static ?int $testWaitMillisecondsOverride = null;
 
     public static function path(): string
@@ -92,6 +95,9 @@ final class SetupUpgradeIntent
         if ($existing === null) {
             // Lost race or unreadable — reclaim dead and retry create once.
             self::reclaimIfOwnerDead();
+            if (is_file($path)) {
+                self::retireFile($path);
+            }
             $handle = @fopen($path, 'x+b');
             if (!is_resource($handle)) {
                 return self::isOwnedByCurrentProcess();
@@ -106,12 +112,12 @@ final class SetupUpgradeIntent
             return true;
         }
 
-        if ((int)$existing['pid'] === $pid && self::isProcessAlive($pid)) {
+        if ((int)$existing['pid'] === $pid && self::isProcessAlive($pid, (float)$existing['started_at'])) {
             // Renew same-owner intent in place.
             return self::rewriteOwnedPayload($payload);
         }
 
-        if (!self::isProcessAlive((int)$existing['pid'])) {
+        if (!self::isProcessAlive((int)$existing['pid'], (float)$existing['started_at'])) {
             @unlink($path);
             $handle = @fopen($path, 'x+b');
             if (!is_resource($handle)) {
@@ -152,7 +158,7 @@ final class SetupUpgradeIntent
             return false;
         }
 
-        return self::isProcessAlive((int)$existing['pid']);
+        return self::isProcessAlive((int)$existing['pid'], (float)$existing['started_at']);
     }
 
     public static function shouldYield(): bool
@@ -168,7 +174,7 @@ final class SetupUpgradeIntent
             return false;
         }
 
-        return (int)$existing['pid'] === $pid && self::isProcessAlive($pid);
+        return (int)$existing['pid'] === $pid && self::isProcessAlive($pid, (float)$existing['started_at']);
     }
 
     /**
@@ -205,29 +211,178 @@ final class SetupUpgradeIntent
 
     private static function reclaimIfOwnerDead(): void
     {
-        $existing = self::readPayload();
-        if ($existing === null) {
+        $path = self::path();
+        if (!is_file($path)) {
+            self::cleanupStaleSiblings();
             return;
         }
-        if (!self::isProcessAlive((int)$existing['pid'])) {
-            @unlink(self::path());
+        $existing = self::readPayload();
+        if ($existing === null) {
+            $mtime = @filemtime($path);
+            if (is_int($mtime) && time() - $mtime > self::CORRUPT_RECLAIM_AFTER_SEC) {
+                self::retireFile($path);
+            }
+            self::cleanupStaleSiblings();
+            return;
+        }
+        if (!self::isProcessAlive((int)$existing['pid'], (float)$existing['started_at'])) {
+            self::retireFile($path);
+        }
+        self::cleanupStaleSiblings();
+    }
+
+    private static function retireFile(string $path): void
+    {
+        $target = $path . '.stale.' . time() . '.' . getmypid();
+        if (!@rename($path, $target)) {
+            @unlink($path);
         }
     }
 
-    private static function isProcessAlive(int $pid): bool
+    private static function cleanupStaleSiblings(): void
+    {
+        $paths = glob(self::path() . '.stale.*') ?: [];
+        foreach ($paths as $path) {
+            $mtime = @filemtime($path);
+            if (is_int($mtime) && time() - $mtime > self::STALE_SIBLING_RETENTION_SEC) {
+                @unlink($path);
+            }
+        }
+    }
+
+    private static function processExists(int $pid): bool
     {
         if ($pid < 1) {
             return false;
         }
         if (\function_exists('posix_kill')) {
-            return @posix_kill($pid, 0);
+            if (@posix_kill($pid, 0)) {
+                return true;
+            }
+
+            return self::processExistsViaPs($pid) || self::processExistsViaTasklist($pid) || is_dir('/proc/' . $pid);
         }
-        // Windows / non-posix: best-effort via /proc or assume alive if file fresh.
+
+        return self::processExistsViaTasklist($pid);
+    }
+
+    private static function processStartedAt(int $pid): ?float
+    {
+        if ($pid < 1) {
+            return null;
+        }
         if (is_dir('/proc/' . $pid)) {
-            return true;
+            $stat = @file_get_contents('/proc/' . $pid . '/stat');
+            if (!is_string($stat)) {
+                return null;
+            }
+            $close = strrpos($stat, ')');
+            if ($close === false) {
+                return null;
+            }
+            $fields = explode(' ', substr($stat, $close + 2));
+            if (!isset($fields[19]) || (float)$fields[19] <= 0.0) {
+                return null;
+            }
+            $boot = @file_get_contents('/proc/stat');
+            if (!is_string($boot) || !preg_match('/^btime\s+(\d+)/m', $boot, $matches)) {
+                return null;
+            }
+            $hz = 100.0;
+            if (\function_exists('shell_exec')) {
+                $clockTick = @shell_exec('getconf CLK_TCK');
+                if (is_string($clockTick) && (float)trim($clockTick) > 0.0) {
+                    $hz = (float)trim($clockTick);
+                }
+            }
+
+            return (float)$matches[1] + ((float)$fields[19] / $hz);
+        }
+        if (PHP_OS_FAMILY === 'Darwin') {
+            if (!\function_exists('exec')) {
+                return null;
+            }
+            $out = [];
+            exec('ps -p ' . $pid . ' -o etime= 2>/dev/null', $out, $code);
+            if ($code !== 0 || $out === []) {
+                return null;
+            }
+            $elapsed = self::parsePsElapsed(trim(implode('', $out)));
+            if ($elapsed === null) {
+                return null;
+            }
+
+            return (float)(time() - $elapsed);
+        }
+
+        return null;
+    }
+
+    private static function parsePsElapsed(string $text): ?int
+    {
+        if ($text === '') {
+            return null;
+        }
+        $days = 0;
+        if (str_contains($text, '-')) {
+            [$dayPart, $text] = explode('-', $text, 2);
+            $days = (int)$dayPart;
+        }
+        $parts = array_map('intval', explode(':', $text));
+        if (count($parts) === 3) {
+            [$hours, $minutes, $seconds] = $parts;
+        } elseif (count($parts) === 2) {
+            $hours = 0;
+            [$minutes, $seconds] = $parts;
+        } else {
+            return null;
+        }
+
+        return $days * 86400 + $hours * 3600 + $minutes * 60 + $seconds;
+    }
+
+    private static function isProcessAlive(int $pid, float $startedAt = 0.0): bool
+    {
+        if (!self::processExists($pid)) {
+            return false;
+        }
+        if ($startedAt > 0.0) {
+            $procStart = self::processStartedAt($pid);
+            if ($procStart !== null && $procStart > $startedAt + 2.0) {
+                return false;
+            }
         }
 
         return true;
+    }
+
+    private static function processExistsViaPs(int $pid): bool
+    {
+        if (!\function_exists('exec')) {
+            return true;
+        }
+        exec('ps -p ' . $pid . ' -o pid= 2>/dev/null', $output, $code);
+        if ($code === 0 && trim(implode('', $output)) !== '') {
+            return true;
+        }
+
+        exec('launchctl print pid/' . $pid . ' 2>/dev/null', $launchctlOutput, $launchctlCode);
+
+        if ($launchctlCode !== 0 || trim(implode('', $launchctlOutput)) === '') {
+            return false;
+        }
+
+        return !str_contains(implode('', $launchctlOutput), 'properties = slain');
+    }
+
+    private static function processExistsViaTasklist(int $pid): bool
+    {
+        if (!\function_exists('exec')) {
+            return true;
+        }
+        exec('tasklist /FI "PID eq ' . $pid . '" /NH 2>NUL', $output, $code);
+
+        return $code === 0 && str_contains(implode('', $output), (string)$pid);
     }
 
     private static function encodePayload(int $pid, string $command, float $startedAt): string

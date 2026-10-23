@@ -506,23 +506,20 @@ class Response implements ResponseInterface, RequestLocalInterface
     }
 
     /**
-     * Non-production HTML (DEV / staging bake preview) must never enter a
-     * shared edge cache.
+     * HTML that is not an FPC HIT stays out of the shared edge when public
+     * URL mode is off, so an uncached DEV render cannot be stored at Cloudflare.
      *
-     * FPC runs in DEV too, and its HIT headers used to be indistinguishable
-     * from production. A DEV preview page could therefore be cached by
-     * Cloudflare with `/Weline/.../view/statics/...` and `_weline_dev=` URLs,
-     * then served to public visitors long after the origin switched back to
-     * PROD. The final response is the single chokepoint every transport
-     * (WLS / FPM / tests) goes through, so enforce no-store here instead of
-     * duplicating it in each cache path.
+     * Publish mode does not veto FPC. A HIT already carries the coordinator's
+     * CDN-Cache-Control; wiping it here made deploy=dev pages DYNAMIC forever
+     * even though origin FPC had hit. Static URL shape stays with
+     * DeployPublicUrlMode and is not decided in this method.
      */
     private function enforceNonProductionHtmlEdgeNoStore(): void
     {
-        if (DeployPublicUrlMode::useProduction()) {
+        if ($this->isSharedFpcHit() || DeployPublicUrlMode::useProduction()) {
             return;
         }
-        $contentType = \strtolower((string)$this->getHeader('Content-Type'));
+        $contentType = \strtolower($this->headerScalar('Content-Type'));
         $looksLikeHtml = \str_contains($contentType, 'text/html')
             || ($contentType === '' && \preg_match('/^\s*(?:<!doctype\s+html|<html\b)/i', $this->body) === 1);
         if (!$looksLikeHtml) {
@@ -531,6 +528,30 @@ class Response implements ResponseInterface, RequestLocalInterface
         $this->setHeader('CDN-Cache-Control', 'no-store');
         $this->setHeader('Cloudflare-CDN-Cache-Control', 'no-store');
         $this->setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
+    }
+
+    /**
+     * Origin FPC HIT is eligible for the edge in both deploy modes.
+     */
+    private function isSharedFpcHit(): bool
+    {
+        foreach (['X-Weline-FPC', 'X-WLS-FPC-Status'] as $name) {
+            if (\strtoupper($this->headerScalar($name)) === 'HIT') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function headerScalar(string $name): string
+    {
+        $value = $this->getHeader($name);
+        if (\is_array($value)) {
+            $value = $value[0] ?? '';
+        }
+
+        return \trim((string)($value ?? ''));
     }
 
     private function prepareForEmission(): void

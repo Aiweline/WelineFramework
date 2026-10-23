@@ -53,12 +53,12 @@ class UpgradeArgsValidationTest extends TestCase
         $this->addToAssertionCount(1);
     }
 
-    public function testOptimizationRunsSynchronouslyByDefaultAndBackgroundRequiresExplicitOptIn(): void
+    public function testOptimizationRunsInBackgroundByDefaultAndSyncForcesSynchronous(): void
     {
         $method = new \ReflectionMethod($this->upgrade, 'shouldRunBackgroundOptimize');
         $method->setAccessible(true);
 
-        self::assertFalse($method->invoke($this->upgrade, []));
+        self::assertTrue($method->invoke($this->upgrade, []));
         self::assertTrue($method->invoke($this->upgrade, ['background-optimize' => true]));
         self::assertFalse($method->invoke($this->upgrade, [
             'background-optimize' => true,

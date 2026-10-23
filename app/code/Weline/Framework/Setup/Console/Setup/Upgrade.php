@@ -32,15 +32,19 @@ use Weline\Framework\Module\Model\Module;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Register\Register;
 use Weline\Framework\Rules\RulesManager;
-use Weline\Framework\Router\Core as RouterCore;
 use Weline\Framework\Setup\Stage\StageUpdateManager;
 use Weline\Framework\Setup\Stage\RouteUpdateStage;
 use Weline\Framework\Setup\Stage\FileUpdateStage;
-use Weline\Framework\Setup\Stage\DatabaseUpdateStage;
+use Weline\Framework\Setup\Kernel\ChangeSet;
+use Weline\Framework\Setup\Kernel\RegistrationState;
+use Weline\Framework\Setup\Kernel\StagePipeline;
+use Weline\Framework\Setup\Kernel\StageResult;
+use Weline\Framework\Setup\Kernel\UpgradeStageInterface;
+use Weline\Framework\Setup\Kernel\UpgradeSession;
 use Weline\Framework\Setup\Stage\FrameworkDbBootstrapStage;
 use Weline\Framework\Setup\Stage\ModuleSetupStage;
 use Weline\Framework\Setup\Stage\EavSchemaStage;
-use Weline\Framework\Setup\Stage\SchemaDiffStage;
+use Weline\Framework\Setup\Stage\ReleaseDatabaseStage;
 use Weline\Framework\Php\FiberTaskBatch;
 use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Phrase\DatabaseFreeTranslator;
@@ -126,6 +130,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         'skip-classmap',
         'skip-composer-dump',
         'keep-maintenance',
+        'from-core-update',
         'y',
         'yes',
         '-y',
@@ -157,6 +162,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         '--skip-classmap',
         '--skip-composer-dump',
         '--keep-maintenance',
+        '--from-core-update',
+        '--resume',
+        '--resume=<operation_id>',
         '--yes, -y',
         '--help, -h',
     ];
@@ -165,6 +173,10 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      * 记录是否有模块被安装或升级
      * @var bool
      */
+    private ?ChangeSet $changeSet = null;
+
+    private ?RegistrationState $registrationState = null;
+
     private bool $hasModuleInstalledOrUpgraded = false;
     
     /**
@@ -203,8 +215,17 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     /** Model/Controller/menu 等源树本轮有变更时，禁止自动跳过 completeUpgrade */
     private bool $sourceTreeChanged = false;
 
+    private array $preRouteSchemaStages = [];
+
+    private array $resumeCompleted = [];
     /** -f/--force-menu：本轮升级必须强制菜单全量重收集 */
     private bool $forceMenuThisRun = false;
+
+    /** 收尾关闭维护失败时置位，最终退出码必须非 0 */
+    private bool $closeoutFailed = false;
+
+    private ?UpgradeSession $upgradeSession = null;
+    private bool $maintenanceClosed = true;
 
     private string $forceMenuReason = '';
 
@@ -326,6 +347,22 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
     private function runComposerDump(): void
     {
+        $composerStamp = null;
+        $composerFp = null;
+        if ($this->changeSet !== null && $this->changeSet->isEmpty()) {
+            try {
+                $composerStamp = $this->computeComposerDumpStamp();
+                $composerFp = new SetupSourceFingerprint();
+                if ($composerFp->matches('composer_dump', $composerStamp)) {
+                    $this->printing->note(__('composer 依赖与模块变更均未变化，跳过 composer dump-autoload'));
+                    return;
+                }
+            } catch (\Throwable) {
+                $composerStamp = null;
+                $composerFp = null;
+            }
+        }
+
         $this->printing->note(__('正在检查 composer 命令...'));
         
         // 检查 composer 命令是否存在
@@ -369,6 +406,13 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             }
             
             $this->printing->success(__('✓ composer dump-autoload 执行成功。'));
+
+            if ($composerFp !== null && $composerStamp !== null) {
+                try {
+                    $composerFp->set('composer_dump', $composerStamp);
+                } catch (\Throwable) {
+                }
+            }
             
             // 输出 composer 的输出信息（如果有）
             if (!empty($result['output'])) {
@@ -395,6 +439,15 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         }
     }
     
+    private function computeComposerDumpStamp(): string
+    {
+        $parts = [];
+        foreach (['composer.json', 'composer.lock', 'vendor/composer/autoload_static.php'] as $rel) {
+            $path = rtrim((string)BP, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $rel);
+            $parts[] = $rel . ':' . (is_file($path) ? (string)hash_file('sha256', $path) : 'missing');
+        }
+        return hash('sha256', implode("\n", $parts));
+    }
     /**
      * 查找 composer 命令路径
      * 优先检查 extend/server/composer.phar，然后检查全局 composer 命令
@@ -549,12 +602,26 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         }
 
         $remaining = [];
-        for ($pass = 1; $pass <= 3; $pass++) {
-            $remaining = $this->clearCacheDirectoryPass($cacheDir);
-            if ($remaining === []) {
-                break;
+        $oldDir = $varDir . DS . 'cache.old.' . date('YmdHis') . '.' . getmypid();
+        $moved = false;
+        if (PHP_OS_FAMILY !== 'Windows' && @rename($cacheDir, $oldDir)) {
+            $moved = true;
+            if (!mkdir($cacheDir, 0775, true) && !is_dir($cacheDir)) {
+                @rename($oldDir, $cacheDir);
+                throw new \RuntimeException((string)__('无法重建缓存目录：%{1}', [$cacheDir]));
             }
-            \usleep(50_000 * $pass);
+            @mkdir($cacheDir . DS . 'frontend_worker', 0700, true);
+            @chmod($cacheDir . DS . 'frontend_worker', 0700);
+            @exec('rm -rf ' . escapeshellarg($oldDir) . ' > /dev/null 2>&1 &');
+        }
+        if (!$moved) {
+            for ($pass = 1; $pass <= 3; $pass++) {
+                $remaining = $this->clearCacheDirectoryPass($cacheDir);
+                if ($remaining === []) {
+                    break;
+                }
+                \usleep(50_000 * $pass);
+            }
         }
 
         if ($remaining !== []) {
@@ -662,6 +729,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     public function execute(array $args = [], array $data = [])
     {
         $this->validateSupportedArgs($args);
+        $this->validateStageArgument($args);
 
         // 检查是否为热更新模式
         if (isset($args['hot']) || isset($args['h'])) {
@@ -727,6 +795,30 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $upgradeSucceeded = false;
             try {
                 $this->setupOperationId = $operationContext->begin();
+                $this->upgradeSession = new UpgradeSession(
+                    $this->setupOperationId,
+                    BP . 'var' . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'runs',
+                    isset($args['keep-maintenance']),
+                    isset($args['from-core-update']) ? 'core_update' : 'cli',
+                );
+                $this->upgradeSession->begin();
+                if (isset($args['resume']) && is_string($args['resume']) && trim($args['resume']) !== '') {
+                    $resumeDir = BP . 'var' . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'runs'
+                        . DIRECTORY_SEPARATOR . trim($args['resume']);
+                    $loaded = UpgradeSession::load($resumeDir);
+                    if ($loaded !== null) {
+                        $this->resumeCompleted = array_values(array_filter(
+                            $loaded->completedStages(),
+                            [UpgradeSession::class, 'isIdempotentStage'],
+                        ));
+                        $this->printing->note(__('续跑：跳过已完成幂等阶段 %{1}', [implode(', ', $this->resumeCompleted)]));
+                    } else {
+                        $this->printing->warning(__('续跑：未找到运行记录，按全量执行。'));
+                    }
+                }
+                $this->changeSet = $this->buildChangeSet($this->readSetupState(), $this->snapshotModuleState());
+                $this->registrationState = RegistrationState::fromChangeSet($this->changeSet);
+                $this->upgradeSession->recordStage('discover', 'ok', 0.0, $this->changeSet->toArray());
                 $this->metrics()->start($this->setupOperationId);
                 $lockFile = $this->getLockFile();
                 // ========== 准备阶段 ==========
@@ -745,7 +837,13 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     // ========== 执行阶段 ==========
                     $this->metrics()->begin('executeUpgradeProcess');
                     try {
+                        $this->upgradeSession->recordStage('execute', 'running', 0.0);
                         $this->executeUpgradeProcess($args, $data, $maintenanceEnabled);
+                        $this->upgradeSession->recordStage('execute', 'ok', 0.0);
+                    } catch (\Exception $e) {
+                        $this->upgradeSession->recordStage('execute', 'failed', 0.0);
+                        $this->upgradeSession->fatal($e->getMessage());
+                        throw $e;
                     } finally {
                         $this->metrics()->end('executeUpgradeProcess');
                     }
@@ -802,6 +900,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 }
             }
 
+            if ($this->closeoutFailed && $exitCode === 0) {
+                $exitCode = 1;
+            }
+            $exitCode = $this->closeoutUpgradeSession($exitCode);
+
             $result = CommandResult::deferFinalizer([$databaseAccessLock, 'release'], $exitCode);
             $releaseTransferred = true;
             return $result;
@@ -810,6 +913,56 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $databaseAccessLock->release();
             }
         }
+    }
+
+    private function closeoutUpgradeSession(int $exitCode): int
+    {
+        if ($this->upgradeSession === null) {
+            return $exitCode;
+        }
+        $sessionExit = $this->upgradeSession->closeout($this->maintenanceClosed);
+        $this->upgradeSession = null;
+        if ($exitCode === 0 && $sessionExit === 0) {
+            $stateDir = BP . 'var' . DIRECTORY_SEPARATOR . 'setup';
+            if (!is_dir($stateDir)) {
+                @mkdir($stateDir, 0775, true);
+            }
+            @file_put_contents(
+                $stateDir . DIRECTORY_SEPARATOR . 'state.json',
+                json_encode(['schema_version' => 1, 'modules' => $this->snapshotModuleState()], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
+            );
+        }
+        return $exitCode === 0 ? $sessionExit : $exitCode;
+    }
+
+    private function buildChangeSet(array $previous, array $current): ChangeSet
+    {
+        return new ChangeSet($previous, $current, []);
+    }
+
+    private function snapshotModuleState(): array
+    {
+        $out = [];
+        foreach (Env::getInstance()->getModuleList() as $name => $data) {
+            $out[(string)$name] = [
+                'version' => (string)($data['version'] ?? ''),
+                'status' => (bool)($data['status'] ?? true),
+                'fingerprint' => method_exists($this, 'moduleFileFingerprint')
+                    ? ''
+                    : '',
+            ];
+        }
+        return $out;
+    }
+
+    private function readSetupState(): array
+    {
+        $path = BP . 'var' . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'state.json';
+        if (!is_file($path)) {
+            return [];
+        }
+        $data = json_decode((string)file_get_contents($path), true);
+        return is_array($data) && is_array($data['modules'] ?? null) ? $data['modules'] : [];
     }
 
     /**
@@ -895,6 +1048,23 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      * @return void
      * @throws Exception
      */
+    private function validateStageArgument(array $args): void
+    {
+        if (!array_key_exists('stage', $args)) {
+            return;
+        }
+        $raw = $args['stage'];
+        $codes = is_array($raw) ? $raw : explode(',', (string)$raw);
+        $codes = array_values(array_filter(array_map(static fn($v) => trim((string)$v), $codes), static fn($v) => $v !== ''));
+        if ($codes === []) {
+            throw new Exception(__('--stage 需要一个阶段 code；可选：%{1}', [implode(', ', self::STAGE_CODES_ORDERED)]));
+        }
+        $unknown = array_diff($codes, self::STAGE_CODES_ORDERED);
+        if ($unknown !== []) {
+            throw new Exception(__('未知阶段 code：%{1}。可选：%{2}', [implode(', ', $unknown), implode(', ', self::STAGE_CODES_ORDERED)]));
+        }
+    }
+
     private function validateSupportedArgs(array $args): void
     {
         $unknownArgs = [];
@@ -1355,6 +1525,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             'args' => $args,
             'operation_id' => $this->setupOperationId,
             'migrations_already_run' => true,
+            'changed_modules' => $this->registrationState?->dirtyModules() ?? [],
         ];
         RegistryProgress::run(function () use ($eventsManager, $eventData): void {
             RegistryProgress::section('setup:upgrade after observers');
@@ -1399,7 +1570,14 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             return false;
         }
 
-        return isset($args['background-optimize']);
+        if (isset($args['background-optimize'])) {
+            return true;
+        }
+        try {
+            return (bool)Env::getInstance()->getConfig('setup.optimize.background', true);
+        } catch (\Throwable) {
+            return true;
+        }
     }
     
     /**
@@ -1467,6 +1645,57 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      * @param array $args 命令参数（支持 --skip-reflection-compile / --skip-reflect）
      * @return void
      */
+    private function optimizeStageKeys(): array
+    {
+        return ['classmap', 'psr4', 'extends', 'framework', 'reflection'];
+    }
+
+    private function shouldRunOptimizeStage(string $key, array $args): bool
+    {
+        if (in_array($key, $this->resumeCompleted, true)) {
+            return false;
+        }
+        return match ($key) {
+            'classmap' => !isset($args['skip-classmap']),
+            'psr4' => true,
+            'extends' => !isset($args['skip-extends-rebuild']),
+            'framework' => !isset($args['skip-framework-compile']),
+            'reflection' => !isset($args['skip-reflection-compile']) && !isset($args['skip-reflect']),
+            default => true,
+        };
+    }
+
+    private function buildOptimizePipeline(array $args): StagePipeline
+    {
+        $session = $this->upgradeSession ?? new UpgradeSession('optimize-' . getmypid(), BP . 'var' . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'runs');
+        $pipeline = new StagePipeline($session);
+        $make = function (string $key, array $requires, bool $shouldRun, callable $run): UpgradeStageInterface {
+            return new class($key, $requires, $shouldRun, $run) implements UpgradeStageInterface {
+                public function __construct(private string $k, private array $r, private bool $s, private $fn) {}
+                public function key(): string { return $this->k; }
+                public function requires(): array { return $this->r; }
+                public function shouldRun(): bool { return $this->s; }
+                public function run(): StageResult { ($this->fn)(); return new StageResult(StageResult::OK); }
+            };
+        };
+        $pipeline->add($make('classmap', [], $this->shouldRunOptimizeStage('classmap', $args), function () {
+            $this->metrics()->measure('completeUpgrade.classmap', fn() => $this->generateClassmapCache());
+        }));
+        $pipeline->add($make('psr4', ['classmap'], $this->shouldRunOptimizeStage('psr4', $args), function () {
+            $this->metrics()->measure('completeUpgrade.psr4', fn() => $this->generatePsr4Cache());
+        }));
+        $pipeline->add($make('extends', ['psr4'], $this->shouldRunOptimizeStage('extends', $args), function () use ($args) {
+            $this->metrics()->measure('completeUpgrade.extends', fn() => $this->rebuildExtendsRegistry($this->parseModuleArgs($args)));
+        }));
+        $pipeline->add($make('framework', ['extends'], $this->shouldRunOptimizeStage('framework', $args), function () {
+            $this->metrics()->measure('completeUpgrade.framework_compile', fn() => $this->compileFrameworkRuntimeRegistries());
+        }));
+        $pipeline->add($make('reflection', ['framework'], $this->shouldRunOptimizeStage('reflection', $args), function () {
+            $this->metrics()->measure('completeUpgrade.reflection', fn() => $this->compileReflectionAndFactories());
+        }));
+        return $pipeline;
+    }
+
     private function generateOptimizationCache(array $args = []): void
     {
         $this->printing->note(__('正在生成优化缓存...'));
@@ -1498,48 +1727,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             }
         }
 
-        // 1. 生成类映射缓存（支持 --skip-classmap 跳过）
-        if (isset($args['skip-classmap'])) {
-            $this->printing->note(__('  - 已跳过类映射缓存（--skip-classmap）'));
-        } else {
-            $this->metrics()->measure('completeUpgrade.classmap', function () {
-                $this->generateClassmapCache();
-            });
-        }
-        
-        // 2. 生成 PSR-4 映射缓存
-        $this->metrics()->measure('completeUpgrade.psr4', function () {
-            $this->generatePsr4Cache();
-        });
-
-        // 3. 重建扩展注册表（generated/extends.php），再编译框架运行时索引
-        $skipExtendsRebuild = isset($args['skip-extends-rebuild']);
-        if ($skipExtendsRebuild) {
-            $this->printing->note(__('已跳过扩展注册表重建，需要时可执行：php bin/w extends:rebuild'));
-        } else {
-            $this->metrics()->measure('completeUpgrade.extends', function () {
-                $this->rebuildExtendsRegistry();
-            });
-        }
-
-        // 4. 编译框架运行时索引（modules provides / container / query providers）
-        $skipFrameworkCompile = isset($args['skip-framework-compile']);
-        if ($skipFrameworkCompile) {
-            $this->printing->note(__('已跳过框架运行时编译，需要时可执行：php bin/w framework:compile'));
-        } else {
-            $this->metrics()->measure('completeUpgrade.framework_compile', function () {
-                $this->compileFrameworkRuntimeRegistries();
-            });
-        }
-        
-        // 5. 编译反射元数据与编译型工厂（reflection_metadata.php + compiled_factories.php）
-        $skipReflectionCompile = isset($args['skip-reflection-compile']) || isset($args['skip-reflect']);
-        if ($skipReflectionCompile) {
-            $this->printing->note(__('已跳过反射/工厂编译，需要时可执行：php bin/w reflection:compile'));
-        } else {
-            $this->metrics()->measure('completeUpgrade.reflection', function () {
-                $this->compileReflectionAndFactories();
-            });
+        $pipeline = $this->buildOptimizePipeline($args);
+        if ($pipeline->run() !== 0) {
+            $this->printing->warning(__('部分优化阶段失败，请查看 var/setup/runs 报告或手动重跑。'));
         }
 
         try {
@@ -1563,6 +1753,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     private function resolveRouteFingerprintPlan(array $modules, array $argsModule): array
     {
         $fpService = new SetupSourceFingerprint();
+        $moduleTotal = \count($modules);
         $fingerprints = [];
         $changed = [];
         $scope = $argsModule !== []
@@ -1580,6 +1771,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 continue;
             }
 
+            $status = \is_array($moduleData) ? (int)($moduleData['status'] ?? 1) : 1;
             $module = new Module(\is_array($moduleData) ? $moduleData : ['name' => $name]);
             $basePath = \rtrim((string)$module->getBasePath(), DIRECTORY_SEPARATOR);
             $parts = [];
@@ -1591,9 +1783,10 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     }
                 }
             }
+            $suffix = '|status=' . $status . '|total=' . $moduleTotal;
             $hash = $parts === []
-                ? \hash('sha256', 'route-empty:' . $name)
-                : \hash('sha256', \implode('|', $parts));
+                ? \hash('sha256', 'route-empty:' . $name . $suffix)
+                : \hash('sha256', \implode('|', $parts) . $suffix);
             $key = 'route:' . $name;
             $fingerprints[$key] = $hash;
             // -m 作用域：始终重扫指定模块；全量：仅指纹未命中者
@@ -1651,21 +1844,17 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function routeArtifactsPresent(): bool
     {
-        $present = 0;
-        foreach (Env::router_files_PATH as $path) {
+        $required = [Env::path_BACKEND_PC_ROUTER_FILE, Env::path_FRONTEND_PC_ROUTER_FILE];
+        foreach ($required as $path) {
             if (!\is_string($path) || $path === '' || !\is_file($path)) {
-                continue;
+                return false;
             }
-            $size = (int)@\filesize($path);
-            if ($size > 32) {
-                $present++;
+            if ((int)@\filesize($path) <= 32) {
+                return false;
             }
         }
-
-        // 至少 backend_pc + frontend_pc 一类核心产物存在才允许全跳
-        return $present >= 2;
+        return true;
     }
-
     /**
      * 已启用模块：磁盘有可注册的 PC Controller，但 backend_pc/frontend_pc 均无该 module 条目。
      *
@@ -1792,10 +1981,44 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     /**
      * 重建 generated/extends.php，确保 Query/Provider 等扩展点与磁盘一致。
      */
-    private function rebuildExtendsRegistry(): void
+    private function shouldSkipStep2RegistryRefresh(): bool
     {
+        return $this->registrationState !== null
+            && !$this->registrationState->needsFullRefresh()
+            && $this->registrationState->dirtyModules() === [];
+    }
+
+    private function resolveExtendsRebuildScope(array $argsModule): array
+    {
+        if ($argsModule !== []) {
+            return ['mode' => 'scoped', 'modules' => array_values(array_map('strval', $argsModule))];
+        }
+        if ($this->registrationState === null) {
+            return ['mode' => 'full', 'modules' => []];
+        }
+        if ($this->registrationState->needsFullRefresh()) {
+            return ['mode' => 'full', 'modules' => []];
+        }
+        $dirty = $this->registrationState->dirtyModules();
+        if ($dirty === []) {
+            return ['mode' => 'skip', 'modules' => []];
+        }
+        return ['mode' => 'scoped', 'modules' => $dirty];
+    }
+
+    private function rebuildExtendsRegistry(array $argsModule = []): void
+    {
+        $scope = $this->resolveExtendsRebuildScope($argsModule);
+        if ($scope['mode'] === 'skip') {
+            $this->printing->note(__('扩展注册表无变化，跳过重建'));
+            return;
+        }
+        $command = 'extends:rebuild';
+        if ($scope['mode'] === 'scoped') {
+            $command .= ' -m ' . implode(',', $scope['modules']);
+        }
         $this->runOptimizeSubcommand(
-            'extends:rebuild',
+            $command,
             '正在重建扩展注册表（extends:rebuild）...',
             '扩展注册表重建出现警告（exit=%{1}）。可手动执行：php bin/w extends:rebuild',
             '扩展注册表重建跳过：%{1}'
@@ -1847,9 +2070,16 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             }
             $phpBin = PHP_BINARY ?: 'php';
             $binW = BP . 'bin' . DIRECTORY_SEPARATOR . 'w';
+            // 子命令由 setup:upgrade 内部调起：父命令收尾会统一 reload，
+            // 子命令不要再各自触发 WSL 代码重载（每次约 12s 的 IPC 等待）。
+            \putenv('WELINE_SETUP_CHILD=1');
             $cmd = '"' . $phpBin . '" "' . $binW . '" ' . $command . ' 2>&1';
             $exitCode = 0;
-            \passthru($cmd, $exitCode);
+            try {
+                \passthru($cmd, $exitCode);
+            } finally {
+                \putenv('WELINE_SETUP_CHILD');
+            }
             if ($exitCode !== 0) {
                 $this->printing->warning(__($exitWarningTemplate, [$exitCode]));
             }
@@ -2096,6 +2326,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // --keep-maintenance：外层 Deploy 窗拥有开关，禁止此处抢关。
         if ($keepMaintenance) {
             $this->printing->note(__('已保留维护模式（--keep-maintenance）：由外层部署窗负责关闭。'));
+            $this->maintenanceClosed = true;
 
             return;
         }
@@ -2106,16 +2337,23 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $envOk = Env::getInstance()->setConfig('system.maintenance', false);
                 $wlsOk = $this->syncWlsMaintenanceMode(false);
                 if ($envOk && $wlsOk) {
+                    $this->maintenanceClosed = true;
                     $this->printing->note(__('维护模式已关闭。'));
                 } elseif ($envOk) {
                     $this->printing->warning(__(
                         '框架维护标志已关闭，但 WLS Worker 门禁未完全同步。请手动运行 php bin/w maintenance:disable 关闭维护模式。'
                     ));
+                    $this->closeoutFailed = true;
+                    $this->maintenanceClosed = false;
                 } else {
                     $this->printing->warning(__('关闭维护模式失败，配置可能未保存。请手动运行 php bin/w maintenance:disable 关闭维护模式。'));
+                    $this->closeoutFailed = true;
+                    $this->maintenanceClosed = false;
                 }
             } catch (\Exception $e) {
                 $this->printing->warning(__('关闭维护模式时发生错误：%{1}。请手动运行 php bin/w maintenance:disable 关闭维护模式。', [$e->getMessage()]));
+                $this->closeoutFailed = true;
+                $this->maintenanceClosed = false;
             }
         }
     }
@@ -2440,8 +2678,25 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      * @throws Exception
      * @throws \ReflectionException
      */
+    private function profileMark(string $label, int &$last): void
+    {
+        if (\getenv('WELINE_SETUP_PROFILE') === false) {
+            return;
+        }
+        $now = \hrtime(true);
+        $ms = ($now - $last) / 1_000_000;
+        $last = $now;
+        @\file_put_contents(
+            \VAR_DIR . 'log' . \DIRECTORY_SEPARATOR . 'setup_profile.log',
+            sprintf("%s\t%.1fms\tpeak=%dMB\n", $label, $ms, (int)round(\memory_get_peak_usage(true) / 1048576)),
+            FILE_APPEND
+        );
+    }
+
     private function executeModuleUpgrade(array $args = [], array $data = []): void
     {
+        $__profileAt = \hrtime(true);
+        $this->profileMark('start', $__profileAt);
         $setupStageContext = ['operation_id' => $this->setupOperationId];
         if (isset($args['force-schema-rebind'])) {
             if (!(defined('DEV') && DEV)) {
@@ -2530,18 +2785,14 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $eavSchemaStage->prepare([]);
                 $eavSchemaStage->commit();
 
-                $schemaDiffStage = ObjectManager::make(SchemaDiffStage::class, [
-                    'moduleHandle' => $routeModuleHandle,
-                    'moduleReader' => ObjectManager::getInstance(\Weline\Framework\Module\Config\ModuleFileReader::class),
-                    'connectionFactory' => $connectionFactory,
-                    'schemaParser' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaParser::class),
-                    'dbSchemaReader' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\DbSchemaReader::class),
-                    'diffEngine' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaDiffEngine::class),
-                    'executor' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaMigrationExecutor::class),
-                    'printing' => $this->printing,
-                ]);
+                $schemaDiffStage = ObjectManager::make(ReleaseDatabaseStage::class);
                 $schemaDiffStage->prepare($setupStageContext);
                 $schemaDiffStage->commit();
+                $this->preRouteSchemaStages = [
+                    'framework_db_bootstrap' => $frameworkDbBootstrapStage,
+                    'eav_schema' => $eavSchemaStage,
+                    'schema_diff' => $schemaDiffStage,
+                ];
             } else {
                 $this->printing->note(__('--route：复用已安装数据库结构，不执行声明式 Schema 更新。'));
             }
@@ -2602,20 +2853,47 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $beforeRouteCollectionEventData = $this->withForceMenuEventData([]);
             $eventsManager->dispatch('Weline_Framework_Setup::before_route_collection', $beforeRouteCollectionEventData);
 
-            // 更新路由（支持指定模块）
-            $routeUpdateService->updateRoutes($argsModule ?: []);
-            // 委托部分更新同样须先 flush ACL 再 orphan，避免误删方法级 source。
-            try {
-                /** @var \Weline\Framework\Module\Helper\Data $moduleHelperForAcl */
-                $moduleHelperForAcl = ObjectManager::getInstance(\Weline\Framework\Module\Helper\Data::class);
-                $moduleHelperForAcl->flushDeferredControllerAttributes();
-            } catch (\Throwable $e) {
-                $this->printing->warning(__('委托升级 orphan 前 ACL 落盘失败：%{1}', [$e->getMessage()]));
+            // route-only 也走指纹增量：全命中跳过；部分命中只收集变更模块（保留其他模块旧路由）。
+            $routeOnlyFilter = $argsModule;
+            $routeOnlySkip = false;
+            if ($routeOnlyFilter === []) {
+                $routeOnlyHandle = ObjectManager::getInstance(Handle::class);
+                $routeOnlyModulesMap = $routeOnlyHandle->getModules();
+                $routeOnlyPlan = $this->resolveRouteFingerprintPlan(
+                    \is_array($routeOnlyModulesMap) ? $routeOnlyModulesMap : [],
+                    []
+                );
+                $this->routeFingerprintPending = $routeOnlyPlan['fingerprints'] ?? [];
+                if (!empty($routeOnlyPlan['skip_all'])) {
+                    $routeOnlySkip = true;
+                    $this->skipRouteCollect = true;
+                    $this->routeChangedModules = [];
+                    $this->printing->note(__('   - 路由 Controller 源指纹全员命中，跳过路由收集'));
+                } else {
+                    $routeOnlyFilter = \is_array($routeOnlyPlan['changed'] ?? null) ? $routeOnlyPlan['changed'] : [];
+                    $this->routeChangedModules = $routeOnlyFilter;
+                    $this->printing->note(__(
+                        '   - 路由增量收集：%{n} 个变更模块（其余模块保留旧路由）',
+                        ['n' => \count($routeOnlyFilter)]
+                    ));
+                }
             }
-            $afterRouteCollectionEventData = [
-                'touched_modules' => $argsModule ?: null,
-            ];
-            $eventsManager->dispatch('Weline_Framework_Setup::after_route_collection', $afterRouteCollectionEventData);
+            if (!$routeOnlySkip) {
+                // 更新路由（支持指定模块）
+                $routeUpdateService->updateRoutes($routeOnlyFilter);
+                // 委托部分更新同样须先 flush ACL 再 orphan，避免误删方法级 source。
+                try {
+                    /** @var \Weline\Framework\Module\Helper\Data $moduleHelperForAcl */
+                    $moduleHelperForAcl = ObjectManager::getInstance(\Weline\Framework\Module\Helper\Data::class);
+                    $moduleHelperForAcl->flushDeferredControllerAttributes();
+                } catch (\Throwable $e) {
+                    $this->printing->warning(__('委托升级 orphan 前 ACL 落盘失败：%{1}', [$e->getMessage()]));
+                }
+                $afterRouteCollectionEventData = [
+                    'touched_modules' => $argsModule ?: ($this->routeChangedModules ?: null),
+                ];
+                $eventsManager->dispatch('Weline_Framework_Setup::after_route_collection', $afterRouteCollectionEventData);
+            }
         }
         
         if ($appoint) {
@@ -2650,19 +2928,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     ]
                 ));
             } else {
-                $this->printing->warning('清除文件：');
-                RouterCore::snapshotGeneratedRouterFiles();
-                /**@var System $system */
-                $system = ObjectManager::getInstance(System::class);
-                foreach (Env::router_files_PATH as $path) {
-                    $this->printing->warning($path);
-                    if (is_file($path)) {
-                        $data = $system->exec('rm -f ' . $path);
-                        if ($data) {
-                            $this->printing->printList($data);
-                        }
-                    }
-                }
+                // 不再删除路由文件：全量收集完成后由 RouteUpdateStage 原子覆盖，
+                // 收集期间旧路由仍可用；收集失败/中断时也不会留下“路由全丢”的窗口。
+                $this->printing->note(__('   - 保留磁盘路由文件，全量收集后原子覆盖（不再先删后写）'));
             }
             $i += 1;
             $this->printing->note($i . '、命令行更新...');
@@ -2771,10 +3039,20 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             });
         } else {
             // 全量更新模式：更新所有注册表
-            RegistryProgress::run(function () use ($registryService): void {
-                RegistryProgress::section('setup:upgrade step 2 full registry refresh');
-                $registryService->updateAllRegistries(true, false, true);
-            });
+            if ($this->shouldSkipStep2RegistryRefresh()) {
+                $this->printing->note(__('模块集合与版本未变化，跳过 step2 重复全量注册表刷新'));
+            } elseif ($this->registrationState !== null && $this->registrationState->needsFullRefresh()) {
+                RegistryProgress::run(function () use ($registryService): void {
+                    RegistryProgress::section('setup:upgrade step 2 full registry refresh');
+                    $registryService->updateAllRegistries(true, false, true);
+                });
+            } elseif ($this->registrationState !== null && $this->registrationState->dirtyModules() !== []) {
+                $dirty = $this->registrationState->dirtyModules();
+                RegistryProgress::run(function () use ($registryService, $dirty): void {
+                    RegistryProgress::section('setup:upgrade step 2 incremental registry refresh');
+                    $registryService->updateModuleRegistriesIncremental($dirty);
+                });
+            }
         }
         // step2 已刷新；后续 recollectRegistryAfterModuleChange 应跳过，避免再扫一遍。
         $this->registryCollectedInThisRun = true;
@@ -2787,31 +3065,38 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
          * @var array{
          *   framework_db_bootstrap: FrameworkDbBootstrapStage,
          *   eav_schema: EavSchemaStage,
-         *   schema_diff: SchemaDiffStage
+         *   schema_diff: ReleaseDatabaseStage
          * } $preSchemaStages
          */
-        $preSchemaStages = RegistryProgress::run(function () use ($setupStageContext): array {
+        $this->profileMark('before-preSchema', $__profileAt);
+        $preSchemaStages = RegistryProgress::run(function () use ($setupStageContext, &$__profileAt): array {
             RegistryProgress::section('setup:upgrade post-registry database readiness');
             RegistryProgress::log('Framework DB bootstrap prepare started');
             $connectionFactory = ObjectManager::getInstance(ConnectionFactory::class);
-            $preSchemaFrameworkBootstrap = ObjectManager::make(FrameworkDbBootstrapStage::class, ['connectionFactory' => $connectionFactory]);
-            $preSchemaFrameworkBootstrap->prepare([]);
-            RegistryProgress::log('Framework DB bootstrap commit started');
-            $preSchemaFrameworkBootstrap->commit();
+            $preSchemaFrameworkBootstrap = $this->preRouteSchemaStages['framework_db_bootstrap']
+                ?? ObjectManager::make(FrameworkDbBootstrapStage::class, ['connectionFactory' => $connectionFactory]);
+            if (!$preSchemaFrameworkBootstrap->isCommitted()) {
+                $preSchemaFrameworkBootstrap->prepare([]);
+                RegistryProgress::log('Framework DB bootstrap commit started');
+                $preSchemaFrameworkBootstrap->commit();
+            }
             RegistryProgress::log('Framework DB bootstrap finished');
 
             RegistryProgress::section('setup:upgrade post-registry EAV schema');
             /** @var Handle $preSchemaModuleHandle */
             $preSchemaModuleHandle = ObjectManager::getInstance(Handle::class);
-            $preSchemaEavStage = ObjectManager::make(EavSchemaStage::class, [
+            $preSchemaEavStage = $this->preRouteSchemaStages['eav_schema']
+                ?? ObjectManager::make(EavSchemaStage::class, [
                 'eventsManager' => ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class),
                 'migrationModel' => ObjectManager::getInstance(\Weline\Framework\Setup\Model\Migration::class),
                 'printing' => $this->printing,
             ]);
-            RegistryProgress::log('EAV schema prepare started');
-            $preSchemaEavStage->prepare([]);
-            RegistryProgress::log('EAV schema commit started');
-            $preSchemaEavStage->commit();
+            if (!$preSchemaEavStage->isCommitted()) {
+                RegistryProgress::log('EAV schema prepare started');
+                $preSchemaEavStage->prepare([]);
+                RegistryProgress::log('EAV schema commit started');
+                $preSchemaEavStage->commit();
+            }
             RegistryProgress::log('EAV schema finished');
 
             RegistryProgress::section('setup:upgrade setup script contract preflight');
@@ -2838,20 +3123,16 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             RegistryProgress::log('Setup script contract preflight finished');
 
             RegistryProgress::section('setup:upgrade post-registry schema diff');
-            $preSchemaDiffStage = ObjectManager::make(SchemaDiffStage::class, [
-                'moduleHandle' => $preSchemaModuleHandle,
-                'moduleReader' => ObjectManager::getInstance(\Weline\Framework\Module\Config\ModuleFileReader::class),
-                'connectionFactory' => $connectionFactory,
-                'schemaParser' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaParser::class),
-                'dbSchemaReader' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\DbSchemaReader::class),
-                'diffEngine' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaDiffEngine::class),
-                'executor' => ObjectManager::getInstance(\Weline\Framework\Database\Schema\SchemaMigrationExecutor::class),
-                'printing' => $this->printing,
-            ]);
-            RegistryProgress::log('Schema diff prepare started');
-            $preSchemaDiffStage->prepare($setupStageContext);
-            RegistryProgress::log('Schema diff commit started');
-            $preSchemaDiffStage->commit();
+            $preSchemaDiffStage = $this->preRouteSchemaStages['schema_diff']
+                ?? ObjectManager::make(ReleaseDatabaseStage::class);
+            if (!$preSchemaDiffStage->isCommitted()) {
+                RegistryProgress::log('Schema diff prepare started');
+                $preSchemaDiffStage->prepare($setupStageContext);
+                $this->profileMark('schema-prepare', $__profileAt);
+                RegistryProgress::log('Schema diff commit started');
+                $preSchemaDiffStage->commit();
+                $this->profileMark('schema-commit', $__profileAt);
+            }
             RegistryProgress::log('Schema diff finished');
 
             RegistryProgress::section('setup:upgrade pending registrations');
@@ -2979,6 +3260,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $modules = $module_handle->getModules();
         
         $stageNumber = 1;
+        $this->profileMark('registry+register', $__profileAt);
         $this->printing->note($stageNumber . '、初始化阶段更新管理器...', '系统');
         /**@var StageUpdateManager $stageManager */
         $stageManager = ObjectManager::getInstance(StageUpdateManager::class);
@@ -2997,10 +3279,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $eavSchemaStage = $preSchemaStages['eav_schema'];
         $stageManager->registerStage($eavSchemaStage, 2);
 
-        /**@var ModelManager $modelManager */
-        $modelManager = ObjectManager::getInstance(ModelManager::class);
-        $databaseStage = ObjectManager::make(DatabaseUpdateStage::class, ['modelManager' => $modelManager]);
-        $stageManager->registerStage($databaseStage, 3);
 
         $schemaDiffStage = $preSchemaStages['schema_diff'];
         $stageManager->registerStage($schemaDiffStage, 4);
@@ -3015,6 +3293,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         
         // ========== 批量收集所有更新任务 ==========
         $stageNumber++;
+        $this->profileMark('preSchema/pending', $__profileAt);
         $this->printing->note($stageNumber . '、批量收集模块更新任务...', '系统');
         
         // 收集模块安装/升级任务（按模块 Fiber 调度，主线程登记）
@@ -3246,7 +3525,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             }
             if ($schemaDiffStage && !$schemaDiffStage->isCommitted()) {
                 $schemaDiffStage->prepare($setupStageContext);
-                if ($schemaDiffStage instanceof SchemaDiffStage
+                if (\method_exists($schemaDiffStage, 'wasSourceFingerprintSkipped')
                     && !$schemaDiffStage->wasSourceFingerprintSkipped()) {
                     $this->sourceTreeChanged = true;
                 }
@@ -3276,6 +3555,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         
         // 收集路由注册任务（仅在将提交 route_update 时执行，避免污染路由缓冲）
         if ($willCommitRoute) {
+        $this->profileMark('stages-prepare', $__profileAt);
             $this->printing->note(__('   - 批量收集路由注册任务（Fiber 协作）...'));
             $routeBatch = new FiberTaskBatch(
                 null,
@@ -3347,19 +3627,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '✓ 路由扫描收集完成（内存缓冲）；先落盘控制器 ACL，再 orphan diff，路由文件仍在 route_update 提交时写入'
             ));
             $this->noteSetupMemory('路由扫描收集后');
-            if ($this->routeFingerprintPending !== []) {
-                $toPersist = $this->routeFingerprintPending;
-                if (\is_array($this->routeChangedModules) && $this->routeChangedModules !== []) {
-                    $toPersist = [];
-                    foreach ($this->routeChangedModules as $mod) {
-                        $k = 'route:' . $mod;
-                        if (isset($this->routeFingerprintPending[$k])) {
-                            $toPersist[$k] = $this->routeFingerprintPending[$k];
-                        }
-                    }
-                }
-                $this->persistRouteFingerprints($toPersist);
-            }
             // Defer 队列必须在 orphan diff 前落盘并写入 CollectedAclSourceIdsRegistry；
             // 否则 touched 模块上「尚未 flush 的方法级 ACL」会被当成孤儿删掉。
             try {
@@ -3396,6 +3663,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         
         // ========== 准备所有阶段 ==========
         $stageNumber++;
+        $this->profileMark('route/menu-collect', $__profileAt);
         $this->printing->note($stageNumber . '、准备所有更新阶段...', '系统');
         try {
             $stageManager->prepareAll([
@@ -3471,14 +3739,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 gc_collect_cycles();
             }
 
-            // 第二步：文件迁移（SchemaDiff 后、ModuleSetup 前），供 Install/Upgrade 依赖
-            $this->printing->note(__('   - 执行模块文件迁移（MigrationService，位于 ModuleSetup 之前）...'));
-            $this->runDatabaseFileMigrations($args, $argsModule);
-            $this->printing->note(__('   - 模块文件迁移检查结束，进入 ModuleSetup…'));
-            if (\defined('STDOUT') && \is_resource(STDOUT)) {
-                \fflush(STDOUT);
-            }
-
             // 第三步：提交模块安装/升级阶段（此时表与文件迁移已就绪）
             if ($shouldCommitStage(self::STAGE_MODULE_SETUP)) {
                 $setupTaskCount = method_exists($moduleSetupStage, 'getTaskCount')
@@ -3507,47 +3767,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 // 重新加载模块列表（可能有新模块被安装，或者模块状态已更新）
                 $module_handle = ObjectManager::getInstance(Handle::class);
                 $updatedModules = $module_handle->getModules();
-                
-                // 重新收集数据库更新任务（检查是否有遗漏的任务）
-                $this->printing->note(__('   - 重新收集数据库更新任务...'));
-                foreach ($updatedModules as $module_name => $module) {
-                    if ($argsModule and !in_array($module_name, $argsModule)) {
-                        continue;
-                    }
-                    
-                    $moduleObj = new Module($module);
-                    $fromSetup = (string)($module['setup_version'] ?? '0.0.0');
-                    $setupContext = ObjectManager::make(SetupContext::class, [
-                        'module_name' => $moduleObj->getName(),
-                        'module_version' => $moduleObj->getVersion(),
-                        'module_description' => $moduleObj->getDescription(),
-                        'from_setup_version' => $fromSetup !== '' ? $fromSetup : '0.0.0',
-                    ], '__construct');
-                    
-                    // 检查该模块是否已有数据库任务
-                    $hasDatabaseTask = false;
-                    try {
-                        $reflection = new \ReflectionClass($databaseStage);
-                        $property = $reflection->getProperty('updateTasks');
-                        $property->setAccessible(true);
-                        $existingTasks = $property->getValue($databaseStage);
-                        
-                        foreach ($existingTasks as $task) {
-                            if ($task['module']->getName() === $moduleObj->getName()) {
-                                $hasDatabaseTask = true;
-                                break;
-                            }
-                        }
-                    } catch (\Exception $e) {
-                        // 反射失败，继续执行
-                    }
-                    
-                    // 注意：模块安装时，setupInstall 内部会调用 modelManager->update(install)
-                    // 所以数据库更新任务已经在模块安装阶段执行了
-                    // 这里主要是检查是否有新注册的模块（依赖模块）需要数据库初始化
-                    // 新注册的模块不会有 installing 标志，因为它们是在安装过程中被注册的
-                    // 所以这里我们主要检查是否有遗漏的模块
-                }
                 
                 // 重新收集路由注册任务（仅当将提交 route_update 时执行）
                 if ($willCommitRoute) {
@@ -3655,6 +3874,19 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     }
                     $routeStage->commit();
                     $this->printing->success(__('   - 路由更新阶段已提交'));
+                    if ($this->routeFingerprintPending !== []) {
+                        $toPersist = $this->routeFingerprintPending;
+                        if (\is_array($this->routeChangedModules) && $this->routeChangedModules !== []) {
+                            $toPersist = [];
+                            foreach ($this->routeChangedModules as $mod) {
+                                $k = 'route:' . $mod;
+                                if (isset($this->routeFingerprintPending[$k])) {
+                                    $toPersist[$k] = $this->routeFingerprintPending[$k];
+                                }
+                            }
+                        }
+                        $this->persistRouteFingerprints($toPersist);
+                    }
                     if (\defined('STDOUT') && \is_resource(\STDOUT)) {
                         \fflush(\STDOUT);
                     }
@@ -3687,6 +3919,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->printing->note('模块更新完毕！');
         }
         $stageNumber++;
+        $this->profileMark('stage-commit', $__profileAt);
         $this->printing->note($stageNumber . '、收集模块信息', '系统');
         # 加载module中的助手函数
         $modules = Env::getInstance()->getActiveModules();
@@ -3955,18 +4188,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function acquireLock(string $lockFile)
     {
-        # 检查锁文件是否存在，如果存在则检查进程是否还在运行
-        if (file_exists($lockFile)) {
-            $lockInfo = $this->readLockInfo($lockFile);
-            if ($lockInfo !== null && isset($lockInfo['pid'])) {
-                # 检查进程是否还在运行
-                if (!$this->isProcessRunning($lockInfo['pid'])) {
-                    # 进程已不存在，删除旧的锁文件
-                    @unlink($lockFile);
-                }
-            }
-        }
-        
         # 打开锁文件（如果不存在则创建）
         $handle = @fopen($lockFile, 'c+');
         if ($handle === false) {
@@ -4051,25 +4272,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      * @param array $args
      * @param array $argsModule
      */
-    private function runDatabaseFileMigrations(array $args, array $argsModule): void
-    {
-        /** @var EventsManager $eventsManager */
-        $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $doModel = isset($args['model']);
-        $doRoute = isset($args['route']);
-        $eventData = [
-            'is_partial_upgrade' => $doModel || $doRoute,
-            'route_only' => false,
-            'model_only' => $doModel,
-            'args' => $args,
-            'operation_id' => $this->setupOperationId,
-            'modules' => $argsModule,
-            'migrations_already_run' => false,
-        ];
-        // 直接派发同一观察器逻辑：使用专用事件名不可靠时复用 upgrade_after 并在 observer 侧去重
-        $eventsManager->dispatch('Weline_Framework_Setup::upgrade_migrations', $eventData);
-    }
-
     private function releaseLock($handle, string $lockFile): void
     {
         $held = $handle !== null && is_resource($handle);
@@ -4203,49 +4405,16 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     private function executeHotReload(): void
     {
         $this->printing->note(__('正在执行热更新...'));
-        
-        // 读取服务器配置
-        $serverConfig = Env::getInstance()->getConfig('wls');
-        if (empty($serverConfig) || empty($serverConfig['instances'])) {
-            $this->printing->warning(__('未检测到运行中的 WLS 服务器实例。'));
-            $this->printing->note(__('请先启动服务器：php bin/w server:start'));
-            return;
+        $broadcaster = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(RuntimeControlBroadcasterInterface::class);
+        if (!$broadcaster instanceof RuntimeControlBroadcasterInterface) {
+            throw new Exception((string)__('热更新失败：未找到可用的运行时广播实现（WLS 未启用？）。'));
         }
-        
-        $reloadCount = 0;
-        
-        foreach ($serverConfig['instances'] as $name => $instance) {
-            if (empty($instance['pid'])) {
-                continue;
-            }
-            
-            $pid = (int) $instance['pid'];
-            
-            // 检查进程是否存在
-            if (!$this->isProcessRunning($pid)) {
-                $this->printing->warning(__('实例 %{1} 的主进程 (PID: %{2}) 未运行', [$name, $pid]));
-                continue;
-            }
-            
-            // 发送 SIGUSR1 信号（仅 Linux/Mac）
-            if (\function_exists('posix_kill')) {
-                if (\posix_kill($pid, SIGUSR1)) {
-                    $this->printing->success(__('已向实例 %{1} (PID: %{2}) 发送热重载信号', [$name, $pid]));
-                    $reloadCount++;
-                } else {
-                    $this->printing->error(__('无法向实例 %{1} 发送信号', [$name]));
-                }
-            } else {
-                // Windows 平台暂不支持信号
-                $this->printing->warning(__('Windows 平台暂不支持热更新，请重启服务器：php bin/w server:start -r'));
-            }
+        $result = $broadcaster->reloadAsync(null, 'code');
+        if (empty($result['success'])) {
+            throw new Exception((string)__('热更新失败：%{1}', [(string)($result['message'] ?? 'no running instance')]));
         }
-        
-        if ($reloadCount > 0) {
-            $this->printing->success(__('热更新信号已发送给 %{1} 个实例', [$reloadCount]));
-        } else {
-            $this->printing->warning(__('没有可用的 WLS 实例接收热更新信号'));
-        }
+        $this->printing->success(__('热更新信号已发送：%{1}', [(string)($result['message'] ?? 'ok')]));
     }
     
     public function help(): array|string
@@ -4273,6 +4442,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '--background-optimize' => __('显式在后台执行优化；主命令不会等待类映射与反射编译完成'),
                 '--skip-background-optimize' => __('兼容选项：保持同步执行优化（现在已是默认行为）'),
                 '--sync' => __('兼容选项：保持同步执行优化（现在已是默认行为）'),
+                '--resume=<operation_id>' => __('从 var/setup/runs/<id> 读取上次进度，只跳过已完成的幂等阶段（classmap/psr4/extends/framework/reflection/registry/file）；schema/迁移仍重跑。'),
                 '--dev-rerun-install' => __('DEV 下显式重跑全模块 Install.php（默认关闭）'),
                 '--force-schema-rebind' => __('DEV only：同版本 Schema checkpoint 冲突时 supersede 旧记录并重绑；与 -f/--force（跳过环境检测）无关'),
                 '--force-optimize' => __('强制重跑 classmap / reflection / framework:compile（忽略 optimize stamp）'),
@@ -4280,6 +4450,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '--skip-classmap' => __('跳过 composer dump-autoload 与类映射缓存生成。适用：未变更 Composer 依赖/自动加载配置的快速更新'),
                 '--skip-composer-dump' => __('仅跳过 composer dump-autoload。适用：Composer 子进程不可用但需要执行 setup 阶段'),
                 '--keep-maintenance' => __('保留维护模式：收尾不关闭 system.maintenance（供外层 deploy:release 窗拥有生命周期）'),
+                '--from-core-update' => __('标记本次升级由后台核心更新触发（报告 source=core_update）。'),
                 '--force-i18n-collect' => __('强制在 upgrade_after 跑全量短语 collect（默认跳过，避免 locale 稀表前扇出拖死升级；平时用 i18n:collect）'),
                 '--skip-extends-rebuild' => __('跳过扩展注册表重建（generated/extends.php）；需要时执行 extends:rebuild'),
                 '--yes, -y' => __('未安装时免交互：有 db 配置按现有配置安装，否则走开发环境快速安装'),
@@ -4292,8 +4463,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 __('部署窗内升级（不关维护）') => 'php bin/w setup:upgrade --keep-maintenance',
                 '升级数据库模型（含 SchemaDiff）' => 'php bin/w setup:upgrade --model',
                 '仅升级路由（仅新增 Controller、无需 Schema 时）' => 'php bin/w setup:upgrade --route',
-                __('仅运行 schema_diff 阶段（测试声明式表）') => 'php bin/w setup:upgrade --stage=schema_diff',
-                __('仅运行 framework_db_bootstrap 阶段') => 'php bin/w setup:upgrade --stage=framework_db_bootstrap',
+                __('以 schema_diff 为优先阶段（测试声明式表；schema 三阶段仍必执行）') => 'php bin/w setup:upgrade --stage=schema_diff',
+                __('以 framework_db_bootstrap 为优先阶段（schema 三阶段仍必执行）') => 'php bin/w setup:upgrade --stage=framework_db_bootstrap',
                 '升级指定模块（位置参数）' => 'php bin/w setup:upgrade Vendor_Module',
                 '升级指定模块（长选项）' => 'php bin/w setup:upgrade --module Vendor_Module',
                 '升级指定模块（短选项）' => 'php bin/w setup:upgrade -m Vendor_Module',
@@ -4402,6 +4573,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         if ($input === '1') {
             // 显示 system:install 命令的帮助信息
             $this->showSystemInstallHelp();
+            return 1;
         } elseif ($input === '2' || empty($input)) {
             // 如果输入为空，默认选择选项2
             if (empty($input)) {
@@ -4425,7 +4597,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 $this->executeDevelopmentInstall();
             } else {
                 $this->printing->note(__('安装已取消。'));
-                return 0;
+                return 1;
             }
         } else {
             $this->printing->error(__('无效的选项！请重新运行命令。'));

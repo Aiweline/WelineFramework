@@ -376,7 +376,10 @@
                 offerUuid: offerUuid,
                 renderError: false,
             });
-        }).then(function () {
+        }).then(function (result) {
+            if (result && result.superseded) {
+                return;
+            }
             appendQuickViewExtraActions(body, productId, fallback.url || '');
         }).catch(function () {
             toast(texts().quickViewFailed, 'error');

@@ -30,7 +30,13 @@ namespace Weline\Framework\DataObject {
         public function setData(array|string $key, mixed $value = null): static { if (is_array($key)) $this->_data = $key + $this->_data; else $this->_data[$key] = $value; return $this; }
     }
 }
-namespace Weline\Cdn\Adapter {
+namespace Weline\Framework\Manager {
+    class ObjectManager {
+        public static array $instances = [];
+        public static function getInstance(string $class = ''): object { return self::$instances[$class] ??= ($class === '' ? new self() : new $class()); }
+    }
+}
+namespace Weline\Cdn\Service {
     function curl_init(string $url): object { return (object)['url' => $url, 'options' => [], 'reply' => []]; }
     function curl_setopt(object $handle, int $key, mixed $value): bool { $handle->options[$key] = $value; return true; }
     function curl_setopt_array(object $handle, array $options): bool { $handle->options = $options + $handle->options; return true; }
@@ -39,8 +45,8 @@ namespace Weline\Cdn\Adapter {
         \CdnFixture::$requests[] = ['url' => $handle->url, 'method' => $handle->options[CURLOPT_CUSTOMREQUEST] ?? 'GET', 'data' => json_decode($handle->options[CURLOPT_POSTFIELDS] ?? '{}', true)];
         return is_string($handle->reply['body']) ? $handle->reply['body'] : json_encode($handle->reply['body']);
     }
+    function curl_errno(object $handle): int { return 0; }
     function curl_getinfo(object $handle, int $key): int { return $handle->reply['status']; }
-    function curl_error(object $handle): string { return ''; }
     function curl_close(object $handle): void {}
 }
 namespace {
@@ -50,6 +56,7 @@ namespace {
         return $message;
     }
     function w_log_warning(mixed ...$args): void {}
+    function w_log_error(mixed ...$args): void {}
     function w_env_website_id(): int { return 7; }
     final class CdnFixture { public static array $requests = []; public static array $replies = []; }
     require BP . 'app/code/Weline/Framework/Cache/Contract/EdgeCacheAdapterInterface.php';
@@ -57,10 +64,10 @@ namespace {
     foreach (['Api/Event/AsyncObserverInterface.php', 'Event/Async/Exception/AsyncEventValidationException.php', 'Event/Async/Exception/NonRetryableAsyncEventException.php', 'Event/ResourceChange/ResourceChange.php'] as $file) {
         require BP . 'app/code/Weline/Framework/' . $file;
     }
-    foreach (['StoreCatalogInterface.php', 'WebsiteCatalogInterface.php', 'Data/StoreSummary.php', 'Data/WebsiteSummary.php'] as $file) {
+    foreach (['StoreCatalogInterface.php', 'WebsiteCatalogInterface.php', 'WebsiteDomainCatalogInterface.php', 'Data/StoreSummary.php', 'Data/WebsiteSummary.php'] as $file) {
         require BP . 'app/code/Weline/Websites/Api/Catalog/' . $file;
     }
-    foreach (['Api/AdapterInterface.php', 'Model/Domain.php', 'Adapter/Cloudflare.php', 'Service/AccountManager.php', 'Service/UrlSiteResolver.php', 'Service/CachePurger.php', 'Observer/CdnRequest.php', 'Observer/ScopeChanged.php', 'extends/module/Weline_Framework/Changed/Capability/CdnCapability.php'] as $file) {
+    foreach (['Api/AdapterInterface.php', 'Api/OauthCapableProviderInterface.php', 'Api/OriginNoStoreEdgeHeaderWriterInterface.php', 'Model/Domain.php', 'Exception/CloudflareApiException.php', 'Adapter/Cloudflare.php', 'Service/CloudflareHttpClient.php', 'Service/AccountManager.php', 'Service/UrlSiteResolver.php', 'Service/WarmupLocaleUrlExpander.php', 'Service/FpcPolicyTargetService.php', 'Service/EdgePurgeUrlPlanner.php', 'Service/CachePurger.php', 'Observer/CdnRequest.php', 'Observer/ScopeChanged.php'] as $file) {
         require dirname(__DIR__, 2) . '/' . $file;
     }
     function check(bool $ok, string $message): void { if (!$ok) { throw new \RuntimeException($message); } }
@@ -137,7 +144,7 @@ namespace {
         (new \ReflectionProperty($observer, 'domainModel'))->setValue($observer, new \Weline\Cdn\Model\Domain());
         $event = (new \Weline\Framework\Event\Event())->setData('website_id', 0)->setData('action', 'purge_urls')->setData('data', ['urls' => ['https://www.example.com/p/1', 'https://images.example.com/p.jpg']]);
         $observer->execute($event);
-        check(($event->getData('response')['success'] ?? false) === true, 'zero site request failed');
+        check(($event->getData('response')['success'] ?? false) === true, 'zero site request failed: ' . json_encode($event->getData('response'), JSON_UNESCAPED_UNICODE));
         check($purger->calls === [[10, 'urls', ['urls' => ['https://www.example.com/p/1']]], [11, 'urls', ['urls' => ['https://images.example.com/p.jpg']]]], 'URLs were sent to the wrong domain or website');
     };
     $cases['store update clears old URL and default website URL when inheritance is restored'] = static function (): void {
@@ -160,7 +167,7 @@ namespace {
         };
         $event = new \Weline\Framework\Event\Event(['data' => ['website_id' => 0, 'store_id' => 0, 'store' => ['url' => null], 'before' => ['url' => 'https://www.example.com/old-store/']]]);
         (new \Weline\Cdn\Observer\ScopeChanged($stores, $websites, $request))->execute($event);
-        check($purger->calls === [[10, 'hosts', ['hosts' => ['www.example.com']]], [10, 'prefixes', ['prefixes' => ['www.example.com/old-store/']]]], 'store URL range inheritance failed or old range was lost');
+        check($purger->calls === [[10, 'hosts', ['hosts' => ['www.example.com']]], [10, 'prefixes', ['prefixes' => ['www.example.com/old-store/']]]], 'store URL range inheritance failed or old range was lost: ' . json_encode($purger->calls));
     };
     $cases['unconfigured old URL does not prevent configured new URL purge'] = static function (): void {
         \Weline\Framework\Database\Model::$rows = [domain(10, 'example.com')->setData('site_id', 0)->setData('enabled', 1)];
@@ -170,7 +177,7 @@ namespace {
         (new \ReflectionProperty($request, 'domainModel'))->setValue($request, new \Weline\Cdn\Model\Domain());
         $event = new \Weline\Framework\Event\Event(['data' => ['website_id' => 0, 'action' => 'purge_urls', 'data' => ['urls' => ['https://old.invalid/', 'https://www.example.com/']]]]);
         $request->execute($event);
-        check($purger->calls === [[10, 'urls', ['urls' => ['https://www.example.com/']]]], 'unconfigured old host blocked the configured URL');
+        check($purger->calls === [[10, 'urls', ['urls' => ['https://www.example.com/']]]], 'unconfigured old host blocked the configured URL: ' . json_encode([$purger->calls, $event->getData('response')], JSON_UNESCAPED_UNICODE));
         check($event->getData('response')['success'] === false, 'unmatched URL was reported as purged');
     };
     $cases['explicit subdomain purge uses requested host with parent zone mapping'] = static function (): void {
@@ -183,29 +190,59 @@ namespace {
         $request->execute($event);
         check($purger->calls === [[10, 'hosts', ['hosts' => ['shop.example.com']]]], 'parent zone host replaced the requested subdomain');
     };
-    $cases['website change purges public range while product change only purges actual URLs'] = static function (): void {
-        \Weline\Framework\Database\Model::$rows = [domain(10, 'example.com')->setData('site_id', 0)->setData('enabled', 1)];
-        foreach (['website', 'product_search_projection'] as $type) {
-            $purger = new CdnTestPurger();
-            $change = \Weline\Framework\Event\ResourceChange\ResourceChange::fromArray([
-                'schema_version' => 1, 'event_id' => str_repeat('a', 32), 'event_name' => \Weline\Framework\Event\ResourceChange\ResourceChange::EVENT_NAME,
-                'occurred_at' => '2026-09-05T00:00:00.000000Z', 'resource' => ['type' => $type, 'id' => '1', 'revision' => 1, 'action' => 'upsert'],
-                'website' => ['id' => 0, 'code' => 'default', 'previous_code' => null, 'site_id' => 0],
-                'impact' => ['urls' => ['https://www.example.com/shop/'], 'previous_urls' => [], 'namespaces' => [], 'previous_namespaces' => []],
-                'changed_fields' => ['name'], 'before' => [], 'after' => [],
-                'origin' => ['area' => 'backend', 'entry' => 'fixture', 'request_id' => '', 'instance' => '', 'trigger_by' => ['type' => 'system', 'id' => null]],
-                'context' => ['website_id' => 0, 'website_code' => 'default', 'lang' => 'en_US', 'currency' => 'USD', 'area' => 'backend', 'timezone' => 'UTC', 'user' => ['type' => 'system', 'id' => null]],
-            ]);
-            $event = new \Weline\Framework\Event\Event(['data' => ['data' => $change]]);
-            (new \Weline\Cdn\Observer\ResourceChanged(new \Weline\Cdn\Model\Domain(), $purger))->execute($event);
-            $expected = $type === 'website' ? [10, 'prefixes', ['prefixes' => ['www.example.com/shop/']]] : [10, 'urls', ['urls' => ['https://www.example.com/shop/']]];
-            check($purger->calls === [$expected], 'resource type did not select its actual affected range');
-        }
+    /** Website 0 公网面：站点 URL www、店铺子路径、站点绑定域名（含外区域域名）。 */
+    function siteTargets(array $websiteDomainBases): \Weline\Cdn\Service\FpcPolicyTargetService {
+        $websites = new class implements \Weline\Websites\Api\Catalog\WebsiteCatalogInterface {
+            public function defaultWebsiteId(): int { return 0; }
+            public function all(): array { return [new \Weline\Websites\Api\Catalog\Data\WebsiteSummary(0, 'Default', 'default', 'https://www.example.com/')]; }
+            public function count(): int { return 1; }
+        };
+        $stores = new class implements \Weline\Websites\Api\Catalog\StoreCatalogInterface {
+            public function byWebsite(int $websiteId): array { return $websiteId === 0 ? [new \Weline\Websites\Api\Catalog\Data\StoreSummary(1, 0, 'a', 'A', 'normal', false, true, 'active', null, 'https://www.example.com/shop-a')] : []; }
+            public function byCode(int $websiteId, string $storeCode): ?\Weline\Websites\Api\Catalog\Data\StoreSummary { return null; }
+            public function byId(int $storeId): ?\Weline\Websites\Api\Catalog\Data\StoreSummary { return null; }
+            public function defaultStore(int $websiteId): ?\Weline\Websites\Api\Catalog\Data\StoreSummary { return null; }
+            public function all(): array { return []; }
+        };
+        $domains = new class($websiteDomainBases) implements \Weline\Websites\Api\Catalog\WebsiteDomainCatalogInterface {
+            public function __construct(private array $bases) {}
+            public function publicBaseUrls(int $websiteId): array { return $websiteId === 0 ? $this->bases : []; }
+        };
+        $locales = (new \ReflectionClass(\Weline\Cdn\Service\WarmupLocaleUrlExpander::class))->newInstanceWithoutConstructor();
+        return new \Weline\Cdn\Service\FpcPolicyTargetService(new \Weline\Cdn\Model\Domain(), $websites, $stores, $locales, $domains);
+    }
+    function purgerWith(\Weline\Cdn\Service\FpcPolicyTargetService $targets): CdnTestPurger {
+        $purger = new CdnTestPurger();
+        (new \ReflectionProperty(\Weline\Cdn\Service\CachePurger::class, 'targets'))->setValue($purger, $targets);
+        return $purger;
+    }
+    $cases['host-wide purge covers every public host of the site, not only the bound apex'] = static function (): void {
+        $purger = purgerWith(siteTargets(['https://m.example.com', 'https://example.com', 'http://foreign.invalid']));
+        $results = $purger->purgeDomainPublicScope(domain(10, 'example.com')->setData('site_id', 0), ['https://old.example.com/', 'https://other.invalid/']);
+        check(count($results) === 1, 'expected one merged hosts purge');
+        check($purger->calls === [[10, 'hosts', ['hosts' => ['old.example.com', 'www.example.com', 'm.example.com', 'example.com']]]], 'site hosts missing, foreign host leaked, or sub-path purged separately: ' . json_encode($purger->calls));
+    };
+    $cases['sub-path website domain purges its prefix instead of the whole host'] = static function (): void {
+        $purger = purgerWith(siteTargets(['https://shop.example.org/eu']));
+        $purger->purgeDomainPublicScope(domain(20, 'shop.example.org')->setData('site_id', 0));
+        check($purger->calls === [[20, 'prefixes', ['prefixes' => ['shop.example.org/eu']]]], 'sub-path domain widened to host or lost: ' . json_encode($purger->calls));
+    };
+    $cases['theme localhost URL is projected onto every public host of the site'] = static function (): void {
+        $targets = siteTargets(['https://m.example.com']);
+        $planned = \Weline\Cdn\Service\EdgePurgeUrlPlanner::project(
+            [domain(10, 'example.com')->setData('site_id', 0), domain(70, 'example.com')->setData('site_id', 7)],
+            ['http://localhost/about'],
+            [0],
+            static fn(\Weline\Cdn\Model\Domain $d): array => $targets->publicEndpoints($d),
+            static fn(int $site, string $base, string $path): array => [],
+        );
+        check(($planned[10] ?? []) === ['https://www.example.com/about', 'https://www.example.com/shop-a/about', 'https://m.example.com/about', 'https://example.com/about', 'https://example.com/shop-a/about'], 'public hosts missing from projection: ' . json_encode($planned));
+        check(!isset($planned[70]), 'path intent leaked into another website');
     };
     $failed = 0;
     foreach ($cases as $name => $case) {
         CdnFixture::$requests = CdnFixture::$replies = [];
-        try { $case(); echo "PASS: {$name}\n"; } catch (\Throwable $e) { $failed++; echo "FAIL: {$name}: {$e->getMessage()}\n"; }
+        try { $case(); echo "PASS: {$name}\n"; } catch (\Throwable $e) { $failed++; echo "FAIL: {$name}: {$e->getMessage()} @ " . basename($e->getFile()) . ':' . $e->getLine() . "\n"; }
     }
     exit($failed ? 1 : 0);
 }

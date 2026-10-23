@@ -846,7 +846,7 @@ if ($productBreadcrumbs === []) {
                     <div class="product-native-detail__variant-axes"
                          data-testid="product-variant-axes"
                          <?= $hasInteractiveVariants ? 'data-variant-interactive="1"' : '' ?>
-                         <?php if ($hasInteractiveVariants): ?>data-variant-live-url="@url{'weline_product/frontend/api/variant-availability'}"<?php endif; ?>>
+                         <?= $hasInteractiveVariants ? 'data-variant-live="1"' : '' ?>>
                         <?php foreach ($interactiveVariantAxes as $axis): ?>
                             <?php
                             $axisCode = strtolower(trim((string)($axis['code'] ?? '')));

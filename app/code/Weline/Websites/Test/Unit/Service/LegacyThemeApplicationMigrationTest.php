@@ -23,6 +23,7 @@ final class LegacyThemeApplicationMigrationTest extends TestCase
             public array $rows=[];
             public function __construct(private string $directory) {}
             public function read(string $scopeKey,string $storeMode,string $area):array {return $this->rows[$scopeKey.'|'.$storeMode]??['reference'=>null,'revision'=>0];}
+            public function listForArea(string $storeMode,string $area):array {throw new \LogicException('migration must not list applications');}
             public function compareAndSwap(string $scopeKey,string $storeMode,string $area,?ThemeApplicationReference $reference,int $expectedRevision):array {
                 if(count(glob($this->directory.'/*/backup.json')?:[])!==1)throw new \RuntimeException('backup_missing_before_write');
                 $current=$this->read($scopeKey,$storeMode,$area);

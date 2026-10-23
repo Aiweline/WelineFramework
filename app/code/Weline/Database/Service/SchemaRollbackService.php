@@ -11,6 +11,7 @@ use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
 use Weline\Framework\Database\Connection\Api\PhysicalTableIdentityProviderInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableMetadataInterface;
 use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Database\Service\BackupService;
 use Weline\Framework\Database\Schema\SchemaCheckpointIdentity;
 use Weline\Framework\Database\Schema\SchemaDiffOp;
 use Weline\Framework\Setup\Model\MigrationBackup;

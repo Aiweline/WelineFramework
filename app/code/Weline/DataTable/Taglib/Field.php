@@ -5,12 +5,22 @@ declare(strict_types=1);
 namespace Weline\DataTable\Taglib;
 
 use Weline\DataTable\Helper\FrontendAccess;
+use Weline\DataTable\Helper\OwnedChildren;
 use Weline\DataTable\Helper\TableContext;
 use Weline\Framework\App\Exception;
+use Weline\Framework\Taglib\OwnsChildCompilationInterface;
 use Weline\Framework\Taglib\TaglibInterface;
+use Weline\Framework\View\Template;
 
-final class Field implements TaglibInterface
+/**
+ * 字段标签自编译子内容：label 与所有显示文字都在渲染期翻译。
+ *
+ * 编译缓存不分语言，所以回调里不得调用 __()；编译期只产出 `Field::render(spec)` 调用。
+ */
+final class Field implements TaglibInterface, OwnsChildCompilationInterface
 {
+    private const SELECT_WIDGET_TYPES = ['language-select', 'module-select', 'website-select'];
+
     public static function name(): string
     {
         return 'field';
@@ -61,7 +71,7 @@ final class Field implements TaglibInterface
 
     public static function callback(): callable
     {
-        return static function ($tagKey, $config, $tagData, $attributes): string {
+        return static function ($tagKey, $config, $tagData, $attributes, ?Template $template = null): string {
             $name = trim((string)($attributes['name'] ?? ''));
             if ($name === '') {
                 throw new Exception(__('field标签必须指定name属性！'));
@@ -84,20 +94,94 @@ final class Field implements TaglibInterface
             }
 
             $content = trim((string)($tagData[2] ?? ''));
-            $field = self::normalizeField($name, $belong, $content, $attributes, $context);
+            $labelWord = self::staticLangWord($content);
+            $isMarkup = $labelWord === null && self::isMarkup($content);
+            $spec = self::normalizeField($name, $belong, $isMarkup ? '' : $content, $labelWord, $attributes, $context);
             $scope = (string)($context['scope'] ?? $accessContext['scope'] ?? 'datatable');
-            TableContext::recordTemplateField($scope, $belong, $name, $field);
+            TableContext::recordTemplateField($scope, $belong, $name, $spec);
+            $runtime = OwnedChildren::isRuntime((array)$config);
 
-            return match ($belong) {
-                't-header' => self::renderHeader($field),
-                't-filter' => self::renderFilter($field),
-                'd-form' => self::renderForm($field, $context),
-            };
+            if ($isMarkup) {
+                $wrapsMarkup = ($belong === 'd-form' && $spec['type'] !== 'hidden')
+                    || ($belong === 't-filter' && in_array($spec['type'], self::SELECT_WIDGET_TYPES, true));
+                if (!$wrapsMarkup) {
+                    throw new Exception(__('field标签（%{1}）的子内容只能是纯文本或<lang>；其它内容请改用label属性。', [$name]));
+                }
+                $markup = OwnedChildren::process($content, (array)$config, $template, $context);
+                return ($runtime ? self::renderMarkupOpen($spec) : self::renderCall('renderMarkupOpen', $spec))
+                    . $markup . '</div>';
+            }
+
+            return $runtime ? self::render($spec) : self::renderCall('render', $spec);
         };
     }
 
+    /**
+     * 渲染期入口：编译产物里的 `Field::render(spec)` 与运行期回调共用。
+     *
+     * @param array<string,mixed> $spec
+     */
+    public static function render(array $spec): string
+    {
+        $field = self::resolve($spec);
+        return match ($field['belong']) {
+            't-header' => self::renderHeader($field),
+            't-filter' => self::renderFilter($field),
+            'd-form' => self::renderForm($field),
+        };
+    }
+
+    /**
+     * 可信标记子内容（表单控件 / 筛选选择器部件）的包裹层开标签。
+     *
+     * @param array<string,mixed> $spec
+     */
+    public static function renderMarkupOpen(array $spec): string
+    {
+        $field = self::resolve($spec);
+        $nameHtml = self::escape((string)$field['name']);
+        $config = self::jsonAttribute($field);
+        if ($field['belong'] === 't-filter') {
+            $class = trim('w-datatable__filter-field ' . (string)$field['class']);
+            return '<div class="' . self::escape($class) . '" data-field="' . $nameHtml . '" data-type="'
+                . self::escape((string)$field['type']) . '" data-w-field="' . $config . '">';
+        }
+        $class = trim('w-field w-datatable-form__field ' . (string)$field['class']);
+        return '<div class="' . self::escape($class) . '" data-field="' . $nameHtml . '" data-w-field="' . $config . '">';
+    }
+
+    /** @param array<string,mixed> $spec */
+    private static function renderCall(string $method, array $spec): string
+    {
+        return '<' . '?= \\' . self::class . '::' . $method . '(' . var_export($spec, true) . ') ?' . '>';
+    }
+
+    /**
+     * 把编译期规格解析成本次请求语言下的显示字段。
+     *
+     * @param array<string,mixed> $spec
+     * @return array<string,mixed>
+     */
+    private static function resolve(array $spec): array
+    {
+        $field = $spec;
+        $labelWord = $spec['labelWord'] ?? null;
+        unset($field['labelWord']);
+        $label = is_string($labelWord) ? (string)__($labelWord) : (string)$spec['label'];
+        $field['label'] = $label;
+        if ($field['placeholder'] === ''
+            && !in_array($field['type'], ['select', 'checkbox', 'radio', 'switch', 'file', 'image', 'hidden'], true)) {
+            $field['placeholder'] = (string)__('请输入%{1}', [$label]);
+        }
+        $field['options'] = array_map(
+            static fn (array $option): array => ['value' => $option['value'], 'label' => (string)__($option['label'])],
+            $spec['options']
+        );
+        return $field;
+    }
+
     /** @return array<string,mixed> */
-    private static function normalizeField(string $name, string $belong, string $content, array $attributes, array $context): array
+    private static function normalizeField(string $name, string $belong, string $content, ?string $labelWord, array $attributes, array $context): array
     {
         $type = strtolower(trim((string)($attributes['type'] ?? '')));
         if ($type === '') {
@@ -113,13 +197,11 @@ final class Field implements TaglibInterface
             $type = 'text';
         }
 
-        $label = trim((string)($attributes['label'] ?? $content));
-        if ($label === '') {
-            $label = self::humanize($name);
-        }
-        $placeholder = trim((string)($attributes['placeholder'] ?? ''));
-        if ($placeholder === '' && !in_array($type, ['select', 'checkbox', 'radio', 'switch', 'file', 'image', 'hidden'], true)) {
-            $placeholder = (string)__('请输入%{1}', [$label]);
+        $label = trim((string)($attributes['label'] ?? ''));
+        if ($label !== '') {
+            $labelWord = null;
+        } elseif ($labelWord === null) {
+            $label = $content !== '' ? $content : self::humanize($name);
         }
         $width = self::cssLength((string)($attributes['width'] ?? ''));
         $defaultVisible = $belong !== 't-filter';
@@ -128,9 +210,9 @@ final class Field implements TaglibInterface
             'name' => $name,
             'belong' => $belong,
             'label' => $label,
-            'content' => $content,
+            'labelWord' => $labelWord,
             'type' => $type,
-            'placeholder' => $placeholder,
+            'placeholder' => trim((string)($attributes['placeholder'] ?? '')),
             'options' => self::options($attributes['options'] ?? ''),
             'class' => self::welineClasses((string)($attributes['class'] ?? '')),
             'sortable' => self::toBool($attributes['sortable'] ?? false),
@@ -181,13 +263,6 @@ final class Field implements TaglibInterface
         $class = trim('w-datatable__filter-field ' . (string)$field['class']);
         $common = ' id="' . $idHtml . '" name="filter[' . $nameHtml . ']" data-field="' . $nameHtml . '"';
 
-        if (in_array($field['type'], ['language-select', 'module-select', 'website-select'], true)
-            && self::containsTrustedMarkup((string)$field['content'])) {
-            return '<div class="' . self::escape($class) . '" data-field="' . $nameHtml . '" data-type="'
-                . self::escape((string)$field['type']) . '" data-w-field="' . $config . '">'
-                . (string)$field['content'] . '</div>';
-        }
-
         if ($field['type'] === 'select') {
             $control = '<select class="w-select"' . $common . '><option value="">' . self::escape((string)__('全部')) . '</option>';
             foreach ($field['options'] as $option) {
@@ -210,7 +285,7 @@ final class Field implements TaglibInterface
             . $labelHtml . $control . '</div>';
     }
 
-    private static function renderForm(array $field, array $context): string
+    private static function renderForm(array $field): string
     {
         $name = (string)$field['name'];
         $id = 'w-field-' . self::normalizeId((string)$field['formId'] . '-' . $name);
@@ -225,11 +300,6 @@ final class Field implements TaglibInterface
         if ($field['type'] === 'hidden') {
             return '<input type="hidden" id="' . $idHtml . '" name="' . $nameHtml . '" value="'
                 . self::escape((string)$field['default']) . '" data-w-field="' . $config . '">';
-        }
-
-        if (self::containsTrustedMarkup((string)$field['content'])) {
-            return '<div class="' . self::escape($class) . '" data-field="' . $nameHtml . '" data-w-field="'
-                . $config . '">' . (string)$field['content'] . '</div>';
         }
 
         $control = self::formControl($field, $idHtml, $nameHtml, $attributes);
@@ -319,10 +389,10 @@ final class Field implements TaglibInterface
                 if (is_array($label)) {
                     $result[] = [
                         'value' => (string)($label['value'] ?? $key),
-                        'label' => (string)__((string)($label['label'] ?? $label['value'] ?? $key)),
+                        'label' => (string)($label['label'] ?? $label['value'] ?? $key),
                     ];
                 } else {
-                    $result[] = ['value' => (string)$key, 'label' => (string)__((string)$label)];
+                    $result[] = ['value' => (string)$key, 'label' => (string)$label];
                 }
             }
             return $result;

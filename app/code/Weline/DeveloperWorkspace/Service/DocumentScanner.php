@@ -65,7 +65,7 @@ class DocumentScanner
     /**
      * 扫描所有模块的文档
      */
-    public function scanAllModules(bool $forceRescan = false): array
+    public function scanAllModules(bool $forceRescan = false, ?array $moduleNames = null): array
     {
         $this->seenCatalogIds = [];
         $this->seenDocumentKeys = [];
@@ -94,6 +94,9 @@ class DocumentScanner
         $modulesWithDoc = [];
         foreach ($modules as $name => $mod) {
             if (empty($name) || empty($mod['base_path']) || !($mod['status'] ?? false)) {
+                continue;
+            }
+            if ($moduleNames !== null && !in_array((string)$name, array_map('strval', $moduleNames), true)) {
                 continue;
             }
             $docPath = rtrim($mod['base_path'], '/\\') . DIRECTORY_SEPARATOR . 'doc';
@@ -143,12 +146,14 @@ class DocumentScanner
             $this->progress("   ✓ " . __('扫描完成: 文档 %{scanned} 个, 新增 %{new} 个, 更新 %{updated} 个', $moduleResult), 'success');
         }
 
-        // 清理不存在的文档和分类
-        $this->progress('', 'info');
-        $this->progress('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-        $this->progress("🧹 " . __('正在清理不存在的文档和分类...'), 'info');
-        $result['deleted'] = $this->cleanupUnseenDocuments();
-        $result['deleted_catalogs'] = $this->cleanupUnseenCatalogs();
+        // 清理不存在的文档和分类（增量扫描时 seenDocumentKeys 只含本次模块，跳过以免误删其他模块）
+        if ($moduleNames === null) {
+            $this->progress('', 'info');
+            $this->progress('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            $this->progress("🧹 " . __('正在清理不存在的文档和分类...'), 'info');
+            $result['deleted'] = $this->cleanupUnseenDocuments();
+            $result['deleted_catalogs'] = $this->cleanupUnseenCatalogs();
+        }
 
         // API 文档导入
         $this->importApiDocuments($forceRescan, $result);

@@ -1,0 +1,661 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array<int,array<string,mixed>> $continents
+ * @var array<string,string> $statuses
+ * @var array<int,array<string,mixed>> $profiles
+ * @var array<string,string> $sourcePlatforms
+ * @var array<int,array<string,mixed>> $websites
+ * @var int|null $selectedWebsiteId
+ */
+$continents = is_array($continents ?? null) ? $continents : [];
+$statuses = is_array($statuses ?? null) ? $statuses : [];
+$sourcePlatforms = is_array($sourcePlatforms ?? null) ? $sourcePlatforms : [];
+$profiles = is_array($profiles ?? null) ? $profiles : [];
+$websites = is_array($websites ?? null) ? $websites : [];
+$selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
+?>
+<css>Weline_AiAcquisition::css/backend/acquisition.css</css>
+<a id="acq-run-url" href="@backend-url{'ai_acquisition/backend/run'}" hidden></a>
+
+<div class="acq-intro">
+    <div class="acq-intro__copy">
+        <p>从公开网络沉淀的潜客。按洲、国家、公司、来源与 AI 资格分筛选，决定谁值得跟进。</p>
+    </div>
+    <div class="acq-intro__actions">
+        <button type="button" class="w-button" data-tone="neutral" data-variant="outline" id="lead-refresh">
+            <w:icon name="refresh" size="sm"></w:icon>
+            刷新
+        </button>
+        <button type="button" class="w-button" data-tone="primary" id="lead-new">
+            <w:icon name="plus" size="sm"></w:icon>
+            新建线索
+        </button>
+    </div>
+</div>
+
+<section class="acq-kpis" aria-label="线索概览">
+    <article class="acq-kpi">
+        <span class="acq-kpi__icon"><w:icon name="users" size="sm"></w:icon></span>
+        <div class="acq-kpi__body">
+            <div class="acq-kpi__label">线索总数</div>
+            <div class="acq-kpi__value" id="stat-total">0</div>
+            <div class="acq-kpi__meta">全部来源合计</div>
+        </div>
+    </article>
+    <article class="acq-kpi">
+        <span class="acq-kpi__icon"><w:icon name="check" size="sm"></w:icon></span>
+        <div class="acq-kpi__body">
+            <div class="acq-kpi__label">已确认 / 更高</div>
+            <div class="acq-kpi__value" id="stat-qualified">0</div>
+            <div class="acq-kpi__meta">已确认、已联系、已回复、已成交</div>
+        </div>
+    </article>
+    <article class="acq-kpi">
+        <span class="acq-kpi__icon"><w:icon name="plus" size="sm"></w:icon></span>
+        <div class="acq-kpi__body">
+            <div class="acq-kpi__label">新线索</div>
+            <div class="acq-kpi__value" id="stat-new">0</div>
+            <div class="acq-kpi__meta">等待人工确认</div>
+        </div>
+    </article>
+    <article class="acq-kpi">
+        <span class="acq-kpi__icon"><w:icon name="globe" size="sm"></w:icon></span>
+        <div class="acq-kpi__body">
+            <div class="acq-kpi__label">覆盖洲</div>
+            <div class="acq-kpi__value" id="stat-continents">0</div>
+            <div class="acq-kpi__meta">按客户归属洲统计</div>
+        </div>
+    </article>
+</section>
+
+<section class="w-card" aria-label="筛选">
+    <div class="acq-filters">
+        <label class="acq-filter acq-filter--search">
+            <span class="acq-filter__label">关键词</span>
+            <span class="acq-search">
+                <w:icon name="search" size="sm"></w:icon>
+                <input type="search" class="w-input" id="filter-keyword" placeholder="公司 / 邮箱 / 域名 / 来源 URL">
+            </span>
+        </label>
+        <label class="acq-filter">
+            <span class="acq-filter__label">网站</span>
+            <select class="w-select" id="filter-website">
+                <option value="">全部网站</option>
+                <?php foreach ($websites as $website): ?>
+                    <option value="<?= (int)($website['website_id'] ?? 0) ?>" <?= $selectedWebsiteId !== null && (int)($website['website_id'] ?? 0) === $selectedWebsiteId ? 'selected' : '' ?>>
+                        <?= htmlspecialchars((string)($website['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+        <label class="acq-filter">
+            <span class="acq-filter__label">洲</span>
+            <select class="w-select" id="filter-continent">
+                <option value="">全部洲</option>
+                <?php foreach ($continents as $continent): ?>
+                    <option value="<?= htmlspecialchars((string)($continent['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                        <?= htmlspecialchars((string)($continent['name_zh'] ?? $continent['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+        <label class="acq-filter">
+            <span class="acq-filter__label">状态</span>
+            <select class="w-select" id="filter-status">
+                <option value="">全部状态</option>
+                <?php foreach ($statuses as $code => $label): ?>
+                    <option value="<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+        <label class="acq-filter">
+            <span class="acq-filter__label">来源</span>
+            <select class="w-select" id="filter-source">
+                <option value="">全部来源</option>
+                <?php foreach ($sourcePlatforms as $code => $label): ?>
+                    <option value="<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+        <label class="acq-filter">
+            <span class="acq-filter__label">最低分</span>
+            <input type="number" class="w-input" id="filter-min-score" min="0" max="10" step="0.5" placeholder="0">
+        </label>
+        <div class="acq-filter__actions">
+            <button type="button" class="w-button" data-tone="primary" data-variant="soft" id="filter-apply">筛选</button>
+            <button type="button" class="w-button" data-tone="neutral" data-variant="outline" id="filter-reset">重置</button>
+        </div>
+    </div>
+</section>
+
+<section class="w-card acq-table-card" aria-label="线索列表">
+    <div class="acq-table-head">
+        <div class="acq-table-head__title">
+            <strong>线索列表</strong>
+            <span class="w-badge" data-tone="muted" id="lead-count">0 条</span>
+        </div>
+        <div class="acq-table-head__actions">
+            <select class="w-select" id="bulk-status" aria-label="批量修改状态">
+                <option value="">批量改状态</option>
+                <?php foreach ($statuses as $code => $label): ?>
+                    <option value="<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></option>
+                <?php endforeach; ?>
+            </select>
+            <button type="button" class="w-button" data-size="sm" data-tone="neutral" data-variant="outline" id="bulk-apply">应用</button>
+            <button type="button" class="w-button" data-size="sm" data-tone="danger" data-variant="outline" id="bulk-delete">删除</button>
+        </div>
+    </div>
+    <div class="acq-table-wrap">
+        <table class="w-table acq-table acq-table--leads" id="lead-table">
+            <thead>
+            <tr>
+                <th style="inline-size: 2.25rem;"><input type="checkbox" class="acq-check" id="lead-select-all" aria-label="全选"></th>
+                <th>公司 / 联系人</th>
+                <th>洲 / 国家</th>
+                <th>邮箱</th>
+                <th>来源</th>
+                <th>AI 评分</th>
+                <th>状态</th>
+                <th style="inline-size: 5.5rem;">操作</th>
+            </tr>
+            </thead>
+            <tbody id="lead-tbody"></tbody>
+        </table>
+    </div>
+    <div class="acq-table-foot">
+        <span id="lead-status">加载中…</span>
+        <div class="acq-pager">
+            <button type="button" class="acq-page-btn" id="lead-prev">上一页</button>
+            <span class="acq-page-btn" id="lead-page-label" data-current="true">1 / 1</span>
+            <button type="button" class="acq-page-btn" id="lead-next">下一页</button>
+        </div>
+    </div>
+</section>
+
+<div class="acq-drawer" id="lead-drawer" hidden>
+    <div class="acq-drawer__backdrop" data-lead-close></div>
+    <aside class="acq-drawer__panel" role="dialog" aria-modal="true" aria-labelledby="lead-form-title">
+        <header class="acq-drawer__header">
+            <div>
+                <h2 class="acq-drawer__title" id="lead-form-title">新建线索</h2>
+                <p class="acq-drawer__subtitle">只记录公开页面可核实的公司与商务联系方式。</p>
+            </div>
+            <button type="button" class="acq-icon-btn" data-lead-close aria-label="关闭">
+                <w:icon name="close" size="sm"></w:icon>
+            </button>
+        </header>
+        <div class="acq-drawer__body">
+            <input type="hidden" id="lead-id">
+
+            <section class="acq-form-section">
+                <h3 class="acq-form-section__title">基本信息</h3>
+                <div class="acq-form-grid">
+                    <label class="acq-form-field"><span>公司名称</span><input class="w-input" id="lead-company-name" placeholder="例如 Alpine Haus GmbH"></label>
+                    <label class="acq-form-field"><span>公司域名</span><input class="w-input" id="lead-company-domain" placeholder="example.com"></label>
+                    <label class="acq-form-field"><span>归属网站</span>
+                        <select class="w-select" id="lead-website">
+                            <?php foreach ($websites as $website): ?>
+                                <option value="<?= (int)($website['website_id'] ?? 0) ?>"><?= htmlspecialchars((string)($website['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+                    <label class="acq-form-field"><span>联系人</span><input class="w-input" id="lead-contact-name"></label>
+                    <label class="acq-form-field"><span>职位</span><input class="w-input" id="lead-contact-role"></label>
+                    <label class="acq-form-field"><span>邮箱</span><input class="w-input" id="lead-email" placeholder="buyer@example.com"></label>
+                    <label class="acq-form-field"><span>邮箱状态</span>
+                        <select class="w-select" id="lead-email-status">
+                            <option value="unknown">未知</option>
+                            <option value="valid">有效</option>
+                            <option value="risky">有风险</option>
+                            <option value="invalid">无效</option>
+                        </select>
+                    </label>
+                    <label class="acq-form-field"><span>电话 / WhatsApp</span><input class="w-input" id="lead-phone"></label>
+                    <label class="acq-form-field"><span>跟进状态</span>
+                        <select class="w-select" id="lead-status">
+                            <?php foreach ($statuses as $code => $label): ?>
+                                <option value="<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+                </div>
+            </section>
+
+            <section class="acq-form-section">
+                <h3 class="acq-form-section__title">地理位置</h3>
+                <div class="acq-form-grid">
+                    <label class="acq-form-field"><span>洲</span>
+                        <select class="w-select" id="lead-continent">
+                            <?php foreach ($continents as $continent): ?>
+                                <option value="<?= htmlspecialchars((string)($continent['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)($continent['name_zh'] ?? $continent['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+                    <label class="acq-form-field"><span>国家代码</span><input class="w-input" id="lead-country-code" maxlength="2" placeholder="DE"></label>
+                    <label class="acq-form-field"><span>国家名称</span><input class="w-input" id="lead-country-name"></label>
+                    <label class="acq-form-field"><span>州 / 省</span><input class="w-input" id="lead-region"></label>
+                    <label class="acq-form-field"><span>城市</span><input class="w-input" id="lead-city"></label>
+                    <label class="acq-form-field"><span>时区</span><input class="w-input" id="lead-timezone" placeholder="Europe/Berlin"></label>
+                </div>
+            </section>
+
+            <section class="acq-form-section">
+                <h3 class="acq-form-section__title">来源与证据</h3>
+                <div class="acq-form-grid">
+                    <label class="acq-form-field acq-form-field--full"><span>来源 URL</span><input class="w-input" id="lead-source-url" placeholder="https://..."></label>
+                    <label class="acq-form-field"><span>来源标题</span><input class="w-input" id="lead-source-title"></label>
+                    <label class="acq-form-field"><span>来源平台</span>
+                        <select class="w-select" id="lead-source-platform">
+                            <?php foreach ($sourcePlatforms as $code => $label): ?>
+                                <option value="<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+                    <label class="acq-form-field acq-form-field--full"><span>来源证据摘录</span><textarea class="w-textarea" id="lead-source-excerpt" rows="3" placeholder="粘贴 1–2 句能证明买家需求的原文"></textarea></label>
+                </div>
+            </section>
+
+            <section class="acq-form-section">
+                <h3 class="acq-form-section__title">AI 推断</h3>
+                <div class="acq-form-grid">
+                    <label class="acq-form-field"><span>资格分（0–10）</span><input type="number" class="w-input" id="lead-ai-score" min="0" max="10" step="0.5"></label>
+                    <label class="acq-form-field"><span>推断模型</span><input class="w-input" id="lead-ai-model"></label>
+                    <label class="acq-form-field acq-form-field--full"><span>客户偏好</span><textarea class="w-textarea" id="lead-ai-preference" rows="3"></textarea></label>
+                    <label class="acq-form-field acq-form-field--full"><span>商业业务方向</span><textarea class="w-textarea" id="lead-ai-direction" rows="3"></textarea></label>
+                    <label class="acq-form-field acq-form-field--full"><span>打分理由</span><textarea class="w-textarea" id="lead-ai-reason" rows="3"></textarea></label>
+                </div>
+            </section>
+        </div>
+        <footer class="acq-drawer__footer">
+            <span class="acq-form-status" id="lead-form-status"></span>
+            <div class="acq-drawer__footer-actions">
+                <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-lead-close>取消</button>
+                <button type="button" class="w-button" data-tone="primary" id="lead-save">保存线索</button>
+            </div>
+        </footer>
+    </aside>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    var continents = <?= json_encode($continents, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]' ?>;
+    var statuses = <?= json_encode($statuses, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}' ?>;
+    var sourcePlatforms = <?= json_encode($sourcePlatforms, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}' ?>;
+    var websites = <?= json_encode($websites, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]' ?>;
+    var runUrl = (document.getElementById('acq-run-url') || {}).href || '#';
+    var state = { items: [], page: 1, pageSize: 20, total: 0, lastPage: 1, selected: {} };
+
+    function op(operation, data) {
+        var run = function (api) {
+            var resource = api.resource('ai_acquisition');
+            if (!resource || typeof resource[operation] !== 'function') {
+                return Promise.reject(new Error('AI 获客接口不可用，请刷新页面。'));
+            }
+            return resource[operation](data || {}).then(function (res) {
+                return res && Object.prototype.hasOwnProperty.call(res, 'data') ? res.data : res;
+            });
+        };
+        if (window.Weline && typeof window.Weline.load === 'function') {
+            return window.Weline.load('api').then(run);
+        }
+        if (window.Weline && window.Weline.Api) {
+            return Promise.resolve(run(window.Weline.Api));
+        }
+        return Promise.reject(new Error('Weline.Api 不可用，请刷新页面。'));
+    }
+
+    function errorText(error, fallback) {
+        var data = error && error.response && error.response.data ? error.response.data : null;
+        return (data && (data.message || data.msg)) || (error && error.message) || fallback;
+    }
+
+    function byId(id) { return document.getElementById(id); }
+    function value(id) { var el = byId(id); return el ? String(el.value || '').trim() : ''; }
+    function setText(id, text) { var el = byId(id); if (el) { el.textContent = text == null ? '' : String(text); } }
+    function escapeHtml(text) {
+        return String(text == null ? '' : text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function statusLabel(code) { return statuses[code] || code || '-'; }
+    function platformLabel(code) { return sourcePlatforms[code] || code || '来源'; }
+    function websiteName(websiteId) {
+        for (var i = 0; i < websites.length; i += 1) {
+            if (String(websites[i].website_id || '') === String(websiteId || '')) { return websites[i].name || ''; }
+        }
+        return '';
+    }
+    function continentLabel(code) {
+        for (var i = 0; i < continents.length; i += 1) {
+            if (String(continents[i].code || '') === String(code || '')) { return continents[i].name_zh || code; }
+        }
+        return code || '未知';
+    }
+    function statusTone(code) {
+        if (code === 'converted' || code === 'qualified') { return 'success'; }
+        if (code === 'rejected') { return 'danger'; }
+        if (code === 'contacted' || code === 'replied') { return 'info'; }
+        return 'warning';
+    }
+    function scoreTone(score) {
+        if (score >= 8) { return 'success'; }
+        if (score >= 6) { return 'warning'; }
+        return 'danger';
+    }
+    function initials(name) {
+        var text = String(name || '').trim();
+        if (!text) { return '?'; }
+        if (/^[\u4e00-\u9fff]/.test(text)) { return text.slice(0, 2); }
+        var parts = text.split(/\s+/).filter(Boolean);
+        return (parts[0] ? parts[0][0] : '') + (parts.length > 1 ? parts[1][0] : '');
+    }
+    function icon(name) {
+        if (name === 'edit') {
+            return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>';
+        }
+        if (name === 'trash') {
+            return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/><path d="M10 11v5M14 11v5"/></svg>';
+        }
+        return '';
+    }
+
+    function filters() {
+        var result = {
+            keyword: value('filter-keyword'),
+            website_id: value('filter-website'),
+            continent: value('filter-continent'),
+            status: value('filter-status'),
+            source_platform: value('filter-source'),
+            min_score: value('filter-min-score'),
+            page: state.page,
+            page_size: state.pageSize
+        };
+        Object.keys(result).forEach(function (key) {
+            if (result[key] === '') { delete result[key]; }
+        });
+        return result;
+    }
+
+    function runHref() {
+        var websiteId = value('filter-website');
+        if (websiteId === '') { return runUrl; }
+        return runUrl + (runUrl.indexOf('?') === -1 ? '?' : '&') + 'website_id=' + encodeURIComponent(websiteId);
+    }
+
+    function emptyRow() {
+        return '<tr><td colspan="8">' +
+            '<div class="acq-empty">' +
+            '<span class="acq-empty__icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c.6-4 2.7-6 6-6s5.4 2 6 6M15 15c3 0 4.8 1.7 5.3 5"/></svg></span>' +
+            '<div class="acq-empty__title">还没有符合条件的线索</div>' +
+            '<div class="acq-empty__text">先手动录入一条，或让获客智能体在公开网络上找一轮买家。</div>' +
+            '<div class="acq-empty__actions">' +
+            '<button type="button" class="w-button" data-tone="primary" data-lead-new>新建线索</button>' +
+            '<a class="w-button" data-tone="neutral" data-variant="outline" href="' + escapeHtml(runHref()) + '">让智能体去找</a>' +
+            '</div></div></td></tr>';
+    }
+
+    function render() {
+        var tbody = byId('lead-tbody');
+        if (!tbody) { return; }
+        var items = state.items || [];
+        if (!items.length) {
+            tbody.innerHTML = emptyRow();
+        } else {
+            tbody.innerHTML = items.map(function (item) {
+                var id = parseInt(item.id || 0, 10);
+                var score = Number(item.ai_score || 0);
+                var company = item.company_name || item.contact_name || '未命名公司';
+                var contact = [item.contact_name || '', item.contact_role || '', websiteName(item.website_id)].filter(Boolean).join(' · ') || '未公开联系人';
+                var location = [item.country_name || item.country_code || '', item.city || item.region || ''].filter(Boolean).join(' · ') || '待补充';
+                var email = item.email
+                    ? '<a class="acq-link" href="mailto:' + escapeHtml(item.email) + '">' + escapeHtml(item.email) + '</a>'
+                    : '<span class="acq-muted">未公开</span>';
+                return '<tr>' +
+                    '<td><input type="checkbox" class="acq-check" data-lead-id="' + id + '"' + (state.selected[id] ? ' checked' : '') + ' aria-label="选择线索"></td>' +
+                    '<td><div class="acq-company"><span class="acq-avatar">' + escapeHtml(initials(company)) + '</span><div class="acq-company__body">' +
+                    '<div class="acq-company__name">' + escapeHtml(company) + '</div>' +
+                    '<div class="acq-muted">' + escapeHtml(contact) + '</div>' +
+                    (item.company_domain ? '<div class="acq-muted">' + escapeHtml(item.company_domain) + '</div>' : '') +
+                    '</div></div></td>' +
+                    '<td><div class="acq-location"><span class="w-badge" data-tone="muted">' + escapeHtml(continentLabel(item.continent_code)) + '</span>' +
+                    '<div class="acq-muted">' + escapeHtml(location) + '</div></div></td>' +
+                    '<td>' + email + '</td>' +
+                    '<td><span class="w-badge" data-tone="info">' + escapeHtml(platformLabel(item.source_platform)) + '</span></td>' +
+                    '<td><span class="acq-score" data-tone="' + scoreTone(score) + '"><span class="acq-score__ring">' + escapeHtml(Math.round(score)) + '</span>' + score.toFixed(1) + '</span></td>' +
+                    '<td><span class="w-badge" data-tone="' + statusTone(item.status) + '">' + escapeHtml(statusLabel(item.status)) + '</span></td>' +
+                    '<td><div class="acq-actions">' +
+                    '<button type="button" class="acq-icon-btn" data-lead-edit="' + id + '" title="编辑">' + icon('edit') + '</button>' +
+                    '<button type="button" class="acq-icon-btn" data-tone="danger" data-lead-delete="' + id + '" title="删除">' + icon('trash') + '</button>' +
+                    '</div></td></tr>';
+            }).join('');
+        }
+        setText('lead-count', state.total + ' 条');
+        setText('lead-status', '共 ' + state.total + ' 条 · 每页 ' + state.pageSize + ' 条');
+        setText('lead-page-label', state.page + ' / ' + Math.max(1, state.lastPage));
+        byId('lead-prev').disabled = state.page <= 1;
+        byId('lead-next').disabled = state.page >= state.lastPage;
+        var selectAll = byId('lead-select-all');
+        if (selectAll) { selectAll.checked = items.length > 0 && items.every(function (item) { return !!state.selected[parseInt(item.id, 10)]; }); }
+    }
+
+    function renderStats(stats) {
+        if (!stats) { return; }
+        setText('stat-total', stats.total || 0);
+        setText('stat-qualified', stats.qualified || 0);
+        setText('stat-new', stats.by_status && stats.by_status.new ? stats.by_status.new : 0);
+        setText('stat-continents', stats.by_continent ? Object.keys(stats.by_continent).filter(function (key) { return Number(stats.by_continent[key]) > 0; }).length : 0);
+    }
+
+    function load() {
+        setText('lead-status', '加载中…');
+        return Promise.all([
+            op('leadList', filters()),
+            op('leadStats', {})
+        ]).then(function (results) {
+            var list = results[0] || {};
+            state.items = Array.isArray(list.items) ? list.items : [];
+            state.total = Number(list.total || 0);
+            state.lastPage = Number((list.pagination && list.pagination.lastPage) || 1);
+            renderStats(results[1] || {});
+            render();
+        }).catch(function (error) {
+            setText('lead-status', errorText(error, '线索加载失败'));
+        });
+    }
+
+    function collect() {
+        return {
+            id: parseInt(value('lead-id') || '0', 10),
+            website_id: parseInt(value('lead-website') || '0', 10),
+            company_name: value('lead-company-name'),
+            company_domain: value('lead-company-domain'),
+            contact_name: value('lead-contact-name'),
+            contact_role: value('lead-contact-role'),
+            email: value('lead-email'),
+            email_status: value('lead-email-status'),
+            phone: value('lead-phone'),
+            continent_code: value('lead-continent'),
+            country_code: value('lead-country-code').toUpperCase(),
+            country_name: value('lead-country-name'),
+            region: value('lead-region'),
+            city: value('lead-city'),
+            timezone: value('lead-timezone'),
+            source_url: value('lead-source-url'),
+            source_title: value('lead-source-title'),
+            source_platform: value('lead-source-platform'),
+            source_excerpt: value('lead-source-excerpt'),
+            status: value('lead-status'),
+            ai_score: value('lead-ai-score'),
+            ai_model_code: value('lead-ai-model'),
+            ai_preference: value('lead-ai-preference'),
+            ai_business_direction: value('lead-ai-direction'),
+            ai_reason: value('lead-ai-reason')
+        };
+    }
+
+    function fill(item) {
+        item = item || {};
+        var map = {
+            'lead-id': item.id || '',
+            'lead-website': item.website_id != null ? item.website_id : (value('filter-website') || '0'),
+            'lead-company-name': item.company_name || '',
+            'lead-company-domain': item.company_domain || '',
+            'lead-contact-name': item.contact_name || '',
+            'lead-contact-role': item.contact_role || '',
+            'lead-email': item.email || '',
+            'lead-email-status': item.email_status || 'unknown',
+            'lead-phone': item.phone || '',
+            'lead-continent': item.continent_code || 'UNKNOWN',
+            'lead-country-code': item.country_code || '',
+            'lead-country-name': item.country_name || '',
+            'lead-region': item.region || '',
+            'lead-city': item.city || '',
+            'lead-timezone': item.timezone || '',
+            'lead-source-url': item.source_url || '',
+            'lead-source-title': item.source_title || '',
+            'lead-source-platform': item.source_platform || 'web',
+            'lead-source-excerpt': item.source_excerpt || '',
+            'lead-status': item.status || 'new',
+            'lead-ai-score': item.ai_score || '',
+            'lead-ai-model': item.ai_model_code || '',
+            'lead-ai-preference': item.ai_preference || '',
+            'lead-ai-direction': item.ai_business_direction || '',
+            'lead-ai-reason': item.ai_reason || ''
+        };
+        Object.keys(map).forEach(function (id) {
+            var el = byId(id);
+            if (el) { el.value = map[id]; }
+        });
+        setText('lead-form-title', item.id ? '编辑线索 #' + item.id : '新建线索');
+        setText('lead-form-status', '');
+        byId('lead-drawer').hidden = false;
+        document.body.classList.add('acq-modal-open');
+        window.setTimeout(function () {
+            var first = byId('lead-company-name');
+            if (first && typeof first.focus === 'function') { first.focus({ preventScroll: true }); }
+        }, 30);
+    }
+
+    function closeDrawer() {
+        byId('lead-drawer').hidden = true;
+        document.body.classList.remove('acq-modal-open');
+    }
+
+    function save() {
+        var payload = collect();
+        if (!payload.company_name && !payload.email && !payload.source_url) {
+            setFormStatus('公司、邮箱、来源 URL 至少填一项。', 'danger');
+            return;
+        }
+        setFormStatus('保存中…', '');
+        op('leadSave', { payload: payload }).then(function (result) {
+            if (!result || result.success === false) { throw new Error((result && result.message) || '保存失败'); }
+            setFormStatus(result.created === false ? '已合并到既有线索。' : '已保存。', 'success');
+            closeDrawer();
+            return load();
+        }).catch(function (error) {
+            setFormStatus(errorText(error, '保存失败'), 'danger');
+        });
+    }
+
+    function setFormStatus(text, tone) {
+        var el = byId('lead-form-status');
+        if (!el) { return; }
+        el.textContent = text || '';
+        el.setAttribute('data-tone', tone || '');
+    }
+
+    function remove(id) {
+        var confirmText = '确定删除线索 #' + id + '？该操作不可撤销。';
+        var run = function () {
+            op('leadDelete', { id: id }).then(function (result) {
+                if (!result || result.success === false) { throw new Error((result && result.message) || '删除失败'); }
+                delete state.selected[id];
+                return load();
+            }).catch(function (error) { setText('lead-status', errorText(error, '删除失败')); });
+        };
+        if (window.Weline && Weline.UI && Weline.UI.dialog && Weline.UI.dialog.confirm) {
+            Weline.UI.dialog.confirm(confirmText, { title: '删除线索', confirmLabel: '删除', cancelLabel: '取消', onConfirm: run, tone: 'danger' });
+        } else if (window.confirm) {
+            if (window.confirm(confirmText)) { run(); }
+        }
+    }
+
+    function selectedIds() {
+        return Object.keys(state.selected).map(function (key) { return parseInt(key, 10); }).filter(function (id) { return id > 0; });
+    }
+
+    byId('lead-refresh').addEventListener('click', load);
+    byId('lead-new').addEventListener('click', function () { fill({}); });
+    byId('lead-tbody').addEventListener('click', function (event) {
+        if (event.target.closest('[data-lead-new]')) { fill({}); return; }
+        var edit = event.target.closest('[data-lead-edit]');
+        if (edit) {
+            var id = parseInt(edit.getAttribute('data-lead-edit') || '0', 10);
+            op('leadGet', { id: id }).then(function (result) {
+                if (!result || result.success === false) { throw new Error((result && result.message) || '线索不存在'); }
+                fill(result.lead || {});
+            }).catch(function (error) { setText('lead-status', errorText(error, '加载线索失败')); });
+            return;
+        }
+        var removeButton = event.target.closest('[data-lead-delete]');
+        if (removeButton) { remove(parseInt(removeButton.getAttribute('data-lead-delete') || '0', 10)); }
+    });
+    byId('lead-tbody').addEventListener('change', function (event) {
+        var target = event.target;
+        var id = target && target.getAttribute ? parseInt(target.getAttribute('data-lead-id') || '0', 10) : 0;
+        if (id > 0) { state.selected[id] = !!target.checked; }
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-lead-close]'), function (el) {
+        el.addEventListener('click', closeDrawer);
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && !byId('lead-drawer').hidden) { closeDrawer(); }
+    });
+    byId('lead-save').addEventListener('click', save);
+    byId('filter-apply').addEventListener('click', function () { state.page = 1; load(); });
+    byId('filter-reset').addEventListener('click', function () {
+        ['filter-keyword', 'filter-website', 'filter-continent', 'filter-status', 'filter-source', 'filter-min-score'].forEach(function (id) { byId(id).value = ''; });
+        state.page = 1;
+        load();
+    });
+    byId('filter-keyword').addEventListener('keydown', function (event) { if (event.key === 'Enter') { state.page = 1; load(); } });
+    byId('lead-prev').addEventListener('click', function () { if (state.page > 1) { state.page -= 1; load(); } });
+    byId('lead-next').addEventListener('click', function () { if (state.page < state.lastPage) { state.page += 1; load(); } });
+    byId('lead-select-all').addEventListener('change', function (event) {
+        state.items.forEach(function (item) {
+            var id = parseInt(item.id || 0, 10);
+            if (id > 0) { state.selected[id] = event.target.checked; }
+        });
+        render();
+    });
+    byId('bulk-apply').addEventListener('click', function () {
+        var ids = selectedIds();
+        var status = value('bulk-status');
+        if (!ids.length || !status) { setText('lead-status', '请选择线索与目标状态。'); return; }
+        op('leadBulkStatus', { ids: ids, status: status }).then(function (result) {
+            if (!result || result.success === false) { throw new Error((result && result.message) || '批量更新失败'); }
+            state.selected = {};
+            return load();
+        }).catch(function (error) { setText('lead-status', errorText(error, '批量更新失败')); });
+    });
+    byId('bulk-delete').addEventListener('click', function () {
+        var ids = selectedIds();
+        if (!ids.length) { setText('lead-status', '请先选择线索。'); return; }
+        var run = function () {
+            op('leadBulkDelete', { ids: ids }).then(function (result) {
+                if (!result || result.success === false) { throw new Error((result && result.message) || '批量删除失败'); }
+                state.selected = {};
+                return load();
+            }).catch(function (error) { setText('lead-status', errorText(error, '批量删除失败')); });
+        };
+        if (window.Weline && Weline.UI && Weline.UI.dialog && Weline.UI.dialog.confirm) {
+            Weline.UI.dialog.confirm('确定删除选中的 ' + ids.length + ' 条线索？', { title: '批量删除', confirmLabel: '删除', cancelLabel: '取消', onConfirm: run, tone: 'danger' });
+        } else if (window.confirm && window.confirm('确定删除选中的 ' + ids.length + ' 条线索？')) {
+            run();
+        }
+    });
+
+    load();
+})();
+</script>

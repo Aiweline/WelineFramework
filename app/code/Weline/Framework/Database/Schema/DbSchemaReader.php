@@ -111,6 +111,72 @@ final class DbSchemaReader implements SchemaReaderInterface
         if ($tableNames === []) {
             return [];
         }
+        if (method_exists($connector, 'getTablesBatchCore')) {
+            $result = [];
+            foreach (array_chunk($tableNames, 200) as $chunk) {
+                $core = $connector->getTablesBatchCore($chunk);
+                foreach ($chunk as $name) {
+                    $cleanName = trim(str_replace(['`', '"'], '', $name));
+                    $lookupName = $this->extractLookupTableName($cleanName);
+                    $row = $core[$lookupName] ?? $core[$cleanName] ?? $core[(string)$name] ?? null;
+                    if ($lookupName === '' || $row === null || ($row['columns'] ?? []) === []) {
+                        // 批读会为输入表预初始化空条目；columns 为空说明表实际不存在，
+                        // 必须按“不存在”处理，否则 diff 会把 CREATE 误判成 add_column。
+                        continue;
+                    }
+                    $indexRows = $connector->getTableIndexes($lookupName);
+                    $fkRows = $connector->getTableForeignKeys($lookupName);
+
+                    $columns = [];
+                    foreach ($row['columns'] ?? [] as $col) {
+                        $columns[] = new ColumnDefinition(
+                            name: (string) ($col['name'] ?? ''),
+                            type: (string) ($col['type'] ?? ''),
+                            length: array_key_exists('length', $col) ? $col['length'] : null,
+                            nullable: (bool) ($col['nullable'] ?? true),
+                            primaryKey: (bool) ($col['primary_key'] ?? false),
+                            autoIncrement: (bool) ($col['auto_increment'] ?? false),
+                            default: $col['default'] ?? null,
+                            comment: (string) ($col['comment'] ?? ''),
+                            unique: (bool) ($col['unique'] ?? false)
+                        );
+                    }
+
+                    $indexes = [];
+                    foreach ($indexRows as $indexRow) {
+                        $indexes[] = new IndexDefinition(
+                            name: (string) ($indexRow['name'] ?? ''),
+                            columns: array_values($indexRow['columns'] ?? []),
+                            type: (string)($indexRow['type'] ?? (!empty($indexRow['unique']) ? 'UNIQUE' : 'DEFAULT')),
+                            comment: '',
+                            method: (string)($indexRow['method'] ?? 'BTREE')
+                        );
+                    }
+
+                    $foreignKeys = [];
+                    foreach ($fkRows as $fkRow) {
+                        $foreignKeys[] = new ForeignKeyDefinition(
+                            name: (string) ($fkRow['name'] ?? ''),
+                            columns: array_values($fkRow['columns'] ?? []),
+                            referencesTable: (string) ($fkRow['ref_table'] ?? ''),
+                            referencesColumns: array_values($fkRow['ref_columns'] ?? []),
+                            onDeleteCascade: (bool) ($fkRow['on_delete_cascade'] ?? false),
+                            onUpdateCascade: (bool) ($fkRow['on_update_cascade'] ?? false)
+                        );
+                    }
+
+                    $result[$name] = new TableSchema(
+                        tableName: $name,
+                        comment: (string) ($row['comment'] ?? ''),
+                        columns: $columns,
+                        indexes: $indexes,
+                        foreignKeys: $foreignKeys,
+                        modelClass: null
+                    );
+                }
+            }
+            return $result;
+        }
         // 一次查询确认哪些表实际存在（N→1 DB round-trip）
         $existing = array_flip($connector->getExistingTables($tableNames));
 

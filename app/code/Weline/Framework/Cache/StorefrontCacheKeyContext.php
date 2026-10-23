@@ -238,7 +238,7 @@ final readonly class StorefrontCacheKeyContext
             ?? \Weline\Framework\Phrase\LocaleFallbackChain::candidates($lang, $defaultLocale);
         $namespaceFingerprint = hash('sha256', 'storefront-global-namespace|' . self::SCHEMA_VERSION);
         $static = class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::class)
-            ? \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::cacheGeneration()
+            ? \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pointerCacheGeneration()
             : StaticBuildId::current();
         $fingerprint = hash('sha256', implode('|', [
             'storefront-global-scope-v2',

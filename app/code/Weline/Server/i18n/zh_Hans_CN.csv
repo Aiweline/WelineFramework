@@ -2650,6 +2650,16 @@ Linux,Linux
 Windows,视窗
 "下载官方 nginx.zip 到本机项目隔离目录；需 ZipArchive 或 PowerShell/tar","下载官方 nginx.zip 到本机项目隔离目录；需 ZipArchive 或 PowerShell/tar"
 安装,安装
+"用法：server:nginx:host-fpc --host=<域名> -p=<回环端口>","用法：server:nginx:host-fpc --host=<域名> -p=<回环端口>"
+"宿主 Nginx 已加载 FPC 世代配置。","宿主 Nginx 已加载 FPC 世代配置。"
+"宿主 Nginx FPC 配置无变化。","宿主 Nginx FPC 配置无变化。"
+"宿主 Nginx FPC 配置未加载：%{1}","宿主 Nginx FPC 配置未加载：%{1}"
+"写入宿主 Nginx 的 FPC 世代 map/location 并 reload","写入宿主 Nginx 的 FPC 世代 map/location 并 reload"
+"宿主 Nginx（系统/宝塔/第三方）接入本项目 FPC 世代读取；需 root 或配置属主权限","宿主 Nginx（系统/宝塔/第三方）接入本项目 FPC 世代读取；需 root 或配置属主权限"
+"宿主 Nginx server_name，例如 shop.example.com","宿主 Nginx server_name，例如 shop.example.com"
+"WLS 回环端口，例如 9555","WLS 回环端口，例如 9555"
+"非标准宿主 Nginx 二进制路径（可选）","非标准宿主 Nginx 二进制路径（可选）"
+"非标准宿主 Nginx 主配置路径（可选）","非标准宿主 Nginx 主配置路径（可选）"
 "本项目托管 Nginx 状态","本项目托管 Nginx 状态"
 二进制,二进制
 端口来源,端口来源
@@ -3069,6 +3079,8 @@ Previous：%{1},上一篇：%{1}
 "✓ 滚动重启完成（耗时: %{1}，Worker: %{2}）","✓ 滚动重启完成（耗时: %{1}，Worker: %{2}）"
 "托管 Nginx 未运行，跳过 Edge 配置刷新","托管 Nginx 未运行，跳过 Edge 配置刷新"
 "✓ 托管 Nginx 已重写并 reload（Edge 配置含当前源码代次；轻量校验）","✓ 托管 Nginx 已重写并 reload（Edge 配置含当前源码代次；轻量校验）"
+"宿主 Nginx 已加载当前 FPC 世代配置。","宿主 Nginx 已加载当前 FPC 世代配置。"
+"宿主 Nginx FPC 刷新异常：%{1}","宿主 Nginx FPC 刷新异常：%{1}"
 "无法检查共享 sidecar 协议代次：%{1}。若本波含 mdel 等协议变更，请项目经理批 server:shared:stop && server:shared:start。","无法检查共享 sidecar 协议代次：%{1}。若本波含 mdel 等协议变更，请项目经理批 server:shared:stop && server:shared:start。"
 "✗ 滚动重启失败：Worker #%{1} - %{2}","✗ 滚动重启失败：Worker #%{1} - %{2}"
 排水中,排水中

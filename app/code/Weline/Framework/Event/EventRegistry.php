@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Event;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Compilation\ReleaseStamp;
 use Weline\Framework\Compilation\CompiledPhpRegistry;
 use Weline\Framework\Registry\Service\GeneratedPhpArrayPublisher;
 use Weline\Framework\Registry\Service\RegistryProgress;
@@ -29,6 +30,9 @@ class EventRegistry implements EventRegistryInterface
 
     private ?array $cachedRegistry = null;
     private ?int $cachedFileMtime = null;
+
+    /** mtime 校验实际执行次数（信任发布戳后应为 0）。 */
+    private static int $registryStatCalls = 0;
     private static ?array $runtimeRegistryCache = null;
     private static ?int $runtimeRegistryMtime = null;
     private EventScanner $scanner;
@@ -62,11 +66,12 @@ class EventRegistry implements EventRegistryInterface
     {
         $trustRuntimeCache = $this->canTrustCachedRegistryForRuntime();
 
-        // 内存缓存机制
+        // 内存缓存机制：WLS 常驻或发布戳覆盖 events.php 时不再 stat。
         if (!$forceReload && $this->cachedRegistry !== null) {
-            if ($trustRuntimeCache) {
+            if ($trustRuntimeCache || $this->canTrustRegistryStamp()) {
                 return $this->cachedRegistry;
             }
+            self::$registryStatCalls++;
             $currentMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
             if ($currentMtime === $this->cachedFileMtime) {
                 return $this->cachedRegistry;
@@ -131,6 +136,29 @@ class EventRegistry implements EventRegistryInterface
         }
 
         return $registry;
+    }
+
+    /**
+     * 发布戳已覆盖 generated/events.php 时，同一 generation 内无需再 stat。
+     * DEV 保留 mtime 校验：改 event.xml 后不重编译也能立刻看到。
+     */
+    private function canTrustRegistryStamp(): bool
+    {
+        if (\defined('DEV') && DEV) {
+            return false;
+        }
+
+        return ReleaseStamp::hasArtifact('events.php');
+    }
+
+    public static function getRegistryStatCallCount(): int
+    {
+        return self::$registryStatCalls;
+    }
+
+    public static function resetRegistryStatCallCount(): void
+    {
+        self::$registryStatCalls = 0;
     }
 
     private function canTrustCachedRegistryForRuntime(): bool
@@ -536,13 +564,8 @@ class EventRegistry implements EventRegistryInterface
             foreach ($events as $eventName => $eventInfo) {
                 // 检查是否是动态事件模式
                 if ($this->isDynamicEventPattern($eventName)) {
-                    // 收集匹配的观察者
-                    $matchedObservers = [];
-                    foreach ($observersData as $actualEventName => $eventObservers) {
-                        if ($this->matchPattern($eventName, $actualEventName)) {
-                            $matchedObservers = array_merge($matchedObservers, $eventObservers);
-                        }
-                    }
+                    $split = $this->splitPatternObservers($eventName, $observersData);
+                    $matchedObservers = $split['pattern'];
                     
                     // 合并到现有动态模式的观察者
                     if (isset($registry['dynamic_patterns'][$eventName])) {
@@ -568,6 +591,43 @@ class EventRegistry implements EventRegistryInterface
                         'pattern' => $eventName,
                         'observers' => $matchedObservers,
                     ];
+                    foreach ($split['concrete'] as $concreteEvent => $concreteObservers) {
+                        if (!isset($registry['events'][$concreteEvent])) {
+                            $registry['events'][$concreteEvent] = [
+                                'name' => $concreteEvent,
+                                'description' => '',
+                                'doc' => '',
+                                'doc_path' => '',
+                                'has_spec' => false,
+                                'has_doc' => false,
+                                'module' => '',
+                                'modules' => [],
+                                'observers' => array_values($concreteObservers),
+                            ];
+                        } else {
+                            foreach ($concreteObservers as $observer) {
+                                $observerKey = ($observer['instance'] ?? '') . '::' . ($observer['name'] ?? '');
+                                $isDuplicate = false;
+                                foreach ($registry['events'][$concreteEvent]['observers'] as $existingObserver) {
+                                    $existingKey = ($existingObserver['instance'] ?? '') . '::' . ($existingObserver['name'] ?? '');
+                                    if ($observerKey === $existingKey && !empty($observerKey)) {
+                                        $isDuplicate = true;
+                                        break;
+                                    }
+                                }
+                                if (!$isDuplicate) {
+                                    $registry['events'][$concreteEvent]['observers'][] = $observer;
+                                }
+                            }
+                            if (count($registry['events'][$concreteEvent]['observers']) > 1) {
+                                usort($registry['events'][$concreteEvent]['observers'], function ($a, $b) {
+                                    $sortA = (int)($a['sort'] ?? 10000);
+                                    $sortB = (int)($b['sort'] ?? 10000);
+                                    return $sortA <=> $sortB;
+                                });
+                            }
+                        }
+                    }
                     continue;
                 }
                 
@@ -738,14 +798,8 @@ class EventRegistry implements EventRegistryInterface
                 // 检查是否是动态事件模式（包含 {}）
                 if ($this->isDynamicEventPattern($eventName)) {
                     // 动态事件模式，存储到 patterns 中
-                    // 查找所有匹配该动态事件模式的实际事件名的观察者
-                    $matchedObservers = [];
-                    foreach ($observersData as $actualEventName => $eventObservers) {
-                        if ($this->matchPattern($eventName, $actualEventName)) {
-                            // 匹配成功，合并观察者
-                            $matchedObservers = array_merge($matchedObservers, $eventObservers);
-                        }
-                    }
+                    $split = $this->splitPatternObservers($eventName, $observersData);
+                    $matchedObservers = $split['pattern'];
                     
                     // 对观察者按sort值排序
                     if (count($matchedObservers) > 1) {
@@ -791,6 +845,29 @@ class EventRegistry implements EventRegistryInterface
                         'pattern' => $eventName, // 存储原始模式
                         'observers' => $matchedObservers, // 添加匹配的观察者
                     ];
+                    foreach ($split['concrete'] as $concreteEvent => $concreteObservers) {
+                        if (isset($registry[$concreteEvent])) {
+                            continue;
+                        }
+                        if (count($concreteObservers) > 1) {
+                            usort($concreteObservers, function ($a, $b) {
+                                $sortA = (int)($a['sort'] ?? 10000);
+                                $sortB = (int)($b['sort'] ?? 10000);
+                                return $sortA <=> $sortB;
+                            });
+                        }
+                        $registry[$concreteEvent] = [
+                            'name' => $concreteEvent,
+                            'description' => '',
+                            'doc' => '',
+                            'doc_path' => '',
+                            'has_spec' => false,
+                            'has_doc' => false,
+                            'module' => '',
+                            'modules' => [],
+                            'observers' => array_values($concreteObservers),
+                        ];
+                    }
                     continue; // 动态事件模式不添加到普通事件列表
                 }
 
@@ -940,6 +1017,29 @@ class EventRegistry implements EventRegistryInterface
                 });
             }
         }
+    }
+
+    private function splitPatternObservers(string $pattern, array $observersData): array
+    {
+        $patternObservers = [];
+        $concrete = [];
+        foreach ($observersData as $eventName => $eventObservers) {
+            if (!is_string($eventName) || !is_array($eventObservers)) {
+                continue;
+            }
+            if (!$this->matchPattern($pattern, $eventName)) {
+                continue;
+            }
+            if ($eventName === $pattern) {
+                $patternObservers = array_merge($patternObservers, $eventObservers);
+                continue;
+            }
+            if ($this->isDynamicEventPattern($eventName)) {
+                continue;
+            }
+            $concrete[$eventName] = array_merge($concrete[$eventName] ?? [], $eventObservers);
+        }
+        return ['pattern' => $patternObservers, 'concrete' => $concrete];
     }
 
     /**

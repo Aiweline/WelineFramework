@@ -80,7 +80,7 @@
 - 仅操作当前 binding 用户自身数据、且没有 `user_id/role_id/website_id` 等主体切换参数时，才允许 `kind=self`。
 - 资源必须真实存在、启用、属于后台，并且当前实时角色有精确 `RoleAccess`。即使是超级管理员，拼错或不存在的 source 也拒绝。
 - same-origin 只证明传输来源，不证明后台权限。`resource()` 和 graph 的每个节点都会先恢复页面证明，再做 ACL；graph 任一节点失败时不执行任何节点。
-- `auth=backend` stream 当前 fail-closed 返回 `backend_stream_disabled`。例外：后台页面带着有效 Worker binding 时，可使用 `runtime_task.events`（授权仍走 type 的 `areas + backend_acl` 与 task owner/lease）；不得把任意 `auth=backend` QueryProvider stream 当作已开放。
+- `auth=backend` stream 当前 fail-closed 返回 `backend_stream_disabled`。例外：后台页面带着有效 Worker binding 时，可使用 `runtime_task.events`（授权仍走 type 的 `areas + backend_acl` 与 task owner/lease）和 `admin.menuSignalWatch`（只读当前用户的菜单未读）；不得把任意 `auth=backend` QueryProvider stream 当作已开放。
 
 ## 6. 页面落点
 

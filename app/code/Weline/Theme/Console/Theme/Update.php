@@ -88,6 +88,7 @@ class Update extends AbstractConsole
                     '已切换：current=%{1} previous=%{2} epoch=%{3}',
                     [$state['current'], $state['previous'] === '' ? '-' : $state['previous'], (string)$state['epoch']]
                 ));
+                $this->failOnPostSwitchErrors($state);
                 return;
 
             case 'rollback':
@@ -101,6 +102,7 @@ class Update extends AbstractConsole
                     '已回滚：current=%{1} previous=%{2} epoch=%{3}',
                     [$state['current'], $state['previous'] === '' ? '-' : $state['previous'], (string)$state['epoch']]
                 ));
+                $this->failOnPostSwitchErrors($state);
                 return;
 
             case 'gc':
@@ -182,6 +184,7 @@ class Update extends AbstractConsole
                     (string)($state['current'] ?? ''),
                     (string)($state['epoch'] ?? 0),
                 ]));
+                $this->failOnPostSwitchErrors($state);
                 return;
 
             case 'build':
@@ -338,6 +341,19 @@ class Update extends AbstractConsole
         }
 
         return $options;
+    }
+
+    /** @param array<string,mixed> $state promote/rollback 结果 */
+    private function failOnPostSwitchErrors(array $state): void
+    {
+        $errors = (array)($state['post_switch_errors'] ?? []);
+        if ($errors === []) {
+            return;
+        }
+        foreach ($errors as $error) {
+            $this->printing->error(__('切换后清理失败：%{1}', [(string)$error]));
+        }
+        throw new ConsoleException(__('代次已切换，但缓存/边缘清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。'));
     }
 
     private function requireThemeId(string $themeName): int

@@ -331,6 +331,116 @@ final class CheckoutOrderPaymentServiceTest extends TestCase
         self::assertSame('checkout_order_payment_notification_pending', $result['error_code']);
     }
 
+    public function testItExposesProviderClientActionWithoutMarkingOrderPaid(): void
+    {
+        $orders = $this->createMock(OrderFacadeInterface::class);
+        $orders->method('get')->willReturn(new OrderReadResult(
+            orderUuid: 'order-uuid-1',
+            checkoutGroupUuid: 'group-uuid-1',
+            status: 'pending',
+            currency: 'USD',
+            websiteId: 3,
+            storeId: 8,
+            money: ['grand_total_minor' => 249900],
+        ));
+        $orders->expects(self::never())->method('notifyOrderPaid');
+
+        $payments = $this->createMock(PaymentFacadeInterface::class);
+        $payments->expects(self::once())->method('tryCreatePayment')->with(
+            'paypal',
+            self::callback(static fn(array $context): bool => ($context['client_action'] ?? false) === true),
+        )->willReturn(new PaymentTransactionRecord(
+            id: 102,
+            transactionNumber: 'PAY-CARD-1',
+            methodCode: 'paypal',
+            status: PaymentTransactionRecord::STATUS_PENDING,
+            response: [
+                'provider_reference' => 'ORDER-CARD-1',
+                'payload' => [
+                    'order_id' => 'ORDER-CARD-1',
+                    'client_action' => [
+                        'type' => 'card_fields',
+                        'method_code' => 'paypal',
+                        'provider_code' => 'paypal',
+                        'data' => [
+                            'order_id' => 'ORDER-CARD-1',
+                            'sdk_src' => 'https://www.paypal.com/sdk/js?client-id=cid&components=card-fields',
+                            'client_id' => 'cid',
+                            'currency' => 'USD',
+                            'amount_minor' => 249900,
+                            'environment' => 'sandbox',
+                            'presentment_currency' => 'USD',
+                        ],
+                    ],
+                ],
+            ],
+        ));
+
+        $result = $this->createService($orders, $payments)->pay(
+            ['order-uuid-1'],
+            'paypal',
+            'checkout-card-key',
+            ['client_action' => true, 'checkout_token' => 'qt-success-1'],
+        );
+
+        self::assertFalse($result['paid']);
+        self::assertSame('pending', $result['outcome']);
+        self::assertTrue($result['requires_action']);
+        self::assertNull($result['redirect_url']);
+        self::assertSame('card_fields', $result['client_action']['type'] ?? null);
+        self::assertSame('ORDER-CARD-1', $result['client_action']['data']['order_id'] ?? null);
+        self::assertStringContainsString('card-fields', $result['client_action']['data']['sdk_src'] ?? '');
+    }
+
+    public function testConfirmCapturesProviderActionAndNotifiesOrderPaid(): void
+    {
+        $orders = $this->createMock(OrderFacadeInterface::class);
+        $orders->method('get')->willReturn(new OrderReadResult(
+            orderUuid: 'order-uuid-1',
+            checkoutGroupUuid: 'group-uuid-1',
+            status: 'pending',
+            currency: 'USD',
+            websiteId: 3,
+            storeId: 8,
+            money: ['grand_total_minor' => 249900],
+        ));
+        $orders->expects(self::once())->method('notifyOrderPaid')->with(
+            'order-uuid-1',
+            self::callback(static fn(array $context): bool =>
+                ($context['payment_method'] ?? '') === 'paypal'
+                && ($context['payment_transaction_no'] ?? '') === 'PAY-CARD-1'
+            ),
+        );
+
+        $payments = $this->createMock(PaymentFacadeInterface::class);
+        $payments->expects(self::once())->method('confirmPayment')->with(
+            'PAY-CARD-1',
+            self::callback(static fn(array $context): bool =>
+                ($context['order_uuid'] ?? '') === 'order-uuid-1'
+                && ($context['provider_reference'] ?? '') === 'ORDER-CARD-1'
+            ),
+        )->willReturn(new PaymentTransactionRecord(
+            id: 102,
+            transactionNumber: 'PAY-CARD-1',
+            methodCode: 'paypal',
+            status: PaymentTransactionRecord::STATUS_SUCCESS,
+            response: ['provider_reference' => 'CAPTURE-1'],
+        ));
+
+        $result = $this->createService($orders, $payments)->confirm(
+            'order-uuid-1',
+            'PAY-CARD-1',
+            'qt-success-1',
+            'checkout-card-key',
+            ['provider_reference' => 'ORDER-CARD-1'],
+        );
+
+        self::assertTrue($result['paid']);
+        self::assertSame('paid', $result['outcome']);
+        self::assertSame(PaymentTransactionRecord::STATUS_SUCCESS, $result['status']);
+        self::assertSame('PAY-CARD-1', $result['transactions'][0]['transaction_no']);
+    }
+
     private function createService(
         OrderFacadeInterface $orders,
         PaymentFacadeInterface $payments,

@@ -361,7 +361,7 @@ class Address implements TaglibInterface
             'Weline_Theme::js/address-loader.js',
         ));
         // Explicit bust: module asset query can stick while file content already changed.
-        $loaderUrl .= (str_contains($loaderUrl, '?') ? '&' : '?') . 'v=20261012-seed-country1';
+        $loaderUrl .= (str_contains($loaderUrl, '?') ? '&' : '?') . 'v=20261023-phone-rule-1';
         $html[] = '<script src="' . $loaderUrl . '" data-w-address-loader data-no-extract="true" defer></script>';
 
         return implode("\n", $html);

@@ -6,6 +6,7 @@ namespace Weline\Theme\Test\Unit\Font;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Theme\Font\FontSubsetService;
+use Weline\Theme\Font\Table\Type\cmap;
 use Weline\Theme\Font\FontWarmupService;
 use Weline\Theme\Font\LanguageCharsetResolver;
 
@@ -27,6 +28,24 @@ final class FontSubsetServiceTest extends TestCase
     protected function tearDown(): void
     {
         $this->removeTree($this->cacheDir);
+    }
+
+    public function testFormat4LookupDoesNotNeedAnExpandedCharacterMap(): void
+    {
+        $cmap = (new \ReflectionClass(cmap::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(cmap::class, 'glyphIdForCode');
+        $subtable = [
+            'format' => 4,
+            'startCode' => [0x4E00],
+            'endCode' => [0x9FFF],
+            'idDelta' => [1],
+            'idRangeOffset' => [0],
+            'glyphIndexArray' => [],
+        ];
+
+        self::assertSame((0x4E10 + 1) & 0xFFFF, $method->invoke($cmap, $subtable, 0x4E10));
+        self::assertSame(0, $method->invoke($cmap, $subtable, 0x0041));
+        self::assertSame([], $subtable['glyphIndexArray']);
     }
 
     public function testLanguageCharsetResolverPrefersSpecificCharsetFile(): void

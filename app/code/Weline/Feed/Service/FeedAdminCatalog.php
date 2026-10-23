@@ -17,6 +17,7 @@ use Weline\Feed\Model\FeedChannelAccount;
 use Weline\Feed\Model\FeedDefinition;
 use Weline\Feed\Service\Channel\AbstractFeedChannel;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Api\Catalog\WebsiteCatalogInterface;
 
 /**
  * Admin feed rows and site category maps. Secrets stay in the sealed account payload.
@@ -272,38 +273,46 @@ final class FeedAdminCatalog
         } catch (FeedCredentialsMissing $e) {
             return [
                 'success' => false,
+                'generated_ok' => false,
                 'definition_id' => $definition->definitionId,
                 'item_count' => 0,
                 'skipped_count' => 0,
                 'diagnostics' => [],
                 'connection_status' => $connectionStatus,
                 'error_code' => 'credentials_missing',
+                'diagnostic_code' => '',
                 'missing_fields' => $e->missingFields,
                 'message' => $e->getMessage(),
             ];
         } catch (\RuntimeException $e) {
             return [
                 'success' => false,
+                'generated_ok' => false,
                 'definition_id' => $definition->definitionId,
                 'item_count' => 0,
                 'skipped_count' => 0,
                 'diagnostics' => [],
                 'connection_status' => $connectionStatus,
                 'error_code' => $e->getMessage(),
+                'diagnostic_code' => '',
                 'message' => $e->getMessage(),
             ];
         }
         $this->assertMissingSecretIsDisconnected($definition->channelCode, $loaded['secrets'], $report->connectionStatus);
+        $persisted = $this->requireDefinition($definition->definitionId);
 
         return [
             'success' => true,
+            'generated_ok' => true,
             'definition_id' => $definition->definitionId,
+            'last_generated_at' => (string)$persisted->lastGeneratedAt,
             'item_count' => $report->itemCount,
             'skipped_count' => $report->skippedCount,
             'diagnostics' => $report->diagnostics,
             'connection_status' => $report->connectionStatus,
-            'error_code' => $report->errorCode,
-            'public_url' => $this->publicUrl($definition->publicToken, true),
+            'error_code' => '',
+            'diagnostic_code' => $report->errorCode,
+            'public_url' => $this->publicUrl($definition->publicToken, true, $definition->websiteId),
         ];
     }
 
@@ -620,6 +629,7 @@ final class FeedAdminCatalog
         $channel = (new FeedChannelRegistry())->find($channelCode);
         $artifact = $this->latestArtifact($definitionId);
         $ready = ($artifact['status'] ?? '') === FeedArtifact::STATUS_READY && (int)($artifact['byte_size'] ?? 0) > 0;
+        $artifactCode = trim((string)($artifact['error_code'] ?? ''));
 
         return [
             'definition_id' => $definitionId,
@@ -633,13 +643,17 @@ final class FeedAdminCatalog
             'enabled' => (int)($row[FeedDefinition::schema_fields_ENABLED] ?? 0) === 1 ? 1 : 0,
             'archived' => (int)($row[FeedDefinition::schema_fields_ARCHIVED] ?? 0) === 1 ? 1 : 0,
             'connection_status' => $this->operatorStatus($channelCode, $secrets, $country),
-            'public_url' => $ready ? $this->publicUrl($token, true) : '',
+            'public_url' => $ready
+                ? $this->publicUrl($token, true, (int)($row[FeedDefinition::schema_fields_WEBSITE_ID] ?? 0))
+                : '',
             'public_label' => $ready ? '' : '尚未生成',
             'sample_url' => $channel instanceof AbstractFeedChannel ? FeedSamplePath::forChannel($channelCode) : '',
             'last_generated_at' => trim((string)($row[FeedDefinition::schema_fields_LAST_GENERATED_AT] ?? '')),
             'item_count' => (int)($artifact['item_count'] ?? 0),
             'skipped_count' => (int)($artifact['skipped_count'] ?? 0),
-            'error_code' => trim((string)($artifact['error_code'] ?? '')),
+            'generated_ok' => $ready,
+            'error_code' => $ready ? '' : $artifactCode,
+            'diagnostic_code' => $ready ? $artifactCode : '',
             'diagnostics' => $artifact['diagnostics'] ?? [],
         ];
     }
@@ -1048,13 +1062,38 @@ final class FeedAdminCatalog
         return null;
     }
 
-    private function publicUrl(string $token, bool $ready): string
+    /**
+     * Channels fetch the document themselves, so the address carries the owning website's origin.
+     */
+    private function publicUrl(string $token, bool $ready, int $websiteId): string
     {
         if (!$ready || trim($token) === '') {
             return '';
         }
 
-        return FeedPublicPath::forToken($token);
+        return $this->websiteOrigin($websiteId) . FeedPublicPath::forToken($token);
+    }
+
+    private function websiteOrigin(int $websiteId): string
+    {
+        $websites = ObjectManager::getInstance(WebsiteCatalogInterface::class);
+        foreach ($websites->all() as $website) {
+            if ($website->id !== $websiteId) {
+                continue;
+            }
+            $url = rtrim(trim($website->url), '/');
+            $parts = parse_url($url);
+            if (!is_array($parts) || !isset($parts['scheme'], $parts['host'])
+                || !in_array(strtolower((string)$parts['scheme']), ['http', 'https'], true)
+            ) {
+                return '';
+            }
+
+            return strtolower((string)$parts['scheme']) . '://' . $parts['host']
+                . (isset($parts['port']) ? ':' . $parts['port'] : '');
+        }
+
+        return '';
     }
 
     private function secretBox(): FeedSecretBox

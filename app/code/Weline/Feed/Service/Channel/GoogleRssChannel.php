@@ -33,9 +33,12 @@ abstract class GoogleRssChannel extends AbstractFeedChannel
         return 'xml';
     }
 
+    /**
+     * Brand is optional for products without a clearly associated brand; Google forbids made-up brands.
+     */
     protected function extraRequired(FeedItem $item): array
     {
-        return [$item->description, $item->brand];
+        return [$item->description];
     }
 
     protected function build(FeedDefinition $definition, array $rows): string
@@ -67,13 +70,24 @@ abstract class GoogleRssChannel extends AbstractFeedChannel
             . '<g:link>' . $this->xml($item->link) . '</g:link>'
             . '<g:image_link>' . $this->xml($item->imageLink) . '</g:image_link>'
             . '<g:availability>' . $this->xml($item->availability) . '</g:availability>'
-            . '<g:price>' . $this->xml($this->money($item->priceMinor, $currency, true)) . '</g:price>'
-            . '<g:brand>' . $this->xml($item->brand) . '</g:brand>';
+            . '<g:price>' . $this->xml($this->money($item->priceMinor, $currency, true)) . '</g:price>';
+        $brand = trim($item->brand);
+        $gtin = trim((string)$item->gtin);
+        $mpn = trim((string)$item->mpn);
+        if ($brand !== '') {
+            $xml .= '<g:brand>' . $this->xml($brand) . '</g:brand>';
+        }
         if (trim($item->groupId) !== '') {
             $xml .= '<g:item_group_id>' . $this->xml($item->groupId) . '</g:item_group_id>';
         }
-        if ($item->gtin !== null && trim($item->gtin) !== '') {
-            $xml .= '<g:gtin>' . $this->xml($item->gtin) . '</g:gtin>';
+        if ($gtin !== '') {
+            $xml .= '<g:gtin>' . $this->xml($gtin) . '</g:gtin>';
+        }
+        if ($mpn !== '') {
+            $xml .= '<g:mpn>' . $this->xml($mpn) . '</g:mpn>';
+        }
+        if ($gtin === '' && ($brand === '' || $mpn === '')) {
+            $xml .= '<g:identifier_exists>no</g:identifier_exists>';
         }
         $category = trim((string)$item->channelCategory);
         if ($item->id !== 'sample-offer' && preg_match('/^[1-9][0-9]*$/', $category)) {

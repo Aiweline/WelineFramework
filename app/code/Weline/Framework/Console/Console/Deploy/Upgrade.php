@@ -206,7 +206,7 @@ class Upgrade extends CommandAbstract
                     $buildId,
                 ]));
             }
-            // 部署换版：把每个在用主题的上一对主题世代目录硬链接到新部署号下。
+            // 部署换版：用新部署树生成当前主题世代，并删除该主题的旧世代目录。
             try {
                 if (class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateBatchService::class)) {
                     $linked = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateBatchService::backfillThemePairForNewDeploy(

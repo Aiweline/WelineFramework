@@ -110,7 +110,15 @@ final class FeedChannelCatalogContractTest extends TestCase
         self::assertStringNotContainsString('<g:gtin>', $sample->body);
         self::assertStringContainsString('<g:brand>', $sample->body);
 
-        $skipped = $channel->render($definition, [$this->item(brand: '')]);
+        self::assertStringContainsString('<g:identifier_exists>no</g:identifier_exists>', $body);
+
+        $unbranded = $channel->render($definition, [$this->item(brand: '')]);
+        self::assertSame(1, $unbranded->itemCount);
+        self::assertSame('', $unbranded->diagnosticCode);
+        self::assertStringNotContainsString('<g:brand>', $unbranded->body);
+        self::assertStringContainsString('<g:identifier_exists>no</g:identifier_exists>', $unbranded->body);
+
+        $skipped = $channel->render($definition, [$this->item(description: '')]);
         self::assertSame('', trim($skipped->body));
         self::assertSame('items_skipped', $skipped->diagnosticCode);
     }
@@ -252,7 +260,7 @@ final class FeedChannelCatalogContractTest extends TestCase
         $service = new FeedGenerationService(
             new FeedConnectionRegistry(),
             new FeedChannelRegistry(),
-            $this->source([$this->item(brand: '')]),
+            $this->source([$this->item(description: '')]),
             $writer,
         );
         try {
@@ -363,7 +371,7 @@ final class FeedChannelCatalogContractTest extends TestCase
         );
     }
 
-    private function item(string $availability = 'in_stock', string $brand = 'Atelier'): FeedItem
+    private function item(string $availability = 'in_stock', string $brand = 'Atelier', string $description = 'A robe'): FeedItem
     {
         return new FeedItem(
             id: 'offer-red-m',
@@ -372,7 +380,7 @@ final class FeedChannelCatalogContractTest extends TestCase
             groupId: '9',
             sku: 'SKU-RED',
             title: 'Robe',
-            description: 'A robe',
+            description: $description,
             brand: $brand,
             link: 'https://shop.example/product/robe?color=red&offer=offer-red-m',
             imageLink: 'https://shop.example/media/robe.jpg',

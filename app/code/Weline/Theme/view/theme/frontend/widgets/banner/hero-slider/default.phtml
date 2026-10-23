@@ -132,7 +132,6 @@ $resolveSlideBackground = static function (array $slide, int $index) use ($defau
     return 'background: ' . $gradient . ';';
 };
 
-// 无运营配置时提供可直接上线的汉服视觉；图片不烘焙文字，文案按当前 storefront locale 输出。
 $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
 $currentLocale = trim(\Weline\Framework\Env\WelineEnv::getLangLocal());
 if ($currentLocale === ''
@@ -153,20 +152,6 @@ $translateDefaultCopy = static function (string $source, string $english) use ($
     }
 
     return $isChineseLocale ? $source : $english;
-};
-$heroImage = static function (string $slug, string $alt, bool $priority = false) use ($esc, $frameRatioAttr, $frameRatioCss): string {
-    $desktop = '/pub/media/catalog/hanfu/r2/homepage/' . $slug . '.webp';
-    $mobile = '/pub/media/catalog/hanfu/r2/homepage/' . $slug . '-mobile.webp';
-    return '<div class="w-frame" data-ratio="' . $esc($frameRatioAttr) . '" data-fit="cover" style="--weline-frame-ratio:' . $esc($frameRatioCss) . ';">'
-        . '<picture>'
-        . '<source media="(max-width: 768px)" srcset="' . $esc($mobile) . '" width="900" height="1200" />'
-        . '<img src="' . $esc($desktop) . '" alt="' . $esc($alt) . '" '
-        . 'width="1920" height="600" '
-        . 'loading="' . ($priority ? 'eager' : 'lazy') . '" decoding="async"'
-        . ($priority ? ' fetchpriority="high"' : '')
-        . '>'
-        . '</picture>'
-        . '</div>';
 };
 
 // 运营配置里可能烘焙了旧版 image_file_html（缺 width/height / 错 data-ratio）；渲染前补齐并对齐 aspect_ratio。
@@ -265,7 +250,7 @@ foreach ($slides as $slideIndex => $slide) {
     if ($mediaHtml !== '') {
         $slides[$slideIndex]['image_file_html'] = $ensureHeroMediaDimensions($mediaHtml);
     }
-    // 运营配置 slides 常烘焙中文源串；渲染时按当前 locale 解析（与默认汉服幻灯同路径）
+    // 运营配置 slides 常烘焙中文源串；渲染时按当前 locale 解析
     foreach (['kicker', 'title', 'subtitle', 'button_text', 'secondary_button_text', 'alt'] as $copyKey) {
         $rawCopy = trim((string)($slides[$slideIndex][$copyKey] ?? ''));
         if ($rawCopy === '') {
@@ -275,96 +260,33 @@ foreach ($slides as $slideIndex => $slide) {
     }
 }
 
-if (empty($slides) && \Weline\Theme\Helper\StorefrontHanfuDemoCatalog::allowed()) {
-    // 素材：人物抠图 + 自衣饰母题发散的水墨山水底（r2/homepage/{slug}(.|-mobile).webp）
-    // 仅已知汉服站 website code 启用；grocery/daocharms 等新站禁止串入。
-    $defaults = [
+if (empty($slides)) {
+    $slides = [
         [
-            'slug' => 'taoyuan-qingmeng',
-            'tone' => 'light',
-            'kicker_zh' => '桃花源意',
-            'kicker_en' => 'Peach Blossom Spring',
-            'title_zh' => '桃园清梦 · 明制花鸟套装',
-            'title_en' => 'Peach Garden Dream · Ming-Style Set',
-            'subtitle_zh' => '裙上桃鸟入画：烟粉远山，上衣与马面可单选成套',
-            'subtitle_en' => 'Peach birds from the skirt become misty mountains; top or mamian alone, or as a set',
-            'alt_zh' => '桃园清梦明制花鸟套装立于桃花源意山水画前',
-            'alt_en' => 'Peach Garden Dream Ming-style set before a peach-blossom landscape painting',
-            // WO-HP-P2-08：主 CTA → Featured 锚点（非 /products 泛入口）
-            'link' => '#homepage-featured',
+            'gradient' => $defaultGradients[0],
+            'title' => (string)__('2026春季新品上市'),
+            'subtitle' => (string)__('探索最新时尚潮流'),
+            'button_text' => (string)__('立即选购'),
+            'link' => '/products/new',
+            'text_position' => 'left',
         ],
         [
-            'slug' => 'shenlong-yin',
-            'tone' => 'dark',
-            'kicker_zh' => '妆花江山',
-            'kicker_en' => 'Zhuanghua Rivers & Mountains',
-            'title_zh' => '神龙吟 · 妆花马面裙',
-            'title_en' => 'Dragon Chant · Zhuanghua Mamian',
-            'subtitle_zh' => '裙幅青绿峰与金鹤散作朱砂江山，同系可选',
-            'subtitle_en' => 'Teal peaks and golden cranes from the skirt unfold into cinnabar mountains',
-            'alt_zh' => '神龙吟妆花马面立于青绿金鹤山水画前',
-            'alt_en' => 'Dragon Chant zhuanghua mamian before a teal-and-gold landscape painting',
-            'link' => '#homepage-featured',
+            'gradient' => $defaultGradients[1],
+            'title' => (string)__('限时特惠'),
+            'subtitle' => (string)__('全场满300减50'),
+            'button_text' => (string)__('查看详情'),
+            'link' => '/promotions',
+            'text_position' => 'center',
         ],
         [
-            'slug' => 'zuimeng-xifeng',
-            'tone' => 'dark',
-            'kicker_zh' => '泼金暮山',
-            'kicker_en' => 'Gold-Splashed Evening Peaks',
-            'title_zh' => '醉梦夕风 · 仙鹤织金',
-            'title_en' => 'Evening Wind · Crane Brocade',
-            'subtitle_zh' => '裙裾金山水与蝶影化作夜色泼金，单裙或套装可入藏',
-            'subtitle_en' => 'Gold mountains and butterflies from the hem become a night ink wash; skirt or set',
-            'alt_zh' => '醉梦夕风织金马面立于泼金暮山山水画前',
-            'alt_en' => 'Evening Wind brocade mamian before a gold-splashed night landscape painting',
-            'link' => '#homepage-featured',
+            'gradient' => $defaultGradients[2],
+            'title' => (string)__('品质生活'),
+            'subtitle' => (string)__('精选优质好物'),
+            'button_text' => (string)__('开始探索'),
+            'link' => '/featured',
+            'text_position' => 'right',
         ],
     ];
-    $slides = [];
-    foreach ($defaults as $index => $default) {
-        $slides[] = [
-            'gradient' => $defaultGradients[$index],
-            'tone' => $default['tone'],
-            'kicker' => $translateDefaultCopy($default['kicker_zh'], $default['kicker_en']),
-            'title' => $translateDefaultCopy($default['title_zh'], $default['title_en']),
-            'subtitle' => $translateDefaultCopy($default['subtitle_zh'], $default['subtitle_en']),
-            // WO-HP-P2-08：仅 1 主 + 1 次 CTA（顾问定稿文案）
-            'button_text' => $translateDefaultCopy('浏览精选', 'Shop Featured'),
-            'link' => $default['link'],
-            'secondary_button_text' => $translateDefaultCopy('按场景选', 'Shop by Occasion'),
-            'secondary_link' => '/category/hanfu/occasion',
-            'text_position' => 'left',
-            'image_file_html' => $heroImage(
-                $default['slug'],
-                $translateDefaultCopy($default['alt_zh'], $default['alt_en']),
-                $index === 0,
-            ),
-        ];
-    }
-}
-
-// 运营配置帧若仅有主按钮：补顾问次 CTA；旧「浏览系列→/products」归一到 Featured。
-// 汉服场景次 CTA（/category/hanfu/occasion）仅汉服站注入。
-$advisorPrimaryText = $translateDefaultCopy('浏览精选', 'Shop Featured');
-$advisorSecondaryText = $translateDefaultCopy('按场景选', 'Shop by Occasion');
-$allowHanfuAdvisorCta = \Weline\Theme\Helper\StorefrontHanfuDemoCatalog::allowed();
-foreach ($slides as $slideIndex => $slide) {
-    if (!is_array($slide)) {
-        continue;
-    }
-    $primaryText = trim((string)($slide['button_text'] ?? ''));
-    $primaryLink = trim((string)($slide['link'] ?? ''));
-    if ($primaryText === ''
-        || in_array($primaryText, ['浏览系列', 'Explore collection'], true)
-        || in_array($primaryLink, ['/products', 'products'], true)
-    ) {
-        $slides[$slideIndex]['button_text'] = $advisorPrimaryText;
-        $slides[$slideIndex]['link'] = '#homepage-featured';
-    }
-    if ($allowHanfuAdvisorCta && trim((string)($slides[$slideIndex]['secondary_button_text'] ?? '')) === '') {
-        $slides[$slideIndex]['secondary_button_text'] = $advisorSecondaryText;
-        $slides[$slideIndex]['secondary_link'] = '/category/hanfu/occasion';
-    }
 }
 
 ?>
@@ -392,7 +314,7 @@ foreach ($slides as $slideIndex => $slide) {
                     if ($href === '' || $href === '#') {
                         return '#';
                     }
-                    // 页内锚点（如 #homepage-featured）不得走 getUrl，否则会丢 hash。
+                    // 页内锚点（#xxx）不得走 getUrl，否则会丢 hash。
                     if (str_starts_with($href, '#')) {
                         return $href;
                     }

@@ -15,6 +15,8 @@ final class ScopeTokenServiceTest extends TestCase
 {
     private const SECRET = 'scope-token-test-secret-material-32-bytes-minimum';
 
+    private const PAGE_GENERATION = 'fixture-gen';
+
     private string|false $previousKeyring;
     private ScopeIdentity $scope;
     private ScopeTokenService $service;
@@ -41,20 +43,21 @@ final class ScopeTokenServiceTest extends TestCase
 
     public function testIssuesCanonicalV1TokenWithFixedLifetime(): void
     {
-        $token = $this->service->issue($this->scope, 'Shop.Example.Test:19740', 1_000);
-        $verification = $this->service->verify($token, 'shop.example.test:19740', $this->scope, 1_001);
+        $token = $this->service->issue($this->scope, 'Shop.Example.Test:19740', self::PAGE_GENERATION, 1_000);
+        $verification = $this->service->verify($token, 'shop.example.test:19740', $this->scope, self::PAGE_GENERATION, 1_001);
 
         self::assertSame(ScopeTokenVerification::STATUS_VALID, $verification->status);
         self::assertSame('test-active', $verification->kid);
         self::assertSame(1_000, $verification->issuedAt);
         self::assertSame(1_000 + ScopeTokenService::TTL_SECONDS, $verification->expiresAt);
         self::assertSame('shop.example.test:19740', $verification->host);
+        self::assertSame(self::PAGE_GENERATION, $this->payloadFromToken($token)['page_generation']);
         self::assertTrue($verification->scope?->equals($this->scope) ?? false);
     }
 
     public function testTamperingSignatureAndIdentityClaimsAlwaysFailsClosed(): void
     {
-        $token = $this->service->issue($this->scope, 'shop.example.test', 2_000);
+        $token = $this->service->issue($this->scope, 'shop.example.test', self::PAGE_GENERATION, 2_000);
         foreach (['website_id', 'store_mode', 'channel_code'] as $claim) {
             $parts = explode('.', $token);
             $payload = $this->decodePayload($parts[2]);
@@ -69,27 +72,29 @@ final class ScopeTokenServiceTest extends TestCase
                 implode('.', $parts),
                 'shop.example.test',
                 $this->scope,
+                self::PAGE_GENERATION,
                 2_001,
             );
             self::assertSame(ScopeTokenVerification::STATUS_INVALID, $verification->status, $claim);
             self::assertSame('bad_signature', $verification->reason, $claim);
-            self::assertNull($this->service->renew($verification, $this->scope, 'shop.example.test', 2_001));
+            self::assertNull($this->service->renew($verification, $this->scope, 'shop.example.test', self::PAGE_GENERATION, 2_001));
         }
 
         $parts = explode('.', $token);
         $parts[3][0] = $parts[3][0] === 'A' ? 'B' : 'A';
-        $verification = $this->service->verify(implode('.', $parts), 'shop.example.test', $this->scope, 2_001);
+        $verification = $this->service->verify(implode('.', $parts), 'shop.example.test', $this->scope, self::PAGE_GENERATION, 2_001);
         self::assertSame(ScopeTokenVerification::STATUS_INVALID, $verification->status);
         self::assertSame('bad_signature', $verification->reason);
     }
 
     public function testExpiredTokenCannotBeRenewedInPlace(): void
     {
-        $token = $this->service->issue($this->scope, 'shop.example.test', 3_000);
+        $token = $this->service->issue($this->scope, 'shop.example.test', self::PAGE_GENERATION, 3_000);
         $verification = $this->service->verify(
             $token,
             'shop.example.test',
             $this->scope,
+            self::PAGE_GENERATION,
             3_000 + ScopeTokenService::TTL_SECONDS,
         );
 
@@ -98,15 +103,16 @@ final class ScopeTokenServiceTest extends TestCase
             $verification,
             $this->scope,
             'shop.example.test',
+            self::PAGE_GENERATION,
             3_000 + ScopeTokenService::TTL_SECONDS,
         ));
     }
 
     public function testSignedWrongHostAudienceAndContextVersionAreRejected(): void
     {
-        $token = $this->service->issue($this->scope, 'shop.example.test', 4_000);
+        $token = $this->service->issue($this->scope, 'shop.example.test', self::PAGE_GENERATION, 4_000);
 
-        $wrongHost = $this->service->verify($token, 'other.example.test', $this->scope, 4_001);
+        $wrongHost = $this->service->verify($token, 'other.example.test', $this->scope, self::PAGE_GENERATION, 4_001);
         self::assertSame(ScopeTokenVerification::STATUS_CONTEXT_CONFLICT, $wrongHost->status);
         self::assertSame('host_mismatch', $wrongHost->reason);
         // Token 声明的 Host 必须随拒绝结果带出，排障时才能与请求 authority 对照。
@@ -118,6 +124,7 @@ final class ScopeTokenServiceTest extends TestCase
             $this->signPayload($payload),
             'shop.example.test',
             $this->scope,
+            self::PAGE_GENERATION,
             4_001,
         );
         self::assertSame(ScopeTokenVerification::STATUS_CONTEXT_CONFLICT, $wrongAudience->status);
@@ -129,6 +136,7 @@ final class ScopeTokenServiceTest extends TestCase
             $this->signPayload($payload),
             'shop.example.test',
             $this->scope,
+            self::PAGE_GENERATION,
             4_001,
         );
         self::assertSame(ScopeTokenVerification::STATUS_CONTEXT_CONFLICT, $wrongContext->status);
@@ -138,7 +146,7 @@ final class ScopeTokenServiceTest extends TestCase
     public function testSignedEquivalentButNonCanonicalJsonIsRejected(): void
     {
         $payload = $this->payloadFromToken(
-            $this->service->issue($this->scope, 'shop.example.test', 5_000),
+            $this->service->issue($this->scope, 'shop.example.test', self::PAGE_GENERATION, 5_000),
         );
         ksort($payload, SORT_STRING);
 
@@ -146,6 +154,7 @@ final class ScopeTokenServiceTest extends TestCase
             $this->signPayload($payload),
             'shop.example.test',
             $this->scope,
+            self::PAGE_GENERATION,
             5_001,
         );
 
@@ -156,21 +165,46 @@ final class ScopeTokenServiceTest extends TestCase
     public function testFutureIssueTimeUsesTheSharedSixtySecondSkewBoundary(): void
     {
         $accepted = $this->service->verify(
-            $this->service->issue($this->scope, 'shop.example.test', 6_060),
+            $this->service->issue($this->scope, 'shop.example.test', self::PAGE_GENERATION, 6_060),
             'shop.example.test',
             $this->scope,
+            self::PAGE_GENERATION,
             6_000,
         );
         self::assertSame(ScopeTokenVerification::STATUS_VALID, $accepted->status);
 
         $rejected = $this->service->verify(
-            $this->service->issue($this->scope, 'shop.example.test', 6_061),
+            $this->service->issue($this->scope, 'shop.example.test', self::PAGE_GENERATION, 6_061),
             'shop.example.test',
             $this->scope,
+            self::PAGE_GENERATION,
             6_000,
         );
         self::assertSame(ScopeTokenVerification::STATUS_INVALID, $rejected->status);
         self::assertSame('invalid_time_claims', $rejected->reason);
+    }
+
+    public function testPageGenerationMismatchAndMissingClaimAreRecoverableConflicts(): void
+    {
+        $token = $this->service->issue($this->scope, 'shop.example.test', 'gen-a', 7_000);
+        $same = $this->service->verify($token, 'shop.example.test', $this->scope, 'gen-a', 7_001);
+        self::assertSame(ScopeTokenVerification::STATUS_VALID, $same->status);
+
+        $other = $this->service->verify($token, 'shop.example.test', $this->scope, 'gen-b', 7_001);
+        self::assertSame(ScopeTokenVerification::STATUS_CONTEXT_CONFLICT, $other->status);
+        self::assertSame('page_generation_mismatch', $other->reason);
+
+        $payload = $this->payloadFromToken($token);
+        unset($payload['page_generation']);
+        $missing = $this->service->verify(
+            $this->signPayload($payload),
+            'shop.example.test',
+            $this->scope,
+            'gen-a',
+            7_001,
+        );
+        self::assertSame(ScopeTokenVerification::STATUS_CONTEXT_CONFLICT, $missing->status);
+        self::assertSame('page_generation_mismatch', $missing->reason);
     }
 
     /** @return array<string, mixed> */

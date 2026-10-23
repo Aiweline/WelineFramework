@@ -59,16 +59,8 @@ $backgroundColor = ThemeUiColor::sanitize(
     $this->getData('background_color') ?? '',
     'var(--weline-theme-primary-subtle)'
 );
-// 促销条应是品牌向短讯；历史「包邮门槛 / 站专属品牌串」不适合占默认主题 homepage-promo 主信号
 $promoTextRaw = trim((string)($this->getData('text') ?? ''));
-$promoTextDeprecated = [
-    '运费以结算页为准',
-    '满 $49 包邮 · 新品上架',
-    '长安汉服 · 满 ¥299 包邮 · 形制精选上新',
-    '云裳汉服 · 满 ¥299 包邮 · 形制精选上新',
-    '长安汉服 · 形制精选上新',
-];
-if ($promoTextRaw === '' || in_array($promoTextRaw, $promoTextDeprecated, true)) {
+if ($promoTextRaw === '') {
     $promoTextRaw = '精选上新 · 本季新品';
 }
 $text = WidgetI18n::label($promoTextRaw, '精选上新 · 本季新品');

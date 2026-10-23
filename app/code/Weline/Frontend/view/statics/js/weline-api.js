@@ -469,9 +469,12 @@
                 const error = new Error('[Weline.Api] Theme published generation changed. Reload required.');
                 error.code = 'deploy_reload_required';
                 error.status = 409;
+                error.pageGenerationToken = payload && payload.page_generation_token != null
+                    ? String(payload.page_generation_token).trim()
+                    : '';
                 error.tip = readScopeTipCache(currentStorefrontLocale(), 'deploy_reload_required');
                 try {
-                    maybeAutoReloadForScopeConflict(resolveErrorPresentation(error));
+                    maybeAutoReloadForScopeConflict(resolveErrorPresentation(error), error);
                 } catch (_reloadError) {
                     // Presentation helpers may not be ready on extreme early boot.
                 }
@@ -1321,7 +1324,7 @@
     };
 
     const SCOPE_RELOAD_GUARD_KEY = 'weline.api.scope_reload_at';
-    const maybeAutoReloadForScopeConflict = (presentation) => {
+    const maybeAutoReloadForScopeConflict = (presentation, sourceError) => {
         if (!presentation || !presentation.autoReload) {
             return false;
         }
@@ -1335,7 +1338,14 @@
                 : null;
             if (prompt) {
                 const tip = presentation.message || presentation.tip || '';
-                return !!prompt(tip);
+                const token = sourceError && (
+                    sourceError.pageGenerationToken
+                    || (sourceError.response
+                        && sourceError.response.data
+                        && sourceError.response.data.error
+                        && sourceError.response.data.error.page_generation_token)
+                );
+                return !!prompt(tip, token);
             }
         } catch (_promptError) {
             // Fall through to guarded location.reload.
@@ -1551,6 +1561,55 @@
     };
 
     /**
+     * Boot handshake: a transport is usable only after the worker script answered
+     * `transport-ping` on this port. Script 404 / CSP / parse failure ⇒ reject + terminate,
+     * so callers fall back instead of queueing requests on a dead port.
+     */
+    const QUERY_BIN_TRANSPORT_PING = 'transport-ping';
+    const QUERY_BIN_TRANSPORT_READY = 'transport-ready';
+    const QUERY_BIN_TRANSPORT_READY_TIMEOUT_MS = 6000;
+    let queryBinTransportPingSeq = 0;
+
+    const awaitQueryBinTransportReady = (transport) => new Promise((resolve, reject) => {
+        queryBinTransportPingSeq += 1;
+        const pingId = 'transport_ping_' + Date.now() + '_' + queryBinTransportPingSeq;
+        let timerId = 0;
+        const cleanup = () => {
+            window.clearTimeout(timerId);
+            transport.removeEventListener('message', onMessage);
+            transport.removeEventListener('error', onError);
+        };
+        const fail = (reason) => {
+            cleanup();
+            transport.terminate();
+            reject(new Error('[Weline.Api] ' + transport.kind + ' worker ' + reason));
+        };
+        const onMessage = (event) => {
+            const data = event && event.data ? event.data : {};
+            if (data.id !== pingId) {
+                return;
+            }
+            if (data.type !== QUERY_BIN_TRANSPORT_READY) {
+                fail('answered transport-ping without transport-ready (stale worker script?).');
+                return;
+            }
+            cleanup();
+            resolve(transport);
+        };
+        const onError = (event) => {
+            const detail = event && event.message ? ': ' + event.message : '';
+            fail('failed to boot (CSP, HTTP or script error)' + detail + '.');
+        };
+        transport.addEventListener('message', onMessage);
+        transport.addEventListener('error', onError);
+        timerId = window.setTimeout(
+            () => fail('did not answer transport-ping within ' + QUERY_BIN_TRANSPORT_READY_TIMEOUT_MS + 'ms.'),
+            QUERY_BIN_TRANSPORT_READY_TIMEOUT_MS
+        );
+        transport.postMessage({ id: pingId, type: QUERY_BIN_TRANSPORT_PING });
+    });
+
+    /**
      * Prefer true SharedWorker (stable same-origin URL — blob URLs cannot share across tabs).
      * Fall back to Dedicated: Blob-first then same-origin URL Worker
      * (Blob path requires worker-src blob: — see SecurityHeaderDefaults::CSP).
@@ -1572,162 +1631,105 @@
         }
 
         const boot = (() => {
-            const fetchInit = {
-                credentials: 'same-origin',
-                cache: isDevMode() ? 'no-store' : 'force-cache',
-            };
-            const timeoutMs = typeof options.timeoutMs === 'number' ? options.timeoutMs : 8000;
-            let timeoutId = 0;
-            let localAbort = null;
-            if (options && options.signal) {
-                fetchInit.signal = options.signal;
-            } else if (typeof AbortController === 'function' && timeoutMs > 0) {
-                localAbort = new AbortController();
-                fetchInit.signal = localAbort.signal;
-                timeoutId = window.setTimeout(() => {
-                    try {
-                        localAbort.abort();
-                    } catch (_error) {
-                        /* ignore */
-                    }
-                }, timeoutMs);
-            }
-
-            const clearFetchTimeout = () => {
-                if (timeoutId) {
-                    window.clearTimeout(timeoutId);
-                    timeoutId = 0;
-                }
-            };
-
-            const createSharedWorker = () => new Promise((resolve, reject) => {
+            const createSharedWorker = () => {
                 if (typeof window.SharedWorker !== 'function') {
-                    reject(new Error('[Weline.Api] SharedWorker unavailable.'));
-                    return;
+                    return Promise.reject(new Error('[Weline.Api] SharedWorker unavailable.'));
                 }
-                let settled = false;
-                let shared = null;
+                let transport = null;
                 try {
                     // Stable name + URL ⇒ one process across tabs (not blob:).
-                    shared = new SharedWorker(scriptUrl, { name: 'weline-query-bin' });
+                    transport = wrapQueryBinWorkerTransport(
+                        new SharedWorker(scriptUrl, { name: 'weline-query-bin' }),
+                        'shared'
+                    );
                 } catch (error) {
-                    reject(error);
-                    return;
+                    return Promise.reject(error);
                 }
-                const finishOk = () => {
-                    if (settled) {
-                        return;
+                return awaitQueryBinTransportReady(transport);
+            };
+
+            const createBlobWorker = () => {
+                if (typeof window.Worker !== 'function') {
+                    return Promise.reject(new Error('[Weline.Api] Worker is unavailable.'));
+                }
+                const fetchInit = {
+                    credentials: 'same-origin',
+                    cache: isDevMode() ? 'no-store' : 'force-cache',
+                };
+                const timeoutMs = typeof options.timeoutMs === 'number' ? options.timeoutMs : 8000;
+                let timeoutId = 0;
+                if (options && options.signal) {
+                    fetchInit.signal = options.signal;
+                } else if (typeof AbortController === 'function' && timeoutMs > 0) {
+                    const localAbort = new AbortController();
+                    fetchInit.signal = localAbort.signal;
+                    timeoutId = window.setTimeout(() => localAbort.abort(), timeoutMs);
+                }
+                return fetch(scriptUrl, fetchInit).then((response) => {
+                    if (!response.ok) {
+                        throw new Error('[Weline.Api] worker script HTTP ' + response.status);
                     }
-                    settled = true;
+                    return response.text();
+                }).finally(() => {
+                    if (timeoutId) {
+                        window.clearTimeout(timeoutId);
+                    }
+                }).then((code) => {
+                    if (!code || !String(code).trim()) {
+                        throw new Error('[Weline.Api] worker script body is empty.');
+                    }
+                    const blobUrl = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+                    let transport = null;
                     try {
-                        shared.removeEventListener('error', onError);
-                    } catch (_e) { /* ignore */ }
-                    clearFetchTimeout();
-                    try {
-                        resolve(wrapQueryBinWorkerTransport(shared, 'shared'));
+                        transport = wrapQueryBinWorkerTransport(new Worker(blobUrl), 'dedicated');
                     } catch (error) {
-                        reject(error);
-                    }
-                };
-                const onError = () => {
-                    if (settled) {
-                        return;
-                    }
-                    settled = true;
-                    try {
-                        shared.removeEventListener('error', onError);
-                    } catch (_e) { /* ignore */ }
-                    reject(new Error('[Weline.Api] SharedWorker blocked by CSP or failed to boot.'));
-                };
-                if (typeof shared.addEventListener === 'function') {
-                    shared.addEventListener('error', onError);
-                }
-                window.setTimeout(finishOk, 80);
-            });
-
-            const createBlobWorker = () => fetch(scriptUrl, fetchInit).then((response) => {
-                clearFetchTimeout();
-                if (!response.ok) {
-                    throw new Error('[Weline.Api] worker script HTTP ' + response.status);
-                }
-                return response.text();
-            }).then((code) => {
-                if (!code || !String(code).trim()) {
-                    throw new Error('[Weline.Api] worker script body is empty.');
-                }
-                if (typeof window.Worker !== 'function') {
-                    throw new Error('[Weline.Api] Worker is unavailable.');
-                }
-                const blob = new Blob([code], { type: 'text/javascript' });
-                const blobUrl = URL.createObjectURL(blob);
-                try {
-                    const worker = new Worker(blobUrl);
-                    // Keep blob URL until the worker has had time to parse (revoke@0 races CSP/load).
-                    window.setTimeout(() => {
-                        try {
-                            URL.revokeObjectURL(blobUrl);
-                        } catch (_error) {
-                            /* ignore */
-                        }
-                    }, 5000);
-                    return wrapQueryBinWorkerTransport(worker, 'dedicated');
-                } catch (error) {
-                    try {
                         URL.revokeObjectURL(blobUrl);
-                    } catch (_error) {
-                        /* ignore */
+                        throw error;
                     }
-                    throw error;
-                }
-            }).catch((error) => {
-                clearFetchTimeout();
-                throw error;
-            });
+                    // Revoke only after the worker answered (or failed) — revoke@0 races script load.
+                    return awaitQueryBinTransportReady(transport).finally(() => URL.revokeObjectURL(blobUrl));
+                });
+            };
 
-            const createUrlWorker = () => new Promise((resolve, reject) => {
+            const createUrlWorker = () => {
                 if (typeof window.Worker !== 'function') {
-                    reject(new Error('[Weline.Api] Worker is unavailable.'));
-                    return;
+                    return Promise.reject(new Error('[Weline.Api] Worker is unavailable.'));
                 }
-                let settled = false;
-                let worker = null;
+                let transport = null;
                 try {
-                    worker = new Worker(scriptUrl);
+                    transport = wrapQueryBinWorkerTransport(new Worker(scriptUrl), 'dedicated');
                 } catch (error) {
-                    reject(error);
-                    return;
+                    return Promise.reject(error);
                 }
-                const finishOk = () => {
-                    if (settled) {
-                        return;
-                    }
-                    settled = true;
-                    try {
-                        worker.removeEventListener('error', onError);
-                    } catch (_e) { /* ignore */ }
-                    clearFetchTimeout();
-                    resolve(wrapQueryBinWorkerTransport(worker, 'dedicated'));
-                };
-                const onError = () => {
-                    if (settled) {
-                        return;
-                    }
-                    settled = true;
-                    try {
-                        worker.removeEventListener('error', onError);
-                    } catch (_e) { /* ignore */ }
-                    try {
-                        worker.terminate();
-                    } catch (_t) { /* ignore */ }
-                    reject(new Error('[Weline.Api] same-origin Worker blocked by CSP or failed to boot.'));
-                };
-                worker.addEventListener('error', onError);
-                // CSP violations surface asynchronously; accept URL worker if no error arrives quickly.
-                window.setTimeout(finishOk, 80);
-            });
+                return awaitQueryBinTransportReady(transport);
+            };
 
             // SharedWorker first (true cross-tab); Dedicated Blob then URL as fallback.
-            return createSharedWorker().catch(() => createBlobWorker().catch(() => createUrlWorker()));
+            // A transport counts as booted only after it answered transport-ping.
+            const attempts = [
+                ['shared', createSharedWorker],
+                ['blob', createBlobWorker],
+                ['url', createUrlWorker],
+            ];
+            const failures = [];
+            const tryAttempt = (index) => {
+                if (index >= attempts.length) {
+                    return Promise.reject(new Error(
+                        '[Weline.Api] No QueryBin worker transport booted: ' + failures.join(' | ')
+                    ));
+                }
+                const [label, create] = attempts[index];
+                return Promise.resolve().then(create).then((transport) => {
+                    if (failures.length > 0) {
+                        console.warn('[Weline.Api] QueryBin worker fell back to ' + label + ' transport.', failures.slice());
+                    }
+                    return transport;
+                }, (error) => {
+                    failures.push(label + ': ' + (error instanceof Error ? error.message : String(error)));
+                    return tryAttempt(index + 1);
+                });
+            };
+            return tryAttempt(0);
         })();
 
         inflightWorkerScriptBoots.set(scriptUrl, boot);
@@ -3262,6 +3264,9 @@
             error.details = serverError.details || '';
             error.responseKind = serverError.responseKind || '';
             error.tip = normalizeScopeTip(serverError.tip);
+            error.pageGenerationToken = serverError.page_generation_token != null
+                ? String(serverError.page_generation_token).trim()
+                : '';
             if (error.tip) {
                 writeScopeTipCache(
                     error.tip.locale || currentStorefrontLocale(),
@@ -3385,7 +3390,7 @@
             // installs onHttpError or marks the call silent — otherwise stale HTML
             // after release never recovers.
             const presentation = resolveErrorPresentation(error || {});
-            if (presentation.autoReload && maybeAutoReloadForScopeConflict(presentation)) {
+            if (presentation.autoReload && maybeAutoReloadForScopeConflict(presentation, error)) {
                 return;
             }
             if (silent) return;
@@ -3575,7 +3580,7 @@
                 return;
             }
             // autoReload already attempted in handleHttpError; keep as toast-path fallback.
-            if (maybeAutoReloadForScopeConflict(presentation)) {
+            if (maybeAutoReloadForScopeConflict(presentation, error)) {
                 return;
             }
             if (shouldDedupeDefaultErrorToast(presentation.code, message)) {

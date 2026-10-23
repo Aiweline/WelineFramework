@@ -38,28 +38,24 @@ class Install implements InstallInterface
         $shippingAddress = ObjectManager::getInstance(ShippingAddress::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($shippingAddress);
-        $shippingAddress->setup($modelSetup, $context);
         
         // 安装运送地址表
         /** @var DeliveryAddress $deliveryAddress */
         $deliveryAddress = ObjectManager::getInstance(DeliveryAddress::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($deliveryAddress);
-        $deliveryAddress->setup($modelSetup, $context);
         
         // 安装地区表
         /** @var Region $region */
         $region = ObjectManager::getInstance(Region::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($region);
-        $region->setup($modelSetup, $context);
         
         // 安装快递公司表
         /** @var Carrier $carrier */
         $carrier = ObjectManager::getInstance(Carrier::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($carrier);
-        $carrier->setup($modelSetup, $context);
         
         // 插入默认快递公司数据
         $this->installDefaultCarriers($carrier);
@@ -69,35 +65,30 @@ class Install implements InstallInterface
         $rateTemplate = ObjectManager::getInstance(RateTemplate::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($rateTemplate);
-        $rateTemplate->setup($modelSetup, $context);
         
         // 安装免邮规则表
         /** @var FreeShippingRule $freeShippingRule */
         $freeShippingRule = ObjectManager::getInstance(FreeShippingRule::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($freeShippingRule);
-        $freeShippingRule->setup($modelSetup, $context);
         
         // 安装配送服务表
         /** @var ShippingService $shippingService */
         $shippingService = ObjectManager::getInstance(ShippingService::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($shippingService);
-        $shippingService->setup($modelSetup, $context);
         
         // 安装物流跟踪记录表
         /** @var Tracking $tracking */
         $tracking = ObjectManager::getInstance(Tracking::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($tracking);
-        $tracking->setup($modelSetup, $context);
         
         // 安装物流跟踪节点表
         /** @var TrackingNode $trackingNode */
         $trackingNode = ObjectManager::getInstance(TrackingNode::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($trackingNode);
-        $trackingNode->setup($modelSetup, $context);
 
         // Fresh installs require the same current schema and data migration as upgrades.
         ObjectManager::getInstance(Upgrade::class)->setup($setup, $context);

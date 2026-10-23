@@ -51,13 +51,5 @@ class Install implements InstallInterface
         if ($modelSetup->tableExist()) {
             return;
         }
-        $modelSetup->createTable('地区语言名表')
-            ->addColumn(LocaleName::schema_fields_ID, TableInterface::column_type_VARCHAR, 12, 'not null', '地区码')
-            ->addColumn(LocaleName::schema_fields_DISPLAY_LOCALE_CODE, TableInterface::column_type_VARCHAR, 12, 'not null', '展示地区码')
-            ->addColumn(LocaleName::schema_fields_DISPLAY_NAME, TableInterface::column_type_VARCHAR, 255, 'not null', '地区名')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_locale_code', LocaleName::schema_fields_LOCALE_CODE, '区码索引')
-            ->addIndex(TableInterface::index_type_KEY, 'idx_display_locale_code', LocaleName::schema_fields_DISPLAY_LOCALE_CODE, '展示区码索引')
-            ->addIndex(TableInterface::index_type_UNIQUE, 'uk_locale_display_locale', LocaleName::schema_fields_LOCALE_CODE . ',' . LocaleName::schema_fields_DISPLAY_LOCALE_CODE, '区域语言唯一索引')
-            ->create();
     }
 }

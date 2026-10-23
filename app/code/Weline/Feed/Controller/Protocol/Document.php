@@ -25,10 +25,7 @@ final class Document extends FrontendController
             $token = trim((string)$this->request->getParam('token'));
         }
         $decision = $this->documents->resolve($token);
-        if ($decision->statusCode !== 200) {
-            return Response::text('', 404, 'text/plain; charset=utf-8');
-        }
 
-        return Response::text($decision->body, 200, $decision->contentType);
+        return Response::text($decision->body, $decision->statusCode, $decision->contentType);
     }
 }

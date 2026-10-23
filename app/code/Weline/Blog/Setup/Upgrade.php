@@ -25,12 +25,10 @@ final class Upgrade implements UpgradeInterface
         /** @var BlogCategoryAttributeEntity $entity */
         $entity = ObjectManager::getInstance(BlogCategoryAttributeEntity::class);
         $modelSetup->putModel($entity);
-        $entity->upgrade($modelSetup, $context);
 
         /** @var LocalDescription $postLocal */
         $postLocal = ObjectManager::getInstance(LocalDescription::class);
         $modelSetup->putModel($postLocal);
-        $postLocal->upgrade($modelSetup, $context);
 
         ObjectManager::getInstance(BlogCategoryEavBootstrap::class)->ensureCategorySchema();
         ObjectManager::getInstance(BlogCategoryLocaleSyncService::class)->syncExistingCategories();

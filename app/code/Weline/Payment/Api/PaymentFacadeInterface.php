@@ -18,4 +18,12 @@ interface PaymentFacadeInterface
      * @param array<string, mixed> $context
      */
     public function tryCreatePayment(string $methodCode, array $context = []): ?PaymentTransactionRecord;
+
+    /**
+     * Confirm an existing transaction with its provider (Card Fields capture /
+     * hosted-checkout resume). Idempotent for already-successful transactions.
+     *
+     * @param array<string, mixed> $context
+     */
+    public function confirmPayment(string $transactionNo, array $context = []): PaymentTransactionRecord;
 }

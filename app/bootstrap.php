@@ -28,6 +28,23 @@ if ((!$isCliSapi) and !file_exists(BP . 'setup' . DIRECTORY_SEPARATOR . 'install
 require __DIR__ . DIRECTORY_SEPARATOR . 'autoload.php';
 // 加载框架通用函数（必须在 TraceContext::init() 之前，因为 TraceContext 依赖 w_env() 等函数）
 require __DIR__ . '/code/Weline/Framework/Common/functions.php';
+
+// 发布戳必须在任何 DI 解析之前生效：ExceptionBootstrap 会解析服务，晚加载会白跑一轮逐类签名。
+$releaseStampFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'framework' . DIRECTORY_SEPARATOR . 'release.php';
+$releaseStamp = \is_file($releaseStampFile) ? require $releaseStampFile : null;
+if (\Weline\Framework\Compilation\ReleaseStamp::isValid($releaseStamp)) {
+    \Weline\Framework\Compilation\ReleaseStamp::set($releaseStamp);
+    \define('WELINE_BUILD_ID', (string)$releaseStamp['build_id']);
+}
+
+// 生产 Web 请求不接受「没有编译产物」：与 04-performance-budget 的 fail-fast 约束一致。
+if (!\defined('WELINE_BUILD_ID') && !$isCliSapi) {
+    \http_response_code(503);
+    \header('Content-Type: text/plain; charset=utf-8');
+    echo "框架编译产物缺失或已过期。请先执行：php bin/w framework:compile\n";
+    exit(1);
+}
+
 // 初始化统一的异常处理系统
 ExceptionBootstrap::init($isCliSapi ? 'CLI' : 'FPM');
 

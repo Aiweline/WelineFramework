@@ -10,6 +10,19 @@ final class FrameworkCompileManifest
 
     private const FORMAT = 'weline-framework-compile-manifest/v2';
 
+    public const RELEASE_FILE_NAME = 'release.php';
+    private const RELEASE_FORMAT = 1;
+
+    /** 请求期会直接信任的运行期产物（位于 generated/ 根，非 framework 子目录）。 */
+    private const RUNTIME_ARTIFACT_FILES = [
+        'classmap.php',
+        'compiled_factories.php',
+        'reflection_metadata.php',
+        'events.php',
+        'hooks.php',
+        'psr4_map.php',
+    ];
+
     /** @var list<string> */
     private const ARTIFACT_FILES = [
         'modules.php',
@@ -304,6 +317,62 @@ final class FrameworkCompileManifest
     }
 
     /**
+     * 小型、请求期可直接 require 的发布戳：产物摘要只在编译期算一次。
+     *
+     * @param list<string> $moduleOrder
+     * @return array<string, mixed>
+     */
+    public function writeReleaseStamp(array $moduleOrder, string $outputDirectory): array
+    {
+        $artifacts = $this->artifactDigests($outputDirectory);
+        $normalized = [
+            'format' => self::RELEASE_FORMAT,
+            'php_version_id' => \PHP_VERSION_ID,
+            'module_set_hash' => \hash('sha256', \implode("\n", $moduleOrder)),
+            'artifacts' => $artifacts,
+            'runtime_artifacts' => $this->runtimeArtifactDigests(\dirname(\rtrim($outputDirectory, '/\\'))),
+        ];
+        $stamp = [
+            'build_id' => \hash('sha256', (string)\json_encode($normalized, \JSON_UNESCAPED_SLASHES)),
+        ] + $normalized + [
+            'compiled_at' => \time(),
+        ];
+        $content = "<?php\n\ndeclare(strict_types=1);\n\nreturn "
+            . \var_export($stamp, true)
+            . ";\n";
+        (new AtomicCompiledFilePublisher())->publish(
+            \rtrim($outputDirectory, '/\\') . DS . self::RELEASE_FILE_NAME,
+            $content,
+        );
+
+        return $stamp;
+    }
+
+    /**
+     * 请求期会直接 require 的运行期产物摘要；文件不存在则跳过（安装早期允许缺失）。
+     *
+     * @return array<string, string>
+     */
+    private function runtimeArtifactDigests(string $generatedDirectory): array
+    {
+        $digests = [];
+        foreach (self::RUNTIME_ARTIFACT_FILES as $fileName) {
+            $path = \rtrim($generatedDirectory, '/\\') . DS . $fileName;
+            \clearstatcache(true, $path);
+            if (!\is_file($path)) {
+                continue;
+            }
+            $digest = (string)@\hash_file('sha256', $path);
+            if (\preg_match('/^[a-f0-9]{64}$/D', $digest) !== 1) {
+                throw new \RuntimeException('Unable to hash runtime artifact: ' . $fileName);
+            }
+            $digests[$fileName] = $digest;
+        }
+
+        return $digests;
+    }
+
+    /**
      * Validate one already-published generation without recursively enumerating
      * the source tree. Every previously compiled PHP file is stat-checked, files
      * whose metadata changed are content-hashed, and directory metadata detects
@@ -381,6 +450,11 @@ final class FrameworkCompileManifest
                 ) {
                     return false;
                 }
+            }
+
+            // 发布戳必须存在且与本次 generation 完全一致：半发布/旧戳在这里 fail-closed。
+            if (!ReleaseStamp::generationMatches($outputDirectory, (array)$manifest['artifacts'])) {
+                return false;
             }
 
             return true;

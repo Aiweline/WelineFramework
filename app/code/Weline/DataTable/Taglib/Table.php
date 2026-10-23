@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\DataTable\Taglib;
 
 use Weline\DataTable\Helper\FrontendAccess;
+use Weline\DataTable\Helper\OwnedChildren;
 use Weline\DataTable\Helper\TableContext;
 use Weline\DataTable\Helper\UiAssets;
 use Weline\DataTable\Service\DataTableResourceRegistry;
@@ -82,7 +83,7 @@ final class Table implements TaglibInterface, OwnsChildCompilationInterface
 
     public static function callback(): callable
     {
-        return static function ($tagKey, $config, $tagData, $attributes): string {
+        return static function ($tagKey, $config, $tagData, $attributes, ?Template $template = null): string {
             if (!FrontendAccess::isAllowed($attributes)) {
                 return FrontendAccess::deniedComment('d-table');
             }
@@ -224,20 +225,18 @@ final class Table implements TaglibInterface, OwnsChildCompilationInterface
             TableContext::setTableContext($scope, $tableContext);
 
             try {
-                /** @var Template $template */
-                $template = w_obj(Template::class);
-                $taglib = ObjectManager::getInstance(\Weline\Framework\View\Taglib::class);
                 $rawContent = (string)($tagData[2] ?? '');
                 [$rawContent, $nestedFormSource, $nestedFormId] = self::extractNestedForm($rawContent, $formId);
                 $manual = trim($rawContent) !== '';
                 $rawContent = $manual
                     ? self::ensureRequiredTags($rawContent)
                     : self::generateDefaultTableStructure($modelConfig, $filterAdvanced, $filterCollapsible, $filterMode);
-                $content = $taglib->tagReplace($template, $rawContent);
+                $content = OwnedChildren::process($rawContent, (array)$config, $template, $tableContext);
+                $template ??= w_obj(Template::class);
 
                 if ($nestedFormSource !== '') {
                     $formId = $nestedFormId;
-                    $formHtml = $taglib->tagReplace($template, $nestedFormSource);
+                    $formHtml = OwnedChildren::process($nestedFormSource, (array)$config, $template, $tableContext);
                 } elseif (!$capabilities['create'] && !$capabilities['update']) {
                     $formHtml = '';
                 } else {

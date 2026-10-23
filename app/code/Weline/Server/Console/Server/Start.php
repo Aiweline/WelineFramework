@@ -1682,6 +1682,7 @@ class Start extends CommandAbstract
                 ];
             }
             $this->printer->note(__('纯 WLS 负责公网 TLS/HTTP；HTTP/3 不启用。'));
+            $this->publishHostNginxFpcDisk($publicHost, (int)$port);
         } elseif ($gatewayMode) {
             $gatewayHttpsPort = (int)($config['gateway']['public_https'] ?? 0);
             if ($gatewayHttpsPort < 1 || $gatewayHttpsPort > 65535) {
@@ -15166,6 +15167,39 @@ PHP;
         $this->printer->note('');
         $this->printer->note($this->colorize(str_repeat('─', 60), 'Blue'));
         $this->printer->note('');
+    }
+
+    /**
+     * Host Nginx (宝塔) reads config like any Nginx. Pure-WLS start writes the
+     * page-generation map and html-disk location, then reloads that Nginx.
+     */
+    private function publishHostNginxFpcDisk(string $publicHost, int $port): void
+    {
+        if (!\defined('BP') || $port < 1) {
+            return;
+        }
+        try {
+            $result = (new \Weline\Server\Service\Edge\Nginx\HostNginxFpcDiskPublisher())
+                ->publish((string)\BP, $publicHost, $port);
+        } catch (\Throwable $exception) {
+            $this->printer->warning(__('宿主 Nginx FPC 配置未加载：%{1}', [$exception->getMessage()]));
+            return;
+        }
+        if (($result['skipped'] ?? false) === true) {
+            return;
+        }
+        $notice = \trim((string)($result['notice'] ?? ''));
+        if ($notice !== '') {
+            $this->printer->warning($notice);
+            return;
+        }
+        if (($result['reloaded'] ?? false) === true) {
+            $this->printer->note(__('宿主 Nginx 已加载本项目的 FPC 世代配置。'));
+            return;
+        }
+        if (($result['ok'] ?? false) !== true) {
+            $this->printer->warning(__('宿主 Nginx FPC 配置未加载：%{1}', [(string)($result['message'] ?? '')]));
+        }
     }
 
     private function resolveEdgeCliMode(array $args): ?string

@@ -12,6 +12,7 @@ use Weline\Theme\Font\Font;
 use Weline\Theme\Font\BinaryStream;
 use Weline\Theme\Font\Table\Table;
 use Weline\Theme\Font\Table\DirectoryEntry;
+use Weline\Theme\Font\Table\Type\cmap;
 use Weline\Theme\Font\Table\Type\glyf;
 use Weline\Theme\Font\Table\Type\name;
 use Weline\Theme\Font\Table\Type\nameRecord;
@@ -37,6 +38,9 @@ class File extends BinaryStream {
   protected $glyph_subset = array();
 
   public $glyph_all = array();
+
+  /** @var array<int, int> unicode codepoint => source glyph id，仅子集用到的字 */
+  private $subset_unicode_map = array();
 
   static $macCharNames = array(
     ".notdef", ".null", "CR",
@@ -287,24 +291,21 @@ class File extends BinaryStream {
 
     $subset = array_unique($subset);
 
-    $glyphIndexArray = $this->getUnicodeCharMap();
-
-    if (!$glyphIndexArray) {
-      return;
-    }
-
     $gids = array(
-      0, // .notdef — required; do NOT force source gid 1 (often "space" in CJK fonts, not .null)
+      0 => 0, // .notdef — required; do NOT force source gid 1 (often "space" in CJK fonts, not .null)
     );
+    $mapped = array();
 
     foreach ($subset as $code) {
-      if (!isset($glyphIndexArray[$code])) {
+      $code = (int)$code;
+      $gid = $this->mapCodeToGlyph($code);
+      if ($gid <= 0) {
         continue;
       }
-
-      $gid        = $glyphIndexArray[$code];
+      $mapped[$code] = $gid;
       $gids[$gid] = $gid;
     }
+    $this->subset_unicode_map = $mapped;
 
     /** @var glyf $glyf */
     $glyf = $this->getTableObject("glyf");
@@ -313,7 +314,45 @@ class File extends BinaryStream {
       sort($gids);
       $this->glyph_subset = $gids;
     }
-    $this->glyph_all    = array_values($glyphIndexArray); // FIXME
+    $this->glyph_all = array_values($gids);
+  }
+
+  /**
+   * @return array<int, int>
+   */
+  function getSubsetUnicodeMap() {
+    return $this->subset_unicode_map;
+  }
+
+  function mapCodeToGlyph($code) {
+    $code = (int)$code;
+    $subtable = $this->unicodeCmapSubtable();
+    if (!$subtable) {
+      return 0;
+    }
+    $expanded = $subtable['glyphIndexArray'] ?? null;
+    if (\is_array($expanded) && $expanded !== [] && isset($expanded[$code])) {
+      return (int)$expanded[$code];
+    }
+    $cmap = $this->getTableObject('cmap');
+    if ($cmap instanceof cmap) {
+      return $cmap->glyphIdForCode($subtable, $code);
+    }
+
+    return 0;
+  }
+
+  /**
+   * @return array<string, mixed>|null
+   */
+  private function unicodeCmapSubtable() {
+    foreach ($this->getData("cmap", "subtables") as $_subtable) {
+      if ($_subtable["platformID"] == 0 || ($_subtable["platformID"] == 3 && $_subtable["platformSpecificID"] == 1)) {
+        return $_subtable;
+      }
+    }
+
+    return null;
   }
 
   function getSubset() {

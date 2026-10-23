@@ -35,6 +35,23 @@ final class CmsEditorContextResolverTest extends TestCase
         self::assertTrue($context->defaultStore);
     }
 
+    public function testDefaultStoreWhoseIdIsZeroIsAValidEditorContext(): void
+    {
+        $store = $this->store(0, 0, 'default', true, true);
+        $resolver = $this->resolver(
+            defaultStore: $store,
+            byId: [$store->id => $store],
+            byWebsite: [$store],
+        );
+
+        $context = $resolver->resolve($this->page(0, 'default'), null, 'zh_Hans_CN');
+
+        self::assertSame(0, $context->websiteId);
+        self::assertSame(0, $context->storeId);
+        self::assertSame('default', $context->storeCode);
+        self::assertTrue($context->defaultStore);
+    }
+
     public function testExplicitStoreMustBelongToPageWebsite(): void
     {
         $foreign = $this->store(8, 2, 'foreign', false, true);

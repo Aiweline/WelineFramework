@@ -39,7 +39,9 @@ class Stream extends FrontendRestController
             $ticket = (string)$this->request->getGet('ticket', '');
             $streamTicket = $this->sessionService->consumeStreamTicket($ticket);
             $events = $this->gateway->executeStream($streamTicket);
-            $isRuntimeTaskStream = $this->isRuntimeTaskChannel((string)$streamTicket['channel']);
+            $channel = (string)$streamTicket['channel'];
+            $isRuntimeTaskStream = $this->isRuntimeTaskChannel($channel);
+            $isRotatingObservation = $this->isRotatingObservationChannel($channel);
 
             $sse->start();
             if (!$isRuntimeTaskStream) {
@@ -75,7 +77,7 @@ class Stream extends FrontendRestController
             // A runtime provider may intentionally rotate a subscription after
             // replay/polling. Its terminal state must therefore come only from
             // a persisted event, never from the HTTP stream ending.
-            if ($isRuntimeTaskStream) {
+            if ($isRotatingObservation) {
                 // Tell the StreamHandle to fetch a fresh ticket. Native
                 // EventSource would otherwise auto-retry the consumed ticket
                 // URL and leave the UI cursor stuck until the task finishes.
@@ -184,6 +186,15 @@ class Stream extends FrontendRestController
     private function isRuntimeTaskChannel(string $channel): bool
     {
         return \str_starts_with($channel, 'runtime_task.');
+    }
+
+    /**
+     * Bounded observation windows must rotate the one-time ticket.
+     * `done` would mark the client stream terminal and stop menu updates.
+     */
+    private function isRotatingObservationChannel(string $channel): bool
+    {
+        return $this->isRuntimeTaskChannel($channel) || $channel === 'admin.menuSignalWatch';
     }
 
     private function normalizeEventId(mixed $id): ?int

@@ -1301,7 +1301,14 @@ final class FrontendWorkerSessionService
         if ($attestedArea === FrontendWorkerExecutionContext::AREA_FRONTEND && $storedThemeId !== '') {
             // Storefront identity = Scope-published theme version (not system deploy stamp).
             if ($storedThemeId !== $themePublishedVersionId) {
-                throw new FrontendQueryException('auth_error', 'Worker session theme generation mismatch.', 401);
+                // Generation drift is a page-generation mismatch, not an auth failure:
+                // 409 lets QueryBin attach the current page_generation_token and the
+                // main thread auto-reloads onto the current Scope generation.
+                throw new FrontendQueryException(
+                    'deploy_reload_required',
+                    'Worker session theme generation mismatch.',
+                    409,
+                );
             }
         } else {
             if ((string)($session['deploy_version'] ?? '') !== $deployVersion) {

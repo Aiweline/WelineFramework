@@ -55,7 +55,15 @@ final class ScopeChanged implements ObserverInterface
             }
             $request = new Event(['data' => ['action' => 'purge_scope', 'website_id' => $websiteId, 'data' => ['urls' => $urls]]]);
             $this->cdnRequest->execute($request);
-            $event->setData('cdn_result', $request->getData('response'));
+            $response = $request->getData('response');
+            $event->setData('cdn_result', $response);
+            if (!is_array($response) || ($response['success'] ?? null) !== true) {
+                w_log_error('CDN scope URL purge failed: ' . json_encode([
+                    'website_id' => $websiteId,
+                    'urls' => $urls,
+                    'response' => $response,
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            }
         } catch (\Throwable $e) {
             $event->setData('cdn_result', ['success' => false, 'message' => __('CDN 资源变更清理失败')]);
             w_log_error('CDN scope URL purge failed: ' . $e->getMessage());

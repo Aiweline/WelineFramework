@@ -98,12 +98,21 @@ private function assert_QueryBinDeployGeneration_testHandshakeAssertsClientTheme
     self::assertStringContainsString("'deploy_reload_required'", $src);
     self::assertStringContainsString('主题已发布新版本。请重新加载页面以继续。', $src);
     self::assertStringContainsString('StorefrontGenerationIdentity', $src);
-    self::assertStringContainsString('collectAcceptableStorefrontGenerationIds', $src);
+    // Strict current generation: old/rollback generations must be corrected, not accepted.
+    self::assertStringNotContainsString('collectAcceptableStorefrontGenerationIds', $src);
+    self::assertStringContainsString('isCurrentStorefrontGenerationId', $src);
+    self::assertStringContainsString('page_generation_token', $src);
     self::assertStringContainsString('theme_published_version_id', $src);
     self::assertStringNotContainsString('assertClientDeployGenerationCurrent', $src);
     self::assertStringNotContainsString('currentServerDeployVersion', $src);
     // Backend-attested handshake must not 409 on missing storefront theme stamp.
     self::assertMatchesRegularExpression('/\$backendBootstrapId\s*===\s*\'\'\s*\)\s*\{\s*\$this->assertClientThemeGenerationCurrent/', $src);
+
+    // TU epoch must move both the wire generation and the FPC slot token.
+    $resolver = (string) \file_get_contents(BP . 'app/code/Weline/Theme/Service/ThemePublishedVersionRuntimeResolver.php');
+    self::assertStringContainsString("'.e' . \$tuEpoch", $resolver);
+    $runtime = (string) \file_get_contents(BP . 'app/code/Weline/Theme/Service/ThemeUpdate/ThemeUpdateRuntime.php');
+    self::assertStringContainsString("'~e' . \$epoch", $runtime);
 }
 
 private function assert_QueryBinDeployGeneration_testApiJsComparesHolePunchThemePublishedVersion(): void
@@ -157,6 +166,17 @@ private function assert_QueryBinDeployGeneration_testWorkerSessionThemeMatchIsSt
     self::assertStringNotContainsString("const themeGenerationMatches = configThemeId === ''\n            || sessionThemeId === ''\n            || sessionThemeId === configThemeId;", $script);
     self::assertStringContainsString('theme generation mismatch', $script);
     self::assertStringContainsString('sessionsByScopeKey.clear()', $script);
+    // Handshake 409 must carry the current page-generation token to the main thread.
+    self::assertStringContainsString('pageGenerationToken:', $script);
+    self::assertStringContainsString('body.error.page_generation_token', $script);
+    // Worker error serialization must preserve the token for the main thread.
+    self::assertStringContainsString('page_generation_token: error && error.pageGenerationToken', $script);
+
+    $service = (string) \file_get_contents(BP . 'app/code/Weline/Framework/Service/Query/FrontendWorkerSessionService.php');
+    self::assertMatchesRegularExpression(
+        "/throw new FrontendQueryException\\(\\s*'deploy_reload_required',\\s*'Worker session theme generation mismatch\\.',\\s*409,/s",
+        $service,
+    );
 }
 
 private function assert_QueryBinDeployGeneration_testNonceCommitPassesThemePublishedVersionId(): void
@@ -218,5 +238,7 @@ private function assert_ScopeBootstrapRoute_testClientFetchesCanonicalHolePunchP
     self::assertFileExists($js);
     $src = (string) \file_get_contents($js);
     self::assertStringContainsString("fetch('/api/frontend/scope-bootstrap'", $src);
+    $controller = (string) \file_get_contents(BP . 'app/code/Weline/Frontend/Controller/Api/ScopeBootstrap.php');
+    self::assertStringContainsString("'page_generation_token' =>", $controller);
 }
 }

@@ -1420,9 +1420,10 @@
      * Theme/UI tip + auto-reload when *server* generation left the page behind
      * (ScopeBootstrap / QueryBin). Never uses native window.confirm/alert.
      * @param {string} [message]
+     * @param {string} [pageGenerationToken] 16-hex slot; requests NG/WLS for that FPC
      * @returns {boolean} true when reload started (or tip shown with reload attempted)
      */
-    function promptStorefrontGenerationRefresh(message) {
+    function promptStorefrontGenerationRefresh(message, pageGenerationToken) {
         try {
             const now = Date.now();
             const last = Number(sessionStorage.getItem(STOREFRONT_GEN_PROMPT_GUARD_KEY) || 0) || 0;
@@ -1450,10 +1451,31 @@
             // Toast is optional; reload still proceeds.
         }
 
+        return navigateToRequestedPageGeneration(pageGenerationToken);
+    }
+
+    /**
+     * Ask Nginx and WLS for this generation's FPC. `w_pg` changes the URL so a
+     * stale CDN copy is not reused. No token → ordinary reload.
+     * @param {string} [pageGenerationToken]
+     * @returns {boolean}
+     */
+    function navigateToRequestedPageGeneration(pageGenerationToken) {
+        const gen = String(pageGenerationToken || '').trim().toLowerCase();
         try {
-            window.location.reload();
+            if (!/^[a-f0-9]{16}$/.test(gen)) {
+                window.location.reload();
+                return true;
+            }
+            const url = new URL(window.location.href);
+            if (url.searchParams.get('w_pg') === gen) {
+                window.location.reload();
+                return true;
+            }
+            url.searchParams.set('w_pg', gen);
+            window.location.assign(url.toString());
             return true;
-        } catch (_reloadError) {
+        } catch (_navError) {
             return false;
         }
     }

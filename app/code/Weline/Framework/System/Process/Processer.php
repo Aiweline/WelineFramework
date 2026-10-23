@@ -12998,6 +12998,7 @@ POWERSHELL;
             'stale_pids_removed' => 0,
             'stale_json_files_removed' => 0,
             'legacy_pid_files_removed' => 0,
+            'detached_logs_removed' => 0,
         ];
         
         // 1. 清理 N 天前的生命周期日志
@@ -13013,10 +13014,45 @@ POWERSHELL;
         
         // 4. 清理历史遗留的 {pid}.pid 文件（已废弃机制）
         $stats['legacy_pid_files_removed'] = self::cleanupLegacyPidFiles();
+
+        // 5. 清理脱离进程的 var/process/*.log（不含 lifecycle.log）
+        $stats['detached_logs_removed'] = self::cleanupDetachedProcessLogs($logRetentionDays);
         
         return $stats;
     }
     
+    /**
+     * 清理脱离进程的 var/process/*.log（queue-search 等任务日志）。
+     * lifecycle.log 仍走 cleanupLifecycleLog 行级裁剪。
+     */
+    private static function cleanupDetachedProcessLogs(int $days): int
+    {
+        $dir = Env::varDir() . 'process' . DS;
+        if (!\is_dir($dir)) {
+            return 0;
+        }
+        $cutoff = \time() - (\max(1, $days) * 86400);
+        $removed = 0;
+        $files = \glob($dir . '*.log') ?: [];
+        foreach ($files as $path) {
+            if (!\is_file($path)) {
+                continue;
+            }
+            if (\basename($path) === 'lifecycle.log') {
+                continue;
+            }
+            $mtime = \filemtime($path);
+            if ($mtime === false || $mtime >= $cutoff) {
+                continue;
+            }
+            if (\unlink($path)) {
+                $removed++;
+            }
+        }
+
+        return $removed;
+    }
+
     /**
      * 清理历史遗留的 {pid}.pid 文件
      * 

@@ -26,7 +26,7 @@ final class StorefrontWarmup implements CronTaskInterface
 
     public function tip(): string
     {
-        return __('每分钟推进店面 FPC 预热相位 A→B(Sitemap 文档)→C(补源)→D(地图 loc)；真机 busy 门禁；进度账本续跑。WLS Worker 不再编排店面预热。');
+        return __('每分钟推进店面 FPC 预热相位 A→B(Sitemap 文档)→C(补源)→D(地图 loc)；真机 busy 门禁；进度账本续跑。系统权威时钟与账本世代不一致时立即标记需要预热并从相位 A 重跑。WLS Worker 不再编排店面预热。');
     }
 
     public function cron_time(): string
@@ -52,7 +52,7 @@ final class StorefrontWarmup implements CronTaskInterface
             $elapsed = \round((\microtime(true) - $started), 2);
 
             return \sprintf(
-                'storefront_warmup source=%s phase=%s reason=%s warmed=%d skipped=%d failed=%d band=%s designed_conc=%d designed_shard=%d effective_conc=%d effective_shard=%d idle_ratio=%.3f remaining=%d yield=%d elapsed=%ss',
+                'storefront_warmup source=%s phase=%s reason=%s warmed=%d skipped=%d failed=%d band=%s designed_conc=%d designed_shard=%d effective_conc=%d effective_shard=%d idle_ratio=%.3f remaining=%d yield=%d gen=%d needs_rewarm=%d generation_changed=%d elapsed=%ss',
                 (string)($report['source'] ?? 'cron'),
                 (string)($report['phase'] ?? ''),
                 (string)($report['reason'] ?? ''),
@@ -67,6 +67,9 @@ final class StorefrontWarmup implements CronTaskInterface
                 (float)($report['idle_ratio'] ?? (1.0 - (float)($report['capacity']['ratio'] ?? 0))),
                 (int)($report['remaining'] ?? ($report['capacity']['remaining'] ?? 0)),
                 (($report['reason'] ?? '') === 'yield_traffic' || ($report['band'] ?? '') === 'yield') ? 1 : 0,
+                (int)($report['generation_authority_clock'] ?? 0),
+                !empty($report['needs_rewarm']) ? 1 : 0,
+                !empty($report['generation_changed']) ? 1 : 0,
                 (string)$elapsed,
             );
         } catch (\Throwable $e) {

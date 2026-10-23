@@ -212,6 +212,7 @@ final class ManagedNginxService
         string $ownerInstance,
         string $edgeAdapterName,
         ?array $certificateGeneration,
+        bool $allowLegacyWlsBackend = false,
     ): array {
         if ($edgeAdapterName !== EdgeAdapterInterface::NAME_NGINX) {
             return ['ok' => false, 'message' => 'Nginx is the only supported public edge adapter'];
@@ -248,10 +249,19 @@ final class ManagedNginxService
             ];
         }
         if ($previousOwner === null && (bool)$currentStatus['running']) {
-            return [
-                'ok' => false,
-                'message' => 'managed nginx is already running without a verifiable owner; refusing upstream takeover',
-            ];
+            // Legacy/adopted edge: process identity is already safe. Allow a same-upstream
+            // takeover so config generation + reload can adopt it and write the owner file;
+            // a different upstream is still refused.
+            $activeUpstreamPort = $this->activeConfigUpstreamPort();
+            if ($activeUpstreamPort < 1 || $activeUpstreamPort !== $upstreamPort) {
+                return [
+                    'ok' => false,
+                    'message' => 'managed nginx is already running without a verifiable owner; '
+                        . 'refusing upstream takeover (active upstream '
+                        . ($activeUpstreamPort > 0 ? (string)$activeUpstreamPort : 'unknown')
+                        . ', requested ' . $upstreamPort . ')',
+                ];
+            }
         }
         if (!$this->paths->isInstalled()) {
             return [
@@ -285,7 +295,11 @@ final class ManagedNginxService
         $backendIdentity = null;
         $upstreamPorts = [$upstreamPort];
         if (!$fpmOrigin) {
-            $backendIdentity = $this->resolveWlsBackendIdentity($ownerInstance, $upstreamPort);
+            $backendIdentity = $this->resolveWlsBackendIdentity(
+                $ownerInstance,
+                $upstreamPort,
+                $allowLegacyWlsBackend,
+            );
             if ($backendIdentity === null) {
                 return [
                     'ok' => false,
@@ -405,6 +419,7 @@ final class ManagedNginxService
                 'previous_owner_sha256' => $previousOwnerContents !== null
                     ? \hash('sha256', $previousOwnerContents)
                     : '',
+                'legacy_wls_backend' => $allowLegacyWlsBackend,
                 ...$this->certificateGenerationFacts($written),
                 ...$this->protocolFacts($written, $capabilities),
                 'updated_at' => \date('c'),
@@ -488,6 +503,7 @@ final class ManagedNginxService
                     (string)$written['config_generation'],
                     $ownerInstance,
                     $upstreamPort,
+                    $allowLegacyWlsBackend,
                 )
             ) {
                 $recovery = $this->restorePublishedConfig(
@@ -511,6 +527,7 @@ final class ManagedNginxService
                 (string)$written['config_generation'],
                 $ownerInstance,
                 $upstreamPort,
+                $allowLegacyWlsBackend,
             )) {
                 $recovery = $this->restorePublishedConfig(
                     $rollback,
@@ -970,11 +987,29 @@ final class ManagedNginxService
         }
         $owner = $this->readOwner();
         if (!\is_array($owner)) {
-            return [
-                'ok' => false,
-                'message' => 'managed nginx is running without a verifiable owner; refusing reload',
-                'exit_code' => null,
-            ];
+            // Ownerless legacy/adopted edge: if the running config still points at a
+            // live nginx-edge WLS instance, regenerate config + reload and write the
+            // owner file. This is the automatic-load path for `server:reload` /
+            // `server:nginx:reload` after code or Edge config changes.
+            $adoption = $this->ownerlessLegacyAdoptionParams();
+            if ($adoption === null) {
+                return [
+                    'ok' => false,
+                    'message' => 'managed nginx is running without a verifiable owner; refusing reload',
+                    'exit_code' => null,
+                ];
+            }
+            [$adoptPort, $adoptHost, $adoptNames, $adoptInstance, $adoptCertificate, $allowLegacyWls] = $adoption;
+
+            return $this->prepareAndStartUnlocked(
+                $adoptPort,
+                $adoptHost,
+                $adoptNames,
+                $adoptInstance,
+                EdgeAdapterInterface::NAME_NGINX,
+                $adoptCertificate,
+                $allowLegacyWls,
+            );
         }
         $fpmOrigin = $this->paths->isFpmOrigin();
         $backendIdentity = null;
@@ -998,6 +1033,7 @@ final class ManagedNginxService
             $backendIdentity = $this->resolveWlsBackendIdentity(
                 (string)$owner['instance_name'],
                 (int)$owner['upstream_port'],
+                (bool)($owner['legacy_wls_backend'] ?? false),
             );
             if ($backendIdentity === null) {
                 return [
@@ -1954,7 +1990,11 @@ final class ManagedNginxService
      *
      * @return array{topology:'direct'|'dispatcher',listener_mode:string,upstream_port:int,upstream_ports:list<int>,worker_port:int,worker_count:int}|null
      */
-    private function resolveWlsBackendIdentity(string $instanceName, int $upstreamPort): ?array
+    private function resolveWlsBackendIdentity(
+        string $instanceName,
+        int $upstreamPort,
+        bool $allowLegacyWls = false,
+    ): ?array
     {
         try {
             $endpoint = (new ServerInstanceManager())->getRawInstanceData($instanceName);
@@ -1969,7 +2009,12 @@ final class ManagedNginxService
                 $edgeAdapterName = EdgeAdapterInterface::NAME_NGINX;
             }
             if ($edgeAdapterName !== EdgeAdapterInterface::NAME_NGINX) {
-                return null;
+                // Ownerless legacy adoption may front an existing pure-WLS instance.
+                // Only the explicit adoption path sets this flag; normal start/reload
+                // still require an nginx-edge owner.
+                if (!$allowLegacyWls || $edgeAdapterName !== 'wls') {
+                    return null;
+                }
             }
             $endpointPort = (int)($endpoint['port'] ?? $endpoint['main_port'] ?? 0);
             $mainPort = (int)($endpoint['main_port'] ?? $endpointPort);
@@ -2608,6 +2653,7 @@ final class ManagedNginxService
         string $generation,
         string $ownerInstance,
         int $upstreamPort,
+        bool $allowLegacyWlsBackend = false,
     ): bool {
         if ($fpmOrigin) {
             return $this->verifyFpmEdgeHttpRuntime($protocol, $port, $serverNames, $generation);
@@ -2620,6 +2666,7 @@ final class ManagedNginxService
             $generation,
             $ownerInstance,
             $upstreamPort,
+            $allowLegacyWlsBackend,
         );
     }
 
@@ -2765,6 +2812,7 @@ final class ManagedNginxService
         string $generation,
         string $ownerInstance,
         int $upstreamPort,
+        bool $allowLegacyWlsBackend = false,
     ): bool {
         if (!\in_array($protocol, ['1.1', '2'], true)
             || $port < 1
@@ -2793,7 +2841,11 @@ final class ManagedNginxService
             return false;
         }
 
-        $backendIdentity = $this->resolveWlsBackendIdentity($ownerInstance, $upstreamPort);
+        $backendIdentity = $this->resolveWlsBackendIdentity(
+            $ownerInstance,
+            $upstreamPort,
+            $allowLegacyWlsBackend,
+        );
         if ($backendIdentity === null) {
             return false;
         }
@@ -3421,6 +3473,78 @@ final class ManagedNginxService
     private function readOwner(): ?array
     {
         return $this->readOwnerFile($this->paths->ownerFile());
+    }
+
+    /**
+     * Upstream port of the active managed config. Used only to prove that an
+     * ownerless legacy process is still this project's same edge before adoption.
+     */
+    private function activeConfigUpstreamPort(): int
+    {
+        $conf = @\file_get_contents($this->paths->confFile());
+        if (!\is_string($conf) || $conf === '') {
+            return 0;
+        }
+        if (\preg_match(
+            '/upstream\s+wls_backend\s*\{[^}]*?server\s+(?:\[[^\]]+\]|[^:\s]+):(\d+)\s*;/s',
+            $conf,
+            $matched,
+        ) !== 1) {
+            return 0;
+        }
+        $port = (int)$matched[1];
+
+        return $port > 0 && $port <= 65535 ? $port : 0;
+    }
+
+    /**
+     * Rebuild prepare/start parameters for an ownerless legacy managed edge.
+     * Only returns when the active config's upstream matches a live WLS instance;
+     * pure-WLS instances are allowed only for this explicit adoption path.
+     *
+     * @return array{0:int,1:string,2:list<string>,3:string,4:array<string,mixed>|null,5:bool}|null
+     */
+    private function ownerlessLegacyAdoptionParams(): ?array
+    {
+        $upstreamPort = $this->activeConfigUpstreamPort();
+        if ($upstreamPort < 1) {
+            return null;
+        }
+        try {
+            /** @var ServerInstanceManager $manager */
+            $manager = \Weline\Framework\Manager\ObjectManager::getInstance(ServerInstanceManager::class);
+        } catch (\Throwable) {
+            return null;
+        }
+        $ownerInstance = '';
+        $publicHost = '';
+        $allowLegacyWls = false;
+        foreach ($manager->listPersistedInstanceNames() as $name) {
+            $raw = $manager->getRawInstanceData((string)$name);
+            if (!\is_array($raw)) {
+                continue;
+            }
+            $candidatePort = (int)($raw['port'] ?? $raw['main_port'] ?? 0);
+            if ($candidatePort !== $upstreamPort) {
+                continue;
+            }
+            $adapterName = \strtolower(\trim((string)($raw['edge_adapter'] ?? '')));
+            if ($adapterName !== '' && !\in_array($adapterName, ['nginx', 'wls'], true)) {
+                continue;
+            }
+            $ownerInstance = (string)$name;
+            $publicHost = \trim((string)($raw['public_host'] ?? $raw['host'] ?? ''));
+            $allowLegacyWls = $adapterName === 'wls';
+            break;
+        }
+        if ($ownerInstance === '') {
+            return null;
+        }
+        $catalog = new ManagedNginxLocalHostCatalog();
+        $serverNames = $catalog->expandServerNames($publicHost !== '' ? [$publicHost] : []);
+        $certificate = $catalog->resolveEdgeCertificate(null, $serverNames);
+
+        return [$upstreamPort, '127.0.0.1', $serverNames, $ownerInstance, $certificate, $allowLegacyWls];
     }
 
     /** @return array<string,mixed>|null */

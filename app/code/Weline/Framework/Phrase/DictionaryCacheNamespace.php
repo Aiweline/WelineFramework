@@ -80,7 +80,14 @@ final class DictionaryCacheNamespace
             return null;
         }
 
-        $namespaces = self::namespacePaths($locales);
+        $namespaceMemoKey = 'phrase.dict.ns.paths.' . \md5(\implode('|', $locales));
+        $namespaces = RequestContext::isInitialized() ? RequestContext::get($namespaceMemoKey) : null;
+        if (!\is_array($namespaces)) {
+            $namespaces = self::namespacePaths($locales);
+            if (RequestContext::isInitialized()) {
+                RequestContext::set($namespaceMemoKey, $namespaces);
+            }
+        }
         $scopeKey = \implode('|', $namespaces);
         $requestId = RequestContext::getId();
         if ($requestId === null) {

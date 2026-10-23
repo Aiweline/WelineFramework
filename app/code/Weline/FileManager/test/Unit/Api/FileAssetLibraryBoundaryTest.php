@@ -387,7 +387,7 @@ final class FileAssetLibraryBoundaryTest extends TestCase
     public function testLegacyMigrationComputesSha256FromFileContents(): void
     {
         $migration = (string)file_get_contents(
-            BP . '/app/code/Weline/FileManager/Setup/Db/Migration/import_legacy_local_media_20260822-v1.1.0.php',
+            BP . '/app/code/Weline/FileManager/Service/Setup/LegacyLocalMediaImporter.php',
         );
 
         self::assertStringContainsString("hash_init('sha256')", $migration);

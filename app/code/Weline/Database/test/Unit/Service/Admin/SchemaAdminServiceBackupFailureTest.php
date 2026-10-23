@@ -6,7 +6,7 @@ namespace Weline\Database\Test\Unit\Service\Admin;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Database\Service\Admin\SchemaAdminService;
-use Weline\Database\Service\BackupService;
+use Weline\Framework\Database\Service\BackupService;
 use Weline\Framework\Database\Connection\Api\AtomicPhysicalTableChangeInterface;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\DbManager\ConfigProvider;

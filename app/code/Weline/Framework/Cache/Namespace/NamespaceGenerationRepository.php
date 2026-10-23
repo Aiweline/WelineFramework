@@ -319,6 +319,73 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
     }
 
     /**
+     * @return list<string> stored public namespaces, never @clock
+     */
+    public function listStoredNamespaces(): array
+    {
+        try {
+            $rows = $this->newGenerationModel()
+                ->fields(NamespaceVersion::schema_fields_NAMESPACE)
+                ->select()
+                ->fetchArray();
+        } catch (\Throwable $e) {
+            if ($this->isGenerationAuthorityTableMissing($e)) {
+                return [];
+            }
+            throw $e;
+        }
+        $namespaces = [];
+        foreach (\is_array($rows) ? $rows : [] as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $namespace = \trim((string)($row[NamespaceVersion::schema_fields_NAMESPACE] ?? ''));
+            if ($namespace === '' || $namespace === NamespacePath::AUTHORITY_CLOCK) {
+                continue;
+            }
+            $namespaces[] = $namespace;
+        }
+        $namespaces = \array_values(\array_unique($namespaces));
+        \sort($namespaces, \SORT_STRING);
+
+        return $namespaces;
+    }
+
+    /**
+     * Delete leftover exact namespace rows. @clock is never forgotten.
+     *
+     * @param list<string> $namespaces
+     */
+    public function forgetExact(array $namespaces): int
+    {
+        $canonical = [];
+        foreach ($namespaces as $namespace) {
+            if (!\is_string($namespace) || \trim($namespace) === '') {
+                continue;
+            }
+            if ($namespace === NamespacePath::AUTHORITY_CLOCK) {
+                continue;
+            }
+            $canonical[] = $this->path->canonicalize($namespace);
+        }
+        $canonical = \array_values(\array_unique($canonical));
+        if ($canonical === []) {
+            return 0;
+        }
+        $hashes = [];
+        foreach ($canonical as $namespace) {
+            $hashes[] = self::hashNamespace($namespace);
+        }
+        $this->newGenerationModel()
+            ->where(NamespaceVersion::schema_fields_HASH, $hashes, 'IN')
+            ->delete()
+            ->fetch();
+        $this->snapshot->dropNamespaces($canonical);
+
+        return \count($canonical);
+    }
+
+    /**
      * @param list<string> $requested public canonical namespaces plus optional @clock
      * @return array<string,int>
      */
@@ -483,7 +550,8 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
                 return $next;
             }
 
-            // Generations never decrease and rows are never deleted. Advancing
+            // Generations never decrease. Orphan leftover rows may be forgotten
+        // via forgetExact(); live authority rows are not deleted here. Advancing
             // the expected value avoids a stale repeatable-read snapshot after
             // another transaction wins the CAS (notably MySQL/InnoDB).
             $expected = $next;

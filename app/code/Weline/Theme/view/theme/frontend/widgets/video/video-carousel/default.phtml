@@ -210,62 +210,8 @@ foreach ($rawItems as $row) {
     }
 }
 
-if ($items === [] && \Weline\Theme\Helper\StorefrontHanfuDemoCatalog::allowed()) {
-    // 店面空配置时的古风古装 YouTube 演示（oEmbed 可站外嵌入；作者/简介取自公开频道信息）
-    // 仅已知汉服站；grocery 等新站禁止串入汉服视频 demo。
-    $demoRows = [
-        [
-            'video_type' => 'youtube',
-            'video_url' => 'https://www.youtube.com/watch?v=HxNb2cUg5Pg',
-            'title' => $translateDefaultCopy('齐胸襦裙穿法指南', 'How to Wear Qixiong Ruqun'),
-            'author' => 'Yumi King',
-            'description' => $translateDefaultCopy(
-                '一片式与两片式齐胸汉服的穿法演示，适合初学者快速上手日常造型。',
-                'Beginner-friendly guide to one- and two-piece chest-high Hanfu looks for everyday wear.'
-            ),
-            // 齐胸襦裙演示 → 唐制齐胸襦裙/诃子裙 SKU
-            'product_ids' => '234,227',
-        ],
-        [
-            'video_type' => 'youtube',
-            'video_url' => 'https://www.youtube.com/watch?v=s1BDvRuEgSM',
-            'title' => $translateDefaultCopy('汉制曲裾深衣穿法', 'How to Wear Quju Shenyi'),
-            'author' => 'Five Thousand Years',
-            'description' => $translateDefaultCopy(
-                '秦汉曲裾深衣逐步穿戴教程，讲解交领右衽、续衽钩边与大袖礼仪场合要点。',
-                'Step-by-step Quju Shenyi from the Qin–Han era: wrapping order, ritual sleeves, and historical notes.'
-            ),
-            // 曲裾/深衣系 → 战国直裾袍与魏晋交领广袖（店内最接近先秦–魏晋深衣形制）
-            'product_ids' => '237,232',
-        ],
-        [
-            'video_type' => 'youtube',
-            'video_url' => 'https://www.youtube.com/watch?v=iMwTyWg3_bU',
-            'title' => $translateDefaultCopy('马面裙的现代穿搭', 'Style Mamianqun with Modern Looks'),
-            'author' => 'Yugene Lee',
-            'description' => $translateDefaultCopy(
-                '明制马面裙与现代外套、唐制褙子等混搭思路，通勤与秋冬造型参考。',
-                'Ming-style mamianqun mixed with modern coats and Tang-inspired layers for commute and cold weather.'
-            ),
-            // 马面裙穿搭 → 明制短袄马面裙
-            'product_ids' => '245,241',
-        ],
-        [
-            'video_type' => 'youtube',
-            'video_url' => 'https://www.youtube.com/watch?v=ZRRQbkh0ryI',
-            'title' => $translateDefaultCopy('明代朝服穿戴演示', 'Ming Court Dress Demonstration'),
-            'author' => 'ZiQiao子翹Official Channel',
-            'description' => $translateDefaultCopy(
-                '明华堂「大明衣冠」系列：晚明朝服穿戴顺序与穿着效果演示（含中英字幕）。',
-                'MingHuaTang court-dress reconstruction: wearing order and finished look with bilingual captions.'
-            ),
-            // 明制朝服礼仪感 → 织金道袍 + 方领补服短袄
-            'product_ids' => '246,241',
-        ],
-    ];
-    foreach ($demoRows as $row) {
-        $items[] = $normalizeItem($row);
-    }
+if ($items === []) {
+    $items[] = $normalizeItem([]);
 }
 
 foreach ($items as $index => &$slide) {

@@ -16,6 +16,7 @@ use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupCapacityPlanner;
 use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupExcludeGate;
+use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupGenerationFence;
 use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupHttpClient;
 use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupOfferQueue;
 use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupOrchestrator;
@@ -36,6 +37,11 @@ use Weline\Server\Service\MemoryStateFacade;
  */
 final class CacheContractsTest extends TestCase
 {
+    public function testStorefrontWarmupGenerationFenceRestartsWhenAuthorityClockChanges(): void
+    {
+        $this->assert_StorefrontWarmupOrchestrator_testGenerationFenceRestartsWhenAuthorityClockChanges();
+    }
+
     public function testAllCacheContractsPass(): void
     {
         $failures = [];
@@ -191,6 +197,9 @@ final class CacheContractsTest extends TestCase
         },
             'StorefrontWarmupOrchestrator::testDesignedBudgetAndTrafficBandsWithoutStickyBackoff' => function () {
             $this->assert_StorefrontWarmupOrchestrator_testDesignedBudgetAndTrafficBandsWithoutStickyBackoff();
+        },
+            'StorefrontWarmupOrchestrator::testGenerationFenceRestartsWhenAuthorityClockChanges' => function () {
+            $this->assert_StorefrontWarmupOrchestrator_testGenerationFenceRestartsWhenAuthorityClockChanges();
         },
             'SharedResponseCachePolicyForbiddenEvent::testForbidDispatchesSharedCacheForbiddenEventConstant' => function () {
             $this->assert_SharedResponseCachePolicyForbiddenEvent_testForbidDispatchesSharedCacheForbiddenEventConstant();
@@ -820,6 +829,90 @@ private function assert_StorefrontScopeHotCacheProcessL1_testEstimateSamplesNest
     $huge = ['a' => \str_repeat('x', 300000)];
     $bytes = (int) $method->invoke(null, ['payload' => $huge]);
     self::assertGreaterThan(262144, $bytes);
+}
+
+private function assert_StorefrontWarmupOrchestrator_testGenerationFenceRestartsWhenAuthorityClockChanges(): void
+{
+    $fence = new StorefrontWarmupGenerationFence();
+    $done = [
+        'version' => 1,
+        'phase' => StorefrontWarmupProgressLedger::PHASE_DONE,
+        'sitemap_doc_cursor' => 4,
+        'extras_cursor' => 2,
+        'loc_cursor' => 9,
+        'priority_home_cursor' => 3,
+        'ok' => 8,
+        'skip' => 1,
+        'fail' => 0,
+        'sitemap_docs' => ['/sitemap.xml'],
+        'extras' => ['/guide'],
+        'locs' => ['/p/1'],
+        'generation_authority_clock' => 4,
+        'storefront_generation_fingerprint' => 'fp-a',
+        'needs_rewarm' => false,
+    ];
+
+    $restarted = $fence->align($done, 'fp-b', 9);
+    self::assertTrue($restarted['rewarm']);
+    self::assertTrue($restarted['dirty']);
+    self::assertSame(StorefrontWarmupProgressLedger::PHASE_A_HOMEPAGE, $restarted['state']['phase']);
+    self::assertSame(9, $restarted['state']['generation_authority_clock']);
+    self::assertSame('fp-b', $restarted['state']['storefront_generation_fingerprint']);
+    self::assertTrue($restarted['state']['needs_rewarm']);
+    self::assertSame('generation_changed', $restarted['state']['last_reason']);
+    self::assertSame(0, $restarted['state']['loc_cursor']);
+    self::assertSame([], $restarted['state']['locs']);
+
+    $same = $fence->align($restarted['state'], 'fp-b', 9);
+    self::assertFalse($same['rewarm']);
+    self::assertSame(StorefrontWarmupProgressLedger::PHASE_A_HOMEPAGE, $same['state']['phase']);
+    self::assertTrue($same['state']['needs_rewarm']);
+
+    $clockOnly = $fence->align($done, 'fp-a', 11);
+    self::assertFalse($clockOnly['rewarm']);
+    self::assertSame(11, $clockOnly['state']['generation_authority_clock']);
+
+    $finished = $restarted['state'];
+    $finished['phase'] = StorefrontWarmupProgressLedger::PHASE_DONE;
+    $cleared = $fence->align($finished, 'fp-b', 9);
+    self::assertFalse($cleared['rewarm']);
+    self::assertFalse($cleared['state']['needs_rewarm']);
+
+    $fresh = $fence->align(['phase' => StorefrontWarmupProgressLedger::PHASE_A_HOMEPAGE], 'fp-c', 3);
+    self::assertFalse($fresh['rewarm']);
+    self::assertTrue($fresh['dirty']);
+    self::assertSame(3, $fresh['state']['generation_authority_clock']);
+    self::assertSame('fp-c', $fresh['state']['storefront_generation_fingerprint']);
+    self::assertFalse($fresh['state']['needs_rewarm']);
+
+    $legacyDone = $fence->align(['phase' => StorefrontWarmupProgressLedger::PHASE_DONE, 'ok' => 2], 'fp-first', 6);
+    self::assertFalse($legacyDone['rewarm'], 'first-deploy / clock-only progress binds the live fingerprint');
+    self::assertSame(6, $legacyDone['state']['generation_authority_clock']);
+    self::assertSame('fp-first', $legacyDone['state']['storefront_generation_fingerprint']);
+
+    $emptyFingerprint = $fence->align($done, '', 99);
+    self::assertFalse($emptyFingerprint['rewarm']);
+
+    $rejected = false;
+    try {
+        $fence->align([], 'x', -1);
+    } catch (\InvalidArgumentException) {
+        $rejected = true;
+    }
+    self::assertTrue($rejected, 'negative authority clock must not be treated as a warmup generation');
+
+    $orchestrator = (string) \file_get_contents((new \ReflectionClass(StorefrontWarmupOrchestrator::class))->getFileName() ?: '');
+    self::assertStringContainsString('currentAuthorityClock', $orchestrator);
+    self::assertStringContainsString('currentStorefrontGenerationFingerprint', $orchestrator);
+    self::assertStringContainsString('authorityClock()', $orchestrator);
+    self::assertStringContainsString('generation_changed', $orchestrator);
+    self::assertStringNotContainsString('WlsRuntime', $orchestrator);
+    $busy = (string) \file_get_contents((new \ReflectionClass(\Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupBusyGate::class))->getFileName() ?: '');
+    self::assertStringContainsString('HostLoadSampler', $busy);
+    self::assertStringContainsString('loadavg', $busy);
+    $repo = (string) \file_get_contents((new \ReflectionClass(\Weline\Framework\Cache\Namespace\NamespaceGenerationRepository::class))->getFileName() ?: '');
+    self::assertStringContainsString('function listStoredNamespaces', $repo);
+    self::assertStringContainsString('function forgetExact', $repo);
 }
 }
 

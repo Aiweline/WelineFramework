@@ -10,6 +10,7 @@ use Weline\Framework\Context;
 use Weline\Framework\Controller\Extra\ExtraPolicyResolver;
 use Weline\Framework\Controller\Extra\FpcPolicySnapshot;
 use Weline\Framework\Database\TransactionContext;
+use Weline\Framework\Http\Fpc\FpcHtmlDiskStore;
 use Weline\Framework\Http\Fpc\FpcBypassEvaluator;
 use Weline\Framework\Http\Fpc\FpcBypassFactsBuilder;
 use Weline\Framework\Manager\ObjectManager;
@@ -110,12 +111,20 @@ final class WorkerFullPageCacheFastPath
         Context::enter($probeContext);
         RequestContext::setId('fpc-probe-' . spl_object_id($probeContext));
         try {
-            // Prefer READY's exact identity, then the receipt captured by a
-            // natural anonymous homepage hit when startup skipped priming.
-            // Both paths stay in Process L1; a miss returns to Framework.
-            // (Anonymous `/` cannot rebuild variants in the probe Context while
-            // legacy pre-router FPC is disabled — receipt identity is required.)
-            if ($requestUri === '/') {
+            $requestedGen = FpcHtmlDiskStore::requestedPageGeneration($fullUri);
+            if ($requestedGen['present']) {
+                // This request names a generation. Serve only that slot.
+                // Miss or a bad token goes to the process; do not substitute another generation.
+                $cached = $requestedGen['token'] === null
+                    ? null
+                    : $this->coordinator->tryFormattedCurrentGenerationDiskHit(
+                        $fullUri,
+                        $decision->method,
+                        (string)($headers['accept-encoding'] ?? ''),
+                        (string)($headers['cookie'] ?? ''),
+                        $decision->keepAlive(),
+                    );
+            } elseif ($requestUri === '/') {
                 $cookieHeader = (string)($headers['cookie'] ?? '');
                 // Guest homepage receipt ignores cookies; still pass header for
                 // cold-disk / formatted fallthrough identity helpers.
@@ -127,10 +136,21 @@ final class WorkerFullPageCacheFastPath
                     $scheme,
                     $cookieHeader,
                 );
-                if (\is_array($receipt)) {
-                    if (!$this->coordinator->isInternalHomepageReceiptCurrent($receipt)) {
+                if (\is_array($receipt) && !$this->coordinator->isInternalHomepageReceiptCurrent($receipt)) {
+                    // Namespace receipt is an older generation. Select the current
+                    // html-disk generation only — do not drop the request, and do
+                    // not open Shared L2 for a receipt that failed the generation check.
+                    $cached = $this->coordinator->tryFormattedCurrentGenerationDiskHit(
+                        $fullUri,
+                        $decision->method,
+                        (string)($headers['accept-encoding'] ?? ''),
+                        $cookieHeader,
+                        $decision->keepAlive(),
+                    );
+                    if ($cached === null) {
                         return null;
                     }
+                } elseif (\is_array($receipt)) {
                     $this->prepareReceiptResponseContext($probeContext, $decision, $scheme, $host, $requestUri, $fullUri);
                     RequestContext::installScopeIdentity(ScopeIdentity::fromArray($receipt['scope_identity']));
                     RequestContext::setWelineArea(RequestContext::AREA_FRONTEND);
@@ -178,10 +198,18 @@ final class WorkerFullPageCacheFastPath
                     (string)($headers['cookie'] ?? ''),
                 );
                 $cached = null;
-                if (\is_array($localizedReceipt)) {
-                    if (!$this->coordinator->isInternalHomepageReceiptCurrent($localizedReceipt)) {
+                if (\is_array($localizedReceipt) && !$this->coordinator->isInternalHomepageReceiptCurrent($localizedReceipt)) {
+                    $cached = $this->coordinator->tryFormattedCurrentGenerationDiskHit(
+                        $fullUri,
+                        $decision->method,
+                        (string)($headers['accept-encoding'] ?? ''),
+                        (string)($headers['cookie'] ?? ''),
+                        $decision->keepAlive(),
+                    );
+                    if ($cached === null) {
                         return null;
                     }
+                } elseif (\is_array($localizedReceipt)) {
                     $this->prepareReceiptResponseContext($probeContext, $decision, $scheme, $host, $requestUri, $fullUri);
                     RequestContext::installScopeIdentity(ScopeIdentity::fromArray($localizedReceipt['scope_identity']));
                     RequestContext::setWelineArea(RequestContext::AREA_FRONTEND);

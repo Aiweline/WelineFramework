@@ -340,6 +340,14 @@ function unlockDocument() {
 }
 
 function pushOverlay(element, restoreFocus) {
+    const existing = overlayStack.findIndex((entry) => entry.element === element);
+    if (existing >= 0) {
+        // Reopened before the previous close settled: one entry, original focus target.
+        const [entry] = overlayStack.splice(existing, 1);
+        overlayStack.push(entry);
+        lockDocument();
+        return entry;
+    }
     const entry = { element, restoreFocus };
     overlayStack.push(entry);
     lockDocument();
@@ -1842,6 +1850,9 @@ function registerDialog() {
         });
         if (nativeDialog) {
             listen(element, 'close', () => {
+                // `close` is dispatched as a later task; close() + showModal() in one task
+                // must stay open, not become an invisible modal that leaves the page inert.
+                if (element.open) return;
                 element.dataset.state = 'closed';
                 element.hidden = true;
                 element.setAttribute('hidden', '');

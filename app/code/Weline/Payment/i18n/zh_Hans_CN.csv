@@ -28,6 +28,7 @@ PayPal,PayPal
 "PayPal credentials are not configured for the current environment.","当前环境尚未配置 PayPal 凭据。"
 "Currency is not supported by PayPal.","PayPal 不支持当前货币。"
 "Country is not supported by PayPal.","PayPal 不支持当前国家。"
+"PayPal card fields ready.","PayPal 银行卡收银台已就绪。"
 "Redirecting to PayPal checkout.","正在跳转到 PayPal 结账页。"
 "PayPal order id is missing.","缺少 PayPal 订单 ID。"
 "PayPal express approved; awaiting merchant confirm.","PayPal express approved; awaiting merchant confirm."
@@ -40,6 +41,15 @@ PayPal,PayPal
 "PayPal void is not supported in this integration.","当前集成不支持 PayPal 作废。"
 "PayPal refund submitted.","PayPal 退款已提交。"
 "Payment query provider does not support operation: %{1}",支付查询提供商不支持操作：%{1}
+卡号,卡号
+有效期,有效期
+安全码,安全码
+"卡信息由 PayPal 安全托管，本站不接触卡号与安全码。若需使用 PayPal 账户余额或钱包，请直接点「提交订单」走 PayPal 跳转。","卡信息由 PayPal 安全托管，本站不接触卡号与安全码。若需使用 PayPal 账户余额或钱包，请直接点「提交订单」走 PayPal 跳转。"
+"3D Secure 验证已取消，请重试。","3D Secure 验证已取消，请重试。"
+银行卡支付失败，请检查卡信息后重试。,银行卡支付失败，请检查卡信息后重试。
+创建支付订单失败，请重试。,创建支付订单失败，请重试。
+支付确认失败，请稍后在订单页查看状态。,支付确认失败，请稍后在订单页查看状态。
+支付失败，请重试。,支付失败，请重试。
 支付状态查询成功,支付状态查询成功
 支付状态查询失败,支付状态查询失败
 "已有 %{1} 个可用于结账的支付方式。","已有 %{1} 个可用于结账的支付方式。"
@@ -561,6 +571,7 @@ More,更多的
 "支付方式 %{code} 不存在或未启用","支付方式 %{code} 不存在或未启用"
 支付提供商实例化失败,支付提供商实例化失败
 创建支付订单失败,创建支付订单失败
+支付确认失败,支付确认失败
 "支付提供商 method_code 不能为空","支付提供商 method_code 不能为空"
 支付方式排序列表不能为空,支付方式排序列表不能为空
 "支付方式不存在: %{1}","支付方式不存在: %{1}"

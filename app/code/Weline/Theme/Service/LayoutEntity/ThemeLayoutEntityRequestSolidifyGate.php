@@ -14,6 +14,12 @@ use Weline\Widget\Service\DefaultInjectionPlanRepository;
 /**
  * Storefront gate: detect stale/missing solidify stamp → enqueue async job → force original template.
  * While pending: do not read stale derived PHTML.
+ *
+ * Circuit breaker: when the slot's bake has failed `fail_count >= threshold` times inside the
+ * cooldown window ({@see ThemeLayoutEntitySolidifyQueue::circuitState()}), the gate stops
+ * enqueueing and stops forbidding shared FPC — the source template is served cacheably with
+ * `X-Weline-Solidify-Decision: solidify_circuit_open`. A persistent bake defect must never turn
+ * the whole storefront into per-request SSR.
  */
 final class ThemeLayoutEntityRequestSolidifyGate
 {
@@ -140,9 +146,16 @@ final class ThemeLayoutEntityRequestSolidifyGate
             || $originStale
             || $chromeOriginStale
             || ($derivedMissing && !$stampFresh);
+        // Circuit breaker: the bake for this slot has failed repeatedly (dead-letter
+        // fail_count >= threshold, still inside cooldown). Re-enqueueing would fail
+        // again and `forbid()` would keep the whole storefront out of shared FPC for a
+        // defect that is not request-specific. Serve the source template, allow FPC,
+        // and let the Cron drain retry once the cooldown elapses (half-open).
+        $circuit = $needsJob && !$pending ? $this->queue->circuitState($key) : ['open' => false];
+        $circuitOpen = (bool)($circuit['open'] ?? false);
         $enqueued = false;
         $coalesced = false;
-        if ($needsJob) {
+        if ($needsJob && !$circuitOpen) {
             $result = $this->queue->enqueue($key, $expectedFp);
             $enqueued = (bool)($result['enqueued'] ?? false);
             $coalesced = (bool)($result['coalesced'] ?? false);
@@ -151,7 +164,9 @@ final class ThemeLayoutEntityRequestSolidifyGate
 
         $useOriginal = $needsJob;
         $reason = 'fresh';
-        if ($pending && ($enqueued || $coalesced)) {
+        if ($circuitOpen) {
+            $reason = 'solidify_circuit_open';
+        } elseif ($pending && ($enqueued || $coalesced)) {
             $reason = $enqueued ? 'enqueued_fallback_original' : 'pending_coalesce_fallback_original';
         } elseif ($criticalEmpty) {
             $reason = $this->filterInventoryBakeBroken(
@@ -184,6 +199,8 @@ final class ThemeLayoutEntityRequestSolidifyGate
             'enqueued' => $enqueued,
             'coalesced' => $coalesced,
             'pending' => $pending,
+            'circuit_open' => $circuitOpen,
+            'circuit_fail_count' => (int)($circuit['fail_count'] ?? 0),
             'expected_fp' => $expectedFp,
             'serial_key' => $key->toString(),
             'chrome_origin_stale' => $chromeOriginStale,
@@ -204,10 +221,15 @@ final class ThemeLayoutEntityRequestSolidifyGate
         if ($useOriginal) {
             RequestContext::set(self::CTX_FORCE_ORIGINAL, true);
             ThemeLayoutEntityPublishedSlotHost::markSolidifiedControllerTemplateSelected(false);
-            // Fallback original must not enter shared FPC. Browser Cache-Control
-            // no-store is owned here; vendor edge headers (CDN-Cache-Control / CF)
-            // are written by Weline_Cdn observers on the Framework forbid event.
-            SharedResponseCachePolicy::forbid('theme_layout_solidify_fallback_original');
+            // Fallback original must not enter shared FPC while a bake is pending/expected.
+            // Browser Cache-Control no-store is owned here; vendor edge headers
+            // (CDN-Cache-Control / CF) are written by Weline_Cdn observers on the
+            // Framework forbid event. With the circuit OPEN no bake is coming: the
+            // source template IS the page for now, so shared FPC stays allowed and the
+            // drain bumps the scoped Theme generation when the slot recovers.
+            if (!$circuitOpen) {
+                SharedResponseCachePolicy::forbid('theme_layout_solidify_fallback_original');
+            }
         } else {
             RequestContext::remove(self::CTX_FORCE_ORIGINAL);
         }

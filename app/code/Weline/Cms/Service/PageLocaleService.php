@@ -632,7 +632,7 @@ class PageLocaleService
         string $locale,
         bool $forUpdate = false,
     ): ?\Weline\Cms\Model\PageLocale {
-        if ($pageId <= 0 || $storeId <= 0) {
+        if ($pageId <= 0 || $storeId < 0) {
             return null;
         }
         return $this->findTitle($pageId, $storeId, $this->normalizeLocaleCode($locale), $forUpdate);

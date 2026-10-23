@@ -15,7 +15,7 @@ final readonly class CmsPageVariantIdentity
         public int $storeId,
         string $localeCode,
     ) {
-        if ($pageId <= 0 || $websiteId < 0 || $storeId <= 0) {
+        if ($pageId <= 0 || $websiteId < 0 || $storeId < 0) {
             throw new \InvalidArgumentException((string)__('CMS 页面变体身份无效。'));
         }
         $localeCode = self::normalizeLocale($localeCode);

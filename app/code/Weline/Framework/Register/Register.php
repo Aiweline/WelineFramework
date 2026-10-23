@@ -32,6 +32,23 @@ class Register implements RegisterDataInterface
 
     private array $original_module_data = [];
 
+    public static function pendingRegistrationModules(): array
+    {
+        $names = [];
+        foreach (self::$pendingRegistrations as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $module = trim((string)($entry[1] ?? ''));
+            if ($module !== '') {
+                $names[$module] = true;
+            }
+        }
+        $modules = array_keys($names);
+        sort($modules, SORT_STRING);
+        return $modules;
+    }
+
     /**
      * @DESC         |注册
      *

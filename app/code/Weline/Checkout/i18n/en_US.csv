@@ -65,6 +65,7 @@
 结账接口不支持该操作：%{1},"Checkout does not support operation: %{1}"
 购物车币种与当前请求币种不一致,"The shopping cart currency is inconsistent with the current request currency"
 结账报价失败,"Checkout quote failed"
+支付完成,"Payment completed"
 改址参数不完整,"Incomplete address-change parameters"
 无权修改该订单地址,"Not allowed to change this order address"
 订单不存在,"Order does not exist"

@@ -25,7 +25,6 @@ final class Upgrade implements UpgradeInterface
         /** @var GoogleTaxonomy $model */
         $model = ObjectManager::getInstance(GoogleTaxonomy::class);
         $modelSetup->putModel($model);
-        $model->upgrade($modelSetup, $context);
         $this->importTaxonomyReference();
     }
 

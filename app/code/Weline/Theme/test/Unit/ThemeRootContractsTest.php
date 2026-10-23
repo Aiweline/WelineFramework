@@ -2627,11 +2627,7 @@ private function assert_GreenfieldPlanFixtureSweep_testDashboardAndWidgetDemoFix
 private function assert_GreenfieldVirtualLayoutAssetFailClosed_testVirtualLayoutAssetApisAreFailClosedAfterDrop(): void
 {
     $servicePath = '/Users/weline/Project/Official/框架/dev' . '/Service/ThemeVirtualLayoutService.php';
-    $migrationPath = '/Users/weline/Project/Official/框架/dev' . '/Setup/Db/Migration/drop_legacy_theme_layout_20260831-v2.2.0.php';
     $service = (string) file_get_contents($servicePath);
-    $migration = (string) file_get_contents($migrationPath);
-    self::assertStringContainsString('ThemeVirtualLayout::schema_table', $migration);
-    self::assertStringContainsString('ThemeVirtualLayoutVersion::schema_table', $migration);
     self::assertStringContainsString('function isVirtualLayoutAssetAvailable', $service);
     self::assertStringContainsString('theme_virtual_layout_missing', $service);
     self::assertStringContainsString("virtualLayoutAssetMissingPayload('save_source_version')", $service);

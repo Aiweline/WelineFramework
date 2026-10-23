@@ -270,6 +270,13 @@ final class FiberOutputBuffer
         if (!Runtime::isPersistent()) {
             return;
         }
+
+        // Fiber-local baselines must be read before the maps are dropped: a Fiber
+        // that died between beginCapture()/endCapture() leaves process-global native
+        // layers that would push every later capture into native mode.
+        $nativeBaselines = self::$fiberNativeNestedBaselines[$fiber] ?? null;
+        $hasNativeLeak = \is_array($nativeBaselines) && $nativeBaselines !== [];
+
         if (self::$fiberBufferStacks !== null && isset(self::$fiberBufferStacks[$fiber])) {
             unset(self::$fiberBufferStacks[$fiber]);
         }
@@ -278,6 +285,18 @@ final class FiberOutputBuffer
         }
         if (self::$fiberCaptureModes !== null && isset(self::$fiberCaptureModes[$fiber])) {
             unset(self::$fiberCaptureModes[$fiber]);
+        }
+
+        if ($hasNativeLeak
+            && self::$installedLevel > 0
+            && WlsConcurrency::canCompactProcessCaches()
+        ) {
+            while (\ob_get_level() > self::$installedLevel) {
+                $before = \ob_get_level();
+                if (!@\ob_end_clean() || \ob_get_level() >= $before) {
+                    break;
+                }
+            }
         }
     }
 

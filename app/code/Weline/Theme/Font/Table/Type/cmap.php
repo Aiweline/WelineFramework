@@ -157,54 +157,18 @@ class cmap extends Table {
           $startCode = $font->readUInt16Many($segCount);
           $idDelta   = $font->readInt16Many($segCount);
   
-          $ro_start      = $font->pos();
+          $idRangeOffsetStart = $font->pos();
           $idRangeOffset = $font->readUInt16Many($segCount);
-  
-          $glyphIndexArray = array();
-          for ($i = 0; $i < $segCount; $i++) {
-            $c1 = $startCode[$i];
-            $c2 = $endCode[$i];
-            $d  = $idDelta[$i];
-            $ro = $idRangeOffset[$i];
-  
-            if ($ro > 0) {
-              $font->seek($subtable["offset"] + 2 * $i + $ro);
-            }
-  
-            for ($c = $c1; $c <= $c2; $c++) {
-              if ($c === 0xFFFF) {
-                continue;
-              }
-  
-              if ($ro == 0) {
-                $gid = ($c + $d) & 0xFFFF;
-              }
-              else {
-                $offset = ($c - $c1) * 2 + $ro;
-                $offset = $ro_start + 2 * $i + $offset;
-  
-                $gid = 0;
-                if ($font->seek($offset) === true) {
-                  $gid = $font->readUInt16();
-                }
-  
-                if ($gid != 0) {
-                  $gid = ($gid + $d) & 0xFFFF;
-                }
-              }
-  
-              if ($gid >= 0) {
-                $glyphIndexArray[$c] = $gid;
-              }
-            }
-          }
-  
+
+          // 段表足够做单字查找。不要把整段 Unicode 展开成 PHP 数组，
+          // 否则 CJK 字体会在升级进程里把 256MB 打满。
           $subtable += array(
             "endCode"         => $endCode,
             "startCode"       => $startCode,
             "idDelta"         => $idDelta,
             "idRangeOffset"   => $idRangeOffset,
-            "glyphIndexArray" => $glyphIndexArray
+            "idRangeOffsetStart" => $idRangeOffsetStart,
+            "glyphIndexArray" => array(),
           );
           break;
 
@@ -213,26 +177,21 @@ class cmap extends Table {
 
           $subtable += $font->unpack(self::$subtable_v12_format);
 
-          $glyphIndexArray = array();
           $endCodes = array();
           $startCodes = array();
+          $startGlyphs = array();
 
           for ($p = 0; $p < $subtable['ngroups']; $p++) {
-
-            $startCode = $startCodes[] = $font->readUInt32();
-            $endCode = $endCodes[] = $font->readUInt32();
-            $startGlyphCode = $font->readUInt32();
-
-            for ($c = $startCode; $c <= $endCode; $c++) {
-              $glyphIndexArray[$c] = $startGlyphCode;
-              $startGlyphCode++;
-            }
+            $startCodes[] = $font->readUInt32();
+            $endCodes[] = $font->readUInt32();
+            $startGlyphs[] = $font->readUInt32();
           }
 
           $subtable += array(
             "startCode" => $startCodes,
             "endCode" => $endCodes,
-            "glyphIndexArray" => $glyphIndexArray,
+            "startGlyph" => $startGlyphs,
+            "glyphIndexArray" => array(),
           );
           break;
       }
@@ -241,17 +200,134 @@ class cmap extends Table {
     $this->data = $data;
   }
 
+  /**
+   * 按码点查字形编号。format 4/12 只扫段表，不展开整张字符图。
+   *
+   * @param array<string, mixed> $subtable
+   */
+  public function glyphIdForCode(array $subtable, int $code): int
+  {
+    $format = (int)($subtable['format'] ?? 0);
+    if ($format === 12) {
+      return $this->glyphIdFromGroups($subtable, $code);
+    }
+    if ($format === 4) {
+      return $this->glyphIdFromFormat4($subtable, $code);
+    }
+    $expanded = $subtable['glyphIndexArray'] ?? null;
+    if (\is_array($expanded) && isset($expanded[$code])) {
+      return (int)$expanded[$code];
+    }
+
+    return 0;
+  }
+
+  /**
+   * @param array<string, mixed> $subtable
+   */
+  private function glyphIdFromFormat4(array $subtable, int $code): int
+  {
+    $end = $subtable['endCode'] ?? [];
+    $start = $subtable['startCode'] ?? [];
+    $delta = $subtable['idDelta'] ?? [];
+    $rangeOffset = $subtable['idRangeOffset'] ?? [];
+    if (!\is_array($end) || $end === []) {
+      return 0;
+    }
+
+    $lo = 0;
+    $hi = \count($end) - 1;
+    while ($lo <= $hi) {
+      $mid = intdiv($lo + $hi, 2);
+      $segmentEnd = (int)$end[$mid];
+      $segmentStart = (int)($start[$mid] ?? 0);
+      if ($code > $segmentEnd) {
+        $lo = $mid + 1;
+        continue;
+      }
+      if ($code < $segmentStart) {
+        $hi = $mid - 1;
+        continue;
+      }
+
+      $idDelta = (int)($delta[$mid] ?? 0);
+      $ro = (int)($rangeOffset[$mid] ?? 0);
+      if ($ro === 0) {
+        return ($code + $idDelta) & 0xFFFF;
+      }
+
+      $origin = (int)($subtable['idRangeOffsetStart'] ?? 0);
+      $offset = $origin + (2 * $mid) + $ro + (($code - $segmentStart) * 2);
+      $font = $this->getFont();
+      if ($font->seek($offset) !== true) {
+        return 0;
+      }
+      $gid = (int)$font->readUInt16();
+      if ($gid !== 0) {
+        $gid = ($gid + $idDelta) & 0xFFFF;
+      }
+
+      return $gid;
+    }
+
+    return 0;
+  }
+
+  /**
+   * @param array<string, mixed> $subtable
+   */
+  private function glyphIdFromGroups(array $subtable, int $code): int
+  {
+    $end = $subtable['endCode'] ?? [];
+    $start = $subtable['startCode'] ?? [];
+    $startGlyph = $subtable['startGlyph'] ?? [];
+    if (!\is_array($end) || $end === []) {
+      return 0;
+    }
+
+    $lo = 0;
+    $hi = \count($end) - 1;
+    while ($lo <= $hi) {
+      $mid = intdiv($lo + $hi, 2);
+      $segmentEnd = (int)$end[$mid];
+      $segmentStart = (int)($start[$mid] ?? 0);
+      if ($code > $segmentEnd) {
+        $lo = $mid + 1;
+        continue;
+      }
+      if ($code < $segmentStart) {
+        $hi = $mid - 1;
+        continue;
+      }
+
+      return (int)($startGlyph[$mid] ?? 0) + ($code - $segmentStart);
+    }
+
+    return 0;
+  }
+
   function _encode() {
     $font = $this->getFont();
 
     $subset          = $font->getSubset();
-    $glyphIndexArray = $font->getUnicodeCharMap();
-
     $newGlyphIndexArray = array();
-    foreach ($glyphIndexArray as $code => $gid) {
-      $new_gid = array_search($gid, $subset);
-      if ($new_gid !== false) {
-        $newGlyphIndexArray[$code] = $new_gid;
+    $mapped = $font->getSubsetUnicodeMap();
+    if (\is_array($mapped) && $mapped !== []) {
+      foreach ($mapped as $code => $gid) {
+        $new_gid = array_search($gid, $subset, true);
+        if ($new_gid !== false) {
+          $newGlyphIndexArray[$code] = $new_gid;
+        }
+      }
+    } else {
+      $glyphIndexArray = $font->getUnicodeCharMap();
+      if (\is_array($glyphIndexArray)) {
+        foreach ($glyphIndexArray as $code => $gid) {
+          $new_gid = array_search($gid, $subset);
+          if ($new_gid !== false) {
+            $newGlyphIndexArray[$code] = $new_gid;
+          }
+        }
       }
     }
 

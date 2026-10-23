@@ -664,29 +664,34 @@ final class ThemeRuntimeCacheCleaner
         return $paths->website($websiteCode, $segments);
     }
 
-    /** Bump every recorded theme cache namespace plus the global storefront theme authority. */
+    /** Bump live website theme namespaces plus the global storefront theme authority. */
     private function bumpAllThemeNamespaces(): void
     {
         $namespacePath = ObjectManager::getInstance(NamespacePath::class);
         $namespaces = [
             $namespacePath->global('storefront', ['theme']),
         ];
+        $liveCodes = $this->liveWebsiteCodes();
+        $orphans = [];
         try {
-            $rows = ObjectManager::getInstance(NamespaceVersion::class)
-                ->clear()
-                ->clearQuery()
-                ->fields(NamespaceVersion::schema_fields_NAMESPACE)
-                ->select()
-                ->fetchArray();
-            foreach (\is_array($rows) ? $rows : [] as $row) {
-                if (!\is_array($row)) {
+            $repo = ObjectManager::getInstance(\Weline\Framework\Cache\Namespace\NamespaceGenerationRepository::class);
+            foreach ($repo->listStoredNamespaces() as $ns) {
+                if (!\preg_match('#(^|/)theme(/|$)#', $ns)) {
                     continue;
                 }
-                $ns = \trim((string)($row[NamespaceVersion::schema_fields_NAMESPACE] ?? ''));
-                if ($ns === '' || !\preg_match('#(^|/)theme(/|$)#', $ns)) {
+                $websiteCode = $this->websiteCodeFromNamespace($ns);
+                if ($websiteCode !== null && $liveCodes !== [] && !isset($liveCodes[$websiteCode])) {
+                    $orphans[] = $ns;
+                    continue;
+                }
+                if ($websiteCode !== null && $liveCodes === []) {
+                    $orphans[] = $ns;
                     continue;
                 }
                 $namespaces[] = $namespacePath->canonicalize($ns);
+            }
+            if ($orphans !== []) {
+                $repo->forgetExact($orphans);
             }
         } catch (\Throwable) {
             // Table may be empty/unavailable during early bootstrap; global bump still runs.
@@ -694,6 +699,41 @@ final class ThemeRuntimeCacheCleaner
         $namespaces = \array_values(\array_unique($namespaces));
         \sort($namespaces, \SORT_STRING);
         ObjectManager::getInstance(NamespaceGenerationInterface::class)->bumpMany($namespaces);
+    }
+
+    /** @return array<string, true> */
+    private function liveWebsiteCodes(): array
+    {
+        if (!\interface_exists(\Weline\Websites\Api\Catalog\WebsiteCatalogInterface::class)) {
+            return [];
+        }
+        try {
+            $catalog = ObjectManager::getInstance(\Weline\Websites\Api\Catalog\WebsiteCatalogInterface::class);
+            $codes = [];
+            foreach ($catalog->all() as $site) {
+                $code = \trim((string)$site->code);
+                if ($code !== '') {
+                    $codes[$code] = true;
+                }
+            }
+
+            return $codes;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    private function websiteCodeFromNamespace(string $namespace): ?string
+    {
+        if (!\str_starts_with($namespace, 'website/')) {
+            return null;
+        }
+        $parts = \explode('/', $namespace, 3);
+        if (\count($parts) < 2 || $parts[1] === '') {
+            return null;
+        }
+
+        return \rawurldecode($parts[1]);
     }
 
     private function clearWlsSharedFpcAndRouter(string $reason): void
@@ -843,6 +883,7 @@ final class ThemeRuntimeCacheCleaner
             ++$attempts;
             try {
                 FpcHtmlDiskStore::beginStagingGeneration(true);
+                FpcHtmlDiskStore::alignWriteBaseToCurrentPageGeneration();
                 if (\class_exists(StorefrontFpcWarmer::class)) {
                     ObjectManager::getInstance(StorefrontFpcWarmer::class)->warm();
                 }

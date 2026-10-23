@@ -92,7 +92,7 @@ $headerFlattenNavForEditor = static function (array $items): array {
 
 // 保留定义供契约检索；整页预览禁止拍平 children。
 
-// 默认主题编辑器空导航占位（中性）。站专属汉服预览树见 design/Weline/hanfu/.../category-menu。
+// 默认主题编辑器空导航占位（中性）。
 $editorPreviewDemoNav = static function (): array {
     $searchHref = static fn (string $query): string => '/search?q=' . rawurlencode($query);
 

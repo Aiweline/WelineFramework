@@ -448,6 +448,30 @@ list,list
 执行持久化模块代码与数据库联动回滚任务,"Execute persistence module code and database linkage rollback tasks"
 "回滚任务 ID","Rollback task ID"
 重试人工恢复补偿,"Retry manual recovery compensation"
+"一次性 cutover：baseline + 快照 + 旧表归档","一次性 cutover：baseline + 快照 + 旧表归档"
+"baseline release_id（必填）","baseline release_id（必填）"
+"baseline manifest JSON（--actual 生成）","baseline manifest JSON（--actual 生成）"
+旧表名，逗号分隔,旧表名，逗号分隔
+"归档后缀，缺省 Ymd","归档后缀，缺省 Ymd"
+"只建 baseline，不归档旧表","只建 baseline，不归档旧表"
+"跳过实际 schema 指纹校验（仅测试）","跳过实际 schema 指纹校验（仅测试）"
+"执行 RSSE release：快照 → expand → transform → contract → commit","执行 RSSE release：快照 → expand → transform → contract → commit"
+release_id（必填）,release_id（必填）
+只处理指定模块，逗号分隔,只处理指定模块，逗号分隔
+"release manifest JSON 文件路径","release manifest JSON 文件路径"
+"manifest 签名（非 baseline 必填）","manifest 签名（非 baseline 必填）"
+"输出格式：text（默认）或 json","输出格式：text（默认）或 json"
+"只读查看 RSSE release、checkpoint、scope 与 table owner 状态","只读查看 RSSE release、checkpoint、scope 与 table owner 状态"
+"指定 release_id，缺省显示最新 release","指定 release_id，缺省显示最新 release"
+"生成当前代码的 RSSE SchemaManifest","生成当前代码的 RSSE SchemaManifest"
+只生成指定模块，逗号分隔,只生成指定模块，逗号分隔
+"从实际库生成 baseline manifest（cutover 用）","从实际库生成 baseline manifest（cutover 用）"
+"写入文件；缺省输出到 stdout","写入文件；缺省输出到 stdout"
+"回滚 RSSE release 到目标版本（L2 快照恢复）","回滚 RSSE release 到目标版本（L2 快照恢复）"
+"当前 release_id（必填）","当前 release_id（必填）"
+"目标 release_id（必填）","目标 release_id（必填）"
+"只读规划 RSSE release 的 expand/transform/contract 变更","只读规划 RSSE release 的 expand/transform/contract 变更"
+只规划指定模块，逗号分隔,只规划指定模块，逗号分隔
 "请指定 --module=ModuleName 或 --tables=table1,table2","Please specify --module=ModuleName or --tables=table1,table2"
 "手动表备份: %{1}","Manual table backup: %{1}"
 创建备份记录失败,"Failed to create backup record"

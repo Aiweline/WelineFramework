@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Install/refresh this project's WLS FPC page-generation config into a host
+# Nginx (system / BaoTa / third-party). Must run as root or as the Nginx
+# config owner; it writes the w_pg map + location include and reloads Nginx.
+#
+# Usage:
+#   sudo bash bin/wls-host-nginx-fpc --host=shop.example.com -p=9555
+#   sudo bash bin/wls-host-nginx-fpc --host=shop.example.com --port=9555
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PHP_BIN="${PHP_BIN:-php}"
+
+usage() {
+    cat <<EOF
+用法：
+  sudo bash ${ROOT}/bin/wls-host-nginx-fpc --host=<域名> -p=<WLS回环端口>
+
+参数：
+  --host=<域名>   宿主 Nginx 的 server_name（必填）
+  -p, --port       WLS 回环端口（必填，例如 9555）
+  --nginx-bin=    非标准宿主 Nginx 二进制路径（可选）
+  --nginx-conf=   非标准宿主 Nginx 主配置路径（可选）
+  --help          显示本帮助
+
+作用：
+  1. 在宿主 Nginx 的 http 上下文写入 w_pg map；
+  2. 把已反代到 127.0.0.1:<port> 的 location / 改成按世代读 FPC；
+  3. nginx -t 通过后 reload。
+  同时会生成项目内可直接 include 的文件：
+    ${ROOT}/var/server/nginx/conf/host-fpc-http.include.conf
+    ${ROOT}/var/server/nginx/conf/host-fpc-server.include.conf
+EOF
+}
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    usage
+    exit 0
+fi
+
+if [[ "$(id -u)" -ne 0 ]]; then
+    cat >&2 <<EOF
+需要 root（或对宿主 Nginx 配置目录有写权限的账号）才能安装。
+请用有权限的身份执行：
+  sudo bash ${ROOT}/bin/wls-host-nginx-fpc $*
+EOF
+    exit 1
+fi
+
+cd "${ROOT}"
+# Fresh deployments may not have regenerated generated/commands.php yet.
+if ! "${PHP_BIN}" bin/w server:nginx:host-fpc --help >/dev/null 2>&1; then
+    "${PHP_BIN}" bin/w command:upgrade >/dev/null 2>&1 || true
+fi
+exec "${PHP_BIN}" bin/w server:nginx:host-fpc "$@"

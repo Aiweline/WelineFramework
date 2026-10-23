@@ -22,7 +22,8 @@ class ModuleUpgradeObserver implements ObserverInterface
         try {
             /** @var DocumentScanner $scanner */
             $scanner = ObjectManager::getInstance(DocumentScanner::class);
-            $scanner->scanAllModules(false);
+            $changed = (array)($event->getData('changed_modules') ?? []);
+            $scanner->scanAllModules(false, $changed === [] ? null : $changed);
         } catch (\Throwable) {
             // Module upgrade must not fail because the optional document index is unavailable.
         }

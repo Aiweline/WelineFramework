@@ -33,7 +33,7 @@ final class StaticAssetHtmlRewriter
         }
 
         $rewrite = static fn (array $match): string => $match[1]
-            . StaticBuildId::versionedPath($match[2], $buildId)
+            . StaticBuildId::versionedPath(self::alignThemePair($match[2], $buildId), $buildId)
             . $match[3];
 
         $html = \preg_replace_callback(
@@ -62,9 +62,45 @@ final class StaticAssetHtmlRewriter
         } catch (\Throwable) {
             $pair = '';
         }
-        $html = \str_replace('/static/' . self::PAIR_PLACEHOLDER . '/', '/static/' . $pair . '/', $html);
         $deploy = $buildId !== '' ? $buildId : self::DEPLOY_PLACEHOLDER;
+        // 没有主题对时（指针未写 pair_segment），主题自有资源也退回部署段；
+        // 否则会产出 `/static//Weline/...` 这种双斜杠地址。
+        $pairSegment = $pair !== '' ? $pair : $deploy;
+        $html = \str_replace('/static/' . self::PAIR_PLACEHOLDER . '/', '/static/' . $pairSegment . '/', $html);
 
         return \str_replace('/static/' . self::DEPLOY_PLACEHOLDER . '/', '/static/' . $deploy . '/', $html);
+    }
+
+    /**
+     * 已带主题对、但 code/版本不是当前应用主题的 URL，改成当前 pair。
+     * 纯部署号调用 {@see StaticBuildId::versionedPath()} 会保留旧的 code/v{n}。
+     */
+    private static function alignThemePair(string $url, string $buildId): string
+    {
+        $pair = '';
+        try {
+            if (\class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
+                $pair = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pairSegment();
+            }
+        } catch (\Throwable) {
+            $pair = '';
+        }
+        if ($pair === '' || \preg_match('#^[A-Za-z0-9_.-]+/v[0-9]+$#', $pair) !== 1) {
+            return $url;
+        }
+        [$path, $query] = \str_contains($url, '?') ? \explode('?', $url, 2) : [$url, null];
+        if (\preg_match('#^/static/([A-Za-z0-9_.-]+)/(v[0-9]+)/([A-Za-z0-9_-]+)(/.*)?$#', $path, $match) !== 1) {
+            return $url;
+        }
+        if ($match[1] . '/' . $match[2] === $pair) {
+            return $url;
+        }
+        $deploy = $match[3];
+        if ($buildId !== '' && \str_contains($buildId, '/') === false) {
+            $deploy = $buildId;
+        }
+        $aligned = '/static/' . $pair . '/' . $deploy . ($match[4] ?? '');
+
+        return $query === null ? $aligned : $aligned . '?' . $query;
     }
 }

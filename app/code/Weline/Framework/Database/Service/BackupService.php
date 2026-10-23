@@ -25,7 +25,7 @@ use Weline\Framework\Output\Cli\Printing;
 
 /**
  * 数据库迁移备份服务（Framework 内置）
- * 表名与 API 与 Weline\Database\Service\BackupService 兼容。
+ * 旧调用方统一使用本服务；RSSE 新链路使用 BackupCatalog/DatabaseSnapshotService。
  *
  * @package Weline\Framework\Database\Service
  */

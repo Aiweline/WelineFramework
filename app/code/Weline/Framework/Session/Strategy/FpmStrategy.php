@@ -155,6 +155,16 @@ final class FpmStrategy implements SessionStrategyInterface
         }
 
         if (\session_status() !== PHP_SESSION_ACTIVE) {
+            // 原生 session_start() 只按 php.ini 发 Set-Cookie；这里统一成框架配置，
+            // 避免出现第二条同名 Cookie、HttpOnly/SameSite 缺失或 TTL 取错。
+            \session_set_cookie_params([
+                'lifetime' => (int)($this->config['cookie_lifetime'] ?? $this->defaultTtl),
+                'path' => $this->resolveCookiePath(),
+                'domain' => $this->cookieDomain,
+                'secure' => $this->cookieSecure,
+                'httponly' => $this->cookieHttpOnly,
+                'samesite' => $this->cookieSameSite !== '' ? $this->cookieSameSite : 'Lax',
+            ]);
             \session_start();
         }
 

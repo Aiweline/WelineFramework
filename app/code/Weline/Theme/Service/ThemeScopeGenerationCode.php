@@ -12,15 +12,17 @@ use Weline\Theme\Model\ThemeScopeVersion;
  * Storefront generation === current Scope published theme version. The wire identity is this
  * code (not the numeric PK alone). Format:
  *
- *   t{themeId}.{area}.{storeMode}.{scopeFp12}.v{versionNumber}
+ *   t{themeId}.{area}.{storeMode}.{scopeFp12}.v{versionNumber}[.e{tuEpoch}]
  *
- * Same owner + version_number always yields the same code (publish rollback to an older sealed
- * row restores that older code). Compile / cache clear only read the code — they must never
- * invent a new published version.
+ * {@see fromVersion()} returns the version-only base; the runtime resolver appends the
+ * Theme Update epoch so promote/rollback changes the FE scope identity even when the
+ * version number and deploy build stay the same. Same owner + version_number always yields
+ * the same base code (publish rollback to an older sealed row restores that older base).
+ * Compile / cache clear only read the code — they must never invent a new published version.
  */
 final class ThemeScopeGenerationCode
 {
-    public const PATTERN = '/^t\d+\.(frontend|backend)\.[A-Za-z0-9._:+-]{1,32}\.[a-f0-9]{12}\.v\d+$/D';
+    public const PATTERN = '/^t\d+\.(frontend|backend)\.[A-Za-z0-9._:+-]{1,32}\.[a-f0-9]{12}\.v\d+(?:\.e\d+)?$/D';
 
     public static function fromVersion(ThemeScopeVersion $version): string
     {

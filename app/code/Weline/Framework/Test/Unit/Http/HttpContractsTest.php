@@ -221,6 +221,9 @@ final class HttpContractsTest extends TestCase
                 $this->tearDown_FpcHtmlDiskStore();
             }
         },
+            'FpcHtmlDiskStore::testExpiredGenerationsKeepThreeAndSevenDayCutoff' => function () {
+            $this->assert_FpcHtmlDiskStore_testExpiredGenerationsKeepThreeAndSevenDayCutoff();
+        },
             'FpcHtmlDiskStore::testSoftPurgeAllKeepsPreviousAndRollbackRestores' => function () {
             $this->setUp_FpcHtmlDiskStore();
             try {
@@ -1108,6 +1111,31 @@ private function assert_FpcHtmlDiskStore_testAllowlistedQueryUsesQVariantLeaf():
     FpcHtmlDiskStore::purgeUrls([$canonical]);
     $this->assertFpcHtmlDiskLeafMissing($pathOnly);
     $this->assertFpcHtmlDiskLeafMissing($variantPath);
+}
+
+private function assert_FpcHtmlDiskStore_testExpiredGenerationsKeepThreeAndSevenDayCutoff(): void
+{
+    $delete = FpcHtmlDiskStore::expiredGenerationIdsToDelete(
+        [
+            '20261023000006-live',
+            '20261023000005-prev',
+            '20261023000004-d',
+            '20261023000003-c',
+            '20261023000002-b',
+            '20261023000001-a',
+            '20261023000007-staging',
+        ],
+        '20261023000006-live',
+        '20261023000005-prev',
+        '20261023000007-staging',
+    );
+    \sort($delete);
+    self::assertSame(['20261023000001-a', '20261023000002-b'], $delete);
+    $now = \time();
+    self::assertTrue(FpcHtmlDiskStore::generationIsOlderThanDays('20200101000000-old', 7, $now));
+    self::assertFalse(FpcHtmlDiskStore::generationIsOlderThanDays(\date('YmdHis') . '-new', 7, $now));
+    self::assertSame(3, FpcHtmlDiskStore::RETAIN_EXPIRED_GENERATIONS);
+    self::assertSame(7, FpcHtmlDiskStore::GENERATION_MAX_AGE_DAYS);
 }
 
 private function assert_FpcHtmlDiskStore_testSoftPurgeAllKeepsPreviousAndRollbackRestores(): void

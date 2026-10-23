@@ -85,11 +85,19 @@ final class StaticBuildId
         }
         if ($buildId === null) {
             $deploy = self::current();
+            if ($deploy === '') {
+                $deploy = self::themePinnedStaticBuild();
+            }
             // 主题自有资源 → 主题对目录 `/{code}/v{n}/{buildId}`；其余沿用部署构建号。
+            // 两边都没有构建号时不改写，避免发出没有对应目录的 `/{code}/v{n}/`。
             $pair = self::themePairPrefix($path);
             if ($pair !== null && $pair['pair'] !== '') {
-                [$code, $version] = explode('/v', $pair['pair'], 2);
-                $buildId = $code . '/v' . $version . '/' . $deploy;
+                if ($deploy === '') {
+                    $buildId = '';
+                } else {
+                    [$code, $version] = explode('/v', $pair['pair'], 2);
+                    $buildId = $code . '/v' . $version . '/' . $deploy;
+                }
             } else {
                 $buildId = self::themeUpdateBuildId($path) ?? $deploy;
             }
@@ -108,14 +116,21 @@ final class StaticBuildId
         $parts = \explode('/', trim((string)$urlPath, '/'));
         $first = $parts[1] ?? '';
         // 主题对目录：/static/{code}/v{n}/{buildId}/…（第二段是 v{n}）。
+        // $buildId 可能是纯部署号，也可能是上面拼好的 {code}/v{n}/{部署号}。
+        // 后者出现时，URL 里旧的 code/v{n} 要换成当前主题对，不能再叠一层。
         $isThemePair = \preg_match('/^v[0-9]+$/', $parts[2] ?? '') === 1;
-        if ($isThemePair && ($parts[3] ?? '') === $buildId) {
-            return $path;
-        }
         if ($isThemePair) {
-            // 主题段在前：保留 code/v{n}，仅替换部署段。
+            $pairPrefix = $first . '/' . ($parts[2] ?? '');
+            $deployOnly = (string)$buildId;
+            if (\preg_match('#^([A-Za-z0-9_.-]+/v[0-9]+)/([A-Za-z0-9_-]+)$#', (string)$buildId, $composed) === 1) {
+                $pairPrefix = $composed[1];
+                $deployOnly = $composed[2];
+            }
+            if ($pairPrefix === $first . '/' . ($parts[2] ?? '') && ($parts[3] ?? '') === $deployOnly) {
+                return $path;
+            }
             $rest = \implode('/', \array_slice($parts, 4));
-            $result = '/static/' . $first . '/' . $parts[2] . '/' . $buildId . ($rest === '' ? '' : '/' . $rest) . ($trailingSlash ? '/' : '');
+            $result = '/static/' . $pairPrefix . '/' . $deployOnly . ($rest === '' ? '' : '/' . $rest) . ($trailingSlash ? '/' : '');
 
             return $query === null ? $result : $result . '?' . $query;
         }
@@ -158,6 +173,19 @@ final class StaticBuildId
             return \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::staticPrefixForPath($path);
         } catch (\Throwable) {
             return null;
+        }
+    }
+
+    /** 主题更新指针上的 12 位构建号；没有部署 `.build.json` 时给 versionedPath 用。 */
+    private static function themePinnedStaticBuild(): string
+    {
+        if (!class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
+            return '';
+        }
+        try {
+            return \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pinnedStaticBuild();
+        } catch (\Throwable) {
+            return '';
         }
     }
 

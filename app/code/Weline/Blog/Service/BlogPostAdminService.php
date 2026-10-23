@@ -110,6 +110,9 @@ final class BlogPostAdminService
         $model->setData(Post::schema_fields_AUTHOR_JOB_TITLE, trim((string)($data['author_job_title'] ?? '')));
         $model->setData(Post::schema_fields_AUTHOR_SAME_AS, trim((string)($data['author_same_as'] ?? '')));
         $model->setData(Post::schema_fields_KEYWORDS, trim((string)($data['keywords'] ?? '')));
+        if (array_key_exists('translation_of', $data)) {
+            $model->setData(Post::schema_fields_TRANSLATION_OF, max(0, (int)$data['translation_of']));
+        }
         $model->setData(Post::schema_fields_CATEGORY_ID, (int)($data['category_id'] ?? 0));
         $model->setData(Post::schema_fields_STATUS, $status);
         if ($status === Post::STATUS_PUBLISHED) {

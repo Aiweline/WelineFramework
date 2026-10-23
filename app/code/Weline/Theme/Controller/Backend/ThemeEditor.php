@@ -1431,22 +1431,37 @@ class ThemeEditor extends BackendController
         $scopeKind = \trim((string)$this->request->getParam('scope_kind', ''));
         $websiteId = $this->nullableRequestInt('website_id');
         $websiteCode = $this->nullableRequestString('website_code');
+        $storeCode = $this->nullableRequestString('store_code');
+        $channelCode = $this->nullableRequestString('channel_code');
+        $storeMode = $this->nullableRequestString('store_mode');
         // Theme list「编辑」只带 website_id/code，不带 scope_kind；仍须建成 website claims，
         // 否则 Scope 回落 default，画布/预览会打在默认站 Host（汉服）上。
+        // CMS / 博客正文编辑器同时带 store_code。店铺主键可以是 0（默认站默认店），
+        // 不能因为 website_id 存在就把带店铺的请求收成 Website Scope。
         if ($scopeKind === '') {
-            if ($websiteId === null && ($websiteCode === null || $websiteCode === '')) {
+            if ($channelCode !== null) {
+                $scopeKind = ScopeIdentity::KIND_CHANNEL;
+            } elseif ($storeCode !== null) {
+                $scopeKind = ScopeIdentity::KIND_STORE;
+            } elseif ($websiteId === null && ($websiteCode === null || $websiteCode === '')) {
                 return [];
+            } else {
+                $scopeKind = ScopeIdentity::KIND_WEBSITE;
             }
-            $scopeKind = ScopeIdentity::KIND_WEBSITE;
+        }
+        if ($scopeKind === ScopeIdentity::KIND_WEBSITE || $scopeKind === 'website') {
+            $storeCode = null;
+            $channelCode = null;
+            $storeMode = null;
         }
 
         return [
             'scope_kind' => $scopeKind,
             'website_id' => $websiteId,
             'website_code' => $websiteCode,
-            'store_code' => $this->nullableRequestString('store_code'),
-            'channel_code' => $this->nullableRequestString('channel_code'),
-            'store_mode' => $this->nullableRequestString('store_mode'),
+            'store_code' => $storeCode,
+            'channel_code' => $channelCode,
+            'store_mode' => $storeMode,
             'context_version' => (string)$this->request->getParam('context_version', 'v1'),
         ];
     }

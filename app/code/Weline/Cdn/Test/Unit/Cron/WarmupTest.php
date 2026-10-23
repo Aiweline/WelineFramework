@@ -8,6 +8,8 @@ use PHPUnit\Framework\TestCase;
 use Weline\Cdn\Cron\Warmup;
 use Weline\Cdn\Service\WarmupCollectService;
 use Weline\Cdn\Service\WarmupRunner;
+use Weline\Framework\Cache\Service\StorefrontWarmup\HostLoadSampler;
+use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupBusyGate;
 use Weline\Framework\Cron\CronTaskInterface;
 
 class WarmupTest extends TestCase
@@ -21,7 +23,17 @@ class WarmupTest extends TestCase
         parent::setUp();
         $this->collectService = $this->createMock(WarmupCollectService::class);
         $this->warmupRunner = $this->createMock(WarmupRunner::class);
-        $this->cron = new Warmup($this->collectService, $this->warmupRunner);
+        $this->cron = new Warmup(
+            $this->collectService,
+            $this->warmupRunner,
+            new StorefrontWarmupBusyGate(new HostLoadSampler([
+                'available' => true,
+                'source' => 'test',
+                'cores' => 1,
+                'load1' => 0.0,
+                'busy_ratio' => 0.0,
+            ])),
+        );
     }
 
     public function testImplementsCronTaskInterface(): void
@@ -43,5 +55,25 @@ class WarmupTest extends TestCase
         $msg = $this->cron->execute();
         $this->assertStringContainsString('providers=2', $msg);
         $this->assertStringContainsString('success=3', $msg);
+    }
+
+    public function testExecuteYieldsWhenHostIsBusy(): void
+    {
+        $this->collectService->expects($this->never())->method('collectAllProviders');
+        $this->warmupRunner->expects($this->never())->method('run');
+        $cron = new Warmup(
+            $this->collectService,
+            $this->warmupRunner,
+            new StorefrontWarmupBusyGate(new HostLoadSampler([
+                'available' => true,
+                'source' => 'test',
+                'cores' => 1,
+                'load1' => 8.0,
+                'busy_ratio' => 1.0,
+            ])),
+        );
+        $msg = $cron->execute();
+        $this->assertStringContainsString('CDN预热让出', $msg);
+        $this->assertStringContainsString('busy_ge_start', $msg);
     }
 }

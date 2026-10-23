@@ -20,7 +20,6 @@ final class Install implements InstallInterface
         /** @var GoogleTaxonomy $model */
         $model = ObjectManager::getInstance(GoogleTaxonomy::class);
         $modelSetup->putModel($model);
-        $model->setup($modelSetup, $context);
         $this->importTaxonomyReference();
     }
 

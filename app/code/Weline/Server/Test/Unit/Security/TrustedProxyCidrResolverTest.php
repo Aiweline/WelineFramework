@@ -57,6 +57,16 @@ final class TrustedProxyCidrResolverTest extends TestCase
         self::assertSame(['198.51.100.0/24'], $cidrs);
     }
 
+    public function testForwardedHeaderTrustAddsLoopbackToPublicHops(): void
+    {
+        $cidrs = TrustedProxyCidrResolver::forNginxForwardedHeaders([
+            '203.0.113.10/32',
+            '1.2.3.4; rm -rf /',
+        ]);
+
+        self::assertSame(['127.0.0.0/8', '203.0.113.10/32', '::1/128'], $cidrs);
+    }
+
     public function testRejectsUnsafeCidrLiterals(): void
     {
         self::assertFalse(TrustedProxyCidrResolver::isSafeCidrLiteral('1.2.3.4; rm -rf /'));

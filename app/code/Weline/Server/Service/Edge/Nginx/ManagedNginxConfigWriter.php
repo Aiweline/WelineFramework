@@ -194,11 +194,14 @@ NGINX;
         $edgeLimitLocation = (string)($edgeLimit['location_directives'] ?? '');
         $mimeTypes = $this->stageMimeTypesDependency();
         $quotedMimeTypes = $this->nginxQuotedPath($mimeTypes);
+        $publicTrustedProxyCidrs = $nginxTrustedProxyCidrs ?? $this->resolveNginxTrustedProxyCidrs();
         $realIpHttpBlock = $realIpSupported
-            ? $this->buildRealIpHttpBlock(
-                $nginxTrustedProxyCidrs ?? $this->resolveNginxTrustedProxyCidrs(),
-            )
+            ? $this->buildRealIpHttpBlock($publicTrustedProxyCidrs)
             : '';
+        $forwardedHeaderTrustBlock = $this->buildForwardedHeaderTrustHttpBlock(
+            $publicTrustedProxyCidrs,
+            $realIpSupported,
+        );
 
         // Linux + Windows: pin body/proxy temp under temp/ (project-owned).
         // Omitting these on Linux lets nginx create prefix-root client_body_temp
@@ -247,7 +250,7 @@ NGINX;
             . DIRECTORY_SEPARATOR . 'generated'
             . DIRECTORY_SEPARATOR . 'html'
             . DIRECTORY_SEPARATOR . 'live'
-        ) . '/$wls_fpc_html_host"';
+        ) . '/$wls_fpc_html_host/pg/$wls_fpc_page_gen"';
         $maintenanceEdgeDiskBypassSnippet = $this->buildMaintenanceEdgeDiskBypassSnippet();
         $fpcHtmlDiskHitHeaders = $this->buildFpcHtmlDiskHitHeaderBlock();
         try {
@@ -371,6 +374,13 @@ NGINX;
         default \$http_host;
         ""      \$host;
     }
+    # Request names a page generation via ?w_pg={16hex}. NG serves only that slot.
+    # Absent → pg/current. Present but not a slot token → pg/__miss__ (then WLS).
+    map \$arg_w_pg \$wls_fpc_page_gen {
+        "~^[a-f0-9]{16}$" \$arg_w_pg;
+        "~.+"             __miss__;
+        default           current;
+    }
     map \$http_accept_encoding \$wls_fpc_accepts_br {
         default 0;
         "~*(^|[, ])br(\$|[;,\\s])" 1;
@@ -380,7 +390,8 @@ NGINX;
     # Allowlisted query (\$wls_fpc_html_query_allowlist_bypass=1) → 418/origin (~q leaf).
     # Noise-only query keeps allowlist=0 → path-only HIT (UC-FPC-Scan).
     # HTTP → 418 → @wls_html_origin (owns http→https 308).
-    map "\$scheme:\$wls_fpc_html_disk_bypass:\$wls_fpc_html_query_allowlist_bypass:\$wls_fpc_accepts_br" \$wls_fpc_html_disk_try {
+    # Public scheme (trusted front proxy aware), not this listener's \$scheme.
+    map "\$wls_public_scheme:\$wls_fpc_html_disk_bypass:\$wls_fpc_html_query_allowlist_bypass:\$wls_fpc_accepts_br" \$wls_fpc_html_disk_try {
         default 0;
         "https:0:0:1" 1;
     }
@@ -465,7 +476,7 @@ NGINX;
 
         $httpsPortSuffix = (int)$ports['https'] === 443 ? '' : ':' . (int)$ports['https'];
         $httpRedirectLocation = $ssl !== null
-            ? "\n            if (\$scheme = http) { return 308 https://\$host{$httpsPortSuffix}\$request_uri; }"
+            ? "\n            if (\$wls_edge_http_redirect) { return 308 https://\$host{$httpsPortSuffix}\$request_uri; }"
             : '';
         $businessProxyConnectTimeoutSec = self::BUSINESS_PROXY_CONNECT_TIMEOUT_SEC;
         $businessProxyReadTimeoutSec = self::BUSINESS_PROXY_READ_TIMEOUT_SEC;
@@ -672,10 +683,10 @@ NGINX;
             proxy_set_header Upgrade \$wls_business_upstream_upgrade;
             proxy_set_header Connection \$wls_business_upstream_connection;
             proxy_set_header Host \$wls_upstream_authority;
-            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-Port \$wls_public_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
-            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Forwarded-Proto \$wls_public_scheme;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_set_header Cookie "";
             proxy_set_header Authorization "";
@@ -739,7 +750,7 @@ http {
     open_file_cache_min_uses 2;
     open_file_cache_errors on;
 {$tempBlock}{$gzipBlock}
-{$cacheHttpBlock}{$fpcHtmlDiskMapBlock}{$authorityMapBlock}{$protocolMapBlock}
+{$cacheHttpBlock}{$forwardedHeaderTrustBlock}{$fpcHtmlDiskMapBlock}{$authorityMapBlock}{$protocolMapBlock}
 {$edgeLimitHttpZone}
 {$upstreamBlock}
     server {
@@ -791,10 +802,10 @@ http {
             proxy_set_header Upgrade \$wls_business_upstream_upgrade;
             proxy_set_header Connection \$wls_business_upstream_connection;
             proxy_set_header Host \$wls_upstream_authority;
-            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-Port \$wls_public_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
-            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Forwarded-Proto \$wls_public_scheme;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_set_header X-Wls-Fpc-Bypass "";
             proxy_set_header X-Wls-Internal-Fpc-Bypass "";
@@ -1344,7 +1355,7 @@ NGINX;
                 . DIRECTORY_SEPARATOR . 'generated'
                 . DIRECTORY_SEPARATOR . 'html'
                 . DIRECTORY_SEPARATOR . 'live'
-            ) . '/$wls_fpc_html_host"';
+            ) . '/$wls_fpc_html_host/pg/$wls_fpc_page_gen"';
             $maintenanceEdgeDiskBypassSnippet = $this->buildMaintenanceEdgeDiskBypassSnippet();
             $fpcHtmlDiskHitHeaders = $this->buildFpcHtmlDiskHitHeaderBlock();
             $originName = $this->nginxSafeNamedLocationSuffix($host);
@@ -1380,10 +1391,10 @@ NGINX;
             proxy_http_version 1.1;
             proxy_set_header Connection "";
             proxy_set_header Host \$wls_upstream_authority;
-            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-Port \$wls_public_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
-            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Forwarded-Proto \$wls_public_scheme;
         }
 {$nonHtmlOriginLocationBlock}
         location / {
@@ -1405,10 +1416,10 @@ NGINX;
             proxy_set_header Upgrade \$wls_business_upstream_upgrade;
             proxy_set_header Connection \$wls_business_upstream_connection;
             proxy_set_header Host \$wls_upstream_authority;
-            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-Port \$wls_public_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
-            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Forwarded-Proto \$wls_public_scheme;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_connect_timeout {$connectTimeout}s;
             proxy_read_timeout {$readTimeout}s;
@@ -1543,10 +1554,10 @@ NGINX;
             proxy_http_version 1.1;
             proxy_set_header Connection "";
             proxy_set_header Host \$host;
-            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-Port \$wls_public_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
-            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Forwarded-Proto \$wls_public_scheme;
         }
 {$apexNonHtmlOriginLocationBlock}
         location / {
@@ -2246,7 +2257,7 @@ NGINX;
             . DIRECTORY_SEPARATOR . 'generated'
             . DIRECTORY_SEPARATOR . 'html'
             . DIRECTORY_SEPARATOR . 'live'
-        ) . '/$wls_fpc_html_host"';
+        ) . '/$wls_fpc_html_host/pg/$wls_fpc_page_gen"';
         // Heredoc would eat `{40}` / leave `{{40}}`; inject quantifier via variable.
         $hexSha1Quant = '{40}';
         foreach ($this->resolveNonHtmlOriginPathPrefixes() as $prefix) {
@@ -2293,10 +2304,10 @@ NGINX;
 {$httpRedirectLocation}{$upgradeHeader}
             proxy_set_header Connection {$connectionHeader};
             proxy_set_header Host {$hostHeader};
-            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-Port \$wls_public_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
-            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Forwarded-Proto \$wls_public_scheme;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_buffering off;
             proxy_cache off;
@@ -2318,10 +2329,10 @@ NGINX;
 {$httpRedirectLocation}{$upgradeHeader}
             proxy_set_header Connection {$connectionHeader};
             proxy_set_header Host {$hostHeader};
-            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-Port \$wls_public_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
-            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Forwarded-Proto \$wls_public_scheme;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_connect_timeout {$connectTimeoutSec}s;
             proxy_read_timeout {$readTimeoutSec}s;
@@ -2341,10 +2352,10 @@ NGINX;
 {$httpRedirectLocation}{$upgradeHeader}
             proxy_set_header Connection {$connectionHeader};
             proxy_set_header Host {$hostHeader};
-            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-Port \$wls_public_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
-            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Forwarded-Proto \$wls_public_scheme;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_connect_timeout {$connectTimeoutSec}s;
             proxy_read_timeout {$readTimeoutSec}s;
@@ -2355,7 +2366,7 @@ NGINX;
 NGINX;
         }
 
-        // Module Frontend\\Api PC surfaces (purchase-panel, variant-availability…).
+        // Module Frontend\\Api PC surfaces (purchase-panel, quote-request…).
         $blocks[] = <<<NGINX
 
         location ~* ^/[A-Za-z0-9_-]+/frontend/api(/|\$) {
@@ -2364,10 +2375,10 @@ NGINX;
 {$httpRedirectLocation}{$upgradeHeader}
             proxy_set_header Connection {$connectionHeader};
             proxy_set_header Host {$hostHeader};
-            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-Port \$wls_public_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
-            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Forwarded-Proto \$wls_public_scheme;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_connect_timeout {$connectTimeoutSec}s;
             proxy_read_timeout {$readTimeoutSec}s;
@@ -2441,6 +2452,70 @@ NGINX;
         foreach ($cidrs as $cidr) {
             $lines[] = '    set_real_ip_from ' . $cidr . ';';
         }
+
+        return \implode("\n", $lines) . "\n";
+    }
+
+    /**
+     * Public scheme/port as seen by the browser. A trusted front hop (CDN or a
+     * co-resident panel nginx terminating TLS) forwards cleartext to this
+     * listener; its X-Forwarded-Proto/Port then define the public origin, and
+     * scheme policy (http→https) belongs to that hop. Untrusted peers can never
+     * override this listener's own $scheme / $server_port.
+     *
+     * Defines $wls_public_scheme, $wls_public_port, $wls_public_https and
+     * $wls_edge_http_redirect for every forwarding header, FPM param, HTML disk
+     * gate and redirect in the generated conf.
+     *
+     * @param list<string> $publicCidrs
+     */
+    private function buildForwardedHeaderTrustHttpBlock(array $publicCidrs, bool $realIpSupported): string
+    {
+        $cidrs = \Weline\Server\Security\TrustedProxyCidrResolver::forNginxForwardedHeaders($publicCidrs);
+        // real_ip rewrites $remote_addr to the client; trust is about the TCP peer.
+        $peer = $realIpSupported ? '$realip_remote_addr' : '$remote_addr';
+        $lines = [
+            '',
+            '    # Trusted front hops (cdn_trusted_ips + CF catalog + accept_gate + loopback):',
+            '    # only these may set the public scheme/port via X-Forwarded-Proto/Port.',
+            '    geo ' . $peer . ' $wls_trusted_front_proxy {',
+            '        default 0;',
+        ];
+        foreach ($cidrs as $cidr) {
+            $lines[] = '        ' . $cidr . ' 1;';
+        }
+        \array_push(
+            $lines,
+            '    }',
+            '    map $http_x_forwarded_proto $wls_forwarded_proto_hint {',
+            '        default "";',
+            '        "~*^[ ]*https[ ]*(?:,|$)" https;',
+            '        "~*^[ ]*http[ ]*(?:,|$)" http;',
+            '    }',
+            '    map $http_x_forwarded_port $wls_forwarded_port_hint {',
+            '        default "";',
+            '        "~^[ ]*([0-9]{1,5})[ ]*(?:,|$)" $1;',
+            '    }',
+            '    map "$wls_trusted_front_proxy:$wls_forwarded_proto_hint" $wls_public_scheme {',
+            '        default $scheme;',
+            '        "1:https" https;',
+            '        "1:http" http;',
+            '    }',
+            '    map "$wls_trusted_front_proxy:$wls_forwarded_proto_hint:$wls_forwarded_port_hint" $wls_public_port {',
+            '        default $server_port;',
+            '        "1:https:" 443;',
+            '        "1:http:" 80;',
+            '        "~^1:[a-z]*:([0-9]+)$" $1;',
+            '    }',
+            '    map $wls_public_scheme $wls_public_https {',
+            '        default "";',
+            '        https on;',
+            '    }',
+            '    map "$wls_trusted_front_proxy:$scheme" $wls_edge_http_redirect {',
+            '        default 0;',
+            '        "0:http" 1;',
+            '    }',
+        );
 
         return \implode("\n", $lines) . "\n";
     }
@@ -2613,10 +2688,10 @@ NGINX;
             proxy_http_version 1.1;
             proxy_set_header Connection "";
             proxy_set_header Host \$wls_upstream_authority;
-            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-Port \$wls_public_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
-            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Forwarded-Proto \$wls_public_scheme;
         }
 
 NGINX;
@@ -2653,10 +2728,10 @@ NGINX;
             proxy_http_version 1.1;
             proxy_set_header Connection \$wls_probe_upstream_connection;
             proxy_set_header Host \$wls_upstream_authority;
-            proxy_set_header X-Forwarded-Port \$server_port;
+            proxy_set_header X-Forwarded-Port \$wls_public_port;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header CF-Connecting-IP \$http_cf_connecting_ip;
-            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Forwarded-Proto \$wls_public_scheme;
             proxy_set_header X-Real-IP \$remote_addr;
         }
 
@@ -2685,9 +2760,12 @@ NGINX;
             fastcgi_param SCRIPT_FILENAME \$document_root/index.php;
             fastcgi_param SCRIPT_NAME /index.php;
             fastcgi_param DOCUMENT_ROOT \$document_root;
-            fastcgi_param HTTPS \$https if_not_empty;
-            fastcgi_param HTTP_X_FORWARDED_PROTO \$scheme;
-            fastcgi_param HTTP_X_FORWARDED_PORT \$server_port;
+            # Public scheme/port (trusted front proxy aware) override fastcgi_params.
+            fastcgi_param REQUEST_SCHEME \$wls_public_scheme;
+            fastcgi_param HTTPS \$wls_public_https if_not_empty;
+            fastcgi_param SERVER_PORT \$wls_public_port;
+            fastcgi_param HTTP_X_FORWARDED_PROTO \$wls_public_scheme;
+            fastcgi_param HTTP_X_FORWARDED_PORT \$wls_public_port;
             fastcgi_param HTTP_X_REAL_IP \$remote_addr;
             fastcgi_param HTTP_X_FORWARDED_FOR \$proxy_add_x_forwarded_for;
             fastcgi_connect_timeout {$connectTimeoutSec}s;
@@ -2744,7 +2822,7 @@ NGINX;
             . '(?:'
             . '[ \t]*\n'
             . '|'
-            . '[ \t]*(?:proxy_[^\n]+|if \(\$scheme = http\) \{[^}\n]*\})\n'
+            . '[ \t]*(?:proxy_[^\n]+|if \(\$wls_edge_http_redirect\) \{[^}\n]*\})\n'
             . ')*/',
             $fpmBody,
             $conf,

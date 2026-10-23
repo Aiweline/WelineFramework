@@ -97,6 +97,10 @@ private function assert_BackendMenuSignalDeepLink_testSidebarHostsSignalPanelAnd
     self::assertStringContainsString('navigateToLeaf', $js);
     self::assertStringContainsString('function noteViewed()', $js);
     self::assertStringContainsString('function releaseViewed()', $js);
+    self::assertStringContainsString("STREAM_CHANNEL = 'admin.menuSignalWatch'", $js);
+    self::assertStringContainsString("handle.addEventListener('menu_signals'", $js);
+    self::assertStringContainsString('function startStream()', $js);
+    self::assertStringContainsString('SSE unavailable, polling.', $js);
     self::assertStringContainsString('omitViewedItems', $js);
     self::assertStringContainsString('viewedHrefKeys', $js);
     self::assertStringContainsString('anchorSignalTriggerToBadge', $js);

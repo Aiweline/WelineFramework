@@ -22,12 +22,13 @@ final class ScopeTokenService
     {
     }
 
-    public function issue(ScopeIdentity $scope, string $host, ?int $now = null): string
+    public function issue(ScopeIdentity $scope, string $host, string $pageGeneration, ?int $now = null): string
     {
         if ($scope->scopeKind !== ScopeIdentity::KIND_CHANNEL) {
             throw new \InvalidArgumentException(__('Storefront Scope Token 必须使用完整 Channel Scope'));
         }
         $host = $this->normalizeHost($host);
+        $pageGeneration = $this->normalizePageGeneration($pageGeneration);
         $now ??= time();
         if ($now <= 0 || $now > PHP_INT_MAX - self::TTL_SECONDS) {
             throw new \RuntimeException(__('Scope Token 时钟无效'));
@@ -39,6 +40,7 @@ final class ScopeTokenService
             $now,
             $now,
             $now + self::TTL_SECONDS,
+            $pageGeneration,
         );
         $body = self::b64($json);
         $signingInput = self::signingInput($active['kid'], $body);
@@ -50,9 +52,10 @@ final class ScopeTokenService
         string $token,
         string $host,
         ScopeIdentity $trustedScope,
+        string $currentPageGeneration,
         ?int $now = null,
     ): ScopeTokenVerification {
-        $verification = $this->verifyCandidate($token, $host, $now);
+        $verification = $this->verifyCandidate($token, $host, $currentPageGeneration, $now);
         if ($verification->scope === null
             || ($verification->status !== ScopeTokenVerification::STATUS_VALID
                 && $verification->status !== ScopeTokenVerification::STATUS_EXPIRED)) {
@@ -79,6 +82,7 @@ final class ScopeTokenService
     public function verifyCandidate(
         string $token,
         string $host,
+        string $currentPageGeneration,
         ?int $now = null,
     ): ScopeTokenVerification {
         $fingerprint = substr(hash('sha256', $token), 0, 16);
@@ -129,6 +133,17 @@ final class ScopeTokenService
             $payload = json_decode($payloadJson, true, 32, JSON_THROW_ON_ERROR);
         } catch (\Throwable) {
             return ScopeTokenVerification::rejected(ScopeTokenVerification::STATUS_INVALID, 'malformed_claims', $fingerprint, $kid);
+        }
+        if (!is_array($payload) || array_is_list($payload)) {
+            return ScopeTokenVerification::rejected(ScopeTokenVerification::STATUS_INVALID, 'malformed_claims', $fingerprint, $kid);
+        }
+        if (!array_key_exists('page_generation', $payload) || !is_string($payload['page_generation'])) {
+            return ScopeTokenVerification::rejected(
+                ScopeTokenVerification::STATUS_CONTEXT_CONFLICT,
+                'page_generation_mismatch',
+                $fingerprint,
+                $kid,
+            );
         }
         if (!$this->hasExactClaims($payload)) {
             return ScopeTokenVerification::rejected(ScopeTokenVerification::STATUS_INVALID, 'malformed_claims', $fingerprint, $kid);
@@ -200,7 +215,33 @@ final class ScopeTokenService
             return ScopeTokenVerification::rejected(ScopeTokenVerification::STATUS_CONTEXT_CONFLICT, 'host_mismatch', $fingerprint, $kid, $claimedHost);
         }
         try {
-            $canonicalPayload = $this->encodeCanonicalPayload($scope, $claimedHost, $iat, $nbf, $exp);
+            $claimedGeneration = $this->normalizePageGeneration($payload['page_generation']);
+            $expectedGeneration = $this->normalizePageGeneration($currentPageGeneration);
+        } catch (\Throwable) {
+            return ScopeTokenVerification::rejected(
+                ScopeTokenVerification::STATUS_CONTEXT_CONFLICT,
+                'page_generation_mismatch',
+                $fingerprint,
+                $kid,
+            );
+        }
+        if (!hash_equals($claimedGeneration, $payload['page_generation'])) {
+            return ScopeTokenVerification::rejected(
+                ScopeTokenVerification::STATUS_CONTEXT_CONFLICT,
+                'page_generation_mismatch',
+                $fingerprint,
+                $kid,
+            );
+        }
+        try {
+            $canonicalPayload = $this->encodeCanonicalPayload(
+                $scope,
+                $claimedHost,
+                $iat,
+                $nbf,
+                $exp,
+                $claimedGeneration,
+            );
         } catch (\Throwable) {
             return ScopeTokenVerification::rejected(
                 ScopeTokenVerification::STATUS_INVALID,
@@ -213,6 +254,14 @@ final class ScopeTokenService
             return ScopeTokenVerification::rejected(
                 ScopeTokenVerification::STATUS_INVALID,
                 'non_canonical_payload',
+                $fingerprint,
+                $kid,
+            );
+        }
+        if (!hash_equals($expectedGeneration, $claimedGeneration)) {
+            return ScopeTokenVerification::rejected(
+                ScopeTokenVerification::STATUS_CONTEXT_CONFLICT,
+                'page_generation_mismatch',
                 $fingerprint,
                 $kid,
             );
@@ -245,11 +294,13 @@ final class ScopeTokenService
         ScopeTokenVerification $verification,
         ScopeIdentity $trustedScope,
         string $host,
+        string $currentPageGeneration,
         ?int $now = null,
     ): ?string {
         $now ??= time();
         try {
             $normalizedHost = $this->normalizeHost($host);
+            $currentPageGeneration = $this->normalizePageGeneration($currentPageGeneration);
         } catch (\Throwable) {
             return null;
         }
@@ -261,7 +312,7 @@ final class ScopeTokenService
             || !$this->shouldRenew($verification, $now)) {
             return null;
         }
-        return $this->issue($trustedScope, $normalizedHost, $now);
+        return $this->issue($trustedScope, $normalizedHost, $currentPageGeneration, $now);
     }
 
     private function hasExactClaims(mixed $payload): bool
@@ -271,7 +322,7 @@ final class ScopeTokenService
         }
         $expected = [
             'aud', 'channel_code', 'context_version', 'exp', 'host', 'iat', 'nbf',
-            'scope_kind', 'store_code', 'store_mode', 'website_code', 'website_id',
+            'page_generation', 'scope_kind', 'store_code', 'store_mode', 'website_code', 'website_id',
         ];
         $actual = array_keys($payload);
         sort($expected);
@@ -279,7 +330,7 @@ final class ScopeTokenService
         if ($actual !== $expected) {
             return false;
         }
-        foreach (['aud', 'channel_code', 'context_version', 'host', 'scope_kind', 'store_code', 'store_mode', 'website_code'] as $field) {
+        foreach (['aud', 'channel_code', 'context_version', 'host', 'page_generation', 'scope_kind', 'store_code', 'store_mode', 'website_code'] as $field) {
             if (!is_string($payload[$field])) {
                 return false;
             }
@@ -293,6 +344,7 @@ final class ScopeTokenService
         int $issuedAt,
         int $notBefore,
         int $expiresAt,
+        string $pageGeneration,
     ): string {
         return json_encode(
             $scope->toArray() + [
@@ -301,9 +353,20 @@ final class ScopeTokenService
                 'iat' => $issuedAt,
                 'nbf' => $notBefore,
                 'exp' => $expiresAt,
+                'page_generation' => $pageGeneration,
             ],
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
         );
+    }
+
+    private function normalizePageGeneration(string $pageGeneration): string
+    {
+        $pageGeneration = trim($pageGeneration);
+        if (strlen($pageGeneration) > 180 || preg_match('/[\x00-\x1F\x7F]/', $pageGeneration) === 1) {
+            throw new \InvalidArgumentException(__('Scope Token 页面世代无效'));
+        }
+
+        return $pageGeneration;
     }
 
     private function normalizeHost(string $host): string

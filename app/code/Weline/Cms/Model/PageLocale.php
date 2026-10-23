@@ -157,7 +157,7 @@ class PageLocale extends Model
         if ($this->getPageId() <= 0) {
             throw new \InvalidArgumentException((string)__('CMS 页面语言变体必须指定有效页面。'));
         }
-        if ($this->getStoreId() <= 0) {
+        if ($this->getStoreId() < 0) {
             throw new \InvalidArgumentException((string)__('CMS 页面语言变体必须指定有效店铺。'));
         }
         $storeCode = trim($this->getStoreCode());

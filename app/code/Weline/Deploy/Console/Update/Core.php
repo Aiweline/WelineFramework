@@ -94,6 +94,7 @@ class Core extends CommandAbstract
     private int $skippedFiles = 0;  // 跳过的文件数（受保护的配置文件）
     private int $newFiles = 0;  // 新增的文件数
     private int $deletedFiles = 0;  // 删除的文件数
+    private int $failedFiles = 0;
     
     /**
      * Git 变化的文件列表（增量模式使用）
@@ -171,7 +172,10 @@ class Core extends CommandAbstract
 
     public function execute(array $args = [], array $data = [])
     {
-        SystemUpdateActivity::acquire('core:update');
+        if (!SystemUpdateActivity::acquire('core:update')) {
+            $this->printer->error(__('另一个核心更新正在执行，本次退出。'));
+            return 1;
+        }
         try {
         // 检查是否强制更新
         $this->forceUpdate = isset($args['f']) || isset($args['force']);
@@ -264,6 +268,10 @@ class Core extends CommandAbstract
 
         // 最后打印本次落到的最新 commit 详情，便于确认更新到哪一版
         $this->printLatestSyncedCommitDetails($tmpDir);
+
+        if ($this->failedFiles > 0) {
+            throw new \RuntimeException((string)__('核心文件复制失败 %{1} 个，更新未完成。', [$this->failedFiles]));
+        }
 
         // Theme 等可在此清布局固化物；核心同步后旧 shell/layout 不得继续直读。
         /** @var EventsManager $eventsManager */
@@ -406,7 +414,7 @@ class Core extends CommandAbstract
     {
         if (!$this->commandExists('git')) {
             $this->printer->error(__('错误：未检测到 Git'));
-            exit(1);
+            throw new \RuntimeException(__('错误：未检测到 Git'));
         }
         $this->printer->success(__('✓ Git 检查通过'));
     }
@@ -476,7 +484,7 @@ class Core extends CommandAbstract
         }
         $this->printer->note(__('以上仅为核心路径相对缓存仓的内容差异，与业务模块 git 无关'));
         $this->printer->note(__('请先自行处理这些核心改动；确需用仓库版本强制覆盖时执行：php bin/w core:update <分支名> -f'));
-        exit(1);
+        throw new \RuntimeException(__('请先自行处理这些核心改动；确需用仓库版本强制覆盖时执行：php bin/w core:update <分支名> -f'));
     }
 
     /**
@@ -997,7 +1005,7 @@ class Core extends CommandAbstract
         if (empty($branch)) {
             $this->printer->error(__('错误：必须指定分支（-b <分支名>）或在配置中设置 branch_default'));
             $this->printer->note(__('php bin/w update:core -b <分支名>'));
-            exit(1);
+            throw new \RuntimeException(__('错误：必须指定分支（-b <分支名>）或在配置中设置 branch_default'));
         }
         return $branch;
     }
@@ -1060,7 +1068,7 @@ class Core extends CommandAbstract
             if ($fetchCode !== 0) {
                 if ($this->gitTransferSecondsRemaining() <= 0) {
                     $this->printer->error(__('拉包超过 5 分钟总时限'));
-                    exit(1);
+                    throw new \RuntimeException(__('拉包超过 5 分钟总时限'));
                 }
                 $this->printer->warning(__('拉取未完成，删掉旧缓存仓并换仓库浅克隆...'));
                 $this->replaceCacheWithFreshClone($tmpDir, $branch, $tag);
@@ -1153,8 +1161,7 @@ class Core extends CommandAbstract
         $diffCode = $this->runGitCommand($tmpDir, ['diff', '--name-status', $fromRef . '..' . $toRef], $diffOutput);
         
         if ($diffCode !== 0) {
-            $this->printer->warning(__('无法获取 Git diff，将使用全量更新'));
-            return [];
+            throw new \RuntimeException((string)__('无法获取核心更新 diff，已中止。'));
         }
         
         foreach ($diffOutput as $line) {
@@ -1210,7 +1217,7 @@ class Core extends CommandAbstract
 
         $this->printer->error(__('所有仓库均无法浅克隆'));
         $this->printer->printList($lastOutput);
-        exit(1);
+        throw new \RuntimeException(__('所有仓库均无法浅克隆'));
     }
 
     /**
@@ -1419,7 +1426,10 @@ class Core extends CommandAbstract
                 case 'A': // 新增
                     if (file_exists($sourcePath)) {
                         $this->ensureDirectoryExists(dirname($targetPath));
-                        copy($sourcePath, $targetPath);
+                        if (!@copy($sourcePath, $targetPath)) {
+                            $this->failedFiles++;
+                            break;
+                        }
                         $this->newFiles++;
                         $processedCount++;
                     }
@@ -1428,7 +1438,10 @@ class Core extends CommandAbstract
                 case 'M': // 修改
                     if (file_exists($sourcePath)) {
                         $this->ensureDirectoryExists(dirname($targetPath));
-                        copy($sourcePath, $targetPath);
+                        if (!@copy($sourcePath, $targetPath)) {
+                            $this->failedFiles++;
+                            break;
+                        }
                         $this->updatedFiles++;
                         $processedCount++;
                     }
@@ -1475,7 +1488,10 @@ class Core extends CommandAbstract
 
                 if (!$targetExists) {
                     $this->ensureDirectoryExists(\dirname($targetPath));
-                    \copy($source, $targetPath);
+                    if (!@copy($source, $targetPath)) {
+                        $this->failedFiles++;
+                        continue;
+                    }
                     $this->newFiles++;
                     $missingCount++;
                 }
@@ -1512,7 +1528,10 @@ class Core extends CommandAbstract
 
                 if (!$targetExists) {
                     $this->ensureDirectoryExists(\dirname($targetPath));
-                    \copy($sourcePath, $targetPath);
+                    if (!@copy($sourcePath, $targetPath)) {
+                        $this->failedFiles++;
+                        continue;
+                    }
                     $this->newFiles++;
                     $missingCount++;
                 }
@@ -1592,18 +1611,19 @@ class Core extends CommandAbstract
                     continue;
                 }
                 $this->ensureDirectoryExists(\dirname($target));
-                if (\copy($source, $target)) {
-                    if (\file_exists($target)) {
-                        $this->updatedFiles++;
-                    } else {
-                        $this->newFiles++;
-                    }
-                    $this->printer->success(__('✓ %{1}', [$normalizedPath]));
-                    $processedPaths++;
-                } else {
+                if (!@copy($source, $target)) {
                     $this->printer->warning(__('⚠ %{1} 处理失败', [$normalizedPath]));
+                    $this->failedFiles++;
                     $failedPaths++;
+                    continue;
                 }
+                if (\file_exists($target)) {
+                    $this->updatedFiles++;
+                } else {
+                    $this->newFiles++;
+                }
+                $this->printer->success(__('✓ %{1}', [$normalizedPath]));
+                $processedPaths++;
                 continue;
             }
             
@@ -1684,8 +1704,10 @@ class Core extends CommandAbstract
                 // 确保目标目录存在
                 $this->ensureDirectoryExists(dirname($targetPath));
                 
-                // 直接覆盖拷贝
-                copy($sourcePath, $targetPath);
+                if (!@copy($sourcePath, $targetPath)) {
+                    $this->failedFiles++;
+                    continue;
+                }
                 
                 if ($isNewFile) {
                     $this->newFiles++;

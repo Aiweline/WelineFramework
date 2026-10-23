@@ -13,6 +13,7 @@
  * @var string $websiteSelectOptionsJson
  * @var bool $cms_available
  * @var int $cms_page_id
+ * @var array<string,mixed> $cms_editor_state
  * @var string $theme_editor_url
  * @var string $preview_url
  * @var string $list_url
@@ -29,8 +30,16 @@ $themeEditorUrl = (string)($theme_editor_url ?? '');
 $previewUrl = (string)($preview_url ?? '');
 $listUrl = (string)($list_url ?? '');
 $suggestSlugUrl = (string)($suggest_slug_url ?? '');
+$translateUrl = (string)($translate_url ?? '');
+$autoTranslateUrl = (string)($auto_translate_url ?? '');
+$autoTranslateEnabled = !empty($auto_translate_enabled);
+$translationVersions = is_array($translation_versions ?? null) ? $translation_versions : [];
+$translationTargetCodes = is_array($translation_target_codes ?? null) ? $translation_target_codes : [];
+$translationMissingCodes = is_array($translation_missing_codes ?? null) ? $translation_missing_codes : [];
 $cmsAvailable = (bool)($cms_available ?? false);
+$cmsEditorState = is_array($cms_editor_state ?? null) ? $cms_editor_state : [];
 $hasEditor = $themeEditorUrl !== '';
+$cmsMissingLocaleCount = count((array)($cmsEditorState['translation']['missing_locales'] ?? []));
 $escape = static fn(mixed $value): string => htmlspecialchars(
     is_scalar($value) || $value === null ? (string)$value : (string)json_encode($value, JSON_UNESCAPED_UNICODE),
     ENT_QUOTES | ENT_SUBSTITUTE,
@@ -335,6 +344,81 @@ if ($coverImageValue !== '') {
             </div>
         </w:form>
 
+        <?php if ($postId > 0): ?>
+        <div class="w-card blog-post-translate-card"
+             data-blog-translate
+             data-translate-url="<?= $escape($translateUrl) ?>"
+             data-auto-translate-url="<?= $escape($autoTranslateUrl) ?>"
+             data-auto-translate-enabled="<?= $autoTranslateEnabled ? '1' : '0' ?>"
+             data-msg-empty="<?= $escape(__('先选至少一种目标语言')) ?>"
+             data-msg-working="<?= $escape(__('AI 翻译中，请稍候…')) ?>"
+             data-msg-failed="<?= $escape(__('翻译请求失败')) ?>">
+            <div class="w-card__body">
+                <h5 class="blog-post-settings-title"><lang>多语言版本</lang></h5>
+                <p class="blog-post-settings-desc"><lang>选好目标语言后由 AI 翻译标题、摘要、正文与关键词，并保存为对应语言的文章。</lang></p>
+
+                <?php if ($translationVersions !== []): ?>
+                    <ul class="blog-post-translate-list">
+                        <?php foreach ($translationVersions as $versionLocale => $version): ?>
+                            <li class="blog-post-translate-list__item">
+                                <span class="blog-post-translate-list__locale"><?= $escape($versionLocale) ?></span>
+                                <span class="blog-post-translate-list__title"><?= $escape($version['title'] ?? '') ?></span>
+                                <span class="blog-post-translate-list__status"><?= $escape($statusLabels[$version['status'] ?? ''] ?? ($version['status'] ?? '')) ?></span>
+                                <a class="blog-post-translate-list__link"
+                                   href="<?= $escape($this->getUrl('blog/backend/post-admin/form', ['post_id' => (int)($version['post_id'] ?? 0)])) ?>"><lang>编辑</lang></a>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+
+                <div class="blog-post-translate-controls">
+                    <div class="blog-post-field">
+                        <label class="w-field__label" for="blog-post-translate-targets"><lang>翻译到</lang></label>
+                        <w:i18n:language:select
+                            id="blog-post-translate-targets"
+                            name="translate_locales[]"
+                            multiple="true"
+                            allowed-values="translationTargetCodes"
+                            value="translationMissingCodes"
+                        />
+                    </div>
+                    <div class="blog-post-translate-row">
+                        <label class="blog-post-translate-check">
+                            <input type="checkbox" data-blog-translate-overwrite value="1">
+                            <span><lang>覆盖已有译文</lang></span>
+                        </label>
+                        <label class="blog-post-translate-check">
+                            <input type="checkbox" data-blog-translate-draft value="1" checked>
+                            <span><lang>先存为草稿</lang></span>
+                        </label>
+                        <button class="w-button" type="button" data-tone="primary" data-blog-translate-button>
+                            <w:icon name="translate" size="sm"></w:icon>
+                            <lang>AI 翻译并保存</lang>
+                        </button>
+                    </div>
+                </div>
+
+                <label class="blog-post-translate-check blog-post-translate-auto">
+                    <input type="checkbox" data-blog-auto-translate <?= $autoTranslateEnabled ? 'checked' : '' ?>>
+                    <span><lang>保存文章时 AI 自动补齐缺失语言</lang></span>
+                </label>
+
+                <p class="blog-post-translate-status" data-blog-translate-status hidden></p>
+            </div>
+        </div>
+        <?php endif; ?>
+        <style>
+            .blog-post-translate-controls { display: flex; flex-direction: column; gap: 12px; margin: 12px 0; }
+            .blog-post-translate-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+            .blog-post-translate-check { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; margin: 0; }
+            .blog-post-translate-check input { margin: 0; }
+            .blog-post-translate-list { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+            .blog-post-translate-list__item { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+            .blog-post-translate-list__locale { font-weight: 600; min-width: 72px; }
+            .blog-post-translate-list__title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .blog-post-translate-status { margin: 8px 0 0; font-size: 12px; }
+        </style>
+
         <div class="w-card blog-post-editor-card">
             <div class="blog-post-editor-head">
                 <div>
@@ -343,8 +427,17 @@ if ($coverImageValue !== '') {
                 </div>
                 <?php if ($hasEditor): ?>
                     <span class="w-blog-post-form__badge is-live"><lang>编辑器已就绪</lang></span>
+                    <?php if ($cmsMissingLocaleCount > 0): ?>
+                        <button class="w-button" type="button" data-blog-cms-translate-missing data-tone="primary" data-variant="outline" data-size="sm">
+                            <lang>翻译 CMS 缺失语言</lang>
+                            (<?= (int)$cmsMissingLocaleCount ?>)
+                        </button>
+                    <?php endif; ?>
                 <?php endif; ?>
             </div>
+            <?php if ($hasEditor && $cmsEditorState !== []): ?>
+                <p class="blog-post-editor-translate-hint" data-blog-cms-translate-status hidden></p>
+            <?php endif; ?>
             <div class="cms-theme-editor-workspace <?= $hasEditor ? 'is-ready' : 'is-empty' ?>">
                 <?php if (!$cmsAvailable): ?>
                     <div class="w-alert" data-tone="warning" style="--w-mb:0;">
@@ -368,7 +461,13 @@ if ($coverImageValue !== '') {
     </div>
 </div>
 <?php if ($cmsAvailable): ?>
+<?php if ($cmsEditorState !== []): ?>
+<script id="blog-cms-editor-state" type="application/json"><?= json_encode(
+    $cmsEditorState,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+) ?></script>
+<?php endif; ?>
 <script defer src="@static(Weline_Theme::js/cms-preview-bridge.js)"></script>
 <script defer src="@static(Weline_Cms::js/cms-page-editor.js)"></script>
 <?php endif; ?>
-<script defer src="@static(Weline_Blog::js/blog-post-admin-form.js)?v=20260827-cover-picker-v1"></script>
+<script defer src="@static(Weline_Blog::js/blog-post-admin-form.js)?v=20261023-translate-v1"></script>

@@ -28,7 +28,6 @@ class Upgrade implements UpgradeInterface
         $local = ObjectManager::getInstance(LocalDescription::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($local);
-        $local->setup($modelSetup, $context);
 
         $this->ensureAudienceSegmentWebsiteColumn($modelSetup, $context);
         $this->migrateLegacyWebsiteIdZeroMeansAll();
@@ -43,7 +42,6 @@ class Upgrade implements UpgradeInterface
             /** @var AudienceSegment $segment */
             $segment = ObjectManager::getInstance(AudienceSegment::class);
             $modelSetup->putModel($segment);
-            $segment->setup($modelSetup, $context);
         } catch (\Throwable $e) {
             w_log_warning('Marketing AudienceSegment website_id setup: ' . $e->getMessage(), [], 'marketing');
         }

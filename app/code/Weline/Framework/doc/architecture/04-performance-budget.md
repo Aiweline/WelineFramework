@@ -163,7 +163,7 @@ FPC `full_uri` 的 authority 必须来自请求入口已校验并规范化的 `H
 
 WLS 禁止在 Worker READY 或普通请求阶段加载某个 locale 的全模块词典。翻译热路径固定为：
 
-1. 先查 Worker 进程内 `locale + 当前模块集合 + word` 的最终译文哈希，O(1) 返回；该表只随本 Worker 实际遇到的词增长，上限 32,768 项；满袋**一次削到 90% 水位**（`intdiv($max * 9, 10)`），后续插入摊还 O(1)。
+1. 先查 Worker 进程内 `locale + 当前模块集合 + word` 的最终译文哈希，O(1) 返回；该表只随本 Worker 实际遇到的词增长，默认上限 **1,024 项**（`phrase_worker_translated_word_cache_max` 可调，夹紧到 64–2,048，`PhraseContractsTest` 锁定）；满袋**由 `processBag()` 一次削到 90% 水位**（`intdiv($max * 9, 10)`），`Parser::rememberWorkerTranslatedWord()` 不得再自行削袋，后续插入摊还 O(1)。
 2. 路由涉及的模块词典按模块分别维护 Worker L1。L1 尚未建立时才读取 `phrase` Shared Memory 的模块 CSV 快照；Shared miss 才解析该模块自己的 `i18n/{locale}.csv` 并回填。文件 mtime/size 参与版本，其他 Worker 不重复解析同一 CSV。
 3. 模块 CSV miss 后，旧词典表和无 `source_module` 归属的历史词条按“精确单词”回源：先查 Worker 单词 L1，再查 Shared Memory 的单词级记录，最后才通过 `GlobalDictionaryProviderInterface::word()` 按 `md5(word + locale)` 索引查询一行并回填。该路径不得构造 locale 级数组。
 4. CLI/维护命令可以显式调用 `words(locale, modules)` 读取模块范围或全词典；该批量路径不得进入持久 Worker。

@@ -38,6 +38,106 @@
         return json;
     }
 
+    async function postForm(url, fields) {
+        const body = new FormData();
+        Object.keys(fields).forEach(function (key) {
+            const value = fields[key];
+            if (Array.isArray(value)) {
+                value.forEach(function (item) {
+                    body.append(key, item);
+                });
+                return;
+            }
+            body.append(key, value);
+        });
+        const response = await fetch(url, {
+            method: 'POST',
+            body: body,
+            credentials: 'same-origin',
+        });
+        return await response.json();
+    }
+
+    function initTranslationPanel() {
+        const panel = document.querySelector('[data-blog-translate]');
+        if (!panel) {
+            return;
+        }
+        const translateUrl = panel.getAttribute('data-translate-url') || '';
+        const auto_translate_url = panel.getAttribute('data-auto-translate-url') || '';
+        const statusEl = panel.querySelector('[data-blog-translate-status]');
+        const localeField = panel.querySelector('[data-w-language-field]');
+        const overwriteEl = panel.querySelector('[data-blog-translate-overwrite]');
+        const draftEl = panel.querySelector('[data-blog-translate-draft]');
+        const translateButton = panel.querySelector('[data-blog-translate-button]');
+        const autoTranslateEl = panel.querySelector('[data-blog-auto-translate]');
+        const postIdInput = document.querySelector('.blog-post-settings-bar [name="post_id"]');
+        const postId = postIdInput ? String(postIdInput.value || '') : '0';
+
+        if (translateButton) {
+            translateButton.addEventListener('click', async function () {
+                const locales = localeField ? Array.from(localeField.selectedOptions).map(function (option) {
+                    return option.value;
+                }).filter(Boolean) : [];
+                if (locales.length === 0) {
+                    notify(panel.dataset.msgEmpty, 'warning');
+                    return;
+                }
+                translateButton.disabled = true;
+                if (statusEl) {
+                    statusEl.textContent = panel.dataset.msgWorking;
+                    statusEl.removeAttribute('hidden');
+                }
+                try {
+                    const fields = {
+                        post_id: postId,
+                        overwrite: overwriteEl && overwriteEl.checked ? '1' : '0',
+                        as_draft: draftEl && draftEl.checked ? '1' : '0',
+                        'locales[]': locales,
+                    };
+                    const json = await postForm(translateUrl, fields);
+                    if (json && json.success) {
+                        notify(json.msg || translateUi('翻译完成'), 'success');
+                        window.setTimeout(function () {
+                            window.location.reload();
+                        }, 600);
+                    } else {
+                        const message = (json && json.msg) || panel.dataset.msgFailed;
+                        if (statusEl) {
+                            statusEl.textContent = message;
+                        }
+                        notify(message, 'error');
+                    }
+                } catch (error) {
+                    if (statusEl) {
+                        statusEl.textContent = panel.dataset.msgFailed;
+                    }
+                    notify(panel.dataset.msgFailed, 'error');
+                } finally {
+                    translateButton.disabled = false;
+                }
+            });
+        }
+
+        if (autoTranslateEl) {
+            autoTranslateEl.addEventListener('change', async function () {
+                const enabled = autoTranslateEl.checked ? '1' : '0';
+                try {
+                    const json = await postForm(auto_translate_url, { enabled: enabled });
+                    if (json && !json.success) {
+                        autoTranslateEl.checked = !autoTranslateEl.checked;
+                        notify(json.msg || panel.dataset.msgFailed, 'error');
+                    } else {
+                        notify(json.msg || translateUi('已保存'), 'success');
+                    }
+                } catch (error) {
+                    autoTranslateEl.checked = !autoTranslateEl.checked;
+                    notify(panel.dataset.msgFailed, 'error');
+                }
+            });
+        }
+    }
+
     function init() {
         const form = document.querySelector('.blog-post-settings-bar');
         if (!form) {
@@ -282,6 +382,178 @@
         syncCoverPickerLabel();
     }
 
+    function loadRuntimeApi(host) {
+        if (host.Weline && typeof host.Weline.load === 'function') {
+            return host.Weline.load('api').then(function () {
+                return host.Weline;
+            });
+        }
+        return Promise.reject(new Error('Weline runtime unavailable'));
+    }
+
+    function initBlogCmsThemeEditor() {
+        const stateNode = document.getElementById('blog-cms-editor-state');
+        const frame = document.querySelector('.blog-post-editor-card .cms-theme-editor-frame');
+        if (!stateNode || !frame) {
+            return;
+        }
+        let payload = {};
+        try {
+            payload = JSON.parse(stateNode.textContent || '{}');
+        } catch (error) {
+            notify(translateUi('CMS 编辑器桥接数据无效。'), 'error');
+            return;
+        }
+        const pageEditor = window.Weline && Weline.Cms && Weline.Cms.PageEditor;
+        const previewBridge = window.Weline && Weline.Theme && Weline.Theme.CmsPreviewBridge;
+        if (!previewBridge) {
+            return;
+        }
+        const pageId = Number(payload.pageId || payload.page_id || 0);
+        const storeId = Number(payload.storeId || 0);
+        const translateButton = document.querySelector('[data-blog-cms-translate-missing]');
+        const translationStatus = document.querySelector('[data-blog-cms-translate-status]');
+        const translationConfig = payload.translation && typeof payload.translation === 'object' ? payload.translation : {};
+        const translationMessages = translationConfig.messages && typeof translationConfig.messages === 'object'
+            ? translationConfig.messages
+            : {};
+        let translationRunning = false;
+
+        function translationMessage(key, fallback) {
+            return String(translationMessages[key] || fallback || '');
+        }
+
+        function setTranslationStatus(message, tone) {
+            if (!translationStatus) {
+                return;
+            }
+            translationStatus.textContent = String(message || '');
+            translationStatus.removeAttribute('hidden');
+            translationStatus.classList.remove('is-success', 'is-warning', 'is-error');
+            if (tone) {
+                translationStatus.classList.add('is-' + tone);
+            }
+        }
+
+        function buildPreviewContext(overrides) {
+            return Object.assign({
+                pageId: pageId,
+                websiteId: Number(payload.websiteId || 0),
+                websiteCode: String(payload.websiteCode || ''),
+                storeId: storeId,
+                storeCode: String(payload.storeCode || ''),
+                storeMode: String(payload.storeMode || 'normal'),
+                scope: String(payload.scope || ''),
+                locale: String(payload.current_locale || ''),
+                layoutOption: String(payload.layout_option || 'default'),
+                publicRoute: String(payload.publicRoute || ''),
+            }, overrides || {});
+        }
+
+        const bridge = previewBridge.createParentBridge({
+            hostWindow: window,
+            targetWindow: frame.contentWindow,
+            timeoutMs: 15000,
+        });
+        bridge.start();
+
+        function syncPreviewContext(overrides) {
+            return bridge.setContext(buildPreviewContext(overrides)).then(function (result) {
+                if (result.dirty) {
+                    notify(translateUi('Theme 编辑器有未保存修改，请先保存后再切换。'), 'warning');
+                } else if (!result.ok && !result.fallback && result.reason !== 'superseded') {
+                    notify(translateUi('Theme 预览同步失败。'), 'warning');
+                }
+                return result;
+            });
+        }
+
+        function pushContextWhenReady() {
+            if (!frame.contentWindow) {
+                return;
+            }
+            syncPreviewContext().catch(function () {
+                // iframe may still be booting; one retry after load.
+            });
+        }
+
+        frame.addEventListener('load', pushContextWhenReady, { once: false });
+        if (frame.contentDocument && frame.contentDocument.readyState === 'complete') {
+            pushContextWhenReady();
+        }
+
+        const localeInput = document.querySelector('.blog-post-settings-bar [name="locale"]');
+        if (localeInput) {
+            localeInput.addEventListener('change', async function () {
+                const nextLocale = String(localeInput.value || '');
+                const previousLocale = String(payload.current_locale || '');
+                if (!nextLocale || nextLocale === previousLocale) {
+                    return;
+                }
+                const result = await syncPreviewContext({ locale: nextLocale });
+                if (result && result.ok) {
+                    payload.current_locale = nextLocale;
+                } else if (result && result.reason !== 'superseded') {
+                    localeInput.value = previousLocale;
+                }
+            });
+        }
+
+        async function startCmsPageTranslation() {
+            if (translationRunning || !pageEditor || pageId < 1) {
+                return;
+            }
+            translationRunning = true;
+            if (translateButton) {
+                translateButton.disabled = true;
+            }
+            setTranslationStatus(translationMessage('starting', '正在启动翻译任务…'), '');
+            try {
+                const api = await loadRuntimeApi(window);
+                const outcome = await pageEditor.runTranslationTask({
+                    api: api,
+                    pageId: pageId,
+                    storeId: storeId,
+                    requestId: 'blog-cms-' + pageId + '-' + Date.now(),
+                    isStopped: function () { return false; },
+                    onUpdate: function (snapshot) {
+                        const checkpoint = snapshot && snapshot.checkpoint && snapshot.checkpoint.state;
+                        const state = checkpoint && typeof checkpoint === 'object' ? checkpoint : {};
+                        const total = Number(state.total || 0);
+                        const completed = Number(state.next_index || state.completed || 0);
+                        let message = translationMessage('progress', '正在翻译语言') + ' ' + completed + '/' + total;
+                        if (state.current_locale) {
+                            message += ' · ' + String(state.current_locale);
+                        }
+                        setTranslationStatus(message, '');
+                    },
+                });
+                const status = String(outcome.snapshot && outcome.snapshot.status || '').toLowerCase();
+                if (status !== 'completed') {
+                    setTranslationStatus(translationMessage('failed', '翻译任务未完成。'), 'error');
+                    return;
+                }
+                setTranslationStatus(translationMessage('complete', 'CMS 页面语言均已补全。'), 'success');
+                window.setTimeout(function () {
+                    window.location.reload();
+                }, 800);
+            } catch (error) {
+                setTranslationStatus(translationMessage('failed', '翻译任务未完成。'), 'error');
+            } finally {
+                translationRunning = false;
+                if (translateButton) {
+                    translateButton.disabled = false;
+                }
+            }
+        }
+
+        if (translateButton) {
+            translateButton.addEventListener('click', function () {
+                startCmsPageTranslation();
+            });
+        }
+    }
+
     function initCoverWatcher() {
         const coverInput = document.getElementById('blog-cover');
         const panel = document.querySelector('[data-blog-cover-panel]');
@@ -321,9 +593,13 @@
         document.addEventListener('DOMContentLoaded', function () {
             init();
             initCoverWatcher();
+            initTranslationPanel();
+            initBlogCmsThemeEditor();
         }, { once: true });
     } else {
         init();
         initCoverWatcher();
+        initTranslationPanel();
+        initBlogCmsThemeEditor();
     }
 })();

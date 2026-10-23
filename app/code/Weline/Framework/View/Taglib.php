@@ -53,7 +53,11 @@ class Taglib
      * Bumped when compiled Taglib output shape changes (e.g. form body capture).
      * Embedded into Template compile hash so view/tpl cannot keep stale PHP.
      */
-    public const COMPILER_GENERATION = '20261023-block-lang-attr-v9';
+    public const COMPILER_GENERATION = '20261023-owned-children-phase-v10';
+
+    /** 回调 `$config` 中的渲染阶段键；只有 {@see renderRuntimeTag()} 会写入 runtime。 */
+    public const RENDER_PHASE_KEY = 'render_phase';
+    public const RENDER_PHASE_RUNTIME = 'runtime';
 
     // PHP 标签常量，避免在回调函数中重复定义
     private const PHP_OPEN_TAG = '<' . '?';
@@ -384,7 +388,7 @@ class Taglib
             $callback = $tagConfig['callback'];
 
             try {
-                $replacement = $callback($tagKey, $tagConfig, $tagData, []);
+                $replacement = $callback($tagKey, $tagConfig, $tagData, [], $template);
             } catch (\Throwable $e) {
                 // 回调异常时保留原文不替换，继续扫描
                 $offset = $pos + strlen($raw);
@@ -569,6 +573,7 @@ class Taglib
 
         $trimmed = \trim($value);
         $extractor = $this->activeCompileExtractor ?? $this->phpExtractor;
+        // 关闭标签吞换行后，自闭合的斜杠可能粘在占位符后面。
         $placeholder = $trimmed;
         if (\preg_match('/^(__PHP_\d+__)\/$/', $trimmed, $glued) === 1) {
             $placeholder = $glued[1];
@@ -996,7 +1001,7 @@ class Taglib
             $callback = $tagConfig['callback'];
             
             // 构建注册闭包
-            $registerCallback = function(string $registerName) use ($generator, $callback, $tagConfig, $tagName, $fileName) {
+            $registerCallback = function(string $registerName) use ($generator, $callback, $tagConfig, $tagName, $fileName, &$template) {
                 $ownsChildCompilation = isset($tagConfig['class'])
                     && \is_string($tagConfig['class'])
                     && \is_a(
@@ -1010,7 +1015,7 @@ class Taglib
                 }
 
                 // 将回调适配到原始参数格式：function ($tag_key, $config, $tag_data, $attributes)
-                $generator->registerTag($registerName, function(array $params) use ($callback, $tagConfig, $tagName, $fileName, $ownsChildCompilation) {
+                $generator->registerTag($registerName, function(array $params) use ($callback, $tagConfig, $tagName, $fileName, $ownsChildCompilation, &$template) {
                 // 从 params 中提取属性
                 $attrs = [];
                 foreach ($params as $key => $value) {
@@ -1120,7 +1125,7 @@ class Taglib
                     (int)($params['line'] ?? 0)
                 );
 
-                return $callback($tag_key, $runtimeConfig, $tag_data, $attrs);
+                return $callback($tag_key, $runtimeConfig, $tag_data, $attrs, $template);
                 });
             };
             
@@ -2396,7 +2401,7 @@ class Taglib
             'empty' => [
                 'tag-start' => 1,
                 'tag-end' => 1,
-                'callback' => function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                'callback' => function ($tag_key, $config, $tag_data, $attributes, Template $template) {
                     switch ($tag_key) {
                         // @empty{$name|<li>空的</li>}
                         case '@tag{}':
@@ -2421,7 +2426,7 @@ class Taglib
             'notempty' => [
                 'tag-start' => 1,
                 'tag-end' => 1,
-                'callback' => function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                'callback' => function ($tag_key, $config, $tag_data, $attributes, Template $template) {
                     switch ($tag_key) {
                         // @empty{$name|<li>空的</li>}
                         case '@tag{}':
@@ -2446,7 +2451,7 @@ class Taglib
             'has' => [
                 'tag-start' => 1,
                 'tag-end' => 1,
-                'callback' => function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                'callback' => function ($tag_key, $config, $tag_data, $attributes, Template $template) {
                     switch ($tag_key) {
                         // @empty{$name|<li>空的</li>}
                         case '@tag{}':
@@ -2606,7 +2611,7 @@ class Taglib
                 'attr' => ['name' => 1, 'key' => 0, 'item' => 0],
                 'tag-start' => 1,
                 'tag-end' => 1,
-                'callback' => function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                'callback' => function ($tag_key, $config, $tag_data, $attributes, Template $template) {
                     switch ($tag_key) {
                         // @foreach{$name as $key=>$v|<li><var>$k</var>:<var>$v</var></li>}
                         case '@tag{}':
@@ -2664,7 +2669,7 @@ class Taglib
             'static' => [
                 'tag' => 1,
                 'callback' =>
-                    function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                    function ($tag_key, $config, $tag_data, $attributes, Template $template) {
                         // 编译期 tag_data[1]=路径；运行时 tag_data[1]=rawAttributes、tag_data[2]=路径
                         $path = trim($tag_data[1] ?? '') ?: trim($tag_data[2] ?? '');
                         return match ($tag_key) {
@@ -2677,7 +2682,7 @@ class Taglib
                 'tag' => 1,
                 'attr' => ['enable' => 0, 'name' => 0],
                 'callback' =>
-                    function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                    function ($tag_key, $config, $tag_data, $attributes, Template $template) {
                         $enable = $attributes['enable'] ?? 1;
                         if (!$enable or ($enable === 'false')) {
                             $template_string = $tag_data[0] ?? '';
@@ -2732,7 +2737,7 @@ class Taglib
                 'tag' => 1,
                 'attr' => ['type' => 0, 'async' => 0, 'defer' => 0, 'crossorigin' => 0, 'integrity' => 0, 'nomodule' => 0, 'id' => 0, 'class' => 0, 'data-*' => 0],
                 'callback' =>
-                    function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                    function ($tag_key, $config, $tag_data, $attributes, Template $template) {
                         $raw1 = trim((string)($tag_data[1] ?? ''));
                         $raw2 = trim((string)($tag_data[2] ?? ''));
                         // 若 [1] 是路径（含 :: 或 /），不能当 HTML 属性；属性优先用 $attributes
@@ -2777,7 +2782,7 @@ class Taglib
             'css' => [
                 'tag' => 1,
                 'callback' =>
-                    function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                    function ($tag_key, $config, $tag_data, $attributes, Template $template) {
                         $raw1 = trim((string)($tag_data[1] ?? ''));
                         $raw2 = trim((string)($tag_data[2] ?? ''));
                         // 若 [1] 被误解析为路径串（含 :: 或 /），不当作 HTML 属性输出，仅作 href 来源
@@ -2868,7 +2873,7 @@ class Taglib
                 'tag-end' => 1,
                 'tag-self-close-with-attrs' => 1,
                 'callback' =>
-                    function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                    function ($tag_key, $config, $tag_data, $attributes, Template $template) {
                         $baked = $this->tryBakeUrlFamily($template, 'getUrl', (string)$tag_key, $tag_data, $attributes);
                         if ($baked !== null) {
                             return $baked;
@@ -2923,7 +2928,7 @@ class Taglib
                 'tag-end' => 1,
                 'tag-self-close-with-attrs' => 1,
                 'callback' =>
-                    function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                    function ($tag_key, $config, $tag_data, $attributes, Template $template) {
                         $baked = $this->tryBakeUrlFamily($template, 'getFrontendUrl', (string)$tag_key, $tag_data, $attributes);
                         if ($baked !== null) {
                             return $baked;
@@ -2976,7 +2981,7 @@ class Taglib
                 'tag-end' => 1,
                 'tag-self-close-with-attrs' => 1,
                 'callback' =>
-                    function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                    function ($tag_key, $config, $tag_data, $attributes, Template $template) {
                         $baked = $this->tryBakeUrlFamily($template, 'getApi', (string)$tag_key, $tag_data, $attributes);
                         if ($baked !== null) {
                             return $baked;
@@ -3028,7 +3033,7 @@ class Taglib
                 'tag-start' => 1,
                 'tag-end' => 1,
                 'callback' =>
-                    function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                    function ($tag_key, $config, $tag_data, $attributes, Template $template) {
                         $result = '';
                         switch ($tag_key) {
                             case 'tag':
@@ -3071,7 +3076,7 @@ class Taglib
                 'tag-start' => 1,
                 'tag-end' => 1,
                 'callback' =>
-                    function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                    function ($tag_key, $config, $tag_data, $attributes, Template $template) {
                         $result = '';
                         switch ($tag_key) {
                             case 'tag':
@@ -3114,7 +3119,7 @@ class Taglib
                 'tag-start' => 1,
                 'tag-end' => 1,
                 'callback' =>
-                    function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                    function ($tag_key, $config, $tag_data, $attributes, Template $template) {
                         $result = '';
                         switch ($tag_key) {
                             case 'tag':
@@ -4586,8 +4591,8 @@ class Taglib
         $tagData = $this->buildTagData($node, $content);
         $attributes = $this->buildAttributesFromRaw($rawAttributes);
         if ($tagKey === 'tag-start' && !empty($config['tag-end'])) {
-            $start = $config['callback']('tag-start', $config, $tagData, $attributes);
-            $end = $config['callback']('tag-end', $config, $tagData, $attributes);
+            $start = $config['callback']('tag-start', $config, $tagData, $attributes, $template);
+            $end = $config['callback']('tag-end', $config, $tagData, $attributes, $template);
             
             // 对于 if 标签，需要将内容中的 <else/> 和 <elseif .../> 转换为 PHP 代码
             if ($node->name === 'if' || $node->name === 'w:if') {
@@ -4607,7 +4612,7 @@ class Taglib
             return $start . $content . $end;
         }
 
-        return $config['callback']($tagKey, $config, $tagData, $attributes);
+        return $config['callback']($tagKey, $config, $tagData, $attributes, $template);
     }
 
     private function buildTagData(TagNode $node, string $content): array
@@ -4760,6 +4765,7 @@ class Taglib
             return $content;
         }
         $config = $this->enrichTagConfigWithSource($config, $fileName);
+        $config[self::RENDER_PHASE_KEY] = self::RENDER_PHASE_RUNTIME;
         $tagData = ($tagKey === '@tag()' || $tagKey === '@tag{}')
             ? [$inlineContent, $inlineContent]
             : [$this->buildRuntimeRawTag($tagName, $rawAttributes, $content, $tagKey), $rawAttributes, $content];
@@ -4774,15 +4780,15 @@ class Taglib
         }
 
         if ($tagKey === 'tag-start' && !empty($config['tag-end']) && isset($config['callback']) && \is_callable($config['callback'])) {
-            $start = $config['callback']('tag-start', $config, $tagData, $attributes);
-            $end = $config['callback']('tag-end', $config, $tagData, $attributes);
+            $start = $config['callback']('tag-start', $config, $tagData, $attributes, $template);
+            $end = $config['callback']('tag-end', $config, $tagData, $attributes, $template);
             $start = \is_string($start) ? $start : (string)$start;
             $end = \is_string($end) ? $end : (string)$end;
 
             return $start . $content . $end;
         }
 
-        $result = $config['callback']($tagKey, $config, $tagData, $attributes);
+        $result = $config['callback']($tagKey, $config, $tagData, $attributes, $template);
         if ($result === null) {
             return '';
         }
@@ -4799,6 +4805,33 @@ class Taglib
         }
 
         return $result;
+    }
+
+    /**
+     * {@see \Weline\Framework\Taglib\OwnsChildCompilationInterface} 标签处理自身子源码的唯一入口。
+     *
+     * 编译期：返回可拼进编译产物的 PHP。
+     * 运行期：回调返回值会被直接输出，所以把可信的子模板源码编译成按渲染维度分目录的文件，
+     * 在当前模板作用域执行后只返回 HTML；运行期属性值永远不进入编译或 eval。
+     *
+     * $contextDigest 是子源码编译结果所依赖的父标签上下文摘要（由调用方声明）。
+     */
+    public function processOwnedChildren(Template $template, string $source, array $config, string $contextDigest = ''): string
+    {
+        if (($config[self::RENDER_PHASE_KEY] ?? '') !== self::RENDER_PHASE_RUNTIME) {
+            return (string)$this->compile($template, $source);
+        }
+        if (\trim($source) === '') {
+            return '';
+        }
+        $identity = \hash('xxh3', $source . "\0" . $contextDigest);
+
+        return $template->fetchSourceHtml(
+            'taglib-owned-children.phtml',
+            $source,
+            'taglib-owned-children/' . $identity . '.phtml',
+            $identity
+        );
     }
 
     /**

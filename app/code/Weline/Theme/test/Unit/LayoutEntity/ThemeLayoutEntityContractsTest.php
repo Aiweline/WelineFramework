@@ -31,6 +31,7 @@ use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySolidifyCompilePipeline;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySolidifyLeaseStore;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySolidifyQueue;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySolidifySerialKey;
+use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySolidifyJobStore;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySolidifyStampStore;
 use Weline\Theme\Service\LayoutEntity\WidgetAssetArtifactPublisher;
 use Weline\Theme\Service\LayoutEntity\WidgetAssetOptimizer;
@@ -402,6 +403,22 @@ final class ThemeLayoutEntityContractsTest extends TestCase
             $this->setUp_ThemeLayoutEntityRequestSolidifyGate();
             try {
                 $this->assert_ThemeLayoutEntityRequestSolidifyGate_testStampRoundTrip();
+            } finally {
+                $this->tearDown_ThemeLayoutEntityRequestSolidifyGate();
+            }
+        },
+            'ThemeLayoutEntityRequestSolidifyGate::testDeadLetterCountsConsecutiveFailuresAndClears' => function () {
+            $this->setUp_ThemeLayoutEntityRequestSolidifyGate();
+            try {
+                $this->assert_ThemeLayoutEntityRequestSolidifyGate_testDeadLetterCountsConsecutiveFailuresAndClears();
+            } finally {
+                $this->tearDown_ThemeLayoutEntityRequestSolidifyGate();
+            }
+        },
+            'ThemeLayoutEntityRequestSolidifyGate::testCircuitBreakerStopsForbidAndEnqueue' => function () {
+            $this->setUp_ThemeLayoutEntityRequestSolidifyGate();
+            try {
+                $this->assert_ThemeLayoutEntityRequestSolidifyGate_testCircuitBreakerStopsForbidAndEnqueue();
             } finally {
                 $this->tearDown_ThemeLayoutEntityRequestSolidifyGate();
             }
@@ -2255,6 +2272,65 @@ private function assert_ThemeLayoutEntityRequestSolidifyGate_testStampRoundTrip(
     self::assertNull($stamps->read($key));
     $stamps->write($key, str_repeat('a', 64));
     self::assertSame(str_repeat('a', 64), $stamps->read($key));
+}
+
+private function assert_ThemeLayoutEntityRequestSolidifyGate_testDeadLetterCountsConsecutiveFailuresAndClears(): void
+{
+    $paths = new ThemeLayoutEntityPaths($this->root_ThemeLayoutEntityRequestSolidifyGate . DIRECTORY_SEPARATOR);
+    $jobs = new ThemeLayoutEntitySolidifyJobStore($paths);
+    $key = ThemeLayoutEntitySolidifySerialKey::fromParts(7, 'frontend', 'g.default.default', 'normal', 'category', 'default', 3, 2);
+    self::assertNull($jobs->failureState($key));
+    self::assertFalse($jobs->clearFailure($key));
+
+    // Three consecutive drain failures accumulate on the same slot-scoped dead-letter file.
+    for ($i = 1; $i <= 3; $i++) {
+        $jobs->put($key, str_repeat('f', 64));
+        self::assertTrue($jobs->moveToFailed($key, 'di_mismatch_' . $i));
+        self::assertFalse($jobs->has($key), 'moveToFailed must remove the pending slot');
+        $state = $jobs->failureState($key);
+        self::assertIsArray($state);
+        self::assertSame($i, $state['fail_count']);
+        self::assertSame('di_mismatch_' . $i, $state['fail_reason']);
+        self::assertGreaterThan(0, $state['failed_at']);
+    }
+    // A later version of the same slot shares the dead-letter record (slot hash, not V/R).
+    $later = ThemeLayoutEntitySolidifySerialKey::fromParts(7, 'frontend', 'g.default.default', 'normal', 'category', 'default', 9, 9);
+    self::assertSame(3, $jobs->failureState($later)['fail_count'] ?? null);
+
+    // Successful bake clears the record exactly once.
+    self::assertTrue($jobs->clearFailure($later));
+    self::assertNull($jobs->failureState($key));
+    self::assertFalse($jobs->clearFailure($key));
+}
+
+private function assert_ThemeLayoutEntityRequestSolidifyGate_testCircuitBreakerStopsForbidAndEnqueue(): void
+{
+    $gate = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/LayoutEntity/ThemeLayoutEntityRequestSolidifyGate.php';
+    $queue = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/LayoutEntity/ThemeLayoutEntitySolidifyQueue.php';
+    $gateSrc = (string) file_get_contents($gate);
+    $queueSrc = (string) file_get_contents($queue);
+
+    // Queue owns the breaker policy (env thresholds), Gate only consumes it.
+    self::assertStringContainsString('public function circuitState(', $queueSrc);
+    self::assertStringContainsString("theme.layout_entity.solidify_circuit_failures", $queueSrc);
+    self::assertStringContainsString("theme.layout_entity.solidify_circuit_cooldown_seconds", $queueSrc);
+    self::assertStringContainsString('$this->jobs->clearFailure($key)', $queueSrc);
+    self::assertStringContainsString('invalidateScopeAfterRecovery', $queueSrc);
+    self::assertStringContainsString("'theme_layout_solidify_circuit_recovered'", $queueSrc);
+    // Bake must not save/markPublished an already sealed+published version on every run.
+    self::assertStringContainsString('if ($needsSeal) {', $queueSrc);
+    self::assertStringContainsString('if ($needsSeal || !$version->isPublished()) {', $queueSrc);
+
+    self::assertStringContainsString('$this->queue->circuitState($key)', $gateSrc);
+    self::assertStringContainsString("'solidify_circuit_open'", $gateSrc);
+    self::assertStringContainsString('if ($needsJob && !$circuitOpen) {', $gateSrc);
+    // forbid() must be guarded by the breaker: open circuit keeps shared FPC allowed.
+    $forbidPos = strpos($gateSrc, "SharedResponseCachePolicy::forbid('theme_layout_solidify_fallback_original')");
+    self::assertNotFalse($forbidPos);
+    $guardPos = strrpos(substr($gateSrc, 0, $forbidPos), 'if (!$circuitOpen) {');
+    self::assertNotFalse($guardPos, 'forbid() must sit inside the !$circuitOpen guard');
+    self::assertLessThan(200, $forbidPos - $guardPos);
+    self::assertStringContainsString("'circuit_open' => \$circuitOpen", $gateSrc);
 }
 
 private function assert_ThemeLayoutEntityRequestSolidifyGate_testQueueClassesAndGateExist(): void

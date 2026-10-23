@@ -22,7 +22,6 @@ class Upgrade implements UpgradeInterface
         foreach ([PromotionActivityTheme::class, PromotionActivityThemeLocal::class, PromotionActivityThemeProduct::class] as $modelClass) {
             $model = ObjectManager::getInstance($modelClass);
             $modelSetup->putModel($model);
-            $model->upgrade($modelSetup, $context);
         }
 
         ObjectManager::getInstance(PromotionActivityThemeService::class)->ensureDefaultThemes();

@@ -591,8 +591,20 @@ private function assert_WelineApiWorkerNonce_testApiSuppressesNonceReplayToast()
     self::assertStringContainsString('createUrlWorker', $script);
     self::assertStringContainsString('createBlobWorker', $script);
     self::assertStringContainsString('createSharedWorker', $script);
-    self::assertStringContainsString('createSharedWorker().catch(() => createBlobWorker().catch(() => createUrlWorker()))', $script);
-    self::assertStringContainsString('same-origin Worker blocked', $script);
+    self::assertStringContainsString("['shared', createSharedWorker],\n                ['blob', createBlobWorker],\n                ['url', createUrlWorker],", $script);
+    self::assertStringContainsString('No QueryBin worker transport booted', $script);
+    self::assertStringContainsString('awaitQueryBinTransportReady', $script);
+    self::assertStringContainsString("const QUERY_BIN_TRANSPORT_PING = 'transport-ping'", $script);
+    self::assertStringContainsString("const QUERY_BIN_TRANSPORT_READY = 'transport-ready'", $script);
+    self::assertStringNotContainsString('setTimeout(finishOk', $script);
+    $worker = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Frontend' . '/view/statics/js/weline-api-worker.js');
+    self::assertStringContainsString("if (message.type === 'transport-ping')", $worker);
+    self::assertStringContainsString("port.postMessage({ id, type: 'transport-ready' });", $worker);
+    self::assertLessThan(
+        strpos($worker, 'normalizeConfig(message.config'),
+        strpos($worker, "if (message.type === 'transport-ping')"),
+        'transport-ping must be answered before config validation'
+    );
     self::assertStringContainsString('recoverWorkerAfterTimeout', $script);
     self::assertStringContainsString('workerRecoverPromise', $script);
     self::assertStringContainsString('Script still downloading', $script);

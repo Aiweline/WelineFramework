@@ -62,6 +62,14 @@ final class CheckoutOrderPaymentService
         if ($idempotencyKey === '') {
             throw new \InvalidArgumentException('checkout_payment_idempotency_required');
         }
+        // Card Fields 一次只承载一个 PayPal order；拆单/express 直接回退跳转，
+        // 避免生成多个卡单或把 express 地址流混进站内卡收银台。
+        if (!empty($context['client_action'])
+            && (count($orderUuids) !== 1 || !empty($context['express_checkout']))
+        ) {
+            $context['client_action'] = false;
+            $context['client_action_fallback'] = 'unsupported_order_shape';
+        }
 
         $transactions = [];
         $hasPending = false;
@@ -69,6 +77,7 @@ final class CheckoutOrderPaymentService
         $hasPartial = false;
         $notificationPending = false;
         $redirectUrl = null;
+        $clientAction = null;
         $lastPurpose = '';
         $chargedAmountMinor = 0;
         foreach ($orderUuids as $orderUuid) {
@@ -266,6 +275,12 @@ final class CheckoutOrderPaymentService
                     $paymentContext[$key] = $context[$key];
                 }
             }
+            if (!empty($context['client_action'])) {
+                $paymentContext['client_action'] = true;
+            }
+            if (!empty($context['client_action_fallback'])) {
+                $paymentContext['client_action_fallback'] = (string) $context['client_action_fallback'];
+            }
 
             $checkoutToken = trim((string) (
                 $context['checkout_token']
@@ -364,6 +379,9 @@ final class CheckoutOrderPaymentService
                 $hasPending = true;
             }
             $safeResponse = $this->sanitizeResponse($transaction->response);
+            if ($clientAction === null && \is_array($safeResponse['client_action'] ?? null)) {
+                $clientAction = $safeResponse['client_action'];
+            }
             $transactionRedirect = $safeResponse['redirect_url'] ?? null;
             if ($redirectUrl === null && is_string($transactionRedirect) && $transactionRedirect !== '') {
                 $redirectUrl = $transactionRedirect;
@@ -448,9 +466,10 @@ final class CheckoutOrderPaymentService
             'paid' => $outcome === 'paid',
             'outcome' => $outcome,
             'status' => $status,
-            'requires_action' => $redirectUrl !== null,
+            'requires_action' => $redirectUrl !== null || $clientAction !== null,
             'recoverable' => !in_array($outcome, ['paid', 'partial'], true) && !$notificationPending,
             'redirect_url' => $redirectUrl,
+            'client_action' => $clientAction,
             'transactions' => $transactions,
             // 续付金额漂移检测：pending 跳转金额须与订单权威 grand 对齐。
             'amount_minor' => $chargedAmountMinor,
@@ -463,6 +482,132 @@ final class CheckoutOrderPaymentService
         }
 
         return $result;
+    }
+
+    /**
+     * Confirm an on-site card payment (PayPal Card Fields) for an already-created
+     * order. The transaction must belong to the order, and capture is performed
+     * by the Payment shell using the provider reference persisted at create time.
+     *
+     * @param array<string, mixed> $context
+     * @return array{
+     *     paid:bool,
+     *     outcome:'paid'|'pending'|'failed',
+     *     status:string,
+     *     requires_action:bool,
+     *     recoverable:bool,
+     *     redirect_url:?string,
+     *     transactions:list<array<string,mixed>>,
+     *     notification_pending?:bool
+     * }
+     */
+    public function confirm(
+        string $orderUuid,
+        string $transactionNo,
+        string $quoteToken,
+        string $orderIdempotencyKey,
+        array $context = [],
+    ): array {
+        $orderUuid = trim($orderUuid);
+        $transactionNo = trim($transactionNo);
+        $quoteToken = trim($quoteToken);
+        $orderIdempotencyKey = trim($orderIdempotencyKey);
+        if ($orderUuid === '' || $transactionNo === '') {
+            throw new \InvalidArgumentException('checkout_payment_confirm_required');
+        }
+
+        // Bind capture to the submitted checkout session. A submitted order must
+        // have a session; when the session exposes order_uuids, the order must be
+        // one of them. Never capture a transaction for another order.
+        $session = $quoteToken !== '' ? $this->checkoutSessions->get($quoteToken) : null;
+        if (\is_array($session)) {
+            $submitted = \is_array($session['submitted_result'] ?? null) ? $session['submitted_result'] : [];
+            $sessionOrderUuids = array_values(array_filter(array_map(
+                static fn (mixed $uuid): string => trim((string) $uuid),
+                (array) ($submitted['order_uuids'] ?? []),
+            )));
+            if ($sessionOrderUuids !== [] && !\in_array($orderUuid, $sessionOrderUuids, true)) {
+                throw new \InvalidArgumentException('checkout_payment_order_scope_mismatch');
+            }
+        } elseif ($quoteToken !== '') {
+            throw new \InvalidArgumentException('checkout_payment_session_not_found');
+        }
+
+        $order = $this->orders->get($orderUuid);
+        if (\in_array(strtolower(trim($order->status)), ['paid', 'fulfilled', 'completed'], true)) {
+            return [
+                'paid' => true,
+                'outcome' => 'paid',
+                'status' => PaymentTransactionRecord::STATUS_SUCCESS,
+                'requires_action' => false,
+                'recoverable' => false,
+                'redirect_url' => null,
+                'transactions' => [],
+            ];
+        }
+
+        $transaction = $this->payments->confirmPayment($transactionNo, array_replace($context, [
+            'order_uuid' => $orderUuid,
+            'quote_token' => $quoteToken,
+            'idempotency_key' => $orderIdempotencyKey !== ''
+                ? $orderIdempotencyKey
+                : (string) ($context['idempotency_key'] ?? ''),
+        ]));
+        $status = strtolower(trim($transaction->status));
+        $transactionRow = [
+            'order_uuid' => $orderUuid,
+            'transaction_id' => $transaction->id,
+            'transaction_no' => $transaction->transactionNumber,
+            'method_code' => $transaction->methodCode,
+            'status' => $status,
+            'response' => $this->sanitizeResponse($transaction->response),
+        ];
+
+        if ($status === PaymentTransactionRecord::STATUS_SUCCESS) {
+            $notificationPending = false;
+            try {
+                $this->ensureOrderMoneyConserved($orderUuid, $this->orders->get($orderUuid)->money);
+                $this->notifyOrderPaidCaptured($orderUuid, [
+                    'payment_method' => $transaction->methodCode,
+                    'payment_transaction_id' => $transaction->id,
+                    'payment_transaction_no' => $transaction->transactionNumber,
+                ]);
+            } catch (\Throwable $e) {
+                // Provider already captured; never report failure (double-charge risk).
+                $this->logOrderPaidNotificationFailure($orderUuid, $transaction, $e);
+                $notificationPending = true;
+            }
+
+            $result = [
+                'paid' => true,
+                'outcome' => 'paid',
+                'status' => PaymentTransactionRecord::STATUS_SUCCESS,
+                'requires_action' => false,
+                'recoverable' => false,
+                'redirect_url' => null,
+                'transactions' => [$transactionRow],
+            ];
+            if ($notificationPending) {
+                $result['notification_pending'] = true;
+            }
+
+            return $result;
+        }
+
+        $failed = \in_array($status, [
+            PaymentTransactionRecord::STATUS_FAILED,
+            PaymentTransactionRecord::STATUS_REFUNDED,
+        ], true);
+
+        return [
+            'paid' => false,
+            'outcome' => $failed ? 'failed' : 'pending',
+            'status' => $status,
+            'requires_action' => false,
+            'recoverable' => !$failed,
+            'redirect_url' => null,
+            'transactions' => [$transactionRow],
+        ];
     }
 
     /**
@@ -889,9 +1034,58 @@ final class CheckoutOrderPaymentService
      */
     private function sanitizeResponse(array $response): array
     {
+        $safe = [];
         $redirectUrl = $this->extractRedirectUrl($response);
+        if ($redirectUrl !== null) {
+            $safe['redirect_url'] = $redirectUrl;
+        }
+        $clientAction = $this->extractClientAction($response);
+        if ($clientAction !== null) {
+            $safe['client_action'] = $clientAction;
+        }
 
-        return $redirectUrl === null ? [] : ['redirect_url' => $redirectUrl];
+        return $safe;
+    }
+
+    /**
+     * Expose a provider-defined client action to the browser without teaching
+     * Checkout what the action means. Only scalar data is forwarded; secrets and
+     * nested provider payloads are dropped.
+     *
+     * @param array<string, mixed> $response
+     * @return array<string, mixed>|null
+     */
+    private function extractClientAction(array $response): ?array
+    {
+        $raw = null;
+        if (\is_array($response['payload']['client_action'] ?? null)) {
+            $raw = $response['payload']['client_action'];
+        } elseif (\is_array($response['client_action'] ?? null)) {
+            $raw = $response['client_action'];
+        }
+        if ($raw === null) {
+            return null;
+        }
+
+        $type = trim((string) ($raw['type'] ?? ''));
+        $data = \is_array($raw['data'] ?? null) ? $raw['data'] : null;
+        if ($type === '' || $data === null) {
+            return null;
+        }
+
+        $safeData = [];
+        foreach ($data as $key => $value) {
+            if (\is_scalar($value) || $value === null) {
+                $safeData[(string) $key] = $value;
+            }
+        }
+
+        return [
+            'type' => $type,
+            'method_code' => trim((string) ($raw['method_code'] ?? '')),
+            'provider_code' => trim((string) ($raw['provider_code'] ?? '')),
+            'data' => $safeData,
+        ];
     }
 
     /** @param array<string, mixed> $response */

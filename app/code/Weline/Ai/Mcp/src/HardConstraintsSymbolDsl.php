@@ -145,7 +145,7 @@ final class HardConstraintsSymbolDsl
             'WidgetWork', 'ThemeWork', 'CodexOptIn', 'Cli', 'Codex', 'RuleCRUD', 'Skill', 'LangTable',
             'SyncMap', 'DirtySym', 'Silent', 'Nested', 'InverseRaised', 'Frontend', 'NeedPlan', 'PlanDone',
             'Complex', 'Simple', 'API', 'DesignTheme', 'PlanBody', 'Scheme', 'SiteSeed', 'SiteCopy', 'ProjectRules',
-            'McpGen', 'HandEdit', 'GlobalRuleEdit', 'MCP', 'HostMdc', 'DemoPage', 'Git', 'CacheOff',
+            'McpGen', 'HandEdit', 'GlobalRuleEdit', 'MCP', 'HostMdc', 'DemoPage', 'Git', 'CacheOff', 'Port',
             'SeverityUi', 'SemTone', 'AllDefault',
             'CompVar', 'PaletteLeaf', 'DanglingVar',
             'ReqCtxAsk', 'ReadDiag', 'LogicChg', 'SyncDiag',
@@ -515,8 +515,8 @@ final class HardConstraintsSymbolDsl
                 'cluster' => '§✓',
             ],
             'feature_delivery_urls' => [
-                'formula' => 'DelivUrl→□PierceStamp',
-                'gloss_zh' => '交付/规划URL须w_fpc_pierce；visitor次链可免',
+                'formula' => 'DelivUrl→□(PierceStamp∧¬Port)',
+                'gloss_zh' => '交付URL须穿章且无端口；visitor免章',
                 'cluster' => '§✓',
             ],
             'real_machine_usecases_not_unit_tests' => [

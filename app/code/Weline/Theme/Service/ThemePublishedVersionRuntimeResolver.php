@@ -7,6 +7,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Model\ThemeScopeVersion;
 use Weline\Theme\Model\WelineTheme;
@@ -35,6 +36,87 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
     }
 
     /**
+     * Applied storefront theme before the process default.
+     *
+     * Header/API/ScopeBootstrap may run before Env theme is switched to the
+     * website theme; Env::getTheme() is the module package default (theme id 1)
+     * and would stamp every page/API with another theme's generation.
+     */
+    private function resolveAppliedThemeId(): int
+    {
+        foreach (['frontend', 'backend'] as $area) {
+            foreach (['runtime', 'editor', 'preview'] as $purpose) {
+                $ctx = ThemeApplicationContext::current($area, $purpose);
+                if ($ctx instanceof ThemeApplicationContext && (int)$ctx->themeId > 0) {
+                    return (int)$ctx->themeId;
+                }
+            }
+        }
+
+        // Website application is the authoritative storefront theme even when the
+        // request has not installed ThemeApplicationContext (ScopeBootstrap fast
+        // path / early header). Query the exact Website scope before Env default.
+        if (\class_exists(\Weline\Websites\Service\ThemeApplicationService::class)) {
+            try {
+                $meta = RequestContext::scopeMetadata();
+                $websiteId = (int)($meta['website_id'] ?? 0);
+                $websiteCode = \trim((string)($meta['website_code'] ?? 'default')) ?: 'default';
+                /** @var \Weline\Websites\Service\ThemeApplicationService $applications */
+                $applications = ObjectManager::getInstance(
+                    \Weline\Websites\Service\ThemeApplicationService::class
+                );
+                $record = $applications->getOwn(
+                    'website|' . $websiteId . '|' . $websiteCode . '||||v1',
+                    ScopeIdentity::MODE_NORMAL,
+                    'frontend',
+                );
+                $themeId = (int)($record['reference']?->themeId ?? 0);
+                if ($themeId > 0) {
+                    return $themeId;
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        if (\class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::class)) {
+            try {
+                $active = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::active();
+                $themeId = \is_array($active) ? (int)($active['theme_id'] ?? 0) : 0;
+                if ($themeId > 0) {
+                    return $themeId;
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        // QueryBin / ScopeBootstrap may run outside App's ThemeApplicationContext,
+        // but the trusted ScopeIdentity is still present. Resolve the Website
+        // application chain instead of stamping the module default theme.
+        $identity = RequestContext::scopeIdentity();
+        if ($identity instanceof ScopeIdentity) {
+            try {
+                $hierarchy = ObjectManager::getInstance(ScopeHierarchyInterface::class);
+                /** @var \Weline\Websites\Api\Theme\ThemeApplicationInterface $applications */
+                $applications = ObjectManager::getInstance(
+                    \Weline\Websites\Api\Theme\ThemeApplicationInterface::class
+                );
+                $resolution = $applications->resolve(
+                    $hierarchy->chainFromIdentity($identity),
+                    $identity->storeMode ?? ScopeIdentity::MODE_NORMAL,
+                    'frontend',
+                );
+                $themeId = (int)($resolution->reference?->themeId ?? 0);
+                if ($themeId > 0) {
+                    return $themeId;
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return 0;
+    }
+
+    /**
      * Numeric ThemeScopeVersion PK for internal Theme services (injections / bake).
      * Not the storefront wire generation code — use {@see resolve()} / generation identity for FE.
      */
@@ -43,6 +125,9 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
         unset($pageType);
         try {
             if ($themeId === null || $themeId <= 0) {
+                $themeId = $this->resolveAppliedThemeId();
+            }
+            if ($themeId <= 0) {
                 $theme = Env::getInstance()->getTheme();
                 $themeId = (int)($theme['id'] ?? $theme['theme_id'] ?? 0);
             }
@@ -91,6 +176,9 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
 
         try {
             if ($themeId === null || $themeId <= 0) {
+                $themeId = $this->resolveAppliedThemeId();
+            }
+            if ($themeId <= 0) {
                 $theme = Env::getInstance()->getTheme();
                 $themeId = (int)($theme['id'] ?? $theme['theme_id'] ?? 0);
             }
@@ -114,6 +202,13 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
                     $code = ThemeScopeGenerationCode::fromVersion($published);
                     if ($code === '') {
                         continue;
+                    }
+                    // TU epoch participates in the wire generation so a batch
+                    // promote/rollback changes the FE scope identity even when the
+                    // Scope-published version number and deploy build stay the same.
+                    $tuEpoch = $this->storefrontTuEpoch($candidateThemeId);
+                    if ($tuEpoch > 0) {
+                        $code .= '.e' . $tuEpoch;
                     }
 
                     return [
@@ -149,6 +244,22 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
             return $path === '' ? '' : \basename($path);
         } catch (\Throwable) {
             return '';
+        }
+    }
+
+    /**
+     * Current Theme Update batch epoch for the active storefront pointer.
+     * Empty/zero means no TU pointer; the wire generation stays version-only.
+     */
+    private function storefrontTuEpoch(int $themeId): int
+    {
+        if (!\class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::class)) {
+            return 0;
+        }
+        try {
+            return \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::epochForTheme($themeId);
+        } catch (\Throwable) {
+            return 0;
         }
     }
 
@@ -234,6 +345,10 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
                     }
                     $code = ThemeScopeGenerationCode::fromVersion($published);
                     if ($code !== '') {
+                        $epoch = $this->storefrontTuEpoch($candidateThemeId);
+                        if ($epoch > 0) {
+                            $code .= '.e' . $epoch;
+                        }
                         $ids[$code] = true;
                     }
                     $legacy = ThemeScopeGenerationCode::legacyNumericId($published);
@@ -245,6 +360,60 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
         }
 
         return $ids;
+    }
+
+    /**
+     * Strict current-generation check for a client-supplied wire id.
+     *
+     * The request may resolve a different fallback scope than the page that baked the
+     * stamp (Channel page vs bare/Global API). Accept only a generation that is the
+     * CURRENT published row of some storefront scope for that theme — never an older
+     * sealed version, and never a different theme's generation.
+     */
+    public function isCurrentStorefrontGenerationId(string $clientVersionId): bool
+    {
+        $clientVersionId = \trim($clientVersionId);
+        if ($clientVersionId === ''
+            || \preg_match(ThemeScopeGenerationCode::PATTERN, $clientVersionId) !== 1
+            || \preg_match('/^t(\d+)\./', $clientVersionId, $matched) !== 1) {
+            return false;
+        }
+        $current = \trim((string)($this->resolveGenerationIdentity()['themePublishedVersionId'] ?? ''));
+        if ($current !== '' && \strcasecmp($current, $clientVersionId) === 0) {
+            return true;
+        }
+
+        $themeId = (int)$matched[1];
+        if ($themeId < 1) {
+            return false;
+        }
+        /** @var ThemeScopeVersionService $versions */
+        $versions = ObjectManager::getInstance(ThemeScopeVersionService::class);
+        foreach ($this->themeIdChain($themeId) as $candidateThemeId) {
+            foreach ($this->storefrontScopeProbeList($candidateThemeId) as $scope) {
+                try {
+                    $published = $versions->getPublished($candidateThemeId, $scope);
+                } catch (\Throwable) {
+                    continue;
+                }
+                if (!$published instanceof ThemeScopeVersion || $published->getVersionId() <= 0) {
+                    continue;
+                }
+                $code = ThemeScopeGenerationCode::fromVersion($published);
+                if ($code === '') {
+                    continue;
+                }
+                $epoch = $this->storefrontTuEpoch($candidateThemeId);
+                if ($epoch > 0) {
+                    $code .= '.e' . $epoch;
+                }
+                if (\strcasecmp($code, $clientVersionId) === 0) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

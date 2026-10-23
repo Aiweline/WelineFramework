@@ -58,6 +58,8 @@ class Post extends Model
     public const schema_fields_STATUS = 'status';
     #[Col('datetime', nullable: true, comment: '发布时间')]
     public const schema_fields_PUBLISHED_AT = 'published_at';
+    #[Col('int', nullable: false, default: 0, comment: '源文章 ID（译文指向原文，原文为 0）')]
+    public const schema_fields_TRANSLATION_OF = 'translation_of';
     #[Col('datetime', nullable: false, comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';
     #[Col('datetime', nullable: false, comment: '更新时间')]

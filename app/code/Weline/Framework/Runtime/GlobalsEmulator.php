@@ -92,6 +92,9 @@ class GlobalsEmulator
             'WLS_INTERNAL_BACKEND_WARMUP',
             'WLS_INTERNAL_BACKEND_WARMUP_USER_ID',
             'WLS_FPC_BYPASS',
+            'REMOTE_ADDR',
+            'WLS_CANONICAL_REMOTE_ADDR',
+            'WLS_ADMISSION_WAIT_MS',
         ];
 
         $server = [];

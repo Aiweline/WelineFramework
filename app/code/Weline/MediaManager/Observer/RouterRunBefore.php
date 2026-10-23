@@ -44,20 +44,11 @@ class RouterRunBefore implements ObserverInterface
             $staticPath = $decodedPath;
             // Theme/module assets may have a stale pub/static copy from a previous request.
             // Refresh them before serving the existing published file.
-            $publishedThemePath = $this->publishThemeOverrideStaticPath($staticPath);
-            if ($publishedThemePath !== null) {
-                /** @var Core $core */
-                $core = ObjectManager::getInstance(Core::class);
-                $core->StaticFile($publishedThemePath, true);
-            }
+            $this->servePublishedStatic($this->publishThemeOverrideStaticPath($staticPath), $staticPath);
 
             $file_path = $this->resolveExistingFileInRoot(PUB . 'static', \substr($staticPath, \strlen('/static/')));
-            if ($file_path !== null && is_file($file_path)) {
-                /**@var Core $core */
-                $core = ObjectManager::getInstance(Core::class);
-                // 传递包含pub目录的完整路径
-                $full_path = '/pub' . $staticPath;
-                $core->StaticFile($full_path, true);
+            if ($file_path !== null) {
+                $this->core()->serveStaticFile($file_path, $staticPath);
             }
         }
         
@@ -76,12 +67,9 @@ class RouterRunBefore implements ObserverInterface
             ];
             foreach ($candidateRoots as $candidateRoot) {
                 $module_file_path = $this->resolveExistingFileInRoot($candidateRoot, $file);
-                if ($module_file_path !== null && is_file($module_file_path)) {
-                    /**@var Core $core */
-                    $core = ObjectManager::getInstance(Core::class);
-                    $static_url = '/app/code/' . $vendor . '/' . $module . '/view/statics/' . $file;
-                    // StaticFile() 会直接抛 ResponseTerminateException，Runtime 统一输出文件响应。
-                    $core->StaticFile($static_url, true);
+                if ($module_file_path !== null) {
+                    // 抛 ResponseTerminateException，Runtime 统一输出文件响应。
+                    $this->core()->serveStaticFile($module_file_path, $decodedPath);
                 }
             }
         }
@@ -89,12 +77,7 @@ class RouterRunBefore implements ObserverInterface
         # 路径格式: /Vendor/ModuleName/view/theme/...
         if (preg_match('#^/([A-Za-z0-9_]+)/([A-Za-z0-9_]+)/view/theme/(.+)$#', $decodedPath, $matches)) {
             $requestThemePath = $decodedPath;
-            $publishedThemePath = $this->publishThemeOverrideStaticPath($requestThemePath);
-            if ($publishedThemePath !== null) {
-                /**@var Core $core */
-                $core = ObjectManager::getInstance(Core::class);
-                $core->StaticFile($publishedThemePath, true);
-            }
+            $this->servePublishedStatic($this->publishThemeOverrideStaticPath($requestThemePath), $requestThemePath);
 
             $file = $matches[3];
             $suffix = '/view/theme/' . $file;
@@ -144,6 +127,28 @@ class RouterRunBefore implements ObserverInterface
         if (str_starts_with($path, '/media/file/')) {
             \Weline\Framework\Env\WelineEnv::setServer('WELINE_PARSER_URL', false, 'MediaManager router before');
             \Weline\Framework\Env\WelineEnv::setServer('WELINE_IS_MEDIA', true, 'MediaManager router before');
+        }
+    }
+
+    private function core(): Core
+    {
+        /** @var Core $core */
+        $core = ObjectManager::getInstance(Core::class);
+
+        return $core;
+    }
+
+    /**
+     * 主题发布器返回 BP 相对的 `/pub/static/...`；只在 pub/static 根内解析后输出。
+     */
+    private function servePublishedStatic(?string $publishedPath, string $requestPath): void
+    {
+        if ($publishedPath === null || !\str_starts_with($publishedPath, '/pub/static/')) {
+            return;
+        }
+        $file = $this->resolveExistingFileInRoot(PUB . 'static', \substr($publishedPath, \strlen('/pub/static/')));
+        if ($file !== null) {
+            $this->core()->serveStaticFile($file, $requestPath);
         }
     }
 

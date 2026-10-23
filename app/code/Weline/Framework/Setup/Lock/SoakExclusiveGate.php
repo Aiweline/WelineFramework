@@ -53,7 +53,6 @@ final class SoakExclusiveGate
             ];
         }
 
-        $age = microtime(true) - (float)$mtime;
         $raw = @file_get_contents($path);
         $payload = null;
         if (is_string($raw) && $raw !== '') {
@@ -63,7 +62,11 @@ final class SoakExclusiveGate
             }
         }
 
-        if ($age > (float)max(1, $staleAfterSec)) {
+        $age = microtime(true) - (float)$mtime;
+        $effective = isset($payload['stale_after_sec']) ? (float)$payload['stale_after_sec'] : (float)$staleAfterSec;
+        $effective = max(1.0, $effective);
+
+        if ($age > $effective) {
             return [
                 'active' => false,
                 'path' => $path,
@@ -123,6 +126,16 @@ final class SoakExclusiveGate
             throw new \RuntimeException('Cannot create soak lock directory: ' . $dir);
         }
 
+        if (is_file($path)) {
+            $raw = @file_get_contents($path);
+            $decoded = is_string($raw) && $raw !== '' ? json_decode($raw, true) : null;
+            $ownerPid = (int)(is_array($decoded) ? ($decoded['pid'] ?? 0) : 0);
+            $state = self::inspect();
+            if (($state['active'] ?? false) === true && $ownerPid > 0 && $ownerPid !== (int)(getmypid() ?: 0)) {
+                throw new \RuntimeException('Soak exclusive lock is held by another process.');
+            }
+        }
+
         $payload = array_merge([
             'schema' => 'wls-soak-exclusive.v1',
             'pid' => (int)(getmypid() ?: 0),
@@ -157,6 +170,12 @@ final class SoakExclusiveGate
         $path = self::lockPath();
         if (!is_file($path)) {
             return true;
+        }
+        $raw = @file_get_contents($path);
+        $decoded = is_string($raw) && $raw !== '' ? json_decode($raw, true) : null;
+        $ownerPid = (int)(is_array($decoded) ? ($decoded['pid'] ?? 0) : 0);
+        if ($ownerPid > 0 && $ownerPid !== (int)(getmypid() ?: 0)) {
+            return false;
         }
 
         return @unlink($path);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Integration\Framework;
 
+use Weline\Framework\Cache\StorefrontCacheKeyContext;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Runtime\FrontendWorkerScopeException;
 use Weline\Framework\Runtime\FrontendWorkerScopeProviderInterface;
@@ -93,7 +94,12 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
         }
 
         try {
-            return $this->tokenService->issue($resolved['scope'], $authorityHost, $now);
+            return $this->tokenService->issue(
+                $resolved['scope'],
+                $authorityHost,
+                StorefrontCacheKeyContext::pageGenerationValue(),
+                $now,
+            );
         } catch (FrontendWorkerScopeException $exception) {
             throw $exception;
         } catch (\Throwable $exception) {
@@ -121,7 +127,12 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
             return null;
         }
 
-        $verification = $this->tokenService->verifyCandidate($token, $authorityHost, $now);
+        $verification = $this->tokenService->verifyCandidate(
+            $token,
+            $authorityHost,
+            StorefrontCacheKeyContext::pageGenerationValue(),
+            $now,
+        );
         if (!$verification->isValid()
             || !$verification->scope instanceof ScopeIdentity
             || $verification->host === null

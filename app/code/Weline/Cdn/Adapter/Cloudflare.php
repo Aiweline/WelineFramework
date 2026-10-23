@@ -14,6 +14,7 @@ namespace Weline\Cdn\Adapter;
 use Weline\Cdn\Api\AdapterInterface;
 use Weline\Cdn\Api\OauthCapableProviderInterface;
 use Weline\Cdn\Api\OriginNoStoreEdgeHeaderWriterInterface;
+use Weline\Cdn\Exception\CloudflareApiException;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Cdn\Service\CloudflareOAuthService;
 use Weline\Framework\Exception\Core;
@@ -383,10 +384,20 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface, Ori
 
     /**
      * Zone 尚未创建 http_request_cache_settings 阶段入口 ruleset。
+     *
+     * 传异常时先按异常链上的 Cloudflare 状态/错误码判定（HTTP 404 + 10003），
+     * 因为 HTTP 客户端会把原文收成不含响应体的本地化句子。
      */
-    public static function isMissingCacheRulesEntrypoint(string $message): bool
+    public static function isMissingCacheRulesEntrypoint(string|\Throwable $failure): bool
     {
-        $normalized = \strtolower(\trim($message));
+        if ($failure instanceof \Throwable) {
+            $api = CloudflareApiException::findInChain($failure);
+            if ($api !== null && $api->httpStatus() === 404 && $api->providerErrorCode() === '10003') {
+                return true;
+            }
+            $failure = (string)$failure->getMessage();
+        }
+        $normalized = \strtolower(\trim($failure));
         if ($normalized === '') {
             return false;
         }
@@ -408,7 +419,7 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface, Ori
         try {
             $response = $this->makeRequest('GET', $url, [], $credentials);
         } catch (Core $e) {
-            if (self::isMissingCacheRulesEntrypoint((string)$e->getMessage())) {
+            if (self::isMissingCacheRulesEntrypoint($e)) {
                 return [];
             }
             throw $e;
@@ -440,7 +451,7 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface, Ori
                 $existingRuleset = is_array($getResponse['result'] ?? null) ? $getResponse['result'] : [];
             }
         } catch (Core $e) {
-            if (!self::isMissingCacheRulesEntrypoint((string)$e->getMessage())) {
+            if (!self::isMissingCacheRulesEntrypoint($e)) {
                 return [
                     'success' => false,
                     'message' => (string)$e->getMessage(),
@@ -983,7 +994,7 @@ class Cloudflare implements AdapterInterface, OauthCapableProviderInterface, Ori
                 false,
             );
         } catch (\Throwable $e) {
-            throw new Core(__('%{1}', [$e->getMessage()]));
+            throw new Core(__('%{1}', [$e->getMessage()]), 0, $e);
         }
     }
 

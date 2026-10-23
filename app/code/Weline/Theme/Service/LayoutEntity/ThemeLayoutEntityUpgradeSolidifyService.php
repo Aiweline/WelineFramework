@@ -38,10 +38,34 @@ final class ThemeLayoutEntityUpgradeSolidifyService
      */
     public function runOnce(string $invalidationReason, array $options = []): array
     {
+        $mode = (string) \Weline\Framework\App\Env::getInstance()->getConfig('setup.layout_solidify', 'auto');
+        if ($mode === 'never') {
+            $this->printing->note((string)__('布局固化已关闭（setup.layout_solidify=never）'));
+            return ['purged' => 0, 'solidified' => 0, 'purged_legacy' => 0, 'cache_failures' => []];
+        }
+        $fp = null;
+        $hash = '';
+        if ($mode === 'auto') {
+            $fp = new \Weline\Theme\Service\StaticPublishFingerprint(
+                \VAR_DIR . 'state' . \DIRECTORY_SEPARATOR . 'static_publish'
+            );
+            $hash = $fp->compute($this->layoutSolidifyInputs());
+            if ($fp->matches('layout_solidify', $hash)) {
+                $this->printing->note((string)__('布局版本与模板源未变化，跳过布局固化'));
+                return ['purged' => 0, 'solidified' => 0, 'purged_legacy' => 0, 'cache_failures' => []];
+            }
+        }
         if (self::$hasRun) {
             return ['purged' => 0, 'solidified' => 0, 'purged_legacy' => 0];
         }
         $result = $this->cutover(null, $invalidationReason, $options);
+        $cacheFailures = $result['cache_failures'] ?? [];
+        if ($cacheFailures !== []) {
+            $this->printing->warning('theme_layout_upgrade_cache_partial_failure:' . json_encode($cacheFailures, JSON_UNESCAPED_UNICODE));
+        }
+        if ($mode === 'auto' && $fp !== null) {
+            $fp->remember('layout_solidify', $fp->compute($this->layoutSolidifyInputs()));
+        }
         self::$hasRun = true;
         return $result;
     }
@@ -52,6 +76,41 @@ final class ThemeLayoutEntityUpgradeSolidifyService
      *
      * @param array{scope?:string,all_versions?:bool,layout_type?:string,layout_option?:string} $options
      */
+    public function layoutSolidifyInputs(): array
+    {
+        $versions = 0;
+        try {
+            $versions = (int)\Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Model\ThemeLayoutVersion::class
+            )->clear()->total();
+        } catch (\Throwable) {
+        }
+        $sources = [];
+        $dir = BP . 'app' . DIRECTORY_SEPARATOR . 'design';
+        if (is_dir($dir)) {
+            $stamps = [];
+            $count = 0;
+            $it = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::LEAVES_ONLY
+            );
+            foreach ($it as $file) {
+                if ($count >= 20000) { break; }
+                if (!$file->isFile()) { continue; }
+                $stamps[] = [$file->getPathname(), (int)$file->getMTime(), (int)$file->getSize()];
+                $count++;
+            }
+            sort($stamps);
+            $sources['app/design'] = $stamps;
+        }
+        $themeVersion = '';
+        try {
+            $themeVersion = (string)(\Weline\Framework\App\Env::getInstance()->getModuleInfo('Weline_Theme')['version'] ?? '');
+        } catch (\Throwable) {
+        }
+        return ['version' => 1, 'layout_versions' => $versions, 'theme_module' => $themeVersion, 'sources' => $sources];
+    }
+
     public function solidifyAllThemes(?string $area = null, array $options = []): int
     {
         $themes = $this->themeApplicationUsage->themesForDefaultUpgrade();
@@ -180,10 +239,15 @@ final class ThemeLayoutEntityUpgradeSolidifyService
         $invalidation = \strtolower(\trim((string)($options['cache_invalidation'] ?? 'all')));
         if ($invalidation === 'all') {
             $result = $this->cacheCleaner->clearAllThemeRelatedCaches($theme?->getId(), trim($reason) ?: 'theme_layout_phtml_rebuilt');
+            $cacheFailures = [];
             foreach ((array)($result['failures'] ?? []) as $step => $message) {
-                if (!str_starts_with((string)$step, 'cdn_') && !str_contains((string)$message, 'cdn_')) {
-                    throw new \RuntimeException('layout_entities_cache_clear_partial_failure:' . $step . '=' . $message);
+                if (str_starts_with((string)$step, 'cdn_') || str_contains((string)$message, 'cdn_')) {
+                    continue;
                 }
+                $cacheFailures[(string)$step] = (string)$message;
+            }
+            if ($cacheFailures !== []) {
+                $this->printing->warning('theme_layout_upgrade_cache_partial_failure:' . json_encode($cacheFailures, JSON_UNESCAPED_UNICODE));
             }
         }
         $this->printing->success(sprintf(
@@ -197,6 +261,7 @@ final class ThemeLayoutEntityUpgradeSolidifyService
             'solidified' => $solidified,
             'purged_legacy' => $legacy,
             'unmapped' => $report['unmapped'] ?? [],
+            'cache_failures' => $cacheFailures ?? [],
         ];
     }
 

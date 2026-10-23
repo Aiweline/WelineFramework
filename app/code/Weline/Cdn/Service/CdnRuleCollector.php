@@ -118,9 +118,11 @@ class CdnRuleCollector
         
         foreach ($files as $file) {
             $className = $this->getClassNameFromFile($file, $module);
-            if (empty($className) || !class_exists($className, false)) {
-                // 尝试加载文件
-                if (file_exists($file)) {
+            if ($className === '') {
+                continue;
+            }
+            if (!class_exists($className, false)) {
+                if (is_file($file) && !str_starts_with(basename($file), '._')) {
                     require_once $file;
                 }
                 if (!class_exists($className, false)) {
@@ -840,9 +842,14 @@ class CdnRuleCollector
         );
         
         foreach ($iterator as $file) {
-            if ($file->isFile() && $file->getExtension() === 'php') {
-                $files[] = $file->getPathname();
+            if (!$file->isFile() || $file->getExtension() !== 'php') {
+                continue;
             }
+            // macOS AppleDouble（._*.php）没有 PHP 标签，include 会把 xattr 打到终端。
+            if (str_starts_with($file->getFilename(), '._')) {
+                continue;
+            }
+            $files[] = $file->getPathname();
         }
         
         return $files;

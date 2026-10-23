@@ -6,7 +6,7 @@ namespace Weline\Database\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Database\Model\Migration;
-use Weline\Database\Service\BackupService;
+use Weline\Framework\Database\Service\BackupService;
 use Weline\Database\Service\SchemaRollbackService;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;

@@ -75,6 +75,15 @@
         scope="global,website,store" />
 
     <w:config:field
+        key="payment/method/paypal/card_fields_enabled"
+        label="启用站内银行卡收银台（PayPal Card Fields）"
+        description="默认开启。结账页选中 PayPal 时，在站内展开银行卡输入（PayPal 托管 iframe + 3DS），无需跳转。需 PayPal 商户具备 Advanced Credit and Debit Card（advanced_cards）资格；前端会实时检测，不满足、币种需折算或订单拆分时自动回退到 PayPal 跳转，不会阻断结账。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website,store" />
+
+    <w:config:field
         key="payment/method/paypal/express_logo"
         label="快捷支付 Logo"
         description="结账页快捷支付按钮 logo。留空使用默认 PayPal 快捷支付 logo（paypal-express.svg）。部件级 logo 优先于本配置。"

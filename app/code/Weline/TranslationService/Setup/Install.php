@@ -36,54 +36,8 @@ class Install implements InstallInterface
         $connection = $setup->getDb();
         
         // 创建翻译渠道配置表
-        $connection->createTable('w_translation_provider', '翻译渠道配置表')
-            ->addColumn('provider_id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', '渠道ID')
-            ->addColumn('provider_code', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 50, 'not null', '渠道代码（google、baidu、deepl、microsoft等）')
-            ->addColumn('provider_name', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 100, 'not null', '渠道名称')
-            ->addColumn('api_key', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 500, '', 'API密钥')
-            ->addColumn('api_secret', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 500, '', 'API密钥（加密存储）')
-            ->addColumn('api_endpoint', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 500, '', 'API端点URL')
-            ->addColumn('config', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, '', '额外配置（JSON格式）')
-            ->addColumn('is_enabled', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 1', '是否启用（1=启用，0=禁用）')
-            ->addColumn('is_default', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, 1, 'default 0', '是否默认渠道（1=是，0=否）')
-            ->addColumn('priority', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'default 0', '优先级（数字越大优先级越高）')
-            ->addColumn('supported_languages', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, '', '支持的语言列表（JSON格式）')
-            ->addColumn('rate_limit', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, '', '速率限制（每分钟请求数）')
-            ->addColumn('daily_limit', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, '', '每日限制（每日请求数）')
-            ->addColumn('cost_per_character', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_DECIMAL, '10,6', 'default 0', '每字符成本')
-            ->addColumn('description', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, '', '渠道描述')
-            ->addColumn('created_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_DATETIME, null, 'not null', '创建时间')
-            ->addColumn('updated_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_DATETIME, null, 'not null', '更新时间')
-            ->addIndex('UNIQUE', 'idx_w_translation_provider_code', ['provider_code'])
-            ->addIndex('INDEX', 'idx_w_translation_provider_is_enabled', ['is_enabled'])
-            ->addIndex('INDEX', 'idx_w_translation_provider_is_default', ['is_default'])
-            ->addIndex('INDEX', 'idx_w_translation_provider_priority', ['priority'])
-            ->create();
         
         // 创建翻译记录表
-        $connection->createTable('w_translation_record', '翻译记录表')
-            ->addColumn('record_id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'primary key auto_increment', '记录ID')
-            ->addColumn('provider_id', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, 'not null', '渠道ID')
-            ->addColumn('provider_code', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 50, 'not null', '渠道代码')
-            ->addColumn('source_text', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, 'not null', '源文本')
-            ->addColumn('translated_text', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, '', '翻译文本')
-            ->addColumn('source_language', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'not null', '源语言代码（ISO 639-1或BCP 47）')
-            ->addColumn('target_language', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'not null', '目标语言代码（ISO 639-1或BCP 47）')
-            ->addColumn('character_count', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, '', '字符数')
-            ->addColumn('cost', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_DECIMAL, '10,6', 'default 0', '翻译成本')
-            ->addColumn('response_time', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_INTEGER, null, '', '响应时间（毫秒）')
-            ->addColumn('status', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 20, 'default \'success\'', '状态（success、failed、pending）')
-            ->addColumn('error_message', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, '', '错误信息')
-            ->addColumn('request_data', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, '', '请求数据（JSON格式）')
-            ->addColumn('response_data', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_TEXT, null, '', '响应数据（JSON格式）')
-            ->addColumn('module_name', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_VARCHAR, 100, '', '调用模块名称')
-            ->addColumn('created_at', \Weline\Framework\Database\Api\Db\Ddl\TableInterface::column_type_DATETIME, null, 'not null', '创建时间')
-            ->addIndex('INDEX', 'idx_w_translation_record_provider_id', ['provider_id'])
-            ->addIndex('INDEX', 'idx_w_translation_record_provider_code', ['provider_code'])
-            ->addIndex('INDEX', 'idx_w_translation_record_status', ['status'])
-            ->addIndex('INDEX', 'idx_w_translation_record_created_at', ['created_at'])
-            ->addIndex('INDEX', 'idx_w_translation_record_module_name', ['module_name'])
-            ->create();
         
         // 插入默认渠道配置（不包含API密钥，需要用户配置）
         $defaultProviders = [

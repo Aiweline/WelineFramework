@@ -6,6 +6,7 @@ namespace Weline\Feed\Controller\Protocol;
 
 use Weline\Feed\Api\Data\FeedConnectionMode;
 use Weline\Feed\Api\Data\FeedDefinition;
+use Weline\Feed\Api\Data\FeedPublicDecision;
 use Weline\Feed\Service\Channel\AbstractFeedChannel;
 use Weline\Feed\Service\FeedChannelRegistry;
 use Weline\Framework\App\Controller\FrontendController;
@@ -29,7 +30,7 @@ final class Sample extends FrontendController
         }
         $channel = $this->channels->find($code);
         if (!$channel instanceof AbstractFeedChannel) {
-            return Response::text('', 404, 'text/plain; charset=utf-8');
+            return $this->notFound();
         }
         $document = $channel->renderSample(new FeedDefinition(
             definitionId: 0,
@@ -45,9 +46,16 @@ final class Sample extends FrontendController
             publicToken: 'sample',
         ));
         if (trim($document->body) === '') {
-            return Response::text('', 404, 'text/plain; charset=utf-8');
+            return $this->notFound();
         }
 
         return Response::text($document->body, 200, $document->contentType);
+    }
+
+    private function notFound(): Response
+    {
+        $decision = FeedPublicDecision::notFound();
+
+        return Response::text($decision->body, $decision->statusCode, $decision->contentType);
     }
 }

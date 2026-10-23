@@ -175,11 +175,6 @@ return [
         'description' => __('在 SchemaDiff 执行 DDL 之前触发，允许 owning 模块做数据自愈（如唯一键去重）后再建索引。'),
         'doc' => 'setup/SchemaDiff提交前.md',
     ],
-    'Weline_Framework_Setup::upgrade_migrations' => [
-        'name' => __('执行模块数据库迁移'),
-        'description' => __('在 SchemaDiff 成功后、ModuleSetup 提交前触发，允许数据库模块执行文件迁移并对齐已完成的模块版本游标。'),
-        'doc' => 'setup/系统升级后.md',
-    ],
     'Weline_Framework_Setup::upgrade_after' => [
         'name' => __('系统升级后'),
         'description' => __('模块与数据库升级阶段完成后、优化和清理之前触发，允许其他模块执行升级后维护。'),

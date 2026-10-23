@@ -15,6 +15,9 @@ final class SetupSourceFingerprint
 
     /** @var array<string, string>|null */
     private static ?array $memoryStore = null;
+    public static int $hashReads = 0;
+    private static array $fileDigestCache = [];
+    private const FILE_DIGEST_CACHE_LIMIT = 20000;
 
     public function storePath(): string
     {
@@ -48,8 +51,19 @@ final class SetupSourceFingerprint
                         continue;
                     }
                     $size = (int)$info->getSize();
-                    $content = @\file_get_contents($full);
-                    $digest = \is_string($content) ? \hash('sha256', $content) : 'unreadable';
+                    $mtime = (int)$info->getMTime();
+                    $cacheKey = $full . '|' . $size . '|' . $mtime;
+                    if (isset(self::$fileDigestCache[$cacheKey])) {
+                        $digest = self::$fileDigestCache[$cacheKey];
+                    } else {
+                        $content = @\file_get_contents($full);
+                        $digest = \is_string($content) ? \hash('sha256', $content) : 'unreadable';
+                        if (\count(self::$fileDigestCache) >= self::FILE_DIGEST_CACHE_LIMIT) {
+                            self::$fileDigestCache = [];
+                        }
+                        self::$fileDigestCache[$cacheKey] = $digest;
+                        self::$hashReads++;
+                    }
                     $entries[] = $rel . '|' . $size . '|' . $digest;
                 }
             } catch (\Throwable) {

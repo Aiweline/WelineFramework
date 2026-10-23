@@ -1281,6 +1281,10 @@
      * panel, Compare quick view, …). Ensures product-info assets, fetches via
      * BinQuery product.getPurchasePanel, rebinds purchase/B2B handlers.
      *
+     * A newer mount into the same body supersedes this one: the older call resolves
+     * `{superseded: true}` without touching the body (late responses must not
+     * overwrite the product the shopper clicked last, nor flash its error).
+     *
      * @param {HTMLElement|null} body
      * @param {{productId:number, offerUuid?:string, showLoading?:boolean, renderError?:boolean, onErrorClose?:Function}} options
      * @returns {Promise<object>}
@@ -1291,6 +1295,13 @@
         if (productId <= 0) {
             throw new Error('product_id_required');
         }
+        const mountSeq = body ? String(Number(body.dataset.purchasePanelMountSeq || 0) + 1) : '';
+        if (body) {
+            body.dataset.purchasePanelMountSeq = mountSeq;
+        }
+        const superseded = function () {
+            return !!body && body.dataset.purchasePanelMountSeq !== mountSeq;
+        };
         const isZh = purchasePanelIsZh();
         if (body && opts.showLoading !== false) {
             body.innerHTML = '<div class="w-product-purchase-panel__loading">'
@@ -1313,6 +1324,9 @@
             const result = await productApi.getPurchasePanel(panelParams, { silent: true });
             payload = unwrapPurchasePanelPayload(result);
         } catch (networkError) {
+            if (superseded()) {
+                return { superseded: true };
+            }
             const msg = humanizePurchaseError(
                 networkError,
                 isZh ? '无法打开加购面板' : 'Could not open options.',
@@ -1323,6 +1337,9 @@
             throw new Error(msg);
         }
 
+        if (superseded()) {
+            return { superseded: true };
+        }
         if (!payload || payload.success === false || !payload.html) {
             const msg = humanizePurchaseError(
                 { message: (payload && payload.message) || '' },
@@ -1336,7 +1353,11 @@
         try {
             await assetsReady;
         } catch (e) {
-            // Styles/scripts are best-effort; panel HTML still usable.
+            // Panel HTML stays usable without product-info styles/scripts; surface the cause.
+            console.warn('[WelineCartPurchaseActions] product-info assets failed to load', e);
+        }
+        if (superseded()) {
+            return { superseded: true };
         }
         if (body) {
             body.innerHTML = String(payload.html);

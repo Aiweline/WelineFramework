@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Weline AI 获客 · 设置</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <h1>Weline AI 获客 · 设置</h1>
+
+  <label class="field">
+    <span>后端地址</span>
+    <input id="baseUrl" type="url" placeholder="https://example.com" autocomplete="off">
+  </label>
+
+  <label class="field">
+    <span>默认检索词（每行一个，可留空）</span>
+    <textarea id="querySlots" rows="6" placeholder="buyer &amp; importer&#10;distributor"></textarea>
+  </label>
+
+  <div class="actions">
+    <button id="save" type="button">保存设置</button>
+  </div>
+
+  <p id="status" class="status"></p>
+
+  <section class="notes">
+    <h2>数据边界</h2>
+    <ul>
+      <li>扩展只采公开页面与公开商务联系方式，不绕过登录、付费墙或验证码。</li>
+      <li>所有后端请求使用票据鉴权，票据不写入浏览器存储、不打印到日志。</li>
+      <li>设置里只保存后端地址与默认检索词；不保存任何密钥或账号。</li>
+    </ul>
+  </section>
+
+  <script src="options.js"></script>
+</body>
+</html>

@@ -74,6 +74,7 @@ final class FeedKernelContractTest extends TestCase
         });
 
         self::assertSame(404, $documents->resolve('disabled')->statusCode);
+        self::assertNotSame('', $documents->resolve('disabled')->body);
         self::assertSame(404, $documents->resolve('nofile')->statusCode);
         self::assertSame(404, $documents->resolve('blank')->statusCode);
         self::assertSame(404, $documents->resolve('missing-token')->statusCode);

@@ -548,26 +548,126 @@
         return key === 'phone' || key === 'billing_phone' || key === 'contact_phone';
     }
 
-    /** 与后端 AddressValidationService::isValidInternationalPhone 对齐（E.164 位数 7–15） */
-    function isValidPhone(value) {
+    /**
+     * 国家电话规则缓存（country_code → rule）。来源：SSR data-phone-rule（初始国家）+ address.js 派发的
+     * weline:address:schema-labels（country_profile.phone）。权威：后端 PhoneNumberRuleService。
+     */
+    var phoneRules = {};
+    (function seedPhoneRule() {
+        var rule = null;
+        try {
+            rule = JSON.parse(root.getAttribute('data-phone-rule') || 'null');
+        } catch (e) {
+            rule = null;
+        }
+        var cc = text(rule && rule.country_code).toUpperCase();
+        if (cc && rule) {
+            phoneRules[cc] = rule;
+        }
+    })();
+    document.addEventListener('weline:address:schema-labels', function (event) {
+        var detail = (event && event.detail) || {};
+        var cc = text(detail.country_code).toUpperCase();
+        if (!cc) {
+            return;
+        }
+        // 规则按国家缓存；该国无规则记 null → 回退 E.164 总位数
+        phoneRules[cc] = detail.phone && typeof detail.phone === 'object' ? detail.phone : null;
+    });
+
+    function phoneRuleFor(countryCode) {
+        var cc = text(countryCode).trim().toUpperCase();
+        return cc && phoneRules[cc] ? phoneRules[cc] : null;
+    }
+
+    /**
+     * 与后端 PhoneNumberRuleService::analyze 同算法的前置校验。
+     * + / 00 国际写法：区号命中当前国家规则则按该国校验，否则仅 E.164 总位数（跨国号码由后端权威判定）。
+     * 国内写法：按 countryCode 规则去 trunk 后查位数区间 + 可选 pattern；无规则回退 E.164 总位数 7–15。
+     * @returns {{valid:boolean, rule:Object|null}}
+     */
+    function analyzePhone(value, countryCode) {
         var phone = text(value).trim();
+        var rule = phoneRuleFor(countryCode);
+        var bad = {valid: false, rule: rule};
         if (phone === '' || phone.length > 32) {
-            return false;
+            return bad;
         }
         if (!/^\+?[0-9\-\s().\/]+$/.test(phone)) {
-            return false;
+            return bad;
         }
-        if (phone.indexOf('+') > 0) {
-            return false;
+        if (phone.indexOf('+') > 0 || (phone.match(/\+/g) || []).length > 1) {
+            return bad;
         }
-        if ((phone.match(/\+/g) || []).length > 1) {
-            return false;
-        }
-        if (!/^\+?[0-9]/.test(phone)) {
-            return false;
+        if (!/^\+?[0-9(]/.test(phone)) {
+            return bad;
         }
         var digits = phone.replace(/\D/g, '');
-        return digits.length >= 7 && digits.length <= 15;
+        var international = phone.charAt(0) === '+';
+        if (!international && digits.indexOf('00') === 0 && digits.length > 2) {
+            international = true;
+            digits = digits.slice(2);
+        }
+        var e164Ok = digits.length >= 7 && digits.length <= 15;
+        var national;
+        if (international) {
+            if (!e164Ok) {
+                return bad;
+            }
+            if (!rule || !rule.dial_code || digits.indexOf(rule.dial_code) !== 0) {
+                return {valid: true, rule: null};
+            }
+            national = digits.slice(rule.dial_code.length);
+            if (rule.trunk_prefix && national.indexOf(rule.trunk_prefix) === 0 && national.length > rule.national_max
+                && national.length - rule.trunk_prefix.length >= rule.national_min) {
+                national = national.slice(rule.trunk_prefix.length);
+            }
+            return {valid: checkNationalPhone(national, rule), rule: rule};
+        }
+        if (!rule) {
+            return {valid: e164Ok, rule: null};
+        }
+        national = digits;
+        if (rule.dial_code && national.length > rule.national_max && national.indexOf(rule.dial_code) === 0
+            && national.length - rule.dial_code.length >= rule.national_min) {
+            national = national.slice(rule.dial_code.length);
+        }
+        if (rule.trunk_prefix && national.indexOf(rule.trunk_prefix) === 0
+            && national.length - rule.trunk_prefix.length >= rule.national_min) {
+            national = national.slice(rule.trunk_prefix.length);
+        }
+        return {valid: checkNationalPhone(national, rule), rule: rule};
+    }
+
+    function checkNationalPhone(national, rule) {
+        var min = Number(rule.national_min) || 1;
+        var max = Number(rule.national_max) || 14;
+        if (national.length < min || national.length > max) {
+            return false;
+        }
+        if (rule.national_pattern) {
+            try {
+                if (!new RegExp(rule.national_pattern).test(national)) {
+                    return false;
+                }
+            } catch (e) {
+                // 规则 pattern 非法时不在前端拦截，交后端权威
+            }
+        }
+        return true;
+    }
+
+    function isValidPhone(value, countryCode) {
+        return analyzePhone(value, countryCode).valid;
+    }
+
+    function phoneInvalidMessage(value, countryCode) {
+        var rule = analyzePhone(value, countryCode).rule;
+        var example = text(rule && rule.example).trim();
+        if (example) {
+            return t('err_phone_invalid_example', '电话号码格式不正确，示例：%{1}').replace('%{1}', example);
+        }
+        return t('err_phone_invalid', '电话号码格式不正确');
     }
 
     function applyPhoneFieldSanitize(input) {
@@ -1306,8 +1406,8 @@
         var phone = text(snap.phone).trim();
         if (!phone) {
             errors.phone = t('err_phone', '请填写电话。');
-        } else if (!isValidPhone(phone)) {
-            errors.phone = t('err_phone_invalid', '电话号码格式不正确');
+        } else if (!isValidPhone(phone, snap.country_code)) {
+            errors.phone = phoneInvalidMessage(phone, snap.country_code);
         }
         if (!text(snap.address1).trim()) {
             errors.address1 = t('err_address1', '请填写详细地址。');
@@ -2229,8 +2329,8 @@
         var phone = text(address.phone).trim();
         if (!phone) {
             errors.billing_phone = t('err_phone', '请填写电话。');
-        } else if (!isValidPhone(phone)) {
-            errors.billing_phone = t('err_phone_invalid', '电话号码格式不正确');
+        } else if (!isValidPhone(phone, address.country_code)) {
+            errors.billing_phone = phoneInvalidMessage(phone, address.country_code);
         }
         if (!text(address.address1).trim()) {
             errors.billing_address1 = t('err_address1', '请填写详细地址。');
@@ -2540,9 +2640,9 @@
         bootAddress();
     }
 
-    root.setAttribute('data-shipping-js-rev', '20261007-address-pay-local');
+    root.setAttribute('data-shipping-js-rev', '20261023-phone-intl-1');
     var api = {
-        rev: '20261007-address-pay-local',
+        rev: '20261023-phone-intl-1',
         root: root,
         mount: mount,
         getMode: mode,
@@ -2563,7 +2663,7 @@
     }
 
     window.WelineShippingCheckoutAddress = {
-        rev: '20261007-address-pay-local',
+        rev: '20261023-phone-intl-1',
         root: null,
         mount: mount,
         getMode: function () { return ''; },

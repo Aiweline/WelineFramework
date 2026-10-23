@@ -25,14 +25,14 @@ final class ThemeUpdateRuntime
     private const REQUEST_STATE_KEY = 'theme_update.runtime.active';
     private const POINTER_FILE_TTL_SECONDS = 10;
 
-    /** @var array{at:int,map:array<string,mixed>,epoch:int}|null */
+    /** @var array{at:int,mtime:int,map:array<string,mixed>,epoch:int}|null */
     private static ?array $pointerFileCache = null;
 
     /** 构建期强制代次（让编译产物烘焙「正在构建的批次」前缀）。 */
     private static ?array $forced = null;
 
 
-    /** @param array{batch_id:string,static_ns:string,entity_root:string,theme_prefix:string,epoch:int,pair_segment?:string}|null $active */
+    /** @param array{batch_id:string,static_ns:string,entity_root:string,theme_prefix:string,epoch:int,pair_segment?:string,static_build?:string}|null $active */
     public static function forceBatch(?array $active): void
     {
         self::$forced = $active;
@@ -66,6 +66,31 @@ final class ThemeUpdateRuntime
      *
      * @deprecated 用 {@see pageGeneration()}（主题 code + 版本号 + 部署号三元组）。
      */
+    /**
+     * 缓存键隔离用的代次。只读指针和部署构建号，不查发布版本库。
+     * 发布版本库会占用本请求的命名空间时钟，缓存键这条路不能碰它。
+     */
+    public static function pointerCacheGeneration(): string
+    {
+        $active = self::$forced ?? self::active();
+        $pinned = \trim((string)($active['pair_segment'] ?? ''));
+        if ($pinned !== '') {
+            $base = $pinned;
+        } else {
+            $deploy = StaticBuildId::current();
+            $base = $deploy !== '' ? $deploy : self::pinnedStaticBuild();
+        }
+        // Global-scope fallback keys must also move on TU promote/rollback even
+        // when pair/build stay the same; epochForTheme avoids the resolver clock.
+        $themeId = (int)($active['theme_id'] ?? 0);
+        $epoch = self::epochForTheme(
+            $themeId > 0 ? $themeId : self::resolvedThemeId(),
+            self::currentArea(),
+        );
+
+        return $epoch > 0 ? $base . '~e' . $epoch : $base;
+    }
+
     public static function cacheGeneration(): string
     {
         $pair = self::pairSegment();
@@ -90,7 +115,12 @@ final class ThemeUpdateRuntime
     }
 
     /**
-     * 主题世代段：`{主题code}/v{版本号}`（占位构建期为 `__PAIR__`）。
+     * 主题世代段：`{主题code}/v{版本号}`。
+     *
+     * 与磁盘镜像 {@see ThemeUpdateBatchService::mirrorThemeStaticToDeploy()} 同一主题：
+     * 已写入代次指针的 pair_segment 优先；否则用当前请求已应用主题
+     * （ThemeApplicationContext，缺省再用指针上的 theme_id）。
+     * 禁止改问进程默认主题 Env::getTheme()——那是模块包 view/theme，会得到另一套 code/版本。
      */
     public static function pairSegment(): string
     {
@@ -98,37 +128,118 @@ final class ThemeUpdateRuntime
         if ($active !== null && \trim((string)($active['pair_segment'] ?? '')) !== '') {
             return \trim((string)$active['pair_segment']);
         }
-        $identity = self::generationIdentity();
-        $code = \trim((string)($identity['themeCode'] ?? ''));
-        $version = (int)($identity['versionNumber'] ?? 0);
+        $resolved = self::active();
+        $pinned = \trim((string)($resolved['pair_segment'] ?? ''));
+        if ($pinned !== '') {
+            return $pinned;
+        }
 
-        return ($code !== '' && $version > 0) ? $code . '/v' . $version : '';
+        // 指针上没有世代段就留空，调用方改用部署构建号。
+        // 不能在这里查发布版本：那会先占用本请求的命名空间时钟。
+        return '';
     }
 
     /**
-     * 页面世代键：主题 code + 发布版本号 + 部署构建号。
+     * 页面世代键：主题 code + 发布版本号 + TU epoch + 静态构建号。
+     * TU epoch 让 promote/rollback 即使版本号与部署号不变也换 token；
+     * 无 TU 指针（epoch=0）时保持旧的 `pair~build` 形状。
      */
     public static function pageGeneration(): string
     {
         $pair = self::pairSegment();
+        $build = self::staticBuildSegment();
+        $identity = self::generationIdentity();
+        $epochThemeId = (int)($identity['themeId'] ?? 0);
+        $epoch = self::epochForTheme(
+            $epochThemeId > 0 ? $epochThemeId : self::resolvedThemeId(),
+            self::currentArea(),
+        );
+        $epochSegment = $epoch > 0 ? '~e' . $epoch : '';
+        if ($pair !== '' && $build !== '') {
+            return $pair . $epochSegment . '~' . $build;
+        }
+        if ($pair !== '') {
+            return $pair . $epochSegment;
+        }
+        if ($build !== '') {
+            // Even without a theme pair, the epoch must move the token so a TU
+            // rollback invalidates build-keyed FPC entries.
+            return $build . $epochSegment;
+        }
 
-        return $pair !== '' ? $pair . '~' . StaticBuildId::current() : StaticBuildId::current();
+        return $epoch > 0 ? 'e' . $epoch : '';
     }
 
-    /** @return array{themeCode:string,versionNumber:int}|null */
+    /**
+     * 当前静态构建段：部署构建号优先，否则取指针上主题更新写下的 12 位号。
+     */
+    public static function staticBuildSegment(): string
+    {
+        $deploy = StaticBuildId::current();
+        if ($deploy !== '') {
+            return $deploy;
+        }
+
+        return self::pinnedStaticBuild();
+    }
+
+    /** 指针（或构建期强制代次）上的 12 位主题静态构建号；没有则 ''。 */
+    public static function pinnedStaticBuild(): string
+    {
+        $active = self::$forced ?? self::active();
+        $pinned = \strtolower(\trim((string)($active['static_build'] ?? '')));
+
+        return \preg_match('/^[0-9a-f]{12}$/', $pinned) === 1 ? $pinned : '';
+    }
+
+    /**
+     * 静态 URL 要用的主题：跟本请求实际选中的代次指针走（镜像目录就是按它写的）。
+     * 指针上没有 theme_id 时才用请求上下文里的应用主题。
+     * 两者都没有时返回 0，解析器才回落进程默认主题。
+     */
+    private static function appliedThemeId(): int
+    {
+        $active = self::active();
+        $fromPointer = (int)($active['theme_id'] ?? 0);
+        if ($fromPointer > 0) {
+            return $fromPointer;
+        }
+
+        return self::currentThemeId();
+    }
+
+    /** Applied theme, then Env theme (header/API may run before ThemeApplicationContext). */
+    private static function resolvedThemeId(): int
+    {
+        $themeId = self::appliedThemeId();
+        if ($themeId > 0) {
+            return $themeId;
+        }
+        try {
+            $theme = Env::getInstance()->getTheme();
+
+            return (int)($theme['id'] ?? $theme['theme_id'] ?? 0);
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    /** @return array{themeCode:string,versionNumber:int,themeId:int}|null */
     private static function generationIdentity(): ?array
     {
         if (!\class_exists('\\Weline\\Theme\\Service\\ThemePublishedVersionRuntimeResolver')) {
             return null;
         }
         try {
+            $themeId = self::appliedThemeId();
             /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
             $resolver = ObjectManager::getInstance(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class);
-            $identity = $resolver->resolveGenerationIdentity();
+            $identity = $resolver->resolveGenerationIdentity($themeId > 0 ? $themeId : null);
 
             return [
                 'themeCode' => \trim((string)($identity['themeCode'] ?? '')),
                 'versionNumber' => (int)($identity['versionNumber'] ?? 0),
+                'themeId' => (int)($identity['themeId'] ?? 0),
             ];
         } catch (\Throwable) {
             return null;
@@ -171,6 +282,47 @@ final class ThemeUpdateRuntime
         $active = self::active();
 
         return $active === null ? 0 : (int)$active['epoch'];
+    }
+
+    /**
+     * Epoch for a known theme owner, without relying on the request theme context.
+     * Footer/header/API code often resolves the published version from Env theme
+     * before ThemeApplicationContext exists; epoch() would then see multiple pointers
+     * and return 0, silently dropping the TU generation from wire id / FPC token.
+     */
+    public static function epochForTheme(int $themeId, string $area = ThemeUpdateBatchService::AREA_FRONTEND): int
+    {
+        if (self::$forced !== null) {
+            return \max(0, (int)(self::$forced['epoch'] ?? 0));
+        }
+        if ($themeId < 1) {
+            return self::epoch();
+        }
+        $area = \in_array($area, ['frontend', 'backend'], true) ? $area : 'frontend';
+        $map = self::pointerMapFromFile();
+        if ($map === []) {
+            try {
+                $map = Env::getInstance()->getConfig(ThemeUpdateBatchService::CONFIG_CURRENT_MAP, []);
+            } catch (\Throwable) {
+                $map = [];
+            }
+        }
+        if (!\is_array($map)) {
+            return 0;
+        }
+        foreach ([self::currentWebsiteId(), 0] as $websiteId) {
+            $key = ThemeUpdateBatchService::pointerConfigKey($websiteId, $themeId, $area);
+            $row = $map[$key] ?? null;
+            if (!\is_array($row)) {
+                continue;
+            }
+            $epoch = (int)($row['epoch'] ?? 0);
+            if ($epoch > 0) {
+                return $epoch;
+            }
+        }
+
+        return 0;
     }
 
     // ---------------------------------------------------------------- 发布脏标记
@@ -299,13 +451,10 @@ final class ThemeUpdateRuntime
                 continue;
             }
 
-            return [
-                'batch_id' => $batchId,
-                'static_ns' => \trim((string)($row['static_ns'] ?? $batchId)),
-                'entity_root' => \trim((string)($row['entity_root'] ?? $batchId)),
-                'theme_prefix' => \trim((string)($row['theme_prefix'] ?? '')),
-                'epoch' => \max(1, (int)($row['epoch'] ?? 1)),
-            ];
+            $entry = self::pointerEntry($key, $row);
+            if ($entry !== null) {
+                return $entry;
+            }
         }
 
         // 上下文里的主题ID与指针不一致（例如默认主题1 vs 站点主题3）时，
@@ -347,18 +496,24 @@ final class ThemeUpdateRuntime
     }
 
     /**
-     * 读指针文件（≤10s TTL，与 StaticBuildId 对齐）。失败回落空数组。
+     * 读指针文件。文件 mtime 变了立刻重读；没变则 ≤10s TTL。失败回落空数组。
      *
      * @return array<string,mixed>
      */
     private static function pointerMapFromFile(): array
     {
+        $file = ThemeUpdateBatchService::pointerFile();
+        $mtime = @\filemtime($file);
+        $mtime = $mtime === false ? 0 : $mtime;
         $now = \time();
-        if (self::$pointerFileCache !== null && ($now - self::$pointerFileCache['at']) < self::POINTER_FILE_TTL_SECONDS) {
+        if (self::$pointerFileCache !== null
+            && (self::$pointerFileCache['mtime'] ?? -1) === $mtime
+            && ($now - self::$pointerFileCache['at']) < self::POINTER_FILE_TTL_SECONDS
+        ) {
             return self::$pointerFileCache['map'];
         }
-        $file = ThemeUpdateBatchService::pointerFile();
         $map = [];
+        $decoded = [];
         $raw = @\file_get_contents($file);
         if (\is_string($raw) && $raw !== '') {
             $decoded = \json_decode($raw, true);
@@ -366,7 +521,12 @@ final class ThemeUpdateRuntime
                 $map = $decoded['map'];
             }
         }
-        self::$pointerFileCache = ['at' => $now, 'map' => $map, 'epoch' => (int)($decoded['epoch'] ?? 0)];
+        self::$pointerFileCache = [
+            'at' => $now,
+            'mtime' => $mtime,
+            'map' => $map,
+            'epoch' => (int)($decoded['epoch'] ?? 0),
+        ];
 
         return $map;
     }
@@ -392,16 +552,42 @@ final class ThemeUpdateRuntime
             if ($batchId === '') {
                 continue;
             }
-            $matches[] = [
-                'batch_id' => $batchId,
-                'static_ns' => \trim((string)($row['static_ns'] ?? $batchId)),
-                'entity_root' => \trim((string)($row['entity_root'] ?? $batchId)),
-                'theme_prefix' => \trim((string)($row['theme_prefix'] ?? '')),
-                'epoch' => \max(1, (int)($row['epoch'] ?? 1)),
-            ];
+            $entry = self::pointerEntry($key, $row);
+            if ($entry !== null) {
+                $matches[] = $entry;
+            }
         }
 
         return \count($matches) === 1 ? $matches[0] : null;
+    }
+
+    /**
+     * 代次指针行。theme_id 优先行内字段，旧指针只写在 key 的中段（website|theme|area）。
+     *
+     * @param array<string,mixed> $row
+     * @return array{batch_id:string,static_ns:string,entity_root:string,theme_prefix:string,epoch:int,theme_id:int,pair_segment:string}|null
+     */
+    private static function pointerEntry(string $key, array $row): ?array
+    {
+        $batchId = \trim((string)($row['batch_id'] ?? ''));
+        if ($batchId === '') {
+            return null;
+        }
+        $parts = \explode('|', $key);
+        $themeId = (int)($row['theme_id'] ?? 0);
+        if ($themeId < 1 && \count($parts) === 3) {
+            $themeId = (int)$parts[1];
+        }
+
+        return [
+            'batch_id' => $batchId,
+            'static_ns' => \trim((string)($row['static_ns'] ?? $batchId)),
+            'entity_root' => \trim((string)($row['entity_root'] ?? $batchId)),
+            'theme_prefix' => \trim((string)($row['theme_prefix'] ?? '')),
+            'epoch' => \max(1, (int)($row['epoch'] ?? 1)),
+            'theme_id' => \max(0, $themeId),
+            'pair_segment' => \trim((string)($row['pair_segment'] ?? '')),
+        ];
     }
 
     /**

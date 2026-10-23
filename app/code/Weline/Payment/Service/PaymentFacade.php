@@ -38,4 +38,17 @@ final class PaymentFacade implements PaymentFacadeInterface
             response: $transaction->getResponseData(),
         );
     }
+
+    public function confirmPayment(string $transactionNo, array $context = []): PaymentTransactionRecord
+    {
+        $transaction = $this->paymentService->confirmPayment($transactionNo, $context);
+
+        return new PaymentTransactionRecord(
+            id: (int)$transaction->getId(),
+            transactionNumber: (string)$transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO),
+            methodCode: (string)$transaction->getData(PaymentTransaction::schema_fields_METHOD_CODE),
+            status: (string)$transaction->getData(PaymentTransaction::schema_fields_STATUS),
+            response: $transaction->getResponseData(),
+        );
+    }
 }

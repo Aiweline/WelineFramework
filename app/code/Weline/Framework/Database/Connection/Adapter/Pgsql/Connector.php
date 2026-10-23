@@ -2261,6 +2261,119 @@ SQL);
         return [$schema, $table];
     }
 
+    /**
+     * 批量读取表元数据（comment/columns/pk+unique/列注释），每 200 个物理表一批，共 4 条 SQL。
+     *
+     * @param list<string> $tables 逻辑表名
+     * @return array<string, array{comment: string, columns: list<array>, indexes: array, fks: array}>
+     */
+    public function getTablesBatchCore(array $tables): array
+    {
+        $groups = [];
+        foreach ($tables as $logical) {
+            try {
+                [$schema, $physical] = $this->parseSchemaTable($this->formatTableName((string)$logical));
+            } catch (\Throwable) {
+                continue;
+            }
+            if ($physical === '') {
+                continue;
+            }
+            $groups[$schema][] = ['logical' => (string)$logical, 'physical' => $physical];
+        }
+
+        $result = [];
+        $pdo = $this->getWrappedConnection()->getPdo();
+        foreach ($groups as $schema => $items) {
+            for ($offset = 0, $count = count($items); $offset < $count; $offset += 200) {
+                $batchItems = array_slice($items, $offset, 200);
+                $names = array_column($batchItems, 'physical');
+                $logicalByPhysical = [];
+                foreach ($batchItems as $item) {
+                    $logicalByPhysical[$item['physical']] = $item['logical'];
+                    $result[$item['logical']] = ['comment' => '', 'columns' => [], 'indexes' => [], 'fks' => []];
+                }
+                try {
+                    $placeholders = implode(',', array_fill(0, count($names), '?'));
+
+                    $commentStmt = $pdo->prepare(
+                        "SELECT c.relname, obj_description(c.oid) AS comment FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=? AND c.relname IN ({$placeholders}) AND c.relkind='r'"
+                    );
+                    $commentStmt->execute(array_merge([$schema], $names));
+                    foreach ($commentStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                        $logical = $logicalByPhysical[$row['relname'] ?? ''] ?? null;
+                        if ($logical !== null) {
+                            $result[$logical]['comment'] = (string)($row['comment'] ?? '');
+                        }
+                    }
+
+                    $columnRows = [];
+                    try {
+                        $columnStmt = $pdo->prepare(
+                            "SELECT table_name, column_name, data_type, character_maximum_length, numeric_precision, numeric_scale, is_nullable, column_default, is_identity FROM information_schema.columns WHERE table_schema=? AND table_name IN ({$placeholders}) ORDER BY table_name, ordinal_position"
+                        );
+                        $columnStmt->execute(array_merge([$schema], $names));
+                        $columnRows = $columnStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                    } catch (\Throwable) {
+                        $columnStmt = $pdo->prepare(
+                            "SELECT table_name, column_name, data_type, character_maximum_length, numeric_precision, numeric_scale, is_nullable, column_default FROM information_schema.columns WHERE table_schema=? AND table_name IN ({$placeholders}) ORDER BY table_name, ordinal_position"
+                        );
+                        $columnStmt->execute(array_merge([$schema], $names));
+                        $columnRows = $columnStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                        foreach ($columnRows as &$legacyRow) {
+                            $legacyRow['is_identity'] = 'NO';
+                        }
+                        unset($legacyRow);
+                    }
+
+                    $constraintStmt = $pdo->prepare(
+                        "SELECT t.relname, con.contype, a.attname FROM pg_constraint con JOIN pg_class t ON t.oid=con.conrelid JOIN pg_namespace n ON n.oid=t.relnamespace CROSS JOIN unnest(con.conkey) AS k(attnum) JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=k.attnum AND a.attnum>0 AND NOT a.attisdropped WHERE n.nspname=? AND t.relname IN ({$placeholders}) AND con.contype IN ('p','u')"
+                    );
+                    $constraintStmt->execute(array_merge([$schema], $names));
+                    $pkByTable = [];
+                    $uniqueByTable = [];
+                    foreach ($constraintStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                        $physical = $row['relname'] ?? '';
+                        $col = $row['attname'] ?? '';
+                        if (($row['contype'] ?? '') === 'p') {
+                            $pkByTable[$physical][$col] = true;
+                        } else {
+                            $uniqueByTable[$physical][$col] = true;
+                        }
+                    }
+
+                    $colCommentStmt = $pdo->prepare(
+                        "SELECT c.relname, a.attname, col_description(c.oid,a.attnum) AS col_comment FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_attribute a ON a.attrelid=c.oid WHERE n.nspname=? AND c.relname IN ({$placeholders}) AND c.relkind='r' AND a.attnum>0 AND NOT a.attisdropped"
+                    );
+                    $colCommentStmt->execute(array_merge([$schema], $names));
+                    $commentsByTable = [];
+                    foreach ($colCommentStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                        $commentsByTable[$row['relname'] ?? ''][$row['attname'] ?? ''] = (string)($row['col_comment'] ?? '');
+                    }
+
+                    $rowsByTable = [];
+                    foreach ($columnRows as $row) {
+                        $rowsByTable[$row['table_name'] ?? ''][] = $row;
+                    }
+                    foreach ($batchItems as $item) {
+                        $physical = $item['physical'];
+                        $result[$item['logical']]['columns'] = $this->buildPhysicalTableColumns(
+                            $rowsByTable[$physical] ?? [],
+                            $pkByTable[$physical] ?? [],
+                            $uniqueByTable[$physical] ?? [],
+                            $commentsByTable[$physical] ?? []
+                        );
+                    }
+                } catch (\Throwable) {
+                    foreach ($batchItems as $item) {
+                        $result[$item['logical']] = ['comment' => '', 'columns' => [], 'indexes' => [], 'fks' => []];
+                    }
+                }
+            }
+        }
+        return $result;
+    }
+
     /** @inheritDoc */
     public function getTableComment(string $table): string
     {
@@ -2364,6 +2477,14 @@ SQL);
             $comments[$r['attname'] ?? ''] = (string) ($r['col_comment'] ?? '');
         }
 
+        return $this->buildPhysicalTableColumns($rows, $pkCols, $uniqueCols, $comments);
+    }
+
+    /**
+     * 将 information_schema 行与主键/唯一/注释数据合并为列结构。
+     */
+    private function buildPhysicalTableColumns(array $rows, array $pkCols, array $uniqueCols, array $comments): array
+    {
         $list = [];
         foreach ($rows as $row) {
             $field = $row['column_name'] ?? '';

@@ -11,9 +11,12 @@ use Weline\Framework\Http\ContentEncodingNegotiator;
  * Generation-pointer FPC cold disk.
  *
  * Layout:
- *   generated/html/live → generations/{gen}/
+ *   generated/html/live → generations/{gen}/          （当前世代，读口只认它）
  *   generated/html/previous → generations/{prev}/   (rollback)
- *   generated/html/generations/{gen}/{host}/{path}/index.html[.br]
+ *   过期世代最多再留 3 个目录；超过 7 天的由 FpcGenerationGc 删除
+ *   generated/html/generations/{gen}/{host}/pg/{pageGen}/…/index.html[.br]
+ *   …/{host}/pg/{token}/…  请求带 w_pg={16hex} 时只读这一代；没带才跟 pg/current
+ *   其它 pageGen 目录留着，世代不符不删、也不拿来冒充这一代
  *   …/{path}/~q/{sha1(canonical_query)}/index.html[.br]  — Extra query_keys HTML
  *   …/{path}/~q/{sha1}/index.bq.br                         — same-identity BinQuery wire
  *
@@ -43,8 +46,27 @@ final class FpcHtmlDiskStore
     /** BinQuery wire leaf basename (brotli authority: index.bq.br). */
     public const BQ_BASENAME = 'index.bq';
 
-    /** Keep live + previous; GC older generation dirs after rotate. */
+    /** Live + previous symlink pair. Expired dirs beyond this are not the current generation. */
     public const RETAIN_GENERATIONS = 2;
+
+    /** Expired generation directories kept after rotate (previous counts as one). */
+    public const RETAIN_EXPIRED_GENERATIONS = 3;
+
+    /** Cron deletes FPC generation dirs and cache files older than this many days. */
+    public const GENERATION_MAX_AGE_DAYS = 7;
+
+    /**
+     * Per-host page-generation slot under the disk generation.
+     * A request with `w_pg={16hex}` reads only `pg/{token}`. No `w_pg` follows
+     * `pg/current`. A named generation with no leaf is a miss (process builds
+     * the server's current generation). Other token dirs stay for that request.
+     */
+    public const PAGE_GEN_DIR = 'pg';
+
+    public const PAGE_GEN_CURRENT = 'current';
+
+    /** Query the browser adds so Nginx and WLS select this generation's FPC. */
+    public const PAGE_GEN_QUERY = 'w_pg';
 
     public static function root(): string
     {
@@ -135,8 +157,14 @@ final class FpcHtmlDiskStore
             return null;
         }
         $base = self::writeBaseRoot();
+        $token = self::pageGenerationToken();
+        self::pointHostSlot($base, $resolved['host'], $token);
+        $slotted = self::withPageGenSlot($rel, $token);
+        if ($slotted === null) {
+            return null;
+        }
 
-        return $base . \DIRECTORY_SEPARATOR . $rel;
+        return $base . \DIRECTORY_SEPARATOR . $slotted;
     }
 
     public static function htmlPath(string $urlOrPath): ?string
@@ -241,8 +269,12 @@ final class FpcHtmlDiskStore
         if ($rel === null) {
             return null;
         }
+        $slotted = self::withPageGenSlot($rel, self::PAGE_GEN_CURRENT);
+        if ($slotted === null) {
+            return null;
+        }
 
-        return self::readBqRelative($resolved['host'], $rel);
+        return self::readBqRelative($resolved['host'], $slotted);
     }
 
     /**
@@ -267,8 +299,12 @@ final class FpcHtmlDiskStore
         if ($rel === null) {
             return null;
         }
+        $slotted = self::withPageGenSlot($rel, self::PAGE_GEN_CURRENT);
+        if ($slotted === null) {
+            return null;
+        }
 
-        return self::readBqRelative($host, $rel);
+        return self::readBqRelative($host, $slotted);
     }
 
     /**
@@ -310,10 +346,14 @@ final class FpcHtmlDiskStore
         if ($rel === null) {
             return null;
         }
+        $slotted = self::withPageGenSlot($rel, self::PAGE_GEN_CURRENT);
+        if ($slotted === null) {
+            return null;
+        }
         self::ensureLiveGeneration();
         $html = self::root()
             . \DIRECTORY_SEPARATOR . self::LIVE_NAME
-            . \DIRECTORY_SEPARATOR . $rel
+            . \DIRECTORY_SEPARATOR . $slotted
             . \DIRECTORY_SEPARATOR . 'index.html';
 
         return $brotli ? ($html . '.br') : $html;
@@ -404,12 +444,20 @@ final class FpcHtmlDiskStore
     /**
      * @return array{body:string,encoding:?string,path:string}|null
      */
-    public static function read(string $fullUri, string $acceptEncoding = ''): ?array
+    public static function read(string $fullUri, string $acceptEncoding = '', ?string $pageGenToken = null): ?array
     {
         // Readers always follow live (promoted) tree — not an in-flight staging gen.
         // $acceptEncoding is retained for call-site compatibility; .br is returned
         // whenever present so WLS can decode for identity/gzip clients.
         unset($acceptEncoding);
+        $requested = self::requestedPageGeneration($fullUri);
+        if ($pageGenToken === null && $requested['present']) {
+            $pageGenToken = $requested['token'];
+        }
+        if ($pageGenToken !== null && !self::isPageGenerationSlotToken($pageGenToken)) {
+            return null;
+        }
+        $fullUri = self::stripPageGenerationQuery($fullUri);
         $resolved = self::resolveHostPath($fullUri);
         if ($resolved === null) {
             return null;
@@ -418,7 +466,11 @@ final class FpcHtmlDiskStore
         if ($rel === null) {
             return null;
         }
-        $htmlPath = self::liveRoot() . \DIRECTORY_SEPARATOR . $rel . \DIRECTORY_SEPARATOR . 'index.html';
+        $slotted = self::withPageGenSlot($rel, $pageGenToken ?? self::PAGE_GEN_CURRENT);
+        if ($slotted === null) {
+            return null;
+        }
+        $htmlPath = self::liveRoot() . \DIRECTORY_SEPARATOR . $slotted . \DIRECTORY_SEPARATOR . 'index.html';
         $brPath = $htmlPath . '.br';
         if (\is_file($brPath)) {
             $raw = @\file_get_contents($brPath);
@@ -684,6 +736,37 @@ final class FpcHtmlDiskStore
         return $genId;
     }
 
+    /**
+     * 只留当前 live。上一份和更早的 HTML 盘一次性删除，不再软服务旧世代。
+     */
+    public static function discardAllButLive(): void
+    {
+        self::ensureLiveGeneration();
+        $liveId = self::readSymlinkGenerationId(self::LIVE_NAME);
+        $prevPath = self::root() . \DIRECTORY_SEPARATOR . self::PREVIOUS_NAME;
+        if (\is_link($prevPath) && !@\unlink($prevPath)) {
+            throw new \RuntimeException('fpc_html_disk_previous_unlink_failed');
+        }
+        $stagingId = self::stagingGenerationId();
+        $gensRoot = self::generationsRoot();
+        $items = @\scandir($gensRoot);
+        if (!\is_array($items)) {
+            return;
+        }
+        foreach ($items as $name) {
+            if ($name === '.' || $name === '..' || !self::isSafeGenerationId($name)) {
+                continue;
+            }
+            if ($name === $liveId || $name === $stagingId) {
+                continue;
+            }
+            $path = $gensRoot . \DIRECTORY_SEPARATOR . $name;
+            if (\is_dir($path)) {
+                self::purgeTree($path);
+            }
+        }
+    }
+
     private static function writeBaseRoot(): string
     {
         self::ensureLiveGeneration();
@@ -933,25 +1016,227 @@ final class FpcHtmlDiskStore
         if (!\is_array($items)) {
             return;
         }
-        $candidates = [];
+        $all = [];
         foreach ($items as $name) {
-            if ($name === '.' || $name === '..' || isset($keep[$name])) {
-                continue;
-            }
-            if (!self::isSafeGenerationId($name)) {
+            if ($name === '.' || $name === '..' || !self::isSafeGenerationId($name)) {
                 continue;
             }
             $path = $gensRoot . \DIRECTORY_SEPARATOR . $name;
             if (\is_dir($path)) {
-                $candidates[] = $name;
+                $all[] = $name;
             }
         }
-        // Retain policy: keep at most RETAIN_GENERATIONS named by keep set; delete the rest.
-        // keep set already encodes live+previous (+staging). Delete all candidates.
-        foreach ($candidates as $name) {
+        $liveId = self::readSymlinkGenerationId(self::LIVE_NAME);
+        $previousId = self::readSymlinkGenerationId(self::PREVIOUS_NAME);
+        foreach (self::expiredGenerationIdsToDelete($all, $liveId, $previousId, $staging) as $name) {
+            if (isset($keep[$name])) {
+                continue;
+            }
             self::purgeTree($gensRoot . \DIRECTORY_SEPARATOR . $name);
         }
-        unset($keep); // RETAIN_GENERATIONS documented; keep set enforces live+previous.
+        unset($keep);
+    }
+
+    /**
+     * Ids of expired generation dirs that should be deleted so at most
+     * $keepExpired remain. Live and staging are never expired. Previous counts
+     * toward the kept expired set. Newest ids sort last because they start
+     * with YmdHis.
+     *
+     * @param list<string> $generationIds
+     * @return list<string>
+     */
+    public static function expiredGenerationIdsToDelete(
+        array $generationIds,
+        ?string $liveId,
+        ?string $previousId,
+        ?string $stagingId,
+        int $keepExpired = self::RETAIN_EXPIRED_GENERATIONS,
+    ): array {
+        $expired = [];
+        foreach ($generationIds as $id) {
+            $id = (string)$id;
+            if (!self::isSafeGenerationId($id) || $id === $liveId || $id === $stagingId) {
+                continue;
+            }
+            $expired[$id] = true;
+        }
+        $ids = \array_keys($expired);
+        \rsort($ids, \SORT_STRING);
+        $kept = 0;
+        if ($previousId !== null && $previousId !== '' && $previousId !== $liveId && isset($expired[$previousId])) {
+            $kept = 1;
+        }
+        $room = $keepExpired - $kept;
+        if ($room < 0) {
+            $room = 0;
+        }
+        $delete = [];
+        $extraKept = 0;
+        foreach ($ids as $id) {
+            if ($id === $previousId) {
+                continue;
+            }
+            if ($extraKept < $room) {
+                $extraKept++;
+                continue;
+            }
+            $delete[] = $id;
+        }
+
+        return $delete;
+    }
+
+    public static function generationIsOlderThanDays(string $generationId, int $days, ?int $now = null): bool
+    {
+        if ($days < 1) {
+            $days = 1;
+        }
+        $created = self::generationCreatedAt($generationId);
+        if ($created === null) {
+            return false;
+        }
+        $now ??= \time();
+
+        return $created <= ($now - ($days * 86400));
+    }
+
+    /**
+     * Drop expired generation dirs and FPC cache files older than $days.
+     * Never removes the live generation or an in-flight staging generation.
+     *
+     * @return array{generations:int,files:int}
+     */
+    public static function pruneOlderThanDays(int $days = self::GENERATION_MAX_AGE_DAYS): array
+    {
+        if ($days < 1) {
+            $days = 1;
+        }
+        $removedGenerations = 0;
+        $removedFiles = 0;
+        self::ensureLiveGeneration();
+        $liveId = self::readSymlinkGenerationId(self::LIVE_NAME);
+        $stagingId = self::stagingGenerationId();
+        $gensRoot = self::generationsRoot();
+        $items = \scandir($gensRoot);
+        if ($items === false) {
+            $items = [];
+        }
+        if ($items !== []) {
+            foreach ($items as $name) {
+                if ($name === '.' || $name === '..' || !self::isSafeGenerationId($name)) {
+                    continue;
+                }
+                if ($name === $liveId || $name === $stagingId) {
+                    continue;
+                }
+                if (!self::generationIsOlderThanDays($name, $days)) {
+                    continue;
+                }
+                $path = $gensRoot . \DIRECTORY_SEPARATOR . $name;
+                if (!\is_dir($path)) {
+                    continue;
+                }
+                self::purgeTree($path);
+                $removedGenerations++;
+            }
+        }
+        $previousId = self::readSymlinkGenerationId(self::PREVIOUS_NAME);
+        if ($previousId !== null) {
+            $previousDir = $gensRoot . \DIRECTORY_SEPARATOR . $previousId;
+            if (!\is_dir($previousDir)) {
+                $link = self::root() . \DIRECTORY_SEPARATOR . self::PREVIOUS_NAME;
+                if (\is_link($link) && !\unlink($link)) {
+                    throw new \RuntimeException('fpc_html_disk_previous_unlink_failed');
+                }
+            }
+        }
+        $removedFiles = self::pruneOldFpcCacheFiles($days);
+
+        return ['generations' => $removedGenerations, 'files' => $removedFiles];
+    }
+
+    private static function generationCreatedAt(string $generationId): ?int
+    {
+        if (\preg_match('/^(\d{14})/', $generationId, $match) === 1) {
+            $created = \DateTimeImmutable::createFromFormat('YmdHis', $match[1]);
+            if ($created instanceof \DateTimeImmutable) {
+                return $created->getTimestamp();
+            }
+        }
+        $path = self::generationsRoot() . \DIRECTORY_SEPARATOR . $generationId;
+        if (!\is_dir($path)) {
+            return null;
+        }
+        $mtime = \filemtime($path);
+
+        return \is_int($mtime) ? $mtime : null;
+    }
+
+    private static function pruneOldFpcCacheFiles(int $days): int
+    {
+        $cutoff = \time() - ($days * 86400);
+        $base = \rtrim((string)BP, '\\/') . \DIRECTORY_SEPARATOR . 'var' . \DIRECTORY_SEPARATOR . 'cache';
+        $removed = 0;
+        foreach (['fpc', 'router-fpc-payloads', 'router-fpc-path-index', 'router-fpc-locks'] as $name) {
+            $removed += self::unlinkFilesOlderThan($base . \DIRECTORY_SEPARATOR . $name, $cutoff, $base);
+        }
+
+        return $removed;
+    }
+
+    private static function unlinkFilesOlderThan(string $dir, int $cutoff, string $stop): int
+    {
+        if (!\is_dir($dir)) {
+            return 0;
+        }
+        $rootReal = \realpath($stop);
+        $dirReal = \realpath($dir);
+        if (!\is_string($rootReal) || !\is_string($dirReal)) {
+            return 0;
+        }
+        $rootReal = \rtrim($rootReal, \DIRECTORY_SEPARATOR);
+        if ($dirReal !== $rootReal && !\str_starts_with($dirReal, $rootReal . \DIRECTORY_SEPARATOR)) {
+            return 0;
+        }
+        $removed = 0;
+        $stack = [$dirReal];
+        while ($stack !== []) {
+            $current = \array_pop($stack);
+            if (!\is_string($current) || !\is_dir($current)) {
+                continue;
+            }
+            $items = \scandir($current);
+            if ($items === false) {
+                continue;
+            }
+            foreach ($items as $name) {
+                if ($name === '.' || $name === '..') {
+                    continue;
+                }
+                $path = $current . \DIRECTORY_SEPARATOR . $name;
+                if (\is_link($path)) {
+                    continue;
+                }
+                if (\is_dir($path)) {
+                    $stack[] = $path;
+                    continue;
+                }
+                if (!\is_file($path)) {
+                    continue;
+                }
+                $mtime = \filemtime($path);
+                if (!\is_int($mtime) || $mtime > $cutoff) {
+                    continue;
+                }
+                if (!\unlink($path)) {
+                    throw new \RuntimeException('fpc_cache_file_unlink_failed');
+                }
+                $removed++;
+            }
+        }
+
+        return $removed;
     }
 
     private static function readSymlinkGenerationId(string $linkName): ?string
@@ -1025,6 +1310,183 @@ final class FpcHtmlDiskStore
     {
         return $id !== '' && \preg_match('/^[A-Za-z0-9._-]+$/D', $id) === 1
             && !\str_contains($id, '..');
+    }
+
+    /**
+     * 16-hex slot name. Same input always maps to the same directory.
+     */
+    public static function isPageGenerationSlotToken(string $token): bool
+    {
+        return \preg_match('/^[a-f0-9]{16}$/D', $token) === 1;
+    }
+
+    /**
+     * `w_pg` on this URL. Absent → present=false. Present but not 16 hex → token=null
+     * (do not serve another generation).
+     *
+     * @return array{present:bool,token:?string}
+     */
+    public static function requestedPageGeneration(string $fullUri): array
+    {
+        $query = (string)(\parse_url($fullUri, \PHP_URL_QUERY) ?: '');
+        if ($query === '' || \preg_match('/(?:^|&)' . self::PAGE_GEN_QUERY . '=([^&]*)/', $query, $matched) !== 1) {
+            return ['present' => false, 'token' => null];
+        }
+        $raw = \strtolower(\rawurldecode((string)$matched[1]));
+        if (!self::isPageGenerationSlotToken($raw)) {
+            return ['present' => true, 'token' => null];
+        }
+
+        return ['present' => true, 'token' => $raw];
+    }
+
+    /**
+     * Drop only `w_pg` so the page path stays the path-only (or other-query) leaf.
+     */
+    public static function stripPageGenerationQuery(string $fullUri): string
+    {
+        $parts = \parse_url($fullUri);
+        if (!\is_array($parts) || !isset($parts['query']) || (string)$parts['query'] === '') {
+            return $fullUri;
+        }
+        $kept = [];
+        foreach (\explode('&', (string)$parts['query']) as $pair) {
+            if ($pair === '') {
+                continue;
+            }
+            $name = \strtolower(\rawurldecode(\explode('=', $pair, 2)[0]));
+            if ($name === self::PAGE_GEN_QUERY) {
+                continue;
+            }
+            $kept[] = $pair;
+        }
+        $query = \implode('&', $kept);
+        $rebuilt = '';
+        if (isset($parts['scheme'])) {
+            $rebuilt .= $parts['scheme'] . '://';
+        }
+        if (isset($parts['user'])) {
+            $rebuilt .= $parts['user'];
+            if (isset($parts['pass'])) {
+                $rebuilt .= ':' . $parts['pass'];
+            }
+            $rebuilt .= '@';
+        }
+        $rebuilt .= (string)($parts['host'] ?? '');
+        if (isset($parts['port'])) {
+            $rebuilt .= ':' . $parts['port'];
+        }
+        $rebuilt .= (string)($parts['path'] ?? '');
+        if ($query !== '') {
+            $rebuilt .= '?' . $query;
+        }
+        if (isset($parts['fragment'])) {
+            $rebuilt .= '#' . $parts['fragment'];
+        }
+
+        return $rebuilt !== '' ? $rebuilt : $fullUri;
+    }
+
+    /**
+     * Active page-generation token (16 hex). Same input always maps to the same slot.
+     */
+    public static function pageGenerationToken(): string
+    {
+        $raw = \trim(\Weline\Framework\Cache\StorefrontCacheKeyContext::pageGenerationValue());
+        if ($raw === '') {
+            $raw = '0';
+        }
+
+        return \substr(\hash('sha256', $raw), 0, 16);
+    }
+
+    /**
+     * Point every host already present on the write base (staging or live) at the
+     * current page generation. Does not remove other slot directories.
+     */
+    public static function alignWriteBaseToCurrentPageGeneration(): void
+    {
+        $base = self::writeBaseRoot();
+        if (!\is_dir($base)) {
+            return;
+        }
+        $token = self::pageGenerationToken();
+        $items = @\scandir($base);
+        if (!\is_array($items)) {
+            return;
+        }
+        foreach ($items as $name) {
+            if ($name === '.' || $name === '..') {
+                continue;
+            }
+            if (\preg_match('/^[a-z0-9._:-]+$/D', $name) !== 1) {
+                continue;
+            }
+            $path = $base . \DIRECTORY_SEPARATOR . $name;
+            if (!\is_dir($path) || \is_link($path)) {
+                continue;
+            }
+            self::pointHostSlot($base, $name, $token);
+        }
+    }
+
+    /**
+     * Insert `pg/{slot}` after the host segment. `$slot` is `current` or a token.
+     */
+    private static function withPageGenSlot(string $rel, string $slot): ?string
+    {
+        if ($slot !== self::PAGE_GEN_CURRENT && !self::isSafeGenerationId($slot)) {
+            return null;
+        }
+        $rel = \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $rel);
+        $parts = \explode(\DIRECTORY_SEPARATOR, $rel);
+        $host = $parts[0] ?? '';
+        if ($host === '' || \preg_match('/^[a-z0-9._:-]+$/D', $host) !== 1) {
+            return null;
+        }
+        $rest = \array_slice($parts, 1);
+        $slotted = [$host, self::PAGE_GEN_DIR, $slot];
+        foreach ($rest as $segment) {
+            if ($segment === '') {
+                continue;
+            }
+            $slotted[] = $segment;
+        }
+
+        return \implode(\DIRECTORY_SEPARATOR, $slotted);
+    }
+
+    /**
+     * Retarget `{host}/pg/current` at `$token`. Unlinks only the symlink, never a token directory.
+     */
+    private static function pointHostSlot(string $base, string $host, string $token): void
+    {
+        if (!self::isSafeGenerationId($token)) {
+            throw new \RuntimeException('fpc_html_disk_page_gen_token');
+        }
+        $pg = $base . \DIRECTORY_SEPARATOR . $host . \DIRECTORY_SEPARATOR . self::PAGE_GEN_DIR;
+        if (!self::ensureDirectory($pg)) {
+            throw new \RuntimeException('fpc_html_disk_page_gen_mkdir_failed');
+        }
+        $tokenDir = $pg . \DIRECTORY_SEPARATOR . $token;
+        if (!self::ensureDirectory($tokenDir)) {
+            throw new \RuntimeException('fpc_html_disk_page_gen_mkdir_failed');
+        }
+        $link = $pg . \DIRECTORY_SEPARATOR . self::PAGE_GEN_CURRENT;
+        if (\is_link($link)) {
+            $target = \readlink($link);
+            if ($target === $token) {
+                return;
+            }
+            if (!@\unlink($link)) {
+                throw new \RuntimeException('fpc_html_disk_page_gen_symlink_replace_failed');
+            }
+        } elseif (\file_exists($link)) {
+            throw new \RuntimeException('fpc_html_disk_page_gen_current_not_symlink');
+        }
+        if (!@\symlink($token, $link)) {
+            throw new \RuntimeException('fpc_html_disk_page_gen_symlink_failed');
+        }
     }
 
     private static function relativePageDir(string $host, string $path): ?string

@@ -9,17 +9,17 @@ use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Service\BackendThemeApplicationService;
 use Weline\Theme\Api\DefaultThemeInterface;
 use Weline\Theme\Model\WelineTheme;
-use Weline\Websites\Model\ThemeApplication;
+use Weline\Websites\Api\Theme\ThemeApplicationRepositoryInterface;
 use Weline\Websites\Model\Website;
 
 /**
- * 只读：按 websites_theme_application / backend_theme_application 汇总主题使用，
+ * 只读：经 Websites 应用仓库接口 / backend_theme_application 汇总主题使用，
  * 供主题列表与 theme:upgrade 无 -t 目标解析。不写激活标记。
  */
 final class ThemeApplicationUsageService
 {
     public function __construct(
-        private readonly ThemeApplication $applications,
+        private readonly ThemeApplicationRepositoryInterface $applications,
         private readonly BackendThemeApplicationService $backendApplications,
         private readonly DefaultThemeInterface $defaultTheme,
         private readonly WelineTheme $themes,
@@ -281,40 +281,11 @@ final class ThemeApplicationUsageService
      */
     private function listOwnApplicationDetailRows(string $area): array
     {
-        try {
-            $rows = (clone $this->applications)->clear()
-                ->where(ThemeApplication::schema_fields_AREA, $area)
-                ->where(ThemeApplication::schema_fields_STORE_MODE, ScopeIdentity::MODE_NORMAL)
-                ->select()
-                ->fetchArray();
-        } catch (\Throwable) {
-            return [];
-        }
-        if (!\is_array($rows)) {
-            return [];
-        }
-
         $out = [];
-        foreach ($rows as $row) {
-            if (!\is_array($row)) {
-                continue;
-            }
-            $raw = $row[ThemeApplication::schema_fields_REFERENCE_JSON] ?? null;
-            if ($raw === null || $raw === '') {
-                continue;
-            }
-            try {
-                $data = \json_decode((string)$raw, true, 512, \JSON_THROW_ON_ERROR);
-            } catch (\Throwable) {
-                continue;
-            }
-            if (!\is_array($data)) {
-                continue;
-            }
-            $themeId = (int)($data['theme_id'] ?? 0);
-            $scopeKey = (string)($row[ThemeApplication::schema_fields_SCOPE_KEY] ?? '');
-            $ownerScope = \trim((string)($data['version_owner_scope'] ?? ''));
-            if ($scopeKey === '' || $ownerScope === '') {
+        foreach ($this->applications->listForArea(ScopeIdentity::MODE_NORMAL, $area) as $row) {
+            $reference = $row['reference'];
+            $scopeKey = $row['scope_key'];
+            if ($reference === null || $scopeKey === '') {
                 continue;
             }
             $parts = \explode('|', $scopeKey);
@@ -327,24 +298,14 @@ final class ThemeApplicationUsageService
                 $wid = (int)($parts[1] ?? -1);
                 $websiteId = $wid >= 0 ? $wid : null;
             }
-            $storeMode = \trim((string)($data['version_owner_store_mode']
-                ?? $row[ThemeApplication::schema_fields_STORE_MODE]
-                ?? ScopeIdentity::MODE_NORMAL));
-            if (!\in_array($storeMode, [ScopeIdentity::MODE_NORMAL, ScopeIdentity::MODE_DEV, ScopeIdentity::MODE_TEST], true)) {
-                $storeMode = ScopeIdentity::MODE_NORMAL;
-            }
-            $refArea = \trim((string)($data['area'] ?? $area));
-            if ($refArea !== 'frontend' && $refArea !== 'backend') {
-                $refArea = $area;
-            }
             $out[] = [
-                'theme_id' => $themeId,
-                'area' => $refArea,
-                'store_mode' => $storeMode,
+                'theme_id' => $reference->themeId,
+                'area' => $reference->area,
+                'store_mode' => $reference->versionOwnerStoreMode,
                 'scope_key' => $scopeKey,
                 'scope_kind' => $scopeKind,
                 'website_id' => $websiteId,
-                'version_owner_scope' => $ownerScope,
+                'version_owner_scope' => \trim($reference->versionOwnerScope),
             ];
         }
 

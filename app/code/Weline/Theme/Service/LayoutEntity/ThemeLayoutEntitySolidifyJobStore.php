@@ -89,6 +89,10 @@ final class ThemeLayoutEntitySolidifyJobStore
 
     /**
      * Move a failed job into `.solidify-jobs/failed/` (dead-letter) and remove from pending.
+     *
+     * The dead-letter file is slot-scoped and **accumulates** `fail_count` across
+     * consecutive failures so the request gate can open a circuit breaker instead of
+     * re-enqueueing (and forbidding shared FPC) forever while a bake keeps failing.
      */
     public function moveToFailed(ThemeLayoutEntitySolidifySerialKey $key, string $reason = ''): bool
     {
@@ -105,9 +109,12 @@ final class ThemeLayoutEntitySolidifyJobStore
         if (!is_array($data)) {
             $data = ['serial' => $key->toString()];
         }
+        $previous = $this->failureState($key);
+        $data['fail_count'] = ($previous['fail_count'] ?? 0) + 1;
+        $data['first_failed_at'] = $previous['first_failed_at'] ?? gmdate('c');
         $data['failed_at'] = gmdate('c');
         $data['fail_reason'] = trim($reason);
-        $dest = $failedDir . DIRECTORY_SEPARATOR . basename($path);
+        $dest = $this->failedPathFor($key);
         $encoded = json_encode($data, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
         if (@file_put_contents($dest, $encoded, LOCK_EX) === false) {
             return false;
@@ -115,6 +122,53 @@ final class ThemeLayoutEntitySolidifyJobStore
         @unlink($path);
 
         return true;
+    }
+
+    /**
+     * Consecutive-failure record for the slot (null when the slot never failed or was cleared).
+     *
+     * @return null|array{fail_count:int,failed_at:int,first_failed_at:string,fail_reason:string}
+     */
+    public function failureState(ThemeLayoutEntitySolidifySerialKey $key): ?array
+    {
+        $dest = $this->failedPathFor($key);
+        if (!is_file($dest)) {
+            return null;
+        }
+        $raw = @file_get_contents($dest);
+        $data = is_string($raw) && $raw !== '' ? json_decode($raw, true) : null;
+        if (!is_array($data)) {
+            return null;
+        }
+        $failedAt = strtotime((string)($data['failed_at'] ?? '')) ?: (int)(@filemtime($dest) ?: 0);
+
+        return [
+            'fail_count' => max(1, (int)($data['fail_count'] ?? 1)),
+            'failed_at' => $failedAt,
+            'first_failed_at' => (string)($data['first_failed_at'] ?? ($data['failed_at'] ?? '')),
+            'fail_reason' => (string)($data['fail_reason'] ?? ''),
+        ];
+    }
+
+    /**
+     * Forget the dead-letter record after a successful bake. Returns true when a record existed
+     * (caller may need to invalidate pages that were served from the source template meanwhile).
+     */
+    public function clearFailure(ThemeLayoutEntitySolidifySerialKey $key): bool
+    {
+        $dest = $this->failedPathFor($key);
+        if (!is_file($dest)) {
+            return false;
+        }
+        @unlink($dest);
+
+        return true;
+    }
+
+    private function failedPathFor(ThemeLayoutEntitySolidifySerialKey $key): string
+    {
+        return dirname($this->pathFor($key)) . DIRECTORY_SEPARATOR . 'failed'
+            . DIRECTORY_SEPARATOR . $key->slotHash() . '.json';
     }
 
     /**

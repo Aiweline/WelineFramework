@@ -24,7 +24,6 @@ final class Upgrade implements UpgradeInterface
         /** @var FaqItem $item */
         $item = ObjectManager::getInstance(FaqItem::class);
         $modelSetup->putModel($item);
-        $item->upgrade($modelSetup, $context);
 
         ObjectManager::getInstance(FaqItemScopeKeyHealer::class)->heal();
 

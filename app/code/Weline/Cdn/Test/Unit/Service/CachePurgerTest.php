@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Cdn\Service\AccountManager;
 use Weline\Cdn\Service\AdapterResolver;
 use Weline\Cdn\Service\CachePurger;
+use Weline\Cdn\Service\FpcPolicyTargetService;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -22,7 +23,8 @@ class CachePurgerTest extends TestCase
         $this->cachePurger = new CachePurger(
             ObjectManager::getInstance(),
             $this->createMock(AdapterResolver::class),
-            $this->createMock(AccountManager::class)
+            $this->createMock(AccountManager::class),
+            (new \ReflectionClass(FpcPolicyTargetService::class))->newInstanceWithoutConstructor()
         );
     }
 

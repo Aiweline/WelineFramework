@@ -43,7 +43,6 @@ class Install implements InstallInterface
             foreach ($models as $modelClass) {
                 $model = ObjectManager::getInstance($modelClass);
                 $modelSetup->putModel($model);
-                $model->install($modelSetup, $context);
             }
 
             $context->getPrinter()->success(__('Multipass 模块安装完成'));

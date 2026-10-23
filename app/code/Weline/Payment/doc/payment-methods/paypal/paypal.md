@@ -25,6 +25,44 @@ required_fields: client_id, client_secret, return_url, cancel_url
 - return_url / cancel_url：PayPal 跳转回站点的 URL。
 - webhook_id：PayPal Developer 注册的 Webhook ID；配置后 Provider 会调用 `/v1/notifications/verify-webhook-signature` 验真签（官方要求）。未配置且无 Transmission 头时，仅允许本地注入/无签名联调。
 - google_pay_enabled / apple_pay_enabled：默认开启。控制 PayPal JS SDK 的 `enable-funding` / `disable-funding`（googlepay、applepay）。关闭后本站不再展示对应钱包按钮。需商户侧具备 Google/Apple Pay 能力；Apple Pay 生产还需域名登记（完整收单见 Phase 2）。
+- card_fields_enabled：默认开启。结账页选中 PayPal 时，在站内展开银行卡收银台（PayPal Card Fields / Advanced Credit and Debit Card）。需商户具备 `advanced_cards` 资格；前端会通过 `sdk.findEligibleMethods({currencyCode}).isEligible("advanced_cards")` 实时检测，不满足、币种需折算、拆单或 express 场景自动回退到 PayPal 跳转。
+
+## 站内银行卡收银台（Card Fields / ACDC）
+
+### 能力边界
+
+- 卡号、有效期、CVV 全部在 PayPal 托管 iframe 内输入，本站不接收、不落库、不打印原始卡数据；PCI 范围按 PayPal 的 SAQ A-EP 说明执行。
+- 本站只负责：创建 PayPal order（`payment_source.card.experience_context`）→ 前端 `cardSession.submit(orderId)` → 服务端 `capture`。
+- 3DS/SCA 由 PayPal SDK 弹出；建单默认传 `attributes.verification.method=SCA_WHEN_REQUIRED`（PSD2 区域自动触发，非 PSD2 区域不强制）。
+- 不做保存卡（vault）、订阅、多订单合并 capture；这些场景回退跳转。
+
+### 链路
+
+1. 结账页选中 PayPal；`Weline_Payment` 前端模块读取 `payment.paypalCardFieldsConfig`（只返回公开 client_id、SDK URL、币种、CSS URL）。
+2. SDK 检测 `advanced_cards` 资格后展开卡字段；资格不满足直接隐藏，不影响原跳转。
+3. 买家点「提交订单」：
+   - 前端 `checkout.submitV2({payment_method:'paypal', client_action:true})`；
+   - 服务端 `CheckoutOrderPaymentService::pay()` → `PayPalProvider::createPayment()` 建 `payment_source.card` 单，返回通用 `payment.client_action`（`type=card_fields`，`data` 为 PayPal 单号/SDK 配置）；
+   - 前端 Payment handler 读取 `client_action.data`，`cardSession.submit(order_id, {billingAddress})` 完成卡输入与 3DS；
+   - 前端 `checkout.confirmPaymentV2({order_uuid, transaction_no, quote_token, idempotency_key, provider_reference})`；
+   - 服务端 `PaymentService::confirmPayment()` → `PayPalProvider::resumePayment()` capture，事务落 success，`notifyOrderPaid` 更新订单。
+4. 任一环节失败：前端展示可重试错误；服务端未 capture 时不改订单状态，避免假成功/重复扣款。
+
+### 降级规则（必须保持）
+
+- `card_fields_enabled=0`、无 client_id、SDK URL 为空、币种需折算（如沙箱 CNY→USD）、订单拆分、express 上下文、前端资格失败 → 一律回退 PayPal 跳转。
+- 服务端 `sanitizeResponse()` 只向前端暴露通用 `client_action`（`type` / `method_code` / `provider_code` / 标量 `data`），不透传 provider 原始 payload。
+- **解耦边界**：Checkout 只知道 `client_action` / `confirmPaymentV2` 两个通用扩展点；`card_fields` 的 `type`、卡字段 SDK 配置和 PayPal capture 细节全部由 Payment 模块及其前端 handler 负责。结账页不引用 `WelinePayPalCardFields` 等模块全局对象，Payment handler 通过 `window.WelineCheckout.registerPaymentHandler('paypal', ...)` 注册。
+
+### 验收与排查
+
+- 单测：`php vendor/bin/phpunit --bootstrap app/code/Weline/Payment/Test/Unit/bootstrap.php app/code/Weline/Payment/Test/Unit/Service/PayPalCardFieldsTest.php`
+- Checkout 单测：`php vendor/bin/phpunit --bootstrap app/code/Weline/Checkout/test/Unit/bootstrap.php app/code/Weline/Checkout/test/Unit/Service/CheckoutOrderPaymentServiceTest.php`
+- 前端语法：`node --check app/code/Weline/Payment/view/statics/js/paypal-card-fields.js`
+- 常见失败：
+  - 卡字段不出现：商户无 `advanced_cards` 资格 / `card_fields_enabled=0` / 币种不一致 / CSP 拦截 `c.paypal.com`。
+  - `confirmPaymentV2` 400：`quote_token` 已过期或订单不属于该 checkout session；检查 `checkout_payment_session_not_found` / `checkout_payment_order_scope_mismatch`。
+  - 卡字段 iframe 空白：检查 CSP `script-src`/`frame-src` 是否包含 `https://c.paypal.com` 与 `https://www.paypal.com`。
 
 ## Webhook/回调 URL
 在 Developer Dashboard > Webhooks 配置 WeShop 回调 URL，建议至少订阅：

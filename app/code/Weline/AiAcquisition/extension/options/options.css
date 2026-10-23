@@ -1,0 +1,72 @@
+body {
+  margin: 0;
+  padding: 24px;
+  max-width: 560px;
+  font: 14px/1.6 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #1f2933;
+  background: #ffffff;
+}
+
+h1 {
+  margin: 0 0 18px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+h2 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.field {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.field span {
+  display: block;
+  margin-bottom: 4px;
+  color: #52606d;
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 9px;
+  border: 1px solid #cbd2d9;
+  border-radius: 4px;
+  font: inherit;
+}
+
+.actions {
+  margin-bottom: 10px;
+}
+
+.actions button {
+  padding: 7px 16px;
+  border: 1px solid #0b6e99;
+  border-radius: 4px;
+  background: #0b6e99;
+  color: #ffffff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.status {
+  min-height: 20px;
+  margin: 0 0 18px;
+  color: #0b6e99;
+}
+
+.notes {
+  border-top: 1px solid #e4e7eb;
+  padding-top: 14px;
+  color: #3e4c59;
+}
+
+.notes ul {
+  margin: 0;
+  padding-left: 20px;
+}

@@ -28,7 +28,6 @@ final class ModuleRollbackManager implements ModuleRollbackManagerInterface
 
     public function __construct(
         private readonly VersionService $versionService,
-        private readonly MigrationService $migrationService,
         private readonly SchemaRollbackService $schemaRollbackService,
         private readonly ModuleArtifactProviderRegistry $artifactRegistry,
         private readonly ModuleManifestReader $manifestReader,
@@ -37,6 +36,14 @@ final class ModuleRollbackManager implements ModuleRollbackManagerInterface
         private readonly ModuleVersionOperationItem $itemModel,
         private readonly EventsManager $eventsManager,
     ) {
+    }
+
+
+    /** @return array{migrations: list<array<string, mixed>>, blockers: list<string>, warnings: list<string>} */
+    private function planScriptRollback(string $moduleName, string $toVersion, string $fromVersion): array
+    {
+        // Legacy file migrations are retired; RSSE releases own database changes.
+        return ['migrations' => [], 'blockers' => [], 'warnings' => []];
     }
 
     public function listTargets(string $moduleName): array
@@ -219,7 +226,7 @@ final class ModuleRollbackManager implements ModuleRollbackManagerInterface
                 $blockers[] = __('模块 %{1} 缺少目标代码制品', $selectedModule);
                 continue;
             }
-            $scriptPlan = $this->migrationService->planRollbackToVersion($selectedModule, $toVersion, $fromVersion);
+            $scriptPlan = $this->planScriptRollback($selectedModule, $toVersion, $fromVersion);
             $schemaPlan = $this->schemaRollbackService->createPlan($selectedModule, $toVersion, $fromVersion);
             $blockers = array_merge($blockers, $scriptPlan['blockers'], $schemaPlan['blockers']);
             $warnings = array_merge($warnings, $schemaPlan['warnings']);
@@ -318,7 +325,7 @@ final class ModuleRollbackManager implements ModuleRollbackManagerInterface
                     throw new \RuntimeException(__('模块 %{1} 目标制品在预检后已变化', $module));
                 }
 
-                $scriptPlan = $this->migrationService->planRollbackToVersion($module, $toVersion, $fromVersion);
+                $scriptPlan = $this->planScriptRollback($module, $toVersion, $fromVersion);
                 $schemaPlan = $this->schemaRollbackService->createPlan($module, $toVersion, $fromVersion);
                 if ($scriptPlan['blockers'] !== [] || $schemaPlan['blockers'] !== []) {
                     throw new \RuntimeException(__('模块 %{1} 的迁移或 Schema 反向链在预检后已失效', $module));

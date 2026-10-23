@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Weline\Shipping\Service;
 
 /**
- * 按国家决定地址字段深度（是否显示 district 等）+ 合并 AddressSchemaProvider 标签（State/ZIP 等）。
- * 层级配置权威：data/address-country-profiles.json；文案权威：AddressSchemaProvider。
+ * 按国家决定地址字段深度（是否显示 district 等）+ 合并 AddressSchemaProvider 标签（State/ZIP 等）+ 电话规则。
+ * 层级配置权威：data/address-country-profiles.json；文案权威：AddressSchemaProvider；电话规则权威：PhoneNumberRuleService。
  */
 final class AddressCountryProfileService
 {
@@ -17,11 +17,14 @@ final class AddressCountryProfileService
 
     public function __construct(
         private readonly AddressSchemaProvider $schemaProvider = new AddressSchemaProvider(),
+        private readonly PhoneNumberRuleService $phoneRules = new PhoneNumberRuleService(),
     ) {
     }
 
     /**
-     * @return array{levels:list<string>,autocomplete:bool,country_code:string,labels:array<string,string>,field_order:list<string>,name_mode:string}
+     * phone：该国电话规则（PhoneNumberRuleService；无规则为 null，店面回退 E.164 总位数）。
+     *
+     * @return array{levels:list<string>,autocomplete:bool,country_code:string,labels:array<string,string>,field_order:list<string>,name_mode:string,phone:array<string,mixed>|null}
      */
     public function profileFor(?string $countryCode): array
     {
@@ -62,6 +65,7 @@ final class AddressCountryProfileService
             'labels' => $labels,
             'field_order' => $fieldOrder,
             'name_mode' => $nameMode,
+            'phone' => $this->phoneRules->frontendRule($code !== '' ? $code : null),
         ];
     }
 

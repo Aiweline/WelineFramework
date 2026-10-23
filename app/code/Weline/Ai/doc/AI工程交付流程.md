@@ -221,7 +221,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - **文档对齐（硬门槛，`docs_reconcile_on_closeout` + `documentation_engineer_for_docs_work`）**：复杂 team 由 **文档工程师统一执笔**——测试 pass 后、汇审前对照已验证实现 + 各席 `doc_debt` 改写归属模块 `doc/README.md`、`doc/需求.md`、`doc/功能现状.md`、`doc/开发日志.md` 及本次触及的专题文档——**实现变则文档描述必须同变**；写 `meetings/文档-review.md`。其它开发席**禁止**私改模块耐久 `doc/`，须交 `doc_debt` 由 PM 安排文档工程师。监工模式由父会话兼任同义务。有差异则改文档或 escalate 回改代码，二者必须一致。
 - **交付地址清单（硬门槛）**：在面向用户的交付汇报**末尾**列出本功能涉及的全部入口，按表面分组：
   - **前台 / 后台主验收**：每行一条**可直接打开的 http(s) Markdown 链接**，格式 `[名称](http(s)://完整URL)`；链接文字用页面名（如「愿望清单」），**禁止**把 `command:simpleBrowser.api.open` 等宿主私有伪协议当作**唯一/主链**；禁止仅写不可点的「打开」变色字。
-  - **本机默认 Host（硬）**：`{project_hash}.test.weline.com`（例：`http://p05113ef3.test.weline.com:9555/...`）。**禁止**把 `*.weline.test`（例：`p05113ef3.weline.test`）当作主验收 Host（即使 `/etc/hosts` 也解析）；仅当不存在可用的 `*.test.weline.com` 时才用 `127.0.0.1`。本机常为 http，勿伪造 https。权威：`WebUI浏览器验收与交付地址门禁.md`；MCP：`feature_delivery_urls.default_local_host` / `forbidden_primary_hosts`、`closeout_delivery_reminder`。
+  - **本机默认 Host（硬）**：`{project_hash}.test.weline.com`（例：`https://p05113ef3.test.weline.com/...`）。本机交付/汇报 URL **禁止带端口**（含 `:9555`）；无端口探活不通则报阻塞，不得改用带端口地址。**禁止**把 `*.weline.test`（例：`p05113ef3.weline.test`）当作主验收 Host（即使 `/etc/hosts` 也解析）；仅当不存在可用的 `*.test.weline.com` 时才用 `127.0.0.1`。权威：`WebUI浏览器验收与交付地址门禁.md`；MCP：`feature_delivery_urls.default_local_host` / `forbidden_primary_hosts`、`closeout_delivery_reminder`。
   - **API / Query**：`w_query` 资源名、路由或 `php bin/w http:request` 可复现示例。
   - **纯逻辑**：对应表面写 `N/A`，并给出 CLI 命令或接口入口。
   - 禁止臆造路由；交付前须探活；探活失败不得交付可点击死链。

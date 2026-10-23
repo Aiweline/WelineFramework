@@ -218,10 +218,13 @@ final class QueryBinScopeHandshakeTest extends TestCase
         ?FrontendWorkerSessionService $sessionService = null,
     ): QueryBin {
         $gateway = (new \ReflectionClass(FrontendQueryGateway::class))->newInstanceWithoutConstructor();
+        $securityGate = (new \ReflectionClass(\Weline\Frontend\Service\ScopeHolePunchSecurityGate::class))
+            ->newInstanceWithoutConstructor();
         return new QueryBin(
             new WelineBinaryCodec(),
             $gateway,
             $sessionService ?? new FrontendWorkerSessionService($store),
+            $securityGate,
             new RuntimeProviderResolver(new ServiceProviderRegistry($registryFile)),
         );
     }

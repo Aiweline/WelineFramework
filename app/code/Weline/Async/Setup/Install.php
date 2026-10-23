@@ -62,14 +62,12 @@ class Install implements InstallInterface
         $syncHost = ObjectManager::getInstance(SyncHost::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($syncHost);
-        $syncHost->setup($modelSetup, $context);
         
         // 安装目录映射表
         /** @var SyncMapping $syncMapping */
         $syncMapping = ObjectManager::getInstance(SyncMapping::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($syncMapping);
-        $syncMapping->setup($modelSetup, $context);
     }
 
     /**

@@ -35,13 +35,9 @@ final class FpcCapability implements ChangedCapabilityInterface
 
     public function execute(InvalidationEffect $effect, ResourceChange $change): void
     {
-        try {
-            /** @var FpcStoreAdapterRegistry $registry */
-            $registry = ObjectManager::getInstance(FpcStoreAdapterRegistry::class);
-            $adapter = $registry->active();
-        } catch (\Throwable) {
-            return;
-        }
+        /** @var FpcStoreAdapterRegistry $registry */
+        $registry = ObjectManager::getInstance(FpcStoreAdapterRegistry::class);
+        $adapter = $registry->active();
         if ($adapter === null) {
             return;
         }
@@ -65,9 +61,13 @@ final class FpcCapability implements ChangedCapabilityInterface
         $urls = \is_array($effect->payload['urls'] ?? null) ? $effect->payload['urls'] : [];
         $urls = \array_map('strval', $urls);
         if ($slugs !== []) {
+            // URL 主机可能只是本机/预览入口；站点自身的全部域名必须一起清。
             $hosts = self::hostsFromUrls($urls);
-            if ($hosts === [] && $change->hasWebsiteContext()) {
-                $hosts = self::hostsForWebsite((int)$change->websiteId());
+            if ($change->hasWebsiteContext()) {
+                $hosts = \array_values(\array_unique(\array_merge(
+                    $hosts,
+                    self::hostsForWebsite((int)$change->websiteId()),
+                )));
             }
             if ($hosts !== []) {
                 $adapter->purgeSlugs($hosts, $slugs);
@@ -114,6 +114,8 @@ final class FpcCapability implements ChangedCapabilityInterface
     }
 
     /**
+     * 该站点的全部店面主机：站点绑定域名 + 站点 URL 主机（只取本站，不混入其它站点）。
+     *
      * @return list<string>
      */
     private static function hostsForWebsite(int $websiteId): array
@@ -121,29 +123,25 @@ final class FpcCapability implements ChangedCapabilityInterface
         if ($websiteId < 0 || !\function_exists('w_query')) {
             return [];
         }
-        try {
-            $domains = \w_query('websites', 'getActiveWebsiteDomains', ['website_id' => $websiteId]);
-            if (!\is_array($domains)) {
-                return [];
+        $candidates = [];
+        $domains = \w_query('websites', 'getWebsiteDomains', ['website_id' => $websiteId]);
+        foreach (\is_array($domains) ? $domains : [] as $row) {
+            if (\is_array($row) && (int)($row['website_id'] ?? -1) === $websiteId) {
+                $candidates[] = (string)($row['domain'] ?? '');
             }
-            $hosts = [];
-            foreach ($domains as $row) {
-                $host = '';
-                if (\is_array($row)) {
-                    $host = \strtolower(\trim((string)($row['domain'] ?? $row['host'] ?? '')));
-                } elseif (\is_string($row)) {
-                    $host = \strtolower(\trim($row));
-                }
-                $host = \preg_replace('#^https?://#i', '', $host) ?? $host;
-                $host = \explode('/', $host, 2)[0] ?? '';
-                if ($host !== '' && \preg_match('/^[a-z0-9._:-]+$/Di', $host) === 1) {
-                    $hosts[$host] = $host;
-                }
-            }
-
-            return \array_values($hosts);
-        } catch (\Throwable) {
-            return [];
         }
+        $website = \w_query('websites', 'getWebsiteById', ['website_id' => $websiteId, 'force_reload' => false]);
+        if (\is_array($website)) {
+            $candidates[] = self::hostsFromUrls([(string)($website['url'] ?? '')])[0] ?? '';
+        }
+        $hosts = [];
+        foreach ($candidates as $host) {
+            $host = \strtolower(\trim($host));
+            if ($host !== '' && \preg_match('/^[a-z0-9._:-]+$/Di', $host) === 1) {
+                $hosts[$host] = $host;
+            }
+        }
+
+        return \array_values($hosts);
     }
 }

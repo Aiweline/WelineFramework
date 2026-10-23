@@ -19,6 +19,5 @@ class Install implements InstallInterface
         $model = ObjectManager::getInstance(DeployRelease::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($model);
-        $model->setup($modelSetup, $context);
     }
 }

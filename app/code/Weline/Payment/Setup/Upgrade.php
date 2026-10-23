@@ -22,7 +22,6 @@ class Upgrade implements UpgradeInterface
         $paymentMethodAttributeEntity = ObjectManager::getInstance(PaymentMethodAttributeEntity::class);
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($paymentMethodAttributeEntity);
-        $paymentMethodAttributeEntity->setup($modelSetup, $context);
 
         foreach ([
             PaymentDevRelaySession::class,

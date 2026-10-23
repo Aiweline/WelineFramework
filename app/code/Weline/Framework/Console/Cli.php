@@ -11,6 +11,7 @@ namespace Weline\Framework\Console;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
+use Weline\Framework\Compilation\GenerationRepairService;
 use Weline\Framework\Manager\ObjectManager;
 
 class Cli extends CliAbstract
@@ -76,6 +77,10 @@ class Cli extends CliAbstract
             return 0;
         }
         
+        // 控制面命令（Worker 启动/重启）在执行前自愈过期编译产物：
+        // 不再依赖「记住先跑一次 framework:compile」。
+        $this->repairStaleGenerationIfNeeded($command_class);
+
         // 执行命令
         $command = $command_class['command'] ?? '';
         $data = $command_class['data'];
@@ -180,6 +185,36 @@ class Cli extends CliAbstract
      * @param string $commandClass 命令类全限定名
      * @return string 规范命令名（如 setup:upgrade）
      */
+    /**
+     * @param array{class?:string, command?:string, data?:mixed} $commandClass
+     */
+    private function repairStaleGenerationIfNeeded(array $commandClass): void
+    {
+        if (\in_array('--skip-generation-repair', $this->argv, true)) {
+            return;
+        }
+        $matched = (string)($commandClass['command'] ?? '');
+        $class = (string)($commandClass['class'] ?? '');
+        if ($matched === '' || $class === '') {
+            return;
+        }
+        $canonical = $this->getCanonicalCommandName($matched, $class);
+        if (!\in_array($canonical, ['server:start', 'server:restart', 'server:reload'], true)) {
+            return;
+        }
+
+        $result = (new GenerationRepairService())->ensure(
+            BP . 'app' . DS . 'code' . DS . 'Weline',
+            BP . 'generated' . DS . 'framework',
+        );
+        $reason = (string)($result['reason'] ?? '');
+        if ($reason === 'repaired') {
+            $this->printer->success(__('框架编译产物已自动重建。'));
+        } elseif ($reason === 'compile_failed') {
+            $this->printer->error(__('框架编译产物自愈失败：') . (string)($result['error'] ?? ''));
+        }
+    }
+
     private function getCanonicalCommandName(string $matchedCommand, string $commandClass): string
     {
         $commands = Env::getCommands();

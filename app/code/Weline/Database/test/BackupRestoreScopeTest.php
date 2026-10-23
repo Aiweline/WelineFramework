@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Database\test;
 
 use Weline\Database\Model\MigrationBackup;
-use Weline\Database\Service\BackupService;
+use Weline\Framework\Database\Service\BackupService;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Test\TestCore;

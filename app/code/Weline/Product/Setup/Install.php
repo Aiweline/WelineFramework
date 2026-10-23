@@ -22,12 +22,10 @@ final class Install implements InstallInterface
         /** @var ProductCatalogAttributeEntity $productEntity */
         $productEntity = ObjectManager::getInstance(ProductCatalogAttributeEntity::class);
         $modelSetup->putModel($productEntity);
-        $productEntity->setup($modelSetup, $context);
 
         /** @var CategoryAttributeEntity $categoryEntity */
         $categoryEntity = ObjectManager::getInstance(CategoryAttributeEntity::class);
         $modelSetup->putModel($categoryEntity);
-        $categoryEntity->setup($modelSetup, $context);
 
         ObjectManager::getInstance(ProductCategoryEavBootstrap::class)->ensureCategorySchema();
     }

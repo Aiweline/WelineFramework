@@ -5,11 +5,12 @@ use Weline\Cdn\Model\Domain;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Websites\Api\Catalog\WebsiteCatalogInterface;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
+use Weline\Websites\Api\Catalog\WebsiteDomainCatalogInterface;
 
 /** 清理权威仅取可信域名和公开 Scope URL，用户不能直接传入清理地址。 */
 final class FpcPolicyTargetService
 {
-    public function __construct(private readonly Domain $domains, private readonly WebsiteCatalogInterface $websites, private readonly StoreCatalogInterface $stores, private readonly WarmupLocaleUrlExpander $locales) {}
+    public function __construct(private readonly Domain $domains, private readonly WebsiteCatalogInterface $websites, private readonly StoreCatalogInterface $stores, private readonly WarmupLocaleUrlExpander $locales, private readonly WebsiteDomainCatalogInterface $websiteDomains) {}
 
     public function domains(bool $enabledOnly = true): array
     {
@@ -19,6 +20,7 @@ final class FpcPolicyTargetService
     }
 
     /** 同站点官方公共 base 优先；绑定 host 的别名只继承该 base 的路径，不扩大域名范围。
+     * Website 范围的 base 来自站点 URL、启用店铺 URL 与站点绑定域名；只保留落在本 CDN 域名内的 host。
      * @return list<array{host:string,base_url:string}>
      */
     public function publicEndpoints(Domain $domain, ?ScopeIdentity $scope = null): array
@@ -38,6 +40,7 @@ final class FpcPolicyTargetService
         } else {
             if ($websiteUrl!==null) { $candidates[]=$websiteUrl; }
             foreach ($this->stores->byWebsite($site) as $store) { if ($store->enabled && $store->url!==null) { $candidates[]=$store->url; } }
+            foreach ($this->websiteDomains->publicBaseUrls($site) as $base) { $candidates[]=$base; }
         }
         $official=[]; $boundAliases=[];
         foreach ($candidates as $candidate) {

@@ -24,6 +24,13 @@ final class PostResponseTaskQueue
     /** @var array<string, array{context: WlsFiberContext, refs: int}> */
     private static array $sharedFullByRequestId = [];
 
+    private const DEFAULT_MAX_PENDING = 1024;
+
+    /** 队列满时丢弃的任务数（只增不减，供诊断）。 */
+    private static int $droppedTasks = 0;
+
+    private static ?int $maxPendingTasks = null;
+
     public static function enqueue(
         string $key,
         callable $task,
@@ -31,6 +38,19 @@ final class PostResponseTaskQueue
         PostResponseCaptureMode $mode = PostResponseCaptureMode::Full,
     ): void {
         if ($key === '' || isset(self::$tasks[$key])) {
+            return;
+        }
+
+        if (\count(self::$tasks) >= self::maxPendingTasks()) {
+            self::$droppedTasks++;
+            if (self::$droppedTasks === 1 || self::$droppedTasks % 100 === 0) {
+                Env::log_warning(
+                    'runtime/post_response_task',
+                    'Dropped post-response task: queue full, pending=' . \count(self::$tasks)
+                    . ' max=' . self::maxPendingTasks() . ' dropped_total=' . self::$droppedTasks
+                );
+            }
+
             return;
         }
 
@@ -107,6 +127,7 @@ final class PostResponseTaskQueue
 
         self::$draining = true;
         try {
+            $previousContext = Context::getCurrent();
             self::memoryProbe('drain_start', null, null);
             $startedAt = \microtime(true);
             $slowTaskMs = (float)(Env::get('wls.post_response_task_slow_ms', \max(25.0, $budgetMs)) ?: \max(25.0, $budgetMs));
@@ -151,7 +172,14 @@ final class PostResponseTaskQueue
                 } finally {
                     $processed++;
                     self::releaseSharedFull($task['shared_request_id'] ?? null);
-                    self::cleanupRestoredContext();
+                    try {
+                        self::cleanupRestoredContext($previousContext);
+                    } catch (\Throwable $cleanupError) {
+                        Env::log_error(
+                            'runtime/post_response_task',
+                            'post-response cleanup failed: ' . $cleanupError->getMessage()
+                        );
+                    }
                     self::memoryProbe('task_after_cleanup', $key, \count(self::$tasks));
                 }
 
@@ -169,6 +197,22 @@ final class PostResponseTaskQueue
         } finally {
             self::$draining = false;
         }
+    }
+
+    private static function maxPendingTasks(): int
+    {
+        if (self::$maxPendingTasks !== null) {
+            return self::$maxPendingTasks;
+        }
+        $configured = Env::get('wls.post_response_task_max_pending', self::DEFAULT_MAX_PENDING);
+        $max = \is_numeric($configured) ? (int)$configured : self::DEFAULT_MAX_PENDING;
+
+        return self::$maxPendingTasks = \max(64, \min(8192, $max));
+    }
+
+    public static function getDroppedTaskCount(): int
+    {
+        return self::$droppedTasks;
     }
 
     private static function memoryProbe(string $phase, ?string $key, ?int $pending): void
@@ -244,6 +288,8 @@ final class PostResponseTaskQueue
             'capture_full' => $captureFull,
             'capture_scope' => $captureScope,
             'capture_none' => $captureNone,
+            'dropped' => self::$droppedTasks,
+            'max_pending' => self::maxPendingTasks(),
         ];
     }
 
@@ -442,21 +488,33 @@ final class PostResponseTaskQueue
         }
     }
 
-    private static function cleanupRestoredContext(): void
+    private static function cleanupRestoredContext(?Context $previousContext): void
     {
         $failures = [];
-        try {
-            StateManager::reset();
-        } catch (\Throwable $e) {
-            RequestResetException::append($failures, 'state_manager', $e);
+        $current = Context::getCurrent();
+        $enteredOwnContext = $previousContext === null || $current !== $previousContext;
+        if ($enteredOwnContext) {
+            try {
+                StateManager::reset();
+            } catch (\Throwable $e) {
+                RequestResetException::append($failures, 'state_manager', $e);
+            }
         }
-
-        try {
-            Context::leave();
-        } catch (\Throwable $e) {
-            RequestResetException::append($failures, 'context_leave', $e);
+        if ($previousContext !== null) {
+            if (Context::getCurrent() !== $previousContext) {
+                try {
+                    Context::enter($previousContext);
+                } catch (\Throwable $e) {
+                    RequestResetException::append($failures, 'context_restore', $e);
+                }
+            }
+        } elseif (Context::getCurrent() !== null) {
+            try {
+                Context::leave();
+            } catch (\Throwable $e) {
+                RequestResetException::append($failures, 'context_leave', $e);
+            }
         }
-
         if ($failures !== []) {
             throw new RequestResetException('post_response_task', $failures);
         }

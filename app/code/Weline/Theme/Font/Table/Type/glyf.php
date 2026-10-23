@@ -21,19 +21,15 @@ class glyf extends Table {
   protected function _parse() {
     $font   = $this->getFont();
     $offset = $font->pos();
-
-    $loca      = $font->getData("loca");
-    $real_loca = array_slice($loca, 0, -1); // Not the last dummy loca entry
-
-    $data = array();
-
-    foreach ($real_loca as $gid => $location) {
-      $_offset    = $offset + $loca[$gid];
-      $_size      = $loca[$gid + 1] - $loca[$gid];
-      $data[$gid] = Outline::init($this, $_offset, $_size, $font);
+    $loca   = $font->getData("loca");
+    $index  = array();
+    $count  = \count($loca) - 1;
+    for ($gid = 0; $gid < $count; $gid++) {
+      $index[$gid] = array($offset + $loca[$gid], $loca[$gid + 1] - $loca[$gid]);
     }
 
-    $this->data = $data;
+    // 只记下位置。子集用到哪个字形再读哪个，避免把整套 CJK 轮廓装进内存。
+    $this->data = new LazyGlyphList($this, $index);
   }
 
   public function getGlyphIDs($gids = array()) {
@@ -161,5 +157,77 @@ class glyf extends Table {
     $font->getTableObject("loca")->data = $loca;
 
     return $length;
+  }
+}
+
+/**
+ * 按字形编号按需解析。ArrayAccess 让原有 $glyf->data[$gid] 调用保持不变。
+ */
+class LazyGlyphList implements \ArrayAccess, \Countable, \IteratorAggregate
+{
+  /** @var glyf */
+  private $table;
+
+  /** @var array<int, array{0:int,1:int}> */
+  private $index;
+
+  /** @var array<int, Outline> */
+  private $cache = array();
+
+  /**
+   * @param array<int, array{0:int,1:int}> $index
+   */
+  public function __construct(glyf $table, array $index)
+  {
+    $this->table = $table;
+    $this->index = $index;
+  }
+
+  public function offsetExists(mixed $offset): bool
+  {
+    return isset($this->index[(int)$offset]);
+  }
+
+  public function offsetGet(mixed $offset): Outline
+  {
+    $gid = (int)$offset;
+    if (!isset($this->cache[$gid])) {
+      $slot = $this->index[$gid] ?? array(0, 0);
+      $this->cache[$gid] = Outline::init($this->table, $slot[0], $slot[1], $this->table->getFont());
+    }
+
+    return $this->cache[$gid];
+  }
+
+  public function offsetSet(mixed $offset, mixed $value): void
+  {
+    $this->cache[(int)$offset] = $value;
+  }
+
+  public function offsetUnset(mixed $offset): void
+  {
+    unset($this->cache[(int)$offset]);
+  }
+
+  public function release(int $gid): void
+  {
+    unset($this->cache[$gid]);
+  }
+
+  public function releaseAll(): void
+  {
+    $this->cache = array();
+  }
+
+  public function count(): int
+  {
+    return \count($this->index);
+  }
+
+  public function getIterator(): \Traversable
+  {
+    foreach (array_keys($this->index) as $gid) {
+      yield $gid => $this->offsetGet($gid);
+    }
   }
 }

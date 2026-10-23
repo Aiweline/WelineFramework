@@ -39,6 +39,7 @@ class ProviderFactory
         'vectorengine' => VectorEngineProvider::class,
         'openai' => OpenAiProvider::class,
         'deepseek' => OpenAiProvider::class,
+        'fake' => FakeProvider::class,
     ];
 
     /**

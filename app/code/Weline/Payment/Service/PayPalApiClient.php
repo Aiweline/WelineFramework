@@ -52,7 +52,11 @@ final class PayPalApiClient
      * @param array{
      *   shipping_preference?:string,
      *   user_action?:string,
-     *   express_checkout?:bool
+     *   express_checkout?:bool,
+     *   card_fields?:bool,
+     *   locale?:string,
+     *   brand_name?:string,
+     *   sca_method?:string
      * } $options
      * @return array{order_id:string,approve_url:string,raw:array<string,mixed>}
      */
@@ -106,8 +110,35 @@ final class PayPalApiClient
         $payload = [
             'intent' => 'CAPTURE',
             'purchase_units' => [$purchaseUnit],
-            'application_context' => $applicationContext,
         ];
+        if (!empty($options['card_fields'])) {
+            // PayPal Card Fields（ACDC）：卡字段在 PayPal iframe 内，由 payment_source.card 建单。
+            // 不发送 application_context，避免与 payment_source 的 experience_context 冲突。
+            $locale = trim((string) ($options['locale'] ?? 'en-US'));
+            if (!\preg_match('/^[a-z]{2}(-[A-Z]{2})?$/', $locale)) {
+                $locale = 'en-US';
+            }
+            $brandName = mb_substr(trim((string) ($options['brand_name'] ?? 'Weline')), 0, 127);
+            $cardSource = [
+                'experience_context' => array_filter([
+                    'payment_method_preference' => 'IMMEDIATE_PAYMENT_REQUIRED',
+                    'brand_name' => $brandName,
+                    'locale' => $locale,
+                    'landing_page' => 'NO_PREFERENCE',
+                    'shipping_preference' => 'NO_SHIPPING',
+                    'user_action' => 'PAY_NOW',
+                    'return_url' => $applicationContext['return_url'] ?? null,
+                    'cancel_url' => $applicationContext['cancel_url'] ?? null,
+                ], static fn (mixed $value): bool => $value !== null && $value !== ''),
+            ];
+            $scaMethod = strtoupper(trim((string) ($options['sca_method'] ?? 'SCA_WHEN_REQUIRED')));
+            if (\in_array($scaMethod, ['SCA_ALWAYS', 'SCA_WHEN_REQUIRED'], true)) {
+                $cardSource['attributes'] = ['verification' => ['method' => $scaMethod]];
+            }
+            $payload['payment_source'] = ['card' => $cardSource];
+        } else {
+            $payload['application_context'] = $applicationContext;
+        }
 
         $response = $this->request(
             $config,
@@ -136,7 +167,7 @@ final class PayPalApiClient
         }
 
         $approveUrl = $this->extractLink($decoded, 'approve');
-        if ($approveUrl === '') {
+        if (empty($options['card_fields']) && $approveUrl === '') {
             throw new \RuntimeException('PayPal approve link is missing.');
         }
 

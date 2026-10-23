@@ -264,7 +264,22 @@ php bin/w server:start
 - **TLS/证书与 WLS 回源同路径**：`ManagedNginxLocalHostCatalog` 扩本地 Host + 优先 `*.test.weline.com`（等）Local CA 通配 generation；`origin_mode=fpm` **不得**丢掉证书、不得回退到 `server_name=_` + `localhost` 叶证（否则浏览器 `ERR_CERT_COMMON_NAME_INVALID`）。纯 WLS（`--edge=wls` / 无 Nginx）仍走自身 TLS；有托管 Nginx 时无论 `wls`/`fpm` 回源，公网证书绑定逻辑一致，只改 upstream（`proxy_pass` ↔ `fastcgi_pass`）。
 - **回源头（仅开发）**：`deploy=dev`（或 `wls.debug.identity_headers`）时边缘/Worker 放出 `X-Wls-Origin-Mode: fpm|wls`；线上默认不放出（`ResponseObservabilityPolicy::identityHeadersEnabled`）。
 - FPM 下 `/_wls/health` 与 ACME `/.well-known/acme-challenge/` 均为边缘本地处理，不回源 Worker。
+- FPM 前控在 `include fastcgi_params` 之后覆盖 `REQUEST_SCHEME` / `HTTPS` / `SERVER_PORT` / `HTTP_X_FORWARDED_PROTO` / `HTTP_X_FORWARDED_PORT` 为下文「可信前置代理」解析出的公开 scheme/port（PHP-FPM 同名参数取最后一个）。
 - `server:start` **不会**静默改 `origin_mode`，也**不会**静默安装 Nginx。
+
+#### 可信前置代理（宝塔 / CDN 终止 TLS 后明文回源）
+
+托管 Nginx 前面若还有一跳终止 TLS 的代理（同机宝塔 Nginx、Cloudflare 等 CDN），本监听看到的是明文 http + 高位端口。公开 origin 统一由 http 块的一组变量决定，转发头、FPM 参数、HTML 磁盘命中门与 http→https 308 门**只**引用它们：
+
+| 变量 | 含义 |
+|------|------|
+| `$wls_trusted_front_proxy` | `geo`：TCP peer（有 realip 模块时为 `$realip_remote_addr`，否则 `$remote_addr`）落在可信前置跳 → `1` |
+| `$wls_public_scheme` | 可信跳且其 `X-Forwarded-Proto` 首值为 http/https → 采信；否则本监听 `$scheme` |
+| `$wls_public_port` | 可信跳：`X-Forwarded-Port` 首值，缺省按 scheme 取 443/80；否则 `$server_port` |
+| `$wls_public_https` | 公开 scheme 为 https → `on` |
+| `$wls_edge_http_redirect` | 仅「非可信跳 + 本监听明文」才 308 到 HTTPS（可信跳已在前面终止 TLS） |
+
+可信前置跳 = `TrustedProxyCidrResolver::forNginxForwardedHeaders()`：与 `set_real_ip_from` 相同的公共列表（`wls.edge.nginx.cdn_trusted_ips` + Cloudflare 目录 + `wls.accept_gate.trusted_proxy_cidrs`）再加 loopback（同机前置面板）。loopback **只**用于采信 scheme/port，仍**不**进 `set_real_ip_from`，不会被剥成客户端 IP。任意其它来源伪造的 `X-Forwarded-*` 一律忽略。Alt-Svc 仍按本监听 `$scheme`（它描述的是本监听自身能力）。
 
 普通 `server:start`、reload 和 restart **绝不下载或编译 Nginx**。托管模式缺少二进制时，启动返回非零并提示先显式执行 `php bin/w server:nginx:install`；不会在启动路径中自动补装。Unix 显式安装在 PCRE2 头文件缺失时 fail closed，安装 manifest 和运行时 capability probe 都要求 rewrite 模块；不会回退到 `--without-http_rewrite_module`。
 
@@ -293,7 +308,7 @@ php bin/w server:start
 
 每次托管 Nginx reload 还执行独立的 `fresh-share-across-nginx-reload-v1` 连续性事务：候选发布前用新 SSL share 建立一个 fresh TLS 1.3 Session 并保留该 share；新 generation 激活、旧 Worker 排水后，使用同一 share 在 fresh TCP 上恢复。只有 Nginx Master PID 和证书摘要不变、generation 已变化、结果为 `r`、新旧 Nginx Worker PID 不同且恢复握手 ≤ 50ms 才通过。它证明 Nginx shared SSL session cache/ticket 在 graceful reload 期间连续，不能推导 PHP Stream/WLS 或 HTTP/3/QUIC Session Resumption。
 
-托管配置用 `$wls_upstream_authority` 保留公开 authority：有 `$http_host` 时原样转发；HTTP/3 的 `$http_host` 为空时回退为 `$host:$server_port`。`Host`、`X-Forwarded-Proto` 与 `X-Forwarded-Port` 一起经过固定可信的 loopback H1 hop，Worker 据此重建公开 origin，避免非标准 HTTPS 端口丢失。
+托管配置用 `$wls_upstream_authority` 保留公开 authority：有 `$http_host` 时原样转发；HTTP/3 的 `$http_host` 为空时回退为 `$host:$server_port`。`Host`、`X-Forwarded-Proto` 与 `X-Forwarded-Port` 一起经过固定可信的 loopback H1 hop，Worker 据此重建公开 origin，避免非标准 HTTPS 端口丢失。后两者取 `$wls_public_scheme` / `$wls_public_port`（见上文「可信前置代理」），托管 Nginx 前面再有终止 TLS 的可信跳时也能带出真实公开 origin。
 
 普通业务请求默认清空 upstream `Connection` 并复用 Nginx Keep-Alive 池；只有精确的 `Upgrade: websocket` 会映射为 tunnel 头并绕过边缘缓存，但当前发布矩阵尚未用 101/帧往返宣称 WebSocket 可用。Nginx loopback allowlist 保护的 `/_wls/` 探测位置会把客户端精确的 `Connection: close` 传播给 WLS，使 H1 fresh 分流门禁同时创建 fresh edge 与 fresh 回源连接；其它 Upgrade/Connection 值不会传播。
 

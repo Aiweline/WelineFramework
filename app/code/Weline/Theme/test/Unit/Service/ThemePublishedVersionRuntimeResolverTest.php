@@ -18,7 +18,7 @@ final class ThemePublishedVersionRuntimeResolverTest extends TestCase
         self::assertStringContainsString('fallbackStorageScopes', $source);
         self::assertStringNotContainsString('->findAnyPublishedVersion(', $source);
         self::assertStringNotContainsString('$versions->findAnyPublishedVersion', $source);
-        self::assertStringContainsString('scopeCandidates()', $source);
+        self::assertStringContainsString('scopeCandidates(', $source);
         self::assertStringContainsString('default.default.default', $source);
         // 旧注释随实现重写（不再有 findAnyPublishedVersion 跳租）：新锚点是「按 scope 候选链逐级查发布版」。
         self::assertStringContainsString('Authority is ThemeScopeVersion', $source);

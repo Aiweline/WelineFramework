@@ -560,6 +560,9 @@ final class SchemaDiffEngine
         if ($expected === $observed) {
             return true;
         }
+        if ($this->isBooleanType($declared->type) && $this->isBooleanType($actual->type)) {
+            return $this->booleanLiteral($expected) === $this->booleanLiteral($observed);
+        }
         $isPgsql = \in_array($databaseType, ['pgsql', 'postgres', 'postgresql'], true);
         if (!$isPgsql && \in_array($databaseType, ['mysql', 'mariadb'], true)) {
             // MariaDB information_schema.COLUMN_DEFAULT stores SQL NULL as the
@@ -593,6 +596,26 @@ final class SchemaDiffEngine
             $observed = \str_replace("''", "'", $matches[1]);
         }
         return $expected === $observed;
+    }
+
+
+    private function isBooleanType(string $type): bool
+    {
+        return \in_array(\strtolower($type), ['bool', 'boolean'], true);
+    }
+
+    private function booleanLiteral(string $value): ?bool
+    {
+        $value = \strtolower(\trim($value));
+        if ($value === '' || $value === 'null') {
+            return null;
+        }
+
+        return match ($value) {
+            '1', 'true', 't', 'yes' => true,
+            '0', 'false', 'f', 'no' => false,
+            default => null,
+        };
     }
 
     private function decodeMysqlInformationSchemaDefault(string $observed): string

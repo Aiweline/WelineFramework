@@ -9,6 +9,7 @@ use Weline\Blog\Service\BlogPostAdminListPresenter;
 use Weline\Blog\Service\BlogPostAdminService;
 use Weline\Blog\Service\BlogPostCmsEditorService;
 use Weline\Blog\Service\BlogPostSlugService;
+use Weline\Blog\Service\BlogPostTranslationService;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Websites\Service\AdminWebsiteScope;
@@ -23,6 +24,7 @@ final class PostAdmin extends BackendController
         private readonly BlogPostCmsEditorService $cmsEditor,
         private readonly BlogPostSlugService $slugService,
         private readonly WebsiteAclGrantService $websiteGrants,
+        private readonly BlogPostTranslationService $translations,
     ) {
     }
 
@@ -131,6 +133,23 @@ final class PostAdmin extends BackendController
                     $params['website_id'] = max(0, (int)$params['website_id']);
                 }
                 $saved = $this->posts->save($params);
+                if ((int)($saved['post_id'] ?? 0) > 0 && (int)($saved[PostModel::schema_fields_TRANSLATION_OF] ?? 0) === 0) {
+                    try {
+                        $autoFilled = $this->translations->autoFill((int)$saved['post_id']);
+                        $autoCount = count((array)($autoFilled['created'] ?? [])) + count((array)($autoFilled['updated'] ?? []));
+                        if ($autoCount > 0) {
+                            $this->getMessageManager()->addSuccess(__('AI 已补齐 %{1} 种语言译文。', [$autoCount]));
+                        }
+                        if (!empty($autoFilled['simulation'])) {
+                            $this->getMessageManager()->addWarning(__('当前是模拟 AI（fake）：自动补齐只生成预览，未写入数据库。'));
+                        }
+                        if (($autoFilled['errors'] ?? []) !== []) {
+                            $this->getMessageManager()->addWarning(__('AI 自动补齐未全部成功：%{1}', [implode('; ', array_slice((array)$autoFilled['errors'], 0, 3))]));
+                        }
+                    } catch (\Throwable $autoException) {
+                        $this->getMessageManager()->addWarning(__('AI 自动补齐失败：%{1}', [$autoException->getMessage()]));
+                    }
+                }
                 $this->getMessageManager()->addSuccess(__('博客文章已保存。'));
                 $this->redirect($this->getUrl('blog/backend/post-admin/form', ['post_id' => (int)($saved['post_id'] ?? 0)]));
             } catch (\Throwable $exception) {
@@ -171,7 +190,10 @@ final class PostAdmin extends BackendController
         $previewUrl = '';
         if ($cmsAvailable && $post !== []) {
             try {
-                $cmsPageId = $this->cmsEditor->syncCmsPageFromPost($post);
+                $cmsPageId = $this->cmsEditor->findCmsPageId($post);
+                if ($cmsPageId <= 0) {
+                    $cmsPageId = $this->cmsEditor->syncCmsPageFromPost($post);
+                }
                 if ($cmsPageId > 0) {
                     $themeEditorUrl = $this->cmsEditor->buildThemeEditorUrl($cmsPageId, $postLocale);
                     $previewUrl = $this->cmsEditor->buildPreviewUrl($cmsPageId, $postLocale);
@@ -203,10 +225,22 @@ final class PostAdmin extends BackendController
         $this->assign('media_identity_scope', $this->resolveMediaIdentityScope($websiteSelect['options'], $websiteId));
         $this->assign('cms_available', $cmsAvailable);
         $this->assign('cms_page_id', $cmsPageId);
+        $this->assign(
+            'cms_editor_state',
+            $cmsPageId > 0 && $post !== []
+                ? $this->cmsEditor->buildEditorBridgeState($cmsPageId, $postLocale, $post)
+                : [],
+        );
         $this->assign('theme_editor_url', $themeEditorUrl);
         $this->assign('preview_url', $previewUrl);
         $listQuery = ['website_id' => $websiteId];
         $this->assign('list_url', $this->getUrl('blog/backend/post-admin/index', $listQuery));
+        $this->assign('translation_versions', $postId > 0 ? $this->translations->versions($postId) : []);
+        $this->assign('translation_target_codes', array_values(array_diff($this->translations->enabledLocales($websiteId), [$postLocale])));
+        $this->assign('translation_missing_codes', $postId > 0 ? $this->translations->missingLocales($postId, $websiteId, $postLocale) : []);
+        $this->assign('auto_translate_enabled', $this->translations->isAutoTranslateEnabled());
+        $this->assign('translate_url', $this->getUrl('blog/backend/post-admin/post-translate'));
+        $this->assign('auto_translate_url', $this->getUrl('blog/backend/post-admin/post-auto-translate'));
         $this->assign('suggest_slug_url', $this->getUrl('blog/backend/post-admin/post-suggest-slug'));
 
         return (string)$this->fetch('Weline_Blog::templates/backend/post-admin/form.phtml');
@@ -226,6 +260,67 @@ final class PostAdmin extends BackendController
             'data' => $result,
         ]);
     }
+
+    #[Acl('Weline_Blog::save', 'AI 翻译博客文章', 'mdi-translate', '把博客文章翻译并保存为目标语言版本')]
+    public function postTranslate(): string
+    {
+        $payload = ['success' => false, 'msg' => (string)__('翻译未执行'), 'data' => []];
+        try {
+            $postId = max(0, (int)$this->request->getPost('post_id', 0));
+            $raw = $this->request->getPost('locales', []);
+            if (!is_array($raw)) {
+                $raw = preg_split('/[,;\s]+/', (string)$raw) ?: [];
+            }
+            $locales = [];
+            foreach ($raw as $locale) {
+                $locale = trim((string)$locale);
+                if ($locale !== '') {
+                    $locales[$locale] = $locale;
+                }
+            }
+            $options = [
+                'overwrite' => (int)$this->request->getPost('overwrite', 0) === 1,
+                'as_draft' => (int)$this->request->getPost('as_draft', 0) === 1,
+            ];
+            $result = $this->translations->translatePost($postId, array_values($locales), $options);
+            $simulated = !empty($result['simulation']);
+            $success = !$simulated
+                && $result['errors'] === []
+                && ($result['created'] !== [] || $result['updated'] !== [] || $result['skipped'] !== []);
+            if ($simulated) {
+                $msg = (string)__('当前是模拟 AI（fake）：已生成预览，但结果不会写入数据库。');
+            } elseif ($success) {
+                $msg = (string)__('翻译完成：新建 %{1}，更新 %{2}，跳过 %{3}。', [count($result['created']), count($result['updated']), count($result['skipped'])]);
+            } else {
+                $msg = (string)__('翻译未全部成功：%{1}', [implode('; ', array_slice($result['errors'], 0, 3)) ?: (string)__('没有可翻译的目标语言')]);
+            }
+            $payload = ['success' => $success, 'msg' => $msg, 'data' => $result];
+        } catch (\Throwable $exception) {
+            $payload = ['success' => false, 'msg' => $exception->getMessage(), 'data' => []];
+        }
+
+        return $this->fetchJson($payload);
+    }
+
+    #[Acl('Weline_Blog::save', 'AI 自动补齐博客译文', 'mdi-translate-off', '开关：保存文章时自动补齐缺失语言译文')]
+    public function postAutoTranslate(): string
+    {
+        $payload = ['success' => false, 'msg' => (string)__('开关未保存'), 'data' => []];
+        try {
+            $enabled = (int)$this->request->getPost('enabled', 0) === 1;
+            $this->translations->setAutoTranslateEnabled($enabled);
+            $payload = [
+                'success' => true,
+                'msg' => $enabled ? (string)__('已开启 AI 自动补齐') : (string)__('已关闭 AI 自动补齐'),
+                'data' => ['enabled' => $enabled],
+            ];
+        } catch (\Throwable $exception) {
+            $payload = ['success' => false, 'msg' => $exception->getMessage(), 'data' => []];
+        }
+
+        return $this->fetchJson($payload);
+    }
+
 
     #[Acl('Weline_Blog::delete', '删除博客文章', 'mdi-delete-outline', '删除博客文章')]
     public function postDelete(): string

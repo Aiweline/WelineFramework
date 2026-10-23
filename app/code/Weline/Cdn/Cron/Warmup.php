@@ -13,6 +13,7 @@ namespace Weline\Cdn\Cron;
 
 use Weline\Cdn\Service\WarmupCollectService;
 use Weline\Cdn\Service\WarmupRunner;
+use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupBusyGate;
 use Weline\Framework\Cron\CronTaskInterface;
 
 /**
@@ -25,6 +26,7 @@ class Warmup implements CronTaskInterface
     public function __construct(
         private readonly WarmupCollectService $collectService,
         private readonly WarmupRunner $warmupRunner,
+        private readonly ?StorefrontWarmupBusyGate $busyGate = null,
     ) {
     }
 
@@ -50,6 +52,15 @@ class Warmup implements CronTaskInterface
 
     public function execute(): string
     {
+        $busy = ($this->busyGate ?? new StorefrontWarmupBusyGate())->sample();
+        if ($busy['busy'] && $busy['ratio'] >= $busy['abort_threshold']) {
+            return \sprintf(
+                'CDN预热让出: reason=%s ratio=%.3f source=%s',
+                $busy['reason'],
+                $busy['ratio'],
+                $busy['source'],
+            );
+        }
         $collect = $this->collectService->collectAllProviders();
         if (\Weline\Framework\Setup\Lock\SetupUpgradeIntent::shouldYield()) {
             return (string)__('因系统升级意图提前结束计划任务。');

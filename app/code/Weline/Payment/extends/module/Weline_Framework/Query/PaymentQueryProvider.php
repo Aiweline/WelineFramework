@@ -14,10 +14,12 @@ use Weline\Payment\Interface\ProviderInterface;
 use Weline\Payment\Model\PaymentMethod;
 use Weline\Payment\Service\PaymentCustomerGuideRegistry;
 use Weline\Payment\Service\PaymentGuideI18nService;
+use Weline\Payment\Service\PaymentMethodIconResolver;
 use Weline\Payment\Service\PaymentMethodManager;
 use Weline\Payment\Service\PaymentObjectScopeService;
 use Weline\Payment\Service\PaymentScopeConfigService;
 use Weline\Payment\Service\PaymentTransactionAccessService;
+use Weline\Payment\Service\PayPalJsSdkUrlBuilder;
 use Weline\Framework\Event\EventsManager;
 
 class PaymentQueryProvider implements QueryProviderInterface
@@ -52,6 +54,7 @@ class PaymentQueryProvider implements QueryProviderInterface
             'auditPaymentGuideI18n' => $this->auditPaymentGuideI18n($params),
             'enqueuePaymentGuideAiTranslation' => $this->enqueuePaymentGuideAiTranslation($params),
             'listExpressMethods' => $this->listExpressMethods($params),
+            'paypalCardFieldsConfig' => $this->paypalCardFieldsConfig($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Payment query provider does not support operation: %{1}', [$operation])
             ),
@@ -75,6 +78,76 @@ class PaymentQueryProvider implements QueryProviderInterface
 
         return [
             'methods' => $facade->listExpressMethods($params),
+        ];
+    }
+
+    /**
+     * Browser-safe PayPal Card Fields bootstrap config (public client id + SDK URL).
+     * Never returns client secret or any credential material.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function paypalCardFieldsConfig(array $params): array
+    {
+        $method = $this->methodManager->getMethodByCode('paypal');
+        if ($method === null || !$this->methodManager->isMethodActiveForScope($method, $params)) {
+            return [
+                'enabled' => false,
+                'method_code' => 'paypal',
+                'reason' => 'paypal_method_inactive',
+            ];
+        }
+
+        $scope = (new PaymentScopeConfigService())->resolveScope($params);
+        $config = $this->methodManager->getRuntimeConfig($method, $scope);
+        $rawEnabled = $config['card_fields_enabled'] ?? '1';
+        $enabled = !($rawEnabled === false
+            || $rawEnabled === 0
+            || $rawEnabled === '0'
+            || $rawEnabled === ''
+            || $rawEnabled === null);
+
+        $currency = strtoupper(trim((string) ($params['currency'] ?? $config['default_currency'] ?? 'USD')));
+        if (!\preg_match('/^[A-Z]{3}$/', $currency)) {
+            $currency = 'USD';
+        }
+
+        $meta = (new PayPalJsSdkUrlBuilder())->walletMeta($config, [
+            'components' => 'buttons,card-fields,googlepay,applepay',
+            'currency' => $currency,
+            'intent' => 'capture',
+        ]);
+        $clientId = trim((string) ($meta['client_id'] ?? ''));
+        $sdkSrc = trim((string) ($meta['js_sdk_src'] ?? ''));
+        $cssUrl = '';
+        try {
+            $cssUrl = (new PaymentMethodIconResolver())->toPublicUrl('Weline_Payment::css/paypal-card-fields.css');
+        } catch (\Throwable) {
+            $cssUrl = '';
+        }
+
+        return [
+            'enabled' => $enabled && $clientId !== '' && $sdkSrc !== '',
+            'method_code' => 'paypal',
+            'client_id' => $clientId,
+            'sdk_src' => $sdkSrc,
+            'css_url' => $cssUrl,
+            'currency' => $currency,
+            'environment' => (string) ($scope['environment'] ?? 'sandbox'),
+            'sca_method' => 'SCA_WHEN_REQUIRED',
+            'reason' => $enabled ? '' : 'card_fields_disabled',
+            'labels' => [
+                'card_number' => (string) __('卡号'),
+                'expiry' => (string) __('有效期'),
+                'cvv' => (string) __('安全码'),
+                'hint' => (string) __('卡信息由 PayPal 安全托管，本站不接触卡号与安全码。若需使用 PayPal 账户余额或钱包，请直接点「提交订单」走 PayPal 跳转。'),
+                'error_3ds_canceled' => (string) __('3D Secure 验证已取消，请重试。'),
+                'error_card_failed' => (string) __('银行卡支付失败，请检查卡信息后重试。'),
+                'error_create_order' => (string) __('创建支付订单失败，请重试。'),
+                'error_capture_failed' => (string) __('支付确认失败，请稍后在订单页查看状态。'),
+                'error_generic' => (string) __('支付失败，请重试。'),
+            ],
         ];
     }
 
@@ -687,6 +760,19 @@ class PaymentQueryProvider implements QueryProviderInterface
                     'params' => [],
                     'returns' => $commonReturns,
                     'summary' => 'Read available checkout payment methods as code-label pairs.',
+                ],
+                [
+                    'name' => 'paypalCardFieldsConfig',
+                    'frontend' => true,
+                    'external' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [
+                        ['name' => 'currency', 'type' => 'string', 'required' => false],
+                    ],
+                    'returns' => $commonReturns,
+                    'summary' => 'Read browser-safe PayPal Card Fields bootstrap config (client id + SDK URL).',
                 ],
                 [
                     'name' => 'getPaymentMethod',

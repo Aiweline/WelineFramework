@@ -142,6 +142,9 @@ final class ServerRuntimeContractsTest extends TestCase
             'WlsRuntimeStorefrontWarmup::testLowMemoryWorkerTightensDeferredBagPrimeDefaults' => function () {
             $this->assert_WlsRuntimeStorefrontWarmup_testLowMemoryWorkerTightensDeferredBagPrimeDefaults();
         },
+            'WlsRuntimeTiming::testWorkerFiberCapturesHandleStartTimeForAdmissionWait' => function () {
+            $this->assert_WlsRuntimeTiming_testWorkerFiberCapturesHandleStartTimeForAdmissionWait();
+        },
         ];
     }
 
@@ -667,5 +670,25 @@ private function assert_WlsRuntimeStorefrontWarmup_testLowMemoryWorkerTightensDe
     self::assertSame(512, $parse->invoke($runtime, '512M'));
     self::assertSame(768, $parse->invoke($runtime, '768M'));
     self::assertSame(0, $parse->invoke($runtime, '-1'));
+}
+
+private function assert_WlsRuntimeTiming_testWorkerFiberCapturesHandleStartTimeForAdmissionWait(): void
+{
+    $root = '/Users/weline/Project/Official/框架/app/code/Weline/Server';
+    $worker = (string) \file_get_contents($root . '/bin/worker.php');
+    self::assertStringContainsString(
+        '$admissionWaitMs = \round((wlsWorkerMonotonicNow() - $handleStartTime) * 1000, 2);',
+        $worker
+    );
+    $fiberUsePos = \strpos($worker, '$requestFiber = new \Fiber(function () use (');
+    self::assertNotFalse($fiberUsePos);
+    $useClose = \strpos($worker, ') {', $fiberUsePos);
+    self::assertNotFalse($useClose);
+    $useList = \substr($worker, $fiberUsePos, $useClose - $fiberUsePos);
+    self::assertStringContainsString('$handleStartTime', $useList, 'worker.php Fiber use-list must capture handleStartTime');
+    $runtime = (string) \file_get_contents($root . '/Runtime/WlsRuntime.php');
+    self::assertStringContainsString("'queue_wait_ms'", $runtime);
+    self::assertStringContainsString('resolveAdmissionWaitMs', $runtime);
+    self::assertStringContainsString('600_000.0', $runtime);
 }
 }

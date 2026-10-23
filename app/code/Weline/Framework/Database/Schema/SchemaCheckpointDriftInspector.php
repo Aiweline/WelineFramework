@@ -4,18 +4,14 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database\Schema;
 
+use Weline\Database\Model\Release\SchemaCheckpoint;
+use Weline\Database\Service\Release\SchemaManifestBuilder;
 use Weline\Framework\Database\ConnectionFactory;
-use Weline\Framework\Database\Schema\Shard\ShardSchemaFamilyProviderRegistry;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Module\Config\ModuleFileReader;
-use Weline\Framework\Module\Handle;
-use Weline\Framework\Output\Cli\Printing;
-use Weline\Framework\Setup\Model\Migration;
-use Weline\Framework\Setup\Stage\SchemaDiffStage;
 
 /**
- * Read-only drift detection: declared Model fingerprints vs stored checkpoints.
- * Reuses SchemaDiffStage::prepare fingerprint path (no second hash algorithm).
+ * Read-only drift detection: declared SchemaManifest checksums vs stored RSSE
+ * SchemaCheckpoint rows.
  */
 final class SchemaCheckpointDriftInspector
 {
@@ -48,85 +44,90 @@ final class SchemaCheckpointDriftInspector
             }
         }
 
-        /** @var SchemaDiffStage $stage */
-        $stage = ObjectManager::make(SchemaDiffStage::class, [
-            'moduleHandle' => ObjectManager::getInstance(Handle::class),
-            'moduleReader' => ObjectManager::getInstance(ModuleFileReader::class),
-            'connectionFactory' => ObjectManager::getInstance(ConnectionFactory::class),
-            'schemaParser' => ObjectManager::getInstance(SchemaParser::class),
-            'dbSchemaReader' => ObjectManager::getInstance(DbSchemaReader::class),
-            'diffEngine' => ObjectManager::getInstance(SchemaDiffEngine::class),
-            'executor' => ObjectManager::getInstance(SchemaMigrationExecutor::class),
-            'printing' => ObjectManager::getInstance(Printing::class),
-            'schemaProviderRegistry' => ObjectManager::getInstance(ShardSchemaFamilyProviderRegistry::class),
-        ]);
-        $stage->prepare([
-            'operation_id' => 'schema-check-' . bin2hex(random_bytes(4)),
-        ]);
+        $builder = ObjectManager::getInstance(SchemaManifestBuilder::class);
+        $manifest = $builder->build($filter === [] ? [] : array_keys($filter));
+        $connectionFactory = ObjectManager::getInstance(ConnectionFactory::class);
 
-        /** @var Migration $migration */
-        $migration = ObjectManager::getInstance(Migration::class);
-        $fingerprints = $stage->getModuleSchemaFingerprints();
-        $fingerprintCandidates = $stage->getModuleSchemaFingerprintCandidates();
-        $versions = $stage->getModuleVersions();
+        $checkpointModel = new SchemaCheckpoint();
+        $checkpointModel->setConnection($connectionFactory);
+
+        $allExpectedTables = [];
+        foreach ((array)($manifest['modules'] ?? []) as $module) {
+            if (is_array($module)) {
+                foreach (array_keys((array)($module['tables'] ?? [])) as $tableName) {
+                    $allExpectedTables[(string)$tableName] = true;
+                }
+            }
+        }
+
         $drifts = [];
         $checked = 0;
-
-        foreach ($versions as $moduleName => $moduleVersion) {
+        foreach ((array)($manifest['modules'] ?? []) as $moduleName => $module) {
             $moduleName = (string)$moduleName;
-            $moduleVersion = trim((string)$moduleVersion);
-            if ($filter !== [] && !isset($filter[$moduleName])) {
+            if (!is_array($module)) {
                 continue;
             }
+            $moduleVersion = trim((string)($module['version'] ?? ''));
             if ($moduleVersion === '' || !preg_match('/^\d+\.\d+\.\d+/', $moduleVersion)) {
                 continue;
             }
             $checked++;
-            $tables = is_array($fingerprints[$moduleName] ?? null) ? $fingerprints[$moduleName] : [];
-            $existing = $migration->getSchemaCheckpoint($moduleName, $moduleVersion);
-            $format = (int)($existing['format'] ?? Migration::SCHEMA_CHECKPOINT_FORMAT_CURRENT);
-            $expectedChecksum = $migration->schemaCheckpointChecksum($tables, $format);
-            if ($existing === null) {
-                // No checkpoint yet is not "drift" for CI — only mismatch on existing version.
+
+            $rows = (clone $checkpointModel)->clearData()->reset()
+                ->where(SchemaCheckpoint::schema_fields_MODULE_NAME, $moduleName)
+                ->where(SchemaCheckpoint::schema_fields_MODULE_VERSION, $moduleVersion)
+                ->order(SchemaCheckpoint::schema_fields_ID, 'DESC')
+                ->limit(1)
+                ->select()
+                ->fetchArray();
+            $existing = $rows[0] ?? null;
+            if (!is_array($existing)) {
+                // No checkpoint yet is not drift for CI; only mismatch is.
                 continue;
             }
-            if (hash_equals((string)$existing['checksum'], $expectedChecksum)) {
+
+            $expectedChecksum = (string)($module['checksum'] ?? '');
+            if ($expectedChecksum === '') {
+                $expectedChecksum = hash(
+                    'sha256',
+                    (string)json_encode($module['tables'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                );
+            }
+            if (hash_equals((string)($existing[SchemaCheckpoint::schema_fields_CHECKSUM] ?? ''), $expectedChecksum)) {
                 continue;
             }
-            $candidates = is_array($fingerprintCandidates[$moduleName] ?? null)
-                ? $fingerprintCandidates[$moduleName]
-                : [];
-            $compatible = false;
-            foreach ($candidates as $candidate) {
-                if (!is_array($candidate)) {
-                    continue;
+
+            $stored = json_decode((string)($existing[SchemaCheckpoint::schema_fields_TABLES_JSON] ?? ''), true);
+            $storedTableMap = is_array($stored['tables'] ?? null) ? $stored['tables'] : [];
+            $expectedTableMap = (array)($module['tables'] ?? []);
+            $storedTables = array_keys($storedTableMap);
+            $expectedTables = array_keys($expectedTableMap);
+            $added = array_values(array_diff($expectedTables, $storedTables));
+            $removed = array_values(array_diff($storedTables, $expectedTables));
+            $changed = [];
+            foreach (array_intersect($storedTables, $expectedTables) as $tableName) {
+                if ((string)($storedTableMap[$tableName] ?? '') !== (string)($expectedTableMap[$tableName] ?? '')) {
+                    $changed[] = (string)$tableName;
                 }
-                $candidateChecksum = $migration->schemaCheckpointChecksum($candidate, $format);
-                if (hash_equals((string)$existing['checksum'], $candidateChecksum)) {
-                    $compatible = true;
-                    break;
-                }
             }
-            if ($compatible) {
+            $moved = array_values(array_filter(
+                $removed,
+                static fn(string $tableName): bool => isset($allExpectedTables[$tableName]),
+            ));
+            if ($added === [] && $changed === [] && count($moved) === count($removed)) {
+                // Table ownership moved to another equivalent module; not schema drift.
                 continue;
             }
-            $diff = Migration::diffSchemaCheckpointTables(
-                is_array($existing['tables'] ?? null) ? $existing['tables'] : [],
-                $tables,
-            );
-            // Rebuild expected tables via checksum path may leave raw fingerprints unordered;
-            // diff against payload tables when possible.
-            $expectedPayloadTables = $tables;
+
             $drifts[] = [
                 'module' => $moduleName,
                 'version' => $moduleVersion,
-                'suggested_version' => Migration::suggestNextModuleVersion($moduleVersion),
-                'changed_tables' => $diff['changed'],
-                'added_tables' => $diff['added'],
-                'removed_tables' => $diff['removed'],
-                'existing_checksum' => (string)$existing['checksum'],
+                'suggested_version' => $this->suggestNextVersion($moduleVersion),
+                'changed_tables' => $changed,
+                'added_tables' => $added,
+                'removed_tables' => $removed,
+                'existing_checksum' => (string)($existing[SchemaCheckpoint::schema_fields_CHECKSUM] ?? ''),
                 'expected_checksum' => $expectedChecksum,
-                'expected_table_count' => count($expectedPayloadTables),
             ];
         }
 
@@ -135,5 +136,14 @@ final class SchemaCheckpointDriftInspector
             'drifts' => $drifts,
             'checked_modules' => $checked,
         ];
+    }
+
+    private function suggestNextVersion(string $version): ?string
+    {
+        if (preg_match('/^(\d+)\.(\d+)\.(\d+)/', $version, $matches) !== 1) {
+            return null;
+        }
+
+        return $matches[1] . '.' . $matches[2] . '.' . ((int)$matches[3] + 1);
     }
 }

@@ -1037,6 +1037,13 @@ final class FullPageCacheCoordinatorTest extends TestCase
                 ->invoke($coordinator, $receipt),
             'Framework rebuild-wait soft-serve may still resolve the previous generation key.',
         );
+
+        $receipt['page_generation'] = 'demo/v1~bbbbbbbbbbbb';
+        self::assertNull(
+            (new \ReflectionMethod($coordinator, 'internalHomepageReceiptSoftServeCacheKey'))
+                ->invoke($coordinator, $receipt),
+            'A changed theme page generation must not soft-serve the previous homepage when the new generation has no FPC.',
+        );
     }
 
     public function testHomepageReceiptRetainsItsTranslationSnapshotAcrossOtherRequestLanguages(): void

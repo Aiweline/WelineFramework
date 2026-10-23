@@ -23,7 +23,6 @@ final class Install implements InstallInterface
         /** @var FaqItem $item */
         $item = ObjectManager::getInstance(FaqItem::class);
         $modelSetup->putModel($item);
-        $item->setup($modelSetup, $context);
 
         ObjectManager::getInstance(FaqService::class)->seedSiteHubFaqs(0, '');
         $templateSeed = ObjectManager::getInstance(\Weline\Faq\Service\FaqTemplateSeedService::class);

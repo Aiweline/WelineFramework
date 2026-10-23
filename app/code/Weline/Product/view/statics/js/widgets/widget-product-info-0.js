@@ -573,9 +573,12 @@ window.WelineWidgetAssets.register('product-product-info-0', function (widgetScr
     let liveRefreshTimer = null;
     let liveRefreshToken = 0;
 
+    function liveAvailabilityEnabled() {
+        return variantAxes.dataset.variantLive === '1';
+    }
+
     function scheduleLiveAvailabilityRefresh() {
-        const liveUrl = variantAxes.dataset.variantLiveUrl || '';
-        if (!liveUrl) {
+        if (!liveAvailabilityEnabled()) {
             return;
         }
         if (liveRefreshTimer) {
@@ -584,32 +587,43 @@ window.WelineWidgetAssets.register('product-product-info-0', function (widgetScr
         liveRefreshTimer = setTimeout(refreshLiveAvailability, 120);
     }
 
+    async function loadProductApi() {
+        const weline = window.Weline;
+        if (weline && (!weline.Api || typeof weline.Api.resource !== 'function') && typeof weline.use === 'function') {
+            await weline.use('api');
+        }
+        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+            throw new Error('Weline.Api unavailable');
+        }
+        return window.Weline.Api.resource('product');
+    }
+
     async function refreshLiveAvailability() {
-        const liveUrl = variantAxes.dataset.variantLiveUrl || '';
-        if (!liveUrl) {
+        if (!liveAvailabilityEnabled()) {
             return;
         }
         const token = ++liveRefreshToken;
+        let payload = null;
         try {
-            const params = new URLSearchParams();
-            params.set('product_id', String(Number(widgetScript.dataset.v2)));
-            const response = await fetch(liveUrl + '?' + params.toString(), {
-                credentials: 'same-origin',
-                headers: { Accept: 'application/json' },
-                cache: 'no-store',
-            });
-            if (!response.ok || token !== liveRefreshToken) {
-                return;
-            }
-            const payload = await response.json();
-            if (token !== liveRefreshToken || !payload || !payload.success || !Array.isArray(payload.offers)) {
-                return;
-            }
-            mergeLiveOffers(payload.offers);
-            applySelection(selection, { pinnedAxes: [], syncUrl: false });
+            const productApi = await loadProductApi();
+            payload = await productApi.getVariantAvailability(
+                { product_id: Number(widgetScript.dataset.v2) || 0 },
+                { silent: true },
+            );
         } catch (error) {
-            // Embedded catalog snapshot remains usable when live refresh fails.
+            // Embedded catalog snapshot stays usable; the refresh failure is still reported.
+            console.warn('[product-info] live variant availability refresh failed', error);
+            return;
         }
+        if (token !== liveRefreshToken) {
+            return;
+        }
+        if (!payload || payload.success !== true || !Array.isArray(payload.offers)) {
+            console.warn('[product-info] live variant availability unavailable', payload && payload.message);
+            return;
+        }
+        mergeLiveOffers(payload.offers);
+        applySelection(selection, { pinnedAxes: [], syncUrl: false });
     }
 
     function isOfferStocked(offer) {

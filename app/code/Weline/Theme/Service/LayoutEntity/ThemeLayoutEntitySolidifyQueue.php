@@ -80,6 +80,45 @@ final class ThemeLayoutEntitySolidifyQueue
     }
 
     /**
+     * Circuit breaker for a slot whose bake keeps failing.
+     *
+     * Open = `fail_count >= theme.layout_entity.solidify_circuit_failures` (default 3) and the
+     * last failure is younger than `theme.layout_entity.solidify_circuit_cooldown_seconds`
+     * (default 900). While open the request gate must serve the source template **without**
+     * forbidding shared FPC and without re-enqueueing. After cooldown the circuit is half-open:
+     * one more enqueue is allowed; success clears the record, failure re-opens it.
+     *
+     * @return array{open:bool,fail_count:int,failed_at:int,threshold:int,cooldown_seconds:int,reason:string}
+     */
+    public function circuitState(ThemeLayoutEntitySolidifySerialKey $key): array
+    {
+        $threshold = max(1, (int)(Env::get('theme.layout_entity.solidify_circuit_failures', 3) ?: 3));
+        $cooldown = max(60, (int)(Env::get('theme.layout_entity.solidify_circuit_cooldown_seconds', 900) ?: 900));
+        $state = $this->jobs->failureState($key);
+        if ($state === null) {
+            return [
+                'open' => false,
+                'fail_count' => 0,
+                'failed_at' => 0,
+                'threshold' => $threshold,
+                'cooldown_seconds' => $cooldown,
+                'reason' => '',
+            ];
+        }
+        $open = $state['fail_count'] >= $threshold
+            && (time() - $state['failed_at']) < $cooldown;
+
+        return [
+            'open' => $open,
+            'fail_count' => $state['fail_count'],
+            'failed_at' => $state['failed_at'],
+            'threshold' => $threshold,
+            'cooldown_seconds' => $cooldown,
+            'reason' => $state['fail_reason'],
+        ];
+    }
+
+    /**
      * Cron / tests: drain up to $limit durable jobs.
      *
      * @return array{processed:int,skipped:int,failed:int,folded?:array{folded:int,removed:int,slots:int}}
@@ -163,6 +202,12 @@ final class ThemeLayoutEntitySolidifyQueue
             $this->leases->release($key);
             if ($ok && !$dirty) {
                 $this->jobs->delete($key);
+                // Bake landed after earlier failures: pages may have entered shared FPC
+                // rendered from the source template while the circuit was open — bump
+                // the scoped theme generation so readers pick up the derived layout.
+                if ($this->jobs->clearFailure($key)) {
+                    $this->invalidateScopeAfterRecovery($key);
+                }
             } elseif ($failed) {
                 $this->jobs->moveToFailed($key, $failReason !== '' ? $failReason : 'drain_fail');
             }
@@ -279,14 +324,25 @@ final class ThemeLayoutEntitySolidifyQueue
         }
 
         // Selection may point at a draft lifecycle row; seal + mark so readers/bake agree.
+        // Only persist when something actually changes: every save() emits a resource
+        // change (namespace bump) and markPublished() invalidates chrome pointers — doing
+        // that on each bake of an already-sealed, already-published version restarts
+        // storefront warmup and drops hot caches for nothing.
+        $needsSeal = false;
         if ((int)$version->getContentRevision() < 1) {
             $version->setContentRevision(1);
+            $needsSeal = true;
         }
         if ((string)$version->getLifecycle() !== \Weline\Theme\Model\ThemeScopeVersion::LIFECYCLE_SEALED) {
             $version->setLifecycle(\Weline\Theme\Model\ThemeScopeVersion::LIFECYCLE_SEALED);
+            $needsSeal = true;
         }
-        $version->save();
-        $this->scopeVersions->markPublished($version);
+        if ($needsSeal) {
+            $version->save();
+        }
+        if ($needsSeal || !$version->isPublished()) {
+            $this->scopeVersions->markPublished($version);
+        }
 
         $versionId = (int)$version->getVersionId();
         // rematerialize may return '' when candidate is intentionally null (no entity
@@ -338,6 +394,33 @@ final class ThemeLayoutEntitySolidifyQueue
         // Slot-scoped stamp path: survives V bump with same fingerprint.
         $this->stamps->write($stampKey, $expectedFp);
         $this->stamps->write($key, $expectedFp);
+    }
+
+    /**
+     * After a slot recovers from dead-letter, bump the scoped Theme generation so FPC
+     * entries rendered from the source template (circuit open) are superseded.
+     */
+    private function invalidateScopeAfterRecovery(ThemeLayoutEntitySolidifySerialKey $key): void
+    {
+        try {
+            $version = $this->resolveVersionForBake($key);
+            if ($version === null) {
+                return;
+            }
+            $identity = new \Weline\Theme\Api\Version\ThemeVersionIdentity(
+                $key->themeId,
+                $key->canonicalScope,
+                $key->storeMode,
+                $key->area,
+                (int)$version->getVersionId(),
+                'formal',
+                max(1, (int)$version->getContentRevision()),
+            );
+            ObjectManager::getInstance(\Weline\Theme\Service\ThemeRuntimeCacheCleaner::class)
+                ->invalidateAfterVersionPublish($identity, 'theme_layout_solidify_circuit_recovered');
+        } catch (\Throwable $e) {
+            Env::log_error('theme/layout_solidify_queue', 'circuit_recovery_invalidate_failed: ' . $e->getMessage() . ' key=' . $key->toString());
+        }
     }
 
     private function resolveVersionForBake(ThemeLayoutEntitySolidifySerialKey $key): ?\Weline\Theme\Model\ThemeScopeVersion

@@ -55,4 +55,20 @@ final class AddressCountryProfileServiceTest extends TestCase
         self::assertSame('省份', $profile['labels']['province'] ?? null);
         self::assertSame('邮政编码', $profile['labels']['postal_code'] ?? null);
     }
+
+    public function testProfileCarriesPhoneRuleForFrontend(): void
+    {
+        $service = new AddressCountryProfileService();
+        $cn = $service->profileFor('CN');
+        self::assertIsArray($cn['phone'] ?? null);
+        self::assertSame('86', $cn['phone']['dial_code']);
+        self::assertSame(11, $cn['phone']['national_max']);
+
+        $unknown = $service->profileFor('ZZ');
+        self::assertArrayHasKey('phone', $unknown);
+        self::assertNull($unknown['phone']);
+
+        $all = $service->allProfiles();
+        self::assertSame('1', $all['countries']['US']['phone']['dial_code'] ?? null);
+    }
 }

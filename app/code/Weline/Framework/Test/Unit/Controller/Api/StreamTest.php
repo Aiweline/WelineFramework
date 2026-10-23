@@ -72,6 +72,39 @@ final class StreamTest extends TestCase
         self::assertFalse($method->invoke($stream, 'heartbeat'));
     }
 
+    public function testMenuSignalWatchRotatesInsteadOfTerminalDone(): void
+    {
+        $reflection = new \ReflectionClass(\Weline\Frontend\Controller\Api\Stream::class);
+        /** @var \Weline\Frontend\Controller\Api\Stream $stream */
+        $stream = $reflection->newInstanceWithoutConstructor();
+        $method = $reflection->getMethod('isRotatingObservationChannel');
+
+        self::assertTrue($method->invoke($stream, 'admin.menuSignalWatch'));
+        self::assertTrue($method->invoke($stream, 'runtime_task.events'));
+        self::assertFalse($method->invoke($stream, 'admin.menuSignals'));
+        self::assertFalse($method->invoke($stream, 'page_builder.aiSiteStream'));
+    }
+
+    public function testAttestedBackendObservationChannelsStayNamed(): void
+    {
+        self::assertTrue(\Weline\Framework\Service\Query\FrontendQueryGateway::isAttestedBackendObservationChannel(
+            'admin',
+            'menuSignalWatch'
+        ));
+        self::assertTrue(\Weline\Framework\Service\Query\FrontendQueryGateway::isAttestedBackendObservationChannel(
+            'runtime_task',
+            'events'
+        ));
+        self::assertFalse(\Weline\Framework\Service\Query\FrontendQueryGateway::isAttestedBackendObservationChannel(
+            'admin',
+            'menuSignals'
+        ));
+        self::assertFalse(\Weline\Framework\Service\Query\FrontendQueryGateway::isAttestedBackendObservationChannel(
+            'admin',
+            'adminRequest'
+        ));
+    }
+
     public function testRuntimeTaskChannelDoesNotUseGenericTransportTerminalMarkers(): void
     {
         $reflection = new \ReflectionClass(Stream::class);

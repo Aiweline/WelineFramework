@@ -1,0 +1,30 @@
+{
+  "module": "Weline_Cdn",
+  "skills": [
+    {
+      "skill_id": "doc:cdn-zone-bind-and-push",
+      "name": "cdn-zone-bind-and-push",
+      "aliases": [
+        "cdn-zone-bind-and-push",
+        "CDN 搬迁",
+        "CDN 复制",
+        "CDN 迁移",
+        "CDN 配置迁移",
+        "CDN 配置拷贝",
+        "站间复制 CDN",
+        "Cloudflare 配置复制",
+        "Cloudflare 配置迁移",
+        "配置 CDN 域名",
+        "挂 Zone",
+        "推送缓存规则",
+        "推送 Cache Rules",
+        "Cache Rules 是空的",
+        "CDN 账户有了但没推规则",
+        "cloudflare cache rules",
+        "weline-cdn-zone-bind-and-push"
+      ],
+      "path": "app/code/Weline/Cdn/doc/ai/skills/cdn-zone-bind-and-push/SKILL.md",
+      "description": "Owns CDN/Cloudflare move, copy, and migration: reseal the token with the target app key, bind one apex CDN domain that inherits the default account, and push Cache Rules. Does not raw-copy secret_ref or domain-pool ids."
+    }
+  ]
+}

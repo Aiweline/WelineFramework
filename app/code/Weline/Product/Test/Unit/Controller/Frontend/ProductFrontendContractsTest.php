@@ -447,7 +447,6 @@ private function assert_ProductDetailTemplate_testDetailShimFetchesProductInfoTh
         $shim,
         'raw __DIR__ include of product-info bypasses Taglib (T_DIR → source dir) and leaks @url into HTML',
     );
-    self::assertStringContainsString('data-variant-live-url="@url{\'weline_product/frontend/api/variant-availability\'}"', (string) file_get_contents(BP . 'app/code/Weline/Product/view/templates/frontend/widgets/product-info.phtml'));
 
     // Optional local design overlay (often gitignored): must compile module bytes, never raw-include.
     $hanfuOverlay = BP . 'app/design/Weline/hanfu/Weline_Product/templates/frontend/widgets/product-info.phtml';
@@ -559,8 +558,11 @@ private function assert_ProductDetailTemplate_testDetailTemplateUsesPublishedOff
     self::assertStringContainsString('@url{\'products\'}', $template);
     self::assertStringContainsString('@widget.code {product-info}', $template);
     self::assertStringContainsString('product-main', $template);
-    self::assertStringContainsString('data-variant-live-url', $template);
+    self::assertStringContainsString('data-variant-live="1"', $template);
+    self::assertStringNotContainsString('data-variant-live-url', $template);
     self::assertStringContainsString('refreshLiveAvailability', $variantJs);
+    self::assertStringContainsString('productApi.getVariantAvailability(', $variantJs);
+    self::assertStringNotContainsString('fetch(liveUrl', $variantJs);
     self::assertStringNotContainsString('scope:', $template);
     self::assertStringNotContainsString('website_id:', $template);
     self::assertStringNotContainsString('store_code:', $template);
@@ -614,7 +616,7 @@ private function assert_ProductDetailTemplate_testConfigurableDetailRequiresAnEx
     self::assertStringContainsString('resolveOptionGallery', $variantJs);
     self::assertStringContainsString('全局 EAV 选项图板仅表示', (string) file_get_contents(BP . 'app/code/Weline/Product/Service/StorefrontVariantAxisResolver.php'));
     self::assertStringContainsString('clearVariantOptionSwatchImages', (string) file_get_contents(BP . 'app/code/Weline/Product/Service/ProductCatalogEavBootstrap.php'));
-    self::assertStringContainsString('data-variant-live-url', $template);
+    self::assertStringContainsString('data-variant-live="1"', $template);
     self::assertStringContainsString('refreshLiveAvailability', $variantJs);
     self::assertStringContainsString('mergeLiveOffers', $variantJs);
     self::assertStringContainsString('Availability API returns raw catalog unit_price_minor', $variantJs);
@@ -628,7 +630,10 @@ private function assert_ProductDetailTemplate_testConfigurableDetailRequiresAnEx
     self::assertStringNotContainsString('$this->snapshots->resolve(', $service);
     self::assertStringContainsString('attachPrimarySupplier', $service);
     self::assertStringContainsString('supplier_name', $service);
-    self::assertStringContainsString('VariantAvailability', (string) file_get_contents(BP . 'app/code/Weline/Product/Controller/Frontend/Api/VariantAvailability.php'));
+    $queryProvider = (string) file_get_contents(BP . 'app/code/Weline/Product/extends/module/Weline_Framework/Query/ProductQueryProvider.php');
+    self::assertStringContainsString("'name' => 'getVariantAvailability'", $queryProvider);
+    self::assertStringContainsString('StorefrontVariantAvailabilityService::class', $queryProvider);
+    self::assertFileDoesNotExist(BP . 'app/code/Weline/Product/Controller/Frontend/Api/VariantAvailability.php');
     self::assertStringNotContainsString('axios', $template);
 }
 

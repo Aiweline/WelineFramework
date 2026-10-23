@@ -27,15 +27,18 @@ class CachePurger
     private ObjectManager $objectManager;
     private AdapterResolver $adapterResolver;
     private AccountManager $accountManager;
+    private FpcPolicyTargetService $targets;
 
     public function __construct(
         ObjectManager $objectManager,
         AdapterResolver $adapterResolver,
-        AccountManager $accountManager
+        AccountManager $accountManager,
+        FpcPolicyTargetService $targets
     ) {
         $this->objectManager = $objectManager;
         $this->adapterResolver = $adapterResolver;
         $this->accountManager = $accountManager;
+        $this->targets = $targets;
     }
 
     /**
@@ -126,8 +129,62 @@ class CachePurger
     }
 
     /**
+     * 清理该 CDN 域名下属于其站点的全部公网入口（站点 URL、店铺 URL、站点绑定域名、绑定根域别名），
+     * 外加调用方给出的同区域 base。无路径 base 合并为一次 hosts，带路径 base 合并为一次 prefixes。
+     *
+     * @param list<string> $extraBaseUrls
+     * @return list<array<string,mixed>> 每次适配器调用的结果
+     */
+    public function purgeDomainPublicScope(Domain $domain, array $extraBaseUrls = []): array
+    {
+        $domainId = (int)$domain->getData(Domain::schema_fields_DOMAIN_ID);
+        $bound = strtolower(rtrim(trim((string)$domain->getData(Domain::schema_fields_DOMAIN_NAME)), '.'));
+        if ($domainId < 1 || $bound === '') {
+            return [];
+        }
+        $bases = [];
+        foreach ($extraBaseUrls as $baseUrl) {
+            $host = strtolower(rtrim((string)parse_url(trim((string)$baseUrl), PHP_URL_HOST), '.'));
+            if ($host === $bound || str_ends_with($host, '.' . $bound)) {
+                $bases[] = (string)$baseUrl;
+            }
+        }
+        foreach ($this->targets->publicEndpoints($domain) as $endpoint) {
+            $bases[] = $endpoint['base_url'];
+        }
+        $hosts = [];
+        $prefixes = [];
+        foreach ($bases as $baseUrl) {
+            $host = strtolower(rtrim((string)parse_url($baseUrl, PHP_URL_HOST), '.'));
+            if ($host === '') {
+                continue;
+            }
+            $path = rtrim((string)parse_url($baseUrl, PHP_URL_PATH), '/');
+            if ($path === '') {
+                $hosts[$host] = $host;
+            } else {
+                $prefixes[$host . $path] = $host;
+            }
+        }
+        foreach ($prefixes as $prefix => $host) {
+            if (isset($hosts[$host])) {
+                unset($prefixes[$prefix]);
+            }
+        }
+        $results = [];
+        if ($hosts !== []) {
+            $results[] = $this->purge($domainId, 'hosts', ['hosts' => array_values($hosts)]);
+        }
+        if ($prefixes !== []) {
+            $results[] = $this->purge($domainId, 'prefixes', ['prefixes' => array_keys($prefixes)]);
+        }
+
+        return $results;
+    }
+
+    /**
      * Website 保存触发的 CDN 清理入口。
-     * 已绑定域名时按公开基址 purge；未绑定域名时仍返回可观测的 triggered（本机闭环用）。
+     * 已绑定域名时清该站全部公网入口与变更前后的站点 URL；未绑定域名时仍返回可观测的 triggered（本机闭环用）。
      *
      * @param list<string> $urls
      * @return array{success:bool,triggered:bool,skipped?:bool,message?:string,data?:mixed}
@@ -167,30 +224,25 @@ class CachePurger
             if (!$domain instanceof Domain) {
                 continue;
             }
-            $domainId = (int)$domain->getData(Domain::schema_fields_DOMAIN_ID);
-            if ($domainId < 1) {
-                continue;
-            }
-            if ($normalized === []) {
-                $host = trim((string)$domain->getData(Domain::schema_fields_DOMAIN_NAME));
-                if ($host !== '') {
-                    $results[] = $this->purge($domainId, 'hosts', ['hosts' => [$host]]);
-                }
-                continue;
-            }
-            foreach ($normalized as $baseUrl) {
-                $results[] = $this->purgePublicScope($domainId, $baseUrl);
+            foreach ($this->purgeDomainPublicScope($domain, $normalized) as $result) {
+                $results[] = $result;
             }
         }
         $success = $results !== [];
+        $failures = [];
         foreach ($results as $result) {
-            $success = $success && (($result['success'] ?? false) === true);
+            if (($result['success'] ?? false) !== true) {
+                $success = false;
+                $failures[] = (string)($result['message'] ?? '');
+            }
         }
 
         return [
             'success' => $success,
             'triggered' => true,
-            'message' => $success ? (string)__('缓存清理成功') : (string)__('缓存清理失败'),
+            'message' => $success
+                ? (string)__('缓存清理成功')
+                : (string)__('缓存清理失败') . ($failures !== [] ? '：' . implode('；', $failures) : ''),
             'data' => $results,
         ];
     }

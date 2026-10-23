@@ -270,6 +270,13 @@
             load: "lazy",
             description: "PayPal JS SDK：Google Pay / Apple Pay funding 按钮容器"
         },
+        paypalCardFields: {
+            origin_paths: ["app/code/Weline/Payment/view/statics/js/paypal-card-fields.js?v=20261023-cardfields1"],
+            paths: ["Weline_Payment::js/paypal-card-fields.js?v=20261023-cardfields1"],
+            globalVar: "WelineModules",
+            load: "eager",
+            description: "PayPal 站内银行卡收银台（Card Fields / ACDC）"
+        },
         paymentHandoff: {
             origin_paths: ["app/code/Weline/Payment/view/statics/js/payment-handoff.js?v=20261021-payment-handoff-1"],
             paths: ["Weline_Payment::js/payment-handoff.js?v=20261021-payment-handoff-1"],
@@ -407,8 +414,8 @@
             description: "Geo定位模块（浏览器定位和IP定位）"
         },
         shippingCheckoutAddress: {
-            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20261007-address-pay-local"],
-            paths: ["Weline_Shipping::js/widgets/checkout-shipping-address.js?v=20261007-address-pay-local"],
+            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js?v=20261023-phone-intl-1"],
+            paths: ["Weline_Shipping::js/widgets/checkout-shipping-address.js?v=20261023-phone-intl-1"],
             globalVar: "WelineShippingCheckoutAddress",
             description: "结账收货地址部件"
         },
@@ -597,6 +604,7 @@
         payment: "paymentLifecycle",
         productExpressPay: "productExpressPay",
         paypalWalletButtons: "paypalWalletButtons",
+        paypalCardFields: "paypalCardFields",
         geolocation: "location",
         checkout: "checkoutLifecycle",
         checkoutExpressReview: "checkoutExpressReview",

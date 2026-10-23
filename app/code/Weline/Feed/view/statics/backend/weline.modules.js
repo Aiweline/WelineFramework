@@ -9,7 +9,7 @@ window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAlia
 Object.assign(window.WelineModulesConfig.modules, {
     feedCatalog: {
         paths: [
-            'Weline_Feed::backend/feed-catalog.js?v=20261022c'
+            'Weline_Feed::backend/feed-catalog.js?v=20261023h'
         ],
         globalVar: 'WelineFeedCatalog',
         description: '购物目录：列表、弹层新增编辑、分类挂钩、生成、启停与归档'

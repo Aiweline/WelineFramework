@@ -54,7 +54,7 @@ class FontSubsetService
     }
 
     /**
-     * Convert an absolute subset cache path to a public URL under /pub/media/font-subset/.
+     * Convert an absolute subset cache path to a public URL under /media/font-subset/.
      *
      * @throws \RuntimeException
      */
@@ -77,7 +77,7 @@ class FontSubsetService
         }
         $rel = ltrim(substr($file, strlen($rootTrim)), '/');
 
-        return '/pub/media/font-subset/' . $rel;
+        return '/media/font-subset/' . $rel;
     }
 
     /**

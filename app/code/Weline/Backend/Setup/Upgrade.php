@@ -43,16 +43,6 @@ class Upgrade implements UpgradeInterface
         if ($db->tableExist(Contact::schema_table)) {
             return;
         }
-        $db->createTable(Contact::schema_table, '联系人表（实体，可绑定多渠道配置）')
-            ->addColumn(Contact::schema_fields_ID, TableInterface::column_type_INTEGER, null, 'primary key auto_increment', '主键')
-            ->addColumn(Contact::schema_fields_user_id, TableInterface::column_type_INTEGER, null, 'not null', '后台用户 ID')
-            ->addColumn(Contact::schema_fields_contact_name, TableInterface::column_type_VARCHAR, 100, 'not null', '联系人显示名称')
-            ->addColumn(Contact::schema_fields_channel_config, TableInterface::column_type_TEXT, null, '', '按渠道的配置 JSON')
-            ->addColumn(Contact::schema_fields_channels, TableInterface::column_type_VARCHAR, 255, "default ''", '已配置渠道逗号分隔')
-            ->addColumn(Contact::schema_fields_is_enabled, TableInterface::column_type_SMALLINT, 1, 'default 1', '是否启用')
-            ->addIndex('INDEX', 'idx_user_id', [Contact::schema_fields_user_id], '用户索引')
-            ->addIndex('INDEX', 'idx_is_enabled', [Contact::schema_fields_is_enabled], '启用索引')
-            ->create();
     }
 
     /**

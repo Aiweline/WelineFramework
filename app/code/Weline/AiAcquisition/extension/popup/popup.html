@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Weline AI 获客</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <h1>Weline AI 获客</h1>
+
+  <label class="field">
+    <span>后端地址</span>
+    <input id="baseUrl" type="url" placeholder="https://example.com" autocomplete="off">
+  </label>
+
+  <label class="field">
+    <span>运行票据</span>
+    <input id="ticket" type="password" placeholder="从后台运行页复制" autocomplete="off">
+  </label>
+
+  <div class="actions">
+    <button id="start" type="button">连接并开始</button>
+    <button id="stop" type="button" disabled>停止</button>
+  </div>
+
+  <dl class="stats">
+    <dt>状态</dt>
+    <dd id="status">未连接</dd>
+    <dt>模型</dt>
+    <dd id="mode">—</dd>
+    <dt>已入库</dt>
+    <dd id="saved">0</dd>
+    <dt>搜索次数</dt>
+    <dd id="searches">0</dd>
+    <dt>当前成本</dt>
+    <dd id="cost">0</dd>
+  </dl>
+
+  <p class="hint">票据只在本次运行内存中使用，不写入浏览器存储。</p>
+
+  <ol id="logs" class="logs"></ol>
+
+  <button id="options" type="button" class="link">打开设置</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -38,6 +38,9 @@ final class StorefrontWarmupProgressLedger
      *   sitemap_docs:list<string>,
      *   extras:list<string>,
      *   locs:list<string>,
+     *   generation_authority_clock:int,
+     *   storefront_generation_fingerprint:string,
+     *   needs_rewarm:bool,
      *   updated_at:string
      * }
      */
@@ -116,6 +119,9 @@ final class StorefrontWarmupProgressLedger
      *   sitemap_docs:list<string>,
      *   extras:list<string>,
      *   locs:list<string>,
+     *   generation_authority_clock:int,
+     *   storefront_generation_fingerprint:string,
+     *   needs_rewarm:bool,
      *   updated_at:string
      * }
      */
@@ -140,6 +146,9 @@ final class StorefrontWarmupProgressLedger
             'sitemap_docs' => [],
             'extras' => [],
             'locs' => [],
+            'generation_authority_clock' => 0,
+            'storefront_generation_fingerprint' => '',
+            'needs_rewarm' => false,
             'updated_at' => '',
         ];
     }
@@ -164,6 +173,9 @@ final class StorefrontWarmupProgressLedger
      *   sitemap_docs:list<string>,
      *   extras:list<string>,
      *   locs:list<string>,
+     *   generation_authority_clock:int,
+     *   storefront_generation_fingerprint:string,
+     *   needs_rewarm:bool,
      *   updated_at:string
      * }
      */
@@ -200,8 +212,26 @@ final class StorefrontWarmupProgressLedger
             'sitemap_docs' => $this->stringList($raw['sitemap_docs'] ?? []),
             'extras' => $this->stringList($raw['extras'] ?? []),
             'locs' => $this->stringList($raw['locs'] ?? []),
+            'generation_authority_clock' => \max(0, (int)($raw['generation_authority_clock'] ?? 0)),
+            'storefront_generation_fingerprint' => \trim((string)($raw['storefront_generation_fingerprint'] ?? '')),
+            'needs_rewarm' => $this->boolValue($raw['needs_rewarm'] ?? false),
             'updated_at' => (string)($raw['updated_at'] ?? $base['updated_at']),
         ];
+    }
+
+    private function boolValue(mixed $raw): bool
+    {
+        if (\is_bool($raw)) {
+            return $raw;
+        }
+        if (\is_int($raw) || \is_float($raw)) {
+            return (int)$raw === 1;
+        }
+        if (\is_string($raw)) {
+            return \in_array(\strtolower(\trim($raw)), ['1', 'true', 'yes'], true);
+        }
+
+        return false;
     }
 
     /**

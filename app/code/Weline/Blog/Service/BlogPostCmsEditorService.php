@@ -12,6 +12,7 @@ use Weline\Cms\Service\PageLocaleService;
 use Weline\Cms\Service\PageService;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
 
 final class BlogPostCmsEditorService
 {
@@ -23,6 +24,26 @@ final class BlogPostCmsEditorService
     public function isAvailable(): bool
     {
         return class_exists(PageService::class) && class_exists(Page::class);
+    }
+
+    /**
+     * @param array<string,mixed> $post
+     */
+    public function findCmsPageId(array $post): int
+    {
+        if (!$this->isAvailable()) {
+            return 0;
+        }
+
+        $websiteId = (int)($post[Post::schema_fields_WEBSITE_ID] ?? 0);
+        $slug = trim(strtolower((string)($post[Post::schema_fields_SLUG] ?? '')));
+        if ($websiteId < 0 || $slug === '') {
+            return 0;
+        }
+
+        $existing = $this->cmsAdapter->getPageForConflictCheck($websiteId, $slug);
+
+        return (int)($existing['page_id'] ?? 0);
     }
 
     /**
@@ -113,6 +134,8 @@ final class BlogPostCmsEditorService
         $locale = trim($locale);
         $resolver = ObjectManager::getInstance(CmsEditorContextResolver::class);
         $context = $resolver->resolve($page, 0, $locale);
+        $scopeIdentity = $context->scopeIdentity->toArray();
+        $publicRoute = ltrim(trim($page->getIdentifier()), '/');
 
         $url = ObjectManager::getInstance(Url::class);
 
@@ -131,7 +154,11 @@ final class BlogPostCmsEditorService
             'theme_layout_source_target_type' => Page::TARGET_TYPE,
             'theme_layout_source_target_id' => $page->getPageId(),
             'scope' => $context->canonicalScope,
+            'scope_kind' => (string)($scopeIdentity['scope_kind'] ?? ScopeIdentity::KIND_STORE),
+            'context_version' => (string)($scopeIdentity['context_version'] ?? ScopeIdentity::CONTEXT_VERSION),
             'store_mode' => $context->storeMode,
+            'link_block' => '1',
+            'preview_entity_route' => $publicRoute,
             'locale' => $locale,
             'locale_code' => $locale,
             'website_id' => $page->getWebsiteId(),
@@ -144,6 +171,81 @@ final class BlogPostCmsEditorService
             'status' => 'draft',
             'lock_source' => 'cms',
         ]);
+    }
+
+    /**
+     * @param array<string,mixed> $post
+     * @return array<string,mixed>
+     */
+    public function buildEditorBridgeState(int $cmsPageId, string $locale, array $post = []): array
+    {
+        if (!$this->isAvailable() || $cmsPageId <= 0) {
+            return [];
+        }
+
+        $pageService = ObjectManager::getInstance(PageService::class);
+        $page = $pageService->getPageModel($cmsPageId);
+        if ($page === null) {
+            return [];
+        }
+
+        $locale = trim($locale) !== '' ? trim($locale) : trim((string)($post[Post::schema_fields_LOCALE] ?? 'zh_Hans_CN'));
+        $resolver = ObjectManager::getInstance(CmsEditorContextResolver::class);
+        $context = $resolver->resolve($page, 0, $locale);
+        $localeService = ObjectManager::getInstance(PageLocaleService::class);
+        $localePayload = $localeService->buildEditorPayload($page, $context->localeCode, $context->storeId);
+        $supportedLocales = [];
+        foreach ((array)($localePayload['supported_locales'] ?? []) as $item) {
+            if (is_array($item) && isset($item['code'])) {
+                $supportedLocales[] = (string)$item['code'];
+            } elseif (is_string($item)) {
+                $supportedLocales[] = $item;
+            }
+        }
+        $titles = is_array($localePayload['locale_titles'] ?? null) ? (array)$localePayload['locale_titles'] : [];
+        $sourceLocale = (string)($localePayload['source_locale'] ?? $locale);
+        $missingLocales = [];
+        foreach ($supportedLocales as $code) {
+            $code = trim((string)$code);
+            if ($code === '' || $code === $sourceLocale) {
+                continue;
+            }
+            if (trim((string)($titles[$code] ?? '')) === '') {
+                $missingLocales[] = $code;
+            }
+        }
+
+        return [
+            'page_id' => $cmsPageId,
+            'pageId' => $cmsPageId,
+            'websiteId' => $page->getWebsiteId(),
+            'websiteCode' => $page->getWebsiteCode(),
+            'storeId' => $context->storeId,
+            'storeCode' => $context->storeCode,
+            'storeMode' => $context->storeMode,
+            'scope' => $context->canonicalScope,
+            'publicRoute' => ltrim(trim($page->getIdentifier()), '/'),
+            'current_locale' => (string)($localePayload['current_locale'] ?? $locale),
+            'source_locale' => $sourceLocale,
+            'layout_option' => 'default',
+            'supported_locales' => $supportedLocales,
+            'titles' => $titles,
+            'translation' => [
+                'type_code' => 'cms.page_translation',
+                'missing_locales' => $missingLocales,
+                'messages' => [
+                    'button' => (string)__('翻译 CMS 页面缺失语言'),
+                    'continue' => (string)__('继续查看翻译任务'),
+                    'running' => (string)__('翻译进行中'),
+                    'save_first' => (string)__('请先保存文章设置，再翻译 CMS 页面语言。'),
+                    'ready' => (string)__('待补全 CMS 语言：'),
+                    'starting' => (string)__('正在启动翻译任务…'),
+                    'progress' => (string)__('正在翻译语言'),
+                    'complete' => (string)__('CMS 页面语言均已补全。'),
+                    'failed' => (string)__('翻译任务未完成，请稍后重试。'),
+                ],
+            ],
+        ];
     }
 
     public function buildPreviewUrl(int $cmsPageId, string $locale = ''): string
