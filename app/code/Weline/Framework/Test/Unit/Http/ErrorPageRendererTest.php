@@ -73,7 +73,7 @@ final class ErrorPageRendererTest extends TestCase
         self::assertStringContainsString('404', $html);
     }
 
-    public function testRenderHtmlPrefersStorefrontStatic404ForBackendArea(): void
+    public function testRenderHtmlDoesNotUseStorefrontStatic404ForBackendArea(): void
     {
         if (!\defined('BP')) {
             self::markTestSkipped('BP not defined');
@@ -88,13 +88,15 @@ final class ErrorPageRendererTest extends TestCase
         @\file_put_contents($file, '<!DOCTYPE html><html><body>' . $marker . '</body></html>');
 
         $previousArea = null;
-        if (\function_exists('w_env')) {
+        if (\function_exists('w_env') && \function_exists('w_env_set')) {
             try {
                 $previousArea = \w_env('area', null);
-                \w_env('area', 'backend');
+                \w_env_set('area', 'backend', 'ErrorPageRendererTest');
             } catch (\Throwable) {
                 self::markTestSkipped('w_env unavailable');
             }
+        } else {
+            self::markTestSkipped('w_env_set unavailable');
         }
 
         try {
@@ -104,11 +106,12 @@ final class ErrorPageRendererTest extends TestCase
                 'home_href' => '/',
             ]);
 
-            self::assertStringContainsString($marker, $html);
-            self::assertStringNotContainsString('w-error', $html);
+            self::assertStringNotContainsString($marker, $html);
+            self::assertStringContainsString('404', $html);
+            self::assertStringContainsString('w-error', $html);
         } finally {
-            if (\function_exists('w_env') && $previousArea !== null) {
-                \w_env('area', $previousArea);
+            if (\function_exists('w_env_set')) {
+                \w_env_set('area', \is_string($previousArea) ? $previousArea : 'frontend', 'ErrorPageRendererTest');
             }
         }
     }

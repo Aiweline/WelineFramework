@@ -6,6 +6,9 @@ namespace Weline\Framework\Test\Unit\Controller;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\App\Env;
 use Weline\Framework\Controller\PcController;
+use Weline\Framework\Http\Request;
+use Weline\Framework\Http\ResponseTerminateException;
+use Weline\Framework\Session\Session;
 use Weline\Framework\Ui\FormKey;
 
 final class PcControllerSecurityTest extends TestCase
@@ -244,5 +247,59 @@ final class PcControllerSecurityTest extends TestCase
                 'safe.token' => 'ok',
             ])
         );
+    }
+
+    public function testFormKeyPeekDoesNotMintAToken(): void
+    {
+        $session = $this->createMock(Session::class);
+        $session->expects(self::never())->method('setData');
+        $session->method('getData')->willReturn(null);
+
+        self::assertNull((new FormKey($session))->peekKey());
+    }
+
+    public function testCsrfMismatchTerminatesAsForbiddenInsteadOfMissingRoute(): void
+    {
+        $request = $this->createMock(Request::class);
+        $request->method('getMethod')->willReturn('POST');
+        $request->method('getPost')->willReturn('not-the-session-key');
+        $request->method('getContentType')->willReturn('application/json');
+        $request->method('getServer')->willReturn('');
+        $request->method('getParam')->willReturn('');
+        $request->method('getHeader')->willReturn('application/json');
+
+        $controller = new class extends PcController {
+            public function __construct()
+            {
+            }
+
+            protected function csrf(): string
+            {
+                return FormKey::key_name;
+            }
+
+            protected function getExpectedCsrfToken(string $name): ?string
+            {
+                return 'expected-token';
+            }
+
+            public function check(): void
+            {
+                $this->isAllowed();
+            }
+        };
+
+        $property = new \ReflectionProperty(PcController::class, 'request');
+        $property->setAccessible(true);
+        $property->setValue($controller, $request);
+
+        try {
+            $controller->check();
+            self::fail('CSRF mismatch must stop the request');
+        } catch (ResponseTerminateException $exception) {
+            self::assertSame(403, $exception->getStatusCode());
+            self::assertStringContainsString('页面校验已失效', $exception->getBody());
+            self::assertStringNotContainsString('404', $exception->getBody());
+        }
     }
 }

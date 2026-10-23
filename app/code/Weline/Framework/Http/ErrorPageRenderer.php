@@ -47,7 +47,7 @@ final class ErrorPageRenderer
 
         // skip_static: static 404 generators must never re-load published snapshots
         // (would bake default-site HTML into every website folder on TypeError fallback).
-        if ($statusCode === 404 && empty($context['skip_static'])) {
+        if ($statusCode === 404 && empty($context['skip_static']) && !self::requestAreaIsBackend($context)) {
             $staticHtml = self::loadStorefrontNotFoundStaticHtml($context);
             if ($staticHtml !== null) {
                 return $staticHtml;
@@ -511,6 +511,27 @@ HTML;
         }
 
         return false;
+    }
+
+    /**
+     * 后台缺页用框架错误页。店面静态 404 只服务前台。
+     *
+     * @param array<string, mixed> $context
+     */
+    private static function requestAreaIsBackend(array $context): bool
+    {
+        $area = \strtolower(\trim((string) ($context['area'] ?? '')));
+        if ($area === '') {
+            try {
+                $area = \strtolower(\trim(WelineEnv::getArea()));
+            } catch (\Throwable $throwable) {
+                \error_log('ErrorPageRenderer could not read the request area: ' . $throwable->getMessage());
+
+                return false;
+            }
+        }
+
+        return $area === 'backend' || $area === 'rest_backend';
     }
 
     /**

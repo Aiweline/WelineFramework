@@ -15,8 +15,10 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Http\ErrorPageRenderer;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -308,7 +310,8 @@ class PcController extends Core
         if ($name === FormKey::key_name) {
             /** @var FormKey $formKey */
             $formKey = ObjectManager::getInstance(FormKey::class);
-            return $formKey->getKey($this->request->getUrlBuilder()->getCurrentUrl());
+
+            return $formKey->peekKey();
         }
 
         return Token::get($name);
@@ -320,32 +323,101 @@ class PcController extends Core
             if (!$this->shouldValidateCsrfForMethod()) {
                 return;
             }
-            # form表单检测
-            if ($token = $this->getExpectedCsrfToken($name)) {
-                $request_token = $this->request->getPost($name);
-                # post 请求
-                if ($request_token and ($this->request->getPost($name) !== $token)) {
-                    $this->noRouter();
-                }
-                if (!$request_token) {
-                    # 处理api form-key和token问题
-                    if ($this->isJsonContentType($this->request->getContentType())) {
-                        $request_token = $this->request->getServer('X-CSRF-TOKEN');
-                    }
-                    if (empty($request_token)) {
-                        $request_token = $this->request->getParam('form_key');
-                    }
-                    if (empty($request_token)) {
-                        $request_token = $this->request->getParam('t');
-                    }
-                    if ($request_token !== $token) {
-                        $this->noRouter();
-                    }
-                }
-            } else {
-                $this->noRouter();
+            $expected = $this->getExpectedCsrfToken($name);
+            $submitted = $this->readSubmittedCsrfToken($name);
+            if (!\is_string($expected) || $expected === '' || !\hash_equals($expected, $submitted)) {
+                $this->denyCsrf();
             }
         }
+    }
+
+    /**
+     * 校验失败是拒绝，不是缺路由。页面请求回到当前地址并带上原因；JSON 请求回 403。
+     */
+    protected function denyCsrf(): never
+    {
+        $message = (string) __('页面校验已失效，请刷新后重试。');
+        \w_log_error('CSRF token mismatch; denial is 403, not a missing route.');
+        if ($this->wantsCsrfJsonDenial()) {
+            throw new ResponseTerminateException(
+                403,
+                (string) \json_encode([
+                    'ok' => false,
+                    'status' => 403,
+                    'error' => 'Forbidden',
+                    'message' => $message,
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ['Content-Type' => 'application/json; charset=utf-8']
+            );
+        }
+
+        try {
+            MessageManager::error($message);
+        } catch (\Throwable $throwable) {
+            \w_log_error('CSRF denial could not store a flash message: ' . $throwable->getMessage());
+            throw new ResponseTerminateException(
+                403,
+                ErrorPageRenderer::render(403, $message),
+                ['Content-Type' => 'text/html; charset=utf-8']
+            );
+        }
+
+        $target = '';
+        try {
+            if ($this->_url instanceof Url) {
+                $target = $this->_url->getCurrentUrl([], false);
+            }
+        } catch (\Throwable $throwable) {
+            \w_log_error('CSRF denial could not resolve the return URL: ' . $throwable->getMessage());
+            $target = '';
+        }
+        if ($target === '') {
+            throw new ResponseTerminateException(
+                403,
+                ErrorPageRenderer::render(403, $message),
+                ['Content-Type' => 'text/html; charset=utf-8']
+            );
+        }
+
+        $this->request->getResponse()->redirect($target);
+    }
+
+    private function readSubmittedCsrfToken(string $name): string
+    {
+        $posted = $this->request->getPost($name);
+        if (\is_string($posted) && $posted !== '') {
+            return $posted;
+        }
+        if ($this->isJsonContentType($this->request->getContentType())) {
+            $header = $this->request->getServer('X-CSRF-TOKEN');
+            if (\is_string($header) && $header !== '') {
+                return $header;
+            }
+        }
+        foreach ([$name, FormKey::key_name, 't'] as $key) {
+            $value = $this->request->getParam($key);
+            if (\is_string($value) && $value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
+    private function wantsCsrfJsonDenial(): bool
+    {
+        if ($this->isJsonContentType($this->request->getContentType())) {
+            return true;
+        }
+        $acceptHeader = $this->request->getHeader('Accept');
+        $accept = \is_array($acceptHeader)
+            ? \strtolower(\implode(',', $acceptHeader))
+            : \strtolower(\trim((string) $acceptHeader));
+        if ($accept === '' || \str_contains($accept, 'text/html')) {
+            return false;
+        }
+
+        return \str_contains($accept, 'application/json') || \str_contains($accept, '+json');
     }
 
     protected function getControllerCache(): CachePoolInterface

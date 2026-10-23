@@ -52,6 +52,21 @@ class FormKey
         return [];
     }
 
+    /**
+     * 只读已有票据。校验失败时不得在比对前另签发一把新票据。
+     */
+    public function peekKey(string $name = ''): ?string
+    {
+        $stored = $name !== ''
+            ? $this->_session->getData(self::key_name . '_' . $name)
+            : $this->_session->getData(self::key_name);
+        if (!\is_string($stored) || $stored === '') {
+            return null;
+        }
+
+        return $stored;
+    }
+
     public function getKey(string $path, string $name = ''): string
     {
         $this->setKey($name);
