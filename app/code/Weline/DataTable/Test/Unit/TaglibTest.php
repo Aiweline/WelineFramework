@@ -303,7 +303,7 @@ class TaglibTest extends TestCore
             ]);
             
             try {
-                $result = $callback('field', [], ['', '', ''], $attributes);
+                $result = $callback('field', self::runtimeConfig(), ['', '', ''], $attributes);
                 $this->assertIsString($result);
                 $this->assertStringContainsString($type, $result);
             } catch (\Exception $e) {
@@ -336,12 +336,95 @@ class TaglibTest extends TestCore
         ]);
         
         try {
-            $result = $callback('field', [], ['', '', ''], $attributes);
+            $result = $callback('field', self::runtimeConfig(), ['', '', ''], $attributes);
             $this->assertStringContainsString('type="text"', $result);
             $this->assertStringNotContainsString('invalid_type', $result);
         } finally {
             TableContext::popTag();
         }
+    }
+
+    public function testFieldLangChildCompilesToRenderCallInsteadOfPhraseMarkerSource()
+    {
+        TableContext::pushChildTag('t-header', 'lang-scope-header', ['type' => 't-header', 'scope' => 'lang-scope-header']);
+        try {
+            $compiled = Field::callback()('field', [], ['', '', '<lang>封面</lang>'], ['belong' => 't-header', 'name' => 'cover_image']);
+        } finally {
+            TableContext::popTag();
+        }
+
+        $this->assertStringContainsString('Weline\\DataTable\\Taglib\\Field::render(', $compiled);
+        $this->assertStringContainsString("'labelWord' => '封面'", $compiled);
+        $this->assertStringNotContainsString('InlinePhraseMarker', $compiled);
+        $this->assertStringNotContainsString('&lt;', $compiled);
+    }
+
+    public function testFieldLangChildRendersTranslatedLabelAtRuntime()
+    {
+        TableContext::pushChildTag('t-header', 'lang-scope-header', ['type' => 't-header', 'scope' => 'lang-scope-header']);
+        try {
+            $html = Field::callback()('field', self::runtimeConfig(), ['', '', '<lang>封面</lang>'], [
+                'belong' => 't-header',
+                'name' => 'cover_image',
+                'sortable' => 'true',
+            ]);
+        } finally {
+            TableContext::popTag();
+        }
+
+        $label = (string)__('封面');
+        $this->assertStringNotContainsString('<?', $html);
+        $this->assertStringNotContainsString('InlinePhraseMarker', $html);
+        $this->assertStringContainsString('<span>' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</span>', $html);
+        $this->assertStringContainsString(
+            'aria-label="' . htmlspecialchars((string)__('按%{1}排序', [$label]), ENT_QUOTES, 'UTF-8') . '"',
+            $html
+        );
+    }
+
+    public function testFieldRejectsMarkupLabelInHeader()
+    {
+        TableContext::pushChildTag('t-header', 'markup-scope-header', ['type' => 't-header', 'scope' => 'markup-scope-header']);
+        try {
+            $this->expectException(\Weline\Framework\App\Exception::class);
+            Field::callback()('field', [], ['', '', '<strong>Name</strong>'], ['belong' => 't-header', 'name' => 'name']);
+        } finally {
+            TableContext::popTag();
+        }
+    }
+
+    public function testHeaderLangLabelsRenderWithoutCompiledPhpOnCompileAndRuntimePaths()
+    {
+        $fields = '<w:t-header>'
+            . '<w:field belong="t-header" name="name" type="text"><lang>封面</lang></w:field>'
+            . '<w:field belong="t-header" name="email" type="text" sortable="true"><lang>标题 / Slug</lang></w:field>'
+            . '</w:t-header><w:t-body></w:t-body>';
+        $sources = [
+            'compile' => '<w:d-table id="lang-static" model="Weline\DataTable\Model\TestUser" scope="lang-static" mode="local" local-data-el="#x">'
+                . $fields . '</w:d-table>',
+            'runtime' => '<?php $actions = "[]"; ?><w:d-table id="lang-dynamic" model="Weline\DataTable\Model\TestUser" scope="lang-dynamic"'
+                . ' mode="local" local-data-el="#x" row-actions="<?= htmlspecialchars($actions) ?>">' . $fields . '</w:d-table>',
+        ];
+        $template = Template::getInstance();
+        foreach ($sources as $path => $source) {
+            $html = $template->fetchSourceHtml('datatable-lang-' . $path . '.phtml', $source, __FILE__, $path);
+            $this->assertStringNotContainsString('InlinePhraseMarker', $html, $path);
+            $this->assertStringNotContainsString('&lt;?', $html, $path);
+            $this->assertStringNotContainsString('<?', $html, $path);
+            preg_match_all('/<th\b[^>]*data-w-field="([^"]*)"/', $html, $matches);
+            $this->assertCount(2, $matches[1], $path);
+            $labels = array_map(
+                static fn (string $json): string => (string)(json_decode(html_entity_decode($json, ENT_QUOTES), true)['label'] ?? ''),
+                $matches[1]
+            );
+            $this->assertSame([(string)__('封面'), (string)__('标题 / Slug')], $labels, $path);
+        }
+    }
+
+    /** @return array<string,string> */
+    private static function runtimeConfig(): array
+    {
+        return [Taglib::RENDER_PHASE_KEY => Taglib::RENDER_PHASE_RUNTIME];
     }
 
     /**

@@ -10,7 +10,6 @@ use Weline\DataTable\Helper\TableContext;
 use Weline\DataTable\Helper\UiAssets;
 use Weline\DataTable\Service\DataTableResourceRegistry;
 use Weline\Framework\App\Exception;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Taglib\OwnsChildCompilationInterface;
 use Weline\Framework\Taglib\TaglibInterface;
 use Weline\Framework\View\Template;

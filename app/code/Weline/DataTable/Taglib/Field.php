@@ -404,7 +404,7 @@ final class Field implements TaglibInterface, OwnsChildCompilationInterface
         $result = [];
         foreach (explode(',', $raw) as $pair) {
             $parts = array_map('trim', explode(':', $pair, 2));
-            $result[] = ['value' => $parts[0], 'label' => (string)__($parts[1] ?? $parts[0])];
+            $result[] = ['value' => $parts[0], 'label' => $parts[1] ?? $parts[0]];
         }
         return $result;
     }
@@ -429,9 +429,23 @@ final class Field implements TaglibInterface, OwnsChildCompilationInterface
         return ucwords(trim($name));
     }
 
-    private static function containsTrustedMarkup(string $content): bool
+    /** 子内容恰好是一个静态 `<lang>词</lang>` 时返回词源，供渲染期翻译。 */
+    private static function staticLangWord(string $content): ?string
     {
-        return $content !== '' && strip_tags($content) !== $content;
+        if (preg_match('~^<(?:w:)?lang\s*>([^<]*)</(?:w:)?lang\s*>$~i', $content, $matches) !== 1) {
+            return null;
+        }
+        $word = trim($matches[1]);
+        if ($word === '' || str_contains($word, '{{') || str_contains($word, '@')) {
+            return null;
+        }
+        return $word;
+    }
+
+    private static function isMarkup(string $content): bool
+    {
+        return str_contains($content, '<') || str_contains($content, '{{')
+            || preg_match('/@[A-Za-z][\w:-]*\s*[({]/', $content) === 1;
     }
 
     private static function accept(string $value): string
@@ -485,7 +499,6 @@ final class Field implements TaglibInterface, OwnsChildCompilationInterface
 
     private static function jsonAttribute(array $value): string
     {
-        unset($value['content']);
         $json = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
         return self::escape($json === false ? '{}' : $json);
     }

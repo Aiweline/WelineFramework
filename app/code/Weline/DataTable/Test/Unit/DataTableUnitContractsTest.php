@@ -10,7 +10,6 @@ use Weline\DataTable\Helper\UiAssets;
 use Weline\DataTable\Taglib\Field;
 use Weline\DataTable\Taglib\Form;
 use Weline\DataTable\Taglib\Table;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Test\TestCore;
 use Weline\Framework\View\Taglib;
 use Weline\Framework\View\Template;
@@ -224,9 +223,7 @@ private function assert_TaglibFrontend_testTaglibPreservesExplicitAliasPrefixedH
         </w:t-header>
     </w:d-table>
     HTML;
-    $taglib = ObjectManager::getInstance(Taglib::class);
-    $template = ObjectManager::getInstance(Template::class);
-    $html = $taglib->tagReplace($template, $source);
+    $html = Template::getInstance()->fetchSourceHtml('datatable-alias-header-contract.phtml', $source, __FILE__, 'alias-header');
     $this->assertStringContainsString('data-field="u.name"', $html);
     $this->assertStringContainsString('data-field="o.order_no"', $html);
     $this->assertStringNotContainsString('data-field="phone"', $html);
@@ -311,7 +308,7 @@ private function assert_TaglibFrontend_testStandaloneFormFieldUsesRenderStackCon
 {
     TableContext::pushChildTag('d-form', 'frontend-standalone-form', ['type' => 'd-form', 'scope' => 'frontend-standalone-form', 'model' => 'Weline\DataTable\Model\TestUser', 'attributes' => ['scope' => 'frontend-standalone-form', 'model' => 'Weline\DataTable\Model\TestUser', 'allow-frontend' => true]]);
     $callback = Field::callback();
-    $html = $callback('field', [], ['', '', 'Name'], ['belong' => 'd-form', 'name' => 'name', 'type' => 'text', 'label' => 'Name']);
+    $html = $callback('field', [Taglib::RENDER_PHASE_KEY => Taglib::RENDER_PHASE_RUNTIME], ['', '', 'Name'], ['belong' => 'd-form', 'name' => 'name', 'type' => 'text', 'label' => 'Name']);
     TableContext::popTag();
     $this->assertIsString($html);
     $this->assertStringContainsString('data-field="name"', $html);
