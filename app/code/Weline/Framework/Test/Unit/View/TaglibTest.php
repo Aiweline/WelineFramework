@@ -227,6 +227,31 @@ class TaglibTest extends TestCore
     }
 
     /**
+     * 多行 block 的最后一个 @lang 紧挨 />。?> 会吞掉换行，占位符不能粘上 `/`。
+     */
+    public function testBlockLangAttributeBeforeSelfCloseStaysValidPhp(): void
+    {
+        $template = new Template();
+        $content = "<block class='Weline\\Component\\Block\\OffCanvas'\n"
+            . "       template='Weline_Component::off-canvas.phtml'\n"
+            . "       title='@lang(添加域名)'\n"
+            . "       target-button-text='@lang(添加域名)'\n"
+            . "/>";
+        $parse_str = $this->taglib->tagReplace($template, $content);
+
+        self::assertStringNotContainsString("emit('添加域名', true)?>", $parse_str);
+        self::assertSame(2, substr_count($parse_str, "InlinePhraseMarker::emit('添加域名', true)"));
+        $tmp = tempnam(sys_get_temp_dir(), 'w_block_lang_close_');
+        self::assertNotFalse($tmp);
+        file_put_contents($tmp, $parse_str);
+        $lint = [];
+        $code = 0;
+        exec('php -l ' . escapeshellarg($tmp) . ' 2>&1', $lint, $code);
+        @unlink($tmp);
+        self::assertSame(0, $code, implode("\n", $lint));
+    }
+
+    /**
      * 测试混合内容属性值（文本 + PHP 表达式）
      */
     public function testMixedAttributeValueRuntime()

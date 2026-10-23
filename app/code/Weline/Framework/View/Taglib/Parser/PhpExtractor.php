@@ -120,6 +120,9 @@ final class PhpExtractor
                         if ($inPhp) {
                             $phpBuffer .= $text;
                             $result .= $this->createPlaceholder($phpBuffer, $phpStartLine, $isEcho);
+                            // 关闭标签后的换行属于 T_CLOSE_TAG。不补回 HTML 流时，下一行的斜杠
+                            // 会粘进无引号属性值，restore 后变成 ParseError。
+                            $result .= self::htmlSeparatorAfterCloseTag($text);
                             $phpBuffer = '';
                             $inPhp = false;
                         } else {
@@ -234,6 +237,10 @@ final class PhpExtractor
                         if ($inPhp) {
                             $phpBuffer .= $text;
                             yield $this->createPlaceholder($phpBuffer, $phpStartLine, $isEcho);
+                            $separator = self::htmlSeparatorAfterCloseTag($text);
+                            if ($separator !== '') {
+                                yield $separator;
+                            }
                             $phpBuffer = '';
                             $inPhp = false;
                         } else {
@@ -343,6 +350,22 @@ final class PhpExtractor
     public function getPlaceholders(): array
     {
         return $this->placeholders;
+    }
+
+    /**
+     * token_get_all 把紧跟 ?> 的换行算进关闭标签。占位符若把这段空白从 HTML 流里拿走，
+     * 下一行的 `/>` 会粘到无引号属性值上。
+     */
+    private static function htmlSeparatorAfterCloseTag(string $closeTagText): string
+    {
+        if (\str_ends_with($closeTagText, "\r\n")) {
+            return "\r\n";
+        }
+        if (\str_ends_with($closeTagText, "\n") || \str_ends_with($closeTagText, "\r")) {
+            return "\n";
+        }
+
+        return '';
     }
 
     /**

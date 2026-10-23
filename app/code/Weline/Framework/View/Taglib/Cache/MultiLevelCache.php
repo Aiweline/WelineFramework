@@ -58,8 +58,7 @@ final class MultiLevelCache
      */
     public function get(Template $template, string $path, string $content): ?string
     {
-        // 计算内容哈希（使用 xxh3，比 md5 快 10 倍）
-        $hash = hash('xxh3', $content);
+        $hash = $this->contentHash($content);
         
         // L0: 进程内 WeakMap（最快）
         $result = $this->l0->getByTemplate($template, $hash);
@@ -96,7 +95,7 @@ final class MultiLevelCache
      */
     public function getByPath(string $path, string $content): ?string
     {
-        $hash = hash('xxh3', $content);
+        $hash = $this->contentHash($content);
 
         // L0: 路径缓存
         $result = $this->l0->get($path, $hash);
@@ -131,7 +130,7 @@ final class MultiLevelCache
      */
     public function set(Template $template, string $path, string $content, string $compiled): void
     {
-        $hash = hash('xxh3', $content);
+        $hash = $this->contentHash($content);
 
         // 写入所有层
         $this->l0->setByTemplate($template, $compiled, $hash);
@@ -144,11 +143,19 @@ final class MultiLevelCache
      */
     public function setByPath(string $path, string $content, string $compiled): void
     {
-        $hash = hash('xxh3', $content);
+        $hash = $this->contentHash($content);
 
         $this->l0->set($path, $hash, $compiled);
         $this->l1->set($path, $hash, $compiled);
         $this->l3->set($path, $hash, $compiled);
+    }
+
+    /**
+     * 编译器代次必须进键。只哈希模板正文时，修完 Taglib 仍会命中旧的坏 PHP。
+     */
+    private function contentHash(string $content): string
+    {
+        return hash('xxh3', \Weline\Framework\View\Taglib::COMPILER_GENERATION . "\0" . $content);
     }
 
     /**

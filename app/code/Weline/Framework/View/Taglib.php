@@ -53,7 +53,7 @@ class Taglib
      * Bumped when compiled Taglib output shape changes (e.g. form body capture).
      * Embedded into Template compile hash so view/tpl cannot keep stale PHP.
      */
-    public const COMPILER_GENERATION = '20261018-url-literal-root-relative-v8';
+    public const COMPILER_GENERATION = '20261023-block-lang-attr-v9';
 
     // PHP 标签常量，避免在回调函数中重复定义
     private const PHP_OPEN_TAG = '<' . '?';
@@ -569,8 +569,12 @@ class Taglib
 
         $trimmed = \trim($value);
         $extractor = $this->activeCompileExtractor ?? $this->phpExtractor;
-        if ($extractor instanceof PhpExtractor && $extractor->isPlaceholder($trimmed)) {
-            $expr = $extractor->getExpression($trimmed);
+        $placeholder = $trimmed;
+        if (\preg_match('/^(__PHP_\d+__)\/$/', $trimmed, $glued) === 1) {
+            $placeholder = $glued[1];
+        }
+        if ($extractor instanceof PhpExtractor && $extractor->isPlaceholder($placeholder)) {
+            $expr = $extractor->getExpression($placeholder);
             if (\is_string($expr) && $expr !== '') {
                 return '(' . \rtrim(\trim($expr), ';') . ')';
             }
