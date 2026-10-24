@@ -319,3 +319,7 @@ app/code/Weline/Ai/Test/Http/Backend/batch-test-results.json
 app/code/Weline/AiAcquisition/view/statics/downloads/ai-acquisition-extension.zip
 app/code/Weline/AiAcquisition/view/statics/downloads/weline-extension-installer-mac.zip
 var/ai_acquisition_extension/
+
+# 融媒体扩展包产物（按需打包，不进 Git）
+app/code/Weline/Social/view/statics/icons/social-extension.zip
+app/code/Weline/Social/view/statics/downloads/*.zip
