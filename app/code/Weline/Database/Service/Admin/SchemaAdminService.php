@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Database\Service\Admin;
 
-use Weline\Framework\Database\Service\BackupService;
 use Weline\Framework\Database\Connection\Api\AtomicPhysicalTableChangeInterface;
 use Weline\Framework\Database\Connection\Api\AtomicPhysicalViewChangeInterface;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
@@ -12,13 +11,16 @@ use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
 use Weline\Framework\Database\Connection\Api\PhysicalTableMetadataInterface;
 use Weline\Framework\Database\Connection\Api\PhysicalViewIdentity;
 use Weline\Framework\Database\Connection\Api\PhysicalViewMetadataInterface;
+use Weline\Database\Service\Release\BackupCatalog;
+use Weline\Database\Service\Release\ColumnBackupService;
 use Weline\Framework\Database\ConnectionFactory;
 
 class SchemaAdminService
 {
     public function __construct(
         private readonly ConnectionFactory $connectionFactory,
-        private readonly BackupService $backupService
+        private readonly ColumnBackupService $columnBackupService,
+        private readonly BackupCatalog $backupCatalog,
     ) {
     }
 
@@ -61,6 +63,7 @@ class SchemaAdminService
                 }
                 return $this->executeConnectorStatement($connector, $sql);
             },
+            $column,
         );
     }
 
@@ -81,6 +84,7 @@ class SchemaAdminService
                 );
                 return $this->executeConnectorStatement($connector, $sql);
             },
+            $column,
         );
     }
 
@@ -221,6 +225,7 @@ class SchemaAdminService
         PhysicalTableIdentity $identity,
         string $action,
         callable $ddl,
+        ?string $backupColumn = null,
     ): int
     {
         $connector = $this->physicalConnector();
@@ -230,32 +235,40 @@ class SchemaAdminService
 
         return $connector->atomicPhysicalTableChange(
             $identity,
-            function (ConnectorInterface $lockedConnector) use ($connector, $identity, $action, $ddl): int {
+            function (ConnectorInterface $lockedConnector) use (
+                $connector,
+                $identity,
+                $action,
+                $ddl,
+                $backupColumn,
+            ): int {
                 if ($lockedConnector !== $connector) {
                     throw new \RuntimeException('atomic physical table connector changed during callback');
                 }
                 self::assertPhysicalConnector($lockedConnector);
-                $this->backupBeforeHighRisk($identity, $lockedConnector, $action);
+                if ($backupColumn !== null) {
+                    $this->backupColumnBeforeChange($identity, $backupColumn);
+                }
                 return $ddl($lockedConnector);
             },
         );
     }
 
-    private function backupBeforeHighRisk(
-        PhysicalTableIdentity $identity,
-        ConnectorInterface $connector,
-        string $action,
-    ): void
+    private function backupColumnBeforeChange(PhysicalTableIdentity $identity, string $column): void
     {
-        $migrationId = $this->backupService->beginPhysicalBackupOperation(
-            $identity,
-            $action,
-            $connector,
-        );
-        $this->backupService->smartBackupPhysicalTable(
-            $identity,
-            $migrationId,
-            physicalConnector: $connector,
+        $column = trim($column);
+        if ($column === '') {
+            return;
+        }
+
+        $releaseId = 'admin-' . date('YmdHis') . '-' . bin2hex(random_bytes(4));
+        $scopeKey = 'admin:' . $identity->namespace();
+        $this->columnBackupService->backupColumn(
+            $releaseId,
+            $scopeKey,
+            $identity->canonical(),
+            $column,
+            $releaseId,
         );
     }
 
@@ -300,16 +313,6 @@ class SchemaAdminService
                 if ($locked !== $connector || !$locked instanceof PhysicalViewMetadataInterface) {
                     throw new \RuntimeException('atomic physical view connector changed during callback');
                 }
-                $migrationId = $this->backupService->beginPhysicalViewBackupOperation(
-                    $identity,
-                    $action,
-                    $locked,
-                );
-                $this->backupService->backupPhysicalViewDefinition(
-                    $identity,
-                    $migrationId,
-                    physicalConnector: $locked,
-                );
                 return $ddl($locked, $existed);
             },
         );

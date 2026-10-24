@@ -14,50 +14,14 @@ namespace Weline\Payment\Setup;
 use Weline\Framework\Setup\InstallInterface;
 use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\Payment\Model\PaymentDevRelayCommand;
-use Weline\Payment\Model\PaymentDevRelayEvent;
-use Weline\Payment\Model\PaymentDevRelaySession;
-use Weline\Payment\Model\PaymentMethod;
-use Weline\Payment\Model\PaymentMethodAttributeEntity;
-use Weline\Payment\Model\PaymentTransaction;
 
 class Install implements InstallInterface
 {
     /**
-     * 安装模块
+     * 安装模块：表结构由 Model #[Col]/#[Index] + RSSE planner 负责，本钩子无 seed。
      */
     public function setup(Setup $setup, Context $context): void
     {
-        // 安装支付方式表
-        /** @var PaymentMethod $paymentMethod */
-        $paymentMethod = ObjectManager::getInstance(PaymentMethod::class);
-        $modelSetup = ObjectManager::make(ModelSetup::class);
-        $modelSetup->putModel($paymentMethod);
-
-        // 安装支付方式 EAV 值表，不重建支付方式主表
-        /** @var PaymentMethodAttributeEntity $paymentMethodAttributeEntity */
-        $paymentMethodAttributeEntity = ObjectManager::getInstance(PaymentMethodAttributeEntity::class);
-        $modelSetup = ObjectManager::make(ModelSetup::class);
-        $modelSetup->putModel($paymentMethodAttributeEntity);
-        
-        // 安装支付交易表
-        /** @var PaymentTransaction $paymentTransaction */
-        $paymentTransaction = ObjectManager::getInstance(PaymentTransaction::class);
-        $modelSetup = ObjectManager::make(ModelSetup::class);
-        $modelSetup->putModel($paymentTransaction);
-
-        foreach ([
-            PaymentDevRelaySession::class,
-            PaymentDevRelayEvent::class,
-            PaymentDevRelayCommand::class,
-        ] as $modelClass) {
-            $model = ObjectManager::getInstance($modelClass);
-            $relaySetup = ObjectManager::make(ModelSetup::class);
-            $relaySetup->putModel($model);
-            $model->setup($relaySetup, $context);
-        }
     }
 }
 

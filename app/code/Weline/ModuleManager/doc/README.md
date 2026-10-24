@@ -19,12 +19,8 @@
 - 跨模块需要按名称查模块 ID、按名称模糊匹配 ID 或读取模块展示元数据时，只解析
   `Weline\ModuleManager\Api\ModuleCatalogInterface`。它返回 final readonly
   `ModuleCatalogEntry`，不暴露 Module Model、Query Builder 或可写能力；目录查询不会新建事务。
-- 模块版本回滚强依赖 `Weline_Database`，但只注入
-  `Weline\Database\Api\ModuleRollbackManagerInterface`。ModuleManager 不建 Model 版本表、不执行 DDL、不切换代码；
-  `weline_module` 中的代码/Database/Schema 字段只是同步查询投影。
-- 后台通过 `moduleRollback` QueryProvider 的
-  `listTargets/createPlan/start/getOperation` 引用回滚能力，浏览器端仅使用 `Weline.Api.resource()`。
-  `Weline_Framework/Weline_Database/Weline_ModuleManager` 自身在后台回滚预检中必须被阻断。
+- 模块版本回滚入口已下线，改由 `php bin/w release:rollback`（RSSE）承担；ModuleManager 不再注入模块回滚契约，
+  `weline_module` 中的代码/Database/Schema 字段仅作同步查询投影。
 
 ## 代码面概览
 

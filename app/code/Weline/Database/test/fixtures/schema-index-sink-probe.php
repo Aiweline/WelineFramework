@@ -19,7 +19,7 @@ namespace {
     use Weline\Framework\Database\ConnectionFactory;
     use Weline\Framework\Database\Schema\IndexDefinition;
     use Weline\Framework\Database\Schema\SchemaDiffOp;
-    use Weline\Framework\Database\Schema\SchemaMigrationExecutor;
+    use Weline\Database\Service\Release\SchemaDiffExecutor;
     use Weline\Framework\Manager\ObjectManager;
 
     $table = '';
@@ -43,7 +43,7 @@ namespace {
         $connector->query('CREATE TABLE ' . $table . ' (id INTEGER PRIMARY KEY, a VARCHAR(32), b VARCHAR(32))')->fetch();
         $connector->query('CREATE INDEX ' . $index . ' ON ' . $table . ' (a)')->fetch();
 
-        $executor = ObjectManager::getInstance(SchemaMigrationExecutor::class);
+        $executor = ObjectManager::getInstance(SchemaDiffExecutor::class);
         $drop = new SchemaDiffOp(
             SchemaDiffOp::KIND_DROP_INDEX,
             $table,

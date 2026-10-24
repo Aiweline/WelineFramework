@@ -874,19 +874,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                         isset($args['keep-maintenance'])
                     );
                 } finally {
-                    $setupReleaseFailed = null;
-                    try {
-                        if ($upgradeSucceeded && $this->setupOperationId !== '') {
-                            $this->releaseSucceededSetupSchemaDiffBindings($this->setupOperationId);
-                        }
-                    } catch (\Throwable $releaseError) {
-                        // B1: release failure must not look like a green upgrade (C-RB-1).
-                        $setupReleaseFailed = $releaseError;
-                        $this->printing->error(__(
-                            'setup 成功释放 schema_diff operation_id 绑定失败：%{1}',
-                            [$releaseError->getMessage()]
-                        ));
-                    }
                     try {
                         $this->metrics()->printOverview();
                     } catch (\Throwable) {
@@ -894,9 +881,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     // Clear process context after release attempt; DB bindings stay if release failed.
                     $this->setupOperationId = '';
                     $operationContext->clear();
-                    if ($setupReleaseFailed instanceof \Throwable) {
-                        $exitCode = $exitCode === 0 ? 1 : $exitCode;
-                    }
                 }
             }
 
@@ -1458,30 +1442,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         return true;
     }
 
-    /**
-     * Non-hot setup success: release this setup operation_id from installed schema_diff.
-     */
-    private function releaseSucceededSetupSchemaDiffBindings(string $operationId): void
-    {
-        $migrationClass = '\\Weline\\Database\\Model\\Migration';
-        if (!class_exists($migrationClass)) {
-            return;
-        }
-        /** @var object $migration */
-        $migration = ObjectManager::getInstance($migrationClass, [], false);
-        if (!is_object($migration)
-            || !method_exists($migration, 'releaseSucceededSetupOperationBindingsFailClosed')) {
-            return;
-        }
-        $released = (int)$migration->releaseSucceededSetupOperationBindingsFailClosed($operationId);
-        if ($released > 0) {
-            $this->printing->note(__(
-                '已释放 setup operation_id 在 %{1} 条 installed schema_diff 上的绑定',
-                [(string)$released]
-            ));
-        }
-    }
-    
     /**
      * 执行升级流程：维护模式、模块升级、注册表重新收集
      * 
@@ -2779,7 +2739,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
                 $eavSchemaStage = ObjectManager::make(EavSchemaStage::class, [
                     'eventsManager' => ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class),
-                    'migrationModel' => ObjectManager::getInstance(\Weline\Framework\Setup\Model\Migration::class),
+                    'connectionFactory' => $connectionFactory,
                     'printing' => $this->printing,
                 ]);
                 $eavSchemaStage->prepare([]);
@@ -3088,7 +3048,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $preSchemaEavStage = $this->preRouteSchemaStages['eav_schema']
                 ?? ObjectManager::make(EavSchemaStage::class, [
                 'eventsManager' => ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class),
-                'migrationModel' => ObjectManager::getInstance(\Weline\Framework\Setup\Model\Migration::class),
+                'connectionFactory' => $connectionFactory,
                 'printing' => $this->printing,
             ]);
             if (!$preSchemaEavStage->isCommitted()) {

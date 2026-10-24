@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Framework',
-        "version" => '2.5.439',
+        "version" => '2.5.440',
     "requires" => [
     ],
     "optional" => [
@@ -19,7 +19,7 @@ return [
         \Weline\Framework\Database\Schema\SchemaReaderInterface::class
             => \Weline\Framework\Database\Schema\DbSchemaReader::class,
         \Weline\Framework\Database\Schema\SchemaMigrationExecutorInterface::class
-            => \Weline\Framework\Database\Schema\SchemaMigrationExecutor::class,
+            => \Weline\Database\Service\Release\SchemaDiffExecutor::class,
         \Weline\Framework\Database\Schema\Shard\ShardSchemaProvisionerInterface::class
             => \Weline\Framework\Database\Schema\Shard\ShardSchemaProvisioner::class,
         \Weline\Framework\Api\Event\AsyncEventDeliveryRunnerInterface::class

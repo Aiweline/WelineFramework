@@ -7,20 +7,12 @@ namespace Weline\Shipping\Setup;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
-use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\UpgradeInterface;
 use Weline\Shipping\Model\Carrier;
-use Weline\Shipping\Model\CarrierRegion;
 use Weline\Shipping\Model\DeliveryAddress;
-use Weline\Shipping\Model\DestinationRegion;
 use Weline\Shipping\Model\EmbargoRegion;
 use Weline\Shipping\Model\EmbargoReason;
-use Weline\Shipping\Model\EmbargoReason\LocalDescription as EmbargoReasonLocalDescription;
-use Weline\Shipping\Model\PostalPlace\LocalDescription as PostalPlaceLocalDescription;
-use Weline\Shipping\Model\Region\LocalDescription as RegionLocalDescription;
 use Weline\Shipping\Model\ShippingService;
-use Weline\Shipping\Model\ServiceRegion;
-use Weline\Shipping\Model\Street\LocalDescription as StreetLocalDescription;
 use Weline\Shipping\Service\CarrierCoverageAdminService;
 use Weline\Shipping\Service\DefaultShippingLaneSeedService;
 use Weline\Shipping\Service\EmbargoReasonAdminService;
@@ -59,44 +51,9 @@ final class Upgrade implements UpgradeInterface
 {
     public function setup(Setup $setup, Context $context): void
     {
-        foreach ([
-            DeliveryAddress::class,
-            Carrier::class,
-            CarrierRegion::class,
-            DestinationRegion::class,
-            EmbargoRegion::class,
-            EmbargoReason::class,
-            EmbargoReasonLocalDescription::class,
-            \Weline\Shipping\Model\FreeShippingConditionType::class,
-            \Weline\Shipping\Model\FreeShippingConditionType\LocalDescription::class,
-            RegionLocalDescription::class,
-            StreetLocalDescription::class,
-            PostalPlaceLocalDescription::class,
-            ShippingService::class,
-            ServiceRegion::class,
-            \Weline\Shipping\Model\RateTemplate::class,
-            \Weline\Shipping\Model\FreeShippingRule::class,
-            \Weline\Shipping\Model\WarehouseShippingOrigin::class,
-            \Weline\Shipping\Model\ShippingProfile::class,
-            \Weline\Shipping\Model\ShippingProfileService::class,
-            \Weline\Shipping\Model\ShippingSurchargeRule::class,
-            \Weline\Shipping\Model\ShippingPackingPolicy::class,
-            \Weline\Shipping\Model\ShippingCheckoutAddon::class,
-            \Weline\Shipping\Model\ShippingSeasonalRule::class,
-            \Weline\Shipping\Model\ShippingLabelIdempotency::class,
-            \Weline\Shipping\Model\ShippingLabelOrphan::class,
-            \Weline\Shipping\Model\ShippingCommercePolicy::class,
-        ] as $modelClass) {
-            $model = ObjectManager::getInstance($modelClass);
-            $runner = ObjectManager::make(ModelSetup::class);
-            $runner->putModel($model);
-            $model->setup($runner, $context);
-        }
-
         $from = $context->getFromSetupVersion();
         if (version_compare($from, '2.9.29', '<')) {
             $this->migrateDeliveryAddressPurposeFlags();
-            $this->dropLegacyZoneSchema();
             $this->migrateConfigScopeColumns();
             $this->seedCarrierCoverageDefaults();
             $this->seedRegionLocals();
@@ -138,23 +95,6 @@ final class Upgrade implements UpgradeInterface
             $table = $quote(DeliveryAddress::schema_table);
             $checkoutCol = $quote(DeliveryAddress::schema_fields_PURPOSE_CHECKOUT);
             $receivingCol = $quote(DeliveryAddress::schema_fields_PURPOSE_RECEIVING);
-
-            try {
-                $model->reset()->query(
-                    'ALTER TABLE ' . $table
-                    . ' ADD COLUMN IF NOT EXISTS ' . $checkoutCol
-                    . ' int NOT NULL DEFAULT 1'
-                )->fetch();
-            } catch (\Throwable) {
-            }
-            try {
-                $model->reset()->query(
-                    'ALTER TABLE ' . $table
-                    . ' ADD COLUMN IF NOT EXISTS ' . $receivingCol
-                    . ' int NOT NULL DEFAULT 1'
-                )->fetch();
-            } catch (\Throwable) {
-            }
 
             $model->reset()->query(
                 'UPDATE ' . $table
@@ -277,42 +217,6 @@ final class Upgrade implements UpgradeInterface
         }
     }
 
-    private function dropLegacyZoneSchema(): void
-    {
-        try {
-            /** @var ShippingService $service */
-            $service = ObjectManager::getInstance(ShippingService::class);
-            $conn = $service->getConnection();
-            $connector = $conn->getConnector();
-            $quote = static function (string $ident) use ($connector): string {
-                if (method_exists($connector, 'quoteIdentifier')) {
-                    return (string)$connector->quoteIdentifier($ident);
-                }
-                return '"' . str_replace('"', '""', $ident) . '"';
-            };
-
-            // Drop dependent column/index first, then legacy tables.
-            try {
-                $service->reset()->query(
-                    'ALTER TABLE ' . $quote(ShippingService::schema_table)
-                    . ' DROP COLUMN IF EXISTS ' . $quote('zone_id')
-                )->fetch();
-            } catch (\Throwable) {
-                // Column may already be gone after model sync.
-            }
-
-            foreach (['w_shipping_zone_regions', 'w_shipping_zones'] as $table) {
-                try {
-                    $service->reset()->query('DROP TABLE IF EXISTS ' . $quote($table))->fetch();
-                } catch (\Throwable) {
-                    // Ignore missing tables on fresh installs.
-                }
-            }
-        } catch (\Throwable) {
-            // Connection/schema not ready; next upgrade can retry.
-        }
-    }
-
     private function seedCarrierCoverageDefaults(): void
     {
         try {
@@ -368,33 +272,11 @@ final class Upgrade implements UpgradeInterface
             };
 
             $tables = [
-                ShippingService::schema_table => ['idx_service_code', 'service_code'],
-                'w_shipping_rate_templates' => ['idx_template_code', 'template_code'],
-                'w_shipping_free_shipping_rules' => ['idx_rule_code', 'rule_code'],
+                ShippingService::schema_table,
+                'w_shipping_rate_templates',
+                'w_shipping_free_shipping_rules',
             ];
-            foreach ($tables as $table => [$legacyIndex, $codeCol]) {
-                try {
-                    $service->reset()->query(
-                        'DROP INDEX IF EXISTS ' . $quote($legacyIndex)
-                    )->fetch();
-                } catch (\Throwable) {
-                }
-                try {
-                    $service->reset()->query(
-                        'ALTER TABLE ' . $quote($table)
-                        . ' ADD COLUMN IF NOT EXISTS ' . $quote('scope_type')
-                        . " varchar(16) NOT NULL DEFAULT 'website'"
-                    )->fetch();
-                } catch (\Throwable) {
-                }
-                try {
-                    $service->reset()->query(
-                        'ALTER TABLE ' . $quote($table)
-                        . ' ADD COLUMN IF NOT EXISTS ' . $quote('scope_id')
-                        . ' int NOT NULL DEFAULT 0'
-                    )->fetch();
-                } catch (\Throwable) {
-                }
+            foreach ($tables as $table) {
                 try {
                     $service->reset()->query(
                         'UPDATE ' . $quote($table)

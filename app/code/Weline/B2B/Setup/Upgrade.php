@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\B2B\Setup;
 
-use Weline\B2B\Model\CustomerGroupRecord\LocalDescription;
 use Weline\B2B\Service\CustomerGroupLocalSeedService;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
-use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\UpgradeInterface;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
@@ -29,12 +27,6 @@ final class Upgrade implements UpgradeInterface
     {
         $fromVersion = $context->getFromSetupVersion();
         if (version_compare($fromVersion, '2.6.47', '<')) {
-            foreach ([LocalDescription::class] as $modelClass) {
-                $model = ObjectManager::getInstance($modelClass);
-                $runner = ObjectManager::make(ModelSetup::class);
-                $runner->putModel($model);
-                $model->setup($runner, $context);
-            }
             $this->seedCustomerGroupLocals();
         }
         if (version_compare($fromVersion, '2.6.62', '<')) {

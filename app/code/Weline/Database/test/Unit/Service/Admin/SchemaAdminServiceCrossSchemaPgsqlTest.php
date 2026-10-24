@@ -5,14 +5,17 @@ declare(strict_types=1);
 namespace Weline\Database\Test\Unit\Service\Admin;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Database\Model\Release\BackupObject;
+use Weline\Database\Model\Release\BackupSet;
 use Weline\Database\Service\Admin\SchemaAdminService;
+use Weline\Database\Service\Release\ReleaseTableInstaller;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Connection\Api\PhysicalTableIdentity;
 use Weline\Framework\Database\Connection\Api\PhysicalTableMetadataInterface;
 use Weline\Framework\Database\Connection\Api\Sql\PhysicalTableQueryInterface;
 use Weline\Framework\Database\Connection\Adapter\Pgsql\PgsqlIndexName;
+use Weline\Framework\Database\Schema\SchemaParser;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Model\MigrationBackup;
 
 final class SchemaAdminServiceCrossSchemaPgsqlTest extends TestCase
 {
@@ -25,6 +28,7 @@ final class SchemaAdminServiceCrossSchemaPgsqlTest extends TestCase
         $sentinel = new PhysicalTableIdentity($schema, 'w_' . $logicalTable);
         $factory = ObjectManager::getInstance(ConnectionFactory::class);
         $connector = $factory->getConnector();
+        (new ReleaseTableInstaller(new SchemaParser(), $factory))->install();
         self::assertSame('pgsql', strtolower($connector->getConfigProvider()->getDbType()));
         self::assertInstanceOf(PhysicalTableMetadataInterface::class, $connector);
         self::assertInstanceOf(PhysicalTableQueryInterface::class, $connector->getQuery());
@@ -55,6 +59,10 @@ final class SchemaAdminServiceCrossSchemaPgsqlTest extends TestCase
             );
             self::assertContains('legacy_value', array_column($metadata->getPhysicalTableColumns($identity), 'name'));
             self::assertContains('legacy_value', array_column($metadata->getPhysicalTableColumns($sentinel), 'name'));
+            $connector->query(
+                'UPDATE ' . $metadata->quotePhysicalTable($identity)
+                . " SET legacy_value = 'keep' WHERE id = 1",
+            )->fetch();
 
             $service->modifyColumn($schema, $logicalTable, 'legacy_value', 'VARCHAR(255)');
             $exactColumns = $metadata->getPhysicalTableColumns($identity);
@@ -79,45 +87,56 @@ final class SchemaAdminServiceCrossSchemaPgsqlTest extends TestCase
             self::assertNotContains('legacy_value', array_column($metadata->getPhysicalTableColumns($identity), 'name'));
             self::assertContains('legacy_value', array_column($metadata->getPhysicalTableColumns($sentinel), 'name'));
 
-            $backups = ObjectManager::getInstance(MigrationBackup::class, [], false)
-                ->reset()
-                ->where(MigrationBackup::schema_fields_TABLE_NAME, $qualifiedTable)
-                ->where(MigrationBackup::schema_fields_BACKUP_TYPE, MigrationBackup::TYPE_STRUCTURE)
+            $backupSets = (new BackupSet())->setConnection($factory)->reset()
+                ->where(BackupSet::schema_fields_SCOPE_KEY, 'admin:' . $schema)
+                ->order(BackupSet::schema_fields_ID, 'ASC')
                 ->select()
-                ->fetch()
-                ->getItems();
-            self::assertCount(4, $backups);
-            $migrationIds = [];
-            foreach ($backups as $backup) {
-                $migrationIds[] = (int)$backup->getData(MigrationBackup::schema_fields_MIGRATION_ID);
-                self::assertSame($identity->canonical(), $backup->getData(MigrationBackup::schema_fields_TABLE_NAME));
+                ->fetchArray();
+            self::assertCount(2, $backupSets, 'modify/drop column should create two backup sets');
+            foreach ($backupSets as $backupSet) {
+                self::assertMatchesRegularExpression(
+                    '/\Aadmin-\d{14}-[a-f0-9]{8}\z/',
+                    (string)$backupSet[BackupSet::schema_fields_RELEASE_ID],
+                );
+                self::assertSame(
+                    'admin:' . $schema,
+                    (string)$backupSet[BackupSet::schema_fields_SCOPE_KEY],
+                );
+                $objects = (new BackupObject())->setConnection($factory)->reset()
+                    ->where(
+                        BackupObject::schema_fields_BACKUP_SET_ID,
+                        (int)$backupSet[BackupSet::schema_fields_ID],
+                    )
+                    ->where(BackupObject::schema_fields_OBJECT_TYPE, BackupObject::OBJECT_TYPE_COLUMN)
+                    ->select()
+                    ->fetchArray();
+                self::assertCount(1, $objects);
+                self::assertSame($identity->canonical(), (string)$objects[0][BackupObject::schema_fields_TABLE_NAME]);
+                self::assertSame('legacy_value', (string)$objects[0][BackupObject::schema_fields_COLUMN_NAME]);
                 self::assertStringNotContainsString(
                     'sentinel',
-                    (string)$backup->getData(MigrationBackup::schema_fields_BACKUP_DATA),
+                    (string)$objects[0][BackupObject::schema_fields_DATA_JSON],
                 );
             }
-            self::assertCount(4, array_unique($migrationIds));
-            $anchors = ObjectManager::getInstance(MigrationBackup::class, [], false)
-                ->reset()
-                ->where(MigrationBackup::schema_fields_TABLE_NAME, $qualifiedTable)
-                ->where(MigrationBackup::schema_fields_BACKUP_TYPE, MigrationBackup::TYPE_OPERATION)
-                ->select()
-                ->fetch()
-                ->getItems();
-            self::assertCount(4, $anchors);
-            $anchorIds = array_map(
-                static fn(MigrationBackup $anchor): int => (int)$anchor->getId(),
-                $anchors,
-            );
-            sort($anchorIds);
-            sort($migrationIds);
-            self::assertSame($anchorIds, $migrationIds);
+
         } finally {
-            ObjectManager::getInstance(MigrationBackup::class, [], false)
-                ->reset()
-                ->where(MigrationBackup::schema_fields_TABLE_NAME, $identity->canonical())
-                ->delete()
-                ->fetch();
+            $cleanupSets = (new BackupSet())->setConnection($factory)->reset()
+                ->where(BackupSet::schema_fields_SCOPE_KEY, 'admin:' . $schema)
+                ->select()
+                ->fetchArray();
+            foreach ($cleanupSets as $cleanupSet) {
+                (new BackupObject())->setConnection($factory)->reset()
+                    ->where(
+                        BackupObject::schema_fields_BACKUP_SET_ID,
+                        (int)$cleanupSet[BackupSet::schema_fields_ID],
+                    )
+                    ->delete()
+                    ->fetch();
+                (new BackupSet())->setConnection($factory)->reset()
+                    ->where(BackupSet::schema_fields_ID, (int)$cleanupSet[BackupSet::schema_fields_ID])
+                    ->delete()
+                    ->fetch();
+            }
             $connector->query("DROP SCHEMA {$quotedSchema} CASCADE")->fetch();
         }
     }

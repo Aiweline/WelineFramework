@@ -9,6 +9,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Theme\Service\StaticPublishFingerprint;
+use Weline\Theme\Service\StaticPublishGate;
 use Weline\Theme\Service\StorefrontNotFoundStaticGenerator;
 
 /**
@@ -29,6 +30,13 @@ final class SetupUpgradeAfterPublishNotFoundStatic implements ObserverInterface
     {
         $eventData = $event->getData();
         if (\is_array($eventData) && !empty($eventData['is_partial_upgrade'])) {
+            return;
+        }
+
+        $args = \is_array($eventData) && \is_array($eventData['args'] ?? null) ? $eventData['args'] : [];
+        $skipReason = StaticPublishGate::skipReason($args);
+        if ($skipReason !== null) {
+            $this->printing->note(__('404 静态发布已跳过（%{reason}）', ['reason' => $skipReason]));
             return;
         }
 

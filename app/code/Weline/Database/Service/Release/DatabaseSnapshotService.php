@@ -143,6 +143,82 @@ final class DatabaseSnapshotService implements DatabaseSnapshotInterface
         };
 
         $this->reconcileCatalog($row, $path, $checksum);
+
+        // After a PG/MySQL restore, sequences are restored to their snapshot-time
+        // values. Any rows inserted after the snapshot (and then erased by the restore)
+        // left the sequence behind. Reset all RSSE table sequences to avoid PK collisions.
+        if ($engine === self::ENGINE_PGSQL) {
+            $this->resetRsseSequences();
+        }
+    }
+
+    /**
+     * Build an engine-appropriate upsert statement for reconciling restored
+     * snapshot metadata. PG uses ON CONFLICT, MySQL/MariaDB use ON DUPLICATE KEY.
+     *
+     * @param array<int, string> $cols
+     */
+    private function prepareReconcileUpsert(\PDO $pdo, string $table, array $cols): \PDOStatement
+    {
+        $engine = $this->normalizeEngine(
+            (string) ($this->connectionFactory->getConnector()->getConfigProvider()->getDbType() ?? ''),
+        );
+        if ($engine === self::ENGINE_MYSQL) {
+            // MySQL/MariaDB: backtick identifiers + ON DUPLICATE KEY UPDATE.
+            // The model table name already carries backtick-qualified db + table.
+            $colList = implode(', ', array_map(static fn (string $c): string => '`' . $c . '`', $cols));
+            $placeholders = implode(', ', array_fill(0, count($cols) + 1, '?'));
+            $set = implode(', ', array_map(
+                static fn (string $c): string => '`' . $c . '` = VALUES(`' . $c . '`)',
+                $cols,
+            ));
+
+            return $pdo->prepare(
+                'INSERT INTO ' . $table . ' (`snapshot_id`, ' . $colList . ') VALUES (' . $placeholders . ')'
+                . ' ON DUPLICATE KEY UPDATE ' . $set,
+            );
+        }
+
+        // PostgreSQL / SQLite: double-quote identifiers + ON CONFLICT.
+        $colList = implode(', ', array_map(static fn (string $c): string => '"' . $c . '"', $cols));
+        $placeholders = implode(', ', array_fill(0, count($cols) + 1, '?'));
+        $set = implode(', ', array_map(
+            static fn (string $c): string => '"' . $c . '" = EXCLUDED."' . $c . '"',
+            $cols,
+        ));
+
+        return $pdo->prepare(
+            'INSERT INTO ' . $table . ' ("snapshot_id", ' . $colList . ') VALUES (' . $placeholders . ')'
+            . ' ON CONFLICT ("snapshot_id") DO UPDATE SET ' . $set,
+        );
+    }
+
+    private function resetRsseSequences(): void
+    {
+        $connector = $this->connectionFactory->getConnector();
+        $pdo = $connector->getWrappedConnection()->getPdo();
+        $rsseTables = [
+            'weline_schema_release' => 'release_id',
+            'weline_schema_snapshot' => 'snapshot_id',
+            'weline_schema_backup_set' => 'set_id',
+            'weline_schema_backup_object' => 'object_id',
+            'weline_schema_change' => 'change_id',
+            'weline_schema_operation_event' => 'event_id',
+            'weline_schema_checkpoint' => 'checkpoint_id',
+            'weline_schema_scope' => 'scope_id',
+            'weline_schema_table_owner' => 'owner_id',
+            'weline_schema_data_transform_progress' => 'progress_id',
+            'weline_schema_physical_state' => 'state_id',
+        ];
+        foreach ($rsseTables as $tableName => $idColumn) {
+            try {
+                $seqName = $tableName . '_' . $idColumn . '_seq';
+                $maxId = $pdo->query("SELECT COALESCE(MAX(\"{$idColumn}\"), 0) FROM \"{$tableName}\"")->fetchColumn();
+                $pdo->exec("SELECT setval('{$seqName}', " . (int)$maxId . ', true)');
+            } catch (\Throwable) {
+                // Table might not exist or not have a sequence; skip silently
+            }
+        }
     }
 
     public function verify(string $snapshotId): bool
@@ -212,8 +288,26 @@ final class DatabaseSnapshotService implements DatabaseSnapshotInterface
         }
 
         $rows = $model->limit(1)->select()->fetchArray();
+        if ($rows !== []) {
+            return $rows[0];
+        }
 
-        return $rows === [] ? null : $rows[0];
+        // A restored PostgreSQL dump may contain the row while the model's
+        // primary-key query path is still stale (sequence/schema cache). Fall
+        // back to a raw lookup before declaring metadata reconciliation failed.
+        if (ctype_digit($snapshotId)) {
+            $connector = $this->connectionFactory->getConnector();
+            $table = $model->getTable();
+            $sql = 'SELECT * FROM ' . $connector->formatTableName($table)
+                . ' WHERE ' . $connector->quoteIdentifier(SchemaSnapshot::schema_fields_ID)
+                . ' = ' . (int) $snapshotId;
+            $rawRows = $connector->query($sql)->fetchArray();
+            if (is_array($rawRows) && $rawRows !== []) {
+                return $rawRows[0];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -279,9 +373,7 @@ final class DatabaseSnapshotService implements DatabaseSnapshotInterface
         if ($snapshotKey === '') {
             $snapshotKey = pathinfo($path, PATHINFO_FILENAME);
         }
-        $model = $this->newSnapshotModel();
-        $model->setData([
-            SchemaSnapshot::schema_fields_ID => $snapshotId,
+        $data = [
             SchemaSnapshot::schema_fields_SNAPSHOT_KEY => $snapshotKey,
             SchemaSnapshot::schema_fields_BACKUP_SET_ID => $backupSetId,
             SchemaSnapshot::schema_fields_RELEASE_ID => $releaseId,
@@ -294,8 +386,14 @@ final class DatabaseSnapshotService implements DatabaseSnapshotInterface
             SchemaSnapshot::schema_fields_STATUS => SchemaSnapshot::STATUS_RESTORED,
             SchemaSnapshot::schema_fields_CREATED_AT => $row[SchemaSnapshot::schema_fields_CREATED_AT] ?? $restoredAt,
             SchemaSnapshot::schema_fields_RESTORED_AT => $restoredAt,
-        ]);
-        $model->save();
+        ];
+        $table = $this->newSnapshotModel()->getTable();
+        $pdo = $this->connectionFactory->getConnector()->getWrappedConnection()->getPdo();
+        $cols = array_keys($data);
+        $values = [$snapshotId, ...array_values($data)];
+        $stmt = $this->prepareReconcileUpsert($pdo, $table, $cols);
+        $stmt->execute($values);
+        $stmt->closeCursor();
 
         if ($this->findSnapshotRow((string) $snapshotId) === null) {
             throw new RuntimeException('Restored snapshot metadata could not be reconciled: ' . $snapshotId);
@@ -420,6 +518,9 @@ final class DatabaseSnapshotService implements DatabaseSnapshotInterface
         }
 
         $parts = ['mysqldump', '--single-transaction', '--routines', '--triggers'];
+        if (self::mysqldumpSupportsColumnStatistics()) {
+            $parts[] = '--column-statistics=0';
+        }
         $host = $config->getHostName();
         if ($host !== '') {
             $parts[] = '-h';
@@ -449,6 +550,20 @@ final class DatabaseSnapshotService implements DatabaseSnapshotInterface
     /**
      * @param array<string, mixed> $options
      */
+    private static function mysqldumpSupportsColumnStatistics(): bool
+    {
+        static $supported = null;
+        if ($supported !== null) {
+            return $supported;
+        }
+        $output = [];
+        $exit = 0;
+        @exec('mysqldump --help 2>&1', $output, $exit);
+        $supported = str_contains(implode("\n", $output), 'column-statistics');
+
+        return $supported;
+    }
+
     private function restoreSqlite(string $snapshotPath, array $options): void
     {
         $connector = $this->connectionFactory->getConnector();

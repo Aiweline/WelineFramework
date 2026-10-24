@@ -17,6 +17,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Theme\Service\StaticPublishFingerprint;
+use Weline\Theme\Service\StaticPublishGate;
 
 /**
  * After setup:upgrade in production, republish static assets (minify via transform hook).
@@ -38,6 +39,14 @@ class SetupUpgradeAfterDeployStatic implements ObserverInterface
         self::$hasRun = true;
 
         if (defined('DEV') && DEV) {
+            return;
+        }
+
+        $eventData = $event->getData();
+        $args = is_array($eventData) && is_array($eventData['args'] ?? null) ? $eventData['args'] : [];
+        $skipReason = StaticPublishGate::skipReason($args);
+        if ($skipReason !== null) {
+            $this->printing->note(__('静态发布已跳过（%{reason}）', ['reason' => $skipReason]));
             return;
         }
 
@@ -78,6 +87,15 @@ class SetupUpgradeAfterDeployStatic implements ObserverInterface
                 FILE_APPEND
             );
         }
+    }
+
+    /**
+     * @deprecated use {@see StaticPublishGate::skipReason()}
+     * @param array<string, mixed> $args
+     */
+    public static function skipReasonForArgs(array $args = []): ?string
+    {
+        return StaticPublishGate::skipReason($args);
     }
 
     private function staticPublishInputs(): array

@@ -22,7 +22,7 @@ final class SchemaIndexChangeSinkContractTest extends TestCase
         self::assertTrue(method_exists(SchemaIndexChangeSinkInterface::class, 'handleIndexOp'));
 
         $executor = (string)file_get_contents(
-            dirname(__DIR__, 5) . '/Framework/Database/Schema/SchemaMigrationExecutor.php'
+            dirname(__DIR__, 5) . '/Database/Service/Release/SchemaDiffExecutor.php'
         );
         self::assertStringContainsString('SchemaIndexChangeSinkInterface', $executor);
         self::assertStringContainsString('handleIndexOp', $executor);

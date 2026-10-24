@@ -36,26 +36,10 @@ final class BotToAgentMigrator
         $db = $setup->getDb();
 
         foreach (self::TABLE_MAP as $from => $to) {
-            $fromTable = $db->getTable($from);
-            $toTable = $db->getTable($to);
-            $fromExists = $db->tableExist($from);
-            $toExists = $db->tableExist($to);
-
-            if ($fromExists && !$toExists) {
-                $db->query('RENAME TABLE `' . $fromTable . '` TO `' . $toTable . '`');
-                continue;
-            }
-
-            // 新模块 Schema 已建空表时：若旧表有数据且新表为空，则丢弃空表再 RENAME
-            if ($fromExists && $toExists) {
-                $fromCount = $this->countRows($db, $fromTable);
-                $toCount = $this->countRows($db, $toTable);
-                if ($fromCount > 0 && $toCount === 0) {
-                    $db->dropTable($to);
-                    $db->query('RENAME TABLE `' . $fromTable . '` TO `' . $toTable . '`');
-                } elseif ($fromCount === 0) {
-                    $db->dropTable($from);
-                }
+            try {
+                $this->migrateTable($db, $from, $to);
+            } catch (\Throwable $e) {
+                $this->warn('Agent Bot→Agent table migrate skipped for ' . $from . ': ' . $e->getMessage());
             }
         }
 
@@ -63,6 +47,95 @@ final class BotToAgentMigrator
         $this->migrateSkillClassNames($db);
         $this->migrateScenarioAdapters($db);
         $this->migrateModuleRegistry($db);
+    }
+
+    /**
+     * 旧表 → 新表：只做数据搬迁，不 DROP 任何表（旧表留给后续 cutover 归档）。
+     */
+    private function migrateTable(\Weline\Framework\Setup\Db\Setup $db, string $from, string $to): void
+    {
+        $fromTable = $db->getTable($from);
+        $toTable = $db->getTable($to);
+        $fromExists = $db->tableExist($from);
+        $toExists = $db->tableExist($to);
+
+        if ($fromExists && !$toExists) {
+            $db->query('RENAME TABLE `' . $fromTable . '` TO `' . $toTable . '`');
+            return;
+        }
+
+        if (!$fromExists || !$toExists) {
+            return;
+        }
+
+        $fromCount = $this->countRows($db, $fromTable);
+        $toCount = $this->countRows($db, $toTable);
+        if ($fromCount === 0 || $toCount > 0) {
+            // 旧表空：保留旧表；新表已有数据：不自动合并，交给 cutover 决策。
+            return;
+        }
+
+        $columns = $this->commonColumns($db, $fromTable, $toTable);
+        if ($columns === []) {
+            $this->warn('Agent Bot→Agent copy skipped for ' . $from . ': no common columns with ' . $to);
+            return;
+        }
+
+        $columnList = \implode(', ', \array_map(
+            static fn(string $column): string => '`' . \str_replace('`', '``', $column) . '`',
+            $columns
+        ));
+
+        try {
+            $db->query(
+                'INSERT INTO `' . $toTable . '` (' . $columnList . ')'
+                . ' SELECT ' . $columnList . ' FROM `' . $fromTable . '`'
+            );
+        } catch (\Throwable $e) {
+            $this->warn('Agent Bot→Agent copy failed for ' . $from . ': ' . $e->getMessage());
+        }
+        // 旧表保留；不在此阶段 DROP。
+    }
+
+    /**
+     * 新表顺序返回两表列交集。
+     *
+     * @return list<string>
+     */
+    private function commonColumns(\Weline\Framework\Setup\Db\Setup $db, string $fromTable, string $toTable): array
+    {
+        try {
+            $connector = $db->getConnector();
+            $fromColumns = [];
+            foreach ($connector->getTableColumns($fromTable) as $column) {
+                $name = (string) ($column['name'] ?? '');
+                if ($name !== '') {
+                    $fromColumns[$name] = true;
+                }
+            }
+
+            $columns = [];
+            foreach ($connector->getTableColumns($toTable) as $column) {
+                $name = (string) ($column['name'] ?? '');
+                if ($name !== '' && isset($fromColumns[$name])) {
+                    $columns[] = $name;
+                }
+            }
+
+            return $columns;
+        } catch (\Throwable $e) {
+            $this->warn('Agent Bot→Agent column introspection failed: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    private function warn(string $message): void
+    {
+        if (\function_exists('w_log_warning')) {
+            \w_log_warning($message, [], 'agent_setup');
+            return;
+        }
+        \error_log($message);
     }
 
     private function countRows(\Weline\Framework\Setup\Db\Setup $db, string $table): int

@@ -5,28 +5,24 @@ declare(strict_types=1);
 namespace Weline\Framework\Setup\Stage;
 
 use Weline\Framework\App\Exception;
+use Weline\Database\Service\Release\SchemaDiffExecutor;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\ConnectionFactory;
-use Weline\Framework\Database\Schema\SchemaMigrationExecutor;
 use Weline\Framework\Database\Schema\SchemaParser;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Model\Cache\NamespaceVersion;
-use Weline\Framework\Setup\Model\Migration;
-use Weline\Framework\Setup\Model\MigrationBackup;
 use Weline\Framework\Setup\Model\ModuleBackup;
 use Weline\Framework\Setup\Model\ModuleTable;
 
 /**
  * Framework 数据库引导阶段（order=0）
- * 创建 Migration、MigrationBackup 等 bootstrap 表，使用 connector->createTable() / buildAlterAddColumnSql 等 API，
+ * 创建 Framework bootstrap 表（NamespaceVersion / ModuleTable / ModuleBackup）与 RSSE 表，
  * 方言由适配器层实现，本阶段禁止使用 raw SQL 方言。
  */
 class FrameworkDbBootstrapStage extends AbstractStage
 {
     private const BOOTSTRAP_MODELS = [
         NamespaceVersion::class,
-        Migration::class,
-        MigrationBackup::class,
         ModuleTable::class,
         ModuleBackup::class,
     ];
@@ -34,17 +30,30 @@ class FrameworkDbBootstrapStage extends AbstractStage
     /**
      * Optional module-owned bootstrap tables. They must exist before schema_diff
      * so a deferred index job can be written during the same setup run.
+     * The RSSE release ledger (weline_schema_*) is excluded from the release
+     * manifest, so on a fresh database nothing but this stage creates it.
      * Class names are strings to keep Framework free of a hard module dependency.
      */
     private const OPTIONAL_BOOTSTRAP_MODELS = [
         'Weline\\Database\\Model\\SchemaIndexJob',
         'Weline\\Database\\Model\\SchemaIndexState',
+        'Weline\\Database\\Model\\Release\\SchemaRelease',
+        'Weline\\Database\\Model\\Release\\SchemaCheckpoint',
+        'Weline\\Database\\Model\\Release\\SchemaScopeRecord',
+        'Weline\\Database\\Model\\Release\\SchemaOperationEvent',
+        'Weline\\Database\\Model\\Release\\SchemaSnapshot',
+        'Weline\\Database\\Model\\Release\\SchemaChange',
+        'Weline\\Database\\Model\\Release\\SchemaPhysicalState',
+        'Weline\\Database\\Model\\Release\\TableOwner',
+        'Weline\\Database\\Model\\Release\\BackupSet',
+        'Weline\\Database\\Model\\Release\\BackupObject',
+        'Weline\\Database\\Model\\Release\\DataTransformProgress',
     ];
 
     public function __construct(
         private readonly ConnectionFactory $connectionFactory,
         private readonly SchemaParser $schemaParser,
-        private readonly SchemaMigrationExecutor $schemaMigrationExecutor,
+        private readonly SchemaDiffExecutor $schemaDiffExecutor,
     ) {
     }
 
@@ -87,10 +96,6 @@ class FrameworkDbBootstrapStage extends AbstractStage
             $tableName = $model->getTable();
             if (!$connector->tableExist($tableName)) {
                 $this->createTableFromModel($connector, $modelClass);
-            } elseif ($modelClass === Migration::class) {
-                $this->ensureMigrationsSchemaDdlColumns($connector, $tableName);
-            } elseif ($modelClass === MigrationBackup::class) {
-                $this->ensureBackupsTableStructure($connector, $tableName);
             } elseif ($modelClass === ModuleTable::class) {
                 $this->ensureModuleTablePolicyColumns($connector, $tableName);
             }
@@ -115,151 +120,7 @@ class FrameworkDbBootstrapStage extends AbstractStage
         if ($schema === null) {
             return;
         }
-        $this->schemaMigrationExecutor->createBootstrapTable($connector, $schema);
-    }
-
-    /**
-     * 确保 migrations 表包含 schema diff 相关列；缺列则通过 connector->buildAlterAddColumnSql 添加。
-     */
-    private function ensureMigrationsSchemaDdlColumns(ConnectorInterface $connector, string $tableName): void
-    {
-        $schema = $this->schemaParser->parse(Migration::class);
-        if ($schema === null) {
-            return;
-        }
-        $needCols = [
-            'forward_ddl',
-            'rollback_ddl',
-            'schema_table_name',
-            'connection_name',
-            'batch_id',
-            'sequence_no',
-            'migration_type',
-            'operation_kind',
-            'model_class',
-            'schema_before_checksum',
-            'schema_after_checksum',
-            'operation_id',
-            'operation_payload',
-        ];
-        foreach ($schema->columns as $col) {
-            if (!in_array($col->name, $needCols, true)) {
-                continue;
-            }
-            if ($connector->hasField($tableName, $col->name)) {
-                continue;
-            }
-            $colArr = [
-                'name' => $col->name,
-                'type' => $col->type,
-                'length' => $col->length,
-                'nullable' => $col->nullable,
-                'primaryKey' => $col->primaryKey,
-                'autoIncrement' => $col->autoIncrement,
-                'default' => $col->default,
-                'comment' => $col->comment,
-                'unique' => $col->unique,
-            ];
-            $sql = $connector->buildAlterAddColumnSql($connector->formatTableName($tableName), $colArr);
-            if ($sql !== '') {
-                $connector->query($sql)->fetch();
-            }
-        }
-    }
-
-    /**
-     * 若 weline_database_backups 缺少 backup_id 或 migration_id，则重建表。
-     * 使用 getTableColumns 校验实际列，避免 hasField 与表名格式不一致导致的误判。
-     * 探测异常必须硬失败，禁止当成空列集后 DROP（避免瞬时错误删光迁移备份）。
-     */
-    private function ensureBackupsTableStructure(ConnectorInterface $connector, string $backupsTable): void
-    {
-        $requiredCols = ['backup_id', 'migration_id'];
-        try {
-            $cols = $connector->getTableColumns($backupsTable);
-        } catch (\Throwable $e) {
-            throw new Exception(__(
-                '无法探测备份表 %{1} 结构，已中止升级以避免误删备份数据：%{2}',
-                [$backupsTable, $e->getMessage()]
-            ), 0, $e);
-        }
-        $colNames = array_column($cols, 'name');
-        $colSet = array_flip(array_map('strtolower', $colNames));
-        $missing = array_filter($requiredCols, fn (string $c) => !isset($colSet[strtolower($c)]));
-        if ($missing !== []) {
-            $rowCount = $this->countBackupTableRows($connector, $backupsTable);
-            if ($rowCount > 0) {
-                throw new Exception(__(
-                    '备份表 %{1} 缺少列 %{2} 且已有 %{3} 行数据，拒绝自动 DROP 重建；请先转存备份后再升级',
-                    [$backupsTable, implode(', ', $missing), (string)$rowCount]
-                ));
-            }
-            $connector->dropTableIfExists($backupsTable);
-            $this->createTableFromModel($connector, MigrationBackup::class);
-            return;
-        }
-
-        $schema = $this->schemaParser->parse(MigrationBackup::class);
-        if ($schema === null) {
-            return;
-        }
-        $retentionColumns = [
-            'column_name',
-            'backup_scope',
-            'operation_id',
-            'source_backup_id',
-            'retention_state',
-            'retain_until',
-            'restored_at',
-        ];
-        foreach ($schema->columns as $column) {
-            if (!in_array($column->name, $retentionColumns, true)
-                || $connector->hasField($backupsTable, $column->name)) {
-                continue;
-            }
-            $sql = $connector->buildAlterAddColumnSql($connector->formatTableName($backupsTable), [
-                'name' => $column->name,
-                'type' => $column->type,
-                'length' => $column->length,
-                'nullable' => $column->nullable,
-                'primaryKey' => $column->primaryKey,
-                'autoIncrement' => $column->autoIncrement,
-                'default' => $column->default,
-                'comment' => $column->comment,
-                'unique' => $column->unique,
-            ]);
-            if ($sql !== '') {
-                $connector->query($sql)->fetch();
-            }
-        }
-        $this->widenMysqlBackupDataColumn($connector, $backupsTable, $cols);
-    }
-
-    /**
-     * MySQL TEXT caps at 64KB; schema-diff commit writes table/chunk snapshots
-     * into backup_data before it would reach this table's own ALTER, so the
-     * widening must happen here.
-     *
-     * @param list<array<string, mixed>> $cols
-     */
-    private function widenMysqlBackupDataColumn(ConnectorInterface $connector, string $backupsTable, array $cols): void
-    {
-        if (strtolower((string)$connector->getConfigProvider()->getDbType()) !== 'mysql') {
-            return;
-        }
-        foreach ($cols as $col) {
-            if (strcasecmp((string)($col['name'] ?? ''), MigrationBackup::schema_fields_BACKUP_DATA) !== 0) {
-                continue;
-            }
-            if (!in_array(strtolower((string)($col['type'] ?? '')), ['tinytext', 'text', 'mediumtext'], true)) {
-                return;
-            }
-            $connector->query(
-                'ALTER TABLE ' . $connector->formatTableName($backupsTable)
-                . " MODIFY `backup_data` LONGTEXT NULL COMMENT 'Backup Data'"
-            )->fetch();
-            return;
-        }
+        $this->schemaDiffExecutor->createBootstrapTable($connector, $schema);
     }
 
     /**
@@ -338,29 +199,4 @@ class FrameworkDbBootstrapStage extends AbstractStage
         )->fetch();
     }
 
-    private function countBackupTableRows(ConnectorInterface $connector, string $backupsTable): int
-    {
-        try {
-            if (!$connector->tableExist($backupsTable)) {
-                return 0;
-            }
-            $quoted = $connector->quoteTable($backupsTable);
-            $result = $connector->query("SELECT COUNT(*) AS c FROM {$quoted}")->fetch();
-            if (is_array($result)) {
-                if (isset($result['c'])) {
-                    return (int)$result['c'];
-                }
-                if (isset($result[0]['c'])) {
-                    return (int)$result[0]['c'];
-                }
-            }
-        } catch (\Throwable $e) {
-            throw new Exception(__(
-                '无法统计备份表 %{1} 行数，已中止自动重建：%{2}',
-                [$backupsTable, $e->getMessage()]
-            ), 0, $e);
-        }
-
-        return 0;
-    }
 }

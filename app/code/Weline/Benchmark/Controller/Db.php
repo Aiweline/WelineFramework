@@ -5,19 +5,19 @@ declare(strict_types=1);
 namespace Weline\Benchmark\Controller;
 
 use Weline\Benchmark\FrontendController;
+use Weline\Database\Model\DatabaseAdminAuditLog;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Setup\Model\Migration;
 
 class Db extends FrontendController
 {
     public function index(): Response
     {
         try {
-            /** @var Migration $migration */
-            $migration = ObjectManager::getInstance(Migration::class, [], false);
-            $migration->clearQuery()->load(1);
-            $id = (int)$migration->getId(0);
+            /** @var DatabaseAdminAuditLog $auditLog */
+            $auditLog = ObjectManager::getInstance(DatabaseAdminAuditLog::class, [], false);
+            $rows = $auditLog->clear()->limit(1)->select()->fetchArray();
+            $id = (int)($rows[0][DatabaseAdminAuditLog::schema_fields_ID] ?? 0);
         } catch (\Throwable) {
             return Response::json([
                 'ok' => false,
@@ -26,7 +26,7 @@ class Db extends FrontendController
         }
 
         return Response::json([
-            'ok' => $id > 0,
+            'ok' => true,
             'id' => $id,
             'status' => $id > 0 ? 'found' : 'missing',
         ]);

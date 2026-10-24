@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Database\Schema;
 
 /**
- * 单条 Schema 差异操作，由 SchemaDiffEngine 产出，由 SchemaMigrationExecutor 执行。
+ * 单条 Schema 差异操作，由 SchemaDiffEngine 产出，由 SchemaDiffExecutor 执行。
  */
 final class SchemaDiffOp
 {

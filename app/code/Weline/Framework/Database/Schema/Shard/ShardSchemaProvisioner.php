@@ -33,7 +33,7 @@ final class ShardSchemaProvisioner implements ShardSchemaProvisionerInterface
     }
 
     /**
-     * @param array<string, mixed> $context 透传 SchemaMigrationExecutor（operation_id 等）
+     * @param array<string, mixed> $context 透传 SchemaDiffExecutor（operation_id 等）
      */
     public function provision(string $familyCode, string $shardKey, array $context = []): ShardProvisionResult
     {

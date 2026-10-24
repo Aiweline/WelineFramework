@@ -5,13 +5,11 @@ declare(strict_types=1);
 /**
  * Weline_Database 模块安装脚本
  *
- * 创建 Migration、MigrationBackup 表；其余表结构由 SchemaDiffStage 根据 Model #[Col] 声明同步。
+ * 只创建仍在使用的 DatabaseAdminAuditLog；旧 Migration/MigrationBackup 账本不再由安装创建。
  */
 
 namespace Weline\Database\Setup;
 
-use Weline\Database\Model\Migration;
-use Weline\Database\Model\MigrationBackup;
 use Weline\Database\Model\DatabaseAdminAuditLog;
 use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
 use Weline\Framework\Manager\ObjectManager;
@@ -25,29 +23,7 @@ class Install implements \Weline\Framework\Setup\InstallInterface
     {
         /** @var ModelSetup $modelSetup */
         $modelSetup = ObjectManager::getInstance(ModelSetup::class);
-        $this->createMigrationTable($modelSetup);
-        $this->createMigrationBackupTable($modelSetup);
         $this->createAdminAuditLogTable($modelSetup);
-    }
-
-    private function createMigrationTable(ModelSetup $modelSetup): void
-    {
-        /** @var Migration $model */
-        $model = ObjectManager::getInstance(Migration::class);
-        $modelSetup->putModel($model);
-        if ($modelSetup->tableExist()) {
-            return;
-        }
-    }
-
-    private function createMigrationBackupTable(ModelSetup $modelSetup): void
-    {
-        /** @var MigrationBackup $model */
-        $model = ObjectManager::getInstance(MigrationBackup::class);
-        $modelSetup->putModel($model);
-        if ($modelSetup->tableExist()) {
-            return;
-        }
     }
 
     private function createAdminAuditLogTable(ModelSetup $modelSetup): void

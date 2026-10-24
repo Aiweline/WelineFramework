@@ -115,7 +115,7 @@ final class SchemaDiffEngine
                 $modelClass,
             );
         }
-        // Index DDL is ordered after ADD_COLUMN by SchemaMigrationExecutor.  A
+        // Index DDL is ordered after ADD_COLUMN by SchemaDiffExecutor.  A
         // column declared in this target schema is therefore available to an
         // index in the same migration batch even when it is absent from the
         // pre-migration physical snapshot.  Undeclared/misspelled columns stay

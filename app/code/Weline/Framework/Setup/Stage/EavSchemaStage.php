@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace Weline\Framework\Setup\Stage;
 
 use Weline\Framework\App\Exception;
-use Weline\Framework\Setup\Model\Migration;
+use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Setup\Db\ModelSetup;
+use Weline\Framework\Setup\Model\ModuleTable;
 
 /**
  * Eav 表创建阶段（order=2，可选）：若 Eav 模块存在则调用 SchemaRegistry::createAllTables，
@@ -23,7 +24,7 @@ class EavSchemaStage extends AbstractStage
 
     public function __construct(
         private readonly EventsManager $eventsManager,
-        private readonly Migration $migrationModel,
+        private readonly ConnectionFactory $connectionFactory,
         private readonly Printing $printing,
     ) {
     }
@@ -65,9 +66,12 @@ class EavSchemaStage extends AbstractStage
 
         /** @var ModelSetup $setup */
         $setup = ObjectManager::getInstance(ModelSetup::class, ['printing' => $this->printing]);
-        $setup->putModel($this->migrationModel);
+        // ModelSetup::createTable() 需要一个带连接的模型；这里只借 ModuleTable 的连接，不再依赖旧 Migration 模型。
+        $setupModel = ObjectManager::getInstance(ModuleTable::class);
+        $setupModel->setConnection($this->connectionFactory);
+        $setup->putModel($setupModel);
 
-        $connection = $this->migrationModel->getConnection();
+        $connection = $this->connectionFactory->getConnector();
         $prefix = $connection->getConfigProvider()->getPrefix();
         $ownerModuleName = $provider->ownerModuleName();
 

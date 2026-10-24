@@ -6,12 +6,12 @@ namespace Weline\Database\Service\Index;
 
 use Weline\Database\Model\SchemaIndexJob;
 use Weline\Database\Model\SchemaIndexState;
+use Weline\Database\Service\Release\SchemaDiffExecutor;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Schema\IndexDefinition;
 use Weline\Framework\Database\Schema\IndexDefinitionContract;
 use Weline\Framework\Database\Schema\SchemaDiffOp;
 use Weline\Framework\Database\Schema\SchemaIndexChangeSinkInterface;
-use Weline\Framework\Database\Schema\SchemaMigrationExecutor;
 use Weline\Framework\Database\Schema\SchemaParser;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -30,7 +30,7 @@ final class SchemaIndexChangeSink implements SchemaIndexChangeSinkInterface
 
     public function __construct(
         private readonly SchemaParser $schemaParser,
-        private readonly SchemaMigrationExecutor $schemaMigrationExecutor,
+        private readonly SchemaDiffExecutor $schemaDiffExecutor,
         private readonly SchemaIndexConfig $config,
     ) {
     }
@@ -188,7 +188,7 @@ final class SchemaIndexChangeSink implements SchemaIndexChangeSinkInterface
                     [$modelClass],
                 ));
             }
-            $this->schemaMigrationExecutor->createBootstrapTable($connector, $schema);
+            $this->schemaDiffExecutor->createBootstrapTable($connector, $schema);
         }
 
         $this->tablesEnsured = true;

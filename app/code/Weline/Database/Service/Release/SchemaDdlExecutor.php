@@ -27,9 +27,9 @@ final class SchemaDdlExecutor
     {
     }
 
-    public function build(SchemaDiffOp $op, bool $rollback = false): string
+    public function build(SchemaDiffOp $op, bool $rollback = false, ?ConnectorInterface $connector = null): string
     {
-        $connector = $this->connectionFactory->getConnector();
+        $connector ??= $this->connectionFactory->getConnector();
         $table = $connector->formatTableName($op->tableName);
 
         return $rollback
@@ -37,9 +37,9 @@ final class SchemaDdlExecutor
             : $this->buildForwardDdl($connector, $op, $table);
     }
 
-    public function apply(SchemaDiffOp $op, bool $rollback = false): void
+    public function apply(SchemaDiffOp $op, bool $rollback = false, ?ConnectorInterface $connector = null): void
     {
-        $connector = $this->connectionFactory->getConnector();
+        $connector ??= $this->connectionFactory->getConnector();
         if (!$rollback && $op->kind === SchemaDiffOp::KIND_CREATE_TABLE) {
             if (!$op->payload instanceof TableSchema) {
                 throw new RuntimeException(
@@ -54,7 +54,7 @@ final class SchemaDdlExecutor
             $this->dropDependentIndexes($connector, $op);
         }
 
-        $sql = $this->build($op, $rollback);
+        $sql = $this->build($op, $rollback, $connector);
         if ($sql === '') {
             if ($this->isEmptyNoOp($op, $rollback)) {
                 return;
@@ -63,7 +63,11 @@ final class SchemaDdlExecutor
                 'DDL 为空; kind=' . $op->kind . '; table=' . $op->tableName
             );
         }
-        $connector->query($sql)->fetch();
+        $stmt = $connector->query($sql);
+        $stmt->fetch();
+        if (method_exists($stmt, 'closeCursor')) {
+            $stmt->closeCursor();
+        }
     }
 
     /**
@@ -143,7 +147,11 @@ final class SchemaDdlExecutor
                 continue;
             }
             try {
-                $connector->query($sql)->fetch();
+                $stmt = $connector->query($sql);
+        $stmt->fetch();
+        if (method_exists($stmt, 'closeCursor')) {
+            $stmt->closeCursor();
+        }
             } catch (\Throwable $exception) {
                 // ALTER/DROP 过程中索引可能已被并发移除；只有 already-missing 可忽略。
                 if (\stripos($exception->getMessage(), 'no such index') !== false) {

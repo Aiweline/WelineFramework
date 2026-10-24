@@ -7,7 +7,7 @@ namespace Weline\Framework\Database\Schema;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 
 /**
- * Schema DDL 执行契约；{@see SchemaMigrationExecutor} 为默认实现。
+ * Schema DDL 执行契约；{@see \Weline\Database\Service\Release\SchemaDiffExecutor} 为默认实现。
  */
 interface SchemaMigrationExecutorInterface
 {

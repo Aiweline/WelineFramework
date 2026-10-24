@@ -12,7 +12,6 @@ return [
         'Weline_Queue' => '*',
     ],
     "provides" => [
-        \Weline\Database\Api\ModuleRollbackManagerInterface::class => \Weline\Database\Service\ModuleRollbackManager::class,
         \Weline\Framework\Database\Schema\SchemaIndexChangeSinkInterface::class
             => \Weline\Database\Service\Index\SchemaIndexChangeSink::class,
         \Weline\Framework\Database\Release\Api\DatabaseReleaseCoordinatorInterface::class

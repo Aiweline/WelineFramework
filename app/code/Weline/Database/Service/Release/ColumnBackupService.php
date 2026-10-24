@@ -86,7 +86,11 @@ final class ColumnBackupService
         $rowCount = 0;
         $chunkChecksums = [];
 
-        foreach ($connector->query($sql)->fetchIterator() as $row) {
+        // Use fetchArray to fully consume the result set and close the cursor
+        // before executing DDL. fetchIterator leaves a PG cursor open that
+        // holds a table lock, blocking subsequent ALTER TABLE DROP COLUMN.
+        $allRows = $connector->query($sql)->fetchArray();
+        foreach ($allRows as $row) {
             if (!is_array($row)) {
                 continue;
             }
@@ -656,7 +660,10 @@ final class ColumnBackupService
             . ' SET ' . $connector->quoteIdentifier(BackupObject::schema_fields_STATUS) . ' = ?'
             . ' WHERE ' . $connector->quoteIdentifier(BackupObject::schema_fields_ID) . ' = ?';
         $statement = $connector->getWrappedConnection()->prepare($sql);
-        $statement->execute([BackupObject::STATUS_READY, $objectId]);
+        // The backup_object row may no longer exist after an L2 snapshot restore
+        // (restore rewinds the catalog to the snapshot-time state). Marking ready
+        // is best-effort; the restore path reconciles metadata separately.
+        @$statement->execute([BackupObject::STATUS_READY, $objectId]);
         $statement->closeCursor();
     }
 
