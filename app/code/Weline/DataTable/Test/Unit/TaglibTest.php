@@ -421,6 +421,28 @@ class TaglibTest extends TestCore
         }
     }
 
+    public function testIdenticalChildSourceInSiblingTablesKeepsEachParentContext()
+    {
+        $nonce = (string)hrtime(true);
+        $children = '<w:t-header><w:field belong="t-header" name="name" type="text">Name ' . $nonce . '</w:field></w:t-header><w:t-body></w:t-body>';
+        $table = static fn (string $id): string => '<w:d-table id="' . $id . '" model="Weline\DataTable\Model\TestUser" scope="' . $id . '"'
+            . ' mode="local" local-data-el="#x">' . $children . '</w:d-table>';
+
+        $html = Template::getInstance()->fetchSourceHtml(
+            'datatable-sibling-children.phtml',
+            $table('sibling-a') . $table('sibling-b'),
+            __FILE__,
+            'sibling-' . $nonce
+        );
+
+        preg_match_all('/<th\b[^>]*data-w-field="([^"]*)"/', $html, $matches);
+        $formIds = array_map(
+            static fn (string $json): string => (string)(json_decode(html_entity_decode($json, ENT_QUOTES), true)['formId'] ?? ''),
+            $matches[1]
+        );
+        $this->assertSame(['sibling-a-header', 'sibling-b-header'], $formIds);
+    }
+
     /** @return array<string,string> */
     private static function runtimeConfig(): array
     {

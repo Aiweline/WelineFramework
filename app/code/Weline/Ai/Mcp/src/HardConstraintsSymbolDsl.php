@@ -168,7 +168,7 @@ final class HardConstraintsSymbolDsl
             'Write' => ['gloss_zh' => '即将写仓', 'rule_ids' => ['architecture_grade_change_only']],
             'Arch' => ['gloss_zh' => 'mechanism∧owning∧¬do≥1', 'rule_ids' => ['architecture_grade_change_only']],
             'Prep' => ['gloss_zh' => 'prepare_project+遵守hard_constraints', 'rule_ids' => ['mcp_call_scope']],
-            'Aoci' => ['gloss_zh' => 'aoci_rules(+overview若不可靠)', 'rule_ids' => ['aoci_complements_weline_mcp']],
+            'Aoci' => ['gloss_zh' => 'cognition_rules(+overview若不可靠)', 'rule_ids' => ['cognition_complements_weline_mcp']],
             'WebTouch' => ['gloss_zh' => '触.phtml/CSS/主题/店面页', 'rule_ids' => ['browser_operator_self_test']],
             'WBOP' => ['gloss_zh' => 'Browser真机禁缓存+抹自动+点选+截图Read', 'rule_ids' => ['browser_operator_self_test']],
             'Curl5' => ['gloss_zh' => '打开前curl --max-time 5探活', 'rule_ids' => ['browser_operator_fail_closed_release']],
@@ -209,7 +209,7 @@ final class HardConstraintsSymbolDsl
             'PlanRev' => ['gloss_zh' => '审查/自审/汇审计划', 'rule_ids' => ['plan_review_three_lenses']],
             'LensE' => ['gloss_zh' => '读计划∧探磁盘码', 'rule_ids' => ['plan_review_requires_code_evidence']],
             'LensA' => ['gloss_zh' => '架构审mech+own+¬do', 'rule_ids' => ['scheme_requires_architecture_review']],
-            'LensI' => ['gloss_zh' => '影响面先AOCI', 'rule_ids' => ['plan_review_requires_impact_surface']],
+            'LensI' => ['gloss_zh' => '影响面先Cognition', 'rule_ids' => ['plan_review_requires_impact_surface']],
             'Closeout' => ['gloss_zh' => '面向用户收口/进度', 'rule_ids' => ['user_facing_brief_plain_report']],
             'Brief' => ['gloss_zh' => '简述问题→改动→结论末', 'rule_ids' => ['user_facing_brief_plain_report']],
             'Decisive' => ['gloss_zh' => '用户要明确结论', 'rule_ids' => ['user_facing_verdict_last']],
@@ -479,9 +479,9 @@ final class HardConstraintsSymbolDsl
                 'gloss_zh' => '产品/文章/主图等跳过prepare与技能索引',
                 'cluster' => '§P',
             ],
-            'aoci_complements_weline_mcp' => [
+            'cognition_complements_weline_mcp' => [
                 'formula' => 'Eng→□Aoci∧¬(Aoci≢Prep)',
-                'gloss_zh' => 'prepare后须aoci_rules；AOCI不可替Weline门禁',
+                'gloss_zh' => 'prepare后须cognition_rules；Cognition不可替Weline门禁',
                 'cluster' => '§Ω',
             ],
             'requirement_acceptance_always' => [
@@ -536,7 +536,7 @@ final class HardConstraintsSymbolDsl
             ],
             'plan_review_requires_impact_surface' => [
                 'formula' => 'PlanRev→□LensI',
-                'gloss_zh' => '影响面先调AOCI再MCP/原生',
+                'gloss_zh' => '影响面先调Cognition再MCP/原生',
                 'cluster' => '§Π',
             ],
             'scheme_requires_architecture_review' => [
@@ -932,7 +932,7 @@ final class HardConstraintsSymbolDsl
             str_contains($id, 'user_facing') => '§U',
             str_contains($id, 'i18n') || str_contains($id, 'lang') || str_contains($id, 'translation') || str_contains($id, 'locale') => '§I',
             str_contains($id, 'sql') || str_contains($id, 'database') || str_contains($id, 'orm') => '§D',
-            str_contains($id, 'aoci') => '§Ω',
+            str_contains($id, 'cognition') => '§Ω',
             str_contains($id, 'engineer') || str_contains($id, 'advisor') || str_contains($id, 'seat') || str_contains($id, 'team') => '§S',
             str_contains($id, 'architecture') || str_contains($id, 'website_concept') || str_contains($id, 'demo') => '§A',
             str_contains($id, 'requirement') || str_contains($id, 'intent_lane') || str_contains($id, 'grade') => '§G',

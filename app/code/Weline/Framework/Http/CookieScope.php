@@ -34,6 +34,8 @@ final class CookieScope
     /** True while EVENT_RESOLVE (or override) is running. */
     private static bool $resolving = false;
 
+    private static ?\WeakMap $fiberResolving = null;
+
     /** @var array{
      *     active: bool,
      *     name_suffix: string,
@@ -65,7 +67,7 @@ final class CookieScope
     {
         self::$cachedPolicy = null;
         self::$cachedScopeKey = '';
-        self::$resolving = false;
+        self::storeResolving(false);
         // While request-trace is closed, allow a later qualified panel cookie to arm.
         // Never disturb an actively recording request.
         if (\class_exists(\Weline\Framework\Runtime\TraceGate::class, false)) {
@@ -181,6 +183,26 @@ final class CookieScope
         return self::isProtocolCookie($name);
     }
 
+    private static function isResolving(): bool
+    {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            return self::$resolving;
+        }
+        return (bool)(self::$fiberResolving[$fiber] ?? false);
+    }
+
+    private static function storeResolving(bool $resolving): void
+    {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            self::$resolving = $resolving;
+            return;
+        }
+        self::$fiberResolving ??= new \WeakMap();
+        self::$fiberResolving[$fiber] = $resolving;
+    }
+
     /**
      * @return array{
      *     active: bool,
@@ -203,11 +225,11 @@ final class CookieScope
         }
 
         // Break CookieScope ↔ getCookie / observer re-entry before EventsManager work.
-        if (self::$resolving) {
+        if (self::isResolving()) {
             return self::identityPolicy();
         }
 
-        self::$resolving = true;
+        self::storeResolving(true);
         $data = self::identityPolicy();
 
         try {
@@ -217,7 +239,7 @@ final class CookieScope
         } catch (\Throwable) {
             // Event failure must not break cookie emission.
         } finally {
-            self::$resolving = false;
+            self::storeResolving(false);
         }
 
         unset($data['observers']);
@@ -246,11 +268,11 @@ final class CookieScope
             return self::$cachedPolicy;
         }
 
-        if (self::$resolving) {
+        if (self::isResolving()) {
             return self::identityPolicy();
         }
 
-        self::$resolving = true;
+        self::storeResolving(true);
         try {
             try {
                 $data = (self::$policyResolverOverride)();
@@ -267,7 +289,7 @@ final class CookieScope
 
             return $policy;
         } finally {
-            self::$resolving = false;
+            self::storeResolving(false);
         }
     }
 

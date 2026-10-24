@@ -460,6 +460,8 @@ LocalModel,LocalModel
 扫描进度,"Scan progress"
 点击选择目标语言,"Click to select target language"
 搜索语言、国家或代码...,"Search for language, country or code..."
+浏览器本地翻译（AI）,浏览器本地翻译（AI）
+全选语言,全选语言
 目标语言,"Target Language"
 当前目标语言：,"Current Target Language:"
 国际化支持：管理从源语言到目标语言的翻译词典,"Internationalization Support: Manage translation dictionaries from source language to target language"

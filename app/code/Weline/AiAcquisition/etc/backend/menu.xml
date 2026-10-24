@@ -21,5 +21,11 @@
               action="ai_acquisition/backend/run"
               icon="search"
               order="20"/>
+        <menu source="Weline_AiAcquisition::config"
+              name="ai_acquisition_config"
+              title="AI 获客配置"
+              action="ai_acquisition/backend/config"
+              icon="settings"
+              order="30"/>
     </menu>
 </menus>

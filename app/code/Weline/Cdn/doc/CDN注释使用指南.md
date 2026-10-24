@@ -640,7 +640,7 @@ Cloudflare Cache Rules **先匹配先生效**。`planRulesForEdgePush` 顺序：
 | A7 | Packer 读 `ApiRule` class/route，不靠 `toCloudflareRule` 猜面 | §0.2（实现约束）；契约测 |
 | A8 | 指南含「边缘真相=plan」「库内 merged ≠ 边缘 plan」 | **§0.1（本条）** |
 | A9 | Demo 脚本：无凭证 SKIP；有凭证 dry-run 可见 pack | §0.2 |
-| A10 | 受管对象稳定后一次 `aoci_maintain`（非整仓） | 收尾席 / 开发日志 |
+| A10 | 受管对象稳定后一次 `cognition_maintain`（非整仓） | 收尾席 / 开发日志 |
 
 契约与回归由测试席执行；本文锁定产品语义与双视图命名，不替代测试绿灯。
 

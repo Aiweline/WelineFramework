@@ -455,6 +455,9 @@ class SocialWebsiteAccountService
             'creative' => 'creative',
             'publish' => 'publish',
             'records' => 'records',
+            'autopilotplan' => 'autopilotPlan',
+            'extensionpublish' => 'extensionPublish',
+            'review' => 'review',
         ];
 
         return $map[$tab] ?? 'platforms';

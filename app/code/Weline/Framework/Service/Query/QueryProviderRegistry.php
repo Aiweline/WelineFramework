@@ -20,6 +20,8 @@ class QueryProviderRegistry implements ProcessSharedInterface
     /** @var array<string, QueryProviderInterface> */
     private array $providers = [];
 
+    private ?\WeakMap $fiberProviders = null;
+
     /** @var array<string, array{class_name:string, source_file:string}> */
     private array $providerDefinitions = [];
 
@@ -347,18 +349,37 @@ class QueryProviderRegistry implements ProcessSharedInterface
         );
     }
 
+    private function currentProviders(): array
+    {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            return $this->providers;
+        }
+        return $this->fiberProviders[$fiber] ?? [];
+    }
+
+    private function storeProviders(array $providers): void
+    {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            $this->providers = $providers;
+            return;
+        }
+        $this->fiberProviders ??= new \WeakMap();
+        $this->fiberProviders[$fiber] = $providers;
+    }
+
     private function instantiateNamedProvider(string $providerName): ?QueryProviderInterface
     {
-        if (isset($this->providers[$providerName])) {
-            return $this->providers[$providerName];
+        $providers = $this->currentProviders();
+        if (isset($providers[$providerName])) {
+            return $providers[$providerName];
         }
 
         $definition = $this->providerDefinitions[$providerName] ?? null;
         if ($definition === null) {
             return $this->resolveDeferredProvider($providerName);
         }
-
-        unset($this->providerDefinitions[$providerName]);
 
         $instance = $this->instantiateProviderDefinition($definition);
         if ($instance === null) {
@@ -367,10 +388,11 @@ class QueryProviderRegistry implements ProcessSharedInterface
 
         $resolvedName = trim($instance->getProviderName());
         if ($resolvedName !== '') {
-            $this->providers[$resolvedName] = $instance;
+            $providers[$resolvedName] = $instance;
         }
+        $this->storeProviders($providers);
 
-        return $this->providers[$providerName] ?? null;
+        return $this->currentProviders()[$providerName] ?? null;
     }
 
     private function resolveDeferredProvider(string $providerName): ?QueryProviderInterface
@@ -391,14 +413,16 @@ class QueryProviderRegistry implements ProcessSharedInterface
                 continue;
             }
 
-            $this->providers[$resolvedName] = $instance;
+            $providers = $this->currentProviders();
+            $providers[$resolvedName] = $instance;
+            $this->storeProviders($providers);
             if ($resolvedName !== $providerName) {
                 continue;
             }
         }
 
         $this->deferredDefinitions = $remaining;
-        return $this->providers[$providerName] ?? null;
+        return $this->currentProviders()[$providerName] ?? null;
     }
 
     private function instantiateRemainingProviders(): void
@@ -422,7 +446,9 @@ class QueryProviderRegistry implements ProcessSharedInterface
 
             $providerName = trim($instance->getProviderName());
             if ($providerName !== '') {
-                $this->providers[$providerName] = $instance;
+                $providers = $this->currentProviders();
+                $providers[$providerName] = $instance;
+                $this->storeProviders($providers);
             }
         }
     }

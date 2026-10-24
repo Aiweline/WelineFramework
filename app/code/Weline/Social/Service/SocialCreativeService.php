@@ -31,6 +31,8 @@ class SocialCreativeService
         if ($prompt === '') {
             $prompt = (string)__('发布 Weline_Social fake 模式浏览器验证内容。');
         }
+        $contentKind = $this->resolveContentKind($params);
+        $assets = $this->normalizeAssets($params);
         $platformCodes = \array_values(\array_filter(\array_map('strval', (array)($params['platforms'] ?? ['fake_browser']))));
         $fakeMode = (bool)($params['fake_mode'] ?? false);
         $useAi = (bool)($params['use_ai'] ?? !$fakeMode);
@@ -68,13 +70,57 @@ class SocialCreativeService
             ->setData(SocialCreativeDraft::schema_fields_CREATED_AT, $now)
             ->setData(SocialCreativeDraft::schema_fields_UPDATED_AT, $now)
             ->setVariants($variants)
-            ->setAssets(\is_array($params['assets'] ?? null) ? $params['assets'] : [])
+            ->setAssets($assets)
             ->save();
 
         return [
             'success' => true,
             'draft' => $draft->toArrayData(),
         ];
+    }
+
+    public function resolveContentKind(array $params): string
+    {
+        $kind = \strtolower(\trim((string)($params['content_kind'] ?? 'text')));
+        if ($kind === '') {
+            $kind = 'text';
+        }
+        if (!\in_array($kind, ['text', 'image'], true)) {
+            throw new \InvalidArgumentException('unsupported_content_kind: ' . $kind);
+        }
+
+        return $kind;
+    }
+
+    public function normalizeAssets(array $params): array
+    {
+        $kind = $this->resolveContentKind($params);
+        $raw = \is_array($params['assets'] ?? null) ? $params['assets'] : [];
+        if ($raw === [] && \in_array($kind, ['image', 'video'], true)) {
+            throw new \InvalidArgumentException('missing_media');
+        }
+
+        $assets = [];
+        foreach ($raw as $item) {
+            if (\is_scalar($item)) {
+                $assets[] = [
+                    'asset_id' => (int)$item,
+                    'kind' => $kind,
+                    'path' => '',
+                    'checksum' => '',
+                ];
+                continue;
+            }
+            $data = \is_array($item) ? $item : [];
+            $assets[] = [
+                'asset_id' => (int)($data['asset_id'] ?? 0),
+                'kind' => (string)($data['kind'] ?? $kind),
+                'path' => (string)($data['path'] ?? ''),
+                'checksum' => (string)($data['checksum'] ?? ''),
+            ];
+        }
+
+        return \array_values($assets);
     }
 
     public function getDraft(int $draftId): ?SocialCreativeDraft

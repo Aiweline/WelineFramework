@@ -11,7 +11,6 @@ require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATO
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Support.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Config.php';
 require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'ProcessRunner.php';
-require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'AociInstaller.php';
 
 /**
  * Step 0 bootstrap: verify Weline project guidance host state and auto-repair when possible.
@@ -123,12 +122,6 @@ if (($codexPlugin['changed'] ?? false) === true) {
     $repairs[] = 'refreshed_codex_plugin_single_registration';
 }
 
-// AOCI binary: missing → Weline MUST auto-install (aoci_complements_weline_mcp).
-// Failure is reported; it does not by itself block Weline STDIO readiness.
-$aociInstallation = welineGuidanceEnsureAociInstallation($repoRoot);
-if (($aociInstallation['status'] ?? '') === 'ready' && !($aociInstallation['cached'] ?? false)) {
-    $repairs[] = 'installed_aoci_binary';
-}
 
 $stdio = welineGuidanceProbeStdioMcp($repoRoot, $mcpRoot);
 $stdioOk = (bool) ($stdio['ready'] ?? false);
@@ -216,7 +209,7 @@ if (!$branchOk) {
 } elseif ($cursorBounceRecommended) {
     // Soft: keep ready so interactive STDIO stays usable; ToolService MCP_RUNTIME_STALE
     // still refuses stale-generation work until a new Agent turn re-leases the process.
-    $nextAction = 'learning-mcp source generation is newer than the live Cursor child, but the process is still healthy so ensure did not SIGTERM-bounce it. Start a new Agent turn to re-lease MCP (MCP_RUNTIME_STALE may refuse tools until then). Set WELINE_MCP_FORCE_BOUNCE=1 only if the live transport is dead. Do NOT toggle MCP in Settings and do NOT use Developer: Reload Window. Check health.project_intelligence.index_refresh_worker if sibling aoci calls time out.';
+    $nextAction = 'learning-mcp source generation is newer than the live Cursor child, but the process is still healthy so ensure did not SIGTERM-bounce it. Start a new Agent turn to re-lease MCP (MCP_RUNTIME_STALE may refuse tools until then). Set WELINE_MCP_FORCE_BOUNCE=1 only if the live transport is dead. Do NOT toggle MCP in Settings and do NOT use Developer: Reload Window. Check health.project_intelligence.index_refresh_worker if sibling cognition calls time out.';
 }
 
 welineGuidanceEmit([
@@ -257,7 +250,6 @@ welineGuidanceEmit([
     'cursor_mcp_bounce' => $cursorBounce,
     'mcp_host' => $activeHost,
     'host_mcp_install' => $hostMcpInstall,
-    'aoci_installation' => $aociInstallation,
     'ensure_mcp' => [
         'writes_host_config' => false,
         'primary_ready' => $hostReady,
@@ -278,25 +270,6 @@ function welineGuidanceEmit(array $payload, int $exitCode): never
 }
 
 /** @return array<string,mixed> */
-function welineGuidanceEnsureAociInstallation(string $repoRoot): array
-{
-    try {
-        $installer = new \LearningMcp\AociInstaller(
-            \LearningMcp\Config::expandPath('~/.learning-mcp/tools/aoci'),
-            new \LearningMcp\ProcessRunner(),
-        );
-
-        return $installer->ensure($repoRoot);
-    } catch (\Throwable $exception) {
-        return [
-            'schema_version' => 'aoci-installation.v1',
-            'status' => 'failed',
-            'cached' => false,
-            'error' => $exception->getMessage(),
-            'next_action' => '修复 AOCI 自动安装失败原因后重跑 ensure-project-guidance / prepare_project。',
-        ];
-    }
-}
 
 function welineGuidanceResolveRepoRoot(string $mcpRoot): ?string
 {

@@ -40,6 +40,24 @@ abstract class AbstractSocialPlatformProvider implements SocialPlatformProviderI
         $definition['auth_modes'] = \array_values((array)($definition['auth_modes'] ?? []));
         $definition['capabilities'] = \array_values((array)($definition['capabilities'] ?? []));
         $definition['content_types'] = \array_values((array)($definition['content_types'] ?? ['text']));
+        $mediaUpload = ['text' => 'none', 'image' => 'none', 'video' => 'none'];
+        foreach ($definition['content_types'] as $contentType) {
+            if (isset($mediaUpload[$contentType])) {
+                $mediaUpload[$contentType] = 'implemented';
+            }
+        }
+        foreach ((array)($definition['media_upload'] ?? []) as $kind => $state) {
+            if (isset($mediaUpload[$kind])) {
+                $mediaUpload[$kind] = (string)$state;
+            }
+        }
+        $definition['media_upload'] = $mediaUpload;
+        $definition['media_specs'] = \array_merge([
+            'image' => ['max_bytes' => 8388608, 'ratios' => ['1:1'], 'min_side' => 320],
+            'video' => ['max_bytes' => 268435456, 'duration_s' => [3, 60], 'ratios' => ['9:16', '16:9']],
+            'caption' => ['max_chars' => 2200, 'hashtags_max' => 30],
+        ], (array)($definition['media_specs'] ?? []));
+        $definition['publish_ui'] = (bool)($definition['publish_ui'] ?? true);
         $definition['config_fields'] = \array_values((array)($definition['config_fields'] ?? []));
         $definition['docs'] = (array)($definition['docs'] ?? []);
         $definition['icon'] = (string)($definition['icon'] ?? $definition['code']);

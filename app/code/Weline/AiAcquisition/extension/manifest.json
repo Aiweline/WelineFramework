@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Weline AI 获客浏览器桥",
-  "version": "1.1.0",
-  "description": "在用户浏览器内执行获客搜索与页面抽取，通过票据桥接 Weline AI 获客运行。",
+  "version": "1.3.0",
+  "description": "在用户浏览器内执行获客搜索与页面抽取；页面出现票据时悬浮助手自动弹出并桥接 Weline AI 获客运行。",
   "permissions": [
     "storage",
     "alarms",
     "scripting",
     "tabs",
-    "aiLanguageModel"
+    "aiLanguageModel",
+    "offscreen"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -23,5 +24,17 @@
   "options_page": "options/options.html",
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "assistant.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
 }

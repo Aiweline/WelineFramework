@@ -47,6 +47,17 @@ final class RequestCycleContractsTest extends TestCase
         self::assertStringContainsString('WELINE_BUILD_ID', $source);
     }
 
+    public function testFpmPreflightIsGatedByReleaseStampSoCliCanCompile(): void
+    {
+        $source = $this->source('Runtime/FpmRuntime.php');
+        $gatePos = \strpos($source, "if (\\defined('WELINE_BUILD_ID')) {");
+        $preflightPos = \strpos($source, 'ContainerRuntime::preflight();');
+        self::assertNotFalse($gatePos, '无发布戳的 CLI（全新安装首次 setup:upgrade）不得被严格 preflight 拦死');
+        self::assertNotFalse($preflightPos);
+        self::assertLessThan($preflightPos, $gatePos);
+        self::assertSame(1, \substr_count($source, 'ContainerRuntime::preflight();'));
+    }
+
     public function testGenerationValidationRequiresReleaseStamp(): void
     {
         $source = $this->source('Compilation/FrameworkCompileManifest.php');

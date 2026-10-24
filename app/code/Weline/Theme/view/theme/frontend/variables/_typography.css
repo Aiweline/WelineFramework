@@ -1,7 +1,7 @@
 /**
  * 变量：字体变量定义
  *
- * 古风分层：正文宋体可读、标题文楷出韵、界面控件偏干净。
+ * 定义字体系统相关的变量
  * 字段
  * @meta.name {default="字体变量",name="字体变量",description="字体变量，用于描述变量的名称"}
  * @meta.description {default="定义字体系统相关的变量，包括字体族、字体大小、字体粗细、行高等",name="定义字体系统相关的变量，包括字体族、字体大小、字体粗细、行高等",description="定义字体系统相关的变量，包括字体族、字体大小、字体粗细、行高等，用于描述变量的用途"}
@@ -12,13 +12,10 @@
 
 :root {
     /* ========== 字体族 #font-family ========== */
-    /* 正文 / 商品卡文案：思源宋体 */
-    --font-family-base: "Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", "SimSun", "Noto Sans SC", "PingFang SC", serif;
-    /* 标题 / Hero / 区块名：霞鹜文楷（默认古风主信号） */
-    --font-family-display: "LXGW WenKai", "Kaiti SC", "STKaiti", "KaiTi", "Noto Serif SC", "Songti SC", serif;
-    /* 顶栏 / 按钮 / 筛选等密控件：宋体，避免楷书发糊 */
-    --font-family-ui: "Noto Serif SC", "Songti SC", "Noto Sans SC", "PingFang SC", serif;
-    --font-family-serif: "Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", "SimSun", Georgia, "Times New Roman", serif;
+    --font-family-base: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --font-family-display: var(--font-family-base);
+    --font-family-ui: var(--font-family-base);
+    --font-family-serif: Georgia, "Times New Roman", serif;
     --font-family-mono: "Courier New", Courier, monospace;
 
     /* ========== 字体大小 #font-size ========== */
@@ -40,7 +37,7 @@
 
     /* ========== 行高 #line-height ========== */
     --line-height-tight: 1.25;
-    --line-height-normal: 1.55;
+    --line-height-normal: 1.5;
     --line-height-relaxed: 1.75;
     --line-height-loose: 2;
 

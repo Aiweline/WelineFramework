@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\AiAcquisition\Service\Tool;
 
 use Weline\Ai\Api\ToolInterface;
+use Weline\AiAcquisition\Service\Scan\RunScope;
+use Weline\AiAcquisition\Service\Scan\ScanRegistry;
 use Weline\AiAcquisition\Service\Search\PageInspector;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -46,10 +48,27 @@ class InspectPageTool implements ToolInterface
             return ['error' => (string)__('url 不能为空，请给出搜索结果中的公开页面地址。')];
         }
 
+        // 页面去重：已扫描过的地址直接返回，不再抓取（省时间也省模型 token）。
+        $registry = RunScope::hasWebsite() ? ObjectManager::getInstance(ScanRegistry::class) : null;
+        if ($registry !== null) {
+            $probe = $registry->filterUnseen(RunScope::websiteId(), [$url]);
+            if ($probe['allowed'] === []) {
+                return [
+                    'url' => $url,
+                    'skipped' => true,
+                    'reason' => (string)__('该页面在此站点已扫描过，请换别的候选页或换关键词。'),
+                ];
+            }
+        }
+
         try {
             $result = ObjectManager::getInstance(PageInspector::class)->inspect($url);
         } catch (\Throwable $e) {
             return ['error' => (string)__('页面检查失败：%{1}', [$e->getMessage()])];
+        }
+
+        if ($registry !== null && !(isset($result['error']) && (string)$result['error'] !== '')) {
+            $registry->mark(RunScope::websiteId(), [$url], RunScope::runId());
         }
 
         if (isset($result['error']) && (string)$result['error'] !== '') {

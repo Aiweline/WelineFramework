@@ -17,6 +17,7 @@ namespace Weline\Theme\Controller\Frontend;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Service\LayoutResolveService;
+use Weline\Theme\Service\ThemeLayoutLocator;
 
 /**
  * 政策/法律壳（店面）。
@@ -185,6 +186,9 @@ class Policy extends FrontendController
         }
         if ($title === '' && $layoutType === 'sitemap') {
             $title = '站点地图';
+        }
+        if ($title === '') {
+            $title = $this->layoutLocator()->themeDeclaredTitle($layoutType, $layoutOption);
         }
         if ($title !== '') {
             $this->assign('title', \Weline\Theme\Helper\WidgetI18n::label($title));
@@ -357,13 +361,7 @@ class Policy extends FrontendController
             'about' => '关于我们',
             'contact' => '联系我们',
             'faq' => 'FAQ/常见问题',
-            'journal' => '道记',
-            'journal-article' => '道记文章',
-            'readingnote' => '道记文章',
-            'article' => '道记文章',
-            'sanctuary' => '无为空间',
             'shop' => '选购',
-            'lounge' => '道家居服',
             'terms' => '服务条款',
             'guide' => '指南',
             'payment_guide' => '支付方式指南',
@@ -402,13 +400,7 @@ class Policy extends FrontendController
             'faq' => ['default'],
             'guide' => ['default'],
             'payment_guide' => ['default'],
-            'journal' => ['default'],
-            'journal-article' => ['default'],
-            'readingnote' => ['default'],
-            'article' => ['default'],
-            'sanctuary' => ['default'],
             'shop' => ['default'],
-            'lounge' => ['default'],
             'not_found' => ['default'],
             'promotion' => ['default'],
             'qa' => ['default'],
@@ -431,7 +423,15 @@ class Policy extends FrontendController
             'search' => ['default'],
         ];
 
-        return isset($allowedLayouts[$layoutType])
-            && in_array($layoutOption, $allowedLayouts[$layoutType], true);
+        if (isset($allowedLayouts[$layoutType])) {
+            return in_array($layoutOption, $allowedLayouts[$layoutType], true);
+        }
+
+        return $this->layoutLocator()->themeDeclaredFile($layoutType, $layoutOption) !== null;
+    }
+
+    private function layoutLocator(): ThemeLayoutLocator
+    {
+        return ObjectManager::getInstance(ThemeLayoutLocator::class);
     }
 }

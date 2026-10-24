@@ -69,7 +69,10 @@ class Lead extends BackendController
             'forum' => '论坛/社区',
             'directory' => '目录/名录',
             'manual' => '手动录入',
+            'ai_select' => 'AI 选择录入',
+            'skill' => '获客技能录入',
         ]);
+        $this->assign('entryChannelLabels', LeadModel::ENTRY_CHANNELS);
 
         return $this->fetch();
     }

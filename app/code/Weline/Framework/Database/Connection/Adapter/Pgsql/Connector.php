@@ -127,19 +127,23 @@ final class Connector extends Query implements
         if ($this->link !== null && $this->lease?->isActive()) {
             if (!$this->lease->isOwnedByCurrentOwner() && $this->lease->isOwnerFiberDead()) {
                 // The owning fiber terminated without releasing its lease. Recycle
-                // the stale lease and reconnect under the current owner.
+                // the stale lease, then fall through to the acquire path below:
+                // close() nulls link/lease, so returning here would hand back a
+                // connector with no connection (PdoConnection(null) fatal).
                 try {
                     ConnectionPool::releaseLease($this->lease);
                 } catch (\Throwable) {
                     // Pool may have already finalized it.
                 }
                 $this->close();
-            } elseif (!$this->lease->isOwnedByCurrentOwner()) {
-                throw new \RuntimeException('database_connector_owner_mismatch');
+            } else {
+                if (!$this->lease->isOwnedByCurrentOwner()) {
+                    throw new \RuntimeException('database_connector_owner_mismatch');
+                }
+                // 🔧 修复：如果连接已存在，确保引用也被设置
+                $this->_original_pdo = $this->link;
+                return $this;
             }
-            // 🔧 修复：如果连接已存在，确保引用也被设置
-            $this->_original_pdo = $this->link;
-            return $this;
         }
         if ($this->link !== null || $this->lease !== null) {
             $this->close();
@@ -188,6 +192,7 @@ final class Connector extends Query implements
         );
         $this->lease = $lease;
         $this->link = $lease->getConnection();
+
         $this->_original_pdo = $this->link;
         try {
             // 初始化 SchemaConfig（统一管理 schema）
@@ -213,6 +218,8 @@ final class Connector extends Query implements
     public function getWrappedConnection(): DbConnectionInterface
     {
         $this->create();
+        if ($this->link === null) {
+        }
         if ($this->wrappedConnection === null) {
             $this->wrappedConnection = new PdoConnection($this->link, 'pgsql');
         }

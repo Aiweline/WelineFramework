@@ -33,13 +33,19 @@ class SocialCreativeDraft extends Model
     public const schema_fields_ASSETS_JSON = 'assets_json';
     #[Col('varchar', 32, nullable: false, default: 'draft', comment: 'Draft status')]
     public const schema_fields_STATUS = 'status';
+    #[Col('varchar', 20, nullable: false, default: 'none', comment: 'Review status')]
+    public const schema_fields_REVIEW_STATUS = 'review_status';
+    #[Col('varchar', 16, nullable: false, default: 'site', comment: 'Topic source')]
+    public const schema_fields_TOPIC_SOURCE = 'topic_source';
+    #[Col('varchar', 512, nullable: true, comment: 'Topic source URL')]
+    public const schema_fields_TOPIC_SOURCE_URL = 'topic_source_url';
     #[Col('datetime', nullable: true, comment: 'Created at')]
     public const schema_fields_CREATED_AT = 'created_at';
     #[Col('datetime', nullable: true, comment: 'Updated at')]
     public const schema_fields_UPDATED_AT = 'updated_at';
 
     public array $_unit_primary_keys = ['draft_id'];
-    public array $_index_sort_keys = ['status'];
+    public array $_index_sort_keys = ['status', 'review_status'];
 
     public function _init(): void
     {

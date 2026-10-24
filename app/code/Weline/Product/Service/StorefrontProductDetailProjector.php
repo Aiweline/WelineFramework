@@ -45,6 +45,13 @@ final class StorefrontProductDetailProjector
         'width_cm',
         'height_cm',
         'weight_kg',
+        'url_key',
+        'meta_name',
+        'meta_description',
+        'meta_keyword',
+        'meta_keywords',
+        'source_url',
+        'source_slug',
     ];
 
     private ?StorefrontEavLabelResolver $eavLabels;

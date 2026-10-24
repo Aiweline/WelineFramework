@@ -258,6 +258,7 @@ final class ConnectionAcceptGate
         if (!$whitelisted && $this->matchesSet($peerIp, $this->denyExact, $this->denyNetworks)) {
             return $this->reject($peerIp, 'ip_denied', false, $trustedSource);
         }
+        // pierce pass handled at policy layer
         if ($this->connectionRateEnabled
             && !$whitelisted
             && $this->perIpConnectionRate > 0

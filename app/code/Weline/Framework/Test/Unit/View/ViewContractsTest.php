@@ -380,7 +380,7 @@ private function assert_ForbidHardcodedModuleStaticUrl_testTraitTemplateModuleSt
 private function assert_FormFiberCapture_testFormTaglibCallbackUsesFiberOutputBufferNotNativeOb(): void
 {
     $source = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/View/Taglib.php');
-    self::assertSame('20261023-block-lang-attr-v9', Taglib::COMPILER_GENERATION);
+    self::assertSame('20261023-compile-scope-v13', Taglib::COMPILER_GENERATION);
     self::assertStringContainsString('FiberOutputBuffer::beginCapture()', $source);
     self::assertStringContainsString('FiberOutputBuffer::endCapture()', $source);
     self::assertStringContainsString('Taglib__form_body', $source);
@@ -1074,7 +1074,7 @@ private function assert_TraitTemplateTagSourceAreaRoute_testFetchTagSourceDisabl
 
 private function assert_UrlLiteralBake_testCompilerGenerationBumpsForUrlLiteralBake(): void
 {
-    self::assertSame('20261023-block-lang-attr-v9', Taglib::COMPILER_GENERATION);
+    self::assertSame('20261023-compile-scope-v13', Taglib::COMPILER_GENERATION);
     $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/View/Taglib.php');
     self::assertStringContainsString('function tryBakeUrlFamily', $source);
     self::assertStringContainsString('adjustBakedStaticInlineReplacement', $source);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\AiAcquisition\Service\Run;
 
+use Weline\AiAcquisition\Model\BridgeEvent;
 use Weline\AiAcquisition\Model\LeadRun;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\AiAcquisition\Model\PromptProfile;
@@ -165,7 +166,7 @@ class RunService
     }
 
     /**
-     * 按票据取运行：空/超长/过期/非 pending、running 都返回 null。
+     * 按票据取运行：空/超长/过期返回 null；状态由调用方按接口语义校验。
      *
      * @return array<string,mixed>|null
      */
@@ -190,12 +191,133 @@ class RunService
         if ((int)($row[LeadRun::schema_fields_TICKET_EXPIRES_AT] ?? 0) <= time()) {
             return null;
         }
-        $status = (string)($row[LeadRun::schema_fields_STATUS] ?? '');
-        if (!in_array($status, [LeadRun::STATUS_PENDING, LeadRun::STATUS_RUNNING], true)) {
+
+        return $this->normalizeRunRow($row);
+    }
+
+    /**
+     * 浏览器模型初始化完成：写入桥接信息并从 pending 进入 running。
+     *
+     * @param array<string,mixed> $info
+     */
+    public function markBridgeReady(int $runId, array $info = []): bool
+    {
+        $run = $this->findModel($runId);
+        if ($run === null) {
+            return false;
+        }
+
+        $current = (string)$run->getData(LeadRun::schema_fields_STATUS);
+        if (!in_array($current, [LeadRun::STATUS_PENDING, LeadRun::STATUS_RUNNING], true)) {
+            return false;
+        }
+
+        $meta = $this->decodeMeta((string)$run->getData(LeadRun::schema_fields_META_JSON));
+        $meta['bridge_ready_at'] = time();
+        foreach (['model_mode', 'model_label'] as $key) {
+            $value = trim((string)($info[$key] ?? ''));
+            if ($value !== '') {
+                $meta['bridge_' . $key] = mb_substr($value, 0, 120);
+            }
+        }
+
+        $now = time();
+        $fields = [
+            LeadRun::schema_fields_STATUS => LeadRun::STATUS_RUNNING,
+            LeadRun::schema_fields_META_JSON => json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            LeadRun::schema_fields_UPDATED_AT => $now,
+        ];
+        if ((int)$run->getData(LeadRun::schema_fields_STARTED_AT) <= 0) {
+            $fields[LeadRun::schema_fields_STARTED_AT] = $now;
+        }
+        $this->updateRun($runId, $fields);
+
+        return true;
+    }
+
+    /**
+     * 暂停运行；只有执行中的运行可暂停。
+     */
+    public function pause(int $runId): bool
+    {
+        $run = $this->findModel($runId);
+        if ($run === null) {
+            return false;
+        }
+        if ((string)$run->getData(LeadRun::schema_fields_STATUS) !== LeadRun::STATUS_RUNNING) {
+            return false;
+        }
+
+        $now = time();
+        $this->updateRun($runId, [
+            LeadRun::schema_fields_STATUS => LeadRun::STATUS_PAUSED,
+            LeadRun::schema_fields_UPDATED_AT => $now,
+        ]);
+
+        return true;
+    }
+
+    /**
+     * 继续已暂停的运行。
+     */
+    public function resume(int $runId): bool
+    {
+        $run = $this->findModel($runId);
+        if ($run === null) {
+            return false;
+        }
+        if ((string)$run->getData(LeadRun::schema_fields_STATUS) !== LeadRun::STATUS_PAUSED) {
+            return false;
+        }
+
+        $now = time();
+        $this->updateRun($runId, [
+            LeadRun::schema_fields_STATUS => LeadRun::STATUS_RUNNING,
+            LeadRun::schema_fields_UPDATED_AT => $now,
+        ]);
+
+        return true;
+    }
+
+    /**
+     * 删除运行记录；执行中/已暂停的运行必须先停止，级联清理桥事件。
+     */
+    public function delete(int $runId): bool
+    {
+        $run = $this->findModel($runId);
+        if ($run === null) {
+            return false;
+        }
+
+        $status = (string)$run->getData(LeadRun::schema_fields_STATUS);
+        if (in_array($status, [LeadRun::STATUS_RUNNING, LeadRun::STATUS_PAUSED], true)) {
+            return false;
+        }
+
+        $this->purgeEvents($runId);
+
+        $this->runModel->clearData()->reset()
+            ->where(LeadRun::schema_fields_ID, $runId)
+            ->delete()
+            ->fetch();
+
+        return true;
+    }
+
+    /**
+     * @return array{run:array<string,mixed>,events:list<array<string,mixed>>}|null
+     */
+    public function detail(int $runId): ?array
+    {
+        $run = $this->status($runId);
+        if ($run === null) {
             return null;
         }
 
-        return $this->normalizeRunRow($row);
+        return [
+            'run' => $run,
+            'events' => $this->recentEvents($runId, 50),
+        ];
     }
 
     public function markRunning(int $runId): bool
@@ -433,6 +555,73 @@ class RunService
     }
 
     /**
+     * 删除运行关联的桥事件与线索引用（删除运行记录前调用）。
+     */
+    private function purgeEvents(int $runId): void
+    {
+        if ($runId <= 0) {
+            return;
+        }
+
+        try {
+            ObjectManager::getInstance(BridgeEvent::class)
+                ->clearData()
+                ->clearQuery()
+                ->where(BridgeEvent::schema_fields_RUN_ID, $runId)
+                ->delete()
+                ->fetch();
+        } catch (\Throwable) {
+            // 事件表缺失时不影响运行删除
+        }
+    }
+
+    /**
+     * 运行详情用：最近事件（双方向）。
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function recentEvents(int $runId, int $limit = 50): array
+    {
+        if ($runId <= 0) {
+            return [];
+        }
+        $limit = max(1, min(100, $limit));
+
+        try {
+            $rows = ObjectManager::getInstance(BridgeEvent::class)
+                ->clearData()
+                ->clearQuery()
+                ->where(BridgeEvent::schema_fields_RUN_ID, $runId)
+                ->order(BridgeEvent::schema_fields_ID, 'DESC')
+                ->limit($limit)
+                ->select()
+                ->fetchArray();
+        } catch (\Throwable) {
+            return [];
+        }
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $events = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $payload = json_decode((string)($row[BridgeEvent::schema_fields_PAYLOAD_JSON] ?? ''), true);
+            $events[] = [
+                'id' => (int)($row[BridgeEvent::schema_fields_ID] ?? 0),
+                'type' => (string)($row[BridgeEvent::schema_fields_TYPE] ?? ''),
+                'direction' => (string)($row[BridgeEvent::schema_fields_DIRECTION] ?? ''),
+                'payload' => is_array($payload) ? $payload : [],
+                'created_at' => (int)($row[BridgeEvent::schema_fields_CREATED_AT] ?? 0),
+            ];
+        }
+
+        return $events;
+    }
+
+    /**
      * @param array<string,mixed> $fields
      */
     private function updateRun(int $runId, array $fields): void
@@ -451,6 +640,12 @@ class RunService
     private function normalizeRunRow(array $row): array
     {
         $status = (string)($row[LeadRun::schema_fields_STATUS] ?? '');
+        $meta = $this->decodeMeta((string)($row[LeadRun::schema_fields_META_JSON] ?? ''));
+        $modelMode = (string)($meta['model_mode'] ?? 'ai_module');
+        $modelLabel = (string)($meta['bridge_model_label'] ?? '');
+        if ($modelLabel === '') {
+            $modelLabel = (string)($meta['local_model'] ?? $meta['browser_model'] ?? '');
+        }
 
         return [
             'id' => (int)($row[LeadRun::schema_fields_ID] ?? 0),
@@ -458,6 +653,10 @@ class RunService
             'status' => $status,
             'status_label' => (string)(LeadRun::STATUSES[$status] ?? $status),
             'model_code' => (string)($row[LeadRun::schema_fields_MODEL_CODE] ?? ''),
+            'model_mode' => $modelMode,
+            'model_label' => $modelLabel,
+            'bridge_ready' => (int)($meta['bridge_ready_at'] ?? 0) > 0,
+            'website_name' => (string)($meta['website_name'] ?? ''),
             'prompt_profile_id' => (int)($row[LeadRun::schema_fields_PROMPT_PROFILE_ID] ?? 0),
             'prompt_body' => (string)($row[LeadRun::schema_fields_PROMPT_BODY] ?? ''),
             'ticket_expires_at' => (int)($row[LeadRun::schema_fields_TICKET_EXPIRES_AT] ?? 0),
@@ -471,7 +670,7 @@ class RunService
             'cost' => round((float)($row[LeadRun::schema_fields_COST] ?? 0), 6),
             'currency' => (string)($row[LeadRun::schema_fields_CURRENCY] ?? ModelCatalogService::CURRENCY),
             'error' => (string)($row[LeadRun::schema_fields_ERROR] ?? ''),
-            'meta' => $this->decodeMeta((string)($row[LeadRun::schema_fields_META_JSON] ?? '')),
+            'meta' => $meta,
             'created_at' => (int)($row[LeadRun::schema_fields_CREATED_AT] ?? 0),
             'updated_at' => (int)($row[LeadRun::schema_fields_UPDATED_AT] ?? 0),
             'started_at' => (int)($row[LeadRun::schema_fields_STARTED_AT] ?? 0),

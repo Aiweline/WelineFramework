@@ -1,0 +1,193 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var array<int,array<string,mixed>> $grants */
+/** @var string $pairingCode */
+$grants = \is_array($grants ?? null) ? $grants : [];
+$pairingCode = (string)($pairingCode ?? '');
+$h = static function ($value): string {
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+};
+?>
+<?= $this->fetch('Weline_Ai::templates/backend/Manager/tabs.phtml', ['activeTab' => 'extension']) ?>
+<div class="w-container">
+  <div class="w-card" style="--w-p:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+    <h4 style="--w-m:0 0 var(--weline-space-2);"><?= __('浏览器扩展') ?></h4>
+    <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);">
+      <?= __('首次使用：下载扩展 ZIP，解压后在 Chrome 扩展页开启「开发者模式」并加载已解压的扩展目录；之后回到本页点击「在线授权」即可（授权一次，签章自动续期）。') ?>
+    </div>
+    <div class="w-cluster" data-wrap="true" data-align="center" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-2);">
+      <a class="w-button" data-tone="neutral" data-variant="outline" data-size="sm" href="@static(Weline_Ai::downloads/weline-ai-extension.zip)" download>
+        <?= __('下载扩展 ZIP') ?>
+      </a>
+      <button class="w-button" type="button" data-tone="primary" data-size="sm" id="ai-extension-authorize">
+        <?= __('在线授权') ?>
+      </button>
+      <span class="w-text" data-size="sm" id="ai-extension-authorize-state" data-tone="muted"></span>
+    </div>
+    <div class="w-text" data-tone="muted" data-size="sm">
+      <?= __('扩展状态') ?>：<span id="ai-extension-ext-status"><?= __('检测中…') ?></span>
+    </div>
+  </div>
+
+  <div class="w-card" style="--w-p:var(--weline-space-4);">
+    <h4 style="--w-m:0 0 var(--weline-space-3);"><?= __('授权设备') ?></h4>
+    <?php if (empty($grants)): ?>
+      <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-3);"><?= __('暂无授权设备') ?></div>
+      <div class="w-cluster">
+        <button class="w-button" type="button" data-tone="primary" data-variant="outline" data-size="sm">
+          <?= __('开始授权') ?>
+        </button>
+      </div>
+    <?php else: ?>
+      <div class="w-table" style="--w-mb:var(--weline-space-3);">
+        <table>
+          <thead>
+            <tr>
+              <th><?= __('授权ID') ?></th>
+              <th><?= __('设备指纹') ?></th>
+              <th><?= __('状态') ?></th>
+              <th><?= __('创建时间') ?></th>
+              <th><?= __('操作') ?></th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($grants as $grant): ?>
+              <?php
+                $grantId = (string)($grant['grant_id'] ?? '');
+                $status = (string)($grant['status'] ?? '');
+                $fingerprint = (string)($grant['device_fp'] ?? '');
+              ?>
+              <tr>
+                <td><code class="w-text" title="<?= $h($grantId) ?>"><?= $h(mb_substr($grantId, 0, 10)) ?></code></td>
+                <td><code class="w-text" title="<?= $h($fingerprint) ?>"><?= $h(mb_substr($fingerprint, 0, 12)) ?></code></td>
+                <td><span class="w-badge" data-tone="<?= $status === 'active' ? 'success' : 'muted' ?>"><?= $h($status === 'active' ? __('有效') : __('已撤销')) ?></span></td>
+                <td class="w-text"><?= $h($grant['created_at'] ?? '') ?></td>
+                <td>
+                  <?php if ($status === 'active'): ?>
+                    <button class="w-button" type="button" data-tone="danger" data-variant="outline" data-size="sm" data-revoke-grant="<?= $h($grantId) ?>">
+                      <?= __('撤销') ?>
+                    </button>
+                  <?php endif; ?>
+                </td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+  </div>
+</div>
+<script>
+(function () {
+  'use strict';
+  function post(url, data) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(data || {})
+    }).then(function (response) {
+      return response.json().catch(function () { return {}; }).then(function (payload) {
+        if (!response.ok || payload.success === false) {
+          throw new Error(payload.message || (response.statusText || 'Request failed'));
+        }
+        return payload;
+      });
+    });
+  }
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-revoke-grant]');
+    if (!button) { return; }
+    event.preventDefault();
+    var grantId = button.getAttribute('data-revoke-grant') || '';
+    if (!grantId) { return; }
+    button.setAttribute('aria-busy', 'true');
+    post("@backend-url{'ai/backend/extensiongrants/revoke'}", { grant_id: grantId }).then(function () {
+      window.location.reload();
+    }).catch(function () {
+      button.removeAttribute('aria-busy');
+    });
+  });
+  var copyButton = document.getElementById('ai-extension-copy');
+  if (copyButton) {
+    copyButton.addEventListener('click', function () {
+      var text = copyButton.parentElement.querySelector('code');
+      if (!text || !navigator.clipboard) { return; }
+      navigator.clipboard.writeText(text.textContent || '');
+    });
+  }
+})();
+</script>
+
+<script>
+(function () {
+  'use strict';
+  var TYPE = 'weline-ai-ext';
+  function post(url, data) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(data || {})
+    }).then(function (response) {
+      return response.json().catch(function () { return {}; }).then(function (payload) {
+        if (!response.ok || payload.success === false) {
+          throw new Error(payload.message || (response.statusText || 'Request failed'));
+        }
+        return payload;
+      });
+    });
+  }
+  function ask(action, payload) {
+    return new Promise(function (resolve, reject) {
+      var nonce = 'pg-' + action + '-' + Date.now();
+      var timer = setTimeout(function () {
+        window.removeEventListener('weline-ai-ext-reply', onReply);
+        reject(new Error(action === 'status' ? 'extension not installed' : 'extension not responding'));
+      }, 1500);
+      function onReply(event) {
+        var data = event.detail;
+        if (!data || data.type !== TYPE || data.nonce !== nonce) { return; }
+        clearTimeout(timer);
+        window.removeEventListener('weline-ai-ext-reply', onReply);
+        if (data.payload && data.payload.ok) { resolve(data.payload); }
+        else { reject(new Error((data.payload && data.payload.error) || 'rejected')); }
+      }
+      window.addEventListener('weline-ai-ext-reply', onReply);
+      window.dispatchEvent(new CustomEvent('weline-ai-ext-request', { detail: { type: TYPE, action: action, nonce: nonce, payload: payload || {} } }));
+    });
+  }
+  var stateEl = document.getElementById('ai-extension-ext-status');
+  var authStateEl = document.getElementById('ai-extension-authorize-state');
+  function refreshExtStatus() {
+    if (!stateEl) { return; }
+    ask('status', {}).then(function (p) {
+      stateEl.textContent = p.authorized ? '已授权，运行中' : '已安装，待授权';
+    }).catch(function () {
+      stateEl.textContent = '未安装或未启用';
+    });
+  }
+  var authButton = document.getElementById('ai-extension-authorize');
+  if (authButton) {
+    authButton.addEventListener('click', function () {
+      authButton.setAttribute('aria-busy', 'true');
+      if (authStateEl) { authStateEl.textContent = ''; }
+      post("@backend-url{'ai/backend/extension/pairing/execute'}", {
+        ext_id: 'weline-ai-assistant',
+        device_fp: 'browser-' + (navigator.platform || 'unknown')
+      }).then(function (payload) {
+        if (!payload.access) { throw new Error(payload.message || 'pairing failed'); }
+        return ask('pairing', { access: payload.access, origin: window.location.origin });
+      }).then(function () {
+        if (authStateEl) { authStateEl.textContent = '已授权'; }
+        setTimeout(function () { window.location.reload(); }, 800);
+      }).catch(function (error) {
+        if (authStateEl) { authStateEl.textContent = '授权失败：' + (error.message || '未知错误'); }
+      }).finally(function () {
+        authButton.removeAttribute('aria-busy');
+      });
+    });
+  }
+  refreshExtStatus();
+})();
+</script>

@@ -20,55 +20,35 @@ final class WlsFpcStoreAdapter implements FpcStoreAdapterInterface
 
     public function purgeUrls(array $urls): void
     {
-        try {
-            if (\class_exists(FullPageCacheCoordinator::class)) {
-                FullPageCacheCoordinator::purgeUrls($urls);
-            }
-        } catch (\Throwable) {
-            $this->clearProcessCache();
-        }
+        FullPageCacheCoordinator::purgeUrls($urls);
     }
 
     public function purgeSlugs(array $hosts, array $slugs): void
     {
         $this->clearProcessCache();
-        try {
-            FpcHtmlDiskStore::purgeSlugs($hosts, $slugs);
-        } catch (\Throwable) {
-        }
+        FpcHtmlDiskStore::purgeSlugs($hosts, $slugs);
     }
 
     public function purgeAll(string $reason = ''): void
     {
         $this->clearProcessCache();
-        try {
-            $manager = \Weline\Framework\Manager\ObjectManager::getInstance(
-                \Weline\Framework\Cache\CacheManager::class
-            );
-            foreach (['fpc', 'router'] as $pool) {
-                if (!\method_exists($manager, 'hasPool') || !$manager->hasPool($pool)) {
-                    continue;
-                }
-                $manager->pool($pool)->clear();
+        $manager = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Framework\Cache\CacheManager::class
+        );
+        foreach (['fpc', 'router'] as $pool) {
+            if (!\method_exists($manager, 'hasPool') || !$manager->hasPool($pool)) {
+                continue;
             }
-        } catch (\Throwable) {
+            $manager->pool($pool)->clear();
         }
-        try {
-            FpcHtmlDiskStore::purgeAll();
-            FpcHtmlDiskStore::purgeLegacyHashTrees();
-        } catch (\Throwable) {
-        }
+        FpcHtmlDiskStore::purgeAll();
+        FpcHtmlDiskStore::purgeLegacyHashTrees();
         unset($reason);
     }
 
     public function clearProcessCache(): void
     {
-        try {
-            if (\class_exists(FullPageCacheCoordinator::class)) {
-                FullPageCacheCoordinator::clearProcessCache();
-            }
-        } catch (\Throwable) {
-        }
+        FullPageCacheCoordinator::clearProcessCache();
     }
 
 }

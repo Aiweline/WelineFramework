@@ -18,6 +18,7 @@ use Weline\Framework\Deploy\DeployFpcInvalidation;
 use Weline\Framework\Deploy\DeployStagingSession;
 use Weline\Framework\Deploy\FlatStaticRuntimeFilesProviderInterface;
 use Weline\Framework\Deploy\HostProcessPoolPolicy;
+use Weline\Framework\Deploy\StaticBuildId;
 use Weline\Framework\Deploy\StaticBuildPublisher;
 use Weline\Framework\Deploy\WelineCoreBundle;
 use Weline\Framework\Deploy\StaticPublishExclusion;
@@ -139,11 +140,19 @@ class Upgrade extends CommandAbstract
                 if ($entry === '.' || $entry === '..') {
                     continue;
                 }
+                $child = $path . DIRECTORY_SEPARATOR . $entry;
                 // 主题更新代次根（tu-*）由代次机制管理，可能并发 cutover；不参与权限归一。
                 if ($isStaticRoot && str_starts_with($entry, 'tu-')) {
                     continue;
                 }
-                $child = $path . DIRECTORY_SEPARATOR . $entry;
+                // 12 位 hex 构建代包含完整的旧文件树；权限归一只需覆盖当前发布树，
+                // 递归历史代会把 126 模块发布拖成数十分钟。
+                if ($isStaticRoot
+                    && preg_match('/^[0-9a-f]{12}$/', $entry) === 1
+                    && is_file($child . DIRECTORY_SEPARATOR . StaticBuildId::BUILD_MARKER)
+                ) {
+                    continue;
+                }
                 if (is_link($child)) {
                     continue;
                 }
@@ -192,7 +201,17 @@ class Upgrade extends CommandAbstract
             }
             $this->printer->note(__('前端核心脚本已合并：%{1}', [$coreBundle['path']]));
         }
-        $normalizePermissions($staticRoot);
+        // Permission normalization walks every file in the live tree and is
+        // extremely slow on hosts with large static trees. It is not required
+        // for asset correctness; opt out explicitly for CLI/deploy runs.
+        $skipPermissions = in_array(
+            strtolower(trim((string)getenv('WELINE_SKIP_STATIC_PERMISSIONS'))),
+            ['1', 'true', 'yes', 'on'],
+            true,
+        );
+        if (!$skipPermissions) {
+            $normalizePermissions($staticRoot);
+        }
         try {
             $buildId = StaticBuildPublisher::publish($staticRoot);
             $this->printer->note(__('静态资源构建号：%{1}', [$buildId]));
@@ -341,15 +360,29 @@ class Upgrade extends CommandAbstract
                         'proc' => $proc,
                         'pipes' => $pipes,
                         'name' => $name,
+                        'stdout' => '',
+                        'stderr' => '',
                     ];
                 }
                 foreach ($running as $key => $state) {
                     $status = proc_get_status($state['proc']);
                     if (!empty($status['running'])) {
+                        // Drain both pipes every tick; otherwise a worker that logs
+                        // more than the OS pipe buffer blocks forever on write while
+                        // the parent waits for it to exit.
+                        $outChunk = stream_get_contents($state['pipes'][1]);
+                        if (is_string($outChunk) && $outChunk !== '') {
+                            $state['stdout'] .= $outChunk;
+                        }
+                        $errChunk = stream_get_contents($state['pipes'][2]);
+                        if (is_string($errChunk) && $errChunk !== '') {
+                            $state['stderr'] .= $errChunk;
+                        }
+                        $running[$key] = $state;
                         continue;
                     }
-                    $stdout = stream_get_contents($state['pipes'][1]);
-                    $stderr = stream_get_contents($state['pipes'][2]);
+                    $stdout = $state['stdout'] . (string)stream_get_contents($state['pipes'][1]);
+                    $stderr = $state['stderr'] . (string)stream_get_contents($state['pipes'][2]);
                     foreach ([1, 2] as $fd) {
                         if (is_resource($state['pipes'][$fd])) {
                             fclose($state['pipes'][$fd]);

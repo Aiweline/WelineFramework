@@ -122,6 +122,7 @@ play,玩
 保存,保存
 打穿章,打穿章
 "原 WLS Panel「FPC 打穿章」已迁入本页。轮换会重写 Nginx pierce map（Server 模块可用时）。","原 WLS Panel「FPC 打穿章」已迁入本页。轮换会重写 Nginx pierce map（Server 模块可用时）。"
+"该章同时是 WLS 通行章：URL 带 ?w_fpc_pierce=<密钥> 或本机持有其 Cookie 时，shared_ban / connection_rate_ban / path_scan 与攻击规则一律放行，并会顺手解封当前 IP。请按运维机密对待，勿外泄。","该章同时是 WLS 通行章：URL 带 ?w_fpc_pierce=<密钥> 或本机持有其 Cookie 时，shared_ban / connection_rate_ban / path_scan 与攻击规则一律放行，并会顺手解封当前 IP。请按运维机密对待，勿外泄。"
 打穿章状态,打穿章状态
 密钥（遮罩）,密钥（遮罩）
 "Cookie 名","Cookie 名"

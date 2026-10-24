@@ -80,9 +80,18 @@ class Run extends BackendController
             $websiteProfile = [];
         }
 
+        $selectedSiteLabel = '';
+        foreach ($websites as $website) {
+            if ((int)($website['website_id'] ?? -1) === (int)($selectedWebsiteId ?? -1)) {
+                $selectedSiteLabel = (string)($website['name'] ?? '');
+                break;
+            }
+        }
+
         $this->assign('websites', $websites);
         $this->assign('websiteProfile', $websiteProfile);
         $this->assign('selectedWebsiteId', $selectedWebsiteId ?? -1);
+        $this->assign('selectedSiteLabel', $selectedSiteLabel);
         $this->assign('models', $models);
         $this->assign('runs', $runs);
         $this->assign('profiles', $profiles);

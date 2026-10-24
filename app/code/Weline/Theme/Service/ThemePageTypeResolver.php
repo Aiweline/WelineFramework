@@ -526,8 +526,8 @@ final class ThemePageTypeResolver implements ProcessSharedInterface
             return ThemeLayout::PAGE_TYPE_NOT_FOUND;
         }
 
-        // Path ↔ layout 1:1 for known frontend layout folders (article/journal/sanctuary/…).
-        // Allowlist only — never treat arbitrary catalog/CMS slugs as layout types.
+        // Path ↔ layout 1:1 for module-shipped or theme-declared layout folders.
+        // Never treat arbitrary catalog/CMS slugs as layout types.
         // Needed so theme-head overlay can layout-scope CSS when Template layoutType
         // is not yet assigned at head render time.
         $fromSegment = $this->detectLayoutTypeFromKnownLayoutSegment($path);
@@ -555,12 +555,12 @@ final class ThemePageTypeResolver implements ProcessSharedInterface
             return '';
         }
         $first = \strtolower($segments[0]);
-        if (isset($set[$first])) {
+        if ($this->isLayoutSegment($first, $set)) {
             return $first;
         }
         foreach ($segments as $segment) {
             $segment = \strtolower($segment);
-            if (isset($set[$segment])) {
+            if ($this->isLayoutSegment($segment, $set)) {
                 return $segment;
             }
         }
@@ -569,7 +569,28 @@ final class ThemePageTypeResolver implements ProcessSharedInterface
     }
 
     /**
-     * Single-segment layout identities safe for URI→overlay scoping.
+     * @param array<string, true> $constantSet
+     */
+    private function isLayoutSegment(string $segment, array $constantSet): bool
+    {
+        if (isset($constantSet[$segment])) {
+            return true;
+        }
+        if (isset(self::NON_URI_LAYOUT_IDENTITIES[$segment])) {
+            return false;
+        }
+        /** @var ThemeLayoutLocator $locator */
+        $locator = ObjectManager::getInstance(ThemeLayoutLocator::class);
+
+        return $locator->moduleDefaultFile($segment) !== null
+            || $locator->themeDeclaredFile($segment) !== null;
+    }
+
+    /** Layout identities that must never be inferred from a URI segment. */
+    private const NON_URI_LAYOUT_IDENTITIES = ['default' => true, 'cms_page' => true, 'error' => true, 'test' => true];
+
+    /**
+     * Single-segment PAGE_TYPE_* identities safe for URI→overlay scoping.
      *
      * @return array<string, true>
      */
@@ -580,36 +601,18 @@ final class ThemePageTypeResolver implements ProcessSharedInterface
             return $set;
         }
         $set = [];
-        try {
-            foreach ((new \ReflectionClass(ThemeLayout::class))->getConstants() as $name => $value) {
-                if (!\is_string($name) || !\str_starts_with($name, 'PAGE_TYPE_') || !\is_string($value)) {
-                    continue;
-                }
-                $segment = \strtolower(\trim($value));
-                if ($segment === '' || \str_contains($segment, '/') || \str_contains($segment, '.')) {
-                    continue;
-                }
-                $set[$segment] = true;
+        foreach ((new \ReflectionClass(ThemeLayout::class))->getConstants() as $name => $value) {
+            if (!\is_string($name) || !\str_starts_with($name, 'PAGE_TYPE_') || !\is_string($value)) {
+                continue;
             }
-        } catch (\Throwable) {
-            // Fall through to the explicit shell list below.
-        }
-        // Design / Theme layout folders with public path ↔ layouts/{name} (not all in PAGE_TYPE_*).
-        foreach ([
-            'article',
-            'journal',
-            'journal-article',
-            'sanctuary',
-            'lounge',
-            'readingnote',
-            'shop',
-            'quiz',
-            'blank',
-        ] as $segment) {
+            $segment = \strtolower(\trim($value));
+            if ($segment === '' || \str_contains($segment, '/') || \str_contains($segment, '.')) {
+                continue;
+            }
             $set[$segment] = true;
         }
-        // Keep empty/cms/error/default as non-URI identities (handled elsewhere or must stay empty).
-        unset($set['default'], $set['cms_page'], $set['error'], $set['test']);
+
+        $set = \array_diff_key($set, self::NON_URI_LAYOUT_IDENTITIES);
 
         return $set;
     }

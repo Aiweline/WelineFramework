@@ -19,30 +19,21 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
     $repoRoot = $context['repo_root'];
     $serverConfig = $context['server_config'];
     $serverName = WELINE_PROJECT_INTELLIGENCE_MCP_SERVER;
-    $aociRegistration = welineMcpInstallAociRegistration($repoRoot);
 
     $primaryHost = welineMcpInstallDetectPrimaryHost([], [], $hostKind);
     $inactiveHost = ['ready' => null, 'binary_found' => false, 'reason' => 'inactive_host_not_probed'];
     $cursorProbe = $primaryHost === 'cursor' ? welineMcpInstallProbeCursor($repoRoot) : $inactiveHost;
     $claudeProbe = $primaryHost === 'claude' ? welineMcpInstallProbeClaude($repoRoot) : $inactiveHost;
 
-    // Cursor project config: Weline only. AOCI lives in user ~/.cursor/mcp.json (single落点).
+    // Cursor project config: Weline only. Cognition lives in user ~/.cursor/mcp.json (single落点).
     $cursorWelineDocument = [
         'mcpServers' => [
             $serverName => $serverConfig,
         ],
     ];
-    $cursorAociDocument = $aociRegistration === null ? null : [
-        'mcpServers' => [
-            'aoci' => $aociRegistration,
-        ],
-    ];
     // Unknown-host fallback document may include both for hosts that use one file.
     $cursorDocument = $cursorWelineDocument;
-    if ($aociRegistration !== null) {
-        $cursorDocument['mcpServers']['aoci'] = $aociRegistration;
-    }
-    $vscodeDocument = welineMcpInstallVscodeDocument($serverConfig, $serverName, $aociRegistration);
+    $vscodeDocument = welineMcpInstallVscodeDocument($serverConfig, $serverName);
     $claudeAdd = welineMcpInstallClaudeAddCommand($serverName, $serverConfig, $context);
 
     $cursorInstallSteps = [
@@ -50,19 +41,9 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
             '.cursor/mcp.json',
             $cursorWelineDocument,
             rtrim($repoRoot, "/\\") . DIRECTORY_SEPARATOR . '.cursor' . DIRECTORY_SEPARATOR . 'mcp.json',
-            ['aoci'],
+            [],
         ),
     ];
-    if ($cursorAociDocument !== null) {
-        $userCursorMcp = welineMcpInstallResolveConfigPath('~/.cursor/mcp.json');
-        $cursorInstallSteps[] = array_merge(
-            welineMcpInstallBuildWriteJsonStep('~/.cursor/mcp.json', $cursorAociDocument, $userCursorMcp),
-            [
-                'merge_servers' => true,
-                'summary' => 'Mount aoci only into user ~/.cursor/mcp.json when session lacks AOCI tools and registration is not already equivalent. Do not also write project .mcp.json aoci. Skip rewrite when noop=true.',
-            ],
-        );
-    }
     $cursorInstallSteps[] = [
         'kind' => 'shell',
         'command' => 'cursor-agent mcp enable ' . $serverName,
@@ -81,7 +62,7 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
             $cursorProbe,
             $cursorProbe['ready'] !== false ? null : [
                 'mode' => 'session_install',
-                'summary' => 'Write project Cursor MCP for Weline (idempotent); mount aoci only into ~/.cursor/mcp.json when missing/unequal; then approve/enable via cursor-agent. Skip any write_json step with noop=true. Never Reload Window—new Agent turn only.',
+                'summary' => 'Write project Cursor MCP for Weline (idempotent); then approve/enable via cursor-agent. Skip any write_json step with noop=true. Never Reload Window—new Agent turn only.',
                 'steps' => $cursorInstallSteps,
             ],
         ),
@@ -158,14 +139,6 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
         'server' => $serverName,
         'repository' => $repoRoot,
         'registration' => $serverConfig,
-        'aoci_registration' => $aociRegistration,
-        'aoci_cursor_mount' => [
-            'path' => '~/.cursor/mcp.json',
-            'single_mount_point' => true,
-            'forbid_project_mcp_json_aoci' => true,
-            'semantic_idempotent' => true,
-            'refresh' => 'new_agent_turn_only',
-        ],
         'primary_host' => $primaryHost,
         'primary_ready' => $primaryReady,
         'hosts' => $hosts,
@@ -173,55 +146,11 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
     ];
 }
 
-/**
- * Prefer the success marker written by AociInstaller; fall back to ~/.local/bin/aoci.
- *
- * Cursor STDIO (current Helper) speaks NDJSON — same framing as Weline learning-mcp
- * and bare `aoci mcp`. Do NOT wrap with aoci-mcp-cursor-bridge (Content-Length↔NDJSON):
- * that bridge leaves Cursor stuck in connecting with zero tools.
- *
- * @return array{command:string,args:list<string>,startup_timeout_sec?:int,tool_timeout_sec?:int}|null
- */
-function welineMcpInstallAociRegistration(string $repoRoot): ?array
-{
-    $home = getenv('HOME') ?: '';
-    $binary = '';
-    if ($home !== '') {
-        $markerPath = $home . '/.learning-mcp/tools/aoci/installed.json';
-        if (is_file($markerPath)) {
-            $marker = json_decode((string) file_get_contents($markerPath), true);
-            if (is_array($marker)
-                && ($marker['status'] ?? '') === 'ready'
-                && is_string($marker['binary'] ?? null)
-                && $marker['binary'] !== ''
-                && is_file($marker['binary'])) {
-                $binary = (string) $marker['binary'];
-            }
-        }
-        if ($binary === '') {
-            $fallback = $home . '/.local/bin/aoci';
-            if (is_file($fallback) && (PHP_OS_FAMILY === 'Windows' || is_executable($fallback))) {
-                $binary = $fallback;
-            }
-        }
-    }
-    if ($binary === '') {
-        return null;
-    }
-
-    return [
-        'command' => $binary,
-        'args' => ['--repo', $repoRoot, 'mcp'],
-        'startup_timeout_sec' => 120,
-        'tool_timeout_sec' => 300,
-    ];
-}
 
 /** @param array<string,mixed> $serverConfig
- *  @param array{command:string,args:list<string>}|null $aociRegistration
  *  @return array<string,mixed>
  */
-function welineMcpInstallVscodeDocument(array $serverConfig, string $serverName, ?array $aociRegistration = null): array
+function welineMcpInstallVscodeDocument(array $serverConfig, string $serverName): array
 {
     $entry = [
         'type' => 'stdio',
@@ -238,14 +167,6 @@ function welineMcpInstallVscodeDocument(array $serverConfig, string $serverName,
     $servers = [
         $serverName => $entry,
     ];
-    if ($aociRegistration !== null) {
-        $servers['aoci'] = [
-            'type' => 'stdio',
-            'command' => $aociRegistration['command'],
-            'args' => $aociRegistration['args'],
-        ];
-    }
-
     return [
         'servers' => $servers,
     ];

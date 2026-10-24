@@ -86,6 +86,12 @@ class PublicApiAuthRouteMatcher
     ];
 
     private const GUEST_FRONTEND_PATH_PATTERNS = [
+        // Weline_App 公开接口（下载部件/自更新/推送令牌）：config/version/download/push-register/push-unregister
+        'weline_app/rest/v1/config',
+        'weline_app/rest/v1/version',
+        'weline_app/rest/v1/download',
+        'weline_app/rest/v1/push/register',
+        'weline_app/rest/v1/push/unregister',
         'visitor/rest/v1/statistics',
         'visitor/rest/v1/analytics',
         'visitor/rest/v1/panel',

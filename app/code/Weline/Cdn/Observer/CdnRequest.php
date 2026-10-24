@@ -7,7 +7,6 @@ namespace Weline\Cdn\Observer;
 use Weline\Cdn\Model\Domain;
 use Weline\Cdn\Service\AdapterResolver;
 use Weline\Cdn\Service\CachePurger;
-use Weline\Cdn\Service\RuleManager;
 use Weline\Cdn\Service\UrlSiteResolver;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
@@ -20,25 +19,24 @@ use Weline\Framework\Event\ObserverInterface;
  * 支持的操作类型：
  * - purge_all: 清理全站缓存
  * - purge_urls: 清理指定 URL 缓存
- * - push_rule: 推送 CDN 规则
+ * - purge_scope: 按公开基址的 host/path 范围清理
  * - check_capability: 检测 CDN 能力
+ *
+ * 边缘规则只经 FPC 策略同步（RuleManager::planRulesForEdgePush）下发；不接受模块零散推送规则。
  */
 class CdnRequest implements ObserverInterface
 {
     private CachePurger $cachePurger;
     private AdapterResolver $adapterResolver;
-    private RuleManager $ruleManager;
     private Domain $domainModel;
 
     public function __construct(
         CachePurger $cachePurger,
         AdapterResolver $adapterResolver,
-        RuleManager $ruleManager,
         Domain $domainModel
     ) {
         $this->cachePurger = $cachePurger;
         $this->adapterResolver = $adapterResolver;
-        $this->ruleManager = $ruleManager;
         $this->domainModel = $domainModel;
     }
 
@@ -93,10 +91,6 @@ class CdnRequest implements ObserverInterface
             switch ($action) {
                 case 'purge_all':
                     $response = $this->handlePurgeAll($domainConfig, is_string($domain) ? $domain : null);
-                    break;
-
-                case 'push_rule':
-                    $response = $this->handlePushRule($domainConfig, $data);
                     break;
 
                 case 'check_capability':
@@ -264,47 +258,6 @@ class CdnRequest implements ObserverInterface
             'message' => $result['message'] ?? __('URL 缓存清理完成'),
             'data' => $result,
         ];
-    }
-
-    /**
-     * 处理规则推送
-     */
-    private function handlePushRule(Domain $domain, array $data): array
-    {
-        $rules = $data['rules'] ?? [];
-        if (empty($rules)) {
-            return [
-                'success' => false,
-                'message' => __('规则列表不能为空'),
-                'data' => [],
-            ];
-        }
-
-        try {
-            // 使用 RuleManager 推送规则
-            foreach ($rules as $rule) {
-                $this->ruleManager->saveRule([
-                    'domain_id' => $domain->getData(Domain::schema_fields_DOMAIN_ID),
-                    'rule_type' => $rule['type'] ?? 'bypass',
-                    'rule_name' => $rule['name'] ?? '',
-                    'rule_expression' => $rule['expression'] ?? '',
-                    'rule_action' => $rule['action'] ?? '',
-                    'is_enabled' => true,
-                ]);
-            }
-
-            return [
-                'success' => true,
-                'message' => __('规则推送成功'),
-                'data' => ['rules_count' => count($rules)],
-            ];
-        } catch (\Throwable $e) {
-            return [
-                'success' => false,
-                'message' => $e->getMessage(),
-                'data' => [],
-            ];
-        }
     }
 
     /**

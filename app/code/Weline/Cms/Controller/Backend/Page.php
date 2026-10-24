@@ -799,6 +799,8 @@ class Page extends BackendController
             'preview_area' => 'frontend',
             'status' => 'draft',
             'lock_source' => 'cms',
+            'link_block' => '1',
+            'preview_entity_route' => ltrim(trim($page->getIdentifier()), '/'),
         ]);
     }
 

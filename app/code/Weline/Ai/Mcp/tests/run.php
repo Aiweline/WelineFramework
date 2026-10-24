@@ -1156,7 +1156,6 @@ SH);
     );
 
     foreach ([
-        'aoci-installation.php',
         'context-response-budget.php',
         'cursor-mcp-stability.php',
         'host-detection.php',

@@ -106,7 +106,7 @@ index:
   bound_repository: ""
   # Codex/Hook writes refresh immediately; this is only the fallback for changes made outside Hook/MCP.
   refresh_interval: 30m
-  # Detached refresh budget — short + lowest nice so indexer cannot starve sibling MCP (aoci)/Cursor.
+  # Detached refresh budget — short + lowest nice so indexer cannot starve sibling MCP (cognition)/Cursor.
   refresh_worker_max_seconds: 120
   refresh_worker_nice: 19
   max_file_bytes: 524288
@@ -115,7 +115,7 @@ index:
   vector_dimensions: 2048
   # Keep only the highest-weight sparse terms per chunk.
   vector_max_terms: 16
-  # Smaller SQLite warm cache so index RAM does not crowd AOCI/Cursor.
+  # Smaller SQLite warm cache so index RAM does not crowd Cognition/Cursor.
   sqlite_mmap_bytes: 67108864
   sqlite_cache_kib: 4096
   include_tests: false

@@ -90,8 +90,13 @@ final readonly class CanonicalStorefrontUrl
 
     private static function parse(string $url, bool $allowQuery): self
     {
+        $querySplitOffset = \strpos($url, '?');
+        $authorityAndPath = $querySplitOffset === false ? $url : \substr($url, 0, $querySplitOffset);
         if ($url === '' || \trim($url) !== $url || \strlen($url) > 2048
-            || \preg_match('/[\x00-\x20\x7F\\\\]/', $url) === 1) {
+            || \preg_match('/[\x00-\x20\x7F\\\\]/', $authorityAndPath) === 1) {
+            throw new \InvalidArgumentException('URL contains invalid bytes or whitespace.');
+        }
+        if (\preg_match('/[\x00-\x1F\x7F\\\\]/', $url) === 1) {
             throw new \InvalidArgumentException('URL contains invalid bytes or whitespace.');
         }
         if (\str_contains($url, '#') || (!$allowQuery && \str_contains($url, '?'))) {

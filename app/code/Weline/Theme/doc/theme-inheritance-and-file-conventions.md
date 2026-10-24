@@ -255,3 +255,14 @@ app/code/Weline/Theme/view/tpl/zh_Hans_CN/theme/frontend/layouts/homepage/com_de
 3. 用当前主题和 area 推导目标路径。
 4. 只改源文件。
 5. 改完后用 `rg` 检查没有新增 raw ajax/fetch、没有改 `view/tpl`、没有新增旧路径。
+
+## 响应式单一权威（禁止三套）
+
+- 同一页面/组件的响应式行为只允许一个权威文件：`默认主题` **或** `design 覆盖`；命中覆盖后默认层 CSS/JS 不再参与该页面行为，覆盖文件整体接管。
+- 发布面的 `{area}/assets/...` 与 `Weline/Theme/view/theme/...` 双写是 `theme:upgrade` 构建产物，不属于本条「三套」；本条只约束运行时会同时参与层叠的 CSS/JS 规则层。
+- 一个断点只声明一次；禁止 layout 内联 CSS、主题 CSS、部件 CSS、JS 重复声明/推导同一断点。
+- `JS 禁止自行适配断点`：不得用 `matchMedia`、`window.innerWidth`、`outerWidth` 判断布局模式；只能读取 CSS 已表达状态（示例：`getComputedStyle(toggle).display`）。
+- 覆盖需要不同断点时，覆盖文件内保留唯一 `@media`；禁止「默认 992 抽屉 + 主题 901 桌面栏 + JS 992 inert」三套并存。
+- 反例：2026-10-25 汉服 PLP，三套规则导致 `901–992` 侧栏被隐藏、按钮不可见、JS 设 `inert`。
+- 验收：断点两侧浏览器各测一次；`rg` 确认同一页面断点只出现在一个权威文件；JS 中无 `matchMedia`/`innerWidth` 布局判断。
+

@@ -60,6 +60,7 @@ $cmsEditorState = [
     'storeCode' => $currentStoreCode,
     'storeMode' => $currentStoreMode,
     'scope' => $canonicalScope,
+    'publicRoute' => ltrim(trim((string)($page['identifier'] ?? '')), '/'),
     'variant_status' => $currentVariantStatus,
     'translation_state' => $currentTranslationState,
     'translation' => [

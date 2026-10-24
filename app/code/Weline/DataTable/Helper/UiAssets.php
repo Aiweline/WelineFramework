@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\DataTable\Helper;
 
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\View\Template;
 
 /**
@@ -13,8 +14,7 @@ use Weline\Framework\View\Template;
  */
 final class UiAssets
 {
-    /** @var array<string, true> */
-    private static array $rendered = [];
+    private const REQUEST_RENDERED_KEY = 'datatable.ui_assets.rendered.v1';
 
     /** @var array<string,string>|null */
     private static ?array $compiledVersions = null;
@@ -51,7 +51,7 @@ final class UiAssets
         foreach ($bundleNames as $bundleName) {
             $bundleName = (string)$bundleName;
             $renderKey = 'bundle:' . $bundleName;
-            if ($bundleName === '' || isset(self::$rendered[$renderKey])) {
+            if ($bundleName === '' || self::isRendered($renderKey)) {
                 continue;
             }
             $bundle = $manifest['bundles'][$bundleName] ?? null;
@@ -61,7 +61,7 @@ final class UiAssets
                 throw new \RuntimeException(__('Weline UI 编译 bundle 不可用：%{1}', [$bundleName]));
             }
 
-            self::$rendered[$renderKey] = true;
+            self::markRendered($renderKey);
             $url = self::url($template, 'Weline_Theme::ui/' . $file);
             $asset = htmlspecialchars($bundleName, ENT_QUOTES, 'UTF-8');
             $html .= $type === 'css'
@@ -74,8 +74,24 @@ final class UiAssets
 
     public static function resetRequestState(): void
     {
-        self::$rendered = [];
+        RequestContext::remove(self::REQUEST_RENDERED_KEY);
         self::$compiledVersions = null;
+    }
+
+    private static function isRendered(string $key): bool
+    {
+        $rendered = RequestContext::get(self::REQUEST_RENDERED_KEY, []);
+        return isset($rendered[$key]);
+    }
+
+    private static function markRendered(string $key): void
+    {
+        $rendered = RequestContext::get(self::REQUEST_RENDERED_KEY, []);
+        if (!is_array($rendered)) {
+            $rendered = [];
+        }
+        $rendered[$key] = true;
+        RequestContext::set(self::REQUEST_RENDERED_KEY, $rendered);
     }
 
     private static function url(Template $template, string $source): string

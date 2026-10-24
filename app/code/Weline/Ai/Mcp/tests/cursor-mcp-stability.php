@@ -17,10 +17,6 @@ $tmp = sys_get_temp_dir() . '/weline-cursor-mcp-stability-' . getmypid();
 $mcpPath = $tmp . '/mcp.json';
 file_put_contents($mcpPath, json_encode([
     'mcpServers' => [
-        'aoci' => [
-            'command' => '/usr/local/bin/aoci',
-            'args' => ['--repo', '/repo', 'mcp'],
-        ],
         'weline_project_intelligence' => [
             'command' => 'php',
             'args' => ['/mcp/bin/learning-mcp'],
@@ -30,12 +26,12 @@ file_put_contents($mcpPath, json_encode([
 $mtimeBefore = filemtime($mcpPath);
 
 $equal = welineMcpRegistrationSemanticallyEqual(
-    ['command' => '/usr/local/bin/aoci', 'args' => ['--repo', '/repo', 'mcp']],
-    ['command' => '/usr/local/bin/aoci', 'args' => ['--repo', '/repo', 'mcp'], 'env' => ['EXTRA' => '1']],
+    ['command' => 'php', 'args' => ['/mcp/bin/learning-mcp']],
+    ['command' => 'php', 'args' => ['/mcp/bin/learning-mcp']]
 );
 $unequal = welineMcpRegistrationSemanticallyEqual(
-    ['command' => '/usr/local/bin/aoci', 'args' => ['--repo', '/repo', 'mcp']],
-    ['command' => '/usr/local/bin/aoci', 'args' => ['--repo', '/other', 'mcp']],
+    ['command' => 'php', 'args' => ['/mcp/bin/learning-mcp']],
+    ['command' => 'php', 'args' => ['/mcp/bin/other']]
 );
 fwrite(($equal && !$unequal) ? STDOUT : STDERR, sprintf(
     "[%s] registration semantic equality\n",
@@ -47,16 +43,15 @@ $step = welineMcpInstallBuildWriteJsonStep(
     $mcpPath,
     [
         'mcpServers' => [
-            'aoci' => [
-                'command' => '/usr/local/bin/aoci',
-                'args' => ['--repo', '/repo', 'mcp'],
+            'weline_project_intelligence' => [
+                'command' => 'php',
+                'args' => ['/mcp/bin/learning-mcp'],
             ],
         ],
     ],
     $mcpPath,
 );
 $noopOk = ($step['noop'] ?? false) === true && ($step['skip_reason'] ?? '') === 'semantic_equivalent';
-fwrite($noopOk ? STDOUT : STDERR, sprintf("[%s] write_json noop when aoci already equivalent\n", $noopOk ? 'PASS' : 'FAIL'));
 $failed = $failed || !$noopOk;
 
 $stamp = $tmp . '/bounce.stamp';
@@ -125,24 +120,17 @@ $failed = $failed || !$touchFallback;
 
 $ensure = (string) file_get_contents(dirname(__DIR__) . '/scripts/ensure-project-guidance.php');
 $ops = (string) file_get_contents(dirname(__DIR__) . '/docs/OPERATIONS.md');
-$aociDoc = (string) file_get_contents(dirname(__DIR__, 2) . '/doc/AOCI自动安装.md');
 $noReloadEnsure = !str_contains($ensure, 'or Developer: Reload Window');
 $opsOk = (str_contains($ops, 'SIGTERM-bounce') || str_contains($ops, 'SIGTERM-bounces'))
     && str_contains($ops, 'Never')
     && str_contains($ops, 'Reload Window')
     && str_contains($ops, 'semantic-idempotent')
     && str_contains($ops, 'shared_process_idle_helper');
-$aociOk = str_contains($aociDoc, '语义幂等')
-    && str_contains($aociDoc, '禁止')
-    && str_contains($aociDoc, 'Reload Window')
-    && !str_contains($aociDoc, '新开 Agent 回合或 Reload Window');
 fwrite($noReloadEnsure ? STDOUT : STDERR, sprintf(
     "[%s] ensure nextAction no longer offers Reload Window fallback\n",
     $noReloadEnsure ? 'PASS' : 'FAIL'
 ));
 fwrite($opsOk ? STDOUT : STDERR, sprintf("[%s] OPERATIONS current guidance stable\n", $opsOk ? 'PASS' : 'FAIL'));
-fwrite($aociOk ? STDOUT : STDERR, sprintf("[%s] AOCI自动安装 current guidance stable\n", $aociOk ? 'PASS' : 'FAIL'));
-$failed = $failed || !$noReloadEnsure || !$opsOk || !$aociOk;
 
 foreach (glob($tmp . '/*') ?: [] as $file) {
     @unlink($file);

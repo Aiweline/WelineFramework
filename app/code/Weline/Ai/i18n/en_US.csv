@@ -52,6 +52,8 @@ id属性不能为空,"The id attribute cannot be empty"
 模型列表加载失败,"Model list loading failed"
 正在加载模型...,"Loading model..."
 供应商筛选,"Supplier screening"
+"capability 不在白名单: %{1}","capability 不在白名单: %{1}"
+"languages 非法: %{1}","languages 非法: %{1}"
 "参数错误：word 不能为空","参数错误：word 不能为空"
 "参数错误：target_locales 必须是非空数组","参数错误：target_locales 必须是非空数组"
 "AI 未返回任何语种译文，请检查翻译模型、API 余额或密钥后重试","AI 未返回任何语种译文，请检查翻译模型、API 余额或密钥后重试"
@@ -189,6 +191,15 @@ switch,switch
 "扫描 AI 智能体","Scan AI agents"
 search,search
 "扫描并注册 AI 智能体","Scan and register AI agents"
+"AI 扩展续签","AI 扩展续签"
+edit,edit
+浏览器扩展签章续签,浏览器扩展签章续签
+"AI 扩展撤销","AI 扩展撤销"
+delete,delete
+撤销浏览器扩展授权,撤销浏览器扩展授权
+"AI 扩展配对","AI 扩展配对"
+add,add
+创建浏览器扩展授权配对,创建浏览器扩展授权配对
 自定义供应商不存在,"Custom supplier does not exist"
 本地供应商已保存,"Local supplier saved"
 "本地供应商已保存（模型 %{1} 个，删除 %{2} 个）","Local suppliers saved (models %{1}, deleted %{2})"
@@ -204,7 +215,6 @@ server,server
 查看本地供应商,"View local suppliers"
 查看本地/自定义供应商列表,"View local/custom supplier list"
 编辑本地供应商,"Edit local supplier"
-edit,edit
 编辑本地/自定义供应商,"Edit local/custom supplier"
 保存本地供应商,"Save local supplier"
 保存本地/自定义供应商,"Save local/custom supplier"
@@ -449,6 +459,14 @@ palette,palette
 "Match AI style by brief","Match AI style by brief"
 "Manage adapter styles","Manage adapter styles"
 "Manage manual adapter style bindings","Manage manual adapter style bindings"
+授权ID不能为空。,授权ID不能为空。
+无权撤销该授权。,无权撤销该授权。
+"AI 扩展授权","AI 扩展授权"
+"AI 浏览器扩展授权管理","AI 浏览器扩展授权管理"
+"查看 AI 扩展授权","查看 AI 扩展授权"
+查看当前账号授权设备,查看当前账号授权设备
+"撤销 AI 扩展授权","撤销 AI 扩展授权"
+撤销当前账号授权设备,撤销当前账号授权设备
 文本生成,"Text generation"
 图像生成,"Image generation"
 音频生成,"Audio generation"
@@ -1168,6 +1186,18 @@ API基础URL,"API Base URL"
 模型配置,"Model configuration"
 确定要测试此模型的连接吗？,"Are you sure you want to test the connection of this model?"
 测试返回图片,"Test return image"
+授权一次,授权一次
+将以下一次性授权码粘贴到浏览器扩展中完成设备授权。仅在没有有效授权设备时生成。,将以下一次性授权码粘贴到浏览器扩展中完成设备授权。仅在没有有效授权设备时生成。
+复制授权码,复制授权码
+当前已有有效授权设备。,当前已有有效授权设备。
+授权设备,授权设备
+暂无授权设备,暂无授权设备
+开始授权,开始授权
+授权ID,授权ID
+设备指纹,设备指纹
+有效,有效
+已撤销,已撤销
+撤销,撤销
 添加本地供应商,"Add local supplier"
 本地供应商列表,"Local supplier list"
 "用于登记本机或内网 OpenAI 兼容服务（Ollama / LM Studio / vLLM 等）。可在表单内直接添加模型并测试连通性；保存时会自动创建本地账户并写入模型库。","Used to register local or intranet OpenAI compatible services (Ollama / LM Studio / vLLM, etc.). You can add models directly in the form and test connectivity; when saving, a local account will be automatically created and written to the model library."

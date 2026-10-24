@@ -128,6 +128,14 @@ final class LeadNormalizer
             $sourcePlatform = 'web';
         }
 
+        $entryChannel = strtolower(self::text(self::pick($input, ['entry_channel', 'entry_channel_code'])));
+        if ($entryChannel === '') {
+            $entryChannel = Lead::ENTRY_CHANNEL_DEFAULT;
+        }
+        if (!isset(Lead::ENTRY_CHANNELS[$entryChannel])) {
+            throw new InvalidArgumentException('无效的录入渠道：' . $entryChannel);
+        }
+
         $countryName = $countryKnown
             ? $country['country_name']
             : ($countryNameRaw !== '' ? self::collapseWhitespace($countryNameRaw) : CountryCatalog::UNKNOWN_NAME);
@@ -159,6 +167,7 @@ final class LeadNormalizer
             Lead::schema_fields_SOURCE_URL => $sourceUrl,
             Lead::schema_fields_SOURCE_TITLE => self::text(self::pick($input, ['source_title', 'title'])),
             Lead::schema_fields_SOURCE_PLATFORM => $sourcePlatform,
+            Lead::schema_fields_ENTRY_CHANNEL => $entryChannel,
             Lead::schema_fields_SOURCE_EXCERPT => self::text(self::pick($input, ['source_excerpt', 'excerpt'])),
             Lead::schema_fields_SOURCE_PUBLISHED_AT => self::normalizeTimestamp(
                 self::pick($input, ['source_published_at']),

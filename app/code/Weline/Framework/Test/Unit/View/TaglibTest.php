@@ -127,12 +127,15 @@ class TaglibTest extends TestCore
         self::assertSame($content, $parse_str, 'HTML void tag should not break AST parsing');
     }
 
-    public function testLangStaticCompileTime()
+    public function testLangStaticDefersTranslationToRender()
     {
         $template = new Template();
         $content = '<lang>hello</lang>';
         $parse_str = $this->taglib->tagReplace($template, $content);
-        self::assertSame(__('hello'), $parse_str, 'static lang should be compile-time');
+        $expected = class_exists(\Weline\I18n\Service\InlineEdit\InlinePhraseMarker::class)
+            ? "<?=\\Weline\\I18n\\Service\\InlineEdit\\InlinePhraseMarker::emit('hello', false)?>"
+            : "<?=__('hello')?>";
+        self::assertSame($expected, $parse_str, 'static lang must translate at render time: compile cache has no locale dimension');
     }
 
     public function testLangDynamicInlineRuntime()

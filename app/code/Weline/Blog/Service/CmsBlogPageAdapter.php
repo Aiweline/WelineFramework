@@ -7,12 +7,44 @@ namespace Weline\Blog\Service;
 use Weline\Blog\Api\Data\BlogArticle;
 use Weline\Blog\Api\Uri\BlogNamespace;
 use Weline\Blog\Model\Post;
+use Weline\Cms\Service\PageService;
+use Weline\Framework\Manager\ObjectManager;
 
 final class CmsBlogPageAdapter
 {
     public function isAvailable(): bool
     {
-        return function_exists('w_query');
+        return class_exists(PageService::class) || function_exists('w_query');
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>|null
+     */
+    private function fetchPage(array $params): ?array
+    {
+        if (class_exists(PageService::class)) {
+            try {
+                $page = ObjectManager::getInstance(PageService::class)->getPage($params);
+                if (is_array($page)) {
+                    return $page;
+                }
+            } catch (\Throwable) {
+                // Fall back to async BinQuery when in-process CMS read fails.
+            }
+        }
+
+        if (!function_exists('w_query')) {
+            return null;
+        }
+
+        try {
+            $page = w_query('cms', 'getPage', $params);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return is_array($page) ? $page : null;
     }
 
     /**
@@ -24,18 +56,12 @@ final class CmsBlogPageAdapter
             return null;
         }
 
-        try {
-            $page = w_query('cms', 'getPage', [
-                'identifier' => BlogNamespace::identifierFromSlug($slug),
-                'path_group' => BlogNamespace::PREFIX,
-                'website_id' => $websiteId,
-                'status' => 'published',
-            ]);
-        } catch (\Throwable) {
-            return null;
-        }
-
-        return is_array($page) ? $page : null;
+        return $this->fetchPage([
+            'identifier' => BlogNamespace::identifierFromSlug($slug),
+            'path_group' => BlogNamespace::PREFIX,
+            'website_id' => $websiteId,
+            'status' => 'published',
+        ]);
     }
 
     /**
@@ -47,17 +73,11 @@ final class CmsBlogPageAdapter
             return null;
         }
 
-        try {
-            $page = w_query('cms', 'getPage', [
-                'identifier' => BlogNamespace::identifierFromSlug($slug),
-                'path_group' => BlogNamespace::PREFIX,
-                'website_id' => $websiteId,
-            ]);
-        } catch (\Throwable) {
-            return null;
-        }
-
-        return is_array($page) ? $page : null;
+        return $this->fetchPage([
+            'identifier' => BlogNamespace::identifierFromSlug($slug),
+            'path_group' => BlogNamespace::PREFIX,
+            'website_id' => $websiteId,
+        ]);
     }
 
     /**

@@ -15,7 +15,7 @@ covers_use_cases:
   - UC-shelf-offers-warm
   - UC-bn_BD-ns-gone
   - UC-no-shell-strip
-mcp_note: prepare_project/aoci_rules timed out this seat turn; continued via AI硬规则索引.md + 需求澄清与用例规格.md + findings/contracts on disk.
+mcp_note: prepare_project/cognition_rules timed out this seat turn; continued via AI硬规则索引.md + 需求澄清与用例规格.md + findings/contracts on disk.
 ---
 
 # Spec: chrome warmer L2 HIT + homepage shelf/offers 语种维预热 + env locale 去污染

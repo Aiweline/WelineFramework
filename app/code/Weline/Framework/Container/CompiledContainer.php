@@ -373,14 +373,15 @@ final class CompiledContainer implements ContainerInterface
         $this->registryDigest = $digestAfterLoad;
     }
 
+    /**
+     * Only PROD/WLS fail closed. An unset deploy mode (fresh install before the
+     * first setup:upgrade compiles the registry) must still boot the CLI.
+     */
     private static function developmentFallbackAllowed(): bool
     {
         if (\defined('WLS_MODE') && WLS_MODE) {
             return false;
         }
-        if (\defined('PROD') && PROD) {
-            return false;
-        }
-        return !\defined('DEV') || DEV;
+        return !(\defined('PROD') && PROD);
     }
 }

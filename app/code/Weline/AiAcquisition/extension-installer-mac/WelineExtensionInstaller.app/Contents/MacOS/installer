@@ -1,0 +1,42 @@
+#!/bin/bash
+# Weline acquisition extension one-click installer (macOS)
+set -u
+APP_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+RES="$APP_DIR/Contents/Resources"
+ZIP="$RES/extension.zip"
+TARGET_DIR="$HOME/Downloads/extension 3"
+LOG="$HOME/Downloads/weline-extension-install.log"
+EXT_ID="ohcpocncbkkngkkcbkedblneigakdeoe"
+ZH_TITLE="$(printf %s V2VsaW5lIOiOt+WuouaJqeWxleWuieijheWZqA== | /usr/bin/base64 -d)"
+ZH_OK="$(printf %s 5omp5bGV5bey5a6J6KOF77yIdiRWRVLvvInjgILor7flnKggY2hyb21lOi8vZXh0ZW5zaW9ucyDpobXngrnkuIDmrKHjgIzph43mlrDliqDovb3jgI3mjInpkq7vvIzlho3liLfmlrDlkI7lj7Dov5DooYzpobXljbPlj6/kvb/nlKjjgII= | /usr/bin/base64 -d)"
+ZH_BAD_BUNDLE="$(printf %s 5a6J6KOF5YyF5o2f5Z2P77ya5pyq5om+5YiwIGV4dGVuc2lvbi56aXA= | /usr/bin/base64 -d)"
+ZH_BAD_UNZIP="$(printf %s 6Kej5Y6L5aSx6LSl77yM6K+36YeN6K+V | /usr/bin/base64 -d)"
+ZH_BAD_MANIFEST="$(printf %s 5a6J6KOF5aSx6LSl77yabWFuaWZlc3QuanNvbiDnvLrlpLE= | /usr/bin/base64 -d)"
+say() { echo "[$(date '+%H:%M:%S')] $*" >> "$LOG"; }
+msg() { /usr/bin/osascript -e "display dialog \"$1\" with title \"$ZH_TITLE\" buttons {\"OK\"} default button \"OK\" with icon note" >/dev/null 2>&1; }
+say "=== start install ==="
+if [ ! -f "$ZIP" ]; then
+  say "ERROR: extension.zip not found in bundle"
+  msg "$ZH_BAD_BUNDLE"
+  exit 1
+fi
+mkdir -p "$TARGET_DIR"
+if ! unzip -o -q "$ZIP" -d "$TARGET_DIR" >/dev/null 2>&1; then
+  say "ERROR: unzip failed"
+  msg "$ZH_BAD_UNZIP"
+  exit 1
+fi
+say "files written to: $TARGET_DIR"
+if [ ! -f "$TARGET_DIR/manifest.json" ]; then
+  say "ERROR: manifest.json missing"
+  msg "$ZH_BAD_MANIFEST"
+  exit 1
+fi
+VER="$(/usr/bin/python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("version","?"))' "$TARGET_DIR/manifest.json" 2>/dev/null || echo '?')"
+say "extension version: $VER"
+/usr/bin/osascript -e 'tell application "Google Chrome" to activate' >/dev/null 2>&1
+/usr/bin/osascript -e "tell application \"Google Chrome\" to open location \"chrome://extensions/?id=$EXT_ID\"" >/dev/null 2>&1
+say "opened chrome://extensions"
+msg "${ZH_OK//\$VER/$VER}"
+say "=== install done ==="
+exit 0

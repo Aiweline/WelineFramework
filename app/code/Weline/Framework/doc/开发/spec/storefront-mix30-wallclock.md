@@ -28,8 +28,8 @@ covers_use_cases:
   - UC-no-shell-strip
   - UC-no-storm-p95-only
 mcp_note: >-
-  文档席 prepare_project / aoci_rules MCP timeout/connection closed；
-  ensure ready + 宿主 Read AI硬规则索引.md；未假装 MCP/AOCI 成功。
+  文档席 prepare_project / cognition_rules MCP timeout/connection closed；
+  ensure ready + 宿主 Read AI硬规则索引.md；未假装 MCP/Cognition 成功。
 ---
 
 # Spec: 店面混发并发 30 · 墙钟 / 叠建 / 不当优化
@@ -139,7 +139,7 @@ mcp_note: >-
 | C7 | W1–W7 是否全做？ | 先证伪；**确认**才勾选 plan；未确认不得开工 | findings §3 + escalate |
 | C8 | 归属？ | 主落 `Weline_Framework`（FPC/Clear/FileAdapter）；fiber 钉档边界属 `Weline_Server`（配置语义，不重开 capacity） | 用户归属建议 |
 | C9 | SESSION？ | 本席 **禁改 SESSION**；由 PM 检查后更新 | 用户 HARD |
-| C10 | MCP？ | prepare/aoci/get_skill 超时 → 宿主 Read 硬规则索引继续；不假装已遵守 MCP 下发 | mcp_note |
+| C10 | MCP？ | prepare/cognition/get_skill 超时 → 宿主 Read 硬规则索引继续；不假装已遵守 MCP 下发 | mcp_note |
 
 ### 可选拍板（≤5，不阻塞 `ready-for-plan`；默认已选）
 

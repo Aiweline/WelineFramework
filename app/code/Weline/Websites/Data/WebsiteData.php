@@ -1079,14 +1079,9 @@ class WebsiteData
      */
     private static function loadDomainsOnce(int $websiteId): array
     {
-        try {
-            $websiteDomain = ObjectManager::getInstance(WebsiteDomain::class);
-            $rows = $websiteDomain->fetchAssociationDomainsFromDatabase($websiteId);
+        $websiteDomain = ObjectManager::getInstance(WebsiteDomain::class);
 
-            return \is_array($rows) ? \array_values($rows) : [];
-        } catch (\Throwable) {
-            return [];
-        }
+        return \array_values($websiteDomain->fetchAssociationDomainsFromDatabase($websiteId));
     }
 
     private static function sharedDomainsCacheKey(int $websiteId): string

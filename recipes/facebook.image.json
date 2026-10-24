@@ -1,0 +1,55 @@
+{
+  "platform": "facebook",
+  "kind": "image",
+  "version": 1,
+  "entry": "https://www.facebook.com/{page}/posts/create",
+  "fields": [
+    {
+      "key": "body",
+      "role": "textbox",
+      "anchor": [
+        "发帖",
+        "Create post",
+        "What's on your mind"
+      ]
+    }
+  ],
+  "media": {
+    "upload_role": "file",
+    "accept": [
+      "image/jpeg",
+      "image/png"
+    ],
+    "max": 10
+  },
+  "verify": {
+    "url_matches": "/posts/",
+    "text_any": [
+      "已发布",
+      "Published",
+      "Your post is now published"
+    ]
+  },
+  "branches": [
+    {
+      "when_text": [
+        "切换到专业版",
+        "Switch to professional"
+      ],
+      "do": "navigate:pro"
+    }
+  ],
+  "give_up": [
+    "需要验证码",
+    "账号受限",
+    "Checkpoint required"
+  ],
+  "submit": {
+    "role": "button",
+    "anchor": [
+      "Post",
+      "发帖",
+      "发布"
+    ]
+  }
+}

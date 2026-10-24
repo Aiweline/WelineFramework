@@ -33,6 +33,12 @@ class SocialPublishTarget extends Model
     public const schema_fields_ACCOUNT_ID = 'account_id';
     #[Col('varchar', 64, nullable: false, comment: 'Platform code')]
     public const schema_fields_PLATFORM_CODE = 'platform_code';
+    #[Col('varchar', 32, nullable: false, default: '', comment: 'Publish channel')]
+    public const schema_fields_CHANNEL = 'channel';
+    #[Col('varchar', 16, nullable: false, default: '', comment: 'Content kind')]
+    public const schema_fields_CONTENT_KIND = 'content_kind';
+    #[Col('varchar', 64, nullable: true, comment: 'Blocked reason')]
+    public const schema_fields_BLOCK_REASON = 'block_reason';
     #[Col('varchar', 32, nullable: false, default: 'pending', comment: 'Target status')]
     public const schema_fields_STATUS = 'status';
     #[Col('varchar', 190, nullable: false, comment: 'Idempotency key')]

@@ -45,6 +45,20 @@ class WorkerScaler
     }
 
     /**
+     * 下一个 worker 实例编号 = 历史最大编号 + 1（单调递增，不复用）。
+     *
+     * 不能用「存活实例数 + 1」：登记表可能含未清理的已停止实例（幽灵登记，
+     * 线上实证 #1100），计数会虚高跳号；且存活数下降时编号会复用，registry
+     * 键冲突覆盖（线上 2026-10-25：#1100 幽灵 + nginx prematurely closed 1335 次）。
+     *
+     * @param list<int> $existingIds 当前登记的全部 worker 实例编号（含幽灵）
+     */
+    private static function nextInstanceId(array $existingIds): int
+    {
+        return $existingIds === [] ? 1 : max($existingIds) + 1;
+    }
+
+    /**
      * 扩容：启动 N 个新 Worker（P0-4：并发启动 + 并发等待注册）
      *
      * 旧行为：逐个启动 → 逐个等待 READY，最坏 N × START_TIMEOUT。
@@ -70,7 +84,11 @@ class WorkerScaler
         }
 
         $currentWorkers = $this->orchestrator->getInstancesByRole('worker');
-        $nextInstanceId = \count($currentWorkers) + 1;
+        $existingIds = [];
+        foreach ($currentWorkers as $existingWorker) {
+            $existingIds[] = (int)$existingWorker->instanceId;
+        }
+        $nextInstanceId = self::nextInstanceId($existingIds);
 
         /** @var array<int, ServiceInstance> $startedInstances instanceId => instance */
         $startedInstances = [];

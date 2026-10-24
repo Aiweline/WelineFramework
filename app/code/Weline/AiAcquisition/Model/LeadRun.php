@@ -24,6 +24,7 @@ class LeadRun extends Model
 
     public const STATUS_PENDING = 'pending';
     public const STATUS_RUNNING = 'running';
+    public const STATUS_PAUSED = 'paused';
     public const STATUS_COMPLETED = 'completed';
     public const STATUS_FAILED = 'failed';
     public const STATUS_CANCELLED = 'cancelled';
@@ -31,6 +32,7 @@ class LeadRun extends Model
     public const STATUSES = [
         self::STATUS_PENDING => '待连接',
         self::STATUS_RUNNING => '执行中',
+        self::STATUS_PAUSED => '已暂停',
         self::STATUS_COMPLETED => '已完成',
         self::STATUS_FAILED => '失败',
         self::STATUS_CANCELLED => '已取消',

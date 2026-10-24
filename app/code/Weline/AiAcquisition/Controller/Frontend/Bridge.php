@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\AiAcquisition\Controller\Frontend;
 
 use Weline\AiAcquisition\Model\BridgeEvent;
+use Weline\AiAcquisition\Model\Lead;
 use Weline\AiAcquisition\Model\LeadRun;
 use Weline\AiAcquisition\Service\Bridge\BridgeService;
 use Weline\AiAcquisition\Service\Lead\LeadService;
@@ -12,6 +13,7 @@ use Weline\AiAcquisition\Service\Model\ModelCatalogService;
 use Weline\AiAcquisition\Service\Model\ModelGatewayService;
 use Weline\AiAcquisition\Service\Prompt\PromptLibrary;
 use Weline\AiAcquisition\Service\Run\RunService;
+use Weline\AiAcquisition\Service\Scan\ScanRegistry;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\ObjectManager;
@@ -42,6 +44,7 @@ class Bridge extends FrontendController
     private const MAX_MESSAGES = 60;
     /** 单条事件负载上限 */
     private const EVENT_PAYLOAD_MAX_BYTES = 8192;
+    private const SCAN_BATCH_LIMIT = 50;
 
     /**
      * 运行上下文：运行记录、提示词、模型、报价、站点。
@@ -53,11 +56,10 @@ class Bridge extends FrontendController
         return $this->guard(function (): array {
             $run = $this->bridge()->validateTicket($this->queryTicket());
             $runId = (int)($run[LeadRun::schema_fields_ID] ?? 0);
-            $this->runService()->markRunning($runId);
-            $run[LeadRun::schema_fields_STATUS] = LeadRun::STATUS_RUNNING;
+            if ($runId <= 0) {
+                throw new \RuntimeException(__('运行记录不存在'), 404);
+            }
             $this->bridge()->heartbeat($runId, ['event' => 'context']);
-            // 浏览器已连上，运行从 pending 进入 running
-            $this->runService()->markRunning($runId);
 
             $meta = \is_array($run['meta'] ?? null) ? $run['meta'] : [];
             $modelMode = (string)($meta['model_mode'] ?? 'ai_module');
@@ -112,6 +114,8 @@ class Bridge extends FrontendController
                 'quote' => $quote,
                 'website' => $this->websiteContext((int)($run[LeadRun::schema_fields_WEBSITE_ID] ?? 0)),
                 'query_slots' => $this->querySlots($meta),
+                // 已扫描页面/已获客域名：扩展与工具据此跳过重复页面，避免反复搜同一批结果。
+                'scan' => $this->scanRegistry()->exclusionContext((int)($run[LeadRun::schema_fields_WEBSITE_ID] ?? 0)),
                 'last_event_id' => $this->bridge()->lastSeen($runId),
             ];
         });
@@ -183,6 +187,123 @@ class Bridge extends FrontendController
     }
 
     /**
+     * 运行状态：扩展助手轮询（面板展示、暂停/停止感知）。
+     *
+     * GET /ai_acquisition/frontend/bridge/status?ticket=
+     */
+    public function getStatus(): string
+    {
+        return $this->guard(function (): array {
+            $run = $this->bridge()->validateTicket($this->queryTicket());
+            $runId = $this->runId($run);
+            $status = (string)($run[LeadRun::schema_fields_STATUS] ?? '');
+            $meta = \is_array($run['meta'] ?? null) ? $run['meta'] : [];
+
+            return [
+                'ok' => true,
+                'run' => [
+                    'id' => $runId,
+                    'status' => $status,
+                    'status_label' => (string)(LeadRun::STATUSES[$status] ?? $status),
+                    'model_mode' => (string)($meta['model_mode'] ?? 'ai_module'),
+                    'model_label' => (string)($meta['bridge_model_label'] ?? ''),
+                    'target_count' => (int)($run[LeadRun::schema_fields_TARGET_COUNT] ?? 0),
+                    'leads_saved' => (int)($run[LeadRun::schema_fields_LEADS_SAVED] ?? 0),
+                    'searches_count' => (int)($run[LeadRun::schema_fields_SEARCHES_COUNT] ?? 0),
+                    'input_tokens' => (int)($run[LeadRun::schema_fields_INPUT_TOKENS] ?? 0),
+                    'output_tokens' => (int)($run[LeadRun::schema_fields_OUTPUT_TOKENS] ?? 0),
+                    'cost' => (float)($run[LeadRun::schema_fields_COST] ?? 0),
+                    'currency' => (string)($run[LeadRun::schema_fields_CURRENCY] ?? 'CNY'),
+                    'ticket_expires_at' => (int)($run[LeadRun::schema_fields_TICKET_EXPIRES_AT] ?? 0),
+                ],
+            ];
+        });
+    }
+
+    /**
+     * 模型初始化成功：pending → running（运行记录此刻才进入执行中）。
+     *
+     * POST /ai_acquisition/frontend/bridge/ready
+     * Body: {ticket,model_mode?,model_label?}
+     */
+    public function postReady(): string
+    {
+        return $this->guard(function (): array {
+            $body = $this->jsonBody();
+            $run = $this->bridge()->validateTicket($this->bodyTicket($body));
+            $runId = $this->runId($run);
+            $this->bridge()->assertRateLimit($runId);
+
+            $status = (string)($run[LeadRun::schema_fields_STATUS] ?? '');
+            if (!\in_array($status, [LeadRun::STATUS_PENDING, LeadRun::STATUS_RUNNING], true)) {
+                throw new \RuntimeException(__('运行当前状态不可接入：%{1}', [$status]), 409);
+            }
+
+            $this->runService()->markBridgeReady($runId, [
+                'model_mode' => (string)($body['model_mode'] ?? ''),
+                'model_label' => (string)($body['model_label'] ?? ''),
+            ]);
+            $this->bridge()->heartbeat($runId, ['event' => 'ready']);
+
+            return ['ok' => true, 'run_id' => $runId, 'status' => LeadRun::STATUS_RUNNING];
+        });
+    }
+
+    /**
+     * 运行控制：暂停 / 继续 / 停止（票据鉴权，扩展助手与后台共用）。
+     *
+     * POST /ai_acquisition/frontend/bridge/control
+     * Body: {ticket,action}
+     */
+    public function postControl(): string
+    {
+        return $this->guard(function (): array {
+            $body = $this->jsonBody();
+            $run = $this->bridge()->validateTicket($this->bodyTicket($body));
+            $runId = $this->runId($run);
+            $this->bridge()->assertRateLimit($runId);
+
+            $action = \strtolower(\trim((string)($body['action'] ?? '')));
+            $status = (string)($run[LeadRun::schema_fields_STATUS] ?? '');
+            $terminal = [LeadRun::STATUS_COMPLETED, LeadRun::STATUS_FAILED, LeadRun::STATUS_CANCELLED];
+
+            if ($action === 'pause') {
+                if ($status !== LeadRun::STATUS_RUNNING) {
+                    throw new \RuntimeException(__('只有执行中的运行可以暂停'), 409);
+                }
+                $this->runService()->pause($runId);
+            } elseif ($action === 'resume') {
+                if ($status !== LeadRun::STATUS_PAUSED) {
+                    throw new \RuntimeException(__('只有已暂停的运行可以继续'), 409);
+                }
+                $this->runService()->resume($runId);
+            } elseif ($action === 'stop') {
+                if (!\in_array($status, $terminal, true)) {
+                    $this->runService()->cancel($runId);
+                }
+            } else {
+                throw new \InvalidArgumentException(__('不支持的运行控制：%{1}', [$action]));
+            }
+
+            $nextStatus = match ($action) {
+                'pause' => LeadRun::STATUS_PAUSED,
+                'resume' => LeadRun::STATUS_RUNNING,
+                default => \in_array($status, $terminal, true) ? $status : LeadRun::STATUS_CANCELLED,
+            };
+            $updated = $this->runService()->status($runId) ?? [];
+            // 同一请求内读回可能落在只读副本上，明确以本次动作的目标状态为准
+            $updated['status'] = $nextStatus;
+            $updated['status_label'] = (string)(LeadRun::STATUSES[$nextStatus] ?? $nextStatus);
+            $this->bridge()->enqueue($runId, 'control', [
+                'action' => $action,
+                'status' => $nextStatus,
+            ], BridgeEvent::DIRECTION_SERVER_TO_BROWSER);
+
+            return ['ok' => true, 'action' => $action, 'run' => $updated];
+        });
+    }
+
+    /**
      * 浏览器回传事件。
      *
      * POST /ai_acquisition/frontend/bridge/event
@@ -192,7 +313,9 @@ class Bridge extends FrontendController
     {
         return $this->guard(function (): array {
             $body = $this->jsonBody();
-            $runId = $this->runId($this->bridge()->validateTicket($this->bodyTicket($body)));
+            $run = $this->bridge()->validateTicket($this->bodyTicket($body));
+            $runId = $this->runId($run);
+            $this->assertExecutable($run);
             $this->bridge()->assertRateLimit($runId);
 
             $type = BridgeService::normalizeType((string)($body['type'] ?? ''));
@@ -217,6 +340,47 @@ class Bridge extends FrontendController
     }
 
     /**
+     * 上报已扫描页面：扩展抓过的 URL 落站点级台账，下次运行直接跳过。
+     *
+     * POST /ai_acquisition/frontend/bridge/scan
+     * Body: {ticket,urls:[string,...]}
+     */
+    public function postScan(): string
+    {
+        return $this->guard(function (): array {
+            $body = $this->jsonBody();
+            $run = $this->bridge()->validateTicket($this->bodyTicket($body));
+            $runId = $this->runId($run);
+            $this->assertExecutable($run);
+            $this->bridge()->assertRateLimit($runId);
+
+            $urls = $body['urls'] ?? [];
+            if (!\is_array($urls)) {
+                throw new \InvalidArgumentException(__('urls 必须是数组'));
+            }
+            $clean = [];
+            foreach (\array_slice($urls, 0, self::SCAN_BATCH_LIMIT) as $url) {
+                $url = \trim((string)$url);
+                if ($url !== '' && \preg_match('#^https?://#i', $url) === 1) {
+                    $clean[$url] = true;
+                }
+            }
+            if ($clean === []) {
+                return ['ok' => true, 'added' => 0];
+            }
+
+            $added = $this->scanRegistry()->mark(
+                (int)($run[LeadRun::schema_fields_WEBSITE_ID] ?? 0),
+                \array_keys($clean),
+                $runId
+            );
+            $this->bridge()->heartbeat($runId, ['event' => 'scan']);
+
+            return ['ok' => true, 'added' => $added];
+        });
+    }
+
+    /**
      * 浏览器智能体步进：调用运行所选模型，记 token 与成本。
      *
      * POST /ai_acquisition/frontend/bridge/step
@@ -228,6 +392,7 @@ class Bridge extends FrontendController
             $body = $this->jsonBody();
             $run = $this->bridge()->validateTicket($this->bodyTicket($body));
             $runId = $this->runId($run);
+            $this->assertExecutable($run);
             $this->bridge()->assertRateLimit($runId);
 
             $meta = \is_array($run['meta'] ?? null) ? $run['meta'] : [];
@@ -313,12 +478,22 @@ class Bridge extends FrontendController
     {
         return $this->guard(function (): array {
             $body = $this->jsonBody();
-            $runId = $this->runId($this->bridge()->validateTicket($this->bodyTicket($body)));
+            $run = $this->bridge()->validateTicket($this->bodyTicket($body));
+            $runId = $this->runId($run);
+            $this->assertExecutable($run);
             $this->bridge()->assertRateLimit($runId);
 
             $lead = $body['lead'] ?? null;
             if (!\is_array($lead) || $lead === []) {
                 throw new \InvalidArgumentException(__('lead 必须是 JSON 对象'));
+            }
+
+            $meta = is_array($run['meta'] ?? null) ? $run['meta'] : [];
+            $modelMode = (string)($meta['model_mode'] ?? 'ai_module');
+            if ($modelMode === 'browser_local' || $modelMode === 'local_computer') {
+                $lead['entry_channel'] = Lead::ENTRY_CHANNEL_BROWSER_MODEL;
+            } elseif (!isset($lead['entry_channel']) || trim((string)$lead['entry_channel']) === '') {
+                $lead['entry_channel'] = Lead::ENTRY_CHANNEL_DEFAULT;
             }
 
             $result = $this->leadService()->save($lead, $runId);
@@ -432,7 +607,9 @@ class Bridge extends FrontendController
             $code = (int)$exception->getCode();
             $status = $code >= 400 && $code <= 599 ? $code : 400;
             return $this->json(['success' => false, 'message' => $exception->getMessage()], $status);
-        } catch (\Throwable) {
+        } catch (\Throwable $throwable) {
+            w_log_error('[AiAcquisition] bridge unhandled: ' . $throwable->getMessage()
+                . ' @' . $throwable->getFile() . ':' . $throwable->getLine());
             return $this->json(['success' => false, 'message' => __('请求处理失败，请稍后重试')], 500);
         }
     }
@@ -501,6 +678,22 @@ class Bridge extends FrontendController
     }
 
     /**
+     * 只有执行中的运行可以回传事件 / 步进 / 线索；暂停与终态一律拒绝。
+     *
+     * @param array<string, mixed> $run
+     */
+    private function assertExecutable(array $run): void
+    {
+        $status = (string)($run[LeadRun::schema_fields_STATUS] ?? '');
+        if ($status === LeadRun::STATUS_PAUSED) {
+            throw new \RuntimeException((string)__('运行已暂停，请在扩展助手或运行记录中继续'), 409);
+        }
+        if ($status !== LeadRun::STATUS_RUNNING) {
+            throw new \RuntimeException((string)__('运行当前状态不可执行：%{1}', [$status]), 409);
+        }
+    }
+
+    /**
      * @param array<string, mixed> $run
      */
     private function runId(array $run): int
@@ -538,7 +731,12 @@ class Bridge extends FrontendController
         if (!\is_array($toolCalls)) {
             throw new \InvalidArgumentException((string)__('本地模型 tool_calls 必须是数组。'));
         }
-        $toolCalls = \array_slice(\array_values($toolCalls), 0, 20);
+        $toolCalls = \array_slice(\array_values(\array_filter(
+            $toolCalls,
+            static fn ($call): bool => \is_array($call) && (
+                isset($call['function']['name']) || isset($call['name'])
+            )
+        )), 0, 20);
         $usage = \is_array($local['usage'] ?? null) ? $local['usage'] : [];
         $promptTokens = \max(0, \min(1000000, (int)($usage['prompt_tokens'] ?? 0)));
         $completionTokens = \max(0, \min(1000000, (int)($usage['completion_tokens'] ?? 0)));
@@ -678,6 +876,11 @@ class Bridge extends FrontendController
             'name' => (string)($row[Website::schema_fields_NAME] ?? ''),
             'url' => (string)($row[Website::schema_fields_URL] ?? ''),
         ];
+    }
+
+    private function scanRegistry(): ScanRegistry
+    {
+        return ObjectManager::getInstance(ScanRegistry::class);
     }
 
     private function bridge(): BridgeService

@@ -253,3 +253,45 @@
 }
 
 }
+
+/* C 方案：邮箱/手机号作为「范围属性」并入当前配置范围卡片 */
+.weline-social-admin__scope-attributes {
+    display: grid;
+    gap: var(--weline-space-2);
+    margin-top: var(--weline-space-4);
+    padding-top: var(--weline-space-3);
+    border-top: 1px solid var(--weline-theme-border);
+}
+
+.weline-social-admin__scope-attr {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.weline-social-admin__scope-attr .weline-social-admin__mailbox-strip {
+    flex: 1 1 auto;
+    max-width: 100%;
+    margin-inline-start: 0;
+    min-width: 0;
+}
+
+.weline-social-admin__scope-attr .weline-social-admin__mailbox-strip-inner {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    row-gap: var(--weline-space-1);
+}
+
+.weline-social-admin__scope-attr .weline-social-admin__mailbox-strip-inner[data-mailbox-state='ready'] [data-mailbox-status] {
+    align-items: flex-start;
+}
+
+.weline-social-admin__scope-attr .weline-social-admin__mailbox-hint {
+    text-align: start;
+}
+
+@media (max-width: 639px) {
+    .weline-social-admin__scope-attributes {
+        margin-top: var(--weline-space-3);
+    }
+}

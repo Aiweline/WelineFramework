@@ -136,7 +136,6 @@ const lazyComponentSources = new Map([
     ['ai-model-select', './components/weline-ai-model-select.js'],
     ['currency-select', './components/weline-currency-select.js'],
     ['language-switcher', './components/weline-language-switcher.js'],
-    ['online-translation-collector', './components/weline-online-translation-collector.js'],
     ['scope-persistence', './components/weline-scope-persistence.js'],
     ['file-preview', './components/weline-file-picker.js'],
     ['file-picker', './components/weline-file-picker.js'],

@@ -19,6 +19,7 @@ class YoutubeProvider extends DocumentedSocialPlatformProvider
         'supports_one_click_auth' => true,
         'capabilities' => ['publish_text', 'publish_link'],
         'content_types' => ['text', 'link'],
+        'media_upload' => ['video' => 'planned'],
         'required_config' => ['access_token'],
         'config_fields' => [
             ['key' => 'access_token', 'label' => 'Access Token', 'type' => 'password', 'required' => true],

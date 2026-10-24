@@ -1475,6 +1475,7 @@ class Template extends DataObject implements RequestLocalInterface
             : '<?php ' . $marker . ' ?>' . $compiled;
         // Production: collapse HTML whitespace / strip safe PHP comments in com_*.
         $compiled = CompiledTemplateMinifier::minify($compiled);
+        $this->assertCompiledPhp($compiled, $originPath);
         $directory = dirname($compiledPath);
         if (!is_dir($directory) && !@mkdir($directory, 0770, true) && !is_dir($directory)) {
             throw new Exception('Failed to create template compile directory: ' . $directory);
@@ -1502,6 +1503,24 @@ class Template extends DataObject implements RequestLocalInterface
         clearstatcache(true, $compiledPath);
 
         return $compiledPath;
+    }
+
+    /**
+     * 坏产物一旦落盘，compile_id 命中后不会被重编，整页会永久 500。
+     * 发布前用 PHP 自己的解析器验一遍，编不出来就当场报出模板名，而不是留个坏文件。
+     */
+    private function assertCompiledPhp(string $compiled, string $originPath): void
+    {
+        try {
+            \token_get_all($compiled, \TOKEN_PARSE);
+        } catch (\ParseError $parseError) {
+            if (\function_exists('w_log_error')) {
+                \w_log_error('[template-compile] invalid php ' . $originPath . ': ' . $parseError->getMessage());
+            }
+            throw new Exception(
+                __('模板编译结果不是合法 PHP：%{1}（%{2}）', [$originPath, $parseError->getMessage()])
+            );
+        }
     }
 
     /**
@@ -1838,7 +1857,17 @@ class Template extends DataObject implements RequestLocalInterface
             $this->addSourceModuleToRequest(DataInterface::dir_type_TEMPLATE, $fileName);
 
             $comFileName = $this->getFetchFile($fileName);
-            $result = $this->ob_file($comFileName, $dictionary);
+            try {
+                $result = $this->ob_file($comFileName, $dictionary);
+            } catch (\ParseError $parseError) {
+                // 历史/并发写坏的编译产物：删掉重编一次，别让整页永久 500。
+                if (\function_exists('w_log_error')) {
+                    \w_log_error('[template-compiled-corrupt] ' . $comFileName . ': ' . $parseError->getMessage());
+                }
+                self::forgetCompiledArtifact($comFileName);
+                $comFileName = $this->getFetchFile($fileName);
+                $result = $this->ob_file($comFileName, $dictionary);
+            }
             return $result;
         } finally {
             TemplateRenderRouteTrace::end('fetch_html', $routeIdentity);
@@ -1854,6 +1883,25 @@ class Template extends DataObject implements RequestLocalInterface
             }
         } catch (\Throwable) {
         }
+    }
+
+    /**
+     * 丢弃一份不可用的编译产物：删文件并清掉所有「它还新鲜」的进程缓存，
+     * 让下一次 getFetchFile() 真正重新编译。
+     */
+    private static function forgetCompiledArtifact(string $compiledPath): void
+    {
+        @\unlink($compiledPath);
+        unset(self::$compiledTemplateFreshnessCache[$compiledPath], self::$fetchFileIdentityMemo[$compiledPath]);
+        foreach (self::$processViewFileCache as $key => $entry) {
+            if (($entry['compiled'] ?? '') === $compiledPath) {
+                unset(self::$processViewFileCache[$key]);
+            }
+        }
+        if (function_exists('opcache_invalidate')) {
+            @opcache_invalidate($compiledPath, true);
+        }
+        \clearstatcache(true, $compiledPath);
     }
 
     /**

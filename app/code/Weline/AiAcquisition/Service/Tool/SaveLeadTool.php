@@ -102,6 +102,8 @@ class SaveLeadTool implements ToolInterface
             $payload['ai_score'] = $score;
         }
 
+        $payload['entry_channel'] = Lead::ENTRY_CHANNEL_AI_SELECT;
+
         $score = $payload['ai_score'] ?? null;
         if ($score === null || $score === '' || !is_numeric($score)) {
             return ['error' => (string)__('缺少 5 轴评分（axes）或 ai_score，请先按 0–2 分打分。')];

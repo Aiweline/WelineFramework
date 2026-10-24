@@ -106,7 +106,7 @@ function welineMcpNormalizeEnvMap(mixed $env): array
  * @return array<string,mixed>
  */
 /**
- * @param list<string> $dropServers Server names that must not remain on disk (e.g. stale project aoci).
+ * @param list<string> $dropServers Server names that must not remain on disk (e.g. stale project cognition).
  */
 function welineMcpInstallBuildWriteJsonStep(
     string $path,
@@ -128,7 +128,7 @@ function welineMcpInstallBuildWriteJsonStep(
     ];
     if ($dropServers !== []) {
         $step['drop_servers'] = array_values($dropServers);
-        $step['agent_instruction'] = 'Write document; also remove drop_servers keys from mcpServers if present (Cursor aoci single-mount: never leave aoci in project .cursor/mcp.json).';
+        $step['agent_instruction'] = 'Write document; also remove drop_servers keys from mcpServers if present (Cursor cognition single-mount: never leave cognition in project .cursor/mcp.json).';
     }
     if (is_string($resolved) && $resolved !== '') {
         $step['absolute_path'] = $resolved;

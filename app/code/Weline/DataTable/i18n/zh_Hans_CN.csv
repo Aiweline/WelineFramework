@@ -7,6 +7,7 @@
 高级筛选,高级筛选
 field标签必须指定name属性！,field标签必须指定name属性！
 field标签的belong必须是t-header、t-filter或d-form。,field标签的belong必须是t-header、t-filter或d-form。
+field标签（%{1}）的子内容只能是纯文本或<lang>；其它内容请改用label属性。,field标签（%{1}）的子内容只能是纯文本或<lang>；其它内容请改用label属性。
 请输入%{1},请输入%{1}
 按%{1}排序,按%{1}排序
 全部,全部
@@ -96,6 +97,7 @@ d-table标签必须指定scope属性！,d-table标签必须指定scope属性！
 "DataTable resource is not registered for model %{1}.","模型 %{1} 未注册数据表格资源。"
 "DataTable write contains unknown or protected fields: %{1}.",数据表格写入包含未知或受保护字段：%{1}。
 "DataTable model is invalid: %{1}.",数据表格模型无效：%{1}。
+"运行期渲染 DataTable 子内容缺少当前模板实例。","运行期渲染 DataTable 子内容缺少当前模板实例。"
 %{1}标签必须指定%{2}属性或位于d-table标签内！,%{1}标签必须指定%{2}属性或位于d-table标签内！
 未注册的数据表资源：%{1},未注册的数据表资源：%{1}
 "Weline UI 编译 bundle 不可用：%{1}","Weline UI 编译 bundle 不可用：%{1}"

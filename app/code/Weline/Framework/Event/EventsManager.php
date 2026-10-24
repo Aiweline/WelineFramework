@@ -20,6 +20,7 @@ class EventsManager
 //    protected  WeakMaps $observers;# php8
     /**@var $events Event[] */
     protected array $events = [];
+    private ?\WeakMap $fiberEvents = null;
 
     protected array $eventsObservers = [];
 
@@ -73,17 +74,39 @@ class EventsManager
         self::$moduleStatusCache = [];
     }
 
+    private function currentEvents(): array
+    {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            return $this->events;
+        }
+        $this->fiberEvents ??= new \WeakMap();
+        return $this->fiberEvents[$fiber] ?? [];
+    }
+
+    private function storeEvents(array $events): void
+    {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            $this->events = $events;
+            return;
+        }
+        $this->fiberEvents ??= new \WeakMap();
+        $this->fiberEvents[$fiber] = $events;
+    }
+
     /**
-     * WLS 每请求重置事件运行期缓存，防止跨请求边界污染。
+     * WLS 每请求重置当前 Fiber 的事件运行期缓存，防止跨请求边界污染。
      */
     public function resetRequestState(): void
     {
-        foreach ($this->events as $event) {
+        $events = $this->currentEvents();
+        foreach ($events as $event) {
             if ($event instanceof Event) {
                 $event->releaseBoundPayload();
             }
         }
-        $this->events = [];
+        $this->storeEvents([]);
         // observer/module 状态属于进程级只读缓存，频繁清空会导致每请求重扫事件配置。
         // 仅重置请求内 Event 实例数据，避免跨请求污染同时保留热缓存性能。
     }
@@ -268,10 +291,12 @@ class EventsManager
             $event = (new Event(['data' => &$data, 'observers' => $observers]))->setName($eventName);
         }
 
-        if (isset($this->events[$eventName]) && $this->events[$eventName] instanceof Event) {
-            $this->events[$eventName]->releaseBoundPayload();
+        $events = $this->currentEvents();
+        if (isset($events[$eventName]) && $events[$eventName] instanceof Event) {
+            $events[$eventName]->releaseBoundPayload();
         }
-        $this->events[$eventName] = $event;
+        $events[$eventName] = $event;
+        $this->storeEvents($events);
         $event->dispatch();
 
         if (!is_array($data)) {
@@ -305,8 +330,9 @@ class EventsManager
      */
     public function getEventData(string $eventName): DataObject|null
     {
-        if (isset($this->events[$eventName])) {
-            return $this->events[$eventName];
+        $events = $this->currentEvents();
+        if (isset($events[$eventName])) {
+            return $events[$eventName];
         }
         return null;
     }

@@ -56,7 +56,6 @@
 - `app/code/Weline/Ai/doc/AI工程交付流程.md`
 - `app/code/Weline/Ai/doc/AI开发治理.md`
 - `app/code/Weline/Ai/doc/AI硬规则索引.md`
-- `app/code/Weline/Ai/doc/AOCI自动安装.md`
 - `app/code/Weline/Ai/doc/API/API.md`
 - `app/code/Weline/Ai/doc/MCP索引与响应性能.md`
 - `app/code/Weline/Ai/doc/README.md`

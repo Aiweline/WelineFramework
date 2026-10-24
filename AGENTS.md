@@ -16,9 +16,9 @@
 
 权威细则：`app/code/Weline/Ai/doc/AI硬规则索引.md`（`mcp_call_scope`）与 MCP `hard-constraints.v1`。
 
-## AOCI 与 Weline MCP（互补）
+## 仓库认知（cognition）
 
-并列挂载 AOCI-CODE（`aoci`）。**Weline MCP** 管硬规则 / 技能 / `prepare_project` / 验收；**AOCI** 管认知索引 / Baseline / 漂移。工程主链仍走 Weline；禁止用 AOCI 替代或绕过 `hard_constraints`。**本机无 AOCI 程序时，ensure / `prepare_project` 必须自动安装**；装好后按 `aoci_installation.mcp_registration` 挂宿主。**工程强制认知（HARD DEFAULT USE，非可选）**：prepare 后动手前必须 `aoci_rules`（无可靠完整认知再 `aoci_overview`）；禁止跳过却假装已有认知；内容运营与闲聊豁免。细则：`aoci_complements_weline_mcp` → `规则/00-MCP调用与会话.md` §1b / `AOCI自动安装.md`。
+仓库认知由 Weline MCP 的 `cognition` 工具提供：按文件 F/R/A/S 压缩条目，按模块分片、按需加载，不常驻全量索引。工程任务：`prepare_project` 后按需 `cognition action=query`（module/path/query）；受管对象达到稳定状态后 `action=maintain` 一次；`overview`/`status` 查看条目与过期数。外部认知工具已退役，不再安装、挂载或调用。
 
 ## 挂载与冷启动
 
@@ -53,18 +53,3 @@ ensure 会写出 MCP 生成的 Cursor alwaysApply 门禁：`.cursor/rules/weline
 
 **宿主编辑器规则（强制，MCP `host_editor_rules_mcp_generated_only`）**：工程规则只维护在 MCP `hard-constraints.v1` 与仓库文档；Cursor/Codex 等规则文件**禁止 Agent 手写**，仅可由 MCP 生成器产出（换项目否则找不到）。权威：`app/code/Weline/Ai/doc/AI硬规则索引.md`。
 
-<!-- aoci:begin -->
-## AOCI 仓库认知
-
-`aoci.txt` 是本仓面向模型的认知索引：每个受管对象一条 Entry，用 F/R/A/S 表达职责、重要关系、对外契约与非显然约束；Header + 全部 Entry 构成完整索引，受管内容变化时只维护受影响条目。
-
-工程任务（内容运营与闲聊豁免）：
-
-1. **会话开始**：`aoci_rules` 取当前运行合同；无可信完整认知再 `aoci_overview`，返回 `continuation_required` 时原样续 `next_cursor` 直到 `completed=true`，中途不得插业务动作。
-2. **上下文压缩后**：先前认知视为不可靠，用 `refresh_reasons=["context_compaction"]` 重新完整 `aoci_overview`，不得用 `check_only` 代替。
-3. **改完受管对象**：最终稳定状态只调一次 `aoci_maintain`；候选由 Host 模型按证据独立创作，经 `aoci_update_entry` 整批提交，保留 `source_sha256` / `candidate_id`。
-4. **证据不足**：用 `aoci_report` 登记，不得猜写、套模板或为消待办而编造认知。
-5. **只读问答、未改受管对象**：无需维护；用户明确禁止写 `.aoci` / `aoci.txt` 时以用户限制为准。
-
-语义创作、Onboarding、Curation、恢复等专项流程只按实时 Guide 与工具说明执行，本文件不重建流程；接入状态用 `aoci doctor` 检查。
-<!-- aoci:end -->

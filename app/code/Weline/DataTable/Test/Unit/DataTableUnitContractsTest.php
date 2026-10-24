@@ -268,8 +268,12 @@ private function assert_TaglibFrontend_testStandaloneFormLoadsOnlyItsOwnedCompon
     $this->assertIsString($html);
     $this->assertStringContainsString('weline-datatable.css', $html);
     $this->assertStringContainsString('weline-datatable-form.js', $html);
-    $this->assertMatchesRegularExpression('/weline-datatable\.css\?v=(?:dev_)?[a-f0-9]{12}(?:&amp;v=[a-f0-9]{12})?/', $html);
-    $this->assertMatchesRegularExpression('/weline-datatable-form\.js\?v=(?:dev_)?[a-f0-9]{12}(?:&amp;v=[a-f0-9]{12})?/', $html);
+    $manifest = json_decode((string)file_get_contents(BP . 'app/code/Weline/Theme/view/statics/ui/manifest.json'), true, 512, JSON_THROW_ON_ERROR);
+    foreach (['datatable-css' => 'weline-datatable\.css', 'datatable-form-js' => 'weline-datatable-form\.js'] as $bundle => $file) {
+        $contentVersion = substr((string)$manifest['bundles'][$bundle]['sha256'], 0, 12);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{12}$/', $contentVersion);
+        $this->assertMatchesRegularExpression('/' . $file . '\?(?:[^"]*&amp;)?v=' . $contentVersion . '"/', $html);
+    }
     $this->assertStringNotContainsString('components/weline-datatable.js', $html);
 }
 

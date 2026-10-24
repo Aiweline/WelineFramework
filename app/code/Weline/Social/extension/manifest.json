@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Weline Social Browser Publisher",
+  "version": "1.0.0",
+  "description": "在用户自己的浏览器登录态内执行 Weline 社媒配方动作；不保存账号密码或 Cookie。",
+  "permissions": ["storage", "alarms", "scripting", "tabs"],
+  "host_permissions": [
+    "https://*.facebook.com/*",
+    "https://*.x.com/*",
+    "https://*.tiktok.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.facebook.com/*",
+        "https://*.x.com/*",
+        "https://*.tiktok.com/*"
+      ],
+      "js": [
+        "shared/schema.js",
+        "content/snapshot.js",
+        "content/actions.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options/options.html",
+  "action": {
+    "default_title": "Weline Social Browser Publisher"
+  }
+}

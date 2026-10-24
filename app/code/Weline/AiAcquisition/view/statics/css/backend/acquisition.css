@@ -170,6 +170,7 @@ body.acq-modal-open { overflow: hidden; }
 .acq-table th,
 .acq-table td { padding: var(--weline-space-3) var(--weline-space-4); }
 .acq-table td { vertical-align: middle; }
+.acq-table--leads td:nth-child(4) { min-inline-size: 9rem; }
 .acq-check { inline-size: 1rem; block-size: 1rem; accent-color: var(--weline-theme-primary); }
 
 .acq-company {
@@ -235,10 +236,7 @@ body.acq-modal-open { overflow: hidden; }
     border-color: color-mix(in srgb, var(--weline-theme-warning) 58%, transparent);
     color: var(--weline-theme-warning);
 }
-.acq-score[data-tone="danger"] .acq-score__ring {
-    border-color: color-mix(in srgb, var(--weline-theme-danger) 58%, transparent);
-    color: var(--weline-theme-danger);
-}
+.acq-score[data-tone="danger"] .acq-score__ring { border-color: color-mix(in srgb, var(--weline-theme-border) 88%, transparent); color: var(--weline-theme-text-muted); }
 
 .acq-actions {
     display: flex;
@@ -652,3 +650,109 @@ body.acq-modal-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
     .acq-mode-option { transition: none; }
 }
+
+
+/* 运行详情：字段表 + 事件流（只消费 Theme Token） */
+.acq-detail {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--weline-space-2) var(--weline-space-4);
+    margin: 0;
+}
+.acq-detail__row {
+    display: grid;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    gap: var(--weline-space-2);
+    padding-block: var(--weline-space-1);
+    border-block-end: 1px dashed color-mix(in srgb, var(--weline-theme-border) 72%, transparent);
+}
+.acq-detail__row dt {
+    margin: 0;
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-xs);
+}
+.acq-detail__row dd {
+    margin: 0;
+    font-size: var(--weline-font-size-sm);
+    overflow-wrap: anywhere;
+}
+.acq-event-list {
+    display: grid;
+    gap: var(--weline-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.acq-event-list li {
+    display: flex;
+    align-items: center;
+    gap: var(--weline-space-2);
+    font-size: var(--weline-font-size-xs);
+}
+.acq-event-list__time {
+    color: var(--weline-theme-text-muted);
+    white-space: nowrap;
+}
+.acq-event-list__text { overflow-wrap: anywhere; }
+
+@media (max-width: 720px) {
+    .acq-detail { grid-template-columns: minmax(0, 1fr); }
+}
+
+.acq-table--runs .acq-code { white-space: nowrap; }
+
+@media (max-width: 1200px) {
+    .acq-table--runs { min-inline-size: 44rem; }
+    .acq-table--runs th:nth-child(5),
+    .acq-table--runs td:nth-child(5),
+    .acq-table--runs th:nth-child(6),
+    .acq-table--runs td:nth-child(6) { display: none; }
+}
+
+/* 线索分类标签徽章 */
+.acq-lead-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--weline-space-1);
+    margin-block-start: var(--weline-space-1);
+}
+.acq-tag {
+    padding: 0 var(--weline-space-2);
+    border-radius: var(--weline-radius-sm);
+    background: color-mix(in srgb, var(--weline-theme-primary) 12%, transparent);
+    color: var(--weline-theme-primary);
+    font-size: var(--weline-font-size-xs);
+    line-height: 1.6;
+    white-space: nowrap;
+}
+.acq-tag--more { background: var(--weline-theme-surface-muted); color: var(--weline-theme-text-muted); }
+/* 录入方式徽章：与来源徽章同格，三种语义色对应三种录入通道 */
+.acq-source { display: grid; justify-items: start; gap: var(--weline-space-1); min-inline-size: 6rem; }
+.acq-entry {
+    padding: 0 var(--weline-space-2);
+    border-radius: var(--weline-radius-sm);
+    font-size: var(--weline-font-size-xs);
+    line-height: 1.6;
+    white-space: nowrap;
+}
+.acq-entry--browser_model { background: var(--weline-theme-info-surface); color: var(--weline-theme-info); }
+.acq-entry--ai_select { background: var(--weline-theme-primary-surface); color: var(--weline-theme-primary); }
+.acq-entry--skill { background: var(--weline-theme-success-surface); color: var(--weline-theme-success); }
+
+/* 扩展未装时高亮「浏览器扩展」卡片 */
+.acq-ext-card-pulse { animation: acq-ext-pulse 1.2s ease-in-out 2; }
+@keyframes acq-ext-pulse { 0%,100% { box-shadow: none; } 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--weline-theme-primary) 45%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .acq-ext-card-pulse { animation: none; } }
+
+/* 浏览器扩展卡片在线状态指示 */
+.acq-ext-online { border-color: color-mix(in srgb, var(--weline-theme-success) 60%, var(--weline-theme-border)); }
+.acq-ext-offline { border-color: color-mix(in srgb, var(--weline-theme-danger) 55%, var(--weline-theme-border)); }
+
+/* combobox 容器（框架组件 data-w-component="combobox"） */
+.acq-combobox { position: relative; }
+
+/* combobox 容器（框架组件 data-w-component="combobox"） */
+.acq-combobox { position: relative; }
+
+/* combobox 容器（框架组件 data-w-component="combobox"） */
+.acq-combobox { position: relative; }

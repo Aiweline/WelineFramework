@@ -94,6 +94,9 @@ class AcquisitionAgent implements AgentInterface
         array $params = [],
         ?callable $streamCallback = null,
     ): AgentResult {
+        // 工具去重需要站点/运行上下文（页面台账按 website_id 隔离）。
+        \Weline\AiAcquisition\Service\Scan\RunScope::setFromParams($params);
+
         $tools = array_values(array_filter(
             $this->getTools(),
             static fn(ToolInterface $tool): bool => $tool->isEnabled()

@@ -11,7 +11,7 @@ use Throwable;
  * Prefer unix-socket send to an existing sidecar; otherwise proc_open a detached PHP worker.
  *
  * Detached workers carry a wall-clock deadline and reduced CPU nice so unbounded
- * index_project cannot starve sibling MCP servers (aoci) on the same host.
+ * index_project cannot starve sibling MCP servers (cognition) on the same host.
  */
 final class IndexRefreshScheduler
 {
@@ -65,7 +65,7 @@ final class IndexRefreshScheduler
         }
 
         // Single-flight: many prepare_project turns must not pile detached indexers.
-        // Unbounded workers starve the machine and Cursor cannot lease sibling MCP (aoci).
+        // Unbounded workers starve the machine and Cursor cannot lease sibling MCP (cognition).
         $existingPid = self::liveDetachedWorkerPid($config, $repository);
         if ($existingPid > 0) {
             if (self::reclaimOverBudgetWorker($config, $existingPid)) {

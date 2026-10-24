@@ -37,9 +37,6 @@ final class ProcessFpcStoreAdapter implements FpcStoreAdapterInterface
 
     public function clearProcessCache(): void
     {
-        try {
-            FullPageCacheCoordinator::clearProcessCache();
-        } catch (\Throwable) {
-        }
+        FullPageCacheCoordinator::clearProcessCache();
     }
 }

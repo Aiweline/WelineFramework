@@ -687,7 +687,6 @@ $checks = [
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'requirement_scan_architecture_smell_gate'
-            && str_contains((string) ($rule['summary'] ?? ''), 'AOCI MUST participate')
             && str_contains((string) ($rule['summary'] ?? ''), 'patch-grade')
             && str_contains((string) ($rule['summary'] ?? ''), '架构隐患/周边发现')
             && str_contains((string) ($rule['summary'] ?? ''), 'USER decides')
@@ -938,7 +937,6 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'plan_review_requires_code_evidence')
             && str_contains((string) ($rule['summary'] ?? ''), 'scheme_requires_architecture_review')
             && str_contains((string) ($rule['summary'] ?? ''), 'plan_review_requires_impact_surface')
-            && str_contains((string) ($rule['summary'] ?? ''), 'aoci_search')
             && str_contains((string) ($rule['summary'] ?? ''), 'FORBID 通过')
             && str_contains((string) ($rule['summary'] ?? ''), 'plan-review-three-lenses.mdc')),
         false,
@@ -1055,10 +1053,6 @@ $checks = [
         is_array($hardConstraintsPackage['rules'] ?? null) ? $hardConstraintsPackage['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'plan_review_requires_impact_surface'
-            && str_contains((string) ($rule['summary'] ?? ''), 'HARD AOCI ATTEMPT FIRST')
-            && str_contains((string) ($rule['summary'] ?? ''), 'aoci_search')
-            && str_contains((string) ($rule['summary'] ?? ''), 'FORBID skipping AOCI')
-            && str_contains((string) ($rule['summary'] ?? ''), 'aoci_unavailable')
             && str_contains((string) ($rule['summary'] ?? ''), 'Weline MCP')
             && str_contains((string) ($rule['summary'] ?? ''), 'host-native')
             && str_contains((string) ($rule['summary'] ?? ''), '未探测影响面，暂不结论')
@@ -2399,34 +2393,6 @@ $checks = [
             && str_contains((string) ($phase['label'] ?? ''), '工程必做')),
         false,
     ),
-    'mcp_call_scope mandates prepare_project for engineering' => array_reduce(
-        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
-        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
-            && ($rule['id'] ?? '') === 'mcp_call_scope'
-            && str_contains((string) ($rule['summary'] ?? ''), 'MANDATORY')
-            && str_contains((string) ($rule['summary'] ?? ''), 'prepare_project')
-            && str_contains((string) ($rule['summary'] ?? ''), 'hard_constraints')),
-        false,
-    ),
-    'aoci_complements_weline_mcp keeps prepare_project as main path' => array_reduce(
-        is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
-        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
-            && ($rule['id'] ?? '') === 'aoci_complements_weline_mcp'
-            && str_contains((string) ($rule['summary'] ?? ''), 'COMPLEMENT')
-            && str_contains((string) ($rule['summary'] ?? ''), 'prepare_project')
-            && str_contains((string) ($rule['summary'] ?? ''), 'FORBIDDEN')
-            && str_contains((string) ($rule['summary'] ?? ''), 'HARD AUTO-INSTALL')
-            && str_contains((string) ($rule['summary'] ?? ''), 'MUST auto-install')
-            && str_contains((string) ($rule['summary'] ?? ''), 'HARD DEFAULT USE')
-            && str_contains((string) ($rule['summary'] ?? ''), 'aoci_rules')
-            && str_contains((string) ($rule['summary'] ?? ''), 'not optional')
-            && str_contains((string) ($rule['summary'] ?? ''), 'treating AOCI cognition as optional')
-            && str_contains((string) ($rule['summary'] ?? ''), 'SEMANTIC IDEMPOTENT')
-            && str_contains((string) ($rule['summary'] ?? ''), '~/.cursor/mcp.json')
-            && str_contains((string) ($rule['summary'] ?? ''), 'Reload Window')
-            && str_contains((string) ($rule['summary'] ?? ''), 'EXEMPT')),
-        false,
-    ),
     'content_ops_skills_skip_mcp forbids prepare on product/blog ops' => array_reduce(
         is_array($hardConstraintsPackage['mcp_operational'] ?? null) ? $hardConstraintsPackage['mcp_operational'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -2478,7 +2444,6 @@ $checks = [
             && str_contains((string) ($rule['summary'] ?? ''), 'delete-certificate')
             && str_contains((string) ($rule['summary'] ?? ''), 'retired_sha1_fingerprints.txt')
             && str_contains((string) ($rule['summary'] ?? ''), 'LEARNING_MCP_BOUND_REPOSITORY')
-            && str_contains((string) ($rule['summary'] ?? ''), 'aoci --repo')
             && str_contains((string) ($rule['summary'] ?? ''), 'sibling')
             && str_contains((string) ($rule['summary'] ?? ''), 'fingerprint')),
         false,

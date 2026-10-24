@@ -17,21 +17,9 @@ final class HeaderCommerceDataTest extends TestCase
         AllMenuTreeRegistry::reset();
         parent::tearDown();
     }
-    public function testDefaultHotWordsAreNonEmpty(): void
+    public function testNeutralHotWordsAreNonEmpty(): void
     {
-        $words = HeaderCommerceData::defaultHotWords('default');
-        self::assertNotEmpty($words);
-        self::assertContains('马面裙', $words);
-
-        $dao = HeaderCommerceData::defaultHotWords('daocharms');
-        self::assertNotEmpty($dao);
-        self::assertContains('黑曜石', $dao);
-        self::assertNotContains('马面裙', $dao);
-
-        $grocery = HeaderCommerceData::defaultHotWords('grocery');
-        self::assertNotEmpty($grocery);
-        self::assertContains('今日特价', $grocery);
-        self::assertNotContains('马面裙', $grocery);
+        self::assertNotEmpty(HeaderCommerceData::neutralDefaultHotWords());
     }
 
     public function testRepeatedHeaderQueriesUseRequestMemo(): void

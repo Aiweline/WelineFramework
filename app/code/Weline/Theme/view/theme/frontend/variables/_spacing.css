@@ -26,7 +26,25 @@
     --spacing-section-margin: var(--spacing-xl);
     
     /* ========== 布局间距 ========== */
-    --spacing-container-padding: var(--spacing-md);
+    /*
+     * 版心（container）契约 —— 全站唯一来源。
+     * 所有壳层（header 行、footer、breadcrumb、正文、bottom-slot）必须消费这两个 token，
+     * 禁止再写 width: calc(100% - Npx) 或按断点各写一个 padding，否则 Header/正文/Footer 会不同步。
+     *
+     * 沟槽用 clamp 做连续缩放：窄屏 16px → 宽屏 40px，不需要任何 @media 覆写。
+     */
+    --weline-container-gutter: clamp(1rem, 0.9rem + 1.5vw, 2.5rem);
+    /*
+     * 页面画布（page canvas）：主题要换底色/纸纹只设这四个 token，
+     * 禁止再写 html body{...!important} 去和骨架打架。
+     */
+    --weline-page-canvas-color: var(--weline-theme-body-bg, var(--weline-chrome-body-bg, var(--color-bg-canvas, var(--weline-theme-canvas, #ffffff))));
+    --weline-page-canvas-image: none;
+    --weline-page-canvas-size: auto;
+    --weline-page-canvas-repeat: repeat;
+    --weline-page-canvas-position: 0 0;
+
+    --spacing-container-padding: var(--weline-container-gutter);
     --spacing-container-max-width: 1440px;
     --spacing-grid-gap: var(--spacing-md);
     --layout-header-height: 70px;
@@ -182,7 +200,7 @@
      * 禁止再用「视口≥版心则内沿归零」公式——Header/独立壳/contents 提升轨会贴边。
      * 宽屏外沿由 max-width + margin:auto 提供；内沿 padding 永不撤掉。
      */
-    --weline-layout-content-padding-inline: var(--spacing-container-padding);
+    --weline-layout-content-padding-inline: var(--weline-container-gutter);
     --weshop-control-height: var(--control-height);
     --weshop-border-width: var(--border-width);
     --weshop-line-height-tight: var(--line-height-tight);

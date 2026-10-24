@@ -109,6 +109,20 @@ final class ToolService
                 $readOnly,
             ),
             self::tool(
+                'cognition',
+                'Compressed repository cognition (F/R/A/S per file)',
+                'Query or maintain the per-project compressed cognition index. Use action=query before editing unfamiliar code; call action=maintain once after managed objects reach a stable state. Entries are loaded per module shard on demand.',
+                self::objectSchema([
+                    'action' => ['type' => 'string', 'enum' => ['overview', 'query', 'maintain', 'status'], 'description' => 'Cognition operation.'],
+                    'module' => self::stringSchema('Module shard, e.g. Weline_Framework.'),
+                    'path' => self::stringSchema('Exact repository-relative file path.'),
+                    'query' => self::stringSchema('Case-insensitive substring over f/r/a/s.'),
+                    'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100, 'description' => 'Max entries (default 20).'],
+                    'entries' => ['type' => 'array', 'items' => ['type' => 'object'], 'description' => 'Entries for action=maintain.'],
+                ] + $scope, ['action', 'repository']),
+                $additive,
+            ),
+            self::tool(
                 'search_project_knowledge',
                 'Search project knowledge',
                 'Hybrid-search indexed code, module docs, skills, configuration, and rules without a query-time recursive file scan.',
@@ -292,6 +306,7 @@ final class ToolService
             'resolve_skill',
             'get_skill',
             'check_document_drift' => $this->intelligence->call($name, $arguments),
+            'cognition' => $this->cognition($arguments),
             'health' => $this->health(),
             default => throw new ToolException('NOT_FOUND', 'Unknown tool: ' . $name, false, ['tool' => $name]),
         };
@@ -315,6 +330,19 @@ final class ToolService
         }
 
         return $result;
+    }
+
+    private function cognition(array $input): array
+    {
+        $repository = $this->resolveProject($input);
+        $service = new CognitionService(RepositoryScope::projectDataDir($repository));
+        return match ((string) ($input['action'] ?? 'status')) {
+            'overview' => $service->overview(),
+            'query' => $service->query($input),
+            'maintain' => $service->maintain((array) ($input['entries'] ?? [])),
+            'status' => $service->status(),
+            default => throw new ToolException('INVALID_ARGUMENT', 'Unknown cognition action', false),
+        };
     }
 
     private function health(): array

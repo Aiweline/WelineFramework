@@ -125,7 +125,7 @@ $milestones = [
             min-height: 100vh;
             color: var(--color-text-primary, #1c1c1c);
             background: var(--color-bg-canvas, #f7f4ef);
-            font-family: "Source Han Serif SC", "Noto Serif SC", "Songti SC", "Times New Roman", serif;
+            font-family: var(--font-family-base);
         }
 
         .amazon-about {
@@ -514,7 +514,7 @@ $milestones = [
                 $lateDesc = trim($siteBrandLate->resolveFrontendSiteDescription((string)($contact['site_description'] ?? '')));
                 if ($lateDesc !== '') {
                     $contact['site_description'] = $lateDesc;
-                    if ($subtitle === '' || str_contains($subtitle, '长安汉服')) {
+                    if ($subtitle === '') {
                         $subtitle = WidgetI18n::label($lateDesc);
                     }
                 }

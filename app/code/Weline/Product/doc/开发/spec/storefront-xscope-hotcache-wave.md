@@ -24,7 +24,7 @@ covers_use_cases:
 advisor_sources:
   - dev/team/storefront-xscope-hotcache-wave/channel/kickoff.md#msg-3
   - dev/team/storefront-xscope-hotcache-wave/meetings/电商顾问-design.md
-mcp_note: prepare_project / get_skill(requirement_clarify_use_case) / aoci_rules timed out prior seat turn; continued via AI硬规则索引.md + 需求澄清与用例规格.md + 扩展点选型.md + findings/inventory + advisor channel/meetings on disk.
+mcp_note: prepare_project / get_skill(requirement_clarify_use_case) / cognition_rules timed out prior seat turn; continued via AI硬规则索引.md + 需求澄清与用例规格.md + 扩展点选型.md + findings/inventory + advisor channel/meetings on disk.
 ---
 
 # Spec: 店面跨范围 HotCache 波（search / PLP / 非 home chrome）

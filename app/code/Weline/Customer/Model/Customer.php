@@ -39,6 +39,14 @@ class Customer extends Model implements AuthenticableInterface
     #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: 'Anonymous checkout-created account (no storefront login until upgraded)')]
     public const schema_fields_is_anonymous = 'is_anonymous';
 
+    #[Col(type: 'varchar', length: 32, nullable: false, default: 'retail', comment: 'Customer type code (customer_type registry)')]
+    public const schema_fields_customer_type = 'customer_type';
+
+    // 需工程确认：本 Model 现无类级 #[Index] 声明，customer_type 索引是否生效需验证建表链路后决定是否补加。
+    public const CUSTOMER_TYPE_RETAIL = 'retail';
+    public const CUSTOMER_TYPE_B2B_WHOLESALE = 'b2b_wholesale';
+    public const CUSTOMER_TYPE_AI_ACQUISITION = 'ai_acquisition';
+
     public const schema_primary_key = 'customer_id';
     public const schema_primary_keys = ['customer_id'];
 

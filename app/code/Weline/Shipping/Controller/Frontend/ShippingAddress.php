@@ -67,7 +67,9 @@ class ShippingAddress extends FrontendController
         }
         
         $this->assign('address', $address);
-        return $this->fetch();
+        // 模板目录是小写 shipping-address/（与控制器短名 ShippingAddress 大小写不一致），
+        // 且 fetch 的相对名含 / 会被拼成 控制器/方法/文件 三层 → 必须用模块语法直达模板文件。
+        return $this->fetch('Weline_Shipping::templates/frontend/shipping-address/form.phtml');
     }
 
     /**

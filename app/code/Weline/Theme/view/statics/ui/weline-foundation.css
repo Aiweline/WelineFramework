@@ -72,10 +72,10 @@
         --weline-theme-shadow-sm: 0 1px 2px rgba(9, 16, 29, 0.08);
         --weline-theme-shadow-md: 0 10px 28px rgba(9, 16, 29, 0.14);
         --weline-theme-shadow-lg: 0 24px 64px rgba(9, 16, 29, 0.2);
-        --weline-font-sans: "Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", "SimSun", "Noto Sans SC", "PingFang SC", serif;
-        --weline-font-serif: "Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", "SimSun", Georgia, "Times New Roman", serif;
-        --weline-font-display: "LXGW WenKai", "Kaiti SC", "STKaiti", "KaiTi", "Noto Serif SC", "Songti SC", serif;
-        --weline-font-ui: "Noto Serif SC", "Songti SC", "Noto Sans SC", "PingFang SC", serif;
+        --weline-font-sans: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        --weline-font-serif: Georgia, "Times New Roman", serif;
+        --weline-font-display: var(--weline-font-sans);
+        --weline-font-ui: var(--weline-font-sans);
         --weline-font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
         --weline-font-size-xs: 0.75rem;
         --weline-font-size-sm: 0.875rem;
@@ -464,14 +464,12 @@
 }
 
 @layer layout {
-    .w-container {
-        box-sizing: border-box;
-        width: min(100%, var(--weline-layout-content-max-width));
-        max-width: 100%;
-        min-width: 0;
-        margin-inline: auto;
-        padding-inline: var(--weline-layout-content-padding-inline);
-    }
+    /*
+     * 版心唯一实现：所有壳层（header 行、footer、breadcrumb、正文、bottom-slot）
+     * 必须复用这一条，禁止再写等价的 width/padding 组合，否则会出现
+     * 「Header 与正文/Footer 不同步」。token 见 variables/_spacing.css。
+     */
+    .w-container,
     .w-theme-content-width {
         box-sizing: border-box;
         width: min(100%, var(--weline-layout-content-max-width));

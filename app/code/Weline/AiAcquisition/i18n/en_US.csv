@@ -13,6 +13,9 @@
 请选择模型。,"Please select a model."
 运行参数格式不正确。,"Invalid run parameters."
 运行记录不存在。,"Run does not exist."
+只有执行中的运行可以暂停。,只有执行中的运行可以暂停。
+只有已暂停的运行可以继续。,只有已暂停的运行可以继续。
+执行中或已暂停的运行不能删除，请先停止。,执行中或已暂停的运行不能删除，请先停止。
 "智能体未注册，请先执行 ai:agent:scan。","Agent is not registered. Run ai:agent:scan first."
 "AI 获客","AI Acquisition"
 "客户线索、获客提示词、AI 模型预估与智能体运行管理。","Lead records, acquisition prompts, AI model estimates and agent run management."
@@ -33,6 +36,10 @@
 "已入库 %{1} 条线索 · %{2} 次运行","已入库 %{1} 条线索 · %{2} 次运行"
 运行记录不存在,"Run does not exist"
 事件拉取失败,"Failed to pull events"
+运行当前状态不可接入：%{1},运行当前状态不可接入：%{1}
+只有执行中的运行可以暂停,只有执行中的运行可以暂停
+只有已暂停的运行可以继续,只有已暂停的运行可以继续
+不支持的运行控制：%{1},不支持的运行控制：%{1}
 "payload 必须是 JSON 对象","payload must be a JSON object"
 "payload 过大","payload is too large"
 "messages 不能为空","messages cannot be empty"
@@ -49,15 +56,53 @@
 "请求体必须是 JSON 对象","Request body must be a JSON object"
 请求体过大,"Request body is too large"
 缺少票据,"Missing ticket"
+运行已暂停，请在扩展助手或运行记录中继续,运行已暂停，请在扩展助手或运行记录中继续
+运行当前状态不可执行：%{1},运行当前状态不可执行：%{1}
+本地模型结果为空。,本地模型结果为空。
+"本地模型 tool_calls 必须是数组。","本地模型 tool_calls 必须是数组。"
+"AI 获客配置","AI 获客配置"
+settings,settings
+"AI 自动回复频控、外发账户、模型与提示词模板配置","AI 自动回复频控、外发账户、模型与提示词模板配置"
+"查看 AI 获客配置","查看 AI 获客配置"
 search,search
 "AI 获客智能体运行与浏览器桥","AI acquisition agent runs and browser bridge"
 查看获客智能体,"View acquisition agent"
 list,list
 查看获客智能体运行记录,"View acquisition agent runs"
+线索不存在,线索不存在
+线索未登记有效邮箱，无法发信,线索未登记有效邮箱，无法发信
+主题和正文不能为空,主题和正文不能为空
+无可用发件账户，请先在企业邮箱启用账户,无可用发件账户，请先在企业邮箱启用账户
+邮件发送失败,邮件发送失败
+邮件已发送,邮件已发送
+线索邮件沟通,线索邮件沟通
+message,message
+打开线索邮件弹窗与往来时间线,打开线索邮件弹窗与往来时间线
+线索邮件发送,线索邮件发送
+经企业邮箱给线索发信并写入沟通记录,经企业邮箱给线索发信并写入沟通记录
 "AI 获客线索","AI acquisition leads"
 users,users
 "AI 获客客户线索库","AI acquisition lead library"
 "查看 AI 获客客户线索","View AI acquisition leads"
+缺少线索ID,缺少线索ID
+线索转为客户,线索转为客户
+user-plus,user-plus
+把可转化线索转为匿名客户,把可转化线索转为匿名客户
+配置写入当前作用范围；切换范围后页面会按新范围加载。自动回复默认开启，模型与获客运行页同源。,配置写入当前作用范围；切换范围后页面会按新范围加载。自动回复默认开启，模型与获客运行页同源。
+在统一配置中心打开,在统一配置中心打开
+作用范围,作用范围
+发件账户,发件账户
+无可用发件账户,无可用发件账户
+收件人,收件人
+主题,主题
+正文,正文
+发送,发送
+往来时间线,往来时间线
+暂无往来记录，发送第一封邮件后显示。,暂无往来记录，发送第一封邮件后显示。
+发出,发出
+收到,收到
+【%1】合作跟进,【%1】合作跟进
+公司名,公司名
 "运行 ID 无效","Invalid run ID"
 票据为空或格式不正确,"Ticket is empty or malformed"
 票据无效或已过期,"Ticket is invalid or expired"
@@ -71,12 +116,19 @@ users,users
 "模型 %{1} 无法匹配供应商 %{2}：%{3}","Model %{1} could not be matched to provider %{2}: %{3}"
 模型代码不能为空。,"Model code cannot be empty."
 模型不存在：%{1},"Model does not exist: %{1}"
+请根据以上线索上下文，撰写一封面向该客户的英文跟进邮件正文。,请根据以上线索上下文，撰写一封面向该客户的英文跟进邮件正文。
+"【%1】感谢您的关注 — 跟进","【%1】感谢您的关注 — 跟进"
+模型运行方式不支持：%{1},模型运行方式不支持：%{1}
 "没有可用的文本模型，请先在 AI 模块配置模型：%{1}","No text model is available. Configure a model in the AI module first: %{1}"
+请填写本地模型服务地址（http/https）。,请填写本地模型服务地址（http/https）。
+"请填写本地模型名，例如 qwen2.5:3b。","请填写本地模型名，例如 qwen2.5:3b。"
 请先选择要获客的网站。,请先选择要获客的网站。
 网站不存在或尚未配置可用的站点画像。,网站不存在或尚未配置可用的站点画像。
 提示词档案不存在：%{1},"Prompt profile does not exist: %{1}"
 运行记录创建失败。,"Failed to create the run record."
 "finish 只接受终态，收到：%{1}","finish only accepts terminal statuses; received: %{1}"
+"线索状态 %{1} 不可转化","线索状态 %{1} 不可转化"
+线索邮箱为空或格式不正确，不可转化,线索邮箱为空或格式不正确，不可转化
 "Open one public page and extract title, meta description, company name, public emails, country hints and a text excerpt. Use it to verify buyer intent before saving a lead.","Open one public page and extract title, meta description, company name, public emails, country hints and a text excerpt. Use it to verify buyer intent before saving a lead."
 "url 不能为空，请给出搜索结果中的公开页面地址。","url cannot be empty. Provide a public page URL from the search results."
 页面检查失败：%{1},"Page inspection failed: %{1}"
@@ -96,3 +148,5 @@ users,users
 "query 不能为空，请给出体现买家意向的检索词。","query cannot be empty. Provide keywords that express buyer intent."
 搜索失败：%{1},"Search failed: %{1}"
 没有检索到结果。请更换同义词、买家意向词或来源后重试，不要据此编造线索。,"No results found. Try synonyms, other buyer-intent keywords or another source; do not invent leads."
+录入方式,"Entry channel"
+"Entry channel","Entry channel"

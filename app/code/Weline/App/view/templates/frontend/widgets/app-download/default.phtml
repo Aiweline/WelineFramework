@@ -1,0 +1,51 @@
+<?php
+/**
+ * 下载App 部件（结构骨架；视觉由 UI 席消费 CSS Token 后填充皮肤）。
+ *
+ * @widget.source {Weline_App::css/widgets/app-download.css}
+ * @widget.code {app-download}
+ * @widget.name {下载App}
+ * @widget.description {按站点展示 iOS/Android/Web PWA 三端下载入口；数据来自 Weline_App 版本接口}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.default_injections {[{"layout_type":"default","layout_option":"default","slot":"content-before","area":"content","sort_order":10,"required":false,"reason":"下载App部件：默认注入全站 default 布局 content-before 槽（皮肤完成后固化生效）"},{"layout_type":"test","layout_option":"origin-watch","slot":"origin-watch-probe","area":"content","sort_order":20,"required":false,"reason":"App download widget render validation on editor-area-demo test layout"}]}
+ * @widget.supports {["app-download","download","app"]}
+ * @widget.placement {injection}
+ */
+/**@var \Weline\Framework\View\Template $this */
+// 数据面：三平台最新 released 产物（直接读登记表，禁 stat 产物文件）
+$service = new \Weline\App\Service\Build\LatestArtifact();
+$platforms = [
+    'web' => $service->latest('web'),
+    'android' => $service->latest('android'),
+    'ios' => $service->latest('ios'),
+];
+$entries = [];
+foreach ($platforms as $platform => $artifact) {
+    $hasArtifact = $artifact && $artifact->getData('id');
+    if ($platform === 'web') {
+        $entries[$platform] = $hasArtifact ? '/api/weline_app/rest/v1/download/download?platform=web' : null;
+    } elseif ($platform === 'android') {
+        $entries[$platform] = $hasArtifact ? '/api/weline_app/rest/v1/download/download?platform=android' : null;
+    } else {
+        // iOS App Store 链接占位，待 App Store 上架后补充
+        $entries[$platform] = null;
+    }
+}
+$webArtifact = $platforms['web'];
+?>
+<?php if ($entries['web'] || $entries['android'] || $entries['ios']): ?>
+<div class="weline-app-download" data-weline-app-version="<?= htmlspecialchars((string)($webArtifact ? $webArtifact->getData('version') : ''), ENT_QUOTES) ?>">
+    <div class="app-download__entry">
+        <?php foreach ($entries as $platform => $entryUrl): ?>
+            <?php if ($entryUrl): ?>
+                <a class="app-download__btn app-download__btn--<?= $platform ?>" href="<?= $entryUrl ?>"><?= __('下载 App') ?></a>
+            <?php elseif ($platform === 'ios'): ?>
+                <?php // iOS App Store 占位 ?>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php endif; ?>

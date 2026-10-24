@@ -11,6 +11,7 @@ namespace Weline\Framework\Http\Request;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Http\Fpc\FpcPierceStamp;
 use Weline\Framework\Runtime\StateManager;
 
 class RequestFilter extends DataObject
@@ -405,6 +406,13 @@ class RequestFilter extends DataObject
      */
     public function init(): void
     {
+        $piercePass = false;
+        try {
+            $piercePass = FpcPierceStamp::isValidCurrentRequest();
+        } catch (\Throwable) {
+            $piercePass = false;
+        }
+
         $this->registerStateManager();
 
         if ($this->attackScanCompleted) {
@@ -425,9 +433,9 @@ class RequestFilter extends DataObject
                 if ($this->isSafeReturnUrlParam($keyStr, $value)) {
                     continue;
                 }
-                $this->StopAttack($key, is_string($value) ? $this->decodeNestedUrlValue($value) : $value, $getfilter);
+                $this->StopAttack($key, is_string($value) ? $this->decodeNestedUrlValue($value) : $value, $getfilter, $piercePass);
             } else {
-                $this->StopAttack($key, $value, $getfilter);
+                $this->StopAttack($key, $value, $getfilter, $piercePass);
             }
         }
         foreach (\Weline\Framework\Env\WelineEnv::getPost() as $key => $value) {
@@ -439,13 +447,13 @@ class RequestFilter extends DataObject
                 if ($this->isSafeReturnUrlParam($keyStr, $value)) {
                     continue;
                 }
-                $this->StopAttack($key, is_string($value) ? $this->decodeNestedUrlValue($value) : $value, $postfilter);
+                $this->StopAttack($key, is_string($value) ? $this->decodeNestedUrlValue($value) : $value, $postfilter, $piercePass);
             } else {
-                $this->StopAttack($key, $value, $postfilter);
+                $this->StopAttack($key, $value, $postfilter, $piercePass);
             }
         }
         foreach (\w_env_cookie() as $key => $value) {
-            $this->StopAttack($key, $value, $cookiefilter);
+            $this->StopAttack($key, $value, $cookiefilter, $piercePass);
         }
         if (file_exists('updateSafeScan.php')) {
             throw new \Weline\Framework\Http\ResponseTerminateException(
@@ -458,8 +466,12 @@ class RequestFilter extends DataObject
         $this->attackScanCompleted = true;
     }
 
-    public function StopAttack($StrFiltKey, $StrFiltValue, $ArrFiltReq): void
+    public function StopAttack($StrFiltKey, $StrFiltValue, $ArrFiltReq, bool $piercePass = false): void
     {
+        if ($piercePass) {
+            return;
+        }
+
         if (is_array($StrFiltValue)) {
             $StrFiltValue = json_encode($StrFiltValue);
         }

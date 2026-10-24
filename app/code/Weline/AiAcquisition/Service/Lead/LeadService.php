@@ -6,8 +6,11 @@ namespace Weline\AiAcquisition\Service\Lead;
 
 use InvalidArgumentException;
 use Weline\AiAcquisition\Model\Lead;
+use Weline\AiAcquisition\Service\Customer\LeadCustomerSync;
+use Weline\AiAcquisition\Service\Tag\TagCatalog;
 use Weline\AiAcquisition\Service\Catalog\ContinentCatalog;
 use Weline\AiAcquisition\Service\Catalog\CountryCatalog;
+use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 线索服务：归一化入库、按去重哈希合并、列表筛选、统计与批量维护。
@@ -67,7 +70,12 @@ final class LeadService
             $model->setData(Lead::schema_fields_RAW_JSON, $rawJson);
             $model->save();
 
-            return ['lead' => $this->find($editId) ?? $normalized, 'created' => false];
+            $lead = $this->find($editId);
+            if ($lead !== null) {
+                $this->syncCustomer($lead);
+            }
+
+            return ['lead' => $lead ?? $normalized, 'created' => false];
         }
 
         $hash = (string)$normalized[Lead::schema_fields_DEDUPE_HASH];
@@ -81,6 +89,10 @@ final class LeadService
 
             $model = $this->newModel();
             $model->setData(Lead::schema_fields_ID, $leadId);
+            $existingTags = TagCatalog::normalize($existing[Lead::schema_fields_TAGS] ?? []);
+            $mergedTags = TagCatalog::dedupeByGroup(TagCatalog::merge($existingTags, $normalized[Lead::schema_fields_TAGS] ?? []));
+            $model->setData(Lead::schema_fields_TAGS, $mergedTags === [] ? null : json_encode($mergedTags, JSON_UNESCAPED_UNICODE));
+            $normalized[Lead::schema_fields_TAGS] = $mergedTags;
             $this->applyMergeFields($model, $normalized);
             $existingStatus = trim((string)($existing[Lead::schema_fields_STATUS] ?? ''));
             if ($existingStatus === '') {
@@ -96,6 +108,7 @@ final class LeadService
             $model->save();
 
             $lead = $this->find($leadId) ?? $existing;
+            $this->syncCustomer($lead);
 
             return ['lead' => $lead, 'created' => false];
         }
@@ -117,8 +130,21 @@ final class LeadService
             $lead = $normalized;
             $lead[Lead::schema_fields_ID] = $leadId;
         }
+        $this->syncCustomer($lead);
 
         return ['lead' => $lead, 'created' => true];
+    }
+
+    /**
+     * 合格线索（评分 ≥6 且有邮箱）自动转为正式客户并同步标签。
+     */
+    private function syncCustomer(array $lead): void
+    {
+        try {
+            ObjectManager::getInstance(LeadCustomerSync::class)->syncFromLead($lead);
+        } catch (\Throwable $throwable) {
+            w_log_error('[AiAcquisition] customer sync failed: ' . $throwable->getMessage());
+        }
     }
 
     /**
@@ -340,6 +366,11 @@ final class LeadService
             }
         }
 
+        $tag = $this->filterText($filters['tag'] ?? '');
+        if ($tag !== '') {
+            $model->where(Lead::schema_fields_TAGS, '%' . $tag . '%', 'LIKE');
+        }
+
         $continent = ContinentCatalog::normalize($this->filterText($filters['continent'] ?? ''));
         if ($continent !== ContinentCatalog::UNKNOWN) {
             $model->where(Lead::schema_fields_CONTINENT_CODE, $continent);
@@ -367,6 +398,13 @@ final class LeadService
         $sourcePlatform = strtolower($this->filterText($filters['source_platform'] ?? ''));
         if ($sourcePlatform !== '') {
             $model->where(Lead::schema_fields_SOURCE_PLATFORM, $sourcePlatform);
+        }
+        $entryChannel = strtolower($this->filterText($filters['entry_channel'] ?? ''));
+        if ($entryChannel !== '') {
+            if (!isset(Lead::ENTRY_CHANNELS[$entryChannel])) {
+                throw new InvalidArgumentException('无效的录入渠道筛选值：' . $entryChannel);
+            }
+            $model->where(Lead::schema_fields_ENTRY_CHANNEL, $entryChannel);
         }
 
         $minScore = $filters['min_score'] ?? null;
@@ -401,6 +439,9 @@ final class LeadService
                 continue;
             }
             if ($field === Lead::schema_fields_SOURCE_PLATFORM && $value === 'web') {
+                continue;
+            }
+            if ($field === Lead::schema_fields_ENTRY_CHANNEL && $value === Lead::ENTRY_CHANNEL_DEFAULT) {
                 continue;
             }
             if ($field === Lead::schema_fields_CONTINENT_CODE && $value === ContinentCatalog::UNKNOWN) {

@@ -95,13 +95,13 @@ CSP 仅放开 `'wasm-unsafe-eval'` 以运行本地 WASM；**没有**远程脚本
 | `WASM 文件加载失败` | 重新执行 `build.sh`，确认 `wasm/agent_core.wasm` 存在 |
 
 
-## 三种模型运行方式
+## 三种模型运行方式（v1.2.0）
 
 | 方式 | 运行位置 | 计费 | 配置 |
 |---|---|---|---|
 | `ai_module` | 后端调用 AI 模块模型 | 按 token 计费，写 `ai_usage_log` | 后台选择 AI 模块模型 |
 | `local_computer` | 扩展直接调用本机 Ollama / OpenAI 兼容服务 | 不计费 | 运行页填服务地址（如 `http://127.0.0.1:11434`）与模型名 |
-| `browser_local` | 扩展调用 Chrome 内置 Prompt API（Gemini Nano） | 不计费 | 运行页选 Chrome 内置模型；需 Chrome 138+ 并已下载模型 |
+| `browser_local` | 扩展调用 Chrome 内置 Prompt API，或 offscreen WebLLM | 不计费 | 运行页选 Chrome 内置 / Qwen2.5 0.5B / Llama 3.2 1B / Qwen2.5 1.5B |
 
 本地服务需要允许扩展来源（Ollama 可设置 `OLLAMA_ORIGINS=*` 或在启动参数中放行 `chrome-extension://*`）。浏览器端侧模型不可用时，扩展会明确提示改用本地电脑模型。
 
@@ -118,4 +118,42 @@ POST {local_endpoint}/v1/chat/completions
 
 ### 端侧模型
 
-`browser_local` 使用 Chrome 内置 `LanguageModel`（Prompt API）。扩展不下载远程脚本或权重，模型由 Chrome 管理；首次使用可能触发浏览器模型下载。不可用时回退到本地电脑模型或 AI 模块模型。
+`browser_local` 有两个子路径：
+
+- `chrome-builtin`：Chrome 内置 `LanguageModel`（Prompt API / Gemini Nano），模型由 Chrome 管理。
+- WebLLM：`Qwen2.5-0.5B-Instruct-q4f16_1-MLC`、`Llama-3.2-1B-Instruct-q4f16_1-MLC`、`Qwen2.5-1.5B-Instruct-q4f16_1-MLC`，由扩展 offscreen 文档通过 WebGPU 运行；首次选择时从 HuggingFace 下载权重，需 WebGPU 与足够磁盘/内存。
+
+不可用时回退到本地电脑模型或 AI 模块模型。
+
+## 悬浮助手（1.3.0）
+
+- 扩展在任意 http(s) 页面注入 `assistant.js`（Shadow DOM，不污染宿主样式）。页面出现 `[data-acq-ticket]`（64 位 hex，兜底扫描 `#run-ticket`）时，右下角助手自动展开并显示票据尾号。
+- 点击「初始化模型并运行」后由 background 依次执行：
+  1. `GET /ai_acquisition/frontend/bridge/context` 取运行配置；
+  2. 按运行方式初始化模型：`ai_module` 直接放行、`local_computer` 探活本机 `/models` 或最小推理、`browser_local` 走 WebLLM offscreen 下载（或检查 Chrome 内置 Prompt API）；
+  3. `POST /bridge/ready` 成功后才把运行从「待连接」改为「执行中」；
+  4. 跑 agent 循环，每轮前 `GET /bridge/status`，被后台暂停时等待「继续」，被停止时结束本地循环。
+- 面板按钮：暂停 / 继续 / 停止（调 `POST /bridge/control`）、打开运行记录；后台运行记录里同样可以暂停、继续、停止、删除。
+- 票据只在内存中使用，不写 storage、不写日志；面板日志里的邮箱会脱敏。
+- 模型初始化失败会在面板上直接显示原因，不会静默结束。
+
+### 验收（本机）
+
+- `node --check`：`background.js`、`assistant.js`、`offscreen.js`（module）、`popup.js`、`options.js` 全过。
+- `wasm-smoke.js` → `WASM_OK`。
+- Playwright Chromium 加载 ZIP 解压目录：service worker 启动，manifest 1.3.0。
+- 真实后台：注入票据后助手自动展开；点击运行在无内置模型的环境返回明确提示并回传 `failed`。
+
+## 端侧流水线（browser_local 模式）
+
+端侧 1B/3B 小模型不走自由工具循环（实测会回声 schema 或跑题），改为脚本化取证流水线：
+
+1. 检索词：按「品类 + 海外买家渠道」固定模板生成（如 `cosplay shop hanfu contact email`），并做严格品类词过滤；
+2. Bing RSS 检索 → 抓取候选页 → 过滤出带公开商务邮箱的页面；
+3. 模型只做一件事：输出 JSON `{company_name,email,country_code,source_excerpt,axes,reason}`，判定是否为合格买家（5 轴总分 ≥6）；
+4. 合格则调 `save_lead` 入库，全程模型输出只走「只输出 JSON」协议。
+
+工程约束（真机实测）：
+- offscreen 里 WebLLM 用 `appConfig` 把 `context_window_size` 覆写为 8192（预置 4096 不够）；
+- `AbortError` 后必须卸载并重建 engine，复用被中断的请求队列会持续失败；
+- Qwen2.5-3B q4f16 权重约 1.65GB，首次下载约 3-4 分钟（视网络）。

@@ -49,7 +49,6 @@ MCP 是**知识面**（技能索引 / 代码地图 / 领域硬规则下发），
 | `chat` | 闲聊/概念、不改仓 | 可跳过 MCP |
 
 权威目录：[意图路由.md](../../../dev/ai-command/ai/意图路由.md)；宿主插件 `~/.cursor/plugins/local/weline-lane-router/`（`/lane-route`，技能包 `references/lanes.yaml`）。  
-日常入口先对原话：编码 / 部署 / 运营社媒 / 内容 / 闲聊。判完只加载该车道 `skill_pack.load_now`；`skip` 禁止打开。运营、内容、闲聊不跑 AOCI；编码默认不加载 OPC 全树。  
 误把会改码的需求标成 chat/opc → **必须重判 engineering**。其后仍跑 §1a `request_grade`。  
 宿主常带：`~/.cursor/rules/intent-lane-router.mdc`（`global_rules_dual_write_mcp_and_host`）。
 
@@ -71,31 +70,21 @@ MCP 是**知识面**（技能索引 / 代码地图 / 领域硬规则下发），
 
 工程需求**讨论/分析**与为此进行的**代码扫描**时（`request_grade=engineering`）：
 
-1. **AOCI 须参与**：相关/周边结构认知走 AOCI（合同缺失先 `aoci_rules`；相关对象用 scoped search/get_entries；完整认知不可靠再 overview）——讨论阶段也不得把 AOCI 当可选。
 2. **扫码顺带分级**：为完成需求而扫描的文件/周边逻辑，同时判定是**架构级隐患**还是**补丁级写法**（如绕开 Taglib、Runtime 业务硬编码、未文档化事件、跨模块 new Service/Model、归属错位等）——不只扫主路径。
 3. **疑点对照模块 doc 索引**：发现可能不合理处，须调 Weline MCP（`resolve_task_context` / `search_project_knowledge` / `get_indexed_document`）读模块 `doc/` 与框架索引，对比正确做法并记下证据路径。
 4. **汇报由用户裁决**：分析收口必须含「**架构隐患/周边发现**」小节（无则写「无」）；**是否顺带处理由用户决定**——禁止擅自扩大实现范围、静默顺手修周边。
 
 EXEMPT：内容运营与纯闲聊。宿主常带：`~/.cursor/rules/requirement-scan-architecture-smell-gate.mdc`。细则：[规则/10 §2](./10-工程流程与验收.md)。
 
-## 1b. AOCI 与 Weline MCP 互补（`aoci_complements_weline_mcp`）
 
-AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_intelligence`）**并列挂载**，定位互补，**不互替**。对**编码/工程任务**，AOCI 认知是 **HARD DEFAULT USE（强制）**，不是可选辅助层。
 
 | 面 | 负责 | 不负责 |
 |----|------|--------|
-| **Weline MCP** | 工程硬规则、`prepare_project`、技能、代码地图、验收门禁；**本机无 AOCI 程序时自动安装** | 不写仓；不替代源码阅读与测试 |
-| **AOCI** | 仓库认知索引、Baseline、漂移、受管 Overview / Entries | **不能**替代 `prepare_project` / `hard_constraints` |
 
-**自动安装（硬）**：本机缺少 AOCI 程序时，Weline 必须在 `ensure-project-guidance` 与/或 `prepare_project`（`AociInstaller`）中自动安装；结果见 `aoci_installation`。安装失败须可见汇报，**禁止**当作「可选跳过」；失败本身不单独阻断 Weline 就绪。装好后 Agent 须按 `mcp_registration` 把 `aoci` 挂进宿主（会话缺 AOCI 工具时）。细则：[AOCI自动安装.md](../AOCI自动安装.md)。
 
-**工程强制认知（硬，`HARD DEFAULT USE`）**：编码/工程在 `prepare_project` 之后、宿主原生编辑之前，**必须**建立 AOCI 认知合同——会话无与当前仓库根/索引版本匹配的可靠运行合同时先 `aoci_rules`；无可靠完整认知时再普通 `aoci_overview`（压缩恢复按 AOCI `context_compaction` 合同）。受管对象达到本次最终稳定状态后调用一次 `aoci_maintain`（纯只读且无受管对象变更可免）。`aoci` 工具不可用时须按 `mcp_registration` 挂载并可见汇报；AOCI 认知失败**不**单独阻断 Weline 就绪，但工程 Agent **不得**把 AOCI 当成可选而跳过，也**不得**假装已遵守 AOCI 认知合同。
 
-**路由约定**：流程 / 规则 / 技能 → Weline；结构认知 / 漂移 / 索引 → AOCI。禁止用 AOCI 覆盖或假装已遵守 Weline 硬规则。
 
-**挂载与宿主配置稳定（硬）**：Cursor 须并列注册两套 MCP（工程任务）；`aoci` 配置须用本机绝对路径（二进制 + `--repo` 仓库根），host 配置**勿提交 Git**。**语义幂等**：`mcp_registration` 的 command/args 与目标文件已有 `aoci` 条目等价时，**禁止** rewrite / `touch` / 整文件重写；只汇报「已挂载」并**新开 Agent 回合**。**Cursor 单落点**：`aoci` 只维护用户级 `~/.cursor/mcp.json`；**禁止**同一会话再写项目 `.mcp.json` 的 `aoci`（项目 `.mcp.json` 留给 Claude Code 等其它宿主）。**禁止**用 Developer: Reload Window 刷新 MCP/规则/目录（会杀死全部智能体）。大仓首次 `scan`/建索引成本高，未经明示或范围计划不得自动全仓扫描。**EXEMPT**：内容运营与纯闲聊豁免 AOCI 认知调用（走 prepare 时仍可触发安装）。
 
-权威：`HardConstraintsCatalog::mcpOperationalRules()` → `aoci_complements_weline_mcp`。
 
 ## 1c. 整机共享态须工作区范围（`machine_shared_side_effects_require_workspace_scope`，严重）
 
@@ -106,7 +95,6 @@ AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_int
 | 类 | 典型动作 | 范围门禁 |
 |----|----------|----------|
 | Local CA 信任 | `security add-trusted-cert` / `delete-certificate`；写入 System / login keychain | 仅允许**当前仓** `var/server/_local_ca/rootCA.pem`，且用户**本回合明示**「信任本仓 CA / 修钥匙串」。**WLS 运行时**亦同：`delete-certificate` 只许删本仓 `retired_sha1_fingerprints.txt` 登记**且**本仓 `local_ca_provenance.json` 记为 `origin=generated`/`shared=false`、并有本仓数据库/叶证签发证据的指纹；继承整机共享目录、已共享给兄弟项目、来源不明的 CA 一律保留；禁止按同名 CN 清掉兄弟仓 CA |
-| MCP / AOCI 绑定 | 改 `LEARNING_MCP_BOUND_REPOSITORY`、learning-mcp 路径、`aoci --repo` | ensure/prepare 仅当目标根 == **当前工作区根**；跨仓改绑须用户本回合明示切换项目/工作区 |
 
 ### 允许
 
@@ -123,12 +111,10 @@ AOCI-CODE（`aoci` MCP）与本仓 Weline 项目智能 MCP（`weline_project_int
 | 把**非本仓**的 `rootCA.pem` / `.trust-*.pem` 装进 System/login keychain |
 | 假定「CN 都叫 Weline Local Development CA」就能共用一把钥——**必须核对指纹**等于当前仓 `rootCA.pem` |
 | 钥匙串已有同名但指纹不同的 CA 时**静默替换/删除**（会破坏其他仓 HTTPS）——Agent 须停手说明影响；WLS 启动同步**禁止**把非本仓 retired 名单内的同名 CA 当 stale 删除 |
-| 任务在仓 A、IDE 工作区是仓 A，却把全局 Weline/AOCI MCP 改绑到仓 B（「顺手帮兄弟仓绑 MCP」） |
 | 未明示就 `add-trusted-cert`；或为修兄弟仓 HTTPS 而污染当前仓信任链 |
 
 ### 与已有规则关系
 
-- 补齐 `aoci_complements_weline_mcp` 的语义幂等：幂等只防「无意义 rewrite」，**不**授权为兄弟仓改绑。
 - 补齐 MCP `RepositoryScope` / `LEARNING_MCP_BOUND_REPOSITORY`：服务端拒越界**拦不住** Agent 先改 host `mcp.json`。
 - **不**替代 `preserve_dirty_workspace`（Git 脏树）——本条只管钥匙串与 MCP 绑定。
 

@@ -186,6 +186,7 @@ $fakeFlag = (string)($this->request->getGet('mail_fake', '') ?? ($_GET['mail_fak
 $fakeMode = $fakeFlag === '1';
 $enabled = $mailService->isServiceEnabled($fakeMode);
 $domains = $mailService->getActiveDomains();
+$mailDomainSelectOptionsJson = \Weline\Mail\Service\MailSelectOptions::domainsForSelectJson($domains);
 $accounts = $mailService->getAccountsForCustomer($customerId);
 $fakeAccounts = $mailboxService->getUsableAccounts($accounts);
 $selectedAccount = $fakeAccounts[0] ?? null;
@@ -227,11 +228,15 @@ $statusLabels = [
                         </div>
                         <div class="account-form__group">
                             <label class="account-form__label" for="mail_domain_id"><lang>邮箱域名</lang></label>
-                            <select id="mail_domain_id" class="account-form__input" name="domain_id" required>
-                                <?php foreach ($domains as $domain): ?>
-                                    <option value="<?= (int)$domain->getId() ?>">@<?= $escape($domain->getData(MailDomain::schema_fields_DOMAIN_NAME)) ?></option>
-                                <?php endforeach; ?>
-                            </select>
+                            <w:mail:domain:select
+                                id="mail_domain_id"
+                                class="account-form__input"
+                                name="domain_id"
+                                value=""
+                                display=""
+                                options="mailDomainSelectOptionsJson"
+                                required="true"
+                            />
                         </div>
                         <div class="account-form__group">
                             <label class="account-form__label" for="mail_display_name"><lang>显示名称</lang></label>

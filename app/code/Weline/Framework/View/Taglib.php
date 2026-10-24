@@ -53,11 +53,17 @@ class Taglib
      * Bumped when compiled Taglib output shape changes (e.g. form body capture).
      * Embedded into Template compile hash so view/tpl cannot keep stale PHP.
      */
-    public const COMPILER_GENERATION = '20261023-owned-children-phase-v10';
+    public const COMPILER_GENERATION = '20261023-compile-scope-v13';
 
     /** 回调 `$config` 中的渲染阶段键；只有 {@see renderRuntimeTag()} 会写入 runtime。 */
     public const RENDER_PHASE_KEY = 'render_phase';
     public const RENDER_PHASE_RUNTIME = 'runtime';
+
+    /**
+     * 回调 `$config` 中携带本次编译的 PhpExtractor。
+     * 属性导出只认它——占位符映射不挂在单例上，也不跨编译复用。
+     */
+    private const COMPILE_EXTRACTOR_KEY = '__compile_php_extractor';
 
     // PHP 标签常量，避免在回调函数中重复定义
     private const PHP_OPEN_TAG = '<' . '?';
@@ -72,34 +78,11 @@ class Taglib
     ];
     
     // ====== 优化组件 ======
-    
-    /**
-     * PHP 提取器
-     */
-    private ?PhpExtractor $phpExtractor = null;
 
-    /** Current compile-depth PhpExtractor (nested compiles use a private instance). */
-    private ?PhpExtractor $activeCompileExtractor = null;
-    
     /**
-     * 词法分析器
-     */
-    private ?Tokenizer $tokenizer = null;
-    
-    /**
-     * AST 构建器
-     */
-    private ?AstBuilder $astBuilder = null;
-    
-    /**
-     * 编译管道
+     * 编译管道（只保存 pass 列表，无单次编译状态；供 addCompilePass()/统计复用）
      */
     private ?CompilePipeline $pipeline = null;
-    
-    /**
-     * 代码生成器
-     */
-    private ?CodeGenerator $codeGenerator = null;
     
     /**
      * 多级缓存
@@ -199,39 +182,6 @@ class Taglib
     // ====== 懒加载获取器 ======
     
     /**
-     * 获取 PHP 提取器
-     */
-    private function getPhpExtractor(): PhpExtractor
-    {
-        if ($this->phpExtractor === null) {
-            $this->phpExtractor = new PhpExtractor();
-        }
-        return $this->phpExtractor;
-    }
-    
-    /**
-     * 获取词法分析器
-     */
-    private function getTokenizer(): Tokenizer
-    {
-        if ($this->tokenizer === null) {
-            $this->tokenizer = new Tokenizer();
-        }
-        return $this->tokenizer;
-    }
-    
-    /**
-     * 获取 AST 构建器
-     */
-    private function getAstBuilder(): AstBuilder
-    {
-        if ($this->astBuilder === null) {
-            $this->astBuilder = new AstBuilder();
-        }
-        return $this->astBuilder;
-    }
-    
-    /**
      * 获取编译管道
      * 
      * 默认包含四个优化通道（按文档约定优先级）：
@@ -239,6 +189,9 @@ class Taglib
      * - ConstantFoldingPass (优先级 10-30) - 常量折叠
      * - DeadCodeEliminationPass (优先级 30-50) - 死代码消除
      * - InlineOptimizationPass (优先级 50-70) - 内联优化
+     *
+     * 管道只保存 pass 列表（process() 无内部游标），可以安全地跨编译复用；
+     * 单次编译的 extractor/tokenizer/AST/generator 一律在 compile() 栈上。
      */
     private function getCompilePipeline(): CompilePipeline
     {
@@ -259,18 +212,7 @@ class Taglib
 
         return $pipeline;
     }
-    
-    /**
-     * 获取代码生成器
-     */
-    private function getCodeGenerator(): CodeGenerator
-    {
-        if ($this->codeGenerator === null) {
-            $this->codeGenerator = new CodeGenerator();
-        }
-        return $this->codeGenerator;
-    }
-    
+
     /**
      * 获取多级缓存
      */
@@ -548,7 +490,7 @@ class Taglib
      *
      * @param array<array-key, mixed> $attributes
      */
-    private function exportBlockProcessAttributes(array $attributes): string
+    private function exportBlockProcessAttributes(array $attributes, ?PhpExtractor $extractor = null): string
     {
         if ($attributes === []) {
             return '[]';
@@ -556,7 +498,7 @@ class Taglib
 
         $pairs = [];
         foreach ($attributes as $key => $value) {
-            $pairs[] = var_export((string)$key, true) . ' => ' . $this->exportBlockAttributeValue($value);
+            $pairs[] = var_export((string)$key, true) . ' => ' . $this->exportBlockAttributeValue($value, $extractor);
         }
 
         return '[' . implode(', ', $pairs) . ']';
@@ -564,25 +506,25 @@ class Taglib
 
     /**
      * @param mixed $value
+     * @param PhpExtractor|null $extractor 本次编译的 extractor；null 表示不在编译期（如运行期标签渲染）
      */
-    private function exportBlockAttributeValue(mixed $value): string
+    private function exportBlockAttributeValue(mixed $value, ?PhpExtractor $extractor = null): string
     {
         if (!\is_string($value)) {
             return w_var_export($value, true);
         }
 
         $trimmed = \trim($value);
-        $extractor = $this->activeCompileExtractor ?? $this->phpExtractor;
         // 关闭标签吞换行后，自闭合的斜杠可能粘在占位符后面。
         $placeholder = $trimmed;
         if (\preg_match('/^(__PHP_\d+__)\/$/', $trimmed, $glued) === 1) {
             $placeholder = $glued[1];
         }
         if ($extractor instanceof PhpExtractor && $extractor->isPlaceholder($placeholder)) {
-            $expr = $extractor->getExpression($placeholder);
-            if (\is_string($expr) && $expr !== '') {
-                return '(' . \rtrim(\trim($expr), ';') . ')';
-            }
+            $expr = $this->placeholderValueExpression($extractor, $placeholder);
+            // 占位符指向 if/else/endif 这类语句时，映射已被别的编译污染：
+            // 属性值只可能是「值」，宁可丢掉属性，也不要编出 (endif) 或把 PHP 源码当字符串。
+            return $expr !== null ? '(' . $expr . ')' : 'null';
         }
         if (\preg_match('/^<\?=\s*(.*?)\s*\?>$/s', $trimmed, $m) === 1) {
             return '(' . $m[1] . ')';
@@ -592,6 +534,30 @@ class Taglib
         }
 
         return \var_export($value, true);
+    }
+
+    /**
+     * 占位符能当属性值用的前提是它本身是「值」：`<?= expr ?>` 或 `<?php echo expr; ?>`。
+     * 语句块（if/else/endif/foreach…）即使号对上了也不能内联，否则编出 `(endif)`。
+     */
+    private function placeholderValueExpression(PhpExtractor $extractor, string $placeholder): ?string
+    {
+        $info = $extractor->getPlaceholderInfo($placeholder);
+        if (!\is_array($info)) {
+            return null;
+        }
+        if (($info['isEcho'] ?? false) === true) {
+            $expr = \rtrim(\trim((string)($info['expression'] ?? '')), ';');
+
+            return $expr !== '' ? $expr : null;
+        }
+        if (\preg_match('/^<\?php\s+echo\s+(.+?);?\s*\?>$/s', (string)($info['code'] ?? ''), $m) === 1) {
+            $expr = \rtrim(\trim($m[1]), ';');
+
+            return $expr !== '' ? $expr : null;
+        }
+
+        return null;
     }
 
     /**
@@ -849,9 +815,10 @@ class Taglib
      * @param Template $template 模板对象
      * @param string $content 模板内容
      * @param string $fileName 文件名
+     * @param string $cacheScope 编译结果除正文外还依赖的上下文摘要；非空时与文件名一起进入缓存键
      * @return string 编译后的内容
      */
-    public function compile(Template &$template, string &$content, string $fileName = ''): string
+    public function compile(Template &$template, string &$content, string $fileName = '', string $cacheScope = ''): string
     {
         // 生产环境移除 HTML 注释
         if (PROD) {
@@ -860,7 +827,8 @@ class Taglib
         
         // 使用多级缓存：优先 L0（Template WeakMap），再 L1（APCu），最后 L3（File）
         $cache = $this->getCache();
-        $cached = $cache->get($template, $fileName, $content);
+        $cachePath = $cacheScope === '' ? $fileName : $fileName . '#scope:' . $cacheScope;
+        $cached = $cache->get($template, $cachePath, $content);
         if ($cached !== null) {
             $this->cacheHits++;
             return $cached;
@@ -885,68 +853,60 @@ class Taglib
         $content = $this->expandInlineTags($content, $template, $fileName);
         
         // 阶段 1: 提取 PHP 代码
-        // 嵌套编译（如 <w:template> 触发子模板编译）必须用独立 extractor，否则会覆盖父级占位符
+        //
+        // 架构约束：一次编译的全部中间状态（extractor / tokenizer / AST / generator）
+        // 只活在本方法的栈上，不挂到 Taglib 单例。占位符映射因此天然属于「这一次编译」，
+        // 嵌套编译、并发 Fiber 或重入都不可能看见/覆盖另一个模板的 __PHP_N__；
+        // 也不存在“上一次编译的映射”可以回退。
         $compileDepth = self::getCompileDepthValue() + 1;
         self::setCompileDepthValue($compileDepth);
         $topLevelCompile = $compileDepth === 1;
         try {
-            // Nested compile (w:widget / w:template fetchHtml) must not reset the
-            // parent Tokenizer/AstBuilder/CodeGenerator. Doing so remaps parent
-            // __PHP_N__ placeholders onto the child's foreach/endif and yields
-            // "unexpected token endforeach" in the compiled parent.
-            $nested = $compileDepth > 1;
-            $extractor = $nested ? new PhpExtractor() : $this->getPhpExtractor();
-            $extractor->reset();
-            $previousActiveExtractor = $this->activeCompileExtractor;
-            $this->activeCompileExtractor = $extractor;
-            try {
-                $cleanContent = $extractor->extract($content);
+            $extractor = new PhpExtractor();
+            $cleanContent = $extractor->extract($content);
 
-                // 阶段 2: 词法分析（复用实例 + reset）
-                $tokenizer = $nested ? new Tokenizer() : $this->getTokenizer();
-                $tokenizer->reset();
-                $tags = $this->getTags($template, $fileName, $content);
-                if ($topLevelCompile) {
-                    $this->resetCompileScopedTagState();
-                }
-                $tokenizer->setFrameworkTags(array_keys($tags));
-                $tokens = $tokenizer->tokenize($cleanContent);
-
-                // 阶段 3: 构建 AST（复用实例 + reset）
-                $astBuilder = $nested ? new AstBuilder() : $this->getAstBuilder();
-                $astBuilder->reset();
-                $astBuilder->setPhpExtractor($extractor);
-                $ast = $astBuilder->build($tokens, $fileName);
-
-                // 阶段 4: 编译管道优化
-                $pipeline = $nested ? $this->newCompilePipeline() : $this->getCompilePipeline();
-                $ast = $pipeline->process($ast);
-
-                // 阶段 5: 生成代码（复用实例 + reset，避免回调累积）
-                $generator = $nested ? new CodeGenerator() : $this->getCodeGenerator();
-                $generator->reset();
-                $generator->setPhpExtractor($extractor);
-
-                // 调试模式：传递 SourceMap 给生成器
-                if ($this->debug && $this->sourceMap !== null) {
-                    $generator->setSourceMap($this->sourceMap);
-                }
-
-                $this->registerTagCallbacks($generator, $tags, $template, $fileName);
-                $result = $generator->generate($ast);
-
-                // 恢复 PHP 占位符
-                $result = $extractor->restore($result);
-
-                $result = \Weline\Framework\View\Taglib\TemplateTranslationWords::withRuntimePrefetch($result);
-
-                // 缓存结果（写入所有缓存层）
-                $cache->set($template, $fileName, $content, $result);
-
-                return $result;
-            } finally {
-                $this->activeCompileExtractor = $previousActiveExtractor;
+            // 阶段 2: 词法分析
+            $tokenizer = new Tokenizer();
+            $tokenizer->reset();
+            $tags = $this->getTags($template, $fileName, $content);
+            if ($topLevelCompile) {
+                $this->resetCompileScopedTagState();
             }
+            $tokenizer->setFrameworkTags(array_keys($tags));
+            $tokens = $tokenizer->tokenize($cleanContent);
+
+            // 阶段 3: 构建 AST
+            $astBuilder = new AstBuilder();
+            $astBuilder->reset();
+            $astBuilder->setPhpExtractor($extractor);
+            $ast = $astBuilder->build($tokens, $fileName);
+
+            // 阶段 4: 编译管道优化（管道只保存 pass 列表，无本次编译状态）
+            $ast = $this->getCompilePipeline()->process($ast);
+
+            // 阶段 5: 生成代码
+            $generator = new CodeGenerator();
+            $generator->reset();
+            $generator->setPhpExtractor($extractor);
+
+            // 调试模式：传递 SourceMap 给生成器
+            if ($this->debug && $this->sourceMap !== null) {
+                $generator->setSourceMap($this->sourceMap);
+            }
+
+            // extractor 随本次编译的标签配置走，回调不再从单例上取环境状态。
+            $this->registerTagCallbacks($generator, $tags, $template, $fileName, $extractor);
+            $result = $generator->generate($ast);
+
+            // 恢复 PHP 占位符
+            $result = $extractor->restore($result);
+
+            $result = \Weline\Framework\View\Taglib\TemplateTranslationWords::withRuntimePrefetch($result);
+
+            // 缓存结果（写入所有缓存层）
+            $cache->set($template, $cachePath, $content, $result);
+
+            return $result;
         } finally {
             self::setCompileDepthValue(\max(0, $compileDepth - 1));
             if ($topLevelCompile) {
@@ -991,14 +951,21 @@ class Taglib
     /**
      * 注册标签回调到代码生成器
      */
-    private function registerTagCallbacks(CodeGenerator $generator, array $tags, Template &$template, string $fileName): void
-    {
+    private function registerTagCallbacks(
+        CodeGenerator $generator,
+        array $tags,
+        Template &$template,
+        string $fileName,
+        PhpExtractor $extractor
+    ): void {
         foreach ($tags as $tagName => $tagConfig) {
             if (!isset($tagConfig['callback'])) {
                 continue;
             }
             
             $callback = $tagConfig['callback'];
+            // 本次编译的占位符映射随配置下发；$tagConfig 是缓存数组的副本，不会污染全局标签表。
+            $tagConfig[self::COMPILE_EXTRACTOR_KEY] = $extractor;
             
             // 构建注册闭包
             $registerCallback = function(string $registerName) use ($generator, $callback, $tagConfig, $tagName, $fileName, &$template) {
@@ -2550,6 +2517,8 @@ class Taglib
                 },
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) {
+                        // 属性里的 __PHP_N__ 只能由本次编译的 extractor 还原。
+                        $compileExtractor = $config[self::COMPILE_EXTRACTOR_KEY] ?? null;
                         // 防止非预期 tag_key 分支未赋值就 return：避免 Undefined variable warning。
                         $result = '';
                         switch ($tag_key) {
@@ -2557,7 +2526,7 @@ class Taglib
                             case 'tag':
                                 $data = explode('|', $tag_data[2]);
                                 $data = array_merge($data, $attributes);
-                                $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . $this->exportBlockProcessAttributes($data) . ');' . self::PHP_CLOSE_TAG;
+                                $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . $this->exportBlockProcessAttributes($data, $compileExtractor) . ');' . self::PHP_CLOSE_TAG;
                                 break;
                             // @block{Vendor\Module\Block\Demo|Vendor_Module::block/demo.phtml}
                             case '@tag{}':
@@ -2572,7 +2541,7 @@ class Taglib
                                         )
                                     );
                                 }
-                                $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . $this->exportBlockProcessAttributes($data) . ');' . self::PHP_CLOSE_TAG;
+                                $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . $this->exportBlockProcessAttributes($data, $compileExtractor) . ');' . self::PHP_CLOSE_TAG;
                                 break;
                             // <block class='Vendor\Module\Block\Demo' template='Vendor_Module::templates/demo.phtml'/>
                             // AST 自闭合使用 tag-self-close；旧解析器用 tag-self-close-with-attrs。
@@ -2600,7 +2569,7 @@ class Taglib
                                     }
                                 }
                                 $vars_string .= ']';
-                                $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . $this->exportBlockProcessAttributes($attributes) . ',$vars=' . $vars_string . ');' . self::PHP_CLOSE_TAG;
+                                $result = self::PHP_OPEN_TAG . 'php echo framework_view_process_block(' . $this->exportBlockProcessAttributes($attributes, $compileExtractor) . ',$vars=' . $vars_string . ');' . self::PHP_CLOSE_TAG;
                                 break;
                             default:
                         }
@@ -4814,12 +4783,12 @@ class Taglib
      * 运行期：回调返回值会被直接输出，所以把可信的子模板源码编译成按渲染维度分目录的文件，
      * 在当前模板作用域执行后只返回 HTML；运行期属性值永远不进入编译或 eval。
      *
-     * $contextDigest 是子源码编译结果所依赖的父标签上下文摘要（由调用方声明）。
+     * $contextDigest 是子源码编译结果所依赖的父标签上下文摘要（由调用方声明），两个阶段都进入缓存身份。
      */
     public function processOwnedChildren(Template $template, string $source, array $config, string $contextDigest = ''): string
     {
         if (($config[self::RENDER_PHASE_KEY] ?? '') !== self::RENDER_PHASE_RUNTIME) {
-            return (string)$this->compile($template, $source);
+            return (string)$this->compile($template, $source, (string)($config['file'] ?? ''), $contextDigest);
         }
         if (\trim($source) === '') {
             return '';

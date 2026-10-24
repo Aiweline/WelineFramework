@@ -194,15 +194,11 @@ final class BlogPostCmsEditorService
         $context = $resolver->resolve($page, 0, $locale);
         $localeService = ObjectManager::getInstance(PageLocaleService::class);
         $localePayload = $localeService->buildEditorPayload($page, $context->localeCode, $context->storeId);
-        $supportedLocales = [];
-        foreach ((array)($localePayload['supported_locales'] ?? []) as $item) {
-            if (is_array($item) && isset($item['code'])) {
-                $supportedLocales[] = (string)$item['code'];
-            } elseif (is_string($item)) {
-                $supportedLocales[] = $item;
-            }
-        }
-        $titles = is_array($localePayload['locale_titles'] ?? null) ? (array)$localePayload['locale_titles'] : [];
+        $supportedLocales = array_values(array_filter(array_map(
+            static fn ($code) => trim((string)$code),
+            (array)($localePayload['supported_locales'] ?? []),
+        )));
+        $titles = is_array($localePayload['titles'] ?? null) ? (array)$localePayload['titles'] : [];
         $sourceLocale = (string)($localePayload['source_locale'] ?? $locale);
         $missingLocales = [];
         foreach ($supportedLocales as $code) {

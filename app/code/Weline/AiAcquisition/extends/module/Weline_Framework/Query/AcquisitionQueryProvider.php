@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\AiAcquisition\Extends\Module\Weline_Framework\Query;
 
 use Weline\Ai\Service\AgentScanner;
+use Weline\AiAcquisition\Model\Lead as LeadModel;
 use Weline\AiAcquisition\Model\PromptProfile;
 use Weline\AiAcquisition\Service\Lead\LeadService;
 use Weline\AiAcquisition\Service\Model\ModelCatalogService;
@@ -55,6 +56,10 @@ final class AcquisitionQueryProvider implements QueryProviderInterface
                 'runList' => $this->runService->listing($this->filters($params), $this->page($params), $this->pageSize($params)),
                 'runStatus' => $this->runStatus($params),
                 'runCancel' => $this->runCancel($params),
+                'runPause' => $this->runPause($params),
+                'runResume' => $this->runResume($params),
+                'runDelete' => $this->runDelete($params),
+                'runDetail' => $this->runDetail($params),
                 'agentInfo' => $this->agentInfo(),
                 default => throw new \InvalidArgumentException((string)__('AI 获客查询器不支持操作：%{1}', [$operation])),
             };
@@ -84,6 +89,9 @@ final class AcquisitionQueryProvider implements QueryProviderInterface
             throw new \InvalidArgumentException((string)__('线索数据格式不正确。'));
         }
         $payload['run_id'] = (int)($params['run_id'] ?? 0);
+        if (!isset($payload['entry_channel']) || trim((string)$payload['entry_channel']) === '') {
+            $payload['entry_channel'] = LeadModel::ENTRY_CHANNEL_DEFAULT;
+        }
         $result = $this->leadService->save($payload);
 
         return ['success' => true] + $result;
@@ -270,6 +278,47 @@ final class AcquisitionQueryProvider implements QueryProviderInterface
         return ['success' => true, 'run' => $this->runService->status($id)];
     }
 
+    private function runPause(array $params): array
+    {
+        $id = $this->positiveInt($params, 'id');
+        if (!$this->runService->pause($id)) {
+            throw new \InvalidArgumentException((string)__('只有执行中的运行可以暂停。'));
+        }
+
+        return ['success' => true, 'run' => $this->runService->status($id)];
+    }
+
+    private function runResume(array $params): array
+    {
+        $id = $this->positiveInt($params, 'id');
+        if (!$this->runService->resume($id)) {
+            throw new \InvalidArgumentException((string)__('只有已暂停的运行可以继续。'));
+        }
+
+        return ['success' => true, 'run' => $this->runService->status($id)];
+    }
+
+    private function runDelete(array $params): array
+    {
+        $id = $this->positiveInt($params, 'id');
+        if (!$this->runService->delete($id)) {
+            throw new \InvalidArgumentException((string)__('执行中或已暂停的运行不能删除，请先停止。'));
+        }
+
+        return ['success' => true, 'id' => $id];
+    }
+
+    private function runDetail(array $params): array
+    {
+        $id = $this->positiveInt($params, 'id');
+        $detail = $this->runService->detail($id);
+        if ($detail === null) {
+            throw new \InvalidArgumentException((string)__('运行记录不存在。'));
+        }
+
+        return ['success' => true] + $detail;
+    }
+
     private function agentInfo(): array
     {
         $agent = ObjectManager::getInstance(AgentScanner::class)->getAgent('ai_acquisition');
@@ -307,7 +356,7 @@ final class AcquisitionQueryProvider implements QueryProviderInterface
             'description' => (string)__('客户线索、获客提示词、AI 模型预估与智能体运行管理。'),
             'module' => 'Weline_AiAcquisition',
             'operations' => [
-                $this->op('leadList', 'inspection', 'read', $leadAcl, ['keyword', 'continent', 'country', 'status', 'source_platform', 'min_score', 'website_id', 'page', 'page_size']),
+                $this->op('leadList', 'inspection', 'read', $leadAcl, ['keyword', 'continent', 'country', 'status', 'source_platform', 'entry_channel', 'min_score', 'website_id', 'tag', 'page', 'page_size']),
                 $this->op('leadGet', 'inspection', 'read', $leadAcl, ['id']),
                 $this->op('leadSave', 'inspection', 'write', $leadAcl, ['payload']),
                 $this->op('leadDelete', 'inspection', 'write', $leadAcl, ['id']),
@@ -323,6 +372,10 @@ final class AcquisitionQueryProvider implements QueryProviderInterface
                 $this->op('runList', 'inspection', 'read', $runAcl, ['status', 'model_code', 'website_id', 'keyword', 'page', 'page_size']),
                 $this->op('runStatus', 'inspection', 'read', $runAcl, ['id']),
                 $this->op('runCancel', 'inspection', 'write', $runAcl, ['id']),
+                $this->op('runPause', 'inspection', 'write', $runAcl, ['id']),
+                $this->op('runResume', 'inspection', 'write', $runAcl, ['id']),
+                $this->op('runDelete', 'inspection', 'write', $runAcl, ['id']),
+                $this->op('runDetail', 'inspection', 'read', $runAcl, ['id']),
                 $this->op('agentInfo', 'inspection', 'read', $runAcl, []),
             ],
         ];
@@ -354,7 +407,7 @@ final class AcquisitionQueryProvider implements QueryProviderInterface
     /** @return array<string,mixed> */
     private function filters(array $params): array
     {
-        $keys = ['keyword', 'continent', 'country', 'status', 'source_platform', 'min_score', 'website_id', 'model_code'];
+        $keys = ['keyword', 'continent', 'country', 'status', 'source_platform', 'entry_channel', 'min_score', 'website_id', 'tag', 'model_code'];
         $filters = [];
         foreach ($keys as $key) {
             if (array_key_exists($key, $params) && $params[$key] !== '' && $params[$key] !== null) {

@@ -1,0 +1,43 @@
+﻿"一键编译 App：按站点配置打包 Flutter 客户端，提供下载部件与多语言多货币版本 API","一键编译 App：按站点配置打包 Flutter 客户端，提供下载部件与多语言多货币版本 API"
+"App 打包配置","App 打包配置"
+网站ID无效,网站ID无效
+请至少选择一个目标平台,请至少选择一个目标平台
+"App 打包配置已保存","App 打包配置已保存"
+"App 打包配置保存失败：%{1}","App 打包配置保存失败：%{1}"
+circle,circle
+"App 打包配置管理","App 打包配置管理"
+查看App打包配置,查看App打包配置
+保存App打包配置,保存App打包配置
+edit,edit
+"下载 App","下载 App"
+"按站点渲染配置并执行 flutter build web，产物登记 AppArtifact","按站点渲染配置并执行 flutter build web，产物登记 AppArtifact"
+非法平台,非法平台
+暂无产物,暂无产物
+产物未盖章（artifact_corrupt）,产物未盖章（artifact_corrupt）
+获取下载失败：%{1},获取下载失败：%{1}
+获取配置成功,获取配置成功
+获取配置失败：%{1},获取配置失败：%{1}
+获取版本成功,获取版本成功
+获取版本失败：%{1},获取版本失败：%{1}
+"检测系统/模块版本漂移，自动投递 Weline App 打包任务（闲时窗口）","检测系统/模块版本漂移，自动投递 Weline App 打包任务（闲时窗口）"
+"按站点渲染并打包 App（--dry-run 查看渲染配置；实跑经队列）","按站点渲染并打包 App（--dry-run 查看渲染配置；实跑经队列）"
+"Flutter：已安装 %{1}","Flutter：已安装 %{1}"
+Flutter：未安装,Flutter：未安装
+Java：已安装,Java：已安装
+"Java：未安装（Android 构建必需）","Java：未安装（Android 构建必需）"
+"Android SDK：%{1}","Android SDK：%{1}"
+"Android SDK：未安装","Android SDK：未安装"
+Xcode：完整,Xcode：完整
+Xcode：不完整,Xcode：不完整
+"签名：平台统一签名（本机无需 keystore）","签名：平台统一签名（本机无需 keystore）"
+网络镜像：%{1},网络镜像：%{1}
+ready_for=%{1},ready_for=%{1}
+"探测本机 App 编译环境（Flutter/JDK/Android SDK/Xcode/网络镜像）","探测本机 App 编译环境（Flutter/JDK/Android SDK/Xcode/网络镜像）"
+依赖均已安装,依赖均已安装
+"[plan] %{1}","[plan] %{1}"
+"[fail] %{1}","[fail] %{1}"
+"[done] %{1}","[done] %{1}"
+"按环境自动安装 App 编译依赖（Flutter/JDK/Android SDK）；默认 dry-run，--yes 实装","按环境自动安装 App 编译依赖（Flutter/JDK/Android SDK）；默认 dry-run，--yes 实装"
+下载成功,下载成功
+平台未启用,平台未启用
+该站点自动打包已关闭,该站点自动打包已关闭

@@ -1,0 +1,161 @@
+<?php
+/**
+ * 线索邮件弹窗：发件账户 / 收件人（灰显）/ 主题 / 正文 / 发送（AJAX）+ 往来时间线。
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array<string,mixed> $lead
+ * @var array<int,array<string,mixed>> $accounts
+ * @var int $defaultAccountId
+ * @var list<array<string,mixed>> $timeline
+ */
+$lead = is_array($lead ?? null) ? $lead : [];
+$accounts = is_array($accounts ?? null) ? $accounts : [];
+$timeline = is_array($timeline ?? null) ? $timeline : [];
+$defaultAccountId = (int)($defaultAccountId ?? 0);
+$leadId = (int)($lead['id'] ?? 0);
+$leadEmail = (string)($lead['email'] ?? '');
+$companyName = (string)($lead['company_name'] ?? '');
+$sendUrl = $this->request->getUrlBuilder()->getBackendUrl('ai_acquisition/backend/lead_mail/send');
+?>
+<div class="acq-mail-modal" data-lead-mail="<?= $leadId ?>" data-send-url="<?= htmlspecialchars($sendUrl, ENT_QUOTES, 'UTF-8') ?>">
+    <form class="w-stack" id="lead-mail-form" style="--w-gap:var(--weline-space-3);">
+        <div class="w-field">
+            <label class="w-field__label" for="lead-mail-account"><lang>发件账户</lang></label>
+            <div class="w-field__control">
+                <select class="w-select" id="lead-mail-account" name="account_id">
+                    <?php if ($accounts === []): ?>
+                        <option value="0"><lang>无可用发件账户</lang></option>
+                    <?php endif; ?>
+                    <?php foreach ($accounts as $accountId => $account): ?>
+                        <option value="<?= (int)$accountId ?>" <?= (int)$accountId === $defaultAccountId ? 'selected' : '' ?>>
+                            <?= htmlspecialchars((string)($account['label'] ?? ($account['email'] ?? '')), ENT_QUOTES, 'UTF-8') ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+
+        <div class="w-field">
+            <label class="w-field__label" for="lead-mail-to"><lang>收件人</lang></label>
+            <div class="w-field__control">
+                <input class="w-input" type="text" id="lead-mail-to" name="to"
+                       value="<?= htmlspecialchars($leadEmail, ENT_QUOTES, 'UTF-8') ?>" readonly aria-readonly="true"
+                       style="opacity:0.65;">
+            </div>
+        </div>
+
+        <div class="w-field">
+            <label class="w-field__label" for="lead-mail-subject"><lang>主题</lang></label>
+            <div class="w-field__control">
+                <input class="w-input" type="text" id="lead-mail-subject" name="subject"
+                       placeholder="<?= htmlspecialchars((string)__('【%1】合作跟进', [$companyName !== '' ? $companyName : (string)__('公司名')]), ENT_QUOTES, 'UTF-8') ?>">
+            </div>
+        </div>
+
+        <div class="w-field">
+            <label class="w-field__label" for="lead-mail-body"><lang>正文</lang></label>
+            <div class="w-field__control">
+                <textarea class="w-textarea" id="lead-mail-body" name="body" rows="8"></textarea>
+            </div>
+        </div>
+
+        <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
+            <span class="w-text" data-size="sm" data-tone="muted" id="lead-mail-status" role="status" aria-live="polite"></span>
+            <button type="submit" class="w-button" data-tone="primary" id="lead-mail-send" <?= $accounts === [] || $leadEmail === '' ? 'disabled' : '' ?>>
+                <lang>发送</lang>
+            </button>
+        </div>
+    </form>
+
+    <section class="w-stack" style="--w-gap:var(--weline-space-2);" aria-label="<lang>往来时间线</lang>">
+        <h3 class="w-text" data-weight="semibold" style="--w-m:0;"><lang>往来时间线</lang></h3>
+        <?php if ($timeline === []): ?>
+            <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;"><lang>暂无往来记录，发送第一封邮件后显示。</lang></p>
+        <?php else: ?>
+            <ul class="w-stack" id="lead-mail-timeline" style="--w-gap:var(--weline-space-2); --w-m:0; padding-inline-start:0; list-style:none;">
+                <?php foreach ($timeline as $item): ?>
+                    <?php
+                    $direction = (string)($item['direction'] ?? '');
+                    $isOut = $direction === 'out';
+                    ?>
+                    <li class="w-card" style="--weline-space-4: var(--weline-space-4);">
+                        <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-2);">
+                            <span class="w-badge" data-tone="<?= $isOut ? 'info' : 'success' ?>">
+                                <?= $isOut ? '<lang>发出</lang>' : '<lang>收到</lang>' ?>
+                            </span>
+                            <?php $role = (string)($item['role'] ?? ''); ?>
+                            <?php if ($role !== ''): ?>
+                                <span class="w-text" data-size="sm" data-tone="muted"><?= htmlspecialchars($role, ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endif; ?>
+                            <?php $sentAt = (string)($item['sent_at'] ?? ''); ?>
+                            <?php if ($sentAt !== ''): ?>
+                                <time class="w-text" data-size="sm" data-tone="muted"><?= htmlspecialchars($sentAt, ENT_QUOTES, 'UTF-8') ?></time>
+                            <?php endif; ?>
+                        </div>
+                        <p class="w-text" data-size="sm" style="--w-m:0; white-space:pre-wrap;"><?= htmlspecialchars((string)($item['content'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+    </section>
+</div>
+<script>
+(function () {
+    'use strict';
+    var root = document.querySelector('[data-lead-mail]');
+    if (!root) { return; }
+    var sendUrl = root.getAttribute('data-send-url') || '';
+    var form = document.getElementById('lead-mail-form');
+    var status = document.getElementById('lead-mail-status');
+    var sendButton = document.getElementById('lead-mail-send');
+    var leadId = root.getAttribute('data-lead-mail');
+
+    function setStatus(text, tone) {
+        if (!status) { return; }
+        status.textContent = text || '';
+        status.setAttribute('data-tone', tone || '');
+    }
+
+    if (!form || !sendUrl) { return; }
+    form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var subject = (document.getElementById('lead-mail-subject') || {}).value || '';
+        var body = (document.getElementById('lead-mail-body') || {}).value || '';
+        var accountId = (document.getElementById('lead-mail-account') || {}).value || '0';
+        if (!String(subject).trim() || !String(body).trim()) {
+            setStatus('主题和正文不能为空', 'danger');
+            return;
+        }
+        if (sendButton) { sendButton.disabled = true; }
+        setStatus('发送中…', '');
+        var payload = 'lead_id=' + encodeURIComponent(leadId)
+            + '&account_id=' + encodeURIComponent(accountId)
+            + '&subject=' + encodeURIComponent(subject)
+            + '&body=' + encodeURIComponent(body);
+        fetch(sendUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin',
+            body: payload
+        }).then(function (response) {
+            return response.json().then(function (data) { return { ok: response.ok, data: data }; });
+        }).then(function (result) {
+            var data = result.data || {};
+            if (!result.ok || data.success === false) {
+                throw new Error(data.message || '发送失败');
+            }
+            setStatus(data.message || '邮件已发送', 'success');
+            if (data.status_changed) {
+                window.setTimeout(function () { window.location.reload(); }, 600);
+            }
+        }).catch(function (error) {
+            setStatus(error.message || '发送失败', 'danger');
+        }).finally(function () {
+            if (sendButton) { sendButton.disabled = false; }
+        });
+    });
+})();
+</script>

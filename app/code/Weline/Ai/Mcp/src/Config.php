@@ -268,7 +268,7 @@ final class Config
                 // Background fallback only; Hook/post-tool already covers edits.
                 'refresh_interval' => '30m',
                 // Detached incremental worker wall-clock budget (seconds) + CPU nice.
-                // Keep short + low priority so indexer cannot starve sibling MCP (aoci) / Cursor.
+                // Keep short + low priority so indexer cannot starve sibling MCP (cognition) / Cursor.
                 'refresh_worker_max_seconds' => 120,
                 'refresh_worker_nice' => 19,
                 'max_file_bytes' => 524_288,
@@ -276,7 +276,7 @@ final class Config
                 'context_token_budget' => 4_000,
                 'vector_dimensions' => 2_048,
                 'vector_max_terms' => 16,
-                // Smaller SQLite warm cache — large mmap/cache compete with AOCI/Cursor for RAM.
+                // Smaller SQLite warm cache — large mmap/cache compete with Cognition/Cursor for RAM.
                 'sqlite_mmap_bytes' => 67_108_864,
                 'sqlite_cache_kib' => 4_096,
                 'include_tests' => false,

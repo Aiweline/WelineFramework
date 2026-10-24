@@ -22,6 +22,10 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_ai_acquisition_lead_country', columns: ['country_code'])]
 #[Index(name: 'idx_ai_acquisition_lead_email', columns: ['email'])]
 #[Index(name: 'idx_ai_acquisition_lead_updated', columns: ['updated_at'])]
+#[Index(name: 'idx_ai_acquisition_lead_entry_channel', columns: ['entry_channel', 'updated_at'])]
+#[Index(name: 'idx_ai_acquisition_lead_type', columns: ['lead_type', 'status'])]
+#[Index(name: 'idx_ai_acquisition_lead_customer', columns: ['customer_id'])]
+#[Index(name: 'idx_ai_acquisition_lead_first_seen', columns: ['first_seen_date'])]
 class Lead extends Model
 {
     public const schema_table = 'ai_acquisition_lead';
@@ -44,6 +48,37 @@ class Lead extends Model
     ];
 
     public const EMAIL_UNKNOWN = 'unknown';
+
+    public const ENTRY_CHANNEL_DEFAULT = 'default';
+    public const ENTRY_CHANNEL_BROWSER_MODEL = 'browser_model';
+    public const ENTRY_CHANNEL_AI_SELECT = 'ai_select';
+    public const ENTRY_CHANNEL_SKILL = 'skill';
+    public const ENTRY_CHANNELS = [
+        self::ENTRY_CHANNEL_DEFAULT => '默认录入',
+        self::ENTRY_CHANNEL_BROWSER_MODEL => '浏览器模型录入',
+        self::ENTRY_CHANNEL_AI_SELECT => 'AI 选择录入',
+        self::ENTRY_CHANNEL_SKILL => '获客技能录入',
+    ];
+
+    public const LEAD_TYPE_RETAILER = 'retailer';
+    public const LEAD_TYPE_RENTAL_STUDIO = 'rental_studio';
+    public const LEAD_TYPE_SUPPLIER_FACTORY = 'supplier_factory';
+    public const LEAD_TYPE_MARKETPLACE = 'marketplace';
+    public const LEAD_TYPE_MEDIA_GUIDE = 'media_guide';
+    public const LEAD_TYPE_DIRECTORY = 'directory';
+    public const LEAD_TYPE_SOCIAL = 'social';
+    public const LEAD_TYPE_UNKNOWN = 'unknown';
+
+    public const LEAD_TYPES = [
+        self::LEAD_TYPE_RETAILER => '零售商',
+        self::LEAD_TYPE_RENTAL_STUDIO => '租赁工作室',
+        self::LEAD_TYPE_SUPPLIER_FACTORY => '供应商/工厂',
+        self::LEAD_TYPE_MARKETPLACE => '电商平台',
+        self::LEAD_TYPE_MEDIA_GUIDE => '媒体/导购',
+        self::LEAD_TYPE_DIRECTORY => '名录/黄页',
+        self::LEAD_TYPE_SOCIAL => '社媒',
+        self::LEAD_TYPE_UNKNOWN => '未知',
+    ];
     public const EMAIL_VALID = 'valid';
     public const EMAIL_RISKY = 'risky';
     public const EMAIL_INVALID = 'invalid';
@@ -90,6 +125,8 @@ class Lead extends Model
     public const schema_fields_SOURCE_TITLE = 'source_title';
     #[Col('varchar', 64, default: 'web', comment: '来源平台')]
     public const schema_fields_SOURCE_PLATFORM = 'source_platform';
+    #[Col('varchar', 32, default: 'default', comment: '录入渠道')]
+    public const schema_fields_ENTRY_CHANNEL = 'entry_channel';
     #[Col('text', nullable: true, comment: '来源证据摘录')]
     public const schema_fields_SOURCE_EXCERPT = 'source_excerpt';
     #[Col('int', default: 0, comment: '来源发布时间')]
@@ -116,6 +153,16 @@ class Lead extends Model
     public const schema_fields_DEDUPE_HASH = 'dedupe_hash';
     #[Col('text', nullable: true, comment: '原始采集JSON')]
     public const schema_fields_RAW_JSON = 'raw_json';
+    #[Col('varchar', 32, default: 'unknown', comment: '线索类型')]
+    public const schema_fields_LEAD_TYPE = 'lead_type';
+    #[Col('smallint', default: 0, comment: '是否外联目标')]
+    public const schema_fields_OUTREACH_TARGET = 'outreach_target';
+    #[Col('smallint', default: 0, comment: '是否AI自动回复')]
+    public const schema_fields_AI_AUTO_REPLY = 'ai_auto_reply';
+    #[Col('int', default: 0, comment: '转化客户ID')]
+    public const schema_fields_CUSTOMER_ID = 'customer_id';
+    #[Col('date', nullable: true, comment: '首次发现日期')]
+    public const schema_fields_FIRST_SEEN_DATE = 'first_seen_date';
     #[Col('int', default: 0, comment: '最后命中时间')]
     public const schema_fields_LAST_SEEN_AT = 'last_seen_at';
     #[Col('int', default: 0, comment: '创建时间')]
@@ -151,5 +198,18 @@ class Lead extends Model
     {
         $status = (string)$this->getData(self::schema_fields_STATUS);
         return (string)(self::STATUSES[$status] ?? $status);
+    }
+
+    public function getLeadTypeLabel(): string
+    {
+        $leadType = (string)$this->getData(self::schema_fields_LEAD_TYPE);
+        return (string)(self::LEAD_TYPES[$leadType] ?? $leadType);
+    }
+
+    public function getEntryChannelLabel(): string
+    {
+        $channel = (string)$this->getData(self::schema_fields_ENTRY_CHANNEL);
+
+        return (string)(self::ENTRY_CHANNELS[$channel] ?? $channel);
     }
 }

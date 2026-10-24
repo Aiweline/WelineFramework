@@ -34,16 +34,16 @@ $renderedTemplateContent = trim($rawContent) === '' && $contentTemplate !== ''
         .w-theme-qa-stage { box-sizing: border-box; width: min(100%, var(--weline-layout-content-max-width)); max-width: 100%; min-width: 0; margin-inline: auto; padding: var(--weline-layout-spacing-2xl) var(--weline-layout-content-padding-inline) var(--weline-layout-spacing-3xl); }
         .w-theme-qa-fallback { display: grid; gap: clamp(1.5rem, 3vw, 2.25rem); }
         .w-theme-qa-fallback__intro { position: relative; overflow: hidden; padding: clamp(1.75rem, 5vw, 3.5rem); border: 1px solid color-mix(in srgb, var(--weline-layout-text-primary) 14%, transparent); border-radius: 1rem; background: linear-gradient(145deg, color-mix(in srgb, var(--weline-layout-surface-primary) 94%, #d9cfbd), var(--weline-layout-surface-primary)); }
-        .w-theme-qa-fallback__intro::before { content: '问'; position: absolute; inset-block-start: -.35em; inset-inline-end: .05em; color: color-mix(in srgb, #83302a 8%, transparent); font-family: "Noto Serif SC", "Songti SC", serif; font-size: clamp(9rem, 23vw, 18rem); line-height: 1; pointer-events: none; }
-        .w-theme-qa-fallback__eyebrow { position: relative; margin: 0 0 .65rem; color: #83302a; font-size: .78rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
-        .w-theme-qa-fallback h1 { position: relative; margin: 0; font-family: "Noto Serif SC", "Songti SC", serif; font-size: clamp(1.8rem, 4vw, 3rem); line-height: 1.25; font-weight: 600; }
+        .w-theme-qa-fallback__intro::before { content: '?'; position: absolute; inset-block-start: -.35em; inset-inline-end: .05em; color: color-mix(in srgb, var(--weline-theme-primary) 8%, transparent); font-family: var(--font-family-display); font-size: clamp(9rem, 23vw, 18rem); line-height: 1; pointer-events: none; }
+        .w-theme-qa-fallback__eyebrow { position: relative; margin: 0 0 .65rem; color: var(--weline-theme-primary); font-size: .78rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+        .w-theme-qa-fallback h1 { position: relative; margin: 0; font-family: var(--font-family-display); font-size: clamp(1.8rem, 4vw, 3rem); line-height: 1.25; font-weight: 600; }
         .w-theme-qa-fallback__lead { position: relative; margin: .9rem 0 0; max-width: 45rem; color: var(--weline-layout-text-secondary); line-height: 1.8; }
         .w-theme-qa-fallback__actions { position: relative; display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.25rem; }
         .w-theme-qa-fallback__link { display: inline-flex; min-height: 2.75rem; align-items: center; justify-content: center; padding-inline: 1.2rem; border: 1px solid currentColor; border-radius: 999px; color: var(--weline-layout-text-primary); text-decoration: none; font-weight: 700; }
-        .w-theme-qa-fallback__link--primary { border-color: #83302a; background: #83302a; color: #fff; }
+        .w-theme-qa-fallback__link--primary { border-color: var(--weline-theme-primary); background: var(--weline-theme-primary); color: var(--weline-theme-on-primary); }
         .w-theme-qa-fallback__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
-        .w-theme-qa-fallback__card { padding: 1.25rem; border-block-start: 2px solid #83302a; background: var(--weline-layout-surface-primary); box-shadow: 0 .75rem 2rem rgba(30, 27, 22, .06); }
-        .w-theme-qa-fallback__card h2 { margin: 0 0 .5rem; font-family: "Noto Serif SC", "Songti SC", serif; font-size: 1.05rem; }
+        .w-theme-qa-fallback__card { padding: 1.25rem; border-block-start: 2px solid var(--weline-theme-primary); background: var(--weline-layout-surface-primary); box-shadow: 0 .75rem 2rem rgba(30, 27, 22, .06); }
+        .w-theme-qa-fallback__card h2 { margin: 0 0 .5rem; font-family: var(--font-family-display); font-size: 1.05rem; }
         .w-theme-qa-fallback__card p { margin: 0; color: var(--weline-layout-text-secondary); line-height: 1.75; font-size: .94rem; }
         @media (max-width: 760px) { .w-theme-qa-fallback__grid { grid-template-columns: 1fr; } }
     </style>

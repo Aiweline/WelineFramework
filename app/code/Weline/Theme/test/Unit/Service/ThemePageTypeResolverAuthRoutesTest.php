@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace Weline\Theme\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
+use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeDirectoryResolver;
+use Weline\Theme\Service\ThemeLayoutLocator;
 use Weline\Theme\Service\ThemePageTypeResolver;
 
 /**
@@ -13,6 +17,18 @@ use Weline\Theme\Service\ThemePageTypeResolver;
  */
 final class ThemePageTypeResolverAuthRoutesTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->declareThemeLayouts([]);
+    }
+
+    protected function tearDown(): void
+    {
+        ObjectManager::removeInstance(ThemeLayoutLocator::class);
+        parent::tearDown();
+    }
+
     public function testAccountPreviewRouteEqualsLayoutPath(): void
     {
         $resolver = new ThemePageTypeResolver();
@@ -190,8 +206,9 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
         );
     }
 
-    public function testDesignShellUrisResolvePathToLayoutOneToOne(): void
+    public function testThemeDeclaredLayoutUrisResolvePathToLayoutOneToOne(): void
     {
+        $this->declareThemeLayouts(['article', 'journal', 'journal-article', 'sanctuary']);
         $resolver = new ThemePageTypeResolver();
         // After Url::peelWebsiteMountPathFromRelativePath (live website context),
         // /{website}/article collapses to article — unit tests use post-peel paths.
@@ -201,14 +218,19 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
             '/journal' => 'journal',
             '/journal-article' => 'journal-article',
             '/sanctuary' => 'sanctuary',
-            '/lounge' => 'lounge',
-            '/readingnote' => 'readingnote',
             '/shop' => 'shop',
-            '/quiz' => 'quiz',
         ];
         foreach ($cases as $uri => $expected) {
             self::assertSame($expected, $resolver->resolveLayoutTypeFromUri($uri, ''), $uri);
         }
+    }
+
+    public function testUndeclaredSiteLayoutUriIsNotALayoutType(): void
+    {
+        $resolver = new ThemePageTypeResolver();
+
+        self::assertSame('', $resolver->resolveLayoutTypeFromUri('/sanctuary', ''));
+        self::assertSame('', $resolver->resolveLayoutTypeFromUri('/lounge', ''));
     }
 
     public function testArbitraryCatalogSlugDoesNotBecomeLayoutType(): void
@@ -222,5 +244,25 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
             '',
             $resolver->resolveLayoutTypeFromUri('/editorial/hanfu-care', '')
         );
+    }
+
+    /**
+     * @param list<string> $layoutTypes page types the active design theme ships
+     */
+    private function declareThemeLayouts(array $layoutTypes): void
+    {
+        $locator = new class($layoutTypes, $this->createMock(ThemeDirectoryResolver::class)) extends ThemeLayoutLocator {
+            /** @param list<string> $layoutTypes */
+            public function __construct(private readonly array $layoutTypes, ThemeDirectoryResolver $directories)
+            {
+                parent::__construct($directories);
+            }
+
+            public function themeDeclaredFile(string $layoutType, string $layoutOption = 'default', ?WelineTheme $theme = null): ?string
+            {
+                return in_array($layoutType, $this->layoutTypes, true) ? '/design/layouts/' . $layoutType . '/' . $layoutOption . '.phtml' : null;
+            }
+        };
+        ObjectManager::setInstance(ThemeLayoutLocator::class, $locator);
     }
 }

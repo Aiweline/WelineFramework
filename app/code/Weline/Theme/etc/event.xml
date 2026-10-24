@@ -172,11 +172,6 @@
     </event>
 
     <event name="Weline_Framework_Setup::upgrade_after">
-        <observer name="Weline_Theme::setup_upgrade_after"
-                  instance="Weline\Theme\Observer\SetupUpgradeAfter"
-                  disabled="false"
-                  shared="true"
-                  sort="200"/>
         <observer name="Weline_Theme::setup_upgrade_font_warmup"
                   instance="Weline\Theme\Font\Observer\SetupUpgradeAfterFontWarmup"
                   disabled="false"

@@ -183,4 +183,22 @@ final class LeadNormalizerTest extends TestCase
         self::assertArrayNotHasKey('run_id', $normalized);
         self::assertSame(1, $normalized[Lead::schema_fields_SEEN_COUNT]);
     }
+
+    public function testNormalizesEntryChannelWithWhitelist(): void
+    {
+        $browser = LeadNormalizer::normalize([
+            'email' => 'a@example.com',
+            'entry_channel' => '  BROWSER_MODEL ',
+        ]);
+        self::assertSame(Lead::ENTRY_CHANNEL_BROWSER_MODEL, $browser[Lead::schema_fields_ENTRY_CHANNEL]);
+
+        $skill = LeadNormalizer::normalize(['email' => 'a@example.com', 'entry_channel' => 'skill']);
+        self::assertSame(Lead::ENTRY_CHANNEL_SKILL, $skill[Lead::schema_fields_ENTRY_CHANNEL]);
+
+        $fallback = LeadNormalizer::normalize(['email' => 'a@example.com']);
+        self::assertSame(Lead::ENTRY_CHANNEL_DEFAULT, $fallback[Lead::schema_fields_ENTRY_CHANNEL]);
+
+        $this->expectException(InvalidArgumentException::class);
+        LeadNormalizer::normalize(['email' => 'a@example.com', 'entry_channel' => 'teleport']);
+    }
 }

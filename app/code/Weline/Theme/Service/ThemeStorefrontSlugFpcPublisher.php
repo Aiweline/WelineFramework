@@ -9,7 +9,7 @@ use Weline\Framework\Event\ResourceChange\ResourceChangeFactory;
 use Weline\Framework\Event\ResourceChange\ResourceRevisionService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Model\Event\ResourceRevision;
-use Weline\Framework\Runtime\ScopeHierarchyInterface;
+use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\Theme\Api\Scoped\ThemeContentScope;
@@ -158,7 +158,7 @@ final class ThemeStorefrontSlugFpcPublisher
                 $path = (string)\strtok($raw, '?');
                 $path = (string)\strtok($path, '#');
             }
-            $slug = \ltrim((string)$path, '/');
+            $slug = \trim((string)$path, '/');
             if ($slug === '' || \str_contains($slug, '..') || \str_starts_with($slug, '~')) {
                 $rejected[] = $raw;
                 continue;
@@ -475,24 +475,27 @@ final class ThemeStorefrontSlugFpcPublisher
      */
     private function resolveWebsiteFace(ThemeEditorContext $context): array
     {
+        $identity = ObjectManager::getInstance(ScopeHierarchyInterface::class)
+            ->fromStorageScope($context->scope->storageScope, true);
         $websiteId = null;
         $websiteCode = null;
         $origin = '';
-        $scopeContext = ObjectManager::getInstance(ScopeHierarchyInterface::class)
-            ->fromStorageScope($context->scope->storageScope, true);
-        $identity = $scopeContext->identity ?? null;
-        if ($identity instanceof ScopeIdentity && $identity->websiteId !== null) {
-            $websiteId = (int)$identity->websiteId;
-            $websiteCode = $identity->websiteCode !== null ? (string)$identity->websiteCode : null;
+        if ($identity === null || $identity->isGlobal()) {
+            return [$websiteId, $websiteCode, $origin];
         }
-        if ($websiteId !== null) {
-            // 本机入口只服务本机 FPC 键；公网主机由 FPC/CDN 能力按站点域名自行投影。
-            $resolver = ObjectManager::getInstance(InstallLocalStorefrontBaseResolver::class);
-            $origin = \trim((string)($resolver->resolveForWebsite(
-                $websiteId,
-                (string)($websiteCode ?? '')
-            ) ?? ''));
+        if ($identity->websiteId === null) {
+            return [$websiteId, $websiteCode, $origin];
         }
+        $websiteId = (int)$identity->websiteId;
+        if ($identity->websiteCode !== null) {
+            $websiteCode = (string)$identity->websiteCode;
+        }
+        // 本机入口只服务本机 FPC 键；公网主机由 FPC/CDN 能力按站点域名自行投影。
+        $resolver = ObjectManager::getInstance(InstallLocalStorefrontBaseResolver::class);
+        $origin = \trim((string)($resolver->resolveForWebsite(
+            $websiteId,
+            (string)($websiteCode ?? '')
+        ) ?? ''));
 
         return [$websiteId, $websiteCode, \rtrim($origin, '/')];
     }

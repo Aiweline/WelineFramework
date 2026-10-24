@@ -52,9 +52,7 @@ final class StaticBuildPublisher
             }
             $relative = \substr($item->getPathname(), \strlen($root) + 1);
             $relative = \str_replace(DIRECTORY_SEPARATOR, '/', $relative);
-            if ($relative === StaticBuildId::MANIFEST
-                || $relative === StaticBuildId::MANIFEST . '.tmp'
-            ) {
+            if (self::isBuildMetadata($relative)) {
                 continue;
             }
             $sha = @\hash_file('sha256', $item->getPathname());
@@ -72,6 +70,7 @@ final class StaticBuildPublisher
 
     private static function linkTree(string $root, string $staging): void
     {
+        $directories = [];
         $iterator = self::iterateSourceTree($root);
         foreach ($iterator as $item) {
             /** @var \SplFileInfo $item */
@@ -80,17 +79,27 @@ final class StaticBuildPublisher
             }
             $relative = \substr($item->getPathname(), \strlen($root) + 1);
             $relative = \str_replace(DIRECTORY_SEPARATOR, '/', $relative);
-            if ($relative === StaticBuildId::MANIFEST
-                || $relative === StaticBuildId::MANIFEST . '.tmp'
-            ) {
+            if (self::isBuildMetadata($relative)) {
                 continue;
             }
             $target = $staging . '/' . \str_replace('/', DIRECTORY_SEPARATOR, $relative);
-            @\mkdir(\dirname($target), 0775, true);
+            $targetDir = \dirname($target);
+            if (!isset($directories[$targetDir])) {
+                if (!is_dir($targetDir) && !@\mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+                    throw new \RuntimeException('static_build_mkdir_failed:' . $relative);
+                }
+                $directories[$targetDir] = true;
+            }
             if (!@\link($item->getPathname(), $target) && !@\copy($item->getPathname(), $target)) {
                 throw new \RuntimeException('static_build_copy_failed:' . $relative);
             }
         }
+    }
+
+    private static function isBuildMetadata(string $relative): bool
+    {
+        return $relative === StaticBuildId::MANIFEST
+            || $relative === StaticBuildId::MANIFEST . '.tmp';
     }
 
     /**

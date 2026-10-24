@@ -20,6 +20,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Fpc\FpcMode;
+use Weline\Framework\Http\Fpc\FpcPierceStamp;
 use Weline\Framework\Manager\ObjectManager;
 
 final class UrlParserRequestState
@@ -1816,7 +1817,8 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
             throw new NoRouterException(400, 'Invalid request URI encoding');
         }
         // FPM / 非 WLS 入口也做保守注入探针拒绝（WLS 侧由 WorkerPolicyKernel 权威拦截）。
-        if (self::looksLikeInjectionProbe((string)$uri)) {
+        // 通行章（FPC 打穿章）视为受信运维流量：带章即跳过本门，与 RequestFilter / WorkerPolicyKernel 一致。
+        if (self::looksLikeInjectionProbe((string)$uri) && !self::hasPiercePass()) {
             throw new NoRouterException(403, 'Suspicious request URI rejected');
         }
         // Lock visitor-facing origin + path locale BEFORE strip/rewrite/cache.
@@ -2734,6 +2736,19 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
         }
 
         return false;
+    }
+
+    /**
+     * 当前请求是否携带有效通行章（FPC 打穿章）。
+     * fail-closed：读密钥/解析异常一律视为未带章。
+     */
+    private static function hasPiercePass(): bool
+    {
+        try {
+            return FpcPierceStamp::isValidCurrentRequest();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**

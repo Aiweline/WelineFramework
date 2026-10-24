@@ -59,10 +59,8 @@ final class FpcPierceStamp
         if (self::$memoSecret !== null) {
             return self::$memoSecret;
         }
-        $fromFile = self::readSecretFile();
-        if ($fromFile !== '') {
-            return self::$memoSecret = $fromFile;
-        }
+        // 显式 env 配置优先（与 SecurityProbeTokenService::resolveSecret() 同序），
+        // 密钥文件作兜底：避免 env 与 runtime 真源分叉后「改优先级即换章」。
         try {
             $fromEnv = \trim((string)Env::get(self::ENV_KEY, ''));
         } catch (\Throwable) {
@@ -70,6 +68,10 @@ final class FpcPierceStamp
         }
         if ($fromEnv !== '' && self::isHexSecret($fromEnv)) {
             return self::$memoSecret = \strtolower($fromEnv);
+        }
+        $fromFile = self::readSecretFile();
+        if ($fromFile !== '') {
+            return self::$memoSecret = $fromFile;
         }
 
         return '';
@@ -153,6 +155,35 @@ final class FpcPierceStamp
         }
 
         return self::isValidRequest($cookie, $query);
+    }
+
+    /**
+     * Worker / L4 可用的通行章校验：不依赖 WelineEnv::server（Worker 进程读不到），
+     * 只认调用方显式传入的 query 与 cookie header。
+     *
+     * @param array<string, mixed> $query      已 parse_str 的查询参数（键名大小写不敏感）
+     * @param array<string, mixed>|string $cookieHeader Cookie 头（字符串或已解析数组均可）
+     */
+    public static function hasValidStamp(array $query, mixed $cookieHeader = ''): bool
+    {
+        $secret = self::readSecret();
+        if ($secret === '') {
+            return false;
+        }
+        $fromQuery = '';
+        foreach ($query as $key => $value) {
+            if (\strcasecmp((string)$key, self::QUERY_NAME) === 0) {
+                $fromQuery = \is_array($value) ? '' : \trim((string)$value);
+                break;
+            }
+        }
+        if ($fromQuery !== '' && \hash_equals($secret, $fromQuery)) {
+            return true;
+        }
+        $cookie = \is_array($cookieHeader) ? \implode('; ', $cookieHeader) : (string)$cookieHeader;
+        $fromCookie = self::extractCookieStamp($cookie);
+
+        return $fromCookie !== '' && \hash_equals($secret, $fromCookie);
     }
 
     /**

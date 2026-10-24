@@ -24,7 +24,7 @@ covers_use_cases:
   - UC-no-shell-strip
   - UC-evidence-split
   - UC-bags-quiet-only
-mcp_note: docs seat — prepare_project / aoci_rules MCP timed out; ensure ready + host Read AI硬规则索引.md; did not pretend MCP prepare/aoci succeeded.
+mcp_note: docs seat — prepare_project / cognition_rules MCP timed out; ensure ready + host Read AI硬规则索引.md; did not pretend MCP prepare/cognition succeeded.
 ---
 
 # Spec: 店面混发并发 30 · 容量与 Clear→warm

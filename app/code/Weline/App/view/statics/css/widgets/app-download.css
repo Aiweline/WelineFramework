@@ -1,0 +1,58 @@
+/*
+ * Weline_App · app-download 部件架构层 CSS
+ * 规约：只写布局结构（排列/间距/响应式/焦点态），全部消费 Theme Token 变量；
+ * 色彩/圆角/阴影的具体值由激活主题盘（--weline-theme-*）决定，此处不落裸值。
+ */
+.weline-app-download {
+  display: block;
+  margin-block: var(--weline-space-4);
+}
+
+.app-download__entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--weline-space-3);
+  align-items: center;
+}
+
+.app-download__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--weline-space-2);
+  padding-block: var(--weline-space-2);
+  padding-inline: var(--weline-space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-decoration: none;
+  transition: filter 0.15s ease;
+}
+
+.app-download__btn:hover,
+.app-download__btn:focus-visible {
+  filter: brightness(0.96);
+  outline: none;
+}
+
+.app-download__btn:focus-visible {
+  outline: 2px solid var(--color-primary, currentColor);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .app-download__entry {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .app-download__btn {
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-download__btn {
+    transition: none;
+  }
+}

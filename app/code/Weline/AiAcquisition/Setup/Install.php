@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\AiAcquisition\Setup;
 
 use Weline\AiAcquisition\Model\BridgeEvent;
+use Weline\AiAcquisition\Model\CustomerTag;
 use Weline\AiAcquisition\Model\Continent;
 use Weline\AiAcquisition\Model\Lead;
 use Weline\AiAcquisition\Model\LeadRun;
@@ -26,6 +27,7 @@ class Install implements InstallInterface
         PromptProfile::class,
         LeadRun::class,
         BridgeEvent::class,
+        CustomerTag::class,
     ];
 
     private const CONTINENTS = [

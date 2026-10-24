@@ -28,7 +28,7 @@ covers_use_cases:
   - UC-HOLD-QUIET
   - UC-U4-OBS
   - UC-U5-OBS
-mcp_note: docs seat — prepare_project / aoci_rules MCP timed out; ensure ready + host Read AI硬规则索引.md + 文档工程师.md; did not pretend MCP prepare/aoci succeeded.
+mcp_note: docs seat — prepare_project / cognition_rules MCP timed out; ensure ready + host Read AI硬规则索引.md + 文档工程师.md; did not pretend MCP prepare/cognition succeeded.
 ---
 
 # Spec：WLS 常驻内存业界坑修复（利用率 / 编排 / FPC / compact / 多 Host）

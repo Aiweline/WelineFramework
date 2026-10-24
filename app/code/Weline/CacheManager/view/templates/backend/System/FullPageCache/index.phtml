@@ -88,6 +88,9 @@ $noticeText = $noticeMap[$notice] ?? '';
     <section class="fpc-card">
         <h3><?= __('打穿章') ?></h3>
         <p><?= __('原 WLS Panel「FPC 打穿章」已迁入本页。轮换会重写 Nginx pierce map（Server 模块可用时）。') ?></p>
+        <p class="fpc-hint">
+            <?= __('该章同时是 WLS 通行章：URL 带 ?w_fpc_pierce=<密钥> 或本机持有其 Cookie 时，shared_ban / connection_rate_ban / path_scan 与攻击规则一律放行，并会顺手解封当前 IP。请按运维机密对待，勿外泄。') ?>
+        </p>
         <div class="fpc-metrics" aria-label="<?= __('打穿章状态') ?>">
             <article class="fpc-metric">
                 <span><?= __('密钥（遮罩）') ?></span>

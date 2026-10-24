@@ -1,0 +1,32 @@
+<?php /** @var \Weline\Framework\View\Template $this */ ?>
+<div class="w-container" style="padding: var(--weline-space-4);">
+    <h1 style="margin-bottom: var(--weline-space-3);"><?= __('App 打包配置') ?></h1>
+    <form method="post" action="<?= $this->getUrl('*/backend/save') ?>" style="display: grid; gap: var(--weline-space-3); max-width: 480px;">
+        <label style="display: grid; gap: var(--weline-space-1);">
+            <span><?= __('网站ID') ?></span>
+            <input type="number" name="website_id" min="0" value="0" required>
+        </label>
+        <label style="display: grid; gap: var(--weline-space-1);">
+            <span><?= __('域名') ?></span>
+            <input type="text" name="domain" placeholder="<?= __('留空=通用包') ?>">
+        </label>
+        <fieldset style="border: 1px solid var(--weline-theme-border); border-radius: var(--weline-radius-sm); padding: var(--weline-space-3);">
+            <legend><?= __('目标平台') ?></legend>
+            <label style="display: flex; gap: var(--weline-space-1); align-items: center;">
+                <input type="checkbox" name="platforms[]" value="android"> <?= __('Android') ?>
+            </label>
+            <label style="display: flex; gap: var(--weline-space-1); align-items: center;">
+                <input type="checkbox" name="platforms[]" value="web"> <?= __('Web') ?>
+            </label>
+            <label style="display: flex; gap: var(--weline-space-1); align-items: center;">
+                <input type="checkbox" name="platforms[]" value="ios"> <?= __('iOS') ?> <?= __('（走平台云编译）') ?>
+            </label>
+        </fieldset>
+        <label style="display: flex; gap: var(--weline-space-1); align-items: center;">
+            <input type="checkbox" name="enabled" value="1" checked> <?= __('启用') ?>
+        </label>
+        <button type="submit" style="border-radius: var(--weline-radius-sm); padding: var(--weline-space-2) var(--weline-space-4); background: var(--weline-theme-primary); color: var(--weline-theme-primary-contrast);">
+            <?= __('保存') ?>
+        </button>
+    </form>
+</div>

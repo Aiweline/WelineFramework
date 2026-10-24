@@ -18,18 +18,12 @@ final class IntelligenceService
     /** @var array<string, ProjectIndex> */
     private array $projectIndexes = [];
     private readonly ProjectReadinessService $readiness;
-    private readonly AociInstaller $aociInstaller;
 
     public function __construct(
         private readonly Store $learningStore,
         private readonly Config $config,
-        ?AociInstaller $aociInstaller = null,
     ) {
         $this->readiness = new ProjectReadinessService($config, new ProcessRunner());
-        $this->aociInstaller = $aociInstaller ?? new AociInstaller(
-            Config::expandPath('~/.learning-mcp/tools/aoci'),
-            new ProcessRunner(),
-        );
     }
 
     public function __destruct()
@@ -109,16 +103,14 @@ final class IntelligenceService
     private function prepareProject(array $input): array
     {
         return $this->withProject($input, false, function (ProjectIndex $index) use ($input): array {
-            $installation = $this->aociInstaller->ensure($index->root());
             $legacyPurge = (new DataDirLegacyPurge($this->config))->sweep();
             $prepared = $this->readiness->prepare($index, $input);
             $prepared['storage_legacy_purge'] = $legacyPurge;
-            $prepared['agent_guidance']['aoci_installation'] = $installation;
-            $prepared['agent_guidance']['aoci_cognition'] = [
-                'state' => 'not_established',
-                'meaning' => 'AOCI installation and MCP registration do not establish project cognition.',
-                'policy' => 'HARD DEFAULT USE (engineering): AOCI cognition is mandatory after prepare_project, not optional.',
-                'next_step' => 'After prepare_project and before host-native edits: MUST call aoci_rules; when complete cognition is unreliable MUST call ordinary aoci_overview; after managed objects stabilize call aoci_maintain once. Content-ops/chat EXEMPT. Do not pretend AOCI was obeyed if skipped.',
+            $prepared['agent_guidance']['cognition'] = [
+                'state' => 'available',
+                'meaning' => 'Compressed repository cognition (F/R/A/S per file) is served by this MCP tool: cognition.',
+                'policy' => 'Engineering: call cognition action=query before editing unfamiliar code; maintain once after a stable change.',
+                'next_step' => 'cognition {action:"query", module|path|query, limit}; then cognition {action:"maintain", entries:[...]} when the managed object stabilizes.',
             ];
             return $prepared;
         });

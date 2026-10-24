@@ -69,12 +69,11 @@
         }
 
         /*
-         * WO-BUILD-THEME-01 · work_mode=default_theme（与 hanfu design 壳对齐 · 气质加固）
          * 矮 Hero + 信任下精选；禁 .wpc-media 有限 max-height；气质服从可买。
          * 视口只锁 container/wrapper（≤60vh）；禁止再压内部 .w-frame 导致图不满露底。
          */
         .theme-layout-homepage .homepage-hero {
-            border-block-end: var(--hanfu-rule-width, 1px) solid color-mix(
+            border-block-end: 1px solid color-mix(
                 in srgb,
                 var(--color-primary, var(--weline-theme-primary)) 42%,
                 var(--color-border-default, var(--weline-theme-border)) 58%
@@ -140,19 +139,15 @@
         .theme-layout-homepage .homepage-hero .hero-title {
             font-family: var(--weline-layout-font-family-display, var(--font-family-display, serif));
             font-size: clamp(var(--weline-font-size-xl, 1.25rem), 2.4vw, var(--weline-font-size-2xl, 1.5rem));
-            letter-spacing: var(--hanfu-label-tracking, 0.09em);
+            letter-spacing: 0.09em;
             margin-block-end: var(--weline-space-2);
             text-shadow: 0 1px 0 color-mix(in srgb, var(--color-bg-canvas, #fff) 55%, transparent);
         }
 
         .theme-layout-homepage .homepage-hero .slide-kicker,
         .theme-layout-homepage .homepage-hero .slide .slide-kicker {
-            letter-spacing: var(--hanfu-heading-tracking, 0.14em);
+            letter-spacing: 0.14em;
             color: var(--color-primary, var(--weline-theme-primary));
-        }
-
-        .theme-layout-homepage .homepage-hero .hanfu-hero-disclosure {
-            display: none; /* 店面隐藏「场景演绎/Illustrative scene」占位标 */
         }
 
         .theme-layout-homepage .homepage-hero + .homepage-section--trust-strip {
@@ -170,20 +165,20 @@
         .theme-layout-homepage .homepage-section--trust-strip [data-widget-code="trust-badges"] {
             padding-block: var(--weline-space-1);
             border-block-start: none;
-            border-block-end: var(--hanfu-rule-width, 1px) solid var(--color-border-subtle, var(--weline-theme-border-subtle, var(--weline-theme-border)));
+            border-block-end: 1px solid var(--color-border-subtle, var(--weline-theme-border-subtle, var(--weline-theme-border)));
         }
 
         .theme-layout-homepage .homepage-section--trust-strip .badge-title,
         .theme-layout-homepage .homepage-section--trust-strip .badge-text {
-            letter-spacing: var(--hanfu-label-tracking, 0.06em);
+            letter-spacing: 0.06em;
         }
 
         .theme-layout-homepage .homepage-section--trust-strip [data-widget-code="trust-badges"] .badge-icon {
-            border-radius: var(--hanfu-round, 2px);
+            border-radius: 2px;
             background: var(--color-bg-primary, var(--weline-theme-surface));
-            border: var(--hanfu-rule-width, 1px) solid var(--color-primary, var(--weline-theme-primary));
+            border: 1px solid var(--color-primary, var(--weline-theme-primary));
             color: var(--color-primary, var(--weline-theme-primary));
-            box-shadow: inset 0 0 0 var(--hanfu-rule-width, 1px) color-mix(in srgb, var(--color-primary, var(--weline-theme-primary)) 30%, transparent);
+            box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary, var(--weline-theme-primary)) 30%, transparent);
         }
 
         .theme-layout-homepage .homepage-section--trust-strip + .homepage-section--featured-lead {
@@ -210,11 +205,11 @@
          * THEME-01：禁对 .wpc-media 写有限 max-height；媒体锁 1:1（禁 68% 横幅致「压扁」）。
          */
         .theme-layout-homepage .homepage-section--featured-lead .weline-product-card {
-            border: var(--hanfu-rule-width, 1px) solid var(--color-border-subtle, var(--weline-theme-border-subtle, var(--weline-theme-border)));
-            border-radius: var(--hanfu-round, 2px);
+            border: 1px solid var(--color-border-subtle, var(--weline-theme-border-subtle, var(--weline-theme-border)));
+            border-radius: 2px;
             background: color-mix(
                 in srgb,
-                var(--color-bg-primary, var(--weline-theme-surface)) var(--hanfu-panel-opacity, 96%),
+                var(--color-bg-primary, var(--weline-theme-surface)) 96%,
                 transparent
             );
             box-shadow: none;
@@ -261,8 +256,8 @@
 
         .theme-layout-homepage .homepage-section--featured-lead .widget-title {
             position: relative;
-            padding-inline-start: calc(var(--hanfu-heading-mark, 0.32rem) + var(--weline-space-2));
-            letter-spacing: var(--hanfu-label-tracking, 0.06em);
+            padding-inline-start: calc(0.32rem + var(--weline-space-2));
+            letter-spacing: 0.06em;
             font-family: var(--weline-layout-font-family-display, var(--font-family-display, serif));
         }
 
@@ -274,17 +269,17 @@
             position: absolute;
             inset-block: 0.2em 0.2em;
             inset-inline-start: 0;
-            width: var(--hanfu-heading-mark, 0.32rem);
+            width: 0.32rem;
             background: var(--color-primary, var(--weline-theme-primary));
-            border-radius: var(--hanfu-round, 2px);
+            border-radius: 2px;
         }
 
         .theme-layout-homepage [data-widget-code="deals-of-day"] .widget-title,
         .theme-layout-homepage [data-widget-code="new-arrivals"] .widget-title,
         .theme-layout-homepage [data-widget-code="bestsellers"] .widget-title {
             position: relative;
-            padding-inline-start: calc(var(--hanfu-heading-mark, 0.32rem) + var(--weline-space-2));
-            letter-spacing: var(--hanfu-label-tracking, 0.06em);
+            padding-inline-start: calc(0.32rem + var(--weline-space-2));
+            letter-spacing: 0.06em;
         }
 
         .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-price,
@@ -298,7 +293,7 @@
 
         .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .wpc-title,
         .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .product-name {
-            letter-spacing: var(--hanfu-label-tracking, 0.04em);
+            letter-spacing: 0.04em;
         }
 
         /* 店音乐头像与客服 FAB 同高（StoreMusic 默认已 3.75rem；首页明示保留，防漂移） */
@@ -319,16 +314,16 @@
         .theme-layout-homepage .homepage-section--featured-lead .weline-product-card .product-actions .w-button--primary,
         .theme-layout-homepage .homepage-section--featured-lead .weline-product-card [data-action="add-to-cart"],
         .theme-layout-homepage .homepage-section--featured-lead .weline-product-card [data-action="buy-now"] {
-            border: var(--hanfu-rule-width, 1px) solid var(--color-primary-border, var(--color-primary, var(--weline-theme-primary)));
-            border-radius: var(--hanfu-round, 2px);
-            letter-spacing: var(--hanfu-label-tracking, 0.06em);
+            border: 1px solid var(--color-primary-border, var(--color-primary, var(--weline-theme-primary)));
+            border-radius: 2px;
+            letter-spacing: 0.06em;
             min-height: var(--control-height-md, 2.25rem);
         }
 
         .theme-layout-homepage .homepage-hero .slide-button,
         .theme-layout-homepage .homepage-hero .slide-button.w-button--primary {
-            border-radius: var(--hanfu-round, 2px);
-            letter-spacing: var(--hanfu-label-tracking, 0.08em);
+            border-radius: 2px;
+            letter-spacing: 0.08em;
             box-shadow: none;
         }
 
@@ -354,7 +349,7 @@
         }
 
         .theme-layout-homepage .homepage-section--category-strip .grid-title {
-            letter-spacing: var(--hanfu-label-tracking, 0.06em);
+            letter-spacing: 0.06em;
         }
 
         .theme-layout-homepage .homepage-section--category-strip [data-widget-code="category-grid"] .category-card {

@@ -9,8 +9,10 @@ namespace Weline\Ai\Service\Agent;
  */
 final class AgentExecutionContext
 {
+    private static ?\WeakMap $fiberStacks = null;
+
     /** @var list<string> */
-    private static array $stack = [];
+    private static array $mainStack = [];
 
     public static function enter(string $agentCode): void
     {
@@ -18,28 +20,55 @@ final class AgentExecutionContext
         if ($code === '') {
             throw new \InvalidArgumentException('Agent code is required.');
         }
-        self::$stack[] = $code;
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            self::$mainStack[] = $code;
+
+            return;
+        }
+        self::$fiberStacks ??= new \WeakMap();
+        /** @var list<string> $stack */
+        $stack = self::$fiberStacks[$fiber] ?? [];
+        $stack[] = $code;
+        self::$fiberStacks[$fiber] = $stack;
     }
 
     public static function leave(): void
     {
-        if (self::$stack === []) {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            if (self::$mainStack !== []) {
+                array_pop(self::$mainStack);
+            }
+
             return;
         }
-        array_pop(self::$stack);
+        self::$fiberStacks ??= new \WeakMap();
+        /** @var list<string> $stack */
+        $stack = self::$fiberStacks[$fiber] ?? [];
+        if ($stack !== []) {
+            array_pop($stack);
+        }
+        self::$fiberStacks[$fiber] = $stack;
     }
 
     public static function currentAgentCode(): ?string
     {
-        if (self::$stack === []) {
-            return null;
-        }
+        $fiber = \Fiber::getCurrent();
+        $stack = $fiber === null ? self::$mainStack : (self::$fiberStacks[$fiber] ?? []);
 
-        return self::$stack[array_key_last(self::$stack)];
+        return $stack === [] ? null : $stack[array_key_last($stack)];
     }
 
     public static function reset(): void
     {
-        self::$stack = [];
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            self::$mainStack = [];
+
+            return;
+        }
+        self::$fiberStacks ??= new \WeakMap();
+        self::$fiberStacks[$fiber] = [];
     }
 }

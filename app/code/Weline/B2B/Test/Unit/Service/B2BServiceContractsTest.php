@@ -90,8 +90,8 @@ final class B2BServiceContractsTest extends TestCase
             'CustomerGroupLocalModel::testControlCenterEditUsesLocalTagForNameAndDescription' => function () {
             $this->assert_CustomerGroupLocalModel_testControlCenterEditUsesLocalTagForNameAndDescription();
         },
-            'CustomerGroupLocalModel::testUpgradeRegistersLocalDescription' => function () {
-            $this->assert_CustomerGroupLocalModel_testUpgradeRegistersLocalDescription();
+            'CustomerGroupLocalModel::testUpgradeSeedsCustomerGroupLocals' => function () {
+            $this->assert_CustomerGroupLocalModel_testUpgradeSeedsCustomerGroupLocals();
         },
             'DefaultWholesalePolicyWiring::testPluginAndObserverWired' => function () {
             $this->assert_DefaultWholesalePolicyWiring_testPluginAndObserverWired();
@@ -355,12 +355,11 @@ private function assert_CustomerGroupLocalModel_testControlCenterEditUsesLocalTa
     self::assertStringContainsString('id="b2b-group-edit-description"', $content);
 }
 
-private function assert_CustomerGroupLocalModel_testUpgradeRegistersLocalDescription(): void
+private function assert_CustomerGroupLocalModel_testUpgradeSeedsCustomerGroupLocals(): void
 {
     $path = BP . 'app/code/Weline/B2B/Setup/Upgrade.php';
     self::assertFileExists($path);
     $content = (string) file_get_contents($path);
-    self::assertStringContainsString('LocalDescription::class', $content);
     self::assertStringContainsString('CustomerGroupLocalSeedService', $content);
 }
 

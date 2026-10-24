@@ -1,0 +1,37 @@
+name: weline_app
+description: Weline Framework App — 长安汉服 (Chang'an Hanfu) storefront client.
+publish_to: 'none'
+
+# 版本由打包时渲染 {{VERSION}}（FlutterBuilder 占位符；本地开发默认 1.0.0）
+version: 1.0.0
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  # 自更新/启动 config 拉取（UC4/UC6）
+  http: ^1.2.0
+  # 语言偏好持久化（UC4）
+  shared_preferences: ^2.2.0
+  # iOS 跳 App Store（UC6；V1 合约：iOS 不做热更新）
+  url_launcher: ^6.2.0
+  webview_flutter: ^4.14.1
+  webview_flutter_android: ^4.13.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  # 品牌汉字「长安汉服」用宋体系（iOS Songti SC 内建；Android 需后续打包 Noto Serif SC 子集资产，见 README）
+  # TODO(flutter-seat): assets/brand/NotoSerifSC-Bold.otf 由平台资源任务补齐后取消注释
+  # fonts:
+  #   - family: Songti
+  #     fonts:
+  #       - asset: assets/brand/NotoSerifSC-Bold.otf
+  #         weight: 600

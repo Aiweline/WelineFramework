@@ -112,8 +112,9 @@ private function assert_NoLegacyAndProviderGateway_testUpgradeMigratesAndDropsLe
     $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Dropship' . '/Setup/Upgrade.php');
     self::assertStringContainsString('remote_country_code', $src);
     self::assertStringContainsString('cj_country_code', $src);
-    self::assertStringContainsString('DROP COLUMN IF EXISTS', $src);
     self::assertStringContainsString('cj_storage_id', $src);
+    // RSSE owns schema: legacy columns are no longer dropped by the setup hook.
+    self::assertStringNotContainsString('DROP COLUMN IF EXISTS', $src);
 }
 
 private function assert_ShellProviderIsomorph_testBackendControllersDoNotEmbedVendorClientsOrApis(): void

@@ -95,6 +95,7 @@
             storeMode: ['normal', 'dev', 'test'].includes(storeMode) ? storeMode : 'normal',
             locale: normalizeLocale(value.locale),
             layoutOption: normalizeLayoutOption(claim('layoutOption', 'layout_option', '')),
+            publicRoute: boundedText(claim('publicRoute', 'public_route', ''), 512),
         };
     }
 
@@ -1165,7 +1166,7 @@
             throw new Error('cms-target-mismatch');
         }
         if (!Number.isSafeInteger(websiteId) || websiteId < 0
-            || !Number.isSafeInteger(storeId) || storeId <= 0
+            || !Number.isSafeInteger(storeId) || storeId < 0
             || !locale || !requestedLayout || !canonicalScope || scope !== canonicalScope
         ) {
             throw new Error('cms-context-invalid');
@@ -1328,6 +1329,9 @@
             }
             throw contextApplyError;
         }
+        const publicRoute = sanitizeStorefrontPublicRoute(
+            context.publicRoute || context.public_route || ''
+        );
         showCanvasLoadingImmediate();
         loadCanvas({
             locale: state.configLocale,
@@ -1335,6 +1339,7 @@
             scope: canonicalScope,
             store_mode: storeMode || 'normal',
             layout_option: state.layoutOption,
+            preview_entity_route: publicRoute,
         });
         Promise.resolve(loadLayoutConfig({
             locale: state.configLocale,
@@ -1669,13 +1674,27 @@
         return next;
     }
 
+    function isCmsEmbedEditorShell() {
+        const container = document.getElementById('themeEditor');
+        if (!container) {
+            return false;
+        }
+        if (container.classList.contains('theme-editor-cms-embed')) {
+            return true;
+        }
+        return String(container.dataset.layoutLockSource || '').trim().toLowerCase() === 'cms';
+    }
+
     function resolveInitialLinkBlockEnabled() {
         const fromUrl = getCurrentWindowParam('link_block');
         if (fromUrl != null && fromUrl !== '') {
             return normalizeLinkBlockEnabled(fromUrl);
         }
         const fromStore = readStoredLinkBlockEnabled();
-        return fromStore == null ? false : fromStore;
+        if (fromStore != null) {
+            return fromStore;
+        }
+        return isCmsEmbedEditorShell();
     }
 
     function notifyPreviewSelectionTarget(mode = state.selectionTarget) {
@@ -5965,6 +5984,12 @@
         );
         renderLayoutOptionSelect(state.layoutType, state.layoutOption);
         syncCanvasRouteFromLayout(state.layoutType);
+        const initialPreviewRoute = sanitizeStorefrontPublicRoute(
+            getCurrentWindowParam('preview_entity_route') || ''
+        );
+        if (initialPreviewRoute !== '') {
+            state.canvasRoute = initialPreviewRoute;
+        }
         // Drop live storefront preview token from editor shell URL (pollutes canvas identity).
         if (getCurrentWindowParam('weline_preview_token')) {
             syncEditorUrlState({

@@ -314,3 +314,8 @@ app/code/Weline/Ai/Test/Http/Backend/batch-test-results.json
 /aoci.code.txt
 /aoci.meta.txt
 /aoci.database.txt
+
+# 浏览器扩展下载包：运行时由 ExtensionPackage 控制器现场打包，不进 Git
+app/code/Weline/AiAcquisition/view/statics/downloads/ai-acquisition-extension.zip
+app/code/Weline/AiAcquisition/view/statics/downloads/weline-extension-installer-mac.zip
+var/ai_acquisition_extension/

@@ -437,6 +437,10 @@ final class WorkerPolicyKernel
         $whitelisted = $this->identityResolver->matchesAny($clientIp, $this->whitelistCidrs);
         $probeMode = SecurityProbeTokenService::headerHasValidToken($parsed['headers']);
         $liveBanMode = SecurityProbeTokenService::headerHasValidLiveBanToken($parsed['headers']);
+        $piercePass = $this->isPiercePass(
+            \is_array($parsed['headers'] ?? null) ? $parsed['headers'] : [],
+            $this->parsePierceQuery($parsed['query'] ?? '')
+        );
         $envelope = new RequestEnvelope(
             peerIp: $clientIp,
             method: $parsed['method'],
@@ -457,8 +461,9 @@ final class WorkerPolicyKernel
         );
 
         // 探针自助解封：面板会话签发的豁免/实战凭证即可解本连接 peer IP（不依赖 PHP 读到 REMOTE_ADDR）。
-        if ($this->isSecurityProbeUnlockPath($parsed['method'], $parsed['path'])
-            && ($probeMode || $liveBanMode)
+        if ($piercePass
+            || ($this->isSecurityProbeUnlockPath($parsed['method'], $parsed['path'])
+                && ($probeMode || $liveBanMode))
         ) {
             $this->clearSecurityBans($clientIp, false);
         }
@@ -467,7 +472,8 @@ final class WorkerPolicyKernel
         // 探针豁免 token / 探针自助解封路径除外。
         // 爬虫策略 allow 通行证（站内放行 + 友好搜索硬底）：跳过 shared_ban，避免 path_scan
         // 误封 Googlebot 等同 IP 后整站 403 杀收录。非 Origin/攻击 deny 旁路。
-        if (!$probeMode
+        if (!$piercePass
+            && !$probeMode
             && !$this->isSecurityProbeSelfServicePath($parsed['path'])
             && $this->rateLimiter->isBanned($clientIp)
             && !$this->isCrawlerAllowPass($parsed['headers'] ?? [], (string)($parsed['host'] ?? ''))
@@ -713,7 +719,11 @@ final class WorkerPolicyKernel
                 $probeMode = $this->isSecurityProbeRequest($envelope);
                 $liveBanMode = !empty($envelope->attributes['live_ban_mode'])
                     || SecurityProbeTokenService::headerHasValidLiveBanToken($envelope->headers);
-                if ($whitelisted && !$probeMode && !$liveBanMode) {
+                $piercePass = $this->isPiercePass(
+                    $envelope->headers,
+                    $this->parsePierceQuery($envelope->attributes['query'] ?? '')
+                );
+                if ($piercePass || ($whitelisted && !$probeMode && !$liveBanMode)) {
                     return null;
                 }
                 if ($type === 'attack_rules') {
@@ -731,7 +741,7 @@ final class WorkerPolicyKernel
                         )
                     ) {
                         $blockDuration = (int)($pathScan['block_duration'] ?? 600);
-                        if (!$probeMode) {
+                        if (!$probeMode && !$piercePass) {
                             $this->rateLimiter->ban($envelope->peerIp, $blockDuration);
                             AttackLogService::log(
                                 [
@@ -1519,6 +1529,40 @@ final class WorkerPolicyKernel
     private function isSecurityProbeRequest(RequestEnvelope $envelope): bool
     {
         return SecurityProbeTokenService::headerHasValidToken($envelope->headers);
+    }
+
+    /**
+     * FPC 通行章：URL query / Cookie 带安装级打穿章时，视为受信运维流量。
+     * 与 probe token 的区别：长命、可轮换、后台可查；因此语义是"解封 + 跳过攻击规则"。
+     */
+    private function isPiercePass(array $headers, array $query): bool
+    {
+        $cookie = $headers['cookie'] ?? '';
+        if (\is_array($cookie)) {
+            $cookie = \implode('; ', $cookie);
+        }
+        return \Weline\Framework\Http\Fpc\FpcPierceStamp::hasValidStamp($query, (string)$cookie);
+    }
+
+    /**
+     * parseRequest 产出的 query 是**原始查询串**（字符串），不是数组；
+     * 直接当数组用会让 URL 上的 ?w_fpc_pierce= 被静默丢弃，只剩 Cookie 生效。
+     *
+     * @return array<string, mixed>
+     */
+    private function parsePierceQuery(mixed $rawQuery): array
+    {
+        if (\is_array($rawQuery)) {
+            return $rawQuery;
+        }
+        $raw = \trim((string)$rawQuery);
+        if ($raw === '') {
+            return [];
+        }
+        $query = [];
+        \parse_str($raw, $query);
+
+        return \is_array($query) ? $query : [];
     }
 
     /**

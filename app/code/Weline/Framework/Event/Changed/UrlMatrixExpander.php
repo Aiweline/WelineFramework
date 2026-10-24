@@ -265,25 +265,20 @@ final class UrlMatrixExpander
     {
         $defaultLang = trim((string)($locales[0] ?? 'zh_Hans_CN')) ?: 'zh_Hans_CN';
         $defaultCurrency = strtoupper(trim((string)($currencies[0] ?? 'CNY'))) ?: 'CNY';
-        try {
-            if (function_exists('w_query')) {
-                // WebsiteData bag via Query — never forceReload when process/request face exists.
-                $row = w_query('websites', 'getWebsiteById', [
-                    'website_id' => $websiteId,
-                    'force_reload' => false,
-                ]);
-                if (is_array($row)) {
-                    $lang = trim((string)($row['default_language'] ?? ''));
-                    $cur = strtoupper(trim((string)($row['default_currency'] ?? '')));
-                    if ($lang !== '') {
-                        $defaultLang = $lang;
-                    }
-                    if ($cur !== '') {
-                        $defaultCurrency = $cur;
-                    }
-                }
+        // WebsiteData bag via Query — never forceReload when process/request face exists.
+        $row = w_query('websites', 'getWebsiteById', [
+            'website_id' => $websiteId,
+            'force_reload' => false,
+        ]);
+        if (is_array($row)) {
+            $lang = trim((string)($row['default_language'] ?? ''));
+            $cur = strtoupper(trim((string)($row['default_currency'] ?? '')));
+            if ($lang !== '') {
+                $defaultLang = $lang;
             }
-        } catch (\Throwable) {
+            if ($cur !== '') {
+                $defaultCurrency = $cur;
+            }
         }
 
         return [$defaultLang, $defaultCurrency];
@@ -292,37 +287,35 @@ final class UrlMatrixExpander
     /** @return list<string> */
     private function websiteLocales(int $websiteId): array
     {
-        try {
-            if (function_exists('w_query')) {
-                $codes = w_query('websites', 'getWebsiteLanguageCodes', [
-                    'website_id' => $websiteId,
-                    'force_reload' => false,
-                ]);
-                if (is_array($codes)) {
-                    return array_values(array_filter(array_map('strval', $codes)));
-                }
-            }
-        } catch (\Throwable) {
-        }
         // No WebsiteLanguage FQCN soft-pull — websites Query is the only read path.
-        return ['zh_Hans_CN', 'en_US'];
+        $codes = w_query('websites', 'getWebsiteLanguageCodes', [
+            'website_id' => $websiteId,
+            'force_reload' => false,
+        ]);
+
+        return self::codeList('getWebsiteLanguageCodes', $websiteId, $codes);
     }
 
     /** @return list<string> */
     private function websiteCurrencies(int $websiteId): array
     {
-        try {
-            if (function_exists('w_query')) {
-                $codes = w_query('websites', 'getWebsiteCurrencyCodes', [
-                    'website_id' => $websiteId,
-                    'force_reload' => false,
-                ]);
-                if (is_array($codes) && $codes !== []) {
-                    return array_values(array_filter(array_map('strval', $codes)));
-                }
-            }
-        } catch (\Throwable) {
+        $codes = w_query('websites', 'getWebsiteCurrencyCodes', [
+            'website_id' => $websiteId,
+            'force_reload' => false,
+        ]);
+
+        return self::codeList('getWebsiteCurrencyCodes', $websiteId, $codes);
+    }
+
+    /** @return list<string> */
+    private static function codeList(string $method, int $websiteId, mixed $codes): array
+    {
+        if (!is_array($codes)) {
+            throw new \UnexpectedValueException(
+                'websites.' . $method . ' returned ' . get_debug_type($codes) . ' for website ' . $websiteId
+            );
         }
-        return ['CNY'];
+
+        return array_values(array_filter(array_map('strval', $codes)));
     }
 }

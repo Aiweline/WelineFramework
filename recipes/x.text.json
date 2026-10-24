@@ -1,0 +1,56 @@
+{
+  "platform": "x",
+  "kind": "text",
+  "version": 1,
+  "entry": "https://x.com/compose/post",
+  "fields": [
+    {
+      "key": "body",
+      "role": "textbox",
+      "anchor": [
+        "Post text",
+        "发帖",
+        "有什么新鲜事"
+      ]
+    }
+  ],
+  "media": {
+    "upload_role": "none",
+    "accept": [],
+    "max": 0
+  },
+  "verify": {
+    "url_matches": "/status/",
+    "text_any": [
+      "Your post was sent",
+      "已发送",
+      "Your post was published"
+    ]
+  },
+  "branches": [
+    {
+      "when_text": [
+        "Continue",
+        "继续"
+      ],
+      "do": "click:continue"
+    }
+  ],
+  "give_up": [
+    "需要验证码",
+    "账号受限",
+    "Something went wrong"
+  ],
+  "submit": {
+    "role": "button",
+    "testid": [
+      "tweetButtonInline",
+      "tweetButton"
+    ],
+    "anchor": [
+      "Post",
+      "发帖",
+      "发布"
+    ]
+  }
+}

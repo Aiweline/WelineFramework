@@ -189,10 +189,32 @@ description: >-
 
 ---
 
+## 录入渠道标记（强制，HARD）
+
+本技能（含 `获客巡检.md` 指令与 `push_leads_pg.py` 录入脚本）写入
+`w_ai_acquisition_lead.entry_channel` 时**必须**取 `skill`（获客技能录入）。
+该列由后台 `Weline_AiAcquisition` 维护，四个合法值：
+
+| 值 | 含义 | 谁负责写 |
+|---|---|---|
+| `default` | 后台手工录入 / 旧数据兜底 | 后台表单（不显示徽章） |
+| `browser_model` | 浏览器端侧/本地模型录入 | 浏览器桥 `POST /ai_acquisition/frontend/bridge/lead` 自动判定 |
+| `ai_select` | AI 模块模型经智能体 `save_lead` 录入 | `SaveLeadTool` 自动写入 |
+| `skill` | 获客技能录入 | **本技能，写库时必须显式带上** |
+
+- `push_leads_pg.py` 的 INSERT 列清单必须含 `entry_channel`，值固定 `'skill'`；
+  upsert 的 `DO UPDATE` 子句**不得**把 `entry_channel` 改回 `default`（避免覆盖已有标记）。
+- 若某条线索是技能先发现、后由 AI/浏览器补录，以**先到的非 default 标记为准**，
+  不要互相覆盖（后端 `applyMergeFields` 已对 `default` 做空值保护，脚本侧同样遵守）。
+- 未经用户确认，不得把本技能产出标成 `browser_model` 或 `ai_select`。
+
+---
+
 ## 禁止
 
 - 以通用网页搜索起手找线索
 - 把供应商营销页 / 目录站 / 聚合站当成买家线索
+- 写库时不带 `entry_channel='skill'`，或把他人标记覆盖成 `default`
 - 用「必须出现汉服二字」一刀切排除相邻品类
 - 群发、跨渠道重复、联系已拒绝者
 - 编造价格 / MOQ / 交期 / 库存 / 认证

@@ -22,6 +22,27 @@
 - 队列执行：`SocialPublishQueue` 可消费单个 `SocialPublishTarget`。
 - fake 模式：内置 `fake_browser` Provider，供真实浏览器 smoke 验证使用，不访问外部平台。
 
+## 日更自动运营（SocialAutopilot）
+
+- 计划表 `weline_social_autopilot_plan` 每站一份，默认 `enabled=0`；开启后按 `slots`（默认 09:30 / 19:30）由 `SocialAutopilotCron` 每 5 分钟扫描，时段带 0~7 分钟抖动。
+- 计划新增 `daily_count`（1-20）、`content_types`（text/image/video）、`image_model_code`、`video_model_code`、`video_source`（image_slideshow/ai_video）；`listMediaModels` 只读返回 image/video/text_default。
+- 图片内容必须选择 `listMediaModels.image` 中的模型；`ai_video` 必须选择 video 列表中的模型，否则分别返回 `image_model_required` / `video_model_required`，不写计划表。后台勾图片未选模型时前端提示，不弹原生 alert。
+- 取题按 `topic_ratio`（默认站内 3 : 站外 1）；内容按勾选的 `content_types` 与 `mix`（默认 text 2 / image 1 / video 1）分配，没有可用素材时降级图文，不硬凑。
+- 一条记录一个 batch、多平台多 target；发布记录新增「平台」列，聚合 `platform_code success/total ✓|✗`，保留内容类型/通道/远端链接列。
+- 通道路由：`SocialPublishRouter` 返回 `api` / `extension` / `draft_only` / `blocked(reason)`；`api` 创建发布批次，`extension` 进入浏览器扩展任务队列，`draft_only` 只留草稿不外发。
+- 视频且 `review_video=1` 时停在 `awaiting_review`，在后台「审片」页签通过后才生成发布任务；驳回重新生成（最多 2 次）。
+- 幂等键 `social:auto:{websiteId}:{Y-m-d}:{slotKey}`，重复触发返回 `duplicate`，不双发。
+- 运行状态用 `getAutopilotRunStatus` 读取；扩展离线 24 小时、审片积压会标记 `needs_user`，同一阻塞项同日只记一次通知。
+
+## 浏览器扩展安装
+
+1. 在后台「扩展发布」页签下载 `social-extension.zip`。
+2. 打开 `chrome://extensions`，开启开发者模式，点「加载已解压的扩展程序」并选中解压后的目录。
+3. 回到后台「扩展发布」页签，点「生成授权码（5 分钟）」。
+4. 点「复制」，打开扩展的选项页粘贴授权码并点「连接」。
+5. 扩展每 60s 心跳上报；后台「待发队列」显示设备在线/离线与待发数量。
+6. 用户打开页面或扩展在线后队列自动排空；离线只累计，不判失败，超过 24 小时计入 `needs_user`。
+
 ## QueryProvider
 
 由于 `WeShop_Social` 已经占用 `social` provider，`Weline_Social` 使用：
@@ -50,6 +71,15 @@ const Social = await Weline.Api.resource('welineSocial')
 - `generateCreative`
 - `createPublishBatch`
 - `getPublishBatchStatus`
+- `listAutopilotPlan`
+- `saveAutopilotPlan`
+- `listMediaModels`
+- `listExtensionJobs`
+- `listReviewQueue`
+- `getAutopilotRunStatus`
+- `approveReview`
+- `rejectReview`
+- `createExtensionGrantCode`
 
 后台页面通过 `Weline.Query.request('welineSocial', operation, params)`（经 Query worker）调用这些操作。管理写操作已声明 `frontend/backend/external`，避免后台页被误判为「未对 frontend worker 开放」。前台公开面仍建议只调用只读能力（如 `listPlatforms`、`listWidgetAccounts`）。
 
@@ -67,7 +97,7 @@ const Social = await Weline.Api.resource('welineSocial')
 - `scope_code` / `website_code`（站点编码）
 - `scope_type` + `scope_id` + `child_scope_type` + `child_scope_id`
 - `scope={website_code}.default.default`（与系统配置 scope 语法兼容）
-- `tab=accounts|scopeAccounts|creative|publish|records`（打开指定页签）
+- `tab=accounts|scopeAccounts|creative|publish|records|autopilotPlan|extensionPublish|review`（打开指定页签）
 
 示例：`/weline_social/backend/social?scope_key=website:0:website_default:0&tab=scopeAccounts`
 
@@ -121,12 +151,18 @@ Provider 必须实现 `Weline\Social\Interface\SocialPlatformProviderInterface`�
 
 ## 安全边界
 
-- 不保存社媒登录密码。
-- 不使用 Cookie、爬虫或浏览器模拟绕过授权。
+本模块的浏览器扩展与 AI 操作流按以下边界实施（2026-10-24 用户拍板；与旧版「不使用浏览器模拟」口径的差异在此明确记录）：
+
+- **扩展运行在用户自己的浏览器里**，用用户自己的登录态；Weline 只下发「发什么、怎么发」，不接收、不存储密码或 Cookie。
+- 扩展仅对用户在站点里显式勾选过的平台与账号工作；权限按平台域名最小化，不使用 `<all_urls>`。
+- **AI 只按配方声明的入口与字段操作**：动作白名单 9 种（navigate / click / type / upload / scroll / wait / assert / done / give_up），单账号每日 1~2 条、带随机间隔；不做关注、私信、评论等互动自动化。
+- 遇验证码、二次验证或风控提示即停，标记 `needs_user`；不绕过、不用打码平台、不走接码。
+- **平台侧风险**：即使全部合规操作，仍可能触发平台自动化策略导致限流或封号；建议只用运营账号（`contact@` 体系开的号），不用个人主号。
+- **配乐许可三件套**：`source_url`、`license`、`attribution` 必须齐备；只接受可商用或明确授权的来源；人工确认 `license_confirmed_at` 后才允许发布。视频审片开启时，人审同时确认配乐许可，缺一不进包。
 - 凭据使用 `Weline_Ai\Api\SecretStoreInterface` 加密存储；Social 不依赖 Ai 内部 Service 或密钥实现。
 - 发布日志会脱敏 token、secret、password、authorization、api_key 等字段。
 - 前台部件和 QueryProvider 安全输出不包含加密凭据。
-- 没有官方开发文档或官方 API 入口的平台不接入。
+- 自动日更默认关闭：全局 `social_autopilot_enabled` 与站点计划 `enabled` 双开关，必须人工打开；未勾选的平台只出草稿，不外发。
 
 ## 前 10 平台实发与授权
 

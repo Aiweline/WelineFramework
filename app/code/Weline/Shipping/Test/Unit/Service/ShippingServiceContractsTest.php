@@ -717,12 +717,18 @@ private function assert_CommerceEdgesChapter4_testReturnSellerPaysZeroAndBuyerTe
 
 private function assert_CommerceEdgesChapter4_testConfigVersionAndModule290(): void
 {
+    $this->assert_CommerceEdgesChapter4_upgradeSeedsRegistered();
     $mgr = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Shipping' . '/Service/ShippingServiceManager.php');
     self::assertStringContainsString('commerceConfigFacts', $mgr);
     $module = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Shipping' . '/etc/module.php');
     self::assertStringContainsString("'2.9.0'", $module);
+}
+
+private function assert_CommerceEdgesChapter4_upgradeSeedsRegistered(): void
+{
     $upgrade = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Shipping' . '/Setup/Upgrade.php');
-    self::assertStringContainsString('ShippingCommercePolicy', $upgrade);
+    self::assertStringContainsString('seedEmbargoReasons', $upgrade);
+    self::assertStringContainsString('seedFreeShippingConditionTypes', $upgrade);
 }
 
 private function assert_CommerceEdgesChapter4_testCodFeeCalculatorIntoGrandTotalContract(): void

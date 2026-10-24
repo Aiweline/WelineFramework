@@ -14,6 +14,15 @@ body {
     max-width: 100%;
 }
 
+/* 页面画布：只由 token 决定，主题不得再用 !important 覆盖 body 背景。 */
+body {
+    background-color: var(--weline-page-canvas-color);
+    background-image: var(--weline-page-canvas-image);
+    background-size: var(--weline-page-canvas-size);
+    background-repeat: var(--weline-page-canvas-repeat);
+    background-position: var(--weline-page-canvas-position);
+}
+
 .weline-page-wrapper {
     min-height: 100vh;
     display: flex;
@@ -194,9 +203,9 @@ html[data-dir="ltr"] {
     --weline-shadow-md: var(--shadow-md, var(--weline-theme-shadow-md));
     --weline-shadow-lg: var(--shadow-lg, var(--weline-theme-shadow-lg));
 
-    --weline-layout-font-family: var(--font-family-base, var(--weshop-font-family, "Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", "SimSun", "Noto Sans SC", serif));
-    --weline-layout-font-family-display: var(--font-family-display, var(--weshop-font-display, "LXGW WenKai", "Kaiti SC", "Noto Serif SC", "Songti SC", serif));
-    --weline-layout-font-family-ui: var(--font-family-ui, var(--font-family-base, "Noto Serif SC", "Songti SC", "Noto Sans SC", serif));
+    --weline-layout-font-family: var(--font-family-base, var(--weshop-font-family, "Noto Sans SC", "PingFang SC", sans-serif));
+    --weline-layout-font-family-display: var(--font-family-display, var(--weshop-font-display, var(--weline-layout-font-family)));
+    --weline-layout-font-family-ui: var(--font-family-ui, var(--weline-layout-font-family));
     --weline-layout-font-size-xs: var(--font-size-xs, var(--weshop-font-size-xs, 0.75rem));
     --weline-layout-font-size-sm: var(--font-size-sm, var(--weshop-font-size-sm, 0.875rem));
     --weline-layout-font-size-base: var(--font-size-base, var(--weshop-font-size-base, 1rem));

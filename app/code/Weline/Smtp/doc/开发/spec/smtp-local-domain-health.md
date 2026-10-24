@@ -188,7 +188,7 @@ THEN Smtp/Mail SHALL 经 `mail.getSmtpTlsStatus*` 读取真相，SHALL NOT 跨�
 | 周边 | 后台 theme 全局 `.w-badge` 可能盖 foundation tone | 本波仅模块特异性绑回；Mode A 另裁 |
 | 历史数据 | 已存在脏 `MODE_SELF` 行不删 | G4；靠列表 warning |
 
-AOCI：多席 `aoci_search`/`aoci_overview` 超时或 0 hit → 文档与实现以源码为准（`aoci_unavailable`）。
+Cognition：多席 `cognition_search`/`cognition_overview` 超时或 0 hit → 文档与实现以源码为准（`cognition_unavailable`）。
 
 ---
 

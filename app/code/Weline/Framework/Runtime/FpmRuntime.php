@@ -25,8 +25,11 @@ class FpmRuntime implements RuntimeInterface
         }
 
         // 编译容器 preflight 必须早于 App::init()（04-performance-budget）。PROD 常量要到
-        // App::init() 内部才定义，所以这里不再用 PROD 做门禁：缺产物由发布戳在引导层 fail-fast。
-        ContainerRuntime::preflight();
+        // App::init() 内部才定义，所以以发布戳为门：Web 无戳已在引导层 503，有戳必严格校验；
+        // CLI 控制面无戳（全新安装、首次 setup:upgrade / framework:compile 尚未产出）交给惰性容器。
+        if (\defined('WELINE_BUILD_ID')) {
+            ContainerRuntime::preflight();
+        }
         App::init();
         $this->bootstrapped = true;
     }

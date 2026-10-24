@@ -20,6 +20,5 @@ Register::register(
         'Weline_Admin',
         'Weline_Backend',
         'Weline_SystemConfig',
-        'Weline_Mail',
     ]
 );

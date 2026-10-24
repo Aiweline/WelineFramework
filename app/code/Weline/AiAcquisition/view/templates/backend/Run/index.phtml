@@ -23,7 +23,7 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
 
 <div class="acq-intro">
     <div class="acq-intro__copy">
-        <p>选择 AI 模块、本地电脑或浏览器端侧模型，签发票据；扩展在用户浏览器内执行搜索。云端模式回到 AI 模块结算，本地/浏览器模式不计费。</p>
+        <p>选择 AI 模块、本地电脑或浏览器端侧模型后签发运行；扩展助手会读取页面票据自动弹出，初始化所选模型后在本机浏览器内执行搜索。云端模式回到 AI 模块结算，本地/浏览器模式不计费。</p>
     </div>
     <div class="acq-intro__actions">
         <button type="button" class="w-button" data-tone="neutral" data-variant="outline" id="run-refresh">
@@ -45,46 +45,36 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
             <div class="acq-form-grid acq-form-grid--2">
                 <div class="acq-form-field acq-form-field--full">
                     <span>为哪个网站获客（必选）</span>
-                    <select class="w-select" id="run-website" hidden aria-hidden="true">
-                        <option value="-1">请选择网站</option>
-                        <?php foreach ($websites as $website): ?>
-                            <option value="<?= (int)($website['website_id'] ?? 0) ?>"
-                                    data-url="<?= htmlspecialchars((string)($website['url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                    <?= (int)($website['website_id'] ?? 0) === $selectedWebsiteId ? 'selected' : '' ?>>
-                                <?= htmlspecialchars((string)($website['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <div class="acq-site-picker" id="run-site-picker" role="radiogroup" aria-label="为哪个网站获客">
-                        <?php foreach ($websites as $website): ?>
-                            <?php
-                            $siteId = (int)($website['website_id'] ?? 0);
-                            $siteName = (string)($website['name'] ?? ('#' . $siteId));
-                            $siteUrl = (string)($website['url'] ?? '');
-                            $siteChecked = $siteId === $selectedWebsiteId;
-                            ?>
-                            <button type="button"
-                                    class="acq-site-option"
-                                    role="radio"
-                                    aria-checked="<?= $siteChecked ? 'true' : 'false' ?>"
-                                    data-acq-site-id="<?= $siteId ?>"
-                                    data-acq-site-name="<?= htmlspecialchars($siteName, ENT_QUOTES, 'UTF-8') ?>">
-                                <span class="acq-site-option__head">
+                    <div class="acq-combobox" id="run-site-picker" data-w-component="combobox" role="radiogroup" aria-label="为哪个网站获客">
+                        <input class="w-input" role="combobox" id="run-site-input"
+                               aria-expanded="false" aria-controls="run-site-list" aria-autocomplete="list"
+                               placeholder="搜索或选择网站" autocomplete="off"
+                               value="<?= htmlspecialchars((string)($selectedSiteLabel ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                        <input type="hidden" id="run-website" value="<?= (int)$selectedWebsiteId ?>">
+                        <div class="w-combobox__panel" role="listbox" id="run-site-list" hidden>
+                            <?php foreach ($websites as $website): ?>
+                                <?php
+                                $siteId = (int)($website['website_id'] ?? 0);
+                                $siteName = (string)($website['name'] ?? ('#' . $siteId));
+                                $siteUrl = (string)($website['url'] ?? '');
+                                $siteChecked = $siteId === $selectedWebsiteId;
+                                $siteSearch = trim($siteName . ' ' . $siteUrl);
+                                ?>
+                                <button type="button" class="w-combobox__option" role="option"
+                                        data-value="<?= $siteId ?>"
+                                        data-acq-site-id="<?= $siteId ?>"
+                                        data-acq-site-name="<?= htmlspecialchars($siteName, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-search="<?= htmlspecialchars($siteSearch, ENT_QUOTES, 'UTF-8') ?>"
+                                        aria-selected="<?= $siteChecked ? 'true' : 'false' ?>">
                                     <span class="acq-site-option__name"><?= htmlspecialchars($siteName, ENT_QUOTES, 'UTF-8') ?></span>
                                     <?php if ($siteId === 0): ?>
                                         <span class="w-badge" data-tone="success">当前站</span>
-                                    <?php else: ?>
-                                        <span class="w-badge" data-tone="muted">站点</span>
+                                    <?php elseif ($siteUrl !== ''): ?>
+                                        <span class="acq-site-option__url"><?= htmlspecialchars($siteUrl, ENT_QUOTES, 'UTF-8') ?></span>
                                     <?php endif; ?>
-                                    <?php if ($siteChecked): ?>
-                                        <span class="acq-site-option__check"><w:icon name="check" size="sm"></w:icon></span>
-                                    <?php endif; ?>
-                                </span>
-                                <?php if ($siteUrl !== ''): ?>
-                                    <span class="acq-site-option__url"><?= htmlspecialchars($siteUrl, ENT_QUOTES, 'UTF-8') ?></span>
-                                <?php endif; ?>
-                            </button>
-                        <?php endforeach; ?>
+                                </button>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
                 </div>
                 <div class="acq-price-box acq-form-field--full" id="run-website-profile">
@@ -107,21 +97,31 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
                         </button>
                     </div>
                 </div>
-                <label class="acq-form-field acq-form-field--full" id="run-ai-model-field">
+                <div class="acq-form-field acq-form-field--full" id="run-ai-model-field">
                     <span>AI 模型（来自 AI 模块）</span>
-                    <select class="w-select" id="run-model">
-                        <option value="">请选择模型</option>
-                        <?php foreach ($models as $model): ?>
-                            <option value="<?= htmlspecialchars((string)($model['model_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                    data-input="<?= htmlspecialchars((string)($model['input_price'] ?? 0), ENT_QUOTES, 'UTF-8') ?>"
-                                    data-output="<?= htmlspecialchars((string)($model['output_price'] ?? 0), ENT_QUOTES, 'UTF-8') ?>"
-                                    <?= (string)($model['model_code'] ?? '') === $defaultModel ? 'selected' : '' ?>>
-                                <?= htmlspecialchars((string)($model['name'] ?? $model['model_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
-                                （<?= htmlspecialchars((string)($model['supplier'] ?? ''), ENT_QUOTES, 'UTF-8') ?>）
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </label>
+                    <div class="acq-combobox" data-w-component="combobox">
+                        <input class="w-input" role="combobox" id="run-model-input"
+                               aria-expanded="false" aria-controls="run-model-list" aria-autocomplete="list"
+                               placeholder="搜索或选择模型" autocomplete="off"
+                               value="<?= htmlspecialchars((string)($defaultModelLabel ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                        <input type="hidden" id="run-model" value="<?= htmlspecialchars((string)($defaultModel ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                        <div class="w-combobox__panel" role="listbox" id="run-model-list" hidden>
+                            <?php foreach ($models as $model): ?>
+                                <?php
+                                $mCode = (string)($model['model_code'] ?? '');
+                                $mLabel = trim((string)($model['name'] ?? '') . '（' . (string)($model['supplier'] ?? '') . '）');
+                                ?>
+                                <button type="button" class="w-combobox__option" role="option"
+                                        data-value="<?= htmlspecialchars($mCode, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-input="<?= htmlspecialchars((string)($model['input_price'] ?? 0), ENT_QUOTES, 'UTF-8') ?>"
+                                        data-output="<?= htmlspecialchars((string)($model['output_price'] ?? 0), ENT_QUOTES, 'UTF-8') ?>"
+                                        aria-selected="<?= $mCode === (string)($defaultModel ?? '') ? 'true' : 'false' ?>">
+                                    <span class="acq-option-label"><?= htmlspecialchars($mLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                                </button>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
                 <div class="acq-price-box acq-form-field--full" id="run-model-price">
                     <span>选择模型后显示每千 token 价格与 8 轮预估。</span>
                 </div>
@@ -141,14 +141,35 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
                     </div>
                 </div>
                 <div class="acq-form-field acq-form-field--full" id="run-browser-settings" hidden>
-                    <label class="acq-form-field">
+                    <div class="acq-form-field">
                         <span>浏览器端侧模型</span>
-                        <select class="w-select" id="run-browser-model">
-                            <option value="chrome-builtin">Chrome 内置 Gemini Nano（Prompt API）</option>
-                        </select>
-                    </label>
+                        <div class="acq-combobox" data-w-component="combobox">
+                            <input class="w-input" role="combobox" id="run-browser-model-input"
+                                   aria-expanded="false" aria-controls="run-browser-model-list" aria-autocomplete="list"
+                                   placeholder="搜索或选择模型" autocomplete="off">
+                            <input type="hidden" id="run-browser-model" value="chrome-builtin">
+                            <div class="w-combobox__panel" role="listbox" id="run-browser-model-list" hidden>
+                                <?php
+                                $browserModels = [
+                                    'chrome-builtin' => 'Chrome 内置 Gemini Nano（Prompt API · 免下载）',
+                                    'Qwen2.5-0.5B-Instruct-q4f16_1-MLC' => 'Qwen2.5 0.5B（WebLLM · 约 0.4GB）',
+                                    'Llama-3.2-1B-Instruct-q4f16_1-MLC' => 'Llama 3.2 1B（WebLLM · 约 0.8GB）',
+                                    'Qwen2.5-1.5B-Instruct-q4f16_1-MLC' => 'Qwen2.5 1.5B（WebLLM · 约 1.1GB）',
+                                    'Qwen2.5-3B-Instruct-q4f16_1-MLC' => 'Qwen2.5 3B（WebLLM · 约 1.8GB · 判定更准）',
+                                ];
+                                foreach ($browserModels as $bCode => $bLabel):
+                                ?>
+                                    <button type="button" class="w-combobox__option" role="option"
+                                            data-value="<?= htmlspecialchars((string)$bCode, ENT_QUOTES, 'UTF-8') ?>"
+                                            aria-selected="<?= $bCode === 'chrome-builtin' ? 'true' : 'false' ?>">
+                                        <span class="acq-option-label"><?= htmlspecialchars((string)$bLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                                    </button>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </div>
                     <div class="acq-price-box">
-                        <span>模型在浏览器内运行，不上传站点内容；需 Chrome 138+ 且已下载内置模型。不可用时请改用本地电脑模型。</span>
+                        <span>模型在浏览器内运行，不上传站点内容。Chrome 内置需 Chrome 138+ 并下载模型；WebLLM 模型首次需下载权重，并要求 WebGPU。不可用时请改用本地电脑模型。</span>
                     </div>
                 </div>
                 <label class="acq-form-field acq-form-field--full">
@@ -162,19 +183,19 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
                 </label>
                 <label class="acq-form-field"><span>目标线索数</span><input type="number" class="w-input" id="run-target" value="10" min="1" max="100"></label>
                 <label class="acq-form-field"><span>最大轮次</span><input type="number" class="w-input" id="run-iterations" value="8" min="1" max="8"></label>
-                <label class="acq-form-field acq-form-field--full"><span>浏览器桥前台地址（扩展连接用）</span><input class="w-input" id="run-bridge-base" placeholder="https://www.example.com（留空使用当前后台地址）"></label>
+                <input class="w-input" type="hidden" id="run-bridge-base">
                 <label class="acq-form-field acq-form-field--full"><span>补充给智能体的站点上下文（可选）</span><textarea class="w-textarea" id="run-context" rows="3" placeholder="产品线 / 目标市场 / ICP / 排除域名。站点专属提示词请写入提示词档案。"></textarea></label>
             </div>
             <div class="acq-run-actions">
                 <button type="button" class="w-button" data-tone="primary" id="run-create">签发票据并创建运行</button>
                 <span class="acq-form-status" id="run-create-status"></span>
             </div>
-            <div class="acq-ticket" id="run-ticket-box" hidden>
-                <div class="acq-form-section__title">浏览器票据（2 小时有效，只显示一次）</div>
-                <code id="run-ticket"></code>
+            <div class="acq-ticket" id="run-ticket-box" hidden data-acq-bridge-base="">
+                <div class="acq-form-section__title">运行票据（2 小时有效，只显示一次）</div>
+                <code id="run-ticket" data-acq-ticket=""></code>
                 <div class="acq-run-actions">
                     <button type="button" class="w-button" data-size="sm" data-tone="neutral" data-variant="outline" id="run-copy-ticket">复制票据</button>
-                    <span class="acq-muted">在扩展 popup 中粘贴票据后点击“连接并执行”。</span>
+                    <span class="acq-muted">扩展助手已自动识别票据：点击悬浮窗里的「初始化模型并运行」即可，无需手工粘贴。</span>
                 </div>
             </div>
         </div>
@@ -189,17 +210,24 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
         </div>
         <div class="w-card__body">
             <div class="acq-run-actions">
-                <a class="w-button" data-tone="neutral" data-variant="outline" href="@static(Weline_AiAcquisition::downloads/ai-acquisition-extension.zip)" download>
+                <?php if (PHP_OS_FAMILY === 'Darwin'): ?>
+                <a class="w-button" data-tone="primary" href="@frontend-url{'ai_acquisition/frontend/extension-package/installer'}" download>
+                    <w:icon name="download" size="sm"></w:icon>
+                    一键安装扩展（macOS · 推荐）
+                </a>
+                <?php endif; ?>
+                <a class="w-button" data-tone="neutral" data-variant="outline" href="@frontend-url{'ai_acquisition/frontend/extension-package/zip'}" download>
                     <w:icon name="download" size="sm"></w:icon>
                     下载扩展 ZIP
                 </a>
-                <span class="acq-muted">v1.1.0 · 解压后加载 <code class="acq-code">extension/</code></span>
+                <span class="acq-muted">v1.3.0 · 解压后加载 <code class="acq-code">extension/</code></span>
             </div>
             <ol class="acq-steps">
-                <li><span>下载并解压 ZIP；Chrome / Edge 打开 <code class="acq-code">chrome://extensions</code>，启用开发者模式。</span></li>
+                <li><span><strong>macOS 最简单</strong>：点上方「一键安装扩展」→ 解压 → 双击 <code class="acq-code">WelineExtensionInstaller.app</code> → 在弹出的扩展页点一次「重新加载」↻。</span></li>
+                <li><span>其他系统：下载扩展 ZIP 并解压；Chrome / Edge 打开 <code class="acq-code">chrome://extensions</code>，启用开发者模式。</span></li>
                 <li><span>点“加载已解压的扩展程序”，选择解压后的 <code class="acq-code">extension/</code> 目录。</span></li>
-                <li><span>在 popup 填后端地址（前台站点）与上方票据，点击“连接并执行”。</span></li>
-                <li><span>扩展在本机执行搜索；云端模式回传 AI 模块，本地/浏览器模式只回传结果与用量。</span></li>
+                <li><span>回到本页创建运行：票据一出现，右下角悬浮助手自动弹出并识别票据。</span></li>
+                <li><span>点击「初始化模型并运行」：扩展下载 / 连接所选模型，就绪后运行自动进入「执行中」。运行记录里可暂停、继续、停止、删除。</span></li>
             </ol>
             <div class="acq-form-section">
                 <div class="acq-form-section__title">连接信息</div>
@@ -215,12 +243,42 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
     </section>
 </div>
 
+<div class="w-dialog" id="acq-ext-missing-modal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" data-w-backdrop="static" hidden>
+    <div class="w-dialog__frame" data-size="md">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title">需要浏览器扩展</h5>
+                <button type="button" class="w-button" aria-label="关闭" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+            </div>
+            <div class="w-dialog__body">
+                <p class="acq-muted" style="--w-m:0 0 var(--weline-space-3);">
+                    所选模型在浏览器扩展里运行，安装并启用扩展后才能创建运行。本次<strong>没有创建运行记录</strong>。
+                </p>
+                <ol class="acq-steps">
+                    <li><span>下载扩展 ZIP 并解压<?php if (PHP_OS_FAMILY === 'Darwin'): ?>，或直接用页面右侧「一键安装扩展（macOS）」<?php endif; ?>。</span></li>
+                    <li><span>Chrome / Edge 打开 <code class="acq-code">chrome://extensions</code>，开启开发者模式。</span></li>
+                    <li><span>点「加载已解压的扩展程序」，选择解压后的 <code class="acq-code">extension/</code> 目录。</span></li>
+                    <li><span>回到本页点「我已安装，重新检测」，检测通过后才会签发票据并创建运行。</span></li>
+                </ol>
+                <p class="acq-form-status" id="acq-ext-missing-status" role="status" aria-live="polite"></p>
+            </div>
+            <div class="w-dialog__footer">
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral" data-variant="outline">取消</button>
+                <button type="button" class="w-button" data-tone="neutral" data-variant="outline" id="acq-ext-modal-reload">刷新本页</button>
+                <a class="w-button" data-tone="neutral" data-variant="outline" href="@frontend-url{'ai_acquisition/frontend/extension-package/zip'}" download>下载扩展 ZIP</a>
+                <button type="button" class="w-button" data-tone="primary" id="acq-ext-modal-recheck">我已安装，重新检测</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <section class="w-card acq-table-card" aria-label="运行记录">
     <div class="acq-table-head">
         <div class="acq-table-head__title">
             <strong>运行记录</strong>
             <span class="w-badge" data-tone="muted" id="run-list-status">0 条</span>
         </div>
+        <span class="acq-muted" id="run-leave-hint" role="status" aria-live="polite"></span>
     </div>
     <div class="acq-table-wrap">
         <table class="w-table acq-table acq-table--runs">
@@ -234,13 +292,33 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
                 <th>Token</th>
                 <th>成本</th>
                 <th>创建时间</th>
-                <th style="inline-size: 5.5rem;">操作</th>
+                <th style="inline-size: 11.5rem;">操作</th>
             </tr>
             </thead>
             <tbody id="run-tbody"></tbody>
         </table>
     </div>
 </section>
+
+<div class="acq-drawer" id="run-drawer" hidden>
+    <div class="acq-drawer__backdrop" data-run-close></div>
+    <aside class="acq-drawer__panel" role="dialog" aria-modal="true" aria-labelledby="run-detail-title">
+        <header class="acq-drawer__header">
+            <div>
+                <h2 class="acq-drawer__title" id="run-detail-title">运行详情</h2>
+                <p class="acq-drawer__subtitle" id="run-detail-subtitle">—</p>
+            </div>
+            <button type="button" class="acq-icon-btn" data-run-close aria-label="关闭">
+                <w:icon name="close" size="sm"></w:icon>
+            </button>
+        </header>
+        <div class="acq-drawer__body" id="run-detail-body"></div>
+        <footer class="acq-drawer__footer">
+            <span class="acq-muted">弹窗侧最近 50 条事件</span>
+            <div class="acq-drawer__footer-actions" id="run-detail-actions"></div>
+        </footer>
+    </aside>
+</div>
 
 <script>
 (function () {
@@ -328,10 +406,85 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
             box.innerHTML = parts.join('');
             var baseInput = byId('run-bridge-base');
             if (baseInput && !baseInput.value) {
-                var candidateUrl = /^https:\/\//i.test(profile.url || '') ? profile.url : window.location.origin;
-                baseInput.value = candidateUrl;
+                // 桥接口挂在当前后台所在源的 frontend 控制器上，跨站前台域名会打不开票据
+                baseInput.value = window.location.origin;
             }
         })();
+    }
+
+    var MODEL_CHOICE_KEY = 'weline.acq.modelChoice.v1';
+    var restoringChoice = false;
+
+    /** 记住上次的模型运行方式与具体模型，下次打开页面自动恢复。 */
+    /** combobox 按值回填显示文本。 */
+    function syncComboboxDisplay(inputId, listId, value) {
+        var input = byId(inputId);
+        var list = document.getElementById(listId);
+        if (!input || !list) { return; }
+        Array.prototype.forEach.call(list.querySelectorAll('[role="option"]'), function (option) {
+            var label = (option.querySelector('.acq-option-label') || option).textContent.trim();
+            if ((option.getAttribute('data-value') || '') === value) {
+                input.value = label;
+                option.setAttribute('aria-selected', 'true');
+            } else {
+                option.setAttribute('aria-selected', 'false');
+            }
+        });
+    }
+
+    function rememberModelChoice() {
+        if (restoringChoice) {
+            return; // 恢复过程中不回写，避免把刚恢复的值覆盖成默认值
+        }
+        var choice = {
+            mode: state.modelMode,
+            model: value('run-model'),
+            browser_model: value('run-browser-model'),
+            local_model: value('run-local-model'),
+            local_endpoint: value('run-local-endpoint'),
+        };
+        try {
+            window.localStorage.setItem(MODEL_CHOICE_KEY, JSON.stringify(choice));
+        } catch (error) {
+            // 隐私模式/存储被禁用时忽略
+        }
+    }
+
+    function restoreModelChoice() {
+        restoringChoice = true;
+        var choice = null;
+        try {
+            choice = JSON.parse(window.localStorage.getItem(MODEL_CHOICE_KEY) || 'null');
+        } catch (error) {
+            choice = null;
+        }
+        if (!choice || typeof choice !== 'object') {
+            setModelMode('ai_module');
+            restoringChoice = false;
+            return;
+        }
+        var mode = ['ai_module', 'local_computer', 'browser_local'].indexOf(choice.mode) === -1
+            ? 'ai_module'
+            : choice.mode;
+        setModelMode(mode);
+        if (mode === 'ai_module' && choice.model && byId('run-model')) {
+            byId('run-model').value = choice.model;
+            syncComboboxDisplay('run-model-input', 'run-model-list', choice.model);
+            refreshPrice();
+        }
+        if (mode === 'browser_local' && choice.browser_model && byId('run-browser-model')) {
+            byId('run-browser-model').value = choice.browser_model;
+            syncComboboxDisplay('run-browser-model-input', 'run-browser-model-list', choice.browser_model);
+        }
+        if (mode === 'local_computer') {
+            if (choice.local_endpoint && byId('run-local-endpoint') && !value('run-local-endpoint')) {
+                byId('run-local-endpoint').value = choice.local_endpoint;
+            }
+            if (choice.local_model && byId('run-local-model')) {
+                byId('run-local-model').value = choice.local_model;
+            }
+        }
+        restoringChoice = false;
     }
 
     function setModelMode(mode) {
@@ -350,6 +503,7 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
         if (aiMode) {
             refreshPrice();
         }
+        rememberModelChoice();
     }
 
     function refreshPrice() {
@@ -395,7 +549,10 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
         } else {
             tbody.innerHTML = runs.map(function (run) {
                 var id = parseInt(run.id || 0, 10);
-                var terminal = run.status === 'completed' || run.status === 'cancelled' || run.status === 'failed';
+                var actions = '<div class="acq-actions">' +
+                    '<button type="button" class="w-button" data-size="sm" data-tone="neutral" data-variant="outline" data-run-action="detail" data-run-id="' + id + '">详情</button>' +
+                    runActions(run, id) +
+                    '</div>';
                 return '<tr>' +
                     '<td>#' + id + '</td>' +
                     '<td><code class="acq-code">' + escapeHtml(run.model_code || '-') + '</code></td>' +
@@ -405,11 +562,42 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
                     '<td>' + Number(run.input_tokens || 0) + ' + ' + Number(run.output_tokens || 0) + '</td>' +
                     '<td>' + escapeHtml(money(run.cost, run.currency)) + '</td>' +
                     '<td>' + escapeHtml(timeText(run.created_at)) + '</td>' +
-                    '<td><button type="button" class="w-button" data-size="sm" data-tone="danger" data-variant="outline" data-run-cancel="' + id + '"' + (terminal ? ' disabled' : '') + '>取消</button></td>' +
+                    '<td>' + actions + '</td>' +
                     '</tr>';
             }).join('');
         }
         setText('run-list-status', state.runs.length + ' 条');
+        syncLeaveGuard();
+    }
+
+    // 有「待连接 / 执行中」的智能体时，离开本页（关闭、刷新、跳菜单）先二次确认。
+    var ACTIVE_RUN_STATUSES = { pending: 1, running: 1 };
+    var leaveGuardBound = false;
+    function activeRunCount() {
+        var runs = state.runs || [];
+        var count = 0;
+        for (var i = 0; i < runs.length; i += 1) {
+            if (ACTIVE_RUN_STATUSES[String(runs[i] && runs[i].status || '')] === 1) { count += 1; }
+        }
+        return count;
+    }
+    function onBeforeUnload(event) {
+        if (activeRunCount() === 0) { return undefined; }
+        event.preventDefault();
+        event.returnValue = '有正在运行的获客智能体，确认离开本页？';
+        return event.returnValue;
+    }
+    function syncLeaveGuard() {
+        var count = activeRunCount();
+        window.__acqActiveRuns = count;
+        if (count > 0 && !leaveGuardBound) {
+            window.addEventListener('beforeunload', onBeforeUnload);
+            leaveGuardBound = true;
+        } else if (count === 0 && leaveGuardBound) {
+            window.removeEventListener('beforeunload', onBeforeUnload);
+            leaveGuardBound = false;
+        }
+        setText('run-leave-hint', count > 0 ? '有 ' + count + ' 个智能体正在运行，离开本页会二次确认。' : '');
     }
 
     function loadRuns() {
@@ -455,21 +643,175 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
         } else {
             payload.browser_model = value('run-browser-model') || 'chrome-builtin';
         }
+        // 浏览器端侧 / 本机模型都依赖扩展执行：先确认扩展在线，未安装则弹窗引导且不创建运行记录。
+        if (mode !== 'ai_module') {
+            setText('run-create-status', '正在检测浏览器扩展…');
+            waitForExtension(1500).then(function (online) {
+                if (!online) {
+                    setText('run-create-status', '');
+                    openExtMissingModal();
+                    return;
+                }
+                submitRun(payload);
+            });
+            return;
+        }
+        submitRun(payload);
+    }
+
+    function submitRun(payload) {
         setText('run-create-status', '创建中…');
         op('runCreate', {
             payload: payload
         }).then(function (result) {
             if (!result || result.success === false) { throw new Error((result && result.message) || '创建失败'); }
             state.ticket = result.ticket || '';
-            byId('run-ticket').textContent = state.ticket;
-            byId('run-ticket-box').hidden = false;
+            var ticketCode = byId('run-ticket');
+            ticketCode.textContent = state.ticket;
+            ticketCode.setAttribute('data-acq-ticket', state.ticket);
+            var ticketBox = byId('run-ticket-box');
             var bridgeBase = (value('run-bridge-base') || window.location.origin).replace(/\/+$/, '');
+            ticketBox.hidden = false;
+            ticketBox.setAttribute('data-acq-bridge-base', window.location.origin);
             byId('run-sse-url').textContent = bridgeBase + '/ai_acquisition/frontend/bridge/stream?ticket=' + encodeURIComponent(state.ticket);
-            setText('run-create-status', '已创建运行 #' + (result.id || ''));
+            setText('run-create-status', '已签发运行 #' + (result.id || '') + '，等待扩展助手初始化模型…');
             loadRuns();
+            // ai_module 在服务端跑模型，不需要扩展助手；只有本机/浏览器端侧模型才通知扩展。
+            if (state.modelMode !== 'ai_module') {
+                notifyExtension(result);
+            } else {
+                setText('run-create-status', '已创建运行 #' + (result.id || '') + '，AI 模块开始执行。');
+            }
         }).catch(function (error) {
             setText('run-create-status', errorText(error, '创建失败'));
         });
+    }
+
+    function extensionOnline() {
+        return Boolean(document.getElementById('weline-acq-assistant-host'));
+    }
+
+    // content script 是 document_idle 注入，刚进页面时可能还没挂上助手 host，短轮询等待。
+    function waitForExtension(timeoutMs) {
+        return new Promise(function (resolve) {
+            if (extensionOnline()) { resolve(true); return; }
+            var deadline = Date.now() + (timeoutMs || 1500);
+            var timer = setInterval(function () {
+                if (extensionOnline()) { clearInterval(timer); resolve(true); return; }
+                if (Date.now() >= deadline) { clearInterval(timer); resolve(false); }
+            }, 150);
+        });
+    }
+
+    function openExtMissingModal() {
+        var modal = byId('acq-ext-missing-modal');
+        setText('acq-ext-missing-status', '');
+        if (!modal) { showInstallGuide(); return; }
+        if (window.Weline && window.Weline.UI && window.Weline.UI.dialog) {
+            window.Weline.UI.dialog.open('#acq-ext-missing-modal');
+            return;
+        }
+        modal.hidden = false;
+        modal.removeAttribute('hidden');
+        modal.dataset.state = 'open';
+        modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeExtMissingModal() {
+        var modal = byId('acq-ext-missing-modal');
+        if (!modal) { return; }
+        if (window.Weline && window.Weline.UI && window.Weline.UI.dialog) {
+            window.Weline.UI.dialog.close('#acq-ext-missing-modal');
+            return;
+        }
+        modal.dataset.state = 'closed';
+        modal.setAttribute('aria-hidden', 'true');
+        modal.hidden = true;
+    }
+
+    function showInstallGuide() {
+        setText('run-create-status', '未检测到浏览器扩展：请按右侧「浏览器扩展」卡片重新下载 ZIP（v1.3.0 起才有悬浮助手），解压后替换旧目录并刷新本页；旧版扩展没有悬浮助手。');
+        var extCard = document.querySelector('section[aria-label="浏览器扩展"]');
+        if (extCard) {
+            extCard.classList.add('acq-ext-card-pulse');
+            setTimeout(function () { extCard.classList.remove('acq-ext-card-pulse'); }, 8000);
+        }
+    }
+
+    (function bindExtMissingModal() {
+        var recheck = byId('acq-ext-modal-recheck');
+        if (recheck) {
+            recheck.addEventListener('click', function () {
+                setText('acq-ext-missing-status', '正在检测…');
+                recheck.setAttribute('aria-busy', 'true');
+                waitForExtension(2500).then(function (online) {
+                    recheck.removeAttribute('aria-busy');
+                    if (!online) {
+                        setText('acq-ext-missing-status', '仍未检测到扩展。若是刚加载扩展，请点「刷新本页」后重试。');
+                        return;
+                    }
+                    closeExtMissingModal();
+                    createRun();
+                });
+            });
+        }
+        var reload = byId('acq-ext-modal-reload');
+        if (reload) {
+            reload.addEventListener('click', function () { window.location.reload(); });
+        }
+    })();
+
+    function notifyExtension(result) {
+        // content script 运行在隔离环境，window 标记对页面不可见；
+        // 助手的 Shadow DOM host 元素挂在主 DOM 上，用它判定扩展是否在线。
+        if (!extensionOnline()) {
+            // content script 是 document_idle 注入：慢渲染/刚进页面时可能还没挂上，
+            // 等 2.5s 复检一次再下结论，避免误报「未安装」。
+            setText('run-create-status', '正在检测浏览器扩展…');
+            setTimeout(function () {
+                if (extensionOnline()) {
+                    dispatchStart(result);
+                } else {
+                    showInstallGuide();
+                }
+            }, 2500);
+            return;
+        }
+        dispatchStart(result);
+    }
+
+    function dispatchStart(result) {
+        var ponged = false;
+        var retries = 0;
+        function start() {
+            if (ponged && retries >= 3) { return; }
+            ponged = true;
+            window.dispatchEvent(new CustomEvent('weline-acq-start', {
+                detail: { ticket: state.ticket, baseUrl: window.location.origin }
+            }));
+            setText('run-create-status', '已自动启动扩展助手 #' + (result.id || '') + '，模型初始化中…');
+            // 助手可能因标签页休眠/SW 睡眠漏掉事件：3s 后若 dataset.acqPhase 仍非运行态，补派一次（最多 3 次）
+            setTimeout(function () {
+                var host = document.getElementById('weline-acq-assistant-host');
+                var phase = host && host.dataset ? host.dataset.acqPhase : '';
+                if (phase === 'running' || phase === 'paused' || phase === 'done'
+                    || phase === 'failed' || phase === 'stopped' || phase === 'init') {
+                    return;
+                }
+                retries += 1;
+                ponged = false;
+                if (retries <= 3) {
+                    log_retry(result, retries);
+                    start();
+                }
+            }, 3000);
+        }
+        function log_retry(result, attempt) {
+            setText('run-create-status', '已自动启动扩展助手 #' + (result.id || '') + '（第 ' + attempt + ' 次唤醒）');
+        }
+        window.addEventListener('weline-acq-pong', start, { once: true });
+        setTimeout(start, 2000);
+        window.dispatchEvent(new CustomEvent('weline-acq-ping'));
     }
 
     byId('run-website').addEventListener('change', function () {
@@ -478,19 +820,66 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
             window.location.href = window.location.pathname + '?website_id=' + encodeURIComponent(websiteId);
         }
     });
-    byId('run-site-picker').addEventListener('click', function (event) {
-        var option = event.target.closest('[data-acq-site-id]');
-        if (!option) { return; }
-        var select = byId('run-website');
-        select.value = option.getAttribute('data-acq-site-id');
-        select.dispatchEvent(new Event('change', { bubbles: true }));
+    byId('run-site-input').addEventListener('change', function () {
+        var wanted = this.value.trim();
+        var list = document.getElementById('run-site-list');
+        var matched = null;
+        Array.prototype.forEach.call(list.querySelectorAll('[role="option"]'), function (option) {
+            var value = option.getAttribute('data-value') || '';
+            var label = option.querySelector('.acq-site-option__name').textContent.trim();
+            if (wanted === value || wanted === label) {
+                matched = value;
+                this.value = label;
+                option.setAttribute('aria-selected', 'true');
+            } else {
+                option.setAttribute('aria-selected', 'false');
+            }
+        }, this);
+        byId('run-website').value = matched || '-1';
+        byId('run-website').dispatchEvent(new Event('change', { bubbles: true }));
     });
     byId('run-mode-picker').addEventListener('click', function (event) {
         var option = event.target.closest('[data-model-mode]');
         if (!option) { return; }
         setModelMode(option.getAttribute('data-model-mode'));
     });
-    byId('run-model').addEventListener('change', refreshPrice);
+    // combobox 选择后同步隐藏域。框架组件会把 input.value 写成 data-value，
+    // 因此同时按 data-value 与显示文本两种方式匹配 option。
+    function bindCombobox(inputId, hiddenId) {
+        var input = byId(inputId);
+        var hidden = byId(hiddenId);
+        if (!input || !hidden) { return; }
+        var panel = document.getElementById(input.getAttribute('aria-controls') || '');
+        input.addEventListener('change', function () {
+            var wanted = input.value.trim();
+            var matched = null;
+            if (panel) {
+                Array.prototype.forEach.call(panel.querySelectorAll('[role="option"]'), function (option) {
+                    var value = option.getAttribute('data-value') || '';
+                    var label = (option.querySelector('.acq-option-label') || option).textContent.trim();
+                    if (wanted === value || wanted === label) {
+                        matched = value;
+                        input.value = label; // 显示文本，不把 code 露给用户
+                        option.setAttribute('aria-selected', 'true');
+                    } else {
+                        option.setAttribute('aria-selected', 'false');
+                    }
+                });
+            }
+            hidden.value = matched || '';
+            hidden.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    }
+    bindCombobox('run-model-input', 'run-model');
+    bindCombobox('run-browser-model-input', 'run-browser-model');
+
+    byId('run-model').addEventListener('change', function () {
+        refreshPrice();
+        rememberModelChoice();
+    });
+    byId('run-browser-model').addEventListener('change', rememberModelChoice);
+    byId('run-local-model') && byId('run-local-model').addEventListener('change', rememberModelChoice);
+    byId('run-local-endpoint') && byId('run-local-endpoint').addEventListener('change', rememberModelChoice);
     byId('run-iterations').addEventListener('change', refreshPrice);
     byId('run-create').addEventListener('click', createRun);
     byId('run-refresh').addEventListener('click', loadRuns);
@@ -500,19 +889,145 @@ $selectedWebsiteId = (int)($selectedWebsiteId ?? 0);
             navigator.clipboard.writeText(state.ticket).then(function () { setText('run-create-status', '票据已复制。'); });
         }
     });
-    byId('run-tbody').addEventListener('click', function (event) {
-        var button = event.target.closest('[data-run-cancel]');
-        if (!button) { return; }
-        var id = parseInt(button.getAttribute('data-run-cancel') || '0', 10);
-        if (!id) { return; }
-        op('runCancel', { id: id }).then(function () { return loadRuns(); }).catch(function (error) {
-            setText('run-list-status', errorText(error, '取消失败'));
+    function runActionButton(action, id, tone) {
+        return '<button type="button" class="w-button" data-size="sm" data-tone="' + (tone || 'neutral') + '" data-variant="outline" data-run-action="' + action + '" data-run-id="' + id + '">' +
+            ({ pause: '暂停', resume: '继续', stop: '停止', delete: '删除' }[action] || action) + '</button>';
+    }
+
+    function runActions(run, id) {
+        var paused = run.status === 'paused';
+        var active = run.status === 'pending' || run.status === 'running' || paused;
+        var html = '';
+        if (run.status === 'running') { html += runActionButton('pause', id); }
+        if (paused) { html += runActionButton('resume', id, 'primary'); }
+        if (active) { html += runActionButton('stop', id, 'danger'); }
+        if (!run.status || !active) { html += runActionButton('delete', id, 'danger'); }
+        return html;
+    }
+
+    function renderDetail(result) {
+        var run = (result && result.run) || {};
+        var events = Array.isArray(result && result.events) ? result.events : [];
+        var rows = [
+            ['状态', statusLabel(run.status)],
+            ['网站', run.website_name || ('#' + (run.website_id || 0))],
+            ['模型', (run.model_label || run.model_code || '-') + (run.model_mode ? '（' + run.model_mode + '）' : '')],
+            ['线索', (run.leads_saved || 0) + ' 已入库 / ' + (run.leads_found || 0) + ' 发现'],
+            ['搜索', String(run.searches_count || 0)],
+            ['Token', (run.input_tokens || 0) + ' + ' + (run.output_tokens || 0)],
+            ['成本', money(run.cost, run.currency)],
+            ['创建', timeText(run.created_at)],
+            ['开始', timeText(run.started_at)],
+            ['结束', timeText(run.finished_at)],
+            ['票据到期', timeText(run.ticket_expires_at)]
+        ];
+        var html = '<dl class="acq-detail">' + rows.map(function (row) {
+            return '<div class="acq-detail__row"><dt>' + escapeHtml(row[0]) + '</dt><dd>' + escapeHtml(row[1]) + '</dd></div>';
+        }).join('') + '</dl>';
+        if (run.error) {
+            html += '<div class="acq-note">' + escapeHtml(run.error) + '</div>';
+        }
+        html += '<section class="acq-form-section"><h3 class="acq-form-section__title">运行事件</h3>';
+        if (!events.length) {
+            html += '<p class="acq-muted">还没有事件；扩展接入后这里会显示每一次搜索与入库。</p>';
+        } else {
+            var typeLabels = { search: '检索', step: '模型步进', lead: '线索', complete: '结束', control: '控制', ready: '就绪', context: '连接' };
+            html += '<ol class="acq-event-list">' + events.slice(0, 50).map(function (event) {
+                var payload = event.payload || {};
+                var detail = [];
+                if (payload.query) { detail.push('“' + payload.query + '”'); }
+                if (payload.results != null) { detail.push(payload.results + ' 条'); }
+                if (payload.model_code) { detail.push(payload.model_code); }
+                if (payload.tool_calls != null) { detail.push('工具 ' + payload.tool_calls); }
+                if (payload.prompt_tokens != null) { detail.push('token ' + payload.prompt_tokens + '+' + payload.completion_tokens); }
+                if (payload.created != null) { detail.push(payload.created ? '新线索' : '已存在'); }
+                if (payload.status) { detail.push(statusLabel(payload.status)); }
+                if (payload.action) { detail.push({ pause: '暂停', resume: '继续', stop: '停止' }[payload.action] || payload.action); }
+                if (!detail.length) {
+                    Object.keys(payload).slice(0, 2).forEach(function (key) {
+                        var value = payload[key];
+                        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                            detail.push(key + ': ' + value);
+                        }
+                    });
+                }
+                return '<li><span class="acq-event-list__time">' + escapeHtml(timeText(event.created_at)) + '</span>' +
+                    '<span class="w-badge" data-tone="muted">' + escapeHtml(typeLabels[event.type] || event.type || '-') + '</span>' +
+                    '<span class="acq-event-list__text">' + escapeHtml(detail.join(' · ') || '-') + '</span></li>';
+            }).join('') + '</ol>';
+        }
+        html += '</section>';
+        byId('run-detail-body').innerHTML = html;
+        byId('run-detail-title').textContent = '运行 #' + (run.id || '');
+        byId('run-detail-subtitle').textContent = statusLabel(run.status) + ' · ' + timeText(run.created_at);
+        byId('run-detail-actions').innerHTML = runActions(run, parseInt(run.id || 0, 10));
+    }
+
+    function openDetail(id) {
+        setText('run-list-status', '加载中…');
+        op('runDetail', { id: id }).then(function (result) {
+            renderDetail(result);
+            byId('run-drawer').hidden = false;
+            setText('run-list-status', state.runs.length + ' 条');
+        }).catch(function (error) {
+            setText('run-list-status', errorText(error, '详情加载失败'));
         });
+    }
+
+    function runAction(action, id) {
+        if (action === 'detail') {
+            openDetail(id);
+            return;
+        }
+        if (action === 'delete' && !window.confirm('删除运行 #' + id + ' 的运行记录与桥事件？')) {
+            return;
+        }
+        var operation = { pause: 'runPause', resume: 'runResume', stop: 'runCancel', delete: 'runDelete' }[action];
+        if (!operation) { return; }
+        op(operation, { id: id }).then(function () {
+            loadRuns();
+            if (!byId('run-drawer').hidden) { openDetail(id); }
+        }).catch(function (error) {
+            setText('run-list-status', errorText(error, '操作失败'));
+        });
+    }
+
+    byId('run-tbody').addEventListener('click', function (event) {
+        var button = event.target.closest('[data-run-action]');
+        if (!button) { return; }
+        var id = parseInt(button.getAttribute('data-run-id') || '0', 10);
+        if (!id) { return; }
+        runAction(button.getAttribute('data-run-action'), id);
+    });
+    byId('run-detail-actions').addEventListener('click', function (event) {
+        var button = event.target.closest('[data-run-action]');
+        if (!button) { return; }
+        var id = parseInt(button.getAttribute('data-run-id') || '0', 10);
+        if (!id) { return; }
+        runAction(button.getAttribute('data-run-action'), id);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-run-close]'), function (node) {
+        node.addEventListener('click', function () { byId('run-drawer').hidden = true; });
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && !byId('run-drawer').hidden) {
+            byId('run-drawer').hidden = true;
+        }
     });
 
     renderRuns();
     loadWebsiteProfile();
-    setModelMode('ai_module');
+    // 常驻扩展在线指示：3s 后仍未挂上助手 host → 卡片标注「未在线」
+    setTimeout(function () {
+        var card = document.querySelector('section[aria-label="浏览器扩展"]');
+        if (!card) { return; }
+        if (document.getElementById('weline-acq-assistant-host')) {
+            card.classList.add('acq-ext-online');
+        } else {
+            card.classList.add('acq-ext-offline');
+        }
+    }, 3000);
+    restoreModelChoice();
     window.setInterval(loadRuns, 5000);
 })();
 </script>

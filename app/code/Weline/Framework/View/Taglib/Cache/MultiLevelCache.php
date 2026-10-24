@@ -58,7 +58,7 @@ final class MultiLevelCache
      */
     public function get(Template $template, string $path, string $content): ?string
     {
-        $hash = $this->contentHash($content);
+        $hash = $this->contentHash($path, $content);
         
         // L0: 进程内 WeakMap（最快）
         $result = $this->l0->getByTemplate($template, $hash);
@@ -95,7 +95,7 @@ final class MultiLevelCache
      */
     public function getByPath(string $path, string $content): ?string
     {
-        $hash = $this->contentHash($content);
+        $hash = $this->contentHash($path, $content);
 
         // L0: 路径缓存
         $result = $this->l0->get($path, $hash);
@@ -130,7 +130,7 @@ final class MultiLevelCache
      */
     public function set(Template $template, string $path, string $content, string $compiled): void
     {
-        $hash = $this->contentHash($content);
+        $hash = $this->contentHash($path, $content);
 
         // 写入所有层
         $this->l0->setByTemplate($template, $compiled, $hash);
@@ -143,7 +143,7 @@ final class MultiLevelCache
      */
     public function setByPath(string $path, string $content, string $compiled): void
     {
-        $hash = $this->contentHash($content);
+        $hash = $this->contentHash($path, $content);
 
         $this->l0->set($path, $hash, $compiled);
         $this->l1->set($path, $hash, $compiled);
@@ -152,10 +152,11 @@ final class MultiLevelCache
 
     /**
      * 编译器代次必须进键。只哈希模板正文时，修完 Taglib 仍会命中旧的坏 PHP。
+     * 路径也必须进键：L0 每模板一槽、L3 文件名只取本哈希，同正文不同路径（含子内容缓存域）否则会串用编译结果。
      */
-    private function contentHash(string $content): string
+    private function contentHash(string $path, string $content): string
     {
-        return hash('xxh3', \Weline\Framework\View\Taglib::COMPILER_GENERATION . "\0" . $content);
+        return hash('xxh3', \Weline\Framework\View\Taglib::COMPILER_GENERATION . "\0" . $path . "\0" . $content);
     }
 
     /**

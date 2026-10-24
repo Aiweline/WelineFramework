@@ -489,14 +489,6 @@
                 "js/components/mega-menu.js"
             ]
         },
-        "online-translation-collector-js": {
-            "type": "js",
-            "output": "components/weline-online-translation-collector.js",
-            "source_root": "app/code/Weline/I18n/view/statics",
-            "sources": [
-                "js/online-translation-collector.js"
-            ]
-        },
         "scope-persistence-js": {
             "type": "js",
             "output": "components/weline-scope-persistence.js",
@@ -787,9 +779,6 @@
         "mega-menu-js": [
             "mega-menu"
         ],
-        "online-translation-collector-js": [
-            "online-translation-collector"
-        ],
         "scope-persistence-js": [
             "scope-persistence"
         ],
@@ -884,15 +873,6 @@
             "bundles": [
                 "mega-menu-css",
                 "mega-menu-js"
-            ]
-        },
-        "online-translation-collector": {
-            "owner": "Weline_I18n",
-            "components": [
-                "online-translation-collector"
-            ],
-            "bundles": [
-                "online-translation-collector-js"
             ]
         },
         "scope-persistence": {

@@ -264,6 +264,47 @@ class BridgeService
     }
 
     /**
+     * 运行详情用：最近事件（双方向、倒序、只读不改投递状态）。
+     *
+     * @return list<array{id:int,type:string,direction:string,payload:array<string,mixed>,created_at:int}>
+     */
+    public function recent(int $runId, int $limit = 50): array
+    {
+        if ($runId <= 0) {
+            return [];
+        }
+        $limit = \max(1, \min(100, $limit));
+
+        $rows = $this->eventModel()
+            ->clearData()
+            ->clearQuery()
+            ->where(BridgeEvent::schema_fields_RUN_ID, $runId)
+            ->order(BridgeEvent::schema_fields_ID, 'DESC')
+            ->limit($limit)
+            ->select()
+            ->fetchArray();
+        if (!\is_array($rows)) {
+            return [];
+        }
+
+        $events = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $events[] = [
+                'id' => (int)($row[BridgeEvent::schema_fields_ID] ?? 0),
+                'type' => (string)($row[BridgeEvent::schema_fields_TYPE] ?? ''),
+                'direction' => (string)($row[BridgeEvent::schema_fields_DIRECTION] ?? ''),
+                'payload' => self::decodePayload($row[BridgeEvent::schema_fields_PAYLOAD_JSON] ?? null),
+                'created_at' => (int)($row[BridgeEvent::schema_fields_CREATED_AT] ?? 0),
+            ];
+        }
+
+        return $events;
+    }
+
+    /**
      * 已投递给浏览器的最大事件 ID；没有事件时返回 null。
      */
     public function lastSeen(int $runId): ?int

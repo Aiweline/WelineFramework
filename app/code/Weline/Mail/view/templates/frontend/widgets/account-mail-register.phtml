@@ -23,6 +23,7 @@ if (!$feature->isRegisterEnabled()) {
     return;
 }
 $domains = ObjectManager::getInstance(MailCustomerAccountService::class)->getActiveDomains();
+$mailDomainSelectOptionsJson = \Weline\Mail\Service\MailSelectOptions::domainsForSelectJson($domains);
 if ($domains === []) {
     return;
 }
@@ -45,11 +46,14 @@ if ($variant !== 'panel') {
         <p class="w-text" data-tone="muted" data-size="sm"><lang>注册并登录后可申请本站企业邮箱；开启辅助验证时须验证真人邮箱。</lang></p>
         <form class="w-form" data-mail-register-form method="post" action="@url{'weline_mail/frontend/account/register/apply'}">
             <label class="w-field"><span class="w-field__label"><lang>邮箱域名</lang></span>
-                <select class="w-select" name="domain_id" required>
-                    <?php foreach ($domains as $domain): ?>
-                        <option value="<?= (int)$domain->getId() ?>"><?= $safe($domain->getData('domain_name')) ?></option>
-                    <?php endforeach; ?>
-                </select>
+                <w:mail:domain:select
+                    id="mail_register_domain_id"
+                    name="domain_id"
+                    value=""
+                    display=""
+                    options="mailDomainSelectOptionsJson"
+                    required="true"
+                />
             </label>
             <label class="w-field"><span class="w-field__label"><lang>邮箱前缀</lang></span>
                 <input class="w-input" type="text" name="local_part" required pattern="[a-z0-9][a-z0-9._-]{1,62}" placeholder="name">

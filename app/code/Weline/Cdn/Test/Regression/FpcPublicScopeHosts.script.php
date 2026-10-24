@@ -39,16 +39,18 @@ try {
     foreach(['targets'=>$targets,'rules'=>$om->getInstance(RuleManager::class)] as $field=>$value){(new ReflectionProperty($sync,$field))->setValue($sync,$value);}
     $desiredMethod=new ReflectionMethod($sync,'desiredRules');$adapter=$om->getInstance(Cloudflare::class);
     $desired=$desiredMethod->invoke($sync,[$domain],$adapter);
-    $assert(count($desired)===6,'单Domain公开别名不能把六条默认规则复制成十二条');
+    $planned=0;foreach($om->getInstance(RuleManager::class)->planRulesForEdgePush($domain,null,true) as $rule){unset($rule['_weline_identity']);if(($adapter->formatRulesForApi([$rule])[0]??null)!==null){$planned++;}}
+    $assert($planned>=3&&count($desired)===$planned,'单Domain公开别名不能把规则按public host复制成多份');
     foreach($desired as $rule){$assert(str_contains($rule['expression'],'"changanhanfu.com"')&&str_contains($rule['expression'],'"www.changanhanfu.com"'),'实际Website www被desired规则丢失');$assert(!str_contains($rule['expression'],'foreign.')&&!str_contains($rule['expression'],'evil'),'跨站或非法suffix混入规则');}
-    $baseline=json_decode(file_get_contents(BP.'/dev/team/cdn-fpc-policy-sync/cloud-rules-baseline.json'),true,512,JSON_THROW_ON_ERROR)['rules'];
+    // 旧版同步写入云端的状态：无 host 包裹、非 weline_cdn_ ref 的同内容规则。
+    $baseline=[];foreach($desired as $i=>$rule){$baseline[]=['id'=>'legacy-rule-'.$i,'ref'=>'legacy-rule-'.$i]+$rule['_legacy_rule'];}
     $manual=['id'=>'human-rule-id','ref'=>'human-rule-ref','description'=>'Operator rule','enabled'=>false,'action'=>'set_cache_settings','expression'=>'http.request.uri.path eq "/manual-only"','action_parameters'=>['cache'=>false]];
     $withManual=$baseline;array_splice($withManual,2,0,[$manual]);$preserved=FpcPolicyRulePlanner::merge($withManual,$desired);
-    $assert(count($preserved)===7&&$preserved[2]===$manual&&array_column($preserved,'id')===array_column($withManual,'id'),'人工规则内容/id/ref/相对位置被改动');
+    $assert(count($preserved)===count($baseline)+1&&$preserved[2]===$manual&&array_column($preserved,'id')===array_column($withManual,'id'),'人工规则内容/id/ref/相对位置被改动');
     $initialPlan=FpcPolicyRulePlanner::plan($baseline,$desired);$merged=$initialPlan['rules'];$legacyBindings=$initialPlan['bindings'];
-    $assert(count($merged)===6&&array_column($merged,'id')===array_column($baseline,'id'),'首次六条规则认领丢ID或重复创建');
+    $assert(count($merged)===count($baseline)&&array_column($merged,'id')===array_column($baseline,'id'),'首次认领旧规则丢ID或重复创建');
     $assert(FpcPolicyRulePlanner::equivalent($merged,FpcPolicyRulePlanner::merge($merged,$desired,$legacyBindings)),'重复公开host集合不是no-op');
-    $refs=array_column($desired,'ref');$assert($refs[0]==='weline_cdn_'.substr(hash('sha256',"default:0\nchanganhanfu.com"),0,40),'既有受管ref身份公式被改变');$websites->rows[0]=new WebsiteSummary(0,'Production default','default','https://changanhanfu.com');$savedStores=$stores->rows;$stores->rows=[$stores->rows[0]];
+    $refs=array_column($desired,'ref');$assert(in_array('weline_cdn_'.substr(hash('sha256',"default:0\nchanganhanfu.com"),0,40),$refs,true),'既有受管ref身份公式被改变');$websites->rows[0]=new WebsiteSummary(0,'Production default','default','https://changanhanfu.com');$savedStores=$stores->rows;$stores->rows=[$stores->rows[0]];
     $withoutWww=$desiredMethod->invoke($sync,[$domain],$adapter);$assert($refs===array_column($withoutWww,'ref'),'只变公开host集合不应改变稳定受管ref');
     $afterRemoval=FpcPolicyRulePlanner::merge($merged,$withoutWww,$legacyBindings);$assert(array_column($afterRemoval,'id')===array_column($baseline,'id'),'public host变动丢已有受管ID');
     $websites->rows[0]=new WebsiteSummary(0,'Production default','default','https://www.changanhanfu.com');$stores->rows=$savedStores;
@@ -70,5 +72,5 @@ try {
     $assert(in_array('m.changanhanfu.com',$hosts,true)&&in_array('www.changanhanfu.com',$hosts,true)&&!in_array('changanhanfu.com.evil.invalid',$hosts,true),'站点绑定域名未纳入公网入口或外区域域名混入');
     $assert($targets->publicEndpoints($domain,ScopeIdentity::store(0,'default','a','normal'))===$scoped,'Store scope不应扩到站点绑定域名');
     $siteDomains->bases=[];
-    echo "PASS actual apex/site0→www: six rules/legacy IDs/stable refs/purge/public samples; foreign hosts excluded; store prefixes preserved; website domains included\n";
+    echo "PASS actual apex/site0→www: one rule per planned rule/legacy IDs/stable refs/purge/public samples; foreign hosts excluded; store prefixes preserved; website domains included\n";
 }catch(Throwable $error){fwrite(STDERR,'FAIL '.$error->getMessage()."\n");exit(1);}

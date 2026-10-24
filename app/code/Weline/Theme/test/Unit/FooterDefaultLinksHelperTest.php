@@ -5,11 +5,20 @@ declare(strict_types=1);
 namespace Weline\Theme\Test\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\FooterDefaultLinksHelper;
 use Weline\Theme\Helper\SocialIconHelper;
+use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeDesignDataResolver;
 
 final class FooterDefaultLinksHelperTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        ObjectManager::removeInstance(ThemeDesignDataResolver::class);
+        parent::tearDown();
+    }
+
     public function testRelativeFooterLinksKeepTheirQueryAndAnchorWhileTheTaglibAddsTheActivePrefixOnce(): void
     {
         foreach ([
@@ -51,7 +60,7 @@ final class FooterDefaultLinksHelperTest extends TestCase
         $this->assertArrayHasKey('url', $groups[0]['items'][0]);
     }
 
-    public function testWidgetLinkGroupsUseHanfuAtelierLabelsWithoutDuplicatingExtensionLinks(): void
+    public function testWidgetLinkGroupsUseNeutralLabelsWithoutDuplicatingExtensionLinks(): void
     {
         $groups = FooterDefaultLinksHelper::widgetLinkGroups();
 
@@ -75,65 +84,42 @@ final class FooterDefaultLinksHelperTest extends TestCase
         $this->assertSame([], $groups[3]['links']);
     }
 
-    public function testDefaultSocialChannelsFitAnInternationalHanfuStore(): void
+    public function testDefaultSocialItemsComeFromTheBoundThemeDataPack(): void
     {
-        $items = FooterDefaultLinksHelper::defaultSocialItems('default');
+        $this->bindSocialPack([
+            ['name' => 'YouTube', 'icon' => 'fab fa-youtube', 'url' => 'https://www.youtube.com/@theme-brand'],
+            ['name' => 'Pinterest', 'icon' => 'fab fa-pinterest', 'url' => '#'],
+            ['name' => 'Unsafe', 'icon' => 'fas fa-link', 'url' => 'javascript:alert(1)'],
+            ['name' => 'Bluesky', 'icon' => 'fab fa-bluesky', 'url' => 'https://bsky.app/profile/theme-brand.bsky.social'],
+        ]);
 
-        $this->assertSame(
-            ['YouTube', 'X', 'TikTok', 'Facebook', 'Pinterest', 'Bluesky'],
-            array_column($items, 'name'),
-        );
-        $this->assertSame(
-            [
-                'fab fa-youtube',
-                'fab fa-twitter',
-                'fab fa-tiktok',
-                'fab fa-facebook',
-                'fab fa-pinterest',
-                'fab fa-bluesky',
-            ],
-            array_column($items, 'icon'),
-        );
-        foreach ($items as $item) {
-            $this->assertMatchesRegularExpression('#^https://#', (string)$item['url']);
-        }
-        $this->assertSame(
-            [
-                'https://www.youtube.com/@changanhanfu',
-                'https://x.com/changanhanfu',
-                'https://www.tiktok.com/@changanhanfu_hq',
-                'https://www.facebook.com/profile.php?id=61595373054093',
-                'https://www.pinterest.com/changanhanfu/',
-                'https://bsky.app/profile/changanhanfu.bsky.social',
-            ],
-            FooterDefaultLinksHelper::defaultSameAsUrls('default'),
+        self::assertSame(['YouTube', 'Bluesky'], array_column(FooterDefaultLinksHelper::defaultSocialItems(), 'name'));
+        self::assertSame(
+            ['https://www.youtube.com/@theme-brand', 'https://bsky.app/profile/theme-brand.bsky.social'],
+            FooterDefaultLinksHelper::defaultSameAsUrls(),
         );
     }
 
-    /**
-     * The banned/removed @changanhanfu Instagram profile must never be advertised in the
-     * footer row nor fed into Organization.sameAs (dead profile = broken Trust signal).
-     */
-    public function testRemovedInstagramProfileIsNotAdvertisedOrFedIntoSameAs(): void
+    public function testThemeWithoutSocialPackAdvertisesNothing(): void
     {
-        $serialized = strtolower((string)json_encode(FooterDefaultLinksHelper::defaultSocialItems('default')));
-        self::assertStringNotContainsString('instagram', $serialized);
-        self::assertStringNotContainsString(
-            'instagram',
-            strtolower(implode(' ', FooterDefaultLinksHelper::defaultSameAsUrls('default'))),
-        );
-    }
+        $this->bindSocialPack(null);
 
-    public function testDaocharmsWebsiteDoesNotInheritHanfuSocialDefaults(): void
-    {
-        self::assertFalse(FooterDefaultLinksHelper::allowsHanfuSocialDefaults('daocharms'));
-        self::assertSame([], FooterDefaultLinksHelper::defaultSocialItems('daocharms'));
-        self::assertSame([], FooterDefaultLinksHelper::defaultSameAsUrls('daocharms'));
+        self::assertSame([], FooterDefaultLinksHelper::defaultSocialItems());
+        self::assertSame([], FooterDefaultLinksHelper::defaultSameAsUrls());
         // SEO extract path must not invent brand defaults from empty / placeholder rows.
         self::assertSame([], FooterDefaultLinksHelper::actionableSocialItems([]));
         self::assertSame([], FooterDefaultLinksHelper::actionableSocialItems([
             ['name' => 'Pinterest', 'icon' => 'fab fa-pinterest', 'url' => '#'],
         ]));
+    }
+
+    public function testHelperCarriesNoSiteOrBrandProfiles(): void
+    {
+        $source = (string)file_get_contents(dirname(__DIR__, 2) . '/Helper/FooterDefaultLinksHelper.php');
+
+        foreach (['hanfu', 'daocharms', 'grocery', '61595373054093'] as $needle) {
+            self::assertStringNotContainsStringIgnoringCase($needle, $source, $needle);
+        }
     }
 
     public function testResolveSocialPlatformCodeMapsOfficialProfiles(): void
@@ -177,7 +163,11 @@ final class FooterDefaultLinksHelperTest extends TestCase
 
     public function testNormalizeSocialItemsOnlyReturnsActionableProfileLinks(): void
     {
-        $defaults = FooterDefaultLinksHelper::defaultSocialItems('default');
+        $this->bindSocialPack([
+            ['name' => 'YouTube', 'icon' => 'fab fa-youtube', 'url' => 'https://www.youtube.com/@theme-brand'],
+        ]);
+        $defaults = FooterDefaultLinksHelper::defaultSocialItems();
+        self::assertNotSame([], $defaults);
         self::assertSame($defaults, FooterDefaultLinksHelper::normalizeSocialItems(null));
         self::assertSame(
             $defaults,
@@ -218,5 +208,25 @@ final class FooterDefaultLinksHelperTest extends TestCase
         $this->assertSame('/policy/privacy', $byText['隐私声明'] ?? null);
         $this->assertSame('/policy/cookie', $byText['Cookie 政策'] ?? null);
         $this->assertArrayNotHasKey('广告偏好', $byText);
+    }
+
+    /**
+     * @param list<array<string,string>>|null $socialItems null = theme ships no pack
+     */
+    private function bindSocialPack(?array $socialItems): void
+    {
+        $pack = $socialItems === null ? [] : ['social_items' => $socialItems];
+        $resolver = new class($pack) extends ThemeDesignDataResolver {
+            /** @param array<string,mixed> $pack */
+            public function __construct(private readonly array $pack)
+            {
+            }
+
+            public function load(string $key, ?WelineTheme $theme = null): array
+            {
+                return $key === 'storefront-defaults' ? $this->pack : [];
+            }
+        };
+        ObjectManager::setInstance(ThemeDesignDataResolver::class, $resolver);
     }
 }

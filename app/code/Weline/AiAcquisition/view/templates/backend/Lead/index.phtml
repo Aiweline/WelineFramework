@@ -17,6 +17,8 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
 ?>
 <css>Weline_AiAcquisition::css/backend/acquisition.css</css>
 <a id="acq-run-url" href="@backend-url{'ai_acquisition/backend/run'}" hidden></a>
+<a id="acq-lead-mail-url" href="@backend-url{'ai_acquisition/backend/lead_mail'}" hidden></a>
+<a id="acq-lead-convert-url" href="@backend-url{'ai_acquisition/backend/lead_convert/convert'}" hidden></a>
 
 <div class="acq-intro">
     <div class="acq-intro__copy">
@@ -119,6 +121,33 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
             </select>
         </label>
         <label class="acq-filter">
+            <span class="acq-filter__label">录入方式</span>
+            <select class="w-select" id="filter-entry">
+                <option value="">全部方式</option>
+                <?php foreach (($entryChannelLabels ?? []) as $code => $label): ?>
+                    <option value="<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+        <label class="acq-filter">
+            <span class="acq-filter__label">分类标签</span>
+            <select class="w-select" id="filter-tag">
+                <option value="">全部标签</option>
+                <?php
+                $tagCatalog = \Weline\AiAcquisition\Service\Tag\TagCatalog::LABELS;
+                $tagGroupLabels = ['buyer_type' => '买家类型', 'channel' => '渠道', 'influence' => '影响力'];
+                foreach ($tagGroupLabels as $tagGroup => $tagGroupLabel):
+                    if (!isset($tagCatalog[$tagGroup])) { continue; }
+                ?>
+                    <optgroup label="<?= htmlspecialchars($tagGroupLabel, ENT_QUOTES, 'UTF-8') ?>">
+                        <?php foreach ($tagCatalog[$tagGroup] as $tagCode => $tagLabel): ?>
+                            <option value="<?= htmlspecialchars($tagGroup . ':' . $tagCode, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($tagLabel, ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                    </optgroup>
+                <?php endforeach; ?>
+            </select>
+        </label>
+        <label class="acq-filter">
             <span class="acq-filter__label">最低分</span>
             <input type="number" class="w-input" id="filter-min-score" min="0" max="10" step="0.5" placeholder="0">
         </label>
@@ -154,10 +183,10 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
                 <th>公司 / 联系人</th>
                 <th>洲 / 国家</th>
                 <th>邮箱</th>
-                <th>来源</th>
+                <th>来源 · 录入方式</th>
                 <th>AI 评分</th>
                 <th>状态</th>
-                <th style="inline-size: 5.5rem;">操作</th>
+                <th style="inline-size: 9rem;">操作</th>
             </tr>
             </thead>
             <tbody id="lead-tbody"></tbody>
@@ -252,6 +281,13 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
                             <?php endforeach; ?>
                         </select>
                     </label>
+                    <label class="acq-form-field"><span>录入方式</span>
+                        <select class="w-select" id="lead-entry-channel">
+                            <?php foreach (($entryChannelLabels ?? []) as $code => $label): ?>
+                                <option value="<?= htmlspecialchars((string)$code, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
                     <label class="acq-form-field acq-form-field--full"><span>来源证据摘录</span><textarea class="w-textarea" id="lead-source-excerpt" rows="3" placeholder="粘贴 1–2 句能证明买家需求的原文"></textarea></label>
                 </div>
             </section>
@@ -277,14 +313,34 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
     </aside>
 </div>
 
+<div class="acq-drawer" id="lead-mail-modal" hidden>
+    <div class="acq-drawer__backdrop" data-lead-mail-close></div>
+    <aside class="acq-drawer__panel" role="dialog" aria-modal="true" aria-labelledby="lead-mail-title">
+        <header class="acq-drawer__header">
+            <div>
+                <h2 class="acq-drawer__title" id="lead-mail-title">邮件沟通</h2>
+                <p class="acq-drawer__subtitle">经企业邮箱给该线索发信，往来记录实时入库。</p>
+            </div>
+            <button type="button" class="acq-icon-btn" data-lead-mail-close aria-label="关闭">
+                <w:icon name="close" size="sm"></w:icon>
+            </button>
+        </header>
+        <div class="acq-drawer__body" id="lead-mail-body"></div>
+    </aside>
+</div>
+
 <script>
 (function () {
     'use strict';
     var continents = <?= json_encode($continents, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]' ?>;
     var statuses = <?= json_encode($statuses, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}' ?>;
     var sourcePlatforms = <?= json_encode($sourcePlatforms, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}' ?>;
+    var tagLabels = <?= json_encode(\Weline\AiAcquisition\Service\Tag\TagCatalog::allLabels(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}' ?>;
     var websites = <?= json_encode($websites, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]' ?>;
+    var entryChannelLabels = <?= json_encode($entryChannelLabels ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}' ?>;
     var runUrl = (document.getElementById('acq-run-url') || {}).href || '#';
+    var leadMailUrl = (document.getElementById('acq-lead-mail-url') || {}).href || '';
+    var leadConvertUrl = (document.getElementById('acq-lead-convert-url') || {}).href || '';
     var state = { items: [], page: 1, pageSize: 20, total: 0, lastPage: 1, selected: {} };
 
     function op(operation, data) {
@@ -318,7 +374,24 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
         return String(text == null ? '' : text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
     function statusLabel(code) { return statuses[code] || code || '-'; }
-    function platformLabel(code) { return sourcePlatforms[code] || code || '来源'; }
+    var sourcePlatformFallback = { ddg_web: '网页搜索', bing: 'Bing 搜索', duckduckgo: 'DuckDuckGo', reddit: 'Reddit', linkedin: 'LinkedIn', facebook: 'Facebook', forum: '论坛/社区', directory: '目录/名录', marketplace: '电商平台', manual: '手动录入', ai_select: 'AI 选择录入', skill: '获客技能录入', web: '网页搜索' };
+    function platformLabel(code) { return sourcePlatforms[code] || sourcePlatformFallback[code] || code || '来源'; }
+    var entryChannelTone = { browser_model: 'info', ai_select: 'primary', skill: 'success' };
+    function entryChannelBadge(code) {
+        if (!code || code === 'default') { return ''; }
+        var label = entryChannelLabels[code] || code;
+        return '<span class="acq-entry acq-entry--' + escapeHtml(code) + '" data-entry="' + escapeHtml(code) + '">' + escapeHtml(label) + '</span>';
+    }
+    function tagLabel(tag) { return tagLabels[tag] || tag; }
+    function leadTagsHtml(tags) {
+        var list = Array.isArray(tags) ? tags : (function () {
+            try { var d = JSON.parse(tags || '[]'); return Array.isArray(d) ? d : []; } catch (e) { return []; }
+        })();
+        if (!list.length) { return ''; }
+        return '<div class="acq-lead-tags">' + list.slice(0, 3).map(function (tag) {
+            return '<span class="acq-tag" data-tag="' + escapeHtml(tag) + '">' + escapeHtml(tagLabel(tag)) + '</span>';
+        }).join('') + (list.length > 3 ? '<span class="acq-tag acq-tag--more">+' + (list.length - 3) + '</span>' : '') + '</div>';
+    }
     function websiteName(websiteId) {
         for (var i = 0; i < websites.length; i += 1) {
             if (String(websites[i].website_id || '') === String(websiteId || '')) { return websites[i].name || ''; }
@@ -336,6 +409,10 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
         if (code === 'rejected') { return 'danger'; }
         if (code === 'contacted' || code === 'replied') { return 'info'; }
         return 'warning';
+    }
+    function convertible(status) {
+        // converted 也显示按钮：后端幂等（already_converted 只关联不重建），语义变为查看/补关联既有客户
+        return status === 'replied' || status === 'qualified' || status === 'contacted' || status === 'converted';
     }
     function scoreTone(score) {
         if (score >= 8) { return 'success'; }
@@ -356,6 +433,12 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
         if (name === 'trash') {
             return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/><path d="M10 11v5M14 11v5"/></svg>';
         }
+        if (name === 'mail') {
+            return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>';
+        }
+        if (name === 'convert') {
+            return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="8" r="3"/><path d="M4 20c.6-4 2.9-6 6-6 1.4 0 2.6.4 3.6 1.1"/><path d="M17 14v6M14 17h6"/></svg>';
+        }
         return '';
     }
 
@@ -366,7 +449,9 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
             continent: value('filter-continent'),
             status: value('filter-status'),
             source_platform: value('filter-source'),
+            entry_channel: value('filter-entry'),
             min_score: value('filter-min-score'),
+            tag: value('filter-tag'),
             page: state.page,
             page_size: state.pageSize
         };
@@ -420,10 +505,13 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
                     '<td><div class="acq-location"><span class="w-badge" data-tone="muted">' + escapeHtml(continentLabel(item.continent_code)) + '</span>' +
                     '<div class="acq-muted">' + escapeHtml(location) + '</div></div></td>' +
                     '<td>' + email + '</td>' +
-                    '<td><span class="w-badge" data-tone="info">' + escapeHtml(platformLabel(item.source_platform)) + '</span></td>' +
-                    '<td><span class="acq-score" data-tone="' + scoreTone(score) + '"><span class="acq-score__ring">' + escapeHtml(Math.round(score)) + '</span>' + score.toFixed(1) + '</span></td>' +
+                    '<td><div class="acq-source"><span class="w-badge" data-tone="info">' + escapeHtml(platformLabel(item.source_platform)) + '</span>' + entryChannelBadge(item.entry_channel) + '</div>' +
+                    leadTagsHtml(item.tags) + '</td>' +
+                    '<td><span class="acq-score" data-tone="' + scoreTone(score) + '">' + (score > 0 ? '<span class="acq-score__ring">' + escapeHtml(Math.round(score)) + '</span>' : '') + score.toFixed(1) + '</span></td>' +
                     '<td><span class="w-badge" data-tone="' + statusTone(item.status) + '">' + escapeHtml(statusLabel(item.status)) + '</span></td>' +
                     '<td><div class="acq-actions">' +
+                    '<button type="button" class="acq-icon-btn" data-lead-mail="' + id + '" title="邮件" aria-label="邮件">' + icon('mail') + '</button>' +
+                    (convertible(item.status) ? '<button type="button" class="acq-icon-btn" data-lead-convert="' + id + '" title="转为客户" aria-label="转为客户">' + icon('convert') + '</button>' : '') +
                     '<button type="button" class="acq-icon-btn" data-lead-edit="' + id + '" title="编辑">' + icon('edit') + '</button>' +
                     '<button type="button" class="acq-icon-btn" data-tone="danger" data-lead-delete="' + id + '" title="删除">' + icon('trash') + '</button>' +
                     '</div></td></tr>';
@@ -483,6 +571,7 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
             source_url: value('lead-source-url'),
             source_title: value('lead-source-title'),
             source_platform: value('lead-source-platform'),
+            entry_channel: value('lead-entry-channel'),
             source_excerpt: value('lead-source-excerpt'),
             status: value('lead-status'),
             ai_score: value('lead-ai-score'),
@@ -514,6 +603,7 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
             'lead-source-url': item.source_url || '',
             'lead-source-title': item.source_title || '',
             'lead-source-platform': item.source_platform || 'web',
+            'lead-entry-channel': item.entry_channel || 'default',
             'lead-source-excerpt': item.source_excerpt || '',
             'lead-status': item.status || 'new',
             'lead-ai-score': item.ai_score || '',
@@ -589,6 +679,16 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
     byId('lead-new').addEventListener('click', function () { fill({}); });
     byId('lead-tbody').addEventListener('click', function (event) {
         if (event.target.closest('[data-lead-new]')) { fill({}); return; }
+        var mailButton = event.target.closest('[data-lead-mail]');
+        if (mailButton) {
+            openMailModal(parseInt(mailButton.getAttribute('data-lead-mail') || '0', 10));
+            return;
+        }
+        var convertButton = event.target.closest('[data-lead-convert]');
+        if (convertButton) {
+            convertLead(parseInt(convertButton.getAttribute('data-lead-convert') || '0', 10));
+            return;
+        }
         var edit = event.target.closest('[data-lead-edit]');
         if (edit) {
             var id = parseInt(edit.getAttribute('data-lead-edit') || '0', 10);
@@ -601,6 +701,73 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
         var removeButton = event.target.closest('[data-lead-delete]');
         if (removeButton) { remove(parseInt(removeButton.getAttribute('data-lead-delete') || '0', 10)); }
     });
+
+    function openMailModal(leadId) {
+        if (!leadMailUrl || !(leadId > 0)) { setText('lead-status', '邮件组件不可用'); return; }
+        var modal = byId('lead-mail-modal');
+        var body = byId('lead-mail-body');
+        if (!modal || !body) { return; }
+        body.innerHTML = '<p class="w-text" data-tone="muted" data-size="sm">加载中…</p>';
+        modal.hidden = false;
+        document.body.classList.add('acq-modal-open');
+        fetch(leadMailUrl + (leadMailUrl.indexOf('?') === -1 ? '?' : '&') + 'lead_id=' + encodeURIComponent(leadId), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        }).then(function (response) {
+            return response.text().then(function (text) { return { ok: response.ok, text: text }; });
+        }).then(function (result) {
+            if (!result.ok) { throw new Error('邮件弹窗加载失败'); }
+            body.innerHTML = result.text;
+            var scripts = body.querySelectorAll('script');
+            scripts.forEach(function (old) {
+                var script = document.createElement('script');
+                script.textContent = old.textContent;
+                body.appendChild(script);
+                old.remove();
+            });
+        }).catch(function (error) {
+            body.innerHTML = '<p class="w-text" data-tone="danger" data-size="sm">' + escapeHtml(errorText(error, '加载失败')) + '</p>';
+        });
+    }
+
+    function closeMailModal() {
+        var modal = byId('lead-mail-modal');
+        if (modal) { modal.hidden = true; }
+        var body = byId('lead-mail-body');
+        if (body) { body.innerHTML = ''; }
+        document.body.classList.remove('acq-modal-open');
+        load();
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-lead-mail-close]'), function (el) {
+        el.addEventListener('click', closeMailModal);
+    });
+
+    function convertLead(leadId) {
+        if (!leadConvertUrl || !(leadId > 0)) { setText('lead-status', '转化组件不可用'); return; }
+        var run = function () {
+            var separator = leadConvertUrl.indexOf('?') === -1 ? '?' : '&';
+            fetch(leadConvertUrl + separator + 'lead_id=' + encodeURIComponent(leadId), {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            }).then(function (response) {
+                return response.json().then(function (data) { return { ok: response.ok, data: data }; });
+            }).then(function (result) {
+                var data = result.data || {};
+                if (!result.ok || data.success === false) { throw new Error(data.message || '转化失败'); }
+                setText('lead-status', data.message || '已转为客户 #' + (data.customer_id || ''));
+                return load();
+            }).catch(function (error) { setText('lead-status', errorText(error, '转化失败')); });
+        };
+        if (window.Weline && Weline.UI && Weline.UI.dialog && Weline.UI.dialog.confirm) {
+            Weline.UI.dialog.confirm('确定把线索 #' + leadId + ' 转为客户？', { title: '转为客户', confirmLabel: '转为客户', cancelLabel: '取消', onConfirm: run });
+        } else if (window.confirm && window.confirm('确定把线索 #' + leadId + ' 转为客户？')) {
+            run();
+        }
+    }
+
+
     byId('lead-tbody').addEventListener('change', function (event) {
         var target = event.target;
         var id = target && target.getAttribute ? parseInt(target.getAttribute('data-lead-id') || '0', 10) : 0;
@@ -611,11 +778,12 @@ $selectedWebsiteId = isset($selectedWebsiteId) ? (int)$selectedWebsiteId : null;
     });
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape' && !byId('lead-drawer').hidden) { closeDrawer(); }
+        if (event.key === 'Escape' && !byId('lead-mail-modal').hidden) { closeMailModal(); }
     });
     byId('lead-save').addEventListener('click', save);
     byId('filter-apply').addEventListener('click', function () { state.page = 1; load(); });
     byId('filter-reset').addEventListener('click', function () {
-        ['filter-keyword', 'filter-website', 'filter-continent', 'filter-status', 'filter-source', 'filter-min-score'].forEach(function (id) { byId(id).value = ''; });
+        ['filter-keyword', 'filter-website', 'filter-continent', 'filter-status', 'filter-source', 'filter-entry', 'filter-min-score'].forEach(function (id) { byId(id).value = ''; });
         state.page = 1;
         load();
     });

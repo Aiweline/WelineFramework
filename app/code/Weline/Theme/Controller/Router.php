@@ -242,7 +242,9 @@ class Router implements RouterInterface
             /** @var \Weline\Theme\Service\LayoutResolveService $layoutResolve */
             $layoutResolve = ObjectManager::getInstance(\Weline\Theme\Service\LayoutResolveService::class);
             $resolved = $layoutResolve->resolveFromPath($normalizedPath);
-        } catch (\Throwable) {
+            file_put_contents(BP . 'tmp/theme-pollution/debug-router.log', date('c') . ' ' . $normalizedPath . ' ' . json_encode($resolved) . "\n", FILE_APPEND); // TMPDEBUG
+        } catch (\Throwable $tmpDebugE) {
+            file_put_contents(BP . 'tmp/theme-pollution/debug-router.log', date('c') . ' ' . $normalizedPath . ' EXC ' . $tmpDebugE::class . ': ' . $tmpDebugE->getMessage() . ' @' . $tmpDebugE->getFile() . ':' . $tmpDebugE->getLine() . "\n", FILE_APPEND); // TMPDEBUG
             return;
         }
         if (!(bool)($resolved['claimed'] ?? false)

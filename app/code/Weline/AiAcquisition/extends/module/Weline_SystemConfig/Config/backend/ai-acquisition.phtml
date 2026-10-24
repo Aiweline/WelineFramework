@@ -1,0 +1,145 @@
+<?php
+/**
+ * @meta.title {default="AI 获客",description="AI 自动回复频控、外发邮箱账户、模型与提示词模板"}
+ * @meta.description {default="控制 AI 自动回复是否发送、跟进节奏、每日上限、外发账户与各线索类型的提示词模板。未配置时使用内置默认值。"}
+ * @config.area {backend}
+ * @config.sort {80}
+ * @config.acl {Weline_AiAcquisition::config}
+ */
+?>
+
+<w:config:group
+    code="ai_acquisition_auto_reply"
+    label="AI 自动回复"
+    description="AI 自动回复的开关与频控。关闭开关即停发所有 AI 邮件。"
+    sort="10"
+>
+    <w:config:field
+        key="ai_acquisition/auto_reply/enabled"
+        label="启用 AI 自动回复"
+        description="关闭后 AI 不再自动发送任何邮件；人工发送不受影响。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website"
+    />
+    <w:config:field
+        key="ai_acquisition/auto_reply/cooldown_days"
+        label="跟进冷却天数"
+        description="同一线索最近一次我方发出后，隔多少天才允许再次自动跟进。"
+        type="number"
+        value-type="int"
+        default="7"
+        scope="global,website"
+        validation="min:0|max:365"
+    />
+    <w:config:field
+        key="ai_acquisition/auto_reply/daily_limit"
+        label="单账户每日自动外发上限"
+        description="每个发件账户当日 AI 自动外出的邮件数上限，防止超发。"
+        type="number"
+        value-type="int"
+        default="50"
+        scope="global,website"
+        validation="min:1|max:10000"
+    />
+    <w:config:field
+        key="ai_acquisition/auto_reply/max_rounds"
+        label="自动跟进最大轮数"
+        description="同一线索 AI 自动发出达到该轮数仍未成交时，停止自动跟进。"
+        type="number"
+        value-type="int"
+        default="3"
+        scope="global,website"
+        validation="min:1|max:50"
+    />
+</w:config:group>
+
+<w:config:group
+    code="ai_acquisition_outreach"
+    label="外发与模型"
+    description="AI 自动回复使用的发件邮箱账户与对话模型。"
+    sort="20"
+>
+    <w:config:field
+        key="ai_acquisition/outreach/mail_account_id"
+        label="外发邮箱账户 ID"
+        description="企业邮箱启账户 ID（企业邮箱模块的 account_id）。填 0 表示使用缺省账户（contact@changanhanfu.com 对应的启用账户）。"
+        type="number"
+        value-type="int"
+        default="0"
+        scope="global,website"
+        validation="min:0"
+    />
+    <w:config:field
+        key="ai_acquisition/model_code"
+        label="AI 模型代码"
+        description="与获客运行页同源的模型代码（如 gpt-4o-mini）。留空使用 AI 模块 chat 默认模型。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website"
+    />
+</w:config:group>
+
+<w:config:group
+    code="ai_acquisition_prompts"
+    label="提示词模板"
+    description="按线索类型选择提示词模板；变量：{company} {country} {type} {evidence} {site}。unknown 类型回落到默认模板。"
+    sort="30"
+>
+    <w:config:field
+        key="ai_acquisition/prompt/default"
+        label="默认提示词模板"
+        description="未命中任何线索类型时使用。变量：{company} {country} {type} {evidence} {site}。"
+        type="textarea"
+        value-type="string"
+        default="你是 {{company}} 的开发信写手。该公司位于 {country}，类型为 {type}。请根据来源证据「{evidence}」（来源页面：{site}）撰写一封简短、友好的英文开发信，突出我们可为对方提供的价值，并以一个问题结尾引导回复。不报价、不报 MOQ、不承诺交期。"
+        scope="global,website"
+    />
+    <w:config:field
+        key="ai_acquisition/prompt/retailer"
+        label="零售商提示词模板"
+        description="线索类型 retailer。变量：{company} {country} {type} {evidence} {site}。"
+        type="textarea"
+        value-type="string"
+        default="你是面向零售商 {{company}} 的开发信写手。该公司位于 {country}。请根据来源证据「{evidence}」（来源页面：{site}）撰写一封英文开发信，强调批发合作、稳定供货与零售终端的吸引力，以一个问题结尾引导回复。不报价、不报 MOQ、不承诺交期。"
+        scope="global,website"
+    />
+    <w:config:field
+        key="ai_acquisition/prompt/rental_studio"
+        label="租赁工作室提示词模板"
+        description="线索类型 rental_studio。变量：{company} {country} {type} {evidence} {site}。"
+        type="textarea"
+        value-type="string"
+        default="你是面向租赁工作室 {company} 的开发信写手。该公司位于 {country}。请根据来源证据「{evidence}」（来源页面：{site}）撰写一封英文开发信，强调汉服/礼服租赁场景的品类合作与长租供货，以一个问题结尾引导回复。不报价、不报 MOQ、不承诺交期。"
+        scope="global,website"
+    />
+    <w:config:field
+        key="ai_acquisition/prompt/supplier_factory"
+        label="供应商工厂提示词模板"
+        description="线索类型 supplier_factory。变量：{company} {country} {type} {evidence} {site}。"
+        type="textarea"
+        value-type="string"
+        default="你是面向供应商/工厂 {company} 的开发信写手。该公司位于 {country}。请根据来源证据「{evidence}」（来源页面：{site}）撰写一封英文开发信，强调 OEM/ODM 合作、品质与产能互补，以一个问题结尾引导回复。不报价、不报 MOQ、不承诺交期。"
+        scope="global,website"
+    />
+    <w:config:field
+        key="ai_acquisition/prompt/media_guide"
+        label="媒体/导购提示词模板"
+        description="线索类型 media_guide。变量：{company} {country} {type} {evidence} {site}。"
+        type="textarea"
+        value-type="string"
+        default="你是面向媒体/导购平台 {company} 的开发信写手。该公司位于 {country}。请根据来源证据「{evidence}」（来源页面：{site}）撰写一封英文开发信，提出内容合作、品牌曝光与联合推广的可能性，以一个问题结尾引导回复。不报价、不报 MOQ、不承诺交期。"
+        scope="global,website"
+    />
+    <w:config:field
+        key="ai_acquisition/prompt/directory"
+        label="目录/名录提示词模板"
+        description="线索类型 directory。变量：{company} {country} {type} {evidence} {site}。"
+        type="textarea"
+        value-type="string"
+        default="你是面向目录/名录站点 {company} 的开发信写手。该公司位于 {country}。请根据来源证据「{evidence}」（来源页面：{site}）撰写一封英文开发信，提出收录、列表合作或资源互换的可能性，以一个问题结尾引导回复。不报价、不报 MOQ、不承诺交期。"
+        scope="global,website"
+    />
+</w:config:group>

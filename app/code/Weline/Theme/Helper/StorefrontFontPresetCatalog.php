@@ -72,26 +72,20 @@ final class StorefrontFontPresetCatalog
     }
 
     /**
-     * Default classical pairing for ink / Hanfu storefront.
+     * Neutral default-theme stacks; design themes override the --font-family-* tokens.
      * Must stay aligned with view/theme/frontend/variables/_typography.css.
      *
      * @return array{base:string,display:string,ui:string,serif:string}
      */
     public static function defaultStacks(): array
     {
-        $byId = [];
-        foreach (self::presets() as $preset) {
-            $byId[$preset['id']] = $preset['stack'];
-        }
+        $base = '"Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif';
 
         return [
-            // 正文：宋体稳、好扫读
-            'base' => $byId['noto-serif-sc'],
-            // 标题/品牌：霞鹜文楷（默认古风主信号）
-            'display' => $byId['lxgw-wenkai'],
-            // 顶栏/按钮/筛选：略短宋体栈，避免楷书挤在密控件里
-            'ui' => '"Noto Serif SC", "Songti SC", "Noto Sans SC", "PingFang SC", serif',
-            'serif' => '"Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", "SimSun", Georgia, "Times New Roman", serif',
+            'base' => $base,
+            'display' => $base,
+            'ui' => $base,
+            'serif' => 'Georgia, "Times New Roman", serif',
         ];
     }
 
