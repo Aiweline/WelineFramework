@@ -106,6 +106,9 @@ final class Connector extends Query implements
     public function create(): static
     {
         if ($this->link !== null && $this->lease?->isActive()) {
+            if (!$this->lease->isOwnedByCurrentOwner()) {
+                throw new \RuntimeException('database_connector_owner_mismatch');
+            }
             return $this;
         }
         if ($this->link !== null || $this->lease !== null) {

@@ -21,6 +21,7 @@ use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\Exception\LinkException;
 use Weline\Framework\Database\Service\DriverRegistry;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\Runtime;
 
 class ConnectionFactory
 {
@@ -28,6 +29,8 @@ class ConnectionFactory
      * @var array<string, array{defaultConnector: ?ConnectorInterface, configProvider: ConfigProvider, connectors: array}> 静态存储连接工厂实例
      */
     private static array $instances = [];
+
+    private static ?\WeakMap $fiberConnectors = null;
 
     /**
      * 获取连接工厂实例的键名
@@ -154,6 +157,13 @@ class ConnectionFactory
 
     public function close(): void
     {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber !== null && self::$fiberConnectors !== null && isset(self::$fiberConnectors[$fiber][$this->instanceKey])) {
+            $bag = self::$fiberConnectors[$fiber];
+            $bag[$this->instanceKey]->close();
+            unset($bag[$this->instanceKey]);
+            self::$fiberConnectors[$fiber] = $bag;
+        }
         if (isset(self::$instances[$this->instanceKey])) {
             self::$instances[$this->instanceKey]['defaultConnector'] = null;
         }
@@ -170,7 +180,7 @@ class ConnectionFactory
      */
     public function getConnection(): ConnectorInterface
     {
-        return self::$instances[$this->instanceKey]['defaultConnector'];
+        return $this->getConnector();
     }
 
     /**
@@ -184,6 +194,23 @@ class ConnectionFactory
      */
     public function getConnector(): ConnectorInterface
     {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber !== null && Runtime::isPersistent()) {
+            self::$fiberConnectors ??= new \WeakMap();
+            $bag = self::$fiberConnectors[$fiber] ?? [];
+            if (isset($bag[$this->instanceKey])) {
+                return $bag[$this->instanceKey];
+            }
+            $adapter = $this->getConnectorAdapter();
+            if (null === $adapter) {
+                throw new LinkException(__('无法创建数据库连接适配器'));
+            }
+            $adapter->create();
+            $bag[$this->instanceKey] = $adapter;
+            self::$fiberConnectors[$fiber] = $bag;
+            return $adapter;
+        }
+
         $instance = &self::$instances[$this->instanceKey];
         
         // 确保 connectors 数组已初始化
@@ -227,10 +254,31 @@ class ConnectionFactory
      *
      * @return QueryInterface
      */
+    private function fiberConnectorForConfig(ConfigProvider $configProvider, string $cacheKey): ConnectorInterface
+    {
+        $fiber = \Fiber::getCurrent();
+        self::$fiberConnectors ??= new \WeakMap();
+        $bag = self::$fiberConnectors[$fiber] ?? [];
+        $key = $this->instanceKey . ':config:' . $cacheKey;
+        if (isset($bag[$key])) {
+            return $bag[$key];
+        }
+        $adapter = $this->getConnectorAdapter($configProvider);
+        if (null === $adapter) {
+            throw new LinkException(__('无法创建数据库连接适配器'));
+        }
+        $adapter->create();
+        $bag[$key] = $adapter;
+        self::$fiberConnectors[$fiber] = $bag;
+        return $adapter;
+    }
+
     public function query(string $sql): QueryInterface
     {
         $instance = &self::$instances[$this->instanceKey];
         $configProvider = $instance['configProvider'];
+        $fiberWls = \Fiber::getCurrent() !== null && Runtime::isPersistent();
+        $connector = $fiberWls ? null : ($instance['defaultConnector'] ?? null);
         
         # 非写操作，用均衡算法从从库中选择一个
         $write_flags = [
@@ -256,24 +304,32 @@ class ConnectionFactory
                 # FIXME 均衡算法（先随机选一个）
                 $slave_config = $slaves_configs[array_rand($slaves_configs)];
                 $config_key = md5($slave_config['host'] . $slave_config['port'] . $slave_config['database']);
-                if (!isset($instance['connectors'][$config_key])) {
-                    $instance['connectors'][$config_key] = $this->getConnectorAdapter($slave_config);
+                if ($fiberWls) {
+                    $connector = $this->fiberConnectorForConfig($slave_config, $config_key);
+                } else {
+                    if (!isset($instance['connectors'][$config_key])) {
+                        $instance['connectors'][$config_key] = $this->getConnectorAdapter($slave_config);
+                    }
+                    $connector = $instance['connectors'][$config_key];
+                    $instance['defaultConnector'] = $connector;
                 }
-                $instance['defaultConnector'] = $instance['connectors'][$config_key];
             } else {
-                $instance['defaultConnector'] = $this->getConnector();
+                $connector = $this->getConnector();
+                if (!$fiberWls) {
+                    $instance['defaultConnector'] = $connector;
+                }
             }
         }
-        if (is_null($instance['defaultConnector'])) {
-            $this->getConnector();
+        if (!$connector instanceof ConnectorInterface) {
+            $connector = $this->getConnector();
         }
 
-        return $instance['defaultConnector']->query($sql);
+        return $connector->query($sql);
     }
 
     public function getQuery(): QueryInterface
     {
-        return self::$instances[$this->instanceKey]['defaultConnector']->getQuery();
+        return $this->getConnector()->getQuery();
     }
 
 }

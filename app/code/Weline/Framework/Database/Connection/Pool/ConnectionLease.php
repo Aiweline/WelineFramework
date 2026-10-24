@@ -75,6 +75,11 @@ final class ConnectionLease
         return $this->ownerKey;
     }
 
+    public function isOwnedByCurrentOwner(): bool
+    {
+        return $this->ownerKey === ConnectionPool::currentOwnerKey();
+    }
+
     /** @internal Process-local logical checkout identity. */
     public function getLeaseToken(): int
     {

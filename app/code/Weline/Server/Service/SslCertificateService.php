@@ -12,8 +12,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
+use Weline\Database\Service\Release\SchemaDiffExecutor;
 use Weline\Framework\App\Env;
-use Weline\Framework\Database\Schema\SchemaMigrationExecutor;
 use Weline\Framework\Database\Schema\SchemaParser;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -1601,7 +1601,7 @@ class SslCertificateService
                 throw new \RuntimeException('Unable to build schema for ' . SslCertificate::class . ' during WLS SSL bootstrap.');
             }
 
-            ObjectManager::getInstance(SchemaMigrationExecutor::class)
+            ObjectManager::getInstance(SchemaDiffExecutor::class)
                 ->createBootstrapTable($connector, $schema);
             self::$certificateStorageReady = true;
             w_log_info('[SslCertificateService] SSL certificate storage table created during WLS startup bootstrap: ' . $tableName);

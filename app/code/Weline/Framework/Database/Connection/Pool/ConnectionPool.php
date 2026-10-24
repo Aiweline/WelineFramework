@@ -672,6 +672,11 @@ class ConnectionPool
         return 'process:' . (\getmypid() ?: 0);
     }
 
+    public static function currentOwnerKey(): string
+    {
+        return self::resolveCurrentOwnerKey();
+    }
+
     private static function ownerType(string $ownerKey): string
     {
         $separator = \strpos($ownerKey, ':');

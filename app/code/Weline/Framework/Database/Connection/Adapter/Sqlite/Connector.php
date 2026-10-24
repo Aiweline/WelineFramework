@@ -112,6 +112,9 @@ final class Connector extends Query implements ConnectorInterface, PhysicalTable
     public function create(): static
     {
         if ($this->link !== null && $this->lease?->isActive()) {
+            if (!$this->lease->isOwnedByCurrentOwner()) {
+                throw new \RuntimeException('database_connector_owner_mismatch');
+            }
             return $this;
         }
         if ($this->link !== null || $this->lease !== null) {
@@ -874,7 +877,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function quoteTable(string $table): string
     {
-        return $this->getDialect()->quoteTable($table);
+        return $this->getDialect()->quoteTable($this->formatTableName($table));
     }
 
     /** @inheritDoc */
@@ -887,7 +890,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function buildAlterAddColumnSql(string $table, array $col): string
     {
         $d = $this->getDialect();
-        $t = $d->quoteTable($table);
+        $t = $d->quoteTable($this->formatTableName($table));
         $def = $this->sqliteColumnDef($col);
         if (empty($col['primaryKey']) && empty($col['unique'])) {
             return "ALTER TABLE {$t} ADD COLUMN {$def}";
@@ -923,7 +926,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function buildAlterAddProjectedColumnSql(string $table, array $col): string
     {
         $d = $this->getDialect();
-        $t = $d->quoteTable($table);
+        $t = $d->quoteTable($this->formatTableName($table));
         return "ALTER TABLE {$t} ADD COLUMN " . $this->sqliteColumnDef($col);
     }
 
@@ -1027,7 +1030,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function buildAddIndexSql(string $table, array $idx): string
     {
         $d = $this->getDialect();
-        $t = $d->quoteTable($table);
+        $t = $d->quoteTable($this->formatTableName($table));
         $physicalTable = $this->exactSqliteTable($table);
         $logicalName = (string)($idx['name'] ?? '');
         $physicalName = Standar::getIndexName($physicalTable, $logicalName);
@@ -1107,7 +1110,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         // SQLite cannot ADD PRIMARY KEY to an existing table without rebuild.
         // Surface an explicit comment DDL so the executor can fail closed instead of
         // pretending the constraint exists.
-        $quotedTable = $this->getDialect()->quoteTable($table);
+        $quotedTable = $this->getDialect()->quoteTable($this->formatTableName($table));
         $quotedColumns = array_map(
             fn (string $column): string => $this->getDialect()->quoteIdentifier($column),
             $normalized
@@ -1720,6 +1723,15 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         return trim($formatted);
     }
 
+    private function applySqliteTablePrefix(string $table): string
+    {
+        $prefix = $this->configProvider->getPrefix();
+        if ($prefix === '' || $prefix === null || str_starts_with($table, $prefix)) {
+            return $table;
+        }
+        return $prefix . $table;
+    }
+
     private function exactSqliteTable(string $table): string
     {
         $table = self::processName(trim($table));
@@ -1727,6 +1739,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
             $parts = explode('.', $table);
             $table = trim((string)end($parts));
         }
+        $table = $this->applySqliteTablePrefix($table);
         $table = trim($table, "`\"[] ");
         if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $table) !== 1) {
             throw new \InvalidArgumentException('invalid SQLite exact physical table');

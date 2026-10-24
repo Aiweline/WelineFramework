@@ -573,7 +573,7 @@ abstract class AbstractModel extends DataObject
     public function newQuery(bool $really_new = true): QueryInterface
     {
         $query = TransactionContext::queryForModel($this->getConnection(), $this)
-            ?? $this->getConnection()->getConnector();
+            ?? clone $this->getConnection()->getConnector();
         $query->clearQuery();
         if ($really_new) {
             $query->table($this->getOriginTableName())->identity($this->_primary_key);

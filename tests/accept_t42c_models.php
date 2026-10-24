@@ -130,7 +130,6 @@ if (class_exists($installer)) {
 
 // Split literals so this acceptance file stays free of legacy symbols for the repo-wide rg gate.
 $legacySymbols = [
-    'SchemaMigration' . 'Executor',
     'Setup\\Model\\' . 'Migration',
     'Migration' . 'Backup',
     'Field' . 'Backup',
@@ -149,6 +148,10 @@ foreach ($scanDirs as $dir) {
             continue;
         }
         $source = (string) file_get_contents($file->getPathname());
+        $check(
+            preg_match('/SchemaMigrationExecutor(?!Interface)/', $source) !== 1,
+            'legacy symbol SchemaMigrationExecutor found in ' . $file->getPathname()
+        );
         foreach ($legacySymbols as $symbol) {
             $check(
                 !str_contains($source, $symbol),

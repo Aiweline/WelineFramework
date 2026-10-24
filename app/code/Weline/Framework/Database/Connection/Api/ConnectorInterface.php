@@ -170,6 +170,12 @@ interface ConnectorInterface
     public function getSqlDialect(): \Weline\Framework\Database\Compiler\Dialect\DialectInterface;
 
     /**
+     * Format a logical table name into the adapter's physical table name
+     * (prefix/schema handling belongs to the adapter).
+     */
+    public function formatTableName(string $logicalName): string;
+
+    /**
      * Build DDL for the adapter's current exact physical target. $table may be
      * qualified and/or quoted; implementations must not add a prefix or replace
      * its namespace. $col: name, type, length?, nullable, primaryKey,

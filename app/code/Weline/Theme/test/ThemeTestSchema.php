@@ -58,7 +58,7 @@ final class ThemeTestSchema
                     \Weline\Framework\Database\Schema\SchemaParser::class
                 );
                 $executor = \Weline\Framework\Manager\ObjectManager::getInstance(
-                    \Weline\Framework\Database\Schema\SchemaMigrationExecutor::class
+                    \Weline\Database\Service\Release\SchemaDiffExecutor::class
                 );
                 $schema = $parser->parse($class);
                 if ($schema !== null) {
