@@ -125,7 +125,16 @@ final class Connector extends Query implements
     public function create(): static
     {
         if ($this->link !== null && $this->lease?->isActive()) {
-            if (!$this->lease->isOwnedByCurrentOwner()) {
+            if (!$this->lease->isOwnedByCurrentOwner() && $this->lease->isOwnerFiberDead()) {
+                // The owning fiber terminated without releasing its lease. Recycle
+                // the stale lease and reconnect under the current owner.
+                try {
+                    ConnectionPool::releaseLease($this->lease);
+                } catch (\Throwable) {
+                    // Pool may have already finalized it.
+                }
+                $this->close();
+            } elseif (!$this->lease->isOwnedByCurrentOwner()) {
                 throw new \RuntimeException('database_connector_owner_mismatch');
             }
             // 🔧 修复：如果连接已存在，确保引用也被设置

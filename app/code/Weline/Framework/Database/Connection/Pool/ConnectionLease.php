@@ -26,7 +26,22 @@ final class ConnectionLease
         private readonly string $poolKey,
         private readonly string $ownerKey,
         private readonly int $leaseToken,
+        private readonly ?\Fiber $ownerFiber = null,
     ) {
+    }
+
+    /**
+     * True when the owning fiber has terminated without releasing the lease.
+     * A suspended-but-live fiber still owns the connection; only a dead one
+     * may be taken over.
+     */
+    public function isOwnerFiberDead(): bool
+    {
+        if ($this->ownerFiber === null) {
+            return false;
+        }
+
+        return $this->ownerFiber->isTerminated();
     }
 
     public function getConnection(): PDO
@@ -77,7 +92,20 @@ final class ConnectionLease
 
     public function isOwnedByCurrentOwner(): bool
     {
-        return $this->ownerKey === ConnectionPool::currentOwnerKey();
+        $current = ConnectionPool::currentOwnerKey();
+        if ($this->ownerKey === $current) {
+            return true;
+        }
+        // A fiber-scoped lease held while the current context is the main process
+        // means the owning fiber has already finished (fibers cannot outlive the
+        // script that scheduled them). Treat it as stale so the process can take
+        // over instead of failing with database_connector_owner_mismatch.
+        if (str_starts_with($this->ownerKey, 'fiber:')
+            && str_starts_with($current, 'process:')) {
+            return true;
+        }
+
+        return false;
     }
 
     /** @internal Process-local logical checkout identity. */

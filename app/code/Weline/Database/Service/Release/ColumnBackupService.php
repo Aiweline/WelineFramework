@@ -356,7 +356,7 @@ final class ColumnBackupService
         }
 
         $sql = 'SELECT ' . implode(', ', array_map($connector->quoteIdentifier(...), $fields))
-            . ' FROM ' . $connector->quoteTable($table);
+            . ' FROM ' . $connector->quoteTable($connector->formatTableName($table));
         if ($ordered) {
             $sql .= ' ORDER BY ' . implode(', ', array_map($connector->quoteIdentifier(...), $primaryColumns));
         }
@@ -500,7 +500,7 @@ final class ColumnBackupService
         }
 
         $sql = 'SELECT ' . $connector->quoteIdentifier($column)
-            . ' FROM ' . $connector->quoteTable($table)
+            . ' FROM ' . $connector->quoteTable($connector->formatTableName($table))
             . ' WHERE ' . implode(' AND ', $conditions)
             . ' LIMIT 1';
         $statement = $connector->getWrappedConnection()->prepare($sql);
@@ -539,7 +539,7 @@ final class ColumnBackupService
             $params[] = $identity[$primaryColumn];
         }
 
-        $sql = 'UPDATE ' . $connector->quoteTable($table)
+        $sql = 'UPDATE ' . $connector->quoteTable($connector->formatTableName($table))
             . ' SET ' . $connector->quoteIdentifier($column) . ' = ?'
             . ' WHERE ' . implode(' AND ', $conditions);
         $statement = $connector->getWrappedConnection()->prepare($sql);
@@ -656,7 +656,19 @@ final class ColumnBackupService
     private function markObjectReady(int $objectId): void
     {
         $connector = $this->connectionFactory->getConnector();
-        $sql = 'UPDATE ' . $connector->quoteTable(BackupObject::schema_table)
+        $engine = strtolower((string) ($connector->getConfigProvider()->getDbType() ?? ''));
+        if ($engine === 'sqlite') {
+            // SQLite model table names embed the database file path; use the plain
+            // quoted constant (SQLite has no table prefix).
+            $tableSql = $connector->quoteTable(BackupObject::schema_table);
+        } else {
+            // PG/MySQL: the raw schema_table constant is unprefixed; the model's
+            // getTable() carries the engine prefix (e.g. "public"."w_...").
+            $objectModel = new BackupObject();
+            $objectModel->setConnection($this->connectionFactory);
+            $tableSql = $objectModel->getTable();
+        }
+        $sql = 'UPDATE ' . $tableSql
             . ' SET ' . $connector->quoteIdentifier(BackupObject::schema_fields_STATUS) . ' = ?'
             . ' WHERE ' . $connector->quoteIdentifier(BackupObject::schema_fields_ID) . ' = ?';
         $statement = $connector->getWrappedConnection()->prepare($sql);

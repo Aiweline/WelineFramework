@@ -107,7 +107,15 @@ final class Connector extends Query implements
     {
         if ($this->link !== null && $this->lease?->isActive()) {
             if (!$this->lease->isOwnedByCurrentOwner()) {
-                throw new \RuntimeException('database_connector_owner_mismatch');
+                if ($this->lease->isOwnerFiberDead()) {
+                    try {
+                        ConnectionPool::releaseLease($this->lease);
+                    } catch (\Throwable) {
+                    }
+                    $this->close();
+                } else {
+                    throw new \RuntimeException('database_connector_owner_mismatch');
+                }
             }
             return $this;
         }

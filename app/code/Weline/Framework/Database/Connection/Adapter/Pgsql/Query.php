@@ -2348,19 +2348,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     // 获取最后插入的 ID
                     $lastId = $this->getLink()->lastInsertId();
                     // 创建一个假的 PDOStatement，返回插入的 ID
-                    $this->PDOStatement = new class($lastId, $this->identity_field) extends \PDOStatement {
-                        private $lastId;
-                        private $identityField;
-                        public function __construct($lastId, $identityField) {
-                            $this->lastId = $lastId;
-                            $this->identityField = $identityField;
-                        }
-                        public function execute(?array $params = null): bool { return true; }
-                        public function fetchAll(int $mode = \PDO::FETCH_DEFAULT, ...$args): array { 
-                            return [[$this->identityField => $this->lastId]]; 
-                        }
-                        public function nextRowset(): bool { return false; }
-                    };
+                    $this->PDOStatement = new FakeInsertStatement($lastId, (string) $this->identity_field);
                     // 清空 SQL，避免父类再次执行
                     $this->sql = '';
                     $this->batch = false;
@@ -2383,19 +2371,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                                     );
                                 }
                                 $lastId = $this->getLink()->lastInsertId();
-                                $this->PDOStatement = new class($lastId, $this->identity_field) extends \PDOStatement {
-                                    private $lastId;
-                                    private $identityField;
-                                    public function __construct($lastId, $identityField) {
-                                        $this->lastId = $lastId;
-                                        $this->identityField = $identityField;
-                                    }
-                                    public function execute(?array $params = null): bool { return true; }
-                                    public function fetchAll(int $mode = \PDO::FETCH_DEFAULT, ...$args): array { 
-                                        return [[$this->identityField => $this->lastId]]; 
-                                    }
-                                    public function nextRowset(): bool { return false; }
-                            };
+                                $this->PDOStatement = new FakeInsertStatement($lastId, (string) $this->identity_field);
                             $this->sql = '';
                             $this->batch = false;
                         } else {
@@ -2447,19 +2423,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                                 );
                             }
                             $lastId = $this->getLink()->lastInsertId();
-                            $this->PDOStatement = new class($lastId, $this->identity_field) extends \PDOStatement {
-                                private $lastId;
-                                private $identityField;
-                                public function __construct($lastId, $identityField) {
-                                    $this->lastId = $lastId;
-                                    $this->identityField = $identityField;
-                                }
-                                public function execute(?array $params = null): bool { return true; }
-                                public function fetchAll(int $mode = \PDO::FETCH_DEFAULT, ...$args): array { 
-                                    return [[$this->identityField => $this->lastId]]; 
-                                }
-                                public function nextRowset(): bool { return false; }
-                            };
+                            $this->PDOStatement = new FakeInsertStatement($lastId, (string) $this->identity_field);
                             $this->sql = '';
                             $this->batch = false;
                         } else {
@@ -2484,19 +2448,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                                     );
                                 }
                                 $lastId = $this->getLink()->lastInsertId();
-                                $this->PDOStatement = new class($lastId, $this->identity_field) extends \PDOStatement {
-                                    private $lastId;
-                                    private $identityField;
-                                    public function __construct($lastId, $identityField) {
-                                        $this->lastId = $lastId;
-                                        $this->identityField = $identityField;
-                                    }
-                                    public function execute(?array $params = null): bool { return true; }
-                                    public function fetchAll(int $mode = \PDO::FETCH_DEFAULT, ...$args): array { 
-                                        return [[$this->identityField => $this->lastId]]; 
-                                    }
-                                    public function nextRowset(): bool { return false; }
-                                };
+                                $this->PDOStatement = new FakeInsertStatement($lastId, (string) $this->identity_field);
                                 $this->sql = '';
                                 $this->batch = false;
                             }
@@ -2516,19 +2468,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                                 );
                             }
                             $lastId = $this->getLink()->lastInsertId();
-                            $this->PDOStatement = new class($lastId, $this->identity_field) extends \PDOStatement {
-                                private $lastId;
-                                private $identityField;
-                                public function __construct($lastId, $identityField) {
-                                    $this->lastId = $lastId;
-                                    $this->identityField = $identityField;
-                                }
-                                public function execute(?array $params = null): bool { return true; }
-                                public function fetchAll(int $mode = \PDO::FETCH_DEFAULT, ...$args): array { 
-                                    return [[$this->identityField => $this->lastId]]; 
-                                }
-                                public function nextRowset(): bool { return false; }
-                            };
+                            $this->PDOStatement = new FakeInsertStatement($lastId, (string) $this->identity_field);
                             $this->sql = '';
                             $this->batch = false;
                         } else {
@@ -2563,26 +2503,10 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     if ($this->fetch_type == 'insert' && $this->identity_field) {
                         $lastId = $this->getLink()->lastInsertId();
                         // 创建一个假的 PDOStatement，返回插入的 ID，以便父类可以继续处理
-                        $this->PDOStatement = new class($lastId, $this->identity_field) extends \PDOStatement {
-                            private $lastId;
-                            private $identityField;
-                            public function __construct($lastId, $identityField) {
-                                $this->lastId = $lastId;
-                                $this->identityField = $identityField;
-                            }
-                            public function execute(?array $params = null): bool { return true; }
-                            public function fetchAll(int $mode = \PDO::FETCH_DEFAULT, ...$args): array { 
-                                return [[$this->identityField => $this->lastId]]; 
-                            }
-                            public function nextRowset(): bool { return false; }
-                        };
+                        $this->PDOStatement = new FakeInsertStatement($lastId, (string) $this->identity_field);
                     } else {
                         // 创建一个假的 PDOStatement，返回空结果
-                        $this->PDOStatement = new class extends \PDOStatement {
-                            public function execute(?array $params = null): bool { return true; }
-                            public function fetchAll(int $mode = \PDO::FETCH_DEFAULT, ...$args): array { return []; }
-                            public function nextRowset(): bool { return false; }
-                        };
+                        $this->PDOStatement = new FakeEmptyStatement();
                     }
                     $this->sql = ''; // 清空 SQL，避免父类再次执行
                     $this->batch = false;
@@ -2622,27 +2546,11 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                             }
                             if ($this->fetch_type == 'insert' && $this->identity_field) {
                                 $lastId = $this->getLink()->lastInsertId();
-                                $this->PDOStatement = new class($lastId, $this->identity_field) extends \PDOStatement {
-                                    private $lastId;
-                                    private $identityField;
-                                    public function __construct($lastId, $identityField) {
-                                        $this->lastId = $lastId;
-                                        $this->identityField = $identityField;
-                                    }
-                                    public function execute(?array $params = null): bool { return true; }
-                                    public function fetchAll(int $mode = \PDO::FETCH_DEFAULT, ...$args): array { 
-                                        return [[$this->identityField => $this->lastId]]; 
-                                    }
-                                    public function nextRowset(): bool { return false; }
-                                };
+                                $this->PDOStatement = new FakeInsertStatement($lastId, (string) $this->identity_field);
                                 $this->sql = '';
                                 $this->batch = false;
                             } else {
-                                $this->PDOStatement = new class extends \PDOStatement {
-                                    public function execute(?array $params = null): bool { return true; }
-                                    public function fetchAll(int $mode = \PDO::FETCH_DEFAULT, ...$args): array { return []; }
-                                    public function nextRowset(): bool { return false; }
-                                };
+                                $this->PDOStatement = new FakeEmptyStatement();
                                 $this->sql = '';
                             }
                         }
@@ -2668,27 +2576,11 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                         }
                         if ($this->fetch_type == 'insert' && $this->identity_field) {
                             $lastId = $this->getLink()->lastInsertId();
-                            $this->PDOStatement = new class($lastId, $this->identity_field) extends \PDOStatement {
-                                private $lastId;
-                                private $identityField;
-                                public function __construct($lastId, $identityField) {
-                                    $this->lastId = $lastId;
-                                    $this->identityField = $identityField;
-                                }
-                                public function execute(?array $params = null): bool { return true; }
-                                public function fetchAll(int $mode = \PDO::FETCH_DEFAULT, ...$args): array { 
-                                    return [[$this->identityField => $this->lastId]]; 
-                                }
-                                public function nextRowset(): bool { return false; }
-                            };
+                            $this->PDOStatement = new FakeInsertStatement($lastId, (string) $this->identity_field);
                             $this->sql = '';
                             $this->batch = false;
                         } else {
-                            $this->PDOStatement = new class extends \PDOStatement {
-                                public function execute(?array $params = null): bool { return true; }
-                                public function fetchAll(int $mode = \PDO::FETCH_DEFAULT, ...$args): array { return []; }
-                                public function nextRowset(): bool { return false; }
-                            };
+                            $this->PDOStatement = new FakeEmptyStatement();
                             $this->sql = '';
                         }
                     }
@@ -2793,19 +2685,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     );
                 }
                 $lastId = $this->getLink()->lastInsertId();
-                $this->PDOStatement = new class($lastId, $this->identity_field) extends \PDOStatement {
-                    private $lastId;
-                    private $identityField;
-                    public function __construct($lastId, $identityField) {
-                        $this->lastId = $lastId;
-                        $this->identityField = $identityField;
-                    }
-                    public function execute(?array $params = null): bool { return true; }
-                    public function fetchAll(int $mode = \PDO::FETCH_DEFAULT, ...$args): array { 
-                        return [[$this->identityField => $this->lastId]]; 
-                    }
-                    public function rowCount(): int { return 1; }
-                };
+                $this->PDOStatement = new FakeInsertStatement($lastId, (string) $this->identity_field);
                 $this->sql = '';
                 $this->batch = false;
             } else {

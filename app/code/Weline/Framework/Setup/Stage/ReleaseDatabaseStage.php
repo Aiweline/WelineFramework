@@ -75,6 +75,15 @@ final class ReleaseDatabaseStage extends AbstractStage
 
         $this->committed = true;
         $this->clearErrors();
+
+        // Release the connector lease so later stages (route registration fibers,
+        // etc.) can check out a fresh lease under their own owner key. Holding the
+        // lease across stages triggers database_connector_owner_mismatch.
+        try {
+            \Weline\Framework\Database\ConnectionFactory::getInstance()->getConnector()->close();
+        } catch (\Throwable) {
+            // Connection may already be closed by the coordinator; non-fatal.
+        }
     }
 
     public function rollback(): void

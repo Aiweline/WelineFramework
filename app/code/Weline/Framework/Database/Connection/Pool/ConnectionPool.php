@@ -545,7 +545,7 @@ class ConnectionPool
         }
 
         $leaseToken = ++self::$leaseSequence;
-        $lease = new ConnectionLease($connection, $poolKey, $ownerKey, $leaseToken);
+        $lease = new ConnectionLease($connection, $poolKey, $ownerKey, $leaseToken, \Fiber::getCurrent());
         self::$ownerConnections[$poolKey][$ownerKey]['lease_tokens'][$leaseToken] = true;
         self::$ownerConnections[$poolKey][$ownerKey]['ref_count'] = \count(
             self::$ownerConnections[$poolKey][$ownerKey]['lease_tokens']
