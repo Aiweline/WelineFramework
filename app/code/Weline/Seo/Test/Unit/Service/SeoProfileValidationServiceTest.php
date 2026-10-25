@@ -169,4 +169,26 @@ class SeoProfileValidationServiceTest extends TestCase
             $result['warnings']
         );
     }
+    public function testWarnsWhenProductMerchantListingFactsMissing(): void
+    {
+        $result = (new SeoProfileValidationService())->validate([
+            'page_type' => 'product',
+            'title' => 'Product',
+            'description' => 'Product.',
+            'canonical_url' => 'https://shop.test/product/a',
+            'robots' => 'index,follow',
+            'product' => [
+                'name' => 'Product',
+                'price' => '100',
+                'offers' => ['@type' => 'AggregateOffer', 'offers' => [
+                    ['@type' => 'Offer'],
+                    ['@type' => 'Offer'],
+                ]],
+            ],
+        ]);
+
+        self::assertContains('product pages should expose brand (or gtin/mpn) for merchant listing identifier requirements.', $result['warnings']);
+        self::assertContains('product pages should expose a global identifier (gtin or mpn) when brand alone is unavailable.', $result['warnings']);
+        self::assertSame(6, count(array_filter($result['warnings'], static fn (string $warning): bool => str_contains($warning, 'merchant listing') || str_contains($warning, 'global identifier'))));
+    }
 }

@@ -1,0 +1,44 @@
+<?php
+/**
+ * @hook-priority 100
+ * @hook-sort-order 50
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Service\SiteContactScopeMapper;
+
+$channel = (array)($this->getData('channel') ?? $this->getData('entity') ?? []);
+$channelId = array_key_exists('channel_id', $channel) ? (int)$channel['channel_id'] : (int)($this->getData('channel_id') ?? 0);
+$storeId = array_key_exists('store_id', $channel) ? (int)$channel['store_id'] : (int)($this->getData('store_id') ?? 0);
+$websiteId = array_key_exists('website_id', $channel) ? (int)$channel['website_id'] : (int)($this->getData('website_id') ?? 0);
+if ($channelId >= 0 && !array_key_exists('channel_id', $channel)) {
+    $channel['channel_id'] = $channelId;
+}
+if (!array_key_exists('store_id', $channel)) {
+    $channel['store_id'] = $storeId;
+}
+if (!array_key_exists('website_id', $channel) && $websiteId > 0) {
+    $channel['website_id'] = $websiteId;
+}
+$hookId = preg_replace('/[^\w\-]+/', '_', (string)($this->getData('id') ?? 'channel'));
+if (!is_string($hookId) || $hookId === '' || preg_match('/^[A-Za-z_]/D', $hookId) !== 1) {
+    $hookId = 'channel_' . (is_string($hookId) ? $hookId : '');
+}
+
+$scopeMeta = ['ok' => false];
+try {
+    if (array_key_exists('code', $channel) && trim((string)$channel['code']) !== '') {
+        /** @var SiteContactScopeMapper $mapper */
+        $mapper = ObjectManager::getInstance(SiteContactScopeMapper::class);
+        $scopeMeta = $mapper->forChannel($channel);
+    }
+} catch (\Throwable) {
+}
+
+echo $this->fetch('Weline_Seo::templates/backend/partials/merchant-info-section.phtml', [
+    'sectionId' => $hookId . '_seo_merchant',
+    'scopeMeta' => $scopeMeta,
+    'pendingHint' => (string)__('请先保存渠道，再配置商家信息。'),
+    'scopeHint' => (string)__('渠道范围未填写时继承店铺，再继承网站与 Global。'),
+    'storeMode' => (string)($channel['store_mode'] ?? $this->getData('store_mode') ?? 'normal'),
+]);

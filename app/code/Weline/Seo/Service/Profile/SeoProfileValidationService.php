@@ -43,6 +43,23 @@ class SeoProfileValidationService
             if ($this->firstString($profile, ['image']) === '' && $this->firstString($product, ['image']) === '') {
                 $warnings[] = 'product pages should expose a primary image.';
             }
+            $offerList = $this->offerNodes($product['offers'] ?? null);
+            if ($this->firstString($product, ['brand', 'brand_name', 'manufacturer']) === ''
+                && $this->firstString($profile, ['brand']) === '') {
+                $warnings[] = 'product pages should expose brand (or gtin/mpn) for merchant listing identifier requirements.';
+            }
+            if ($this->firstString($product, ['gtin', 'gtin13', 'gtin12', 'gtin8', 'gtin14', 'mpn']) === '') {
+                $warnings[] = 'product pages should expose a global identifier (gtin or mpn) when brand alone is unavailable.';
+            }
+            foreach ($offerList as $offer) {
+                if (!is_array($offer)) { continue; }
+                if (!isset($offer['hasMerchantReturnPolicy']) && !isset($offer['merchant_return_policy'])) {
+                    $warnings[] = 'product offers should expose hasMerchantReturnPolicy for merchant listing rich results.';
+                }
+                if (!isset($offer['shippingDetails']) && !isset($offer['shipping_details'])) {
+                    $warnings[] = 'product offers should expose shippingDetails for merchant listing rich results.';
+                }
+            }
         }
 
         if (in_array($pageType, ['article', 'blog_post', 'post', 'news', 'news_article'], true)) {
@@ -112,6 +129,20 @@ class SeoProfileValidationService
             'errors' => $errors,
             'warnings' => $warnings,
         ];
+    }
+
+    private function offerNodes(mixed $offers): array
+    {
+        if (!is_array($offers)) {
+            return [];
+        }
+        if (array_is_list($offers)) {
+            return array_values($offers);
+        }
+        if (isset($offers['offers']) && is_array($offers['offers']) && array_is_list($offers['offers'])) {
+            return array_values($offers['offers']);
+        }
+        return [$offers];
     }
 
     private function normalizePageType(string $pageType): string

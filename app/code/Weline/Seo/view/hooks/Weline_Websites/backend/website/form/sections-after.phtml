@@ -91,3 +91,22 @@ try {
         </div>
     </div>
 </div>
+
+<?php
+// 商家信息（商品结构化数据）：网站范围可覆盖 Global；店铺/渠道可各自覆盖。
+$merchantScopeMeta = ['ok' => false];
+try {
+    if (array_key_exists('code', $website) && trim((string)$website['code']) !== '') {
+        /** @var \Weline\Websites\Service\SiteContactScopeMapper $merchantScopeMapper */
+        $merchantScopeMapper = ObjectManager::getInstance(\Weline\Websites\Service\SiteContactScopeMapper::class);
+        $merchantScopeMeta = $merchantScopeMapper->forWebsite($website);
+    }
+} catch (\Throwable) {
+}
+
+echo $this->fetch('Weline_Seo::templates/backend/partials/merchant-info-section.phtml', [
+    'sectionId' => $hookId . '_seo_merchant',
+    'scopeMeta' => $merchantScopeMeta,
+    'pendingHint' => (string)__('请先保存网站，再配置商家信息。'),
+    'scopeHint' => (string)__('网站范围未填写时继承 Global；店铺/渠道可各自覆盖。'),
+]);

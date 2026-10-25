@@ -17,6 +17,12 @@ class HeadRenderer
     /** @var string|null Request id that already claimed the head slot in this worker. */
     private static ?string $claimedRequestId = null;
 
+    /** @var array<string, mixed>|null Request-local cache of derived merchant-listing facts. */
+    private ?array $commerceFacts = null;
+
+    /** @var array<string, mixed>|null Request-local cache of seo_merchant config. */
+    private ?array $merchantInfo = null;
+
     public function __construct(
         private readonly PageSeoContextResolver $resolver,
         private readonly ?SeoStructureRegistry $structureRegistry = null,
@@ -934,6 +940,25 @@ HTML;
         if (!empty($organization['address'])) {
             $graph[0]['address'] = $organization['address'];
         }
+        // 商家信息（seo_merchant）：补齐商家名称/邮箱/电话/地址，缺项不输出。
+        $merchant = $this->merchantInfo();
+        if ($merchant !== []) {
+            if (trim((string) ($graph[0]['name'] ?? '')) === '' && (string) ($merchant['name'] ?? '') !== '') {
+                $graph[0]['name'] = (string) $merchant['name'];
+            }
+            if (empty($graph[0]['email']) && (string) ($merchant['email'] ?? '') !== '') {
+                $graph[0]['email'] = (string) $merchant['email'];
+            }
+            if (empty($graph[0]['telephone']) && (string) ($merchant['phone'] ?? '') !== '') {
+                $graph[0]['telephone'] = (string) $merchant['phone'];
+            }
+            if (empty($graph[0]['address']) && (string) ($merchant['address'] ?? '') !== '') {
+                $graph[0]['address'] = [
+                    '@type' => 'PostalAddress',
+                    'streetAddress' => (string) $merchant['address'],
+                ];
+            }
+        }
         $availableLanguages = $this->availableLanguages($context);
         if ($availableLanguages !== []) {
             $graph[1]['availableLanguage'] = $availableLanguages;
@@ -1249,13 +1274,18 @@ HTML;
             || $variants !== []
             || $this->readNonEmpty($product, ['product_group_id', 'productGroupID']) !== null;
         $description = $this->cleanText((string) ($this->readNonEmpty($product, ['meta_description', 'short_description', 'description']) ?: ($context['description'] ?? '')));
+        if ($description === '') {
+            $description = $this->fallbackProductDescription($product, $context);
+        }
         $node = [
             '@type' => $isProductGroup ? 'ProductGroup' : 'Product',
             '@id' => $url . '#product',
-            'name' => (string) $name,
-            'description' => $description,
+            'name' => $this->truncateSchemaName((string) $name),
             'url' => $url,
         ];
+        if ($description !== '') {
+            $node['description'] = $description;
+        }
 
         $images = $this->productImages($context, $url);
         if ($images !== []) {
@@ -1267,6 +1297,12 @@ HTML;
             $node['brand'] = is_array($brand)
                 ? array_replace(['@type' => 'Brand'], array_filter($brand, static fn ($value): bool => $value !== null && $value !== ''))
                 : ['@type' => 'Brand', 'name' => (string) $brand];
+        } else {
+            // Google「全局标识符（品牌）」：商品无品牌时用商家信息品牌 / 站点名兜底。
+            $merchantBrand = $this->merchantBrand($context);
+            if ($merchantBrand !== '') {
+                $node['brand'] = ['@type' => 'Brand', 'name' => $merchantBrand];
+            }
         }
 
         foreach ([
@@ -1336,6 +1372,37 @@ HTML;
         }
 
         return $node;
+    }
+
+    private function truncateSchemaName(string $name, int $limit = 150): string
+    {
+        $name = trim($name);
+        if (mb_strlen($name) <= $limit) {
+            return $name;
+        }
+        $cut = mb_substr($name, 0, $limit);
+        $space = mb_strrpos($cut, ' ');
+        $short = $space === false ? $cut : mb_substr($cut, 0, $space);
+        return rtrim($short, " \t\n\r\0\x0B,;:·/|-.。，；：");
+    }
+
+    private function fallbackProductDescription(mixed $product, array $context): string
+    {
+        $scalarText = static function (mixed $value): string {
+            if (!is_scalar($value)) {
+                return '';
+            }
+            return trim((string) $value);
+        };
+        $brand = $scalarText($product['brand'] ?? '')
+            ?: $scalarText($product['brand_name'] ?? '');
+        $name = $scalarText($product['name'] ?? '')
+            ?: $scalarText($product['title'] ?? '')
+            ?: $scalarText($context['title'] ?? '');
+        $category = $scalarText($product['category'] ?? '')
+            ?: $scalarText($product['category_path'] ?? '');
+        $text = ($brand !== '' ? $brand . ' — ' : '') . $name . ($category !== '' ? ' · ' . $category : '');
+        return trim($this->cleanText($text));
     }
 
     /**
@@ -1602,8 +1669,80 @@ HTML;
         return array_keys($images);
     }
 
+    /**
+     * 商家信息（seo_merchant）；读取失败时返回空数组，head 渲染不受影响。
+     *
+     * @return array<string, mixed>
+     */
+    private function merchantInfo(): array
+    {
+        if ($this->merchantInfo !== null) {
+            return $this->merchantInfo;
+        }
+        $this->merchantInfo = [];
+        if (!class_exists(\Weline\Seo\Service\Merchant\MerchantInfoConfigResolver::class)) {
+            return $this->merchantInfo;
+        }
+        try {
+            /** @var \Weline\Seo\Service\Merchant\MerchantInfoConfigResolver $resolver */
+            $resolver = ObjectManager::getInstance(\Weline\Seo\Service\Merchant\MerchantInfoConfigResolver::class);
+            $info = $resolver->resolve();
+            if (is_array($info)) {
+                $this->merchantInfo = $info;
+            }
+        } catch (\Throwable) {
+            // 商家信息缺失不得中断 head 渲染。
+        }
+
+        return $this->merchantInfo;
+    }
+
+    /**
+     * 品牌兜底：商家信息品牌 → 站点名；都没有则返回空串（不输出 brand）。
+     *
+     * @param array<string, mixed> $context
+     */
+    private function merchantBrand(array $context): string
+    {
+        $merchant = $this->merchantInfo();
+        $brand = trim((string) ($merchant['brand'] ?? ''));
+        if ($brand !== '') {
+            return $brand;
+        }
+
+        return trim((string) ($context['site_name'] ?? ''));
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
+    private function commerceFacts(array $context): array
+    {
+        if ($this->commerceFacts !== null) {
+            return $this->commerceFacts;
+        }
+        $facts = ['merchant_return_policy' => null, 'shipping_details' => null];
+        if (class_exists(\Weline\Seo\Service\Head\ProductCommerceFactsResolver::class)) {
+            try {
+                $resolver = ObjectManager::getInstance(\Weline\Seo\Service\Head\ProductCommerceFactsResolver::class);
+                $resolved = $resolver->resolve(
+                    is_array($context['product'] ?? null) ? $context['product'] : [],
+                    $context
+                );
+                if (is_array($resolved)) {
+                    $facts = array_replace($facts, $resolved);
+                }
+            } catch (\Throwable) {
+                // Missing Shipping facts must never break head rendering.
+            }
+        }
+        return $this->commerceFacts = $facts;
+    }
+
     private function productOffers(mixed $product, string $url, string $orgId, array $context): array
     {
+        $commerce = $this->commerceFacts($context);
         $providedOffers = $this->read($product, ['offers']);
         if (is_array($providedOffers) && $providedOffers !== []) {
             return $this->normalizeOffers($providedOffers, $url, $orgId, $product, $context);
@@ -1621,7 +1760,8 @@ HTML;
                     (string) ($variant['url'] ?? $url),
                     $orgId,
                     $context,
-                    $product
+                    $product,
+                    $commerce
                 );
                 if ($built !== []) {
                     $sku = $this->readNonEmpty($variant, ['sku']);
@@ -1641,11 +1781,11 @@ HTML;
             return $this->aggregateOffer($normalized, $this->productCurrency($product, $context), $url);
         }
 
-        $offer = $this->buildOffer($product, $url, $orgId, $context);
+        $offer = $this->buildOffer($product, $url, $orgId, $context, null, $commerce);
         return $offer !== [] ? $offer : [];
     }
 
-    private function buildOffer(mixed $source, string $url, string $orgId, array $context, mixed $fallbackProduct = null): array
+    private function buildOffer(mixed $source, string $url, string $orgId, array $context, mixed $fallbackProduct = null, array $commerce = []): array
     {
         $price = $this->readNonEmpty($source, ['price', 'final_price', 'sale_price']);
         if ($price === null || is_array($price)) {
@@ -1694,6 +1834,13 @@ HTML;
             $offer['hasMerchantReturnPolicy'] = $returnPolicy;
         }
 
+        if (!isset($offer['shippingDetails']) && !empty($commerce['shipping_details']) && is_array($commerce['shipping_details'])) {
+            $offer['shippingDetails'] = $commerce['shipping_details'];
+        }
+        if (!isset($offer['hasMerchantReturnPolicy']) && !empty($commerce['merchant_return_policy']) && is_array($commerce['merchant_return_policy'])) {
+            $offer['hasMerchantReturnPolicy'] = $commerce['merchant_return_policy'];
+        }
+
         return $offer;
     }
 
@@ -1710,7 +1857,7 @@ HTML;
                 unset($offers['type']);
                 return $offers;
             }
-            return $this->buildOffer($offers, (string) ($offers['url'] ?? $url), $orgId, $context, $product);
+            return $this->buildOffer($offers, (string) ($offers['url'] ?? $url), $orgId, $context, $product, $this->commerceFacts($context));
         }
 
         $normalized = [];
@@ -1718,7 +1865,7 @@ HTML;
             if (!is_array($offer)) {
                 continue;
             }
-            $built = $this->buildOffer($offer, (string) ($offer['url'] ?? $url), $orgId, $context, $product);
+            $built = $this->buildOffer($offer, (string) ($offer['url'] ?? $url), $orgId, $context, $product, $this->commerceFacts($context));
             if ($built !== []) {
                 $normalized[] = $built;
             }
@@ -1798,7 +1945,7 @@ HTML;
                 '@type' => 'Product',
                 '@id' => $url . '#variant-' . rawurlencode((string) $variantId),
                 'isVariantOf' => ['@id' => $url . '#product'],
-                'name' => (string) ($name ?: ($context['title'] ?? '')),
+                'name' => $this->truncateSchemaName((string) ($name ?: ($context['title'] ?? ''))),
             ];
             foreach (['sku' => ['sku'], 'color' => ['color'], 'size' => ['size'], 'material' => ['material'], 'pattern' => ['pattern']] as $field => $keys) {
                 $value = $this->readNonEmpty($variant, $keys);
@@ -1814,7 +1961,7 @@ HTML;
             if ($image !== '') {
                 $node['image'] = [$image];
             }
-            $offer = $this->buildOffer($variant, (string) ($variant['url'] ?? $url), $orgId, $context, $context['product'] ?? null);
+            $offer = $this->buildOffer($variant, (string) ($variant['url'] ?? $url), $orgId, $context, $context['product'] ?? null, $this->commerceFacts($context));
             if ($offer !== []) {
                 $sku = $this->readNonEmpty($variant, ['sku']);
                 if ($sku !== null && !is_array($sku)) {

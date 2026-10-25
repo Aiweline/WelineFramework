@@ -1,0 +1,40 @@
+<?php
+/**
+ * @hook-priority 100
+ * @hook-sort-order 50
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Service\SiteContactScopeMapper;
+
+$store = (array)($this->getData('store') ?? $this->getData('entity') ?? []);
+$storeId = array_key_exists('store_id', $store) ? (int)$store['store_id'] : (int)($this->getData('store_id') ?? 0);
+$websiteId = array_key_exists('website_id', $store) ? (int)$store['website_id'] : (int)($this->getData('website_id') ?? 0);
+if ($storeId >= 0 && !array_key_exists('store_id', $store)) {
+    $store['store_id'] = $storeId;
+}
+if (!array_key_exists('website_id', $store) && $websiteId > 0) {
+    $store['website_id'] = $websiteId;
+}
+$hookId = preg_replace('/[^\w\-]+/', '_', (string)($this->getData('id') ?? 'store'));
+if (!is_string($hookId) || $hookId === '' || preg_match('/^[A-Za-z_]/D', $hookId) !== 1) {
+    $hookId = 'store_' . (is_string($hookId) ? $hookId : '');
+}
+
+$scopeMeta = ['ok' => false];
+try {
+    if (array_key_exists('code', $store) && trim((string)$store['code']) !== '') {
+        /** @var SiteContactScopeMapper $mapper */
+        $mapper = ObjectManager::getInstance(SiteContactScopeMapper::class);
+        $scopeMeta = $mapper->forStore($store);
+    }
+} catch (\Throwable) {
+}
+
+echo $this->fetch('Weline_Seo::templates/backend/partials/merchant-info-section.phtml', [
+    'sectionId' => $hookId . '_seo_merchant',
+    'scopeMeta' => $scopeMeta,
+    'pendingHint' => (string)__('请先保存店铺，再配置商家信息。'),
+    'scopeHint' => (string)__('店铺范围未填写时继承网站，再继承 Global。'),
+    'storeMode' => (string)($store['store_mode'] ?? $this->getData('store_mode') ?? 'normal'),
+]);

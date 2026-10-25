@@ -1,0 +1,67 @@
+<?php
+/**
+ * 商家信息（SystemConfig 分组 seo_merchant 嵌入；网站/店铺/渠道编辑页共用）。
+ *
+ * @var string $sectionId
+ * @var array{ok:bool,storage_scope:string,website_code:string,store_code:string,channel_code:string,scope_kind:string,label:string} $scopeMeta
+ * @var string $pendingHint
+ * @var string $scopeHint
+ * @var string $storeMode
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\SystemConfig\Service\ConfigEmbedRenderer;
+
+$sectionId = (string)($sectionId ?? 'seo_merchant');
+$scopeMeta = is_array($scopeMeta ?? null) ? $scopeMeta : ['ok' => false];
+$pendingHint = (string)($pendingHint ?? __('请先保存后再配置商家信息。'));
+$scopeHint = (string)($scopeHint ?? '');
+$storeMode = (string)($storeMode ?? 'normal');
+$h = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$storageScope = (string)($scopeMeta['storage_scope'] ?? '');
+$scopeLabel = (string)($scopeMeta['label'] ?? '');
+$canEmbed = !empty($scopeMeta['ok']) && $storageScope !== '';
+?>
+<div class="w-disclosure" id="<?= $h($sectionId) ?>" data-testid="seo-merchant-info-section" data-w-component="disclosure">
+    <div id="<?= $h($sectionId . '_heading') ?>">
+        <button class="w-disclosure__trigger" type="button" aria-expanded="true" aria-controls="<?= $h($sectionId . '_body') ?>" data-w-target="#<?= $h($sectionId . '_body') ?>" data-w-action="disclosure.toggle" data-w-disclosure-trigger>
+            <span><lang>商家信息</lang></span>
+            <?php if ($scopeLabel !== ''): ?>
+                <span class="w-badge" data-tone="neutral" data-size="sm" style="margin-inline-start:var(--weline-space-2);"><?= $h($scopeLabel) ?></span>
+            <?php endif; ?>
+        </button>
+    </div>
+    <div id="<?= $h($sectionId . '_body') ?>" class="w-disclosure__panel" aria-labelledby="<?= $h($sectionId . '_heading') ?>" data-w-disclosure-panel>
+        <div class="w-disclosure__body">
+            <?php if (!$canEmbed): ?>
+                <p class="w-text" data-tone="muted" style="--w-mb:0;"><?= $h($pendingHint) ?></p>
+            <?php else: ?>
+                <?php if ($scopeHint !== ''): ?>
+                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-3);"><?= $h($scopeHint) ?></p>
+                <?php endif; ?>
+                <div data-testid="seo-merchant-info-embed" data-storage-scope="<?= $h($storageScope) ?>">
+                    <?php
+                    /** @var ConfigEmbedRenderer $embedRenderer */
+                    $embedRenderer = ObjectManager::getInstance(ConfigEmbedRenderer::class);
+                    echo $embedRenderer->renderFromAttributes([
+                        'module' => 'Weline_Seo',
+                        'area' => 'backend',
+                        'group' => 'seo_merchant',
+                        'locale' => 'default',
+                        'target_scope' => $storageScope,
+                        'website_code' => (string)($scopeMeta['website_code'] ?? ''),
+                        'store_code' => (string)($scopeMeta['store_code'] ?? ''),
+                        'channel_code' => (string)($scopeMeta['channel_code'] ?? ''),
+                        'scope_kind' => (string)($scopeMeta['scope_kind'] ?? ''),
+                        'store_mode' => $storeMode,
+                    ]);
+                    ?>
+                </div>
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-3);--w-mb:0;">
+                    <lang>修改即时保存到当前范围；留空可继承上级（Global → Website → Store → Channel）。</lang>
+                    <span class="w-text" data-tone="muted">scope=<?= $h($storageScope) ?></span>
+                </p>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>

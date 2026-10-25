@@ -1,0 +1,129 @@
+<?php
+/**
+ * @meta.title {default="商家信息",description="商品富结果（Google 商家信息）使用的商家信息；Global 为默认，Website / Store / Channel 可覆盖（按继承回退）"}
+ * @meta.description {default="退货政策、配送政策、退货口径与商家联系方式。下级范围留空时自动继承上级；政策页 URL 用主题默认的 /policy/refund 与 /policy/shipping。"}
+ * @config.area {backend}
+ * @config.sort {60}
+ * @config.acl {Weline_Seo::seo_dashboard}
+ */
+?>
+
+<w:config:group
+    code="seo_merchant"
+    label="商家信息"
+    description="按 Global → Website → Store → Channel 继承；商品结构化数据（退货政策、配送、品牌、商家联系方式）自动装填。"
+    sort="10"
+>
+    <w:config:field
+        key="seo/merchant/name"
+        label="商家名称"
+        description="对外展示的商家/店铺名称；留空继承上级或使用网站名称。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:191"
+    />
+    <w:config:field
+        key="seo/merchant/brand"
+        label="品牌名称"
+        description="商品未填写品牌时使用，用于补齐 Google「全局标识符（品牌）」。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:191"
+    />
+    <w:config:field
+        key="seo/merchant/email"
+        label="客服邮箱"
+        description="结构化数据 OnlineStore.email；留空继承上级。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:191"
+    />
+    <w:config:field
+        key="seo/merchant/phone"
+        label="客服电话"
+        description="结构化数据 OnlineStore.telephone；留空继承上级。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:64"
+    />
+    <w:config:field
+        key="seo/merchant/address"
+        label="商家地址"
+        description="结构化数据 OnlineStore.address；留空继承上级。"
+        type="textarea"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:512"
+    />
+    <w:config:field
+        key="seo/merchant/return_policy_url"
+        label="退货政策页 URL"
+        description="默认主题政策页 /policy/refund；填绝对 URL 时以其为准。"
+        type="text"
+        value-type="string"
+        default="/policy/refund"
+        scope="global,website,store"
+        validation="max:255"
+    />
+    <w:config:field
+        key="seo/merchant/shipping_policy_url"
+        label="配送政策页 URL"
+        description="默认主题政策页 /policy/shipping。"
+        type="text"
+        value-type="string"
+        default="/policy/shipping"
+        scope="global,website,store"
+        validation="max:255"
+    />
+    <w:config:field
+        key="seo/merchant/return_days"
+        label="退货窗口（天）"
+        description="Google 富结果 merchantReturnDays；0 表示不提供无理由退货。"
+        type="number"
+        value-type="int"
+        default="30"
+        scope="global,website,store"
+        validation="min:0|max:365"
+    />
+    <w:config:field
+        key="seo/merchant/return_fees"
+        label="退货运费"
+        description="退货运费由谁承担。"
+        type="select"
+        value-type="string"
+        default="buyer_pays"
+        options="buyer_pays:买家承担退货运费,free_return:商家承担（免费退货）"
+        scope="global,website,store"
+        validation="in_options"
+    />
+    <w:config:field
+        key="seo/merchant/return_method"
+        label="退货方式"
+        description="退货寄回方式。"
+        type="select"
+        value-type="string"
+        default="mail"
+        options="mail:邮寄退回,in_store:到店退回"
+        scope="global,website,store"
+        validation="in_options"
+    />
+    <w:config:field
+        key="seo/merchant/country"
+        label="适用国家/地区"
+        description="两位国家代码（如 US、CN）；跨境通用填 WW。"
+        type="text"
+        value-type="string"
+        default="WW"
+        scope="global,website,store"
+        validation="max:2"
+    />
+</w:config:group>
