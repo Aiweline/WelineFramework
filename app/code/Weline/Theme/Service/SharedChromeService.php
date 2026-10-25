@@ -136,8 +136,8 @@ final class SharedChromeService
      * @var list<string>
      */
     public const PARTIALS_HEADER_SHELL_LAYOUT_CSS = [
-        'Weline_Theme::css/widgets/header-chrome-amazon.css',
-        'Weline_Theme::css/widgets/header-search-amazon.css',
+        'Weline_Theme::css/widgets/header-chrome.css',
+        'Weline_Theme::css/widgets/header-search.css',
         'Weline_Theme::css/partials/header-default.css',
         // Nested header chrome widgets — ride layout pack (avoid mid-body 1KB source packs).
         'Weline_Websites::css/widgets/scope-switcher.css',

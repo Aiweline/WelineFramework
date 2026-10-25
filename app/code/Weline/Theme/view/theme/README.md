@@ -60,7 +60,7 @@ theme/
 
 - `assets/`
   - `assets/css/theme.css`、`assets/js/theme.js` 放 area 级**架构**入口（布局/表面机制/全局组件与 Token 侧效应）。
-  - **禁止**在 `theme.css` 写 Amazon/品牌风格壳（`.amazon-*` / `.w-amz-*`、单页英雄皮肤等）——风格落 `view/statics/css/widgets/*`、design 独立 CSS 或布局 `<style>`。细则：`doc/theme-css-architecture-vs-style.md`。
+  - **禁止**在 `theme.css` 写厂商/品牌风格壳（`.{vendor}-*` / `.w-{vendor}-*`、单页英雄皮肤等）——风格落 `view/statics/css/widgets/*`、design 独立 CSS 或布局 `<style>`。细则：`doc/theme-css-architecture-vs-style.md`。
   - `head` partial 会加载这些基础资源，并在运行时拼接生成的布局 CSS。
 
 - `config/modules.json`
@@ -70,6 +70,7 @@ theme/
 
 ## 文档入口
 
+- **主题统一规范（全局入口 · 不含具体主题信息）**：[`theme-unified-spec.md`](../../doc/theme-unified-spec.md)
 - `frontend/README.md`：前端 area 总览
 - `frontend/layouts/README.md`：前端布局命名与清单
 - `frontend/partials/README.md`：前端片段命名与加载方式

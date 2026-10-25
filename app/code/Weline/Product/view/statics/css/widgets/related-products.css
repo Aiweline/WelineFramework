@@ -12,7 +12,7 @@
   padding: var(--weline-space-5) var(--weline-space-4) var(--weline-space-2);
   border-top: var(--border-width-thin) solid var(--wpr-border);
   color: var(--wpr-ink);
-  font-family: "Amazon Ember", Arial, sans-serif;
+  font-family: "Weline Ember", Arial, sans-serif;
 }
 
 .weline-product-related .wpr-header {

@@ -7,7 +7,7 @@ use Weline\Inquiry\Service\InquiryFormBootstrap;
 
 $formHtml = ObjectManager::getInstance(InquiryRendererInterface::class)->render(
     InquiryFormBootstrap::CODE_SUPPLIER_APPLICATION,
-    ['mode' => 'inline', 'skin' => 'amazon']
+    ['mode' => 'inline', 'skin' => 'supplier']
 );
 ?>
 <css>Weline_Inquiry::css/supplier-application-atelier.css</css>

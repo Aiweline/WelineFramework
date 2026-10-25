@@ -120,7 +120,7 @@ final class ThemeLayoutEntityBakeCoordinator
         $nodes = $this->themeConfiguredNodes($identity, (new ThemeLayoutEntityInputResolver())->placements($nodes));
         $path = $this->paths()->pageLayoutPhtml($identity, $context->layoutType, $context->layoutOption, $context->targetType, $context->targetId ?: null);
         $hasLocaleParams = array_filter($locales, static fn(array $values): bool => array_key_exists('layout', $values)) !== [];
-        // Design-owned layout origin (e.g. hanfu journal/faq) must bake even without editor intent
+        // Design-owned layout origin (e.g. design-theme journal/faq) must bake even without editor intent
         // or required-default injection nodes — Materializer compiles from design absolute path.
         $designOwned = ThemeLayoutDesignOverride::provides(
             $identity->themeId,

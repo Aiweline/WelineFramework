@@ -1,10 +1,10 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
 $showSidebar = !in_array($this->getData('showSidebar') ?? true, [false, 0, '0', 'false', 'off'], true);
-$bodyClass = 'amazon-payment-guide-layout__body' . ($showSidebar ? ' amazon-payment-guide-layout__body--with-sidebar' : '');
+$bodyClass = 'payment-guide-layout__body' . ($showSidebar ? ' payment-guide-layout__body--with-sidebar' : '');
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/amazon-payment-guide.css)?v=20260905-socialguide1">
+      href="@static(Weline_Theme::css/widgets/payment-guide.css)?v=20260905-socialguide1">
 <style>
 /* Social-login guide reuses payment_guide chrome; keep brand badge spacing consistent. */
 .social-login-guide-article__faq { display: grid; gap: var(--spacing-0_85); margin: 0; padding: 0; list-style: none; }

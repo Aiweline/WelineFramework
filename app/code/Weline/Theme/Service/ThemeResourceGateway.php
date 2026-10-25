@@ -131,7 +131,7 @@ final class ThemeResourceGateway
             . $relativePath;
 
         // Prefer theme identity from namespaced /static/{theme}/... URLs so multi-site
-        // CSS/JS requests do not fall back to a global active/default theme (e.g. hanfu)
+        // CSS/JS requests do not fall back to a global active/default theme (e.g. a design theme)
         // when the page was rendered under a Website-scoped websites_theme_application (daocharms).
         // If the URL carries an explicit namespace, never fail-open onto another theme
         // (that would publish the wrong site's bytes under the requested namespace).

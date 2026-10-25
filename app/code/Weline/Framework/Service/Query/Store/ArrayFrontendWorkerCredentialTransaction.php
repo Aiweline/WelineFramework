@@ -297,6 +297,42 @@ final class ArrayFrontendWorkerCredentialTransaction implements FrontendWorkerCr
         return $bytes;
     }
 
+    public function evictOldest(string $type, int $keep, int $now): int
+    {
+        $type = $this->validatedType($type);
+        if ($type === FrontendWorkerCredentialType::NONCE) {
+            // Nonces are per-scope shards with their own janitor; never evict blindly.
+            return 0;
+        }
+        $bucketKey = self::TYPE_BUCKETS[$type];
+        $bucket = $this->bucket($type);
+        $active = [];
+        foreach ($bucket as $key => $value) {
+            $payload = $this->activePayload($value, $now, $type);
+            if ($payload === null) {
+                continue;
+            }
+            $order = (int)($payload['created_at'] ?? 0);
+            if ($order < 1) {
+                $order = (int)($payload['expires_at'] ?? 0);
+            }
+            $active[] = ['key' => $key, 'order' => $order];
+        }
+        $total = \count($active);
+        if ($total <= $keep) {
+            return 0;
+        }
+        \usort($active, static fn(array $a, array $b): int => $a['order'] <=> $b['order']);
+        $evict = $total - $keep;
+        $evicted = 0;
+        foreach (\array_slice($active, 0, $evict) as $candidate) {
+            unset($bucket[$candidate['key']]);
+            $evicted++;
+        }
+        $this->store[$bucketKey] = $bucket;
+        return $evicted;
+    }
+
     public function deleteExpired(int $now, ?string $type = null, ?string $scope = null): void
     {
         $types = $type === null ? FrontendWorkerCredentialType::all() : [$this->validatedType($type)];

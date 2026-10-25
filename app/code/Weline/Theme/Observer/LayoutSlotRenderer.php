@@ -1605,12 +1605,12 @@ HTML;
         // Policy / terms shells: never fall through to HOME (that plans homepage
         // content widgets like newsletter-popup into data-slot-id=content).
         if (\preg_match(
-            '/amazon-policy__|data-layout=["\']policy-|data-testid=["\']storefront-(?:privacy|refund|cookie|shipping|disclaimer|accessibility|term)/i',
+            '/doc-policy__|data-layout=["\']policy-|data-testid=["\']storefront-(?:privacy|refund|cookie|shipping|disclaimer|accessibility|term)/i',
             $html,
         ) === 1) {
             return ThemeLayout::PAGE_TYPE_POLICY;
         }
-        if (\preg_match('/amazon-terms__|data-layout=["\']terms/i', $html) === 1) {
+        if (\preg_match('/doc-terms__|data-layout=["\']terms/i', $html) === 1) {
             return ThemeLayout::PAGE_TYPE_TERMS;
         }
         // Last resort: keep chrome inherit alive when detectPageType is empty.

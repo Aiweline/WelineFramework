@@ -200,7 +200,7 @@ private function assert_BlogCategoryTree_testFrontendFilterSupportsExpandableChi
 {
     $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/view/templates/frontend/partials/category-filter.phtml');
     self::assertStringContainsString('data-blog-filter-toggle', $source);
-    self::assertStringContainsString('amazon-blog-filter__children', $source);
+    self::assertStringContainsString('blog-filter__children', $source);
     self::assertStringContainsString("\$category['children']", $source);
 }
 

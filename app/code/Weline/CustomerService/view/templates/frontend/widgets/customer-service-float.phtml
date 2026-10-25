@@ -114,7 +114,7 @@ $customerServiceJsHref = (string)$this->fetchTagSource('statics', 'Weline_Custom
 $customerServiceJsHref = preg_replace('/[?&]v=[^&]*/', '', $customerServiceJsHref) ?: $customerServiceJsHref;
 $customerServiceJsHref = rtrim($customerServiceJsHref, '?&');
 ?>
-<div id="customer-service-widget" class="customer-service-widget customer-service-widget--amazon" data-editor-interactive
+<div id="customer-service-widget" class="customer-service-widget customer-service-widget--classic" data-editor-interactive
      data-weline-load="customerServiceFloat"
      data-cs-chat-url="@frontend-url{'customerservice/frontend/chat'}"
      data-cs-bind-url="@frontend-url{'customerservice/frontend/bind'}"

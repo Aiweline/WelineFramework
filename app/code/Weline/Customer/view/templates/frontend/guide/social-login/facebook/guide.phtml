@@ -6,14 +6,14 @@ $policyRoute = (string) ($entry['policy_route'] ?? '');
 <?php echo $this->fetch('Weline_Customer::templates/frontend/guide/social-login/partials/shell-open.phtml'); ?>
 <?php echo $this->fetch('Weline_Customer::templates/frontend/guide/social-login/partials/sidebar.phtml'); ?>
 
-<article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="social-login-guide-facebook" weline-code="customer.social_login.guide.facebook">
-    <header class="amazon-payment-guide-article__header">
-        <p class="amazon-payment-guide-article__badge">Facebook</p>
-        <h1 class="amazon-payment-guide-article__title"><lang>Facebook 登录指南</lang></h1>
-        <p class="amazon-payment-guide-article__lead"><lang>使用 Facebook 账户授权后，可一键登录本站，或把 Facebook 绑定到已有顾客账户。</lang></p>
+<article class="payment-guide-layout__main payment-guide-article" data-testid="social-login-guide-facebook" weline-code="customer.social_login.guide.facebook">
+    <header class="payment-guide-article__header">
+        <p class="payment-guide-article__badge">Facebook</p>
+        <h1 class="payment-guide-article__title"><lang>Facebook 登录指南</lang></h1>
+        <p class="payment-guide-article__lead"><lang>使用 Facebook 账户授权后，可一键登录本站，或把 Facebook 绑定到已有顾客账户。</lang></p>
     </header>
 
-    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.guide.facebook.prepare">
+    <section class="payment-guide-article__panel" weline-code="customer.social_login.guide.facebook.prepare">
         <h2><lang>开始前准备</lang></h2>
         <ul>
             <li><lang>准备可用的 Facebook 账户，并允许弹出授权窗口。</lang></li>
@@ -22,7 +22,7 @@ $policyRoute = (string) ($entry['policy_route'] ?? '');
         </ul>
     </section>
 
-    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.guide.facebook.permissions">
+    <section class="payment-guide-article__panel" weline-code="customer.social_login.guide.facebook.permissions">
         <h2><lang>商户须开通的 Meta 权限</lang></h2>
         <p><lang>本站 Facebook 登录固定请求以下 OAuth 权限（与后台配置指南、FacebookProvider 一致）：</lang></p>
         <ul>
@@ -32,7 +32,7 @@ $policyRoute = (string) ($entry['policy_route'] ?? '');
         <p><lang>开发模式下可用应用角色或测试用户验证流程。对普通顾客上线前，须在 Meta「应用审核 / 权限与功能」为上述权限申请 Advanced Access，完成「登录审核」，并将应用切换为正式模式。</lang></p>
     </section>
 
-    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.guide.facebook.steps">
+    <section class="payment-guide-article__panel" weline-code="customer.social_login.guide.facebook.steps">
         <h2><lang>登录步骤</lang></h2>
         <ol>
             <li><lang>在登录页「快捷登录」点击 Facebook Logo。</lang></li>
@@ -41,9 +41,9 @@ $policyRoute = (string) ($entry['policy_route'] ?? '');
         </ol>
     </section>
 
-    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.guide.facebook.faq">
+    <section class="payment-guide-article__panel" weline-code="customer.social_login.guide.facebook.faq">
         <h2><lang>常见问题</lang></h2>
-        <ul class="social-login-guide-article__faq amazon-payment-guide-article__faq">
+        <ul class="social-login-guide-article__faq payment-guide-article__faq">
             <li>
                 <strong><lang>看不到 Facebook 入口？</lang></strong>
                 <p><lang>请确认后台已激活 Facebook 前台入口，且部件未关闭 enable_facebook。</lang></p>
@@ -72,7 +72,7 @@ $policyRoute = (string) ($entry['policy_route'] ?? '');
     </section>
 
     <?php if ($policyRoute !== ''): ?>
-        <footer class="amazon-payment-guide-article__footer">
+        <footer class="payment-guide-article__footer">
             <a href="@url{$policyRoute}"><lang>查看 Facebook 登录政策</lang></a>
         </footer>
     <?php endif; ?>

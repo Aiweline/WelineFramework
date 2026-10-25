@@ -1037,7 +1037,7 @@ final class ThemeUpdateBatchService
         }
     }
 
-    /** 是否为设计命名空间（app/design 下的主题目录，如 hanfu）。 */
+    /** 是否为设计命名空间（app/design 下的主题目录，如 {theme}）。 */
     private function isDesignNamespace(string $name): bool
     {        $designRoot = rtrim((string)\Weline\Framework\App\Env::path_THEME_DESIGN_DIR, '/\\');
         if ($designRoot === '' || !is_dir($designRoot)) {

@@ -737,7 +737,7 @@
             function isOwnHeaderNavMode() {
                 // Design themes that inherit the Amazon shell then CLEAR default left
                 // overflow must set data-header-nav-mode="own" on .weline-header.
-                // Theme must not hardcode brand classes (e.g. .hanfu-slim-nav).
+                // Theme must not hardcode design-theme classes (e.g. .{brand}-slim-nav).
                 const header = document.querySelector('.weline-header');
                 return !!(header && header.getAttribute('data-header-nav-mode') === 'own');
             }

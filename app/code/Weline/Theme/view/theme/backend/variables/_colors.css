@@ -238,7 +238,7 @@
     --color-info-ink-2: #1e40af;
     --color-info-soft-3: #93c5fd;
     --color-slate-glow: rgba(148, 163, 184, 0.35);
-    --color-bg-amazon: #131921;
+    --color-bg-chrome: #131921;
     --color-overlay-50: rgba(0, 0, 0, 0.5);
 
     /* ========== 提取色叶子（须挂 color panel；禁止丢进 auto-literals） ========== */

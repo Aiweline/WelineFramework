@@ -2,6 +2,8 @@
 
 > **写任何 `.phtml` / 模板 / 布局 / 部件前**：先读 [AI硬规则索引.md](../../../Ai/doc/AI硬规则索引.md) 与 [Taglib 场景映射表.md](../../../Taglib/doc/场景映射表.md)。
 >
+> **统一入口（先读）**：[主题统一规范](../theme-unified-spec.md) — 默认主题=机制、设计主题=品牌、同 key 文件覆盖契约、品牌内容迁出流程、验收清单；本指南只展开操作细节。
+>
 > **先判 `work_mode`（硬）**：维护默认主题 / 新开 design / Theme PHP 运行时是三件事。工程团队主题席须先声明 `work_mode∈{default_theme,design_theme,theme_module_runtime}` 再落文件——完整双模式手册见 [主题开发.md](../../../../../../dev/ai-command/ai/主题开发.md)；新建 design 操作摘要见 [theme-inheritance「新建设计主题」](../theme-inheritance-and-file-conventions.md#新建设计主题操作摘要)。
 >
 > **`design_theme` 继承硬禁（`theme_design_must_inherit_not_mutate_source_widgets`）**：已有 `app/design/{Vendor}/{theme}` 时，改外观**只能**在 design 树继承覆盖；**禁止**直接改上游 `app/code` 主题源。若仅靠 design 继承做不到 → **停手询问用户**（框架/默认层缺口），禁止静默改上游解围。

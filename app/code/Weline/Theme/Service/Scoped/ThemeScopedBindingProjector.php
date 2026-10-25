@@ -17,7 +17,7 @@ use Weline\Websites\Api\Theme\ThemeApplicationInterface;
  *
  * load()/parent fallback MUST resolve via ThemeApplication scope chain (then module
  * Default). Never use process-active theme id — that leaks another website's theme
- * (e.g. default/hanfu) into DaoCharms 「恢复继承」.
+ * (e.g. default/design theme) into DaoCharms 「恢复继承」.
  */
 final class ThemeScopedBindingProjector
 {

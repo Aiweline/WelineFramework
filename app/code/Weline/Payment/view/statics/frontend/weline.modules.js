@@ -32,7 +32,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     paypalCardFields: {
         paths: [
-            "Weline_Payment::js/paypal-card-fields.js?v=20261023-cardfields1"
+            "Weline_Payment::js/paypal-card-fields.js?v=20261025-classic1"
         ],
         globalVar: "WelineModules",
         load: "eager",

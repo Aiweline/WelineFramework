@@ -271,7 +271,7 @@ private function assert_AccountChallengeWidget_testChallengeOwnedByCustomerLayou
     $formSource = (string) \file_get_contents($challengeForm);
     self::assertMatchesRegularExpression('/data-w-component\s*=\s*["\']account-challenge["\']/', $formSource);
     self::assertStringContainsString('data-w-challenge-form', $formSource);
-    self::assertStringContainsString('w-auth-login--amazon', $formSource);
+    self::assertStringContainsString('w-auth-login--classic', $formSource);
     self::assertStringNotContainsString('linear-gradient(135deg, var(--color-primary)', $formSource);
     self::assertStringNotContainsString('AccountApi.completeChallenge', $formSource);
     self::assertStringContainsString('data-w-challenge-idle-label', $formSource);
@@ -302,9 +302,9 @@ private function assert_AccountChallengeWidget_testChallengeOwnedByCustomerLayou
     self::assertStringContainsString("credentials: 'same-origin'", $challengeJs);
     self::assertStringNotContainsString('completeChallenge', $challengeJs);
     $loginCss = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/Theme/view/statics/ui/pages/weline-customer-account-login.css');
-    self::assertStringContainsString('.w-auth-login--amazon .w-auth-login__submit [data-w-challenge-idle-label]', $loginCss);
-    self::assertStringContainsString('.w-auth-login--amazon .w-auth-login__submit [data-w-challenge-busy-label]', $loginCss);
-    self::assertMatchesRegularExpression('/\.w-auth-login--amazon \.w-auth-login__submit\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;/s', $loginCss);
+    self::assertStringContainsString('.w-auth-login--classic .w-auth-login__submit [data-w-challenge-idle-label]', $loginCss);
+    self::assertStringContainsString('.w-auth-login--classic .w-auth-login__submit [data-w-challenge-busy-label]', $loginCss);
+    self::assertMatchesRegularExpression('/\.w-auth-login--classic \.w-auth-login__submit\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;/s', $loginCss);
     $welineUi = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/Theme/view/statics/ui/weline-ui.js');
     self::assertMatchesRegularExpression("/\\['account-challenge',\\s*'\\.\\/pages\\/weline-customer-account-challenge\\.js/", $welineUi);
     self::assertMatchesRegularExpression("/\\['account-challenge',\\s*'\\.\\/pages\\/weline-customer-account-login\\.css/", $welineUi);
@@ -517,7 +517,7 @@ private function assert_AccountRegisterWidget_testRegisterOwnedByCustomerLayout(
     self::assertFileExists($registerLayout);
     self::assertFileExists($widgetPhp);
     $formSource = (string) \file_get_contents($registerForm);
-    self::assertStringContainsString('w-auth-login--amazon', $formSource);
+    self::assertStringContainsString('w-auth-login--classic', $formSource);
     self::assertStringContainsString('data-w-component="account-register"', $formSource);
     self::assertStringContainsString('data-customer-register-form', $formSource);
     self::assertStringNotContainsString('auth-form__icon', $formSource);

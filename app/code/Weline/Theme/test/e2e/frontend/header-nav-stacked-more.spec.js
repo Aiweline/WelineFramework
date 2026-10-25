@@ -306,7 +306,7 @@ moduleDescribe(test, MODULE, 'header stacked nav more full-width', () => {
         path.join(ROOT, 'vendor/phpunit/phpunit/phpunit'),
         '--configuration',
         path.join(ROOT, 'tests/phpunit/config.xml'),
-        path.join(ROOT, 'app/code/Weline/Theme/test/Unit/ThemeHeaderMobileAmazonContractTest.php'),
+        path.join(ROOT, 'app/code/Weline/Theme/test/Unit/ThemeHeaderMobileCommerceContractTest.php'),
       ],
       { cwd: ROOT, encoding: 'utf8' }
     );

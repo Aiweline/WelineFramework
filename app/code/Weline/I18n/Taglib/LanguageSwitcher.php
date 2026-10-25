@@ -444,6 +444,7 @@ class LanguageSwitcher implements TaglibInterface
                         . ' data-i18n-panel-retry-text="' . htmlspecialchars($labelRetry, ENT_QUOTES, 'UTF-8') . '"'
                     : '')
                 . ' data-website-id="' . (int)$websiteId . '"'
+                . ($lazyPanel ? ' data-i18n-catalog-url="/i18n/frontend/switcher/catalog"' : '')
                 . ($showLanguageRequest ? ' data-language-request="1"' : '')
                 . ' data-website-mount="' . $safeWebsiteMount . '">';
             $html[] = '    <button type="button" id="' . $safeToggleId . '"'

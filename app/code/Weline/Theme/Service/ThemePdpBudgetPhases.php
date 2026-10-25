@@ -101,7 +101,7 @@ final class ThemePdpBudgetPhases
 
     /**
      * Stamp data-pdp-budget-phase onto known PDP section classes when design themes
-     * omit the attribute (hanfu/daocharms overrides). Does not change chrome structure.
+     * omit the attribute (design-theme overrides). Does not change chrome structure.
      */
     public static function stampSectionAttributes(string $html): string
     {

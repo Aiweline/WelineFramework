@@ -229,7 +229,7 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
     }
 
     /**
-     * 主题 code：WelineTheme.path 的最后一段（如 app/design/Weline/hanfu → hanfu）。
+     * 主题 code：WelineTheme.path 的最后一段（如 app/design/{Vendor}/{theme} → {theme}）。
      * 不是 name，也不是 id。
      */
     public function themeCodeFor(int $themeId): string

@@ -25,7 +25,7 @@ ob_start();
 $mailRegisterPanelHtml = (string)ob_get_clean();
 $showRegisterTabs = trim(strip_tags(preg_replace('/<!--.*?-->/s', '', $mailRegisterPanelHtml) ?? '')) !== '';
 ?>
-<section class="w-card w-auth-login w-auth-login--amazon w-auth-login--register" data-w-component="account-register"
+<section class="w-card w-auth-login w-auth-login--classic w-auth-login--register" data-w-component="account-register"
          data-weline-load="api,account"
          weline-code="customer.account.register">
     <header class="w-auth-login__header">

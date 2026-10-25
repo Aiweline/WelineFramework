@@ -12,7 +12,7 @@ final class WidgetAssetPositionTest extends TestCase
             ['type' => 'container', 'code' => 'footer'],
             ['_source' => 'Weline_Theme::js/widgets/widget-assets-runtime.js'], $path,
         );
-        self::assertStringContainsString('widget-hanfu-container-footer-default-0.js', $html);
+        self::assertStringContainsString('widget-container-footer-grid-default-0.js', $html);
         self::assertStringContainsString('widget-assets-runtime.js', $html);
     }
     public function testLayoutWinsEvenWhenSourceWasSeenFirst(): void

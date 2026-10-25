@@ -1186,10 +1186,12 @@ API基础URL,"API Base URL"
 模型配置,"Model configuration"
 确定要测试此模型的连接吗？,"Are you sure you want to test the connection of this model?"
 测试返回图片,"Test return image"
-授权一次,授权一次
-将以下一次性授权码粘贴到浏览器扩展中完成设备授权。仅在没有有效授权设备时生成。,将以下一次性授权码粘贴到浏览器扩展中完成设备授权。仅在没有有效授权设备时生成。
-复制授权码,复制授权码
-当前已有有效授权设备。,当前已有有效授权设备。
+浏览器扩展,浏览器扩展
+"首次使用：下载扩展 ZIP，解压后在 Chrome 扩展页开启「开发者模式」并加载已解压的扩展目录；之后回到本页点击「在线授权」即可（授权一次，签章自动续期）。","首次使用：下载扩展 ZIP，解压后在 Chrome 扩展页开启「开发者模式」并加载已解压的扩展目录；之后回到本页点击「在线授权」即可（授权一次，签章自动续期）。"
+"下载扩展 ZIP","下载扩展 ZIP"
+在线授权,在线授权
+扩展状态,扩展状态
+检测中…,检测中…
 授权设备,授权设备
 暂无授权设备,暂无授权设备
 开始授权,开始授权
@@ -1379,6 +1381,10 @@ AI用量审计恢复,"AI usage audit recovery"
 "%{1} 同步失败：%{2}","%{1} Synchronization failed: %{2}"
 "模型收集完成，共 %{1} 个模型","Model collection completed, total %{1} models"
 已跳过模型收集,"Model collection skipped"
+授权一次,授权一次
+将以下一次性授权码粘贴到浏览器扩展中完成设备授权。仅在没有有效授权设备时生成。,将以下一次性授权码粘贴到浏览器扩展中完成设备授权。仅在没有有效授权设备时生成。
+复制授权码,复制授权码
+当前已有有效授权设备。,当前已有有效授权设备。
 "AI Skills","AI Skills"
 AI翻译繁忙：本地模型正被其他任务占用，请稍后重试。,"AI translation is busy: The local model is currently occupied by other tasks. Please try again later."
 请稍候，正在拉取可测模型,"Please wait while available models are loaded"

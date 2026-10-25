@@ -161,7 +161,7 @@ final class StorefrontThemeCacheCoordinator implements ProcessSharedInterface
     }
 
     /**
-     * Static content widget sections (textile-heritage / video-carousel / image-gallery gallery).
+     * Static content widget sections (design-theme content / video-carousel / image-gallery gallery).
      * website scope; vary lang+currency because video dialogs embed priced product cards.
      * Config fingerprint lives in the logical key. No session HTML.
      */

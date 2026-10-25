@@ -1,5 +1,7 @@
 # Theme 继承与文件式约定
 
+> 统一入口：[主题统一规范](./theme-unified-spec.md)。本文只展开继承/文件落点的实现细节；示例中的主题名仅作历史说明，不代表默认主题应包含该主题内容。
+>
 > 适用范围：主题继承、`app/design` 覆盖、模块 `view/theme` 资源贡献、模块模板覆盖、layout/partial/component/widget 文件落点。开发前先调用 `resolve_task_context` 获取本任务所需约束。
 
 ## 实现来源
@@ -66,7 +68,7 @@
 
 这些是继承发现链与发布合同的**预期落点**，不是「同文件复制了多份所以要删」。Agent **禁止**把它们标成架构级多拷贝隐患并擅自删除一侧。改皮肤：在设计主题权威 area 源上编辑 → `theme:upgrade` 再同步发布面。
 
-正例：DaoCharms 的 `frontend/assets/css/daocharms-*.css` 与同主题下 `Weline/Theme/view/theme/frontend/assets/css/` 双写并存；背景 webp 只在 `{area}/assets/images/...`。  
+正例：某设计主题的 `frontend/assets/css/{brand}-*.css` 与同主题下 `Weline/Theme/view/theme/frontend/assets/css/` 双写并存；背景 webp 只在 `{area}/assets/images/...`。  
 反例：把设计主题皮肤误放在无主题 `register` 的 `app/code/.../view/templates/theme/...` 树里——那不是本条所说的继承多路径。
 
 ### 全局资产与 Token overlay
@@ -81,7 +83,7 @@
 
 > 完整逐步清单与否决例见 [主题开发.md Mode B](../../../../../dev/ai-command/ai/主题开发.md)。开工前须声明 `work_mode=design_theme`。
 
-1. **register.php**（样例 `app/design/Weline/hanfu/register.php`）：
+1. **register.php**（样例 `app/design/{Vendor}/{theme}/register.php`）：
 
 ```php
 Register::register(
@@ -105,7 +107,7 @@ Register::register(
 
 5. **高压线**：禁止同 key 覆盖 `theme.css` / `theme.js`；模块模板走 `Weline_Module/templates/...`，禁止 `frontend/templates/`。
 
-对照样例（非第二权威）：[hanfu 主题继承研究](../../../../../app/design/Weline/hanfu/doc/开发/主题继承研究.md)。
+对照样例（非第二权威）：各设计主题自己的 `doc/` 目录；默认主题不得复制这些样例内容。
 
 ## 普通模板覆盖规则
 

@@ -1672,7 +1672,7 @@ table.table tbody tr:hover {
     --w-surface-fg: var(--weline-theme-text-on-dark);
     --w-surface-fg-muted: var(--weline-theme-text-on-dark-muted);
     --w-surface-fg-subtle: var(--weline-theme-text-on-dark-muted);
-    --w-surface-bg: var(--color-bg-amazon, var(--weline-theme-bg-dark, var(--color-bg-dark-secondary)));
+    --w-surface-bg: var(--color-bg-chrome, var(--weline-theme-bg-dark, var(--color-bg-dark-secondary)));
     color: var(--w-surface-fg);
 }
 
@@ -2910,8 +2910,8 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 /*
  * Inverse / on-dark storefront surfaces (WO-UI-CONTRAST-INVERSE) — architecture only.
  * theme.css owns the surface mechanism (`[data-surface=inverse]` / `.w-surface-inverse`).
- * Style shells (Amazon about/faq/policy heroes, shopper toast, chrome-amazon) live in
- * their own style CSS or layout <style>; do NOT register .amazon-* here.
+ * Style shells (Commerce about/faq/policy heroes, shopper toast, chrome-commerce) live in
+ * their own style CSS or layout <style>; do NOT register .commerce-* here.
  *
  * Dark heroes must set data-surface="inverse" (or .w-surface-inverse) and rebind
  * tokens with non-zero specificity + hard on-dark fallbacks — never chain through

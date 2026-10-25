@@ -173,17 +173,17 @@
     background: var(--paper-card);
 }
 
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon.weline-inquiry--inline .weline-inquiry__modal {
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier.weline-inquiry--inline .weline-inquiry__modal {
     display: block;
     position: relative;
     inset: auto;
     padding: 0;
     place-items: unset;
-}.w-inquiry-suppliers--atelier .weline-inquiry--amazon.weline-inquiry--inline .weline-inquiry__backdrop.weline-inquiry__backdrop, .w-inquiry-suppliers--atelier .weline-inquiry--amazon.weline-inquiry--inline .weline-inquiry__close.weline-inquiry__close{
+}.w-inquiry-suppliers--atelier .weline-inquiry--supplier.weline-inquiry--inline .weline-inquiry__backdrop.weline-inquiry__backdrop, .w-inquiry-suppliers--atelier .weline-inquiry--supplier.weline-inquiry--inline .weline-inquiry__close.weline-inquiry__close{
     display: none;
 }
 
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__dialog {
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__dialog {
     width: 100%;
     max-width: none;
     max-height: none;
@@ -195,13 +195,13 @@
     overflow: visible;
 }
 
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__body {
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__body {
     display: grid;
     gap: var(--spacing-0_85);
 }
 
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__body > h2,
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__title {
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__body > h2,
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__title {
     margin: 0;
     font-family: "Songti SC", "STSong", "Noto Serif SC", Georgia, serif;
     font-size: var(--font-size-3xl);
@@ -210,37 +210,37 @@
     color: var(--ink);
 }
 
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__body > p:not(.weline-inquiry__message),
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__description {
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__body > p:not(.weline-inquiry__message),
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__description {
     margin: 0;
     font-size: var(--weline-font-size-sm);
     line-height: 1.55;
     color: var(--muted);
 }
 
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__form {
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__form {
     display: grid;
     gap: var(--spacing-0_9);
     margin: var(--weline-space-1) 0 0;
 }
 
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field {
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__field {
     display: grid;
     gap: 0;
     margin: 0;
     --weline-theme-field-label-bg: var(--color-bg-primary);
 }
 
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field.w-field > .w-field__label,
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field--country .w-field__label {
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__field.w-field > .w-field__label,
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__field--country .w-field__label {
     /* Theme Outlined notch owns label placement; keep atelier ink only. */
     color: var(--ink-soft);
 }
 
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field textarea,
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field select,
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field--country .w-address__control {
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__field input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__field textarea,
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__field select,
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__field--country .w-address__control {
     box-sizing: border-box;
     width: 100%;
     min-height: var(--weline-control-height);
@@ -254,21 +254,21 @@
     font-size: var(--font-size-sm);
 }
 
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field textarea {
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__field textarea {
     min-height: 6.5rem;
     resize: vertical;
 }
 
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field input:focus,
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field textarea:focus,
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field select:focus,
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field--country .w-address__control:focus-within {
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__field input:focus,
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__field textarea:focus,
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__field select:focus,
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__field--country .w-address__control:focus-within {
     border-color: var(--gold);
     outline: none;
     box-shadow: var(--weline-shadow-md);
 }
 
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field--country .w-address__input {
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__field--country .w-address__input {
     min-height: var(--control-height-md);
     padding: var(--spacing-0_55) var(--spacing-0_7);
     border: 0;
@@ -276,8 +276,8 @@
     box-shadow: none;
 }
 
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__form > button[type="submit"],
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__submit {
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__form > button[type="submit"],
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__submit {
     box-sizing: border-box;
     width: 100%;
     min-height: var(--control-height-lg);
@@ -294,10 +294,10 @@
     transition: background 160ms ease, color 160ms ease;
 }
 
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__form > button[type="submit"]:hover:not(:disabled),
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__submit:hover:not(:disabled),
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__form > button[type="submit"]:focus-visible,
-.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__submit:focus-visible {
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__form > button[type="submit"]:hover:not(:disabled),
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__submit:hover:not(:disabled),
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__form > button[type="submit"]:focus-visible,
+.w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__submit:focus-visible {
     background: var(--gold);
     border-color: var(--gold);
     color: var(--ink);
@@ -334,8 +334,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__form > button[type="submit"],
-    .w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__submit {
+    .w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__form > button[type="submit"],
+    .w-inquiry-suppliers--atelier .weline-inquiry--supplier .weline-inquiry__submit {
         transition: none;
     }
 }

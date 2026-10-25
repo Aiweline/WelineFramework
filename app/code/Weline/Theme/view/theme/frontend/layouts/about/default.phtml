@@ -128,23 +128,23 @@ $milestones = [
             font-family: var(--font-family-base);
         }
 
-        .amazon-about {
+        .doc-about {
             width: 100%;
         }
 
-        .amazon-about__breadcrumb {
+        .doc-about__breadcrumb {
             border-bottom: 1px solid var(--color-border-default, #d8d2c6);
             background: var(--color-bg-secondary, #ede9e1);
         }
 
-        .amazon-about__inner {
+        .doc-about__inner {
             width: min(100%, var(--weline-layout-content-max-width));
             max-width: 100%;
             padding-inline: var(--weline-layout-content-padding-inline);
             margin: 0 auto;
         }
 
-        .amazon-about__hero {
+        .doc-about__hero {
             background:
                 radial-gradient(ellipse at top right, rgba(184, 74, 60, 0.22), transparent 48%),
                 linear-gradient(135deg, var(--color-bg-dark-secondary, #1a1c1f) 0%, var(--color-bg-dark, #1f2124) 58%, var(--color-bg-dark-tertiary, #2c3036) 100%);
@@ -159,7 +159,7 @@ $milestones = [
             color: var(--_inverse-text);
         }
 
-        .amazon-about__hero-inner {
+        .doc-about__hero-inner {
             box-sizing: border-box;
             width: min(100%, var(--weline-layout-content-max-width));
             max-width: 100%;
@@ -172,7 +172,7 @@ $milestones = [
             align-items: center;
         }
 
-        .amazon-about__eyebrow {
+        .doc-about__eyebrow {
             margin: 0 0 0.5rem;
             font-size: 0.85rem;
             font-weight: 700;
@@ -181,7 +181,7 @@ $milestones = [
             color: var(--color-primary-light, #d4786a);
         }
 
-        .amazon-about__hero h1 {
+        .doc-about__hero h1 {
             margin: 0;
             font-size: clamp(1.75rem, 4vw, 2.65rem);
             line-height: 1.15;
@@ -189,22 +189,22 @@ $milestones = [
             color: var(--_inverse-text, var(--color-text-on-dark, #f7f4ef));
         }
 
-        .amazon-about__hero-lead,
-        .amazon-about__hero-mission {
+        .doc-about__hero-lead,
+        .doc-about__hero-mission {
             margin: 0.85rem 0 0;
             max-width: 40rem;
             line-height: 1.65;
             color: var(--_inverse-muted, var(--color-text-on-dark-muted, #d4cfc5));
         }
 
-        .amazon-about__hero-actions {
+        .doc-about__hero-actions {
             margin-top: 1.35rem;
             display: flex;
             flex-wrap: wrap;
             gap: 0.75rem 1rem;
         }
 
-        .amazon-about__btn {
+        .doc-about__btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -218,34 +218,34 @@ $milestones = [
             color: inherit;
         }
 
-        .amazon-about__btn--primary {
+        .doc-about__btn--primary {
             border-color: var(--color-primary-border, #963b30);
             background: linear-gradient(180deg, #d4786a 0%, var(--color-primary, #b84a3c) 100%);
             box-shadow: none;
             color: var(--color-on-primary, #f7f4ef);
         }
 
-        .amazon-about__btn--primary:hover {
+        .doc-about__btn--primary:hover {
             background: linear-gradient(180deg, #c45d4f 0%, var(--color-primary-hover, #963b30) 100%);
             color: var(--color-on-primary, #f7f4ef);
             text-decoration: none;
         }
 
-        .amazon-about__hero a.amazon-about__btn--ghost,
-        .amazon-about__btn--ghost {
+        .doc-about__hero a.doc-about__btn--ghost,
+        .doc-about__btn--ghost {
             border-color: color-mix(in srgb, var(--_inverse-text, #f7f4ef) 55%, transparent);
             background: transparent;
             color: var(--_inverse-text, var(--color-text-on-dark, #f7f4ef));
         }
 
-        .amazon-about__hero a.amazon-about__btn--ghost:hover,
-        .amazon-about__btn--ghost:hover {
+        .doc-about__hero a.doc-about__btn--ghost:hover,
+        .doc-about__btn--ghost:hover {
             border-color: var(--color-primary-light, #d4786a);
             color: var(--color-primary-light, #d4786a);
             text-decoration: none;
         }
 
-        .amazon-about__hero-card {
+        .doc-about__hero-card {
             border: 1px solid rgba(247, 244, 239, 0.14);
             border-radius: 10px;
             background: rgba(28, 28, 28, 0.28);
@@ -253,25 +253,25 @@ $milestones = [
             backdrop-filter: blur(4px);
         }
 
-        .amazon-about__hero-card h2 {
+        .doc-about__hero-card h2 {
             margin: 0 0 0.65rem;
             font-size: 1.05rem;
             color: var(--_inverse-text, var(--color-text-on-dark, #f7f4ef));
         }
 
-        .amazon-about__hero-card p {
+        .doc-about__hero-card p {
             margin: 0;
             line-height: 1.6;
             color: var(--_inverse-muted, var(--color-text-on-dark-muted, #d4cfc5));
             font-size: 0.95rem;
         }
 
-        .amazon-about__stats {
+        .doc-about__stats {
             background: var(--color-bg-secondary, #ede9e1);
             border-bottom: 1px solid var(--color-border-default, #d8d2c6);
         }
 
-        .amazon-about__stats-grid {
+        .doc-about__stats-grid {
             width: min(100%, var(--weline-layout-content-max-width));
             max-width: 100%;
             margin: 0 auto;
@@ -282,57 +282,57 @@ $milestones = [
             gap: 0.75rem;
         }
 
-        .amazon-about__stat {
+        .doc-about__stat {
             text-align: center;
             padding: 0.65rem 0.5rem;
         }
 
-        .amazon-about__stat strong {
+        .doc-about__stat strong {
             display: block;
             font-size: clamp(1.2rem, 2.4vw, 1.55rem);
             color: var(--color-text-primary, #1c1c1c);
         }
 
-        .amazon-about__stat span {
+        .doc-about__stat span {
             display: block;
             margin-top: 0.25rem;
             color: var(--color-text-secondary, #4a4a48);
             font-size: 0.9rem;
         }
 
-        .amazon-about__section {
+        .doc-about__section {
             padding: clamp(2rem, 4vw, 3rem) 0;
         }
 
-        .amazon-about__section--muted {
+        .doc-about__section--muted {
             background: var(--color-bg-secondary, #ede9e1);
         }
 
-        .amazon-about__section-head {
+        .doc-about__section-head {
             margin-bottom: 1.25rem;
         }
 
-        .amazon-about__section-head h2 {
+        .doc-about__section-head h2 {
             margin: 0;
             font-size: clamp(1.35rem, 2.4vw, 1.75rem);
             color: var(--color-text-primary, #1c1c1c);
         }
 
-        .amazon-about__section-head p {
+        .doc-about__section-head p {
             margin: 0.55rem 0 0;
             max-width: 42rem;
             color: var(--color-text-secondary, #4a4a48);
             line-height: 1.65;
         }
 
-        .amazon-about__story-grid {
+        .doc-about__story-grid {
             display: grid;
             grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr);
             gap: 1.25rem;
             align-items: stretch;
         }
 
-        .amazon-about__panel {
+        .doc-about__panel {
             border: 1px solid var(--color-border-default, #d8d2c6);
             border-radius: 8px;
             background: var(--color-bg-primary, #fffefa);
@@ -340,28 +340,28 @@ $milestones = [
             padding: 1.25rem 1.35rem;
         }
 
-        .amazon-about__panel h3 {
+        .doc-about__panel h3 {
             margin: 0 0 0.65rem;
             font-size: 1.05rem;
         }
 
-        .amazon-about__panel p {
+        .doc-about__panel p {
             margin: 0;
             color: var(--color-text-secondary, #4a4a48);
             line-height: 1.65;
         }
 
-        .amazon-about__panel p + p {
+        .doc-about__panel p + p {
             margin-top: 0.75rem;
         }
 
-        .amazon-about__values {
+        .doc-about__values {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 0.85rem;
         }
 
-        .amazon-about__value {
+        .doc-about__value {
             border: 1px solid var(--color-border-default, #d8d2c6);
             border-radius: 8px;
             background: var(--color-bg-primary, #fffefa);
@@ -369,25 +369,25 @@ $milestones = [
             min-height: 100%;
         }
 
-        .amazon-about__value h3 {
+        .doc-about__value h3 {
             margin: 0 0 0.5rem;
             font-size: 1rem;
             color: var(--color-text-primary, #1c1c1c);
         }
 
-        .amazon-about__value p {
+        .doc-about__value p {
             margin: 0;
             color: var(--color-text-secondary, #4a4a48);
             line-height: 1.55;
             font-size: 0.93rem;
         }
 
-        .amazon-about__timeline {
+        .doc-about__timeline {
             display: grid;
             gap: 0.75rem;
         }
 
-        .amazon-about__milestone {
+        .doc-about__milestone {
             display: grid;
             grid-template-columns: 5.5rem minmax(0, 1fr);
             gap: 0.85rem;
@@ -398,18 +398,18 @@ $milestones = [
             padding: 0.95rem 1.1rem;
         }
 
-        .amazon-about__milestone strong {
+        .doc-about__milestone strong {
             color: var(--color-primary-text-emphasis, #7a3028);
             font-size: 1rem;
         }
 
-        .amazon-about__milestone p {
+        .doc-about__milestone p {
             margin: 0;
             color: var(--color-text-secondary, #4a4a48);
             line-height: 1.55;
         }
 
-        .amazon-about__cta {
+        .doc-about__cta {
             background: var(--color-bg-dark, #1f2124);
             --_inverse-text: var(--color-text-on-dark, #f7f4ef);
             --_inverse-muted: var(--color-text-on-dark-muted, #d4cfc5);
@@ -420,7 +420,7 @@ $milestones = [
             padding: clamp(1.75rem, 3.5vw, 2.5rem) 0;
         }
 
-        .amazon-about__cta-inner {
+        .doc-about__cta-inner {
             width: min(100%, var(--weline-layout-content-max-width));
             max-width: 100%;
             padding-inline: var(--weline-layout-content-padding-inline);
@@ -432,70 +432,70 @@ $milestones = [
             gap: 1rem 1.5rem;
         }
 
-        .amazon-about__cta h2 {
+        .doc-about__cta h2 {
             margin: 0;
             font-size: clamp(1.2rem, 2.2vw, 1.55rem);
             color: var(--_inverse-text, var(--color-text-on-dark, #f7f4ef));
         }
 
-        .amazon-about__cta p {
+        .doc-about__cta p {
             margin: 0.4rem 0 0;
             color: var(--_inverse-muted, var(--color-text-on-dark-muted, #d4cfc5));
             line-height: 1.55;
         }
 
-        .amazon-about__cta-actions {
+        .doc-about__cta-actions {
             display: flex;
             flex-wrap: wrap;
             gap: 0.75rem;
         }
 
-        .amazon-about__extras {
+        .doc-about__extras {
             margin-top: 1.25rem;
             display: grid;
             gap: 1rem;
         }
 
         @media (max-width: 960px) {
-            .amazon-about__hero-inner,
-            .amazon-about__story-grid {
+            .doc-about__hero-inner,
+            .doc-about__story-grid {
                 grid-template-columns: 1fr;
             }
 
-            .amazon-about__stats-grid,
-            .amazon-about__values {
+            .doc-about__stats-grid,
+            .doc-about__values {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
 
         @media (max-width: 560px) {
-            .amazon-about__stats-grid,
-            .amazon-about__values {
+            .doc-about__stats-grid,
+            .doc-about__values {
                 grid-template-columns: 1fr;
             }
 
-            .amazon-about__milestone {
+            .doc-about__milestone {
                 grid-template-columns: 1fr;
             }
 
-            .amazon-about__hero-actions,
-            .amazon-about__cta-actions {
+            .doc-about__hero-actions,
+            .doc-about__cta-actions {
                 width: 100%;
             }
 
-            .amazon-about__btn {
+            .doc-about__btn {
                 width: 100%;
             }
         }
     </style>
     <w:hook>seo::head</w:hook>
 </head>
-<body class="about-layout amazon-about-layout <?= $escape($meta['class'] ?? '') ?>">
+<body class="about-layout doc-about-layout <?= $escape($meta['class'] ?? '') ?>">
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::about::body-start</w:hook>
 
-    <div class="weline-page-wrapper amazon-about" data-testid="storefront-about-page">
+    <div class="weline-page-wrapper doc-about" data-testid="storefront-about-page">
         <if condition="meta.showHeader">
             <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
@@ -524,21 +524,21 @@ $milestones = [
         ?>
 
         <if condition="meta.showBreadcrumb">
-            <div class="amazon-about__breadcrumb">
+            <div class="doc-about__breadcrumb">
                 <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
                 <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
                 <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
             </div>
         </if>
 
-        <main class="amazon-about__main" id="main-content" data-layout="about">
+        <main class="doc-about__main" id="main-content" data-layout="about">
             <w:slot id="content"
                     name="内容区"
                     accept="layout-about-content,layout-default-content,content,banner,cta,trust,faq,team"
                     reject="header,footer,navigation,cart,checkout"
                     multiple="true"
                     position="content"
-                    class="amazon-about__content-root-slot">
+                    class="doc-about__content-root-slot">
 
                 <w:slot id="about-hero"
                         name="关于页主视觉"
@@ -546,31 +546,31 @@ $milestones = [
                         reject="header,footer,navigation,cart,checkout"
                         multiple="false"
                         position="content"
-                        class="amazon-about__hero-slot">
+                        class="doc-about__hero-slot">
                     <w:hook>
                         Weline_Theme::frontend::layouts::about::hero
                         <else/>
-                        <section class="amazon-about__hero" data-surface="inverse" aria-labelledby="about-layout-title" weline-code="theme.about.hero">
-                            <div class="amazon-about__hero-inner">
+                        <section class="doc-about__hero" data-surface="inverse" aria-labelledby="about-layout-title" weline-code="theme.about.hero">
+                            <div class="doc-about__hero-inner">
                                 <div>
-                                    <p class="amazon-about__eyebrow"><?= $escape($siteName) ?></p>
+                                    <p class="doc-about__eyebrow"><?= $escape($siteName) ?></p>
                                     <h1 id="about-layout-title"><?= $escape(
                                         ($title === '' || \Weline\Framework\View\Helper\EmbeddedPageTitle::isModulePlaceholder((string)$title))
                                             ? WidgetI18n::label('关于我们')
                                             : (string)$title
                                     ) ?></h1>
-                                    <p class="amazon-about__hero-lead"><?= $escape($subtitle) ?></p>
-                                    <p class="amazon-about__hero-mission"><?= $escape($mission) ?></p>
-                                    <div class="amazon-about__hero-actions">
-                                        <a class="amazon-about__btn amazon-about__btn--primary amazon-about__shop-link" href="@url{'products'}">
+                                    <p class="doc-about__hero-lead"><?= $escape($subtitle) ?></p>
+                                    <p class="doc-about__hero-mission"><?= $escape($mission) ?></p>
+                                    <div class="doc-about__hero-actions">
+                                        <a class="doc-about__btn doc-about__btn--primary doc-about__shop-link" href="@url{'products'}">
                                             <?= $escape(WidgetI18n::label('浏览商品')) ?>
                                         </a>
-                                        <a class="amazon-about__btn amazon-about__btn--ghost" href="@url{'contact'}">
+                                        <a class="doc-about__btn doc-about__btn--ghost" href="@url{'contact'}">
                                             <?= $escape(WidgetI18n::label('联系我们')) ?>
                                         </a>
                                     </div>
                                 </div>
-                                <aside class="amazon-about__hero-card">
+                                <aside class="doc-about__hero-card">
                                     <h2><?= $escape(WidgetI18n::label('我们的承诺')) ?></h2>
                                     <p><?= $escape(WidgetI18n::label('规格清晰、价格真实、售后有指引——让每一次选购都踏实从容。')) ?></p>
                                 </aside>
@@ -585,14 +585,14 @@ $milestones = [
                         reject="header,footer,navigation,cart,checkout"
                         multiple="false"
                         position="content"
-                        class="amazon-about__stats-slot">
+                        class="doc-about__stats-slot">
                     <w:hook>
                         Weline_Theme::frontend::layouts::about::stats
                         <else/>
-                        <section class="amazon-about__stats" aria-label="<?= $escape(WidgetI18n::label('品牌概览')) ?>" weline-code="theme.about.stats">
-                            <div class="amazon-about__stats-grid">
+                        <section class="doc-about__stats" aria-label="<?= $escape(WidgetI18n::label('品牌概览')) ?>" weline-code="theme.about.stats">
+                            <div class="doc-about__stats-grid">
                                 <?php foreach ($stats as $stat): ?>
-                                    <div class="amazon-about__stat">
+                                    <div class="doc-about__stat">
                                         <strong><?= $escape($stat['value']) ?></strong>
                                         <span><?= $escape($stat['label']) ?></span>
                                     </div>
@@ -602,24 +602,24 @@ $milestones = [
                     </w:hook>
                 </w:slot>
 
-                <section class="amazon-about__section" weline-code="theme.about.story">
-                    <div class="amazon-about__inner">
-                        <div class="amazon-about__section-head">
+                <section class="doc-about__section" weline-code="theme.about.story">
+                    <div class="doc-about__inner">
+                        <div class="doc-about__section-head">
                             <h2><?= $escape(WidgetI18n::label('我们的故事')) ?></h2>
                             <p><?= $escape(WidgetI18n::label('从货架整理到日常可用，我们把顾客的疑问沉淀成更清晰的选购路径与更可靠的履约体验。')) ?></p>
                         </div>
-                        <div class="amazon-about__story-grid">
+                        <div class="doc-about__story-grid">
                             <w:slot id="about-story"
                                     name="品牌故事"
                                     accept="layout-about-story,layout-about-content,content"
                                     reject="header,footer,navigation,cart,checkout"
                                     multiple="true"
                                     position="content"
-                                    class="amazon-about__story-slot">
+                                    class="doc-about__story-slot">
                                 <w:hook>
                                     Weline_Theme::frontend::layouts::about::story
                                     <else/>
-                                    <article class="amazon-about__panel">
+                                    <article class="doc-about__panel">
                                         <h3><?= $escape(WidgetI18n::label('为什么选择我们')) ?></h3>
                                         <p><?= $escape(WidgetI18n::label('好的购物体验不靠运气：规格标注清楚、材质说明可信、尺码有据、物流可追踪。')) ?></p>
                                         <p><?= $escape($siteName) ?> <?= $escape(WidgetI18n::label('团队围绕「买得到、用得上」打磨每一个关键路径——从首页发现到订单完成。')) ?></p>
@@ -633,11 +633,11 @@ $milestones = [
                                     reject="header,footer,navigation,cart,checkout"
                                     multiple="true"
                                     position="sidebar"
-                                    class="amazon-about__sidebar-slot">
+                                    class="doc-about__sidebar-slot">
                                 <w:hook>
                                     Weline_Theme::frontend::layouts::about::sidebar
                                     <else/>
-                                    <aside class="amazon-about__panel">
+                                    <aside class="doc-about__panel">
                                         <h3><?= $escape(WidgetI18n::label('快捷入口')) ?></h3>
                                         <p><a href="@url{'faq'}"><?= $escape(WidgetI18n::label('帮助中心')) ?></a></p>
                                         <p><a href="@url{'customer/account/index'}#orders"><?= $escape(WidgetI18n::label('订单跟踪')) ?></a></p>
@@ -650,9 +650,9 @@ $milestones = [
                     </div>
                 </section>
 
-                <section class="amazon-about__section amazon-about__section--muted" weline-code="theme.about.values">
-                    <div class="amazon-about__inner">
-                        <div class="amazon-about__section-head">
+                <section class="doc-about__section doc-about__section--muted" weline-code="theme.about.values">
+                    <div class="doc-about__inner">
+                        <div class="doc-about__section-head">
                             <h2><?= $escape(WidgetI18n::label('我们的价值观')) ?></h2>
                             <p><?= $escape(WidgetI18n::label('这些原则指导我们如何选品上架、如何服务顾客，以及如何持续打磨独立站体验。')) ?></p>
                         </div>
@@ -662,13 +662,13 @@ $milestones = [
                                 reject="header,footer,navigation,cart,checkout"
                                 multiple="true"
                                 position="content"
-                                class="amazon-about__values-slot">
+                                class="doc-about__values-slot">
                             <w:hook>
                                 Weline_Theme::frontend::layouts::about::values
                                 <else/>
-                                <div class="amazon-about__values">
+                                <div class="doc-about__values">
                                     <?php foreach ($values as $value): ?>
-                                        <article class="amazon-about__value">
+                                        <article class="doc-about__value">
                                             <h3><?= $escape($value['title']) ?></h3>
                                             <p><?= $escape($value['desc']) ?></p>
                                         </article>
@@ -679,9 +679,9 @@ $milestones = [
                     </div>
                 </section>
 
-                <section class="amazon-about__section" weline-code="theme.about.timeline">
-                    <div class="amazon-about__inner">
-                        <div class="amazon-about__section-head">
+                <section class="doc-about__section" weline-code="theme.about.timeline">
+                    <div class="doc-about__inner">
+                        <div class="doc-about__section-head">
                             <h2><?= $escape(WidgetI18n::label('发展历程')) ?></h2>
                             <p><?= $escape(WidgetI18n::label('关键节点记录我们如何把兴趣走进可上线的国际化商城。')) ?></p>
                         </div>
@@ -691,13 +691,13 @@ $milestones = [
                                 reject="header,footer,navigation,cart,checkout"
                                 multiple="true"
                                 position="content"
-                                class="amazon-about__timeline-slot">
+                                class="doc-about__timeline-slot">
                             <w:hook>
                                 Weline_Theme::frontend::layouts::about::timeline
                                 <else/>
-                                <div class="amazon-about__timeline">
+                                <div class="doc-about__timeline">
                                     <?php foreach ($milestones as $milestone): ?>
-                                        <article class="amazon-about__milestone">
+                                        <article class="doc-about__milestone">
                                             <strong><?= $escape($milestone['year']) ?></strong>
                                             <p><?= $escape($milestone['text']) ?></p>
                                         </article>
@@ -714,7 +714,7 @@ $milestones = [
                                 append="true"
                                 max="16"
                                 position="content"
-                                class="amazon-about__extras">
+                                class="doc-about__extras">
                             <w:hook>
                                 Weline_Theme::frontend::layouts::about::extras
                                 <else/>
@@ -731,21 +731,21 @@ $milestones = [
                         reject="header,footer,navigation,cart,checkout"
                         multiple="false"
                         position="content"
-                        class="amazon-about__cta-slot">
+                        class="doc-about__cta-slot">
                     <w:hook>
                         Weline_Theme::frontend::layouts::about::cta
                         <else/>
-                        <section class="amazon-about__cta" data-surface="inverse" aria-labelledby="about-cta-title" weline-code="theme.about.cta">
-                            <div class="amazon-about__cta-inner">
+                        <section class="doc-about__cta" data-surface="inverse" aria-labelledby="about-cta-title" weline-code="theme.about.cta">
+                            <div class="doc-about__cta-inner">
                                 <div>
                                     <h2 id="about-cta-title"><?= $escape(WidgetI18n::label('准备好挑选第一件心仪商品了吗？')) ?></h2>
                                     <p><?= $escape(WidgetI18n::label('从热销爆款到日常精选，挑选适合你的商品，或联系我们了解尺码与售后。')) ?></p>
                                 </div>
-                                <div class="amazon-about__cta-actions">
-                                    <a class="amazon-about__btn amazon-about__btn--primary" href="@url{'products'}">
+                                <div class="doc-about__cta-actions">
+                                    <a class="doc-about__btn doc-about__btn--primary" href="@url{'products'}">
                                         <?= $escape(WidgetI18n::label('浏览商品')) ?>
                                     </a>
-                                    <a class="amazon-about__btn amazon-about__btn--ghost" href="@url{'faq'}">
+                                    <a class="doc-about__btn doc-about__btn--ghost" href="@url{'faq'}">
                                         <?= $escape(WidgetI18n::label('前往帮助中心')) ?>
                                     </a>
                                 </div>

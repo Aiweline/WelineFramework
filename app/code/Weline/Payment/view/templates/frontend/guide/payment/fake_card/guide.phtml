@@ -5,19 +5,19 @@ $entry = (array) ($this->getData('payment_guide_entry') ?? []);
 $policyRoute = (string) ($entry['policy_route'] ?? '');
 ?>
 
-<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
-<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/guide-shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/sidebar.phtml'); ?>
 
-<article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="payment-guide-fake-card">
-    <?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-breadcrumb.phtml'); ?>
+<article class="payment-guide-layout__main payment-guide-article" data-testid="payment-guide-fake-card">
+    <?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/breadcrumb.phtml'); ?>
 
-    <header class="amazon-payment-guide-article__header">
-        <p class="amazon-payment-guide-article__badge"><lang>开发验证</lang></p>
-        <h1 class="amazon-payment-guide-article__title"><lang>本地测试支付指南</lang></h1>
-        <p class="amazon-payment-guide-article__lead"><lang>本支付方式仅用于本地与沙箱环境验证结账流程，不会产生真实扣款。</lang></p>
+    <header class="payment-guide-article__header">
+        <p class="payment-guide-article__badge"><lang>开发验证</lang></p>
+        <h1 class="payment-guide-article__title"><lang>本地测试支付指南</lang></h1>
+        <p class="payment-guide-article__lead"><lang>本支付方式仅用于本地与沙箱环境验证结账流程，不会产生真实扣款。</lang></p>
     </header>
 
-    <section class="amazon-payment-guide-article__panel" weline-code="payment.guide.fake_card.scenarios">
+    <section class="payment-guide-article__panel" weline-code="payment.guide.fake_card.scenarios">
         <h2><lang>适用场景</lang></h2>
         <ul>
             <li><lang>验证结账页支付方式展示、动态字段与条款勾选。</lang></li>
@@ -26,7 +26,7 @@ $policyRoute = (string) ($entry['policy_route'] ?? '');
         </ul>
     </section>
 
-    <section class="amazon-payment-guide-article__panel" weline-code="payment.guide.fake_card.steps">
+    <section class="payment-guide-article__panel" weline-code="payment.guide.fake_card.steps">
         <h2><lang>支付步骤</lang></h2>
         <ol>
             <li><lang>在结账页选择“本地测试支付”。</lang></li>
@@ -36,9 +36,9 @@ $policyRoute = (string) ($entry['policy_route'] ?? '');
     </section>
 
     <?php if ($policyRoute !== ''): ?>
-        <footer class="amazon-payment-guide-article__footer">
+        <footer class="payment-guide-article__footer">
             <a href="@url{$policyRoute}"><lang>查看本地测试支付政策</lang></a>
         </footer>
     <?php endif; ?>
 </article>
-<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/guide-shell-close.phtml'); ?>

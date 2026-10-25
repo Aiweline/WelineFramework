@@ -16,7 +16,7 @@ final class SharedChromeAssetBindingTest extends TestCase
     public function testFrozenChromeKeepsItsExplicitLayoutAssetsDespiteNewDefaults(): void
     {
         $this->registry->definitions['label']=new ThemeComponentDefinition(module:'Fixture',type:'header',code:'label',name:'label',renderMode:ThemeRenderable::MODE_TEMPLATE_CONTENT,
-            defaultConfig:['_layout_source'=>'Weline_Theme::css/widgets/header-search-amazon.css'],templateContent:'<b><?= $this->getData("text") ?></b>');
+            defaultConfig:['_layout_source'=>'Weline_Theme::css/widgets/header-search.css'],templateContent:'<b><?= $this->getData("text") ?></b>');
         $node=$this->node('a','generic-actions','SAVED',0);
         $node['widget_type']='header';
         $node['layout_source']='Weline_Theme::css/widgets/widget-content-text-block-default.css';
@@ -24,6 +24,6 @@ final class SharedChromeAssetBindingTest extends TestCase
         $html=(new RuntimeTemplateMaterializer(ObjectManager::getInstance(Template::class)))->renderContent($phtml);
         self::assertStringContainsString('<b>SAVED</b>',$html);
         self::assertStringContainsString('widget-content-text-block-default.css',$html);
-        self::assertStringNotContainsString('header-search-amazon.css',$html);
+        self::assertStringNotContainsString('header-search.css',$html);
     }
 }

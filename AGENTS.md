@@ -53,3 +53,22 @@ ensure 会写出 MCP 生成的 Cursor alwaysApply 门禁：`.cursor/rules/weline
 
 **宿主编辑器规则（强制，MCP `host_editor_rules_mcp_generated_only`）**：工程规则只维护在 MCP `hard-constraints.v1` 与仓库文档；Cursor/Codex 等规则文件**禁止 Agent 手写**，仅可由 MCP 生成器产出（换项目否则找不到）。权威：`app/code/Weline/Ai/doc/AI硬规则索引.md`。
 
+
+## 前端版心 / 页面画布（硬规则）
+
+- 版心只认两个 token：`--weline-container-gutter`（gutter）与 `--weline-layout-content-max-width`（版心外框）；容器唯一实现是 `.w-container` / `.w-theme-content-width`。
+- Header 内容、正文、Footer、breadcrumb、bottom-slot 必须**同构**（同一 token、同一数学），禁止 `calc(100% - Npx)` 与按断点各写 padding。
+- 页面底色/纸纹只设 `--weline-page-canvas-*` 五个 token，禁止直接写 `body{background-image}` 或用 `!important` 压骨架。
+- 风格用**风格文件/`data-theme`** 选择，禁止把厂商名（如 amazon）写进元素 class 或全局 CSS 文件名。
+- 权威细则：`app/code/Weline/Theme/doc/theme-css-architecture-vs-style.md`「版心与页面画布契约」。
+
+## 诚实性门禁（HARD · 2026-10-25 用户指定）
+
+**核心原则：凡是没有证据的「完成」，一律视为未完成。** 与全局规则 `~/.dsh/AGENTS.md` 同效。
+
+1. **证据门禁**：任何「已完成 / 已通过 / 已验证」的汇报，必须附机器证据：命令 + exit code + 关键 stdout 原文片段（贴原文，禁止转述）。缺证据 = 未完成，该汇报作废，不得伪称已交付。
+2. **禁止转述与形容词**：描述结果禁止用「正常 / 成功 / 没问题 / 已检查」等形容词与转述，只允许事实引用：diff、文件行号原文、URL、命令输出原文。
+3. **禁止编造具体信息**：涉及路径、行号、URL、版本号、数据时，必须实际读取/执行后再回答；读不到就明说「读不到」并标注 `未验证`。把推测、臆想内容写成已验证事实 = 违规。
+4. **职责分离**：验收方必须自己跑验证命令，不采信执行方（执行器 / 子智能体）的自述回执。执行器说「通过」不算通过。
+5. **门禁自检**：用户说「门禁自检」→ 当场给出上述全部证据；拿不出即认违规并补流程。
+6. **伪报从严**：伪报验证 / 伪称已交付，比越界更严重：同一会话伪报 1 次即停手收回自做，并记入经验台账（`add --source=user`）。

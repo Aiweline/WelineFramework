@@ -20,10 +20,10 @@ if ($rawPath !== '' && $rawPath !== '/') {
     $tocPath = $rawPath;
 }
 ?>
-<article class="amazon-doc" data-testid="shipping-guide" weline-code="shipping.guide">
+<article class="guide-doc" data-testid="shipping-guide" weline-code="shipping.guide">
     <style>
-        .amazon-doc { width: 100%; max-width: none; margin: 0; padding: 0; color: var(--weline-layout-text-primary); }
-        .amazon-doc__hero {
+        .guide-doc { width: 100%; max-width: none; margin: 0; padding: 0; color: var(--weline-layout-text-primary); }
+        .guide-doc__hero {
             margin: 0 0 var(--weline-space-5);
             padding: clamp(var(--spacing-5_5), 3vw, var(--spacing-7)) clamp(var(--spacing-4_5), 2.5vw, var(--spacing-7));
             border-radius: var(--radius-lg);
@@ -32,10 +32,10 @@ if ($rawPath !== '' && $rawPath !== '/') {
                 linear-gradient(135deg, var(--color-bg-dark) 0%, var(--color-bg-dark) 58%, var(--color-info) 100%);
             color: var(--color-text-light);
         }
-        .amazon-doc__eyebrow { margin: 0 0 .4rem; font-size: .82rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--color-text-faint); }
-        .amazon-doc__hero h1 { margin: 0; font-size: clamp(var(--font-size-2xl), 3.2vw, var(--font-size-4xl)); line-height: 1.2; color: var(--color-text-light); }
-        .amazon-doc__hero p { margin: .75rem 0 0; max-width: 46rem; line-height: 1.65; color: var(--color-text-faint); }
-        .amazon-doc__panel {
+        .guide-doc__eyebrow { margin: 0 0 .4rem; font-size: .82rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--color-text-faint); }
+        .guide-doc__hero h1 { margin: 0; font-size: clamp(var(--font-size-2xl), 3.2vw, var(--font-size-4xl)); line-height: 1.2; color: var(--color-text-light); }
+        .guide-doc__hero p { margin: .75rem 0 0; max-width: 46rem; line-height: 1.65; color: var(--color-text-faint); }
+        .guide-doc__panel {
             display: grid;
             grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr);
             gap: 0;
@@ -45,39 +45,39 @@ if ($rawPath !== '' && $rawPath !== '/') {
             box-shadow: var(--weline-shadow-md);
             /* no overflow:hidden — bare #anchors break under storefront <base href="/"> */
         }
-        .amazon-doc__toc { border-radius: var(--radius-lg) 0 0 var(--radius-lg); padding: var(--spacing-4_5) var(--weline-space-4) var(--weline-space-5); border-right: var(--border-width-thin) solid var(--color-border-muted); background: var(--color-bg-slate); }
-        .amazon-doc__toc h2 { margin: 0 0 .7rem; font-size: .95rem; }
-        .amazon-doc__toc nav { display: grid; gap: .3rem; }
-        .amazon-doc__toc a { display: block; padding: .35rem .5rem; border-radius: var(--radius-md); color: var(--color-text-secondary); text-decoration: none; font-size: .9rem; line-height: 1.35; }
-        .amazon-doc__toc a:hover { background: var(--color-bg-panel); color: var(--color-link); text-decoration: underline; }
-        .amazon-doc__body { border-radius: 0 var(--radius-lg) var(--radius-lg) 0; padding: clamp(var(--spacing-4_5), 2.4vw, var(--spacing-7)); }
-        .amazon-doc__section { margin-top: var(--spacing-5_5); scroll-margin-top: 12rem; }
-        .amazon-doc__section:first-of-type { margin-top: 0; }
-        .amazon-doc__section h2 { margin: 0 0 .7rem; font-size: var(--font-size-lg); border-left: var(--loader-border-width) solid var(--color-primary); padding-left: .65rem; }
-        .amazon-doc__section p, .amazon-doc__section li { margin: 0 0 .65rem; line-height: 1.7; color: var(--color-text-secondary); }
-        .amazon-doc__section ul { margin: .3rem 0 .9rem; padding-left: var(--weline-space-5); }
-        .amazon-doc__related { margin-top: var(--weline-space-6); padding-top: var(--weline-space-4); border-top: var(--border-width-thin) solid var(--color-border-muted); display: flex; flex-wrap: wrap; gap: .65rem var(--weline-space-4); }
-        .amazon-doc__related a { color: var(--color-text-secondary); text-decoration: none; font-size: .92rem; }
-        .amazon-doc__related a:hover { color: var(--color-link); text-decoration: underline; }
+        .guide-doc__toc { border-radius: var(--radius-lg) 0 0 var(--radius-lg); padding: var(--spacing-4_5) var(--weline-space-4) var(--weline-space-5); border-right: var(--border-width-thin) solid var(--color-border-muted); background: var(--color-bg-slate); }
+        .guide-doc__toc h2 { margin: 0 0 .7rem; font-size: .95rem; }
+        .guide-doc__toc nav { display: grid; gap: .3rem; }
+        .guide-doc__toc a { display: block; padding: .35rem .5rem; border-radius: var(--radius-md); color: var(--color-text-secondary); text-decoration: none; font-size: .9rem; line-height: 1.35; }
+        .guide-doc__toc a:hover { background: var(--color-bg-panel); color: var(--color-link); text-decoration: underline; }
+        .guide-doc__body { border-radius: 0 var(--radius-lg) var(--radius-lg) 0; padding: clamp(var(--spacing-4_5), 2.4vw, var(--spacing-7)); }
+        .guide-doc__section { margin-top: var(--spacing-5_5); scroll-margin-top: 12rem; }
+        .guide-doc__section:first-of-type { margin-top: 0; }
+        .guide-doc__section h2 { margin: 0 0 .7rem; font-size: var(--font-size-lg); border-left: var(--loader-border-width) solid var(--color-primary); padding-left: .65rem; }
+        .guide-doc__section p, .guide-doc__section li { margin: 0 0 .65rem; line-height: 1.7; color: var(--color-text-secondary); }
+        .guide-doc__section ul { margin: .3rem 0 .9rem; padding-left: var(--weline-space-5); }
+        .guide-doc__related { margin-top: var(--weline-space-6); padding-top: var(--weline-space-4); border-top: var(--border-width-thin) solid var(--color-border-muted); display: flex; flex-wrap: wrap; gap: .65rem var(--weline-space-4); }
+        .guide-doc__related a { color: var(--color-text-secondary); text-decoration: none; font-size: .92rem; }
+        .guide-doc__related a:hover { color: var(--color-link); text-decoration: underline; }
         @media (max-width: 900px) {
-            .amazon-doc__panel { grid-template-columns: 1fr; }
-            .amazon-doc__toc { border-right: 0; border-bottom: var(--border-width-thin) solid var(--color-border-muted); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
-            .amazon-doc__body { border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
-            .amazon-doc__toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .guide-doc__panel { grid-template-columns: 1fr; }
+            .guide-doc__toc { border-right: 0; border-bottom: var(--border-width-thin) solid var(--color-border-muted); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+            .guide-doc__body { border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+            .guide-doc__toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 560px) {
-            .amazon-doc__toc nav { grid-template-columns: 1fr; }
+            .guide-doc__toc nav { grid-template-columns: 1fr; }
         }
     </style>
 
-    <header class="amazon-doc__hero" aria-labelledby="shipping-title">
-        <p class="amazon-doc__eyebrow"><lang>帮助中心</lang></p>
+    <header class="guide-doc__hero" aria-labelledby="shipping-title">
+        <p class="guide-doc__eyebrow"><lang>帮助中心</lang></p>
         <h1 id="shipping-title"><lang>配送说明</lang></h1>
         <p><lang>本站由中国大陆仓库发往海外。本页说明制作或备货、国际运输、运费、跟踪与异常处理。下单前请核实具体款式与目的地的安排；预售或定制说明不限制您依法享有的权利。</lang></p>
     </header>
 
-    <div class="amazon-doc__panel">
-        <aside class="amazon-doc__toc" aria-label="@lang('配送说明目录')">
+    <div class="guide-doc__panel">
+        <aside class="guide-doc__toc" aria-label="@lang('配送说明目录')">
             <h2><lang>目录</lang></h2>
             <nav>
                 <?php foreach ($toc as $item): ?>
@@ -86,8 +86,8 @@ if ($rawPath !== '' && $rawPath !== '/') {
             </nav>
         </aside>
 
-        <div class="amazon-doc__body">
-            <section class="amazon-doc__section" id="shipping-s1" weline-code="shipping.guide.shipping.s1">
+        <div class="guide-doc__body">
+            <section class="guide-doc__section" id="shipping-s1" weline-code="shipping.guide.shipping.s1">
                 <h2><lang>一、发货时效</lang></h2>
                 <p><lang>1.1 制作或备货时间与国际运输时间分开计算。下单前请联系客服核实所选款式的库存、制作方式及预计发货时间；本页不承诺统一发货天数。</lang></p>
                 <p><lang>1.2 国际运输从实际发货后开始计算，预计时间因目的地、承运商、旺季及清关情况而异。下单前请核实目的地可用的配送服务及预计运输时间；预计时间不限制适用法律规定的交付义务与救济。</lang></p>
@@ -95,14 +95,14 @@ if ($rawPath !== '' && $rawPath !== '/') {
                 <p><lang>1.4 合并与拆单：同一地址可合并的订单可能并包发出；缺货时可能先发有货部分并告知补发或退款方案，不无故整单取消。</lang></p>
             </section>
 
-            <section class="amazon-doc__section" id="shipping-s2" weline-code="shipping.guide.shipping.s2">
+            <section class="guide-doc__section" id="shipping-s2" weline-code="shipping.guide.shipping.s2">
                 <h2><lang>二、配送范围</lang></h2>
                 <p><lang>2.1 发货地为中国大陆。海外及跨境地址是否可配送、可选航线与运费，以结账页计算结果为准。</lang></p>
                 <p><lang>2.2 偏远岛屿、需多次中转或当地承运商覆盖弱的地址，可能仅支持指定渠道，时效长于常规航线。</lang></p>
                 <p><lang>2.3 地址无法派送或不完整时，需您配合更正；因此产生的滞留、退回或改派费用可能由买家承担。</lang></p>
             </section>
 
-            <section class="amazon-doc__section" id="shipping-s3" weline-code="shipping.guide.shipping.s3">
+            <section class="guide-doc__section" id="shipping-s3" weline-code="shipping.guide.shipping.s3">
                 <h2><lang>三、运费与包邮</lang></h2>
                 <p><lang>3.1 运费按目的地、重量/体积与国际航线在结账页计算，下单前请确认最终金额。</lang></p>
                 <p><lang>3.2 满额包邮等活动一般只减免去程标准运费，不含关税、清关、回程或二次派送；规则以活动页与结算提示为准。</lang></p>
@@ -110,14 +110,14 @@ if ($rawPath !== '' && $rawPath !== '/') {
                 <p><lang>3.4 因拒收、地址错误、长期无人签收、清关失败导致退回或销毁的，退回/滞留费用通常由买家承担，重发需补差价。</lang></p>
             </section>
 
-            <section class="amazon-doc__section" id="shipping-s4" weline-code="shipping.guide.shipping.s4">
+            <section class="guide-doc__section" id="shipping-s4" weline-code="shipping.guide.shipping.s4">
                 <h2><lang>四、物流跟踪</lang></h2>
                 <p><lang>4.1 发货后可在「我的订单」查看运单号与节点。承运商同步可能延迟；国际干线连续数日无更新较常见，不等同于丢件。</lang></p>
                 <p><lang>4.2 若显著超过参考时效仍无进展：请先排除目的地节假日与清关中状态，再联系客服并提供订单号协助查询。</lang></p>
                 <p><lang>4.3 请保持收件电话/邮箱畅通，并留意海关或本地派送通知；需改派自提点时按当地承运商指引操作。</lang></p>
             </section>
 
-            <section class="amazon-doc__section" id="shipping-s5" weline-code="shipping.guide.shipping.s5">
+            <section class="guide-doc__section" id="shipping-s5" weline-code="shipping.guide.shipping.s5">
                 <h2><lang>五、签收与验收</lang></h2>
                 <ul>
                     <li><lang>签收时请核对外包装；明显破损、浸水、变形时，建议拍照留证并尽快联系客服，以便调查。这一建议不缩短您的法定权利期限。</lang></li>
@@ -128,7 +128,7 @@ if ($rawPath !== '' && $rawPath !== '/') {
                 </ul>
             </section>
 
-            <section class="amazon-doc__section" id="shipping-s6" weline-code="shipping.guide.shipping.s6">
+            <section class="guide-doc__section" id="shipping-s6" weline-code="shipping.guide.shipping.s6">
                 <h2><lang>六、异常与赔付</lang></h2>
                 <p><lang>6.1 运输丢失或严重破损：请提供订单号及可取得的运单信息或照片，我们会调查并依法安排补发、退款或其他适用救济。因我们责任产生的退款不会自动扣除所谓不可回收费用，承运商调查不限制您的法定权利。</lang></p>
                 <p><lang>6.2 显示已签收但未收到：建议先向家人、门卫、邻居及代收点确认；仍无法找到时请尽快联系客服启动查询。物流签收记录并非实际收到商品的唯一依据，报告建议不缩短法定权利期限。</lang></p>
@@ -136,17 +136,17 @@ if ($rawPath !== '' && $rawPath !== '/') {
                 <p><lang>6.4 海关查验、口岸拥堵或航班调整可能影响运输，我们会协助查询并及时告知进展。延误不构成一概免责的理由；您依法享有的取消、退款及其他救济不受本说明限制。</lang></p>
             </section>
 
-            <section class="amazon-doc__section" id="shipping-s7" weline-code="shipping.guide.shipping.s7">
+            <section class="guide-doc__section" id="shipping-s7" weline-code="shipping.guide.shipping.s7">
                 <h2><lang>七、发票与配送凭证</lang></h2>
                 <p><lang>如需发票，请在下单时按结算页指引填写开票信息，或在订单完成后联系客服补开。物流面单与签收记录可作为收货凭证，请妥善保存电子运单信息。</lang></p>
             </section>
 
-            <section class="amazon-doc__section" id="shipping-s8" weline-code="shipping.guide.shipping.s8">
+            <section class="guide-doc__section" id="shipping-s8" weline-code="shipping.guide.shipping.s8">
                 <h2><lang>八、联系我们</lang></h2>
                 <p><lang>配送相关问题可通过帮助中心「联系客服」、联系我们页或订单详情页售后入口提交。请尽量提供订单号、运单号与问题截图，以便更快处理。</lang></p>
             </section>
 
-            <p class="amazon-doc__related">
+            <p class="guide-doc__related">
                 <a href="@url{'guide/returns'}"><lang>查看退换政策</lang></a>
                 <a href="@url{'refund'}"><lang>查看退款政策</lang></a>
                 <a href="@url{'faq'}"><lang>返回帮助中心</lang></a>

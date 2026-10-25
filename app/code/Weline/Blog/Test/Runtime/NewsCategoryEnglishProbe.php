@@ -15,7 +15,7 @@ $document->loadHTML($html);
 libxml_clear_errors();
 $xpath = new DOMXPath($document);
 $title = trim($xpath->evaluate('string(//title)'));
-$heading = trim($xpath->evaluate('string(//*[contains(concat(" ", normalize-space(@class), " "), " amazon-blog-listing__title ")])'));
+$heading = trim($xpath->evaluate('string(//*[contains(concat(" ", normalize-space(@class), " "), " blog-listing__title ")])'));
 $lang = $document->documentElement->getAttribute('lang');
 $results = [
     ['case' => 'html_language', 'observed' => $lang, 'passed' => $lang === 'en-US'],

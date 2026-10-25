@@ -1,4 +1,4 @@
-/* 与 .categories-list / .category-link 同节奏：同 gap + 同水平 padding，避免「Hanfu|About Us」贴死 */
+/* 与 .categories-list / .category-link 同节奏：同 gap + 同水平 padding，避免「品牌|About Us」贴死 */
 .wc-theme_widget_header_policy_links.header-policy-links {
     display: flex;
     align-items: center;

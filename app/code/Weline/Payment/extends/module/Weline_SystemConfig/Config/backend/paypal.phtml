@@ -77,7 +77,7 @@
     <w:config:field
         key="payment/method/paypal/card_fields_enabled"
         label="启用站内银行卡收银台（PayPal Card Fields）"
-        description="默认开启。结账页选中 PayPal 时，在站内展开银行卡输入（PayPal 托管 iframe + 3DS），无需跳转。需 PayPal 商户具备 Advanced Credit and Debit Card（advanced_cards）资格；前端会实时检测，不满足、币种需折算或订单拆分时自动回退到 PayPal 跳转，不会阻断结账。"
+        description="默认开启。结账页选中 PayPal 时，在站内展开银行卡输入（PayPal 托管 iframe + 3DS），无需跳转。需 PayPal 商户具备 Advanced Credit and Debit Card（advanced_cards）资格；前端会实时检测，不满足、币种需折算或订单拆分时自动回退到 PayPal 跳转，不会阻断结账。\n资格自查：在任一挂有结账页的店面，用管理员账号控制台执行 window.Weline.Api.resource('payment').paypalCardFieldsConfig({currency:'USD'})，enabled=true 且 SDK 加载后 sandbox 探测 isEligible()=true 即具备；=false 需到 PayPal Business 后台开通「Accept credit/debit cards（Advanced Credit and Debit Card）」。"
         type="switch"
         value-type="bool"
         default="1"

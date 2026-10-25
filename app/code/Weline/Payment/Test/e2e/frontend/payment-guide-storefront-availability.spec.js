@@ -42,7 +42,7 @@ const EVIDENCE_DIR = process.env.WELINE_E2E_EVIDENCE_DIR
 /** 从页面里取侧边导航（aside）内的支付方式链接，排除 hreflang/语言备用链接干扰。 */
 async function readSidebarMethodCodes(page) {
   return page.evaluate(() => {
-    const aside = document.querySelector('aside.amazon-payment-guide-layout__sidebar');
+    const aside = document.querySelector('aside.payment-guide-layout__sidebar');
     if (!aside) {
       return null;
     }
@@ -74,7 +74,7 @@ moduleDescribe(test, MODULE, 'payment guide storefront availability gate', () =>
 
       await page.goto(`${BASE}${HUB}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-      const aside = page.locator('aside.amazon-payment-guide-layout__sidebar');
+      const aside = page.locator('aside.payment-guide-layout__sidebar');
       await expect(aside).toBeVisible({ timeout: 30000 });
 
       const codes = await readSidebarMethodCodes(page);
@@ -104,7 +104,7 @@ moduleDescribe(test, MODULE, 'payment guide storefront availability gate', () =>
       expect(response.status()).toBe(200);
 
       // 「非 404」按页面自身标识判定：整页文本正则不可靠——字体/资源哈希里会偶然出现 404。
-      await expect(page.locator('aside.amazon-payment-guide-layout__sidebar')).toBeVisible({ timeout: 30000 });
+      await expect(page.locator('aside.payment-guide-layout__sidebar')).toBeVisible({ timeout: 30000 });
       // Locale title may be "…支付指南…" (zh) rather than English "guide".
       await expect(page).toHaveTitle(/guide|指南/i);
 
@@ -124,7 +124,7 @@ moduleDescribe(test, MODULE, 'payment guide storefront availability gate', () =>
     'every method link rendered in the guide sidebar opens successfully',
     async ({ page, request }) => {
       await page.goto(`${BASE}${HUB}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await expect(page.locator('aside.amazon-payment-guide-layout__sidebar')).toBeVisible({ timeout: 30000 });
+      await expect(page.locator('aside.payment-guide-layout__sidebar')).toBeVisible({ timeout: 30000 });
 
       const codes = await readSidebarMethodCodes(page);
       expect(codes.length).toBeGreaterThan(0);

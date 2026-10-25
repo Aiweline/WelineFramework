@@ -1413,7 +1413,7 @@ class Partials extends Block
 
     /**
      * FOUC pending without unlock leaves body visibility:hidden forever.
-     * Default Theme amazon-progressive FOUC has no pending → this gate is a no-op.
+     * Default Theme progressive FOUC has no pending → this gate is a no-op.
      * Design themes may still set pending and drop css-ready — Theme owns the gate.
      */
     private function ensureStorefrontHeadCssReadyGate(string $html): string

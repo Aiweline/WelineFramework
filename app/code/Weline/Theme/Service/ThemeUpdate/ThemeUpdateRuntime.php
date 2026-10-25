@@ -101,7 +101,7 @@ final class ThemeUpdateRuntime
         return StaticBuildId::current();
     }
 
-    /** 当前主题的路径前缀（如 `Weline/hanfu` / `Weline/Theme`），无上下文返回 ''。 */
+    /** 当前主题的路径前缀（如 `Weline/{theme}` / `Weline/Theme`），无上下文返回 ''。 */
     public static function activeThemePrefix(): string
     {
         $active = self::$forced;
@@ -248,7 +248,7 @@ final class ThemeUpdateRuntime
 
     /**
      * 该静态路径是否属于「主题自有资源」；是则返回批次前缀，否则 null（沿用部署构建号）。
-     * 主题自有 = 主题设计命名空间（如 Weline/hanfu）或 Theme 模块资源。
+     * 主题自有 = 主题设计命名空间（如 Weline/{theme}）或 Theme 模块资源。
      */
     public static function staticPrefixForPath(string $urlPath): ?string
     {

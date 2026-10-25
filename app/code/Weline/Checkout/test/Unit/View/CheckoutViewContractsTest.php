@@ -144,8 +144,8 @@ final class CheckoutViewContractsTest extends TestCase
             'ProductCardBuyNowWidget::testWidgetRegistrationExposesCardBuyNowTemplate' => function () {
             $this->assert_ProductCardBuyNowWidget_testWidgetRegistrationExposesCardBuyNowTemplate();
         },
-            'ProductCardBuyNowWidget::testCardBuyNowWidgetUsesBuyNowActionAndAmazonClasses' => function () {
-            $this->assert_ProductCardBuyNowWidget_testCardBuyNowWidgetUsesBuyNowActionAndAmazonClasses();
+            'ProductCardBuyNowWidget::testCardBuyNowWidgetUsesBuyNowActionAndCommerceClasses' => function () {
+            $this->assert_ProductCardBuyNowWidget_testCardBuyNowWidgetUsesBuyNowActionAndCommerceClasses();
         },
         ];
     }
@@ -639,7 +639,7 @@ private function assert_ProductCardBuyNowWidget_testWidgetRegistrationExposesCar
     self::assertStringContainsString('@widget.page_layouts {["*"]}', $src);
 }
 
-private function assert_ProductCardBuyNowWidget_testCardBuyNowWidgetUsesBuyNowActionAndAmazonClasses(): void
+private function assert_ProductCardBuyNowWidget_testCardBuyNowWidgetUsesBuyNowActionAndCommerceClasses(): void
 {
     $template = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Checkout' . '/view/templates/frontend/widgets/product-card-buy-now.phtml');
     self::assertStringContainsString('data-testid="product-card-buy-now"', $template);

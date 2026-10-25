@@ -42,8 +42,8 @@ final class ThemeViewContractsTest extends TestCase
     private function contractChecks(): array
     {
         return [
-            'AboutLayoutTemplate::testAboutLayoutHasAmazonShellSlotsAndHooks' => function () {
-            $this->assert_AboutLayoutTemplate_testAboutLayoutHasAmazonShellSlotsAndHooks();
+            'AboutLayoutTemplate::testAboutLayoutHasCommerceShellSlotsAndHooks' => function () {
+            $this->assert_AboutLayoutTemplate_testAboutLayoutHasCommerceShellSlotsAndHooks();
         },
             'BodyEndAggregateCacheComplete::testGeneratedAggregateManifestIsComplete' => function () {
             $this->assert_BodyEndAggregateCacheComplete_testGeneratedAggregateManifestIsComplete();
@@ -75,29 +75,29 @@ final class ThemeViewContractsTest extends TestCase
             'GroceryPurchasePanelCompact::testGroceryPurchasePanelCssIsWiredAndForcesCompactShelfGrid' => function () {
             $this->assert_GroceryPurchasePanelCompact_testGroceryPurchasePanelCssIsWiredAndForcesCompactShelfGrid();
         },
-            'GuideAndPolicyAmazonShell::testGuideDefaultLayoutUsesPageWrapperAndThemeWidth' => function () {
-            $this->assert_GuideAndPolicyAmazonShell_testGuideDefaultLayoutUsesPageWrapperAndThemeWidth();
+            'GuideAndPolicyCommerceShell::testGuideDefaultLayoutUsesPageWrapperAndThemeWidth' => function () {
+            $this->assert_GuideAndPolicyCommerceShell_testGuideDefaultLayoutUsesPageWrapperAndThemeWidth();
         },
-            'GuideAndPolicyAmazonShell::testTermsLayoutUsesInsetHeroAndThemeWidth' => function () {
-            $this->assert_GuideAndPolicyAmazonShell_testTermsLayoutUsesInsetHeroAndThemeWidth();
+            'GuideAndPolicyCommerceShell::testTermsLayoutUsesInsetHeroAndThemeWidth' => function () {
+            $this->assert_GuideAndPolicyCommerceShell_testTermsLayoutUsesInsetHeroAndThemeWidth();
         },
-            'GuideAndPolicyAmazonShell::testPolicyAndFaqTemplatesHaveNoCompileTimeLangChrome' => function () {
-            $this->assert_GuideAndPolicyAmazonShell_testPolicyAndFaqTemplatesHaveNoCompileTimeLangChrome();
+            'GuideAndPolicyCommerceShell::testPolicyAndFaqTemplatesHaveNoCompileTimeLangChrome' => function () {
+            $this->assert_GuideAndPolicyCommerceShell_testPolicyAndFaqTemplatesHaveNoCompileTimeLangChrome();
         },
-            'GuideAndPolicyAmazonShell::testPolicyAndTermsTocFragmentHrefsSurviveDocumentBase' => function () {
-            $this->assert_GuideAndPolicyAmazonShell_testPolicyAndTermsTocFragmentHrefsSurviveDocumentBase();
+            'GuideAndPolicyCommerceShell::testPolicyAndTermsTocFragmentHrefsSurviveDocumentBase' => function () {
+            $this->assert_GuideAndPolicyCommerceShell_testPolicyAndTermsTocFragmentHrefsSurviveDocumentBase();
         },
-            'GuideAndPolicyAmazonShell::testEnglishCsvTranslatesPolicyTocHeading' => function () {
-            $this->assert_GuideAndPolicyAmazonShell_testEnglishCsvTranslatesPolicyTocHeading();
+            'GuideAndPolicyCommerceShell::testEnglishCsvTranslatesPolicyTocHeading' => function () {
+            $this->assert_GuideAndPolicyCommerceShell_testEnglishCsvTranslatesPolicyTocHeading();
         },
-            'GuideAndPolicyAmazonShell::testPolicyLayoutsSoftenedToneKeepsComplianceAnchors' => function () {
-            $this->assert_GuideAndPolicyAmazonShell_testPolicyLayoutsSoftenedToneKeepsComplianceAnchors();
+            'GuideAndPolicyCommerceShell::testPolicyLayoutsSoftenedToneKeepsComplianceAnchors' => function () {
+            $this->assert_GuideAndPolicyCommerceShell_testPolicyLayoutsSoftenedToneKeepsComplianceAnchors();
         },
             'HanfuLayoutsFrozenFromTheme::testHanfuOwnsEveryThemeFrontendLayoutPathWithoutDeletingTheme' => function () {
             $this->assert_HanfuLayoutsFrozenFromTheme_testHanfuOwnsEveryThemeFrontendLayoutPathWithoutDeletingTheme();
         },
-            'HanfuLayoutsFrozenFromTheme::testHanfuPolicySetIncludesAmazonShellPages' => function () {
-            $this->assert_HanfuLayoutsFrozenFromTheme_testHanfuPolicySetIncludesAmazonShellPages();
+            'HanfuLayoutsFrozenFromTheme::testHanfuPolicySetIncludesCommerceShellPages' => function () {
+            $this->assert_HanfuLayoutsFrozenFromTheme_testHanfuPolicySetIncludesCommerceShellPages();
         },
             'HeadCurrencyContext::testDefaultHeadUsesFrameworkCurrencyStateAsItsSingleSourceOfTruth' => function () {
             $this->assert_HeadCurrencyContext_testDefaultHeadUsesFrameworkCurrencyStateAsItsSingleSourceOfTruth();
@@ -114,8 +114,8 @@ final class ThemeViewContractsTest extends TestCase
             'HeaderAccountPaperInk::testAccountDropdownRebindsPaperInkUnderInverseChrome' => function () {
             $this->assert_HeaderAccountPaperInk_testAccountDropdownRebindsPaperInkUnderInverseChrome();
         },
-            'HeaderBeltFullBleedBackground::testChromeAmazonHeaderContainerIsFullBleedWithContentOnBeltInner' => function () {
-            $this->assert_HeaderBeltFullBleedBackground_testChromeAmazonHeaderContainerIsFullBleedWithContentOnBeltInner();
+            'HeaderBeltFullBleedBackground::testChromeHeaderContainerIsFullBleedWithContentOnBeltInner' => function () {
+            $this->assert_HeaderBeltFullBleedBackground_testChromeHeaderContainerIsFullBleedWithContentOnBeltInner();
         },
             'HeaderBeltFullBleedBackground::testHeaderDefaultPartialContainerIsFullBleedWithContentOnBeltInner' => function () {
             $this->assert_HeaderBeltFullBleedBackground_testHeaderDefaultPartialContainerIsFullBleedWithContentOnBeltInner();
@@ -171,8 +171,8 @@ final class ThemeViewContractsTest extends TestCase
             'MegaMenuPanelBanner::testHeaderPassesBannerFlagIntoMegaPanel' => function () {
             $this->assert_MegaMenuPanelBanner_testHeaderPassesBannerFlagIntoMegaPanel();
         },
-            'MiniCartBadgeCorner::testAmazonChromeBadgeUsesPhysicalNegativeHangOff' => function () {
-            $this->assert_MiniCartBadgeCorner_testAmazonChromeBadgeUsesPhysicalNegativeHangOff();
+            'MiniCartBadgeCorner::testCommerceBadgeUsesPhysicalNegativeHangOff' => function () {
+            $this->assert_MiniCartBadgeCorner_testCommerceBadgeUsesPhysicalNegativeHangOff();
         },
             'MiniCartBadgeCorner::testWidgetBadgeUsesPhysicalNegativeHangOff' => function () {
             $this->assert_MiniCartBadgeCorner_testWidgetBadgeUsesPhysicalNegativeHangOff();
@@ -207,11 +207,11 @@ final class ThemeViewContractsTest extends TestCase
             'PolicyDocumentWidget::testParamSchemasDeclareSortableI18nSectionsAndLinks' => function () {
             $this->assert_PolicyDocumentWidget_testParamSchemasDeclareSortableI18nSectionsAndLinks();
         },
-            'PolicyDocumentWidget::testWidgetDeclaresSchemasAndAmazonShell' => function () {
-            $this->assert_PolicyDocumentWidget_testWidgetDeclaresSchemasAndAmazonShell();
+            'PolicyDocumentWidget::testWidgetDeclaresSchemasAndCommerceShell' => function () {
+            $this->assert_PolicyDocumentWidget_testWidgetDeclaresSchemasAndCommerceShell();
         },
-            'PolicyDocumentWidget::testWidgetCssOwnsAmazonShellTokens' => function () {
-            $this->assert_PolicyDocumentWidget_testWidgetCssOwnsAmazonShellTokens();
+            'PolicyDocumentWidget::testWidgetCssOwnsCommerceShellTokens' => function () {
+            $this->assert_PolicyDocumentWidget_testWidgetCssOwnsCommerceShellTokens();
         },
             'PolicyDocumentWidget::testPolicyLayoutsEmbedWidgetWithoutHardcodedClauses' => function () {
             $this->assert_PolicyDocumentWidget_testPolicyLayoutsEmbedWidgetWithoutHardcodedClauses();
@@ -321,8 +321,8 @@ final class ThemeViewContractsTest extends TestCase
             'StorefrontShopperToast::testArchitectureCssOwnsShopperToastStyles' => function () {
             $this->assert_StorefrontShopperToast_testArchitectureCssOwnsShopperToastStyles();
         },
-            'StorefrontShopperToast::testAmazonFileIsImportShimOnly' => function () {
-            $this->assert_StorefrontShopperToast_testAmazonFileIsImportShimOnly();
+            'StorefrontShopperToast::testCommerceFileIsImportShimOnly' => function () {
+            $this->assert_StorefrontShopperToast_testCommerceFileIsImportShimOnly();
         },
             'StorefrontShopperToast::testThemeCssDoesNotOwnShopperToastStyles' => function () {
             $this->assert_StorefrontShopperToast_testThemeCssDoesNotOwnShopperToastStyles();
@@ -354,8 +354,8 @@ final class ThemeViewContractsTest extends TestCase
             'StorefrontTailChrome::testPartialsSchemaIncludesFooterNestedFingerprint' => function () {
             $this->assert_StorefrontTailChrome_testPartialsSchemaIncludesFooterNestedFingerprint();
         },
-            'TermsLayoutTemplate::testTermsLayoutHasAmazonShellSingleContentSlotAndDefaultCopy' => function () {
-            $this->assert_TermsLayoutTemplate_testTermsLayoutHasAmazonShellSingleContentSlotAndDefaultCopy();
+            'TermsLayoutTemplate::testTermsLayoutHasCommerceShellSingleContentSlotAndDefaultCopy' => function () {
+            $this->assert_TermsLayoutTemplate_testTermsLayoutHasCommerceShellSingleContentSlotAndDefaultCopy();
         },
             'ThemeBrandBasics::testEditorTemplateDeclaresBrandEntryAndChromeControls' => function () {
             $this->assert_ThemeBrandBasics_testEditorTemplateDeclaresBrandEntryAndChromeControls();
@@ -474,7 +474,7 @@ final class ThemeViewContractsTest extends TestCase
         ];
     }
 
-private function assert_AboutLayoutTemplate_testAboutLayoutHasAmazonShellSlotsAndHooks(): void
+private function assert_AboutLayoutTemplate_testAboutLayoutHasCommerceShellSlotsAndHooks(): void
 {
     $path = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/theme/frontend/layouts/about/default.phtml';
     self::assertFileExists($path);
@@ -484,8 +484,8 @@ private function assert_AboutLayoutTemplate_testAboutLayoutHasAmazonShellSlotsAn
     self::assertStringContainsString('type="breadcrumb"', $source);
     self::assertStringContainsString('data-testid="storefront-about-page"', $source);
     self::assertStringContainsString('data-layout="about"', $source);
-    self::assertStringContainsString('amazon-about__hero', $source);
-    self::assertStringContainsString('amazon-about__shop-link', $source);
+    self::assertStringContainsString('doc-about__hero', $source);
+    self::assertStringContainsString('doc-about__shop-link', $source);
     self::assertStringContainsString('id="about-hero"', $source);
     self::assertStringContainsString('id="about-values"', $source);
     self::assertStringContainsString('id="about-timeline"', $source);
@@ -726,26 +726,26 @@ private function assert_GroceryPurchasePanelCompact_testGroceryPurchasePanelCssI
     self::assertStringContainsString('1.0.12', $registerSrc);
 }
 
-private function assert_GuideAndPolicyAmazonShell_testGuideDefaultLayoutUsesPageWrapperAndThemeWidth(): void
+private function assert_GuideAndPolicyCommerceShell_testGuideDefaultLayoutUsesPageWrapperAndThemeWidth(): void
 {
     $path = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/theme/frontend/layouts/guide/default.phtml';
     self::assertFileExists($path);
     $source = (string) file_get_contents($path);
     self::assertStringContainsString('weline-page-wrapper', $source);
-    self::assertStringContainsString('amazon-policy-doc__stage', $source);
+    self::assertStringContainsString('doc-policy-doc__stage', $source);
     self::assertStringContainsString('--weline-layout-content-max-width', $source);
     self::assertStringContainsString('--weline-layout-content-padding-inline', $source);
     self::assertStringContainsString('padding-block:', $source);
     self::assertStringNotContainsString('1440px', $source);
 }
 
-private function assert_GuideAndPolicyAmazonShell_testTermsLayoutUsesInsetHeroAndThemeWidth(): void
+private function assert_GuideAndPolicyCommerceShell_testTermsLayoutUsesInsetHeroAndThemeWidth(): void
 {
     $path = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/theme/frontend/layouts/terms/default.phtml';
     $source = (string) file_get_contents($path);
     self::assertStringContainsString('weline-page-wrapper', $source);
-    self::assertStringContainsString('amazon-terms__stage', $source);
-    self::assertStringContainsString('amazon-policy__stage', $source);
+    self::assertStringContainsString('doc-terms__stage', $source);
+    self::assertStringContainsString('doc-policy__stage', $source);
     self::assertStringContainsString('name="policy-document"', $source);
     self::assertStringContainsString('"page":"terms"', $source);
     self::assertStringContainsString('type="breadcrumb"', $source);
@@ -753,16 +753,16 @@ private function assert_GuideAndPolicyAmazonShell_testTermsLayoutUsesInsetHeroAn
     self::assertStringNotContainsString('<style>', $source);
     self::assertStringNotContainsString('1 / 我们提供哪些服务', $source);
     self::assertStringNotContainsString('<lang>', $source);
-    self::assertStringNotContainsString('amazon-terms__hero-inner', $source);
+    self::assertStringNotContainsString('doc-terms__hero-inner', $source);
     self::assertStringNotContainsString('1440px', $source);
 }
 
-private function policyLayoutProvider_GuideAndPolicyAmazonShell(): array
+private function policyLayoutProvider_GuideAndPolicyCommerceShell(): array
 {
     return ['privacy' => ['privacy.phtml'], 'cookie' => ['cookie.phtml'], 'refund' => ['refund.phtml'], 'disclaimer' => ['disclaimer.phtml'], 'term-condition' => ['term-condition.phtml'], 'shipping' => ['shipping.phtml'], 'accessibility' => ['accessibility.phtml']];
 }
 
-private function assert_GuideAndPolicyAmazonShell_testPolicyAndFaqTemplatesHaveNoCompileTimeLangChrome(): void
+private function assert_GuideAndPolicyCommerceShell_testPolicyAndFaqTemplatesHaveNoCompileTimeLangChrome(): void
 {
     self::markTestSkipped('已过期：断言指南/政策页壳的源码字符串或旧模板路径，实现演进后不再匹配：testPolicyAndFaqTemplatesHaveNoCompileTimeLangChrome');
     $base = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/theme/frontend/layouts';
@@ -775,7 +775,7 @@ private function assert_GuideAndPolicyAmazonShell_testPolicyAndFaqTemplatesHaveN
     }
 }
 
-private function assert_GuideAndPolicyAmazonShell_testPolicyAndTermsTocFragmentHrefsSurviveDocumentBase(): void
+private function assert_GuideAndPolicyCommerceShell_testPolicyAndTermsTocFragmentHrefsSurviveDocumentBase(): void
 {
     $widget = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/theme/frontend/widgets/content/policy-document/default.phtml';
     $css = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/statics/css/widgets/widget-content-policy-document-default.css';
@@ -794,9 +794,9 @@ private function assert_GuideAndPolicyAmazonShell_testPolicyAndTermsTocFragmentH
     self::assertStringContainsString("\$page === 'terms'", $widget);
 }
 
-private function assert_GuideAndPolicyAmazonShell_testEnglishCsvTranslatesPolicyTocHeading(): void
+private function assert_GuideAndPolicyCommerceShell_testEnglishCsvTranslatesPolicyTocHeading(): void
 {
-    $map = self::loadCsvMap_GuideAndPolicyAmazonShell('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/i18n/en_US.csv');
+    $map = self::loadCsvMap_GuideAndPolicyCommerceShell('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/i18n/en_US.csv');
     self::assertSame('Contents', $map['目录'] ?? null);
     self::assertSame('Privacy policy contents', $map['隐私政策目录'] ?? null);
     self::assertSame('Cookie policy contents', $map['Cookie 政策目录'] ?? null);
@@ -808,7 +808,7 @@ private function assert_GuideAndPolicyAmazonShell_testEnglishCsvTranslatesPolicy
 /**
  * policy-copy-tone-soften：政策页去公文硬句，但合规底线源串仍在；新源串须有 en_US 真译。
  */
-private function assert_GuideAndPolicyAmazonShell_testPolicyLayoutsSoftenedToneKeepsComplianceAnchors(): void
+private function assert_GuideAndPolicyCommerceShell_testPolicyLayoutsSoftenedToneKeepsComplianceAnchors(): void
 {
     self::markTestSkipped('已过期：断言指南/政策页壳的源码字符串或旧模板路径，实现演进后不再匹配：testPolicyLayoutsSoftenedToneKeepsComplianceAnchors');
     $base = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/theme/frontend/layouts/policy';
@@ -839,8 +839,8 @@ private function assert_GuideAndPolicyAmazonShell_testPolicyLayoutsSoftenedToneK
     self::assertStringContainsString('强制范围内', $refund);
     $shipping = (string) file_get_contents($base . '/shipping.phtml');
     self::assertStringContainsString('不是固定送达承诺', $shipping);
-    $en = self::loadCsvMap_GuideAndPolicyAmazonShell('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/i18n/en_US.csv');
-    $zh = self::loadCsvMap_GuideAndPolicyAmazonShell('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/i18n/zh_Hans_CN.csv');
+    $en = self::loadCsvMap_GuideAndPolicyCommerceShell('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/i18n/en_US.csv');
+    $zh = self::loadCsvMap_GuideAndPolicyCommerceShell('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/i18n/zh_Hans_CN.csv');
     $newSources = ['我们会认真保护您的个人信息。下面说明：我们可能收集什么、用来做什么、何时会与支付/物流伙伴共享，以及您如何查询或更正。', '欢迎逛店、下单。使用本站前，请花一两分钟看看账户安全与购物规则；有不清楚的地方，随时问客服。', '必要 Cookie 让登录、购物车、结账能正常工作。统计或营销类 Cookie，我们会先征得您的同意再开启；您也可以随时在浏览器里清理。', '本页是配送规则说明；操作步骤见配送指南。', '下面用白话说明逛店与下单时需要留意的规则。可按目录跳转；有疑问请通过帮助中心联系我们。'];
     foreach ($newSources as $src) {
         self::assertArrayHasKey($src, $zh, 'zh CSV missing: ' . $src);
@@ -850,7 +850,7 @@ private function assert_GuideAndPolicyAmazonShell_testPolicyLayoutsSoftenedToneK
     }
 }
 
-private function nonZhLocaleProvider_GuideAndPolicyAmazonShell(): array
+private function nonZhLocaleProvider_GuideAndPolicyCommerceShell(): array
 {
     return ['en_US' => ['en_US', 'Contents'], 'ar_SA' => ['ar_SA', 'المحتويات'], 'es_ES' => ['es_ES', 'Contenido'], 'fr_FR' => ['fr_FR', 'Sommaire'], 'pt_BR' => ['pt_BR', 'Conteúdo'], 'id_ID' => ['id_ID', 'Daftar isi'], 'bn_BD' => ['bn_BD', 'সূচিপত্র'], 'hi_IN' => ['hi_IN', 'विषय सूची'], 'ur_PK' => ['ur_PK', 'فہرست']];
 }
@@ -858,7 +858,7 @@ private function nonZhLocaleProvider_GuideAndPolicyAmazonShell(): array
 /**
  * @return array<string, string>
  */
-private function loadCsvMap_GuideAndPolicyAmazonShell(string $path): array
+private function loadCsvMap_GuideAndPolicyCommerceShell(string $path): array
 {
     self::assertFileExists($path);
     $handle = fopen($path, 'rb');
@@ -915,16 +915,16 @@ private function assert_HanfuLayoutsFrozenFromTheme_testHanfuOwnsEveryThemeFront
     }
 }
 
-private function assert_HanfuLayoutsFrozenFromTheme_testHanfuPolicySetIncludesAmazonShellPages(): void
+private function assert_HanfuLayoutsFrozenFromTheme_testHanfuPolicySetIncludesCommerceShellPages(): void
 {
     $hanfuPolicy = $this->hanfuLayoutsDir_HanfuLayoutsFrozenFromTheme() . '/policy';
     foreach (['accessibility.phtml', 'cookie.phtml', 'default.phtml', 'disclaimer.phtml', 'privacy.phtml', 'refund.phtml', 'shipping.phtml', 'term-condition.phtml'] as $file) {
         $path = $hanfuPolicy . '/' . $file;
         self::assertFileExists($path, $file);
     }
-    // Frozen policy pages keep Theme amazon-policy shell + policy-document embed.
+    // Frozen policy pages keep Theme agent-policy shell + policy-document embed.
     $privacy = (string) file_get_contents($hanfuPolicy . '/privacy.phtml');
-    self::assertStringContainsString('amazon-policy', $privacy);
+    self::assertStringContainsString('agent-policy', $privacy);
     self::assertStringContainsString('name="policy-document"', $privacy);
     self::assertStringContainsString('"page":"privacy"', $privacy);
     self::assertStringNotContainsString('<style>', $privacy);
@@ -1004,9 +1004,9 @@ private function assert_HeaderAccountPaperInk_testAccountDropdownRebindsPaperInk
     self::assertStringNotContainsString('--amz-drawer-muted: var(--color-text-gray)', $css);
 }
 
-private function assert_HeaderBeltFullBleedBackground_testChromeAmazonHeaderContainerIsFullBleedWithContentOnBeltInner(): void
+private function assert_HeaderBeltFullBleedBackground_testChromeHeaderContainerIsFullBleedWithContentOnBeltInner(): void
 {
-    $css = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/statics/css/widgets/header-chrome-amazon.css');
+    $css = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/statics/css/widgets/header-chrome.css');
     self::assertMatchesRegularExpression('/\.weline-header\s+\.header-container\s*\{[^}]*width:\s*100%;/s', $css, 'header-container must be full-bleed (width 100%)');
     self::assertDoesNotMatchRegularExpression('/\.weline-header\s+\.header-container\s*\{[^}]*width:\s*min\(\s*100%\s*,\s*var\(--weline-layout-content-max-width\)\);/s', $css, 'header-container must not use content max-width (boxes the background)');
     self::assertMatchesRegularExpression('/\.weline-header\s+\.header-belt-inner\s*\{[^}]*width:\s*min\(\s*100%\s*,\s*var\(--weline-layout-content-max-width\)\);/s', $css, 'header-belt-inner must carry the content max-width');
@@ -1317,9 +1317,9 @@ private function assert_MegaMenuPanelBanner_testHeaderPassesBannerFlagIntoMegaPa
     self::assertStringContainsString("'show_banner_with_children' => \$headerShowBannerWithChildren", $header);
 }
 
-private function assert_MiniCartBadgeCorner_testAmazonChromeBadgeUsesPhysicalNegativeHangOff(): void
+private function assert_MiniCartBadgeCorner_testCommerceBadgeUsesPhysicalNegativeHangOff(): void
 {
-    $css = $this->read_MiniCartBadgeCorner('view/statics/css/widgets/header-chrome-amazon.css');
+    $css = $this->read_MiniCartBadgeCorner('view/statics/css/widgets/header-chrome.css');
     self::assertStringContainsString('.weline-header .header-cart .cart-count', $css);
     self::assertMatchesRegularExpression('/\.weline-header\s+\.header-cart\s+\.cart-count[\s\S]{0,500}?top:\s*calc\(var\(--spacing-2[^)]*\)\s*\*\s*-1\)/i', $css);
     self::assertMatchesRegularExpression('/\.weline-header\s+\.header-cart\s+\.cart-count[\s\S]{0,500}?right:\s*calc\(var\(--spacing-2[^)]*\)\s*\*\s*-1\)/i', $css);
@@ -1350,7 +1350,7 @@ private function assert_MiniCartBadgeCorner_testHeaderDefaultBadgeUsesPhysicalNe
 
 private function assert_MiniCartBadgeCorner_testHeaderCartInfoTwoLineCopyAndDensityGates(): void
 {
-    $chrome = $this->read_MiniCartBadgeCorner('view/statics/css/widgets/header-chrome-amazon.css');
+    $chrome = $this->read_MiniCartBadgeCorner('view/statics/css/widgets/header-chrome.css');
     $widget = $this->read_MiniCartBadgeCorner('view/statics/css/widgets/widget-header-mini-cart-icon-default.css');
     // CQ on the same flex item that sizes to content collapses width to 0.
     self::assertDoesNotMatchRegularExpression('/^\s*container-type:\s*inline-size\s*;/m', $chrome, 'size-container declaration must not live on chrome CSS (zeros .header-actions width)');
@@ -1370,10 +1370,10 @@ private function assert_MiniCartBadgeCorner_testHeaderCartInfoTwoLineCopyAndDens
     self::assertMatchesRegularExpression('/@media\s*\(min-width:\s*769px\)[\s\S]{0,400}?header-belt-row-1\s*\{[\s\S]{0,120}?flex-wrap:\s*nowrap/s', $chrome, 'Desktop belt must nowrap so account/cart money shrink search instead of wrapping');
     self::assertMatchesRegularExpression('/\.weline-header\s+\.header-search-wrapper\s*\{[\s\S]{0,200}?flex:\s*1\s+1\s+0/s', $chrome, 'Search must be the yield lane (flex 1 1 0)');
     self::assertDoesNotMatchRegularExpression('/@media\s*\(max-width:\s*1360px\)[\s\S]{0,600}?header-search-wrapper[\s\S]{0,200}?flex:\s*0\s+0\s+100%/s', $chrome, 'Must not drop search to own row at 1360 — mid desktop keeps one row via search shrink');
-    self::assertMatchesRegularExpression('/@media\s*\(max-width:\s*768px\)[\s\S]{0,2800}?header-search-wrapper[\s\S]{0,200}?flex:\s*0\s+0\s+100%/s', $chrome, '≤768 must keep search on its own row (amazon flex:1 1 0 must not win)');
+    self::assertMatchesRegularExpression('/@media\s*\(max-width:\s*768px\)[\s\S]{0,2800}?header-search-wrapper[\s\S]{0,200}?flex:\s*0\s+0\s+100%/s', $chrome, '≤768 must keep search on its own row (commerce flex:1 1 0 must not win)');
     // Phone humanization: avatar-only + hide duplicate nav All (belt hamburger owns drawer).
     self::assertStringContainsString('.header-top-bar-locale', $chrome);
-    // Wave C (amazon chrome) still has historical !important; Wave B does not touch that file.
+    // Wave C (commerce chrome) still has historical !important; Wave B does not touch that file.
     self::assertMatchesRegularExpression('/@media\s*\(max-width:\s*768px\)[\s\S]{0,2800}?header-user-area \.account-text[\s\S]{0,400}?display:\s*none\s*!important/s', $chrome);
     self::assertMatchesRegularExpression('/@media\s*\(max-width:\s*768px\)[\s\S]{0,4500}?\.weline-header \.header-nav-all(?:,\s*\n\s*\.weline-header #header-nav-all-root)?\s*\{[\s\S]{0,120}?display:\s*none\s*!important/s', $chrome);
     self::assertMatchesRegularExpression('/@media\s*\(max-width:\s*768px\)[\s\S]{0,4500}?\.categories-overflow-wrapper[\s\S]{0,200}?display:\s*none\s*!important/s', $chrome, 'phone must hide More chrome; scroll owns overflow');
@@ -1462,9 +1462,9 @@ private function assert_NotFoundLayoutTemplate_testNotFoundLayoutHasHeaderFooter
     self::assertStringContainsString('type="footer"', $source);
     self::assertStringContainsString('id="not-found-recommendations"', $source);
     self::assertStringContainsString('data-testid="storefront-not-found-page"', $source);
-    self::assertStringContainsString('amazon-not-found__intro', $source);
-    self::assertStringContainsString('amazon-not-found__shop-panel', $source);
-    self::assertStringContainsString('amazon-not-found__home-link', $source);
+    self::assertStringContainsString('not-found__intro', $source);
+    self::assertStringContainsString('not-found__shop-panel', $source);
+    self::assertStringContainsString('not-found__home-link', $source);
     self::assertStringContainsString('layout-not-found-recommendations', $source);
     self::assertStringContainsString('Weline_Theme::frontend::layouts::not-found::recommendations', $source);
     self::assertStringContainsString('Weline_Theme::frontend::layouts::base::body-end', $source);
@@ -1501,7 +1501,7 @@ private function assert_PolicyDocumentWidget_testParamSchemasDeclareSortableI18n
     self::assertFalse((bool) ($links['item_schema']['url']['i18n'] ?? true));
 }
 
-private function assert_PolicyDocumentWidget_testWidgetDeclaresSchemasAndAmazonShell(): void
+private function assert_PolicyDocumentWidget_testWidgetDeclaresSchemasAndCommerceShell(): void
 {
     $path = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/theme/frontend/widgets/content/policy-document/default.phtml';
     self::assertFileExists($path);
@@ -1510,22 +1510,22 @@ private function assert_PolicyDocumentWidget_testWidgetDeclaresSchemasAndAmazonS
     self::assertStringContainsString('type="policy_document_sections"', $src);
     self::assertStringContainsString('type="policy_document_links"', $src);
     self::assertStringContainsString('PolicyDocumentDefaults', $src);
-    self::assertStringContainsString('amazon-policy__hero', $src);
-    self::assertStringContainsString('amazon-policy__toc', $src);
-    self::assertStringContainsString('amazon-policy__panel', $src);
+    self::assertStringContainsString('doc-policy__hero', $src);
+    self::assertStringContainsString('doc-policy__toc', $src);
+    self::assertStringContainsString('doc-policy__panel', $src);
     self::assertStringContainsString('StorefrontHref::fragmentHref', $src);
     self::assertStringContainsString('WidgetI18n::html', $src);
     self::assertStringContainsString('SiteBrand', $src);
     self::assertStringContainsString('resolveFrontendSiteName', $src);
 }
 
-private function assert_PolicyDocumentWidget_testWidgetCssOwnsAmazonShellTokens(): void
+private function assert_PolicyDocumentWidget_testWidgetCssOwnsCommerceShellTokens(): void
 {
     $path = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/statics/css/widgets/widget-content-policy-document-default.css';
     self::assertFileExists($path);
     $css = (string) file_get_contents($path);
     self::assertStringContainsString('--weline-layout-content-max-width', $css);
-    self::assertStringContainsString('amazon-policy__toc', $css);
+    self::assertStringContainsString('doc-policy__toc', $css);
     self::assertStringContainsString('position: sticky', $css);
     self::assertStringNotContainsString('1440px', $css);
     self::assertStringNotContainsString('top: 12rem', $css);
@@ -1560,7 +1560,7 @@ private function assert_PolicyDocumentWidget_testTermsPageKeyAliasesTermConditio
 private function assert_PolicyDocumentWidget_testDefaultsPreservePrivacyComplianceAnchorsAndCookieUrlKey(): void
 {
     $privacy = PolicyDocumentDefaults::forPage('privacy');
-    self::assertSame('amazon', $privacy['variant'] ?? null);
+    self::assertSame('classic', $privacy['variant'] ?? null);
     self::assertGreaterThanOrEqual(8, count($privacy['sections'] ?? []));
     $blob = json_encode($privacy, JSON_UNESCAPED_UNICODE);
     self::assertIsString($blob);
@@ -1626,7 +1626,7 @@ private function assert_PolicyDocumentWidget_testHydrateParamsFillsEmptySections
     self::assertGreaterThanOrEqual(5, count($hydrated['sections'] ?? []));
     self::assertSame('1 / 总则', $hydrated['sections'][0]['title'] ?? null);
     self::assertStringContainsString('本政策适用于', (string) ($hydrated['sections'][0]['body'] ?? ''));
-    $privacy = PolicyDocumentDefaults::hydrateParams(['page' => 'privacy', 'variant' => 'amazon', 'sections' => []]);
+    $privacy = PolicyDocumentDefaults::hydrateParams(['page' => 'privacy', 'variant' => 'classic', 'sections' => []]);
     self::assertSame('隐私政策', $privacy['title'] ?? null);
     self::assertTrue((bool) ($privacy['show_legal_contact'] ?? false));
     self::assertGreaterThanOrEqual(8, count($privacy['sections'] ?? []));
@@ -1659,8 +1659,8 @@ private function assert_PolicyLayoutSiteBrandLateResolve_testPolicyDocumentWidge
     $src = (string) file_get_contents($path);
     self::assertStringContainsString('SiteBrand', $src);
     self::assertStringContainsString('resolveFrontendSiteName()', $src);
-    self::assertStringContainsString('amazon-policy__eyebrow', $src);
-    self::assertMatchesRegularExpression('/resolveFrontendSiteName\(\)[\s\S]*amazon-policy__eyebrow/', $src, 'SiteBrand resolve must feed eyebrow');
+    self::assertStringContainsString('doc-policy__eyebrow', $src);
+    self::assertMatchesRegularExpression('/resolveFrontendSiteName\(\)[\s\S]*doc-policy__eyebrow/', $src, 'SiteBrand resolve must feed eyebrow');
 }
 
 private function setUp_ProductCardAddToCartPartial(): void
@@ -2112,7 +2112,7 @@ private function assert_StorefrontImageLoadingPolicy_testLooksWallUsesEagerLoadi
 
 private const TOAST_CSS_StorefrontShopperToast = 'css/widgets/storefront-shopper-toast.css';
 
-private const AMAZON_SHIM_StorefrontShopperToast = 'css/widgets/storefront-shopper-toast-amazon.css';
+private const COMMERCE_SHIM_StorefrontShopperToast = 'css/widgets/storefront-shopper-toast-chrome.css';
 
 private function assert_StorefrontShopperToast_testArchitectureCssOwnsShopperToastStyles(): void
 {
@@ -2128,9 +2128,9 @@ private function assert_StorefrontShopperToast_testArchitectureCssOwnsShopperToa
     self::assertStringNotContainsString('@media (max-width: var(--token-bp-767px))', $toastCss);
 }
 
-private function assert_StorefrontShopperToast_testAmazonFileIsImportShimOnly(): void
+private function assert_StorefrontShopperToast_testCommerceFileIsImportShimOnly(): void
 {
-    $shim = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/statics/' . self::AMAZON_SHIM_StorefrontShopperToast);
+    $shim = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/statics/' . self::COMMERCE_SHIM_StorefrontShopperToast);
     self::assertStringContainsString('@import url("./storefront-shopper-toast.css")', $shim);
     self::assertStringNotContainsString('.w-amz-shopper-toast {', $shim);
 }
@@ -2142,7 +2142,7 @@ private function assert_StorefrontShopperToast_testThemeCssDoesNotOwnShopperToas
     self::assertStringNotContainsString('.w-shopper-cart-added', $themeCss);
     self::assertStringNotContainsString('.w-amz-shopper-toast', $themeCss);
     self::assertStringNotContainsString('.w-amz-cart-added', $themeCss);
-    self::assertStringContainsString('do NOT register .amazon-* here', $themeCss);
+    self::assertStringContainsString('do NOT register .commerce-* here', $themeCss);
 }
 
 private function assert_StorefrontShopperToast_testThemeHeadsDoNotHardReferenceToastCss(): void
@@ -2255,9 +2255,9 @@ private function assert_StorefrontTailChrome_testPartialsSchemaIncludesFooterNes
     self::assertStringContainsString('FooterNestedChromeSourceFingerprint', $src);
 }
 
-private function assert_TermsLayoutTemplate_testTermsLayoutHasAmazonShellSingleContentSlotAndDefaultCopy(): void
+private function assert_TermsLayoutTemplate_testTermsLayoutHasCommerceShellSingleContentSlotAndDefaultCopy(): void
 {
-    self::markTestSkipped('已过期：断言源码字符串，实现演进后不再匹配：testTermsLayoutHasAmazonShellSingleContentSlotAndDefaultCopy');
+    self::markTestSkipped('已过期：断言源码字符串，实现演进后不再匹配：testTermsLayoutHasCommerceShellSingleContentSlotAndDefaultCopy');
     $path = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/theme/frontend/layouts/terms/default.phtml';
     self::assertFileExists($path);
     $source = (string) file_get_contents($path);
@@ -2266,8 +2266,8 @@ private function assert_TermsLayoutTemplate_testTermsLayoutHasAmazonShellSingleC
     self::assertStringContainsString('type="breadcrumb"', $source);
     self::assertStringContainsString('data-testid="storefront-terms-page"', $source);
     self::assertStringContainsString('data-layout="terms"', $source);
-    self::assertStringContainsString('amazon-terms__hero', $source);
-    self::assertStringContainsString('amazon-terms__content-root-slot', $source);
+    self::assertStringContainsString('doc-terms__hero', $source);
+    self::assertStringContainsString('doc-terms__content-root-slot', $source);
     self::assertStringContainsString('id="content"', $source);
     self::assertStringContainsString('id="terms-section-1"', $source);
     self::assertStringContainsString('一、服务说明', $source);
@@ -2858,7 +2858,7 @@ private function assert_WidgetImageFileImage_testBuilderComponentImageFieldsPref
 
 private function assert_WidgetImageFileImage_testTextileHeritageRendersHydratedFileHtml(): void
 {
-    $file = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/theme/frontend/widgets/content/textile-heritage/default.phtml';
+    $file = '/Users/weline/Project/Official/框架/app/design/Weline/hanfu' . '/frontend/widgets/content/textile-heritage/default.phtml';
     self::assertFileExists($file);
     $src = (string) file_get_contents($file);
     self::assertStringContainsString('image_file_html', $src);
@@ -2878,7 +2878,7 @@ private function assert_WidgetNoBareStylesheetLink_testHeaderContainerLayoutSour
     $path = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/theme/frontend/widgets/container/header/default.phtml';
     $src = (string) file_get_contents($path);
     self::assertStringContainsString('Weline_Theme::css/partials/header-default.css', $src);
-    self::assertStringContainsString('Weline_Theme::css/widgets/header-chrome-amazon.css', $src);
+    self::assertStringContainsString('Weline_Theme::css/widgets/header-chrome.css', $src);
 }
 
 private function assert_WidgetNoBareStylesheetLink_testHanfuStorefrontShellDeclaresHeaderChromeAsLayoutAssets(): void
@@ -2891,7 +2891,7 @@ private function assert_WidgetNoBareStylesheetLink_testHanfuStorefrontShellDecla
     }
     $src = (string) file_get_contents($path);
     self::assertStringContainsString('SharedChromeService::emitPartialsHeaderShellLayoutCssHtml', $src, 'hanfu shell must emit via SharedChromeService helper (module-source for css_merge)');
-    self::assertDoesNotMatchRegularExpression('/<link\b[^>]*header-chrome-amazon\.css/i', $src, 'hanfu shell must not hand-write header-chrome stylesheet links');
+    self::assertDoesNotMatchRegularExpression('/<link\b[^>]*header-chrome\.css/i', $src, 'hanfu shell must not hand-write header-chrome stylesheet links');
 }
 
 private function assert_WidgetNoBareStylesheetLink_testThemePartialsHeaderDeclaresHeaderChromeAsLayoutAssets(): void
@@ -2899,13 +2899,13 @@ private function assert_WidgetNoBareStylesheetLink_testThemePartialsHeaderDeclar
     $path = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/theme/frontend/partials/header/default.phtml';
     $src = (string) file_get_contents($path);
     self::assertStringContainsString('SharedChromeService::emitPartialsHeaderShellLayoutCssHtml', $src);
-    self::assertDoesNotMatchRegularExpression('/<link\b[^>]*header-chrome-amazon\.css/i', $src, 'Theme Partials header must not hand-write header-chrome stylesheet links');
+    self::assertDoesNotMatchRegularExpression('/<link\b[^>]*header-chrome\.css/i', $src, 'Theme Partials header must not hand-write header-chrome stylesheet links');
 }
 
 private function assert_WidgetNoBareStylesheetLink_testPartialsHeaderShellLayoutCssConstantMatchesHeaderContainer(): void
 {
     $peers = \Weline\Theme\Service\SharedChromeService::PARTIALS_HEADER_SHELL_LAYOUT_CSS;
-    self::assertSame(['Weline_Theme::css/widgets/header-chrome-amazon.css', 'Weline_Theme::css/widgets/header-search-amazon.css', 'Weline_Theme::css/partials/header-default.css', 'Weline_Websites::css/widgets/scope-switcher.css', 'Weline_Visitor::css/widgets/widget-storefront-pixel-bootstrap.css', 'Weline_Theme::ui/components/weline-choice-selector.css', 'Weline_Theme::ui/components/weline-mega-menu.css'], $peers);
+    self::assertSame(['Weline_Theme::css/widgets/header-chrome.css', 'Weline_Theme::css/widgets/header-search.css', 'Weline_Theme::css/partials/header-default.css', 'Weline_Websites::css/widgets/scope-switcher.css', 'Weline_Visitor::css/widgets/widget-storefront-pixel-bootstrap.css', 'Weline_Theme::ui/components/weline-choice-selector.css', 'Weline_Theme::ui/components/weline-mega-menu.css'], $peers);
     $headerWidget = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/theme/frontend/widgets/container/header/default.phtml');
     foreach ($peers as $path) {
         self::assertStringContainsString($path, $headerWidget);

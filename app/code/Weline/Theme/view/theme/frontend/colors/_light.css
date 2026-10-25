@@ -69,7 +69,7 @@
 
 /* Light-mode semantic overrides on top of _default（未列叶子继承 default） */
 [data-theme="light"] {
-    --color-text-amazon-body: #0f1111;
+    --color-text-body: #0f1111;
     --color-text: #172033;
     --color-text-primary: var(--color-text);
     --color-text-secondary: #475569;

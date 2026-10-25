@@ -4,6 +4,7 @@
 
 如果要开发主题、页面、布局、slot、widget、Theme.js 或主题覆盖，可选调用 `prepare_project` / `resolve_task_context` 获取 Theme 文档，然后按需阅读（编码用宿主原生编辑）：
 
+0. **主题统一规范（全局入口 · 不含具体主题信息）**：[`theme-unified-spec.md`](./theme-unified-spec.md) — 默认主题=机制、设计主题=品牌、同 key 文件覆盖契约、品牌内容迁出流程、验收清单
 1. [`需求.md`](./需求.md)
 2. [`开发日志.md`](./开发日志.md)
 2b. **后台默认主题开发标准（现行）**：[`backend/后端主题开发标准.md`](./backend/后端主题开发标准.md) — 后台 layout/partial/w-* 原语/Token/异步资源/页面骨架唯一标准；工具页例外登记见 [`backend/工具页迁移清单.md`](./backend/工具页迁移清单.md)
@@ -21,7 +22,7 @@
    - 部件：[`部件开发指南.md`](./部件开发指南.md)
    - **前台 section `weline-code`（强约束）**：[`frontend-section-weline-code.md`](./frontend-section-weline-code.md) — 字面 `<section>` 与 `w:slot wrapper="section"` 必须非空语义 code；改模板后跑 `php bin/w frontend:check-section-code`
    - **CSS/PHTML 变量强约束（`REQ-THEME-0007`）**：[`theme-css-variables-only.md`](./theme-css-variables-only.md) — 禁止硬编码颜色/尺寸，须用主题 Token；待改清单见 [`theme-hardcoded-visual-audit.md`](./theme-hardcoded-visual-audit.md)
-   - **theme.css 架构≠风格（硬）**：[`theme-css-architecture-vs-style.md`](./theme-css-architecture-vs-style.md) — theme.css 只定布局/表面机制/全局组件；Amazon 等风格壳禁止进入
+   - **theme.css 架构≠风格（硬）**：[`theme-css-architecture-vs-style.md`](./theme-css-architecture-vs-style.md) — theme.css 只定布局/表面机制/全局组件；厂商/品牌风格壳禁止进入
    - **店面 Token 消费约定**：[`theme-storefront-token-consumption.md`](./theme-storefront-token-consumption.md) — 间距/圆角/字号只走 `--weline-space-*` / `--weline-theme-radius-*` / `--weline-font-size-*`
    - **语义色重要程度矩阵**：[`theme-semantic-color-matrix.md`](./theme-semantic-color-matrix.md) — 角色×强度、Foundation 桥接、`data-tone` 用法、外观盘分组
    - **Surface / Text 语义（反色顶栏）**：[`theme-surface-text-roles.md`](./theme-surface-text-roles.md) — `data-surface` + `.w-text*`，禁止裸 span 黑底黑字
@@ -274,7 +275,7 @@ Theme 不再引用它。主题发布通知只发布 `Weline_Theme::notification`
 | `theme:font` | 语言子集 `@font-face` | `{Module}/view/fonts/`，默认模块 `Weline_Theme` | `Theme/Font` |
 | `theme:layout-critical` | 内联 layout-critical CSS（防 FOUC） | 基线 `view/ui/css/layout-critical-{area}.css`；**design 主题**由 Formal/`theme:upgrade` 物化为 `{area}/assets/css/layout-critical.css`（防串站）；基座只读基线 | `LayoutCriticalCssService` + `LayoutCriticalCssMaterializer` |
 
-前后台 head 默认顺序：`css-fouc-bootstrap`（`data-weline-css=pending`）→ `theme:layout-critical`（`css_minify` 开时可压缩内联）→ `weline-theme-prepaint.js` → 色盘 / 外链**布局** CSS（`data-weline-layout-css` / theme-head 合包）→ `weline-css-ready.js`。风格叶（如 `*-amazon.css`）**不进** theme-head 布局合包；店面 chrome 仍走部件 bake / 页面链路。
+前后台 head 默认顺序：`css-fouc-bootstrap`（`data-weline-css=pending`）→ `theme:layout-critical`（`css_minify` 开时可压缩内联）→ `weline-theme-prepaint.js` → 色盘 / 外链**布局** CSS（`data-weline-layout-css` / theme-head 合包）→ `weline-css-ready.js`。风格叶（如 `*-{vendor}.css`）**不进** theme-head 布局合包；店面 chrome 仍走部件 bake / 页面链路。
 
 三者路径同形：省略模块 → 默认 `Weline_Theme`；写 `Vendor_Module::相对路径` → 指定模块。模块 `view/statics` 继续用 `@static(...)`（或内置 `<css>` / `<js>`），不要改写成 theme 标签。
 
@@ -373,4 +374,4 @@ Worker 重载不能代替入口静态缓存或浏览器资源版本的更新。
 
 404 静态页发布每次走正常模板渲染，覆盖公共模板、Hook 和部件依赖的当前输出；不以仅包含主布局的输入摘要提前跳过。最终内容相同则保留已有静态文件。访问已发布 404 页面仍直接读取静态 HTML，不逐次查询数据库重建部件。
 
-**设计主题继承（硬）**：`StorefrontNotFoundStaticGenerator` 在安装站点 `ThemeApplicationContext` 后必须用 `Template::fetchHtml` 渲染 `layouts/not_found`，以便 `ThemePathResolver` 命中 `app/design/{Vendor}/{theme}/frontend/layouts/not_found/`。禁止 `fetchModuleThemeHtml` / 强制模块源——那会锁死 Amazon 模块壳，逼运维手改 `pub/errors`。品牌 404 只落 design 主题；手改 `pub/errors` 不是合法 SoT。
+**设计主题继承（硬）**：`StorefrontNotFoundStaticGenerator` 在安装站点 `ThemeApplicationContext` 后必须用 `Template::fetchHtml` 渲染 `layouts/not_found`，以便 `ThemePathResolver` 命中 `app/design/{Vendor}/{theme}/frontend/layouts/not_found/`。禁止 `fetchModuleThemeHtml` / 强制模块源——那会锁死默认模块壳，逼运维手改 `pub/errors`。品牌 404 只落 design 主题；手改 `pub/errors` 不是合法 SoT。

@@ -223,7 +223,7 @@ final class StorefrontFilterPanelService
     }
 
     /**
-     * Amazon-style refinement facet counts for soft listing refresh (BinQuery).
+     * Storefront-style refinement facet counts for soft listing refresh (BinQuery).
      *
      * count(D,v) = |filter(baseOffers, Q_{-D} ∪ {D=v})|
      * Cross-dimension AND; within-dimension disjunction; empty intersection must not
@@ -1019,7 +1019,7 @@ final class StorefrontFilterPanelService
 
 
     /**
-     * Amazon-style department nav: expand along the active path and list children under the current node.
+     * Storefront-style department nav: expand along the active path and list children under the current node.
      *
      * @return list<array{name:string,url:string,current:bool,depth:int}>
      */

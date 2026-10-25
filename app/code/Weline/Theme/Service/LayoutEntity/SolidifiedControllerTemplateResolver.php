@@ -226,7 +226,7 @@ final class SolidifiedControllerTemplateResolver
      * some layouts still inherit from the parent/module chain (LayoutScanner).
      * Inherit ancestor published solidification only for layouts the child does
      * not override in its own design tree — otherwise parent bake would clobber
-     * brand homepage/content (e.g. grocery promo → Hanfu promo-banner).
+     * brand homepage/content (e.g. design-theme promo → default promo-banner).
      *
      * Own published alone is not enough: a child with a sealed version still
      * reads parent identity for layouts it does not override (no sibling/shared disk write).

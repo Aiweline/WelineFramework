@@ -1,6 +1,6 @@
 <?php
 /**
- * 政策正文部件：可编辑条款数组 + 自动目录（amazon / plain）。
+ * 政策正文部件：可编辑条款数组 + 自动目录（classic / plain）。
  *
  * @widget.layout_source {Weline_Theme::css/widgets/widget-content-policy-document-default.css}
  * @widget.source {Weline_Theme::css/widgets/widget-content-policy-document-default.css}
@@ -16,7 +16,7 @@
  * @widget.exclusive {false}
  *
  * @param page {default="privacy",type="string",label="默认文案页键",description="privacy/refund/cookie/shipping/disclaimer/term-condition/terms/accessibility/default；sections 为空时回落"}
- * @param variant {default="amazon",type="select",label="版式",options={amazon:"左目录右正文",plain:"单栏"}}
+ * @param variant {default="classic",type="select",label="版式",options={classic:"左目录右正文",plain:"单栏"}}
  * @param title {default="",type="string",label="标题"}
  * @param lead {default="",type="textarea",label="英雄区导语"}
  * @param intro {default="",type="textarea",label="正文前导"}
@@ -53,7 +53,8 @@ $t = static fn (mixed $value, string $fallback = ''): string => WidgetI18n::labe
 $page = Block::text($this->getData('page') ?? 'privacy', 'privacy');
 $defaults = PolicyDocumentDefaults::forPage($page);
 
-$variant = Block::choice($this->getData('variant') ?? ($defaults['variant'] ?? 'amazon'), ['amazon', 'plain'], (string)($defaults['variant'] ?? 'amazon'));
+// 旧版式值 amazon 已改名 classic：持久化旧值不在白名单内，由 choice 回落 classic（兼容已发布布局）。
+$variant = Block::choice($this->getData('variant') ?? ($defaults['variant'] ?? 'classic'), ['classic', 'plain'], (string)($defaults['variant'] ?? 'classic'));
 $title = Block::text($this->getData('title'));
 if ($title === '') {
     $title = Block::text($defaults['title'] ?? '政策');
@@ -184,15 +185,15 @@ $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
      data-js-ns="<?= $esc($scope->jsNs) ?>"
      data-page="<?= $esc($page) ?>"
      data-variant="<?= $esc($variant) ?>">
-<?php if ($variant === 'amazon'): ?>
-    <div class="amazon-policy__document">
-        <header class="amazon-policy__hero" data-surface="inverse" aria-labelledby="policy-doc-title-<?= $esc($scope->uid) ?>" weline-code="theme.policy.hero">
-            <p class="amazon-policy__eyebrow"><?= $esc($siteName) ?></p>
+<?php if ($variant === 'classic'): ?>
+    <div class="doc-policy__document">
+        <header class="doc-policy__hero" data-surface="inverse" aria-labelledby="policy-doc-title-<?= $esc($scope->uid) ?>" weline-code="theme.policy.hero">
+            <p class="doc-policy__eyebrow"><?= $esc($siteName) ?></p>
             <h1 id="policy-doc-title-<?= $esc($scope->uid) ?>"><?= $esc($t($title)) ?></h1>
             <?php if ($lead !== ''): ?>
-                <p class="amazon-policy__hero-lead"><?= $esc($t($lead)) ?></p>
+                <p class="doc-policy__hero-lead"><?= $esc($t($lead)) ?></p>
             <?php endif; ?>
-            <div class="amazon-policy__meta">
+            <div class="doc-policy__meta">
                 <?php if ($updatedAt !== ''): ?>
                     <span><?= $esc($t('最后更新：', '最后更新：')) ?><?= $esc($updatedAt) ?></span>
                 <?php endif; ?>
@@ -211,8 +212,8 @@ $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
             </div>
         </header>
 
-        <div class="amazon-policy__panel">
-            <aside class="amazon-policy__toc" aria-label="<?= $esc($t($tocAria)) ?>">
+        <div class="doc-policy__panel">
+            <aside class="doc-policy__toc" aria-label="<?= $esc($t($tocAria)) ?>">
                 <h2><?= $esc($t('目录', '目录')) ?></h2>
                 <nav>
                     <?php foreach ($normalizedSections as $section): ?>
@@ -220,7 +221,7 @@ $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
                     <?php endforeach; ?>
                 </nav>
             </aside>
-            <article class="amazon-policy__article" aria-label="<?= $esc($t($articleAria)) ?>">
+            <article class="doc-policy__article" aria-label="<?= $esc($t($articleAria)) ?>">
                 <?php if ($showLegal): ?>
                     <?php if (Block::text($contact['legal_name'] ?? '') !== ''): ?>
                         <p><?= $esc($t('经营主体', '经营主体')) ?>：<?= $esc((string)$contact['legal_name']) ?></p>
@@ -234,10 +235,10 @@ $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
                     <?php endif; ?>
                 <?php endif; ?>
                 <?php if ($intro !== ''): ?>
-                    <p class="amazon-policy__intro"><?= $esc($t($intro)) ?></p>
+                    <p class="doc-policy__intro"><?= $esc($t($intro)) ?></p>
                 <?php endif; ?>
                 <?php foreach ($normalizedSections as $index => $section): ?>
-                    <section class="amazon-policy__section" id="<?= $esc($section['id']) ?>" weline-code="theme.policy.section_<?= $esc((string)($index + 2)) ?>">
+                    <section class="doc-policy__section" id="<?= $esc($section['id']) ?>" weline-code="theme.policy.section_<?= $esc((string)($index + 2)) ?>">
                         <?php if ($section['title'] !== ''): ?>
                             <h2><?= $esc($t($section['title'])) ?></h2>
                         <?php endif; ?>
@@ -248,7 +249,7 @@ $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
                     </section>
                 <?php endforeach; ?>
                 <?php if ($footerNote !== ''): ?>
-                    <div class="amazon-policy__footer-note">
+                    <div class="doc-policy__footer-note">
                         <p><?= $esc($t($footerNote)) ?></p>
                     </div>
                 <?php endif; ?>

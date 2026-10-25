@@ -519,6 +519,8 @@ final class SchemaDiffEngine
             return true;
         }
         // MySQL TEXT/BLOB 家族容量递增；物理列不小于声明时 MODIFY 只会截断现存数据（Data too long）。
+        // 注意：json 不进本数组——json 声明在 MariaDB 物理层可为 longtext（收缩方向），
+        // 由下方 mysql/mariadb 专用分支做双向兼容，容量 rank 规则会误拒。
         foreach ([
             ['tinytext', 'text', 'mediumtext', 'longtext'],
             ['tinyblob', 'blob', 'mediumblob', 'longblob'],
@@ -528,6 +530,17 @@ final class SchemaDiffEngine
             if ($declaredRank !== false && $actualRank !== false) {
                 return $actualRank >= $declaredRank;
             }
+        }
+        if (in_array($databaseType, ['mysql', 'mariadb'], true)
+            && (($declaredType === 'json'
+                    && in_array($actualType, ['longtext', 'mediumtext', 'text', 'tinytext'], true))
+                || ($actualType === 'json'
+                    && in_array($declaredType, ['longtext', 'mediumtext', 'text', 'tinytext'], true)))) {
+            return true;
+        }
+        if (in_array($databaseType, ['mysql', 'mariadb'], true)
+            && $this->isBooleanTinyintCompatible($declaredType, $declared, $actualType, $actual)) {
+            return true;
         }
         if ($databaseType !== 'sqlite'
             || !$declared->primaryKey
@@ -562,6 +575,18 @@ final class SchemaDiffEngine
         }
         if ($this->isBooleanType($declared->type) && $this->isBooleanType($actual->type)) {
             return $this->booleanLiteral($expected) === $this->booleanLiteral($observed);
+        }
+        $isMysql = \in_array($databaseType, ['mysql', 'mariadb'], true);
+        if ($isMysql
+            && $this->isTextBlobType($declared->type)
+            && ((string)($declared->default ?? '') !== '')
+            && ($actual->default === null || strcasecmp((string)$actual->default, 'NULL') === 0)) {
+            return true;
+        }
+        if ($isMysql
+            && (($declared->default === null && $this->decodeMysqlInformationSchemaDefault((string)($actual->default ?? '')) === '')
+                || ($declared->default === '' && strcasecmp((string)($actual->default ?? ''), 'NULL') === 0))) {
+            return true;
         }
         $isPgsql = \in_array($databaseType, ['pgsql', 'postgres', 'postgresql'], true);
         if (!$isPgsql && \in_array($databaseType, ['mysql', 'mariadb'], true)) {
@@ -598,6 +623,41 @@ final class SchemaDiffEngine
         return $expected === $observed;
     }
 
+
+    private function isTextBlobType(string $type): bool
+    {
+        return in_array($this->normalizeType($type), [
+            'text',
+            'tinytext',
+            'mediumtext',
+            'longtext',
+            'blob',
+            'tinyblob',
+            'mediumblob',
+            'longblob',
+        ], true);
+    }
+
+    private function isBooleanTinyintCompatible(
+        string $declaredType,
+        ColumnDefinition $declared,
+        string $actualType,
+        ColumnDefinition $actual,
+    ): bool {
+        $booleanSide = null;
+        $tinyintSide = null;
+        if ($declaredType === 'boolean' && $actualType === 'tinyint') {
+            $booleanSide = $declared;
+            $tinyintSide = $actual;
+        } elseif ($declaredType === 'tinyint' && $actualType === 'boolean') {
+            $booleanSide = $actual;
+            $tinyintSide = $declared;
+        }
+        if ($booleanSide === null) {
+            return false;
+        }
+        return (string)($tinyintSide->length ?? '') === '1';
+    }
 
     private function isBooleanType(string $type): bool
     {

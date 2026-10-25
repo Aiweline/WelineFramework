@@ -16,7 +16,7 @@ class ThemeDiskKeysAndMetaTest extends TestCase
         self::assertSame('theme.frontend.disk_active.color.value', ThemeDiskKeys::activeIdentify('frontend', 'color'));
         self::assertSame('theme.backend.disk_custom.spacing.my-disk.value', ThemeDiskKeys::customIdentify('backend', 'spacing', 'My Disk'));
         self::assertSame(['kind' => 'custom', 'key' => 'abc'], ThemeDiskKeys::parseActiveRef('custom:abc'));
-        self::assertSame(['kind' => 'file', 'key' => 'amazon'], ThemeDiskKeys::parseActiveRef('file:amazon'));
+        self::assertSame(['kind' => 'file', 'key' => 'commerce'], ThemeDiskKeys::parseActiveRef('file:commerce'));
     }
 
     public function testParserReadsPanelMeta(): void

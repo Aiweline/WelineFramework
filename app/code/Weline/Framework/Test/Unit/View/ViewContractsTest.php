@@ -341,7 +341,7 @@ private function assert_CompiledTemplateMinifier_testMinifyKeepsHashCommentAndIs
 private function criticalRuntimeFiles_ForbidHardcodedModuleStaticUrl(): array
 {
     $bp = '/Users/weline/Project/Official/框架/app/code/Weline';
-    return [$bp . '/Frontend/view/blocks/header/base.phtml', $bp . '/Backend/view/blocks/header/base.phtml', $bp . '/Theme/Helper/StorefrontImagePlaceholder.php', $bp . '/Theme/Service/TextileHeritageCatalog.php', $bp . '/Theme/Observer/ControllerFetchFileAfter.php', $bp . '/I18n/Helper/CountryFlagMarkup.php', $bp . '/CustomerService/view/templates/frontend/widgets/customer-service-float.phtml'];
+    return [$bp . '/Frontend/view/blocks/header/base.phtml', $bp . '/Backend/view/blocks/header/base.phtml', $bp . '/Theme/Helper/StorefrontImagePlaceholder.php', $bp . '/Theme/Observer/ControllerFetchFileAfter.php', $bp . '/I18n/Helper/CountryFlagMarkup.php', $bp . '/CustomerService/view/templates/frontend/widgets/customer-service-float.phtml'];
 }
 
 private function assert_ForbidHardcodedModuleStaticUrl_testCriticalChromeUsesPublicStaticUrlNotBareDevModulePaths(): void

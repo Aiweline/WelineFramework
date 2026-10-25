@@ -1,9 +1,9 @@
 /**
- * 客服服务前端浮层 — Amazon chrome 对齐（--weline-chrome-*）+ Weline 控件契约
+ * 客服服务前端浮层 — Classic chrome 对齐（--weline-chrome-*）+ Weline 控件契约
  */
 @layer page {
     .customer-service-widget,
-    .customer-service-widget--amazon {
+    .customer-service-widget--classic {
         --cs-accent: var(--weline-chrome-primary);
         --cs-accent-hover: var(--weline-chrome-primary-dark);
         --cs-on-accent: var(--color-bg-dark-secondary);
@@ -1346,7 +1346,7 @@
 
 /*
  * Unlayered: Theme .w-panel-header/.w-panel-footer are unlayered and beat @layer page.
- * Keep Amazon/chrome header readable (dark bg + light text) against ink/panel light surfaces.
+ * Keep Classic/chrome header readable (dark bg + light text) against ink/panel light surfaces.
  */
 .customer-service-widget .cs-chat-header.w-panel-header {
     background: var(--cs-header-bg);

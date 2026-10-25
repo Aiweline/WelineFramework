@@ -263,6 +263,35 @@ async function fetchLanguageSwitcherCatalogHtml(root) {
         try {
             return await Promise.race([
                 (async () => {
+                    /*
+                     * 公开目录端点优先：语言目录是只读公共数据，
+                     * 走 QueryBin 会给每个访客分配 Worker Session，
+                     * 量大时出现「工作会话已达上限」。此端点可 HTTP 缓存、无需会话；
+                     * 失败时再回退到 QueryBin 资源。
+                     */
+                    const catalogUrl = String(root.getAttribute('data-i18n-catalog-url') || '').trim();
+                    if (catalogUrl) {
+                        try {
+                            const url = new URL(catalogUrl, window.location.origin);
+                            const websiteId = Number(root.dataset.websiteId || 0) || 0;
+                            if (websiteId > 0) url.searchParams.set('website_id', String(websiteId));
+                            const display = String(root.dataset.i18nDisplayLocale || '').trim();
+                            if (display) url.searchParams.set('display_locale_code', display);
+                            const current = String(root.dataset.i18nCurrentLocale || '').trim();
+                            if (current) url.searchParams.set('current', current);
+                            const response = await fetch(url.toString(), {
+                                credentials: 'same-origin',
+                                headers: { Accept: 'application/json' },
+                            });
+                            if (response.ok) {
+                                const payload = await response.json();
+                                const html = String(payload?.data?.html || payload?.html || '');
+                                if (html.trim()) return html;
+                            }
+                        } catch (_catalogError) {
+                            // fall through to QueryBin
+                        }
+                    }
                     if (typeof window.Weline?.load === 'function') {
                         await window.Weline.load('api');
                     }
@@ -1339,6 +1368,7 @@ export function register(UI) {
         };
 
         let panelCatalogLoaded = root.getAttribute('data-i18n-panel-lazy') !== '1';
+        let panelCatalogRetried = false;
         let panelCatalogLoading = false;
         let panelCatalogGeneration = 0;
 
@@ -1370,6 +1400,7 @@ export function register(UI) {
                     event.preventDefault();
                     event.stopPropagation();
                     panelCatalogLoaded = false;
+                    panelCatalogRetried = false;
                     void loadPanelCatalog(true);
                 }, { once: true });
                 list.append(button);
@@ -1409,13 +1440,34 @@ export function register(UI) {
             } catch (error) {
                 if (generation !== panelCatalogGeneration) return;
                 panelCatalogLoaded = false;
-                renderPanelStatus(
-                    error instanceof Error
-                        ? error.message
-                        : (root.dataset.i18nPanelErrorText || 'Unable to load.'),
-                    'danger',
-                    true,
-                );
+                /*
+                 * 后端 5xx（含 Worker 容量打满）对客户不可见：
+                 * 显示中性文案并自动重试一次；仍失败才给出可操作的重试按钮，
+                 * 永远不把「工作会话已达上限」这类内部文案透给店面用户。
+                 */
+                const rawMessage = error instanceof Error ? error.message : '';
+                const transient = /worker_capacity|503|500|502|504|Failed to fetch|NetworkError|load failed/i
+                    .test(rawMessage);
+                if (transient && !panelCatalogRetried) {
+                    panelCatalogRetried = true;
+                    panelCatalogPromises.delete(root);
+                    renderPanelStatus(
+                        root.dataset.i18nPanelLoadingText || 'Loading…',
+                        'muted',
+                        false,
+                    );
+                    window.setTimeout(() => {
+                        if (generation === panelCatalogGeneration) {
+                            void loadPanelCatalog(true);
+                        }
+                    }, 1500);
+                } else {
+                    renderPanelStatus(
+                        root.dataset.i18nPanelErrorText || 'Unable to load.',
+                        'danger',
+                        true,
+                    );
+                }
             } finally {
                 if (generation === panelCatalogGeneration) {
                     panelCatalogLoading = false;

@@ -106,7 +106,7 @@ $hrefAttr = 'href="' . $esc($resolvedHref !== '' ? $resolvedHref : '#') . '"';
     <div class="wpc-media w-frame" data-ratio="1" data-fit="cover">
         <a class="wpc-media-link" <?= $hrefAttr ?> aria-label="<?= $esc($productName) ?>">
             <img src="<?= $esc($productImage) ?>"
-                 alt="<?= $esc($productName) ?>"
+                 alt="<?= $esc(ProductCardRenderer::imageAlt($productName)) ?>"
                  class="wpc-image"
                  width="800"
                  height="800"

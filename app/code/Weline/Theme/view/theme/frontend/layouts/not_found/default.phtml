@@ -1,9 +1,9 @@
 <?php
 /**
- * 布局：404 页面（Amazon 风格）- 头尾 + 推荐产品槽
+ * 布局：404 页面（Commerce 风格）- 头尾 + 推荐产品槽
  *
- * @meta.name {default="404 页面布局",name="404 页面布局",description="Amazon 风格 404，静态快照由 Theme 生成"}
- * @meta.description {default="Amazon 风格页面不存在布局",name="404 页面布局",description="404 静态页生成模板"}
+ * @meta.name {default="404 页面布局",name="404 页面布局",description="Commerce 风格 404，静态快照由 Theme 生成"}
+ * @meta.description {default="Commerce 风格页面不存在布局",name="404 页面布局",description="404 静态页生成模板"}
  * @param title {default="抱歉，找不到您要的页面",name="页面标题",description="页面标题"}
  * @param pageTitle {default="抱歉，找不到您要的页面",name="404 标题",description="404 主标题"}
  * @param pageLead {default="您访问的链接可能已失效，或该页面已被移除。",name="404 说明",description="404 主要说明"}
@@ -35,23 +35,23 @@ $this->setData('seo', [
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
     <style>
-        .amazon-not-found-layout {
+        .not-found-layout {
             margin: 0;
             background: var(--color-bg-canvas, #ffffff);
             color: var(--color-text-primary, #0f1111);
-            font-family: "Amazon Ember", Arial, sans-serif;
+            font-family: "Commerce Ember", Arial, sans-serif;
         }
 
-        .amazon-not-found {
+        .not-found {
             width: 100%;
         }
 
-        .amazon-not-found__intro {
+        .not-found__intro {
             background: var(--color-bg-canvas, #ffffff);
             border-bottom: 1px solid var(--color-border-default, #ddd);
         }
 
-        .amazon-not-found__intro-inner {
+        .not-found__intro-inner {
             width: min(100%, var(--weline-layout-content-max-width));
             max-width: 100%;
             margin: 0 auto;
@@ -63,19 +63,19 @@ $this->setData('seo', [
             align-items: center;
         }
 
-        .amazon-not-found__visual {
+        .not-found__visual {
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 0.5rem;
         }
 
-        .amazon-not-found__visual svg {
+        .not-found__visual svg {
             width: min(100%, 240px);
             height: auto;
         }
 
-        .amazon-not-found__kicker {
+        .not-found__kicker {
             margin: 0 0 0.35rem;
             font-size: 0.95rem;
             font-weight: 700;
@@ -84,7 +84,7 @@ $this->setData('seo', [
             color: var(--color-text-secondary, #565959);
         }
 
-        .amazon-not-found__title {
+        .not-found__title {
             margin: 0 0 0.75rem;
             font-size: clamp(1.45rem, 2.4vw, 1.85rem);
             line-height: 1.25;
@@ -92,20 +92,20 @@ $this->setData('seo', [
             color: var(--color-text-primary, #0f1111);
         }
 
-        .amazon-not-found__lead,
-        .amazon-not-found__hint {
+        .not-found__lead,
+        .not-found__hint {
             margin: 0;
             max-width: 42rem;
             line-height: 1.55;
             color: var(--color-text-secondary, #565959);
         }
 
-        .amazon-not-found__hint {
+        .not-found__hint {
             margin-top: 0.55rem;
             font-size: 0.95rem;
         }
 
-        .amazon-not-found__actions {
+        .not-found__actions {
             margin-top: 1.15rem;
             display: flex;
             flex-wrap: wrap;
@@ -113,7 +113,7 @@ $this->setData('seo', [
             gap: 0.85rem 1.25rem;
         }
 
-        .amazon-not-found__home-link {
+        .not-found__home-link {
             display: inline-flex;
             align-items: center;
             min-height: 2rem;
@@ -128,12 +128,12 @@ $this->setData('seo', [
             text-decoration: none;
         }
 
-        .amazon-not-found__home-link:hover {
+        .not-found__home-link:hover {
             background: linear-gradient(180deg, #ffd56b 0%, var(--color-primary-hover, #e68900) 100%);
             color: var(--color-on-primary, #111);
         }
 
-        .amazon-not-found__back-link {
+        .not-found__back-link {
             appearance: none;
             border: none;
             background: transparent;
@@ -145,17 +145,17 @@ $this->setData('seo', [
             text-decoration: none;
         }
 
-        .amazon-not-found__back-link:hover {
+        .not-found__back-link:hover {
             color: var(--color-link-hover);
             text-decoration: underline;
         }
 
-        .amazon-not-found__shop {
+        .not-found__shop {
             background: var(--color-bg-secondary, #eaeded);
             padding: 1.35rem 0 2.5rem;
         }
 
-        .amazon-not-found__shop-panel {
+        .not-found__shop-panel {
             width: min(100%, var(--weline-layout-content-max-width));
             max-width: 100%;
             padding-inline: var(--weline-layout-content-padding-inline);
@@ -167,35 +167,35 @@ $this->setData('seo', [
             box-shadow: 0 1px 2px rgba(15, 17, 17, 0.06);
         }
 
-        .amazon-not-found__shop-panel .weline-product-recommended {
+        .not-found__shop-panel .weline-product-recommended {
             margin: 0;
         }
 
         @media (max-width: 768px) {
-            .amazon-not-found__intro-inner {
+            .not-found__intro-inner {
                 grid-template-columns: 1fr;
                 padding: 1.75rem 0 2rem;
                 text-align: left;
             }
 
-            .amazon-not-found__visual {
+            .not-found__visual {
                 justify-content: flex-start;
             }
 
-            .amazon-not-found__visual svg {
+            .not-found__visual svg {
                 width: min(72vw, 200px);
             }
 
-            .amazon-not-found__actions {
+            .not-found__actions {
                 flex-direction: column;
                 align-items: flex-start;
             }
 
-            .amazon-not-found__shop {
+            .not-found__shop {
                 padding: 1rem 0 2rem;
             }
 
-            .amazon-not-found__shop-panel {
+            .not-found__shop-panel {
                 width: min(100%, var(--weline-layout-content-max-width));
                 max-width: 100%;
                 padding: 0.85rem 0.75rem 1rem;
@@ -204,26 +204,26 @@ $this->setData('seo', [
     </style>
     <w:hook>seo::head</w:hook>
 </head>
-<body class="not-found-layout amazon-not-found-layout">
+<body class="not-found-layout not-found-layout">
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
     <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
 
-    <main class="amazon-not-found <?= $esc((string)($meta['class'] ?? '')) ?>"
+    <main class="not-found <?= $esc((string)($meta['class'] ?? '')) ?>"
           id="not-found-main"
           data-layout="not_found"
           data-testid="storefront-not-found-page">
-        <section class="amazon-not-found__intro" weline-code="theme.not_found.intro" aria-labelledby="amazon-not-found-title">
+        <section class="not-found__intro" weline-code="theme.not_found.intro" aria-labelledby="not-found-title">
             <w:slot id="not-found-content"
                     name="404 内容"
                     accept="layout-not-found-content,content,empty-state"
                     reject="header,footer"
                     multiple="true"
                     position="content"
-                    class="amazon-not-found__intro-inner not-found-container">
-                <div class="amazon-not-found__visual" aria-hidden="true">
+                    class="not-found__intro-inner not-found-container">
+                <div class="not-found__visual" aria-hidden="true">
                     <svg viewBox="0 0 240 200" role="img" focusable="false">
                         <rect x="28" y="56" width="118" height="92" rx="10" fill="#ffd699"/>
                         <rect x="38" y="66" width="98" height="72" rx="8" fill="#fffaf0" stroke="#ff9900" stroke-width="3"/>
@@ -234,20 +234,20 @@ $this->setData('seo', [
                         <ellipse cx="120" cy="168" rx="62" ry="10" fill="#eaeded"/>
                     </svg>
                 </div>
-                <div class="amazon-not-found__message">
-                    <p class="amazon-not-found__kicker"><?= $esc((string)$statusCode) ?> · <?= __('SORRY') ?></p>
-                    <h1 class="amazon-not-found__title" id="amazon-not-found-title"><?= $esc($pageTitle) ?></h1>
+                <div class="not-found__message">
+                    <p class="not-found__kicker"><?= $esc((string)$statusCode) ?> · <?= __('SORRY') ?></p>
+                    <h1 class="not-found__title" id="not-found-title"><?= $esc($pageTitle) ?></h1>
                     <?php if ($pageLead !== ''): ?>
-                        <p class="amazon-not-found__lead"><?= $esc($pageLead) ?></p>
+                        <p class="not-found__lead"><?= $esc($pageLead) ?></p>
                     <?php endif; ?>
                     <?php if ($pageHint !== ''): ?>
-                        <p class="amazon-not-found__hint"><?= $esc($pageHint) ?></p>
+                        <p class="not-found__hint"><?= $esc($pageHint) ?></p>
                     <?php endif; ?>
-                    <div class="amazon-not-found__actions">
-                        <a class="amazon-not-found__home-link" href="<?= $esc($homeHref !== '' ? $homeHref : '/') ?>">
+                    <div class="not-found__actions">
+                        <a class="not-found__home-link" href="<?= $esc($homeHref !== '' ? $homeHref : '/') ?>">
                             <?= __('前往首页继续购物') ?>
                         </a>
-                        <button type="button" class="amazon-not-found__back-link" data-w-error-back>
+                        <button type="button" class="not-found__back-link" data-w-error-back>
                             <?= __('返回上一页') ?>
                         </button>
                     </div>
@@ -255,8 +255,8 @@ $this->setData('seo', [
             </w:slot>
         </section>
 
-        <section class="amazon-not-found__shop" weline-code="theme.not_found.shop" aria-label="<?= $esc((string)__('推荐产品')) ?>">
-            <div class="amazon-not-found__shop-panel">
+        <section class="not-found__shop" weline-code="theme.not_found.shop" aria-label="<?= $esc((string)__('推荐产品')) ?>">
+            <div class="not-found__shop-panel">
                 <w:slot id="not-found-recommendations"
                         name="404 推荐产品"
                         accept="layout-not-found-recommendations,recommended-products,featured-products,bestsellers,new-arrivals,you-may-like,product-carousel"

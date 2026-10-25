@@ -5,15 +5,15 @@ declare(strict_types=1);
 /**
  * skill-v2 surface: theme_development（主题开发工程师席 · 薄表面）
  *
- * 可执行程序：声明 work_mode/area -> 读 P0 文档 -> 按 mode 落盘 -> Token/组件边界 -> 编译矩阵 -> 双轨收口。
- * 权威正文在 weline-theme-development / frontend_development 与 Theme doc；政策正文在 hard_constraints。
+ * 可执行程序：声明 work_mode/area -> 读统一规范 + P0 文档 -> 按 mode 落盘 -> Token/组件边界 -> 编译矩阵 -> 双轨收口。
+ * 权威正文在 theme-unified-spec / weline-theme-development / frontend_development 与 Theme doc；政策正文在 hard_constraints。
  * 标准：app/code/Weline/Ai/doc/AI技能编写标准.md
  */
 return [
     'id' => 'theme_development',
     'spec' => 'skill-v2',
     'label' => '主题开发专席（薄）',
-    'description' => '工程团队主题开发工程师席薄表面：Theme Token/语义色、layout 壳、版心、预览三态、app/design 继承覆盖、Weline_Theme 自有部件的施工与合规复审。开工先声明 work_mode；无 user_deleted 时必装永远存在；权威正文见 weline-theme-development。',
+    'description' => '工程团队主题开发工程师席薄表面：Theme Token/语义色、layout 壳、版心、预览三态、app/design 同 key 文件覆盖、Weline_Theme 自有部件的施工与合规复审。默认主题只放机制与默认信息，不得含具体设计主题的资产/模板/服务/命名；开工先声明 work_mode；无 user_deleted 时必装永远存在；权威正文见 theme-unified-spec 与 weline-theme-development。',
     'triggers' => [
         '主题开发工程师', '主题开发', 'Theme Token', 'CSS变量', 'variables/_',
         'layout壳', '版心', '预览三态', 'theme-preview', 'app/design',
@@ -21,10 +21,12 @@ return [
         '新主题', 'theme:create', 'theme:active', 'register.php', 'work_mode',
         'components', 'w-backend-page', '通用建站', '四层',
         '必装永远存在', 'user_deleted', 'required_default_always_present',
+        '主题统一规范', 'theme-unified-spec', '默认主题纯度', '设计主题覆盖', '同key文件覆盖',
     ],
     'authoritative_skill' => 'weline-theme-development',
-    'authoritative_doc' => 'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
+    'authoritative_doc' => 'app/code/Weline/Theme/doc/theme-unified-spec.md',
     'authoritative_docs' => [
+        'app/code/Weline/Theme/doc/theme-unified-spec.md',
         'dev/ai-command/ai/主题开发.md',
         'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
         'app/code/Weline/Theme/doc/theme-css-variables-only.md',
@@ -45,8 +47,9 @@ return [
         '改动面：Token/布局壳/组件/模块模板/运行时 PHP',
     ],
     'procedure' => [
-        '开工首条回报写 work_mode 与 area；读 主题开发.md P0 节 + Theme开发总指南.md。',
-        '按 mode 落盘：default_theme 改 view/theme；design_theme 只 app/design 继承；runtime 改 PHP 并升版。',
+        '开工首条回报写 work_mode 与 area；先读 theme-unified-spec.md，再读 主题开发.md P0 节 + Theme开发总指南.md。',
+        '按 mode 落盘：default_theme 只放机制/默认信息，禁具体设计主题资产/模板/服务/命名；design_theme 只 app/design 同 key 文件覆盖；runtime 改 PHP 并升版。',
+        '品牌内容迁出默认主题：同 key 复制到 app/design/{Vendor}/{theme}，设计主题 head/overlay 挂载，默认层还原通用结构；禁在默认层留 @import/<link> 指向设计主题资产。',
         'Token 取 --weline-theme-*/--color-*，间距/圆角/字号取 --weline-space/radius/font-size；禁裸 px。',
         'components 与 statics/ui 双层复用；外国注入 defer Team:部件开发工程师:，同身份 XOR。',
         '编译矩阵按改面跑 welineModules/welineUi/disk:compile/theme:upgrade。',
@@ -54,14 +57,18 @@ return [
     ],
     'checklist' => [
         'work_mode 与 area 已在首条回报声明',
-        'design 波 diff 不含 app/code 上游 widgets',
+        '默认主题无具体设计主题的资产/模板/服务/命名（跑 ThemeDefaultPurityTest）',
+        'design 波 diff 只在 app/design/{Vendor}/{theme}，不含 app/code 上游',
         '无 user_deleted 时 required 必装仍在',
         'theme.css 无 !important、无 #hex、无裸 px',
         '店面由 websites_theme_application 或 Default 解析',
         '预览三态与正式店面同构',
     ],
     'anti_patterns' => [
-        '把 .amazon-*/.w-amz-* 风格壳写进 theme.css',
+        '把 .{vendor}-*/.w-{vendor}-* 风格壳写进 theme.css',
+        '把某设计主题的模板/资产/服务/目录/SEO 文案留在默认主题',
+        '在默认布局 accept 中登记设计主题专属部件，或在默认 CSS 写设计主题专属选择器',
+        '为迁移方便在默认主题保留 @import/<link> 指向设计主题资产',
         '未声明 work_mode 就改 app/design 文件',
         'design 继承做不到应停手询问，禁改上游 app/code',
         '用 theme:active 或旧 theme_binding 当店面权威',
@@ -86,6 +93,9 @@ return [
         ['id' => 'scope_migrate_cli_unimplemented', 'summary' => 'theme:scope:migrate 未实现；禁自写 SQL 删 scope 表；只走 Editor Scope+发布。'],
         ['id' => 'editor_dual_preview_parity', 'summary' => '画布禁 start-preview/种 Token；仅 #btnFrontendPreview 可 Token；禁 preview early-return。'],
         ['id' => 'frontend_section_weline_code', 'summary' => 'section 与 w:slot wrapper=section 必带非空 weline-code；改后 check-section-code。'],
+        ['id' => 'theme_default_purity_no_design_theme_content', 'summary' => '默认主题只放机制与默认信息；禁具体设计主题的资产/模板/服务/命名/专属选择器/accept 登记。'],
+        ['id' => 'design_theme_same_key_file_override', 'summary' => '设计主题只 app/design/{Vendor}/{theme} 同 key 覆盖；品牌 CSS 进 overlay，禁同 key 覆盖 theme.css/theme.js。'],
+        ['id' => 'theme_spec_theme_agnostic', 'summary' => '主题统一规范正文不出现具体主题/品牌/站点名；示例用 {Vendor}/{theme}/{brand} 占位符。'],
     ],
     'norm_ids' => [
         'theme_engineer_dual_track',
@@ -104,16 +114,22 @@ return [
         'token_only_no_private_palette',
         'preview_three_modes',
         'compile_weline_modules',
+        'theme_default_purity_no_design_theme_content',
+        'design_theme_same_key_file_override',
+        'theme_spec_theme_agnostic',
     ],
     'template_surface_rules' => [
         'required' => [
             'Declare work_mode and area before any Theme/design edit',
             'Team:主题开发工程师: on Token/shell/preview/design waves, dual-track',
             'Without user_deleted@{versionId}, required default injections always exist',
+            'Default theme carries mechanism + default info only; no design-theme assets/templates/services/names',
+            'Brand content moves to app/design/{Vendor}/{theme} via same-key file override',
         ],
         'forbidden' => [
             'Same-key override of assets/css/theme.css or assets/js/theme.js',
-            'Style shells (.amazon-*/.w-amz-*) or !important in default theme.css',
+            'Style shells (.{vendor}-*/.w-{vendor}-*) or !important in default theme.css',
+            'Design-theme content, selectors, accept entries, or asset links left in the default theme',
             'Patching upstream app/code when design inheritance falls short',
             'Stripping chrome/required widgets under peer pressure',
         ],
@@ -123,5 +139,6 @@ return [
         'php bin/w frontend:check-theme-layout-widgets',
         'php bin/w resource:compile welineModules',
         'php bin/w theme:upgrade -t {name}',
+        'vendor/bin/phpunit --bootstrap app/bootstrap_phpunit.php app/code/Weline/Theme/test/Unit/ThemeDefaultPurityTest.php',
     ],
 ];

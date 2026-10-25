@@ -109,15 +109,15 @@ $searchPlaceholder = (string)WidgetI18n::label('搜索常见问题，例如：�
             min-height: 100vh;
             color: var(--color-text-primary);
             background: var(--color-bg-canvas);
-            font-family: "Amazon Ember", Arial, sans-serif;
+            font-family: "Weline Ember", Arial, sans-serif;
         }
-        .amazon-faq.weline-page-wrapper {
+        .faq-panel.weline-page-wrapper {
             min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
-        .amazon-faq__main { flex: 1 0 auto; display: flex; flex-direction: column; }
-        .amazon-faq__hero {
+        .faq-panel__main { flex: 1 0 auto; display: flex; flex-direction: column; }
+        .faq-panel__hero {
             margin: 0 0 var(--weline-space-5);
             padding: clamp(var(--spacing-5_5), 3vw, var(--spacing-7)) clamp(var(--spacing-4_5), 2.5vw, var(--spacing-7));
             border-radius: var(--radius-lg);
@@ -127,7 +127,7 @@ $searchPlaceholder = (string)WidgetI18n::label('搜索常见问题，例如：�
             color: var(--color-text-light);
             box-sizing: border-box;
         }
-        .amazon-faq__stage {
+        .faq-panel__stage {
             box-sizing: border-box;
             width: min(100%, var(--weline-layout-content-max-width));
             max-width: 100%;
@@ -136,7 +136,7 @@ $searchPlaceholder = (string)WidgetI18n::label('搜索常见问题，例如：�
             padding-inline: var(--weline-layout-content-padding-inline);
             padding-block: clamp(var(--weline-space-9), 4.5vw, var(--spacing-13)) clamp(var(--weline-space-12), 6vw, var(--spacing-13));
         }
-        .amazon-faq__eyebrow {
+        .faq-panel__eyebrow {
             margin: 0 0 .45rem;
             font-size: .85rem;
             font-weight: 700;
@@ -144,20 +144,20 @@ $searchPlaceholder = (string)WidgetI18n::label('搜索常见问题，例如：�
             text-transform: uppercase;
             color: var(--color-text-faint);
         }
-        .amazon-faq__hero h1 {
+        .faq-panel__hero h1 {
             margin: 0;
             font-size: clamp(var(--font-size-3xl), 3.6vw, 2.4rem);
             line-height: 1.2;
             font-weight: 700;
             color: var(--color-text-light);
         }
-        .amazon-faq__hero-lead {
+        .faq-panel__hero-lead {
             margin: .85rem 0 0;
             max-width: 46rem;
             line-height: 1.65;
             color: var(--color-text-faint);
         }
-        .amazon-faq__meta {
+        .faq-panel__meta {
             margin-top: var(--weline-space-4);
             display: flex;
             flex-wrap: wrap;
@@ -165,12 +165,12 @@ $searchPlaceholder = (string)WidgetI18n::label('搜索常见问题，例如：�
             font-size: .9rem;
             color: var(--color-text-faint);
         }
-        .amazon-faq__meta a { color: inherit; text-decoration: underline; }
-        .amazon-faq__search {
+        .faq-panel__meta a { color: inherit; text-decoration: underline; }
+        .faq-panel__search {
             margin-top: var(--weline-space-5);
             max-width: 40rem;
         }
-        .amazon-faq__search-form {
+        .faq-panel__search-form {
             display: flex;
             gap: 0;
             background: var(--color-bg-primary);
@@ -178,7 +178,7 @@ $searchPlaceholder = (string)WidgetI18n::label('搜索常见问题，例如：�
             overflow: hidden;
             box-shadow: var(--weline-shadow-md);
         }
-        .amazon-faq__search-form input {
+        .faq-panel__search-form input {
             flex: 1;
             min-width: 0;
             min-height: var(--control-height-lg);
@@ -188,7 +188,7 @@ $searchPlaceholder = (string)WidgetI18n::label('搜索常见问题，例如：�
             color: var(--weline-theme-color-text);
             outline: none;
         }
-        .amazon-faq__search-form button {
+        .faq-panel__search-form button {
             min-height: var(--control-height-lg);
             border: 0;
             padding: 0 var(--weline-space-5);
@@ -197,13 +197,13 @@ $searchPlaceholder = (string)WidgetI18n::label('搜索常见问题，例如：�
             font-weight: 700;
             cursor: pointer;
         }
-        .amazon-faq__search-form button:hover { background: var(--color-warning); }
-        .amazon-faq__body {
+        .faq-panel__search-form button:hover { background: var(--color-warning); }
+        .faq-panel__body {
             flex: 1 0 auto;
             width: 100%;
             background: linear-gradient(180deg, var(--color-bg-muted) 0, var(--color-bg-muted) 12rem);
         }
-        .amazon-faq__panel {
+        .faq-panel__panel {
             background: var(--color-bg-primary);
             border: var(--border-width-thin) solid var(--color-border-muted);
             border-radius: var(--radius-lg);
@@ -211,12 +211,12 @@ $searchPlaceholder = (string)WidgetI18n::label('搜索常见问题，例如：�
             padding: clamp(var(--spacing-4_5), 2.4vw, var(--spacing-7));
             box-sizing: border-box;
         }
-        .amazon-faq__panel + .amazon-faq__panel,
-        .amazon-faq__panel + .faq-layout__support,
+        .faq-panel__panel + .faq-panel__panel,
+        .faq-panel__panel + .faq-layout__support,
         .faq-layout__primary > * + * {
             margin-top: var(--spacing-4_5);
         }
-        .amazon-faq__panel-title {
+        .faq-panel__panel-title {
             margin: 0 0 var(--weline-space-4);
             font-size: var(--font-size-xl);
             font-weight: 700;
@@ -360,18 +360,18 @@ $searchPlaceholder = (string)WidgetI18n::label('搜索常见问题，例如：�
         }
         @media (max-width: 560px) {
             .faq-layout__topics { grid-template-columns: 1fr; }
-            .amazon-faq__search-form { flex-direction: column; }
-            .amazon-faq__search-form button { min-height: var(--control-height); }
+            .faq-panel__search-form { flex-direction: column; }
+            .faq-panel__search-form button { min-height: var(--control-height); }
         }
     </style>
     <w:hook>seo::head</w:hook>
 </head>
-<body class="faq-layout amazon-faq-layout <?= $escape($meta['class'] ?? '') ?>">
+<body class="faq-layout faq-layout <?= $escape($meta['class'] ?? '') ?>">
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::faq::body-start</w:hook>
 
-    <div class="weline-page-wrapper amazon-faq" data-testid="storefront-faq-page">
+    <div class="weline-page-wrapper faq-panel" data-testid="storefront-faq-page">
         <if condition="meta.showHeader">
             <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
@@ -390,22 +390,22 @@ $searchPlaceholder = (string)WidgetI18n::label('搜索常见问题，例如：�
         }
         ?>
 
-        <main class="faq-layout__main amazon-faq__main" id="faq-main" data-layout="faq">
-            <div class="amazon-faq__body">
-                <div class="amazon-faq__stage faq-layout__inner">
-                    <header class="amazon-faq__hero" aria-labelledby="faq-layout-title" weline-code="theme.faq.hero">
-                        <p class="amazon-faq__eyebrow"><?= $escape($siteName) ?></p>
+        <main class="faq-layout__main faq-panel__main" id="faq-main" data-layout="faq">
+            <div class="faq-panel__body">
+                <div class="faq-panel__stage faq-layout__inner">
+                    <header class="faq-panel__hero" aria-labelledby="faq-layout-title" weline-code="theme.faq.hero">
+                        <p class="faq-panel__eyebrow"><?= $escape($siteName) ?></p>
                         <h1 id="faq-layout-title"><?= $escape($heroTitle) ?></h1>
-                        <p class="amazon-faq__hero-lead"><?= $escape($lead) ?></p>
-                        <div class="amazon-faq__meta">
+                        <p class="faq-panel__hero-lead"><?= $escape($lead) ?></p>
+                        <div class="faq-panel__meta">
                             <span><?= $escape(WidgetI18n::label('最后更新：')) ?><?= $escape($updatedAt) ?></span>
                             <a href="@url{'guide/shipping'}"><?= $escape(WidgetI18n::label('配送说明')) ?></a>
                             <a href="@url{'guide/returns'}"><?= $escape(WidgetI18n::label('退换政策')) ?></a>
                             <a href="@url{'privacy'}"><?= $escape(WidgetI18n::label('隐私政策')) ?></a>
                             <a href="@url{'terms'}"><?= $escape(WidgetI18n::label('服务条款')) ?></a>
                         </div>
-                        <div class="amazon-faq__search faq-layout__search">
-                            <w:form action="@url{'search'}" method="get" class="amazon-faq__search-form faq-layout__search-form">
+                        <div class="faq-panel__search faq-layout__search">
+                            <w:form action="@url{'search'}" method="get" class="faq-panel__search-form faq-layout__search-form">
                                 <input type="search" name="q" placeholder="<?= $escape($searchPlaceholder) ?>" aria-label="<?= $escape($ariaSearch) ?>">
                                 <button type="submit"><?= $escape(WidgetI18n::label('搜索')) ?></button>
                             </w:form>
@@ -413,7 +413,7 @@ $searchPlaceholder = (string)WidgetI18n::label('搜索常见问题，例如：�
                     </header>
                     <div class="faq-layout__primary">
                         <?php if ($isFaqArticle): ?>
-                            <section class="amazon-faq__panel" data-testid="faq-article-panel" weline-code="theme.faq.article">
+                            <section class="faq-panel__panel" data-testid="faq-article-panel" weline-code="theme.faq.article">
                                 <?php
                                 $articleHtml = (string)($meta['content'] ?? $this->getData('content') ?? '');
                                 if (trim($articleHtml) !== '') {
@@ -424,8 +424,8 @@ $searchPlaceholder = (string)WidgetI18n::label('搜索常见问题，例如：�
                                 ?>
                             </section>
                         <?php else: ?>
-                        <section class="amazon-faq__panel" aria-labelledby="faq-topics-title" weline-code="theme.faq.topics">
-                            <h2 class="amazon-faq__panel-title" id="faq-topics-title"><?= $escape(WidgetI18n::label('热门 FAQ 主题')) ?></h2>
+                        <section class="faq-panel__panel" aria-labelledby="faq-topics-title" weline-code="theme.faq.topics">
+                            <h2 class="faq-panel__panel-title" id="faq-topics-title"><?= $escape(WidgetI18n::label('热门 FAQ 主题')) ?></h2>
                             <w:slot id="faq-topics"
                                     name="FAQ 主题"
                                     accept="layout-faq-topics,faq-topics,content,faq,notice"
@@ -451,8 +451,8 @@ $searchPlaceholder = (string)WidgetI18n::label('搜索常见问题，例如：�
                             </w:slot>
                         </section>
 
-                        <section class="amazon-faq__panel faq-layout__section" id="faq-faq" aria-labelledby="faq-faq-title" weline-code="theme.faq.faq">
-                            <h2 class="amazon-faq__panel-title" id="faq-faq-title"><?= $escape(WidgetI18n::label('常见问题')) ?></h2>
+                        <section class="faq-panel__panel faq-layout__section" id="faq-faq" aria-labelledby="faq-faq-title" weline-code="theme.faq.faq">
+                            <h2 class="faq-panel__panel-title" id="faq-faq-title"><?= $escape(WidgetI18n::label('常见问题')) ?></h2>
                             <w:slot id="faq-faq"
                                     name="FAQ 列表"
                                     accept="layout-faq-faq,faq,content,notice"

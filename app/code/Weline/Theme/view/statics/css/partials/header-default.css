@@ -101,7 +101,7 @@ textarea::-webkit-scrollbar-thumb:hover,
 /* Header主容器 */
 .weline-header {
     width: 100%;
-    background-color: var(--weline-chrome-bg-dark, var(--color-bg-amazon, var(--color-bg-dark-secondary)));
+    background-color: var(--weline-chrome-bg-dark, var(--color-bg-chrome, var(--color-bg-dark-secondary)));
     position: sticky;
     top: 0;
     z-index: var(--weline-z-sticky-header, 100);
@@ -136,7 +136,7 @@ textarea::-webkit-scrollbar-thumb:hover,
     overflow: visible;
     position: relative;
     box-sizing: border-box;
-    background-color: var(--weline-chrome-bg-dark, var(--color-bg-amazon, var(--color-bg-dark-secondary)));
+    background-color: var(--weline-chrome-bg-dark, var(--color-bg-chrome, var(--color-bg-dark-secondary)));
     color: var(--weline-theme-text-on-dark);
 }
 
@@ -310,7 +310,7 @@ textarea::-webkit-scrollbar-thumb:hover,
 /* 桌面端：Logo + 搜索 + Actions 同排；放得下就同排，放不下搜索换到下面 */
 @media (min-width: 769px) {
     /*
-     * Belt continuum owned by header-chrome-amazon.css (nowrap + search yield).
+     * Belt continuum owned by header-chrome.css (nowrap + search yield).
      * Do NOT re-declare flex-wrap:wrap / search own-row mid breakpoints here —
      * dual write caused mid-width tools-under-search drift (审图).
      */
@@ -774,7 +774,7 @@ textarea::-webkit-scrollbar-thumb:hover,
 }
 
 /*
- * Published layout loads this partial (not header-chrome-amazon). Category menu
+ * Published layout loads this partial (not header-chrome). Category menu
  * nests as a raised light tree; foundation dark-flyout open-branch white must not
  * paint 「女装」「襦裙」on cream (WO-UI-CONTRAST).
  */
@@ -1460,7 +1460,7 @@ textarea::-webkit-scrollbar-thumb:hover,
 
 .cart-count {
     position: absolute;
-    /* Physical negative hang-off (see header-chrome-amazon cart-count). */
+    /* Physical negative hang-off (see header-chrome cart-count). */
     top: calc(var(--spacing-2, 0.5rem) * -1);
     right: calc(var(--spacing-2, 0.5rem) * -1);
     left: auto;
@@ -3609,16 +3609,14 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     text-decoration: none;
 }
 
-.categories-sidebar .theme-published-slot[data-slot-id="header-nav-extensions"],
-.categories-sidebar .hanfu-chrome__drawer-extensions {
+.categories-sidebar .theme-published-slot[data-slot-id="header-nav-extensions"] {
     display: flex;
     flex-direction: column;
     align-items: stretch;
     gap: 0;
 }
 
-.categories-sidebar .theme-published-slot[data-slot-id="header-nav-extensions"] .widget-wrapper,
-.categories-sidebar .hanfu-chrome__drawer-extensions .widget-wrapper {
+.categories-sidebar .theme-published-slot[data-slot-id="header-nav-extensions"] .widget-wrapper {
     display: block;
     width: 100%;
     margin: 0;

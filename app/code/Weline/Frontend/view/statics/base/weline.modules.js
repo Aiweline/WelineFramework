@@ -271,8 +271,8 @@
             description: "PayPal JS SDK：Google Pay / Apple Pay funding 按钮容器"
         },
         paypalCardFields: {
-            origin_paths: ["app/code/Weline/Payment/view/statics/js/paypal-card-fields.js?v=20261023-cardfields1"],
-            paths: ["Weline_Payment::js/paypal-card-fields.js?v=20261023-cardfields1"],
+            origin_paths: ["app/code/Weline/Payment/view/statics/js/paypal-card-fields.js?v=20261025-classic1"],
+            paths: ["Weline_Payment::js/paypal-card-fields.js?v=20261025-classic1"],
             globalVar: "WelineModules",
             load: "eager",
             description: "PayPal 站内银行卡收银台（Card Fields / ACDC）"

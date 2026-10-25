@@ -530,8 +530,8 @@ private function assert_FooterHelpLinksWidget_testGuideControllersAndTemplatesEx
     $returnsTpl = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Shipping' . '/view/templates/frontend/guide/returns.phtml');
     self::assertStringContainsString('data-testid="shipping-guide"', $shippingTpl);
     self::assertStringContainsString('data-testid="shipping-returns"', $returnsTpl);
-    self::assertStringContainsString('amazon-doc__panel', $shippingTpl);
-    self::assertStringContainsString('amazon-doc__panel', $returnsTpl);
+    self::assertStringContainsString('doc__panel', $shippingTpl);
+    self::assertStringContainsString('doc__panel', $returnsTpl);
     self::assertStringContainsString('一、发货时效', $shippingTpl);
     self::assertStringContainsString('一、适用条件', $returnsTpl);
     self::assertStringNotContainsString('width: min(52rem', $shippingTpl);

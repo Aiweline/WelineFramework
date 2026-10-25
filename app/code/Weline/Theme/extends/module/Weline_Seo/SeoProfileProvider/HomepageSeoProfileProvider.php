@@ -14,7 +14,7 @@ use Weline\Theme\Helper\SiteBrand;
  * Never hardcodes merchant brand social accounts or demo share images.
  * sameAs comes from ThemeSocialSameAsSeoContextService / merchant config only.
  */
-final class HanfuHomepageSeoProfileProvider implements SeoProfileProviderInterface
+final class HomepageSeoProfileProvider implements SeoProfileProviderInterface
 {
     private const PAGE_LABEL_ZH = '首页';
     private const PAGE_LABEL_EN = 'Home';
@@ -250,15 +250,11 @@ final class HanfuHomepageSeoProfileProvider implements SeoProfileProviderInterfa
             'Home',
             'Homepage',
             'Homepage Default',
-            '水墨汉服商城首页',
-            'Ink-Wash Hanfu Boutique',
         ];
         if ($merchantSiteName !== '') {
             $candidates[] = $merchantSiteName;
             $candidates[] = $merchantSiteName . ' | ' . self::PAGE_LABEL_ZH;
             $candidates[] = $merchantSiteName . ' | ' . self::PAGE_LABEL_EN;
-            $candidates[] = $merchantSiteName . ' | 水墨汉服商城首页';
-            $candidates[] = $merchantSiteName . ' | Ink-Wash Hanfu Boutique';
         }
 
         if (in_array($title, $candidates, true)) {
@@ -266,7 +262,7 @@ final class HanfuHomepageSeoProfileProvider implements SeoProfileProviderInterfa
         }
 
         return (bool) preg_match(
-            '/^.+\s\|\s(?:首页|Home|水墨汉服商城首页|Ink-Wash Hanfu Boutique|متجر هانفو بأسلوب الحبر الصيني)$/u',
+            '/^.+\s\|\s(?:首页|Home)$/u',
             $title
         );
     }

@@ -47,8 +47,8 @@ private function assert_BlogSeoProfileProvider_testProviderImplementsSeoProfileI
     self::assertStringContainsString("'image_alt'", (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/Service/BlogSeoFactsBuilder.php'));
     self::assertStringContainsString('existingImage', $source);
     self::assertStringContainsString('preferredDetailCanonical', $source);
-    self::assertStringContainsString('amazon-blog-article__header', (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/view/templates/frontend/post/detail.phtml'));
-    self::assertStringNotContainsString('<header class="amazon-blog-article__header">', (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/view/templates/frontend/post/detail.phtml'));
+    self::assertStringContainsString('blog-article__header', (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/view/templates/frontend/post/detail.phtml'));
+    self::assertStringNotContainsString('<header class="blog-article__header">', (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/view/templates/frontend/post/detail.phtml'));
     self::assertStringContainsString("getUrl('blog/' . \$slug)", (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/Controller/Frontend/View.php'));
     $facts = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/Service/BlogSeoFactsBuilder.php');
     self::assertStringContainsString('localeAwarePath', $facts);

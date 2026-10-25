@@ -286,7 +286,7 @@
 .twofa-app-card .account-btn--secondary {
     flex: 0 0 auto;
     border: var(--border-width-thin) solid var(--color-overlay-medium);
-    background: var(--color-bg-amazon);
+    background: var(--color-bg-classic);
     color: var(--color-text-light);
     box-shadow: var(--weline-shadow-md);
 }

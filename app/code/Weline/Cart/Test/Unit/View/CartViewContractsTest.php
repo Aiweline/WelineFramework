@@ -90,8 +90,8 @@ final class CartViewContractsTest extends TestCase
             'CartStorefrontQueryBin::testQuantityActionLabelsNeverWrapVertically' => function () {
             $this->assert_CartStorefrontQueryBin_testQuantityActionLabelsNeverWrapVertically();
         },
-            'CartStorefrontQueryBin::testCartPageUsesAmazonSurfaceAndStylesheet' => function () {
-            $this->assert_CartStorefrontQueryBin_testCartPageUsesAmazonSurfaceAndStylesheet();
+            'CartStorefrontQueryBin::testCartPageUsesCommerceSurfaceAndStylesheet' => function () {
+            $this->assert_CartStorefrontQueryBin_testCartPageUsesCommerceSurfaceAndStylesheet();
         },
             'CartStorefrontQueryBin::testCartPageRendersSelectedOptionLabels' => function () {
             $this->assert_CartStorefrontQueryBin_testCartPageRendersSelectedOptionLabels();
@@ -165,7 +165,7 @@ final class CartViewContractsTest extends TestCase
 private function assert_CartEmptySiblingUi_testEmptyActionsRowUsesSecondarySiblingButton(): void
 {
     $root = '/Users/weline/Project/Official/框架/app/code/Weline/Cart';
-    $css = (string) \file_get_contents($root . '/view/statics/css/cart-page-amazon.css');
+    $css = (string) \file_get_contents($root . '/view/statics/css/cart-page.css');
     $page = (string) \file_get_contents($root . '/view/templates/frontend/cart/index.phtml');
     self::assertStringContainsString('weline-cart-shell__empty-actions', $page);
     self::assertStringContainsString('data-cart-siblings', $page);
@@ -394,7 +394,7 @@ private function assert_CartPageStateMutex_testPageShellUsesExclusiveDataCartVie
 {
     $root = '/Users/weline/Project/Official/框架/app/code/Weline/Cart';
     $page = (string) \file_get_contents($root . '/view/templates/frontend/cart/index.phtml');
-    $css = (string) \file_get_contents($root . '/view/statics/css/cart-page-amazon.css');
+    $css = (string) \file_get_contents($root . '/view/statics/css/cart-page.css');
     self::assertStringContainsString('data-cart-view="loading"', $page);
     self::assertStringContainsString('data-cart-page-state="loading"', $page);
     self::assertStringContainsString('data-cart-page-state="empty"', $page);
@@ -404,7 +404,7 @@ private function assert_CartPageStateMutex_testPageShellUsesExclusiveDataCartVie
     self::assertStringContainsString("node.setAttribute('aria-hidden', 'true')", $page);
     self::assertStringContainsString("node.setAttribute('inert', '')", $page);
     self::assertStringContainsString('showState(\'loading\')', $page);
-    self::assertStringContainsString('.weline-cart-shell--amazon > [data-cart-state]', $css);
+    self::assertStringContainsString('.weline-cart-shell--cart-page > [data-cart-state]', $css);
     self::assertStringContainsString('display: none !important', $css);
     self::assertStringContainsString('[data-cart-view="loading"] > [data-cart-state="loading"]', $css);
     self::assertStringContainsString('[data-cart-view="empty"] > [data-cart-state="empty"]', $css);
@@ -416,15 +416,15 @@ private function assert_CartPageStateMutex_testCartHeaderTitleSitsRightOfTypeTab
 {
     $root = '/Users/weline/Project/Official/框架/app/code/Weline/Cart';
     $page = (string) \file_get_contents($root . '/view/templates/frontend/cart/index.phtml');
-    $css = (string) \file_get_contents($root . '/view/statics/css/cart-page-amazon.css');
+    $css = (string) \file_get_contents($root . '/view/statics/css/cart-page.css');
     self::assertStringContainsString('class="weline-cart-shell__heading"', $page);
     self::assertStringContainsString('data-cart-page-type-host', $page);
     self::assertStringContainsString('data-cart-page-title', $page);
     self::assertStringContainsString('data-cart-subtitle', $page);
     self::assertStringContainsString('v=20261010-money-summary-row-flex1', $page);
-    self::assertStringContainsString('.weline-cart-shell--amazon .weline-cart-shell__header', $css);
+    self::assertStringContainsString('.weline-cart-shell--cart-page .weline-cart-shell__header', $css);
     self::assertStringContainsString('justify-content: space-between', $css);
-    self::assertStringContainsString('.weline-cart-shell--amazon .weline-cart-shell__heading', $css);
+    self::assertStringContainsString('.weline-cart-shell--cart-page .weline-cart-shell__heading', $css);
     self::assertStringContainsString('margin-left: auto', $css);
     self::assertStringContainsString('text-align: right', $css);
 }
@@ -432,10 +432,10 @@ private function assert_CartPageStateMutex_testCartHeaderTitleSitsRightOfTypeTab
 private function assert_CartPageStateMutex_testMoneySummaryRowsKeepLabelAmountSpaceBetweenLikeDiscountLine(): void
 {
     $root = '/Users/weline/Project/Official/框架/app/code/Weline/Cart';
-    $css = (string) \file_get_contents($root . '/view/statics/css/cart-page-amazon.css');
-    self::assertStringContainsString('.weline-cart-shell--amazon .w-storefront-money-summary__row', $css);
+    $css = (string) \file_get_contents($root . '/view/statics/css/cart-page.css');
+    self::assertStringContainsString('.weline-cart-shell--cart-page .w-storefront-money-summary__row', $css);
     self::assertStringContainsString('justify-content: space-between', $css);
-    self::assertStringContainsString('.weline-cart-shell--amazon .weline-cart-shell__discount-line', $css);
+    self::assertStringContainsString('.weline-cart-shell--cart-page .weline-cart-shell__discount-line', $css);
     self::assertStringContainsString('Widget CSS may bake into a print-deferred pack', $css);
 }
 
@@ -534,16 +534,16 @@ private function assert_CartStorefrontQueryBin_testMoneyUsesLocaleAwareThousands
 
 private function assert_CartStorefrontQueryBin_testQuantityActionLabelsNeverWrapVertically(): void
 {
-    $css = $this->amazonCss_CartStorefrontQueryBin();
-    self::assertMatchesRegularExpression('/\.weline-cart-shell--amazon \.weline-cart-shell__action\s*\{[^}]*white-space:\s*nowrap;/s', $css);
-    self::assertMatchesRegularExpression('/\.weline-cart-shell--amazon \.weline-cart-shell__qty\s*\{[^}]*flex-wrap:\s*nowrap;/s', $css);
+    $css = $this->commerceCss_CartStorefrontQueryBin();
+    self::assertMatchesRegularExpression('/\.weline-cart-shell--cart-page \.weline-cart-shell__action\s*\{[^}]*white-space:\s*nowrap;/s', $css);
+    self::assertMatchesRegularExpression('/\.weline-cart-shell--cart-page \.weline-cart-shell__qty\s*\{[^}]*flex-wrap:\s*nowrap;/s', $css);
 }
 
-private function assert_CartStorefrontQueryBin_testCartPageUsesAmazonSurfaceAndStylesheet(): void
+private function assert_CartStorefrontQueryBin_testCartPageUsesCommerceSurfaceAndStylesheet(): void
 {
     $template = $this->template_CartStorefrontQueryBin();
-    self::assertStringContainsString('weline-cart-shell--amazon', $template);
-    self::assertStringContainsString('@static(Weline_Cart::css/cart-page-amazon.css)&v=', $template);
+    self::assertStringContainsString('weline-cart-shell--cart-page', $template);
+    self::assertStringContainsString('@static(Weline_Cart::css/cart-page.css)&v=', $template);
     self::assertStringContainsString('weline-cart-shell__line', $template);
     self::assertStringContainsString('data-qty-decrease', $template);
     self::assertStringContainsString('weline-cart-shell__checkout', $template);
@@ -553,7 +553,7 @@ private function assert_CartStorefrontQueryBin_testCartPageUsesAmazonSurfaceAndS
 private function assert_CartStorefrontQueryBin_testCartPageRendersSelectedOptionLabels(): void
 {
     $template = $this->template_CartStorefrontQueryBin();
-    $css = $this->amazonCss_CartStorefrontQueryBin();
+    $css = $this->commerceCss_CartStorefrontQueryBin();
     self::assertStringContainsString('function formatLineOptions(item)', $template);
     self::assertStringContainsString('function appendLineOptions(details, item)', $template);
     self::assertStringContainsString("weline-cart-shell__line-options", $template);
@@ -562,10 +562,10 @@ private function assert_CartStorefrontQueryBin_testCartPageRendersSelectedOption
     self::assertStringContainsString('ensureCartSwatchPreview', $template);
     self::assertStringContainsString('option.swatch_image', $template);
     self::assertStringContainsString('option.value_label || option.value', $template);
-    self::assertMatchesRegularExpression('/\.weline-cart-shell--amazon \.weline-cart-shell__line-options\s*\{/', $css);
-    self::assertMatchesRegularExpression('/\.weline-cart-shell--amazon \.weline-cart-shell__line-option-swatch\s*\{/', $css);
-    self::assertMatchesRegularExpression('/\.weline-cart-shell--amazon \.weline-cart-shell__line-option-swatch-btn\s*\{/', $css);
-    self::assertMatchesRegularExpression('/\.weline-cart-shell--amazon \.weline-cart-shell__swatch-preview\s*\{/', $css);
+    self::assertMatchesRegularExpression('/\.weline-cart-shell--cart-page \.weline-cart-shell__line-options\s*\{/', $css);
+    self::assertMatchesRegularExpression('/\.weline-cart-shell--cart-page \.weline-cart-shell__line-option-swatch\s*\{/', $css);
+    self::assertMatchesRegularExpression('/\.weline-cart-shell--cart-page \.weline-cart-shell__line-option-swatch-btn\s*\{/', $css);
+    self::assertMatchesRegularExpression('/\.weline-cart-shell--cart-page \.weline-cart-shell__swatch-preview\s*\{/', $css);
 }
 
 private function template_CartStorefrontQueryBin(): string
@@ -573,9 +573,9 @@ private function template_CartStorefrontQueryBin(): string
     return (string) file_get_contents(BP . 'app/code/Weline/Cart/view/templates/frontend/cart/index.phtml');
 }
 
-private function amazonCss_CartStorefrontQueryBin(): string
+private function commerceCss_CartStorefrontQueryBin(): string
 {
-    return (string) file_get_contents(BP . 'app/code/Weline/Cart/view/statics/css/cart-page-amazon.css');
+    return (string) file_get_contents(BP . 'app/code/Weline/Cart/view/statics/css/cart-page.css');
 }
 
 private function assert_CartStorefrontSlotsCatalog_testCartDeclaresStorefrontSlotCatalogForInjectionDiscovery(): void
@@ -641,7 +641,7 @@ private function assert_CartTypeSwitchDecouple_testStorefrontConsumersUseCartApi
     $cartPage = (string) \file_get_contents($root . '/view/templates/frontend/cart/index.phtml');
     $miniCart = (string) \file_get_contents(\dirname($root) . '/Theme/view/statics/js/widgets/mini-cart-icon.js');
     $b2b = (string) \file_get_contents(\dirname($root) . '/B2B/view/statics/js/selling-mode.js');
-    $cartCss = (string) \file_get_contents($root . '/view/statics/css/cart-page-amazon.css');
+    $cartCss = (string) \file_get_contents($root . '/view/statics/css/cart-page.css');
     self::assertStringContainsString('WelineCart.requestCartType', $cartPage);
     self::assertStringContainsString('weline:cart-type-changed', $cartPage);
     self::assertStringContainsString("forceNetwork: true", $cartPage);
@@ -935,7 +935,7 @@ private function assert_ProductCardAddToCartHook_testPurchaseActionsScriptBindsC
     self::assertStringNotContainsString('[data-action="add-v2"]', $script);
     self::assertStringContainsString('markCardButtonAdded', $script);
     self::assertStringContainsString('showFloatingToast', $script);
-    self::assertStringContainsString('showAmazonCartAddedNotice', $script);
+    self::assertStringContainsString('showCartAddedNoticePanel', $script);
     self::assertStringNotContainsString('openMiniCartDrawer', $script);
     self::assertStringContainsString('showCartAddedNotice', $script);
     self::assertStringContainsString('w-amz-cart-added', $script);

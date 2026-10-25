@@ -36,29 +36,29 @@ $title = (string)($meta['title'] ?? __('指南'));
             color: var(--weline-layout-text-primary, #0f1111);
             background: var(--color-bg-canvas, #fff);
         }
-        .amazon-policy-doc.weline-page-wrapper {
+        .doc-guide.weline-page-wrapper {
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             background: transparent;
             overflow: visible;
         }
-        .amazon-policy-doc.weline-page-wrapper > .weline-header-slot,
-        .amazon-policy-doc.weline-page-wrapper > .weline-header {
+        .doc-guide.weline-page-wrapper > .weline-header-slot,
+        .doc-guide.weline-page-wrapper > .weline-header {
             flex: 0 0 auto;
             width: 100%;
             min-width: 0;
             overflow: visible;
             align-self: stretch;
         }
-        .amazon-policy-doc__main {
+        .doc-guide__main {
             flex: 1 1 auto;
             min-height: 0;
             width: 100%;
             background:
                 linear-gradient(180deg, var(--color-bg-secondary, #eaeded) 0, var(--color-bg-muted, #f3f3f3) 12rem);
         }
-        .amazon-policy-doc__stage {
+        .doc-guide__stage {
             box-sizing: border-box;
             width: min(100%, var(--weline-layout-content-max-width));
             max-width: 100%;
@@ -67,7 +67,7 @@ $title = (string)($meta['title'] ?? __('指南'));
             padding-inline: var(--weline-layout-content-padding-inline);
             padding-block: clamp(2.25rem, 4.5vw, 3.25rem) clamp(3rem, 6vw, 4.5rem);
         }
-        .amazon-policy-doc__stage > * {
+        .doc-guide__stage > * {
             width: 100%;
             max-width: none;
             margin-inline: 0;
@@ -77,27 +77,27 @@ $title = (string)($meta['title'] ?? __('指南'));
     </style>
     <w:hook>seo::head</w:hook>
 </head>
-<body class="guide-layout amazon-policy-doc-layout <?= $escape($meta['class'] ?? '') ?>">
+<body class="guide-layout doc-guide-layout <?= $escape($meta['class'] ?? '') ?>">
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::guide::body-start</w:hook>
 
-    <div class="weline-page-wrapper amazon-policy-doc" data-testid="storefront-guide-page" data-layout="guide">
+    <div class="weline-page-wrapper doc-guide" data-testid="storefront-guide-page" data-layout="guide">
         <if condition="meta.showHeader">
             <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
             <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
         </if>
 
-        <main class="amazon-policy-doc__main" id="main-content" aria-label="<?= $escape($title) ?>">
-            <div class="amazon-policy-doc__stage">
+        <main class="doc-guide__main" id="main-content" aria-label="<?= $escape($title) ?>">
+            <div class="doc-guide__stage">
                 <w:slot id="content"
                         name="指南正文"
                         accept="layout-guide-content,layout-policy-content,content,faq,policy-content"
                         reject="header,footer,navigation"
                         multiple="true"
                         position="content"
-                        class="amazon-policy-doc__content-slot">
+                        class="doc-guide__content-slot">
                     <w:hook>
                         Weline_Theme::frontend::layouts::guide::content
                         <else/>

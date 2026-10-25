@@ -6,11 +6,11 @@ namespace Weline\Theme\Test\Unit\Extends;
 
 use PHPUnit\Framework\TestCase;
 use Weline\I18n\Api\Translation\TranslationResolverInterface;
-use Weline\Theme\Extends\Module\Weline_Seo\SeoProfileProvider\HanfuHomepageSeoProfileProvider;
+use Weline\Theme\Extends\Module\Weline_Seo\SeoProfileProvider\HomepageSeoProfileProvider;
 use Weline\Theme\Helper\SiteBrand;
 use Weline\Websites\Service\WebsiteBrandIdentitySeedService;
 
-final class HanfuHomepageSeoProfileProviderTest extends TestCase
+final class HomepageSeoProfileProviderTest extends TestCase
 {
     private const PAGE_LABEL_ZH = '首页';
     private const PAGE_LABEL_EN = 'Home';
@@ -359,6 +359,6 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
             $isArabic ? self::DESCRIPTION_AR : ($isChinese ? self::DESCRIPTION_ZH : self::DESCRIPTION_EN)
         );
 
-        return (new HanfuHomepageSeoProfileProvider($resolver, $siteBrand))->provideSeoProfile(null, $context);
+        return (new HomepageSeoProfileProvider($resolver, $siteBrand))->provideSeoProfile(null, $context);
     }
 }

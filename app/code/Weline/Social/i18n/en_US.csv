@@ -25,15 +25,19 @@
 获取发布批次状态。,"Get publish batch status."
 "读取站点日更自动运营计划（缺省 enabled=0）。","读取站点日更自动运营计划（缺省 enabled=0）。"
 保存站点日更自动运营计划（只写计划表，不触发外发）。,保存站点日更自动运营计划（只写计划表，不触发外发）。
+列出可用于图片/视频生成的有效模型与默认文字模型。,列出可用于图片/视频生成的有效模型与默认文字模型。
 列出浏览器扩展待发任务。,列出浏览器扩展待发任务。
 列出待人工审片的草稿。,列出待人工审片的草稿。
 "读取日更运行状态与 needs_user 阻塞项。","读取日更运行状态与 needs_user 阻塞项。"
 审片通过并按通道路由发布草稿。,审片通过并按通道路由发布草稿。
 驳回审片并记录重生成次数。,驳回审片并记录重生成次数。
+"生成浏览器扩展一次性授权码（5 分钟有效）。","生成浏览器扩展一次性授权码（5 分钟有效）。"
 获取当前网站范围的社媒注册专用邮箱状态。,"Get social registration mailbox status for the current website scope."
 一键开通当前网站范围的社媒注册专用邮箱。,"One-click provision a social registration mailbox for the current website scope."
 重置当前网站范围社媒专用邮箱密码并返回一次明文。,"Reset the social mailbox password for the current website scope and return the plaintext once."
 "开通（若缺）社媒邮箱并向本站 contact 发探测信，确认能收到后再允许注册平台。","开通（若缺）社媒邮箱并向本站 contact 发探测信，确认能收到后再允许注册平台。"
+获取当前站点范围的社媒专用手机号。,获取当前站点范围的社媒专用手机号。
+保存当前站点范围的社媒专用手机号（一站一号，换号须全站社媒同步）。,保存当前站点范围的社媒专用手机号（一站一号，换号须全站社媒同步）。
 未知社媒平台：%{1},"Unknown social platform: %{1}"
 缺少网站编号，不能猜测融媒体平台。,缺少网站编号，不能猜测融媒体平台。
 读取该站融媒体账户失败。,读取该站融媒体账户失败。
@@ -206,6 +210,10 @@ grid,grid
 二级范围,"Secondary Scope"
 正在配置,Configuring
 未选择范围,"No range selected"
+社媒邮箱,"Social mailbox"
+选择站点范围后显示,"Select a site scope to show"
+社媒手机号,社媒手机号
+未配置（用命令行录入）,未配置（用命令行录入）
 暂无可配置范围，无法按范围配置社媒账户。,"There is currently no configuration range, and social media accounts cannot be configured by range."
 范围已由网站编辑锁定，如需切换站点请返回网站列表另开编辑。,"Scope is locked by website editor. Open another website from the list to switch sites."
 平台库,"Platform Library"
@@ -217,8 +225,6 @@ grid,grid
 日更计划,日更计划
 扩展发布,扩展发布
 审片,审片
-社媒邮箱,"Social mailbox"
-选择站点范围后显示,"Select a site scope to show"
 "内置平台与扩展平台统一进入 Provider 注册表，图标由平台 code 自动解析为 SVG。","Built-in and extension platforms are unified in the Provider registry. Icons resolve automatically from platform code as SVG."
 搜索平台,"Search platforms"
 搜索平台名称、编码、状态或授权方式,"Search by name, code, status, or auth mode"
@@ -294,6 +300,23 @@ grid,grid
 逗号或空格分隔，按站点时区执行。,逗号或空格分隔，按站点时区执行。
 站内选题条数,站内选题条数
 站外选题条数,站外选题条数
+每天生成数量,每天生成数量
+"1-20 条，按当日剩余额度分摊到各时段。","1-20 条，按当日剩余额度分摊到各时段。"
+媒体类型（至少选一种）,媒体类型（至少选一种）
+文字,文字
+图片,图片
+视频,视频
+文字使用系统默认模型,文字使用系统默认模型
+图片模型,图片模型
+搜索图片模型...,搜索图片模型...
+可用图片模型：加载中…,可用图片模型：加载中…
+视频模型,视频模型
+搜索视频模型...,搜索视频模型...
+可用视频模型：加载中…,可用视频模型：加载中…
+视频来源,视频来源
+"图片序列（ffmpeg 合成）","图片序列（ffmpeg 合成）"
+"AI 视频模型","AI 视频模型"
+无视频模型时只能使用图片序列。,无视频模型时只能使用图片序列。
 自动发布平台（未勾选只出草稿）,自动发布平台（未勾选只出草稿）
 视频先审片再发布（不审不发）,视频先审片再发布（不审不发）
 发布模式,发布模式
@@ -310,6 +333,11 @@ grid,grid
 未命名设备,未命名设备
 在线,在线
 离线,离线
+"一次性授权码（5 分钟）","一次性授权码（5 分钟）"
+"点击「生成授权码」后显示，5 分钟内有效","点击「生成授权码」后显示，5 分钟内有效"
+"生成授权码（5 分钟）","生成授权码（5 分钟）"
+复制,复制
+"授权码只显示一次；生成后 5 分钟内到扩展选项页粘贴。","授权码只显示一次；生成后 5 分钟内到扩展选项页粘贴。"
 "用户打开页面或扩展在线后会自动排空待发队列；不在线只累计，不判失败，超过 24 小时转为 stale 并计入运行状态。","用户打开页面或扩展在线后会自动排空待发队列；不在线只累计，不判失败，超过 24 小时转为 stale 并计入运行状态。"
 "视频默认人工审片：通过后才生成发布任务，驳回会重新生成（最多 2 次）；人审同时确认配乐许可三件套。","视频默认人工审片：通过后才生成发布任务，驳回会重新生成（最多 2 次）；人审同时确认配乐许可三件套。"
 不审不发,不审不发
@@ -377,17 +405,38 @@ grid,grid
 发布能力,"Publishing capability"
 官方文档,"Official documentation"
 已开启,已开启
+暂无支持视频生成的模型,暂无支持视频生成的模型
+暂无支持图片生成的模型,暂无支持图片生成的模型
+请选择受支持的模型,请选择受支持的模型
+使用默认模型,使用默认模型
+可用图片模型：,可用图片模型：
+个,个
+可用视频模型：,可用视频模型：
+"，ai_video 不可用","，ai_video 不可用"
+文字使用系统默认模型：,文字使用系统默认模型：
 暂无运行记录。,暂无运行记录。
 运行状态：需要人工处理,运行状态：需要人工处理
 运行状态：正常,运行状态：正常
+至少选择一种媒体类型。,至少选择一种媒体类型。
+勾选图片时请先选择图片模型。,勾选图片时请先选择图片模型。
 正在保存日更计划...,正在保存日更计划...
 保存失败,保存失败
 日更计划已保存。,日更计划已保存。
+勾选图片时必须选择可用的图片模型。,勾选图片时必须选择可用的图片模型。
+"使用 AI 视频时必须选择可用的视频模型。","使用 AI 视频时必须选择可用的视频模型。"
 正在处理审片...,正在处理审片...
 审片操作失败,审片操作失败
 审片通过，发布任务已创建。,审片通过，发布任务已创建。
 已驳回，等待重生成。,已驳回，等待重生成。
 驳回原因不能为空。,驳回原因不能为空。
+授权码已过期，请重新生成。,授权码已过期，请重新生成。
+授权码剩余,授权码剩余
+"，生成后 5 分钟内有效。","，生成后 5 分钟内有效。"
+正在生成授权码...,正在生成授权码...
+"未配置 wls.social_extension_secret，无法生成授权码。","未配置 wls.social_extension_secret，无法生成授权码。"
+请先生成授权码。,请先生成授权码。
+授权码已复制，请粘贴到扩展选项页。,授权码已复制，请粘贴到扩展选项页。
+复制失败，请手动选择输入框内容复制。,复制失败，请手动选择输入框内容复制。
 仅展示,"Display only"
 必填,Required
 可选,Optional
@@ -395,6 +444,9 @@ grid,grid
 请选择二级范围,"Select secondary scope"
 请选择平台,"Select a platform"
 请选择授权方式,"Select an auth mode"
+未配置,未配置
+用命令行或后续编辑弹窗录入,用命令行或后续编辑弹窗录入
+正在检查…,正在检查…
 确认重置社媒邮箱密码？旧密码将立即失效。,"Reset the social mailbox password? The old password will stop working immediately."
 暂时无法加载融媒体管理嵌入页，请稍后重试或打开完整融媒体管理。,"Unable to load the embedded Social admin. Retry later or open full Social Media Management."
 账户添加、范围社媒与一键发布均绑定当前网站范围。,"Account add, scope social, and one-click publish are bound to the current website scope."
@@ -410,14 +462,15 @@ grid,grid
 "按 SocialPublishTarget 执行单个平台发布。","Executes one platform publish by SocialPublishTarget."
 "缺少 target_id。","target_id is required."
 社媒发布完成,"Social publish completed"
+社媒日更,社媒日更
 "扩展离线超过 24 小时，待发任务已转为积压。","扩展离线超过 24 小时，待发任务已转为积压。"
 "审片队列积压：%{1} 条待审。","审片队列积压：%{1} 条待审。"
-社媒日更,社媒日更
 站点日更,站点日更
 "Social platform provider with empty code was skipped: %{1}","Social platform provider with empty code was skipped: %{1}"
 "Duplicate social platform provider code: %{1}","Duplicate social platform provider code: %{1}"
 "Social platform provider load failed: %{1} - %{2}","Social platform provider load failed: %{1} - %{2}"
 "Social platform definition missing %{1}: %{2}","Social platform definition missing %{1}: %{2}"
+站点日更内容,站点日更内容
 创意草稿不存在。,"Creative draft does not exist."
 请选择发布账户，或先为当前范围配置默认社媒账户。,"Please select a publishing account, or configure a default social media account for the current scope first."
 没有可用的发布账户。,"No usable publish accounts."

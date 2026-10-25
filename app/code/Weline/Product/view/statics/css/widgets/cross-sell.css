@@ -13,7 +13,7 @@
   padding: var(--token-size-1-15rem) var(--spacing-0_85) var(--spacing-0_85);
   border-top: var(--border-width-thin) solid var(--wpf-border);
   color: var(--wpf-ink);
-  font-family: "Amazon Ember", Arial, sans-serif;
+  font-family: "Weline Ember", Arial, sans-serif;
 }
 
 .weline-product-fbt .wpf-header {

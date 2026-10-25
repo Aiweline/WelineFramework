@@ -1,4 +1,4 @@
-/* 结账地址分段 + Amazon 结账卡：沿用 checkout Amazon 色板变量，部件内提供回退 */
+/* 结账地址分段 + Weline 结账卡：沿用 checkout Weline 色板变量，部件内提供回退 */
 .w-shipping-checkout-address {
   --sca-text: var(--checkout-text);
   --sca-muted: var(--checkout-text-secondary);
@@ -280,7 +280,7 @@
 /*
  * Address save CTA: full-width outline primary (theme tokens).
  * Must not look like a bare browser <button>, and must not compete with
- * .weline-checkout__submit solid place-order CTA (Amazon yellow retired).
+ * .weline-checkout__submit solid place-order CTA (Weline yellow retired).
  */
 .w-shipping-checkout-address .w-shipping-checkout-address__primary-btn.w-button,
 .w-shipping-checkout-address .w-shipping-checkout-address__primary-btn {

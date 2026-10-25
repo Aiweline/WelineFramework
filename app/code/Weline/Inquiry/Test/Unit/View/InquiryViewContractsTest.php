@@ -42,8 +42,8 @@ final class InquiryViewContractsTest extends TestCase
             'SupplierApplication::testPrototypeAssetsRemoved' => function () {
             $this->assert_SupplierApplication_testPrototypeAssetsRemoved();
         },
-            'SupplierApplication::testRendererSupportsAmazonSkinOption' => function () {
-            $this->assert_SupplierApplication_testRendererSupportsAmazonSkinOption();
+            'SupplierApplication::testRendererSupportsSupplierSkinOption' => function () {
+            $this->assert_SupplierApplication_testRendererSupportsSupplierSkinOption();
         },
             'SupplierApplication::testSupplierGuideEnglishCsvKeysAreUnquoted' => function () {
             $this->assert_SupplierApplication_testSupplierGuideEnglishCsvKeysAreUnquoted();
@@ -85,7 +85,7 @@ private function assert_SupplierApplication_testSuppliersTemplateRendersInquiryI
     self::assertStringContainsString('InquiryRendererInterface::class', $src);
     self::assertStringContainsString('InquiryFormBootstrap::CODE_SUPPLIER_APPLICATION', $src);
     self::assertStringContainsString("'mode' => 'inline'", $src);
-    self::assertStringContainsString("'skin' => 'amazon'", $src);
+    self::assertStringContainsString("'skin' => 'supplier'", $src);
     self::assertStringContainsString('w-inquiry-suppliers--atelier', $src);
     self::assertStringContainsString('w-inquiry-suppliers__shell', $src);
     self::assertStringContainsString('data-testid="inquiry-supplier-guide"', $src);
@@ -97,7 +97,7 @@ private function assert_SupplierApplication_testSuppliersTemplateRendersInquiryI
     self::assertStringContainsString('Weline_Inquiry::css/supplier-application-atelier.css', $src);
     self::assertStringContainsString('supplier-application-atelier.css?v=20260907-stretch2', $src);
     self::assertStringNotContainsString('data-supplier-prototype-switcher', $src);
-    self::assertStringNotContainsString('supplier-application-amazon.css', $src);
+    self::assertStringNotContainsString('supplier-application-atelier.css', $src);
     self::assertStringNotContainsString('supplier-application-workspace.css', $src);
     self::assertStringNotContainsString('<w:inquiry', $src);
 }
@@ -121,17 +121,17 @@ private function assert_SupplierApplication_testAtelierLayoutCssExists(): void
 private function assert_SupplierApplication_testPrototypeAssetsRemoved(): void
 {
     $base = '/Users/weline/Project/Official/框架/app/code/Weline/Inquiry' . '/view/statics';
-    self::assertFileDoesNotExist($base . '/css/supplier-application-amazon.css');
+    self::assertFileDoesNotExist($base . '/css/supplier-application-atelier.css');
     self::assertFileDoesNotExist($base . '/css/supplier-application-workspace.css');
     self::assertFileDoesNotExist($base . '/css/supplier-prototype-switcher.css');
     self::assertFileDoesNotExist($base . '/js/supplier-prototype-switcher.js');
 }
 
-private function assert_SupplierApplication_testRendererSupportsAmazonSkinOption(): void
+private function assert_SupplierApplication_testRendererSupportsSupplierSkinOption(): void
 {
     $path = '/Users/weline/Project/Official/框架/app/code/Weline/Inquiry' . '/Service/InquiryRenderer.php';
     $src = (string) file_get_contents($path);
-    self::assertStringContainsString("in_array(\$input, ['amazon'], true)", $src);
+    self::assertStringContainsString("in_array(\$input, ['supplier'], true)", $src);
     self::assertStringContainsString('weline-inquiry--', $src);
     self::assertStringContainsString('data-inquiry-skin', $src);
     self::assertStringContainsString('weline-inquiry__submit', $src);

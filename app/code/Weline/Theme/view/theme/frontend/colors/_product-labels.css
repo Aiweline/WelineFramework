@@ -14,7 +14,7 @@
 :root,
 [data-theme="default"],
 [data-theme="light"] {
-    /* 新品：Amazon Success Green #007600 浅底 + 深绿字 */
+    /* 新品：Commerce Success Green #007600 浅底 + 深绿字 */
     --color-product-label-new-bg: #e6f2e6;
     --color-product-label-new-text: #007600;
     /* 促销：淡粉底 + 深红字 */

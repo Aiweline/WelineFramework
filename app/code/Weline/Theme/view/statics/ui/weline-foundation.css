@@ -464,12 +464,14 @@
 }
 
 @layer layout {
-    /*
-     * 版心唯一实现：所有壳层（header 行、footer、breadcrumb、正文、bottom-slot）
-     * 必须复用这一条，禁止再写等价的 width/padding 组合，否则会出现
-     * 「Header 与正文/Footer 不同步」。token 见 variables/_spacing.css。
-     */
-    .w-container,
+    .w-container {
+        box-sizing: border-box;
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
+        min-width: 0;
+        margin-inline: auto;
+        padding-inline: var(--weline-layout-content-padding-inline);
+    }
     .w-theme-content-width {
         box-sizing: border-box;
         width: min(100%, var(--weline-layout-content-max-width));

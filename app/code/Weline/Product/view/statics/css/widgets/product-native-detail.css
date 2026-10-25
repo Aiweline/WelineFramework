@@ -1,6 +1,6 @@
 /* PDP product-info shell. Tokens only; no hardcoded palette. */
-/* PDP：水墨宣纸气质（兼容 --amazon 类名；色值只消费 Theme ink token） */
-.product-native-detail--amazon {
+/* PDP：水墨宣纸气质（兼容 --classic 类名；色值只消费 Theme ink token） */
+.product-native-detail--classic {
     --amz-text: var(--color-text-primary);
     --amz-link: var(--color-link);
     --amz-price: var(--color-primary);
@@ -28,7 +28,7 @@
         radial-gradient(120% 60% at 0% 0%, color-mix(in srgb, var(--color-primary) 4%, transparent), transparent 55%),
         var(--pdp-canvas);
 }
-.product-detail-layout__main-content .product-native-detail--amazon {
+.product-detail-layout__main-content .product-native-detail--classic {
     max-width: none;
     margin-inline: 0;
     padding-inline: 0;
@@ -237,7 +237,7 @@
 }
 .product-native-detail__buy-column {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(var(--size-panel-220), var(--sidebar-width));
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--spacing-5) var(--spacing-6);
     align-items: start;
 }
@@ -631,6 +631,8 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
 }
 .product-native-detail__variant-submit:hover { background: var(--color-surface-hover); }
 .product-native-detail__buybox {
+    margin-inline-start: 0;
+    max-width: none;
     display: flex;
     flex-direction: column;
     gap: var(--weline-space-4);

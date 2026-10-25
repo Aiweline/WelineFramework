@@ -22,6 +22,9 @@ class RunService
 {
     public const TICKET_TTL = 7200;
 
+    /** 执行中运行距最后更新超过该秒数视为已中断（仅读取时打标，不写库）。 */
+    public const STALE_RUN_SECONDS = 1800;
+
     public function __construct(
         private readonly LeadRun $runModel,
         private readonly ModelCatalogService $modelCatalog,
@@ -489,10 +492,36 @@ class RunService
         $pagination = $model->getPaginationState();
 
         return [
-            'items' => $items,
+            'items' => $this->flagStaleRuns($items),
             'pagination' => $pagination,
             'total' => (int)($pagination['totalSize'] ?? 0),
         ];
+    }
+
+    /**
+     * 浏览器已停止但后端停止请求丢失时，running 会永远显示「执行中」。
+     * 这里只在读取时打标（不写库）：距最后更新超过 30 分钟的执行中运行视为已中断，
+     * 让后台显示真实状态，避免用户误以为还在跑。
+     *
+     * @param list<array<string,mixed>> $items
+     * @return list<array<string,mixed>>
+     */
+    private function flagStaleRuns(array $items): array
+    {
+        $now = time();
+        foreach ($items as &$item) {
+            if ((string)($item[LeadRun::schema_fields_STATUS] ?? '') !== LeadRun::STATUS_RUNNING) {
+                continue;
+            }
+            $updatedAt = (int)($item[LeadRun::schema_fields_UPDATED_AT] ?? 0);
+            if ($updatedAt > 0 && $now - $updatedAt >= self::STALE_RUN_SECONDS) {
+                $item[LeadRun::schema_fields_STATUS] = LeadRun::STATUS_CANCELLED;
+                $item['status_stale'] = true;
+            }
+        }
+        unset($item);
+
+        return $items;
     }
 
     /**

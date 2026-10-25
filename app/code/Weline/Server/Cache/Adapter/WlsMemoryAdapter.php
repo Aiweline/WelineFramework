@@ -34,7 +34,18 @@ class WlsMemoryAdapter implements AtomicCacheConfirmationInterface, BatchCacheAd
     private static float $remoteGloballyUnavailableUntil = 0.0;
     /** 已观察到真实共享服务故障的请求 ID。 */
     private static ?string $remoteSlowRequestId = null;
-    private const REMOTE_FAILURE_COOLDOWN_SECONDS = 2.0;
+    /**
+     * @var array<string, int>
+     */
+    private static array $remoteFailureCounts = [];
+    /**
+     * 冷却日志去噪索引（remoteFailureCooldownLogIndex）。
+     *
+     * @var array<string, float>
+     */
+    private static array $remoteFailureLogIndex = [];
+    private const REMOTE_FAILURE_COOLDOWN_BASE_SECONDS = 2.0;
+    private const REMOTE_FAILURE_COOLDOWN_MAX_SECONDS = 60.0;
     private const EPOCH_NAMESPACE = 'wls_adapter_local_epoch';
 
     /** 进程内缓存（减少网络请求） */
@@ -433,6 +444,7 @@ class WlsMemoryAdapter implements AtomicCacheConfirmationInterface, BatchCacheAd
         self::$remoteSlowRequestId = null;
         self::$remoteGloballyUnavailableUntil = 0.0;
         unset(self::$remoteUnavailableUntil[$this->identity]);
+        unset(self::$remoteFailureCounts[$this->identity], self::$remoteFailureLogIndex[$this->identity]);
         if ($this->memoryFacade !== null && \method_exists($this->memoryFacade, 'disconnect')) {
             $this->memoryFacade->disconnect();
         }
@@ -657,6 +669,8 @@ class WlsMemoryAdapter implements AtomicCacheConfirmationInterface, BatchCacheAd
     private static function resetRemoteHealthAfterSuccessfulClear(): void
     {
         self::$remoteUnavailableUntil = [];
+        self::$remoteFailureCounts = [];
+        self::$remoteFailureLogIndex = [];
         self::$remoteGloballyUnavailableUntil = 0.0;
         self::$remoteSlowRequestId = null;
     }
@@ -903,13 +917,20 @@ class WlsMemoryAdapter implements AtomicCacheConfirmationInterface, BatchCacheAd
 
     private function markRemoteUnavailable(\Throwable $throwable): void
     {
-        $this->logRemoteFailureStage('remote_unavailable', $throwable);
+        $count = (self::$remoteFailureCounts[$this->identity] ?? 0) + 1;
+        self::$remoteFailureCounts[$this->identity] = $count;
+        $cooldown = \min(self::REMOTE_FAILURE_COOLDOWN_BASE_SECONDS * (2 ** ($count - 1)), self::REMOTE_FAILURE_COOLDOWN_MAX_SECONDS);
+        $now = self::monotonicSeconds();
+        if (($now - (self::$remoteFailureLogIndex[$this->identity] ?? 0.0)) > self::REMOTE_FAILURE_COOLDOWN_MAX_SECONDS) {
+            $this->logRemoteFailureStage('remote_unavailable', $throwable);
+            self::$remoteFailureLogIndex[$this->identity] = $now;
+        }
         \Weline\Framework\Runtime\TraceGate::recordSpan('wls.cache.remote.unavailable', 0, 'wls', meta: [
             'failed_stage' => 'remote_unavailable', 'exception_class' => $throwable::class,
         ]);
         unset($throwable);
         $this->remoteOperationSucceeded = false;
-        $until = self::monotonicSeconds() + self::REMOTE_FAILURE_COOLDOWN_SECONDS;
+        $until = self::monotonicSeconds() + $cooldown;
         self::$remoteUnavailableUntil[$this->identity] = $until;
         self::$remoteGloballyUnavailableUntil = \max(self::$remoteGloballyUnavailableUntil, $until);
         $requestId = $this->currentRequestId();
@@ -947,6 +968,7 @@ class WlsMemoryAdapter implements AtomicCacheConfirmationInterface, BatchCacheAd
     private function markRemoteAvailable(): void
     {
         unset(self::$remoteUnavailableUntil[$this->identity]);
+        unset(self::$remoteFailureCounts[$this->identity], self::$remoteFailureLogIndex[$this->identity]);
     }
 
     /**

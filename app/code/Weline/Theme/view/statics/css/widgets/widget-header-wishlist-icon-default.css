@@ -51,4 +51,4 @@
     font-weight: 700;
 }
 .wc-theme_widget_wishlist_icon .wishlist-count[hidden] { display: none !important; }
-/* Icon-only: label removed from hanfu design markup; tip = data-w-tooltip / title / aria-label */
+/* Icon-only: label removed from design-theme markup; tip = data-w-tooltip / title / aria-label */

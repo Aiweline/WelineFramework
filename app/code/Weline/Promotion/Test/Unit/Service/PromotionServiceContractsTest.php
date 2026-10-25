@@ -231,7 +231,7 @@ private function assert_PromotionStorefrontLaunchReadiness_testPromotionTemplate
     self::assertStringContainsString('<w:product:card ids="batchProducts"', $template);
     self::assertStringNotContainsString('ProductCardRenderer::projectFromProducts', $template);
     self::assertStringContainsString('ProductCardRenderer::emitStylesheetLinkOnce()', $template);
-    self::assertStringNotContainsString('amazon-product-card.css', $template);
+    self::assertStringNotContainsString('product-card-chrome.css', $template);
 }
 
 private function assert_PromotionStorefrontLaunchReadiness_testPromotionHeroMirrorsItsImageFocusForRtlLocales(): void

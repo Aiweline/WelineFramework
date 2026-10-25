@@ -28,6 +28,8 @@ return [
             => \Weline\Framework\Event\Async\AsyncEventDeliveryMaintenance::class,
         \Weline\Framework\Http\UrlInterface::class
             => \Weline\Framework\Http\Url::class,
+        \Weline\Framework\Http\RequestInterface::class
+            => \Weline\Framework\Http\Request::class,
         'process_cache_resetter.Weline_Framework'
             => \Weline\Framework\Api\Runtime\ProcessCacheResetter::class,
         'request_resetter.Weline_Framework'

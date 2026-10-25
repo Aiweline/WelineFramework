@@ -75,7 +75,7 @@ final class InquiryRenderer implements InquiryRendererInterface
     private function skin(string $input): string
     {
         $input = strtolower(trim($input));
-        return in_array($input, ['amazon'], true) ? $input : '';
+        return in_array($input, ['supplier'], true) ? $input : '';
     }
 
     private function id(string $input, string $code): string

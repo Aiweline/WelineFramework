@@ -1,6 +1,6 @@
 <?php
 /**
- * Blog category sidebar filter (Amazon-style left nav) — expandable 2-level tree.
+ * Blog category sidebar filter (Weline-style left nav) — expandable 2-level tree.
  *
  * @var list<array<string,mixed>> $blog_categories
  * @var int $blog_active_category_id
@@ -67,34 +67,34 @@ $renderNodes = static function (
         $isOpen = $isActive || $isAncestor;
         $itemId = 'blog-cat-node-' . $id;
         ?>
-        <li class="amazon-blog-filter__node<?= $hasChildren ? ' has-children' : '' ?><?= $isOpen ? ' is-open' : '' ?>"
+        <li class="blog-filter__node<?= $hasChildren ? ' has-children' : '' ?><?= $isOpen ? ' is-open' : '' ?>"
             data-blog-filter-node
             data-state="<?= $isOpen ? 'open' : 'closed' ?>">
-            <div class="amazon-blog-filter__row">
+            <div class="blog-filter__row">
                 <?php if ($hasChildren): ?>
                     <button type="button"
-                            class="amazon-blog-filter__toggle"
+                            class="blog-filter__toggle"
                             data-blog-filter-toggle
                             aria-expanded="<?= $isOpen ? 'true' : 'false' ?>"
                             aria-controls="<?= $escape($itemId) ?>"
                             title="@lang('展开/收起')">
-                        <span class="amazon-blog-filter__toggle-icon" aria-hidden="true"></span>
+                        <span class="blog-filter__toggle-icon" aria-hidden="true"></span>
                     </button>
                 <?php else: ?>
-                    <span class="amazon-blog-filter__toggle-spacer" aria-hidden="true"></span>
+                    <span class="blog-filter__toggle-spacer" aria-hidden="true"></span>
                 <?php endif; ?>
-                <a class="amazon-blog-filter__option<?= $isActive ? ' is-active' : '' ?>"
+                <a class="blog-filter__option<?= $isActive ? ' is-active' : '' ?>"
                    href="<?= $escape($url) ?>"
                    <?= $isActive ? 'aria-current="page"' : '' ?>>
                     <?= $escape($label) ?>
                 </a>
             </div>
             <?php if ($hasChildren): ?>
-                <div class="amazon-blog-filter__children"
+                <div class="blog-filter__children"
                      id="<?= $escape($itemId) ?>"
                      data-blog-filter-children
                      <?= $isOpen ? '' : 'hidden' ?>>
-                    <ul class="amazon-blog-filter__list amazon-blog-filter__list--nested" role="list">
+                    <ul class="blog-filter__list blog-filter__list--nested" role="list">
                         <?php $renderNodes($children, $activeId, $depth + 1, $escape, $containsId, $buildUrl); ?>
                     </ul>
                 </div>
@@ -104,15 +104,15 @@ $renderNodes = static function (
     }
 };
 ?>
-<div class="amazon-blog-filter"
+<div class="blog-filter"
      data-testid="blog-category-filter"
      data-blog-category-filter
      data-weline-load="blogCategoryFilter">
     <?php /* Non-heading label: must not precede page H1 in the SEO outline. */ ?>
-    <p class="amazon-blog-filter__title"><lang>博客分类</lang></p>
-    <ul class="amazon-blog-filter__list" role="list">
+    <p class="blog-filter__title"><lang>博客分类</lang></p>
+    <ul class="blog-filter__list" role="list">
         <li>
-            <a class="amazon-blog-filter__option<?= $activeId <= 0 ? ' is-active' : '' ?>"
+            <a class="blog-filter__option<?= $activeId <= 0 ? ' is-active' : '' ?>"
                href="@url{'blog'}"
                <?= $activeId <= 0 ? 'aria-current="page"' : '' ?>>
                 <lang>全部文章</lang>

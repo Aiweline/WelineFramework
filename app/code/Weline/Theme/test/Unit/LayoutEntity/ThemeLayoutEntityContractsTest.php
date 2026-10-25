@@ -131,8 +131,8 @@ final class ThemeLayoutEntityContractsTest extends TestCase
             'LayoutSlotRendererColdPathPolicy::testPublishedLayoutSourceCandidatesPolicySharesProjectionPool' => function () {
             $this->assert_LayoutSlotRendererColdPathPolicy_testPublishedLayoutSourceCandidatesPolicySharesProjectionPool();
         },
-            'LayoutSlotRendererColdPathPolicy::testCriticalChromePinsRejectStaleAmazonBag' => function () {
-            $this->assert_LayoutSlotRendererColdPathPolicy_testCriticalChromePinsRejectStaleAmazonBag();
+            'LayoutSlotRendererColdPathPolicy::testCriticalChromePinsRejectStaleCommerceBag' => function () {
+            $this->assert_LayoutSlotRendererColdPathPolicy_testCriticalChromePinsRejectStaleCommerceBag();
         },
             'LayoutSlotRendererColdPathPolicy::testHardCutFinalizeRecordsSkippedL3BudgetPhase' => function () {
             $this->assert_LayoutSlotRendererColdPathPolicy_testHardCutFinalizeRecordsSkippedL3BudgetPhase();
@@ -913,10 +913,10 @@ private function assert_LayoutSlotRendererColdPathPolicy_testPublishedLayoutSour
 }
 
 /**
- * Stale source_candidates bag with Amazon-like header bytes must fail chrome pin gate
+ * Stale source_candidates bag with commerce-like header bytes must fail chrome pin gate
  * when live derived disk already holds design SoT chrome.
  */
-private function assert_LayoutSlotRendererColdPathPolicy_testCriticalChromePinsRejectStaleAmazonBag(): void
+private function assert_LayoutSlotRendererColdPathPolicy_testCriticalChromePinsRejectStaleCommerceBag(): void
 {
     $tmp = \sys_get_temp_dir() . '/weline-chrome-pin-gate-' . \bin2hex(\random_bytes(4));
     \mkdir($tmp, 0777, true);
@@ -953,15 +953,15 @@ private function assert_LayoutSlotRendererColdPathPolicy_testCriticalChromePinsR
     };
 
     $sotOrigin = $tmp . '/design-header-default.phtml';
-    $amazonOrigin = $tmp . '/amazon-header-default.phtml';
+    $commerceOrigin = $tmp . '/commerce-header-default.phtml';
     $sotDisk = $wrap($sotOrigin, '<header data-header-chrome="sot"></header>');
-    $amazonPin = $wrap($amazonOrigin, '<header data-header-mobile="amazon"></header>');
+    $commercePin = $wrap($commerceOrigin, '<header data-header-mobile="supplier"></header>');
     \file_put_contents($diskHeader, $sotDisk);
 
     $stale = \Weline\Theme\Service\LayoutEntity\ThemeLayoutSourceSnapshot::fromCandidates(
         $identity,
         '',
-        [$diskHeader => $amazonPin],
+        [$diskHeader => $commercePin],
     );
     $fresh = \Weline\Theme\Service\LayoutEntity\ThemeLayoutSourceSnapshot::fromCandidates(
         $identity,
@@ -973,7 +973,7 @@ private function assert_LayoutSlotRendererColdPathPolicy_testCriticalChromePinsR
     $method->setAccessible(true);
     self::assertFalse(
         (bool)$method->invoke(null, $stale, $paths, $identity),
-        'stale Amazon pin against SoT disk must fail criticalChromePinsMatchDisk',
+        'stale commerce pin against SoT disk must fail criticalChromePinsMatchDisk',
     );
     self::assertTrue(
         (bool)$method->invoke(null, $fresh, $paths, $identity),
@@ -2677,14 +2677,14 @@ private function assert_ThemeLayoutEntityUpgradeSolidifyBoundThemes_testSolidify
 private function assert_ThemeLayoutEntityWidgetAssets_testCollectorDedupesAndSplitsBuckets(): void
 {
     $collector = new ThemeLayoutEntityAssetCollector(null);
-    $manifest = $collector->collectFromNodes([['node_uid' => str_repeat('a', 32), 'widget_module' => 'Weline_Theme', 'widget_code' => 'default-header', 'widget_type' => 'header', 'is_active' => true, 'layout_source' => 'Weline_Theme:css/widgets/header-chrome-amazon.css,Weline_Theme:js/widgets/header.js', 'source' => 'Weline_Theme:css/widgets/header-chrome-amazon.css,Weline_Theme:css/widgets/header-search-amazon.css'], ['node_uid' => str_repeat('b', 32), 'widget_module' => 'Weline_Theme', 'widget_code' => 'featured-products', 'widget_type' => 'product', 'is_active' => true, 'layout_source' => 'Weline_Theme:css/widgets/should-skip-layout.css', 'source' => 'Weline_Theme:css/widgets/featured-products.css']], true);
-    self::assertContains('Weline_Theme::css/widgets/header-chrome-amazon.css', $manifest['layout_css']);
+    $manifest = $collector->collectFromNodes([['node_uid' => str_repeat('a', 32), 'widget_module' => 'Weline_Theme', 'widget_code' => 'default-header', 'widget_type' => 'header', 'is_active' => true, 'layout_source' => 'Weline_Theme:css/widgets/header-chrome.css,Weline_Theme:js/widgets/header.js', 'source' => 'Weline_Theme:css/widgets/header-chrome.css,Weline_Theme:css/widgets/header-search.css'], ['node_uid' => str_repeat('b', 32), 'widget_module' => 'Weline_Theme', 'widget_code' => 'featured-products', 'widget_type' => 'product', 'is_active' => true, 'layout_source' => 'Weline_Theme:css/widgets/should-skip-layout.css', 'source' => 'Weline_Theme:css/widgets/featured-products.css']], true);
+    self::assertContains('Weline_Theme::css/widgets/header-chrome.css', $manifest['layout_css']);
     self::assertContains('Weline_Theme::js/widgets/header.js', $manifest['layout_js']);
-    self::assertContains('Weline_Theme::css/widgets/header-search-amazon.css', $manifest['source_css']);
+    self::assertContains('Weline_Theme::css/widgets/header-search.css', $manifest['source_css']);
     self::assertContains('Weline_Theme::css/widgets/featured-products.css', $manifest['source_css']);
     self::assertNotContains('Weline_Theme::css/widgets/should-skip-layout.css', $manifest['layout_css']);
     // Deduped out of source because already in layout.
-    self::assertNotContains('Weline_Theme::css/widgets/header-chrome-amazon.css', $manifest['source_css']);
+    self::assertNotContains('Weline_Theme::css/widgets/header-chrome.css', $manifest['source_css']);
     self::assertNotSame('', $manifest['fp']);
 }
 

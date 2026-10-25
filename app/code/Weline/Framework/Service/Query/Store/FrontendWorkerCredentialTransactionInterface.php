@@ -68,4 +68,15 @@ interface FrontendWorkerCredentialTransactionInterface
     public function retainedBytes(string $type, ?string $scope, int $now): int;
 
     public function deleteExpired(int $now, ?string $type = null, ?string $scope = null): void;
+
+    /**
+     * Capacity relief: evict oldest active credentials of a type until at most
+     * `$keep` rows remain, oldest first. Returns the number evicted.
+     *
+     * Backed by a best-effort contract — implementations may evict fewer rows
+     * when the underlying store cannot order by creation time. Callers must
+     * re-check `countRetained()` afterwards and still fail gracefully when
+     * capacity remains exhausted.
+     */
+    public function evictOldest(string $type, int $keep, int $now): int;
 }

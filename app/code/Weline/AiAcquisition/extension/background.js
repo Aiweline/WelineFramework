@@ -21,6 +21,8 @@ const DEFAULT_TARGET_COUNT = 10;
 const MIN_LEAD_SCORE = 6;
 const MAX_SEARCH_RESULTS = 10;
 const MAX_LOG_ENTRIES = 40;
+/** 零产出时补试检索词的轮数上限。 */
+const RETRY_QUERY_ROUNDS = 3;
 const MAX_TOOL_RESULT_CHARS = 8000;
 const KEEPALIVE_ALARM = 'weline-bridge-keepalive';
 
@@ -380,6 +382,14 @@ async function startRun(payload) {
 async function failBeforeRun(error) {
   state.lastError = String(error?.message || error);
   log(`运行失败：${state.lastError}`);
+  // 初始化失败同样要落库，否则后台表格会一直显示「执行中」而助手已结束。
+  await completeRun('failed', {
+    searches_count: state.searches,
+    leads_saved: state.saved,
+    leads_found: state.saved,
+    iterations: state.iterations,
+    error: state.lastError,
+  });
   state.running = false;
   state.stopRequested = false;
   state.paused = false;
@@ -919,9 +929,12 @@ async function runBrowserAgent(context, extraSlots) {
     queries = [`${category} shop USA contact`, `${category} store Europe email`, `${category} rental studio contact`];
   }
   let inspected = 0;
+  let emptySearches = 0;
   outer:
   for (const query of queries) {
     if (state.stopRequested) break;
+    // 目标未达成就不该提前收场：最大轮次只统计「真正读到内容的页面」，
+    // 抓取失败 / 无公开邮箱的候选不占名额，否则几个坏页面就烧光轮次。
     const queryKey = String(query || '').trim().toLowerCase();
     if (state.usedQueries && state.usedQueries.has(queryKey)) {
       log(`跳过重复检索词：${query}`);
@@ -948,84 +961,217 @@ async function runBrowserAgent(context, extraSlots) {
     }
     const rawResults = Array.isArray(search?.results) ? search.results : [];
     state.searches += 1;
-    const filtered = filterToolResults(rawResults);
-    const results = filtered.results;
+    let filtered = filterToolResults(rawResults);
+    let results = filtered.results;
     log(`检索「${query}」：${rawResults.length} 条，可新抓 ${results.length} 条${filtered.skipped ? `（跳过 ${filtered.skipped} 条已看过）` : ''}（${search?.engine || 'none'}）`);
-    if (results.length === 0) continue;
+    if (results.length === 0 && rawResults.length > 0) {
+      // 全是域名级排除命中：放开域名、只按精确 URL 去重，先把这批结果用起来。
+      filtered = filterToolResults(rawResults, true);
+      results = filtered.results;
+      if (results.length > 0) {
+        log(`域名排除过严，放开后可用 ${results.length} 条（仅按 URL 去重）`);
+      }
+    }
+    if (results.length === 0) {
+      // 确实没有可抓的：记一次空转，连续 3 次空转就换一批词，别把轮次耗在重复结果上。
+      emptySearches += 1;
+      if (emptySearches >= 3) {
+        log(`连续 ${emptySearches} 次检索没有新页面，提前换词`);
+        break;
+      }
+      continue;
+    }
+    emptySearches = 0;
 
-    for (const item of results.slice(0, 6)) {
-      if (state.saved >= target || inspected >= maxPages || state.stopRequested) break outer;
-      await checkControl();
-      if (state.stopRequested) break outer;
-      inspected += 1;
+    log(`本轮检索「${query}」处理 ${results.length} 个候选，已入库 ${state.saved}`);
+    await inspectCandidates(context, results, target, wasm);
+    log(`候选处理结束，已入库 ${state.saved}${state.stopRequested ? '（已请求停止）' : ''}`);
+    reportScanned();
+  }
+  log(`检索词遍历结束：共 ${queries.length} 个词，已检索 ${state.searches} 次，入库 ${state.saved}`);
 
-      let page = null;
-      let emails = [];
-      // 首页无公开邮箱时，依次尝试常见联系/关于子页（零售站点邮箱多在联系页）
-      const candidates = [item.url].concat(contactSubpaths(item.url));
-      for (const candidate of candidates) {
-        try {
-          page = await inspectPage(candidate);
-        } catch (error) {
-          continue;
-        }
-        if (!page || page.error) {
-          continue;
-        }
-        if (state.scan) {
-          state.scan.mark(candidate);
-        }
-        emails = Array.isArray(page.emails) ? page.emails.filter(isBusinessEmail) : [];
-        if (emails.length > 0) {
-          break;
-        }
+  reportScanned();
+  // 零产出不认输：换一批检索词再跑，直到有产出或试满轮数。
+  if (state.saved <= 0 && !state.stopRequested) {
+    await retryWithFreshQueries(context, category, target);
+  }
+  reportScanned();
+  // 零产出不算完成：目标没达成本次运行就是失败，原因写清楚供后台排查。
+  if (state.saved <= 0) {
+    const reason = state.stopRequested
+      ? '已手动停止，未产出线索'
+      : `未找到符合条件的线索（检索 ${state.searches} 次、命中 ${state.saved} 条）。请调整目标市场或检索词后重试。`;
+    await finishRun('failed', new Error(reason));
+    return;
+  }
+  await finishRun(state.stopRequested ? 'cancelled' : 'completed');
+}
+
+/**
+ * 逐个核实候选页面并入库。抓取失败 / 无公开邮箱的候选不占「最大轮次」名额，
+ * 只有真正读到内容的页面才计数——否则几个坏页面就烧光轮次，目标没达成提前收场。
+ */
+async function inspectCandidates(context, results, target, wasm) {
+  const maxPages = clampInt(context.run?.max_iterations, 1, 20, 8);
+  let inspected = 0;
+  for (const item of (results || []).slice(0, 6)) {
+    if (state.saved >= target || inspected >= maxPages || state.stopRequested) {
+      return;
+    }
+    await checkControl();
+    if (state.stopRequested) {
+      return;
+    }
+
+    let page = null;
+    let emails = [];
+    // 首页无公开邮箱时，依次尝试常见联系/关于子页（零售站点邮箱多在联系页）
+    const candidates = [item.url].concat(contactSubpaths(item.url));
+    for (const candidate of candidates) {
+      try {
+        page = await inspectPage(candidate);
+      } catch (error) {
+        continue;
       }
       if (!page || page.error) {
-        log(`抓取失败：${item.url}`);
         continue;
       }
-      if (emails.length === 0) {
-        log(`跳过（无公开邮箱）：${item.url}`);
-        continue;
+      if (state.scan) {
+        state.scan.mark(candidate);
       }
-      log(`核实：${item.title || item.url} · ${emails.length} 个公开邮箱`);
+      inspected += 1; // 只统计真正读到内容的页面
+      emails = Array.isArray(page.emails) ? page.emails.filter(isBusinessEmail) : [];
+      if (emails.length > 0) {
+        break;
+      }
+    }
+    if (!page || page.error) {
+      log(`抓取失败：${item.url}`);
+      continue;
+    }
+    if (emails.length === 0) {
+      log(`跳过（无公开邮箱）：${item.url}`);
+      continue;
+    }
+    log(`核实：${item.title || item.url} · ${emails.length} 个公开邮箱`);
 
-      let lead;
-      try {
-        lead = await extractLead(context, page, item, emails);
-      } catch (error) {
-        log(`模型提取失败：${error.message || error}`);
-        continue;
-      }
-      if (!lead) {
-        log('模型判定：不是合格买家或分数不足，跳过');
-        continue;
-      }
-      let result;
-      try {
-        result = await saveLeadTool(lead, wasm);
-      } catch (error) {
-        // 入库回传失败（站点维护/网络）不终止运行：记录后继续找下一条。
-        log(`入库回传失败（不影响本次运行）：${error.message || error}`);
-        broadcast();
-        continue;
-      }
-      if (result?.created) {
-        state.saved += 1;
-        log(`入库：${lead.company_name}（${lead.email}）score=${result.ai_score}`);
-      } else if (result?.saved) {
-        log(`已存在：${lead.company_name}`);
-      } else {
-        log(`未入库：${result?.message || result?.reason || '未知原因'}`);
-      }
+    let lead;
+    try {
+      lead = await extractLead(context, page, item, emails);
+    } catch (error) {
+      log(`模型提取失败：${error.message || error}`);
+      continue;
+    }
+    if (!lead) {
+      log('模型判定：不是合格买家或分数不足，跳过');
+      continue;
+    }
+    let result;
+    try {
+      result = await saveLeadTool(lead, wasm);
+    } catch (error) {
+      // 入库回传失败（站点维护/网络）不终止运行：记录后继续找下一条。
+      log(`入库回传失败（不影响本次运行）：${error.message || error}`);
       broadcast();
-      if (state.saved >= target) break outer;
+      continue;
+    }
+    if (result?.created) {
+      state.saved += 1;
+      log(`入库：${lead.company_name}（${lead.email}）score=${result.ai_score}`);
+    } else if (result?.saved) {
+      log(`已存在：${lead.company_name}`);
+    } else {
+      log(`未入库：${result?.message || result?.reason || '未知原因'}`);
+    }
+    broadcast();
+    if (state.saved >= target) {
+      return;
+    }
+  }
+}
+
+
+/**
+ * 零产出时换一批检索词重试：目标没达成就不能收场。
+ * 每次从品类模板里取未用过的组合，最多补 RETRY_QUERY_ROUNDS 轮。
+ */
+async function retryWithFreshQueries(context, category, target) {
+  const pool = buildQueryPool(category);
+  const consumed = new Set(); // 本函数内已取用过的词，避免多轮取到同一批
+  let round = 0;
+  while (state.saved < target && !state.stopRequested && round < RETRY_QUERY_ROUNDS) {
+    const fresh = pool.filter((q) => {
+      const key = q.toLowerCase();
+      if (consumed.has(key)) {
+        return false;
+      }
+      return !state.usedQueries || !state.usedQueries.has(key);
+    });
+    if (fresh.length === 0) {
+      break;
+    }
+    round += 1;
+    const batch = fresh.slice(0, 3);
+    batch.forEach((q) => consumed.add(q.toLowerCase()));
+    log(`未产出线索，第 ${round}/${RETRY_QUERY_ROUNDS} 轮换检索词重试：${batch.slice(0, 2).join(' | ')}`);
+    for (const query of batch) {
+      if (state.saved >= target || state.stopRequested) {
+        break;
+      }
+      if (state.usedQueries) {
+        state.usedQueries.add(query.toLowerCase());
+      }
+      await checkControl();
+      if (state.stopRequested) {
+        break;
+      }
+      let search = null;
+      for (let attempt = 1; attempt <= 3 && !search; attempt += 1) {
+        try {
+          const reply = await searchInBrowser(query);
+          if (reply && Array.isArray(reply.results)) {
+            search = reply;
+          } else {
+            await sleep(2500);
+          }
+        } catch (error) {
+          await sleep(2500);
+        }
+      }
+      if (!search) {
+        continue;
+      }
+      state.searches += 1;
+      const filtered = filterToolResults(search.results || []);
+      log(`检索「${query}」：${(search.results || []).length} 条，可新抓 ${filtered.results.length} 条（${search.engine || 'none'}）`);
+      await inspectCandidates(context, filtered.results, target);
     }
     reportScanned();
   }
+  if (state.saved <= 0 && round > 0) {
+    log(`已补试 ${round} 轮检索词仍未产出线索`);
+  }
+}
 
-  reportScanned();
-  await finishRun(state.stopRequested ? 'cancelled' : 'completed');
+/** 品类检索词池：给重试轮次提供未用过的组合。 */
+function buildQueryPool(category) {
+  const base = String(category || 'hanfu');
+  const markets = ['USA', 'Europe', 'UK', 'Australia', 'Canada'];
+  const intents = [
+    'wholesale distributor contact',
+    'shop owner email address',
+    'boutique stockist enquiry',
+    'retail buyer contact us',
+    'store manager email',
+    'reseller program contact',
+  ];
+  const pool = [];
+  for (const market of markets) {
+    for (const intent of intents) {
+      pool.push(`${base} ${intent} ${market}`);
+    }
+  }
+  return pool;
 }
 
 function isBusinessEmail(email) {
@@ -1329,6 +1475,13 @@ async function runAgent(context, extraSlots) {
   }
 
   const settled = await settleBeforeFinish();
+  // 零产出不算完成：目标没达成本次运行就是失败，原因写清楚供后台排查。
+  if (!state.stopRequested && settled !== 'cancelled' && settled !== 'failed' && state.saved <= 0) {
+    await finishRun('failed', new Error(
+      `未找到符合条件的线索（检索 ${state.searches} 次、命中 ${state.saved} 条）。请调整目标市场或检索词后重试。`
+    ));
+    return;
+  }
   await finishRun(
     state.stopRequested || settled === 'cancelled' ? 'cancelled' : (settled === 'failed' ? 'failed' : 'completed')
   );
@@ -1865,8 +2018,16 @@ function postEvent(type, payload) {
  * 过滤检索结果：剔除该站点已扫描页面与已获客域名，并给出换词提示。
  * @returns {{results: Array, skipped: number, hint: string}}
  */
-function filterToolResults(results) {
-  return self.WelineScanDedupe.filterResults(results, state.scan);
+function filterToolResults(results, relaxDomains) {
+  const tracker = state.scan;
+  if (!relaxDomains || !tracker) {
+    return self.WelineScanDedupe.filterResults(results, tracker);
+  }
+  // 域名级排除会把热门查询的 10 条结果全部挡掉（实测 seen_domains 33 个，
+  // 覆盖 wikipedia/miccostumes 等固定头条），此时退回到只按精确 URL 去重，
+  // 让已看过域名的新路径也能被抓 —— 目标没达成就不能零抓取。
+  const relaxed = { seenUrls: tracker.seenUrls, seenDomains: new Set() };
+  return self.WelineScanDedupe.filterResults(results, relaxed);
 }
 
 async function saveLeadTool(args, wasm) {
@@ -2278,11 +2439,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === 'WELINE_STOP') {
+    // 停止必须先让后端落库，否则会出现「助手显示已结束、后台仍执行中」的假象。
     controlRun('stop')
-      .catch(() => null)
-      .then(() => {
+      .then((run) => {
         stopRun('user');
-        sendResponse({ ok: true });
+        sendResponse({ ok: true, run: run || null });
+      })
+      .catch((error) => {
+        // 后端停止失败：保留本地运行态，让助手明确告知而不是假装已停。
+        log(`停止失败：${error.message || error}（后台可能仍在执行，请重试）`);
+        sendResponse({ ok: false, message: error.message || '停止失败，请重试' });
       });
     return true;
   }

@@ -30,14 +30,14 @@ final class BlogViewContractsTest extends TestCase
     private function contractChecks(): array
     {
         return [
-            'BlogFrontendTemplate::testListTemplateRendersAmazonCards' => function () {
-            $this->assert_BlogFrontendTemplate_testListTemplateRendersAmazonCards();
+            'BlogFrontendTemplate::testListTemplateRendersCommerceCards' => function () {
+            $this->assert_BlogFrontendTemplate_testListTemplateRendersCommerceCards();
         },
             'BlogFrontendTemplate::testCategoryFilterTemplateUsesFrameworkUrl' => function () {
             $this->assert_BlogFrontendTemplate_testCategoryFilterTemplateUsesFrameworkUrl();
         },
-            'BlogFrontendTemplate::testDetailTemplateRendersAmazonArticle' => function () {
-            $this->assert_BlogFrontendTemplate_testDetailTemplateRendersAmazonArticle();
+            'BlogFrontendTemplate::testDetailTemplateRendersCommerceArticle' => function () {
+            $this->assert_BlogFrontendTemplate_testDetailTemplateRendersCommerceArticle();
         },
             'BlogFrontendTemplate::testBlogReviewsWidgetRegistersDefaultInjection' => function () {
             $this->assert_BlogFrontendTemplate_testBlogReviewsWidgetRegistersDefaultInjection();
@@ -69,19 +69,19 @@ final class BlogViewContractsTest extends TestCase
         ];
     }
 
-private function assert_BlogFrontendTemplate_testListTemplateRendersAmazonCards(): void
+private function assert_BlogFrontendTemplate_testListTemplateRendersCommerceCards(): void
 {
     $template = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/view/templates/frontend/index.phtml');
-    self::assertStringContainsString('amazon-blog-listing', $template);
+    self::assertStringContainsString('blog-listing', $template);
     self::assertStringContainsString('blog-storefront__card', $template);
     self::assertStringContainsString('data-testid="blog-list"', $template);
     self::assertStringContainsString('StorefrontImagePlaceholder', $template);
     self::assertStringContainsString("\$this->getUrl(ltrim(\$url, '/')", $template);
     self::assertStringContainsString("\$this->getUrl(ltrim(\$categoryUrl, '/')", $template);
-    self::assertStringContainsString('amazon-blog-listing__section-title', $template);
-    self::assertStringContainsString('<h1 class="amazon-blog-listing__title">', $template);
+    self::assertStringContainsString('blog-listing__section-title', $template);
+    self::assertStringContainsString('<h1 class="blog-listing__title">', $template);
     self::assertStringContainsString('blog-storefront__card-title', $template);
-    self::assertStringNotContainsString('<header class="amazon-blog-listing__header">', $template);
+    self::assertStringNotContainsString('<header class="blog-listing__header">', $template);
     self::assertStringNotContainsString('<h3><?= $escape($cardTitle) ?></h3>', $template);
     self::assertStringNotContainsString('<h2><?= $escape($title', $template);
 }
@@ -92,19 +92,19 @@ private function assert_BlogFrontendTemplate_testCategoryFilterTemplateUsesFrame
     self::assertStringContainsString('data-testid="blog-category-filter"', $template);
     self::assertStringContainsString("\$template->getUrl(ltrim(\$path, '/')", $template);
     self::assertStringContainsString("\$buildUrl", $template);
-    self::assertStringContainsString('<p class="amazon-blog-filter__title">', $template);
-    self::assertStringNotContainsString('<h2 class="amazon-blog-filter__title">', $template);
+    self::assertStringContainsString('<p class="blog-filter__title">', $template);
+    self::assertStringNotContainsString('<h2 class="blog-filter__title">', $template);
 }
 
-private function assert_BlogFrontendTemplate_testDetailTemplateRendersAmazonArticle(): void
+private function assert_BlogFrontendTemplate_testDetailTemplateRendersCommerceArticle(): void
 {
     $template = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/view/templates/frontend/post/detail.phtml');
-    self::assertStringContainsString('amazon-blog-article', $template);
+    self::assertStringContainsString('blog-article', $template);
     self::assertStringContainsString('data-testid="blog-post-detail"', $template);
     self::assertStringContainsString('blog-related', $template);
-    self::assertStringContainsString('amazon-blog-article__content', $template);
-    self::assertStringContainsString('amazon-blog-article__author-inline', $template);
-    self::assertStringContainsString('amazon-blog-article__keywords', $template);
+    self::assertStringContainsString('blog-article__content', $template);
+    self::assertStringContainsString('blog-article__author-inline', $template);
+    self::assertStringContainsString('blog-article__keywords', $template);
     self::assertStringContainsString('@url{$rPath}', $template);
     self::assertStringNotContainsString("href=\"<?= \$escape(\$rUrl) ?>\"", $template);
     $form = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Blog' . '/view/templates/backend/post-admin/form.phtml');

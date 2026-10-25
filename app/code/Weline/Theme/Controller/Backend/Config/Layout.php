@@ -717,7 +717,7 @@ class Layout extends BackendController
                     [$defaultPrimary, $defaultSecondary] = match (strtolower($themeIdentifier)) {
                         'light' => ['#ffffff', '#f8f9fa'],
                         'dark' => ['#1a1a1a', '#2d2d2d'],
-                        'amazon' => ['#ff9900', '#131921'],
+                        'commerce' => ['#ff9900', '#131921'],
                         default => ['#0d6efd', '#6c757d'],
                     };
                     $primaryColor = $primaryColor ?: $defaultPrimary;

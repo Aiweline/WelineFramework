@@ -2,8 +2,8 @@
 /**
  * 布局：服务异常页面（镜像 404 壳）- 头尾 + 说明区
  *
- * @meta.name {default="服务异常页面布局",name="服务异常页面布局",description="Amazon 风格 500/服务异常壳，供主题编辑与公网 /error 发现"}
- * @meta.description {default="Amazon 风格服务异常布局",name="服务异常页面布局",description="服务异常页模板；运行时静态 500 仍可走 pub/errors"}
+ * @meta.name {default="服务异常页面布局",name="服务异常页面布局",description="Commerce 风格 500/服务异常壳，供主题编辑与公网 /error 发现"}
+ * @meta.description {default="Commerce 风格服务异常布局",name="服务异常页面布局",description="服务异常页模板；运行时静态 500 仍可走 pub/errors"}
  * @param title {default="服务暂时不可用",name="页面标题",description="页面标题"}
  * @param pageTitle {default="服务暂时不可用",name="异常标题",description="异常主标题"}
  * @param pageLead {default="我们正在处理问题，请稍后再试。",name="异常说明",description="异常主要说明"}
@@ -35,23 +35,23 @@ $this->setData('seo', [
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::error::head-after</w:hook>
     <style>
-        .amazon-error-layout {
+        .error-layout {
             margin: 0;
             background: var(--color-bg-canvas, #ffffff);
             color: var(--color-text-primary, #0f1111);
-            font-family: "Amazon Ember", Arial, sans-serif;
+            font-family: "Commerce Ember", Arial, sans-serif;
         }
 
-        .amazon-error {
+        .error {
             width: 100%;
         }
 
-        .amazon-error__intro {
+        .error__intro {
             background: var(--color-bg-canvas, #ffffff);
             border-bottom: 1px solid var(--color-border-default, #ddd);
         }
 
-        .amazon-error__intro-inner {
+        .error__intro-inner {
             width: min(100%, var(--weline-layout-content-max-width));
             max-width: 100%;
             margin: 0 auto;
@@ -63,19 +63,19 @@ $this->setData('seo', [
             align-items: center;
         }
 
-        .amazon-error__visual {
+        .error__visual {
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 0.5rem;
         }
 
-        .amazon-error__visual svg {
+        .error__visual svg {
             width: min(100%, 240px);
             height: auto;
         }
 
-        .amazon-error__kicker {
+        .error__kicker {
             margin: 0 0 0.35rem;
             font-size: 0.95rem;
             font-weight: 700;
@@ -84,7 +84,7 @@ $this->setData('seo', [
             color: var(--color-text-secondary, #565959);
         }
 
-        .amazon-error__title {
+        .error__title {
             margin: 0 0 0.75rem;
             font-size: clamp(1.45rem, 2.4vw, 1.85rem);
             line-height: 1.25;
@@ -92,20 +92,20 @@ $this->setData('seo', [
             color: var(--color-text-primary, #0f1111);
         }
 
-        .amazon-error__lead,
-        .amazon-error__hint {
+        .error__lead,
+        .error__hint {
             margin: 0;
             max-width: 42rem;
             line-height: 1.55;
             color: var(--color-text-secondary, #565959);
         }
 
-        .amazon-error__hint {
+        .error__hint {
             margin-top: 0.55rem;
             font-size: 0.95rem;
         }
 
-        .amazon-error__actions {
+        .error__actions {
             margin-top: 1.15rem;
             display: flex;
             flex-wrap: wrap;
@@ -113,7 +113,7 @@ $this->setData('seo', [
             gap: 0.85rem 1.25rem;
         }
 
-        .amazon-error__home-link {
+        .error__home-link {
             display: inline-flex;
             align-items: center;
             min-height: 2rem;
@@ -128,12 +128,12 @@ $this->setData('seo', [
             text-decoration: none;
         }
 
-        .amazon-error__home-link:hover {
+        .error__home-link:hover {
             background: linear-gradient(180deg, #ffd56b 0%, var(--color-primary-hover, #e68900) 100%);
             color: var(--color-on-primary, #111);
         }
 
-        .amazon-error__back-link {
+        .error__back-link {
             appearance: none;
             border: none;
             background: transparent;
@@ -145,27 +145,27 @@ $this->setData('seo', [
             text-decoration: none;
         }
 
-        .amazon-error__back-link:hover {
+        .error__back-link:hover {
             color: var(--color-link-hover);
             text-decoration: underline;
         }
 
         @media (max-width: 768px) {
-            .amazon-error__intro-inner {
+            .error__intro-inner {
                 grid-template-columns: 1fr;
                 padding: 1.75rem 0 2rem;
                 text-align: left;
             }
 
-            .amazon-error__visual {
+            .error__visual {
                 justify-content: flex-start;
             }
 
-            .amazon-error__visual svg {
+            .error__visual svg {
                 width: min(72vw, 200px);
             }
 
-            .amazon-error__actions {
+            .error__actions {
                 flex-direction: column;
                 align-items: flex-start;
             }
@@ -173,26 +173,26 @@ $this->setData('seo', [
     </style>
     <w:hook>seo::head</w:hook>
 </head>
-<body class="error-layout amazon-error-layout">
+<body class="error-layout">
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
     <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
 
-    <main class="amazon-error <?= $esc((string)($meta['class'] ?? '')) ?>"
+    <main class="error <?= $esc((string)($meta['class'] ?? '')) ?>"
           id="error-main"
           data-layout="error"
           data-testid="storefront-error-page">
-        <section class="amazon-error__intro" weline-code="theme.error.intro" aria-labelledby="amazon-error-title">
+        <section class="error__intro" weline-code="theme.error.intro" aria-labelledby="error-title">
             <w:slot id="error-content"
                     name="异常内容"
                     accept="layout-error-content,content,empty-state"
                     reject="header,footer"
                     multiple="true"
                     position="content"
-                    class="amazon-error__intro-inner error-container">
-                <div class="amazon-error__visual" aria-hidden="true">
+                    class="error__intro-inner error-container">
+                <div class="error__visual" aria-hidden="true">
                     <svg viewBox="0 0 240 200" role="img" focusable="false">
                         <rect x="28" y="56" width="118" height="92" rx="10" fill="#ffd699"/>
                         <rect x="38" y="66" width="98" height="72" rx="8" fill="#fffaf0" stroke="#ff9900" stroke-width="3"/>
@@ -203,20 +203,20 @@ $this->setData('seo', [
                         <ellipse cx="120" cy="168" rx="62" ry="10" fill="#eaeded"/>
                     </svg>
                 </div>
-                <div class="amazon-error__message">
-                    <p class="amazon-error__kicker"><?= $esc((string)$statusCode) ?> · <?= __('ERROR') ?></p>
-                    <h1 class="amazon-error__title" id="amazon-error-title"><?= $esc($pageTitle) ?></h1>
+                <div class="error__message">
+                    <p class="error__kicker"><?= $esc((string)$statusCode) ?> · <?= __('ERROR') ?></p>
+                    <h1 class="error__title" id="error-title"><?= $esc($pageTitle) ?></h1>
                     <?php if ($pageLead !== ''): ?>
-                        <p class="amazon-error__lead"><?= $esc($pageLead) ?></p>
+                        <p class="error__lead"><?= $esc($pageLead) ?></p>
                     <?php endif; ?>
                     <?php if ($pageHint !== ''): ?>
-                        <p class="amazon-error__hint"><?= $esc($pageHint) ?></p>
+                        <p class="error__hint"><?= $esc($pageHint) ?></p>
                     <?php endif; ?>
-                    <div class="amazon-error__actions">
-                        <a class="amazon-error__home-link" href="<?= $esc($homeHref !== '' ? $homeHref : '/') ?>">
+                    <div class="error__actions">
+                        <a class="error__home-link" href="<?= $esc($homeHref !== '' ? $homeHref : '/') ?>">
                             <?= __('前往首页') ?>
                         </a>
-                        <button type="button" class="amazon-error__back-link" data-w-error-back>
+                        <button type="button" class="error__back-link" data-w-error-back>
                             <?= __('返回上一页') ?>
                         </button>
                     </div>

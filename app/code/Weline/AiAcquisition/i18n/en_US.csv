@@ -42,6 +42,7 @@
 不支持的运行控制：%{1},不支持的运行控制：%{1}
 "payload 必须是 JSON 对象","payload must be a JSON object"
 "payload 过大","payload is too large"
+"urls 必须是数组","urls 必须是数组"
 "messages 不能为空","messages cannot be empty"
 "messages 数量超出上限","too many messages"
 "tools 必须是数组","tools must be an array"
@@ -51,6 +52,7 @@
 "lead 必须是 JSON 对象","lead must be a JSON object"
 运行状态不合法,"Invalid run status"
 "stats 必须是数组","stats must be an array"
+未找到符合条件的线索，请调整目标市场或检索词后重试。,未找到符合条件的线索，请调整目标市场或检索词后重试。
 请求处理失败，请稍后重试,"Request failed. Please try again later."
 "仅接受 application/json 请求体","Only application/json request bodies are accepted"
 "请求体必须是 JSON 对象","Request body must be a JSON object"
@@ -60,6 +62,13 @@
 运行当前状态不可执行：%{1},运行当前状态不可执行：%{1}
 本地模型结果为空。,本地模型结果为空。
 "本地模型 tool_calls 必须是数组。","本地模型 tool_calls 必须是数组。"
+扩展目录不存在,扩展目录不存在
+无法创建扩展压缩包,无法创建扩展压缩包
+扩展压缩包落盘失败,扩展压缩包落盘失败
+"macOS 安装器目录不存在","macOS 安装器目录不存在"
+无法创建安装器压缩包,无法创建安装器压缩包
+安装器压缩包落盘失败,安装器压缩包落盘失败
+压缩包不存在,压缩包不存在
 "AI 获客配置","AI 获客配置"
 settings,settings
 "AI 自动回复频控、外发账户、模型与提示词模板配置","AI 自动回复频控、外发账户、模型与提示词模板配置"
@@ -131,6 +140,7 @@ user-plus,user-plus
 线索邮箱为空或格式不正确，不可转化,线索邮箱为空或格式不正确，不可转化
 "Open one public page and extract title, meta description, company name, public emails, country hints and a text excerpt. Use it to verify buyer intent before saving a lead.","Open one public page and extract title, meta description, company name, public emails, country hints and a text excerpt. Use it to verify buyer intent before saving a lead."
 "url 不能为空，请给出搜索结果中的公开页面地址。","url cannot be empty. Provide a public page URL from the search results."
+该页面在此站点已扫描过，请换别的候选页或换关键词。,该页面在此站点已扫描过，请换别的候选页或换关键词。
 页面检查失败：%{1},"Page inspection failed: %{1}"
 "Check whether a lead already exists before saving. Searches existing leads by company, email, domain or source URL keyword and returns a short summary.","Check whether a lead already exists before saving. Searches existing leads by company, email, domain or source URL keyword and returns a short summary."
 "keyword 不能为空，请给出公司名、邮箱、域名或来源 URL 关键词。","keyword cannot be empty. Provide a company name, email, domain or source URL keyword."
@@ -148,5 +158,6 @@ user-plus,user-plus
 "query 不能为空，请给出体现买家意向的检索词。","query cannot be empty. Provide keywords that express buyer intent."
 搜索失败：%{1},"Search failed: %{1}"
 没有检索到结果。请更换同义词、买家意向词或来源后重试，不要据此编造线索。,"No results found. Try synonyms, other buyer-intent keywords or another source; do not invent leads."
+这些结果都已扫描过（或已入库线索）。请更换关键词、换目标国家/渠道，不要重复抓同一批页面。,这些结果都已扫描过（或已入库线索）。请更换关键词、换目标国家/渠道，不要重复抓同一批页面。
 录入方式,"Entry channel"
 "Entry channel","Entry channel"

@@ -122,6 +122,8 @@ class ServiceOrchestrator
     private const MAX_PROVIDER_VENDORS = 256;
     private const MAX_PROVIDER_MODULES_PER_VENDOR = 1024;
     private const MAX_PROVIDER_DEFINITION_BYTES = 262_144;
+    private const RESURRECT_TRANSIENT_RETRY_BASE_SEC = 1.5;
+    private const RESURRECT_TRANSIENT_RETRY_MAX_SEC = 12.0;
     private const GATEWAY_NATIVE_EDGE_ROLES = [
         ControlMessage::ROLE_WORKER,
         ControlMessage::ROLE_DISPATCHER,
@@ -164,7 +166,7 @@ class ServiceOrchestrator
     private const BULK_LAUNCH_PORT_REPROBE_ROLES = [
         ControlMessage::ROLE_WORKER => true,
     ];
-    private const MASTER_LEASE_TOUCH_INTERVAL_SEC = 2.0;
+    private const MASTER_LEASE_TOUCH_INTERVAL_SEC = 3.0;
     private const WINDOWS_CHILD_PID_LEASE_WAIT_SEC = 2.0;
     private const WINDOWS_EMULATED_CHILD_PID_LEASE_WAIT_SEC = 40.0;
 
@@ -16169,7 +16171,15 @@ class ServiceOrchestrator
                             $this->restoreFailedResurrectionPlaceholder($currentInstance, $entry);
                         }
                         unset($currentQueuedEntry['launching'], $currentQueuedEntry['launchingAt']);
-                        $currentQueuedEntry['scheduledAt'] = self::monotonicSeconds() + 1.5;
+                        $transientWindow = $throwable instanceof \RuntimeException
+                            && $throwable->getMessage() === 'Managed-child Master lease is not authorized: Master lease is not running.';
+                        $retryDelay = $transientWindow
+                            ? $this->resurrectTransientRetryDelay($currentQueuedEntry)
+                            : 1.5;
+                        if ($transientWindow) {
+                            $currentQueuedEntry['transient_retry_attempts'] = (int)($currentQueuedEntry['transient_retry_attempts'] ?? 0) + 1;
+                        }
+                        $currentQueuedEntry['scheduledAt'] = self::monotonicSeconds() + $retryDelay;
                         $currentQueuedEntry['delayed'] = true;
                         $currentQueuedEntry['pid'] = 0;
                         $currentQueuedEntry['tracking_pid'] = 0;
@@ -16192,9 +16202,15 @@ class ServiceOrchestrator
                             $this->resurrectQueue[$key] = $currentQueuedEntry;
                         }
                     }
-                    WlsLogger::error_(
-                        "[Orchestrator] {$entry['role']}#{$entry['instanceId']} 复活任务异常，1.5s 后重试：{$throwable->getMessage()}"
-                    );
+                    if ($transientWindow) {
+                        WlsLogger::warning_(
+                            "[Orchestrator] {$entry['role']}#{$entry['instanceId']} 复活任务遇到 Master lease 切换窗口，{$retryDelay}s 后重试：{$throwable->getMessage()}"
+                        );
+                    } else {
+                        WlsLogger::error_(
+                            "[Orchestrator] {$entry['role']}#{$entry['instanceId']} 复活任务异常，1.5s 后重试：{$throwable->getMessage()}"
+                        );
+                    }
 
                     return;
                 }
@@ -16332,6 +16348,15 @@ class ServiceOrchestrator
         $message = $throwable->getMessage();
         return \str_contains($message, 'observable process identity')
             || \str_contains($message, 'process birth identity');
+    }
+
+    private function resurrectTransientRetryDelay(array $entry): float
+    {
+        $attempts = (int)($entry['transient_retry_attempts'] ?? 0);
+        return \min(
+            self::RESURRECT_TRANSIENT_RETRY_BASE_SEC * (2 ** $attempts),
+            self::RESURRECT_TRANSIENT_RETRY_MAX_SEC,
+        );
     }
 
     /**

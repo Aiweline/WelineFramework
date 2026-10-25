@@ -20,7 +20,7 @@ class MasterLeaseManager
     public const SCHEMA = 'wls-master-lease/2';
     public const STATE_RUNNING = 'running';
     public const STATE_STOPPING = 'stopping';
-    public const HEARTBEAT_STALE_SEC = 15;
+    public const HEARTBEAT_STALE_SEC = 30;
 
     private const MAX_PROTECTED_LEASE_BYTES = 16_384;
     private const LOCK_WAIT_SEC = 5.0;

@@ -114,9 +114,10 @@ class PaymentQueryProvider implements QueryProviderInterface
         }
 
         $meta = (new PayPalJsSdkUrlBuilder())->walletMeta($config, [
-            'components' => 'buttons,card-fields,googlepay,applepay',
+            'components' => 'buttons,card-fields',
             'currency' => $currency,
             'intent' => 'capture',
+            'skip_funding_flags' => true,
         ]);
         $clientId = trim((string) ($meta['client_id'] ?? ''));
         $sdkSrc = trim((string) ($meta['js_sdk_src'] ?? ''));

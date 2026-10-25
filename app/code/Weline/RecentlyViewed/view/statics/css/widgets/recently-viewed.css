@@ -1,4 +1,4 @@
-/* Amazon-style browsing-history shelf for recently-viewed */
+/* Classic-style browsing-history shelf for recently-viewed */
 .weline-recently-viewed {
   --wrv-ink: var(--weline-theme-text);
   --wrv-muted: var(--weline-theme-text-muted);

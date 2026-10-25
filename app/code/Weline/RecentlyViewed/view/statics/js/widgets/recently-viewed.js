@@ -110,7 +110,7 @@
 
   function recordFromDocument(scope) {
     var root = (scope || document).querySelector(
-      '.product-native-detail--amazon[data-product-id], [data-wrv-record-product-id]'
+      '.product-native-detail--classic[data-product-id], [data-wrv-record-product-id]'
     );
     if (!root) {
       return;

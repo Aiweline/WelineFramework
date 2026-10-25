@@ -134,7 +134,7 @@ $resolveName = static function (array $node) use ($resolveLocale, $isCatalogCate
     if (is_array($i18nMap)) {
         $localized = trim((string)($i18nMap[$locale] ?? ''));
         if ($localized !== '') {
-            // EN 店面：拒绝用错误 i18n 映射把已英文化的 text（Hanfu）覆盖成 CJK（汉服）。
+            // EN 店面：拒绝用错误 i18n 映射把已英文化的 text（Brand）覆盖成 CJK（品牌名）。
             $rejectCjkOverwrite = $locale === 'en_US'
                 && $name !== ''
                 && !preg_match('/\p{Han}/u', $name)
@@ -168,7 +168,7 @@ $resolveName = static function (array $node) use ($resolveLocale, $isCatalogCate
         }
     }
 
-    // Catalog / toNavItems 已解析店面语言；勿再走 headerEsc/__()（会把 Hanfu 反向翻成 汉服）。
+    // Catalog / toNavItems 已解析店面语言；勿再走 headerEsc/__()（会把 Brand 反向翻成品牌名）。
     return htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
 };
 

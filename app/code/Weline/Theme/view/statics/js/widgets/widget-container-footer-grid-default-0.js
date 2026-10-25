@@ -1,4 +1,4 @@
-window.WelineWidgetAssets.register('theme-hanfu-container-footer-default-0', function (widgetScript) {
+window.WelineWidgetAssets.register('theme-container-footer-grid-default-0', function (widgetScript) {
 (function () {
             var btn = document.getElementById('navBackToTop');
             if (btn && btn.getAttribute('data-weline-back-to-top-bound') !== '1') {

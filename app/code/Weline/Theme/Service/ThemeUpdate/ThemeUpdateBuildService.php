@@ -452,7 +452,7 @@ final class ThemeUpdateBuildService
     }
 
     /**
-     * 主题静态命名空间（如 Weline/hanfu）。
+     * 主题静态命名空间（如 Weline/{theme}）。
      * 设计目录下的相对路径原样返回。模块内默认主题是绝对路径，没有设计命名空间，返回空，
      * 避免把磁盘路径写进抽样 URL 和代次指针。
      */
@@ -471,7 +471,7 @@ final class ThemeUpdateBuildService
         return trim(substr($absolute, strlen($designDir)), '/');
     }
 
-    /** 主题对应的静态命名空间前缀（如 Weline/hanfu），用于运行时识别「主题自有资源」。 */
+    /** 主题对应的静态命名空间前缀（如 Weline/{theme}），用于运行时识别「主题自有资源」。 */
     private function resolveThemePrefix(int $themeId): string
     {
         try {

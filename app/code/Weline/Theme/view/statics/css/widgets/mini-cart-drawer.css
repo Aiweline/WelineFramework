@@ -21,7 +21,7 @@
 }
 
 .header-cart .mini-cart-drawer,
-.header-cart .mini-cart-drawer--amazon {
+.header-cart .mini-cart-drawer {
     /*
      * Paper ink on raised cream drawer under inverse header (WO-UI-CONTRAST).
      * Theme `_colors.css` aliases --weline-chrome-body-text → --color-text-primary,
@@ -1036,8 +1036,8 @@ a.header-cart .mini-cart-drawer__line-price-campaign:hover,
     border-bottom: var(--border-width-thin) solid var(--weline-theme-border);
 }
 
-/* Match theme-head `body .weline-cart-shell--amazon …` specificity so underline rail wins over pill chrome. */
-body .weline-cart-shell--amazon .weline-cart-shell__summary-extras .mini-cart-drawer__extras-tab,
+/* Match theme-head `body .weline-cart-shell--chrome …` specificity so underline rail wins over pill chrome. */
+body .weline-cart-shell--chrome .weline-cart-shell__summary-extras .mini-cart-drawer__extras-tab,
 body .weline-checkout .weline-checkout__extras .mini-cart-drawer__extras-tab,
 .weline-cart-shell__summary-extras .mini-cart-drawer__extras-tab,
 .weline-checkout__extras .mini-cart-drawer__extras-tab {
@@ -1061,7 +1061,7 @@ body .weline-checkout .weline-checkout__extras .mini-cart-drawer__extras-tab,
     box-shadow: none;
 }
 
-body .weline-cart-shell--amazon .weline-cart-shell__summary-extras .mini-cart-drawer__extras-tab.is-active,
+body .weline-cart-shell--chrome .weline-cart-shell__summary-extras .mini-cart-drawer__extras-tab.is-active,
 body .weline-checkout .weline-checkout__extras .mini-cart-drawer__extras-tab.is-active,
 .weline-cart-shell__summary-extras button.mini-cart-drawer__extras-tab.is-active,
 .weline-cart-shell__summary-extras .mini-cart-drawer__extras-tab.is-active,

@@ -1450,6 +1450,15 @@ final class FrontendWorkerSessionService
         int $now,
     ): void {
         $store->deleteExpired($now, FrontendWorkerCredentialType::SESSION);
+        $count = $store->countRetained(FrontendWorkerCredentialType::SESSION, null, $now);
+        if ($count >= self::MAX_ACTIVE_SESSIONS) {
+            /*
+             * 容量打满先 LRU 淘汰（最旧创建的未绑定会话先走，活跃后端会话保留），
+             * 而不是直接把 503 抛给客户。淘汰水位留 20% 余量，避免连续握手反复触发。
+             */
+            $keep = \max(0, (int)\floor(self::MAX_ACTIVE_SESSIONS * 0.8));
+            $store->evictOldest(FrontendWorkerCredentialType::SESSION, $keep, $now);
+        }
         $this->assertCredentialCapacity(
             $store,
             FrontendWorkerCredentialType::SESSION,

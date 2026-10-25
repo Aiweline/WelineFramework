@@ -787,7 +787,7 @@
     }
 
     /** @deprecated Use showCartAddedNoticePanel; kept for buy-box / frequently-bought-together callers. */
-    function showAmazonCartAddedNotice(successText, summary, cartMeta) {
+    function showCartAddedNotice(successText, summary, cartMeta) {
         return showCartAddedNoticePanel(successText, summary, cartMeta);
     }
 

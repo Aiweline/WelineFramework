@@ -26,7 +26,7 @@ final class PolicyDocumentDefaults
         }
         $all = self::all();
         $defaults = isset($all[$page]) ? $all[$page] : ($all['privacy'] ?? [
-            'variant' => 'amazon',
+            'variant' => 'classic',
             'title' => '政策',
             'lead' => '',
             'intro' => '',
@@ -92,6 +92,8 @@ final class PolicyDocumentDefaults
         $sectionsWereEmpty = !\is_array($params['sections'] ?? null) || $params['sections'] === [];
         $linksWereEmpty = !\is_array($params['related_links'] ?? null) || $params['related_links'] === [];
 
+
+
         foreach (['title', 'lead', 'intro', 'footer_note', 'updated_at', 'toc_aria', 'article_aria', 'variant'] as $key) {
             $cur = $params[$key] ?? null;
             if ($cur !== null && $cur !== '') {
@@ -103,7 +105,7 @@ final class PolicyDocumentDefaults
             $fallback = $defaults[$key];
             if ($fallback === null || $fallback === '') {
                 if ($key === 'variant') {
-                    $params[$key] = 'amazon';
+                    $params[$key] = 'classic';
                 }
                 continue;
             }
@@ -212,7 +214,7 @@ final class PolicyDocumentDefaults
         return array (
   'privacy' => 
   array (
-    'variant' => 'amazon',
+    'variant' => 'classic',
     'title' => '隐私政策',
     'lead' => '我们会认真保护您的个人信息。下面说明：我们可能收集什么、用来做什么、何时会与支付/物流伙伴共享，以及您如何查询或更正。',
     'intro' => '这份说明和购物、账户规则一起适用。左侧目录可快速跳转；有不清楚的地方，可通过帮助中心或联系入口找我们。',
@@ -318,7 +320,7 @@ final class PolicyDocumentDefaults
   ),
   'refund' => 
   array (
-    'variant' => 'amazon',
+    'variant' => 'classic',
     'title' => '退款政策',
     'lead' => '我们从中国发往海外，跨境回程成本高，所以店内售后以质量问题、错发漏发、运输损坏为主。单纯不喜欢或选错色码，通常不好办理退换。',
     'intro' => '本页说明退款到账、金额与流程。能不能退换、期限与例外，以「退换政策」为准；若两页表述不一致，以退换政策及强制性法规为准。',
@@ -418,7 +420,7 @@ final class PolicyDocumentDefaults
   ),
   'cookie' => 
   array (
-    'variant' => 'amazon',
+    'variant' => 'classic',
     'title' => 'Cookie 政策',
     'lead' => '必要 Cookie 让登录、购物车、结账能正常工作。统计或营销类 Cookie，我们会先征得您的同意再开启；您也可以随时在浏览器里清理。',
     'intro' => '下面说明我们用哪些 Cookie、各自做什么，以及您如何管理。完整的个人信息说明请参阅隐私政策。',
@@ -495,7 +497,7 @@ final class PolicyDocumentDefaults
   ),
   'shipping' => 
   array (
-    'variant' => 'amazon',
+    'variant' => 'classic',
     'title' => '配送政策',
     'lead' => '包裹从中国大陆仓库发出。结算页上的时效是估算，清关和旺季可能变慢——我们会协助查询，但不把估算日当作固定送达承诺。操作步骤见配送指南。',
     'intro' => '下单前请确认：包裹自中国大陆发出，海外地址需可通达、可清关。承运方案、参考时效与费用以结算页为准；结算页展示的送达时间仅为估算，不是固定送达承诺。',
@@ -582,7 +584,7 @@ final class PolicyDocumentDefaults
   ),
   'disclaimer' => 
   array (
-    'variant' => 'amazon',
+    'variant' => 'classic',
     'title' => '免责声明',
     'lead' => '我们会尽量保持网站稳定，但网络与第三方服务偶发故障时，页面可能暂时打不开——我们会尽快恢复。本页说明责任边界，供您了解。',
     'intro' => '本说明补充服务条款中的责任边界。可按目录了解服务中断、信息内容、交易与第三方相关说明。',
@@ -671,7 +673,7 @@ final class PolicyDocumentDefaults
   ),
   'term-condition' => 
   array (
-    'variant' => 'amazon',
+    'variant' => 'classic',
     'title' => '服务条款',
     'lead' => '欢迎逛店、下单。使用本站前，请花一两分钟看看账户安全与购物规则；有不清楚的地方，随时问客服。',
     'intro' => '下面用白话说明逛店与下单时需要留意的规则。可按目录跳转；有疑问请通过帮助中心联系我们。',
@@ -765,7 +767,7 @@ final class PolicyDocumentDefaults
   ),
   'accessibility' => 
   array (
-    'variant' => 'amazon',
+    'variant' => 'classic',
     'title' => '无障碍声明',
     'lead' => '我们希望更多朋友能顺利逛店下单。若您用辅助功能遇到障碍，请告诉我们页面和设备，我们会尽量协助。',
     'intro' => '下面说明我们在无障碍方面的目标、已知限制和反馈渠道。遇到障碍时，欢迎告诉我们，我们会尽量协助。',

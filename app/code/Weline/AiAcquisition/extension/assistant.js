@@ -32,6 +32,7 @@
     observer: null,
     host: null,
     root: null,
+    notice: '',
   };
 
   const MODE_LABELS = {
@@ -380,6 +381,13 @@
     }
     if (logs.hidden === false) {
       logs.textContent = '';
+      if (state.notice) {
+        const warn = document.createElement('li');
+        warn.textContent = state.notice;
+        warn.style.color = '#ffb4a2';
+        warn.style.fontWeight = '600';
+        logs.appendChild(warn);
+      }
       for (const line of (runtime.logs || []).slice(-6)) {
         const li = document.createElement('li');
         li.textContent = String(line);
@@ -421,12 +429,22 @@
   }
 
   async function control(action) {
+    let failure = '';
     try {
-      await chrome.runtime.sendMessage({ type: `WELINE_${action.toUpperCase()}` });
+      const reply = await chrome.runtime.sendMessage({ type: `WELINE_${action.toUpperCase()}` });
+      if (reply && reply.ok === false) {
+        failure = reply.message || '操作失败，请重试';
+      }
     } catch (error) {
       // 后台未就绪时忽略，下一次轮询会纠正状态
     }
+    if (failure) {
+      state.notice = failure;
+    } else {
+      state.notice = '';
+    }
     pollRuntime();
+    render();
   }
 
   async function pollRuntime() {

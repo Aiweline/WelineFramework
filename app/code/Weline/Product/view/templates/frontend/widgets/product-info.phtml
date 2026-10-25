@@ -520,7 +520,7 @@ if ($productBreadcrumbs === []) {
     }
 }
 ?>
-<section class="product-native-detail product-native-detail--amazon<?= $isPreviewMode ? ' is-preview' : '' ?><?= $quickAdd ? ' product-native-detail--quick-add' : '' ?>"
+<section class="product-native-detail product-native-detail--classic<?= $isPreviewMode ? ' is-preview' : '' ?><?= $quickAdd ? ' product-native-detail--quick-add' : '' ?>"
          data-product-id="<?= (int)$productId ?>"
          data-testid="storefront-product-detail"
          data-requires-shipping="<?= $requiresShipping ? '1' : '0' ?>"
@@ -639,7 +639,7 @@ if ($productBreadcrumbs === []) {
                 <div class="product-native-detail__stage w-frame" data-ratio="1" data-fit="contain">
                     <img class="product-native-detail__primary-image"
                          src="<?= $escape($primarySrc) ?>"
-                         alt="<?= $escape($name) ?>"
+                         alt="<?= $escape(\Weline\Product\Service\ProductCardRenderer::imageAlt($name)) ?>"
                          <?php if ($primaryW > 0 && $primaryH > 0): ?>
                          width="<?= $primaryW ?>"
                          height="<?= $primaryH ?>"
@@ -1357,7 +1357,7 @@ if ($productBreadcrumbs === []) {
                          data-sticky-primary-image
                          data-testid="product-sticky-primary-image"
                          src="<?= $escape((string)($offer['image'] ?? ($images[0] ?? ''))) ?>"
-                         alt="<?= $escape($name) ?>"
+                         alt="<?= $escape(\Weline\Product\Service\ProductCardRenderer::imageAlt($name)) ?>"
                          width="64"
                          height="64"
                          loading="lazy">

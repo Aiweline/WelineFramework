@@ -339,9 +339,10 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
             $cardFieldsSdkSrc = '';
             if ($useCardFields) {
                 $cardFieldsSdkSrc = (new PayPalJsSdkUrlBuilder())->build($config, [
-                    'components' => 'buttons,card-fields,googlepay,applepay',
+                    'components' => 'buttons,card-fields',
                     'currency' => $paypalCurrency,
                     'intent' => 'capture',
+                    'skip_funding_flags' => true,
                 ]);
                 // 无 client_id / SDK URL 构建失败时不发卡单，避免产生无法在前端渲染的孤儿订单。
                 $useCardFields = $cardFieldsSdkSrc !== '';

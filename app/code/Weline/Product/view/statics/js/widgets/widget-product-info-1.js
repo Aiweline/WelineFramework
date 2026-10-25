@@ -1,7 +1,7 @@
 window.WelineWidgetAssets.register('product-product-info-1', function (widgetScript) {
 (function () {
-    const root = document.querySelector(('.product-native-detail--amazon[data-product-id="' + Number(widgetScript.dataset.v0) + '"]'))
-        || document.querySelector('.product-native-detail--amazon');
+    const root = document.querySelector(('.product-native-detail--classic[data-product-id="' + Number(widgetScript.dataset.v0) + '"]'))
+        || document.querySelector('.product-native-detail--classic');
     if (!root) {
         return;
     }

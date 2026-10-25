@@ -701,6 +701,61 @@ PHP;
         self::assertFalse($mismatch['transient_owner_unknown']);
     }
 
+    public function testTransientStateWindowFlaggedForSameGenerationStoppedLease(): void
+    {
+        $instance = 'credential-state-window-' . \bin2hex(\random_bytes(4));
+        $manager = new class extends MasterLeaseManager {
+            public array $lease = [];
+
+            public function validateRunningLease(
+                string $path,
+                string $expectedInstance = '',
+                int $expectedMasterPid = 0,
+                int $expectedEpoch = 0,
+                string $expectedToken = '',
+                int $expectedControlPort = 0,
+                bool $requireManagedName = false,
+            ): array {
+                return [
+                    'authorized' => false,
+                    'identity_authorized' => false,
+                    'veto' => false,
+                    'fresh' => false,
+                    'same_boot' => true,
+                    'foreign_pid_namespace' => false,
+                    'owner_status' => MasterLeaseRuntimeIdentity::OWNER_MATCH,
+                    'reason' => 'Master lease is not running.',
+                    'lease' => $this->lease,
+                ];
+            }
+        };
+        $manager->lease = [
+            'instance' => $instance,
+            'master_pid' => 4242,
+            'master_epoch' => 7,
+        ];
+        $store = new MasterChildCredentialStore(leaseManager: $manager);
+        $validate = static fn (int $pid, int $epoch): array => $store->validateCurrentProcessCredential(
+            MasterLeaseManager::pathForInstance($instance),
+            $instance,
+            $pid,
+            $epoch,
+            \str_repeat('a', 64),
+        );
+
+        $sameGeneration = $validate(4242, 7);
+        self::assertFalse($sameGeneration['authorized']);
+        self::assertTrue($sameGeneration['transient_state_window']);
+
+        $otherGeneration = $validate(4242, 8);
+        self::assertFalse($otherGeneration['authorized']);
+        self::assertFalse($otherGeneration['transient_state_window']);
+
+        $otherMaster = $validate(9999, 7);
+        self::assertFalse($otherMaster['authorized']);
+        self::assertFalse($otherMaster['transient_state_window']);
+    }
+
     public function testWindowsCredentialResolutionKeepsAnExactChildPendingWhileMasterOwnerIsUnobservable(): void
     {
         $instance = 'windows-birth-only-' . \bin2hex(\random_bytes(4));

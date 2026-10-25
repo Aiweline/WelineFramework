@@ -24,26 +24,26 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
     <w:hook>Weline_Theme::frontend::layouts::policy.shipping::head-after</w:hook>
     <w:hook>seo::head</w:hook>
 </head>
-<body class="amazon-policy-layout <?= $escape($meta['class'] ?? '') ?>">
+<body class="doc-policy-layout <?= $escape($meta['class'] ?? '') ?>">
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::policy.shipping::body-start</w:hook>
 
-    <div class="weline-page-wrapper amazon-policy weline-shipping-policy" data-testid="storefront-shipping-page" data-layout="policy-shipping">
+    <div class="weline-page-wrapper doc-policy weline-shipping-policy" data-testid="storefront-shipping-page" data-layout="policy-shipping">
         <if condition="meta.showHeader">
             <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
             <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
         </if>
 
-        <main class="amazon-policy__main" id="main-content">
+        <main class="doc-policy__main" id="main-content">
             <w:slot id="content"
                     name="内容区"
                     accept="layout-policy-shipping-content,layout-policy-content,layout-default-content,content,policy-content,cms-content,faq"
                     reject="header,footer"
                     multiple="true"
                     position="content"
-                    class="amazon-policy__content-root-slot">
+                    class="doc-policy__content-root-slot">
             <div class="policy-main <?= $escape($meta['class'] ?? '') ?>" data-layout="policy-shipping">
                 <w:slot id="policy-content"
                         name="配送政策正文"
@@ -51,13 +51,13 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
                         reject="header,footer"
                         multiple="true"
                         position="content"
-                        class="amazon-policy__content-slot">
+                        class="doc-policy__content-slot">
                 <if condition="meta.content">
                     {{meta.content}}
                 <else/>
-                    <div class="amazon-policy__stage">
+                    <div class="doc-policy__stage">
                         <if condition="meta.showBreadcrumb">
-                            <div class="amazon-policy__breadcrumb">
+                            <div class="doc-policy__breadcrumb">
                                 <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
                                 <w:hook>Weline_Theme::frontend::layouts::policy::breadcrumb-before</w:hook>
                                 <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
@@ -65,7 +65,7 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
                                 <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
                             </div>
                         </if>
-                        <w:widget type="content" name="policy-document" params='{"page":"shipping","variant":"amazon"}' />
+                        <w:widget type="content" name="policy-document" params='{"page":"shipping","variant":"classic"}' />
                     </div>
                 </if>
                 </w:slot>

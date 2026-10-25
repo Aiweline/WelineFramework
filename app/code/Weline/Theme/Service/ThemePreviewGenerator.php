@@ -445,7 +445,7 @@ class ThemePreviewGenerator
     public static function getPreviewImagePublicUrl(int $themeId, string $area = 'frontend', ?int $websiteId = null): string
     {
         // Website-scoped cards must not fall back to the legacy shared PNG —
-        // that paints another bound site (e.g. Hanfu) onto grocery Host cards.
+        // that paints another bound site (e.g. another design theme) onto grocery Host cards.
         $abs = self::getPreviewImagePath($themeId, $area, $websiteId);
         if (!is_file($abs)) {
             return '';

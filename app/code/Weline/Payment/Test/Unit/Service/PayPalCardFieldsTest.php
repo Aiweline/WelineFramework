@@ -241,4 +241,29 @@ final class PayPalCardFieldsTest extends TestCase
         self::assertStringContainsString('card-fields', $url);
         self::assertStringContainsString('client-id=client-id', $url);
     }
+
+    public function testSdkUrlBuilderSkipsFundingFlagsForCardFields(): void
+    {
+        // 沙箱/未开通 Google Pay 的商户传 enable-funding=googlepay 会直接 400；
+        // card-fields 场景通过 skip_funding_flags 不声明钱包能力。
+        $builder = new PayPalJsSdkUrlBuilder();
+        $config = [
+            'client_id' => 'client-id',
+            'google_pay_enabled' => true,
+            'apple_pay_enabled' => true,
+        ];
+        $context = [
+            'components' => 'buttons,card-fields',
+            'currency' => 'USD',
+            'skip_funding_flags' => true,
+        ];
+
+        $url = $builder->build($config, $context);
+        self::assertStringContainsString('card-fields', $url);
+        self::assertStringNotContainsString('enable-funding', $url);
+        self::assertStringNotContainsString('disable-funding', $url);
+
+        $meta = $builder->walletMeta($config, $context);
+        self::assertStringNotContainsString('enable-funding', $meta['js_sdk_src']);
+    }
 }

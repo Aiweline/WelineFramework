@@ -224,7 +224,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
             <section class="weline-checkout__panel" weline-code="checkout.checkout.index.section_4">
                 <h2><?= __('支付方式') ?></h2>
                 <w:hook>Weline_Checkout::frontend::layouts::checkout::payment-methods-before</w:hook>
-                <div class="weline-checkout__options" data-payment-methods>
+                <div class="weline-checkout__options" data-payment-methods data-weline-load="paypalCardFields">
                     <?php if ($ssrPaymentHtml !== ''): ?>
                         <?= $ssrPaymentHtml ?>
                     <?php else: ?>

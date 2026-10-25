@@ -292,7 +292,7 @@ class ThemeDirectoryResolver
 
             // 构建主题模块覆盖路径（与 area 资源同一继承链：当前主题 → 父主题 → …）
             // app/design/WeShop/motor/Weline_Customer/templates/frontend/account/login.phtml
-            // app/design/Weline/hanfu/Weline_Smtp/email/shell.phtml
+            // app/design/{Vendor}/{theme}/Weline_Smtp/email/shell.phtml
             $modulePath1 = str_replace('_', DS, $moduleName);
             $modulePath2 = str_replace('_', '/', $moduleName);
             $relativeDs = str_replace('/', DS, $relativePath);

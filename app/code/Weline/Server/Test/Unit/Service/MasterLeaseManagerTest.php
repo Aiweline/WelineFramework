@@ -425,6 +425,11 @@ final class MasterLeaseManagerTest extends TestCase
         );
     }
 
+    public function testHeartbeatWindowIsThirtySeconds(): void
+    {
+        self::assertSame(30, MasterLeaseManager::HEARTBEAT_STALE_SEC);
+    }
+
     private function instance(string $prefix): string
     {
         $instance = $prefix . '-' . \bin2hex(\random_bytes(5));

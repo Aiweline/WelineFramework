@@ -58,6 +58,7 @@ class SocialExtensionPackageService
         }
         @\chmod($target, 0644);
         \clearstatcache(true, $target);
+        $this->publishCopies($target);
 
         return $target;
     }
@@ -96,6 +97,30 @@ class SocialExtensionPackageService
             }
             if (\is_file($path)) {
                 $zip->addFile($path, $local);
+            }
+        }
+    }
+
+    /**
+     * 同步到已存在的静态发布目录（@static 走 pub/static；版本 hash 不在此推导，命中即写）。
+     */
+    private function publishCopies(string $target): void
+    {
+        $base = \dirname(__DIR__, 5) . '/pub/static';
+        $roots = [];
+        foreach (['icons', 'downloads'] as $sub) {
+            foreach (\glob($base . '/*/Weline/Social/' . $sub, \GLOB_ONLYDIR) ?: [] as $dir) {
+                $roots[] = $dir;
+            }
+            $roots[] = $base . '/Weline/Social/' . $sub;
+        }
+        foreach ($roots as $root) {
+            if (!\is_dir($root)) {
+                continue;
+            }
+            $dest = $root . '/' . self::FILE_NAME;
+            if (@\copy($target, $dest)) {
+                @\chmod($dest, 0644);
             }
         }
     }

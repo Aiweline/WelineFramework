@@ -1,22 +1,22 @@
 /**
- * 色系：Amazon风格主题颜色
+ * 色系：Commerce风格主题颜色
  * 
- * Amazon风格的主题颜色覆盖文件
+ * Commerce风格的主题颜色覆盖文件
  * 字段
- * @meta.name {default="Amazon风格主题颜色",name="Amazon风格主题颜色",description="Amazon风格主题颜色，用于描述色系的名称"}
- * @meta.description {default="参考Amazon的设计风格，提供橙色主题色系",name="参考Amazon的设计风格，提供橙色主题色系",description="参考Amazon的设计风格，提供橙色主题色系，用于描述色系的用途"}
- * @meta.theme {default="amazon",name="主题标识",description="主题标识，用于标识该色系对应的主题名称"}
+ * @meta.name {default="Commerce风格主题颜色",name="Commerce风格主题颜色",description="Commerce风格主题颜色，用于描述色系的名称"}
+ * @meta.description {default="参考Commerce的设计风格，提供橙色主题色系",name="参考Commerce的设计风格，提供橙色主题色系",description="参考Commerce的设计风格，提供橙色主题色系，用于描述色系的用途"}
+ * @meta.theme {default="commerce",name="主题标识",description="主题标识，用于标识该色系对应的主题名称"}
  * @meta.panel {default="color",name="panel",description="panel"}
  * @meta.disk_kind {default="colors",name="disk_kind",description="disk_kind"}
  * @meta.palette_role {default="brand",name="palette_role",description="palette_role"}
  */
 
-[data-theme="amazon"],
+[data-theme="commerce"],
 [data-theme="default"],
 [data-theme="light"] {
-    /* Amazon风格的颜色调整 */
+    /* Commerce风格的颜色调整 */
     --color-primary: #ff9900;
-    /* Amazon橙色 */
+    /* Commerce橙色 */
     --color-primary-light: #febd69;
     --color-primary-dark: #e68900;
     --color-primary-border: #cc7700;
@@ -28,7 +28,7 @@
     --color-primary-text-emphasis: #c45500;
     --color-on-primary: #111111;
 
-    /* 文本色 - Amazon风格 */
+    /* 文本色 - Commerce风格 */
     --color-text-primary: #111;
     --color-text-secondary: #565959;
     --color-text-tertiary: #a6a6a6;
@@ -39,7 +39,7 @@
     --color-text-light: #ffffff;
     --color-text-light-secondary: #dddddd;
 
-    /* 背景色 - Amazon：Body 画布白 #ffffff；secondary 浅灰底板 #eaeded；卡片/菜单白底 */
+    /* 背景色 - Commerce：Body 画布白 #ffffff；secondary 浅灰底板 #eaeded；卡片/菜单白底 */
     --color-bg-canvas: #ffffff;
     --color-bg-canvas-rgb: 255, 255, 255;
     --color-bg-primary: #fff;
@@ -51,13 +51,13 @@
     --color-surface-hover: #f3f3f3;
     --color-on-dark-soft: rgba(255, 255, 255, 0.08);
 
-    /* 边框色 - Amazon风格 */
+    /* 边框色 - Commerce风格 */
     --color-border-default: #ddd;
     --color-border-emphasis: #a6a6a6;
     --color-border-focus: #ff9900;
     --color-border-light: #e5e7eb;
 
-    /* 强调色（使用Amazon橙色系） */
+    /* 强调色（使用Commerce橙色系） */
     --color-accent: #ff9900;
     --color-accent-hover: #e68900;
     --color-accent-light: rgba(255, 153, 0, 0.05);
@@ -72,7 +72,7 @@
     --color-error-light: rgba(239, 68, 68, 0.05);
     --color-info: #007185;
 
-    /* 链接色 - Amazon风格 */
+    /* 链接色 - Commerce风格 */
     --color-link: #007185;
     --color-link-hover: #c45500;
     --color-link-visited: #551a8b;
@@ -99,7 +99,7 @@
     --weline-chrome-body-link-hover: var(--color-primary);
     --weline-chrome-menu-panel-text-hover: var(--color-primary);
 
-    /* 商品标签：Amazon 零售绿 #007600（In Stock / Success） */
+    /* 商品标签：Commerce 零售绿 #007600（In Stock / Success） */
     --color-product-label-new-bg: #e6f2e6;
     --color-product-label-new-text: #007600;
     --weline-product-label-new-bg: var(--color-product-label-new-bg);

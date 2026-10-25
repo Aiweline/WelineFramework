@@ -27,14 +27,12 @@
             padding-block: 0;
         }
 
-        .theme-layout-homepage .homepage-section:has([data-testid="textile-heritage"]),
         .theme-layout-homepage .homepage-section:has([data-site-block="brand-logos"]),
         .theme-layout-homepage .homepage-section:has([data-site-block="testimonials"]),
         .theme-layout-homepage .homepage-section:has([data-site-block="image-gallery"][data-variant="looks"]) {
             padding-block-end: 0;
         }
 
-        .theme-layout-homepage .homepage-section:has([data-testid="textile-heritage"]) + .homepage-section,
         .theme-layout-homepage .homepage-section:has([data-site-block="brand-logos"]) + .homepage-section {
             padding-block-start: var(--weline-layout-spacing-md);
         }
@@ -377,7 +375,6 @@
         }
 
         .theme-layout-homepage .homepage-section--content-compact [data-widget-code="brand-logos"],
-        .theme-layout-homepage .homepage-section--content-compact [data-testid="textile-heritage"],
         .theme-layout-homepage .homepage-section--content-compact [data-site-block="brand-logos"] {
             padding-block: var(--weline-space-3);
         }

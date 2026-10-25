@@ -53,22 +53,22 @@ if ($keywordsRaw !== '') {
 }
 $keywordsLabelEsc = $escape((string)__('关键词'));
 ?>
-<article class="amazon-blog-article" data-testid="blog-post-detail">
+<article class="blog-article" data-testid="blog-post-detail">
     <?php
     /*
      * 面包屑只挂 layout（blog/default · Theme breadcrumb block + showBreadcrumb）。
-     * 禁止在正文再画一条 amazon-blog-article__breadcrumb，否则双轨并存。
+     * 禁止在正文再画一条 blog-article__breadcrumb，否则双轨并存。
      */
     ?>
-    <div class="amazon-blog-article__header">
-        <div class="amazon-blog-article__title-row">
+    <div class="blog-article__header">
+        <div class="blog-article__title-row">
             <?php /* Use div (not <header>): SEO inspector excludes headings inside <header>, which zeroed H1. */ ?>
-            <h1 class="amazon-blog-article__title"><?= $escape($title) ?></h1>
+            <h1 class="blog-article__title"><?= $escape($title) ?></h1>
             <?= $this->fetch('Weline_Blog::templates/frontend/partials/rss-subscribe.phtml') ?>
         </div>
-        <div class="amazon-blog-article__byline">
+        <div class="blog-article__byline">
             <?php if ($author !== ''): ?>
-                <span class="amazon-blog-article__author-inline"><lang>作者</lang>：<?php if ($authorUrl !== ''): ?><a href="<?= $escape($authorUrl) ?>" rel="author"><?= $escape($author) ?></a><?php else: ?><?= $escape($author) ?><?php endif; ?><?php if ($authorJobTitle !== ''): ?> · <?= $escape($authorJobTitle) ?><?php endif; ?></span>
+                <span class="blog-article__author-inline"><lang>作者</lang>：<?php if ($authorUrl !== ''): ?><a href="<?= $escape($authorUrl) ?>" rel="author"><?= $escape($author) ?></a><?php else: ?><?= $escape($author) ?><?php endif; ?><?php if ($authorJobTitle !== ''): ?> · <?= $escape($authorJobTitle) ?><?php endif; ?></span>
             <?php endif; ?>
             <?php if ($publishedAt !== ''): ?>
                 <time datetime="<?= $escape($publishedAt) ?>"><?= $escape($publishedAt) ?></time>
@@ -79,27 +79,27 @@ $keywordsLabelEsc = $escape((string)__('关键词'));
             <span><?= $escape((string)$readingMinutes) ?> <lang>分钟阅读</lang></span>
             <?php if ($categoryLabel !== ''): ?>
                 <?php if ($categoryHref !== ''): ?>
-                    <a class="amazon-blog-article__category" href="<?= $escape($categoryHref) ?>"><?= $escape($categoryLabel) ?></a>
+                    <a class="blog-article__category" href="<?= $escape($categoryHref) ?>"><?= $escape($categoryLabel) ?></a>
                 <?php else: ?>
-                    <span class="amazon-blog-article__category"><?= $escape($categoryLabel) ?></span>
+                    <span class="blog-article__category"><?= $escape($categoryLabel) ?></span>
                 <?php endif; ?>
             <?php endif; ?>
         </div>
         <?php if ($excerpt !== ''): ?>
-            <p class="amazon-blog-article__excerpt"><?= $escape($excerpt) ?></p>
+            <p class="blog-article__excerpt"><?= $escape($excerpt) ?></p>
         <?php endif; ?>
     </div>
 
     <?php if ($keywordTags !== []): ?>
-        <div class="amazon-blog-article__keywords" aria-label="<?= $keywordsLabelEsc ?>">
+        <div class="blog-article__keywords" aria-label="<?= $keywordsLabelEsc ?>">
             <?php foreach ($keywordTags as $tag): ?>
-                <span class="amazon-blog-article__keyword"><?= $escape($tag) ?></span>
+                <span class="blog-article__keyword"><?= $escape($tag) ?></span>
             <?php endforeach; ?>
         </div>
     <?php endif; ?>
 
     <?php if ($hasRealCover): ?>
-        <figure class="amazon-blog-article__cover">
+        <figure class="blog-article__cover">
             <img src="<?= $escape($cover['src']) ?>"
                  alt="<?= $escape($title) ?>"
                  width="1200"
@@ -111,14 +111,14 @@ $keywordsLabelEsc = $escape((string)__('关键词'));
         </figure>
     <?php endif; ?>
 
-    <div class="amazon-blog-article__content" data-testid="blog-post-content">
+    <div class="blog-article__content" data-testid="blog-post-content">
         <?= $postContent ?>
     </div>
 
     <?php if ($related !== []): ?>
-        <section class="amazon-blog-article__related" aria-labelledby="blog-related-heading" weline-code="blog.article.related">
+        <section class="blog-article__related" aria-labelledby="blog-related-heading" weline-code="blog.article.related">
             <h2 id="blog-related-heading"><lang>相关文章</lang></h2>
-            <div class="amazon-blog-listing__grid amazon-blog-listing__grid--related">
+            <div class="blog-listing__grid blog-listing__grid--related">
                 <?php foreach ($related as $row): ?>
                     <?php
                     if (!is_array($row)) {

@@ -20,7 +20,7 @@
 - `variables/`
   - 前台 token 文件，当前包含 `colors`、`spacing`、`typography`、`shadows`、`borders`。
 - `colors/`
-  - 前台色盘，当前包含 `default`、`light`、`dark`、`amazon`。
+  - 前台色盘，当前包含 `default`、`light`、`dark`、`commerce`。
 - `config/modules.json`
   - 前台主题私有模块配置；仅用于 `weline.modules.js` 编译。
 

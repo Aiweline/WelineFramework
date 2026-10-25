@@ -1233,4 +1233,25 @@ final class ProductCardRenderer
 
         return $products;
     }
+
+    /**
+     * 商品图 alt：去掉末尾音译括号并限长，避免把“英文名 + 拼音”整串塞进 alt。
+     */
+    public static function imageAlt(string $name): string
+    {
+        $alt = \trim((string)\preg_replace('/\s+/u', ' ', $name));
+        $stripped = \preg_replace('/\s*\[[A-Za-z0-9 ,.\'’&\-]{20,}\]\s*$/u', '', $alt);
+        if (\is_string($stripped) && \trim($stripped) !== '') {
+            $alt = \trim($stripped);
+        }
+        if (\mb_strlen($alt, 'UTF-8') > 120) {
+            $alt = \mb_substr($alt, 0, 120, 'UTF-8');
+            $space = \mb_strrpos($alt, ' ');
+            if ($space !== false && $space >= 60) {
+                $alt = \mb_substr($alt, 0, $space, 'UTF-8');
+            }
+            $alt = \rtrim($alt, " ,.;:，。；：");
+        }
+        return $alt !== '' ? $alt : \trim($name);
+    }
 }

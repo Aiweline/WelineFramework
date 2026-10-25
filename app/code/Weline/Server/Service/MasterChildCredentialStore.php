@@ -879,12 +879,19 @@ final class MasterChildCredentialStore
                 'authorized' => true,
                 'reason' => '',
                 'transient_owner_unknown' => false,
+                'transient_state_window' => false,
             ];
         } catch (\Throwable $throwable) {
+            $message = \substr($throwable->getMessage(), 0, 512);
+            $transientStateWindow = $message === 'Managed-child Master lease is not authorized: Master lease is not running.'
+                && \is_array($validation['lease'] ?? null)
+                && (int)($validation['lease']['master_pid'] ?? 0) === $masterPid
+                && (int)($validation['lease']['master_epoch'] ?? 0) === $masterEpoch;
             return [
                 'authorized' => false,
-                'reason' => \substr($throwable->getMessage(), 0, 512),
+                'reason' => $message,
                 'transient_owner_unknown' => $transientOwnerUnknown,
+                'transient_state_window' => $transientStateWindow,
             ];
         }
     }

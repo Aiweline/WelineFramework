@@ -25,6 +25,7 @@
     initPromise: null,
     submitting: false,
     eligible: false,
+    pendingOrderId: '',
     idempotencyKey: '',
     observer: null,
     observeTimer: null
@@ -74,7 +75,12 @@
     } catch (e) {
       // ignore
     }
-    return !!document.querySelector('#payment-recovery, [data-continue-pay]');
+    // 结账页 recovery 区块常驻 DOM（hidden 也在）；只有可见时才算续付模式。
+    var recovery = document.querySelector('#payment-recovery, [data-checkout-payment-recovery]');
+    if (recovery && !recovery.hidden && recovery.getAttribute('aria-hidden') !== 'true') {
+      return true;
+    }
+    return !!document.querySelector('[data-continue-pay]:not([hidden])');
   }
 
   function readCheckoutCurrency() {
@@ -184,7 +190,14 @@
     if (!global.Weline || !global.Weline.Api || typeof global.Weline.Api.resource !== 'function') {
       return Promise.resolve(null);
     }
-    return global.Weline.Api.resource('payment').then(function (api) {
+    // Weline.Api.resource 返回同步 Proxy 客户端（非 Promise），方法返回 Promise。
+    var api;
+    try {
+      api = global.Weline.Api.resource('payment');
+    } catch (eCfg) {
+      return Promise.resolve(null);
+    }
+    return Promise.resolve().then(function () {
       if (!api || typeof api.paypalCardFieldsConfig !== 'function') {
         return null;
       }
@@ -265,36 +278,69 @@
       }
       applyLabels(container, config.labels);
       return loadPayPalSdk(text(config.sdk_src).trim()).then(function (paypal) {
-        if (!paypal || typeof paypal.createInstance !== 'function') {
-          return false;
+        // 兼容两代 SDK：新式 createInstance（card-fields 组件 + session API）
+        // 与经典 CardFields 顶层工厂（components=card-fields 时挂在 window.paypal）。
+        if (paypal && typeof paypal.createInstance === 'function') {
+          return paypal.createInstance({
+            clientId: text(config.client_id).trim(),
+            components: ['card-fields'],
+            pageType: 'checkout'
+          }).then(function (sdk) {
+            if (!sdk || typeof sdk.findEligibleMethods !== 'function') {
+              return false;
+            }
+            return sdk.findEligibleMethods({
+              currencyCode: text(config.currency).trim() || readCheckoutCurrency() || 'USD'
+            }).then(function (paymentMethods) {
+              if (!paymentMethods || typeof paymentMethods.isEligible !== 'function'
+                || !paymentMethods.isEligible('advanced_cards')) {
+                return false;
+              }
+              if (typeof sdk.createCardFieldsOneTimePaymentSession !== 'function') {
+                return false;
+              }
+              var cardSession = sdk.createCardFieldsOneTimePaymentSession();
+              mountFields(cardSession, container);
+              state.sdk = sdk;
+              state.cardSession = cardSession;
+              state.mounted = true;
+              state.eligible = true;
+              return true;
+            });
+          });
         }
-        return paypal.createInstance({
-          clientId: text(config.client_id).trim(),
-          components: ['card-fields'],
-          pageType: 'checkout'
-        }).then(function (sdk) {
-          if (!sdk || typeof sdk.findEligibleMethods !== 'function') {
+        if (paypal && typeof paypal.CardFields === 'function') {
+          var cfInstance = null;
+          try {
+            cfInstance = paypal.CardFields({
+              style: { input: { 'font-size': '16px' } },
+              createOrder: function () {
+                if (!state.pendingOrderId) {
+                  return Promise.reject(new Error('order_not_created'));
+                }
+                return Promise.resolve(state.pendingOrderId);
+              },
+              onError: function (err) {
+                showError((err && err.detail && err.detail.message)
+                  ? String(err.detail.message)
+                  : label('error_card_failed', '银行卡支付失败，请检查卡信息后重试。'));
+              },
+            });
+          } catch (eCf) {
             return false;
           }
-          return sdk.findEligibleMethods({
-            currencyCode: text(config.currency).trim() || readCheckoutCurrency() || 'USD'
-          }).then(function (paymentMethods) {
-            if (!paymentMethods || typeof paymentMethods.isEligible !== 'function'
-              || !paymentMethods.isEligible('advanced_cards')) {
-              return false;
-            }
-            if (typeof sdk.createCardFieldsOneTimePaymentSession !== 'function') {
-              return false;
-            }
-            var cardSession = sdk.createCardFieldsOneTimePaymentSession();
-            mountFields(cardSession, container);
-            state.sdk = sdk;
-            state.cardSession = cardSession;
-            state.mounted = true;
-            state.eligible = true;
-            return true;
-          });
-        });
+          var eligible = false;
+          try { eligible = cfInstance.isEligible() === true; } catch (eElig) { eligible = false; }
+          if (!eligible) {
+            return false;
+          }
+          state.sdk = paypal;
+          state.cardSession = cfInstance;
+          state.mounted = true;
+          state.eligible = true;
+          return true;
+        }
+        return false;
       });
     }).catch(function () {
       return false;
@@ -458,9 +504,24 @@
       if (billing) {
         submitOptions.billingAddress = billing;
       }
-      return state.cardSession.submit(text(rc.actionData.order_id).trim(), submitOptions).then(function (submitResult) {
+      // 经典 CardFields：先回填 createOrder 回调用的 orderId，再 submit()（无参数）。
+      // 新 session API：submit(orderId, options)。
+      var isClassic = state.sdk && typeof state.sdk.createInstance !== 'function';
+      var submitCall;
+      if (isClassic) {
+        state.pendingOrderId = text(rc.actionData.order_id).trim();
+        submitCall = Promise.resolve(state.cardSession.submit());
+      } else {
+        submitCall = state.cardSession.submit(text(rc.actionData.order_id).trim(), submitOptions);
+      }
+      return submitCall.then(function (submitResult) {
         var data = submitResult && submitResult.data ? submitResult.data : {};
         var submitState = text(submitResult && submitResult.state).trim().toLowerCase();
+        if (submitState === '') {
+          // 经典 CardFields.submit() 无 state 返回（成功即回调 createOrder+approve）。
+          submitState = 'succeeded';
+          data = data || {};
+        }
         if (submitState === 'canceled') {
           showError(label('error_3ds_canceled', '3D Secure 验证已取消，请重试。'));
           return true;
@@ -554,10 +615,9 @@
     if (state.booted) {
       return;
     }
+    // 结账页支付方式由 getData 异步渲染：boot 时可能还没有 radio。
+    // 事件/观察器先挂上，radio 出现后 syncVisibility 再真正初始化。
     state.booted = true;
-    if (!document.querySelector('input[name="payment_method"]')) {
-      return;
-    }
     ensureContainer();
     document.addEventListener('change', function (event) {
       if (event.target && event.target.name === 'payment_method') {
@@ -575,6 +635,8 @@
       init().then(function (ok) {
         setVisible(ok === true && selectedPaymentMethod() === 'paypal');
       });
+    } else {
+      syncVisibility();
     }
   }
 

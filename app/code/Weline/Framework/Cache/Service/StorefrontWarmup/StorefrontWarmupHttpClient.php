@@ -54,7 +54,11 @@ final class StorefrontWarmupHttpClient
                         $scheme = 'https';
                     }
                     $port = (int)($parts['port'] ?? ($scheme === 'http' ? 80 : 443));
-                    $push($scheme, $host, $port, $host);
+                    // Worker 监听口不是公网可达源：直连会绕过托管 Nginx，
+                    // 让渲染/FPC 发布带上 :9555（canonical/hreflang/站内链接全被污染）。
+                    if (!$this->isWorkerListenPort($port)) {
+                        $push($scheme, $host, $port, $host);
+                    }
                 }
             }
         }
@@ -71,11 +75,13 @@ final class StorefrontWarmupHttpClient
             ? (bool)$instance['ssl_enabled']
             : (\trim((string)($instance['ssl_cert'] ?? '')) !== '');
         $loopbackScheme = $sslEnabled ? 'https' : 'http';
-        $requestHost = $publicHost !== '' ? $publicHost : '127.0.0.1';
-        if ($sslEnabled && $workerPort !== 443 && $workerPort !== 80) {
-            $requestHost .= ':' . $workerPort;
-        }
-        $push($loopbackScheme, '127.0.0.1', $workerPort, $requestHost);
+        // The loopback Worker target must present the public Host WITHOUT the
+        // Worker listen port. Worker host parsing (Url::parser →
+        // WlsRequest::getBaseHost) treats a public Host carrying the listen port
+        // as a public non-default port under edge_adapter=wls, bakes it into
+        // canonical/hreflang/storefront links and publishes that into html-disk.
+        // A bare public Host on the loopback hop renders the clean origin.
+        $push($loopbackScheme, '127.0.0.1', $workerPort, $publicHost !== '' ? $publicHost : '127.0.0.1');
 
         return $targets;
     }
@@ -611,6 +617,29 @@ final class StorefrontWarmupHttpClient
             'url' => $url,
             'storefront_gen_cookie' => $genCookie,
         ];
+    }
+
+    /**
+     * True when $port is the WLS Worker listen port. Such a "public_origin" is an
+     * internal H1 upstream address (managed Nginx → 127.0.0.1:WLS_PORT), never a
+     * browser-reachable origin: warming it renders/publishes URLs carrying the
+     * Worker port into canonical/hreflang/storefront links.
+     */
+    private function isWorkerListenPort(int $port): bool
+    {
+        if ($port <= 0 || $port === 80 || $port === 443) {
+            return false;
+        }
+
+        $raw = \getenv('WLS_PORT');
+        if (!\is_string($raw) || $raw === '' || !\ctype_digit($raw)) {
+            $raw = $_SERVER['WLS_PORT'] ?? $_SERVER['SERVER_PORT'] ?? '';
+        }
+        if (!\is_int($raw) && !(\is_string($raw) && $raw !== '' && \ctype_digit($raw))) {
+            return false;
+        }
+
+        return (int)$raw === $port;
     }
 
     /**

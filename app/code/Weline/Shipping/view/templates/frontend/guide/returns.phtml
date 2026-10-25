@@ -21,10 +21,10 @@ if ($rawPath !== '' && $rawPath !== '/') {
     $tocPath = $rawPath;
 }
 ?>
-<article class="amazon-doc" data-testid="shipping-returns" weline-code="shipping.returns">
+<article class="guide-doc" data-testid="shipping-returns" weline-code="shipping.returns">
     <style>
-        .amazon-doc { width: 100%; max-width: none; margin: 0; padding: 0; color: var(--weline-layout-text-primary); }
-        .amazon-doc__hero {
+        .guide-doc { width: 100%; max-width: none; margin: 0; padding: 0; color: var(--weline-layout-text-primary); }
+        .guide-doc__hero {
             margin: 0 0 var(--weline-space-5);
             padding: clamp(var(--spacing-5_5), 3vw, var(--spacing-7)) clamp(var(--spacing-4_5), 2.5vw, var(--spacing-7));
             border-radius: var(--radius-lg);
@@ -33,10 +33,10 @@ if ($rawPath !== '' && $rawPath !== '/') {
                 linear-gradient(135deg, var(--color-bg-dark) 0%, var(--color-bg-dark) 58%, var(--color-info) 100%);
             color: var(--color-text-light);
         }
-        .amazon-doc__eyebrow { margin: 0 0 .4rem; font-size: .82rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--color-text-faint); }
-        .amazon-doc__hero h1 { margin: 0; font-size: clamp(var(--font-size-2xl), 3.2vw, var(--font-size-4xl)); line-height: 1.2; color: var(--color-text-light); }
-        .amazon-doc__hero p { margin: .75rem 0 0; max-width: 46rem; line-height: 1.65; color: var(--color-text-faint); }
-        .amazon-doc__panel {
+        .guide-doc__eyebrow { margin: 0 0 .4rem; font-size: .82rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--color-text-faint); }
+        .guide-doc__hero h1 { margin: 0; font-size: clamp(var(--font-size-2xl), 3.2vw, var(--font-size-4xl)); line-height: 1.2; color: var(--color-text-light); }
+        .guide-doc__hero p { margin: .75rem 0 0; max-width: 46rem; line-height: 1.65; color: var(--color-text-faint); }
+        .guide-doc__panel {
             display: grid;
             grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr);
             gap: 0;
@@ -46,39 +46,39 @@ if ($rawPath !== '' && $rawPath !== '/') {
             box-shadow: var(--weline-shadow-md);
             /* no overflow:hidden — bare #anchors break under storefront <base href="/"> */
         }
-        .amazon-doc__toc { border-radius: var(--radius-lg) 0 0 var(--radius-lg); padding: var(--spacing-4_5) var(--weline-space-4) var(--weline-space-5); border-right: var(--border-width-thin) solid var(--color-border-muted); background: var(--color-bg-slate); }
-        .amazon-doc__toc h2 { margin: 0 0 .7rem; font-size: .95rem; }
-        .amazon-doc__toc nav { display: grid; gap: .3rem; }
-        .amazon-doc__toc a { display: block; padding: .35rem .5rem; border-radius: var(--radius-md); color: var(--color-text-secondary); text-decoration: none; font-size: .9rem; line-height: 1.35; }
-        .amazon-doc__toc a:hover { background: var(--color-bg-panel); color: var(--color-link); text-decoration: underline; }
-        .amazon-doc__body { border-radius: 0 var(--radius-lg) var(--radius-lg) 0; padding: clamp(var(--spacing-4_5), 2.4vw, var(--spacing-7)); }
-        .amazon-doc__section { margin-top: var(--spacing-5_5); scroll-margin-top: 12rem; }
-        .amazon-doc__section:first-of-type { margin-top: 0; }
-        .amazon-doc__section h2 { margin: 0 0 .7rem; font-size: var(--font-size-lg); border-left: var(--loader-border-width) solid var(--color-primary); padding-left: .65rem; }
-        .amazon-doc__section p, .amazon-doc__section li { margin: 0 0 .65rem; line-height: 1.7; color: var(--color-text-secondary); }
-        .amazon-doc__section ul { margin: .3rem 0 .9rem; padding-left: var(--weline-space-5); }
-        .amazon-doc__related { margin-top: var(--weline-space-6); padding-top: var(--weline-space-4); border-top: var(--border-width-thin) solid var(--color-border-muted); display: flex; flex-wrap: wrap; gap: .65rem var(--weline-space-4); }
-        .amazon-doc__related a { color: var(--color-text-secondary); text-decoration: none; font-size: .92rem; }
-        .amazon-doc__related a:hover { color: var(--color-link); text-decoration: underline; }
+        .guide-doc__toc { border-radius: var(--radius-lg) 0 0 var(--radius-lg); padding: var(--spacing-4_5) var(--weline-space-4) var(--weline-space-5); border-right: var(--border-width-thin) solid var(--color-border-muted); background: var(--color-bg-slate); }
+        .guide-doc__toc h2 { margin: 0 0 .7rem; font-size: .95rem; }
+        .guide-doc__toc nav { display: grid; gap: .3rem; }
+        .guide-doc__toc a { display: block; padding: .35rem .5rem; border-radius: var(--radius-md); color: var(--color-text-secondary); text-decoration: none; font-size: .9rem; line-height: 1.35; }
+        .guide-doc__toc a:hover { background: var(--color-bg-panel); color: var(--color-link); text-decoration: underline; }
+        .guide-doc__body { border-radius: 0 var(--radius-lg) var(--radius-lg) 0; padding: clamp(var(--spacing-4_5), 2.4vw, var(--spacing-7)); }
+        .guide-doc__section { margin-top: var(--spacing-5_5); scroll-margin-top: 12rem; }
+        .guide-doc__section:first-of-type { margin-top: 0; }
+        .guide-doc__section h2 { margin: 0 0 .7rem; font-size: var(--font-size-lg); border-left: var(--loader-border-width) solid var(--color-primary); padding-left: .65rem; }
+        .guide-doc__section p, .guide-doc__section li { margin: 0 0 .65rem; line-height: 1.7; color: var(--color-text-secondary); }
+        .guide-doc__section ul { margin: .3rem 0 .9rem; padding-left: var(--weline-space-5); }
+        .guide-doc__related { margin-top: var(--weline-space-6); padding-top: var(--weline-space-4); border-top: var(--border-width-thin) solid var(--color-border-muted); display: flex; flex-wrap: wrap; gap: .65rem var(--weline-space-4); }
+        .guide-doc__related a { color: var(--color-text-secondary); text-decoration: none; font-size: .92rem; }
+        .guide-doc__related a:hover { color: var(--color-link); text-decoration: underline; }
         @media (max-width: 900px) {
-            .amazon-doc__panel { grid-template-columns: 1fr; }
-            .amazon-doc__toc { border-right: 0; border-bottom: var(--border-width-thin) solid var(--color-border-muted); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
-            .amazon-doc__body { border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
-            .amazon-doc__toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .guide-doc__panel { grid-template-columns: 1fr; }
+            .guide-doc__toc { border-right: 0; border-bottom: var(--border-width-thin) solid var(--color-border-muted); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+            .guide-doc__body { border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+            .guide-doc__toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 560px) {
-            .amazon-doc__toc nav { grid-template-columns: 1fr; }
+            .guide-doc__toc nav { grid-template-columns: 1fr; }
         }
     </style>
 
-    <header class="amazon-doc__hero" aria-labelledby="returns-title">
-        <p class="amazon-doc__eyebrow"><lang>帮助中心</lang></p>
+    <header class="guide-doc__hero" aria-labelledby="returns-title">
+        <p class="guide-doc__eyebrow"><lang>帮助中心</lang></p>
         <h1 id="returns-title"><lang>退换政策</lang></h1>
         <p><lang>本店从中国国内发往海外。跨境回程成本较高，更建议您下单前确认尺码与款式。发出后，个人原因的退换通常难以安排；若遇到质量、错发或运输损坏，我们会认真处理。与部分平台的无理由退货不同，我们的售后重心是质量与发货准确性。退款到账另见退款政策。</lang></p>
     </header>
 
-    <div class="amazon-doc__panel">
-        <aside class="amazon-doc__toc" aria-label="@lang('退换政策目录')">
+    <div class="guide-doc__panel">
+        <aside class="guide-doc__toc" aria-label="@lang('退换政策目录')">
             <h2><lang>目录</lang></h2>
             <nav>
                 <?php foreach ($toc as $item): ?>
@@ -87,8 +87,8 @@ if ($rawPath !== '' && $rawPath !== '/') {
             </nav>
         </aside>
 
-        <div class="amazon-doc__body">
-            <section class="amazon-doc__section" id="returns-s1" weline-code="shipping.guide.returns.s1">
+        <div class="guide-doc__body">
+            <section class="guide-doc__section" id="returns-s1" weline-code="shipping.guide.returns.s1">
                 <h2><lang>一、适用条件</lang></h2>
                 <p><lang>1.1 跨境售后说明：本店从中国国内发往海外。跨境回程运费与税费较高，试穿后也较难二次销售，因此更建议您下单前确认尺码与款式。发出后，个人原因的退换通常难以安排；若遇到质量、错发或运输损坏，我们会认真处理。与部分平台的无理由退货不同，我们的售后重心是质量与发货准确性。</lang></p>
                 <p><lang>1.2 可申请退换的情形：质量问题（明显做工瑕疵、污渍、破损且非买家使用造成、与描述明显不符）、错发或漏发、运输损坏。请保留商品与凭证并尽快申报；我们确认属商家或物流责任后，将优先安排补发、换货或退款。</lang></p>
@@ -96,13 +96,13 @@ if ($rawPath !== '' && $rawPath !== '/') {
                 <p><lang>1.4 法定例外：若您所在地区的强制性法律要求提供法定冷静期或无理由退货，我们将在该强制范围内依法办理。这与我们日常以质量与发货准确性为主的售后服务不同；非质量原因的回程运费与税费通常由买家承担（法律另有规定除外）。</lang></p>
             </section>
 
-            <section class="amazon-doc__section" id="returns-s1b" weline-code="shipping.guide.returns.s1b">
+            <section class="guide-doc__section" id="returns-s1b" weline-code="shipping.guide.returns.s1b">
                 <h2><lang>批发特别说明</lang></h2>
                 <p><lang>批发/批量订单除适用上述质量与物流责任条款外：正常范围内损耗（如可熨烫褶皱、轻微线头、约定色差/公差内的批次差异）通常不作为退货理由；确认的质量问题仍可按件/按批次提供凭证，我们会按责任范围处理，一般不以「整单无理由」方式退货。</lang></p>
                 <p><a href="@url{'faq/b2b-wholesale'}"><lang>查看批发说明</lang></a></p>
             </section>
 
-            <section class="amazon-doc__section" id="returns-s2" weline-code="shipping.guide.returns.s2">
+            <section class="guide-doc__section" id="returns-s2" weline-code="shipping.guide.returns.s2">
                 <h2><lang>二、通常难以办理退换的情况</lang></h2>
                 <ul>
                     <li><lang>发货后因个人喜好、选错颜色/尺码、轻微试穿后不想要、改变主意等非质量原因；</lang></li>
@@ -114,7 +114,7 @@ if ($rawPath !== '' && $rawPath !== '/') {
                 </ul>
             </section>
 
-            <section class="amazon-doc__section" id="returns-s3" weline-code="shipping.guide.returns.s3">
+            <section class="guide-doc__section" id="returns-s3" weline-code="shipping.guide.returns.s3">
                 <h2><lang>三、办理流程</lang></h2>
                 <p><lang>3.1 提交申请：登录账户进入「我的订单」，选择对应订单与商品，提交售后（退货/换货/仅退款），填写原因并上传清晰照片或视频。</lang></p>
                 <p><lang>3.2 审核：我们将在 1–3 个工作日内完成初审。审核通过后，系统或客服会告知退货地址、寄回要求与注意事项。</lang></p>
@@ -123,7 +123,7 @@ if ($rawPath !== '' && $rawPath !== '/') {
                 <p><lang>3.5 完成处理：退货通过后办理退款；换货通过后安排重新发出。进度可在订单售后详情中查看。</lang></p>
             </section>
 
-            <section class="amazon-doc__section" id="returns-s4" weline-code="shipping.guide.returns.s4">
+            <section class="guide-doc__section" id="returns-s4" weline-code="shipping.guide.returns.s4">
                 <h2><lang>四、运费说明</lang></h2>
                 <p><lang>4.1 因质量问题、错发漏发或运输损坏且经确认属商家或物流责任的退换：合理范围内寄回中国仓库的标准国际运费按责任归属处理（核实报销、直免或以客服书面确认为准）；加急/保价等增值费用除外。</lang></p>
                 <p><lang>4.2 个人原因的退换通常难以安排。若因强制性法律必须办理且非质量问题，全部回程费用（寄回中国仓库的国际运费、可能产生的出口/进口税费与清关费）由买家承担；换货再发出的运费以客服确认为准。包邮一般不包含回程。</lang></p>
@@ -131,21 +131,21 @@ if ($rawPath !== '' && $rawPath !== '/') {
                 <p><lang>4.4 因地址或签收原因导致退回、长期不取件，或跨境退货产生目的地出口手续/原进口税费不退等情况，除质量问题且我们书面同意承担外，相关成本通常需由买家自行处理。</lang></p>
             </section>
 
-            <section class="amazon-doc__section" id="returns-s5" weline-code="shipping.guide.returns.s5">
+            <section class="guide-doc__section" id="returns-s5" weline-code="shipping.guide.returns.s5">
                 <h2><lang>五、退款金额与到账</lang></h2>
                 <p><lang>5.1 退款金额一般为商品实付金额。因质量问题退货的，符合条件的运费一并退还；个人原因退货可能扣除已产生的运费优惠或回程运费。</lang></p>
                 <p><lang>5.2 优惠券、满减、积分、赠品：已使用的优惠是否退回以活动规则为准；赠品如已使用或损坏，可能需补差或从退款中扣除相应金额。</lang></p>
                 <p><lang>5.3 到账时效：质检通过后 3–15 个工作日内原路退回，具体到账时间以支付渠道（银行卡、第三方支付等）为准。节假日可能顺延。</lang></p>
             </section>
 
-            <section class="amazon-doc__section" id="returns-s6" weline-code="shipping.guide.returns.s6">
+            <section class="guide-doc__section" id="returns-s6" weline-code="shipping.guide.returns.s6">
                 <h2><lang>六、换货规则</lang></h2>
                 <p><lang>6.1 换货适用于同款不同尺码/颜色且库存充足的情形；无同款库存时，可改为退货退款或协商其它方案。</lang></p>
                 <p><lang>6.2 换货商品寄回要求与退货相同。换出商品发货后，物流与签收规则适用《配送说明》。</lang></p>
                 <p><lang>6.3 定制类商品通常不便换款，仅对确认的质量问题提供修补、重做或退款方案。</lang></p>
             </section>
 
-            <section class="amazon-doc__section" id="returns-s7" weline-code="shipping.guide.returns.s7">
+            <section class="guide-doc__section" id="returns-s7" weline-code="shipping.guide.returns.s7">
                 <h2><lang>七、尺码与试穿建议</lang></h2>
                 <ul>
                     <li><lang>下单前请对照商品页尺码表与自身三围/身高体重；若介于两码之间，可先咨询客服。</lang></li>
@@ -154,12 +154,12 @@ if ($rawPath !== '' && $rawPath !== '/') {
                 </ul>
             </section>
 
-            <section class="amazon-doc__section" id="returns-s8" weline-code="shipping.guide.returns.s8">
+            <section class="guide-doc__section" id="returns-s8" weline-code="shipping.guide.returns.s8">
                 <h2><lang>八、争议与联系</lang></h2>
                 <p><lang>如对审核结果有异议，可通过帮助中心「联系客服」或联系我们页提交补充材料。我们将在合理期限内复核。更完整的退款条款亦可参阅退款政策页。</lang></p>
             </section>
 
-            <p class="amazon-doc__related">
+            <p class="guide-doc__related">
                 <a href="@url{'guide/shipping'}"><lang>查看配送说明</lang></a>
                 <a href="@url{'refund'}"><lang>查看退款政策</lang></a>
                 <a href="@url{'faq'}"><lang>返回帮助中心</lang></a>

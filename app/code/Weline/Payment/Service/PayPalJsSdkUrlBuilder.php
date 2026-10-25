@@ -23,19 +23,23 @@ final class PayPalJsSdkUrlBuilder
             return '';
         }
 
-        $googleOn = $this->isEnabledFlag($config['google_pay_enabled'] ?? true);
-        $appleOn = $this->isEnabledFlag($config['apple_pay_enabled'] ?? true);
+        // PayPal JS SDK 校验 enable-funding 必须与本商户实际能力匹配；沙箱/
+        // 未开通 Google Pay 的商户传 googlepay 会直接 400。card-fields 场景
+        // 通过 skip_funding_flags 显式不声明钱包能力。
+        $skipFundingFlags = !empty($context['skip_funding_flags']);
+        $googleOn = !$skipFundingFlags && $this->isEnabledFlag($config['google_pay_enabled'] ?? true);
+        $appleOn = !$skipFundingFlags && $this->isEnabledFlag($config['apple_pay_enabled'] ?? true);
 
         $enable = [];
         $disable = [];
         if ($googleOn) {
             $enable[] = 'googlepay';
-        } else {
+        } elseif (!$skipFundingFlags) {
             $disable[] = 'googlepay';
         }
         if ($appleOn) {
             $enable[] = 'applepay';
-        } else {
+        } elseif (!$skipFundingFlags) {
             $disable[] = 'applepay';
         }
 

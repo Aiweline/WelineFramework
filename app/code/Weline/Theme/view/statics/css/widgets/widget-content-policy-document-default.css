@@ -1,36 +1,36 @@
-/* policy-document widget — amazon + plain shells */
-body.amazon-policy-layout {
+/* policy-document widget — commerce + plain shells */
+body.doc-policy-layout {
             margin: 0;
             min-height: 100vh;
             color: var(--color-text-primary);
             background: var(--color-bg-canvas);
             font-family: "Amazon Ember", Arial, sans-serif;
         }
-        .amazon-policy.weline-page-wrapper {
+        .doc-policy.weline-page-wrapper {
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             background: transparent;
         }
         /* Prototype A: quiet trail inside content column — no full-bleed chrome strip */
-        .amazon-policy__breadcrumb {
+        .doc-policy__breadcrumb {
             margin: 0 0 var(--weline-space-4);
             border: 0;
             background: transparent;
         }
-        .amazon-policy__breadcrumb .w-frontend-breadcrumb {
+        .doc-policy__breadcrumb .w-frontend-breadcrumb {
             padding-block: 0;
             width: 100%;
             max-width: none;
             margin-inline: 0;
             padding-inline: 0;
         }
-        .amazon-policy__main {
+        .doc-policy__main {
             flex: 1 0 auto;
             width: 100%;
             background: linear-gradient(180deg, var(--color-bg-secondary) 0, var(--color-bg-muted) var(--token-size-12rem));
         }
-        .amazon-policy__stage {
+        .doc-policy__stage {
             box-sizing: border-box;
             width: min(100%, var(--weline-layout-content-max-width));
             max-width: 100%;
@@ -39,7 +39,7 @@ body.amazon-policy-layout {
             padding-inline: var(--weline-layout-content-padding-inline);
             padding-block: var(--weline-space-4) clamp(var(--weline-space-12), 6vw, var(--token-size-4-5rem));
         }
-        .amazon-policy__hero {
+        .doc-policy__hero {
             margin: 0 0 var(--weline-space-5);
             padding: clamp(var(--token-size-1-35rem), 3vw, var(--token-size-1-85rem)) clamp(var(--token-size-1-15rem), 2.5vw, var(--spacing-7));
             border-radius: var(--spacing-2);
@@ -54,7 +54,7 @@ body.amazon-policy-layout {
             color: var(--_inverse-text);
             box-sizing: border-box;
         }
-        .amazon-policy__eyebrow {
+        .doc-policy__eyebrow {
             margin: 0 0 var(--spacing-0_4);
             font-size: var(--token-size-0-82rem);
             font-weight: 700;
@@ -62,20 +62,20 @@ body.amazon-policy-layout {
             text-transform: uppercase;
             color: var(--color-primary-light);
         }
-        .amazon-policy__hero h1 {
+        .doc-policy__hero h1 {
             margin: 0;
             font-size: clamp(var(--token-size-1-55rem), 3.2vw, var(--token-size-2-1rem));
             line-height: 1.2;
             font-weight: 700;
             color: var(--color-bg-primary);
         }
-        .amazon-policy__hero-lead {
+        .doc-policy__hero-lead {
             margin: var(--weline-space-3) 0 0;
             max-width: var(--token-size-46rem);
             line-height: 1.65;
             color: var(--color-border-default);
         }
-        .amazon-policy__meta {
+        .doc-policy__meta {
             margin-top: var(--weline-space-4);
             display: flex;
             flex-wrap: wrap;
@@ -83,8 +83,8 @@ body.amazon-policy-layout {
             font-size: var(--spacing-0_9);
             color: var(--color-primary-light);
         }
-        .amazon-policy__meta a { color: inherit; text-decoration: underline; }
-        .amazon-policy__panel {
+        .doc-policy__meta a { color: inherit; text-decoration: underline; }
+        .doc-policy__panel {
             display: grid;
             grid-template-columns: minmax(var(--size-panel-200), var(--token-size-240px)) minmax(0, 1fr);
             gap: 0;
@@ -95,7 +95,7 @@ body.amazon-policy-layout {
             box-shadow: 0 var(--border-width-thin) var(--border-width-medium) var(--color-literal-rgba-15-17-17-0-08);
             /* no overflow:hidden — with <base href="/"> + sticky header, hash scroll must use document */
         }
-        .amazon-policy__toc {
+        .doc-policy__toc {
             border-radius: var(--spacing-2) 0 0 var(--spacing-2);
             padding: var(--token-size-1-15rem) var(--weline-space-4) var(--weline-space-5);
             border-right: var(--border-width-thin) solid var(--color-literal-e3e6e6);
@@ -104,9 +104,9 @@ body.amazon-policy-layout {
             top: calc(var(--theme-header-height) + var(--weline-space-3));
             align-self: start;
         }
-        .amazon-policy__toc h2 { margin: 0 0 var(--weline-space-3); font-size: var(--spacing-0_95); font-weight: 700; }
-        .amazon-policy__toc nav { display: grid; gap: var(--token-size-0-35rem); }
-        .amazon-policy__toc a {
+        .doc-policy__toc h2 { margin: 0 0 var(--weline-space-3); font-size: var(--spacing-0_95); font-weight: 700; }
+        .doc-policy__toc nav { display: grid; gap: var(--token-size-0-35rem); }
+        .doc-policy__toc a {
             display: block;
             padding: var(--spacing-0_4) var(--spacing-0_55);
             border-radius: var(--spacing-1);
@@ -115,24 +115,24 @@ body.amazon-policy-layout {
             font-size: var(--spacing-0_9);
             line-height: 1.35;
         }
-        .amazon-policy__toc a:hover {
+        .doc-policy__toc a:hover {
             background: var(--color-literal-f7fafa);
             color: var(--color-primary-text-emphasis);
             text-decoration: underline;
         }
-        .amazon-policy__article {
+        .doc-policy__article {
             border-radius: 0 var(--spacing-2) var(--spacing-2) 0;
             padding: clamp(var(--token-size-1-15rem), 2.5vw, var(--spacing-7)) clamp(var(--token-size-1-15rem), 2.5vw, var(--token-size-1-85rem)) var(--token-size-1-85rem);
         }
-        .amazon-policy__intro {
+        .doc-policy__intro {
             margin: 0 0 var(--weline-space-5);
             padding-bottom: var(--weline-space-4);
             border-bottom: var(--border-width-thin) solid var(--color-literal-e3e6e6);
             color: var(--color-text-gray);
             line-height: 1.7;
         }
-        .amazon-policy__section { margin-top: var(--weline-space-6); scroll-margin-top: calc(var(--theme-header-height) + var(--weline-space-3)); }
-        .amazon-policy__section h2 {
+        .doc-policy__section { margin-top: var(--weline-space-6); scroll-margin-top: calc(var(--theme-header-height) + var(--weline-space-3)); }
+        .doc-policy__section h2 {
             margin: 0 0 var(--weline-space-3);
             font-size: var(--spacing-1_2);
             font-weight: 700;
@@ -140,56 +140,56 @@ body.amazon-policy-layout {
             padding-left: var(--spacing-0_65);
             color: var(--color-text-primary);
         }
-        .amazon-policy__section p {
+        .doc-policy__section p {
             margin: 0 0 var(--spacing-0_7);
             line-height: 1.7;
             font-size: var(--token-size-0-98rem);
             color: var(--color-literal-333333);
         }
-        .amazon-policy__section ul {
+        .doc-policy__section ul {
             margin: var(--token-size-0-35rem) 0 var(--spacing-0_85);
             padding-left: var(--token-size-1-35rem);
         }
-        .amazon-policy__section li {
+        .doc-policy__section li {
             margin-bottom: var(--spacing-0_45);
             line-height: 1.65;
             color: var(--color-literal-333333);
         }
-        .amazon-policy__footer-note {
+        .doc-policy__footer-note {
             margin-top: var(--spacing-7);
             padding-top: var(--weline-space-4);
             border-top: var(--border-width-thin) solid var(--color-literal-e3e6e6);
             font-size: var(--spacing-0_9);
             color: var(--color-text-gray);
         }
-        .amazon-policy__related {
+        .doc-policy__related {
             margin-top: var(--weline-space-4);
             display: flex;
             flex-wrap: wrap;
             gap: var(--spacing-0_65) var(--weline-space-4);
         }
-        .amazon-policy__related a {
+        .doc-policy__related a {
             color: var(--color-info);
             text-decoration: none;
             font-size: var(--token-size-0-92rem);
         }
-        .amazon-policy__related a:hover {
+        .doc-policy__related a:hover {
             color: var(--color-primary-text-emphasis);
             text-decoration: underline;
         }
         @media (max-width: var(--size-content-900)) {
-            .amazon-policy__panel { grid-template-columns: 1fr; }
-            .amazon-policy__toc {
+            .doc-policy__panel { grid-template-columns: 1fr; }
+            .doc-policy__toc {
                 position: static;
                 border-right: 0;
                 border-bottom: var(--border-width-thin) solid var(--color-literal-e3e6e6);
                 border-radius: var(--spacing-2) var(--spacing-2) 0 0;
             }
-            .amazon-policy__article { border-radius: 0 0 var(--spacing-2) var(--spacing-2); }
-            .amazon-policy__toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .doc-policy__article { border-radius: 0 0 var(--spacing-2) var(--spacing-2); }
+            .doc-policy__toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: var(--size-hero-height)) {
-            .amazon-policy__toc nav { grid-template-columns: 1fr; }
+            .doc-policy__toc nav { grid-template-columns: 1fr; }
         }
 
 /* plain (policy/default) */

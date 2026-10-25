@@ -100,7 +100,9 @@ class RouterRunBefore implements ObserverInterface
             if ($resolved !== null) {
                 /**@var Core $core */
                 $core = ObjectManager::getInstance(Core::class);
-                $core->StaticFile('/pub/media/' . \ltrim($resolved, '/'), true);
+                // StaticFile(string &$url) 为引用传参，不能传字面量表达式
+                $mediaUrl = '/pub/media/' . \ltrim($resolved, '/');
+                $core->StaticFile($mediaUrl, true);
             }
         }
         // /media/{relative} → pub/media/{relative}（音频/附件等非 /media/image|/media/file 直链）
@@ -114,7 +116,8 @@ class RouterRunBefore implements ObserverInterface
             if ($resolved !== null) {
                 /**@var Core $core */
                 $core = ObjectManager::getInstance(Core::class);
-                $core->StaticFile('/pub/media/' . \ltrim($resolved, '/'), true);
+                $mediaUrl = '/pub/media/' . \ltrim($resolved, '/');
+                $core->StaticFile($mediaUrl, true);
             }
         }
         // 跳过解析 

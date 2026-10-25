@@ -5,7 +5,7 @@
  *   1. css-before-js        第一条 stylesheet 早于第一条外部 <script src>
  *   2. layout-css-present   存在带 data-weline-layout-css 或 data-weline-layout-pack 的布局样式
  *   3. no-blocking-head-js  head 内没有「无 defer/async/type=module」的外部脚本
- *   4. fouc-gate-released   html[data-weline-css] 最终不是 pending（amazon-progressive 无 pending 即 PASS）
+ *   4. fouc-gate-released   html[data-weline-css] 最终不是 pending（commerce-progressive 无 pending 即 PASS）
  *
  * 输出：
  *   - window.__WELINE_HEAD_ORDER__  = 结论对象（供 e2e / 控制台读取）

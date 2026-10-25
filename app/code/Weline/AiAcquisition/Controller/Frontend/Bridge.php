@@ -539,6 +539,13 @@ class Bridge extends FrontendController
                 throw new \InvalidArgumentException(__('stats 必须是数组'));
             }
 
+            // 零产出不算完成：目标没达成本次运行就是失败，与端侧判定保持一致。
+            if ($status === LeadRun::STATUS_COMPLETED && (int)($stats['leads_saved'] ?? 0) <= 0) {
+                $status = LeadRun::STATUS_FAILED;
+                $stats['error'] = $stats['error']
+                    ?? __('未找到符合条件的线索，请调整目标市场或检索词后重试。');
+            }
+
             $this->runService()->finish($runId, $status, $this->safeStats($stats));
             $this->bridge()->enqueue($runId, 'complete', [
                 'status' => $status,
@@ -818,6 +825,13 @@ class Bridge extends FrontendController
         foreach (['searches_count', 'leads_found', 'leads_saved', 'iterations'] as $key) {
             if (\array_key_exists($key, $stats) && \is_numeric($stats[$key])) {
                 $safe[$key] = \max(0, (int)$stats[$key]);
+            }
+        }
+        // 失败原因要落库，否则后台只看到状态看不到为什么停。
+        if (isset($stats['error']) && \is_scalar($stats['error'])) {
+            $error = \trim((string)$stats['error']);
+            if ($error !== '') {
+                $safe['error'] = \mb_substr($error, 0, 500);
             }
         }
 

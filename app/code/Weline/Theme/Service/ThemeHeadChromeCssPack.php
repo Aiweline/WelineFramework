@@ -34,7 +34,7 @@ use Weline\Theme\Service\LayoutEntity\WidgetAssetArtifactPublisher;
  * Artifacts publish under the **active theme** static namespace and are keyed by
  * **application scope** (+ layout_type for overlay) so themes/scopes/layouts never cross-pollute.
  *
- * FOUC policy (amazon-progressive): progressive paint, no whole-page body hide.
+ * FOUC policy (progressive): progressive paint, no whole-page body hide.
  * Chrome packs (PACK_TOKENS / PACK_STOREFRONT / PACK_OVERLAY) MUST stay blocking —
  * tryLinkHtml MUST NOT emit media="print" onload. media=print defer is reserved for
  * widget late source only (WidgetAssetOptimizer).
@@ -164,7 +164,7 @@ final class ThemeHeadChromeCssPack
             return null;
         }
         $safe = htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        // amazon-progressive FOUC: chrome packs stay blocking — never media="print" here.
+        // progressive FOUC: chrome packs stay blocking — never media="print" here.
         // media=print onload is reserved for widget late source (WidgetAssetOptimizer).
         $attrs = ' rel="stylesheet" type="text/css" data-weline-theme-head-pack="'
             . htmlspecialchars($pack, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"';

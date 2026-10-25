@@ -3295,7 +3295,7 @@
       ".byline",
       ".post-author",
       ".article-author",
-      ".amazon-blog-article__author-inline",
+      ".guide-article__author-inline",
       "[data-author]",
       "[class*='author']"
     ];
@@ -3328,7 +3328,7 @@
   }
 
   function eeatAuthorBackgroundReachable(persons) {
-    var hasBio = Boolean(document.querySelector(".author-bio, .author-description, [data-author-bio], .amazon-blog-article__author-bio"));
+    var hasBio = Boolean(document.querySelector(".author-bio, .author-description, [data-author-bio], .guide-article__author-bio"));
     if (hasBio) return true;
     var pageText = String((document.body && document.body.innerText) || "");
     if (/作者简介|About the author|Author bio/i.test(pageText)) return true;
@@ -3519,7 +3519,7 @@
     // Why: machine proxy for main content. Audience/intent is not machine-judged —
     // when proxy passes, omit tip (and do not mark intent as pass); tip only if main content weak.
     var whyMain = eeatFindRule("why_main_content_first");
-    var mainEl = document.querySelector("main, [role='main'], article, .amazon-blog-article, .product-native-detail");
+    var mainEl = document.querySelector("main, [role='main'], article, .guide-article, .product-native-detail");
     var mainLen = mainEl ? visibleTextLength(mainEl) : 0;
     var pageText = typeof context.visibleText === "number"
       ? context.visibleText
@@ -3655,7 +3655,7 @@
       )
     );
     var h1 = getMainH1Text();
-    var h2Count = Array.from(document.querySelectorAll("main h2, article h2, .amazon-policy__article h2")).filter(function (n) {
+    var h2Count = Array.from(document.querySelectorAll("main h2, article h2, .doc-policy__article h2")).filter(function (n) {
       return !isIgnoredSeoAuditNode(n);
     }).length;
     var hasWebPage = jsonLdTypesInclude(jsonTypes, "WebPage");

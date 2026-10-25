@@ -38,6 +38,11 @@ class Social extends BaseController
     #[Acl('Weline_Social::social_index', '查看融媒体管理', 'grid', '查看融媒体管理页面')]
     public function index(): string
     {
+        try {
+            (new \Weline\Social\Service\SocialExtensionPackageService())->ensurePackage();
+        } catch (\Throwable) {
+        }
+
         // OffCanvas / 网站编辑 iframe 内嵌时用 blank，避免重复套后台顶栏/侧栏。
         $socialEmbed = $this->request->isIframe()
             || (string)$this->request->getParam('isIframe') !== '';
@@ -121,14 +126,6 @@ class Social extends BaseController
         $this->assign('social_scopes', $socialScopes);
         $this->assign('initial_scope', $initialScope);
 
-        // 扩展包：下载前按需打包（ZIP 为产物，不进 Git）
-        try {
-            \Weline\Framework\Manager\ObjectManager::getInstance(
-                \Weline\Social\Service\SocialExtensionPackageService::class
-            )->ensurePackage();
-        } catch (\Throwable) {
-            // 打包失败不阻塞页面；下载时 404 由前端提示
-        }
         $this->assign('website_relations', $websiteRelations);
         $this->assign('scope_relations', $scopeRelations);
         $this->assign('drafts', $drafts);

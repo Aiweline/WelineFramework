@@ -93,8 +93,8 @@ final class CustomerServiceViewContractsTest extends TestCase
             'CustomerServiceWidgetUi::testFrontendStylesUseThemePanelAndResponsiveChat' => function () {
             $this->assert_CustomerServiceWidgetUi_testFrontendStylesUseThemePanelAndResponsiveChat();
         },
-            'CustomerServiceWidgetUi::testFrontendWidgetUsesAmazonChromeSurface' => function () {
-            $this->assert_CustomerServiceWidgetUi_testFrontendWidgetUsesAmazonChromeSurface();
+            'CustomerServiceWidgetUi::testFrontendWidgetUsesClassicChromeSurface' => function () {
+            $this->assert_CustomerServiceWidgetUi_testFrontendWidgetUsesClassicChromeSurface();
         },
             'CustomerServiceWidgetUi::testFrontendStylesPinSurfaceBackgroundForMessageInput' => function () {
             $this->assert_CustomerServiceWidgetUi_testFrontendStylesPinSurfaceBackgroundForMessageInput();
@@ -458,7 +458,7 @@ private function assert_CustomerServiceWidgetUi_testFrontendStylesUseThemePanelA
     $cssFile = '/Users/weline/Project/Official/框架/app/code/Weline/CustomerService' . '/view/statics/css/customer-service.css';
     $this->assertFileExists($cssFile);
     $content = (string) file_get_contents($cssFile);
-    $this->assertStringContainsString('.customer-service-widget--amazon', $content);
+    $this->assertStringContainsString('.customer-service-widget--classic', $content);
     $this->assertStringContainsString('--weline-chrome-bg-dark', $content);
     $this->assertStringContainsString('--weline-chrome-primary', $content);
     $this->assertStringContainsString('.cs-chat-header.w-panel-header', $content);
@@ -484,12 +484,12 @@ private function assert_CustomerServiceWidgetUi_testFrontendStylesUseThemePanelA
     $this->assertStringContainsString('.cs-notice-alert.is-open', $content);
 }
 
-private function assert_CustomerServiceWidgetUi_testFrontendWidgetUsesAmazonChromeSurface(): void
+private function assert_CustomerServiceWidgetUi_testFrontendWidgetUsesClassicChromeSurface(): void
 {
     $hookFile = '/Users/weline/Project/Official/框架/app/code/Weline/CustomerService' . '/view/templates/frontend/widgets/customer-service-float.phtml';
     $this->assertFileExists($hookFile);
     $content = (string) file_get_contents($hookFile);
-    $this->assertStringContainsString('customer-service-widget--amazon', $content);
+    $this->assertStringContainsString('customer-service-widget--classic', $content);
 }
 
 private function assert_CustomerServiceWidgetUi_testFrontendStylesPinSurfaceBackgroundForMessageInput(): void

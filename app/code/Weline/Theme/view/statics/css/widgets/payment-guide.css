@@ -1,11 +1,11 @@
 /* Amazon-style payment guide pages — shared by payment_guide Theme layout + Weline_Payment templates */
 
-.weline-page-wrapper.amazon-payment-guide-layout {
+.weline-page-wrapper.payment-guide-layout {
     background: var(--color-bg-secondary);
     color: var(--color-text-primary);
 }
 
-.amazon-payment-guide-layout__shell {
+.payment-guide-layout__shell {
     box-sizing: border-box;
     width: min(100%, var(--weline-layout-content-max-width));
     max-width: 100%;
@@ -13,18 +13,18 @@
     padding: var(--weline-space-4) var(--weline-layout-content-padding-inline) var(--weline-space-8);
 }
 
-.amazon-payment-guide-layout__body {
+.payment-guide-layout__body {
     display: grid;
     gap: var(--weline-space-4);
 }
 
-.amazon-payment-guide-layout__body--with-sidebar {
+.payment-guide-layout__body--with-sidebar {
     grid-template-columns: minmax(var(--size-panel-200), var(--token-size-240px)) minmax(0, 1fr);
     align-items: start;
 }
 
-.amazon-payment-guide-layout__sidebar,
-.amazon-payment-guide-layout__main {
+.payment-guide-layout__sidebar,
+.payment-guide-layout__main {
     background: var(--color-bg-primary);
     border: var(--border-width-thin) solid var(--color-literal-d5d9d9);
     border-radius: var(--weline-theme-radius-lg);
@@ -32,7 +32,7 @@
     box-sizing: border-box;
 }
 
-.amazon-payment-guide-layout__sidebar-title {
+.payment-guide-layout__sidebar-title {
     margin: 0 0 var(--weline-space-3);
     font-size: var(--weline-font-size-sm);
     font-weight: 700;
@@ -41,7 +41,7 @@
     color: var(--color-text-primary);
 }
 
-.amazon-payment-guide-layout__nav {
+.payment-guide-layout__nav {
     list-style: none;
     margin: 0;
     padding: 0;
@@ -49,7 +49,7 @@
     gap: var(--weline-space-1);
 }
 
-.amazon-payment-guide-layout__nav-link {
+.payment-guide-layout__nav-link {
     display: block;
     padding: var(--spacing-0_45) var(--token-size-0-6rem);
     border-radius: var(--weline-theme-radius-md);
@@ -59,24 +59,24 @@
     line-height: 1.45;
 }
 
-.amazon-payment-guide-layout__nav-link:hover {
+.payment-guide-layout__nav-link:hover {
     background: var(--color-literal-f7fafa);
     color: var(--color-link-hover);
 }
 
-.amazon-payment-guide-layout__nav-link.is-active {
+.payment-guide-layout__nav-link.is-active {
     background: var(--color-bg-secondary);
     border-left: var(--border-width-thick) solid var(--color-border-focus);
     font-weight: 700;
     padding-left: calc(var(--token-size-0-6rem) - var(--border-width-thick));
 }
 
-.amazon-payment-guide-layout__nav-group {
+.payment-guide-layout__nav-group {
     display: grid;
     gap: var(--weline-space-1);
 }
 
-.amazon-payment-guide-layout__nav-group-label {
+.payment-guide-layout__nav-group-label {
     display: block;
     padding: var(--spacing-0_45) var(--token-size-0-6rem);
     font-size: var(--weline-font-size-sm);
@@ -85,7 +85,7 @@
     color: var(--color-text-primary);
 }
 
-.amazon-payment-guide-layout__nav-group-children {
+.payment-guide-layout__nav-group-children {
     list-style: none;
     margin: 0;
     padding: 0 0 var(--weline-space-1) var(--weline-space-3);
@@ -94,7 +94,7 @@
     gap: var(--spacing-0_2);
 }
 
-.amazon-payment-guide-layout__nav-article {
+.payment-guide-layout__nav-article {
     display: block;
     padding: var(--token-size-0-35rem) var(--spacing-0_55);
     border-radius: var(--weline-theme-radius-md);
@@ -105,13 +105,13 @@
     font-weight: 600;
 }
 
-.amazon-payment-guide-layout__nav-article:hover {
+.payment-guide-layout__nav-article:hover {
     color: var(--color-link-hover);
     background: var(--color-literal-f7fafa);
     text-decoration: underline;
 }
 
-.amazon-payment-guide-layout__nav-article.is-active {
+.payment-guide-layout__nav-article.is-active {
     background: var(--color-bg-secondary);
     border-left: var(--border-width-thick) solid var(--color-border-focus);
     color: var(--color-text-primary);
@@ -120,7 +120,7 @@
     text-decoration: none;
 }
 
-.amazon-payment-guide-layout__nav-sub {
+.payment-guide-layout__nav-sub {
     margin-top: var(--weline-space-3);
     padding-top: var(--weline-space-3);
     border-top: var(--border-width-thin) solid var(--color-literal-e3e6e6);
@@ -128,23 +128,23 @@
     gap: var(--token-size-0-35rem);
 }
 
-.amazon-payment-guide-layout__nav-sub a {
+.payment-guide-layout__nav-sub a {
     color: var(--color-link);
     font-size: var(--weline-font-size-xs);
     text-decoration: none;
     font-weight: 600;
 }
 
-.amazon-payment-guide-layout__nav-sub a:hover {
+.payment-guide-layout__nav-sub a:hover {
     color: var(--color-link-hover);
     text-decoration: underline;
 }
 
-.amazon-payment-guide-listing__header {
+.payment-guide-listing__header {
     margin-bottom: var(--weline-space-4);
 }
 
-.amazon-payment-guide-listing__title {
+.payment-guide-listing__title {
     margin: 0 0 var(--weline-space-1);
     font-size: var(--weline-space-6);
     font-weight: 700;
@@ -152,25 +152,25 @@
     color: var(--color-text-primary);
 }
 
-.amazon-payment-guide-listing__subtitle,
-.amazon-payment-guide-listing__meta {
+.payment-guide-listing__subtitle,
+.payment-guide-listing__meta {
     margin: 0;
     color: var(--color-text-gray);
     font-size: var(--weline-font-size-sm);
     line-height: 1.5;
 }
 
-.amazon-payment-guide-listing__subtitle {
+.payment-guide-listing__subtitle {
     margin-bottom: var(--weline-space-1);
 }
 
-.amazon-payment-guide-listing__grid {
+.payment-guide-listing__grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--weline-space-3);
 }
 
-.amazon-payment-guide-card {
+.payment-guide-card {
     display: grid;
     gap: var(--weline-space-2);
     min-height: 100%;
@@ -182,12 +182,12 @@
     transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
-.amazon-payment-guide-card:hover {
+.payment-guide-card:hover {
     border-color: var(--color-literal-a2a6a6);
     box-shadow: var(--weline-shadow-sm);
 }
 
-.amazon-payment-guide-card__badge {
+.payment-guide-card__badge {
     display: inline-block;
     width: fit-content;
     padding: var(--token-size-0-15rem) var(--spacing-0_45);
@@ -200,7 +200,7 @@
     letter-spacing: var(--token-size-0-03em);
 }
 
-.amazon-payment-guide-card__title {
+.payment-guide-card__title {
     margin: 0;
     font-size: var(--token-size-15px);
     font-weight: 700;
@@ -208,7 +208,7 @@
     color: var(--color-text-primary);
 }
 
-.amazon-payment-guide-card__summary {
+.payment-guide-card__summary {
     margin: 0;
     color: var(--color-text-gray);
     font-size: var(--weline-font-size-sm);
@@ -216,31 +216,31 @@
     flex: 1;
 }
 
-.amazon-payment-guide-card__actions {
+.payment-guide-card__actions {
     display: flex;
     flex-wrap: wrap;
     gap: var(--weline-space-3);
     margin-top: var(--weline-space-1);
 }
 
-.amazon-payment-guide-card__link {
+.payment-guide-card__link {
     color: var(--color-link);
     font-size: var(--weline-font-size-sm);
     font-weight: 600;
     text-decoration: none;
 }
 
-.amazon-payment-guide-card__link:hover {
+.payment-guide-card__link:hover {
     color: var(--color-link-hover);
     text-decoration: underline;
 }
 
-.amazon-payment-guide-card__link--muted {
+.payment-guide-card__link--muted {
     color: var(--color-text-gray);
     font-weight: 500;
 }
 
-.amazon-payment-guide-article__breadcrumb {
+.payment-guide-article__breadcrumb {
     display: flex;
     flex-wrap: wrap;
     gap: var(--token-size-0-35rem);
@@ -249,23 +249,23 @@
     font-size: var(--weline-font-size-xs);
 }
 
-.amazon-payment-guide-article__breadcrumb a {
+.payment-guide-article__breadcrumb a {
     color: var(--color-link);
     text-decoration: none;
 }
 
-.amazon-payment-guide-article__breadcrumb a:hover {
+.payment-guide-article__breadcrumb a:hover {
     color: var(--color-link-hover);
     text-decoration: underline;
 }
 
-.amazon-payment-guide-article__header {
+.payment-guide-article__header {
     margin-bottom: var(--weline-space-4);
     padding-bottom: var(--weline-space-3);
     border-bottom: var(--border-width-thin) solid var(--color-literal-e3e6e6);
 }
 
-.amazon-payment-guide-article__badge {
+.payment-guide-article__badge {
     display: inline-block;
     margin: 0 0 var(--token-size-0-35rem);
     padding: var(--token-size-0-15rem) var(--spacing-0_45);
@@ -277,7 +277,7 @@
     text-transform: uppercase;
 }
 
-.amazon-payment-guide-article__title {
+.payment-guide-article__title {
     margin: 0 0 var(--token-size-0-35rem);
     font-size: var(--token-size-1-35rem);
     font-weight: 700;
@@ -285,34 +285,34 @@
     color: var(--color-text-primary);
 }
 
-.amazon-payment-guide-article__lead {
+.payment-guide-article__lead {
     margin: 0;
     color: var(--color-text-gray);
     font-size: var(--weline-font-size-sm);
     line-height: 1.6;
 }
 
-.amazon-payment-guide-article__panel {
+.payment-guide-article__panel {
     margin-top: var(--spacing-3_5);
     padding-top: var(--spacing-3_5);
     border-top: var(--border-width-thin) solid var(--color-literal-e3e6e6);
 }
 
-.amazon-payment-guide-article__panel:first-of-type {
+.payment-guide-article__panel:first-of-type {
     margin-top: 0;
     padding-top: 0;
     border-top: 0;
 }
 
-.amazon-payment-guide-article__panel h2 {
+.payment-guide-article__panel h2 {
     margin: 0 0 var(--weline-space-2);
     font-size: var(--token-size-15px);
     font-weight: 700;
     color: var(--color-text-primary);
 }
 
-.amazon-payment-guide-article__panel ul,
-.amazon-payment-guide-article__panel ol {
+.payment-guide-article__panel ul,
+.payment-guide-article__panel ol {
     margin: 0;
     padding-left: var(--token-size-1-1rem);
     color: var(--color-text-primary);
@@ -322,7 +322,7 @@
     gap: var(--token-size-0-35rem);
 }
 
-.amazon-payment-guide-article__faq {
+.payment-guide-article__faq {
     list-style: none;
     margin: 0;
     padding: 0;
@@ -330,46 +330,46 @@
     gap: var(--weline-space-3);
 }
 
-.amazon-payment-guide-article__faq li {
+.payment-guide-article__faq li {
     padding: var(--spacing-0_65) var(--weline-space-3);
     border: var(--border-width-thin) solid var(--color-literal-e3e6e6);
     border-radius: var(--weline-theme-radius-md);
     background: var(--color-literal-f7fafa);
 }
 
-.amazon-payment-guide-article__faq strong {
+.payment-guide-article__faq strong {
     display: block;
     margin-bottom: var(--weline-space-1);
     font-size: var(--weline-font-size-sm);
     color: var(--color-text-primary);
 }
 
-.amazon-payment-guide-article__faq p {
+.payment-guide-article__faq p {
     margin: 0;
     color: var(--color-text-gray);
     font-size: var(--weline-font-size-sm);
     line-height: 1.55;
 }
 
-.amazon-payment-guide-article__footer {
+.payment-guide-article__footer {
     margin-top: var(--weline-space-4);
     padding-top: var(--spacing-3_5);
     border-top: var(--border-width-thin) solid var(--color-literal-e3e6e6);
 }
 
-.amazon-payment-guide-article__footer a {
+.payment-guide-article__footer a {
     color: var(--color-link);
     font-size: var(--weline-font-size-sm);
     font-weight: 600;
     text-decoration: none;
 }
 
-.amazon-payment-guide-article__footer a:hover {
+.payment-guide-article__footer a:hover {
     color: var(--color-link-hover);
     text-decoration: underline;
 }
 
-.amazon-payment-guide-listing__empty {
+.payment-guide-listing__empty {
     padding: var(--weline-space-8) var(--weline-space-4);
     text-align: center;
     color: var(--color-text-gray);
@@ -377,23 +377,23 @@
 }
 
 @media (max-width: var(--token-bp-1024px)) {
-    .amazon-payment-guide-listing__grid {
+    .payment-guide-listing__grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
 @media (max-width: var(--size-content-900)) {
-    .amazon-payment-guide-layout__body--with-sidebar {
+    .payment-guide-layout__body--with-sidebar {
         grid-template-columns: 1fr;
     }
 }
 
 @media (max-width: var(--token-size-520px)) {
-    .amazon-payment-guide-listing__grid {
+    .payment-guide-listing__grid {
         grid-template-columns: 1fr;
     }
 
-    .amazon-payment-guide-card__actions {
+    .payment-guide-card__actions {
         flex-direction: column;
         align-items: flex-start;
     }

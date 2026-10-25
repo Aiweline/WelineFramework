@@ -10,18 +10,18 @@ $rssUrl = trim((string)($this->getData('blog_rss_url') ?? ''));
 $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $count = count($articles);
 ?>
-<section class="amazon-blog-listing" data-testid="blog-list" data-active-category="<?= $activeCategoryId ?>" weline-code="blog.listing.section">
+<section class="blog-listing" data-testid="blog-list" data-active-category="<?= $activeCategoryId ?>" weline-code="blog.listing.section">
     <?php /* Use div (not <header>): SEO inspector excludes any heading inside <header>, which zeroed H1. */ ?>
-    <div class="amazon-blog-listing__header">
-        <div class="amazon-blog-listing__heading">
-            <h1 class="amazon-blog-listing__title"><?= $escape($heading !== '' ? $heading : (string)__('博客')) ?></h1>
+    <div class="blog-listing__header">
+        <div class="blog-listing__heading">
+            <h1 class="blog-listing__title"><?= $escape($heading !== '' ? $heading : (string)__('博客')) ?></h1>
             <?php if ($subtitle !== ''): ?>
-                <p class="amazon-blog-listing__subtitle"><?= $escape($subtitle) ?></p>
+                <p class="blog-listing__subtitle"><?= $escape($subtitle) ?></p>
             <?php endif; ?>
-            <p class="amazon-blog-listing__meta"><lang args="[(string)$count]">共 %{1} 条</lang></p>
+            <p class="blog-listing__meta"><lang args="[(string)$count]">共 %{1} 条</lang></p>
         </div>
         <?php if ($rssUrl !== ''): ?>
-            <div class="amazon-blog-listing__actions">
+            <div class="blog-listing__actions">
                 <?= $this->fetch('Weline_Blog::templates/frontend/partials/rss-subscribe.phtml', [
                     'blog_rss_url' => $rssUrl,
                     'blog_rss_label' => $this->getData('blog_rss_label'),
@@ -31,13 +31,13 @@ $count = count($articles);
     </div>
 
     <?php if ($articles === []): ?>
-        <div class="amazon-blog-listing__empty" data-testid="blog-list-empty">
+        <div class="blog-listing__empty" data-testid="blog-list-empty">
             <p><lang>暂无文章</lang></p>
-            <a class="amazon-blog-listing__back" href="@url{'blog'}"><lang>返回博客</lang></a>
+            <a class="blog-listing__back" href="@url{'blog'}"><lang>返回博客</lang></a>
         </div>
     <?php else: ?>
-        <h2 class="amazon-blog-listing__section-title" id="blog-articles-heading"><lang>文章列表</lang></h2>
-        <div class="amazon-blog-listing__grid" data-testid="blog-list-grid" aria-labelledby="blog-articles-heading">
+        <h2 class="blog-listing__section-title" id="blog-articles-heading"><lang>文章列表</lang></h2>
+        <div class="blog-listing__grid" data-testid="blog-list-grid" aria-labelledby="blog-articles-heading">
             <?php foreach ($articles as $article): ?>
                 <?php
                 if (!is_array($article)) {

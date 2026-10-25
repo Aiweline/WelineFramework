@@ -17,7 +17,7 @@ use Weline\Theme\Service\ThemeContextService;
 /**
  * Scope-hot HTML for guest-safe homepage content widgets.
  *
- * Whitelist: textile-heritage, video-carousel, image-gallery.
+ * Whitelist: design-theme content widgets, video-carousel, image-gallery.
  * Profiles:
  * - {@see PROFILE_STATIC}: long-lived config HTML (textile / video / gallery)
  * - {@see PROFILE_LOOKS}: buyer-looks walls; TTL mirrors Review buyer_looks; fingerprint must include assembled items

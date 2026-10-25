@@ -45,7 +45,7 @@ $heading = trim((string)($this->getData('login_widget_title') ?? ''));
 $subheading = trim((string)($this->getData('login_widget_subtitle') ?? ''));
 // Do not pass params via w:widget attribute (short-echo PHP inside attrs breaks Taglib).
 ?>
-<section class="w-card w-auth-login w-auth-login--amazon w-auth-login--split" data-w-component="account-login"
+<section class="w-card w-auth-login w-auth-login--classic w-auth-login--split" data-w-component="account-login"
          data-w-auth-return="<?= $safe($redirectUrl) ?>"
          data-weline-load="api,account"
          weline-code="customer.account.login"

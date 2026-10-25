@@ -1127,7 +1127,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID,
             ));
             if ($release instanceof ThemeScopeRelease) {
-                // theme_binding: Global's published package (often Default/hanfu) must NOT
+                // theme_binding: Global's published package (often Default/design theme) must NOT
                 // become the inherit base for Website/Store/Channel leaves — those fall back
                 // to the leaf ThemeApplication (own header/footer). Layout/meta still use
                 // ancestor Releases including Global.
@@ -1260,7 +1260,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
     {
         if ($context->scope->parent !== null) {
             // Keep the child as theme_binding leaf so empty ancestor Releases fall back to
-            // the child's ThemeApplication (own header/footer), not Global Default/hanfu.
+            // the child's ThemeApplication (own header/footer), not Global Default/design theme.
             return $this->publishedState(
                 $context->withScope($context->scope->parent),
                 true,
@@ -1278,7 +1278,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
 
     /**
      * Website/Store/Channel theme_binding must not inherit Global's published theme package
-     * (Default/hanfu chrome). Global editing still consumes Global Releases normally.
+     * (Default/design-theme chrome). Global editing still consumes Global Releases normally.
      */
     private function themeBindingLeafSkipsGlobalRelease(
         ThemeEditorContext $leaf,
@@ -2887,7 +2887,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
      * Default/all-language editor contexts still stamp file-image usage with the
      * site default locale. File layout validation needs that concrete locale.
      * Do not fall back to Env::default_LANGUAGE_CODE alone — storefront sites
-     * such as Chang Hanfu use en_US while the framework default stays zh_Hans_CN.
+     * such as a design theme site use en_US while the framework default stays zh_Hans_CN.
      */
     private function resolveFileAssetLocale(ThemeEditorContext $context): string
     {

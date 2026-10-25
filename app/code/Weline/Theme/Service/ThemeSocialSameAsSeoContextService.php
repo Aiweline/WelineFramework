@@ -121,7 +121,7 @@ class ThemeSocialSameAsSeoContextService
 
         if ($code === 'footer-container' || $type === 'footer-container') {
             // Respect merchant social_items as-is (incl. intentional []). Do not
-            // substitute Hanfu brand defaults here — that caused DaoCharms sameAs leak.
+            // substitute design-theme brand defaults here — that caused cross-site sameAs leak.
             foreach (FooterDefaultLinksHelper::actionableSocialItems($config['social_items'] ?? []) as $item) {
                 $urls[] = (string) ($item['url'] ?? '');
             }

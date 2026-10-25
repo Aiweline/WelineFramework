@@ -6,14 +6,14 @@ $guideRoute = (string) ($entry['guide_route'] ?? '');
 <?php echo $this->fetch('Weline_Customer::templates/frontend/guide/social-login/partials/shell-open.phtml'); ?>
 <?php echo $this->fetch('Weline_Customer::templates/frontend/guide/social-login/partials/sidebar.phtml'); ?>
 
-<article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="social-login-policy-google" weline-code="customer.social_login.policy.google">
-    <header class="amazon-payment-guide-article__header">
-        <p class="amazon-payment-guide-article__badge">Google</p>
-        <h1 class="amazon-payment-guide-article__title"><lang>Google 登录政策</lang></h1>
-        <p class="amazon-payment-guide-article__lead"><lang>说明本站如何通过 Google OAuth 获取与使用授权信息，以及您如何管理绑定与撤销授权。</lang></p>
+<article class="payment-guide-layout__main payment-guide-article" data-testid="social-login-policy-google" weline-code="customer.social_login.policy.google">
+    <header class="payment-guide-article__header">
+        <p class="payment-guide-article__badge">Google</p>
+        <h1 class="payment-guide-article__title"><lang>Google 登录政策</lang></h1>
+        <p class="payment-guide-article__lead"><lang>说明本站如何通过 Google OAuth 获取与使用授权信息，以及您如何管理绑定与撤销授权。</lang></p>
     </header>
 
-    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.policy.google.data">
+    <section class="payment-guide-article__panel" weline-code="customer.social_login.policy.google.data">
         <h2><lang>我们获取哪些信息</lang></h2>
         <ul>
             <li><lang>在您确认授权后，本站仅获取 Google 返回的账户标识、邮箱、显示名称与头像（以实际授权范围为准）。</lang></li>
@@ -22,7 +22,7 @@ $guideRoute = (string) ($entry['guide_route'] ?? '');
         </ul>
     </section>
 
-    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.policy.google.use">
+    <section class="payment-guide-article__panel" weline-code="customer.social_login.policy.google.use">
         <h2><lang>信息如何使用与存储</lang></h2>
         <ul>
             <li><lang>绑定关系保存在本站社媒绑定表中，用于下次一键登录校验。</lang></li>
@@ -31,7 +31,7 @@ $guideRoute = (string) ($entry['guide_route'] ?? '');
         </ul>
     </section>
 
-    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.policy.google.control">
+    <section class="payment-guide-article__panel" weline-code="customer.social_login.policy.google.control">
         <h2><lang>您的控制权</lang></h2>
         <ul>
             <li><lang>可在个人中心「连接与应用」随时解绑 Google。</lang></li>
@@ -40,7 +40,7 @@ $guideRoute = (string) ($entry['guide_route'] ?? '');
         </ul>
     </section>
 
-    <section class="amazon-payment-guide-article__panel" id="data-deletion" weline-code="customer.social_login.policy.google.data_deletion">
+    <section class="payment-guide-article__panel" id="data-deletion" weline-code="customer.social_login.policy.google.data_deletion">
         <h2><lang>用户数据删除</lang></h2>
         <ul>
             <li><lang>若您希望本站删除与 Google 登录相关的绑定与资料：请登录个人中心「连接与应用」解绑 Google，或联系本站客服协助删除账户/绑定数据。</lang></li>
@@ -50,7 +50,7 @@ $guideRoute = (string) ($entry['guide_route'] ?? '');
     </section>
 
     <?php if ($guideRoute !== ''): ?>
-        <footer class="amazon-payment-guide-article__footer">
+        <footer class="payment-guide-article__footer">
             <a href="@url{$guideRoute}"><lang>返回 Google 登录指南</lang></a>
         </footer>
     <?php endif; ?>

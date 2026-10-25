@@ -90,7 +90,7 @@ final class PreviewContextService
         // 态 1 画布只认 RAW query（editor_mode / shell=theme-editor）。
         // 禁止用 syncRequest 注入的 bag 冒充画布，否则态 2 真实预览会被误伤丢 Token。
         // 错误 Token payload（theme_id=1 + default.default.default）会压过 /~site/{code}
-        // 的 ThemeApplication，把 DaoCharms 画布染成默认站 hanfu 壳。
+        // 的 ThemeApplication，把其他站点画布染成默认站主题壳。
         $editorCanvas = $this->isRawThemeEditorLiveCanvasRequest();
         $tokenData = ($shouldUseStoredContext && !$editorCanvas)
             ? $this->previewTokenService->getCurrentPreviewData()

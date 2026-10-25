@@ -36,8 +36,8 @@ final class MarketingViewContractsTest extends TestCase
             'CheckoutCouponWidget::testWidgetRegistrationPinsThreeDefaultInjections' => function () {
             $this->assert_CheckoutCouponWidget_testWidgetRegistrationPinsThreeDefaultInjections();
         },
-            'CheckoutCouponWidget::testCheckoutCouponWidgetUsesAmazonLayoutClasses' => function () {
-            $this->assert_CheckoutCouponWidget_testCheckoutCouponWidgetUsesAmazonLayoutClasses();
+            'CheckoutCouponWidget::testCheckoutCouponWidgetUsesCommerceLayoutClasses' => function () {
+            $this->assert_CheckoutCouponWidget_testCheckoutCouponWidgetUsesCommerceLayoutClasses();
         },
             'FooterCampaignLinkWidget::testFooterCampaignLinkRegistersDefaultInjection' => function () {
             $this->assert_FooterCampaignLinkWidget_testFooterCampaignLinkRegistersDefaultInjection();
@@ -118,7 +118,7 @@ private function assert_CheckoutCouponWidget_testWidgetRegistrationPinsThreeDefa
     self::assertStringContainsString('"required":true', $src);
 }
 
-private function assert_CheckoutCouponWidget_testCheckoutCouponWidgetUsesAmazonLayoutClasses(): void
+private function assert_CheckoutCouponWidget_testCheckoutCouponWidgetUsesCommerceLayoutClasses(): void
 {
     $template = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Marketing' . '/view/templates/frontend/widgets/checkout-coupon.phtml');
     self::assertStringContainsString('data-testid="checkout-coupon"', $template);

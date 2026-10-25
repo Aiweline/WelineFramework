@@ -51,8 +51,8 @@ final class PaymentViewContractsTest extends TestCase
             'CheckoutExpressPaymentWidget::testExpressPaymentRegistersRequiredDefaultInjectionWithVisibilityToggle' => function () {
             $this->assert_CheckoutExpressPaymentWidget_testExpressPaymentRegistersRequiredDefaultInjectionWithVisibilityToggle();
         },
-            'CheckoutExpressPaymentWidget::testExpressPaymentTemplateIsShopifyLayoutAmazonStyledAndToggleAware' => function () {
-            $this->assert_CheckoutExpressPaymentWidget_testExpressPaymentTemplateIsShopifyLayoutAmazonStyledAndToggleAware();
+            'CheckoutExpressPaymentWidget::testExpressPaymentTemplateIsShopifyLayoutCommerceStyledAndToggleAware' => function () {
+            $this->assert_CheckoutExpressPaymentWidget_testExpressPaymentTemplateIsShopifyLayoutCommerceStyledAndToggleAware();
         },
             'FooterPaymentMethodsLinkWidget::testFooterPaymentMethodsLinkRegistersDefaultInjection' => function () {
             $this->assert_FooterPaymentMethodsLinkWidget_testFooterPaymentMethodsLinkRegistersDefaultInjection();
@@ -96,8 +96,8 @@ final class PaymentViewContractsTest extends TestCase
             'PaymentGuideTemplate::testGuidePhraseEnUsTranslationsAreNotChinesePlaceholders' => function () {
             $this->assert_PaymentGuideTemplate_testGuidePhraseEnUsTranslationsAreNotChinesePlaceholders();
         },
-            'PaymentGuideTemplate::testAmazonStyleAssetsAndPartialsExist' => function () {
-            $this->assert_PaymentGuideTemplate_testAmazonStyleAssetsAndPartialsExist();
+            'PaymentGuideTemplate::testPaymentGuideStyleAssetsAndPartialsExist' => function () {
+            $this->assert_PaymentGuideTemplate_testPaymentGuideStyleAssetsAndPartialsExist();
         },
             'PaymentLifecycleScript::testPaymentLifecycleOwnsUnifiedOutcomeEvents' => function () {
             $this->assert_PaymentLifecycleScript_testPaymentLifecycleOwnsUnifiedOutcomeEvents();
@@ -219,7 +219,7 @@ private function assert_CheckoutExpressPaymentWidget_testExpressPaymentRegisters
     self::assertStringContainsString('@param enabled {default=true', $src);
 }
 
-private function assert_CheckoutExpressPaymentWidget_testExpressPaymentTemplateIsShopifyLayoutAmazonStyledAndToggleAware(): void
+private function assert_CheckoutExpressPaymentWidget_testExpressPaymentTemplateIsShopifyLayoutCommerceStyledAndToggleAware(): void
 {
     $template = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Payment' . '/view/templates/frontend/widgets/checkout-express-payment.phtml');
     self::assertStringContainsString('data-testid="checkout-express-payment"', $template);
@@ -417,8 +417,8 @@ private function assert_PaymentGuideTemplate_testHubTemplateUsesGuideEntryLinks(
     $moduleRoot = '/Users/weline/Project/Official/框架/app/code/Weline/Payment';
     $hubTemplate = (string) file_get_contents($moduleRoot . '/view/templates/frontend/guide/payment/index.phtml');
     self::assertStringContainsString('payment_guide_entries', $hubTemplate);
-    self::assertStringContainsString('amazon-payment-guide-listing', $hubTemplate);
-    self::assertStringContainsString('amazon-shell-open.phtml', $hubTemplate);
+    self::assertStringContainsString('payment-guide-listing', $hubTemplate);
+    self::assertStringContainsString('shell-open.phtml', $hubTemplate);
     self::assertStringContainsString('<lang>查看支付指南</lang>', $hubTemplate);
     self::assertStringContainsString('<lang>查看支付政策</lang>', $hubTemplate);
     self::assertStringContainsString('<lang>查看用户协议</lang>', $hubTemplate);
@@ -426,28 +426,28 @@ private function assert_PaymentGuideTemplate_testHubTemplateUsesGuideEntryLinks(
 
 private function assert_PaymentGuideTemplate_testSidebarUsesProviderArticleHierarchy(): void
 {
-    $sidebar = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Payment' . '/view/templates/frontend/guide/payment/partials/amazon-sidebar.phtml');
-    self::assertStringContainsString('amazon-payment-guide-layout__nav-group', $sidebar);
-    self::assertStringContainsString('amazon-payment-guide-layout__nav-group-label', $sidebar);
-    self::assertStringContainsString('amazon-payment-guide-layout__nav-article', $sidebar);
+    $sidebar = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Payment' . '/view/templates/frontend/guide/payment/partials/sidebar.phtml');
+    self::assertStringContainsString('payment-guide-layout__nav-group', $sidebar);
+    self::assertStringContainsString('payment-guide-layout__nav-group-label', $sidebar);
+    self::assertStringContainsString('payment-guide-layout__nav-article', $sidebar);
     self::assertStringContainsString('$guideTitle', $sidebar);
     self::assertStringContainsString('$policyTitle', $sidebar);
     self::assertStringContainsString('$agreementTitle', $sidebar);
-    self::assertStringNotContainsString('amazon-payment-guide-layout__nav-sub', $sidebar);
+    self::assertStringNotContainsString('payment-guide-layout__nav-sub', $sidebar);
 }
 
 private function assert_PaymentGuideTemplate_testArticleTemplatesUseSharedBreadcrumbPartial(): void
 {
     foreach (['paypal/guide.phtml', 'paypal/policy.phtml', 'paypal/agreement.phtml', 'stripe/guide.phtml', 'stripe/policy.phtml', 'stripe/agreement.phtml', 'fake_card/guide.phtml', 'fake_card/policy.phtml', 'fake_card/agreement.phtml'] as $relativePath) {
         $content = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Payment' . '/view/templates/frontend/guide/payment/' . $relativePath);
-        self::assertStringContainsString('amazon-breadcrumb.phtml', $content, $relativePath);
+        self::assertStringContainsString('breadcrumb.phtml', $content, $relativePath);
     }
 }
 
 private function assert_PaymentGuideTemplate_testGuideTemplatesUseLangTagsNotPhpTranslate(): void
 {
     $moduleRoot = '/Users/weline/Project/Official/框架/app/code/Weline/Payment';
-    $templates = [$moduleRoot . '/view/templates/frontend/guide/payment/index.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/paypal/guide.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/paypal/policy.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/paypal/agreement.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/stripe/guide.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/stripe/policy.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/stripe/agreement.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/fake_card/guide.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/fake_card/policy.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/fake_card/agreement.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/partials/amazon-sidebar.phtml'];
+    $templates = [$moduleRoot . '/view/templates/frontend/guide/payment/index.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/paypal/guide.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/paypal/policy.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/paypal/agreement.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/stripe/guide.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/stripe/policy.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/stripe/agreement.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/fake_card/guide.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/fake_card/policy.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/fake_card/agreement.phtml', $moduleRoot . '/view/templates/frontend/guide/payment/partials/sidebar.phtml'];
     foreach ($templates as $template) {
         $content = (string) file_get_contents($template);
         self::assertStringContainsString('<lang>', $content, $template);
@@ -458,7 +458,7 @@ private function assert_PaymentGuideTemplate_testGuideTemplatesUseLangTagsNotPhp
 private function assert_PaymentGuideTemplate_testGuideTemplatesUseUrlTagForNavigationLinks(): void
 {
     $moduleRoot = '/Users/weline/Project/Official/框架/app/code/Weline/Payment';
-    $sidebar = (string) file_get_contents($moduleRoot . '/view/templates/frontend/guide/payment/partials/amazon-sidebar.phtml');
+    $sidebar = (string) file_get_contents($moduleRoot . '/view/templates/frontend/guide/payment/partials/sidebar.phtml');
     self::assertStringContainsString("@url{'guide/payment'}", $sidebar);
     self::assertStringContainsString('@url{$guideRoute}', $sidebar);
     self::assertStringContainsString('@url{$policyRoute}', $sidebar);
@@ -471,10 +471,10 @@ private function assert_PaymentGuideTemplate_testGuideTemplatesUseUrlTagForNavig
     self::assertDoesNotMatchRegularExpression('/href="\/guide\/payment/', $index);
     foreach (['paypal/guide.phtml', 'paypal/policy.phtml', 'paypal/agreement.phtml', 'stripe/guide.phtml', 'stripe/policy.phtml', 'stripe/agreement.phtml', 'fake_card/guide.phtml', 'fake_card/policy.phtml', 'fake_card/agreement.phtml'] as $relativePath) {
         $content = (string) file_get_contents($moduleRoot . '/view/templates/frontend/guide/payment/' . $relativePath);
-        self::assertStringContainsString('amazon-breadcrumb.phtml', $content, $relativePath);
+        self::assertStringContainsString('breadcrumb.phtml', $content, $relativePath);
         self::assertStringNotContainsString('payment_guide_hub_url', $content, $relativePath);
     }
-    $breadcrumb = (string) file_get_contents($moduleRoot . '/view/templates/frontend/guide/payment/partials/amazon-breadcrumb.phtml');
+    $breadcrumb = (string) file_get_contents($moduleRoot . '/view/templates/frontend/guide/payment/partials/breadcrumb.phtml');
     self::assertStringContainsString("@url{'guide/payment'}", $breadcrumb);
     self::assertStringContainsString('@url{$guideRoute}', $breadcrumb);
     self::assertDoesNotMatchRegularExpression('/href="\/guide\/payment/', $breadcrumb);
@@ -528,16 +528,16 @@ private function assert_PaymentGuideTemplate_testGuidePhraseEnUsTranslationsAreN
     self::assertSame([], $bad, 'Guide phrases still have Chinese placeholders in en_US.csv');
 }
 
-private function assert_PaymentGuideTemplate_testAmazonStyleAssetsAndPartialsExist(): void
+private function assert_PaymentGuideTemplate_testPaymentGuideStyleAssetsAndPartialsExist(): void
 {
     $moduleRoot = '/Users/weline/Project/Official/框架/app/code/Weline/Payment';
     $themeRoot = dirname($moduleRoot) . '/Theme';
-    self::assertFileExists($themeRoot . '/view/statics/css/widgets/amazon-payment-guide.css');
+    self::assertFileExists($themeRoot . '/view/statics/css/widgets/payment-guide.css');
     self::assertFileExists($moduleRoot . '/view/theme/frontend/layouts/payment_guide/default.phtml');
-    self::assertFileExists($moduleRoot . '/view/templates/frontend/guide/payment/partials/amazon-sidebar.phtml');
-    self::assertFileExists($moduleRoot . '/view/templates/frontend/guide/payment/partials/amazon-shell-open.phtml');
+    self::assertFileExists($moduleRoot . '/view/templates/frontend/guide/payment/partials/sidebar.phtml');
+    self::assertFileExists($moduleRoot . '/view/templates/frontend/guide/payment/partials/shell-open.phtml');
     $layout = (string) file_get_contents($moduleRoot . '/view/theme/frontend/layouts/payment_guide/default.phtml');
-    self::assertStringContainsString('amazon-payment-guide.css', $layout);
+    self::assertStringContainsString('payment-guide.css', $layout);
     self::assertStringContainsString('{{meta.content}}', $layout);
     self::assertStringContainsString('Weline_Theme::frontend::layouts::payment_guide::head-after', $layout);
 }

@@ -62,7 +62,6 @@ return [
     'Weline_Theme::theme/frontend/widgets/video/video-carousel/default.phtml',
     'Weline_Theme::theme/frontend/widgets/content/countdown/default.phtml',
     'Weline_Theme::theme/frontend/widgets/content/brand-logos/default.phtml',
-    'Weline_Theme::theme/frontend/widgets/content/textile-heritage/default.phtml',
     'Weline_Theme::theme/frontend/widgets/form/account-login/default.phtml',
     'Weline_Theme::theme/frontend/widgets/form/account-register/default.phtml',
     'Weline_Theme::theme/frontend/widgets/form/account-challenge/default.phtml',

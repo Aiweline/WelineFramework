@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Weline\Product\Test\Unit\View;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Product\Service\TextileHeritageCatalog;
-use Weline\Theme\Service\TextileHeritageCatalog as ThemeTextileHeritageCatalog;
 
 /**
  * Aggregated contract suite (merged from 23 *ContractTest files).
@@ -216,15 +214,6 @@ final class ProductViewContractsTest extends TestCase
         },
             'RecommendedProductsMobileMediaQuery::testShelfCssUsesLiteralMobileBreakpointsNotCssVars' => function () {
             $this->assert_RecommendedProductsMobileMediaQuery_testShelfCssUsesLiteralMobileBreakpointsNotCssVars();
-        },
-            'TextileHeritageWidget::testProductRegistryNoLongerOwnsTextileHeritageWidget' => function () {
-            $this->assert_TextileHeritageWidget_testProductRegistryNoLongerOwnsTextileHeritageWidget();
-        },
-            'TextileHeritageWidget::testLegacyCatalogDelegatesToThemeOwnedRealAssets' => function () {
-            $this->assert_TextileHeritageWidget_testLegacyCatalogDelegatesToThemeOwnedRealAssets();
-        },
-            'TextileHeritageWidget::testLegacyTemplateLoadsThemeOwnedStylesWithoutInlineCarouselScript' => function () {
-            $this->assert_TextileHeritageWidget_testLegacyTemplateLoadsThemeOwnedStylesWithoutInlineCarouselScript();
         },
             'YouMayLikeWidget::testRegistrationPinsProductOwnedDefaultInjectionAndListingCard' => function () {
             $this->assert_YouMayLikeWidget_testRegistrationPinsProductOwnedDefaultInjectionAndListingCard();
@@ -1199,42 +1188,6 @@ private function assert_RecommendedProductsMobileMediaQuery_testShelfCssUsesLite
         self::assertMatchesRegularExpression('/@media\s*\(\s*max-width:\s*767px\s*\)/i', $css, $path . ' must declare a literal 767px mobile breakpoint');
         self::assertMatchesRegularExpression('/@media\s*\(\s*max-width:\s*480px\s*\)/i', $css, $path . ' must declare a literal 480px single-column breakpoint');
     }
-}
-
-private function assert_TextileHeritageWidget_testProductRegistryNoLongerOwnsTextileHeritageWidget(): void
-{
-    $widgetPhp = '/Users/weline/Project/Official/框架/app/code/Weline/Product' . '/extends/module/Weline_Widget/Weline_Product/widget.php';
-    self::assertFalse(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, 'Weline_Product::templates/frontend/widgets/textile-heritage.phtml'));
-    self::assertFalse(\Weline\Widget\Test\Support\SlimWidgetPhpListing::listsTemplate($widgetPhp, 'Weline_Theme::theme/frontend/widgets/content/textile-heritage/default.phtml'));
-}
-
-private function assert_TextileHeritageWidget_testLegacyCatalogDelegatesToThemeOwnedRealAssets(): void
-{
-    self::assertSame(ThemeTextileHeritageCatalog::TITLE, TextileHeritageCatalog::TITLE);
-    self::assertSame(ThemeTextileHeritageCatalog::IMAGE_BASE, TextileHeritageCatalog::IMAGE_BASE);
-    self::assertSame(ThemeTextileHeritageCatalog::items(), TextileHeritageCatalog::items());
-    self::assertSame(ThemeTextileHeritageCatalog::widgetConfig(), TextileHeritageCatalog::widgetConfig());
-    foreach (TextileHeritageCatalog::items() as $item) {
-        $image = (string) $item['image'];
-        if (\Weline\Framework\Deploy\DeployPublicUrlMode::useProduction()) {
-            self::assertStringStartsWith('/static/Weline/Theme/images/textile-heritage/', $image);
-        } else {
-            self::assertStringStartsWith('/Weline/Theme/view/statics/images/textile-heritage/', $image);
-        }
-        self::assertDoesNotMatchRegularExpression('/\.svg(?:$|\?)/i', (string) $item['image']);
-        self::assertStringStartsWith('https://', (string) $item['source_url']);
-        self::assertNotSame('', trim((string) $item['license']));
-    }
-}
-
-private function assert_TextileHeritageWidget_testLegacyTemplateLoadsThemeOwnedStylesWithoutInlineCarouselScript(): void
-{
-    $path = '/Users/weline/Project/Official/框架/app/code/Weline/Product' . '/view/templates/frontend/widgets/textile-heritage.phtml';
-    self::assertFileExists($path);
-    $source = (string) file_get_contents($path);
-    self::assertStringContainsString('@widget.code {textile-heritage}', $source);
-    self::assertStringContainsString('Weline_Theme::theme/frontend/widgets/content/textile-heritage/default.phtml', $source);
-    self::assertStringNotContainsString('<script', $source);
 }
 
 private function assert_YouMayLikeWidget_testRegistrationPinsProductOwnedDefaultInjectionAndListingCard(): void

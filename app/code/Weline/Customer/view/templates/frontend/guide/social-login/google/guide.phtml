@@ -6,14 +6,14 @@ $policyRoute = (string) ($entry['policy_route'] ?? '');
 <?php echo $this->fetch('Weline_Customer::templates/frontend/guide/social-login/partials/shell-open.phtml'); ?>
 <?php echo $this->fetch('Weline_Customer::templates/frontend/guide/social-login/partials/sidebar.phtml'); ?>
 
-<article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="social-login-guide-google" weline-code="customer.social_login.guide.google">
-    <header class="amazon-payment-guide-article__header">
-        <p class="amazon-payment-guide-article__badge">Google</p>
-        <h1 class="amazon-payment-guide-article__title"><lang>Google 登录指南</lang></h1>
-        <p class="amazon-payment-guide-article__lead"><lang>使用 Google 账户授权后，可一键登录本站顾客账户，或把 Google 绑定到已有账户，无需重复输入密码。</lang></p>
+<article class="payment-guide-layout__main payment-guide-article" data-testid="social-login-guide-google" weline-code="customer.social_login.guide.google">
+    <header class="payment-guide-article__header">
+        <p class="payment-guide-article__badge">Google</p>
+        <h1 class="payment-guide-article__title"><lang>Google 登录指南</lang></h1>
+        <p class="payment-guide-article__lead"><lang>使用 Google 账户授权后，可一键登录本站顾客账户，或把 Google 绑定到已有账户，无需重复输入密码。</lang></p>
     </header>
 
-    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.guide.google.prepare">
+    <section class="payment-guide-article__panel" weline-code="customer.social_login.guide.google.prepare">
         <h2><lang>开始前准备</lang></h2>
         <ul>
             <li><lang>准备可用的 Google 账户，并允许浏览器弹出 Google 授权窗口。</lang></li>
@@ -22,7 +22,7 @@ $policyRoute = (string) ($entry['policy_route'] ?? '');
         </ul>
     </section>
 
-    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.guide.google.steps">
+    <section class="payment-guide-article__panel" weline-code="customer.social_login.guide.google.steps">
         <h2><lang>登录步骤</lang></h2>
         <ol>
             <li><lang>打开本站登录页，在「快捷登录」区域点击 Google Logo。</lang></li>
@@ -32,7 +32,7 @@ $policyRoute = (string) ($entry['policy_route'] ?? '');
         </ol>
     </section>
 
-    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.guide.google.bind">
+    <section class="payment-guide-article__panel" weline-code="customer.social_login.guide.google.bind">
         <h2><lang>绑定与解绑</lang></h2>
         <ul>
             <li><lang>已登录顾客可在个人中心发起「绑定」，完成 Google 授权后写入绑定关系。</lang></li>
@@ -41,9 +41,9 @@ $policyRoute = (string) ($entry['policy_route'] ?? '');
         </ul>
     </section>
 
-    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.guide.google.faq">
+    <section class="payment-guide-article__panel" weline-code="customer.social_login.guide.google.faq">
         <h2><lang>常见问题</lang></h2>
-        <ul class="social-login-guide-article__faq amazon-payment-guide-article__faq">
+        <ul class="social-login-guide-article__faq payment-guide-article__faq">
             <li>
                 <strong><lang>登录页看不到 Google Logo？</lang></strong>
                 <p><lang>请确认后台已填写凭据并开启「激活前台入口」；主题部件也未关闭 enable_google。</lang></p>
@@ -60,7 +60,7 @@ $policyRoute = (string) ($entry['policy_route'] ?? '');
     </section>
 
     <?php if ($policyRoute !== ''): ?>
-        <footer class="amazon-payment-guide-article__footer">
+        <footer class="payment-guide-article__footer">
             <a href="@url{$policyRoute}"><lang>查看 Google 登录政策</lang></a>
         </footer>
     <?php endif; ?>

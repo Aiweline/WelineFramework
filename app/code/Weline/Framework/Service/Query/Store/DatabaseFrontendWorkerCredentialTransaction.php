@@ -336,6 +336,58 @@ final class DatabaseFrontendWorkerCredentialTransaction implements FrontendWorke
         return \max(0, (int)($rows[0]['retained_bytes'] ?? 0));
     }
 
+    public function evictOldest(string $type, int $keep, int $now): int
+    {
+        FrontendWorkerCredentialType::assert($type);
+        if ($type === FrontendWorkerCredentialType::NONCE || $keep < 0) {
+            // Nonces are per-scope shards with their own janitor; never evict blindly.
+            return 0;
+        }
+        $this->lockCapacityScope($type, null, $now);
+
+        $model = $this->credentialModel();
+        $total = (int)$model
+            ->where(FrontendWorkerCredential::schema_fields_TYPE, $type)
+            ->where(FrontendWorkerCredential::schema_fields_EXPIRES_AT, $now, '>')
+            ->count();
+        if ($total <= $keep) {
+            return 0;
+        }
+        $evict = $total - $keep;
+        // Order by oldest creation (fallback: soonest expiry) so live backends
+        // (newest created_at) are always kept.
+        $rows = $model->resetQuery()
+            ->where(FrontendWorkerCredential::schema_fields_TYPE, $type)
+            ->where(FrontendWorkerCredential::schema_fields_EXPIRES_AT, $now, '>')
+            ->order(FrontendWorkerCredential::schema_fields_CREATED_AT, 'ASC')
+            ->order(FrontendWorkerCredential::schema_fields_EXPIRES_AT, 'ASC')
+            ->order(FrontendWorkerCredential::schema_fields_ID, 'ASC')
+            ->limit($evict)
+            ->select(FrontendWorkerCredential::schema_fields_ID)
+            ->fetchArray();
+        $ids = [];
+        foreach ((array)$rows as $row) {
+            $id = (int)($row[FrontendWorkerCredential::schema_fields_ID] ?? 0);
+            if ($id >= 1) {
+                $ids[] = $id;
+            }
+        }
+        if ($ids === []) {
+            return 0;
+        }
+        $evicted = 0;
+        foreach ($ids as $id) {
+            $row = $this->credentialModel()->clearData()->clearQuery()->load($id);
+            if (!$row->hasData(FrontendWorkerCredential::schema_fields_ID)) {
+                continue;
+            }
+            $row->delete();
+            $evicted++;
+        }
+
+        return $evicted;
+    }
+
     public function deleteExpired(int $now, ?string $type = null, ?string $scope = null): void
     {
         if ($type !== null) {

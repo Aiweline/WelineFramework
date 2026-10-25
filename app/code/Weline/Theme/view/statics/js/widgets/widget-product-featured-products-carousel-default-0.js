@@ -1,4 +1,4 @@
-window.WelineWidgetAssets.register('theme-hanfu-product-featured-products-default-0', function (widgetScript) {
+window.WelineWidgetAssets.register('theme-product-featured-products-carousel-default-0', function (widgetScript) {
 (function() {
     const root = document.querySelector(('[data-uid="' + widgetScript.dataset.v0 + '"]'));
     if (!root) return;
