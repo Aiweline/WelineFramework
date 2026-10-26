@@ -50,6 +50,7 @@ CLAUDE.local.md
 .claudeignore
 .mcp.json
 .mcp.json.backup.*
+.mcp.json.bak*
 .cursor/
 .cursorrules
 .cursorignore
@@ -243,6 +244,7 @@ app/code/Weline/Ai/Test/Http/Backend/batch-test-results.json
 
 # Legacy coverage at repo root (optional cleanup)
 /coverage-html/
+/coverage.xml
 /coverage.txt
 /e2e-parallel-run.log
 
@@ -314,6 +316,12 @@ app/code/Weline/Ai/Test/Http/Backend/batch-test-results.json
 /aoci.code.txt
 /aoci.meta.txt
 /aoci.database.txt
+/.aoci/
+
+# 已退役外部认知工具 / 本机一次性归档（勿入库）
+/.gitnexusignore
+/.skill-archive/
+/verify_auto.js
 
 # 浏览器扩展下载包：运行时由 ExtensionPackage 控制器现场打包，不进 Git
 app/code/Weline/AiAcquisition/view/statics/downloads/ai-acquisition-extension.zip

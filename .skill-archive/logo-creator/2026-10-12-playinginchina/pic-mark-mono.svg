@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="28" role="img" focusable="false" aria-hidden="true">
-  <!-- Mono / inverse footer: light fills on dark chrome -->
-  <path fill="#7fc7ab" d="M1.8 27 H30.2 L22.2 12.6 L17.6 20.2 L12.2 8.2 L1.8 27 Z"/>
-  <path fill="#0b2a22" fill-opacity=".35" d="M12.2 8.2 L15.4 15.4 L12.2 18.8 L9 15.4 Z"/>
-  <path fill="none" stroke="#0b2a22" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" opacity=".4"
-        d="M15.2 27 C15.6 22.8 16.4 19.6 18.2 16.8 C19.6 14.6 21.2 13.4 22.8 12.8"/>
-  <circle fill="#e2a23c" cx="25.4" cy="8.2" r="3.15"/>
-</svg>
