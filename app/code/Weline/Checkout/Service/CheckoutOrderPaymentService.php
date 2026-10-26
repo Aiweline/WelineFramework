@@ -25,6 +25,7 @@ final class CheckoutOrderPaymentService
         private readonly PaymentFacadeInterface $payments,
         private readonly CheckoutSuccessUrlBuilder $successUrlBuilder,
         private readonly CheckoutSessionStoreInterface $checkoutSessions,
+        private readonly ?CheckoutPaymentIncentiveApplierInterface $incentiveApplier = null,
     ) {
     }
 
@@ -145,6 +146,15 @@ final class CheckoutOrderPaymentService
                 }
             }
 
+            // Points discount reservation (optional module; fail closed if planned but unavailable).
+            $pointsReserved = $this->reservePointsDiscount($order, $typePayload, $idempotencyKey);
+            if (($pointsReserved['points'] ?? 0) > 0) {
+                if (empty($pointsReserved['ok'])) {
+                    throw new \RuntimeException('checkout_points_discount_reserve_failed');
+                }
+                $amountMinor = max(0, $amountMinor - (int) $pointsReserved['apply_checkout_minor']);
+            }
+
             // Zero cash deposit: credit covered the deposit — skip PSP, mark deposit paid.
             if ($hangPurpose === 'deposit' && $amountMinor <= 0) {
                 $lastPurpose = $hangPurpose;
@@ -236,7 +246,7 @@ final class CheckoutOrderPaymentService
             ];
             // 选中支付方式激励：并入 discount_lines 并下调应付（与 PaymentService create 幂等）
             if ($hangPurpose === '' || $hangPurpose === 'full') {
-                $paymentContext = (new CheckoutPaymentIncentiveApplier())
+                $paymentContext = ($this->incentiveApplier ?? new CheckoutPaymentIncentiveApplier())
                     ->applyToPaymentContext($methodCode, $paymentContext);
                 $amountMinor = (int)($paymentContext['amount_minor'] ?? $amountMinor);
                 $this->syncOrderPaymentIncentive($order, $paymentContext);
@@ -336,10 +346,12 @@ final class CheckoutOrderPaymentService
                 $transaction = $this->payments->tryCreatePayment($methodCode, $paymentContext);
             } catch (\Throwable $e) {
                 $this->releaseB2bCreditForDeposit($order->orderUuid, $typePayload, $idempotencyKey);
+                $this->releasePointsDiscount($order->orderUuid, $idempotencyKey);
                 throw $e;
             }
             if (!$transaction instanceof PaymentTransactionRecord) {
                 $this->releaseB2bCreditForDeposit($order->orderUuid, $typePayload, $idempotencyKey);
+                $this->releasePointsDiscount($order->orderUuid, $idempotencyKey);
                 throw new \RuntimeException('checkout_payment_method_unavailable');
             }
             $this->rememberOrderPaymentMethod($order->orderUuid, (string)$transaction->methodCode);
@@ -375,6 +387,7 @@ final class CheckoutOrderPaymentService
             ], true)) {
                 $hasFailed = true;
                 $this->releaseB2bCreditForDeposit($order->orderUuid, $typePayload, $idempotencyKey);
+                $this->releasePointsDiscount($order->orderUuid, $idempotencyKey);
             } elseif (!$paid) {
                 $hasPending = true;
             }
@@ -398,6 +411,7 @@ final class CheckoutOrderPaymentService
             $chargedAmountMinor += max(0, $amountMinor);
             if ($paid) {
                 try {
+                    $this->commitPointsDiscount($order->orderUuid, $idempotencyKey);
                     if ($hangPurpose === 'deposit') {
                         $this->notifyHangDepositPaid(
                             $order->orderUuid,
@@ -921,6 +935,96 @@ final class CheckoutOrderPaymentService
             $model->setData(\Weline\Order\Model\Order::schema_fields_PAYMENT_METHOD, $methodCode)->save();
         } catch (\Throwable) {
             // Soft-fail DB write.
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $typePayload
+     * @return array{ok:bool,points:int,apply_checkout_minor:int,error?:string}
+     */
+    private function reservePointsDiscount(
+        OrderReadResult $order,
+        array $typePayload,
+        string $idempotencyKey,
+    ): array {
+        $points = max(0, (int) ($typePayload['points_discount_points'] ?? 0));
+        if ($points <= 0) {
+            return ['ok' => true, 'points' => 0, 'apply_checkout_minor' => 0];
+        }
+        $applyCheckout = max(0, (int) ($typePayload['points_discount_apply_checkout_minor'] ?? 0));
+        $applyBase = max(0, (int) ($typePayload['points_discount_apply_base_minor'] ?? 0));
+        if ($applyCheckout <= 0) {
+            return ['ok' => true, 'points' => 0, 'apply_checkout_minor' => 0];
+        }
+        if (!interface_exists(\Weline\Points\Api\PointsDiscountSettlementInterface::class)) {
+            return ['ok' => false, 'points' => $points, 'apply_checkout_minor' => $applyCheckout, 'error' => 'points_module_missing'];
+        }
+        $customerId = (int) ($order->customerId ?? 0);
+        if ($customerId <= 0) {
+            return ['ok' => false, 'points' => $points, 'apply_checkout_minor' => $applyCheckout, 'error' => 'points_customer_missing'];
+        }
+        try {
+            $settlement = ObjectManager::getInstance(\Weline\Points\Api\PointsDiscountSettlementInterface::class);
+            if (!$settlement instanceof \Weline\Points\Api\PointsDiscountSettlementInterface) {
+                return ['ok' => false, 'points' => $points, 'apply_checkout_minor' => $applyCheckout, 'error' => 'points_settlement_unavailable'];
+            }
+            $namespace = strtolower(trim((string) ($order->scope['namespace'] ?? $order->scope['environment'] ?? 'live')));
+            if (!in_array($namespace, ['live', 'sandbox'], true)) {
+                $namespace = 'live';
+            }
+            $result = $settlement->reserveForOrder(
+                $order->orderUuid,
+                $customerId,
+                (int) $order->websiteId,
+                $namespace,
+                $points,
+                $applyCheckout,
+                $applyBase,
+                (string) ($typePayload['points_discount_checkout_currency'] ?? $order->currency),
+                $idempotencyKey,
+            );
+
+            return [
+                'ok' => (bool) ($result['ok'] ?? false),
+                'points' => $points,
+                'apply_checkout_minor' => (int) ($result['apply_checkout_minor'] ?? $applyCheckout),
+                'error' => (string) ($result['error'] ?? ''),
+            ];
+        } catch (\Throwable $exception) {
+            return [
+                'ok' => false,
+                'points' => $points,
+                'apply_checkout_minor' => $applyCheckout,
+                'error' => 'points_reserve_failed:' . $exception->getMessage(),
+            ];
+        }
+    }
+
+    private function commitPointsDiscount(string $orderUuid, string $idempotencyKey): void
+    {
+        try {
+            if (!interface_exists(\Weline\Points\Api\PointsDiscountSettlementInterface::class)) {
+                return;
+            }
+            $settlement = ObjectManager::getInstance(\Weline\Points\Api\PointsDiscountSettlementInterface::class);
+            if ($settlement instanceof \Weline\Points\Api\PointsDiscountSettlementInterface) {
+                $settlement->commitForOrder($orderUuid, $idempotencyKey);
+            }
+        } catch (\Throwable) {
+        }
+    }
+
+    private function releasePointsDiscount(string $orderUuid, string $idempotencyKey): void
+    {
+        try {
+            if (!interface_exists(\Weline\Points\Api\PointsDiscountSettlementInterface::class)) {
+                return;
+            }
+            $settlement = ObjectManager::getInstance(\Weline\Points\Api\PointsDiscountSettlementInterface::class);
+            if ($settlement instanceof \Weline\Points\Api\PointsDiscountSettlementInterface) {
+                $settlement->releaseForOrder($orderUuid, $idempotencyKey);
+            }
+        } catch (\Throwable) {
         }
     }
 

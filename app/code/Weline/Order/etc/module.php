@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Order',
-    "version" => '2.13.77',
+    "version" => '2.13.78',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Backend' => '*',
@@ -24,6 +24,7 @@ return [
         \Weline\Order\Api\OrderPostPaymentHookInterface::class => \Weline\Order\Service\OrderPaidStateHook::class,
         \Weline\Order\Api\RefundAssetReturnCapabilityInterface::class => \Weline\Order\Service\PaymentRefundAssetReturnCapability::class,
         \Weline\Payment\Api\OrderAssetAllocationSnapshotSinkInterface::class => \Weline\Order\Service\OrderAssetAllocationSnapshotService::class,
+        \Weline\Order\Api\OrderAssetAllocationSnapshotReaderInterface::class => \Weline\Order\Service\OrderAssetAllocationSnapshotService::class,
         'view_warmup_contribution.Weline_Order' => \Weline\Order\Api\View\ViewWarmupContributionProvider::class,
     ],
 ];

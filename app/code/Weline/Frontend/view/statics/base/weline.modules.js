@@ -587,6 +587,12 @@
             globalVar: "WelineDaocharmsTown",
             load: "eager",
             description: "真实商品三维镇内选购"
+        },
+        pointsCheckout: {
+            origin_paths: ["app/code/Weline/Points/view/statics/js/points-discount.js?v=20261027-1"],
+            paths: ["Weline_Points::js/points-discount.js?v=20261027-1"],
+            globalVar: "WelinePointsCheckout",
+            description: "Points redemption quote/apply on cart"
         }
     });
 

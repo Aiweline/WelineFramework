@@ -1,0 +1,31 @@
+<?php
+/**
+ * @meta.title {default="积分与会员等级",description="赚分、成长值、VIP 等级、商品积分属性与结账抵扣"}
+ * @meta.description {default="可花积分余额由客户资产账本持有；赚分、抵扣与等级按站点基准货币和后台比例执行。"}
+ * @config.area {backend}
+ * @config.sort {56}
+ * @config.acl {Weline_SystemConfig::config}
+ */
+?>
+
+<w:config:group code="points_earn" label="积分赚取" description="订单支付成功后按站点基准货币的实付现金赚取积分。默认关闭。" sort="10">
+    <w:config:field key="points/earn/enabled" label="启用赚分" description="关闭时订单支付成功不赚积分、不增加成长值。" type="switch" value-type="bool" default="0" scope="global,website,store" />
+    <w:config:field key="points/earn/rate_per_currency_unit" label="赚分比例" description="每 1 个站点基准货币主单位（1 元/1 美元/1 日元）赚取的积分，按主单位向下取整后计算。积分记点，不是分。" type="number" value-type="float" default="1" scope="global,website,store" validation="min:0" />
+    <w:config:field key="points/growth/rate_per_currency_unit" label="成长值比例" description="每 1 个站点基准货币主单位实付现金增加的成长值。成长值只增不减，不能当积分花。" type="number" value-type="float" default="1" scope="global,website,store" validation="min:0" />
+</w:config:group>
+
+<w:config:group code="points_product" label="商品积分属性" description="商品编辑页的「积分获取比例 / 每件固定积分」优先；未填写时使用这里的默认值。" sort="15">
+    <w:config:field key="points/product/default_ratio" label="默认获取比例" description="商品未配置积分属性时的默认倍率，1 表示按全局赚分比例，2 表示双倍。" type="number" value-type="float" default="1" scope="global,website,store" validation="min:0" />
+    <w:config:field key="points/product/default_fixed_points" label="默认每件固定积分" description="大于 0 时优先于比例，按商品件数发放固定积分；0 表示不启用固定积分。" type="number" value-type="int" default="0" scope="global,website,store" validation="min:0" />
+</w:config:group>
+
+<w:config:group code="points_discount" label="积分抵扣" description="结账时积分按兑换比例抵扣，默认单笔最多抵扣订单金额的 30%。仍需同时开启 Payment 积分资产与客户资产 mode。" sort="20">
+    <w:config:field key="points/discount/enabled" label="启用积分抵扣" description="关闭时结账不报价积分抵扣。" type="switch" value-type="bool" default="1" scope="global,website,store" />
+    <w:config:field key="points/discount/max_ratio" label="最大抵扣比例" description="0 到 1；默认 0.3 表示单笔最多抵扣 30%，其余必须现金支付。" type="number" value-type="float" default="0.3" scope="global,website,store" validation="min:0|max:1" />
+</w:config:group>
+
+<w:config:group code="points_vip" label="VIP 等级" description="按累计赚取积分（默认）或成长值自动升级。抵扣和退款不降低累计积分。" sort="30">
+    <w:config:field key="points/vip/enabled" label="启用 VIP 等级" description="关闭时成长值/累计积分照常记录，但所有顾客按普通会员权益计算。" type="switch" value-type="bool" default="0" scope="global,website,store" />
+    <w:config:field key="points/vip/basis" label="等级依据" description="累计赚取积分在抵扣后不减少，推荐用累计积分保级；成长值只增不减。" type="select" value-type="string" default="lifetime_points" scope="global,website,store" options="lifetime_points:累计赚取积分,growth:成长值" validation="required|in_options" />
+    <w:config:field key="points/vip/multiplier_enabled" label="启用等级积分倍率" description="开启后赚分按当前 VIP 等级的倍率放大；关闭时所有等级倍率按 1 计算。" type="switch" value-type="bool" default="1" scope="global,website,store" />
+</w:config:group>

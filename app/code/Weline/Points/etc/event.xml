@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <event name="Weline_Order::order_paid">
+        <observer name="weline_points_order_paid"
+                  instance="Weline\Points\Observer\OrderPaidObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="120"/>
+    </event>
+    <event name="Weline_Order::order_refunded">
+        <observer name="weline_points_order_refunded"
+                  instance="Weline\Points\Observer\OrderRefundedObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="120"/>
+    </event>
+    <event name="Weline_Order::order_cancelled">
+        <observer name="weline_points_order_cancelled"
+                  instance="Weline\Points\Observer\OrderCancelledObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="120"/>
+    </event>
+    <event name="Weline_Checkout::checkout::asset_discount::apply">
+        <observer name="weline_points_checkout_discount_apply"
+                  instance="Weline\Points\Observer\CheckoutPointsDiscountApplyObserver"
+                  disabled="false"
+                  shared="false"
+                  sort="150"/>
+    </event>
+</config>

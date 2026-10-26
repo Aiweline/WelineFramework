@@ -16,7 +16,8 @@
         "weline/module-shipping": "@dev"
     },
     "suggest": {
-        "weline/module-tax": "Provides server-side Tax calculation after TASK-P3B-002 is accepted."
+        "weline/module-tax": "Provides server-side Tax calculation after TASK-P3B-002 is accepted.",
+        "weline/module-points": "Provides optional checkout points redemption settlement."
     },
     "autoload": {
         "psr-4": {

@@ -6,6 +6,7 @@ namespace Weline\Checkout\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Checkout\Service\CheckoutOrderPaymentService;
+use Weline\Checkout\Service\CheckoutPaymentIncentiveApplierInterface;
 use Weline\Checkout\Service\CheckoutSuccessUrlBuilder;
 use Weline\Checkout\Service\InMemoryCheckoutSessionStore;
 use Weline\Checkout\Model\CheckoutSession;
@@ -463,6 +464,13 @@ final class CheckoutOrderPaymentServiceTest extends TestCase
             ],
         ]);
 
-        return new CheckoutOrderPaymentService($orders, $payments, $builder, $sessions);
+        $incentives = new class implements CheckoutPaymentIncentiveApplierInterface {
+            public function applyToPaymentContext(string $paymentMethod, array $orderData): array
+            {
+                return $orderData;
+            }
+        };
+
+        return new CheckoutOrderPaymentService($orders, $payments, $builder, $sessions, $incentives);
     }
 }

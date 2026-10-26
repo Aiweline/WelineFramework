@@ -1,0 +1,33 @@
+{
+    "name": "weline/module-points",
+    "description": "Universal points, growth and VIP level rules over the customer asset ledger",
+    "type": "weline-module",
+    "require": {
+        "php": "^8.4",
+        "weline/framework": "@dev",
+        "weline/module-customer": "@dev",
+        "weline/module-customer-asset": "@dev",
+        "weline/module-eav": "@dev",
+        "weline/module-system-config": "@dev"
+    },
+    "suggest": {
+        "weline/module-checkout": "Supplies storefront checkout payment events.",
+        "weline/module-currency": "Converts checkout amounts into the website base currency.",
+        "weline/module-order": "Supplies order paid/refunded events, items and committed asset allocation snapshots.",
+        "weline/module-payment": "Spends points through the existing points asset policy.",
+        "weline/module-product": "Supplies the product EAV entity and product edit page.",
+        "weline/module-websites": "Website-scoped rules and accounts."
+    },
+    "authors": [
+        {
+            "name": "Weline",
+            "email": "aiweline@qq.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Weline\\Points\\": ""
+        }
+    },
+    "license": "MIT"
+}

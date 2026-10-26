@@ -12,7 +12,8 @@ use Weline\Payment\Api\OrderAssetAllocationSnapshotSinkInterface;
  * Order implementation of Payment's optional allocation snapshot sink.
  */
 final class OrderAssetAllocationSnapshotService implements
-    OrderAssetAllocationSnapshotSinkInterface
+    OrderAssetAllocationSnapshotSinkInterface,
+    \Weline\Order\Api\OrderAssetAllocationSnapshotReaderInterface
 {
     /** @var array<string, array<string, mixed>>|null */
     private ?array $memory = null;
@@ -86,6 +87,12 @@ final class OrderAssetAllocationSnapshotService implements
             'not_applicable' => $snapshots === [],
             'snapshots' => $snapshots,
         ];
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function listCommittedAllocationsForOrder(string $orderUuid): array
+    {
+        return $this->listForOrder($orderUuid);
     }
 
     /** @return list<array<string, mixed>> */

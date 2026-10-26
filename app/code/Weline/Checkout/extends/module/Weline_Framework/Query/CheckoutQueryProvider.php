@@ -257,9 +257,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 expectedConfigVersion: $expectedConfig,
                 expectedTaxRuleSetHash: $expectedTaxHash,
                 paymentMethod: trim((string)($params['payment_method'] ?? '')) ?: null,
-                b2bCreditApplyMinor: array_key_exists('b2b_credit_apply_minor', $params)
-                    ? max(0, (int)$params['b2b_credit_apply_minor'])
-                    : null,
+                b2bCreditApplyMinor: $this->assetDiscountApplyMinor($params),
             );
             $payment = $this->paymentRecoveryState->get($quoteToken, $idempotencyKey);
             if (!is_array($payment)) {
@@ -1035,6 +1033,34 @@ class CheckoutQueryProvider implements QueryProviderInterface
         // RequestContext. Consume Cart's published server-owned resolver
         // contract without coupling Checkout to Cart's concrete Service.
         return $this->cartScopeResolver()->fromParams([]);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function assetDiscountApplyMinor(array $params): ?int
+    {
+        if (array_key_exists('b2b_credit_apply_minor', $params)) {
+            return max(0, (int) $params['b2b_credit_apply_minor']);
+        }
+        if (array_key_exists('points_discount_apply_minor', $params)) {
+            return max(0, (int) $params['points_discount_apply_minor']);
+        }
+        if (!interface_exists(\Weline\Points\Api\PointsDiscountApplySessionInterface::class)) {
+            return null;
+        }
+        try {
+            $session = ObjectManager::getInstance(\Weline\Points\Api\PointsDiscountApplySessionInterface::class);
+            if ($session instanceof \Weline\Points\Api\PointsDiscountApplySessionInterface) {
+                $apply = $session->get();
+                $minor = (int) ($apply['apply_checkout_minor'] ?? 0);
+
+                return $minor > 0 ? $minor : null;
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
     }
 
     private function currentCustomerId(): ?int
@@ -3340,6 +3366,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'client_action' => ['type' => 'boolean', 'required' => false],
                         'locale' => ['type' => 'string', 'required' => false, 'max_length' => 16],
                         'b2b_credit_apply_minor' => ['type' => 'integer', 'required' => false],
+                        'points_discount_apply_minor' => ['type' => 'integer', 'required' => false],
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Submit frozen Checkout V2 quote (config version must match)',

@@ -11,7 +11,7 @@ use Weline\Payment\Service\PaymentMethodManager;
 /**
  * 选中支付方式后把激励并入 totals / discount_lines（SPI 归属 Payment；本类仅编排）。
  */
-final class CheckoutPaymentIncentiveApplier
+final class CheckoutPaymentIncentiveApplier implements CheckoutPaymentIncentiveApplierInterface
 {
     public function __construct(private readonly ?ObjectManager $objectManager = null)
     {
