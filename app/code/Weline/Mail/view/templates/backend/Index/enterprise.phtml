@@ -3920,12 +3920,34 @@ if ($oauthCfError === 'invalid_scope') {
                                                    data-smtp-delete-sse="service">
                                                 <input type="hidden" name="return_view" value="smtp">
                                                 <input type="hidden" name="smtp_service_id" value="<?= $sid ?>">
+                                                <input type="hidden" name="also_stalwart" value="1">
                                                 <button class="w-button" data-variant="outline" data-tone="danger" data-size="sm" type="submit"
                                                         data-testid="mail-smtp-delete-<?= $sid ?>"
                                                         title="<?= $escape($deleteServiceConfirm) ?>">
                                                     <?= __('删除') ?>
                                                 </button>
                                             </w:form>
+                                            <?php if ($mode === SmtpService::MODE_SELF): ?>
+                                                <?php
+                                                $deleteLocalOnlyConfirm = (string)__(
+                                                    '确定只删除该 Smtp 服务及下属 %{1} 个账户的 Weline 目录记录？本机 Stalwart 中的同名账户与邮件会保留，供管理认证恢复后再清理。',
+                                                    [(string)$svcAccountCount]
+                                                );
+                                                ?>
+                                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/smtp-service-delete-stream'}"
+                                                       onsubmit="return confirm(<?= json_encode($deleteLocalOnlyConfirm, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>);"
+                                                       data-testid="mail-smtp-delete-local-service-form-<?= $sid ?>"
+                                                       data-smtp-delete-sse="service">
+                                                    <input type="hidden" name="return_view" value="smtp">
+                                                    <input type="hidden" name="smtp_service_id" value="<?= $sid ?>">
+                                                    <input type="hidden" name="also_stalwart" value="0">
+                                                    <button class="w-button" data-variant="outline" data-tone="danger" data-size="sm" type="submit"
+                                                            data-testid="mail-smtp-delete-local-<?= $sid ?>"
+                                                            title="<?= $escape($deleteLocalOnlyConfirm) ?>">
+                                                        <?= __('仅删除本地记录') ?>
+                                                    </button>
+                                                </w:form>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                 </summary>

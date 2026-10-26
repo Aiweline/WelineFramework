@@ -311,11 +311,12 @@ final class SmtpServiceCatalogService
 
     /**
      * 删除 Smtp 服务：外部直接删；本机启用先按账户卸本机 Stalwart，再删目录下属账户，最后删服务。
+     * $alsoStalwart=false 时只删 Weline 目录记录，保留本机 Stalwart 账户（管理认证不可用时用）。
      *
      * @param callable(string $step, string $message, int $current, int $total): void|null $onProgress
      * @return array{success: bool, message: string}
      */
-    public function deleteService(int $serviceId, ?callable $onProgress = null): array
+    public function deleteService(int $serviceId, ?callable $onProgress = null, bool $alsoStalwart = true): array
     {
         /** @var SmtpService $svc */
         $svc = ObjectManager::getInstance(SmtpService::class)->clear()->load($serviceId);
@@ -336,7 +337,9 @@ final class SmtpServiceCatalogService
             $this->emitDeleteProgress(
                 $onProgress,
                 'plan',
-                (string)__('准备从本机 Stalwart 与目录移除 %{1} 个账户…', [(string)$total]),
+                $alsoStalwart
+                    ? (string)__('准备从本机 Stalwart 与目录移除 %{1} 个账户…', [(string)$total])
+                    : (string)__('准备从目录移除 %{1} 个账户（保留本机 Stalwart）…', [(string)$total]),
                 0,
                 max(1, $total)
             );
@@ -346,33 +349,38 @@ final class SmtpServiceCatalogService
             foreach ($workable as $one) {
                 $index++;
                 $email = strtolower(trim((string)$one->getData(SmtpAccount::schema_fields_EMAIL)));
-                $this->emitDeleteProgress(
-                    $onProgress,
-                    'stalwart',
-                    $email !== ''
-                        ? (string)__('正在从本机 Stalwart 删除 %{1}…', [$email])
-                        : (string)__('正在删除账户…'),
-                    $index,
-                    max(1, $total)
-                );
-                if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false) {
-                    try {
-                        $mgmt->deleteAccount($email);
-                    } catch (\Throwable $e) {
-                        return [
-                            'success' => false,
-                            'message' => (string)__(
-                                'Stalwart 删除账户 %{1} 失败，服务与目录未改：%{2}',
-                                [$email, $e->getMessage()]
-                            ),
-                        ];
+                if ($alsoStalwart) {
+                    $this->emitDeleteProgress(
+                        $onProgress,
+                        'stalwart',
+                        $email !== ''
+                            ? (string)__('正在从本机 Stalwart 删除 %{1}…', [$email])
+                            : (string)__('正在删除账户…'),
+                        $index,
+                        max(1, $total)
+                    );
+                    if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false) {
+                        try {
+                            $mgmt->deleteAccount($email);
+                        } catch (\Throwable $e) {
+                            $hint = str_contains($e->getMessage(), '401')
+                                ? (string)__('；若只需移除 Weline 配置，请改用「仅删除本地记录」')
+                                : '';
+                            return [
+                                'success' => false,
+                                'message' => (string)__(
+                                    'Stalwart 删除账户 %{1} 失败，服务与目录未改：%{2}',
+                                    [$email, $e->getMessage()]
+                                ) . $hint,
+                            ];
+                        }
                     }
                 }
                 $this->emitDeleteProgress(
                     $onProgress,
                     'catalog',
                     $email !== ''
-                        ? (string)__('已卸邮局，正在删除目录账户 %{1}…', [$email])
+                        ? (string)__($alsoStalwart ? '已卸邮局，正在删除目录账户 %{1}…' : '正在删除目录账户 %{1}…', [$email])
                         : (string)__('正在删除目录账户…'),
                     $index,
                     max(1, $total)
@@ -402,10 +410,15 @@ final class SmtpServiceCatalogService
             'success' => true,
             'message' => $mode === SmtpService::MODE_EXTERNAL
                 ? (string)__('外部 Smtp 已删除')
-                : (string)__(
-                    '本机 Smtp 服务已删除，下属账户 %{1} 个已从目录与本机 Stalwart 移除',
-                    [(string)$removedAccounts]
-                ),
+                : ($alsoStalwart
+                    ? (string)__(
+                        '本机 Smtp 服务已删除，下属账户 %{1} 个已从目录与本机 Stalwart 移除',
+                        [(string)$removedAccounts]
+                    )
+                    : (string)__(
+                        '本机 Smtp 服务已从目录删除（下属账户 %{1} 个），本机 Stalwart 账户已保留',
+                        [(string)$removedAccounts]
+                    )),
         ];
     }
 

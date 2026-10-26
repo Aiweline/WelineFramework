@@ -931,9 +931,10 @@ class Index extends BackendController
     public function postDeleteSmtpService(): string
     {
         $serviceId = (int)$this->request->getParam('smtp_service_id', 0);
+        $alsoStalwart = (string)$this->request->getParam('also_stalwart', '1') !== '0';
         /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
         $catalog = ObjectManager::getInstance(\Weline\Smtp\Service\SmtpServiceCatalogService::class);
-        $result = $catalog->deleteService($serviceId);
+        $result = $catalog->deleteService($serviceId, null, $alsoStalwart);
         if (!empty($result['success'])) {
             PostResponseTaskQueue::enqueue(
                 'mail-outbound-relay-sync',
@@ -976,6 +977,7 @@ class Index extends BackendController
             }
 
             $serviceId = (int)$this->request->getParam('smtp_service_id', 0);
+            $alsoStalwart = (string)$this->request->getParam('also_stalwart', '1') !== '0';
             $sse->sendEvent('start', [
                 'message' => (string)__('开始删除 Smtp 服务…'),
                 'progress' => 0,
@@ -998,7 +1000,8 @@ class Index extends BackendController
                         'total' => $total,
                         'progress' => min(95, max(1, $percent)),
                     ]);
-                }
+                },
+                $alsoStalwart
             );
 
             if (empty($result['success'])) {
