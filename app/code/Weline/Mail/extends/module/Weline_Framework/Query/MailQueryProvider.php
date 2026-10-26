@@ -139,6 +139,16 @@ class MailQueryProvider implements QueryProviderInterface
                 'code' => 422,
             ];
         }
+        if (MailAccount::isFeedMailboxLocalPart($local)) {
+            return [
+                'success' => false,
+                'message' => (string)__(
+                    'FE 专用邮箱 %{1}@ 由购物目录（GMC）开通，会出现在账户列表里，系统生成，不能在这里手工新建或删除。',
+                    [$local]
+                ),
+                'code' => 422,
+            ];
+        }
         if (MailAccount::isReservedSystemLocalPart($local)) {
             return [
                 'success' => false,
@@ -336,7 +346,10 @@ class MailQueryProvider implements QueryProviderInterface
 
     private function resolveActiveMailDomain(array $params): array
     {
-        return $this->ensureService()->resolveActiveDomain((int)($params['domain_id'] ?? 0));
+        return $this->ensureService()->resolveActiveDomain(
+            (int)($params['domain_id'] ?? 0),
+            (string)($params['host'] ?? $params['domain_name'] ?? '')
+        );
     }
 
     private function ensureContactAccount(array $params): array
@@ -533,9 +546,10 @@ class MailQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'resolveActiveMailDomain',
-                    'description' => __('解析 Smtp 一键挂钩用的 active 邮局域名（多真实域须传 domain_id）'),
+                    'description' => __('解析 Smtp 一键挂钩用的 active 邮局域名（多真实域须传 domain_id 或 host）'),
                     'params' => [
                         ['name' => 'domain_id', 'type' => 'int', 'required' => false, 'description' => __('显式域名ID')],
+                        ['name' => 'host', 'type' => 'string', 'required' => false, 'description' => __('站点主机名，按域名后缀匹配邮局域名')],
                     ],
                 ],
                 [
@@ -838,6 +852,8 @@ class MailQueryProvider implements QueryProviderInterface
                         ['name' => 'outbound_relay_username', 'type' => 'string', 'required' => false, 'description' => __('用户名')],
                         ['name' => 'outbound_relay_password', 'type' => 'string', 'required' => false, 'description' => __('密码')],
                         ['name' => 'outbound_relay_tls', 'type' => 'string', 'required' => false, 'description' => __('TLS')],
+                        ['name' => 'outbound_share_to_pool', 'type' => 'int', 'required' => false, 'description' => __('手填时共享到 Smtp 账户池')],
+                        ['name' => 'outbound_bind_domain', 'type' => 'int', 'required' => false, 'description' => __('同步为该域名默认外投')],
                     ],
                 ],
                 [

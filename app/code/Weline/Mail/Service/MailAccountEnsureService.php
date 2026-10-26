@@ -45,7 +45,7 @@ final class MailAccountEnsureService
      *   code?: int
      * }
      */
-    public function resolveActiveDomain(int $domainId = 0): array
+    public function resolveActiveDomain(int $domainId = 0, string $host = ''): array
     {
         if ($domainId > 0) {
             /** @var MailDomain $domain */
@@ -58,6 +58,11 @@ final class MailAccountEnsureService
             }
 
             return $this->domainPayload($domain);
+        }
+
+        $host = strtolower(trim($host));
+        if ($host !== '' && str_starts_with($host, 'www.')) {
+            $host = substr($host, 4);
         }
 
         $active = $this->customerAccounts()->getActiveDomains();
@@ -75,6 +80,27 @@ final class MailAccountEnsureService
                 $fake[] = $domain;
             } else {
                 $real[] = $domain;
+            }
+        }
+
+        if ($host !== '') {
+            $matched = null;
+            $matchedLength = -1;
+            foreach ($real as $domain) {
+                $name = strtolower(trim((string)$domain->getData(MailDomain::schema_fields_DOMAIN_NAME)));
+                if ($name === '') {
+                    continue;
+                }
+                if ($host !== $name && !str_ends_with($host, '.' . $name)) {
+                    continue;
+                }
+                if (strlen($name) > $matchedLength) {
+                    $matched = $domain;
+                    $matchedLength = strlen($name);
+                }
+            }
+            if ($matched !== null) {
+                return $this->domainPayload($matched);
             }
         }
 
@@ -349,7 +375,10 @@ final class MailAccountEnsureService
         $existing = $model->clear()->where(MailAccount::schema_fields_EMAIL, $email)->find()->fetch();
         if ($existing->getId()) {
             $status = (string)$existing->getData(MailAccount::schema_fields_STATUS);
-            if (MailAccount::isSocialMailboxLocalPart($localPart)) {
+            if (
+                MailAccount::isSocialMailboxLocalPart($localPart)
+                || MailAccount::isFeedMailboxLocalPart($localPart)
+            ) {
                 $dirty = false;
                 if ((int)$existing->getData(MailAccount::schema_fields_IS_SYSTEM) !== 1) {
                     $existing->setData(MailAccount::schema_fields_IS_SYSTEM, 1);

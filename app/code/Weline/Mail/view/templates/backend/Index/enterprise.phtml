@@ -2719,7 +2719,7 @@ if ($oauthCfError === 'invalid_scope') {
                         <?= __('共 %{1} 个账号 · 第 %{2} / %{3} 页', [$accountListTotal, $accountPage, $accountPageCount]) ?>
                     </p>
                     <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;" data-testid="mail-account-system-hint">
-                        <?= __('标有「系统账号」的邮箱不能删除。contact@、smtp@ 由启用域名或 Smtp 创建，也不能改密。social- 开头的社媒邮箱由融媒体开通，会出现在本列表，可以重置密码，不能删除。') ?>
+                        <?= __('标有「系统账号」的邮箱不能删除。contact@、smtp@ 由启用域名或 Smtp 创建，也不能改密。social- 开头的社媒邮箱由融媒体开通、feed- 开头的 FE 邮箱由购物目录（GMC）开通，会出现在本列表，可以重置密码，不能删除。') ?>
                     </p>
                     <div class="w-table-wrap">
                         <table class="w-table" data-testid="mail-account-table">
@@ -2762,9 +2762,11 @@ if ($oauthCfError === 'invalid_scope') {
                                         $obTls = trim((string)($account['outbound_relay_tls'] ?? '')) ?: 'starttls';
                                         $acctLocal = MailAccount::emailLocalPart($email);
                                         $isSocialSystem = MailAccount::isSocialMailboxLocalPart($acctLocal);
+                                        $isFeedSystem = MailAccount::isFeedMailboxLocalPart($acctLocal);
                                         $isSystemAcct = !empty($account['is_system'])
                                             || MailAccount::isReservedSystemLocalPart($acctLocal)
-                                            || $isSocialSystem;
+                                            || $isSocialSystem
+                                            || $isFeedSystem;
                                         $systemRoleLabel = trim((string)($account['system_role_label'] ?? ''));
                                         if ($isSystemAcct && $systemRoleLabel === '') {
                                             $systemRoleLabel = MailAccount::systemRoleLabelForLocal(MailAccount::emailLocalPart($email));
@@ -2787,11 +2789,13 @@ if ($oauthCfError === 'invalid_scope') {
                                         $obTls = trim((string)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_TLS)) ?: 'starttls';
                                         $acctLocal = MailAccount::emailLocalPart($email);
                                         $isSocialSystem = MailAccount::isSocialMailboxLocalPart($acctLocal);
+                                        $isFeedSystem = MailAccount::isFeedMailboxLocalPart($acctLocal);
                                         $isSystemAcct = method_exists($account, 'isSystemAccount')
                                             ? (bool)$account->isSystemAccount()
                                             : ((int)$account->getData(MailAccount::schema_fields_IS_SYSTEM) === 1
                                                 || MailAccount::isReservedSystemLocalPart($acctLocal)
-                                                || $isSocialSystem);
+                                                || $isSocialSystem
+                                                || $isFeedSystem);
                                         $systemRoleLabel = $isSystemAcct
                                             ? (method_exists($account, 'systemRoleLabel')
                                                 ? (string)$account->systemRoleLabel()
@@ -2835,7 +2839,7 @@ if ($oauthCfError === 'invalid_scope') {
                                                 <span class="w-badge" data-tone="info" data-size="sm"
                                                       data-testid="mail-account-system-badge-<?= $acctId ?>"><?= __('系统账号') ?></span>
                                                 <span class="w-text" data-tone="muted" data-size="sm"
-                                                      data-testid="mail-account-system-role-<?= $acctId ?>"><?= $escape($systemRoleLabel) ?> · <?= $isSocialSystem ? __('不可删除') : __('不可删改') ?></span>
+                                                      data-testid="mail-account-system-role-<?= $acctId ?>"><?= $escape($systemRoleLabel) ?> · <?= ($isSocialSystem || $isFeedSystem) ? __('不可删除') : __('不可删改') ?></span>
                                             <?php endif; ?>
                                             <br>
                                             <span class="w-text" data-tone="muted" data-size="sm"><?= $escape($displayName) ?></span>
@@ -2865,7 +2869,7 @@ if ($oauthCfError === 'invalid_scope') {
                                                 <?php endif; ?>
                                             </div>
                                             <div class="mail-enterprise__actions" style="--w-mt:var(--weline-space-2);">
-                                                <?php if (!$isSystemAcct || $isSocialSystem): ?>
+                                                <?php if (!$isSystemAcct || $isSocialSystem || $isFeedSystem): ?>
                                                     <button class="w-button" data-variant="outline" data-size="sm" type="button"
                                                             data-testid="mail-account-reset-open-<?= $acctId ?>"
                                                             data-account-reset-open><?= __('开通/重置密码') ?></button>
@@ -3020,7 +3024,7 @@ if ($oauthCfError === 'invalid_scope') {
                             <div class="w-dialog__body w-stack" style="--w-gap:var(--weline-space-3); flex:1 1 auto; min-block-size:0; overflow:auto;">
                                 <p class="w-text" data-size="sm" data-tone="muted" style="--w-m:0;" data-outbound-email></p>
                                 <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
-                                    <?= __('未勾选则走本域 MX:25。优先选用 Smtp Tab 已登记的外部服务；也可服务商预设手填，或完全自定义。') ?>
+                                    <?= __('未勾选则走本域 MX:25。优先选用 Smtp Tab 已登记的外部服务；也可服务商预设手填，或完全自定义。手填保存后会自动登记为共享 Smtp 账户，并在域名无默认外投时绑定为该域名默认。') ?>
                                 </p>
                                 <input type="hidden" name="account_id" value="0" data-outbound-field="account_id">
                                 <label class="w-text" data-size="sm" style="display:block;">
@@ -3103,6 +3107,14 @@ if ($oauthCfError === 'invalid_scope') {
                                         </select>
                                     </label>
                                 </div>
+                                <label class="w-text" data-size="sm" style="display:block;">
+                                    <input type="checkbox" name="outbound_share_to_pool" value="1" checked data-outbound-share data-outbound-field="share">
+                                    <?= __('共享到 Smtp 账户池（其他邮箱可直接选择）') ?>
+                                </label>
+                                <label class="w-text" data-size="sm" style="display:block;">
+                                    <input type="checkbox" name="outbound_bind_domain" value="1" checked data-outbound-bind-domain data-outbound-field="bind_domain">
+                                    <?= __('同时设为该域名默认外投（新建同域账号自动继承）') ?>
+                                </label>
                                 <span class="w-text" data-size="sm" data-tone="muted" data-outbound-status style="--w-m:0;"></span>
                             </div>
                             <div class="w-dialog__footer" style="flex-shrink:0;">
@@ -3521,6 +3533,10 @@ if ($oauthCfError === 'invalid_scope') {
                             if (tls) tls.value = row.getAttribute('data-ob-tls') || 'starttls';
                             if (pass) { pass.value = ''; pass.placeholder = <?= json_encode((string)__('选目录后留空即可'), JSON_UNESCAPED_UNICODE) ?>; }
                             if (pick) pick.value = '';
+                            var share = outboundForm.querySelector('[data-outbound-share]');
+                            var bindDomain = outboundForm.querySelector('[data-outbound-bind-domain]');
+                            if (share) share.checked = true;
+                            if (bindDomain) bindDomain.checked = true;
                             if (emailEl) emailEl.textContent = row.getAttribute('data-account-email') || '';
                             setOutboundStatus('muted', '');
                             openUiDialog(outboundDialog);
@@ -3537,7 +3553,9 @@ if ($oauthCfError === 'invalid_scope') {
                             outbound_relay_port: parseInt((outboundForm.querySelector('[data-outbound-port]') || {}).value || '587', 10) || 587,
                             outbound_relay_username: String((outboundForm.querySelector('[data-outbound-user]') || {}).value || '').trim(),
                             outbound_relay_password: String((outboundForm.querySelector('[data-outbound-pass]') || {}).value || ''),
-                            outbound_relay_tls: String((outboundForm.querySelector('[data-outbound-tls]') || {}).value || 'starttls')
+                            outbound_relay_tls: String((outboundForm.querySelector('[data-outbound-tls]') || {}).value || 'starttls'),
+                            outbound_share_to_pool: (outboundForm.querySelector('[data-outbound-share]') || {}).checked ? 1 : 0,
+                            outbound_bind_domain: (outboundForm.querySelector('[data-outbound-bind-domain]') || {}).checked ? 1 : 0
                         };
                         setOutboundStatus('muted', <?= json_encode((string)__('保存中…'), JSON_UNESCAPED_UNICODE) ?>);
                         mailApi().then(function (api) { return api.setMailboxOutboundRelay(payload); })

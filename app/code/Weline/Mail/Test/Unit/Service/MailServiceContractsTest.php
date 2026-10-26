@@ -101,6 +101,9 @@ final class MailServiceContractsTest extends TestCase
             'MailOutboundRelaySync::testEnterpriseOutboundOnAccountSmtpTabNotDomain' => function () {
             $this->assert_MailOutboundRelaySync_testEnterpriseOutboundOnAccountSmtpTabNotDomain();
         },
+            'MailOutboundRelayBinding::testManualRelaySharesToPoolAndBindsDomain' => function () {
+            $this->assert_MailOutboundRelayBinding_testManualRelaySharesToPoolAndBindsDomain();
+        },
             'MailEngineAccountDbSseSync::testSecretsPreferProjectKeyNotEtc' => function () {
             $this->assert_MailEngineAccountDbSseSync_testSecretsPreferProjectKeyNotEtc();
         },
@@ -470,7 +473,7 @@ private function assert_MailComposeDeeplink_testBackendComposePrefillAndSendEven
 private function assert_MailComposeDeeplink_testModuleVersion(): void
 {
     $module = include BP . 'app/code/Weline/Mail/etc/module.php';
-    self::assertSame('0.2.50', $module['version'] ?? null);
+    self::assertSame('0.2.52', $module['version'] ?? null);
 }
 
 private function assert_MailDkimLocalEnsureService_testEnsureGeneratesReusablePublicKey(): void
@@ -780,5 +783,40 @@ private function assert_MailOutboundRelaySync_testEnterpriseOutboundOnAccountSmt
     self::assertStringContainsString('?callable $onProgress = null', $catalog);
     self::assertStringNotContainsString('mail-domain-outbound-', $src);
     self::assertStringNotContainsString('set-default-smtp-account', $src);
+}
+
+private function assert_MailOutboundRelayBinding_testManualRelaySharesToPoolAndBindsDomain(): void
+{
+    $bindingPath = BP . '/app/code/Weline/Mail/Service/MailOutboundRelayBindingService.php';
+    self::assertFileExists($bindingPath);
+    $binding = (string) \file_get_contents($bindingPath);
+    self::assertStringContainsString('function ensureSharedSmtpService', $binding);
+    self::assertStringContainsString('function syncDomainBinding', $binding);
+    self::assertStringContainsString('function applyDomainDefaultToAccount', $binding);
+    self::assertStringContainsString('SmtpService::MODE_EXTERNAL', $binding);
+    self::assertStringContainsString('createExternalService', $binding);
+    self::assertStringContainsString('MailDomain::schema_fields_OUTBOUND_RELAY_HOST', $binding);
+
+    $relay = (string) \file_get_contents(BP . '/app/code/Weline/Mail/Service/MailAccountOutboundRelayService.php');
+    self::assertStringContainsString('outbound_share_to_pool', $relay);
+    self::assertStringContainsString('outbound_bind_domain', $relay);
+    self::assertStringContainsString('ensureSharedSmtpService', $relay);
+    self::assertStringContainsString('syncDomainBinding', $relay);
+    self::assertStringContainsString("!str_starts_with(\$pickKey, 'acct:')", $relay);
+
+    $mgmt = (string) \file_get_contents(BP . '/app/code/Weline/Mail/Service/MailAccountManagementService.php');
+    self::assertStringContainsString('applyDomainDefaultToAccount', $mgmt);
+    $customer = (string) \file_get_contents(BP . '/app/code/Weline/Mail/Service/MailCustomerAccountService.php');
+    self::assertStringContainsString('applyDomainDefaultToAccount', $customer);
+
+    $enterprise = (string) \file_get_contents(BP . '/app/code/Weline/Mail/view/templates/backend/Index/enterprise.phtml');
+    self::assertStringContainsString('outbound_share_to_pool', $enterprise);
+    self::assertStringContainsString('outbound_bind_domain', $enterprise);
+    self::assertStringContainsString('共享到 Smtp 账户池', $enterprise);
+    self::assertStringContainsString('同时设为该域名默认外投', $enterprise);
+
+    $index = (string) \file_get_contents(BP . '/app/code/Weline/Mail/Controller/Backend/Index.php');
+    self::assertStringContainsString("getParam('outbound_share_to_pool'", $index);
+    self::assertStringContainsString("getParam('outbound_bind_domain'", $index);
 }
 }

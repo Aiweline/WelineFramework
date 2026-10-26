@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Feed',
-    'version' => '0.1.0',
+    'version' => '0.1.1',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Product' => '*',
         'Weline_Websites' => '*',
     ],
-    'optional' => [],
+    'optional' => [
+        'Weline_Mail' => '*',
+    ],
     'provides' => [
         \Weline\Feed\Api\FeedSourceInterface::class
             => \Weline\Feed\Service\CatalogFeedSource::class,

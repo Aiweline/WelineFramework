@@ -106,6 +106,7 @@ final class MailQueryContractsTest extends TestCase
         self::assertStringContainsString('Weline_Mail::mail_accounts_manage', $src);
         self::assertStringContainsString('isReservedSystemLocalPart', $src);
         self::assertStringContainsString('isSocialMailboxLocalPart', $src);
+        self::assertStringContainsString('isFeedMailboxLocalPart', $src);
         self::assertStringContainsString('系统账号', $src);
 
         $model = (string) file_get_contents(BP . '/app/code/Weline/Mail/Model/MailAccount.php');
@@ -117,6 +118,12 @@ final class MailQueryContractsTest extends TestCase
         self::assertTrue(\Weline\Mail\Model\MailAccount::isGeneratedSystemLocalPart('social-default'));
         self::assertFalse(\Weline\Mail\Model\MailAccount::isReservedSystemLocalPart('social-default'));
         self::assertFalse(\Weline\Mail\Model\MailAccount::isSocialMailboxLocalPart('social'));
+        self::assertStringContainsString('function isFeedMailboxLocalPart', $model);
+        self::assertStringContainsString("SYSTEM_LOCAL_FEED_PREFIX = 'feed-'", $model);
+        self::assertTrue(\Weline\Mail\Model\MailAccount::isFeedMailboxLocalPart('feed-default'));
+        self::assertTrue(\Weline\Mail\Model\MailAccount::isGeneratedSystemLocalPart('feed-default'));
+        self::assertFalse(\Weline\Mail\Model\MailAccount::isReservedSystemLocalPart('feed-default'));
+        self::assertFalse(\Weline\Mail\Model\MailAccount::isFeedMailboxLocalPart('feed'));
         $mgmt = (string) file_get_contents(BP . '/app/code/Weline/Mail/Service/MailAccountManagementService.php');
         self::assertStringContainsString('assertSystemMutable', $mgmt);
         self::assertStringContainsString('isGeneratedSystemLocalPart', $mgmt);

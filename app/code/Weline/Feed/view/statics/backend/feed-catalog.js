@@ -3,7 +3,8 @@
  *
  * provider：feed_admin。
  * operation：listFeeds、saveFeed、setFeedEnabled、archiveFeed、generateFeed、
- * listCategoryMaps、saveCategoryMap、deleteCategoryMap。
+ * listCategoryMaps、saveCategoryMap、deleteCategoryMap、
+ * getScopeFeedMailbox、ensureScopeFeedMailbox、resetScopeFeedMailboxPassword。
  * 请求失败只展示错误，不用失败回包改写 connection_status。
  */
 (function () {
@@ -78,6 +79,227 @@
         categoryLocale: '',
         onlyUnmapped: false
     };
+
+    var mailboxEl = root.querySelector('[data-feed-scope-mailbox]');
+    var mailboxState = { email: '', password_once: '', account_id: 0 };
+
+    function mailboxPayload() {
+        var websiteId = Number(state.website || 0);
+        return websiteId > 0 ? { website_id: websiteId } : null;
+    }
+
+    function mailboxButton(action, label, tone) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'w-button';
+        button.setAttribute('data-tone', tone || 'quiet');
+        button.setAttribute('data-size', 'sm');
+        button.setAttribute('data-feed-mailbox-' + action, '');
+        button.textContent = label;
+        return button;
+    }
+
+    function copyTextValue(value) {
+        value = String(value || '');
+        if (!value) {
+            return Promise.resolve(false);
+        }
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            return navigator.clipboard.writeText(value).then(function () { return true; }).catch(function () { return false; });
+        }
+        try {
+            var area = document.createElement('textarea');
+            area.value = value;
+            area.setAttribute('readonly', '');
+            area.style.position = 'fixed';
+            area.style.left = '-9999px';
+            document.body.appendChild(area);
+            area.select();
+            var ok = document.execCommand('copy');
+            document.body.removeChild(area);
+            return Promise.resolve(!!ok);
+        } catch (error) {
+            return Promise.resolve(false);
+        }
+    }
+
+    function confirmMailbox(message) {
+        var dialog = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+        if (dialog && typeof dialog.confirm === 'function') {
+            return Promise.resolve(dialog.confirm(String(message || ''), { tone: 'warning' })).then(function (ok) {
+                return !!ok;
+            });
+        }
+        return Promise.resolve(false);
+    }
+
+    function renderMailbox(data) {
+        if (!mailboxEl) {
+            return;
+        }
+        var status = mailboxEl.querySelector('[data-feed-mailbox-status]');
+        var actions = mailboxEl.querySelector('[data-feed-mailbox-actions]');
+        var label = mailboxEl.querySelector('[data-feed-mailbox-label]');
+        if (!status || !actions) {
+            return;
+        }
+        data = data && typeof data === 'object' ? data : {};
+        var mailboxView = String(data.state || 'need_scope');
+        mailboxState.email = String(data.email || '');
+        mailboxState.password_once = String(data.password_once || '');
+        mailboxState.account_id = Number(data.account_id || 0);
+        actions.replaceChildren();
+        actions.hidden = true;
+        if (label) {
+            label.hidden = mailboxView === 'ready' || mailboxView === 'missing';
+        }
+        if (mailboxView === 'need_scope') {
+            status.textContent = text.mailboxNeedScope || '';
+            return;
+        }
+        if (mailboxView === 'loading') {
+            status.textContent = text.mailboxLoading || '';
+            return;
+        }
+        if (mailboxView === 'mail_unavailable') {
+            status.textContent = data.message || text.mailboxMailUnavailable || '';
+            return;
+        }
+        if (mailboxView === 'domain_unavailable') {
+            status.textContent = data.message || text.mailboxDomainUnavailable || '';
+            return;
+        }
+        if (mailboxView === 'missing') {
+            status.textContent = (text.mailboxMissing || '') + (mailboxState.email ? (' · ' + mailboxState.email) : '');
+            actions.hidden = false;
+            actions.appendChild(mailboxButton('ensure', text.mailboxEnsure || '', 'primary'));
+            return;
+        }
+        if (mailboxView === 'ready') {
+            status.replaceChildren();
+            var email = document.createElement('span');
+            email.className = 'w-text';
+            email.setAttribute('data-weight', 'strong');
+            email.title = mailboxState.email;
+            email.textContent = mailboxState.email;
+            var hint = document.createElement('span');
+            hint.className = 'w-text';
+            hint.setAttribute('data-size', 'sm');
+            hint.setAttribute('data-tone', 'muted');
+            hint.textContent = text.mailboxHint || '';
+            status.appendChild(email);
+            status.appendChild(hint);
+            actions.hidden = false;
+            actions.appendChild(mailboxButton('copy-email', text.mailboxCopyEmail || ''));
+            actions.appendChild(mailboxButton('copy-password', text.mailboxCopyPassword || ''));
+            actions.appendChild(mailboxButton('reset-password', text.mailboxResetPassword || ''));
+            return;
+        }
+        status.textContent = data.message || text.mailboxDomainUnavailable || '';
+    }
+
+    function mailboxResult(result) {
+        return result && typeof result === 'object' ? result : {};
+    }
+
+    function refreshMailbox() {
+        if (!mailboxEl) {
+            return;
+        }
+        var payload = mailboxPayload();
+        if (!payload) {
+            renderMailbox({ state: 'need_scope' });
+            return;
+        }
+        renderMailbox({ state: 'loading' });
+        callOp('getScopeFeedMailbox', payload).then(function (result) {
+            renderMailbox(mailboxResult(result));
+        }).catch(function (error) {
+            renderMailbox({ state: 'error', message: errorMessage(error) });
+        });
+    }
+
+    function bindMailboxActions() {
+        if (!mailboxEl || mailboxEl.getAttribute('data-mailbox-bound') === '1') {
+            return;
+        }
+        mailboxEl.setAttribute('data-mailbox-bound', '1');
+        mailboxEl.addEventListener('click', function (event) {
+            var target = event.target;
+            if (!target || !target.closest) {
+                return;
+            }
+            var payload = mailboxPayload();
+            if (target.closest('[data-feed-mailbox-ensure]')) {
+                if (!payload) {
+                    return;
+                }
+                renderMailbox({ state: 'loading' });
+                callOp('ensureScopeFeedMailbox', payload).then(function (result) {
+                    renderMailbox(mailboxResult(result));
+                }).catch(function (error) {
+                    renderMailbox({ state: 'error', message: errorMessage(error) });
+                });
+                return;
+            }
+            if (target.closest('[data-feed-mailbox-copy-email]')) {
+                copyTextValue(mailboxState.email).then(function (ok) {
+                    notify(ok ? 'success' : 'error', ok ? (text.mailboxCopied || '') : (text.mailboxCopyFailed || ''));
+                });
+                return;
+            }
+            if (target.closest('[data-feed-mailbox-copy-password]')) {
+                if (mailboxState.password_once) {
+                    copyTextValue(mailboxState.password_once).then(function (ok) {
+                        notify(ok ? 'success' : 'error', ok ? (text.mailboxCopied || '') : (text.mailboxCopyFailed || ''));
+                    });
+                    return;
+                }
+                if (!payload) {
+                    return;
+                }
+                confirmMailbox(text.mailboxNeedResetForCopy || '').then(function (confirmed) {
+                    if (!confirmed) {
+                        return;
+                    }
+                    renderMailbox({ state: 'loading' });
+                    return callOp('resetScopeFeedMailboxPassword', payload).then(function (result) {
+                        var data = mailboxResult(result);
+                        renderMailbox(data);
+                        if (!data.password_once) {
+                            return;
+                        }
+                        copyTextValue(data.password_once).then(function (ok) {
+                            notify(ok ? 'success' : 'error', ok ? (text.mailboxCopied || '') : (text.mailboxCopyFailed || ''));
+                        });
+                    });
+                }).catch(function (error) {
+                    renderMailbox({ state: 'error', message: errorMessage(error) });
+                });
+                return;
+            }
+            if (target.closest('[data-feed-mailbox-reset-password]')) {
+                if (!payload) {
+                    return;
+                }
+                confirmMailbox(text.mailboxConfirmReset || '').then(function (confirmed) {
+                    if (!confirmed) {
+                        return;
+                    }
+                    renderMailbox({ state: 'loading' });
+                    return callOp('resetScopeFeedMailboxPassword', payload).then(function (result) {
+                        var data = mailboxResult(result);
+                        renderMailbox(data);
+                        if (data.password_once) {
+                            notify('success', text.mailboxPasswordOnce || '');
+                        }
+                    });
+                }).catch(function (error) {
+                    renderMailbox({ state: 'error', message: errorMessage(error) });
+                });
+            }
+        });
+    }
 
     function notify(kind, message) {
         var value = String(message || '').trim();
@@ -1249,9 +1471,22 @@
             readFilters();
             loadList();
         });
+        filters.addEventListener('change', function (event) {
+            var target = event.target;
+            if (!target || !target.hasAttribute) {
+                return;
+            }
+            var isWebsite = target.hasAttribute('data-website-select-value')
+                && !!target.closest('[data-feed-filter-website]');
+            if (isWebsite) {
+                refreshMailbox();
+            }
+        });
     }
     if (config.notice) {
         notify('error', scrubText(config.notice));
     }
+    bindMailboxActions();
+    refreshMailbox();
     loadList();
 })();

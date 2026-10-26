@@ -33,6 +33,9 @@ $config = [
             'listCategoryMaps',
             'saveCategoryMap',
             'deleteCategoryMap',
+            'getScopeFeedMailbox',
+            'ensureScopeFeedMailbox',
+            'resetScopeFeedMailboxPassword',
         ],
     ],
     'text' => [
@@ -94,6 +97,22 @@ $config = [
         'choose' => (string)__('请选择'),
         'all' => (string)__('全部'),
         'listReloadFailed' => (string)__('请求已返回，但列表没能重新读取。'),
+        'mailboxLabel' => (string)__('FE 邮箱'),
+        'mailboxNeedScope' => (string)__('先在筛选里选一个站点，再申请 FE 专用邮箱。'),
+        'mailboxLoading' => (string)__('正在检查 FE 邮箱…'),
+        'mailboxMailUnavailable' => (string)__('未启用企业邮箱模块，无法开通 FE 专用邮箱。'),
+        'mailboxDomainUnavailable' => (string)__('本站企业邮箱未在本机可用。'),
+        'mailboxMissing' => (string)__('还没有 FE 专用邮箱'),
+        'mailboxEnsure' => (string)__('申请 FE 邮箱'),
+        'mailboxHint' => (string)__('注册 GMC 等平台时用这个邮箱；企业邮箱列表里会显示为系统账号，不能删除。'),
+        'mailboxCopyEmail' => (string)__('复制邮箱'),
+        'mailboxCopyPassword' => (string)__('复制密码'),
+        'mailboxResetPassword' => (string)__('重置密码'),
+        'mailboxCopied' => (string)__('已复制'),
+        'mailboxCopyFailed' => (string)__('没有复制成功。'),
+        'mailboxNeedResetForCopy' => (string)__('一次性密码已不在页面上，需要重置后才能复制。继续重置？'),
+        'mailboxPasswordOnce' => (string)__('新密码只显示这一次，请立即保存。'),
+        'mailboxConfirmReset' => (string)__('确认重置 FE 邮箱密码？旧密码将立即失效。'),
     ],
 ];
 $configJson = json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?: '{}';
@@ -110,6 +129,18 @@ $h = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QU
         <button class="w-button" type="button" data-tone="primary" data-size="sm"
                 data-feed-action="create" data-testid="feed-catalog-create-open"><?= __('新增') ?></button>
     </div>
+
+    <aside class="w-card" data-feed-scope-mailbox data-testid="feed-scope-mailbox" aria-live="polite">
+        <div class="w-card__body">
+            <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
+                <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2); min-inline-size:0;">
+                    <span class="w-text" data-size="sm" data-tone="muted" data-feed-mailbox-label><?= __('FE 邮箱') ?></span>
+                    <span class="w-text" data-size="sm" data-tone="muted" data-feed-mailbox-status><?= __('先在筛选里选一个站点，再申请 FE 专用邮箱。') ?></span>
+                </div>
+                <span class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2);" data-feed-mailbox-actions hidden></span>
+            </div>
+        </div>
+    </aside>
 
     <section class="w-card">
         <div class="w-card__header">

@@ -57,6 +57,9 @@ final class FeedAdminQueryContractTest extends TestCase
                 'listCategoryMaps',
                 'saveCategoryMap',
                 'deleteCategoryMap',
+                'getScopeFeedMailbox',
+                'ensureScopeFeedMailbox',
+                'resetScopeFeedMailboxPassword',
             ],
             $names,
         );

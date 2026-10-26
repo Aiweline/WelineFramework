@@ -114,6 +114,14 @@ class MailCustomerAccountService
             ->setData(MailAccount::schema_fields_CREATED_AT, $now)
             ->setData(MailAccount::schema_fields_UPDATED_AT, $now)
             ->save();
+        if ((int)$accountModel->getId() > 0) {
+            try {
+                ObjectManager::getInstance(MailOutboundRelayBindingService::class)
+                    ->applyDomainDefaultToAccount($accountModel);
+            } catch (\Throwable) {
+                // 域名默认外投继承失败不阻断申请
+            }
+        }
 
         return [
             'success' => true,

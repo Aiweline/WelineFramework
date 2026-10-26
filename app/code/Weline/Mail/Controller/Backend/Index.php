@@ -483,6 +483,8 @@ class Index extends BackendController
             'outbound_relay_password' => (string)$this->request->getParam('outbound_relay_password', ''),
             'outbound_relay_tls' => (string)$this->request->getParam('outbound_relay_tls', 'starttls'),
             'outbound_smtp_pick' => (string)$this->request->getParam('outbound_smtp_pick', ''),
+            'outbound_share_to_pool' => (int)$this->request->getParam('outbound_share_to_pool', 1),
+            'outbound_bind_domain' => (int)$this->request->getParam('outbound_bind_domain', 1),
         ]);
 
         return $this->respondFormResult(

@@ -26,6 +26,8 @@ final class MailAccountOutboundRelayService
         $password = (string)($params['outbound_relay_password'] ?? '');
         $tls = strtolower(trim((string)($params['outbound_relay_tls'] ?? 'starttls')));
         $pickKey = trim((string)($params['outbound_smtp_pick'] ?? ''));
+        $shareToPool = (int)($params['outbound_share_to_pool'] ?? 1) === 1;
+        $bindDomain = (int)($params['outbound_bind_domain'] ?? 1) === 1;
 
         if ($pickKey !== '') {
             /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
@@ -87,6 +89,55 @@ final class MailAccountOutboundRelayService
         }
         $account->save();
 
+        $notes = [];
+        if ($enabled === 1 && $host !== '') {
+            $sealed = trim((string)$account->getData(MailAccount::schema_fields_OUTBOUND_RELAY_PASSWORD_SEALED));
+            $plainForShare = $password;
+            if ($plainForShare === '' && $sealed !== '') {
+                try {
+                    /** @var MailOutboundRelaySecretService $secrets */
+                    $secrets = ObjectManager::getInstance(MailOutboundRelaySecretService::class);
+                    $plainForShare = $secrets->open($sealed);
+                } catch (\Throwable) {
+                    $plainForShare = '';
+                }
+            }
+            if ($pickKey === '' && $shareToPool) {
+                try {
+                    /** @var MailOutboundRelayBindingService $binding */
+                    $binding = ObjectManager::getInstance(MailOutboundRelayBindingService::class);
+                    $shared = $binding->ensureSharedSmtpService($host, $port, $user, $plainForShare, $tls);
+                    if (!empty($shared['success'])) {
+                        $notes[] = (string)($shared['message'] ?? __('已共享到 Smtp 账户池'));
+                    } else {
+                        $notes[] = (string)($shared['message'] ?? __('共享 Smtp 账户登记失败'));
+                    }
+                } catch (\Throwable $e) {
+                    $notes[] = (string)__('共享 Smtp 账户登记失败：%{1}', [$e->getMessage()]);
+                }
+            }
+            if ($bindDomain && !str_starts_with($pickKey, 'acct:')) {
+                try {
+                    /** @var MailOutboundRelayBindingService $binding */
+                    $binding = ObjectManager::getInstance(MailOutboundRelayBindingService::class);
+                    $bound = $binding->syncDomainBinding($account, [
+                        'host' => $host,
+                        'port' => $port,
+                        'username' => $user,
+                        'tls' => $tls,
+                        'sealed' => $sealed,
+                    ]);
+                    if (!empty($bound['success'])) {
+                        $notes[] = (string)($bound['message'] ?? __('已绑定为域名默认外投'));
+                    } else {
+                        $notes[] = (string)($bound['message'] ?? __('域名默认外投绑定失败'));
+                    }
+                } catch (\Throwable $e) {
+                    $notes[] = (string)__('域名默认外投绑定失败：%{1}', [$e->getMessage()]);
+                }
+            }
+        }
+
         if (class_exists(PostResponseTaskQueue::class)) {
             PostResponseTaskQueue::enqueue(
                 'mail-outbound-relay-sync',
@@ -107,6 +158,9 @@ final class MailAccountOutboundRelayService
         $msg = $enabled
             ? (string)__('已保存该账号外投 smarthost（路由异步下发）')
             : (string)__('已关闭该账号外投（路由异步下发）');
+        if ($notes !== []) {
+            $msg .= '；' . implode('；', $notes);
+        }
 
         return ['success' => true, 'message' => $msg];
     }

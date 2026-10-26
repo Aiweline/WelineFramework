@@ -33,7 +33,7 @@ align_freeze: closed
 
 1. 提供**邮件订阅**能力（访客/客户提交邮箱 + 主题偏好），与 Theme 已有订阅壳表单接通。
 2. 前台提供可配置的**订阅弹窗部件**与**页脚订阅部件**；**页脚默认有订阅入口**（注入到 footer 内已声明槽）。
-3. 视觉对齐汉服古风：宣纸/信笺气质，支持透明 PNG 背景（对照 `app/design/Weline/hanfu/doc/spec/pages/newsletter.md`）。
+3. 视觉对齐汉服古风：宣纸/信笺气质，透明背景用 **WebP alpha**（不支持时退回 PNG）；对照 `app/design/Weline/hanfu/doc/spec/pages/newsletter.md`。
 4. 「订阅有奖」：折扣活动配置后，对成功订阅邮箱**自动发随机优惠券**，结账侧**尽量自动带上该券**，并在订阅记录上可回查券码。
 5. 订阅表单默认勾选：**优惠活动主题**、**上新活动主题**。
 6. 在本模块内通过 Smtp `MailChannelProviderInterface` 注册默认事务邮件模板（欢迎/发券通知等）。
@@ -180,7 +180,7 @@ As a 系统, I want 模块自带 Smtp 渠道与默认模板, so that 订阅/发�
 ### 5.6 UI / 主题 / 汉服
 
 - 线稿：`app/design/Weline/hanfu/doc/spec/pages/newsletter.md`（竖形：弹窗宣纸板 + 页脚轻量条；注明 Theme 壳尚无独立事务邮件模板——由本模块 Smtp 补齐）。
-- 古风信笺透明 PNG：部件 `image` / 背景媒体参数（popup 已有 `image` media_image）；主题 Token + hanfu design，禁止硬编码紫白模板风。
+- 古风信笺透明图：优先 **WebP alpha**（不支持时 PNG），按展示尺寸压缩；部件 `image` / 背景媒体参数（popup 已有 `image` media_image）；主题 Token + hanfu design，禁止硬编码紫白模板风。
 - 涉 UI：roster 须 **原型 ∥ 前端 ∥ 主题 ∥ UI** 双轨。
 
 ### 5.7 其它框架面（编制提示）

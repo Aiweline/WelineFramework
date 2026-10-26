@@ -6,6 +6,7 @@ namespace Weline\Feed\Extends\Module\Weline_Framework\Query;
 
 use Weline\Feed\Service\FeedAdminCatalog;
 use Weline\Feed\Service\FeedOperatorConnectionStatus;
+use Weline\Feed\Service\FeedScopeMailboxService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 
@@ -36,6 +37,9 @@ final class FeedAdminQueryProvider implements QueryProviderInterface
                 'listCategoryMaps' => $this->catalog()->listCategoryMaps($params),
                 'saveCategoryMap' => $this->catalog()->saveCategoryMap($params),
                 'deleteCategoryMap' => $this->catalog()->deleteCategoryMap($params),
+                'getScopeFeedMailbox' => $this->mailbox()->getScopeFeedMailbox($params),
+                'ensureScopeFeedMailbox' => $this->mailbox()->ensureScopeFeedMailbox($params),
+                'resetScopeFeedMailboxPassword' => $this->mailbox()->resetScopeFeedMailboxPassword($params),
                 default => throw new \InvalidArgumentException('feed_operation_unknown'),
             };
         } catch (\Throwable $e) {
@@ -111,6 +115,16 @@ final class FeedAdminQueryProvider implements QueryProviderInterface
                 $this->op('deleteCategoryMap', '删除一条分类映射', 'write', [
                     ['name' => 'map_id', 'type' => 'int', 'required' => true, 'description' => '映射'],
                 ]),
+                $this->op('getScopeFeedMailbox', '读取当前站点的 FE 专用邮箱状态', 'read', [
+                    ['name' => 'website_id', 'type' => 'int', 'required' => false, 'description' => '网站'],
+                ]),
+                $this->op('ensureScopeFeedMailbox', '一键开通当前站点的 FE 专用邮箱', 'write', [
+                    ['name' => 'website_id', 'type' => 'int', 'required' => false, 'description' => '网站'],
+                ]),
+                $this->op('resetScopeFeedMailboxPassword', '重置当前站点 FE 专用邮箱密码并返回一次明文', 'write', [
+                    ['name' => 'website_id', 'type' => 'int', 'required' => false, 'description' => '网站'],
+                    ['name' => 'password', 'type' => 'string', 'required' => false, 'description' => '留空自动生成'],
+                ]),
             ],
         ];
     }
@@ -160,5 +174,10 @@ final class FeedAdminQueryProvider implements QueryProviderInterface
         }
 
         return $catalog;
+    }
+
+    private function mailbox(): FeedScopeMailboxService
+    {
+        return ObjectManager::getInstance(FeedScopeMailboxService::class);
     }
 }
