@@ -2,15 +2,15 @@
 /**
  * 下载App 部件（结构骨架；视觉由 UI 席消费 CSS Token 后填充皮肤）。
  *
- * @widget.source {Weline_App::css/widgets/app-download.css}
+ * @widget.source {Weline_App::css/widgets/app-download.css,Weline_App::js/widgets/app-download-async.js}
  * @widget.code {app-download}
  * @widget.name {下载App}
- * @widget.description {按站点展示 iOS/Android/Web PWA 三端下载入口；数据来自 Weline_App 版本接口}
+ * @widget.description {按站点展示 iOS/Android/Web PWA 三端下载入口；点击弹二维码 + 下载中心}
  * @widget.type {content}
  * @widget.area {frontend}
  * @widget.position {["content"]}
  * @widget.page_layouts {["*"]}
- * @widget.default_injections {[{"layout_type":"default","layout_option":"default","slot":"content-before","area":"content","sort_order":10,"required":false,"reason":"下载App部件：默认注入全站 default 布局 content-before 槽（皮肤完成后固化生效）"},{"layout_type":"test","layout_option":"origin-watch","slot":"origin-watch-probe","area":"content","sort_order":20,"required":false,"reason":"App download widget render validation on editor-area-demo test layout"}]}
+ * @widget.default_injections {[{"layout_type":"*","slot":"storefront-float-start","area":"footer","sort_order":110,"required":true,"reason":"App下载：唯一入口，左侧悬浮容器（二维码弹窗 + 下载中心）","config":[]}]}
  * @widget.supports {["app-download","download","app"]}
  * @widget.placement {injection}
  */
@@ -34,18 +34,79 @@ foreach ($platforms as $platform => $artifact) {
         $entries[$platform] = null;
     }
 }
-$webArtifact = $platforms['web'];
+$versionOf = static function (string $platform) use ($platforms): string {
+    $artifact = $platforms[$platform] ?? null;
+
+    return $artifact && $artifact->getData('id') ? (string)$artifact->getData('version') : '';
+};
+$webVersion = $versionOf('web');
+$iosStoreUrl = \Weline\App\Service\Build\StoreLinks::iosStoreUrl();
+// 翻译兜底：未翻译的语言回退英文（避免小语种页面整段中文）
+$widgetLang = '';
+try {
+    $widgetLang = \trim((string)\Weline\Framework\Env\WelineEnv::getLang());
+} catch (\Throwable) {
+    $widgetLang = '';
+}
+$widgetIsZh = \str_starts_with(\strtolower($widgetLang), 'zh');
+$wt = static function (string $zh, string $en) use ($widgetIsZh): string {
+    $translated = (string)\__($zh);
+    if ($widgetIsZh) {
+        return $translated;
+    }
+
+    return ($translated === $zh || $translated === '') ? $en : $translated;
+};
 ?>
 <?php if ($entries['web'] || $entries['android'] || $entries['ios']): ?>
-<div class="weline-app-download" data-weline-app-version="<?= htmlspecialchars((string)($webArtifact ? $webArtifact->getData('version') : ''), ENT_QUOTES) ?>">
+<div class="weline-app-download" data-app-download data-weline-app-version="<?= htmlspecialchars($webVersion, ENT_QUOTES) ?>">
+    <?php // 单一入口：平台差异全在二维码弹窗/下载中心里，避免按平台重复渲染同名按钮 ?>
     <div class="app-download__entry">
-        <?php foreach ($entries as $platform => $entryUrl): ?>
-            <?php if ($entryUrl): ?>
-                <a class="app-download__btn app-download__btn--<?= $platform ?>" href="<?= $entryUrl ?>"><?= __('下载 App') ?></a>
-            <?php elseif ($platform === 'ios'): ?>
-                <?php // iOS App Store 占位 ?>
-            <?php endif; ?>
-        <?php endforeach; ?>
+        <a class="app-download__btn app-download__btn--primary"
+           data-app-download-link="web"
+           data-app-download-open="web"
+           aria-haspopup="dialog"
+           href="/app/download"><?= $wt('下载 App', 'Download App') ?><span class="app-download__ver" data-app-download-version="web" hidden></span></a>
+    </div>
+
+    <div class="app-download__modal" data-app-download-modal hidden>
+        <div class="app-download__scrim" data-app-download-close></div>
+        <div class="app-download__dialog" role="dialog" aria-modal="true" aria-labelledby="app-download-dialog-title">
+            <div class="app-download__dialog-head">
+                <div>
+                    <p class="app-download__dialog-title" id="app-download-dialog-title"><?= $wt('扫码下载 App', 'Scan to download the app') ?></p>
+                    <p class="app-download__dialog-sub">
+                        <?= $wt('手机相机扫一扫', 'Scan with your phone camera') ?> · <?= $wt('版本', 'Version') ?>
+                        <span data-app-download-version="web"><?= htmlspecialchars($webVersion, ENT_QUOTES) ?></span>
+                    </p>
+                </div>
+                <button type="button" class="app-download__close" data-app-download-close aria-label="<?= $wt('关闭', 'Close') ?>">×</button>
+            </div>
+            <div class="app-download__dialog-body">
+                <div class="app-download__qr">
+                    <img src="/api/weline_app/rest/v1/download/qr?platform=web"
+                         width="200" height="200" loading="lazy"
+                         alt="<?= $wt('扫码打开下载中心', 'Scan to open the download center') ?>">
+                </div>
+                <div class="app-download__plat">
+                    <?php // iOS 暂不上（无 Apple 签名凭据，出不了可安装包），只列 android / web ?>
+                    <?php foreach (['android', 'web'] as $platform): ?>
+                        <?php $publishedVersion = $versionOf($platform); ?>
+                        <?php if ($publishedVersion === '') { continue; } ?>
+                        <div class="app-download__plat-row">
+                            <span class="app-download__plat-name"><?= $platform === 'web' ? 'Web / PWA' : 'Android' ?></span>
+                            <span class="app-download__plat-meta">v<?= htmlspecialchars($publishedVersion, ENT_QUOTES) ?></span>
+                        </div>
+                    <?php endforeach; ?>
+                    <button type="button" class="app-download__btn app-download__pwa" data-pwa-install hidden><?= $wt('安装到桌面', 'Install to desktop') ?></button>
+                    <a class="app-download__btn app-download__btn--primary app-download__center" href="/app/download">
+                        <?= $wt('打开下载中心', 'Open download center') ?>
+                    </a>
+                    <span class="app-download__hint"><?= $wt('桌面端扫码即可；手机端可直接安装。', 'Scan on desktop; install directly on mobile.') ?></span>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 <?php endif; ?>
+<span hidden data-widget-script="app-download-async"></span>

@@ -32,16 +32,13 @@ namespace Weline\App\Test\Unit {
             }
         }
 
-        public function testIosThrowsRuntimeWithYunbianyi(): void
+        public function testIosPlatformPassesValidation(): void
         {
             try {
                 (new ConfigRenderer())->render(0, 'ios');
-                $this->fail('expected RuntimeException with 云编译');
-            } catch (\RuntimeException $e) {
-                if (str_contains($e->getMessage(), 'DB unavailable')) {
-                    $this->markTestSkipped('DB unavailable');
-                }
-                $this->assertStringContainsString('云编译', $e->getMessage());
+                $this->addToAssertionCount(1);
+            } catch (\RuntimeException|LinkException $e) {
+                $this->assertStringNotContainsString('非法平台', $e->getMessage());
             }
         }
 
@@ -57,7 +54,7 @@ namespace Weline\App\Test\Unit {
     }
 
     if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
-        $methods = ['testInvalidPlatformThrows', 'testIosThrowsRuntimeWithYunbianyi', 'testWebPlatformPassesValidation'];
+        $methods = ['testInvalidPlatformThrows', 'testIosPlatformPassesValidation', 'testWebPlatformPassesValidation'];
         $failures = 0;
         foreach ($methods as $method) {
             try {

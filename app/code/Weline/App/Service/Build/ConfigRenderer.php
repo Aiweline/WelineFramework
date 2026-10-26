@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace Weline\App\Service\Build;
 
+use Weline\App\Service\SiteProfile;
+use Weline\Framework\Manager\ObjectManager;
+
 class ConfigRenderer
 {
     public const PLATFORMS = ['android', 'web', 'ios'];
@@ -12,10 +15,7 @@ class ConfigRenderer
         if (!in_array($platform, self::PLATFORMS, true)) {
             throw new \InvalidArgumentException('非法平台：' . $platform . '（允许 android|web|ios）');
         }
-        if ($platform === 'ios') {
-            throw new \RuntimeException('iOS 走平台云编译，本机不编译（V1 契约）');
-        }
-
+        // iOS：本机出「未签名 IPA」供自签侧载（不经 App Store）；上架后改用 App Store 链接即可
         $config = $this->loadWebsiteConfig($websiteId);
 
         if ((int)($config['enabled'] ?? 1) !== 1) {
@@ -28,28 +28,50 @@ class ConfigRenderer
 
         $versions = $this->readVersions();
         $domain = (string)($config['domain'] ?? '');
+        $profile = $this->resolveProfile($websiteId);
 
         return [
             'website_id' => $websiteId,
             'domain' => $domain,
             'universal' => $domain === '',
             'platform' => $platform,
-            'app_name' => 'Weline App',
-            'locales' => ['en_US', 'zh_Hans_CN'],
-            'currencies' => [
-                ['code' => 'USD', 'symbol' => '$'],
-                ['code' => 'CNY', 'symbol' => '¥'],
-            ],
-            'theme' => ['primary' => 'rgb(177,63,60)', 'surface' => 'rgb(247,242,233)'],
+            'app_name' => $profile['name'],
+            'locales' => $profile['locales'],
+            'default_locale' => $profile['default_locale'],
+            'currencies' => $profile['currencies'],
+            'default_currency' => $profile['default_currency'],
+            'theme' => $profile['theme'],
             'version' => $versions['module'] ?? '1.0.0',
             'flutter_pin' => $versions['template_flutter'] ?? '3.27.4',
             'build_id_prefix' => $websiteId . '-' . $platform . '-' . date('Ymd'),
         ];
     }
 
+    /**
+     * CLI/单测环境可能没有完整 DB/站点上下文；画像读取失败时退回空集合，
+     * 不阻断打包配置校验。
+     *
+     * @return array<string, mixed>
+     */
+    private function resolveProfile(int $websiteId): array
+    {
+        try {
+            return ObjectManager::getInstance(SiteProfile::class)->resolve($websiteId);
+        } catch (\Throwable) {
+            return [
+                'name' => '',
+                'locales' => [],
+                'default_locale' => '',
+                'currencies' => [],
+                'default_currency' => '',
+                'theme' => ['primary' => '', 'surface' => ''],
+            ];
+        }
+    }
+
     private function loadWebsiteConfig(int $websiteId): array
     {
-        $model = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\App\Model\AppBuild::class);
+        $model = ObjectManager::getInstance(\Weline\App\Model\AppBuild::class);
         $found = $model->clear()
             ->where($model::schema_fields_website_id, $websiteId)
             ->find()

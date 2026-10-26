@@ -37,7 +37,7 @@ class Version extends FrontendRestController
                 'build_ts' => (int)$artifact->getData(AppArtifact::schema_fields_build_ts),
                 'sha256' => (string)$artifact->getData(AppArtifact::schema_fields_sha256),
                 'size_bytes' => (int)$artifact->getData(AppArtifact::schema_fields_size_bytes),
-                'url' => '/app/api/download?platform=' . urlencode($platform),
+                'url' => '/api/weline_app/rest/v1/download/download?platform=' . urlencode($platform),
                 'force_update' => false,
                 'changelog' => __((string)$artifact->getData(AppArtifact::schema_fields_changelog)),
             ]);

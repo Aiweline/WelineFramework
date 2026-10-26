@@ -1,8 +1,9 @@
 <?php
 declare(strict_types=1);
 
-namespace Weline\App\Controller\Backend\Build;
+namespace Weline\App\Controller\Backend\BuildLog;
 
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Sse\SseWriter;
 

@@ -15,22 +15,31 @@ class InstallDeps extends CommandAbstract
     {
         $os = (string)($args['os'] ?? 'auto');
         $yes = isset($args['yes']);
-        $plan = (new DepInstaller())->plan($os);
+        $installer = new DepInstaller();
+        $plan = $installer->plan($os);
         if (!$plan['steps']) {
             $this->printer->success(__('依赖均已安装'));
             return 0;
         }
-        foreach ($plan['steps'] as $step) {
-            $this->printer->note(__('[plan] %{1}', [$step['command']]));
-            if (!$yes) {
-                continue;
+        if (!$yes) {
+            foreach ($plan['steps'] as $step) {
+                $this->printer->note(__('[plan] %{1} → %{2}', [$step['target'], $step['command']]));
             }
-            exec($step['command'], $out, $code);
-            if ($code !== 0) {
-                $this->printer->error(__('[fail] %{1}', [$step['target']]));
+            return 0;
+        }
+        $result = $installer->install($os, function (string $line): void {
+            $this->printer->note($line);
+        });
+        foreach ($result['steps'] as $step) {
+            if ($step['exit'] !== 0) {
+                $this->printer->error(__('[fail] %{1}（exit %{2}）：%{3}', [$step['target'], $step['exit'], $step['output']]));
                 return CommandResult::shortCircuit(1);
             }
             $this->printer->success(__('[done] %{1}', [$step['target']]));
+        }
+        if ($result['missing'] !== []) {
+            $this->printer->error(__('安装后仍缺：%{1}', [implode(', ', $result['missing'])]));
+            return CommandResult::shortCircuit(1);
         }
         return 0;
     }

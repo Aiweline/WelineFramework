@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_App',
-    'version' => '1.0.3',
+    'version' => '1.0.4',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Cron' => '*',

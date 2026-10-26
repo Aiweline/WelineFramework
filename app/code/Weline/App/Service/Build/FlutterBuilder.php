@@ -28,6 +28,58 @@ class FlutterBuilder
         return $result;
     }
 
+    /**
+     * Android 产物：flutter build apk --release → app-release.apk 落在产物目录 as app.apk。
+     * 与 web 同一套配置渲染/登记/盖章链路，客户端版本检测走 version 接口。
+     */
+    public function buildAndroid(array $cfg, string $buildId, AppArtifact $artifact): array
+    {
+        if (!function_exists('proc_open')) {
+            throw new \RuntimeException('proc_open 不可用，无法执行 flutter build');
+        }
+        if (!is_dir(VAR_DIR)) {
+            throw new \RuntimeException('VAR_DIR 不存在');
+        }
+        $workDir = sys_get_temp_dir() . '/weline-app-' . $buildId;
+        $this->assertSafeWorkDir($workDir);
+        if (!is_dir($workDir)) {
+            @mkdir($workDir, 0755, true);
+        }
+        $this->copyTemplate($workDir, $cfg);
+        $this->runFlutterBuild($workDir, $cfg, 'android');
+        $result = $this->collectApk($workDir, $cfg, $buildId);
+        $this->stampArtifact($artifact, $result);
+        $this->cleanup($workDir);
+
+        return $result;
+    }
+
+    /**
+     * iOS 产物：flutter build ios --release --no-codesign → Payload/Runner.app 打成未签名 app.ipa。
+     * 不经 App Store：用户用自己的 Apple ID 自签侧载（Sideloadly/AltStore 等）。
+     */
+    public function buildIos(array $cfg, string $buildId, AppArtifact $artifact): array
+    {
+        if (!function_exists('proc_open')) {
+            throw new \RuntimeException('proc_open 不可用，无法执行 flutter build');
+        }
+        if (!is_dir(VAR_DIR)) {
+            throw new \RuntimeException('VAR_DIR 不存在');
+        }
+        $workDir = sys_get_temp_dir() . '/weline-app-' . $buildId;
+        $this->assertSafeWorkDir($workDir);
+        if (!is_dir($workDir)) {
+            @mkdir($workDir, 0755, true);
+        }
+        $this->copyTemplate($workDir, $cfg);
+        $this->runFlutterBuild($workDir, $cfg, 'ios');
+        $result = $this->collectIpa($workDir, $cfg, $buildId);
+        $this->stampArtifact($artifact, $result);
+        $this->cleanup($workDir);
+
+        return $result;
+    }
+
     private function assertSafeWorkDir(string $dir): void
     {
         $base = realpath(sys_get_temp_dir());
@@ -78,6 +130,31 @@ class FlutterBuilder
             w_log_error('FlutterBuilder 模板复制后缺 pubspec.yaml，回退程序化 scaffold');
             $this->legacyScaffold($dir, $cfg);
         }
+        $this->applyPubspecVersion($dir, $cfg);
+    }
+
+    /**
+     * 把站点版本写进 pubspec（Info.plist 的 CFBundleShortVersionString 取这里）。
+     * Flutter 版本必须带 build number：x.y.z+N。
+     */
+    private function applyPubspecVersion(string $dir, array $cfg): void
+    {
+        $file = $dir . '/pubspec.yaml';
+        if (!is_file($file)) {
+            return;
+        }
+        $version = \trim((string)($cfg['version'] ?? ''));
+        if ($version === '' || \preg_match('/^\d+\.\d+\.\d+/', $version) !== 1) {
+            return;
+        }
+        if (!\str_contains($version, '+')) {
+            $version .= '+' . \max(1, (int)($cfg['website_id'] ?? 0) + 1);
+        }
+        $yaml = (string)file_get_contents($file);
+        $patched = (string)\preg_replace('/^version:\s*\S+\s*$/m', 'version: ' . $version, $yaml, 1);
+        if ($patched !== '' && $patched !== $yaml) {
+            file_put_contents($file, $patched);
+        }
     }
 
     private function legacyScaffold(string $dir, array $cfg): void
@@ -114,10 +191,15 @@ class FlutterBuilder
         }
     }
 
-    private function runFlutterBuild(string $dir, array $cfg): void
+    private function runFlutterBuild(string $dir, array $cfg, string $target = 'web'): void
     {
         $flutter = trim((string)shell_exec('which flutter 2>/dev/null')) ?: 'flutter';
-        $cmd = $flutter . ' build web --release --no-tree-shake-icons';
+        $command = match ($target) {
+            'android' => 'apk',
+            'ios' => 'ios --no-codesign',
+            default => 'web',
+        };
+        $cmd = $flutter . ' build ' . $command . ' --release --no-tree-shake-icons';
         // BASE_URL 必传：域名站用绑定域名；通用包用请求时站点主链（空域名时由 App 端首启绑定，V1 先给当前站点主链）
         $baseUrl = trim((string)($cfg['domain'] ?? ''));
         if ($baseUrl === '') {
@@ -137,6 +219,13 @@ class FlutterBuilder
         foreach (['PATH', 'HOME', 'USER', 'SHELL', 'TMPDIR'] as $must) {
             if (!isset($env[$must]) && ($v = getenv($must)) !== false) {
                 $env[$must] = $v;
+            }
+        }
+        // Android 构建要 JDK + SDK（gradle 读这两个变量）
+        foreach (['JAVA_HOME', 'ANDROID_HOME', 'ANDROID_SDK_ROOT'] as $androidEnv) {
+            $v = getenv($androidEnv);
+            if (is_string($v) && $v !== '') {
+                $env[$androidEnv] = $v;
             }
         }
         $probe = (new \Weline\App\Service\Toolchain\EnvProbe())->probe();
@@ -160,8 +249,13 @@ class FlutterBuilder
         if ($exit !== 0) {
             throw new \RuntimeException('flutter build 退出码 ' . $exit . '：' . substr($stdout . $stderr, -500));
         }
-        if (!is_dir($dir . '/build/web')) {
-            throw new \RuntimeException('build/web 未产出');
+        $produced = match ($target) {
+            'android' => $dir . '/build/app/outputs/flutter-apk/app-release.apk',
+            'ios' => $dir . '/build/ios/iphoneos/Runner.app',
+            default => $dir . '/build/web',
+        };
+        if (!file_exists($produced)) {
+            throw new \RuntimeException('flutter build 未产出：' . $produced);
         }
     }
 
@@ -191,7 +285,16 @@ class FlutterBuilder
             copy($file->getPathname(), $dest);
             if ($rel === 'index.html') {
                 // index.html 会被框架路由兜底拦截（404），落一份 entry.html 别名供 302 直达
-                @copy($file->getPathname(), dirname($dest) . DS . 'entry.html');
+                $entry = dirname($dest) . DS . 'entry.html';
+                // Web 产物只作「在线商店」入口：Flutter web 壳没有商品数据（空壳页面会被当成原型），
+                // 直接跳到店面；native 端的版本更新走 version 接口，与这里无关。
+                $redirect = '<!doctype html><html lang="zh-Hans"><head><meta charset="utf-8">'
+                    . '<meta name="robots" content="noindex"><meta name="viewport" content="width=device-width, initial-scale=1">'
+                    . '<meta http-equiv="refresh" content="0;url=/"><title>正在打开在线商店…</title></head>'
+                    . '<body><p>正在打开在线商店…<a href="/">继续</a></p>'
+                    . '<script>location.replace("/");</script></body></html>';
+                file_put_contents($dest, $redirect);
+                file_put_contents($entry, $redirect);
             }
             $bytes = filesize($dest) ?: 0;
             $total += $bytes;
@@ -208,6 +311,52 @@ class FlutterBuilder
         ];
         // L7：构建期戳，只在此处生成
         file_put_contents($artifactRoot . DS . 'build.json', json_encode($stamp, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        return [
+            'path' => 'static/weline-app/' . $buildId,
+            'sha256' => $sha256,
+            'size' => $total,
+            'build_ts' => $stamp['build_ts'],
+        ];
+    }
+
+    private function collectIpa(string $workDir, array $cfg, string $buildId): array
+    {
+        $artifactRoot = PUB . 'static' . DS . 'weline-app' . DS . $buildId;
+        if (!is_dir($artifactRoot)) {
+            @mkdir($artifactRoot, 0755, true);
+        }
+        $app = $workDir . '/build/ios/iphoneos/Runner.app';
+        if (!is_dir($app)) {
+            throw new \RuntimeException('Runner.app 未产出');
+        }
+        // IPA = Payload/Runner.app 的 zip；用 ditto 保留符号链接与权限
+        $payload = $workDir . '/build/ipa/Payload';
+        @mkdir($payload, 0755, true);
+        $dest = $artifactRoot . DS . 'app.ipa';
+        @unlink($dest);
+        $copy = 'ditto ' . escapeshellarg($app) . ' ' . escapeshellarg($payload . '/Runner.app');
+        exec($copy . ' 2>&1', $copyOut, $copyExit);
+        if ($copyExit !== 0) {
+            throw new \RuntimeException('打包 Payload 失败：' . implode("\n", $copyOut));
+        }
+        $zip = 'cd ' . escapeshellarg($workDir . '/build/ipa') . ' && zip -qry ' . escapeshellarg($dest) . ' Payload';
+        exec($zip . ' 2>&1', $zipOut, $zipExit);
+        if ($zipExit !== 0 || !is_file($dest)) {
+            throw new \RuntimeException('生成 app.ipa 失败：' . implode("\n", $zipOut));
+        }
+        $sha256 = (string)hash_file('sha256', $dest);
+        $total = filesize($dest) ?: 0;
+        $stamp = [
+            'build_id' => $buildId,
+            'platform' => 'ios',
+            'version' => (string)$cfg['version'],
+            'build_ts' => time(),
+            'sha256' => $sha256,
+            'size_bytes' => $total,
+            'signed' => false,
+        ];
+        file_put_contents($artifactRoot . DS . 'build.json', json_encode($stamp, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+
         return [
             'path' => 'static/weline-app/' . $buildId,
             'sha256' => $sha256,
@@ -241,9 +390,35 @@ class FlutterBuilder
         }
         @rmdir($dir);
     }
-    private function buildAndroid(array $cfg): void
+    private function collectApk(string $workDir, array $cfg, string $buildId): array
     {
-        // V1 不实现 Android 构建（本机无 JDK/AndroidSDK），仅保留命令骨架。
-        // 预期：flutter build apk --release --dart-define=WELINE_BASE_URL=... --dart-define=WELINE_APP_NAME=... --dart-define=WELINE_APP_VERSION=...
+        $artifactRoot = PUB . 'static' . DS . 'weline-app' . DS . $buildId;
+        if (!is_dir($artifactRoot)) {
+            @mkdir($artifactRoot, 0755, true);
+        }
+        $apk = $workDir . '/build/app/outputs/flutter-apk/app-release.apk';
+        if (!is_file($apk)) {
+            throw new \RuntimeException('app-release.apk 未产出');
+        }
+        $dest = $artifactRoot . DS . 'app.apk';
+        copy($apk, $dest);
+        $sha256 = (string)hash_file('sha256', $dest);
+        $total = filesize($dest) ?: 0;
+        $stamp = [
+            'build_id' => $buildId,
+            'platform' => 'android',
+            'version' => (string)$cfg['version'],
+            'build_ts' => time(),
+            'sha256' => $sha256,
+            'size_bytes' => $total,
+        ];
+        file_put_contents($artifactRoot . DS . 'build.json', json_encode($stamp, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+
+        return [
+            'path' => 'static/weline-app/' . $buildId,
+            'sha256' => $sha256,
+            'size' => $total,
+            'build_ts' => $stamp['build_ts'],
+        ];
     }
 }

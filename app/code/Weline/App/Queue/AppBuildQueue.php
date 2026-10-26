@@ -19,7 +19,7 @@ class AppBuildQueue extends AbstractQueue
 
     public function tip(): string
     {
-        return __('按站点渲染配置并执行 flutter build web，产物登记 AppArtifact');
+        return __('按站点渲染配置并执行 flutter build（android→APK / ios→未签名 IPA / web→在线商店入口），产物登记 AppArtifact');
     }
 
     public function attributes(): array
@@ -76,7 +76,14 @@ class AppBuildQueue extends AbstractQueue
         $artifactId = (int)$artifact->getId();
 
         try {
-            (new FlutterBuilder())->buildWeb($cfg, $buildId, $artifact);
+            // 按平台分派：android→APK；ios→未签名 IPA（自签侧载）；web→在线商店入口
+            if ($platform === 'android') {
+                (new FlutterBuilder())->buildAndroid($cfg, $buildId, $artifact);
+            } elseif ($platform === 'ios') {
+                (new FlutterBuilder())->buildIos($cfg, $buildId, $artifact);
+            } else {
+                (new FlutterBuilder())->buildWeb($cfg, $buildId, $artifact);
+            }
             $queue->setResult('released:' . $buildId);
             $queue->setFinished(true);
             $queue->save();

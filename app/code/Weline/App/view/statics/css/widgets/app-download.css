@@ -56,3 +56,209 @@
     transition: none;
   }
 }
+
+/* ===== 悬浮形态（storefront-float-start 槽）===== */
+[data-slot-id="storefront-float-start"] .weline-app-download {
+  width: 100%;
+  padding: var(--weline-space-3);
+}
+
+[data-slot-id="storefront-float-start"] .app-download__entry {
+  flex-direction: column;
+  gap: var(--weline-space-2);
+}
+
+[data-slot-id="storefront-float-start"] .app-download__btn {
+  width: 100%;
+  justify-content: center;
+  font-size: var(--weline-font-size-xs, 12px);
+}
+
+[data-slot-id="storefront-float-start"] .weline-app-download[data-app-download-loaded]::after {
+  content: '';
+}
+
+.weline-app-download:not([data-app-download-loaded]) [data-app-download-version] {
+  opacity: .45;
+}
+
+/* ===== 二维码弹窗（桌面居中卡片 / 移动端底部抽屉）===== */
+.app-download__modal {
+  position: fixed;
+  inset: 0;
+  /* 高于悬浮层(2147482900)与其内部部件(如进店音乐 2147483001)，弹窗不能被压在下层 */
+  z-index: 2147483100;
+  display: grid;
+  place-items: center;
+  padding: var(--weline-space-5);
+}
+
+.app-download__modal[hidden] {
+  display: none;
+}
+
+.app-download__scrim {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--weline-theme-text, #2e2a25) 42%, transparent);
+}
+
+.app-download__dialog {
+  position: relative;
+  width: min(100%, 40rem);
+  max-height: calc(100vh - 2 * var(--weline-space-5));
+  overflow: auto;
+  padding: var(--weline-space-6);
+  border: 1px solid var(--weline-theme-border, #e4dbcd);
+  border-radius: var(--weline-radius-lg, 16px);
+  background: var(--weline-theme-surface-raised, #fffdf8);
+  box-shadow: var(--weline-theme-shadow-lg, 0 18px 48px rgba(46, 42, 37, .18));
+}
+
+.app-download__dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--weline-space-4);
+}
+
+.app-download__dialog-title {
+  margin: 0;
+  font: 600 var(--weline-font-size-lg, 18px)/1.3 var(--weline-font-serif, Georgia, serif);
+}
+
+.app-download__dialog-sub {
+  margin: var(--weline-space-1) 0 0;
+  color: var(--weline-theme-text-muted, #7b7268);
+  font-size: var(--weline-font-size-sm, 13px);
+}
+
+.app-download__close {
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--weline-theme-border, #e4dbcd);
+  border-radius: 999px;
+  background: var(--weline-theme-surface-raised, #fff);
+  color: var(--weline-theme-text-muted, #7b7268);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.app-download__close:focus-visible {
+  outline: 2px solid var(--weline-theme-primary, #a83a32);
+  outline-offset: 2px;
+}
+
+.app-download__dialog-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--weline-space-6);
+  align-items: center;
+  margin-top: var(--weline-space-5);
+}
+
+.app-download__qr {
+  padding: var(--weline-space-3);
+  border: 1px solid var(--weline-theme-border, #e4dbcd);
+  border-radius: var(--radius-md, 10px);
+  background: #fff;
+  line-height: 0;
+}
+
+.app-download__qr img {
+  display: block;
+  width: 200px;
+  height: 200px;
+}
+
+.app-download__plat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--weline-space-2);
+}
+
+.app-download__plat-row {
+  display: flex;
+  align-items: center;
+  gap: var(--weline-space-2);
+  padding: var(--weline-space-2) var(--weline-space-3);
+  border: 1px solid var(--weline-theme-border, #e4dbcd);
+  border-radius: var(--radius-md, 10px);
+  background: var(--weline-theme-surface, #fffdf8);
+  font-size: var(--weline-font-size-sm, 13px);
+}
+
+.app-download__plat-name {
+  font-weight: 600;
+}
+
+.app-download__plat-meta {
+  color: var(--weline-theme-text-muted, #7b7268);
+}
+
+.app-download__tag {
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--weline-theme-border, #e4dbcd) 55%, transparent);
+  color: var(--weline-theme-text-muted, #7b7268);
+  font-size: var(--weline-font-size-xs, 12px);
+}
+
+.app-download__tag--on {
+  background: color-mix(in srgb, var(--weline-theme-primary, #a83a32) 12%, transparent);
+  color: var(--weline-theme-primary, #a83a32);
+}
+
+.app-download__center.app-download__btn {
+  justify-content: center;
+  margin-top: var(--weline-space-1);
+  border-color: transparent;
+  background: var(--weline-theme-primary, #a83a32);
+  color: var(--weline-theme-on-primary, #fff);
+}
+
+.app-download__hint {
+  color: var(--weline-theme-text-muted, #7b7268);
+  font-size: var(--weline-font-size-xs, 12px);
+}
+
+@media (max-width: 640px) {
+  .app-download__modal {
+    padding: 0;
+    place-items: end stretch;
+  }
+
+  .app-download__dialog {
+    width: 100%;
+    max-height: 92vh;
+    padding: var(--weline-space-5) var(--weline-space-5) var(--weline-space-6);
+    border-radius: var(--weline-radius-xl, 20px) var(--weline-radius-xl, 20px) 0 0;
+  }
+
+  .app-download__dialog-body {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+    gap: var(--weline-space-4);
+  }
+
+  .app-download__qr img {
+    width: 176px;
+    height: 176px;
+  }
+
+  .app-download__plat {
+    width: 100%;
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-download__dialog,
+  .app-download__close {
+    transition: none;
+  }
+}
