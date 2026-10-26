@@ -26,9 +26,12 @@ class FileAdapter implements CacheAdapterInterface
         $this->identity = $identity;
         $configured = (string)($config['path'] ?? 'var/cache/');
         $basePath = DirectoryList::resolveConfiguredDataPathStatic($configured);
-        $basePath = rtrim(str_replace(['/', '\\'], DS, $basePath), DS) . DS;
-        
-        $this->cachePath = $basePath . $identity . DS;
+        // DS 是 App::init / app/autoload.php 定义的引导常量；Pest/裸 CLI 场景可能尚未定义，
+        // 不能假设它存在（否则 "Undefined constant DS" 直接炸掉 ObjectManager 缓存初始化）。
+        $ds = \defined('DS') ? \DS : \DIRECTORY_SEPARATOR;
+        $basePath = rtrim(str_replace(['/', '\\'], $ds, $basePath), $ds) . $ds;
+
+        $this->cachePath = $basePath . $identity . $ds;
 
         if (!is_dir($this->cachePath)) {
             $parentDir = dirname($this->cachePath);
@@ -178,7 +181,7 @@ class FileAdapter implements CacheAdapterInterface
     {
         $hash = $this->hashKey($key);
         $subDir = substr($hash, 0, 2);
-        return $this->cachePath . $subDir . DS . $hash;
+        return $this->cachePath . $subDir . \DIRECTORY_SEPARATOR . $hash;
     }
 
     /**
@@ -205,7 +208,7 @@ class FileAdapter implements CacheAdapterInterface
         $files = is_array($entries) ? array_diff($entries, ['.', '..']) : [];
         
         foreach ($files as $file) {
-            $path = $dir . DS . $file;
+            $path = $dir . \DIRECTORY_SEPARATOR . $file;
             if (is_dir($path)) {
                 $this->deleteDirectory($path, true);
             } else {

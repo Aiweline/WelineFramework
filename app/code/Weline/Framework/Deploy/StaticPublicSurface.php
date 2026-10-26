@@ -94,8 +94,8 @@ final class StaticPublicSurface
         'mp4', 'mp3', 'm4a', 'aac', 'webm', 'ogg', 'm3u8', 'wav',
         // 文档
         'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-        // 归档
-        'zip', 'rar', '7z', 'gz', 'tar',
+        // 归档 / 安装包
+        'zip', 'rar', '7z', 'gz', 'tar', 'apk', 'ipa',
         // 历史遗留（旧版 nginx 模板与存量资源仍在用）
         'swf',
     ];
@@ -116,7 +116,7 @@ final class StaticPublicSurface
         'mp4', 'mp3', 'm4a', 'aac', 'webm', 'ogg', 'm3u8',
         'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
         'txt', 'json', 'xml',
-        'zip', 'rar', '7z', 'gz', 'tar',
+        'zip', 'rar', '7z', 'gz', 'tar', 'apk', 'ipa',
     ];
 
     /**

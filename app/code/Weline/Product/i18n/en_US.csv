@@ -1302,9 +1302,10 @@ SKU（每次新建使用唯一值）,"SKU (use a unique value for each new produ
 "必须与当前 env 配置一致的 mig_clone_* 数据库","Databases named `mig_clone_*` that must be consistent with the current environment configuration."
 "cutover/rollback 必填的切换状态版本","Required switchover/rollback version status."
 "rollback 目标：dual_read（默认）或 legacy","Rollback target: dual_read (default) or legacy."
-"第 %{1}–%{2} 件，共 %{3} 件商品","%{1}–%{2} of %{3} products"
 收起悬浮,"Collapse float"
 展开悬浮,"Expand float"
+推荐产品,推荐产品
+"第 %{1}–%{2} 件，共 %{3} 件商品","%{1}–%{2} of %{3} products"
 "平均 %{1} 星","Average %{1} stars"
 "%{1} 条评价","%{1} ratings"
 "Page %{1} of %{2}","Page %{1} of %{2}"

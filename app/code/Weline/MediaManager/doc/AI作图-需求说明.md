@@ -190,7 +190,7 @@ app/code/Weline/MediaManager/extends/module/Weline_Ai/Adapter/MediaManagerAiDraw
 |------|--------|------|
 | `size` | `1024x1024` | 与参考图比例差异大时提示可能裁切 |
 | `aspect_ratio` | `1:1` | 与 size 联动 |
-| `output_format` | `png` | png / webp / jpeg |
+| `output_format` | `webp` | webp / png / jpeg；默认 webp 并按展示尺寸压缩（`cwebp -q 80`），禁止原图直上页面 |
 | `target_directory` | 当前 `CWD_HASH` | 只读展示 |
 | `batch_count` | `1` | 批量模式 |
 
@@ -211,7 +211,7 @@ app/code/Weline/MediaManager/extends/module/Weline_Ai/Adapter/MediaManagerAiDraw
 | 选项 | 条件 | 行为 |
 |------|------|------|
 | **覆盖原图** | 存在 `source_file_hash` 且用户有写权限 | 用新字节替换原文件；扩展名可随 `output_format` 变化时需提示「覆盖后文件名/类型可能变化」 |
-| **另存为新文件** | 始终可用 | 写入 `target_directory`，默认名 `ai-draw-{timestamp}-{id}.png`，可编辑 |
+| **另存为新文件** | 始终可用 | 写入 `target_directory`，默认名 `ai-draw-{timestamp}-{id}.webp`，可编辑 |
 
 批量保存：
 

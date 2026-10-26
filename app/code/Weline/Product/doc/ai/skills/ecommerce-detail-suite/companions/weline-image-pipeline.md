@@ -255,17 +255,19 @@ Step H  replaceContent；复扫至 0 BAD（含窄竖、糊、假垫边）
 
 ---
 
-## 6.5 交付格式（默认 WebP · 严重）
+## 6.5 交付格式与体积（所有网页图默认 WebP · 严重）
 
-对齐 MCP 硬规则 **`generated_images_prefer_webp`**：
+对齐 MCP 硬规则 **`web_images_webp_compressed`**（覆盖生图与普通上传/主题/CMS/博客图）：
 
 | 默认 | 例外（才允许 PNG/JPG） |
 |------|------------------------|
-| 终态落盘 **`.webp`**（`pub/media` / 主题 assets / Banner·Hero·主图） | 用户**明示**要 PNG/JPG |
-| 生图工具若返回 PNG/JPEG → **转码 WebP 后再交付** | 确需非 WebP 透明通道的消费端（极少；WebP alpha 优先） |
+| 终态落盘 **`.webp`**（`pub/media` / 主题 assets / Banner·Hero·主图 / 博客配图） | 用户**明示**要 PNG/JPG |
+| 生图工具若返回 PNG/JPEG → **转码 WebP 后再交付**（`cwebp -q 80` / Pillow / GD） | 确需非 WebP 透明通道的消费端（极少；WebP alpha 优先） |
 | MediaManager AI 画图默认 `output_format=webp` | favicon / `.ico` / 平台硬性 PNG |
+| **按展示尺寸派生**：重采样到实际显示尺寸（视网膜 ≤2×，不放大）；长边 内容/商品 ≤1600px、Hero ≤2560px | 原图直上页面 / 用浏览器缩放大图 |
+| **体积预算**：内容/商品 ≤200KB、缩略图/卡片 ≤80KB、Hero ≤350KB、图标/Logo ≤30KB；编码后目检清晰度 | 大体积 PNG/JPG 当店面长期交付物；压到糊字/糊边 |
 
-禁止把大体积 PNG/JPG 当作店面长期交付物「因为生成器默认是 PNG」。
+原图只作**源文件**保留，不进公开目录、不被页面直接引用。禁止把大体积 PNG/JPG 当作店面长期交付物「因为生成器默认是 PNG」。
 
 ---
 

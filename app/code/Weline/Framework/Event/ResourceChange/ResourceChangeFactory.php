@@ -139,7 +139,9 @@ final class ResourceChangeFactory
                 'id' => $websiteId,
                 'code' => $websiteCode,
                 'previous_code' => $previousWebsiteCode,
-                'site_id' => $siteId,
+                // Envelope contract requires a non-negative int; callers passing null
+                // (Theme publishers pre-2026-10) must not kill the whole invalidation chain.
+                'site_id' => \max(0, (int)($siteId ?? $websiteId)),
             ],
             'impact' => $normalizedImpact,
             'changed_fields' => $changedFields,

@@ -36,6 +36,10 @@ Theme `foundation.css`：
 
 封面/`object-fit: cover` 可用更具体选择器覆盖 `height`，但仍须保留 HTML 宽高以锁定比例。
 
+## 格式与体积
+
+所有网页栅格图（含上传、主题 assets、CMS、博客、商品图）终态用 **WebP**；按展示尺寸派生（视网膜 ≤2×，不放大），长边 内容/商品 ≤1600px、Hero ≤2560px；体积预算 内容/商品 ≤200KB、缩略图 ≤80KB、Hero ≤350KB、图标 ≤30KB。原图只作源文件，不进 `pub/media`、不直上页面。细则见 [规则/40 §4](../../Ai/doc/规则/40-集成与运维.md)。
+
 ## Agent / MCP
 
-硬规则 id：`image_explicit_width_height_css`（`HardConstraintsCatalog` + `AI硬规则索引`）。凡图片相关改动须设宽高再配响应式 CSS。
+硬规则 id：`image_explicit_width_height_css` / `web_images_webp_compressed`（`HardConstraintsCatalog` + `AI硬规则索引`）。凡图片相关改动须设宽高再配响应式 CSS，并按 WebP + 压缩交付。

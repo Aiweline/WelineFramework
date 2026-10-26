@@ -121,7 +121,19 @@ layoutType=account/register，option=default → layouts/account/register/defaul
             background: transparent;
             background-color: transparent;
         }
-        .auth-container.account-auth-stage__container,
+        /* 版心唯一承担者：与全站 .w-container 同构（同一 token、同一数学） */
+        .auth-container.account-auth-stage__container {
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            margin-inline: auto;
+            padding-inline: var(--weline-layout-content-padding-inline);
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            background: transparent;
+        }
         .account-auth-shell.account-auth-stage__shell,
         .account-auth-content {
             width: 100%;
@@ -144,7 +156,7 @@ layoutType=account/register，option=default → layouts/account/register/defaul
         /* Bare Customer auth form (no stage widget): breathe from header/footer */
         .account-auth-shell.auth-login-card {
             padding-block: clamp(var(--spacing-13), 8vh, var(--spacing-5rem));
-            padding-inline: clamp(var(--weline-space-3), 3vw, var(--weline-space-6));
+            padding-inline: 0;
             box-sizing: border-box;
             justify-content: center;
             align-items: center;

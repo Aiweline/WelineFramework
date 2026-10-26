@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Test\Unit\Event;
 
+// 本测试直接触 ObjectManager / Changed 管线（依赖 BP 等引导常量）；Pest 裸跑无 TestCore
+// 预引导时按模块测试约定显式引入 app 引导（同 Theme test/Unit/Ui/DesignSystemContractTest.php）。
+require_once dirname(__DIR__, 7) . '/app/bootstrap.php';
+
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Event\Config\XmlReader;
 use Weline\Framework\Event\Async\DeliveryCoalescer;
@@ -548,21 +552,21 @@ private function assert_UrlMatrixExpanderPathLocale_testMatrixPurgeClearsBakedZh
 private function assert_AsyncEventConfiguration_testResourceChangedDeclaresVersionedAsyncContractMetadata(): void
 {
     $config = ObjectManager::getInstance(XmlReader::class)->read();
-    $observer = null;
+    $eventConfig = null;
     foreach ($config as $events) {
-        foreach ((array) ($events['Weline_Framework::resource_changed'] ?? []) as $candidate) {
-            if (($candidate['name'] ?? '') === 'cache_namespace') {
-                $observer = $candidate;
-                break 2;
-            }
+        if (isset($events['Weline_Framework::resource_changed'])) {
+            $eventConfig = $events['Weline_Framework::resource_changed'];
+            break;
         }
     }
-    self::assertIsArray($observer);
-    self::assertSame('sync', $observer['delivery']);
-    self::assertSame('critical', $observer['failure']);
-    self::assertSame(1, $observer['event_schema_version']);
-    self::assertSame('Weline\Framework\Event\ResourceChange\ResourceChangePayloadMapper', $observer['event_async_mapper']);
-    self::assertSame('resource_change.v1', $observer['event_data_contract']);
+    // 2026-09 cache_namespace/cache_impact Observer 已硬切 Changed Extends Capability
+    // （ThemeRuntimeCapability 等），event.xml 不再注册同步 Observer；事件级 async 契约
+    // （schema_version / async_mapper / data_contract）由 event.php 声明并随注册表下发。
+    self::assertIsArray($eventConfig);
+    $contract = $eventConfig[0] ?? $eventConfig;
+    self::assertSame(1, (int)($contract['event_schema_version'] ?? ($contract['schema_version'] ?? 0)));
+    self::assertSame('Weline\Framework\Event\ResourceChange\ResourceChangePayloadMapper', $contract['event_async_mapper'] ?? null);
+    self::assertSame('resource_change.v1', $contract['event_data_contract'] ?? null);
 }
 
 private function validPolicies_AsyncEventConfiguration(): iterable

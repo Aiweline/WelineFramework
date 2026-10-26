@@ -23,6 +23,7 @@ $storefrontBaseHref = rtrim($frontendRoot, '/') . '/';
 <w:seo slot="head"/>
 <w:geo slot="head"/>
 <w:hook>Weline_Theme::frontend::partials::head::favicon<else/><w:template>Weline_Theme::partials/head/site-favicon.phtml</w:template></w:hook>
+<w:hook>Weline_Theme::frontend::partials::head::pwa</w:hook>
 <w:block class="Weline\Frontend\Block\Header\Base" template="Weline_Frontend::header/base.phtml"/>
 <?php if ($this->getHeader()): ?>
     <?= $this->getHeader()->getHtml() ?>

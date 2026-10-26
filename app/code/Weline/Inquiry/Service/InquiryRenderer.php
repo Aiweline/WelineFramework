@@ -86,7 +86,7 @@ final class InquiryRenderer implements InquiryRendererInterface
 
     private function baseCss(): string
     {
-        return '<style data-inquiry-base-style>.weline-inquiry__modal[hidden]{display:none!important}.weline-inquiry__modal{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:1rem}.weline-inquiry--inline .weline-inquiry__modal{position:relative;z-index:auto;padding:0;display:block}.weline-inquiry--inline .weline-inquiry__backdrop{display:none}.weline-inquiry--inline .weline-inquiry__dialog{width:auto;max-height:none;box-shadow:none}.weline-inquiry__backdrop{position:absolute;inset:0;background:rgba(0,0,0,.72)}.weline-inquiry__dialog{position:relative;z-index:1;width:min(100%,42rem);max-height:calc(100vh - 2rem);overflow:auto;padding:1.5rem;background:#fff;color:#171717;box-shadow:0 1rem 3rem rgba(0,0,0,.35)}.weline-inquiry__close{position:absolute;top:.75rem;right:.75rem}.weline-inquiry__field{display:grid;gap:.4rem;margin:0 0 1rem}.weline-inquiry__field input,.weline-inquiry__field textarea,.weline-inquiry__field select{width:100%;box-sizing:border-box;padding:.65rem;border:1px solid #a5a5a5}.weline-inquiry__field--country{gap:.3rem}.weline-inquiry__field--country .w-address{margin:0}.weline-inquiry__honeypot{position:absolute;left:-9999px}.weline-inquiry__captcha{margin:.25rem 0 1rem}.weline-inquiry__message{min-height:1.25em}</style>';
+        return '<style data-inquiry-base-style>.weline-inquiry__modal[hidden]{display:none!important}.weline-inquiry__modal{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:1rem}.weline-inquiry--inline .weline-inquiry__modal{position:relative;z-index:auto;padding:0;display:block;place-items:normal}.weline-inquiry--inline .weline-inquiry__backdrop{display:none}.weline-inquiry--inline .weline-inquiry__dialog{width:auto;max-height:none;overflow:visible;box-shadow:none}.weline-inquiry--inline .weline-inquiry__close{display:none}.weline-inquiry__backdrop{position:absolute;inset:0;background:rgba(0,0,0,.72)}.weline-inquiry__dialog{position:relative;z-index:1;width:min(100%,42rem);max-height:calc(100vh - 2rem);overflow:auto;padding:1.5rem;background:#fff;color:#171717;box-shadow:0 1rem 3rem rgba(0,0,0,.35)}.weline-inquiry__close{position:absolute;top:.75rem;right:.75rem}.weline-inquiry__field{display:grid;gap:.4rem;margin:0 0 1rem}.weline-inquiry__field input,.weline-inquiry__field textarea,.weline-inquiry__field select{width:100%;box-sizing:border-box;padding:.65rem;border:1px solid #a5a5a5}.weline-inquiry__field--country{gap:.3rem}.weline-inquiry__field--country .w-address{margin:0}.weline-inquiry__honeypot{position:absolute;left:-9999px}.weline-inquiry__captcha{margin:.25rem 0 1rem}.weline-inquiry__message{min-height:1.25em}</style>';
     }
 
     private function css(string $css): string
@@ -189,6 +189,8 @@ function addField(form,field,copy){
     return;
   }
   var wrap=el("div",{class:"weline-inquiry__field"}),id=fieldId(key),name="values["+key+"]",input;
+  wrap.classList.add("weline-inquiry__field--"+type);
+  if(type==="textarea"||type==="file"||type==="checkbox"||type==="radio"){wrap.classList.add("weline-inquiry__field--wide");}
   if(type==="country"){
     wrap.className="weline-inquiry__field weline-inquiry__field--country";
     wrap.setAttribute("data-inquiry-country-field","1");

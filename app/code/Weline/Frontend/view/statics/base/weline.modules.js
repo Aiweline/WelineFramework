@@ -543,10 +543,10 @@
             description: "商品详情/加购弹窗分销分享（等账户会话后异步水合）"
         },
         affiliateFloat: {
-            origin_paths: ["app/code/Weline/Affiliate/view/statics/js/affiliate-float.js"],
-            paths: ["Weline_Affiliate::js/affiliate-float.js"],
+            origin_paths: ["app/code/Weline/Affiliate/view/statics/js/affiliate-float.js?v=20261025-rules-login-gate-4"],
+            paths: ["Weline_Affiliate::js/affiliate-float.js?v=20261025-rules-login-gate-4"],
             globalVar: "WelineAffiliateFloat",
-            description: "右侧中悬浮分销面板（storefront-float-side 槽内容）"
+            description: "右侧中悬浮分销面板（游客展示规则，登录后水合个人分销信息）"
         },
         helpPayShare: {
             origin_paths: ["app/code/Weline/HelpPay/view/statics/js/helppay-share.js?v=20261006-cartamt1"],
