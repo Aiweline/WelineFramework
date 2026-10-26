@@ -48,7 +48,19 @@ final class PointsViewContractsTest extends TestCase
         self::assertStringContainsString('data-money-summary-payable-minor', $src);
         self::assertStringContainsString('bootAttempts', $src);
         self::assertStringContainsString('quoteAttempts', $src);
+        self::assertStringContainsString('getApplyMinor', $src);
         self::assertStringNotContainsString('fetch(', $src);
         self::assertStringNotContainsString('alert(', $src);
+    }
+
+    public function testCheckoutSubmitFallsBackToPointsSession(): void
+    {
+        $src = (string) file_get_contents(
+            \dirname(__DIR__, 4) . '/Checkout/extends/module/Weline_Framework/Query/CheckoutQueryProvider.php',
+        );
+
+        self::assertStringContainsString('points_discount_apply_minor', $src);
+        self::assertStringContainsString('PointsDiscountApplySessionInterface', $src);
+        self::assertStringContainsString('$b2b > 0', $src);
     }
 }

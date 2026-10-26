@@ -352,6 +352,9 @@
         applyMinor: function () {
             return state.apply ? state.apply.apply_checkout_minor : 0;
         },
+        getApplyMinor: function () {
+            return state.apply ? state.apply.apply_checkout_minor : 0;
+        },
         state: state
     };
 
