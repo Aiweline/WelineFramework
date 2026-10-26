@@ -223,4 +223,33 @@ final class CrawlerBlockCatalogTest extends TestCase
         self::assertFalse(CrawlerBlockCatalog::isAllowPass('curl/8.0', []));
         self::assertFalse(CrawlerBlockCatalog::isAllowPass('', CrawlerBlockCatalog::defaultRule()));
     }
+
+    public function testEntriesExposeLiteralUaTokensForEdgeAndRobots(): void
+    {
+        $entries = CrawlerBlockCatalog::defaultWebsiteEntries();
+        $byId = [];
+        foreach ($entries as $entry) {
+            $byId[(string)$entry['id']] = $entry;
+            self::assertArrayHasKey('ua_tokens', $entry);
+            self::assertArrayHasKey('robots_token', $entry);
+        }
+
+        self::assertSame(['GPTBot', 'OAI-SearchBot', 'ChatGPT-User'], $byId['openai_crawlers']['ua_tokens']);
+        self::assertSame('GPTBot', $byId['openai_crawlers']['robots_token']);
+        self::assertSame(['Diffbot'], $byId['diffbot']['ua_tokens']);
+        self::assertSame('Diffbot', $byId['diffbot']['robots_token']);
+
+        $resolved = CrawlerBlockCatalog::resolveEntries([
+            'enabled' => true,
+            'entries' => [[
+                'id' => 'openai_crawlers',
+                'name' => 'OpenAI',
+                'pattern' => '/GPTBot/i',
+                'action' => 'allow',
+                'enabled' => true,
+            ]],
+        ]);
+        self::assertSame(['GPTBot', 'OAI-SearchBot', 'ChatGPT-User'], $resolved[0]['ua_tokens']);
+        self::assertSame('GPTBot', $resolved[0]['robots_token']);
+    }
 }
