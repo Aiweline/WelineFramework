@@ -78,6 +78,7 @@ class DeployGitMetadataService
         $root = $this->normalizeRoot($root);
         $this->fetch(true, $remote, $root);
         // Deploy always force-aligns: dirty/untracked worktrees must not block tag releases.
+        $this->snapshotDirtyWorktree('checkout_tag:' . $tag, $root);
         $this->runGitOrFail(['checkout', '-f', $tag], 'Git checkout tag failed: %{1}', $root);
     }
 
@@ -109,6 +110,8 @@ class DeployGitMetadataService
             throw new \InvalidArgumentException((string)__('Git restore commit cannot be empty.'));
         }
 
+        $this->snapshotDirtyWorktree('restore_commit:' . $commit, $root);
+
         $branch = trim($branch);
         if ($branch !== '') {
             $this->runGitOrFail(
@@ -136,6 +139,7 @@ class DeployGitMetadataService
     {
         $root = $this->normalizeRoot($root);
         $remote = trim($remote) !== '' ? trim($remote) : 'origin';
+        $this->snapshotDirtyWorktree('reset_hard:' . $remote . '/' . $branch, $root);
         $this->runGitOrFail(['reset', '--hard', $remote . '/' . $branch], 'Git reset failed: %{1}', $root);
     }
 
@@ -144,6 +148,118 @@ class DeployGitMetadataService
         $root = $this->normalizeRoot($root);
         $remote = trim($remote) !== '' ? trim($remote) : 'origin';
         $this->runGitOrFail(['pull', '--ff-only', $remote, $branch], 'Git pull failed: %{1}', $root);
+    }
+
+    /**
+     * 破坏性 git 对齐（checkout -f / reset --hard / 自动回滚）前，把当前脏改快照到
+     * var/deploy/dirty-snapshots/<时间戳>/，避免覆盖其它会话正在推进的修改。
+     * 返回快照目录；工作区干净时返回空串。快照失败必须让发布中止（fail-closed）。
+     */
+    public function snapshotDirtyWorktree(string $reason = '', ?string $root = null): string
+    {
+        $root = $this->normalizeRoot($root);
+        $statusResult = $this->runGit(['status', '--porcelain=v1', '-z', '--untracked-files=all'], $root);
+        if (($statusResult['exit_code'] ?? 1) !== 0) {
+            throw new \RuntimeException((string)__(
+                'Deploy dirty-worktree snapshot aborted: git status failed: %{1}',
+                [trim((string)($statusResult['stderr'] ?? ''))]
+            ));
+        }
+        $status = (string)($statusResult['stdout'] ?? '');
+        if ($status === '') {
+            return '';
+        }
+
+        $stamp = date('Ymd-His') . '-' . substr(sha1($status . microtime(true)), 0, 8);
+        $snapshotRoot = $root . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'deploy'
+            . DIRECTORY_SEPARATOR . 'dirty-snapshots' . DIRECTORY_SEPARATOR . $stamp;
+        if (!is_dir($snapshotRoot) && !@mkdir($snapshotRoot, 0775, true) && !is_dir($snapshotRoot)) {
+            throw new \RuntimeException((string)__(
+                'Deploy dirty-worktree snapshot aborted: unable to create %{1}',
+                [$snapshotRoot]
+            ));
+        }
+
+        $statusText = str_replace("\0", "\n", $status);
+        $entries = array_values(array_filter(explode("\0", $status), static fn(string $value): bool => $value !== ''));
+        if (@file_put_contents($snapshotRoot . DIRECTORY_SEPARATOR . 'status.txt', $statusText) === false) {
+            throw new \RuntimeException('Deploy dirty-worktree snapshot aborted: unable to write status.txt');
+        }
+
+        $diffResult = $this->runGit(['diff', '--binary', 'HEAD'], $root);
+        if (($diffResult['exit_code'] ?? 1) !== 0) {
+            throw new \RuntimeException((string)__(
+                'Deploy dirty-worktree snapshot aborted: git diff failed: %{1}',
+                [trim((string)($diffResult['stderr'] ?? ''))]
+            ));
+        }
+        $patch = (string)($diffResult['stdout'] ?? '');
+        if (@file_put_contents($snapshotRoot . DIRECTORY_SEPARATOR . 'tracked.patch', $patch) === false) {
+            throw new \RuntimeException('Deploy dirty-worktree snapshot aborted: unable to write tracked.patch');
+        }
+
+        $untrackedResult = $this->runGit(['ls-files', '--others', '--exclude-standard', '-z'], $root);
+        if (($untrackedResult['exit_code'] ?? 1) !== 0) {
+            throw new \RuntimeException((string)__(
+                'Deploy dirty-worktree snapshot aborted: git ls-files failed: %{1}',
+                [trim((string)($untrackedResult['stderr'] ?? ''))]
+            ));
+        }
+        $untracked = (string)($untrackedResult['stdout'] ?? '');
+        $untrackedFiles = $untracked === ''
+            ? []
+            : array_values(array_filter(explode("\0", $untracked), static fn(string $value): bool => $value !== ''));
+        $copied = 0;
+        foreach ($untrackedFiles as $relativePath) {
+            $relativePath = str_replace('\\', '/', $relativePath);
+            $segments = array_values(array_filter(explode('/', $relativePath), static fn(string $value): bool => $value !== ''));
+            if ($segments === [] || in_array('..', $segments, true)) {
+                continue;
+            }
+            $relativePath = implode('/', $segments);
+            $source = $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+            if (!is_file($source)) {
+                continue;
+            }
+            $destination = $snapshotRoot . DIRECTORY_SEPARATOR . 'untracked' . DIRECTORY_SEPARATOR
+                . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+            $destinationDir = dirname($destination);
+            if (!is_dir($destinationDir) && !@mkdir($destinationDir, 0775, true) && !is_dir($destinationDir)) {
+                throw new \RuntimeException((string)__(
+                    'Deploy dirty-worktree snapshot aborted: unable to create %{1}',
+                    [$destinationDir]
+                ));
+            }
+            if (!@copy($source, $destination)) {
+                throw new \RuntimeException((string)__(
+                    'Deploy dirty-worktree snapshot aborted: unable to copy %{1}',
+                    [$relativePath]
+                ));
+            }
+            ++$copied;
+        }
+
+        $manifest = [
+            'created_at' => date('c'),
+            'reason' => $reason,
+            'deploy_root' => $root,
+            'dirty_entries' => count($entries),
+            'untracked_copied' => $copied,
+            'tracked_patch_bytes' => strlen($patch),
+        ];
+        @file_put_contents(
+            $snapshotRoot . DIRECTORY_SEPARATOR . 'manifest.json',
+            (string)json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+        );
+
+        $logLine = '[' . date('c') . '] ' . ($reason !== '' ? $reason : 'deploy') . ' -> ' . $snapshotRoot
+            . ' dirty=' . count($entries) . ' untracked=' . $copied . "\n";
+        $logDir = $root . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'deploy';
+        if (is_dir($logDir) || @mkdir($logDir, 0775, true) || is_dir($logDir)) {
+            @file_put_contents($logDir . DIRECTORY_SEPARATOR . 'dirty-snapshot.log', $logLine, FILE_APPEND);
+        }
+
+        return $snapshotRoot;
     }
 
     public function getTagCommit(string $tag, ?string $root = null): string
