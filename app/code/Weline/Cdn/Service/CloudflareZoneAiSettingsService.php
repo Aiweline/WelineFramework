@@ -65,12 +65,16 @@ final class CloudflareZoneAiSettingsService
 
         $zoneId = (string)$domain->getData(Domain::schema_fields_ZONE_ID);
         $credentials = $this->ruleManager->getCredentials($domain);
+        // PUT replaces the object: send current writable fields + the minimal diff.
+        $payload = $plan['current'];
+        unset($payload['using_latest_model']);
+        $payload = \array_replace($payload, $plan['desired']);
         $this->httpClient->apiWithCredentials(
             $credentials,
             'PUT',
             \sprintf(self::ENDPOINT, \rawurlencode($zoneId)),
             [],
-            $plan['desired'],
+            $payload,
         );
 
         return $plan + [
