@@ -207,7 +207,27 @@ final class DatabaseReleaseCoordinator implements DatabaseReleaseCoordinatorInte
             'scope_key' => $scope->key(),
         ] + $options);
         if (($residual['expand'] ?? []) !== [] || ($residual['contract'] ?? []) !== []) {
-            throw new RuntimeException('apply 后仍有残余 expand/contract 变更，拒绝 commit');
+            // 逐条落日志（首 20 条）：不做汇总丢弃，运维需要知道是哪张表/哪个列反复残差。
+            $residualRows = \array_merge(
+                \is_array($residual['expand'] ?? null) ? $residual['expand'] : [],
+                \is_array($residual['contract'] ?? null) ? $residual['contract'] : [],
+            );
+            foreach (\array_slice($residualRows, 0, 20) as $row) {
+                \w_log_warning(
+                    'RSSE residual change: ' . $this->encode($row),
+                    [],
+                    'schema_release.log'
+                );
+            }
+            if (\count($residualRows) > 20) {
+                \w_log_warning(
+                    'RSSE residual change total: ' . \count($residualRows) . ' rows (first 20 logged)',
+                    [],
+                    'schema_release.log'
+                );
+            }
+            throw new RuntimeException('apply 后仍有残余 expand/contract 变更，拒绝 commit（共 '
+                . \count($residualRows) . ' 条，明细见 schema_release.log）');
         }
 
         $this->baselineBuilder->commit($releaseId, [
