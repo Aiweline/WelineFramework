@@ -393,6 +393,9 @@ class Start extends CommandAbstract
             $this->printer->error($exception->getMessage());
             return 1;
         }
+        if (!$this->assertStartupDiskHeadroom()) {
+            return 1;
+        }
         // 欢迎语
         $this->printWelcome();
 
@@ -571,6 +574,32 @@ class Start extends CommandAbstract
                 $this->printer->error(__(
                     '无法启动：实例 [%{1}] 正在执行启动、停止、重载或清理事务，请等待该有界事务结束后重试。',
                     [$instanceName],
+                ));
+                $lifecycleHolder = [];
+                try {
+                    $lifecycleData = GatewayProjectStateFilesystem::readOptional(
+                        ServerLifecycleOperationLock::pathForInstance($instanceName),
+                        16_384,
+                        'WLS lifecycle operation lock',
+                        true,
+                    );
+                    $decodedLifecycle = $lifecycleData !== null
+                        ? \json_decode($lifecycleData, true)
+                        : null;
+                    $lifecycleHolder = \is_array($decodedLifecycle) ? $decodedLifecycle : [];
+                } catch (\Throwable) {
+                    // A missing or unsafe payload is not ownership evidence.
+                    $lifecycleHolder = [];
+                }
+                if ($lifecycleHolder !== []) {
+                    $this->printer->note(__('事务持有者：PID %{1}，类型 %{2}，开始于 %{3}。', [
+                        (string)($lifecycleHolder['pid'] ?? '?'),
+                        (string)($lifecycleHolder['purpose'] ?? '?'),
+                        (string)($lifecycleHolder['started_at'] ?? '?'),
+                    ]));
+                }
+                $this->printer->note(__(
+                    '已等待锁超时。若持有者进程已不存在，直接重试即可；确认无并发启动时可执行 server:clean --force 清理运行态。'
                 ));
                 return 1;
             }
@@ -1853,7 +1882,11 @@ class Start extends CommandAbstract
         $restartCleanupPerformed = false;
         $instanceRunning = $fastRestartMetadata !== null
             || ($occupantWls === $instanceName)
-            || (!$skipPostStopPortInspection && $this->isServerRunning($instanceName, $port));
+            || (!$skipPostStopPortInspection && $this->isServerRunning($instanceName, $port))
+            // 运行态权威来源是 master lease（state=running + PID 存活 + 进程 birth 一致）。
+            // 端口占用/实例文件在过渡态会瞬时判「没在跑」，从而起第二代并收掉旧代
+            // （2026-10-26 线上实测：一次误判导致 2 分钟断站）。
+            || (!$skipPostStopPortInspection && $this->isMasterServingFromLease($instanceName));
         $instanceRedirectResidue = ($redirectOccupantWls === $instanceName) && !$instanceRunning;
         $this->traceStartupPhase($instanceName, 'restart-preflight:after', [
             'force_restart' => $forceRestart,
@@ -1863,6 +1896,28 @@ class Start extends CommandAbstract
             'redirect_occupant' => $redirectOccupantWls,
         ]);
         if (($instanceRunning || $instanceRedirectResidue) && !$forceRestart) {
+            // 服务代在跑不代表公网边缘在跑：曾经「边缘失败 → 整代回收」，
+            // 而「已在运行」直接返回 0 会让边缘故障永远无人修复。这里做收敛：
+            // 只补边缘，绝不重建服务代（Master PID 必须保持不变）。
+            if ($this->edgeNeedsRepair($instanceName, $config)) {
+                $this->printer->warning(__(
+                    'WLS 实例运行中，但项目托管 Nginx 未在为本实例提供服务；只修复边缘，不重建服务代。'
+                ));
+                $edgeExit = ObjectManager::getInstance(
+                    \Weline\Server\Console\Server\Nginx\Start::class
+                )->execute([
+                    'upstream' => (string)$port,
+                    'owner' => $instanceName,
+                ], []);
+                if ((int)$edgeExit === 0) {
+                    $this->printer->success(__('托管 Nginx 已恢复；WLS 服务代未变。'));
+                    return 0;
+                }
+                $this->printer->error(__(
+                    '边缘修复失败；WLS 服务代保持运行，请用 php bin/w server:nginx:status 定位。'
+                ));
+                return 1;
+            }
             $this->showAlreadyRunningInfo($instanceName, $port);
             return;
         }
@@ -5678,6 +5733,24 @@ class Start extends CommandAbstract
         // CLI --edge is applied below and therefore remains authoritative.
         if ($savedEdgeMode !== null) {
             $config = $this->applyConfiguredEdgeIntent($config, $savedEdgeMode);
+        }
+        // The default instance must not stay on a previously saved pure-WLS
+        // edge. Without an explicit --edge/--no-nginx (or an env edge intent),
+        // `server:start` defaults back to auto so the managed Nginx/gateway is
+        // tried first; auto still falls back to pure WLS only when the public
+        // edge is occupied. Explicit CLI/env WLS intent remains authoritative.
+        if ($instanceName === 'default'
+            && $savedEdgeMode
+                === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS
+            && $this->resolveEdgeCliMode($args) === null
+            && $envEdgeMode
+                !== \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS
+        ) {
+            $config = $this->applyConfiguredEdgeIntent(
+                $config,
+                $envEdgeMode
+                    ?? \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_AUTO,
+            );
         }
         if ($savedCertificateProfile !== null) {
             $config['certificate_profile'] = $savedCertificateProfile;
@@ -14162,7 +14235,154 @@ PHP;
         }
     }
 
-    protected function acquireStartLock(string $instanceName, int $timeout = 3): bool
+    /**
+     * A full data filesystem otherwise surfaces later as unrelated failures
+     * (compiled artifact write, lifecycle lock payload, autostart install
+     * request) and every retry fails the same way. Fail before any runtime
+     * state is touched, with the numbers an operator needs.
+     */
+    protected function assertStartupDiskHeadroom(int $minimumFreeBytes = 536_870_912): bool
+    {
+        $envMinimum = \getenv('WLS_MIN_FREE_BYTES');
+        if ($envMinimum !== false && \is_numeric($envMinimum) && (int)$envMinimum >= 0) {
+            $minimumFreeBytes = (int)$envMinimum;
+        }
+        if ($minimumFreeBytes === 0) {
+            return true;
+        }
+        $varDir = Env::varDir();
+        $free = @\disk_free_space($varDir);
+        if (!\is_int($free) && !\is_float($free)) {
+            // Unknown capacity must not block startup.
+            return true;
+        }
+        if ((int)$free >= $minimumFreeBytes) {
+            return true;
+        }
+        $this->printer->error(__(
+            '磁盘空间不足：%{1} 仅剩 %{2} MB（WLS 启动下限 %{3} MB）。启动会写编译产物、生命周期锁与托管 Nginx 配置；请先清理 var/backup/release、var/log 后重试。',
+            [
+                $varDir,
+                (string)\max(0, (int)\floor(((float)$free) / 1048576)),
+                (string)\intdiv($minimumFreeBytes, 1048576),
+            ],
+        ));
+        return false;
+    }
+
+    /**
+     * 运行态权威来源是 master lease，而不是端口占用或实例文件的瞬时读数。
+     * 过渡态（守护脚本重启中、实例文件正被改写）用启发式会误判「没在跑」，
+     * 于是起第二代、旧代被新一代顶掉，形成 2 分钟断站（2026-10-26 实测）。
+     */
+    protected function isMasterServingFromLease(string $instanceName): bool
+    {
+        $leaseFile = Env::varDir() . 'server' . DS . 'runtime' . DS . $instanceName
+            . DS . 'master_lease.json';
+        try {
+            $raw = GatewayProjectStateFilesystem::readOptional(
+                $leaseFile,
+                65_536,
+                'WLS master lease',
+                true,
+            );
+        } catch (\Throwable) {
+            return false;
+        }
+        if ($raw === null) {
+            return false;
+        }
+        $lease = \json_decode($raw, true);
+        if (!\is_array($lease) || !self::leaseReportsServingMaster($lease)) {
+            return false;
+        }
+        $pid = (int)($lease['master_pid'] ?? 0);
+        try {
+            $identity = (new MasterLeaseRuntimeIdentity())->captureProcessIdentity($pid);
+        } catch (\Throwable) {
+            // Dead/unreadable PID is not serving evidence; fall back to the old probes.
+            return false;
+        }
+
+        return self::leaseIdentityProvesServingMaster($lease, $identity);
+    }
+
+    /**
+     * @param array<string,mixed> $lease
+     */
+    public static function leaseReportsServingMaster(array $lease): bool
+    {
+        return \trim((string)($lease['state'] ?? '')) === 'running'
+            && (int)($lease['master_pid'] ?? 0) > 0;
+    }
+
+    /**
+     * PID 会被复用：只有 lease 里的 birth 与当前进程 birth 逐字一致，才算同一代 master。
+     *
+     * @param array<string,mixed> $lease
+     * @param array<string,mixed> $identity
+     */
+    public static function leaseIdentityProvesServingMaster(array $lease, array $identity): bool
+    {
+        if (!self::leaseReportsServingMaster($lease)) {
+            return false;
+        }
+        $leaseBirth = \strtolower(\trim((string)($lease['master_process_birth'] ?? '')));
+        $liveBirth = \strtolower(\trim((string)($identity['birth'] ?? '')));
+        if (\preg_match('/\A[a-f0-9]{64}\z/D', $leaseBirth) !== 1
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $liveBirth) !== 1
+        ) {
+            return false;
+        }
+
+        return \hash_equals($leaseBirth, $liveBirth);
+    }
+
+    /**
+     * 公网边缘是否需要收敛修复：只看运行态事实（进程 + owner 归属），不看配置「应该」怎样。
+     *
+     * @param array<string,mixed> $config
+     */
+    protected function edgeNeedsRepair(string $instanceName, array $config): bool
+    {
+        $edge = \Weline\Server\Service\Edge\Nginx\ManagedNginxService::fromEnv();
+        if (!$edge->paths()->managedEnabled()) {
+            return false;
+        }
+        $adapter = \trim((string)($config['edge_adapter'] ?? ''));
+        if ($adapter !== ''
+            && $adapter !== \Weline\Server\Service\Edge\EdgeAdapterInterface::NAME_NGINX
+        ) {
+            return false;
+        }
+
+        return self::edgeSnapshotNeedsRepair(
+            $edge->runtimeRunningSnapshot(),
+            $edge->ownerSnapshot(),
+            $instanceName,
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $running
+     * @param array<string,mixed>|null $owner
+     */
+    public static function edgeSnapshotNeedsRepair(
+        array $running,
+        ?array $owner,
+        string $instanceName
+    ): bool {
+        if (($running['running'] ?? false) !== true) {
+            return true;
+        }
+        if (!\is_array($owner)) {
+            return true;
+        }
+
+        return \trim((string)($owner['instance_name'] ?? '')) !== \trim($instanceName);
+    }
+
+    protected function acquireStartLock(string $instanceName, int $timeout = 30): bool
     {
         $this->startLockBlockedByLifecycle = false;
         if ($this->lifecycleOperationLock !== null) {

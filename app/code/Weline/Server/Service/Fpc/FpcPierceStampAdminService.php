@@ -41,7 +41,7 @@ final class FpcPierceStampAdminService
     }
 
     /**
-     * @return array{ok:bool, message:string, status:array<string, mixed>, nginx:array<string, mixed>}
+     * @return array{ok:bool, message:string, status:array<string, mixed>, nginx:array<string, mixed>, cdn:array<string, mixed>}
      */
     public function rotateAndPublish(bool $reloadNginx = true): array
     {
@@ -61,6 +61,8 @@ final class FpcPierceStampAdminService
                 ];
             }
         }
+        // 换章后 CDN 规则里仍是旧 secret：必须重推，否则新章不打穿 CF、旧章继续可用。
+        $cdn = $this->syncCdnPierceRule();
         $ok = (bool)($map['ok'] ?? false)
             && (bool)(($nginx['reload']['ok'] ?? false) || ($nginx['reload']['message'] ?? '') === 'skipped');
 
@@ -69,7 +71,26 @@ final class FpcPierceStampAdminService
             'message' => $ok ? 'rotated' : 'rotate_partial_failure',
             'status' => $this->status(),
             'nginx' => $nginx,
+            'cdn' => $cdn,
         ];
+    }
+
+    /**
+     * 穿章轮换后的 CDN Cache Rules 重推（Cdn 模块可选；失败不阻断换章）。
+     *
+     * @return array{ok:bool, message:string, domains?:list<array<string,mixed>>}
+     */
+    private function syncCdnPierceRule(): array
+    {
+        $class = 'Weline\\Cdn\\Service\\PierceRuleSyncService';
+        if (!\class_exists($class)) {
+            return ['ok' => false, 'message' => 'cdn_module_absent'];
+        }
+        try {
+            return \Weline\Framework\Manager\ObjectManager::getInstance($class)->pushAll();
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'message' => $e->getMessage()];
+        }
     }
 
     /**

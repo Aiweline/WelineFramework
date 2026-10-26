@@ -12701,7 +12701,7 @@ function handleStaticFile(string $uri, string $rawRequest, ?int $maxPreAdmission
         'mp4', 'mp3', 'm4a', 'aac', 'webm', 'ogg', 'm3u8',
         'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
         'txt', 'json', 'xml',
-        'zip', 'rar', '7z', 'gz', 'tar',
+        'zip', 'rar', '7z', 'gz', 'tar', 'apk', 'ipa',
     ];
     
     // MIME 类型映射
@@ -12737,6 +12737,8 @@ function handleStaticFile(string $uri, string $rawRequest, ?int $maxPreAdmission
         'm3u8' => 'application/vnd.apple.mpegurl',
         'pdf' => 'application/pdf',
         'zip' => 'application/zip',
+        'apk' => 'application/vnd.android.package-archive',
+        'ipa' => 'application/octet-stream',
         'gz' => 'application/gzip',
     ];
     

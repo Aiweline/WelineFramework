@@ -1890,12 +1890,44 @@ final class ManagedNginxService
             if (!$this->lifecycleDeadlineAvailable()) {
                 return false;
             }
-            if (!$this->probeWlsBackend($host, $port, $instanceName, $backendIdentity)) {
+            // 启动窗口竞态：WLS 刚 READY 时 dispatcher 可能还没开始正常受理
+            // （实测 11:50 三次探测全失败 → 整代被回收；实例健康后同一探测 8s 通过）。
+            // 因此在生命周期预算内轮询到「200 + 身份匹配」或超时，仍然 fail-closed。
+            if (!$this->probeWlsBackendUntilReady($host, $port, $instanceName, $backendIdentity)) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    /**
+     * 在生命周期预算内轮询后端健康（默认最多 25s），避免启动瞬间的短暂不可受理被判死。
+     *
+     * @param array{topology:'direct'|'dispatcher',listener_mode:string,upstream_port:int,upstream_ports:list<int>,worker_port:int,worker_count:int} $backendIdentity
+     */
+    private function probeWlsBackendUntilReady(
+        string $host,
+        int $port,
+        string $instanceName,
+        array $backendIdentity,
+    ): bool {
+        $waitBudget = 25.0;
+        $startedAt = \hrtime(true) / 1_000_000_000;
+        while (true) {
+            if ($this->probeWlsBackend($host, $port, $instanceName, $backendIdentity)) {
+                return true;
+            }
+            if (!$this->lifecycleDeadlineAvailable()) {
+                return false;
+            }
+            if ((\hrtime(true) / 1_000_000_000) - $startedAt >= $waitBudget) {
+                return false;
+            }
+            if (!$this->sleepWithinLifecycleDeadline(0.5)) {
+                return false;
+            }
+        }
     }
 
     /**
@@ -3932,8 +3964,8 @@ final class ManagedNginxService
                 || $resumedCount < 1
                 || $sameResumedCount + $crossResumedCount !== $resumedCount
                 || $resumedTlsHandshakeP95Us < 1
-                || $resumedTlsHandshakeP95Us
-                    > ManagedNginxTlsSessionResumptionVerifier::MAX_RESUMED_TLS_HANDSHAKE_P95_US
+                // p95 高于 SLO 只作观测（见 latencyGateVerdict）；这里不再当硬门禁，
+                // 否则一次网络抖动会让整代 Nginx 判定不可用并被回收（2026-10-25 线上 33h 停站）。
                 || (int)($decoded['tls_session_resumption_baseline_worker_pid'] ?? 0) < 1
                 || $observedWorkerCount < 1
                 || $effectiveWorkerCount < 1
@@ -4014,8 +4046,7 @@ final class ManagedNginxService
                 || $reloadMasterPid < 1
                 || $reloadMasterPid !== (int)($decoded['tls_session_resumption_master_pid'] ?? 0)
                 || $reloadHandshakeUs < 1
-                || $reloadHandshakeUs
-                    > ManagedNginxTlsSessionResumptionVerifier::MAX_RESUMED_TLS_HANDSHAKE_P95_US
+                // reload 后握手耗时同样只作 SLO 观测，不作为连续性硬门禁。
                 || \preg_match('/\A[a-f0-9]{32}\z/D', $reloadPreviousGeneration) !== 1
                 || \preg_match('/\A[a-f0-9]{32}\z/D', $reloadCurrentGeneration) !== 1
                 || \hash_equals($reloadPreviousGeneration, $reloadCurrentGeneration)
@@ -4114,6 +4145,8 @@ final class ManagedNginxService
             'tls_session_ticket_keys_shared' => (bool)($decoded['tls_session_ticket_keys_shared'] ?? false),
             'tls_session_resumption_runtime_verified' => $resumptionVerified,
             'tls_session_resumption_status' => (string)($decoded['tls_session_resumption_status'] ?? ''),
+            // SLO 观测必须落盘，否则「降级不阻断」等于没有证据（2026-10-26 门禁分层）。
+            'tls_session_resumption_latency_gate' => (string)($decoded['tls_session_resumption_latency_gate'] ?? ''),
             'tls_session_resumption_proof_model' => (string)($decoded['tls_session_resumption_proof_model'] ?? ''),
             'tls_session_resumption_baseline_result' => (string)($decoded['tls_session_resumption_baseline_result'] ?? ''),
             'tls_session_resumption_negative_control_result' => (string)($decoded['tls_session_resumption_negative_control_result'] ?? ''),
@@ -4146,6 +4179,7 @@ final class ManagedNginxService
             'tls_session_resumption_reload_probe_worker_pid' => (int)($decoded['tls_session_resumption_reload_probe_worker_pid'] ?? 0),
             'tls_session_resumption_reload_master_pid' => (int)($decoded['tls_session_resumption_reload_master_pid'] ?? 0),
             'tls_session_resumption_reload_tls_handshake_us' => (int)($decoded['tls_session_resumption_reload_tls_handshake_us'] ?? 0),
+            'tls_session_resumption_reload_latency_gate' => (string)($decoded['tls_session_resumption_reload_latency_gate'] ?? ''),
             'tls_session_resumption_reload_previous_config_generation' => (string)($decoded['tls_session_resumption_reload_previous_config_generation'] ?? ''),
             'tls_session_resumption_reload_config_generation' => (string)($decoded['tls_session_resumption_reload_config_generation'] ?? ''),
             'tls_session_resumption_reload_verified_at' => (string)($decoded['tls_session_resumption_reload_verified_at'] ?? ''),

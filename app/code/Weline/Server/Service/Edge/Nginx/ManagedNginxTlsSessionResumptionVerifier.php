@@ -183,13 +183,15 @@ final class ManagedNginxTlsSessionResumptionVerifier
             }
 
             $resumedTlsHandshakeP95Us = $this->percentile95($resumedTlsHandshakeMicros);
-            if ($resumedTlsHandshakeP95Us < 1
-                || $resumedTlsHandshakeP95Us > self::MAX_RESUMED_TLS_HANDSHAKE_P95_US
-            ) {
+            if ($resumedTlsHandshakeP95Us < 1) {
                 return $this->failure(
-                    'managed nginx resumed TLS handshake p95 exceeded the 50ms release gate'
+                    'managed nginx resumed TLS handshake p95 could not be measured'
                 );
             }
+            // p95 是性能 SLO，不是功能正确性。2026-10-25 线上把 50ms 当发布硬门禁，
+            // 一次抖动让整代启动失败并被回收，站点停 33 小时；这里只降级为观测，
+            // 功能项（复用成立 / 同跨 worker 绑定 / 负向对照 / 样本数）仍是硬门禁。
+            $latencyGate = self::latencyGateVerdict($resumedTlsHandshakeP95Us);
             $sameWorkerStatus = 'verified';
             $crossWorkerStatus = $effectiveWorkerCount === 1
                 ? 'not_applicable'
@@ -197,6 +199,7 @@ final class ManagedNginxTlsSessionResumptionVerifier
             $evidence = [
                 'tls_session_resumption_runtime_verified' => true,
                 'tls_session_resumption_status' => 'verified',
+                'tls_session_resumption_latency_gate' => $latencyGate['state'],
                 'tls_session_resumption_proof_model' => self::PROOF_MODEL,
                 'tls_session_resumption_baseline_result' => '.',
                 'tls_session_resumption_negative_control_result' => '.',
@@ -368,11 +371,13 @@ final class ManagedNginxTlsSessionResumptionVerifier
                     'managed nginx did not resume the pre-reload TLS 1.3 Session on the new Worker generation'
                 );
             }
-            if ($handshakeUs < 1 || $handshakeUs > self::MAX_RESUMED_TLS_HANDSHAKE_P95_US) {
+            if ($handshakeUs < 1) {
                 return $this->failure(
-                    'managed nginx post-reload resumed TLS handshake exceeded the 50ms release gate'
+                    'managed nginx post-reload resumed TLS handshake could not be measured'
                 );
             }
+            // 同上：reload 后的握手耗时也属 SLO 观测，不阻断 reload 连续性判定。
+            $reloadLatencyGate = self::latencyGateVerdict($handshakeUs);
 
             return [
                 'ok' => true,
@@ -387,6 +392,7 @@ final class ManagedNginxTlsSessionResumptionVerifier
                     'tls_session_resumption_reload_probe_worker_pid' => $probeWorkerPid,
                     'tls_session_resumption_reload_master_pid' => $masterPid,
                     'tls_session_resumption_reload_tls_handshake_us' => $handshakeUs,
+                    'tls_session_resumption_reload_latency_gate' => $reloadLatencyGate['state'],
                     'tls_session_resumption_reload_previous_config_generation' => $previousGeneration,
                     'tls_session_resumption_reload_config_generation' => $configGeneration,
                     'tls_session_resumption_reload_verified_at' => \date('c'),
@@ -407,6 +413,26 @@ final class ManagedNginxTlsSessionResumptionVerifier
             $this->closeShare($share);
         }
         $probe['share'] = null;
+    }
+
+    /**
+     * p95 是性能 SLO，不是功能门禁；调用方只能把它当观测，不能当发布阻断条件。
+     */
+    public static function isLatencyWithinSlo(int $resumedTlsHandshakeP95Us): bool
+    {
+        return $resumedTlsHandshakeP95Us >= 1
+            && $resumedTlsHandshakeP95Us <= self::MAX_RESUMED_TLS_HANDSHAKE_P95_US;
+    }
+
+    /**
+     * @return array{state:string,slo_us:int}
+     */
+    public static function latencyGateVerdict(int $resumedTlsHandshakeP95Us): array
+    {
+        return [
+            'state' => self::isLatencyWithinSlo($resumedTlsHandshakeP95Us) ? 'passed' : 'exceeded',
+            'slo_us' => self::MAX_RESUMED_TLS_HANDSHAKE_P95_US,
+        ];
     }
 
     /** @return array{ok:bool,message:string,evidence:array<string,mixed>} */

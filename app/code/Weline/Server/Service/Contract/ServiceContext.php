@@ -85,9 +85,7 @@ class ServiceContext
                         'Host-gateway WLS context requires authenticated wls-edge/2 project and epoch metadata.'
                     );
                 }
-            } elseif (($nginx['managed'] ?? null) !== true
-                || ($nginx['auto_start'] ?? null) !== true
-            ) {
+            } elseif ($this->explicitlyDeniesManagedNginx($nginx)) {
                 throw new \InvalidArgumentException(
                     'Nginx WLS context requires managed=true and auto_start=true.'
                 );
@@ -205,6 +203,31 @@ class ServiceContext
     public function isDispatcher(): bool
     {
         return $this->runtimeSelection->isDispatcher();
+    }
+
+    /**
+     * 只有显式否决（managed=false 或 auto_start=false）才拒绝 Nginx WLS 上下文；
+     * 缺省（未配置）视为许可，避免项目 env.php 未内联 wls.edge.nginx 时启动被卡死。
+     *
+     * @param array<string,mixed> $nginx
+     */
+    private function explicitlyDeniesManagedNginx(array $nginx): bool
+    {
+        foreach (['managed', 'auto_start'] as $key) {
+            if (!\array_key_exists($key, $nginx)) {
+                continue;
+            }
+            $value = $nginx[$key];
+            if ($value === false
+                || $value === 0
+                || $value === '0'
+                || (\is_string($value) && \in_array(\strtolower(\trim($value)), ['false', 'no', 'off'], true))
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function isDirect(): bool

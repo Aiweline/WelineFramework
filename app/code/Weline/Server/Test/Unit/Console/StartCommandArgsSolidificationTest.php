@@ -154,8 +154,8 @@ final class StartCommandArgsSolidificationTest extends TestCase
     public function testLegacyAdapterIntentIsMappedAcrossSavedAndEnvShapes(): void
     {
         $cases = [
-            'saved flat wls' => [['edge_adapter' => 'wls'], [], 'default', 'wls'],
-            'saved nested wls' => [['edge' => ['adapter' => 'wls']], [], 'default', 'wls'],
+            'saved flat wls' => [['edge_adapter' => 'wls'], [], 'shop', 'wls'],
+            'saved nested wls' => [['edge' => ['adapter' => 'wls']], [], 'shop', 'wls'],
             'saved flat nginx' => [['edge_adapter' => 'nginx'], [], 'default', 'legacy'],
             'saved nested nginx' => [['edge' => ['adapter' => 'nginx']], [], 'default', 'legacy'],
             'env flat wls' => [null, ['wls' => ['edge_adapter' => 'wls']], 'default', 'wls'],
@@ -186,6 +186,32 @@ final class StartCommandArgsSolidificationTest extends TestCase
                 $label,
             );
         }
+    }
+
+    public function testDefaultInstanceDoesNotStayOnSavedPureWlsWithoutExplicitIntent(): void
+    {
+        $saved = ['edge_mode' => 'wls', 'edge_adapter' => 'wls'];
+
+        $auto = $this->createProbe($saved)->resolveConfig('default', ['no-ssl' => true]);
+        self::assertSame('auto', $auto['edge_mode'] ?? null);
+        self::assertSame('nginx', $auto['edge_adapter'] ?? null);
+
+        $explicit = $this->createProbe($saved)->resolveConfig('default', [
+            'edge' => 'wls',
+            'no-ssl' => true,
+        ]);
+        self::assertSame('wls', $explicit['edge_mode'] ?? null);
+
+        $envWls = $this->createProbe($saved, ['wls' => ['edge_adapter' => 'wls']])
+            ->resolveConfig('default', ['no-ssl' => true]);
+        self::assertSame('wls', $envWls['edge_mode'] ?? null);
+
+        $envNginx = $this->createProbe($saved, ['wls' => ['edge_adapter' => 'nginx']])
+            ->resolveConfig('default', ['no-ssl' => true]);
+        self::assertSame('legacy', $envNginx['edge_mode'] ?? null);
+
+        $named = $this->createProbe($saved)->resolveConfig('shop', ['no-ssl' => true]);
+        self::assertSame('wls', $named['edge_mode'] ?? null);
     }
 
     public function testEdgeIntentPriorityIsCliThenSavedThenInstanceEnvThenBaseEnv(): void
