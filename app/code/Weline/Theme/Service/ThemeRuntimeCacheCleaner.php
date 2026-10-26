@@ -17,7 +17,6 @@ use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\Framework\Runtime\WlsRuntimeAdapterInterface;
 use Weline\SystemConfig\Api\Scope\ScopeContext;
 use Weline\Theme\Block\Partials;
 use Weline\Theme\Helper\ThemeData;
@@ -106,8 +105,13 @@ final class ThemeRuntimeCacheCleaner
             'failures' => [],
         ];
 
-        // Skip nested staging promote — Shared/process purge below would wipe it.
-        // Atomic closure: purge pointers first, then one final staging→promote.
+        // Skip nested staging promote — the final staging→promote below owns it.
+        // Publish = new build number: invalidate compile/runtime state (templates,
+        // theme data, pools feeding render), then let the generation bump re-sign
+        // the identity and the staging warm-promote re-bake html-disk. FPC pools /
+        // Shared FPC / CDN are NOT purged here: old generations keep serving during
+        // the warmup window (acceptable generation tolerance), and the CDN refresh
+        // is enqueue-only — WarmupRunner purges each URL right before warming it.
         $cleared = $this->clearNonGlobalCaches($themeId, $reason, false);
         $result['steps'] = \array_merge($result['steps'], $cleared['steps'] ?? []);
         $result['failures'] = \array_merge($result['failures'], $cleared['failures'] ?? []);
@@ -116,26 +120,7 @@ final class ThemeRuntimeCacheCleaner
         $this->runStep($result, 'theme_namespace_generations_all', function (): void {
             $this->bumpAllThemeNamespaces();
         });
-        $this->runStep($result, 'fpc_cache_pools', function (): void {
-            $cacheManager = ObjectManager::getInstance(CacheManager::class);
-            foreach (['fpc', 'router'] as $pool) {
-                if (\method_exists($cacheManager, 'hasPool') && !$cacheManager->hasPool($pool)) {
-                    continue;
-                }
-                $cacheManager->pool($pool)->clear();
-            }
-        });
-        $this->runStep($result, 'wls_shared_fpc_full', function () use ($reason): void {
-            $this->clearWlsSharedFpcAndRouter($reason);
-        });
-        $this->runStep($result, 'wls_worker_broadcast_all', function (): void {
-            $broadcaster = $this->runtimeProvider(RuntimeControlBroadcasterInterface::class);
-            if ($broadcaster instanceof RuntimeControlBroadcasterInterface) {
-                // null = all WLS instances, not only the current worker.
-                $broadcaster->cacheClear(null);
-            }
-        });
-        $this->runStep($result, 'cdn_full_page_purge', function (): void {
+        $this->runStep($result, 'cdn_publish_refresh_enqueue', function (): void {
             $this->purgeCdnFullPageCaches();
         });
         // LAST: html-disk staging seed → promote. Warm is the cron's job (generation bump above).
@@ -737,82 +722,38 @@ final class ThemeRuntimeCacheCleaner
         return \rawurldecode($parts[1]);
     }
 
-    private function clearWlsSharedFpcAndRouter(string $reason): void
-    {
-        $adapter = $this->runtimeProvider(WlsRuntimeAdapterInterface::class);
-        if ($adapter instanceof WlsRuntimeAdapterInterface) {
-            $facade = $adapter->createSharedState([
-                'consumer_code' => $reason,
-                'prefer_direct_connect' => true,
-                'pool_size' => 1,
-                'auto_start' => false,
-            ]);
-            $facade->clearCache('router');
-            $facade->clearCache('fpc');
-            $facade->disconnect();
-            return;
-        }
-
-        // Fallback when not under WLS adapter: clear SharedCacheState if present.
-        if ($this->currentRuntimeInstanceName() === null) {
-            return;
-        }
-        $state = $this->runtimeProvider(SharedCacheStateInterface::class);
-        if ($state instanceof SharedCacheStateInterface) {
-            $state->clearCache('router');
-            $state->clearCache('fpc');
-            $state->clearNamespace('theme_runtime');
-        }
-    }
-
     /**
-     * Best-effort CDN full-page purge for every enabled domain.
-     * Soft-fails into the step result when Cdn is absent or a domain purge fails.
+     * Publish-driven URL refresh: instead of CDN purge-everything, register every
+     * warmup-provider URL into the CDN warmup queue. The warmup runner purges each
+     * URL's edge cache immediately before warming it (one at a time). URLs not yet
+     * warmed keep serving the previous generation at the edge — tolerated by the
+     * warmup-transition generation check (isAcceptableStorefrontGenerationId).
+     * Soft-fails into the step result when Cdn is absent or collection fails.
      */
     private function purgeCdnFullPageCaches(): void
     {
         if (!\class_exists(\Weline\Cdn\Model\Domain::class)
-            || !\class_exists(\Weline\Cdn\Service\CachePurger::class)
+            || !\class_exists(\Weline\Cdn\Service\WarmupCollectService::class)
         ) {
             return;
         }
-        /** @var \Weline\Cdn\Model\Domain $domainModel */
-        $domainModel = ObjectManager::getInstance(\Weline\Cdn\Model\Domain::class);
-        $domains = (clone $domainModel)->reset()
-            ->where(\Weline\Cdn\Model\Domain::schema_fields_ENABLED, 1)
-            ->select()
-            ->fetch()
-            ->getItems();
-        if ($domains === []) {
-            return;
-        }
-        /** @var \Weline\Cdn\Service\CachePurger $purger */
-        $purger = ObjectManager::getInstance(\Weline\Cdn\Service\CachePurger::class);
+        /** @var \Weline\Cdn\Service\WarmupCollectService $collector */
+        $collector = ObjectManager::getInstance(\Weline\Cdn\Service\WarmupCollectService::class);
         $errors = [];
-        foreach ($domains as $domain) {
-            if (!$domain instanceof \Weline\Cdn\Model\Domain) {
-                continue;
-            }
-            $domainId = (int)$domain->getData(\Weline\Cdn\Model\Domain::schema_fields_DOMAIN_ID);
-            $host = (string)$domain->getData(\Weline\Cdn\Model\Domain::schema_fields_DOMAIN_NAME);
-            if ($domainId < 1) {
-                continue;
-            }
-            try {
-                $result = $purger->purge($domainId, 'everything', []);
-                if (($result['success'] ?? false) !== true) {
-                    // Adapters that reject everything fall back to host purge.
-                    $result = $purger->purge($domainId, 'hosts', ['hosts' => [$host]]);
-                }
-                if (($result['success'] ?? false) !== true) {
-                    $errors[] = $host !== '' ? $host : ('domain:' . $domainId);
-                }
-            } catch (\Throwable $e) {
-                $errors[] = $e->getMessage();
-            }
+        try {
+            $summary = $collector->collectAllProviders();
+            $inserted = (int)($summary['inserted'] ?? 0);
+            Env::log(
+                'theme_cache_clear',
+                'cdn post-publish url refresh queued inserted=' . $inserted
+                . ' providers=' . (int)($summary['providers'] ?? 0)
+                . ' filtered=' . (int)($summary['filtered'] ?? 0),
+            );
+        } catch (\Throwable $e) {
+            $errors[] = 'warmup_collect:' . $e->getMessage();
         }
         if ($errors !== []) {
-            throw new \RuntimeException('cdn_purge_partial_failure:' . \implode(';', $errors));
+            throw new \RuntimeException('cdn_refresh_partial_failure:' . \implode(';', $errors));
         }
     }
 

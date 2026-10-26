@@ -13,6 +13,31 @@ use PHPUnit\Framework\TestCase;
  */
 final class FrontendApiContractsTest extends TestCase
 {
+    public static function setUpBeforeClass(): void
+    {
+        if (!\defined('BP')) {
+            // 仓库根（composer 契约测试惯例：BP = repo root）。
+            $root = dirname(__DIR__, 9);
+            // __DIR__ 在个别运行环境丢非 ASCII 段时回落真实仓库根。
+            if (!\is_dir($root . '/app/code/Weline')) {
+                $probe = __DIR__;
+                for ($i = 0; $i < 12; ++$i) {
+                    if (\is_dir($probe . '/app/code/Weline')) {
+                        $root = $probe;
+                        break;
+                    }
+                    $parent = \dirname($probe);
+                    if ($parent === $probe) {
+                        break;
+                    }
+                    $probe = $parent;
+                }
+            }
+            \define('BP', $root . \DIRECTORY_SEPARATOR);
+        }
+        parent::setUpBeforeClass();
+    }
+
     public function testAllFrontendApiContractsPass(): void
     {
         $failures = [];
@@ -66,6 +91,9 @@ final class FrontendApiContractsTest extends TestCase
             'ScopeBootstrapRoute::testClientFetchesCanonicalHolePunchPath' => function () {
             $this->assert_ScopeBootstrapRoute_testClientFetchesCanonicalHolePunchPath();
         },
+            'ScopeBootstrapRoute::testResponseCarriesAcceptableStorefrontGenerationIds' => function () {
+            $this->assert_ScopeBootstrapRoute_testResponseCarriesAcceptableStorefrontGenerationIds();
+        },
         ];
     }
 
@@ -77,6 +105,15 @@ private function assert_QueryBinCacheHeader_testQueryBinResolvesBinQueryCacheHea
     self::assertStringContainsString('readCacheMarker', $source);
     self::assertStringContainsString('array $cacheHeaders', $source);
     self::assertDoesNotMatchRegularExpression('/private function binaryResponse\([^\)]*\)\s*:\s*Response\s*\{\s*[^}]*setHeader\(\'Cache-Control\',\s*\'no-store\'\);/s', $source, 'binaryResponse must accept cache headers instead of hardcoding only no-store');
+}
+
+private function assert_ScopeBootstrapRoute_testResponseCarriesAcceptableStorefrontGenerationIds(): void
+{
+    $src = (string) \file_get_contents(BP . 'app/code/Weline/Frontend/Controller/Api/ScopeBootstrap.php');
+    // Warmup-transition tolerance contract: server hands the client the acceptable list.
+    self::assertStringContainsString("'acceptable_theme_published_version_ids'", $src);
+    self::assertStringContainsString('collectAcceptableStorefrontGenerationIds', $src);
+    self::assertStringContainsString('acceptableStorefrontGenerationIds', $src);
 }
 
 private function assert_QueryBinLocalization_testApplyLocalizationPrefersDocumentPathname(): void
@@ -98,9 +135,11 @@ private function assert_QueryBinDeployGeneration_testHandshakeAssertsClientTheme
     self::assertStringContainsString("'deploy_reload_required'", $src);
     self::assertStringContainsString('主题已发布新版本。请重新加载页面以继续。', $src);
     self::assertStringContainsString('StorefrontGenerationIdentity', $src);
-    // Strict current generation: old/rollback generations must be corrected, not accepted.
+    // Warmup-transition tolerance (2026-10-26): QueryBin accepts the current generation
+    // plus the most recent ACCEPTABLE_GENERATION_DEPTH sealed generations of the same
+    // theme chain × owner quad. Strict current-only remains in the promote assertion.
     self::assertStringNotContainsString('collectAcceptableStorefrontGenerationIds', $src);
-    self::assertStringContainsString('isCurrentStorefrontGenerationId', $src);
+    self::assertStringContainsString('isAcceptableStorefrontGenerationId', $src);
     self::assertStringContainsString('page_generation_token', $src);
     self::assertStringContainsString('theme_published_version_id', $src);
     self::assertStringNotContainsString('assertClientDeployGenerationCurrent', $src);
@@ -124,6 +163,9 @@ private function assert_QueryBinDeployGeneration_testApiJsComparesHolePunchTheme
     self::assertStringContainsString('deploy_reload_required:', $script);
     self::assertStringContainsString("readScopeTipCache(currentStorefrontLocale(), 'deploy_reload_required')", $script);
     self::assertStringContainsString('rememberScopeTipsFromPayload(payload)', $script);
+    // Warmup-transition tolerance: page stamp listed by the server keeps working (no reload).
+    self::assertStringContainsString('acceptable_theme_published_version_ids', $script);
+    self::assertStringContainsString('pageGenerationAcceptable', $script);
     self::assertStringContainsString("locale: pageLocale || undefined", $script);
     self::assertStringNotContainsString('payload.deploy_version', $script);
     // Client response-cache generation segment = theme published id, not system deploy.

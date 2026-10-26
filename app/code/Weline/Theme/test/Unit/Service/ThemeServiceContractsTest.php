@@ -4335,12 +4335,15 @@ private function assert_ThemeLayoutScopeSlotMerge_testThemeRuntimeCacheCleanerPu
     self::assertStringContainsString('fpc_router_cache_pools', $source);
     self::assertStringContainsString('theme_namespace_generations_all', $source);
     self::assertStringContainsString('bumpAllThemeNamespaces(', $source);
-    self::assertStringContainsString('fpc_cache_pools', $source);
-    self::assertStringContainsString('wls_shared_fpc_full', $source);
-    self::assertStringContainsString('wls_worker_broadcast_all', $source);
-    self::assertStringContainsString('cdn_full_page_purge', $source);
+    // Publish = new build number (2026-10-26): no FPC pool wipe, no Shared FPC purge,
+    // no worker broadcast-all, no CDN purge-everything. CDN refresh is enqueue-only
+    // (WarmupRunner purges per-URL before warming); old generations keep serving.
+    self::assertStringContainsString('cdn_publish_refresh_enqueue', $source);
     self::assertStringContainsString('purgeCdnFullPageCaches(', $source);
-    self::assertStringContainsString('cacheClear(null)', $source);
+    self::assertStringNotContainsString("runStep(\$result, 'fpc_cache_pools'", $source);
+    self::assertStringNotContainsString("runStep(\$result, 'wls_shared_fpc_full'", $source);
+    self::assertStringNotContainsString("runStep(\$result, 'wls_worker_broadcast_all'", $source);
+    self::assertStringNotContainsString("runStep(\$result, 'cdn_full_page_purge'", $source);
     $workspace = $this->read_ThemeLayoutScopeSlotMerge('app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspace.php');
     self::assertStringContainsString('dispatchScopedPublishResourceChange(', $workspace);
     self::assertStringContainsString('\w_changed($change)', $workspace);
@@ -4707,14 +4710,16 @@ private function assert_ThemePublishHtmlDiskGenerationAtomic_testClearAllThemeRe
     $allPos = \strpos($src, 'function clearAllThemeRelatedCaches(');
     self::assertNotFalse($allPos);
     $chunk = \substr($src, $allPos, 5500);
-    $sharedPos = \strpos($chunk, 'wls_shared_fpc_full');
-    $cdnPos = \strpos($chunk, 'cdn_full_page_purge');
+    // Publish flow (2026-10-26): no Shared FPC purge step; CDN refresh is enqueue-only
+    // and must still precede the staging warm-promote (warm is LAST).
+    self::assertStringNotContainsString('wls_shared_fpc_full', $chunk);
+    self::assertStringNotContainsString('wls_worker_broadcast_all', $chunk);
+    self::assertStringNotContainsString('fpc_cache_pools', $chunk);
+    $cdnPos = \strpos($chunk, 'cdn_publish_refresh_enqueue');
     $warmPos = \strpos($chunk, "runStep(\$result, 'fpc_staging_warm_promote'");
-    self::assertNotFalse($sharedPos);
     self::assertNotFalse($cdnPos);
     self::assertNotFalse($warmPos);
-    self::assertGreaterThan($sharedPos, $warmPos, 'staging warm must run AFTER shared purge');
-    self::assertGreaterThan($cdnPos, $warmPos, 'staging warm must be LAST after CDN purge');
+    self::assertGreaterThan($cdnPos, $warmPos, 'staging warm must be LAST after CDN refresh enqueue');
 }
 
 private function assert_ThemePublishHtmlDiskGenerationAtomic_testStagingWarmRepublishesHomepageViaPierceIntoOpenStaging(): void

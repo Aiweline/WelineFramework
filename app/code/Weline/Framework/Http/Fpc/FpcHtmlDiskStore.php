@@ -37,6 +37,7 @@ final class FpcHtmlDiskStore
 {
     public const LIVE_NAME = 'live';
     public const PREVIOUS_NAME = 'previous';
+    public const PREVIOUS2_NAME = 'previous2';
     public const GENERATIONS_DIR = 'generations';
     public const STAGING_ID_FILE = '.staging-gen';
 
@@ -46,10 +47,10 @@ final class FpcHtmlDiskStore
     /** BinQuery wire leaf basename (brotli authority: index.bq.br). */
     public const BQ_BASENAME = 'index.bq';
 
-    /** Live + previous symlink pair. Expired dirs beyond this are not the current generation. */
-    public const RETAIN_GENERATIONS = 2;
+    /** Live + previous + previous2 symlink chain. Expired dirs beyond this are not the current generation. */
+    public const RETAIN_GENERATIONS = 3;
 
-    /** Expired generation directories kept after rotate (previous counts as one). */
+    /** Expired generation directories kept after rotate (previous/previous2 count as two). */
     public const RETAIN_EXPIRED_GENERATIONS = 3;
 
     /** Cron deletes FPC generation dirs and cache files older than this many days. */
@@ -100,6 +101,13 @@ final class FpcHtmlDiskStore
         self::ensureLiveGeneration();
 
         return self::readSymlinkGenerationId(self::PREVIOUS_NAME);
+    }
+
+    public static function previous2GenerationId(): ?string
+    {
+        self::ensureLiveGeneration();
+
+        return self::readSymlinkGenerationId(self::PREVIOUS2_NAME);
     }
 
     /**
@@ -629,6 +637,7 @@ final class FpcHtmlDiskStore
     public static function beginStagingGeneration(bool $seedFromLive = true): string
     {
         self::ensureLiveGeneration();
+        self::assertDiskHeadroomForExtraGeneration();
         $genId = self::newGenerationId();
         $dir = self::generationsRoot() . \DIRECTORY_SEPARATOR . $genId;
         if (!self::ensureDirectory($dir)) {
@@ -724,6 +733,7 @@ final class FpcHtmlDiskStore
     public static function rotateToEmptyGeneration(): string
     {
         self::ensureLiveGeneration();
+        self::assertDiskHeadroomForExtraGeneration();
         $genId = self::newGenerationId();
         $dir = self::generationsRoot() . \DIRECTORY_SEPARATOR . $genId;
         if (!self::ensureDirectory($dir)) {
@@ -945,6 +955,7 @@ final class FpcHtmlDiskStore
             if ($name === '.' || $name === '..'
                 || $name === self::LIVE_NAME
                 || $name === self::PREVIOUS_NAME
+                || $name === self::PREVIOUS2_NAME
                 || $name === self::GENERATIONS_DIR
                 || $name === self::STAGING_ID_FILE
             ) {
@@ -974,16 +985,23 @@ final class FpcHtmlDiskStore
         $root = self::root();
         $livePath = $root . \DIRECTORY_SEPARATOR . self::LIVE_NAME;
         $prevPath = $root . \DIRECTORY_SEPARATOR . self::PREVIOUS_NAME;
+        $prev2Path = $root . \DIRECTORY_SEPARATOR . self::PREVIOUS2_NAME;
         $currentId = self::readSymlinkGenerationId(self::LIVE_NAME);
         $previousId = $forcePreviousId !== null ? $forcePreviousId : $currentId;
+        // Third link in the chain: the previous2 generation only advances when the
+        // previous link actually moves, so repeated promotes keep 3 generations live.
+        $previous2Id = self::readSymlinkGenerationId(self::PREVIOUS_NAME);
 
         if (!self::replaceSymlink($livePath, self::GENERATIONS_DIR . '/' . $newGenId)) {
             return false;
         }
         if ($previousId !== null && $previousId !== '' && $previousId !== $newGenId) {
+            if ($previous2Id !== null && $previous2Id !== $previousId && $previous2Id !== $newGenId) {
+                self::replaceSymlink($prev2Path, self::GENERATIONS_DIR . '/' . $previous2Id);
+            }
             self::replaceSymlink($prevPath, self::GENERATIONS_DIR . '/' . $previousId);
         }
-        self::gcOldGenerations([$newGenId, $previousId]);
+        self::gcOldGenerations([$newGenId, $previousId, $previous2Id]);
 
         return true;
     }
@@ -991,6 +1009,76 @@ final class FpcHtmlDiskStore
     /**
      * @param list<?string> $keepIds
      */
+    /**
+     * Disk guard: opening one more full generation must not push the volume to full
+     * (disk-full = WLS full stop, nginx 111, 503 site-wide). Require free space ≥
+     * the total size of all existing generation dirs × ratio (default 1.0, i.e. one
+     * extra generation worth of headroom; seeded staging is mostly hardlinks so the
+     * real cost is lower, this is the conservative bound).
+     */
+    public const DISK_MIN_FREE_RATIO_ENV = 'wls.performance.fpc_disk_min_free_ratio';
+
+    public static function assertDiskHeadroomForExtraGeneration(): void
+    {
+        $ratio = (float)(Env::get(self::DISK_MIN_FREE_RATIO_ENV, 1.0) ?: 1.0);
+        if ($ratio <= 0) {
+            return; // Guard disabled explicitly.
+        }
+        $gensRoot = self::generationsRoot();
+        $totalBytes = self::treeBytes($gensRoot, 3);
+        if ($totalBytes <= 0) {
+            return;
+        }
+        $free = @\disk_free_space($gensRoot);
+        if (!\is_float($free) && !\is_int($free)) {
+            return; // Unknown free space — don't block on stat failure.
+        }
+        if ((float)$free < $totalBytes * $ratio) {
+            throw new \RuntimeException(
+                'fpc_disk_headroom_insufficient'
+                . ' free=' . (int)$free
+                . ' generations_bytes=' . $totalBytes
+                . ' ratio=' . $ratio,
+            );
+        }
+    }
+
+    /**
+     * Recursive directory size with a depth cap; resilient to concurrent removals.
+     */
+    private static function treeBytes(string $dir, int $depth): int
+    {
+        if ($depth < 0 || !\is_dir($dir)) {
+            return 0;
+        }
+        $total = 0;
+        $items = @\scandir($dir);
+        if (!\is_array($items)) {
+            return 0;
+        }
+        foreach ($items as $name) {
+            if ($name === '.' || $name === '..') {
+                continue;
+            }
+            $path = $dir . \DIRECTORY_SEPARATOR . $name;
+            if (\is_link($path)) {
+                $size = @\filesize($path);
+                $total += \is_int($size) ? $size : 0;
+                continue;
+            }
+            if (\is_dir($path)) {
+                $total += self::treeBytes($path, $depth - 1);
+                continue;
+            }
+            if (\is_file($path)) {
+                $size = @\filesize($path);
+                $total += \is_int($size) ? $size : 0;
+            }
+        }
+
+        return $total;
+    }
+
     private static function gcOldGenerations(array $keepIds): void
     {
         $keep = [];
@@ -999,8 +1087,8 @@ final class FpcHtmlDiskStore
                 $keep[$id] = true;
             }
         }
-        // Always keep whatever live/previous currently resolve to.
-        foreach ([self::LIVE_NAME, self::PREVIOUS_NAME] as $link) {
+        // Always keep whatever live/previous/previous2 currently resolve to.
+        foreach ([self::LIVE_NAME, self::PREVIOUS_NAME, self::PREVIOUS2_NAME] as $link) {
             $id = self::readSymlinkGenerationId($link);
             if ($id !== null) {
                 $keep[$id] = true;
@@ -1028,7 +1116,8 @@ final class FpcHtmlDiskStore
         }
         $liveId = self::readSymlinkGenerationId(self::LIVE_NAME);
         $previousId = self::readSymlinkGenerationId(self::PREVIOUS_NAME);
-        foreach (self::expiredGenerationIdsToDelete($all, $liveId, $previousId, $staging) as $name) {
+        $previous2Id = self::readSymlinkGenerationId(self::PREVIOUS2_NAME);
+        foreach (self::expiredGenerationIdsToDelete($all, $liveId, $previousId, $staging, self::RETAIN_EXPIRED_GENERATIONS, $previous2Id) as $name) {
             if (isset($keep[$name])) {
                 continue;
             }
@@ -1052,6 +1141,7 @@ final class FpcHtmlDiskStore
         ?string $previousId,
         ?string $stagingId,
         int $keepExpired = self::RETAIN_EXPIRED_GENERATIONS,
+        ?string $previous2Id = null,
     ): array {
         $expired = [];
         foreach ($generationIds as $id) {
@@ -1064,8 +1154,10 @@ final class FpcHtmlDiskStore
         $ids = \array_keys($expired);
         \rsort($ids, \SORT_STRING);
         $kept = 0;
-        if ($previousId !== null && $previousId !== '' && $previousId !== $liveId && isset($expired[$previousId])) {
-            $kept = 1;
+        foreach ([$previousId, $previous2Id] as $anchorId) {
+            if ($anchorId !== null && $anchorId !== '' && $anchorId !== $liveId && isset($expired[$anchorId])) {
+                $kept++;
+            }
         }
         $room = $keepExpired - $kept;
         if ($room < 0) {
@@ -1074,7 +1166,7 @@ final class FpcHtmlDiskStore
         $delete = [];
         $extraKept = 0;
         foreach ($ids as $id) {
-            if ($id === $previousId) {
+            if ($id === $previousId || $id === $previous2Id) {
                 continue;
             }
             if ($extraKept < $room) {
@@ -1148,6 +1240,16 @@ final class FpcHtmlDiskStore
                 $link = self::root() . \DIRECTORY_SEPARATOR . self::PREVIOUS_NAME;
                 if (\is_link($link) && !\unlink($link)) {
                     throw new \RuntimeException('fpc_html_disk_previous_unlink_failed');
+                }
+            }
+        }
+        $previous2Id = self::readSymlinkGenerationId(self::PREVIOUS2_NAME);
+        if ($previous2Id !== null) {
+            $previous2Dir = $gensRoot . \DIRECTORY_SEPARATOR . $previous2Id;
+            if (!\is_dir($previous2Dir)) {
+                $link2 = self::root() . \DIRECTORY_SEPARATOR . self::PREVIOUS2_NAME;
+                if (\is_link($link2) && !\unlink($link2)) {
+                    throw new \RuntimeException('fpc_html_disk_previous2_unlink_failed');
                 }
             }
         }

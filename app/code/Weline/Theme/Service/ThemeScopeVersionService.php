@@ -260,6 +260,73 @@ final class ThemeScopeVersionService
     }
 
     /**
+     * 最近 N 个已封存（SEALED）版本 id，version_number 倒序。
+     *
+     * 用途：预热过渡窗口内放行旧店面世代（html-disk 多版本共存）。
+     * 严格限定 owner 四元组（theme_id+scope+store_mode+area），不展开祖先 Scope，
+     * 保证「同 Scope 链内」限定，跨 Scope / 跨主题不放行。
+     *
+     * @return list<int>
+     */
+    public function listRecentSealedVersionIds(
+        int $themeId,
+        string $scope,
+        string $storeMode = 'normal',
+        string $area = 'frontend',
+        int $limit = 3,
+    ): array {
+        $ids = [];
+        foreach ($this->listRecentSealedVersions($themeId, $scope, $storeMode, $area, $limit) as $version) {
+            $ids[] = $version->getVersionId();
+        }
+
+        return $ids;
+    }
+
+    /**
+     * @return list<ThemeScopeVersion>
+     */
+    public function listRecentSealedVersions(
+        int $themeId,
+        string $scope,
+        string $storeMode = 'normal',
+        string $area = 'frontend',
+        int $limit = 3,
+    ): array {
+        $scope = $this->normalizeScope($scope);
+        if ($themeId < 1 || $scope === '' || $limit < 1) {
+            return [];
+        }
+        $storeMode = $storeMode !== '' ? $storeMode : 'normal';
+        $area = \in_array($area, ['frontend', 'backend'], true) ? $area : 'frontend';
+
+        $result = $this->versionModel->reset()
+            ->where(ThemeScopeVersion::schema_fields_THEME_ID, $themeId)
+            ->where(ThemeScopeVersion::schema_fields_SCOPE, $scope)
+            ->where(ThemeScopeVersion::schema_fields_STORE_MODE, $storeMode)
+            ->where(ThemeScopeVersion::schema_fields_AREA, $area)
+            ->where(ThemeScopeVersion::schema_fields_LIFECYCLE, ThemeScopeVersion::LIFECYCLE_SEALED)
+            ->order(ThemeScopeVersion::schema_fields_VERSION_NUMBER, 'DESC')
+            ->limit($limit)
+            ->select()
+            ->fetchArray();
+
+        $versions = [];
+        foreach (\is_array($result) ? $result : [] as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $version = clone $this->versionModel;
+            $version->setData($row);
+            if ($version->getVersionId() > 0) {
+                $versions[] = $version;
+            }
+        }
+
+        return $versions;
+    }
+
+    /**
      * 当前编辑版本：selection 是唯一可变权威（优先草稿，其次该 owner 已发布版本）。
      *
      * 尚未建立 selection 行的 owner（历史/仅 legacy 标志）继续回落 is_current，

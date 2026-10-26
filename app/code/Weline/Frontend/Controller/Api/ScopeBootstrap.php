@@ -105,6 +105,10 @@ class ScopeBootstrap extends FrontendRestController
             // Storefront generation authority = Scope-published theme version (not system deploy).
             'theme_published_version_id' => $generation['theme_published_version_id'],
             'theme_published_version' => $generation['theme_published_version'],
+            // Warmup-transition tolerance: pages baked with any of these (recent sealed)
+            // generations keep working during the post-publish warmup window — the client
+            // must NOT auto-reload when the page stamp is in this list (max 3, current first).
+            'acceptable_theme_published_version_ids' => $this->acceptableStorefrontGenerationIds(),
             'page_generation_token' => \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::pageGenerationToken(),
             // Warm client locale tip cache (hole-punch may detect mismatch without QueryBin tip).
             'tips' => FrontendScopeReloadTip::catalogForCurrentLocale(),
@@ -112,6 +116,31 @@ class ScopeBootstrap extends FrontendRestController
         ], \JSON_UNESCAPED_UNICODE) ?: '{"ok":false}');
 
         return $response;
+    }
+
+    /**
+     * Warmup-transition acceptable generation ids (current + recent sealed, max 3).
+     * Empty when the Theme resolver is absent or fails — client then keeps the
+     * strict current-only comparison (fail-closed).
+     *
+     * @return list<string>
+     */
+    private function acceptableStorefrontGenerationIds(): array
+    {
+        if (!\class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
+            return [];
+        }
+        try {
+            /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
+            $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class
+            );
+            $ids = $resolver->collectAcceptableStorefrontGenerationIds();
+
+            return \array_values(\array_map('strval', \array_keys($ids)));
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**

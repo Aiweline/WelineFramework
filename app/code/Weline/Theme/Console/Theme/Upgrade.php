@@ -344,20 +344,18 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 __('步骤失败：') . (string)$step . ($detail !== '' ? ' — ' . $detail : '')
             );
         }
-        if (isset($failures['cdn_full_page_purge'])) {
-            // `-f` means "I need the edge invalidated now". A warning plus
-            // exit 0 here is the exact false-success that made operators
-            // believe Cloudflare had been cleared while it kept serving old
-            // HTML. Promoted artifacts are intentionally not rolled back;
-            // only the command result turns red.
+        if (isset($failures['cdn_publish_refresh_enqueue'])) {
+            // `-f` enqueue step failure = warmup queue was NOT refreshed, so the
+            // post-publish per-URL purge→warm cycle won't run. Promoted artifacts
+            // are intentionally not rolled back; only the command result turns red.
             throw new ConsoleException(__(
-                'CDN 全页缓存清理失败，边缘可能继续返回旧 HTML。已 promote 的产物不会回滚；'
-                . '请配置 CDN API 令牌后重试，或等待边缘 HTML TTL（默认 300 秒）自然过期。详情：%{detail}',
-                ['detail' => \trim((string)$failures['cdn_full_page_purge'])]
+                'CDN 预热刷新队列注册失败，边缘将按旧世代继续服务且不会被逐 URL 刷新。'
+                . '请配置 CDN 预热 Provider 后重试，或手动触发预热收集。详情：%{detail}',
+                ['detail' => \trim((string)$failures['cdn_publish_refresh_enqueue'])]
             ));
         }
         $this->printing->success(__(
-            '店面 FPC/CDN 清理完成：成功 %{ok}，失败 %{fail}',
+            '店面缓存刷新完成（构建号换代 + 预热队列）：成功 %{ok}，失败 %{fail}',
             ['ok' => $ok, 'fail' => $fail]
         ));
     }

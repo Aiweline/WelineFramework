@@ -465,7 +465,20 @@
                     || window.Weline.config.theme_published_version_id
                 )) || ''
             ).trim();
-            if (serverThemeId !== '' && pageThemeId !== '' && serverThemeId !== pageThemeId) {
+            // Warmup-transition tolerance: the server answers with the acceptable
+            // generation list (current + recent sealed, max 3). A page baked with any
+            // listed generation keeps working — no auto-reload — while the warmup
+            // queue refreshes URLs one by one. Absent/empty list keeps strict compare.
+            const acceptableThemeIds = payload && Array.isArray(payload.acceptable_theme_published_version_ids)
+                ? payload.acceptable_theme_published_version_ids.map((id) => String(id || '').trim()).filter(Boolean)
+                : [];
+            const pageGenerationAcceptable = acceptableThemeIds.some(
+                (acceptableId) => acceptableId.toLowerCase() === pageThemeId.toLowerCase(),
+            );
+            if (serverThemeId !== ''
+                && pageThemeId !== ''
+                && serverThemeId !== pageThemeId
+                && !pageGenerationAcceptable) {
                 const error = new Error('[Weline.Api] Theme published generation changed. Reload required.');
                 error.code = 'deploy_reload_required';
                 error.status = 409;

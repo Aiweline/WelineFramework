@@ -792,8 +792,10 @@ class QueryBin extends FrontendRestController
         }
 
         // Multi-Scope: the page may bake a Channel/Store generation while a bare
-        // request resolves another fallback owner. Accept only that scope's CURRENT
-        // published generation — never an older sealed one.
+        // request resolves another fallback owner. Accept that scope's CURRENT
+        // published generation, plus (warmup-transition tolerance) the most recent
+        // ACCEPTABLE_GENERATION_DEPTH sealed generations of the same theme chain ×
+        // owner quad — pages not yet re-warmed after publish must keep serving.
         $clientId = \trim($clientThemePublishedVersionId);
         if ($clientId !== ''
             && \class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
@@ -802,7 +804,7 @@ class QueryBin extends FrontendRestController
                 $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
                     \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class
                 );
-                if ($resolver->isCurrentStorefrontGenerationId($clientId)) {
+                if ($resolver->isAcceptableStorefrontGenerationId($clientId)) {
                     return;
                 }
             } catch (\Throwable) {

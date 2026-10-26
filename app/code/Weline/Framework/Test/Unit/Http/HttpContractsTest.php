@@ -1131,6 +1131,27 @@ private function assert_FpcHtmlDiskStore_testExpiredGenerationsKeepThreeAndSeven
     );
     \sort($delete);
     self::assertSame(['20261023000001-a', '20261023000002-b'], $delete);
+    // previous2 anchor: chain keeps live+previous+previous2 and fills remaining room newest-first.
+    $deleteChain = FpcHtmlDiskStore::expiredGenerationIdsToDelete(
+        [
+            '20261023000006-live',
+            '20261023000005-prev',
+            '20261023000004-prev2',
+            '20261023000003-c',
+            '20261023000002-b',
+            '20261023000001-a',
+            '20261023000007-staging',
+        ],
+        '20261023000006-live',
+        '20261023000005-prev',
+        '20261023000007-staging',
+        FpcHtmlDiskStore::RETAIN_EXPIRED_GENERATIONS,
+        '20261023000004-prev2',
+    );
+    \sort($deleteChain);
+    self::assertSame(['20261023000001-a', '20261023000002-b'], $deleteChain);
+    self::assertSame(3, FpcHtmlDiskStore::RETAIN_GENERATIONS);
+    self::assertNotNull(FpcHtmlDiskStore::previous2GenerationId() === null ? null : null);
     $now = \time();
     self::assertTrue(FpcHtmlDiskStore::generationIsOlderThanDays('20200101000000-old', 7, $now));
     self::assertFalse(FpcHtmlDiskStore::generationIsOlderThanDays(\date('YmdHis') . '-new', 7, $now));

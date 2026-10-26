@@ -355,6 +355,32 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
                     if ($legacy !== '') {
                         $ids[$legacy] = true;
                     }
+                    // Warmup-transition tolerance: also include the most recent N-1
+                    // older sealed generations of the same owner quad.
+                    try {
+                        $recent = $versions->listRecentSealedVersions(
+                            $candidateThemeId,
+                            $scope,
+                            'normal',
+                            'frontend',
+                            self::ACCEPTABLE_GENERATION_DEPTH,
+                        );
+                    } catch (\Throwable) {
+                        continue;
+                    }
+                    $epoch = $this->storefrontTuEpoch($candidateThemeId);
+                    foreach ($recent as $recentVersion) {
+                        if (!$recentVersion instanceof ThemeScopeVersion || $recentVersion->getVersionId() <= 0) {
+                            continue;
+                        }
+                        $recentCode = ThemeScopeGenerationCode::fromVersion($recentVersion);
+                        if ($recentCode !== '') {
+                            if ($epoch > 0) {
+                                $recentCode .= '.e' . $epoch;
+                            }
+                            $ids[$recentCode] = true;
+                        }
+                    }
                 }
             }
         }
@@ -409,6 +435,71 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
                 }
                 if (\strcasecmp($code, $clientVersionId) === 0) {
                     return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Warmup-transition tolerance check for a client-supplied wire id.
+     *
+     * html-disk multi-generation coexistence: during the post-publish warmup window a
+     * visitor may still carry a stamp from a PREVIOUS sealed generation (page not yet
+     * re-warmed). Accept the current generation plus the most recent (ACCEPTABLE_GENERATION_DEPTH)
+     * sealed versions of the SAME theme ancestor-chain × owner scope quad — never a
+     * different theme's generation, never a scope outside the chain, never beyond depth.
+     * Promote assertions keep using isCurrentStorefrontGenerationId().
+     */
+    public const ACCEPTABLE_GENERATION_DEPTH = 3;
+
+    public function isAcceptableStorefrontGenerationId(string $clientVersionId): bool
+    {
+        $clientVersionId = \trim($clientVersionId);
+        if ($clientVersionId === ''
+            || \preg_match(ThemeScopeGenerationCode::PATTERN, $clientVersionId) !== 1
+            || \preg_match('/^t(\d+)\./', $clientVersionId, $matched) !== 1) {
+            return false;
+        }
+        if ($this->isCurrentStorefrontGenerationId($clientVersionId)) {
+            return true;
+        }
+
+        $themeId = (int)$matched[1];
+        if ($themeId < 1) {
+            return false;
+        }
+        /** @var ThemeScopeVersionService $versions */
+        $versions = ObjectManager::getInstance(ThemeScopeVersionService::class);
+        foreach ($this->themeIdChain($themeId) as $candidateThemeId) {
+            foreach ($this->storefrontScopeProbeList($candidateThemeId) as $scope) {
+                $epoch = $this->storefrontTuEpoch($candidateThemeId);
+                try {
+                    $recent = $versions->listRecentSealedVersions(
+                        $candidateThemeId,
+                        $scope,
+                        'normal',
+                        'frontend',
+                        self::ACCEPTABLE_GENERATION_DEPTH,
+                    );
+                } catch (\Throwable) {
+                    continue;
+                }
+                foreach ($recent as $version) {
+                    if (!$version instanceof ThemeScopeVersion || $version->getVersionId() <= 0) {
+                        continue;
+                    }
+                    $code = ThemeScopeGenerationCode::fromVersion($version);
+                    if ($code === '') {
+                        continue;
+                    }
+                    if ($epoch > 0) {
+                        $code .= '.e' . $epoch;
+                    }
+                    if (\strcasecmp($code, $clientVersionId) === 0) {
+                        return true;
+                    }
                 }
             }
         }

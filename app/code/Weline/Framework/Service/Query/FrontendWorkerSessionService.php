@@ -1271,6 +1271,28 @@ final class FrontendWorkerSessionService
     }
 
     /**
+     * Warmup-transition tolerance: an older sealed storefront generation of the same
+     * theme chain × owner quad (most recent ACCEPTABLE_GENERATION_DEPTH) is acceptable
+     * during the post-publish warmup window. Fail-closed on any resolver error.
+     */
+    private function isAcceptableWarmupGeneration(string $clientVersionId): bool
+    {
+        if (!\class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
+            return false;
+        }
+        try {
+            /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
+            $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class
+            );
+
+            return $resolver->isAcceptableStorefrontGenerationId($clientVersionId);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
      * @return array{secret:string,deploy_version:string,worker_build_id:string,attested_area:string,created_at:int,expires_at:int,scope_binding?:FrontendWorkerScopeBinding,backend_binding?:FrontendWorkerBackendBinding,theme_published_version_id?:string}
      */
     private function assertSession(
@@ -1300,10 +1322,13 @@ final class FrontendWorkerSessionService
         $themePublishedVersionId = $this->normalizeOptionalThemePublishedVersionId($themePublishedVersionId);
         if ($attestedArea === FrontendWorkerExecutionContext::AREA_FRONTEND && $storedThemeId !== '') {
             // Storefront identity = Scope-published theme version (not system deploy stamp).
-            if ($storedThemeId !== $themePublishedVersionId) {
+            if ($storedThemeId !== $themePublishedVersionId
+                && !$this->isAcceptableWarmupGeneration($storedThemeId)) {
                 // Generation drift is a page-generation mismatch, not an auth failure:
                 // 409 lets QueryBin attach the current page_generation_token and the
-                // main thread auto-reloads onto the current Scope generation.
+                // main thread auto-reloads onto the current Scope generation. During the
+                // post-publish warmup window an older sealed generation of the same theme
+                // chain × owner quad stays acceptable (html-disk multi-generation).
                 throw new FrontendQueryException(
                     'deploy_reload_required',
                     'Worker session theme generation mismatch.',

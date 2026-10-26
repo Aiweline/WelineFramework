@@ -141,6 +141,12 @@ class WarmupRunner
             }
         }
 
+        // Publish-driven warmup contract: purge the URL's edge cache FIRST, then warm.
+        // Purge success moves the next fetch to the origin (fresh generation bakes onto
+        // html-disk and re-caches at the edge); purge failure keeps the edge copy so the
+        // URL keeps serving the old generation (warmup-transition tolerance, no 409).
+        $this->purgeUrlEdgeCache($url, $domainId ? (int)$domainId : null);
+
         $fetchUrl = $this->resolveFetchUrl($url);
         $localDevFetch = $fetchUrl !== $url;
         $ch = curl_init($fetchUrl);
@@ -189,6 +195,47 @@ class WarmupRunner
         $warmupUrl->save();
 
         return 'success';
+    }
+
+    /**
+     * Per-URL edge purge before warm. Best-effort: any failure is logged and warm
+     * proceeds — the edge keeps serving the previous generation until the next pass.
+     */
+    private function purgeUrlEdgeCache(string $url, ?int $domainId): void
+    {
+        if (!class_exists(CachePurger::class)) {
+            return;
+        }
+        try {
+            $purger = $this->objectManager->getInstance(CachePurger::class);
+            $target = $domainId;
+            if (!$target) {
+                $parts = parse_url($url);
+                $host = strtolower((string)($parts['host'] ?? ''));
+                if ($host === '' || !class_exists(Domain::class)) {
+                    return;
+                }
+                $domain = $this->objectManager->getInstance(Domain::class)->reset()
+                    ->where(Domain::schema_fields_DOMAIN_NAME, $host)
+                    ->select()
+                    ->fetch()
+                    ->getItems();
+                $first = reset($domain);
+                if (!$first instanceof Domain) {
+                    return;
+                }
+                $target = (int)$first->getData(Domain::schema_fields_DOMAIN_ID);
+            }
+            if (!$target) {
+                return;
+            }
+            $result = $purger->purge($target, 'urls', ['urls' => [$url]]);
+            if (($result['success'] ?? false) !== true) {
+                w_log_error('预热前逐URL边缘purge未成功: ' . $url);
+            }
+        } catch (\Throwable $e) {
+            w_log_error('预热前逐URL边缘purge异常: ' . $url . ' ' . $e->getMessage());
+        }
     }
 
     /**

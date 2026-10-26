@@ -226,8 +226,9 @@ private function assert_ThemeUpgradeCommand_testParseArgumentsRecognizesForceFlu
     self::assertStringContainsString('theme_upgrade_force_fpc', $source);
     self::assertStringContainsString('-f, --force', $source);
     self::assertStringContainsString('显式全量清（故障恢复）', $source);
-    self::assertStringContainsString("failures['cdn_full_page_purge']", $source);
-    self::assertStringContainsString('CDN 全页缓存清理失败', $source);
+    // Publish = build-number flip (2026-10-26): CDN step is enqueue-only.
+    self::assertStringContainsString("failures['cdn_publish_refresh_enqueue']", $source);
+    self::assertStringContainsString('CDN 预热刷新队列注册失败', $source);
     self::assertStringContainsString('theme_upgrade_scoped', $source);
     self::assertStringContainsString('purgeLayoutsForThemeTargets', $source);
     self::assertStringContainsString("cache_invalidation'] = 'none'", $source);

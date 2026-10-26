@@ -114,6 +114,11 @@ class WarmupSend implements ObserverInterface
                     $existing->setData(WarmupUrl::schema_fields_SITE_ID, $siteId);
                     $existing->setData(WarmupUrl::schema_fields_DOMAIN_ID, $domainId);
                     $existing->setData(WarmupUrl::schema_fields_PROVIDER, $provider);
+                    // 发布驱动的重新收集要重跑预热（逐URL purge→warm）：
+                    // 重置处理进度，否则已成功的行不会再被 WarmupRunner 选中。
+                    $existing->setData(WarmupUrl::schema_fields_PROCESSED_COUNT, 0);
+                    $existing->setData(WarmupUrl::schema_fields_TARGET_COUNT, 1);
+                    $existing->setData(WarmupUrl::schema_fields_STATUS, WarmupUrl::STATUS_PENDING);
                     $existing->setData(WarmupUrl::schema_fields_UPDATED_AT, time());
                     $existing->save();
                     $updatedCount++;
