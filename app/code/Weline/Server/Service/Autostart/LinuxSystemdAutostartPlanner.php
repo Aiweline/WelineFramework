@@ -14,7 +14,7 @@ final class LinuxSystemdAutostartPlanner
      * 指纹（写进 unit 的 marker）只覆盖输入参数，不含生成物正文，
      * 不加版本号会导致「生成器修好了但生产永远 already_installed」。
      */
-    public const GENERATOR_VERSION = 3;
+    public const GENERATOR_VERSION = 4;
 
     public const MARKER = 'X-Weline-Wls-Autostart';
     public const MARKER_VALUE = '1';
@@ -88,7 +88,8 @@ final class LinuxSystemdAutostartPlanner
             self::MARKER_VALUE,
         ]));
 
-        $startArgs = ['server:start', $instance, '-n'];
+        // -n/--no-wait 只属于 server:reload；server:start 传它没有语义（且会误导运维以为已就绪）。
+        $startArgs = ['server:start', $instance];
         if ($useDispatcher) {
             $startArgs[] = '--dispatcher';
         }

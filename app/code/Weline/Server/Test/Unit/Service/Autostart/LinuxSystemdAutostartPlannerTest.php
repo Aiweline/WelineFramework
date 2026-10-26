@@ -34,6 +34,8 @@ final class LinuxSystemdAutostartPlannerTest extends TestCase
             $plan['service_body'],
         );
         self::assertStringContainsString('--dispatcher', $plan['script_body']);
+        // -n 是 server:reload 的 no-wait 参数，不能传给 server:start
+        self::assertStringNotContainsString("'server:start' 'default' '-n'", $plan['script_body']);
         self::assertStringContainsString('--worker-memory-limit=512M', $plan['script_body']);
         self::assertStringContainsString('server:shared:start', $plan['script_body']);
         // 参数必须按位置传给内层 bash；拼进 -c "…" 字符串会把 -n/--dispatcher 打坏（systemd exit 2）
