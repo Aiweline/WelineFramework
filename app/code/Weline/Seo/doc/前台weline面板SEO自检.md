@@ -53,3 +53,27 @@ SEO ：JSON-LD 关键字段原文（brand / offers.hasMerchantReturnPolicy / shi
 - 复验：首页注入 `dev-tool-panel-loader`=1、`data-token-required`=1、`__WELINE_SEO_INSPECTOR__`≥1；
   `POST …/panel/session` → `{"success":true,"message":"Weline 面板已授权。","ttl":3600}`。
 - 关闭方式：删 `dev_tool.panel.enable_in_prod` 或置 `false`，`cache:clear` + `server:reload`。
+
+## 6. 命令行批量校验（机器证据，推荐）
+
+面板只能人看；要给证据/回归，用仓内脚本 `tests/seo_audit_urls.php`（纯 curl，不需要 bootstrap）：
+
+```bash
+# 按 sitemap 抽样 20 条，商品页强校验商家信息字段
+php tests/seo_audit_urls.php \
+  --sitemap=https://<站点>/sitemaps/default/canonical/sitemap_weline-product-product_en-us_1.xml \
+  --limit=20 --strict-merchant
+
+# 指定 URL 文件 / 单 URL
+php tests/seo_audit_urls.php --urls=/tmp/urls.txt --limit=50
+php tests/seo_audit_urls.php --url=https://<站点>/product/<slug> --strict-merchant
+```
+
+输出每条一行，结尾 `SUMMARY total=… bad=… ok=…` + 问题计数；**有 BAD 时 exit 1**（可直接当 CI / 验收门禁）。
+
+检查项：HTTP 200、`<title>`、meta description、canonical、robots、JSON-LD 是否可解析、
+Product/ProductGroup 的 `name`≤150 / `description` / `brand` / `hasVariant` / `offers`，
+以及 `--strict-merchant` 下的 `hasMerchantReturnPolicy.merchantReturnDays`、`shippingDetails`、`Organization.email/address`。
+
+实测（2026-10-26，changanhanfu en_US 商品 sitemap）：
+`SUMMARY total=20 bad=0 ok=20`，逐条 `return_policy=5/5…10/10`、`shipping_details=5/5…15/15`、`brand=y`。
