@@ -756,8 +756,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         // SQLite 使用 PRAGMA table_info
         // 这里不依赖 Connector::processName，直接使用原始表名，交给 SQLite 自身处理
         $sql = "PRAGMA table_info('{$tableName}')";
-        // 通过连接器的 query 接口执行，避免直接访问底层 PDO
-        $rows = $this->connection->query($sql)->fetchArray();
+        // 通过自身 query 接口执行（$this 即 Connector/Query；clone 出的实例上
+        // SqlTrait $connection 属性恒为 null，走延迟检出路径才正确）
+        $rows = $this->query($sql)->fetchArray();
 
         foreach ($rows as $info) {
             if (($info['name'] ?? '') === $fieldName) {

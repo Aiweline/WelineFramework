@@ -218,16 +218,19 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
      */
     public function getColumnDefinition(string $tableName, string $fieldName): ?array
     {
-        $configProvider = $this->connection->getConfigProvider();
+        // $this->connection（SqlTrait 属性）在 clone 出的 Query/Connector 上恒为 null
+        // （Connector::__clone 清空 lease/link，连接未自绑定）；走自身延迟检出路径，
+        // 与 getLink()/getWrappedConnection() 同源，Fiber 每隔离连接下也正确。
+        $configProvider = $this->getConfigProvider();
         $schema = $configProvider->getDatabase();
 
         // 使用参数化查询从 information_schema 读取字段结构
-        $sql = "SELECT * FROM information_schema.columns 
-                WHERE table_schema = :schema 
-                  AND table_name = :table 
+        $sql = "SELECT * FROM information_schema.columns
+                WHERE table_schema = :schema
+                  AND table_name = :table
                   AND column_name = :column";
 
-        $pdo = $this->connection->getLink();
+        $pdo = $this->getLink();
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
             ':schema' => $schema,

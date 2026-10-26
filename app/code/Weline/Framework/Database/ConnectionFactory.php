@@ -22,7 +22,6 @@ use Weline\Framework\Database\Exception\LinkException;
 use Weline\Framework\Database\Service\DriverRegistry;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
-
 class ConnectionFactory
 {
     /**
@@ -195,7 +194,11 @@ class ConnectionFactory
     public function getConnector(): ConnectorInterface
     {
         $fiber = \Fiber::getCurrent();
-        if ($fiber !== null && Runtime::isPersistent()) {
+        if ($fiber !== null) {
+            // WLS 常驻与 CLI Fiber（setup:upgrade 路由/ACL 收集等）都必须按 Fiber
+            // 独立检出连接：共享单例的 lease 归属第一个检出的 Fiber，另一个
+            // 活跃 Fiber 再 create() 会命中 database_connector_owner_mismatch。
+            // 每 Fiber 独立适配器（WeakMap 持有，Fiber 结束随 GC 归还/关闭）。
             self::$fiberConnectors ??= new \WeakMap();
             $bag = self::$fiberConnectors[$fiber] ?? [];
             if (isset($bag[$this->instanceKey])) {
@@ -212,33 +215,33 @@ class ConnectionFactory
         }
 
         $instance = &self::$instances[$this->instanceKey];
-        
+
         // 确保 connectors 数组已初始化
         if (!isset($instance['connectors'])) {
             $instance['connectors'] = [];
         }
-        
+
         if (is_null($instance['defaultConnector'])) {
             $adapter = $this->getConnectorAdapter();
-            
+
             // 确保适配器不为空
             if (is_null($adapter)) {
                 throw new LinkException(__('无法创建数据库连接适配器'));
             }
-            
+
             // 确保连接器已初始化：调用 create() 方法初始化连接
             $adapter->create();
-            
+
             // 将适配器存储到 connectors 数组中
             $instance['connectors']['master'] = $adapter;
             $instance['defaultConnector'] = $instance['connectors']['master'];
         }
-        
+
         // 确保返回的连接器不为空
         if (is_null($instance['defaultConnector'])) {
             throw new LinkException(__('数据库连接器未初始化'));
         }
-        
+
         return $instance['defaultConnector'];
     }
 
@@ -277,8 +280,8 @@ class ConnectionFactory
     {
         $instance = &self::$instances[$this->instanceKey];
         $configProvider = $instance['configProvider'];
-        $fiberWls = \Fiber::getCurrent() !== null && Runtime::isPersistent();
-        $connector = $fiberWls ? null : ($instance['defaultConnector'] ?? null);
+        $inFiber = \Fiber::getCurrent() !== null;
+        $connector = $inFiber ? null : ($instance['defaultConnector'] ?? null);
         
         # 非写操作，用均衡算法从从库中选择一个
         $write_flags = [
@@ -304,7 +307,7 @@ class ConnectionFactory
                 # FIXME 均衡算法（先随机选一个）
                 $slave_config = $slaves_configs[array_rand($slaves_configs)];
                 $config_key = md5($slave_config['host'] . $slave_config['port'] . $slave_config['database']);
-                if ($fiberWls) {
+                if ($inFiber) {
                     $connector = $this->fiberConnectorForConfig($slave_config, $config_key);
                 } else {
                     if (!isset($instance['connectors'][$config_key])) {
@@ -315,7 +318,7 @@ class ConnectionFactory
                 }
             } else {
                 $connector = $this->getConnector();
-                if (!$fiberWls) {
+                if (!$inFiber) {
                     $instance['defaultConnector'] = $connector;
                 }
             }
