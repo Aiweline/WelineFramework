@@ -16,6 +16,7 @@ use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
 
 class AffiliateService
 {
@@ -73,6 +74,7 @@ class AffiliateService
         private readonly ?AffiliateScopeResolver $scopeResolver = null,
         private readonly ?AffiliateScopeFormDataService $scopeFormDataService = null,
         private readonly ?AffiliateAnalyticsService $analyticsService = null,
+        private ?AffiliateRuleService $ruleService = null,
     ) {
     }
 
@@ -80,7 +82,8 @@ class AffiliateService
         int $customerId,
         int $websiteId = 0,
         string $storeCode = '',
-        string $channelCode = ''
+        string $channelCode = '',
+        ?float $commissionRate = null
     ): Affiliate {
         if ($customerId <= 0) {
             throw new \InvalidArgumentException((string) \__('Customer ID is required.'));
@@ -105,6 +108,9 @@ class AffiliateService
         }
 
         $now = date('Y-m-d H:i:s');
+        $rate = $commissionRate !== null
+            ? round(max(0.0, min(1.0, $commissionRate)), 4)
+            : AffiliateRuleService::DEFAULT_COMMISSION_RATE;
 
         $affiliate = $this->newAffiliateModel();
         $affiliate->clearData()->save([
@@ -113,7 +119,7 @@ class AffiliateService
             Affiliate::schema_fields_STORE_CODE => (string) $scope['store_code'],
             Affiliate::schema_fields_CHANNEL_CODE => (string) $scope['channel_code'],
             Affiliate::schema_fields_REFERRAL_CODE => $this->generateReferralCode($customerId),
-            Affiliate::schema_fields_COMMISSION_RATE => 0.10,
+            Affiliate::schema_fields_COMMISSION_RATE => $rate,
             Affiliate::schema_fields_TOTAL_COMMISSION => 0.0,
             Affiliate::schema_fields_PAID_COMMISSION => 0.0,
             Affiliate::schema_fields_STATUS => self::STATUS_ACTIVE,
@@ -813,11 +819,13 @@ class AffiliateService
             return $existing;
         }
 
+        $rules = $this->rules()->resolve($this->resolveRuleScope());
         $affiliate = $this->createAffiliate(
             $customerId,
             (int) $scope['website_id'],
             (string) $scope['store_code'],
-            (string) $scope['channel_code']
+            (string) $scope['channel_code'],
+            (float) ($rules['commission_rate'] ?? AffiliateRuleService::DEFAULT_COMMISSION_RATE)
         );
 
         return [
@@ -2895,6 +2903,26 @@ class AffiliateService
     private function scopeResolver(): AffiliateScopeResolver
     {
         return $this->scopeResolver ?? ObjectManager::getInstance(AffiliateScopeResolver::class);
+    }
+
+    private function rules(): AffiliateRuleService
+    {
+        return $this->ruleService ??= new AffiliateRuleService();
+    }
+
+    private function resolveRuleScope(): string
+    {
+        try {
+            $resolved = $this->scopeResolver()->resolve();
+            $identity = $resolved['scope'] ?? null;
+            if ($identity instanceof ScopeIdentity) {
+                return $identity->toLegacyScopeString();
+            }
+        } catch (\Throwable) {
+            // Fall back to global rules when scope identity is unavailable.
+        }
+
+        return '';
     }
 
     private function scopeForm(): AffiliateScopeFormDataService

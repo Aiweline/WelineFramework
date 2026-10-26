@@ -18,13 +18,14 @@ class Index extends FrontendController
     public function index(): string
     {
         $customerId = (int) ($this->session->getUserId() ?? 0);
+        $centerUrl = $this->getUrl('customer/account/index') . '#affiliate';
         if ($customerId <= 0) {
             $this->getMessageManager()->addError(\__('Please log in to continue.'));
-            $this->redirect(self::LOGIN_ROUTE);
+            $this->redirect($this->getUrl(self::LOGIN_ROUTE, ['redirect_url' => $centerUrl]));
             return '';
         }
 
-        $this->redirect($this->getUrl('customer/account/index') . '#affiliate');
+        $this->redirect($centerUrl);
         return '';
     }
 }

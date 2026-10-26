@@ -22,9 +22,9 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     affiliateFloat: {
         paths: [
-            "Weline_Affiliate::js/affiliate-float.js"
+            "Weline_Affiliate::js/affiliate-float.js?v=20261025-rules-login-gate-4"
         ],
         globalVar: "WelineAffiliateFloat",
-        description: "右侧中悬浮分销面板（storefront-float-side 槽内容）"
+        description: "右侧中悬浮分销面板（游客展示规则，登录后水合个人分销信息）"
     }
 });

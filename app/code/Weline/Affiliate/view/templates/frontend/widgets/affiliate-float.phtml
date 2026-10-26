@@ -4,14 +4,14 @@
  * 悬浮右侧中分销部件：默认注入 Theme chrome 槽 storefront-float-side。
  * 容器（Theme）对业务零感知；本部件为该槽首个注入方，可经可视化卸载或后台删除注入回收。
  *
- * SSR 引子化：只输出入口按钮壳，面板 DOM 由 affiliate-float.js 首次展开时异步渲染
- * （异步部件引子契约，见 Weline_Affiliate doc）。
+ * SSR 引子：规则文案随模板输出，游客展开即可阅读；个人分销数据由 affiliate-float.js
+ * 在确认登录后异步水合（异步部件引子契约，见 Weline_Affiliate doc）。
  *
  * @widget.code {affiliate-float}
  * @widget.cache {3600}
  * @widget.share {false}
  * @widget.name {悬浮分销}
- * @widget.description {右侧中悬浮分销面板：邀请链接复制与佣金速览，未登录仅展示我要推广入口。}
+ * @widget.description {右侧中悬浮分销面板：默认展示当前范围分销规则；登录后展示个人等级与佣金速览。}
  * @widget.type {content}
  * @widget.area {frontend}
  * @widget.position {["footer"]}
@@ -23,19 +23,59 @@
  * @var \Weline\Framework\View\Template $this
  */
 
+use Weline\Affiliate\Service\AffiliateRuleService;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
 WidgetI18n::prefetchLabels([
     '我要推广',
     '分销面板',
+    '分销计划',
+    '进入分销中心',
+    '进入分销中心需要登录。',
 ]);
 
 $scope = WidgetUiScope::forWidget('affiliate-float');
 $esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 
-// Guest-safe SSR：登录态与佣金数据在展开时经 BinQuery 拉取；SSR 只输出中性入口。
-$affiliateCenterUrl = (string) $this->getUrl('affiliate/customer/affiliate');
+try {
+    /** @var AffiliateRuleService $ruleService */
+    $ruleService = ObjectManager::getInstance(AffiliateRuleService::class);
+    $rules = $ruleService->resolve();
+} catch (\Throwable) {
+    $rules = AffiliateRuleService::defaults();
+}
+
+try {
+    $affiliateCenterUrl = (string) $this->getUrl('affiliate');
+} catch (\Throwable) {
+    $affiliateCenterUrl = '/affiliate';
+}
+
+$ruleLines = is_array($rules['lines'] ?? null) ? $rules['lines'] : [];
+$floatI18n = [
+    'memberTitle' => (string) __('我的分销'),
+    'levelLabel' => (string) __('分销等级'),
+    'rateLabel' => (string) __('佣金比例'),
+    'statusLabel' => (string) __('状态'),
+    'scopeLabel' => (string) __('所属范围'),
+    'pendingLabel' => (string) __('待结算佣金'),
+    'linkLabel' => (string) __('专属推广链接'),
+    'copy' => (string) __('复制链接'),
+    'copied' => (string) __('已复制'),
+    'guestNote' => (string) __('进入分销中心需要登录。'),
+    'centerCta' => (string) __('进入分销中心'),
+    'active' => (string) __('启用中'),
+    'disabled' => (string) __('已停用'),
+    'loadFailed' => (string) __('分销数据暂时无法加载'),
+    'apiMissing' => (string) __('分销 API 未初始化'),
+    'defaultLevel' => (string) __('分销员'),
+];
+$floatI18nJson = json_encode($floatI18n, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+if (!is_string($floatI18nJson)) {
+    $floatI18nJson = '{}';
+}
 ?>
 <div class="affiliate-float-widget <?= $esc($scope->cssClass) ?>"
      weline-code="<?= $esc($scope->code) ?>"
@@ -43,8 +83,10 @@ $affiliateCenterUrl = (string) $this->getUrl('affiliate/customer/affiliate');
      data-js-ns="<?= $esc($scope->jsNs) ?>"
      data-float-side-widget
      data-affiliate-float
-     data-weline-load="affiliateFloat"
+     data-weline-load="api,account,affiliateFloat"
      data-affiliate-center-url="<?= $esc($affiliateCenterUrl) ?>"
+     data-affiliate-level-name="<?= $esc((string) ($rules['level_name'] ?? '')) ?>"
+     data-affiliate-i18n="<?= $esc($floatI18nJson) ?>"
      data-testid="affiliate-float-widget">
     <button type="button"
             class="affiliate-float-widget__entry"
@@ -57,4 +99,39 @@ $affiliateCenterUrl = (string) $this->getUrl('affiliate/customer/affiliate');
         </svg>
         <span class="affiliate-float-widget__entry-label"><lang>我要推广</lang></span>
     </button>
+
+    <div class="affiliate-float-widget__panel w-panel"
+         id="affiliate-float-panel-<?= $esc($scope->uid) ?>"
+         data-affiliate-float-panel
+         hidden
+         role="region"
+         aria-label="<?= $esc((string) __('分销面板')) ?>"
+         data-testid="affiliate-float-panel">
+        <div class="affiliate-float-widget__panel-body" data-affiliate-float-body>
+            <p class="affiliate-float-widget__status" data-affiliate-float-status></p>
+
+            <p class="affiliate-float-widget__eyebrow"><lang>分销计划</lang></p>
+            <h3 class="affiliate-float-widget__title"><?= $esc((string) ($rules['title'] ?? '')) ?></h3>
+
+            <?php if ($ruleLines !== []): ?>
+                <ul class="affiliate-float-widget__rules" data-affiliate-float-rules>
+                    <?php foreach ($ruleLines as $ruleLine): ?>
+                        <li><?= $esc((string) $ruleLine) ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php endif; ?>
+
+            <div class="affiliate-float-widget__member" data-affiliate-float-member hidden></div>
+
+            <p class="affiliate-float-widget__note" data-affiliate-float-note>
+                <lang>进入分销中心需要登录。</lang>
+            </p>
+
+            <a class="affiliate-float-widget__cta"
+               data-affiliate-float-cta
+               href="<?= $esc($affiliateCenterUrl) ?>">
+                <lang>进入分销中心</lang>
+            </a>
+        </div>
+    </div>
 </div>

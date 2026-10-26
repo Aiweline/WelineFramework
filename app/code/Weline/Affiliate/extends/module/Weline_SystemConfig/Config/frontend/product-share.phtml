@@ -1,7 +1,7 @@
 <?php
 /**
- * @meta.title {default="分销店面展示",description="按范围启用或关闭商品详情分销分享面板"}
- * @meta.description {default="关闭后前台商品详情与快捷加购弹窗不再展示「分销分享」。未配置时默认启用。配置保存经 SystemConfig ResourceChange（w_changed）使 storefront/config 缓存代次失效。"}
+ * @meta.title {default="分销店面展示与规则",description="按范围启用或关闭商品详情分销分享面板，并配置分销规则"}
+ * @meta.description {default="关闭后前台商品详情与快捷加购弹窗不再展示「分销分享」。未配置时默认启用。分销规则按网站、店铺、渠道保存；网站规则默认向下覆盖，下级单独保存后覆盖网站。配置保存经 SystemConfig ResourceChange（w_changed）使 storefront/config 缓存代次失效。"}
  * @config.area {frontend}
  * @config.sort {75}
  * @config.acl {Weline_Affiliate::config}
@@ -22,5 +22,53 @@
         value-type="bool"
         default="1"
         scope="global,website,store"
+    />
+</w:config:group>
+
+<w:config:group
+    code="affiliate_distribution_rules"
+    label="分销规则"
+    description="网站规则默认向下覆盖店铺与渠道；下级单独保存后覆盖网站。前台悬浮分销面板默认展示当前范围规则。"
+    sort="20"
+>
+    <w:config:field
+        key="rule_title"
+        label="规则标题"
+        description="前台分销面板标题；留空时使用默认标题。"
+        type="text"
+        value-type="string"
+        default="加入分销计划"
+        scope="global,website,store,channel"
+        validation="max:120"
+    />
+    <w:config:field
+        key="rule_summary"
+        label="规则说明"
+        description="每行一条；前台分销面板按条目展示。留空时使用默认说明。"
+        type="textarea"
+        value-type="string"
+        default="分享商品给朋友，成交后获得佣金。&#10;登录后可查看专属推广链接与佣金明细。"
+        scope="global,website,store,channel"
+        validation="max:2000"
+    />
+    <w:config:field
+        key="default_commission_rate"
+        label="默认佣金比例"
+        description="0-1 小数，例如 0.10 表示 10%；也接受 10%。仅用于新创建的分销账户，已有账户不变。"
+        type="text"
+        value-type="string"
+        default="0.10"
+        scope="global,website,store,channel"
+        validation="required|max:8"
+    />
+    <w:config:field
+        key="level_name"
+        label="分销等级名称"
+        description="前台个人分销区展示的等级名称，例如「标准分销员」。"
+        type="text"
+        value-type="string"
+        default="分销员"
+        scope="global,website,store,channel"
+        validation="max:60"
     />
 </w:config:group>

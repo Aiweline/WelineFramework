@@ -1,7 +1,7 @@
 <css>Weline_Affiliate::css/backend/affiliate-admin.css</css>
 <?php
 /**
- * 分销配置：嵌入统一配置声明的商品分销分享启停开关（支持 URL 范围）。
+ * 分销配置：嵌入统一配置声明的商品分销分享启停开关与范围级分销规则。
  */
 $selectedScope = (string)($this->getData('selected_scope') ?? 'default.default.default');
 $centerUrl = $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig/backend/config', [
@@ -14,7 +14,7 @@ $centerUrl = $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig
     <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
         <div class="w-stack" style="--w-gap:var(--weline-space-1);">
             <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
-                <lang>配置写入当前作用范围；切换范围后页面会按新范围加载。关闭后商品详情不再展示分销分享。保存后经 SystemConfig 变更事件清理店面配置缓存。</lang>
+                <lang>配置写入当前作用范围；切换范围后页面会按新范围加载。网站规则默认向下覆盖店铺与渠道，下级单独保存后覆盖网站。关闭分销分享后商品详情不再展示该区块。保存后经 SystemConfig 变更事件清理店面配置缓存。</lang>
             </p>
         </div>
         <a class="w-button" data-tone="neutral" data-variant="outline" data-size="sm"
@@ -43,7 +43,7 @@ $centerUrl = $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig
     <w:config:embed
         module="Weline_Affiliate"
         area="frontend"
-        fields="product_share_enabled"
+        fields="product_share_enabled,rule_title,rule_summary,default_commission_rate,level_name"
         locale="default"
     />
 </div>
