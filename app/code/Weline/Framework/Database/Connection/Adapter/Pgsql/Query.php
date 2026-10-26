@@ -596,7 +596,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
      */
     public function getColumnDefinition(string $tableName, string $fieldName): ?array
     {
-        $configProvider = $this->connection->getConfigProvider();
+        $configProvider = $this->getConnector()->getConfigProvider();
         $dbName = $configProvider->getDatabase();
 
         // 默认 schema 为 public
