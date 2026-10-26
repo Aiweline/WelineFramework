@@ -40,6 +40,7 @@ class CrawlerPolicyAiOpen extends CommandAbstract implements CommandInterface
             __('  --website=ID   网站 ID（默认站为 0）'),
             __('  --all          所有已绑定 Cloudflare 域名的网站'),
             __('  --apply        实际写入差异字段'),
+            __('  --closed       恢复保守拦截（默认 open）'),
             __('  --json         输出 JSON'),
         ];
     }
@@ -49,6 +50,7 @@ class CrawlerPolicyAiOpen extends CommandAbstract implements CommandInterface
         $websiteId = $this->websiteArg($args, $data);
         $all = isset($data['all']) || \in_array('--all', $args, true);
         $apply = isset($data['apply']) || \in_array('--apply', $args, true);
+        $closed = isset($data['closed']) || \in_array('--closed', $args, true);
         $json = isset($data['json']) || \in_array('--json', $args, true);
         if (!$all && $websiteId === null) {
             $this->printer->warning(__('请指定 --website=ID 或 --all'));
@@ -63,7 +65,7 @@ class CrawlerPolicyAiOpen extends CommandAbstract implements CommandInterface
         foreach ($websiteIds as $id) {
             foreach ($this->domains($id) as $domain) {
                 try {
-                    $results[] = ['website_id' => $id] + $service->apply($domain, !$apply);
+                    $results[] = ['website_id' => $id] + $service->apply($domain, !$apply, !$closed);
                 } catch (\Throwable $throwable) {
                     $results[] = [
                         'website_id' => $id,

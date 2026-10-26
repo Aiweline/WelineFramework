@@ -44,6 +44,8 @@ final class WebsiteCrawlerPolicyServiceTest extends TestCase
 
         self::assertTrue($normalized['enabled']);
         self::assertSame(0, $normalized['block_duration']);
+        self::assertTrue($normalized['ai_default_open']);
+        self::assertFalse($service->normalizeInput(['ai_default_open' => '0'])['ai_default_open']);
         self::assertCount(2, $normalized['entries']);
         self::assertSame('allow', $normalized['entries'][0]['action']);
         self::assertSame('block', $normalized['entries'][1]['action']);

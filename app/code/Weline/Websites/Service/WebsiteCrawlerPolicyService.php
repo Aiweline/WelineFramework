@@ -34,6 +34,7 @@ class WebsiteCrawlerPolicyService
         return [
             'enabled' => (bool)($rule['enabled'] ?? true),
             'block_duration' => 0,
+            'ai_default_open' => (bool)($rule['ai_default_open'] ?? true),
             'entries' => \array_values((array)($rule['entries'] ?? [])),
             'persisted' => $this->policyModel->loadByWebsiteId($websiteId)->getId() ? true : false,
         ];
@@ -49,7 +50,7 @@ class WebsiteCrawlerPolicyService
         }
         $this->policyModel->loadByWebsiteId($websiteId);
         if (!$this->policyModel->getId()) {
-            return CrawlerBlockCatalog::defaultWebsiteRule();
+            return CrawlerBlockCatalog::defaultWebsiteRule() + ['ai_default_open' => true];
         }
 
         $entries = $this->decodeEntries((string)$this->policyModel->getData(WebsiteCrawlerPolicy::schema_fields_ENTRIES_JSON));
@@ -65,6 +66,7 @@ class WebsiteCrawlerPolicyService
         return [
             'enabled' => (int)$this->policyModel->getData(WebsiteCrawlerPolicy::schema_fields_ENABLED) === 1,
             'block_duration' => 0,
+            'ai_default_open' => (int)$this->policyModel->getData(WebsiteCrawlerPolicy::schema_fields_AI_DEFAULT_OPEN) === 1,
             'entries' => $entries,
         ];
     }
@@ -90,6 +92,7 @@ class WebsiteCrawlerPolicyService
         $this->policyModel
             ->setData(WebsiteCrawlerPolicy::schema_fields_ENABLED, !empty($normalized['enabled']) ? 1 : 0)
             ->setData(WebsiteCrawlerPolicy::schema_fields_BLOCK_DURATION, (int)$normalized['block_duration'])
+            ->setData(WebsiteCrawlerPolicy::schema_fields_AI_DEFAULT_OPEN, !empty($normalized['ai_default_open']) ? 1 : 0)
             ->setData(
                 WebsiteCrawlerPolicy::schema_fields_ENTRIES_JSON,
                 (string)\json_encode($normalized['entries'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
@@ -137,6 +140,8 @@ class WebsiteCrawlerPolicyService
         $enabled = !empty($input['enabled']) && (string)$input['enabled'] !== '0';
         // Website crawler policy: deny the request only; never IP-ban by duration.
         $blockDuration = 0;
+        $aiDefaultOpen = !isset($input['ai_default_open'])
+            || (!empty($input['ai_default_open']) && (string)$input['ai_default_open'] !== '0');
 
         $rows = \is_array($input['entries'] ?? null) ? $input['entries'] : [];
         $entries = [];
@@ -196,6 +201,7 @@ class WebsiteCrawlerPolicyService
         return [
             'enabled' => $enabled,
             'block_duration' => $blockDuration,
+            'ai_default_open' => $aiDefaultOpen,
             'entries' => $entries,
         ];
     }

@@ -17,12 +17,14 @@ if (!\is_string($hookId) || $hookId === '' || \preg_match('/^[A-Za-z_]/D', $hook
 $sectionId = $hookId . '_crawler_policy';
 
 $enabled = true;
+$aiDefaultOpen = true;
 $entries = [];
 try {
     /** @var WebsiteCrawlerPolicyService $service */
     $service = ObjectManager::getInstance(WebsiteCrawlerPolicyService::class);
     $state = $service->getEditorState($websiteId >= 0 ? $websiteId : -1);
     $enabled = (bool)$state['enabled'];
+    $aiDefaultOpen = (bool)($state['ai_default_open'] ?? true);
     $entries = \is_array($state['entries']) ? $state['entries'] : [];
 } catch (\Throwable) {
     $entries = [];
@@ -71,6 +73,16 @@ $pageSize = 10;
                        value="1"
                        <?= $enabled ? 'checked' : '' ?>>
                 <label for="<?= $escape($sectionId . '_enabled') ?>"><lang>启用本站爬虫策略</lang></label>
+            </div>
+
+            <input type="hidden" name="extensions[crawler][ai_default_open]" value="0">
+            <div class="w-switch" style="--w-mb:var(--weline-space-3);">
+                <input type="checkbox"
+                       id="<?= $escape($sectionId . '_ai_open') ?>"
+                       name="extensions[crawler][ai_default_open]"
+                       value="1"
+                       <?= $aiDefaultOpen ? 'checked' : '' ?>>
+                <label for="<?= $escape($sectionId . '_ai_open') ?>"><lang>AI 爬虫默认开放（关闭后恢复 Cloudflare 保守拦截）</lang></label>
             </div>
 
             <div class="w-cluster" data-align="end" data-wrap="true" style="--w-mb:var(--weline-space-3); --w-gap:var(--weline-space-2);">

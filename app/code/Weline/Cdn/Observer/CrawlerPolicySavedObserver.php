@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Cdn\Observer;
 
 use Weline\Cdn\Api\CrawlerPolicyEdgePublisherInterface;
+use Weline\Cdn\Service\CloudflareZoneAiSettingsService;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
 use Weline\Framework\Event\Event;
@@ -19,6 +20,7 @@ final class CrawlerPolicySavedObserver implements ObserverInterface
 {
     public function __construct(
         private readonly CrawlerPolicyEdgePublisherInterface $publisher,
+        private readonly CloudflareZoneAiSettingsService $aiSettings,
         private readonly TransactionCoordinatorInterface $transactions,
     ) {
     }
@@ -34,11 +36,18 @@ final class CrawlerPolicySavedObserver implements ObserverInterface
             return;
         }
 
-        $run = function () use ($websiteId): void {
+        $aiOpen = !isset($data['rule']['ai_default_open'])
+            || (bool)$data['rule']['ai_default_open'];
+        $run = function () use ($websiteId, $aiOpen): void {
             try {
                 $this->publisher->publish($websiteId);
             } catch (\Throwable) {
                 // Edge failures are recorded in cdn_crawler_policy_state.
+            }
+            try {
+                $this->aiSettings->applyForWebsite($websiteId, $aiOpen);
+            } catch (\Throwable) {
+                // Zone AI settings are best-effort; WAF state is independent.
             }
         };
 

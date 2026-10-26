@@ -29,6 +29,9 @@ class WebsiteCrawlerPolicy extends Model
     #[Col('int', 0, nullable: false, default: 86400, comment: 'Block duration seconds')]
     public const schema_fields_BLOCK_DURATION = 'block_duration';
 
+    #[Col('int', 1, nullable: false, default: 1, comment: 'AI crawlers default open on the CDN edge')]
+    public const schema_fields_AI_DEFAULT_OPEN = 'ai_default_open';
+
     #[Col('mediumtext', comment: 'JSON crawler entries with action allow|block')]
     public const schema_fields_ENTRIES_JSON = 'entries_json';
 
