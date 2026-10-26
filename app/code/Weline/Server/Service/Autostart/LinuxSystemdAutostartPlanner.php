@@ -9,6 +9,13 @@ namespace Weline\Server\Service\Autostart;
  */
 final class LinuxSystemdAutostartPlanner
 {
+    /**
+     * 生成物语义版本：改脚本/单元内容时必须 +1。
+     * 指纹（写进 unit 的 marker）只覆盖输入参数，不含生成物正文，
+     * 不加版本号会导致「生成器修好了但生产永远 already_installed」。
+     */
+    public const GENERATOR_VERSION = 2;
+
     public const MARKER = 'X-Weline-Wls-Autostart';
     public const MARKER_VALUE = '1';
     public const FINGERPRINT_HEADER = 'X-Weline-Wls-Autostart-Fingerprint';
@@ -56,6 +63,12 @@ final class LinuxSystemdAutostartPlanner
         $workerMemoryLimit = $this->requireMemoryLimit((string)$spec['worker_memory_limit']);
         $phpMemoryLimit = $this->requireMemoryLimit((string)$spec['php_memory_limit']);
         $useDispatcher = (bool)$spec['use_dispatcher'];
+        $healthPort = (int)($spec['health_port'] ?? 0);
+        if ($healthPort < 1 || $healthPort > 65535) {
+            throw new \InvalidArgumentException(
+                'health_port must be the resolved WLS listen port (1-65535); refusing to generate a health check for a dead port.'
+            );
+        }
         $unitBasename = 'weline-wls-p' . $shortHash . '-' . $instance;
         $scriptPath = '/usr/local/sbin/' . $unitBasename . '.sh';
         $healthScriptPath = '/usr/local/sbin/' . $unitBasename . '-health.sh';
@@ -68,6 +81,8 @@ final class LinuxSystemdAutostartPlanner
             $workerMemoryLimit,
             $phpMemoryLimit,
             $useDispatcher ? '1' : '0',
+            (string)self::GENERATOR_VERSION,
+            (string)$healthPort,
             $scriptPath,
             $healthScriptPath,
             self::MARKER_VALUE,
@@ -89,7 +104,7 @@ final class LinuxSystemdAutostartPlanner
             $phpMemoryLimit,
             $startArgs,
         );
-        $healthScriptBody = $this->buildHealthScript($scriptPath, $projectRoot);
+        $healthScriptBody = $this->buildHealthScript($scriptPath, $projectRoot, $healthPort);
 
         $serviceBody = <<<UNIT
 [Unit]
@@ -217,7 +232,9 @@ stamp() { date "+%Y-%m-%d %H:%M:%S"; }
 log() { printf "[%s] %s\\n" "\$(stamp)" "\$*" | tee -a "\$LOG" >/dev/null; }
 
 run_w() {
-  runuser -u "\$RUN_USER" -- /bin/bash -c "cd \"\$PROJECT\"; exec \"\$PHP\" -d memory_limit=\$PHP_MEM bin/w \"\$@\"" _ "\$@" >>"\$LOG" 2>&1
+  # 参数按位置传给内层 bash：$0=项目根，$@=php 及 bin/w 参数。
+  # 不要把参数拼进 -c 的双引号字符串（-n/--dispatcher 会打坏引号，systemd 启动直接 exit 2）。
+  runuser -u "\$RUN_USER" -- /bin/bash -c 'cd "\$0" || exit 1; exec "\$@"' "\$PROJECT" "\$PHP" -d "memory_limit=\$PHP_MEM" bin/w "\$@" >>"\$LOG" 2>&1
 }
 
 case "\${1:-}" in
@@ -240,7 +257,7 @@ esac
 SH;
     }
 
-    private function buildHealthScript(string $startScriptPath, string $projectRoot): string
+    private function buildHealthScript(string $startScriptPath, string $projectRoot, int $healthPort): string
     {
         $escapedStart = $this->shellSingleQuote($startScriptPath);
         $escapedRoot = $this->shellSingleQuote($projectRoot);
@@ -259,7 +276,7 @@ COOLDOWN_SEC=300
 UA="Mozilla/5.0 (compatible; weline-wls-health/1.1)"
 HDR="\$(mktemp /tmp/weline-wls-health-hdr.XXXXXX)"
 trap 'rm -f "\$HDR"' EXIT
-WORKER_PORT=9510
+PROBE_PORT={$healthPort}
 
 mkdir -p /run /var/log
 exec 9>"\$LOCK"
@@ -283,23 +300,23 @@ probe_worker() {
   code="\$(curl -sk -D "\$HDR" -o /dev/null --max-time 8 -A "\$UA" \\
     -H "Host: localhost" \\
     -w "%{http_code}" \\
-    "http://127.0.0.1:\${WORKER_PORT}/" 2>/dev/null || echo 000)"
+    "http://127.0.0.1:\${PROBE_PORT}/" 2>/dev/null || echo 000)"
   case "\$code" in
     200|301|302|303|307|308|401|403)
       if has_wls_marker || grep -qiE "^(server|content-type):" "\$HDR"; then
         return 0
       fi
-      log "worker :\${WORKER_PORT} code=\${code} but no usable headers"
+      log "worker :\${PROBE_PORT} code=\${code} but no usable headers"
       ;;
     *)
-      log "worker :\${WORKER_PORT} code=\${code}"
+      log "worker :\${PROBE_PORT} code=\${code}"
       ;;
   esac
   return 1
 }
 
 healthy() {
-  port_listening "\$WORKER_PORT" || { log "missing :\$WORKER_PORT"; return 1; }
+  port_listening "\$PROBE_PORT" || { log "missing :\$PROBE_PORT"; return 1; }
   pgrep -f "weline-wls-master-" >/dev/null 2>&1 || { log "master not running"; return 1; }
   probe_worker
 }

@@ -24,6 +24,7 @@ final class LinuxSystemdAutostartPlannerTest extends TestCase
             'php_memory_limit' => '1024M',
             'use_dispatcher' => true,
             'cli_memory_flag' => '1024M',
+            'health_port' => 9981,
         ]);
 
         self::assertSame('weline-wls-pabcdef01-default', $plan['unit_basename']);
@@ -35,9 +36,17 @@ final class LinuxSystemdAutostartPlannerTest extends TestCase
         self::assertStringContainsString('--dispatcher', $plan['script_body']);
         self::assertStringContainsString('--worker-memory-limit=512M', $plan['script_body']);
         self::assertStringContainsString('server:shared:start', $plan['script_body']);
+        // 参数必须按位置传给内层 bash；拼进 -c "…" 字符串会把 -n/--dispatcher 打坏（systemd exit 2）
+        self::assertStringContainsString(
+            '/bin/bash -c \'cd "$0" || exit 1; exec "$@"\'',
+            $plan['script_body'],
+        );
+        self::assertStringNotContainsString('bin/w \"$@\"" _', $plan['script_body']);
         self::assertStringContainsString('Must probe WLS', $plan['health_script_body']);
         self::assertStringContainsString('has_wls_marker', $plan['health_script_body']);
-        self::assertStringContainsString('WORKER_PORT=9510', $plan['health_script_body']);
+        // 端口必须来自解析后的启动配置，不得再写死 9510（曾导致 health 永远探空端口）
+        self::assertStringContainsString('PROBE_PORT=9981', $plan['health_script_body']);
+        self::assertStringNotContainsString('9510', $plan['health_script_body']);
         self::assertStringNotContainsString('probe "http://127.0.0.1/"', $plan['health_script_body']);
         self::assertTrue($planner->isInstallSatisfied(
             [
@@ -67,6 +76,59 @@ final class LinuxSystemdAutostartPlannerTest extends TestCase
             true,
             true,
         ));
+    }
+
+    public function testPlanRejectsMissingHealthPort(): void
+    {
+        $planner = new LinuxSystemdAutostartPlanner();
+        $spec = [
+            'project_root' => '/www/wwwroot/demo',
+            'php_binary' => '/usr/local/bin/php',
+            'run_user' => 'weline',
+            'instance' => 'default',
+            'project_hash' => 'abcdef0123456789',
+            'worker_count' => 2,
+            'worker_memory_limit' => '512M',
+            'php_memory_limit' => '1024M',
+            'use_dispatcher' => true,
+            'cli_memory_flag' => '1024M',
+        ];
+
+        foreach ([null, 0, 70000] as $invalidPort) {
+            $candidate = $spec;
+            if ($invalidPort !== null) {
+                $candidate['health_port'] = $invalidPort;
+            }
+            try {
+                $planner->plan($candidate);
+                self::fail('health_port must be required (invalid: ' . var_export($invalidPort, true) . ')');
+            } catch (\InvalidArgumentException) {
+                self::assertTrue(true);
+            }
+        }
+    }
+
+    public function testFingerprintCoversHealthPort(): void
+    {
+        $base = [
+            'project_root' => '/www/wwwroot/demo',
+            'php_binary' => '/usr/local/bin/php',
+            'run_user' => 'weline',
+            'instance' => 'default',
+            'project_hash' => 'abcdef0123456789',
+            'worker_count' => 2,
+            'worker_memory_limit' => '512M',
+            'php_memory_limit' => '1024M',
+            'use_dispatcher' => true,
+            'cli_memory_flag' => '1024M',
+        ];
+        $planner = new LinuxSystemdAutostartPlanner();
+        $a = $planner->plan($base + ['health_port' => 9981]);
+        $b = $planner->plan($base + ['health_port' => 9982]);
+        $c = $planner->plan($base + ['health_port' => 9981]);
+
+        self::assertNotSame($a['fingerprint'], $b['fingerprint'], 'health_port must affect fingerprint');
+        self::assertSame($a['fingerprint'], $c['fingerprint'], 'fingerprint must be idempotent');
     }
 
     public function testInstallerSkipsNonLinuxAndDisabled(): void

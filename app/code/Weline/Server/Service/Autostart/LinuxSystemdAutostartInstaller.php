@@ -134,6 +134,9 @@ final class LinuxSystemdAutostartInstaller
             'php_memory_limit' => '1024M',
             'use_dispatcher' => $useDispatcher,
             'cli_memory_flag' => '1024M',
+            // health 探针必须打「解析后的回源/派发端口」；缺失时 plan() 直接拒绝，
+            // 不允许再生成指向死端口的自愈脚本（2026-10-26 线上 9510 事故根因）。
+            'health_port' => (int)($config['port'] ?? 0),
         ];
     }
 

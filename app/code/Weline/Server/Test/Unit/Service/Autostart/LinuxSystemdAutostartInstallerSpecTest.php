@@ -40,6 +40,28 @@ final class LinuxSystemdAutostartInstallerSpecTest extends TestCase
         self::assertTrue($spec['use_dispatcher']);
     }
 
+    public function testSpecCarriesResolvedListenPortForHealthProbe(): void
+    {
+        // health 脚本必须探「解析后的回源端口」（nginx edge/dispatcher 都是这个 port），
+        // 不能再由 planner 写死 9510。
+        $spec = $this->buildSpec([
+            'port' => 9981,
+            'runtime_selection' => $this->selection(EffectiveTopology::Dispatcher),
+        ]);
+        self::assertSame(9981, $spec['health_port']);
+
+        $direct = $this->buildSpec([
+            'port' => 9981,
+            'runtime_selection' => $this->selection(EffectiveTopology::Direct),
+        ]);
+        self::assertSame(9981, $direct['health_port']);
+
+        $missing = $this->buildSpec([
+            'runtime_selection' => $this->selection(EffectiveTopology::Dispatcher),
+        ]);
+        self::assertSame(0, $missing['health_port']);
+    }
+
     public function testResolvedDirectSelectionWinsOverLegacyDispatcherFlag(): void
     {
         $spec = $this->buildSpec([
