@@ -547,6 +547,24 @@ final class FiberTaskRunner
             if ($enteredContext) {
                 Context::leave();
             }
+            $this->releaseFiberDatabaseConnections();
+        }
+    }
+
+    /**
+     * Fiber 任务结束即归还该 Fiber owner 的空闲数据库连接。
+     * 菜单/路由/ACL 等批量收集每个 Fiber 都会 checkout 连接；不归还会把池吃满
+     * （ConnectionPoolExhaustedException: in_use=max_size, owners=N）。
+     */
+    private function releaseFiberDatabaseConnections(): void
+    {
+        $pool = 'Weline\\Framework\\Database\\Connection\\Pool\\ConnectionPool';
+        if (!\class_exists($pool)) {
+            return;
+        }
+        try {
+            $pool::releaseCurrentOwnerIdleConnections();
+        } catch (\Throwable) {
         }
     }
 
