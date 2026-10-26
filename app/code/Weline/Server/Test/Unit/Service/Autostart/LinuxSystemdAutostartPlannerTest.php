@@ -48,6 +48,13 @@ final class LinuxSystemdAutostartPlannerTest extends TestCase
         self::assertStringContainsString('PROBE_PORT=9981', $plan['health_script_body']);
         self::assertStringNotContainsString('9510', $plan['health_script_body']);
         self::assertStringNotContainsString('probe "http://127.0.0.1/"', $plan['health_script_body']);
+        // 自愈必须交给 systemd 拉起服务单元，不能在本 oneshot 单元的 cgroup 里 exec 启动脚本
+        self::assertStringContainsString(
+            "SERVICE_UNIT='weline-wls-pabcdef01-default.service'",
+            $plan['health_script_body'],
+        );
+        self::assertStringContainsString('systemctl start "$SERVICE_UNIT"', $plan['health_script_body']);
+        self::assertStringContainsString('exec "$START" start', $plan['health_script_body']);
         self::assertTrue($planner->isInstallSatisfied(
             [
                 $plan['service_unit'] => $plan['service_body'],

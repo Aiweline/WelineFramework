@@ -14,7 +14,7 @@ final class LinuxSystemdAutostartPlanner
      * 指纹（写进 unit 的 marker）只覆盖输入参数，不含生成物正文，
      * 不加版本号会导致「生成器修好了但生产永远 already_installed」。
      */
-    public const GENERATOR_VERSION = 2;
+    public const GENERATOR_VERSION = 3;
 
     public const MARKER = 'X-Weline-Wls-Autostart';
     public const MARKER_VALUE = '1';
@@ -104,7 +104,7 @@ final class LinuxSystemdAutostartPlanner
             $phpMemoryLimit,
             $startArgs,
         );
-        $healthScriptBody = $this->buildHealthScript($scriptPath, $projectRoot, $healthPort);
+        $healthScriptBody = $this->buildHealthScript($scriptPath, $projectRoot, $healthPort, $unitBasename . '.service');
 
         $serviceBody = <<<UNIT
 [Unit]
@@ -257,10 +257,11 @@ esac
 SH;
     }
 
-    private function buildHealthScript(string $startScriptPath, string $projectRoot, int $healthPort): string
+    private function buildHealthScript(string $startScriptPath, string $projectRoot, int $healthPort, string $serviceUnit): string
     {
         $escapedStart = $this->shellSingleQuote($startScriptPath);
         $escapedRoot = $this->shellSingleQuote($projectRoot);
+        $escapedServiceUnit = $this->shellSingleQuote($serviceUnit);
 
         return <<<SH
 #!/usr/bin/env bash
@@ -271,6 +272,7 @@ LOCK=/run/weline-wls-health-\$(basename {$escapedStart}).lock
 LOG=/var/log/weline-wls-health.log
 START={$escapedStart}
 PROJECT={$escapedRoot}
+SERVICE_UNIT={$escapedServiceUnit}
 COOLDOWN=/run/weline-wls-health-\$(basename {$escapedStart}).cooldown
 COOLDOWN_SEC=300
 UA="Mozilla/5.0 (compatible; weline-wls-health/1.1)"
@@ -335,6 +337,14 @@ if [[ -f "\$COOLDOWN" ]]; then
   fi
 fi
 printf "%s" "\$now" > "\$COOLDOWN"
+
+# 由 systemd 拉起服务单元：health 服务是 Type=oneshot，直接在它的 cgroup 里
+# exec 启动脚本时，单元结束时会把刚拉起的实例一起带走（2026-10-26 实测 origin 303→000）。
+if [ "\$(id -u)" = "0" ] && command -v systemctl >/dev/null 2>&1; then
+  log "unhealthy; systemctl start \$SERVICE_UNIT"
+  exec 9>&-
+  exec systemctl start "\$SERVICE_UNIT"
+fi
 
 log "unhealthy; invoking \$START start"
 exec 9>&-

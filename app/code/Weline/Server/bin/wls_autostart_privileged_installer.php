@@ -112,6 +112,9 @@ $commands = [
     ['systemctl', 'daemon-reload'],
     ['systemctl', 'enable', '--', (string)$plan['service_unit']],
     ['systemctl', 'enable', '--', (string)$plan['health_timer_unit']],
+    // enable 只是开机自启，不启动当前会话：不 start 的话 list-timers 为空，
+    // 线上就没有周期巡检（2026-10-26 实测 is-enabled=enabled 但 list-timers=0）。
+    ['systemctl', 'start', '--', (string)$plan['health_timer_unit']],
 ];
 foreach ($commands as $cmd) {
     $line = '';
