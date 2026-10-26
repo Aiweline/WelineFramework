@@ -72,6 +72,7 @@ return [
     'Weline_Theme::theme/frontend/widgets/footer/footer-payment/default.phtml',
     'Weline_Theme::theme/frontend/widgets/footer/footer-copyright/default.phtml',
     'Weline_Theme::theme/frontend/widgets/social/social-share/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/social/social-float/default.phtml',
     'Weline_Theme::theme/frontend/widgets/testimonial/testimonials/default.phtml',
     'Weline_Theme::theme/frontend/widgets/content/trust-badges/default.phtml',
     'Weline_Theme::theme/frontend/widgets/faq/faq-accordion/default.phtml',

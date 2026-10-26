@@ -256,6 +256,8 @@ id属性不能为空,id属性不能为空
 在渲染页头组件之后触发，允许其他模块在页头结束处注入内容。,"Triggered after rendering the header component, allowing other modules to inject content at the end of the header."
 "Frontend head favicon","Frontend head favicon"
 "Allows modules to replace the frontend favicon links in the document head.","Allows modules to replace the frontend favicon links in the document head."
+"Frontend head PWA","Frontend head PWA"
+"Allows modules to inject PWA manifest, theme-color and install metadata into the frontend document head.","Allows modules to inject PWA manifest, theme-color and install metadata into the frontend document head."
 "Head 模块声明","Head module declaration"
 "在 head 中 theme.js 加载之后触发，允许其他模块注入 JS 模块声明。使用 Weline.declare() 声明需要加载的模块。","Triggered after theme.js loads in the head, allowing other modules to inject JS module declarations. Use Weline.declare() to declare modules that need to be loaded."
 面包屑自定义内容（items）,"Breadcrumb Custom Content (Items)"
@@ -883,15 +885,6 @@ FAQ/常见问题,FAQ
 分类,Classification
 分类展示图,"Category showcase image"
 查看全部,"View all"
-件商品,"items of goods"
-查看更多,"View more"
-距离结束,"Ends in"
-时,Hour
-分,Minute
-秒,Second
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
 官方社交媒体,"Official social media"
@@ -928,6 +921,15 @@ FAQ/常见问题,FAQ
 零售,Retail
 迷你购物车金额小计,"Mini-cart money summary"
 关闭通知,"Close notification"
+件商品,"items of goods"
+查看更多,"View more"
+距离结束,"Ends in"
+时,Hour
+分,Minute
+秒,Second
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -2343,13 +2345,15 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+"Decision information pack · Digital delivery after payment","Decision information pack · Digital delivery after payment"
+"Attraction ticket · Handpicked for independent travelers","Attraction ticket · Handpicked for independent travelers"
+登录,"Log in"
+登录页工具,"Login page tools"
 "Search results","Search results"
 "Search · 检索","Search · 检索"
 寻衣,寻衣
 Search…,Search…
 搜索筛选,"Search and filter"
-登录,"Log in"
-登录页工具,"Login page tools"
 尺码指南,"Size Guide"
 旅行攻略,旅行攻略
 注册,Register
@@ -2419,8 +2423,6 @@ Pagination,Pagination
 Previous,Previous
 "Page %{1} of %{2}","Page %{1} of %{2}"
 Next,Next
-"Decision information pack · Digital delivery after payment","Decision information pack · Digital delivery after payment"
-"Attraction ticket · Handpicked for independent travelers","Attraction ticket · Handpicked for independent travelers"
 圆领袍,"Round-Collar Robes"
 发簪与发冠,"Hairpins & Crowns"
 腰带与禁步,"Belts & Jinbu Charms"

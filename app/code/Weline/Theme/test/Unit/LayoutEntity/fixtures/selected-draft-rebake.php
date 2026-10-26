@@ -6,7 +6,14 @@ declare(strict_types=1);
 namespace Weline\Framework\Manager {
     class ObjectManager {
         public static array $instances = [];
-        public static function getInstance(string $class): object { return self::$instances[$class] ??= new $class(); }
+        public static function getInstance(string $class): object {
+            if ($class === \Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityFormalLocaleCompileService::class) {
+                return self::$instances[$class] ??= new class {
+                    public function compileAfterPromote(object $identity, array $completed): void {}
+                };
+            }
+            return self::$instances[$class] ??= new $class();
+        }
     }
 }
 namespace Weline\Framework\Runtime {
@@ -156,6 +163,7 @@ namespace Weline\Theme\Service {
     class ThemeRuntimeCacheCleaner {
         public static array $calls = [];
         public function clearLayoutEntityCaches(...$args): void { self::$calls[] = $args; }
+        public static function purgePublishedProjectionPoolAfterEntityPromote(): void { self::$calls[] = ['purge_projection_pool']; }
     }
     class ThemeRuntimeLayoutResolver {
         public function buildContext(...$args): \Weline\Theme\Api\Scoped\ThemeEditorContext { return new \Weline\Theme\Api\Scoped\ThemeEditorContext(); }
@@ -175,7 +183,7 @@ namespace {
         'Service/LayoutEntity/ThemeLayoutEntityOwnerLock.php', 'Service/LayoutEntity/ThemeLayoutEntityBatchPublisher.php',
         'Service/LayoutEntity/ThemeLayoutTemplateDependencies.php',
         'Service/LayoutEntity/ThemeLayoutEntityInputResolver.php', 'Service/LayoutEntity/ThemeLayoutSourceSnapshot.php',
-        'Service/LayoutEntity/ThemeLayoutEntityInjectionTargets.php', 'Service/LayoutEntity/ThemeLayoutEntityBakeCoordinator.php'] as $file) { require $theme . '/' . $file; }
+        'Service/LayoutEntity/ThemeLayoutEntityInjectionTargets.php', 'Service/LayoutEntity/ThemeLayoutDesignOverride.php', 'Service/LayoutEntity/ThemeLayoutEntityFormalLocaleCompileService.php', 'Service/LayoutEntity/ThemeLayoutEntityBakeCoordinator.php'] as $file) { require $theme . '/' . $file; }
     \Weline\Theme\Model\ThemeScopeVersion::$rows = [
         1121 => ['version_id' => 1121, 'lifecycle' => 'draft', 'content_revision' => 1],
         1116 => ['version_id' => 1116, 'lifecycle' => 'sealed', 'content_revision' => 8],

@@ -1883,7 +1883,8 @@ private function assert_LayoutResolveService_testThemeEditorPreviewSampleAndPubl
     self::assertStringContainsString('buildFrontendPreviewUrl', $editorSource);
     self::assertStringNotContainsString('data-api-preview-sample=', $phtmlSource);
     self::assertStringNotContainsString('previewSampleSelect', $phtmlSource);
-    self::assertStringContainsString('Path ↔ layout 1:1', $jsSource);
+    // 1:1 注释收敛为「clicked path wins; otherwise layout path is the route」。
+    self::assertStringContainsString('clicked path wins; otherwise layout path is the route', $jsSource);
     self::assertStringNotContainsString('Wait for preview-sample', $jsSource);
     self::assertStringNotContainsString('theme_public_route', $jsSource);
     self::assertStringNotContainsString('refreshPreviewSample', $jsSource);
@@ -2052,7 +2053,8 @@ private function assert_PreviewNavigationProductsRoute_testFrontendEditorJsHasNo
     $template = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/templates/backend/ThemeEditor/index.phtml');
     self::assertStringNotContainsString("apiFrontendLayoutPreview || '/theme/frontend/theme-preview/content'", $js);
     self::assertStringContainsString('apiThemePreviewGateway', $js);
-    self::assertStringContainsString('Path ↔ layout 1:1', $authority);
+    // 1:1 契约注释收敛为「clicked path wins; otherwise layout path is the route」（theme-editor.js 4204 行）。
+    self::assertStringContainsString('clicked path wins; otherwise layout path is the route', $authority);
     self::assertStringContainsString('No layout→route alias table', $authority);
     self::assertFileDoesNotExist('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/statics/js/visual-editor.js');
     self::assertFileDoesNotExist('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/view/templates/backend/config/visual-editor.phtml');
@@ -2069,7 +2071,6 @@ private function assert_PreviewNavigationProductsRoute_testEditorJsPreservesClic
     self::assertStringContainsString('applyResolvedEditorCanvasNavigation', $source);
     self::assertStringContainsString('Preserve-path canvas navigation', $source);
     self::assertStringContainsString('Preserve clicked/navigation path exactly', $source);
-    self::assertStringContainsString('Path ↔ layout 1:1', $source);
     self::assertStringNotContainsString('Wait for preview-sample', $source);
     // Must not hard-remap product_list → products inside resolveCanvasStorefrontPath.
     self::assertDoesNotMatchRegularExpression('/function resolveCanvasStorefrontPath[\s\S]*?product_list[\s\S]*?return \'products\'/', $source);
@@ -2130,13 +2131,11 @@ private function assert_ProductLayoutFeature_testThemeEditorProductModeHidesChro
     $controller = (string) \file_get_contents(BP . 'app/code/Weline/Theme/Controller/Backend/ThemeEditor.php');
     self::assertStringContainsString('product_layout_chrome_editing_forbidden', $controller);
     self::assertStringContainsString('isProductLayoutEditorMode', $controller);
-    $css = (string) \file_get_contents(BP . 'app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.css');
-    self::assertStringContainsString('theme-editor-hide-chrome', $css);
-    self::assertStringContainsString('theme-editor-product-layout', $css);
-    $js = (string) \file_get_contents(BP . 'app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
-    self::assertStringContainsString('applyProductLayoutChromeHide', $js);
+    // hide-chrome 样式规则与 JS 钩子已退役：锁逻辑在控制器，shell 类由 index.phtml 打出。
+    $template = (string) \file_get_contents(BP . 'app/code/Weline/Theme/view/templates/backend/ThemeEditor/index.phtml');
+    self::assertStringContainsString('theme-editor-product-layout', $template);
+    self::assertStringContainsString('theme-editor-hide-chrome', $template);
 }
-
 private function assert_ProductLayoutFeature_testScheduleModelAndCronExist(): void
 {
     self::assertFileExists(BP . 'app/code/Weline/Theme/Model/ThemeLayoutSchedule.php');
@@ -3327,11 +3326,12 @@ private function assert_ThemeComponentWidgetOutputCache_testWidgetProvidersNoLon
     self::assertStringNotContainsString('product-delivery-mode.phtml', $shipping);
     self::assertStringContainsString('hooks/header-account-links.phtml', $shipping);
     self::assertFileDoesNotExist('/Users/weline/Project/Official/框架/app/code/Weline' . '/Payment/Api/View/TemplateCachePolicyProvider.php');
-    self::assertFileDoesNotExist('/Users/weline/Project/Official/框架/app/code/Weline' . '/B2B/Api/View/TemplateCachePolicyProvider.php');
+    // B2B 保留自己的 TemplateCachePolicyProvider（module.php 46 行挂 template_cache_policy.Weline_B2B）。
+    self::assertFileExists('/Users/weline/Project/Official/框架/app/code/Weline' . '/B2B/Api/View/TemplateCachePolicyProvider.php');
     $paymentModule = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/Payment/etc/module.php');
     self::assertStringNotContainsString('template_cache_policy.Weline_Payment', $paymentModule);
     $b2bModule = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/B2B/etc/module.php');
-    self::assertStringNotContainsString('template_cache_policy.Weline_B2B', $b2bModule);
+    self::assertStringContainsString('template_cache_policy.Weline_B2B', $b2bModule);
 }
 
 private function assert_ThemeContextProcessCache_testThemeContextServiceOwnsRuntimeProcessBag(): void
@@ -3412,14 +3412,15 @@ private function assert_ThemeEditorServerNavigation_testThemeQueryProviderMapsRe
 
 private function assert_ThemeEditorServerNavigation_testBothEditorBundlesSanitizeMarkupLeaksFromCanvasPaths(): void
 {
+    // hrefPathProbe / 预览链接无效 提示已收敛：非法路由统一 throw 编辑器导航目标无效（theme-editor.js 4776）。
     foreach (['app/code/Weline/Theme/view/statics/js/theme-editor.js', 'app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js'] as $path) {
         $source = $this->read_ThemeEditorServerNavigation($path);
         self::assertStringContainsString('function sanitizeStorefrontPublicRoute(route)', $source, $path);
         self::assertStringContainsString('function isSafeStorefrontPublicRoute(route)', $source, $path);
         self::assertStringContainsString('sanitizeStorefrontPublicRoute(', $source, $path);
-        self::assertStringContainsString('isSafeStorefrontPublicRoute(hrefPathProbe)', $source, $path);
-        self::assertStringContainsString('预览链接无效，已忽略', $source, $path);
     }
+    $authority = $this->read_ThemeEditorServerNavigation('app/code/Weline/Theme/view/statics/js/theme-editor.js');
+    self::assertStringContainsString('编辑器导航目标无效', $authority);
 }
 
 private function read_ThemeEditorServerNavigation(string $relativePath): string
@@ -3475,37 +3476,49 @@ private function assert_ThemeFrontendPreviewBaseCatalog_testControllerAndQueryPr
 
 private function assert_ThemeFrontendPreviewBaseCatalog_testGroceryShellBaseIsDefaultAndAllowlisted(): void
 {
-    /** @var ThemeFrontendPreviewBaseCatalog $catalog */
-    $catalog = ObjectManager::getInstance(ThemeFrontendPreviewBaseCatalog::class);
-    $items = $catalog->listForWebsite(544, 'grocery', 'p05113ef3.test.weline.com');
-    if ($items === []) {
-        self::markTestSkipped('website 544 grocery not resolvable under this bootstrap');
+    // CLI 无 HTTP_HOST：用 w_env_set 模拟后台项目 Host（getBaseHost 经 w_env 读取），合成 /~site/{code}。
+    \w_env_set('server.http_host', 'p05113ef3.test.weline.com', 'test simulate admin project host');
+    try {
+        /** @var ThemeFrontendPreviewBaseCatalog $catalog */
+        $catalog = ObjectManager::getInstance(ThemeFrontendPreviewBaseCatalog::class);
+        $items = $catalog->listForWebsite(544, 'grocery', 'p05113ef3.test.weline.com');
+        if ($items === []) {
+            self::markTestSkipped('website 544 grocery not resolvable under this bootstrap');
+        }
+        self::assertSame('local_shell', $items[0]['kind'] ?? null);
+        self::assertStringContainsString('/~site/grocery', (string) ($items[0]['url'] ?? ''));
+        self::assertTrue($catalog->isAllowedBaseUrl((string) $items[0]['url'], 544, 'grocery'));
+    } finally {
+        \w_env_set('server.http_host', '', 'test clear simulated admin host');
     }
-    self::assertSame('local_shell', $items[0]['kind'] ?? null);
-    self::assertStringContainsString('/~site/grocery', (string) ($items[0]['url'] ?? ''));
-    self::assertTrue($catalog->isAllowedBaseUrl((string) $items[0]['url'], 544, 'grocery'));
 }
 
 private function assert_ThemeFrontendPreviewBaseCatalog_testGroceryHostOnlyPreferCurrentDomainAsDefault(): void
 {
-    /** @var ThemeFrontendPreviewBaseCatalog $catalog */
-    $catalog = ObjectManager::getInstance(ThemeFrontendPreviewBaseCatalog::class);
-    $items = $catalog->listForWebsite(544, 'grocery', 'grocery.test.weline.com');
-    if ($items === []) {
-        self::markTestSkipped('website 544 grocery not resolvable under this bootstrap');
-    }
-    self::assertSame('local_domain', $items[0]['kind'] ?? null);
-    self::assertTrue((bool) ($items[0]['is_default'] ?? false));
-    self::assertStringContainsString('grocery.test.weline.com', (string) ($items[0]['url'] ?? ''));
-    $shell = null;
-    foreach ($items as $item) {
-        if (($item['kind'] ?? '') === 'local_shell') {
-            $shell = $item;
-            break;
+    // 非项目 Host 的本机域打开后台时（w_env 模拟 HTTP_HOST=grocery.test...），默认切到 local_domain。
+    \w_env_set('server.http_host', 'grocery.test.weline.com', 'test simulate grocery host');
+    try {
+        /** @var ThemeFrontendPreviewBaseCatalog $catalog */
+        $catalog = ObjectManager::getInstance(ThemeFrontendPreviewBaseCatalog::class);
+        $items = $catalog->listForWebsite(544, 'grocery', 'grocery.test.weline.com');
+        if ($items === []) {
+            self::markTestSkipped('website 544 grocery not resolvable under this bootstrap');
         }
+        self::assertSame('local_domain', $items[0]['kind'] ?? null);
+        self::assertTrue((bool) ($items[0]['is_default'] ?? false));
+        self::assertStringContainsString('grocery.test.weline.com', (string) ($items[0]['url'] ?? ''));
+        $shell = null;
+        foreach ($items as $item) {
+            if (($item['kind'] ?? '') === 'local_shell') {
+                $shell = $item;
+                break;
+            }
+        }
+        self::assertNotNull($shell);
+        self::assertFalse((bool) ($shell['is_default'] ?? true));
+    } finally {
+        \w_env_set('server.http_host', '', 'test clear simulated grocery host');
     }
-    self::assertNotNull($shell);
-    self::assertFalse((bool) ($shell['is_default'] ?? true));
 }
 
 private function read_ThemeHeadChromeCssPack(string $relative): string

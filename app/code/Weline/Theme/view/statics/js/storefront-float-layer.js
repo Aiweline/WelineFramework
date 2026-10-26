@@ -86,7 +86,9 @@
   }
 
   function storageKey(side) {
-    return STORAGE_PREFIX + (side === 'end' ? 'end' : 'start');
+    // Each slot keeps its own state: collapsing side must not collapse start.
+    // Marker: storefront-float-edge-storage-key-v2
+    return STORAGE_PREFIX + (side === 'end' || side === 'side' ? side : 'start');
   }
 
   function readStoredCollapsed(side) {

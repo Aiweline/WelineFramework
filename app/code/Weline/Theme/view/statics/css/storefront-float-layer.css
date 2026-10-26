@@ -36,6 +36,8 @@
 
 .w-storefront-float-layer__slot.is-edge-collapsed {
   will-change: transform;
+  overflow: visible;
+  max-height: none;
 }
 
 .w-storefront-float-layer__slot--start {
@@ -55,8 +57,9 @@
   right: max(var(--weline-space-5, 1.25rem), env(safe-area-inset-right, 0px));
   top: 50%;
   transform: translateY(-50%);
-  max-height: calc(100vh - 8rem);
-  overflow-y: auto;
+  /* Keep edge recall (outside slot box) clickable — no scroll clipping.
+   * Marker: storefront-float-edge-flush-v3 */
+  overflow: visible;
 }
 
 /* Social quick bar stacks above the end float — lift end slot only */

@@ -256,6 +256,8 @@ id属性不能为空,id属性不能为空
 在渲染页头组件之后触发，允许其他模块在页头结束处注入内容。,在渲染页头组件之后触发，允许其他模块在页头结束处注入内容。
 "Frontend head favicon",前端头部图标
 "Allows modules to replace the frontend favicon links in the document head.",允许模块替换文档头中的前端图标链接。
+"Frontend head PWA","Frontend head PWA"
+"Allows modules to inject PWA manifest, theme-color and install metadata into the frontend document head.","Allows modules to inject PWA manifest, theme-color and install metadata into the frontend document head."
 "Head 模块声明","Head 模块声明"
 "在 head 中 theme.js 加载之后触发，允许其他模块注入 JS 模块声明。使用 Weline.declare() 声明需要加载的模块。","在 head 中 theme.js 加载之后触发，允许其他模块注入 JS 模块声明。使用 Weline.declare() 声明需要加载的模块。"
 面包屑自定义内容（items）,面包屑自定义内容（items）
@@ -883,15 +885,6 @@ FAQ/常见问题,FAQ/常见问题
 分类,分类
 分类展示图,分类展示图
 查看全部,查看全部
-件商品,件商品
-查看更多,查看更多
-距离结束,距离结束
-时,时
-分,分
-秒,秒
-回到顶部,回到顶部
-站点偏好,站点偏好
-法律与政策,法律与政策
 展开社交媒体,展开社交媒体
 收起社交媒体,收起社交媒体
 官方社交媒体,官方社交媒体
@@ -928,6 +921,15 @@ FAQ/常见问题,FAQ/常见问题
 零售,零售
 迷你购物车金额小计,迷你购物车金额小计
 关闭通知,关闭通知
+件商品,件商品
+查看更多,查看更多
+距离结束,距离结束
+时,时
+分,分
+秒,秒
+回到顶部,回到顶部
+站点偏好,站点偏好
+法律与政策,法律与政策
 数据卡片,数据卡片
 "近 7 日访问量 +18%","近 7 日访问量 +18%"
 卡片内容,卡片内容
@@ -2343,13 +2345,15 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 "编译 Weline UI 2.0 静态资源包！","编译 Weline UI 2.0 静态资源包！"
 编译主题资源（less、weline.modules.js等）,编译主题资源（less、weline.modules.js等）
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+"Decision information pack · Digital delivery after payment","Decision information pack · Digital delivery after payment"
+"Attraction ticket · Handpicked for independent travelers","Attraction ticket · Handpicked for independent travelers"
+登录,登录
+登录页工具,登录页工具
 "Search results","Search results"
 "Search · 检索","Search · 检索"
 寻衣,寻衣
 Search…,Search…
 搜索筛选,搜索筛选
-登录,登录
-登录页工具,登录页工具
 尺码指南,尺码指南
 旅行攻略,旅行攻略
 注册,注册
@@ -2419,8 +2423,6 @@ Pagination,分页
 Previous,以前的
 "Page %{1} of %{2}","第 %{1} 页（共 %{2}）"
 Next,下一个
-"Decision information pack · Digital delivery after payment","Decision information pack · Digital delivery after payment"
-"Attraction ticket · Handpicked for independent travelers","Attraction ticket · Handpicked for independent travelers"
 圆领袍,圆领袍
 发簪与发冠,发簪与发冠
 腰带与禁步,腰带与禁步

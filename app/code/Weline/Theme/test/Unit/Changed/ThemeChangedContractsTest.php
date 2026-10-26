@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Test\Unit\Changed;
 
+// 本测试直接触 ObjectManager（BP 依赖引导常量）；Pest 裸跑时无 TestCore 预引导，
+// 按模块测试约定显式引入 app 引导（同 Ui/DesignSystemContractTest.php）。
+require_once dirname(__DIR__, 7) . '/app/bootstrap.php';
+
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Event\Changed\InvalidationEffect;
 use Weline\Framework\Event\ResourceChange\ResourceChangeFactory;

@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\FooterDefaultLinksHelper;
 use Weline\Theme\Helper\SocialIconHelper;
+use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeDesignDataResolver;
 
@@ -16,6 +17,7 @@ final class FooterDefaultLinksHelperTest extends TestCase
     protected function tearDown(): void
     {
         ObjectManager::removeInstance(ThemeDesignDataResolver::class);
+        ThemeData::resetRequestState();
         parent::tearDown();
     }
 
@@ -111,6 +113,35 @@ final class FooterDefaultLinksHelperTest extends TestCase
         self::assertSame([], FooterDefaultLinksHelper::actionableSocialItems([
             ['name' => 'Pinterest', 'icon' => 'fab fa-pinterest', 'url' => '#'],
         ]));
+    }
+
+    public function testDefaultSocialItemsUseCurrentThemeWhenRequestThemeContextIsMissing(): void
+    {
+        $theme = $this->createMock(WelineTheme::class);
+        $theme->method('getId')->willReturn(3);
+        ThemeData::setCurrentTheme($theme);
+
+        $resolver = new class($theme) extends ThemeDesignDataResolver {
+            public function __construct(private readonly WelineTheme $expectedTheme)
+            {
+            }
+
+            public function load(string $key, ?WelineTheme $theme = null): array
+            {
+                // SEO head integration has no request-level theme context; the pack must
+                // still be resolved against ThemeData's current storefront theme.
+                if ($key !== 'storefront-defaults' || $theme !== $this->expectedTheme) {
+                    return [];
+                }
+
+                return ['social_items' => [
+                    ['name' => 'YouTube', 'icon' => 'fab fa-youtube', 'url' => 'https://www.youtube.com/@theme-brand'],
+                ]];
+            }
+        };
+        ObjectManager::setInstance(ThemeDesignDataResolver::class, $resolver);
+
+        self::assertSame(['https://www.youtube.com/@theme-brand'], FooterDefaultLinksHelper::defaultSameAsUrls());
     }
 
     public function testHelperCarriesNoSiteOrBrandProfiles(): void

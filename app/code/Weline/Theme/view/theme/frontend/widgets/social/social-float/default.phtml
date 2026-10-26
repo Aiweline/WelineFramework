@@ -1,0 +1,82 @@
+<?php
+/**
+ * 悬浮社媒（左侧贴边）—— 店面全站共享 chrome 部件。
+ *
+ * 数据与页脚社媒同源：主题 storefront-defaults.social_items；不读商家凭据。
+ * 收起/展开由 Weline_Theme 的 footerSocialFloat 模块异步接管（data-weline-load）。
+ *
+ * @widget.source {Weline_Theme::css/widgets/widget-social-float-default.css}
+ * @widget.code {social-float}
+ * @widget.cache {3600}
+ * @widget.share {true}
+ * @widget.name {悬浮社媒}
+ * @widget.description {左侧贴边悬浮社交媒体入口；异步加载，可收起贴边并召回。}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {storefront-float-start}
+ * @widget.supports {["social-float","layout-storefront-float-start","content"]}
+ * @widget.default_injections {[{"layout_type":"*","slot":"storefront-float-start","area":"footer","sort_order":121,"required":true,"reason":"店面任意布局默认左侧悬浮社媒；主题重写布局仍注入，仅可视化卸载可省略"}]}
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+use Weline\Theme\Helper\FooterDefaultLinksHelper;
+use Weline\Theme\Helper\ThemeData;
+use Weline\Theme\Helper\WidgetUiScope;
+
+// 主题设计数据（storefront-defaults.social_items）是页脚社媒的同源事实。
+// 实体渲染/烘焙路径已由 ThemeLayoutEntityWidgetRenderer 设定当前主题；
+// 请求期兜底再取一次「当前激活主题」，两处都拿不到就不渲染空壳。
+$theme = ThemeData::getCurrentTheme();
+if ($theme === null) {
+    try {
+        $theme = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class)
+            ->getDirectActiveTheme('frontend');
+    } catch (\Throwable) {
+        $theme = null;
+    }
+}
+$items = [];
+if ($theme !== null) {
+    $pack = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeDesignDataResolver::class)
+        ->load('storefront-defaults', $theme);
+    $items = FooterDefaultLinksHelper::actionableSocialItems($pack['social_items'] ?? []);
+}
+if ($items === []) {
+    $items = FooterDefaultLinksHelper::normalizeSocialItems([]);
+}
+if ($items === []) {
+    return;
+}
+
+$scope = WidgetUiScope::forWidget('social-float');
+$panelId = 'w-social-float-panel-' . $scope->uid;
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+?>
+<nav class="w-social-float <?= $esc($scope->cssClass) ?>"
+     data-side="left"
+     data-testid="footer-social-float"
+     data-weline-load="footerSocialFloat"
+     data-collapsed-label="<?= $esc((string)__('展开社交媒体')) ?>"
+     data-expanded-label="<?= $esc((string)__('收起社交媒体')) ?>"
+     aria-label="<?= $esc((string)__('官方社交媒体')) ?>">
+    <div class="w-social-float__panel" id="<?= $esc($panelId) ?>" data-float-panel>
+        <?= $this->fetch('Weline_Theme::theme/frontend/components/social-profile-links.phtml', [
+            'items' => $items,
+            'link_class' => 'w-social-float__link',
+            'icon_class' => 'footer-social-icon',
+            'icon_size' => '18',
+        ]) ?>
+    </div>
+    <button type="button"
+            class="w-social-float__toggle"
+            data-float-toggle
+            data-testid="social-float-toggle"
+            aria-expanded="true"
+            aria-controls="<?= $esc($panelId) ?>"
+            aria-label="<?= $esc((string)__('收起社交媒体')) ?>">
+        <span class="w-social-float__toggle-icon" aria-hidden="true"><w:icon name="chevron-left" size="xs"></w:icon></span>
+    </button>
+</nav>

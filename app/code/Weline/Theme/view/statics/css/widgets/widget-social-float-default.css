@@ -1,0 +1,135 @@
+/**
+ * 悬浮社媒（左侧贴边）—— 全站共享 chrome 部件皮肤。
+ * 只消费 Theme Token；var() 内的值是 Token 未加载时的兜底。
+ * 收起/展开由 footerSocialFloat 模块写 .is-collapsed + inline transform。
+ */
+.w-social-float {
+    position:fixed;
+    top: 50%;
+    left: max(0px, env(safe-area-inset-left, 0px));
+    z-index: var(--z-index-fixed, 1030);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--weline-space-1, 0.25rem);
+    padding: var(--weline-space-2, 0.5rem) var(--weline-space-1, 0.25rem);
+    transform: translateY(-50%);
+    color: var(--weline-theme-text, #1f2937);
+    background: var(--weline-theme-surface-raised, #ffffff);
+    border: var(--weline-theme-border-width, 1px) solid var(--weline-theme-border, #e2e8f0);
+    border-left-width: var(--weline-space-1, 0.25rem);
+    border-left-color: var(--weline-theme-primary, #0f766e);
+    border-radius: 0 var(--weline-radius-md, 8px) var(--weline-radius-md, 8px) 0;
+    box-shadow: var(--weline-theme-shadow-md, 0 8px 24px rgba(15, 23, 42, 0.08));
+    transition: transform var(--weline-theme-duration-normal, 0.28s) var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.w-social-float__panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--weline-space-1, 0.25rem);
+}
+
+.w-social-float__link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: calc(var(--weline-space-5, 1.25rem) + var(--weline-space-1, 0.25rem));
+    height: calc(var(--weline-space-5, 1.25rem) + var(--weline-space-1, 0.25rem));
+    color: var(--weline-theme-text, #1f2937);
+    background: var(--weline-theme-surface, #ffffff);
+    border: var(--weline-theme-border-width, 1px) solid var(--weline-theme-border, #e2e8f0);
+    border-radius: var(--weline-radius-sm, 4px);
+    box-shadow: var(--weline-theme-shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.08));
+    text-decoration: none;
+    transition:
+        color var(--weline-theme-duration-fast, 0.16s) var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1)),
+        background-color var(--weline-theme-duration-fast, 0.16s) var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.w-social-float__link:is(:hover, :focus-visible) {
+    color: var(--weline-theme-on-primary, #ffffff);
+    background: var(--weline-theme-primary, #0f766e);
+    border-color: var(--weline-theme-primary, #0f766e);
+    outline: none;
+}
+
+.w-social-float__link .footer-social-icon {
+    width: var(--weline-space-4, 1rem);
+    height: var(--weline-space-4, 1rem);
+    color: inherit;
+    fill: currentColor;
+}
+
+.w-social-float__toggle {
+    position: absolute;
+    top: 50%;
+    left: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--weline-space-5, 1.25rem);
+    height: calc(var(--weline-space-8, 2rem) + var(--weline-space-1, 0.25rem));
+    margin: 0;
+    padding: 0;
+    transform: translateY(-50%);
+    color: var(--weline-theme-primary, #0f766e);
+    background: var(--weline-theme-surface-raised, #ffffff);
+    border: var(--weline-theme-border-width, 1px) solid var(--weline-theme-border, #e2e8f0);
+    border-left: none;
+    border-radius: 0 var(--weline-radius-md, 8px) var(--weline-radius-md, 8px) 0;
+    box-shadow: var(--weline-theme-shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.08));
+    cursor: pointer;
+    appearance: none;
+}
+
+.w-social-float__toggle:is(:hover, :focus-visible) {
+    color: var(--weline-theme-on-primary, #ffffff);
+    background: var(--weline-theme-primary, #0f766e);
+    outline: none;
+}
+
+.w-social-float__toggle-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+    transition: transform var(--weline-theme-duration-normal, 0.28s) var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.w-social-float.is-collapsed {
+    transform: translateY(-50%) translateX(-100%);
+}
+
+.w-social-float.is-collapsed .w-social-float__panel {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.w-social-float.is-collapsed .w-social-float__toggle-icon {
+    transform: scaleX(-1);
+}
+
+/* 旧 footer 容器社媒条与本部件并存时只保留本部件（防双轨） */
+body:has(.w-social-float) .footer-social-float {
+    display: none !important;
+}
+
+@media (max-width: 720px) {
+    .w-social-float {
+        padding: var(--weline-space-1, 0.25rem);
+    }
+    .w-social-float__link {
+        width: var(--weline-space-6, 1.5rem);
+        height: var(--weline-space-6, 1.5rem);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .w-social-float,
+    .w-social-float__link,
+    .w-social-float__toggle-icon {
+        transition: none;
+    }
+}

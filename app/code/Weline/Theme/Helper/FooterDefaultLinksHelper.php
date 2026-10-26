@@ -268,7 +268,9 @@ final class FooterDefaultLinksHelper
     {
         /** @var ThemeDesignDataResolver $themeData */
         $themeData = ObjectManager::getInstance(ThemeDesignDataResolver::class);
-        $raw = $themeData->load('storefront-defaults')['social_items'] ?? [];
+        // head/SEO 集成阶段未必有请求级主题上下文；优先用 ThemeData 的当前前台主题，
+        // 否则会退回模块默认主题、读不到站点品牌数据包（Organization.sameAs 丢失）。
+        $raw = $themeData->load('storefront-defaults', ThemeData::getCurrentTheme())['social_items'] ?? [];
 
         return self::filterActionableSocialItems(is_array($raw) ? array_values($raw) : []);
     }

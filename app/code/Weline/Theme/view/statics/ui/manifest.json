@@ -11,7 +11,7 @@
             "ui-core"
         ]
     },
-    "build_id": "33c7613674cf1076e2756af74148ae3c3b77ac66948e376fa54aa510eafdbf23",
+    "build_id": "86dddd8d02efb0ac0fe0d08baf468a95c0d1d67e68753e00d7b9f57f62e5caa5",
     "bundles": {
         "acl-role-assign-css": {
             "bytes": 2931,
@@ -147,10 +147,10 @@
             "type": "js"
         },
         "customer-account-login-css": {
-            "bytes": 36996,
+            "bytes": 37738,
             "file": "pages/weline-customer-account-login.css",
-            "gzip_bytes": 5847,
-            "sha256": "3c807d396708c1fe70bccdcf24b06af708dbbfeea638d7ce19bdd31ba32c7602",
+            "gzip_bytes": 5860,
+            "sha256": "ae554d378899eeca0a149675fa7573e2bb70dda070dbb68de594a7e5eea931a5",
             "type": "css"
         },
         "customer-account-login-js": {

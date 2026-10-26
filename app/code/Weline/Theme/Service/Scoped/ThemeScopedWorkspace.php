@@ -3236,7 +3236,8 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface, Theme
                 'slugs' => $slugs,
             ],
             origin: ['entry' => $entry],
-            siteId: null,
+            // Domain.site_id 存的是 website_id（Cdn purgeWebsiteScope 按 websiteId 查 site_id）。
+            siteId: $websiteId,
             resourceScope: $context->scope->storageScope,
         );
         \w_changed($change);

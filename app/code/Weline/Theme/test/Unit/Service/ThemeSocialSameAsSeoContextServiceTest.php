@@ -6,11 +6,19 @@ namespace Weline\Theme\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Theme\Helper\FooterDefaultLinksHelper;
+use Weline\Theme\Helper\ThemeData;
+use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeLayoutService;
 use Weline\Theme\Service\ThemeSocialSameAsSeoContextService;
 
 final class ThemeSocialSameAsSeoContextServiceTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        ThemeData::resetRequestState();
+        parent::tearDown();
+    }
+
     public function testExtractsHttpSocialUrlsFromFooterContainerWithoutInventingDefaults(): void
     {
         self::assertSame(
@@ -48,26 +56,19 @@ final class ThemeSocialSameAsSeoContextServiceTest extends TestCase
         ]);
 
         $service = new ThemeSocialSameAsSeoContextService($layoutService);
+
+        // Existing sameAs facts win; the integration never overwrites them.
         self::assertSame([], $service->resolve(['organization' => ['sameAs' => ['https://example.com/a']]]));
 
-        // When a live theme is present, resolve prefers actionable layout social URLs.
-        $fromLayout = $service->resolve(['page_type' => 'product', 'organization' => []]);
-        if ($fromLayout !== []) {
-            self::assertSame(
-                ['organization' => ['sameAs' => ['https://www.instagram.com/changan.hanfu']]],
-                $fromLayout,
-            );
-        } else {
-            // No live theme in isolation → brand-scoped defaults (CLI/default → Hanfu).
-            self::assertSame(
-                ['organization' => ['sameAs' => FooterDefaultLinksHelper::defaultSameAsUrls('default')]],
-                (new ThemeSocialSameAsSeoContextService($this->createMock(ThemeLayoutService::class)))
-                    ->resolve(['page_type' => 'product', 'organization' => []]),
-            );
-        }
+        // A live theme prefers actionable layout social URLs and drops `#` placeholders.
+        $this->bindCurrentTheme();
+        self::assertSame(
+            ['organization' => ['sameAs' => ['https://www.instagram.com/changan.hanfu']]],
+            $service->resolve(['page_type' => 'product', 'organization' => []]),
+        );
     }
 
-    public function testEmptyFooterSocialDoesNotLeakHanfuDefaultsViaNormalize(): void
+    public function testEmptyFooterSocialFallsBackToThemeDefaultsWithoutInventingUrls(): void
     {
         $layoutService = $this->createMock(ThemeLayoutService::class);
         $layoutService->method('getPublishedLayout')->willReturn([
@@ -83,17 +84,29 @@ final class ThemeSocialSameAsSeoContextServiceTest extends TestCase
             ],
         ]);
 
+        $this->bindCurrentTheme();
         $service = new ThemeSocialSameAsSeoContextService($layoutService);
         $resolved = $service->resolve(['page_type' => 'home', 'organization' => []]);
 
-        // With a live theme + empty social_items, extract yields [] then falls back to
-        // website-scoped defaults. DaoCharms must stay empty; Hanfu/default may emit Trust URLs.
-        $sameAs = $resolved['organization']['sameAs'] ?? [];
-        foreach ($sameAs as $url) {
-            self::assertIsString($url);
-            // Guard: never invent DaoCharms→Hanfu cross-brand when website is daocharms.
-            // (CLI without RequestContext uses default website family — Hanfu URLs allowed.)
+        // With empty layout social_items the theme data pack is the only source of truth.
+        $defaults = FooterDefaultLinksHelper::defaultSameAsUrls();
+        if ($defaults === []) {
+            // A theme without brand profiles must never invent sameAs URLs.
+            self::assertSame([], $resolved);
+
+            return;
         }
-        self::assertSame([], FooterDefaultLinksHelper::defaultSameAsUrls('daocharms'));
+
+        self::assertSame(['organization' => ['sameAs' => $defaults]], $resolved);
+        foreach ($defaults as $url) {
+            self::assertMatchesRegularExpression('#^https?://#i', $url);
+        }
+    }
+
+    private function bindCurrentTheme(): void
+    {
+        $theme = $this->createMock(WelineTheme::class);
+        $theme->method('getId')->willReturn(3);
+        ThemeData::setCurrentTheme($theme);
     }
 }

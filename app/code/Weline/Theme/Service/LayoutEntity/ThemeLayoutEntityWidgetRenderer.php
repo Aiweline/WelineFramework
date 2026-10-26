@@ -42,6 +42,17 @@ final class ThemeLayoutEntityWidgetRenderer
         if ($code === '__no_widget_placements__') { return ''; }
         $area = $identity?->area ?? 'frontend';
         $theme = $identity !== null ? $this->themeForRequest($identity->themeId) : null;
+        // Widget templates that read theme design data (ThemeData) must see the entity theme:
+        // the resolved/bake path skips ThemeComponentRenderer::mergeConfig() → resolveThemeDefaults().
+        // Marker: theme-layout-entity-theme-context-v1
+        try {
+            $currentTheme = \Weline\Theme\Helper\ThemeData::getCurrentTheme();
+            if ($theme !== null && $currentTheme?->getId() !== $theme->getId()) {
+                \Weline\Theme\Helper\ThemeData::setCurrentTheme($theme);
+            }
+        } catch (\Throwable) {
+            // Theme data stays as-is; widget renders its declared defaults.
+        }
         $definition = $this->placeableRegistry->find($module, $type, $code, $theme, $area);
         if ($definition === null && $module !== '' && $code !== '') {
             // Published entities may keep a stale widget_type after @widget.type moves
