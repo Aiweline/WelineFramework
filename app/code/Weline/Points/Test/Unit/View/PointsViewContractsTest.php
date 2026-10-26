@@ -43,6 +43,8 @@ final class PointsViewContractsTest extends TestCase
         self::assertStringContainsString("discount.apply", $src);
         self::assertStringContainsString("discount.clear", $src);
         self::assertStringContainsString('points_discount_apply_minor', $src);
+        self::assertStringContainsString('.mini-cart-drawer', $src);
+        self::assertStringContainsString('data-money-summary-payable-minor', $src);
         self::assertStringNotContainsString('fetch(', $src);
         self::assertStringNotContainsString('alert(', $src);
     }

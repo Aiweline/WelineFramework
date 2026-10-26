@@ -21,7 +21,7 @@
         if (/cart|checkout|mini-cart|minicart/.test(path)) {
             return true;
         }
-        return !!document.querySelector('[data-mini-cart], .mini-cart, [data-weline-mini-cart]');
+        return !!document.querySelector('[data-mini-cart], .mini-cart, .mini-cart-drawer, [data-weline-mini-cart]');
     }
 
     function precisionFor(currency) {
@@ -54,6 +54,7 @@
 
     function readAmountMinor() {
         var attrs = [
+            'data-money-summary-payable-minor',
             'data-points-amount-minor',
             'data-cart-total-minor',
             'data-checkout-total-minor',
@@ -71,6 +72,7 @@
             }
         }
         var textSelectors = [
+            '[data-money-summary-payable]',
             '[data-cart-total]',
             '[data-checkout-total]',
             '[data-grand-total]',
@@ -95,9 +97,14 @@
     function findMount(host) {
         var selectors = [
             '[data-checkout-summary]',
+            '.weline-checkout__extras',
             '.checkout-summary',
             '[data-cart-summary-extras]',
             '.cart-summary',
+            '[data-w-mini-cart] .mini-cart-drawer__extras',
+            '[data-mini-cart-drawer] .mini-cart-drawer__extras',
+            '.mini-cart-drawer__extras',
+            '.mini-cart-drawer',
             '[data-mini-cart]',
             '.mini-cart',
             '[data-weline-mini-cart]'
