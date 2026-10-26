@@ -234,6 +234,10 @@ class PointsQueryProvider implements QueryProviderInterface
             'operations' => [
                 [
                     'name' => 'discount.quote',
+                    'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
+                    'mode' => 'read',
                     'description' => '按购物车金额与顾客积分余额计算可抵扣上限',
                     'params' => [
                         ['name' => 'website_id', 'type' => 'int', 'required' => false, 'description' => '站点 ID'],
@@ -243,6 +247,10 @@ class PointsQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'discount.apply',
+                    'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
+                    'mode' => 'write',
                     'description' => '钳制并保存积分抵扣选择',
                     'params' => [
                         ['name' => 'website_id', 'type' => 'int', 'required' => false, 'description' => '站点 ID'],
@@ -253,11 +261,19 @@ class PointsQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'discount.clear',
+                    'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
+                    'mode' => 'write',
                     'description' => '清除积分抵扣选择',
                     'params' => [],
                 ],
                 [
                     'name' => 'vip.state',
+                    'frontend' => false,
+                    'external' => false,
+                    'auth' => 'any',
+                    'mode' => 'read',
                     'description' => '读取顾客成长值、累计积分与当前等级',
                     'params' => [
                         ['name' => 'customer_id', 'type' => 'int', 'required' => false, 'description' => '顾客 ID，默认当前登录顾客'],
@@ -267,6 +283,10 @@ class PointsQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'vip.benefits',
+                    'frontend' => false,
+                    'external' => false,
+                    'auth' => 'any',
+                    'mode' => 'read',
                     'description' => '读取当前等级权益',
                     'params' => [
                         ['name' => 'customer_id', 'type' => 'int', 'required' => false, 'description' => '顾客 ID'],
@@ -275,6 +295,10 @@ class PointsQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'vip.levels',
+                    'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
+                    'mode' => 'read',
                     'description' => '列出等级门槛与权益',
                     'params' => [],
                 ],
