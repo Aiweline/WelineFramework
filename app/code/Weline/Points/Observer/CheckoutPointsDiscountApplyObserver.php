@@ -107,9 +107,11 @@ final class CheckoutPointsDiscountApplyObserver implements ObserverInterface
                 return $deposit;
             }
         }
-        $fromQuote = (int) ($session['quote']['amount_minor'] ?? $session['quote']['total_amount_minor'] ?? 0);
-        if ($fromQuote > 0) {
-            return $fromQuote;
+        // quote.amount_minor is the shipping amount in Checkout V2; the payable
+        // base lives in totals.grand_total_minor. Never use shipping as the cap.
+        $fromTotals = (int) ($session['totals']['grand_total_minor'] ?? 0);
+        if ($fromTotals > 0) {
+            return $fromTotals;
         }
         $sum = 0;
         foreach (is_array($session['orders'] ?? null) ? $session['orders'] : [] as $order) {
@@ -123,8 +125,11 @@ final class CheckoutPointsDiscountApplyObserver implements ObserverInterface
                 $sum += max(0, (int) ($item['qty_minor'] ?? 0)) * max(0, (int) ($item['unit_price_minor'] ?? 0));
             }
         }
+        if ($sum > 0) {
+            return $sum;
+        }
 
-        return $sum;
+        return (int) ($session['quote']['total_amount_minor'] ?? 0);
     }
 
     /**
