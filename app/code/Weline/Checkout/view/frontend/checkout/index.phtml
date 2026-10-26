@@ -4213,6 +4213,16 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
         }
         const idempotencyKey = text(opts.idempotency_key).trim()
             || newIdempotencyKey(opts.idempotency_prefix || 'checkout_ui_');
+        const pointsDiscountApplyMinor = (function () {
+            if (window.WelinePointsCheckout
+                && typeof window.WelinePointsCheckout.getApplyMinor === 'function') {
+                return Number(window.WelinePointsCheckout.getApplyMinor()) || 0;
+            }
+            const input = document.querySelector('input[name="points_discount_apply_minor"]');
+            return Number(window.__welinePointsDiscountApplyMinor
+                || (input && input.value)
+                || 0) || 0;
+        })();
         const submitPayload = {
             quote_token: quoteToken,
             payment_method: paymentMethod,
@@ -4223,6 +4233,7 @@ if (!\is_string($ssrBootStateJson) || $ssrBootStateJson === '') {
                 && typeof window.WelineB2BCheckoutTob.readApplyMinor === 'function')
                 ? window.WelineB2BCheckoutTob.readApplyMinor()
                 : 0,
+            points_discount_apply_minor: pointsDiscountApplyMinor,
         };
         // Traditional checkout must omit this flag; only express/smart-button paths set it.
         if (opts.express_checkout) {

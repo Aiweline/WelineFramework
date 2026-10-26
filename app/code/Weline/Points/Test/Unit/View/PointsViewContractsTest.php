@@ -63,4 +63,14 @@ final class PointsViewContractsTest extends TestCase
         self::assertStringContainsString('PointsDiscountApplySessionInterface', $src);
         self::assertStringContainsString('$b2b > 0', $src);
     }
+
+    public function testCheckoutSubmitCarriesPointsApplyMinor(): void
+    {
+        $src = (string) file_get_contents(
+            \dirname(__DIR__, 4) . '/Checkout/view/frontend/checkout/index.phtml',
+        );
+
+        self::assertStringContainsString('points_discount_apply_minor', $src);
+        self::assertStringContainsString('WelinePointsCheckout.getApplyMinor', $src);
+    }
 }
