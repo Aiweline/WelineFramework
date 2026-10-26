@@ -930,6 +930,9 @@ class Index extends BackendController
 
     public function postDeleteSmtpService(): string
     {
+        if (!$this->isMailAclAllowed('Weline_Mail::mail_accounts_password')) {
+            return $this->respondFormResult(403, __('无权限删除 Smtp 服务'));
+        }
         $serviceId = (int)$this->request->getParam('smtp_service_id', 0);
         $alsoStalwart = (string)$this->request->getParam('also_stalwart', '1') !== '0';
         /** @var \Weline\Smtp\Service\SmtpServiceCatalogService $catalog */
@@ -970,6 +973,16 @@ class Index extends BackendController
                 $sse->sendEvent('error', [
                     'success' => false,
                     'message' => (string)__('无效的请求方法'),
+                ]);
+                $sse->close();
+
+                return '';
+            }
+
+            if (!$this->isMailAclAllowed('Weline_Mail::mail_accounts_password')) {
+                $sse->sendEvent('error', [
+                    'success' => false,
+                    'message' => (string)__('无权限删除 Smtp 服务'),
                 ]);
                 $sse->close();
 
