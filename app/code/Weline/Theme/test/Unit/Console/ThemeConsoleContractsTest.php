@@ -236,8 +236,13 @@ private function assert_ThemeUpgradeCommand_testParseArgumentsRecognizesForceFlu
 
 private function assert_ThemeUpgradeCommand_testParseArgumentsRejectsOptionWithoutLayout(): void
 {
-    $this->expectException(\Weline\Framework\Console\ConsoleException::class);
-    ThemeUpgradeCommand::parseArguments([0 => 'theme:upgrade', 1 => '-o', 2 => 'default']);
+    // 合同套件在闭包里逐项 try/catch，expectException 语义失效；改直接断言。
+    try {
+        ThemeUpgradeCommand::parseArguments([0 => 'theme:upgrade', 1 => '-o', 2 => 'default']);
+        self::fail('-o 必须要求 -l 同时存在');
+    } catch (\Weline\Framework\Console\ConsoleException $e) {
+        self::assertStringContainsString('layout', $e->getMessage());
+    }
 }
 
 private function assert_ThemeUpgradeCommand_testTipDescribesBoundThemesNotLegacyActiveFlags(): void

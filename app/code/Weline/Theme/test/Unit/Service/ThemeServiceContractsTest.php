@@ -3433,6 +3433,14 @@ private function read_ThemeEditorServerNavigation(string $relativePath): string
 
 private function assert_ThemeFrontendPreviewBaseCatalog_testLocalShellIsDefaultForDaocharms(): void
 {
+    // 沙箱 sqlite 缺 w_weline_websites_website_domain 时 domainsForWebsite 直接抛
+    // PDO 异常（listForWebsite 内未捕获）；与 ThemeTestSchema::ensure 同规则补表。
+    try {
+        $domainModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\WebsiteDomain::class);
+        (clone $domainModel)->reset()->select()->fetch()->getItems();
+    } catch (\Throwable) {
+        $this->ensureWebsiteDomainTableForPreviewCatalog();
+    }
     /** @var ThemeFrontendPreviewBaseCatalog $catalog */
     $catalog = ObjectManager::getInstance(ThemeFrontendPreviewBaseCatalog::class);
     $items = $catalog->listForWebsite(158, 'daocharms');
@@ -3476,6 +3484,8 @@ private function assert_ThemeFrontendPreviewBaseCatalog_testControllerAndQueryPr
 
 private function assert_ThemeFrontendPreviewBaseCatalog_testGroceryShellBaseIsDefaultAndAllowlisted(): void
 {
+    // 沙箱缺域名表时先补（同 testLocalShellIsDefaultForDaocharms）。
+    $this->ensureWebsiteDomainTableForPreviewCatalog();
     // CLI 无 HTTP_HOST：用 w_env_set 模拟后台项目 Host（getBaseHost 经 w_env 读取），合成 /~site/{code}。
     \w_env_set('server.http_host', 'p05113ef3.test.weline.com', 'test simulate admin project host');
     try {
@@ -3495,6 +3505,8 @@ private function assert_ThemeFrontendPreviewBaseCatalog_testGroceryShellBaseIsDe
 
 private function assert_ThemeFrontendPreviewBaseCatalog_testGroceryHostOnlyPreferCurrentDomainAsDefault(): void
 {
+    $this->ensureWebsiteDomainTableForPreviewCatalog();
+    $this->seedGroceryLocalDomainForPreviewCatalog();
     // 非项目 Host 的本机域打开后台时（w_env 模拟 HTTP_HOST=grocery.test...），默认切到 local_domain。
     \w_env_set('server.http_host', 'grocery.test.weline.com', 'test simulate grocery host');
     try {
@@ -3518,6 +3530,55 @@ private function assert_ThemeFrontendPreviewBaseCatalog_testGroceryHostOnlyPrefe
         self::assertFalse((bool) ($shell['is_default'] ?? true));
     } finally {
         \w_env_set('server.http_host', '', 'test clear simulated grocery host');
+    }
+}
+
+/** grocery(544) 沙箱无域名行时种一条 active 本机域，供 local_domain 断言（幂等）。 */
+private function seedGroceryLocalDomainForPreviewCatalog(): void
+{
+    try {
+        $model = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\WebsiteDomain::class);
+        $existing = (clone $model)->reset()
+            ->where(\Weline\Websites\Model\WebsiteDomain::schema_fields_WEBSITE_ID, 544)
+            ->where(\Weline\Websites\Model\WebsiteDomain::schema_fields_DOMAIN, 'grocery.test.weline.com')
+            ->select()->fetch()->getItems();
+        if ($existing !== []) {
+            return;
+        }
+        $model->clearData()->addData([
+            \Weline\Websites\Model\WebsiteDomain::schema_fields_WEBSITE_ID => 544,
+            \Weline\Websites\Model\WebsiteDomain::schema_fields_DOMAIN => 'grocery.test.weline.com',
+            \Weline\Websites\Model\WebsiteDomain::schema_fields_ROOT_DOMAIN => 'weline.com',
+            \Weline\Websites\Model\WebsiteDomain::schema_fields_IS_PRIMARY => 1,
+            \Weline\Websites\Model\WebsiteDomain::schema_fields_HTTPS_ENABLED => 1,
+            \Weline\Websites\Model\WebsiteDomain::schema_fields_STATUS => \Weline\Websites\Model\WebsiteDomain::STATUS_ACTIVE,
+        ])->save();
+    } catch (\Throwable) {
+        // 种子失败不阻塞用例
+    }
+}
+
+/** 沙箱库缺 w_weline_websites_website_domain 时按模型 schema 补表（同 ThemeTestSchema::ensure 规则）。 */
+private function ensureWebsiteDomainTableForPreviewCatalog(): void
+{
+    try {
+        $parser = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Framework\Database\Schema\SchemaParser::class
+        );
+        $schema = $parser->parse(\Weline\Websites\Model\WebsiteDomain::class);
+        if ($schema !== null) {
+            $executor = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Database\Service\Release\SchemaDiffExecutor::class
+            );
+            $executor->createBootstrapTable(
+                \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Framework\Database\Connection\Adapter\Sqlite\Connector::class
+                ),
+                $schema,
+            );
+        }
+    } catch (\Throwable) {
+        // 夹具失败不阻塞用例
     }
 }
 
