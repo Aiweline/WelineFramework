@@ -191,9 +191,13 @@
         if (!global.Weline || !global.Weline.Api || typeof global.Weline.Api.resource !== 'function') {
             return Promise.resolve(null);
         }
-        return global.Weline.Api.resource('points').catch(function () {
-            return null;
-        });
+        try {
+            return Promise.resolve(global.Weline.Api.resource('points')).catch(function () {
+                return null;
+            });
+        } catch (e) {
+            return Promise.resolve(null);
+        }
     }
 
     function quote(host) {

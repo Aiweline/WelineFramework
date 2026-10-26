@@ -39,6 +39,7 @@ final class PointsViewContractsTest extends TestCase
         $src = (string) file_get_contents($this->modulePath('view/statics/js/points-discount.js'));
 
         self::assertStringContainsString("Weline.Api.resource('points')", $src);
+        self::assertStringContainsString('Promise.resolve(global.Weline.Api.resource', $src);
         self::assertStringContainsString("discount.quote", $src);
         self::assertStringContainsString("discount.apply", $src);
         self::assertStringContainsString("discount.clear", $src);
