@@ -12,6 +12,8 @@ use Weline\Framework\Manager\ObjectManager;
 class SocialScopeMailboxService
 {
     public const LOCAL_PREFIX = 'social';
+    /** 新生成社媒专用邮箱统一 local_part：social-ugc@{站点邮局域名}。 */
+    public const LOCAL_PART = 'social-ugc';
 
     public function __construct(
         private readonly SocialWebsiteAccountService $websiteAccountService,
@@ -432,26 +434,11 @@ class SocialScopeMailboxService
     }
 
     /**
-     * @param array<string, mixed> $scope
+     * 社媒专用邮箱 local_part 固定为 social-ugc（域名随站点），格式如 social-ugc@playinginchina.com。
      */
     private function localPartForWebsite(array $scope): string
     {
-        $code = \strtolower(\trim((string)($scope['code'] ?? '')));
-        $code = \preg_replace('/[^a-z0-9]+/', '-', $code) ?? '';
-        $code = \trim($code, '-');
-        if ($code === '') {
-            $code = 'w' . (int)($scope['website_id'] ?? 0);
-        }
-        $local = self::LOCAL_PREFIX . '-' . $code;
-        if (\strlen($local) > 64) {
-            $local = \substr($local, 0, 64);
-            $local = \rtrim($local, '-.');
-        }
-        if (!\preg_match('/^[a-z0-9][a-z0-9._-]{0,63}$/', $local)) {
-            $local = self::LOCAL_PREFIX . '-w' . (int)($scope['website_id'] ?? 0);
-        }
-
-        return $local;
+        return self::LOCAL_PART;
     }
 
     private function findAccountIdByEmail(string $email): int

@@ -159,7 +159,8 @@ private function assert_SocialPlatformSignupUrl_testBuildsHttpsEmailUrlAndReject
 private function assert_SocialScopeMailbox_testSocialLocalPartIsMailSystemAccount(): void
 {
     self::assertSame('social', SocialScopeMailboxService::LOCAL_PREFIX);
-    $local = SocialScopeMailboxService::LOCAL_PREFIX . '-default';
+    self::assertSame('social-ugc', SocialScopeMailboxService::LOCAL_PART);
+    $local = SocialScopeMailboxService::LOCAL_PART;
     self::assertTrue(MailAccount::isSocialMailboxLocalPart($local));
     self::assertTrue(MailAccount::isGeneratedSystemLocalPart($local));
     self::assertFalse(MailAccount::isReservedSystemLocalPart($local));

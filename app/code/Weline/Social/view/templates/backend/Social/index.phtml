@@ -89,7 +89,37 @@ $socialConfigQuery = [ 'area' => 'backend', 'module' => 'Weline_Social', 'search
 </aside>
 </div>
 <div class="weline-social-admin__scope-attr" data-attr="phone">
-<aside class="weline-social-admin__mailbox-strip" id="social-scope-phone" data-testid="social-scope-phone" aria-live="polite"><div class="weline-social-admin__mailbox-strip-inner" data-phone-state="need_scope"><span class="w-text" data-tone="muted" data-size="sm" data-phone-label><?= __('社媒手机号') ?></span><span class="w-text" data-tone="muted" data-size="sm" data-phone-status><?= __('未配置（用命令行录入）') ?></span><span class="weline-social-admin__mailbox-actions" data-phone-actions hidden></span></div></aside>
+<aside class="weline-social-admin__mailbox-strip" id="social-scope-phone" data-testid="social-scope-phone" aria-live="polite"><div class="weline-social-admin__mailbox-strip-inner" data-phone-state="need_scope"><span class="w-text" data-tone="muted" data-size="sm" data-phone-label><?= __('社媒手机号') ?></span><span class="w-text" data-tone="muted" data-size="sm" data-phone-status><?= __('选择站点范围后显示') ?></span><span class="weline-social-admin__mailbox-actions" data-phone-actions hidden></span></div></aside>
+</div>
+</div>
+<div class="w-dialog" id="social-phone-dialog" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden data-testid="social-phone-dialog">
+<div class="w-dialog__frame" data-size="sm">
+<div class="w-dialog__surface">
+<div class="w-dialog__header">
+<h2 class="w-dialog__title" id="social-phone-dialog-title"><?= __('配置社媒手机号') ?></h2>
+<button type="button" class="w-button" aria-label="<?= __('关闭') ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+</div>
+<div class="w-dialog__body w-stack" style="--w-gap:var(--weline-space-3);">
+<div class="w-text" id="social-phone-dialog-scope" data-tone="muted" data-size="sm"></div>
+<div>
+<label class="w-field__label" for="social-phone-number"><?= __('手机号') ?></label>
+<input id="social-phone-number" class="w-input" name="number" inputmode="tel" maxlength="21" placeholder="+8613800138000">
+</div>
+<div>
+<label class="w-field__label" for="social-phone-operator"><?= __('运营商') ?></label>
+<input id="social-phone-operator" class="w-input" name="operator" maxlength="60">
+</div>
+<div>
+<label class="w-field__label" for="social-phone-note"><?= __('备注') ?></label>
+<input id="social-phone-note" class="w-input" name="note" maxlength="200">
+</div>
+<div class="w-text social-status" id="social-phone-status" data-size="sm"></div>
+<div class="w-cluster" style="--w-gap:var(--weline-space-2);">
+<button type="button" class="w-button" data-tone="primary" data-phone-save><?= __('保存') ?></button>
+<button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-w-action="dialog.close" data-w-close><?= __('取消') ?></button>
+</div>
+</div>
+</div>
 </div>
 </div>
 <?php if ($socialScopes === []): ?> <div class="w-field__hint w-text" data-tone="warning" style="--w-mt:var(--weline-space-2);"><?= __('暂无可配置范围，无法按范围配置社媒账户。') ?></div> <?php elseif ($scopeLocked): ?> <div class="w-field__hint w-text" data-tone="info" style="--w-mt:var(--weline-space-2);"><?= __('范围已由网站编辑锁定，如需切换站点请返回网站列表另开编辑。') ?></div> <?php endif; ?> </section> <div class="w-grid" style="--w-mb:var(--weline-space-4);"><div style="--w-span:12;">
@@ -142,7 +172,8 @@ $socialConfigQuery = [ 'area' => 'backend', 'module' => 'Weline_Social', 'search
 <script type="application/json" id="weline-social-config-center-json">{"url":"@backend-url{$socialConfigCenterPath}","query":<?= json_encode($socialConfigQuery, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}' ?>,"guide_keys":<?= json_encode($socialPlatformGuideKeys, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]' ?>,"default_guide_key":<?= json_encode($socialConfigDefaultGuideKey, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '""' ?>,"guide_return_base":<?= json_encode($socialConfigGuideReturn, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '""' ?>}</script>
 <script type="application/json" id="weline-social-platform-guides-json"><?= $json($platformCredentialGuides) ?></script>
 <script>
-(function () { var provider = '<?= $h($queryProvider) ?>'; var platforms = JSON.parse(document.getElementById('weline-social-platform-json').textContent || '[]'); var accounts = JSON.parse(document.getElementById('weline-social-account-json').textContent || '[]'); var socialScopes = JSON.parse(document.getElementById('weline-social-scope-json').textContent || '[]'); var scopeRelations = JSON.parse(document.getElementById('weline-social-scope-relation-json').textContent || '[]'); var socialConfigCenter = JSON.parse(document.getElementById('weline-social-config-center-json').textContent || '{}'); var platformGuides = JSON.parse(document.getElementById('weline-social-platform-guides-json').textContent || '{}'); var initialScope = JSON.parse(document.getElementById('weline-social-initial-scope-json').textContent || '{}'); var scopeUrlSyncTimer = null; var allowedScopeTabs = { platforms: true, accounts: true, scopeAccounts: true, creative: true, publish: true, records: true, autopilotPlan: true, extensionPublish: true, review: true }; var platformMap = {}; var accountMap = {}; var relationsByScope = {}; var currentScope = null; var pendingScopeAssign = false; var messages = { addAccountTitle: '<?= $h((string)__('新增账户')) ?>', editAccountTitle: '<?= $h((string)__('编辑账户')) ?>', queryUnavailable: '<?= $h((string)__('后台查询接口尚未就绪。')) ?>', saving: '<?= $h((string)__('正在保存账户...')) ?>', saved: '<?= $h((string)__('账户保存完成。')) ?>', scopeSaving: '<?= $h((string)__('正在保存范围默认社媒...')) ?>', scopeSaved: '<?= $h((string)__('范围默认社媒已保存。')) ?>', resolvingDefaults: '<?= $h((string)__('正在解析范围默认社媒...')) ?>', testing: '<?= $h((string)__('正在检测账户...')) ?>', disabled: '<?= $h((string)__('账户已禁用。')) ?>', working: '<?= $h((string)__('正在处理...')) ?>', bindingScope: '<?= $h((string)__('正在绑定到当前范围...')) ?>', bindAfterSave: '<?= $h((string)__('保存后会自动绑定到当前范围：')) ?>', currentScope: '<?= $h((string)__('当前范围：')) ?>', addedFromPlatform: '<?= $h((string)__('已选择平台，保存账户后会加入当前范围。')) ?>', generated: '<?= $h((string)__('创意草稿已生成。')) ?>', batchCreated: '<?= $h((string)__('发布批次已创建。')) ?>', needAccount: '<?= $h((string)__('请选择发布账户。')) ?>', needScope: '<?= $h((string)__('请先选择范围类型和站点范围。')) ?>', needDraft: '<?= $h((string)__('请填写草稿 ID。')) ?>', oauthStarting: '<?= $h((string)__('正在生成授权地址...')) ?>', oauthUnavailable: '<?= $h((string)__('未配置平台应用凭据，请先点「打开系统配置」填写 App/Client。')) ?>', mailboxLabel: '<?= $h((string)__('社媒邮箱')) ?>', mailboxNeedScope: '<?= $h((string)__('选择站点范围后显示')) ?>', mailboxLoading: '<?= $h((string)__('正在检查企业邮箱…')) ?>', mailboxMissing: '<?= $h((string)__('未开通')) ?>', mailboxReady: '<?= $h((string)__('已开通')) ?>', mailboxEnsure: '<?= $h((string)__('一键开通')) ?>', mailboxCopyEmail: '<?= $h((string)__('复制邮箱')) ?>', mailboxCopyPassword: '<?= $h((string)__('复制密码')) ?>', mailboxResetPassword: '<?= $h((string)__('重置密码')) ?>', mailboxCopied: '<?= $h((string)__('已复制')) ?>', mailboxCopyFailed: '<?= $h((string)__('复制失败')) ?>', mailboxPasswordOnce: '<?= $h((string)__('密码（仅显示一次）')) ?>', mailboxNeedResetForCopy: '<?= $h((string)__('当前没有可复制的明文密码。将重置并复制新密码，旧密码立即失效，是否继续？')) ?>', mailboxDomainUnavailable: '<?= $h((string)__('本站企业邮箱未就绪')) ?>', mailboxMailUnavailable: '<?= $h((string)__('企业邮箱模块未启用')) ?>', mailboxRegisterHint: '<?= $h((string)__('注册平台时可用此邮箱，方便统一管理。')) ?>', mailboxRegisterOpened: '<?= $h((string)__('已复制社媒邮箱并打开注册页。若页面没有自动填入，请粘贴。')) ?>', mailboxRegisterCopiedOnly: '<?= $h((string)__('已复制社媒邮箱。该平台没有公开注册页，请自行注册并粘贴。')) ?>' }; platforms.forEach(function (platform) { if (platform && platform.code) { platformMap[String(platform.code)] = platform; } }); accounts.forEach(function (account) { if (account && account.account_id) { accountMap[String(account.account_id)] = account; } }); scopeRelations.forEach(function (relation) { if (!relation || !relation.account_id || relation.status !== 'active') { return; } var key = relation.scope_key || buildScopeKey(relation); if (!relationsByScope[key]) { relationsByScope[key] = []; } relationsByScope[key].push(Number(relation.account_id || 0)); }); function setStatus(id, text, type) { var node = document.getElementById(id); if (!node) { return; } node.textContent = text || ''; node.className = 'w-text social-status' + (type === 'error' ? ' text-danger' : type === 'success' ? ' w-text' : ' text-muted'); } function callSocial(operation, params, retry) { retry = (typeof retry === 'number') ? retry : 15; if (!window.Weline || !window.Weline.Query || typeof window.Weline.Query.request !== 'function') { if (retry > 0) { return new Promise(function (resolve) { setTimeout(function () { resolve(callSocial(operation, params, retry - 1)); }, 200); }); } return Promise.reject(new Error(messages.queryUnavailable)); } return window.Weline.Query.request(provider, operation, params || {}, {area: 'backend'}).then(function (response) { if (response && typeof response === 'object') { if (response.data && typeof response.data === 'object' && (response.data.success !== undefined || response.data.authorization_url !== undefined || response.data.accounts !== undefined || response.data.platforms !== undefined || response.data.state !== undefined || response.data.email !== undefined)) { return response.data; } if (response.result && typeof response.result === 'object') { return response.result; } } return response; }); } function activateTab(name) { document.querySelectorAll('[data-social-tab]').forEach(function (item) { item.classList.remove('active'); item.setAttribute('aria-selected', 'false'); }); document.querySelectorAll('[data-social-panel]').forEach(function (panel) { panel.hidden = true; }); var tab = document.querySelector('[data-social-tab="' + name + '"]'); var panel = document.querySelector('[data-social-panel="' + name + '"]'); if (tab) { tab.classList.add('active'); tab.setAttribute('aria-selected', 'true'); } if (panel) { panel.hidden = false; } if (name === 'autopilotPlan') { loadAutopilotPlan(); } } function buildGuideReturnUrl() { var base = String((socialConfigCenter && socialConfigCenter.guide_return_base) || ''); if (!base) { return window.location.pathname; } try { var url = new URL(base, window.location.origin); if (currentScope && currentScope.scope_key) { url.searchParams.set('scope_key', String(currentScope.scope_key)); } var activeTab = document.querySelector('[data-social-tab].active'); if (activeTab) { var tabName = String(activeTab.getAttribute('data-social-tab') || ''); if (allowedScopeTabs[tabName]) { url.searchParams.set('tab', tabName); } } return url.pathname + url.search + url.hash; } catch (e) { return base; } } function syncScopeToUrl() { if (!window.history || typeof window.history.replaceState !== 'function') { return; } if (scopeUrlSyncTimer) { window.clearTimeout(scopeUrlSyncTimer); } scopeUrlSyncTimer = window.setTimeout(function () { scopeUrlSyncTimer = null; try { var url = new URL(window.location.href); if (currentScope && currentScope.scope_key) { url.searchParams.set('scope_key', String(currentScope.scope_key)); if (currentScope.scope_code) { url.searchParams.set('scope_code', String(currentScope.scope_code)); } url.searchParams.delete('scope_type'); url.searchParams.delete('scope_id'); url.searchParams.delete('child_scope_type'); url.searchParams.delete('child_scope_id'); url.searchParams.delete('scope'); url.searchParams.delete('website_code'); } else { url.searchParams.delete('scope_key'); url.searchParams.delete('scope_code'); } var activeTab = document.querySelector('[data-social-tab].active'); if (activeTab) { var tabName = String(activeTab.getAttribute('data-social-tab') || ''); if (allowedScopeTabs[tabName] && tabName !== 'platforms') { url.searchParams.set('tab', tabName); } else { url.searchParams.delete('tab'); } } var next = url.pathname + url.search + url.hash; if (next !== window.location.pathname + window.location.search + window.location.hash) { window.history.replaceState({}, '', next); } } catch (e) {} }, 120); } function applyScopeSelection(selection) { selection = selection && typeof selection === 'object' ? selection : {}; var typeChoice = getSocialChoice('social-scope-type'); if (!typeChoice) { return; } var typeOptions = (Array.isArray(socialScopes) ? socialScopes : []).map(function (group) { return { value: String(group.scope_type || ''), label: String(group.scope_label || group.scope_type || ''), meta: '' }; }).filter(function (item) { return item.value !== ''; }); typeChoice.setOptions(typeOptions);
+(function () { var provider = '<?= $h($queryProvider) ?>'; var platforms = JSON.parse(document.getElementById('weline-social-platform-json').textContent || '[]'); var accounts = JSON.parse(document.getElementById('weline-social-account-json').textContent || '[]'); var socialScopes = JSON.parse(document.getElementById('weline-social-scope-json').textContent || '[]'); var scopeRelations = JSON.parse(document.getElementById('weline-social-scope-relation-json').textContent || '[]'); var socialConfigCenter = JSON.parse(document.getElementById('weline-social-config-center-json').textContent || '{}'); var platformGuides = JSON.parse(document.getElementById('weline-social-platform-guides-json').textContent || '{}'); var initialScope = JSON.parse(document.getElementById('weline-social-initial-scope-json').textContent || '{}'); var scopeUrlSyncTimer = null; var allowedScopeTabs = { platforms: true, accounts: true, scopeAccounts: true, creative: true, publish: true, records: true, autopilotPlan: true, extensionPublish: true, review: true }; var platformMap = {}; var accountMap = {}; var relationsByScope = {}; var currentScope = null;
+var phoneState = { number: '', operator: '', note: '' }; var pendingScopeAssign = false; var messages = { addAccountTitle: '<?= $h((string)__('新增账户')) ?>', editAccountTitle: '<?= $h((string)__('编辑账户')) ?>', queryUnavailable: '<?= $h((string)__('后台查询接口尚未就绪。')) ?>', saving: '<?= $h((string)__('正在保存账户...')) ?>', saved: '<?= $h((string)__('账户保存完成。')) ?>', scopeSaving: '<?= $h((string)__('正在保存范围默认社媒...')) ?>', scopeSaved: '<?= $h((string)__('范围默认社媒已保存。')) ?>', resolvingDefaults: '<?= $h((string)__('正在解析范围默认社媒...')) ?>', testing: '<?= $h((string)__('正在检测账户...')) ?>', disabled: '<?= $h((string)__('账户已禁用。')) ?>', working: '<?= $h((string)__('正在处理...')) ?>', bindingScope: '<?= $h((string)__('正在绑定到当前范围...')) ?>', bindAfterSave: '<?= $h((string)__('保存后会自动绑定到当前范围：')) ?>', currentScope: '<?= $h((string)__('当前范围：')) ?>', addedFromPlatform: '<?= $h((string)__('已选择平台，保存账户后会加入当前范围。')) ?>', generated: '<?= $h((string)__('创意草稿已生成。')) ?>', batchCreated: '<?= $h((string)__('发布批次已创建。')) ?>', needAccount: '<?= $h((string)__('请选择发布账户。')) ?>', needScope: '<?= $h((string)__('请先选择范围类型和站点范围。')) ?>', needDraft: '<?= $h((string)__('请填写草稿 ID。')) ?>', oauthStarting: '<?= $h((string)__('正在生成授权地址...')) ?>', oauthUnavailable: '<?= $h((string)__('未配置平台应用凭据，请先点「打开系统配置」填写 App/Client。')) ?>', mailboxLabel: '<?= $h((string)__('社媒邮箱')) ?>', mailboxNeedScope: '<?= $h((string)__('选择站点范围后显示')) ?>', mailboxLoading: '<?= $h((string)__('正在检查企业邮箱…')) ?>', mailboxMissing: '<?= $h((string)__('未开通')) ?>', mailboxReady: '<?= $h((string)__('已开通')) ?>', mailboxEnsure: '<?= $h((string)__('一键开通')) ?>', mailboxCopyEmail: '<?= $h((string)__('复制邮箱')) ?>', mailboxCopyPassword: '<?= $h((string)__('复制密码')) ?>', mailboxResetPassword: '<?= $h((string)__('重置密码')) ?>', mailboxCopied: '<?= $h((string)__('已复制')) ?>', mailboxCopyFailed: '<?= $h((string)__('复制失败')) ?>', mailboxPasswordOnce: '<?= $h((string)__('密码（仅显示一次）')) ?>', mailboxNeedResetForCopy: '<?= $h((string)__('当前没有可复制的明文密码。将重置并复制新密码，旧密码立即失效，是否继续？')) ?>', mailboxDomainUnavailable: '<?= $h((string)__('本站企业邮箱未就绪')) ?>', mailboxMailUnavailable: '<?= $h((string)__('企业邮箱模块未启用')) ?>', mailboxRegisterHint: '<?= $h((string)__('注册平台时可用此邮箱，方便统一管理。')) ?>', mailboxRegisterOpened: '<?= $h((string)__('已复制社媒邮箱并打开注册页。若页面没有自动填入，请粘贴。')) ?>', mailboxRegisterCopiedOnly: '<?= $h((string)__('已复制社媒邮箱。该平台没有公开注册页，请自行注册并粘贴。')) ?>' }; platforms.forEach(function (platform) { if (platform && platform.code) { platformMap[String(platform.code)] = platform; } }); accounts.forEach(function (account) { if (account && account.account_id) { accountMap[String(account.account_id)] = account; } }); scopeRelations.forEach(function (relation) { if (!relation || !relation.account_id || relation.status !== 'active') { return; } var key = relation.scope_key || buildScopeKey(relation); if (!relationsByScope[key]) { relationsByScope[key] = []; } relationsByScope[key].push(Number(relation.account_id || 0)); }); function setStatus(id, text, type) { var node = document.getElementById(id); if (!node) { return; } node.textContent = text || ''; node.className = 'w-text social-status' + (type === 'error' ? ' text-danger' : type === 'success' ? ' w-text' : ' text-muted'); } function callSocial(operation, params, retry) { retry = (typeof retry === 'number') ? retry : 15; if (!window.Weline || !window.Weline.Query || typeof window.Weline.Query.request !== 'function') { if (retry > 0) { return new Promise(function (resolve) { setTimeout(function () { resolve(callSocial(operation, params, retry - 1)); }, 200); }); } return Promise.reject(new Error(messages.queryUnavailable)); } return window.Weline.Query.request(provider, operation, params || {}, {area: 'backend'}).then(function (response) { if (response && typeof response === 'object') { if (response.data && typeof response.data === 'object' && (response.data.success !== undefined || response.data.authorization_url !== undefined || response.data.accounts !== undefined || response.data.platforms !== undefined || response.data.state !== undefined || response.data.email !== undefined)) { return response.data; } if (response.result && typeof response.result === 'object') { return response.result; } } return response; }); } function activateTab(name) { document.querySelectorAll('[data-social-tab]').forEach(function (item) { item.classList.remove('active'); item.setAttribute('aria-selected', 'false'); }); document.querySelectorAll('[data-social-panel]').forEach(function (panel) { panel.hidden = true; }); var tab = document.querySelector('[data-social-tab="' + name + '"]'); var panel = document.querySelector('[data-social-panel="' + name + '"]'); if (tab) { tab.classList.add('active'); tab.setAttribute('aria-selected', 'true'); } if (panel) { panel.hidden = false; } if (name === 'autopilotPlan') { loadAutopilotPlan(); } } function buildGuideReturnUrl() { var base = String((socialConfigCenter && socialConfigCenter.guide_return_base) || ''); if (!base) { return window.location.pathname; } try { var url = new URL(base, window.location.origin); if (currentScope && currentScope.scope_key) { url.searchParams.set('scope_key', String(currentScope.scope_key)); } var activeTab = document.querySelector('[data-social-tab].active'); if (activeTab) { var tabName = String(activeTab.getAttribute('data-social-tab') || ''); if (allowedScopeTabs[tabName]) { url.searchParams.set('tab', tabName); } } return url.pathname + url.search + url.hash; } catch (e) { return base; } } function syncScopeToUrl() { if (!window.history || typeof window.history.replaceState !== 'function') { return; } if (scopeUrlSyncTimer) { window.clearTimeout(scopeUrlSyncTimer); } scopeUrlSyncTimer = window.setTimeout(function () { scopeUrlSyncTimer = null; try { var url = new URL(window.location.href); if (currentScope && currentScope.scope_key) { url.searchParams.set('scope_key', String(currentScope.scope_key)); if (currentScope.scope_code) { url.searchParams.set('scope_code', String(currentScope.scope_code)); } url.searchParams.delete('scope_type'); url.searchParams.delete('scope_id'); url.searchParams.delete('child_scope_type'); url.searchParams.delete('child_scope_id'); url.searchParams.delete('scope'); url.searchParams.delete('website_code'); } else { url.searchParams.delete('scope_key'); url.searchParams.delete('scope_code'); } var activeTab = document.querySelector('[data-social-tab].active'); if (activeTab) { var tabName = String(activeTab.getAttribute('data-social-tab') || ''); if (allowedScopeTabs[tabName] && tabName !== 'platforms') { url.searchParams.set('tab', tabName); } else { url.searchParams.delete('tab'); } } var next = url.pathname + url.search + url.hash; if (next !== window.location.pathname + window.location.search + window.location.hash) { window.history.replaceState({}, '', next); } } catch (e) {} }, 120); } function applyScopeSelection(selection) { selection = selection && typeof selection === 'object' ? selection : {}; var typeChoice = getSocialChoice('social-scope-type'); if (!typeChoice) { return; } var typeOptions = (Array.isArray(socialScopes) ? socialScopes : []).map(function (group) { return { value: String(group.scope_type || ''), label: String(group.scope_label || group.scope_type || ''), meta: '' }; }).filter(function (item) { return item.value !== ''; }); typeChoice.setOptions(typeOptions);
  var typeField = document.getElementById('social-scope-type');
  var typeWrap = typeField ? typeField.closest('.scope-selector-grid > div') : null;
  if (typeWrap) {
@@ -307,7 +338,7 @@ createSocialChoice(document.getElementById('social-scope-type'), { emptyLabel: '
 
  function mailboxScopePayload() {
    if (!currentScope) { return null; }
-   return { website_id: Number(currentScope.website_id || currentScope.scope_id || 0), scope_id: Number(currentScope.scope_id || 0), scope_key: String(currentScope.scope_key || '') };
+   return { website_id: Number(currentScope.website_id || currentScope.scope_id || 0), scope_id: Number(currentScope.scope_id || 0), scope_code: String(currentScope.scope_code || ''), scope_key: String(currentScope.scope_key || '') };
  }
  function copyText(value) {
    value = String(value || '');
@@ -410,7 +441,100 @@ createSocialChoice(document.getElementById('social-scope-type'), { emptyLabel: '
    }
    status.textContent = data.message || messages.mailboxDomainUnavailable;
  }
- function renderScopePhoneStrip(data) {   var root = document.getElementById('social-scope-phone'); if (!root) { return; }   var status = root.querySelector('[data-phone-status]'); var actions = root.querySelector('[data-phone-actions]'); var label = root.querySelector('[data-phone-label]');   if (!status || !actions) { return; }   data = data && typeof data === 'object' ? data : {};   var number = String(data.number || ''); var operator = String(data.operator || '');   actions.hidden = true; actions.innerHTML = '';   if (!currentScope) { if (label) { label.hidden = false; } status.textContent = messages.mailboxNeedScope; return; }   if (label) { label.hidden = number !== ''; }   if (number === '') { status.innerHTML = '<span class="w-text" data-tone="muted" data-size="sm"><?= $h((string)__('未配置')) ?></span><span class="w-text" data-tone="muted" data-size="sm"> · <?= $h((string)__('用命令行或后续编辑弹窗录入')) ?></span>'; return; }   status.innerHTML = '<span class="w-text" data-weight="strong" title="' + escapeHtml(number) + '">' + escapeHtml(number) + '</span>' + (operator ? '<span class="w-text" data-tone="muted" data-size="sm"> · ' + escapeHtml(operator) + '</span>' : '');   actions.hidden = false;   actions.innerHTML = '<button type="button" class="w-button" data-tone="secondary" data-size="sm" data-phone-copy>' + '<?= $h((string)__('复制')) ?>' + '</button>';   var copyBtn = actions.querySelector('[data-phone-copy]');   if (copyBtn) { copyBtn.addEventListener('click', function () { copyText(number).then(function (ok) { if (ok) { copyBtn.textContent = '<?= $h((string)__('已复制')) ?>'; } }); }); } } function refreshScopePhoneStrip() {   var root = document.getElementById('social-scope-phone'); if (!root) { return; }   var status = root.querySelector('[data-phone-status]');   if (!currentScope) { renderScopePhoneStrip({}); return; }   if (status) { status.textContent = '<?= $h((string)__('正在检查…')) ?>'; }   var payload = mailboxScopePayload(); if (!payload) { renderScopePhoneStrip({}); return; }   callSocial('getScopeSocialPhone', payload).then(function (result) { renderScopePhoneStrip(result || {}); }).catch(function () { /* 保留服务端直出值，避免错误文案覆盖 */ }); } function refreshScopeMailboxStrip() {
+ function renderScopePhoneStrip(data) {
+  var root = document.getElementById('social-scope-phone'); if (!root) { return; }
+  var status = root.querySelector('[data-phone-status]'); var actions = root.querySelector('[data-phone-actions]'); var label = root.querySelector('[data-phone-label]');
+  if (!status || !actions) { return; }
+  data = data && typeof data === 'object' ? data : {};
+  var number = String(data.number || ''); var operator = String(data.operator || '');
+  phoneState.number = number; phoneState.operator = operator; phoneState.note = String(data.note || '');
+  actions.hidden = true; actions.innerHTML = '';
+  if (!currentScope) { if (label) { label.hidden = false; } status.textContent = messages.mailboxNeedScope; return; }
+  if (label) { label.hidden = number !== ''; }
+  if (number === '') {
+    status.innerHTML = '<span class="w-text" data-tone="muted" data-size="sm"><?= $h((string)__('未配置')) ?></span>';
+  } else {
+    status.innerHTML = '<span class="w-text" data-weight="strong" title="' + escapeHtml(number) + '">' + escapeHtml(number) + '</span>' + (operator ? '<span class="w-text" data-tone="muted" data-size="sm"> · ' + escapeHtml(operator) + '</span>' : '');
+  }
+  actions.hidden = false;
+  var html = '';
+  if (number !== '') {
+    html += '<button type="button" class="w-button" data-tone="secondary" data-size="sm" data-phone-copy>' + '<?= $h((string)__('复制')) ?>' + '</button>';
+  }
+  html += '<button type="button" class="w-button" data-tone="primary" data-variant="outline" data-size="sm" data-phone-edit>' + (number === '' ? '<?= $h((string)__('配置')) ?>' : '<?= $h((string)__('编辑')) ?>') + '</button>';
+  actions.innerHTML = html;
+  var copyBtn = actions.querySelector('[data-phone-copy]');
+  if (copyBtn) { copyBtn.addEventListener('click', function () { copyText(number).then(function (ok) { if (ok) { copyBtn.textContent = '<?= $h((string)__('已复制')) ?>'; } }); }); }
+}
+function openPhoneDialog() {
+  var dialog = document.getElementById('social-phone-dialog'); if (!dialog) { return; }
+  var scopeLabel = document.getElementById('social-phone-dialog-scope');
+  if (scopeLabel) { scopeLabel.textContent = currentScope ? String(currentScope.scope_label || currentScope.scope_code || '') : ''; }
+  var numberInput = document.getElementById('social-phone-number');
+  var operatorInput = document.getElementById('social-phone-operator');
+  var noteInput = document.getElementById('social-phone-note');
+  if (numberInput) { numberInput.value = phoneState.number; }
+  if (operatorInput) { operatorInput.value = phoneState.operator; }
+  if (noteInput) { noteInput.value = phoneState.note; }
+  var status = document.getElementById('social-phone-status'); if (status) { status.textContent = ''; }
+  var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+  if (ui && typeof ui.open === 'function') { ui.open(dialog); return; }
+  dialog.hidden = false; dialog.setAttribute('data-state', 'open'); dialog.setAttribute('aria-hidden', 'false');
+}
+function closePhoneDialog() {
+  var dialog = document.getElementById('social-phone-dialog'); if (!dialog) { return; }
+  var ui = window.Weline && window.Weline.UI && window.Weline.UI.dialog;
+  if (ui && typeof ui.close === 'function') { ui.close(dialog); return; }
+  dialog.hidden = true; dialog.setAttribute('data-state', 'closed'); dialog.setAttribute('aria-hidden', 'true');
+}
+function saveScopePhone() {
+  var payload = mailboxScopePayload();
+  if (!payload) { uiToast(messages.needScope, 'warning'); return; }
+  var numberInput = document.getElementById('social-phone-number');
+  var operatorInput = document.getElementById('social-phone-operator');
+  var noteInput = document.getElementById('social-phone-note');
+  var status = document.getElementById('social-phone-status');
+  if (status) { status.textContent = '<?= $h((string)__('正在保存…')) ?>'; }
+  var data = { number: numberInput ? String(numberInput.value).trim() : '', operator: operatorInput ? String(operatorInput.value).trim() : '', note: noteInput ? String(noteInput.value).trim() : '' };
+  callSocial('saveScopeSocialPhone', { website_id: payload.website_id, scope_id: payload.scope_id, scope_code: payload.scope_code, data: data }).then(function (result) {
+    if (!result || !result.success) {
+      if (status) { status.textContent = (result && result.message) || '<?= $h((string)__('保存失败')) ?>'; }
+      return;
+    }
+    phoneState.number = String(result.number || ''); phoneState.operator = String(result.operator || ''); phoneState.note = String(result.note || '');
+    renderScopePhoneStrip(phoneState);
+    closePhoneDialog();
+    uiToast('<?= $h((string)__('社媒手机号已保存。')) ?>', 'success');
+  }).catch(function (error) {
+    if (status) { status.textContent = (error && error.message) || '<?= $h((string)__('保存失败')) ?>'; }
+  });
+}
+function refreshScopePhoneStrip() {
+  var root = document.getElementById('social-scope-phone'); if (!root) { return; }
+  var status = root.querySelector('[data-phone-status]');
+  if (!currentScope) { renderScopePhoneStrip({}); return; }
+  if (status) { status.textContent = '<?= $h((string)__('正在检查…')) ?>'; }
+  var payload = mailboxScopePayload(); if (!payload) { renderScopePhoneStrip({}); return; }
+  callSocial('getScopeSocialPhone', payload).then(function (result) { renderScopePhoneStrip(result || {}); }).catch(function () { /* 保留服务端直出值，避免错误文案覆盖 */ });
+}
+function bindPhoneStripActions() {
+  var root = document.getElementById('social-scope-phone');
+  if (!root || root.getAttribute('data-phone-bound') === '1') { return; }
+  root.setAttribute('data-phone-bound', '1');
+  root.addEventListener('click', function (event) {
+    var target = event.target;
+    if (!target || !target.closest) { return; }
+    if (target.closest('[data-phone-edit]')) { openPhoneDialog(); }
+  });
+}
+function bindPhoneDialogActions() {
+  var saveBtn = document.querySelector('[data-phone-save]');
+  if (saveBtn && saveBtn.getAttribute('data-phone-save-bound') !== '1') {
+    saveBtn.setAttribute('data-phone-save-bound', '1');
+    saveBtn.addEventListener('click', saveScopePhone);
+  }
+}
+function refreshScopeMailboxStrip() {
    var payload = mailboxScopePayload();
    if (!payload) {
      renderMailboxStrip({ state: 'need_scope' });
@@ -493,6 +617,6 @@ createSocialChoice(document.getElementById('social-scope-type'), { emptyLabel: '
    });
  }
 
- bindMailboxStripActions(); bindAutopilotForm(); bindReviewActions(); bindExtensionGrantActions(); initializeScopeSelectors(); initializePlatformSearch(); updateAuthAndCredentials(); if (initialScope && initialScope.tab && allowedScopeTabs[String(initialScope.tab)]) { activateTab(String(initialScope.tab)); }
+ bindMailboxStripActions(); bindPhoneStripActions(); bindPhoneDialogActions(); bindAutopilotForm(); bindReviewActions(); bindExtensionGrantActions(); initializeScopeSelectors(); initializePlatformSearch(); updateAuthAndCredentials(); if (initialScope && initialScope.tab && allowedScopeTabs[String(initialScope.tab)]) { activateTab(String(initialScope.tab)); }
 })();
 </script>

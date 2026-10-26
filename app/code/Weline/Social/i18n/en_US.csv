@@ -211,9 +211,15 @@ grid,grid
 正在配置,Configuring
 未选择范围,"No range selected"
 社媒邮箱,"Social mailbox"
-选择站点范围后显示,"Select a site scope to show"
+选择站点范围后显示,"Shown after selecting a website scope"
 社媒手机号,社媒手机号
-未配置（用命令行录入）,未配置（用命令行录入）
+配置社媒手机号,"Configure social media phone"
+关闭,关闭
+手机号,"Phone number"
+运营商,Carrier
+备注,Note
+保存,保存
+取消,取消
 暂无可配置范围，无法按范围配置社媒账户。,"There is currently no configuration range, and social media accounts cannot be configured by range."
 范围已由网站编辑锁定，如需切换站点请返回网站列表另开编辑。,"Scope is locked by website editor. Open another website from the list to switch sites."
 平台库,"Platform Library"
@@ -244,7 +250,6 @@ grid,grid
 编辑,Edit
 禁用,Disable
 新增或编辑账户,"Add or Edit Account"
-关闭,关闭
 从平台库添加时，保存后会自动绑定到当前配置范围。,"When added from the platform library, it will be automatically bound to the current configuration scope after saving."
 平台,Platform
 编辑已有账户时不可更改平台。,"The platform cannot be changed when editing an existing account."
@@ -349,7 +354,6 @@ grid,grid
 驳回审片,驳回审片
 驳回原因,驳回原因
 说明需要重生成的原因,说明需要重生成的原因
-取消,取消
 确认驳回,确认驳回
 扩展与平台族,"Extensions and Platform Families"
 编辑账户,"Edit account"
@@ -445,7 +449,9 @@ grid,grid
 请选择平台,"Select a platform"
 请选择授权方式,"Select an auth mode"
 未配置,未配置
-用命令行或后续编辑弹窗录入,用命令行或后续编辑弹窗录入
+配置,Configure
+正在保存…,Saving...
+社媒手机号已保存。,"Social media phone saved."
 正在检查…,正在检查…
 确认重置社媒邮箱密码？旧密码将立即失效。,"Reset the social mailbox password? The old password will stop working immediately."
 暂时无法加载融媒体管理嵌入页，请稍后重试或打开完整融媒体管理。,"Unable to load the embedded Social admin. Retry later or open full Social Media Management."
@@ -630,6 +636,8 @@ Snapchat,Snapchat
 "本地 fake 发布验证","Local fake release verification"
 社媒日更自动运营,社媒日更自动运营
 按站点计划时段执行日更：取题、生成内容、按通道排队；视频按审片开关停在待审。,按站点计划时段执行日更：取题、生成内容、按通道排队；视频按审片开关停在待审。
+未配置（用命令行录入）,未配置（用命令行录入）
+用命令行或后续编辑弹窗录入,用命令行或后续编辑弹窗录入
 "提供 Weline_Social 平台、账户、AI 创意和发布批次操作。","Provides Weline_Social platform, account, AI creative, and publish batch operations."
 搜索范围类型,"Search scope type"
 未找到匹配范围类型,"No matching scope types found"

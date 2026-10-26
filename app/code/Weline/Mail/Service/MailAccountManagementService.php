@@ -52,8 +52,18 @@ final class MailAccountManagementService
                 if ((string)$domain->getData(MailDomain::schema_fields_STATUS) !== 'active') {
                     return $this->failure(__('请先启用邮箱域名'));
                 }
-                ObjectManager::getInstance(StalwartManagementAdapter::class)
-                    ->provisionAccount($email, $password, $quotaMb);
+                $adapter = ObjectManager::getInstance(StalwartManagementAdapter::class);
+                try {
+                    $adapter->provisionAccount($email, $password, $quotaMb);
+                } catch (\DomainException $provisionException) {
+                    // 上次开通已在 Stalwart 落号、但本地账号行没写成：系统生成账号直接接管并重置密码。
+                    if (!MailAccount::isGeneratedSystemLocalPart($localPart)
+                        || !str_contains($provisionException->getMessage(), '已存在于 Stalwart')
+                    ) {
+                        throw $provisionException;
+                    }
+                    $adapter->provisionOrResetAccount($email, $password, $quotaMb);
+                }
             }
 
             $isSystem = MailAccount::isGeneratedSystemLocalPart($localPart)
@@ -76,12 +86,21 @@ final class MailAccountManagementService
                 $model->setData(MailAccount::schema_fields_PASSWORD_SEALED, $secrets->seal($password));
             }
             $model->save();
+            $accountId = (int)$model->getId();
+            if ($accountId > 0) {
+                $this->inheritDomainRelay($model);
+            }
 
-            return ['success' => true, 'message' => __('邮箱账号已开通'), 'account_id' => (int)$model->getId()];
+            return ['success' => true, 'message' => __('邮箱账号已开通'), 'account_id' => $accountId];
         } catch (\InvalidArgumentException|\DomainException $exception) {
             return $this->failure($exception->getMessage());
-        } catch (\Throwable) {
-            return $this->failure(__('邮箱账号开通失败，请检查 Stalwart 管理连接'), 500);
+        } catch (\Throwable $exception) {
+            w_log_error('[Mail] 邮箱账号开通失败：' . $exception->getMessage(), ['email' => $email ?? ''], 'mail');
+
+            return $this->failure(
+                __('邮箱账号开通失败，请检查 Stalwart 管理连接') . '：' . $exception->getMessage(),
+                500
+            );
         }
     }
 
@@ -229,6 +248,9 @@ final class MailAccountManagementService
         $account->setData(MailAccount::schema_fields_STATUS, $status)
             ->setData(MailAccount::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
             ->save();
+        if ($status === 'active') {
+            $this->inheritDomainRelay($account);
+        }
 
         return ['success' => true, 'message' => __('邮箱账号状态已更新')];
     }
@@ -400,12 +422,18 @@ final class MailAccountManagementService
                 ->setData(MailAccount::schema_fields_PASSWORD_SEALED, $secrets->seal(trim($password)))
                 ->setData(MailAccount::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
                 ->save();
+            $this->inheritDomainRelay($account);
 
             return ['success' => true, 'message' => __('邮箱已在 Stalwart 中开通，密码已更新')];
         } catch (\InvalidArgumentException|\DomainException $exception) {
             return $this->failure($exception->getMessage());
-        } catch (\Throwable) {
-            return $this->failure(__('邮箱开通或密码重置失败，请检查 Stalwart 管理连接'), 500);
+        } catch (\Throwable $exception) {
+            w_log_error('[Mail] 邮箱开通或密码重置失败：' . $exception->getMessage(), ['account_id' => $accountId], 'mail');
+
+            return $this->failure(
+                __('邮箱开通或密码重置失败，请检查 Stalwart 管理连接') . '：' . $exception->getMessage(),
+                500
+            );
         }
     }
 
@@ -456,11 +484,14 @@ final class MailAccountManagementService
         }
         $this->healSystemFlag($account);
         $email = (string)$account->getData(MailAccount::schema_fields_EMAIL);
-        if (
-            $action === 'reset_password'
-            && MailAccount::isSocialMailboxLocalPart(MailAccount::emailLocalPart($email))
-        ) {
-            return null;
+        if ($action === 'reset_password') {
+            $localPart = MailAccount::emailLocalPart($email);
+            if (
+                MailAccount::isSocialMailboxLocalPart($localPart)
+                || MailAccount::isFeedMailboxLocalPart($localPart)
+            ) {
+                return null;
+            }
         }
         $label = $email !== '' ? $email : ('#' . (int)$account->getId());
 
@@ -511,6 +542,16 @@ final class MailAccountManagementService
         }
 
         return array_values($out);
+    }
+
+    private function inheritDomainRelay(MailAccount $account): void
+    {
+        try {
+            ObjectManager::getInstance(MailOutboundRelayBindingService::class)
+                ->applyDomainDefaultToAccount($account);
+        } catch (\Throwable) {
+            // 域名默认外投继承失败不阻断账号开通/启用
+        }
     }
 
     private function failure(mixed $message, int $code = 422): array

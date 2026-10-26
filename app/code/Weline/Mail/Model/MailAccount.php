@@ -39,10 +39,14 @@ class MailAccount extends Model
     #[Col('varchar', 32, default: 'pending', comment: '账号状态')]
     public const schema_fields_STATUS = 'status';
 
-    /** contact@ 人收、smtp@ 提交代理：禁止删改身份与改密。social-{站code}@ 由融媒体开通：禁止删除与改身份，仍可重置密码。 */
+    /**
+     * contact@ 人收、smtp@ 提交代理：禁止删改身份与改密。
+     * social-{站code}@ 由融媒体开通、feed-{站code}@ 由购物目录（GMC）开通：禁止删除与改身份，仍可重置密码。
+     */
     public const SYSTEM_LOCAL_CONTACT = 'contact';
     public const SYSTEM_LOCAL_SMTP = 'smtp';
     public const SYSTEM_LOCAL_SOCIAL_PREFIX = 'social-';
+    public const SYSTEM_LOCAL_FEED_PREFIX = 'feed-';
 
     #[Col('tinyint', default: 0, comment: '系统固定账号：禁止删除；contact/smtp 另禁止改密')]
     public const schema_fields_IS_SYSTEM = 'is_system';
@@ -98,12 +102,24 @@ class MailAccount extends Model
     }
 
     /**
-     * 融媒体开通的社媒专用邮箱 local_part：social-{网站code}。
+     * 融媒体开通的社媒专用邮箱 local_part：social- 前缀（现行统一为 social-ugc，旧 social-{站code} 兼容）。
      */
     public static function isSocialMailboxLocalPart(string $localPart): bool
     {
+        return self::hasGeneratedPrefix($localPart, self::SYSTEM_LOCAL_SOCIAL_PREFIX);
+    }
+
+    /**
+     * 购物目录（GMC）开通的 FE 专用邮箱 local_part：feed-{网站code}。
+     */
+    public static function isFeedMailboxLocalPart(string $localPart): bool
+    {
+        return self::hasGeneratedPrefix($localPart, self::SYSTEM_LOCAL_FEED_PREFIX);
+    }
+
+    private static function hasGeneratedPrefix(string $localPart, string $prefix): bool
+    {
         $local = strtolower(trim($localPart));
-        $prefix = self::SYSTEM_LOCAL_SOCIAL_PREFIX;
 
         return $local !== ''
             && str_starts_with($local, $prefix)
@@ -113,7 +129,8 @@ class MailAccount extends Model
     public static function isGeneratedSystemLocalPart(string $localPart): bool
     {
         return self::isReservedSystemLocalPart($localPart)
-            || self::isSocialMailboxLocalPart($localPart);
+            || self::isSocialMailboxLocalPart($localPart)
+            || self::isFeedMailboxLocalPart($localPart);
     }
 
     public static function emailLocalPart(string $email): string
@@ -135,6 +152,9 @@ class MailAccount extends Model
         $local = strtolower(trim($localPart));
         if (self::isSocialMailboxLocalPart($local)) {
             return (string)__('社媒注册（系统）');
+        }
+        if (self::isFeedMailboxLocalPart($local)) {
+            return (string)__('FE 专用（系统）');
         }
 
         return match ($local) {
