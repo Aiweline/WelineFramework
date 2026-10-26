@@ -111,9 +111,9 @@ final class ToolService
             self::tool(
                 'cognition',
                 'Compressed repository cognition (F/R/A/S per file)',
-                'Query or maintain the per-project compressed cognition index. Use action=query before editing unfamiliar code; call action=maintain once after managed objects reach a stable state. Entries are loaded per module shard on demand.',
+                'Query, maintain, or prune the per-project compressed cognition index. Use action=query before editing unfamiliar code; call action=maintain once after managed objects reach a stable state; call action=prune to remove entries whose files no longer exist. Entries are loaded per module shard on demand.',
                 self::objectSchema([
-                    'action' => ['type' => 'string', 'enum' => ['overview', 'query', 'maintain', 'status'], 'description' => 'Cognition operation.'],
+                    'action' => ['type' => 'string', 'enum' => ['overview', 'query', 'maintain', 'prune', 'status'], 'description' => 'Cognition operation.'],
                     'module' => self::stringSchema('Module shard, e.g. Weline_Framework.'),
                     'path' => self::stringSchema('Exact repository-relative file path.'),
                     'query' => self::stringSchema('Case-insensitive substring over f/r/a/s.'),
@@ -332,14 +332,20 @@ final class ToolService
         return $result;
     }
 
+    public function close(): void
+    {
+        $this->intelligence->close();
+    }
+
     private function cognition(array $input): array
     {
-        $repository = $this->resolveProject($input);
-        $service = new CognitionService(RepositoryScope::projectDataDir($repository));
+        $repository = $this->resolveProjectRepository($input);
+        $service = new CognitionService(RepositoryScope::projectDataDir($repository), $repository);
         return match ((string) ($input['action'] ?? 'status')) {
             'overview' => $service->overview(),
             'query' => $service->query($input),
             'maintain' => $service->maintain((array) ($input['entries'] ?? [])),
+            'prune' => $service->prune(),
             'status' => $service->status(),
             default => throw new ToolException('INVALID_ARGUMENT', 'Unknown cognition action', false),
         };
@@ -433,7 +439,7 @@ final class ToolService
     }
 
     /** @param array<string, mixed> $input */
-    private function resolveProject(array $input): string
+    private function resolveProjectRepository(array $input): string
     {
         $projectId = trim((string) ($input['project_id'] ?? ''));
         $repository = trim((string) ($input['repository'] ?? ''));
@@ -441,7 +447,11 @@ final class ToolService
             if ($projectId === '') {
                 throw new ToolException('VALIDATION_FAILED', 'project_id or repository is required');
             }
-            return $projectId;
+            $location = $this->store->preferredProjectLocation($projectId);
+            $repository = trim((string) ($location['canonical_path'] ?? ''));
+            if ($repository === '') {
+                throw new ToolException('VALIDATION_FAILED', 'repository is required');
+            }
         }
         $resolved = ProjectResolver::resolve($repository);
         $actual = (string) $resolved['project']['id'];
@@ -450,7 +460,7 @@ final class ToolService
         }
         $this->store->upsertProject($resolved['project']);
 
-        return $actual;
+        return (string) $resolved['repository'];
     }
 
     /** @param array<string, mixed> $details

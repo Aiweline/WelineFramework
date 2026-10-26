@@ -574,7 +574,7 @@ final class ProjectIndex
 
     private function writeOwnershipManifest(): void
     {
-        if (!is_resource($this->leaseHandle)) {
+        if (!is_resource($this->leaseHandle) || !is_dir($this->projectDirectory)) {
             return;
         }
         $path = $this->projectDirectory . DIRECTORY_SEPARATOR . self::OWNER_MANIFEST;

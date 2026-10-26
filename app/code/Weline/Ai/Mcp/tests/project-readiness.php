@@ -206,6 +206,120 @@ try {
     readinessCheck(($loaded['schema_version'] ?? '') === 'mcp-skills.v1' && is_array($loaded['skill'] ?? null), 'get_skill returns mcp skill body');
     readinessCheck(str_contains((string) ($loaded['skill']['content'] ?? ''), 'get_skill'), 'get_skill content includes fetch instructions');
     readinessCheck(is_array($toolReady['agent_guidance']['mcp_skills'] ?? null), 'prepare_project exposes agent_guidance.mcp_skills');
+    $cognitionHome = $temporary . '/cognition-home';
+    mkdir($cognitionHome, 0700, true);
+    $previousHome = getenv('HOME');
+    putenv('HOME=' . $cognitionHome);
+    $_SERVER['HOME'] = $cognitionHome;
+    $pruneCandidate = 'app/code/Acme/Demo/etc/prune-me.php';
+    file_put_contents($repository . '/' . $pruneCandidate, "<?php\n");
+    $cognitionMaintained = $tools->call('cognition', [
+        'action' => 'maintain',
+        'repository' => $repository,
+        'client_session_id' => 'tool-session',
+        'readiness_id' => $toolReady['readiness_id'],
+        'entries' => [
+            [
+                'path' => 'app/code/Acme/Demo/register.php',
+                'f' => 'Acme_Demo 模块注册入口',
+                'r' => [],
+                'a' => [],
+                's' => [],
+            ],
+            [
+                'path' => $pruneCandidate,
+                'f' => 'Acme_Demo 待清理条目',
+                'r' => [],
+                'a' => [],
+                's' => [],
+            ],
+        ],
+    ]);
+    $cognitionQuery = $tools->call('cognition', [
+        'action' => 'query',
+        'repository' => $repository,
+        'client_session_id' => 'tool-session',
+        'readiness_id' => $toolReady['readiness_id'],
+        'module' => 'Acme_Demo',
+    ]);
+    $otherModuleFile = 'app/code/Acme/Other/register.php';
+    mkdir($repository . '/app/code/Acme/Other/doc', 0700, true);
+    file_put_contents($repository . '/' . $otherModuleFile, "<?php\n");
+    foreach (['README.md', '需求.md', '开发日志.md'] as $document) {
+        file_put_contents($repository . '/app/code/Acme/Other/doc/' . $document, "# Acme_Other {$document}\n");
+    }
+    $tools->call('cognition', [
+        'action' => 'maintain',
+        'repository' => $repository,
+        'client_session_id' => 'tool-session',
+        'readiness_id' => $toolReady['readiness_id'],
+        'entries' => [[
+            'path' => $otherModuleFile,
+            'f' => 'Acme_Other 模块注册入口',
+            'r' => [],
+            'a' => [],
+            's' => [],
+        ]],
+    ]);
+    $cognitionOverview = $tools->call('cognition', [
+        'action' => 'overview',
+        'repository' => $repository,
+        'client_session_id' => 'tool-session',
+        'readiness_id' => $toolReady['readiness_id'],
+    ]);
+    unlink($repository . '/' . $pruneCandidate);
+    $cognitionPruned = $tools->call('cognition', [
+        'action' => 'prune',
+        'repository' => $repository,
+        'client_session_id' => 'tool-session',
+        'readiness_id' => $toolReady['readiness_id'],
+    ]);
+    $cognitionAfterPrune = $tools->call('cognition', [
+        'action' => 'query',
+        'repository' => $repository,
+        'client_session_id' => 'tool-session',
+        'readiness_id' => $toolReady['readiness_id'],
+        'path' => $pruneCandidate,
+    ]);
+    $cognitionOverviewAfterPrune = $tools->call('cognition', [
+        'action' => 'overview',
+        'repository' => $repository,
+        'client_session_id' => 'tool-session',
+        'readiness_id' => $toolReady['readiness_id'],
+    ]);
+    if ($previousHome === false) {
+        putenv('HOME');
+        unset($_SERVER['HOME']);
+    } else {
+        putenv('HOME=' . $previousHome);
+        $_SERVER['HOME'] = $previousHome;
+    }
+    readinessCheck(
+        ($cognitionMaintained['written'] ?? 0) === 2,
+        'cognition maintain resolves the repository path from prepare_project readiness',
+    );
+    readinessCheck(
+        ($cognitionQuery['count'] ?? 0) === 2
+            && (($cognitionQuery['entries'][0]['stale'] ?? true) === false),
+        'cognition query returns the maintained entries as fresh',
+    );
+    readinessCheck(
+        ($cognitionOverview['total'] ?? 0) === 3 && count($cognitionOverview['modules'] ?? []) === 2,
+        'cognition maintain keeps every module in the overview manifest',
+    );
+    readinessCheck(
+        ($cognitionPruned['pruned'] ?? 0) === 1 && ($cognitionPruned['remaining'] ?? 0) === 2,
+        'cognition prune removes entries whose files no longer exist',
+    );
+    readinessCheck(
+        ($cognitionAfterPrune['count'] ?? -1) === 0,
+        'cognition query no longer returns the pruned entry',
+    );
+    readinessCheck(
+        ($cognitionOverviewAfterPrune['total'] ?? 0) === 2
+            && count($cognitionOverviewAfterPrune['modules'] ?? []) === 2,
+        'cognition prune keeps the remaining modules in the overview manifest',
+    );
     $hostCodexDelegation = $toolReady['agent_guidance']['host_codex_delegation'] ?? null;
     readinessCheck(is_array($hostCodexDelegation), 'prepare_project exposes agent_guidance.host_codex_delegation');
     readinessCheck(
@@ -243,6 +357,7 @@ try {
             && !str_contains($reviewTpl, '--model'),
         'host_codex_delegation command templates omit model flags',
     );
+    $tools->close();
     unset($tools);
     gc_collect_cycles();
     $store->close();

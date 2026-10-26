@@ -53,15 +53,20 @@ final class CognitionService
                 return ['written' => 0, 'skipped' => count($entries)];
             }
         }
+        $modules = [];
+        foreach (glob($this->dir . '/*.jsonl') ?: [] as $file) {
+            $module = basename($file, '.jsonl');
+            $modules[$module] = count($this->readShard($module));
+        }
         $manifest = [
             'version' => 1,
             'updated_at' => date('c'),
-            'modules' => $counts,
+            'modules' => $modules,
         ];
         if (!$this->atomicWrite($this->dir . '/manifest.json', json_encode($manifest, JSON_UNESCAPED_SLASHES) . "\n")) {
             return ['written' => 0, 'skipped' => count($entries)];
         }
-        return ['written' => $written, 'skipped' => $skipped, 'modules' => $counts];
+        return ['written' => $written, 'skipped' => $skipped, 'modules' => $modules];
     }
 
     public function query(array $args): array
@@ -139,6 +144,51 @@ final class CognitionService
             'total' => $total,
             'shards' => ['count' => $shardCount, 'bytes' => $size, 'entries' => $total],
         ];
+    }
+
+    public function prune(): array
+    {
+        $pruned = 0;
+        $remaining = 0;
+        $counts = [];
+        foreach (glob($this->dir . '/*.jsonl') ?: [] as $file) {
+            $module = basename($file, '.jsonl');
+            $rows = $this->readShard($module);
+            $changed = false;
+            foreach ($rows as $path => $row) {
+                $absolute = $this->repository . '/' . ltrim($path, '/');
+                if (!is_file($absolute)) {
+                    unset($rows[$path]);
+                    $pruned++;
+                    $changed = true;
+                }
+            }
+            if ($changed) {
+                $lines = array_map(
+                    static fn(array $row): string => (string) json_encode(
+                        $row,
+                        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE,
+                    ),
+                    array_values($rows),
+                );
+                if (!$this->atomicWrite($file, implode("\n", $lines) . ($lines === [] ? '' : "\n"))) {
+                    return ['pruned' => 0, 'remaining' => 0, 'modules' => []];
+                }
+            }
+            $counts[$module] = count($rows);
+            $remaining += count($rows);
+        }
+
+        $manifest = [
+            'version' => 1,
+            'updated_at' => date('c'),
+            'modules' => $counts,
+        ];
+        if (!$this->atomicWrite($this->dir . '/manifest.json', json_encode($manifest, JSON_UNESCAPED_SLASHES) . "\n")) {
+            return ['pruned' => 0, 'remaining' => 0, 'modules' => []];
+        }
+
+        return ['pruned' => $pruned, 'remaining' => $remaining, 'modules' => $counts];
     }
 
     private function moduleFor(string $path): string

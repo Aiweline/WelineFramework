@@ -26,12 +26,17 @@ final class IntelligenceService
         $this->readiness = new ProjectReadinessService($config, new ProcessRunner());
     }
 
-    public function __destruct()
+    public function close(): void
     {
         foreach ($this->projectIndexes as $index) {
             $index->close();
         }
         $this->projectIndexes = [];
+    }
+
+    public function __destruct()
+    {
+        $this->close();
     }
 
     /** @param array<string, mixed> $input
