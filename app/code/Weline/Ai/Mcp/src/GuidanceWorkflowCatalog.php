@@ -819,6 +819,7 @@ final class GuidanceWorkflowCatalog
                     'Address and region cascade/filters via <w:theme:address> (single or multi, including official chips); never hand-roll region inputs or chip rows',
                     'Floating surfaces (menu/popover/tooltip/combobox/address multi) via menu/popover/tooltip/combobox/anchored-float or UI.floating.attach',
                     'Images via <w:file:image> (or equivalent) with UI width+height or aspect_ratio, plus Theme CSS max-width:100%;height:auto / .w-file-image',
+                    'Web-facing rasters (uploads, theme assets, CMS/blog/product images, AI-generated) ship as compressed WebP at display size (retina ≤2x, no upscaling); never publish originals or large PNG/JPG',
                     'Choose layout / partial / component / widget layer before editing',
                     'Widget JS scoped by data-js-ns + data-uid; register in weline.modules.js and load via Weline.declare / data-weline-load / data-weline-declare; after any modules registry change run php bin/w resource:compile welineModules before closeout',
                     'Dynamic values in attributes: set on HTML elements in body, not on Taglib tag attributes',

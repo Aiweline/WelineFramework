@@ -186,6 +186,21 @@ final class LeadNormalizer
             ),
             Lead::schema_fields_STATUS => $status,
             Lead::schema_fields_TAGS => self::normalizeJsonField(self::pick($input, ['tags']), 'tags'),
+            Lead::schema_fields_LEAD_TYPE => self::normalizeLeadType(
+                self::text(self::pick($input, ['lead_type', 'type']))
+            ),
+            Lead::schema_fields_OUTREACH_TARGET => self::normalizeBool(
+                self::pick($input, ['outreach_target'])
+            ),
+            Lead::schema_fields_AI_AUTO_REPLY => self::normalizeBool(
+                self::pick($input, ['ai_auto_reply'])
+            ),
+            Lead::schema_fields_CUSTOMER_ID => self::normalizeInt(
+                self::pick($input, ['customer_id']), 0, 'customer_id'
+            ),
+            Lead::schema_fields_FIRST_SEEN_DATE => self::normalizeFirstSeenDate(
+                self::text(self::pick($input, ['first_seen_date']))
+            ),
             Lead::schema_fields_SEEN_COUNT => max(1, self::normalizeInt(self::pick($input, ['seen_count']), 1, 'seen_count')),
             Lead::schema_fields_DEDUPE_HASH => hash('sha256', $dedupeKey),
         ];
@@ -402,6 +417,52 @@ final class LeadNormalizer
         }
 
         throw new InvalidArgumentException('字段 ' . $field . ' 不是有效时间。');
+    }
+
+
+    /**
+     * 线索类型：Lead::LEAD_TYPES 枚举，未知/空值回落 unknown。
+     */
+    private static function normalizeLeadType(string $value): string
+    {
+        $value = strtolower(trim($value));
+        if ($value === '' || !isset(Lead::LEAD_TYPES[$value])) {
+            return Lead::LEAD_TYPE_UNKNOWN;
+        }
+        return $value;
+    }
+
+    /**
+     * 布尔归一：接受 true/false/0/1/'1'/'0'/'true'/'false'/'yes'/'no'；缺省按开处理（需求：默认开）。
+     */
+    private static function normalizeBool(mixed $value): int
+    {
+        if ($value === null || $value === '') {
+            return 1;
+        }
+        if (is_bool($value)) {
+            return $value ? 1 : 0;
+        }
+        return in_array(strtolower(trim((string)$value)), ['1', 'true', 'yes', 'on'], true) ? 1 : 0;
+    }
+
+    /**
+     * 首见日期：空值回落当日；支持 Y-m-d 与时间戳。
+     */
+    private static function normalizeFirstSeenDate(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return date('Y-m-d');
+        }
+        if (ctype_digit($value)) {
+            return date('Y-m-d', (int)$value);
+        }
+        $ts = strtotime($value);
+        if ($ts === false) {
+            throw new InvalidArgumentException('无效的 first_seen_date：' . $value);
+        }
+        return date('Y-m-d', $ts);
     }
 
     private static function normalizeJsonField(mixed $value, string $field): string
