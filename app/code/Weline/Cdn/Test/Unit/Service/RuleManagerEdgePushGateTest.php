@@ -35,7 +35,11 @@ final class RuleManagerEdgePushGateTest extends TestCase
         self::assertFalse($manager->annotationsAllowedOnEdge($domain));
         $planned = $manager->planRulesForEdgePush($domain);
         self::assertNotEmpty($planned);
-        self::assertSame($manager->getDefaultRules(), $planned);
+        // 穿章 Bypass 恒在 defaults 之前（有 secret 时 1 条，无 secret 时 0 条）。
+        self::assertSame(
+            \array_merge($manager->getPierceBypassRules(), $manager->getDefaultRules()),
+            $planned
+        );
         foreach ($planned as $rule) {
             self::assertIsArray($rule);
             self::assertStringNotContainsString(

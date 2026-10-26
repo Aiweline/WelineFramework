@@ -93,3 +93,28 @@ description: >-
 | 只登记 `www` | `domain_name` 用根域 |
 | 看到 404/10003 就判定 Token 无效 | 那是缺 Cache Rules 入口；PUT phase entrypoint |
 | 本机 curl 公网站点探活 | 在目标机上打 Cloudflare API；探活走 SSH 上的本机回环 |
+
+## 穿章 Bypass 规则（w_fpc_pierce）· 自动生成，禁止手写死
+
+CDN 必须认穿章：只有带**当前**安装级 secret 的请求才跳过缓存。
+
+- 生成：`RuleManager::getPierceBypassRules()` 按 `FpcPierceStamp::readSecret()` **现算**，
+  ref `weline_cdn_fpc_pierce_bypass`，表达式 `http.request.uri.query contains "w_fpc_pierce=<secret>"`，
+  action `set_cache_settings` / `{"cache":false}`。
+- 位置：`planRulesForEdgePush()` 恒放第一条（CF 先匹配先生效），并从 Cache Rules 容量扣 1 条名额。
+- 禁止：写进 `etc/default-rules.json`、写进 `w_cdn_api_rule`、或在上线脚本里硬编码 secret——换章即失真。
+- 换章：`FpcPierceStampAdminService::rotateAndPublish()` / `FullPageCacheAdminService::rotatePierce()`
+  → `PierceRuleSyncService::pushAll()` → `requestManualSync` → 队列 `cdn-fpc-sync` → 写 CF。
+- 验证别用 HTML：被打穿响应带 `Set-Cookie`，`cf-cache-status: BYPASS` 是副产物；
+  用静态可缓存资源（`/sitemap.xml`）：正确章 `BYPASS`、错误章不得 `BYPASS`。
+
+排查顺序（2026-10-26 线上实测顺序）：`getPierceBypassRules()` 有 1 条 → `planRulesForEdgePush()[0].ref` 是它 →
+`getCredentials($domain)` 非空 → 队列 `accepted=true`。第二步就空 = 账户密文解不开（见下），不是规则代码问题。
+
+## 凭据解不开：诊断与处置
+
+`w_cdn_account.credentials` 是 `secret_ref:v1o:`（`SecretRefCipher` + `security.secret_ref_key`）。
+跨站搬 `secret_ref` 会在本站解密失败：`revealJson()` 抛 `secret_ref_decrypt_failed`，`getCredentials()` 返回 `[]`，
+作业停在 `cloud: cdn_fpc_credentials_unavailable`（purge 同样拿不到令牌）。
+
+处置：在本站后台重新录入 Token（重新密封）；或恢复原 `security.secret_ref_key`。改规则代码绕不过去。

@@ -17,6 +17,7 @@ use Weline\Cdn\Model\Account;
 use Weline\Cdn\Model\ApiRule;
 use Weline\Framework\App\Env;
 use Weline\Framework\Exception\Core;
+use Weline\Framework\Http\Fpc\FpcPierceStamp;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -84,6 +85,36 @@ class RuleManager
     }
 
     /**
+     * 穿章（FPC pierce stamp）Bypass 规则——随当前 secret 动态生成，禁止落库/落文件。
+     *
+     * CDN 必须在边缘就认穿章：只有带着**当前**安装级 secret 的请求才跳过缓存；
+     * 因此本规则不进 default-rules.json、不写 w_cdn_api_rule，每次 plan/push 现算。
+     * 穿章轮换后由 {@see PierceRuleSyncService} 触发重推，否则 CF 里仍是旧 secret。
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getPierceBypassRules(): array
+    {
+        try {
+            $secret = FpcPierceStamp::readSecret();
+        } catch (\Throwable) {
+            $secret = '';
+        }
+        if ($secret === '' || \preg_match('/\A[0-9a-f]{64}\z/i', $secret) !== 1) {
+            return [];
+        }
+
+        return [[
+            'ref' => 'weline_cdn_fpc_pierce_bypass',
+            'description' => 'Weline FPC pierce stamp bypass (secret refreshed on rotation)',
+            'expression' => 'http.request.uri.query contains "w_fpc_pierce=' . $secret . '"',
+            'action' => 'set_cache_settings',
+            'action_parameters' => ['cache' => false],
+            'enabled' => true,
+        ]];
+    }
+
+    /**
      * 库内展开视图（inventory）——非边缘推送真相。
      *
      * 双视图契约：
@@ -105,10 +136,11 @@ class RuleManager
         // 3. 获取API注释规则（Cloudflare格式，通用，不指定适配器；未打包）
         $apiRules = $this->getApiRules(null);
         
-        // 4. 合并规则（优先级：API规则 > 域名规则 > 默认规则）
-        // Cloudflare Cache Rules 先匹配先生效，故注解/覆盖须前置 defaults。
+        // 4. 合并规则（优先级：穿章 Bypass > API规则 > 域名规则 > 默认规则）
+        // Cloudflare Cache Rules 先匹配先生效，故穿章 Bypass 必须最前；注解/覆盖须前置 defaults。
         // 注意：这是库内展开，不等于 planRulesForEdgePush 推送结果。
         return array_merge(
+            $this->getPierceBypassRules(),
             $apiRules,
             $overrideRules,
             $defaultRules
@@ -269,19 +301,25 @@ class RuleManager
      */
     public function planRulesForEdgePush(Domain $domain, ?string $triggerType = null, bool $includeIdentity = false): array
     {
+        // 穿章 Bypass 恒在第一位：先匹配先生效，且它随 secret 现算（轮换后下一次推送即更新）。
+        $pierce = $this->getPierceBypassRules();
+        if ($includeIdentity) {
+            foreach ($pierce as $index => &$rule) { $rule['_weline_identity'] = 'pierce:' . $index; }
+            unset($rule);
+        }
         $defaults = $this->getDefaultRules();
         if ($includeIdentity) {
             foreach ($defaults as $index => &$rule) { $rule['_weline_identity'] = 'default:' . $index; }
             unset($rule);
         }
         if (!$this->annotationsAllowedOnEdge($domain)) {
-            return $defaults;
+            return \array_merge($pierce, $defaults);
         }
 
         $capacity = $this->getCacheRulesCapacity($domain);
-        $budget = \max(0, $capacity - \count($defaults));
+        $budget = \max(0, $capacity - \count($defaults) - \count($pierce));
         if ($budget === 0) {
-            return $defaults;
+            return \array_merge($pierce, $defaults);
         }
 
         $overrides = $domain->getRulesOverrideArray();
@@ -325,7 +363,7 @@ class RuleManager
             }
         }
 
-        return \array_merge($accepted, $defaults);
+        return \array_merge($pierce, $accepted, $defaults);
     }
 
     public function isAnnotationPackEnabled(): bool

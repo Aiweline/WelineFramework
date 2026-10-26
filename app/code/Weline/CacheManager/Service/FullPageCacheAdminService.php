@@ -122,6 +122,7 @@ final class FullPageCacheAdminService
                 'message' => (string)($result['message'] ?? ''),
                 'status' => $this->status(),
                 'nginx' => $result['nginx'] ?? [],
+                'cdn' => $result['cdn'] ?? [],
             ];
         }
 
@@ -140,7 +141,26 @@ final class FullPageCacheAdminService
             'ok' => true,
             'message' => 'rotated_without_nginx',
             'status' => $this->status(),
+            'cdn' => $this->syncCdnPierceRule(),
         ];
+    }
+
+    /**
+     * 换章后重推 CDN 规则（Cdn 模块可选；失败不影响换章本身）。
+     *
+     * @return array<string, mixed>
+     */
+    private function syncCdnPierceRule(): array
+    {
+        $class = 'Weline\\Cdn\\Service\\PierceRuleSyncService';
+        if (!\class_exists($class)) {
+            return ['ok' => false, 'message' => 'cdn_module_absent'];
+        }
+        try {
+            return \Weline\Framework\Manager\ObjectManager::getInstance($class)->pushAll();
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'message' => $e->getMessage()];
+        }
     }
 
     /**

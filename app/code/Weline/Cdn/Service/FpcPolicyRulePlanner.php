@@ -12,6 +12,30 @@ final class FpcPolicyRulePlanner
         return FpcPolicyStateReducer::canonical($rule);
     }
 
+    /**
+     * 认领用内容：忽略 host 守卫差异，覆盖「旧版本推的规则没带 weline_cdn_ 前缀」的场景。
+     * 只用于内容比对，不参与最终 payload。
+     */
+    private static function adoptableContent(array $rule): array
+    {
+        $rule = self::content($rule);
+        if (isset($rule['expression']) && \is_string($rule['expression'])) {
+            $rule['expression'] = self::stripHostGuard($rule['expression']);
+        }
+
+        return $rule;
+    }
+
+    private static function stripHostGuard(string $expression): string
+    {
+        $expression = \trim($expression);
+        if (\preg_match('/^\(http\.host in \{[^}]*\}\) and \((.*)\)$/s', $expression, $m) === 1) {
+            return \trim($m[1]);
+        }
+
+        return $expression;
+    }
+
     /** bindings 必须在任何云端写入前持久化；删除的旧id保留历史，不能认领同内容的新人工规则。 */
     public static function plan(array $existing, array $desired, array $bindings = []): array
     {
@@ -34,7 +58,7 @@ final class FpcPolicyRulePlanner
             foreach ($existing as $current) {
                 if (isset($current['id']) && !isset($byId[$current['id']])
                     && !str_starts_with((string)($current['ref'] ?? ''), 'weline_cdn_')
-                    && self::content($current) === self::content($rule['_legacy_rule'] ?? $rule)) { $matches[] = $current; }
+                    && self::adoptableContent($current) === self::adoptableContent($rule['_legacy_rule'] ?? $rule)) { $matches[] = $current; }
             }
             if (count($matches) === 1) {
                 $current = $matches[0];

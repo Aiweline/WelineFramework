@@ -14,6 +14,9 @@ use Weline\Framework\Runtime\RuntimeProviderResolver;
 /** 持久目标是权威，Queue 内容只负责唤醒同一个 Zone 作业。 */
 final class FpcPolicySyncService
 {
+    /** 超过该待办量走一次 purge_everything，避免几千条 URL 逐批打 CF。 */
+    private const PURGE_EVERYTHING_THRESHOLD = 200;
+
     public function __construct(private readonly FpcPolicyStateService $states, private readonly FpcPolicyPublishService $publisher, private readonly FpcPolicyTargetService $targets, private readonly RuleManager $rules, private readonly AdapterResolver $adapters, private readonly AccountManager $accounts, private readonly FpcPolicyHttpVerificationService $http) {}
 
     public function binding(Domain $domain): array
@@ -171,7 +174,8 @@ final class FpcPolicySyncService
                         $state['cloud_rule_bindings'][$zoneIdentity]=$plan['bindings'];
                     });
                 }
-                $merged=$plan['rules'];
+                $capacity=method_exists($this->rules,'getCacheRulesCapacity')?(int)$this->rules->getCacheRulesCapacity($credentialDomain):0;
+                $merged=$this->capRules($plan['rules'],$desired,$capacity);
                 $changed=!FpcPolicyRulePlanner::equivalent($existing,$merged);
                 $receipt=$changed ? $adapter->putRules($job['zone_id'],$merged,$credentials) : ['success'=>true,'changed'=>false];
                 if (!($receipt['success']??false)) { throw new \RuntimeException((string)($receipt['message']??'cdn_fpc_cloud_rejected')); }
@@ -179,27 +183,41 @@ final class FpcPolicySyncService
                 $this->update($jobKey,static function(array &$row)use($version,$cloud):void{$row['cloud_version']=$version;$row['cloud_receipt']=$cloud;});
                 $stage='purge';
                 $this->invalidateLocalEdge($jobKey,$job,$version);
-                $byKind=[];
-                foreach ($job['pending_targets'] as $pending) { $byKind[$pending['target']['kind']][]=$pending['target']; }
-                foreach ($byKind as $kind=>$targets) {
-                    foreach (array_chunk($targets,100) as $batch) {
-                        $values=array_column($batch,'value');
+                // 大批量不逐条 purl：超过阈值一次 purge_everything，避免几千条 URL 反复打 CF。
+                if (count($job['pending_targets']) >= self::PURGE_EVERYTHING_THRESHOLD) {
+                    $result=$adapter->purgeEverything($job['zone_id'],$credentials);
+                    if (!($result['success']??false)) { throw new \RuntimeException((string)($result['message']??'cdn_fpc_purge_rejected')); }
+                    $this->update($jobKey,static function(array &$row)use($version):void{
+                        $row['pending_targets']=[];
+                        $row['purge_receipt']['everything']=['accepted_version'=>$version,'accepted_at'=>gmdate(DATE_ATOM)];
+                    });
+                } else {
+                    $byKind=[];
+                    foreach ($job['pending_targets'] as $pending) { $byKind[$pending['target']['kind']][]=$pending['target']; }
+                    foreach ($byKind as $kind=>$targets) {
                         if ($kind==='prefix' && !method_exists($adapter,'purgePrefixes')) {
                             throw new \RuntimeException('cdn_fpc_adapter_prefix_purge_unsupported');
                         }
-                        $result=match($kind) {
-                            'url'=>$adapter->purgeUrls($job['zone_id'],$values,$credentials),
-                            'host'=>$adapter->purgeHosts($job['zone_id'],$values,$credentials),
-                            'prefix'=>$adapter->purgePrefixes($job['zone_id'],$values,$credentials),
-                        };
-                        if (!($result['success']??false)) { throw new \RuntimeException((string)($result['message']??'cdn_fpc_purge_rejected')); }
-                        $purgeIds=array_values(array_map('strval',(array)($result['purge_ids']??[])));
-                        $this->update($jobKey,static function(array &$row)use($batch,$version,$purgeIds):void{
-                            $row['pending_targets']=FpcPolicyStateReducer::acknowledgeTargets($row['pending_targets'],$batch,$version);
-                            foreach ($batch as $target) {
-                                $row['purge_receipt']['targets'][FpcPolicyStateReducer::targetKey($target)]=['target'=>$target,'accepted_version'=>$version,'accepted_at'=>gmdate(DATE_ATOM),'purge_ids'=>$purgeIds];
+                        $values=array_values(array_unique(array_map(static fn(array $target): string => (string)$target['value'],$targets)));
+                        foreach (array_chunk($values,100) as $chunk) {
+                            $result=match($kind) {
+                                'url'=>$adapter->purgeUrls($job['zone_id'],$chunk,$credentials),
+                                'host'=>$adapter->purgeHosts($job['zone_id'],$chunk,$credentials),
+                                'prefix'=>$adapter->purgePrefixes($job['zone_id'],$chunk,$credentials),
+                            };
+                            if (!($result['success']??false)) { throw new \RuntimeException((string)($result['message']??'cdn_fpc_purge_rejected')); }
+                            $purgeIds=array_values(array_map('strval',(array)($result['purge_ids']??[])));
+                            $batch=[];
+                            foreach ($targets as $target) {
+                                if (in_array((string)$target['value'],$chunk,true)) { $batch[]=$target; }
                             }
-                        });
+                            $this->update($jobKey,static function(array &$row)use($batch,$version,$purgeIds):void{
+                                $row['pending_targets']=FpcPolicyStateReducer::acknowledgeTargets($row['pending_targets'],$batch,$version);
+                                foreach ($batch as $target) {
+                                    $row['purge_receipt']['targets'][FpcPolicyStateReducer::targetKey($target)]=['target'=>$target,'accepted_version'=>$version,'accepted_at'=>gmdate(DATE_ATOM),'purge_ids'=>$purgeIds];
+                                }
+                            });
+                        }
                     }
                 }
             }
@@ -324,5 +342,32 @@ final class FpcPolicySyncService
             $desired[]=$rule;
         }
         return $desired;
+    }
+
+    /**
+     * 合并结果硬性截断到套餐容量（CF Free = 10 条）：先保 desired，再按原顺序补人工规则。
+     * 不截断就会 PUT 出超限规则集，CF 只回一个 HTTP 400/50001，看不出是条数问题。
+     *
+     * @param list<array<string,mixed>> $merged
+     * @param list<array<string,mixed>> $desired
+     * @return list<array<string,mixed>>
+     */
+    private function capRules(array $merged, array $desired, int $capacity): array
+    {
+        if ($capacity <= 0 || count($merged) <= $capacity) { return $merged; }
+        $desiredRefs = [];
+        foreach ($desired as $rule) {
+            if (isset($rule['ref']) && is_string($rule['ref']) && $rule['ref'] !== '') { $desiredRefs[$rule['ref']] = true; }
+        }
+        $kept = []; $manual = [];
+        foreach ($merged as $rule) {
+            $ref = (string)($rule['ref'] ?? '');
+            if ($ref !== '' && isset($desiredRefs[$ref])) { $kept[] = $rule; continue; }
+            $manual[] = $rule;
+        }
+        if (count($kept) > $capacity) {
+            throw new \RuntimeException('cdn_fpc_rules_capacity_exceeded: desired=' . count($kept) . ' capacity=' . $capacity);
+        }
+        return array_merge($kept, array_slice($manual, 0, max(0, $capacity - count($kept))));
     }
 }
