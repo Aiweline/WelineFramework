@@ -67,8 +67,46 @@ final class MerchantInfoConfigResolver
      */
     public function resolve(?string $scope = null): array
     {
+        return $this->resolveWithCandidates($this->candidateScopes($scope));
+    }
+
+    /**
+     * 按调用方给定的「近→远」scope 链解析（后台编辑页展示生效值用）。
+     *
+     * @param list<string> $scopes
+     * @return array<string, mixed>
+     */
+    public function resolveScopes(array $scopes): array
+    {
+        $candidates = [];
+        $hasGlobal = false;
+        foreach ($scopes as $scope) {
+            $scope = strtolower(trim((string)$scope));
+            if ($scope === '') {
+                continue;
+            }
+            if ($scope === SystemConfig::SCOPE_GLOBAL) {
+                $hasGlobal = true;
+                continue;
+            }
+            if (!in_array($scope, $candidates, true)) {
+                $candidates[] = $scope;
+            }
+        }
+        if ($hasGlobal) {
+            $candidates[] = SystemConfig::SCOPE_GLOBAL;
+        }
+
+        return $this->resolveWithCandidates($candidates !== [] ? $candidates : [null]);
+    }
+
+    /**
+     * @param list<string|null> $candidates
+     * @return array<string, mixed>
+     */
+    private function resolveWithCandidates(array $candidates): array
+    {
         $configured = [];
-        $candidates = $this->candidateScopes($scope);
         $strict = count($candidates) > 1;
         $read = function (string $key) use ($candidates, $strict, &$configured): string {
             $configured[$key] = false;

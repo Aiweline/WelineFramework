@@ -145,6 +145,18 @@ $checkHooks = static function (): void {
     accept_assert(str_contains($partialSource, MERCHANT_GROUP), 'merchant partial does not embed ' . MERCHANT_GROUP);
     accept_assert(str_contains($partialSource, 'target_scope'), 'merchant partial must lock target_scope');
     accept_assert(str_contains($partialSource, 'ConfigEmbedRenderer'), 'merchant partial must use ConfigEmbedRenderer');
+    accept_assert(str_contains($partialSource, 'resolveScopes'), 'merchant partial must show effective inherited values');
+
+    // 默认站/默认店/默认渠道主键都是 0：渠道页不能用 SiteContactScopeMapper 判身份（store_id=0 会返回失败）。
+    $channelHook = (string) file_get_contents($hooks['channel']);
+    accept_assert(
+        str_contains($channelHook, 'SystemConfigTargetScopeService'),
+        'channel hook must resolve channel scope via SystemConfigTargetScopeService (default store_id=0)'
+    );
+    accept_assert(
+        !str_contains($channelHook, 'SiteContactScopeMapper'),
+        'channel hook must not depend on SiteContactScopeMapper (fails for default store_id=0)'
+    );
 };
 
 $checkResolver = static function (): void {
@@ -165,6 +177,13 @@ $checkResolver = static function (): void {
     accept_assert($info['return_fees'] === 'buyer_pays', 'default return fees must be buyer_pays');
     accept_assert($info['return_method'] === 'mail', 'default return method must be mail');
     accept_assert($info['country'] === 'WW', 'default country must be WW');
+
+    accept_assert($reflection->hasMethod('resolveScopes'), 'resolver resolveScopes() missing');
+    $chained = $resolver->resolveScopes(['default.__store__.__channel__', 'default.__website__.default', 'default.default.default']);
+    accept_assert(is_array($chained), 'resolveScopes must return array');
+    foreach (['return_days', 'return_policy_url', 'country'] as $key) {
+        accept_assert(array_key_exists($key, $chained), 'resolveScopes result missing ' . $key);
+    }
 };
 
 $checkFacts = static function (): void {

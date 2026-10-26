@@ -5,7 +5,10 @@
  */
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Websites\Service\SiteContactScopeMapper;
+use Weline\SystemConfig\Service\SystemConfigTargetScopeService;
+use Weline\Websites\Model\SalesChannel;
+use Weline\Websites\Model\Store;
+use Weline\Websites\Model\Website;
 
 $channel = (array)($this->getData('channel') ?? $this->getData('entity') ?? []);
 $channelId = array_key_exists('channel_id', $channel) ? (int)$channel['channel_id'] : (int)($this->getData('channel_id') ?? 0);
@@ -17,20 +20,71 @@ if ($channelId >= 0 && !array_key_exists('channel_id', $channel)) {
 if (!array_key_exists('store_id', $channel)) {
     $channel['store_id'] = $storeId;
 }
-if (!array_key_exists('website_id', $channel) && $websiteId > 0) {
+if (!array_key_exists('website_id', $channel)) {
     $channel['website_id'] = $websiteId;
 }
 $hookId = preg_replace('/[^\w\-]+/', '_', (string)($this->getData('id') ?? 'channel'));
 if (!is_string($hookId) || $hookId === '' || preg_match('/^[A-Za-z_]/D', $hookId) !== 1) {
     $hookId = 'channel_' . (is_string($hookId) ? $hookId : '');
 }
+$storeMode = (string)($channel['store_mode'] ?? $this->getData('store_mode') ?? 'normal');
 
 $scopeMeta = ['ok' => false];
 try {
-    if (array_key_exists('code', $channel) && trim((string)$channel['code']) !== '') {
-        /** @var SiteContactScopeMapper $mapper */
-        $mapper = ObjectManager::getInstance(SiteContactScopeMapper::class);
-        $scopeMeta = $mapper->forChannel($channel);
+    // 默认站/默认店的主键是 0（合法哨兵），不能按「<=0 即无身份」判空；
+    // 码为 default 时直接取 default，其余才回查模型。
+    $resolveCode = static function (string $model, string $idField, int $id, string $codeField): string {
+        if ($id <= 0) {
+            return 'default';
+        }
+        try {
+            /** @var \Weline\Framework\Database\AbstractModel $row */
+            $row = ObjectManager::getInstance($model)->clear()->where($idField, $id)->find()->fetch();
+            if (!$row || $row->getId() === null || $row->getId() === '') {
+                return '';
+            }
+
+            return strtolower(trim((string)$row->getData($codeField)));
+        } catch (\Throwable) {
+            return '';
+        }
+    };
+
+    $websiteCode = strtolower(trim((string)($channel['website_code'] ?? '')));
+    if ($websiteCode === '') {
+        $websiteCode = $resolveCode(Website::class, Website::schema_fields_ID, $websiteId, Website::schema_fields_CODE);
+    }
+    $storeCode = strtolower(trim((string)($channel['store_code'] ?? '')));
+    if ($storeCode === '') {
+        $storeCode = $resolveCode(Store::class, Store::schema_fields_ID, $storeId, Store::schema_fields_CODE);
+    }
+    $channelCode = strtolower(trim((string)($channel['code'] ?? '')));
+    if ($channelCode === '' && $channelId > 0) {
+        $channelCode = $resolveCode(SalesChannel::class, SalesChannel::schema_fields_ID, $channelId, SalesChannel::schema_fields_CODE);
+    }
+
+    if ($websiteCode !== '' && $storeCode !== '' && $channelCode !== '') {
+        /** @var SystemConfigTargetScopeService $scopeService */
+        $scopeService = ObjectManager::getInstance(SystemConfigTargetScopeService::class);
+        $target = $scopeService->resolveFromInput([
+            'website_code' => $websiteCode,
+            'store_code' => $storeCode,
+            'channel_code' => $channelCode,
+            'scope_kind' => 'channel',
+            'store_mode' => $storeMode,
+        ], false);
+        $storageScope = trim((string)($target['storage_scope'] ?? ''));
+        if ($storageScope !== '') {
+            $scopeMeta = [
+                'ok' => true,
+                'storage_scope' => $storageScope,
+                'website_code' => (string)($target['website_code'] ?? $websiteCode),
+                'store_code' => (string)($target['store_code'] ?? $storeCode),
+                'channel_code' => (string)($target['channel_code'] ?? $channelCode),
+                'scope_kind' => (string)($target['kind'] ?? 'channel'),
+                'label' => (string)__('当前渠道'),
+            ];
+        }
     }
 } catch (\Throwable) {
 }
@@ -40,5 +94,5 @@ echo $this->fetch('Weline_Seo::templates/backend/partials/merchant-info-section.
     'scopeMeta' => $scopeMeta,
     'pendingHint' => (string)__('请先保存渠道，再配置商家信息。'),
     'scopeHint' => (string)__('渠道范围未填写时继承店铺，再继承网站与 Global。'),
-    'storeMode' => (string)($channel['store_mode'] ?? $this->getData('store_mode') ?? 'normal'),
+    'storeMode' => $storeMode,
 ]);
