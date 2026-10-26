@@ -351,7 +351,11 @@ class ObjectManager implements ManagerInterface
             return null;
         }
 
-        if (!\Weline\Framework\Runtime\Runtime::isPersistent()) {
+        // CLI Fiber（setup:upgrade 路由/ACL 收集等）同样需要实例隔离：
+        // Acl/Observer 等持有数据库连接查询的共享实例若跨 Fiber 复用，
+        // 其 current_query 绑定的连接 lease 归属另一活跃 owner，
+        // 另一 Fiber 使用即抛 database_connector_owner_mismatch。
+        if (!\Weline\Framework\Runtime\Runtime::isPersistent() && \PHP_SAPI !== 'cli') {
             return null;
         }
 
