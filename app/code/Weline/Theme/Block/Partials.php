@@ -1497,6 +1497,104 @@ class Partials extends Block
         return (\is_string($absolute) && \is_file($absolute)) ? $modulePath : null;
     }
 
+    private function isThemeChromePartialType(string $type): bool
+    {
+        return \in_array(\strtolower(\trim($type)), ['header', 'footer'], true);
+    }
+
+    /**
+     * Resolve the configured partials option for the active theme.
+     * ThemeData metadata wins; theme config is the fallback.
+     */
+    private function resolveConfiguredPartialsOption(
+        string $area,
+        string $type,
+        string $defaultOption,
+        WelineTheme $theme
+    ): string {
+        /** @var ThemeContextService $ctx */
+        $ctx = ObjectManager::getInstance(ThemeContextService::class);
+        $scope = $ctx->resolveCurrentScope($area);
+        ThemeData::setCurrentTheme($theme);
+        ThemeData::setCurrentArea($area);
+        $config = ThemeData::getPartialsConfig($area, $scope);
+        if (empty($config)) {
+            $themeConfig = (array)$theme->getConfig();
+            $partialsByArea = (array)($themeConfig['partials'] ?? []);
+            $config = (array)($partialsByArea[$area] ?? []);
+        }
+        $option = \trim((string)($config[$type] ?? ''));
+
+        return $option !== '' ? $option : $defaultOption;
+    }
+
+    /**
+     * Live theme chrome for the active theme. Used only when a layout entity
+     * captured header/footer from a foreign theme/module layer.
+     */
+    private function resolveLiveThemeChromePartial(string $area, string $type, string $defaultOption): ?string
+    {
+        $theme = $this->resolvePartialsTheme($area);
+        if (!$theme || !$theme->getId()) {
+            return null;
+        }
+        $option = $this->resolveConfiguredPartialsOption($area, $type, $defaultOption, $theme);
+        $live = $this->resolveForcedPartialsOption($area, $type, $option);
+        if ($live === null && $option !== 'default') {
+            $live = $this->resolveForcedPartialsOption($area, $type, 'default');
+        }
+
+        return $live;
+    }
+
+    /**
+     * True when the captured chrome source belongs to the default Theme/module
+     * layer instead of the active theme chain (theme + parent themes).
+     * Synthetic/non-project sources are left untouched for test fixtures.
+     */
+    private function isForeignThemeChromeSource(string $selectedPath, string $area): bool
+    {
+        $snapshot = ThemeLayoutSourceSnapshot::current();
+        if ($snapshot === null) {
+            return false;
+        }
+        $source = $snapshot->source($selectedPath);
+        $origin = (string)($source['origin'] ?? $selectedPath);
+        if ($origin === '') {
+            return false;
+        }
+        $normalizedOrigin = \preg_replace('#/+#', '/', \str_replace('\\', '/', $origin));
+        $realOrigin = \realpath($normalizedOrigin);
+        if ($realOrigin !== false) {
+            $normalizedOrigin = \str_replace('\\', '/', $realOrigin);
+        }
+        $basePath = \preg_replace('#/+#', '/', \rtrim(\str_replace('\\', '/', (string)BP), '/'));
+        if (!\str_starts_with($normalizedOrigin, $basePath . '/app/design/')
+            && !\str_starts_with($normalizedOrigin, $basePath . '/app/code/')
+        ) {
+            return false;
+        }
+
+        $theme = $this->resolvePartialsTheme($area);
+        if (!$theme || !$theme->getId()) {
+            return false;
+        }
+        /** @var ThemeDirectoryResolver $dirResolver */
+        $dirResolver = ObjectManager::getInstance(ThemeDirectoryResolver::class);
+        foreach ($dirResolver->getThemeChain($theme, $area) as $layerTheme) {
+            $layerPath = \preg_replace('#/+#', '/', \rtrim(\str_replace('\\', '/', (string)$layerTheme->getPath()), '/'));
+            $realLayerPath = \realpath($layerPath);
+            if ($realLayerPath !== false) {
+                $layerPath = \rtrim(\str_replace('\\', '/', $realLayerPath), '/');
+            }
+            if ($layerPath !== '' && \str_starts_with($normalizedOrigin, $layerPath . '/')) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /**
      * @param array<string, mixed> $dictionary
      */
@@ -2474,11 +2572,25 @@ class Partials extends Block
         if ($snapshot !== null && $snapshot->identity->area === strtolower($area)) {
             $selected = $snapshot->selectedPartialPath($type, $defaultOption);
             if ($selected !== null) {
-                // Snapshot may hand back a generated absolute path; chrome HotCache
-                // keys must stay on the stable Weline_Theme:: logical form so CLI
-                // warmers and storefront HTTP (often without snapshot on header)
-                // share one bag. Keep using $selected for source() lookup via aliases.
                 $normalizedArea = \strtolower(\trim($area));
+                if ($this->isThemeChromePartialType($type)) {
+                    // Theme chrome (header/footer) is owned by the active theme. A
+                    // layout entity may still carry a source captured from the
+                    // default Theme/module before the custom theme shipped its own
+                    // chrome. Rebase that foreign capture to the active theme; keep
+                    // the captured source when it already belongs to the theme chain.
+                    if ($this->isForeignThemeChromeSource($selected, $normalizedArea)) {
+                        $live = $this->resolveLiveThemeChromePartial($normalizedArea, $type, $defaultOption);
+                        if ($live !== null) {
+                            return $live;
+                        }
+                    }
+
+                    return $selected;
+                }
+
+                // Non-chrome partials keep the stable logical path so CLI warmers
+                // and storefront HTTP share one chrome bag.
                 $option = \trim($defaultOption) !== '' ? \trim($defaultOption) : 'default';
 
                 return 'Weline_Theme::theme/' . $normalizedArea . '/partials/'
@@ -2500,18 +2612,7 @@ class Partials extends Block
             return null;
         }
 
-        $scope = $ctx->resolveCurrentScope($normalizedArea);
-
-        // 获取配置的选项（优先 ThemeData 元配置，回退主题 config）
-        ThemeData::setCurrentTheme($theme);
-        ThemeData::setCurrentArea($normalizedArea);
-        $config = ThemeData::getPartialsConfig($normalizedArea, $scope);
-        if (empty($config)) {
-            $themeConfig = (array)$theme->getConfig();
-            $partialsByArea = (array)($themeConfig['partials'] ?? []);
-            $config = (array)($partialsByArea[$normalizedArea] ?? []);
-        }
-        $option = $config[$type] ?? $defaultOption;
+        $option = $this->resolveConfiguredPartialsOption($normalizedArea, $type, $defaultOption, $theme);
 
         // 使用 ThemeDirectoryResolver 解析主题 partials 路径（支持继承链）
         /** @var ThemeDirectoryResolver $dirResolver */

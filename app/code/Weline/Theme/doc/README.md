@@ -331,6 +331,7 @@ Theme 对外提供 `w_query('theme', 'copyTargetLayoutData', ...)`，供 CMS 等
 
 - [`widget-slot-system.md`](./widget-slot-system.md)
 - [`widget-page-types.md`](./widget-page-types.md)
+- [`主题页头页尾强契约.md`](./主题页头页尾强契约.md)
 - [`visual-editor/`](./visual-editor/)
 - [`version-control/`](./version-control/)
 

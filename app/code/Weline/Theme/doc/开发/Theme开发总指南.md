@@ -102,6 +102,8 @@ account.login                        # 点号旧式会拆成 type=account + opti
 
 不要把完整业务流程塞进 partial。
 
+**页头页尾强契约**：header/footer 是主题 chrome，不是布局私有内容。布局只能通过 `<w:block class="Weline\Theme\Block\Partials" type="header|footer">` 挂载，禁止写死默认 Theme 或其他模块的 chrome；即使页面回退到模块布局，也必须解析到当前活动主题的 header/footer。详见 [主题页头页尾强契约](../主题页头页尾强契约.md)。
+
 ### 2.3 Component
 
 适合做这些事：
