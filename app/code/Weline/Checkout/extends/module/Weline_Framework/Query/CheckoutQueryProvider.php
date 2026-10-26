@@ -1040,11 +1040,19 @@ class CheckoutQueryProvider implements QueryProviderInterface
      */
     private function assetDiscountApplyMinor(array $params): ?int
     {
+        // Checkout UI always sends b2b_credit_apply_minor=0 for ToC. A zero value
+        // must not short-circuit the points amount or the session fallback.
         if (array_key_exists('b2b_credit_apply_minor', $params)) {
-            return max(0, (int) $params['b2b_credit_apply_minor']);
+            $b2b = max(0, (int) $params['b2b_credit_apply_minor']);
+            if ($b2b > 0) {
+                return $b2b;
+            }
         }
         if (array_key_exists('points_discount_apply_minor', $params)) {
-            return max(0, (int) $params['points_discount_apply_minor']);
+            $points = max(0, (int) $params['points_discount_apply_minor']);
+            if ($points > 0) {
+                return $points;
+            }
         }
         if (!interface_exists(\Weline\Points\Api\PointsDiscountApplySessionInterface::class)) {
             return null;

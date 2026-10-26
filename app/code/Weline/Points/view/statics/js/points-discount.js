@@ -8,6 +8,8 @@
         apply: null,
         busy: false
     };
+    var bootAttempts = 0;
+    var quoteAttempts = 0;
 
     function t(host, key, fallback) {
         return String(host.getAttribute('data-label-' + key) || fallback || '');
@@ -203,9 +205,16 @@
     function quote(host) {
         var amount = readAmountMinor();
         if (amount <= 0) {
+            if (quoteAttempts++ < 10) {
+                global.setTimeout(function () {
+                    quote(host);
+                }, 300);
+                return;
+            }
             host.hidden = true;
             return;
         }
+        quoteAttempts = 0;
         return api().then(function (resource) {
             if (!resource || typeof resource['discount.quote'] !== 'function') {
                 host.hidden = true;
@@ -294,19 +303,47 @@
         input.value = String(minor > 0 ? minor : 0);
     }
 
+    var bootTimer = 0;
+    function scheduleBoot() {
+        if (bootTimer) {
+            return;
+        }
+        bootTimer = global.setTimeout(function () {
+            bootTimer = 0;
+            boot();
+        }, 0);
+    }
+
     function boot() {
         if (!onRelevantPage()) {
+            if (bootAttempts++ < 20) {
+                global.setTimeout(boot, 300);
+            }
             return;
         }
         var host = document.querySelector(HOST_SELECTOR);
         if (!host) {
+            if (bootAttempts++ < 20) {
+                global.setTimeout(boot, 300);
+            }
             return;
         }
+        bootAttempts = 0;
         var mount = findMount(host);
         if (mount !== host.parentNode) {
             mount.appendChild(host);
         }
         quote(host);
+    }
+
+    // Cart totals / drawer markup can arrive after module boot (async cart or
+    // SPA updates). Re-boot on the events the storefront already publishes.
+    function bindBootRetries() {
+        global.addEventListener('load', scheduleBoot);
+        ['weline:cart-updated', 'weshop:cart:updated', 'weline:cart:update',
+            'weshop:mini-cart:open', 'weshop:cart-summary:extras-ready'].forEach(function (name) {
+            document.addEventListener(name, scheduleBoot);
+        });
     }
 
     global.WelinePointsCheckout = {
@@ -317,6 +354,8 @@
         },
         state: state
     };
+
+    bindBootRetries();
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', boot);
