@@ -58,7 +58,7 @@ class Alter extends AbstractTable implements AlterInterface
      *
      * @return AlterInterface
      */
-    public function addColumn(string $field_name, string $after_column, string $type, string|int $length, string $options, string $comment): AlterInterface
+    public function addColumn(string $field_name, string $after_column, string $type, string|int|null $length, string $options, string $comment): AlterInterface
     {
         $type_length = $length ? "{$type}({$length})" : $type;
 
