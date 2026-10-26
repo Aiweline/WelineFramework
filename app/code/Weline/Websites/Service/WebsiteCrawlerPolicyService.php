@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service;
 
+use Weline\Framework\Event\EventsManager;
 use Weline\Server\Security\AttackDetector;
 use Weline\Server\Security\CrawlerBlockCatalog;
 use Weline\Server\Service\Policy\RuntimePolicyLivePublisher;
@@ -20,6 +21,7 @@ class WebsiteCrawlerPolicyService
         private readonly WebsiteCrawlerPolicy $policyModel,
         private readonly WebsiteDomain $websiteDomainModel,
         private readonly Website $websiteModel,
+        private readonly ?EventsManager $events = null,
     ) {
     }
 
@@ -96,8 +98,34 @@ class WebsiteCrawlerPolicyService
             ->save();
 
         $this->syncToWlsDomainOverrides($websiteId, $normalized, $connection);
+        $this->dispatchSavedEvent($websiteId, $normalized, $connection);
 
         return $normalized;
+    }
+
+    /**
+     * Edge sync is best-effort and must never break the website save.
+     *
+     * @param array<string, mixed> $rule
+     */
+    private function dispatchSavedEvent(
+        int $websiteId,
+        array $rule,
+        ?\Weline\Framework\Database\ConnectionFactory $connection,
+    ): void {
+        if ($this->events === null) {
+            return;
+        }
+        try {
+            $eventData = [
+                'website_id' => $websiteId,
+                'rule' => $rule,
+                'connection' => $connection,
+            ];
+            $this->events->dispatch('Weline_Websites::crawler_policy_saved', $eventData);
+        } catch (\Throwable) {
+            // CDN listener failures stay outside the website write path.
+        }
     }
 
     /**

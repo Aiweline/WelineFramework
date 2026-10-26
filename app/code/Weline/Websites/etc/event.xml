@@ -199,4 +199,12 @@
                   disabled="false"
                   shared="true" sort="100"/>
     </event>
+
+    <!-- Robots.txt per-bot block groups from the website crawler policy. -->
+    <event name="Weline_Seo::protocol::robots_contribute">
+        <observer name="Weline_Websites::crawler_policy_robots"
+                  instance="Weline\Websites\Observer\CrawlerPolicyRobotsContribute"
+                  disabled="false"
+                  shared="true" sort="20"/>
+    </event>
 </config>

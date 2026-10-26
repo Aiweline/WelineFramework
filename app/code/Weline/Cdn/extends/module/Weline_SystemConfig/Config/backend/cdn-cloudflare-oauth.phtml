@@ -79,6 +79,11 @@
 搜索 Cache Settings / Cache Rules：
 · Cache Settings Write（若列表写 Cache Rules Edit，也勾）→ cache-settings.write
 
+【可选 · 爬虫策略同步 WAF】
+若使用 cdn:crawler-policy:sync，再勾选 Zone WAF / Firewall Services 写权限，
+并把控制台实际显示的 scope id 追加到下方 OAuth Scopes。
+未授权时同步返回 waf_scope_missing，不影响网站保存与 WLS 策略。
+
 不要搜、不要勾 offline_access——它不在权限勾选列表里（协议 scope，由 Refresh Token grant 自动追加）。
 
 不要勾：开发人员平台、AI、应用安全性、Zero Trust、分析和日志

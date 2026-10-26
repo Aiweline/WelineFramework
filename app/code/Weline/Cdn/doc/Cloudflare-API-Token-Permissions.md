@@ -17,6 +17,7 @@
 | 清理缓存 | `Zone / Cache Purge / Purge`（API 权限 Cache Purge）；资源选目标 Zone |
 | 自动查找 Zone ID | `Zone / Zone / Read`，用于 `GET /zones` |
 | 管理缓存规则 | `Zone / Cache Rules / Read` 或 `Edit`，按读取/写入需要配置 |
+| 同步爬虫策略到 WAF | `Zone / WAF / Edit`；用于 `http_request_firewall_custom` 读写 |
 
 手工配置 Zone ID 的清缓存流程不要求额外授予缓存规则编辑权。[Zone 详情 API](https://developers.cloudflare.com/api/resources/zones/methods/get/) 的允许权限包含 Cache Purge；已知 ID 的只读访问测试不要求额外开通 Zone 列表权限。Token 可在 [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) 创建，并限制到实际使用的 Zone。
 

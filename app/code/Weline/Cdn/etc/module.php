@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Cdn',
-    "version" => '1.0.54',
+    "version" => '1.0.55',
     "requires" => [
         'Weline_Cron' => '*',
         'Weline_Framework' => '*',
@@ -23,5 +23,7 @@ return [
             => \Weline\Cdn\Service\CdnFpcDevModeFlagResolver::class,
         \Weline\Framework\Controller\Extra\FpcPolicySnapshotProviderInterface::class
             => \Weline\Cdn\Service\CompiledFpcPolicySnapshotProvider::class,
+        \Weline\Cdn\Api\CrawlerPolicyEdgePublisherInterface::class
+            => \Weline\Cdn\Service\CloudflareCrawlerPolicyPublisher::class,
     ],
 ];

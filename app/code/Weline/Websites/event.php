@@ -12,6 +12,11 @@ return [
         'description' => __('网站保存后触发，可用于更新缓存、通知等相关操作。'),
         'doc' => 'website_save_after.md',
     ],
+    'Weline_Websites::crawler_policy_saved' => [
+        'name' => __('站点爬虫策略保存后'),
+        'description' => __('站点爬虫 allow/block 策略保存并同步 WLS 后触发；CDN 等扩展在 afterCommit 中下发边缘规则。数据包含 website_id、rule、connection。'),
+        'doc' => 'crawler_policy_saved.md',
+    ],
     'Weline_Websites::store_save_after' => [
         'name' => __('店铺保存后'),
         'description' => __('店铺编辑保存后触发；扩展模块可读取 post_data.extensions 写入自有表。'),

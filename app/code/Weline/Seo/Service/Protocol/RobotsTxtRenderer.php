@@ -52,7 +52,7 @@ class RobotsTxtRenderer
             $lines[] = 'Disallow: /';
         }
 
-        if ($this->shouldDisallowGoogleExtended($config)) {
+        if (!$contribution['suppress_google_extended'] && $this->shouldDisallowGoogleExtended($config)) {
             $lines[] = '';
             $lines[] = 'User-agent: Google-Extended';
             $lines[] = 'Disallow: /';
@@ -72,7 +72,7 @@ class RobotsTxtRenderer
     }
 
     /**
-     * @return array{global_lines: list<string>, star_lines: list<string>}
+     * @return array{global_lines: list<string>, star_lines: list<string>, suppress_google_extended: bool}
      */
     private function robotContributions(string $baseUrl, int $websiteId, bool $robotsEnabled): array
     {
@@ -90,6 +90,7 @@ class RobotsTxtRenderer
         return [
             'global_lines' => $this->sanitizeDirectiveLines($bag->getData('global_lines')),
             'star_lines' => $this->sanitizeDirectiveLines($bag->getData('star_lines')),
+            'suppress_google_extended' => (bool)$bag->getData('suppress_google_extended'),
         ];
     }
 
@@ -138,6 +139,7 @@ class RobotsTxtRenderer
             '/rest/',
             '/backend/',
             '/location/rest/',
+            '/customer/account/social-login/',
         ];
 
         $backendPrefix = (string)Env::getAreaRoutePrefix('backend');

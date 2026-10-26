@@ -37,7 +37,10 @@ Weline CDN 一键授权是 **服务端机密客户端**：Client Secret 仅保�
 | **DNS Write**（DNS Edit） | `dns.write` | 企业邮箱一键写 MX/SPF 等 |
 | **Cache Purge**（缓存清理） | `cache.purge` | CDN 清缓存 |
 | **Cache Settings Write**（或 Cache Rules Edit） | `cache-settings.write` | 推送/管理缓存规则（`http_request_cache_settings`） |
+| **Zone WAF / Firewall Services Write**（启用爬虫策略同步时） | 以控制台实际显示的 id 为准，追加到 `oauth_scopes` | 管理 WAF 自定义规则（`http_request_firewall_custom`） |
 
+> 爬虫策略同步需要的 WAF scope 是按需项：未授权时 `cdn:crawler-policy:sync` 返回 `waf_scope_missing`，网站保存与 WLS 策略不受影响。Cloudflare 控制台不同版本的 scope id 可能不同，禁止凭记忆写死，按控制台显示值填入。
+>
 > **不要**在权限勾选列表里找 `offline_access`——它不存在；勾选 **授权类型 → Refresh Token** 后由 Cloudflare **自动**追加协议 scope。
 
 后台「OAuth Scopes」字段默认（原样）：
