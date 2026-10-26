@@ -158,6 +158,7 @@ final class CheckoutOrderPaymentService
             // Zero cash deposit: credit covered the deposit — skip PSP, mark deposit paid.
             if ($hangPurpose === 'deposit' && $amountMinor <= 0) {
                 $lastPurpose = $hangPurpose;
+                $this->commitPointsDiscount($order->orderUuid, $idempotencyKey);
                 $this->notifyHangDepositPaid(
                     $order->orderUuid,
                     'b2b_credit_zero_cash_' . $order->orderUuid,
@@ -1008,9 +1009,13 @@ final class CheckoutOrderPaymentService
             }
             $settlement = ObjectManager::getInstance(\Weline\Points\Api\PointsDiscountSettlementInterface::class);
             if ($settlement instanceof \Weline\Points\Api\PointsDiscountSettlementInterface) {
-                $settlement->commitForOrder($orderUuid, $idempotencyKey);
+                $result = $settlement->commitForOrder($orderUuid, $idempotencyKey);
+                if (empty($result['ok'])) {
+                    $this->logPointsSettlementFailure('commit', $orderUuid, $result);
+                }
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
+            $this->logPointsSettlementFailure('commit', $orderUuid, ['error' => $exception->getMessage()]);
         }
     }
 
@@ -1022,9 +1027,24 @@ final class CheckoutOrderPaymentService
             }
             $settlement = ObjectManager::getInstance(\Weline\Points\Api\PointsDiscountSettlementInterface::class);
             if ($settlement instanceof \Weline\Points\Api\PointsDiscountSettlementInterface) {
-                $settlement->releaseForOrder($orderUuid, $idempotencyKey);
+                $result = $settlement->releaseForOrder($orderUuid, $idempotencyKey);
+                if (empty($result['ok'])) {
+                    $this->logPointsSettlementFailure('release', $orderUuid, $result);
+                }
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
+            $this->logPointsSettlementFailure('release', $orderUuid, ['error' => $exception->getMessage()]);
+        }
+    }
+
+    /** @param array<string, mixed> $result */
+    private function logPointsSettlementFailure(string $action, string $orderUuid, array $result): void
+    {
+        if (\function_exists('w_log_error')) {
+            w_log_error('Points discount ' . $action . ' failed', [
+                'order_uuid' => $orderUuid,
+                'error' => (string) ($result['error'] ?? 'unknown'),
+            ], 'points');
         }
     }
 

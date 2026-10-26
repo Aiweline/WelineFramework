@@ -207,25 +207,33 @@ final class PointsDiscountSettlementService implements PointsDiscountSettlementI
         $remaining = max(0, $points - $returned);
         $refundCheckoutMinor = max(0, $refundCheckoutMinor);
         $orderTotalCheckoutMinor = max(0, $orderTotalCheckoutMinor);
+        $applyCheckoutMinor = max(0, (int) $record[DiscountApplyRecord::schema_fields_APPLY_CHECKOUT_MINOR]);
+        // Refund cash excludes the points tender; the denominator must be cash
+        // paid, not the full order grand total.
+        $cashPaidMinor = max(1, $orderTotalCheckoutMinor - $applyCheckoutMinor);
         if ($remaining <= 0 || $refundCheckoutMinor <= 0) {
             return ['ok' => true, 'returned_points' => 0];
         }
 
-        $toReturn = ($orderTotalCheckoutMinor <= 0 || $refundCheckoutMinor >= $orderTotalCheckoutMinor)
+        $toReturn = ($refundCheckoutMinor >= $cashPaidMinor)
             ? $remaining
-            : min($remaining, intdiv($points * $refundCheckoutMinor, $orderTotalCheckoutMinor));
+            : min($remaining, intdiv($points * $refundCheckoutMinor, $cashPaidMinor));
         if ($toReturn <= 0) {
             return ['ok' => true, 'returned_points' => 0];
         }
 
         try {
-            $this->assets->returnCommitted(
+            $result = $this->assets->returnCommitted(
                 (string) $record[DiscountApplyRecord::schema_fields_RESERVATION_ID],
                 $toReturn,
                 'points:discount:return:' . trim($orderUuid) . ':' . trim($idempotencyKey),
             );
         } catch (\Throwable $exception) {
             return ['ok' => false, 'returned_points' => 0, 'error' => 'points_discount_return_failed:' . $exception->getMessage()];
+        }
+
+        if (!empty($result['idempotent'])) {
+            return ['ok' => true, 'returned_points' => 0, 'idempotent' => true];
         }
 
         $returned += $toReturn;
