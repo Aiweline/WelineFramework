@@ -2219,6 +2219,13 @@ if [[ "$LINK_SYSTEM" == true ]] || [[ -x "$SERVER_DIR/php/bin/php" ]]; then
   ensure_system_bin_links
 fi
 
+# 项目快捷命令：首次安装给项目命名（15 秒无输入自动跳过；已有别名时不重复询问）
+if [[ -n "$PHP_EXE" ]] && [[ -x "$PHP_EXE" ]] && [[ -f "$ROOT/bin/w" ]]; then
+  echo ""
+  echo "项目快捷命令（可选）："
+  ( cd "$ROOT" && "$PHP_EXE" "$ROOT/bin/w" shell:alias --ask ) || true
+fi
+
 # 验证 PATH 是否添加成功（新登录 shell 中 php/w 是否指向项目安装）
 verify_path_added() {
   local ok=1
