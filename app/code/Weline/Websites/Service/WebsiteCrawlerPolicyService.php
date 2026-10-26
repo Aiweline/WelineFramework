@@ -53,6 +53,11 @@ class WebsiteCrawlerPolicyService
         $entries = $this->decodeEntries((string)$this->policyModel->getData(WebsiteCrawlerPolicy::schema_fields_ENTRIES_JSON));
         if ($entries === []) {
             $entries = CrawlerBlockCatalog::defaultWebsiteEntries();
+        } else {
+            $entries = \array_values(\array_map(
+                static fn(array $entry): array => CrawlerBlockCatalog::withTokens($entry),
+                $entries,
+            ));
         }
 
         return [
@@ -126,8 +131,21 @@ class WebsiteCrawlerPolicyService
             if ($action !== 'allow') {
                 $action = 'block';
             }
+            $safeId = \preg_replace('/[^a-zA-Z0-9._-]/', '-', $id)
+                ?: ('custom-' . \substr(\hash('sha256', $pattern), 0, 12));
+            $uaTokens = $this->normalizeUaTokens($row['ua_tokens'] ?? []);
+            $robotsToken = $this->normalizeUaToken((string)($row['robots_token'] ?? ''));
+            $catalogTokens = CrawlerBlockCatalog::tokensFor($safeId);
+            if ($uaTokens === []) {
+                $uaTokens = $catalogTokens['ua_tokens'];
+            }
+            if ($robotsToken === '') {
+                $robotsToken = $catalogTokens['robots_token'] !== ''
+                    ? $catalogTokens['robots_token']
+                    : ($uaTokens[0] ?? '');
+            }
             $entries[] = [
-                'id' => \preg_replace('/[^a-zA-Z0-9._-]/', '-', $id) ?: ('custom-' . \substr(\hash('sha256', $pattern), 0, 12)),
+                'id' => $safeId,
                 'name' => \trim((string)($row['name'] ?? $id)),
                 'pattern' => $pattern,
                 'category' => \trim((string)($row['category'] ?? 'custom')) ?: 'custom',
@@ -135,6 +153,8 @@ class WebsiteCrawlerPolicyService
                 'action' => $action,
                 'enabled' => !isset($row['enabled']) || !empty($row['enabled']) && (string)$row['enabled'] !== '0',
                 'builtin' => !empty($row['builtin']),
+                'ua_tokens' => $uaTokens,
+                'robots_token' => $robotsToken,
             ];
             if (\count($entries) >= 200) {
                 break;
@@ -150,6 +170,52 @@ class WebsiteCrawlerPolicyService
             'block_duration' => $blockDuration,
             'entries' => $entries,
         ];
+    }
+
+    /**
+     * @param mixed $raw array or comma/newline separated string
+     * @return list<string>
+     */
+    private function normalizeUaTokens(mixed $raw): array
+    {
+        if (\is_string($raw)) {
+            $raw = \preg_split('/[\r\n,]+/', $raw) ?: [];
+        }
+        if (!\is_array($raw)) {
+            return [];
+        }
+
+        $tokens = [];
+        foreach ($raw as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $token = $this->normalizeUaToken((string)$value);
+            if ($token !== '') {
+                $tokens[\strtolower($token)] = $token;
+            }
+            if (\count($tokens) >= 50) {
+                break;
+            }
+        }
+
+        return \array_values($tokens);
+    }
+
+    private function normalizeUaToken(string $token): string
+    {
+        $token = \trim($token);
+        if ($token === '' || \strlen($token) > 128) {
+            return '';
+        }
+        if (\preg_match('/[\x00-\x1F\x7F"\\\\]/', $token) === 1) {
+            return '';
+        }
+        if (\preg_match('#^[A-Za-z0-9][A-Za-z0-9 ._+/-]*$#', $token) !== 1) {
+            return '';
+        }
+
+        return $token;
     }
 
     /**

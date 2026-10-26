@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Websites',
-    "version" => '1.8.125',
+    "version" => '1.8.126',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Admin' => '*',
@@ -31,6 +31,7 @@ return [
         \Weline\Websites\Api\Catalog\StoreCatalogInterface::class => \Weline\Websites\Service\StoreCatalog::class,
         \Weline\Websites\Api\Catalog\WebsiteDomainCatalogInterface::class => \Weline\Websites\Service\WebsiteDomainCatalog::class,
         \Weline\Websites\Api\Catalog\SalesChannelCatalogInterface::class => \Weline\Websites\Service\SalesChannelCatalog::class,
+        \Weline\Websites\Api\Crawler\CrawlerPolicyProviderInterface::class => \Weline\Websites\Service\CrawlerPolicyProvider::class,
         'system_config.scope_identity_catalog.Weline_Websites'
             => \Weline\Websites\Integration\SystemConfig\ScopeIdentityCatalog::class,
         'theme.brand_basics_identity.websites'
