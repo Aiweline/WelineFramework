@@ -155,7 +155,7 @@ class DeployGitMetadataService
      * var/deploy/dirty-snapshots/<时间戳>/，避免覆盖其它会话正在推进的修改。
      * 返回快照目录；工作区干净时返回空串。快照失败必须让发布中止（fail-closed）。
      */
-    public function snapshotDirtyWorktree(string $reason = '', ?string $root = null): string
+    public function snapshotDirtyWorktree(string $reason = '', ?string $root = null, int $keep = 20): string
     {
         $root = $this->normalizeRoot($root);
         $statusResult = $this->runGit(['status', '--porcelain=v1', '-z', '--untracked-files=all'], $root);
@@ -259,7 +259,53 @@ class DeployGitMetadataService
             @file_put_contents($logDir . DIRECTORY_SEPARATOR . 'dirty-snapshot.log', $logLine, FILE_APPEND);
         }
 
+        $this->pruneDirtySnapshots(dirname($snapshotRoot), $keep);
+
         return $snapshotRoot;
+    }
+
+    /**
+     * 只保留最近 $keep 个脏改快照，避免部署次数多了撑爆磁盘。
+     */
+    private function pruneDirtySnapshots(string $snapshotsRoot, int $keep): void
+    {
+        if ($keep < 1 || !is_dir($snapshotsRoot)) {
+            return;
+        }
+        $directories = [];
+        foreach (scandir($snapshotsRoot) ?: [] as $name) {
+            if (preg_match('/^\d{8}-\d{6}-[a-f0-9]{8}$/', (string)$name) !== 1) {
+                continue;
+            }
+            $path = $snapshotsRoot . DIRECTORY_SEPARATOR . $name;
+            if (is_dir($path)) {
+                $directories[] = $path;
+            }
+        }
+        rsort($directories, SORT_STRING);
+        foreach (array_slice($directories, $keep) as $expired) {
+            $this->removeDirectoryRecursive($expired);
+        }
+    }
+
+    private function removeDirectoryRecursive(string $path): void
+    {
+        $items = @scandir($path);
+        if ($items === false) {
+            return;
+        }
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $target = $path . DIRECTORY_SEPARATOR . $item;
+            if (is_dir($target) && !is_link($target)) {
+                $this->removeDirectoryRecursive($target);
+                continue;
+            }
+            @unlink($target);
+        }
+        @rmdir($path);
     }
 
     public function getTagCommit(string $tag, ?string $root = null): string

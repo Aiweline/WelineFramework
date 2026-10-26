@@ -42,6 +42,20 @@ final class DeployGitDirtySnapshotTest extends TestCase
         self::assertSame(1, $manifest['untracked_copied'] ?? null);
     }
 
+    public function testPrunesOldSnapshots(): void
+    {
+        $this->initRepository();
+        file_put_contents($this->root . '/tracked.txt', "changed\n");
+
+        $service = new DeployGitMetadataService();
+        for ($i = 0; $i < 3; $i++) {
+            self::assertNotSame('', $service->snapshotDirtyWorktree('unit_test', $this->root, 2));
+        }
+
+        $directories = glob($this->root . '/var/deploy/dirty-snapshots/*', GLOB_ONLYDIR) ?: [];
+        self::assertCount(2, $directories);
+    }
+
     public function testCleanWorktreeReturnsEmptySnapshotPath(): void
     {
         $this->initRepository();
