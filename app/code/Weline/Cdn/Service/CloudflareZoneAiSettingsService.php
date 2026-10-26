@@ -17,10 +17,13 @@ final class CloudflareZoneAiSettingsService
     private const ENDPOINT = '/zones/%s/bot_management';
 
     private const TARGET = [
+        // Cloudflare enums: ai_training/ai_search/ai_user accept disabled|block|
+        // only_on_ad_pages (training also allows disallow); there is no "allow".
+        // "disabled" means the restriction is off, which is the default-open state.
         'ai_bots_protection' => 'disabled',
-        'ai_training' => 'allow',
-        'ai_search' => 'allow',
-        'ai_user' => 'allow',
+        'ai_training' => 'disabled',
+        'ai_search' => 'disabled',
+        'ai_user' => 'disabled',
         'bot_preference_sync_enabled' => false,
         'is_robots_txt_managed' => false,
     ];
