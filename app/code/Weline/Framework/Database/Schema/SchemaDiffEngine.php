@@ -577,6 +577,26 @@ final class SchemaDiffEngine
             return $this->booleanLiteral($expected) === $this->booleanLiteral($observed);
         }
         $isMysql = \in_array($databaseType, ['mysql', 'mariadb'], true);
+        if ($isMysql) {
+            $declaredTypeNormalized = $this->normalizeType($declared->type);
+            $actualTypeNormalized = $this->normalizeType($actual->type);
+            $defaultDroppedSide = static fn(string $type): bool => \preg_match(
+                '/\b(text|blob|json|geometry|point|linestring|polygon)\b/',
+                $type,
+            ) === 1;
+            // mysqlColumnDef() 对 text/blob/json/geometry 家族静默丢弃 DEFAULT
+            // （MariaDB 侧同样不物化/以 NULL 字面量呈现），diff 不能把
+            // 「声明有 default、实际没有」当成漂移，否则 modify_column 永不收敛。
+            // 双向覆盖：声明→实际被丢弃（declared 有、actual NULL），
+            // 与声明侧同型但另一侧类型是同族（json 声明落库为 longtext+CHECK）。
+            if (($defaultDroppedSide($declaredTypeNormalized) || $defaultDroppedSide($actualTypeNormalized))
+                && (
+                    ($actual->default === null || strcasecmp((string)$actual->default, 'NULL') === 0)
+                    || ($declared->default === null)
+                )) {
+                return true;
+            }
+        }
         if ($isMysql
             && $this->isTextBlobType($declared->type)
             && ((string)($declared->default ?? '') !== '')
