@@ -13,6 +13,90 @@ namespace Weline\Server\Security;
 final class CrawlerBlockCatalog
 {
     /**
+     * Literal UA tokens for Cloudflare `contains` and robots.txt groups.
+     *
+     * WLS keeps matching on `pattern`; this map only adds the token form so the
+     * same catalog entry can be published to edge/robots without leaking regex.
+     *
+     * @var array<string, list<string>>
+     */
+    private const UA_TOKENS = [
+        'googlebot' => ['Googlebot'],
+        'google_inspection' => ['Google-InspectionTool'],
+        'googleother' => ['GoogleOther'],
+        'googlebot_image' => ['Googlebot-Image'],
+        'googlebot_news' => ['Googlebot-News'],
+        'googlebot_video' => ['Googlebot-Video'],
+        'storebot_google' => ['Storebot-Google'],
+        'adsbot_google' => ['AdsBot-Google'],
+        'mediapartners_google' => ['Mediapartners-Google'],
+        'bingbot' => ['bingbot'],
+        'bingpreview' => ['BingPreview'],
+        'duckduckbot' => ['DuckDuckBot'],
+        'yandex' => ['YandexBot', 'YandexImages', 'YandexVideo', 'YandexFavicons'],
+        'baiduspider' => ['Baiduspider'],
+        'sogou' => ['Sogou'],
+        'spider360' => ['360Spider'],
+        'yisou' => ['YisouSpider'],
+        'toutiao_byte' => ['ToutiaoSpider', 'DouyinBot', 'DouyinSpider', 'bytedance'],
+        'applebot' => ['Applebot'],
+        'msn_media' => ['msnbot', 'MSNBot'],
+        'slurp' => ['Slurp'],
+        'facebookexternalhit' => ['facebookexternalhit'],
+        'twitterbot' => ['Twitterbot'],
+        'linkedinbot' => ['LinkedInBot'],
+        'pinterestbot' => ['Pinterestbot'],
+        'seznambot' => ['SeznamBot'],
+        'mojeekbot' => ['MojeekBot'],
+        'bravebot' => ['Bravebot'],
+        'naverbot' => ['NaverBot', 'Yeti'],
+        'petalbot' => ['PetalBot'],
+        'openai_crawlers' => ['GPTBot', 'OAI-SearchBot', 'ChatGPT-User'],
+        'anthropic_crawlers' => ['ClaudeBot', 'Claude-User', 'Claude-Web', 'anthropic-ai'],
+        'google_ai' => ['Google-Extended', 'Google-CloudVertexBot'],
+        'applebot_extended' => ['Applebot-Extended'],
+        'bytespider' => ['Bytespider'],
+        'ccbot' => ['CCBot'],
+        'amazonbot' => ['Amazonbot'],
+        'meta_ai' => ['Meta-ExternalAgent', 'Meta-ExternalFetcher', 'Meta-WebIndexer', 'FacebookBot'],
+        'perplexity' => ['PerplexityBot', 'Perplexity-User'],
+        'youbot' => ['YouBot'],
+        'imagesiftbot' => ['ImagesiftBot'],
+        'cohere' => ['cohere-ai'],
+        'mistral' => ['MistralAI'],
+        'duckassistbot' => ['DuckAssistBot'],
+        'kimi_moonshot' => ['KimiBot', 'MoonshotAI'],
+        'deepseek' => ['DeepSeek'],
+        'zhipu' => ['Zhipu', 'ChatGLM'],
+        'minimax' => ['MiniMax'],
+        'tencent_yuanbao' => ['YuanbaoBot', 'Hunyuan'],
+        'iflytek_spark' => ['iFlytek', 'SparkBot'],
+        'quark' => ['QuarkBot', 'Quark-Scan'],
+        'yi_01ai' => ['Yi-AI', '01-ai'],
+        'ai2_bot' => ['AI2Bot', 'AllenAI'],
+        'tencent_us' => ['TensparTS'],
+        'diffbot' => ['Diffbot'],
+        'serpstatbot' => ['SerpstatBot'],
+        'semrush' => ['SemrushBot', 'SiteAuditBot'],
+        'ahrefs' => ['AhrefsBot'],
+        'dotbot' => ['DotBot'],
+        'mj12bot' => ['MJ12bot'],
+        'dataforseo' => ['DataForSeoBot', 'DataForSeo'],
+        'blexbot' => ['BLEXBot'],
+        'mauibot' => ['MauiBot'],
+        'seekport' => ['Seekport', 'SeekportBot'],
+        'scrapy' => ['Scrapy'],
+        'python_requests' => ['python-requests'],
+        'go_http' => ['Go-http-client'],
+        'curl' => ['curl/'],
+        'wget' => ['Wget/'],
+        'httpclient' => ['Apache-HttpClient'],
+        'java' => ['Java/'],
+        'libwww' => ['libwww-perl'],
+        'httrack' => ['HTTrack', 'WebCopier', 'WebZIP', 'Offline Explorer'],
+    ];
+
+    /**
      * @return list<array{id:string,name:string,pattern:string,category:string,reason:string}>
      */
     public static function builtins(): array
@@ -241,6 +325,36 @@ final class CrawlerBlockCatalog
     }
 
     /**
+     * @return array{ua_tokens:list<string>,robots_token:string}
+     */
+    public static function tokensFor(string $id): array
+    {
+        $tokens = self::UA_TOKENS[\strtolower(\trim($id))] ?? [];
+
+        return [
+            'ua_tokens' => $tokens,
+            'robots_token' => $tokens[0] ?? '',
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $entry
+     * @return array<string, mixed>
+     */
+    public static function withTokens(array $entry): array
+    {
+        $tokens = self::tokensFor((string)($entry['id'] ?? ''));
+        if (!\is_array($entry['ua_tokens'] ?? null) || $entry['ua_tokens'] === []) {
+            $entry['ua_tokens'] = $tokens['ua_tokens'];
+        }
+        if (!\is_string($entry['robots_token'] ?? null) || \trim($entry['robots_token']) === '') {
+            $entry['robots_token'] = $tokens['robots_token'];
+        }
+
+        return $entry;
+    }
+
+    /**
      * Default website-managed entries: friendly allow + parasitic block.
      *
      * @return list<array{id:string,name:string,pattern:string,category:string,reason:string,action:string,enabled:bool,builtin:bool}>
@@ -249,18 +363,18 @@ final class CrawlerBlockCatalog
     {
         $entries = [];
         foreach (self::allowlistEntries() as $item) {
-            $entries[] = $item + [
+            $entries[] = self::withTokens($item + [
                 'action' => 'allow',
                 'enabled' => true,
                 'builtin' => true,
-            ];
+            ]);
         }
         foreach (self::builtins() as $item) {
-            $entries[] = $item + [
+            $entries[] = self::withTokens($item + [
                 'action' => 'block',
                 'enabled' => true,
                 'builtin' => true,
-            ];
+            ]);
         }
 
         return $entries;
@@ -292,7 +406,7 @@ final class CrawlerBlockCatalog
                 if ($action !== 'allow') {
                     $action = 'block';
                 }
-                $normalized[] = [
+                $normalized[] = self::withTokens([
                     'id' => $id,
                     'name' => \trim((string)($item['name'] ?? $id)),
                     'pattern' => $pattern,
@@ -300,7 +414,9 @@ final class CrawlerBlockCatalog
                     'reason' => \trim((string)($item['reason'] ?? 'Custom crawler rule')),
                     'builtin' => (bool)($item['builtin'] ?? false),
                     'action' => $action,
-                ];
+                    'ua_tokens' => \is_array($item['ua_tokens'] ?? null) ? $item['ua_tokens'] : [],
+                    'robots_token' => (string)($item['robots_token'] ?? ''),
+                ]);
             }
 
             return $normalized;
@@ -320,7 +436,7 @@ final class CrawlerBlockCatalog
             if (isset($disabled[$id])) {
                 continue;
             }
-            $entries[] = $item + ['builtin' => true, 'action' => 'block'];
+            $entries[] = self::withTokens($item + ['builtin' => true, 'action' => 'block']);
         }
 
         foreach ((array)($rule['custom_entries'] ?? []) as $item) {
@@ -342,7 +458,7 @@ final class CrawlerBlockCatalog
             if ($action !== 'allow') {
                 $action = 'block';
             }
-            $entries[] = [
+            $entries[] = self::withTokens([
                 'id' => $id,
                 'name' => \trim((string)($item['name'] ?? $id)),
                 'pattern' => $pattern,
@@ -350,7 +466,9 @@ final class CrawlerBlockCatalog
                 'reason' => \trim((string)($item['reason'] ?? 'Custom crawler rule')),
                 'builtin' => false,
                 'action' => $action,
-            ];
+                'ua_tokens' => \is_array($item['ua_tokens'] ?? null) ? $item['ua_tokens'] : [],
+                'robots_token' => (string)($item['robots_token'] ?? ''),
+            ]);
         }
 
         return $entries;
