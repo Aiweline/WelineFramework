@@ -6,6 +6,7 @@ namespace Weline\Framework\Cache\Service\StorefrontWarmup;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
+use Weline\Framework\Deploy\StaticBuildId;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FpcWarmupProviderInterface;
 use Weline\Websites\Data\WebsiteData;
@@ -1025,8 +1026,10 @@ final class StorefrontWarmupOrchestrator
     }
 
     /**
-     * Live storefront theme generations only. Leftover e2e website rows must
-     * not restart warmup when they bump the global @clock.
+     * Live storefront theme generations (global + every live website) plus the
+     * static build number. A build bump (theme update / deploy) must re-warm
+     * without any caller telling the warmer to do so. Leftover e2e website rows
+     * must not restart warmup when they bump the global @clock.
      */
     private function currentStorefrontGenerationFingerprint(): string
     {
@@ -1044,6 +1047,11 @@ final class StorefrontWarmupOrchestrator
         $parts = [];
         foreach ($vector['generations'] as $namespace => $generation) {
             $parts[] = $namespace . '=' . $generation;
+        }
+        try {
+            $parts[] = 'static_build=' . StaticBuildId::current();
+        } catch (\Throwable) {
+            // Build manifest unavailable (early bootstrap): generations still fence.
         }
         \sort($parts, \SORT_STRING);
 

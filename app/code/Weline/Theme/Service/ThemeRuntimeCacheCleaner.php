@@ -91,8 +91,9 @@ final class ThemeRuntimeCacheCleaner
      *
      * Storefront generation identity === Scope-published ThemeScopeVersion id.
      * That id changes ONLY when ops clicks Publish in the theme editor for that Scope.
-     * This method NEVER rotates / invents published versions — compile, solidify, theme:upgrade -f,
-     * and cache clear only rewarm artifacts bound to the current published version.
+     * This method NEVER rotates / invents published versions — compile, solidify and
+     * theme:upgrade -f only invalidate (and promote the staged seed). Storefront FPC
+     * warm is left to the cron warmer, which reacts to the generation/build change.
      *
      * @return array{reason:string,theme_id:int|null,steps:array<string,bool>,failures:array<string,string>}
      */
@@ -105,8 +106,8 @@ final class ThemeRuntimeCacheCleaner
             'failures' => [],
         ];
 
-        // Skip nested staging warm — Shared/process purge below would wipe it.
-        // Atomic closure: purge pointers first, then one final staging→warm→promote.
+        // Skip nested staging promote — Shared/process purge below would wipe it.
+        // Atomic closure: purge pointers first, then one final staging→promote.
         $cleared = $this->clearNonGlobalCaches($themeId, $reason, false);
         $result['steps'] = \array_merge($result['steps'], $cleared['steps'] ?? []);
         $result['failures'] = \array_merge($result['failures'], $cleared['failures'] ?? []);
@@ -137,7 +138,7 @@ final class ThemeRuntimeCacheCleaner
         $this->runStep($result, 'cdn_full_page_purge', function (): void {
             $this->purgeCdnFullPageCaches();
         });
-        // LAST: html-disk staging seed → warm (new themePublishedVersionId) → promote.
+        // LAST: html-disk staging seed → promote. Warm is the cron's job (generation bump above).
         $this->runStep($result, 'fpc_staging_warm_promote', function () use (&$result): void {
             $this->rebuildFpcViaStagingWarmPromote($result);
         });
@@ -868,8 +869,9 @@ final class ThemeRuntimeCacheCleaner
     }
 
     /**
-     * Theme rebuild: keep live serving old HTML while staging is seeded + warmed,
-     * then atomically promote. Warm failure abandons staging (live unchanged).
+     * Theme rebuild: keep live serving old HTML while staging is seeded,
+     * then atomically promote. Storefront warm is NOT run here — the generation
+     * bump above makes the cron warmer detect the change and warm by itself.
      * After promote, real HTTP access per warm Host must show non-empty
      * themePublishedVersionId, and live stamp must match origin bake for that Host.
      *
@@ -884,9 +886,6 @@ final class ThemeRuntimeCacheCleaner
             try {
                 FpcHtmlDiskStore::beginStagingGeneration(true);
                 FpcHtmlDiskStore::alignWriteBaseToCurrentPageGeneration();
-                if (\class_exists(StorefrontFpcWarmer::class)) {
-                    ObjectManager::getInstance(StorefrontFpcWarmer::class)->warm();
-                }
                 // Seed hardlinks + FPC-off can leave warm as edge HIT without PHP publish.
                 // Pierce homepage and write the fresh body into the staging write root.
                 $this->republishHomepageIntoOpenStaging();

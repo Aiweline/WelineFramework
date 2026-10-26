@@ -377,6 +377,8 @@ private function assert_ModeSetCompileCleanup_testModeSetFlushesPoolsThenDeletes
 {
     $src = (string) \file_get_contents($this->frameworkFile_ModeSetCompileCleanup('Console/Console/Deploy/Mode/Set.php'));
     self::assertStringContainsString("skip_view_compile' => true", $src);
+    // 切模式只失效不预热：店面预热由定时任务按构建世代变化触发。
+    self::assertStringContainsString("skip_warm' => true", $src);
     self::assertStringContainsString('刷新缓存池（flush）', $src);
     self::assertStringContainsString('正在删除模组模板编译目录', $src);
     self::assertStringContainsString('clearGeneratedComplicateDir', $src);
@@ -391,6 +393,8 @@ private function assert_ModeSetCompileCleanup_testCacheClearSupportsPoolsOnlySki
     $src = (string) \file_get_contents($this->frameworkFile_ModeSetCompileCleanup('Cache/Console/Cache/Clear.php'));
     self::assertStringContainsString('skip_view_compile', $src);
     self::assertStringContainsString('--pools-only', $src);
+    self::assertStringContainsString('skip_warm', $src);
+    self::assertStringContainsString('--no-warm', $src);
 }
 
 private function assert_ModeSetCompileCleanup_testTemplateCacheManagerClearAllDeletesTreeOnce(): void

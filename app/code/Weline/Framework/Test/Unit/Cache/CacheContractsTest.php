@@ -904,6 +904,8 @@ private function assert_StorefrontWarmupOrchestrator_testGenerationFenceRestarts
     $orchestrator = (string) \file_get_contents((new \ReflectionClass(StorefrontWarmupOrchestrator::class))->getFileName() ?: '');
     self::assertStringContainsString('currentAuthorityClock', $orchestrator);
     self::assertStringContainsString('currentStorefrontGenerationFingerprint', $orchestrator);
+    // Build-number bumps must trigger the cron warmer without a caller-side signal.
+    self::assertStringContainsString('StaticBuildId::current()', $orchestrator);
     self::assertStringContainsString('authorityClock()', $orchestrator);
     self::assertStringContainsString('generation_changed', $orchestrator);
     self::assertStringNotContainsString('WlsRuntime', $orchestrator);

@@ -309,7 +309,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
     /**
      * Force-clear storefront FPC pools, WLS Shared FPC, CDN full-page cache,
-     * then staging→warm→promote (same path as formal compile / publish).
+     * then staging→promote. Storefront warm is left to the cron warmer, which
+     * reacts to the theme generation bump (no direct warm here).
      */
     private function flushStorefrontFpcAfterUpgrade(?WelineTheme $theme): void
     {
@@ -791,7 +792,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '-l, --layout <type>' => '仅固化指定布局类型（如 homepage / checkout）；省略则处理全部布局',
                 '-o, --option <name>' => '仅固化该布局下指定选项（如 default）；须同时提供 -l；省略 -o 则处理该布局下全部选项',
                 '-a, --all' => '部署并编译该主题（或全部站绑主题）下全部历史版本；默认仅当前正式版+草稿',
-                '-f, --force' => '显式全量清理店面 FPC / Shared FPC / CDN 全页缓存并 staging→warm→promote（仅故障恢复；日常发版默认只按布局清 FPC/CDN URL）',
+                '-f, --force' => '显式全量清理店面 FPC / Shared FPC / CDN 全页缓存并 staging→promote（仅故障恢复；不直接预热，预热由定时任务按世代变化触发；日常发版默认只按布局清 FPC/CDN URL）',
                 '--inplace' => '旧流程：就地 purge+固化（需维护模式；仅应急/兼容）。默认走原子代次通道',
                 '--batch, --atomic' => '（默认）原子代次：构建进新代次目录→校验→只翻指针；不 purge、不需要维护模式',
             ],

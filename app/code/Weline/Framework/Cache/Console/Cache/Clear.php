@@ -69,6 +69,11 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         $skipViewCompile = !empty($data['skip_view_compile'])
             || \in_array('--pools-only', $args, true)
             || \in_array('--skip-view-compile', $args, true);
+        // 仅失效不预热（如部署模式切换）：店面预热交给定时任务按构建世代变化触发，
+        // 避免每次切换模式都在这里全量重暖。
+        $skipWarm = !empty($data['skip_warm'])
+            || \in_array('--no-warm', $args, true)
+            || \in_array('--skip-warm', $args, true);
         $pools = $this->scanner->getCaches()['pools'] ?? [];
         $totalPools = \count($pools);
 
@@ -133,7 +138,12 @@ class Clear implements \Weline\Framework\Console\CommandInterface
             // Soft-clear (--pools-only) must warm after flush so quiet-cold HTTP
             // sees chrome/shelf L2. Full clear warms after view/tpl delete.
             // Skip only when WLS clear itself failed (caller already returned).
-            $fpcWarmOk = $this->warmStorefrontFpcAfterClear();
+            if ($skipWarm) {
+                // 只失效不预热：预热由定时任务按构建号变化自行触发。
+                $fpcWarmOk = true;
+            } else {
+                $fpcWarmOk = $this->warmStorefrontFpcAfterClear();
+            }
         } else {
             // Machine-readable honesty markers for acceptance scripts (W6).
             $this->printing->warning('fpc_warm_ok=0');
@@ -428,6 +438,7 @@ class Clear implements \Weline\Framework\Console\CommandInterface
                 '-h, --help' => '显示帮助信息',
                 '-f, --force' => '强制清理（含持久缓存池）',
                 '--pools-only, --skip-view-compile' => '仅 flush 缓存池（不删 view/tpl / generated/complicate）',
+                '--no-warm, --skip-warm' => '只失效不预热店面（预热由定时任务按构建世代触发）',
             ],
             [],
             []
