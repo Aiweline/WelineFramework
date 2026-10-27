@@ -3,7 +3,8 @@ $page = (string) ($this->getData('points_page') ?? 'overview');
 $title = (string) ($this->getData('points_title') ?? __('积分与会员'));
 $summary = (array) ($this->getData('points_summary') ?? []);
 $datasets = (array) ($this->getData('points_datasets') ?? []);
-$settingsUrl = (string) ($this->getData('points_settings_url') ?? 'weline_systemconfig/backend/config');
+$selectedScope = (string) ($this->getData('points_selected_scope') ?? 'default.default.default');
+$centerUrl = (string) ($this->getData('points_center_url') ?? '');
 $escape = static fn (mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $display = static function (mixed $value) use ($escape): string {
     if (is_bool($value)) {
@@ -25,11 +26,58 @@ $display = static function (mixed $value) use ($escape): string {
     </div>
 
     <?php if ($page === 'settings'): ?>
-        <div class="w-card">
-            <div class="w-card__header"><h5 style="--w-mb:0;"><?= __('积分设置') ?></h5></div>
-            <div class="w-card__body">
-                <div class="w-alert" data-tone="info"><?= __('赚分比例、成长值比例、商品默认值、抵扣上限与 VIP 开关在系统配置中维护。') ?></div>
-                <a class="w-button" data-tone="primary" href="@backend-url{'weline_systemconfig/backend/config'|['area'=>'backend','search'=>'积分','guide_key'=>'points/discount/enabled,points/discount/max_ratio,payment/asset/points/enabled,payment/asset/points/exchange_ratio']}"><?= __('打开积分与会员配置') ?></a>
+        <div class="points-settings w-stack" style="--w-gap:var(--weline-space-6);" data-testid="points-settings">
+            <div class="w-cluster" data-align="center" data-justify="between" style="--w-gap:var(--weline-space-3);">
+                <div class="w-stack" style="--w-gap:var(--weline-space-1);">
+                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                        <lang>配置写入当前作用范围；切换范围后页面按新范围加载。抵扣还需在 Payment 积分资产中打开启用与兑换比例。</lang>
+                    </p>
+                </div>
+                <?php if ($centerUrl !== ''): ?>
+                    <a class="w-button" data-tone="neutral" data-variant="outline" data-size="sm"
+                       href="<?= $escape($centerUrl) ?>">
+                        <lang>在统一配置中心打开</lang>
+                    </a>
+                <?php endif; ?>
+            </div>
+
+            <div class="w-field points-scope-field">
+                <label class="w-field__label" for="points-config-scope"><lang>作用范围</lang></label>
+                <div class="w-field__control">
+                    <w:scope
+                        id="points-config-scope"
+                        name="target_scope"
+                        value="selectedScope"
+                        placeholder="@lang(选择网站、店铺或渠道)"
+                        search-placeholder="@lang(搜索作用范围)"
+                        aria-label="@lang(选择作用范围)"
+                        searchable="true"
+                        default-expand-all="true"
+                        required="true"
+                    />
+                </div>
+            </div>
+
+            <w:config:embed
+                module="Weline_Points"
+                area="backend"
+                fields="points/earn/enabled,points/earn/rate_per_currency_unit,points/growth/rate_per_currency_unit,points/product/default_ratio,points/product/default_fixed_points,points/discount/enabled,points/discount/max_ratio,points/vip/enabled,points/vip/basis,points/vip/multiplier_enabled"
+                locale="default"
+            />
+
+            <div class="w-stack" style="--w-gap:var(--weline-space-2);">
+                <h3 class="w-text" data-weight="semibold" style="--w-m:0;">
+                    <lang>Payment 积分资产（抵扣前置条件）</lang>
+                </h3>
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-m:0;">
+                    <lang>结账抵扣要求同时打开 Payment 的积分资产启用与正的兑换比例；折扣角色由积分模块策略自动声明，无需在此打开。</lang>
+                </p>
+                <w:config:embed
+                    module="Weline_Payment"
+                    area="backend"
+                    fields="payment/asset/points/enabled,payment/asset/points/exchange_ratio"
+                    locale="default"
+                />
             </div>
         </div>
     <?php else: ?>

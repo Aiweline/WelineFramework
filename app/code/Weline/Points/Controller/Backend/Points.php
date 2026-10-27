@@ -80,14 +80,35 @@ final class Points extends BackendController
         ]);
     }
 
-    #[Acl('Weline_Points::commerce:partner:points_settings', '积分设置', 'eye', '查看积分设置入口')]
+    #[Acl('Weline_Points::commerce:partner:points_settings', '积分设置', 'eye', '查看积分设置')]
     public function settings(): string
     {
+        /** @var \Weline\SystemConfig\Service\SystemConfigTargetScopeService $targetScopeService */
+        $targetScopeService = ObjectManager::getInstance(
+            \Weline\SystemConfig\Service\SystemConfigTargetScopeService::class,
+        );
+        $resolved = $targetScopeService->resolveFromInput([
+            'target_scope' => (string) $this->request->getGet('target_scope', ''),
+            'scope' => (string) $this->request->getGet('scope', ''),
+            'website_code' => (string) $this->request->getGet('website_code', ''),
+            'store_code' => (string) $this->request->getGet('store_code', ''),
+            'channel_code' => (string) $this->request->getGet('channel_code', ''),
+        ], false);
+
+        $storageScope = (string) ($resolved['storage_scope'] ?? 'default.default.default');
         $this->assign('points_page', 'settings');
         $this->assign('points_title', (string) __('积分设置'));
         $this->assign('points_summary', []);
         $this->assign('points_datasets', []);
-        $this->assign('points_settings_url', 'weline_systemconfig/backend/config');
+        $this->assign('points_selected_scope', $storageScope);
+        $this->assign('points_center_url', $this->request->getUrlBuilder()->getBackendUrl(
+            'weline_systemconfig/backend/config',
+            [
+                'module' => 'Weline_Points',
+                'area' => 'backend',
+                'target_scope' => $storageScope,
+            ],
+        ));
 
         return $this->fetch('index');
     }

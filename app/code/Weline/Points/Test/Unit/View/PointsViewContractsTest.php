@@ -77,6 +77,18 @@ final class PointsViewContractsTest extends TestCase
         self::assertFileExists($this->modulePath('view/templates/backend/Points/index.phtml'));
     }
 
+    public function testSettingsPageEmbedsPointsAndPaymentConfig(): void
+    {
+        $src = (string) file_get_contents($this->modulePath('view/templates/backend/Points/index.phtml'));
+
+        self::assertStringContainsString('<w:config:embed', $src);
+        self::assertStringContainsString('module="Weline_Points"', $src);
+        self::assertStringContainsString('points/discount/enabled', $src);
+        self::assertStringContainsString('module="Weline_Payment"', $src);
+        self::assertStringContainsString('payment/asset/points/exchange_ratio', $src);
+        self::assertStringContainsString('在统一配置中心打开', $src);
+    }
+
     public function testBackendTemplateCompiles(): void
     {
         $file = $this->modulePath('view/templates/backend/Points/index.phtml');
