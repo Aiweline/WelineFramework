@@ -118,19 +118,55 @@ Product EAV 属性（由 Install/Upgrade 自动声明，set=`storefront`，group
 `w_query('points', 'discount.clear')`
 `w_query('points', 'vip.state')` / `vip.benefits` / `vip.levels`
 
+暴露面（`PointsQueryProvider::getDescriptor()`）：
+
+| operation | mode | frontend | external | 说明 |
+|---|---|---|---|---|
+| `discount.quote` | read | 是 | 是 | 购物车/结账报价 |
+| `discount.apply` | write | 是 | 是 | 钳制并保存抵扣选择 |
+| `discount.clear` | write | 是 | 是 | 清除抵扣选择 |
+| `vip.levels` | read | 是 | 是 | 等级门槛与权益 |
+| `vip.state` / `vip.benefits` | read | 否 | 否 | 含 `customer_id` 参数，仅服务端读取，防 IDOR |
+
+`discount.apply` / `discount.clear` 的 write 模式经 Frontend `QueryBin` 入口，先 `assertProtocolHeaders()` + `assertSameOrigin()`（`app/code/Weline/Frontend/Controller/Api/QueryBin.php:87-91`、`843-856`）；Origin 不匹配返回 401。会话 Cookie 默认 `SameSite=Lax`（`QueryBin.php` `attachPendingCookies()`），跨站 POST 不携带会话 Cookie。**没有独立 CSRF token**，不要把 same-origin 校验写成 CSRF token。
+
 结账提交可带 `points_discount_apply_minor`；若未带，CheckoutQueryProvider 会读取 `PointsCheckoutApplySession` 中 `discount.apply` 保存的金额，再与 `b2b_credit_apply_minor` 一起送入资产折扣 apply 事件。
+
+## E2E 验收（2026-10-27，隔离沙箱）
+
+- 环境：独立克隆库 `mig_clone_pointse2e_20261026181838_4613`（`mig:foundation clone-create --mode=full`），独立 `php -S 127.0.0.1:8787` 副本 `/tmp/weline-points-e2e`，独立 Chrome profile（CDP 9333）。
+- 共享站 `p05113ef3.test.weline.com` 未再改配置；未发真实积分；未用裸 SQL 改业务表。
+- 流程（真实浏览器）：登录（local_image 验证码）→ 商品页选 M → 加购 → `/cart` 面板 quote（可用 101998，最多 96.10）→ apply 9610 → `/checkout` 填地址（payable 31773）→ 面板最多 95.31 → apply 9531 → 提交 `fake_card` → success。
+- 订单：`b63f4fc5-287e-401b-a246-aea4c8cdf15d` / `#1404195708` / paid / grand_total 317.73。
+- 支付：`PAY20261026160406941379` / `fake_card` / success / 222.42（= 317.73 − 95.31）。
+- 积分：`type_payload.points_discount_points=9531`；`discount_apply` committed 9531；ledger `reserve` / `commit` / `earn` 齐全；余额 101998 → 92467，预占 0；VIP lifetime 2283 → 2518（silver，未下降）。
+- 30% 上限：`floor(31773 × 0.30) = 9531`，与 apply 一致。
+- 截图：`/tmp/weline-points-e2e/evidence-cart-panel.png`、`evidence-checkout-applied.png`、`evidence-order-success.png`。
 
 ## 验证
 
 ```bash
 vendor/bin/phpunit --bootstrap app/code/Weline/Points/Test/Unit/bootstrap.php \
   app/code/Weline/Points/Test/Unit
+vendor/bin/phpunit --bootstrap app/bootstrap_phpunit.php \
+  app/code/Weline/Order/test/Unit/Service/OrderAssetAllocationSnapshotServiceTest.php
+php bin/w setup:schema:check -m Weline_Points --json
+php bin/w architecture:check --allow-legacy --json
 php bin/w setup:upgrade --model -m Weline_Points
 ```
 
+最近结果：Points 单测 `OK (34 tests, 103 assertions)`；Order 快照 `OK (6 tests, 28 assertions)`；Checkout 支付/提交/零现金 4 个文件 `OK (27 tests, 137 assertions)`；schema `{"ok": true, "exit": 0, "checked_modules": 1, "drifts": []}`。全量 Checkout Unit 仍有既有失败（`Tests: 103, Assertions: 1746, Errors: 1, Failures: 13, Warnings: 1`，含 `CheckoutSessionAccessServiceTest.php:89` 致命错误），与 Points 改动无关，不能记为全量通过。
+
+## 已知问题
+
+1. 订单金额投影未减积分：E2E 订单 `money_snapshot` / 成功页仍显示 317.73，实际 PSP 扣款 222.42。`ensureOrderMoneyConserved` 只按 `subtotal+shipping+tax+cod−discount` 重算，积分抵扣不在 `discount_amount` 内；属产品口径待定。
+2. `commitPointsDiscount` / `releasePointsDiscount` 失败现在写 `w_log_error('points')`，但无自动重试/outbox；PSP 成功而 commit 失败时积分会保持预占。
+3. 支付阶段直接信任 `type_payload` 的积分数，不重复校验 30% 上限；依赖 apply 时服务端 clamp。
+4. `architecture:check` 对 Points 仍有 6 条 findings：2 条 `dependency.internal_api`（`CurrencyRateService`、`WebsiteData`）和 4 条 `Weline_Checkout -> Weline_Points -> Weline_Customer` 循环引用，未修复。
+
 ## 未覆盖
 
-- 购物车/迷你购物车/结账页的浏览器 E2E 未跑；组件已提供，挂载点依赖主题现有 `checkout-summary` / `cart-summary-extras` / mini-cart 容器。
 - 后台等级增删改查页面。
-- Shipping 免运费权益接入报价链路。
+- Shipping 免运费权益、VIP 折扣率接入结账报价链路（本模块只提供读取契约）。
 - 积分过期、提现、转让、跨站共用、现金购买积分。
+- 共享站不再做 E2E 配置改写；后续 E2E 只在一次性沙箱跑。
