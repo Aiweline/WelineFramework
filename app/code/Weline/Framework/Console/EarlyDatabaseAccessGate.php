@@ -222,19 +222,59 @@ final class EarlyDatabaseAccessGate
      */
     public static function lockHolderSkipReason(string $commandLine, string $projectRoot): string
     {
-        $command = trim($commandLine);
+        $command = trim(self::normalizeCommandLineEncoding($commandLine));
         if ($command === '') {
             return 'unread_command';
         }
         if (!self::isSameProjectGatePeer($command)) {
             return 'not_cron';
         }
-        $root = rtrim($projectRoot, '/\\');
+        $root = rtrim(self::normalizeCommandLineEncoding($projectRoot), '/\\');
         if ($root !== '' && !str_contains($command, $root)) {
             return 'other_project';
         }
 
         return '';
+    }
+
+    /**
+     * macOS/BSD `ps -o command` 把 argv 里的非 ASCII 字节渲染成可见记法
+     * （Linux /proc/cmdline 给原始字节，无此问题），会使含非 ASCII 路径的应用根比对恒失败、
+     * 本站 cron 持锁被误判 other_project 而杀不掉（-f 强制收回失效 → exit 75）。
+     * 还原该记法后再做 NFC 折叠。
+     */
+    private static function normalizeCommandLineEncoding(string $text): string
+    {
+        // 实测「框架」→ M-fM-!M^FM-fM^^M-6，每个非 ASCII 字节一个单元，三种形式：
+        //   M-x   meta+可打印   → 0x80 | ord(x)              （x 可为字母/数字/标点，如 M-!）
+        //   M^x   meta+控制     → 0x80 | (ord(uppercase x) & 0x1F)（注意 M 与 ^ 之间没有 '-'）
+        //   M-C-x meta+control  → 0x80 | ord(uppercase x)
+        // 交替必须长单元在前；未参与的分隔组默认 ''，而 '' ?? $x 短路返回 ''，
+        // 故用 PREG_UNMATCHED_AS_NULL 让缺席组成为 null 才能按组分支。
+        $normalized = preg_replace_callback('/M-C-([A-Za-z0-9^])|M\^([A-Za-z0-9^])|M-(.)/', static function (array $m): string {
+            $isMetaControl = ($m[1] ?? null) !== null;
+            $isMetaCaret = ($m[2] ?? null) !== null;
+            $char = $m[1] ?? $m[2] ?? $m[3] ?? null;
+            if ($char === null || $char === '') {
+                return $m[0];
+            }
+            if ($isMetaCaret) {
+                return chr(0x80 | (ord(strtoupper($char)) & 0x1F));
+            }
+            if ($isMetaControl) {
+                return chr(0x80 | ord(strtoupper($char)));
+            }
+
+            return chr(0x80 | ord($char));
+        }, $text, -1, $count, PREG_UNMATCHED_AS_NULL);
+        if (($count ?? 0) > 0 && is_string($normalized) && class_exists(\Normalizer::class)) {
+            $checked = \Normalizer::normalize($normalized, \Normalizer::FORM_C);
+            if (is_string($checked)) {
+                return $checked;
+            }
+        }
+
+        return is_string($normalized) ? $normalized : $text;
     }
 
     /**

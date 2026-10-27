@@ -1159,7 +1159,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 6. 环境依赖检测
         $this->checkEnvironmentDependencies($args);
 
-        // 6b. -f/--force 与 --force-menu：清除 menu:* 指纹并强制下一轮全量重解析
+        // 6b. --force-menu：清除 menu:* 指纹并强制下一轮全量重解析（-f 不再捆绑菜单全量，见方法注释）
         $this->requestForceMenuCollectIfNeeded($args);
 
         // 7. 验证框架约束规则（必须在模块升级前验证，遵循框架约束）
@@ -1167,20 +1167,20 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     }
 
     /**
-     * -f/--force 与 --force-menu：强制菜单全量重收集（与仅跳过环境检测的历史语义叠加）。
+     * --force-menu：强制菜单全量重收集。
+     *
+     * 2026-10-28 起 -f/--force 不再触发菜单全量：菜单增删改只来自 menu.xml 或模块激活集变化，
+     * MenuXmlReader 的源指纹（menu:<module> + menu:active_set）与「ACL 产物为空禁止跳过」兜底
+     * 已覆盖真实变更；-f 捆绑全量重解析使线上每次部署固定走最慢路径（实测本机 --force-menu
+     * 单段 >15 分钟未完，暖增量全程仅 18.3s）。-f 保留语义：跳过环境检测 + 门禁侧强制收回 setup DB 锁。
      */
     private function requestForceMenuCollectIfNeeded(array $args): void
     {
-        $forceFlag = isset($args['force']) || isset($args['f']);
-        $forceMenu = isset($args['force-menu']);
-        if (!$forceFlag && !$forceMenu) {
+        if (!isset($args['force-menu'])) {
             return;
         }
-        $reason = $forceFlag && $forceMenu
-            ? '-f/--force + --force-menu'
-            : ($forceMenu ? '--force-menu' : '-f/--force');
         $this->forceMenuThisRun = true;
-        $this->forceMenuReason = $reason;
+        $this->forceMenuReason = '--force-menu';
         // Force-full menu is applied by Backend Observer via before_route_collection eventData.
     }
 
@@ -4467,7 +4467,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '--stage=<code>[,code...]' => __('优先运行指定阶段；framework_db_bootstrap/eav_schema/schema_diff 在全量路径仍必执行。阶段 code：%{1}。幽灵阶段 module_manager_bootstrap 已移除。', [$stageCodes]),
                 '--hot' => __('热更新模式，仅通知 WLS 服务器重载（不执行 Schema/路由操作）。适用：只改了 Controller/Template/CSS/JS'),
                 '-s, --skip-env-check' => '跳过环境依赖检测（不强制菜单）',
-                '-f, --force' => '强制升级：跳过环境依赖检测，并强制全量重解析/收集菜单（清除 menu:* 源指纹）',
+                '-f, --force' => '强制升级：跳过环境依赖检测（菜单收集仍按源指纹增量；强制全量重解析请用 --force-menu）',
                 '--skip-reflection-compile, --skip-reflect' => __('跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）'),
                 '--skip-framework-compile' => __('跳过 framework:compile（modules provides / container 等运行时索引；可事后执行 framework:compile）'),
                 '--background-optimize' => __('显式在后台执行优化；主命令不会等待类映射与反射编译完成'),

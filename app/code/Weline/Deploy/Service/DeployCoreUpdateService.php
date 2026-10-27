@@ -53,6 +53,8 @@ class DeployCoreUpdateService
         $cd = 'cd ' . escapeshellarg($deployRoot) . ' && ';
         return [
             'update' => $cd . 'php bin/w update:core -b ' . escapeshellarg($branch) . ' 2>&1',
+            // 核心更新拉入的新文件会自然改变源指纹，setup:upgrade 按指纹只重做受影响部分；
+            // -f 不再捆绑菜单全量（2026-10-28），此处保留 -f 仅用于跳过环境检测。
             'setup' => $cd . 'php bin/w setup:upgrade -f --from-core-update 2>&1',
             'reload' => $cd . 'php bin/w server:reload -r 2>&1',
         ];

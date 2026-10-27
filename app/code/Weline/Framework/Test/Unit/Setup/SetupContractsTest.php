@@ -595,9 +595,8 @@ private function assert_UpgradeSpeedSkip_testSkipRequiresDestinationArtifacts():
     self::assertStringContainsString('pendingFingerprints', $menu);
     self::assertStringContainsString('menu:dest:', $menu);
     self::assertStringContainsString('destinationFingerprintForModule', $menu);
-    self::assertStringContainsString('assertForceMenuBeforeCollect', $upgrade);
-    self::assertStringContainsString('force-menu', $upgrade);
-    self::assertStringContainsString('MenuXmlReader::requestForceFull', $upgrade);
+    self::assertStringContainsString('requestForceMenuCollectIfNeeded', $upgrade);
+    self::assertStringContainsString('--force-menu', $upgrade);
     $fp = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/Setup/Service/SetupSourceFingerprint.php');
     self::assertStringContainsString('forgetByPrefix', $fp);
     self::assertStringContainsString('磁盘仓被外部删除时', $fp);

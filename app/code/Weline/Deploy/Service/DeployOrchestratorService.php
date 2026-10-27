@@ -171,7 +171,7 @@ class DeployOrchestratorService
             $postDeployCommand = trim((string)($config['POST_DEPLOY_COMMAND'] ?? ''));
             if ($postDeployCommand === '') {
                 $postDeployCommand = 'php bin/w setup:upgrade -f';
-                $log(__('POST_DEPLOY 为空，默认执行 setup:upgrade -f（强制更新）以达静态铺平…'));
+                $log(__('POST_DEPLOY 为空，默认执行 setup:upgrade -f（跳过环境检测；菜单按源指纹增量）…'));
             }
             $postDeployCommand = $this->ensureKeepMaintenanceOnSetupUpgrade($postDeployCommand);
             $postDeployCommand = $this->ensureForceOnSetupUpgrade($postDeployCommand);
@@ -1191,8 +1191,12 @@ class DeployOrchestratorService
     {
         $sourcePath = str_replace('\\', '/', $deployRoot);
         $backupZip = str_replace('\\', '/', $backupPath . '.zip');
+        // 与 backupWithTar / DeploySiteBackupService 同清单：排除 var/backup（防自包含滚雪球）、var/session、var/log。
         $psScript = "Get-ChildItem -Path '$sourcePath' -Recurse | " .
             "Where-Object { \$_.FullName -notlike '*\\var\\cache*' -and " .
+            "\$_.FullName -notlike '*\\var\\backup*' -and " .
+            "\$_.FullName -notlike '*\\var\\session*' -and " .
+            "\$_.FullName -notlike '*\\var\\log*' -and " .
             "\$_.FullName -notlike '*\\.git*' -and " .
             "\$_.FullName -notlike '*\\vendor*' -and " .
             "\$_.FullName -notlike '*\\node_modules*' } | " .
@@ -1202,9 +1206,11 @@ class DeployOrchestratorService
 
     private function backupWithTar(string $deployRoot, string $backupPath): void
     {
+        // Exclude var/backup so successive site tars do not re-pack prior archives (size explosion).
         exec(
             'cd ' . escapeshellarg($deployRoot) .
-            " && tar --exclude='var/cache/*' --exclude='.git' --exclude='vendor' --exclude='node_modules' -czf " .
+            " && tar --exclude='var/cache/*' --exclude='var/backup/*' --exclude='var/session/*'" .
+            " --exclude='var/log/*' --exclude='.git' --exclude='vendor' --exclude='node_modules' -czf " .
             escapeshellarg($backupPath . '.tar.gz') . ' . 2>/dev/null'
         );
     }
@@ -1267,7 +1273,8 @@ class DeployOrchestratorService
 
     /**
      * Idempotently append -f/--force to every setup:upgrade segment so
-     * deploy-time system upgrades always run forced (menu recollect + env-check skip).
+     * deploy-time system upgrades skip the environment dependency check.
+     * (2026-10-28: -f no longer bundles full menu re-collection; that is --force-menu only.)
      */
     private function ensureForceOnSetupUpgrade(string $command): string
     {

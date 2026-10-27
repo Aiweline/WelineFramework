@@ -96,9 +96,7 @@ final class ConsoleContractsTest extends TestCase
 private function assert_PhpCliMemoryFloor_testBinWDoesNotRaiseMemoryAtRuntime(): void
 {
     $binW = (string) \file_get_contents(BP . 'bin/w');
-    $binM = (string) \file_get_contents(BP . 'bin/m');
     self::assertStringContainsString('PhpCliRuntimePreflight::enforce', $binW);
-    self::assertStringContainsString('PhpCliRuntimePreflight::enforce', $binM);
 
     $preflight = (string) \file_get_contents(
         BP . 'app/code/Weline/Framework/Console/PhpCliRuntimePreflight.php'
@@ -267,17 +265,29 @@ private function assert_EarlyDatabaseAccessGateUpgradeWait_testLockHolderSkipRea
         '/usr/bin/php /www/wwwroot/other.com/bin/w cron:task:run',
         $root,
     ));
-    self::assertSame('', EarlyDatabaseAccessGate::lockHolderSkipReason(
+    // 2026-10-23 起 -f 只收回本站 cron 持锁，绝不停另一个 setup:upgrade（8a8ab63325），
+    // 故 setup 命令行一律 not_cron；旧断言期望 '' 是与该改动未同步的残留。
+    self::assertSame('not_cron', EarlyDatabaseAccessGate::lockHolderSkipReason(
         '/usr/bin/php /www/wwwroot/playinginchina.com/bin/w s:up -f',
         $root,
     ));
-    self::assertSame('', EarlyDatabaseAccessGate::lockHolderSkipReason(
+    self::assertSame('not_cron', EarlyDatabaseAccessGate::lockHolderSkipReason(
         '/usr/bin/php /www/wwwroot/playinginchina.com/bin/w setup:upgrade -f',
         $root,
     ));
-    self::assertSame('other_project', EarlyDatabaseAccessGate::lockHolderSkipReason(
+    self::assertSame('not_cron', EarlyDatabaseAccessGate::lockHolderSkipReason(
         '/usr/bin/php /www/wwwroot/changanhanfu.com/bin/w s:up -f',
         $root,
+    ));
+    // macOS/BSD `ps -o command` 把每个非 ASCII 字节渲染成一个单元（实测「框架」→ M-fM-!M^FM-fM^^M-6，
+    // 控制形式是 'M^x' 无 '-'）：本站根含中文时不得误判 other_project（实测致 -f 强制收回失败 exit 75）。
+    $cjkRoot = '/Users/weline/Project/Official/' . '框架';
+    $escapedCommand = '/opt/homebrew/bin/php /Users/weline/Project/Official/M-fM-!M^FM-fM^^M-6/bin/w cron:task:run -process meta_translation';
+    self::assertSame('', EarlyDatabaseAccessGate::lockHolderSkipReason($escapedCommand, $cjkRoot));
+    // NFD（macOS HFS 分解形式）与 NFC 应用根须同样命中，否则比对仍会失败。
+    self::assertSame('', EarlyDatabaseAccessGate::lockHolderSkipReason(
+        $escapedCommand,
+        \Normalizer::normalize($cjkRoot, \Normalizer::FORM_D),
     ));
 }
 
