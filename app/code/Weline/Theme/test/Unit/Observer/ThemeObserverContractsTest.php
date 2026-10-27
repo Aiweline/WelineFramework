@@ -168,7 +168,7 @@ private function assert_HomepageShellSkipTemplateFetch_testHomepageBagFinalizerA
     $finalizer = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/StorefrontLayoutHtmlFinalizer.php';
     self::assertFileExists($finalizer);
     $bag = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/StorefrontHomepageLayoutHtmlBag.php');
-    self::assertStringContainsString('theme.homepage_layout.html.v7.', $bag);
+    self::assertStringContainsString('theme.homepage_layout.html.v8.', $bag);
     $slot = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Observer/LayoutSlotRenderer.php');
     self::assertStringContainsString('pre_finalized_skip', $slot);
     self::assertStringContainsString('theme.storefront_html_pre_finalized', $slot);

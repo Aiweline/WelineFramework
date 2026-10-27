@@ -3062,8 +3062,12 @@ class Partials extends Block
      */
     private function parsePartialsMetaFromFile(string $modulePath, string $area, string $type, string $option): array
     {
-        // 解析模块路径为文件系统路径
+        // 解析模块路径为文件系统路径；design 主题覆盖会直接给绝对路径，
+        // 不能再走 Module::path 解析，否则 @param 默认值全部丢失。
         $filePath = $this->resolveModulePath($modulePath);
+        if ((!$filePath || !is_file($filePath)) && is_file($modulePath)) {
+            $filePath = $modulePath;
+        }
         if (!$filePath || !is_file($filePath)) {
             return [];
         }

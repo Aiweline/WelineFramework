@@ -393,6 +393,8 @@ final class StorefrontHeaderNavFragmentCache implements ProcessSharedInterface
                 $websiteUrl = '';
             }
         }
+
+        $origin = '';
         if ($websiteUrl !== '' && \str_contains($websiteUrl, '://')) {
             $parts = \parse_url($websiteUrl);
             if (\is_array($parts)) {
@@ -402,31 +404,48 @@ final class StorefrontHeaderNavFragmentCache implements ProcessSharedInterface
                 if ($scheme !== '' && $host !== '') {
                     $default = ($scheme === 'https') ? 443 : 80;
                     $authority = $host . ($port > 0 && $port !== $default ? ':' . $port : '');
-
-                    return \preg_replace('/[^a-z0-9.:_-]+/i', '-', $scheme . '-' . $authority) ?: 'unknown';
+                    $origin = $scheme . '-' . $authority;
                 }
             }
         }
 
-        $scheme = 'http';
-        try {
-            $scheme = \strtolower(\trim((string)\Weline\Framework\Env\WelineEnv::get('request.scheme', 'http'))) ?: 'http';
-        } catch (\Throwable) {
+        if ($origin === '') {
             $scheme = 'http';
-        }
-        $host = '';
-        try {
-            $host = \strtolower(\trim((string)\Weline\Framework\Env\WelineEnv::get('server.http_host', '')));
-        } catch (\Throwable) {
+            try {
+                $scheme = \strtolower(\trim((string)\Weline\Framework\Env\WelineEnv::get('request.scheme', 'http'))) ?: 'http';
+            } catch (\Throwable) {
+                $scheme = 'http';
+            }
             $host = '';
+            try {
+                $host = \strtolower(\trim((string)\Weline\Framework\Env\WelineEnv::get('server.http_host', '')));
+            } catch (\Throwable) {
+                $host = '';
+            }
+            if ($host === '') {
+                $host = \strtolower(\trim((string)(
+                    \Weline\Framework\Env\WelineEnv::server('HTTP_HOST', '')
+                    ?: ($_SERVER['HTTP_HOST'] ?? '')
+                )));
+            }
+            $origin = ($scheme !== '' ? $scheme : 'http') . '-' . ($host !== '' ? $host : 'unknown');
         }
-        if ($host === '') {
-            $host = \strtolower(\trim((string)(
-                \Weline\Framework\Env\WelineEnv::server('HTTP_HOST', '')
+
+        // website_url can resolve to a different alias than the visitor host
+        // (multi-domain stores / local preview shells). Keep both dimensions so
+        // a nav fragment baked for one host is never replayed on another.
+        $visitorHost = '';
+        try {
+            $visitorHost = \strtolower(\trim((string)(
+                \Weline\Framework\Env\WelineEnv::get('http_weline_original_host', '')
+                ?: \Weline\Framework\Env\WelineEnv::get('server.http_host', '')
+                ?: \Weline\Framework\Env\WelineEnv::server('HTTP_HOST', '')
                 ?: ($_SERVER['HTTP_HOST'] ?? '')
             )));
+        } catch (\Throwable) {
+            $visitorHost = '';
         }
-        $raw = ($scheme !== '' ? $scheme : 'http') . '-' . ($host !== '' ? $host : 'unknown');
+        $raw = $origin . '-' . ($visitorHost !== '' ? \substr(\sha1($visitorHost), 0, 8) : 'unknown');
 
         return \preg_replace('/[^a-z0-9.:_-]+/i', '-', $raw) ?: 'unknown';
     }

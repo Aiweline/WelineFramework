@@ -346,6 +346,10 @@ return [
             'dynamic_warmup_block_on_target_ms' => false,
             'dynamic_warmup_attempts' => 3,
             'homepage_warmup_host' => null,
+            // 默认只预热本实例 public_origin 对应的注册站点 Host；本机预览实例
+            // 不会拿生产站点 URL 去预热，避免把生产绝对链接写进本地 FPC。
+            // null=自动按 public_origin 过滤；true=显式预热全部注册站点；false=关闭。
+            'warm_registered_website_hosts' => null,
             'homepage_warmup_peer_wait_ms' => 3000,
             'homepage_keep_warm_enabled' => true,
             'homepage_keep_warm_interval_sec' => 300,

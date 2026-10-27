@@ -31,7 +31,7 @@ final class StorefrontBlogLayoutHtmlBag implements ProcessSharedInterface
 
     private const REQUEST_MEMO_PREFIX = 'theme.blog_layout_html.req.v1.';
     /** v6: dialog opens through the dialog component, including currency-only. */
-    private const LOGICAL_KEY_PREFIX = 'theme.blog_layout.html.v7.';
+    private const LOGICAL_KEY_PREFIX = 'theme.blog_layout.html.v8.';
     /** Same gzip envelope as homepage bag. */
     private const PACK_PREFIX = 'HPLH1:';
 
@@ -211,7 +211,9 @@ final class StorefrontBlogLayoutHtmlBag implements ProcessSharedInterface
             . '.'
             . $rejectedSeg
             . '.'
-            . $rejectedCurrencySeg;
+            . $rejectedCurrencySeg
+            . '.'
+            . StorefrontOriginSegment::get();
     }
 
     private function isBlogDetailLayout(string $layoutTemplate): bool

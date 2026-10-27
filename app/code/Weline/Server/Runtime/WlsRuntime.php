@@ -972,6 +972,23 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private function resolveRegisteredWebsiteWarmupHosts(): array
     {
         try {
+            // Registered site URLs are production/alias Hosts. A local preview
+            // instance must not warm them: the rendered HTML contains absolute
+            // links for that alias and would poison the local Host's FPC leaf.
+            $setting = Env::get('wls.worker.warm_registered_website_hosts', null);
+            $explicit = \is_scalar($setting)
+                ? \filter_var($setting, \FILTER_VALIDATE_BOOLEAN, \FILTER_NULL_ON_FAILURE)
+                : null;
+            if ($explicit === false) {
+                return [];
+            }
+
+            $publicOrigin = $this->resolveWorkerPublicOrigin();
+            $publicHost = $this->normalizeWarmupHostForCompare((string)($publicOrigin['host'] ?? ''));
+            if ($explicit !== true && $publicHost === '') {
+                return [];
+            }
+
             if (!\class_exists(\Weline\Websites\Model\Website::class)) {
                 return [];
             }
@@ -995,6 +1012,15 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 if ($host === '') {
                     continue;
                 }
+                // Default: only warm the Host this instance actually serves.
+                // Aliases (www vs bare) compare equal; local preview vs
+                // production do not.
+                if ($explicit !== true
+                    && $publicHost !== ''
+                    && $this->normalizeWarmupHostForCompare($host) !== $publicHost
+                ) {
+                    continue;
+                }
                 $hosts[] = $host;
                 if (\count($hosts) >= 5) {
                     break;
@@ -1005,6 +1031,21 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    private function normalizeWarmupHostForCompare(string $host): string
+    {
+        $host = \strtolower(\trim($host));
+        if ($host === '') {
+            return '';
+        }
+        if (\str_contains($host, '://')) {
+            $parsed = $this->parseWarmupUrl($host);
+            $host = \strtolower(\trim((string)($parsed['host'] ?? '')));
+        }
+        $host = \preg_replace('/^www\./', '', $host) ?? $host;
+
+        return \trim($host, '.');
     }
 
     private function shouldRunReadyGateWorkerBootstrapWarmup(): bool
