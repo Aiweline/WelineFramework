@@ -331,8 +331,13 @@ private function assert_AsyncEventDeliveryQueryProvider_testUi01WebsiteZeroAndUi
 
 private function assert_AsyncEventDeliveryQueryProvider_testUi02UnknownOperationFailsClosedBeforeDataAccess(): void
 {
-    $this->expectException(\InvalidArgumentException::class);
-    $this->provider_AsyncEventDeliveryQueryProvider()->execute('unsafeUnknownOperation', []);
+    // 同 testInvalidPhaseRejected：闭包外层 try/catch 使 expectException 失效，改直接断言。
+    try {
+        $this->provider_AsyncEventDeliveryQueryProvider()->execute('unsafeUnknownOperation', []);
+        self::fail('未知 operation 必须在触达数据前 fail-closed');
+    } catch (\InvalidArgumentException $e) {
+        self::assertStringContainsString('不支持操作', $e->getMessage());
+    }
 }
 
 private function provider_AsyncEventDeliveryQueryProvider(): AsyncEventDeliveryQueryProvider
@@ -433,8 +438,14 @@ private function assert_ChangedPipeline_testEffectPhasesFrozen(): void
 
 private function assert_ChangedPipeline_testInvalidPhaseRejected(): void
 {
-    $this->expectException(\InvalidArgumentException::class);
-    new InvalidationEffect('x', 'later');
+    // 合同套件在闭包里逐项 try/catch，expectException 语义失效（异常被外层捕获计为失败）。
+    // 改为直接断言异常类型。
+    try {
+        new InvalidationEffect('x', 'later');
+        self::fail('InvalidationEffect 必须拒绝非法 phase');
+    } catch (\InvalidArgumentException $e) {
+        self::assertStringContainsString('sync 或 after_commit', $e->getMessage());
+    }
 }
 
 private function assert_ChangedPipeline_testProductRecipeRequiresUrlsMaterialOnUpsert(): void
@@ -452,10 +463,22 @@ private function assert_ChangedPipeline_testProductRecipeRequiresUrlsMaterialOnU
 private function assert_ChangedPipeline_testThemePublishUsesPurgeAllWithWhitelistModule(): void
 {
     $type = new ThemeChangedType();
-    $change = $this->change_ChangedPipeline('theme', 'publish', ['namespaces' => ['website/default/theme'], 'urls' => [], 'previous_urls' => []]);
-    $effects = $type->recipe($change);
+    // 2026-10-13 起（0663decb44「系统发布零碰 FPC」）：带 website 上下文的主题发布
+    // 走选择性 purge（purge_fpc_urls / cdn_purge），不再 purge_fpc_all；
+    // 仅全局（无 website、无 urls）发布才允许 purge_fpc_all（白名单模块）。
+    $websiteChange = $this->change_ChangedPipeline('theme', 'publish', ['namespaces' => ['website/default/theme'], 'urls' => [], 'previous_urls' => []]);
+    $websiteCodes = array_map(static fn(InvalidationEffect $e) => $e->code, $type->recipe($websiteChange));
+    self::assertNotContains(InvalidationEffect::CODE_PURGE_FPC_ALL, $websiteCodes);
+    self::assertContains(InvalidationEffect::CODE_PURGE_FPC_URLS, $websiteCodes);
+    self::assertContains(InvalidationEffect::CODE_CDN_PURGE, $websiteCodes);
+
+    $globalChange = ResourceChange::fromArray(array_replace_recursive($this->basePayload_ChangedPipeline('theme', 'publish'), [
+        'website' => null,
+        'context' => ['website_id' => null, 'website_code' => null, 'lang' => 'zh_Hans_CN', 'currency' => 'CNY', 'area' => 'backend', 'timezone' => 'UTC', 'user' => ['type' => 'system', 'id' => null]],
+        'impact' => ['namespaces' => ['global/storefront/theme'], 'urls' => [], 'previous_urls' => [], 'previous_namespaces' => []],
+    ]));
     $purgeAll = null;
-    foreach ($effects as $effect) {
+    foreach ($type->recipe($globalChange) as $effect) {
         if ($effect->code === InvalidationEffect::CODE_PURGE_FPC_ALL) {
             $purgeAll = $effect;
         }
@@ -496,6 +519,68 @@ private function basePayload_ChangedPipeline(string $type, string $action): arra
 private function setUp_UrlMatrixExpanderPathLocale(): void
 {
     ProjectRoot::defineBp(__DIR__);
+    // UrlMatrixExpander 走 websites Query 读站点语言/币种（sandbox sqlite）。
+    // 沙箱库缺 w_weline_websites_website_language / _website_currency 表时
+    // WebsiteData 快照为空 → 只有默认 locale，en_US 变体永远不会展开（2026-10-26 定位）。
+    // 与 Theme test/ThemeTestSchema::ensure 同规则：由模型 schema 推导 DDL，失败不阻塞。
+    foreach ([
+        \Weline\Websites\Model\Website::class,
+        \Weline\Websites\Model\WebsiteLanguage::class,
+        \Weline\Websites\Model\WebsiteCurrency::class,
+    ] as $modelClass) {
+        if (!class_exists($modelClass)) {
+            continue;
+        }
+        try {
+            $parser = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Database\Schema\SchemaParser::class
+            );
+            $executor = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Database\Service\Release\SchemaDiffExecutor::class
+            );
+            $schema = $parser->parse($modelClass);
+            if ($schema !== null) {
+                $executor->createBootstrapTable(
+                    \Weline\Framework\Manager\ObjectManager::getInstance(
+                        \Weline\Framework\Database\Connection\Adapter\Sqlite\Connector::class
+                    ),
+                    $schema,
+                );
+            }
+        } catch (\Throwable) {
+            // 夹具失败不阻塞用例
+        }
+    }
+    // 种子语言/币种关联（沙箱库为空 → 只有默认 locale，en_US 路径变体不会展开）。
+    try {
+        $lang = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\WebsiteLanguage::class);
+        $existing = (clone $lang)->reset()->where(\Weline\Websites\Model\WebsiteLanguage::schema_fields_WEBSITE_ID, 0)
+            ->select()->fetch()->getItems();
+        if ($existing === []) {
+            $lang->addData([
+                \Weline\Websites\Model\WebsiteLanguage::schema_fields_WEBSITE_ID => 0,
+                \Weline\Websites\Model\WebsiteLanguage::schema_fields_LANGUAGE_CODE => 'zh_Hans_CN',
+                \Weline\Websites\Model\WebsiteLanguage::schema_fields_SORT_ORDER => 1,
+            ])->save();
+            $lang->clearData()->addData([
+                \Weline\Websites\Model\WebsiteLanguage::schema_fields_WEBSITE_ID => 0,
+                \Weline\Websites\Model\WebsiteLanguage::schema_fields_LANGUAGE_CODE => 'en_US',
+                \Weline\Websites\Model\WebsiteLanguage::schema_fields_SORT_ORDER => 2,
+            ])->save();
+        }
+        $cur = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\WebsiteCurrency::class);
+        $existingCur = (clone $cur)->reset()->where(\Weline\Websites\Model\WebsiteCurrency::schema_fields_WEBSITE_ID, 0)
+            ->select()->fetch()->getItems();
+        if ($existingCur === []) {
+            $cur->clearData()->addData([
+                \Weline\Websites\Model\WebsiteCurrency::schema_fields_WEBSITE_ID => 0,
+                \Weline\Websites\Model\WebsiteCurrency::schema_fields_CURRENCY_CODE => 'USD',
+                \Weline\Websites\Model\WebsiteCurrency::schema_fields_SORT_ORDER => 1,
+            ])->save();
+        }
+    } catch (\Throwable) {
+        // 种子失败不阻塞用例（断言会按真实数据行数收敛）
+    }
 }
 
 private function assert_UrlMatrixExpanderPathLocale_testExpandEmitsDefaultAndEnUsPathNotQueryWl(): void

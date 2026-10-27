@@ -11,7 +11,7 @@
             "ui-core"
         ]
     },
-    "build_id": "86dddd8d02efb0ac0fe0d08baf468a95c0d1d67e68753e00d7b9f57f62e5caa5",
+    "build_id": "55fc6609b90bbe0a058d46f2b54cbf203ec400646ef5fbb28c7c39dd10e7784d",
     "bundles": {
         "acl-role-assign-css": {
             "bytes": 2931,
@@ -84,10 +84,10 @@
             "type": "css"
         },
         "ai-model-select-js": {
-            "bytes": 9060,
+            "bytes": 9580,
             "file": "components/weline-ai-model-select.js",
-            "gzip_bytes": 2314,
-            "sha256": "cb12b0b3eb4537decdde960f941a0c5922d29d7747ead9d69fd9070b91f0d28e",
+            "gzip_bytes": 2436,
+            "sha256": "ef47a25c1920e082f953c378c835fc37b1f8230c0c4717526d75831648c0b107",
             "type": "js"
         },
         "api-worker-smoke-css": {

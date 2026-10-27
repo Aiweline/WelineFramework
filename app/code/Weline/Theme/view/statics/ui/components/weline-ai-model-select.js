@@ -1,5 +1,5 @@
 /* Weline UI source: js/ai-model-select.js */
-let modelListPromise = null;
+const modelListPromises = {};
 
 function normalizeModels(response) {
     if (Array.isArray(response)) return response;
@@ -8,17 +8,18 @@ function normalizeModels(response) {
     return [];
 }
 
-function loadModels() {
-    if (!modelListPromise) {
-        modelListPromise = window.Weline.load('api')
-            .then((api) => api.resource('ai').listModels({}))
+function loadModels(modality) {
+    const key = String(modality || '').trim();
+    if (!modelListPromises[key]) {
+        modelListPromises[key] = window.Weline.load('api')
+            .then((api) => api.resource('ai').listModels(key ? { primary_modality: key } : {}))
             .then(normalizeModels)
             .catch((error) => {
-                modelListPromise = null;
+                delete modelListPromises[key];
                 throw error;
             });
     }
-    return modelListPromise;
+    return modelListPromises[key];
 }
 
 export function register(UI) {
@@ -43,8 +44,13 @@ export function register(UI) {
 
         const portal = floating.portal(panel, 'ai-model-select');
         const limit = Math.max(1, Number.parseInt(element.dataset.aiModelLimit || '50', 10) || 50);
+        const serviceType = String(element.querySelector('[data-ai-model-value]')?.dataset.serviceType || element.dataset.aiModelServiceType || '').trim();
         let models = null;
 
+        const modalityAllowed = (model) => {
+            if (!serviceType) return true;
+            return String(model?.primary_modality || '').trim() === serviceType;
+        };
         const modelCode = (model) => String(model?.model_code || model?.code || '');
         const modelLabel = (model) => String(model?.name || modelCode(model));
         const modelSupplier = (model) => String(model?.supplier || '');
@@ -94,7 +100,7 @@ export function register(UI) {
             if (models) return true;
             setStatus(element.dataset.aiModelLoading || 'Loading…');
             try {
-                models = await loadModels();
+                models = await loadModels(serviceType);
                 const suppliers = [...new Set(models.map(modelSupplier).filter(Boolean))].sort();
                 for (const value of suppliers) {
                     const option = document.createElement('option');
@@ -126,6 +132,7 @@ export function register(UI) {
             const query = search.value.trim().toLocaleLowerCase();
             const selectedSupplier = supplier.value.trim().toLocaleLowerCase();
             const filtered = models.filter((model) => {
+                if (!modalityAllowed(model)) return false;
                 const supplierName = modelSupplier(model).toLocaleLowerCase();
                 if (selectedSupplier && supplierName !== selectedSupplier) return false;
                 const haystack = `${modelLabel(model)} ${supplierName} ${modelCode(model)}`.toLocaleLowerCase();

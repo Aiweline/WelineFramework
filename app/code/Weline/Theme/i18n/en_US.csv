@@ -882,12 +882,12 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-分类,Classification
-分类展示图,"Category showcase image"
-查看全部,"View all"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
 官方社交媒体,"Official social media"
+分类,Classification
+分类展示图,"Category showcase image"
+查看全部,"View all"
 商品,Products
 查看商品图,"View product image"
 查看规格图,"View spec images"
@@ -921,6 +921,10 @@ FAQ/常见问题,FAQ
 零售,Retail
 迷你购物车金额小计,"Mini-cart money summary"
 关闭通知,"Close notification"
+"WelineFramework Admin","WelineFramework Admin"
+面包屑,"bread crumbs"
+点击配置此部件,"Click to configure this widget"
+无模板,"No template"
 件商品,"items of goods"
 查看更多,"View more"
 距离结束,"Ends in"
@@ -930,6 +934,27 @@ FAQ/常见问题,FAQ
 回到顶部,"Back to top"
 站点偏好,"Site preferences"
 法律与政策,"Law and Policy"
+加载中,loading
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
+合作品牌,"Partner brands"
+"品牌 %{1}","品牌 %{1}"
+上一组,"Previous group"
+下一组,"Next group"
+2026春季新品上市,"2026 spring new product launch"
+探索最新时尚潮流,"Explore the latest fashion trends"
+立即选购,"Buy Now"
+限时特惠,"Limited-Time Offer"
+全场满300减50,"Spend 300, Save 50 Storewide"
+查看详情,"View details"
+品质生活,"Quality living"
+精选优质好物,"Curated quality products"
+开始探索,"Start exploring"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
+天,Day(s)
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -1005,7 +1030,6 @@ ERROR,ERROR
 分页导航,"Pagination navigation"
 缺货,"Out of Stock"
 联系询价,联系询价
-面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 我的,mine
 账户及心愿单,"Accounts and Wishlists"
@@ -1057,8 +1081,6 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1110,16 +1132,11 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-天,Day(s)
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
 查看地图,"View map"
-合作品牌,"Partner brands"
-"品牌 %{1}","品牌 %{1}"
-上一组,"Previous group"
-下一组,"Next group"
 您可能还喜欢,"You may also like"
 更大容量,"Larger capacity"
 更多功能,"More features"
@@ -1157,26 +1174,12 @@ Logo,Logo
 热门分类,"Popular Categories"
 热卖精选,"Bestsellers picks"
 特色推荐,"Featured Recommendations"
-限时特惠,"Limited-Time Offer"
 博客,Blog
 热卖,"Hot selling."
 新品,"New Product"
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
-2026春季新品上市,"2026 spring new product launch"
-探索最新时尚潮流,"Explore the latest fashion trends"
-立即选购,"Buy Now"
-全场满300减50,"Spend 300, Save 50 Storewide"
-查看详情,"View details"
-品质生活,"Quality living"
-精选优质好物,"Curated quality products"
-开始探索,"Start exploring"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
-加载中,loading
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -1202,7 +1205,6 @@ Logo,Logo
 确认操作,"Confirm action"
 确定,Sure
 输入,Input
-"WelineFramework Admin","WelineFramework Admin"
 保存,save
 提交中...,Submitting...
 已选择,Selected
@@ -1472,8 +1474,6 @@ Favicon,Favicon
 搜索变量名或色值,"Search variable name or color"
 另存为我的盘,"Save as my disk"
 保存当前我的盘,"Save current my disk"
-点击配置此部件,"Click to configure this widget"
-无模板,"No template"
 "店面主题在「网站 / 店铺 / 渠道信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。","店面主题在「网站 / 店铺 / 渠道信息 → 店面主题」配置；未配置时回落 Theme 注册的 Default。后台皮肤由系统配置决定。"
 前台主题,"Frontend Theme"
 后台主题,"Backend Theme"
@@ -2269,7 +2269,7 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "主题 ID：","主题 ID："
 "范围：全部主题命名空间（未指定 -t）","范围：全部主题命名空间（未指定 -t）"
 步骤失败：,步骤失败：
-"店面 FPC/CDN 清理完成：成功 %{ok}，失败 %{fail}","店面 FPC/CDN 清理完成：成功 %{ok}，失败 %{fail}"
+"店面缓存刷新完成（构建号换代 + 预热队列）：成功 %{ok}，失败 %{fail}","店面缓存刷新完成（构建号换代 + 预热队列）：成功 %{ok}，失败 %{fail}"
 主题不存在：,主题不存在：
 无法解析主题静态资源命名空间。,"Unable to resolve theme static resource namespace."
 收集,Collect
@@ -2345,18 +2345,19 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+尺码指南,"Size Guide"
+旅行攻略,旅行攻略
+注册,Register
+登录页工具,"Login page tools"
+"店面 FPC/CDN 清理完成：成功 %{ok}，失败 %{fail}","店面 FPC/CDN 清理完成：成功 %{ok}，失败 %{fail}"
 "Decision information pack · Digital delivery after payment","Decision information pack · Digital delivery after payment"
 "Attraction ticket · Handpicked for independent travelers","Attraction ticket · Handpicked for independent travelers"
 登录,"Log in"
-登录页工具,"Login page tools"
 "Search results","Search results"
 "Search · 检索","Search · 检索"
 寻衣,寻衣
 Search…,Search…
 搜索筛选,"Search and filter"
-尺码指南,"Size Guide"
-旅行攻略,旅行攻略
-注册,Register
 "正在推送主题预览 CDN 绕过规则…","Pushing theme-preview CDN bypass rules…"
 "主题预览 CDN 绕过规则推送完成","Theme-preview CDN bypass rules push completed"
 "主题预览 CDN 规则推送跳过：%{msg}","Theme-preview CDN rules push skipped: %{msg}"

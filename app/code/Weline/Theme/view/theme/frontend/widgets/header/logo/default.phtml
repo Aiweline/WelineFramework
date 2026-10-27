@@ -55,6 +55,13 @@ $logoLink = LegacyMediaUrl::sanitize($this->getData('logo_link') ?? '/');
 if ($logoLink === '') {
     $logoLink = '/';
 }
+// 站内地址统一走 URL 构造器：带上站点挂载路径与当前语言/货币前缀。
+// 直接输出原始 "/" 会落到域名根，子目录/多语言站点点击 Logo 回不到本站首页。
+// 结果再转 document-root 相对路径：与 <base href> 同一契约，页面缓存跨 Host 复用时不烘焙 Origin。
+// 外链（http(s)/#anchor）保持原样。
+if (str_starts_with($logoLink, '/') && !str_starts_with($logoLink, '//')) {
+    $logoLink = \Weline\Framework\Http\Url::toDocumentRootRelative((string)$this->getUrl($logoLink));
+}
 $logoHeight = max(16, min(400, (int)($this->getData('logo_height') ?? 40)));
 
 if ($logoImage === '' && $logoImageFileHtml === '') {
