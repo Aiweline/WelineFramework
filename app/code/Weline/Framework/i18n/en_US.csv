@@ -897,6 +897,8 @@ operation：%{id},operation：%{id}
 系统已设置为维护模式，开始执行升级...,"The system has been set to maintenance mode, starting upgrade..."
 检测到模块安装或升级，正在重新收集注册表信息...,"Detected module installation or upgrade, re-collecting registry information..."
 系统升级完成！,"System upgrade complete!"
+"✓ 已清理无主历史日志 %{1} 个，释放 %{2} MB","✓ 已清理无主历史日志 %{1} 个，释放 %{2} MB"
+"历史日志清理达到单次上限 %{1} 个，剩余留待下次更新。","历史日志清理达到单次上限 %{1} 个，剩余留待下次更新。"
 正在启动后台优化任务...,"Starting background optimization task..."
 "✓ 后台优化任务已启动 (PID: %{1})","✓ The background optimization task has been started (PID: %{1})"
 "优化内容：类映射缓存、PSR-4 映射、framework:compile、反射编译","Optimization content: class mapping cache, PSR-4 mapping, framework:compile, reflective compilation"
@@ -1058,6 +1060,7 @@ operation：%{id},operation：%{id}
 "跳过 composer dump-autoload 与类映射缓存生成。适用：未变更 Composer 依赖/自动加载配置的快速更新","Skip composer dump-autoload and class map cache generation. Use for fast updates when Composer dependencies/autoload config are unchanged"
 "仅跳过 composer dump-autoload。适用：Composer 子进程不可用但需要执行 setup 阶段","Only skip composer dump-autoload. Use when the Composer child process is unavailable but setup stages must run"
 "保留维护模式：收尾不关闭 system.maintenance（供外层 deploy:release 窗拥有生命周期）","保留维护模式：收尾不关闭 system.maintenance（供外层 deploy:release 窗拥有生命周期）"
+"收尾跳过 var 无主历史日志清理（默认清理：var/process/*.log 超 24h、var/log/{other,deploy,queue,cron,wls} 超 14 天、debug/tmp 超 3 天；不动当前活动日志）","收尾跳过 var 无主历史日志清理（默认清理：var/process/*.log 超 24h、var/log/{other,deploy,queue,cron,wls} 超 14 天、debug/tmp 超 3 天；不动当前活动日志）"
 "标记本次升级由后台核心更新触发（报告 source=core_update）。","标记本次升级由后台核心更新触发（报告 source=core_update）。"
 "跳过扩展注册表重建（generated/extends.php）；需要时执行 extends:rebuild","跳过扩展注册表重建（generated/extends.php）；需要时执行 extends:rebuild"
 "未安装时免交互：有 db 配置按现有配置安装，否则走开发环境快速安装","未安装时免交互：有 db 配置按现有配置安装，否则走开发环境快速安装"
@@ -2258,8 +2261,6 @@ source_id与parent_source不能相同！,"source_id and parent_source cannot be 
 参数,parameter
 示例,Example
 执行命令：,"Execute command:"
-框架编译产物已自动重建。,框架编译产物已自动重建。
-框架编译产物自愈失败：,框架编译产物自愈失败：
 命令查找功能,"Command search function"
 用法,Usage
 直接输入关键词即可在命令名称、描述中搜索,"Enter keywords directly to search in command names and descriptions"
@@ -2490,6 +2491,8 @@ Operation：%{1}.%{2},Operation：%{1}.%{2}
 路由路径,"Route path"
 HTTP方法,"HTTP method"
 控制器,Controller
+框架编译产物已自动重建。,框架编译产物已自动重建。
+框架编译产物自愈失败：,框架编译产物自愈失败：
 "Schema DDL 审计写入失败（migration_id=0），已中止执行：module=%{1} table=%{2} kind=%{3}","Schema DDL audit write failed (migration_id=0), execution aborted: module=%{1} table=%{2} kind=%{3}"
 "表 %{1} 的索引 %{2} 新增后未通过物理定义回读","The index %{2} of table %{1} was not read back through the physical definition after being added."
 "PostgreSQL 表 %{1} 的索引 %{2} 删除后仍然存在","Index %{2} on PostgreSQL table %{1} still exists after deletion"

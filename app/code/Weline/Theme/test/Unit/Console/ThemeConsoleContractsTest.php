@@ -6,7 +6,7 @@ namespace Weline\Theme\Test\Unit\Console;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Theme\Console\Theme\Upgrade as ThemeUpgradeCommand;
+use Weline\Theme\Service\ThemeUpdate\ThemeUpgradeCutoverService as ThemeUpgradeCommand;
 use Weline\Theme\Model\WelineTheme;
 
 /**
@@ -115,7 +115,7 @@ private function assert_PublishNotFoundStaticCommand_testCommandExposesForceAndL
 
 private function assert_ThemeUpgradeCommand_testLayoutEntitySolidifyIsInvokedAfterStaticPublish(): void
 {
-    $source = file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Console/Theme/Upgrade.php');
+    $source = file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/ThemeUpdate/ThemeUpgradeCutoverService.php');
     self::assertIsString($source);
     self::assertStringContainsString('ThemeLayoutEntityUpgradeSolidifyService', $source);
     self::assertStringContainsString('cutoverFromThemeCommand', $source);
@@ -134,7 +134,7 @@ private function assert_ThemeUpgradeCommand_testLayoutEntitySolidifyIsInvokedAft
 
 private function assert_ThemeUpgradeCommand_testNamedThemeLookupUsesTheDeclaredNameFieldConstant(): void
 {
-    $source = file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Console/Theme/Upgrade.php');
+    $source = file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/ThemeUpdate/ThemeUpgradeCutoverService.php');
     self::assertIsString($source);
     self::assertStringContainsString('WelineTheme::schema_fields_NAME', $source);
     self::assertStringNotContainsString('WelineTheme::filed_NAME', $source);
@@ -142,7 +142,7 @@ private function assert_ThemeUpgradeCommand_testNamedThemeLookupUsesTheDeclaredN
 
 private function assert_ThemeUpgradeCommand_testDefaultUpgradeTargetsApplicationReferencedThemes(): void
 {
-    $source = file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Console/Theme/Upgrade.php');
+    $source = file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/ThemeUpdate/ThemeUpgradeCutoverService.php');
     self::assertIsString($source);
     self::assertStringContainsString('resolveThemesToUpgrade', $source);
     self::assertStringContainsString('ThemeApplicationUsageService', $source);
@@ -153,7 +153,7 @@ private function assert_ThemeUpgradeCommand_testDefaultUpgradeTargetsApplication
 
 private function assert_ThemeUpgradeCommand_testDesignAreaAssetsAreMirroredIntoThemeModuleStaticNamespace(): void
 {
-    $source = file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Console/Theme/Upgrade.php');
+    $source = file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/ThemeUpdate/ThemeUpgradeCutoverService.php');
     self::assertIsString($source);
     self::assertStringContainsString('publishDesignAreaAssetsIntoThemeModuleNamespace', $source);
     self::assertStringContainsString("buildNamespacedModuleThemeRequestPath(\n                    \$publicThemePath,\n                    'Weline',\n                    'Theme'", $source);
@@ -219,7 +219,7 @@ private function assert_ThemeUpgradeCommand_testParseArgumentsRecognizesForceFlu
     self::assertTrue($flushLong);
     [, , , , , , $flushAssoc] = ThemeUpgradeCommand::parseArguments(['command' => 'theme:upgrade', 't' => 'hanfu', 'f' => true]);
     self::assertTrue($flushAssoc);
-    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Console/Theme/Upgrade.php');
+    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/ThemeUpdate/ThemeUpgradeCutoverService.php');
     self::assertStringContainsString('flushStorefrontFpcAfterUpgrade', $source);
     self::assertStringContainsString('ThemeRuntimeCacheCleaner', $source);
     self::assertStringContainsString('clearAllThemeRelatedCaches', $source);
@@ -247,7 +247,7 @@ private function assert_ThemeUpgradeCommand_testParseArgumentsRejectsOptionWitho
 
 private function assert_ThemeUpgradeCommand_testTipDescribesBoundThemesNotLegacyActiveFlags(): void
 {
-    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Console/Theme/Upgrade.php');
+    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/ThemeUpdate/ThemeUpgradeCutoverService.php');
     self::assertStringContainsString('范围已绑定主题', $source);
     self::assertStringContainsString('当前正式版 + 当前草稿', $source);
     self::assertStringContainsString('--all', $source);
@@ -407,7 +407,7 @@ private function assert_ThemeUpgradeCommand_testFetchThemeFilesSkipsModuleEmailS
  */
 private function assert_ThemeUpgradeCommand_testFetchThemeFilesSkipsOutOfRootOriginWithoutThrowing(): void
 {
-    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Console/Theme/Upgrade.php');
+    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/ThemeUpdate/ThemeUpgradeCutoverService.php');
     self::assertStringContainsString("DS . 'email' . DS", $source);
     self::assertStringContainsString('跳过主题外文件（不在允许目录内）', $source);
     self::assertStringNotContainsString("throw new ConsoleException(__('主题文件不在允许的主题目录内：')", $source);

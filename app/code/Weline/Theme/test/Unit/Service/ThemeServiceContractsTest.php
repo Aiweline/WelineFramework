@@ -24,7 +24,7 @@ use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
 use Weline\Theme\Api\BrandBasicsIdentityProviderInterface;
 use Weline\Theme\Api\DefaultThemeInterface;
 use Weline\Theme\Api\Version\ThemeVersionIdentity;
-use Weline\Theme\Console\Theme\Upgrade as ThemeUpgradeCommand;
+use Weline\Theme\Service\ThemeUpdate\ThemeUpgradeCutoverService as ThemeUpgradeCommand;
 use Weline\Theme\Helper\HeaderCommerceData;
 use Weline\Theme\Helper\HeaderNavFragment;
 use Weline\Theme\Model\ThemeLayout;
@@ -3376,7 +3376,7 @@ private function assert_ThemeDesignImageStaticUrl_testRemapLeavesCssAndFontsOnMo
 
 private function assert_ThemeDesignImageStaticUrl_testUpgradeSourceSkipsImagesWhenDualWritingDesignArea(): void
 {
-    $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Console/Theme/Upgrade.php');
+    $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/ThemeUpdate/ThemeUpgradeCutoverService.php');
     self::assertStringContainsString('ThemeDesignImageStaticUrl::isImageExtension', $src);
     self::assertStringContainsString('跳过图片', $src);
     self::assertSame('/static/Weline/daocharms/Weline/Theme/view/theme/frontend/assets/css/theme.css', ThemeUpgradeCommand::buildNamespacedModuleThemeRequestPath('Weline/daocharms', 'Weline', 'Theme', 'frontend', 'assets/css/theme.css'));

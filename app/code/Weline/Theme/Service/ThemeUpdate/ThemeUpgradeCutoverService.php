@@ -9,7 +9,7 @@ declare(strict_types=1);
  * 论坛：https://bbs.aiweline.com
  */
 
-namespace Weline\Theme\Console\Theme;
+namespace Weline\Theme\Service\ThemeUpdate;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\System;
@@ -31,7 +31,20 @@ use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 use Weline\Theme\Service\ThemeStaticNamespaceService;
 use Weline\Theme\Service\ThemeStorefrontSlugFpcPublisher;
 
-class Upgrade implements \Weline\Framework\Console\CommandInterface
+/**
+ * 主题固化切流引擎（原 `theme:upgrade` 命令体）。
+ *
+ * 2026-10-28 起 **不再是可执行 CLI 命令**：`theme:upgrade` 已退役，
+ * 因为它无条件「purge 全部布局固化物 + 重固化 + 全量 FPC/CDN 清」，
+ * 单次实测 3.5 分钟起步、带 -f 到 17 分钟，且与 `theme:update` 代次机制重复。
+ * 日常入口只保留 `theme:update`（默认增量：无脏标记跳过，有脏标记只重建受影响布局）。
+ *
+ * 本类保留为服务，仅供以下内部调用方复用：
+ * - ThemeLayoutOriginWatchService（dev 下改设计文件后就地发布静态）
+ * - ThemeStaticAssetModeContributor（部署时按静态资产模式发布主题静态）
+ * - ThemeUpdateBuildService（静态命名空间路径推导）
+ */
+class ThemeUpgradeCutoverService
 {
     /** @var list<string> */
     private const THEME_ASSET_EXTENSIONS = [

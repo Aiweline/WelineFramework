@@ -9,6 +9,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeUpdateBatch;
 use Weline\Theme\Model\ThemeUpdatePointer;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeUpdate\ThemeUpdateAutoService;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateBatchService;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateBuildService;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateFlight;
@@ -19,15 +20,20 @@ use Weline\Theme\Service\ThemeUpdate\ThemeUpdatePointerPlanner;
  * theme:update —— 主题更新代次的查看 / 切换 / 回滚 / 回收。
  *
  * 用法：
- *   php bin/w theme:update          -t hanfu
+ *   php bin/w theme:update          -t hanfu            # 增量：无脏标记直接跳过；有脏标记只重建受影响布局
+ *   php bin/w theme:update -f       -t hanfu            # 强制全量重建代次
  *   php bin/w theme:update status   -t hanfu [--website 0] [--area frontend]
  *   php bin/w theme:update list     -t hanfu
  *   php bin/w theme:update promote  <batch_id> [--dry-run]
  *   php bin/w theme:update rollback -t hanfu [--dry-run]
  *   php bin/w theme:update gc       -t hanfu [--keep 2] [--dry-run]
  *
- * 不带子命令时与 theme:upgrade 相同：构建新代次、校验、翻指针。
+ * 不带子命令 = 增量收敛（ThemeUpdateAutoService）：无发布变更直接跳过，绝不无条件 purge 重固。
+ * `-f/--force` 才强制整体重建；需要只构建不切换用 `build` 子命令。
  * status/list 只查看。切换/回滚只改指针行（CAS by epoch）并写 Env，不 purge、不需要维护模式。
+ *
+ * 2026-10-28：老命令 `theme:upgrade`（无条件 purge 全部布局固化物 + 全量 FPC/CDN 清，实测 3.5~17 分钟）
+ * 及其命令体已退役，本命令不再转发 `theme:upgrade`。
  */
 class Update extends AbstractConsole
 {
@@ -188,48 +194,8 @@ class Update extends AbstractConsole
                 return;
 
             case 'build':
-                $themeId = $this->requireThemeId($themeName);
-                $layouts = $options['layout'] ?? ($options['l'] ?? '');
-                $layoutList = \is_array($layouts) ? \array_values($layouts) : \array_values(\array_filter(\explode(',', (string)$layouts)));
-                $buildOptions = [
-                    'layouts' => $layoutList,
-                    'skip_static' => !empty($options['skip-static']),
-                    'skip_entities' => !empty($options['skip-entities']),
-                    'all_versions' => !empty($options['all']),
-                ];
-                $this->printing->note(__('开始构建新代次（不会影响线上）…'));
-                /** @var ThemeUpdateBuildService $builder */
-                $builder = ObjectManager::getInstance(ThemeUpdateBuildService::class);
-                /** @var ThemeUpdateFlightRunner $flights */
-                $flights = ObjectManager::getInstance(ThemeUpdateFlightRunner::class);
-                $scope = ThemeUpdateFlight::scopeForTheme($themeId);
-                $result = $flights->execute(
-                    $scope,
-                    function (string $batchId) use ($builder, $themeId, $buildOptions): array {
-                        $buildOptions['batch_id'] = $batchId;
+                $this->buildBatch($this->requireThemeId($themeName), $this->buildOptionsFrom($options));
 
-                        return $builder->build($themeId, $buildOptions);
-                    }
-                );
-                if (($result['skipped'] ?? '') === 'coalesced') {
-                    $this->printing->note(__('已有更新在进行，本次已并入最后一次，不会并行再做一份。'));
-                    return;
-                }
-                $manifest = $result['manifest'];
-                $ok = (bool)($manifest['verify']['ok'] ?? false);
-                $this->printing->note(__('代次：%{1}', [$result['batch_id']]));
-                foreach ((array)($manifest['checks'] ?? []) as $check) {
-                    $this->printing->note(\sprintf(
-                        '  [%s] %s %s',
-                        ($check['ok'] ?? false) ? 'ok' : 'FAIL',
-                        (string)($check['name'] ?? ''),
-                        \json_encode(\array_diff_key((array)$check, ['name' => 1, 'ok' => 1]), JSON_UNESCAPED_UNICODE)
-                    ));
-                }
-                if (!$ok) {
-                    throw new ConsoleException(__('构建校验未通过，代次不会上线：') . $result['batch_id']);
-                }
-                $this->printing->success(__('构建完成且校验通过，可用 theme:update promote %{1} 切换', [$result['batch_id']]));
                 return;
 
             default:
@@ -255,13 +221,14 @@ class Update extends AbstractConsole
                 '--keep <n>' => 'GC 时额外保留的历史代次数量，默认 ' . ThemeUpdatePointerPlanner::DEFAULT_KEEP,
                 '--no-purge-artifacts' => '手动 gc 时跳过「清理引用已删代次的编译产物/缓存」（快，但可能残留）',
                 '--dry-run' => '只打印将要做什么，不落库',
-                '--force' => 'auto 子命令：忽略脏标记，强制重建并切换',
+                '-f, --force' => '忽略脏标记，强制完整重建并切换（默认增量：无脏标记跳过，有脏标记只重建受影响布局）',
                 '-l, --layout <type>' => 'build 时只固化指定布局（如 homepage）',
                 '--skip-static' => 'build 时跳过静态批次目录',
                 '--skip-entities' => 'build 时跳过模板产物固化',
             ],
             [
-                '构建并切换（默认）' => 'php bin/w theme:update -t hanfu',
+                '增量收敛（默认）' => 'php bin/w theme:update -t hanfu',
+                '强制完整重建' => 'php bin/w theme:update -f -t hanfu',
                 '查看当前代次' => 'php bin/w theme:update status -t hanfu',
                 '列代次' => 'php bin/w theme:update list -t hanfu',
                 '切到指定代次' => 'php bin/w theme:update promote tu-20261022-015300-ab12cd',
@@ -289,28 +256,200 @@ class Update extends AbstractConsole
         return 'apply';
     }
 
-    /** @param array<string,mixed> $options */
+    /**
+     * 默认入口 = 增量收敛（不再无条件 purge 重固）。
+     *
+     * - 无 `-f`/`-l`/`-o`/`--all` 且该主题已产出过代次：走 ThemeUpdateAutoService，
+     *   无脏标记直接跳过；有脏标记只重建受影响布局（layout_targets）。
+     * - 首次产出代次（无任何历史代次）或显式强制/定向：走完整 build + promote，仅这一次。
+     *
+     * @param array<string,mixed> $options
+     */
     private function applyUpdate(string $themeName, array $options, bool $dryRun): void
     {
-        $this->requireThemeId($themeName);
+        $themeId = $this->requireThemeId($themeName);
+        // 短选项 -f 在 CLI 里以空串值落地，必须用 isset 判定（!empty 会漏掉 -f）。
+        $force = \array_key_exists('force', $options) || \array_key_exists('f', $options);
+        $buildOptions = $this->buildOptionsFrom($options);
+        $explicitTargets = $buildOptions['layouts'] !== [] || !empty($buildOptions['all_versions']);
+        // dev 模式没有代次可切：一律走就地固化/编译（与 theme_layout_origin_watch 同一实现），
+        // 只有显式 -l/--all 这种"定向构建代次"才走 batch build。
+        $devMode = $this->deployMode() === 'dev';
+        $fullBuild = !$devMode && ($force || $explicitTargets || !$this->hasAnyBatch($themeId));
+        if ($devMode && $explicitTargets) {
+            $fullBuild = true;
+        }
+
         if ($dryRun) {
-            $this->printing->note(__('dry-run：将构建并切换主题 %{1}', [$themeName]));
+            $this->printing->note(match (true) {
+                $devMode => __('dry-run：dev 模式将就地固化/编译主题 %{1}（无变更则零工作）', [$themeName]),
+                $fullBuild => __('dry-run：将完整构建并切换主题 %{1}', [$themeName]),
+                default => __('dry-run：主题 %{1} 走增量收敛（无脏标记则跳过；强制重建用 -f）', [$themeName]),
+            });
 
             return;
         }
-        $forward = ['theme:upgrade', '-t', $themeName];
+
+        if ($fullBuild) {
+            $batchId = $this->buildBatch($themeId, $buildOptions);
+            if ($batchId === '') {
+                return;
+            }
+            /** @var ThemeUpdateBatchService $service */
+            $service = ObjectManager::getInstance(ThemeUpdateBatchService::class);
+            $state = $service->promote($batchId);
+            $this->printing->success(__('已切到代次 %{1}（epoch=%{2}）', [
+                (string)($state['current'] ?? $batchId),
+                (string)($state['epoch'] ?? 0),
+            ]));
+            $this->failOnPostSwitchErrors($state);
+
+            return;
+        }
+
+        /** @var ThemeUpdateAutoService $auto */
+        $auto = ObjectManager::getInstance(ThemeUpdateAutoService::class);
+        $result = $auto->run($themeId, false, false);
+        $mode = (string)($result['mode'] ?? '');
+        // dev 模式无代次概念：就地固化/编译（与 theme_layout_origin_watch 同一实现），
+        // 必须单独收口，否则会掉进下面的「已切到代次」分支打出空代次。
+        if ($mode === 'dev') {
+            $report = (array)($result['report'] ?? []);
+            $this->printing->success(__('dev 模式已就地固化/编译：scanned=%{1} changed=%{2} solidified=%{3} static=%{4} cache_cleared=%{5}', [
+                (string)($report['themes_scanned'] ?? 0),
+                (string)($report['changed'] ?? 0),
+                (string)($report['solidified'] ?? 0),
+                (string)($report['static_published'] ?? 0),
+                (string)($report['cache_cleared'] ?? 0),
+            ]));
+
+            return;
+        }
+        $skipped = (string)($result['skipped'] ?? '');
+        if ($skipped === 'no_dirty') {
+            $this->printing->note(__('主题 #%{1} 无发布变更（无脏标记），已跳过，未做任何重固；需要强制重建请加 -f/--force。', [$themeId]));
+
+            return;
+        }
+        if ($skipped === 'coalesced') {
+            $this->printing->note(__('已有更新在进行，本次已并入最后一次，不会并行再做一份。'));
+
+            return;
+        }
+        if ($skipped === 'backoff') {
+            $this->printing->warning(__('主题 #%{1} 上次构建失败，退避中（重试时间 %{2}），本次跳过。', [
+                $themeId,
+                (string)($result['retry_at'] ?? ''),
+            ]));
+
+            return;
+        }
+        if ($skipped === 'verify_failed') {
+            throw new ConsoleException(__('构建校验未通过，未切换：') . (string)($result['batch_id'] ?? ''));
+        }
+        $state = (array)($result['state'] ?? []);
+        $batchId = (string)($result['batch_id'] ?? '');
+        if ($state === [] && $batchId === '') {
+            // 未知返回：不谎报成功，按「无变更」收口并给出可复现命令。
+            $this->printing->warning(__('主题 #%{1} 本次没有产出新代次（返回 mode=%{2}）；如需强制重建：php bin/w theme:update -f -t %{3}', [
+                $themeId,
+                $mode !== '' ? $mode : 'unknown',
+                $themeName,
+            ]));
+
+            return;
+        }
+        $this->printing->success(__('已切到代次 %{1}（epoch=%{2}）', [
+            (string)($state['current'] ?? $batchId),
+            (string)($state['epoch'] ?? 0),
+        ]));
+        $this->failOnPostSwitchErrors($state);
+    }
+
+    /**
+     * 从命令行选项收出 build 选项（apply 与 build 子命令共用）。
+     *
+     * @param array<string,mixed> $options
+     * @return array{layouts:list<string>,skip_static:bool,skip_entities:bool,all_versions:bool}
+     */
+    private function buildOptionsFrom(array $options): array
+    {
         $layouts = $options['layout'] ?? ($options['l'] ?? '');
         $layoutList = \is_array($layouts)
             ? \array_values($layouts)
             : \array_values(\array_filter(\explode(',', (string)$layouts)));
-        if (isset($layoutList[0]) && (string)$layoutList[0] !== '') {
-            $forward[] = '-l';
-            $forward[] = (string)$layoutList[0];
+
+        return [
+            'layouts' => \array_values(\array_filter(\array_map('strval', $layoutList), static fn(string $v): bool => $v !== '')),
+            'skip_static' => !empty($options['skip-static']),
+            'skip_entities' => !empty($options['skip-entities']),
+            'all_versions' => !empty($options['all']),
+        ];
+    }
+
+    /** 当前部署模式：dev 时代次机制不适用（就地固化/编译）。 */
+    private function deployMode(): string
+    {
+        try {
+            return (string)(\Weline\Framework\App\Env::system('deploy') ?? '');
+        } catch (\Throwable) {
+            return '';
         }
-        if (!empty($options['all'])) {
-            $forward[] = '--all';
+    }
+
+    /** 该主题是否已有任何更新代次（首次产出才允许走完整构建）。 */
+    private function hasAnyBatch(int $themeId): bool
+    {
+        /** @var ThemeUpdateBatchService $service */
+        $service = ObjectManager::getInstance(ThemeUpdateBatchService::class);
+
+        return $service->listBatches($themeId, 0, ThemeUpdateBatchService::AREA_FRONTEND, 1) !== [];
+    }
+
+    /**
+     * 构建新代次（不切换）。
+     *
+     * @param array{layouts?:list<string>,skip_static?:bool,skip_entities?:bool,all_versions?:bool} $buildOptions
+     * @return string batch_id；被合并/放弃时返回 ''
+     */
+    private function buildBatch(int $themeId, array $buildOptions): string
+    {
+        $this->printing->note(__('开始构建新代次（不会影响线上）…'));
+        /** @var ThemeUpdateBuildService $builder */
+        $builder = ObjectManager::getInstance(ThemeUpdateBuildService::class);
+        /** @var ThemeUpdateFlightRunner $flights */
+        $flights = ObjectManager::getInstance(ThemeUpdateFlightRunner::class);
+        $scope = ThemeUpdateFlight::scopeForTheme($themeId);
+        $result = $flights->execute(
+            $scope,
+            function (string $batchId) use ($builder, $themeId, $buildOptions): array {
+                $buildOptions['batch_id'] = $batchId;
+
+                return $builder->build($themeId, $buildOptions);
+            }
+        );
+        if (($result['skipped'] ?? '') === 'coalesced') {
+            $this->printing->note(__('已有更新在进行，本次已并入最后一次，不会并行再做一份。'));
+
+            return '';
         }
-        ObjectManager::getInstance(Upgrade::class)->execute($forward);
+        $manifest = (array)($result['manifest'] ?? []);
+        $ok = (bool)($manifest['verify']['ok'] ?? false);
+        $batchId = (string)($result['batch_id'] ?? '');
+        $this->printing->note(__('代次：%{1}', [$batchId]));
+        foreach ((array)($manifest['checks'] ?? []) as $check) {
+            $this->printing->note(\sprintf(
+                '  [%s] %s %s',
+                ($check['ok'] ?? false) ? 'ok' : 'FAIL',
+                (string)($check['name'] ?? ''),
+                \json_encode(\array_diff_key((array)$check, ['name' => 1, 'ok' => 1]), JSON_UNESCAPED_UNICODE)
+            ));
+        }
+        if (!$ok) {
+            throw new ConsoleException(__('构建校验未通过，代次不会上线：') . $batchId);
+        }
+
+        return $batchId;
     }
 
     /** @return array<string,mixed> */

@@ -294,8 +294,8 @@ final class ThemeLayoutOriginWatchService
     private function publishThemeStaticAssets(WelineTheme $theme, array &$out): void
     {
         try {
-            /** @var \Weline\Theme\Console\Theme\Upgrade $upgrade */
-            $upgrade = ObjectManager::getInstance(\Weline\Theme\Console\Theme\Upgrade::class);
+            /** @var \Weline\Theme\Service\ThemeUpdate\ThemeUpgradeCutoverService $upgrade */
+            $upgrade = ObjectManager::getInstance(\Weline\Theme\Service\ThemeUpdate\ThemeUpgradeCutoverService::class);
             $upgrade->publishStaticAssets($theme);
             $out['static_published'] = 1;
             $out['messages'][] = 'assets:publishStaticAssets';

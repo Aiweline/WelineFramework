@@ -165,19 +165,6 @@ class Start extends CommandAbstract
     ];
 
     /**
-     * Container is promoted last: until every data-only registry is complete,
-     * an old Master can still replace a Worker with its original digest.
-     */
-    private const FRAMEWORK_RUNTIME_REGISTRY_FILES = [
-        'modules.php',
-        'query_providers.php',
-        'runtime_policy_providers.php',
-        'template_cache_policies.php',
-        'compile_manifest.php',
-        'container.php',
-    ];
-
-    /**
      * 启动中实例的 worker 端口预留 TTL（秒）
      */
     private const WORKER_PORT_RESERVATION_TTL = 120;
@@ -1945,26 +1932,26 @@ class Start extends CommandAbstract
             $this->printer->note(__('将先执行平滑停机，再使用新启动参数重新拉起实例。'));
         }
 
-        // Only a confirmed fresh start or explicit restart may publish a new
-        // compiled generation. This gate still runs before stopping the old
-        // instance, so compile/registry failures cannot manufacture downtime.
+        // Startup is a runtime action and must not publish compiled products.
+        // This gate still runs before stopping the old instance, so a missing
+        // or stale generation fails closed without manufacturing downtime.
         try {
-            $this->traceStartupPhase($instanceName, 'framework-compile:before');
-            $compiledRuntime = $this->compileFrameworkRuntimeRegistries(
+            $this->traceStartupPhase($instanceName, 'framework-generation:before');
+            $publishedRuntime = $this->requirePublishedFrameworkRuntimeRegistries(
                 $policyTopology,
                 $instanceName,
                 $config,
             );
-            $containerRegistryDigest = $compiledRuntime['container_registry_digest'];
-            $policyCheck = $compiledRuntime['policy_check'];
-            $this->traceStartupPhase($instanceName, 'framework-compile:after', [
+            $containerRegistryDigest = $publishedRuntime['container_registry_digest'];
+            $policyCheck = $publishedRuntime['policy_check'];
+            $this->traceStartupPhase($instanceName, 'framework-generation:after', [
                 'container_registry_digest' => $containerRegistryDigest,
                 'policy_valid' => (bool)($policyCheck['valid'] ?? false),
-                'cache_hit' => (bool)($compiledRuntime['cache_hit'] ?? false),
+                'cache_hit' => (bool)($publishedRuntime['cache_hit'] ?? false),
             ]);
             $this->renewStartupListenerStateDeadlineAfterColdPreflight();
         } catch (\Throwable $exception) {
-            $this->printer->error(__('WLS 编译运行时预检失败：%{1}', [$exception->getMessage()]));
+            $this->printer->error(__('WLS 运行时产物预检失败：%{1}', [$exception->getMessage()]));
             return 1;
         }
         if (empty($policyCheck['valid'])) {
@@ -12129,16 +12116,19 @@ class Start extends CommandAbstract
     }
 
     /**
-     * Compile and validate a complete generation outside the live registry,
-     * then promote it under one directory lock. No staging path is returned or
-     * logged, and a failed promotion restores the exact previous byte set.
+     * Read the published generation for startup without ever compiling.
+     *
+     * WLS startup is a runtime action: it must not publish compiled products.
+     * A missing or stale generation fails closed with an actionable hint and
+     * the operator runs framework:compile (or setup:upgrade) explicitly.
      *
      * @return array{
      *     container_registry_digest:string,
-     *     policy_check:array{valid:bool,errors:list<string>,source:string,bundle:array<string,mixed>}
+     *     policy_check:array{valid:bool,errors:list<string>,source:string,bundle:array<string,mixed>},
+     *     cache_hit:bool
      * }
      */
-    private function compileFrameworkRuntimeRegistries(
+    private function requirePublishedFrameworkRuntimeRegistries(
         string $policyTopology,
         string $instanceName,
         array $compileContext = [],
@@ -12149,45 +12139,11 @@ class Start extends CommandAbstract
         $modulesRoot = BP . 'app' . DS . 'code' . DS . 'Weline';
         /** @var FrameworkCompiler $compiler */
         $compiler = ObjectManager::getInstance(FrameworkCompiler::class);
-        // A waiting starter must cover one Defender-cold compile, but the
-        // deadline remains bounded so a dead compiler cannot stall startup.
         $publisher = AtomicCompiledFilePublisher::forCli();
 
-        $sharedLockAcquiredHere = false;
+        $lockAcquiredHere = false;
         try {
-            $sharedLockAcquiredHere = $publisher->acquireDirectoryLock($finalDirectory, \LOCK_SH);
-            $fastPathHookSnapshot = $this->snapshotCompiledArtifact($hookRegistry);
-            $cachedRuntime = $this->loadPublishedFrameworkRuntimeRegistries(
-                $compiler,
-                $modulesRoot,
-                $finalDirectory,
-                $hookRegistry,
-                $fastPathHookSnapshot,
-                $policyTopology,
-                $instanceName,
-                $compileContext,
-            );
-            if ($cachedRuntime !== null) {
-                return $cachedRuntime;
-            }
-        } finally {
-            if ($sharedLockAcquiredHere) {
-                AtomicCompiledFilePublisher::releaseDirectoryLock($finalDirectory);
-            }
-        }
-
-        $stagingRoot = VAR_DIR . 'tmp' . DS . 'framework-start-stage-'
-            . (string)(\getmypid() ?: 0)
-            . '-'
-            . \bin2hex(\random_bytes(8));
-        $stagingDirectory = $stagingRoot . DS . 'framework';
-        $stagingHookRegistry = $stagingRoot . DS . 'hooks.php';
-        $finalSnapshots = [];
-        $runtimeContainerInstalled = false;
-        $exclusiveLockAcquiredHere = false;
-
-        try {
-            $exclusiveLockAcquiredHere = $publisher->acquireDirectoryLock($finalDirectory, \LOCK_EX);
+            $lockAcquiredHere = $publisher->acquireDirectoryLock($finalDirectory, \LOCK_SH);
             $hookSnapshot = $this->snapshotCompiledArtifact($hookRegistry);
             $cachedRuntime = $this->loadPublishedFrameworkRuntimeRegistries(
                 $compiler,
@@ -12199,135 +12155,17 @@ class Start extends CommandAbstract
                 $instanceName,
                 $compileContext,
             );
-            if ($cachedRuntime !== null) {
-                return $cachedRuntime;
+            if ($cachedRuntime === null) {
+                throw new \RuntimeException(__(
+                    '框架编译产物缺失或已过期；server:start 不再自动编译。请先执行 php bin/w framework:compile（或 setup:upgrade）后重试。'
+                ));
             }
 
-            if (!@\mkdir($stagingRoot, 0700, true) && !\is_dir($stagingRoot)) {
-                throw new \RuntimeException('Unable to create private framework registry staging directory.');
-            }
-
-            // Template policies consume hooks.php but framework:compile does
-            // not own it. Compile against one immutable copy, then fence the
-            // live hook digest both before and after final promotion.
-            if ($hookSnapshot['exists']) {
-                $publisher->publish($stagingHookRegistry, (string)$hookSnapshot['content']);
-                AtomicCompiledFilePublisher::releaseDirectoryLock($stagingRoot);
-            }
-
-            $compiler->compile(
-                $modulesRoot,
-                $stagingDirectory,
-            );
-
-            $stagedSnapshots = [];
-            foreach (self::FRAMEWORK_RUNTIME_REGISTRY_FILES as $fileName) {
-                $stagedPath = $stagingDirectory . DS . $fileName;
-                $snapshot = $this->snapshotCompiledArtifact($stagedPath);
-                if (!$snapshot['exists']) {
-                    throw new \RuntimeException("Framework registry staging output is missing: {$fileName}.");
-                }
-                $stagedSnapshots[$fileName] = $snapshot;
-            }
-
-            $stagedContainer = new CompiledContainer(
-                $stagingDirectory . DS . 'container.php',
-                false,
-            );
-            $containerRegistryDigest = $stagedContainer->registryDigest();
-            if (\preg_match('/^[a-f0-9]{64}$/D', $containerRegistryDigest) !== 1) {
-                throw new \RuntimeException('Staged compiled container registry digest is invalid.');
-            }
-
-            $stagedPolicyControl = new RuntimePolicyControlService(
-                new RuntimePolicyCompiler($stagingDirectory . DS . 'runtime_policy_providers.php'),
-            );
-            $policyCheck = $stagedPolicyControl->check(
-                $policyTopology,
-                $instanceName,
-                $compileContext,
-            );
-            if (empty($policyCheck['valid'])) {
-                // Invalid policy is a normal preflight result. The final files
-                // have not been touched at this point.
-                return [
-                    'container_registry_digest' => $containerRegistryDigest,
-                    'policy_check' => $policyCheck,
-                    'cache_hit' => false,
-                ];
-            }
-
-            $this->assertCompiledArtifactSnapshot($hookRegistry, $hookSnapshot, 'hook registry');
-            foreach (self::FRAMEWORK_RUNTIME_REGISTRY_FILES as $fileName) {
-                $finalSnapshots[$fileName] = $this->snapshotCompiledArtifact(
-                    $finalDirectory . DS . $fileName,
-                );
-            }
-            $this->assertCompiledArtifactSnapshot($hookRegistry, $hookSnapshot, 'hook registry');
-
-            try {
-                foreach (self::FRAMEWORK_RUNTIME_REGISTRY_FILES as $fileName) {
-                    $publisher->publish(
-                        $finalDirectory . DS . $fileName,
-                        (string)$stagedSnapshots[$fileName]['content'],
-                    );
-                }
-                foreach (self::FRAMEWORK_RUNTIME_REGISTRY_FILES as $fileName) {
-                    $this->assertCompiledArtifactSnapshot(
-                        $finalDirectory . DS . $fileName,
-                        $stagedSnapshots[$fileName],
-                        $fileName,
-                    );
-                }
-                ContainerRuntime::preflight($containerRegistryDigest);
-                $runtimeContainerInstalled = true;
-                $this->assertCompiledArtifactSnapshot($hookRegistry, $hookSnapshot, 'hook registry');
-            } catch (\Throwable $promotionException) {
-                $rollbackErrors = $this->restoreCompiledArtifactSnapshots(
-                    $finalDirectory,
-                    $finalSnapshots,
-                    $publisher,
-                );
-                if ($runtimeContainerInstalled) {
-                    try {
-                        if (($finalSnapshots['container.php']['exists'] ?? false) === true) {
-                            ContainerRuntime::preflight();
-                        } else {
-                            ContainerRuntime::set(null);
-                        }
-                    } catch (\Throwable $containerRestoreException) {
-                        $rollbackErrors[] = 'container runtime restore: ' . $containerRestoreException->getMessage();
-                    }
-                }
-                if ($rollbackErrors !== []) {
-                    throw new \RuntimeException(
-                        'Framework registry promotion failed and rollback verification failed: '
-                        . \implode('; ', $rollbackErrors),
-                        0,
-                        $promotionException,
-                    );
-                }
-                throw $promotionException;
-            }
-
-            return [
-                'container_registry_digest' => $containerRegistryDigest,
-                'policy_check' => $policyCheck,
-                'cache_hit' => false,
-            ];
-        } catch (\Throwable $exception) {
-            $message = \str_replace(
-                [$stagingRoot, \str_replace('\\', '/', $stagingRoot)],
-                '[private framework staging]',
-                $exception->getMessage(),
-            );
-            throw new \RuntimeException($message, 0, $exception);
+            return $cachedRuntime;
         } finally {
-            AtomicCompiledFilePublisher::releaseDirectoryLock($stagingRoot);
-            if ($exclusiveLockAcquiredHere) {
+            if ($lockAcquiredHere) {
                 AtomicCompiledFilePublisher::releaseDirectoryLock($finalDirectory);
             }
-            $this->removePrivateStagingDirectory($stagingRoot);
         }
     }
 
@@ -12440,109 +12278,6 @@ class Start extends CommandAbstract
             || ($snapshot['exists'] && !\hash_equals($snapshot['sha256'], $actual['sha256']))
         ) {
             throw new \RuntimeException("Compiled {$label} changed during startup transaction.");
-        }
-    }
-
-    /**
-     * @param array<string, array{exists:bool,content:?string,sha256:string}> $snapshots
-     * @return list<string>
-     */
-    private function restoreCompiledArtifactSnapshots(
-        string $directory,
-        array $snapshots,
-        AtomicCompiledFilePublisher $publisher,
-    ): array {
-        $errors = [];
-        foreach (self::FRAMEWORK_RUNTIME_REGISTRY_FILES as $fileName) {
-            $snapshot = $snapshots[$fileName] ?? null;
-            if (!\is_array($snapshot)) {
-                $errors[] = "{$fileName}: original snapshot missing";
-                continue;
-            }
-            $path = $directory . DS . $fileName;
-            try {
-                if ($snapshot['exists']) {
-                    $publisher->publish($path, (string)$snapshot['content']);
-                } elseif ((\file_exists($path) || \is_link($path)) && !@\unlink($path)) {
-                    throw new \RuntimeException('unable to remove newly published artifact');
-                }
-                $this->assertCompiledArtifactSnapshot($path, $snapshot, $fileName . ' rollback');
-            } catch (\Throwable $exception) {
-                $errors[] = $fileName . ': ' . $exception->getMessage();
-            }
-        }
-        return $errors;
-    }
-
-    private function removePrivateStagingDirectory(string $directory): void
-    {
-        $visitedEntries = 0;
-        try {
-            $this->removePrivateStagingDirectoryBounded($directory, 0, $visitedEntries);
-        } catch (\Throwable $throwable) {
-            // Cleanup runs from a finally block and must not replace the
-            // compile/promotion result. Abort traversal on any unsafe path and
-            // leave the private staging root for a later bounded cleanup.
-            $this->printer->warning(__('WLS 私有编译暂存目录未完全清理：%{1}', [
-                \substr($throwable->getMessage(), 0, 512),
-            ]));
-        }
-    }
-
-    private function removePrivateStagingDirectoryBounded(
-        string $directory,
-        int $depth,
-        int &$visitedEntries,
-    ): void
-    {
-        if ($directory === '' || (!\is_dir($directory) && !\is_link($directory))) {
-            return;
-        }
-        if (\is_link($directory)) {
-            if (!@\unlink($directory) && \is_link($directory)) {
-                throw new \RuntimeException('Unable to remove linked private compilation staging entry.');
-            }
-            return;
-        }
-        if ($depth > 16) {
-            throw new \RuntimeException('Private compilation staging directory exceeds its depth limit.');
-        }
-        $status = @\lstat($directory);
-        if (!\is_array($status)
-            || ((((int)($status['mode'] ?? 0)) & 0170000) !== 0040000)
-        ) {
-            throw new \RuntimeException('Private compilation staging path is linked or special.');
-        }
-        $handle = @\opendir($directory);
-        if (!\is_resource($handle)) {
-            throw new \RuntimeException('Unable to enumerate private compilation staging directory.');
-        }
-        try {
-            while (($entry = @\readdir($handle)) !== false) {
-                if ($entry === '.' || $entry === '..') {
-                    continue;
-                }
-                if (++$visitedEntries > 4096) {
-                    throw new \RuntimeException(
-                        'Private compilation staging directory exceeds its entry limit.'
-                    );
-                }
-                $path = $directory . DS . $entry;
-                if (\is_dir($path) && !\is_link($path)) {
-                    $this->removePrivateStagingDirectoryBounded(
-                        $path,
-                        $depth + 1,
-                        $visitedEntries,
-                    );
-                } elseif (!@\unlink($path) && (\file_exists($path) || \is_link($path))) {
-                    throw new \RuntimeException('Unable to remove private compilation staging entry.');
-                }
-            }
-        } finally {
-            @\closedir($handle);
-        }
-        if (!@\rmdir($directory) && (\file_exists($directory) || \is_link($directory))) {
-            throw new \RuntimeException('Unable to remove private compilation staging directory.');
         }
     }
 

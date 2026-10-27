@@ -2530,7 +2530,7 @@ private function assert_ThemeLayoutEntityUpgradePurge_testUpgradeEventsRegisterS
 
 private function assert_ThemeLayoutEntityUpgradePurge_testThemeUpgradeCommandWiresLayoutSolidify(): void
 {
-    $upgrade = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Console/Theme/Upgrade.php';
+    $upgrade = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/ThemeUpdate/ThemeUpgradeCutoverService.php';
     self::assertFileExists($upgrade);
     $src = (string) \file_get_contents($upgrade);
     self::assertStringContainsString('ThemeLayoutEntityUpgradeSolidifyService', $src);

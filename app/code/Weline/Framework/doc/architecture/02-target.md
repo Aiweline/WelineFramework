@@ -83,19 +83,21 @@ backup，禁止对已存在 target 原地写入。同一输出目录的编译锁
 shutdown 只是 fatal 安全网。锁文件尽可能以 close-on-exec 打开，且禁止 fork 子进程
 对父 PID 拥有的锁执行 `LOCK_UN`。并发 `framework:compile` 只能有界等待，
 超时明确失败。`setup:upgrade` 的 bootstrap 模块注册表（`modules.php`）与
-`framework:compile` / `server:start` 晋升共用同一 `generated/framework`
-目录锁；Setup 与其它控制面 CLI 使用 `AtomicCompiledFilePublisher::forCli()`
-（180s）等待预算，请求/默认路径保持 10s。该 Windows 切换协议依赖“编译完成前不创建
+`framework:compile` 共用同一 `generated/framework` 目录锁；Setup 与其它
+控制面 CLI 使用 `AtomicCompiledFilePublisher::forCli()`（180s）等待预算，
+请求/默认路径保持 10s。该 Windows 切换协议依赖“编译完成前不创建
 Master/Worker”的控制面不变量，不允许在运行中 Worker 内调用。
 
-`server:start` 在重启旧 Master 前使用更强的多文件事务边界：先在
-`var/tmp` 私有目录编译完整 generation，对其中的 container 和
-runtime-policy provider registry 执行严格预检，并使用不可变的
-`generated/hooks.php` 快照生成模板策略。所有预检通过后才持有最终
-目录锁提升 5 个注册表，`container.php` 最后切换。任一提升、hash
-复核、hooks fence 或最终 container preflight 失败，必须按原始字节
-原子恢复全部 5 个文件并逐项验证 SHA-256。编译或策略预检
-失败不得修改 live registry，也不得泄露私有 staging 路径。
+`server:start` 是纯运行时动作，不编译也不发布编译产物：它只在
+`generated/framework` 的共享目录锁内读取已发布 generation，校验 manifest
+源状态指纹（含 `generated/hooks.php` 快照）、5 个注册表 SHA-256、
+container digest 与 runtime-policy；POSIX 走 `isFresh()`，Windows 走
+`isPublishedGenerationValid()`。产物缺失、过期或校验失败时必须 fail
+closed（非零退出），提示先执行 `php bin/w framework:compile`（或
+`setup:upgrade`），且不得改写 live registry；该门禁位于停止旧 Master
+之前，产物问题不会制造停机。新的 generation 只能由显式控制面命令
+（`framework:compile` / `setup:upgrade` bootstrap）发布，并继续遵守上段的
+临时文件 + 原子替换与目录锁约束。
 
 Phase 1 之后的容器替换清单：
 

@@ -6,7 +6,6 @@ namespace Weline\Theme\Service\ThemeUpdate;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Theme\Console\Theme\Upgrade;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityUpgradeSolidifyService;
@@ -319,7 +318,7 @@ final class ThemeUpdateBuildService
         if ($prefix === '') {
             return $samples;
         }
-        $relative = ltrim(substr(Upgrade::buildNamespacedModuleThemeRequestPath(
+        $relative = ltrim(substr(ThemeUpgradeCutoverService::buildNamespacedModuleThemeRequestPath(
             $prefix,
             'Weline',
             'Theme',

@@ -129,13 +129,18 @@ final class RequestCycleContractsTest extends TestCase
         self::assertStringContainsString('RequestContext::isInitialized()', $source);
     }
 
-    public function testGenerationSelfHealsOnControlPlane(): void
+    public function testGenerationSelfHealIsExplicitOnly(): void
     {
         $cli = $this->source('Console/Cli.php');
-        self::assertStringContainsString('repairStaleGenerationIfNeeded', $cli);
-        self::assertStringContainsString('GenerationRepairService', $cli);
+        self::assertStringNotContainsString('repairStaleGenerationIfNeeded', $cli, 'CLI 不得在任何命令执行前自动编译产物');
+        self::assertStringNotContainsString('GenerationRepairService', $cli);
+        self::assertStringNotContainsString('--skip-generation-repair', $cli);
         $compile = $this->source('Console/Console/Framework/Compile.php');
         self::assertStringContainsString('--ensure', $compile);
+        $start = $this->source('Server/Console/Server/Start.php');
+        self::assertStringNotContainsString('$compiler->compile(', $start, 'WLS 启动不得发布编译产物');
+        self::assertStringContainsString('requirePublishedFrameworkRuntimeRegistries', $start);
+        self::assertStringContainsString('php bin/w framework:compile', $start);
     }
 
     public function testScopeGuardExistsForSharedFiles(): void

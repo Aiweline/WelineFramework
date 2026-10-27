@@ -1517,8 +1517,79 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         } else {
             $this->generateOptimizationCache($args);
         }
-        
+
+        if (!isset($args['keep-logs'])) {
+            $this->pruneStaleVarLogs();
+        }
+
         $this->printing->success(__('系统升级完成！'));
+    }
+
+    /**
+     * 更新收尾清理 var 下无主日志（有界、只删历史文件，不动当前活动日志）。
+     *
+     * 背景：`var/process/*.log`（队列/进程一次性日志）与 `var/log/{other,deploy,queue,cron,wls}`
+     * 下的历史分片只增不减，changanhanfu 实测 `var/process` 已到 170MB（8 个 i18n AI 队列日志
+     * 各 20MB），叠加磁盘 76% 会拖慢每次更新。这里按目录 + 文件龄白名单清理：
+     * - var/process：`*.log|*.out|*.err` 超过 24 小时删除（一次性进程日志）
+     * - var/log/{other,deploy,queue,cron,wls}：`*.log*` 超过 14 天删除
+     * - var/log/debug|tmp：超过 3 天删除
+     * 顶层活动日志（php_error.log / error.log / exception.log / info.log / warning.log /
+     * crash.log 等）永不触碰。
+     */
+    private function pruneStaleVarLogs(): void
+    {
+        $varRoot = \rtrim((string)BP, '/\\') . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR;
+        $plan = [
+            ['dir' => $varRoot . 'process', 'globs' => ['*.log', '*.out', '*.err'], 'seconds' => 86400],
+            ['dir' => $varRoot . 'log' . DIRECTORY_SEPARATOR . 'other', 'globs' => ['*.log', '*.log.*'], 'seconds' => 1209600],
+            ['dir' => $varRoot . 'log' . DIRECTORY_SEPARATOR . 'deploy', 'globs' => ['*.log', '*.log.*'], 'seconds' => 1209600],
+            ['dir' => $varRoot . 'log' . DIRECTORY_SEPARATOR . 'queue', 'globs' => ['*.log', '*.log.*'], 'seconds' => 1209600],
+            ['dir' => $varRoot . 'log' . DIRECTORY_SEPARATOR . 'cron', 'globs' => ['*.log', '*.log.*'], 'seconds' => 1209600],
+            ['dir' => $varRoot . 'log' . DIRECTORY_SEPARATOR . 'wls', 'globs' => ['*.log', '*.log.*'], 'seconds' => 1209600],
+            ['dir' => $varRoot . 'log' . DIRECTORY_SEPARATOR . 'debug', 'globs' => ['*.log', '*.log.*'], 'seconds' => 259200],
+            ['dir' => $varRoot . 'log' . DIRECTORY_SEPARATOR . 'tmp', 'globs' => ['*.log', '*.log.*'], 'seconds' => 259200],
+        ];
+        $now = \time();
+        $maxFiles = 5000;
+        $deleted = 0;
+        $bytes = 0;
+        $capped = false;
+        foreach ($plan as $rule) {
+            $dir = (string)$rule['dir'];
+            if (!\is_dir($dir)) {
+                continue;
+            }
+            foreach ((array)$rule['globs'] as $glob) {
+                foreach (\glob($dir . DIRECTORY_SEPARATOR . $glob) ?: [] as $file) {
+                    if ($deleted >= $maxFiles) {
+                        $capped = true;
+                        break 3;
+                    }
+                    if (!\is_file($file) || \is_link($file)) {
+                        continue;
+                    }
+                    $mtime = @\filemtime($file);
+                    if ($mtime === false || ($now - $mtime) < (int)$rule['seconds']) {
+                        continue;
+                    }
+                    $size = (int)@\filesize($file);
+                    if (@\unlink($file)) {
+                        $deleted++;
+                        $bytes += \max(0, $size);
+                    }
+                }
+            }
+        }
+        if ($deleted > 0) {
+            $this->printing->success(__('✓ 已清理无主历史日志 %{1} 个，释放 %{2} MB', [
+                (string)$deleted,
+                \number_format($bytes / 1048576, 1),
+            ]));
+        }
+        if ($capped) {
+            $this->printing->warning(__('历史日志清理达到单次上限 %{1} 个，剩余留待下次更新。', [(string)$maxFiles]));
+        }
     }
 
     /**
@@ -4410,6 +4481,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '--skip-classmap' => __('跳过 composer dump-autoload 与类映射缓存生成。适用：未变更 Composer 依赖/自动加载配置的快速更新'),
                 '--skip-composer-dump' => __('仅跳过 composer dump-autoload。适用：Composer 子进程不可用但需要执行 setup 阶段'),
                 '--keep-maintenance' => __('保留维护模式：收尾不关闭 system.maintenance（供外层 deploy:release 窗拥有生命周期）'),
+                '--keep-logs' => __('收尾跳过 var 无主历史日志清理（默认清理：var/process/*.log 超 24h、var/log/{other,deploy,queue,cron,wls} 超 14 天、debug/tmp 超 3 天；不动当前活动日志）'),
                 '--from-core-update' => __('标记本次升级由后台核心更新触发（报告 source=core_update）。'),
                 '--force-i18n-collect' => __('强制在 upgrade_after 跑全量短语 collect（默认跳过，避免 locale 稀表前扇出拖死升级；平时用 i18n:collect）'),
                 '--skip-extends-rebuild' => __('跳过扩展注册表重建（generated/extends.php）；需要时执行 extends:rebuild'),

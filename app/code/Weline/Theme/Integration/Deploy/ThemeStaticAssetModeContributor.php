@@ -7,9 +7,9 @@ namespace Weline\Theme\Integration\Deploy;
 use Weline\Framework\Deploy\StaticAssetModeContext;
 use Weline\Framework\Deploy\StaticAssetModeContributorInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Theme\Console\Theme\Upgrade;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeApplicationUsageService;
+use Weline\Theme\Service\ThemeUpdate\ThemeUpgradeCutoverService;
 
 /**
  * Theme-namespace static files only. Module view/statics stay on the framework flat tree.
@@ -18,8 +18,8 @@ final class ThemeStaticAssetModeContributor implements StaticAssetModeContributo
 {
     public function publish(StaticAssetModeContext $context): void
     {
-        /** @var Upgrade $upgrade */
-        $upgrade = ObjectManager::getInstance(Upgrade::class);
+        /** @var ThemeUpgradeCutoverService $upgrade */
+        $upgrade = ObjectManager::getInstance(ThemeUpgradeCutoverService::class);
         foreach ($this->themesFor($context) as $theme) {
             $upgrade->publishStaticAssets($theme, $context->modules);
         }

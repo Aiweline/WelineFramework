@@ -111,36 +111,12 @@ class Collect implements CommandInterface
             $this->printing->warning(__('事件缓存清理失败：%{1}', [$e->getMessage()]));
         }
         
-        // 编译插件/DI（确保依赖注入容器更新）
-        $this->printing->note(__('编译插件/DI...'));
-        try {
-            /** @var \Weline\Framework\Plugin\Console\Plugin\Di\Compile $diCompile */
-            $diCompile = ObjectManager::getInstance(\Weline\Framework\Plugin\Console\Plugin\Di\Compile::class);
-            $diCompile->execute();
-        } catch (\Throwable $e) {
-            $this->printing->warning(__('DI编译失败：%{1}', [$e->getMessage()]));
-        }
-        
-        // 再次清理缓存（菜单变更后立即生效）
-        $this->printing->note(__('清理全部缓存...'));
-        try {
-            $cacheClear = ObjectManager::getInstance(\Weline\Framework\Cache\Console\Cache\Clear::class);
-            $cacheClear->execute(['-f']);
-            $this->printing->success(__('全部缓存清理完成！'));
-        } catch (\Throwable $e) {
-            $this->printing->warning(__('缓存清理失败：%{1}', [$e->getMessage()]));
-        }
-        
-        // 清理模板缓存（菜单变更会影响模板渲染）
-        $this->printing->note(__('清理模板缓存...'));
-        try {
-            /** @var \Weline\Framework\Cache\Console\Template\Clear $templateCacheClear */
-            $templateCacheClear = ObjectManager::getInstance(\Weline\Framework\Cache\Console\Template\Clear::class);
-            $templateCacheClear->execute();
-            $this->printing->success(__('模板缓存清理完成！'));
-        } catch (\Throwable $e) {
-            $this->printing->warning(__('模板缓存清理失败：%{1}', [$e->getMessage()]));
-        }
+        // 菜单变更的失效边界只到菜单 / ACL / 后台菜单树 / 运行时页面缓存：
+        // MenuCollector 已按 diff 定点失效（AclCacheInvalidator、菜单树与后台全页缓存），
+        // 这里不再做全量 cache:clear、也不再清模板缓存与 DI 重编译——
+        // 那会把整个店面缓存池和店面预热（清缓存后同步 warm）卷进一次菜单收集，
+        // 单次平白多出数分钟，且与「菜单」无关；店面预热由定时任务按构建世代触发。
+        $this->printing->note(__('菜单相关缓存已按 diff 定点失效（不做全量清缓存、不做预热）。'));
         
         $this->printing->success(__('菜单收集和系统更新完成！菜单已生效。'));
 

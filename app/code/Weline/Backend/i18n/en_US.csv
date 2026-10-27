@@ -602,6 +602,11 @@ Website,Website
 菜单无变化。,"No changes to menu."
 清理事件缓存...,"Clearing Event Cache..."
 事件缓存清理失败：%{1},"Event cache cleanup failed: %{1}"
+"菜单相关缓存已按 diff 定点失效（不做全量清缓存、不做预热）。","菜单相关缓存已按 diff 定点失效（不做全量清缓存、不做预热）。"
+菜单收集和系统更新完成！菜单已生效。,"Menu collection and system update complete! Menu is now active."
+重建后台菜单搜索索引...,"Rebuilding backend menu search index..."
+后台菜单搜索索引已交给变更队列追平,后台菜单搜索索引已交给变更队列追平
+后台菜单搜索索引重建失败：%{1},"Failed to rebuild backend menu search index: %{1}"
 编译插件/DI...,"Compile plugin/DI..."
 DI编译失败：%{1},"DI compilation failed: %{1}"
 清理全部缓存...,"Clearing All Cache..."
@@ -610,10 +615,6 @@ DI编译失败：%{1},"DI compilation failed: %{1}"
 清理模板缓存...,"Cleaning template cache..."
 模板缓存清理完成！,"Template cache cleanup complete!"
 模板缓存清理失败：%{1},"Template cache cleanup failed: %{1}"
-菜单收集和系统更新完成！菜单已生效。,"Menu collection and system update complete! Menu is now active."
-重建后台菜单搜索索引...,"Rebuilding backend menu search index..."
-后台菜单搜索索引已交给变更队列追平,后台菜单搜索索引已交给变更队列追平
-后台菜单搜索索引重建失败：%{1},"Failed to rebuild backend menu search index: %{1}"
 "后台菜单搜索索引已重建：%{1} 条","Backend menu search index rebuilt: %{1} entries"
 关闭,closure
 确定,Sure

@@ -9,6 +9,7 @@
 
 namespace Weline\Framework\Cache\Console\Cache;
 
+use Weline\Framework\App\SystemUpdateActivity;
 use Weline\Framework\Cache\Scanner;
 use Weline\Framework\Cache\Service\CacheWarmerRegistry;
 use Weline\Framework\Cache\Service\StorefrontWarmup\StorefrontWarmupOrchestrator;
@@ -16,6 +17,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Framework\Setup\Lock\SetupUpgradeIntent;
 use Weline\Framework\View\Taglib;
 use Weline\Framework\View\TemplateCacheManager;
 
@@ -74,6 +76,13 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         $skipWarm = !empty($data['skip_warm'])
             || \in_array('--no-warm', $args, true)
             || \in_array('--skip-warm', $args, true);
+        // 预热不属于系统更新/维护窗口的职责：更新期间（维护门禁开、升级意图活跃）只失效不预热。
+        // 否则一次更新里由任意子命令触发的清缓存都会同步跑满店面预热预算（实测 5 分钟级），
+        // 而更新后页面本就会按新世代重建；预热交给定时任务按构建世代变化触发。
+        if (!$skipWarm && self::systemUpdateWindowActive()) {
+            $skipWarm = true;
+            $this->printing->note(__('系统更新/维护窗口进行中：本次只失效不预热（预热由定时任务按构建世代触发）。'));
+        }
         $pools = $this->scanner->getCaches()['pools'] ?? [];
         $totalPools = \count($pools);
 
@@ -153,6 +162,28 @@ class Clear implements \Weline\Framework\Console\CommandInterface
 
         // Fail-closed exit: fpc:warmed=0 must not look like a green clear for mix scripts.
         return $fpcWarmOk ? 0 : 2;
+    }
+
+    /**
+     * 系统更新 / 维护窗口判定：维护门禁已开，或 setup:upgrade 升级意图活跃。
+     *
+     * 这两个信号本身就是「系统更新命令正在跑」的机器可判定事实；
+     * 更新窗口内清缓存只做失效，不做店面预热。
+     */
+    private static function systemUpdateWindowActive(): bool
+    {
+        try {
+            if (SystemUpdateActivity::inProgress()) {
+                return true;
+            }
+        } catch (\Throwable) {
+            // 判定失败不阻断清理，按无更新窗口处理（保持旧行为）。
+        }
+        try {
+            return SetupUpgradeIntent::isActive();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**

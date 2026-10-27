@@ -48,14 +48,18 @@
 - 并发 `framework:compile` 必须按输出目录串行。锁等待双档：
   **请求/默认** `AtomicCompiledFilePublisher::DEFAULT_LOCK_TIMEOUT_MILLISECONDS`
  （10s）fail-fast；**控制面 CLI**（`forCli()`：`setup:upgrade` bootstrap、
-  `framework:compile`、`server:start` 晋升、`FileUpdateStage`）
+  `framework:compile`、`FileUpdateStage`）
   `CLI_LOCK_TIMEOUT_MILLISECONDS`（180s），以覆盖一次完整并发 compile 会话。
   超时不得继续发布或静默降级；超时文案须带 lock holder（pid / acquired_at /
   alive）。每次成功发布后必须 invalidate target 的 OPcache。
-- `server:start` 必须先在私有 staging 目录完成 5 个注册表、container
-  digest 和 runtime-policy 预检；预检失败时 final 5 文件的 SHA-256 必须
-  全部不变。promotion 以 `container.php` 收尾，第 N 项失败后必须恢复
-  全部原始字节、验证 hash 并释放编译锁。
+  `server:start` 只以共享锁读取已发布 generation，不申请编译锁，也不占用
+  编译等待预算。
+- `server:start` 不得编译或发布编译产物：启动只读取已发布 generation，
+  校验 manifest 源状态指纹（含 hooks 快照）、5 个注册表 SHA-256、
+  container digest 和 runtime-policy；产物缺失/过期/校验失败必须 fail
+  closed（非零退出）并提示显式执行 `php bin/w framework:compile`（或
+  `setup:upgrade`），不得原地补写 live registry。产物发布只能在显式
+  控制面命令内发生。
 - PROD FPM/WLS 的严格 container preflight 必须早于 `App::init()`。WLS READY
   协议版本为 v3，必须携带 `compiled_container_digest_v1` 能力和 64 位
   SHA-256；Master 期望值、Worker 上报值或能力任一缺失/不匹配都不得

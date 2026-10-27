@@ -888,7 +888,10 @@ FAQ/常见问题,FAQ
 官方社交媒体,"Official social media"
 点击配置此部件,"Click to configure this widget"
 无模板,"No template"
+全部商品,"Shop All"
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 7×24,24/7
+查看更多,"View more"
 分类,Classification
 分类展示图,"Category showcase image"
 查看全部,"View all"
@@ -929,7 +932,6 @@ FAQ/常见问题,FAQ
 收起悬浮,"Collapse float"
 展开悬浮,"Expand float"
 件商品,"items of goods"
-查看更多,"View more"
 距离结束,"Ends in"
 时,Hour
 分,Minute
@@ -978,6 +980,7 @@ FAQ/常见问题,FAQ
 第%d张,"Slide %d"
 剩余,Remaining
 天,Day(s)
+内容标题,"Section title"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -1154,7 +1157,6 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
@@ -1187,7 +1189,6 @@ Logo,Logo
 请使用微信扫描二维码分享,"Please scan the QR code with WeChat to share"
 上一条,Previous
 下一条,Next
-全部商品,"Shop All"
 面包屑导航,Breadcrumbs
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 帮助中心,"Help Center"
@@ -1734,6 +1735,53 @@ AI目录加载失败,"AI directory loading failed"
 编辑锁资源身份无效,"The edit-lock resource identity is invalid."
 编辑锁缺少明确操作人,"The edit lock requires an explicit actor."
 "Theme 预览布局选项无效。","The Theme preview layout option is invalid."
+"未找到范围已绑定主题，请用 -t/--theme 指定主题名。","No scope-bound theme found; use -t/--theme to name one."
+"开始 purge 旧布局固化物并重固（generated/theme-layout-entities）…","开始 purge 旧布局固化物并重固（generated/theme-layout-entities）…"
+版本范围：全部历史版本（--all）,"Version set: all historical versions (--all)"
+"版本范围：当前正式版 + 当前草稿","Version set: current published + current draft"
+范围过滤：,"Scope filter:"
+布局过滤：,布局过滤：
+（该布局下全部选项）,（该布局下全部选项）
+"布局模板切流：purge %{purged}，legacy %{legacy}，固化 %{count}","布局模板切流：purge %{purged}，legacy %{legacy}，固化 %{count}"
+"主题 #%{id} 无可解析前端布局，跳过 scoped FPC/CDN 清理。","主题 #%{id} 无可解析前端布局，跳过 scoped FPC/CDN 清理。"
+"主题 #%{id} 无前端站点绑定，跳过 scoped FPC/CDN 清理。","主题 #%{id} 无前端站点绑定，跳过 scoped FPC/CDN 清理。"
+"主题 #%{id} scoped FPC/CDN 清理失败：%{error}","主题 #%{id} scoped FPC/CDN 清理失败：%{error}"
+"主题 #%{id} scoped FPC/CDN 清理跳过：%{reason}","主题 #%{id} scoped FPC/CDN 清理跳过：%{reason}"
+"主题 %{ids} 的店面 FPC/CDN 清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。","主题 %{ids} 的店面 FPC/CDN 清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。"
+"按布局清理店面 FPC/CDN URL 完成：%{count} 个 scope。","按布局清理店面 FPC/CDN URL 完成：%{count} 个 scope。"
+"强制清理店面 FPC / Shared FPC / CDN 全页缓存（-f）…","强制清理店面 FPC / Shared FPC / CDN 全页缓存（-f）…"
+"主题 ID：","主题 ID："
+"范围：全部主题命名空间（未指定 -t）","范围：全部主题命名空间（未指定 -t）"
+步骤失败：,步骤失败：
+"店面缓存刷新完成（构建号换代 + 预热队列）：成功 %{ok}，失败 %{fail}","店面缓存刷新完成（构建号换代 + 预热队列）：成功 %{ok}，失败 %{fail}"
+主题不存在：,主题不存在：
+无法解析主题静态资源命名空间。,"Unable to resolve theme static resource namespace."
+收集,Collect
+主题文件...,"Theme files..."
+静态命名空间：,静态命名空间：
+开始搬迁设计主题覆盖文件...,开始搬迁设计主题覆盖文件...
+设计主题覆盖：,设计主题覆盖：
+个文件,个文件
+"开始发布模块 view/theme 资源到主题命名空间（含继承回退）...","开始发布模块 view/theme 资源到主题命名空间（含继承回退）..."
+模块主题资源：,模块主题资源：
+"个文件已发布到 /static/","个文件已发布到 /static/"
+"开始将设计主题 area 非图片资源双写到 Weline/Theme/view/theme URL 路径...","开始将设计主题 area 非图片资源双写到 Weline/Theme/view/theme URL 路径..."
+"设计 area→Theme 模块路径（跳过图片）：","设计 area→Theme 模块路径（跳过图片）："
+"设置了 -t 参数，但却没有-t参数值！","The -t parameter was set, but no -t parameter value was provided!"
+"设置了 -s/--scope 参数，但却没有范围值！","-s/--scope was set but no scope value was provided!"
+"设置了 -l/--layout 参数，但却没有布局类型值！","设置了 -l/--layout 参数，但却没有布局类型值！"
+"设置了 -o/--option 参数，但却没有布局选项值！","设置了 -o/--option 参数，但却没有布局选项值！"
+指定了布局选项（-o/--option）时必须同时指定布局类型（-l/--layout）。,指定了布局选项（-o/--option）时必须同时指定布局类型（-l/--layout）。
+无法创建主题静态资源目录：,"Unable to create theme static resource directory:"
+无法发布主题静态资源：,"Unable to publish theme static resources:"
+"更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿；默认只按布局清 FPC/CDN URL，-f 才全量清）","更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿；默认只按布局清 FPC/CDN URL，-f 才全量清）"
+跳过主题外文件（不在允许目录内）：,跳过主题外文件（不在允许目录内）：
+"主题 #%{id}：构建更新代次（不影响线上）…","主题 #%{id}：构建更新代次（不影响线上）…"
+"主题 #%{id} 已有更新在进行，本次已并入最后一次。","主题 #%{id} 已有更新在进行，本次已并入最后一次。"
+"主题 #%{id} 构建校验未通过，未切换：%{batch}","主题 #%{id} 构建校验未通过，未切换：%{batch}"
+"主题 #%{id} 已切到代次 %{batch}（epoch=%{epoch}，previous=%{prev}）","主题 #%{id} 已切到代次 %{batch}（epoch=%{epoch}，previous=%{prev}）"
+"主题 #%{id} 切换后清理失败：%{error}","主题 #%{id} 切换后清理失败：%{error}"
+"主题 %{ids} 已切换代次，但缓存/边缘清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。","主题 %{ids} 已切换代次，但缓存/边缘清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。"
 头部部件,"Header Widget"
 底部部件,"Bottom Widget"
 内容部件,"Content widget"
@@ -1921,13 +1969,14 @@ AI目录加载失败,"AI directory loading failed"
 "主题 #%{1} 无发布变更（无脏标记），跳过。","主题 #%{1} 无发布变更（无脏标记），跳过。"
 构建校验未通过，未切换：,构建校验未通过，未切换：
 "已切到代次 %{1}（epoch=%{2}）","已切到代次 %{1}（epoch=%{2}）"
+未知子命令：,未知子命令：
+"构建并切换主题更新代次；status 只查看（不 purge、不需要维护模式）","构建并切换主题更新代次；status 只查看（不 purge、不需要维护模式）"
+"dry-run：将完整构建并切换主题 %{1}","dry-run：将完整构建并切换主题 %{1}"
+"dry-run：主题 %{1} 走增量收敛（无脏标记则跳过；强制重建用 -f）","dry-run：主题 %{1} 走增量收敛（无脏标记则跳过；强制重建用 -f）"
+"主题 #%{1} 无发布变更（无脏标记），已跳过，未做任何重固；需要强制重建请加 -f/--force。","主题 #%{1} 无发布变更（无脏标记），已跳过，未做任何重固；需要强制重建请加 -f/--force。"
 开始构建新代次（不会影响线上）…,开始构建新代次（不会影响线上）…
 代次：%{1},代次：%{1}
 构建校验未通过，代次不会上线：,构建校验未通过，代次不会上线：
-"构建完成且校验通过，可用 theme:update promote %{1} 切换","构建完成且校验通过，可用 theme:update promote %{1} 切换"
-未知子命令：,未知子命令：
-"构建并切换主题更新代次；status 只查看（不 purge、不需要维护模式）","构建并切换主题更新代次；status 只查看（不 purge、不需要维护模式）"
-"dry-run：将构建并切换主题 %{1}","dry-run：将构建并切换主题 %{1}"
 切换后清理失败：%{1},切换后清理失败：%{1}
 代次已切换，但缓存/边缘清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。,代次已切换，但缓存/边缘清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。
 "请用 -t/--theme 指定主题名，例如 -t hanfu","请用 -t/--theme 指定主题名，例如 -t hanfu"
@@ -2251,53 +2300,6 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "No layout entities for theme #%{1}","No layout entities for theme #%{1}"
 "Note: chrome sample walks all version dirs under the theme; historical formal trees keep mismatch counts high after current-identity heal — judge converge on published identity / after drain, not all-time totals alone.","Note: chrome sample walks all version dirs under the theme; historical formal trees keep mismatch counts high after current-identity heal — judge converge on published identity / after drain, not all-time totals alone."
 "布局固化物 pending jobs / chrome digest 健康；可选 --purge-stale GC","布局固化物 pending jobs / chrome digest 健康；可选 --purge-stale GC"
-"未找到范围已绑定主题，请用 -t/--theme 指定主题名。","No scope-bound theme found; use -t/--theme to name one."
-"开始 purge 旧布局固化物并重固（generated/theme-layout-entities）…","开始 purge 旧布局固化物并重固（generated/theme-layout-entities）…"
-版本范围：全部历史版本（--all）,"Version set: all historical versions (--all)"
-"版本范围：当前正式版 + 当前草稿","Version set: current published + current draft"
-范围过滤：,"Scope filter:"
-布局过滤：,布局过滤：
-（该布局下全部选项）,（该布局下全部选项）
-"布局模板切流：purge %{purged}，legacy %{legacy}，固化 %{count}","布局模板切流：purge %{purged}，legacy %{legacy}，固化 %{count}"
-"主题 #%{id} 无可解析前端布局，跳过 scoped FPC/CDN 清理。","主题 #%{id} 无可解析前端布局，跳过 scoped FPC/CDN 清理。"
-"主题 #%{id} 无前端站点绑定，跳过 scoped FPC/CDN 清理。","主题 #%{id} 无前端站点绑定，跳过 scoped FPC/CDN 清理。"
-"主题 #%{id} scoped FPC/CDN 清理失败：%{error}","主题 #%{id} scoped FPC/CDN 清理失败：%{error}"
-"主题 #%{id} scoped FPC/CDN 清理跳过：%{reason}","主题 #%{id} scoped FPC/CDN 清理跳过：%{reason}"
-"主题 %{ids} 的店面 FPC/CDN 清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。","主题 %{ids} 的店面 FPC/CDN 清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。"
-"按布局清理店面 FPC/CDN URL 完成：%{count} 个 scope。","按布局清理店面 FPC/CDN URL 完成：%{count} 个 scope。"
-"强制清理店面 FPC / Shared FPC / CDN 全页缓存（-f）…","强制清理店面 FPC / Shared FPC / CDN 全页缓存（-f）…"
-"主题 ID：","主题 ID："
-"范围：全部主题命名空间（未指定 -t）","范围：全部主题命名空间（未指定 -t）"
-步骤失败：,步骤失败：
-"店面缓存刷新完成（构建号换代 + 预热队列）：成功 %{ok}，失败 %{fail}","店面缓存刷新完成（构建号换代 + 预热队列）：成功 %{ok}，失败 %{fail}"
-主题不存在：,主题不存在：
-无法解析主题静态资源命名空间。,"Unable to resolve theme static resource namespace."
-收集,Collect
-主题文件...,"Theme files..."
-静态命名空间：,静态命名空间：
-开始搬迁设计主题覆盖文件...,开始搬迁设计主题覆盖文件...
-设计主题覆盖：,设计主题覆盖：
-个文件,个文件
-"开始发布模块 view/theme 资源到主题命名空间（含继承回退）...","开始发布模块 view/theme 资源到主题命名空间（含继承回退）..."
-模块主题资源：,模块主题资源：
-"个文件已发布到 /static/","个文件已发布到 /static/"
-"开始将设计主题 area 非图片资源双写到 Weline/Theme/view/theme URL 路径...","开始将设计主题 area 非图片资源双写到 Weline/Theme/view/theme URL 路径..."
-"设计 area→Theme 模块路径（跳过图片）：","设计 area→Theme 模块路径（跳过图片）："
-"设置了 -t 参数，但却没有-t参数值！","The -t parameter was set, but no -t parameter value was provided!"
-"设置了 -s/--scope 参数，但却没有范围值！","-s/--scope was set but no scope value was provided!"
-"设置了 -l/--layout 参数，但却没有布局类型值！","设置了 -l/--layout 参数，但却没有布局类型值！"
-"设置了 -o/--option 参数，但却没有布局选项值！","设置了 -o/--option 参数，但却没有布局选项值！"
-指定了布局选项（-o/--option）时必须同时指定布局类型（-l/--layout）。,指定了布局选项（-o/--option）时必须同时指定布局类型（-l/--layout）。
-无法创建主题静态资源目录：,"Unable to create theme static resource directory:"
-无法发布主题静态资源：,"Unable to publish theme static resources:"
-"更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿；默认只按布局清 FPC/CDN URL，-f 才全量清）","更新主题静态资源（设计覆盖 + 模块 view/theme；省略 -t 时仅范围已绑定主题；默认正式+草稿；默认只按布局清 FPC/CDN URL，-f 才全量清）"
-跳过主题外文件（不在允许目录内）：,跳过主题外文件（不在允许目录内）：
-"主题 #%{id}：构建更新代次（不影响线上）…","主题 #%{id}：构建更新代次（不影响线上）…"
-"主题 #%{id} 已有更新在进行，本次已并入最后一次。","主题 #%{id} 已有更新在进行，本次已并入最后一次。"
-"主题 #%{id} 构建校验未通过，未切换：%{batch}","主题 #%{id} 构建校验未通过，未切换：%{batch}"
-"主题 #%{id} 已切到代次 %{batch}（epoch=%{epoch}，previous=%{prev}）","主题 #%{id} 已切到代次 %{batch}（epoch=%{epoch}，previous=%{prev}）"
-"主题 #%{id} 切换后清理失败：%{error}","主题 #%{id} 切换后清理失败：%{error}"
-"主题 %{ids} 已切换代次，但缓存/边缘清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。","主题 %{ids} 已切换代次，但缓存/边缘清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。"
 "=== 批量生成主题预览图 ===","=== Generate theme previews in batches ==="
 "并发数量: %{1}","Concurrency Count: %{1}"
 系统中没有已安装的主题,"There are no installed themes in the system"
@@ -2344,7 +2346,8 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+"构建完成且校验通过，可用 theme:update promote %{1} 切换","构建完成且校验通过，可用 theme:update promote %{1} 切换"
+"dry-run：将构建并切换主题 %{1}","dry-run：将构建并切换主题 %{1}"
 尺码指南,"Size Guide"
 旅行攻略,旅行攻略
 注册,Register
