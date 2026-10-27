@@ -111,6 +111,21 @@ Product EAV 属性（由 Install/Upgrade 自动声明，set=`storefront`，group
 
 花积分还需要同时打开：`customer_asset` mode、`payment/asset/points/enabled`、正的 `payment/asset/points/exchange_ratio`。
 
+## 后台入口
+
+菜单「电商 → 积分与会员」：
+
+| 菜单 | 路径 |
+|---|---|
+| 积分概览 | `points/backend/points/index` |
+| VIP 等级 | `points/backend/points/levels` |
+| 会员成长 | `points/backend/points/customers` |
+| 积分账本 | `points/backend/points/ledger` |
+| 抵扣记录 | `points/backend/points/discounts` |
+| 积分设置 | `points/backend/points/settings` |
+
+后台菜单搜索「积分」可命中「积分与会员」。菜单与 ACL 由 `etc/backend/menu.xml` 提供；新增/修改后执行 `php bin/w setup:upgrade --force-menu -m Weline_Points`。
+
 ## 前端查询
 
 `w_query('points', 'discount.quote', { website_id, currency, amount_minor })`
@@ -155,7 +170,7 @@ php bin/w architecture:check --allow-legacy --json
 php bin/w setup:upgrade --model -m Weline_Points
 ```
 
-最近结果：Points 单测 `OK (34 tests, 103 assertions)`；Order 快照 `OK (6 tests, 28 assertions)`；Checkout 支付/提交/零现金 4 个文件 `OK (27 tests, 137 assertions)`；schema `{"ok": true, "exit": 0, "checked_modules": 1, "drifts": []}`。全量 Checkout Unit 仍有既有失败（`Tests: 103, Assertions: 1746, Errors: 1, Failures: 13, Warnings: 1`，含 `CheckoutSessionAccessServiceTest.php:89` 致命错误），与 Points 改动无关，不能记为全量通过。
+最近结果：Points 单测 `OK (35 tests, 109 assertions)`；Order 快照 `OK (6 tests, 28 assertions)`；Checkout 支付/提交/零现金 4 个文件 `OK (27 tests, 137 assertions)`；schema `{"ok": true, "exit": 0, "checked_modules": 1, "drifts": []}`。全量 Checkout Unit 仍有既有失败（`Tests: 103, Assertions: 1746, Errors: 1, Failures: 13, Warnings: 1`，含 `CheckoutSessionAccessServiceTest.php:89` 致命错误），与 Points 改动无关，不能记为全量通过。
 
 ## 已知问题
 
