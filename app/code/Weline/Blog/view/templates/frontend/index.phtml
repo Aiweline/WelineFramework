@@ -37,7 +37,7 @@ $count = count($articles);
         </div>
     <?php else: ?>
         <h2 class="blog-listing__section-title" id="blog-articles-heading"><lang>文章列表</lang></h2>
-        <div class="blog-listing__grid" data-testid="blog-list-grid" aria-labelledby="blog-articles-heading">
+        <div class="blog-listing__grid w-blog-listing__grid" data-testid="blog-list-grid" aria-labelledby="blog-articles-heading">
             <?php foreach ($articles as $article): ?>
                 <?php
                 if (!is_array($article)) {
@@ -82,7 +82,7 @@ $count = count($articles);
                 $cardTitle = $title !== '' ? $title : (string)__('未命名文章');
                 $imageAlt = $title !== '' ? $title : (string)__('博客文章封面');
                 ?>
-                <article class="blog-storefront__card is-clickable" data-testid="storefront-blog-card">
+                <article class="blog-storefront__card w-blog-storefront__card is-clickable" data-testid="storefront-blog-card">
                     <?php if ($href !== ''): ?>
                         <a class="blog-storefront__card-hit"
                            href="<?= $escape($href) ?>"
