@@ -64,6 +64,18 @@ final class PointsViewContractsTest extends TestCase
         self::assertStringContainsString('$b2b > 0', $src);
     }
 
+    public function testBackendMenuExposesPointsModule(): void
+    {
+        $src = (string) file_get_contents($this->modulePath('etc/backend/menu.xml'));
+
+        self::assertStringContainsString('积分与会员', $src);
+        self::assertStringContainsString('points/backend/points/index', $src);
+        self::assertStringContainsString('points/backend/points/levels', $src);
+        self::assertStringContainsString('points/backend/points/settings', $src);
+        self::assertFileExists($this->modulePath('Controller/Backend/Points.php'));
+        self::assertFileExists($this->modulePath('view/templates/backend/Points/index.phtml'));
+    }
+
     public function testCheckoutSubmitCarriesPointsApplyMinor(): void
     {
         $src = (string) file_get_contents(

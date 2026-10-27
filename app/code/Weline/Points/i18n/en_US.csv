@@ -65,3 +65,15 @@
 读取顾客成长值、累计积分与当前等级,"Read customer growth, lifetime points and current level"
 读取当前等级权益,"Read current level benefits"
 列出等级门槛与权益,"List level thresholds and benefits"
+积分与会员,"Points and Membership"
+积分概览,"Points Overview"
+会员成长,"Membership Growth"
+积分账本,"Points Ledger"
+抵扣记录,"Redemption Records"
+积分设置,"Points Settings"
+万能积分,"Universal Points"
+打开积分与会员配置,"Open points and membership settings"
+当前没有记录。,"No records yet."
+"数据暂时无法加载。参考编号：%{1}","Data cannot be loaded right now. Reference: %{1}"
+是,Yes
+否,No
