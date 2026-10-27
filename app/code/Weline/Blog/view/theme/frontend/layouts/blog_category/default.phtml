@@ -168,7 +168,14 @@ $bodyClass = 'blog-category-layout__body' . ($showFilters ? ' blog-category-layo
         .blog-listing__back:hover { color: var(--color-link); text-decoration: underline; }
         .blog-listing__grid {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            /* 响应式列数：按容器宽度自动填充；卡片最小 280px，禁止回到固定列/一列通栏 */
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 17.5rem), 1fr));
+            gap: var(--spacing-3);
+        }
+        /* w- 前缀为 Weline 默认命名（新代码统一使用）；旧 blog-* 类保留一版作兼容别名。 */
+        .w-blog-listing__grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 17.5rem), 1fr));
             gap: var(--spacing-3);
         }
         .blog-storefront__card {
@@ -241,15 +248,8 @@ $bodyClass = 'blog-category-layout__body' . ($showFilters ? ' blog-category-layo
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
-        @media (max-width: 1200px) {
-            .blog-listing__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        }
         @media (max-width: 900px) {
             .blog-category-layout__body--with-sidebar { grid-template-columns: 1fr; }
-            .blog-listing__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        }
-        @media (max-width: 520px) {
-            .blog-listing__grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>

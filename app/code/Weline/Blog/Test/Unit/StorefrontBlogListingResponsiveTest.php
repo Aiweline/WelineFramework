@@ -25,23 +25,27 @@ final class StorefrontBlogListingResponsiveTest extends TestCase
 
     public function testListingGridUsesAutoFillInsteadOfFixedColumns(): void
     {
-        $layout = (string)file_get_contents($this->modulePath('theme/frontend/layouts/blog/default.phtml'));
+        // /blog 根列表命中 PAGE_TYPE_BLOG_CATEGORY（layouts/blog_category），
+        // 文章页/相关列表命中 layouts/blog，两处都必须自适应。
+        foreach (['theme/frontend/layouts/blog/default.phtml', 'theme/frontend/layouts/blog_category/default.phtml'] as $suffix) {
+            $layout = (string)file_get_contents($this->modulePath($suffix));
 
-        self::assertMatchesRegularExpression(
-            '/\.blog-listing__grid\s*\{[^}]*repeat\(auto-fill,\s*minmax\(/s',
-            $layout,
-            '列表网格必须使用 repeat(auto-fill, minmax(...)) 自适应列数'
-        );
-        self::assertMatchesRegularExpression(
-            '/\.w-blog-listing__grid\s*\{[^}]*repeat\(auto-fill,\s*minmax\(/s',
-            $layout,
-            'w- 前缀列表网格必须同样使用 auto-fill'
-        );
-        self::assertStringNotContainsString(
-            '.blog-listing__grid { grid-template-columns: repeat(4',
-            $layout,
-            '列表网格不得回退到固定 4 列'
-        );
+            self::assertMatchesRegularExpression(
+                '/\.blog-listing__grid\s*\{[^}]*repeat\(auto-fill,\s*minmax\(/s',
+                $layout,
+                $suffix . ' 列表网格必须使用 repeat(auto-fill, minmax(...)) 自适应列数'
+            );
+            self::assertMatchesRegularExpression(
+                '/\.w-blog-listing__grid\s*\{[^}]*repeat\(auto-fill,\s*minmax\(/s',
+                $layout,
+                $suffix . ' 的 w- 前缀列表网格必须同样使用 auto-fill'
+            );
+            self::assertStringNotContainsString(
+                'grid-template-columns: repeat(4',
+                $layout,
+                $suffix . ' 不得回退到固定 4 列'
+            );
+        }
     }
 
     public function testListingTemplateEmitsWPrefixedGridClass(): void
