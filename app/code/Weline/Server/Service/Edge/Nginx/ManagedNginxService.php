@@ -21,6 +21,14 @@ use Weline\Server\Service\ServerInstanceManager;
 final class ManagedNginxService
 {
     private const LIFECYCLE_LOCK_TIMEOUT_SECONDS = 90.0;
+    /**
+     * 线上实测（2026-10-27 changanhanfu）：高负载冷启动时经 Dispatcher 转发的
+     * loopback `/_wls/health` 延迟 0.1s–10s+；旧 1.0s 读超时会把健康后端判死并回收整代实例。
+     * 仅放宽容忍，身份校验与 lifecycle deadline 兜底不变。
+     */
+    private const BACKEND_PROBE_CONNECT_TIMEOUT_SECONDS = 2.0;
+    private const BACKEND_PROBE_READ_TIMEOUT_SECONDS = 5.0;
+    private const BACKEND_PROBE_WAIT_BUDGET_SECONDS = 60.0;
     private const MAX_HEALTH_RESPONSE_BYTES = 65536;
     private const MAX_HEALTH_HEADERS_BYTES = 65536;
     private const MAX_OWNER_RECOVERY_DIRECTORY_ENTRIES = 8192;
@@ -1912,7 +1920,7 @@ final class ManagedNginxService
         string $instanceName,
         array $backendIdentity,
     ): bool {
-        $waitBudget = 25.0;
+        $waitBudget = self::BACKEND_PROBE_WAIT_BUDGET_SECONDS;
         $startedAt = \hrtime(true) / 1_000_000_000;
         while (true) {
             if ($this->probeWlsBackend($host, $port, $instanceName, $backendIdentity)) {
@@ -1953,7 +1961,9 @@ final class ManagedNginxService
             ? '[' . $normalizedHost . ']'
             : $normalizedHost;
         for ($attempt = 0; $attempt < 3; $attempt++) {
-            $connectTimeout = $this->remainingLifecycleDeadline(0.5);
+            $connectTimeout = $this->remainingLifecycleDeadline(
+                self::BACKEND_PROBE_CONNECT_TIMEOUT_SECONDS,
+            );
             if ($connectTimeout === null) {
                 return false;
             }
@@ -1969,7 +1979,10 @@ final class ManagedNginxService
             if (!\is_resource($socket)) {
                 continue;
             }
-            if (!$this->setSocketTimeoutWithinLifecycleDeadline($socket, 1.0)) {
+            if (!$this->setSocketTimeoutWithinLifecycleDeadline(
+                $socket,
+                self::BACKEND_PROBE_READ_TIMEOUT_SECONDS,
+            )) {
                 @\fclose($socket);
                 return false;
             }
@@ -1979,7 +1992,10 @@ final class ManagedNginxService
             );
             $response = '';
             while (!\feof($socket) && \strlen($response) < 1_048_576) {
-                if (!$this->setSocketTimeoutWithinLifecycleDeadline($socket, 1.0)) {
+                if (!$this->setSocketTimeoutWithinLifecycleDeadline(
+                    $socket,
+                    self::BACKEND_PROBE_READ_TIMEOUT_SECONDS,
+                )) {
                     break;
                 }
                 $chunk = @\fread($socket, 8192);
