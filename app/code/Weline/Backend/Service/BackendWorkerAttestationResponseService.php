@@ -358,7 +358,18 @@ final class BackendWorkerAttestationResponseService
         if ($mode === '' && $dest === '' && $user === '') {
             return $dev;
         }
-        if ($mode !== 'navigate' || $dest !== 'document') {
+        // Top-level navigation normally carries Sec-Fetch-Dest: document. A
+        // Service Worker that re-fetches an intercepted navigation (`fetch(req)`
+        // inside the SW fetch handler) keeps Sec-Fetch-Mode: navigate but the
+        // outgoing request's Sec-Fetch-Dest collapses to `empty` — refusing to
+        // mint here silently downgraded the editor page to a frontend Worker
+        // session, and every auth=backend editorRequest then 403'd
+        // (「不满足操作授权要求」+ 只读编辑锁遮罩). Accept navigate with an
+        // empty dest; iframe/XHR still fail closed (dest=iframe/fetch have
+        // their own values, never empty-with-navigate).
+        $navigate = $mode === 'navigate'
+            && ($dest === 'document' || $dest === '' || $dest === 'empty');
+        if (!$navigate) {
             return false;
         }
         if ($purpose !== '' && (

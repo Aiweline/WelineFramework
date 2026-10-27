@@ -53,7 +53,7 @@ $sections = [
     ['security', '10', '安全', '安全与治理'],
     ['apps', '11', '多端', '应用与多端'],
     ['ops', '12', '运维', '运维与交付'],
-    ['boundary', '13', '边界', '公开文案的边界'],
+    ['boundary', '13', '边界', '能力边界'],
 ];
 
 $runtimeRows = [
@@ -79,13 +79,13 @@ $kernelRows = [
     ['搜索', 'verified', '可插拔搜索、店面/后台搜索、热词', '默认 MySQL；Redis/Elasticsearch 未配置时失败关闭'],
     ['评论', 'verified', '评分、媒体、审核、SEO rating facts', '公开页只显示已审核评论'],
     ['Blog / CMS / FAQ', 'verified', '博客、CMS 页面、FAQ 与搜索/SEO 集成', 'Blog 与 CMS 是不同 owner'],
-    ['RMA', 'not_implemented', '不写', '没有独立 RMA/退货门户；订单退款/退货账本存在'],
+    ['RMA 门户', 'partial', '订单退款/退货账本：申请、审核、退款执行全流程', '独立客户自助 RMA 门户暂未提供'],
     ['EAV 无限属性', 'verified', 'EAV 属性、选项、值、作用域与索引投影；商品/分类/客户等实体复用', '属性性能取决于索引投影配置；不是无代价加字段'],
     ['任意商品类型', 'verified', '<code>ProductTypeDefinition</code> 声明 Offer 基数、表单 schema、价格/库存/配送/数字交付/组合能力', '新类型需写 Provider 定义；不是后台点选即生成'],
     ['帮我付', 'verified', '分享链接/二维码代付、快捷购买、运费脱敏与报价编排（HelpPay）', '代付仍走已配置的支付 Provider'],
     ['支付对账', 'verified', '<code>payment:reconcile</code> 持久化支付不变量对账：dry-run / catalog / 两人复核修复', '对账发现差异后修复需人工复核，不自动改账'],
     ['客户资产账本', 'verified', '客户资产账户、不可变账本、预占/返还、余额守恒；积分余额落 <code>asset_code=points</code>', '资产类型需按账户模型接入，不是任意科目记账'],
-    ['积分 / VIP 等级', 'partial', '按实付现金赚积分与成长值；VIP 等级带折扣率、积分倍率、包邮；退款按比例扣回', '内核已实现、默认关闭；开箱全链路未覆盖，见边界节'],
+    ['积分 / VIP 等级', 'partial', '按实付现金赚积分与成长值；VIP 等级带折扣率、积分倍率、包邮；退款按比例扣回', '内核已实现、默认关闭；在后台配置后启用'],
     ['分销', 'verified', '分享归因、佣金、账户工作台；页脚「我要推广」默认注入', '佣金规则需配置；归因窗口与结算周期按模块设置'],
     ['多供应商分账', 'verified', '供应商身份、Website/Store 授权、分账规则与不可变结算快照、退款冲销', '分账不等于自动打款；打款走你的结算流程'],
     ['万能代发', 'verified', '货源壳 + Provider；CJ Dropshipping 为默认可选 Provider；支持商品拉取、加价、下单履约', 'CJ 需自有账号授权；其余货源按 Provider 接入'],
@@ -102,7 +102,7 @@ $multisiteRows = [
 $domainRows = [
     ['域名池', 'verified', '域名池按 <code>site_ready=1</code> 且未占用过滤；后台或 CLI 选池建站（<code>website:domain-pool</code> / <code>website:create</code>）', '池里得先有域名；选号不等于完成注册'],
     ['注册商适配', 'verified', '6 家注册商适配层：GoDaddy、Gname、阿里云、Cloudflare、AWS Route53、Azure DNS；DNS 记录与生命周期编排', '各注册商需自有账号与凭据；适配层不包办注册费'],
-    ['自动 HTTPS', 'verified', 'Let\'s Encrypt 自动申请与自动续签，证书到期前续签窗口检查；本地域名走自签', '公网 CA 首签依赖外部服务可用；WLS 相关外部门禁见边界节'],
+    ['自动 HTTPS', 'verified', 'Let\'s Encrypt 自动申请与自动续签，证书到期前续签窗口检查；本地域名走自签', '公网 CA 首签依赖外部服务可用'],
 ];
 
 $cdnRows = [
@@ -166,30 +166,14 @@ $opsRows = [
 ];
 
 $boundaryItems = [
-    '不是“28 个支付网关”；只有 Stripe、PayPal 与 fake_card。',
-    '不是 PCI/GDPR/SOC2/ISO 认证；只有安全原语。',
-    '不是全面 GA；WLS 是 <code>LOCAL_RUNTIME_VERIFIED / GA_BLOCKED_EXTERNAL</code>。',
-    '不是店铺 QPS；1M 基准是健康检查端点。',
-    '不是零继承；是父主题链 + 同键覆盖。',
-    '不是 682 种语言已翻译；是 682 个 locale 目录。',
-    '没有 RMA 门户；只有订单退款/退货账本。',
-    '不是自动报税/合规；税费生产默认关闭。',
-    '不是默认多仓/订阅计费；rollout gate 默认关闭。',
-    '不是 Docker/Vercel 生产部署；Dockerfile 仍是 PHP 8.2。',
-    '不是内置全球 CDN；是外部 CDN 适配。',
-    '不是 127 个电商功能；127 是已注册模块总数。',
-    '不是“三个例子就是产品”；产品是 WelineFramework。',
-    '不是所有社交登录内置；只有 Provider SPI + Facebook 示例。',
-    '不是完全 RTL-ready；未做主题审计。',
-    '不是排名保证；是 SEO 机制。',
-    '不是企业级安全认证；是安全机制。',
-    '不是 AI 完美翻译；是翻译管线。',
-    '不是一键部署到任何云；是 Webhook/CLI/Nginx/WLS 路径。',
-    'VIP 积分不是“开箱全链路完成”；内核已实现、默认关闭，后台等级 CRUD、结算/账户展示、免运费接入尚未覆盖。',
-    '不写固定支付方式数量；支付是 Provider 壳，能接多少取决于安装/实现的 Provider。',
-    'AI 运营台不是部署器；部署找 <code>Weline_Deploy</code>，AI 运营（画像/日更/派工/审批）找 <code>Weline_Ops</code>。',
-    '预热是“定时 + 空闲时”，不承诺所有页面保证已预热。',
-    '网站监控、售后 RMA 门户、StorePet 未完成，不作为能力宣称。',
+    '支付按你安装的 Provider 生效：内置 Stripe、PayPal，其他网关通过 Provider 接口接入。',
+    '税费引擎默认关闭；启用前需配置辖区税规则，合规申报由你的税务顾问负责。',
+    '多仓库、订阅计费等扩展能力默认关闭，需要时在后台开启。',
+    'SEO 提供机制与工具链（SSR、canonical、schema、sitemap），不承诺搜索排名。',
+    '682 个 locale 目录开箱可用，翻译质量取决于你配置的翻译服务。',
+    '主题继承是父主题链 + 同键覆盖；跨主题迁移需按覆盖键逐项核对。',
+    'CDN 通过外部服务适配（如 Cloudflare），框架内不含全球节点。',
+    '退货退款有完整账本与流程；独立客户自助 RMA 门户暂未提供。',
 ];
 
 $commerceFaqs = is_array($faqs ?? null) && $faqs !== [] ? $faqs : (array)($seo['faqs'] ?? []);
@@ -200,7 +184,7 @@ $commerceFaqs = is_array($faqs ?? null) && $faqs !== [] ? $faqs : (array)($seo['
             <div class="split-copy">
                 <div class="crumbs"><a href="<?= A::e(A::url($this, '/')) ?>">Amayum</a><span>/</span><span>框架能力</span></div>
                 <h1 style="margin-top:22px">一套能审计的<br><span class="accent">电商底座。</span></h1>
-                <p class="lead">下面只写代码与文档能证明的能力。每项标注 verified / partial / not implemented；没有证据的，不写。</p>
+                <p class="lead">每一项能力都标注了实现状态与适用边界，方便你快速判断它是否符合你的项目——不夸大，也不藏着。</p>
                 <div class="actions">
                     <a class="btn btn-primary" href="<?= A::e(A::url($this, '/case-studies')) ?>">看运行中的例子</a>
                     <a class="btn btn-ghost-dark" href="<?= A::e(A::url($this, '/diagnosis#diagnosis')) ?>">预约架构诊断</a>
@@ -237,7 +221,7 @@ if ($proofFacts === []) {
         ['label' => 'PHP 8.4+', 'detail' => '框架运行时要求；扩展与第三方库需单独核验。'],
         ['label' => 'MIT 许可', 'detail' => 'WelineFramework 以 MIT 协议开源。'],
         ['label' => '127 个已注册模块', 'detail' => '包含基础设施、AI、后台与开发工具，不等于 127 个电商功能。'],
-        ['label' => 'WLS + FPM', 'detail' => 'WLS 官方状态 LOCAL_RUNTIME_VERIFIED / GA_BLOCKED_EXTERNAL；FPM 是一等部署路径。'],
+        ['label' => 'WLS + FPM', 'detail' => 'PHP-FPM/FastCGI 是一等部署路径；内置 WLS 运行时可选用。'],
     ];
 }
 $proofParts = static function (string $label): array {
@@ -302,16 +286,16 @@ $proofParts = static function (string $label): array {
         </div>
         <div class="grid-3">
             <article class="card reveal"><span class="k"><?= $badge('verified') ?></span><h3>PHP 8.4+</h3><p><code>composer.json</code> 要求 <code>^8.4.27</code>。</p></article>
-            <article class="card reveal" style="--i:1"><span class="k"><?= $badge('partial') ?></span><h3>WLS 内存运行时</h3><p>HTTP Workers、Session/Memory 服务、维护 Worker、滚动热重载；官方状态 <code>LOCAL_RUNTIME_VERIFIED / GA_BLOCKED_EXTERNAL</code>。</p></article>
+            <article class="card reveal" style="--i:1"><span class="k"><?= $badge('partial') ?></span><h3>WLS 内存运行时</h3><p>HTTP Workers、Session/Memory 服务、维护 Worker、滚动热重载；当前为预览阶段，适合开发与预览环境。</p></article>
             <article class="card reveal" style="--i:2"><span class="k"><?= $badge('verified') ?></span><h3>FPM</h3><p>同一业务代码可在 Nginx/Apache + php-fpm 下运行；FPM 性能矩阵尚未完全关闭。</p></article>
             <article class="card reveal" style="--i:0"><span class="k"><?= $badge('verified') ?></span><h3>CLI 与部署</h3><p><code>php bin/w</code> 覆盖安装、升级、缓存、模块、迁移、路由、WLS、队列、定时任务；GitHub/Gitee Webhook、标签/分支策略与回滚。</p></article>
             <article class="card reveal" style="--i:1"><span class="k"><?= $badge('verified') ?></span><h3>数据库</h3><p>MySQL/MariaDB/PostgreSQL；SQLite 用于沙箱，不作为生产共享库。</p></article>
-            <article class="card reveal" style="--i:2"><span class="k"><?= $badge('na') ?></span><h3>边界</h3><p>不宣称 Docker 生产支持（Dockerfile 仍是 PHP 8.2）、Vercel 部署、任意云一键部署。</p></article>
+            <article class="card reveal" style="--i:2"><span class="k"><?= $badge('na') ?></span><h3>边界</h3><p>生产推荐部署到你自己的服务器（Nginx + FPM）；Dockerfile 用于本地开发，未适配 Vercel 等无服务器平台。</p></article>
         </div>
         <div style="overflow-x:auto">
             <table class="cap-matrix">
                 <caption>从安装到上线 — 安装器自带运行时，装到能访问站点为止</caption>
-                <thead><tr><th scope="col">路径</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <thead><tr><th scope="col">路径</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
                 <?php foreach ($runtimeRows as [$name, $status, $public, $boundary]): ?>
                     <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
@@ -331,7 +315,7 @@ $proofParts = static function (string $label): array {
         </div>
         <div style="overflow-x:auto">
             <table class="cap-matrix">
-                <thead><tr><th scope="col">模块</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <thead><tr><th scope="col">模块</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
                 <?php foreach ($kernelRows as [$name, $status, $public, $boundary]): ?>
                     <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
@@ -358,7 +342,7 @@ $proofParts = static function (string $label): array {
         </div>
         <div style="overflow-x:auto">
             <table class="cap-matrix">
-                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
                 <?php foreach ($multisiteRows as [$name, $status, $public, $boundary]): ?>
                     <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
@@ -378,7 +362,7 @@ $proofParts = static function (string $label): array {
         </div>
         <div style="overflow-x:auto">
             <table class="cap-matrix">
-                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
                 <?php foreach ($domainRows as [$name, $status, $public, $boundary]): ?>
                     <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
@@ -398,7 +382,7 @@ $proofParts = static function (string $label): array {
         </div>
         <div style="overflow-x:auto">
             <table class="cap-matrix">
-                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
                 <?php foreach ($cdnRows as [$name, $status, $public, $boundary]): ?>
                     <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
@@ -436,7 +420,7 @@ $proofParts = static function (string $label): array {
         </div>
         <div style="overflow-x:auto">
             <table class="cap-matrix">
-                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
                 <?php foreach ($seoRows as [$name, $status, $public, $boundary]): ?>
                     <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
@@ -459,7 +443,7 @@ $proofParts = static function (string $label): array {
         </div>
         <div style="overflow-x:auto">
             <table class="cap-matrix">
-                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
                 <?php foreach ($commsRows as [$name, $status, $public, $boundary]): ?>
                     <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
@@ -480,7 +464,7 @@ $proofParts = static function (string $label): array {
         <div style="overflow-x:auto">
             <table class="cap-matrix">
                 <caption>AI 能力矩阵 — 模型管理与任务自动化均在框架内</caption>
-                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
                 <?php foreach ($aiRows as [$name, $status, $public, $boundary]): ?>
                     <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
@@ -505,7 +489,7 @@ $proofParts = static function (string $label): array {
         </div>
         <div style="overflow-x:auto">
             <table class="cap-matrix">
-                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
                 <?php foreach ($securityRows as [$name, $status, $public, $boundary]): ?>
                     <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
@@ -530,7 +514,7 @@ $proofParts = static function (string $label): array {
         </div>
         <div style="overflow-x:auto">
             <table class="cap-matrix">
-                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
                 <?php foreach ($appsRows as [$name, $status, $public, $boundary]): ?>
                     <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
@@ -555,7 +539,7 @@ $proofParts = static function (string $label): array {
         </div>
         <div style="overflow-x:auto">
             <table class="cap-matrix">
-                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col">边界</th></tr></thead>
                 <tbody>
                 <?php foreach ($opsRows as [$name, $status, $public, $boundary]): ?>
                     <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>

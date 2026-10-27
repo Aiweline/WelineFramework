@@ -728,8 +728,22 @@ NGINX;
         $internalProbeLocationBlock = $this->buildInternalProbeLocation($fpmOrigin, $configGeneration);
         [$originUnavailableServerDirectives, $originUnavailableLocation] = $this->buildOriginUnavailableEdgeFragments();
 
+        // Root-context nginx (e.g. a stray `nginx -t`, or a root-run start that
+        // cannot bind the busy ports) still chowns *_temp_path dirs to its own
+        // worker user before failing. Pin that user to the project runtime owner
+        // so a root run cannot flip temp dirs to nobody and break weline workers.
+        $workerUserDirective = '';
+        if (!$isWindows) {
+            $workerUserName = $this->paths->runtimeUserName();
+            if (\is_string($workerUserName)
+                && \preg_match('/^[A-Za-z0-9_.-]+$/D', $workerUserName) === 1
+            ) {
+                $workerUserDirective = "user {$workerUserName};\n";
+            }
+        }
+
         $conf = <<<NGINX
-worker_processes  {$workerProcesses};
+{$workerUserDirective}worker_processes  {$workerProcesses};
 worker_rlimit_nofile  {$rlimit};
 worker_shutdown_timeout 300s;
 error_log  logs/error.log  warn;

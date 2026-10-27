@@ -273,6 +273,28 @@ final class StorefrontNotFoundStaticGenerator
 
     private function buildHtmlForWebsite(string $lang, int $websiteId, string $websiteCode, string $websiteUrl): string
     {
+        // Render in an isolated Context so the per-locale language override and
+        // scope identity never land in the shared main context. If this Fiber is
+        // abandoned mid-render, the clone is dropped with the Fiber (WeakMap)
+        // instead of leaking its locale into every later request (404 in UK bug).
+        $previousContext = Context::getCurrent();
+        Context::enter(new Context($previousContext !== null ? $previousContext->toArray() : []));
+
+        try {
+            return $this->buildHtmlForWebsiteInIsolatedContext($lang, $websiteId, $websiteCode, $websiteUrl);
+        } finally {
+            try {
+                Context::leave();
+                if ($previousContext !== null) {
+                    Context::enter($previousContext);
+                }
+            } catch (\Throwable) {
+            }
+        }
+    }
+
+    private function buildHtmlForWebsiteInIsolatedContext(string $lang, int $websiteId, string $websiteCode, string $websiteUrl): string
+    {
         // setup:upgrade 等长 CLI 会把全流程 __() 堆进 usedWords；若不隔离，
         // Frontend head 会把整袋词典塞进 runtime JSON，首语言可拖到分钟级甚至 OOM。
         $this->isolatePhraseBagForStaticRender();

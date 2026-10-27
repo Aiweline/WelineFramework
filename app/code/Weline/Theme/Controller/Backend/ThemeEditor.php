@@ -593,9 +593,27 @@ class ThemeEditor extends BackendController
         // as a fake canvas shell.
         $this->assign('initial_preview_token', '');
 
+        // 画布/预览 URL 必须携带安装级 FPC 穿章：editor_mode 等画布 query 的 FPC
+        // bypass 规则要求 pierce stamp（ThemeEditorFpcBypassProvider），缺章时画布
+        // iframe 会被全页缓存命中，编辑草稿看不到效果。
+        $this->assign('fpc_pierce_query_suffix', $this->fpcPierceQuerySuffixForEditor());
+
         return \Weline\Framework\Runtime\TraceGate::measurePhase(
             'theme.editor.shell_template', fn() => $this->fetch('Weline_Theme::templates/backend/ThemeEditor/index.phtml'),
         );
+    }
+
+    /**
+     * 安装级 FPC 穿章 query（w_fpc_pierce=<secret>）；章不可读时返回空串，
+     * 画布退回无穿章行为（与现状一致），不阻塞编辑器。
+     */
+    private function fpcPierceQuerySuffixForEditor(): string
+    {
+        try {
+            return \Weline\Framework\Http\Fpc\FpcPierceStamp::buildQuerySuffix();
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /** Load the canonical draft/effective state for one typed Theme resource. */

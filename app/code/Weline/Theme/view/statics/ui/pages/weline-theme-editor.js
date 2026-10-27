@@ -5319,11 +5319,40 @@
                 : (state.layoutIdentity?.target_id || 0),
         })));
         url.searchParams.set('_t', String(overrides._t || Date.now()));
-        return url.toString();
+        return withFpcPierceStamp(url.toString());
+    }
+
+    /**
+     * Append the install FPC pierce stamp (w_fpc_pierce=<secret>) to a canvas URL.
+     * editor_mode 画布 query 的 FPC bypass 规则要求 pierce stamp，缺章时 iframe
+     * 会被全页缓存命中（看不到草稿）。同源 http(s) 且未带章才追加。
+     */
+    function withFpcPierceStamp(urlString) {
+        const suffix = String(config.fpcPierceQuerySuffix || '').trim();
+        if (!suffix) {
+            return urlString;
+        }
+        const raw = String(urlString || '');
+        if (raw === '' || raw.startsWith('#')
+            || /^(?:mailto|tel|javascript|data|blob):/i.test(raw)
+            || raw.indexOf('w_fpc_pierce=') !== -1) {
+            return raw;
+        }
+        try {
+            const parsed = new URL(raw, window.location.origin);
+            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+                return raw;
+            }
+            parsed.searchParams.set(suffix.split('=')[0], suffix.split('=').slice(1).join('='));
+            return parsed.toString();
+        } catch (error) {
+            return raw;
+        }
     }
 
     /**
      * Area-aware canvas URL: frontend → storefront path; backend → admin dashboard.
+     * Both leaf builders stamp the install FPC pierce query (see withFpcPierceStamp).
      */
     function buildCanvasPreviewUrl(overrides = {}) {
         if (resolveCanvasEditorArea(overrides) === 'backend') {
@@ -5421,7 +5450,7 @@
             canvasUrl.searchParams.set('locale', previewLocale || 'default');
             return canvasUrl.toString();
         }
-        return url.toString();
+        return withFpcPierceStamp(url.toString());
     }
 
     /**
@@ -5804,6 +5833,9 @@
 
         // 从 DOM data 属性获取后台 API URL
         config.apiBase = container.dataset.apiBase || '/backend/theme-editor';
+        // 安装级 FPC 穿章（w_fpc_pierce=<secret>）：画布/预览 URL 必须携带，
+        // 否则 editor_mode 画布被全页缓存命中，草稿修改看不到效果。
+        config.fpcPierceQuerySuffix = String(container.dataset.fpcPierceQuerySuffix || '').trim();
         config.storefrontMountPath = String(container.dataset.storefrontMountPath || '')
             .replace(/^\/+|\/+$/g, '');
         state.storefrontMountPath = config.storefrontMountPath;

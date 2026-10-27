@@ -383,7 +383,14 @@ final class ManagedNginxPaths
                 @\chmod($dir, 0700);
             }
         }
-        $this->alignNginxTempDirectoriesOwnership();
+        $unresolvedTempOwnership = $this->alignNginxTempDirectoriesOwnership();
+        if ($unresolvedTempOwnership !== []) {
+            w_log_warning(
+                'managed nginx temp directory ownership is not aligned: '
+                . \implode(', ', $unresolvedTempOwnership)
+                . ' (expected project user; a root-run nginx may have chowned these dirs — start managed nginx as the project user)'
+            );
+        }
     }
 
     /**
@@ -391,17 +398,20 @@ final class ManagedNginxPaths
      * (or current euid when not root). Prevents 700 nobody-owned
      * `client_body_temp` from breaking POST /api/.../query-bin when workers
      * run as the project user.
+     *
+     * @return list<string> paths that are still misaligned after the heal attempt
      */
-    public function alignNginxTempDirectoriesOwnership(): void
+    public function alignNginxTempDirectoriesOwnership(): array
     {
         if (\PHP_OS_FAMILY === 'Windows') {
-            return;
+            return [];
         }
         $owner = $this->resolveRuntimeOwnerIds();
         if ($owner === null) {
-            return;
+            return [];
         }
         [$uid, $gid] = $owner;
+        $unresolved = [];
         $targets = [];
         foreach ($this->nginxTempSubdirs() as $sub) {
             $targets[] = $this->nginxBodyTempRoot() . DIRECTORY_SEPARATOR . $sub;
@@ -429,7 +439,27 @@ final class ManagedNginxPaths
             if ($this->isNginxBodyTempPath($path) || $path === $this->nginxBodyTempRoot()) {
                 @\chmod($path, $path === $this->nginxBodyTempRoot() ? 0755 : 0700);
             }
+
+            $verified = @\lstat($path);
+            if (!\is_array($verified)) {
+                $unresolved[] = $path;
+                continue;
+            }
+            $actualUid = (int)($verified['uid'] ?? -1);
+            $actualGid = (int)($verified['gid'] ?? -1);
+            $actualMode = ((int)($verified['mode'] ?? 0)) & 0777;
+            $modeChecked = $this->isNginxBodyTempPath($path)
+                || $path === $this->nginxBodyTempRoot();
+            $expectedMode = $path === $this->nginxBodyTempRoot() ? 0755 : 0700;
+            if ($actualUid !== $uid
+                || $actualGid !== $gid
+                || ($modeChecked && $actualMode !== $expectedMode)
+            ) {
+                $unresolved[] = $path;
+            }
         }
+
+        return $unresolved;
     }
 
     /**
@@ -452,6 +482,29 @@ final class ManagedNginxPaths
         }
 
         return [(int)$stat['uid'], (int)$stat['gid']];
+    }
+
+    /**
+     * 项目运行用户：非 root 取当前进程用户；root 取 runtimeRoot 属主（与
+     * resolveRuntimeOwnerIds() 的 root 分支同语义）。托管 Nginx 的 `user`
+     * 指令与 temp 目录属主都用它，避免 root 上下文启动 nginx 时落到 nobody。
+     */
+    public function runtimeUserName(): ?string
+    {
+        if (!\function_exists('posix_getpwuid')) {
+            return null;
+        }
+        $ids = $this->resolveRuntimeOwnerIds();
+        if ($ids === null) {
+            return null;
+        }
+        $account = @\posix_getpwuid((int)$ids[0]);
+        if (!\is_array($account)) {
+            return null;
+        }
+        $name = (string)($account['name'] ?? '');
+
+        return $name === '' ? null : $name;
     }
 
     private function isNginxBodyTempPath(string $path): bool

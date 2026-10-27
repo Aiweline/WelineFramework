@@ -33,6 +33,8 @@ class DeployProjectCommandPolicyService
             '--skip-reflection-compile' => true,
             '--stage=route_update' => true,
             '--keep-maintenance' => true,
+            '-f' => true,
+            '--force' => true,
         ],
         // 短路径：直达 Deploy\Upgrade（仍推荐 setup:upgrade 以覆盖其它 upgrade_after）
         'deploy:upgrade' => [],
@@ -140,10 +142,10 @@ class DeployProjectCommandPolicyService
                 'composer install --no-dev --prefer-dist --no-interaction --no-progress',
             ],
             'post_deploy_examples' => [
-                'php bin/w setup:upgrade',
+                'php bin/w setup:upgrade -f',
                 'php bin/w deploy:upgrade',
                 'php bin/w server:reload -r',
-                'php bin/w setup:upgrade && php bin/w server:reload -r',
+                'php bin/w setup:upgrade -f && php bin/w server:reload -r',
             ],
             'rollback_examples' => [
                 'last-stable',

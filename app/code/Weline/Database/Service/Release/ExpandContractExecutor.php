@@ -202,6 +202,10 @@ final class ExpandContractExecutor
                     case SchemaDiffOp::KIND_MODIFY_COLUMN:
                         $column = $this->requireColumn($op);
                         $this->ddlExecutor->apply($op, true);
+                        if (!$this->modifyColumnAffectsData($change)) {
+                            // 与 contract 侧对称：注释级 MODIFY 未备份列数据，跳过恢复。
+                            break;
+                        }
                         $backups[] = ['type' => 'column_restore', 'table' => $op->tableName, 'column' => $column->name]
                             + $this->columnBackupService->restoreColumn(
                                 $releaseId,
@@ -321,6 +325,15 @@ final class ExpandContractExecutor
         array $options,
     ): ?array {
         switch ($op->kind) {
+            case SchemaDiffOp::KIND_MODIFY_COLUMN:
+                // 仅注释等非数据属性漂移的 MODIFY 不改写任何存量值，无需列数据备份。
+                if (!$this->modifyColumnAffectsData($change)) {
+                    return null;
+                }
+                break;
+        }
+
+        switch ($op->kind) {
             case SchemaDiffOp::KIND_DROP_COLUMN:
             case SchemaDiffOp::KIND_MODIFY_COLUMN:
                 $column = $this->requireColumn($op);
@@ -413,6 +426,32 @@ final class ExpandContractExecutor
         }
 
         return $backup;
+    }
+
+    /**
+     * MODIFY_COLUMN 仅注释漂移时不会改写任何存量数据，无需列备份/恢复。
+     *
+     * @param array<string, mixed> $change
+     */
+    private function modifyColumnAffectsData(array $change): bool
+    {
+        $payload = $change['payload'] ?? null;
+        $rollback = $change['rollback_payload'] ?? null;
+
+        // 注释属于纯元数据：两侧除 comment 外完全一致即视为无数据影响。
+        $strip = static function (mixed $def): ?array {
+            if (!\is_array($def)) {
+                return null;
+            }
+            $copy = $def;
+            unset($copy['comment']);
+            \ksort($copy);
+            return $copy;
+        };
+
+        return $strip($payload) !== null
+            && $strip($rollback) !== null
+            && $strip($payload) !== $strip($rollback);
     }
 
     private function requireColumn(SchemaDiffOp $op): ColumnDefinition

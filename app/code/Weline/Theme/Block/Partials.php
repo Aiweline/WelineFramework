@@ -1548,6 +1548,57 @@ class Partials extends Block
     }
 
     /**
+     * Chrome (header/footer) file overridden by the *active theme itself*.
+     *
+     * Theme overrides are per-file, not per-page-layout: when hanfu is the active
+     * theme, its header/footer must win even on pages whose layout entity was
+     * inherited from a parent theme (e.g. blog, which hanfu never overrode as a
+     * layout). Only a file physically owned by the active theme's own design
+     * layer counts as an override; parent/module fallbacks keep current behavior.
+     */
+    private function resolveActiveThemeChromeOverride(string $area, string $type, string $defaultOption): ?string
+    {
+        $theme = $this->resolvePartialsTheme($area);
+        if (!$theme || !$theme->getId()) {
+            return null;
+        }
+        // Same-identity renders must keep the pinned bytes (draft/preview/editor
+        // consistency). Only an inherited (ancestor theme) entity needs the rebase.
+        $snapshot = ThemeLayoutSourceSnapshot::current();
+        if ($snapshot === null || (int)$snapshot->identity->themeId === (int)$theme->getId()) {
+            return null;
+        }
+        $themeRoot = \realpath(\rtrim((string)$theme->getPath(), '/\\'));
+        if ($themeRoot === false) {
+            return null;
+        }
+        $themeRoot = \rtrim(\str_replace('\\', '/', $themeRoot), '/');
+        // Only custom design themes ship overrides; the module default theme IS the
+        // module layer, so captured/pinned sources there stay authoritative.
+        $designRoot = \rtrim(\str_replace('\\', '/', (string)\Weline\Framework\App\Env::path_THEME_DESIGN_DIR), '/');
+        if ($themeRoot === '' || $designRoot === '' || !\str_starts_with($themeRoot . '/', $designRoot . '/')) {
+            return null;
+        }
+        $option = $this->resolveConfiguredPartialsOption($area, $type, $defaultOption, $theme);
+        $candidates = \trim($option) === 'default' ? ['default'] : [$option, 'default'];
+        foreach ($candidates as $candidate) {
+            $live = $this->resolveForcedPartialsOption($area, $type, (string)$candidate);
+            if ($live === null) {
+                continue;
+            }
+            $realLive = \realpath($live);
+            if ($realLive === false) {
+                continue;
+            }
+            if (\str_starts_with(\str_replace('\\', '/', $realLive), $themeRoot . '/')) {
+                return $live;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * True when the captured chrome source belongs to the default Theme/module
      * layer instead of the active theme chain (theme + parent themes).
      * Synthetic/non-project sources are left untouched for test fixtures.
@@ -2574,6 +2625,13 @@ class Partials extends Block
             if ($selected !== null) {
                 $normalizedArea = \strtolower(\trim($area));
                 if ($this->isThemeChromePartialType($type)) {
+                    // Per-file override contract: an active-theme chrome override wins
+                    // over any captured/ancestor chrome source, regardless of which
+                    // layer supplied the page layout (2026-10-27, blog old-header bug).
+                    $activeChrome = $this->resolveActiveThemeChromeOverride($normalizedArea, $type, $defaultOption);
+                    if ($activeChrome !== null) {
+                        return $activeChrome;
+                    }
                     // Theme chrome (header/footer) is owned by the active theme. A
                     // layout entity may still carry a source captured from the
                     // default Theme/module before the custom theme shipped its own

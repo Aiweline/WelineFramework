@@ -156,6 +156,11 @@ class QueryBin extends FrontendRestController
                 'code' => $exception->getErrorCode(),
                 'status' => $exception->getHttpStatus(),
             ]);
+            \w_log_error('[QueryBin][diag] frontend_query_exception: {msg}', [
+                'msg' => $exception->getErrorCode() . ' ' . $exception->getHttpStatus() . ' ' . $exception->getMessage()
+                    . ' op=' . ($requestSummary['provider'] ?? '') . '.' . ($requestSummary['operation'] ?? '')
+                    . ' type=' . ($requestSummary['type'] ?? ''),
+            ], 'query_bin');
             $errorCode = $exception->getErrorCode();
             $errorPayload = [
                 'code' => $errorCode,

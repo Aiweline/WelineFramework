@@ -549,7 +549,7 @@ pending,pending
 开始发布：%{1},"Starting release: %{1}"
 备份中...,"Backing up..."
 "Git 更新中...","Updating Git..."
-"POST_DEPLOY 为空，默认执行 setup:upgrade 以达静态铺平…","POST_DEPLOY 为空，默认执行 setup:upgrade 以达静态铺平…"
+"POST_DEPLOY 为空，默认执行 setup:upgrade -f（强制更新）以达静态铺平…","POST_DEPLOY 为空，默认执行 setup:upgrade -f（强制更新）以达静态铺平…"
 执行后置命令...,"Running post-deploy commands..."
 版本戳已写入：%{1},"Version stamp written: %{1}"
 重载服务...,"Reloading server..."
@@ -919,6 +919,7 @@ HEAD：%{1}（%{2}）,HEAD：%{1}（%{2}）
 "完整发布：Git 更新 + 后置命令 + 写版本戳 + reload","Full release: Git update + post commands + stamp + reload"
 "发布繁忙：已重新排队，等待进行中的发布结束后由 Drain 执行。","发布繁忙：已重新排队，等待进行中的发布结束后由 Drain 执行。"
 生成不执行发布的机器可读部署计划,"Generate a machine-readable deployment plan without executing the deployment."
+"POST_DEPLOY 为空，默认执行 setup:upgrade 以达静态铺平…","POST_DEPLOY 为空，默认执行 setup:upgrade 以达静态铺平…"
 "无法获取 Git diff，将使用全量更新","Unable to get Git diff, will use full update"
 拉取未在时限内完成，删掉旧缓存仓并换仓库浅克隆...,拉取未在时限内完成，删掉旧缓存仓并换仓库浅克隆...
 "仅显式使用 -f/--force 时跳过本地核心冲突保护，删除缓存并重新克隆后覆盖核心文件；成功后缓存仓 HEAD 即成为下次对比基线","Only when -f/--force is explicitly used, local core conflict protection is skipped, the cache is deleted and the core file is overwritten after cloning again; after success, the cache warehouse HEAD becomes the next comparison baseline."

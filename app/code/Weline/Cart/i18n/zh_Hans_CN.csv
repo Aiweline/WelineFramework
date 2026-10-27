@@ -28,6 +28,12 @@
 购物车工作台,购物车工作台
 search,search
 "按 Scope / guest_token 检查真实 Cart 持久库","按 Scope / guest_token 检查真实 Cart 持久库"
+当前货币暂不可用,当前货币暂不可用
+暂不可售,暂不可售
+正在加入购物车...,正在加入购物车...
+已加入购物车,已加入购物车
+加入购物车失败,加入购物车失败
+前往购物车,前往购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 小计,小计
 税费与运费将在结算时计算,税费与运费将在结算时计算
@@ -71,12 +77,6 @@ search,search
 批发车,批发车
 本次应付定金,本次应付定金
 本单共计,本单共计
-正在加入购物车...,正在加入购物车...
-已加入购物车,已加入购物车
-加入购物车失败,加入购物车失败
-前往购物车,前往购物车
-当前货币暂不可用,当前货币暂不可用
-暂不可售,暂不可售
 "Inspection 按 scope_key 与/或 guest_token（完整或末 4+ 位）查询真实持久库；对照店面 Cookie weline_cart_guest_token。","Inspection 按 scope_key 与/或 guest_token（完整或末 4+ 位）查询真实持久库；对照店面 Cookie weline_cart_guest_token。"
 "完整 scope key（可选）","完整 scope key（可选）"
 "guest_token 完整或末 4+ 位","guest_token 完整或末 4+ 位"

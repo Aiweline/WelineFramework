@@ -141,6 +141,15 @@ final class MaintenanceStaticGenerator
             'website_url' => $websiteUrl,
         ];
 
+        // Publish in an isolated Context so the per-locale language override and
+        // scope identity never land in the shared main context. If this Fiber is
+        // abandoned mid-publish, the clone is dropped with the Fiber (WeakMap)
+        // instead of leaking its locale into every later request.
+        $previousContext = \Weline\Framework\Context::getCurrent();
+        \Weline\Framework\Context::enter(new \Weline\Framework\Context(
+            $previousContext !== null ? $previousContext->toArray() : []
+        ));
+
         try {
             $this->installPublishScope($websiteId, $websiteCode, $lang);
             $htmlFile = MaintenanceStaticPage::staticFilePath($lang, false, $websiteCode);
@@ -168,6 +177,13 @@ final class MaintenanceStaticGenerator
         } catch (\Throwable $e) {
             return ['ok' => false, 'error' => $e->getMessage()];
         } finally {
+            try {
+                \Weline\Framework\Context::leave();
+                if ($previousContext !== null) {
+                    \Weline\Framework\Context::enter($previousContext);
+                }
+            } catch (\Throwable) {
+            }
             $this->publishSite = null;
             try {
                 State::setRequestLanguageOverride('');

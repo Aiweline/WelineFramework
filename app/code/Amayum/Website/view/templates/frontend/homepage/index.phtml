@@ -23,7 +23,7 @@ if ($facts === []) {
         ['label' => 'PHP 8.4+', 'detail' => '框架运行时要求；扩展与第三方库需单独核验。'],
         ['label' => 'MIT 许可', 'detail' => 'WelineFramework 以 MIT 协议开源。'],
         ['label' => '127 个已注册模块', 'detail' => '包含基础设施、AI、后台与开发工具，不等于 127 个电商功能。'],
-        ['label' => 'WLS + FPM', 'detail' => 'WLS 官方状态 LOCAL_RUNTIME_VERIFIED / GA_BLOCKED_EXTERNAL；FPM 是一等部署路径。'],
+        ['label' => 'WLS + FPM', 'detail' => 'PHP-FPM/FastCGI 是一等部署路径；内置 WLS 运行时可选用。'],
     ];
 }
 $factParts = static function (string $label): array {
@@ -361,7 +361,7 @@ $homeFaqs = is_array($faqs ?? null) && $faqs !== [] ? $faqs : (array)($seo['faqs
                 <p class="eyebrow"><span class="idx">08</span> 开源</p>
                 <h2 id="s8-title" style="font-size:clamp(30px,4vw,50px);line-height:1.07;margin-top:14px">先读代码，<br>再谈合作。</h2>
                 <p style="color:var(--muted);font-size:14.5px;line-height:1.8;margin-top:18px;max-width:34em">WelineFramework 以 MIT 协议开源，源码在 Gitee 与 GitHub。安装、启动、升级、缓存、模块、WLS、队列与定时任务都在一个 CLI 里。</p>
-                <p class="mono" style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:20px;max-width:36em;line-height:1.8">Note — WLS 官方状态是 LOCAL_RUNTIME_VERIFIED / GA_BLOCKED_EXTERNAL；生产可用 FPM，WLS 按你的验收标准决定。Dockerfile 仍是 PHP 8.2，不作为生产部署依据；Vercel 不作为 PHP 运行时。</p>
+                <p class="mono" style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:20px;max-width:36em;line-height:1.8">Note — 生产部署以 PHP-FPM/FastCGI 为推荐路径；WLS 内存运行时适合开发与预览。具体环境要求以安装文档为准。</p>
                 <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:24px">
                     <?php if ($github !== ''): ?><a class="btn btn-dark" href="<?= A::e($github) ?>" target="_blank" rel="noopener">GitHub</a><?php endif; ?>
                     <?php if ($gitee !== ''): ?><a class="btn btn-secondary" href="<?= A::e($gitee) ?>" target="_blank" rel="noopener">Gitee</a><?php endif; ?>

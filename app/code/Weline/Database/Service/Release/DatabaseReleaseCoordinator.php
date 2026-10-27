@@ -125,9 +125,7 @@ final class DatabaseReleaseCoordinator implements DatabaseReleaseCoordinatorInte
                     'schema plan 存在 blockers，拒绝执行 DDL：' . $this->encode($dryPlan['blockers'])
                 );
             }
-            $schemaUnchanged = ($dryPlan['expand'] ?? []) === []
-                && ($dryPlan['transform'] ?? []) === []
-                && ($dryPlan['contract'] ?? []) === [];
+            $schemaUnchanged = $this->planHasNoDataChange($dryPlan);
             if ($schemaUnchanged && $this->hasAppliedRelease()) {
                 return [
                     'release_id' => $releaseId,
@@ -533,6 +531,48 @@ final class DatabaseReleaseCoordinator implements DatabaseReleaseCoordinatorInte
             ->fetchArray();
 
         return $rows !== [];
+    }
+
+    /**
+     * 数据无关变更（仅注释漂移的 modify_column / modify_table_comment）不改写任何
+     * 存量数据，不计入「有变更」判定：无需整库快照、无需 DDL，直接幂等返回。
+     *
+     * @param array<string, mixed> $plan
+     */
+    private function planHasNoDataChange(array $plan): bool
+    {
+        if (($plan['expand'] ?? []) !== [] || ($plan['transform'] ?? []) !== []) {
+            return false;
+        }
+        foreach ((array)($plan['contract'] ?? []) as $change) {
+            $kind = (string)($change['change_type'] ?? '');
+            if ($kind === 'modify_column') {
+                $payload = \is_array($change['payload'] ?? null) ? $change['payload'] : null;
+                $rollback = \is_array($change['rollback_payload'] ?? null) ? $change['rollback_payload'] : null;
+                if ($payload === null
+                    || $rollback === null
+                    || $this->stripComment($payload) !== $this->stripComment($rollback)
+                ) {
+                    return false;
+                }
+                continue;
+            }
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $def
+     * @return array<string, mixed>
+     */
+    private function stripComment(array $def): array
+    {
+        $copy = $def;
+        unset($copy['comment']);
+        \ksort($copy);
+        return $copy;
     }
 
     /** @return array<string, mixed>|null */

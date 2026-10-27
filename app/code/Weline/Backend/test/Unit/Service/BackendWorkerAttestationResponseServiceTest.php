@@ -132,6 +132,31 @@ final class BackendWorkerAttestationResponseServiceTest extends TestCase
             '',
             false,
         ));
+        // Service Worker re-fetch of an intercepted navigation keeps
+        // Sec-Fetch-Mode: navigate but collapses Sec-Fetch-Dest to empty.
+        // Must still mint, otherwise the editor page loses its backend
+        // Worker session and every auth=backend editorRequest 403s.
+        self::assertTrue(BackendWorkerAttestationResponseService::shouldMintDocumentProof(
+            'navigate',
+            'empty',
+            '',
+            '',
+            false,
+        ));
+        self::assertTrue(BackendWorkerAttestationResponseService::shouldMintDocumentProof(
+            'navigate',
+            '',
+            '?1',
+            '',
+            false,
+        ));
+        self::assertFalse(BackendWorkerAttestationResponseService::shouldMintDocumentProof(
+            'navigate',
+            'empty',
+            '',
+            'prefetch',
+            false,
+        ));
     }
 
     public function testDevAllowsPostLoginNavigateWithoutSecFetchUser(): void
@@ -182,6 +207,17 @@ final class BackendWorkerAttestationResponseServiceTest extends TestCase
 
     private function service(): BackendWorkerAttestationResponseService
     {
+        // FrontendWorkerSessionService consts read VAR_DIR/DS at class load;
+        // bootstrap them when PHPUnit runs without the app bootstrap.
+        if (!\defined('BP')) {
+            \define('BP', \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('DS')) {
+            \define('DS', DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('VAR_DIR')) {
+            \Weline\Framework\App\DirectoryList::defineBootstrapConstants(\rtrim(BP, '/\\'));
+        }
         $provider = $this->createMock(FrontendWorkerBackendAttestationProviderInterface::class);
         $store = $this->createMock(FrontendWorkerStateStoreInterface::class);
         $sessions = new FrontendWorkerSessionService($store);

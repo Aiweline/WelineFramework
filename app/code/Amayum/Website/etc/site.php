@@ -107,7 +107,7 @@ return [
         ],
         [
             'label' => 'WLS + FPM',
-            'detail' => 'WLS 官方状态 LOCAL_RUNTIME_VERIFIED / GA_BLOCKED_EXTERNAL；FPM 是一等部署路径。',
+            'detail' => 'PHP-FPM/FastCGI 是一等部署路径；内置 WLS 运行时可选用。',
         ],
     ],
     'flags' => [

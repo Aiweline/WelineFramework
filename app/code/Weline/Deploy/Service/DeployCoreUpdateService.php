@@ -53,7 +53,7 @@ class DeployCoreUpdateService
         $cd = 'cd ' . escapeshellarg($deployRoot) . ' && ';
         return [
             'update' => $cd . 'php bin/w update:core -b ' . escapeshellarg($branch) . ' 2>&1',
-            'setup' => $cd . 'php bin/w setup:upgrade --from-core-update 2>&1',
+            'setup' => $cd . 'php bin/w setup:upgrade -f --from-core-update 2>&1',
             'reload' => $cd . 'php bin/w server:reload -r 2>&1',
         ];
     }

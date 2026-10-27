@@ -428,6 +428,11 @@
             if (options.amazon === false || options.shopper === false || options.title) {
                 return fallbackFn(message, options);
             }
+            // Node payloads (e.g. widget-health bridge passes a div with a locate button)
+            // must reach the theme toast intact — String() here would paint "[object HTMLDivElement]".
+            if (message instanceof Node) {
+                return fallbackFn(message, options);
+            }
             var tone = normalizeTone(options.tone != null ? options.tone : defaultTone);
             if (tone) {
                 return buildCompactNotice(message, Object.assign({}, options, { tone: tone }));

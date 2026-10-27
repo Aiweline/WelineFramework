@@ -96,6 +96,73 @@ final class ManagedNginxTempPathOwnershipContractTest extends TestCase
         @\unlink($probe);
     }
 
+    /**
+     * 项目运行用户必须能从 runtimeRoot 属主解析出来：root 上下文 nginx 启动时
+     * 配置里的 `user` 指令就靠它，避免 worker/temp 目录再次落成 nobody。
+     */
+    public function testRuntimeUserNameResolvesCurrentProcessUser(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('POSIX-only project user resolution.');
+        }
+        $paths = $this->newPaths(18142, 18542);
+        $account = \posix_getpwuid(\posix_geteuid());
+        self::assertIsArray($account);
+        self::assertSame((string)$account['name'], $paths->runtimeUserName());
+    }
+
+    /**
+     * 托管 Nginx 主配置必须显式声明 worker 用户；否则 root 上下文启动 nginx
+     * 时会把 temp 目录属主改成默认 user（nobody），weline worker 写不进 → 大 POST 500。
+     */
+    public function testGeneratedConfRunsWorkersAsProjectUser(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('nginx user directive is POSIX-only.');
+        }
+        $paths = $this->newPaths(18144, 18544);
+        $paths->ensureRuntimeDirectories();
+        $this->seedMimeTypes($paths);
+
+        $written = (new ManagedNginxConfigWriter($paths))->write(19044, candidate: false);
+        $conf = \file_get_contents((string)$written['conf']);
+        self::assertIsString($conf);
+
+        $account = \posix_getpwuid(\posix_geteuid());
+        self::assertIsArray($account);
+        $name = \preg_quote((string)$account['name'], '/');
+        self::assertMatchesRegularExpression('/^user\s+' . $name . ';\s*$/m', $conf);
+
+        $userPos = \strpos($conf, 'user ');
+        $httpPos = \strpos($conf, 'http {');
+        self::assertIsInt($userPos);
+        self::assertIsInt($httpPos);
+        self::assertLessThan($httpPos, $userPos);
+    }
+
+    /**
+     * 属主自愈必须报告「修不掉的路径」，不能像 2026-10-27 事故那样静默吞异常。
+     */
+    public function testEnsureRuntimeDirectoriesReportsNoUnresolvedTempOwnership(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('POSIX-only temp ownership reporting.');
+        }
+        $paths = $this->newPaths(18146, 18546);
+        $paths->ensureRuntimeDirectories();
+        self::assertSame([], $paths->alignNginxTempDirectoriesOwnership());
+    }
+
+    private function newPaths(int $httpPort, int $httpsPort): ManagedNginxPaths
+    {
+        return new ManagedNginxPaths($this->root, [
+            'runtime_root' => 'runtime',
+            'install_root' => 'install',
+            'listen_http' => $httpPort,
+            'listen_https' => $httpsPort,
+        ]);
+    }
+
     private function seedMimeTypes(ManagedNginxPaths $paths): void
     {
         $mime = $paths->installRoot() . DIRECTORY_SEPARATOR . 'conf' . DIRECTORY_SEPARATOR . 'mime.types';

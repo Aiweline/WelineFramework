@@ -170,10 +170,11 @@ class DeployOrchestratorService
             // R1：空 POST_DEPLOY 不得跳过 Upgrade；默认 setup:upgrade（!DEV → SetupUpgradeAfterDeployStatic）
             $postDeployCommand = trim((string)($config['POST_DEPLOY_COMMAND'] ?? ''));
             if ($postDeployCommand === '') {
-                $postDeployCommand = 'php bin/w setup:upgrade';
-                $log(__('POST_DEPLOY 为空，默认执行 setup:upgrade 以达静态铺平…'));
+                $postDeployCommand = 'php bin/w setup:upgrade -f';
+                $log(__('POST_DEPLOY 为空，默认执行 setup:upgrade -f（强制更新）以达静态铺平…'));
             }
             $postDeployCommand = $this->ensureKeepMaintenanceOnSetupUpgrade($postDeployCommand);
+            $postDeployCommand = $this->ensureForceOnSetupUpgrade($postDeployCommand);
             $log(__('执行后置命令...'));
             $this->releaseNotifier->notifyPhase(DeployReleaseNotifier::PHASE_POST_DEPLOY_START, $notifyBase([
                 'deploy_root' => $deployRoot,
@@ -1257,6 +1258,36 @@ class DeployOrchestratorService
                 && !preg_match('/(^|\s)--keep-maintenance(\s|$)/', $segment)
             ) {
                 $segment .= ' --keep-maintenance';
+            }
+            $normalized[] = $segment;
+        }
+
+        return $normalized === [] ? $command : implode(' && ', $normalized);
+    }
+
+    /**
+     * Idempotently append -f/--force to every setup:upgrade segment so
+     * deploy-time system upgrades always run forced (menu recollect + env-check skip).
+     */
+    private function ensureForceOnSetupUpgrade(string $command): string
+    {
+        $command = trim($command);
+        if ($command === '') {
+            return $command;
+        }
+
+        $segments = preg_split('/\s*&&\s*/', $command) ?: [];
+        $normalized = [];
+        foreach ($segments as $segment) {
+            $segment = trim((string)$segment);
+            if ($segment === '') {
+                continue;
+            }
+            if (
+                preg_match('/^php\s+bin\/w\s+setup:upgrade(?:\s|$)/', $segment) === 1
+                && !preg_match('/(^|\s)(-f|--force)(\s|$)/', $segment)
+            ) {
+                $segment .= ' -f';
             }
             $normalized[] = $segment;
         }

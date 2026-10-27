@@ -1955,9 +1955,10 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
             $defaultLang = trim((string)($site['default_language'] ?? ''));
             if ($defaultLang !== '') {
                 self::$parserServer['WELINE_USER_LANG'] = $defaultLang;
-            } elseif (empty(self::$parserServer['WELINE_USER_LANG'])) {
-                self::$parserServer['WELINE_USER_LANG'] = WelineEnv::getLang();
             }
+            // No shared-state fallback: empty stays empty. App::synchronizeParsedLocalization
+            // fills the website default; reading WelineEnv::getLang() here pulls another
+            // Fiber's context (e.g. maintenance-publish language override) into shared statics.
             $defaultCurrency = trim((string)($site['default_currency'] ?? ''));
             if ($defaultCurrency !== '') {
                 self::$parserServer['WELINE_USER_CURRENCY'] = $defaultCurrency;
@@ -2008,9 +2009,8 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
                 $defaultLang = trim((string)($site['default_language'] ?? ''));
                 if ($defaultLang !== '') {
                     self::$parserServer['WELINE_USER_LANG'] = $defaultLang;
-                } elseif (empty(self::$parserServer['WELINE_USER_LANG'])) {
-                    self::$parserServer['WELINE_USER_LANG'] = WelineEnv::getLang();
                 }
+                // No shared-state fallback (see first site-match branch above).
                 $defaultCurrency = trim((string)($site['default_currency'] ?? ''));
                 if ($defaultCurrency !== '') {
                     self::$parserServer['WELINE_USER_CURRENCY'] = $defaultCurrency;
@@ -2064,9 +2064,8 @@ class Url implements UrlInterface, \Weline\Framework\Runtime\ProcessSharedInterf
                     $defaultLang = trim((string)($directSite['default_language'] ?? ''));
                     if ($defaultLang !== '') {
                         self::$parserServer['WELINE_USER_LANG'] = $defaultLang;
-                    } elseif (empty(self::$parserServer['WELINE_USER_LANG'])) {
-                        self::$parserServer['WELINE_USER_LANG'] = WelineEnv::getLang();
                     }
+                    // No shared-state fallback (see first site-match branch above).
                     $defaultCurrency = trim((string)($directSite['default_currency'] ?? ''));
                     if ($defaultCurrency !== '') {
                         self::$parserServer['WELINE_USER_CURRENCY'] = $defaultCurrency;

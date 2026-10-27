@@ -29,17 +29,15 @@ eye,eye
 取消,Cancel
 积分抵扣已应用,"Points redemption applied"
 积分抵扣不可用,"Points redemption is unavailable"
-是,Yes
-否,No
-万能积分,"Universal Points"
-"赚分比例、成长值比例、商品默认值、抵扣上限与 VIP 开关在系统配置中维护。","赚分比例、成长值比例、商品默认值、抵扣上限与 VIP 开关在系统配置中维护。"
-打开积分与会员配置,"Open points and membership settings"
-当前没有记录。,"No records yet."
 "配置写入当前作用范围；切换范围后页面按新范围加载。抵扣还需在 Payment 积分资产中打开启用与兑换比例。","配置写入当前作用范围；切换范围后页面按新范围加载。抵扣还需在 Payment 积分资产中打开启用与兑换比例。"
 在统一配置中心打开,在统一配置中心打开
 作用范围,作用范围
 "Payment 积分资产（抵扣前置条件）","Payment 积分资产（抵扣前置条件）"
 "结账抵扣要求同时打开 Payment 的积分资产启用与正的兑换比例；折扣角色由积分模块策略自动声明，无需在此打开。","结账抵扣要求同时打开 Payment 的积分资产启用与正的兑换比例；折扣角色由积分模块策略自动声明，无需在此打开。"
+是,Yes
+否,No
+万能积分,"Universal Points"
+当前没有记录。,"No records yet."
 站点未开启积分抵扣,"Points redemption is off for this site"
 积分暂不可抵扣,"Points cannot be redeemed yet"
 后台尚未启用积分支付资产或兑换比例。,"The points payment asset or exchange ratio is not enabled in the backend."
@@ -50,6 +48,8 @@ eye,eye
 "可用 %{1} 积分，本单最多抵扣 %{2} %{3}","%{1} points available; up to %{2} %{3} off this order"
 "本单可抵扣积分为 0","This order has no redeemable points"
 "积分按后台兑换比例折算，单笔最多抵扣订单金额的 %{1}%；抵扣后余额不足部分不可透支。","Points convert at the backend exchange ratio; a single order can redeem at most %{1}% of its amount. Insufficient balance cannot be overdrawn."
+"赚分比例、成长值比例、商品默认值、抵扣上限与 VIP 开关在系统配置中维护。","赚分比例、成长值比例、商品默认值、抵扣上限与 VIP 开关在系统配置中维护。"
+打开积分与会员配置,"Open points and membership settings"
 查看积分设置入口,查看积分设置入口
 积分与会员等级,"Points and VIP Levels"
 "赚分、成长值、VIP 等级、商品积分属性与结账抵扣","Points earning, growth, VIP levels, product points attributes and checkout redemption"

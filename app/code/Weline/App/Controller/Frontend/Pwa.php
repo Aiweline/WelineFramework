@@ -79,8 +79,15 @@ self.addEventListener('fetch', (e) => {
     );
     return;
   }
-  // 页面：网络优先（命中 FPC 就直接用），断网回缓存（不缓存后台/API）
-  if (req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html')) {
+  // 页面：断网回缓存（不缓存后台/API）。
+  // 仅离线兜底：在线时绝不 respondWith 重新 fetch 导航请求。
+  // SW 里 fetch(req) 发出的请求 Sec-Fetch-Dest 会塌缩为 empty，
+  // 后台页面凭证（backend attestation）据此拒绝铸造，主题编辑器等
+  // auth=backend 接口会全部 403（「不满足操作授权要求」）。在线导航
+  // 直接放行给浏览器原生处理，凭证正常铸造；断网时才回缓存。
+  const isNavigation = req.mode === 'navigate'
+    || (req.headers.get('accept') || '').includes('text/html');
+  if (isNavigation && navigator.onLine === false) {
     e.respondWith(
       fetch(req).then((res) => {
         const copy = res.clone();
