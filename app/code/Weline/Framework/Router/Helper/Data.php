@@ -11,9 +11,18 @@ namespace Weline\Framework\Router\Helper;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Compilation\CompiledPhpRegistry;
+use Weline\Framework\Runtime\ProcessSharedInterface;
 use Weline\Framework\Runtime\Runtime;
 
-class Data
+/**
+ * 路由批量缓冲助手必须进程共享：
+ * 路由收集在 FiberTaskBatch 的各 Fiber 内执行（registerRoute → updatePcRouters），
+ * 而 flushBatchRouters 在主上下文 RouteUpdateStage::commit() 中执行。
+ * 若按 Fiber 隔离实例，各 Fiber 写入的 batchRouters 会随 Fiber 结束丢弃，
+ * 提交时 flush 到的是空缓冲 → generated/routers/*.php 全部写成空文件 → 全站 404。
+ * PHP Fiber 是协作式调度（非并行），本类仅做内存缓冲，无竞态风险。
+ */
+class Data implements ProcessSharedInterface
 {
     /**
      * @var array 批量写入模式下的路由存储 [文件路径 => 路由数组]
