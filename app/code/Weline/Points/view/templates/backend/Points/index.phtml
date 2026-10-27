@@ -29,7 +29,7 @@ $display = static function (mixed $value) use ($escape): string {
             <div class="w-card__header"><h5 style="--w-mb:0;"><?= __('积分设置') ?></h5></div>
             <div class="w-card__body">
                 <div class="w-alert" data-tone="info"><?= __('赚分比例、成长值比例、商品默认值、抵扣上限与 VIP 开关在系统配置中维护。') ?></div>
-                <a class="w-button" data-tone="primary" href="@backend-url{$settingsUrl}"><?= __('打开积分与会员配置') ?></a>
+                <a class="w-button" data-tone="primary" href="@backend-url{'weline_systemconfig/backend/config'|['area'=>'backend','search'=>'积分','guide_key'=>'points/discount/enabled,points/discount/max_ratio,payment/asset/points/enabled,payment/asset/points/exchange_ratio']}"><?= __('打开积分与会员配置') ?></a>
             </div>
         </div>
     <?php else: ?>
