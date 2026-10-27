@@ -34,6 +34,13 @@ final class SetupUpgradeAfterPublishNotFoundStatic implements ObserverInterface
         }
 
         $args = \is_array($eventData) && \is_array($eventData['args'] ?? null) ? $eventData['args'] : [];
+        if ($this->isModuleScopedUpgrade($args)) {
+            // Module-scoped upgrades do not change design-theme chrome. During
+            // setup the website ThemeApplicationContext may not be installed;
+            // republishing here would overwrite a theme 404 with the default
+            // Theme. Full upgrades and theme:upgrade still refresh it.
+            return;
+        }
         $skipReason = StaticPublishGate::skipReason($args);
         if ($skipReason !== null) {
             $this->printing->note(__('404 静态发布已跳过（%{reason}）', ['reason' => $skipReason]));
@@ -83,6 +90,25 @@ final class SetupUpgradeAfterPublishNotFoundStatic implements ObserverInterface
                 FILE_APPEND
             );
         }
+    }
+
+    /**
+     * @param array<string, mixed> $args
+     */
+    private function isModuleScopedUpgrade(array $args): bool
+    {
+        $scope = $args['module'] ?? $args['m'] ?? '';
+        if (\is_array($scope)) {
+            foreach ($scope as $module) {
+                if (\trim((string)$module) !== '') {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return \trim((string)$scope) !== '';
     }
 
     private function staticPublishInputs(): array
