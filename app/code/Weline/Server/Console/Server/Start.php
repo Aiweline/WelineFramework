@@ -42,6 +42,7 @@ use Weline\Server\Service\DarwinWinModeLogWindow;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\WlsLogService;
 use Weline\Server\Log\LogConfig;
+use Weline\Server\Security\CloudflareTrustedProxyCatalog;
 use Weline\Server\Service\Policy\RuntimePolicyControlService;
 use Weline\Server\Service\Policy\RuntimePolicyCompiler;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
@@ -8130,8 +8131,11 @@ class Start extends CommandAbstract
      * 真实公网 Host 启动前门闸：DNS A/AAAA 必须已经指向当前服务器。
      *
      * 本地开发域名、IP、localhost 等由 SSL 服务现有本地策略处理，不做公网 DNS 校验。
+     * Cloudflare 橙云代理域名公网解析只返回 CF 边缘 IP，源站 IP 不可见。此门闸默认仍
+     * fail-closed；仅当域名在 wls.host_guard.cdn_proxied_hosts 中显式登记、且解析结果
+     * 全部为 CF 边缘 IP 时才跳过源站校验（源站归属由显式登记与 CDN 侧配置保证）。
      *
-     * @return array{success: bool, skipped?: bool, message?: string, resolved_ips?: list<string>, server_ips?: list<string>}
+     * @return array{success: bool, skipped?: bool, proxied?: bool, message?: string, resolved_ips?: list<string>, server_ips?: list<string>}
      */
     protected function validatePublicHostResolvesToCurrentServer(
         string $host,
@@ -8176,6 +8180,22 @@ class Start extends CommandAbstract
             }
         }
 
+        if ($this->isCloudflareEdgeResolvedHost($resolvedIps)) {
+            if ($this->isExplicitlyCdnProxiedHost($host)) {
+                return $this->cdnProxiedHostResolution($host, $resolvedIps, $serverIps);
+            }
+
+            return [
+                'success' => false,
+                'resolved_ips' => $resolvedIps,
+                'server_ips' => $serverIps,
+                'message' => __('启动已阻止：真实 Host %{1} 由 Cloudflare 代理（当前解析：%{2}），源站 IP 无法从公网 DNS 校验。确认该域名归属本机后，在 app/etc/env.php 的 wls.host_guard.cdn_proxied_hosts 中显式登记后再启动 WLS。', [
+                    $host,
+                    \implode(', ', $resolvedIps),
+                ]),
+            ];
+        }
+
         return [
             'success' => false,
             'resolved_ips' => $resolvedIps,
@@ -8186,6 +8206,84 @@ class Start extends CommandAbstract
                 \implode(', ', $serverIps),
             ]),
         ];
+    }
+
+    /**
+     * @param list<string> $resolvedIps
+     */
+    protected function isCloudflareEdgeResolvedHost(array $resolvedIps): bool
+    {
+        if ($resolvedIps === []) {
+            return false;
+        }
+
+        foreach ($resolvedIps as $ip) {
+            if (!CloudflareTrustedProxyCatalog::contains($ip)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param list<string> $resolvedIps
+     * @param list<string> $serverIps
+     * @return array{success: bool, skipped: bool, proxied: bool, message: string, resolved_ips: list<string>, server_ips: list<string>}
+     */
+    protected function cdnProxiedHostResolution(string $host, array $resolvedIps, array $serverIps): array
+    {
+        return [
+            'success' => true,
+            'skipped' => true,
+            'proxied' => true,
+            'resolved_ips' => $resolvedIps,
+            'server_ips' => $serverIps,
+            'message' => __('真实 Host %{1} 已在 wls.host_guard.cdn_proxied_hosts 显式登记，且解析到 Cloudflare 边缘 IP（%{2}），跳过源站 IP 校验。', [
+                $host,
+                \implode(', ', $resolvedIps),
+            ]),
+        ];
+    }
+
+    /**
+     * 显式登记 CDN 代理域名（wls.host_guard.cdn_proxied_hosts）。
+     * 支持精确域名与 *.example.com 通配子域；未登记时门闸保持 fail-closed。
+     */
+    protected function isExplicitlyCdnProxiedHost(string $host): bool
+    {
+        $envConfig = $this->getEnvConfig();
+        $wlsConfig = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
+        $hostGuard = \is_array($wlsConfig['host_guard'] ?? null) ? $wlsConfig['host_guard'] : [];
+        $allowedHosts = $hostGuard['cdn_proxied_hosts'] ?? [];
+        if (\is_string($allowedHosts)) {
+            $allowedHosts = \preg_split('/[\s,]+/', $allowedHosts) ?: [];
+        }
+        if (!\is_array($allowedHosts)) {
+            return false;
+        }
+
+        $host = \strtolower(\trim($host));
+        if ($host === '') {
+            return false;
+        }
+        foreach ($allowedHosts as $allowedHost) {
+            $allowedHost = \strtolower(\trim((string)$allowedHost));
+            if ($allowedHost === '') {
+                continue;
+            }
+            if ($allowedHost === $host) {
+                return true;
+            }
+            if (\str_starts_with($allowedHost, '*.')) {
+                $suffix = \substr($allowedHost, 1);
+                if (\str_ends_with($host, $suffix) && $host !== \substr($suffix, 1)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
