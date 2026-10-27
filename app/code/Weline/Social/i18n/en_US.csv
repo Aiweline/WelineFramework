@@ -226,11 +226,11 @@ grid,grid
 账户管理,"Account Management"
 范围社媒,"Scope social media"
 "AI 创意","AI Creative"
+审片,审片
 一键发布,"One-click Publish"
 发布记录,"Publish Records"
 日更计划,日更计划
 扩展发布,扩展发布
-审片,审片
 "内置平台与扩展平台统一进入 Provider 注册表，图标由平台 code 自动解析为 SVG。","Built-in and extension platforms are unified in the Provider registry. Icons resolve automatically from platform code as SVG."
 搜索平台,"Search platforms"
 搜索平台名称、编码、状态或授权方式,"Search by name, code, status, or auth mode"
@@ -283,6 +283,13 @@ grid,grid
 生成创意草稿,"Generate Creative Draft"
 最近草稿,"Recent Drafts"
 暂无创意草稿。,"No creative drafts."
+"视频默认人工审片：通过后才生成发布任务，驳回会重新生成（最多 2 次）；人审同时确认配乐许可三件套。","视频默认人工审片：通过后才生成发布任务，驳回会重新生成（最多 2 次）；人审同时确认配乐许可三件套。"
+不审不发,不审不发
+暂无待审视频。,暂无待审视频。
+配乐许可：%{1},配乐许可：%{1}
+配乐许可：未确认（不可发布）,配乐许可：未确认（不可发布）
+通过,通过
+驳回,驳回
 "草稿 ID","Draft ID"
 发布范围,"Release scope"
 全部站发布,"Publish all websites"
@@ -344,13 +351,6 @@ grid,grid
 复制,复制
 "授权码只显示一次；生成后 5 分钟内到扩展选项页粘贴。","授权码只显示一次；生成后 5 分钟内到扩展选项页粘贴。"
 "用户打开页面或扩展在线后会自动排空待发队列；不在线只累计，不判失败，超过 24 小时转为 stale 并计入运行状态。","用户打开页面或扩展在线后会自动排空待发队列；不在线只累计，不判失败，超过 24 小时转为 stale 并计入运行状态。"
-"视频默认人工审片：通过后才生成发布任务，驳回会重新生成（最多 2 次）；人审同时确认配乐许可三件套。","视频默认人工审片：通过后才生成发布任务，驳回会重新生成（最多 2 次）；人审同时确认配乐许可三件套。"
-不审不发,不审不发
-暂无待审视频。,暂无待审视频。
-配乐许可：%{1},配乐许可：%{1}
-配乐许可：未确认（不可发布）,配乐许可：未确认（不可发布）
-通过,通过
-驳回,驳回
 驳回审片,驳回审片
 驳回原因,驳回原因
 说明需要重生成的原因,说明需要重生成的原因

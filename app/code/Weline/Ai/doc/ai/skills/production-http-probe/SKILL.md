@@ -25,7 +25,8 @@ aliases:
 
 1. **禁止** Agent 本机对生产公网 FQDN `curl`/`wget`/`httpie`。  
 2. **必须** Read 站柜 README → SSH 主用 Host → 远端 `127.0.0.1` + `Host:` 探活（`curl --max-time 5`，禁止 10/15/30s）。  
-3. Forbidden/`shared_ban` → `server:security:unblock`，禁止更多本机公网 curl。  
+3. 生产 HTML / robots / sitemap 验收必须带安装级穿章：先读 `generated/framework/fpc_pierce_secret`，URL 追加 `w_fpc_pierce=<secret>`；secret 不打印、不落日志。  
+4. Forbidden/`shared_ban` → `server:security:unblock`，禁止更多本机公网 curl。  
 
 ## 豁免
 
@@ -35,3 +36,4 @@ aliases:
 
 - [ ] 未从 Agent 本机对公网生产 Host 发 curl  
 - [ ] 探活证据来自 SSH 本机或等价 MCP  
+- [ ] HTML / robots / sitemap 验收带 `w_fpc_pierce`，且 secret 未出现在输出/日志  

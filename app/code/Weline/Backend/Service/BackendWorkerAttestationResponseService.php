@@ -46,11 +46,20 @@ final class BackendWorkerAttestationResponseService
         if ((!$result instanceof Response && !\is_string($result))
             || $this->alreadyProcessed()
             || !$this->isEligibleRequest()) {
+            \w_log_error('[BackendWorkerAttestation][diag] skip: type={type} processed={processed} eligible={eligible}', [
+                'type' => \is_object($result) ? \get_class($result) : \gettype($result),
+                'processed' => $this->alreadyProcessed() ? 1 : 0,
+                'eligible' => $this->isEligibleRequest() ? 1 : 0,
+            ], 'worker_backend_attestation');
             return $result;
         }
 
         $response = $result instanceof Response ? $result : new Response();
         if (!$this->isEligibleResponse($response)) {
+            \w_log_error('[BackendWorkerAttestation][diag] skip: response ineligible status={status} type={ct}', [
+                'status' => $response->getStatusCode(),
+                'ct' => $this->headerValue($response, 'Content-Type'),
+            ], 'worker_backend_attestation');
             return $result;
         }
 
@@ -60,6 +69,12 @@ final class BackendWorkerAttestationResponseService
         // proof. Production requires positive user-activated top-level Fetch
         // Metadata; only local DEV harnesses may omit the headers entirely.
         if (!$this->isTopLevelDocumentNavigation()) {
+            \w_log_error('[BackendWorkerAttestation][diag] skip: non-navigation mode={mode} dest={dest} user={user} purpose={purpose}', [
+                'mode' => (string)Context::getCurrent()?->server('HTTP_SEC_FETCH_MODE', ''),
+                'dest' => (string)Context::getCurrent()?->server('HTTP_SEC_FETCH_DEST', ''),
+                'user' => (string)Context::getCurrent()?->server('HTTP_SEC_FETCH_USER', ''),
+                'purpose' => (string)Context::getCurrent()?->server('HTTP_PURPOSE', ''),
+            ], 'worker_backend_attestation');
             RequestContext::set(self::REQUEST_STATE_KEY, ['status' => 'non_navigation']);
             return $result;
         }

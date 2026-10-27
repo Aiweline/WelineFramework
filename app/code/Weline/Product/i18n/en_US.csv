@@ -1304,26 +1304,29 @@ SKU（每次新建使用唯一值）,"SKU (use a unique value for each new produ
 "rollback 目标：dual_read（默认）或 legacy","Rollback target: dual_read (default) or legacy."
 收起悬浮,"Collapse float"
 展开悬浮,"Expand float"
-推荐产品,推荐产品
-"第 %{1}–%{2} 件，共 %{3} 件商品","%{1}–%{2} of %{3} products"
+"第 %{1}–%{2} 件，共 %{3} 件结果","%{1}–%{2} of %{3} results"
 "平均 %{1} 星","Average %{1} stars"
 "%{1} 条评价","%{1} ratings"
-"Page %{1} of %{2}","Page %{1} of %{2}"
-"第 %{1}–%{2} 件，共 %{3} 件结果","%{1}–%{2} of %{3} results"
-"共 %{1} 件新品","%{1} new arrivals"
-"已售 %{1}","%{1} sold"
-迷你购物车,迷你购物车
-商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
-小计,小计
-税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
-去结算,去结算
-搜索商品、分类与关键词...,搜索商品、分类与关键词...
 按价格从低到高排序,"Sort by: Price: Low to High"
 按价格从高到低排序,"Sort by: Price: High to Low"
 "按名称 A-Z 排序","Sort by: Name: A-Z"
 按精选排序,"Sort by: Featured"
 "%{1} 件物件","%{1} objects"
 当前筛选条件下暂无商品，请调整筛选。,"No products match the current filters."
+"第 %{1}–%{2} 件，共 %{3} 件商品","%{1}–%{2} of %{3} products"
+"已售 %{1}","%{1} sold"
+甄选近期上架的汉服、马面裙与传统配饰，循时序发现新的东方衣冠。,甄选近期上架的汉服、马面裙与传统配饰，循时序发现新的东方衣冠。
+"共 %{1} 件新品","%{1} new arrivals"
+新品汉服,新品汉服
+汉服商品,汉服商品
+推荐产品,推荐产品
+"Page %{1} of %{2}","Page %{1} of %{2}"
+迷你购物车,迷你购物车
+商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
+小计,小计
+税费与运费将在结算时计算,"Taxes and shipping calculated at checkout"
+去结算,去结算
+搜索商品、分类与关键词...,搜索商品、分类与关键词...
 排序：价格从低到高,"Sort: Price: Low to High"
 排序：价格从高到低,"Sort: Price: High to Low"
 "排序：名称 A-Z","Sort: Name: A-Z"

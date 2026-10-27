@@ -26,7 +26,7 @@ lane=engineering
        P0 立项 → P1 对齐冻结(UC+contracts+deps) → P2 方案
        → P3 施工 → P4 专席复审 → P5 UI∥原型过签
        → P6 真机测试闭环（硬）→ P7 文档工程师 → P8 汇审+用户汇报
-  → 简单：监工: 同闭环，无多席扮演
+  → 很小需求（work_scale=tiny）：监工: 同闭环，无多席扮演；其余默认 team
 ```
 
 操作壳阶段文件（仅顺序）：插件 `lifecycle.yaml`。波次正文：[工程团队.md](./工程团队.md)。阶段语义：[AI工程交付流程.md](../../app/code/Weline/Ai/doc/AI工程交付流程.md)。

@@ -55,6 +55,12 @@ class SeoProfileValidationService
                 if (!is_array($offer)) { continue; }
                 if (!isset($offer['hasMerchantReturnPolicy']) && !isset($offer['merchant_return_policy'])) {
                     $warnings[] = 'product offers should expose hasMerchantReturnPolicy for merchant listing rich results.';
+                } else {
+                    $policy = $this->toArray($offer['hasMerchantReturnPolicy'] ?? $offer['merchant_return_policy'] ?? []);
+                    if (($policy['returnFees'] ?? '') === 'https://schema.org/ReturnShippingFees'
+                        && !isset($policy['returnShippingFeesAmount'])) {
+                        $warnings[] = 'merchant return policy with returnFees=ReturnShippingFees must expose returnShippingFeesAmount.';
+                    }
                 }
                 if (!isset($offer['shippingDetails']) && !isset($offer['shipping_details'])) {
                     $warnings[] = 'product offers should expose shippingDetails for merchant listing rich results.';

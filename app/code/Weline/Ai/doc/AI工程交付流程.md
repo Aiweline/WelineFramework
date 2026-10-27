@@ -28,7 +28,7 @@
 1c 宿主计划模式      Agent 自行 Plan Mode；**简单可 skip**（仍须真机验收）
 2  扩展点选型        扩展点选型.md → 文档索引 / doc/event / Query / Hook
 3  计划拆解          背景+方案+细节 → 自审通过后切 Agent 开发
-3b 工程团队          非简单：一席一智能体；对齐冻结(UC+contracts+deps)→施工→专席复审
+3b 工程团队          默认（非 tiny）：一席一智能体；对齐冻结(UC+contracts+deps)→施工→专席复审
                      → UI∥原型过签 → **P6 真机测试闭环** → 文档工程师 → PM 汇审
 4  实现              宿主原生编辑 + TDD（红灯可辅助；≠交付）
 5  复审              专席合规复审（fail→返工）
@@ -83,7 +83,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - **任何方案须架构式审查（硬门槛，`scheme_requires_architecture_review`）**：三视角之架构——正式计划与 simple 跳过时的实现方案，在批准/写码前都必须核对 `mechanism` + `owning_module` + `not_to_do`≥1，并判定架构级 vs 补丁级——**禁止**开工「想怎么写就怎么写」式补丁方案；正式计划与代码证据、影响面三联；simple 仍须紧凑 `architecture_review` + 置尾结论。
 - **面向用户结论置尾（硬门槛，`user_facing_verdict_last`）**：凡需明确结论的用户问法（是不是/能不能/好了吗/是否通过/选哪项等），依据与过程在前，**对应形式的最终结论放在回复末尾**；禁止中段先答再大段解释。计划审查「是否通过置尾」是本条特化。
 - **面向用户简述汇报（硬门槛，`user_facing_brief_plain_report`）**：聊天固定模板 `问题：`→`改动/已做：`→（可选 `需你确认：`）→`结论：`，≤5 行、可裁决用词；「简述」触发；**「减速」≠「简述」**；证据自存；口糊意图自行补全清晰/短格式。
-- **简单需求可跳过计划**：同时满足时可记 `plan_complexity=simple` + `plan_skip_rationale`≥24 字并跳过 Plan Mode——单模块、无新建扩展点发明、无多章计划、约 ≤2 小时/单表面、前后端架构无歧义。**跳过计划 ≠ 跳过验收**（`requirement_acceptance_always`）。同一条件走**监工**，不叫团队。对外每句以 `监工:` 开头。
+- **很小需求可跳过计划**：同时满足时可记 `plan_complexity=simple` + `plan_skip_rationale`≥24 字并跳过 Plan Mode——单模块、无新建扩展点发明、无多章计划、约 ≤2 小时/单表面、前后端架构无歧义。**跳过计划 ≠ 跳过验收**（`requirement_acceptance_always`），也 **≠ 跳过团队**：`plan_complexity=simple` 只表示可跳过正式计划，不再自动等于监工。**仅 `work_scale=tiny` 才走 `监工:`**（单个归属模块、单个清晰表面、无新扩展点发明、无多章计划、无前后端跨层架构歧义、约 ≤30 分钟可完成）；其余一律 team。
 - **前后端范围（硬，`requirement_fe_be_scope_analysis`）**：每条需求须分析并记录 `fe_be_scope=frontend|backend|both|na` 及各侧要点；禁止只做一侧却漏该做的另一侧。
 - **验收不可省（硬，`requirement_acceptance_always`）**：宣称完成前必须有真实验收证据。**先测后报**：禁止在验收未跑通前向用户写「已完成 / 已修好 / 可验收 / PASS」；未测只能「代码已改，验收未完成」。触及 Web/UI 时，即使不做 Playwright e2e（仅 simple 豁免），也必须本机 **真机 Web 测试（WB-OP）**：导航 → `browser_click`/`browser_fill` → **`browser_take_screenshot` + 宿主 Read 截图审图**（裁切/溢出/密度；`acceptance_phase_requires_shentu`）；curl / CDP `Runtime.evaluate` / 尺寸 metrics / 截图未 Read / DOM 抽取不能替代；可见裁切须同回合修；禁止甩用户测。feature 另须满足上款 **UC 闭环**（`requirement_use_case_closed_loop_acceptance`）。
 - **计划 acceptance 映射 UC**：每条覆盖用例的验收项写 `covers_use_cases: [UC-1, …]`，与规格「映射 acceptance」id 对齐；收口对照规格全部 `UC-*`。
@@ -94,9 +94,9 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 - 写码：宿主原生编辑；动手前明确 goal、requirements、known_paths、known_symbols。
 - 原子任务：单次变更宜 2–4 小时可验收；过大则拆 child_requests。
 
-### 3b. 工程团队（复杂才自己选 team）
+### 3b. 工程团队（默认 team，仅很小需求监工）
 
-- **硬门槛（`engineering_team_for_new_requirements`）**：父会话自己选模式，不必等用户开口。简单走监工，每句 `监工:`。复杂自己进入 team；**父会话仅 `Team:项目经理:`**；其余席位必须是**真实子智能体**（`one_seat_one_agent`），禁止父会话换前缀扮演。席间经 `channel/{thread}.md` + resume **互聊**（`peer_talk_via_channel`）；项目经理 = **SESSION 记账 + 计划生命周期主人 + 交换机**（DoD 检查，不替代专席技术复审）。转述子智能体结论时才出现 `Team:架构师:` 等前缀。细则 [工程团队](../../../../../dev/ai-command/ai/工程团队.md)。
+- **硬门槛（`engineering_team_for_new_requirements`）**：父会话自己选模式，不必等用户开口，**默认 team**。仅 `work_scale=tiny`（很小需求，六条件见 §3「很小需求可跳过计划」）走监工，每句 `监工:`。其余全部进入 team；**父会话仅 `Team:项目经理:`**；其余席位必须是**真实子智能体**（`one_seat_one_agent`），禁止父会话换前缀扮演。**席位按涉及职位配置**：默认最小编制 = 项目经理（父会话）+ 需求分析/领域探查 + 架构师 + 实现席（后端/前端等）+ 测试；涉 UI 加原型+UI+前端+主题开发工程师；涉 REST/Query 加 API；涉支付加支付开发工程师；涉 Visitor/像素加数据分析；涉热路径/缓存加性能检查工程师；涉耐久文档加文档工程师。席间经 `channel/{thread}.md` + resume **互聊**（`peer_talk_via_channel`）；项目经理 = **SESSION 记账 + 计划生命周期主人 + 交换机**（DoD 检查，不替代专席技术复审）。转述子智能体结论时才出现 `Team:架构师:` 等前缀。`plan_complexity=simple` 只表示可跳过正式计划，跳过计划 ≠ 跳过团队、≠ 跳过验收。细则 [工程团队](../../../../../dev/ai-command/ai/工程团队.md)。
 - **需求会话总控（`requirement_session_dashboard`）**：立项即建仓库根 `dev/session/{slug}.md`（与归属模块 `doc/开发/spec/{slug}.md` 同 slug；模板 [requirement-session.md](../../../../../dev/ai-command/ai/templates/requirement-session.md)）。集中阶段、计划项进度、未完成清单、审查索引、交付通知日志；仅 PM/监工维护。**禁止**写入模块 `doc/`（`module_doc_forbids_ephemeral_work_artifacts`）。无 SESSION 不得施工；未完成清单非「无」不得宣称完成。
 - **项目经理计划生命周期（`pm_plan_lifecycle`）**：审缺口→派人→监控→席位交付必 `notify_pm`→PM DoD 检查并更新 SESSION→按 deps 唤醒（已满足 deps 可并行）→等测试通知→PM 复检→关计划项；发现须开子 `plan_id` 跟到测试+复检闭环；返工记 SESSION 再拉人循环；全部 closed + 汇审通过才汇报。
 - **席位专项技能镜（`seat_skill_mirrors`）**：每席子智能体提示 = 通用骨架 + 该席增量；开工前必须 `get_skill` / Read 本席 MCP 技能与权威文档（如前端→`frontend_development`+Taglib/Theme；事件→`event_extension`；**数据分析→`visitor_data_analytics`+技能引用`frontend_development`+`taglib_ui_control`+像素指南（整模块 Visitor 含本模块 event.xml/像素桥接；≠通用事件席·禁产品混岗；GTM/GA4 互斥+去重+字典/链）**；**API→`api_sdk_development`+API接口开发规范+BinQuery Provider开发指南**；**支付→`payment_development`+payment-shell+provider-development（改完必拉测试席真浏览器过触及支付全流程）**；**性能检查→`performance_check`+统一缓存范围与性能优化（设计检查+开发后复审；框架约束内）**；**电商顾问→`ecommerce_advisor`+电商顾问.md（禁写码；联网政策；合并原合规）**；后端→模块开发指南+升版门禁）。禁止只发通用骨架。MCP：`engineering_team_bundle.seat_skill_mirrors`。框架专席含 **API**（只做 REST **或** BinQuery/QueryProvider；归属模块落盘；站内业务走 BinQuery，对外走 REST；见 `api_rest_in_owning_module`）、**支付开发工程师**（万能支付壳/对接/退款/Webhook；见 `payment_engineer_for_payment_work`；**`payment_browser_e2e_closed_loop`：改完拉 `Team:测试:` 真 Browser 过方法全流程才过手**；指令 [支付开发.md](../../../../../dev/ai-command/ai/支付开发.md)）、**数据分析**（`Weline_Visitor` 整模块/像素/报表；见 `analytics_engineer_for_visitor_work`；须前端技能引用）、**性能检查工程师**（热路径/缓存设计检查与开发后复审；见 `performance_engineer_for_design_and_review`；指令 [性能检查.md](../../../../../dev/ai-command/ai/性能检查.md)）与 **电商顾问**（见 `ecommerce_advisor_for_commerce`；指令 [电商顾问.md](../../../../../dev/ai-command/ai/电商顾问.md)）。
@@ -232,7 +232,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 |------|----------|
 | 0 | **必须** `prepare_project`（工程任务；刷新 hard_constraints） |
 | 1–2 | 按需 `resolve_task_context`、`search_project_knowledge`、`get_indexed_document` |
-| 3 | 工程计划自检（需求/架构/验收项记录于任务笔记或模块文档）；非简单需求按 [工程团队](../../../../../dev/ai-command/ai/工程团队.md) 编制 |
+| 3 | 工程计划自检（需求/架构/验收项记录于任务笔记或模块文档）；默认（非 `work_scale=tiny`）按 [工程团队](../../../../../dev/ai-command/ai/工程团队.md) 编制 |
 | 3b | `get_skill(engineering_team)`；纪要 `dev/team/{slug}/`；停工则等用户确认 |
 | 3–4 | **宿主原生编辑**（按需 MCP 只读检索） |
 | 部署计划 | 宿主直接调用 `Weline_Deploy` CLI / 运维文档（MCP 不再提供 deploy 工具） |

@@ -43,6 +43,21 @@ WelineFramework packages module lifecycle, generated routing, attribute-driven O
 
 > WLS is a **framework runtime**, not a generic HTTP debugging server. Use it when you want resident workers and in-process services; use FPM when you want the classic stack.
 
+## Capability Map
+
+WelineFramework is more than a PHP runtime: the surrounding business stack ships as installable modules.
+
+- **Domain → HTTPS** — domain pool, registrar adapters (GoDaddy, Gname, Aliyun, Cloudflare, Route53, Azure DNS), DNS orchestration, Let's Encrypt issuance and renewal.
+- **Multi-site** — Website → Store → SalesChannel scope: one codebase, many sites.
+- **Speed** — CDN integration plus multi-layer FPC (process/shared memory → html-disk → edge), URL-level invalidation, scheduled/idle warmup; FPC can be turned off.
+- **Commerce** — B2B price lists, EAV attributes, provider-defined product/payment/order types, subscriptions, customer assets, points/VIP tiers, vendor split settlement, promotion themes, affiliate, dropshipping, marketing/winback.
+- **Growth** — full-site search, product feeds (Google/Meta/TikTok/…), SEO URL/sitemap push to multiple search engines, GEO feeds for AI search, AI translation, social publishing autopilot, AI lead acquisition.
+- **Communication** — enterprise mail server, SMTP templates, notification channel subscriptions (Email/DingTalk/Feishu/Telegram/Webhook), newsletter, built-in customer service.
+- **Delivery** — webhook/tag deploy, rollback, maintenance mode, theme releases without dropping pages, Docker, one-click install.
+- **AI engineering** — built-in MCP, module skills, AI agents/ops desk, site setup assistant, developer panel, API workbench, plugin store.
+
+Full capability atlas with owning modules, entry points, and evidence: [Capability Atlas (Chinese)](./app/code/Weline/Framework/doc/能力全景.md).
+
 ## Quick Start
 
 Linux / macOS / Git Bash:

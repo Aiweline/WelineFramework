@@ -126,8 +126,8 @@ final class GuidanceWorkflowCatalog
             '[Dirty workspace] preserve_dirty_workspace: never wipe dirty with git checkout/restore/clean/stash; dirty-load current disk before edit; forbid other-session/old-baseline overwrite of live dirty files.',
             '【整机共享态】machine_shared_side_effects_require_workspace_scope：钥匙串 Local CA 与 ~/.cursor/mcp.json bound/cognition --repo 只许服务当前工作区；禁止兄弟仓 CA 进系统信任，禁止把全局 MCP 改绑到兄弟仓。',
             '[Machine-shared state] machine_shared_side_effects_require_workspace_scope: keychain Local CA and ~/.cursor/mcp.json bound/cognition --repo must stay scoped to the current workspace; forbid sibling-repo CA into System trust; forbid rebinding global MCP to a sibling repo.',
-            '【每条编码需求】提出后须：① 分析前后端是否要做（fe_be_scope）；② 澄清/用例（简单可轻量）；③ 非简单则宿主 Plan Mode（简单可 plan_skip+理由）；③b **简单用监工（每句监工:），复杂由父会话进 team（父会话仅 Team:项目经理:；每席真实子智能体；席间 channel+resume 互聊；禁扮演）**；④ **一定要验收**—即使不做 Playwright e2e，凡触及 Web 须本机 **真机 Web 测试**（Browser 导航→browser_click/fill→截图/快照 Read；禁止仅 Runtime.evaluate/curl 冒充 WB-OP）；⑤ 布局调整/不够人性化/被吐槽/审图时 **原型+UI 必须参与并调整**；⑥ 隐形需求、work_kind、ui_skill_decision；再 TDD→跑测→汇审→交付地址。',
-            '[Every coding requirement] Analyze FE/BE scope; clarify/use-case (light when simple); host Plan Mode unless simple skip; non-simple requirements staff the engineering team (parent=项目经理 switchboard only, one real subagent per seat, peer talk via channel+resume, 停工 and wait on architecture contradictions; simple skip and content-ops exempt); ALWAYS acceptance—Web touches need local Browser WB-OP visual+logic even without Playwright e2e; layout/humanization/complaint/审图 force prototype+UI adjustments; then TDD→verify→汇审→delivery URLs.',
+            '【每条编码需求】提出后须：① 分析前后端是否要做（fe_be_scope）；② 澄清/用例（简单可轻量）；③ 非简单则宿主 Plan Mode（简单可 plan_skip+理由）；③b **默认 team（按涉及职位配席位；父会话仅 Team:项目经理:；每席真实子智能体；席间 channel+resume 互聊；禁扮演）；仅 work_scale=tiny（单模块/单表面/≤30min/零扩展点）用监工（每句监工:）；plan_complexity=simple 只表示可跳正式计划，不等于监工**；④ **一定要验收**—即使不做 Playwright e2e，凡触及 Web 须本机 **真机 Web 测试**（Browser 导航→browser_click/fill→截图/快照 Read；禁止仅 Runtime.evaluate/curl 冒充 WB-OP）；⑤ 布局调整/不够人性化/被吐槽/审图时 **原型+UI 必须参与并调整**；⑥ 隐形需求、work_kind、ui_skill_decision；再 TDD→跑测→汇审→交付地址。',
+            '[Every coding requirement] Analyze FE/BE scope; clarify/use-case (light when simple); host Plan Mode unless simple skip; DEFAULT team for every engineering ask (parent=项目经理 switchboard only, one real subagent per seat, peer talk via channel+resume, 停工 and wait on architecture contradictions); only work_scale=tiny may use 监工; plan_complexity=simple only skips the formal plan and does NOT waive team/acceptance; content-ops exempt; ALWAYS acceptance—Web touches need local Browser WB-OP visual+logic even without Playwright e2e; layout/humanization/complaint/审图 force prototype+UI adjustments; then TDD→verify→汇审→delivery URLs.',
         ];
     }
 
@@ -425,7 +425,7 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'engineering_team', 'label' => '工程团队编制与停工门禁', 'tools' => ['get_skill'], 'docs' => [
                     'dev/ai-command/ai/工程团队.md',
                 ], 'notes' => [
-                    'MANDATORY (engineering_team_for_new_requirements): parent itself picks the mode. Simple → 监工, user-facing lines start with 监工:. Complex → parent chooses team mode and seats; parent utters ONLY Team:项目经理:; ONE_SEAT_ONE_AGENT—each seat is a real host subagent (forbid parent roleplay); PEER_TALK_VIA_CHANNEL—seats talk via channel/{thread}.md + resume peers (forbid forged multi-seat dialogue); relay Team:架构师: only from real subagent reports. Content-ops exempt.',
+                    'MANDATORY (engineering_team_for_new_requirements): DEFAULT team for every engineering ask; parent itself picks seats by the jobs the requirement touches. ONLY work_scale=tiny (single module/single surface/≤30min/no new extension point) → 监工, user-facing lines start with 监工:; plan_complexity=simple only skips the formal plan and is NOT 监工. Team → parent utters ONLY Team:项目经理:; ONE_SEAT_ONE_AGENT—each seat is a real host subagent (forbid parent roleplay); PEER_TALK_VIA_CHANNEL—seats talk via channel/{thread}.md + resume peers (forbid forged multi-seat dialogue); relay Team:架构师: only from real subagent reports. Content-ops exempt.',
                     'Parent is 项目经理: SESSION bookkeeper + plan-lifecycle owner + switchboard (DoD check; NOT code-review substitute). Framework first + dual_track_all: each triggered specialty seat has 施工 + 合规复审 (事件/扩展点/Taglib/UI/i18n…). Fail → rework before acceptance.',
                     'SESSION (requirement_session_dashboard + pm_plan_lifecycle): create dev/session/{slug}.md (template requirement-session.md) at kickoff—FORBID module doc/session (module_doc_forbids_ephemeral_work_artifacts); ONLY PM edits; seat deliveries require notify_pm→PM DoD check→update SESSION; deps-satisfied seats may parallel; findings open plan_ids until test+PM recheck; gaps non-empty forbid claiming done.',
                     'FLOW (team_flow_on_contracts): after 立项会, 对齐冻结会 (测试主持) freezes executable UC + contracts.md + deps.md before tech finalization/build. Wake-on-deps concurrency. Forbid designing main-path use cases after development. Acceptance EXECUTES frozen UC only.',
@@ -1350,7 +1350,7 @@ final class GuidanceWorkflowCatalog
         return [
             'id' => self::SURFACE_ENGINEERING_TEAM,
             'label' => '工程团队',
-            'description' => '父会话自己选模式：简单用监工（监工:）；复杂进入 team——父会话仅 Team:项目经理:，每席必须真实子智能体（one_seat_one_agent），席间经 channel/{thread}.md + resume 互聊（peer_talk_via_channel）。禁止父会话扮演多席。框架优先、全专席双轨、组件协商、ui_prototype_gate_before_test（UI+原型先审过签才测→测试→PM汇审才汇报）。内容运营两种前缀都不用。',
+            'description' => '默认 team：父会话按涉及职位配席位；仅 work_scale=tiny（单模块/单表面/≤30min/零扩展点）用监工（监工:）；plan_complexity=simple 只跳过正式计划，不等于监工。team 父会话仅 Team:项目经理:，每席必须真实子智能体（one_seat_one_agent），席间经 channel/{thread}.md + resume 互聊（peer_talk_via_channel）。禁止父会话扮演多席。框架优先、全专席双轨、组件协商、ui_prototype_gate_before_test（UI+原型先审过签才测→测试→PM汇审才汇报）。内容运营两种前缀都不用。',
             'triggers' => [
                 '工程团队', '大型团队', '子智能体', '停工汇报', '技术方案会', '问题上报',
                 '拉起项目经理', 'findings_wake_pm', '请立刻组队解决',
@@ -1391,7 +1391,7 @@ final class GuidanceWorkflowCatalog
                 'app/code/Weline/Visitor/doc/像素拓展使用指南.md',
             ],
             'norms' => [
-                ['id' => 'staff_before_code', 'summary' => '简单→监工（前缀监工:）；复杂→父会话选 team；父会话仅 Team:项目经理:'],
+                ['id' => 'staff_before_code', 'summary' => '默认 team（按涉及职位配真子智能体）；仅 work_scale=tiny→监工（前缀监工:）；父会话仅 Team:项目经理:'],
                 ['id' => 'one_seat_one_agent', 'summary' => '每席真实宿主子智能体；禁止父会话换前缀扮演多席'],
                 ['id' => 'peer_talk_via_channel', 'summary' => '席间经 channel/{thread}.md + resume 对端子智能体互聊；项目经理只做交换机'],
                 ['id' => 'parent_is_pm', 'summary' => '父会话是项目经理；席位按波次上场，不全员同时开工；roster 登记 agent_id'],
@@ -1455,7 +1455,7 @@ final class GuidanceWorkflowCatalog
             ],
             'template_surface_rules' => [
                 'forbidden' => [
-                    'Staffing the large team on plan_complexity=simple or on content-ops (产品优化/新建文章)',
+                    'Skipping team because plan_complexity=simple (only work_scale=tiny may use 监工) or applying team prefixes to content-ops (产品优化/新建文章)',
                     'Parent role-playing other seats by emitting Team:{席位}: without a real subagent',
                     'Inventing multi-seat dialogue instead of channel/{thread}.md + resume peers',
                     'Parallel edits to the same file or extension point before the contract is frozen',

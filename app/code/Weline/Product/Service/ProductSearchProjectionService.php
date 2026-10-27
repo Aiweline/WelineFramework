@@ -37,6 +37,12 @@ final class ProductSearchProjectionService
 
     private const SEARCH_NAME_ATTRIBUTE = 'name';
 
+    /** @var list<string> */
+    private const SEARCH_SLUG_ATTRIBUTES = [
+        'source_slug',
+        'slug',
+    ];
+
     /** Keep a small per-process snapshot cache keyed by website + watermark. */
     private const SNAPSHOT_PROCESS_CACHE_MAX = 1;
     /** Full-site search snapshots are multi-MB; keep them out of the worker bag. */
@@ -235,7 +241,7 @@ final class ProductSearchProjectionService
                         $product,
                         $offer,
                         $watermark,
-                        $searchTexts[$productId] ?? ['title' => '', 'keywords' => '', 'localized_titles' => []],
+                        $searchTexts[$productId] ?? ['title' => '', 'keywords' => '', 'localized_titles' => [], 'slug' => ''],
                         $offerIdentities,
                         $productIdentities,
                     );
@@ -351,7 +357,7 @@ final class ProductSearchProjectionService
                         $productRow,
                         $offer,
                         $currentWatermark,
-                        $searchTexts[$productId] ?? ['title' => '', 'keywords' => '', 'localized_titles' => []],
+                        $searchTexts[$productId] ?? ['title' => '', 'keywords' => '', 'localized_titles' => [], 'slug' => ''],
                     );
                 }
             }
@@ -409,7 +415,7 @@ final class ProductSearchProjectionService
      * @param array{store:StoreSummary,channel:\Weline\Websites\Api\Catalog\Data\SalesChannelSummary} $scope
      * @param array<string,mixed> $product
      * @param array<string,mixed> $offer
-     * @param array{title:string,keywords:string,localized_titles:array<string,string>} $searchText
+     * @param array{title:string,keywords:string,localized_titles:array<string,string>,slug:string} $searchText
      * @param array<string, \Weline\Product\Api\Data\OfferIdentityV2> $offerIdentities
      * @param array<string, \Weline\Product\Api\Data\ProductIdentityV2> $productIdentities
      * @return array<string,mixed>
@@ -454,6 +460,10 @@ final class ProductSearchProjectionService
             (string)($productIdentity?->productCode ?? ''),
             (string)($searchText['keywords'] ?? ''),
         ];
+        $publicSlug = $this->resolvePublicSlug(
+            [(string)($searchText['slug'] ?? '')],
+            $sku,
+        );
 
         return $identity + [
             'title' => $title,
@@ -464,7 +474,7 @@ final class ProductSearchProjectionService
             'localized_titles' => \is_array($searchText['localized_titles'] ?? null)
                 ? $searchText['localized_titles']
                 : [],
-            'url' => 'product/' . $productId,
+            'url' => 'product/' . ($publicSlug !== '' ? $publicSlug : $productId),
             'product_id' => $productId,
             'offer_id' => $offerId,
             'global_product_uuid' => $productUuid,
@@ -528,7 +538,7 @@ final class ProductSearchProjectionService
 
     /**
      * @param list<int> $productIds
-     * @return array<int, array{title:string,keywords:string,localized_titles:array<string,string>}>
+     * @return array<int, array{title:string,keywords:string,localized_titles:array<string,string>,slug:string}>
      */
     private function buildProductSearchTexts(int $websiteId, array $productIds): array
     {
@@ -546,6 +556,7 @@ final class ProductSearchProjectionService
                 'title' => '',
                 'keywords' => '',
                 'localized_titles' => [],
+                'slug' => '',
             ];
         }
 
@@ -553,7 +564,11 @@ final class ProductSearchProjectionService
             $websiteId,
             'product',
             $productIds,
-            \array_merge([self::SEARCH_NAME_ATTRIBUTE], self::SEARCH_KEYWORD_ATTRIBUTES),
+            \array_merge(
+                [self::SEARCH_NAME_ATTRIBUTE],
+                self::SEARCH_KEYWORD_ATTRIBUTES,
+                self::SEARCH_SLUG_ATTRIBUTES,
+            ),
         );
         $privateOptionLabels = $this->collectPrivateOptionLabelsByProduct($productIds);
 
@@ -585,6 +600,17 @@ final class ProductSearchProjectionService
             $namesByLocale = $productAttributes[$productId][self::SEARCH_NAME_ATTRIBUTE] ?? [];
             $texts[$productId]['localized_titles'] = $namesByLocale;
             $texts[$productId]['title'] = $this->pickPrimaryLocaleText($namesByLocale);
+
+            $slugCandidates = [];
+            foreach (self::SEARCH_SLUG_ATTRIBUTES as $slugAttribute) {
+                foreach ($productAttributes[$productId][$slugAttribute] ?? [] as $slugValue) {
+                    $candidate = \strtolower(\trim((string)$slugValue));
+                    if ($candidate !== '') {
+                        $slugCandidates[] = $candidate;
+                    }
+                }
+            }
+            $texts[$productId]['slug'] = $this->resolvePublicSlug($slugCandidates, '');
 
             foreach ($productAttributes[$productId] ?? [] as $attributeTexts) {
                 foreach ($attributeTexts as $value) {
@@ -717,6 +743,33 @@ final class ProductSearchProjectionService
         }
 
         return $texts;
+    }
+
+    /**
+     * @param list<string> $candidates
+     */
+    private function resolvePublicSlug(array $candidates, string $sku): string
+    {
+        foreach ($candidates as $candidate) {
+            $candidate = \strtolower(\trim($candidate));
+            if (\preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $candidate) === 1) {
+                return $candidate;
+            }
+        }
+
+        return $this->publicSlugFromSku($sku);
+    }
+
+    private function publicSlugFromSku(string $sku): string
+    {
+        $slug = \strtolower(\trim($sku));
+        $slug = \preg_replace('/[^a-z0-9]+/', '-', $slug) ?? '';
+        $slug = \trim($slug, '-');
+        if ($slug === '' || \preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) !== 1) {
+            return '';
+        }
+
+        return $slug;
     }
 
     /**

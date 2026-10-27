@@ -144,7 +144,7 @@ final class HardConstraintsSymbolDsl
             'OneSeatOneAgent', 'Impl', 'HostPlanMode', 'ImplementabilityBullets', 'PromptWork', 'PayWork',
             'WidgetWork', 'ThemeWork', 'CodexOptIn', 'Cli', 'Codex', 'RuleCRUD', 'Skill', 'LangTable',
             'SyncMap', 'DirtySym', 'Silent', 'Nested', 'InverseRaised', 'Frontend', 'NeedPlan', 'PlanDone',
-            'Complex', 'Simple', 'API', 'DesignTheme', 'PlanBody', 'Scheme', 'SiteSeed', 'SiteCopy', 'ProjectRules',
+            'Complex', 'Simple', 'Tiny', 'API', 'DesignTheme', 'PlanBody', 'Scheme', 'SiteSeed', 'SiteCopy', 'ProjectRules',
             'McpGen', 'HandEdit', 'GlobalRuleEdit', 'MCP', 'HostMdc', 'DemoPage', 'Git', 'CacheOff', 'Port',
             'SeverityUi', 'SemTone', 'AllDefault',
             'CompVar', 'PaletteLeaf', 'DanglingVar',
@@ -610,8 +610,8 @@ final class HardConstraintsSymbolDsl
                 'cluster' => '§P',
             ],
             'engineering_team_for_new_requirements' => [
-                'formula' => 'Complex→□(PM∧OneSeatOneAgent)∧Simple→监工',
-                'gloss_zh' => '复杂一席一真子智能体；简单仅监工',
+                'formula' => '¬Tiny→□(PM∧Staff)|Tiny→监工',
+                'gloss_zh' => '默认team按涉及职位配真子智能体；仅很小需求可监工',
                 'cluster' => '§E',
             ],
             'host_plan_mode_for_planning' => [

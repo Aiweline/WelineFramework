@@ -41,6 +41,21 @@ WelineFramework 把模块生命周期、自动路由、属性驱动 ORM、事件
 
 > WLS 是**框架运行时**，不是通用 HTTP 调试入口。需要常驻 Worker 与进程内服务时用 WLS；需要经典栈时用 FPM。
 
+## 能力全景
+
+WelineFramework 不只是一个 PHP 运行时：域名、CDN、商城、邮件、SEO、AI 运营和自动部署都以可安装模块交付。
+
+- **域名到 HTTPS** — 域名池、注册商适配（GoDaddy / Gname / 阿里云 / Cloudflare / Route53 / Azure DNS）、DNS 编排、Let's Encrypt 自动申请与续签。
+- **多站点** — Website → Store → SalesChannel 三段 Scope，一套代码建多个站。
+- **速度** — CDN 对接 + 多层 FPC（进程/共享内存 → html-disk → 边缘），按 URL 清理、定时/空闲预热；FPC 可关闭。
+- **商城** — B2B 价目表、EAV 无限属性、商品/支付/订单类型 Provider、订阅、客户资产、积分/VIP 等级、供应商分账、活动特价、分销、货源代发、营销/再营销。
+- **增长** — 全站搜索、商品 Feed（Google/Meta/TikTok 等）、SEO 多引擎 URL/Sitemap 推送、GEO（AI 搜索）Feed、AI 翻译、融媒体自动发布、AI 获客。
+- **沟通** — 企业邮局、SMTP 模板、通知渠道订阅（邮件/钉钉/飞书/Telegram/Webhook）、邮件订阅、开箱即用的在线客服。
+- **交付** — Webhook/Tag 部署、回滚、维护模式、主题发布不丢页面、Docker、一键安装。
+- **AI 工程** — 内置 MCP、模块技能、AI 智能体/运营台、建站助手、开发面板、API 调试台、插件商城。
+
+完整能力地图（含归属模块、入口与证据）：[能力全景](./app/code/Weline/Framework/doc/能力全景.md)。
+
 ## 快速开始
 
 Linux / macOS / Git Bash:

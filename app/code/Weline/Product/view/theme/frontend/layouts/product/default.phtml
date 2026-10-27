@@ -357,8 +357,22 @@ $this->assign('meta', $meta);
     }
 
     /* ---- 主内容区域 ---- */
+    /*
+     * PDP 骨架（固定）：主信息两栏比例 / 栏距 / 图廊画框比例只在布局里声明一次，
+     * 部件与主题只消费 --pdp-* token，不再各自改列宽，避免渲染后骨架变形。
+     */
     .product-detail-layout__main-content {
+        --pdp-main-columns: minmax(0, 1.02fr) minmax(0, .98fr);
+        --pdp-main-gap: 44px;
+        --pdp-gallery-frame-ratio: .84;
         flex: 1;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .product-detail-layout__main-content > .theme-published-slot,
+    .product-detail-layout__main-content > .widget-wrapper {
+        width: 100%;
         min-width: 0;
     }
 

@@ -53,6 +53,7 @@ $expectedDefaults = [
     'seo/merchant/shipping_policy_url' => '/policy/shipping',
     'seo/merchant/return_days' => '30',
     'seo/merchant/return_fees' => 'buyer_pays',
+    'seo/merchant/return_shipping_fee' => '0',
     'seo/merchant/return_method' => 'mail',
     'seo/merchant/country' => 'WW',
 ];
@@ -168,7 +169,7 @@ $checkResolver = static function (): void {
     $resolver = new $class();
     $info = $resolver->resolve('default.default.default');
     accept_assert(is_array($info), 'resolver must return array');
-    foreach (['return_policy_url', 'shipping_policy_url', 'return_days', 'return_fees', 'return_method', 'country', 'brand', 'name', 'email', 'phone', 'address'] as $key) {
+    foreach (['return_policy_url', 'shipping_policy_url', 'return_days', 'return_fees', 'return_shipping_fee', 'return_method', 'country', 'brand', 'name', 'email', 'phone', 'address'] as $key) {
         accept_assert(array_key_exists($key, $info), 'resolver result missing ' . $key);
     }
     accept_assert($info['return_policy_url'] === '/policy/refund', 'default return policy url must be /policy/refund');
@@ -204,6 +205,31 @@ $checkFacts = static function (): void {
     }
     accept_assert((int) $policy['merchantReturnDays'] > 0, 'merchantReturnDays must be positive');
     accept_assert(str_starts_with((string) $policy['merchantReturnLink'], 'http'), 'merchantReturnLink must be absolute url');
+    if (isset($policy['returnShippingFeesAmount'])) {
+        $amount = $policy['returnShippingFeesAmount'];
+        accept_assert(is_array($amount), 'returnShippingFeesAmount type invalid');
+        accept_assert(($amount['@type'] ?? '') === 'MonetaryAmount', 'returnShippingFeesAmount @type invalid');
+        accept_assert(is_numeric($amount['value'] ?? null), 'returnShippingFeesAmount value invalid');
+        accept_assert(preg_match('/^[A-Z]{3}$/', (string) ($amount['currency'] ?? '')) === 1, 'returnShippingFeesAmount currency invalid');
+    }
+
+    // 未配置不得编造；显式配置后必须输出 MonetaryAmount。
+    $amountMethod = $reflection->getMethod('returnShippingFeesAmount');
+    $amountMethod->setAccessible(true);
+    accept_assert(
+        $amountMethod->invoke($resolver, ['return_shipping_fee' => 0.0, 'configured' => []], [], ['currency' => 'USD']) === null,
+        'unconfigured return shipping fee must not emit returnShippingFeesAmount'
+    );
+    $configured = $amountMethod->invoke(
+        $resolver,
+        ['return_shipping_fee' => 0.0, 'configured' => ['seo/merchant/return_shipping_fee' => true]],
+        [],
+        ['currency' => 'USD']
+    );
+    accept_assert(is_array($configured), 'configured return shipping fee must emit returnShippingFeesAmount');
+    accept_assert(($configured['@type'] ?? '') === 'MonetaryAmount', 'configured returnShippingFeesAmount @type invalid');
+    accept_assert((string) ($configured['value'] ?? '') === '0.00', 'configured zero return shipping fee must emit 0.00');
+    accept_assert((string) ($configured['currency'] ?? '') === 'USD', 'configured returnShippingFeesAmount currency invalid');
 };
 
 $checkLive = static function (): void {

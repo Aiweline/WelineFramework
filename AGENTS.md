@@ -16,6 +16,8 @@
 
 权威细则：`app/code/Weline/Ai/doc/AI硬规则索引.md`（`mcp_call_scope`）与 MCP `hard-constraints.v1`。
 
+**工程团队**：工程任务默认团队；除非 `work_scale=tiny`，否则按涉及职位配置真实子智能体；验收须 UC 闭环。
+
 ## 仓库认知（cognition）
 
 仓库认知由 Weline MCP 的 `cognition` 工具提供：按文件 F/R/A/S 压缩条目，按模块分片、按需加载，不常驻全量索引。工程任务：`prepare_project` 后按需 `cognition action=query`（module/path/query）；受管对象达到稳定状态后 `action=maintain` 一次；`overview`/`status` 查看条目与过期数。外部认知工具已退役，不再安装、挂载或调用。

@@ -8,7 +8,7 @@
 ---
 slug: {feature-slug}
 module: Weline_Example
-mode: team # team | 监工
+mode: team # team | 监工（仅 work_scale=tiny 才可监工）
 wave: clarifying # clarifying|align_freeze|tech_scheme|construction|specialty_review|ui_prototype_gate|test_exec|pm_recheck|huishen|delivered
 status: open # open | blocked | closed
 updated: YYYY-MM-DD

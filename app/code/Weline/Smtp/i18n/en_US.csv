@@ -415,15 +415,17 @@ Smtp配置,"Smtp configuration"
 仅外部填入服务可在此改主机凭据,仅外部填入服务可在此改主机凭据
 "外部 Smtp 凭据已更新","外部 Smtp 凭据已更新"
 "准备从本机 Stalwart 与目录移除 %{1} 个账户…","准备从本机 Stalwart 与目录移除 %{1} 个账户…"
+"准备从目录移除 %{1} 个账户（保留本机 Stalwart）…","准备从目录移除 %{1} 个账户（保留本机 Stalwart）…"
 "正在从本机 Stalwart 删除 %{1}…","正在从本机 Stalwart 删除 %{1}…"
 正在删除账户…,正在删除账户…
+"；若只需移除 Weline 配置，请改用「仅删除本地记录」","；若只需移除 Weline 配置，请改用「仅删除本地记录」"
 "Stalwart 删除账户 %{1} 失败，服务与目录未改：%{2}","Stalwart failed to delete account %{1}; service and directory unchanged: %{2}"
-"已卸邮局，正在删除目录账户 %{1}…","已卸邮局，正在删除目录账户 %{1}…"
 正在删除目录账户…,正在删除目录账户…
 "正在删除外部 Smtp 服务目录…","正在删除外部 Smtp 服务目录…"
 "正在删除 Smtp 服务目录行…","正在删除 Smtp 服务目录行…"
 "外部 Smtp 已删除","外部 Smtp 已删除"
 "本机 Smtp 服务已删除，下属账户 %{1} 个已从目录与本机 Stalwart 移除","Local SMTP service deleted; %{1} account(s) removed from directory and local Stalwart"
+"本机 Smtp 服务已从目录删除（下属账户 %{1} 个），本机 Stalwart 账户已保留","本机 Smtp 服务已从目录删除（下属账户 %{1} 个），本机 Stalwart 账户已保留"
 外部填入服务不建本机账户；请直接拷贝主机凭据,外部填入服务不建本机账户；请直接拷贝主机凭据
 服务未启用,服务未启用
 请先在该服务开启中继,请先在该服务开启中继
@@ -524,6 +526,7 @@ Global,Global
 "SMTP 用户名未配置","SMTP username is not configured"
 接受者邮箱为空：请正确设置接收邮箱！,"Recipient email is empty: Please set the receiving email correctly!"
 发送者邮箱为空：请正确设置发件邮箱！,"Sender email is empty: please set the sending email correctly!"
+"已卸邮局，正在删除目录账户 %{1}…","已卸邮局，正在删除目录账户 %{1}…"
 "已默认创建发信账号 %{1}，密码（仅一次）：%{2}","已默认创建发信账号 %{1}，密码（仅一次）：%{2}"
 "已默认创建发信账号 %{1}","已默认创建发信账号 %{1}"
 默认账号未创建：%{1},默认账号未创建：%{1}

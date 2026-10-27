@@ -106,6 +106,16 @@
         validation="in_options"
     />
     <w:config:field
+        key="seo/merchant/return_shipping_fee"
+        label="退货运费金额"
+        description="结构化数据 offers.hasMerchantReturnPolicy.returnShippingFeesAmount，按店铺基准币种填写；0 表示商家不收取固定退货运费（买家自行支付承运商）。买家承担退货运费时 Google 要求给出该金额。"
+        type="number"
+        value-type="float"
+        default="0"
+        scope="global,website,store"
+        validation="min:0|max:9999"
+    />
+    <w:config:field
         key="seo/merchant/return_method"
         label="退货方式"
         description="退货寄回方式。"

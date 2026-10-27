@@ -70,8 +70,9 @@
 .product-native-detail__back:hover { color: var(--color-primary-hover); text-decoration: underline; }
 .product-native-detail__hero-grid {
     display: grid;
-    grid-template-columns: minmax(0, 42%) minmax(var(--token-size-320px), 1fr);
-    gap: var(--spacing-6) var(--spacing-8);
+    /* 骨架列宽/栏距由 Product 布局的 --pdp-main-* 下发；无布局 token 时回退旧值。 */
+    grid-template-columns: var(--pdp-main-columns, minmax(0, 42%) minmax(var(--token-size-320px), 1fr));
+    gap: var(--pdp-main-gap, var(--spacing-6) var(--spacing-8));
     align-items: start;
 }
 .product-native-detail__media-column {
@@ -165,6 +166,10 @@
     box-shadow: var(--shadow-sm);
     line-height: 0;
     cursor: crosshair;
+}
+/* 图廊画框由布局 --pdp-gallery-frame-ratio 固定，图片加载不再改变骨架高度。 */
+.product-native-detail__stage.w-frame {
+    aspect-ratio: var(--pdp-gallery-frame-ratio, 1 / 1);
 }
 .product-native-detail__primary-image {
     display: block;

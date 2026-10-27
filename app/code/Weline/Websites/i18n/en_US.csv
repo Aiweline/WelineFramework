@@ -1,5 +1,7 @@
 ﻿网站保存后,"After site is saved"
 网站保存后触发，可用于更新缓存、通知等相关操作。,"Triggered after the website is saved, it can be used to update cache, notifications and other related operations."
+站点爬虫策略保存后,站点爬虫策略保存后
+"站点爬虫 allow/block 策略保存并同步 WLS 后触发；CDN 等扩展在 afterCommit 中下发边缘规则。数据包含 website_id、rule、connection。","站点爬虫 allow/block 策略保存并同步 WLS 后触发；CDN 等扩展在 afterCommit 中下发边缘规则。数据包含 website_id、rule、connection。"
 店铺保存后,"After saving the store"
 "店铺编辑保存后触发；扩展模块可读取 post_data.extensions 写入自有表。","Triggered after editing and saving the store; extension modules can read post_data.extensions and write to their own tables."
 渠道保存后,"After saving the channel"
@@ -1487,6 +1489,7 @@ lock,lock
 "爬虫拦截 / 放行","Crawler block / allow"
 "由本网站自行管理爬虫策略。每条可选择拦截或放行；命中即拒绝本次请求，不额外封 IP。保存后同步到 WLS 对应域名。","This website manages crawler policy itself. Each rule may block or allow; a hit rejects the request without extra IP ban. After save, sync to the matching WLS domain."
 启用本站爬虫策略,"Enable site crawler policy"
+"AI 爬虫默认开放（关闭后恢复 Cloudflare 保守拦截）","AI 爬虫默认开放（关闭后恢复 Cloudflare 保守拦截）"
 查找,Search
 上一页,"Previous page"
 下一页,"Next page"

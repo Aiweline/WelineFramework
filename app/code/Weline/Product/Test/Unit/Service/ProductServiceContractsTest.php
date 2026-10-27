@@ -282,6 +282,9 @@ final class ProductServiceContractsTest extends TestCase
             'ProductSearchProjectionTextMap::testCollectLocalizedAttributeTextsUsesTextMapAndBoundedChunk' => function () {
             $this->assert_ProductSearchProjectionTextMap_testCollectLocalizedAttributeTextsUsesTextMapAndBoundedChunk();
         },
+            'ProductSearchProjectionTextMap::testSearchDocumentUrlUsesPublicSlug' => function () {
+            $this->assert_ProductSearchProjectionTextMap_testSearchDocumentUrlUsesPublicSlug();
+        },
             'SearchProjectionScopeCacheWarmer::testModuleProvidesSearchProjectionScopeWarmer' => function () {
             $this->assert_SearchProjectionScopeCacheWarmer_testModuleProvidesSearchProjectionScopeWarmer();
         },
@@ -1370,6 +1373,14 @@ private function assert_ProductScopedOption_testMisfiledColorToAxesScriptExists(
     self::assertStringContainsString('--dry-run', $source);
     self::assertStringContainsString('--apply', $source);
     self::assertStringContainsString('targetAxes', $source);
+}
+
+private function assert_ProductSearchProjectionTextMap_testSearchDocumentUrlUsesPublicSlug(): void
+{
+    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Product' . '/Service/ProductSearchProjectionService.php');
+    self::assertStringContainsString('SEARCH_SLUG_ATTRIBUTES', $source);
+    self::assertStringContainsString('$this->resolvePublicSlug(', $source);
+    self::assertStringContainsString("'url' => 'product/' . (\$publicSlug !== '' ? \$publicSlug : \$productId)", $source);
 }
 
 private function assert_ProductSearchProjectionTextMap_testCollectLocalizedAttributeTextsUsesTextMapAndBoundedChunk(): void

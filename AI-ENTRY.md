@@ -5,18 +5,19 @@
 ## 🚨 Read This First
 
 1. **MCP bootstrap & rules** → `AGENTS.md`
-2. **Architecture diagrams** → `dev/ai/diagrams/00-INDEX.txt`
-3. **Module docs** → `dev/ai/diagrams/08-module-docs-index.txt`
-4. **Skills** → `dev/ai/skills/_index.md` (on-demand)
+2. **Capability atlas** → `app/code/Weline/Framework/doc/能力全景.md`（能力 → 归属模块 → 入口 → 证据）
+3. **Architecture** → `dev/docs/weline/架构总览.md` + `app/code/Weline/Framework/doc/architecture/`
+4. **Module docs** → `app/code/Weline/Ai/doc/文档索引.md` + `app/code/Weline/Ai/doc/模块文档总览.md`
+5. **Skills** → MCP `resolve_skill` / `get_skill`；内容运营 `dev/ai-command/**`；模块技能 `app/code/*/*/doc/ai/skills/**`
 
 ## 📋 Reading Order
 
 ```
 Step 0: AGENTS.md（接通 weline_project_intelligence MCP）
-Step 1: dev/ai/diagrams/00-INDEX.txt + 01-framework-overview.txt
+Step 1: dev/docs/weline/架构总览.md（框架分层/运行时/路由/ORM/事件）
 Step 1b: app/code/Weline/Ai/doc/AI硬规则索引.md（任务路由）
-Step 2: dev/ai/diagrams/08-module-docs-index.txt → app/code/Weline/{Module}/doc/README.md
-Step 3: dev/ai/skills/{skill}.md (on-demand)
+Step 2: app/code/Weline/Ai/doc/文档索引.md → app/code/Weline/{Module}/doc/README.md
+Step 3: MCP resolve_skill(task) → get_skill(skill_id)，或 dev/ai-command/{域}/{任务}.md
 Step 4: Source code (LAST RESORT)
 ```
 
@@ -25,20 +26,28 @@ Step 4: Source code (LAST RESORT)
 **Check docs before reading source code.**
 
 - Source code: 3000-6000 tokens
-- Diagrams: 500-1000 tokens (save 70-80%)
+- Architecture docs: 500-1000 tokens (save 70-80%)
 - Module docs: 800-1200 tokens (save 80-87%)
 
-## 🏗️ Architecture Diagrams
+## 🏗️ Architecture
 
-**Index:** `dev/ai/diagrams/00-INDEX.txt`
-
-01=Overview | 02=WLS | 03=Routing | 04=ORM | 05=Events | 06=Module | 07=Request | 08=Module Docs
+| 主题 | 路径 |
+|---|---|
+| 架构总览（分层/运行时/路由/ORM/事件） | `dev/docs/weline/架构总览.md` |
+| 当前架构 / 目标架构 / 模块契约 / 性能预算 | `app/code/Weline/Framework/doc/architecture/01-current.md` · `02-target.md` · `03-module-contract.md` · `04-performance-budget.md` |
+| WLS 运行时与验收状态 | `app/code/Weline/Server/doc/WLS架构图.md` · `WLS当前能力与验收状态.md` |
+| 能力全景（业务能力 → 模块） | `app/code/Weline/Framework/doc/能力全景.md` |
 
 ## 📚 Skills (on-demand)
 
-**Index:** `dev/ai/skills/_index.md`
+**权威索引：MCP `resolve_skill(task=...)` → `get_skill(skill_id)`（`mcp-skills.v1`）。** 不再维护静态 skill 文件索引。
 
-ORM→database-model-standards | Routing→weline-routing | Events→extension-points | WLS→runtime-and-process | Theme→theme-development | Components→frontend-components | I18n→i18n-internationalization | Query→unified-query-provider | ACL→acl-permission-system
+| 类型 | 位置 |
+|---|---|
+| 工作流技能（主题/前端/支付/性能/审图/代码复审/工程团队/翻译/文档/电商顾问/运营） | MCP `resolve_skill` / `get_skill` |
+| 内容运营指令（产品优化/详情优化/翻译优化/主图优化/规格修复/新建文章/建站/删站/审图） | `dev/ai-command/{product,blog,sitesetup,theme}/` |
+| 模块技能（CDN/Product/Blog/Social/Theme/Visitor/Ai/I18n/Websites/Framework/Admin/ModuleManager/FileManager） | `app/code/Weline/*/doc/ai/skills/**` |
+| 技能编写标准 | `app/code/Weline/Ai/doc/AI技能编写标准.md` |
 
 ## 🔧 Commands
 
@@ -78,8 +87,9 @@ php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance (
 
 ## 🔗 Resources
 
-- Diagrams: `dev/ai/diagrams/00-INDEX.txt`
-- Module docs: `dev/ai/diagrams/08-module-docs-index.txt`
-- MCP & framework entry: `AGENTS.md`
-- Skills: `dev/ai/skills/_index.md`
-- Full guide: `dev/ai/AI-开发与测试指南.md`
+- **Capability atlas**: `app/code/Weline/Framework/doc/能力全景.md`
+- Architecture: `dev/docs/weline/架构总览.md` · `app/code/Weline/Framework/doc/architecture/`
+- Module docs: `app/code/Weline/Ai/doc/文档索引.md` · `app/code/Weline/Ai/doc/模块文档总览.md`
+- MCP & framework entry: `AGENTS.md` · `app/code/Weline/Ai/Mcp/README.md`
+- Skills: MCP `resolve_skill` / `get_skill` · `dev/ai-command/**`
+- Full guide: `app/code/Weline/Ai/doc/AI工程交付流程.md` · `dev/docs/weline/开发者入口.md`

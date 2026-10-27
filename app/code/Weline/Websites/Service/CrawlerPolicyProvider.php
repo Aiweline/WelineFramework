@@ -63,10 +63,8 @@ final class CrawlerPolicyProvider implements CrawlerPolicyProviderInterface
      */
     private function rule(int $websiteId): array
     {
-        try {
-            return $this->policyService->loadRule($websiteId);
-        } catch (\Throwable) {
-            return ['enabled' => false, 'entries' => []];
-        }
+        // Never turn a read failure into "empty policy" — edge publishers would
+        // otherwise delete the site's WAF rules on a transient DB error.
+        return $this->policyService->loadRule($websiteId);
     }
 }

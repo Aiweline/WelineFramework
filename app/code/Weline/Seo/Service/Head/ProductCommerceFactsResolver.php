@@ -48,6 +48,14 @@ final class ProductCommerceFactsResolver
                 $policy['merchantReturnDays'] = $returnDays;
             }
             $policy['returnFees'] = $this->returnFeesUrl($info, $product, $context);
+            // Google requires the amount whenever returnFees is ReturnShippingFees.
+            // Publish it only when the merchant saved an explicit amount.
+            if ($policy['returnFees'] === 'https://schema.org/ReturnShippingFees') {
+                $amount = $this->returnShippingFeesAmount($info, $product, $context);
+                if ($amount !== null) {
+                    $policy['returnShippingFeesAmount'] = $amount;
+                }
+            }
 
             $link = $this->absoluteUrl((string)$info['return_policy_url'], $context);
             if ($link !== '') {
@@ -93,6 +101,75 @@ final class ProductCommerceFactsResolver
         return (string)($policy['return_policy'] ?? '') === ShippingCommercePolicy::RETURN_SELLER
             ? 'https://schema.org/FreeReturn'
             : 'https://schema.org/ReturnShippingFees';
+    }
+
+    /**
+     * 退回运费金额：仅在商家信息显式保存 seo/merchant/return_shipping_fee 时输出
+     * （0.00 表示商家不收取固定退货运费、买家自行支付承运商）；未配置则不编造。
+     *
+     * @param array<string, mixed> $info
+     * @param array<string, mixed> $product
+     * @param array<string, mixed> $context
+     * @return array{@type:string,value:string,currency:string}|null
+     */
+    private function returnShippingFeesAmount(array $info, array $product, array $context): ?array
+    {
+        if (empty($info['configured'][MerchantInfoConfigResolver::KEY_RETURN_SHIPPING_FEE])) {
+            return null;
+        }
+
+        $currency = strtoupper(trim((string)($context['currency'] ?? $product['currency'] ?? $product['price_currency'] ?? '')));
+        if ($currency === '') {
+            $currency = 'CNY';
+        }
+
+        $amount = max(0.0, (float)($info['return_shipping_fee'] ?? 0.0));
+        $sourceCurrency = $this->baseCurrency();
+        if ($amount > 0.0 && $sourceCurrency !== '' && $sourceCurrency !== $currency) {
+            $converted = $this->convertCurrency($amount, $sourceCurrency, $currency);
+            if ($converted !== null) {
+                $amount = $converted;
+            } else {
+                $currency = $sourceCurrency;
+            }
+        }
+
+        return [
+            '@type' => 'MonetaryAmount',
+            'value' => number_format(max(0.0, $amount), 2, '.', ''),
+            'currency' => $currency,
+        ];
+    }
+
+    private function baseCurrency(): string
+    {
+        try {
+            if (!class_exists(\Weline\Currency\Service\CurrencyRateService::class)) {
+                return 'CNY';
+            }
+            /** @var \Weline\Currency\Service\CurrencyRateService $rates */
+            $rates = ObjectManager::getInstance(\Weline\Currency\Service\CurrencyRateService::class);
+
+            return strtoupper(trim((string)$rates->getBaseCurrency())) ?: 'CNY';
+        } catch (\Throwable) {
+            return 'CNY';
+        }
+    }
+
+    private function convertCurrency(float $amount, string $source, string $target): ?float
+    {
+        try {
+            if (!class_exists(\Weline\Currency\Service\CurrencyRateService::class)) {
+                return null;
+            }
+            /** @var \Weline\Currency\Service\CurrencyRateService $rates */
+            $rates = ObjectManager::getInstance(\Weline\Currency\Service\CurrencyRateService::class);
+            $converted = $rates->tryConvert($amount, $source, $target);
+
+            return is_float($converted) || is_int($converted) ? (float)$converted : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

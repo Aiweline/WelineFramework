@@ -1166,6 +1166,7 @@ $checks = [
             && ($rule['id'] ?? '') === 'engineering_team_for_new_requirements'
             && str_contains((string) ($rule['summary'] ?? ''), '停工')
             && str_contains((string) ($rule['summary'] ?? ''), 'simple')
+            && str_contains((string) ($rule['summary'] ?? ''), 'work_scale=tiny')
             && str_contains((string) ($rule['summary'] ?? ''), '产品优化')
             && str_contains((string) ($rule['summary'] ?? ''), 'dev/team/')
             && str_contains((string) ($rule['summary'] ?? ''), 'Team:架构师:')

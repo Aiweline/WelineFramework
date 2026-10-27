@@ -398,8 +398,19 @@ SSH 主机映射只解决「要连生产时连哪台」，不改变查询目标�
 |------|------|
 | 用户已授权线上/生产时，探活公网店面：SSH 到站柜 **主用 SSH Host**，在远端对 `127.0.0.1`（或本机 loopback）带 `Host:` / SNI 做 curl；或等价 SSH MCP | 从 Cursor/Agent **本机**对生产公网 FQDN（含 apex/www、CDN 前）`curl`/`wget`/`httpie`/裸 `fetch` 做连通性/状态/抽 HTML |
 | 命中 `shared_ban` / 浏览器 Forbidden：在目标机 `php bin/w server:security:unblock --ip=…` 或 `--clear-all`（按运维判断） | 用更多本机公网 curl「再试一次」解封；把非浏览器 UA 探活当成浏览器验收 |
+| 生产店面 HTML / robots / sitemap 验收：在同一 SSH 命令内从 `generated/framework/fpc_pierce_secret` 读取安装级穿章，请求 URL 追加 `w_fpc_pierce=<secret>`；secret 只进 shell 变量，禁止打印、落日志、写文档 | 不带穿章直接探活；把维护页或旧 FPC 内容当成真实页面 |
 
 **豁免（互补）**：本机验收 Host（`*.test.weline.com`、项目 `127.0.0.1`/`localhost` 端口）仍按 `browser_operator_fail_closed_release` 允许打开 Browser 前 curl 探活；宿主 Browser WB-OP（真实浏览器 UA）不走本条封禁路径。
+
+**穿章（生产 HTML 验收强制）**：SSH 到生产后执行，例如：
+
+```bash
+secret=$(cat generated/framework/fpc_pierce_secret)
+curl -sS -m 10 -H 'Host: www.example.com' \
+  "http://127.0.0.1/robots.txt?w_fpc_pierce=$secret"
+```
+
+穿章只打穿 FPC，不替代 Host/SNI，也不等于允许本机直连公网 FQDN。
 
 **为何**：WLS `attack_guard` / `path_scan` 可对非浏览器 UA 写入 `shared_ban`，封的是共享出口 IP——会连带操作员本机浏览器 Forbidden。
 

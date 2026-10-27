@@ -31,6 +31,7 @@ final class MerchantInfoConfigResolver
     public const KEY_SHIPPING_POLICY_URL = 'seo/merchant/shipping_policy_url';
     public const KEY_RETURN_DAYS = 'seo/merchant/return_days';
     public const KEY_RETURN_FEES = 'seo/merchant/return_fees';
+    public const KEY_RETURN_SHIPPING_FEE = 'seo/merchant/return_shipping_fee';
     public const KEY_RETURN_METHOD = 'seo/merchant/return_method';
     public const KEY_COUNTRY = 'seo/merchant/country';
 
@@ -38,6 +39,7 @@ final class MerchantInfoConfigResolver
     public const DEFAULT_SHIPPING_POLICY_URL = '/policy/shipping';
     public const DEFAULT_RETURN_DAYS = 30;
     public const DEFAULT_RETURN_FEES = 'buyer_pays';
+    public const DEFAULT_RETURN_SHIPPING_FEE = 0.0;
     public const DEFAULT_RETURN_METHOD = 'mail';
     public const DEFAULT_COUNTRY = 'WW';
 
@@ -60,6 +62,7 @@ final class MerchantInfoConfigResolver
      *     shipping_policy_url:string,
      *     return_days:int,
      *     return_fees:string,
+     *     return_shipping_fee:float,
      *     return_method:string,
      *     country:string,
      *     configured:array<string, bool>
@@ -160,6 +163,15 @@ final class MerchantInfoConfigResolver
             $returnFees = self::DEFAULT_RETURN_FEES;
         }
 
+        $returnShippingFeeRaw = $read(self::KEY_RETURN_SHIPPING_FEE);
+        $returnShippingFee = $returnShippingFeeRaw === ''
+            ? self::DEFAULT_RETURN_SHIPPING_FEE
+            : (float)$returnShippingFeeRaw;
+        if (!is_finite($returnShippingFee) || $returnShippingFee < 0) {
+            $returnShippingFee = self::DEFAULT_RETURN_SHIPPING_FEE;
+        }
+        $returnShippingFee = min(9999.0, $returnShippingFee);
+
         $returnMethod = strtolower($read(self::KEY_RETURN_METHOD));
         if (!in_array($returnMethod, [self::RETURN_METHOD_MAIL, self::RETURN_METHOD_IN_STORE], true)) {
             $returnMethod = self::DEFAULT_RETURN_METHOD;
@@ -175,6 +187,7 @@ final class MerchantInfoConfigResolver
             'shipping_policy_url' => $this->normalizeUrl($read(self::KEY_SHIPPING_POLICY_URL), self::DEFAULT_SHIPPING_POLICY_URL),
             'return_days' => $returnDays,
             'return_fees' => $returnFees,
+            'return_shipping_fee' => $returnShippingFee,
             'return_method' => $returnMethod,
             'country' => $country,
             'configured' => $configured,

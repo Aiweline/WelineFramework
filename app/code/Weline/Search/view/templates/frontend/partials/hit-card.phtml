@@ -8,7 +8,8 @@ $isAbsolute = str_starts_with($url, 'http://') || str_starts_with($url, 'https:/
 if ($url !== '' && !$isAbsolute && !str_starts_with($url, '/')) {
     // keep as route path for @url
 } elseif ($url === '' && $productId > 0) {
-    $url = 'product/' . $productId;
+    $slug = trim((string)($hit['slug'] ?? ''));
+    $url = 'product/' . ($slug !== '' ? $slug : $productId);
     $isAbsolute = false;
 } elseif ($url === '' && $entityId !== '') {
     $url = 'product/' . $entityId;

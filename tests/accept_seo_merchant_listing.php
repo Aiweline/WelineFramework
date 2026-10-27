@@ -48,6 +48,13 @@ if (class_exists(\Weline\Shipping\Service\ShippingCommercePolicyService::class)
     foreach (['applicableCountry', 'returnPolicyCategory', 'returnMethod', 'returnFees'] as $key) {
         accept_assert(array_key_exists($key, $return), "A3 return policy missing {$key}");
     }
+    if (isset($return['returnShippingFeesAmount'])) {
+        $amount = $return['returnShippingFeesAmount'];
+        accept_assert(is_array($amount), 'A3 returnShippingFeesAmount type invalid');
+        accept_assert(($amount['@type'] ?? '') === 'MonetaryAmount', 'A3 returnShippingFeesAmount @type invalid');
+        accept_assert(is_numeric($amount['value'] ?? null), 'A3 returnShippingFeesAmount value invalid');
+        accept_assert(preg_match('/^[A-Z]{3}$/', (string) ($amount['currency'] ?? '')) === 1, 'A3 returnShippingFeesAmount currency invalid');
+    }
 
     $shipping = $result['shipping_details'];
     accept_assert(is_array($shipping) && $shipping !== [], 'A3 shipping details missing');

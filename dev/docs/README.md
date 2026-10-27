@@ -8,6 +8,7 @@
 
 | 用途 | 路径 |
 |------|------|
+| 能力全景 | [Framework/doc/能力全景.md](../../app/code/Weline/Framework/doc/能力全景.md)（能力 → 模块 → 入口 → 证据） |
 | 架构导览 | [weline/README.md](./weline/README.md) · [开发者入口](./weline/开发者入口.md) · [架构总览](./weline/架构总览.md) |
 | 多语言 README | [readme/README.md](./readme/README.md) |
 | 部署入门 | [部署文档.md](./部署文档.md) · [部署/](./部署/) |
