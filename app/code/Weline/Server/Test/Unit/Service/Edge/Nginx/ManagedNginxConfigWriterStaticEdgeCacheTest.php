@@ -157,6 +157,16 @@ final class ManagedNginxConfigWriterStaticEdgeCacheTest extends TestCase
         self::assertStringNotContainsString('/app/code$uri', $staticBlock);
         self::assertStringContainsString('X-Wls-Static-Disk "1"', $staticBlock);
         self::assertStringContainsString('X-Wls-Static-Fpc "1"', $staticBlock);
+        self::assertStringContainsString(
+            'location ~* ^/(?:composer\.json',
+            $config,
+            'Repository manifests must be denied before static fallbacks.',
+        );
+        self::assertStringContainsString(
+            'location ~ /\.(?!well-known/)',
+            $config,
+            'Dotfiles must be denied except ACME well-known.',
+        );
         self::assertStringContainsString('location @wls_static_origin', $staticBlock);
         self::assertStringContainsString(
             'proxy_cache off;',

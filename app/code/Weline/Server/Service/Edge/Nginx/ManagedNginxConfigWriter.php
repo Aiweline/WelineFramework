@@ -616,6 +616,16 @@ NGINX;
             add_header X-Weline-Static-Encoding br always;
 {$locationProtocolHeaders}
 NGINX;
+        // Repository manifests and dotfiles are not public surfaces. WLS also
+        // path-scans them, but the Nginx static fallbacks must fail closed first.
+        $sensitiveRootLocationBlock = <<<NGINX
+        location ~* ^/(?:composer\.json|composer\.lock|package\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|AGENTS\.md|CLAUDE\.md|weline\.env\.sample|deploy\.env-map\.php|Dockerfile|docker-compose\.yml|nginx\.conf|phpunit\.xml)\$ {
+            return 403;
+        }
+        location ~ /\.(?!well-known/) {
+            return 403;
+        }
+NGINX;
         $staticCacheLocationBlock = <<<NGINX
 
         # Module / DEV statics: FPC disk by Host+path, then WLS (which mirrors).
@@ -760,6 +770,7 @@ http {
 {$serverNginxConfigHeader}
 {$serverProtocolHeaders}
 {$originUnavailableServerDirectives}
+{$sensitiveRootLocationBlock}
         location = /_wls/nginx/tls-session-probe {
             allow 127.0.0.1;
             allow ::1;
