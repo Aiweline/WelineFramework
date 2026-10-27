@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Points\Test\Unit\View;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Manager\ObjectManager;
 
 final class PointsViewContractsTest extends TestCase
 {
@@ -74,6 +75,23 @@ final class PointsViewContractsTest extends TestCase
         self::assertStringContainsString('points/backend/points/settings', $src);
         self::assertFileExists($this->modulePath('Controller/Backend/Points.php'));
         self::assertFileExists($this->modulePath('view/templates/backend/Points/index.phtml'));
+    }
+
+    public function testBackendTemplateCompiles(): void
+    {
+        $file = $this->modulePath('view/templates/backend/Points/index.phtml');
+        $source = (string) file_get_contents($file);
+        $template = ObjectManager::getInstance(\Weline\Framework\View\Template::class);
+
+        $html = $template->fetchSourceHtml(
+            'Weline_Points::templates/backend/Points/index.phtml',
+            $source,
+            $file,
+            'points-backend-contract-test',
+            [],
+        );
+
+        self::assertIsString($html);
     }
 
     public function testCheckoutSubmitCarriesPointsApplyMinor(): void
