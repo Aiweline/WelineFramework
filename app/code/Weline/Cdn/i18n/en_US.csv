@@ -796,6 +796,20 @@ JSON格式错误,"JSON format error"
 "WarmupProvider 不存在","WarmupProvider not found"
 "不是有效的 WarmupProvider","Not a valid WarmupProvider"
 因系统升级意图提前结束计划任务。,"Cron task ended early due to setup upgrade intent."
+"默认放开 Cloudflare Zone 级 AI 爬虫（显式封禁走 WAF）","默认放开 Cloudflare Zone 级 AI 爬虫（显式封禁走 WAF）"
+"默认 dry-run，只输出当前值与最小 diff；加 --apply 才写入。","默认 dry-run，只输出当前值与最小 diff；加 --apply 才写入。"
+"--website=ID   网站 ID（默认站为 0）","--website=ID   网站 ID（默认站为 0）"
+"请指定 --website=ID 或 --all","请指定 --website=ID 或 --all"
+"Dry-run 完成：加 --apply 才写入","Dry-run 完成：加 --apply 才写入"
+查看站点爬虫策略边缘同步状态,查看站点爬虫策略边缘同步状态
+选项:,Options:
+"--website=ID   只看指定网站","--website=ID   只看指定网站"
+读取状态失败：%{1},读取状态失败：%{1}
+暂无同步状态,暂无同步状态
+"检查站点爬虫策略与 Cloudflare 边缘规则的漂移","检查站点爬虫策略与 Cloudflare 边缘规则的漂移"
+"--website=ID   指定网站 ID","--website=ID   指定网站 ID"
+"发现 %{1} 个域名存在漂移","发现 %{1} 个域名存在漂移"
+未发现漂移,未发现漂移
 "域名不能为空，请使用 --domain=域名ID或名称","Domain cannot be empty. Please use --domain=DomainID or Name"
 "清理模式不能为空，请使用 --mode=everything|urls|hosts|tags|cache_keys","Clean mode cannot be empty, please use --mode=everything|urls|hosts|tags|cache_keys"
 无效的清理模式：%{1}，支持的模式：%{2},"Invalid cleanup mode: %{1}, supported modes: %{2}"
@@ -807,7 +821,6 @@ JSON格式错误,"JSON format error"
 缓存清理成功：%{1},"Cache Cleanup Successful: %{1}"
 缓存清理失败：%{1},"Cache Cleanup Failed: %{1}"
 "推送 Weline 标准默认 CDN 规则到目标域名","Push Weline Standard Default CDN Rules to Target Domain"
-选项:,Options:
 "--domain=域名ID或名称   指定要推送的单个域名","--domain=Domain name ID or name Specify a single domain name to push"
 示例:,Example:
 "未发现任何默认规则（app/code/Weline/Cdn/etc/default-rules.json 为空或不存在）","No default rules found (app/code/Weline/Cdn/etc/default-rules.json is empty or does not exist)"
@@ -838,6 +851,11 @@ CDN域名创建成功：%{1},"CDN domain name created successfully: %{1}"
 规则收集完成,"Rule collection completed"
 规则收集失败,"Rule collection failed"
 收集Api和Controller中的@Cdn注释规则,"Collect @Cdn annotation rules from Api and Controller"
+"同步站点爬虫策略到 Cloudflare WAF","同步站点爬虫策略到 Cloudflare WAF"
+"没有找到已绑定 Cloudflare 域名的网站","没有找到已绑定 Cloudflare 域名的网站"
+"网站 #%{1}","网站 #%{1}"
+同步失败：%{1},同步失败：%{1}
+"Dry-run 完成：未调用 Cloudflare","Dry-run 完成：未调用 Cloudflare"
 正在导入规则...,"Importing rules..."
 "规则导入成功，共导入 %{1} 条规则","Rule import succeeded, imported %{1} rules"
 规则已保存为域名覆盖规则,"Rule saved as domain override rule"

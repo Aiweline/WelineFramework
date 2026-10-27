@@ -1,0 +1,78 @@
+<?php
+/**
+ * 指南正文：独立站 SEO 为什么没效果（slug=independent-store-seo）。
+ * 参考 Google Search Central；标注查阅日期，不承诺排名。
+ */
+declare(strict_types=1);
+?>
+<h2 id="gsc">先看 GSC 的四类信号</h2>
+<ul>
+    <li>已发现未索引：抓取预算/质量/重复问题。</li>
+    <li>已抓取未索引：内容质量/重复/ cannibalization。</li>
+    <li>重复网页：canonical/参数/语言版本。</li>
+    <li>软 404：空分类/缺货/筛选页。</li>
+</ul>
+
+<h2 id="crawl">抓取</h2>
+<ul>
+    <li>robots.txt 是否误挡 CSS/JS/关键目录。</li>
+    <li>XML sitemap 是否包含重要页面、是否过期。</li>
+    <li>SSR/预渲染是否输出主要内容与真实 <code>&lt;a href&gt;</code>。</li>
+    <li>分类/筛选/分页是否产生无限 URL 空间。</li>
+    <li>空筛选组合是否返回 404，而不是 200 空页。</li>
+</ul>
+
+<h2 id="index">索引</h2>
+<ul>
+    <li>每个重要页面是否有自指 canonical。</li>
+    <li>语言版本是否用不同 URL；是否成对输出 hreflang。</li>
+    <li>是否有参数/排序/跟踪 URL 与主 URL 竞争。</li>
+    <li>迁移是否留下 302、重定向链或 noindex。</li>
+    <li>分页是否每页有唯一 URL；不要用 fragment 分页。</li>
+</ul>
+
+<h2 id="schema">结构化数据</h2>
+<ul>
+    <li>Product/Offer/Review/FAQ/Article/Breadcrumb 是否与页面事实一致。</li>
+    <li>Product 至少要有 name + 一个 of offers/review/aggregateRating。</li>
+    <li>变体与币种是否有独立 URL。</li>
+    <li>结构化数据是否在初始 HTML 中，而不是只靠 JS 注入。</li>
+    <li>不要让业务模块手写 JSON-LD；让模块返回事实。</li>
+</ul>
+
+<h2 id="cwv">Core Web Vitals</h2>
+<ul>
+    <li>LCP ≤ 2.5s；INP ≤ 200ms；CLS ≤ 0.1（75th percentile）。</li>
+    <li>先测真实用户数据，再看 lab。</li>
+    <li>第三方脚本是常见 LCP/INP 杀手；给每个脚本定预算。</li>
+    <li>CWV 是 page experience 的一部分，不是单独排名开关。</li>
+</ul>
+
+<h2 id="content">内容与转化</h2>
+<ul>
+    <li>title/meta 是否匹配搜索意图；是否有模板化重复。</li>
+    <li>分类页是否只列商品，没有选购说明。</li>
+    <li>PDP 是否回答尺码、材质、运费、税费、退货。</li>
+    <li>内链是否把重要页面放在 3 次点击内。</li>
+    <li>结账是否在最后一步才显示税费/运费。</li>
+</ul>
+
+<h2 id="plan">90 天排查顺序</h2>
+<ul>
+    <li>第 1–2 周：GSC 覆盖、robots、sitemap、canonical、索引。</li>
+    <li>第 3–4 周：结构化数据、CWV、移动端。</li>
+    <li>第 5–8 周：分类/PDP 内容、内链、翻译 QA。</li>
+    <li>第 9–12 周：看 GSC 查询、CTR、转化；重写低 CTR 标题；合并薄页。</li>
+</ul>
+
+<h2 id="dont">不要做的事</h2>
+<ul>
+    <li>不要承诺“保证排名”。</li>
+    <li>不要把 hreflang 当排名信号。</li>
+    <li>不要以为 canonical 是强制指令。</li>
+    <li>不要以为 sitemap 保证收录。</li>
+    <li>不要以为 robots.txt 能删除页面。</li>
+    <li>不要以为 SSR 自动带来排名。</li>
+    <li>不要把 CWV 当单独排名开关。</li>
+</ul>
+<p class="muted">参考：<a href="https://developers.google.com/search/docs" target="_blank" rel="noopener">Google Search Central 文档</a>（2026-10-26 查阅）。政策与工具会变化，执行前请复核。</p>

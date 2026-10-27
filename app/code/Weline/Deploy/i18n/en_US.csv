@@ -538,6 +538,11 @@ pending,pending
 "核心更新失败（%{1} 步骤）。","核心更新失败（%{1} 步骤）。"
 "核心更新完成（已执行 update:core 与 setup:upgrade）。","核心更新完成（已执行 update:core 与 setup:upgrade）。"
 "Git restore commit cannot be empty.","Git restore commit cannot be empty."
+"Deploy dirty-worktree snapshot aborted: git status failed: %{1}","Deploy dirty-worktree snapshot aborted: git status failed: %{1}"
+"Deploy dirty-worktree snapshot aborted: unable to create %{1}","Deploy dirty-worktree snapshot aborted: unable to create %{1}"
+"Deploy dirty-worktree snapshot aborted: git diff failed: %{1}","Deploy dirty-worktree snapshot aborted: git diff failed: %{1}"
+"Deploy dirty-worktree snapshot aborted: git ls-files failed: %{1}","Deploy dirty-worktree snapshot aborted: git ls-files failed: %{1}"
+"Deploy dirty-worktree snapshot aborted: unable to copy %{1}","Deploy dirty-worktree snapshot aborted: unable to copy %{1}"
 "Git working directory does not exist: %{1}","Git working directory does not exist: %{1}"
 "Git process could not be opened.","Git process could not be opened."
 发布繁忙：已有进行中的发布，本任务将排队重试。,发布繁忙：已有进行中的发布，本任务将排队重试。

@@ -1,0 +1,149 @@
+<?php
+/**
+ * 指南 hub：三篇指南 + 怎么读 + 编辑原则（归档默认不渲染，保留条件块）。
+ */
+declare(strict_types=1);
+
+require_once rtrim((string)BP, '/\\') . '/app/design/Amayum/official/frontend/includes/AmayumView.php';
+
+use AmayumDesign\Official\AmayumView as A;
+
+$guides = is_array($guides ?? null) ? $guides : [];
+$readingOrder = is_array($reading_order ?? null) ? array_values(array_filter($reading_order, 'is_string')) : [];
+$archiveLinks = is_array($archive_links ?? null) ? array_values(array_filter($archive_links, 'is_array')) : [];
+
+$guideMeta = [
+    'build-platform' => ['num' => '01', 'k' => '建站路线'],
+    'independent-store-seo' => ['num' => '02', 'k' => '技术 SEO'],
+    'shopify-alternative' => ['num' => '03', 'k' => '替代与迁移'],
+];
+$readDescriptions = [
+    '/journal/build-platform' => '渠道独立 ≠ 系统自有；三条路线的代价与适用条件。',
+    '/journal/independent-store-seo' => '从 GSC 信号开始，按抓取 → 索引 → 结构化数据 → CWV 排查。',
+    '/journal/shopify-alternative' => '摊开算订阅、交易、应用、托管与迁移；迁移有风险清单。',
+];
+?>
+<section class="page-hero" data-atmo weline-code="amayum-journal-index-01">
+    <div class="w-container">
+        <div class="crumbs"><a href="<?= A::e(A::url($this, '/')) ?>">Amayum</a><span>/</span><span>指南</span></div>
+        <h1>把独立站建对，<br><span class="accent">再谈增长。</span></h1>
+        <p class="lead">不写行业通稿。每篇只解决一个判断：建站路线、技术 SEO、迁移与总成本。所有价格与规则标注日期；搜索量未知就不写。</p>
+        <div class="hero-meta"><span>2026-10-26</span><span>3 篇指南</span><span>有来源 · 有日期</span></div>
+    </div>
+</section>
+
+<!-- 01 三篇指南 -->
+<section class="section" aria-labelledby="guides-title" weline-code="amayum-journal-index-02">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">01</span> 三篇指南</p><h2 id="guides-title">每篇只解决<br>一个判断。</h2></div>
+        </div>
+        <div class="grid-3">
+            <?php foreach (array_values($guides) as $index => $guide): ?>
+                <?php
+                $slug = (string)($guide['slug'] ?? '');
+                $meta = $guideMeta[$slug] ?? ['num' => str_pad((string)($index + 1), 2, '0', STR_PAD_LEFT), 'k' => '指南'];
+                $title = (string)($guide['title'] ?? '');
+                $summary = (string)($guide['dek'] ?? ($guide['meta_description'] ?? ''));
+                $path = (string)($guide['canonical_path'] ?? '/journal/' . $slug);
+                $date = (string)($guide['date_published'] ?? '');
+                $byline = (string)($guide['byline'] ?? ($guide['author'] ?? 'Amayum'));
+                $minutes = $guide['reading_minutes'] ?? null;
+                $k = $meta['k'] . ($minutes !== null ? ' · 约 ' . (int)$minutes . ' min' : '');
+                ?>
+                <a class="post guide-card reveal" style="--i:<?= (int)$index ?>" href="<?= A::e(A::url($this, $path)) ?>">
+                    <div class="body">
+                        <span class="g-num"><?= A::e($meta['num']) ?></span>
+                        <span class="k"><?= A::e($k) ?></span>
+                        <h3><?= A::e($title) ?></h3>
+                        <p><?= A::e($summary) ?></p>
+                        <div class="g-meta"><?php if ($date !== ''): ?><span><?= A::e($date) ?></span><?php endif; ?><span><?= A::e($byline) ?></span></div>
+                        <span class="more">读指南
+                            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </span>
+                    </div>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<!-- 02 怎么读 -->
+<section class="section surface" aria-labelledby="how-title" weline-code="amayum-journal-index-03">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">02</span> 怎么读</p><h2 id="how-title">先建站，再 SEO，<br>最后迁移与总成本。</h2></div>
+            <p>先读建站路线，再读 SEO，最后读迁移与总成本。三篇互链，不需要按顺序背。</p>
+        </div>
+        <ol class="coop-grid coop-grid--3">
+            <?php if ($readingOrder !== []): ?>
+                <?php foreach ($readingOrder as $index => $step): ?>
+                    <?php
+                    $parts = array_map('trim', explode('→', $step, 2));
+                    $label = (string)($parts[0] ?? $step);
+                    $path = (string)($parts[1] ?? '');
+                    $description = $path !== '' ? (string)($readDescriptions[$path] ?? '') : '';
+                    ?>
+                    <li class="coop-step reveal" style="--i:<?= (int)$index ?>">
+                        <span class="coop-num"><?= A::e(str_pad((string)($index + 1), 2, '0', STR_PAD_LEFT)) ?></span>
+                        <h3><?php if ($path !== ''): ?><a href="<?= A::e(A::url($this, $path)) ?>"><?= A::e($label) ?></a><?php else: ?><?= A::e($label) ?><?php endif; ?></h3>
+                        <?php if ($description !== ''): ?><p><?= A::e($description) ?></p><?php endif; ?>
+                    </li>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <li class="coop-step reveal"><span class="coop-num">01</span><h3><a href="<?= A::e(A::url($this, '/journal/build-platform')) ?>">建站路线</a></h3><p>渠道独立 ≠ 系统自有；三条路线的代价与适用条件。</p></li>
+                <li class="coop-step reveal" style="--i:1"><span class="coop-num">02</span><h3><a href="<?= A::e(A::url($this, '/journal/independent-store-seo')) ?>">技术 SEO</a></h3><p>从 GSC 信号开始，按抓取 → 索引 → 结构化数据 → CWV 排查。</p></li>
+                <li class="coop-step reveal" style="--i:2"><span class="coop-num">03</span><h3><a href="<?= A::e(A::url($this, '/journal/shopify-alternative')) ?>">替代与迁移</a></h3><p>摊开算订阅、交易、应用、托管与迁移；迁移有风险清单。</p></li>
+            <?php endif; ?>
+        </ol>
+    </div>
+</section>
+
+<!-- 03 编辑原则 -->
+<section class="section tint" aria-labelledby="pr-title" weline-code="amayum-journal-index-04">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">03</span> 编辑原则</p><h2 id="pr-title">有来源，有日期。</h2></div>
+        </div>
+        <div class="grid-3">
+            <article class="card reveal"><span class="k">P.01</span><h3>有来源</h3><p>政策、价格与框架能力给出来源与验证方式。</p></article>
+            <article class="card reveal" style="--i:1"><span class="k">P.02</span><h3>有日期</h3><p>价格与规则标注日期；变化后更新。</p></article>
+            <article class="card reveal" style="--i:2"><span class="k">P.03</span><h3>不写没有证据的数字</h3><p>不写搜索量；不承诺排名；不写客户增长数字；不替读者做法律/税务决定。</p></article>
+        </div>
+    </div>
+</section>
+
+<?php if ($archiveLinks !== []): ?>
+    <!-- 04 归档：仅在 P1 决定保留旧页且后端提供数据时渲染；默认不输出死链。 -->
+    <section class="section" id="archive" aria-labelledby="arch-title" weline-code="amayum-journal-index-05">
+        <div class="w-container">
+            <div class="section-head reveal">
+                <div><p class="eyebrow"><span class="idx">04</span> 归档</p><h2 id="arch-title">旧版运营笔记。</h2></div>
+                <p>归档内容不再作为主入口；保留的页面标注更新时间，待重写。</p>
+            </div>
+            <div class="grid-3">
+                <?php foreach ($archiveLinks as $index => $link): ?>
+                    <?php
+                    $label = (string)($link['label'] ?? '');
+                    $href = (string)($link['href'] ?? '');
+                    if ($label === '' || $href === '') {
+                        continue;
+                    }
+                    ?>
+                    <a class="post reveal" style="--i:<?= (int)$index ?>" href="<?= A::e(A::url($this, $href)) ?>">
+                        <div class="body"><span class="k">归档</span><h3><?= A::e($label) ?></h3><span class="more">读归档
+                            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </span></div>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+<?php endif; ?>
+
+<div class="w-container section-cta">
+    <section class="cta-band reveal" aria-labelledby="journal-cta-title" weline-code="amayum-journal-index-06">
+        <div><h2 id="journal-cta-title">读完还有<br>具体问题？</h2><p>把市场、现有栈与卡点带过来，30 分钟把判断说清楚。</p></div>
+        <div class="actions"><a class="btn btn-primary" href="<?= A::e(A::url($this, '/diagnosis#diagnosis')) ?>">预约架构诊断</a></div>
+    </section>
+</div>

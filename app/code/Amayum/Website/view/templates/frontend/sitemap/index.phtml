@@ -1,0 +1,87 @@
+<?php
+/**
+ * HTML 站点地图：按目的分组；归档/原型 noindex，不进入导航与 XML sitemap。
+ */
+declare(strict_types=1);
+
+require_once rtrim((string)BP, '/\\') . '/app/design/Amayum/official/frontend/includes/AmayumView.php';
+
+use AmayumDesign\Official\AmayumView as A;
+
+$groups = is_array($sitemap_groups ?? null) ? array_values(array_filter($sitemap_groups, 'is_array')) : [];
+$groupDescriptions = [
+    '产品与能力' => '从首页开始，看框架能力与运行中的例子，再到诊断。',
+    '指南' => '每篇只解决一个判断：建站路线、技术 SEO、替代与迁移。',
+    '公司与法务' => '关于我们、合作入口与法务信息。',
+];
+$subLabels = [
+    '/' => 'Home',
+    '/commerce' => 'Commerce',
+    '/case-studies' => 'Case studies',
+    '/diagnosis' => 'Contact',
+    '/journal' => 'Journal',
+    '/journal/build-platform' => 'Build platform',
+    '/journal/independent-store-seo' => 'SEO',
+    '/journal/shopify-alternative' => 'Alternative',
+    '/#about' => 'About',
+    '/legal' => 'Legal',
+    '/sitemap' => 'Sitemap',
+];
+?>
+<section class="page-hero" data-atmo weline-code="amayum-sitemap-index-01">
+    <div class="w-container">
+        <div class="crumbs"><a href="<?= A::e(A::url($this, '/')) ?>">Amayum</a><span>/</span><span>站点地图</span></div>
+        <h1>所有页面，<br><span class="accent">按目的分组。</span></h1>
+        <p class="lead">先决定你要做什么，再去对应的页面。</p>
+        <div class="hero-meta"><span><?= (int)count($groups) ?> 组</span><span>2026-10</span><span>归档与原型不进入导航</span></div>
+    </div>
+</section>
+
+<section class="section" aria-labelledby="groups-title" weline-code="amayum-sitemap-index-02">
+    <div class="w-container">
+        <div class="section-head">
+            <div><p class="eyebrow"><span class="idx">01</span> 分组</p><h2 id="groups-title">按用途进入，<br>不按菜单堆叠。</h2></div>
+            <p>每一组都给出下一步，不需要先读完整张地图。</p>
+        </div>
+        <div class="sitemap-groups">
+            <?php foreach ($groups as $index => $group): ?>
+                <?php
+                $title = (string)($group['title'] ?? '');
+                if ($title === '') {
+                    continue;
+                }
+                $links = array_values(array_filter((array)($group['links'] ?? []), 'is_array'));
+                $description = (string)($groupDescriptions[$title] ?? '');
+                ?>
+                <article class="sitemap-group">
+                    <span class="num"><?= A::e(str_pad((string)($index + 1), 2, '0', STR_PAD_LEFT)) ?></span>
+                    <div>
+                        <h2><?= A::e($title) ?></h2>
+                        <?php if ($description !== ''): ?><p><?= A::e($description) ?></p><?php endif; ?>
+                        <ul>
+                            <?php foreach ($links as $link): ?>
+                                <?php
+                                $label = (string)($link['label'] ?? '');
+                                $href = (string)($link['href'] ?? '');
+                                if ($label === '' || $href === '') {
+                                    continue;
+                                }
+                                $sub = (string)($subLabels[$href] ?? '');
+                                ?>
+                                <li><a href="<?= A::e(A::url($this, $href)) ?>"><?= A::e($label) ?><?php if ($sub !== ''): ?> <span><?= A::e($sub) ?></span><?php endif; ?></a></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+        <p class="mono" style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:26px">Note — 归档、原型与工具页标注 noindex，不进入主导航、不进入 sitemap.xml；本页只列公开页面。</p>
+    </div>
+</section>
+
+<div class="w-container section-cta">
+    <section class="cta-band reveal" aria-labelledby="sitemap-cta-title" weline-code="amayum-sitemap-index-03">
+        <div><h2 id="sitemap-cta-title">没找到要找的？</h2><p>直接把问题发过来，我们用一封邮件说清楚。</p></div>
+        <div class="actions"><a class="btn btn-primary" href="<?= A::e(A::url($this, '/diagnosis')) ?>">联系 Amayum</a></div>
+    </section>
+</div>

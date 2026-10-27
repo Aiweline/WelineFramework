@@ -1,0 +1,55 @@
+<?php
+/**
+ * 指南正文：独立站建站平台怎么选（slug=build-platform）。
+ * 价格口径 2026-10-26；不写未验证数字。
+ */
+declare(strict_types=1);
+?>
+<h2 id="distinction">先分清：渠道独立，不等于系统自有</h2>
+<p>独立站可以只是“不在 Amazon 上卖”，也可以在 Shopify 上。渠道独立解决的是平台依赖；系统自有解决的是代码、数据与运行时所有权。两者不是一回事。</p>
+<p>你要先回答：三年后，你希望谁能改 URL、canonical、结账字段、税费规则与部署环境？</p>
+
+<h2 id="routes">三条路线</h2>
+<table>
+    <thead><tr><th>路线</th><th>适合谁</th><th>代价</th><th>代表</th></tr></thead>
+    <tbody>
+        <tr><td><strong>SaaS</strong></td><td>要最快上线、最少运维、完整生态</td><td>订阅 + 交易费 + 应用；结账/运行时受计划约束</td><td>Shopify、Shoplazza、Shopline</td></tr>
+        <tr><td><strong>开源插件</strong></td><td>有 WordPress/PHP 团队；要低许可成本</td><td>插件组合、性能、安全、升级由你负责</td><td>WooCommerce</td></tr>
+        <tr><td><strong>源码框架</strong></td><td>要代码/数据/运行时所有权；有多站点/多语言/SEO 需求</td><td>需要技术维护；实施周期更长</td><td>WelineFramework、Sylius、Medusa、Saleor</td></tr>
+    </tbody>
+</table>
+
+<h2 id="seven">七个判断</h2>
+<ol>
+    <li><strong>总成本</strong> — 把订阅、交易、应用、托管、迁移、人力分开算。</li>
+    <li><strong>代码所有权</strong> — 你能否读、改、部署、迁移？</li>
+    <li><strong>迁移</strong> — 有没有 URL 映射、301、canonical、hreflang、analytics 方案？</li>
+    <li><strong>多站点</strong> — 一个后台能否管理多个品牌/域名/语言？</li>
+    <li><strong>多语言</strong> — URL 策略、hreflang、翻译工作流、QA 谁负责？</li>
+    <li><strong>SEO 控制</strong> — SSR、canonical、schema、sitemap、robots 是否可配置？</li>
+    <li><strong>运维能力</strong> — 谁更新、谁备份、谁处理故障、谁写内容？</li>
+</ol>
+
+<h2 id="costs">成本清单</h2>
+<table>
+    <thead><tr><th>平台</th><th>价格（2026-10-26 官方页面）</th><th>交易费 / 其他</th></tr></thead>
+    <tbody>
+        <tr><td><strong>Shopify</strong></td><td>Basic $39/mo（月付）或 $29/mo（年付）；Grow $105/$79；Advanced $399/$299；Plus from $2,300/mo</td><td>第三方交易费 2% / 1% / 0.6% / 0.2%</td></tr>
+        <tr><td><strong>Shoplazza</strong></td><td>$39 / $105 / $399 月付</td><td>交易费 2% / 1% / 0.5%</td></tr>
+        <tr><td><strong>WooCommerce</strong></td><td>核心免费，0% revenue share；托管 $25–$350/mo</td><td>扩展 $29–$299/year</td></tr>
+        <tr><td><strong>Medusa Cloud</strong></td><td>$29 / $99 / $299</td><td>0% GMV platform fee</td></tr>
+        <tr><td><strong>Saleor Cloud</strong></td><td>Select $1,599/mo，Volume $3,999/mo</td><td>超额 0.8% / 0.4%</td></tr>
+        <tr><td><strong>Sylius</strong></td><td>开源 MIT；Plus/商业版无公开价，需销售流程</td><td>—</td></tr>
+        <tr><td><strong>Adobe Commerce</strong></td><td>quote-based</td><td>不要引用未验证价格</td></tr>
+    </tbody>
+</table>
+<p class="muted">价格来自 2026-10-26 官方页面；会变；不含支付处理、应用、托管、迁移与人力。</p>
+
+<h2 id="when-saas">什么情况下选 SaaS</h2>
+<p>你要 2 周内上线；没有技术团队；不想处理服务器、备份、升级；接受订阅/交易费；生态与 app 对你重要。</p>
+
+<h2 id="when-framework">什么情况下选源码框架</h2>
+<p>你要代码、数据、运行时所有权；有 PHP 团队或长期 agency；要做多品牌/多市场；要控制 URL/canonical/hreflang/schema；能接受实施周期与运维责任。</p>
+
+<h2 id="next">下一步</h2>
+<p>列出你现在的固定成本、迁移风险、必须保留的功能、不能接受的功能；用一页纸做决策。不要先选平台再补需求。</p>

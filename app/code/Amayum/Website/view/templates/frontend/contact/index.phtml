@@ -1,0 +1,300 @@
+<?php
+/**
+ * 预约架构诊断：GET 渲染表单，POST 由 Contact 控制器服务端校验/落库/发信。
+ *
+ * 状态只由服务端渲染；无 SMTP 或发送失败时保留表单值并显示 mailto 回退，
+ * 绝不伪造成功。字段名与 InquiryService 的校验键一致。
+ */
+declare(strict_types=1);
+
+require_once rtrim((string)BP, '/\\') . '/app/design/Amayum/official/frontend/includes/AmayumView.php';
+
+use AmayumDesign\Official\AmayumView as A;
+
+$site = is_array($site ?? null) ? $site : A::profile();
+$contactEmail = (string)($contact_email ?? ($site['contact_email'] ?? 'hello@amayum.com'));
+$location = (string)($location ?? ($site['location'] ?? '深圳 · 中国'));
+$responseSla = (string)($response_sla ?? ($site['response_sla'] ?? '1 个工作日内回复（Asia/Shanghai）'));
+
+$state = is_array($contact_state ?? null) ? $contact_state : [];
+$status = (string)($state['status'] ?? 'idle');
+$message = trim((string)($state['message'] ?? ''));
+$errors = is_array($state['errors'] ?? null) ? $state['errors'] : [];
+$values = is_array($state['values'] ?? null) ? $state['values'] : [];
+$mailto = (string)($contact_mailto ?? ($state['mailto'] ?? ''));
+if ($mailto === '') {
+    $mailto = 'mailto:' . $contactEmail;
+}
+$plainMailto = 'mailto:' . $contactEmail;
+$smtpAvailable = (bool)($smtp_available ?? false);
+$token = (string)($contact_form_token ?? '');
+
+$fields = is_array($contact_fields ?? null) ? $contact_fields : [];
+$stacks = is_array($stack_options ?? null) ? $stack_options : ['Shopify', 'Shoplazza', 'Shopline', 'WooCommerce', '自建', '其他'];
+$markets = is_array($market_options ?? null) ? $market_options : ['北美', '欧洲', '日本', '海湾', '多市场', '未定'];
+$fieldIds = [
+    'name' => 'fName',
+    'email' => 'fEmail',
+    'company' => 'fCompany',
+    'stack' => 'fStack',
+    'market' => 'fMarket',
+    'volume_band' => 'fVolume',
+    'timeline' => 'fTimeline',
+    'message' => 'fMessage',
+    'consent' => 'fConsent',
+];
+$labelOf = static function (string $key, string $fallback) use ($fields): string {
+    $label = (string)($fields[$key]['label'] ?? '');
+
+    return $label !== '' ? $label : $fallback;
+};
+$errOf = static function (string $key) use ($errors): string {
+    return trim((string)($errors[$key] ?? ''));
+};
+$valueOf = static function (string $key) use ($values): string {
+    return (string)($values[$key] ?? '');
+};
+$invalidClass = static function (string $key) use ($errOf): string {
+    return $errOf($key) !== '' ? ' invalid' : '';
+};
+$errId = static function (string $key) use ($fieldIds): string {
+    return ($fieldIds[$key] ?? 'f' . $key) . 'Err';
+};
+$formError = $errOf('form');
+$statusMessage = $message !== '' ? $message : $formError;
+if ($statusMessage === '') {
+    $statusMessage = match ($status) {
+        'invalid' => '还有必填项没有完成，请检查标红的字段。',
+        'rate_limited' => '提交过于频繁，请稍后再试，或直接使用下方邮件地址。',
+        'new' => '邮件服务未配置或暂不可用，请使用下方邮件地址联系我们。',
+        'failed' => '发送失败，请使用下方邮件地址联系我们。',
+        default => '',
+    };
+}
+$isSuccess = $status === 'sent';
+$statusKind = $isSuccess ? 'ok' : (in_array($status, ['invalid', 'failed', 'rate_limited', 'new'], true) ? 'err' : '');
+$contactFaqs = is_array($faqs ?? null) && $faqs !== [] ? $faqs : (array)($seo['faqs'] ?? []);
+?>
+<section class="page-hero" data-atmo weline-code="amayum-contact-index-01">
+    <div class="hero-art hero-map hero-map--process" aria-hidden="true">
+        <div class="map-card"><span class="map-num">01</span><span class="map-label">DIAGNOSE</span><span class="map-bar"></span></div>
+        <div class="map-card"><span class="map-num">02</span><span class="map-label">SCOPE</span><span class="map-bar"></span></div>
+        <div class="map-card"><span class="map-num">03</span><span class="map-label">DELIVER</span><span class="map-bar"></span></div>
+    </div>
+    <div class="w-container">
+        <div class="crumbs"><a href="<?= A::e(A::url($this, '/')) ?>">Amayum</a><span>/</span><span>预约架构诊断</span></div>
+        <h1>先诊断，<br><span class="accent">再决定要不要建。</span></h1>
+        <p class="lead">30 分钟，围绕你的市场、品类、现有站点与技术能力，给出三条判断：适不适合源码自有路线、第一版做什么、哪些现在不能承诺。</p>
+        <div class="hero-meta">
+            <span><?= A::e($location) ?></span>
+            <a href="<?= A::e($plainMailto) ?>"><?= A::e($contactEmail) ?></a>
+            <span><?= A::e($responseSla) ?></span>
+        </div>
+    </div>
+</section>
+
+<!-- 01 你会得到什么 -->
+<section class="section surface" style="padding:clamp(40px,5vw,64px) 0" weline-code="amayum-contact-index-02">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">01</span> 你会得到什么</p><h2 id="get-title">四样东西，<br>没有推销。</h2></div>
+        </div>
+        <div class="grid-2">
+            <article class="card reveal"><span class="k">01</span><h3>一页诊断纪要</h3><p>市场、品类、现有栈与约束，收敛成一页可讨论的文字。</p></article>
+            <article class="card reveal" style="--i:1"><span class="k">02</span><h3>三条路线对比</h3><p>SaaS / 开源插件 / 源码框架，按你的场景写代价。</p></article>
+            <article class="card reveal" style="--i:0"><span class="k">03</span><h3>建站或迁移的风险清单</h3><p>URL、重定向、税费、支付与运维的已知风险。</p></article>
+            <article class="card reveal" style="--i:1"><span class="k">04</span><h3>不推销</h3><p>不合适就直说。</p></article>
+        </div>
+    </div>
+</section>
+
+<!-- 02 诊断申请 -->
+<section class="section" id="diagnosis" aria-labelledby="form-title" weline-code="amayum-contact-index-03">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">02</span> 诊断申请</p><h2 id="form-title">把背景写清楚，<br>回复才有判断。</h2></div>
+            <p>带 * 的字段为必填。表单提交后由服务端处理；只有在邮件传输接受后才显示成功，否则会保留内容并给出邮件回退。</p>
+        </div>
+
+        <div class="contact-grid">
+            <div class="form-panel reveal">
+                <form id="contactForm" method="post" action="<?= A::e(A::url($this, '/diagnosis')) ?>" novalidate>
+                    <?php if ($token !== ''): ?>
+                        <input type="hidden" name="contact_token" value="<?= A::e($token) ?>">
+                    <?php endif; ?>
+                    <div class="hp-field" aria-hidden="true">
+                        <label for="hp_website">网站</label>
+                        <input id="hp_website" name="hp_website" type="text" tabindex="-1" autocomplete="off">
+                    </div>
+
+                    <?php if (!$smtpAvailable): ?>
+                        <p class="form-status pending" role="status">邮件服务暂未配置或不可用：提交会先记录询盘，但不会显示“已发送”。你也可以直接发邮件到 <a href="<?= A::e($plainMailto) ?>"><?= A::e($contactEmail) ?></a>。</p>
+                    <?php endif; ?>
+
+                    <div class="form-row">
+                        <div class="field<?= $invalidClass('name') ?>">
+                            <label for="fName"><?= A::e($labelOf('name', '姓名')) ?> <span class="req" aria-hidden="true">*</span></label>
+                            <input id="fName" name="name" type="text" autocomplete="name" placeholder="怎么称呼你" maxlength="80" required aria-required="true" aria-describedby="<?= A::e($errId('name')) ?>"<?= $errOf('name') !== '' ? ' aria-invalid="true"' : '' ?> value="<?= A::e($valueOf('name')) ?>">
+                            <p class="err" id="<?= A::e($errId('name')) ?>"><?= A::e($errOf('name') !== '' ? $errOf('name') : '请填写姓名。') ?></p>
+                        </div>
+                        <div class="field<?= $invalidClass('email') ?>">
+                            <label for="fEmail"><?= A::e($labelOf('email', '工作邮箱')) ?> <span class="req" aria-hidden="true">*</span></label>
+                            <input id="fEmail" name="email" type="email" inputmode="email" autocomplete="email" placeholder="you@company.com" maxlength="254" required aria-required="true" aria-describedby="<?= A::e($errId('email')) ?>"<?= $errOf('email') !== '' ? ' aria-invalid="true"' : '' ?> value="<?= A::e($valueOf('email')) ?>">
+                            <p class="err" id="<?= A::e($errId('email')) ?>"><?= A::e($errOf('email') !== '' ? $errOf('email') : '请填写有效的邮箱地址。') ?></p>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="field<?= $invalidClass('company') ?>">
+                            <label for="fCompany"><?= A::e($labelOf('company', '公司 / 站点')) ?></label>
+                            <input id="fCompany" name="company" type="text" autocomplete="organization" placeholder="品牌名或现有域名" maxlength="120" aria-describedby="<?= A::e($errId('company')) ?>"<?= $errOf('company') !== '' ? ' aria-invalid="true"' : '' ?> value="<?= A::e($valueOf('company')) ?>">
+                            <p class="err" id="<?= A::e($errId('company')) ?>"><?= A::e($errOf('company')) ?></p>
+                        </div>
+                        <div class="field<?= $invalidClass('stack') ?>">
+                            <label for="fStack"><?= A::e($labelOf('stack', '当前栈')) ?></label>
+                            <select id="fStack" name="stack" aria-describedby="<?= A::e($errId('stack')) ?>"<?= $errOf('stack') !== '' ? ' aria-invalid="true"' : '' ?>>
+                                <option value="">请选择</option>
+                                <?php foreach ($stacks as $option): ?>
+                                    <option value="<?= A::e((string)$option) ?>"<?= $valueOf('stack') === (string)$option ? ' selected' : '' ?>><?= A::e((string)$option) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="err" id="<?= A::e($errId('stack')) ?>"><?= A::e($errOf('stack')) ?></p>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="field<?= $invalidClass('market') ?>">
+                            <label for="fMarket"><?= A::e($labelOf('market', '目标市场')) ?></label>
+                            <select id="fMarket" name="market" aria-describedby="<?= A::e($errId('market')) ?>"<?= $errOf('market') !== '' ? ' aria-invalid="true"' : '' ?>>
+                                <option value="">请选择</option>
+                                <?php foreach ($markets as $option): ?>
+                                    <option value="<?= A::e((string)$option) ?>"<?= $valueOf('market') === (string)$option ? ' selected' : '' ?>><?= A::e((string)$option) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="err" id="<?= A::e($errId('market')) ?>"><?= A::e($errOf('market')) ?></p>
+                        </div>
+                        <div class="field<?= $invalidClass('volume_band') ?>">
+                            <label for="fVolume"><?= A::e($labelOf('volume_band', '月订单量或 GMV 区间')) ?>（选填，区间即可）</label>
+                            <input id="fVolume" name="volume_band" type="text" placeholder="例如：500–2000 单/月" maxlength="80" aria-describedby="<?= A::e($errId('volume_band')) ?>"<?= $errOf('volume_band') !== '' ? ' aria-invalid="true"' : '' ?> value="<?= A::e($valueOf('volume_band')) ?>">
+                            <p class="err" id="<?= A::e($errId('volume_band')) ?>"><?= A::e($errOf('volume_band')) ?></p>
+                        </div>
+                    </div>
+
+                    <div class="field<?= $invalidClass('timeline') ?>">
+                        <label for="fTimeline"><?= A::e($labelOf('timeline', '计划上线时间')) ?></label>
+                        <input id="fTimeline" name="timeline" type="text" placeholder="例如：2027 Q1，或未定" maxlength="80" aria-describedby="<?= A::e($errId('timeline')) ?>"<?= $errOf('timeline') !== '' ? ' aria-invalid="true"' : '' ?> value="<?= A::e($valueOf('timeline')) ?>">
+                        <p class="err" id="<?= A::e($errId('timeline')) ?>"><?= A::e($errOf('timeline')) ?></p>
+                    </div>
+
+                    <div class="field<?= $invalidClass('message') ?>">
+                        <label for="fMessage"><?= A::e($labelOf('message', '当前最大卡点')) ?> <span class="req" aria-hidden="true">*</span></label>
+                        <textarea id="fMessage" name="message" placeholder="现在卡在哪：订阅成本、结账限制、SEO、多语言、迁移风险……越具体越好。" minlength="8" maxlength="2000" required aria-required="true" aria-describedby="<?= A::e($errId('message')) ?>"<?= $errOf('message') !== '' ? ' aria-invalid="true"' : '' ?>><?= A::e($valueOf('message')) ?></textarea>
+                        <p class="err" id="<?= A::e($errId('message')) ?>"><?= A::e($errOf('message') !== '' ? $errOf('message') : '请至少写 8 个字，方便我们判断。') ?></p>
+                    </div>
+
+                    <div class="check-wrap<?= $invalidClass('consent') ?>">
+                        <label class="check" for="fConsent">
+                            <input id="fConsent" name="consent" type="checkbox" value="1" required aria-required="true" aria-describedby="<?= A::e($errId('consent')) ?>"<?= !empty($values['consent']) ? ' checked' : '' ?><?= $errOf('consent') !== '' ? ' aria-invalid="true"' : '' ?>>
+                            <?= A::e($labelOf('consent', '我同意 Amayum 使用以上信息回复这次咨询，不做订阅推送。')) ?> <span class="req" aria-hidden="true">*</span>
+                        </label>
+                        <p class="err" id="<?= A::e($errId('consent')) ?>"><?= A::e($errOf('consent') !== '' ? $errOf('consent') : '请先勾选同意，再发送需求。') ?></p>
+                    </div>
+
+                    <p class="form-status<?= $statusKind !== '' ? ' ' . $statusKind : '' ?>" id="formStatus" role="<?= $statusKind === 'err' ? 'alert' : 'status' ?>" aria-live="polite"<?= $statusKind === '' ? ' style="display:none"' : '' ?>>
+                        <?= A::e($statusMessage) ?>
+                        <?php if ($statusKind === 'err'): ?>
+                            <a href="<?= A::e($mailto) ?>">用邮件发送这份内容</a>
+                        <?php endif; ?>
+                    </p>
+
+                    <div class="form-actions">
+                        <button class="btn btn-primary" id="contactSubmit" type="submit"><span class="btn-label">提交诊断申请</span>
+                            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </button>
+                        <span class="mono form-meta"><?= A::e($responseSla) ?></span>
+                    </div>
+                    <noscript><p class="form-status err" style="display:block">脚本未启用时表单仍可提交；如提交失败，请直接发邮件到 <a href="<?= A::e($plainMailto) ?>"><?= A::e($contactEmail) ?></a>。</p></noscript>
+                </form>
+            </div>
+
+            <aside class="contact-aside reveal" style="--i:1" aria-label="适合谁与说明">
+                <div class="block">
+                    <span class="k">适合谁</span>
+                    <ul style="margin:8px 0 0;padding-left:18px;font-size:13px;line-height:1.8;color:var(--muted)">
+                        <li>准备从 SaaS 迁移</li>
+                        <li>要做多品牌/多市场</li>
+                        <li>现有 PHP 团队</li>
+                        <li>需要 SEO/多语言控制</li>
+                    </ul>
+                </div>
+                <div class="block">
+                    <span class="k">不适合谁</span>
+                    <ul style="margin:8px 0 0;padding-left:18px;font-size:13px;line-height:1.8;color:var(--muted)">
+                        <li>要零运维</li>
+                        <li>两周上线</li>
+                        <li>20+ 支付网关开箱即用</li>
+                        <li>PCI/GDPR/SOC2/ISO 认证</li>
+                        <li>Docker/Vercel 生产</li>
+                        <li>保证排名</li>
+                        <li>纯模板套版</li>
+                    </ul>
+                </div>
+                <div class="block"><span class="k">我们会问</span><p>市场、品类、支付/税费、内容维护、上线窗口、现有团队。</p></div>
+                <div class="block"><span class="k">不做什么</span><p>不做免费完整方案；不做法律/税务意见；不承诺无法核验的增长数字。</p></div>
+                <div class="block"><span class="k">Email</span><p><a href="<?= A::e($plainMailto) ?>"><?= A::e($contactEmail) ?></a></p></div>
+            </aside>
+        </div>
+    </div>
+</section>
+
+<!-- 03 合作流程 -->
+<section class="section surface" id="process" aria-labelledby="process-title" weline-code="amayum-contact-index-04">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">03</span> 合作流程</p><h2 id="process-title">五个节点。</h2></div>
+        </div>
+        <ol class="coop-grid">
+            <li class="coop-step reveal" style="--i:0"><span class="coop-num">01</span><h3>诊断</h3><p>市场、品类、现有栈、团队与时间。</p></li>
+            <li class="coop-step reveal" style="--i:1"><span class="coop-num">02</span><h3>范围</h3><p>第一版做什么、不做什么、依赖与排除项。</p></li>
+            <li class="coop-step reveal" style="--i:2"><span class="coop-num">03</span><h3>里程碑</h3><p>信息架构、主题、交易链路、内容、验收。</p></li>
+            <li class="coop-step reveal" style="--i:3"><span class="coop-num">04</span><h3>交付</h3><p>主题、部署文档、运维清单、验收记录。</p></li>
+            <li class="coop-step reveal" style="--i:4"><span class="coop-num">05</span><h3>交接</h3><p>团队能自己维护与扩展；支持按合同。</p></li>
+        </ol>
+    </div>
+</section>
+
+<!-- FAQ -->
+<section class="section tint" id="faq" aria-labelledby="faq-title" weline-code="amayum-contact-index-05">
+    <div class="w-container" style="max-width:880px">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">FAQ</span> 常见问题</p><h2 id="faq-title">先回答<br>最常被问的。</h2></div>
+        </div>
+        <?php if ($contactFaqs !== []): ?>
+            <div class="faq-list">
+                <?php foreach (array_values($contactFaqs) as $index => $faq): ?>
+                    <?php
+                    $question = trim((string)($faq['question'] ?? ''));
+                    $answer = trim((string)($faq['answer'] ?? ''));
+                    if ($question === '' || $answer === '') {
+                        continue;
+                    }
+                    ?>
+                    <details class="faq reveal" style="--i:<?= (int)$index ?>">
+                        <summary><?= A::e($question) ?></summary>
+                        <p><?= A::e($answer) ?></p>
+                    </details>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<div class="w-container section-cta">
+    <section class="cta-band reveal" aria-labelledby="contact-cta-title" weline-code="amayum-contact-index-06">
+        <div><h2 id="contact-cta-title">还没准备好聊？</h2><p>先读指南，或看框架能力矩阵；看完再来，问题会更具体。</p></div>
+        <div class="actions">
+            <a class="btn btn-primary" href="<?= A::e(A::url($this, '/journal')) ?>">先读指南</a>
+            <a class="btn btn-ghost-dark" href="<?= A::e(A::url($this, '/commerce')) ?>">看框架能力</a>
+        </div>
+    </section>
+</div>

@@ -1,0 +1,621 @@
+<?php
+/**
+ * 框架能力页：Hero + 13 节能力矩阵 + FAQ + CTA。
+ *
+ * 只写代码/文档能证明的能力；每项带状态与边界。状态图例由控制器注入，
+ * 缺失时使用与站点目录一致的默认值。
+ */
+declare(strict_types=1);
+
+require_once rtrim((string)BP, '/\\') . '/app/design/Amayum/official/frontend/includes/AmayumView.php';
+
+use AmayumDesign\Official\AmayumView as A;
+
+$site = is_array($site ?? null) ? $site : A::profile();
+$statusLegend = is_array($status_legend ?? null) ? $status_legend : [];
+if ($statusLegend === []) {
+    $statusLegend = [
+        ['key' => 'verified', 'label' => '已验证', 'description' => '有代码、文档或运行证据。'],
+        ['key' => 'partial', 'label' => '部分', 'description' => '有实现，但有明确边界或需要配置。'],
+        ['key' => 'not_implemented', 'label' => '未实现', 'description' => '当前仓库没有该能力。'],
+    ];
+}
+$statusClass = static function (string $key): string {
+    return match ($key) {
+        'verified' => 'status status--verified',
+        'partial' => 'status status--partial',
+        'not_implemented', 'missing' => 'status status--missing',
+        default => 'status status--na',
+    };
+};
+$statusLabel = static function (string $key): string {
+    return match ($key) {
+        'verified' => '已验证',
+        'partial' => '部分',
+        'not_implemented', 'missing' => '未实现',
+        default => '不宣称',
+    };
+};
+$badge = static function (string $key) use ($statusClass, $statusLabel): string {
+    return '<span class="' . $statusClass($key) . '">' . $statusLabel($key) . '</span>';
+};
+
+$sections = [
+    ['runtime', '01', '运行时', '运行时与部署'],
+    ['kernel', '02', '交易内核', '交易内核'],
+    ['multisite', '03', '多站点', '多站点与主题'],
+    ['domain', '04', '域名', '域名与 HTTPS'],
+    ['cdn', '05', '缓存', '缓存与 CDN'],
+    ['i18n', '06', '多语言', '多语言'],
+    ['seo', '07', 'SEO', 'SEO 与 GEO'],
+    ['comms', '08', '沟通', '沟通与服务'],
+    ['ai', '09', 'AI', 'AI 协作与自动化'],
+    ['security', '10', '安全', '安全与治理'],
+    ['apps', '11', '多端', '应用与多端'],
+    ['ops', '12', '运维', '运维与交付'],
+    ['boundary', '13', '边界', '公开文案的边界'],
+];
+
+$runtimeRows = [
+    ['一键安装', 'verified', '一条 <code>curl | bash</code>：脚本自动克隆源码、装项目级 PHP 8.4 与 PostgreSQL、建库、执行迁移并启动服务', 'Linux/自动装依赖；macOS 需在弹窗确认 Xcode CLT；Windows 走 <code>bootstrap.ps1</code>；需 shell 权限'],
+    ['源码安装', 'verified', '3 条命令：clone → <code>composer install</code> → <code>php bin/w command:upgrade</code>', '需 PHP ^8.4 / Composer ^2.7 环境（一键路径由脚本自装）'],
+    ['新功能起步', 'verified', '<code>module:create</code> 六步向导生成模块骨架；属性 ORM（<code>#[Table]/#[Col]</code>）、控制器自动发现生成路由、ACL 随模块注册，<code>setup:upgrade</code> 落地', '生成的是 hello-world 级骨架，业务代码仍需开发；不是零代码建站'],
+    ['日常运维', 'verified', '一个 <code>bin/w</code> 管完安装、缓存、队列、定时、邮件、WLS 与部署，240+ 条命令', '命令可用性取决于已安装模块'],
+];
+
+$kernelRows = [
+    ['商品 / 目录', 'verified', 'Website 分片的商品/Offer 模型、SKU、变体、价格、媒体、店铺覆盖、发布流程', '商品分片需要 provision；分片 registry 可能处于 maintenance'],
+    ['购物车', 'verified', '服务端权威购物车、游客/客户合并、ToC/ToB 类型', '跨币种需要 FX；汇率不可用失败关闭'],
+    ['结账', 'verified', '结账冻结可信购物车，价格与行项目由服务端重新解析', '浏览器不能提供价格/行项目'],
+    ['订单', 'verified', '订单状态机、发票、发货、退款、履约账本', '退款执行依赖支付提供方能力'],
+    ['支付', 'verified', 'Provider SPI、支付意图/尝试、Webhook、退款、对账', '仅 Stripe、PayPal、fake_card 已实现'],
+    ['物流', 'verified', '区域、承运商、费率模板、免运费、跟踪', '内置 provider 是本地费率模板 + Yanwen'],
+    ['税费', 'verified', '辖区规则、税类、LKG 快照、VAT/GST 种子矩阵', '生产 rollout 默认 <code>off</code>'],
+    ['库存', 'verified', '不可变台账、预留/租约/CAS、四种可售策略', '仓库迁移 <code>P3A</code> 有 mode-off/allowlist'],
+    ['币种', 'verified', '手动/API 汇率、基础币种换算、店面格式化', '<code>rate &lt;= 0</code> 失败关闭'],
+    ['促销', 'verified', '活动主题、deal price、限定店面路由', '折扣数学归 Marketing；Promotion 不直接写 Marketing 规则'],
+    ['B2B', 'verified', 'ToC/ToB 购物车、客户组、价目表、MOQ、定金/尾款', 'rollout gate 默认 <code>off</code>'],
+    ['订阅', 'verified', '订阅计费原语、续费安全', 'rollout gate 默认 <code>off</code>'],
+    ['搜索', 'verified', '可插拔搜索、店面/后台搜索、热词', '默认 MySQL；Redis/Elasticsearch 未配置时失败关闭'],
+    ['评论', 'verified', '评分、媒体、审核、SEO rating facts', '公开页只显示已审核评论'],
+    ['Blog / CMS / FAQ', 'verified', '博客、CMS 页面、FAQ 与搜索/SEO 集成', 'Blog 与 CMS 是不同 owner'],
+    ['RMA', 'not_implemented', '不写', '没有独立 RMA/退货门户；订单退款/退货账本存在'],
+    ['EAV 无限属性', 'verified', 'EAV 属性、选项、值、作用域与索引投影；商品/分类/客户等实体复用', '属性性能取决于索引投影配置；不是无代价加字段'],
+    ['任意商品类型', 'verified', '<code>ProductTypeDefinition</code> 声明 Offer 基数、表单 schema、价格/库存/配送/数字交付/组合能力', '新类型需写 Provider 定义；不是后台点选即生成'],
+    ['帮我付', 'verified', '分享链接/二维码代付、快捷购买、运费脱敏与报价编排（HelpPay）', '代付仍走已配置的支付 Provider'],
+    ['支付对账', 'verified', '<code>payment:reconcile</code> 持久化支付不变量对账：dry-run / catalog / 两人复核修复', '对账发现差异后修复需人工复核，不自动改账'],
+    ['客户资产账本', 'verified', '客户资产账户、不可变账本、预占/返还、余额守恒；积分余额落 <code>asset_code=points</code>', '资产类型需按账户模型接入，不是任意科目记账'],
+    ['积分 / VIP 等级', 'partial', '按实付现金赚积分与成长值；VIP 等级带折扣率、积分倍率、包邮；退款按比例扣回', '内核已实现、默认关闭；开箱全链路未覆盖，见边界节'],
+    ['分销', 'verified', '分享归因、佣金、账户工作台；页脚「我要推广」默认注入', '佣金规则需配置；归因窗口与结算周期按模块设置'],
+    ['多供应商分账', 'verified', '供应商身份、Website/Store 授权、分账规则与不可变结算快照、退款冲销', '分账不等于自动打款；打款走你的结算流程'],
+    ['万能代发', 'verified', '货源壳 + Provider；CJ Dropshipping 为默认可选 Provider；支持商品拉取、加价、下单履约', 'CJ 需自有账号授权；其余货源按 Provider 接入'],
+    ['营销 / 再营销', 'verified', 'Campaign、Coupon、Lifecycle、Audience Segment、Winback（弃购/未付款/流失挽回）', '触达渠道需先在沟通域配好；规则需人工配置'],
+    ['媒体库 / 对象存储', 'verified', '统一媒体库、FileAsset 同步、本地磁盘与阿里云 OSS 驱动、分片上传、临时/变体 URL', 'OSS 需自有阿里云凭据；不是免费无限存储'],
+    ['店面购物辅助', 'verified', '收藏、对比、快速查看、最近浏览（Cookie MRU + 部件注入）', '跨设备同步依赖客户账号，游客态仅本机'],
+];
+
+$multisiteRows = [
+    ['可视化编辑', 'verified', '后台可视化编辑器 + 部件拖拽（部件槽位）；主题版本发布', '编辑的是主题配置与部件排布，不是任意像素改图'],
+    ['店面世代热更新', 'verified', '主题发布后前端世代切换；新代预热期间旧页继续服务，最近 3 代 SEALED 放行；超代 reload 自愈', '发布仍需预热窗口；切换是世代过渡，不是停机时间为零的承诺'],
+];
+
+$domainRows = [
+    ['域名池', 'verified', '域名池按 <code>site_ready=1</code> 且未占用过滤；后台或 CLI 选池建站（<code>website:domain-pool</code> / <code>website:create</code>）', '池里得先有域名；选号不等于完成注册'],
+    ['注册商适配', 'verified', '6 家注册商适配层：GoDaddy、Gname、阿里云、Cloudflare、AWS Route53、Azure DNS；DNS 记录与生命周期编排', '各注册商需自有账号与凭据；适配层不包办注册费'],
+    ['自动 HTTPS', 'verified', 'Let\'s Encrypt 自动申请与自动续签，证书到期前续签窗口检查；本地域名走自签', '公网 CA 首签依赖外部服务可用；WLS 相关外部门禁见边界节'],
+];
+
+$cdnRows = [
+    ['三层 FPC', 'verified', '进程/共享内存 → html-disk → CDN 边缘；html-disk 保留 live/previous/previous2 三代；FPC 可整体关闭', 'CDN 一层依赖外部 CDN 服务与配置'],
+    ['离线烘焙', 'verified', '<code>website:fpc:bake</code> 按站点 sitemap URL 负载感知暖盘并导出离线包；<code>/s/{deploy_version}/</code> 版本化静态前缀', '烘焙范围以 sitemap 为准，不等于全站 URL'],
+    ['预热', 'verified', 'CDN 定时预热 + 发布后逐 URL 重暖；WLS idle 阶段按优先级预热关键路径', '定时 + 空闲时预热，不保证所有页面已预热'],
+    ['按 URL 清理', 'verified', '站点/店铺/渠道/商品/主题变更后按 URL、Host、Tag 清理源站 FPC 与 CDN；不整站 purge', '清理范围取决于变更类型映射；不是手动清一切'],
+    ['CDN 托管', 'verified', 'Cloudflare / WLS Memory 等多适配器；凭据密封、规则管理、安全规则同步；Cloudflare OAuth 一键授权', '外部 CDN 需自有账户；不是内置全球 CDN'],
+];
+
+$seoRows = [
+    ['商品 Feed', 'verified', '10 个商品 Feed 平台：Google Merchant、Microsoft Merchant、Meta Catalog、Pinterest、TikTok、Snapchat、Criteo、Naver、Yandex、VK；分类映射、连接/授权、公开快照', '各平台需自有账户授权；Feed 被拒不归框架管'],
+    ['全站搜索', 'verified', '前台 <code>/search</code>、热搜、页头搜索部件；后台万能搜索；Provider 注册（商品/Blog/FAQ/配置）；搜索日志与慢查询报表', '默认 MySQL 引擎；Elasticsearch 未配置时失败关闭'],
+    ['地理定位', 'verified', '浏览器原生定位 + IP 定位降级、位置缓存/监听、按需注入不阻塞渲染（Location）', '浏览器授权被拒时走 IP 降级；IP 库精度有限'],
+    ['AI 获客', 'verified', 'AiAcquisition：公开网页/论坛/名录/社媒 → 线索；去重、评分、成本台账；服务端 Agent 或浏览器扩展', '线索合规与外部平台规则自行把握；模型调用走你配置的供应商'],
+    ['融媒体发布', 'verified', 'Social：平台库、OAuth/API Key/Webhook 连接、AI 创意、批量发布、队列、日更自动运营', '平台需逐个授权；外发内容仍走审批闸门'],
+];
+
+$commsRows = [
+    ['企业邮局', 'verified', '管理 Stalwart 原生引擎：邮箱域名、账号、DNS、服务状态、配额；后台直接收发/写信', '邮局跑在你自己的服务器上；送达率取决于服务器信誉与 DNS 配置'],
+    ['SMTP 渠道模板', 'verified', '统一 <code>MailSenderInterface</code> / <code>smtp.send</code>；按渠道 + 语言维护模板；品牌变量自动注入', '模板需按渠道维护；外部 SMTP 需自有凭据'],
+    ['消息渠道订阅', 'verified', '5 类后台通知渠道：邮件、钉钉、飞书、Telegram、Webhook；按 topic 订阅、最低级别、启停', '渠道凭据各自配置；不承诺第三方 IM 消息必达'],
+    ['在线客服', 'verified', '多语言实时聊天、消息自动翻译、客服分配、会话状态、游客邮箱绑定', '自动翻译质量需抽查；客服值守仍靠人'],
+    ['询盘', 'verified', '表单、来源追踪、后台处理（Inquiry）', '响应时效靠你的团队，不是系统承诺'],
+    ['邮件订阅', 'verified', '前台订阅、订阅有奖、欢迎邮件、结账邮箱匹配自动用券（Newsletter）', '订阅营销合规（退订、同意）自行把关'],
+];
+
+$aiRows = [
+    ['项目智能 MCP', 'verified', '内置本地项目智能 MCP：代码地图、任务上下文、知识检索等；AI 进场即懂仓库', '服务于 AI 编码/工程流程，不是终端用户按钮'],
+    ['硬规则下发', 'verified', '领域硬规则随项目下发，AI 改码前先读', '规则随仓库演进，以仓内文档为准'],
+    ['工程技能', 'verified', '主题、部件、支付、翻译、性能、代码复审、工程协作等技能目录；模块级技能文档随仓', '按任务自动匹配加载；不与模块文档口径混计'],
+    ['模型供应商', 'verified', '后台 AI 中心管理多家供应商（OpenAI/Anthropic/Gemini/DeepSeek/Kimi 等）与预置模型，换模型不改代码', '各自需要凭据/配置；不是默认开启'],
+    ['预注册智能体', 'verified', '预注册智能体：运营、分析、博客、社媒、主题、部件、建站、编码、获客；后台可配角色与定时', '预注册 + 人工配置，不是 AI 自生成智能体'],
+    ['站点运营中枢', 'verified', 'cron 派工 + 队列异步执行博客/社媒任务；分析类任务直接完成，博客/社媒进入审批', '默认关闭、人工开启；外发必经审批；不含向量 RAG'],
+    ['AI 翻译队列', 'verified', '网站新增语言自动进 AI 翻译队列；6 家翻译服务可选', '需配置供应商账户；翻译质量需 QA'],
+    ['SEO 定时任务', 'verified', '10 个 SEO 定时任务：sitemap 自动生成、定时提交站长平台、IndexNow 推送、内容重复扫描等', '提交不等于收录'],
+    ['前台排障面板', 'verified', '线上页面敲 <code>weline</code> 呼出面板：标题、描述、canonical、hreflang、JSON-LD、性能、请求 trace 当场看', 'token 门禁；不是公开功能'],
+];
+
+$securityRows = [
+    ['攻击探测', 'verified', 'AttackDetector：频率、路径扫描、SQL/XSS 特征、异常 UA、Slowloris；命中打 <code>X-Weline-Attack-Signal</code>', '特征识别有漏报误报；不是 WAF 硬承诺'],
+    ['自动封禁 + CDN 同步', 'verified', '命中后自动封禁 IP；安全规则同步到 CDN（<code>SyncSecurityRulesToCdn</code>）', '白名单要自己维护；封错可解，但需人看'],
+    ['Multipass 免密身份桥', 'verified', 'AES-128-CBC + HMAC-SHA256 token；成功校验后映射后台/前台/客户身份', '密钥管理在你手里；泄露即失守'],
+    ['后台操作审计', 'verified', '后台请求日志、响应耗时、业务对象上下文（模块/实体/动作/payload）', '审计是留痕，不是回滚'],
+    ['回收站', 'verified', '删除进回收站（Trash）；同意管理（Consent）', '回收站有清理周期；不是永久备份'],
+];
+
+$appsRows = [
+    ['PWA', 'verified', '<code>/manifest.webmanifest</code>、<code>/sw.js</code>、PWA 图标；站名/图标/主题色来自 Website 品牌，带 lang/currency', '离线体验取决于 service worker 缓存策略；iOS 对 PWA 有限制'],
+    ['App 打包', 'verified', 'Android/Web 本机打包；iOS 平台云编译；统一签名；启动配置/版本检测/产物下载公开 API；前台下载部件', 'iOS 云编译依赖外部编译服务；上架审核另算'],
+    ['多端 REST API', 'verified', 'REST V1 + 令牌 + IP 白名单/UA 限制；API 文档；App/Headless/第三方按同一契约接入', 'API 权限需按应用配置；不是公开匿名全量接口'],
+];
+
+$opsRows = [
+    ['webhook 自动发布 + 回滚', 'verified', '<code>git push</code> 触发 webhook 自动发布；WLS 面板 build → release → rollback，出问题一键回滚', '发布预检通过才会走；回滚是机制，不是免检承诺'],
+    ['RSSE 发布/回滚', 'verified', '<code>release:manifest/apply/inspect/rollback/cutover</code>：快照 → expand → transform → contract → commit，支持 L2 快照恢复', 'Schema 变更仍需审阅 manifest；不自动修业务数据'],
+    ['动态 DNS', 'verified', '阿里云 DDNS：IPv4/IPv6、多域名批量解析（AliDdnsServer）', '仅阿里云解析；其他 DNS 服务商需自行处理'],
+    ['维护模式', 'verified', '维护状态、等待页、维护等待礼金、Scope 级维护预览令牌', '礼金是挽留工具，不是补偿承诺'],
+    ['域名批量绑定', 'verified', '批量把域名绑定到站点/CDN 账户，Batch/BatchItem 记录进度（Terraform 模块）', '批量任务进度可查，失败项需人工处理'],
+    ['控制中心 GUI', 'verified', '独立多端桌面 UI（macOS/Windows/Linux），通过 <code>bin/w</code> 与 Agent HTTP 管理本机/远程 WLS', 'GUI 是管理入口，不替代服务器运维；各平台安装包见 GitHub Releases'],
+];
+
+$boundaryItems = [
+    '不是“28 个支付网关”；只有 Stripe、PayPal 与 fake_card。',
+    '不是 PCI/GDPR/SOC2/ISO 认证；只有安全原语。',
+    '不是全面 GA；WLS 是 <code>LOCAL_RUNTIME_VERIFIED / GA_BLOCKED_EXTERNAL</code>。',
+    '不是店铺 QPS；1M 基准是健康检查端点。',
+    '不是零继承；是父主题链 + 同键覆盖。',
+    '不是 682 种语言已翻译；是 682 个 locale 目录。',
+    '没有 RMA 门户；只有订单退款/退货账本。',
+    '不是自动报税/合规；税费生产默认关闭。',
+    '不是默认多仓/订阅计费；rollout gate 默认关闭。',
+    '不是 Docker/Vercel 生产部署；Dockerfile 仍是 PHP 8.2。',
+    '不是内置全球 CDN；是外部 CDN 适配。',
+    '不是 127 个电商功能；127 是已注册模块总数。',
+    '不是“三个例子就是产品”；产品是 WelineFramework。',
+    '不是所有社交登录内置；只有 Provider SPI + Facebook 示例。',
+    '不是完全 RTL-ready；未做主题审计。',
+    '不是排名保证；是 SEO 机制。',
+    '不是企业级安全认证；是安全机制。',
+    '不是 AI 完美翻译；是翻译管线。',
+    '不是一键部署到任何云；是 Webhook/CLI/Nginx/WLS 路径。',
+    'VIP 积分不是“开箱全链路完成”；内核已实现、默认关闭，后台等级 CRUD、结算/账户展示、免运费接入尚未覆盖。',
+    '不写固定支付方式数量；支付是 Provider 壳，能接多少取决于安装/实现的 Provider。',
+    'AI 运营台不是部署器；部署找 <code>Weline_Deploy</code>，AI 运营（画像/日更/派工/审批）找 <code>Weline_Ops</code>。',
+    '预热是“定时 + 空闲时”，不承诺所有页面保证已预热。',
+    '网站监控、售后 RMA 门户、StorePet 未完成，不作为能力宣称。',
+];
+
+$commerceFaqs = is_array($faqs ?? null) && $faqs !== [] ? $faqs : (array)($seo['faqs'] ?? []);
+?>
+<section class="page-hero page-hero--split" data-atmo weline-code="amayum-commerce-index-01">
+    <div class="w-container">
+        <div class="split-grid">
+            <div class="split-copy">
+                <div class="crumbs"><a href="<?= A::e(A::url($this, '/')) ?>">Amayum</a><span>/</span><span>框架能力</span></div>
+                <h1 style="margin-top:22px">一套能审计的<br><span class="accent">电商底座。</span></h1>
+                <p class="lead">下面只写代码与文档能证明的能力。每项标注 verified / partial / not implemented；没有证据的，不写。</p>
+                <div class="actions">
+                    <a class="btn btn-primary" href="<?= A::e(A::url($this, '/case-studies')) ?>">看运行中的例子</a>
+                    <a class="btn btn-ghost-dark" href="<?= A::e(A::url($this, '/diagnosis#diagnosis')) ?>">预约架构诊断</a>
+                </div>
+                <div class="hero-meta" style="margin-top:22px">
+                    <?php foreach ($statusLegend as $legend): ?>
+                        <?php $key = (string)($legend['key'] ?? ''); ?>
+                        <span class="<?= A::e($statusClass($key)) ?>"><?= A::e((string)($legend['label'] ?? $statusLabel($key))) ?></span>
+                    <?php endforeach; ?>
+                </div>
+                <p class="mono" style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:14px;line-height:2">
+                    <?php foreach ($statusLegend as $legend): ?>
+                        <?= A::e((string)($legend['key'] ?? '') . ' = ' . (string)($legend['description'] ?? '')) ?><br>
+                    <?php endforeach; ?>
+                </p>
+            </div>
+            <div class="split-visual">
+                <div class="arch-diagram" role="img" aria-label="WelineFramework 五层架构：运行时、交易内核、多站点、i18n 与 SEO、主题">
+                    <div class="arch-layer arch-top"><span class="l-name">Theme 主题层</span><span class="l-desc">设计主题 · 同键覆盖</span><span class="l-tag">app/design</span></div>
+                    <div class="arch-layer"><span class="l-name">i18n / SEO</span><span class="l-desc">locale · hreflang · sitemap · JSON-LD</span><span class="l-tag">682 locale</span></div>
+                    <div class="arch-layer"><span class="l-name">Multi-site</span><span class="l-desc">Website → Store → Channel</span><span class="l-tag">scope</span></div>
+                    <div class="arch-layer"><span class="l-name">Commerce</span><span class="l-desc">商品 · 购物车 · 订单 · 支付 · 税费 · 库存</span><span class="l-tag">SPI</span></div>
+                    <div class="arch-layer"><span class="l-name">Runtime</span><span class="l-desc">WLS 内存 Worker / FPM · PHP 8.4+</span><span class="l-tag">bin/w</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<?php
+$proofFacts = is_array($proof_facts ?? null) ? array_values(array_filter($proof_facts, 'is_array')) : [];
+if ($proofFacts === []) {
+    $proofFacts = [
+        ['label' => 'PHP 8.4+', 'detail' => '框架运行时要求；扩展与第三方库需单独核验。'],
+        ['label' => 'MIT 许可', 'detail' => 'WelineFramework 以 MIT 协议开源。'],
+        ['label' => '127 个已注册模块', 'detail' => '包含基础设施、AI、后台与开发工具，不等于 127 个电商功能。'],
+        ['label' => 'WLS + FPM', 'detail' => 'WLS 官方状态 LOCAL_RUNTIME_VERIFIED / GA_BLOCKED_EXTERNAL；FPM 是一等部署路径。'],
+    ];
+}
+$proofParts = static function (string $label): array {
+    $label = trim($label);
+    $known = [
+        'PHP 8.4+' => ['PHP 8.4+', '运行时基线'],
+        'MIT 许可' => ['MIT', '开源许可'],
+        '127 个已注册模块' => ['127', '个已注册模块'],
+        'WLS + FPM' => ['WLS + FPM', '双运行时'],
+    ];
+    if (isset($known[$label])) {
+        return $known[$label];
+    }
+    if (preg_match('/^(\d+)\s*(.*)$/u', $label, $matches) === 1) {
+        return [$matches[1], trim($matches[2])];
+    }
+
+    return [$label, ''];
+};
+?>
+<section class="section surface" style="padding:clamp(40px,5vw,64px) 0" aria-label="关键事实" weline-code="amayum-commerce-index-02">
+    <div class="w-container">
+        <div class="facts">
+            <?php foreach ($proofFacts as $fact): ?>
+                <?php
+                $factLabel = (string)($fact['label'] ?? '');
+                $factDetail = (string)($fact['detail'] ?? '');
+                if ($factLabel === '') {
+                    continue;
+                }
+                [$factFigure, $factCaption] = $proofParts($factLabel);
+                ?>
+                <div class="fact">
+                    <b><?= A::e($factFigure) ?></b>
+                    <?php if ($factCaption !== ''): ?><span><?= A::e($factCaption) ?></span><?php endif; ?>
+                    <?php if ($factDetail !== ''): ?><small><?= A::e($factDetail) ?></small><?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<nav class="page-rail" aria-label="页内目录">
+    <?php foreach ($sections as [$id, $num, $short]): ?>
+        <a href="#<?= A::e($id) ?>"><span class="mono"><?= A::e($num) ?></span><?= A::e($short) ?></a>
+    <?php endforeach; ?>
+</nav>
+<details class="page-toc">
+    <summary>页内目录 · 13 节</summary>
+    <nav aria-label="页内目录">
+        <?php foreach ($sections as [$id, $num, , $title]): ?>
+            <a href="#<?= A::e($id) ?>"><span class="mono"><?= A::e($num) ?></span><?= A::e($title) ?></a>
+        <?php endforeach; ?>
+    </nav>
+</details>
+
+<!-- 01 运行时与部署 -->
+<section class="section" id="runtime" aria-labelledby="rt-title" weline-code="amayum-commerce-index-03">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">01</span> 运行时与部署</p><h2 id="rt-title">WLS 或 FPM，<br>两条部署路径。</h2></div>
+        </div>
+        <div class="grid-3">
+            <article class="card reveal"><span class="k"><?= $badge('verified') ?></span><h3>PHP 8.4+</h3><p><code>composer.json</code> 要求 <code>^8.4.27</code>。</p></article>
+            <article class="card reveal" style="--i:1"><span class="k"><?= $badge('partial') ?></span><h3>WLS 内存运行时</h3><p>HTTP Workers、Session/Memory 服务、维护 Worker、滚动热重载；官方状态 <code>LOCAL_RUNTIME_VERIFIED / GA_BLOCKED_EXTERNAL</code>。</p></article>
+            <article class="card reveal" style="--i:2"><span class="k"><?= $badge('verified') ?></span><h3>FPM</h3><p>同一业务代码可在 Nginx/Apache + php-fpm 下运行；FPM 性能矩阵尚未完全关闭。</p></article>
+            <article class="card reveal" style="--i:0"><span class="k"><?= $badge('verified') ?></span><h3>CLI 与部署</h3><p><code>php bin/w</code> 覆盖安装、升级、缓存、模块、迁移、路由、WLS、队列、定时任务；GitHub/Gitee Webhook、标签/分支策略与回滚。</p></article>
+            <article class="card reveal" style="--i:1"><span class="k"><?= $badge('verified') ?></span><h3>数据库</h3><p>MySQL/MariaDB/PostgreSQL；SQLite 用于沙箱，不作为生产共享库。</p></article>
+            <article class="card reveal" style="--i:2"><span class="k"><?= $badge('na') ?></span><h3>边界</h3><p>不宣称 Docker 生产支持（Dockerfile 仍是 PHP 8.2）、Vercel 部署、任意云一键部署。</p></article>
+        </div>
+        <div style="overflow-x:auto">
+            <table class="cap-matrix">
+                <caption>从安装到上线 — 安装器自带运行时，装到能访问站点为止</caption>
+                <thead><tr><th scope="col">路径</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <tbody>
+                <?php foreach ($runtimeRows as [$name, $status, $public, $boundary]): ?>
+                    <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<!-- 02 交易内核 -->
+<section class="section section--ink" id="kernel" aria-labelledby="kn-title" weline-code="amayum-commerce-index-04">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">02</span> 交易内核</p><h2 id="kn-title">按模块列能力、<br>状态与边界。</h2></div>
+            <p>没有列出的能力，不作为卖点；默认关闭的能力，不写成开箱即用。</p>
+        </div>
+        <div style="overflow-x:auto">
+            <table class="cap-matrix">
+                <thead><tr><th scope="col">模块</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <tbody>
+                <?php foreach ($kernelRows as [$name, $status, $public, $boundary]): ?>
+                    <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <p style="margin-top:26px"><a class="text-link" href="<?= A::e(A::url($this, '/case-studies')) ?>">看运行中的例子
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a></p>
+    </div>
+</section>
+
+<!-- 03 多站点与主题 -->
+<section class="section" id="multisite" aria-labelledby="ms-title" weline-code="amayum-commerce-index-05">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">03</span> 多站点与主题</p><h2 id="ms-title">Website → Store → Channel。</h2></div>
+        </div>
+        <div class="grid-3">
+            <article class="card reveal"><span class="k"><?= $badge('verified') ?></span><h3>作用域</h3><p><code>Website → Store → Channel</code> 作用域；Website 级语言、sitemap、robots。</p></article>
+            <article class="card reveal" style="--i:1"><span class="k"><?= $badge('verified') ?></span><h3>主题</h3><p>主题注册、父主题链、同键覆盖；设计主题不复制默认实现。布局/局部/组件/部件/插槽；主题资产、预览与发布。</p></article>
+            <article class="card reveal" style="--i:2"><span class="k"><?= $badge('na') ?></span><h3>边界</h3><p>不是零继承；跨域 Store sitemap 不合并；<code>app/design</code> 主题代码站点私有，部署需单独管理。</p></article>
+        </div>
+        <div style="overflow-x:auto">
+            <table class="cap-matrix">
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <tbody>
+                <?php foreach ($multisiteRows as [$name, $status, $public, $boundary]): ?>
+                    <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<!-- 04 域名与 HTTPS -->
+<section class="section" id="domain" aria-labelledby="dm-title" weline-code="amayum-commerce-index-06">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">04</span> 域名与 HTTPS</p><h2 id="dm-title">从选域名到证书续签，<br>一条链管完。</h2></div>
+            <p>建站第一步常卡在域名和证书：到处注册、手动续费、证书到期忘更。框架把这条链写进后台。</p>
+        </div>
+        <div style="overflow-x:auto">
+            <table class="cap-matrix">
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <tbody>
+                <?php foreach ($domainRows as [$name, $status, $public, $boundary]): ?>
+                    <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<!-- 05 缓存与 CDN -->
+<section class="section surface" id="cdn" aria-labelledby="cdn-title" weline-code="amayum-commerce-index-07">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">05</span> 缓存与 CDN</p><h2 id="cdn-title">像静态页一样快，<br>但改完能生效。</h2></div>
+            <p>页面快靠缓存，生效快靠清理。三层缓存 + 按 URL 清理，改商品不用等整站过期。</p>
+        </div>
+        <div style="overflow-x:auto">
+            <table class="cap-matrix">
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <tbody>
+                <?php foreach ($cdnRows as [$name, $status, $public, $boundary]): ?>
+                    <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<!-- 06 多语言 -->
+<section class="section tint" id="i18n" aria-labelledby="i18n-title" weline-code="amayum-commerce-index-08">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">06</span> 多语言</p><h2 id="i18n-title">682 个 locale 目录，<br>按市场启用。</h2></div>
+        </div>
+        <div class="grid-3">
+            <article class="card reveal"><span class="k"><?= $badge('verified') ?></span><h3>locale 目录与生命周期</h3><p>682-locale 目录；<code>activateLocale()</code>；URL locale 前缀；hreflang/OG locale。</p></article>
+            <article class="card reveal" style="--i:1"><span class="k"><?= $badge('verified') ?></span><h3>翻译提供方</h3><p>6 个翻译提供方：Google、百度、DeepL、Microsoft、有道、腾讯。</p></article>
+            <article class="card reveal" style="--i:2"><span class="k"><?= $badge('na') ?></span><h3>边界</h3><p>目录 ≠ 翻译；官方模块只带 zh/en CSV；RTL 仅方向变量与基础 CSS，未做全站 RTL 审计。</p></article>
+        </div>
+    </div>
+</section>
+
+<!-- 07 SEO 与 GEO -->
+<section class="section" id="seo" aria-labelledby="seo-title" weline-code="amayum-commerce-index-09">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">07</span> SEO 与 GEO</p><h2 id="seo-title">可抓取、可索引、可理解。</h2></div>
+        </div>
+        <div class="grid-3">
+            <article class="card reveal"><span class="k"><?= $badge('verified') ?></span><h3>输出</h3><p>SSR HTML；meta/OG/canonical；8 类 JSON-LD。多站点 sitemap；per-site robots；IndexNow/Bing/Yandex 适配。</p></article>
+            <article class="card reveal" style="--i:1"><span class="k"><?= $badge('verified') ?></span><h3>GEO 文件</h3><p><code>llms.txt</code>、<code>llms-full.txt</code>、<code>ai.txt</code>、<code>license.xml</code>、<code>trust.txt</code>、<code>geo-feed.json/xml</code>。内置 SEO inspector/self-check。</p></article>
+            <article class="card reveal" style="--i:2"><span class="k"><?= $badge('na') ?></span><h3>边界</h3><p>不保证排名；配置依赖；Google Indexing API 不用于普通商品页；GEO push 未逐平台验证。</p></article>
+        </div>
+        <div style="overflow-x:auto">
+            <table class="cap-matrix">
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <tbody>
+                <?php foreach ($seoRows as [$name, $status, $public, $boundary]): ?>
+                    <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <p style="margin-top:26px"><a class="text-link" href="<?= A::e(A::url($this, '/journal/independent-store-seo')) ?>">读技术 SEO 排查
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a></p>
+    </div>
+</section>
+
+<!-- 08 沟通与服务 -->
+<section class="section surface" id="comms" aria-labelledby="cm-title" weline-code="amayum-commerce-index-10">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">08</span> 沟通与服务</p><h2 id="cm-title">客户找得到你，<br>你找得到客户。</h2></div>
+            <p>跨境站最贵的流量是回头客；丢一封询盘邮件就是丢一单。邮局、消息渠道、客服与订阅在框架内各有归属，不用先买一套客服 SaaS 才能开工。</p>
+        </div>
+        <div style="overflow-x:auto">
+            <table class="cap-matrix">
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <tbody>
+                <?php foreach ($commsRows as [$name, $status, $public, $boundary]): ?>
+                    <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<!-- 09 AI 协作与自动化 -->
+<section class="section" id="ai" aria-labelledby="ai-title" weline-code="amayum-commerce-index-11">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">09</span> AI 协作与自动化</p><h2 id="ai-title">为 AI 协作而生，<br>闸门写在代码里。</h2></div>
+            <p>AI 进入项目先领代码地图与硬规则；运营类任务派工到队列，外发内容必经审批。自动化有边界：默认关闭的能力，需要人工开启。</p>
+        </div>
+        <div style="overflow-x:auto">
+            <table class="cap-matrix">
+                <caption>AI 能力矩阵 — 模型管理与任务自动化均在框架内</caption>
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <tbody>
+                <?php foreach ($aiRows as [$name, $status, $public, $boundary]): ?>
+                    <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<!-- 10 安全与治理 -->
+<section class="section surface" id="security" aria-labelledby="sec-title" weline-code="amayum-commerce-index-12">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">10</span> 安全与治理</p><h2 id="sec-title">默认拒绝，<br>写入留痕。</h2></div>
+            <p>开放公网的第一晚就会被扫描。探测、封禁、审计要开箱就有，而不是出事后加插件。</p>
+        </div>
+        <div class="grid-3">
+            <article class="card reveal"><span class="k"><?= $badge('verified') ?></span><h3>权限与配置</h3><p>RBAC/ACL；对象级 Scope ACL；SystemConfig <code>Channel → Store → Website → Global</code>；2FA；Captcha；Consent。</p></article>
+            <article class="card reveal" style="--i:1"><span class="k"><?= $badge('verified') ?></span><h3>响应头与封禁</h3><p>统一安全响应头默认策略；IP 封禁表、白名单、受保护路径、恶意特征/坏 UA 规则。</p></article>
+            <article class="card reveal" style="--i:2"><span class="k"><?= $badge('na') ?></span><h3>边界</h3><p>不是 PCI/GDPR/SOC2/ISO；CSP 正确性取决于配置；Captcha 默认关闭；2FA 可选。</p></article>
+        </div>
+        <div style="overflow-x:auto">
+            <table class="cap-matrix">
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <tbody>
+                <?php foreach ($securityRows as [$name, $status, $public, $boundary]): ?>
+                    <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <ul class="grid-2" style="list-style:none;margin:26px 0 0;padding:0;gap:0 48px">
+            <li class="feature reveal"><span class="n">机制</span><div><b>Master 自愈。</b><p>子进程检测到 Master 连接异常断开时，Worker 按优先级竞选拉起 Master（Redirect 1s / Dispatcher 3s / Worker#1 6s）。</p></div></li>
+            <li class="feature reveal" style="--i:1"><span class="n">机制</span><div><b>站点看门狗。</b><p>看门狗脚本探测站点 URL，不可达自动重启并写入 crontab。</p></div></li>
+        </ul>
+        <p class="mono" style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:18px;line-height:1.8">Note — 自愈是机制存在，不是 SLA 承诺；HA 设计为设计稿状态。AI 部署计划（deploy:plan）只读，不触发发布编排。</p>
+    </div>
+</section>
+
+<!-- 11 应用与多端 -->
+<section class="section" id="apps" aria-labelledby="ap-title" weline-code="amayum-commerce-index-13">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">11</span> 应用与多端</p><h2 id="ap-title">一个后台，<br>Web、PWA、App 都从这里出。</h2></div>
+            <p>客户在手机上搜到你时，站点要像 App 一样能装；发 App 时签名与版本不该是每次都重新折腾的事。</p>
+        </div>
+        <div style="overflow-x:auto">
+            <table class="cap-matrix">
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <tbody>
+                <?php foreach ($appsRows as [$name, $status, $public, $boundary]): ?>
+                    <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<!-- 12 运维与交付 -->
+<section class="section surface" id="ops" aria-labelledby="ops-title" weline-code="amayum-commerce-index-14">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">12</span> 运维与交付</p><h2 id="ops-title">发布、回滚、扩缩容，<br>一个 CLI + 一个面板。</h2></div>
+            <p>发布和运维是两条命：发布要能回滚，日常要少盯屏。下面是已在仓库里的机制。</p>
+        </div>
+        <div class="grid-3">
+            <article class="card reveal"><span class="k"><?= $badge('verified') ?></span><h3>部署链</h3><p>GitHub/Gitee Webhook（<code>webhook_secret</code>、命令白名单）；Tag/分支发布、<code>deploy:plan</code> 只读计划；Git 回滚 + 整站文件备份 + Schema 列备份/恢复链。</p></article>
+            <article class="card reveal" style="--i:1"><span class="k"><?= $badge('verified') ?></span><h3>WLS 运维面</h3><p><code>server:scale</code> 动态扩缩容、<code>server:doctor</code> 只读诊断、<code>server:maintenance</code>、多实例隔离；WLS 面板项目 reload/restart。</p></article>
+            <article class="card reveal" style="--i:2"><span class="k"><?= $badge('na') ?></span><h3>边界</h3><p>不宣称无人值守全自动运维；WLS 外部门禁见边界节；控制中心 GUI 是本机/远程管理入口，不是托管服务。</p></article>
+        </div>
+        <div style="overflow-x:auto">
+            <table class="cap-matrix">
+                <thead><tr><th scope="col">能力</th><th scope="col">状态</th><th scope="col">公开写法</th><th scope="col">边界</th></tr></thead>
+                <tbody>
+                <?php foreach ($opsRows as [$name, $status, $public, $boundary]): ?>
+                    <tr><td><strong><?= A::e($name) ?></strong></td><td class="mono"><?= $badge($status) ?></td><td><?= $public ?></td><td><?= $boundary ?></td></tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <p class="mono" style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:18px;line-height:1.8">Note — WLS 后台面板 + 一个 <code>bin/w</code> 覆盖安装、缓存、队列、定时、邮件、WLS、部署（240+ 条命令）；命令可用性取决于已安装模块。</p>
+    </div>
+</section>
+
+<!-- 13 公开文案的边界 -->
+<section class="section tint" id="boundary" aria-labelledby="bn-title" weline-code="amayum-commerce-index-15">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">13</span> 公开文案的边界</p><h2 id="bn-title">这些不是<br>我们的卖点。</h2></div>
+            <p>下面这些说法没有证据，或者会把路线图写成现状。它们只作为“不宣称”的边界出现，不作为能力列表。</p>
+        </div>
+        <ul class="grid-2" style="list-style:none;margin:0;padding:0;gap:0">
+            <?php foreach ($boundaryItems as $index => $item): ?>
+                <li class="feature reveal" style="--i:<?= (int)($index % 2) ?>"><span class="n">—</span><div><p><?= $item ?></p></div></li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+</section>
+
+<!-- FAQ -->
+<section class="section surface" id="faq" aria-labelledby="faq-title" weline-code="amayum-commerce-index-16">
+    <div class="w-container" style="max-width:880px">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">FAQ</span> 常见问题</p><h2 id="faq-title">六个高频问题。</h2></div>
+        </div>
+        <?php if ($commerceFaqs !== []): ?>
+            <div class="faq-list">
+                <?php foreach (array_values($commerceFaqs) as $index => $faq): ?>
+                    <?php
+                    $question = trim((string)($faq['question'] ?? ''));
+                    $answer = trim((string)($faq['answer'] ?? ''));
+                    if ($question === '' || $answer === '') {
+                        continue;
+                    }
+                    ?>
+                    <details class="faq reveal" style="--i:<?= (int)$index ?>">
+                        <summary><?= A::e($question) ?></summary>
+                        <p><?= A::e($answer) ?></p>
+                    </details>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<div class="w-container section-cta">
+    <section class="cta-band reveal" aria-labelledby="commerce-cta-title" weline-code="amayum-commerce-index-17">
+        <div><h2 id="commerce-cta-title">能力看完了，<br>看它怎么跑。</h2><p>三个运行中的站点，或者直接用 30 分钟诊断你的场景。</p></div>
+        <div class="actions">
+            <a class="btn btn-primary" href="<?= A::e(A::url($this, '/diagnosis#diagnosis')) ?>">预约架构诊断</a>
+            <a class="btn btn-ghost-dark" href="<?= A::e(A::url($this, '/case-studies')) ?>">看运行中的例子</a>
+            <?php $github = (string)($site['github'] ?? ''); ?>
+            <?php if ($github !== ''): ?><a class="btn btn-ghost-dark" href="<?= A::e($github) ?>" target="_blank" rel="noopener">GitHub</a><?php endif; ?>
+        </div>
+    </section>
+</div>

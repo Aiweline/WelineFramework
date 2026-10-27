@@ -1,0 +1,140 @@
+<?php
+/**
+ * 运行中的例子：三个站点各自的问题 / 做法 / 已验证事实 / 不证明，以及边界。
+ *
+ * 数据来自 CaseStudyCatalog（控制器注入 $examples / $examples_not_proven）；
+ * 缺失时使用与目录一致的安全默认值。
+ */
+declare(strict_types=1);
+
+require_once rtrim((string)BP, '/\\') . '/app/design/Amayum/official/frontend/includes/AmayumView.php';
+
+use AmayumDesign\Official\AmayumView as A;
+
+$examples = is_array($examples ?? null) ? array_values(array_filter($examples, 'is_array')) : [];
+$notProven = is_array($examples_not_proven ?? null) ? array_values(array_filter($examples_not_proven, 'is_string')) : [];
+if ($notProven === []) {
+    $notProven = [
+        '不证明框架的每个模块',
+        '不证明多网关',
+        '不证明所有语言',
+        '不证明增长/转化',
+        '不证明合规认证',
+        '不证明 WLS GA',
+    ];
+}
+
+$caseMeta = [
+    'changanhanfu' => ['anchor' => 'hanfu', 'art' => 'art-hanfu', 'big' => '長安漢服', 'section' => 'section atmo-wash', 'desc' => '汉服品牌站 / 生产环境'],
+    'playinginchina' => ['anchor' => 'travel', 'art' => 'art-travel', 'big' => 'PLAYING<br>IN CHINA', 'section' => 'section', 'desc' => 'English-first 中国旅行/门票站 / 生产环境'],
+    'daocharms' => ['anchor' => 'dao', 'art' => 'art-dao', 'big' => 'DAO<br>CHARMS', 'section' => 'section surface', 'desc' => '设计主题 + 本地结账链路 / 非生产'],
+];
+?>
+<section class="page-hero" data-atmo weline-code="amayum-case-studies-index-01">
+    <div class="hero-art hero-map hero-map--cases" aria-hidden="true">
+        <div class="map-card"><span class="map-num">01</span><span class="map-label">HANFU</span><span class="map-bar"></span></div>
+        <div class="map-card"><span class="map-num">02</span><span class="map-label">TRAVEL</span><span class="map-bar"></span></div>
+        <div class="map-card"><span class="map-num">03</span><span class="map-label">DAO</span><span class="map-bar"></span></div>
+    </div>
+    <div class="w-container">
+        <div class="crumbs"><a href="<?= A::e(A::url($this, '/')) ?>">Amayum</a><span>/</span><span>运行中的例子</span></div>
+        <h1>三个运行中的例子，<br><span class="accent">不是产品本身。</span></h1>
+        <p class="lead">它们证明主题、商品、订单、语言与部署可以跑在同一条底座上；它们不证明每个模块都适合你的业务。</p>
+        <div class="hero-meta"><span>运行中的例子</span><span>2 生产 · 1 非生产</span><span>无增长数字</span></div>
+        <div class="actions">
+            <a class="btn btn-primary" href="<?= A::e(A::url($this, '/commerce')) ?>">看框架能力</a>
+        </div>
+    </div>
+</section>
+
+<!-- 01 先说明 -->
+<section class="section surface" style="padding:clamp(40px,5vw,64px) 0" weline-code="amayum-case-studies-index-02">
+    <div class="w-container">
+        <div class="grid-2">
+            <div><p class="eyebrow"><span class="idx">01</span> 先说明</p><h2 style="font-size:clamp(22px,2.6vw,30px);margin-top:12px">例子是证据，<br>不是产品。</h2></div>
+            <ul class="prose" style="max-width:none;margin:0;font-size:14.5px;line-height:1.9;color:var(--muted);padding-left:20px">
+                <li>它们证明同一条底座可以承载不同品类、不同语言与不同主题。</li>
+                <li>它们不证明框架的每个模块都适合你的业务。</li>
+                <li>它们不提供增长、转化或收入数字。</li>
+                <li>产品是 WelineFramework；三个站点是运行中的例子。</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<?php if ($examples !== []): ?>
+    <?php foreach ($examples as $index => $example): ?>
+        <?php
+        $key = (string)($example['key'] ?? '');
+        $meta = $caseMeta[$key] ?? ['anchor' => 'case-' . $index, 'art' => 'art-hanfu', 'big' => (string)($example['name'] ?? ''), 'section' => 'section', 'desc' => (string)($example['type_label'] ?? '')];
+        $name = (string)($example['name'] ?? '');
+        $domain = (string)($example['domain'] ?? '');
+        $url = (string)($example['url'] ?? '');
+        $typeLabel = (string)($example['type_label'] ?? '');
+        $environment = (string)($example['environment'] ?? '');
+        $problem = (string)($example['problem'] ?? '');
+        $approach = array_values(array_filter((array)($example['approach'] ?? []), 'is_string'));
+        $verified = array_values(array_filter((array)($example['verified_facts'] ?? []), 'is_string'));
+        $notProvenItems = array_values(array_filter((array)($example['not_proven'] ?? []), 'is_string'));
+        ?>
+        <section class="<?= A::e($meta['section']) ?>" id="<?= A::e($meta['anchor']) ?>" weline-code="amayum-case-studies-index-<?= (int)$index + 3 ?>">
+            <div class="w-container">
+                <article class="case reveal">
+                    <div class="visual <?= A::e($meta['art']) ?>">
+                        <span class="big"><?= $meta['big'] ?></span>
+                        <span class="meta">运行中的例子 · <?= A::e($typeLabel) ?></span>
+                    </div>
+                    <div class="content">
+                        <h2><?= A::e($name) ?></h2>
+                        <p class="sub"><?= A::e($domain . ' · ' . $meta['desc']) ?></p>
+                        <div class="block"><h3>问题</h3><p><?= A::e($problem) ?></p></div>
+                        <?php if ($approach !== []): ?>
+                            <div class="block"><h3>做法</h3><ul><?php foreach ($approach as $item): ?><li><?= A::e($item) ?></li><?php endforeach; ?></ul></div>
+                        <?php endif; ?>
+                        <?php if ($verified !== []): ?>
+                            <div class="block"><h3>已验证事实</h3><ul><?php foreach ($verified as $item): ?><li><?= A::e($item) ?></li><?php endforeach; ?></ul></div>
+                        <?php endif; ?>
+                        <?php if ($notProvenItems !== []): ?>
+                            <div class="block"><h3>不证明</h3><ul><?php foreach ($notProvenItems as $item): ?><li><?= A::e($item) ?></li><?php endforeach; ?></ul></div>
+                        <?php endif; ?>
+                        <?php if ($environment !== ''): ?>
+                            <p class="mono" style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:14px;line-height:1.8"><?= A::e($environment) ?></p>
+                        <?php endif; ?>
+                        <?php if ($url !== ''): ?>
+                            <p style="margin-top:18px"><a class="text-link" href="<?= A::e($url) ?>" target="_blank" rel="noopener">访问 <?= A::e($domain) ?>（例子）
+                                <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 12 12 4M6 4h6v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </a></p>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            </div>
+        </section>
+    <?php endforeach; ?>
+<?php endif; ?>
+
+<!-- 05 这些例子不证明什么 -->
+<section class="section tint" aria-labelledby="bnd-title" weline-code="amayum-case-studies-index-04">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">05</span> 边界</p><h2 id="bnd-title">这些例子<br>不证明什么。</h2></div>
+        </div>
+        <div class="grid-3">
+            <?php foreach ($notProven as $index => $item): ?>
+                <article class="card reveal" style="--i:<?= (int)($index % 3) ?>">
+                    <span class="k"><?= A::e(str_pad((string)($index + 1), 2, '0', STR_PAD_LEFT)) ?></span>
+                    <p style="color:var(--fg);margin-top:0"><?= A::e($item) ?></p>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<div class="w-container section-cta">
+    <section class="cta-band reveal" aria-labelledby="cases-cta-title" weline-code="amayum-case-studies-index-05">
+        <div><h2 id="cases-cta-title">例子看完了，<br>看底座本身。</h2><p>能力矩阵逐项标注验证状态与边界；或直接用 30 分钟诊断你的场景。</p></div>
+        <div class="actions">
+            <a class="btn btn-primary" href="<?= A::e(A::url($this, '/diagnosis#diagnosis')) ?>">预约架构诊断</a>
+            <a class="btn btn-ghost-dark" href="<?= A::e(A::url($this, '/commerce')) ?>">看框架能力</a>
+        </div>
+    </section>
+</div>

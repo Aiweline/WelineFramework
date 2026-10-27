@@ -1,0 +1,187 @@
+<?php
+/**
+ * 指南文章壳：面包屑 / H1 / dek / byline / 目录 / 正文 / FAQ / 相关阅读 / CTA。
+ *
+ * 正文由 journal/partials/{slug}.phtml 提供；目录 id 与正文 H2 一一对应。
+ */
+declare(strict_types=1);
+
+require_once rtrim((string)BP, '/\\') . '/app/design/Amayum/official/frontend/includes/AmayumView.php';
+
+use AmayumDesign\Official\AmayumView as A;
+
+$guide = is_array($guide ?? null) ? $guide : [];
+$slug = (string)($guide['slug'] ?? '');
+$title = (string)($guide['title'] ?? '指南');
+$dek = (string)($guide['dek'] ?? '');
+$byline = (string)($guide['byline'] ?? ($guide['author'] ?? 'Amayum'));
+$published = (string)($guide['date_published'] ?? '');
+$modified = (string)($guide['date_modified'] ?? '');
+$minutes = $guide['reading_minutes'] ?? null;
+$path = (string)($guide['canonical_path'] ?? '/journal/' . $slug);
+$bodyTemplate = (string)($guide_body_template ?? '');
+if ($bodyTemplate === '' && $slug !== '') {
+    $bodyTemplate = 'Amayum_Website::templates/frontend/journal/partials/' . $slug . '.phtml';
+}
+
+$tocMap = [
+    'build-platform' => [
+        ['distinction', '先分清'],
+        ['routes', '三条路线'],
+        ['seven', '七个判断'],
+        ['costs', '成本清单'],
+        ['when-saas', '什么情况下选 SaaS'],
+        ['when-framework', '什么情况下选源码框架'],
+        ['next', '下一步'],
+    ],
+    'independent-store-seo' => [
+        ['gsc', 'GSC 四类信号'],
+        ['crawl', '抓取'],
+        ['index', '索引'],
+        ['schema', '结构化数据'],
+        ['cwv', 'Core Web Vitals'],
+        ['content', '内容与转化'],
+        ['plan', '90 天排查顺序'],
+        ['dont', '不要做的事'],
+    ],
+    'shopify-alternative' => [
+        ['define', '先定义替代什么'],
+        ['four', '四条路线'],
+        ['cost', '成本表'],
+        ['checklist', '迁移 27 项'],
+        ['seo-migration', 'SEO 迁移'],
+        ['stay', '不要离开 Shopify 的情况'],
+        ['tree', '决策树'],
+    ],
+];
+$toc = $tocMap[$slug] ?? [];
+
+$coverMap = [
+    'build-platform' => ['01', '建站路线<br>怎么选', 'AMAYUM · BUILD PLATFORM'],
+    'independent-store-seo' => ['02', 'SEO 排查<br>顺序', 'AMAYUM · TECHNICAL SEO'],
+    'shopify-alternative' => ['03', '替代与<br>迁移', 'AMAYUM · MIGRATION'],
+];
+$cover = $coverMap[$slug] ?? ['', '指南', 'AMAYUM · JOURNAL'];
+$crumbLabel = [
+    'build-platform' => '建站平台怎么选',
+    'independent-store-seo' => '独立站 SEO',
+    'shopify-alternative' => 'Shopify 替代',
+][$slug] ?? '指南';
+
+$faqs = is_array($guide_faqs ?? null) && $guide_faqs !== []
+    ? $guide_faqs
+    : (array)($guide['faqs'] ?? []);
+$related = is_array($related_guides ?? null) ? array_values(array_filter($related_guides, 'is_array')) : [];
+?>
+<section class="section" style="padding-top:140px" weline-code="amayum-journal-view-01">
+    <div class="w-container">
+        <div class="article-grid">
+            <article class="article-body">
+                <div class="article-head">
+                    <div class="crumbs" style="color:var(--muted)">
+                        <a href="<?= A::e(A::url($this, '/')) ?>" style="color:var(--muted)">首页</a><span>/</span>
+                        <a href="<?= A::e(A::url($this, '/journal')) ?>" style="color:var(--muted)">指南</a><span>/</span>
+                        <span><?= A::e($crumbLabel) ?></span>
+                    </div>
+                    <h1><?= A::e($title) ?></h1>
+                    <?php if ($dek !== ''): ?><p class="dek"><?= A::e($dek) ?></p><?php endif; ?>
+                    <div class="byline">
+                        <span><?= A::e($byline) ?></span>
+                        <?php if ($published !== ''): ?><span><?= A::e($published) ?></span><?php endif; ?>
+                        <?php if ($minutes !== null): ?><span>约 <?= (int)$minutes ?> 分钟阅读</span><?php endif; ?>
+                    </div>
+                </div>
+
+                <figure class="guide-cover" aria-hidden="true">
+                    <span class="gc-num"><?= A::e($cover[0]) ?></span>
+                    <span class="gc-word"><?= $cover[1] ?></span>
+                    <span class="gc-tag"><?= A::e($cover[2]) ?></span>
+                </figure>
+
+                <div class="prose" style="margin-top:40px">
+                    <?php if ($bodyTemplate !== ''): ?>
+                        <?= $this->fetch($bodyTemplate) ?>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($faqs !== []): ?>
+                    <section class="prose" style="margin-top:52px" aria-labelledby="article-faq-title" weline-code="amayum-journal-view-02">
+                        <h2 id="article-faq-title">常见问题</h2>
+                        <div class="faq-list">
+                            <?php foreach (array_values($faqs) as $index => $faq): ?>
+                                <?php
+                                $question = trim((string)($faq['question'] ?? ''));
+                                $answer = trim((string)($faq['answer'] ?? ''));
+                                if ($question === '' || $answer === '') {
+                                    continue;
+                                }
+                                ?>
+                                <details class="faq" style="--i:<?= (int)$index ?>">
+                                    <summary><?= A::e($question) ?></summary>
+                                    <p><?= A::e($answer) ?></p>
+                                </details>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                <?php endif; ?>
+
+                <div style="margin-top:44px;display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+                    <a class="btn btn-primary" href="<?= A::e(A::url($this, '/diagnosis#diagnosis')) ?>">预约架构诊断</a>
+                    <a class="btn btn-secondary" href="<?= A::e(A::url($this, '/journal')) ?>">读其他指南</a>
+                </div>
+            </article>
+
+            <aside class="article-aside reveal" aria-label="文章目录">
+                <span class="k">本文目录</span>
+                <?php foreach ($toc as [$id, $label]): ?>
+                    <a href="#<?= A::e($id) ?>"><?= A::e($label) ?></a>
+                <?php endforeach; ?>
+                <div class="meta">作者：<?= A::e($byline) ?><br>
+                    <?php if ($published !== ''): ?>发布：<?= A::e($published) ?><br><?php endif; ?>
+                    <?php if ($modified !== ''): ?>更新：<?= A::e($modified) ?><br><?php endif; ?>
+                    <a href="<?= A::e(A::url($this, '/journal')) ?>" style="border:0;padding:0;color:var(--fg)">← 回到指南</a>
+                </div>
+            </aside>
+        </div>
+    </div>
+</section>
+
+<?php if ($related !== []): ?>
+    <section class="section surface" aria-labelledby="related-title" weline-code="amayum-journal-view-03">
+        <div class="w-container">
+            <div class="section-head reveal">
+                <div><p class="eyebrow"><span class="idx">NEXT</span> 相关阅读</p><h2 id="related-title">下一步，读这两篇。</h2></div>
+            </div>
+            <div class="related-grid">
+                <?php foreach ($related as $index => $item): ?>
+                    <?php
+                    $relatedTitle = (string)($item['title'] ?? '');
+                    $relatedPath = (string)($item['canonical_path'] ?? '');
+                    $relatedDek = (string)($item['dek'] ?? ($item['meta_description'] ?? ''));
+                    if ($relatedTitle === '' || $relatedPath === '') {
+                        continue;
+                    }
+                    ?>
+                    <a class="card reveal" style="--i:<?= (int)$index ?>" href="<?= A::e(A::url($this, $relatedPath)) ?>">
+                        <span class="k">指南</span>
+                        <h3><?= A::e($relatedTitle) ?></h3>
+                        <?php if ($relatedDek !== ''): ?><p><?= A::e($relatedDek) ?></p><?php endif; ?>
+                        <span class="card-action">继续阅读
+                            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </span>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+<?php endif; ?>
+
+<div class="w-container section-cta">
+    <section class="cta-band reveal" aria-labelledby="article-cta-title" weline-code="amayum-journal-view-04">
+        <div><h2 id="article-cta-title">读完还有具体问题？</h2><p>把你的现有栈、市场与卡点带过来，30 分钟把取舍说清楚。</p></div>
+        <div class="actions">
+            <a class="btn btn-primary" href="<?= A::e(A::url($this, '/diagnosis#diagnosis')) ?>">预约架构诊断</a>
+            <a class="btn btn-ghost-dark" href="<?= A::e(A::url($this, '/commerce')) ?>">看框架能力</a>
+        </div>
+    </section>
+</div>

@@ -1,0 +1,92 @@
+<?php
+/**
+ * 隐私、条款与 MIT 许可。最后更新日期由控制器注入。
+ *
+ * 不写合规认证；MIT 文本以仓库 LICENSE 为准。
+ */
+declare(strict_types=1);
+
+require_once rtrim((string)BP, '/\\') . '/app/design/Amayum/official/frontend/includes/AmayumView.php';
+
+use AmayumDesign\Official\AmayumView as A;
+
+$legalUpdated = (string)($legal_updated ?? '2026-10-27');
+$legalName = (string)($legal_name ?? 'Aiweline（深圳）');
+$contactEmail = (string)($contact_email ?? 'hello@amayum.com');
+$plainMailto = 'mailto:' . $contactEmail;
+?>
+<section class="page-hero page-hero--compact" data-atmo weline-code="amayum-legal-index-01">
+    <div class="w-container">
+        <div class="crumbs"><a href="<?= A::e(A::url($this, '/')) ?>">Amayum</a><span>/</span><span>法务</span></div>
+        <h1>隐私、条款<br><span class="accent">与许可。</span></h1>
+        <p class="lead">这一页说明我们收集什么、如何使用，以及 WelineFramework 的开源许可。最后更新：<?= A::e($legalUpdated) ?>。</p>
+    </div>
+</section>
+
+<section class="section" weline-code="amayum-legal-index-02">
+    <div class="w-container">
+        <div class="article-grid">
+            <div class="prose">
+                <h2 id="privacy">隐私说明</h2>
+                <p>我们只在必要范围内收集信息。通过联系表单提交时，我们会保存你填写的姓名、邮箱、公司与需求描述，用于回复这次咨询。服务器日志会记录访问时间、路径、浏览器与 IP，用于安全与故障排查。</p>
+                <h3>我们如何使用</h3>
+                <ul>
+                    <li>回复咨询、准备方案与安排沟通。</li>
+                    <li>保障站点安全，排查滥用与故障。</li>
+                    <li>在获得同意的前提下，发送与本次咨询直接相关的后续信息。</li>
+                </ul>
+                <h3>我们不会做</h3>
+                <ul>
+                    <li>不出售个人信息，不做跨站广告画像。</li>
+                    <li>不把联系表单的邮箱自动加入营销订阅列表。</li>
+                    <li>不在未告知的情况下把数据用于与咨询无关的用途。</li>
+                </ul>
+                <h3>保留与共享</h3>
+                <p>咨询记录在完成沟通后保留一段合理时间，用于后续跟进与合同履行。我们使用邮件服务与基础设施服务商处理数据，他们只在提供服务所需的范围内访问信息。</p>
+                <h3>你的权利</h3>
+                <p>你可以要求查看、更正或删除你提交的信息。请发邮件到 <a href="<?= A::e($plainMailto) ?>"><?= A::e($contactEmail) ?></a>，我们会在 30 天内答复并处理。</p>
+
+                <h2 id="terms">站点使用条款</h2>
+                <p>本网站用于介绍 Amayum 与产品 WelineFramework：一套源码自有的跨境电商框架；changanhanfu、playinginchina 与 daocharms 是运行在框架上的例子。继续使用即表示你同意以下条款。</p>
+                <ul>
+                    <li>站点内容按“现状”提供，我们会尽力保持准确，但不构成对结果、时效或适销性的保证。</li>
+                    <li>站内的品牌、文字、图形与界面设计受知识产权保护；未经许可不得整体复制用于商业目的。</li>
+                    <li>外部链接指向第三方站点，我们不对其内容、可用性与隐私做法负责。</li>
+                    <li>指南与运营内容中的政策口径会变化，落地前请按你的市场与专业顾问复核。</li>
+                    <li>我们可能更新条款与页面内容，更新后在站内发布即生效。</li>
+                </ul>
+
+                <h2 id="license">MIT 许可</h2>
+                <p>WelineFramework 以 MIT 协议开源，代码托管在 GitHub 与 Gitee。你可以在遵守 MIT 许可的前提下使用、修改、分发与商用。</p>
+                <blockquote>
+                    MIT License<br><br>
+                    Copyright (c) 2026 秋枫雁飞 (aiweline)<br><br>
+                    Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:<br><br>
+                    The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.<br><br>
+                    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+                </blockquote>
+                <p>完整文本以仓库中的 <code>LICENSE</code> 文件为准。站点内容本身不属于 MIT 许可范围，除非页面明确说明。</p>
+
+                <h2 id="contact">联系</h2>
+                <p>与隐私、条款或许可有关的问题，请发邮件到 <a href="<?= A::e($plainMailto) ?>"><?= A::e($contactEmail) ?></a>，或在<a href="<?= A::e(A::url($this, '/diagnosis')) ?>">联系页</a>留言。</p>
+                <p class="muted">运营主体：<?= A::e($legalName) ?>。最后更新：<?= A::e($legalUpdated) ?>。</p>
+            </div>
+
+            <aside class="article-aside" aria-label="页面目录">
+                <span class="k">本页目录</span>
+                <a href="#privacy">隐私说明</a>
+                <a href="#terms">站点使用条款</a>
+                <a href="#license">MIT 许可</a>
+                <a href="#contact">联系</a>
+                <div class="meta"><?= A::e($legalName) ?><br>更新：<?= A::e($legalUpdated) ?><br><a href="<?= A::e(A::url($this, '/')) ?>" style="border:0;padding:0;color:var(--fg)">← 返回首页</a></div>
+            </aside>
+        </div>
+    </div>
+</section>
+
+<div class="w-container section-cta">
+    <section class="cta-band reveal" aria-labelledby="legal-cta-title" weline-code="amayum-legal-index-03">
+        <div><h2 id="legal-cta-title">还有问题？</h2><p>隐私、条款或许可相关的问题，直接发邮件给我们。</p></div>
+        <div class="actions"><a class="btn btn-primary" href="<?= A::e($plainMailto) ?>"><?= A::e($contactEmail) ?></a></div>
+    </section>
+</div>

@@ -183,6 +183,7 @@ id属性不能为空,id属性不能为空
 系统代理账户已齐全，无需重置,系统代理账户已齐全，无需重置
 "无权限从本机 Stalwart 同步账号","No permission to sync accounts from local Stalwart"
 "无权限从企业邮箱域名同步 Smtp 服务","无权限从企业邮箱域名同步 Smtp 服务"
+"无权限删除 Smtp 服务","无权限删除 Smtp 服务"
 "开始删除 Smtp 服务…","开始删除 Smtp 服务…"
 已删除,已删除
 删除失败,删除失败
@@ -622,6 +623,8 @@ Smtp,Smtp
 重置系统代理账户,重置系统代理账户
 "确定删除该 Smtp 服务及其下属全部 %{1} 个账户？将同时从本机 Stalwart 移除这些账户，不可恢复。外投若仍引用需改绑。","Delete this SMTP service and all %{1} accounts under it? They will also be removed from local Stalwart and cannot be undone. Rebind any outbound that still references it."
 "确定删除该外部 Smtp 服务？外投若仍引用需改绑。","Delete this external SMTP service? Rebind any outbound that still references it."
+"确定只删除该 Smtp 服务及下属 %{1} 个账户的 Weline 目录记录？本机 Stalwart 中的同名账户与邮件会保留，供管理认证恢复后再清理。","确定只删除该 Smtp 服务及下属 %{1} 个账户的 Weline 目录记录？本机 Stalwart 中的同名账户与邮件会保留，供管理认证恢复后再清理。"
+仅删除本地记录,仅删除本地记录
 "登记路径不等于本机健康；请按 DNS/证书四态处理后再依赖本通道发信。","Registration path is not local health; fix DNS/certificate four-state before relying on this channel."
 "外部中继凭据可在下方修改主机/用户名/密码。要给企业邮箱外投：打开「用户与账号」→ 编辑 contact@ →「外投 smarthost」选本条。本机 smtp@ 账号表请用「新建 → 本机启用」。","外部中继凭据可在下方修改主机/用户名/密码。要给企业邮箱外投：打开「用户与账号」→ 编辑 contact@ →「外投 smarthost」选本条。本机 smtp@ 账号表请用「新建 → 本机启用」。"
 去用户与账号绑定外投,去用户与账号绑定外投

@@ -1,0 +1,57 @@
+<?php
+/**
+ * 指南正文：Shopify 替代方案怎么选（slug=shopify-alternative）。
+ * 价格口径 2026-10-26；不贬低竞品，不承诺零掉排名。
+ */
+declare(strict_types=1);
+
+require_once rtrim((string)BP, '/\\') . '/app/design/Amayum/official/frontend/includes/AmayumView.php';
+
+use AmayumDesign\Official\AmayumView as A;
+?>
+<h2 id="define">先定义你要替代什么</h2>
+<ul>
+    <li>替代渠道？替代结账？替代运行时？替代 SEO 控制？替代应用栈？</li>
+    <li>如果只是想要更低的月费，先做 TCO；如果只是想要更自由的模板，先看主题/结账限制；如果要代码/数据/运行时所有权，才考虑框架。</li>
+</ul>
+
+<h2 id="four">四条路线</h2>
+<table>
+    <thead><tr><th>路线</th><th>适合谁</th><th>代价</th><th>证据</th></tr></thead>
+    <tbody>
+        <tr><td><strong>Shopify</strong></td><td>要最快上线、最少运维、完整生态</td><td>订阅 + 交易费 + 应用；运行时不受你控制</td><td>官方 pricing</td></tr>
+        <tr><td><strong>WooCommerce</strong></td><td>有 WordPress/PHP 团队；要低许可成本</td><td>插件组合、性能、安全、升级由你负责</td><td>官方 pricing</td></tr>
+        <tr><td><strong>Headless / Medusa / Saleor</strong></td><td>有工程团队；要 API-first/可组合</td><td>实施与运维成本高；生态较小</td><td>官方 pricing</td></tr>
+        <tr><td><strong>源码框架</strong></td><td>要代码/数据/运行时所有权；多站点/多语言/SEO</td><td>需要技术维护；实施周期更长</td><td>Weline / Sylius 文档</td></tr>
+    </tbody>
+</table>
+
+<h2 id="cost">成本表</h2>
+<p>同<a href="<?= A::e(A::url($this, '/journal/build-platform#costs')) ?>">建站平台指南</a>的价格表；注明日期、假设与不含项。</p>
+<p>不要用一个百分比概括 Shopify 的全部费用；分开计划、卡费率、第三方交易费、应用、托管、迁移与人力。</p>
+
+<h2 id="checklist">迁移 27 项检查（摘要）</h2>
+<p>URL 映射与 301；重定向链；canonical；hreflang；sitemap；robots；结构化数据；analytics/GA4；Search Console；产品/变体/SKU；图片/alt；分类/导航；客户/地址；订单/历史；订阅；优惠券；税费；运费；支付；邮件/自动化；应用替代；backlinks；404/410；性能；移动端；结账测试；回滚计划。</p>
+
+<h2 id="seo-migration">SEO 迁移</h2>
+<ul>
+    <li>301/308 服务端永久重定向；不要链式重定向。</li>
+    <li>每个新 URL 自指 canonical；更新 hreflang 与内链。</li>
+    <li>保留重定向至少 1 年；移除迁移期 noindex。</li>
+    <li>迁移后监控 GSC 覆盖、抓取、排名与订单。</li>
+    <li>不承诺零掉排名；目标是降低风险。</li>
+</ul>
+
+<h2 id="stay">什么情况下不要离开 Shopify</h2>
+<ul>
+    <li>你要零运维；没有技术团队；依赖大量 app；要最快上线；不想处理支付/税务/服务器；迁移成本高于收益。</li>
+</ul>
+
+<h2 id="tree">决策树</h2>
+<ol>
+    <li>你有技术团队或长期 agency 吗？没有 → SaaS。</li>
+    <li>你需要代码/数据/运行时所有权吗？不需要 → SaaS 或 WooCommerce。</li>
+    <li>你要多品牌/多市场/多语言吗？是 → 框架/多站点架构。</li>
+    <li>你能接受 6–12 周实施与持续运维吗？不能 → SaaS。</li>
+    <li>你愿意先做付费诊断吗？愿意 → 进入评估。</li>
+</ol>

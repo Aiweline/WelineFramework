@@ -1,0 +1,460 @@
+<?php
+/**
+ * 首页内容：Hero 双面板 → 证据条 → 01–09 → FAQ → Final CTA。
+ *
+ * 数据优先取控制器注入的 $site / $proof_facts / $examples / $guides / $faqs；
+ * 缺失时使用与站点目录一致的安全默认值，不编造未验证事实。
+ */
+declare(strict_types=1);
+
+require_once rtrim((string)BP, '/\\') . '/app/design/Amayum/official/frontend/includes/AmayumView.php';
+
+use AmayumDesign\Official\AmayumView as A;
+
+$site = is_array($site ?? null) ? $site : A::profile();
+$siteUrl = (string)($site['site_url'] ?? 'https://amayum.com');
+$github = (string)($site['github'] ?? '');
+$gitee = (string)($site['gitee'] ?? '');
+$docs = (string)($site['docs'] ?? 'https://www.aiweline.com');
+
+$facts = is_array($proof_facts ?? null) ? array_values(array_filter($proof_facts, 'is_array')) : [];
+if ($facts === []) {
+    $facts = [
+        ['label' => 'PHP 8.4+', 'detail' => '框架运行时要求；扩展与第三方库需单独核验。'],
+        ['label' => 'MIT 许可', 'detail' => 'WelineFramework 以 MIT 协议开源。'],
+        ['label' => '127 个已注册模块', 'detail' => '包含基础设施、AI、后台与开发工具，不等于 127 个电商功能。'],
+        ['label' => 'WLS + FPM', 'detail' => 'WLS 官方状态 LOCAL_RUNTIME_VERIFIED / GA_BLOCKED_EXTERNAL；FPM 是一等部署路径。'],
+    ];
+}
+$factParts = static function (string $label): array {
+    $label = trim($label);
+    $known = [
+        'PHP 8.4+' => ['PHP 8.4+', '运行时基线'],
+        'MIT 许可' => ['MIT', '开源许可'],
+        '127 个已注册模块' => ['127', '个已注册模块'],
+        'WLS + FPM' => ['WLS + FPM', '双运行时'],
+    ];
+    if (isset($known[$label])) {
+        return $known[$label];
+    }
+    if (preg_match('/^(\d+)\s*(.*)$/u', $label, $matches) === 1) {
+        return [$matches[1], trim($matches[2])];
+    }
+
+    return [$label, ''];
+};
+
+$examples = is_array($examples ?? null) ? array_values(array_filter($examples, 'is_array')) : [];
+if ($examples === []) {
+    $examples = [
+        [
+            'key' => 'changanhanfu',
+            'name' => '長安漢服',
+            'domain' => 'changanhanfu.com',
+            'type_label' => '生产环境',
+            'problem' => '海外用户卡在尺码、面料与到手税费。',
+            'verified_facts' => [
+                '主题 hanfu（父主题 Default）',
+                'WLS 8×512M；MySQL',
+                '观察到的 333 个商品 URL、10 个店面币种',
+            ],
+        ],
+        [
+            'key' => 'playinginchina',
+            'name' => 'PlayingInChina',
+            'domain' => 'playinginchina.com',
+            'type_label' => '生产环境',
+            'problem' => '线路、门票、地图与支付分散在多个平台，信息以中文为主。',
+            'verified_facts' => [
+                'default_language=en_US，zh_Hans_CN 第二',
+                '338 个已发布商品（8 个套餐 + 330 张门票）、37 个分类',
+                '383 条 URL 重写、21 条路由测试 200',
+            ],
+        ],
+        [
+            'key' => 'daocharms',
+            'name' => 'DaoCharms',
+            'domain' => 'daocharms.com',
+            'type_label' => '本地 / 非生产',
+            'problem' => '品类容易被做成猎奇陈列。',
+            'verified_facts' => [
+                '设计主题 daocharms',
+                '本地 guest 试用订单 USD 280.93、tax 21.18、shipping 7.75',
+                'payment fake_card',
+            ],
+        ],
+    ];
+}
+
+$homeGuides = is_array($guides ?? null) ? array_values(array_filter($guides, 'is_array')) : [];
+if ($homeGuides === []) {
+    $homeGuides = [
+        ['slug' => 'build-platform', 'title' => '独立站建站平台怎么选', 'canonical_path' => '/journal/build-platform'],
+        ['slug' => 'independent-store-seo', 'title' => '独立站 SEO 为什么没效果', 'canonical_path' => '/journal/independent-store-seo'],
+        ['slug' => 'shopify-alternative', 'title' => 'Shopify 替代方案怎么选', 'canonical_path' => '/journal/shopify-alternative'],
+    ];
+}
+$guideShort = [
+    'build-platform' => '建站平台怎么选',
+    'independent-store-seo' => '独立站 SEO 排查',
+    'shopify-alternative' => 'Shopify 替代与迁移',
+];
+
+$exampleAnchors = ['changanhanfu' => 'hanfu', 'playinginchina' => 'travel', 'daocharms' => 'dao'];
+$exampleCovers = [
+    'changanhanfu' => 'cover-cases.webp',
+    'playinginchina' => 'cover-travel.webp',
+    'daocharms' => 'cover-dao.webp',
+];
+
+$homeFaqs = is_array($faqs ?? null) && $faqs !== [] ? $faqs : (array)($seo['faqs'] ?? []);
+?>
+<!-- Hero: 双面板（左：定位与 CTA，右：运行中的例子 + 终端） -->
+<section class="page-hero page-hero--split" data-atmo weline-code="amayum-homepage-index-01">
+    <div class="w-container">
+        <div class="split-grid">
+            <div class="split-copy">
+                <div class="crumbs"><span>Amayum</span><span>/</span><span>WelineFramework</span></div>
+                <p class="eyebrow" style="margin-top:18px"><span class="idx">AMAYUM × WELINEFRAMEWORK</span></p>
+                <h1>跨境独立站，<br><span class="accent">建在你自己的代码上。</span></h1>
+                <p class="lead">WelineFramework 是一套 PHP 8.4+ 的源码自有型电商框架。商品、订单、支付、税费、多语言与 SEO 是底座能力，不是插件堆出来的。三个运行中的站点是例子，不是产品本身。</p>
+                <div class="actions">
+                    <a class="btn btn-primary" href="<?= A::e(A::url($this, '/commerce')) ?>">看框架能力</a>
+                    <a class="btn btn-ghost-dark" href="<?= A::e(A::url($this, '/case-studies')) ?>">看运行中的例子</a>
+                    <?php if ($github !== ''): ?>
+                        <a class="text-link" href="<?= A::e($github) ?>" target="_blank" rel="noopener">先读代码
+                            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 12 12 4M6 4h6v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="split-visual" aria-hidden="true">
+                <figure class="store-preview">
+                    <img src="<?= A::e(A::image('cover-cases.webp')) ?>" alt="" width="800" height="450" loading="eager" decoding="async">
+                    <figcaption><span class="badge-run">运行中的例子</span><span class="store-name">changanhanfu.com</span></figcaption>
+                </figure>
+                <div class="proof-panel">
+                    <div class="term-head"><i></i><i></i><i></i><span>weline · terminal</span></div>
+                    <div class="term-body">
+                        <div><span class="dim">$</span> <span class="cmd">php bin/w server:start</span></div>
+                        <div><span class="ok">✓</span> WLS workers up · hot reload on</div>
+                        <div><span class="dim">$</span> <span class="cmd">php bin/w command:upgrade</span></div>
+                        <div><span class="ok">✓</span> modules ok · cache warm</div>
+                    </div>
+                    <div class="term-copy"><span>PHP 8.4+</span><span>MIT</span><span>WLS + FPM</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Proof strip -->
+<section class="section surface" style="padding:clamp(40px,5vw,64px) 0" weline-code="amayum-homepage-index-02">
+    <div class="w-container">
+        <div class="facts">
+            <?php foreach ($facts as $fact): ?>
+                <?php
+                $label = (string)($fact['label'] ?? '');
+                $detail = (string)($fact['detail'] ?? '');
+                if ($label === '') {
+                    continue;
+                }
+                [$figure, $caption] = $factParts($label);
+                ?>
+                <div class="fact">
+                    <b><?= A::e($figure) ?></b>
+                    <?php if ($caption !== ''): ?><span><?= A::e($caption) ?></span><?php endif; ?>
+                    <?php if ($detail !== ''): ?><small><?= A::e($detail) ?></small><?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<!-- 01 先分清 -->
+<section class="section" id="about" aria-labelledby="s1-title" weline-code="amayum-homepage-index-03">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">01</span> 先分清</p><h2 id="s1-title">独立站，<br>不等于自有系统。</h2></div>
+            <p>在 Shopify 或 Shoplazza 上开店，渠道是你的，账号和运行时不是。用开源插件自建，代码是你的，但商品、订单、税费、多语言与 SEO 的维护也是你的。WelineFramework 选的是第三条：源码自有，但交易底座已经写好。</p>
+        </div>
+        <div class="grid-3">
+            <article class="card reveal"><span class="k">Route / 01</span><h3>SaaS 店铺</h3><p>上线快，生态全；订阅、交易费与应用成本随规模上升，结账与运行时受平台计划约束。</p><div class="tags"><span class="tag">订阅制</span><span class="tag">生态</span></div></article>
+            <article class="card reveal" style="--i:1"><span class="k">Route / 02</span><h3>开源插件</h3><p>代码归你；插件组合、性能、安全与升级由你负责。</p><div class="tags"><span class="tag">自维护</span><span class="tag">插件组合</span></div></article>
+            <article class="card reveal" style="--i:2"><span class="k">Route / 03</span><h3>源码框架</h3><p>代码、数据与部署归你；商品、订单、支付、税费、多语言与 SEO 由框架提供，仍需你或你的团队维护。</p><div class="tags"><span class="tag">源码自有</span><span class="tag">底座现成</span></div></article>
+        </div>
+        <p style="margin-top:26px"><a class="text-link" href="<?= A::e(A::url($this, '/journal/build-platform')) ?>">读：独立站建站平台怎么选
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a></p>
+    </div>
+</section>
+
+<!-- 02 交易底座 -->
+<section class="section surface" aria-labelledby="s2-title" weline-code="amayum-homepage-index-04">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">02</span> 交易底座</p><h2 id="s2-title">你买的不是页面，<br>是交易底座。</h2></div>
+            <p>页面可以重做，交易链路不能靠拼。下面这些能力在仓库里有模块、有文档、有边界；不是发布会上的名词。</p>
+        </div>
+        <div class="grid-3">
+            <article class="card reveal"><span class="k">Catalog</span><h3>商品与目录</h3><p>Website 分片的商品/Offer 模型、SKU、变体、价格、媒体、店铺覆盖与发布流程。</p><div class="tags"><span class="tag">SKU</span><span class="tag">变体</span></div></article>
+            <article class="card reveal" style="--i:1"><span class="k">Checkout</span><h3>购物车与结账</h3><p>服务端权威购物车、游客/客户合并、ToC/ToB 类型；结账冻结可信购物车，价格与行项目由服务端重新解析。</p><div class="tags"><span class="tag">服务端权威</span><span class="tag">ToB</span></div></article>
+            <article class="card reveal" style="--i:2"><span class="k">Order</span><h3>订单与退款</h3><p>订单状态机、发票、发货、退款与履约账本；退款执行依赖支付提供方能力。</p><div class="tags"><span class="tag">状态机</span><span class="tag">退款</span></div></article>
+            <article class="card reveal" style="--i:0"><span class="k">Payment</span><h3>支付 Provider SPI</h3><p>内置 Stripe、PayPal 与 fake_card（测试）；其他通道按 Provider SPI 接入，不是“28 个网关开箱即用”。</p><div class="tags"><span class="tag">SPI</span><span class="tag">Webhook</span></div></article>
+            <article class="card reveal" style="--i:1"><span class="k">Ops</span><h3>税费、物流与库存</h3><p>辖区税规则、运输区域/费率/跟踪、库存台账与预留；税费生产默认关闭，仓库迁移有开关。</p><div class="tags"><span class="tag">税类</span><span class="tag">台账</span></div></article>
+            <article class="card reveal" style="--i:2"><span class="k">Front</span><h3>多币种、搜索与评论</h3><p>手动/API 汇率、可插拔搜索、评论媒体与审核；汇率缺失时失败关闭，不显示假价。</p><div class="tags"><span class="tag">汇率</span><span class="tag">评论审核</span></div></article>
+        </div>
+        <p style="margin-top:26px"><a class="text-link" href="<?= A::e(A::url($this, '/commerce')) ?>">看完整能力矩阵
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a></p>
+    </div>
+</section>
+
+<!-- 能力全景导流条（不计编号） -->
+<section class="section surface" style="padding:clamp(36px,4.5vw,56px) 0" aria-labelledby="panorama-title" weline-code="amayum-homepage-index-05">
+    <div class="w-container">
+        <div class="section-head reveal" style="margin-bottom:28px">
+            <div><p class="eyebrow"><span class="idx">能力全景</span></p><h2 id="panorama-title" style="font-size:clamp(24px,2.6vw,34px)">十个支柱，从域名到 AI 运营，一张图看完。</h2></div>
+            <p><a class="text-link" href="<?= A::e(A::url($this, '/commerce')) ?>">看能力全景
+                <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a></p>
+        </div>
+        <div class="reveal" style="display:flex;flex-wrap:wrap;gap:8px">
+            <a class="tag" href="<?= A::e(A::url($this, '/commerce')) ?>">双运行时</a>
+            <a class="tag" href="<?= A::e(A::url($this, '/commerce#multisite')) ?>">多站点</a>
+            <a class="tag" href="<?= A::e(A::url($this, '/commerce#domain')) ?>">域名与 HTTPS</a>
+            <a class="tag" href="<?= A::e(A::url($this, '/commerce#cdn')) ?>">缓存与 CDN</a>
+            <a class="tag" href="<?= A::e(A::url($this, '/commerce#multisite')) ?>">主题可视化</a>
+            <a class="tag" href="<?= A::e(A::url($this, '/commerce#kernel')) ?>">交易内核</a>
+            <a class="tag" href="<?= A::e(A::url($this, '/commerce#seo')) ?>">SEO 与增长</a>
+            <a class="tag" href="<?= A::e(A::url($this, '/commerce#comms')) ?>">沟通与服务</a>
+            <a class="tag" href="<?= A::e(A::url($this, '/commerce#ai')) ?>">AI 协作</a>
+            <a class="tag" href="<?= A::e(A::url($this, '/commerce#security')) ?>">安全与运维</a>
+        </div>
+    </div>
+</section>
+
+<!-- 03 AI 原生协作 -->
+<section class="section tint" aria-labelledby="s3-title" weline-code="amayum-homepage-index-06">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">03</span> AI 原生协作</p><h2 id="s3-title">AI 不是外挂，<br>是协作者。</h2></div>
+            <p>打开项目，AI 先领领域硬规则与代码地图，再动第一行代码；改完的每一行走同一套模块与验收流程。AI 工具一大堆、却没一个懂你的仓库——这个问题的解法写在框架里。</p>
+        </div>
+        <div class="grid-3">
+            <article class="card reveal"><span class="k">MCP</span><h3>项目智能 MCP</h3><p>内置本地项目智能 MCP：代码地图、任务上下文、知识检索。AI 进场即懂仓库，不是每次从零教。</p><div class="tags"><span class="tag">代码地图</span><span class="tag">硬规则下发</span></div></article>
+            <article class="card reveal" style="--i:1"><span class="k">Skills</span><h3>工程技能随仓</h3><p>主题、支付、翻译、性能、代码复审等技能目录随仓；AI 按任务自动匹配，不靠提示词玄学。</p><div class="tags"><span class="tag">随仓走</span><span class="tag">按任务匹配</span></div></article>
+            <article class="card reveal" style="--i:2"><span class="k">Models</span><h3>模型不锁定</h3><p>OpenAI、Anthropic、Gemini、DeepSeek、Kimi 等供应商后台配置切换；预注册智能体覆盖运营、博客、社媒、建站、编码。</p><div class="tags"><span class="tag">多供应商</span><span class="tag">预注册智能体</span></div></article>
+        </div>
+        <p style="margin-top:26px"><a class="text-link" href="<?= A::e(A::url($this, '/commerce#ai')) ?>">看 AI 协作细节
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a></p>
+    </div>
+</section>
+
+<!-- 04 一人运营 -->
+<section class="section" aria-labelledby="s4-title" weline-code="amayum-homepage-index-07">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">04</span> 一人运营</p><h2 id="s4-title">一个人，<br>也能把站开起来。</h2></div>
+            <p>请运营、请翻译、请运维，人力成本比建站本身还高。这些活框架里各有归属：内容交给 AI 起草加审批，翻译、SEO、运维各有机制在跑。</p>
+        </div>
+        <ul class="grid-2" style="list-style:none;margin:0;padding:0;gap:0 48px">
+            <li class="feature reveal"><span class="n">内容</span><div><b>AI 起草博客与社媒，等你审批再发。</b><p>默认关闭、人工开启，审批闸门写在代码里——AI 把活干到等你审批。</p></div></li>
+            <li class="feature reveal" style="--i:1"><span class="n">翻译</span><div><b>新增语言，AI 翻译自动入队。</b><p>网站新增语言自动进 AI 翻译队列，6 家翻译服务可换，不用人催。</p></div></li>
+            <li class="feature reveal" style="--i:0"><span class="n">SEO</span><div><b>sitemap 自动生成、定时提交站长平台。</b><p>线上页面敲 <code>weline</code> 当场体检：SEO、性能、请求 trace。</p></div></li>
+            <li class="feature reveal" style="--i:1"><span class="n">运维</span><div><b>进程异常自动拉起，发布出事一键回滚。</b><p>Worker 自动竞选拉起 Master + 站点看门狗；<code>git push</code> 自动发布、一键回滚。</p></div></li>
+        </ul>
+        <p style="margin-top:26px"><a class="text-link" href="<?= A::e(A::url($this, '/commerce#ops')) ?>">看运营与运维能力
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a></p>
+    </div>
+</section>
+
+<!-- 05 多站点 -->
+<section class="section" aria-labelledby="s5-title" weline-code="amayum-homepage-index-08">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">05</span> 多站点</p><h2 id="s5-title">一个后台，<br>多个品牌与市场。</h2></div>
+            <p>Website → Store → Channel 是作用域，不是三个菜单。每个 Website 有自己的语言、站点地图、robots 与主题；商品目录按 Website 分片，店铺可以覆盖展示。</p>
+        </div>
+        <div class="grid-3">
+            <article class="card reveal"><span class="k">Theme</span><h3>主题</h3><p>每个站点注册自己的设计主题；默认主题提供基线，设计主题用同键覆盖，不复制默认实现。父主题链仍然存在，这不是“零继承”。</p></article>
+            <article class="card reveal" style="--i:1"><span class="k">Language</span><h3>语言</h3><p>Website 级语言分配、locale 前缀、hreflang/OG locale；682 个 locale 是目录，不是 682 份已完成翻译。</p></article>
+            <article class="card reveal" style="--i:2"><span class="k">SEO</span><h3>SEO</h3><p>每个 Website 输出自己的 canonical、sitemap 与 robots；跨域 Store 的 sitemap 不合并，独立域名要独立 Website。</p></article>
+        </div>
+        <p style="margin-top:26px"><a class="text-link" href="<?= A::e(A::url($this, '/commerce#multisite')) ?>">看多站点与主题架构
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a></p>
+    </div>
+</section>
+
+<!-- 06 SEO -->
+<section class="section tint" aria-labelledby="s6-title" weline-code="amayum-homepage-index-09">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">06</span> SEO</p><h2 id="s6-title">SEO 是架构输出，<br>不是插件开关。</h2></div>
+            <p>SSR HTML、meta/OG/canonical、hreflang、8 类 schema.org 结构化数据、站点地图、robots、IndexNow/Bing/Yandex 适配，以及 llms.txt / geo-feed。它们解决的是“可抓取、可索引、可理解”，不是“保证排名”。</p>
+        </div>
+        <div class="grid-2">
+            <article class="card reveal"><span class="k">Crawl</span><h3>抓取</h3><p>SSR 输出、真实 <code>&lt;a href&gt;</code>、每站 sitemap 与 robots。</p></article>
+            <article class="card reveal" style="--i:1"><span class="k">Index</span><h3>索引</h3><p>自指 canonical、locale URL、hreflang 成对；配置错一样会出问题。</p></article>
+            <article class="card reveal" style="--i:0"><span class="k">Understand</span><h3>理解</h3><p>Product/Offer/Review/FAQ/Article/Breadcrumb 等结构化数据由业务模块提供事实。</p></article>
+            <article class="card reveal" style="--i:1"><span class="k">Migrate</span><h3>迁移</h3><p>301 映射、canonical、hreflang 与 analytics 一次性迁移；不承诺“不掉排名”。</p></article>
+        </div>
+        <p style="margin-top:26px"><a class="text-link" href="<?= A::e(A::url($this, '/journal/independent-store-seo')) ?>">读：独立站 SEO 排查指南
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a></p>
+    </div>
+</section>
+
+<!-- 07 运行中的例子 -->
+<section class="section" aria-labelledby="s7-title" weline-code="amayum-homepage-index-10">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">07</span> 运行中的例子</p><h2 id="s7-title">三个运行中的例子，<br>不是产品本身。</h2></div>
+            <p>它们证明主题、商品、订单、语言与部署可以跑在同一条底座上；它们不证明每个模块都适合你的业务，也不提供增长数字。</p>
+        </div>
+        <?php if ($examples !== []): ?>
+            <div class="grid-3">
+                <?php foreach (array_values($examples) as $index => $example): ?>
+                    <?php
+                    $key = (string)($example['key'] ?? '');
+                    $anchor = $exampleAnchors[$key] ?? '';
+                    $cover = $exampleCovers[$key] ?? 'cover-cases.webp';
+                    $name = (string)($example['name'] ?? '');
+                    $domain = (string)($example['domain'] ?? '');
+                    $typeLabel = (string)($example['type_label'] ?? '');
+                    $problem = (string)($example['problem'] ?? '');
+                    $verified = array_values(array_filter((array)($example['verified_facts'] ?? []), 'is_string'));
+                    $summary = $problem;
+                    if ($verified !== []) {
+                        $summary .= ($summary !== '' ? ' ' : '') . implode('；', array_slice($verified, -3)) . '。';
+                    }
+                    $href = '/case-studies' . ($anchor !== '' ? '#' . $anchor : '');
+                    ?>
+                    <a class="post guide-card reveal" style="--i:<?= (int)$index ?>" href="<?= A::e(A::url($this, $href)) ?>">
+                        <img class="cover" src="<?= A::e(A::image($cover)) ?>" alt="<?= A::e('例子：' . $name . ' 站点封面') ?>" width="800" height="450" loading="lazy" decoding="async">
+                        <div class="body">
+                            <span class="k"><?= A::e(trim($domain . ($typeLabel !== '' ? ' · ' . $typeLabel : ''), ' ·')) ?></span>
+                            <h3><?= A::e($name) ?></h3>
+                            <p><?= A::e($summary) ?></p>
+                            <span class="more">看例子与边界
+                                <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </span>
+                        </div>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+        <p style="margin-top:26px"><a class="text-link" href="<?= A::e(A::url($this, '/case-studies')) ?>">看全部例子与边界
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a></p>
+    </div>
+</section>
+
+<!-- 08 开源 quick start -->
+<section class="section surface" aria-labelledby="s8-title" weline-code="amayum-homepage-index-11">
+    <div class="w-container">
+        <div class="grid-2" style="align-items:start;gap:clamp(28px,5vw,64px)">
+            <div class="reveal">
+                <p class="eyebrow"><span class="idx">08</span> 开源</p>
+                <h2 id="s8-title" style="font-size:clamp(30px,4vw,50px);line-height:1.07;margin-top:14px">先读代码，<br>再谈合作。</h2>
+                <p style="color:var(--muted);font-size:14.5px;line-height:1.8;margin-top:18px;max-width:34em">WelineFramework 以 MIT 协议开源，源码在 Gitee 与 GitHub。安装、启动、升级、缓存、模块、WLS、队列与定时任务都在一个 CLI 里。</p>
+                <p class="mono" style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:20px;max-width:36em;line-height:1.8">Note — WLS 官方状态是 LOCAL_RUNTIME_VERIFIED / GA_BLOCKED_EXTERNAL；生产可用 FPM，WLS 按你的验收标准决定。Dockerfile 仍是 PHP 8.2，不作为生产部署依据；Vercel 不作为 PHP 运行时。</p>
+                <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:24px">
+                    <?php if ($github !== ''): ?><a class="btn btn-dark" href="<?= A::e($github) ?>" target="_blank" rel="noopener">GitHub</a><?php endif; ?>
+                    <?php if ($gitee !== ''): ?><a class="btn btn-secondary" href="<?= A::e($gitee) ?>" target="_blank" rel="noopener">Gitee</a><?php endif; ?>
+                    <?php if ($docs !== ''): ?><a class="btn btn-ghost" href="<?= A::e($docs) ?>" target="_blank" rel="noopener">安装文档</a><?php endif; ?>
+                </div>
+            </div>
+            <div class="reveal">
+                <div class="proof-panel" style="max-width:none">
+                    <div class="term-head"><i></i><i></i><i></i><span>quick start</span><button class="copy-btn" type="button" data-copy="curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | bash -s --">复制安装命令</button></div>
+                    <div class="term-body">
+                        <div class="dim"># 一键安装（脚本自动装 Git、项目级 PHP 8.4 与 PostgreSQL，建库迁移起服务）</div>
+                        <div><span class="dim">$</span> <span class="cmd">curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | bash -s --</span></div>
+                        <div class="dim" style="margin-top:8px"># 源码路径：3 条命令</div>
+                        <div><span class="dim">$</span> <span class="cmd">composer install</span></div>
+                        <div><span class="dim">$</span> <span class="cmd">php bin/w command:upgrade</span></div>
+                        <div class="dim" style="margin-top:8px"># 启动 WLS</div>
+                        <div><span class="dim">$</span> <span class="cmd">php bin/w server:start</span></div>
+                        <div><span class="dim">$</span> <span class="cmd">php bin/w server:status</span></div>
+                        <div class="dim" style="margin-top:8px"># 或使用 FPM</div>
+                        <div class="dim"># Nginx/Apache + php-fpm → pub/index.php</div>
+                        <div class="dim" style="margin-top:8px"># 一个 bin/w 管完缓存、队列、定时、邮件、WLS、部署（240+ 条命令）</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 09 怎么开始 -->
+<section class="section" aria-labelledby="s9-title" weline-code="amayum-homepage-index-12">
+    <div class="w-container">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">09</span> 怎么开始</p><h2 id="s9-title">先诊断，<br>再决定要不要建。</h2></div>
+        </div>
+        <div class="grid-3">
+            <article class="card reveal"><span class="k">Step / 01</span><h3>30 分钟诊断</h3><p>市场、品类、现有栈、支付/税费/语言与团队能力。</p></article>
+            <article class="card reveal" style="--i:1"><span class="k">Step / 02</span><h3>范围与里程碑</h3><p>第一版做什么、不做什么、谁维护内容、怎么验收。</p></article>
+            <article class="card reveal" style="--i:2"><span class="k">Step / 03</span><h3>源码交付与交接</h3><p>主题、部署文档、运维清单；框架 MIT，项目交付范围以合同为准。</p></article>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:28px">
+            <a class="btn btn-primary" href="<?= A::e(A::url($this, '/diagnosis#diagnosis')) ?>">预约架构诊断</a>
+            <a class="btn btn-secondary" href="<?= A::e(A::url($this, '/journal')) ?>">先读指南</a>
+        </div>
+        <?php if ($homeGuides !== []): ?>
+            <div class="reveal" style="margin-top:24px;display:flex;flex-wrap:wrap;gap:10px 22px;align-items:baseline">
+                <span class="mono" style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Guides</span>
+                <?php foreach (array_slice($homeGuides, 0, 3) as $guide): ?>
+                    <?php
+                    $guideSlug = (string)($guide['slug'] ?? '');
+                    $guideTitle = (string)($guide['title'] ?? '');
+                    $guidePath = (string)($guide['canonical_path'] ?? '');
+                    if ($guideTitle === '' || $guidePath === '') {
+                        continue;
+                    }
+                    $guideLabel = $guideShort[$guideSlug] ?? $guideTitle;
+                    ?>
+                    <a class="text-link" href="<?= A::e(A::url($this, $guidePath)) ?>"><?= A::e($guideLabel) ?></a>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<!-- FAQ -->
+<section class="section surface" aria-labelledby="faq-title" weline-code="amayum-homepage-index-13">
+    <div class="w-container" style="max-width:880px">
+        <div class="section-head reveal">
+            <div><p class="eyebrow"><span class="idx">FAQ</span> 常见问题</p><h2 id="faq-title">先回答<br>最常被问的。</h2></div>
+        </div>
+        <?php if ($homeFaqs !== []): ?>
+            <div class="faq-list">
+                <?php foreach (array_values($homeFaqs) as $index => $faq): ?>
+                    <?php
+                    $question = trim((string)($faq['question'] ?? ''));
+                    $answer = trim((string)($faq['answer'] ?? ''));
+                    if ($question === '' || $answer === '') {
+                        continue;
+                    }
+                    ?>
+                    <details class="faq reveal" style="--i:<?= (int)$index ?>">
+                        <summary><?= A::e($question) ?></summary>
+                        <p><?= A::e($answer) ?></p>
+                    </details>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<!-- Final CTA -->
+<div class="w-container section-cta">
+    <section class="cta-band reveal" aria-labelledby="index-cta-title" weline-code="amayum-homepage-index-14">
+        <div><h2 id="index-cta-title">把你的独立站，<br>建在自己的代码上。</h2><p>先看能力矩阵，或直接用 30 分钟把问题说清楚。</p></div>
+        <div class="actions"><a class="btn btn-primary" href="<?= A::e(A::url($this, '/diagnosis#diagnosis')) ?>">预约架构诊断</a><a class="btn btn-ghost-dark" href="<?= A::e(A::url($this, '/commerce')) ?>">看框架能力</a></div>
+    </section>
+</div>
