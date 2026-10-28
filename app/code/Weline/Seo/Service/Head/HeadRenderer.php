@@ -893,6 +893,11 @@ HTML;
         $url = (string) ($context['canonical_url'] ?? $context['url'] ?? '');
         $siteUrl = $this->siteRoot($url);
         $organization = (array) ($context['organization'] ?? []);
+        // Emission authority: an Organization node may never advertise another site's
+        // domain (seeded / cloned SEO config leak across sibling sites).
+        if (isset($organization['url']) && !$this->urlBelongsToSite((string) $organization['url'], $siteUrl)) {
+            $organization['url'] = $siteUrl;
+        }
         $orgId = rtrim($siteUrl, '/') . '/#organization';
         $graph = [
             [
@@ -913,7 +918,9 @@ HTML;
 
         if (!empty($organization['logo'])) {
             $logo = $this->absoluteUrl((string) $organization['logo'], $url !== '' ? $url : $siteUrl);
-            if ($logo !== '') {
+            // Same-host only: a logo pointing at a sibling site's asset would attribute
+            // this site's brand to the wrong domain, so it is dropped rather than echoed.
+            if ($logo !== '' && $this->urlBelongsToSite($logo, $siteUrl)) {
                 $graph[0]['logo'] = $logo;
             }
         }
@@ -2478,6 +2485,25 @@ HTML;
         $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $value = preg_replace('/\s+/u', ' ', $value) ?: $value;
         return trim($value);
+    }
+
+    /**
+     * Whether a candidate URL (absolute or relative) belongs to the site being rendered.
+     * Relative URLs are same-origin by definition.
+     */
+    private function urlBelongsToSite(string $candidate, string $siteUrl): bool
+    {
+        $host = strtolower((string) parse_url($candidate, PHP_URL_HOST));
+        if ($host === '') {
+            return true;
+        }
+        $siteHost = strtolower((string) parse_url($siteUrl, PHP_URL_HOST));
+        if ($siteHost === '') {
+            return true;
+        }
+
+        return (string) preg_replace('/^www\./i', '', $host)
+            === (string) preg_replace('/^www\./i', '', $siteHost);
     }
 
     private function siteRoot(string $url): string
