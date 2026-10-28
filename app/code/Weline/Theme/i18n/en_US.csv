@@ -885,9 +885,13 @@ FAQ/常见问题,FAQ
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
 官方社交媒体,"Official social media"
+面包屑,"bread crumbs"
 分类,Classification
 分类展示图,"Category showcase image"
 查看全部,"View all"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
 商品,Products
 查看商品图,"View product image"
 查看规格图,"View spec images"
@@ -921,15 +925,19 @@ FAQ/常见问题,FAQ
 零售,Retail
 迷你购物车金额小计,"Mini-cart money summary"
 关闭通知,"Close notification"
+抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
+您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
+请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
+SORRY,SORRY
+前往首页继续购物,"Continue shopping on the home page"
+返回上一页,"Go back"
+推荐产品,"Recommended product"
 件商品,"items of goods"
 查看更多,"View more"
 距离结束,"Ends in"
 时,Hour
 分,Minute
 秒,Second
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -982,13 +990,6 @@ NEW,NEW
 下一页,"Next page"
 末页,"Last page"
 指南,Guide
-抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
-您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
-请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
-SORRY,SORRY
-前往首页继续购物,"Continue shopping on the home page"
-返回上一页,"Go back"
-推荐产品,"Recommended product"
 问答,Q&A
 7×24,24/7
 服务暂时不可用,"Service temporarily unavailable"
@@ -1005,7 +1006,6 @@ ERROR,ERROR
 分页导航,"Pagination navigation"
 缺货,"Out of Stock"
 联系询价,联系询价
-面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 我的,mine
 账户及心愿单,"Accounts and Wishlists"
