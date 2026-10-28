@@ -13,6 +13,14 @@ final class StaticBuildPublisher
             throw new \RuntimeException('static_root_missing');
         }
         $id = self::computeBuildId($root);
+        if (StaticBuildId::isFlatMode()) {
+            // flat 契约：URL 不再携带构建段，无需制造整树 12hex 副本；
+            // .build.json 仍写，作为 FPC/缓存键维度与 legacy 兼容判定。
+            self::writeManifest($root, $id);
+            StaticBuildId::forget($root);
+
+            return $id;
+        }
         $target = $root . '/' . $id;
         $marker = $target . '/' . StaticBuildId::BUILD_MARKER;
         if (is_file($marker)) {

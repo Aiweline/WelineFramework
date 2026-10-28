@@ -2,6 +2,30 @@
 
 `@static(...)`、`<css>` 与 `<js>` 继续是模块静态资源的唯一模板入口。
 
+## 目标契约：单权威树 + `?v=` 纯 query 破缓存（flag `dev.static_flat_urls`）
+
+**契约（用户裁定，2026-10-28）**：css/js/图片/字体在磁盘上只有**一份权威树** `pub/static/{稳定路径}`；主题更新 = 原地覆盖新字节；`?v=` 只是浏览器/CDN 的破缓存令牌（**纯 query，不参与磁盘查找**）；任何曾出现在已发出 HTML 里的路径，不得因发布而 404。
+
+开关：`Env::dev('static_flat_urls')`（env.php `dev` 段），判定权威是
+`StaticBuildId::flatUrlsEnabled()` / `isFlatMode()`（测试可用 `setFlatUrlsOverride()` 注入）。
+**flag 即回滚手段**：关闭后恢复路径段世代机制（磁盘布局向前兼容，旧代码仍可读 flat 树）。
+
+flag 开启后的行为收口：
+
+| 环节 | 权威 | flat 行为 |
+|------|------|-----------|
+| URL 生成 | `StaticBuildId::versionedPath()` → `stablePath()` | 只输出 `/static/{稳定路径}`，不再注入 `{12hex}` / `tu-*` / `{code}/v{n}/{deploy}` 路径段；存量版本化路径幂等剥回 flat |
+| HTML 出口 | `StaticAssetHtmlRewriter::normalizeToFlat()` | 占位符解成 flat；DB complicate / 编译模板里残留的版本化 URL 统一剥回 flat |
+| `?v=` 值 | `TraitTemplate` → `theme_static_versions` map | **不变**（这条链本就符合契约） |
+| 主题 promote | `ThemeUpdateBatchService::mirrorThemeStaticToDeploy()` | 原地覆盖 flat `pub/static/{ns}/...`，不写 `{code}/v{n}/{deployId}`，不删兄弟版本目录，不补代次目录 |
+| 整站 swap | `DeployStagingSession::overlayStaticFlat()` | 静态树逐文件同目录原子替换（link/copy→rename），不整树 rename，任一时刻被引用路径都有可读字节；legacy 世代目录不参与覆盖也不删除 |
+| 构建发布 | `StaticBuildPublisher::publish()` | 不再制造 `{12hex}` 整树副本；`.build.json` 仍写，仅作缓存键维度 |
+| GC | `StaticBuildGc::prune()` | **冻结令**：旧世代目录一律不删（只清 `.tmp-*` 中断产物）；磁盘回收留待人工 |
+
+前端 `weline.js resolveStaticPath()` 与 `header/base.phtml` 的 `staticBaseUrl` 在 flat 模式下固定 `/static`。
+
+> legacy（flag 关闭）机制保留在下文「静态产物跨发布保留」一节，仍是未开 flag 站点（含本地默认）的现行链路。
+
 ## PROD 扁平部署（overlay 与 flat 双树）
 
 `deploy:upgrade` 对每个活跃模块的 `view/statics`：**主题 overlay** 仍铺到 `pub/static/{theme.path}/…/view/statics/…`；同时**整树扁平**铺到 `pub/static/{Vendor}/{Module}/…`，与 PROD `Module::` / `resolveStaticPath`（无 theme、无 `view/statics` 段）对齐。既有 `deploy.flat_static.*` Provider 仅为可选补充/兼容，不再是防 404 主路径。
@@ -165,7 +189,11 @@
 **无任何运行时资源**；且全仓无任何代码以 HTTP 方式取 `.scss` / `.less` / `.hbs`。
 `.well-known/` / `media/` / `errors/` 只套拒绝规则、不套白名单（其中文件可能无扩展名）。
 
-## 静态产物跨发布保留（rename-swap 不变量）
+## 静态产物跨发布保留（rename-swap 不变量 · legacy，flag 关闭时生效）
+
+> **flat 契约（`dev.static_flat_urls`=on）下本节整体退场**：单权威树原地逐文件覆盖天然满足
+> 「旧引用永不 404」，`commitSwap` 不再调用 `carryForward`，GC 冻结旧世代目录。
+> 以下内容描述未开 flag 站点的现行链路，并解释 carry/世代目录为何是路径段设计的症状补丁。
 
 ### 事故形态（必须记住）
 
@@ -220,6 +248,10 @@ Cloudflare 侧若存在**强制 HTML Edge TTL 的自定义 Cache Rule**，它会
 因此发布仍是原子的（staging 完整后才 swap），但旧哈希不会随旧树消失。
 `wls.performance.static_carry_retention_days=0` 可显式关闭携带；安全删除场景
 应使用该开关或手工清理 tombstone，而不是依赖「删源文件 = 全站立即消失」。
+
+**根因定位（2026-10 changanhanfu 事故复盘）**：carry 修的不是「需要携带」，而是
+「版本被做成了 URL 路径段 → 磁盘多份世代副本 → 换树后旧 HTML 引用物理消失」。
+flat 契约把版本收回纯 query 后，该症状类别整体消失；carry 仅保留给 legacy 站点续命。
 
 ### 发版闭环（runbook）
 

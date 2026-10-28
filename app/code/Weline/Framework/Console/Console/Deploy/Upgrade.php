@@ -240,8 +240,10 @@ class Upgrade extends CommandAbstract
                 // 主题模块不可用时跳过（不影响主发布）
             }
             // 自愈：主题更新代次目录只有变更文件，旧烘焙页面引用缺失文件会 404。
+            // flat 契约下 URL 不再引用代次目录，无需补齐（且禁写 legacy 树）。
             try {
-                if (class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::class)) {
+                if (!\Weline\Framework\Deploy\StaticBuildId::isFlatMode()
+                    && class_exists(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::class)) {
                     $generation = (string)\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pairSegment();
                     $generation = $generation !== '' ? $generation : (string)\Weline\Framework\Deploy\StaticBuildId::current();
                     $backfill = \Weline\Framework\Deploy\StaticIntegrityGuard::backfillGeneration($staticRoot, $generation);

@@ -28,6 +28,13 @@ final class StaticIntegrityGuard
     public static function healBuild(string $staticRoot, array $required = self::REQUIRED_BUILD_FILES): array
     {
         $root = \rtrim($staticRoot, '/\\');
+        if (StaticBuildId::isFlatMode()) {
+            // flat 契约：权威树即 pub/static 本身，哨兵文件直接对平铺树校验；
+            // 不删除、不重建任何世代目录。
+            $missing = self::missingFiles($root, $required);
+
+            return ['build' => StaticBuildId::current($root), 'rebuilt' => false, 'missing' => $missing];
+        }
         $current = StaticBuildId::current($root);
         if ($current === '') {
             return ['build' => '', 'rebuilt' => false, 'missing' => []];

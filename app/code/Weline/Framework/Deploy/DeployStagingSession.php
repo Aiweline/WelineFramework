@@ -141,6 +141,10 @@ final class DeployStagingSession
 
     /**
      * Rename-swap staging trees onto live paths. On any failure, restore from *.prev.{stamp}.
+     *
+     * flat 契约模式（{@see StaticBuildId::isFlatMode()}）下静态树不整树 rename：
+     * 逐文件同目录原子替换到 live 平铺路径，任一时刻被引用路径都有可读字节；
+     * 仅本次 staging 产物被覆盖，live 独有的历史字节保留（单权威树原地演进）。
      */
     public function commitSwap(): void
     {
@@ -160,6 +164,11 @@ final class DeployStagingSession
                     if ($pair['tree'] === self::TREE_STATIC) {
                         throw new \RuntimeException('deploy_staging_static_empty');
                     }
+                    continue;
+                }
+                if ($pair['tree'] === self::TREE_STATIC && StaticBuildId::isFlatMode()) {
+                    $this->overlayStaticFlat($staging, $live);
+                    $done[] = array_merge($pair, ['flat' => true]);
                     continue;
                 }
                 if (file_exists($prev) || is_dir($prev) || is_link($prev)) {
@@ -254,6 +263,75 @@ final class DeployStagingSession
         $this->deactivate();
     }
 
+    /**
+     * flat 模式静态树提交：staging 产物逐文件同目录原子替换进 live 平铺树。
+     * legacy 世代目录（12hex / tu-* / {code}/v{n}）与 .build.json 不参与覆盖；
+     * live 独有文件一律保留 —— 单权威树只增改不删，旧引用永不 404。
+     */
+    private function overlayStaticFlat(string $staging, string $live): void
+    {
+        $staging = rtrim($staging, '/\\');
+        $live = rtrim($live, '/\\');
+        if (!is_dir($live) && !mkdir($live, 0775, true) && !is_dir($live)) {
+            throw new \RuntimeException('deploy_staging_live_parent_failed:' . self::TREE_STATIC);
+        }
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($staging, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST,
+        );
+        foreach ($iterator as $item) {
+            /** @var \SplFileInfo $item */
+            if (!$item->isFile()) {
+                continue;
+            }
+            $relative = substr($item->getPathname(), strlen($staging) + 1);
+            $normalized = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
+            if ($this->isLegacyGenerationPath($normalized)) {
+                continue;
+            }
+            $target = $live . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+            $dir = dirname($target);
+            if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+                throw new \RuntimeException('deploy_staging_overlay_mkdir_failed:' . $normalized);
+            }
+            $tmp = $target . '.swap-' . $this->stamp;
+            $this->removePath($tmp);
+            if (@link($item->getPathname(), $tmp) || @copy($item->getPathname(), $tmp)) {
+                if (!@rename($tmp, $target)) {
+                    $this->removePath($tmp);
+                    if (!@copy($item->getPathname(), $target)) {
+                        throw new \RuntimeException('deploy_staging_overlay_write_failed:' . $normalized);
+                    }
+                }
+            } elseif (!@copy($item->getPathname(), $target)) {
+                throw new \RuntimeException('deploy_staging_overlay_copy_failed:' . $normalized);
+            }
+        }
+    }
+
+    /** 判断相对路径首段是否为 legacy 世代目录（12hex 构建代 / tu- 批次 / v{n} 主题版本段）。 */
+    private function isLegacyGenerationPath(string $normalizedRelative): bool
+    {
+        $segments = explode('/', $normalizedRelative);
+        // 世代前缀最多三段：{code}/v{n}/{deploy12hex}；Weline/<theme>/<area> 等真实命名空间不误判。
+        $depth = \min(\count($segments) - 1, 2);
+        for ($index = 0; $index <= $depth; $index++) {
+            $segment = $segments[$index];
+            if ($index === 0 && (\preg_match('/^[0-9a-f]{12}$/i', $segment) === 1 || \str_starts_with($segment, 'tu-'))) {
+                return true;
+            }
+            if ($index >= 1 && \preg_match('/^v[0-9]+$/', $segment) === 1) {
+                return true;
+            }
+            if ($index === 2 && \preg_match('/^[0-9a-f]{12}$/i', $segment) === 1
+                && \preg_match('/^v[0-9]+$/', $segments[1]) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** Remove var/deploy/staging when no stamp dirs remain (.DS_Store ignored). */
     private function removeEmptyStagingParent(): void
     {
@@ -323,6 +401,11 @@ final class DeployStagingSession
     {
         for ($i = count($done) - 1; $i >= 0; $i--) {
             $pair = $done[$i];
+            if (!empty($pair['flat'])) {
+                // flat 覆盖是逐文件原子替换，已提交字节均为完整可读产物；
+                // 半途失败不回滚整树（无 prev 可恢复），下一次发布收敛。
+                continue;
+            }
             $live = $pair['live'];
             $staging = $pair['staging'];
             $prev = $pair['prev'];

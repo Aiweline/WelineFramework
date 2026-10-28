@@ -78,6 +78,11 @@ final class ThemeUpdateBatchService
         if ($root === '' || $newDeployId === '' || !\is_dir($root)) {
             return 0;
         }
+        // flat 契约：URL 不依赖世代目录，平铺树由发布管道原地覆盖；
+        // 既不补代次目录，也绝不删除旧世代（边缘旧 HTML 引用必须继续 200）。
+        if (\Weline\Framework\Deploy\StaticBuildId::isFlatMode()) {
+            return 0;
+        }
         $ready = 0;
         $map = self::pointerFileMap();
         foreach ($map as $row) {
@@ -904,11 +909,12 @@ final class ThemeUpdateBatchService
     }
 
     /**
-     * 把代次的主题静态子树镜像到主题世代目录（硬链接覆盖）。
+     * 把代次的主题静态子树镜像到部署树（硬链接覆盖）。
      *
-     * 目标：`/static/{主题 code}/v{版本号}/{构建号}/…`。
-     * 有部署 `.build.json` 时用它；没有时用本批次稳定的 12 位构建号（不写全局 `.build.json`）。
-     * 主题 code 来自主题 path 尾段；版本号取该主题已生效发布版本 version_number。
+     * flat 契约模式：原地覆盖权威平铺树 `pub/static/Weline/{code}/…` 与 `Weline/Theme/…`，
+     * 不制造世代路径目录、不删除任何被引用字节。
+     * 旧模式：目标 `/static/{主题 code}/v{版本号}/{构建号}/…`；有部署 `.build.json` 时用它，
+     * 没有时用本批次稳定的 12 位构建号（不写全局 `.build.json`）。
      */
     private function mirrorThemeStaticToDeploy(string $batchId): void
     {
@@ -933,12 +939,16 @@ final class ThemeUpdateBatchService
             return;
         }
         [$themeCode, $versionNumber] = $pair;
-        $deployRoot = $pubStatic . DIRECTORY_SEPARATOR . $themeCode . DIRECTORY_SEPARATOR
-            . 'v' . $versionNumber . DIRECTORY_SEPARATOR . $deployId;
-        if (!is_dir($batchRoot) || !is_dir($deployRoot)) {
-            if (!is_dir($deployRoot) && !@mkdir($deployRoot, 0775, true) && !is_dir($deployRoot)) {
-                return;
-            }
+        $flatMode = \Weline\Framework\Deploy\StaticBuildId::isFlatMode();
+        $deployRoot = $flatMode
+            ? $pubStatic
+            : $pubStatic . DIRECTORY_SEPARATOR . $themeCode . DIRECTORY_SEPARATOR
+                . 'v' . $versionNumber . DIRECTORY_SEPARATOR . $deployId;
+        if (!is_dir($batchRoot)) {
+            return;
+        }
+        if (!is_dir($deployRoot) && !@mkdir($deployRoot, 0775, true) && !is_dir($deployRoot)) {
+            return;
         }
 
         // 增量镜像：只覆盖本批次真正发布过的文件（避免每次遍历 1.4 万文件）
@@ -947,6 +957,12 @@ final class ThemeUpdateBatchService
             foreach ($changed as $relative) {
                 $from = $batchRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
                 $to = $deployRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+                if ($flatMode) {
+                    $to = $this->flatMirrorTarget($pubStatic, $relative, $themeCode);
+                    if ($to === null) {
+                        continue;
+                    }
+                }
                 if (!is_file($from)) {
                     if (is_file($to)) {
                         @unlink($to);
@@ -964,8 +980,10 @@ final class ThemeUpdateBatchService
                     @copy($from, $to);
                 }
             }
-            $this->overlayCompiledThemeUi($batchRoot, $deployRoot);
-            self::retireStaleThemePairDirs($pubStatic, $themeCode, $versionNumber, $deployId);
+            if (!$flatMode) {
+                $this->overlayCompiledThemeUi($batchRoot, $deployRoot);
+                self::retireStaleThemePairDirs($pubStatic, $themeCode, $versionNumber, $deployId);
+            }
 
             return;
         }
@@ -987,10 +1005,39 @@ final class ThemeUpdateBatchService
             if ($item !== 'Theme' && !$this->isDesignNamespace($item)) {
                 continue;
             }
+            if ($flatMode) {
+                // 平铺树原地覆盖：目标即 pub/static/Weline/{item}
+                $this->overlayTreeTo($src, $pubStatic . DIRECTORY_SEPARATOR . 'Weline' . DIRECTORY_SEPARATOR . $item);
+                continue;
+            }
             $this->overlayTreeTo($src, $deployRoot . DIRECTORY_SEPARATOR . 'Weline' . DIRECTORY_SEPARATOR . $item);
         }
-        $this->overlayCompiledThemeUi($batchRoot, $deployRoot);
-        self::retireStaleThemePairDirs($pubStatic, $themeCode, $versionNumber, $deployId);
+        if (!$flatMode) {
+            $this->overlayCompiledThemeUi($batchRoot, $deployRoot);
+            self::retireStaleThemePairDirs($pubStatic, $themeCode, $versionNumber, $deployId);
+        }
+    }
+
+    /**
+     * flat 模式下变更清单相对路径 → 平铺树目标；非主题自有子树返回 null（不发）。
+     * 清单相对路径形如 `Weline/Theme/...` 或 `Weline/{code}/...`。
+     *
+     * @return string|null
+     */
+    private function flatMirrorTarget(string $pubStatic, string $relative, string $themeCode): ?string
+    {
+        $normalized = ltrim(str_replace('\\', '/', $relative), '/');
+        if (!str_starts_with($normalized, 'Weline/')
+            || str_contains($normalized, '..')
+            || str_contains($normalized, "//")) {
+            return null;
+        }
+        $second = explode('/', $normalized)[1] ?? '';
+        if ($second !== 'Theme' && $second !== $themeCode && !$this->isDesignNamespace($second)) {
+            return null;
+        }
+
+        return $pubStatic . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $normalized);
     }
 
     /**

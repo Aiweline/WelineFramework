@@ -133,7 +133,9 @@ try {
     $staticBuildId = \Weline\Framework\Deploy\StaticBuildId::current();
 } catch (\Throwable) {
 }
-$runtime['staticBaseUrl'] = $staticBuildId !== '' ? '/static/' . $staticBuildId : '';
+$runtime['staticBaseUrl'] = \Weline\Framework\Deploy\StaticBuildId::flatUrlsEnabled()
+    ? '/static'
+    : ($staticBuildId !== '' ? '/static/' . $staticBuildId : '');
 $runtime['assetVersion'] = $staticBuildId !== '' ? $staticBuildId : ($runtime['assetVersion'] ?? '');
 
 $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP

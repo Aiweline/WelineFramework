@@ -25,6 +25,9 @@ final class StaticAssetHtmlRewriter
         if ($html === '' || (!\str_contains($html, '/static/') && !\str_contains($html, self::PAIR_PLACEHOLDER) && !\str_contains($html, self::DEPLOY_PLACEHOLDER))) {
             return $html;
         }
+        if (StaticBuildId::flatUrlsEnabled()) {
+            return self::normalizeToFlat($html);
+        }
         if (\str_contains($html, self::PAIR_PLACEHOLDER) || \str_contains($html, self::DEPLOY_PLACEHOLDER)) {
             $html = self::resolvePlaceholders($html, $buildId);
         }
@@ -45,6 +48,34 @@ final class StaticAssetHtmlRewriter
         return \preg_replace_callback(
             '#(url\(\s*["\']?)(/static/[^"\')\s]+)(["\']?\s*\))#i',
             $rewrite,
+            $html,
+        ) ?? $html;
+    }
+
+    /**
+     * flat 契约出口归一：占位符解成 /static，并把 HTML 里一切版本化路径段
+     * （{12hex} / tu-* / {code}/v{n}/{deploy}）剥回稳定 flat 路径。幂等。
+     */
+    private static function normalizeToFlat(string $html): string
+    {
+        $flat = static fn (array $match): string => $match[1]
+            . StaticBuildId::stablePath($match[2])
+            . $match[3];
+
+        $html = \str_replace(
+            ['/static/' . self::PAIR_PLACEHOLDER . '/', '/static/' . self::DEPLOY_PLACEHOLDER . '/'],
+            '/static/',
+            $html,
+        );
+        $html = \preg_replace_callback(
+            '#((?:src|href)\s*=\s*["\'])(/static/[^"\']*)(["\'])#i',
+            $flat,
+            $html,
+        ) ?? $html;
+
+        return \preg_replace_callback(
+            '#(url\(\s*["\']?)(/static/[^"\')\s]+)(["\']?\s*\))#i',
+            $flat,
             $html,
         ) ?? $html;
     }

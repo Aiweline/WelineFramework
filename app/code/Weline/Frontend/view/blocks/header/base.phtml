@@ -169,7 +169,10 @@ $runtime = [
     'miniCartQtyHitCss' => PublicStaticUrl::fromDevWebPath('/Weline/Cart/view/statics/css/mini-cart-drawer-qty-hit.css'),
     'storefrontPlaceholderUrl' => PublicStaticUrl::fromDevWebPath('/Weline/Theme/view/statics/images/storefront-placeholder/default.svg'),
     'assetVersion' => $frontendAssetVersion,
-    'staticBaseUrl' => $staticBuildId !== '' ? '/static/' . $staticBuildId : '',
+    // flat 契约下静态根恒为 /static（无构建号路径段）；旧模式仍注入 /static/{buildId}。
+    'staticBaseUrl' => \Weline\Framework\Deploy\StaticBuildId::flatUrlsEnabled()
+        ? '/static'
+        : ($staticBuildId !== '' ? '/static/' . $staticBuildId : ''),
     'deployVersion' => $deployVersion,
     'workerBuildId' => $workerBuildId,
     'themePublishedVersionId' => $themePublishedVersionId,

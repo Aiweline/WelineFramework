@@ -43,6 +43,11 @@ final class StaticBuildGc
                 }
                 continue;
             }
+            if (StaticBuildId::isFlatMode()) {
+                // flat 契约冻结令（用户裁定）：旧世代目录只读保留、一律不删，
+                // 边缘最老 HTML 的引用必须继续 200；回收留给人工处置。
+                continue;
+            }
             if (\preg_match('/^[0-9a-f]{12}$/', $name) !== 1 || !is_file($path . '/' . StaticBuildId::BUILD_MARKER)) {
                 continue;
             }

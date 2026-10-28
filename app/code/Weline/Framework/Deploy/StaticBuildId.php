@@ -76,12 +76,82 @@ final class StaticBuildId
         return '/static/' . $buildId;
     }
 
+    /** 进程内契约开关覆盖（测试/单请求强制）；null = 读 Env dev 配置。 */
+    private static ?bool $flatUrlsOverride = null;
+
+    public static function setFlatUrlsOverride(?bool $enabled): void
+    {
+        self::$flatUrlsOverride = $enabled;
+    }
+
+    /**
+     * 契约开关（灰度）：静态 URL 收敛为「单权威 flat 树 + ?v= 纯 query 破缓存」。
+     * 开启后 {@see versionedPath()} 只做剥段归一，不再注入构建号/主题对路径段；
+     * 关闭即回滚到旧的路径段世代形态。
+     */
+    public static function flatUrlsEnabled(): bool
+    {
+        if (self::$flatUrlsOverride !== null) {
+            return self::$flatUrlsOverride;
+        }
+        try {
+            return (bool) \Weline\Framework\App\Env::dev('static_flat_urls', false);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /** {@see flatUrlsEnabled()} 的语义别名：flat 单权威树模式下发布侧应原地覆盖、禁删被引用目录。 */
+    public static function isFlatMode(): bool
+    {
+        return self::flatUrlsEnabled();
+    }
+
+    /**
+     * 剥掉 URL 中的世代路径段，还原 flat 权威树路径。
+     * 识别 12hex 构建段、tu- 批次段、主题对段（code/vN/deploy）三类前缀；
+     * 非世代形状原样返回。幂等。query 保留。
+     */
+    public static function stablePath(string $path): string
+    {
+        if (!\str_starts_with($path, '/static/')) {
+            return $path;
+        }
+        if (\str_contains($path, '/__preview/') || \str_starts_with($path, '/static/__preview')) {
+            return $path;
+        }
+        [$urlPath, $query] = \str_contains($path, '?') ? \explode('?', $path, 2) : [$path, null];
+        $trailingSlash = \str_ends_with($urlPath, '/');
+        $parts = \explode('/', trim($urlPath, '/'));
+        // $parts[0] === 'static'
+        $first = $parts[1] ?? '';
+        $strip = 0;
+        if (\preg_match('/^[0-9a-f]{12}$/i', $first) === 1 || \str_starts_with($first, 'tu-')) {
+            $strip = 1;
+        } elseif (\preg_match('#^v[0-9]+$#', $parts[2] ?? '') === 1
+            && ($parts[3] ?? '') !== '' && \preg_match('#^[0-9a-f]{12}$#i', $parts[3]) === 1) {
+            // {code}/v{n}/{deploy12hex} 三段世代前缀
+            $strip = 3;
+        }
+        if ($strip === 0) {
+            return $path;
+        }
+        $rest = \implode('/', \array_slice($parts, 1 + $strip));
+        $result = '/static/' . $rest . ($rest !== '' && $trailingSlash ? '/' : '');
+
+        return $query === null ? $result : $result . '?' . $query;
+    }
+
     public static function versionedPath(string $path, ?string $buildId = null): string
     {
         // 预览静态命名空间（/static/__preview/<key>/… 或 /static/<ns>/__preview/…）不可被构建号/代次前缀改写，
         // 否则预览会丢 __preview 段、看到正式资源。
         if (\str_contains($path, '/__preview/') || \str_starts_with($path, '/static/__preview')) {
             return $path;
+        }
+        if (self::flatUrlsEnabled()) {
+            // 单权威树契约：URL 只认稳定 flat 路径，破缓存交给 ?v= query；不再制造路径段世代。
+            return self::stablePath($path);
         }
         if ($buildId === null) {
             $deploy = self::current();
