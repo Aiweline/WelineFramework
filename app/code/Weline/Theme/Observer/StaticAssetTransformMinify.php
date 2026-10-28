@@ -32,18 +32,8 @@ class StaticAssetTransformMinify implements ObserverInterface
         $pathForCheck = $targetPath !== '' ? $targetPath : ('file.' . $extension);
 
         if (defined('DEV') && DEV) {
-            // DEV：不压缩，但超预算立即告警，让体积问题在开发期暴露。
-            if ($this->minifier->shouldMinify($pathForCheck)) {
-                $size = strlen((string)$data->getData('content'));
-                if ($size > StaticAssetMinifier::DEV_ASSET_WARN_BYTES && function_exists('w_log_warning')) {
-                    w_log_warning(sprintf(
-                        '[Theme Minify] %s is %d bytes in DEV (budget %d); minify or split before deploy.',
-                        $pathForCheck,
-                        $size,
-                        StaticAssetMinifier::DEV_ASSET_WARN_BYTES
-                    ));
-                }
-            }
+            // DEV：不压缩内容，但超预算立即告警，让体积问题在开发期暴露。
+            $this->assertDevBudget($pathForCheck, (string)$data->getData('content'));
 
             return;
         }
@@ -60,5 +50,31 @@ class StaticAssetTransformMinify implements ObserverInterface
 
         $data->setData('content', $minified);
         $data->setData('transformed', true);
+    }
+
+    /**
+     * DEV 预算断言：仅 css/js/mjs（且非 `.min.*`）、内容 ≥ 1KB 时检查，超 100KB 记 error。
+     */
+    private function assertDevBudget(string $path, string $content): void
+    {
+        if (!$this->minifier->shouldMinify($path)) {
+            return;
+        }
+
+        $size = strlen($content);
+        if ($size < 1024 || $size <= StaticAssetMinifier::DEV_ASSET_WARN_BYTES) {
+            return;
+        }
+
+        if (!function_exists('w_log_error')) {
+            return;
+        }
+
+        w_log_error(sprintf(
+            '[Theme Minify] %s is %d bytes in DEV (budget %d); minify or split before deploy.',
+            $path,
+            $size,
+            StaticAssetMinifier::DEV_ASSET_WARN_BYTES
+        ));
     }
 }

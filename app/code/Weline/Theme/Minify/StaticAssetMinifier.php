@@ -34,6 +34,10 @@ final class StaticAssetMinifier
         if (preg_match('/\.(map|d\.ts)$/', $basename) === 1) {
             return false;
         }
+        // data: URIs are inline payloads, not files.
+        if (str_starts_with($path, 'data:')) {
+            return false;
+        }
 
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
 

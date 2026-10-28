@@ -23,8 +23,8 @@
 
 ## DEV 预算告警（2026-10 架构优化）
 
-`StaticAssetMinifier::shouldMinify()` 进一步排除 `*.map` / `*.d.ts`（非运行时负载）。
-DEV 环境不压缩，但 `StaticAssetTransformMinify` 会对 > `DEV_ASSET_WARN_BYTES`（102,400 字节）
-的 css/js/mjs 打 warning：体积问题必须在开发期暴露，而不是等上线后看 PageSpeed。
+`StaticAssetMinifier::shouldMinify()` 进一步排除 `*.map` / `*.d.ts` / `data:`（非运行时负载）。
+DEV 环境不压缩，但 `StaticAssetTransformMinify` 会对 > `StaticAssetMinifier::DEV_ASSET_WARN_BYTES`（102,400 字节）
+的 css/js/mjs（`.min.*` 与 <1KB 除外）打 **error**：体积问题必须在开发期暴露，而不是等上线后看 PageSpeed。
 
 head 侧的硬门禁不在本文件：见 `theme-spec-gates.md` S2（head 只允许 tokens/后台阻塞）。
