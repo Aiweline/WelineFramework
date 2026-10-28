@@ -309,6 +309,31 @@ $this->setData('article', $articleFacts);
 
 ---
 
+## 跨站种子数据守卫（同站校验，2026-10-28）
+
+克隆/种子出来的站点常把原站（如 `amayum.com`）的 SEO 配置整套复制过来，导致本站在
+`og:image`、`twitter:image`、JSON-LD `Organization.url`/`logo` 上给别家品牌背书。
+
+**规约：SEO 输出一律同站。** 三道口子都已硬校验，新增出口必须复用：
+
+| 出口 | 位置 | 行为 |
+|------|------|------|
+| `Organization.url` / `logo` | `PageSeoContextResolver::normalizeOrganization()` | 跨站则回落本站根 / 用站点绑定 logo，仍非法则删字段 |
+| `@graph` 发射口 | `HeadRenderer::buildGraph()`（`urlBelongsToSite()`） | 二次兜底：跨站 url 强制改本站根，跨站 logo 不输出 |
+| `og:image` / `twitter:image` | `PageSeoContextResolver`（解析后）+ `HeadRenderer::renderSocial()`（发射口） | 跨站分享图直接丢弃（宁缺不错） |
+
+判定口径：`parse_url(HOST)` 后去掉 `www.` 比较；相对路径视为同站。生产入口永远 443，
+内部监听端口（如 `:9444`）不得进入 canonical/og:url（`PROD` 分支剥端口）。
+
+**注意**：`og:image` 缺失时 `twitter:card` 降级为 `summary`。站点要拿回大图卡片，应在站点
+自己的 SEO 配置里填**本站域名**下的 1200×630 图，而不是恢复跨站种子图。
+
+改动这类守卫后线上不生效，先按
+[theme-spec-gates.md](../../Theme/doc/theme-spec-gates.md#上线后改动不生效固定排查顺序2026-10-28-线上取证)
+的顺序排查：极可能是 `theme.storefront_head` 持久池仍在返回旧 head。
+
+---
+
 ## 相关文档
 
 - [SeoProfileExtensionGuide.md](SeoProfileExtensionGuide.md) — 英文契约与 Provider 完整示例

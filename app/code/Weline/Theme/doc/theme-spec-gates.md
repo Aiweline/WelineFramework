@@ -80,3 +80,29 @@ php bin/w theme:compile spec
 S5/S6 当前只对「首屏标记」的 `<img>` 硬校验；普通正文图片暂为软告警，避免一次性
 把历史模板全部打红。预算收紧（如 14,336 → 10,240）需要同步改常量与
 `LayoutCriticalBudgetTest`，不得只改文档。
+
+## 上线后改动不生效：固定排查顺序（2026-10-28 线上取证）
+
+线上出现「代码已 rsync、`php -l` 通过、md5 一致，但页面仍是旧输出」时，按下面顺序排查，
+**不要**先怀疑代码逻辑：
+
+1. **FPC 叶**：`generated/html/generations/*`（`live` 软链指向当前代）。清叶只解决整页 HTML 缓存。
+2. **店面持久缓存池**（这才是 headline 常见根因）：`theme.storefront_head`、
+   `theme.storefront_head_assets`、`theme.storefront_homepage_layout_html` 存在 WLS 持久池
+   （`weline_theme_storefront_chrome` 等）里，key 由 theme 身份 + publish 世代决定。
+   `theme:update` 报 `theme_update_batch_already_current` 时代次不变 → key 不变 → 旧 head
+   继续被命中，`?w_fpc_pierce=` 与清 FPC 都无效。
+   必须执行：`php bin/w cache:clear -f --no-warm`（`-f` 含持久池；`--no-warm` 避免预热失败
+   导致退出码 2）。
+3. **框架编译产物**：`php bin/w framework:compile`。`server:start` 会预检产物，产物过期会
+   直接拒绝启动（"框架编译产物缺失或已过期"）。
+4. **WLS 进程**：`server:restart -r` 只做 worker 滚动重启，**master 常驻**（opcache 共享内存
+   不重置）；需要彻底换代码用 `server:stop` + `framework:compile` + `server:start`。
+
+取证（同一份文件、同一台机）：清池前首页 JSON-LD 为 `"url": "https://amayum.com"` +
+跨站 `logo`；执行 `cache:clear -f --no-warm` 后立即变为本站域名、跨站 `logo` 消失。
+
+固定发布链（手工 rsync 场景）：`rsync 目标文件` → `chown` → `framework:compile` →
+`cache:clear -f --no-warm` → 清 FPC 叶 → 公网冷请求验收。生产 `core:update -b dev` 在有
+脏工作区时会拒绝（`-f` 会强制覆盖），不要用 `-f`，改走精准 rsync + 上面的链。
+
