@@ -50,7 +50,7 @@ class Pwa extends FrontendController
     public function sw(): Response
     {
         $js = <<<'JS'
-const CACHE = 'weline-shell-v2';
+const CACHE = 'weline-shell-v3';
 const PRECACHE = ['/manifest.webmanifest', '/pwa-icon-192.png'];
 self.addEventListener('install', (e) => {
   self.skipWaiting();
@@ -69,13 +69,19 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin) return;
   const isAsset = /\.(?:css|js|mjs|png|jpe?g|webp|avif|svg|ico|woff2?|ttf|otf)(?:$|\?)/i.test(url.pathname);
   if (isAsset) {
-    // 静态资源：缓存优先，后台刷新
+    // 静态资源：网络优先（带条件校验），断网回缓存。
+    // 站点静态资源 URL 不带内容指纹（_weline_dev 不随文件改动变化），
+    // 旧策略「缓存优先」会把改过的 CSS/JS 永久钉在旧字节上；
+    // cache:'no-cache' 让每次请求都与服务端 ETag/Last-Modified 校验，
+    // 未改动时是 304，改动后立即拿到新内容。
     e.respondWith(
-      caches.match(req).then((hit) => hit || fetch(req).then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+      fetch(req, { cache: 'no-cache' }).then((res) => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+        }
         return res;
-      }))
+      }).catch(() => caches.match(req).then((hit) => hit || Response.error()))
     );
     return;
   }

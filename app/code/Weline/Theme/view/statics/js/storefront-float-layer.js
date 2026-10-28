@@ -1,12 +1,16 @@
 /**
  * Storefront float-layer:
  * 1) adopt fallback — move legacy body-sibling music/CS into start/end slots
- * 2) edge dock — collapse each occupied slot to the viewport edge with localStorage
+ * 2) edge dock — collapse every occupied slot to its viewport edge with localStorage
+ *
+ * Edge dock is attribute-driven: a slot opts in with `data-float-dock`
+ * (`left|right|up|down`). All eight directions share this one code path.
  *
  * Owning module: Weline_Theme (mechanism). Widgets stay content-only.
  * Marker: storefront-float-edge-dock-v1
  * Marker: storefront-float-edge-transform-clear-v1
  * Marker: storefront-float-load-on-layer-v1
+ * Marker: storefront-float-edge-dock-directions-v2
  */
 (function (global) {
   'use strict';
@@ -14,7 +18,7 @@
   var LAYER_SEL = '#w-storefront-float-layer';
   var START_SEL = '[data-float-slot="start"]';
   var END_SEL = '[data-float-slot="end"]';
-  var SIDE_SEL = '[data-float-slot="side"]';
+  var DOCK_SEL = '[data-float-dock]';
   var CS_SEL = '#customer-service-widget, .customer-service-widget';
   var STORAGE_PREFIX = 'weline.storefrontFloat.edgeCollapsed.';
   var boundSlots = typeof WeakSet === 'function' ? new WeakSet() : null;
@@ -30,8 +34,62 @@
     if (!root) {
       return null;
     }
-    var sel = which === 'end' ? END_SEL : which === 'side' ? SIDE_SEL : START_SEL;
-    return root.querySelector(sel);
+    return root.querySelector(which === 'end' ? END_SEL : START_SEL);
+  }
+
+  function dockSlots() {
+    var root = layer();
+    if (!root) {
+      return [];
+    }
+    // `data-float-dock` is the one opt-in attribute. Legacy `data-float-slot`
+    // and published `data-slot-id` shells are normalised so old cached pages
+    // keep their × without a rebuild.
+    return root.querySelectorAll(
+      '.w-storefront-float-layer__slot[data-float-dock], ' +
+        '.w-storefront-float-layer__slot[data-float-slot], ' +
+        '.w-storefront-float-layer__slot[data-slot-id]'
+    );
+  }
+
+  function dockDir(slotEl) {
+    return (slotEl.getAttribute('data-float-dock') || '').toLowerCase();
+  }
+
+  function inferDockDir(slotEl) {
+    var legacy = (slotEl.getAttribute('data-float-slot') || '').toLowerCase();
+    if (legacy === 'end' || legacy === 'side') {
+      return 'right';
+    }
+    if (legacy === 'start') {
+      return 'left';
+    }
+    var id = (slotEl.getAttribute('data-slot-id') || '').toLowerCase();
+    if (/-top-center$/.test(id)) {
+      return 'up';
+    }
+    if (/-bottom-center$/.test(id)) {
+      return 'down';
+    }
+    if (/-end$|-side$/.test(id)) {
+      return 'right';
+    }
+    if (/-start$/.test(id)) {
+      return 'left';
+    }
+    return '';
+  }
+
+  function ensureDockDir(slotEl) {
+    var dir = dockDir(slotEl);
+    if (dir === 'left' || dir === 'right' || dir === 'up' || dir === 'down') {
+      return dir;
+    }
+    dir = inferDockDir(slotEl);
+    if (dir !== '') {
+      slotEl.setAttribute('data-float-dock', dir);
+    }
+    return dir;
   }
 
   function alreadyInSlot(el, slotEl) {
@@ -85,52 +143,50 @@
     }
   }
 
-  function storageKey(side) {
-    // Each slot keeps its own state: collapsing side must not collapse start.
-    // Marker: storefront-float-edge-storage-key-v2
-    return STORAGE_PREFIX + (side === 'end' || side === 'side' ? side : 'start');
+  function storageKey(slotEl) {
+    // Each container keeps its own state: collapsing one must not collapse
+    // another. Marker: storefront-float-edge-storage-key-v3
+    var id = slotEl.getAttribute('data-slot-id') || '';
+    if (id === '') {
+      id = slotEl.getAttribute('data-float-slot') || dockDir(slotEl) || 'start';
+    }
+    return STORAGE_PREFIX + id;
   }
 
-  function readStoredCollapsed(side) {
+  function readStoredCollapsed(slotEl) {
     try {
-      return !!(global.localStorage && global.localStorage.getItem(storageKey(side)) === '1');
+      return !!(global.localStorage && global.localStorage.getItem(storageKey(slotEl)) === '1');
     } catch (e) {
       return false;
     }
   }
 
-  function writeStoredCollapsed(side, collapsed) {
+  function writeStoredCollapsed(slotEl, collapsed) {
     try {
       if (!global.localStorage) {
         return;
       }
       if (collapsed) {
-        global.localStorage.setItem(storageKey(side), '1');
+        global.localStorage.setItem(storageKey(slotEl), '1');
       } else {
-        global.localStorage.removeItem(storageKey(side));
+        global.localStorage.removeItem(storageKey(slotEl));
       }
     } catch (e) {
       /* ignore quota / private mode */
     }
   }
 
-  function sideOf(slotEl) {
-    var raw = (slotEl.getAttribute('data-float-slot') || 'start').toLowerCase();
-    return raw === 'end' || raw === 'side' ? raw : 'start';
-  }
-
   function applyShift(slotEl, collapsed) {
-    var side = sideOf(slotEl);
-    // Expanded: clear inline transform. A leftover identity translate still
-    // creates a containing block so mobile CS position:fixed panels size to the
-    // FAB slot and appear to vanish. Collapsed: class CSS owns ±100% shift.
+    // Collapsed transforms live in CSS keyed by `data-float-dock`, so every
+    // direction (including base translateY(-50%) containers) composes without
+    // per-side JS. Expanded must clear any inline transform: a leftover
+    // identity translate still creates a containing block so mobile CS
+    // position:fixed panels size to the FAB slot and appear to vanish.
     // Marker: storefront-float-edge-transform-clear-v1
     if (!collapsed) {
       slotEl.style.transform = '';
       slotEl.style.removeProperty('transform');
-      return;
     }
-    slotEl.style.transform = side === 'end' ? 'translateX(100%)' : side === 'side' ? 'translateY(-50%) translateX(100%)' : 'translateX(-100%)';
   }
 
   function slotHasDockableContent(slotEl) {
@@ -138,19 +194,28 @@
     if (!body) {
       return false;
     }
-    // Real float widgets only. Empty widget-wrapper + data-store-music-skipped
-    // stubs must NOT count — otherwise an orphan × sits on the Cookie bar.
-    // Marker: storefront-float-dock-real-content-v1
-    return !!body.querySelector(
-      '.w-store-music-host[data-store-music-host], ' +
-        '.w-store-music[data-store-music]:not([hidden]):not([data-store-music-skipped]), ' +
-        '.customer-service-widget, ' +
-        '[data-float-side-widget]'
-    );
+    var nodes = body.querySelectorAll('*');
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      if (el.closest('[data-float-edge-chrome]')) {
+        continue;
+      }
+      if (el.getAttribute('data-weline-mount-state') === 'empty') {
+        continue;
+      }
+      // Real rendered content only: empty shells / skipped stubs are zero-size
+      // and must NOT count, otherwise an orphan × sits on the cookie bar.
+      // Marker: storefront-float-dock-real-content-v2
+      var rect = el.getBoundingClientRect();
+      if (rect.width > 1 || rect.height > 1) {
+        return true;
+      }
+    }
+    return false;
   }
 
   function ensureChrome(slotEl) {
-    var side = sideOf(slotEl);
+    var dir = ensureDockDir(slotEl);
     var body = edgeBody(slotEl);
     if (!body) {
       body = document.createElement('div');
@@ -175,7 +240,7 @@
       chrome = document.createElement('div');
       chrome.className = 'w-storefront-float-edge__chrome';
       chrome.setAttribute('data-float-edge-chrome', '');
-      chrome.setAttribute('data-float-edge-side', side);
+      chrome.setAttribute('data-float-edge-dir', dir);
 
       var labels = resolveEdgeLabels(slotEl);
       var dismissLabel = labels.dismiss;
@@ -185,7 +250,7 @@
       dismiss.type = 'button';
       dismiss.className = 'w-storefront-float-edge__dismiss';
       dismiss.setAttribute('data-float-edge-dismiss', '');
-      dismiss.setAttribute('data-testid', 'storefront-float-edge-dismiss-' + side);
+      dismiss.setAttribute('data-testid', 'storefront-float-edge-dismiss-' + (slotEl.getAttribute('data-slot-id') || dir));
       dismiss.setAttribute('aria-label', dismissLabel);
       dismiss.title = dismissLabel;
       dismiss.innerHTML = '<span aria-hidden="true">×</span>';
@@ -194,17 +259,19 @@
       recall.type = 'button';
       recall.className = 'w-storefront-float-edge__recall';
       recall.setAttribute('data-float-edge-recall', '');
-      recall.setAttribute('data-testid', 'storefront-float-edge-recall-' + side);
+      recall.setAttribute('data-testid', 'storefront-float-edge-recall-' + (slotEl.getAttribute('data-slot-id') || dir));
       recall.setAttribute('aria-label', recallLabel);
       recall.title = recallLabel;
       recall.innerHTML =
         '<span class="w-storefront-float-edge__recall-icon" aria-hidden="true">' +
-        (side === 'start' ? '›' : '‹') +
+        recallGlyph(dir) +
         '</span>';
 
       chrome.appendChild(dismiss);
       chrome.appendChild(recall);
       slotEl.insertBefore(chrome, body);
+    } else {
+      chrome.setAttribute('data-float-edge-dir', dir);
     }
 
     return {
@@ -213,6 +280,16 @@
       dismiss: chrome.querySelector('[data-float-edge-dismiss]'),
       recall: chrome.querySelector('[data-float-edge-recall]'),
     };
+  }
+
+  function recallGlyph(dir) {
+    if (dir === 'up') {
+      return '▾';
+    }
+    if (dir === 'down') {
+      return '▴';
+    }
+    return dir === 'left' ? '›' : '‹';
   }
 
   function readRuntimeFloatEdge() {
@@ -282,7 +359,7 @@
   }
 
   function setCollapsed(slotEl, collapsed, persist) {
-    var side = sideOf(slotEl);
+    var dir = ensureDockDir(slotEl);
     var parts = ensureChrome(slotEl);
     applyEdgeLabels(slotEl);
     var labels = resolveEdgeLabels(slotEl);
@@ -315,12 +392,12 @@
       parts.recall.setAttribute('aria-label', recallLabel);
       var icon = parts.recall.querySelector('.w-storefront-float-edge__recall-icon');
       if (icon) {
-        icon.textContent = side === 'start' ? '›' : '‹';
+        icon.textContent = recallGlyph(dir);
       }
     }
 
     if (persist !== false) {
-      writeStoredCollapsed(side, collapsed);
+      writeStoredCollapsed(slotEl, collapsed);
     }
   }
 
@@ -383,11 +460,10 @@
     if (chrome) {
       chrome.hidden = false;
     }
-    var side = sideOf(slotEl);
-    var want = readStoredCollapsed(side);
+    var want = readStoredCollapsed(slotEl);
     // CS chat is slot-anchored absolute; still expand end when open so a
     // collapsed slot (visibility:hidden body) cannot hide the in-slot panel.
-    if (side === 'end' && endHasOpenCustomerService(slotEl)) {
+    if (slotEl.getAttribute('data-float-slot') === 'end' && endHasOpenCustomerService(slotEl)) {
       want = false;
     }
     var is = slotEl.classList.contains('is-edge-collapsed');
@@ -401,9 +477,10 @@
   }
 
   function syncDocks() {
-    syncDock(slot('start'));
-    syncDock(slot('end'));
-    syncDock(slot('side'));
+    var slots = dockSlots();
+    for (var i = 0; i < slots.length; i++) {
+      syncDock(slots[i]);
+    }
   }
 
   function sync() {
@@ -428,6 +505,8 @@
     var run = function () {
       syncScheduled = false;
       sync();
+      // Footer height changes when widgets mount/expand; keep the clearance exact.
+      measureFooterLift();
     };
     if (typeof global.requestAnimationFrame === 'function') {
       global.requestAnimationFrame(run);
@@ -458,7 +537,97 @@
     );
   }
 
+  function measureHeaderOffset() {
+    var header = document.querySelector('[data-testid="ca-header"], .ca-header, header');
+    if (!header) {
+      return;
+    }
+    var rect = header.getBoundingClientRect();
+    if (rect.height <= 0) {
+      return;
+    }
+    // Top slots anchor below the real chrome (announce bar + header). The CSS
+    // fallback (4.5rem) only knows the header itself, so any announce/topbar
+    // above it made the slot overlap the header.
+    // Marker: storefront-float-header-offset-v1
+    var bottom = rect.bottom + (global.scrollY || global.pageYOffset || 0);
+    if (bottom > 0) {
+      document.documentElement.style.setProperty(
+        '--weline-header-height',
+        Math.round(bottom) + 'px'
+      );
+    }
+  }
+
+  // Footer clearance: a fixed float must never sit on top of footer content.
+  // While the footer is in view the layer's bottom inset is raised to the
+  // footer's viewport top, so bottom-anchored slots stop above the footer.
+  // Marker: storefront-float-footer-clearance-v1
+  var footerLiftScheduled = false;
+
+  function measureFooterLift() {
+    var layerEl = layer();
+    if (!layerEl) {
+      return;
+    }
+    var footer = document.querySelector('footer, [data-testid="ca-footer"]');
+    var lift = 0;
+    if (footer) {
+      var viewport = global.innerHeight || document.documentElement.clientHeight || 0;
+      var clearance =
+        parseFloat(
+          global.getComputedStyle(layerEl).getPropertyValue('--weline-product-sticky-purchase-clearance')
+        ) || 0;
+      lift = Math.round(viewport - clearance - footer.getBoundingClientRect().top);
+      if (lift < 0) {
+        lift = 0;
+      } else if (lift > viewport) {
+        lift = viewport;
+      }
+    }
+    if (lift > 0) {
+      layerEl.style.transition = 'none';
+      layerEl.style.bottom =
+        'calc(var(--weline-product-sticky-purchase-clearance, 0px) + ' + lift + 'px)';
+    } else {
+      layerEl.style.removeProperty('transition');
+      layerEl.style.removeProperty('bottom');
+    }
+  }
+
+  function scheduleFooterLift() {
+    if (footerLiftScheduled) {
+      return;
+    }
+    footerLiftScheduled = true;
+    var run = function () {
+      footerLiftScheduled = false;
+      measureFooterLift();
+    };
+    if (typeof global.requestAnimationFrame === 'function') {
+      global.requestAnimationFrame(run);
+    } else {
+      setTimeout(run, 16);
+    }
+  }
+
   function boot() {
+    measureHeaderOffset();
+    measureFooterLift();
+    global.addEventListener('resize', function () {
+      measureHeaderOffset();
+      measureFooterLift();
+    });
+    global.addEventListener('scroll', scheduleFooterLift, { passive: true });
+    if (document.readyState === 'complete') {
+      global.setTimeout(measureHeaderOffset, 300);
+      global.setTimeout(measureFooterLift, 300);
+    } else {
+      global.addEventListener('load', function () {
+        global.setTimeout(measureHeaderOffset, 300);
+        global.setTimeout(measureFooterLift, 300);
+      }, { once: true });
+    }
     sync();
     bindCsOpenClearsEndTransform();
     var observeOptions = {
