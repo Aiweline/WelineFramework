@@ -34,6 +34,13 @@ final class StorefrontFacetPresentationPolicy
         ['brand', 'hanfu_pin_pai'],
     ];
 
+    /**
+     * Shopper rail keeps only reachable facets. Unselected count=1 values are
+     * dead ends and dominate the shared SSR leaf — one measured PLP snapshot
+     * had 1041 of 1192 options at count=1.
+     */
+    public const MIN_UNSELECTED_OPTION_COUNT = 2;
+
     /** @var list<string> */
     private const COLOR_FAMILY_CODES = ['color', 'available_colors'];
 
@@ -222,6 +229,11 @@ final class StorefrontFacetPresentationPolicy
         $rightLabel = (string)($right['label'] ?? $right['value'] ?? '');
 
         return strcasecmp($leftLabel, $rightLabel);
+    }
+
+    public function isUnselectedOptionVisible(int $count): bool
+    {
+        return $count >= self::MIN_UNSELECTED_OPTION_COUNT;
     }
 
     public function isColorFamilyCode(string $code): bool

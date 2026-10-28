@@ -8,7 +8,7 @@ Register::register(
     Register::MODULE,
     'Weline_Filters',
     __DIR__,
-    '1.0.19',
+    '1.0.20',
     '店面筛选模块：分类/列表侧栏部件注入，含价格与 EAV 属性筛选',
     [
         'Weline_Framework',

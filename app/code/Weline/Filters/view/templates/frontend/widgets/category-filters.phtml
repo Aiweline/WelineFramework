@@ -92,6 +92,9 @@ $attributeGroups = $panel['attributes'];
 $hasActive = (bool)$panel['has_active'];
 $clearUrl = (string)$panel['clear_url'];
 $visibleOptionLimit = 6;
+// Overflow is a bounded SSR budget: keep the toggle useful, but never let a
+// pathological facet dump its whole long tail into the shared page leaf.
+$moreOptionLimit = 30;
 ?>
 <aside class="w-filters wc-theme_widget_category_filters"
        data-widget-code="category-filters"
@@ -176,7 +179,7 @@ $visibleOptionLimit = 6;
             static fn(array $option): bool => !empty($option['selected']),
         )) > 0;
         $visibleOptions = array_slice($groupOptions, 0, $visibleOptionLimit);
-        $moreOptions = array_slice($groupOptions, $visibleOptionLimit);
+        $moreOptions = array_slice($groupOptions, $visibleOptionLimit, $moreOptionLimit);
         $groupOpen = $groupIndex < 4 || $groupHasSelection;
         ?>
         <details

@@ -622,6 +622,9 @@ final class StorefrontFilterPanelService
             max(0, $websiteId),
             $rootCurrent,
             $refinementCounts ? 'refinement' : 'neutral',
+            // Output contract changed with the dead-end cut; new key invalidates
+            // panels cached under the previous shape.
+            StorefrontFacetPresentationPolicy::MIN_UNSELECTED_OPTION_COUNT,
         ]));
     }
 
@@ -958,6 +961,12 @@ final class StorefrontFilterPanelService
                         $count = (int)$count;
                         $selected = isset($selectedAttrs[$code])
                             && strtolower($selectedAttrs[$code]) === strtolower($value);
+                        // Shopper rail: unselected count=1 is a dead end (87% of raw
+                        // options) and only inflates the shared SSR leaf. Selected
+                        // stays visible even at 0 (R1/R2).
+                        if (!$selected && !$this->facetPresentation->isUnselectedOptionVisible($count)) {
+                            continue;
+                        }
                         // R3 in refinement mode (curation already drops most zeros; belt-and-suspenders).
                         if ($refinementCounts && $count <= 0 && !$selected) {
                             continue;
