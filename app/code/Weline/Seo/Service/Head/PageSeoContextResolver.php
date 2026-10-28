@@ -772,7 +772,9 @@ class PageSeoContextResolver
         if ($host === '') {
             return $url;
         }
-        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+        // Public URLs never carry the internal listener port in production; DEV keeps it
+        // so local :8080 style hosts still resolve.
+        $port = (!\defined('PROD') || !PROD) && isset($parts['port']) ? ':' . $parts['port'] : '';
         $path = $this->canonicalPath((string)($parts['path'] ?? '/'));
         return $scheme . '://' . $host . $port . $path;
     }
@@ -861,7 +863,9 @@ class PageSeoContextResolver
         if ($fullUrl !== '' && preg_match('/^https?:\/\//i', $fullUrl)) {
             $parts = parse_url($fullUrl);
             if (is_array($parts) && !empty($parts['host'])) {
-                $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+                // Internal listener port (e.g. :9444) must never leak into og:url/canonical:
+                // the public entry is always 443 behind the managed proxy (E7).
+                $port = (!\defined('PROD') || !PROD) && isset($parts['port']) ? ':' . $parts['port'] : '';
 
                 return \Weline\Framework\Http\RequestSchemeResolver::normalizeUrl(
                     (string) ($parts['scheme'] ?? 'https') . '://' . (string) $parts['host'] . $port,
