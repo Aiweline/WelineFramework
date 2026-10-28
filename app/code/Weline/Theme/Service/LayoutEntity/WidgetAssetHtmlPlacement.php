@@ -105,6 +105,8 @@ final class WidgetAssetHtmlPlacement
      * Slot (preferred): `<!--weline:head-layout-assets-->` in assets-prefix / default head.
      * Heuristic fallback: only <link> chrome markers count — <script data-weline-theme-head-pack>
      * must not win the anchor or layout CSS is injected inside the script and never loads.
+     * A chrome <link> inside `<noscript>` must not win the anchor either: JS-enabled browsers
+     * treat noscript content as inert text, so the layout pack would never load.
      */
     private function insertAfterThemeChrome(string $html, string $chunk): string
     {
@@ -117,6 +119,20 @@ final class WidgetAssetHtmlPlacement
             );
 
             return \is_string($replaced) ? $replaced : $html;
+        }
+        // <noscript> fallbacks reuse the chrome link marker (preload + noscript in one pack).
+        // A <link> inside <noscript> is inert text for JS-enabled browsers, so anchoring the
+        // layout pack there drops the whole chrome CSS. Anchor at the end of the enclosing
+        // <noscript> instead. Marker: layout-pack-noscript-anchor-v1
+        $noscriptSpans = [];
+        if (preg_match_all('/<noscript\b[^>]*>.*?<\/noscript\s*>/is', $html, $noscriptMatches, PREG_OFFSET_CAPTURE) > 0) {
+            foreach ($noscriptMatches[0] as $noscriptMatch) {
+                if (!isset($noscriptMatch[1])) {
+                    continue;
+                }
+                $noscriptStart = (int)$noscriptMatch[1];
+                $noscriptSpans[] = [$noscriptStart, $noscriptStart + strlen((string)$noscriptMatch[0])];
+            }
         }
         $markers = [
             'data-weline-theme-overlay=',
@@ -141,6 +157,12 @@ final class WidgetAssetHtmlPlacement
                     break;
                 }
                 $end = $tagEnd + 1;
+                foreach ($noscriptSpans as [$noscriptStart, $noscriptEnd]) {
+                    if ($end > $noscriptStart && $end < $noscriptEnd) {
+                        $end = $noscriptEnd;
+                        break;
+                    }
+                }
                 if ($bestEnd === null || $end > $bestEnd) {
                     $bestEnd = $end;
                 }

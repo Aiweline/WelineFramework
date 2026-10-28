@@ -45,13 +45,46 @@ final class Category extends FrontendController
      */
     private function layoutCopy(string $param, string $default, string $fallback = '', array $vars = []): string
     {
+        $identify = 'layouts.blog_category.default';
         $value = '';
+
+        // 页面 locale 与 Blog scope locale 可能不同源，这里显式遍历候选组合：
+        // scope 取「主题当前 scope + default」，locale 取「当前 + en_US + zh_Hans_CN」。
+        $scopes = ['default'];
+        $currentScope = '';
         try {
-            $identify = 'layouts.blog_category.default';
-            $scope = $this->themeContext->resolveCurrentScope('frontend');
-            $locale = $this->scope->locale();
-            $value = trim(ThemeData::getParamTranslation($identify, $param, $scope, $locale, $default));
+            $currentScope = trim((string)$this->themeContext->resolveCurrentScope('frontend'));
         } catch (\Throwable) {
+            $currentScope = '';
+        }
+        if ($currentScope !== '' && $currentScope !== 'default') {
+            $scopes[] = $currentScope;
+        }
+
+        $locales = [];
+        try {
+            $locales[] = trim((string)$this->scope->locale());
+        } catch (\Throwable) {
+        }
+        $locales[] = 'en_US';
+        $locales[] = 'zh_Hans_CN';
+
+        foreach (array_values(array_unique(array_filter($locales))) as $candidateLocale) {
+            foreach ($scopes as $candidateScope) {
+                try {
+                    // 传空 default：只取译文，避免把布局默认串误判成「已命中译文」。
+                    $hit = trim(ThemeData::getParamTranslation($identify, $param, $candidateScope, $candidateLocale, ''));
+                } catch (\Throwable) {
+                    $hit = '';
+                }
+                if ($hit !== '') {
+                    $value = $hit;
+                    break 2;
+                }
+            }
+        }
+
+        if ($value === '') {
             $value = trim($default);
         }
 
