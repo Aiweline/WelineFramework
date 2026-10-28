@@ -295,6 +295,9 @@ final class SeoFactsService
         $canonical = $this->canonical($path, $websiteCode);
         $image = $this->siteProfile->absoluteAsset((string)($profile['og_image'] ?? ''), $siteUrl);
         $brand = (string)($profile['brand_name'] ?? 'Amayum');
+        // Share-image alt must describe this site, not the framework product that
+        // seeded the clone; sites can override it via seo_defaults.image_alt.
+        $imageAlt = \trim((string)($profile['seo_defaults']['image_alt'] ?? ''));
 
         return \array_merge([
             'page_type' => $pageType,
@@ -304,7 +307,7 @@ final class SeoFactsService
             'canonical' => $canonical,
             'robots' => 'index,follow',
             'image' => $image,
-            'image_alt' => $brand . ' — WelineFramework',
+            'image_alt' => $imageAlt !== '' ? $imageAlt : $brand,
             'site_name' => $brand,
             'organization' => $this->siteProfile->organization($websiteCode),
             'og_locale' => 'zh_CN',

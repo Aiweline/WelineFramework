@@ -334,6 +334,34 @@ $this->setData('article', $articleFacts);
 
 ---
 
+## 站点品牌资产与分享图配置口径（2026-10-28）
+
+同一份 profile 里 `og_image` 同时被分享图和 `Organization.logo` 使用，是克隆站点最容易
+出错的地方：分享图是 1200×630 横幅，Logo 却是方形品牌标。字段必须分开：
+
+| 字段（`amayum/site/profile`） | 用途 | 要求 |
+|------|------|------|
+| `og_image` | `og:image` / `twitter:image` / JSON-LD 文章图 | 本站 1200×630，稳定 URL |
+| `logo_image` | JSON-LD `Organization.logo`（`SiteProfileService::organization()` 优先读，缺省回落 `og_image`） | 方形品牌标（≥112×112） |
+| `contact_email` | 站点联系邮箱 | 必须是本站域内真实收件箱 |
+| `seo_defaults.og_image` | 页面级 SEO bag 的分享图 | 与 `og_image` 同值 |
+| `seo_defaults.image_alt` | `og:image:alt` / `twitter:image:alt`（`SeoFactsService::page()` 读，缺省回落品牌名） | 描述本站，不得含框架产品名 |
+| `seo_defaults.organization_name` / `organization_url` | JSON-LD 组织名与站点根 | 本站品牌与域名 |
+
+JSON-LD `Organization.email` 走另一条链：`HeadRenderer::merchantInfo()` →
+`MerchantInfoConfigResolver`（`Weline_Seo` / `backend` / 站点 scope）的 `seo/merchant/email`；
+profile 的 `contact_email` 不会自动补进 JSON-LD，两处都要配。
+
+**静态落点**：分享图放站点媒体目录 `/pub/media/websites/<code>/default/brand/`，不要用
+`/static/<site>/v2/<hash>/...`——`<hash>` 是主题资源指纹，换主题即失效，og:image 会 404。
+
+**现状边界**：站点级默认 `og:image` 目前只对走 `SeoProfileProvider`（`SeoFactsService::page()`）
+的页面生效；由主题 layout 直接给 SEO 的内页（如 `/contact`、`/about`）没有 `image` 兜底，
+`twitter:card` 仍是 `summary`。补站点级兜底需要在 `PageSeoContextResolver` 解析完
+`layoutFallback` 后回落站点默认图，尚未实施。
+
+---
+
 ## 相关文档
 
 - [SeoProfileExtensionGuide.md](SeoProfileExtensionGuide.md) — 英文契约与 Provider 完整示例

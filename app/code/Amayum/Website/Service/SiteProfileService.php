@@ -152,10 +152,17 @@ final class SiteProfileService
             }
         }
 
+        // Organization.logo is a brand mark, not a share card: prefer the explicit
+        // logo_image so a 1200x630 og:image is not emitted as the site logo.
+        $logoPath = \trim((string)($profile['logo_image'] ?? ''));
+        if ($logoPath === '') {
+            $logoPath = (string)($profile['og_image'] ?? '');
+        }
+
         return [
             'name' => (string)($profile['brand_name'] ?? 'Amayum'),
             'url' => (string)($profile['site_url'] ?? 'https://amayum.com'),
-            'logo' => $this->absoluteAsset((string)($profile['og_image'] ?? ''), (string)($profile['site_url'] ?? '')),
+            'logo' => $this->absoluteAsset($logoPath, (string)($profile['site_url'] ?? '')),
             'email' => (string)($profile['contact_email'] ?? 'hello@amayum.com'),
             'sameAs' => $sameAs,
         ];
