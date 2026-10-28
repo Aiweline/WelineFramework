@@ -361,6 +361,11 @@ Global → Website → Store 继承；后台路径：SEO 设置 → 商家信息
 兜底图同样过同站校验，跨站配置直接丢弃；站点未配置则不出图，`twitter:card` 保持 `summary`。
 这解决了由主题 layout 直接给 SEO 的内页（如 `/contact`、`/about`）没有分享图的问题。
 
+**`og:image:alt` 口径（2026-10-28 实施）**：只要输出分享图就必须有 alt。
+`PageSeoContextResolver` 解析出的 `image_alt` 为空字符串时属“无值”，
+`HeadRenderer::renderSocial()` 回落页面 `title`；若图来自站点级兜底（品牌分享卡），
+解析层优先用站点名作 alt，避免拿页面标题描述一张品牌图。
+
 ---
 
 ## 相关文档
