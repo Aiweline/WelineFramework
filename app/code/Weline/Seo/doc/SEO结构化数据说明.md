@@ -355,10 +355,11 @@ profile 的 `contact_email` 不会自动补进 JSON-LD，两处都要配。
 **静态落点**：分享图放站点媒体目录 `/pub/media/websites/<code>/default/brand/`，不要用
 `/static/<site>/v2/<hash>/...`——`<hash>` 是主题资源指纹，换主题即失效，og:image 会 404。
 
-**现状边界**：站点级默认 `og:image` 目前只对走 `SeoProfileProvider`（`SeoFactsService::page()`）
-的页面生效；由主题 layout 直接给 SEO 的内页（如 `/contact`、`/about`）没有 `image` 兜底，
-`twitter:card` 仍是 `summary`。补站点级兜底需要在 `PageSeoContextResolver` 解析完
-`layoutFallback` 后回落站点默认图，尚未实施。
+**站点级兜底（2026-10-28 实施）**：页面自身没有 `image` 时，`PageSeoContextResolver` 在
+`layoutFallback` 之后回落 `seo/merchant/share_image`（`Weline_Seo` / `backend`，按
+Global → Website → Store 继承；后台路径：SEO 设置 → 商家信息 → 默认分享图 URL）。
+兜底图同样过同站校验，跨站配置直接丢弃；站点未配置则不出图，`twitter:card` 保持 `summary`。
+这解决了由主题 layout 直接给 SEO 的内页（如 `/contact`、`/about`）没有分享图的问题。
 
 ---
 

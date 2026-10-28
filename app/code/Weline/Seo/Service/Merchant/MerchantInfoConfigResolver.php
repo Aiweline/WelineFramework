@@ -26,6 +26,7 @@ final class MerchantInfoConfigResolver
     public const KEY_BRAND = 'seo/merchant/brand';
     public const KEY_EMAIL = 'seo/merchant/email';
     public const KEY_PHONE = 'seo/merchant/phone';
+    public const KEY_SHARE_IMAGE = 'seo/merchant/share_image';
     public const KEY_ADDRESS = 'seo/merchant/address';
     public const KEY_RETURN_POLICY_URL = 'seo/merchant/return_policy_url';
     public const KEY_SHIPPING_POLICY_URL = 'seo/merchant/shipping_policy_url';
@@ -57,6 +58,7 @@ final class MerchantInfoConfigResolver
      *     brand:string,
      *     email:string,
      *     phone:string,
+     *     share_image:string,
      *     address:string,
      *     return_policy_url:string,
      *     shipping_policy_url:string,
@@ -182,6 +184,7 @@ final class MerchantInfoConfigResolver
             'brand' => $read(self::KEY_BRAND),
             'email' => $read(self::KEY_EMAIL),
             'phone' => $read(self::KEY_PHONE),
+            'share_image' => $read(self::KEY_SHARE_IMAGE),
             'address' => $read(self::KEY_ADDRESS),
             'return_policy_url' => $this->normalizeUrl($read(self::KEY_RETURN_POLICY_URL), self::DEFAULT_RETURN_POLICY_URL),
             'shipping_policy_url' => $this->normalizeUrl($read(self::KEY_SHIPPING_POLICY_URL), self::DEFAULT_SHIPPING_POLICY_URL),

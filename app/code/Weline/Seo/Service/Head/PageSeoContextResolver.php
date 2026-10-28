@@ -135,6 +135,12 @@ class PageSeoContextResolver
             $this->read($page, ['image', 'cover_image', 'featured_image']),
             $this->read($layoutFallback, ['image', 'og_image']),
         ]));
+        // Pages whose SEO comes only from the theme layout (e.g. /contact, /about)
+        // still need a social card: fall back to the site-level share image. Omit
+        // when none is configured rather than fabricating one.
+        if ($image === '') {
+            $image = $this->absoluteUrl($template, $this->resolveSiteDefaultShareImage());
+        }
         // A share image hosted on another site's domain (typical of cloned/seed SEO
         // config) must never be emitted as this site's og:image: crawlers would
         // attribute the card to the sibling brand (E8/E9). Omit rather than echo it.
@@ -178,7 +184,7 @@ class PageSeoContextResolver
             'canonical_url' => (string) $canonical,
             'image' => $image,
             'image_alt' => $imageAlt,
-            'locale' => (string) ($this->readTemplate($template, 'lang_local') ?: w_env('user.lang', 'en_US')),
+            'locale' => (string) ($this->readTemplate($template, 'lang_local') ?: \Weline\Framework\Env\WelineEnv::get('user.lang', 'en_US')),
             'alternates' => $this->normalizeAlternates($this->read($seo, ['alternates', 'hreflang'])),
             'feeds' => $this->normalizeFeeds($this->firstNonEmpty([
                 $this->read($seo, ['feeds']),
@@ -793,7 +799,7 @@ class PageSeoContextResolver
             return '/';
         }
 
-        $currentCurrency = strtoupper(trim((string) \w_env('user.currency', '')));
+        $currentCurrency = strtoupper(trim((string) \Weline\Framework\Env\WelineEnv::get('user.currency', '')));
         $defaultCurrency = '';
         try {
             $defaultCurrency = strtoupper(trim(\Weline\Framework\App\State::resolveWebsiteDefaultCurrency()));
@@ -802,7 +808,7 @@ class PageSeoContextResolver
         }
         if ($defaultCurrency === '') {
             $defaultCurrency = strtoupper(trim((string) (
-                \w_env('website.currency', '')
+                \Weline\Framework\Env\WelineEnv::get('website.currency', '')
                 ?: \Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_CURRENCY', '')
                 ?: \Weline\Framework\App\Env::get('currency', 'CNY')
                 ?: 'CNY'
@@ -812,9 +818,9 @@ class PageSeoContextResolver
             $currentCurrency = $defaultCurrency;
         }
 
-        $currentLanguage = trim((string) \w_env('user.lang', ''));
+        $currentLanguage = trim((string) \Weline\Framework\Env\WelineEnv::get('user.lang', ''));
         $defaultLanguage = trim((string) (
-            \w_env('website.language', '')
+            \Weline\Framework\Env\WelineEnv::get('website.language', '')
             ?: \Weline\Framework\App\Env::get('locale', \Weline\Framework\App\Env::get('lang', 'zh_Hans_CN'))
             ?: 'zh_Hans_CN'
         ));
@@ -1260,6 +1266,26 @@ class PageSeoContextResolver
                 return rtrim($baseUrl, '/') . '/' . ltrim($logo, '/');
             }
             return $logo;
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * Site-level fallback share image (og:image) from the merchant config group.
+     * Returns '' when the site has not configured one.
+     */
+    private function resolveSiteDefaultShareImage(): string
+    {
+        try {
+            /** @var \Weline\Seo\Service\Merchant\MerchantInfoConfigResolver $merchant */
+            $merchant = ObjectManager::getInstance(\Weline\Seo\Service\Merchant\MerchantInfoConfigResolver::class);
+            $image = trim((string)($merchant->resolve()['share_image'] ?? ''));
+            if ($image !== '' && !$this->urlBelongsToCurrentSite($image)) {
+                return '';
+            }
+
+            return $image;
         } catch (\Throwable) {
             return '';
         }

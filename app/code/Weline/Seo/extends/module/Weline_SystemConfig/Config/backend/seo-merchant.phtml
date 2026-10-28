@@ -45,6 +45,16 @@
         validation="max:191"
     />
     <w:config:field
+        key="seo/merchant/share_image"
+        label="默认分享图 URL"
+        description="页面自身没有分享图时，og:image / twitter:image 的站点级兜底；填站内 1200×630 图（推荐 /pub/media/... 稳定路径），留空则不出图（twitter:card 降为 summary）。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:255"
+    />
+    <w:config:field
         key="seo/merchant/phone"
         label="客服电话"
         description="结构化数据 OnlineStore.telephone；留空继承上级。"
