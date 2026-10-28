@@ -1192,14 +1192,23 @@ class PageSeoContextResolver
         $organization = $this->toArray($seo['organization'] ?? $meta['organization'] ?? []);
         $organization['name'] = (string) ($organization['name'] ?? $siteName);
         $organization['url'] = (string) ($organization['url'] ?? $this->absoluteUrl($template, '/'));
-        if (empty($organization['logo'])) {
+        $logo = trim((string) ($organization['logo'] ?? ''));
+        if ($logo !== '' && !$this->logoBelongsToCurrentSite($logo)) {
+            // A logo copied from another site's seed config (e.g. another design theme's
+            // og-default.webp) must never label this site's Organization: Google would
+            // attribute the brand to the wrong domain (E8/E9).
+            $logo = '';
+        }
+        if ($logo === '') {
             // Site-bound logo only. The framework default logo must never impersonate a
-            // real brand in Organization JSON-LD (audit E8); omitting it is the honest result
+            // real brand in Organization JSON-LD; omitting it is the honest result
             // and Google simply drops the logo rich result.
-            $siteLogo = $this->resolveSiteBoundLogoUrl();
-            if ($siteLogo !== '') {
-                $organization['logo'] = $siteLogo;
-            }
+            $logo = $this->resolveSiteBoundLogoUrl();
+        }
+        if ($logo !== '') {
+            $organization['logo'] = $logo;
+        } else {
+            unset($organization['logo']);
         }
         if (empty($organization['alternateName'])) {
             $alternate = $this->resolveOrganizationAlternateName((string) $organization['name']);
@@ -1241,6 +1250,29 @@ class PageSeoContextResolver
         } catch (\Throwable) {
             return '';
         }
+    }
+
+    /**
+     * Whether an absolute logo URL belongs to the site currently being rendered.
+     * Relative paths are same-origin by definition.
+     */
+    private function logoBelongsToCurrentSite(string $logo): bool
+    {
+        $logoHost = strtolower((string) parse_url($logo, PHP_URL_HOST));
+        if ($logoHost === '') {
+            return true;
+        }
+        $baseHost = strtolower((string) parse_url($this->currentRequestBaseUrl(), PHP_URL_HOST));
+        if ($baseHost === '') {
+            return true;
+        }
+
+        return $this->normalizeSeoHost($logoHost) === $this->normalizeSeoHost($baseHost);
+    }
+
+    private function normalizeSeoHost(string $host): string
+    {
+        return (string) preg_replace('/^www\./i', '', $host);
     }
 
     private function resolveOrganizationAlternateName(string $displayName): string
