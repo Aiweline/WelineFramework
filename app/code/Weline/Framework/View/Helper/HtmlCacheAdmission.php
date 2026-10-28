@@ -12,6 +12,39 @@ use Weline\Framework\App\State;
  */
 final class HtmlCacheAdmission
 {
+    /**
+     * Full-document admission for HTML disk (FPC) leaves.
+     *
+     * A storefront leaf must be a complete document: head-only bodies come from a render
+     * that died mid-head (or exited), and once cached they are served forever with 200
+     * and no <body> — Lighthouse then reports NO_FCP while curl shows a "healthy" 200.
+     * Fragment caches must NOT use this gate (they are fragments by design) — that is
+     * why it is a separate method instead of being folded into admit().
+     */
+    public static function admitDocument(string $html): bool
+    {
+        return self::documentIntegrityIssue($html) === '';
+    }
+
+    /** Machine-readable reason a body is not a complete document ('' = complete). */
+    public static function documentIntegrityIssue(string $html): string
+    {
+        if ($html === '') {
+            return 'empty';
+        }
+        if (\strlen($html) < 1024) {
+            return 'too_short:' . \strlen($html);
+        }
+        if (\stripos($html, '</body>') === false) {
+            return 'missing_body_close';
+        }
+        if (\stripos($html, '</html>') === false) {
+            return 'missing_html_close';
+        }
+
+        return '';
+    }
+
     public static function admit(string $html): bool
     {
         if ($html === '') {

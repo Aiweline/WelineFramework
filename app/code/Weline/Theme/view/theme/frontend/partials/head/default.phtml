@@ -35,12 +35,12 @@ try {
         \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_TOKENS,
         ['include_disk' => false, 'include_theme_overlay' => false]
     );
-    $storefrontPackHtml = $headPack->tryLinkHtml(
+    $storefrontPackHtml = $headPack->tryPreloadLinkHtml(
         'frontend',
         \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_STOREFRONT,
         ['include_disk' => false, 'include_theme_overlay' => false]
     );
-    $overlayPackHtml = $headPack->tryLinkHtml(
+    $overlayPackHtml = $headPack->tryPreloadLinkHtml(
         'frontend',
         \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_OVERLAY,
         ['include_disk' => false, 'include_theme_overlay' => true]
@@ -69,8 +69,9 @@ $diskAbsorbed = false;
 <theme:css>Weline_Theme::theme/frontend/colors/_ink.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_light.css</theme:css>
 <?php endif; ?>
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)">
+<link rel="preload" as="style" href="@static(Weline_Theme::ui/weline-foundation.css)" onload="this.onload=null;this.rel='stylesheet'">
+<link rel="preload" as="style" href="@static(Weline_Theme::ui/weline-frontend.css)" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" data-weline-preload-fallback="1" href="@static(Weline_Theme::ui/weline-foundation.css)"><link rel="stylesheet" data-weline-preload-fallback="1" href="@static(Weline_Theme::ui/weline-frontend.css)"></noscript>
 <theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_dark.css</theme:css>
 <?php endif; ?>

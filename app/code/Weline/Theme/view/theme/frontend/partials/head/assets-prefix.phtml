@@ -4,12 +4,16 @@
  * Big widget layout pack is placed after theme/disk/overlay by WidgetAssetHtmlPlacement.
  *
  * Head CSS order (Amazon-aligned):
- * 1) layout-critical (tiny skeleton)
- * 2) tokens pack (① variables / light colors)
- * 3) storefront base pack (② foundation + theme.css + dark)
- * 4) theme config disk override
- * 5) design overlay pack (③ layout-scoped private leaves)
+ * 1) layout-critical (inline shell + first-paint primitives)
+ * 2) tokens pack (① variables / light colors) — BLOCKING
+ * 3) storefront base pack (② foundation + theme.css + dark) — preload+onload
+ * 4) theme config disk override (folded into 3 when meaningful)
+ * 5) design overlay pack (③ layout-scoped private leaves) — preload+onload
  * 6) (later) big layout pack / other CSS via placement
+ *
+ * Blocking policy (theme-spec-gates S1/S2): only PACK_TOKENS may block. Everything
+ * else must arrive via tryPreloadLinkHtml so LCP is not serialized behind CSS.
+ * First-paint stability is owned by layout-critical (budget 14 KB), not by blocking links.
  *
  * JS policy (default Theme): **no Theme scripts in head**. Frontend `weline.js`
  * (pixel/ModuleLoader bootstrap) stays via Weline_Frontend::header/base. Theme
@@ -45,12 +49,12 @@ try {
         \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_TOKENS,
         ['include_disk' => false, 'include_theme_overlay' => false]
     );
-    $storefrontPackHtml = $headPack->tryLinkHtml(
+    $storefrontPackHtml = $headPack->tryPreloadLinkHtml(
         'frontend',
         \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_STOREFRONT,
         ['include_disk' => true, 'include_theme_overlay' => false]
     );
-    $overlayPackHtml = $headPack->tryLinkHtml(
+    $overlayPackHtml = $headPack->tryPreloadLinkHtml(
         'frontend',
         \Weline\Theme\Service\ThemeHeadChromeCssPack::PACK_OVERLAY,
         ['include_disk' => false, 'include_theme_overlay' => true]
@@ -87,8 +91,9 @@ $overlayAbsorbed = $headPack instanceof \Weline\Theme\Service\ThemeHeadChromeCss
 <theme:css>Weline_Theme::theme/frontend/colors/_ink.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_light.css</theme:css>
 <?php endif; ?>
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)">
+<link rel="preload" as="style" href="@static(Weline_Theme::ui/weline-foundation.css)" onload="this.onload=null;this.rel='stylesheet'">
+<link rel="preload" as="style" href="@static(Weline_Theme::ui/weline-frontend.css)" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" data-weline-preload-fallback="1" href="@static(Weline_Theme::ui/weline-foundation.css)"><link rel="stylesheet" data-weline-preload-fallback="1" href="@static(Weline_Theme::ui/weline-frontend.css)"></noscript>
 <theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_dark.css</theme:css>
 <?php endif; ?>

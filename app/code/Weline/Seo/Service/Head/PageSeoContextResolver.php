@@ -764,6 +764,10 @@ class PageSeoContextResolver
             return $url;
         }
         $scheme = $parts['scheme'] ?? 'https';
+        if (\defined('PROD') && PROD) {
+            // Proxy hop is plain HTTP; canonical/og must never advertise http:// (E7).
+            $scheme = 'https';
+        }
         $host = $parts['host'] ?? '';
         if ($host === '') {
             return $url;
@@ -858,15 +862,15 @@ class PageSeoContextResolver
             $parts = parse_url($fullUrl);
             if (is_array($parts) && !empty($parts['host'])) {
                 $port = isset($parts['port']) ? ':' . $parts['port'] : '';
-                return (string) ($parts['scheme'] ?? 'https') . '://' . (string) $parts['host'] . $port;
+
+                return \Weline\Framework\Http\RequestSchemeResolver::normalizeUrl(
+                    (string) ($parts['scheme'] ?? 'https') . '://' . (string) $parts['host'] . $port,
+                    \defined('PROD') && PROD
+                );
             }
         }
 
-        $scheme = (string) \Weline\Framework\Env\WelineEnv::server('REQUEST_SCHEME', '');
-        if ($scheme === '') {
-            $https = (string) \Weline\Framework\Env\WelineEnv::server('HTTPS', '');
-            $scheme = $https !== '' && strtolower($https) !== 'off' ? 'https' : 'http';
-        }
+        $scheme = \Weline\Framework\Http\RequestSchemeResolver::current();
 
         $host = (string) \Weline\Framework\Env\WelineEnv::server(
             'HTTP_HOST',
@@ -1184,6 +1188,15 @@ class PageSeoContextResolver
         $organization = $this->toArray($seo['organization'] ?? $meta['organization'] ?? []);
         $organization['name'] = (string) ($organization['name'] ?? $siteName);
         $organization['url'] = (string) ($organization['url'] ?? $this->absoluteUrl($template, '/'));
+        if (empty($organization['logo'])) {
+            // Site-bound logo only. The framework default logo must never impersonate a
+            // real brand in Organization JSON-LD (audit E8); omitting it is the honest result
+            // and Google simply drops the logo rich result.
+            $siteLogo = $this->resolveSiteBoundLogoUrl();
+            if ($siteLogo !== '') {
+                $organization['logo'] = $siteLogo;
+            }
+        }
         if (empty($organization['alternateName'])) {
             $alternate = $this->resolveOrganizationAlternateName((string) $organization['name']);
             if ($alternate !== '') {
@@ -1192,6 +1205,38 @@ class PageSeoContextResolver
         }
 
         return $organization;
+    }
+
+    /**
+     * Site-bound logo only (E8). Never fall back to the framework default logo for
+     * Organization JSON-LD: a placeholder brand logo is worse than omitting the field.
+     */
+    private function resolveSiteBoundLogoUrl(): string
+    {
+        try {
+            if (!class_exists(\Weline\Theme\Helper\SiteBrand::class)) {
+                return '';
+            }
+            /** @var \Weline\Theme\Helper\SiteBrand $siteBrand */
+            $siteBrand = ObjectManager::getInstance(\Weline\Theme\Helper\SiteBrand::class);
+            $logo = trim($siteBrand->resolveSiteLogoUrl());
+            if ($logo === '') {
+                return '';
+            }
+            if (preg_match('/^https?:\/\//i', $logo)) {
+                return $logo;
+            }
+            if (str_starts_with($logo, '//')) {
+                return 'https:' . $logo;
+            }
+            $baseUrl = $this->currentRequestBaseUrl();
+            if ($baseUrl !== '') {
+                return rtrim($baseUrl, '/') . '/' . ltrim($logo, '/');
+            }
+            return $logo;
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     private function resolveOrganizationAlternateName(string $displayName): string

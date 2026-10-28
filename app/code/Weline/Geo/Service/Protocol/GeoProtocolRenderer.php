@@ -20,6 +20,8 @@ class GeoProtocolRenderer
         private readonly FeedGeneratorService $feedGenerator,
         private readonly WebsiteProtocolConfig $protocolConfig,
         private readonly GeoWebsiteFeedScope $websiteFeedScope,
+        private readonly SiteBindingResolver $siteBinding,
+        private readonly UrlDeduper $urlDeduper,
         private readonly ?FeedScheduleService $feedSchedule = null,
     ) {
     }
@@ -220,6 +222,8 @@ class GeoProtocolRenderer
             }
         }
 
+        $items = $this->urlDeduper->dedupe($items, $baseUrl);
+
         usort($items, static function (array $a, array $b): int {
             $left = (int)($a[FeedItem::schema_fields_PUBLISHED_AT] ?? $a['published_at'] ?? 0);
             $right = (int)($b[FeedItem::schema_fields_PUBLISHED_AT] ?? $b['published_at'] ?? 0);
@@ -265,6 +269,8 @@ class GeoProtocolRenderer
 
         $allowedHosts = $this->websiteFeedScope->allowedHosts($websiteId, $baseUrl);
         $scoped = $this->websiteFeedScope->filterItems($rows, $websiteId, $allowedHosts);
+        // E9: feeds may store http/https + www duplicates of one product URL.
+        $scoped = $this->urlDeduper->dedupe($scoped, $baseUrl);
 
         return array_slice($scoped, 0, max(1, $limit));
     }
@@ -437,12 +443,7 @@ class GeoProtocolRenderer
         }
         $host = (string) \Weline\Framework\Env\WelineEnv::server('HTTP_HOST', '');
         if ($host !== '') {
-            $https = (string) \Weline\Framework\Env\WelineEnv::server('HTTPS', '');
-            $scheme = $https !== '' && strtolower($https) !== 'off' ? 'https' : 'https';
-            $requestScheme = (string) \Weline\Framework\Env\WelineEnv::server('REQUEST_SCHEME', '');
-            if ($requestScheme !== '') {
-                $scheme = $requestScheme;
-            }
+            $scheme = \Weline\Framework\Http\RequestSchemeResolver::current();
             $candidates[] = $scheme . '://' . $host;
         }
         $candidates[] = rtrim(trim((string)($website->url ?? '')), '/');
@@ -514,44 +515,11 @@ class GeoProtocolRenderer
     }
 
     /**
-     * Prefer SEO-resolved public brand over framework placeholder website names.
+     * Website-bound brand name only. Cross-site request brands must never leak
+     * into another website's llms.txt (E9: "# Amayum").
      */
     private function resolvePublicSiteName(object $website): string
     {
-        $fallback = trim((string)($website->name ?? ''));
-        if ($fallback === '') {
-            $fallback = 'Weline';
-        }
-
-        try {
-            $context = \Weline\Framework\Manager\ObjectManager::getInstance(
-                \Weline\Seo\Api\Head\PageContextResolverInterface::class
-            )->resolve(null, [
-                'slot' => 'head',
-                'canonical_url' => rtrim((string)($website->url ?? ''), '/') . '/',
-                'url' => rtrim((string)($website->url ?? ''), '/') . '/',
-            ]);
-            $resolved = trim((string)($context->siteName ?? ''));
-            if ($resolved !== '') {
-                return $resolved;
-            }
-        } catch (\Throwable) {
-        }
-
-        if ($this->isFrameworkPlaceholderSiteName($fallback)) {
-            return 'Weline';
-        }
-
-        return $fallback;
-    }
-
-    private function isFrameworkPlaceholderSiteName(string $siteName): bool
-    {
-        $normalized = trim(preg_replace('/\s+/u', ' ', $siteName) ?? $siteName);
-
-        return (bool) preg_match(
-            '/^(默认网站|默认店铺|Default Website|Default Store|Weline|Weline Framework)(?:\s+(默认网站|默认店铺|Default Website|Default Store))*$/iu',
-            $normalized
-        );
+        return $this->siteBinding->publicSiteName($website);
     }
 }

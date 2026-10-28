@@ -401,6 +401,17 @@ final class FpcHtmlDiskStore
                 $plainForLocale = $decoded;
             }
         }
+        if ($plainForLocale !== '' && !\Weline\Framework\View\Helper\HtmlCacheAdmission::admitDocument($plainForLocale)) {
+            if (\function_exists('w_log_error')) {
+                \w_log_error(
+                    '[FpcHtmlDiskStore] publish refused: incomplete document ('
+                    . \Weline\Framework\View\Helper\HtmlCacheAdmission::documentIntegrityIssue($plainForLocale)
+                    . '), bytes=' . \strlen($plainForLocale) . ' for ' . $fullUri
+                );
+            }
+
+            return false;
+        }
         if ($plainForLocale !== ''
             && !\Weline\Framework\View\Helper\HtmlCacheAdmission::admitPathLocale($plainForLocale, $fullUri)
         ) {
@@ -434,6 +445,10 @@ final class FpcHtmlDiskStore
                 return false;
             }
             @\unlink($htmlPath);
+            // Completeness marker: proves this leaf was published from a finished document
+            // (see HtmlCacheAdmission::admitDocument). Leaves without it are self-healed
+            // (purged) on next read instead of being served head-only forever.
+            self::writeAtomic($htmlPath . '.ok', 'v1:' . \strlen($plainForLocale) . ':' . \crc32($plainForLocale));
 
             return true;
         }
@@ -481,6 +496,17 @@ final class FpcHtmlDiskStore
         $htmlPath = self::liveRoot() . \DIRECTORY_SEPARATOR . $slotted . \DIRECTORY_SEPARATOR . 'index.html';
         $brPath = $htmlPath . '.br';
         if (\is_file($brPath)) {
+            // Self-heal: a leaf without the completeness marker predates the document gate
+            // (or came from a render that died mid-head). Drop it and miss so the page is
+            // re-rendered instead of serving a 200 with no <body>.
+            if (!\is_file($htmlPath . '.ok')) {
+                @\unlink($brPath);
+                if (\function_exists('w_log_warning')) {
+                    \w_log_warning('[FpcHtmlDiskStore] purged unmarked leaf (no completeness marker) for ' . $fullUri);
+                }
+
+                return null;
+            }
             $raw = @\file_get_contents($brPath);
             if (\is_string($raw) && $raw !== '') {
                 return ['body' => $raw, 'encoding' => 'br', 'path' => $brPath];
@@ -491,6 +517,12 @@ final class FpcHtmlDiskStore
         }
         $raw = @\file_get_contents($htmlPath);
         if (!\is_string($raw) || $raw === '') {
+            return null;
+        }
+        if (!\Weline\Framework\View\Helper\HtmlCacheAdmission::admitDocument($raw)) {
+            @\unlink($htmlPath);
+            @\unlink($htmlPath . '.ok');
+
             return null;
         }
 
@@ -1730,7 +1762,7 @@ final class FpcHtmlDiskStore
 
     private static function unlinkPageFiles(string $dir): void
     {
-        foreach (['index.html', 'index.html.br', self::BQ_BASENAME, self::BQ_BASENAME . '.br'] as $name) {
+        foreach (['index.html', 'index.html.br', 'index.html.ok', self::BQ_BASENAME, self::BQ_BASENAME . '.br'] as $name) {
             $file = $dir . \DIRECTORY_SEPARATOR . $name;
             if (\is_file($file)) {
                 @\unlink($file);

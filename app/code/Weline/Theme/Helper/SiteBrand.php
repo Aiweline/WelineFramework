@@ -132,6 +132,34 @@ class SiteBrand
         return self::DEFAULT_APPLE_TOUCH_ICON_PUBLIC_PATH;
     }
 
+    /**
+     * Site-bound logo for machine-facing surfaces (SEO Organization.logo, JSON-LD, llms).
+     * Returns '' when nothing site-specific exists so callers can decide — the framework
+     * default logo must never silently stand in for a real brand (audit E8).
+     */
+    public function resolveSiteLogoUrl(?int $width = null, ?int $height = null): string
+    {
+        $width = $width ?? 240;
+        $height = $height ?? 80;
+
+        foreach (['logo_light', 'logo_dark'] as $key) {
+            $fromTheme = $this->resolveThemeBrandUrl($key, $width, $height);
+            if ($fromTheme !== '') {
+                return $fromTheme;
+            }
+        }
+        if ($this->shouldUseBackendBrandIdentity()) {
+            foreach (['logo_light', 'logo_dark'] as $key) {
+                $url = $this->resolveMediaUrl($key, $width, $height);
+                if ($url !== '') {
+                    return $url;
+                }
+            }
+        }
+
+        return '';
+    }
+
     public function resolveFrontendLogoUrl(Template $template, int $width = 240, int $height = 80): string
     {
         foreach (['logo_light', 'logo_dark'] as $key) {

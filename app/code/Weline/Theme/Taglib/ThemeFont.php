@@ -46,6 +46,7 @@ final class ThemeFont implements TaglibInterface, StaticMirrorCapableInterface
             'style' => false,
             'display' => false,
             'unicode-range' => false,
+            'preload' => false,
         ];
     }
 
@@ -65,8 +66,9 @@ final class ThemeFont implements TaglibInterface, StaticMirrorCapableInterface
                 : "''";
 
             return '<?php ' . $code
-                . ' echo \\Weline\\Framework\\Manager\\ObjectManager::getInstance('
-                . '\\Weline\\Theme\\Font\\FontFaceService::class)->renderStyleTag(['
+                . ' $__welineFontFace = \\Weline\\Framework\\Manager\\ObjectManager::getInstance('
+                . '\\Weline\\Theme\\Font\\FontFaceService::class);'
+                . ' $__welineFontOpts = ['
                 . '\'src\' => (string)($Taglib__src ?? \'\'),'
                 . '\'family\' => (string)($Taglib__family ?? \'\'),'
                 . '\'lang\' => (string)($Taglib__lang ?? \'\'),'
@@ -75,7 +77,11 @@ final class ThemeFont implements TaglibInterface, StaticMirrorCapableInterface
                 . '\'style\' => (string)($Taglib__style ?? \'normal\'),'
                 . '\'display\' => (string)($Taglib__display ?? \'swap\'),'
                 . '\'unicode-range\' => (string)($Taglib__unicode_range ?? \'\'),'
-                . ']); ?>';
+                . '];'
+                . ' if (in_array(strtolower((string)($Taglib__preload ?? \'\')), [\'1\', \'true\', \'yes\'], true)) {'
+                . ' echo $__welineFontFace->renderPreloadLink($__welineFontOpts);'
+                . ' }'
+                . ' echo $__welineFontFace->renderStyleTag($__welineFontOpts); ?>';
         };
     }
 
@@ -85,7 +91,7 @@ final class ThemeFont implements TaglibInterface, StaticMirrorCapableInterface
             return null;
         }
 
-        $keys = ['src', 'family', 'lang', 'chars', 'weight', 'style', 'display', 'unicode-range', 'unicode_range'];
+        $keys = ['src', 'family', 'lang', 'chars', 'weight', 'style', 'display', 'unicode-range', 'unicode_range', 'preload'];
         if (!CompileTimeStaticMirror::attributesAreLiteral($attributes, $keys)) {
             return null;
         }
@@ -113,7 +119,12 @@ final class ThemeFont implements TaglibInterface, StaticMirrorCapableInterface
         /** @var FontFaceService $face */
         $face = ObjectManager::getInstance(FontFaceService::class);
 
-        return $face->renderStyleTag($options);
+        $preload = strtolower(CompileTimeStaticMirror::literalString($attributes['preload'] ?? ''));
+        $preloadHtml = in_array($preload, ['1', 'true', 'yes'], true)
+            ? $face->renderPreloadLink($options)
+            : '';
+
+        return $preloadHtml . $face->renderStyleTag($options);
     }
 
     public static function document(): string
@@ -130,6 +141,9 @@ final class ThemeFont implements TaglibInterface, StaticMirrorCapableInterface
 
 只提取属性 chars 里的字符（忽略语言表）：
 <w:theme:font src="NotoSansSC-Regular.ttf" family="Brand" chars="仅这些字ABC" weight="700" />
+
+首屏正文字体加 preload="1"，在 @font-face 之前输出 <link rel="preload" as="font">（同一条子集 URL，避免字体晚到导致文字闪/位移）：
+<w:theme:font src="NotoSansSC-Regular.ttf" family="Noto Sans SC" weight="400" display="swap" preload="1" />
 
 升级/网站语种变更会预热 view/fonts 下字体 × 语种；chars 子集在首次编译烘焙时生成并缓存。详见 Theme/doc/theme-font.md
 DOC;

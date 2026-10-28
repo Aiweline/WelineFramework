@@ -35,9 +35,12 @@ use Weline\Theme\Service\LayoutEntity\WidgetAssetArtifactPublisher;
  * **application scope** (+ layout_type for overlay) so themes/scopes/layouts never cross-pollute.
  *
  * FOUC policy (progressive): progressive paint, no whole-page body hide.
- * Chrome packs (PACK_TOKENS / PACK_STOREFRONT / PACK_OVERLAY) MUST stay blocking —
- * tryLinkHtml MUST NOT emit media="print" onload. media=print defer is reserved for
- * widget late source only (WidgetAssetOptimizer).
+ * Blocking policy: ONLY PACK_TOKENS blocks (variables must exist before first paint).
+ * PACK_STOREFRONT / PACK_OVERLAY are emitted via tryPreloadLinkHtml (rel=preload as=style
+ * + onload switch + noscript fallback) so LCP is not serialized behind CSS.
+ * First-paint shell stability is owned by layout-critical (<= 14 KB budget), not by
+ * blocking links. media=print defer remains reserved for widget late source only
+ * (WidgetAssetOptimizer) — never for chrome packs.
  *
  * work_mode=theme_module_runtime
  */
@@ -45,7 +48,7 @@ final class ThemeHeadChromeCssPack
 {
     /** ① Theme variables / light color tokens (blocking first link). */
     public const PACK_TOKENS = 'tokens';
-    /** ② Global base elements + theme.css + dark tokens (blocking; not print-deferred). */
+    /** ② Global base elements + theme.css + dark tokens (preload+onload; not blocking). */
     public const PACK_STOREFRONT = 'storefront';
     public const PACK_BACKEND = 'backend';
     public const PACK_TOKENS_PRE = 'tokens-pre';
@@ -147,6 +150,15 @@ final class ThemeHeadChromeCssPack
      */
     public function tryLinkHtml(string $area, string $pack, array $options = []): ?string
     {
+        // Enforced standard (theme-spec-gates S1): only PACK_TOKENS may block.
+        // Storefront / overlay are route-invariant bulk CSS — emitting them as blocking
+        // links serializes LCP behind ~50 KB (measured 1,200 ms on mobile). Templates
+        // (default + every custom design theme) keep calling tryLinkHtml, so the policy
+        // is applied in one place instead of 20 head partials.
+        if ($pack === self::PACK_STOREFRONT || $pack === self::PACK_OVERLAY) {
+            return $this->tryPreloadLinkHtml($area, $pack, $options);
+        }
+
         $area = $this->themeContext->normalizeArea($area);
         if (!$this->isEnabled($area)) {
             return null;
@@ -164,7 +176,7 @@ final class ThemeHeadChromeCssPack
             return null;
         }
         $safe = htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        // progressive FOUC: chrome packs stay blocking — never media="print" here.
+        // progressive FOUC: only tokens/backend reach here and stay blocking.
         // media=print onload is reserved for widget late source (WidgetAssetOptimizer).
         $attrs = ' rel="stylesheet" type="text/css" data-weline-theme-head-pack="'
             . htmlspecialchars($pack, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"';
@@ -234,6 +246,54 @@ final class ThemeHeadChromeCssPack
         $manifest = $this->loadThemeOverlayManifest($area, $theme);
 
         return $manifest['common'] !== [] || $manifest['layouts'] !== [];
+    }
+
+    /**
+     * 主题 overlay manifest 的全部叶（common + 每个 layouts{} 桶），供源码级重复检查使用。
+     * 只读 manifest，不看请求内发包状态，因此不受 head chrome 缓存影响。
+     *
+     * @return list<string>
+     */
+    public function overlayManifestLeaves(string $area = 'frontend', ?WelineTheme $theme = null): array
+    {
+        $area = $this->themeContext->normalizeArea($area);
+        $resolved = $theme instanceof WelineTheme ? $theme : $this->resolveTheme($area);
+        if (!$resolved instanceof WelineTheme || (int)$resolved->getId() < 1) {
+            return [];
+        }
+        $manifest = $this->loadThemeOverlayManifest($area, $resolved);
+        $leaves = $manifest['common'];
+        foreach ($manifest['layouts'] as $bucket) {
+            foreach ($bucket as $leaf) {
+                $leaves[] = $leaf;
+            }
+        }
+
+        return \array_values(\array_unique($leaves));
+    }
+
+    /**
+     * 本次请求 layout_type 下 PACK_OVERLAY 实际会带的叶。
+     * page/layout 的回退守卫必须用它，而不是 {@see themeOverlayAbsorbed()}：
+     * head chrome 走缓存时本请求根本没有 tryLinkHtml 调用，emittedPacks 为空。
+     *
+     * @return list<string>
+     */
+    public function overlayLeavesForCurrentRequest(string $area = 'frontend', ?WelineTheme $theme = null): array
+    {
+        $area = $this->themeContext->normalizeArea($area);
+        $resolved = $theme instanceof WelineTheme ? $theme : $this->resolveTheme($area);
+        if (!$resolved instanceof WelineTheme || (int)$resolved->getId() < 1) {
+            return [];
+        }
+        try {
+            return self::selectOverlayLeaves(
+                $this->loadThemeOverlayManifest($area, $resolved),
+                $this->resolveLayoutType([])
+            );
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     private function markPackEmitted(string $area, string $pack): void
@@ -388,6 +448,14 @@ final class ThemeHeadChromeCssPack
         }
         $safe = htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $attrs = ' data-weline-theme-head-pack="' . htmlspecialchars($pack, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"';
+        // Same markers as the blocking variant: WidgetAssetHtmlPlacement,
+        // ThemeHeadCssDuplicateInspector and StaticAssetResponseRewriter key off these.
+        if ($pack === self::PACK_OVERLAY) {
+            $attrs .= ' data-weline-theme-overlay="1"';
+        }
+        if ($pack === self::PACK_TOKENS) {
+            $attrs .= ' data-weline-theme-tokens="1"';
+        }
         $this->markPackEmitted($area, $pack);
         return '<link rel="preload" as="style" href="' . $safe . '"' . $attrs
             . ' onload="this.onload=null;this.rel=\'stylesheet\'">'

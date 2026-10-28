@@ -55,7 +55,7 @@ if (empty($linkGroups)) {
     <?php foreach ($linkGroups as $group): ?>
         <div class="link-group">
             <?php if (!empty($group['title'])): ?>
-                <h4 class="group-title"><?= $esc((string)__($group['title'])) ?></h4>
+                <h2 class="group-title"><?= $esc((string)__($group['title'])) ?></h2>
             <?php endif; ?>
             <?php if (!empty($group['links'])): ?>
                 <ul class="group-links">

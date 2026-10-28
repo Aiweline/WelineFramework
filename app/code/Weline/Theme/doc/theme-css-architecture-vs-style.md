@@ -199,3 +199,18 @@ body {
 - 至少覆盖：首页、列表页、详情页、FAQ、指南、购物车、结算、账户、政策页；桌面 1440 与手机 375 各一遍。
 - 背景图/渐变上的文字无法用纯色公式判定时，必须截图人工确认，不得默认通过。
 - 修复后复跑同一审计，低对比条目清零才算通过；不得只改根 token 就宣称全站通过。
+
+## head 阻塞策略（2026-10 起，S1–S3）
+
+head 只允许两类阻塞样式表：
+
+1. tokens pack（`data-weline-theme-tokens="1"`，首屏变量必须同步到位）；
+2. backend pack（仅 `/backend/`，管理界面不在 S2 范围）。
+
+storefront / overlay / 设计主题皮肤 / 第三方字体 CSS 一律
+`rel="preload" as="style"` + `onload` 切换 + `<noscript data-weline-preload-fallback="1">`。
+策略收口在 `ThemeHeadChromeCssPack::tryLinkHtml()`（storefront/overlay 内部转 preload），
+模板不必逐个改；自定义主题皮肤里的手写字面量链接由门禁 S2 兜底。
+
+首屏外壳由 `<theme:layout-critical>` 内联兜住（`.w-container` / hero 宽高比 / 字号阶梯 /
+按钮最小高度），预算 ≤ 14,336 字节。规则与反例见 `theme-spec-gates.md`。

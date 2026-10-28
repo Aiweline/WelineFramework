@@ -31,12 +31,14 @@
     --color-text-primary: var(--color-text);
     --color-text-body: #1c1c1c;
     --color-text-secondary: #4a4a48;
-    --color-text-tertiary: #7a7874;
-    --color-text-subtle: #7a7874;
+    /* WCAG AA: tertiary/subtle/placeholder are real text tokens — keep >= 4.5:1 on
+       --color-bg-canvas and --color-bg-primary. Guarded by ContrastTokenTest (E11). */
+    --color-text-tertiary: #6b6a66;
+    --color-text-subtle: #6b6a66;
     --color-text-disabled: #b8b4ac;
     --color-text-dark: #1c1c1c;
     --color-text-muted: #5c5a56;
-    --color-text-placeholder: #9a968e;
+    --color-text-placeholder: #6f6b62;
     --color-text-inverse: #f7f4ef;
     --color-text-light: #f7f4ef;
     --color-text-light-secondary: #d4cfc5;

@@ -143,3 +143,12 @@ $css = (new FontFaceService())->renderStyleTag([
 - 源字体请确认授权可子集化与分发。
 - CJK 语言字符表是「常用字」级别，不是全汉字；页面若用到表外字，可对页面正文再调 `extractChars` / `chars`。
 - 子集引擎源自 php-font-lib（LGPL），见 `Theme/Font/NOTICE.md`。
+
+## 6. preload 与语种策略（2026-10）
+
+- `<w:theme:font preload="1">`：输出 `<link rel="preload" as="font" ... crossorigin>`，
+  让正文家族不再等 CSS 解析后才发起字体请求。默认不加，只给正文/LCP 家族加。
+- 语种分组：`Theme/Helper/FontLocalePolicy::isCjk()`（`zh*` / `ja*` / `ko*`）为真时
+  才输出 CJK 家族；非 CJK 站点拉 Noto Sans SC 属于纯浪费。
+- 门禁：head 中 `<w:theme:font>` 不得显式 `display="block|auto|fallback"`（S7），
+  见 `theme-spec-gates.md`。

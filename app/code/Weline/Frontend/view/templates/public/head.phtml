@@ -13,13 +13,16 @@ $storefrontBaseHref = rtrim($frontendRoot, '/') . '/';
 <base href="<?= htmlspecialchars($storefrontBaseHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<?php // Fonts follow the rendered language: CJK families only on zh/ja/ko pages (theme-spec-gates S7). ?>
+<?php if (\Weline\Theme\Helper\FontLocalePolicy::isCjk()): ?>
+<w:theme:font src="NotoSansSC-Regular.ttf" family="Noto Sans SC" weight="400" display="swap" preload="1"/>
 <w:theme:font src="LXGWWenKai-Regular.ttf" family="LXGW WenKai" weight="400" display="swap"/>
 <w:theme:font src="LXGWWenKai-Medium.ttf" family="LXGW WenKai" weight="500" display="swap"/>
 <w:theme:font src="NotoSerifSC-Regular.ttf" family="Noto Serif SC" weight="400" display="swap"/>
 <w:theme:font src="NotoSerifSC-Bold.ttf" family="Noto Serif SC" weight="700" display="swap"/>
 <w:theme:font src="ZCOOLXiaoWei-Regular.ttf" family="ZCOOL XiaoWei" weight="400" display="swap"/>
-<w:theme:font src="NotoSansSC-Regular.ttf" family="Noto Sans SC" weight="400" display="swap"/>
 <w:theme:font src="NotoSansSC-Bold.ttf" family="Noto Sans SC" weight="700" display="swap"/>
+<?php endif; ?>
 <w:seo slot="head"/>
 <w:geo slot="head"/>
 <w:hook>Weline_Theme::frontend::partials::head::favicon<else/><w:template>Weline_Theme::partials/head/site-favicon.phtml</w:template></w:hook>

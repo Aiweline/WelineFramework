@@ -1,10 +1,24 @@
-/* Layout-critical budget (storefront). Full rules live in weline-frontend.css / foundation. */
+/* Layout-critical budget (storefront). Full rules live in weline-frontend.css / foundation.
+ * Budget: <= 14 KB uncompressed (enforced by Theme/test/Unit/Ui/LayoutCriticalBudgetTest.php).
+ *
+ * Why this file exists after head CSS went non-blocking:
+ * PACK_TOKENS stays blocking; PACK_STOREFRONT / PACK_OVERLAY arrive via rel=preload
+ * (see ThemeHeadChromeCssPack::tryPreloadLinkHtml). Everything above the fold that
+ * would otherwise shift must therefore be reserved here.
+ *
+ * Primitives (.w-container / .w-grid / .w-stack …) are prepended at render time by
+ * LayoutCriticalCssService from view/ui/css/critical-utilities.css — do not duplicate them here.
+ */
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; line-height: 1.5; }
 body {
     margin: 0;
     background: var(--weline-theme-body-bg, var(--weline-chrome-body-bg, var(--color-bg-canvas, var(--weline-theme-canvas, #ffffff))));
     color: var(--weline-theme-body-text, var(--color-text-primary, #0f1111));
+}
+img, video, svg {
+    max-width: 100%;
+    height: auto;
 }
 .weline-page-wrapper {
     min-height: 100vh;
@@ -30,3 +44,56 @@ body {
 .w-frontend-header { border-bottom: 1px solid var(--weline-theme-border, #d7dde7); }
 .w-frontend-footer { border-top: 1px solid var(--weline-theme-border, #d7dde7); }
 .w-maintenance-shell { display: grid; min-height: 100vh; place-items: center; padding: var(--weline-space-5, 1.25rem); }
+
+/* ---- Header shell: reserve the chrome box so the deferred storefront pack
+ *      cannot shift content down by ~80 px on arrival. ---- */
+.w-frontend-header,
+.wc-theme_widget_full_header {
+    position: relative;
+    z-index: 20;
+    inline-size: 100%;
+}
+.w-frontend-header .w-container,
+.wc-theme_widget_full_header .w-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--weline-space-4, 1rem);
+}
+.wc-theme_widget_full_header .header-topbar { min-block-size: 2rem; }
+.wc-theme_widget_full_header .header-main { min-block-size: 3.5rem; }
+
+/* ---- Main / homepage shell ---- */
+.homepage-main { display: block; }
+.homepage-section { inline-size: 100%; min-inline-size: 0; }
+.homepage-section + .homepage-section { margin-block-start: var(--weline-space-8, 2rem); }
+
+/* ---- Hero box reservation (mirrors layout-homepage-default.css so the
+ *      overlay pack arriving late cannot reflow the LCP element). ---- */
+.homepage-hero { position: relative; inline-size: 100%; overflow: hidden; }
+.homepage-hero .slider-wrapper,
+.homepage-hero .slide-media {
+    position: relative;
+    inline-size: 100%;
+    aspect-ratio: var(--wc-hero-aspect, 1920 / 600);
+    max-block-size: min(60vh, 37.5rem);
+    overflow: hidden;
+}
+.homepage-hero .slide-media > img,
+.homepage-hero .slide-media picture > img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    object-position: center 28%;
+}
+
+/* ---- Typography scale: without it, deferred rules would reflow headings. ---- */
+h1, h2, h3 { margin-block: 0 var(--weline-space-3, 0.75rem); line-height: 1.2; }
+h1 { font-size: var(--weline-font-size-2xl, 2rem); }
+h2 { font-size: var(--weline-font-size-xl, 1.5rem); }
+h3 { font-size: var(--weline-font-size-lg, 1.25rem); }
+p, ul, ol { margin-block: 0 var(--weline-space-3, 0.75rem); }
+body, p, li { font-size: var(--weline-font-size-base, 1rem); }
+
+/* ---- Interactive shell: keep buttons tappable before overlay CSS lands. ---- */
+.w-button, button, [role="button"] { min-block-size: 2.5rem; }

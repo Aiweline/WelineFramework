@@ -1385,6 +1385,11 @@ class Template extends DataObject implements RequestLocalInterface
 
     private function compileSourceBytes(string $baseCompiledPath, string $sourceBytes, string $originPath, string $contextKey, ?string $sourceHash = null): string
     {
+        if (\defined('DEV') && DEV) {
+            // Theme spec gate: a non-compliant theme template must fail here, while
+            // editing, not later in PageSpeed. Throws ThemeSpecViolationException.
+            \Weline\Theme\Service\Spec\ThemeSpecValidator::assertFileForDev($originPath);
+        }
         $sourceHash ??= $this->sourceBytesDigest($sourceBytes);
         // S2-A：模板级白名单（默认关闭）。只有显式配置 engine.templates 命中时才走 v3；
         // 未配置时 useV3=false，旧编译入口行为完全不变。
@@ -1868,10 +1873,38 @@ class Template extends DataObject implements RequestLocalInterface
                 $comFileName = $this->getFetchFile($fileName);
                 $result = $this->ob_file($comFileName, $dictionary);
             }
+            self::assertDocumentIntegrityInDev($result, $fileName);
+
             return $result;
         } finally {
             TemplateRenderRouteTrace::end('fetch_html', $routeIdentity);
         }
+    }
+
+    /**
+     * Dev-only hard stop for truncated documents (theme-spec-gates S10).
+     *
+     * Production refuses to cache such bodies in FpcHtmlDiskStore; in dev the point is to
+     * fail loudly at the render site instead of shipping a 200 with no <body>. Fragments
+     * are untouched: the check only runs when the output actually starts a document.
+     */
+    private static function assertDocumentIntegrityInDev($result, string $fileName): void
+    {
+        if (!\defined('DEV') || !DEV || !\is_string($result) || $result === '') {
+            return;
+        }
+        if (\stripos($result, '<html') === false && \stripos($result, '<!DOCTYPE') === false) {
+            return;
+        }
+        $issue = \Weline\Framework\View\Helper\HtmlCacheAdmission::documentIntegrityIssue($result);
+        if ($issue === '') {
+            return;
+        }
+        throw new \RuntimeException(
+            'Incomplete document from template "' . $fileName . '" (' . $issue . ', bytes=' . \strlen($result)
+            . '). The page was cut off before </body></html>. Fix the render/first exit()/die() in the '
+            . 'layout chain; FPC would otherwise cache a head-only leaf.'
+        );
     }
 
     private function addSourceModuleToRequest(string $type, string $source): void

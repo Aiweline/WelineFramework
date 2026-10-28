@@ -169,35 +169,44 @@ final class DesignSystemContractTest extends TestCase
         self::assertStringContainsString('var(--weline-theme-active-text)', $backendCss);
     }
 
-    public function testCriticalCssHeadKeepsLayoutBlocking(): void
+    public function testCriticalCssHeadBlocksOnlyTokens(): void
     {
         $pack = (string)file_get_contents(BP . 'app/code/Weline/Theme/Service/ThemeHeadChromeCssPack.php');
-        // 非阻塞能力保留为可选 API，但布局 CSS 必须走阻塞主包。
+        // 非阻塞能力必须存在，且策略收口在服务层：storefront/overlay 由 tryLinkHtml 内部
+        // 改走 preload，模板（默认主题 + 所有自定义主题）无需逐个修改。
         self::assertStringContainsString('function tryInlineCssHtml', $pack);
         self::assertStringContainsString('function tryPreloadLinkHtml', $pack);
         self::assertStringContainsString('rel="preload" as="style"', $pack);
+        self::assertStringContainsString('if ($pack === self::PACK_STOREFRONT || $pack === self::PACK_OVERLAY)', $pack);
+        self::assertStringContainsString('return $this->tryPreloadLinkHtml($area, $pack, $options);', $pack);
 
         $backendHead = (string)file_get_contents(
             BP . 'app/code/Weline/Theme/view/theme/backend/partials/head/default.phtml'
         );
         self::assertStringContainsString('tryLinkHtml', $backendHead);
         self::assertStringContainsString('theme:layout-critical', $backendHead);
-        self::assertStringNotContainsString('tryPreloadLinkHtml', $backendHead, 'Layout pack must stay render-blocking.');
+        self::assertStringContainsString('PACK_BACKEND', $backendHead, 'Admin chrome must keep the blocking backend pack.');
         self::assertStringNotContainsString('renderInlineStyle', $backendHead);
 
         $frontendPrefix = (string)file_get_contents(
             BP . 'app/code/Weline/Theme/view/theme/frontend/partials/head/assets-prefix.phtml'
         );
         self::assertStringContainsString('tryLinkHtml', $frontendPrefix);
-        self::assertStringNotContainsString('tryPreloadLinkHtml', $frontendPrefix, 'Storefront layout pack must stay render-blocking.');
+        self::assertStringContainsString('tryPreloadLinkHtml', $frontendPrefix, 'Storefront base/overlay must not block LCP.');
         self::assertStringNotContainsString('renderInlineStyle', $frontendPrefix);
+        // tokens 仍然是阻塞包（首屏变量必须同步到位）。
+        self::assertMatchesRegularExpression(
+            '/tryLinkHtml\(\s*\'frontend\',\s*\\\\Weline\\\\Theme\\\\Service\\\\ThemeHeadChromeCssPack::PACK_TOKENS/',
+            $frontendPrefix
+        );
 
-        // 设计主题皮肤与后台 widget CSS 必须阻塞，避免 LCP/骨架闪屏。
+        // 设计主题皮肤 CSS 与默认主题同标准：head 只允许 tokens/backend 阻塞（S2）。
         $hanfuSkin = (string)file_get_contents(
             BP . 'app/design/Weline/hanfu/frontend/partials/head/hanfu-skin.phtml'
         );
-        self::assertStringContainsString("return '<link rel=\"stylesheet\"", $hanfuSkin);
-        self::assertStringNotContainsString('rel="preload" as="style"', $hanfuSkin);
+        self::assertStringContainsString('rel="preload" as="style"', $hanfuSkin);
+        self::assertStringContainsString('data-weline-preload-fallback="1"', $hanfuSkin);
+        // 后台 widget CSS 仍必须阻塞，避免后台骨架闪屏（后台不在 S2 范围）。
         $ssa = (string)file_get_contents(
             BP . 'app/code/Weline/SiteSetupAssistant/view/hooks/Weline_Theme/backend/layouts/base/body-end.phtml'
         );
@@ -223,11 +232,16 @@ final class DesignSystemContractTest extends TestCase
             $rel = str_replace(BP, '', $file);
             // 注释里的 PACK_* 提及不算发射；只在真实代码上断言。
             $code = (string)preg_replace(['#/\*.*?\*/#s', '#//[^\n]*#'], '', $src);
-            self::assertStringNotContainsString('tryPreloadLinkHtml', $code, 'Design theme must not preload layout CSS: ' . $rel);
+            // 阻塞策略收口在 ThemeHeadChromeCssPack：设计主题直接调 tryLinkHtml 即可，
+            // 服务层会把 storefront/overlay 改走 preload。禁止的是「主题自己内联 pack CSS」。
             self::assertStringNotContainsString('tryInlineCssHtml', $code, 'Design theme must not inline pack CSS: ' . $rel);
             self::assertStringNotContainsString('renderInlineStyle', $code, 'Design theme must not inline component CSS: ' . $rel);
             if (str_contains($code, 'PACK_STOREFRONT') && preg_match('/->try[A-Za-z]*LinkHtml\(/', $code) === 1) {
-                self::assertStringContainsString('tryLinkHtml', $code, 'Pack-emitting theme head must stay blocking: ' . $rel);
+                self::assertMatchesRegularExpression(
+                    '/->try(?:Link|PreloadLink)Html\(/',
+                    $code,
+                    'Pack-emitting theme head must delegate to the pack service: ' . $rel
+                );
             }
             if (str_contains($src, 'theme:layout-critical')) {
                 $parts = explode('/frontend/partials/head/', $rel);

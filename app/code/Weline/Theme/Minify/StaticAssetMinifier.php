@@ -18,6 +18,9 @@ use Weline\Theme\Minify\Js\JsMin;
  */
 final class StaticAssetMinifier
 {
+    /** DEV 预算：未压缩的静态资产超此体积即告警（部署后才发现体积问题太晚）。 */
+    public const DEV_ASSET_WARN_BYTES = 102400;
+
     /**
      * @return bool Whether the path should be considered for minify.
      */
@@ -25,6 +28,10 @@ final class StaticAssetMinifier
     {
         $basename = strtolower(basename($path));
         if (preg_match('/\.min\.(css|js|mjs)$/', $basename) === 1) {
+            return false;
+        }
+        // Source maps / type declarations are not runtime payloads.
+        if (preg_match('/\.(map|d\.ts)$/', $basename) === 1) {
             return false;
         }
 

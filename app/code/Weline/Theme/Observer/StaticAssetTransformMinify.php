@@ -26,14 +26,27 @@ class StaticAssetTransformMinify implements ObserverInterface
 
     public function execute(Event &$event): void
     {
-        if (defined('DEV') && DEV) {
-            return;
-        }
-
         $data = $event->getEvenData();
         $targetPath = (string)$data->getData('target_path');
         $extension = strtolower((string)$data->getData('extension'));
         $pathForCheck = $targetPath !== '' ? $targetPath : ('file.' . $extension);
+
+        if (defined('DEV') && DEV) {
+            // DEV：不压缩，但超预算立即告警，让体积问题在开发期暴露。
+            if ($this->minifier->shouldMinify($pathForCheck)) {
+                $size = strlen((string)$data->getData('content'));
+                if ($size > StaticAssetMinifier::DEV_ASSET_WARN_BYTES && function_exists('w_log_warning')) {
+                    w_log_warning(sprintf(
+                        '[Theme Minify] %s is %d bytes in DEV (budget %d); minify or split before deploy.',
+                        $pathForCheck,
+                        $size,
+                        StaticAssetMinifier::DEV_ASSET_WARN_BYTES
+                    ));
+                }
+            }
+
+            return;
+        }
 
         if (!$this->minifier->shouldMinify($pathForCheck)) {
             return;

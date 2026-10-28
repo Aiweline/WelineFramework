@@ -59,8 +59,9 @@ $diskAbsorbed = false;
 <theme:css>Weline_Theme::theme/frontend/colors/_default.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_ink.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_light.css</theme:css>
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)">
+<link rel="preload" as="style" href="@static(Weline_Theme::ui/weline-foundation.css)" onload="this.onload=null;this.rel='stylesheet'">
+<link rel="preload" as="style" href="@static(Weline_Theme::ui/weline-frontend.css)" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" data-weline-preload-fallback="1" href="@static(Weline_Theme::ui/weline-foundation.css)"><link rel="stylesheet" data-weline-preload-fallback="1" href="@static(Weline_Theme::ui/weline-frontend.css)"></noscript>
 <theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_dark.css</theme:css>
 <?php if (!$diskAbsorbed) { echo $diskOverrideHtml; } ?>
