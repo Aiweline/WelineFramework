@@ -11,25 +11,25 @@ use Weline\Server\Service\StaticRequestBypassDecider;
 
 class IndustryProtocolDocumentsTest extends TestCase
 {
-    public function testAiTxtIsTrainingOptOutAndNotAnLlmsCopy(): void
+    public function testAiTxtAllowsTrainingAndIsNotAnLlmsCopy(): void
     {
         $body = IndustryProtocolDocuments::aiTxt();
 
         self::assertStringContainsString('User-Agent: *', $body);
-        self::assertStringContainsString('Disallow: /', $body);
+        self::assertStringContainsString('Allow: /', $body);
+        self::assertStringNotContainsString('Disallow: /', $body);
         self::assertStringNotContainsString('## Products', $body);
         self::assertStringNotContainsString('## Discovery', $body);
     }
 
-    public function testLicenseAllowsSearchAndAiInputButNotTraining(): void
+    public function testLicenseAllowsSearchAiInputAndTraining(): void
     {
         $open = IndustryProtocolDocuments::licenseXml(true);
         self::assertStringContainsString('xmlns="https://rslstandard.org/rsl"', $open);
-        self::assertStringContainsString('<permits type="usage">search ai-input</permits>', $open);
-        self::assertStringNotContainsString('ai-train', $open);
+        self::assertStringContainsString('<permits type="usage">search ai-input ai-train</permits>', $open);
 
         $closed = IndustryProtocolDocuments::licenseXml(false);
-        self::assertStringContainsString('<permits type="usage">search</permits>', $closed);
+        self::assertStringContainsString('<permits type="usage">search ai-train</permits>', $closed);
         self::assertStringNotContainsString('ai-input', $closed);
     }
 
@@ -41,12 +41,12 @@ class IndustryProtocolDocumentsTest extends TestCase
         self::assertSame(0, $decoded[0]['tdm-reservation']);
     }
 
-    public function testTrustTxtRefusesTraining(): void
+    public function testTrustTxtAllowsTraining(): void
     {
         $body = IndustryProtocolDocuments::trustTxt('https://shop.example');
 
         self::assertStringContainsString('member=https://shop.example', $body);
-        self::assertStringContainsString('datatrainingallowed=no', $body);
+        self::assertStringContainsString('datatrainingallowed=yes', $body);
         self::assertStringNotContainsString('member=', IndustryProtocolDocuments::trustTxt(''));
     }
 
@@ -54,11 +54,12 @@ class IndustryProtocolDocumentsTest extends TestCase
     {
         $lines = IndustryProtocolDocuments::robotsContribution('https://shop.example', true, true);
 
-        self::assertSame(['License: https://shop.example/license.xml'], $lines['global_lines']);
-        self::assertContains('Content-Signal: search=yes, ai-input=yes, ai-train=no', $lines['star_lines']);
+        self::assertSame(['# RSL license: https://shop.example/license.xml'], $lines['global_lines']);
+        self::assertSame([], preg_grep('/^License:/i', $lines['global_lines']), 'REP has no License directive; consoles report it as unknown');
+        self::assertContains('Content-Signal: search=yes, ai-input=yes, ai-train=yes', $lines['star_lines']);
 
         $closed = IndustryProtocolDocuments::robotsContribution('https://shop.example', true, false);
-        self::assertContains('Content-Signal: search=yes, ai-input=no, ai-train=no', $closed['star_lines']);
+        self::assertContains('Content-Signal: search=yes, ai-input=no, ai-train=yes', $closed['star_lines']);
 
         $blocked = IndustryProtocolDocuments::robotsContribution('not a url', false, true);
         self::assertSame([], $blocked['global_lines']);

@@ -94,7 +94,7 @@ IP定位失败,IP定位失败
 "GEO 协议与 AI 搜索发现","GEO 协议与 AI 搜索发现"
 "llms.txt 与 AI 引用","llms.txt 与 AI 引用"
 "启用 AI 搜索发现文件","启用 AI 搜索发现文件"
-"关闭后不再允许 ai-input。ai.txt、license.xml、trust.txt 与 tdmrep.json 仍会发布，训练保持关闭。","关闭后不再允许 ai-input。ai.txt、license.xml、trust.txt 与 tdmrep.json 仍会发布，训练保持关闭。"
+"关闭后不再允许 ai-input。ai.txt、license.xml、trust.txt 与 tdmrep.json 仍会发布；AI 训练与引用默认开放。","关闭后不再允许 ai-input。ai.txt、license.xml、trust.txt 与 tdmrep.json 仍会发布；AI 训练与引用默认开放。"
 "GEO Feed","GEO Feed"
 "启用 JSON Feed / RSS Feed","启用 JSON Feed / RSS Feed"
 自动推送,自动推送
