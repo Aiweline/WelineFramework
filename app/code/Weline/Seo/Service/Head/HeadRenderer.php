@@ -300,9 +300,16 @@ class HeadRenderer
         if ($url !== '') {
             $html[] = '<meta property="og:url" content="' . $this->escape($url) . '">';
         }
-        if (!empty($context['image'])) {
-            $html[] = '<meta property="og:image" content="' . $this->escape((string) $context['image']) . '">';
-            $html[] = '<meta name="twitter:image" content="' . $this->escape((string) $context['image']) . '">';
+        $image = (string) ($context['image'] ?? '');
+        // Emission authority: a share image hosted on another site's domain would
+        // brand this page as the sibling site; drop it rather than echo it (E8/E9).
+        $siteUrl = $url !== '' ? $this->siteRoot($url) : '';
+        if ($image !== '' && $siteUrl !== '' && !$this->urlBelongsToSite($image, $siteUrl)) {
+            $image = '';
+        }
+        if ($image !== '') {
+            $html[] = '<meta property="og:image" content="' . $this->escape($image) . '">';
+            $html[] = '<meta name="twitter:image" content="' . $this->escape($image) . '">';
             $imageAlt = trim((string) ($context['image_alt'] ?? $context['title'] ?? ''));
             if ($imageAlt !== '') {
                 $html[] = '<meta property="og:image:alt" content="' . $this->escape($imageAlt) . '">';

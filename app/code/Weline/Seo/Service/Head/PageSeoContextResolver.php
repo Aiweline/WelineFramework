@@ -135,6 +135,12 @@ class PageSeoContextResolver
             $this->read($page, ['image', 'cover_image', 'featured_image']),
             $this->read($layoutFallback, ['image', 'og_image']),
         ]));
+        // A share image hosted on another site's domain (typical of cloned/seed SEO
+        // config) must never be emitted as this site's og:image: crawlers would
+        // attribute the card to the sibling brand (E8/E9). Omit rather than echo it.
+        if ($image !== '' && !$this->urlBelongsToCurrentSite($image)) {
+            $image = '';
+        }
         $imageAlt = $this->normalizeDescription($this->firstNonEmpty([
             $this->read($seo, ['image_alt', 'og_image_alt', 'twitter_image_alt']),
             $this->read($product, ['image_alt', 'alt']),
@@ -883,8 +889,8 @@ class PageSeoContextResolver
         if ($host === '') {
             $configured = rtrim((string) (
                 \Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_URL', '')
-                ?: w_env('website_url', '')
-                ?: w_env('website.url', '')
+                ?: \Weline\Framework\Env\WelineEnv::get('website_url', '')
+                ?: \Weline\Framework\Env\WelineEnv::get('website.url', '')
             ), '/');
             return $configured;
         }
@@ -1192,13 +1198,13 @@ class PageSeoContextResolver
         $organization = $this->toArray($seo['organization'] ?? $meta['organization'] ?? []);
         $organization['name'] = (string) ($organization['name'] ?? $siteName);
         $organization['url'] = (string) ($organization['url'] ?? $this->absoluteUrl($template, '/'));
-        if (!$this->logoBelongsToCurrentSite($organization['url'])) {
+        if (!$this->urlBelongsToCurrentSite($organization['url'])) {
             // A seeded organization url pointing at another site's domain must not claim
             // this site's Organization node; fall back to this site's own root.
             $organization['url'] = $this->absoluteUrl($template, '/');
         }
         $logo = trim((string) ($organization['logo'] ?? ''));
-        if ($logo !== '' && !$this->logoBelongsToCurrentSite($logo)) {
+        if ($logo !== '' && !$this->urlBelongsToCurrentSite($logo)) {
             // A logo copied from another site's seed config (e.g. another design theme's
             // og-default.webp) must never label this site's Organization: Google would
             // attribute the brand to the wrong domain (E8/E9).
@@ -1210,7 +1216,7 @@ class PageSeoContextResolver
             // and Google simply drops the logo rich result.
             $siteLogo = $this->resolveSiteBoundLogoUrl();
             // The site-bound setting itself may still point at the seeding site's asset.
-            $logo = $this->logoBelongsToCurrentSite($siteLogo) ? $siteLogo : '';
+            $logo = $this->urlBelongsToCurrentSite($siteLogo) ? $siteLogo : '';
         }
         if ($logo !== '') {
             $organization['logo'] = $logo;
@@ -1260,13 +1266,13 @@ class PageSeoContextResolver
     }
 
     /**
-     * Whether an absolute logo URL belongs to the site currently being rendered.
+     * Whether an absolute URL belongs to the site currently being rendered.
      * Relative paths are same-origin by definition.
      */
-    private function logoBelongsToCurrentSite(string $logo): bool
+    private function urlBelongsToCurrentSite(string $url): bool
     {
-        $logoHost = strtolower((string) parse_url($logo, PHP_URL_HOST));
-        if ($logoHost === '') {
+        $urlHost = strtolower((string) parse_url($url, PHP_URL_HOST));
+        if ($urlHost === '') {
             return true;
         }
         $baseHost = strtolower((string) parse_url($this->currentRequestBaseUrl(), PHP_URL_HOST));
@@ -1274,7 +1280,7 @@ class PageSeoContextResolver
             return true;
         }
 
-        return $this->normalizeSeoHost($logoHost) === $this->normalizeSeoHost($baseHost);
+        return $this->normalizeSeoHost($urlHost) === $this->normalizeSeoHost($baseHost);
     }
 
     private function normalizeSeoHost(string $host): string
