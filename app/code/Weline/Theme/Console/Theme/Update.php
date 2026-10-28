@@ -47,8 +47,13 @@ class Update extends AbstractConsole
                 $raw[] = (string)$value;
             }
         }
-        if ($raw !== [] && $raw[0] === 'theme:update') {
-            \array_shift($raw);
+        // CLI 支持前缀匹配（`theme:up` 也会命中本命令），首段可能是别名而非规范名，
+        // 因此按「实际输入的命令名」判断，不能只认字面量 theme:update。
+        if ($raw !== [] && !\str_starts_with((string)$raw[0], '-')) {
+            $invoked = \is_string($args['command'] ?? null) ? (string)$args['command'] : '';
+            if ($raw[0] === 'theme:update' || ($invoked !== '' && \strcasecmp((string)$raw[0], $invoked) === 0)) {
+                \array_shift($raw);
+            }
         }
         $action = self::resolveAction($raw);
         if ($raw !== [] && !\str_starts_with((string)$raw[0], '-')) {
