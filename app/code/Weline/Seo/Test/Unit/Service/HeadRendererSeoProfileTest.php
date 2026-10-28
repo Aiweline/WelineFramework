@@ -75,6 +75,32 @@ class HeadRendererSeoProfileTest extends TestCase
         self::assertStringContainsString('"inLanguage": "zh-Hans-CN"', $html);
     }
 
+    public function testEmptyImageAltFallsBackToTitle(): void
+    {
+        $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['resolve'])
+            ->getMock();
+        $resolver->method('resolve')->willReturn([
+            'page_type' => 'web_page',
+            'site_name' => 'Shop',
+            'title' => 'Contact Us',
+            'description' => 'Reach the team.',
+            'robots' => 'index,follow',
+            'canonical_url' => 'https://shop.test/contact',
+            'url' => 'https://shop.test/contact',
+            'image' => 'https://shop.test/media/share.jpg',
+            // Layout-only pages resolve an empty string, which must not suppress the tag.
+            'image_alt' => '',
+            'organization' => ['name' => 'Shop', 'url' => 'https://shop.test/'],
+        ]);
+
+        $html = (new HeadRenderer($resolver, new EmptySeoStructureRegistry()))->render(new SeoProfileHeadTemplateStub());
+
+        self::assertStringContainsString('<meta property="og:image:alt" content="Contact Us">', $html);
+        self::assertStringContainsString('<meta name="twitter:image:alt" content="Contact Us">', $html);
+    }
+
     public function testRendersBlogListCollectionPageItemListGraph(): void
     {
         $resolver = $this->getMockBuilder(PageSeoContextResolver::class)

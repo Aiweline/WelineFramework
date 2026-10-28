@@ -138,8 +138,13 @@ class PageSeoContextResolver
         // Pages whose SEO comes only from the theme layout (e.g. /contact, /about)
         // still need a social card: fall back to the site-level share image. Omit
         // when none is configured rather than fabricating one.
+        $usesSiteShareImage = false;
         if ($image === '') {
-            $image = $this->absoluteUrl($template, $this->resolveSiteDefaultShareImage());
+            $siteShareImage = $this->absoluteUrl($template, $this->resolveSiteDefaultShareImage());
+            if ($siteShareImage !== '') {
+                $image = $siteShareImage;
+                $usesSiteShareImage = true;
+            }
         }
         // A share image hosted on another site's domain (typical of cloned/seed SEO
         // config) must never be emitted as this site's og:image: crawlers would
@@ -152,6 +157,11 @@ class PageSeoContextResolver
             $this->read($product, ['image_alt', 'alt']),
             $this->read($page, ['image_alt', 'cover_image_alt', 'featured_image_alt']),
         ]));
+        // The site-level share card is a brand asset, so its alt is the site name
+        // rather than a per-page title that no longer describes the image.
+        if ($usesSiteShareImage && $image !== '' && $imageAlt === '') {
+            $imageAlt = (string) $siteName;
+        }
 
         $pageType = $this->detectPageType($product, $category, $page, $meta, $seo);
         $breadcrumbs = $this->normalizeBreadcrumbs($this->firstNonEmpty([

@@ -310,7 +310,9 @@ class HeadRenderer
         if ($image !== '') {
             $html[] = '<meta property="og:image" content="' . $this->escape($image) . '">';
             $html[] = '<meta name="twitter:image" content="' . $this->escape($image) . '">';
-            $imageAlt = trim((string) ($context['image_alt'] ?? $context['title'] ?? ''));
+            // An empty image_alt (common on layout-only pages) is not a value:
+            // fall back to the page title so og:image:alt is still emitted.
+            $imageAlt = trim((string) ($context['image_alt'] ?? '')) ?: trim((string) ($context['title'] ?? ''));
             if ($imageAlt !== '') {
                 $html[] = '<meta property="og:image:alt" content="' . $this->escape($imageAlt) . '">';
                 $html[] = '<meta name="twitter:image:alt" content="' . $this->escape($imageAlt) . '">';
