@@ -1192,6 +1192,11 @@ class PageSeoContextResolver
         $organization = $this->toArray($seo['organization'] ?? $meta['organization'] ?? []);
         $organization['name'] = (string) ($organization['name'] ?? $siteName);
         $organization['url'] = (string) ($organization['url'] ?? $this->absoluteUrl($template, '/'));
+        if (!$this->logoBelongsToCurrentSite($organization['url'])) {
+            // A seeded organization url pointing at another site's domain must not claim
+            // this site's Organization node; fall back to this site's own root.
+            $organization['url'] = $this->absoluteUrl($template, '/');
+        }
         $logo = trim((string) ($organization['logo'] ?? ''));
         if ($logo !== '' && !$this->logoBelongsToCurrentSite($logo)) {
             // A logo copied from another site's seed config (e.g. another design theme's
@@ -1203,7 +1208,9 @@ class PageSeoContextResolver
             // Site-bound logo only. The framework default logo must never impersonate a
             // real brand in Organization JSON-LD; omitting it is the honest result
             // and Google simply drops the logo rich result.
-            $logo = $this->resolveSiteBoundLogoUrl();
+            $siteLogo = $this->resolveSiteBoundLogoUrl();
+            // The site-bound setting itself may still point at the seeding site's asset.
+            $logo = $this->logoBelongsToCurrentSite($siteLogo) ? $siteLogo : '';
         }
         if ($logo !== '') {
             $organization['logo'] = $logo;
