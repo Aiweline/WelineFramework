@@ -4,21 +4,29 @@ declare(strict_types=1);
 
 namespace Weline\Database\Cron;
 
+use Weline\Cron\CronTaskPreflightInterface;
+use Weline\Database\Model\SchemaIndexJob;
 use Weline\Database\Service\Index\SchemaIndexConfig;
+use Weline\Database\Service\Index\SchemaIndexDeltaDetector;
 use Weline\Database\Service\Index\SchemaIndexJobService;
 use Weline\Framework\App\SystemUpdateActivity;
 use Weline\Framework\Cron\CronTaskInterface;
+use Weline\Framework\Manager\ObjectManager;
 
 /**
  * Schedules at most max_concurrent index builds. The actual long DDL runs in
  * SchemaIndexApplyQueue, so the cron process never owns a multi-minute
  * CREATE INDEX CONCURRENTLY call.
+ *
+ * 只消费看门狗（SchemaIndexWatchdog）写进 flagged 的表：flagged 为空说明本轮没有
+ * 数据变化，直接 skip:no_watchdog_flagged，不查窗口/负载/任务。
  */
-final class SchemaIndexAutoApply implements CronTaskInterface
+final class SchemaIndexAutoApply implements CronTaskInterface, CronTaskPreflightInterface
 {
     public function __construct(
         private readonly SchemaIndexConfig $config,
         private readonly SchemaIndexJobService $jobService,
+        private readonly SchemaIndexDeltaDetector $deltaDetector,
     ) {
     }
 
@@ -39,11 +47,36 @@ final class SchemaIndexAutoApply implements CronTaskInterface
 
     public function cron_time(): string
     {
-        return '* * * * *';
+        // 窗口写进表达式：窗口外直接不派发，不再每分钟醒来判「不在窗口」。
+        return '*/5 1-5 * * *';
+    }
+
+    /**
+     * 前置检查：看门狗 flagged 非空，且确实存在 pending job。
+     * 只读一次状态文件 + 一次状态计数，不做窗口/负载判断（留给 execute）。
+     */
+    public function hasPendingWork(): bool
+    {
+        try {
+            if ($this->deltaDetector->flaggedTables() === []) {
+                return false;
+            }
+            $model = ObjectManager::getInstance(SchemaIndexJob::class);
+
+            return (int)$model->clear()->reset()
+                ->where(SchemaIndexJob::schema_fields_STATUS, SchemaIndexJob::STATUS_PENDING)
+                ->total() > 0;
+        } catch (\Throwable) {
+            // fail-open：前置检查失败按「有活」处理，交给 execute 里的完整判断。
+            return true;
+        }
     }
 
     public function execute(): string
     {
+        if ($this->deltaDetector->flaggedTables() === []) {
+            return 'skip:no_watchdog_flagged';
+        }
         if (SystemUpdateActivity::inProgress()) {
             return (string)__('系统正在更新，索引构建改到闲时再做。');
         }
@@ -76,6 +109,11 @@ final class SchemaIndexAutoApply implements CronTaskInterface
         try {
             $queueId = $this->jobService->enqueueApplyJob($jobId);
             $this->jobService->markQueued($jobId);
+            $table = trim((string)($job[SchemaIndexJob::schema_fields_TABLE_NAME] ?? ''));
+            if ($table !== '') {
+                // 该表本轮已消费：从看门狗 flagged 中移除，下轮靠新的增量再触发。
+                $this->deltaDetector->markProcessed([$table]);
+            }
 
             return (string)__('索引任务 #%{1} 已入队 #%{2}。', [(string)$jobId, (string)$queueId]);
         } catch (\Throwable $throwable) {

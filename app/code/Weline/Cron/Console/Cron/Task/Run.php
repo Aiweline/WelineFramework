@@ -15,6 +15,7 @@ namespace Weline\Cron\Console\Cron\Task;
 
 use Cron\CronExpression;
 use Weline\Framework\Cron\CronTaskInterface;
+use Weline\Cron\CronTaskPreflightInterface;
 use Weline\Cron\Helper\CronStatus;
 use Weline\Cron\Helper\Process;
 use Weline\Cron\Model\CronTask;
@@ -248,6 +249,11 @@ class Run implements CommandInterface
         $upgradeIntentSkipNoted = false;
         /**@var CronTask $taskModel */
         foreach ($tasks as $key => $taskModel) {
+                // 回收上一轮已退出的子进程：父进程运行期间不回收会让 [php] <defunct>
+                // 一直堆到父进程退出（线上实测峰值 19~25 个）。
+                if (!$manualSse) {
+                    $this->reapExitedChildren();
+                }
                 $forceTask = (bool)$force;
                 $currentTotal = $key + 1;
                 CronStatus::displayProgressBar(__('任务进度：页(%{1}=>%{2})/目(%{3}/%{4})', [$taskTotal, $currentTotal, $taskTotal, $currentTotal]), $currentTotal,
@@ -428,6 +434,15 @@ class Run implements CommandInterface
                                 ));
                             }
                             continue;
+                        }
+                        // 前置检查：任务自行声明本轮无待处理工作时，不 claim、不 spawn。
+                        // 父进程已付过一次启动成本，这里的准入判断远比重开一个 PHP 子进程便宜。
+                        if (!$forceTask) {
+                            $preflightSkip = $this->preflightSkipNote($taskModel, (string)$execute_name);
+                            if ($preflightSkip !== null) {
+                                $this->printing->note($preflightSkip);
+                                continue;
+                            }
                         }
                         // PG/MySQL/MariaDB: due tasks claim+spawn independently (no soft
                         // global concurrency gate — that starved * * * * * fleets).
@@ -634,6 +649,10 @@ class Run implements CommandInterface
                         CronTask::schema_fields_PRE_RUN_DATE => $taskModel->getData(CronTask::schema_fields_PRE_RUN_DATE),
                     ]);
                 }
+        }
+
+        if (!$manualSse) {
+            $this->reapExitedChildren();
         }
 
         if ($manualSse && !$process && !$manualLaunchCompleted) {
@@ -1233,6 +1252,83 @@ class Run implements CommandInterface
                 @\fflush(\STDERR);
             }
         }
+    }
+
+    /**
+     * 前置检查：任务实现 {@see CronTaskPreflightInterface} 且声明「本轮无待处理工作」时，
+     * 返回跳过说明；需要派发时返回 null。
+     *
+     * fail-open：未实现接口、实例化失败、检查抛异常，一律按「有活」处理，不漏跑任务。
+     * 可用 `cron.preflight=off` 一键关闭该机制。
+     */
+    private function preflightSkipNote(CronTask $task, string $executeName): ?string
+    {
+        if (!$this->isPreflightEnabled()) {
+            return null;
+        }
+        $class = trim((string)$task->getData(CronTask::schema_fields_CLASS));
+        if ($class === '' || !\class_exists($class)) {
+            return null;
+        }
+        try {
+            $instance = ObjectManager::getInstance($class);
+        } catch (\Throwable) {
+            return null;
+        }
+        if (!$instance instanceof CronTaskPreflightInterface) {
+            return null;
+        }
+        try {
+            if ($instance->hasPendingWork()) {
+                return null;
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return DatabaseFreeTranslator::translate(
+            '计划任务前置检查无待处理工作，本次跳过派发且未启动子进程：',
+            'Weline_Cron',
+        ) . $executeName;
+    }
+
+    private function isPreflightEnabled(): bool
+    {
+        try {
+            $value = Env::getInstance()->getConfig('cron.preflight', 'on');
+        } catch (\Throwable) {
+            return true;
+        }
+        if (\is_bool($value)) {
+            return $value;
+        }
+        $normalized = \strtolower(\trim((string)$value));
+
+        return !\in_array($normalized, ['0', 'off', 'false', 'no', 'never'], true);
+    }
+
+    /**
+     * 回收已退出的子进程（WNOHANG，不阻塞、不触碰仍在运行的子进程）。
+     *
+     * 只影响已经退出的子进程：它们的生死判定仍以 PID 探针与数据库终态为准，
+     * 因此不改变调度语义，仅避免父进程运行期间堆积僵尸。
+     */
+    private function reapExitedChildren(int $limit = 64): int
+    {
+        if (!\function_exists('pcntl_waitpid')) {
+            return 0;
+        }
+        $reaped = 0;
+        while ($reaped < $limit) {
+            $status = 0;
+            $pid = @\pcntl_waitpid(-1, $status, WNOHANG);
+            if ($pid <= 0) {
+                break;
+            }
+            $reaped++;
+        }
+
+        return $reaped;
     }
 
     /**

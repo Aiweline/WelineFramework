@@ -164,10 +164,16 @@ final class HardConstraintsSymbolDsl
             'Lane' => ['gloss_zh' => '意图车道路由', 'rule_ids' => ['intent_lane_router']],
             'Grade' => ['gloss_zh' => '需求工程分级', 'rule_ids' => ['requirement_engineering_grade_gate']],
             'Eng' => ['gloss_zh' => '工程任务(改码/文档/验收)', 'rule_ids' => ['mcp_call_scope']],
+            'FileChg' => ['gloss_zh' => '要修改文件', 'rule_ids' => ['no_script_batch_replace']],
+            'OneFileEdit' => ['gloss_zh' => '单文件Read+定点编辑+复核', 'rule_ids' => ['no_script_batch_replace']],
+            'BatchScript' => ['gloss_zh' => '脚本批量替换/改写', 'rule_ids' => ['no_script_batch_replace']],
+            'GitWipe' => ['gloss_zh' => 'checkout/restore/clean/stash擦脏', 'rule_ids' => ['preserve_dirty_workspace']],
+            'ShellWrite' => ['gloss_zh' => 'shell写入绕过CAS', 'rule_ids' => ['preserve_dirty_workspace', 'no_script_batch_replace']],
             'COps' => ['gloss_zh' => '内容运营技能任务', 'rule_ids' => ['content_ops_skills_skip_mcp']],
             'Write' => ['gloss_zh' => '即将写仓', 'rule_ids' => ['architecture_grade_change_only']],
             'Arch' => ['gloss_zh' => 'mechanism∧owning∧¬do≥1', 'rule_ids' => ['architecture_grade_change_only']],
             'Prep' => ['gloss_zh' => 'prepare_project+遵守hard_constraints', 'rule_ids' => ['mcp_call_scope']],
+            'SelfInstall' => ['gloss_zh' => '按ensure指引给自己宿主注册MCP', 'rule_ids' => ['mcp_call_scope']],
             'Aoci' => ['gloss_zh' => 'cognition_rules(+overview若不可靠)', 'rule_ids' => ['cognition_complements_weline_mcp']],
             'WebTouch' => ['gloss_zh' => '触.phtml/CSS/主题/店面页', 'rule_ids' => ['browser_operator_self_test']],
             'WBOP' => ['gloss_zh' => 'Browser真机禁缓存+抹自动+点选+截图Read', 'rule_ids' => ['browser_operator_self_test']],
@@ -229,6 +235,14 @@ final class HardConstraintsSymbolDsl
             'PierceStamp' => [
                 'gloss_zh' => '安装级w_fpc_pierce打穿章query',
                 'rule_ids' => ['feature_delivery_urls', 'browser_cache_disabled_on_open'],
+            ],
+            'PierceResolved' => [
+                'gloss_zh' => '章已解析为真实值(非占位符)',
+                'rule_ids' => ['feature_delivery_urls'],
+            ],
+            'MISS' => [
+                'gloss_zh' => '实测x-wls-fpc-status=MISS即真穿透',
+                'rule_ids' => ['feature_delivery_urls'],
             ],
             'DelivUrl' => [
                 'gloss_zh' => '交付地址/规划汇报http(s)链接',
@@ -470,8 +484,8 @@ final class HardConstraintsSymbolDsl
                 'cluster' => '§A',
             ],
             'mcp_call_scope' => [
-                'formula' => 'Eng→□Prep∧COps→¬Prep',
-                'gloss_zh' => '工程须prepare；内容运营跳过MCP',
+                'formula' => 'Eng→□(SelfInstall∧Prep)∧COps→¬Prep',
+                'gloss_zh' => '工程先自装MCP再prepare；内容运营跳过',
                 'cluster' => '§P',
             ],
             'content_ops_skills_skip_mcp' => [
@@ -514,9 +528,14 @@ final class HardConstraintsSymbolDsl
                 'gloss_zh' => '验收导航禁缓存且须FPC打穿章',
                 'cluster' => '§✓',
             ],
+            'browser_automation_uses_ego' => [
+                'formula' => 'Browser→□Ego∧(¬Ego→⊥Auto)',
+                'gloss_zh' => '浏览器默认ego；禁Chrome/Playwright摸页',
+                'cluster' => '§✓',
+            ],
             'feature_delivery_urls' => [
-                'formula' => 'DelivUrl→□(PierceStamp∧¬Port)',
-                'gloss_zh' => '交付URL须穿章且无端口；visitor免章',
+                'formula' => 'DelivUrl→□(PierceResolved∧¬Port∧MISS)',
+                'gloss_zh' => '交付URL须带已解析真实穿章且无端口；占位符≠交付',
                 'cluster' => '§✓',
             ],
             'real_machine_usecases_not_unit_tests' => [
@@ -605,8 +624,13 @@ final class HardConstraintsSymbolDsl
                 'cluster' => '§Θ',
             ],
             'preserve_dirty_workspace' => [
-                'formula' => '¬(checkout∨restore∨clean∨stash_wipe)',
-                'gloss_zh' => '禁擦脏工作区；须dirty-load再改',
+                'formula' => '¬(GitWipe∨ShellWrite)',
+                'gloss_zh' => '禁git擦脏与shell写绕过；须dirty-load再改',
+                'cluster' => '§P',
+            ],
+            'no_script_batch_replace' => [
+                'formula' => 'FileChg→□OneFileEdit∧¬BatchScript|(BatchScript→⊥)',
+                'gloss_zh' => '逐文件Read+定点编辑；禁脚本批量替换改写',
                 'cluster' => '§P',
             ],
             'engineering_team_for_new_requirements' => [

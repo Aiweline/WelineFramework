@@ -321,6 +321,7 @@
 - `app/code/Weline/Theme/doc/功能现状.md`
 - `app/code/Weline/Theme/doc/布局固化与默认注入.md`
 - `app/code/Weline/Theme/doc/开发/Theme开发总指南.md`
+- `app/code/Weline/Theme/doc/开发/自定义主题开发路线.md`
 - `app/code/Weline/Theme/doc/开发/session/hanfu-theme-editor-optimize.md`
 - `app/code/Weline/Theme/doc/开发/session/policy-copy-tone-soften.md`
 - `app/code/Weline/Theme/doc/开发/session/published-slot-assembly-uniformity.md`

@@ -84,6 +84,7 @@ final class ScopeTokenService
         string $host,
         string $currentPageGeneration,
         ?int $now = null,
+        ?callable $acceptClaimedGeneration = null,
     ): ScopeTokenVerification {
         $fingerprint = substr(hash('sha256', $token), 0, 16);
         $now ??= time();
@@ -259,12 +260,25 @@ final class ScopeTokenService
             );
         }
         if (!hash_equals($expectedGeneration, $claimedGeneration)) {
-            return ScopeTokenVerification::rejected(
-                ScopeTokenVerification::STATUS_CONTEXT_CONFLICT,
-                'page_generation_mismatch',
-                $fingerprint,
-                $kid,
-            );
+            // Warmup transition: a token minted for a generation the Scope resolver still
+            // accepts (current + recent sealed, ACCEPTABLE_GENERATION_DEPTH) stays usable.
+            // The caller opts in; without a matcher the comparison stays strict (fail-closed).
+            $acceptable = false;
+            if ($acceptClaimedGeneration !== null) {
+                try {
+                    $acceptable = $acceptClaimedGeneration($claimedGeneration) === true;
+                } catch (\Throwable) {
+                    $acceptable = false;
+                }
+            }
+            if (!$acceptable) {
+                return ScopeTokenVerification::rejected(
+                    ScopeTokenVerification::STATUS_CONTEXT_CONFLICT,
+                    'page_generation_mismatch',
+                    $fingerprint,
+                    $kid,
+                );
+            }
         }
         if ($exp <= $now) {
             return ScopeTokenVerification::expired($scope, $kid, $iat, $exp, $claimedHost, $fingerprint);

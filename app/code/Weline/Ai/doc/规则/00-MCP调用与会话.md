@@ -32,7 +32,8 @@ MCP 是**知识面**（技能索引 / 代码地图 / 领域硬规则下发），
 
 **上下文丢失**：长对话压缩后若看不到 `hard_constraints`，**必须重新** `prepare_project`；不得凭记忆编造规则。
 
-**MCP 挂不上**：宿主 Read [AI硬规则索引.md](../AI硬规则索引.md) + 对应分册继续开发；不得假装已遵守 MCP，不得借此绕过 `blocked`、`dev` 分支、文档/响应式/真实运行验收或部署权限门禁。
+**MCP 挂不上＝先自装，再谈降级（`mcp_call_scope` SELF-INSTALL）**：ensure 报 `host_install_needed` / `host_repair_needed` / `primary_ready=false` / `primary_host=unknown` 时，**Agent 必须按自己宿主的机制给自己装上 MCP**——读 `host_mcp_install.hosts[<宿主>].install.steps`（未知宿主读 `.registration` + `known_targets`），把注册（command/args/env）写进该宿主的 MCP 配置（仅当语义上不等价时才写），在宿主内启用服务，新开一个会话，确认 `mcp_required_tool` 全部可见后再 `prepare_project`。禁止让用户去 Settings 手改、禁止 Reload Window、禁止手写编辑器规则文件（`.cursor/rules`、`CLAUDE.md` 等只能由 MCP 生成器产出）。宿主不在支持表内≠无事可做，而是让 Agent 自己定位该宿主的 MCP 配置。
+**只有证明本机装不上**（如宿主以不可修改的 MCP 白名单拉起 Agent——Qoder 桌面 GUI 的 `--strict-mcp-config` 即此类）才允许降级：宿主 Read [AI硬规则索引.md](../AI硬规则索引.md) + 对应分册继续开发，并如实说明尝试过哪条安装路径、为何失败。不得假装已遵守 MCP，不得借此绕过 `blocked`、`dev` 分支、文档/响应式/真实运行验收或部署权限门禁。
 
 **同回合混合任务**：既有内容运营又有框架 Theme/PHP 编码时，**只有编码切片**走 MCP；内容运营切片仍只读仓内技能/指令。
 
@@ -168,7 +169,7 @@ EXEMPT：内容运营与纯闲聊。宿主常带：`~/.cursor/rules/requirement-
 **禁止**：只写 `~/.cursor/rules` 不进 Catalog；或只改 Catalog 不写宿主全局。  
 **仍禁止**：把手写项目内 `.cursor/rules` 当规则源（coldstart 仍只由 MCP 生成）。  
 **冲突裁决**：仓内 `hard_constraints` / 文档 > 宿主全局 `.mdc`。  
-示例：`user_utterance_commit_ships_dev_and_sites` ↔ `user-utterance-commit-ships-dev-and-sites.mdc`；`requirement_acceptance_always` ↔ `acceptance-before-user-report.mdc`；`plan_review_requires_code_evidence` ↔ `plan-review-requires-code-probe.mdc`；`plan_review_requires_impact_surface` ↔ `plan-review-requires-impact-surface.mdc`；`plan_complete_self_review_then_implement` ↔ `plan-complete-self-review-then-implement.mdc`；`user_facing_verdict_last` ↔ `user-facing-verdict-last.mdc`；`user_facing_brief_plain_report` ↔ `user-facing-brief-plain-report.mdc`；`browser_tab_group_identity` ↔ `browser-tab-group-identity.mdc`；`google_chrome_reuse_before_connect` ↔ `google-chrome-reuse-before-connect.mdc`；`browser_operator_non_preemptive` ↔ `browser-operator-non-preemptive.mdc`；`e2e_ai_record_into_module_formal_path` ↔ `e2e-ai-record-formal-path.mdc`；`full_release_requires_commerce_pathway_e2e` ↔ `full-release-commerce-e2e.mdc`；`automation_test_report_durable_evidence` ↔ `automation-test-report-evidence.mdc`；`theme_inverse_raised_paper_ink_pin` ↔ `theme-inverse-raised-paper-ink.mdc`；`theme_frontend_must_obey_tokens_and_surface_roles` ↔ `theme-frontend-obey-tokens-and-surfaces.mdc`；`business_forbids_sql_dialect` ↔ `business-forbids-sql-dialect.mdc`；`framework_demos_live_in_weline_demo` ↔ `framework-demos-live-in-weline-demo.mdc`；`theme_update_matches_site_cabinet` ↔ `theme-update-matches-site-cabinet.mdc`；`social_scope_mailbox_for_platform_register` ↔ `social-scope-mailbox-register.mdc`。
+示例：`user_utterance_commit_ships_dev_and_sites` ↔ `user-utterance-commit-ships-dev-and-sites.mdc`；`requirement_acceptance_always` ↔ `acceptance-before-user-report.mdc`；`plan_review_requires_code_evidence` ↔ `plan-review-requires-code-probe.mdc`；`plan_review_requires_impact_surface` ↔ `plan-review-requires-impact-surface.mdc`；`plan_complete_self_review_then_implement` ↔ `plan-complete-self-review-then-implement.mdc`；`user_facing_verdict_last` ↔ `user-facing-verdict-last.mdc`；`user_facing_brief_plain_report` ↔ `user-facing-brief-plain-report.mdc`；`browser_tab_group_identity` ↔ `browser-tab-group-identity.mdc`；`google_chrome_reuse_before_connect` ↔ `google-chrome-reuse-before-connect.mdc`；`browser_operator_non_preemptive` ↔ `browser-operator-non-preemptive.mdc`；`e2e_ai_record_into_module_formal_path` ↔ `e2e-ai-record-formal-path.mdc`；`full_release_requires_commerce_pathway_e2e` ↔ `full-release-commerce-e2e.mdc`；`automation_test_report_durable_evidence` ↔ `automation-test-report-evidence.mdc`；`theme_inverse_raised_paper_ink_pin` ↔ `theme-inverse-raised-paper-ink.mdc`；`theme_frontend_must_obey_tokens_and_surface_roles` ↔ `theme-frontend-obey-tokens-and-surfaces.mdc`；`business_forbids_sql_dialect` ↔ `business-forbids-sql-dialect.mdc`；`framework_demos_live_in_weline_demo` ↔ `framework-demos-live-in-weline-demo.mdc`；`theme_update_matches_site_cabinet` ↔ `theme-update-matches-site-cabinet.mdc`；`social_scope_mailbox_for_platform_register` ↔ `social-scope-mailbox-register.mdc`；`no_script_batch_replace` ↔ 宿主全局镜（本机为 `~/.dsh/AGENTS.md`「禁止脚本批量替换」；`.cursor/rules/*.mdc` 停用时不再手写）。
 
 ### 4.2 面向用户结论置尾（`user_facing_verdict_last`，强制）
 
@@ -212,6 +213,24 @@ EXEMPT：内容运营与纯闲聊。宿主常带：`~/.cursor/rules/requirement-
 配套：`requirement_acceptance_always`（先测后报）、`automation_test_report_durable_evidence`（证据仍须采集并持久化，默认不堆进聊天）。
 
 宿主常带：`~/.cursor/rules/user-facing-brief-plain-report.mdc`（与 MCP 双写，见 §4.1）。
+
+### 4.4 禁止脚本批量替换（`no_script_batch_replace`，强制 · 2026-10-28 用户指定）
+
+**改文件必须亲力亲为：一个文件、一次定点编辑；不论规模多大，禁止任何「脚本 / 命令批量替换、批量改写」。**
+
+| 允许 / 必须 | 禁止 |
+|------|------|
+| 逐文件循环：宿主 `Read` 当前磁盘文件 → 定点编辑工具（Edit / Write / ApplyPatch）改**这一个**文件 → 立即重读复核 → 下一个；文件多时分批推进、逐批汇报 | `sed -i` / `awk` 就地改写、`perl -pi`、`xargs` + 编辑命令、`find … -exec` 改写、`grep -rl … | xargs sed`、`php -r` / `python -c` 遍历重写、一次性生成再批量落盘的迁移脚本、replace-all 宏、编辑器全局查找替换代跑批量改动 |
+| `grep` / `rg` / `find` / `diff` 做**查找、统计、验收比对**（只读） | 把「先 grep 出清单再一条命令改完」当捷径——命中后要动手改仍须回到逐文件定点编辑 |
+| 例外（缺一不可）：用户本回合原话**明确点名**允许脚本批量操作 → 先把**全部**目标备份到 `<项目根>/dev/backup/<相对路径>.<时间戳>` → 单文件试运行并贴 diff 给用户过目 → 确认后才扩量 → 结束逐文件抽查复核并列出受影响文件清单 | 未经点名授权自行「优化成脚本批量改」；用 git 回滚掩盖批量误改 |
+
+**为什么**：正则匹配面不可控，一个错误模式会同时损坏成百上千个文件（误删内容、破坏编码与换行、夹带他会话在飞的修改，见 `preserve_dirty_workspace`），且往往当时看不出、事后才暴雷；逐文件改错只伤一个、随时可发现可还原。
+
+**违规定性**：用脚本批量替换改了文件——即使结果碰巧正确——也算违规：立即停手、保留现场，在收尾汇报单列「批量替换违规记录」（受影响文件 + 是否已备份 + 处置）。
+
+配套：`preserve_dirty_workspace`（shell 写入绕过 CAS）、`concurrent_session_commit_hygiene`、`global_rules_dual_write_mcp_and_host`。
+
+宿主常带：`~/.dsh/AGENTS.md`「禁止脚本批量替换」镜（与 MCP 双写，见 §4.1；个人 Agent 全局镜按本机实际存在的宿主镜落点）。
 
 ## 5. Codex CLI 宿主委派（`host_delegate_explore_plan_review_to_codex_cli`，**用户显式 opt-in**）
 
@@ -350,8 +369,8 @@ MCP 子进程只允许只读 Git 检查，禁止上述全部 Git 写操作，禁
 | 3 | 把 `dev` 推到本仓声明的 **Gitee 与 GitHub 两个远程**（`git remote -v` 核对；站柜惯例是 `origin` + `github`）。禁止写死 URL，禁止 `--force`，禁止跳过 hooks。 |
 | 4 | 任一生产 SSH 写入之前：`php bin/w e2e:run --suite=commerce-release` 必须全 PASS。失败则停在推送之后，不上机。 |
 | 5 | 当回合读 `websites/README.md`、各站柜 `README.md` 与 **`关系.md`**。只更新**写明了生产主用 SSH Host 且写明了应用根**的站柜。无生产 Host 或应用根未核验的站柜跳过。软链/别名站柜只算一次。同一 Host、不同应用根分开更新，禁止按 IP 合并。禁止把主机、IP、目录、主题名写进本规则。 |
-| 6 | 对每个这样的站柜：SSH 到其主用 Host，进入其应用根，然后 `maintenance:enable` → `php bin/w core:update -b dev` → `php bin/w setup:upgrade`（系统更新）→ `php bin/w theme:upgrade`（主题名以该站柜绑定为准；未写则跑已绑定范围的 `theme:upgrade`）→ `server:reload -r` → `maintenance:disable`（中途失败也要关维护）。`-b` 必须是字面 `dev`。 |
-| 7 | 设计主题不进 Git。本步的 `theme:upgrade` 只重新发布**该应用根上已有**的主题。用户没有另外要求上传主题文件时，禁止顺手把本机 `app/design` 传上去。另说「主题更新 / 更新某主题 / 发布主题 / 发布某主题」时走 `theme_update_matches_site_cabinet`（先按 `关系.md` 拷贝再升级），不要用本步代替那次上传。 |
+| 6 | 对每个这样的站柜：SSH 到其主用 Host，进入其应用根，然后 `maintenance:enable` → `php bin/w core:update -b dev` → `php bin/w setup:upgrade`（系统更新）→ `server:reload -r` → `maintenance:disable`（中途失败也要关维护）→ `php bin/w theme:update`（主题更新；主题名以该站柜绑定为准，未写则跑已绑定范围）。`-b` 必须是字面 `dev`。**主题更新是世代切换（构建新代次→校验→翻指针），不得放进维护窗，也不得为它单独开关维护模式。** |
+| 7 | 设计主题不进 Git。本步的 `theme:update` 只重新发布**该应用根上已有**的主题。用户没有另外要求上传主题文件时，禁止顺手把本机 `app/design` 传上去。另说「主题更新 / 更新某主题 / 发布主题 / 发布某主题」时走 `theme_update_matches_site_cabinet`（先按 `关系.md` 拷贝再更新），不要用本步代替那次上传。 |
 | 8 | 仅当该站柜写明这次升级会动数据库时才备份库。禁止做站柜明确禁止的整站/代码/主题备份。 |
 | 9 | 更新后探活走 SSH 上的 `127.0.0.1` + `Host` 头。禁止从 Agent 本机 curl 公网域名。 |
 
@@ -372,10 +391,10 @@ MCP 子进程只允许只读 Git 检查，禁止上述全部 Git 写操作，禁
 | 3 | 把该分支推到本仓声明的 **Gitee 与 GitHub** 两个远程（`git remote -v` 核对）。禁止 `--force`，禁止跳过 hooks。推送被拒则停在上机之前。 |
 | 4 | 任一生产 SSH 写入之前：`php bin/w e2e:run --suite=commerce-release` 必须全 PASS。失败则不上机。 |
 | 5 | 当回合读 `websites/README.md`、各站柜 `README.md` 与 `关系.md`。只更新写明了生产主用 SSH Host **且**写明了应用根的站柜。没有服务器或应用根未核验的跳过。软链/别名只算一次。同一 Host、不同应用根分开更新。禁止把主机、IP、目录、主题名写进本规则。 |
-| 6 | 对每个这样的站柜：SSH 到其主用 Host，进入其应用根，然后 `maintenance:enable` → `php bin/w core:update -b <所选分支>` → `php bin/w setup:upgrade`（系统更新）→ **发布主题**（关系卡写明了主题才拷贝该主题目录，无 `--delete`）→ `php bin/w theme:upgrade`（站柜写了主题名就 `-t`，没写主题名则只跑已绑定范围、不猜拷）→ `server:reload -r` → `maintenance:disable`（中途失败也要关维护）。 |
+| 6 | 对每个这样的站柜：SSH 到其主用 Host，进入其应用根，然后 `maintenance:enable` → `php bin/w core:update -b <所选分支>` → `php bin/w setup:upgrade`（系统更新）→ `server:reload -r` → `maintenance:disable`（中途失败也要关维护）→ **发布主题**（关系卡写明了主题才拷贝该主题目录，无 `--delete`）→ `php bin/w theme:update`（站柜写了主题名就 `-t`，没写主题名则只跑已绑定范围、不猜拷）。**主题更新不得放进维护窗；它是世代切换，不需要维护模式。** |
 | 7 | 仅当该站柜写明这次升级会动数据库时才备份库。探活用 SSH 上的 `127.0.0.1` + `Host` 头。禁止从 Agent 本机 curl 公网域名。 |
 
-**只说「发布主题 / 发布某主题 / 更新主题 / 主题更新」**：只做那一张关系卡的主题拷贝和 `theme:upgrade`，不提交、不推两仓、不做核心更新。
+**只说「发布主题 / 发布某主题 / 更新主题 / 主题更新」**：只做那一张关系卡的主题拷贝和 `theme:update`（不开关维护模式），不提交、不推两仓、不做核心更新。
 
 **不触发**：先别发布、不要发布、别发布、不用发布、先不发布；只是在讨论或定义「发布」这个词；口令「提交」。
 
@@ -412,6 +431,8 @@ curl -sS -m 10 -H 'Host: www.example.com' \
 
 穿章只打穿 FPC，不替代 Host/SNI，也不等于允许本机直连公网 FQDN。
 
+**本地交付地址的章（HARD · 2026-10-28 用户指定 · 与生产段互补不冲突）**：本机 `*.test.weline.com` 交付 / 汇报链接里的 `w_fpc_pierce=` **必须内联已解析的真实值**——占位符（`<PIERCE>` / `<install_secret>` / `PIERCE`）链接 = **未交付地址**：点开送出字面量，边缘 `fpc-pierce.map.conf` 匹配不上，仍是 FPC HIT。取法 `FpcPierceStamp::ensureSecret()`：**env `wls.fpc_pierce_secret` 优先**，`generated/framework/fpc_pierce_secret` 兜底；两者不一致时**以 env 与 `var/server/nginx/conf/fpc-pierce.map.conf` 为准**（用兜底值会「看着带章、实际仍 HIT」，2026-10-28 实测踩过）。交付前必须自证：同一 URL 带章 `x-wls-fpc-status: MISS` + `cache-control: … no-store`，不带章 `HIT`；两者都 HIT = 章未生效，先修密钥源再交，不得照发。以上仅限**本地开发章**（用户明确：本地章与线上章不是一个，开发期不算机密）；**生产段仍严格禁止打印/落日志/写文档**，本机文档与规则正文也只写取法不写死值。
+
 **为何**：WLS `attack_guard` / `path_scan` 可对非浏览器 UA 写入 `shared_ban`，封的是共享出口 IP——会连带操作员本机浏览器 Forbidden。
 
 技能：`production_http_probe` / `weline-production-http-probe`。宿主双写：`~/.cursor/rules/production-http-probe-forbids-agent-local-curl.mdc`。
@@ -427,6 +448,20 @@ curl -sS -m 10 -H 'Host: www.example.com' \
 | （无柜）www.aiweline.com | **`weline`** | `weline-saas` 当默认生产；汉服机当官方站 |
 
 索引：本机 `websites/README.md`。Cursor alwaysApply 镜像：`.cursor/rules/ssh-weline-host.mdc`（本机生成/维护，不进 Git）。
+
+## 8b. 浏览器操作默认 ego（`browser_automation_uses_ego`，强制）
+
+| 必须 | 禁止 |
+|------|------|
+| 打开网站、点选、填表、截图、抓页面、UI/交互验收：默认用 **ego lite**。DSH 宿主用 `dsh-ego-browser` 工具：先 `ego_doctor` 探代次，再 `ego_recall`（已知站点）→ `ego_run`（一次任务一段脚本）→ `ego_learn`（跑通后固化）→ `ego_site_run`（下次直接调）；需要真人时 `ego_handoff` | 用 Chrome / puppeteer / Playwright / headless chromium 做**探索、点选、截图、UI 验收**；为「省事」新开自动化浏览器 |
+| 工具未加载时按 `ego-browser` 技能用 CLI：`ego-browser skill` 读本机代次指南，再用 `ego-browser nodejs` 跑整段任务；装在 `~/.dsh/profiles/<profile>` 后需重启 DSH 才注册工具 | 把「插件未重启」当成回退到 Chrome/Playwright 的理由 |
+| 仓库正式 e2e 仍走 `php bin/w e2e:run`（`e2e_playwright_formal_runner_only`）；ego 用于真机交互与验收取证 | 用 ego 脚本冒充仓库 e2e 套件；用 Playwright 冒充 WB-OP 交互验收 |
+| 用户明确点名「用 Chrome / Chrome 扩展 / Weline profile」时才走 Chrome 契约（`google_chrome_reuse_before_connect` / `browser_tab_group_identity`） | 默认把外部 Chrome 当浏览器入口 |
+| 验收仍须遵守 `browser_operator_self_test` / `browser_cache_disabled_on_open` / `browser_operator_fail_closed_release`（禁缓存、穿章、探活、卡死释放） | 因换了 ego 就跳过缓存禁用、穿章、截图/审图证据 |
+
+安装（DSH）：`dsh plugin --profile <name> add -w @dshworks/dsh-ego-browser`，重启 DSH；工具面 = `ego_doctor` / `ego_recall` / `ego_run` / `ego_site_run` / `ego_learn` / `ego_forget` / `ego_handoff`。ego lite 本体与 `ego-browser` 命令需先装好并完成引导（<https://lite.ego.app/>）。
+
+索引：本机 `~/.dsh/AGENTS.md`「浏览器操作默认 ego」；宿主镜像由 MCP 生成，禁止手写。
 
 ## 9. 模块 doc 禁放一次性工作资料（`module_doc_forbids_ephemeral_work_artifacts`，强制）
 

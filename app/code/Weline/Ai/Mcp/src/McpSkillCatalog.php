@@ -24,6 +24,9 @@ final class McpSkillCatalog
      */
     private const HOST_SHELL_ALIASES = [
         'weline-theme-development' => GuidanceWorkflowCatalog::SURFACE_FRONTEND_DEVELOPMENT,
+        'weline-custom-theme-development' => 'custom_theme_development',
+        'custom-theme-development' => 'custom_theme_development',
+        'custom_theme_development' => 'custom_theme_development',
         'taste' => GuidanceWorkflowCatalog::SURFACE_DESIGN_TASTE,
         'design-taste' => GuidanceWorkflowCatalog::SURFACE_DESIGN_TASTE,
         'design_taste' => GuidanceWorkflowCatalog::SURFACE_DESIGN_TASTE,
@@ -216,6 +219,12 @@ final class McpSkillCatalog
                         'role' => 'theme',
                         'host_skill' => 'weline-theme-development',
                         'mcp_skill_id' => GuidanceWorkflowCatalog::SURFACE_FRONTEND_DEVELOPMENT,
+                        'fetch' => 'get_skill',
+                    ],
+                    [
+                        'role' => 'custom_theme',
+                        'host_skill' => 'weline-custom-theme-development',
+                        'mcp_skill_id' => 'custom_theme_development',
                         'fetch' => 'get_skill',
                     ],
                 ],

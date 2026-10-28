@@ -1456,21 +1456,21 @@
 
     /**
      * Ask Nginx and WLS for this generation's FPC. `w_pg` changes the URL so a
-     * stale CDN copy is not reused. No token → ordinary reload.
+     * stale CDN copy is not reused. Without a token there is no different document to
+     * fetch — reloading the same URL only re-requests the HTML that just failed.
      * @param {string} [pageGenerationToken]
-     * @returns {boolean}
+     * @returns {boolean} true when a navigation actually started
      */
     function navigateToRequestedPageGeneration(pageGenerationToken) {
         const gen = String(pageGenerationToken || '').trim().toLowerCase();
         try {
             if (!/^[a-f0-9]{16}$/.test(gen)) {
-                window.location.reload();
-                return true;
+                return false;
             }
             const url = new URL(window.location.href);
             if (url.searchParams.get('w_pg') === gen) {
-                window.location.reload();
-                return true;
+                // Already on this generation's slot: reloading it cannot change the answer.
+                return false;
             }
             url.searchParams.set('w_pg', gen);
             window.location.assign(url.toString());
@@ -1520,6 +1520,7 @@
     Weline.readStorefrontGenerationCookie = readStorefrontGenerationCookie;
     Weline.syncStorefrontGenerationCookieToPage = syncStorefrontGenerationCookieToPage;
     Weline.promptStorefrontGenerationRefresh = promptStorefrontGenerationRefresh;
+    Weline.navigateToRequestedPageGeneration = navigateToRequestedPageGeneration;
     Weline.checkStorefrontGenerationIdentity = checkStorefrontGenerationIdentity;
     Weline.dom = Object.assign({}, Weline.dom || {}, {
         /**

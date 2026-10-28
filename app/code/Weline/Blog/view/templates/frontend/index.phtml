@@ -18,7 +18,14 @@ $count = count($articles);
             <?php if ($subtitle !== ''): ?>
                 <p class="blog-listing__subtitle"><?= $escape($subtitle) ?></p>
             <?php endif; ?>
-            <p class="blog-listing__meta"><lang args="[(string)$count]">共 %{1} 条</lang></p>
+            <p class="blog-listing__meta"><?php
+                $totalLabel = trim((string)($this->getData('blog_total_label') ?? ''));
+                if ($totalLabel !== '') {
+                    echo $escape(str_replace('%{1}', (string)$count, $totalLabel));
+                } else {
+                    ?><lang args="[(string)$count]">共 %{1} 条</lang><?php
+                }
+            ?></p>
         </div>
         <?php if ($rssUrl !== ''): ?>
             <div class="blog-listing__actions">
@@ -32,11 +39,11 @@ $count = count($articles);
 
     <?php if ($articles === []): ?>
         <div class="blog-listing__empty" data-testid="blog-list-empty">
-            <p><lang>暂无文章</lang></p>
-            <a class="blog-listing__back" href="@url{'blog'}"><lang>返回博客</lang></a>
+            <p><?php $emptyText = trim((string)($this->getData('blog_empty_text') ?? '')); ?><?php if ($emptyText !== ''): ?><?= $escape($emptyText) ?><?php else: ?><lang>暂无文章</lang><?php endif; ?></p>
+            <a class="blog-listing__back" href="@url{'blog'}"><?php $backLink = trim((string)($this->getData('blog_back_link') ?? '')); ?><?php if ($backLink !== ''): ?><?= $escape($backLink) ?><?php else: ?><lang>返回博客</lang><?php endif; ?></a>
         </div>
     <?php else: ?>
-        <h2 class="blog-listing__section-title" id="blog-articles-heading"><lang>文章列表</lang></h2>
+        <h2 class="blog-listing__section-title" id="blog-articles-heading"><?php $listTitle = trim((string)($this->getData('blog_list_title') ?? '')); ?><?php if ($listTitle !== ''): ?><?= $escape($listTitle) ?><?php else: ?><lang>文章列表</lang><?php endif; ?></h2>
         <div class="blog-listing__grid w-blog-listing__grid" data-testid="blog-list-grid" aria-labelledby="blog-articles-heading">
             <?php foreach ($articles as $article): ?>
                 <?php

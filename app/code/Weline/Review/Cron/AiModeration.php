@@ -33,7 +33,8 @@ final class AiModeration implements CronTaskInterface
 
     public function cron_time(): string
     {
-        return '* * * * *';
+        // 审核队列无实时性要求：降为 5 分钟，避免每分钟空转。
+        return '*/5 * * * *';
     }
 
     public function unlock_timeout(int $minute = 10): int

@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Weline\Framework\Http\Security;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Context;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 
 /**
  * 安全响应头策略编排（TASK-P1D-001）。
@@ -17,6 +19,9 @@ use Weline\Framework\Manager\ObjectManager;
  */
 final class SecurityHeaderPolicyService
 {
+    /** Request-scoped memo slot for securityVariantMaterial() (RequestContext storage). */
+    private const REQUEST_MEMO_VARIANT_MATERIAL = 'security.request_memo.variant_material.v1';
+
     public function __construct(
         private readonly ContentSecurityPolicyNormalizer $cspNormalizer = new ContentSecurityPolicyNormalizer(),
         private readonly CorsOriginPolicyNormalizer $corsNormalizer = new CorsOriginPolicyNormalizer(),
@@ -273,13 +278,35 @@ final class SecurityHeaderPolicyService
     /**
      * FPC formatted-cache variant material: must include document CSP even in meta
      * delivery, otherwise policy changes would not bust precompressed bodies.
+     *
+     * 请求级 memo：buildFormattedFastHttpCacheKey() 每次调用都 new 本服务，
+     * 而本方法自身要跑两次 resolveCurrentEffective()（≈200µs×2）外加 ksort/serialize。
+     * 材料只取决于 (request scope, area, developerTooling)，故按这三者签名的槽位缓存；
+     * Extends 贡献尚未注册（appDefaultCsp 为空）时一律不落 memo，避免把启动期的
+     * 空 CSP 基线固化进缓存键。
      */
     public function securityVariantMaterial(?bool $developerToolingEnabled = null): string
     {
+        $flagSlot = $developerToolingEnabled === null ? 'auto' : ($developerToolingEnabled ? 'on' : 'off');
+        $slot = $flagSlot . "\x1e"
+            . (RequestContext::scopeIdentity()?->canonicalKey() ?? '')
+            . "\x1e" . RequestContext::getWelineArea();
+        $memo = RequestContext::get(self::REQUEST_MEMO_VARIANT_MATERIAL);
+        if (\is_array($memo) && \is_string($memo[$slot] ?? null)) {
+            return $memo[$slot];
+        }
+
         $headers = $this->resolveCurrentResponseHeaders(null, $developerToolingEnabled);
         \ksort($headers, \SORT_STRING);
+        $material = \serialize($headers) . "\0" . $this->resolveCurrentDocumentCsp($developerToolingEnabled);
 
-        return \serialize($headers) . "\0" . $this->resolveCurrentDocumentCsp($developerToolingEnabled);
+        if (Context::hasCurrent() && $this->appDefaultCsp() !== '') {
+            $memo = \is_array($memo) ? $memo : [];
+            $memo[$slot] = $material;
+            RequestContext::set(self::REQUEST_MEMO_VARIANT_MATERIAL, $memo);
+        }
+
+        return $material;
     }
 
     /**

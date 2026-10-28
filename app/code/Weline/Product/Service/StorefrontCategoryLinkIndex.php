@@ -99,6 +99,13 @@ final class StorefrontCategoryLinkIndex
      */
     private function build(int $websiteId): array
     {
+        // Storefront read tolerance: an unprovisioned product shard has no links
+        // to index yet, so return empty instead of 500. assertReady below still
+        // protects every admin/ops caller that must not read an unprovisioned shard.
+        if (!$this->provisioner->isReady($websiteId)) {
+            return [];
+        }
+
         $this->provisioner->assertReady($websiteId);
         /** @var CategoryLink $model */
         $model = ObjectManager::create(CategoryLink::class, [], false);

@@ -193,6 +193,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
     private const MEMO_CURRENT_VARIANT = 'fpc.memo.current_variant.v1';
     private const MEMO_EFFECTIVE_FPC_POLICY = 'fpc.memo.effective_policy.v1';
     private const MEMO_QUERY_ALLOWLIST = 'fpc.memo.query_allowlist.v1';
+    private const MEMO_FPC_SNAPSHOT = 'fpc.memo.fpc_snapshot.v1';
 
     private ?CacheManager $cacheManager;
     private ?CachePoolInterface $cachePool;
@@ -1175,6 +1176,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
         RequestContext::remove(self::MEMO_CURRENT_VARIANT);
         RequestContext::remove(self::MEMO_EFFECTIVE_FPC_POLICY);
         RequestContext::remove(self::MEMO_QUERY_ALLOWLIST);
+        RequestContext::remove(self::MEMO_FPC_SNAPSHOT);
     }
 
     public static function clearProcessCache(): void
@@ -2956,42 +2958,46 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
                 );
         }
         $encoding = $this->resolveHitContentEncoding($acceptEncoding, $cached);
+        // $payloadCacheKey === $cacheKey here (assigned above), and every branch
+        // below needs the same encoding-suffixed security-variant key
+        // (buildFormattedFastHttpCacheKey: 实测 ~0.3–0.5ms/call). Build it once.
+        $encodedFormattedKey = ($method === 'GET' && $encoding !== null)
+            ? $this->buildFormattedFastHttpCacheKey($payloadCacheKey, $encoding)
+            : null;
         if ($source === 'shared') {
             $this->setProcessCachedPayload($cacheKey, $cached);
-            if ($method === 'GET' && $encoding !== null) {
+            if ($encodedFormattedKey !== null) {
                 $formatted = $this->buildFormattedEncodedKeepAliveResponse(
                     $cached,
                     'shared-formatted',
                     $encoding,
                 );
                 if ($formatted !== null) {
-                    $formattedKey = $this->buildFormattedFastHttpCacheKey($cacheKey, $encoding);
-                    $this->setProcessCachedFormattedResponse($formattedKey, $formatted);
+                    $this->setProcessCachedFormattedResponse($encodedFormattedKey, $formatted);
                     if ($this->shouldPublishSharedFormattedResponse($formatted)) {
-                        $this->cache()->set($formattedKey, $formatted, max(1, $this->payloadRemainingTtlSeconds($cached) ?? 1));
+                        $this->cache()->set($encodedFormattedKey, $formatted, max(1, $this->payloadRemainingTtlSeconds($cached) ?? 1));
                     }
                 }
             }
         } elseif ($source === 'stale-shared') {
             $this->setProcessCachedPayload($payloadCacheKey, $cached);
-            if ($method === 'GET' && $encoding !== null) {
+            if ($encodedFormattedKey !== null) {
                 $formatted = $this->buildFormattedEncodedKeepAliveResponse(
                     $cached,
                     'stale-shared-formatted',
                     $encoding,
                 );
                 if ($formatted !== null) {
-                    $formattedKey = $this->buildFormattedFastHttpCacheKey($payloadCacheKey, $encoding);
-                    $this->setProcessCachedFormattedResponse($formattedKey, $formatted, $this->staleTtlSeconds());
+                    $this->setProcessCachedFormattedResponse($encodedFormattedKey, $formatted, $this->staleTtlSeconds());
                     if ($this->shouldPublishSharedFormattedResponse($formatted)) {
-                        $this->cache()->set($formattedKey, $formatted, $this->staleTtlSeconds());
+                        $this->cache()->set($encodedFormattedKey, $formatted, $this->staleTtlSeconds());
                     }
                 }
             }
         }
 
-        if ($method === 'GET' && $encoding !== null) {
-            $formattedKey = $this->buildFormattedFastHttpCacheKey($payloadCacheKey, $encoding);
+        if ($encodedFormattedKey !== null) {
+            $formattedKey = $encodedFormattedKey;
             $formatted = $this->getProcessCachedFormattedResponse($formattedKey);
             if ($formatted === null) {
                 $formattedSource = \str_starts_with($source, 'stale-')
@@ -5034,15 +5040,16 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
             // Request-scoped memo (§3 方向二): FpcPolicySnapshot::resolve() is a
             // pure function of (snapshot, path, scope); policyPath() is a pure
             // function of (fullUri, websiteUrl); fpcSnapshot() is frozen per
-            // request. Structure: one generation (the snapshot array, compared
-            // by identity/content ===) guarding per-fullUri entries, each keyed
+            // request and itself memoized (fpcPolicySnapshot(), ~772µs Shared
+            // re-read avoided). Structure: one generation (the snapshot array,
+            // compared by identity ===) guarding per-fullUri entries, each keyed
             // by its own inputs (explicit policy path, scope, website mount).
-            // ANY input change self-invalidates (fixture/test snapshot swap
-            // builds a fresh array; URI, mount path or scope rewrite changes a
-            // string). Entries are keyed per fullUri so call sites mixing raw
-            // and canonical URIs cannot thrash a single slot. Miss cost ~0.02µs
-            // (same-zval compare) vs ~131µs resolve + path normalize.
-            $snapshot = $resolver->fpcSnapshot();
+            // URI / mount / scope rewrites self-invalidate via entrySignature;
+            // clearRequestMemos() drops the snapshot so a mid-request provider
+            // swap still takes effect. Entries are keyed per fullUri so call
+            // sites mixing raw and canonical URIs cannot thrash a single slot.
+            // Miss cost ~0.02µs vs ~131µs resolve + path normalize.
+            $snapshot = $this->fpcPolicySnapshot($resolver);
             $memo = RequestContext::get(self::MEMO_EFFECTIVE_FPC_POLICY);
             $entries = (\is_array($memo)
                 && ($memo['snap'] ?? null) === $snapshot
@@ -5092,6 +5099,31 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
             return ['enabled' => false, 'ttl' => 0, 'policy_fingerprint' => 'policy-unavailable'];
         }
+    }
+
+    /**
+     * Request-scoped memo for ExtraPolicyResolver::fpcSnapshot().
+     *
+     * The snapshot is declared frozen per request, yet every effectiveFpcPolicy()
+     * call re-read it from Shared: hot-cache L1 rejects the ~149 KB declaration
+     * map, so policyKey()+readShared() cost ~772 µs each time. Memoizing the
+     * array removes that from all but the first call in a request; the process L1
+     * admission of the same entry (StorefrontScopeHotCache) covers request #1.
+     *
+     * @return array<string, mixed>
+     */
+    private function fpcPolicySnapshot(\Weline\Framework\Controller\Extra\ExtraPolicyResolver $resolver): array
+    {
+        $memo = RequestContext::get(self::MEMO_FPC_SNAPSHOT);
+        if (\is_array($memo) && \is_array($memo['snapshot'] ?? null)) {
+            return $memo['snapshot'];
+        }
+        $snapshot = $resolver->fpcSnapshot();
+        if (Context::hasCurrent()) {
+            RequestContext::set(self::MEMO_FPC_SNAPSHOT, ['snapshot' => $snapshot]);
+        }
+
+        return $snapshot;
     }
 
     private function getUnifiedCacheKey(string $method): string

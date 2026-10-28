@@ -50,6 +50,45 @@ class Data extends AbstractHelper
     /** defer 队列过大时分块派发，避免扫完全部模块才卸掉 ACL 事件大包 */
     private const DEFER_ACL_FLUSH_CHUNK = 600;
 
+    /**
+     * setup:upgrade 路由收集期：控制器类加载失败/解析为空的静默降级记录。
+     * 根治「有 Controller 目录、扫描 continue、零产出仍 commit+落指纹 → 店面 404」；
+     * RouteUpdateStage::commit() 前读取并否决（DEV/CI 抛错，prod 记 warning 日志）。
+     * @var list<array{module: string, class: string, kind: string}>
+     */
+    private array $routeScanFailures = [];
+
+    public function enableRouteScanFailureRecording(): void
+    {
+        $this->routeScanFailures = [];
+    }
+
+    /**
+     * @return list<array{module: string, class: string, kind: string}>
+     */
+    public function getRouteScanFailures(): array
+    {
+        return $this->routeScanFailures;
+    }
+
+    public function clearRouteScanFailures(): void
+    {
+        $this->routeScanFailures = [];
+    }
+
+    private function recordRouteScanFailure(string $moduleName, string $class, string $kind): void
+    {
+        $this->routeScanFailures[] = [
+            'module' => $moduleName,
+            'class'  => $class,
+            'kind'   => $kind,
+        ];
+        w_log_warning(__(
+            '路由扫描静默跳过（已记录）：模块 %1 类 %2 — %3',
+            [$moduleName, $class, $kind]
+        ), [], 'setup/route_integrity.log');
+    }
+
     public function enableDeferControllerAttributes(): void
     {
         $this->deferControllerAttributes = true;
@@ -184,8 +223,9 @@ class Data extends AbstractHelper
                     if (is_file($classFile) && !class_exists($api_class, false)) {
                         require_once $classFile;
                     }
-                    // 如果控制器类不存在，跳过
+                    // 如果控制器类不存在，跳过（记录：禁静默降级）
                     if (!class_exists($api_class, false)) {
+                        $this->recordRouteScanFailure($name, $api_class, 'api_class_load_failed');
                         continue;
                     }
                     $apiDirArray = explode(Handle::api_DIR, $api_class);
@@ -211,6 +251,7 @@ class Data extends AbstractHelper
                     $this->parent_class_arr = [];// 清空父类数组
                     $ctl_data = $this->parserController($api_class, $name);
                     if (empty($ctl_data)) {
+                        $this->recordRouteScanFailure($name, $api_class, 'api_parse_empty');
                         continue;
                     }
                     $ctl_methods = $ctl_data['methods'];
@@ -432,8 +473,9 @@ class Data extends AbstractHelper
                     if (is_file($classFile) && !class_exists($pc_class, false)) {
                         require_once $classFile;
                     }
-                    // 如果控制器类不存在，跳过
+                    // 如果控制器类不存在，跳过（记录：禁静默降级）
                     if (!class_exists($pc_class, false)) {
+                        $this->recordRouteScanFailure($name, $pc_class, 'pc_class_load_failed');
                         continue;
                     }
                     $pcDirArray = explode(Handle::pc_DIR, $pc_class);
@@ -461,6 +503,7 @@ class Data extends AbstractHelper
                     $this->parent_class_arr = [];// 清空父类数组
                     $ctl_data = $this->parserController($pc_class, $name);
                     if (empty($ctl_data)) {
+                        $this->recordRouteScanFailure($name, $pc_class, 'pc_parse_empty');
                         continue;
                     }
                     $ctl_methods = $ctl_data['methods'];

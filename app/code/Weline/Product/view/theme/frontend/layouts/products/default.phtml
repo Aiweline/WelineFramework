@@ -124,7 +124,7 @@ $this->assign('meta', $meta);
                 <w:hook>
                     Weline_Theme::frontend::layouts::products::content
                     <else/>
-            <main class="products-layout__main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="products-main" data-layout="products" data-columns="<?= (int)$gridColumns ?>">
+            <main class="products-layout__main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="products-main" data-weline-load="productCategoryLayout" data-layout="products" data-columns="<?= (int)$gridColumns ?>">
                 <?php if ($isSearchLayout): ?>
                     <div class="products-layout__container products-layout__container--search">
                         <section class="products-layout__search-content" weline-code="theme.products.section_1">

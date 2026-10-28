@@ -200,12 +200,13 @@ class FlutterBuilder
             default => 'web',
         };
         $cmd = $flutter . ' build ' . $command . ' --release --no-tree-shake-icons';
-        // BASE_URL 必传：域名站用绑定域名；通用包用请求时站点主链（空域名时由 App 端首启绑定，V1 先给当前站点主链）
-        $baseUrl = trim((string)($cfg['domain'] ?? ''));
-        if ($baseUrl === '') {
-            $baseUrl = 'https://p05113ef3.test.weline.com';
-        }
+        // BASE_URL 必传：本机协助编译必须显式给线上域名（--base-url），禁止把本机测试 Host 打进包
+        $baseUrl = $this->resolveBaseUrl($cfg);
+        $siteHosts = $this->siteHosts($baseUrl);
         $cmd .= ' --dart-define=WELINE_BASE_URL=' . escapeshellarg($baseUrl);
+        if ($siteHosts !== '') {
+            $cmd .= ' --dart-define=WELINE_SITE_HOSTS=' . escapeshellarg($siteHosts);
+        }
         $cmd .= ' --dart-define=WELINE_APP_NAME=' . escapeshellarg((string)($cfg['app_name'] ?? ''))
             . ' --dart-define=WELINE_APP_VERSION=' . escapeshellarg((string)($cfg['version'] ?? ''))
             . ' 2>&1';
@@ -259,6 +260,58 @@ class FlutterBuilder
         }
     }
 
+    /**
+     * 编译期站点基址：必须是 http(s) 绝对地址。本机协助编译时由 --base-url 指定线上域名；
+     * 拿不到就拒绝构建（禁止把本机测试 Host 打进包）。
+     */
+    private function resolveBaseUrl(array $cfg): string
+    {
+        $baseUrl = \rtrim(\trim((string)($cfg['base_url'] ?? $cfg['domain'] ?? '')), '/');
+        if ($baseUrl === '' || \preg_match('#^https?://[^/\s]+#i', $baseUrl) !== 1) {
+            throw new \RuntimeException(
+                '缺少站点地址：本机协助编译必须显式指定线上域名，例：'
+                . 'php bin/w app:build --website=550 --platform=android --base-url=https://www.example.com'
+            );
+        }
+
+        return $baseUrl;
+    }
+
+    /**
+     * App 壳内「同站」域名清单（含裸域），否则站内绝对链接会被当成外链跳系统浏览器。
+     */
+    private function siteHosts(string $baseUrl): string
+    {
+        $host = \strtolower(\trim((string)\parse_url($baseUrl, PHP_URL_HOST)));
+        if ($host === '') {
+            return '';
+        }
+        $hosts = [$host];
+        $bare = \preg_replace('#^www\.#i', '', $host);
+        if (\is_string($bare) && $bare !== '' && $bare !== $host) {
+            $hosts[] = $bare;
+        }
+
+        return \implode(',', $hosts);
+    }
+
+    /**
+     * 构建期站点上下文：写进 build.json，供上传后在目标机 app:artifact:import 核对打的是哪个站。
+     *
+     * @return array<string, mixed>
+     */
+    private function siteStamp(array $cfg): array
+    {
+        $baseUrl = \rtrim(\trim((string)($cfg['base_url'] ?? $cfg['domain'] ?? '')), '/');
+
+        return [
+            'base_url' => $baseUrl,
+            'site_hosts' => $baseUrl === '' ? '' : $this->siteHosts($baseUrl),
+            'app_name' => (string)($cfg['app_name'] ?? ''),
+            'website_id' => (int)($cfg['website_id'] ?? 0),
+        ];
+    }
+
     private function collect(string $workDir, array $cfg, string $buildId): array
     {
         $artifactRoot = PUB . 'static' . DS . 'weline-app' . DS . $buildId;
@@ -302,6 +355,7 @@ class FlutterBuilder
         }
         $sha256 = hash_final($hashCtx);
         $stamp = [
+            ...$this->siteStamp($cfg),
             'build_id' => $buildId,
             'platform' => 'web',
             'version' => (string)$cfg['version'],
@@ -347,6 +401,7 @@ class FlutterBuilder
         $sha256 = (string)hash_file('sha256', $dest);
         $total = filesize($dest) ?: 0;
         $stamp = [
+            ...$this->siteStamp($cfg),
             'build_id' => $buildId,
             'platform' => 'ios',
             'version' => (string)$cfg['version'],
@@ -405,6 +460,7 @@ class FlutterBuilder
         $sha256 = (string)hash_file('sha256', $dest);
         $total = filesize($dest) ?: 0;
         $stamp = [
+            ...$this->siteStamp($cfg),
             'build_id' => $buildId,
             'platform' => 'android',
             'version' => (string)$cfg['version'],

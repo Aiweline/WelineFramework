@@ -118,4 +118,40 @@ final class FrontendWorkerScopeProviderThemeContextTest extends TestCase
             $src,
         );
     }
+
+    /**
+     * Mint and verify must read the SAME generation authority. Binding the token to the
+     * FPC slot string while comparing against whatever the next request computed is what
+     * made a freshly minted token fail immediately — and the browser retry forever.
+     */
+    public function testScopeTokenBindsStorefrontGenerationNotFpcSlot(): void
+    {
+        $src = (string)\file_get_contents(
+            \dirname(__DIR__, 4) . '/Integration/Framework/FrontendWorkerScopeProvider.php',
+        );
+        self::assertMatchesRegularExpression(
+            '/\$this->tokenService->issue\([\s\S]*?\$this->storefrontGeneration\(\),/',
+            $src,
+        );
+        self::assertMatchesRegularExpression(
+            '/\$this->tokenService->verifyCandidate\([\s\S]*?\$this->storefrontGeneration\(\),/',
+            $src,
+        );
+        self::assertStringContainsString('themePublishedVersionId', $src);
+        // Warmup-transition tolerance reuses the Scope resolver's three-generation window.
+        self::assertStringContainsString('isAcceptableStorefrontGenerationId', $src);
+        self::assertStringNotContainsString('StorefrontCacheKeyContext::pageGenerationValue()', $src);
+    }
+
+    public function testHolePunchInstallsThemeContextBeforeMinting(): void
+    {
+        $src = (string)\file_get_contents(
+            \dirname(__DIR__, 4) . '/Service/FrontendWorkerScopeHolePunchService.php',
+        );
+        $ensurePos = \strpos($src, '$this->ensureThemeApplicationContext($scope);');
+        $issuePos = \strpos($src, '$token = $this->scopeProvider->issueToken(');
+        self::assertIsInt($ensurePos);
+        self::assertIsInt($issuePos);
+        self::assertLessThan($issuePos, $ensurePos);
+    }
 }

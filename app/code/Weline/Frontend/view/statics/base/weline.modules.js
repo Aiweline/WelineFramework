@@ -362,8 +362,8 @@
             description: "PLP path-only：筛选/排序/分页一步 BinQuery 换格"
         },
         productCategoryLayout: {
-            origin_paths: ["app/code/Weline/Product/view/statics/js/category-layout.js?v=20261021-category-layout-1"],
-            paths: ["Weline_Product::js/category-layout.js?v=20261021-category-layout-1"],
+            origin_paths: ["app/code/Weline/Product/view/statics/js/category-layout.js?v=20261028-filter-drawer-2"],
+            paths: ["Weline_Product::js/category-layout.js?v=20261028-filter-drawer-2"],
             globalVar: null,
             load: "eager",
             description: "分类页布局侧栏/筛选抽屉"

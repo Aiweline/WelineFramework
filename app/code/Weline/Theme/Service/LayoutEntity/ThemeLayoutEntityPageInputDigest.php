@@ -21,7 +21,14 @@ final class ThemeLayoutEntityPageInputDigest
         self::$planDigestCache = null;
     }
 
-    /** SHA-256 of RequiredDefaultInjectionBakeMerger declarations (request-static). */
+    /**
+     * SHA-256 of bake inputs that are not origin bytes: RequiredDefaultInjectionBakeMerger
+     * declarations plus code-generated chrome markup revisions (request-static).
+     *
+     * Marker: layout-bake-code-markup-revision-v1 — synthesized footer float layer is
+     * appended by StorefrontFloatLayerHost, not stored in the design origin; without
+     * its revision here a PHP-side markup change never invalidates baked chrome.
+     */
     public static function planDigest(): string
     {
         if (self::$planDigestCache !== null) {
@@ -34,10 +41,11 @@ final class ThemeLayoutEntityPageInputDigest
             $declarations = self::canonicalize($declarations);
             self::$planDigestCache = hash(
                 'sha256',
-                json_encode($declarations, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
+                json_encode($declarations, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)
+                . "\0" . StorefrontFloatLayerHost::MARKUP_REVISION,
             );
         } catch (\Throwable) {
-            self::$planDigestCache = hash('sha256', '[]');
+            self::$planDigestCache = hash('sha256', '[]' . "\0" . StorefrontFloatLayerHost::MARKUP_REVISION);
         }
 
         return self::$planDigestCache;

@@ -12,7 +12,7 @@
 |----------|--------------|
 | **非编码**：闲聊、身份/概念问答、与本仓实现无关的说明、纯口头建议 | **通常跳过**；打招呼 `hi`/`你好` 或指令「提取技能」须列技能/指令目录 |
 | **内容运营技能**：产品优化 / 详情优化 / 翻译优化 / 主图优化 / 新建文章 / 审查文章 / 规格修复 等 | **跳过 MCP**（`content_ops_skills_skip_mcp`）：宿主 Read `dev/ai-command/**` + 模块 `doc/ai/skills/**`；禁止 prepare / 技能索引 |
-| **编码/工程**：改代码或模块文档、诊断/评审本仓、部署规划、功能验收收口 | **强制**：ensure（若需）→ `prepare_project` → 读并遵守 `hard_constraints` → 宿主原生编辑；按需 `resolve_task_context` / `get_skill`。MCP 挂不上则宿主 Read `AI硬规则索引.md`，不得编造规则 |
+| **编码/工程**：改代码或模块文档、诊断/评审本仓、部署规划、功能验收收口 | **强制**：ensure（若需）→ `prepare_project` → 读并遵守 `hard_constraints` → 宿主原生编辑；按需 `resolve_task_context` / `get_skill`。**MCP 挂不上先自装**（`mcp_call_scope` SELF-INSTALL）：任何 AI 读到本文，若 MCP 未挂载到自己会话，必须按 `host_mcp_install` 指引用自己宿主的机制给自己装上（未知宿主自行定位配置 + `known_targets`），启用后新会话验证工具；只有证明装不上才降级 Read `AI硬规则索引.md` 并说明失败原因；不得编造规则、不得让用户手改 Settings、不得手写编辑器规则文件 |
 
 权威细则：`app/code/Weline/Ai/doc/AI硬规则索引.md`（`mcp_call_scope`）与 MCP `hard-constraints.v1`。
 
@@ -35,15 +35,15 @@ php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php
 | `mcp_init_check.verdict` | 含义 | Agent 做什么 |
 |--------------------------|------|--------------|
 | `ready` | 本地 STDIO 引导就绪 | **必须** `prepare_project` 刷新索引与 `hard_constraints`（工程任务） |
-| `host_install_needed` | 宿主未挂上 MCP | 执行 `host_mcp_install` steps → 重跑 ensure |
+| `host_install_needed` | 宿主未挂上 MCP | **Agent 自装**：执行 `host_mcp_install.hosts[<宿主>].install.steps` → 宿主内启用 → 新会话 → 重跑 ensure |
 | `host_repair_needed` | 代次/工具目录过期 | 按 `agent_next_action` 修复后重跑 ensure |
 | `blocked` | 不可继续（如分支） | 按 `blocker` 处理（如在 `master` 则 `git switch dev`） |
 
 ensure 会写出 MCP 生成的 Cursor alwaysApply 门禁：`.cursor/rules/weline-mcp-coldstart.mdc`（禁止手改当规则源）。
 
-挂载成功时：`prepare_project`（仓库根 + 稳定 `client_session_id`）→ **读并遵守** `hard_constraints` → 按需 `resolve_task_context` / `get_skill`。
+**自装优先于降级（HARD，`mcp_call_scope` SELF-INSTALL）**：任何 AI 编辑器读到本文，若 MCP 未挂载到自己会话，**先给自己装上**——按 `host_mcp_install` 的 `registration`（command/args/env）写进本宿主的 MCP 配置（仅当语义不等价时），在宿主内启用，新开一个会话验证 `mcp_required_tool` 全部可见。宿主不在支持表内（`primary_host=unknown`）不等于无事可做：自行定位本宿主的 MCP 配置位置（参考 `known_targets`）。禁止让用户去 Settings 手改、禁止 Reload Window、禁止手写编辑器规则文件。
 
-**MCP 未挂载或检索失败时**：宿主 Read `app/code/Weline/Ai/doc/AI硬规则索引.md` 继续开发；不得假装已遵守 MCP，不得借此绕过验收门禁。
+**MCP 未挂载且自装被证明不可能时**（如宿主以不可修改的 MCP 白名单拉起 Agent）：宿主 Read `app/code/Weline/Ai/doc/AI硬规则索引.md` 继续开发，并如实说明尝试过的安装路径与失败原因；不得假装已遵守 MCP，不得借此绕过验收门禁。
 
 规范正文只维护在 `app/code/Weline/Ai/doc/`、`app/code/Weline/Framework/doc/` 和各模块 `doc/`。
 

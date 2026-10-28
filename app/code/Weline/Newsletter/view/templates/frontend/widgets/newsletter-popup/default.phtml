@@ -1,14 +1,15 @@
 <?php
 /**
  * @widget.source {Weline_Newsletter::css/widgets/widget-newsletter-popup-default.css,Weline_Theme::css/widgets/widget-instance-styles.css,Weline_Theme::js/widgets/widget-instance-styles.js}
- * 订阅弹窗部件（Weline_Newsletter 拥有 · 古风宣纸信笺）
- * 半透明蒙版 + 实心宣纸信笺 WebP（非红包信封）；表单叠写于笺面。
+ * 订阅弹窗部件（Weline_Newsletter 拥有）
+ * 默认皮肤为**中性卡片**（只消费主题 Token，跟随默认主题/设计主题色盘）；不内置任何品牌皮。
+ * 需要"信笺/信封"等品牌观感的主题，在自己的设计主题里同 key 覆盖本模板并提供 image（见 hanfu）。
  *
  * @var \Weline\Framework\View\Template $this
  *
  * @widget.code {newsletter-popup}
  * @widget.name {订阅弹窗}
- * @widget.description {全站邮件订阅弹窗（古风信笺）；cookie_days 默认 14。}
+ * @widget.description {全站邮件订阅弹窗（中性卡片皮肤，跟随主题 Token）；cookie_days 默认 14。}
  * @widget.type {newsletter}
  * @widget.area {frontend}
  * @widget.position {["content"]}
@@ -16,7 +17,7 @@
  *
  * @param title {default="订阅获取优惠",type="string",label="标题"}
  * @param description {default="订阅我们的邮件，立即获得10%折扣码！",type="string",label="描述"}
- * @param image {default="",type="media_image",label="信笺图",description="可选自定义宣纸信笺（建议透明 WebP）；空则用模块默认古风信笺"}
+ * @param image {default="",type="media_image",label="背景图",description="可选自定义背景图（建议透明 WebP，3:4）；留空则渲染中性卡片（主题 Token 皮肤）"}
  * @param button_text {default="立即订阅",type="string",label="按钮文字"}
  * @param trigger {default="deferred",type="select",label="触发方式",options={deferred:"组合延后",delay:"延迟显示",scroll:"滚动触发",exit:"退出意图"}}
  * @param delay_seconds {default=15,type="number",label="延迟秒数"}
@@ -32,7 +33,6 @@
  * @widget.placement {injection}
  */
 
-use Weline\Framework\View\Data\DataInterface;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
@@ -111,12 +111,10 @@ if ($trigger === '' || $trigger === 'auto') {
     $trigger = 'deferred';
 }
 
-$shellUrl = $image !== ''
-    ? $image
-    : (string)$this->fetchTagSource(
-        DataInterface::dir_type_STATICS,
-        'Weline_Newsletter::images/newsletter-xinjian-gufeng.webp'
-    );
+// 中性默认：只有显式配置了 image 才渲染背景图；否则走 CSS 里 .letter-shell:not(:has(__art)) 的卡片降级。
+// 品牌皮（信笺/信封等）由设计主题同 key 覆盖本模板自带，模块不内置任何品牌资产。
+$shellUrl = $image;
+$hasShellArt = $shellUrl !== '';
 $headline = $description !== '' ? $description : $title;
 
 $isEditorPreview = $this->getData('_editor_preview')
@@ -159,13 +157,15 @@ $rootStyle = $isEditorPreview ? '' : 'display: none;';
         </button>
 
         <div class="letter-shell" data-testid="newsletter-letter-sheet">
-            <div class="letter-shell__art w-frame" data-ratio="3/4" data-fit="contain">
-                <img src="<?= $esc($shellUrl) ?>"
-                     alt=""
-                     width="720"
-                     height="960"
-                     decoding="async">
-            </div>
+            <?php if ($hasShellArt): ?>
+                <div class="letter-shell__art w-frame" data-ratio="3/4" data-fit="contain">
+                    <img src="<?= $esc($shellUrl) ?>"
+                         alt=""
+                         width="720"
+                         height="960"
+                         decoding="async">
+                </div>
+            <?php endif; ?>
 
             <div class="letter-shell__form">
                 <?php if ($headline): ?>

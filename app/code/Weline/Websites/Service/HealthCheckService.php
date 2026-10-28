@@ -107,12 +107,30 @@ class HealthCheckService
     
     /**
      * 检查所有活跃域名的健康状态
-     * 
+     *
+     * @param int $freshHours >0 时跳过「超过该小时数未检查」窗口内的域名（增量探测），0 = 全量
      * @return array 检查结果摘要
      */
-    public function checkAllDomains(): array
+    public function checkAllDomains(int $freshHours = 0): array
     {
         $domains = $this->domainModel->getAllActiveDomainsForHealthCheck();
+        if ($freshHours > 0) {
+            $threshold = \time() - $freshHours * 3600;
+            $before = \count($domains);
+            $domains = \array_values(\array_filter(
+                $domains,
+                static function (array $d) use ($threshold): bool {
+                    $checkedAt = (string)($d[WebsiteDomain::schema_fields_HEALTH_CHECKED_AT] ?? '');
+                    $ts = $checkedAt === '' ? 0 : (int)\strtotime($checkedAt);
+
+                    return $ts <= $threshold;
+                }
+            ));
+            WebsitesCronTestContext::detail('HealthCheck.fresh_window', [
+                'fresh_hours' => $freshHours,
+                'skipped_fresh' => $before - \count($domains),
+            ]);
+        }
         if (WebsitesCronTestContext::getDomainFilter() !== null) {
             $domains = \array_values(\array_filter(
                 $domains,

@@ -1486,6 +1486,12 @@ private function assert_FpcMode_testAbsentEnvDefaultsAutoPierceOff(): void
     self::assertStringContainsString('__welineFpcPierceHooked', $js);
     self::assertStringContainsString('data-weline-fpc-dev-auto-pierce', $js);
     self::assertStringContainsString('document.currentScript', $js);
+    // Propagation must not depend on the admin toggle: a stamped visit keeps
+    // stamping from its own address bar (cache-safe, secret-free loader tag).
+    self::assertStringContainsString('self-detect', $clientSrc);
+    self::assertStringNotContainsString("if (\$html === '' || !self::isActive())", $clientSrc);
+    self::assertStringContainsString('location.search', $js);
+    self::assertStringContainsString('readSecret', $js);
     self::assertDoesNotMatchRegularExpression(
         '/<script\b[^>]*\bdefer\b/i',
         $clientSrc,

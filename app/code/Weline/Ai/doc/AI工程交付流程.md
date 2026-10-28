@@ -40,7 +40,7 @@
 ### 0. 会话引导（索引 / 规则 / 技能）
 
 - 工程任务：运行 `php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php`（写出 MCP 生成的冷启动 `.mdc`），再 **必须** `prepare_project`，阅读并遵守 `agent_guidance.hard_constraints`（`hard-constraints.v1`，由 [AI硬规则索引](./AI硬规则索引.md) 编译）。
-- **编码仍用宿主原生编辑**；MCP 无写仓工具。MCP 挂不上时宿主 Read 权威文档继续，不得编造规则。
+- **编码仍用宿主原生编辑**；MCP 无写仓工具。MCP 挂不上时**先按 `mcp_call_scope` SELF-INSTALL 给自己宿主装上**（ensure → `host_mcp_install` steps / `known_targets`，启用后新会话验证工具）；只有证明装不上才宿主 Read 权威文档继续，并说明失败原因，不得编造规则。
 - `session_startup_notices` 只指路。
 - 交付 URL 机器契约：`agent_guidance.feature_delivery_urls`、`closeout_delivery_reminder`。
 - 任务细则：按需 `resolve_task_context` → `workflow_contract.v1` surfaces。

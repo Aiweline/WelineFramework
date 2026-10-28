@@ -9,6 +9,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityPaths;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntityUpgradeSolidifyService;
+use Weline\Theme\Service\ThemeHeadCssDuplicateInspector;
 
 /**
  * 主题更新代次构建器。
@@ -31,6 +32,32 @@ final class ThemeUpdateBuildService
     }
 
     /**
+     * setup:upgrade 正在跑（`var/process/setup_upgrade.lock` 被 flock 占用）时禁止构建代次：
+     * 否则会把升级中途的静态树/实体根硬链接进批次，产出一份半成品快照。
+     */
+    public static function setupUpgradeInProgress(): bool
+    {
+        $root = \defined('VAR_DIR')
+            ? (string)\VAR_DIR
+            : \rtrim((string)BP, '/\\') . \DIRECTORY_SEPARATOR . 'var' . \DIRECTORY_SEPARATOR;
+        $file = \rtrim($root, '/\\') . \DIRECTORY_SEPARATOR . 'process' . \DIRECTORY_SEPARATOR . 'setup_upgrade.lock';
+        if (!\is_file($file)) {
+            return false;
+        }
+        $handle = @\fopen($file, 'r');
+        if ($handle === false) {
+            return false;
+        }
+        $locked = !\flock($handle, \LOCK_EX | \LOCK_NB);
+        if (!$locked) {
+            \flock($handle, \LOCK_UN);
+        }
+        @\fclose($handle);
+
+        return $locked;
+    }
+
+    /**
      * @param array{layouts?:list<string>,options?:list<string>,all_versions?:bool,skip_static?:bool,skip_entities?:bool,batch_id?:string} $options
      * @return array{batch_id:string,static_ns:string,entity_root:string,manifest:array<string,mixed>}
      */
@@ -38,6 +65,9 @@ final class ThemeUpdateBuildService
     {
         if ($themeId < 1) {
             throw new \InvalidArgumentException('theme_update_theme_id_invalid');
+        }
+        if (self::setupUpgradeInProgress()) {
+            throw new \RuntimeException('theme_update_blocked_by_setup_upgrade');
         }
 
         $reuse = (string)($options['batch_id'] ?? '');
@@ -133,6 +163,8 @@ final class ThemeUpdateBuildService
             $checks[] = $this->checkStaticSample($staticDir, $themePrefix);
         }
         $checks[] = $this->checkEntitySample($entityDir);
+        // 3.1) 头部 CSS 重复投递（只允许 DEV 断言：PROD 发布不因它失败）
+        $checks[] = $this->checkHeadCssOverlayDuplicates($themeId);
 
         $ok = true;
         foreach ($checks as $check) {
@@ -401,6 +433,46 @@ final class ThemeUpdateBuildService
             'sampled' => $sampled,
             'empty' => array_slice($empty, 0, 5),
         ];
+    }
+
+    /**
+     * 头部 CSS 重复投递检查：PACK_OVERLAY 已合并主题叶，layout/page 再挂同一个叶就是
+     * 同一份 CSS 投递两次 + 多一个渲染阻塞请求。
+     *
+     * 只允许 DEV 断言（用户 2026-10-28 指定）：PROD 直接 skipped，不拦住发版。
+     * 检查自身异常也不得把发版拖红，统一降级为 skipped。
+     *
+     * @return array<string,mixed>
+     */
+    private function checkHeadCssOverlayDuplicates(int $themeId): array
+    {
+        if (\defined('PROD') && \PROD) {
+            return ['name' => 'head_css_overlay_duplicate', 'ok' => true, 'skipped' => 'prod'];
+        }
+        try {
+            /** @var ThemeHeadCssDuplicateInspector $inspector */
+            $inspector = ObjectManager::getInstance(ThemeHeadCssDuplicateInspector::class);
+            $findings = $inspector->inspectTheme($themeId, 'frontend');
+            $hard = $inspector->hardFindings($findings);
+            $check = [
+                'name' => 'head_css_overlay_duplicate',
+                'ok' => $hard === [],
+                'findings' => \count($findings),
+                'hard' => \count($hard),
+            ];
+            if ($hard !== []) {
+                $check['detail'] = $inspector->format($hard);
+            }
+
+            return $check;
+        } catch (\Throwable $e) {
+            return [
+                'name' => 'head_css_overlay_duplicate',
+                'ok' => true,
+                'skipped' => 'inspector_error',
+                'error' => $e->getMessage(),
+            ];
+        }
     }
 
     /**

@@ -44,7 +44,8 @@ class Queue implements \Weline\Framework\Cron\CronTaskInterface
 
     public function cron_time(): string
     {
-        return '*/1 * * * *';
+        // 与 `* * * * *` 等价的旧写法统一为标准形式。
+        return '* * * * *';
     }
 
     public function execute(): string

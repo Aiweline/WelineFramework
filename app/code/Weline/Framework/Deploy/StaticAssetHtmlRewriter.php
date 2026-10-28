@@ -35,9 +35,25 @@ final class StaticAssetHtmlRewriter
             return $html;
         }
 
-        $rewrite = static fn (array $match): string => $match[1]
-            . StaticBuildId::versionedPath(self::alignThemePair($match[2], $buildId), $buildId)
-            . $match[3];
+        $themeBuild = self::pinnedThemeBuild();
+        $pair = self::currentPairSegment();
+        $themePrefix = self::currentThemePrefix();
+        $rewrite = static function (array $match) use ($buildId, $themeBuild, $pair, $themePrefix): string {
+            $url = self::alignThemePair($match[2], $buildId);
+            $target = $buildId;
+            // 主题自有资源（`{code}/v{n}/…` 或裸主题命名空间）用主题更新指针上的静态段
+            // （每次换代换目录，旧目录留到 GC）；模块/框架资源继续用部署构建号。
+            if ($themeBuild !== '' && $pair !== '') {
+                $isPairShape = \preg_match('#^/static/[A-Za-z0-9_.-]+/v[0-9]+/#', $url) === 1;
+                $isThemeNamespace = ($themePrefix !== '' && \str_starts_with($url, '/static/' . $themePrefix . '/'))
+                    || \str_starts_with($url, '/static/Weline/Theme/');
+                if ($isPairShape || $isThemeNamespace) {
+                    $target = $pair . '/' . $themeBuild;
+                }
+            }
+
+            return $match[1] . StaticBuildId::versionedPath($url, $target) . $match[3];
+        };
 
         $html = \preg_replace_callback(
             '#((?:src|href)\s*=\s*["\'])(/static/[^"\']*)(["\'])#i',
@@ -94,12 +110,57 @@ final class StaticAssetHtmlRewriter
             $pair = '';
         }
         $deploy = $buildId !== '' ? $buildId : self::DEPLOY_PLACEHOLDER;
+        $themeBuild = self::pinnedThemeBuild();
+        $pairBuild = $themeBuild !== '' ? $themeBuild : $deploy;
         // 没有主题对时（指针未写 pair_segment），主题自有资源也退回部署段；
         // 否则会产出 `/static//Weline/...` 这种双斜杠地址。
-        $pairSegment = $pair !== '' ? $pair : $deploy;
+        $pairSegment = $pair !== '' ? $pair . '/' . $pairBuild : $deploy;
         $html = \str_replace('/static/' . self::PAIR_PLACEHOLDER . '/', '/static/' . $pairSegment . '/', $html);
 
         return \str_replace('/static/' . self::DEPLOY_PLACEHOLDER . '/', '/static/' . $deploy . '/', $html);
+    }
+
+    /** 主题更新指针上的 12 位静态段；没有代次机制/未 pin 时返回空串（退回部署构建号）。 */
+    private static function pinnedThemeBuild(): string
+    {
+        try {
+            if (\class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
+                $build = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pinnedStaticBuild();
+
+                return \preg_match('/^[0-9a-f]{12}$/', $build) === 1 ? $build : '';
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
+    }
+
+    /** 当前应用主题的 pair 段（`{code}/v{n}`）；无主题上下文返回空串。 */
+    private static function currentPairSegment(): string
+    {
+        try {
+            if (\class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
+                $pair = \Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::pairSegment();
+
+                return \preg_match('#^[A-Za-z0-9_.-]+/v[0-9]+$#', $pair) === 1 ? $pair : '';
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
+    }
+
+    /** 当前应用主题的静态命名空间（如 `Weline/hanfu`）；无主题上下文返回空串。 */
+    private static function currentThemePrefix(): string
+    {
+        try {
+            if (\class_exists('\\Weline\\Theme\\Service\\ThemeUpdate\\ThemeUpdateRuntime')) {
+                return \trim(\Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime::activeThemePrefix(), '/');
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
     }
 
     /**

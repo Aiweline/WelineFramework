@@ -139,8 +139,8 @@ final class DeployServiceContractsTest extends TestCase
             'DeployWebhookPierceGate::testAckPendingClearsAfterAcknowledge' => function () {
             $this->assert_DeployWebhookPierceGate_testAckPendingClearsAfterAcknowledge();
         },
-            'DeployWebhookQueue::testQueueAndDrainAndCronExist' => function () {
-            $this->assert_DeployWebhookQueue_testQueueAndDrainAndCronExist();
+            'DeployWebhookQueue::testQueueAndDrainAndTriggerPath' => function () {
+            $this->assert_DeployWebhookQueue_testQueueAndDrainAndTriggerPath();
         },
         ];
     }
@@ -514,6 +514,10 @@ private function assert_DeployWebhookAsyncAck_testWebhookReleaseReturnsAcceptedA
     self::assertStringNotContainsString('$this->orchestrator->release', $source);
     // Git-versioned deploy: detached CLI always passes --no-backup (third arg true).
     self::assertMatchesRegularExpression('/dispatchRelease\s*\(\s*\(string\)\$refInfo\[\'ref\'\]\s*,\s*\$force\s*,\s*true\s*\)/', $source);
+    // tag/ref 透传：body 只带 tag / tag_name 时归一成 refs/tags/<tag>，仍走同一条 dispatchRelease，不新增轮询。
+    self::assertStringContainsString('resolveWebhookRef', $source);
+    self::assertStringContainsString("'refs/tags/' . \$tag", $source);
+    self::assertStringContainsString('tag_name', $source);
 }
 
 private function assert_DeployWebhookAsyncAck_testAsyncDispatcherSpawnsDetachedDeployRelease(): void
@@ -540,15 +544,13 @@ private function assert_DeployWebhookExpectWatch_testExpectWatchServiceAndCronEx
 {
     $base = '/Users/weline/Project/Official/框架/app/code/Weline/Deploy';
     self::assertFileExists($base . '/Service/DeployWebhookExpectWatchService.php');
-    self::assertFileExists($base . '/Cron/DeployWebhookExpectCron.php');
+    // tag 到达轮询任务已删除：发布由 webhook 命中直接派发，不再每分钟轮询 git。
+    self::assertFileDoesNotExist($base . '/Cron/DeployWebhookExpectCron.php');
     $watch = (string) file_get_contents($base . '/Service/DeployWebhookExpectWatchService.php');
-    $cron = (string) file_get_contents($base . '/Cron/DeployWebhookExpectCron.php');
     $queue = (string) file_get_contents($base . '/Service/DeployWebhookJobQueue.php');
     $git = (string) file_get_contents($base . '/Service/DeployGitMetadataService.php');
     $history = (string) file_get_contents($base . '/Service/DeployReleaseHistoryService.php');
     $resolver = (string) file_get_contents($base . '/Service/DeployWebhookRefResolver.php');
-    self::assertStringContainsString("'* * * * *'", $cron);
-    self::assertStringContainsString('DeployWebhookExpectWatchService', $cron);
     self::assertStringContainsString('webhook-expect.json', $watch);
     self::assertStringContainsString('DEFAULT_GRACE_SEC = 60', $watch);
     self::assertStringContainsString('KIND_TAG', $watch);
@@ -754,18 +756,15 @@ private function assert_DeployWebhookPierceGate_testAckPendingClearsAfterAcknowl
     self::assertSame(\hash('sha256', $secret), $ackBox->hash);
 }
 
-private function assert_DeployWebhookQueue_testQueueAndDrainAndCronExist(): void
+private function assert_DeployWebhookQueue_testQueueAndDrainAndTriggerPath(): void
 {
     $base = '/Users/weline/Project/Official/框架/app/code/Weline/Deploy';
     self::assertFileExists($base . '/Service/DeployWebhookJobQueue.php');
     self::assertFileExists($base . '/Service/DeployWebhookJobDrainService.php');
-    self::assertFileExists($base . '/Cron/DeployWebhookDrainCron.php');
-    self::assertFileExists($base . '/Cron/DeployWebhookExpectCron.php');
+    // 两个轮询任务全部删除：发布由 webhook 命中直接派发，队列维护搬到触发路径。
+    self::assertFileDoesNotExist($base . '/Cron/DeployWebhookDrainCron.php');
+    self::assertFileDoesNotExist($base . '/Cron/DeployWebhookExpectCron.php');
     self::assertFileExists($base . '/Console/Deploy/Webhook/Drain.php');
-    $cron = (string) file_get_contents($base . '/Cron/DeployWebhookDrainCron.php');
-    self::assertStringContainsString("'* * * * *'", $cron);
-    self::assertStringContainsString('DeployWebhookJobDrainService', $cron);
-    self::assertStringContainsString('reconciled=', $cron);
     $queue = (string) file_get_contents($base . '/Service/DeployWebhookJobQueue.php');
     self::assertStringContainsString('webhook-queue', $queue);
     self::assertStringContainsString("'status' => self::STATUS_PENDING", $queue);
@@ -781,6 +780,20 @@ private function assert_DeployWebhookQueue_testQueueAndDrainAndCronExist(): void
     self::assertStringContainsString('abandonStaleIncomplete(', $dispatcher);
     self::assertStringContainsString('superseded_by_newer_deploy', $dispatcher);
     self::assertStringContainsString('PHASE_ABANDONED', $dispatcher);
+    // webhook 触发路径自带维护：有界 reconcile + abandonStaleIncomplete，失败不阻断本次发布。
+    self::assertStringContainsString('DeployWebhookExternalJobReconciler', $dispatcher);
+    self::assertStringContainsString('MAINTENANCE_RECONCILE_LIMIT = 20', $dispatcher);
+    self::assertStringContainsString('externalReconciler->reconcile(self::MAINTENANCE_RECONCILE_LIMIT)', $dispatcher);
+    self::assertStringContainsString('$this->reconcileExitedExternalJobs($logPath);', $dispatcher);
+    self::assertStringContainsString('$stale = $this->jobQueue->abandonStaleIncomplete();', $dispatcher);
+    self::assertStringContainsString('catch (\Throwable $e) {', $dispatcher);
+    self::assertStringContainsString('# maintenance_failed: ', $dispatcher);
+    // 维护必须在入队之前。
+    $maintainPos = strpos($dispatcher, 'reconcileExitedExternalJobs($logPath);');
+    $enqueuePos = strpos($dispatcher, '$this->jobQueue->enqueue(');
+    self::assertNotFalse($maintainPos);
+    self::assertNotFalse($enqueuePos);
+    self::assertLessThan($enqueuePos, $maintainPos);
     $drain = (string) file_get_contents($base . '/Service/DeployWebhookJobDrainService.php');
     self::assertStringContainsString('abandonStaleIncomplete(', $drain);
     self::assertStringContainsString('PHASE_ABANDONED', $drain);

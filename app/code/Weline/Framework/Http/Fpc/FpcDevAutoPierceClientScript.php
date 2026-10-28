@@ -5,9 +5,16 @@ declare(strict_types=1);
 namespace Weline\Framework\Http\Fpc;
 
 /**
- * When admin「链接自带签章」is on, inject a storefront script that stamps
- * same-origin navigational URLs (a[href]/form[action]/data-href) so widgets
- * that skip Url::getUrl (e.g. localizeHref('/category/...')) still pierce FPC.
+ * Inject a storefront script that stamps same-origin navigational URLs
+ * (a[href]/form[action]/data-href) so widgets that skip Url::getUrl
+ * (e.g. localizeHref('/category/...')) still pierce FPC.
+ *
+ * Two modes:
+ * - self-detect (always): the loader carries no secret and the client reads the
+ *   stamp from its own location.search, so the tag is cache-safe and a pierced
+ *   visit keeps propagating even when the HTML came from an FPC/CDN cache.
+ * - admin「链接自带签章」: the loader also carries data-pierce-secret/suffix so
+ *   freshly rendered pages are stamped before the first navigation.
  */
 final class FpcDevAutoPierceClientScript
 {
@@ -27,7 +34,7 @@ final class FpcDevAutoPierceClientScript
      */
     public static function injectIntoHtml(string $html): string
     {
-        if ($html === '' || !self::isActive()) {
+        if ($html === '') {
             return $html;
         }
         // Binary / compressed FPC bodies must not be scanned as HTML.
@@ -61,20 +68,6 @@ final class FpcDevAutoPierceClientScript
 
     public static function renderScriptTag(): string
     {
-        if (!self::isActive()) {
-            return '';
-        }
-
-        try {
-            $secret = FpcPierceStamp::ensureSecret();
-            $suffix = FpcPierceStamp::buildQuerySuffix($secret);
-        } catch (\Throwable) {
-            return '';
-        }
-        if ($secret === '' || $suffix === '') {
-            return '';
-        }
-
         $src = self::publicScriptUrl();
         if ($src === '') {
             return '';
@@ -82,15 +75,30 @@ final class FpcDevAutoPierceClientScript
 
         $esc = static fn (string $value): string => \htmlspecialchars($value, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
 
-        // No defer: end-of-body placement already has full DOM; defer made
-        // document.currentScript null and raced Bag/widget hydrate.
-        return '<script src="' . $esc($src) . '" '
+        $attrs = 'src="' . $esc($src) . '" '
             . self::MARKER_ATTR . '="1" '
             . 'data-no-extract="true" '
-            . 'data-pierce-query-name="' . $esc(FpcPierceStamp::QUERY_NAME) . '" '
-            . 'data-pierce-secret="' . $esc($secret) . '" '
-            . 'data-pierce-suffix="' . $esc($suffix) . '"'
-            . '></script>';
+            . 'data-pierce-query-name="' . $esc(FpcPierceStamp::QUERY_NAME) . '"';
+
+        // Secret only travels in admin「链接自带签章」mode; that mode bypasses FPC.
+        // Self-detect mode must stay secret-free so the tag is safe in cached HTML.
+        if (self::isActive()) {
+            try {
+                $secret = FpcPierceStamp::ensureSecret();
+                $suffix = FpcPierceStamp::buildQuerySuffix($secret);
+            } catch (\Throwable) {
+                $secret = '';
+                $suffix = '';
+            }
+            if ($secret !== '' && $suffix !== '') {
+                $attrs .= ' data-pierce-secret="' . $esc($secret) . '"'
+                    . ' data-pierce-suffix="' . $esc($suffix) . '"';
+            }
+        }
+
+        // No defer: end-of-body placement already has full DOM; defer made
+        // document.currentScript null and raced Bag/widget hydrate.
+        return '<script ' . $attrs . '></script>';
     }
 
     private static function publicScriptUrl(): string

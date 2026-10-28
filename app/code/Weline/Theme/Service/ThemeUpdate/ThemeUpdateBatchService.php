@@ -94,7 +94,13 @@ final class ThemeUpdateBatchService
             if (!self::seedThemePairFromNewDeploy($root, $themeCode, $versionNumber, $newDeployId)) {
                 continue;
             }
-            self::retireStaleThemePairDirs($root, $themeCode, $versionNumber, $newDeployId);
+            self::retireStaleThemePairDirs(
+                $root,
+                $themeCode,
+                $versionNumber,
+                $newDeployId,
+                self::pinnedBuildsForPair($themeCode)
+            );
             $ready++;
         }
         if ($ready > 0) {
@@ -161,16 +167,23 @@ final class ThemeUpdateBatchService
 
     /**
      * 新世代目录已经有文件时，删除该主题 code 下其余版本和其余部署号。
+     *
+     * @param list<string> $keepBuildIds 额外保留的主题静态段（如指针上的 pinned 段），不得在部署换版时删掉
      */
     public static function retireStaleThemePairDirs(
         string $pubStatic,
         string $themeCode,
         int $versionNumber,
         string $deployId,
+        array $keepBuildIds = [],
     ): int {
         if (!self::isSafePairIdentity($themeCode, $versionNumber, $deployId)) {
             return 0;
         }
+        $keepBuildIds = \array_values(\array_filter(\array_map(
+            static fn ($id): string => \strtolower(\trim((string)$id)),
+            $keepBuildIds
+        ), static fn (string $id): bool => \preg_match('/^[0-9a-f]{12}$/', $id) === 1));
         $root = \rtrim($pubStatic, '/\\');
         $keep = self::themePairDir($root, $themeCode, $versionNumber, $deployId);
         if (!self::directoryHasFile($keep)) {
@@ -194,6 +207,9 @@ final class ThemeUpdateBatchService
             }
             foreach ((array)@\scandir($versionPath) as $deployDir) {
                 if ($deployDir === '.' || $deployDir === '..' || $deployDir === $deployId) {
+                    continue;
+                }
+                if (\in_array(\strtolower((string)$deployDir), $keepBuildIds, true)) {
                     continue;
                 }
                 $candidate = $versionPath . \DIRECTORY_SEPARATOR . $deployDir;
@@ -229,6 +245,62 @@ final class ThemeUpdateBatchService
         }
 
         return $rows;
+    }
+
+    /** @return list<string> 指针里属于该主题 code 的 pinned 静态段（部署换版时须保留） */
+    private static function pinnedBuildsForPair(string $themeCode): array
+    {
+        $themeCode = \trim($themeCode);
+        if ($themeCode === '') {
+            return [];
+        }
+        $out = [];
+        foreach (self::pointerFileMap() as $row) {
+            $pair = \trim((string)($row['pair_segment'] ?? ''));
+            if ($pair === '' || !\str_starts_with($pair, $themeCode . '/v')) {
+                continue;
+            }
+            $build = \strtolower(\trim((string)($row['static_build'] ?? '')));
+            if (\preg_match('/^[0-9a-f]{12}$/', $build) === 1) {
+                $out[$build] = true;
+            }
+        }
+
+        return \array_keys($out);
+    }
+
+    /**
+     * 该主题是否已经有生效的代次指针。
+     *
+     * 首次安装 / 从未走过 theme:update 的站点没有指针，主题产物必须就地固化；
+     * 已进入代次机制的站点可以延后到 theme:update 构建，避免系统更新窗内改线上主题字节。
+     */
+    public static function hasPointerForTheme(int $themeId): bool
+    {
+        if ($themeId < 1) {
+            return false;
+        }
+        foreach (self::pointerFileMap() as $row) {
+            if ((int)($row['theme_id'] ?? 0) === $themeId) {
+                return true;
+            }
+        }
+        try {
+            $env = \Weline\Framework\App\Env::getInstance();
+            $map = $env->getConfig(self::CONFIG_CURRENT_MAP, []);
+            if (!\is_array($map)) {
+                return false;
+            }
+            foreach ($map as $row) {
+                if (\is_array($row) && (int)($row['theme_id'] ?? 0) === $themeId) {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return false;
     }
 
     private static function themePairDir(string $root, string $themeCode, int $versionNumber, string $deployId): string
@@ -334,6 +406,40 @@ final class ThemeUpdateBatchService
         }
 
         return \substr(\hash('sha256', $batchId), 0, 12);
+    }
+
+    /**
+     * 本次 promote 要把主题静态落到哪个 12 位段。
+     *
+     * 默认由批次 ID 派生（每次换代换目录，旧目录留到 GC，避免原地覆盖正在服务的字节）。
+     * Env `theme_update_pinned_static_build=false` 回到旧行为：沿用部署构建号、原地镜像。
+     */
+    public static function pinnedStaticBuildForBatch(string $batchId): string
+    {
+        if (!self::pinnedStaticBuildEnabled()) {
+            return '';
+        }
+        // flat 单权威树没有主题静态段：沿用部署构建号，避免指针指向不存在的段
+        try {
+            if (\Weline\Framework\Deploy\StaticBuildId::isFlatMode()) {
+                return '';
+            }
+        } catch (\Throwable) {
+            // StaticBuildId 不可用：按非 flat 处理
+        }
+
+        return self::themeStaticBuildId($batchId, '');
+    }
+
+    /** 是否启用「每次换代换主题静态段」；关掉即回到沿用部署构建号的旧行为。 */
+    public static function pinnedStaticBuildEnabled(): bool
+    {
+        try {
+            return (bool)\Weline\Framework\App\Env::getInstance()
+                ->getConfig('theme_update_pinned_static_build', true);
+        } catch (\Throwable) {
+            return true;
+        }
     }
 
     /** @return array{batch_id:string,static_ns:string,entity_root:string,theme_prefix:string,epoch:int} */
@@ -464,9 +570,10 @@ final class ThemeUpdateBatchService
             : $row->toState();
 
         $next = ThemeUpdatePointerPlanner::planPromote($state, $batchId);
+        $pinnedBuild = self::pinnedStaticBuildForBatch($batchId);
         $this->commitPointer($row, $websiteId, $themeId, $area, $next, (int)$state['epoch'], $batchId);
-        $this->persistPointerConfig($websiteId, $themeId, $area, $batch, $next['epoch']);
-        $this->mirrorThemeStaticToDeploy($batchId);
+        $this->persistPointerConfig($websiteId, $themeId, $area, $batch, $next['epoch'], $pinnedBuild);
+        $this->mirrorThemeStaticToDeploy($batchId, $pinnedBuild);
         $this->rotateStorefrontHtmlGeneration();
         $errors = $this->invalidateThemeCaches($themeId, 'theme_update_promote');
         // 自动回收历史代次，避免批次目录无界增长（失败不影响切换，但必须上报）
@@ -497,8 +604,9 @@ final class ThemeUpdateBatchService
         }
 
         $this->commitPointer($row, $websiteId, $themeId, $area, $next, (int)$state['epoch'], $next['current']);
-        $this->persistPointerConfig($websiteId, $themeId, $area, $batch, $next['epoch']);
-        $this->mirrorThemeStaticToDeploy($next['current']);
+        $pinnedBuild = self::pinnedStaticBuildForBatch($next['current']);
+        $this->persistPointerConfig($websiteId, $themeId, $area, $batch, $next['epoch'], $pinnedBuild);
+        $this->mirrorThemeStaticToDeploy($next['current'], $pinnedBuild);
         $this->rotateStorefrontHtmlGeneration();
 
         return $next + ['post_switch_errors' => $this->invalidateThemeCaches($themeId, 'theme_update_rollback')];
@@ -566,8 +674,97 @@ final class ThemeUpdateBatchService
                 }
             }
         }
+        // pinned 模式：每代一个主题静态段，旧段由 GC 回收（promote 不再立即删）
+        $this->retireStalePairBuildDirs($state['current'], $keep);
 
         return $deleted;
+    }
+
+    /**
+     * 回收主题静态段：删掉已不是当前版本的其他 `v*`，当前版本内保留当前段 + 最近 `$keep` 段。
+     * 只删 `pub/static/{code}/v{版本}/` 下的目录，不碰部署构建树与其它命名空间。
+     */
+    private function retireStalePairBuildDirs(string $currentBatchId, int $keep): int
+    {
+        if (!self::pinnedStaticBuildEnabled() || $currentBatchId === '') {
+            return 0;
+        }
+        // flat 单权威树没有主题静态段，不参与段回收
+        if (\Weline\Framework\Deploy\StaticBuildId::isFlatMode()) {
+            return 0;
+        }
+        $pair = $this->themePairSegment($currentBatchId);
+        if ($pair === []) {
+            return 0;
+        }
+        [$themeCode, $versionNumber] = $pair;
+        $pubStatic = rtrim((string)PUB, '/\\') . \DIRECTORY_SEPARATOR . 'static';
+        $codeDir = $pubStatic . \DIRECTORY_SEPARATOR . $themeCode;
+        if (!\is_dir($codeDir)) {
+            return 0;
+        }
+        $keepVersion = 'v' . $versionNumber;
+        $keepBuild = '';
+        $map = self::pointerFileMap();
+        if (\is_array($map[$currentBatchId] ?? null)) {
+            $keepBuild = \strtolower(\trim((string)($map[$currentBatchId]['static_build'] ?? '')));
+        }
+        $removed = 0;
+        $versions = [];
+        foreach ((array)@\scandir($codeDir) as $versionDir) {
+            if ($versionDir === '.' || $versionDir === '..' || \preg_match('/^v[0-9]+$/', (string)$versionDir) !== 1) {
+                continue;
+            }
+            $path = $codeDir . \DIRECTORY_SEPARATOR . $versionDir;
+            if (!\is_dir($path) || \is_link($path)) {
+                continue;
+            }
+            $versions[] = ['id' => (string)$versionDir, 'mtime' => (int)@\filemtime($path)];
+        }
+        \usort($versions, static fn(array $a, array $b): int => $b['mtime'] <=> $a['mtime']);
+        $keptOtherVersions = 0;
+        foreach ($versions as $version) {
+            if ($version['id'] === $keepVersion) {
+                continue;
+            }
+            // 留一个最近的历史版本给回滚/边缘旧 HTML 兜底，其余按 GC 收掉
+            if ($keptOtherVersions < 1) {
+                $keptOtherVersions++;
+                continue;
+            }
+            self::removeTreeStatic($codeDir . \DIRECTORY_SEPARATOR . $version['id']);
+            $removed++;
+        }
+        $versionPath = $codeDir . \DIRECTORY_SEPARATOR . $keepVersion;
+        if (!\is_dir($versionPath)) {
+            return $removed;
+        }
+        $builds = [];
+        foreach ((array)@\scandir($versionPath) as $buildDir) {
+            if (\preg_match('/^[0-9a-f]{12}$/', (string)$buildDir) !== 1) {
+                continue;
+            }
+            $path = $versionPath . \DIRECTORY_SEPARATOR . $buildDir;
+            if (!\is_dir($path) || \is_link($path)) {
+                continue;
+            }
+            $builds[] = ['id' => (string)$buildDir, 'mtime' => (int)@\filemtime($path)];
+        }
+        \usort($builds, static fn(array $a, array $b): int => $b['mtime'] <=> $a['mtime']);
+        $keptOthers = 0;
+        foreach ($builds as $build) {
+            if ($keepBuild !== '' && $build['id'] === $keepBuild) {
+                continue;
+            }
+            if ($keptOthers < \max(0, $keep)) {
+                $keptOthers++;
+                continue;
+            }
+            self::removeTreeStatic($versionPath . \DIRECTORY_SEPARATOR . $build['id']);
+            $removed++;
+        }
+
+        return $removed;
     }
 
     // ---------------------------------------------------------------- internals
@@ -663,7 +860,7 @@ final class ThemeUpdateBatchService
      *
      * @param array{current:string,previous:string,epoch:int} $state
      */
-    private function persistPointerConfig(int $websiteId, int $themeId, string $area, ThemeUpdateBatch $batch, int $epoch): void
+    private function persistPointerConfig(int $websiteId, int $themeId, string $area, ThemeUpdateBatch $batch, int $epoch, string $staticBuild = ''): void
     {
         try {
             $env = Env::getInstance();
@@ -676,13 +873,16 @@ final class ThemeUpdateBatchService
             if ($pair !== []) {
                 $value['pair_segment'] = $pair[0] . '/v' . $pair[1];
             }
-            $deployId = '';
-            try {
-                $deployId = \Weline\Framework\Deploy\StaticBuildId::current();
-            } catch (\Throwable) {
-                $deployId = '';
+            $deployId = \strtolower(\trim($staticBuild));
+            if ($deployId === '') {
+                try {
+                    $deployId = \Weline\Framework\Deploy\StaticBuildId::current();
+                } catch (\Throwable) {
+                    $deployId = '';
+                }
+                $deployId = self::themeStaticBuildId($batch->getBatchId(), $deployId);
             }
-            $value['static_build'] = self::themeStaticBuildId($batch->getBatchId(), $deployId);
+            $value['static_build'] = $deployId;
             $map[self::pointerConfigKey($websiteId, $themeId, $area)] = $value;
             $env->setConfig(self::CONFIG_CURRENT_MAP, $map);
             $env->setConfig(self::CONFIG_EPOCH, $epoch);
@@ -909,23 +1109,29 @@ final class ThemeUpdateBatchService
     }
 
     /**
-     * 把代次的主题静态子树镜像到部署树（硬链接覆盖）。
+     * 把代次的主题静态子树镜像到部署树（硬链接 copy，不覆盖当前服务目录）。
      *
-     * flat 契约模式：原地覆盖权威平铺树 `pub/static/Weline/{code}/…` 与 `Weline/Theme/…`，
-     * 不制造世代路径目录、不删除任何被引用字节。
-     * 旧模式：目标 `/static/{主题 code}/v{版本号}/{构建号}/…`；有部署 `.build.json` 时用它，
-     * 没有时用本批次稳定的 12 位构建号（不写全局 `.build.json`）。
+     * flat 契约模式：原地覆盖权威平铺树 `pub/static/Weline/{code}/…` 与 `Weline/Theme/…`
+     * （单权威树，无法换目录；此模式不支持零停机）。
+     * 旧模式：目标 `/static/{主题 code}/v{版本号}/{构建号}/…`。
+     * - `$staticBuild` 非空（默认）：每次换代一个新 12 位段，旧段留到 GC；
+     * - 空串（`theme_update_pinned_static_build=false`）：沿用部署构建号、原地镜像并立即 retire 旧段。
      */
-    private function mirrorThemeStaticToDeploy(string $batchId): void
+    private function mirrorThemeStaticToDeploy(string $batchId, string $staticBuild = ''): void
     {
         if ($batchId === '') {
             return;
         }
         $pubStatic = rtrim((string)PUB, '/\\') . DIRECTORY_SEPARATOR . 'static';
-        try {
-            $deployId = (string)\Weline\Framework\Deploy\StaticBuildId::current($pubStatic);
-        } catch (\Throwable) {
-            $deployId = '';
+        $pinned = \strtolower(\trim($staticBuild));
+        if (\preg_match('/^[0-9a-f]{12}$/', $pinned) === 1) {
+            $deployId = $pinned;
+        } else {
+            try {
+                $deployId = (string)\Weline\Framework\Deploy\StaticBuildId::current($pubStatic);
+            } catch (\Throwable) {
+                $deployId = '';
+            }
         }
         if ($deployId === '') {
             $deployId = self::themeStaticBuildId($batchId);
@@ -982,7 +1188,9 @@ final class ThemeUpdateBatchService
             }
             if (!$flatMode) {
                 $this->overlayCompiledThemeUi($batchRoot, $deployRoot);
-                self::retireStaleThemePairDirs($pubStatic, $themeCode, $versionNumber, $deployId);
+                if ($pinned === '') {
+                    self::retireStaleThemePairDirs($pubStatic, $themeCode, $versionNumber, $deployId);
+                }
             }
 
             return;
@@ -1014,7 +1222,9 @@ final class ThemeUpdateBatchService
         }
         if (!$flatMode) {
             $this->overlayCompiledThemeUi($batchRoot, $deployRoot);
-            self::retireStaleThemePairDirs($pubStatic, $themeCode, $versionNumber, $deployId);
+            if ($pinned === '') {
+                self::retireStaleThemePairDirs($pubStatic, $themeCode, $versionNumber, $deployId);
+            }
         }
     }
 

@@ -101,7 +101,7 @@ class AppUpdater {
     ];
   }
 
-  /// 更新对话框（Account 页「检查更新」入口调用）
+  /// 更新对话框（壳在启动/切 Account Tab 时调用；Android 走应用内下载，iOS 跳商店）
   /// 强调预算：本屏朱砂只给「Update」主按钮一组（token-map §5 checklist）
   Future<void> showUpdateDialog(
     BuildContext context,

@@ -31,7 +31,8 @@ final class StorefrontWarmup implements CronTaskInterface
 
     public function cron_time(): string
     {
-        return '* * * * *';
+        // 预热是后台加速，无实时性要求：降为 5 分钟，避免与 FPC 抢 worker。
+        return '*/5 * * * *';
     }
 
     /**

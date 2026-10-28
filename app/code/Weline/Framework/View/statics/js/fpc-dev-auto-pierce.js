@@ -1,6 +1,12 @@
 /**
- * Dev auto-pierce: stamp same-origin navigational URLs with w_fpc_pierce
- * when admin「链接自带签章」is on. Config via data-* on the loader script tag.
+ * FPC pierce propagation: stamp same-origin navigational URLs with w_fpc_pierce.
+ *
+ * Tiny on purpose. Two stamp sources:
+ * - admin「链接自带签章」: data-pierce-secret on the loader script tag;
+ * - self-detect (always injected, secret-free tag): this page's own
+ *   location.search — so a pierced visit keeps piercing after clicks even when
+ *   the HTML itself came from an FPC/CDN cache.
+ * Existing query params are preserved (incremental, never wiped).
  */
 (function (global) {
   'use strict';
@@ -18,8 +24,26 @@
   }
 
   var queryName = String(loader.getAttribute('data-pierce-query-name') || 'w_fpc_pierce').trim();
-  var secret = String(loader.getAttribute('data-pierce-secret') || '').trim();
-  if (!queryName || !secret) {
+  if (!queryName) {
+    return;
+  }
+
+  function readSecret() {
+    var fromLoader = String(loader.getAttribute('data-pierce-secret') || '').trim();
+    if (fromLoader) {
+      return fromLoader;
+    }
+    try {
+      var query = new URLSearchParams(String(global.location.search || ''));
+      return String(query.get(queryName) || '').trim();
+    } catch (e) {
+      return '';
+    }
+  }
+
+  // No stamp on this visit → stay completely inert (no hooks, no timers).
+  var secret = readSecret();
+  if (secret === '') {
     return;
   }
 
@@ -247,6 +271,11 @@
       if (!doc.querySelector('script[data-weline-fpc-dev-auto-pierce]')) {
         global.clearInterval(keepAlive);
         return;
+      }
+      // Self-detect mode follows the address bar (SPA history may add/drop the stamp).
+      var current = readSecret();
+      if (current !== '') {
+        secret = current;
       }
       scan(doc);
     }, 400);

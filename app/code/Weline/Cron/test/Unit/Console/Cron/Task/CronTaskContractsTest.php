@@ -37,6 +37,14 @@ final class CronTaskContractsTest extends TestCase
             $this->setUpBeforeClass_CronUpgradeIntentSkipClaim();
             $this->assert_CronUpgradeIntentSkipClaim_testRunSkipsClaimWhenUpgradeIntentActive();
         },
+            'CronTaskPreflight::testPreflightRunsBeforeClaimAndFailsOpen' => function () {
+            $this->setUpBeforeClass_CronUpgradeIntentSkipClaim();
+            $this->assert_CronTaskPreflight_testPreflightRunsBeforeClaimAndFailsOpen();
+        },
+            'CronChildReap::testDispatchLoopReapsExitedChildren' => function () {
+            $this->setUpBeforeClass_CronUpgradeIntentSkipClaim();
+            $this->assert_CronChildReap_testDispatchLoopReapsExitedChildren();
+        },
         ];
     }
 
@@ -80,5 +88,51 @@ private function assert_CronUpgradeIntentSkipClaim_testRunSkipsClaimWhenUpgradeI
     self::assertNotFalse($activePos);
     self::assertNotFalse($claimPos);
     self::assertLessThan($claimPos, $activePos);
+}
+
+private function assert_CronTaskPreflight_testPreflightRunsBeforeClaimAndFailsOpen(): void
+{
+    $ifacePath = \BP . 'app/code/Weline/Cron/CronTaskPreflightInterface.php';
+    self::assertFileExists($ifacePath);
+    $ifaceSrc = (string) file_get_contents($ifacePath);
+    self::assertStringContainsString('interface CronTaskPreflightInterface', $ifaceSrc);
+    self::assertStringContainsString('public function hasPendingWork(): bool;', $ifaceSrc);
+
+    $src = (string) file_get_contents(\BP . 'app/code/Weline/Cron/Console/Cron/Task/Run.php');
+    self::assertStringContainsString('CronTaskPreflightInterface', $src);
+    self::assertStringContainsString('function preflightSkipNote', $src);
+    self::assertStringContainsString("getConfig('cron.preflight'", $src);
+
+    // 必须在 claimTaskLaunch 之前判定，否则「无活」任务仍会先写一次调度记录。
+    $preflightPos = strpos($src, '$this->preflightSkipNote(');
+    $claimPos = strpos($src, '$this->claimTaskLaunch(');
+    self::assertNotFalse($preflightPos);
+    self::assertNotFalse($claimPos);
+    self::assertLessThan($claimPos, $preflightPos);
+
+    // fail-open：前置检查自身异常时必须按「有活」处理，不得漏跑任务。
+    $start = strpos($src, 'private function preflightSkipNote(');
+    $end = strpos($src, 'private function isPreflightEnabled(');
+    self::assertNotFalse($start);
+    self::assertNotFalse($end);
+    $methodSrc = substr($src, $start, $end - $start);
+    self::assertStringContainsString('$instance->hasPendingWork()', $methodSrc);
+    self::assertStringContainsString('catch (\Throwable)', $methodSrc);
+    self::assertStringContainsString('return null;', $methodSrc);
+    self::assertStringNotContainsString('return false;', $methodSrc);
+}
+
+private function assert_CronChildReap_testDispatchLoopReapsExitedChildren(): void
+{
+    $src = (string) file_get_contents(\BP . 'app/code/Weline/Cron/Console/Cron/Task/Run.php');
+    self::assertStringContainsString('function reapExitedChildren', $src);
+    self::assertStringContainsString('pcntl_waitpid(-1, $status, WNOHANG)', $src);
+
+    // 必须在派发循环内回收，否则父进程运行期间僵尸一直堆到退出。
+    $loopPos = strpos($src, 'foreach ($tasks as $key => $taskModel) {');
+    $reapPos = strpos($src, '$this->reapExitedChildren();');
+    self::assertNotFalse($loopPos);
+    self::assertNotFalse($reapPos);
+    self::assertGreaterThan($loopPos, $reapPos);
 }
 }

@@ -10,10 +10,17 @@ class ConfigRenderer
 {
     public const PLATFORMS = ['android', 'web', 'ios'];
 
-    public function render(int $websiteId, string $platform): array
+    /**
+     * @param string|null $domainOverride 本机构建时显式指定的站点地址（线上域名），优先于库内配置
+     */
+    public function render(int $websiteId, string $platform, ?string $domainOverride = null): array
     {
         if (!in_array($platform, self::PLATFORMS, true)) {
             throw new \InvalidArgumentException('非法平台：' . $platform . '（允许 android|web|ios）');
+        }
+        $override = $this->prepareDomain((string)$domainOverride);
+        if ($domainOverride !== null && \trim($domainOverride) !== '' && $override === '') {
+            throw new \InvalidArgumentException('站点地址必须是 http(s) 绝对地址：' . $domainOverride);
         }
         // iOS：本机出「未签名 IPA」供自签侧载（不经 App Store）；上架后改用 App Store 链接即可
         $config = $this->loadWebsiteConfig($websiteId);
@@ -27,12 +34,14 @@ class ConfigRenderer
         }
 
         $versions = $this->readVersions();
-        $domain = (string)($config['domain'] ?? '');
         $profile = $this->resolveProfile($websiteId);
+        $domain = $override !== '' ? $override : $this->prepareDomain((string)($config['domain'] ?? ''));
 
         return [
             'website_id' => $websiteId,
             'domain' => $domain,
+            // 编译期基址 = 显式 --base-url 或站点绑定域名；都为空时由构建器拒绝出包（禁止打本机测试 Host）
+            'base_url' => $domain,
             'universal' => $domain === '',
             'platform' => $platform,
             'app_name' => $profile['name'],
@@ -85,6 +94,19 @@ class ConfigRenderer
             'platforms' => json_encode(['android', 'web']),
             'enabled' => 1,
         ];
+    }
+
+    /**
+     * 归一化站点地址：去空白与尾斜杠，非 http(s) 绝对地址一律返回空串（由调用方决定是否报错）。
+     */
+    private function prepareDomain(string $domain): string
+    {
+        $domain = \rtrim(\trim($domain), '/');
+        if ($domain === '' || \preg_match('#^https?://[^/\s]+#i', $domain) !== 1) {
+            return '';
+        }
+
+        return $domain;
     }
 
     private function readVersions(): array

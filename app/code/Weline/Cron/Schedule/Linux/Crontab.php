@@ -251,13 +251,21 @@ class Crontab implements \Weline\Cron\Schedule\ScheduleInterface
         // 128M 的 CLI 默认值会在 DataObject/QueryAst 上 OOM 并把整轮 cron 打死。
         // 用 -d 只抬 CLI 派发器，不改 WLS/FPM 的 worker 内存上限。
         $memoryLimit = $this->resolveCliMemoryLimit();
+        // 多站共用一台机时，各站的 crontab 都在整分 :00 秒启动，形成瞬时进程尖峰。
+        // 按项目路径派生一个稳定偏移，在拿锁之前 sleep，把各站摊到一分钟内的不同秒。
+        $staggerSeconds = $this->resolveStaggerSeconds($normalizedBase);
 
         return '#!/bin/sh' . PHP_EOL
             . 'CRON_PROJECT_DIR=' . escapeshellarg($normalizedBase) . PHP_EOL
             . 'CRON_PHP_BINARY=' . escapeshellarg($phpBinary) . PHP_EOL
             . 'CRON_LOG=' . escapeshellarg($logPath) . PHP_EOL
             . 'CRON_LOCK_FILE=' . escapeshellarg($lockPath) . PHP_EOL
+            . 'CRON_STAGGER_SECONDS=' . $staggerSeconds . PHP_EOL
             . 'cd "$CRON_PROJECT_DIR" || exit 1' . PHP_EOL
+            . '# 错峰在拿锁之前，锁只覆盖真正的执行窗口。' . PHP_EOL
+            . 'if [ "$CRON_STAGGER_SECONDS" -gt 0 ] 2>/dev/null; then' . PHP_EOL
+            . '    sleep "$CRON_STAGGER_SECONDS"' . PHP_EOL
+            . 'fi' . PHP_EOL
             . 'if command -v lockf >/dev/null 2>&1; then' . PHP_EOL
             . '    exec lockf -k -t 0 "$CRON_LOCK_FILE" "$CRON_PHP_BINARY"'
             . ' -d memory_limit=' . $memoryLimit
@@ -284,6 +292,24 @@ class Crontab implements \Weline\Cron\Schedule\ScheduleInterface
         }
 
         return strtoupper($value);
+    }
+
+    /**
+     * 整分错峰秒数（0 = 不错峰）。
+     *
+     * 默认按项目路径派生 0~49 的稳定值，保证同一项目每次生成的偏移一致；
+     * 可用 WELINE_CRON_STAGGER 显式覆盖（如 0 关闭、15 固定 15 秒）。
+     */
+    private function resolveStaggerSeconds(string $baseProjectDir): int
+    {
+        // 注意：不能用 `getenv(...) ?: ''`，字符串 "0" 在 PHP 里为假值，会把显式关闭吃成空值。
+        $env = getenv('WELINE_CRON_STAGGER');
+        $env = $env === false ? '' : trim($env);
+        if ($env !== '' && preg_match('/^\d+$/', $env) === 1) {
+            return max(0, min(59, (int)$env));
+        }
+
+        return abs(crc32($baseProjectDir)) % 50;
     }
 
     private function removeLegacyProjectCronEntries(string $name): void

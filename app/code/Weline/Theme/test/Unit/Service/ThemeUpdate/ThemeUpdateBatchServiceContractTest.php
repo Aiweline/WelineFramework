@@ -82,6 +82,23 @@ final class ThemeUpdateBatchServiceContractTest extends TestCase
         self::assertSame('', ThemeUpdateBatchService::themeStaticBuildId('', 'not-a-build'));
     }
 
+    public function testPinnedStaticBuildForBatchAlwaysDerivesFromBatch(): void
+    {
+        // 非 flat：每次换代由批次派生 12 位段（不沿用共享部署号），旧段由 GC 回收。
+        \Weline\Framework\Deploy\StaticBuildId::setFlatUrlsOverride(false);
+        try {
+            $build = ThemeUpdateBatchService::pinnedStaticBuildForBatch('tu-20261022-185504-3909f8');
+            self::assertSame(1, preg_match('/^[0-9a-f]{12}$/', $build));
+            self::assertSame($build, ThemeUpdateBatchService::pinnedStaticBuildForBatch('tu-20261022-185504-3909f8'));
+            self::assertNotSame($build, ThemeUpdateBatchService::pinnedStaticBuildForBatch('tu-20261022-185505-3909f8'));
+            // flat：单权威树没有主题静态段，退回部署构建号
+            \Weline\Framework\Deploy\StaticBuildId::setFlatUrlsOverride(true);
+            self::assertSame('', ThemeUpdateBatchService::pinnedStaticBuildForBatch('tu-20261022-185504-3909f8'));
+        } finally {
+            \Weline\Framework\Deploy\StaticBuildId::setFlatUrlsOverride(null);
+        }
+    }
+
     public function testBatchServableRequiresVerifiedManifest(): void
     {
         $batch = new ThemeUpdateBatch();

@@ -22,6 +22,13 @@
   position: absolute;
   pointer-events: auto;
   max-width: min(100vw, 28rem);
+  /* Base transform of a slot that is centred on an axis. Collapsed rules
+   * compose it with the edge shift, so every direction shares one mechanism.
+   * Marker: storefront-float-edge-dock-directions-v2 */
+  /* Identity (not empty): an empty custom property makes the composed
+   * `var(--w-float-dock-base,) translateX(...)` collapse to `none` in Chromium,
+   * which left edge slots un-translated. Marker: storefront-float-dock-base-identity-v1 */
+  --w-float-dock-base: translate3d(0, 0, 0);
   transition:
     transform var(--weline-theme-duration-normal, 0.28s)
       var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1)),
@@ -57,9 +64,107 @@
   right: max(var(--weline-space-5, 1.25rem), env(safe-area-inset-right, 0px));
   top: 50%;
   transform: translateY(-50%);
+  --w-float-dock-base: translateY(-50%);
   /* Keep edge recall (outside slot box) clickable — no scroll clipping.
    * Marker: storefront-float-edge-flush-v3 */
   overflow: visible;
+}
+
+/* Eight-direction containers. Empty slots have zero-size boxes, so they neither
+ * occupy space nor block clicks; widgets enter via default_injections.
+ * Marker: storefront-float-eight-direction-v1 */
+.w-storefront-float-layer__slot--top-start {
+  left: max(0.85rem, env(safe-area-inset-left, 0px));
+  top: calc(var(--weline-header-height, 4.5rem) + 0.75rem);
+}
+
+.w-storefront-float-layer__slot--top-center {
+  left: 50%;
+  transform: translateX(-50%);
+  --w-float-dock-base: translateX(-50%);
+  top: calc(var(--weline-header-height, 4.5rem) + 0.75rem);
+}
+
+.w-storefront-float-layer__slot--top-end {
+  right: max(var(--weline-space-5, 1.25rem), env(safe-area-inset-right, 0px));
+  top: calc(var(--weline-header-height, 4.5rem) + 0.75rem);
+}
+
+.w-storefront-float-layer__slot--middle-start {
+  left: max(0.85rem, env(safe-area-inset-left, 0px));
+  top: 50%;
+  transform: translateY(-50%);
+  --w-float-dock-base: translateY(-50%);
+}
+
+.w-storefront-float-layer__slot--bottom-center {
+  left: 50%;
+  transform: translateX(-50%);
+  --w-float-dock-base: translateX(-50%);
+  bottom: max(0.95rem, env(safe-area-inset-bottom, 0px));
+}
+
+/* Async quick-login surface mounted by the theme float module (top-end slot). */
+#w-storefront-float-layer .w-float-quick-login {
+  box-sizing: border-box;
+  width: min(216px, calc(100vw - 24px));
+  padding: var(--weline-space-2, 8px);
+  background: var(--weline-theme-surface-raised, #ffffff);
+  border: var(--weline-theme-border-width, 1px) solid var(--weline-theme-border, #e2e8f0);
+  border-radius: var(--weline-radius-md, 10px);
+  box-shadow: var(--weline-theme-shadow-md, 0 8px 24px rgba(15, 23, 42, 0.12));
+}
+
+#w-storefront-float-layer .w-float-quick-login[data-weline-mount-state="empty"],
+#w-storefront-float-layer .w-float-quick-login[data-weline-mount-state="pending"]:empty {
+  display: none;
+}
+
+#w-storefront-float-layer .w-float-quick-login .weline-social-quick-inline {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+#w-storefront-float-layer .w-float-quick-login .weline-social-quick-bar__actions {
+  gap: var(--weline-space-1, 6px);
+}
+
+#w-storefront-float-layer .w-float-quick-login .weline-social-quick-bar__btn {
+  min-height: 36px;
+  padding: 6px 10px;
+  gap: var(--weline-space-2, 8px);
+  border-radius: var(--weline-radius-sm, 6px);
+  font-size: 12px;
+}
+
+#w-storefront-float-layer .w-float-quick-login .weline-social-quick-bar__btn-icon,
+#w-storefront-float-layer .w-float-quick-login .weline-social-quick-bar__btn-icon svg {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+}
+
+/*
+ * Social float is content-only inside the layer: the slot owns placement and
+ * collapse. Its self `position: fixed` left the slot 0×0, so the × chip hung off
+ * the viewport's left edge (clipped 4px) and the collapse could not slide.
+ * Marker: storefront-float-social-in-flow-v1
+ */
+#w-storefront-float-layer .w-social-float {
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
+  z-index: auto;
+}
+
+/* One collapse control per container: the layer ×/recall replaces the widget's
+ * own toggle inside the layer. Marker: storefront-float-social-single-control-v1 */
+#w-storefront-float-layer .w-social-float__toggle {
+  display: none;
 }
 
 /* Social quick bar stacks above the end float — lift end slot only */
@@ -123,8 +228,17 @@ body:has(#weline-consent-banner:not([hidden])):has(.weline-social-quick-bar:not(
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
+  box-sizing: border-box;
   width: 1.25rem;
   height: 1.25rem;
+  /* Themes may set `button { min-block-size: 2.5rem }` (hanfu layout-critical):
+   * logical min/max must be pinned too, else the 1.25rem wide chip grows to
+   * 2.5rem tall. Marker: storefront-float-edge-chip-size-v2 */
+  min-inline-size: 1.25rem;
+  min-block-size: 1.25rem;
+  max-inline-size: 1.25rem;
+  max-block-size: 1.25rem;
   margin: 0;
   padding: 0;
   border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid)
@@ -159,13 +273,26 @@ body:has(#weline-consent-banner:not([hidden])):has(.weline-social-quick-bar:not(
       var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
-.w-storefront-float-layer__slot--start .w-storefront-float-edge__dismiss {
+/* × / recall placement follows the slot's dock direction only — one rule set
+ * for all eight containers. Marker: storefront-float-edge-dock-directions-v2 */
+.w-storefront-float-layer__slot[data-float-dock='left'] .w-storefront-float-edge__dismiss {
   right: -0.15rem;
 }
 
-.w-storefront-float-layer__slot--end .w-storefront-float-edge__dismiss,
-.w-storefront-float-layer__slot--side .w-storefront-float-edge__dismiss {
+.w-storefront-float-layer__slot[data-float-dock='right'] .w-storefront-float-edge__dismiss {
   left: -0.15rem;
+}
+
+.w-storefront-float-layer__slot[data-float-dock='up'] .w-storefront-float-edge__dismiss {
+  top: auto;
+  bottom: -0.35rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.w-storefront-float-layer__slot[data-float-dock='down'] .w-storefront-float-edge__dismiss {
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .w-storefront-float-edge__dismiss:is(:hover, :focus-visible) {
@@ -193,8 +320,13 @@ body:has(#weline-consent-banner:not([hidden])):has(.weline-social-quick-bar:not(
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
+  box-sizing: border-box;
   width: var(--weline-space-5, 1.25rem);
   height: calc(var(--weline-space-8, 2rem) + 0.25rem);
+  /* Same reason as the × chip: theme `button { min-block-size }` must not stretch it. */
+  min-inline-size: 0;
+  min-block-size: 0;
   margin: 0;
   padding: 0;
   transform: translateY(-50%);
@@ -220,17 +352,33 @@ body:has(#weline-consent-banner:not([hidden])):has(.weline-social-quick-bar:not(
       var(--weline-theme-easing-standard, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
-.w-storefront-float-layer__slot--start .w-storefront-float-edge__recall {
+.w-storefront-float-layer__slot[data-float-dock='left'] .w-storefront-float-edge__recall {
   left: 100%;
   border-radius: 0 var(--weline-radius-md, 8px) var(--weline-radius-md, 8px) 0;
   border-left: none;
 }
 
-.w-storefront-float-layer__slot--end .w-storefront-float-edge__recall,
-.w-storefront-float-layer__slot--side .w-storefront-float-edge__recall {
+.w-storefront-float-layer__slot[data-float-dock='right'] .w-storefront-float-edge__recall {
   right: 100%;
   border-radius: var(--weline-radius-md, 8px) 0 0 var(--weline-radius-md, 8px);
   border-right: none;
+}
+
+.w-storefront-float-layer__slot[data-float-dock='up'] .w-storefront-float-edge__recall {
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 0 0 var(--weline-radius-md, 8px) var(--weline-radius-md, 8px);
+  border-top: none;
+}
+
+.w-storefront-float-layer__slot[data-float-dock='down'] .w-storefront-float-edge__recall {
+  top: auto;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: var(--weline-radius-md, 8px) var(--weline-radius-md, 8px) 0 0;
+  border-bottom: none;
 }
 
 .w-storefront-float-edge__recall:is(:hover, :focus-visible) {
@@ -248,26 +396,31 @@ body:has(#weline-consent-banner:not([hidden])):has(.weline-social-quick-bar:not(
 /*
  * Collapsed must beat widget critical insets (e.g. StoreMusic left:1.75rem)
  * and child visibility:visible overrides (music shell/entry force visible).
- * Marker: storefront-float-edge-flush-v2
+ * One rule per direction — any slot with `data-float-dock` behaves the same.
+ * Marker: storefront-float-edge-dock-directions-v2
  */
 #w-storefront-float-layer
-  .w-storefront-float-layer__slot.is-edge-collapsed[data-float-slot='start'],
-#w-storefront-float-layer
-  .w-storefront-float-layer__slot--start.is-edge-collapsed:has(.w-store-music) {
+  .w-storefront-float-layer__slot.is-edge-collapsed[data-float-dock='left'] {
   left: max(0px, env(safe-area-inset-left, 0px));
-  transform: translateX(-100%);
+  right: auto;
+  transform: var(--w-float-dock-base,) translateX(-100%);
 }
 
 #w-storefront-float-layer
-  .w-storefront-float-layer__slot.is-edge-collapsed[data-float-slot='end'] {
+  .w-storefront-float-layer__slot.is-edge-collapsed[data-float-dock='right'] {
   right: max(0px, env(safe-area-inset-right, 0px));
-  transform: translateX(100%);
+  left: auto;
+  transform: var(--w-float-dock-base,) translateX(100%);
 }
 
 #w-storefront-float-layer
-  .w-storefront-float-layer__slot.is-edge-collapsed[data-float-slot='side'] {
-  right: max(0px, env(safe-area-inset-right, 0px));
-  transform: translateY(-50%) translateX(100%);
+  .w-storefront-float-layer__slot.is-edge-collapsed[data-float-dock='up'] {
+  transform: var(--w-float-dock-base,) translateY(-100%);
+}
+
+#w-storefront-float-layer
+  .w-storefront-float-layer__slot.is-edge-collapsed[data-float-dock='down'] {
+  transform: var(--w-float-dock-base,) translateY(100%);
 }
 
 #w-storefront-float-layer

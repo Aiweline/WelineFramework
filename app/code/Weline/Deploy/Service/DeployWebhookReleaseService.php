@@ -138,7 +138,7 @@ class DeployWebhookReleaseService
         $resolved = $this->resolveEffectiveConfigForWebhook($rawBody, $config, $requestContext);
         $releaseContext = $resolved['context'];
         $effectiveConfig = $resolved['config'];
-        $ref = $this->refResolver->extractRef($payload);
+        $ref = $this->resolveWebhookRef($payload);
         $refInfo = $this->refResolver->resolve($ref, $effectiveConfig);
         if ($refInfo['skipped']) {
             return [
@@ -202,6 +202,31 @@ class DeployWebhookReleaseService
                 'message' => 'release_queued',
             ],
         ];
+    }
+
+    /**
+     * Webhook body → release ref. Gitee/GitHub send `ref`; some senders only carry an explicit
+     * tag (`tag` / `tag_name`). Such a tag is normalized to refs/tags/<tag> so the dispatched
+     * release task receives the same ref a tag push would give — no polling involved.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function resolveWebhookRef(array $payload): string
+    {
+        $ref = trim($this->refResolver->extractRef($payload));
+        if ($ref !== '') {
+            return $ref;
+        }
+
+        foreach (['tag', 'tag_name'] as $key) {
+            $value = $payload[$key] ?? '';
+            $tag = is_scalar($value) ? trim((string)$value) : '';
+            if ($tag !== '') {
+                return str_starts_with($tag, 'refs/tags/') ? $tag : 'refs/tags/' . $tag;
+            }
+        }
+
+        return '';
     }
 
     /**

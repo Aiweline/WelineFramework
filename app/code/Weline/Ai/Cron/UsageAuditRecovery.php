@@ -35,7 +35,8 @@ final class UsageAuditRecovery implements CronTaskInterface
 
     public function cron_time(): string
     {
-        return '* * * * *';
+        // 延迟用量补偿是后台修复：降为 5 分钟，避免每分钟空转。
+        return '*/5 * * * *';
     }
 
     public function execute(): string

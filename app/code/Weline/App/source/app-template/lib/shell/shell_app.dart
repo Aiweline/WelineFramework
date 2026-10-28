@@ -11,7 +11,15 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import 'page_state.dart';
 import 'protocol_js.dart';
+import '../services/app_config.dart';
+import '../services/updater.dart';
 import '../tokens.dart';
+
+/// 打包时注入的模块版本（FlutterBuilder --dart-define=WELINE_APP_VERSION）；缺省按 0.0.0 触发更新提示
+const String kShellAppVersion = String.fromEnvironment(
+  'WELINE_APP_VERSION',
+  defaultValue: '0.0.0',
+);
 
 /// 站点基址（编译期注入；缺省生产域名）
 const String kShellBaseUrl = String.fromEnvironment(
@@ -64,10 +72,14 @@ class _ShellAppState extends State<ShellApp> {
   bool _offline = false;
   int _activeTabIndex = 0;
   String _currentUrl = kShellBaseUrl;
+  final AppConfigService _appConfig = AppConfigService();
+  final AppUpdater _updater = AppUpdater(AppConfigService());
+  bool _updatePromptShown = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdate());
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(_delegate())
@@ -328,7 +340,25 @@ class _ShellAppState extends State<ShellApp> {
   void _switchTab(int index) {
     final tab = kTabs[index];
     setState(() => _activeTabIndex = index);
+    if (tab.key == 'account') _checkForUpdate();
     _controller.loadRequest(Uri.parse(kShellBaseUrl + tab.url));
+  }
+
+  /// UC6：读远端 released 版本，比本地新则弹更新对话框（每会话一次；force_update 由后端控制）
+  Future<void> _checkForUpdate() async {
+    if (_updatePromptShown) return;
+    String localVersion = kShellAppVersion;
+    AppConfig? cfg;
+    try {
+      cfg = await _appConfig.fetchConfig();
+      if (cfg.appVersion.isNotEmpty) localVersion = cfg.appVersion;
+    } catch (_) {
+      // config 拉不到 → 退回编译期版本，检测继续
+    }
+    final result = await _updater.check(localVersion);
+    if (!result.hasUpdate || !mounted) return;
+    _updatePromptShown = true;
+    await _updater.showUpdateDialog(context, result, cfg: cfg);
   }
 
   Future<bool> _onWillPop() async {

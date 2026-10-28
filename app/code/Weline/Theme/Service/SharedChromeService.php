@@ -82,6 +82,12 @@ final class SharedChromeService
         'storefront-float-start',
         'storefront-float-end',
         'storefront-float-side',
+        // Eight-direction float containers (empty by default; widgets enter via default_injections).
+        'storefront-float-top-start',
+        'storefront-float-top-center',
+        'storefront-float-top-end',
+        'storefront-float-middle-start',
+        'storefront-float-bottom-center',
         // Guest-neutral tail chrome (Compare / Consent / B2B / Theme idle) — same bag as float.
         'storefront-tail-chrome',
     ];

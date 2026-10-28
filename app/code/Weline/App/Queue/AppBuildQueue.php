@@ -44,9 +44,10 @@ class AppBuildQueue extends AbstractQueue
         $content = json_decode((string)$queue->getContent(), true);
         $websiteId = (int)($content['website_id'] ?? 0);
         $platform = (string)($content['platform'] ?? '');
+        $baseUrl = \trim((string)($content['base_url'] ?? ''));
 
         try {
-            $cfg = (new ConfigRenderer())->render($websiteId, $platform);
+            $cfg = (new ConfigRenderer())->render($websiteId, $platform, $baseUrl !== '' ? $baseUrl : null);
         } catch (\Throwable $e) {
             $queue->setResult('配置失败：' . $e->getMessage());
             $queue->setFinished(true);

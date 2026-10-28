@@ -113,7 +113,8 @@ skillCheck($hasMcpSkillsRule, 'hard constraints include mcp_skills_fetch_from_mc
 
 $bundle = $policy['css_or_theme_skill_bundle'] ?? [];
 skillCheck(($bundle['rule_id'] ?? '') === 'css_or_theme_requires_ui_prototype_theme_skills', 'policy exposes css_or_theme skill bundle');
-skillCheck(is_array($bundle['required'] ?? null) && count($bundle['required']) === 4, 'css_or_theme bundle lists ui+prototype+taste+theme skills');
+skillCheck(is_array($bundle['required'] ?? null) && count($bundle['required']) === 5, 'css_or_theme bundle lists ui+prototype+taste+theme+custom_theme skills');
+skillCheck(in_array('custom_theme_development', array_column(is_array($bundle['required'] ?? null) ? $bundle['required'] : [], 'mcp_skill_id'), true), 'css_or_theme bundle requires custom_theme_development');
 skillCheck(in_array(GuidanceWorkflowCatalog::SURFACE_DESIGN_TASTE, array_column(is_array($bundle['required'] ?? null) ? $bundle['required'] : [], 'mcp_skill_id'), true), 'css_or_theme bundle requires design_taste');
 
 $featureBundle = $policy['feature_skill_bundle'] ?? [];

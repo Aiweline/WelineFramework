@@ -76,6 +76,13 @@
         if (!root || (mounted && mounted.has(root))) {
             return;
         }
+        // Inside the global float layer the slot owns placement and collapse
+        // (one ×/recall per container); this module must not write inline
+        // transforms or self-collapse there.
+        // Marker: storefront-float-social-layer-v1
+        if (root.closest && root.closest('#w-storefront-float-layer')) {
+            return;
+        }
         var toggle = root.querySelector('[data-float-toggle]');
         if (!toggle) {
             return;

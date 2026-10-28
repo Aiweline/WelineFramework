@@ -11,5 +11,6 @@ return [
     "provides" => [
         \Weline\UrlManager\Api\Rewrite\UrlRewriteDirectoryInterface::class => \Weline\UrlManager\Api\Rewrite\UrlRewriteDirectory::class,
         'process_cache_resetter.Weline_UrlManager' => \Weline\UrlManager\Api\Runtime\ProcessCacheResetter::class,
+        \Weline\Framework\Router\Contract\StorefrontRewriteLookupInterface::class => \Weline\UrlManager\Service\StorefrontRewriteLookup::class,
     ],
 ];

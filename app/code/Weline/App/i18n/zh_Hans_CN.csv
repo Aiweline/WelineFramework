@@ -30,12 +30,18 @@ App打包日志流,App打包日志流
 精选优质商品与可靠服务。,精选优质商品与可靠服务。
 "安装缺失依赖：%{1} → %{2}","安装缺失依赖：%{1} → %{2}"
 "检测系统/模块版本漂移，自动投递 Weline App 打包任务（闲时窗口）","检测系统/模块版本漂移，自动投递 Weline App 打包任务（闲时窗口）"
+"没有可打包的平台：站点 %{1} 的「App 打包配置」未启用任何平台","没有可打包的平台：站点 %{1} 的「App 打包配置」未启用任何平台"
+"平台 %{1}（%{2}/%{3}）","平台 %{1}（%{2}/%{3}）"
+环境未就绪平台：%{1},环境未就绪平台：%{1}
+打包失败平台：%{1},打包失败平台：%{1}
+"非法平台：%{1}（允许 android|ios|web|all）","非法平台：%{1}（允许 android|ios|web|all）"
 "环境检测：缺少 %{1}","环境检测：缺少 %{1}"
 "安装 %{1} 失败（exit %{2}）：%{3}","安装 %{1} 失败（exit %{2}）：%{3}"
 环境检测通过：%{1},环境检测通过：%{1}
+站点地址：%{1},站点地址：%{1}
 "已投递打包任务 queue_id=%{1}","已投递打包任务 queue_id=%{1}"
-"打包失败（queue exit %{1}）","打包失败（queue exit %{1}）"
-"按站点渲染并打包 App：先做环境检测（缺 JDK/Android SDK 自动安装），再投递队列并同步出包；--dry-run 只打印配置，--check-only 只检测环境，--async 只投递，--no-install 禁止自动安装","按站点渲染并打包 App：先做环境检测（缺 JDK/Android SDK 自动安装），再投递队列并同步出包；--dry-run 只打印配置，--check-only 只检测环境，--async 只投递，--no-install 禁止自动安装"
+打包失败：%{1},打包失败：%{1}
+"按站点渲染并打包 App：--base-url=https://线上域名 指定站点地址（本机构建必须显式给线上域名）；--website 选站点，--platform 省略/取 all 时按站点打包配置的全部可用平台（android/ios/web）逐个出包，也可用 android,web 指定子集；--dry-run 只打印配置，--check-only 只检测环境，--async 只投递，--no-install 禁止自动安装","按站点渲染并打包 App：--base-url=https://线上域名 指定站点地址（本机构建必须显式给线上域名）；--website 选站点，--platform 省略/取 all 时按站点打包配置的全部可用平台（android/ios/web）逐个出包，也可用 android,web 指定子集；--dry-run 只打印配置，--check-only 只检测环境，--async 只投递，--no-install 禁止自动安装"
 "Flutter：已安装 %{1}","Flutter：已安装 %{1}"
 Flutter：未安装,Flutter：未安装
 Java：已安装,Java：已安装
@@ -48,12 +54,16 @@ Xcode：不完整,Xcode：不完整
 网络镜像：%{1},网络镜像：%{1}
 ready_for=%{1},ready_for=%{1}
 "探测本机 App 编译环境（Flutter/JDK/Android SDK/Xcode/网络镜像）","探测本机 App 编译环境（Flutter/JDK/Android SDK/Xcode/网络镜像）"
+"登记本机编译后上传的 App 产物：--path=static/weline-app/<build_id>（整目录含 build.json）；校验 sha256/字节数后按 build_ts 发布；--dry-run 只校验不登记","登记本机编译后上传的 App 产物：--path=static/weline-app/<build_id>（整目录含 build.json）；校验 sha256/字节数后按 build_ts 发布；--dry-run 只校验不登记"
 依赖均已安装,依赖均已安装
 "[plan] %{1} → %{2}","[plan] %{1} → %{2}"
 "[fail] %{1}（exit %{2}）：%{3}","[fail] %{1}（exit %{2}）：%{3}"
 "[done] %{1}","[done] %{1}"
 安装后仍缺：%{1},安装后仍缺：%{1}
 "按环境自动安装 App 编译依赖（Flutter/JDK/Android SDK）；默认 dry-run，--yes 实装","按环境自动安装 App 编译依赖（Flutter/JDK/Android SDK）；默认 dry-run，--yes 实装"
+"按站点渲染并打包 App：--base-url=https://线上域名 指定站点地址（本机构建必须显式给线上域名），--website/--platform 选站点与平台；--dry-run 只打印配置，--check-only 只检测环境，--async 只投递，--no-install 禁止自动安装","按站点渲染并打包 App：--base-url=https://线上域名 指定站点地址（本机构建必须显式给线上域名），--website/--platform 选站点与平台；--dry-run 只打印配置，--check-only 只检测环境，--async 只投递，--no-install 禁止自动安装"
+"打包失败（queue exit %{1}）","打包失败（queue exit %{1}）"
+"按站点渲染并打包 App：先做环境检测（缺 JDK/Android SDK 自动安装），再投递队列并同步出包；--dry-run 只打印配置，--check-only 只检测环境，--async 只投递，--no-install 禁止自动安装","按站点渲染并打包 App：先做环境检测（缺 JDK/Android SDK 自动安装），再投递队列并同步出包；--dry-run 只打印配置，--check-only 只检测环境，--async 只投递，--no-install 禁止自动安装"
 "下载 App","下载 App"
 "扫码下载 App","扫码下载 App"
 手机相机扫一扫,手机相机扫一扫

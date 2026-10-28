@@ -570,7 +570,20 @@
     if (!layerEl) {
       return;
     }
-    var footer = document.querySelector('footer, [data-testid="ca-footer"]');
+    // Only a laid-out page footer may lift the layer. A zero-height match
+    // (e.g. a hidden mini-cart drawer footer at top:0) would compute a
+    // full-viewport lift, flatten the layer to 0 height and push every slot
+    // off-screen. Marker: storefront-float-footer-real-v1
+    var footers = document.querySelectorAll(
+      'footer, [data-testid="ca-footer"], [data-testid="footer-container"]'
+    );
+    var footer = null;
+    for (var fi = 0; fi < footers.length; fi++) {
+      if (footers[fi].getBoundingClientRect().height >= 1) {
+        footer = footers[fi];
+        break;
+      }
+    }
     var lift = 0;
     if (footer) {
       var viewport = global.innerHeight || document.documentElement.clientHeight || 0;

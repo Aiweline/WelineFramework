@@ -43,7 +43,8 @@ class DomainLifecycleOrchestration implements CronTaskInterface
 
     public function cron_time(): string
     {
-        return '* * * * *';
+        // 生命周期订单推进无实时性要求：降为 5 分钟，避免每分钟空转。
+        return '*/5 * * * *';
     }
 
     public function execute(): string

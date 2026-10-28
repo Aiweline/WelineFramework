@@ -7,15 +7,16 @@
 ## 文档导航
 
 - 权威计划：`doc/开发计划.md`（用户指定按此文档推进）
+- 本地协助编译与部署（本机出包 → 上传 → 目标机登记；线上不做编译环境）：`doc/本地协助编译与部署.md`
 - 需求权威：`dev/team/app-build-module/contracts.md` 附录 A（UC1–UC9 EARS 展开版）；`doc/需求.md` 引用不重复抄
 - 对外契约：`dev/team/app-build-module/contracts.md`（API 面/数据契约/部件契约/CLI 契约/硬约束）
 - 模块依赖：`dev/team/app-build-module/deps.md`（消费契约接口全名 + 禁止依赖负清单）
 
 ## 对外契约（冻结 v1）
 
-- API：`GET /app/api/config`、`GET /app/api/version`、`GET /app/api/download`
+- API（Rest V1 编译面实际路由）：`GET /api/weline_app/rest/v1/config/config`、`/version/version`、`/download/download`；短链 `/app/api/*` 为契约口径，未实现
 - 部件：widget code `app-download`，模板 `Weline_App::templates/frontend/widgets/app-download/default.phtml`
-- CLI：`php bin/w app:build` / `app:doctor` / `app:install-deps`
+- CLI：`php bin/w app:build` / `app:doctor` / `app:install-deps` / `app:artifact:import`（本机编译产物在目标机登记）
 - 数据：`w_weline_app_build`（站点打包配置）、`w_weline_app_artifact`（产物登记 · 唯一权威，含构建期发布戳）
 
 ## iOS 合规边界（硬边界）

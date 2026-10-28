@@ -8,6 +8,7 @@
 
 use Weline\Product\Helper\StorefrontOfferDetailQuery;
 use Weline\Product\Helper\StorefrontOfferResolver;
+use Weline\Theme\Helper\ProductCardShopperActionMarkup;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
@@ -134,11 +135,11 @@ if ($quoteOnly) {
                 data-open-purchase-panel="<?= $openPurchasePanel ? '1' : '0' ?>"
                 <?= $buttonEnabled ? '' : 'disabled' ?>>
             <?php if ($variant === 'icon'): ?>
-                <w:icon name="cart" size="sm"></w:icon>
+                <?= ProductCardShopperActionMarkup::iconSpriteOnce() . ProductCardShopperActionMarkup::iconMarkup('cart') ?>
                 <span class="visually-hidden"><?= $escape($buttonLabel) ?></span>
             <?php else: ?>
                 <?php if ($variant === 'cta'): ?>
-                    <w:icon name="cart" size="sm"></w:icon>
+                    <?= ProductCardShopperActionMarkup::iconSpriteOnce() . ProductCardShopperActionMarkup::iconMarkup('cart') ?>
                 <?php endif; ?>
                 <span class="weline-pixel::add_to_cart" data-card-add-label="1"><?= $escape($buttonLabel) ?></span>
             <?php endif; ?>

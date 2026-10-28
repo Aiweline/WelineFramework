@@ -15,6 +15,42 @@ use Weline\Theme\Service\Ui\IconRegistry;
  */
 final class ProductCardShopperActionMarkup
 {
+    /** Page-local sprite shared by card shopper actions and card add-to-cart. */
+    public const ICON_SPRITE_PREFIX = 'w-pcard-icon';
+
+    /** @var list<string> */
+    public const ICON_SPRITE_NAMES = ['heart', 'list', 'eye', 'cart'];
+
+    /**
+     * Emit the shared card icon sprite once per document (also used by the
+     * Cart card add-to-cart widget so both consumers hit the same symbols).
+     */
+    public static function iconSpriteOnce(): string
+    {
+        return self::icons()->spriteOnce(self::ICON_SPRITE_PREFIX, self::ICON_SPRITE_NAMES);
+    }
+
+    /**
+     * Card icon via local sprite <use>; falls back to the inline SVG for names
+     * outside ICON_SPRITE_NAMES. Keeps class/data-icon/size contracts.
+     */
+    public static function iconMarkup(string $name, string $size = 'sm'): string
+    {
+        if (!\in_array($name, self::ICON_SPRITE_NAMES, true)) {
+            return self::icons()->render($name, $size);
+        }
+
+        return self::icons()->renderUse(self::ICON_SPRITE_PREFIX . '-' . $name, $size, '', '', $name);
+    }
+
+    private static function icons(): IconRegistry
+    {
+        /** @var IconRegistry $icons */
+        $icons = ObjectManager::getInstance(IconRegistry::class);
+
+        return $icons;
+    }
+
     /**
      * @param array{show_wishlist?: bool, show_compare?: bool, show_quickview?: bool} $flags
      */
@@ -31,15 +67,14 @@ final class ProductCardShopperActionMarkup
             return '';
         }
 
-        /** @var IconRegistry $icons */
-        $icons = ObjectManager::getInstance(IconRegistry::class);
         $esc = static fn (string $value): string => \htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
         $wishlistClass = 'action-btn btn-wishlist' . ($wishlistPixel ? ' weline-pixel::add_to_wishlist' : '');
         $wishlistTitle = (string)\__('加入收藏');
         $compareTitle = (string)\__('加入对比');
         $quickviewTitle = (string)\__('快速查看');
 
-        $html = '<div class="product-actions product-actions--amz"'
+        $html = self::iconSpriteOnce()
+            . '<div class="product-actions product-actions--amz"'
             . ' data-weline-load="compareShopper,storefrontShopperToast">';
         if ($showWishlist) {
             $html .= '<button class="' . $esc($wishlistClass) . '"'
@@ -48,7 +83,7 @@ final class ProductCardShopperActionMarkup
                 . ' aria-label="' . $esc($wishlistTitle) . '"'
                 . ' aria-pressed="false"'
                 . ' data-product-id="' . $productId . '">'
-                . $icons->render('heart', 'sm')
+                . self::iconMarkup('heart')
                 . '</button>';
         }
         if ($showCompare) {
@@ -57,7 +92,7 @@ final class ProductCardShopperActionMarkup
                 . ' title="' . $esc($compareTitle) . '"'
                 . ' aria-label="' . $esc($compareTitle) . '"'
                 . ' data-product-id="' . $productId . '">'
-                . $icons->render('list', 'sm')
+                . self::iconMarkup('list')
                 . '</button>';
         }
         if ($showQuickview) {
@@ -66,7 +101,7 @@ final class ProductCardShopperActionMarkup
                 . ' title="' . $esc($quickviewTitle) . '"'
                 . ' aria-label="' . $esc($quickviewTitle) . '"'
                 . ' data-product-id="' . $productId . '">'
-                . $icons->render('eye', 'sm')
+                . self::iconMarkup('eye')
                 . '</button>';
         }
         $html .= '</div>';

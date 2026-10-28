@@ -146,10 +146,12 @@ probe_http_with_max_time_before_navigate → prefer_background_non_preemptive_na
 ```markdown
 ## 交付地址
 
-- [后台系统配置](https://p05113ef3.test.weline.com/后台前缀/system-config/...?w_fpc_pierce=<install_secret>)
-- [前台某某页](https://p05113ef3.test.weline.com/path?w_fpc_pierce=<install_secret>)
+- [后台系统配置](https://p05113ef3.test.weline.com/后台前缀/system-config/...?w_fpc_pierce=<把<install_secret>替换为当前生效真实值>)
+- [前台某某页](https://p05113ef3.test.weline.com/path?w_fpc_pierce=<把<install_secret>替换为当前生效真实值>)
 - API / Query：`w_query ...` 或 N/A
 ```
+
+> 上面是**模板**：`<…>` 只是给你看的占位符，**交付给用户的链接里必须已替换成真实值**。占位符链接等于未交付。
 
 硬要求：
 
@@ -157,7 +159,8 @@ probe_http_with_max_time_before_navigate → prefer_background_non_preemptive_na
 |----|------|
 | 小节标题 | `交付地址`（或 `Delivery URLs`） |
 | 主验收链接 | 可点击 Markdown `[名称](http(s)://完整URL)`（本机 WLS 常为 `http://`） |
-| FPC 打穿章 | 店面/后台**主验收** URL（含规划/会话/related_web_urls）**必须**带安装级 `w_fpc_pierce=`（`FpcPierceStamp::buildQuerySuffix()`）；已有 query 用 `&`，禁止叠第二个 `?`；**禁止**把密钥样例写进规则/文档 |
+| FPC 打穿章 | 店面/后台**主验收** URL（含规划/会话/related_web_urls）**必须**带安装级 `w_fpc_pierce=`（`FpcPierceStamp::ensureSecret()`：env `wls.fpc_pierce_secret` 优先、`generated/framework/fpc_pierce_secret` 兜底）；已有 query 用 `&`，禁止叠第二个 `?`。**HARD · 交付链接里的章必须是已解析的真实值**：`<PIERCE>` / `<install_secret>` / `PIERCE` 等占位符链接 = **未交付地址**（点开送字面量，`var/server/nginx/conf/fpc-pierce.map.conf` 匹配不上 → FPC HIT，等于谎称已打穿）。**env 与兜底文件不一致时以 env/map 为准**，用兜底值会「看着带章、实际仍 HIT」。规则/文档/模板正文仍**禁止**写死密钥值（会轮换即过期误导），只写取法；交付/汇报链接内联真实值允许（本地开发章不是生产凭据） |
+| 穿透自证 | 交付前必须证明章生效：同一 URL 带章 `x-wls-fpc-status: MISS` + `cache-control: … no-store`，不带章 `HIT`；**两者都 HIT = 章未生效**，先修密钥源再交付，不得照发 |
 | 默认 Host | `{project_hash}.test.weline.com`（例：`p05113ef3.test.weline.com`）；**禁止**把 `*.weline.test` 当作主验收 Host |
 | 探活 | 交付前对字面 URL（含穿章）`curl` 探活；失败不得交死链 |
 | 覆盖面 | 本功能涉及的全部前台页、后台页；有 API 一并列出 |
@@ -168,6 +171,8 @@ probe_http_with_max_time_before_navigate → prefer_background_non_preemptive_na
 
 - 省略「交付地址」小节
 - 主验收店面/后台链接缺 `w_fpc_pierce=`
+- 主验收链接的 `w_fpc_pierce=` 值是占位符（`<PIERCE>` / `<install_secret>` / `PIERCE`）而非已解析的真实值——占位符链接=未交付
+- 章值与环境/边缘 map 不一致（看着带章、实际仍 FPC HIT）
 - 臆造路由 / Host
 - 主链用仅某客户端可点的伪协议（如 `command:simpleBrowser.api.open`）——主链用标准 `http(s)://…` Markdown 链接；宿主 opener 仅可作辅链
 - 有可用 `*.test.weline.com` Host 时强行改成 `127.0.0.1`

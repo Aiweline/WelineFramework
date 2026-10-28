@@ -100,6 +100,12 @@
                   disabled="false"
                   shared="true"
                   sort="140"/>
+        <!-- M4 店面可解析性自检：只观测留痕，晚于 ACL diff / 注解收集 -->
+        <observer name="Weline_Framework_Router::storefront_route_resolvability_check"
+                  instance="Weline\Framework\Router\Observer\StorefrontRouteResolvabilityCheck"
+                  disabled="false"
+                  shared="true"
+                  sort="200"/>
     </event>
 
     <!-- Ad-hoc origin FPC warm URL offer (Changed purge refill + modules); not CDN Warmup. -->

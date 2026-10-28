@@ -16,7 +16,7 @@ final class MultipartCleanup implements CronTaskInterface
     public function name(): string { return (string)__('OSS multipart 清理'); }
     public function execute_name(): string { return 'storage_oss_multipart_cleanup'; }
     public function tip(): string { return (string)__('重试中止未完成的 OSS multipart 上传'); }
-    public function cron_time(): string { return '* * * * *'; }
+    public function cron_time(): string { return '*/5 * * * *'; }
     public function unlock_timeout(int $minute = 5): int { return $minute; }
 
     public function execute(): string

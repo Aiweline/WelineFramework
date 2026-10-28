@@ -22,6 +22,8 @@ class DomainConnectivityService
 {
     private int $timeout = 10;
     private int $connectTimeout = 5;
+    /** 轻探测超时（秒）：只做 DNS → TCP/443 → TLS 握手，取短超时 */
+    private int $lightTimeout = 4;
 
     /**
      * 探测单个域名
@@ -78,6 +80,156 @@ class DomainConnectivityService
             'status' => $ok ? 'ok' : 'error',
             'detail' => $detail,
             'checked_at' => \date('Y-m-d H:i:s'),
+        ];
+    }
+
+    /**
+     * 轻探测：DNS 解析 → 单次 TCP/443 连接 → TLS 握手读证书 notAfter
+     *
+     * 不拉 HTTP body、不跟随重定向、不做完整页面请求；失败返回结构化结果，不抛异常。
+     * 证书不校验（只看有效期），证书是否有效仍以 SSL 证书管理为准。
+     *
+     * @return array{status: 'ok'|'error', checked_at: string, detail: string, cert_expires_at: ?string, cert_days_left: ?int}
+     */
+    public function probeLight(string $domain): array
+    {
+        $checkedAt = \date('Y-m-d H:i:s');
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return $this->buildLightResult('error', $checkedAt, (string) \__('域名为空'));
+        }
+
+        $ips = $this->lightResolveIps($domain);
+        if ($ips === []) {
+            return $this->buildLightResult('error', $checkedAt, (string) \__('DNS 解析失败'));
+        }
+
+        $tls = $this->lightTlsHandshake($domain);
+        if (!$tls['ok']) {
+            return $this->buildLightResult(
+                'error',
+                $checkedAt,
+                (string) \__('DNS 解析到 %{1} 个地址，%{2}', [(string) \count($ips), $tls['error']])
+            );
+        }
+
+        $parsed = $tls['certificate'] !== null ? @\openssl_x509_parse($tls['certificate']) : false;
+        $expiresTs = \is_array($parsed) ? (int) ($parsed['validTo_time_t'] ?? 0) : 0;
+        if ($expiresTs <= 0) {
+            return $this->buildLightResult('error', $checkedAt, (string) \__('TLS 已握手但无法读取证书有效期'));
+        }
+
+        $daysLeft = (int) \floor(($expiresTs - \time()) / 86400);
+        $expiresAt = \date('Y-m-d H:i:s', $expiresTs);
+
+        return $this->buildLightResult(
+            'ok',
+            $checkedAt,
+            $daysLeft >= 0
+                ? (string) \__('轻探测可连通：证书 %{1} 天后到期（%{2}）', [(string) $daysLeft, $expiresAt])
+                : (string) \__('轻探测可连通：证书已于 %{1} 过期', [$expiresAt]),
+            $expiresAt,
+            $daysLeft
+        );
+    }
+
+    /**
+     * @return array{status: 'ok'|'error', checked_at: string, detail: string, cert_expires_at: ?string, cert_days_left: ?int}
+     */
+    private function buildLightResult(
+        string $status,
+        string $checkedAt,
+        string $detail,
+        ?string $certExpiresAt = null,
+        ?int $certDaysLeft = null
+    ): array {
+        return [
+            'status' => $status,
+            'checked_at' => $checkedAt,
+            'detail' => $detail,
+            'cert_expires_at' => $certExpiresAt,
+            'cert_days_left' => $certDaysLeft,
+        ];
+    }
+
+    /**
+     * 轻探测第一步：DNS 解析（A/AAAA），无记录时回退 gethostbynamel
+     *
+     * @return list<string>
+     */
+    protected function lightResolveIps(string $domain): array
+    {
+        $ips = [];
+        $records = @\dns_get_record($domain, \DNS_A | \DNS_AAAA);
+        if (\is_array($records)) {
+            foreach ($records as $record) {
+                $ip = (string) ($record['ip'] ?? $record['ipv6'] ?? '');
+                if ($ip !== '') {
+                    $ips[$ip] = true;
+                }
+            }
+        }
+        if ($ips === []) {
+            $v4 = @\gethostbynamel($domain);
+            foreach (\is_array($v4) ? $v4 : [] as $ip) {
+                $ips[(string) $ip] = true;
+            }
+        }
+
+        return \array_keys($ips);
+    }
+
+    /**
+     * 轻探测第二步：单次 TCP/443 连接后直接 TLS 握手并捕获对端证书
+     *
+     * @return array{ok: bool, error: string, certificate: mixed}
+     */
+    protected function lightTlsHandshake(string $domain): array
+    {
+        $context = \stream_context_create([
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+                'allow_self_signed' => true,
+                'capture_peer_cert' => true,
+                'SNI_enabled' => true,
+                'peer_name' => $domain,
+            ],
+        ]);
+        $errno = 0;
+        $errstr = '';
+        $stream = @\stream_socket_client(
+            'tcp://' . $domain . ':443',
+            $errno,
+            $errstr,
+            (float) $this->lightTimeout,
+            \STREAM_CLIENT_CONNECT,
+            $context
+        );
+        if (!\is_resource($stream)) {
+            return [
+                'ok' => false,
+                'error' => (string) \__('TCP 443 连接失败：%{1}', [$errstr !== '' ? $errstr : ('errno ' . $errno)]),
+                'certificate' => null,
+            ];
+        }
+
+        \stream_set_timeout($stream, $this->lightTimeout);
+        $cryptoOk = @\stream_socket_enable_crypto($stream, true, \STREAM_CRYPTO_METHOD_TLS_CLIENT);
+        $options = \stream_context_get_options($stream);
+        @\fclose($stream);
+        if ($cryptoOk !== true) {
+            return [
+                'ok' => false,
+                'error' => (string) \__('TLS 握手失败'),
+                'certificate' => null,
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'error' => '',
+            'certificate' => $options['ssl']['peer_certificate'] ?? null,
         ];
     }
 

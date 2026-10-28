@@ -104,7 +104,7 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
             ['ready' => null, 'reason' => 'host_not_in_supported_table'],
             [
                 'mode' => 'agent_resolve_host_config',
-                'summary' => 'This host is not in the supported table: the agent resolves the host MCP config location itself, writes registration (command/args/env) into it only when not semantically equivalent, enables the server inside the host, then opens a new session (never Reload Window). Do not ask the user to hand-edit Settings.',
+                'summary' => 'MANDATORY self-install before fallback: this host is not in the supported table, which is NOT "nothing to do". The agent MUST resolve its own MCP config location (known_targets, or the host documentation when unlisted), write the registration (command/args/env) into it only when not semantically equivalent, enable the server inside the host, open a new session, and verify every mcp_required_tool before prepare_project. Only when install is provably impossible for this host may the agent fall back to reading AI硬规则索引.md—and it must state what it tried and why it failed. Do not ask the user to hand-edit Settings; never Reload Window; never hand-write editor rule files.',
                 'steps' => [
                     [
                         'kind' => 'resolve_host_mcp_config',
@@ -129,7 +129,7 @@ function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = nu
     if ($primaryReady === false) {
         $nextAction = 'Execute host_mcp_install.hosts.' . $primaryHost . '.install.steps in this session (skip write_json when noop=true; do not ask the user to open Settings; do not Reload Window), rerun ensure-project-guidance, then prepare_project.';
     } elseif ($primaryHost === 'unknown') {
-        $nextAction = 'primary_host=unknown means this host is not in the supported table, not "nothing to do": resolve the host MCP config location yourself, write host_mcp_install.registration (command/args/env) into it only when not semantically equivalent, enable the server inside the host, then open a new session and verify every mcp_required_tool is exposed before prepare_project. Do not ask the user to hand-edit Settings or Reload Window.';
+        $nextAction = 'Install the MCP into your own host BEFORE any doc fallback (mcp_call_scope SELF-INSTALL): primary_host=unknown means this host is not in the supported table, not "nothing to do". Resolve this host\'s MCP config location yourself (host_mcp_install.hosts.unknown.install.steps[].known_targets, or the host documentation when unlisted), write host_mcp_install.registration (command/args/env) into it only when not semantically equivalent, enable the server inside the host, then open a new session and verify every mcp_required_tool is exposed before prepare_project. Do not ask the user to hand-edit Settings or Reload Window. Reading AI硬规则索引.md instead of installing is allowed ONLY after the install path is proven impossible on this host, and the reason must be reported.';
     }
 
     return [
@@ -335,6 +335,16 @@ function welineMcpInstallHostConfigTargets(): array
         'workbuddy' => [
             'config' => '~/.workbuddy-ai/mcp.json',
             'activate' => '连接器管理页右上角「自定义连接器」点信任，然后新开会话',
+        ],
+        // Qoder 家族：CLI 与桌面 GUI 是两条通道，桌面 GUI 的 --strict-mcp-config 白名单
+        // 会读项目注册但永不连接，误判为「配置没写对」会浪费整轮排障。
+        'qoder_cli' => [
+            'config' => '.qoder/settings.local.json（项目级）或 ~/.qoder/settings.json（用户级），mcpServers 键名 ' . WELINE_PROJECT_INTELLIGENCE_MCP_SERVER,
+            'activate' => '新开 qoder CLI 会话后确认工具目录出现该服务；已运行会话不会热加载',
+        ],
+        'qoder_desktop' => [
+            'config' => '聊天流不可自助安装：桌面 worker 由 GUI 以 --strict-mcp-config + 白名单拉起，项目级注册会被读到但永不连接；仅当启动时显式不带 strict 且 --allowed-mcp-server-names 含本服务名才可挂载',
+            'activate' => '按 AGENTS.md 降级路径宿主 Read AI硬规则索引.md；需要机器判定链路时用本地 STDIO 直驱探针（node bin/weline-mcp.js / php bin/learning-mcp）',
         ],
     ];
 }

@@ -20,6 +20,13 @@ final class LayoutCriticalCssService
 {
     private const BASELINE_RELATIVE = 'app/code/Weline/Theme/view/ui/css/layout-critical-%s.css';
 
+    /**
+     * First-paint primitives (`.w-container`, `.w-grid`, `.w-stack` …).
+     * Composed in front of the theme shell so critical CSS has one source of truth
+     * (no duplicated copies drifting between inline and bundled CSS).
+     */
+    private const BASELINE_PRIMITIVES_RELATIVE = 'app/code/Weline/Theme/view/ui/css/critical-utilities.css';
+
     public function renderInlineStyle(string $area): string
     {
         $area = $this->normalizeArea($area);
@@ -65,6 +72,26 @@ final class LayoutCriticalCssService
     }
 
     private function readCriticalCss(string $area): string
+    {
+        $parts = [];
+
+        $primitives = BP . self::BASELINE_PRIMITIVES_RELATIVE;
+        if (is_readable($primitives)) {
+            $contents = file_get_contents($primitives);
+            if (is_string($contents) && trim($contents) !== '') {
+                $parts[] = $contents;
+            }
+        }
+
+        $shell = $this->readShellCriticalCss($area);
+        if ($shell !== '') {
+            $parts[] = $shell;
+        }
+
+        return implode("\n", $parts);
+    }
+
+    private function readShellCriticalCss(string $area): string
     {
         $overridePath = $this->resolveActiveThemeOverridePath($area);
         if ($overridePath !== null && is_readable($overridePath)) {

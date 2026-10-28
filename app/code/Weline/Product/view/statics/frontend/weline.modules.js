@@ -59,7 +59,7 @@ Object.assign(window.WelineModulesConfig.modules, {
     },
     productCategoryLayout: {
         paths: [
-            "Weline_Product::js/category-layout.js?v=20261021-category-layout-1"
+            "Weline_Product::js/category-layout.js?v=20261028-filter-drawer-2"
         ],
         globalVar: null,
         load: "eager",

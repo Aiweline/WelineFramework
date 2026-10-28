@@ -34,15 +34,21 @@ class HealthCheck
 {
     use WebsitesCronTestRunnerTrait;
 
-    public function execute(): string
+    /**
+     * @param int $freshHours >0 时只探「超过该小时数未检查」的域名（增量），0 = 全量
+     */
+    public function execute(int $freshHours = 0): string
     {
         try {
             /** @var HealthCheckService $healthService */
             $healthService = ObjectManager::getInstance(HealthCheckService::class);
-            WebsitesCronTestContext::detail('HealthCheck.execute', ['domain_filter' => WebsitesCronTestContext::getDomainFilter()]);
+            WebsitesCronTestContext::detail('HealthCheck.execute', [
+                'domain_filter' => WebsitesCronTestContext::getDomainFilter(),
+                'fresh_hours' => $freshHours,
+            ]);
 
             // 执行健康检查
-            $results = $healthService->checkAllDomains();
+            $results = $healthService->checkAllDomains($freshHours);
             
             // 构建结果消息
             $message = __('健康检查完成：共 %{1} 个域名，健康 %{2} 个，不健康 %{3} 个，HTTPS 状态更新 %{4} 个，根域/池同步 %{5} 条', [

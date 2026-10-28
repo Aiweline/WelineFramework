@@ -119,6 +119,14 @@ final class ThemeLayoutEntitySolidifyQueue
     }
 
     /**
+     * 调度前置检查：是否有待排水的持久化 job（仅目录扫描，不做固化）。
+     */
+    public function hasPendingJobs(): bool
+    {
+        return $this->jobs->listPending(1) !== [];
+    }
+
+    /**
      * Cron / tests: drain up to $limit durable jobs.
      *
      * @return array{processed:int,skipped:int,failed:int,folded?:array{folded:int,removed:int,slots:int}}

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Integration\Framework;
 
-use Weline\Framework\Cache\StorefrontCacheKeyContext;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Runtime\FrontendWorkerScopeException;
 use Weline\Framework\Runtime\FrontendWorkerScopeProviderInterface;
@@ -94,10 +93,10 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
         }
 
         try {
-            return $this->tokenService->issue(
+            $token = $this->tokenService->issue(
                 $resolved['scope'],
                 $authorityHost,
-                StorefrontCacheKeyContext::pageGenerationValue(),
+                $this->storefrontGeneration(),
                 $now,
             );
         } catch (FrontendWorkerScopeException $exception) {
@@ -113,6 +112,22 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
                 $exception,
             );
         }
+
+        // 排障：签发时的世代必须与校验时的世代可对比（只有世代串，不含 Token / 签名）。
+        if (\function_exists('w_log_info')) {
+            \w_log_info(
+                '[FrontendWorkerScope] token issued: generation={generation} website={website} store={store} channel={channel}',
+                [
+                    'generation' => $this->storefrontGeneration(),
+                    'website' => $resolved['scope']->websiteId,
+                    'store' => $resolved['store']->id,
+                    'channel' => $resolved['channel']->id,
+                ],
+                'worker_scope',
+            );
+        }
+
+        return $token;
     }
 
     public function verifyToken(
@@ -130,8 +145,9 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
         $verification = $this->tokenService->verifyCandidate(
             $token,
             $authorityHost,
-            StorefrontCacheKeyContext::pageGenerationValue(),
+            $this->storefrontGeneration(),
             $now,
+            $this->storefrontGenerationAcceptor(),
         );
         if (!$verification->isValid()
             || !$verification->scope instanceof ScopeIdentity
@@ -473,15 +489,17 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
         ScopeTokenVerification $verification,
     ): FrontendWorkerScopeException {
         // 排障：被拒时留下结构化原因（不含 Token / 签名），便于区分 host / audience 冲突。
+        // generation 两侧都要有：签发侧见 token issued 日志，这里是校验侧。
         if (\function_exists('w_log_warning')) {
             \w_log_warning(
-                '[FrontendWorkerScope] token verification failed: {status} ({reason}) authority={authority} fingerprint={fingerprint}',
+                '[FrontendWorkerScope] token verification failed: {status} ({reason}) authority={authority} fingerprint={fingerprint} generation={generation}',
                 [
                     'status' => $verification->status,
                     'reason' => $verification->reason,
                     'authority' => RequestAuthority::current(),
                     'claimed_host' => $verification->host,
                     'fingerprint' => $verification->tokenFingerprint,
+                    'generation' => $this->storefrontGeneration(),
                 ],
                 'worker_scope',
             );
@@ -514,6 +532,63 @@ final class FrontendWorkerScopeProvider implements FrontendWorkerScopeProviderIn
     private function requestHost(): string
     {
         return RequestAuthority::current();
+    }
+
+    /**
+     * Storefront generation authority for the Scope Token — the same identity the page
+     * bakes and QueryBin/ScopeBootstrap compare (`t{themeId}.{version}[.e{epoch}]`).
+     * The FPC slot token stays separate: it only picks the html-disk leaf (`w_pg`).
+     *
+     * Both mint and verify MUST read this one value; computing one side from the FPC
+     * generation and the other from the published version is what made a freshly
+     * minted token fail on the very next request.
+     */
+    private function storefrontGeneration(): string
+    {
+        if (!\class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
+            return '';
+        }
+        try {
+            /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
+            $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class
+            );
+            $identity = $resolver->resolveGenerationIdentity();
+
+            return \trim((string)($identity['themePublishedVersionId'] ?? ''));
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * Warmup-transition tolerance: current generation + the most recent sealed ones
+     * (`ACCEPTABLE_GENERATION_DEPTH`). Fail-closed on any resolver error.
+     *
+     * @return (callable(string):bool)|null
+     */
+    private function storefrontGenerationAcceptor(): ?callable
+    {
+        if (!\class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
+            return null;
+        }
+
+        return function (string $claimedGeneration): bool {
+            $claimedGeneration = \trim($claimedGeneration);
+            if ($claimedGeneration === '') {
+                return false;
+            }
+            try {
+                /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
+                $resolver = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class
+                );
+
+                return $resolver->isAcceptableStorefrontGenerationId($claimedGeneration);
+            } catch (\Throwable) {
+                return false;
+            }
+        };
     }
 
     private function catalogConflict(string $reason): FrontendWorkerScopeException

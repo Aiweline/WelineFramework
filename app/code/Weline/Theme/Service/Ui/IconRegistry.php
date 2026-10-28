@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\Ui;
 
+use Weline\Framework\Runtime\RequestContext;
+
 final class IconRegistry
 {
+    private const LOCAL_SPRITE_FLAG_PREFIX = 'theme.ui.icon_local_sprite.';
+    private const LOCAL_SPRITE_DISCARD_HOOK_PREFIX = 'theme.ui.icon_local_sprite_discard.';
+
     private const ICONS = [
         'circle' => '<circle cx="12" cy="12" r="7"/>',
         'home' => '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5M9.5 20v-6h5v6"/>',
@@ -215,6 +220,39 @@ final class IconRegistry
         return '<svg xmlns="http://www.w3.org/2000/svg" hidden aria-hidden="true" class="w-icon-local-sprite">'
             . implode('', $symbols)
             . '</svg>';
+    }
+
+    /**
+     * Emit the page-local sprite only on the first call per request and prefix.
+     * Repeat calls return ''; every call site pairs with {@see renderUse()}.
+     *
+     * Reset on Fiber capture discard so a re-render can still emit the sprite.
+     *
+     * @param list<string> $names
+     */
+    public function spriteOnce(string $prefix, array $names): string
+    {
+        $flag = self::LOCAL_SPRITE_FLAG_PREFIX . $prefix;
+        if (RequestContext::has($flag)) {
+            return '';
+        }
+
+        $sprite = $this->localSprite($prefix, $names);
+        if ($sprite === '') {
+            return '';
+        }
+
+        $hook = self::LOCAL_SPRITE_DISCARD_HOOK_PREFIX . $prefix;
+        RequestContext::set($flag, true);
+        RequestContext::onCaptureDiscard(
+            static function () use ($flag, $hook): void {
+                RequestContext::remove($flag);
+                RequestContext::removeCaptureDiscard($hook);
+            },
+            $hook
+        );
+
+        return $sprite;
     }
 
     /** Reference a local sprite symbol via <use href="#id"> (no external sprite URL). */

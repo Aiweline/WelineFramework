@@ -69,8 +69,8 @@ class AttackSignalMonitor implements CronTaskInterface
      */
     public function cron_time(): string
     {
-        // 每分钟执行一次
-        return '* * * * *';
+        // 攻击信号聚合无实时性要求：降为 5 分钟，避免每分钟付一次框架冷启动。
+        return '*/5 * * * *';
     }
     
     /**

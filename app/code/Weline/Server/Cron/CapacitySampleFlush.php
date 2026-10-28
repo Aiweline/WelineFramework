@@ -33,7 +33,8 @@ class CapacitySampleFlush implements CronTaskInterface
 
     public function cron_time(): string
     {
-        return '* * * * *';
+        // 容量采样落盘无实时性要求：降为 5 分钟。
+        return '*/5 * * * *';
     }
 
     public function locked(): bool

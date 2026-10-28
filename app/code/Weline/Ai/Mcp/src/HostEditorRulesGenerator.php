@@ -72,9 +72,10 @@ alwaysApply: true
 9. 读 `agent_guidance.host_codex_delegation`（`host_delegate_explore_plan_review_to_codex_cli`）：**默认不委派 Codex**——用户本回合未提及 Codex/codex/Codex CLI 时，宿主自行探索/计划/审查，禁止因 CLI 存在而自动跑 `codex`。仅当用户显式提及 Codex 且 CLI 可用时，才委派探索 / 三节详细计划 / 编码后审查给 Codex（默认最新模型，禁 `-m`）；**启动任何委派 `codex` 前必须对用户聊天明示「Codex 正在工作：{阶段}…」**，完成后写「Codex 已完成」，回退写「Codex 不可用，已回退宿主：{原因}」——禁止静默委派。Opt-in 时 Plan Mode 只承载 Codex 计划，不另写第二套笼统计划；Cursor 只按该计划编码。Codex 原生宿主禁止嵌套再调 `codex`。Opt-in 但 CLI 不可用则回退宿主自身规划并记原因。内容运营与闲聊豁免。
 10. **上下文丢失自愈（硬携带）**：本回合若已看不到 `hard_constraints` / `architecture_grade_change_only` / MCP 引导被压缩或摘要丢掉，工程任务须**重新** `prepare_project`，**禁止凭记忆继续改码**；Cognition 合同/完整认知不可靠时按第 4 条重跑 `cognition_rules` / `cognition_overview`。
 11. 按需：`resolve_task_context` / `resolve_skill` / `get_skill`（检索仍可按需，**prepare 与强制 Cognition 不可跳**）。
-12. MCP 挂不上：用宿主 Read 打开 `AI硬规则索引.md` 继续；不得编造规则，不得假装已遵守 MCP。
+12. MCP 挂不上＝**先自装再降级**（`mcp_call_scope` SELF-INSTALL，硬）：ensure 报未挂载时，Agent 按 `host_mcp_install` 用自己宿主的机制给自己装上（未知宿主自行定位 MCP 配置 + `known_targets`），宿主内启用后新会话验证工具；禁止让用户手改 Settings、禁止 Reload Window。只有证明本机装不上（如宿主以不可修改的 MCP 白名单拉起 Agent）才用宿主 Read 打开 `AI硬规则索引.md` 继续，并如实说明尝试与失败原因；不得编造规则，不得假装已遵守 MCP。
 13. **根因修复（`no_error_masking_or_patch_workaround`，硬）**：错误必须真实暴露并保留原因链；**禁止**空/静默 `catch`、`catch` 后返回默认值当成功、`@` 抑制、静默降级/假数据/隐藏开关、删·弱化·跳过断言与测试、`--no-verify`、单站 `if`/白名单绕校验、绕 Provider·Taglib·Event·Service、改 `generated`·`vendor`、复制逻辑不修机制的补丁式修复。仍失败只能如实报「代码已改，验收未完成」+ 真实报错 + 阻塞原因。
 14. **Google Chrome 先复用再连接（`google_chrome_reuse_before_connect`，硬）**：操作本机已登录 Google Chrome 之前，先读 `~/.cursor/chrome-devtools-grant.json`。记录有效则只走已挂 MCP `user-chrome-devtools`。**禁止** `puppeteer.connect`、直连 `9222`/`ws_endpoint`、再起 `chrome-devtools-mcp`、`--autoConnect` 或新的 `--wsEndpoint`。记录没有或主人已死，仍禁止自己开连接，只走复用启动器。MCP 失败禁止改走 CDP。编辑器内置 Browser 不走本条。
+15. **CSS/JS/主题/前端改动必须走主题开发技能（`css_js_theme_work_requires_custom_theme_skill`，硬）**：任何店面/后台 CSS、JS、主题、布局、partial、组件观感、主题图片改动，动手前先 `get_skill(custom_theme_development|weline-custom-theme-development)` 并 Read `app/code/Weline/Theme/doc/开发/自定义主题开发路线.md`；骨架 CSS 先行、Token 实名、色盘/刻度/皮肤进 `theme-head-css-overlay`、图片 WebP 体积预算、JS 只走声明式加载。自定义主题验收一律新开本地站选该主题（`custom_theme_acceptance_new_local_website`，地址 `https://<池子域>/~site/<code>/`），**禁止**切默认站/既有站主题；改过 CSS/JS 的验收 URL 必带 `_wb_nc`。
 
 ## 非工程
 

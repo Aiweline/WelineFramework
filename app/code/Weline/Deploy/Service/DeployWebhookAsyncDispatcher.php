@@ -7,15 +7,21 @@ namespace Weline\Deploy\Service;
 /**
  * Detach webhook release from the HTTP request so Gitee/GitHub ACK within platform read timeouts.
  *
- * Durable path (no sudo): enqueue job → Cron/`deploy:webhook:drain` runs outside WLS request cgroup.
- * Optional acceleration: systemd-run / fork when the host allows it.
+ * Primary path: webhook hit → systemd-run `deploy:release` outside the WLS request cgroup.
+ * Durable record: the job row itself; if no systemd-run exists it stays pending for the manual
+ * `deploy:webhook:drain` CLI. No cron polls the queue — the one-shot maintenance below runs on
+ * the webhook hit, so a stuck queue never needs a poller to be closed out.
  */
 class DeployWebhookAsyncDispatcher
 {
+    /** Bounded reconcile limit per webhook hit (same bound the drain used). */
+    public const MAINTENANCE_RECONCILE_LIMIT = 20;
+
     public function __construct(
         private readonly DeployWebhookJobQueue $jobQueue,
         private readonly DeployReleaseNotifier $releaseNotifier,
         private readonly DeployReleaseFlightGate $flightGate,
+        private readonly DeployWebhookExternalJobReconciler $externalReconciler,
     ) {
     }
 
@@ -80,9 +86,19 @@ class DeployWebhookAsyncDispatcher
         $header = '# webhook-async spawn ' . date('c') . "\n# php=" . $phpBin . "\n";
         @file_put_contents($logPath, $header);
 
-        // Newest webhook wins: abandon incomplete predecessors (and TTL-stale) before enqueue.
+        // Cheap one-shot maintenance on the webhook hit itself (there is no cron poller any more):
+        // close out exited dispatched_external jobs (bounded) and abandon TTL-stale rows.
+        // Fail-tolerant — maintenance trouble must never block this release.
+        $stale = [];
+        try {
+            $this->reconcileExitedExternalJobs($logPath);
+            $stale = $this->jobQueue->abandonStaleIncomplete();
+        } catch (\Throwable $e) {
+            @file_put_contents($logPath, '# maintenance_failed: ' . $e->getMessage() . "\n", FILE_APPEND);
+        }
+
+        // Newest webhook wins: abandon incomplete predecessors before enqueue.
         $superseded = $this->jobQueue->abandonIncomplete('superseded_by_newer_deploy');
-        $stale = $this->jobQueue->abandonStaleIncomplete();
         foreach (array_merge($superseded, $stale) as $row) {
             $abandonedId = (string)($row['job_id'] ?? '');
             if ($abandonedId === '') {
@@ -107,7 +123,7 @@ class DeployWebhookAsyncDispatcher
             \usleep(300000);
         }
 
-        // Always enqueue first — Cron drain does not need sudo and is the durable guarantee.
+        // Always enqueue first — the job row is the durable record the reconciler/CLI drain reads.
         $queued = $this->jobQueue->enqueue($ref, $force, $noBackup, $logPath);
         if (empty($queued['ok'])) {
             return [
@@ -192,9 +208,9 @@ class DeployWebhookAsyncDispatcher
             ];
         }
 
-        // No sudo/systemd-run: leave job pending for Cron/`deploy:webhook:drain`.
-        // Do not best-effort fork here — WLS may reap it and Cron would double-release.
-        @file_put_contents($logPath, "# transport=queue (await cron/cli drain)\n", FILE_APPEND);
+        // No systemd-run: leave the job pending for the manual `deploy:webhook:drain` CLI.
+        // Do not best-effort fork here — WLS may reap it and a second runner would double-release.
+        @file_put_contents($logPath, "# transport=queue (await deploy:webhook:drain)\n", FILE_APPEND);
 
         return [
             'ok' => true,
@@ -205,6 +221,22 @@ class DeployWebhookAsyncDispatcher
             'job_id' => $jobId,
             'transport' => 'queue',
         ];
+    }
+
+    /**
+     * Bounded reconcile of exited systemd-run jobs, so `hasInFlight()` cannot stay blocked
+     * by a dead dispatched_external row while no cron runs.
+     */
+    private function reconcileExitedExternalJobs(string $logPath): void
+    {
+        $external = $this->externalReconciler->reconcile(self::MAINTENANCE_RECONCILE_LIMIT);
+        $messages = [];
+        foreach ($external['messages'] ?? [] as $message) {
+            $messages[] = (string)$message;
+        }
+        if ($messages !== []) {
+            @file_put_contents($logPath, '# reconciled: ' . implode(' | ', $messages) . "\n", FILE_APPEND);
+        }
     }
 
     /**

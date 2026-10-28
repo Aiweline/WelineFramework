@@ -100,6 +100,10 @@ final class CrontabScriptTest extends TestCase
         self::assertTrue(\mkdir($binDir, 0777, true));
         self::assertTrue(\mkdir($varDir, 0777, true));
 
+        // 错峰只用于多站不在同一秒启动；本用例验证的是单飞互斥，关掉错峰保持确定性。
+        $previousStagger = \getenv('WELINE_CRON_STAGGER');
+        \putenv('WELINE_CRON_STAGGER=0');
+
         $method = new \ReflectionMethod(Crontab::class, 'buildShellScript');
         $script = $method->invoke(
             new Crontab(),
@@ -132,7 +136,9 @@ final class CrontabScriptTest extends TestCase
             self::assertIsResource($first);
             $this->closePipes($firstPipes);
 
-            $deadline = \microtime(true) + 2.0;
+            // 本用例验证「互斥」而非「启动速度」：并发跑测试（或多站 cron 同时启动）时
+            // 2 秒窗口会偶发超时，放宽到 15 秒，避免时序脆弱造成假红。
+            $deadline = \microtime(true) + 15.0;
             while (!\is_file($record) && \microtime(true) < $deadline) {
                 \usleep(10_000);
             }
@@ -149,6 +155,11 @@ final class CrontabScriptTest extends TestCase
             self::assertIsArray($starts);
             self::assertCount(1, $starts);
         } finally {
+            if ($previousStagger === false) {
+                \putenv('WELINE_CRON_STAGGER');
+            } else {
+                \putenv('WELINE_CRON_STAGGER=' . $previousStagger);
+            }
             @\touch($release);
             if (\is_resource($second)) {
                 @\proc_terminate($second);

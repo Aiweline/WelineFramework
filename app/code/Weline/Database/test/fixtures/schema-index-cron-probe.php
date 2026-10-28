@@ -12,11 +12,13 @@ namespace {
     use Weline\Database\Model\SchemaIndexJob;
     use Weline\Database\Model\SchemaIndexState;
     use Weline\Database\Service\Index\SchemaIndexConfig;
+    use Weline\Database\Service\Index\SchemaIndexDeltaDetector;
     use Weline\Database\Service\Index\SchemaIndexJobService;
     use Weline\Framework\Database\ConnectionFactory;
     use Weline\Framework\Manager\ObjectManager;
 
     $jobId = 0;
+    $stateFile = '';
 
     try {
         require dirname(__DIR__, 5) . '/bootstrap.php';
@@ -67,7 +69,12 @@ namespace {
         }
 
         $config = new SchemaIndexConfig(null, null, '*', true, 999.0);
-        $cron = new SchemaIndexAutoApply($config, ObjectManager::getInstance(SchemaIndexJobService::class));
+        // auto_apply 只消费看门狗 flagged：用临时状态文件造出「看门狗已标记」的现场。
+        $stateFile = rtrim((string)\constant('VAR_DIR'), '/\\') . DIRECTORY_SEPARATOR . 'state'
+            . DIRECTORY_SEPARATOR . 'schema_index_delta_probe_' . bin2hex(random_bytes(4)) . '.json';
+        $detector = new SchemaIndexDeltaDetector(null, $stateFile);
+        $detector->remember();
+        $cron = new SchemaIndexAutoApply($config, ObjectManager::getInstance(SchemaIndexJobService::class), $detector);
         $message = $cron->execute();
 
         $jobAfter = $jobModel->clear()->reset()
@@ -111,6 +118,9 @@ namespace {
                     ->delete()->fetch();
             } catch (\Throwable) {
             }
+        }
+        if ($stateFile !== '' && is_file($stateFile)) {
+            @unlink($stateFile);
         }
     }
 }

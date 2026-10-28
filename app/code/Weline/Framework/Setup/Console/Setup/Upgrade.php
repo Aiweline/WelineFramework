@@ -2908,6 +2908,30 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                         ['n' => \count($routeOnlyFilter)]
                     ));
                 }
+            } elseif ($routeOnlyFilter !== []) {
+                // scoped -m（update:core 注入路径）：绕过 resolveRouteFingerprintPlan，
+                // 历史上正是这条分支静默丢整模块路由仍落指纹。这里补齐两件事：
+                // 1) changed 声明 → RouteUpdateStage commit 前完整性断言（吞模块即拒写回滚）；
+                // 2) 孤儿检测 → 有 Controller 却不在 PC 路由表的启用模块强制并入重扫。
+                $this->routeChangedModules = array_values(array_unique(array_map('strval', $routeOnlyFilter)));
+                $routeScopedHandle = ObjectManager::getInstance(Handle::class);
+                $routeScopedModulesMap = $routeScopedHandle->getModules();
+                $orphanModules = $this->detectPcRouteOrphanModules(
+                    \is_array($routeScopedModulesMap) ? $routeScopedModulesMap : [],
+                    $routeOnlyFilter
+                );
+                foreach ($orphanModules as $orphanName) {
+                    if (!\in_array($orphanName, $this->routeChangedModules, true)) {
+                        $this->routeChangedModules[] = $orphanName;
+                        $routeOnlyFilter[] = $orphanName;
+                    }
+                }
+                if ($orphanModules !== []) {
+                    $this->printing->note(__(
+                        '   - scoped 路由收集并入孤儿模块（有 Controller 却不在 PC 路由表）：%{1}',
+                        [\implode(', ', $orphanModules)]
+                    ));
+                }
             }
             if (!$routeOnlySkip) {
                 // 更新路由（支持指定模块）

@@ -93,10 +93,10 @@ private function assert_NewsletterWidgetOwner_testTemplatesExposeStableTestIdsAn
     self::assertStringContainsString('data-testid="newsletter-popup-form"', $popup);
     self::assertStringContainsString('data-testid="newsletter-subscribe-success"', $popup);
     self::assertStringContainsString('data-testid="newsletter-letter-sheet"', $popup);
-    self::assertStringContainsString('newsletter-xinjian-gufeng.webp', $popup);
-    self::assertStringContainsString("Weline_Newsletter::images/newsletter-xinjian-gufeng.webp", $popup);
-    self::assertStringContainsString('fetchTagSource', $popup);
-    self::assertStringContainsString('dir_type_STATICS', $popup);
+    /* 默认为中性卡片：模块内不得内置品牌皮资产；品牌皮由设计主题同 key 覆盖自带 */
+    self::assertStringNotContainsString('newsletter-xinjian-gufeng.webp', $popup);
+    self::assertStringNotContainsString('fetchTagSource', $popup);
+    self::assertStringContainsString('$hasShellArt', $popup);
     self::assertStringNotContainsString('/Weline/Newsletter/view/statics/', $popup);
     self::assertStringNotContainsString('newsletter-popup-mist-bg', $popup);
     self::assertStringNotContainsString('newsletter-letter-envelope-shell', $popup);

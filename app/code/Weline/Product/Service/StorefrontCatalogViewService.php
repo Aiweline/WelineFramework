@@ -65,6 +65,7 @@ final class StorefrontCatalogViewService
         private readonly ProductSupplierRepository $productSuppliers,
         private readonly SupplierRepository $suppliers,
         private readonly StorefrontProductMediaUrlResolver $mediaUrls,
+        private readonly ProductShardProvisioner $provisioner,
     ) {
     }
 
@@ -354,6 +355,15 @@ final class StorefrontCatalogViewService
      */
     private function pagePublishedRepresentativeOffers(int $websiteId, int $maxRows): array
     {
+        // Storefront read tolerance: an unprovisioned / empty product shard must
+        // render a summary skeleton of [], never a 500 (same tolerance as
+        // buildPublishedOffers). assertReady still guards admin/ops paths.
+        // isset() keeps reflection-built test doubles (no provisioner injected)
+        // on the previous behaviour instead of touching an uninitialized property.
+        if (isset($this->provisioner) && !$this->provisioner->isReady($websiteId)) {
+            return [];
+        }
+
         $maxRows = max(1, min(self::MAX_CATALOG_PRODUCTS, $maxRows));
         $rows = [];
         $afterOfferId = 0;
@@ -1129,6 +1139,15 @@ final class StorefrontCatalogViewService
         bool $applyStorefrontPricing = true,
     ): array
     {
+        // Storefront read tolerance: an unprovisioned / empty product shard must
+        // render an empty catalog, never a 500. Admin and ops paths still throw
+        // through AbstractWebsiteShardRepository::assertWebsite().
+        // isset() keeps reflection-built test doubles (no provisioner injected)
+        // on the previous behaviour instead of touching an uninitialized property.
+        if (isset($this->provisioner) && !$this->provisioner->isReady($websiteId)) {
+            return [];
+        }
+
         $maxRows = $maxRows === null
             ? null
             : max(1, min(self::MAX_CATALOG_PRODUCTS, $maxRows));

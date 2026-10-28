@@ -255,6 +255,33 @@
         return (expiresAt * 1000) > (Date.now() + SCOPE_STAMP_SKEW_MS);
     };
 
+    /**
+     * Remove `w_pg` once the named page-generation slot actually served this document.
+     * Keeping it pins every later navigation (links, back/forward) to that slot.
+     */
+    const dropServedPageGenerationQuery = (servedToken) => {
+        const token = String(servedToken || '').trim().toLowerCase();
+        if (!/^[a-f0-9]{16}$/.test(token)) {
+            return false;
+        }
+        try {
+            const url = new URL(window.location.href);
+            if (String(url.searchParams.get('w_pg') || '').toLowerCase() !== token) {
+                return false;
+            }
+            url.searchParams.delete('w_pg');
+            if (window.history && typeof window.history.replaceState === 'function') {
+                window.history.replaceState(window.history.state, '', url.toString());
+
+                return true;
+            }
+        } catch (_cleanupError) {
+            // Best-effort: a pinned query is cosmetic, never a reason to break the page.
+        }
+
+        return false;
+    };
+
     const isScopeStampAlreadyEnsured = (ids) => {
         const stampKey = pageScopeSessionKey(ids || {});
         // Tab decision: rollout-off / no visa required — skip POST until forget/recover.
@@ -507,6 +534,10 @@
                     error.status = 0;
                     throw error;
                 }
+                // The named slot has already served this document — drop `w_pg` so later
+                // navigations follow the live generation instead of pinning a stale leaf.
+                dropServedPageGenerationQuery(payload.page_generation_token);
+                clearScopeDriftTerminal();
                 rememberScopeStampKey(stampKey, expiresAt);
                 return true;
             }
@@ -1336,48 +1367,284 @@
         };
     };
 
-    const SCOPE_RELOAD_GUARD_KEY = 'weline.api.scope_reload_at';
+    // One automatic recovery attempt per (host, path, kind, target) — then a persistent,
+    // user-driven exit. A cooldown alone is not a stop condition: it only turns an 8s
+    // reload loop into a 30s one, which still destroys typed input and keeps hammering
+    // the server. Re-targeting (the server moved to yet another generation) buys one
+    // more attempt; the same target never does.
+    const SCOPE_RELOAD_LEDGER_KEY = 'weline.api.scope_reload_ledger';
+    const SCOPE_RELOAD_COOLDOWN_MS = 30000;
+    const SCOPE_RELOAD_LEDGER_MAX = 8;
+    const SCOPE_DRIFT_TERMINAL_ID = 'weline-api-scope-drift';
+
+    const readScopeReloadLedger = () => {
+        try {
+            const parsed = JSON.parse(window.sessionStorage.getItem(SCOPE_RELOAD_LEDGER_KEY) || '{}');
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+        } catch (_ledgerError) {
+            return {};
+        }
+    };
+
+    const writeScopeReloadLedger = (ledger) => {
+        try {
+            window.sessionStorage.setItem(SCOPE_RELOAD_LEDGER_KEY, JSON.stringify(ledger));
+        } catch (_ledgerError) {
+            // sessionStorage may be blocked; the in-page attempt still happens.
+        }
+    };
+
+    const scopeReloadTargetKey = (kind, target) => {
+        const host = String((window.location && window.location.host) || '').toLowerCase();
+        const path = String((window.location && window.location.pathname) || '/');
+        return [host, path, kind, String(target || '')].join('\u0000');
+    };
+
+    const readErrorPageGenerationToken = (error) => {
+        const direct = error && error.pageGenerationToken;
+        if (direct != null && String(direct).trim() !== '') {
+            return String(direct).trim().toLowerCase();
+        }
+        const envelope = error && error.response && error.response.data;
+        const nested = envelope && envelope.error ? envelope.error : (envelope && envelope.data ? envelope.data.error : null);
+        const raw = nested && nested.page_generation_token != null ? String(nested.page_generation_token).trim() : '';
+
+        return /^[a-f0-9]{16}$/.test(raw.toLowerCase()) ? raw.toLowerCase() : '';
+    };
+
+    /**
+     * The Scope the server says this request resolved to (`request_scope` from QueryBin).
+     * It is the "target" of a Scope-drift reload: the same tuple must be tried only once.
+     */
+    const readErrorRequestScopeTag = (error) => {
+        const envelope = error && error.response && error.response.data;
+        const nested = envelope && envelope.error ? envelope.error : (envelope && envelope.data ? envelope.data.error : null);
+        const scope = nested && nested.request_scope;
+        if (!scope || typeof scope !== 'object') {
+            return '';
+        }
+        const parts = ['website_id', 'store_id', 'channel_id', 'store_mode', 'context_version']
+            .map((field) => String(scope[field] != null ? scope[field] : ''));
+
+        return parts.join('/');
+    };
+
+    /**
+     * Page-identity drift (wrong Storefront generation) is healed by fetching the
+     * generation the server serves. Scope-credential drift is NOT: the same URL with the
+     * same HttpOnly Scope Cookie answers the same 409, so a reload is pure spin.
+     */
+    const scopeDriftKind = (code) => (code === 'deploy_reload_required' ? 'generation' : 'scope');
+
+    const hasUnsavedUserInput = () => {
+        try {
+            const active = document && document.activeElement;
+            if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(String(active.tagName || '').toUpperCase())) {
+                const type = String(active.getAttribute('type') || 'text').toLowerCase();
+                if (['text', 'search', 'email', 'tel', 'number', 'password', 'url', ''].includes(type)) {
+                    return true;
+                }
+            }
+            if (active && active.isContentEditable === true) {
+                return true;
+            }
+            const fields = document.querySelectorAll(
+                'textarea, select, input[type="text"], input[type="search"], input[type="email"], input[type="tel"], input[type="number"], input[type="password"], input[type="url"], input:not([type])'
+            );
+            for (const field of fields) {
+                if (!field || field.disabled || field.readOnly) {
+                    continue;
+                }
+                if (String(field.value || '') !== String(field.defaultValue || '')) {
+                    return true;
+                }
+            }
+        } catch (_inputProbeError) {
+            // Fail-open: a broken DOM read must not block the single recovery attempt.
+            return false;
+        }
+
+        return false;
+    };
+
+    /**
+     * Terminal state: no automatic reload any more. The page keeps what the user is doing
+     * and shows one explicit exit; only a click may fetch another generation.
+     */
+    const showScopeDriftTerminal = (message, pageGenerationToken) => {
+        if (!document || !document.body) {
+            return false;
+        }
+        let el = document.getElementById(SCOPE_DRIFT_TERMINAL_ID);
+        if (!el) {
+            el = document.createElement('div');
+            el.id = SCOPE_DRIFT_TERMINAL_ID;
+            el.setAttribute('role', 'alert');
+            el.style.cssText = [
+                'position:fixed',
+                'left:1rem',
+                'right:1rem',
+                'bottom:1rem',
+                'z-index:2147483646',
+                'max-width:min(30rem,calc(100vw - 2rem))',
+                'margin:0 auto',
+                'border-radius:.75rem',
+                'background:#0f1111',
+                'color:#fafafa',
+                'box-shadow:0 12px 32px rgba(15,23,42,.28)',
+                'font:600 14px/1.5 sans-serif',
+                'padding:.9rem 1rem',
+                'display:flex',
+                'gap:.75rem',
+                'align-items:center',
+            ].join(';');
+            const text = document.createElement('span');
+            text.setAttribute('data-role', 'message');
+            text.style.cssText = 'flex:1 1 auto;min-width:0';
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.setAttribute('data-role', 'reload');
+            button.style.cssText = [
+                'flex:0 0 auto',
+                'border:0',
+                'border-radius:.5rem',
+                'padding:.5rem .85rem',
+                'background:#fafafa',
+                'color:#0f1111',
+                'font:700 13px/1.2 sans-serif',
+                'cursor:pointer',
+            ].join(';');
+            button.textContent = i18nText('更新到最新版本');
+            button.addEventListener('click', () => {
+                try {
+                    const navigate = window.Weline && typeof window.Weline.navigateToRequestedPageGeneration === 'function'
+                        ? window.Weline.navigateToRequestedPageGeneration
+                        : null;
+                    if (navigate && navigate(pageGenerationToken)) {
+                        return;
+                    }
+                } catch (_navigateError) {
+                    // Fall through to a plain reload — this one is user-initiated.
+                }
+                try {
+                    window.location.reload();
+                } catch (_reloadError) {
+                    // Nothing left to try; the banner stays.
+                }
+            });
+            el.appendChild(text);
+            el.appendChild(button);
+            document.body.appendChild(el);
+        }
+        const textNode = el.querySelector('[data-role="message"]');
+        if (textNode) {
+            const detail = String(message || '').trim();
+            textNode.textContent = detail
+                ? detail + ' ' + i18nText('已暂停自动刷新。')
+                : i18nText('页面需要更新后才能继续。');
+        }
+
+        return true;
+    };
+
+    /** Recovery succeeded again — a leftover "update required" banner would be a lie. */
+    const clearScopeDriftTerminal = () => {
+        try {
+            const el = document && document.getElementById(SCOPE_DRIFT_TERMINAL_ID);
+            if (el && el.parentNode) {
+                el.parentNode.removeChild(el);
+            }
+        } catch (_clearError) {
+            // Banner is cosmetic; never let its removal break the request path.
+        }
+    };
+
     const maybeAutoReloadForScopeConflict = (presentation, sourceError) => {
         if (!presentation || !presentation.autoReload) {
             return false;
         }
-        // Drop optimistic stamp memory before reload — otherwise skip-POST + missing Cookie
-        // loops on "Page binding is missing or expired" forever.
+        const code = String((sourceError && sourceError.code) || '').trim().toLowerCase();
+        const pageGenerationToken = readErrorPageGenerationToken(sourceError);
+        const kind = scopeDriftKind(code);
+        const message = presentation.message || presentation.tip || '';
+        // A named generation can be fetched by slot (`w_pg`); Scope drift cannot — the only
+        // lever there is re-requesting the page against the Scope the server just named.
+        const target = kind === 'generation' && pageGenerationToken !== ''
+            ? pageGenerationToken
+            : (readErrorRequestScopeTag(sourceError) || code);
+
+        // Never yank a page the user is typing into.
+        if (hasUnsavedUserInput()) {
+            showScopeDriftTerminal(message, pageGenerationToken);
+            return false;
+        }
+
+        const key = scopeReloadTargetKey(kind, target);
+        const ledger = readScopeReloadLedger();
+        const now = Date.now();
+        const lastAt = Number(ledger.lastAt || 0) || 0;
+        // Same target already tried once, or another target was tried moments ago.
+        if (ledger[key] != null || (lastAt > 0 && (now - lastAt) < SCOPE_RELOAD_COOLDOWN_MS)) {
+            showScopeDriftTerminal(message, pageGenerationToken);
+            return false;
+        }
+
+        // Drop optimistic stamp memory before navigating — otherwise skip-POST + missing
+        // Cookie loops on "Page binding is missing or expired" forever.
         forgetScopeStampKey();
-        // Prefer framework toast+auto-reload helper when present (never native confirm).
+        ledger[key] = now;
+        ledger.lastAt = now;
+        const prunable = Object.keys(ledger).filter((entry) => entry !== 'lastAt');
+        while (prunable.length > SCOPE_RELOAD_LEDGER_MAX) {
+            delete ledger[prunable.shift()];
+        }
+        writeScopeReloadLedger(ledger);
+
+        // Scope drift with no generation to name: one plain reload — the new request
+        // re-resolves Store/Channel, which is the only thing that can heal it.
+        if (kind !== 'generation' || pageGenerationToken === '') {
+            try {
+                window.location.reload();
+
+                return true;
+            } catch (_reloadError) {
+                showScopeDriftTerminal(message, pageGenerationToken);
+                return false;
+            }
+        }
+
+        // Prefer the framework navigation (toast + `w_pg` slot); never native confirm.
         try {
             const prompt = window.Weline && typeof window.Weline.promptStorefrontGenerationRefresh === 'function'
                 ? window.Weline.promptStorefrontGenerationRefresh
                 : null;
             if (prompt) {
-                const tip = presentation.message || presentation.tip || '';
-                const token = sourceError && (
-                    sourceError.pageGenerationToken
-                    || (sourceError.response
-                        && sourceError.response.data
-                        && sourceError.response.data.error
-                        && sourceError.response.data.error.page_generation_token)
-                );
-                return !!prompt(tip, token);
+                const started = !!prompt(message, pageGenerationToken);
+                if (!started) {
+                    // Helper refused (guard or unroutable target): do not spin, show the exit.
+                    showScopeDriftTerminal(message, pageGenerationToken);
+                }
+                return started;
             }
         } catch (_promptError) {
-            // Fall through to guarded location.reload.
+            // Fall through to the direct navigation.
         }
         try {
-            const now = Date.now();
-            const last = Number(sessionStorage.getItem(SCOPE_RELOAD_GUARD_KEY) || 0) || 0;
-            // Prevent reload loops if the conflict persists after refresh.
-            if (last > 0 && (now - last) < 8000) {
-                return false;
+            const navigate = window.Weline && typeof window.Weline.navigateToRequestedPageGeneration === 'function'
+                ? window.Weline.navigateToRequestedPageGeneration
+                : null;
+            if (navigate) {
+                const started = !!navigate(pageGenerationToken);
+                if (!started) {
+                    showScopeDriftTerminal(message, pageGenerationToken);
+                }
+                return started;
             }
-            sessionStorage.setItem(SCOPE_RELOAD_GUARD_KEY, String(now));
-        } catch (_error) {
-            // sessionStorage may be blocked; still attempt one reload.
-        }
-        try {
             window.location.reload();
+
             return true;
         } catch (_error) {
+            showScopeDriftTerminal(message, pageGenerationToken);
             return false;
         }
     };

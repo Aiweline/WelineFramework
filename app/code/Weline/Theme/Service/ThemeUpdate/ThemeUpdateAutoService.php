@@ -78,6 +78,12 @@ final class ThemeUpdateAutoService
             return ['mode' => 'batch', 'skipped' => 'backoff', 'retry_at' => $backoff];
         }
 
+        // setup:upgrade 正在写静态树/实体根：本轮跳过（保留脏标记），等它结束后再构建，
+        // 否则批次会硬链一份升级中途的半成品快照。
+        if (ThemeUpdateBuildService::setupUpgradeInProgress()) {
+            return ['mode' => 'batch', 'skipped' => 'setup_upgrade_running'];
+        }
+
         $dirtyLayouts = ThemeUpdateRuntime::dirtyLayouts($themeId);
         $buildOptions = [];
         if (empty($dirtyLayouts['all']) && $dirtyLayouts['layouts'] !== []) {

@@ -207,6 +207,48 @@ final class ScopeTokenServiceTest extends TestCase
         self::assertSame('page_generation_mismatch', $missing->reason);
     }
 
+    /**
+     * Warmup window: a token minted for a generation the Scope resolver still accepts
+     * (current + recent sealed) must keep working; anything outside the window must not.
+     */
+    public function testAcceptableGenerationWindowKeepsRecentTokensUsable(): void
+    {
+        $token = $this->service->issue($this->scope, 'shop.example.test', 't3.v2', 9_000);
+        $acceptCurrentAndPrevious = static fn(string $generation): bool
+            => in_array($generation, ['t3.v3', 't3.v2', 't3.v1'], true);
+
+        $accepted = $this->service->verifyCandidate(
+            $token,
+            'shop.example.test',
+            't3.v3',
+            9_001,
+            $acceptCurrentAndPrevious,
+        );
+        self::assertSame(ScopeTokenVerification::STATUS_VALID, $accepted->status);
+
+        $outsideWindow = $this->service->verifyCandidate(
+            $token,
+            'shop.example.test',
+            't3.v3',
+            9_001,
+            static fn(string $generation): bool => $generation === 't3.v3',
+        );
+        self::assertSame(ScopeTokenVerification::STATUS_CONTEXT_CONFLICT, $outsideWindow->status);
+        self::assertSame('page_generation_mismatch', $outsideWindow->reason);
+
+        // A matcher that throws is fail-closed, never fail-open.
+        $broken = $this->service->verifyCandidate(
+            $token,
+            'shop.example.test',
+            't3.v3',
+            9_001,
+            static function (string $generation): bool {
+                throw new \RuntimeException('resolver down');
+            },
+        );
+        self::assertSame(ScopeTokenVerification::STATUS_CONTEXT_CONFLICT, $broken->status);
+    }
+
     /** @return array<string, mixed> */
     private function payloadFromToken(string $token): array
     {

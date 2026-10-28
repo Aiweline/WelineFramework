@@ -29,7 +29,7 @@ final class UsageAuditRecoveryCronTest extends TestCase
         $task = new UsageAuditRecovery($accountService);
 
         self::assertInstanceOf(CronTaskInterface::class, $task);
-        self::assertSame('* * * * *', $task->cron_time());
+        self::assertSame('*/5 * * * *', $task->cron_time());
         self::assertSame('ai_provider_usage_audit_recovery', $task->execute_name());
         $result = $task->execute();
 

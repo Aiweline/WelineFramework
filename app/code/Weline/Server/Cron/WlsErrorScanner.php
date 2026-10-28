@@ -32,7 +32,8 @@ class WlsErrorScanner implements CronTaskInterface
 
     public function cron_time(): string
     {
-        return '* * * * *';
+        // 日志扫描无实时性要求：降为 5 分钟，避免每分钟付一次框架冷启动。
+        return '*/5 * * * *';
     }
 
     public function locked(): bool

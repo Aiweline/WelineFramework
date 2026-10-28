@@ -160,13 +160,16 @@ final class StaticBuildId
             }
             // 主题自有资源 → 主题对目录 `/{code}/v{n}/{buildId}`；其余沿用部署构建号。
             // 两边都没有构建号时不改写，避免发出没有对应目录的 `/{code}/v{n}/`。
+            // 主题更新代次指针上有 static_build 时优先用它：每次换代一个新段，旧段由 GC 回收。
             $pair = self::themePairPrefix($path);
             if ($pair !== null && $pair['pair'] !== '') {
-                if ($deploy === '') {
+                $pairBuild = self::themePinnedStaticBuild();
+                $build = $pairBuild !== '' ? $pairBuild : $deploy;
+                if ($build === '') {
                     $buildId = '';
                 } else {
                     [$code, $version] = explode('/v', $pair['pair'], 2);
-                    $buildId = $code . '/v' . $version . '/' . $deploy;
+                    $buildId = $code . '/v' . $version . '/' . $build;
                 }
             } else {
                 $buildId = self::themeUpdateBuildId($path) ?? $deploy;

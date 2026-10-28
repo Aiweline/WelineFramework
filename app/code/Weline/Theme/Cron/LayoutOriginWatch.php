@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Cron;
 
+use Weline\Cron\CronTaskPreflightInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutOriginWatchService;
@@ -12,7 +13,7 @@ use Weline\Theme\Service\LayoutEntity\ThemeLayoutOriginWatchService;
  * Dev-only watch: design origin hash → ensure bound scopes → cascade solidify / chrome heal.
  * Production and other deploy modes must fast-skip (no disk scan, no bake).
  */
-final class LayoutOriginWatch implements CronTaskInterface
+final class LayoutOriginWatch implements CronTaskInterface, CronTaskPreflightInterface
 {
     public function __construct(
         private readonly ThemeLayoutOriginWatchService $watch,
@@ -42,6 +43,19 @@ final class LayoutOriginWatch implements CronTaskInterface
     public function cron_time(): string
     {
         return '* * * * *';
+    }
+
+    /**
+     * 非开发模式不产生子进程：本任务在 prod 恒为 skip:non_dev，
+     * 此前每分钟仍要付一次完整框架冷启动才发现要跳过。
+     */
+    public function hasPendingWork(): bool
+    {
+        try {
+            return (Env::system('deploy') ?? '') === 'dev';
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public function execute(): string

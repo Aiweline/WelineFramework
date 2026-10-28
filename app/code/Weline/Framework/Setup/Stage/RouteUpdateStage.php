@@ -50,6 +50,13 @@ class RouteUpdateStage extends AbstractStage
      */
     private array $modulesToClear = [];
 
+    /**
+     * 本轮声明应重扫的模块（seed_partial / scoped -m 路径）：
+     * commit 前须证明每个「磁盘有 PC 控制器」的声明模块在新缓冲里有条目。
+     * @var list<string>
+     */
+    private array $declaredChangedModules = [];
+
     /** 指纹全员命中：不写路由文件、不 flush batch */
     private bool $skipWrite = false;
     
@@ -93,6 +100,11 @@ class RouteUpdateStage extends AbstractStage
 
         $seedPartial = !empty($context['seed_partial']) && !empty($this->modulesToClear);
         $isPartial = !empty($this->modulesToClear) && !$seedPartial;
+        // 声明式完整性断言的期望集：prepare 时记下本轮被声明要重扫的模块，
+        // 之后 modulesToClear 会被清空（seed_partial），不能依赖它做 commit 校验。
+        if ($seedPartial || $isPartial) {
+            $this->declaredChangedModules = array_values(array_unique($this->modulesToClear));
+        }
 
         // 路由文件批量缓冲 + ACL 事件 defer：扫描阶段只做内存收集，commit 时一次落盘/落库
         /** @var \Weline\Framework\Module\Helper\Data $moduleHelper */
@@ -100,6 +112,8 @@ class RouteUpdateStage extends AbstractStage
             \Weline\Framework\Module\Helper\Data::class
         );
         $moduleHelper->enableDeferControllerAttributes();
+        // 扫描失败记录（M3）：静默 continue 处留痕，commit 前读取并否决。
+        $moduleHelper->enableRouteScanFailureRecording();
         \Weline\Framework\Module\Handle::resetBatchRouteProgress();
 
         if ($seedPartial) {
@@ -286,6 +300,172 @@ class RouteUpdateStage extends AbstractStage
         ));
     }
 
+    /**
+     * M3 · 扫描失败必须发声：registerModuleRouter 里类加载失败/解析为空的静默
+     * continue 已记录到 Module\Helper\Data；commit 前读取并否决——只要某模块
+     * 「有 Controller 目录且本轮全部候选类都扫描失败」，其路由必然清零，正是
+     * 02:47 店面 404 的根因链。失败即回滚、指纹不落（DEV/CI 抛错，prod 同样抛错
+     * ——路由产物是持久文件，降级写坏表比中断更危险）。
+     */
+    private function assertNoRouteScanFailuresRecorded(
+        \Weline\Framework\Module\Helper\Data $moduleHelper,
+        callable $note
+    ): void {
+        $failures = $moduleHelper->getRouteScanFailures();
+        $moduleHelper->clearRouteScanFailures();
+        if ($failures === []) {
+            return;
+        }
+
+        $byModule = [];
+        foreach ($failures as $failure) {
+            $moduleName = (string)($failure['module'] ?? '');
+            if ($moduleName === '') {
+                continue;
+            }
+            $byModule[$moduleName][] = sprintf('%s (%s)', (string)($failure['class'] ?? '?'), (string)($failure['kind'] ?? '?'));
+        }
+        // 只否决「致命」模块：声明重扫集内、或清理前磁盘有条目、现在整模块候选全失败。
+        // batch 模式（全量 / seed_partial）下未重扫模块的旧条目来自磁盘种子不会丢，
+        // 其扫描失败仅记 warning；增量模式按文件即时写，任何记录都可能是致命。
+        $declared = array_fill_keys($this->declaredChangedModules, true);
+        $fatal = [];
+        foreach ($byModule as $moduleName => $details) {
+            $isDeclared = isset($declared[$moduleName]);
+            $hadRoutesBefore = $this->countModuleRoutesInBackupFiles($moduleName) > 0;
+            $willRescan = $this->routerHelper->isBatchMode()
+                ? ($isDeclared || $hadRoutesBefore)
+                : true;
+            if (!$willRescan) {
+                // 非本轮重扫的模块：其旧路由仍整批保留在 seed 缓冲里，不构成丢路由。
+                w_log_warning(__(
+                    '路由扫描存在失败记录（非本轮重扫模块，旧路由保留）：%1 — %2',
+                    [$moduleName, implode('; ', array_slice($details, 0, 5))]
+                ), [], 'setup/route_integrity.log');
+                continue;
+            }
+            $fatal[$moduleName] = $details;
+        }
+        if ($fatal === []) {
+            $note(__('   - route_update：扫描失败记录均属于未重扫模块，旧路由保留，放行'));
+            return;
+        }
+
+        $summary = [];
+        foreach ($fatal as $moduleName => $details) {
+            $summary[] = $moduleName . ': ' . implode('; ', array_slice($details, 0, 5));
+        }
+        $note(__('   - route_update：检测到路由扫描失败，正在回滚：%{1}', [\implode(' | ', $summary)]));
+        w_log_warning(__(
+            'route_update 提交被否决：路由扫描失败模块 %1（已回滚，指纹不落）',
+            [\implode(', ', array_keys($fatal))]
+        ), [], 'setup/route_integrity.log');
+        $this->rollback();
+        throw new Exception(__(
+            '路由完整性断言失败：本轮重扫模块的控制器在扫描期加载/解析失败（已回滚，旧路由保留、指纹未写入）：%{1}。'
+            . '详见 var/log/setup/route_integrity.log',
+            [\implode(' | ', $summary)]
+        ));
+    }
+
+    /**
+     * 声明式完整性断言（根治「changed 模块静默零产出仍 commit + 落指纹」）：
+     * 本轮被声明重扫的每个模块，只要磁盘上有可注册的 PC 控制器目录，
+     * 就必须在新缓冲（batch 未 flush）或新磁盘文件（已 flush / 增量即时写）里
+     * 至少出现 1 条路由；否则视为收集器吞掉了该模块 → 拒绝提交、回滚备份、
+     * 抛错（上层 catch 后不落指纹）。
+     *
+     * @param callable(string):void $note
+     */
+    private function assertDeclaredChangedModulesPresent(callable $note): void
+    {
+        if ($this->declaredChangedModules === []) {
+            return;
+        }
+        $modules = $this->loadModulesForCompletenessAssert();
+        $missing = [];
+        foreach ($this->declaredChangedModules as $moduleName) {
+            $moduleName = \trim((string)$moduleName);
+            if ($moduleName === '' || !isset($modules[$moduleName]) || !is_array($modules[$moduleName])) {
+                continue;
+            }
+            if ((int)($modules[$moduleName]['status'] ?? 1) !== 1) {
+                continue;
+            }
+            $basePath = \rtrim((string)($modules[$moduleName]['base_path'] ?? ''), DIRECTORY_SEPARATOR);
+            if ($basePath === '' || !\is_dir($basePath . DIRECTORY_SEPARATOR . \Weline\Framework\Module\Handle::pc_DIR)) {
+                continue;
+            }
+            $count = $this->routerHelper->isBatchMode()
+                ? $this->countModuleRoutesInBatch($moduleName)
+                : $this->countModuleRoutesOnDisk($moduleName);
+            if ($count < 1) {
+                $missing[] = $moduleName;
+            }
+        }
+        $this->declaredChangedModules = [];
+        if ($missing === []) {
+            return;
+        }
+
+        $note(__('   - route_update：声明重扫的模块在路由产物中缺失，正在回滚：%{1}', [\implode(', ', $missing)]));
+        w_log_warning(__(
+            'route_update 完整性断言失败：模块 %1 有 Controller 目录却零路由条目（已回滚，指纹不落）',
+            [\implode(', ', $missing)]
+        ), [], 'setup/route_integrity.log');
+        $this->rollback();
+        throw new Exception(__(
+            '路由完整性断言失败：本轮声明重扫的模块未产出任何路由条目（已回滚，旧路由保留、指纹未写入）：%{1}。'
+            . '请用 php bin/w setup:upgrade -m <Module> --route 复现并查看 setup/route_integrity.log',
+            [\implode(', ', $missing)]
+        ));
+    }
+
+    /**
+     * 断言用模块表：优先内存 Handle，CLI/独立进程退回 app/etc/modules.php。
+     *
+     * @return array<string, mixed>
+     */
+    private function loadModulesForCompletenessAssert(): array
+    {
+        try {
+            /** @var \Weline\Framework\Module\Handle $handle */
+            $handle = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Module\Handle::class);
+            $modules = $handle->getModules();
+            if (\is_array($modules) && $modules !== []) {
+                return $modules;
+            }
+        } catch (\Throwable) {
+            // fall through to disk registry below
+        }
+        $file = \APP_ETC_PATH . 'modules.php';
+        if (\is_file($file)) {
+            $modules = require $file;
+            if (\is_array($modules)) {
+                return $modules;
+            }
+        }
+        return [];
+    }
+
+    /**
+     * batch 缓冲模式下统计某模块在全部路由文件缓冲中的条目数（含 module / rule.module 两种形态）。
+     */
+    private function countModuleRoutesInBatch(string $moduleName): int
+    {
+        $count = 0;
+        foreach ($this->routerFilePaths as $path) {
+            foreach ($this->routerHelper->getBatchRouters((string)$path) as $router) {
+                $extracted = $this->extractModuleFromRouter($router);
+                if ($extracted === $moduleName) {
+                    $count++;
+                }
+            }
+        }
+
+        return $count;
+    }
+
     private function countModuleRoutesOnDisk(string $moduleName): int
     {
         $count = 0;
@@ -413,6 +593,9 @@ class RouteUpdateStage extends AbstractStage
             $moduleHelper = \Weline\Framework\Manager\ObjectManager::getInstance(
                 \Weline\Framework\Module\Helper\Data::class
             );
+            // M3 门禁（先于任何写动作）：扫描期记录到控制器类加载失败/解析为空即否决，
+            // 回滚备份、上层不落指纹；禁止把「吞掉的模块」写进路由产物。
+            $this->assertNoRouteScanFailuresRecorded($moduleHelper, $note);
             // 先落 ACL（扫描期已 defer），再写路由文件。
             // 禁止在此处 clear CollectedAclSourceIdsRegistry / LiveSourceSet：
             // orphan diff（after_route_collection）依赖 registry；提前清空会导致
@@ -425,6 +608,7 @@ class RouteUpdateStage extends AbstractStage
             if ($isPartial) {
                 // 门禁：清理前有路由的模块，收集后不得仍为空（否则整模块前台/后台 404）。
                 $this->assertPartialClearedModulesRepopulated($this->modulesToClear, $note);
+                $this->assertDeclaredChangedModulesPresent($note);
                 $note(__('   - route_update：增量模式，刷新路由快照…'));
                 \Weline\Framework\Router\Core::snapshotGeneratedRouterFiles();
                 $this->committed = true;
@@ -448,6 +632,8 @@ class RouteUpdateStage extends AbstractStage
             // 一次性写入所有路由文件
             $note(__('   - route_update：正在落盘路由文件…'));
             $this->routerHelper->flushBatchRouters();
+            // flush 后 batchMode=false，断言自动改查磁盘新内容；缺失即回滚并拒绝提交。
+            $this->assertDeclaredChangedModulesPresent($note);
             $note(__('   - route_update：路由文件已写入，正在生成运行时快照…'));
             \Weline\Framework\Router\Core::snapshotGeneratedRouterFiles();
 

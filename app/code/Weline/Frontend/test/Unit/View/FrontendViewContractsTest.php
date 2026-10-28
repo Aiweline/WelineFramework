@@ -360,7 +360,10 @@ private function assert_WelineApiErrorPresentation_testApiScopeConflictCodesAuto
     $welineJs = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Frontend' . '/view/statics/js/weline.js');
     self::assertStringContainsString('promptStorefrontGenerationRefresh', $welineJs);
     self::assertStringNotContainsString('window.confirm(', $welineJs);
-    self::assertStringContainsString('weline.api.scope_reload_at', $script);
+    self::assertStringContainsString('weline.api.scope_reload_ledger', $script);
+    // One automatic attempt per (page, generation): a cooldown alone never stops a loop.
+    self::assertStringContainsString('scopeReloadTargetKey', $script);
+    self::assertStringContainsString('showScopeDriftTerminal', $script);
     self::assertStringContainsString('weline.api.scope_tips_by_locale', $script);
     self::assertStringContainsString('rememberScopeTipsFromPayload', $script);
     self::assertStringContainsString('readScopeTipCache', $script);
@@ -368,7 +371,7 @@ private function assert_WelineApiErrorPresentation_testApiScopeConflictCodesAuto
     self::assertStringContainsString('error.tip = normalizeScopeTip(serverError.tip)', $script);
     self::assertStringContainsString('window.location.reload()', $script);
     // autoReload must run before silent / onHttpError short-circuit.
-    self::assertStringContainsString('presentation.autoReload && maybeAutoReloadForScopeConflict(presentation)', $script);
+    self::assertStringContainsString('presentation.autoReload && maybeAutoReloadForScopeConflict(presentation, error)', $script);
     // Main-thread client must adopt Scope ids on channel/store navigations.
     self::assertStringContainsString('client.config.website_id = freshConfig.website_id;', $script);
     self::assertStringContainsString('client.config.store_id = freshConfig.store_id;', $script);
@@ -446,7 +449,7 @@ private function assert_WelineApiErrorPresentation_testApiWaitsForScopeBootstrap
     self::assertStringContainsString('isScopeBindingMissingError', $script);
     // Binding miss must drop optimistic memory (Reload otherwise loops forever).
     self::assertStringContainsString('forgetScopeStampKey();', $script);
-    self::assertStringContainsString('Drop optimistic stamp memory before reload', $script);
+    self::assertStringContainsString('Drop optimistic stamp memory before navigating', $script);
     self::assertStringContainsString('allowRepunch && isScopeStampRecoverableError(error)', $script);
     self::assertStringContainsString('warmup({ forceHandshake: true })', $script);
     self::assertStringContainsString('shouldDeferScopeStampErrorUi', $script);

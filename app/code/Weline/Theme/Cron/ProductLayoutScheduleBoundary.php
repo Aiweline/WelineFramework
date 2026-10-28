@@ -30,7 +30,8 @@ class ProductLayoutScheduleBoundary implements CronTaskInterface
 
     public function cron_time(): string
     {
-        return '* * * * *';
+        // 边界处理窗口是 90 秒，5 分钟粒度足以覆盖；避免每分钟空转。
+        return '*/5 * * * *';
     }
 
     public function execute(): string

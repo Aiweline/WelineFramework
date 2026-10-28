@@ -78,6 +78,32 @@ final class ThemeUpdatePromoteFlatTargetTest extends TestCase
         self::assertSame(0, ThemeUpdateBatchService::backfillThemePairForNewDeploy($this->pubStatic, 'abc123def456'));
     }
 
+    public function testRetireKeepsPinnedBuildAndDropsOtherBuilds(): void
+    {
+        StaticBuildId::setFlatUrlsOverride(false);
+        $deploy = 'abc123def456';
+        $pinned = 'fedcba654321';
+        $stale = '001122334455';
+        foreach ([$deploy, $pinned, $stale] as $build) {
+            $dir = $this->pubStatic . '/hanfu/v276/' . $build;
+            \mkdir($dir, 0775, true);
+            \file_put_contents($dir . '/a.css', $build);
+        }
+
+        $removed = ThemeUpdateBatchService::retireStaleThemePairDirs(
+            $this->pubStatic,
+            'hanfu',
+            276,
+            $deploy,
+            [$pinned],
+        );
+
+        self::assertSame(1, $removed);
+        self::assertDirectoryExists($this->pubStatic . '/hanfu/v276/' . $deploy);
+        self::assertDirectoryExists($this->pubStatic . '/hanfu/v276/' . $pinned, '指针上的 pinned 段不得被部署换版删掉');
+        self::assertDirectoryDoesNotExist($this->pubStatic . '/hanfu/v276/' . $stale);
+    }
+
     public function testMirrorSourceUsesFlatRootShape(): void
     {
         // 结构性断言：promote 镜像在 flat 模式下以 pubStatic 为 deployRoot，且跳过 retire。

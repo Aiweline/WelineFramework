@@ -362,86 +362,13 @@ check,check
 当前属性集没有可填写的商品属性（非规格组）。,"Current attribute set has no fillable product attributes (non-variant groups)."
 全部商品,"All products"
 浏览当前网站已发布的商品，可按分类与价格筛选。,"You can browse the products currently listed on the website and filter them by category and price."
-"Page %{1} of %{2}","Page %{1} of %{2}"
-"第 %{1}–%{2} 件，共 %{3} 件结果","%{1}–%{2} of %{3} results"
+"第 %{1}–%{2} 件，共 %{3} 件商品","%{1}–%{2} of %{3} products"
 默认排序,Default
 价格从低到高,"Price: Low to High"
 价格从高到低,"Price: High to Low"
 "名称 A-Z","Name: A-Z"
-品类浏览,"Browse categories"
-按款式探索分类，再进入商品列表选购。,"Explore categories by style, then shop the product list."
-"第 %{1}–%{2} 件，共 %{3} 件商品","%{1}–%{2} of %{3} products"
-甄选近期上架的商品与配饰，按上新时间发现新品。,"Discover newly listed products and accessories in arrival order."
-"共 %{1} 件新品","%{1} new arrivals"
-排名,Ranking
-"已售 %{1}","%{1} sold"
-暂无热销商品,"No best sellers yet"
-商品类型,"Product type"
-属性集,"Attribute set"
-品牌,Brand
-型号,Model
-颜色,Color
-尺码,Size
-类型,Type
-存储容量,Storage
-处理器,Processor
-电池容量,"Battery capacity"
-充电规格,Charging
-网络制式,Network
-适用面积,"Coverage area"
-滤芯类型,"Filter type"
-功率,Power
-噪音,Noise
-智能控制,"Smart control"
-连接方式,Connectivity
-接口数量,Ports
-"PD 供电","PD power delivery"
-兼容设备,Compatibility
-DPI,DPI
-续航时间,Runtime
-吸力,Suction
-重量,Weight
-容量,Volume
-香型,Scent
-材质,MATERIAL
-尺寸,Dimensions
-"甲醛 CADR","Formaldehyde CADR"
-开锁方式,"Unlock methods"
-配件,Accessories
-适用面料,"Fabric type"
-保质期,"Shelf life"
-保养说明,"Care instructions"
-质保(月),"Warranty (months)"
-系列,Series
-发动机,Engine
-排量,Displacement
-最大功率,"Maximum power"
-最大扭矩,"Maximum torque"
-座高,"Seat height"
-离地间隙,"Ground clearance"
-油箱容量,"Fuel tank capacity"
-整备质量,"Curb weight"
-轮胎,Tyres
-按项目确认库存,"Stock confirmed per project"
-"仅剩 %{1} 件","Only %{1} left in stock"
-有货,"In Stock"
-暂时缺货,"Currently unavailable"
-"查看商品视频 %{1}","View product video %{1}"
-"查看商品图片 %{1}","View product image %{1}"
-"平均 %{1} 星","Average %{1} stars"
-"%{1} 条评价","%{1} ratings"
-暂不可购买,"Not available for this option"
-加入收藏,"Add to Favorites"
-已收藏,Saved
-暂不可售,"Currently unavailable"
-规格,Options
-选择图片或视频,"Choose image or video"
-查看商品视频,"View product video"
-查看商品图片,"View product images"
-下单前请联系客服核实所选款式及目的地的预计发货与运输时间,"Before ordering, contact us to confirm estimated dispatch and transit times for your chosen style and destination"
-当前规格暂不可售,"This option is currently unavailable"
-请填写邮箱或手机号,"Please provide an email or phone number"
-提交成功，我们会尽快联系您。,"Submitted successfully. We will contact you soon."
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
 "筛选器区域 - 由 Filters 部件默认注入","Filter area - injected by default from the Filters component"
 筛选,Filter
 当前网站暂无已发布商品,"No published products on this website yet"
@@ -492,6 +419,8 @@ SKU,SKU
 暂无可用分类，请先从全部商品浏览。,"No categories yet. Browse all products first."
 热门部门,"Featured departments"
 子分类,Subcategories
+品类浏览,"Browse categories"
+按款式探索分类，再进入商品列表选购。,"Explore categories by style, then shop the product list."
 "0 件商品","0 products"
 当前网站暂无已发布商品。,"There are currently no products published on the website."
 查看购物车,"View cart"
@@ -500,10 +429,13 @@ SKU,SKU
 新品,New
 查看商品,"View product"
 新品正在整理,"New arrivals are being curated"
+甄选近期上架的商品与配饰，按上新时间发现新品。,"Discover newly listed products and accessories in arrival order."
 当前网站暂无已发布的热销商品。,"This storefront has no published best sellers yet."
 热销商品,"Best sellers"
+排名,Ranking
 联系询价,"Contact for quote"
 查看详情,"View details"
+暂无热销商品,"No best sellers yet"
 "Buy these items together","Buy these items together"
 请至少选择一个商品,"Please select at least one product."
 已添加,Added
@@ -519,11 +451,14 @@ SKU,SKU
 商品信息暂不可用,"Product information is unavailable"
 返回商品目录,"Back to products"
 商品视频,"Product video"
+品牌,Brand
 查看买家评价,"See customer reviews"
 仅询价商品：以上为参考活动价，不可直接加购,"Quote-only item: price above is a promotional reference and cannot be added to cart"
+规格,Options
 请选择规格,"Select an option"
 查看此规格,"View this option"
 供应商,Supplier
+当前规格暂不可售,"This option is currently unavailable"
 数量,Quantity
 购买数量,Quantity
 提交询价,"Submit quote request"
@@ -545,12 +480,73 @@ SKU,SKU
 取消,Cancel
 选规格,"Select options"
 商品图片,"Product images"
+选择图片或视频,"Choose image or video"
 选择优惠活动,"Select a promotion"
 售卖模式,"Sales mode"
 购买选项,"Purchase options"
 配送模式提示,配送模式提示
 购买操作,"Purchase actions"
 快捷支付,"Express checkout"
+商品类型,"Product type"
+属性集,"Attribute set"
+型号,Model
+颜色,Color
+尺码,Size
+类型,Type
+存储容量,Storage
+处理器,Processor
+电池容量,"Battery capacity"
+充电规格,Charging
+网络制式,Network
+适用面积,"Coverage area"
+滤芯类型,"Filter type"
+功率,Power
+噪音,Noise
+智能控制,"Smart control"
+连接方式,Connectivity
+接口数量,Ports
+"PD 供电","PD power delivery"
+兼容设备,Compatibility
+DPI,DPI
+续航时间,Runtime
+吸力,Suction
+重量,Weight
+容量,Volume
+香型,Scent
+材质,MATERIAL
+尺寸,Dimensions
+"甲醛 CADR","Formaldehyde CADR"
+开锁方式,"Unlock methods"
+配件,Accessories
+适用面料,"Fabric type"
+保质期,"Shelf life"
+保养说明,"Care instructions"
+质保(月),"Warranty (months)"
+系列,Series
+发动机,Engine
+排量,Displacement
+最大功率,"Maximum power"
+最大扭矩,"Maximum torque"
+座高,"Seat height"
+离地间隙,"Ground clearance"
+油箱容量,"Fuel tank capacity"
+整备质量,"Curb weight"
+轮胎,Tyres
+按项目确认库存,"Stock confirmed per project"
+"仅剩 %{1} 件","Only %{1} left in stock"
+有货,"In Stock"
+暂时缺货,"Currently unavailable"
+"查看商品视频 %{1}","View product video %{1}"
+"查看商品图片 %{1}","View product image %{1}"
+暂不可购买,"Not available for this option"
+加入收藏,"Add to Favorites"
+已收藏,Saved
+暂不可售,"Currently unavailable"
+查看商品视频,"View product video"
+查看商品图片,"View product images"
+下单前请联系客服核实所选款式及目的地的预计发货与运输时间,"Before ordering, contact us to confirm estimated dispatch and transit times for your chosen style and destination"
+请填写邮箱或手机号,"Please provide an email or phone number"
+提交成功，我们会尽快联系您。,"Submitted successfully. We will contact you soon."
 "Customers also viewed","Customers also viewed"
 Website,Website
 切换,Switch
@@ -1309,8 +1305,12 @@ SKU（每次新建使用唯一值）,"SKU (use a unique value for each new produ
 "必须与当前 env 配置一致的 mig_clone_* 数据库","Databases named `mig_clone_*` that must be consistent with the current environment configuration."
 "cutover/rollback 必填的切换状态版本","Required switchover/rollback version status."
 "rollback 目标：dual_read（默认）或 legacy","Rollback target: dual_read (default) or legacy."
-收起悬浮,"Collapse float"
-展开悬浮,"Expand float"
+"平均 %{1} 星","Average %{1} stars"
+"%{1} 条评价","%{1} ratings"
+"第 %{1}–%{2} 件，共 %{3} 件结果","%{1}–%{2} of %{3} results"
+"Page %{1} of %{2}","Page %{1} of %{2}"
+"共 %{1} 件新品","%{1} new arrivals"
+"已售 %{1}","%{1} sold"
 推荐产品,推荐产品
 按价格从低到高排序,"Sort by: Price: Low to High"
 按价格从高到低排序,"Sort by: Price: High to Low"

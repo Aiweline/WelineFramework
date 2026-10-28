@@ -203,10 +203,10 @@ grid,grid
 取件,Pickup
 到达,Arrival
 派送,Delivery
-收货地址,"Delivery Address"
-发货地址,"Shipping Address"
 请先保存网站，再配置禁运区域。,"Save the website first, then configure embargo zones."
 请先保存网站，再配置可售目的地。,"Save the website first, then configure sellable destinations."
+收货地址,"Delivery Address"
+发货地址,"Shipping Address"
 请先保存渠道，再配置禁运区域。,"Save the channel first, then configure embargo zones."
 请先保存渠道，再配置可售目的地。,"Save the channel first, then configure sellable destinations."
 请先保存商店，再配置禁运区域。,"Save the store first, then configure embargo zones."

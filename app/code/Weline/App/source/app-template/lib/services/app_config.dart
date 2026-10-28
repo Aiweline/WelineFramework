@@ -39,7 +39,7 @@ class AppConfig {
             .whereType<Map<String, dynamic>>()
             .toList(growable: false),
         theme = (j['theme'] ?? const {}) as Map<String, dynamic>,
-        appVersion = (j['app_version'] ?? '') as String,
+        appVersion = ((j['app_version'] ?? j['version']) ?? '') as String,
         downloads = (j['downloads'] ?? const {}) as Map<String, dynamic>;
 
   final String domain;

@@ -9,6 +9,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeUpdateBatch;
 use Weline\Theme\Model\ThemeUpdatePointer;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeHeadCssDuplicateInspector;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateAutoService;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateBatchService;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateBuildService;
@@ -166,6 +167,7 @@ class Update extends AbstractConsole
                         (string)($report['static_published'] ?? 0),
                         (string)($report['cache_cleared'] ?? 0),
                     ]));
+                    $this->assertHeadCssNoDuplicateLeaf($themeId);
                     return;
                 }
                 if (!empty($result['dry_run'])) {
@@ -181,6 +183,10 @@ class Update extends AbstractConsole
                         (string)$themeId,
                         (string)($result['retry_at'] ?? ''),
                     ]));
+                    return;
+                }
+                if (($result['skipped'] ?? '') === 'setup_upgrade_running') {
+                    $this->printing->note(__('系统更新（setup:upgrade）正在运行，本次跳过；脏标记保留，升级结束后再跑 theme:update。'));
                     return;
                 }
                 if (($result['skipped'] ?? '') === 'no_dirty') {
@@ -327,6 +333,7 @@ class Update extends AbstractConsole
                 (string)($report['static_published'] ?? 0),
                 (string)($report['cache_cleared'] ?? 0),
             ]));
+            $this->assertHeadCssNoDuplicateLeaf($themeId);
 
             return;
         }
@@ -498,6 +505,46 @@ class Update extends AbstractConsole
             $this->printing->error(__('切换后清理失败：%{1}', [(string)$error]));
         }
         throw new ConsoleException(__('代次已切换，但缓存/边缘清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。'));
+    }
+
+    /**
+     * DEV 断言：头部 CSS 不得重复投递（PACK_OVERLAY 已合并主题叶）。
+     *
+     * 只在 DEV 生效：PROD 发版与运行时一律不因它失败（用户 2026-10-28 指定）。
+     * duplicate 级直接让命令非零退出；guard_unsafe / late_override 只打印警告。
+     */
+    private function assertHeadCssNoDuplicateLeaf(int $themeId): void
+    {
+        if (\defined('PROD') && \PROD) {
+            return;
+        }
+        try {
+            /** @var ThemeHeadCssDuplicateInspector $inspector */
+            $inspector = ObjectManager::getInstance(ThemeHeadCssDuplicateInspector::class);
+            $findings = $inspector->inspectTheme($themeId, 'frontend');
+        } catch (\Throwable $e) {
+            $this->printing->warning(__('头部 CSS 重复检查跳过：%{1}', [$e->getMessage()]));
+            return;
+        }
+        if ($findings === []) {
+            return;
+        }
+        $hard = $inspector->hardFindings($findings);
+        foreach ($findings as $finding) {
+            if (($finding['severity'] ?? '') === ThemeHeadCssDuplicateInspector::SEVERITY_DUPLICATE) {
+                continue;
+            }
+            $this->printing->warning($inspector->format([$finding]));
+        }
+        if ($hard === []) {
+            return;
+        }
+        $this->printing->error(__('头部 CSS 重复投递（这些叶已在 PACK_OVERLAY 里）：'));
+        $this->printing->error($inspector->format($hard));
+        throw new ConsoleException(__(
+            '头部 CSS 重复投递 %{1} 处：删掉 layout/page 里的重复叶，或改用 overlayLeavesForCurrentRequest() 做守卫后重跑。',
+            [(string)\count($hard)]
+        ));
     }
 
     private function requireThemeId(string $themeName): int

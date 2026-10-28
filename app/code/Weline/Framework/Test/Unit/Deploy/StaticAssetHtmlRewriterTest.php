@@ -6,6 +6,7 @@ namespace Weline\Framework\Test\Unit\Deploy;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Deploy\StaticAssetHtmlRewriter;
+use Weline\Framework\Deploy\StaticBuildId;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime;
 
 /**
@@ -62,6 +63,33 @@ final class StaticAssetHtmlRewriterTest extends TestCase
             self::assertSame(1, \substr_count($out, '/static/' . self::ID . '/Weline/Frontend/js/b.js'));
         } finally {
             ThemeUpdateRuntime::reset();
+        }
+    }
+
+    public function testPinnedThemeBuildKeepsModuleAssetsOnDeployBuild(): void
+    {
+        StaticBuildId::setFlatUrlsOverride(false);
+        ThemeUpdateRuntime::forceBatch([
+            'batch_id' => 'tu-test',
+            'static_ns' => 'tu-test',
+            'entity_root' => 'tu-test',
+            'theme_prefix' => 'Weline/hanfu',
+            'epoch' => 1,
+            'pair_segment' => 'hanfu/v3',
+            'static_build' => 'fedcba654321',
+        ]);
+        try {
+            $html = '<link rel="stylesheet" href="/static/Weline/hanfu/frontend/assets/css/a.css">'
+                . '<script src="/static/' . self::ID . '/Weline/Frontend/js/b.js"></script>';
+            $out = StaticAssetHtmlRewriter::rewrite($html, self::ID);
+
+            // 主题自有资源走指针上的静态段（每次换代换目录）
+            self::assertStringContainsString('/static/hanfu/v3/fedcba654321/Weline/hanfu/frontend/assets/css/a.css', $out);
+            // 模块/框架资源仍走部署构建号
+            self::assertStringContainsString('/static/' . self::ID . '/Weline/Frontend/js/b.js', $out);
+        } finally {
+            ThemeUpdateRuntime::reset();
+            StaticBuildId::setFlatUrlsOverride(null);
         }
     }
 

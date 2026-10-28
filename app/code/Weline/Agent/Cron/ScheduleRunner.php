@@ -40,7 +40,7 @@ class ScheduleRunner implements CronTaskInterface
 
     public function cron_time(): string
     {
-        return '* * * * *'; // 每分钟检查一次
+        return '*/5 * * * *'; // 5 分钟检查一次，避免每分钟付一次框架冷启动
     }
 
     public function execute(): string

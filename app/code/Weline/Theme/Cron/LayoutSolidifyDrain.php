@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Cron;
 
+use Weline\Cron\CronTaskPreflightInterface;
+use Weline\Framework\App\Env;
 use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Theme\Service\LayoutEntity\ThemeLayoutEntitySolidifyQueue;
 
 /**
  * Drain durable theme-layout solidify jobs (FPM-safe; WLS may also eager-drain post-response).
+ *
+ * 仅开发环境运行：生产 WLS 由 PostResponseTaskQueue 响应后自行排水，
+ * 请求闸门会按 slot 重新入队，本任务只兜 dev/FPM 的残留 job。
  */
-final class LayoutSolidifyDrain implements CronTaskInterface
+final class LayoutSolidifyDrain implements CronTaskInterface, CronTaskPreflightInterface
 {
     public function __construct(
         private readonly ThemeLayoutEntitySolidifyQueue $queue,
@@ -29,7 +34,8 @@ final class LayoutSolidifyDrain implements CronTaskInterface
 
     public function tip(): string
     {
-        return '每分钟排水 generated/theme-layout-entities/*/ .solidify-jobs（店面闸门落盘的重固任务）。FPM 依赖本任务；WLS 可另有响应后加速。';
+        return '仅开发环境：每分钟排水 generated/theme-layout-entities/*/ .solidify-jobs（店面闸门落盘的重固任务）。'
+            . '非开发环境跳过：WLS 由响应后加速自行排水，请求闸门会按 slot 重新入队。';
     }
 
     public function cron_time(): string
@@ -38,8 +44,32 @@ final class LayoutSolidifyDrain implements CronTaskInterface
         return '* * * * *';
     }
 
+    /**
+     * 非开发环境不产生子进程：生产由 WLS 响应后排水，本任务只兜 dev/FPM 残留。
+     */
+    public function hasPendingWork(): bool
+    {
+        if (!$this->isDevMode()) {
+            return false;
+        }
+
+        return $this->queue->hasPendingJobs();
+    }
+
+    private function isDevMode(): bool
+    {
+        try {
+            return (Env::system('deploy') ?? '') === 'dev';
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     public function execute(): string
     {
+        if (!$this->isDevMode()) {
+            return 'skip:non_dev';
+        }
         $start = microtime(true);
         try {
             $report = $this->queue->drainPendingJobs(16);

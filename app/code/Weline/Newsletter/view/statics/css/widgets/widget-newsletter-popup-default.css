@@ -99,7 +99,7 @@
     height: auto;
 }
 
-/* 表单铺满笺面内侧；背景透明以露出宣纸格线，字靠实心笺面可读 */
+/* 仅在站点配置了背景图（image 参数）时：表单铺满图内侧、背景透明以露出图面；无图时走下方卡片降级 */
 .wc-theme_widget_newsletter_popup .letter-shell__form {
     position: absolute;
     left: 11%;

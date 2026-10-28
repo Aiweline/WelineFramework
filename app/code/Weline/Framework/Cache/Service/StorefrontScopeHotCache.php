@@ -52,6 +52,15 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
     /** Skip process L1 for a single oversized payload (Shared/MS still holds it). */
     private const PROCESS_ENTRY_MAX_BYTES = 262_144; // 256 KiB
 
+    /**
+     * Global FPC policy snapshot gets its own entry budget. Its 229 declarations
+     * serialize to ~149 KB, but estimateMixedBytes() samples nested arrays and
+     * over-reports ~375 KB, so it was rejected from L1 on every store. Once
+     * dropped, every fpcSnapshot() call re-reads Shared (~772 µs) although the
+     * value is frozen per request and identical process-wide.
+     */
+    private const PROCESS_POLICY_SNAPSHOT_ENTRY_MAX_BYTES = 786_432; // 768 KiB
+
     /** @var array<string, array{payload:mixed,fresh_until:float,stale_until:float,version:int}> */
     private static array $processCache = [];
 
@@ -825,6 +834,13 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
 
             return;
         }
+        if (self::isPolicySnapshotProcessKey($key) && isset(self::$processCache[$key])) {
+            // Single process-wide entry that is already resident: the hit path
+            // re-stores on every read, and estimateProcessEntryBytes() alone
+            // costs ~291 µs on the 229-declaration snapshot (drop re-estimates
+            // again). Keeping the resident copy is strictly cheaper.
+            return;
+        }
         $this->storeProcessEntry($key, $entry);
     }
 
@@ -832,7 +848,10 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
     private function storeProcessEntry(string $key, array $entry): void
     {
         $entryBytes = self::estimateProcessEntryBytes($entry);
-        if ($entryBytes > self::PROCESS_ENTRY_MAX_BYTES) {
+        $entryLimit = self::isPolicySnapshotProcessKey($key)
+            ? self::PROCESS_POLICY_SNAPSHOT_ENTRY_MAX_BYTES
+            : self::PROCESS_ENTRY_MAX_BYTES;
+        if ($entryBytes > $entryLimit) {
             // Oversized chrome/structure belongs in Shared/MS, not the worker bag.
             self::dropProcessEntry($key);
 
@@ -903,6 +922,16 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
         if (self::$processCacheBytes < 0) {
             self::$processCacheBytes = self::recountProcessCacheBytes();
         }
+    }
+
+    /**
+     * Global FPC policy snapshot entry (`router|policy:framework.fpc_policy_snapshot:...`):
+     * one per process, shared by every request, so keeping it in L1 removes a
+     * Shared re-read from each effectiveFpcPolicy() call.
+     */
+    private static function isPolicySnapshotProcessKey(string $key): bool
+    {
+        return \str_contains($key, 'framework.fpc_policy_snapshot');
     }
 
     private static function isChromeProcessKey(string $key): bool

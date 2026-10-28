@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Cron;
 
+use Weline\Cron\CronTaskPreflightInterface;
 use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Service\ThemeUpdate\ThemeUpdateAutoService;
@@ -16,7 +17,7 @@ use Weline\Theme\Service\ThemeUpdate\ThemeUpdateAutoService;
  *
  * 开发模式由 {@see LayoutOriginWatch} 就地自动固化/编译，本任务 skip:non_dev 反向跳过。
  */
-final class UpdateAutoPublish implements CronTaskInterface
+final class UpdateAutoPublish implements CronTaskInterface, CronTaskPreflightInterface
 {
     public function __construct(
         private readonly ThemeUpdateAutoService $auto,
@@ -42,6 +43,14 @@ final class UpdateAutoPublish implements CronTaskInterface
     public function cron_time(): string
     {
         return '* * * * *';
+    }
+
+    /**
+     * 无脏标记时不产生子进程（只 stat 一次 var/theme-update/dirty）。
+     */
+    public function hasPendingWork(): bool
+    {
+        return ThemeUpdateAutoService::dirtyThemeIds() !== [];
     }
 
     public function execute(): string

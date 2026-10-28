@@ -122,6 +122,10 @@ final class FrontendWorkerScopeHolePunchService
             }
         }
 
+        // Theme application input must exist BEFORE minting: the token binds the current
+        // Storefront generation, and without the context that generation falls back to the
+        // module default theme — the freshly minted token would never validate again.
+        $this->ensureThemeApplicationContext($scope);
         $token = $this->scopeProvider->issueToken($scope, $scheme, $authorityHost);
         if (!\is_string($token) || $token === '') {
             throw new FrontendWorkerScopeException(
@@ -157,7 +161,6 @@ final class FrontendWorkerScopeHolePunchService
         }
 
         $cookieName = FrontendWorkerSessionService::scopeCookieName();
-        $this->ensureThemeApplicationContext($scope);
         $this->expireLegacyScopeBootstrapCookies($response);
         $response->setCookie(
             $cookieName,

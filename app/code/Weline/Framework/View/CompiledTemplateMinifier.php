@@ -72,13 +72,34 @@ final class CompiledTemplateMinifier
 
     private static function collapseHtmlWhitespace(string $html): string
     {
-        // Preserve pre/textarea/script/style content roughly by not minifying if present.
+        // Protect raw-text containers: their content must stay byte-identical
+        // (pre/textarea whitespace is significant; script/style must not be
+        // reflowed). Mask them, collapse the rest, then restore.
+        $masked = [];
+        $html = \preg_replace_callback(
+            '/<(pre|textarea|script|style)\b[\s\S]*?<\/\1\s*>/i',
+            static function (array $m) use (&$masked): string {
+                $key = "\x02WMIN" . \count($masked) . "\x03";
+                $masked[$key] = $m[0];
+
+                return $key;
+            },
+            $html
+        ) ?? $html;
+
+        // Unbalanced opener left over (truncated chunk, script without close
+        // tag): keep old behaviour rather than risk touching raw text.
         if (\preg_match('/<(pre|textarea|script|style)\b/i', $html) === 1) {
             return $html;
         }
+
         $html = \preg_replace('/<!--(?!@\/?weline-slot:|baked-hook:)[\s\S]*?-->/', '', $html) ?? $html;
         $html = \preg_replace('/[ \t]+/', ' ', $html) ?? $html;
         $html = \preg_replace('/\n\s*\n+/', "\n", $html) ?? $html;
+
+        if ($masked !== []) {
+            $html = \strtr($html, $masked);
+        }
 
         return $html;
     }

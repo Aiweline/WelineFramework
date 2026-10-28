@@ -64,7 +64,13 @@ class TemplateCompile implements ObserverInterface
         if (empty($jsWords)) {
             return;
         }
-        
+
+        // 生产/预发禁止改写源码 i18n CSV：自动补词只用于开发环境快速生成各语言 csv；
+        // 线上模板一编译就整文件重写 i18n 目录，既改源码，又会丢词/打乱行序。
+        if (\Weline\Framework\App\Env::system('deploy') === 'prod') {
+            return;
+        }
+
         try {
             // 从模板文件路径推断模块名
             $moduleName = $this->extractModuleNameFromTemplatePath($tplFile);

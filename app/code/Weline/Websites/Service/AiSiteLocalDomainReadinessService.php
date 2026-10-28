@@ -338,7 +338,10 @@ class AiSiteLocalDomainReadinessService
                 return $this->result(
                     false,
                     'TEST_DOMAIN_RESOLUTION_CONFLICT',
-                    (string)__('本地测试域名解析到了非回环地址，已阻止启动。'),
+                    (string)__(
+                        '本地测试域名解析到了非回环地址（%{1}）：证书已就绪，但本机 hosts 还没指向 127.0.0.1。CLI 环境下 WLS 会自动弹出管理员授权写入 hosts；授权后即可访问。',
+                        ['1' => \implode(', ', $resolvedIps)]
+                    ),
                     $domain,
                     $resolvedIps,
                     $certificateReady,

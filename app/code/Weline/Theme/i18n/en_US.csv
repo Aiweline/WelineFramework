@@ -882,10 +882,19 @@ FAQ/常见问题,FAQ
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
+内容标题,"Section title"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
 官方社交媒体,"Official social media"
+"WelineFramework Admin","WelineFramework Admin"
 面包屑,"bread crumbs"
+请先保存网站后，再为本站选择店面主题。,"Save the website first, then choose a storefront theme for this site."
+"本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。","本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。"
+"当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。","当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。"
+本站已配置专属主题应用引用。,本站已配置专属主题应用引用。
+本站范围尚无已发布主题版本；可在主题编辑器发布后再选。,"No published theme version for this website scope yet. Publish in the theme editor first."
+在主题编辑器中打开当前店面主题,在主题编辑器中打开当前店面主题
+请先选择前台主题后再打开编辑器,请先选择前台主题后再打开编辑器
 分类,Classification
 分类展示图,"Category showcase image"
 查看全部,"View all"
@@ -925,6 +934,7 @@ FAQ/常见问题,FAQ
 零售,Retail
 迷你购物车金额小计,"Mini-cart money summary"
 关闭通知,"Close notification"
+查看更多,"View more"
 抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
 您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
 请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
@@ -932,12 +942,6 @@ SORRY,SORRY
 前往首页继续购物,"Continue shopping on the home page"
 返回上一页,"Go back"
 推荐产品,"Recommended product"
-件商品,"items of goods"
-查看更多,"View more"
-距离结束,"Ends in"
-时,Hour
-分,Minute
-秒,Second
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -1100,6 +1104,7 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆活动,节庆活动
 日常通勤,"Everyday commute"
+件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1111,7 +1116,9 @@ Weline,Weline
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
 天,Day(s)
-内容标题,"Section title"
+时,Hour
+分,Minute
+秒,Second
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
@@ -1128,6 +1135,7 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
+距离结束,"Ends in"
 精选轮播,"Featured Carousel"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
@@ -1202,7 +1210,6 @@ Logo,Logo
 确认操作,"Confirm action"
 确定,Sure
 输入,Input
-"WelineFramework Admin","WelineFramework Admin"
 保存,save
 提交中...,Submitting...
 已选择,Selected
@@ -1213,11 +1220,6 @@ Logo,Logo
 "共 %{1} 条","Total %{1} items"
 "您好, 登录","Hello, login"
 "登录 / 注册",Login/Register
-请先保存网站后，再为本站选择店面主题。,"Save the website first, then choose a storefront theme for this site."
-"本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。","本站店面主题写入网站应用引用；未配置时回落 Theme 注册的 Default 默认主题。"
-"当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。","当前显示为继承上级或 Theme 默认；保存时选择主题将写入本站专属应用引用。"
-本站已配置专属主题应用引用。,本站已配置专属主题应用引用。
-本站范围尚无已发布主题版本；可在主题编辑器发布后再选。,"No published theme version for this website scope yet. Publish in the theme editor first."
 请先保存渠道后，再为本渠选择店面主题。,请先保存渠道后，再为本渠选择店面主题。
 "本渠店面主题写入渠道范围应用引用；未配置时继承商店/网站或 Theme 默认。","本渠店面主题写入渠道范围应用引用；未配置时继承商店/网站或 Theme 默认。"
 "当前显示为继承上级或 Theme 默认；保存时选择主题将写入本渠专属应用引用。","当前显示为继承上级或 Theme 默认；保存时选择主题将写入本渠专属应用引用。"
@@ -1566,8 +1568,6 @@ AI目录加载失败,"AI directory loading failed"
 当前生效,"Currently active"
 范围,Scope
 打开主题编辑器,打开主题编辑器
-在主题编辑器中打开当前店面主题,在主题编辑器中打开当前店面主题
-请先选择前台主题后再打开编辑器,请先选择前台主题后再打开编辑器
 "Theme 布局身份无效。","The Theme layout identity is invalid."
 布局语言代码无效：%{1},"Invalid layout language code: %{1}"
 字体子集预热开始…,"Font subset warm-up begins..."
@@ -1965,6 +1965,7 @@ AI目录加载失败,"AI directory loading failed"
 "dev 模式已就地固化/编译：scanned=%{1} changed=%{2} solidified=%{3} static=%{4} cache_cleared=%{5}","dev 模式已就地固化/编译：scanned=%{1} changed=%{2} solidified=%{3} static=%{4} cache_cleared=%{5}"
 "dry-run：将重建并切换主题 #%{1} 的更新代次（dirty=%{2} force=%{3}）","dry-run：将重建并切换主题 #%{1} 的更新代次（dirty=%{2} force=%{3}）"
 "主题 #%{1} 上次构建失败，退避中（重试时间 %{2}），本次跳过。","主题 #%{1} 上次构建失败，退避中（重试时间 %{2}），本次跳过。"
+"系统更新（setup:upgrade）正在运行，本次跳过；脏标记保留，升级结束后再跑 theme:update。","系统更新（setup:upgrade）正在运行，本次跳过；脏标记保留，升级结束后再跑 theme:update。"
 "主题 #%{1} 无发布变更（无脏标记），跳过。","主题 #%{1} 无发布变更（无脏标记），跳过。"
 构建校验未通过，未切换：,构建校验未通过，未切换：
 "已切到代次 %{1}（epoch=%{2}）","已切到代次 %{1}（epoch=%{2}）"
@@ -1979,6 +1980,9 @@ AI目录加载失败,"AI directory loading failed"
 构建校验未通过，代次不会上线：,构建校验未通过，代次不会上线：
 切换后清理失败：%{1},切换后清理失败：%{1}
 代次已切换，但缓存/边缘清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。,代次已切换，但缓存/边缘清理失败；旧页面可能仍在缓存中，请按上方原因修复后重跑。
+"头部 CSS 重复检查跳过：%{1}","头部 CSS 重复检查跳过：%{1}"
+"头部 CSS 重复投递（这些叶已在 PACK_OVERLAY 里）：","头部 CSS 重复投递（这些叶已在 PACK_OVERLAY 里）："
+"头部 CSS 重复投递 %{1} 处：删掉 layout/page 里的重复叶，或改用 overlayLeavesForCurrentRequest() 做守卫后重跑。","头部 CSS 重复投递 %{1} 处：删掉 layout/page 里的重复叶，或改用 overlayLeavesForCurrentRequest() 做守卫后重跑。"
 "请用 -t/--theme 指定主题名，例如 -t hanfu","请用 -t/--theme 指定主题名，例如 -t hanfu"
 未找到主题：,未找到主题：
 "该主题尚无更新代次。构建并切换请执行：theme:update -t %{1}","该主题尚无更新代次。构建并切换请执行：theme:update -t %{1}"
@@ -2345,6 +2349,7 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 编译less静态资源！,"Compile Less Static Resources!"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
+"主题规范校验（head 预算 / 首屏图 / 字体 / SEO 单一出口）！","主题规范校验（head 预算 / 首屏图 / 字体 / SEO 单一出口）！"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 "构建完成且校验通过，可用 theme:update promote %{1} 切换","构建完成且校验通过，可用 theme:update promote %{1} 切换"

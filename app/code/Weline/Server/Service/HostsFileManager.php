@@ -118,7 +118,16 @@ class HostsFileManager
                 self::effectiveUid(),
             )
         ) {
-            return self::permissionDeniedResult($domain, $ip);
+            // 本机域名（*.test.weline.com 等）在 CLI 下自动走 macOS 管理员授权弹窗补齐 hosts；
+            // 未装 WLS 特权 helper 时也无需用户手抄 sudo 命令。WELINE_HOSTS_NO_ADMIN_PROMPT=1 可关闭。
+            $elevated = self::elevatedAddViaAdminPrompt($hostsFile, $domain, $ip);
+            if (($elevated['success'] ?? false) === true) {
+                return $elevated;
+            }
+
+            return self::permissionDeniedResult($domain, $ip) + [
+                'elevation' => (string)($elevated['message'] ?? ''),
+            ];
         }
 
         $mutation = self::mutateHostsFile(
@@ -313,6 +322,50 @@ class HostsFileManager
             'success' => true,
             'message' => "Removed {$domain} from the WLS managed hosts block",
             'status' => $mutationStatus,
+        ];
+    }
+
+    /**
+     * macOS 管理员授权兜底：CLI 场景下用系统授权弹窗写入一行 hosts。
+     * 仅在 Darwin + CLI + 未设置 WELINE_HOSTS_NO_ADMIN_PROMPT=1 时尝试；写后必须回读校验。
+     *
+     * @return array{success:bool,message:string,status?:string,elevation?:string}
+     */
+    private static function elevatedAddViaAdminPrompt(string $hostsFile, string $domain, string $ip): array
+    {
+        if (PHP_OS_FAMILY !== 'Darwin' || PHP_SAPI !== 'cli') {
+            return ['success' => false, 'message' => 'elevation_unavailable'];
+        }
+        if (\trim((string)\getenv('WELINE_HOSTS_NO_ADMIN_PROMPT')) === '1') {
+            return ['success' => false, 'message' => 'elevation_disabled'];
+        }
+        if (!self::validDomain($domain) || !self::validIp($ip)) {
+            return ['success' => false, 'message' => 'elevation_invalid_input'];
+        }
+
+        $line = $ip . ' ' . $domain;
+        $shell = '/usr/bin/grep -qxF ' . \escapeshellarg($line) . ' ' . \escapeshellarg($hostsFile)
+            . ' || /bin/echo ' . \escapeshellarg($line) . ' >> ' . \escapeshellarg($hostsFile);
+        $prompt = 'Weline 本地域名：把 ' . $domain . ' 指向 ' . $ip . '（写入系统 hosts）';
+        $script = 'do shell script "' . \str_replace(['\\', '"'], ['\\\\', '\\"'], $shell)
+            . '" with administrator privileges with prompt "'
+            . \str_replace(['\\', '"'], ['\\\\', '\\"'], $prompt) . '"';
+
+        $output = [];
+        $exitCode = 1;
+        @\exec('/usr/bin/osascript -e ' . \escapeshellarg($script) . ' 2>&1', $output, $exitCode);
+        \clearstatcache(true, $hostsFile);
+        $satisfied = self::inspectSatisfiedAddStatus($hostsFile, $domain, $ip);
+        if ($exitCode === 0 && $satisfied !== null) {
+            $result = self::addDomainSuccessResult($domain, $ip, 'repaired');
+            $result['elevation'] = 'osascript-admin-prompt';
+
+            return $result;
+        }
+
+        return [
+            'success' => false,
+            'message' => $exitCode === 0 ? 'elevation_unverified' : 'elevation_declined',
         ];
     }
 

@@ -171,8 +171,15 @@ class QueryBin extends FrontendRestController
             if ($tip !== null) {
                 $errorPayload['tip'] = $tip;
             }
-            if ($errorCode === 'deploy_reload_required') {
+            // Generation / Scope drift: the browser can only fetch the right HTML when it
+            // knows which generation the server currently serves. Without the token it falls
+            // back to reloading the very same URL (same FPC leaf) and loops forever.
+            if ($this->isStorefrontDriftCode($errorCode)) {
                 $errorPayload['page_generation_token'] = \Weline\Framework\Http\Fpc\FpcHtmlDiskStore::pageGenerationToken();
+                $requestScope = RequestContext::scopeMetadata();
+                if (\is_array($requestScope)) {
+                    $errorPayload['request_scope'] = $requestScope;
+                }
             }
             $payload = [
                 'ok' => false,
@@ -1058,6 +1065,26 @@ class QueryBin extends FrontendRestController
             $exception->httpStatus,
             $exception,
         );
+    }
+
+    /**
+     * Failures that mean "this HTML belongs to another Storefront generation / Scope".
+     * They all owe the browser the current generation token so it can request the right
+     * FPC leaf instead of reloading the same stale document.
+     */
+    private function isStorefrontDriftCode(string $code): bool
+    {
+        return \in_array($code, [
+            'deploy_reload_required',
+            'scope_context_conflict',
+            'scope_reload_required',
+            'scope_binding_required',
+            'scope_token_expired',
+            'scope_token_context_conflict',
+            'scope_bootstrap_invalid',
+            'worker_scope_binding_expired',
+            'request_scope_already_conflicts',
+        ], true);
     }
 
     private function backendAttestationFailure(
