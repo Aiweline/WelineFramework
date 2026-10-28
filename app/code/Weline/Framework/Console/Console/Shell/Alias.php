@@ -89,15 +89,19 @@ final class Alias extends CommandAbstract
                 $this->printing->note('已写入：' . $file);
             }
             if ($result['script'] !== null) {
-                $this->printing->note('立即生效（无需 source）：' . $result['script']);
+                $this->printing->note(
+                    ($result['system'] ? '已系统级安装（所有用户、任意 shell 免 source 可用）：' : '立即生效（当前用户免 source）：')
+                    . $result['script']
+                );
             }
             foreach ($result['warnings'] as $warning) {
                 $this->printing->note('提示：' . $warning);
             }
-            $this->printing->note('用法：' . $name . '  → 进入 ' . $manager->getRoot() . ' 并执行 php bin/w');
+            $this->printing->note('用法：' . $name . '  → 进入 ' . $manager->getRoot() . ' 并以项目用户执行 php bin/w');
             $this->printing->note('      ' . $name . ' cache:clear  → 等价于 php bin/w cache:clear');
             if ($result['script'] === null) {
-                $this->printing->note('当前终端需 source ~/.zshrc 或新终端后生效。');
+                $first = $result['files'][0] ?? '~/.bashrc';
+                $this->printing->note('当前终端需 source ' . $first . ' 或新终端后生效。');
             } else {
                 $this->printing->note('新终端会自动加载同名 shell 函数，执行后保持项目目录。');
             }
@@ -162,8 +166,8 @@ final class Alias extends CommandAbstract
                 '-h, --help' => '显示帮助信息',
             ],
             [
-                '写入文件' => '~/.zshrc、~/.bashrc、~/.bash_profile（新终端保持目录）；PATH 中的 ~/.local/bin/<命令名>（当前终端立即生效，无需 source）',
-                '命令行为' => '进入项目目录（当前 shell 保持在该目录）并以项目用户执行 php bin/w，参数原样透传',
+                '写入文件' => '~/.zshrc、~/.bashrc、~/.bash_profile（当前 HOME，以及 root / sudo 发起用户的 HOME 中可写者）；命令文件优先写入 /usr/local/bin/<命令名>（系统级，所有用户免 source 可用），不可写时回退 ~/.local/bin/<命令名> 并给出 sudo 安装命令',
+                '命令行为' => '进入项目目录并以项目用户执行 php bin/w（HOME 固定为项目用户的 HOME），参数原样透传',
             ],
             [
                 '设置命令名（如 weline）' => 'php bin/w shell:alias weline',
