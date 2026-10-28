@@ -59,6 +59,11 @@
         }
         img.setAttribute('src', real);
         img.removeAttribute('data-src');
+        var lazySrcset = (img.getAttribute('data-srcset') || '').trim();
+        if (lazySrcset) {
+            img.setAttribute('srcset', lazySrcset);
+            img.removeAttribute('data-srcset');
+        }
         img.removeAttribute('data-pdp-desc-lazy');
         img.setAttribute('loading', 'lazy');
         img.setAttribute('decoding', 'async');

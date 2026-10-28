@@ -574,6 +574,11 @@ final class StorefrontProductMediaUrlResolver implements ProcessSharedInterface
             $img->setAttribute('data-src', $src);
             $img->setAttribute('data-pdp-desc-lazy', '1');
             $img->setAttribute('src', self::DESCRIPTION_LAZY_PLACEHOLDER);
+            $srcset = trim($img->getAttribute('srcset'));
+            if ($srcset !== '') {
+                // Keep the responsive candidates for the reveal script to restore later.
+                $img->setAttribute('data-srcset', $srcset);
+            }
             $img->removeAttribute('srcset');
             $img->removeAttribute('loading');
         }

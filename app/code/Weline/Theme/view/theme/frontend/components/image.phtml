@@ -22,6 +22,8 @@
  * @param.class {default="",name="额外 CSS 类",description="追加样式类"}
  */
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\MediaManager\Service\ResponsiveImageService;
 use Weline\Theme\Helper\LegacyMediaUrl;
 use Weline\Theme\Helper\ThemeDemoCatalog;
 use Weline\Theme\Helper\WidgetUiScope;
@@ -107,8 +109,15 @@ $rootStyle = '--wc-image-max:' . ($maxWidth !== '' ? $maxWidth : '100%') . ';'
 
 $rootClass = trim($wc . ' w-builder-image w-builder-image--' . $ratio . ' w-builder-image--' . $objectFit . ' w-builder-align-' . $align . ' w-builder-shadow-' . $shadow . ($class !== '' ? ' ' . $class : ''));
 
+$responsive = $src !== '' ? ObjectManager::getInstance(ResponsiveImageService::class) : null;
+$srcset = $responsive !== null ? $responsive->srcset($src) : '';
+$sizes = $srcset !== '' ? $responsive->sizesFor('detail') : '';
+$responsiveAttrs = $srcset !== ''
+    ? ' srcset="' . $esc($srcset) . '"' . ($sizes !== '' ? ' sizes="' . $esc($sizes) . '"' : '') . ' decoding="async"'
+    : '';
+
 $mediaHtml = $src !== ''
-    ? '<img src="' . $esc($src) . '" alt="' . $esc($alt) . '" loading="lazy" class="image-media">'
+    ? '<img src="' . $esc($src) . '" alt="' . $esc($alt) . '" loading="lazy"' . $responsiveAttrs . ' class="image-media">'
     : '<div class="w-builder-image__placeholder image-placeholder">' . $esc(__('从媒体库选择图片')) . '</div>';
 ?>
 
