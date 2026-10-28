@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace Weline\MediaManager\Service;
 
 /**
- * Builds srcset strings for the /media/image/{relative}?w=&h= thumbnail endpoint.
+ * Builds srcset strings for media-library images.
+ *
+ * Only URLs that nginx can serve as static files under /pub/media are emitted:
+ * the original asset, plus any pre-generated `thumbnail/…_w_{w}_h_{h}_c_o.{ext}`
+ * variant that already exists on disk. The /media/image on-demand endpoint is
+ * deliberately not referenced: it needs GD inside the WLS worker, which is not
+ * guaranteed, and a srcset candidate must never 404.
  *
  * Pure string assembly: no files are generated here and nothing is cached.
- * Only the source image is read (getimagesize) to learn its natural size.
- * Both w and h are always emitted because the endpoint defaults a missing h to 50.
  */
 final class ResponsiveImageService
 {
@@ -17,7 +21,7 @@ final class ResponsiveImageService
 
     private const MAX_CANDIDATES = 5;
 
-    /** Raster extensions the endpoint can fall back from to a sibling .webp. */
+    /** Raster extensions the media router can fall back from to a sibling .webp. */
     private const RASTER_FALLBACK_FROM = ['jpg', 'jpeg', 'png', 'gif'];
 
     /**
@@ -29,7 +33,7 @@ final class ResponsiveImageService
         if ($relative === '') {
             return '';
         }
-        $sourceFile = self::resolveSourceFile($relative);
+        [$sourceRelative, $sourceFile] = self::resolveSource($relative);
         if ($sourceFile === '') {
             return '';
         }
@@ -58,14 +62,20 @@ final class ResponsiveImageService
             $candidates = array_slice($candidates, -self::MAX_CANDIDATES);
         }
 
-        $url = '/media/image/' . $relative;
         $parts = [];
         foreach ($candidates as $width) {
             $height = max(1, (int)round($width * $sourceHeight / $sourceWidth));
-            $parts[] = $url . '?w=' . $width . '&h=' . $height . ' ' . $width . 'w';
+            $url = $width === $sourceWidth
+                ? '/pub/media/' . $sourceRelative
+                : self::existingVariantUrl($sourceRelative, $width, $height);
+            if ($url === '') {
+                continue;
+            }
+            $parts[] = $url . ' ' . $width . 'w';
         }
 
-        return implode(', ', $parts);
+        // A single-candidate srcset adds bytes without letting the browser choose.
+        return count($parts) < 2 ? '' : implode(', ', $parts);
     }
 
     public function sizesFor(string $slot): string
@@ -129,29 +139,53 @@ final class ResponsiveImageService
 
     /**
      * Locates the real file, mirroring Router::resolveRasterFallback (jpg/png/gif → sibling .webp).
+     *
+     * @return array{0: string, 1: string} [web-relative path as served, absolute path]
      */
-    private static function resolveSourceFile(string $relative): string
+    private static function resolveSource(string $relative): array
     {
         $root = self::mediaRoot();
         if ($root === '') {
-            return '';
+            return ['', ''];
         }
         $absolute = $root . str_replace('/', DIRECTORY_SEPARATOR, $relative);
         if (is_file($absolute)) {
-            return $absolute;
+            return [$relative, $absolute];
         }
 
         $info = pathinfo($relative);
         $extension = strtolower((string)($info['extension'] ?? ''));
         $stem = (string)($info['filename'] ?? '');
         if ($stem === '' || !in_array($extension, self::RASTER_FALLBACK_FROM, true)) {
-            return '';
+            return ['', ''];
         }
         $dir = (string)($info['dirname'] ?? '.');
         $webpRelative = ($dir === '.' || $dir === '') ? $stem . '.webp' : $dir . '/' . $stem . '.webp';
         $webpAbsolute = $root . str_replace('/', DIRECTORY_SEPARATOR, $webpRelative);
 
-        return is_file($webpAbsolute) ? $webpAbsolute : '';
+        return is_file($webpAbsolute) ? [$webpRelative, $webpAbsolute] : ['', ''];
+    }
+
+    /**
+     * Existing pre-generated variant, using the Image controller's thumbnail naming.
+     */
+    private static function existingVariantUrl(string $sourceRelative, int $width, int $height): string
+    {
+        $info = pathinfo($sourceRelative);
+        $dir = (string)($info['dirname'] ?? '.');
+        $stem = (string)($info['filename'] ?? '');
+        $extension = (string)($info['extension'] ?? '');
+        if ($stem === '' || $extension === '') {
+            return '';
+        }
+        $thumbRelative = 'thumbnail/' . ($dir === '.' || $dir === '' ? '' : $dir . '/')
+            . $stem . '_w_' . $width . '_h_' . $height . '_c_o.' . $extension;
+        $root = self::mediaRoot();
+        if ($root === '' || !is_file($root . str_replace('/', DIRECTORY_SEPARATOR, $thumbRelative))) {
+            return '';
+        }
+
+        return '/pub/media/' . $thumbRelative;
     }
 
     private static function mediaRoot(): string

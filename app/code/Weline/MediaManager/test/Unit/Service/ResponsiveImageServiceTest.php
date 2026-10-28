@@ -11,6 +11,7 @@ final class ResponsiveImageServiceTest extends TestCase
 {
     private static string $mediaDir = '';
     private static string $relative = 'weline-test/hero.jpg';
+    private static string $plainRelative = 'weline-test/plain.jpg';
 
     public static function setUpBeforeClass(): void
     {
@@ -22,11 +23,18 @@ final class ResponsiveImageServiceTest extends TestCase
         if (!is_dir($targetDir) && !mkdir($targetDir, 0777, true) && !is_dir($targetDir)) {
             self::fail('Unable to create temp media dir: ' . $targetDir);
         }
-        $image = imagecreatetruecolor(1200, 600);
-        $fill = imagecolorallocate($image, 30, 120, 200);
-        imagefilledrectangle($image, 0, 0, 1199, 599, $fill);
-        imagejpeg($image, self::$mediaDir . '/' . self::$relative, 80);
-        imagedestroy($image);
+        self::makeImage(self::$mediaDir . '/' . self::$relative);
+        // Same size, no pre-generated variants: a one-candidate srcset must stay empty.
+        self::makeImage(self::$mediaDir . '/' . self::$plainRelative);
+
+        // Pre-generated variants use the Image controller's thumbnail naming.
+        foreach ([[320, 160], [640, 320]] as [$width, $height]) {
+            self::makeImage(
+                self::$mediaDir . '/thumbnail/weline-test/hero_w_' . $width . '_h_' . $height . '_c_o.jpg',
+                $width,
+                $height
+            );
+        }
 
         if (!defined('MEDIA_DIR')) {
             define('MEDIA_DIR', self::$mediaDir);
@@ -52,14 +60,46 @@ final class ResponsiveImageServiceTest extends TestCase
         rmdir(self::$mediaDir);
     }
 
-    public function testNaturalWidthIsEmittedAndNoUpscaleHappens(): void
+    private static function makeImage(string $path, int $width = 1200, int $height = 600): void
+    {
+        $dir = dirname($path);
+        if (!is_dir($dir) && !mkdir($dir, 0777, true) && !is_dir($dir)) {
+            self::fail('Unable to create temp media dir: ' . $dir);
+        }
+        $image = imagecreatetruecolor($width, $height);
+        $fill = imagecolorallocate($image, 30, 120, 200);
+        imagefilledrectangle($image, 0, 0, $width - 1, $height - 1, $fill);
+        imagejpeg($image, $path, 80);
+        imagedestroy($image);
+    }
+
+    public function testOnlyExistingStaticFilesAreEmitted(): void
     {
         $srcset = (new ResponsiveImageService())->srcset('/media/image/' . self::$relative);
 
-        self::assertStringContainsString(' 320w', $srcset);
-        self::assertStringContainsString(' 1200w', $srcset);
+        self::assertStringContainsString(
+            '/pub/media/thumbnail/weline-test/hero_w_320_h_160_c_o.jpg 320w',
+            $srcset
+        );
+        self::assertStringContainsString(
+            '/pub/media/thumbnail/weline-test/hero_w_640_h_320_c_o.jpg 640w',
+            $srcset
+        );
+        self::assertStringContainsString('/pub/media/weline-test/hero.jpg 1200w', $srcset);
+        // The on-demand endpoint needs GD inside the worker; never emit it in srcset.
+        self::assertStringNotContainsString('/media/image/', $srcset);
         self::assertStringNotContainsString(' 1280w', $srcset);
         self::assertStringNotContainsString(' 1600w', $srcset);
+    }
+
+    public function testSingleCandidateIsNotEmitted(): void
+    {
+        self::assertSame('', (new ResponsiveImageService())->srcset('/media/image/' . self::$plainRelative));
+    }
+
+    public function testMissingFileReturnsEmptyString(): void
+    {
+        self::assertSame('', (new ResponsiveImageService())->srcset('/media/image/weline-test/missing.jpg'));
     }
 
     public function testExternalHttpUrlReturnsEmptyString(): void
@@ -78,21 +118,15 @@ final class ResponsiveImageServiceTest extends TestCase
         self::assertSame('', $service->srcset('/media/image/' . dirname(self::$relative) . '/logo.SVG'));
     }
 
-    public function testEveryCandidateCarriesBothWidthAndHeight(): void
+    public function testEveryCandidateIsAStaticPubMediaUrl(): void
     {
-        $relative = self::$relative;
-        $srcset = (new ResponsiveImageService())->srcset('/media/image/' . $relative);
+        $srcset = (new ResponsiveImageService())->srcset('/media/image/' . self::$relative);
 
         self::assertNotSame('', $srcset);
         $candidates = array_map('trim', explode(',', $srcset));
         self::assertLessThanOrEqual(5, count($candidates));
         foreach ($candidates as $candidate) {
-            self::assertMatchesRegularExpression(
-                '#^/media/image/weline-test/hero\.jpg\?w=\d+&h=\d+ \d+w$#',
-                $candidate
-            );
-            self::assertMatchesRegularExpression('/[?&]w=\d+/', $candidate);
-            self::assertMatchesRegularExpression('/[?&]h=[1-9]\d*/', $candidate);
+            self::assertMatchesRegularExpression('#^/pub/media/[^\s?]+ \d+w$#', $candidate);
         }
     }
 
