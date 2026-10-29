@@ -255,6 +255,11 @@ final class WidgetAssetOptimizer
      */
     private function markLayoutPack(string $tag): string
     {
+        // 2026-10-30 A/B 开关（marker: css-inline-toggles-v1）：`wls.performance.inline_layout_pack`
+        // 置 false 时 layout 合包退回阻塞 <link>，用于实测「HTML 体积 vs 请求数」（默认 true = 内联）。
+        if (!$this->inlineLayoutPackEnabled()) {
+            return $tag;
+        }
         // 注意：标签可能在更早阶段已带 data-weline-layout-pack（合包标记先于本方法），
         // 因此「已标记」也必须继续走内联分支；否则内联永不生效（2026-10-30 实测踩过）。
         if (str_contains($tag, 'data-weline-layout-pack=')) {
@@ -272,6 +277,27 @@ final class WidgetAssetOptimizer
         }
 
         return $marked;
+    }
+
+    /**
+     * layout 合包是否内联（env `wls.performance.inline_layout_pack`，默认 true）。
+     */
+    private function inlineLayoutPackEnabled(): bool
+    {
+        if (!\defined('BP')) {
+            return true;
+        }
+        try {
+            $value = \Weline\Framework\App\Env::get('wls.performance.inline_layout_pack', true);
+        } catch (\Throwable $e) {
+            return true;
+        }
+        if (\is_bool($value)) {
+            return $value;
+        }
+        $normalized = \strtolower(\trim((string)$value));
+
+        return !\in_array($normalized, ['0', 'false', 'off', 'no'], true);
     }
 
     /**

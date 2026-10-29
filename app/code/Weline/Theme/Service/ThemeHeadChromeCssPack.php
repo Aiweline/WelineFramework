@@ -163,7 +163,9 @@ final class ThemeHeadChromeCssPack
         // 内联 74 分 / preload 72 分、FCP 3.3s vs 3.6s —— FCP 由 TTFB 主导，省一轮 RTT 更划算）。
         // 注意不是 tryInlineCssHtml()（那会每请求 composeSources+minify，2026-10-29 15:40 曾因此 503）；
         // 这里命中已有产物只读一次文件。读不到产物/超预算时回退阻塞外链。
-        if ($pack === self::PACK_TOKENS && !isset($options['force_link'])) {
+        // 2026-10-30 A/B 开关（marker: css-inline-toggles-v1）：`wls.performance.inline_tokens_css`
+        // 置 false 时把 tokens 退回外链，用于「HTML 体积 vs 请求数」的实测对比（默认 true = 内联）。
+        if ($pack === self::PACK_TOKENS && !isset($options['force_link']) && $this->inlineTokensEnabled()) {
             $inline = $this->tryInlinePublishedCssHtml($area, $pack, $options);
             if ($inline !== null) {
                 return $inline;
@@ -444,6 +446,28 @@ final class ThemeHeadChromeCssPack
             }
             return null;
         }
+    }
+
+    /**
+     * tokens 是否内联（env `wls.performance.inline_tokens_css`，默认 true）。
+     * 用来实测「HTML 体积 vs 多一个请求」的权衡，不用改代码即可切换。
+     */
+    private function inlineTokensEnabled(): bool
+    {
+        if (!\defined('BP')) {
+            return true;
+        }
+        try {
+            $value = \Weline\Framework\App\Env::get('wls.performance.inline_tokens_css', true);
+        } catch (\Throwable $e) {
+            return true;
+        }
+        if (\is_bool($value)) {
+            return $value;
+        }
+        $normalized = \strtolower(\trim((string)$value));
+
+        return !\in_array($normalized, ['0', 'false', 'off', 'no'], true);
     }
 
     /**
