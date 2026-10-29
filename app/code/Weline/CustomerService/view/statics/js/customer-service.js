@@ -704,9 +704,10 @@ const CustomerServiceWidget = (function() {
         bindVisibilityLifecycle();
         // 先按本地未读水位画角标，避免刷新后要等脚本/接口才「突然没了」
         updateUnreadBadge();
-        // Warm screenshot engine so confirm is not blocked on first script fetch.
-        ensureModernScreenshot().catch(function () { /* optional */ });
-        ensureHtml2Canvas().catch(function () { /* optional */ });
+        // 2026-10-30 性能：原先在此预热截图引擎（html2canvas 52KB + modern-screenshot），
+        // 等于**每个页面**都为「极少使用的截图功能」多下 ~80–100KB JS，直接拉高 FCP/SI。
+        // 改为真正截图时按需加载（captureAndSendScreenshot 里已有 ensureModernScreenshot/
+        // ensureHtml2Canvas 调用，首帧不再为它付出带宽与主线程解析成本）。
 
         // 仅未结束会话才 QuietWatch；禁止「有 token 就全站密刷」
         if (state.conversationOpen && state.sessionToken && canPoll()) {
