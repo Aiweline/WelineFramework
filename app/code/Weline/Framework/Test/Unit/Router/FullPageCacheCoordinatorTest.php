@@ -353,9 +353,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
         $file = $method->getFileName();
 
         self::assertIsString($file);
-        // 2026-10-30 用户指定：协作让出必须恒开，不再提供 env 开关。
-        self::assertNull(\Weline\Framework\App\Env::get('wls.performance.fpc_cooperative_yield_enabled', null));
-
+        // 2026-10-30 用户指定：协作让出必须恒开，不再提供 env 开关（源码里不得出现该判断）。
         $lines = \file($file);
         self::assertIsArray($lines);
 
