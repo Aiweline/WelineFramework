@@ -4565,7 +4565,22 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     }
                     // 内存压力回收：先立刻关监听（admission 不再进新请求），排水时钟等在途归零后
                     // 由主循环起（上限 drain_wait_inflight_sec）。reload / stop 不走这里。
-                    if (\str_starts_with($memoryRecycleIntentReason, 'memory_pressure_drain')) {
+                    // 仅「已热」的 Worker 才启用「等在途归零」：启动/预热期的 ratchet 或内存 DRAIN
+                    // 必须走原立即排水路径，否则会关掉监听导致托管 Nginx 健康探测失败（2026-10-29 实测）。
+                    $recycleGateWarm = false;
+                    try {
+                        $readinessSnapshot = \Weline\Server\Service\Runtime\WorkerReadinessState::snapshot();
+                        $recycleGateWarm = (string) ($readinessSnapshot['warmup_state'] ?? '') === 'hot';
+                    } catch (\Throwable) {
+                        $recycleGateWarm = false;
+                    }
+                    $recycleIntentReason = (string) ($GLOBALS['wlsWorkerRecycleIntentReason'] ?? $memoryRecycleIntentReason);
+                    // 内存压力回收与 zend_mm_ratchet 回收都属于「内存类」退役：热态下先关监听、
+                    // 等在途归零再起排水时钟；reload / stop 不走这里（架构评审 2026-10-29）。
+                    if ($recycleGateWarm
+                        && (\str_starts_with($recycleIntentReason, 'memory_pressure_drain')
+                            || \str_starts_with($recycleIntentReason, 'zend_mm_ratchet'))
+                    ) {
                         // 已在排水/退出中：只按 master 的期限放宽硬排水窗口，不重置在途等待。
                         if ($ipcDraining || $shouldExit) {
                             $dt = (int) ($msg['drain_timeout_sec'] ?? 0);
@@ -6389,6 +6404,7 @@ while (true) {
                     . ",requests={$requestCount}"
                     . ',valve=' . $memoryDrainValve;
                 $memoryRecycleIntentReason = $plannedExitReason;
+                $GLOBALS['wlsWorkerRecycleIntentReason'] = $plannedExitReason;
                 $wlsWorkerGracefulExitReason = $plannedExitReason;
                 if ($ipcClient && $ipcClient->isConnected()) {
                     @$ipcClient->send(\Weline\Server\IPC\ControlMessage::exitReason($plannedExitReason, 0));
@@ -11269,6 +11285,7 @@ function wlsDrainAfterResponseIfRequested(
         WlsLogger::warning_(
             "Worker requested planned recycle after response (await Master drain): {$plannedExitReason}"
         );
+        $GLOBALS['wlsWorkerRecycleIntentReason'] = $plannedExitReason;
         @$ipcClient->send(\Weline\Server\IPC\ControlMessage::exitReason($plannedExitReason, 0));
         if ($plannedRecycleAwaitMasterUntil <= 0.0) {
             $plannedRecycleAwaitMasterUntil = \hrtime(true) / 1_000_000_000 + 12.0;
