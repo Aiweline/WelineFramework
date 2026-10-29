@@ -88,6 +88,29 @@ final class Category extends FrontendController
         }
 
         if ($bindListingQuery) {
+            // 廉价预判定（不渲染 grid / 不补媒体）：零命中的 facet 组合直接 301，
+            // 不为垃圾 URL 付整页渲染成本（CPU 饱和时这正是 503 的来源）。
+            $zeroHitProbe = $this->listingShell->projectFiltered(
+                $offers,
+                $listingQuery,
+                $categoryUrl,
+                'category',
+                null,
+                false,
+                false,
+                false,
+            );
+            if ($offers !== []
+                && !$offersTruncated
+                && (int)($zeroHitProbe['count'] ?? 0) === 0
+            ) {
+                $canonicalRedirectUrl = $this->canonicalRedirectUrl($categoryUrl);
+                RequestContext::set(
+                    'weline.frontend.redirect.canonical_host',
+                    (string)(parse_url($canonicalRedirectUrl, PHP_URL_HOST) ?: '')
+                );
+                $this->request->getResponse()->redirect($canonicalRedirectUrl, 301);
+            }
             $projection = $this->listingShell->projectFiltered(
                 $offers,
                 $listingQuery,
@@ -116,6 +139,12 @@ final class Category extends FrontendController
                 (string)(parse_url($canonicalRedirectUrl, PHP_URL_HOST) ?: '')
             );
             $this->request->getResponse()->redirect($canonicalRedirectUrl, 301);
+        }
+
+        if ($bindListingQuery && (int)($projection['count'] ?? 0) === 0) {
+            // 零命中的 facet 组合不进索引：爬虫拿到 noindex 后不再无限铸造变体
+            // （无命中的 301 已在上面处理；这里覆盖「候选被截断、无法证明无货」的 200 渲染）。
+            $this->request->getResponse()->setHeader('X-Robots-Tag', 'noindex, follow');
         }
 
         $pageTitle = $name !== '' ? $name : __('分类');

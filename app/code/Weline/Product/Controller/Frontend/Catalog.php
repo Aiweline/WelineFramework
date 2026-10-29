@@ -159,6 +159,29 @@ final class Catalog extends FrontendController
         // publish the rendered response for later anonymous hits.
         $isInternalStorefrontChainWarmup = (string)$this->request->getServer('WLS_INTERNAL_STOREFRONT_CHAIN_WARMUP') === '1';
         if ($bindListingQuery && !$isInternalStorefrontChainWarmup) {
+            // 廉价预判定（不渲染 grid / 不补媒体）：零命中的 facet 组合直接 301，
+            // 不为垃圾 URL 付整页渲染成本（CPU 饱和时这正是 503 的来源）。
+            $zeroHitProbe = $this->listingShell->projectFiltered(
+                $offers,
+                $listingQuery,
+                $productsUrl,
+                (string)$surface['code'],
+                null,
+                false,
+                false,
+                false,
+            );
+            if ($offers !== []
+                && !$offersTruncated
+                && (int)($zeroHitProbe['count'] ?? 0) === 0
+            ) {
+                $canonicalRedirectUrl = $this->canonicalRedirectUrl($productsUrl);
+                RequestContext::set(
+                    'weline.frontend.redirect.canonical_host',
+                    (string)(parse_url($canonicalRedirectUrl, PHP_URL_HOST) ?: '')
+                );
+                $this->request->getResponse()->redirect($canonicalRedirectUrl, 301);
+            }
             $projection = $this->listingShell->projectFiltered(
                 $offers,
                 $listingQuery,
