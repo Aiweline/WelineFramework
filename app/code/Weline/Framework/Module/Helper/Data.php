@@ -537,12 +537,23 @@ class Data extends AbstractHelper
                     // 查找控制器文件
                     $classRelativePath = str_replace('\\', DS, str_replace($module['namespace_path'] . '\\', '', $pc_class)) . '.php';
                     $classFile = $module['base_path'] . $classRelativePath;
-                    if (is_file($classFile) && !class_exists($pc_class, false)) {
+                    // 0 字节占位文件（AiKnowledge 的 Controller/Backend/* 创建即空）不承载路由：
+                    // 跳过并留 notice，不记成扫描失败，避免路由完整性门禁否决整次升级。
+                    if (is_file($classFile) && @filesize($classFile) === 0) {
+                        $this->recordRouteScanNotice($name, $pc_class, 'pc_file_empty');
+                        continue;
+                    }
+                    if (is_file($classFile) && !$this->apiSymbolLoaded($pc_class)) {
                         require_once $classFile;
                     }
                     // 如果控制器类不存在，跳过（记录：禁静默降级）
-                    if (!class_exists($pc_class, false)) {
+                    if (!$this->apiSymbolLoaded($pc_class)) {
                         $this->recordRouteScanFailure($name, $pc_class, 'pc_class_load_failed');
+                        continue;
+                    }
+                    // 接口 / trait / enum / 抽象类不能作为 PC 控制器承载路由。
+                    if (!$this->apiSymbolIsControllerClass($pc_class)) {
+                        $this->recordRouteScanNotice($name, $pc_class, 'pc_symbol_not_controller');
                         continue;
                     }
                     $pcDirArray = explode(Handle::pc_DIR, $pc_class);
