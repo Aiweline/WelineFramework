@@ -319,6 +319,13 @@ $defaultNavItemsFactory = static function (): array {
                         class="header-action-item header-scope-switcher header-top-bar-scope">
                 </w:slot>
                 <w:hook>header-wishlist-icon</w:hook>
+                <!-- 右侧菜单入口：窄屏放不下的服务 / 地址入口统一进抽屉，禁止在顶栏硬挤 -->
+                <button type="button"
+                        class="header-action-item header-top-bar-menu-btn js-header-drawer-trigger"
+                        aria-label="@lang(菜单)"
+                        data-testid="header-top-bar-menu-trigger">
+                    <i class="fas fa-bars" aria-hidden="true"></i>
+                </button>
                 <!-- 语言 + 货币：迁通知条右侧（减轻主栏拥挤）；勿塞进 top-bar-rights 槽 -->
                 <div class="header-top-bar-locale"
                      data-testid="header-top-bar-locale"
@@ -766,6 +773,7 @@ $defaultNavItemsFactory = static function (): array {
                         <li><a href="@url{'customer/account/index'}"><i class="fas fa-user" aria-hidden="true"></i> <?= $headerEsc('我的账户') ?></a></li>
                         <li><a href="@url{'customer/account/index'}#orders"><i class="fas fa-box" aria-hidden="true"></i> <?= $headerEsc('我的订单') ?></a></li>
                         <li><a href="@url{'faq'}"><i class="fas fa-question-circle" aria-hidden="true"></i> <?= $headerEsc('帮助中心') ?></a></li>
+                        <li><a href="@url{'customer/account/index'}#delivery-address"><i class="fas fa-map-marker-alt" aria-hidden="true"></i> <?= $headerEsc('配送地址') ?></a></li>
                         <li><a href="@url{'cart'}"><i class="fas fa-shopping-cart" aria-hidden="true"></i> <?= $headerEsc('购物车') ?></a></li>
                         <li><a href="@url{'compare'}"><i class="fas fa-columns" aria-hidden="true"></i> <?= $headerEsc('商品对比') ?></a></li>
                     <?php endif; ?>

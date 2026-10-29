@@ -172,6 +172,37 @@
     align-items: center;
 }
 
+/*
+ * 右侧菜单入口（≤920）：顶栏放不下的东西一律收进抽屉，不在外面挤。
+ * 抽屉复用既有 js-header-drawer-trigger（分类抽屉），因此语言/货币/帮助/订单/配送地址
+ * 都在同一处，语义与"旅行站右侧菜单"一致。
+ */
+.weline-header .header-top-bar-menu-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--spacing-8);
+    min-height: var(--spacing-8);
+    padding: 0 var(--spacing-2);
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+}
+
+.weline-header .header-top-bar-menu-btn:hover,
+.weline-header .header-top-bar-menu-btn:focus-visible {
+    background: var(--color-on-dark-soft);
+    outline: none;
+}
+
+@media (max-width: 920px) {
+    .weline-header .header-top-bar-menu-btn {
+        display: inline-flex;
+    }
+}
+
 .weline-header .header-site-notice-links > * + *::before,
 .weline-header .header-top-bar-rights-cluster > * + *::before,
 .weline-header .header-top-bar-rights-slot > * + *::before {
@@ -1120,6 +1151,9 @@
     min-width: 0;
     width: auto;
     max-width: none;
+    /* 分类链接是 max-content：不裁切会画到右侧「博客/客户服务」上（审图 769：重叠 28/56px）。
+       ≤768 的手机横滚行仍由下方 overflow:visible !important 覆盖。 */
+    overflow: hidden;
 }
 
 .weline-header .header-nav-right-cluster {
@@ -1664,7 +1698,7 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     }
 
     /*
-     * 地址块与搜索同排：42% 预算 + 地址块 min-content（图标+5.5rem 文本+箭头 ≈176px）
+     * 地址块与搜索同排：42% 预算 + 地址块 min-content（图标+文本+箭头 ≈176px）
      * 会在 769–840 溢出父容器 26px，直接压到搜索胶囊上（审图 820px）。
      * 给足预算并允许地址块自身收缩+裁切，溢出即在这里止住。
      */
@@ -1672,9 +1706,13 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
         max-width: min(52%, var(--token-size-22rem));
     }
 
+    /*
+     * 769–920：地址块放不下（可用 64px < 文字 88px，会压箭头/搜索）。
+     * 按「放不下就进菜单」的规则整体收起，入口在抽屉「账户与服务 › 配送地址」，
+     * 不在顶栏硬挤，也不靠裁切硬塞。
+     */
     .weline-header .header-belt-row-1 .header-location {
-        max-width: var(--token-size-9rem);
-        min-width: 0;
+        display: none;
     }
 
     .weline-header .header-belt-row-1 .w-header-delivery-entry,
@@ -1685,10 +1723,15 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
         overflow: hidden;
     }
 
-    /* Keep ZH / $ USD labels — do not strip to orphan chevrons. */
+    /*
+     * Keep ZH / $ USD labels — do not strip to orphan chevrons.
+     * 5.5rem 是「上限」，但箭头前只剩 ~64px：固定的 88px 会让地址文字压在箭头上
+     * （审图 769–900：文字 243–331 与箭头 307–335 重叠 24px）。改成跟随父宽。
+     */
     .weline-header .header-belt .location-line-2,
     .weline-header .header-belt .delivery-line-2 {
-        max-width: var(--token-size-5-5rem);
+        max-width: 100%;
+        min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
