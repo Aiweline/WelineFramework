@@ -97,6 +97,16 @@
         return true;
       }
     }
+    // 2026-10-30（marker: auto-lazy-skip-first-viewport-v1）：**首屏内已可见的图不做自动懒加载**。
+    // 实测 PIC 首页 PSI CLS 0.298 里 0.181 来自头部 logo —— 它被 auto-lazy 加了 loading="lazy"，
+    // 浏览器推迟到很晚才取图，图到位后头部/hero 跟着位移。首屏图本就该立即取，懒加载只对
+    // 视口外的图有意义。用布局矩形判断（未布局时 width=0 不参与）。
+    if (typeof window !== 'undefined' && window.innerHeight > 0 && img.getBoundingClientRect) {
+      var rect = img.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0 && rect.top < window.innerHeight && rect.bottom > 0) {
+        return true;
+      }
+    }
     return false;
   }
 
