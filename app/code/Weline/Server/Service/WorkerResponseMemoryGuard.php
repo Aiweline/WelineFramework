@@ -477,6 +477,13 @@ final class WorkerResponseMemoryGuard
      */
     public static function zendShellDrainBytesForLimit(?int $limitBytes): int
     {
+        // 运维可覆盖：wls.memory_guard.zend_shell_drain_bytes（字节）。
+        // 1024M Worker 在真实负载下 real-used 常年 450-500MB（单次大响应把 Zend 竞技场撑大后不归还），
+        // 默认 153MB 空壳线会让 Worker 每 20-30 秒退役一次 → 缓存全冷 → 冷渲染 12-45s。
+        $override = self::configuredZendShellDrainBytes();
+        if ($override > 0) {
+            return $override;
+        }
         if ($limitBytes === null || $limitBytes <= 0) {
             return self::ZEND_SHELL_DRAIN_BYTES_UNKNOWN_LIMIT;
         }
@@ -487,6 +494,31 @@ final class WorkerResponseMemoryGuard
             self::ZEND_SHELL_DRAIN_BYTES_FLOOR,
             \min(self::ZEND_SHELL_DRAIN_BYTES_CAP, $scaled)
         );
+    }
+
+    /** 读取 wls.memory_guard.zend_shell_drain_bytes（0 = 未配置，走默认线）。 */
+    private static function configuredZendShellDrainBytes(): int
+    {
+        try {
+            if (!\defined('BP') || !\class_exists(\Weline\Framework\App\Env::class, false)) {
+                return 0;
+            }
+            $config = \Weline\Framework\App\Env::get('wls.memory_guard', []);
+            if (!\is_array($config)) {
+                return 0;
+            }
+            $raw = $config['zend_shell_drain_bytes'] ?? 0;
+            if (!\is_numeric($raw)) {
+                return 0;
+            }
+            $bytes = (int) $raw;
+
+            return $bytes > 0
+                ? \max(self::ZEND_SHELL_DRAIN_BYTES_FLOOR, \min(8 * 1024 * 1024 * 1024, $bytes))
+                : 0;
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 
     /**
