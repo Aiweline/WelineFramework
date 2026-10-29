@@ -31,6 +31,17 @@ class SchedulerSystem
     /** @var \WeakMap<\Fiber, true>|null */
     private static ?\WeakMap $backgroundFibers = null;
     /**
+     * 每个请求 Fiber 的下次「协作让出」时间（hrtime ns）。
+     * 用于 cooperate()：同一 Fiber 每 slice 毫秒最多让出一次，其余调用只做一次时间比较。
+     *
+     * @var \WeakMap<\Fiber, int>|null
+     */
+    private static ?\WeakMap $cooperateNextAtNs = null;
+    /** cooperate() 重入深度（yield→dispatchWait→事件派发会回到 cooperate）。 */
+    private static int $cooperateDepth = 0;
+    /** cooperate() 开关（`wls.render.cooperate.enabled`，默认开；可运行时关停）。 */
+    private static ?bool $cooperateEnabled = null;
+    /**
      * Scheduler frames hidden while a nested local Fiber pool is active.
      *
      * The top frame is still able to wake the current parent Fiber. This lets a
@@ -549,6 +560,54 @@ class SchedulerSystem
         }
 
         return $parked;
+    }
+
+    /**
+     * 时间预算式协作让出（WLS 请求 Fiber 内的长任务用）。
+     *
+     * PHP Fiber 是协作式、不可抢占：渲染 / 查询 / hook 这类长任务如果不主动让出，
+     * 同一个 Worker 内其它已准入的请求 Fiber 一个都推进不了（head-of-line blocking），
+     * 最终表现为上游读超时 → 502/504 → 503。
+     *
+     * - 无调度器（FPM / CLI）或当前不在 Fiber 内：立即返回，零行为变化。
+     * - 同一 Fiber 内每 $sliceMs 毫秒最多让出一次；其余调用只做一次 hrtime 比较。
+     */
+    public static function cooperate(int $sliceMs = 8): void
+    {
+        if (!self::$schedulerActive) {
+            return;
+        }
+        if (self::$cooperateEnabled === null) {
+            try {
+                self::$cooperateEnabled = (bool)\Weline\Framework\App\Env::get('wls.render.cooperate.enabled', true);
+            } catch (\Throwable) {
+                self::$cooperateEnabled = true;
+            }
+        }
+        if (self::$cooperateEnabled !== true) {
+            return;
+        }
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            return;
+        }
+        // 防重入：yield() 内部的 dispatchWait 可能再次派发事件，事件派发又会调用本方法。
+        if (self::$cooperateDepth > 0) {
+            return;
+        }
+        $now = \hrtime(true);
+        self::$cooperateNextAtNs ??= new \WeakMap();
+        $nextAt = self::$cooperateNextAtNs[$fiber] ?? 0;
+        if ($now < $nextAt) {
+            return;
+        }
+        self::$cooperateNextAtNs[$fiber] = $now + \max(1, $sliceMs) * 1_000_000;
+        ++self::$cooperateDepth;
+        try {
+            self::yield();
+        } finally {
+            --self::$cooperateDepth;
+        }
     }
 
     public static function yield(): void

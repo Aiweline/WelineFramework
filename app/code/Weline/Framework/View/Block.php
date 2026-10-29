@@ -16,6 +16,7 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FiberOutputBuffer;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 class Block extends Template implements BlockInterface
 {
@@ -94,6 +95,8 @@ class Block extends Template implements BlockInterface
      */
     public function fetchHtml(string $fileName, array $dictionary = []): string
     {
+        // 渲染协作让出：每个 Block/部件渲染前按预算让出一次（仅 WLS 请求 Fiber 内生效）。
+        SchedulerSystem::cooperate();
         $comFileName = $this->fetchTagSource('blocks', $fileName);
         FiberOutputBuffer::beginCapture();
         try {

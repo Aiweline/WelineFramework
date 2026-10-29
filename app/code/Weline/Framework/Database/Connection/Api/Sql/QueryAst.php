@@ -944,6 +944,9 @@ abstract class QueryAst implements WriteIntentQueryInterface, PhysicalTableQuery
 
     public function fetch(string $model_class = ''): mixed
     {
+        // 查询协作让出：WLS 请求 Fiber 内每次取结果前按预算让出一次，
+        // 让 N+1 类循环（渲染时逐条取数）不再独占整个 Worker。
+        \Weline\Framework\Runtime\SchedulerSystem::cooperate();
         $dbTraceStart = 0.0;
         if ($this->PDOStatement === null) {
             return false;

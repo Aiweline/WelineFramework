@@ -1951,6 +1951,9 @@ class Template extends DataObject implements RequestLocalInterface
      */
     public function fetchTagHtml(string $tag, string $fileName, array $dictionary = [])
     {
+        // 渲染协作让出：WLS 请求 Fiber 内每个 taglib/模板块执行前按预算让出，
+        // 避免单个慢页把同 Worker 其它请求饿死（PHP Fiber 协作式不可抢占）。
+        SchedulerSystem::cooperate();
         $this->addSourceModuleToRequest($tag, $fileName);
 
         $comFileName = $this->fetchTagSource($tag, $fileName);

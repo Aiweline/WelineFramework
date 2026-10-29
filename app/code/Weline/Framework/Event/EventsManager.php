@@ -10,6 +10,7 @@
 namespace Weline\Framework\Event;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Runtime\TraceGate;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Config\XmlReader;
@@ -297,6 +298,9 @@ class EventsManager
         }
         $events[$eventName] = $event;
         $this->storeEvents($events);
+        // 渲染为主的现场里 hook 链很长：每次派发前按预算协作让出，
+        // 避免单个慢页把同 Worker 的其它请求饿死（仅 WLS 请求 Fiber 内生效）。
+        SchedulerSystem::cooperate();
         $event->dispatch();
 
         if (!is_array($data)) {
