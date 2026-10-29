@@ -95,6 +95,40 @@ class Data extends AbstractHelper
         return \function_exists('enum_exists') && enum_exists($symbol, false);
     }
 
+    /**
+     * 已加载的符号是否能作为控制器（具体类；接口/枚举/trait/抽象类都不行）。
+     */
+    private function apiSymbolIsControllerClass(string $symbol): bool
+    {
+        try {
+            if (!class_exists($symbol, false)) {
+                return false;
+            }
+            $reflection = new \ReflectionClass($symbol);
+            if ($reflection->isInterface() || $reflection->isTrait() || $reflection->isAbstract()) {
+                return false;
+            }
+            if (\method_exists($reflection, 'isEnum') && $reflection->isEnum()) {
+                return false;
+            }
+
+            return $reflection->isInstantiable();
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * 非致命扫描提示（写日志但不进 routeScanFailures，路由完整性门禁不据此否决）。
+     */
+    private function recordRouteScanNotice(string $moduleName, string $class, string $kind): void
+    {
+        w_log_warning(__(
+            '路由扫描跳过非路由符号（非致命）：模块 %1 类 %2 — %3',
+            [$moduleName, $class, $kind]
+        ), [], 'setup/route_integrity.log');
+    }
+
     private function recordRouteScanFailure(string $moduleName, string $class, string $kind): void
     {
         $this->routeScanFailures[] = [
@@ -239,6 +273,13 @@ class Data extends AbstractHelper
                     // 查找控制器文件
                     $classRelativePath = str_replace('\\', DS, str_replace($module['namespace_path'] . '\\', '', $api_class)) . '.php';
                     $classFile = $module['base_path'] . $classRelativePath;
+                    // 0 字节占位文件：仓库里历史遗留（如 AiKnowledge 的 Controller/Api 空壳，创建即空），
+                    // 不承载任何路由。跳过并留 notice，不能记成「扫描失败」——否则路由完整性门禁会
+                    // 否决整次 setup:upgrade，而丢路由风险为零。
+                    if (is_file($classFile) && @filesize($classFile) === 0) {
+                        $this->recordRouteScanNotice($name, $api_class, 'api_file_empty');
+                        continue;
+                    }
                     // Api/ 目录同时承载 interface / trait / enum（如 *FacadeInterface、*ContentSourceInterface），
                     // 只判 class_exists() 会把它们当成「加载失败」→ 路由完整性门禁据此回滚整次 setup:upgrade。
                     if (is_file($classFile) && !$this->apiSymbolLoaded($api_class)) {
@@ -247,6 +288,11 @@ class Data extends AbstractHelper
                     // 如果符号不存在，跳过（记录：禁静默降级）
                     if (!$this->apiSymbolLoaded($api_class)) {
                         $this->recordRouteScanFailure($name, $api_class, 'api_class_load_failed');
+                        continue;
+                    }
+                    // 接口 / trait / enum / 抽象类不可能作为控制器承载路由，跳过并留 notice。
+                    if (!$this->apiSymbolIsControllerClass($api_class)) {
+                        $this->recordRouteScanNotice($name, $api_class, 'api_symbol_not_controller');
                         continue;
                     }
                     $apiDirArray = explode(Handle::api_DIR, $api_class);
