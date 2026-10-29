@@ -431,6 +431,9 @@ final class ThemeLayoutEntityContractsTest extends TestCase
                 $this->tearDown_ThemeLayoutEntityRequestSolidifyGate();
             }
         },
+            'ThemeLayoutEntityRequestSolidifyGate::testFiltersInventoryBakeVerdict' => function () {
+            $this->assert_ThemeLayoutEntityRequestSolidifyGate_testFiltersInventoryBakeVerdict();
+        },
             'ThemeLayoutEntitySolidifyCompilePipeline::testPipelineExposesDualPoolsAndWorkers' => function () {
             $this->assert_ThemeLayoutEntitySolidifyCompilePipeline_testPipelineExposesDualPoolsAndWorkers();
         },
@@ -2331,6 +2334,87 @@ private function assert_ThemeLayoutEntityRequestSolidifyGate_testCircuitBreakerS
     self::assertNotFalse($guardPos, 'forbid() must sit inside the !$circuitOpen guard');
     self::assertLessThan(200, $forbidPos - $guardPos);
     self::assertStringContainsString("'circuit_open' => \$circuitOpen", $gateSrc);
+}
+
+private function assert_ThemeLayoutEntityRequestSolidifyGate_testFiltersInventoryBakeVerdict(): void
+{
+    $gateRef = new \ReflectionClass(ThemeLayoutEntityRequestSolidifyGate::class);
+    $gate = $gateRef->newInstanceWithoutConstructor();
+    $verdict = $gateRef->getMethod('filtersInventoryVerdict');
+    $verdict->setAccessible(true);
+    $judge = static fn(string $blob, string $origin): array => $verdict->invoke($gate, $blob, $origin);
+
+    $design = BP . 'app/design/Weline/hanfu/frontend/layouts/';
+    // Category design layout mounts NO Filters anchor at all; search mounts id="search-filters"
+    // whose accept="" list merely mentions category-filters; products mounts <w:slot id="list-filters">.
+    $categoryOrigin = $design . 'category/default.phtml';
+    $searchOrigin = $design . 'search/default.phtml';
+    $productsOrigin = $design . 'products/default.phtml';
+    self::assertFileExists($categoryOrigin);
+    self::assertFileExists($searchOrigin);
+    self::assertFileExists($productsOrigin);
+
+    // 1) No Filters slot mounted → judgement not applicable. This is the "job never completes"
+    //    regression: it used to stay true forever, re-enqueueing on every request.
+    self::assertSame(
+        ['broken' => false, 'reason' => 'no_filters_slot'],
+        $judge('<div class="forms-tiles">no filters</div>', $categoryOrigin),
+    );
+    // 2) Counterexample: accept="…,layout-category-filters,category-filters,…" must NOT count as a mount.
+    self::assertStringContainsString(
+        'accept="layout-search-filters,layout-category-filters,category-filters',
+        (string) file_get_contents($searchOrigin),
+    );
+    self::assertSame(
+        ['broken' => false, 'reason' => 'no_filters_slot'],
+        $judge('<div class="search-shell">results</div>', $searchOrigin),
+    );
+    // 3) Layout mounts list-filters but bake produced no Filters → the safety net must stay ON.
+    self::assertSame(
+        ['broken' => true, 'reason' => 'widget_missing_mount_present'],
+        $judge('<div class="products-grid">grid</div>', $productsOrigin),
+    );
+    // 4) Declaration placeholder survived the bake → broken.
+    self::assertSame(
+        ['broken' => true, 'reason' => 'placeholder_left'],
+        $judge('<div data-placeholder="list-filters"></div>', $productsOrigin),
+    );
+    // 5) Healthy bake → not broken.
+    self::assertSame(
+        ['broken' => false, 'reason' => 'filters_baked'],
+        $judge('Weline_Filters data-widget-code="category-filters" renderResolved(', $productsOrigin),
+    );
+    // 6) Unknown origin → conservative broken (logged + surfaced in decision['filter_inventory_bake']).
+    self::assertSame(
+        ['broken' => true, 'reason' => 'origin_unknown'],
+        $judge('<div>x</div>', '/nonexistent/layouts/category/default.phtml'),
+    );
+    // 7) Empty derived page → broken.
+    self::assertSame(
+        ['broken' => true, 'reason' => 'derived_page_empty'],
+        $judge('', $productsOrigin),
+    );
+    // 8) S1 counterexample: bare `id` anchor must NOT swallow *-id attributes
+    //    (`data-widget-id="category-filters"` is a widget instance id, not a slot mount).
+    $tmpOrigin = sys_get_temp_dir() . '/weline-filter-slot-anchor-' . bin2hex(random_bytes(4)) . '.phtml';
+    try {
+        file_put_contents(
+            $tmpOrigin,
+            '<div data-widget-id="category-filters"></div><div data-entity-id="list-filters"></div>',
+        );
+        self::assertSame(
+            ['broken' => false, 'reason' => 'no_filters_slot'],
+            $judge('<div>x</div>', $tmpOrigin),
+        );
+        // 9) A real plain `id="list-filters"` mount still counts.
+        file_put_contents($tmpOrigin, '<div id="list-filters"></div>');
+        self::assertSame(
+            ['broken' => true, 'reason' => 'widget_missing_mount_present'],
+            $judge('<div>x</div>', $tmpOrigin),
+        );
+    } finally {
+        @unlink($tmpOrigin);
+    }
 }
 
 private function assert_ThemeLayoutEntityRequestSolidifyGate_testQueueClassesAndGateExist(): void

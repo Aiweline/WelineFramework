@@ -1293,7 +1293,50 @@ final class ManagedNginxProcessManager
                 return ['code' => 124, 'output' => $throwable->getMessage()];
             }
         }
-        return GatewayBoundedCommandRunner::run($cmd, $commandBudget);
+        return GatewayBoundedCommandRunner::run(
+            $this->withInheritedDescriptorsClosed($cmd),
+            $commandBudget,
+        );
+    }
+
+    /**
+     * Spawn Nginx through a POSIX shell that first closes every inherited
+     * descriptor above stderr.
+     *
+     * The managed lifecycle lock, WLS sockets and log handles are opened by the
+     * publishing PHP process. proc_open() hands every descriptor that is absent
+     * from its descriptor spec straight to the child, and Nginx daemonizes for
+     * the lifetime of the host, so an inherited flock is never released and
+     * every later lifecycle action deadlocks waiting for it. Closing 3..255 in
+     * the child before exec keeps Nginx holding only 0/1/2.
+     *
+     * Closing a descriptor that is not open makes dash exit, so each candidate
+     * is probed through /proc/self/fd first. Where procfs or /bin/sh is
+     * unavailable the plain command is returned unchanged, so the launch
+     * behaves exactly as before instead of failing.
+     *
+     * @param list<string> $command
+     * @return list<string>
+     */
+    private function withInheritedDescriptorsClosed(array $command): array
+    {
+        if (\PHP_OS_FAMILY === 'Windows'
+            || $command === []
+            || !\is_file('/bin/sh')
+            || !\is_dir('/proc/self/fd')
+        ) {
+            return $command;
+        }
+
+        return [
+            '/bin/sh',
+            '-c',
+            'i=3; while [ $i -le 255 ]; do '
+                . 'if [ -e /proc/self/fd/$i ]; then eval "exec $i>&-" 2>/dev/null || exit 1; fi; '
+                . 'i=$((i+1)); done; exec "$@"',
+            'wls-fd-close',
+            ...$command,
+        ];
     }
 
     /** @return array{code:int,output:string} */

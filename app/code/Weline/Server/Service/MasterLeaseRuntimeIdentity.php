@@ -2580,6 +2580,20 @@ CDEF,
             $namespace = ($this->pidNamespaceResolver)($pid);
         } else {
             $namespace = @\readlink('/proc/' . $pid . '/ns/pid');
+            if (!\is_string($namespace) || $namespace === '') {
+                // A managed Nginx master inherits cap_net_bind_service from its
+                // binary, which makes the process non-dumpable. procfs then
+                // refuses readlink(/proc/<pid>/ns/*) to every process without
+                // CAP_SYS_PTRACE, including the project user that owns it. The
+                // namespace is still provable without that capability: NSpid in
+                // /proc/<pid>/status is world readable and lists the PID in each
+                // namespace from the procfs mount namespace inwards, so a single
+                // entry equal to <pid> proves the target lives in the procfs
+                // mount namespace. When our own NSpid is a single entry too we
+                // live in that same namespace, so the target's real namespace
+                // inode is exactly our own.
+                $namespace = $this->sameProcfsMountNamespaceId($pid);
+            }
         }
         if (!\is_string($namespace)
             || \preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $namespace) !== 1
@@ -2588,5 +2602,85 @@ CDEF,
         }
 
         return $namespace;
+    }
+
+    /**
+     * Return the caller's own PID namespace id when $pid is proven to live in
+     * the same procfs mount namespace. Returns null whenever sameness cannot be
+     * proven, so every caller keeps its fail-closed behaviour.
+     */
+    private function sameProcfsMountNamespaceId(int $pid): ?string
+    {
+        $self = (int)\getmypid();
+        if ($pid < 1 || $self < 1 || $self === $pid) {
+            return null;
+        }
+        $ownNamespace = @\readlink('/proc/self/ns/pid');
+
+        return self::nsPidProvesSameNamespace(
+            $this->procStatusNspid($pid),
+            $this->procStatusNspid($self),
+            $pid,
+            $self,
+            \is_string($ownNamespace) && $ownNamespace !== '' ? $ownNamespace : null,
+        );
+    }
+
+    /**
+     * Pure decision for the NSpid fallback. No filesystem access, so every
+     * namespace shape stays unit-testable on any platform.
+     *
+     * NSpid lists the PID in each namespace from the procfs mount namespace
+     * inwards, so a single entry equal to the PID proves the process lives in
+     * that mount namespace. Two such snapshots therefore prove both processes
+     * share one namespace, and the caller's own namespace id is exactly the
+     * target's real namespace id.
+     *
+     * @param list<int>|null $targetNspid
+     * @param list<int>|null $selfNspid
+     */
+    private static function nsPidProvesSameNamespace(
+        ?array $targetNspid,
+        ?array $selfNspid,
+        int $pid,
+        int $selfPid,
+        ?string $selfNamespace,
+    ): ?string {
+        if ($pid < 1 || $selfPid < 1 || $pid === $selfPid) {
+            return null;
+        }
+        if ($targetNspid !== [$pid] || $selfNspid !== [$selfPid]) {
+            return null;
+        }
+        if (!\is_string($selfNamespace)
+            || \preg_match('/\Apid:\[[1-9][0-9]{0,19}\]\z/D', $selfNamespace) !== 1
+        ) {
+            return null;
+        }
+
+        return $selfNamespace;
+    }
+
+    /** @return list<int>|null */
+    private function procStatusNspid(int $pid): ?array
+    {
+        if ($pid < 1) {
+            return null;
+        }
+        $status = @\file_get_contents('/proc/' . $pid . '/status', false, null, 0, 8192);
+        if (!\is_string($status)
+            || \preg_match('/^NSpid:[ \t]*([0-9][0-9 \t]*)[ \t]*$/m', $status, $matches) !== 1
+        ) {
+            return null;
+        }
+        $values = [];
+        foreach (\preg_split('/\s+/', \trim($matches[1])) ?: [] as $token) {
+            if (\preg_match('/\A[1-9][0-9]{0,19}\z/D', $token) !== 1) {
+                return null;
+            }
+            $values[] = (int)$token;
+        }
+
+        return $values === [] ? null : $values;
     }
 }
