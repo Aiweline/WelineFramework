@@ -36,7 +36,9 @@ use Weline\Server\Service\Edge\Gateway\ProjectAcmeHttp01ChallengeStore;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateRenewalIntentStore;
 use Weline\Server\Service\Edge\Gateway\ProjectCertificateGenerationStore;
 use Weline\Server\Service\Edge\Gateway\CertificateRetirementReplayBackoff;
+use Weline\Server\Service\Edge\Gateway\DesiredStateRetryBackoff;
 use Weline\Server\Service\Edge\Gateway\ProjectServingManifestStore;
+use Weline\Server\Service\Edge\Gateway\RetirementProbeDeadline;
 use Weline\Server\Service\MasterChildCredentialStore;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\SslCertificateService;
@@ -72,6 +74,11 @@ final class Agent extends CommandAbstract
     private const DESIRED_STATE_KILL_GRACE_SECONDS = 1.0;
     private const DESIRED_STATE_FINAL_CLEANUP_SECONDS = 3.0;
     private const DESIRED_STATE_LAUNCH_FAILURE_LOG_SECONDS = 30.0;
+    private const DESIRED_STATE_BUILD_FAILURE_LOG_SECONDS = 30.0;
+    private const DESIRED_STATE_BUILD_DEGRADED_LOG_SECONDS = 300.0;
+    private const DESIRED_STATE_BUILD_REARM_MIN_SECONDS = 30.0;
+    private const DESIRED_STATE_EDGE_MODE_PROBE_SECONDS = 30.0;
+    private const DESIRED_STATE_EDGE_SUPPRESSED_LOG_SECONDS = 300.0;
     private const DEFERRED_REAP_MAXIMUM = 8;
     private const DEFERRED_REAP_KILL_RETRY_SECONDS = 10.0;
     private const DEFERRED_REAP_MAXIMUM_AGE_SECONDS = 60.0;
@@ -267,9 +274,37 @@ final class Agent extends CommandAbstract
         $desiredStateBuildPending = true;
         $desiredStateRegisterPending = false;
         $lastDesiredStateLaunchFailureLogAt = 0.0;
+        // Bounded desired-state build retry state. It lives in this Agent
+        // process only: a restart rebuilds the schedule from scratch. A failed
+        // build child costs a full framework bootstrap + serving-publication
+        // transaction (5-13 CPU seconds), so it must never be re-spawned on
+        // every 1 Hz tick.
+        $desiredStateBuildBackoff = new DesiredStateRetryBackoff();
+        $desiredStateBuildJobId = '';
+        /** @var array{failure_at:float,degraded_at:float,degraded_reason:string} */
+        $desiredStateBuildLog = [
+            'failure_at' => 0.0,
+            'degraded_at' => 0.0,
+            'degraded_reason' => '',
+        ];
+        $desiredStateBuildIntentFence = '';
+        $desiredStateBuildStableIntentFence = '';
+        $lastDesiredStateBuildReArmAt = 0.0;
+        /** @var array{suppressed:bool,probed_at:float,mode:string} */
+        $desiredStateEdgeModeProbe = [
+            'suppressed' => false,
+            'probed_at' => 0.0,
+            'mode' => '',
+        ];
+        $lastDesiredStateEdgeSuppressedLogAt = 0.0;
         $lastCertificateReplayAt = 0.0;
         $lastCertificateRetirementProbeAt = 0.0;
         $retirementReplayBackoff = new CertificateRetirementReplayBackoff();
+        // The retirement observation deadline must come from the CURRENT
+        // monotonic clock, not this tick's start: earlier heartbeat/status/
+        // reaping work can consume more than the 0.25 s probe window, which
+        // used to throw "deadline was exhausted" on every probe window.
+        $retirementProbeDeadline = new RetirementProbeDeadline();
         /** @var array<string,array<string,mixed>>|null */
         $retirementPendingProbeCache = null;
         $retirementPendingProbeCacheUntil = 0.0;
@@ -336,11 +371,20 @@ final class Agent extends CommandAbstract
                         );
                     }
                 }
+                // pollDesiredStateJob() releases the job handle, so capture the
+                // exact job identity before polling: every later failure log
+                // and backoff observation must correlate to this child.
+                $desiredStateBuildJobId = \is_array($desiredStateJob)
+                    ? (string)($desiredStateJob['job_id'] ?? '')
+                    : '';
                 $desiredStateResult = $this->pollDesiredStateJob(
                     $desiredStateJob,
                     $now,
                 );
                 if (\is_array($desiredStateResult)) {
+                    $desiredStateResultAction = (string)(
+                        $desiredStateResult['action'] ?? ''
+                    );
                     if ((string)($desiredStateResult['action'] ?? '') === 'retirements') {
                         $retirementPayload = \is_array($desiredStateResult['retirements'] ?? null)
                             ? $desiredStateResult['retirements']
@@ -368,6 +412,12 @@ final class Agent extends CommandAbstract
                         $lastPublicProbe = 0.0;
                         $probeRegistration = $registration;
                         $desiredStateBuildPending = false;
+                        // An adopted envelope proves the build path is healthy
+                        // again: drop every retry penalty immediately.
+                        $this->noteDesiredStateBuildSuccess(
+                            $desiredStateBuildBackoff,
+                            $desiredStateBuildLog,
+                        );
                         if (\in_array(
                             (string)($desiredStateResult['action'] ?? ''),
                             ['register', 'certificates'],
@@ -380,6 +430,26 @@ final class Agent extends CommandAbstract
                         // usable, but a new registration attempt is gated by
                         // the next heartbeat/replay fence.
                         $desiredStateBuildPending = $probeRegistration === null;
+                    } elseif ($desiredStateResultAction === 'build') {
+                        // A build whose result cannot be adopted (worker error,
+                        // or ok=true without a registration payload) must never
+                        // be re-spawned on the next tick. Record it so the
+                        // bounded schedule and the resolved-edge gate decide
+                        // when another expensive child is justified.
+                        $this->noteDesiredStateBuildFailure(
+                            $desiredStateBuildBackoff,
+                            $desiredStateBuildLog,
+                            (string)(
+                                $desiredStateResult['error']['class'] ?? 'build_failed'
+                            ),
+                            (string)(
+                                $desiredStateResult['error']['message']
+                                ?? 'desired-state build produced no registration.'
+                            ),
+                            $desiredStateBuildJobId,
+                            $now,
+                            'worker',
+                        );
                     }
                 }
                 $joinRequired = $builder->requiresJoinBackend($instanceName);
@@ -571,7 +641,9 @@ final class Agent extends CommandAbstract
                                 $certificateRetirementReplay = $retirementPendingProbeCache;
                             } else {
                                 $certificateRetirementReplay = $certificateRetirements
-                                    ->pendingRetirementIntents($now + 0.25);
+                                    ->pendingRetirementIntents(
+                                        $retirementProbeDeadline->forTick($tickDeadline),
+                                    );
                                 $retirementPendingProbeCache = $certificateRetirementReplay;
                                 $retirementPendingProbeCacheUntil = $now
                                     + $retirementReplayBackoff->probeCacheTtlSeconds();
@@ -1163,6 +1235,25 @@ final class Agent extends CommandAbstract
                     && \count($this->deferredDesiredStateReap)
                         < self::DEFERRED_REAP_MAXIMUM
                 ) {
+                    // A changed gateway intent (resolved edge mode, join state,
+                    // native edge state or launch identity) is new intent, not
+                    // a retry of the failed work: re-arm the build schedule once
+                    // so a sticky degradation cannot outlive a reconfiguration.
+                    // The minimum interval absorbs a joinState that flaps.
+                    $this->rearmDesiredStateBuildBackoffOnIntentChange(
+                        $desiredStateBuildBackoff,
+                        $desiredStateBuildIntentFence,
+                        $desiredStateBuildStableIntentFence,
+                        $lastDesiredStateBuildReArmAt,
+                        $now,
+                        $desiredStateEdgeModeProbe,
+                        $joinRequired,
+                        $joinState,
+                        $nativeEdgeState,
+                        $masterEpoch,
+                        $instanceGeneration,
+                        $masterLaunchId,
+                    );
                     $desiredStateAction = '';
                     if ($certificateRetirementReplay !== []
                         && $retirementReplayBackoff->isDue($now, $lastCertificateReplayAt)
@@ -1185,6 +1276,14 @@ final class Agent extends CommandAbstract
                         $desiredStateAction = 'register';
                     } elseif ($desiredStateBuildPending
                         && self::canPreparePublicProbe($joinRequired, $joinState)
+                        && !$this->desiredStateBuildSuppressedByResolvedEdgeMode(
+                            $instanceName,
+                            $now,
+                            $tickDeadline,
+                            $desiredStateEdgeModeProbe,
+                            $lastDesiredStateEdgeSuppressedLogAt,
+                        )
+                        && $desiredStateBuildBackoff->isDue()
                     ) {
                         $desiredStateAction = 'build';
                     }
@@ -1218,6 +1317,21 @@ final class Agent extends CommandAbstract
                                 $desiredStateBuildPending = false;
                             }
                         } catch (\Throwable $throwable) {
+                            if ($desiredStateAction === 'build') {
+                                // A spawn/authorization failure is a failed
+                                // build attempt too: degrade on permanent
+                                // configuration errors instead of retrying a
+                                // broken configuration every tick.
+                                $this->noteDesiredStateBuildFailure(
+                                    $desiredStateBuildBackoff,
+                                    $desiredStateBuildLog,
+                                    \get_class($throwable),
+                                    $throwable->getMessage(),
+                                    '',
+                                    $now,
+                                    'launch',
+                                );
+                            }
                             // Process creation is retried on a later loop; the
                             // heartbeat and fallback state machines continue.
                             if ($lastDesiredStateLaunchFailureLogAt <= 0.0
@@ -1283,6 +1397,8 @@ final class Agent extends CommandAbstract
         $lastLaunchFailureLogAt = 0.0;
         $retirementStore = new ProjectCertificateGenerationStore();
         $retirementReplayBackoff = new CertificateRetirementReplayBackoff();
+        // Same current-clock deadline rule as the main lease loop.
+        $retirementProbeDeadline = new RetirementProbeDeadline();
         /** @var array<string,array<string,mixed>>|null */
         $pendingProbeCache = null;
         $pendingProbeCacheUntil = 0.0;
@@ -1332,7 +1448,9 @@ final class Agent extends CommandAbstract
                             $pendingRetirements = $pendingProbeCache;
                         } else {
                             $pendingRetirements = $retirementStore
-                                ->pendingRetirementIntents($now + 0.25);
+                                ->pendingRetirementIntents(
+                                    $retirementProbeDeadline->forTick($tickDeadline),
+                                );
                             $pendingProbeCache = $pendingRetirements;
                             $pendingProbeCacheUntil = $now
                                 + $retirementReplayBackoff->probeCacheTtlSeconds();
@@ -2106,6 +2224,257 @@ final class Agent extends CommandAbstract
         } finally {
             $this->removeDesiredStateResult($resultFile);
         }
+    }
+
+    /**
+     * An adopted desired-state build clears every retry penalty immediately.
+     *
+     * @param array{failure_at:float,degraded_at:float,degraded_reason:string} $logState
+     */
+    private function noteDesiredStateBuildSuccess(
+        DesiredStateRetryBackoff $backoff,
+        array &$logState,
+    ): void {
+        $previousStreak = $backoff->failureStreak();
+        $previousReason = $backoff->degradedReason();
+        $backoff->recordSuccess();
+        $logState['degraded_reason'] = '';
+        if ($previousStreak > 0 || $previousReason !== '') {
+            WlsLogger::notice_(
+                '[WlsGatewayAgent] desired-state build recovered after '
+                . $previousStreak
+                . ' failure(s)'
+                . ($previousReason !== ''
+                    ? '; previous degradation=' . $previousReason
+                    : '')
+                . '; retry floor restored'
+            );
+        }
+    }
+
+    /**
+     * Record one failed desired-state build attempt (worker result or spawn
+     * failure) and surface it without flooding the WLS log.
+     *
+     * @param array{failure_at:float,degraded_at:float,degraded_reason:string} $logState
+     */
+    private function noteDesiredStateBuildFailure(
+        DesiredStateRetryBackoff $backoff,
+        array &$logState,
+        string $errorClass,
+        string $errorMessage,
+        string $jobId,
+        float $now,
+        string $phase,
+    ): void {
+        $boundedClass = GatewayBoundedText::singleLine($errorClass, 256, 'Throwable');
+        $boundedMessage = GatewayBoundedText::singleLine(
+            $errorMessage,
+            1024,
+            'desired-state build failed',
+        );
+        $previousReason = $backoff->degradedReason();
+        $nextAttemptAt = $backoff->recordFailure($boundedClass, $boundedMessage);
+        $reason = $backoff->degradedReason();
+        $observation = $backoff->observation();
+        $prefix = $phase === 'launch'
+            ? '[WlsGatewayAgent] desired-state worker launch failed'
+            : '[WlsGatewayAgent] desired-state build failed';
+        $detail = ' phase=' . $phase
+            . ' action=build'
+            . ' job_id=' . ($jobId !== '' ? $jobId : '-')
+            . ' error_class=' . $boundedClass
+            . ' streak=' . (int)$observation['failure_streak']
+            . ' message=' . $boundedMessage;
+        if ($reason !== '' && $reason !== $previousReason) {
+            $logState['degraded_reason'] = $reason;
+            $logState['degraded_at'] = $now;
+            WlsLogger::error_(
+                '[WlsGatewayAgent] desired-state build degraded: reason=' . $reason
+                . ($reason === 'permanent_configuration_error'
+                    ? ' (permanent configuration error; no retry until the gateway intent changes)'
+                    : ' (consecutive failures; no retry until a build succeeds or the gateway intent changes)')
+                . $detail
+            );
+
+            return;
+        }
+        if ($reason !== '') {
+            if ($logState['degraded_reason'] !== $reason) {
+                $logState['degraded_reason'] = $reason;
+            }
+            if ($logState['degraded_at'] <= 0.0
+                || $now - $logState['degraded_at']
+                    >= self::DESIRED_STATE_BUILD_DEGRADED_LOG_SECONDS
+            ) {
+                $logState['degraded_at'] = $now;
+                WlsLogger::warning_(
+                    '[WlsGatewayAgent] desired-state build still degraded: reason='
+                    . $reason . $detail
+                );
+            }
+
+            return;
+        }
+        if ($logState['failure_at'] > 0.0
+            && $now - $logState['failure_at']
+                < self::DESIRED_STATE_BUILD_FAILURE_LOG_SECONDS
+        ) {
+            return;
+        }
+        $logState['failure_at'] = $now;
+        WlsLogger::warning_(
+            $prefix
+            . '; retry scheduled in '
+            . \number_format(
+                \max(0.0, $nextAttemptAt - $this->monotonicNow()),
+                3,
+                '.',
+                '',
+            )
+            . 's:' . $detail
+        );
+    }
+
+    /**
+     * Re-arm the build retry schedule only when the external gateway intent
+     * changed. Identical values never reset the schedule, and a minimum
+     * interval keeps a flapping joinState from becoming another spawn storm.
+     *
+     * A permanent configuration error can only be cleared by a change of the
+     * stable launch identity (edge mode, join requirement, epoch, generation,
+     * launch id). joinState / nativeEdgeState are transitional observations
+     * that flap without changing the configuration; re-arming on them would
+     * spend another full bootstrap (~5-13 CPU seconds) every minimum interval
+     * forever, which is the same unbounded-spawn failure this schedule exists
+     * to stop.
+     *
+     * @param array{suppressed:bool,probed_at:float,mode:string} $edgeModeProbe
+     */
+    private function rearmDesiredStateBuildBackoffOnIntentChange(
+        DesiredStateRetryBackoff $backoff,
+        string &$intentFence,
+        string &$stableIntentFence,
+        float &$lastReArmAt,
+        float $now,
+        array $edgeModeProbe,
+        bool $joinRequired,
+        string $joinState,
+        string $nativeEdgeState,
+        int $masterEpoch,
+        int $instanceGeneration,
+        string $masterLaunchId,
+    ): void {
+        $stableFence = \implode('|', [
+            (string)($edgeModeProbe['mode'] ?? ''),
+            $joinRequired ? 'join' : 'native',
+            (string)$masterEpoch,
+            (string)$instanceGeneration,
+            $masterLaunchId,
+        ]);
+        $fence = $stableFence . '#' . $joinState . '|' . $nativeEdgeState;
+        $permanent = $backoff->degradedReason() === 'permanent_configuration_error';
+        $changed = $permanent
+            ? !\hash_equals($stableIntentFence, $stableFence)
+            : !\hash_equals($intentFence, $fence);
+        if (!$changed) {
+            // Keep both snapshots current so merely entering or leaving a
+            // permanent degradation is never mistaken for an intent change.
+            $intentFence = $fence;
+            $stableIntentFence = $stableFence;
+            return;
+        }
+        if ($lastReArmAt > 0.0
+            && $now - $lastReArmAt < self::DESIRED_STATE_BUILD_REARM_MIN_SECONDS
+        ) {
+            // Fence flapping guard: keep the pending change, retry the re-arm
+            // once the floor elapses instead of resetting on every tick.
+            return;
+        }
+        $previousStreak = $backoff->failureStreak();
+        $previousReason = $backoff->degradedReason();
+        $backoff->recordSuccess();
+        $intentFence = $fence;
+        $stableIntentFence = $stableFence;
+        $lastReArmAt = $now;
+        if ($previousStreak > 0 || $previousReason !== '') {
+            WlsLogger::notice_(
+                '[WlsGatewayAgent] desired-state build retry re-armed after gateway '
+                . 'intent change'
+                . ($permanent ? ' (stable identity only)' : '')
+                . ': '
+                . GatewayBoundedText::singleLine($fence, 512, 'intent changed')
+                . '; cleared degradation='
+                . ($previousReason !== '' ? $previousReason : 'none')
+            );
+        }
+    }
+
+    /**
+     * A resolved `legacy` edge mode (WLS 1.x managed Nginx that was never
+     * promoted) is not a wls-edge/2 join tenant: its desired-state build can
+     * never succeed because the schema-6 startup lease is written only for a
+     * gateway startup, so retrying it every tick only burns CPU. Suppress the
+     * build spawn here — never the public probe, fallback or certificate paths.
+     *
+     * Probing is cached and fail-open: any endpoint read error keeps the
+     * existing join/registration behaviour untouched.
+     *
+     * @param array{suppressed:bool,probed_at:float,mode:string} $probe
+     */
+    private function desiredStateBuildSuppressedByResolvedEdgeMode(
+        string $instanceName,
+        float $now,
+        float $tickDeadline,
+        array &$probe,
+        float &$lastSuppressedLogAt,
+    ): bool {
+        if ($probe['probed_at'] > 0.0
+            && $now - $probe['probed_at']
+                < self::DESIRED_STATE_EDGE_MODE_PROBE_SECONDS
+        ) {
+            return $probe['suppressed'] === true;
+        }
+        $probe['probed_at'] = $now;
+        try {
+            $deadline = \min($tickDeadline, $this->monotonicNow() + 0.5);
+            $endpoint = (new GatewayProjectEndpointReader())->read(
+                $instanceName,
+                $deadline,
+            );
+            $gateway = \is_array($endpoint['gateway'] ?? null)
+                ? $endpoint['gateway']
+                : [];
+            $mode = \strtolower(\trim((string)($gateway['mode'] ?? '')));
+            $servingMode = \strtolower(\trim(
+                (string)($gateway['serving_mode'] ?? ''),
+            ));
+            if ($mode !== '') {
+                $probe['mode'] = $mode;
+            } elseif ($servingMode !== '') {
+                $probe['mode'] = $servingMode;
+            }
+            $probe['suppressed'] = $mode === 'legacy' || $servingMode === 'legacy';
+        } catch (\Throwable) {
+            // Fail-open: the endpoint is a diagnostic source here. A read
+            // failure must never suppress a legitimate join/registration path.
+            $probe['suppressed'] = false;
+        }
+        if ($probe['suppressed'] === true
+            && ($lastSuppressedLogAt <= 0.0
+                || $now - $lastSuppressedLogAt
+                    >= self::DESIRED_STATE_EDGE_SUPPRESSED_LOG_SECONDS)
+        ) {
+            $lastSuppressedLogAt = $now;
+            WlsLogger::warning_(
+                '[WlsGatewayAgent] desired-state build suppressed: resolved gateway '
+                . 'edge mode is legacy (mode='
+                . ($probe['mode'] !== '' ? $probe['mode'] : 'unknown')
+                . '); heartbeat, public probe and certificate semantics are unchanged'
+            );
+        }
+
+        return $probe['suppressed'] === true;
     }
 
     /** @param array<string,mixed>|null $job */

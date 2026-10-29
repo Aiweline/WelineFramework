@@ -369,9 +369,23 @@ final class GatewayFallbackProviderTest extends TestCase
         self::assertStringContainsString('notePendingQueue()', $loopSource);
         self::assertStringContainsString('probeCacheTtlSeconds()', $loopSource);
         self::assertStringContainsString('cooperativeTickMilliseconds(', $loopSource);
-        self::assertStringContainsString(
-            'pendingRetirementIntents($now + 0.25)',
+        // task-6 B1 (semantic lock, replaces the former `$now + 0.25` literal):
+        // the retirement probe deadline must come from the CURRENT monotonic
+        // clock through RetirementProbeDeadline, never from the tick start.
+        // A tick-start deadline is already expired once earlier tick work spent
+        // >250 ms, which is exactly the production
+        // "Certificate retirement state deadline was exhausted." storm.
+        self::assertStringContainsString('RetirementProbeDeadline', $loopSource);
+        self::assertMatchesRegularExpression(
+            '/pendingRetirementIntents\(\s*\$retirementProbeDeadline->forTick\(\s*'
+                . '\$tickDeadline\s*\)\s*,?\s*\)/',
             $loopSource,
+            'the retirement-only loop must probe with a current-clock deadline',
+        );
+        self::assertStringNotContainsString(
+            '$now + 0.25',
+            $loopSource,
+            'a tick-start derived retirement deadline must not come back',
         );
         self::assertStringContainsString("'retirements'", $loopSource);
         self::assertStringContainsString('startDesiredStateJob(', $loopSource);
