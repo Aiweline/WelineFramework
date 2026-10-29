@@ -514,7 +514,15 @@ final class ThemeHeadChromeCssPack
             $attrs .= ' data-weline-theme-tokens="1"';
         }
         $this->markPackEmitted($area, $pack);
-        return '<link rel="preload" as="style" href="' . $safe . '"' . $attrs
+        // fetchpriority=low（2026-10-29 LCP 优化）：storefront/overlay 是非阻塞装饰性主包（几十~267KB），
+        // 默认 preload 优先级与首屏 LCP 图同为 High，在 4G 下会把带宽从图上抢走（实测 LCP 2.7s）。
+        // 首屏骨架由 layout-critical + 内联 tokens 兜住（CLS 实测 0），故让位给图安全。
+        // 可用 $options['preload_priority'] 覆盖（例如 'auto' 回到旧行为）。
+        $priority = (string)($options['preload_priority'] ?? 'low');
+        $priorityAttr = ($priority !== '' && $priority !== 'auto')
+            ? ' fetchpriority="' . htmlspecialchars($priority, ENT_QUOTES) . '"'
+            : '';
+        return '<link rel="preload" as="style" href="' . $safe . '"' . $attrs . $priorityAttr
             . ' onload="this.onload=null;this.rel=\'stylesheet\'">'
             . '<noscript><link rel="stylesheet" href="' . $safe . '"' . $attrs . '></noscript>';
     }
