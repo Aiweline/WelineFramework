@@ -1,14 +1,31 @@
-# 主题 CSS/PHTML 变量强约束（禁止硬编码视觉字面量）
+# 主题 CSS/PHTML 变量强约束（变量单一作者 · 外部只许引用）
 
-> **强约束 / 高压线**：默认主题与设计主题的源 CSS、以及 `.phtml` 内嵌 `<style>` / 行内 `style`，**禁止**直接写颜色、字号、间距、圆角、阴影等视觉字面量；必须使用主题变量色盘与间距/字体/边框/阴影 Token。  
+> **强约束 / 高压线（2026-10-29 用户口径升级）**：**所有视觉变量（颜色、字号、间距、圆角、阴影、字重、控件高、断点外的刻度…）只有一个作者——主题变量盘**。默认主题与设计主题的源 CSS、`.phtml` 内嵌 `<style>` / 行内 `style`、部件参数、布局/部件/partial 模板，**一律禁止写任何硬编码视觉字面量，也禁止自建平行变量**；只能 `var(--已登记Token)` 引用已登记的主题变量。  
+> **兜底例外（本条 supersede 旧「禁止 fallback 字面量」条款）**：允许 `var(--token, 默认值)` ——**默认值只在「该变量不存在」时生效**，这是唯一允许在外部出现字面量的形态；但兜底**不得**变成「模板自己定义该变量的实际色/值」：兜底值必须与主题盘叶子同义，且**禁止**靠兜底实现主题未声明的视觉。  
+> **变量可以加，但必须加在主题变量盘里再被引用**：需要新变量/新颜色/新刻度 → 在 `variables/_*.css` / `colors/_*.css`（或 design 主题对应盘）**声明叶子**，再由外部 `var()` 消费；**禁止**在模板/组件里直接写字面量或私建 `--my-*` 平行变量绕过主题盘。  
 > 权威约束归属 `Weline_Theme` 模块文档；由 MCP 按任务动态检索。  
-> 关联需求：`REQ-THEME-0007`。全局硬约束参见 `app/code/Weline/Ai/doc/AI开发治理.md` §7。
+> 关联需求：`REQ-THEME-0007`。MCP 硬规则：`theme_variables_single_author_no_hardcode`。  
+> 全局硬约束参见 `app/code/Weline/Ai/doc/AI开发治理.md` §7。
 
 ## 目标
 
-1. 视觉表现由主题盘（palette / semantic Token）统一控制，支持亮暗色、Scope 覆盖与 Theme Editor 外观盘。
-2. 禁止页面/部件各自“私写” `#hex`、`rgb()`、`px/rem` 字面量导致无法换盘、暗色漏适配。
+1. 视觉表现由主题盘（palette / semantic Token）**单一作者**统一控制，支持亮暗色、Scope 覆盖与 Theme Editor 外观盘。
+2. 禁止页面/部件各自“私写” `#hex`、`rgb()`、`px/rem` 字面量，也禁止各自私建平行变量，导致无法换盘、暗色漏适配。
 3. 新增与修改默认主题时，以 Token 为唯一视觉来源，避免回归硬编码。
+
+## 变量单一作者契约（硬 · `theme_variables_single_author_no_hardcode`）
+
+**判定谓词**：`Hardcode(外部) ∨ PrivateVar(外部) → ⊥`；`NeedVar → □(DeclareInThemePlate ∧ ConsumeViaVar)`。
+
+| 层 | 谁能写 | 写什么 |
+|---|---|---|
+| **主题变量盘（唯一作者）** | 主题开发 / design 主题 | 叶子的**默认值字面量**：颜色、字号、间距、圆角、阴影、字重、控件高、z-index 等全部视觉变量 |
+| **Foundation 桥接**（`foundation.css`） | 主题层 | `--weline-theme-* ← var(--color-*)` 只做映射，不新造值 |
+| **组件 / 布局 / 部件 / partial / 模板 / 内嵌 `<style>` / 行内 `style`** | 任何业务方 | **只准** `var(--已登记Token)`；允许 `var(--token, 默认值)` 兜底；**不准**任何字面色值、也不准私建平行变量 |
+
+**兜底（默认值）细则**：`var(--token, 默认值)` 中默认值语义 = 「变量不存在时才用」→ 允许；但 ① 默认值必须与主题盘叶子同义（不与盘冲突）；② 不得用兜底承载主题尚未声明的视觉（那等于模板私造色，须回盘加叶子）；③ 一个 Token 若全站都需要，禁止靠各模板兜底各写一份。
+
+**加变量的正确姿势**：需要新色/新刻度 → ① 先在 `variables/_colors.css`（或 `_spacing.css` / `_borders.css` / `_typography.css` / `_shadows.css`）声明叶子；② 颜色的 `@meta.panel` 归属 `color`；③ 亮/暗/品牌盘按需给差异；④ 外部再 `var()` 引用。
 
 ## 唯一来源（Token 根）
 
@@ -35,6 +52,35 @@
 4. **禁止空壳（硬 · MCP `theme_referenced_tokens_must_resolve`）**：业务/基础组件侧不得只写 `var(--new-token)` / 标 `data-tone` 却不在盘内定义叶子；桥接层 `theme.css` 的 `var(--x, fallback)` 不能替代色盘登记。暗色模式属性有了但颜色不生效 = 叶子缺失，须补 `_dark`（或模式盘）而非组件私造色。
 5. **继承（default 为准 · 一层）**：前台 `_default` → 品牌盘（如 `_ink`）→ `_light` → `_dark`；后台 `_default` → `_light` → `_dark`。模式盘（light/dark）只写差异；未覆盖叶子继承 `_default`。chrome pack 编译合并同序。品牌盘只叠加品牌叶子，不拆除 secondary/status 全家。模式盘禁止用裸 `:root` 污染另一模式。
 6. **验收**：对新增 Token 做「引用 → 盘内定义 → 亮/暗可解析」三连检查；Theme Editor 外观盘应能看到非空默认。审图见按钮色/字重/描边未按主题生效 → 补主题全局叶子到 pass。
+
+### 零漂移硬目标（HARD · 2026-10-29 用户指定「对齐所有自定义主题，不允许漂移」）
+
+**同一 Token 名在两处盘里必须同值。同键不同值 = 漂移缺陷，交付前必须归零。**
+
+| 对比对 | 同口径 | 允许漂移数 |
+|---|---|---|
+| `{area}/variables/*.css` vs `{area}/colors/*.css` | 同 key，按**末次声明胜出**（同一 `:root` 块内后写覆盖先写） | **0**（前后台核心盘 + 全部 design 主题盘） |
+
+**方向（HARD）**：以 `colors/_default.css`（默认色合同）为基准单向对齐兜底盘，**不是**双向折中。默认盘改了若影响到兜底就向外辐射改兜底；**自定义主题自己定义的变量不干扰**（design 主题只查自己盘内同名漂移，不改其取值）。
+
+**判定口径（HARD）**：必须按**末次声明**统计，不是首次——同一 `:root` 块里重复声明同一个 key 时，后者胜出，按首次会把「实际生效值」算错。
+
+**审计命令**（机器可判定，输出漂移数须为 `0`）：
+
+```bash
+# 前/后台核心盘（把 variables/_colors.css 与 colors/_default.css 的同 key 不同值列出来）
+php -r 'function L($p){$t=file_get_contents($p);$t=preg_replace("~/\\*.*?\\*/~s","",$t);$o=[];preg_match_all("/(--[A-Za-z0-9_-]+)\\s*:\\s*([^;]+);/",$t,$m,PREG_SET_ORDER);foreach($m as $x){$o[$x[1]]=trim($x[2]);}return $o;}foreach([["frontend","app/code/Weline/Theme/view/theme/frontend"],["backend","app/code/Weline/Theme/view/theme/backend"]] as $a){[$n,$b]=$a;$v=L("$b/variables/_colors.css");$d=L("$b/colors/_default.css");$k=array_intersect_key($v,$d);$dr=[];foreach($k as $t=>$val){if($val!==$d[$t])$dr[]="$t $val -> ".$d[$t];}echo "$n 同key=".count($k)." 漂移=".count($dr).PHP_EOL;foreach($dr as $s)echo "  $s".PHP_EOL;}'
+```
+
+**收口标准**：上述命令的**唯一可接受输出**是——`backend 同key=153 漂移=0`，以及 `frontend` 行为 `漂移=1` 且那 1 条恰为 `--color-border-default var(--color-border-soft, …) -> #e5e7eb`（`DefaultFrontendLegacyTokenBridgeTest` 逐字锁定的兼容别名链，字面量形态不可改、解析值已与默认盘同值）。除这 1 条之外出现任何漂移行 = 未收口。
+
+实测样本（2026-10-29 对齐后）：
+
+```
+frontend 同key=130 漂移=1
+  --color-border-default var(--color-border-soft, var(--color-border-light, #d2d2d7)) -> #e5e7eb
+backend 同key=153 漂移=0
+```
 
 7. **@media 断点例外**：`@media` 条件里**禁止** `var(--breakpoint-*)` / `var(--token-bp-*)`（浏览器会忽略整条规则，布局全乱）。断点须写 `768px` 等字面量；变量盘里的 `--breakpoint-md` 等只供 JS/文档，不进 `@media`。
 
@@ -69,7 +115,9 @@
 | 尺寸 | `12px`、`1.5rem`、`10%` 用作字号/间距/宽高/圆角（布局百分比除外见下） |
 | 阴影/边框观感 | 自写 `box-shadow:` / `border-radius:` 数字字面量 |
 | 行内样式 | `style="color:#..."`、`style="font-size:14px"` |
-| 假变量 | `var(--x, #fff)` / `var(--x, 16px)` 用字面量作 fallback（须收敛为纯 Token） |
+| **平行变量（硬 · `theme_variables_single_author_no_hardcode`）** | 外部私建 `--my-btn-bg` / `--brand-color` / `--token-color-e2e8f0` 等**未在主题盘声明**的变量，再拿字面量喂它——等于绕过主题盘私造视觉 |
+| **兜底越界** | 把 `var(--token, 默认值)` 的默认值当成实际视觉来源：默认值与盘叶子不同义、或靠兜底实现主题盘未声明的色/刻度（须回盘加叶子，见「兜底细则」） |
+| ~~假变量~~（**已 supersede · 2026-10-29 用户口径**） | ~~`var(--x, #fff)` / `var(--x, 16px)` 用字面量作 fallback（须收敛为纯 Token）~~ → 现已**允许**兜底；仅禁止上两行所述越界形态 |
 | **`!important`（默认层硬 · `theme_default_forbids_css_important`）** | 默认主题（`app/code/Weline/Theme/view/theme/**` 与默认层静态 CSS）视觉/布局/呈现声明写 `!important`「硬抢」（**含** `var(--token) !important`）——会逼自定义主题跟着打战争 |
 
 ### 默认层禁 `!important` · design 只继承改（流程）
@@ -90,7 +138,9 @@
 ## 允许
 
 - `var(--token-name)` / `var(--w-*)` 等已登记 Token
-- 在 `variables/**`、`colors/**` 内**定义** Token（此处可出现字面量，作为盘的叶子值）
+- **`var(--token, 默认值)` 兜底**（`var(--x, #fff)` / `var(--x, 16px)`）：默认值**只在变量不存在时生效**；须与主题盘叶子同义，且不得成为该视觉的实际来源（详见「兜底细则」）
+- 在 `variables/**`、`colors/**` 内**定义** Token（此处可出现字面量，作为盘的叶子值）——**这是全仓唯一允许写字面视觉值的地方**
+- 在 `variables/**` / `colors/**` 内**新增**变量（任何视觉类别均可加），加完由外部 `var()` 消费
 - `0`、`none`、`transparent`、`currentColor`、`inherit`、`auto`、`100%`（仅流式布局宽高）、`1`/`0` 作为 `opacity`/`flex` 等非主题色盘语义
 - **inverse 下 raised 纸面钉**（见上「WO-UI-CONTRAST-INVERSE 纸面钉例外」）：面板根上的 `#0f1111` / `#565959` / `#666666` 用于钉 `--weline-chrome-body-text*`——**不是**违规硬编码
 - `@media` 断点字面量（见上「@media 断点例外」）
@@ -100,16 +150,22 @@
 ## 写法对照
 
 ```css
-/* 禁止 */
+/* 禁止：外部写字面色值 */
 .card { color: #333; padding: 16px; border-radius: 8px; background: #fff; }
 
-/* 必须 */
+/* 禁止：外部私建平行变量再喂字面量 */
+.card { --card-bg: #fff; background: var(--card-bg); }
+
+/* 必须：只引用主题盘变量 */
 .card {
   color: var(--w-color-text);
   padding: var(--w-space-4);
   border-radius: var(--w-radius-md);
   background: var(--w-color-surface);
 }
+
+/* 允许：兜底仅在变量不存在时生效 */
+.card { background: var(--w-color-surface, #fff); }
 ```
 
 ```html
@@ -120,12 +176,29 @@
 <div class="w-text-danger">...</div>
 ```
 
+```text
+/* 需要新颜色/新刻度时，正确姿势是回盘加叶子，不是模板里造 */
+1. app/code/Weline/Theme/view/theme/frontend/variables/_colors.css
+     --color-brand-accent: #xxxxxx;   /* @meta.panel = color */
+   或 colors/_default.css / _light.css / _dark.css （亮暗差异）
+2. 外部：color: var(--color-brand-accent);
+```
+
 ## 扫描与验收
 
-- 范围：`app/code/Weline/Theme/view/theme/{frontend,backend}`（排除 `variables/**`、`colors/**`）
+**扫描面（覆盖到模板层，不只 CSS）**：
+
+| 通道 | 范围 | 判定 |
+|---|---|---|
+| CSS 字面量 | `view/theme/{frontend,backend}/**/*.css`（排除 `variables/**`、`colors/**`） | 出现 `#hex` / `rgb()` / 裸刻度 → 违规 |
+| 模板内嵌样式 | 布局 / 部件 / partial 的 `.phtml` 内 `<style>` 与行内 `style` | 同上；含 `var(--x, 字面) **私义**` → 违规 |
+| 部件参数 | `@param … type="color"` 的**自由 hex 默认值** | 违规；应改语义 `select` + 语义选项（详见 `部件开发指南.md`） |
+| 运行期注入 | 模板 `data-widget-style` / 内联 CSS 属性注入 `color` / `background-color` 字面 | 违规；应改 `data-tone` 或语义 class |
+| 平行变量 | 外部 `--my-*` / `--brand-color` 等不在主题盘声明的变量 | 违规 |
+
 - 审计快照与优先改造清单：[`theme-hardcoded-visual-audit.md`](./theme-hardcoded-visual-audit.md)
 - 新增/修改主题视觉后，应对照该清单收敛；Theme Editor 外观盘与编译产物须能覆盖同一 Token 集
-- 本约束当前以文档 + 清单门禁为主；后续可升级为 Rules/CLI 扫描（不在本需求范围内强绑实现）
+- 本约束以文档 + 清单 + 契约测试门禁为主；模板层扫描（部件参数 / 运行期注入）为 2026-10-29 新增扫描面，存量分批收敛
 
 ## 非目标
 

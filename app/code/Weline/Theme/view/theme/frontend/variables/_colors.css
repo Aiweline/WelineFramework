@@ -13,68 +13,68 @@
 
 :root {
     /* ========== 品牌色（与 colors/_ink 对齐；盘加载前兜底） ========== */
-    --color-primary: #b84a3c;
-    --color-primary-light: #d4786a;
-    --color-primary-dark: #963b30;
-    --color-primary-border: #963b30;
-    --color-primary-hover: #963b30;
-    --color-primary-active: #7a3028;
-    --color-primary-bg-subtle: #f8ede9;
-    --color-primary-border-subtle: #e8c4bc;
-    --color-primary-text-emphasis: #7a3028;
-    --color-on-primary: #f7f4ef;
+    --color-primary: #0f766e;
+    --color-primary-light: #14b8a6;
+    --color-primary-dark: #0d5f59;
+    --color-primary-border: #0a4f4a;
+    --color-primary-hover: #0d5f59;
+    --color-primary-active: #0a4f4a;
+    --color-primary-bg-subtle: #f0fdfa;
+    --color-primary-border-subtle: #99f6e4;
+    --color-primary-text-emphasis: #115e59;
+    --color-on-primary: #f8fafc;
 
     /* ========== 文本色（默认可继承语义合同） ========== */
-    --color-text: #1c1c1c;
-    --color-text-rgb: 28, 28, 28;
-    --color-emphasis-rgb: 28, 28, 28;
+    --color-text: #111827;
+    --color-text-rgb: 17, 24, 39;
+    --color-emphasis-rgb: 17, 24, 39;
     --color-text-primary: var(--color-text);
-    --color-text-body: #1c1c1c;
-    --color-text-secondary: #4a4a48;
+    --color-text-body: var(--color-text);
+    --color-text-secondary: #4b5563;
     /* WCAG AA: tertiary/subtle/placeholder are real text tokens — keep >= 4.5:1 on
        --color-bg-canvas and --color-bg-primary. Guarded by ContrastTokenTest (E11). */
-    --color-text-tertiary: #6b6a66;
-    --color-text-subtle: #6b6a66;
-    --color-text-disabled: #b8b4ac;
-    --color-text-dark: #1c1c1c;
-    --color-text-muted: #5c5a56;
-    --color-text-placeholder: #6f6b62;
-    --color-text-inverse: #f7f4ef;
-    --color-text-light: #f7f4ef;
-    --color-text-light-secondary: #d4cfc5;
-    --color-text-on-dark: #f7f4ef;
-    --color-text-on-dark-muted: #d4cfc5;
+    --color-text-tertiary: #556074;
+    --color-text-subtle: #6b7280;
+    --color-text-disabled: #c7c7c7;
+    --color-text-dark: #111827;
+    --color-text-muted: #4b5563;
+    --color-text-placeholder: #6b7280;
+    --color-text-inverse: #ffffff;
+    --color-text-light: #f8fafc;
+    --color-text-light-secondary: #e5e7eb;
+    --color-text-on-dark: #f8fafc;
+    --color-text-on-dark-muted: #cbd5e1;
 
     /* ========== 背景 / 表面（默认可继承） ========== */
-    --color-bg-canvas: #f7f4ef;
-    --color-bg-canvas-rgb: 247, 244, 239;
-    --color-bg-primary: #fffefa;
-    --color-bg-secondary: #ede9e1;
-    --color-bg-tertiary: #e0dbd2;
-    --color-bg-dark: #1f2124;
-    --color-bg-dark-secondary: #16181a;
-    --color-bg-dark-tertiary: #2c3034;
+    --color-bg-canvas: #ffffff;
+    --color-bg-canvas-rgb: 255, 255, 255;
+    --color-bg-primary: #ffffff;
+    --color-bg-secondary: #f3f4f6;
+    --color-bg-tertiary: #e5e7eb;
+    --color-bg-dark: #1f2937;
+    --color-bg-dark-secondary: #111827;
+    --color-bg-dark-tertiary: #374151;
     --color-bg-overlay: rgb(15 23 42 / 0.42);
     --color-surface: var(--color-bg-primary);
     --color-surface-subtle: var(--color-bg-secondary);
     --color-surface-muted: var(--color-bg-tertiary);
-    --color-surface-hover: #f0ebe3;
-    --color-surface-disabled: #ede9e1;
+    --color-surface-hover: #f3f4f6;
+    --color-surface-disabled: #f3f4f6;
 
     /* ========== 边框色（默认可继承） ========== */
-    --color-border-default: #d4cfc5;
-    --color-border-subtle: #e8e4dc;
-    --color-border-strong: #a8a299;
-    --color-border-emphasis: #a8a299;
-    --color-border-focus: #b84a3c;
-    --color-border-light: #e8e4dc;
+    --color-border-default: #e5e7eb;
+    --color-border-subtle: #f3f4f6;
+    --color-border-strong: #9ca3af;
+    --color-border-emphasis: #9ca3af;
+    --color-border-focus: #0f766e;
+    --color-border-light: #f3f4f6;
 
     /* ========== 强调色（与主色同族） ========== */
-    --color-accent: #b84a3c;
-    --color-accent-hover: #963b30;
-    --color-accent-light: rgba(184, 74, 60, 0.08);
-    --color-accent-medium: rgba(184, 74, 60, 0.14);
-    --color-accent-dark: rgba(184, 74, 60, 0.22);
+    --color-accent: #0f766e;
+    --color-accent-hover: #0d5f59;
+    --color-accent-light: rgba(15, 118, 110, 0.08);
+    --color-accent-medium: rgba(15, 118, 110, 0.14);
+    --color-accent-dark: rgba(15, 118, 110, 0.22);
 
     /* ========== 次色（secondary 全家 — 默认可继承） ========== */
     --color-secondary: #475569;
@@ -87,50 +87,50 @@
     --color-secondary-text-emphasis: #334155;
 
     /* ========== 功能色（status 全家 — 默认可继承） ========== */
-    --color-success: #4a7c59;
-    --color-success-rgb: 74, 124, 89;
-    --color-success-hover: #3d684a;
-    --color-success-active: #31543c;
+    --color-success: #15803d;
+    --color-success-rgb: 21, 128, 61;
+    --color-success-hover: #166534;
+    --color-success-active: #14532d;
     --color-on-success: #ffffff;
-    --color-success-bg-subtle: #e4efe7;
-    --color-success-border-subtle: #a8cbb3;
-    --color-success-text-emphasis: #31543c;
-    --color-warning: #c4893f;
-    --color-warning-rgb: 196, 137, 63;
-    --color-warning-hover: #a87334;
-    --color-warning-active: #8c602b;
+    --color-success-bg-subtle: #dcfce7;
+    --color-success-border-subtle: #86efac;
+    --color-success-text-emphasis: #166534;
+    --color-warning: #d97706;
+    --color-warning-rgb: 217, 119, 6;
+    --color-warning-hover: #b45309;
+    --color-warning-active: #92400e;
     --color-on-warning: #ffffff;
-    --color-warning-bg-subtle: #f8efe3;
-    --color-warning-border-subtle: #e8cda3;
-    --color-warning-text-emphasis: #8c602b;
-    --color-danger: #a63d3d;
-    --color-danger-rgb: 166, 61, 61;
-    --color-danger-hover: #8b3333;
-    --color-danger-active: #702929;
+    --color-warning-bg-subtle: #fef3c7;
+    --color-warning-border-subtle: #fcd34d;
+    --color-warning-text-emphasis: #92400e;
+    --color-danger: #dc2626;
+    --color-danger-rgb: 220, 38, 38;
+    --color-danger-hover: #b91c1c;
+    --color-danger-active: #991b1b;
     --color-on-danger: #ffffff;
-    --color-danger-bg-subtle: #f8ede9;
-    --color-danger-border-subtle: #e8c4bc;
-    --color-danger-text-emphasis: #702929;
+    --color-danger-bg-subtle: #fee2e2;
+    --color-danger-border-subtle: #fca5a5;
+    --color-danger-text-emphasis: #991b1b;
     --color-error: var(--color-danger);
     --color-error-hover: var(--color-danger-hover);
-    --color-error-light: rgba(166, 61, 61, 0.08);
-    --color-info: #4a6b8a;
-    --color-info-rgb: 74, 107, 138;
-    --color-info-hover: #3d5a74;
-    --color-info-active: #31495e;
+    --color-error-light: rgba(220, 38, 38, 0.08);
+    --color-info: #0369a1;
+    --color-info-rgb: 3, 105, 161;
+    --color-info-hover: #075985;
+    --color-info-active: #0c4a6e;
     --color-on-info: #ffffff;
-    --color-info-bg-subtle: #e8eef3;
-    --color-info-border-subtle: #b3c5d4;
-    --color-info-text-emphasis: #31495e;
+    --color-info-bg-subtle: #e0f2fe;
+    --color-info-border-subtle: #7dd3fc;
+    --color-info-text-emphasis: #075985;
 
     /* ========== 链接色 ========== */
-    --color-link: #3d6b78;
-    --color-link-hover: #b84a3c;
-    --color-link-visited: #5c4a6e;
+    --color-link: #0f766e;
+    --color-link-hover: #115e59;
+    --color-link-visited: #5b21b6;
 
     /* ========== 滚动条色系（默认，可被具体主题覆盖） ========== */
-    --scrollbar-thumb: #a2adb7;
-    --scrollbar-thumb-hover: #8590a5;
+    --scrollbar-thumb: #c1c1c1;
+    --scrollbar-thumb-hover: #a8a8a8;
     --scrollbar-track: transparent;
 
     /* ========== REQ-THEME-0007 语义补充色 ========== */
@@ -139,10 +139,10 @@
     --color-bg-muted: #f3f3f3;
     --color-bg-slate: #f8fafc;
     --color-text-slate: #111827;
-    --color-text-body: #212529;
+    --color-text-body: var(--color-text);
     --color-text-gray: #565959;
     --color-text-gray-mid: #666666;
-    --color-border-soft: #e9ecef;
+    --color-border-soft: #e5e7eb;
     --color-border-muted: #dee2e6;
     --color-border-slate: #e4e8f0;
     --color-accent-indigo: #556ee6;
@@ -188,7 +188,7 @@
     --color-on-dark-92: rgba(255, 255, 255, 0.92);
     --color-overlay-12: rgba(15, 23, 42, 0.12);
     --color-warning-glow: rgba(245, 158, 11, 0.22);
-    --color-primary-rgb: 184, 74, 60;
+    --color-primary-rgb: 15, 118, 110;
 
     --color-primary-soft: rgba(15, 118, 110, 0.16);
     --color-primary-glow: rgba(15, 118, 110, 0.4);
@@ -236,7 +236,7 @@
     --weline-chrome-body-text-heading: var(--color-text-dark);
     --weline-chrome-body-border: var(--color-border-default);
     --weline-chrome-body-link: var(--color-link);
-    --weline-chrome-body-link-hover: var(--color-link-hover);
+    --weline-chrome-body-link-hover: var(--color-primary);
     /* 顶栏 hover 下拉 / Mega Menu 面板文字（白底深字，与 text-light 区分） */
     --weline-chrome-menu-panel-text: var(--color-text-primary);
     --weline-chrome-menu-panel-text-heading: var(--color-text-dark);
@@ -328,9 +328,9 @@
     --token-color-rgba-96-165-250-0-42: rgba(96, 165, 250, 0.42);
 
     /* ========== 商品标签色（NEW / SALE 等，Theme Editor 色盘可统一配置） ========== */
-    --color-product-label-new-bg: #e6f2e6;
-    --color-product-label-new-text: #007600;
-    --color-product-label-sale-bg: #fde8ec;
+    --color-product-label-new-bg: #ecfdf5;
+    --color-product-label-new-text: #047857;
+    --color-product-label-sale-bg: #fef2f2;
     --color-product-label-sale-text: #9f1239;
     --weline-product-label-new-bg: var(--color-product-label-new-bg);
     --weline-product-label-new-text: var(--color-product-label-new-text);

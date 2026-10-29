@@ -148,6 +148,7 @@ final class HardConstraintsSymbolDsl
             'McpGen', 'HandEdit', 'GlobalRuleEdit', 'MCP', 'HostMdc', 'DemoPage', 'Git', 'CacheOff', 'Port',
             'SeverityUi', 'SemTone', 'AllDefault',
             'CompVar', 'PaletteLeaf', 'DanglingVar',
+            'VisualVar', 'ExtLiteral', 'PrivateVar', 'PlateLeaf',
             'ReqCtxAsk', 'ReadDiag', 'LogicChg', 'SyncDiag',
             'AlgoUnclear', 'AlgoChg', 'Pseudo', 'Diag',
         ];
@@ -713,6 +714,11 @@ final class HardConstraintsSymbolDsl
             'theme_high_contrast_mandatory' => [
                 'formula' => 'Frontend∨Shentu→□(HcText∧HcMeasure)∧(¬HcMeasure→⊥Pass)',
                 'gloss_zh' => '主题开发与审图须高对比度实测；未实测禁判pass',
+                'cluster' => '§Θ',
+            ],
+            'theme_variables_single_author_no_hardcode' => [
+                'formula' => 'VisualVar→□(PlateLeaf∧¬ExtLiteral∧¬PrivateVar)',
+                'gloss_zh' => '视觉变量唯一作者=主题盘；外部只准var引用禁硬编码',
                 'cluster' => '§Θ',
             ],
             'preserve_dirty_workspace' => [

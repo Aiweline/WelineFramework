@@ -32,13 +32,20 @@
     --color-text-rgb: 17, 24, 39;
     --color-emphasis-rgb: 17, 24, 39;
     --color-text-primary: var(--color-text);
+    --color-text-body: var(--color-text);
     --color-text-secondary: #4b5563;
-    --color-text-tertiary: #6b7280;
+    /* WCAG AA：tertiary 作为正文字色会落在 --color-bg-tertiary(#e5e7eb) muted 底上渲染，
+       #6b7280 实测 3.90:1 < 4.5:1。与 _light.css 同义对齐到 #556074（muted 底 5.12:1，白底 6.34:1）。
+       --color-text-muted 保持 #4b5563：该值在 muted 底已 5.44:1，无需下压，避免丢掉 muted 层次。 */
+    --color-text-tertiary: #556074;
     --color-text-subtle: #6b7280;
     --color-text-disabled: #c7c7c7;
     --color-text-dark: #111827;
     --color-text-muted: #4b5563;
-    --color-text-placeholder: #9ca3af;
+    /* WCAG AA: placeholder 属可读文本，须 >= 4.5:1（#9ca3af 在白底仅 2.54:1）。
+       slate 家族最浅合规档，同时满足 --color-bg-canvas / --color-bg-primary 白底。
+       #6b7280 在白底 4.83:1 已合规，保持不动（不随 tertiary 下压）。 */
+    --color-text-placeholder: #6b7280;
     --color-text-inverse: #ffffff;
     --color-text-light: #f8fafc;
     --color-text-light-secondary: #e5e7eb;

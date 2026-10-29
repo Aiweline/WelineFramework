@@ -2,7 +2,24 @@
 
 > 归属 `Weline_Theme`。色盘 → Foundation `--weline-theme-*` → `w-button` / `w-badge` / `w-alert` / `w-text` 统一消费。  
 > 关联：[`theme-css-variables-only.md`](./theme-css-variables-only.md)、`REQ-THEME-0007`。  
-> MCP 硬规则：`theme_base_components_token_only`（基础组件禁止私写色）。
+> MCP 硬规则：`theme_base_components_token_only`（基础组件禁止私写色）；`theme_variables_single_author_no_hardcode`（颜色单一作者 + 外部禁硬编码）。
+
+## 颜色单一作者（硬 · 2026-10-29 用户口径）
+
+**所有颜色（含「默认色」）只在主题色盘里定义一次；模板 / 布局 / 部件 / partial / 组件 CSS 一律只准 `var()` 引用，不准写字面色值，也不准私建平行色变量。**
+
+| 概念 | 唯一落点 | 说明 |
+|---|---|---|
+| **颜色变量大全** | `variables/_colors.css` | 全部 `--color-*` 角色×强度叶子（盘加载前可解析兜底） |
+| **「默认色」（默认可继承合同）** | `colors/_default.css` | 主题的默认身份色板；亮/暗/品牌盘**只覆盖它的叶子**，不得另起平行色板 |
+| 亮色差异 | `colors/_light.css` | 只写与 default 不同的叶子 |
+| 暗色差异 | `colors/_dark.css` | 只写差异；未覆盖继承 default |
+| 品牌叠加 | `colors/_ink.css` 等 | 只叠加品牌叶子（primary/accent/chrome/link），**不得**拆除 secondary/status 全家 |
+| design 主题 | `app/design/{Vendor}/{theme}/{area}/colors/_*.css` + `variables/_colors.css` | 只覆盖叶子值 |
+
+**外部可写形态只有一种**：`var(--已登记颜色Token)`；允许 `var(--token, 默认值)` 兜底（变量不存在时才生效，且须与盘叶子同义）。**需要新颜色 → 进上面的盘加叶子，绝不在模板/service CSS 里写 `#hex`。**
+
+**同 key 一致性（硬）**：`variables/_colors.css` 与 `colors/_default.css` 中同名 Token 必须**同义**（`_colors.css` 是盘加载前兜底、`_default.css` 是默认合同）；两处值不同 = 漂移缺陷，须对齐后再交付。
 
 ## 默认可继承合同（硬）
 
@@ -89,3 +106,6 @@ Theme Editor「全局外观」分组规则（注释优先，前缀兜底）：
 - 只写 `var(--new-token)` 却不在色盘登记叶子。
 - 前后台各维护一套互不桥接的 status 字面量（`error` 仅允许作 `danger` 别名）。
 - **基础组件**（`foundation.css` / Weline UI 2.0 基础类）私写颜色或平行色板；只允许改色盘叶子再经 `--weline-theme-*` 桥接。
+- **模板层私造色（硬 · 2026-10-29 新增）**：布局 / 部件 / partial `.phtml` 内嵌 `<style>`、行内 `style`、`@param type="color"` 自由 hex 默认值、`data-widget-style` 运行期注入 `color`/`background-color` —— 一律禁止；只能 `var(--已登记Token)` 或绑 `data-tone`。
+- **平行变量**：外部私建 `--brand-color` / `--btn-color` / `--card-bg` 等主题盘未声明的变量并喂字面量。
+- **默认色双写漂移**：同一 Token 在 `variables/_colors.css` 与 `colors/_default.css` 取不同值后未对齐就交付。
