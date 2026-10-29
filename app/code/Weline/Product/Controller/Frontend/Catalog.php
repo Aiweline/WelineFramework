@@ -191,6 +191,15 @@ final class Catalog extends FrontendController
             $this->request->getResponse()->redirect($canonicalRedirectUrl, 301);
         }
 
+        if ($bindListingQuery
+            && !$isInternalStorefrontChainWarmup
+            && (int)($projection['count'] ?? 0) === 0
+        ) {
+            // 零命中的 facet 组合不进索引（301 已在上面处理；这里覆盖「候选被截断、
+            // 无法证明无货」的 200 渲染，避免爬虫把无限变体抓进索引）。
+            $this->request->getResponse()->setHeader('X-Robots-Tag', 'noindex, follow');
+        }
+
         $this->assign('page_title', $surface['title']);
         $this->assign('storefront_heading', $surface['heading']);
         $this->assign('storefront_lede', $surface['lede']);
