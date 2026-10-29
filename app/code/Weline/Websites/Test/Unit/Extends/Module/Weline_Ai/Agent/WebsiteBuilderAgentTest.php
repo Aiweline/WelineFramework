@@ -64,7 +64,11 @@ final class WebsiteBuilderAgentTest extends TestCase
         );
 
         $this->assertFalse($result->success);
-        $this->assertStringContainsString('最大轮次', (string)$result->error);
+        // 错误文案经 __() 按当前 locale 翻译，用同一翻译源比对可避免跨语言环境漂移。
+        $this->assertSame(
+            (string)__('智能体达到最大轮次，未能完成建站'),
+            (string)$result->error
+        );
     }
 
     public function testExecuteStopsLoopWhenPurchaseToolReturnsSuccess(): void

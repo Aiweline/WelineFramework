@@ -28,12 +28,11 @@ final class ScopeMaintenanceGateTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // The gate memoizes maintenance status per request (StorefrontScopeHotCache
-        // request memo) and per worker process (L1). Earlier tests in the same run
-        // leave both warm, which would hide a fresh enable() from inheritance reads.
-        // RequestContext::init(); EXPERIMENT
-        StorefrontScopeHotCache::resetProcessCache();
-        ScopeMaintenanceGate::clearProcessCache();
+        // The gate memoizes maintenance status for the current request
+        // (StorefrontScopeHotCache request memo). Earlier tests in the same PHP
+        // process leave that memo warm, which would hide a fresh enable() from
+        // inheritance reads, so every test starts from a clean request context.
+        RequestContext::init();
         $this->previousKeyring = getenv('WELINE_SCOPE_TOKEN_KEYRING_B64');
         $this->resetKeyringProcessVersion();
         putenv('WELINE_SCOPE_TOKEN_KEYRING_B64=' . $this->encodedKeyring());
@@ -53,6 +52,12 @@ final class ScopeMaintenanceGateTest extends TestCase
             putenv('WELINE_SCOPE_TOKEN_KEYRING_B64=' . $this->previousKeyring);
         }
         $this->resetKeyringProcessVersion();
+        // Leave the process in CLI passthrough mode again: the request memo and
+        // the process hot cache initialized here must not leak into later tests
+        // (they would serve stale scope trees/DB reads across test classes).
+        RequestContext::setId(null);
+        StorefrontScopeHotCache::resetProcessCache();
+        ScopeMaintenanceGate::clearProcessCache();
     }
 
     public function testStoreAMaintenanceDoesNotAffectB(): void

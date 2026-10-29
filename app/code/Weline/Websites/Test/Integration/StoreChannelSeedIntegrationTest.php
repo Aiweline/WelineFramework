@@ -12,6 +12,7 @@ use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInter
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\Setup\Data\Setup as SetupData;
+use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\SalesChannel;
 use Weline\Websites\Model\Store;
 use Weline\Websites\Model\Website;
@@ -31,6 +32,10 @@ final class StoreChannelSeedIntegrationTest extends TestCase
 
     protected function setUp(): void
     {
+        // WebsiteData memoizes domains per process; earlier tests in the same run
+        // would otherwise hide rows that already exist in the database.
+        WebsiteData::resetRequestState();
+        WebsiteData::clearProcessCache();
         $this->connection = ObjectManager::getInstance(ConnectionFactory::class);
         $this->transactions = ObjectManager::getInstance(WriteIntentTransactionCoordinatorInterface::class);
         $this->seeder = ObjectManager::getInstance(StoreChannelSeedService::class);

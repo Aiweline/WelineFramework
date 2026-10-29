@@ -7,6 +7,7 @@ namespace Weline\Websites\Test\Integration;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
 use Weline\Framework\Cache\Namespace\NamespacePath;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
@@ -24,6 +25,15 @@ final class StorefrontCatalogGenerationIntegrationTest extends TestCase
         // 生产环境里 generation 快照按请求身份落 request 作用域；CLI 下无请求身份时会落到
         // 进程级冻结窗口，导致 clearSnapshot() 后仍读旧向量。这里模拟真实请求上下文。
         RequestContext::init();
+    }
+
+    protected function tearDown(): void
+    {
+        // Restore CLI passthrough so the request memo and process hot cache used
+        // here do not leak stale generation/catalog reads into later test classes.
+        RequestContext::setId(null);
+        StorefrontScopeHotCache::resetProcessCache();
+        parent::tearDown();
     }
 
     public function testGenerationRepositoryRejectsDifferentLogicalConnection(): void
