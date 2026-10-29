@@ -154,9 +154,6 @@ settings,settings
 支付成功,"Payment successful"
 支付待处理,"Payment Pending"
 支付处理中,"Payment Processing"
-收起悬浮,"Collapse float"
-展开悬浮,"Expand float"
-"共 %{1} 个支付供应商","%{1} payment provider(s)"
 或使用下方结账,"Or continue below"
 "使用 %{1} 快捷支付","Pay with %{1}"
 "DevRelay 中继","DevRelay relay."
@@ -755,6 +752,9 @@ More,More
 "PayPal Developer Sandbox REST App Client ID","PayPal Developer Sandbox REST App Client ID"
 "PayPal Developer Sandbox REST App Secret","PayPal Developer Sandbox REST App Secret"
 仅检查平台沙箱凭据是否已就绪,"Only check if the platform sandbox credentials are ready"
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
+"共 %{1} 个支付供应商","%{1} payment provider(s)"
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。

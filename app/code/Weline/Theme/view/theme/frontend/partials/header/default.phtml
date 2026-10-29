@@ -457,11 +457,13 @@ $defaultNavItemsFactory = static function (): array {
                                     <li role="none"><a href="@url{'customer/account/login'}" role="menuitem"><i class="fas fa-user" aria-hidden="true"></i> <lang>账户及心愿单</lang></a></li>
                                     <li role="none"><a href="@url{'customer/account/index'}" role="menuitem"><i class="fas fa-tachometer-alt" aria-hidden="true"></i> <lang>账户</lang></a></li>
                                     <li role="none"><a href="@url{'customer/account/index'}#orders" role="menuitem"><i class="fas fa-box" aria-hidden="true"></i> <lang>我的订单</lang></a></li>
+                                    <li role="none"><a href="@url{'faq'}" role="menuitem"><i class="fas fa-question-circle" aria-hidden="true"></i> <lang>帮助中心</lang></a></li>
                                     <li role="none"><a href="@url{'customer/account/index'}#settings" role="menuitem"><i class="fas fa-cog" aria-hidden="true"></i> <lang>账户设置</lang></a></li>
                                 </w:hook>
                                 <li role="none" data-account-menu-auth="signed-in" hidden><a class="logout-link" href="@url{'customer/account/logout'}" role="menuitem" data-account-logout-confirm><i class="fas fa-sign-out-alt" aria-hidden="true"></i> <lang>退出登录</lang></a></li>
                             <?php else: ?>
                                 <li role="none"><a href="@url{'customer/account/index'}#orders" role="menuitem"><i class="fas fa-box" aria-hidden="true"></i> <lang>我的订单</lang></a></li>
+                                <li role="none"><a href="@url{'faq'}" role="menuitem"><i class="fas fa-question-circle" aria-hidden="true"></i> <lang>帮助中心</lang></a></li>
                             <?php endif; ?>
                             <li role="none" class="my-menu-divider"></li>
                             <li role="none" class="my-menu-submenu">
@@ -763,6 +765,7 @@ $defaultNavItemsFactory = static function (): array {
                     ?>
                         <li><a href="@url{'customer/account/index'}"><i class="fas fa-user" aria-hidden="true"></i> <?= $headerEsc('我的账户') ?></a></li>
                         <li><a href="@url{'customer/account/index'}#orders"><i class="fas fa-box" aria-hidden="true"></i> <?= $headerEsc('我的订单') ?></a></li>
+                        <li><a href="@url{'faq'}"><i class="fas fa-question-circle" aria-hidden="true"></i> <?= $headerEsc('帮助中心') ?></a></li>
                         <li><a href="@url{'cart'}"><i class="fas fa-shopping-cart" aria-hidden="true"></i> <?= $headerEsc('购物车') ?></a></li>
                         <li><a href="@url{'compare'}"><i class="fas fa-columns" aria-hidden="true"></i> <?= $headerEsc('商品对比') ?></a></li>
                     <?php endif; ?>

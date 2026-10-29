@@ -333,6 +333,22 @@ final class HardConstraintsSymbolDsl
                 'gloss_zh' => '写了var/data-tone但主题叶子缺失',
                 'rule_ids' => ['theme_referenced_tokens_must_resolve'],
             ],
+            'HcText' => [
+                'gloss_zh' => '文字≥4.5:1；大字/非文本≥3:1',
+                'rule_ids' => ['theme_high_contrast_mandatory'],
+            ],
+            'HcMeasure' => [
+                'gloss_zh' => 'getComputedStyle实测合成背景比值',
+                'rule_ids' => ['theme_high_contrast_mandatory'],
+            ],
+            'Shentu' => [
+                'gloss_zh' => '审图/截图验收（含用户附图）',
+                'rule_ids' => [
+                    'theme_high_contrast_mandatory',
+                    'user_image_attachment_triggers_shentu',
+                    'acceptance_phase_requires_shentu',
+                ],
+            ],
             'SayCommit' => [
                 'gloss_zh' => '用户口令「提交」且非否定',
                 'rule_ids' => [
@@ -638,6 +654,11 @@ final class HardConstraintsSymbolDsl
             'theme_semantic_severity_tone_required' => [
                 'formula' => 'SeverityUi→□SemTone∧¬AllDefault',
                 'gloss_zh' => '风险结果操作须data-tone；禁全默认quiet',
+                'cluster' => '§Θ',
+            ],
+            'theme_high_contrast_mandatory' => [
+                'formula' => 'Frontend∨Shentu→□(HcText∧HcMeasure)∧(¬HcMeasure→⊥Pass)',
+                'gloss_zh' => '主题开发与审图须高对比度实测；未实测禁判pass',
                 'cluster' => '§Θ',
             ],
             'preserve_dirty_workspace' => [

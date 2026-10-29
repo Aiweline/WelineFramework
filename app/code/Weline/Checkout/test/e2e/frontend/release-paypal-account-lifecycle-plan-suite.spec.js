@@ -221,7 +221,9 @@ moduleDescribe(test, MODULE, '发布回归 PayPal 结账生命周期', () => {
     async ({ page }) => {
       expect(fixture).toBeTruthy();
       if (!loginOrder) {
-        test.skip(true, 'LOGIN-001 did not produce loginOrder');
+        // 上游 LOGIN-001 未产出订单时，本用例不可静默跳过：门禁 skip 预算只接受
+        // allowed_skips 显式声明，级联跳过等于用豁免掩盖上游真实失败。
+        throw new Error('STEP_FAILED[lifecycle.dependency]: LOGIN-001 did not produce loginOrder (上游失败，不得以 skip 掩盖)');
       }
 
       await adminTransitionOrderStatus(

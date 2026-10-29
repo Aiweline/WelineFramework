@@ -971,6 +971,10 @@ install_php_from_source() {
   popd >/dev/null || true
   rm -rf "$build_root"
 
+  # php-src 的 make install 不会创建 --with-config-file-scan-dir 目录。
+  # 缺了 conf.d，brotli/event/opcache 的 ini 就无处写入，PECL 扩展装完也加载不到。
+  mkdir -p "$dest/conf.d" || return 1
+
   if [[ ! -x "$dest/bin/php" ]] && [[ ! -x "$dest/php" ]]; then
     echo "ERROR: PHP install verification failed at $dest." >&2
     return 1

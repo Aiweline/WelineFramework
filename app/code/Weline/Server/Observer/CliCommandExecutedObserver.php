@@ -23,6 +23,16 @@ class CliCommandExecutedObserver implements ObserverInterface
         'cache' => ['cache:'],
     ];
 
+    /**
+     * 显式命令（不走前缀匹配）：这些命令会切换运行世代，必须让 Worker 重载后读新世代。
+     */
+    private const EXACT_CODE_RELOAD_COMMANDS = ['core:update', 'theme:update'];
+
+    /**
+     * theme:update 只查看/只构建不切换的子动作，不触发重载。
+     */
+    private const THEME_UPDATE_NO_RELOAD_ACTIONS = ['status', 'list', 'gc', 'build', 'help'];
+
     public function execute(Event &$event): void
     {
         $command = (string)($event->getData('command') ?? '');
@@ -41,7 +51,7 @@ class CliCommandExecutedObserver implements ObserverInterface
             }
         }
 
-        $reloadType = $this->resolveReloadType($command);
+        $reloadType = $this->resolveReloadType($command, $args);
         if ($reloadType === null) {
             return;
         }
@@ -151,8 +161,12 @@ class CliCommandExecutedObserver implements ObserverInterface
         ];
     }
 
-    private function resolveReloadType(string $command): ?string
+    private function resolveReloadType(string $command, array $args = []): ?string
     {
+        if (\in_array(\strtolower($command), self::EXACT_CODE_RELOAD_COMMANDS, true)) {
+            return $this->exactCommandReloads($command, $args) ? self::RELOAD_TYPE_CODE : null;
+        }
+
         $prefixes = $this->getReloadPrefixes();
         foreach ($prefixes['code'] ?? [] as $prefix) {
             if (\str_starts_with($command, $prefix)) {
@@ -167,6 +181,39 @@ class CliCommandExecutedObserver implements ObserverInterface
         }
 
         return null;
+    }
+
+    /**
+     * 显式命令是否真的切换了运行世代：
+     * - core:update 一定会改写代码/产物，恒需重载；
+     * - theme:update 只有切换指针（apply/auto/promote/rollback）才需重载，
+     *   status/list/gc/build/dry-run 不动线上世代，不重载。
+     */
+    private function exactCommandReloads(string $command, array $args): bool
+    {
+        if (\strtolower($command) !== 'theme:update') {
+            return true;
+        }
+
+        foreach (\array_keys($args) as $key) {
+            if (\is_string($key) && \str_starts_with($key, 'dry-run')) {
+                return false;
+            }
+        }
+
+        $positional = [];
+        foreach ($args as $key => $value) {
+            if (\is_int($key) && \is_string($value)) {
+                $positional[] = \strtolower(\trim($value));
+            }
+        }
+        // 数字键首段是命令名（可能是别名 theme:up），先剥掉再看子动作。
+        if ($positional !== [] && \str_contains($positional[0], ':')) {
+            \array_shift($positional);
+        }
+        $action = $positional[0] ?? 'apply';
+
+        return !\in_array($action, self::THEME_UPDATE_NO_RELOAD_ACTIONS, true);
     }
 
     private function getDispatchService(): BroadcastControlDispatchService

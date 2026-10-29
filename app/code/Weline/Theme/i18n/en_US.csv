@@ -885,9 +885,7 @@ FAQ/常见问题,FAQ
 分类,Classification
 分类展示图,"Category showcase image"
 查看全部,"View all"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
+查看更多,"View more"
 展开社交媒体,"Expand social media"
 收起社交媒体,"Collapse social media"
 官方社交媒体,"Official social media"
@@ -923,17 +921,17 @@ FAQ/常见问题,FAQ
 展开明细,"Expand details"
 零售,Retail
 迷你购物车金额小计,"Mini-cart money summary"
-收起悬浮,"Collapse float"
-展开悬浮,"Expand float"
-7×24,24/7
-"Search results","Search results"
-搜索,Search
-"Search · 检索","Search · 检索"
-寻衣,寻衣
-Search…,Search…
-搜索筛选,"Search and filter"
-面包屑,"bread crumbs"
 关闭通知,"Close notification"
+抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
+您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
+请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
+SORRY,SORRY
+前往首页继续购物,"Continue shopping on the home page"
+返回上一页,"Go back"
+推荐产品,"Recommended product"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -986,14 +984,8 @@ NEW,NEW
 下一页,"Next page"
 末页,"Last page"
 指南,Guide
-抱歉，找不到您要的页面,"Sorry, we couldn't find that page"
-您访问的链接可能已失效，或该页面已被移除。,"The link may be broken or the page may have been removed."
-请检查网址是否输入正确，或返回首页继续购物。,"Check the web address, or continue shopping from the home page."
-SORRY,SORRY
-前往首页继续购物,"Continue shopping on the home page"
-返回上一页,"Go back"
-推荐产品,"Recommended product"
 问答,Q&A
+7×24,24/7
 服务暂时不可用,"Service temporarily unavailable"
 我们正在处理问题，请稍后再试。,"We are working on the issue; please try again later."
 您可以返回首页继续浏览，或稍后刷新本页。,"You can return home to keep browsing, or refresh this page later."
@@ -1008,11 +1000,13 @@ ERROR,ERROR
 分页导航,"Pagination navigation"
 缺货,"Out of Stock"
 联系询价,联系询价
+面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 我的,mine
 账户及心愿单,"Accounts and Wishlists"
 账户,Account
 我的订单,"My orders"
+帮助中心,"Help Center"
 账户设置,"Account settings"
 退出登录,"Log out"
 语言,language
@@ -1020,6 +1014,7 @@ ERROR,ERROR
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
+搜索,Search
 切换语言,"Switch Language"
 切换货币,"Switch Currency"
 导航菜单,"Navigation menu"
@@ -1133,7 +1128,6 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
-查看更多,"View more"
 距离结束,"Ends in"
 精选轮播,"Featured Carousel"
 "Hero 轮播区域","Hero Carousel Area"
@@ -1158,7 +1152,6 @@ Logo,Logo
 全部商品,"Shop All"
 面包屑导航,Breadcrumbs
 国际配送，售后有保障,"International shipping with reliable after-sales support"
-帮助中心,"Help Center"
 订单跟踪,"Order Tracking"
 收藏,Favorite
 热门分类,"Popular Categories"
@@ -1862,6 +1855,8 @@ AI目录加载失败,"AI directory loading failed"
 "保存主题盘失败：配置值过长（%{len}/%{max}），请减少变更 Token 或缩短取值","Failed to save theme disk: configuration value is too long (%{len}/%{max}), please reduce the change token or shorten the value"
 "Theme 布局类型化值超过运行时解析上限。","Theme layout typed value exceeds the runtime resolution limit."
 "file-image 运行时适配器不可用。","The file-image runtime adapter is unavailable."
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
 布局固化已关闭（setup.layout_solidify=never）,布局固化已关闭（setup.layout_solidify=never）
 布局版本与模板源未变化，跳过布局固化,布局版本与模板源未变化，跳过布局固化
 "无站点绑定主题可预固化（websites_theme_application 为空）。","No website-bound themes to solidify (websites_theme_application is empty)."
@@ -2356,6 +2351,11 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 "主题规范校验（head 预算 / 首屏图 / 字体 / SEO 单一出口）！","主题规范校验（head 预算 / 首屏图 / 字体 / SEO 单一出口）！"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+"Search results","Search results"
+"Search · 检索","Search · 检索"
+寻衣,寻衣
+Search…,Search…
+搜索筛选,"Search and filter"
 尺码指南,"Size Guide"
 旅行攻略,旅行攻略
 个人中心,"Personal center"

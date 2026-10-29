@@ -141,17 +141,27 @@
         display: none;
     }
 
-    .weline-header .header-site-notice-items {
-        flex: 1 1 auto;
-        min-width: 0;
-    }
-
     .weline-header .header-site-notice-item .notice-text {
         display: block;
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+}
+
+/*
+ * ≤480：语言/货币触发器曾被压到 33–34px（内容仍 74px），内部 .w-button 溢出自身盒子
+ * 43px，压到邻居上并把「CNY」挤出屏幕（审图 360px）。这里禁止触发器收缩、放不下就换行。
+ */
+@media (max-width: 480px) {
+    .weline-header .header-top-bar-locale > .header-action-item {
+        flex: 0 0 auto;
+    }
+
+    .weline-header .header-site-notice-links {
+        flex-wrap: wrap;
+        row-gap: var(--spacing-0_4);
     }
 }
 

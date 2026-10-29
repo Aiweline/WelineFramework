@@ -822,13 +822,47 @@ class WebsiteAgentService
         if ($base === '' || \strlen($base) < 3) {
             $base = 'local-flow';
         }
-        $suffix = \substr(\md5($base . '-' . \microtime(true)), 0, 6);
-
         $rootDomain = \class_exists(LocalDomainPolicy::class)
             ? LocalDomainPolicy::TEST_ROOT_DOMAIN
             : 'test.weline.com';
 
-        return $base . '-' . $suffix . '.' . $rootDomain;
+        // 同一 base 恒定同域：先复用已在本机 hosts 解析的同 base 域，其次用确定性后缀。
+        // 禁止再用 microtime 生成新随机域——每换一次就是一次入池 + 一次 hosts 写入 + 一次管理员授权。
+        $reused = $this->findReusedLocalFlowDomain($base, $rootDomain);
+        if ($reused !== null) {
+            return $reused;
+        }
+
+        return $base . '-' . \substr(\md5($base), 0, 6) . '.' . $rootDomain;
+    }
+
+    /**
+     * 只读查本机 hosts：同 base 的本地流程域已在回环解析时直接复用（不再触发授权）。
+     */
+    private function findReusedLocalFlowDomain(string $base, string $rootDomain): ?string
+    {
+        $hostsFile = PHP_OS_FAMILY === 'Windows'
+            ? (string)\getenv('SystemRoot') . '\\System32\\drivers\\etc\\hosts'
+            : '/etc/hosts';
+        $content = @\file_get_contents($hostsFile);
+        if (!\is_string($content) || $content === '') {
+            return null;
+        }
+
+        $pattern = '/\A' . \preg_quote($base, '/') . '-[0-9a-f]{6}\.'
+            . \preg_quote($rootDomain, '/') . '\z/D';
+        if (\preg_match_all('/^[ \t]*127\.0\.0\.1[ \t]+(\S+)/m', $content, $matches) === false) {
+            return null;
+        }
+
+        foreach ($matches[1] ?? [] as $candidate) {
+            $candidate = \strtolower(\trim((string)$candidate));
+            if (\preg_match($pattern, $candidate) === 1) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     /**

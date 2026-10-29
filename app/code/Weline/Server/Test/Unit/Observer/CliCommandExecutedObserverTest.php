@@ -206,4 +206,96 @@ final class CliCommandExecutedObserverTest extends TestCase
         $this->assertSame(0, $dispatchService->reloadCalls);
         $this->assertSame(0, $dispatchService->cacheCalls);
     }
+
+    /**
+     * @return array{0:BroadcastControlDispatchService,1:Printing} 桩服务与打印器
+     */
+    private function installReloadStubs(bool $expectNote = true): array
+    {
+        $dispatchService = new class extends BroadcastControlDispatchService {
+            public int $reloadCalls = 0;
+            public string $lastReloadType = '';
+
+            public function __construct()
+            {
+            }
+
+            public function reloadAsync(?string $instanceName, string $reloadType, float $timeout = 3.0): array
+            {
+                $this->reloadCalls++;
+                $this->lastReloadType = $reloadType;
+
+                return [
+                    'success' => true,
+                    'attempted' => ['verify_http'],
+                    'succeeded' => ['verify_http'],
+                    'failed_by_instance' => [],
+                    'skipped_by_instance' => [],
+                    'results_by_instance' => [],
+                    'message' => 'ok',
+                ];
+            }
+        };
+
+        $printing = $this->getMockBuilder(Printing::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['note', 'warning'])
+            ->getMock();
+        $expectNote
+            ? $printing->expects($this->atLeastOnce())->method('note')
+            : $printing->expects($this->never())->method('note');
+
+        ObjectManager::setInstance(BroadcastControlDispatchService::class, $dispatchService);
+        ObjectManager::setInstance(Printing::class, $printing);
+
+        return [$dispatchService, $printing];
+    }
+
+    public function testThemeUpdateSwitchingGenerationDispatchesCodeReload(): void
+    {
+        [$dispatchService] = $this->installReloadStubs();
+
+        $observer = new CliCommandExecutedObserver();
+        $observer->execute(new Event([
+            'data' => ['command' => 'theme:update', 'args' => [0 => 'theme:update', 'theme' => 'hanfu']],
+        ]));
+
+        $this->assertSame(1, $dispatchService->reloadCalls);
+        $this->assertSame(CliCommandExecutedObserver::RELOAD_TYPE_CODE, $dispatchService->lastReloadType);
+    }
+
+    public function testThemeUpdateStatusDoesNotDispatchReload(): void
+    {
+        [$dispatchService] = $this->installReloadStubs(false);
+
+        $observer = new CliCommandExecutedObserver();
+        $observer->execute(new Event([
+            'data' => ['command' => 'theme:update', 'args' => [0 => 'theme:update', 1 => 'status', 'theme' => 'hanfu']],
+        ]));
+
+        $this->assertSame(0, $dispatchService->reloadCalls);
+    }
+
+    public function testThemeUpdateDryRunDoesNotDispatchReload(): void
+    {
+        [$dispatchService] = $this->installReloadStubs(false);
+
+        $observer = new CliCommandExecutedObserver();
+        $observer->execute(new Event([
+            'data' => ['command' => 'theme:update', 'args' => [0 => 'theme:update', 'dry-run' => true, 'theme' => 'hanfu']],
+        ]));
+
+        $this->assertSame(0, $dispatchService->reloadCalls);
+    }
+
+    public function testCoreUpdateDispatchesCodeReload(): void
+    {
+        [$dispatchService] = $this->installReloadStubs();
+
+        $observer = new CliCommandExecutedObserver();
+        $observer->execute(new Event(['data' => ['command' => 'core:update']]));
+
+        $this->assertSame(1, $dispatchService->reloadCalls);
+        $this->assertSame(CliCommandExecutedObserver::RELOAD_TYPE_CODE, $dispatchService->lastReloadType);
+    }
 }

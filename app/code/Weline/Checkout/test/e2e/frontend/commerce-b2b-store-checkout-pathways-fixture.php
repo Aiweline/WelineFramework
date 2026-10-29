@@ -28,8 +28,20 @@ const E2E_B2B_STORE_CODE = 'e2e_b2b_commerce';
 const E2E_B2B_CHANNEL_CODE = 'web';
 const E2E_B2B_STORE_NAME = 'E2E B2B 测试店';
 const E2E_B2B_CHANNEL_NAME = 'E2E B2B Web';
-const E2E_B2B_BASE_HOST = 'https://p05113ef3.test.weline.com:9555';
+// ScopeResolver 用 CanonicalStorefrontUrl::sameOrigin() 匹配店渠，要求 scheme/host/**port** 三者严格相等。
+// 写死 :9555 会让 store.url 的端口与真实店面请求（https 默认 443）永远不等 → 店渠路径全部 404。
+const E2E_B2B_BASE_HOST_DEFAULT = 'https://p05113ef3.test.weline.com';
 const E2E_B2B_SYS_DEFAULT_WH = 32;
+
+/**
+ * 店渠基址：默认不带端口（https = 443，与真实店面请求端口一致）；
+ * 需要 worker 直连端口时用 E2E_B2B_PORT 显式覆盖。
+ */
+function e2e_b2b_base_host(): string
+{
+    $port = trim((string)(getenv('E2E_B2B_PORT') ?: ''));
+    return E2E_B2B_BASE_HOST_DEFAULT . ($port !== '' ? ':' . $port : '');
+}
 
 /**
  * @return array<string, mixed>
@@ -68,7 +80,7 @@ function e2e_b2b_fail(string $message, int $code = 1): never
 function e2e_b2b_ensure_store_channel(): array
 {
     $websiteId = 0;
-    $storeUrl = E2E_B2B_BASE_HOST . '/e2e-b2b-commerce';
+    $storeUrl = e2e_b2b_base_host() . '/e2e-b2b-commerce';
     $channelUrl = $storeUrl . '/web';
 
     /** @var StoreChannelAdminService $admin */

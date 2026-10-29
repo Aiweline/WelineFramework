@@ -154,9 +154,6 @@ settings,settings
 支付成功,支付成功
 支付待处理,支付待处理
 支付处理中,支付处理中
-收起悬浮,收起悬浮
-展开悬浮,展开悬浮
-"共 %{1} 个支付供应商","共 %{1} 个支付供应商"
 或使用下方结账,或使用下方结账
 "使用 %{1} 快捷支付","使用 %{1} 快捷支付"
 "DevRelay 中继","DevRelay 中继"
@@ -755,6 +752,9 @@ More,更多的
 "PayPal Developer Sandbox REST App Client ID","PayPal Developer Sandbox REST App Client ID"
 "PayPal Developer Sandbox REST App Secret","PayPal Developer Sandbox REST App Secret"
 仅检查平台沙箱凭据是否已就绪,仅检查平台沙箱凭据是否已就绪
+收起悬浮,收起悬浮
+展开悬浮,展开悬浮
+"共 %{1} 个支付供应商","共 %{1} 个支付供应商"
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。

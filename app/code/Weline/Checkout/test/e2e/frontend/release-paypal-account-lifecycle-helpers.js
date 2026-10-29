@@ -757,7 +757,36 @@ async function addToCartFromPdp(page, gotoFrontend, pdpPath) {
   };
   const added = await evaluateWithThemeReload(page, addFn);
   assertStep(added && added.success, 'cart.add', added);
-  return added;
+  // 加购接口 ok ≠ 购物车真有货：空车时结账页不渲染表单、配送 codes=[]，
+  // 下游只会报「等待超时 / 配送不可用」这类假根因。这里补齐可判定的硬断言。
+  const cartState = await page.evaluate(async (guestToken) => {
+    let api = window.Weline.Api;
+    if (!api || typeof api.resource !== 'function') {
+      api = await window.Weline.load('api');
+    }
+    const cartApi = await api.resource('cart');
+    const got = await cartApi.getCart({
+      guest_token: guestToken,
+      cart_type: 'toc',
+      selling_mode: 'toc',
+    }, { silent: true });
+    const payload = (got && got.data && typeof got.data === 'object') ? got.data : got;
+    const cart = (payload && payload.cart && typeof payload.cart === 'object') ? payload.cart : payload;
+    const lines = (cart && Array.isArray(cart.lines)) ? cart.lines : [];
+    return {
+      is_empty: !!(cart && cart.is_empty),
+      item_count: Number((cart && cart.item_count) || 0),
+      line_count: lines.length,
+      has_weight: lines.some((line) => Number((line && line.weight_minor) || 0) > 0),
+      currency: String((cart && cart.currency) || ''),
+    };
+  }, added.guest_token || '').catch((error) => ({ error: String((error && error.message) || error) }));
+  assertStep(
+    !!cartState && !cartState.error && Number(cartState.item_count) > 0,
+    'cart.after_add',
+    { ...cartState, pdp_path: pdpPath, guest_token: added.guest_token || '' },
+  );
+  return { ...added, cart_state: cartState };
 }
 
 async function ensureCheckoutAddress(page, email) {
@@ -902,6 +931,16 @@ async function submitPaypalCheckout(page, email) {
     const box = document.querySelector('[data-payment-methods]');
     return !!box && box.querySelectorAll('input[name="payment_method"]').length > 0;
   }, null, { timeout: 90000 }).catch(() => {});
+  // 结账页未渲染 = 先决条件不成立（空车 / 入口不存在），不是配送不可用。
+  // 把假根因拦在这里：否则下游只会报 codes=[]→stage:'shipping'。
+  const checkoutShell = await page.evaluate(() => ({
+    url: location.href,
+    has_checkout_marker: !!document.querySelector('[data-testid="checkout-form-page"], [data-weline-checkout]'),
+    has_payment_box: !!document.querySelector('[data-payment-methods]'),
+    has_shipping_host: !!document.querySelector('[data-shipping-methods], input[name="shipping_method"]'),
+    body_text_len: (document.body && document.body.innerText || '').trim().length,
+  }));
+  assertStep(checkoutShell.has_checkout_marker, 'checkout.shell', checkoutShell);
   const address = await ensureCheckoutAddress(page, email);
   await page.waitForTimeout(1500);
   // Controllable path needs shipping radios before submit — empty codes[] API fallback is not OK.

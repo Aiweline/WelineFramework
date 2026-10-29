@@ -334,7 +334,7 @@ $homeFaqs = is_array($faqs ?? null) && $faqs !== [] ? $faqs : (array)($seo['faqs
                     $href = '/case-studies' . ($anchor !== '' ? '#' . $anchor : '');
                     ?>
                     <a class="post guide-card reveal" style="--i:<?= (int)$index ?>" href="<?= A::e(A::url($this, $href)) ?>">
-                        <img class="cover" src="<?= A::e(A::image($cover)) ?>" alt="<?= A::e('例子：' . $name . ' 站点封面') ?>" width="800" height="450" loading="lazy" decoding="async">
+                        <img width="800" height="450" class="cover" src="<?= A::e(A::image($cover)) ?>" alt="<?= A::e('例子：' . $name . ' 站点封面') ?>" loading="lazy" decoding="async">
                         <div class="body">
                             <span class="k"><?= A::e(trim($domain . ($typeLabel !== '' ? ' · ' . $typeLabel : ''), ' ·')) ?></span>
                             <h3><?= A::e($name) ?></h3>

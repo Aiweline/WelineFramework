@@ -28,36 +28,13 @@
 购物车工作台,"Cart workspace"
 search,search
 "按 Scope / guest_token 检查真实 Cart 持久库","Inspect real Cart persistence by Scope / guest_token"
-收起悬浮,"Collapse float"
-展开悬浮,"Expand float"
-正在加载购物车...,"Loading cart..."
-购物车是空的,"Your cart is empty"
-浏览商品，把喜欢的加入购物车吧。,"Browse products and add your favorites to the cart."
-购物车加载失败，请重试。,"Failed to load cart. Please try again."
-商品,Product
-价格,Price
-数量,Quantity
-小计,Subtotal
-更新,Update
-删除,Delete
-减少数量,"Decrease quantity"
-增加数量,"Increase quantity"
-购物车更新失败，请重试。,"Failed to update cart. Please try again."
-无法创建游客购物车会话,"Unable to create a guest cart session"
-税费与运费将在结算时计算,"Tax and shipping calculated at checkout"
-运费将在结算时计算,"Shipping calculated at checkout"
-税费,Tax
-"小计（%1 件商品）","Subtotal (%1 items)"
-单价,"Unit price"
-"浏览%1 %2件商品","Browse %1 · %2 items"
-零售车,"Retail cart"
-批发车,"Wholesale cart"
-本次应付定金,"Deposit due now"
-本单共计,"Order total"
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,"Line items are rendered from live cart data; edit only the footer extras area here."
+小计,Subtotal
+税费与运费将在结算时计算,"Tax and shipping calculated at checkout"
 去结算,"Proceed to checkout"
 查看购物车,"Go to Cart"
 迷你购物车,"Mini cart"
+购物车是空的,"Your cart is empty"
 继续购物,"Continue shopping"
 您的购物车是空的,"Your cart is empty"
 购物车,"Shopping cart"
@@ -73,6 +50,27 @@ search,search
 购物车订单留言,"Cart order note"
 购物车批发信用,"Cart wholesale credit"
 购物车帮我付,"Cart pay-for-me"
+正在加载购物车...,"Loading cart..."
+浏览商品，把喜欢的加入购物车吧。,"Browse products and add your favorites to the cart."
+购物车加载失败，请重试。,"Failed to load cart. Please try again."
+商品,Product
+价格,Price
+数量,Quantity
+更新,Update
+删除,Delete
+减少数量,"Decrease quantity"
+增加数量,"Increase quantity"
+购物车更新失败，请重试。,"Failed to update cart. Please try again."
+无法创建游客购物车会话,"Unable to create a guest cart session"
+运费将在结算时计算,"Shipping calculated at checkout"
+税费,Tax
+"小计（%1 件商品）","Subtotal (%1 items)"
+单价,"Unit price"
+"浏览%1 %2件商品","Browse %1 · %2 items"
+零售车,"Retail cart"
+批发车,"Wholesale cart"
+本次应付定金,"Deposit due now"
+本单共计,"Order total"
 正在加入购物车...,"Adding to cart..."
 已加入购物车,"Added to cart"
 加入购物车失败,"Failed to add to cart"
@@ -156,6 +154,8 @@ Scope,Scope
 该商品暂不可售，请从购物车移除或稍后再试,"This product is temporarily unavailable; remove it from the cart or try again later"
 "channel_code 必须与 store_code 同时提供","channel_code must be provided together with store_code"
 "购物车 Scope 与当前可信 Website/Store/Channel 请求不一致","Cart Scope does not match the trusted Website/Store/Channel request"
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
 "购物车加购成功后触发；追加 cart_type + type_payload（非破坏）。","Dispatched after a successful cart add; appends cart_type + type_payload (non-breaking)."
 加入购物车,"Add to Cart"
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
