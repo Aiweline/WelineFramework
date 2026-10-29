@@ -471,7 +471,7 @@ install_php_system_deps() {
       run_privileged apt-get install -y \
         build-essential autoconf libtool pkg-config bison re2c \
         libxml2-dev libssl-dev libcurl4-openssl-dev libsqlite3-dev \
-        libzip-dev libpng-dev libjpeg-dev libfreetype6-dev libonig-dev \
+        libzip-dev libpng-dev libjpeg-dev libfreetype6-dev libonig-dev libwebp-dev \
         libxslt1-dev libpq-dev libicu-dev zlib1g-dev libgd-dev libsodium-dev \
         libbrotli-dev libevent-dev libffi-dev
       return
@@ -482,14 +482,14 @@ install_php_system_deps() {
         run_privileged dnf install -y \
           gcc gcc-c++ make autoconf libtool pkgconfig bison re2c \
           libxml2-devel openssl-devel libcurl-devel sqlite-devel \
-          libzip-devel libpng-devel libjpeg-turbo-devel freetype-devel \
+          libzip-devel libpng-devel libjpeg-turbo-devel libwebp-devel freetype-devel \
           oniguruma-devel libxslt-devel postgresql-devel libicu-devel zlib-devel gd-devel libsodium-devel \
           libbrotli-devel libevent-devel libffi-devel
       elif command -v yum &>/dev/null; then
         run_privileged yum install -y \
           gcc gcc-c++ make autoconf libtool pkgconfig bison re2c \
           libxml2-devel openssl-devel libcurl-devel sqlite-devel \
-          libzip-devel libpng-devel libjpeg-turbo-devel freetype-devel \
+          libzip-devel libpng-devel libjpeg-turbo-devel libwebp-devel freetype-devel \
           oniguruma-devel libxslt-devel postgresql-devel libicu-devel zlib-devel gd-devel libsodium-devel \
           libbrotli-devel libevent-devel libffi-devel
       else
@@ -766,7 +766,15 @@ get_php_configure_flags_for_extensions() {
       curl)       echo "--with-curl" ;;
       exif)       echo "--enable-exif" ;;
       fileinfo)   echo "--enable-fileinfo" ;;
-      gd)         echo "--enable-gd" ;;
+      gd)
+        # 只编 --enable-gd 时 GD 没有 jpeg/webp codec：imagecreatefromjpeg() 变成未定义函数，
+        # /media/image 缩略图直接 500。webp 需要 libwebp 头文件，缺头时只保留 jpeg。
+        local gd_flags="--enable-gd --with-jpeg"
+        if [[ -f /usr/include/webp/encode.h || -f /usr/local/include/webp/encode.h ]]; then
+          gd_flags="$gd_flags --with-webp"
+        fi
+        echo "$gd_flags"
+        ;;
       iconv)      echo "--with-iconv" ;;
       intl)       echo "--enable-intl" ;;
       json)       ;;  # PHP 8 内置
@@ -1846,14 +1854,28 @@ enable_php_ext_via_ini() {
   return 0
 }
 
+# PHP 扩展可用性探测：gd 出现在 -m 里只代表扩展已编入，不代表有 jpeg 编解码器
+# （缺 libjpeg 时 imagecreatefromjpeg 是未定义函数，/media/image 缩略图会 500）。
+php_extension_is_usable() {
+  local ext="$1"
+  case "$ext" in
+    gd)
+      "$PHP_EXE" -r 'exit(function_exists("imagecreatefromjpeg") ? 0 : 1);' 2>/dev/null
+      ;;
+    *)
+      "$PHP_EXE" -m 2>/dev/null | grep -qxi "^${ext}$"
+      ;;
+  esac
+}
+
 # 在首次运行 php（run.php）前，确保 Framework 所需 PHP 扩展已安装
 # 扩展列表含 composer.json 与 requirements.php 所需；composer 依赖 exif、fileinfo
 ensure_framework_php_extensions() {
-  local -a needed=(PDO json iconv fileinfo exif xsl dom libxml simplexml intl mbstring sockets openssl curl zip bcmath brotli event ffi)
+  local -a needed=(PDO json iconv fileinfo exif xsl dom libxml simplexml intl mbstring sockets openssl curl zip bcmath brotli event ffi gd)
   local -a missing=()
   local ext
   for ext in "${needed[@]}"; do
-    "$PHP_EXE" -m 2>/dev/null | grep -qxi "^${ext}$" || missing+=("$ext")
+    php_extension_is_usable "$ext" || missing+=("$ext")
   done
   # brotli 即使已在 -m 列表也须有 compress API（FPC 硬依赖）
   if ! "$PHP_EXE" -r 'exit(function_exists("brotli_compress") && function_exists("brotli_uncompress") ? 0 : 1);' 2>/dev/null; then
@@ -1878,7 +1900,7 @@ ensure_framework_php_extensions() {
       }
       missing=()
       for ext in "${needed[@]}"; do
-        "$PHP_EXE" -m 2>/dev/null | grep -qxi "^${ext}$" || missing+=("$ext")
+        php_extension_is_usable "$ext" || missing+=("$ext")
       done
       if ! "$PHP_EXE" -r 'exit(function_exists("brotli_compress") && function_exists("brotli_uncompress") ? 0 : 1);' 2>/dev/null; then
         printf '%s\n' "${missing[@]}" | grep -qxi '^brotli$' || missing+=("brotli")
@@ -1907,7 +1929,7 @@ ensure_framework_php_extensions() {
       PHP_EXE="$rebuilt_php"
       missing=()
       for ext in "${needed[@]}"; do
-        "$PHP_EXE" -m 2>/dev/null | grep -qxi "^${ext}$" || missing+=("$ext")
+        php_extension_is_usable "$ext" || missing+=("$ext")
       done
       if ! "$PHP_EXE" -r 'exit(function_exists("brotli_compress") && function_exists("brotli_uncompress") ? 0 : 1);' 2>/dev/null; then
         printf '%s\n' "${missing[@]}" | grep -qxi '^brotli$' || missing+=("brotli")

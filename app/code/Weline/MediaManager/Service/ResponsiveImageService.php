@@ -24,6 +24,20 @@ final class ResponsiveImageService
     /** Raster extensions the media router can fall back from to a sibling .webp. */
     private const RASTER_FALLBACK_FROM = ['jpg', 'jpeg', 'png', 'gif'];
 
+    /** Absolute media root override (tests / non-BP checkouts); null = resolve from MEDIA_DIR/PUB. */
+    private ?string $mediaRootOverride = null;
+
+    /**
+     * 用指定媒体根构造副本；测试用它隔离 fixture，避免依赖全局 MEDIA_DIR 常量。
+     */
+    public function withMediaRoot(string $mediaRoot): self
+    {
+        $clone = clone $this;
+        $clone->mediaRootOverride = $mediaRoot;
+
+        return $clone;
+    }
+
     /**
      * @param array<int, int|string> $widths
      */
@@ -33,7 +47,7 @@ final class ResponsiveImageService
         if ($relative === '') {
             return '';
         }
-        [$sourceRelative, $sourceFile] = self::resolveSource($relative);
+        [$sourceRelative, $sourceFile] = $this->resolveSource($relative);
         if ($sourceFile === '') {
             return '';
         }
@@ -67,7 +81,7 @@ final class ResponsiveImageService
             $height = max(1, (int)round($width * $sourceHeight / $sourceWidth));
             $url = $width === $sourceWidth
                 ? '/pub/media/' . $sourceRelative
-                : self::existingVariantUrl($sourceRelative, $width, $height);
+                : $this->existingVariantUrl($sourceRelative, $width, $height);
             if ($url === '') {
                 continue;
             }
@@ -142,9 +156,9 @@ final class ResponsiveImageService
      *
      * @return array{0: string, 1: string} [web-relative path as served, absolute path]
      */
-    private static function resolveSource(string $relative): array
+    private function resolveSource(string $relative): array
     {
-        $root = self::mediaRoot();
+        $root = $this->mediaRoot();
         if ($root === '') {
             return ['', ''];
         }
@@ -169,7 +183,7 @@ final class ResponsiveImageService
     /**
      * Existing pre-generated variant, using the Image controller's thumbnail naming.
      */
-    private static function existingVariantUrl(string $sourceRelative, int $width, int $height): string
+    private function existingVariantUrl(string $sourceRelative, int $width, int $height): string
     {
         $info = pathinfo($sourceRelative);
         $dir = (string)($info['dirname'] ?? '.');
@@ -180,7 +194,7 @@ final class ResponsiveImageService
         }
         $thumbRelative = 'thumbnail/' . ($dir === '.' || $dir === '' ? '' : $dir . '/')
             . $stem . '_w_' . $width . '_h_' . $height . '_c_o.' . $extension;
-        $root = self::mediaRoot();
+        $root = $this->mediaRoot();
         if ($root === '' || !is_file($root . str_replace('/', DIRECTORY_SEPARATOR, $thumbRelative))) {
             return '';
         }
@@ -188,8 +202,11 @@ final class ResponsiveImageService
         return '/pub/media/' . $thumbRelative;
     }
 
-    private static function mediaRoot(): string
+    private function mediaRoot(): string
     {
+        if ($this->mediaRootOverride !== null) {
+            return rtrim($this->mediaRootOverride, '/\\') . DIRECTORY_SEPARATOR;
+        }
         if (\defined('MEDIA_DIR')) {
             return rtrim((string)\constant('MEDIA_DIR'), '/\\') . DIRECTORY_SEPARATOR;
         }

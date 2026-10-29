@@ -35,10 +35,6 @@ final class ResponsiveImageServiceTest extends TestCase
                 $height
             );
         }
-
-        if (!defined('MEDIA_DIR')) {
-            define('MEDIA_DIR', self::$mediaDir);
-        }
     }
 
     public static function tearDownAfterClass(): void
@@ -75,7 +71,7 @@ final class ResponsiveImageServiceTest extends TestCase
 
     public function testOnlyExistingStaticFilesAreEmitted(): void
     {
-        $srcset = (new ResponsiveImageService())->srcset('/media/image/' . self::$relative);
+        $srcset = (new ResponsiveImageService())->withMediaRoot(self::$mediaDir)->srcset('/media/image/' . self::$relative);
 
         self::assertStringContainsString(
             '/pub/media/thumbnail/weline-test/hero_w_320_h_160_c_o.jpg 320w',
@@ -94,7 +90,7 @@ final class ResponsiveImageServiceTest extends TestCase
 
     public function testSingleCandidateIsNotEmitted(): void
     {
-        self::assertSame('', (new ResponsiveImageService())->srcset('/media/image/' . self::$plainRelative));
+        self::assertSame('', (new ResponsiveImageService())->withMediaRoot(self::$mediaDir)->srcset('/media/image/' . self::$plainRelative));
     }
 
     public function testMissingFileReturnsEmptyString(): void
@@ -104,7 +100,7 @@ final class ResponsiveImageServiceTest extends TestCase
 
     public function testExternalHttpUrlReturnsEmptyString(): void
     {
-        $service = new ResponsiveImageService();
+        $service = (new ResponsiveImageService())->withMediaRoot(self::$mediaDir);
 
         self::assertSame('', $service->srcset('https://cdn.example.com/a/b.jpg'));
         self::assertSame('', $service->srcset('http://cdn.example.com/a/b.jpg'));
@@ -112,7 +108,7 @@ final class ResponsiveImageServiceTest extends TestCase
 
     public function testSvgReturnsEmptyString(): void
     {
-        $service = new ResponsiveImageService();
+        $service = (new ResponsiveImageService())->withMediaRoot(self::$mediaDir);
 
         self::assertSame('', $service->srcset('/media/image/' . dirname(self::$relative) . '/logo.svg'));
         self::assertSame('', $service->srcset('/media/image/' . dirname(self::$relative) . '/logo.SVG'));
@@ -120,7 +116,7 @@ final class ResponsiveImageServiceTest extends TestCase
 
     public function testEveryCandidateIsAStaticPubMediaUrl(): void
     {
-        $srcset = (new ResponsiveImageService())->srcset('/media/image/' . self::$relative);
+        $srcset = (new ResponsiveImageService())->withMediaRoot(self::$mediaDir)->srcset('/media/image/' . self::$relative);
 
         self::assertNotSame('', $srcset);
         $candidates = array_map('trim', explode(',', $srcset));
@@ -132,7 +128,7 @@ final class ResponsiveImageServiceTest extends TestCase
 
     public function testAllFourInputSpellingsNormalizeToTheSameSrcset(): void
     {
-        $service = new ResponsiveImageService();
+        $service = (new ResponsiveImageService())->withMediaRoot(self::$mediaDir);
         $relative = self::$relative;
         $expected = $service->srcset('/media/image/' . $relative);
 
@@ -144,7 +140,7 @@ final class ResponsiveImageServiceTest extends TestCase
 
     public function testSizesSlots(): void
     {
-        $service = new ResponsiveImageService();
+        $service = (new ResponsiveImageService())->withMediaRoot(self::$mediaDir);
 
         self::assertSame('100vw', $service->sizesFor('hero'));
         self::assertSame(

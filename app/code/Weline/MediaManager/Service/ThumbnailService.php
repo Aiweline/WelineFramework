@@ -253,7 +253,10 @@ class ThumbnailService
         
         switch ($mime) {
             case 'image/jpeg':
-                $image = @\imagecreatefromjpeg($path);
+                // GD 编入不等于有 jpeg codec（缺 libjpeg 时该函数未定义），必须探测。
+                if (\function_exists('imagecreatefromjpeg')) {
+                    $image = @\imagecreatefromjpeg($path);
+                }
                 break;
             case 'image/png':
                 $image = @\imagecreatefrompng($path);

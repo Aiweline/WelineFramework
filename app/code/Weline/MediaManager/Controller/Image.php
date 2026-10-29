@@ -15,6 +15,11 @@ use Weline\Framework\Http\ResponseTerminateException;
  */
 class Image extends FrontendController
 {
+    /**
+     * 单个边最长像素：w/h 来自 GET，属系统边界输入；不设上限一次请求即可吃光 worker 内存。
+     */
+    private const MAX_DIMENSION = 2048;
+
     public function getIndex()
     {
         // 原始图片的路径
@@ -25,9 +30,9 @@ class Image extends FrontendController
             $this->redirect(404);
         }
         // 缩略图的宽度
-        $width = $this->request->getGet('w') ?: 50;
+        $width = self::normalizeDimension($this->request->getGet('w'));
         // 缩略图的高度
-        $height = $this->request->getGet('h') ?: 50;
+        $height = self::normalizeDimension($this->request->getGet('h'));
         // 缩略图的裁剪方式
         $crop = $this->request->getGet('c') ?: 'o';
         $crop = in_array($crop, ['o', 'k'], true) ? $crop : 'o';
@@ -42,7 +47,9 @@ class Image extends FrontendController
         if (!file_exists($thumbnailPath)) {
             $thumbnailResult = self::generateThumbnail($sourcePath, $thumbnailPath, $width, $height, $crop);
             if (!$thumbnailResult) {
-                $this->redirect(404);
+                // 运行时缺编解码器（如 bundled PHP 的 GD 未编 --with-jpeg）时不得抛 500：
+                // 直接回原图字节，浏览器自行缩放，页面不出现破图。
+                $thumbnailPath = $sourcePath;
             }
         }
         if (file_exists($thumbnailPath)) {
@@ -59,6 +66,19 @@ class Image extends FrontendController
         }
         $this->redirect(404);
         return '';
+    }
+
+    /**
+     * w/h 只接受正整数，超过 MAX_DIMENSION 截断，缺省/非法一律回落 fallback。
+     */
+    private static function normalizeDimension(mixed $raw, int $fallback = 50): int
+    {
+        $value = (int)$raw;
+        if ($value < 1) {
+            return $fallback;
+        }
+
+        return min($value, self::MAX_DIMENSION);
     }
 
     private static function mimeForExtension(string $extension): string
@@ -81,24 +101,44 @@ class Image extends FrontendController
             return false;
         }
         $imageType = $imageInfo[2];
-        // 根据图片类型使用适当的GD函数打开原始图片
+        // 根据图片类型使用适当的 GD 函数打开原始图片
+        // function_exists 必须逐类型判断：GD 编进去了不等于有该 codec（缺 libjpeg 时
+        // imagecreatefromjpeg 是未定义函数，直接调用会致命错误）。
         switch ($imageType) {
             case IMAGETYPE_JPEG:
+                if (!function_exists('imagecreatefromjpeg')) {
+                    return false;
+                }
                 $sourceImage = imagecreatefromjpeg($sourcePath);
                 break;
             case IMAGETYPE_PNG:
+                if (!function_exists('imagecreatefrompng')) {
+                    return false;
+                }
                 $sourceImage = imagecreatefrompng($sourcePath);
                 break;
             case IMAGETYPE_GIF:
+                if (!function_exists('imagecreatefromgif')) {
+                    return false;
+                }
                 $sourceImage = imagecreatefromgif($sourcePath);
                 break;
             case IMAGETYPE_WEBP:
+                if (!function_exists('imagecreatefromwebp')) {
+                    return false;
+                }
                 $sourceImage = imagecreatefromwebp($sourcePath);
                 break;
             case IMAGETYPE_BMP:
+                if (!function_exists('imagecreatefrombmp')) {
+                    return false;
+                }
                 $sourceImage = imagecreatefrombmp($sourcePath);
                 break;
             case IMAGETYPE_WBMP:
+                if (!function_exists('imagecreatefromwbmp')) {
+                    return false;
+                }
                 $sourceImage = imagecreatefromwbmp($sourcePath);
                 break;
                 // 可以根据需要添加对其他图片格式的支持
@@ -144,31 +184,20 @@ class Image extends FrontendController
             imagesy($sourceImage)  // 原始图像的高度
         );
         // 将缩略图保存到指定路径
-        $thumbnailSuccess = true;
-        try {
-            switch ($imageType) {
-                case IMAGETYPE_JPEG:
-                    imagejpeg($thumbnailImage, $thumbnailPath);
-                    break;
-                case IMAGETYPE_PNG:
-                    imagepng($thumbnailImage, $thumbnailPath);
-                    break;
-                case IMAGETYPE_GIF:
-                    imagegif($thumbnailImage, $thumbnailPath);
-                    break;
-                case IMAGETYPE_WEBP:
-                    imagewebp($thumbnailImage, $thumbnailPath);
-                    break;
-                case IMAGETYPE_BMP:
-                    imagebmp($thumbnailImage, $thumbnailPath);
-                    break;
-                case IMAGETYPE_WBMP:
-                    imagewbmp($thumbnailImage, $thumbnailPath);
-                    break;
-            }
-        } catch (\Exception $e) {
-            $thumbnailSuccess = false;
-        }
+        // 编码器同样要逐类型探测：imagejpeg/imagewebp 在缺 codec 时并不存在，
+        // Error 不是 Exception，原 try/catch 捕获不到。
+        $encoder = match ($imageType) {
+            IMAGETYPE_JPEG => 'imagejpeg',
+            IMAGETYPE_PNG => 'imagepng',
+            IMAGETYPE_GIF => 'imagegif',
+            IMAGETYPE_WEBP => 'imagewebp',
+            IMAGETYPE_BMP => 'imagebmp',
+            IMAGETYPE_WBMP => 'imagewbmp',
+            default => '',
+        };
+        $thumbnailSuccess = $encoder !== ''
+            && function_exists($encoder)
+            && (bool)@$encoder($thumbnailImage, $thumbnailPath);
         // 释放图像资源
         imagedestroy($sourceImage);
         imagedestroy($thumbnailImage);
