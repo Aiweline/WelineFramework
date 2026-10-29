@@ -76,6 +76,25 @@ class Data extends AbstractHelper
         $this->routeScanFailures = [];
     }
 
+    /**
+     * Api/ 目录里的符号是否已加载（class / interface / trait / enum 都算）。
+     *
+     * 只用 class_exists() 会把 *Interface.php 判成「不存在」，进而被
+     * RouteUpdateStage 的路由完整性门禁当成扫描失败否决整次 setup:upgrade。
+     * 不触发 autoload（第二参数 false），加载由调用方 require_once 负责。
+     */
+    private function apiSymbolLoaded(string $symbol): bool
+    {
+        if ($symbol === '') {
+            return false;
+        }
+        if (class_exists($symbol, false) || interface_exists($symbol, false) || trait_exists($symbol, false)) {
+            return true;
+        }
+
+        return \function_exists('enum_exists') && enum_exists($symbol, false);
+    }
+
     private function recordRouteScanFailure(string $moduleName, string $class, string $kind): void
     {
         $this->routeScanFailures[] = [
@@ -220,11 +239,13 @@ class Data extends AbstractHelper
                     // 查找控制器文件
                     $classRelativePath = str_replace('\\', DS, str_replace($module['namespace_path'] . '\\', '', $api_class)) . '.php';
                     $classFile = $module['base_path'] . $classRelativePath;
-                    if (is_file($classFile) && !class_exists($api_class, false)) {
+                    // Api/ 目录同时承载 interface / trait / enum（如 *FacadeInterface、*ContentSourceInterface），
+                    // 只判 class_exists() 会把它们当成「加载失败」→ 路由完整性门禁据此回滚整次 setup:upgrade。
+                    if (is_file($classFile) && !$this->apiSymbolLoaded($api_class)) {
                         require_once $classFile;
                     }
-                    // 如果控制器类不存在，跳过（记录：禁静默降级）
-                    if (!class_exists($api_class, false)) {
+                    // 如果符号不存在，跳过（记录：禁静默降级）
+                    if (!$this->apiSymbolLoaded($api_class)) {
                         $this->recordRouteScanFailure($name, $api_class, 'api_class_load_failed');
                         continue;
                     }
