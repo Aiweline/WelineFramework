@@ -159,11 +159,10 @@ final class ThemeHeadChromeCssPack
             return $this->tryPreloadLinkHtml($area, $pack, $options);
         }
 
-        // PACK_TOKENS：唯一还会阻塞首屏的样式请求（≈6–10KB）。改为内联「已发布产物字节」——
-        // 注意不是 tryInlineCssHtml()（那会每请求 composeSources+minify，2026-10-29 15:40 因此
-        // 触发过 WLS 渲染超时 503）。这里 publishPackWithTarget 命中已有产物时只做一次文件读取，
-        // 与原先外链路径同样廉价，却省掉一轮 RTT（移动 4G 实测渲染阻塞 140–450ms）。
-        // 读不到产物/超预算时返回 null → 回退原阻塞外链分支，行为与旧版一致。
+        // PACK_TOKENS：改用内联「已发布产物字节」（2026-10-29 起；2026-10-30 复测确认内联优于 preload：
+        // 内联 74 分 / preload 72 分、FCP 3.3s vs 3.6s —— FCP 由 TTFB 主导，省一轮 RTT 更划算）。
+        // 注意不是 tryInlineCssHtml()（那会每请求 composeSources+minify，2026-10-29 15:40 曾因此 503）；
+        // 这里命中已有产物只读一次文件。读不到产物/超预算时回退阻塞外链。
         if ($pack === self::PACK_TOKENS && !isset($options['force_link'])) {
             $inline = $this->tryInlinePublishedCssHtml($area, $pack, $options);
             if ($inline !== null) {
