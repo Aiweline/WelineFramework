@@ -28,7 +28,7 @@ final class ClearSkipWarmTest extends TestCase
 
         \ob_start();
         try {
-            $code = $command->execute([], ['skip_view_compile' => true, 'skip_warm' => true]);
+            $code = $command->execute([], ['skip_warm' => true]);
         } finally {
             \ob_end_clean();
         }

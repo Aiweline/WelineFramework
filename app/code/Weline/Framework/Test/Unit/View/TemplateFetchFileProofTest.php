@@ -73,7 +73,7 @@ final class TemplateFetchFileProofTest extends TestCase
         \clearstatcache(true, $this->sourceFile);
         self::assertFalse($this->proven($compiled), '当前秒内写入的源码不得走捷径。');
 
-        // 4) 编译产物被删除（cache:clear）
+        // 4) 产物仍在（mtime 还原后身份一致）：记忆命中，不因 mtime 回拨重编；只有产物真被删才重建。
         \touch($this->sourceFile, $frozen);
         \clearstatcache(true, $this->sourceFile);
         $this->remember($compiled);

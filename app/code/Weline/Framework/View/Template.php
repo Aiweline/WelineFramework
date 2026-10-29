@@ -120,7 +120,8 @@ class Template extends DataObject implements RequestLocalInterface
      *
      * The compiled file itself needs no mtime/size check: `compile_id` is a
      * deterministic function of exactly the inputs validated here, so any artifact
-     * at this path holds the same bytes. Only deletion (cache:clear) must be noticed.
+     * at this path holds the same bytes. Only deletion of the artifact must be
+     * noticed（发版重建 / 外部清理；`cache:clear` 与 `template:clear` 不删编译产物）。
      *
      * `ctime`/`ino` are folded in on top of `mtime`/`size`: tools that restore
      * mtime (rsync --times, tar, git checkout) still bump ctime, and replace-in-place

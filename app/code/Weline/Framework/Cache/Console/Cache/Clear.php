@@ -66,11 +66,9 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     public function execute(array $args = [], array $data = []): ?int
     {
         $isForce = \in_array('-f', $args, true) || \in_array('--force', $args, true);
-        // pools-only / skip_view_compile：只 flush 缓存池（+可选 WLS IPC），不删模板编译目录。
-        // 编译产物（view/tpl、generated/complicate）应由调用方一次 rm -rf，避免与 flush 叠成慢路径。
-        $skipViewCompile = !empty($data['skip_view_compile'])
-            || \in_array('--pools-only', $args, true)
-            || \in_array('--skip-view-compile', $args, true);
+        // pools-only：只 flush 缓存池（+可选 WLS IPC），跳过 taglib/模板缓存失效。
+        // 编译产物（view/tpl、generated/complicate）不归缓存管理：任何参数下都不删除。
+        $skipViewCaches = \in_array('--pools-only', $args, true);
         // 仅失效不预热（如部署模式切换）：店面预热交给定时任务按构建世代变化触发，
         // 避免每次切换模式都在这里全量重暖。
         $skipWarm = !empty($data['skip_warm'])
@@ -88,8 +86,8 @@ class Clear implements \Weline\Framework\Console\CommandInterface
 
         if ($totalPools === 0) {
             $this->printing->error(__('没有任何类型的缓存需要清理！'));
-            if (!$skipViewCompile) {
-                $this->clearViewCompileCaches();
+            if (!$skipViewCaches) {
+                $this->clearViewCaches();
             }
 
             return 0;
@@ -121,8 +119,8 @@ class Clear implements \Weline\Framework\Console\CommandInterface
             }
         }
 
-        if (!$skipViewCompile) {
-            $this->clearViewCompileCaches();
+        if (!$skipViewCaches) {
+            $this->clearViewCaches();
         }
 
         if ($cleared > 0) {
@@ -145,7 +143,7 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         $fpcWarmOk = false;
         if ($this->sendWlsCacheClearCommand()) {
             // Soft-clear (--pools-only) must warm after flush so quiet-cold HTTP
-            // sees chrome/shelf L2. Full clear warms after view/tpl delete.
+            // sees chrome/shelf L2. cache:clear 不删编译产物，两种清法都直接预热。
             // Skip only when WLS clear itself failed (caller already returned).
             if ($skipWarm) {
                 // 只失效不预热：预热由定时任务按构建号变化自行触发。
@@ -390,9 +388,12 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     }
 
     /**
-     * 清理模板编译相关缓存，避免源码已更新但继续读取旧编译产物。
+     * 清理视图/模板增强缓存（taglib 注册表 + 模板缓存袋）。
+     *
+     * 不删除编译产物：模块 view/tpl 与 generated/complicate/<Vendor>/<Module>/view
+     * 是编译产物，cache:clear 只做失效，需要删产物请显式执行 cache:template:clear。
      */
-    private function clearViewCompileCaches(): void
+    private function clearViewCaches(): void
     {
         try {
             $taglib = ObjectManager::getInstance(Taglib::class);
@@ -407,13 +408,6 @@ class Clear implements \Weline\Framework\Console\CommandInterface
             TemplateCacheManager::getInstance()->clearAll();
         } catch (\Throwable) {
             // Enhanced template cache clear is best-effort during global cache clear.
-        }
-
-        try {
-            ObjectManager::getInstance(\Weline\Framework\Cache\Console\Template\Clear::class)
-                ->execute([], ['silent' => true]);
-        } catch (\Throwable) {
-            // Template cache CLI clear is best-effort during global cache clear.
         }
     }
 
@@ -468,7 +462,7 @@ class Clear implements \Weline\Framework\Console\CommandInterface
             [
                 '-h, --help' => '显示帮助信息',
                 '-f, --force' => '强制清理（含持久缓存池）',
-                '--pools-only, --skip-view-compile' => '仅 flush 缓存池（不删 view/tpl / generated/complicate）',
+                '--pools-only' => '仅 flush 缓存池（跳过 taglib/模板缓存失效；编译产物从不删除）',
                 '--no-warm, --skip-warm' => '只失效不预热店面（预热由定时任务按构建世代触发）',
             ],
             [],

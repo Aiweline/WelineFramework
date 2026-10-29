@@ -89,8 +89,8 @@ final class DeployContractsTest extends TestCase
             'ModeSetCompileCleanup::testModeSetFlushesPoolsThenDeletesCompileTreesOnce' => function () {
             $this->assert_ModeSetCompileCleanup_testModeSetFlushesPoolsThenDeletesCompileTreesOnce();
         },
-            'ModeSetCompileCleanup::testCacheClearSupportsPoolsOnlySkipViewCompile' => function () {
-            $this->assert_ModeSetCompileCleanup_testCacheClearSupportsPoolsOnlySkipViewCompile();
+            'ModeSetCompileCleanup::testCacheClearSupportsPoolsOnlyWithoutCompileDelete' => function () {
+            $this->assert_ModeSetCompileCleanup_testCacheClearSupportsPoolsOnlyWithoutCompileDelete();
         },
             'ModeSetCompileCleanup::testTemplateCacheManagerClearAllDeletesTreeOnce' => function () {
             $this->assert_ModeSetCompileCleanup_testTemplateCacheManagerClearAllDeletesTreeOnce();
@@ -376,7 +376,8 @@ private function frameworkFile_ModeSetCompileCleanup(string $relativeFromFramewo
 private function assert_ModeSetCompileCleanup_testModeSetFlushesPoolsThenDeletesCompileTreesOnce(): void
 {
     $src = (string) \file_get_contents($this->frameworkFile_ModeSetCompileCleanup('Console/Console/Deploy/Mode/Set.php'));
-    self::assertStringContainsString("skip_view_compile' => true", $src);
+    // cache:clear 不再删编译产物：切模式 flush 只传 skip_warm。
+    self::assertStringNotContainsString('skip_view_compile', $src);
     // 切模式只失效不预热：店面预热由定时任务按构建世代变化触发。
     self::assertStringContainsString("skip_warm' => true", $src);
     self::assertStringContainsString('刷新缓存池（flush）', $src);
@@ -388,13 +389,21 @@ private function assert_ModeSetCompileCleanup_testModeSetFlushesPoolsThenDeletes
     self::assertSame(1, $cleanCalls, 'cleanTplComDir must run once per deploy()');
 }
 
-private function assert_ModeSetCompileCleanup_testCacheClearSupportsPoolsOnlySkipViewCompile(): void
+private function assert_ModeSetCompileCleanup_testCacheClearSupportsPoolsOnlyWithoutCompileDelete(): void
 {
     $src = (string) \file_get_contents($this->frameworkFile_ModeSetCompileCleanup('Cache/Console/Cache/Clear.php'));
-    self::assertStringContainsString('skip_view_compile', $src);
     self::assertStringContainsString('--pools-only', $src);
     self::assertStringContainsString('skip_warm', $src);
     self::assertStringContainsString('--no-warm', $src);
+    // 编译产物不归缓存管理：cache:clear 不得再调用模板清（删产物）命令。
+    self::assertStringNotContainsString('skip_view_compile', $src);
+    self::assertStringNotContainsString('Cache\\Console\\Template\\Clear', $src);
+    self::assertStringNotContainsString('clearViewCompileCaches', $src);
+
+    $templateClear = (string) \file_get_contents($this->frameworkFile_ModeSetCompileCleanup('Cache/Console/Template/Clear.php'));
+    self::assertStringNotContainsString('rm -rf', $templateClear, 'cache:template:clear must not delete compile products');
+    self::assertStringNotContainsString('complicateModuleViewDir', $templateClear);
+    self::assertStringContainsString('不删除任何编译产物', $templateClear);
 }
 
 private function assert_ModeSetCompileCleanup_testTemplateCacheManagerClearAllDeletesTreeOnce(): void

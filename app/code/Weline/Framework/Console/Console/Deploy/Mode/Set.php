@@ -104,13 +104,13 @@ class Set extends CommandAbstract
                 return;
             }
         }
-        // flush：只刷缓存池 / L1；prod 不删活树编译目录（staging 管道末尾 rename 切换）。
+        // flush：只刷缓存池 / L1（cache:clear 本就不删编译产物）。
         // 这里只做失效，不做店面预热：预热由定时任务（framework_storefront_warmup）
         // 在检测到构建/世代变化后自行触发，切模式不该顺手全量重暖。
         $this->printer->note('刷新缓存池（flush）...');
         /**@var $cacheManagerConsole \Weline\Framework\Cache\Console\Cache\Clear */
         $cacheManagerConsole = ObjectManager::getInstance(\Weline\Framework\Cache\Console\Cache\Clear::class);
-        $cacheManagerConsole->execute([], ['skip_view_compile' => true, 'skip_warm' => true]);
+        $cacheManagerConsole->execute([], ['skip_warm' => true]);
         switch ($type) {
             case 'prod':
                 // Persist env.php BEFORE staging bake so child CLI/workers re-reading
