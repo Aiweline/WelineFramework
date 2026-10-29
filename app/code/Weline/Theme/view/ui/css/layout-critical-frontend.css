@@ -97,3 +97,19 @@ body, p, li { font-size: var(--weline-font-size-base, 1rem); }
 
 /* ---- Interactive shell: keep buttons tappable before overlay CSS lands. ---- */
 .w-button, button, [role="button"] { min-block-size: 2.5rem; }
+
+/* ---- 首屏骨架几何预留（2026-10-29 · 全局默认，治 CLS）----
+ * PACK_STOREFRONT / PACK_OVERLAY 走 rel=preload（见 ThemeHeadChromeCssPack::tryPreloadLinkHtml），
+ * 批量 CSS 晚到 100–600ms；首帧若不预占 header/hero 的最终高度，后到的 min-height 会把整页下推。
+ * 全局基线提供「设计主题可声明」的骨架占位约定，主题只需在变量盘里给自己的数值：
+ *   --weline-header-height-reserve / --weline-hero-min-height-reserve
+ * 未声明时 min-height:0 → 对既有主题零影响（零回归）。
+ */
+[data-weline-skeleton="header"],
+.w-frontend-header {
+    min-height: var(--weline-header-height-reserve, 0);
+}
+[data-weline-skeleton="hero"],
+.w-line-hero {
+    min-height: var(--weline-hero-min-height-reserve, 0);
+}
