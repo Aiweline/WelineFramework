@@ -105,8 +105,13 @@ final class WidgetAssetOptimizer
             $type = $pending[0]['type'];
             $earlyCount = max(1, (int)($options[$type . '_merge_start_widget'] ?? 6));
             // Late pack only: source after the first N widgets (deferred CSS via media=print).
-            $deferred = ($pending[0]['kind'] ?? '') === 'source'
-                && ($pending[0]['first_widget_index'] ?? 0) > $earlyCount;
+            // 2026-10-29 全局默认（marker: widget-css-never-blocking-v1）：
+            // 部件 CSS 包一律非阻塞：这些是浮动层/客服/音乐等装饰性部件样式，首屏骨架与版心/hero
+            // 几何已由 layout-critical + 内联 tokens 兜住；阻塞它们等于让首屏多等 1 个 RTT
+            // （PIC 首页 PSI「渲染阻塞请求 160–450ms」即来自这类合并包）。
+            $deferred = $type === 'css'
+                || (($pending[0]['kind'] ?? '') === 'source'
+                    && ($pending[0]['first_widget_index'] ?? 0) > $earlyCount);
             $published = $this->publishBatch($pending, $options, $deferred);
             if ($published !== null) {
                 $output[] = $published;
@@ -237,17 +242,70 @@ final class WidgetAssetOptimizer
         return \preg_replace('/^<link\b/i', '<link data-weline-merged-css="' . $list . '"', $tag) ?? $tag;
     }
 
+    /**
+     * Layout 合包（版心/栅格/浮动层/客服等几何关键 CSS）改为**内联**进 head。
+     *
+     * 2026-10-30 实测（marker: inline-layout-pack-v1）：该包约 10 KB(gzip)/60–80 KB(原文)，
+     * 原本是 `<link rel=stylesheet>` 阻塞渲染，PSI「渲染阻塞请求」实测 450 ms —— 主要是
+     * 一个额外 RTT（4G 150 ms）+ 排队。几何关键 CSS 必须阻塞，那就把它内联：语义等价、
+     * 少一个请求，HTML 体积的增加会被 gzip/brotli 摊薄。
+     *
+     * 安全边界：只读已发布产物；读不到 / 空 / >96KB 一律回退原 `<link>`，行为不变。
+     * 链接形态保持可识别：内联后仍带 data-weline-layout-pack 与 data-weline-widget-asset="layout"。
+     */
     private function markLayoutPack(string $tag): string
     {
+        // 注意：标签可能在更早阶段已带 data-weline-layout-pack（合包标记先于本方法），
+        // 因此「已标记」也必须继续走内联分支；否则内联永不生效（2026-10-30 实测踩过）。
         if (str_contains($tag, 'data-weline-layout-pack=')) {
-            return $tag;
+            $inlinedExisting = $this->tryInlineLayoutPack($tag);
+            return $inlinedExisting ?? $tag;
         }
-
-        return preg_replace(
+        $marked = preg_replace(
             '/^<link\b/i',
             '<link data-weline-layout-pack="1" data-weline-widget-asset="layout"',
             $tag
         ) ?? $tag;
+        $inlined = $this->tryInlineLayoutPack($marked);
+        if ($inlined !== null) {
+            return $inlined;
+        }
+
+        return $marked;
+    }
+
+    /**
+     * 把已发布的 layout 合包读成 &lt;style&gt;；任一前提不满足返回 null（调用方回退 link）。
+     */
+    private function tryInlineLayoutPack(string $linkTag): ?string
+    {
+        if (!\preg_match('/\bhref=["\']([^"\']+)["\']/i', $linkTag, $m)) {
+            return null;
+        }
+        $url = \html_entity_decode($m[1], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $path = (string)\parse_url($url, PHP_URL_PATH);
+        if ($path === '' || !\str_starts_with($path, '/')) {
+            return null;
+        }
+        if (!\defined('BP')) {
+            return null;
+        }
+        $file = \rtrim(BP, '/\\') . '/pub' . $path;
+        if (!\is_file($file)) {
+            return null;
+        }
+        $raw = @\file_get_contents($file);
+        if (!\is_string($raw) || $raw === '' || \strlen($raw) > 98304) {
+            return null;
+        }
+        // 只内联纯 CSS，避免把 404 页 / HTML 错误页灌进 <style>。
+        if (\stripos($raw, '<html') !== false || \stripos($raw, '<!doctype') !== false) {
+            return null;
+        }
+        $attrs = ' data-weline-layout-pack="1" data-weline-widget-asset="layout"'
+            . ' data-weline-inline-layout="1"';
+
+        return '<style' . $attrs . '>' . $raw . '</style>';
     }
 
     private function applyDeferredCss(string $tag, string $url): string
