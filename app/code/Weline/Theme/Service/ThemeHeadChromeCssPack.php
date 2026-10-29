@@ -159,22 +159,11 @@ final class ThemeHeadChromeCssPack
             return $this->tryPreloadLinkHtml($area, $pack, $options);
         }
 
-        // PACK_TOKENS 是唯一还会阻塞首屏的样式请求。它体积小（≈6.6 KB）且首帧就要用，
-        // 走外链等于让 FCP/LCP 等一轮 RTT（4G 下实测 220 ms 阻塞）。
-        // 全局默认改为内联：任何自定义主题调 tryLinkHtml(PACK_TOKENS) 都自动拿到无阻塞样式，
-        // 无需各主题自己写内联逻辑。publish 失败/关闭合并时回退外链分支。
-        if ($pack === self::PACK_TOKENS && !isset($options['force_link'])) {
-            try {
-                $inline = $this->tryInlineCssHtml($area, $pack, $options);
-            } catch (\Throwable) {
-                $inline = null;
-            }
-            if ($inline !== null && $inline !== '') {
-                $this->markPackEmitted($area, $pack);
-
-                return $inline;
-            }
-        }
+        // 回滚记录（2026-10-29 15:40 生产 503「页面渲染未完成」）：
+        // 曾在此把 PACK_TOKENS 改为 tryInlineCssHtml() 内联，但该实现每次请求都
+        // composeSources()+minify 重新拼 CSS，渲染耗时飙升触发 WLS 渲染超时 503。
+        // 正确做法：内联必须读「已发布产物」字节（publishPack 落盘后 file_get_contents），
+        // 而不是每次重算。等磁盘产物式内联实现并压测通过后再开。
 
         $area = $this->themeContext->normalizeArea($area);
         if (!$this->isEnabled($area)) {
