@@ -87,6 +87,7 @@ class Image extends FrontendController
             'png' => 'image/png',
             'gif' => 'image/gif',
             'webp' => 'image/webp',
+            'avif' => 'image/avif',
             'bmp' => 'image/bmp',
             'svg' => 'image/svg+xml',
             default => 'image/jpeg',
@@ -128,6 +129,12 @@ class Image extends FrontendController
                     return false;
                 }
                 $sourceImage = imagecreatefromwebp($sourcePath);
+                break;
+            case IMAGETYPE_AVIF:
+                if (!function_exists('imagecreatefromavif')) {
+                    return false;
+                }
+                $sourceImage = imagecreatefromavif($sourcePath);
                 break;
             case IMAGETYPE_BMP:
                 if (!function_exists('imagecreatefrombmp')) {
@@ -191,6 +198,7 @@ class Image extends FrontendController
             IMAGETYPE_PNG => 'imagepng',
             IMAGETYPE_GIF => 'imagegif',
             IMAGETYPE_WEBP => 'imagewebp',
+            IMAGETYPE_AVIF => 'imageavif',
             IMAGETYPE_BMP => 'imagebmp',
             IMAGETYPE_WBMP => 'imagewbmp',
             default => '',

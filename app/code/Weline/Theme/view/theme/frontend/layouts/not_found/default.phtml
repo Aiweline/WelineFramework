@@ -120,7 +120,11 @@ $this->setData('seo', [
             padding: 0.35rem 0.95rem;
             border-radius: 999px;
             border: 1px solid var(--color-primary-border, #cc7700);
-            background: linear-gradient(180deg, #ffe08a 0%, var(--color-primary, #ff9900) 100%);
+            /* 实心 primary 底 + on-primary 墨：两端同色，白字稳过 4.5:1（默认盘 #ffffff on #2563eb=5.17:1）。
+               原为 linear-gradient(180deg, #ffe08a, var(--color-primary))，白字压顶端浅黄实测 1.29:1
+               （视觉上等同白底白字）；任何单一墨色都无法同时满足黄端与蓝端（深墨压蓝端仅 3.15:1），
+               故取消自造渐变，只消费主题盘 Token。 */
+            background: var(--color-primary, #ff9900);
             box-shadow: 0 1px 0 rgba(255, 255, 255, 0.4) inset;
             color: var(--color-on-primary, #111);
             font-size: 0.92rem;
@@ -129,7 +133,7 @@ $this->setData('seo', [
         }
 
         .not-found__home-link:hover {
-            background: linear-gradient(180deg, #ffd56b 0%, var(--color-primary-hover, #e68900) 100%);
+            background: var(--color-primary-hover, #e68900);
             color: var(--color-on-primary, #111);
         }
 

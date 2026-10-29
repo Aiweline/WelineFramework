@@ -67,13 +67,6 @@ final class Category extends FrontendController
         ) {
             \Weline\Server\Security\SearchFilterOriginGate::assertHtmlExtraVariantOrTerminate($this->request);
         }
-        $offers = $productIds === []
-            ? []
-            : $this->catalog->publishedOffersForProductIds($productIds, 120, $bindListingQuery);
-        // 取回上限：候选被截断时，过滤后 0 命中不能证明「该组合无货」，
-        // 否则会把有货的 facet URL 永久 301 掉（架构评审 R4）。
-        $offersTruncated = \count($productIds) > 120;
-        StorefrontPageContext::setListingOffers($offers);
 
         $categoryUrl = trim((string)($category['url'] ?? ''));
         if ($categoryUrl === '') {
@@ -86,6 +79,26 @@ final class Category extends FrontendController
         if (is_string($categoryPath) && $categoryPath !== '') {
             $categoryUrl = $categoryPath;
         }
+
+        // 形状闸：爬虫式的超多/超长 facet 组合在**加载任何数据之前**直接 301。
+        // 真实用户筛选都是短值少量维度；这类 URL 是「facet 无限空间」冷构建的主要来源
+        // （CPU 饱和时正是 503 的来源）。纯字符串判断，零数据访问。
+        if ($bindListingQuery && $this->facetQueryLooksAbusive($listingQuery)) {
+            $canonicalRedirectUrl = $this->canonicalRedirectUrl($categoryUrl);
+            RequestContext::set(
+                'weline.frontend.redirect.canonical_host',
+                (string)(parse_url($canonicalRedirectUrl, PHP_URL_HOST) ?: '')
+            );
+            $this->request->getResponse()->redirect($canonicalRedirectUrl, 301);
+        }
+
+        $offers = $productIds === []
+            ? []
+            : $this->catalog->publishedOffersForProductIds($productIds, 120, $bindListingQuery);
+        // 取回上限：候选被截断时，过滤后 0 命中不能证明「该组合无货」，
+        // 否则会把有货的 facet URL 永久 301 掉（架构评审 R4）。
+        $offersTruncated = \count($productIds) > 120;
+        StorefrontPageContext::setListingOffers($offers);
 
         if ($bindListingQuery) {
             // 廉价预判定（不渲染 grid / 不补媒体）：零命中的 facet 组合直接 301，
@@ -223,6 +236,31 @@ final class Category extends FrontendController
         }
 
         return $path;
+    }
+
+    /**
+     * facet 查询形状是否属于「爬虫式无限组合」：维度过多 / 单值过长 / 整体过长。
+     * 命中即判定无可索引价值，直接 301 回规范页，不加载商品数据。
+     */
+    private function facetQueryLooksAbusive(array $query): bool
+    {
+        $facetCount = 0;
+        $totalLength = 0;
+        foreach ($query as $key => $value) {
+            $key = \strtolower(\trim((string)$key));
+            if (!\str_starts_with($key, 'af_')) {
+                continue;
+            }
+            ++$facetCount;
+            $raw = \is_array($value) ? (string)\reset($value) : (string)$value;
+            $length = \mb_strlen($raw);
+            if ($length > 64) {
+                return true;
+            }
+            $totalLength += $length;
+        }
+
+        return $facetCount > 4 || $totalLength > 160;
     }
 
     private function canonicalRedirectUrl(string $path): string

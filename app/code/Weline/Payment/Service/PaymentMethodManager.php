@@ -112,6 +112,127 @@ class PaymentMethodManager
     }
 
     /**
+     * Seed scoped enable/sort config for a target scope: methods already active
+     * (or test-passed) on the fallback base sort first, the rest sink to the end.
+     * Only keys absent from the whole fallback chain are written, so sites that
+     * rely on inheritance keep relying on it; re-running is idempotent.
+     *
+     * @param array<string, mixed> $context
+     * @return array{seeded:int,skipped:int}
+     */
+    public function seedScopeDefaults(array $context = []): array
+    {
+        $methods = $this->listMethodsForAdmin($context);
+        if ($methods === []) {
+            return ['seeded' => 0, 'skipped' => 0];
+        }
+
+        $scope = $this->getScopeConfigService()->resolveScope($context);
+        $storageScope = (string)$scope['scope'];
+        $environment = (string)$scope['environment'];
+        $baseContext = ['scope' => PaymentScopeConfigService::DEFAULT_SCOPE, 'environment' => $environment];
+        $isBaseScope = $storageScope === PaymentScopeConfigService::DEFAULT_SCOPE;
+
+        // Classify with the same reader as the existence gate below: both must
+        // see the identical fallback-resolved value or seeding writes no-ops.
+        $enabledCodes = [];
+        $disabledCodes = [];
+        foreach ($methods as $method) {
+            $code = $this->normalizeCode((string)$method->getData(PaymentMethod::schema_fields_CODE));
+            if ($code === '') {
+                continue;
+            }
+            if ($isBaseScope) {
+                $activeFirst = (bool)$method->getData(PaymentMethod::schema_fields_IS_ACTIVE);
+            } else {
+                $module = trim((string)$method->getData(PaymentMethod::schema_fields_PROVIDER_MODULE));
+                $resolved = $this->getScopedConfigReader()->getConfig(
+                    'payment/method/' . $code . '/enabled',
+                    $module !== '' ? $module : PaymentScopeConfigService::MODULE_WELINE_PAYMENT,
+                    ConfigStore::area_BACKEND,
+                    null,
+                    $storageScope,
+                );
+                // A method with no enabled key anywhere in the chain falls back to
+                // its row is_active default; treat that as active-first too.
+                $activeFirst = $resolved === null
+                    ? (bool)$method->getData(PaymentMethod::schema_fields_IS_ACTIVE)
+                    : \in_array(strtolower(trim((string)$resolved)), ['1', 'true', 'on', 'yes'], true);
+            }
+            if ($activeFirst) {
+                $enabledCodes[] = $code;
+            } else {
+                $disabledCodes[] = $code;
+            }
+        }
+
+        $configStore = $this->getConfigStore();
+        $seeded = 0;
+        $skipped = 0;
+        $index = 0;
+        foreach ([[$enabledCodes, 1], [$disabledCodes, 0]] as [$codes, $enabledValue]) {
+            foreach ($codes as $code) {
+                $module = trim((string)($this->getMethodByCode($code)?->getData(
+                    PaymentMethod::schema_fields_PROVIDER_MODULE
+                ) ?? ''));
+                if ($module === '') {
+                    $module = PaymentScopeConfigService::MODULE_WELINE_PAYMENT;
+                }
+                $enabledKey = 'payment/method/' . $code . '/enabled';
+                $sortKey = 'payment/method/' . $code . '/sort_order';
+                $reader = $this->getScopedConfigReader();
+                $enabledResolved = $reader->getConfig(
+                    $enabledKey,
+                    $module,
+                    ConfigStore::area_BACKEND,
+                    null,
+                    $storageScope,
+                ) !== null;
+                $sortResolved = $reader->getConfig(
+                    $sortKey,
+                    $module,
+                    ConfigStore::area_BACKEND,
+                    null,
+                    $storageScope,
+                ) !== null;
+                if ($enabledResolved && $sortResolved) {
+                    $skipped += 2;
+                    $index++;
+                    continue;
+                }
+                $writes = [];
+                if (!$enabledResolved) {
+                    $writes[$enabledKey] = $enabledValue;
+                }
+                if (!$sortResolved) {
+                    $writes[$sortKey] = $index * self::SORT_STEP;
+                }
+                foreach ($writes as $key => $value) {
+                    if ($configStore->setScopedConfig(
+                        key: $key,
+                        value: $value,
+                        module: $module,
+                        area: ConfigStore::area_BACKEND,
+                        scope: $storageScope,
+                        locale: ConfigStore::LOCALE_DEFAULT,
+                    )) {
+                        $seeded++;
+                    } else {
+                        $skipped++;
+                    }
+                }
+                $index++;
+            }
+        }
+
+        if ($seeded > 0) {
+            self::invalidateSharedCache();
+        }
+
+        return ['seeded' => $seeded, 'skipped' => $skipped];
+    }
+
+    /**
      * @return PaymentMethod[]
      */
     public function getActiveMethods(array $context = []): array
@@ -572,6 +693,14 @@ class PaymentMethodManager
         }
 
         return $this->configStore;
+    }
+
+    /**
+     * Read through the scope fallback chain to detect already-resolved keys.
+     */
+    private function getScopedConfigReader(): \Weline\SystemConfig\Api\ConfigReader
+    {
+        return $this->objectManager->getInstance(\Weline\SystemConfig\Api\ConfigReader::class);
     }
 
     /**

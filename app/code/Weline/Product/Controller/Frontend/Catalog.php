@@ -142,17 +142,28 @@ final class Catalog extends FrontendController
         ) {
             \Weline\Server\Security\SearchFilterOriginGate::assertHtmlExtraVariantOrTerminate($this->request);
         }
-        $offers = $this->catalog->publishedListingCandidates(1000, $bindListingQuery);
-        // 取回上限：候选被截断时，过滤后 0 命中不能证明「该组合无货」，
-        // 否则会把有货的 facet URL 永久 301 掉（架构评审 R4）。
-        $offersTruncated = \count($offers) >= 1000;
-        StorefrontPageContext::setListingOffers($offers);
 
         $productsUrl = (string)$this->getUrl($surface['public_route']);
         $productsPath = parse_url($productsUrl, PHP_URL_PATH);
         if (is_string($productsPath) && $productsPath !== '') {
             $productsUrl = $productsPath;
         }
+
+        // 形状闸：爬虫式的超多/超长 facet 组合在**加载任何数据之前**直接 301（纯字符串判断）。
+        if ($bindListingQuery && $this->facetQueryLooksAbusive($listingQuery)) {
+            $canonicalRedirectUrl = $this->canonicalRedirectUrl($productsUrl);
+            RequestContext::set(
+                'weline.frontend.redirect.canonical_host',
+                (string)(parse_url($canonicalRedirectUrl, PHP_URL_HOST) ?: '')
+            );
+            $this->request->getResponse()->redirect($canonicalRedirectUrl, 301);
+        }
+
+        $offers = $this->catalog->publishedListingCandidates(1000, $bindListingQuery);
+        // 取回上限：候选被截断时，过滤后 0 命中不能证明「该组合无货」，
+        // 否则会把有货的 facet URL 永久 301 掉（架构评审 R4）。
+        $offersTruncated = \count($offers) >= 1000;
+        StorefrontPageContext::setListingOffers($offers);
         // A diagnostic chain warmup only needs to hydrate the process-local
         // router/template/slot/catalog chain. The normal storefront FPC
         // warmup deliberately keeps the public page shape so it can safely
@@ -281,6 +292,31 @@ final class Catalog extends FrontendController
         ]);
 
         return (string)$this->fetch('Weline_Product::templates/frontend/catalog/index.phtml');
+    }
+
+    /**
+     * facet 查询形状是否属于「爬虫式无限组合」：维度过多 / 单值过长 / 整体过长。
+     * 命中即判定无可索引价值，直接 301 回规范页，不加载商品数据。
+     */
+    private function facetQueryLooksAbusive(array $query): bool
+    {
+        $facetCount = 0;
+        $totalLength = 0;
+        foreach ($query as $key => $value) {
+            $key = \strtolower(\trim((string)$key));
+            if (!\str_starts_with($key, 'af_')) {
+                continue;
+            }
+            ++$facetCount;
+            $raw = \is_array($value) ? (string)\reset($value) : (string)$value;
+            $length = \mb_strlen($raw);
+            if ($length > 64) {
+                return true;
+            }
+            $totalLength += $length;
+        }
+
+        return $facetCount > 4 || $totalLength > 160;
     }
 
     private function canonicalRedirectUrl(string $path): string

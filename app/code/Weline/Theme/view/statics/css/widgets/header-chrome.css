@@ -154,6 +154,16 @@
  * ≤480：语言/货币触发器曾被压到 33–34px（内容仍 74px），内部 .w-button 溢出自身盒子
  * 43px，压到邻居上并把「CNY」挤出屏幕（审图 360px）。这里禁止触发器收缩、放不下就换行。
  */
+/*
+ * ≤480：通知文案是装饰性的（Logo 就在下一行），硬留只会被压成 0 宽／一字一行。
+ * 这里显式收起，顶栏只留「☰ + 渠道 + 收藏 + 语言/货币」，放不下就换行，禁止再互相压。
+ */
+@media (max-width: 480px) {
+    .weline-header .header-site-notice-items {
+        display: none;
+    }
+}
+
 @media (max-width: 480px) {
     .weline-header .header-top-bar-locale > .header-action-item {
         flex: 0 0 auto;
@@ -201,6 +211,62 @@
     .weline-header .header-top-bar-menu-btn {
         display: inline-flex;
     }
+
+    /*
+     * 窄屏顶栏统一重排（审图：换行后每行行首都挂着一根孤儿竖线「|」，且☰夹在工具中间）。
+     * 分隔竖线在下面（分隔符规则之后）统一关掉；这里只做分组与顺序：
+     * 链接簇 display:contents，让「通知 / 菜单按钮 / 渠道 / 收藏 / 语言货币」成为同一行的
+     * 直接 flex 项目，能放就一行（右对齐），放不下自然换行，不再由固定顺序硬挤。
+     */
+    .weline-header .header-site-notice-inner {
+        flex-wrap: wrap;
+        row-gap: var(--spacing-0_4);
+        justify-content: flex-end;
+        column-gap: var(--spacing-md);
+    }
+
+    .weline-header .header-site-notice-links {
+        display: contents;
+    }
+
+    .weline-header .header-site-notice-items {
+        order: 0;
+        flex: 1 1 auto;
+        min-width: 0;
+        margin-inline-end: auto;
+        justify-content: flex-start;
+    }
+
+    /* 菜单按钮放在整行最右：窄屏是「… + ☰」的常规形态，别夹在工具中间 */
+    .weline-header .header-top-bar-menu-btn {
+        order: 5;
+    }
+
+    /* 帮助中心 / 订单跟踪 之间原本靠「|」分隔，竖线关掉后必须给间距，否则两个词粘一起 */
+    .weline-header .header-top-bar-rights-slot {
+        order: 1;
+        column-gap: var(--spacing-md);
+    }
+
+    /*
+     * 工具簇一律「不收缩」：宁可换行，也不能像以前那样把内层 74px 的按钮压进 33px 的盒子里
+     * → 文字/箭头互相重叠、CNY 被裁掉（审图 390px）。
+     */
+    .weline-header .header-top-bar-scope {
+        order: 2;
+        flex: 0 0 auto;
+    }
+
+    .weline-header .header-site-notice-links .header-wishlist {
+        order: 3;
+        flex: 0 0 auto;
+    }
+
+    .weline-header .header-top-bar-locale {
+        order: 4;
+        margin-inline-start: 0;
+        flex: 0 0 auto;
+    }
 }
 
 .weline-header .header-site-notice-links > * + *::before,
@@ -211,6 +277,19 @@
     margin-inline: var(--weline-space-3, var(--spacing-md));
     opacity: 0.45;
     pointer-events: none;
+}
+
+/*
+ * 窄屏换行后，分隔竖线会变成行首孤儿的「|」。必须写在分隔符规则之后才能压过它
+ * （同特异性、后到者胜）；宽屏仍保留竖线。
+ */
+@media (max-width: 920px) {
+    .weline-header .header-site-notice-links > * + *::before,
+    .weline-header .header-top-bar-rights-cluster > * + *::before,
+    .weline-header .header-top-bar-rights-slot > * + *::before {
+        content: none;
+        display: none;
+    }
 }
 
 .weline-header .header-site-notice-links a,
@@ -1651,6 +1730,16 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     opacity: 1;
     line-height: 1.2;
     white-space: nowrap;
+}
+
+/*
+ * 769–860：分类导航的 max-content 会压到右侧「博客 / 客户服务」上（审图 820：重叠 21/53px）。
+ * 按「放不下就进菜单」处理：这两个入口在抽屉与页脚都有，窄带内不再在导航行硬挤。
+ */
+@media (min-width: 769px) and (max-width: 860px) {
+    .weline-header .header-nav-extensions {
+        display: none;
+    }
 }
 
 /*

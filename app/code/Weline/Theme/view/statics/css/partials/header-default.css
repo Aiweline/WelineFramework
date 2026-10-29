@@ -3166,11 +3166,19 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     text-overflow: ellipsis;
 }
 
+/*
+ * 反色面成对绑定：本标题位于深色 header 内（background-color:
+ * var(--weline-chrome-bg-dark-secondary)），但 foundation 的全局
+ * `h1,h2,…{color: var(--weline-theme-text)}` 会直接命中标题元素，
+ * 其优先级高于父级 color 的继承，导致深墨字压在深底上（实测 1.2:1）。
+ * 因此这里必须显式声明反色前景，不能只依赖继承。
+ */
 .categories-sidebar-title {
     margin: 0;
     font-size: var(--font-size-lg);
     font-weight: 700;
     letter-spacing: -0.01em;
+    color: var(--weline-theme-text-on-dark);
 }
 
 .categories-sidebar-header-actions {

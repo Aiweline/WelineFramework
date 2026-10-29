@@ -260,13 +260,13 @@ final class LocaleCatalogPackReader
 
             return;
         }
-        $headers = str_getcsv(rtrim($headerLine, "\r\n"), "\t");
+        $headers = str_getcsv(rtrim($headerLine, "\r\n"), "\t", '"', '\\');
         while (($line = gzgets($gz)) !== false) {
             $line = rtrim($line, "\r\n");
             if ($line === '') {
                 continue;
             }
-            $cols = str_getcsv($line, "\t");
+            $cols = str_getcsv($line, "\t", '"', '\\');
             $row = [];
             foreach ($headers as $i => $key) {
                 $row[(string)$key] = (string)($cols[$i] ?? '');

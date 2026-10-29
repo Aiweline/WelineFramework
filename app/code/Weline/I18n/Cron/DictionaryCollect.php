@@ -9,9 +9,13 @@ use Weline\Framework\Console\Console\I18n\Collect as I18nCollectCommand;
 use Weline\I18n\Service\I18nCollectFingerprint;
 
 /**
- * 定时词典收集：按模块增量复用 `php bin/w i18n:collect --module=<模块>`（Framework Collect），
- * 不自写扫描逻辑。只有 {@see I18nCollectFingerprint} 判定指纹变化的模块才会被重扫，
+ * 定时词典收集：按模块增量复用 `php bin/w i18n:collect --module=<模块> --no-rewrite-csv`
+ * （Framework Collect），不自写扫描逻辑。只有 {@see I18nCollectFingerprint} 判定指纹变化的模块才会被重扫，
  * 无变化时前置检查直接跳过派发，不再每分钟付全量收集的成本。
+ *
+ * **职责边界（HARD）**：本 cron 只做「源码扫描 → 词典编译写入 DB」，**不回写模块 `i18n/*.csv`**。
+ * 词条落盘到 CSV 由开发者在国际化后台（词典收集 SSE / `postCollectWordsStream`）手动触发，
+ * 定时链路不参与，避免无人值守的批量改写污染模块语言包。
  * 编译链路经 dictionary_compile / dictionary_register 写入 DB 后，由 i18n_ai_translation cron 入队翻译。
  */
 class DictionaryCollect implements CronTaskInterface, CronTaskPreflightInterface
@@ -34,7 +38,8 @@ class DictionaryCollect implements CronTaskInterface, CronTaskPreflightInterface
 
     public function tip(): string
     {
-        return '每小时按模块增量收集：只对源码指纹变化的模块复用 i18n:collect --module；'
+        return '每小时按模块增量收集：只对源码指纹变化的模块复用 i18n:collect --module --no-rewrite-csv；'
+            . '只写词典库、不回写模块 i18n/*.csv（CSV 由开发者在国际化后台手动收集）；'
             . '无变化直接跳过；单模块失败不影响其它模块。';
     }
 
@@ -81,8 +86,10 @@ class DictionaryCollect implements CronTaskInterface, CronTaskPreflightInterface
             $succeeded = [];
             $failed = [];
             foreach ($modules as $module) {
-                // 同 CLI：php bin/w i18n:collect --module=<模块>
-                $exitCode = $this->collectCommand->execute(['module' => $module], []);
+                // 同 CLI：php bin/w i18n:collect --module=<模块> --no-rewrite-csv
+                // 定时任务只做「源码扫描 → 词典编译入 DB」，不回写模块 i18n/*.csv：
+                // 词条写入 CSV 由开发者在国际化后台（词典收集 SSE）手动触发，cron 不参与。
+                $exitCode = $this->collectCommand->execute(['module' => $module, '--no-rewrite-csv'], []);
                 if ((int)$exitCode === 75) {
                     // 单飞锁：已有收集进行中，记下已成功的模块后立即停止本轮
                     $this->fingerprint->remember($succeeded);

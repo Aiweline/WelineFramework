@@ -324,7 +324,9 @@ $defaultNavItemsFactory = static function (): array {
                         class="header-action-item header-top-bar-menu-btn js-header-drawer-trigger"
                         aria-label="@lang(菜单)"
                         data-testid="header-top-bar-menu-trigger">
-                    <i class="fas fa-bars" aria-hidden="true"></i>
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="18" height="18">
+                        <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                    </svg>
                 </button>
                 <!-- 语言 + 货币：迁通知条右侧（减轻主栏拥挤）；勿塞进 top-bar-rights 槽 -->
                 <div class="header-top-bar-locale"

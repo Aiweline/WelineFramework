@@ -18,6 +18,10 @@
 
 跨模块进程控制使用 `Weline\Cron\Api\Process\ProcessControlInterface`。它只发布任务名规范化、PID 存活检查、指定 PID 终止和 Cron 日志清理；平台差异和 `Helper\Process` 细节由 Cron 内部 Provider 封装。
 
+## 任务 CPU 预算（可选实现）
+
+任务在 `execute()` 期间要限制自身 CPU 占用时，实现 `Weline\Cron\CronTaskCpuBudgetInterface`（`cpu_count()` / `cpu_percent()`）声明额度；不实现即走默认 1 核 / 最多 30%，完全向后兼容。额度是「最多占多少」的上限，不是预留：`cpu_count × cpu_percent / 100` 核当量，超出部分由 `Service/CronCpuGovernor` 按 SIGALRM 节拍睡眠出让。生效优先级：任务行 `weline_cron_task.cpu_count` / `cpu_percent`（非 0 生效，`0 = 跟随统一配置`）> 统一配置中心 `cron/cpu/default_count` / `cron/cpu/default_percent` > 接口常量。后台默认值在「计划任务 → 系统配置」页（或统一配置中心 `Weline_Cron` backend 区）修改，`cron/cpu/enforce=0` 只计量不让出。细节见 `需求.md#REQ-CRON-0004` 与 `开发日志.md`。
+
 ## 代码面概览
 
 入口文件：

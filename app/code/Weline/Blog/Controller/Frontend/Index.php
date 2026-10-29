@@ -61,8 +61,6 @@ final class Index extends FrontendController
             $locales[] = trim((string)$this->scope->locale());
         } catch (\Throwable) {
         }
-        $locales[] = 'en_US';
-        $locales[] = 'zh_Hans_CN';
 
         foreach (array_values(array_unique(array_filter($locales))) as $candidateLocale) {
             foreach ($scopes as $candidateScope) {
@@ -71,10 +69,23 @@ final class Index extends FrontendController
                 } catch (\Throwable) {
                     $hit = '';
                 }
-                if ($hit !== '') {
-                    $value = $hit;
-                    break 2;
+                if ($hit === '') {
+                    continue;
                 }
+                // getParamTranslation 内部会回退 zh_Hans_CN：非 zh 语种若命中值与 zh 值相同，
+                // 说明本语种没配过覆盖值，应交给词典按本语种翻译（避免德语页冒出中文）。
+                if ($candidateLocale !== 'zh_Hans_CN') {
+                    try {
+                        $zhHit = trim(ThemeData::getParamTranslation($identify, $param, $candidateScope, 'zh_Hans_CN', ''));
+                    } catch (\Throwable) {
+                        $zhHit = '';
+                    }
+                    if ($zhHit !== '' && $hit === $zhHit) {
+                        continue;
+                    }
+                }
+                $value = $hit;
+                break 2;
             }
         }
 

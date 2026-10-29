@@ -226,12 +226,15 @@ private function assert_FrontendRuntimeThemeVersion_testHeaderProdDeployVersionR
     $path = '/Users/weline/Project/Official/框架/app/code/Weline/Frontend' . '/view/blocks/header/base.phtml';
     self::assertFileExists($path);
     $src = (string) file_get_contents($path);
-    self::assertStringContainsString("VAR_DIR . 'deploy/current.json'", $src);
+    self::assertStringContainsString('deploy/current.json', $src);
+    self::assertMatchesRegularExpression("/current\\.json['\"]?\\)/", $src);
     self::assertStringContainsString("\$deployMeta['deploy_version']", $src);
     self::assertStringContainsString('PROD 禁止沿用粘滞的 deploy_version=dev', $src);
     self::assertStringContainsString("strcasecmp(\$deployVersion, 'dev') === 0", $src);
     self::assertStringContainsString("\$deployVersion = 'prod';", $src);
-    self::assertStringContainsString("'/static/Weline/Frontend/base/weline.modules.js'", $src);
+    // modules.js 走 PublicStaticUrl 解析（不再拼死字面 URL），但仍必须是 base/weline.modules.js 这条源。
+    self::assertStringContainsString("PublicStaticUrl::fromDevWebPath('/Weline/Frontend/view/statics/base/weline.modules.js')", $src);
+    self::assertStringContainsString('weline.modules.js', $src);
 }
 
 private function assert_GuestStorefrontFpc_testFrontendHeaderGatesSessionAndCsrfOnExistingCookie(): void
@@ -249,8 +252,12 @@ private function assert_GuestStorefrontFpc_testDeliveryWidgetUsesReadOnlyGuestSh
     $path = '/Users/weline/Project/Official/框架/app/code/Weline' . '/Checkout/view/theme/frontend/widgets/header/checkout-delivery-context/default.phtml';
     self::assertFileExists($path);
     $source = (string) file_get_contents($path);
-    self::assertStringContainsString('SessionCookieNameResolver::hasRequestCookie()', $source);
-    self::assertMatchesRegularExpression('/if\s*\(\$hasSessionCookie\).*?getContext\(\)/s', $source);
+    // 客人壳契约已从「模板里读 Session cookie 再分支」升级为「模板只出只读客人壳，
+    // 个性化数据首开时走 QueryBin 刷新」——模板因此不得自己碰 Session，更不得读 cookie 决策。
+    self::assertStringContainsString('Guest-safe SSR: never personalize by Session cookie', $source);
+    self::assertStringNotContainsString('SessionCookieNameResolver', $source);
+    self::assertStringNotContainsString('SessionFactory::frontend', $source);
+    self::assertStringContainsString("'is_logged_in' => false", $source);
     self::assertStringNotContainsString('$isEditorMode', $source, 'delivery widget must not use editor_mode stub (preview_storefront_delivery_parity)');
 }
 
@@ -678,7 +685,13 @@ private function assert_WelineApiWorkerResponseCache_testWorkerClearsLocalCacheW
     self::assertStringContainsString('await ensureResponseCacheDeployVersion(config)', $script);
     self::assertStringContainsString('wqrc1|', $script);
     self::assertStringContainsString('responseCacheL1.clear()', $api);
-    self::assertStringContainsString("String(client.config.deployVersion || '') !== String(freshConfig.deployVersion || '')", $api);
+    // 店面世代（可清 L1 的判定）以 Scope 发布的主题版本 id 为准，不再用系统 deployVersion：
+    // deployVersion 仍被采纳进 client.config，但不作为 L1 失效条件。
+    self::assertStringContainsString(
+        "String(client.config.themePublishedVersionId || '') !== String(freshConfig.themePublishedVersionId || '')",
+        $api
+    );
+    self::assertStringContainsString('client.config.deployVersion = freshConfig.deployVersion;', $api);
 }
 
 private function assert_WelineApiWorkerResponseCache_testWorkerInvalidatesConsentStatusAfterAccept(): void

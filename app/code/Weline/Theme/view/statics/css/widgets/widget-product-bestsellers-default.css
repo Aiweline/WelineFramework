@@ -322,7 +322,7 @@
     color: var(--weline-theme-on-primary);
 }
 
-@media (max-width: var(--breakpoint-xl)) {
+@media (max-width: 1200px) {
     .wc-theme_widget_bestsellers .products-grid.columns-5,
     .wc-theme_widget_bestsellers .products-grid.columns-6 {
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -334,11 +334,18 @@
 }
 
 /*
- * UC-P1-03：与 featured-products 对齐。
- * 编辑器预览 ≈700px 须保持 columns-4；禁止 992→3 / 768→2。
- * 仅 <560 降 2 列；真窄屏 ≤480 降 1 列。
+ * 断点必须写字面值：@media 内 var() 无法解析，整条媒体查询会被浏览器丢弃
+ * （本文件此前 325/341/356/374/387 五条 var 断点全部未生效）。
+ * 编辑器预览 ≈700px 需保持 columns-4，该需求走 .widget-preview-canvas 作用域隔离。
  */
-@media (max-width: var(--breakpoint-lg)) {
+@media (max-width: 1200px) {
+    .wc-theme_widget_bestsellers .products-grid.columns-5,
+    .wc-theme_widget_bestsellers .products-grid.columns-6 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 992px) {
     .wc-theme_widget_bestsellers .products-grid.columns-4 {
         grid-template-columns: repeat(4, minmax(0, 1fr));
     }
@@ -353,17 +360,18 @@
     }
 }
 
-@media (max-width: var(--breakpoint-md)) {
-    /* 禁止在此档把 columns-4 打成 2：700px 编辑器预览必须仍 4 列 */
-    .wc-theme_widget_bestsellers .products-grid.columns-4,
+@media (max-width: 768px) {
+    .wc-theme_widget_bestsellers .products-grid.columns-4 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
     .wc-theme_widget_bestsellers .products-grid.columns-5,
     .wc-theme_widget_bestsellers .products-grid.columns-6 {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
     .wc-theme_widget_bestsellers .products-grid.layout-masonry.columns-4,
     .wc-theme_widget_bestsellers .products-grid.layout-masonry.columns-5,
     .wc-theme_widget_bestsellers .products-grid.layout-masonry.columns-6 {
-        column-count: 4;
+        column-count: 2;
     }
     .wc-theme_widget_bestsellers .product-actions {
         opacity: 1;
@@ -371,7 +379,7 @@
     }
 }
 
-@media (max-width: var(--token-size-559px)) {
+@media (max-width: 559px) {
     .wc-theme_widget_bestsellers .products-grid.columns-4,
     .wc-theme_widget_bestsellers .products-grid.columns-5,
     .wc-theme_widget_bestsellers .products-grid.columns-6 {
@@ -384,7 +392,7 @@
     }
 }
 
-@media (max-width: var(--auth-container-width)) {
+@media (max-width: 480px) {
     .wc-theme_widget_bestsellers .products-grid,
     .wc-theme_widget_bestsellers .products-grid.columns-2,
     .wc-theme_widget_bestsellers .products-grid.columns-3,
@@ -401,4 +409,16 @@
     .wc-theme_widget_bestsellers .products-grid.layout-masonry.columns-6 {
         column-count: 1;
     }
+}
+
+/* 编辑器预览隔离：预览画布内保持设计稿列数，不影响店面。 */
+.widget-preview-canvas .wc-theme_widget_bestsellers .products-grid.columns-4,
+.widget-preview-canvas .wc-theme_widget_bestsellers .products-grid.columns-5,
+.widget-preview-canvas .wc-theme_widget_bestsellers .products-grid.columns-6 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.widget-preview-canvas .wc-theme_widget_bestsellers .products-grid.layout-masonry.columns-4,
+.widget-preview-canvas .wc-theme_widget_bestsellers .products-grid.layout-masonry.columns-5,
+.widget-preview-canvas .wc-theme_widget_bestsellers .products-grid.layout-masonry.columns-6 {
+    column-count: 4;
 }

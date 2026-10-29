@@ -1,0 +1,45 @@
+<?php
+/**
+ * @meta.title {default="计划任务 CPU 预算",description="计划任务调度子进程的默认 CPU 额度：核数、单核占用上限与是否强制节流"}
+ * @meta.description {default="额度上限 = CPU 个数 × 单核百分比 / 100 个核当量，超出部分通过睡眠出让。任务行自身声明非 0 时优先于本页默认值。"}
+ * @config.area {backend}
+ * @config.sort {52}
+ * @config.acl {Weline_Cron::cron_system_config}
+ */
+?>
+
+<w:config:group code="cron_cpu_budget" label="CPU 预算" description="作用于未自行声明 CPU 额度的计划任务。生效优先级：任务行（cpu_count / cpu_percent 非 0）> 本页默认值 > 接口常量 1 核 / 30%。" sort="10">
+    <w:config:hint type="info" title="额度怎么算" collapsed="0">
+额度上限 = CPU 个数 × 单核百分比 / 100（个 CPU 核当量）。例如 2 核 × 30% = 单核的 60%。「最多占多少」的上限，不是预留；不足 1 秒的任务在首个节拍到来前已结束，不会节流。
+    </w:config:hint>
+
+    <w:config:field
+        key="cron/cpu/default_count"
+        label="默认 CPU 个数"
+        type="number"
+        value-type="int"
+        default="1"
+        scope="global"
+        validation="min:1|max:64"
+        description="任务未自行声明时使用的 CPU 个数，范围 1-64。"
+    />
+    <w:config:field
+        key="cron/cpu/default_percent"
+        label="默认单核占用上限（%）"
+        type="number"
+        value-type="int"
+        default="30"
+        scope="global"
+        validation="min:1|max:100"
+        description="单个 CPU 允许占用的最大百分比，范围 1-100。"
+    />
+    <w:config:field
+        key="cron/cpu/enforce"
+        label="强制执行 CPU 节流"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global"
+        description="开启后超出额度的任务通过睡眠出让 CPU；关闭仍会统计实际 CPU 用量与本可让出的时长，但不装闹钟、不睡眠。"
+    />
+</w:config:group>

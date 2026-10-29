@@ -49,7 +49,7 @@ final class FrontendScopeReloadTip
                 '检测到渠道或店铺切换，正在刷新页面。',
             ],
             'request_scope_already_conflicts' => [
-                '商城范围冲突',
+                '商城范围已变更',
                 '当前请求与页面商城范围不一致，正在刷新页面。',
             ],
             'scope_token_expired' => [
@@ -57,7 +57,7 @@ final class FrontendScopeReloadTip
                 '当前页面商城范围凭证已过期，正在重新获取。',
             ],
             'scope_token_context_conflict' => [
-                '商城范围冲突',
+                '商城范围已变更',
                 '当前页面商城范围与请求上下文不一致，正在重新获取。',
             ],
             'deploy_reload_required' => [

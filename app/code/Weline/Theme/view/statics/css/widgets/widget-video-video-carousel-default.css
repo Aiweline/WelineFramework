@@ -53,6 +53,12 @@
     border: 0;
 }
 
+/*
+ * 反色面成对绑定：占位文案用反色前景（浅字），media 层只有
+ * 0.42 的 --weline-theme-overlay，浅字压上去实测仅 2.8:1，低于 4.5:1。
+ * 这里在占位层自身再叠一次同一 overlay token，把有效 alpha 抬到
+ * 约 0.66（0.42 后再叠 0.42），合成后浅字实测约 5.5:1，仍只消费 Token。
+ */
 .wc-theme_widget_video_carousel .video-carousel__placeholder {
     position: absolute;
     inset: 0;
@@ -63,7 +69,8 @@
     gap: var(--weline-space-2);
     padding: var(--weline-space-4);
     text-align: center;
-    color: var(--weline-theme-on-primary, var(--color-on-primary));
+    background: var(--weline-theme-overlay, var(--color-bg-overlay));
+    color: var(--weline-theme-text-on-dark, var(--weline-theme-on-primary, var(--color-on-primary)));
 }
 
 .wc-theme_widget_video_carousel .video-carousel__meta {

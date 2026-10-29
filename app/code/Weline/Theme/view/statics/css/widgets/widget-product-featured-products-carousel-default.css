@@ -50,9 +50,9 @@
 
 .wc-theme_widget_featured_products .products-grid.columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .wc-theme_widget_featured_products .products-grid.columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-/* HF-ED-P1-03：columns-4 必须实渲 4 列；卡 min-width:0 防撑破换行 */
+/* columns-4 基础为 4 列；卡 min-width:0 防撑破换行。窄屏档由下方 @media 收缩，禁用 !important。 */
 .wc-theme_widget_featured_products .products-grid.columns-4 {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .wc-theme_widget_featured_products .products-grid.columns-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .wc-theme_widget_featured_products .products-grid.columns-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
@@ -153,30 +153,26 @@
 }
 
 /*
- * UC-P1-03 / HF-ED-P1-REWORK：编辑器预览 iframe 常见 CSS 宽 ≈700px。
- * 旧规则在 max-width:768 把 columns-4 打成 2 列 → 实渲 344×2。
- * columns-4 保持到 ≥560；仅真窄屏（<560）降 2 列。!important 压过布局内联 MQ。
+ * 响应式列数：店面按标准断点逐档收缩，禁止用 !important 把列数焊死。
+ * 编辑器预览 iframe CSS 宽 ≈700px 需保持 columns-4 —— 该需求走
+ * .widget-preview-canvas 作用域隔离（与 widget-card/category 等部件的既有写法一致），
+ * 不得把预览需求写进店面全局断点。
  */
 @media (max-width: 992px) {
     .wc-theme_widget_featured_products .products-grid.columns-5,
     .wc-theme_widget_featured_products .products-grid.columns-6 {
         grid-template-columns: repeat(4, minmax(0, 1fr));
     }
-
-    .wc-theme_widget_featured_products .products-grid.columns-4 {
-        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-    }
 }
 
 @media (max-width: 768px) {
-    /* 禁止在此档把 columns-4 打成 2：700px 编辑器预览必须仍 4 列 */
     .wc-theme_widget_featured_products .products-grid.columns-4 {
-        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .wc-theme_widget_featured_products .products-grid.columns-5,
     .wc-theme_widget_featured_products .products-grid.columns-6 {
-        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     .wc-theme_widget_featured_products .widget-title {
@@ -192,6 +188,13 @@
     .wc-theme_widget_featured_products .products-grid.columns-4,
     .wc-theme_widget_featured_products .products-grid.columns-5,
     .wc-theme_widget_featured_products .products-grid.columns-6 {
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+}
+
+/* 编辑器预览隔离：预览画布内保持设计稿列数，不影响店面。 */
+.widget-preview-canvas .wc-theme_widget_featured_products .products-grid.columns-4,
+.widget-preview-canvas .wc-theme_widget_featured_products .products-grid.columns-5,
+.widget-preview-canvas .wc-theme_widget_featured_products .products-grid.columns-6 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 }

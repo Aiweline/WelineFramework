@@ -375,6 +375,8 @@ SKU,SKU
 支付方式优惠,"Payment method discount"
 本单共计,"Order total"
 应付,"Amount due"
+正在前往结账...,"Proceeding to checkout..."
+结账准备失败,"Checkout preparation failed"
 全部,All
 请输入订单号,"Please enter order number"
 搜索,Search
@@ -414,8 +416,6 @@ SKU,SKU
 定位完成，但当前未启用地址添加模块。,"Location completed"
 定位完成，已自动选择国家/省市区，请补全收货人信息并保存。,"Location applied. Country/region cascade selected. Please complete recipient details and save."
 自动定位失败，请手动选择国家并完善地址。,"Auto-detect failed. Please select a country and complete the address."
-正在前往结账...,"Proceeding to checkout..."
-结账准备失败,"Checkout preparation failed"
 立即结账,"Proceed to checkout"
 订单列表,"order list"
 订单号关键词,"Order number keyword"

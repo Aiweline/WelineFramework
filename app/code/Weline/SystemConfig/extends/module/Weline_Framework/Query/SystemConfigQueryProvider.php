@@ -1219,6 +1219,12 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             ['name' => 'website_code', 'type' => 'string', 'required' => false],
             ['name' => 'store_code', 'type' => 'string', 'required' => false],
             ['name' => 'channel_code', 'type' => 'string', 'required' => false],
+            [
+                'name' => 'store_mode',
+                'type' => 'string',
+                'required' => false,
+                'description' => __('店铺作用域模式（normal|dev|test）；由 config-embed 提交，用于保留 store/channel 作用域的权威 identity'),
+            ],
             ['name' => 'locale', 'type' => 'string', 'required' => false],
             ['name' => 'base_versions', 'type' => 'object', 'required' => false],
             ['name' => 'reason', 'type' => 'string', 'required' => false],

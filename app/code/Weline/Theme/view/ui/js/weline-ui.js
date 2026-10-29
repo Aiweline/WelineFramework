@@ -3772,8 +3772,14 @@ function showToast(message, options = {}) {
     const tone = ['neutral', 'success', 'warning', 'danger', 'info'].includes(options.tone) ? options.tone : 'neutral';
     const detailsText = options.details == null ? '' : String(options.details).trim();
     const codeText = options.code == null ? '' : String(options.code).trim();
+    // Toast 可带确认动作（最多 2 个）：有动作时不自动消失，等用户点。
+    const actions = Array.isArray(options.actions)
+        ? options.actions.filter((action) => action && typeof action === 'object' && String(action.label == null ? '' : action.label).trim() !== '')
+        : [];
     const defaultDuration = detailsText !== '' ? 12000 : 4200;
-    const duration = Number.isFinite(options.duration) ? Math.max(0, options.duration) : defaultDuration;
+    const duration = Number.isFinite(options.duration)
+        ? Math.max(0, options.duration)
+        : (actions.length > 0 ? 0 : defaultDuration);
     const toast = document.createElement('section');
     toast.className = 'w-toast';
     toast.dataset.tone = tone;
@@ -3781,6 +3787,9 @@ function showToast(message, options = {}) {
         toast.dataset.code = codeText;
     }
     toast.setAttribute('role', tone === 'danger' ? 'alert' : 'status');
+    // 倒计时时长交给 CSS 进度条；duration=0 表示常驻，等用户操作才关。
+    toast.style.setProperty('--w-toast-duration', `${duration > 0 ? duration : 0}ms`);
+    toast.dataset.persistent = duration > 0 ? 'false' : 'true';
     const icon = createIcon({
         success: 'check-circle',
         warning: 'warning',
@@ -3832,7 +3841,14 @@ function showToast(message, options = {}) {
     close.dataset.size = 'sm';
     close.setAttribute('aria-label', String(options.closeLabel || Weline.config?.i18n?.close || 'Close'));
     close.append(createIcon('close', { size: 'sm' }));
-    toast.append(icon, content, close);
+    const progress = document.createElement('div');
+    progress.className = 'w-toast__progress';
+    progress.setAttribute('aria-hidden', 'true');
+    progress.dataset.state = duration > 0 ? 'running' : 'persistent';
+    const progressFill = document.createElement('span');
+    progressFill.className = 'w-toast__progress-fill';
+    progress.append(progressFill);
+    toast.append(icon, content, close, progress);
     const region = ensureToastRegion();
     let timer = 0;
     const dismiss = () => {
@@ -3849,7 +3865,33 @@ function showToast(message, options = {}) {
     const scheduleDismiss = () => {
         if (duration <= 0 || timer) return;
         if (detailsEl && detailsEl.open) return;
-        timer = setTimeout(dismiss, duration);
+        // 倒计时到点：先给调用方一次「到点动作」（如自动执行更新），返回 false 可保留提示。
+        timer = setTimeout(() => {
+            timer = 0;
+            let proceed = true;
+            try {
+                if (typeof options.onTimeout === 'function') {
+                    proceed = options.onTimeout({ element: toast, close: dismiss }) !== false;
+                }
+            } catch (timeoutError) {
+                console.error('[Weline.UI] toast onTimeout failed:', timeoutError);
+            }
+            if (proceed) {
+                dismiss();
+            }
+        }, duration);
+    };
+    const pauseCountdown = () => {
+        if (duration <= 0) return;
+        progress.dataset.state = 'paused';
+    };
+    const resumeCountdown = () => {
+        if (duration <= 0) return;
+        progress.dataset.state = 'running';
+        // 计时器是重新起算的，进度条也要回到 100% 再跑。
+        progressFill.style.animation = 'none';
+        void progressFill.offsetWidth;
+        progressFill.style.animation = '';
     };
     close.addEventListener('click', dismiss);
     if (detailsEl) {
@@ -3859,10 +3901,36 @@ function showToast(message, options = {}) {
                     clearTimeout(timer);
                     timer = 0;
                 }
+                pauseCountdown();
                 return;
             }
             scheduleDismiss();
+            resumeCountdown();
         });
+    }
+    if (actions.length > 0) {
+        const row = document.createElement('div');
+        row.className = 'w-toast__actions';
+        actions.slice(0, 2).forEach((action) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'w-button w-toast__action';
+            button.dataset.tone = ['primary', 'quiet', 'danger'].includes(action.tone) ? action.tone : 'primary';
+            button.dataset.size = 'sm';
+            button.textContent = String(action.label);
+            button.addEventListener('click', () => {
+                let keepOpen = false;
+                try {
+                    keepOpen = typeof action.onClick === 'function'
+                        && action.onClick({ element: toast, close: dismiss }) === false;
+                } catch (actionError) {
+                    console.error('[Weline.UI] toast action failed:', actionError);
+                }
+                if (!keepOpen) dismiss();
+            });
+            row.append(button);
+        });
+        content.append(row);
     }
     region.append(toast);
     syncToastRegionTopLayer(region);

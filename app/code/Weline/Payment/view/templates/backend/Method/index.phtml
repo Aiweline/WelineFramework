@@ -14,6 +14,23 @@ $listScopeContext = \is_array($list_scope_context ?? null)
         'scope' => $listTargetScope === 'global' ? 'default.default.default' : $listTargetScope,
         'environment' => 'sandbox',
     ];
+/** @var \Weline\Payment\Service\PaymentMethodManager $groupManager */
+$groupManager = \Weline\Framework\Manager\ObjectManager::getInstance(
+    \Weline\Payment\Service\PaymentMethodManager::class
+);
+$enabledMethods = [];
+$disabledMethods = [];
+foreach (($methods ?? []) as $groupMethod) {
+    if ($groupManager->isMethodActiveForScope($groupMethod, $listScopeContext)) {
+        $enabledMethods[] = $groupMethod;
+    } else {
+        $disabledMethods[] = $groupMethod;
+    }
+}
+$methodGroups = [
+    ['label' => (string)__('已开启'), 'methods' => $enabledMethods],
+    ['label' => (string)__('未开启'), 'methods' => $disabledMethods],
+];
 $colspan = $canReorder ? 9 : 8;
 ?>
 <css>Weline_Payment::css/backend/payment-admin.css</css>
@@ -65,7 +82,7 @@ $colspan = $canReorder ? 9 : 8;
                                data-target-scope="<?= htmlspecialchars($listTargetScope, ENT_QUOTES) ?>"
                                data-grant-version="<?= $expectedGrantVersion ?>"
                                data-can-reorder="<?= $canReorder ? '1' : '0' ?>">
-                            <?php if (empty($methods)): ?>
+                            <?php if ($methods === []): ?>
                                 <tr>
                                     <td colspan="<?= $colspan ?>" class="w-text" data-align="center" data-tone="muted">
                                         <?= __('暂无支付方式') ?>
@@ -78,11 +95,17 @@ $colspan = $canReorder ? 9 : 8;
                                     \Weline\Payment\Service\PaymentMethodConfigDeepLinkBuilder::class
                                 );
                                 /** @var \Weline\Payment\Service\PaymentMethodManager $methodManager */
-                                $methodManager = \Weline\Framework\Manager\ObjectManager::getInstance(
-                                    \Weline\Payment\Service\PaymentMethodManager::class
-                                );
-                                ?>
-                                <?php foreach ($methods as $method): ?>
+                                $methodManager = $groupManager;
+                                foreach ($methodGroups as $methodGroup): ?>
+                                    <?php if ($methodGroup['methods'] === []): ?>
+                                        <?php continue; ?>
+                                    <?php endif; ?>
+                                    <tr class="payment-method-group-row" data-testid="payment-method-group-row">
+                                        <td colspan="<?= $colspan ?>" class="w-text" data-tone="muted" data-size="sm">
+                                            <?= htmlspecialchars($methodGroup['label'], ENT_QUOTES) ?>
+                                        </td>
+                                    </tr>
+                                    <?php foreach ($methodGroup['methods'] as $method): ?>
                                     <?php
                                     $methodCode = (string)$method->getData('code');
                                     $providerModule = (string)$method->getData('provider_module');
@@ -175,6 +198,7 @@ $colspan = $canReorder ? 9 : 8;
                                             </div>
                                         </td>
                                     </tr>
+                                    <?php endforeach; ?>
                                 <?php endforeach; ?>
                             <?php endif; ?>
                         </tbody>

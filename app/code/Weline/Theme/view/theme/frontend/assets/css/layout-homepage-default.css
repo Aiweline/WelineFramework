@@ -423,3 +423,24 @@
                 display: none;
             }
         }
+
+/* ========== 空壳容器：有内容才展示 ========== */
+/*
+ * 1) 挂载失败且没有任何子节点的浮动件（如 customer/social-quick → .w-float-quick-login）
+ *    会留下一块 216×18 的白条 + 边框 + 阴影（审图：首页右上角空胶囊）。
+ *    :not(:has(*)) 保证「一旦真的挂上内容」就恢复显示。
+ */
+.theme-layout-homepage [data-weline-mount-state="error"]:not(:has(*)),
+.theme-layout-homepage .w-float-quick-login:not(:has(*)) {
+    display: none;
+}
+
+/*
+ * 2) 只有商品卡的板块：一张卡都没有时整节不占位（新建站/无数据的 featured-lead 会留下 16px 空条）。
+ *    用「有没有卡片」判断，而不是用高度，避免把稍后才挂载内容的槽位一起误收。
+ */
+.theme-layout-homepage .homepage-section--featured-lead:not(:has(.weline-product-card)),
+.theme-layout-homepage .homepage-section--deals:not(:has(.weline-product-card)) {
+    display: none;
+}
+

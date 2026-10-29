@@ -376,19 +376,21 @@
     font-size: var(--weline-font-size-sm);
 }
 
-@media (max-width: var(--token-bp-1024px)) {
+/* 断点必须写字面值：@media 条件里 var() 不解析，整条 MQ 会被浏览器丢弃。
+ * 1024px = --token-bp-1024px；900px = --size-content-900；520px = --token-size-520px。 */
+@media (max-width: 1024px) {
     .payment-guide-listing__grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
-@media (max-width: var(--size-content-900)) {
+@media (max-width: 900px) {
     .payment-guide-layout__body--with-sidebar {
         grid-template-columns: 1fr;
     }
 }
 
-@media (max-width: var(--token-size-520px)) {
+@media (max-width: 520px) {
     .payment-guide-listing__grid {
         grid-template-columns: 1fr;
     }

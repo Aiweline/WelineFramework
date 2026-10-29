@@ -1134,9 +1134,12 @@
     color: var(--amz-drawer-text, var(--weline-theme-text));
 }button.b2b-mini-cart-type-option.is-selected.is-selected, .b2b-mini-cart-type-option.is-selected.is-selected, .b2b-mini-cart-type-option[data-state="active"], .b2b-mini-cart-type-option[aria-pressed="true"]{
     font-weight: 700;
-    /* Active label = primary ink; !important beats inverse button color: inherit. */
-    color: var(--color-primary, var(--amz-drawer-cta-bg, var(--weline-theme-primary)));
-    -webkit-text-fill-color: var(--color-primary, var(--amz-drawer-cta-bg, var(--weline-theme-primary)));
+    /* Active label = primary emphasis ink; !important beats inverse button color: inherit.
+     * 用 --color-primary-text-emphasis 而不是 --color-primary：本元素底色是
+     * --weline-theme-surface-muted(#e2e8f0) 灰底，--color-primary(#2563eb) 实测 4.19:1 < 4.5:1；
+     * emphasis 档 #1d4ed8 在同底 5.44:1。该 token 是盘中既有叶子（_light.css:104），非新增色。 */
+    color: var(--color-primary-text-emphasis, var(--color-primary, var(--amz-drawer-cta-bg, var(--weline-theme-primary))));
+    -webkit-text-fill-color: var(--color-primary-text-emphasis, var(--color-primary, var(--amz-drawer-cta-bg, var(--weline-theme-primary))));
     background: var(--amz-drawer-surface-muted, var(--weline-theme-surface-muted));
     box-shadow: var(--weline-shadow-lg);
 }.header-cart[data-cart-type="tob"] [data-mini-cart-discount-breakdown], .header-cart.is-cart-type-tob [data-mini-cart-discount-breakdown], [data-weline-cart][data-cart-type="tob"] [data-cart-discount-breakdown], [data-weline-cart].is-cart-type-tob [data-cart-discount-breakdown]{

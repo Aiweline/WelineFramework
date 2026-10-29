@@ -2165,7 +2165,7 @@ button.product-native-detail__variant-option.is-out-of-stock .product-native-det
     display: grid;
     gap: var(--token-size-0-15rem);
     min-width: 0;
-    flex: 1 1 var(--token-size-8rem);
+    flex: 0 1 auto;
 }
 .product-native-detail__sticky-purchase-title {
     overflow: hidden;
@@ -2229,24 +2229,28 @@ html.has-product-sticky-purchase {
 html.has-product-sticky-purchase body {
     padding-bottom: calc(var(--weline-product-sticky-purchase-clearance) + env(safe-area-inset-bottom, 0));
 }
+/* ≤640 底栏锁两行：价格 + 规格 + 选规格 / 按钮。
+   媒体图与价格顶对齐；规格区 flex 1 1 0 可收缩，禁止把「选规格」挤成第三行。 */
 @media (max-width: 640px) {
     .product-native-detail__sticky-purchase-inner {
-        align-items: center;
+        align-items: flex-start;
         gap: var(--spacing-sm);
     }
     .product-native-detail__sticky-purchase-main {
         flex: 1 1 auto;
+        min-width: 0;
+        align-items: flex-start;
     }
     .product-native-detail__sticky-purchase-meta {
         order: 1;
-        flex: 1 1 auto;
+        flex: 0 1 auto;
         min-width: 0;
     }
     .product-native-detail__sticky-purchase-specs {
         order: 2;
         max-width: none;
         margin-inline-start: 0;
-        flex: 1 1 auto;
+        flex: 1 1 0;
     }
     .product-native-detail__sticky-purchase-jump {
         order: 3;
@@ -2265,7 +2269,7 @@ html.has-product-sticky-purchase body {
         display: none;
     }
     .product-native-detail__sticky-purchase-media {
-        align-self: center;
+        align-self: flex-start;
         width: var(--weline-space-12);
         height: var(--weline-space-12);
     }

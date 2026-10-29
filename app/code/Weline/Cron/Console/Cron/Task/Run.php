@@ -19,6 +19,8 @@ use Weline\Cron\CronTaskPreflightInterface;
 use Weline\Cron\Helper\CronStatus;
 use Weline\Cron\Helper\Process;
 use Weline\Cron\Model\CronTask;
+use Weline\Cron\Service\CronCpuBudgetPolicy;
+use Weline\Cron\Service\CronCpuGovernor;
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Namespace\NamespaceGenerationRepository;
@@ -43,6 +45,13 @@ class Run implements CommandInterface
      */
     private ?CronTask $cronTask = null;
     private Printing $printing;
+
+    /**
+     * 按 cron 表达式字符串缓存 CronExpression，避免每分钟对每条任务重复解析（68 条时约 19.6ms → 2.4ms）。
+     *
+     * @var array<string, \Cron\CronExpression>
+     */
+    private array $cronExpressionCache = [];
 
     public function __construct(Printing $printing)
     {
@@ -211,7 +220,7 @@ class Run implements CommandInterface
                 $this->printing->note((string) __('【后台手动运行】%{1} 开始执行…', [$executeName]));
                 $this->flushCronCliStreams();
             }
-            $result = $instance->execute();
+            $result = $this->executeWithinCpuBudget($task, $instance, $sseManual);
             if ($result !== '' && $result !== null) {
                 $this->printing->success((string) $result);
             } elseif ($sseManual) {
@@ -265,7 +274,7 @@ class Run implements CommandInterface
                 $task_start_time = $task_start_time > 0 ? $task_start_time : microtime(true);
                 $task_run_date = date('Y-m-d H:i:s');
                 # 上锁
-                $cron = new CronExpression($taskModel->getData('cron_time'));
+                $cron = $this->resolveCronExpression((string) $taskModel->getData('cron_time'));
                 # 设置程序预计数据
                 $taskModel->setData($taskModel::schema_fields_BLOCK_TIME, 0);
                 $taskModel->setData($taskModel::schema_fields_RUNTIME_ERROR, '');
@@ -1292,6 +1301,22 @@ class Run implements CommandInterface
         ) . $executeName;
     }
 
+    /**
+     * 按表达式字符串复用 CronExpression 实例：同一轮里多条任务常常共用同一表达式。
+     */
+    private function resolveCronExpression(string $expression): CronExpression
+    {
+        $key = \trim($expression);
+        if ($key === '') {
+            $key = '* * * * *';
+        }
+        if (!isset($this->cronExpressionCache[$key])) {
+            $this->cronExpressionCache[$key] = new CronExpression($key);
+        }
+
+        return $this->cronExpressionCache[$key];
+    }
+
     private function isPreflightEnabled(): bool
     {
         try {
@@ -1366,6 +1391,38 @@ class Run implements CommandInterface
         } catch (\Throwable) {
             // Namespace prefetch is best-effort.
         }
+    }
+
+    /**
+     * 在任务声明的 CPU 额度内执行业务体。
+     *
+     * 额度优先级：任务行（weline_cron_task.cpu_count / cpu_percent，非 0 生效）
+     * > 统一配置中心默认值 > 能力接口常量 1 / 30。未超额度时完全不干预执行。
+     */
+    private function executeWithinCpuBudget(CronTask $task, CronTaskInterface $instance, bool $sseManual): mixed
+    {
+        /** @var CronCpuBudgetPolicy $policy */
+        $policy = ObjectManager::getInstance(CronCpuBudgetPolicy::class);
+        /** @var CronCpuGovernor $governor */
+        $governor = ObjectManager::getInstance(CronCpuGovernor::class);
+
+        $count = (int) ($task->getData(CronTask::schema_fields_CPU_COUNT) ?: 0);
+        $percent = (int) ($task->getData(CronTask::schema_fields_CPU_PERCENT) ?: 0);
+        if ($instance instanceof \Weline\Cron\CronTaskCpuBudgetInterface) {
+            $count = $count > 0 ? $count : (int) $instance->cpu_count();
+            $percent = $percent > 0 ? $percent : (int) $instance->cpu_percent();
+        }
+        $budget = $policy->resolve($count, $percent);
+
+        $executeName = (string) ($task->getData(CronTask::schema_fields_EXECUTE_NAME) ?? '');
+        $onDegrade = function (string $reason) use ($executeName, $sseManual): void {
+            $this->printing->note((string) __('计划任务 %{1} 未启用 CPU 限速：%{2}', [$executeName, $reason]));
+            if ($sseManual) {
+                $this->flushCronCliStreams();
+            }
+        };
+
+        return $governor->run($budget, static fn (): mixed => $instance->execute(), $onDegrade);
     }
 
     /**

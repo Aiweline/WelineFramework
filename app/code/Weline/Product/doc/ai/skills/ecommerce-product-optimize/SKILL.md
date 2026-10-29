@@ -76,7 +76,7 @@ description: >-
 
 | 槽 | 对照权威 | 最低检查项（FAIL 即返工） |
 |----|----------|---------------------------|
-| ① | 图管线 + `ecommerce-product-image` | main+gallery+**variant** 齐；含人→§1‑M：`clothing_lock=pass` + 只换人景 + **新 object_key（ai-lock-…）**；无人→方卡 outpaint；无改衣/同路径假交付/漏规格；空放大=否 |
+| ① | 图管线 + `ecommerce-product-image` | main+gallery+**variant** 齐；**源图本身糊（宽 < 页面 CSS 宽 ×1.5）已按管线 §3 升清**（更大源 → Real-ESRGAN → 2× LANCZOS+USM），汇报含 `src W×H → out W×H`；含人→§1‑M：`clothing_lock=pass` + 只换人景 + **新 object_key（ai-lock-…）**；无人→方卡 outpaint；无改衣/同路径假交付/漏规格；空放大=否（>2× 或已够像素仍放大即 FAIL） |
 | ② | `详情优化` + detail-suite | 烤字/诗侧栏/信息表已 textify；**详情含人插图→`ai_full_model`**；静物可 outpaint；**§5.2+D PASS**（杂志 HTML + Browser 左右栏/pair + **contain 不裁脸**；清 tpl）；**§5.4 PASS**；`data-weds=xq`；无相册滑梯；文案不假称真人实拍 |
 | ③ | `翻译优化` + i18n | 启用语全表已检；字段级真译无 EN/ZH 渗漏；`/{locale}/product/` 抽检过 |
 

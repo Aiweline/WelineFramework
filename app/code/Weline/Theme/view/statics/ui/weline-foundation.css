@@ -1790,11 +1790,11 @@
         margin: 0;
         padding: 0;
         border: 0;
-        background: transparent;
+        background: none;
         color: inherit;
         overflow: auto;
     }
-    .w-toast { display: grid; grid-template-columns: auto 1fr auto; align-items: start; gap: var(--weline-space-3); padding: var(--weline-space-4); border: 1px solid var(--weline-theme-border); border-inline-start: 4px solid var(--weline-theme-primary); border-radius: var(--weline-radius-md); background: var(--weline-theme-surface-raised); color: var(--weline-theme-text); box-shadow: var(--weline-theme-shadow-md); pointer-events: auto; }
+    .w-toast { display: grid; grid-template-columns: auto 1fr auto; align-items: start; gap: var(--weline-space-3); padding: var(--weline-space-4); border: calc(var(--weline-space-1) * 0.25) solid var(--weline-theme-border); border-inline-start: var(--weline-space-1) solid var(--weline-theme-primary); border-radius: var(--weline-radius-md); background: var(--weline-theme-surface-raised); color: var(--weline-theme-text); box-shadow: var(--weline-theme-shadow-md); pointer-events: auto; }
     .w-toast__icon { color: var(--weline-theme-primary); }
     .w-toast__content { display: grid; min-width: 0; gap: var(--weline-space-1); overflow-wrap: anywhere; }
     .w-toast__content > * { min-width: 0; max-width: 100%; }
@@ -1825,7 +1825,7 @@
     }
     .w-toast__details > summary::-webkit-details-marker { display: none; }
     .w-toast__details[open] > summary {
-        border-block-end: 1px solid var(--weline-theme-border);
+        border-block-end: calc(var(--weline-space-1) * 0.25) solid var(--weline-theme-border);
     }
     .w-toast__details-body {
         margin: 0;
@@ -1842,10 +1842,35 @@
     .w-toast[data-tone="success"] { border-inline-start-color: var(--weline-theme-success); }
     .w-toast[data-tone="warning"] { border-inline-start-color: var(--weline-theme-warning); }
     .w-toast[data-tone="danger"] { border-inline-start-color: var(--weline-theme-danger); }
+    .w-toast[data-tone="info"] { border-inline-start-color: var(--weline-theme-info); }
     .w-toast[data-tone="success"] .w-toast__icon { color: var(--weline-theme-success); }
     .w-toast[data-tone="warning"] .w-toast__icon { color: var(--weline-theme-warning); }
     .w-toast[data-tone="danger"] .w-toast__icon { color: var(--weline-theme-danger); }
     .w-toast[data-tone="info"] .w-toast__icon { color: var(--weline-theme-info); }
+    .w-toast[data-tone="info"] .w-toast__code { background: var(--weline-theme-info-surface); color: var(--weline-theme-info-emphasis); }
+    .w-toast__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--weline-space-2); margin-block-start: var(--weline-space-2); }
+    .w-toast__progress { grid-column: 1 / -1; block-size: var(--weline-space-1); border-radius: var(--weline-radius-round); background: var(--weline-theme-surface-muted); overflow: hidden; }
+    .w-toast__progress-fill { display: block; inline-size: 100%; block-size: 100%; border-radius: inherit; background: var(--weline-theme-primary); animation: w-toast-countdown var(--w-toast-duration, 4200ms) linear forwards; }
+    .w-toast[data-tone="success"] .w-toast__progress-fill { background: var(--weline-theme-success); }
+    .w-toast[data-tone="warning"] .w-toast__progress-fill { background: var(--weline-theme-warning); }
+    .w-toast[data-tone="danger"] .w-toast__progress-fill { background: var(--weline-theme-danger); }
+    .w-toast[data-tone="info"] .w-toast__progress-fill { background: var(--weline-theme-info); }
+    .w-toast__progress[data-state="paused"] .w-toast__progress-fill { animation-play-state: paused; }
+    /* 常驻（等用户确认）不缩短：满格实色，与限时条的「在缩短」形成对比，不靠降透明度糊掉对比度。 */
+    .w-toast__progress[data-state="persistent"] .w-toast__progress-fill { animation: none; inline-size: 100%; }
+    @keyframes w-toast-countdown { from { inline-size: 100%; } to { inline-size: 0%; } }
+    /* prefers-reduced-motion：停掉倒计时条的宽度动画（弱动效 / 前庭敏感用户），且不给假倒计时——
+       改为静态满格状态条：填充恒为 tone 实色满格，轨道保留一道 Token 推导的内衬描边，读起来仍是「条」而非「剩余 100%」。
+       自动关闭由 JS 负责，CSS 不阻断；常驻态 [data-state="persistent"] 排除在外，呈现不变。 */
+    @media (prefers-reduced-motion: reduce) {
+        .w-toast__progress:not([data-state="persistent"]) {
+            padding: calc(var(--weline-space-1) * 0.25);
+        }
+        .w-toast__progress:not([data-state="persistent"]) .w-toast__progress-fill {
+            animation: none;
+            inline-size: 100%;
+        }
+    }
     .w-tooltip { position: fixed; z-index: var(--weline-z-toast); max-width: 18rem; padding: var(--weline-space-1) var(--weline-space-2); border-radius: var(--weline-radius-sm); background: var(--weline-theme-text); color: var(--weline-theme-surface); font-size: var(--weline-font-size-xs); box-shadow: var(--weline-theme-shadow-sm); pointer-events: none; }
 
     .w-progress { width: 100%; height: 0.55rem; overflow: hidden; border-radius: var(--weline-radius-round); background: var(--weline-theme-surface-muted); }

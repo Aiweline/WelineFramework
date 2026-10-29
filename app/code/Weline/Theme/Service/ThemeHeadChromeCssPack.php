@@ -371,7 +371,7 @@ final class ThemeHeadChromeCssPack
         $key = hash('sha256', json_encode([
             // v9: palette merge order = default → brand/ink → light → dark（未覆盖继承 default）
             // v10: design-theme leaf URLs must use active theme static namespace (not bare Weline/Theme).
-            'theme-head-chrome-v13', // v13: PACK_TOKENS 补投 variables/_colors.css（literal/brand 叶子）
+            'theme-head-chrome-v14', // v14: PACK_TOKENS 再补 variables/_borders.css + _shadows.css（边框/圆角/阴影叶子）
             $area,
             $pack,
             $layoutType,
@@ -630,12 +630,22 @@ final class ThemeHeadChromeCssPack
                 // 导致店面上这些 var() 解析为空值 → 整条 shorthand（如
                 // widget-content-policy-document-default.css 的 .doc-policy__hero
                 // 双层 background）连兜底都失效，反色面 hero 直接空白。
-                // weline-foundation.css:113 的注释也写着 "overridden by theme
+                // weline-foundation 样式表 :113 的注释也写着 "overridden by theme
                 // variables/_colors.css when loaded"，即框架假定它会被投递。
                 'theme/' . $area . '/variables/_colors.css',
                 'theme/' . $area . '/variables/_spacing.css',
                 'theme/' . $area . '/variables/_auto-literals.css',
                 'theme/' . $area . '/variables/_typography.css',
+                // variables/_borders.css + _shadows.css 同属 variables 层的叶子盘，历史清单也漏了：
+                // 店面 CSS 消费 --border-width-thin 134 处、--border-width-medium 46 处、
+                // --border-radius-md/sm/full 共 51 处、--shadow-card 等，一旦这些叶子解析为空，
+                // 形如 `border: var(--border-width-thin) solid <色>` 的整条声明会被浏览器整条丢弃
+                // → 边框/圆角/卡片阴影直接消失（不是「样式略偏」而是「元素没有边框」）。
+                // 实测：补投前 --border-width-thin / --border-radius-md / --border-input / --shadow-card 全为 EMPTY；
+                // --radius-md / --shadow-sm 有值只是因为 foundation 与 colors 盘另有同名声明兜住。
+                // _auth.css 不在此列：它只声明 --auth-*（登录/后台面），店面 CSS 引用数为 0。
+                'theme/' . $area . '/variables/_borders.css',
+                'theme/' . $area . '/variables/_shadows.css',
                 'theme/' . $area . '/colors/_default.css',
                 'theme/' . $area . '/colors/_ink.css',
                 'theme/' . $area . '/colors/_light.css',

@@ -9,9 +9,10 @@ namespace {
     define('APP_CODE_PATH', APP_PATH . 'code/');
     define('APP_ETC_PATH', APP_PATH . 'etc/');
     define('VENDOR_PATH', $root . '/vendor/');
-    define('VAR_DIR', VAR_DIR);
-    define('PUB', PUB);
+    define('VAR_DIR', $root . '/var/');
+    define('PUB', $root . '/pub/');
     define('DEV', false);
+    define('PROD', false);
     define('DEBUG', false);
     define('SANDBOX', false);
     define('CLI', true);

@@ -3,12 +3,14 @@ name: ecommerce-detail-suite
 description: >-
   CHILD skill slot ② under parent 产品优化. SKIP MCP (content_ops_skills_skip_mcp)—
   host Read this dir + 详情优化.md. MUST also Read companion triad:
-  frontend-design (审美细节) + ui-ux-pro-max (风格质感) + interaction-design (交互).
+  frontend-design (审美细节) + ui-ux-pro-max (风格质感) + interaction-design (交互);
+  when a triad skill is not readable on this host, fall back to in-repo
+  companions/hanfu-brand-tonality.md — never skip brand/layout grounding.
   Triggers: 详情优化/商详优化/… OR /product/ with those intents. Parent 产品优化
   launches three parallel subagents. Skip ONLY if data-weds="xq" AND §5.2 layout
   gate PASS (magazine HTML: feature/poem-aside + pair + checklist; Browser≥640
   visible—NOT big-image stack; §5.3 native Flex/Grid + text-safety + triad polish;
-  §5.4 motion/scroll/brand + interaction-design); else FORCE HTML relayout.
+  §5.4 motion/scroll/brand + interaction-design or in-repo brand baseline); else FORCE HTML relayout.
   NOT weline-product-knowledge.
 ---
 
@@ -42,20 +44,26 @@ description: >-
 |--------------|------|------|
 | DetailFlow / 文案 FABE / 工业详情包 | **宿主 Agent Store** `companions/`（本仓目录不一定有副本） | 楼层蓝图、卖点、QC |
 | **产品图处理** | **本仓** `companions/weline-image-pipeline.md` | 像素 SOP |
+| **品牌调性（汉服）** | **本仓** `companions/hanfu-brand-tonality.md` | §5.3/§5.4 的品牌底线：色板 Token、字族、动效基调、文案用词、FAIL 清单 |
 
 ### 设计三件套（严重 · 排版/质感/交互必引）
 
-详情 HTML 杂志排版与动效 **禁止只靠本文件模板交差**。动手前 **同回合宿主 Read** 下列三技能（Agent Store），并按分工落进 §5.3 / §5.4：
+详情 HTML 杂志排版与动效 **禁止只靠本文件模板交差**。动手前 **同回合宿主 Read** 下列三技能，并按分工落进 §5.3 / §5.4：
 
-| 技能 | 安装位置 | 本套件职责 | 落到 |
-|------|----------|------------|------|
-| **`frontend-design`** | 宿主 Agent Store `skills/frontend-design/` | **审美与细节**：字阶层级、留白、反模板构图、有意图的排版节奏 | **§5.3** + §五字阶/行宽 |
-| **`ui-ux-pro-max`** | 宿主 Agent Store `skills/ui-ux-pro-max/` | **风格与质感**：材质感、视觉系统、高级表面、反廉价货盘皮 | **§5.3** 质感闸 + 品牌可辨 |
-| **`interaction-design`** | 宿主 Agent Store `skills/interaction-design/` | **交互**：滚轮入场、微交互、状态反馈、`prefers-reduced-motion` | **§5.4** 动效闸 |
+| 技能 | 本机实际位置（按序找，读到即可） | 本套件职责 | 落到 |
+|------|-----------------------------------|------------|------|
+| **`frontend-design`** | `~/.qoder-cn/skills/frontend-design/` → `~/.cursor/skills/frontend-design/` | **审美与细节**：字阶层级、留白、反模板构图、有意图的排版节奏 | **§5.3** + §五字阶/行宽 |
+| **`ui-ux-pro-max`** | `~/.cursor/skills/ui-ux-pro-max/` → `~/.claude/skills/ui-ux-pro-max/` | **风格与质感**：材质感、视觉系统、高级表面、反廉价货盘皮 | **§5.3** 质感闸 + 品牌可辨 |
+| **`interaction-design`** | `~/.cursor/skills/interaction-design/` → `~/.claude/skills/interaction-design/` | **交互**：滚轮入场、微交互、状态反馈、`prefers-reduced-motion` | **§5.4** 动效闸 |
 
-**冲突裁决（硬）**：Theme Token / `weline-theme-development` / 品牌技能（汉服→`changan-hanfu-brand`）/ §5.2‑D 不裁脸 **>** 三件套里任何「炫技模板」；Weline 店面优先复用 `productDetailReveal`，禁为详情硬塞 React/Framer。
+**缺失不降级（硬）**：三个宿主技能不在本会话可读路径时，**禁止**当作「不用读」放行，也**禁止**因此停手等用户装技能。改读本仓 **`companions/hanfu-brand-tonality.md`**（品牌底线）+ 本文件 §5.3/§5.4/§五‑B 全文，并在汇报注明 `三件套=缺失，已用仓内基线兜底`。宿主技能是加分，不是免责牌。
 
-另齐读（按需）：`weline-theme-development`、`changan-hanfu-brand`、审图、`local-browser-urls`。
+**冲突裁决（硬）**：Theme Token / `weline-theme-development` / 品牌基线（汉服→本仓 `companions/hanfu-brand-tonality.md`）/ §5.2‑D 不裁脸 **>** 三件套里任何「炫技模板」；Weline 店面优先复用 `productDetailReveal`，禁为详情硬塞 React/Framer。
+
+另齐读（按需 · 均为仓内可读真源）：
+- `app/code/Weline/Theme/doc/开发/自定义主题开发路线.md`（Token/骨架 CSS，即 `weline-theme-development` 的正文）
+- `app/code/Weline/Product/doc/ai/skills/ecommerce-detail-suite/companions/hanfu-brand-tonality.md`（品牌调性）
+- `app/code/Weline/Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md`（即 `local-browser-urls`：验收 Host、禁缓存 `_wb_nc`、穿章、交付后关 Browser）
 
 ---
 
@@ -385,7 +393,7 @@ orientation：`portrait`（h/w≥1.15）/ `squareish`（0.85–1.15）/ `landsca
 | source_grade | 判定（目测优先，脚本辅证） | 允许动作 |
 |--------------|----------------------------|----------|
 | **sharp_ok** | 绣线/面料纹理可读；平坦区无明显颗粒；**bpp 够**（见下） | 可轻度去噪后按需放大到短边≥1200 |
-| **soft_blur** | 源图本身糊（对焦软、运动糊、过度压缩）；或 **低码率 JPEG**（`bytes*8/(w*h) < 1.2` 且短边≥900）即使 mid-lap 虚高 | **禁止空放大**；换更清原图，或去噪 + **Real-ESRGAN 真超分**；无 ESRGAN → 去噪后近原生，**禁止**当 sharp 交差 |
+| **soft_blur** | 源图本身糊（对焦软、运动糊、过度压缩）；或 **低码率 JPEG**（`bytes*8/(w*h) < 1.2` 且短边≥900）即使 mid-lap 虚高 | 换更清原图，或去噪 + **Real-ESRGAN 真超分**；无 ESRGAN → 按图管线 §3「升清实做」2× LANCZOS+USM **补偿展示像素**（非空放大）；>2× 禁止，禁当 sharp 交差 |
 | **grainy** | 帘/墙/暗部颗粒、色斑噪点重 | **先去噪**（hqdn3d/nlmeans 等），再极轻锐化或不再锐化；禁止未去噪狂 unsharp |
 | **soft_and_grainy** | 又糊又噪 | 去噪优先 +（换原图或 ESRGAN）；禁止只拉分辨率 |
 
@@ -409,7 +417,7 @@ orientation：`portrait`（h/w≥1.15）/ `squareish`（0.85–1.15）/ `landsca
 1. **审图定级** `source_grade`（上表）。  
 2. **优先换更清晰的更大原图**（CDN/源站；去缩略后缀）。  
 3. **sharp_ok**：可整幅放大到短边≥1200（竖图优先约 1600–1800 短边），**先轻度去噪再极轻锐化**。  
-4. **soft_blur / grainy / soft_and_grainy**：必须 **去噪 +（换原图或真超分）**；**无 ESRGAN 时禁止空放大**——去噪后保持裁切区接近原生分辨率，宁小而净，勿大而糊。  
+4. **soft_blur / grainy / soft_and_grainy**：必须 **去噪 +（换原图或真超分）**；**无 ESRGAN 时**：源宽 < 页面 CSS 宽 ×1.5 → 按图管线 §3「升清实做」**2× LANCZOS+USM 补偿展示像素（允许）**；已够展示像素 → 保持原生、宁小而净；>2× 禁止。  
 5. 本仓：`remediate-product-image-hd.php` / 详情 suite `replaceContent`；记录 method。  
 6. **升清 ≠ 糊边扩画幅**；整幅处理，主体仍满幅。
 
@@ -521,12 +529,13 @@ collage seam through face, paper-white mask blocks, ultra-thin image strip,
 
 ```
 Step L1  卖点表（FABE）→ 每点一句证据，禁止无证据编造
-Step L2  书面锁原型序列（≥4 种，密→疏→密）；写出后再落 HTML
+Step L2  书面锁原型序列（≥4 种，密→疏→密）；**每个原型必须取自 §5.5‑C 可用清单**（白名单外 class 会被剥）；写出后再落 HTML
 Step L3  按图选槽：竖图走 stack/fullbleed/editorial；真横才 feature_lr
 Step L4  图文交错：通栏后接 prose；要点旁文；pair 双色；quiet 透气；checklist/spec 收束
-Step L5  字阶地板（§五‑B）+ §5.3 原生布局/CSS Token + **齐读 frontend-design + ui-ux-pro-max**（审美·质感）+ 禁图容器框底描边
-Step L5b §5.4 动效·高级感·品牌感 + **齐读 interaction-design**（交互）：楼层滚轮入场 + 有节制微动效（见 §5.4）
-Step L6  Browser 禁缓存验收：非相册滑梯、可读、无小字巨图、§5.2‑D 不裁脸、**滚轮可见入场动效**、观感非「排版太弱」
+Step L5  字阶地板（§五‑B）+ §5.3 原生布局/CSS Token + **齐读 frontend-design + ui-ux-pro-max**（审美·质感；缺则读本仓 companions/hanfu-brand-tonality.md）+ 禁图容器框底描边
+Step L5b §5.4 动效·高级感·品牌感 + **齐读 interaction-design**（交互；缺则读品牌基线 §5 动效基调）：楼层滚轮入场 + 有节制微动效（见 §5.4）
+Step L6  Browser 禁缓存验收：非相册滑梯、可读、无小字巨图、§5.2‑D 不裁脸、**滚轮可见入场动效**、观感非「排版太弱」  
+Step L7  §5.5‑E 剥壳自检：curl 渲染 HTML `grep -oE … | uniq -c`，关键 class 源码有而店面为 0 → FAIL 重写
 ```
 
 推荐序列示例（汉服竖图多）：
@@ -635,7 +644,7 @@ Browser 抽检：桌面宽打开诗侧栏，`getComputedStyle(img).objectFit ===
 ### 5.3 原生 HTML+CSS 杂志审美（严重 · 指南落地 · Weline 适配）
 
 > 吸收外部「AI 驱动电商详情原生 HTML+CSS」指南的可执行部分：**结构化布局指令、高级感参数、三大组件、微调三法则**。  
-> **冲突裁决**：本仓 **§5.2 / §5.2‑D**、**Theme Token**、古风品牌（`changan-hanfu-brand`）> 指南原文。指南里的 **Apple 系统字体 / 纯科技灰 `#f5f5f7` / Hero 用 `object-fit:cover` 裁产品脸** → **一律不照抄**。
+> **冲突裁决**：本仓 **§5.2 / §5.2‑D**、**Theme Token**、古风品牌基线（`companions/hanfu-brand-tonality.md`）> 指南原文。指南里的 **Apple 系统字体 / 纯科技灰 `#f5f5f7` / Hero 用 `object-fit:cover` 裁产品脸** → **一律不照抄**。
 
 #### A. 生成详情 HTML 的布局指令（Prompt / 落码硬规）
 
@@ -686,14 +695,14 @@ Browser 抽检：桌面宽打开诗侧栏，`getComputedStyle(img).objectFit ===
   - `ui-ux-pro-max` → **风格和质感**（材质·高级表面·视觉系统）  
   - `interaction-design` → **交互**（滚轮 reveal·微反馈·reduced-motion）  
   未齐读三件套而交出「结构过了但观感弱」→ **§5.3/§5.4 FAIL**，禁 `data-weds`。  
-- 汇报建议加一行：`§5.3：Flex/Grid=是；文字安全=是；行宽=是；Hero/Bento/Spec=…；三件套=frontend-design+ui-ux-pro-max+interaction-design` · `§5.4：滚轮入场=是；品牌氛围=是；reduced-motion=已尊重`。
+- 汇报建议加一行：`§5.3：Flex/Grid=是；文字安全=是；行宽=是；Hero/Bento/Spec=…；三件套=frontend-design+ui-ux-pro-max+interaction-design|缺失(仓内基线兜底)` · `§5.4：滚轮入场=是；品牌氛围=是；reduced-motion=已尊重`。
 
 口令：**指南学结构，不学苹果皮；高级感来自留白·字阶·基线·HTML 文案·有节制动效，不是 cover 切脸。审美看 frontend-design，质感看 ui-ux-pro-max，交互看 interaction-design。**
 
 ### 5.4 动效 · 高级感 · 品牌感（严重 · 滚轮有戏 · 整页质感）
 
 > **目标**：详情不是「静态杂志 PDF」，而是 **有呼吸感的品牌卷轴**——滚轮推进时楼层有入场/错落，整页观感高级、有品牌识别，而不是货盘相册或廉价闪烁轮播。  
-> **冲突裁决**：§5.2 / §5.2‑D（不裁脸）· Theme Token · 品牌技能（汉服→`changan-hanfu-brand`）> 任意第三方「炫技动效」模板。
+> **冲突裁决**：§5.2 / §5.2‑D（不裁脸）· Theme Token · 品牌基线（汉服→`companions/hanfu-brand-tonality.md` §5 动效基调）> 任意第三方「炫技动效」模板。
 
 #### A. 必须达成的观感（缺一 FAIL）
 
@@ -701,7 +710,7 @@ Browser 抽检：桌面宽打开诗侧栏，`getComputedStyle(img).objectFit ===
 |---|------|----------|------|
 | 1 | **滚轮入场** | 详情主楼层（lead / feature|poem-aside / pair|triptych / checklist|spec / 卖点墙）在进入视口时有 **淡入 + 轻位移**（或等价 staggered reveal）；滚一段就能感到节奏 | 全程静态硬切；滚轮像翻 JPG 相册 |
 | 2 | **高级感** | 动效 **慢而稳**（常见 0.55–0.9s、ease-out / cubic-bezier 柔缓）；位移小（约 12–28px）；不抢内容；与 §5.3 留白·字阶一致 | 弹跳/抖动/霓虹闪；时长 <0.25s 的廉价闪现；全页同时乱闪 |
-| 3 | **品牌感** | 动效气质贴品牌：汉服/古风 → 克制、水墨卷轴感（轻 fade / 竖向轻移 / 诗栏略晚于图）；禁止科技紫渐变、赛博扫光、电商大红甩动 | 通用模板动效套任何品类；动效破坏古风/品牌识别 |
+| 3 | **品牌感** | 动效气质贴品牌：汉服/古风 → 克制、水墨卷轴感（轻 fade / 竖向轻移 / 诗栏略晚于图，参数见本仓 `companions/hanfu-brand-tonality.md` §5）；禁止科技紫渐变、赛博扫光、电商大红甩动 | 通用模板动效套任何品类；动效破坏古风/品牌识别；命中品牌基线 §8 FAIL 清单任一条 |
 | 4 | **整页效果** | 开合有呼吸：密楼层可短 stagger，quiet 后下一块再入场；首屏 lead 可轻入场，其后随滚轮接力 | 只有首屏动一次、后面全死；或每张图同构弹跳到页底 |
 
 #### B. 落码硬规（CSS / 轻 JS）
@@ -720,7 +729,7 @@ Browser 抽检：桌面宽打开诗侧栏，`getComputedStyle(img).objectFit ===
 
 1. **店面已有** `.weline-detail-*` / `product-info` 共享 reveal CSS/JS → **复用**，禁止私造第二套。  
 2. 无共享基建 → 在详情描述安全范围内补 **最小** reveal CSS + 一段 observer（或模块静态资源一次登记）；class 须能过店面白名单/`safeDetailTextClass`（与 §5.3 一致，禁随意 `<section>`）。  
-3. **同回合必读三件套**：`frontend-design`（审美·细节）+ `ui-ux-pro-max`（风格·质感）+ `interaction-design`（交互·滚轮·反馈）；再加 `weline-theme-development`（Token）+ 品牌技能（有则）。禁止「只跑 reveal 脚本、不读三件套」交差。
+3. **同回合必读三件套**：`frontend-design`（审美·细节）+ `ui-ux-pro-max`（风格·质感）+ `interaction-design`（交互·滚轮·反馈）；再加 Token 正文（`app/code/Weline/Theme/doc/开发/自定义主题开发路线.md`）+ 品牌基线（汉服→本仓 `companions/hanfu-brand-tonality.md`）。宿主技能读不到时用仓内基线兜底并如实注明，**禁止**「只跑 reveal 脚本、不读任何审美/品牌依据」交差。
 
 #### C. Browser 验收（禁缓存 · 与 §5.2‑B 同开）
 
@@ -742,6 +751,83 @@ Browser 抽检：桌面宽打开诗侧栏，`getComputedStyle(img).objectFit ===
 汇报须写：`§5.4：reveal=是；楼层入场≥3；品牌气质=…；reduced-motion=已尊重`。
 
 口令：**详情要会呼吸；滚轮有戏，高级克制，品牌可辨；死板静态 = 未完工。**
+
+---
+
+### 5.5 店面 class 阶梯与剥壳闸（严重 · 实测源码 · 写码前必读）
+
+> 为什么需要本节：§5.2/§5.3 要求「杂志排版」，但详情 HTML 入库会经白名单过滤，**写了不认的 class 会被静默剥掉**，于是「设计过的楼层」在店面上退化成裸 `<div>` + 大图竖墙。这正是用户反复看到「详情布局不好」的真实机制之一。别猜，按下面这张表写。
+
+#### A. 两处过滤器，规则不同（勿混用）
+
+| 过滤器 | 源码位 | 何时跑 | 认哪些 |
+|--------|--------|--------|--------|
+| **`StorefrontProductMediaUrlResolver::safeDetailTextClass()`** | [app/code/Weline/Product/Service/StorefrontProductMediaUrlResolver.php:875](file:///Users/weline/Project/Official/框架/app/code/Weline/Product/Service/StorefrontProductMediaUrlResolver.php#L875) | 渲染期（描述落进 `description-body`） | `weline-detail-{text,prose,feature,figure,quiet,bento}…` + `weline-detail-orient--{portrait,landscape,squareish,macro}` + `dc-hue-floor` / `dc-hue-root` + `w-frame` |
+| **`DetailDescriptionTextifier::safeDetailTextClass()`** | [app/code/Weline/Product/Service/DetailDescriptionTextifier.php:622](file:///Users/weline/Project/Official/框架/app/code/Weline/Product/Service/DetailDescriptionTextifier.php#L622) | textify 改写尺码/信息烤图时 | 仅前缀族（**不认** orient / dc-hue / w-frame） |
+
+实测同一串 class 过两把闸的结果（php -r 跑上表正则，非推断）：
+
+```
+weline-detail-prose--lead            KEPT        weline-detail-figure-row--pair   KEPT
+weline-detail-feature--poem-aside    KEPT        weline-detail-bento__card--kv    KEPT
+weline-detail-text__scale-option--selected  KEPT  weline-detail-quiet-spacer      KEPT
+weline-detail-orient--portrait       STRIPPED(第一把闸的 orient 例外单独放行；第二把不认)
+hanfu-hero / detail-section          STRIPPED    ← 自造 class 必被剥
+```
+
+**结论**：想让版式活着到店面 → 只用上表第一行的集合。`weline-detail-*` 之外的自造 class（如 `.hanfu-hero`、`.detail-section`）**一律被剥**。  
+**`weline-detail-reveal` 也不在前缀族白名单里**——它是 JS 自己 `classList.add()` 加的，不要手写在源码 class 上指望它生效。
+
+#### B. 动效钩不用自己带
+
+`product-detail-reveal.js` 的 `FLOOR_SEL`（[view/statics/js/widgets/product-detail-reveal.js:14](file:///Users/weline/Project/Official/框架/app/code/Weline/Product/view/statics/js/widgets/product-detail-reveal.js#L14)）会自动把 `.weline-detail-prose` / `__feature` / `-figure-stack` / `-bento` / `-text` 标成 reveal 楼层并加 `is-armed`→`is-in`。
+
+- 可以**不写** `data-weline-detail-reveal`，动效仍生效；写了也不会被剥（属性名不在 `weline-detail-` 命名空间内会被清，但 JS 自己补）。
+- **禁止**为详情私造第二套 observer；**禁止**靠 inline `style="animation…"` 冒充动效（会被剥且破坏 reduced-motion）。
+- stagger 由脚本按 `index * 40ms` 注入，不要手调单楼层延迟。
+
+#### C. 可用楼层清单（= 店面真能渲染的原型上限）
+
+| 原型（技能用语） | 实际 class | 备注 |
+|------------------|-----------|------|
+| lead 开篇 | `weline-detail-prose weline-detail-prose--lead` + `__eyebrow` | eyebrow 做卷名 |
+| 散文/心源 | `weline-detail-prose`（裸） | 行宽靠 CSS 父级 |
+| 诗句横排/竖排 | `weline-detail-prose--verse` / `--verse-vertical` | 竖排配 display 字族 |
+| 图文对照 | `weline-detail-feature` + `__copy` + `__media` (+ `__note`) | 镜像用 `--reverse` |
+| 诗侧栏 | `weline-detail-feature weline-detail-feature--poem-aside` | 本站默认对照层 |
+| 双列/三联 | `weline-detail-figure-row weline-detail-figure-row--pair` / `--triptych`，内含 `weline-detail-figure` | 包在 `weline-detail-figure-stack` 里 |
+| 通栏/带注 | `weline-detail-figure-stack--fullbleed` / `--caption` | solo 也是 figure-row--solo |
+| 要点标注 | `weline-detail-prose--macro` | 配旁文，不单独刷 |
+| 卖点墙 | `weline-detail-bento` + `__heading` + `__grid` + `__card`(`--accent`/`--wide`/`--large`/`--kv`) | ≥3 条有证据卖点才用 |
+| 信任清单 | `weline-detail-prose--checklist` | 实质条目 |
+| 透气 | `weline-detail-quiet weline-detail-quiet-spacer` | 密→疏的「疏」 |
+| 参数/尺码/须知 | `weline-detail-text weline-detail-text--{product-info,size-chart,buyer-notice,section}` + `__body`/`__columns`/`__col`/`__defs`/`__scale*`/`__foot` | 语义 HTML，非 JPG |
+| 画幅标记 | `weline-detail-orient--portrait` / `--landscape` / `--squareish` / `--macro` | §3.1‑B 比例优先；**只在渲染期闸存活**，走 textify 改写会被剥 |
+| 版心框 | `w-frame` | Theme 布局稳定原语（`widget_layout_stability_theme_primitives`），配 inline `style="--weline-frame-ratio: W / H"`（渲染期闸专门放行该属性）；详情内由 `.product-native-detail__description-body .w-frame` 承托比例框 |
+
+> **两个「看着能用」的坑**：  
+> ① `dc-hue-floor` / `dc-hue-root` 虽在渲染白名单里，但样式选择器是 `[data-dc-hue-root="1"] .dc-hue-floor[data-dc-hue=…]`（[product-native-detail.css:2467](file:///Users/weline/Project/Official/框架/app/code/Weline/Product/view/statics/css/widgets/product-native-detail.css#L2467)），而 `data-dc-hue-*` 属性不在 class 保留逻辑内 → **汉服站不要指望它活着生效**，别拿它当新版式方案。  
+> ② `weline-detail-reveal` 不在白名单，是 JS 自己加的——手写进源码会被剥，且不影响动效（JS 会补）。
+
+#### D. 想上新版式怎么办（禁止硬塞）
+
+新原型需要**三处同波落地**，缺一即「本地看着好、店面被剥平」：
+
+1. 白名单正则加 token（`StorefrontProductMediaUrlResolver.php:875`；若走 textify 路径还要 `DetailDescriptionTextifier.php:622`）；
+2. `view/statics/css/widgets/product-native-detail.css` 加对应样式（只准 Theme Token）；
+3. 需要入场则确认 `FLOOR_SEL` 覆盖该根节点，否则加 `[data-weline-detail-reveal]`。
+
+改 `app/code/Weline/Product/**` 属模块域，须先取得用户点名放行；未放行时用**上表既有原型重新组合**出节奏，而不是造 class。
+
+#### E. 自检（落库后必跑，禁凭肉眼推断）
+
+```bash
+# 1) 拿店面实际渲染出的描述 HTML（禁缓存），数关键 class 是否还在
+curl -s "<PDP_URL>&_wb_nc=1" | grep -oE 'weline-detail-(feature--poem-aside|figure-row--pair|prose--lead|bento|text--size-chart)' | sort | uniq -c
+```
+
+任一关键 class 计数为 `0` 而源码里有 → **剥壳 FAIL**：对照本表 A 改名/换原型后重写，禁止声称排版完成。  
+另须删编译模板残留再验：`view/tpl/**/com_product-info.phtml`（§5.2‑B）。
 
 ---
 
@@ -891,6 +977,8 @@ Browser 抽检：桌面宽打开诗侧栏，`getComputedStyle(img).objectFit ===
 | 高清 | remediate HD / lanczos / Real-ESRGAN | 禁止交糊图 |
 | 裁后对齐 AR | **真·生图 AI outpaint**（`GenerateImage`+参考图+目标 `aspect_ratio`）装进画幅 | cover 裁窄；异色灰砖 / blur-fill / 反射糊边假拓；细长条 |
 | 文案/楼层 | vendored 同伴 | 可用 |
+| 审美/质感/交互依据 | 宿主三件套 `frontend-design` · `ui-ux-pro-max` · `interaction-design` | **不豁免**：改读仓内 `companions/hanfu-brand-tonality.md` + §5.3/§5.4/§五‑B，汇报注明「缺失，仓内基线兜底」 |
+| 品牌底线（汉服） | 仓内 `companions/hanfu-brand-tonality.md`（色板/字族/动效/文案/FAIL 清单） | 本文件即真源，不存在「读不到」 |
 
 ---
 
@@ -901,6 +989,7 @@ Browser 抽检：桌面宽打开诗侧栏，`getComputedStyle(img).objectFit ===
 - 抠图 / rembg / 假宣纸贴纸  
 - 纯色灰条假扩；**裁白边不齐比例 → 细长条主图**  
 - **纯竖叠相册详情**（无旁文节奏）  
+- **自造 class 当版式**（`weline-detail-*` 白名单外，如 `.hanfu-hero` / inline `style=animation`）→ 店面剥壳后塌成大图竖墙（§5.5‑A/E；用户已验「布局不好」真因之一）  
 - **千篇一律大图到底**（通栏 solo/fullbleed 滑梯；批量同构模板当终态）  
 - **「全是一张大图从上到下」仍盖 `data-weds`**（§5.2 FAIL：无 feature/poem-aside 左右栏、无 pair、Browser 看不见杂志排版）  
 - **只认 `data-weds` 跳过、不跑 §5.2 结构+Browser 闸**  
@@ -909,7 +998,8 @@ Browser 抽检：桌面宽打开诗侧栏，`getComputedStyle(img).objectFit ===
 - **无证据 Bento 空卡墙、宽屏正文无 max-width 拉成长河**（§5.3）  
 - **详情静态死板：无滚轮入场、无品牌气质动效、或廉价弹跳/霓虹扫光冒充高级感**（§5.4）  
 - **无视 `prefers-reduced-motion`，或动效用 overflow+缩放裁切人脸**（§5.4）  
-- **排版太弱：结构 class 齐了但观感仍像货盘**——未 Read **`frontend-design`（审美细节）+ `ui-ux-pro-max`（风格质感）+ `interaction-design`（交互）** 三件套仍交稿（§5.3‑D / §5.4）  
+- **排版太弱：结构 class 齐了但观感仍像货盘**——未 Read **`frontend-design`（审美细节）+ `ui-ux-pro-max`（风格质感）+ `interaction-design`（交互）** 三件套、宿主缺件时也未读仓内 `companions/hanfu-brand-tonality.md` 就交稿（§5.3‑D / §5.4）  
+- **品牌 FAIL 清单命中**（盘外色 / 朱砂满屏 / 图框垫底 / 无衬线正文 / 叫卖文案 / 原始含人实拍直上页面）——见 `companions/hanfu-brand-tonality.md` §8，禁写 `data-weds`  
 - **改 `product-info.phtml` 却不清 `view/tpl` 编译稿，仍验旧 CSS**  
 - **糊图未处理仍盖 `data-weds`**（低码率 soft / soft_blur 未 ESRGAN 或换清原图）  
 - 左右刷屏；同棚三联；小字巨图  

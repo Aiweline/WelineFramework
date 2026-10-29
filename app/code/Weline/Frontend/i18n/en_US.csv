@@ -198,3 +198,4 @@ Weline,Weline
 当前页面商城范围凭证已过期，正在重新获取。,"This page's store scope credential expired. Re-acquiring it now."
 当前页面商城范围与请求上下文不一致，正在重新获取。,"This page's store scope does not match the request context. Re-acquiring it now."
 站点已更新,"Site updated"
+更新到最新版本,"Update to latest version"

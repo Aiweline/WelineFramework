@@ -126,7 +126,8 @@ if ($rawCopyright === null || trim((string)$rawCopyright) === '') {
 $gridClass = 'footer-content footer-content--cols-' . $columns;
 ?>
 <footer id="footer"
-        class="weline-footer <?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+        class="weline-footer w-surface-inverse <?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+        data-surface="inverse"
         weline-code="<?= $esc($scope->code) ?>"
         data-uid="<?= $esc($scope->uid) ?>"
         data-js-ns="<?= $esc($scope->jsNs) ?>"

@@ -10,6 +10,11 @@ description: >-
 
 # cdn-zone-bind-and-push
 
+> **先判 lane（2026-10-29 新增）**：用户说「只配 token / 规则不用管 / 复制 cf 的配置信息 / 汉服的配置是对的」时，
+> **只做 §4 封存（用目标站密钥重封凭据）就停**——不挂 `cdn_domain`、不推 Cache Rules、不改 zone 设置。
+> 一键命令 + 站点矩阵 + 六条硬断言见 `websites/config-migrate/SKILL.md` §A（`scripts/cdn-token-migrate.sh`）。
+> 本技能 §5 起（挂 Zone、推规则、穿章）只在用户**点名**要 Zone/Cache Rules 时执行。
+
 把 Cloudflare 账户真正用在**这一站的根域 Zone** 上，并让 Cache Rules 出现在该 Zone。
 
 归属：`Weline_Cdn`。机制：目标站 `SecretRefCipher` 封存账户、`cdn_domain` 继承默认账户、`RuleManager::planRulesForEdgePush` 规划后写入 Cache Rules phase entrypoint。

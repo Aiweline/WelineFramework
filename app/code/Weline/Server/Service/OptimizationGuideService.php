@@ -531,10 +531,11 @@ CONFIG,
             'content' => <<<INI
 opcache.enable=1
 opcache.enable_cli=1
-opcache.memory_consumption=88
+opcache.memory_consumption=192
 opcache.interned_strings_buffer=16
-opcache.max_accelerated_files=10000
+opcache.max_accelerated_files=20000
 opcache.validate_timestamps=0
+; WLS injects a shared disk bytecode cache at generated/framework/opcache_file_cache
 INI,
         ];
         

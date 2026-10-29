@@ -33,7 +33,7 @@ if (!\defined('APP_CODE_PATH')) {
     \define('APP_CODE_PATH', APP_PATH . 'code' . DS);
 }
 if (!\defined('PUB')) {
-    \define('PUB', PUB);
+    \define('PUB', BP . 'pub' . DS);
 }
 if (!\defined('VENDOR_PATH')) {
     \define('VENDOR_PATH', BP . 'vendor' . DS);

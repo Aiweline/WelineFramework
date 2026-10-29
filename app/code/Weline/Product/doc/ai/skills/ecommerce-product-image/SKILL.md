@@ -35,7 +35,7 @@ description: >-
    - **含人** → §1‑M：衣锁死 + 只换人景 + **M6 新 object_key（ai-lock-…）**。  
    - **无人** → 剥框 + 真 outpaint；同路径仍 HIT 则同样改 key。  
 4. 备份 → 生图 → 新 key → pierce 页 HTML 含 `ai-lock-` → `clothing_lock=pass`。  
-5. **交付格式**：终态 **WebP**，按展示尺寸压缩（1:1 主图长边 ≤1600px、单图 ≤250KB；不放大）；原图只作源，禁止直上页面。  
+5. **交付格式**：终态 **WebP**，按展示尺寸压缩（1:1 主图长边 ≤1600px、单图 ≤250KB）；**源图本身糊（宽 < 页面 CSS 宽 ×1.5）→ 必须按管线 §3「升清实做」提升**（更大源 → Real-ESRGAN → 2× LANCZOS+USM，参数见管线），再压；仅禁止「空放大」（>2× / 已够像素还放大 / 同 key 覆盖）；原图只作源，禁止直上页面。  
 6. 汇报：`advisor` / `clothing_lock=pass` / `url_bust=…` / `含人 N` / `variant=已覆盖` / `format=webp`。
 
 **禁止**：改衣；漏 variant；同路径假交付；`SHOW TABLES`/扫 EAV；假称真人实拍；交大 PNG/JPG 或原图。

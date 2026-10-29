@@ -233,6 +233,20 @@ EXEMPT：内容运营与纯闲聊。宿主常带：`~/.cursor/rules/requirement-
 **冲突裁决**：仓内 `hard_constraints` / 文档 > 宿主全局 `.mdc`。  
 示例：`user_utterance_commit_ships_dev_and_sites` ↔ `user-utterance-commit-ships-dev-and-sites.mdc`；`requirement_acceptance_always` ↔ `acceptance-before-user-report.mdc`；`plan_review_requires_code_evidence` ↔ `plan-review-requires-code-probe.mdc`；`plan_review_requires_impact_surface` ↔ `plan-review-requires-impact-surface.mdc`；`plan_complete_self_review_then_implement` ↔ `plan-complete-self-review-then-implement.mdc`；`user_facing_verdict_last` ↔ `user-facing-verdict-last.mdc`；`user_facing_brief_plain_report` ↔ `user-facing-brief-plain-report.mdc`；`browser_tab_group_identity` ↔ `browser-tab-group-identity.mdc`；`google_chrome_reuse_before_connect` ↔ `google-chrome-reuse-before-connect.mdc`；`browser_operator_non_preemptive` ↔ `browser-operator-non-preemptive.mdc`；`e2e_ai_record_into_module_formal_path` ↔ `e2e-ai-record-formal-path.mdc`；`full_release_requires_commerce_pathway_e2e` ↔ `full-release-commerce-e2e.mdc`；`automation_test_report_durable_evidence` ↔ `automation-test-report-evidence.mdc`；`theme_inverse_raised_paper_ink_pin` ↔ `theme-inverse-raised-paper-ink.mdc`；`theme_frontend_must_obey_tokens_and_surface_roles` ↔ `theme-frontend-obey-tokens-and-surfaces.mdc`；`business_forbids_sql_dialect` ↔ `business-forbids-sql-dialect.mdc`；`framework_demos_live_in_weline_demo` ↔ `framework-demos-live-in-weline-demo.mdc`；`theme_update_matches_site_cabinet` ↔ `theme-update-matches-site-cabinet.mdc`；`social_scope_mailbox_for_platform_register` ↔ `social-scope-mailbox-register.mdc`；`no_script_batch_replace` ↔ 宿主全局镜（本机为 `~/.dsh/AGENTS.md`「禁止脚本批量替换」；`.cursor/rules/*.mdc` 停用时不再手写）。
 
+### 4.1b 用户参数/风格调整写回对应分类（`user_param_adjust_rule_writeback`，强制 · 2026-10-29 用户指定）
+
+用户对参数、风格、口径提出的任何调整（「一定要高对比度的主题」「字号再大一档」「每页 20 条」「超时 5s」「备份只留 1 份」……）都是**长期标准**，不是一次性补丁；本回合执行完**必须回写到全局规则中对应的既有分类**。
+
+| 允许 / 必须 | 禁止 |
+|------|------|
+| 先按主题定位既有分类（如 `主题/前端对比度`、`交付地址与缓存签章穿透`、`备份目录`、`浏览器操作默认 ego`、`小步提交`），在该分类下按「HARD · 日期 · 用户指定」追加条目 | 另起一个平行分类；散落到不相干段落；只在本回合执行不回写 |
+| 写**用户原话关键词 + 可执行数值/阈值**（正文 ≥4.5:1 目标 7:1；20 条/页；5s） | 只写「更好 / 优化 / 提高」等形容词而无判定口径 |
+| 先读该分类现状：等价条款**原地更新**并追加日期；冲突以**最新用户原话**为准，旧条标 superseded 并保留历史 | 重复堆叠同类条款；删除历史条款 |
+| 只改该分类；改后重读目标片段确认只含本次调整 | 顺手改其他分类 / 扩大范围 |
+| 收尾给出文件路径 + 行号 + 原文片段；未回写 = 未完成 | 报「已记录」但不给证据 |
+
+宿主常带：`~/.dsh/AGENTS.md`「用户参数/风格调整写回全局规则」（本机 `~/.cursor/rules/` 已停用，不再手写 `.mdc`）。
+
 ### 4.2 面向用户结论置尾（`user_facing_verdict_last`，强制）
 
 用户问了需要**明确结论**的问题，或要求给出判定时：面向用户的回复须**先写依据/过程/解释，最后一行（或末段）给出对应形式的结论**。
@@ -293,6 +307,28 @@ EXEMPT：内容运营与纯闲聊。宿主常带：`~/.cursor/rules/requirement-
 配套：`preserve_dirty_workspace`（shell 写入绕过 CAS）、`concurrent_session_commit_hygiene`、`global_rules_dual_write_mcp_and_host`。
 
 宿主常带：`~/.dsh/AGENTS.md`「禁止脚本批量替换」镜（与 MCP 双写，见 §4.1；个人 Agent 全局镜按本机实际存在的宿主镜落点）。
+
+### 4.5 算法理解与伪代码汇报（`algorithm_understanding_pseudocode_report`，强制 · 2026-10-29 用户指定）
+
+**用户原话：算法没理清楚，以及汇报的时候涉及到修改算法，就用伪代码、文字示意图等方式汇报理解。**
+
+**触发（命中任一即强制）**：① **算法没理清**——分支 / 边界条件 / 数据来源 / 执行时序 / 失败路径 / 并发与缓存交互，任一处不确定；② **汇报涉及算法或逻辑改动**（改分支、改判定、改顺序、改状态机、改计算方式、改缓存准入）。
+
+| 允许 / 必须 | 禁止 |
+|------|------|
+| 动码前先给**语言无关伪代码**：`输入 → 输出`、每个分支谓词、边界用例、失败/降级路径 | 只用自然语言糊过去（「大概是这样」「先判断再返回」）就开写 |
+| 结构与时序用**文字示意图**：ASCII 流程图 / 状态流转箭头 / 数据流箭头 / 步骤表 | 依赖图床、截图或浏览器渲染才能表达的「示意图」 |
+| 汇报固定四段：`改动前伪代码` → `改动后伪代码` → `变化点清单`（哪个分支/条件/顺序/状态变了）→ `边界用例表`（输入 → 期望输出） | 只写「优化了算法 / 逻辑更清晰 / 应该没问题」等形容词当汇报 |
+| 伪代码与落盘代码**逐分支对账**，关键分支标 `文件:行号`；不一致时以代码为准并重写伪代码 | 留一份与实现不符的示意图（说了等于没说，且误导后续会话） |
+| 伪代码/示意图块不受 `user_facing_brief_plain_report` 的 ≤5 行 / ≤180 字预算约束；散文部分仍简述、结论仍置尾 | 以「简述」为由砍掉伪代码或示意图；把伪代码塞进结论位导致结论不在末尾 |
+
+**豁免**：纯闲聊；不含算法/逻辑内容的简单文案或配置值调整。
+
+公式：`(AlgoUnclear∨AlgoChg)→□(Pseudo∧Diag)`（`AlgoUnclear` / `AlgoChg` / `Pseudo` / `Diag` 为公式局部内置原子）。
+
+配套：`user_facing_brief_plain_report`（简述只管散文）、`user_facing_verdict_last`（结论置尾）、`requirement_acceptance_always`（先测后报）。
+
+宿主常带：`~/.dsh/AGENTS.md`「算法理解与伪代码汇报」镜（与 MCP 双写，见 §4.1；本机 `~/.cursor/rules/` 已停用，不手写 `.mdc`）。
 
 ## 5. Codex CLI 宿主委派（`host_delegate_explore_plan_review_to_codex_cli`，**用户显式 opt-in**）
 

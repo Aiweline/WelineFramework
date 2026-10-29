@@ -36,6 +36,23 @@ final class ThemeLayoutEntitySolidifyLeaseStore
     }
 
     /**
+     * mtime of the slot lease file (null when there is no lease).
+     *
+     * Used by the pending-budget check: `queued_at` is refreshed by every gate re-enqueue,
+     * so only the lease mtime survives as the "this bake actually started" marker.
+     */
+    public function leaseStartedAt(ThemeLayoutEntitySolidifySerialKey $key): ?int
+    {
+        $path = $this->pathFor($key);
+        if (!is_file($path)) {
+            return null;
+        }
+        $mtime = @filemtime($path);
+
+        return is_int($mtime) && $mtime > 0 ? $mtime : null;
+    }
+
+    /**
      * @return bool true when this caller acquired the lease; false when already pending (coalesce)
      */
     public function tryAcquire(ThemeLayoutEntitySolidifySerialKey $key): bool

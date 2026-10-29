@@ -185,7 +185,7 @@ Step H  replaceContent；复扫至 0 BAD（含窄竖、糊、假垫边）
 |-----------------|-------|------|
 | ≥220 | `sharp_ok` | 可轻度升清到短边≥1200；先极轻去噪或不去噪，再极轻锐化 |
 | 120–220 | `softish` | **禁止猛去噪**；最多 mild 升清 ≤1.25× + 轻锐化 |
-| <120 | `soft_blur` | 优先换更大更清原图；否则轻 hqdn + **Real-ESRGAN**；**禁止空放大** |
+| <120 | `soft_blur` | 优先换更大更清原图；否则轻 hqdn + **Real-ESRGAN**；无 ESRGAN → 按 §3「升清实做」2× LANCZOS+USM 补展示像素；>2× 禁止 |
 
 **附加 soft 闸（与 mid-lap 并联，任一命中即 soft）**：
 
@@ -198,13 +198,37 @@ Step H  replaceContent；复扫至 0 BAD（含窄竖、糊、假垫边）
 #### 正向
 - 源图 mid 已锐 → **跳过强去噪**（hqdn/median 会把绣线打糊）
 - 黑棚区整图 lap 低是正常的 → **仍看 mid-lap**
-- soft → **Real-ESRGAN**（本仓可下 `var/tools/realesrgan`）后再轻度；无 ESRGAN 宁小而净
+- soft → **Real-ESRGAN**（本仓可下 `var/tools/realesrgan`）后再轻度；无 ESRGAN → 按 §3「升清实做」2× LANCZOS+USM（源宽低于展示像素时必需）
 
 #### 负面
 - 对 sharp 图狂 `hqdn3d` / median → 交付发糊
-- 源已糊仍 lanczos 拉大 → 更大的糊图
+- 源已糊仍 lanczos 拉到远超 2× → 更大的糊图（2× 补偿见下）
 - 未去噪就狂 unsharp → 噪点爆炸
 - **批量脚本跳过 soft 定级仍盖 `data-weds`** → 用户可见「图糊了没处理」
+
+#### 源图本身糊 → 升清实做（工具 + 验收 · 严重）
+
+**判定先算展示像素，不凭感觉**：图片按 CSS 宽渲染，视网膜需 `CSS宽 × 2` 设备像素。
+源图宽 `< CSS宽 × 1.5` → 页面必糊（浏览器 bilinear 插值被放大）；`< CSS宽 × 2` → 视网膜软。
+典型：详情图源 790px、页面 CSS 拉到 1000–1120px → 必糊。
+
+| 步 | 动作 | 命令 / 参数 |
+|----|------|-------------|
+| 1 | 先试更大源 | 同平台换尺寸后缀；实测 1688/alicdn `_1200x1200Q90` 仍返 800、`_1500x1500Q90` 404 = 无更大源，进第 2 步 |
+| 2 | Real-ESRGAN（装了就优先） | `realesrgan-ncnn-vulkan -i in -o out -n realesrgan-x4plus -s 2`（本仓 `var/tools/realesrgan`） |
+| 3 | 无 ESRGAN → **2× LANCZOS + USM**（已验，允许） | Pillow `resize(2×, LANCZOS)` → `UnsharpMask(radius=1.1, percent=55, threshold=3)` |
+| 4 | 编码 | 照片 `cwebp -q 90 -m 6`；JPEG 源 `quality=90, subsampling=0, progressive`；**`pngquant` 只用于纯色/文字板**（照片必出 256 色抖动噪点） |
+| 5 | 体积闸 | 见 §6.5；超预算先把 q 降到 85，禁压到糊字 |
+| 6 | 换图即换 URL | 新 object_key（如 `…-detext.webp`）+ 升 revision；`/pub/media` `immutable` 一年，同路径覆盖买家仍见旧图 |
+
+**「空放大」边界（收紧）**——只有这些算违规：
+- 源图已 ≥ 展示 2× 仍继续放大；
+- 放大后仍 `< 展示 2×`（白拉大，没补足）；
+- 只改字节不改 object_key / URL（`immutable` 假绿）。
+
+**源图本身低于展示像素时，2× LANCZOS+USM 是必需补偿，不算空放大**；超过 2× 无真实细节，禁止。
+
+**验收**：中区绣线 / 英文小字眯眼可读；`src W×H → out W×H` + 工具参数写进汇报；交付 URL 直连 `200` + `Content-Type: image/webp`；页面 DOM `naturalWidth = out 宽`。
 ---
 
 ## 4. 问题 → 解法对照表（严重）
@@ -233,8 +257,9 @@ Step H  replaceContent；复扫至 0 BAD（含窄竖、糊、假垫边）
 1. 审 mid-lap 定级  
 2. 优先更大更清原图  
 3. `sharp_ok`：可放大；默认不去噪 → 极轻锐化  
-4. `soft_blur`：去噪 +（换原图或 ESRGAN）；无 ESRGAN **禁止空放大**  
-5. 本仓：`replaceContent` / `remediate-product-image-hd.php`
+4. `soft_blur`：去噪 +（换原图或 ESRGAN）；无 ESRGAN → 按 §3「升清实做」2× LANCZOS+USM（不算空放大）；>2× 禁止  
+5. 源图本身低于展示像素 → **必须**升清（§3 表 1→6 步），并换新 object_key  
+6. 本仓：`replaceContent` / `remediate-product-image-hd.php`
 
 ---
 
@@ -264,7 +289,7 @@ Step H  replaceContent；复扫至 0 BAD（含窄竖、糊、假垫边）
 | 终态落盘 **`.webp`**（`pub/media` / 主题 assets / Banner·Hero·主图 / 博客配图） | 用户**明示**要 PNG/JPG |
 | 生图工具若返回 PNG/JPEG → **转码 WebP 后再交付**（`cwebp -q 80` / Pillow / GD） | 确需非 WebP 透明通道的消费端（极少；WebP alpha 优先） |
 | MediaManager AI 画图默认 `output_format=webp` | favicon / `.ico` / 平台硬性 PNG |
-| **按展示尺寸派生**：重采样到实际显示尺寸（视网膜 ≤2×，不放大）；长边 内容/商品 ≤1600px、Hero ≤2560px | 原图直上页面 / 用浏览器缩放大图 |
+| **按展示尺寸派生**：重采样到实际显示尺寸（视网膜 ≤2×）；长边 内容/商品 ≤1600px、Hero ≤2560px；**源图低于展示像素 → 先按 §3「升清实做」补足再压**（禁止拿小图直上靠浏览器放大） | 原图直上页面 / 用浏览器缩放大图 / 源图糊还按原尺寸交付 |
 | **体积预算**：内容/商品 ≤200KB、缩略图/卡片 ≤80KB、Hero ≤350KB、图标/Logo ≤30KB；编码后目检清晰度 | 大体积 PNG/JPG 当店面长期交付物；压到糊字/糊边 |
 
 原图只作**源文件**保留，不进公开目录、不被页面直接引用。禁止把大体积 PNG/JPG 当作店面长期交付物「因为生成器默认是 PNG」。
@@ -274,6 +299,7 @@ Step H  replaceContent；复扫至 0 BAD（含窄竖、糊、假垫边）
 ## 7. 详情图
 
 同清晰/禁令；**不强制**主图 AR。  
+**源图本身糊（宽 < 页面 CSS 宽 ×1.5）→ §3「升清实做」补齐展示像素后再交付**（2× LANCZOS+USM 属补偿，非空放大）；`/pub/media` `immutable` → 必换新 object_key。  
 **含人模特插图** → §1‑M `ai_full_model`（与画廊同一套服装描述锁定）。  
 **静物/绣特写** → HD/outpaint。  
 **信息烤图** → textify，禁止 AI 模特。  

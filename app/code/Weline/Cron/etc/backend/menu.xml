@@ -4,6 +4,15 @@
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
     <!-- 计划任务 - 归入系统管理 > 系统服务 -->
-    <menu source="Weline_Cron::system_cron" name="system_cron" title="计划任务" action="system/backend/cron/listing"
-          parent="Weline_Backend::system_service_group" icon="clock" order="30"/>
+    <menu source="Weline_Cron::system_cron" name="system_cron" title="计划任务"
+          parent="Weline_Backend::system_service_group" icon="clock" order="30">
+
+        <!-- 任务列表：承接原 system_cron 上的动作路由 -->
+        <menu source="Weline_Cron::cron_task_listing" name="cron_task_listing" title="任务列表"
+              action="system/backend/cron/listing" icon="list" order="10"/>
+
+        <!-- 系统配置：CPU 预算等统一配置中心字段的入口 -->
+        <menu source="Weline_Cron::cron_system_config" name="cron_system_config" title="系统配置"
+              action="system/backend/cron/config" icon="settings" order="20"/>
+    </menu>
 </menus>

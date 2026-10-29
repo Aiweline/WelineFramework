@@ -222,6 +222,9 @@ class WidgetAssetArtifactPublisher
                     if ($minify) {
                         $content = ObjectManager::getInstance(StaticAssetMinifier::class)->minifyFileContent($content, $type);
                     }
+                    if ($type === 'css') {
+                        $content = $this->layerWidgetSourceCss($content, $assets[$index] ?? []);
+                    }
                     $contents[] = $content;
                 }
                 $content = implode($type === 'js' ? "\n;\n" : "\n", $contents);
@@ -484,6 +487,33 @@ class WidgetAssetArtifactPublisher
             $output .= 'url("' . ($origin !== '' ? $origin . $resolvedPath : $resolvedPath) . '")';
         }
         return $output;
+    }
+
+    /**
+     * Keep widget CSS inside `@layer components` so a design-theme skin can override it by plain
+     * cascade (no `!important`, no specificity hacks).
+     *
+     * Unlayered CSS always beats layered CSS, so leaving widget CSS unlayered used to force every
+     * skin into `!important`. First-paint skeleton rules are not at risk here: the inline
+     * `@layer layout` block is emitted first and `layout` is declared before `components`, so
+     * geometry still wins by layer order instead of by sitting outside the layer stack.
+     *
+     * @param array<string, mixed> $asset
+     */
+    private function layerWidgetSourceCss(string $content, array $asset): string
+    {
+        if (trim($content) === '') {
+            return $content;
+        }
+        // `@import` is invalid inside a layer block and would be dropped by the browser.
+        if (preg_match('/@import\b/i', $content) === 1) {
+            return $content;
+        }
+        // Already layer-aware: nested wrapping would reorder the existing layer stack.
+        if (preg_match('/@layer\b/i', $content) === 1) {
+            return $content;
+        }
+        return '@layer components{' . "\n" . $content . "\n}";
     }
 
     /** Offset immediately after a CSS quoted string, respecting escaped quotes. */

@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Cron\Console\Cron\Task;
 
+use Weline\Cron\CronTaskCpuBudgetInterface;
 use Weline\Framework\Cron\CronTaskInterface as FrameworkCronTaskInterface;
 use Weline\Cron\Model\CronTask;
 use Weline\Framework\App\Env;
@@ -111,6 +112,8 @@ class Collect implements CommandInterface
                     CronTask::schema_fields_CRON_TIME => $taskObject->cron_time(),
                     CronTask::schema_fields_BLOCK_UNLOCK_TIMEOUT => $taskObject->unlock_timeout(),
                     CronTask::schema_fields_MODULE => $module['name'],
+                    CronTask::schema_fields_CPU_COUNT => $this->resolveCpuCount($taskObject),
+                    CronTask::schema_fields_CPU_PERCENT => $this->resolveCpuPercent($taskObject),
                 ];
                 if ($existingId) {
                     // 已有行：值与库内完全一致时不写，避免每分钟一次全表零差异 UPDATE 打爆 WAL 与锁
@@ -199,6 +202,33 @@ class Collect implements CommandInterface
             return false;
         }
         return (string) $id !== (string) $selfId;
+    }
+
+    /**
+     * 任务声明的 CPU 个数；未实现能力接口写 0 = 未声明，交给统一配置中心默认值。
+     *
+     * 这里必须写 0 而不是接口常量 1：接口常量是「最终兜底」，一旦落成行内值，
+     * 就会让后台 cron/cpu/default_count 永远被行内值遮蔽而失效。
+     */
+    private function resolveCpuCount(object $taskObject): int
+    {
+        if (!$taskObject instanceof CronTaskCpuBudgetInterface) {
+            return 0;
+        }
+
+        return \max(1, \min(64, (int) $taskObject->cpu_count()));
+    }
+
+    /**
+     * 任务声明的 CPU 上限百分比；未实现能力接口写 0 = 未声明，交给统一配置中心默认值。
+     */
+    private function resolveCpuPercent(object $taskObject): int
+    {
+        if (!$taskObject instanceof CronTaskCpuBudgetInterface) {
+            return 0;
+        }
+
+        return \max(1, \min(100, (int) $taskObject->cpu_percent()));
     }
 
     /**

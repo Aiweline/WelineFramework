@@ -341,7 +341,9 @@
     font-weight: 600;
 }
 
-@media (max-width: var(--breakpoint-md)) {
+/* 断点必须写字面值：@media 条件里 var() 不解析，整条 MQ 会被浏览器丢弃。
+ * 该值对应 --breakpoint-md: 768px（view/theme/frontend/variables/_spacing.css:89）。 */
+@media (max-width: 768px) {
     .weline-amz-card-widget .product-actions {
         opacity: 1;
         pointer-events: auto;

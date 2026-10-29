@@ -322,10 +322,26 @@ class PaymentQueryProvider implements QueryProviderInterface
             $this->expectedGrantVersion($params),
         );
 
+        $registered = $this->methodManager->registerAllProviders();
+        $storageScope = $target->isGlobal()
+            ? PaymentScopeConfigService::DEFAULT_SCOPE
+            : (string)$target->toLegacyScopeString();
+        if ($storageScope === '' || $storageScope === 'global') {
+            $storageScope = PaymentScopeConfigService::DEFAULT_SCOPE;
+        }
+        $seedContext = ['scope' => $storageScope];
+        $explicitEnvironment = strtolower(trim((string)($params['environment'] ?? '')));
+        if ($explicitEnvironment === 'sandbox' || $explicitEnvironment === 'live') {
+            $seedContext['environment'] = $explicitEnvironment;
+        }
+        $seed = $this->methodManager->seedScopeDefaults($seedContext);
+
         return [
             'success' => true,
             'source' => 'Weline_Payment',
-            'providers_registered' => $this->methodManager->registerAllProviders(),
+            'providers_registered' => $registered,
+            'scope_defaults_seeded' => $seed['seeded'],
+            'scope_defaults_skipped' => $seed['skipped'],
         ];
     }
 

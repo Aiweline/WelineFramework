@@ -1,0 +1,7 @@
+=== public cover URL (actual filename) ===
+pub/media/.../hanfu-price-range.cover.jpg -> 200 type=image/jpeg
+pub/media/.../hanfu-mens-shapes.cover.jpg -> 200 type=image/jpeg
+pub/media/.../hanfu-accessories-face-shape.cover.jpg -> 200 type=image/jpeg
+pub/media/.../hanfu-size-fit.cover.jpg -> 200 type=image/jpeg
+pub/media/.../hanfu-avoid-fake.cover.jpg -> 200 type=image/jpeg
+=== cover_image field in DB ===

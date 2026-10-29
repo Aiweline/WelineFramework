@@ -471,7 +471,7 @@ install_php_system_deps() {
       run_privileged apt-get install -y \
         build-essential autoconf libtool pkg-config bison re2c \
         libxml2-dev libssl-dev libcurl4-openssl-dev libsqlite3-dev \
-        libzip-dev libpng-dev libjpeg-dev libfreetype6-dev libonig-dev libwebp-dev \
+        libzip-dev libpng-dev libjpeg-dev libfreetype6-dev libonig-dev libwebp-dev libavif-dev \
         libxslt1-dev libpq-dev libicu-dev zlib1g-dev libgd-dev libsodium-dev \
         libbrotli-dev libevent-dev libffi-dev
       return
@@ -767,13 +767,17 @@ get_php_configure_flags_for_extensions() {
       exif)       echo "--enable-exif" ;;
       fileinfo)   echo "--enable-fileinfo" ;;
       gd)
-        # 只编 --enable-gd 时 GD 没有 jpeg/webp codec：imagecreatefromjpeg() 变成未定义函数，
-        # /media/image 缩略图直接 500。webp 需要 libwebp 头文件，缺头时只保留 jpeg。
+        # 只编 --enable-gd 时 GD 没有 jpeg/webp/avif codec：imagecreatefromjpeg() 变成未定义函数，
+        # /media/image 缩略图直接 500。webp 需要 libwebp 头文件，avif 需要 libavif >= 0.9.1 头文件，
+        # 缺头时对应 codec 不编，其余照常。
         # 必须一行一个 configure 参数：调用方按行收集，多参数写成一行会被当成单个 feature name。
         echo "--enable-gd"
         echo "--with-jpeg"
         if [[ -f /usr/include/webp/encode.h || -f /usr/local/include/webp/encode.h ]]; then
           echo "--with-webp"
+        fi
+        if [[ -f /usr/include/avif/avif.h || -f /usr/local/include/avif/avif.h ]]; then
+          echo "--with-avif"
         fi
         ;;
       iconv)      echo "--with-iconv" ;;

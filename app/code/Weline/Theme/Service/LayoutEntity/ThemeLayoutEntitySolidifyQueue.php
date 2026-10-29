@@ -22,6 +22,11 @@ final class ThemeLayoutEntitySolidifyQueue
     /** @var array<string, true> */
     private static array $requestEnqueued = [];
 
+    /** @var array<string, int> slotHash => unix time until which the gate must not re-enqueue */
+    private static array $enqueueDeferredUntil = [];
+
+    public const DEFAULT_ENQUEUE_DEFER_SECONDS = 5;
+
     public function __construct(
         private readonly ThemeLayoutEntitySolidifyLeaseStore $leases,
         private readonly ThemeLayoutEntitySolidifyStampStore $stamps,
@@ -77,6 +82,79 @@ final class ThemeLayoutEntitySolidifyQueue
     public function isPending(ThemeLayoutEntitySolidifySerialKey $key): bool
     {
         return $this->leases->isPending($key) || $this->jobs->has($key);
+    }
+
+    /**
+     * Age (seconds) of this slot's pending state: `now - min(job.queued_at, lease mtime)`.
+     *
+     * `queued_at` is rewritten on every gate re-enqueue, so a bake that keeps running can
+     * look brand new forever; the slot lease mtime (created when the drain acquires the
+     * lease) is the oldest marker that actually survives. Null when neither marker exists.
+     */
+    public function pendingAgeSeconds(ThemeLayoutEntitySolidifySerialKey $key, ?int $now = null): ?int
+    {
+        $now ??= time();
+        $startedAt = null;
+        if ($this->jobs->has($key)) {
+            $job = $this->jobs->read($key);
+            $queuedAt = $job === null ? '' : trim((string)($job['queued_at'] ?? ''));
+            if ($queuedAt !== '') {
+                $queuedTs = strtotime($queuedAt);
+                if (is_int($queuedTs)) {
+                    $startedAt = $queuedTs;
+                }
+            }
+        }
+        $leaseAt = $this->leases->leaseStartedAt($key);
+        if ($leaseAt !== null) {
+            $startedAt = $startedAt === null ? $leaseAt : min($startedAt, $leaseAt);
+        }
+        if ($startedAt === null) {
+            return null;
+        }
+
+        return max(0, $now - $startedAt);
+    }
+
+    /**
+     * After a slot's pending budget is exceeded the gate must stop re-enqueueing it for a
+     * short window, otherwise every request rewrites `queued_at` and the deadline never
+     * fires. Per-worker statics: slots are few and expired entries are pruned.
+     */
+    public function deferEnqueue(
+        ThemeLayoutEntitySolidifySerialKey $key,
+        int $seconds = self::DEFAULT_ENQUEUE_DEFER_SECONDS,
+    ): void {
+        if (\count(self::$enqueueDeferredUntil) > 64) {
+            self::pruneEnqueueDeferrals((string)$key->slotHash());
+        }
+        self::$enqueueDeferredUntil[(string)$key->slotHash()] = time() + max(1, $seconds);
+    }
+
+    public function isEnqueueDeferred(ThemeLayoutEntitySolidifySerialKey $key): bool
+    {
+        $id = (string)$key->slotHash();
+        $until = self::$enqueueDeferredUntil[$id] ?? 0;
+        if ($until < 1) {
+            return false;
+        }
+        if ($until <= time()) {
+            unset(self::$enqueueDeferredUntil[$id]);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private static function pruneEnqueueDeferrals(string $keepId): void
+    {
+        $now = time();
+        foreach (self::$enqueueDeferredUntil as $id => $until) {
+            if ($until <= $now || (string)$id === $keepId) {
+                unset(self::$enqueueDeferredUntil[$id]);
+            }
+        }
     }
 
     /**
@@ -166,9 +244,13 @@ final class ThemeLayoutEntitySolidifyQueue
     public function drainOne(ThemeLayoutEntitySolidifySerialKey $key, string $expectedFp = ''): string
     {
         if (!$this->jobs->has($key)) {
+            Env::log('theme/layout_solidify_drain', 'job_missing key=' . $key->toString());
+
             return 'skip';
         }
         if (!$this->leases->tryAcquire($key)) {
+            Env::log('theme/layout_solidify_drain', 'lease_busy key=' . $key->toString());
+
             return 'skip';
         }
         $ok = false;
@@ -178,6 +260,8 @@ final class ThemeLayoutEntitySolidifyQueue
         try {
             $snap = $this->jobs->read($key);
             if ($snap === null) {
+                Env::log('theme/layout_solidify_drain', 'job_missing key=' . $key->toString());
+
                 return 'skip';
             }
             $bakeKey = $snap['key'];
@@ -223,6 +307,8 @@ final class ThemeLayoutEntitySolidifyQueue
         }
 
         if ($dirty) {
+            Env::log('theme/layout_solidify_drain', 'payload_dirty key=' . $key->toString());
+
             return 'skip';
         }
 
@@ -474,5 +560,6 @@ final class ThemeLayoutEntitySolidifyQueue
     public static function resetRequestEnqueued(): void
     {
         self::$requestEnqueued = [];
+        self::$enqueueDeferredUntil = [];
     }
 }

@@ -45,6 +45,15 @@ final class CronTaskContractsTest extends TestCase
             $this->setUpBeforeClass_CronUpgradeIntentSkipClaim();
             $this->assert_CronChildReap_testDispatchLoopReapsExitedChildren();
         },
+            'CronCpuBudget::testTaskCpuColumnsPersistedByCollect' => function () {
+            $this->assert_CronCpuBudget_testTaskCpuColumnsPersistedByCollect();
+        },
+            'CronCpuBudget::testChildExecutionRunsWithinGovernor' => function () {
+            $this->assert_CronCpuBudget_testChildExecutionRunsWithinGovernor();
+        },
+            'CronCpuBudget::testCronExpressionIsMemoizedPerExpression' => function () {
+            $this->assert_CronCpuBudget_testCronExpressionIsMemoizedPerExpression();
+        },
         ];
     }
 
@@ -134,5 +143,70 @@ private function assert_CronChildReap_testDispatchLoopReapsExitedChildren(): voi
     self::assertNotFalse($loopPos);
     self::assertNotFalse($reapPos);
     self::assertGreaterThan($loopPos, $reapPos);
+}
+
+private function assert_CronCpuBudget_testTaskCpuColumnsPersistedByCollect(): void
+{
+    $modelSrc = (string) file_get_contents(\BP . 'app/code/Weline/Cron/Model/CronTask.php');
+    self::assertStringContainsString("schema_fields_CPU_COUNT = 'cpu_count'", $modelSrc);
+    self::assertStringContainsString("schema_fields_CPU_PERCENT = 'cpu_percent'", $modelSrc);
+    // 列默认值必须是 0 = 未声明：接口常量 1/30 只是最终兜底，落成行内默认值会让统一配置失效。
+    self::assertStringContainsString("#[Col('int', default: 0, comment: 'CPU 个数（0=跟随统一配置）')]", $modelSrc);
+    self::assertStringContainsString("#[Col('int', default: 0, comment: 'CPU 上限百分比（0=跟随统一配置）')]", $modelSrc);
+
+    $collectSrc = (string) file_get_contents(\BP . 'app/code/Weline/Cron/Console/Cron/Task/Collect.php');
+    self::assertStringContainsString('CronTask::schema_fields_CPU_COUNT => $this->resolveCpuCount($taskObject)', $collectSrc);
+    self::assertStringContainsString('CronTask::schema_fields_CPU_PERCENT => $this->resolveCpuPercent($taskObject)', $collectSrc);
+    // 未实现能力接口的老任务必须写 0（未声明），不能写接口常量把配置默认值钉死。
+    self::assertStringContainsString('$taskObject instanceof CronTaskCpuBudgetInterface', $collectSrc);
+    self::assertMatchesRegularExpression(
+        '/private function resolveCpuCount\(object \$taskObject\): int\s*\{[^}]*?return 0;/s',
+        $collectSrc,
+        'resolveCpuCount 必须在未实现接口时返回 0',
+    );
+    self::assertMatchesRegularExpression(
+        '/private function resolveCpuPercent\(object \$taskObject\): int\s*\{[^}]*?return 0;/s',
+        $collectSrc,
+        'resolveCpuPercent 必须在未实现接口时返回 0',
+    );
+}
+
+private function assert_CronCpuBudget_testChildExecutionRunsWithinGovernor(): void
+{
+    $src = (string) file_get_contents(\BP . 'app/code/Weline/Cron/Console/Cron/Task/Run.php');
+    self::assertStringContainsString('function executeWithinCpuBudget', $src);
+    self::assertStringContainsString('$this->executeWithinCpuBudget($task, $instance, $sseManual)', $src);
+    // 业务体必须经治理器执行，禁止继续裸调。
+    self::assertStringContainsString('$governor->run($budget', $src);
+    self::assertStringContainsString('CronCpuBudgetPolicy::class', $src);
+    self::assertStringContainsString('CronCpuGovernor::class', $src);
+    self::assertStringContainsString('CronTask::schema_fields_CPU_COUNT', $src);
+    self::assertStringContainsString('CronTask::schema_fields_CPU_PERCENT', $src);
+
+    $governorSrc = (string) file_get_contents(\BP . 'app/code/Weline/Cron/Service/CronCpuGovernor.php');
+    // 计量口径只允许本进程；\getrusage(1) 会掺子进程 CPU，必须不出现实际调用。
+    self::assertStringContainsString('\getrusage(0)', $governorSrc);
+    self::assertStringNotContainsString('\getrusage(1)', $governorSrc);
+    self::assertStringContainsString("'ru_utime.tv_sec'", $governorSrc);
+    self::assertStringContainsString("'ru_stime.tv_sec'", $governorSrc);
+    // 累计式公式 + 动态单次睡眠上限。
+    self::assertStringContainsString('$used / $budget - $wall', $governorSrc);
+    self::assertStringContainsString('MIN_SLEEP_CAP_SECONDS', $governorSrc);
+    self::assertStringContainsString('2.0 / $budget', $governorSrc);
+    // 闹钟必须先查占用、用完归还，且不得与宿主抢。
+    self::assertStringContainsString('pcntl_alarm(0)', $governorSrc);
+    self::assertStringContainsString('pcntl_signal_get_handler', $governorSrc);
+    self::assertStringContainsString('pcntl_alarm(self::TICK_SECONDS)', $governorSrc);
+    self::assertStringContainsString('finally {', $governorSrc);
+}
+
+private function assert_CronCpuBudget_testCronExpressionIsMemoizedPerExpression(): void
+{
+    $src = (string) file_get_contents(\BP . 'app/code/Weline/Cron/Console/Cron/Task/Run.php');
+    self::assertStringContainsString('function resolveCronExpression', $src);
+    self::assertStringContainsString('$this->resolveCronExpression(', $src);
+    // 无业务时不重复解析表达式：每条任务不再各自 new CronExpression。
+    self::assertStringNotContainsString('new CronExpression($taskModel->getData(\'cron_time\'))', $src);
+    self::assertStringContainsString('cronExpressionCache', $src);
 }
 }

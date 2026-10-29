@@ -155,7 +155,7 @@ $milestones = [
             --weline-theme-text-secondary: var(--_inverse-muted);
             --color-text-primary: var(--_inverse-text);
             --color-text-secondary: var(--_inverse-muted);
-            --color-link: var(--color-primary-light, #d4786a);
+            --color-link: var(--color-text-on-dark-muted, #cbd5e1);
             color: var(--_inverse-text);
         }
 
@@ -220,13 +220,18 @@ $milestones = [
 
         .doc-about__btn--primary {
             border-color: var(--color-primary-border, #963b30);
-            background: linear-gradient(180deg, #d4786a 0%, var(--color-primary, #b84a3c) 100%);
+            /* 实心 primary 底 + on-primary 墨（默认盘 #b84a3c 上 #f7f4ef = 4.69:1）。
+               原为 linear-gradient(180deg, #d4786a → var(--color-primary))，浅端实测
+               #f7f4ef on #d4786a = 2.86:1（白字压浅红，远低于正文 4.5:1）；
+               hover 浅端 #c45d4f 也只有 3.81:1。渐变自造的浅端无法达标，
+               故取消渐变，只消费主题盘 Token。 */
+            background: var(--color-primary, #b84a3c);
             box-shadow: none;
             color: var(--color-on-primary, #f7f4ef);
         }
 
         .doc-about__btn--primary:hover {
-            background: linear-gradient(180deg, #c45d4f 0%, var(--color-primary-hover, #963b30) 100%);
+            background: var(--color-primary-hover, #963b30);
             color: var(--color-on-primary, #f7f4ef);
             text-decoration: none;
         }

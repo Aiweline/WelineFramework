@@ -30,6 +30,9 @@ final class ThemeLayoutEntityRequestSolidifyGate
     /** Critical public chrome partials checked for design-origin drift (WS-A). */
     private const CRITICAL_CHROME_PARTIALS = ['header', 'footer'];
 
+    /** Upper bound (s) for keeping shared FPC forbidden on a pending slot: bake ≈34s, peak ≈89s. */
+    private const DEFAULT_PENDING_MAX_SECONDS = 120;
+
     public function __construct(
         private readonly ThemeLayoutEntitySolidifyStampStore $stamps,
         private readonly ThemeLayoutEntitySolidifyQueue $queue,
@@ -147,24 +150,45 @@ final class ThemeLayoutEntityRequestSolidifyGate
             || $chromeOriginStale
             || ($derivedMissing && !$stampFresh);
         // Circuit breaker: the bake for this slot has failed repeatedly (dead-letter
-        // fail_count >= threshold, still inside cooldown). Re-enqueueing would fail
-        // again and `forbid()` would keep the whole storefront out of shared FPC for a
-        // defect that is not request-specific. Serve the source template, allow FPC,
-        // and let the Cron drain retry once the cooldown elapses (half-open).
-        $circuit = $needsJob && !$pending ? $this->queue->circuitState($key) : ['open' => false];
+        // fail_count >= threshold). Re-enqueueing would fail again and `forbid()` would
+        // keep the whole storefront out of shared FPC for a defect that is not
+        // request-specific. Serve the source template, allow FPC, and let the Cron drain
+        // retry once the cooldown elapses (half-open).
+        $circuit = $needsJob ? $this->queue->circuitState($key) : ['open' => false, 'fail_count' => 0];
         $circuitOpen = (bool)($circuit['open'] ?? false);
+        $circuitFailCount = (int)($circuit['fail_count'] ?? 0);
+        // Pending budget: no slot may keep shared FPC forbidden forever. `queued_at` is
+        // refreshed by every re-enqueue, so age is measured from the older of the job
+        // timestamp and the slot lease mtime (lease TTL 300s must be counted).
+        $pendingAge = $pending ? $this->queue->pendingAgeSeconds($key) : null;
+        $pendingMaxSeconds = $pending ? self::pendingMaxSeconds() : 0;
+        $pendingBounded = $pendingAge !== null && $pendingMaxSeconds > 0 && $pendingAge > $pendingMaxSeconds;
+        if ($pendingBounded) {
+            // Deadline hit: stop per-request re-enqueueing this slot for a short window,
+            // otherwise each request rewrites `queued_at` and the age never grows.
+            $this->queue->deferEnqueue($key);
+        }
+        $circuitOpen = $circuitOpen || $pendingBounded || $circuitFailCount >= 3;
         $enqueued = false;
         $coalesced = false;
         if ($needsJob && !$circuitOpen) {
-            $result = $this->queue->enqueue($key, $expectedFp);
-            $enqueued = (bool)($result['enqueued'] ?? false);
-            $coalesced = (bool)($result['coalesced'] ?? false);
-            $pending = $pending || (bool)($result['pending'] ?? false) || $enqueued || $coalesced;
+            if (!$this->queue->isEnqueueDeferred($key)) {
+                $result = $this->queue->enqueue($key, $expectedFp);
+                $enqueued = (bool)($result['enqueued'] ?? false);
+                $coalesced = (bool)($result['coalesced'] ?? false);
+                $pending = $pending || (bool)($result['pending'] ?? false) || $enqueued || $coalesced;
+            }
+        }
+        if ($pendingBounded) {
+            // Bounded: the wire must not advertise a bake that is not coming in budget.
+            $pending = false;
         }
 
         $useOriginal = $needsJob;
         $reason = 'fresh';
-        if ($circuitOpen) {
+        if ($pendingBounded) {
+            $reason = 'solidify_pending_deadline_exceeded';
+        } elseif ($circuitOpen) {
             $reason = 'solidify_circuit_open';
         } elseif ($pending && ($enqueued || $coalesced)) {
             $reason = $enqueued ? 'enqueued_fallback_original' : 'pending_coalesce_fallback_original';
@@ -200,7 +224,9 @@ final class ThemeLayoutEntityRequestSolidifyGate
             'coalesced' => $coalesced,
             'pending' => $pending,
             'circuit_open' => $circuitOpen,
-            'circuit_fail_count' => (int)($circuit['fail_count'] ?? 0),
+            'circuit_fail_count' => $circuitFailCount,
+            'pending_bounded' => $pendingBounded,
+            'pending_age_seconds' => $pendingAge,
             'expected_fp' => $expectedFp,
             'serial_key' => $key->toString(),
             'chrome_origin_stale' => $chromeOriginStale,
@@ -438,8 +464,7 @@ final class ThemeLayoutEntityRequestSolidifyGate
         Env::log('theme/request_solidify_decision', $payload);
     }
 
-    private static function evaluateRequestKey(
-        int $themeId,
+    private static function evaluateRequestKey(        int $themeId,
         string $area,
         string $scope,
         string $storeMode,

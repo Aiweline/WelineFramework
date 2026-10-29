@@ -205,7 +205,9 @@
     color: var(--weline-theme-success);
 }
 
-@media (max-width: var(--breakpoint-md)) {
+/* 断点必须写字面值：@media 条件里 var() 不解析，整条 MQ 会被浏览器丢弃。
+ * 该值对应 --breakpoint-md: 768px（view/theme/frontend/variables/_spacing.css:89）。 */
+@media (max-width: 768px) {
     .wc-theme_widget_cross_sell .cross-sell-container {
         flex-direction: column;
     }

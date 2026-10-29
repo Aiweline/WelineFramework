@@ -65,4 +65,8 @@ class CronTask extends Model
     public const schema_fields_RUNTIME_ERROR_DATE = 'runtime_error_date';
     #[Col('int', comment: '运行时进程ID')]
     public const schema_fields_PID = 'pid';
+    #[Col('int', default: 0, comment: 'CPU 个数（0=跟随统一配置）')]
+    public const schema_fields_CPU_COUNT = 'cpu_count';
+    #[Col('int', default: 0, comment: 'CPU 上限百分比（0=跟随统一配置）')]
+    public const schema_fields_CPU_PERCENT = 'cpu_percent';
 }

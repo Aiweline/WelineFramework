@@ -60,50 +60,20 @@ wifi,wifi
 "当前调度日志实时尾随（GET 兼容入口）","Current scheduling log real-time tracking (GET compatible entry)"
 运行日志SSE,"Run log SSE"
 当前调度日志实时尾随（SSE）,"Current Scheduling Log Live Trailing (SSE)"
-全部,All
+计划任务CPU预算,"Scheduled Task CPU Budget"
+计划任务系统配置,"Scheduled task system configuration"
+settings,settings
+"计划任务 CPU 预算等系统配置","Scheduled task CPU budget and other system configuration"
+查看计划任务系统配置,"View scheduled task system configuration"
+"查看计划任务 CPU 预算等系统配置","View scheduled task CPU budget and other system configuration"
 待执行,"To execute"
 运行中,Running
 成功,Success
 已锁定,Locked
 失败,Failed
-全部模块,"All Modules"
-全部状态,"All Statuses"
 遗漏,Missing
-共,Total
-条,items
-ID,ID
-任务信息,"Task info"
-执行频率,"Execution frequency"
-状态,Status
-运行时间,Runtime
-操作,Operation
-运行,Run
-日志,Logs
-解锁,Unlock
-分钟,Minutes
-任务描述,"Task description"
-无,None
-暂无定时任务,"No scheduled tasks"
-手动运行,"Manual run"
-帮助说明,"Help description"
-加载中,Loading
-后缀,Suffix
-可选,Optional
-写入,Write
-开始执行,"Start execution"
 关闭,Close
-调度运行日志,"Scheduling run log."
-选择记录,"Select Record"
-点击展开或收起任务描述,"Click to expand or collapse the task description."
-执行名,"Execution name"
-任务超时未执行,"Task timed out without execution"
-上次运行,"last run"
-下次运行,"next run"
-真实执行（SSE）,"Real execution (SSE)"
-调度运行日志（历史与实时）,"Scheduling run log (historical and real-time)"
-锁定,Lock
-留空则与定时调度一致,"Leave blank to be consistent with the scheduled schedule"
-输出,Output
+加载中,Loading
 加载失败,"Failed to load"
 调度说明,"Scheduling instructions."
 手动参数,"Manual parameters"
@@ -119,6 +89,49 @@ ID,ID
 "当前运行中（SSE 实时）","Currently running (SSE real-time)"
 当前托管进程日志（实时尾随至空闲）,"Current managed-process log (real-time tailing until idle)."
 暂无日志。任务运行时会生成当前托管日志；上一轮日志会在下一轮启动前归档到此。,"No logs yet. A current managed log is created while the task runs; the previous log is archived here before the next run starts."
+"本页嵌入计划任务模块在统一配置中心声明的 CPU 预算字段。任务行自身声明了非 0 的 CPU 个数或百分比时，以任务行为准；本页只是未声明任务的默认值。切换作用范围后按新范围加载。","This page embeds the CPU budget fields that the scheduled task module declares in the unified configuration center. When a task row itself declares a non-zero CPU count or percentage, the task row wins; this page only holds the default for tasks that declare nothing. Switching the scope reloads the values for that scope."
+返回任务列表,"Back to task list"
+在统一配置中心打开,在统一配置中心打开
+作用范围,作用范围
+全部,All
+全部模块,"All Modules"
+全部状态,"All Statuses"
+共,Total
+条,items
+ID,ID
+任务信息,"Task info"
+执行频率,"Execution frequency"
+状态,Status
+运行时间,Runtime
+"CPU 上限","CPU Cap"
+操作,Operation
+跟随配置,"Follows config"
+运行,Run
+日志,Logs
+解锁,Unlock
+分钟,Minutes
+任务描述,"Task description"
+无,None
+暂无定时任务,"No scheduled tasks"
+手动运行,"Manual run"
+帮助说明,"Help description"
+后缀,Suffix
+可选,Optional
+写入,Write
+开始执行,"Start execution"
+调度运行日志,"Scheduling run log."
+选择记录,"Select Record"
+点击展开或收起任务描述,"Click to expand or collapse the task description."
+执行名,"Execution name"
+任务超时未执行,"Task timed out without execution"
+上次运行,"last run"
+下次运行,"next run"
+"任务未自行声明 CPU 额度，跟随统一配置中心默认值","Task declares no CPU quota; follows the unified configuration default"
+真实执行（SSE）,"Real execution (SSE)"
+调度运行日志（历史与实时）,"Scheduling run log (historical and real-time)"
+锁定,Lock
+留空则与定时调度一致,"Leave blank to be consistent with the scheduled schedule"
+输出,Output
 "参数 execute_name 无效","Invalid parameter execute_name"
 "参数 file 无效","Invalid parameter file"
 日志文件不存在,"Log file does not exist"
@@ -197,6 +210,7 @@ ID,ID
 受管计划任务子进程已退出但未提交终态，已由调度父进程标记失败。进程ID：%{1},"The managed scheduled-task child exited without committing a terminal state and was marked failed by the scheduler parent. PID: %{1}"
 受管计划任务失败，任务未提供错误摘要。,"The managed scheduled task failed without an error summary."
 等待受管计划任务时丢失状态围栏：%{1},"Lost the managed scheduled-task state fence while waiting: %{1}"
+"计划任务 %{1} 未启用 CPU 限速：%{2}","CPU throttling is not enabled for scheduled task %{1}: %{2}"
 """Cron 查询器不支持的操作：%{1}""","Unsupported Cron query operation: %{1}"
 "mdi mdi-clock-outline","mdi mdi-clock-outline"
 "mdi mdi-format-list-bulleted","mdi mdi-format-list-bulleted"
@@ -221,3 +235,24 @@ ID,ID
 进程创建失败！请检查进程状态！,"Process creation failed! Please check the process status!"
 计划任务,"Scheduled tasks"
 系统升级意图活跃，本次跳过派发计划任务且未启动子进程。,"Setup upgrade intent is active; skipped claiming cron tasks and did not spawn children."
+"pcntl_alarm 不可用（可能被 disable_functions 禁用）","pcntl_alarm is unavailable (possibly disabled via disable_functions)"
+"pcntl_signal 不可用（可能被 disable_functions 禁用）","pcntl_signal is unavailable (possibly disabled via disable_functions)"
+"pcntl_signal_get_handler 不可用，无法安全还原宿主闹钟","pcntl_signal_get_handler is unavailable, so the host alarm cannot be restored safely"
+"当前平台未定义 SIGALRM（Windows 不支持进程闹钟）","SIGALRM is not defined on this platform (Windows does not support process alarms)"
+"CPU 限速总开关已关闭（只计量，不让出）","The CPU throttling master switch is off (metering only, no yielding)"
+"CPU 额度解析为 0，按不限速执行","The CPU quota resolved to 0; running without throttling"
+"进程闹钟已被宿主占用（剩余 %{1} 秒），本次不抢用","The process alarm is held by the host (%{1} seconds left); not taking it over this run"
+"安装 SIGALRM 处理器失败","Failed to install the SIGALRM handler"
+"计划任务 CPU 预算","Scheduled task CPU budget"
+"计划任务调度子进程的默认 CPU 额度：核数、单核占用上限与是否强制节流","Default CPU quota for scheduled task child processes: core count, per-core usage cap, and whether throttling is enforced"
+"额度上限 = CPU 个数 × 单核百分比 / 100 个核当量，超出部分通过睡眠出让。任务行自身声明非 0 时优先于本页默认值。","Quota cap = CPU count × per-core percentage / 100 core-equivalents; anything above it is yielded by sleeping. A non-zero declaration on the task row takes priority over the defaults on this page."
+"CPU 预算","CPU budget"
+"作用于未自行声明 CPU 额度的计划任务。生效优先级：任务行（cpu_count / cpu_percent 非 0）> 本页默认值 > 接口常量 1 核 / 30%。","Applies to scheduled tasks that do not declare a CPU quota themselves. Precedence: task row (non-zero cpu_count / cpu_percent) > defaults on this page > interface constants 1 core / 30%."
+额度怎么算,"How the quota is calculated"
+"额度上限 = CPU 个数 × 单核百分比 / 100（个 CPU 核当量）。例如 2 核 × 30% = 单核的 60%。「最多占多少」的上限，不是预留；不足 1 秒的任务在首个节拍到来前已结束，不会节流。","Quota cap = CPU count × per-core percentage / 100 (core-equivalents). For example, 2 cores × 30% = 60% of one core. It is an upper bound on how much may be used, not a reservation; tasks shorter than 1 second finish before the first tick and are not throttled."
+"默认 CPU 个数","Default CPU count"
+"任务未自行声明时使用的 CPU 个数，范围 1-64。","CPU count used when a task does not declare one; range 1-64."
+默认单核占用上限（%）,"Default per-core usage cap (%)"
+"单个 CPU 允许占用的最大百分比，范围 1-100。","Maximum percentage a single CPU may be occupied; range 1-100."
+"强制执行 CPU 节流","Enforce CPU throttling"
+"开启后超出额度的任务通过睡眠出让 CPU；关闭仍会统计实际 CPU 用量与本可让出的时长，但不装闹钟、不睡眠。","When on, tasks that exceed their quota yield CPU by sleeping; when off, actual CPU usage and the time that could have been yielded are still measured, but no alarm is installed and no sleeping happens."

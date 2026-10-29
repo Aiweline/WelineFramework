@@ -73,8 +73,12 @@
     --color-text: #172033;
     --color-text-primary: var(--color-text);
     --color-text-secondary: #475569;
-    --color-text-tertiary: #64748b;
-    --color-text-muted: #64748b;
+    /* WCAG AA：tertiary/muted 作为正文字色会落在 --color-bg-tertiary(#e2e8f0) 的 muted 底上渲染
+       （典型载体 .w-toast__details > summary、.w-toast__code），#64748b 实测 3.86:1 < 4.5:1。
+       #556074 在同一 muted 底 5.14:1，白底(canvas) 6.34:1，色相仍在 slate 家族，保留 muted 语义。
+       placeholder 不随之改动：它落在白底 input 表面，原值 #64748b 已 4.76:1 合规。 */
+    --color-text-tertiary: #556074;
+    --color-text-muted: #556074;
     --color-text-disabled: #94a3b8;
     --color-text-placeholder: #64748b;
     --color-text-inverse: #ffffff;
@@ -99,6 +103,16 @@
     --color-primary-bg-subtle: #dbeafe;
     --color-primary-border-subtle: #93c5fd;
     --color-primary-text-emphasis: #1d4ed8;
+    /* 补齐 primary 家族派生叶子：本块已把 --color-primary 改成蓝色 #2563eb，但此前只给了
+       -rgb/-hover/-active/-bg-subtle 四个派生，-light/-dark/-border 三个叶子没跟上，
+       于是回落到品牌盘（_ink.css）的朱砂 —— 主色蓝、浅主色朱砂，同一色系断裂。
+       实测后果：.doc-policy__hero 反色底(--color-bg-dark #232f3e)上的
+       var(--color-primary-light) 取到朱砂 #d4786a，只有 4.33:1 < 4.5:1（WCAG AA 正文）。
+       取值与 _dark.css:112-114 的蓝色派生同源，保证亮/暗两模式同色系；
+       #93c5fd 在 #232f3e 上 7.52:1、#1e293b 上 8.11:1，满足目标 7:1。 */
+    --color-primary-light: #93c5fd;
+    --color-primary-dark: #3b82f6;
+    --color-primary-border: #93c5fd;
     --color-on-primary: #ffffff;
     --color-secondary: #475569; --color-secondary-rgb: 71, 85, 105; --color-secondary-hover: #334155; --color-secondary-active: #1e293b; --color-on-secondary: #ffffff; --color-secondary-bg-subtle: #e2e8f0; --color-secondary-border-subtle: #94a3b8; --color-secondary-text-emphasis: #334155;
     --color-link: #1d4ed8;

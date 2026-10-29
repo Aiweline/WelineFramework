@@ -22,6 +22,19 @@ class LongRunningPhpRuntime
     private const RECOMMENDED_OPEN_FILE_SOFT_LIMIT = 65536;
 
     /**
+     * Upper bound when honouring a host/php.ini opcache.memory_consumption.
+     * CLI OPcache is per-process (Master + every Worker + Dispatcher each hold
+     * their own segment), so an unbounded value multiplies across the fleet.
+     */
+    private const OPCACHE_MEMORY_CEILING_MB = 256;
+
+    /**
+     * Disk bytecode cache, relative to the framework base path. Shared across
+     * process generations, unlike the per-process CLI OPcache segment.
+     */
+    private const RELATIVE_FILE_CACHE_DIR = 'generated/framework/opcache_file_cache';
+
+    /**
      * Unix WLS processes explicitly enable CLI OPcache when the extension is
      * available so every Master/Worker generation gets the production bytecode
      * fast path even when the interactive CLI default is disabled.
@@ -39,29 +52,63 @@ class LongRunningPhpRuntime
         if (\PHP_OS_FAMILY !== 'Windows') {
             if (\extension_loaded('Zend OPcache') || \function_exists('opcache_get_status')) {
                 // CLI OPcache is per-process (not SHM-shared across Workers).
-                // Sized from warm-path MemDiag: peak used ≈82.5MB + 5MB headroom → 88.
-                // Prefer a lower host/php.ini value when explicitly configured smaller.
-                $opcacheMb = 88;
+                // 88MB was sized from a "1533 scripts" warm-path MemDiag sample.
+                // Measured warm footprint is 30.2KB/PHP script and 45.8KB/compiled
+                // template, so 88MB only holds ≈2473 scripts while the real working
+                // set is ≥13852 (12063 app PHP + 1789 templates written in 1h).
+                // 192MB holds ≈5395 scripts; the disk bytecode cache below backfills
+                // the evicted remainder across process generations.
+                $opcacheMb = 192;
                 $configured = \ini_get('opcache.memory_consumption');
                 if (\is_string($configured) && \ctype_digit($configured)) {
                     $configuredMb = (int)$configured;
-                    if ($configuredMb > 0 && $configuredMb < $opcacheMb) {
-                        $opcacheMb = $configuredMb;
+                    // Honour a larger host/php.ini value, but never above the
+                    // per-process ceiling: Master + every Worker + Dispatcher
+                    // each own an independent segment.
+                    if ($configuredMb > $opcacheMb) {
+                        $opcacheMb = \min($configuredMb, self::OPCACHE_MEMORY_CEILING_MB);
                     }
                 }
 
-                // Per-process CLI OPcache + tracing JIT (not SHM-shared across Workers).
-                // Windows keeps JIT off below — PHP 8.4 can crash on shared JIT buffers there.
-                return [
+                $arguments = [
                     '-d',
                     'opcache.enable_cli=1',
                     '-d',
                     'opcache.memory_consumption=' . $opcacheMb,
-                    '-d',
-                    'opcache.jit=tracing',
-                    '-d',
-                    'opcache.jit_buffer_size=64M',
                 ];
+
+                // Shared on-disk bytecode cache: survives process exits, so a
+                // recycled Worker reloads opcode instead of re-parsing ~13k
+                // scripts. consistency_checks is intentionally left at its
+                // default (On) so deploy-time edits never serve stale bytecode.
+                $fileCache = self::ensureFileCacheDirectory();
+                if ($fileCache !== '') {
+                    $arguments[] = '-d';
+                    $arguments[] = 'opcache.file_cache=' . $fileCache;
+                    $arguments[] = '-d';
+                    $arguments[] = 'opcache.file_cache_only=0';
+                }
+
+                // Tracing JIT is ON by default (user directive 2026-10-29).
+                // Interaction with file_cache, measured 2026-10-29 (4-way matrix,
+                // fresh cache dir per run):
+                //   jit=on  + file_cache → cached=320 .bin=0     (does NOT write)
+                //   jit=on  + no cache   → cached=320 .bin=2
+                //   jit=off + file_cache → cached=320 .bin=321   (writes)
+                //   jit=off + no cache   → cached=320 .bin=3
+                // So JIT suppresses *writes* to the disk cache, but it still READS
+                // a cache populated by another process: with a pre-warmed dir a
+                // fresh jit=on process cold-starts in 0.18-0.20s vs 0.38-0.42s
+                // without one, and opcache_get_status reports hits=339 misses=0
+                // with jit.on=1. Keeping file_cache alongside JIT is therefore
+                // still a net win for warm starts; the cache is filled by CLI
+                // commands (compile/warm) which do not enable JIT.
+                $arguments[] = '-d';
+                $arguments[] = 'opcache.jit=tracing';
+                $arguments[] = '-d';
+                $arguments[] = 'opcache.jit_buffer_size=64M';
+
+                return $arguments;
             }
 
             return [];
@@ -73,6 +120,33 @@ class LongRunningPhpRuntime
             '-d',
             'opcache.jit_buffer_size=0',
         ];
+    }
+
+    /**
+     * Absolute path of the shared disk bytecode cache, created on first use.
+     * Returns '' when the directory cannot be created or written, so callers
+     * keep the memory-only fast path instead of failing process start.
+     */
+    public static function ensureFileCacheDirectory(): string
+    {
+        $base = \defined('BP') ? (string)\BP : '';
+        if ($base === '') {
+            return '';
+        }
+
+        $path = \rtrim($base, '/\\') . \DIRECTORY_SEPARATOR
+            . \str_replace('/', \DIRECTORY_SEPARATOR, self::RELATIVE_FILE_CACHE_DIR);
+
+        if (!\is_dir($path)) {
+            // Concurrent Worker starts can race here; a lost race is not an error.
+            @\mkdir($path, 0775, true);
+        }
+
+        if (!\is_dir($path) || !\is_writable($path)) {
+            return '';
+        }
+
+        return $path;
     }
 
     public function apply(): void

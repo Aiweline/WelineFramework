@@ -3629,7 +3629,9 @@ private function assert_ThemeHeadChromeCssPack_testStorefrontPackIsBaseOnlyAndTo
     self::assertStringContainsString('PACK_TOKENS', $src);
     self::assertStringContainsString('PACK_STOREFRONT', $src);
     self::assertStringContainsString('PACK_BACKEND', $src);
-    self::assertStringContainsString('theme-head-chrome-v12', $src);
+    // 缓存键必须存在（防误删），但不锁死具体代次字面：PACK_TOKENS 清单每次增删叶子都要升 vN，
+    // 否则 publishPack 会把旧产物当成新包复用（叶子仍不投递）。锁字面会让每次正当升级都红。
+    self::assertMatchesRegularExpression('/theme-head-chrome-v\d+/', $src, 'head chrome 缓存键必须带 vN 代次');
     self::assertStringContainsString('normalizeOverlayManifest', $src);
     self::assertStringContainsString('resolveOverlayLeavesForLayout', $src);
     self::assertStringContainsString('selectOverlayLeaves', $src);
@@ -3675,7 +3677,8 @@ private function assert_ThemeHeadChromeCssPack_testStorefrontPackIsBaseOnlyAndTo
     // Backend 合并序 default → light → dark（源码 519 行注释）；PHPUnit actual < expected。
     self::assertLessThan(strpos($beBlock, 'colors/_light.css'), strpos($beBlock, 'colors/_default.css'));
     self::assertLessThan(strpos($beBlock, 'colors/_dark.css'), strpos($beBlock, 'colors/_light.css'));
-    self::assertStringContainsString('theme-head-chrome-v12', $src);
+    // 同 :3634 —— 只要求存在 vN 代次缓存键，不锁死具体代次字面。
+    self::assertMatchesRegularExpression('/theme-head-chrome-v\d+/', $src, 'head chrome 缓存键必须带 vN 代次');
     $tryLinkAttrs = $this->extractTryLinkAttrsSnippet_ThemeHeadChromeCssPack($src);
     self::assertDoesNotMatchRegularExpression('/\$attrs\s*\.=\s*[\'"] data-weline-layout-css/', $tryLinkAttrs, 'theme pack link must not set data-weline-layout-css');
     // Pin attribute assignment only — comments may mention media="print" as forbidden.
@@ -3760,6 +3763,25 @@ private function extractTryLinkAttrsSnippet_ThemeHeadChromeCssPack(string $src):
     return substr($src, $fn, 1400);
 }
 
+/**
+ * 按方法边界取方法体（下一个 `private function` / `public function` 之前）。
+ *
+ * 不要再用 `substr($src, $fn, 2400)` 这类固定字符窗口：方法里一旦插入新分支
+ * （例如 PACK_TOKENS 内联已发布产物），后续 assert 就被推出窗口而假红。
+ */
+private function extractMethodBody_ThemeHeadChromeCssPack(string $src, string $method): string
+{
+    $fn = strpos($src, 'function ' . $method . '(');
+    if ($fn === false) {
+        return '';
+    }
+    $next = preg_match('/\n\s*(?:public|private|protected|final|static)[^\n]*function\s+/', $src, $m, PREG_OFFSET_CAPTURE, $fn + 1)
+        ? (int) $m[0][1]
+        : strlen($src);
+
+    return substr($src, $fn, $next - $fn);
+}
+
 private function assert_ThemeHeadChromeCssPack_testDiskOverrideMeaningfulCssGate(): void
 {
     self::assertFalse(\Weline\Theme\Service\Disk\ThemeDiskHeadService::cssContentIsMeaningful(''));
@@ -3806,9 +3828,8 @@ private function assert_ThemeHeadChromeCssPack_testThemeOverlayAbsorbedRequiresE
         $absorbBody,
         'themeOverlayAbsorbed must gate on PACK_OVERLAY emit before manifest'
     );
-    $tryFn = strpos($src, 'function tryLinkHtml');
-    self::assertNotFalse($tryFn);
-    $tryBody = substr($src, $tryFn, 2400);
+    $tryBody = $this->extractMethodBody_ThemeHeadChromeCssPack($src, 'tryLinkHtml');
+    self::assertNotSame('', $tryBody, 'tryLinkHtml must exist');
     self::assertStringContainsString('markPackEmitted', $tryBody, 'tryLinkHtml must mark emit when returning a link');
     self::assertMatchesRegularExpression(
         '/\$html\s*=\s*\'<link\'[\s\S]{0,400}markPackEmitted\s*\(\s*\$area\s*,\s*\$pack\s*\)[\s\S]{0,120}return\s+\$html/',

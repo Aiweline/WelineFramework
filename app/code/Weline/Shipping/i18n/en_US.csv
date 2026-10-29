@@ -205,27 +205,6 @@ grid,grid
 派送,Delivery
 收货地址,"Delivery Address"
 发货地址,"Shipping Address"
-选择收货地址,"Select a shipping address"
-名,名
-姓,姓
-编辑,Edit
-使用新地址,"Use a new address"
-取消,Cancel
-保存此地址,"Save this address"
-账单地址与收货地址相同,"Billing address same as shipping address"
-账单地址,"Billing address"
-选择账单地址,"Select billing address"
-账单地址已保存。,"Billing address saved."
-更换地址,"Change address"
-收起地址列表,"Hide address list"
-地址列表加载失败，请稍后重试。,"Failed to load addresses. Please try again."
-该地址所在地区暂不支持配送（禁运）。,"This address is in an embargoed area and cannot be shipped to."
-同时用作收货地址,"Also use as shipping address"
-请填写收货人。,"Please enter the recipient name."
-请填写电话。,"Please enter a phone number."
-电话号码格式不正确,"Invalid phone number format"
-电话号码格式不正确，示例：%{1},"Invalid phone number format, e.g. %{1}"
-请填写详细地址。,"Please enter the street address."
 请先保存网站，再配置禁运区域。,"Save the website first, then configure embargo zones."
 请先保存网站，再配置可售目的地。,"Save the website first, then configure sellable destinations."
 请先保存渠道，再配置禁运区域。,"Save the channel first, then configure embargo zones."
@@ -234,6 +213,7 @@ grid,grid
 请先保存商店，再配置可售目的地。,"Save the store first, then configure sellable destinations."
 默认,Default
 邮编：,"Postal code:"
+编辑,Edit
 设为默认,"Set as Default"
 删除,Delete
 新增,Add
@@ -243,6 +223,7 @@ grid,grid
 设为默认地址,"Set as Default Address"
 同时用作结账地址,"Also use as checkout address"
 保存地址,"Save Address"
+取消,Cancel
 管理顶部「配送至」与订单收货时使用的地址。,"Manage addresses used by the header Deliver-to picker and for order receiving."
 新增收货地址,"Add Delivery Address"
 还没有收货地址,"No delivery address yet"
@@ -399,6 +380,25 @@ grid,grid
 请输入邮箱地址,"Please enter email address"
 请输入邮政编码,"Please enter postal code"
 "门牌号 / 楼栋单元等","Building / unit number, etc."
+同时用作收货地址,"Also use as shipping address"
+选择收货地址,"Select a shipping address"
+名,名
+姓,姓
+使用新地址,"Use a new address"
+保存此地址,"Save this address"
+账单地址与收货地址相同,"Billing address same as shipping address"
+账单地址,"Billing address"
+选择账单地址,"Select billing address"
+账单地址已保存。,"Billing address saved."
+更换地址,"Change address"
+收起地址列表,"Hide address list"
+地址列表加载失败，请稍后重试。,"Failed to load addresses. Please try again."
+该地址所在地区暂不支持配送（禁运）。,"This address is in an embargoed area and cannot be shipped to."
+请填写收货人。,"Please enter the recipient name."
+请填写电话。,"Please enter a phone number."
+电话号码格式不正确,"Invalid phone number format"
+电话号码格式不正确，示例：%{1},"Invalid phone number format, e.g. %{1}"
+请填写详细地址。,"Please enter the street address."
 确定要删除这个地址吗？,"Are you sure you want to delete this address?"
 系统,System
 运送地址列表,"Shipping address list"

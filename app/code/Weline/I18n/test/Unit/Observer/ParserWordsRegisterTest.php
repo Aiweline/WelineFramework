@@ -137,9 +137,23 @@ class ParserWordsRegisterTest extends TestCase
         $wordsProperty->setAccessible(true);
         $wordsProperty->setValue(null, $translations);
 
-        $usedWordsProperty = new \ReflectionProperty(Parser::class, 'usedWords');
-        $usedWordsProperty->setAccessible(true);
-        $usedWordsProperty->setValue(null, $usedWords);
+        // usedWords 已从 Parser 静态属性迁到 ParserRequestState（Parser 只保留静态 $words）；
+        // 按仓内迁移后写法（Framework/test/Unit/Phrase/ParserClearUsedWordsTest）经 requestState() 取 state 再赋值。
+        $stateMethod = new \ReflectionMethod(Parser::class, 'requestState');
+        $stateMethod->setAccessible(true);
+        /** @var \Weline\Framework\Phrase\ParserRequestState $state */
+        $state = $stateMethod->invoke(null);
+        $state->usedWords = $usedWords;
+
+        // getUsedWordsWithTranslations() 的译文走「分层词典 $layerCacheKey.'|'.$word」缓存；
+        // 预填该缓存，使本测试不依赖运行环境的真实词典文件（原实现只设 usedWords，
+        // 在 en_US 环境无对应条目时会回落到原词，导致断言假失败）。
+        $layersMethod = new \ReflectionMethod(Parser::class, 'getCurrentLayeredWords');
+        $layersMethod->setAccessible(true);
+        $layerCacheKey = (string)($layersMethod->invoke(null)['cache_key'] ?? '');
+        foreach ($translations as $word => $translation) {
+            $state->translatedWords[$layerCacheKey . '|' . $word] = $translation;
+        }
     }
 
     /**

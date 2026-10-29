@@ -929,9 +929,42 @@ SORRY,SORRY
 前往首页继续购物,"Continue shopping on the home page"
 返回上一页,"Go back"
 推荐产品,"Recommended product"
+全部商品,"Shop All"
+浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
+面包屑,"bread crumbs"
+加载中,loading
+"WelineFramework Admin","WelineFramework Admin"
 回到顶部,"Back to top"
 站点偏好,"Site preferences"
 法律与政策,"Law and Policy"
+指南,Guide
+问答,Q&A
+7×24,24/7
+视频,Video
+您的浏览器不支持视频标签。,"Your browser does not support the video tag."
+件商品,"items of goods"
+合作品牌,"Partner brands"
+"品牌 %{1}","品牌 %{1}"
+上一组,"Previous group"
+下一组,"Next group"
+距离结束,"Ends in"
+时,Hour
+分,Minute
+秒,Second
+2026春季新品上市,"2026 spring new product launch"
+探索最新时尚潮流,"Explore the latest fashion trends"
+立即选购,"Buy Now"
+限时特惠,"Limited-Time Offer"
+全场满300减50,"Spend 300, Save 50 Storewide"
+查看详情,"View details"
+品质生活,"Quality living"
+精选优质好物,"Curated quality products"
+开始探索,"Start exploring"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
+天,Day(s)
 数据卡片,"data card"
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
@@ -983,9 +1016,6 @@ NEW,NEW
 上一页,"Previous page"
 下一页,"Next page"
 末页,"Last page"
-指南,Guide
-问答,Q&A
-7×24,24/7
 服务暂时不可用,"Service temporarily unavailable"
 我们正在处理问题，请稍后再试。,"We are working on the issue; please try again later."
 您可以返回首页继续浏览，或稍后刷新本页。,"You can return home to keep browsing, or refresh this page later."
@@ -1000,7 +1030,6 @@ ERROR,ERROR
 分页导航,"Pagination navigation"
 缺货,"Out of Stock"
 联系询价,联系询价
-面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 我的,mine
 账户及心愿单,"Accounts and Wishlists"
@@ -1053,8 +1082,6 @@ Weline,Weline
 第一页,"First Page"
 最后一页,"Last page"
 支付方式,"Payment methods"
-视频,Video
-您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 请填写视频地址,"Please enter a video URL"
 请粘贴嵌入代码（iframe）或视频链接,"Please paste embed code (iframe) or a video link"
 "请填写自托管视频地址（mp4 等）","Please enter a self-hosted video URL (mp4, etc.)"
@@ -1096,7 +1123,6 @@ Weline,Weline
 婚礼与礼服,"Wedding & Ceremonial"
 节庆活动,节庆活动
 日常通勤,"Everyday commute"
-件商品,"items of goods"
 暂无匹配的问题,"No matching questions"
 搜索问题,"Search questions"
 今日特价,"Today's Deals"
@@ -1107,19 +1133,11 @@ Weline,Weline
 请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-天,Day(s)
-时,Hour
-分,Minute
-秒,Second
 内容标题,"Section title"
 请选择真实图片,"Choose an authentic image"
 图文标题,"Image and text"
 在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
 查看地图,"View map"
-合作品牌,"Partner brands"
-"品牌 %{1}","品牌 %{1}"
-上一组,"Previous group"
-下一组,"Next group"
 您可能还喜欢,"You may also like"
 更大容量,"Larger capacity"
 更多功能,"More features"
@@ -1128,7 +1146,6 @@ Weline,Weline
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
-距离结束,"Ends in"
 精选轮播,"Featured Carousel"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
@@ -1149,7 +1166,6 @@ Logo,Logo
 请使用微信扫描二维码分享,"Please scan the QR code with WeChat to share"
 上一条,Previous
 下一条,Next
-全部商品,"Shop All"
 面包屑导航,Breadcrumbs
 国际配送，售后有保障,"International shipping with reliable after-sales support"
 订单跟踪,"Order Tracking"
@@ -1157,26 +1173,12 @@ Logo,Logo
 热门分类,"Popular Categories"
 热卖精选,"Bestsellers picks"
 特色推荐,"Featured Recommendations"
-限时特惠,"Limited-Time Offer"
 博客,Blog
 热卖,"Hot selling."
 新品,"New Product"
 促销活动,Promotions
 暂停轮播,"Pause slideshow"
 播放轮播,"Play slideshow"
-2026春季新品上市,"2026 spring new product launch"
-探索最新时尚潮流,"Explore the latest fashion trends"
-立即选购,"Buy Now"
-全场满300减50,"Spend 300, Save 50 Storewide"
-查看详情,"View details"
-品质生活,"Quality living"
-精选优质好物,"Curated quality products"
-开始探索,"Start exploring"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
-加载中,loading
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -1202,7 +1204,6 @@ Logo,Logo
 确认操作,"Confirm action"
 确定,Sure
 输入,Input
-"WelineFramework Admin","WelineFramework Admin"
 保存,save
 提交中...,Submitting...
 已选择,Selected
@@ -2361,7 +2362,6 @@ Search…,Search…
 个人中心,"Personal center"
 "Decision information pack · Digital delivery after payment","Decision information pack · Digital delivery after payment"
 "Attraction ticket · Handpicked for independent travelers","Attraction ticket · Handpicked for independent travelers"
-浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 "构建完成且校验通过，可用 theme:update promote %{1} 切换","构建完成且校验通过，可用 theme:update promote %{1} 切换"
 "dry-run：将构建并切换主题 %{1}","dry-run：将构建并切换主题 %{1}"
 注册,Register

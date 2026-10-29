@@ -49,8 +49,8 @@ description: >-
 |------|--------|--------|
 | **双层背景未拓开 / 框中框** | 左右竖缝；中区纹理细、两侧糊或色差；后景人影/雾在中框截断 | 剥中区实拍 → **真·GenerateImage outpaint** 让雾气/后景层连续铺满画幅；禁反射糊边凑宽 |
 | **假拓边** | 匀色柱、拖影、拼贴接缝 | 回退 → 真 outpaint |
-| **软糊 / 低码率** | mid-lap / bpp 闸 | 按管线；禁空放大 |
-| **大 PNG/JPG / 原图直上** | 店面图非 WebP；单图超预算；用原图尺寸 | 转 WebP + 按展示尺寸压缩（长边 ≤1600px、≤250KB；不放大） |
+| **软糊 / 低码率** | mid-lap / bpp 闸；源宽 < 页面 CSS 宽 ×1.5 | 按管线 §3「升清实做」：更大源 → Real-ESRGAN → 2× LANCZOS+USM；换新 object_key；禁空放大（>2× / 同 key 覆盖） |
+| **大 PNG/JPG / 原图直上** | 店面图非 WebP；单图超预算；用原图尺寸 | 转 WebP + 按展示尺寸压缩（长边 ≤1600px、≤250KB）；**源图低于展示像素先升清再压**；禁拿小图靠浏览器放大 |
 | 详情信息烤图 | 尺码表/参数 JPG | **textify**，不走 outpaint |
 
 ## Agent 必做
@@ -60,10 +60,10 @@ description: >-
 3. **必须并行**启动恰好 **2** 个子智能体，prompt 粘贴技能路径：  
    - ① `ecommerce-product-image/SKILL.md` + `weline-image-pipeline.md`  
    - ② 详情实拍：同管线 §7；版式若坏再开 `ecommerce-detail-suite` + `详情优化.md`  
-4. 硬闸：含人→§1‑M 衣锁死+只换人景+**M6 新 object_key**；无人→方卡 outpaint；禁改衣/同路径假交付/漏 variant/cover/色垫/空放大。  
-5. **格式闸**：终态 WebP + 按展示尺寸压缩；禁原图/大 PNG-JPG 直上。  
-6. 目检：衣=原款；HTML 含 `ai-lock-`（或新 key）；再更新台账 **仅** `last_product_id=`。  
-7. 汇报：本波 IDs / `last_product_id` / `clothing_lock=pass` / `url_bust=…` / `含人 N` / 接缝=0 / `format=webp`。
+4. 硬闸：含人→§1‑M 衣锁死+只换人景+**M6 新 object_key**；无人→方卡 outpaint；**源图本身糊（宽 < 页面 CSS 宽 ×1.5）→ 管线 §3「升清实做」2× LANCZOS+USM 或真超分**；禁改衣/同路径假交付/漏 variant/cover/色垫/空放大（>2× 或已够展示像素仍放大）。  
+5. **格式闸**：终态 WebP + 按展示尺寸压缩；**源图低于展示像素先升清再压**；禁原图/大 PNG-JPG 直上。  
+6. 目检：衣=原款；**升清后绣线/小字可读**；HTML 含 `ai-lock-`（或新 key）；再更新台账 **仅** `last_product_id=`。  
+7. 汇报：本波 IDs / `last_product_id` / `clothing_lock=pass` / `url_bust=…` / `含人 N` / `upscaled N 张 src→out` / 接缝=0 / `format=webp`。
 
 ## 与父「产品优化」关系
 

@@ -1061,6 +1061,41 @@
         deploy_reload_required: true,
         scope_bootstrap_waiting: true,
     };
+    /**
+     * 范围「等待态」：首次签章尚未完成时的轻提示 —— info、无动作、短时长，绝不自动刷新。
+     */
+    const SCOPE_WAIT_TIP_CODES = {
+        scope_bootstrap_waiting: true,
+    };
+    /**
+     * 范围「重试态」：签章流程的真实失败/等待（超时、限流、请求失败、绑定失效）。
+     * 保留「请重试」语义走 warning（role=status），不是 danger 红条；不挂自动刷新倒计时，
+     * 否则失败 → 自动刷新 → 再失败，形成刷新死循环。
+     */
+    const SCOPE_RETRY_TIP_CODES = {
+        scope_bootstrap_timeout: true,
+        scope_bootstrap_hole_punch_failed: true,
+        scope_bootstrap_rate_limited: true,
+        scope_bootstrap_invalid: true,
+        worker_scope_binding_expired: true,
+    };
+    /** 更新态 = TIP_CODES 去掉等待态：渲染成「有新版本 / 需刷新」的正向提示。 */
+    const isScopeUpdateTipCode = (code) => {
+        const tipCode = String(code || '').trim();
+
+        return SCOPE_TIP_CODES[tipCode] === true && SCOPE_WAIT_TIP_CODES[tipCode] !== true;
+    };
+    /** 等待态：首次签章的轻提示。 */
+    const isScopeWaitTipCode = (code) => SCOPE_WAIT_TIP_CODES[String(code || '').trim()] === true;
+    /** 重试态：签章失败族。 */
+    const isScopeRetryTipCode = (code) => SCOPE_RETRY_TIP_CODES[String(code || '').trim()] === true;
+    /**
+     * 范围 / 更新家族（等待 + 更新 + 重试三态）。
+     * 仅这一族做 toast 单例收敛；其它非范围 toast 必须保持可并发。
+     */
+    const isScopeFamilyTipCode = (code) => isScopeUpdateTipCode(code)
+        || isScopeWaitTipCode(code)
+        || isScopeRetryTipCode(code);
 
     const SCOPE_WAIT_TIP_SOURCE = '请稍等片刻...';
     const SCOPE_WAIT_TIP_EN_FALLBACK = 'Please wait a moment...';
@@ -1289,7 +1324,7 @@
                 autoReload: true,
             },
             request_scope_already_conflicts: {
-                title: i18nText('商城范围冲突'),
+                title: i18nText('商城范围已变更'),
                 message: i18nText('当前请求与页面商城范围不一致，正在刷新页面。'),
                 autoReload: true,
             },
@@ -1300,7 +1335,7 @@
                 autoReload: true,
             },
             scope_token_context_conflict: {
-                title: i18nText('商城范围冲突'),
+                title: i18nText('商城范围已变更'),
                 message: i18nText('当前页面商城范围与请求上下文不一致，正在重新获取。'),
                 autoReload: true,
             },
@@ -1309,6 +1344,8 @@
                 message: i18nText('主题已发布新版本。请重新加载页面以继续。'),
                 autoReload: true,
             },
+            // 签章流程真实失败（不是「页面过期」）：warning 可重试，绝不 danger 红条、
+            // 绝不自动刷新 —— 失败即刷新会变成刷新死循环。
             scope_bootstrap_timeout: {
                 title: i18nText('商城范围未就绪'),
                 message: i18nText('服务器繁忙或维护中，请稍后重试。'),
@@ -1319,7 +1356,15 @@
             },
             scope_bootstrap_rate_limited: {
                 title: i18nText('商城范围未就绪'),
-                message: i18nText('请稍等片刻...'),
+                message: i18nText('请求失败，请稍后重试。'),
+            },
+            scope_bootstrap_invalid: {
+                title: i18nText('商城范围未就绪'),
+                message: i18nText('请求失败，请稍后重试。'),
+            },
+            worker_scope_binding_expired: {
+                title: i18nText('商城范围未就绪'),
+                message: i18nText('请求失败，请稍后重试。'),
             },
         };
         const byStatus = {
@@ -1357,13 +1402,25 @@
         }
         const displayCode = transportFailed ? `${code}:${status}` : code;
         const showDetails = details !== '' && details !== message;
+        // 范围签章过期/漂移属「更新」而非错误：不摆错误码、用 info 语气并可一键确认更新。
+        const scopeUpdateTip = isScopeUpdateTipCode(code);
+        // 首次签章等待：轻提示（info、无动作、短时长、不自动刷新）。
+        const scopeWaitTip = isScopeWaitTipCode(code);
+        // 签章流程真实失败：可重试的 warning，不摆错误码 chip、不挂自动刷新倒计时。
+        const scopeRetryTip = isScopeRetryTipCode(code);
+        // 范围 / 更新家族统一收敛：家族内一律不渲染错误码 chip（文案不依赖错误码）。
+        const scopeFamilyTip = isScopeFamilyTipCode(code);
         return {
             title,
             message,
-            code: displayCode,
+            code: scopeFamilyTip ? '' : displayCode,
             details: showDetails ? details : '',
             detailsLabel: i18nText('查看详情'),
             autoReload: !!(preset && preset.autoReload),
+            scopeUpdateTip,
+            scopeWaitTip,
+            scopeRetryTip,
+            scopeFamilyTip,
         };
     };
 
@@ -1436,26 +1493,51 @@
      */
     const scopeDriftKind = (code) => (code === 'deploy_reload_required' ? 'generation' : 'scope');
 
+    /**
+     * True only when the user has actually typed/chosen something we would destroy.
+     * NOTE: <select> has no `defaultValue` (undefined → "undefined" ≠ value), so the old
+     * naive compare reported every page carrying a select as "dirty" and blocked the single
+     * recovery attempt forever (audit: default theme demo, banner with zero form input).
+     */
+    const fieldHasUserInput = (field) => {
+        if (!field || field.disabled || field.readOnly) {
+            return false;
+        }
+        const tag = String(field.tagName || '').toLowerCase();
+        if (tag === 'select') {
+            const options = field.options ? Array.from(field.options) : [];
+            const initial = options.find((option) => option.defaultSelected) || options[0];
+            if (!initial) {
+                return false;
+            }
+
+            return String(field.value || '') !== String(initial.value || '');
+        }
+        const value = String(field.value || '');
+
+        return value !== '' && value !== String(field.defaultValue || '');
+    };
+
     const hasUnsavedUserInput = () => {
         try {
             const active = document && document.activeElement;
             if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(String(active.tagName || '').toUpperCase())) {
                 const type = String(active.getAttribute('type') || 'text').toLowerCase();
                 if (['text', 'search', 'email', 'tel', 'number', 'password', 'url', ''].includes(type)) {
-                    return true;
+                    // Focused but empty = nothing to lose; only real text blocks recovery.
+                    if (String(active.value || '').trim() !== '') {
+                        return true;
+                    }
                 }
             }
-            if (active && active.isContentEditable === true) {
+            if (active && active.isContentEditable === true && String(active.textContent || '').trim() !== '') {
                 return true;
             }
             const fields = document.querySelectorAll(
                 'textarea, select, input[type="text"], input[type="search"], input[type="email"], input[type="tel"], input[type="number"], input[type="password"], input[type="url"], input:not([type])'
             );
             for (const field of fields) {
-                if (!field || field.disabled || field.readOnly) {
-                    continue;
-                }
-                if (String(field.value || '') !== String(field.defaultValue || '')) {
+                if (fieldHasUserInput(field)) {
                     return true;
                 }
             }
@@ -1647,6 +1729,163 @@
             showScopeDriftTerminal(message, pageGenerationToken);
             return false;
         }
+    };
+
+    /**
+     * 范围更新提示自动执行的等待时长（进度条即倒计时）；到点自动刷新，不等用户。
+     */
+    const SCOPE_UPDATE_AUTO_APPLY_MS = 8000;
+    /**
+     * 自动更新冷却：刷新后若范围冲突仍在，禁止再次自动刷新（否则无限刷新循环），
+     * 冷却期内只给手动按钮。
+     */
+    const SCOPE_UPDATE_AUTO_APPLY_KEY = 'weline.api.scope_update_auto_at';
+    const SCOPE_UPDATE_AUTO_APPLY_COOLDOWN_MS = 60000;
+    /** 本文档内已自动更新过 → 不再自动（sessionStorage 不可写时的兜底）。 */
+    let scopeUpdateAutoAppliedInPage = false;
+    const canAutoApplyScopeUpdate = () => {
+        if (scopeUpdateAutoAppliedInPage) {
+            return false;
+        }
+        try {
+            const last = parseInt(window.sessionStorage.getItem(SCOPE_UPDATE_AUTO_APPLY_KEY) || '0', 10) || 0;
+            return last === 0 || (Date.now() - last) > SCOPE_UPDATE_AUTO_APPLY_COOLDOWN_MS;
+        } catch (_readError) {
+            return true;
+        }
+    };
+    const markScopeUpdateApplied = () => {
+        scopeUpdateAutoAppliedInPage = true;
+        try {
+            window.sessionStorage.setItem(SCOPE_UPDATE_AUTO_APPLY_KEY, String(Date.now()));
+        } catch (_writeError) {
+            // 写不进 sessionStorage 时由 scopeUpdateAutoAppliedInPage 兜底。
+        }
+    };
+
+    /**
+     * 用户点「更新到最新版本」或倒计时到点：丢掉乐观签章记忆后整页刷新，
+     * 让下一次请求按服务端最新范围重新解析。
+     */
+    const applyScopeUpdateNow = () => {
+        try {
+            forgetScopeStampKey();
+        } catch (_forgetError) {
+            // 记忆清理失败不阻断刷新。
+        }
+        try {
+            window.location.reload();
+        } catch (_reloadError) {
+            // 无法刷新时提示保留，用户可再次点击。
+        }
+    };
+
+    /** 等待态（首次签章）轻提示时长：无动作、无倒计时、不自动刷新。 */
+    const SCOPE_WAIT_TOAST_MS = 2800;
+    /** 重试态（签章失败）提示时长：保留可重试语义，不挂自动刷新倒计时。 */
+    const SCOPE_RETRY_TOAST_MS = 8000;
+    /**
+     * 范围 / 更新家族 toast 单例：同一时刻最多只留一条家族提示，新提示替换旧提示；
+     * 只收敛这一族，其它非范围 toast 仍可各自并发。
+     * 优先级：更新态（带倒计时/动作）> 重试态 > 等待态，低优先级不得顶掉高优先级。
+     */
+    const SCOPE_FAMILY_TOAST_ATTR = 'data-weline-scope-family';
+    const SCOPE_FAMILY_TOAST_PRIORITY = {
+        wait: 1,
+        retry: 2,
+        update: 3,
+    };
+    let scopeFamilyToastEntry = null;
+
+    const findScopeFamilyToastElement = (entry) => {
+        const element = entry && entry.handle && entry.handle.element ? entry.handle.element : null;
+        if (element) {
+            return element;
+        }
+        try {
+            return document ? document.querySelector('[' + SCOPE_FAMILY_TOAST_ATTR + '="1"]') : null;
+        } catch (_probeError) {
+            return null;
+        }
+    };
+
+    const isScopeFamilyToastAlive = (entry) => {
+        if (!entry) {
+            return false;
+        }
+        const element = findScopeFamilyToastElement(entry);
+        if (element) {
+            return element.isConnected !== false;
+        }
+        // 句柄与 DOM 标记都拿不到：无法确认存活，按已消失处理（宁可替换不可漏掉新提示）。
+        return false;
+    };
+
+    const dismissScopeFamilyToast = () => {
+        const previous = scopeFamilyToastEntry;
+        scopeFamilyToastEntry = null;
+        if (!previous) {
+            return;
+        }
+        try {
+            if (previous.handle && typeof previous.handle.close === 'function') {
+                previous.handle.close();
+            }
+        } catch (_closeError) {
+            // 关不掉就交给下面的 DOM 兜底移除。
+        }
+        try {
+            const element = findScopeFamilyToastElement(previous);
+            if (element && element.isConnected !== false && typeof element.remove === 'function') {
+                element.remove();
+            }
+        } catch (_removeError) {
+            // 提示收敛是展示层优化，失败不影响主流程。
+        }
+    };
+
+    /**
+     * 展示范围家族提示（单例）。
+     * @returns {'shown'|'blocked'|'failed'} blocked = 已有更高优先级的家族提示在展示。
+     */
+    const showScopeFamilyToast = (priority, render) => {
+        if (isScopeFamilyToastAlive(scopeFamilyToastEntry)
+            && Number(scopeFamilyToastEntry.priority || 0) > Number(priority || 0)) {
+            return 'blocked';
+        }
+        dismissScopeFamilyToast();
+        let handle = null;
+        try {
+            handle = render();
+        } catch (_renderError) {
+            console.error('[Weline.Api] scope family toast failed:', _renderError);
+            return 'failed';
+        }
+        const element = handle && handle.element ? handle.element : null;
+        if (element && typeof element.setAttribute === 'function') {
+            try {
+                element.setAttribute(SCOPE_FAMILY_TOAST_ATTR, '1');
+            } catch (_markError) {
+                // 标记失败只是失去 DOM 兜底，单例仍由句柄保证。
+            }
+        }
+        scopeFamilyToastEntry = { handle: handle || null, priority: Number(priority || 0) };
+        if (!element) {
+            // 组件没返回句柄：给刚渲染出的 .w-toast 打标记，供下一次替换时定位。
+            try {
+                const toasts = document
+                    ? document.querySelectorAll('.w-toast:not([' + SCOPE_FAMILY_TOAST_ATTR + '])')
+                    : [];
+                const latest = toasts.length > 0 ? toasts[toasts.length - 1] : null;
+                if (latest && typeof latest.setAttribute === 'function') {
+                    latest.setAttribute(SCOPE_FAMILY_TOAST_ATTR, '1');
+                }
+            } catch (_markDomError) {
+                // 同样只是兜底定位能力。
+            }
+        }
+        // 渲染调用没有抛错即视为已展示（自定义组件可能不返回句柄、也不产出 .w-toast）。
+        return 'shown';
     };
 
     const readErrorEnvelope = (error) => {
@@ -3191,22 +3430,41 @@
                     }
                     const message = resolveScopeBootstrapWaitingMessage();
                     let shown = false;
+                    let blocked = false;
                     try {
                         const Toast = this.resolveToastComponent();
-                        if (Toast && typeof Toast.info === 'function') {
-                            Toast.info(message, { duration: 2800 });
-                            shown = true;
-                        } else if (Toast && typeof Toast.show === 'function') {
-                            Toast.show(message, { type: 'info', tone: 'info', duration: 2800 });
-                            shown = true;
+                        if (Toast) {
+                            // 等待态同属范围家族：并入单例，低优先级（不顶掉更新态倒计时）。
+                            const outcome = showScopeFamilyToast(SCOPE_FAMILY_TOAST_PRIORITY.wait, () => {
+                                if (typeof Toast.info === 'function') {
+                                    return Toast.info(message, {
+                                        duration: SCOPE_WAIT_TOAST_MS,
+                                        tone: 'info',
+                                    });
+                                }
+                                if (typeof Toast.show === 'function') {
+                                    return Toast.show(message, {
+                                        type: 'info',
+                                        tone: 'info',
+                                        duration: SCOPE_WAIT_TOAST_MS,
+                                    });
+                                }
+
+                                return undefined;
+                            });
+                            shown = outcome === 'shown';
+                            blocked = outcome === 'blocked';
                         }
                     } catch (_toastError) {
                         /* tip is best-effort */
                     }
                     // Only fallback when no Toast API succeeded — do not re-probe Theme Notice
                     // DOM (Weline.UI.toast uses .w-toast; dual probe caused duplicate tips).
+                    // blocked = 已有更高优先级的范围提示（更新/重试）在展示，绝不再追加第二条。
                     if (!shown) {
-                        this.renderScopeWaitTip(message);
+                        if (!blocked) {
+                            this.renderScopeWaitTip(message);
+                        }
                     }
                 };
                 // Wait briefly for footer i18n-client bag → Weline.i18n.setDictionary.
@@ -3866,23 +4124,81 @@
             if (shouldDedupeDefaultErrorToast(presentation.code, message)) {
                 return;
             }
+            const isScopeFamily = presentation.scopeFamilyTip === true;
+            const isScopeUpdate = presentation.scopeUpdateTip === true;
+            const isScopeRetry = presentation.scopeRetryTip === true;
+            // 自动更新只允许一次（冷却期内不自动，避免「冲突→刷新→再冲突」无限循环）。
+            const scopeAutoApply = isScopeUpdate && canAutoApplyScopeUpdate();
+            // danger 只留给真错误：范围家族 = 更新 info / 失败 warning，任何情况都不是红条。
+            const scopeTone = isScopeRetry ? 'warning' : (isScopeFamily ? 'info' : 'danger');
             const toastOptions = {
                 title: presentation.title,
                 code: presentation.code,
                 details: presentation.details,
                 detailsLabel: presentation.detailsLabel,
-                duration: presentation.details ? 12000 : 5200,
-                tone: 'danger',
+                duration: isScopeFamily
+                    ? (
+                        isScopeUpdate
+                            ? (scopeAutoApply ? SCOPE_UPDATE_AUTO_APPLY_MS : 0)
+                            : (isScopeRetry ? SCOPE_RETRY_TOAST_MS : SCOPE_WAIT_TOAST_MS)
+                    )
+                    : (presentation.details ? 12000 : 5200),
+                tone: scopeTone,
             };
+            if (isScopeUpdate) {
+                // 范围更新不是报错：倒计时到点自动更新（进度条即倒计时），也可点按钮立刻更新。
+                toastOptions.actions = [
+                    {
+                        label: i18nText('更新到最新版本'),
+                        tone: 'primary',
+                        onClick: () => {
+                            markScopeUpdateApplied();
+                            applyScopeUpdateNow();
+                            return false;
+                        },
+                    },
+                ];
+                if (scopeAutoApply) {
+                    toastOptions.onTimeout = () => {
+                        markScopeUpdateApplied();
+                        applyScopeUpdateNow();
+                        return false;
+                    };
+                }
+            }
             try {
                 const Toast = this.resolveToastComponent();
                 if (Toast) {
+                    if (isScopeFamily) {
+                        // 范围家族单例：新提示替换同族旧提示；更高优先级（更新态倒计时）不被顶掉。
+                        const scopePriority = isScopeUpdate
+                            ? SCOPE_FAMILY_TOAST_PRIORITY.update
+                            : (isScopeRetry ? SCOPE_FAMILY_TOAST_PRIORITY.retry : SCOPE_FAMILY_TOAST_PRIORITY.wait);
+                        const toneMethod = scopeTone === 'danger' ? 'error' : scopeTone;
+                        const outcome = showScopeFamilyToast(scopePriority, () => {
+                            if (typeof Toast[toneMethod] === 'function') {
+                                return Toast[toneMethod](message, toastOptions);
+                            }
+                            if (typeof Toast.show === 'function') {
+                                return Toast.show(message, Object.assign({}, toastOptions, { tone: scopeTone }));
+                            }
+
+                            return undefined;
+                        });
+                        if (outcome === 'shown' || outcome === 'blocked') {
+                            // blocked：已有更高优先级的范围提示在展示，绝不再追加第二条。
+                            return;
+                        }
+                        // shown/render 都失败：范围家族退化到中性轻提示，绝不落 danger 红条。
+                        this.renderScopeWaitTip(message);
+                        return;
+                    }
                     if (typeof Toast.error === 'function') {
                         Toast.error(message, toastOptions);
                         return;
                     }
                     if (typeof Toast.show === 'function') {
-                        Toast.show(message, { ...toastOptions, tone: 'danger' });
+                        Toast.show(message, toastOptions);
                         return;
                     }
                 }
@@ -3895,7 +4211,12 @@
             } catch (toastError) {
                 console.error('[Weline.Api] showDefaultError failed:', toastError);
                 try {
-                    this.renderFallbackToast(message);
+                    // 范围家族即使降级也不得落 danger 红条：退回中性轻提示。
+                    if (isScopeFamily) {
+                        this.renderScopeWaitTip(message);
+                    } else {
+                        this.renderFallbackToast(message);
+                    }
                 } catch (fallbackError) {
                     console.error('[Weline.Api]', message, fallbackError);
                 }

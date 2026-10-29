@@ -96,7 +96,7 @@ final class PhpExtensionIniEnablerTest extends TestCase
             'ffi',
             static fn (): bool => true,
             ['ffi.enable=true'],
-            ['ini_files' => [], 'scan_dir' => $scan]
+            ['ini_files' => [], 'scan_dir' => $scan, 'builtin' => false]
         );
 
         $drop = $scan . '/weline-ffi.ini';
@@ -104,6 +104,44 @@ final class PhpExtensionIniEnablerTest extends TestCase
         self::assertFileExists($drop);
         $body = (string) file_get_contents($drop);
         self::assertStringContainsString('extension=ffi', $body);
+        self::assertStringContainsString('ffi.enable=true', $body);
+    }
+
+    public function testBuiltinExtensionSkipsLoadLineAndRemovesStaleDropIn(): void
+    {
+        $scan = $this->root . '/scan';
+        mkdir($scan, 0777, true);
+        // 旧版本写下的加载行（内置 ffi 时会刷 "Unable to load dynamic library"）
+        file_put_contents($scan . '/weline-ffi.ini', "extension=ffi\n");
+
+        $result = (new PhpExtensionIniEnabler())->enable(
+            'ffi',
+            static fn (): bool => true,
+            [],
+            ['ini_files' => [], 'scan_dir' => $scan, 'builtin' => true]
+        );
+
+        self::assertTrue($result['success']);
+        self::assertFileDoesNotExist($scan . '/weline-ffi.ini');
+    }
+
+    public function testBuiltinExtensionKeepsExtraDirectivesWithoutLoadLine(): void
+    {
+        $scan = $this->root . '/scan';
+        mkdir($scan, 0777, true);
+
+        $result = (new PhpExtensionIniEnabler())->enable(
+            'ffi',
+            static fn (): bool => true,
+            ['ffi.enable=true'],
+            ['ini_files' => [], 'scan_dir' => $scan, 'builtin' => true]
+        );
+
+        $drop = $scan . '/weline-ffi.ini';
+        self::assertTrue($result['success']);
+        self::assertFileExists($drop);
+        $body = (string) file_get_contents($drop);
+        self::assertStringNotContainsString('extension=ffi', $body);
         self::assertStringContainsString('ffi.enable=true', $body);
     }
 

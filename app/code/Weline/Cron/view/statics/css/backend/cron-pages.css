@@ -58,10 +58,10 @@
 .weline-cron-action-btn:hover { transform: translateY(-1px); }
 .weline-cron-empty { color: var(--backend-color-text-tertiary, var(--weline-theme-text-muted)); }
 .weline-cron-empty i { font-size: 4rem; margin-bottom: var(--backend-spacing-sm); }
-.weline-cron-empty p { margin: 0; font-size: 1rem; } .weline-cron-task__summary, .weline-cron-list-head__labels { display: grid; grid-template-columns: 56px minmax(0, 1.6fr) 120px 120px 150px; gap: var(--weline-space-2); align-items: center; width: 100%; }
+.weline-cron-empty p { margin: 0; font-size: 1rem; } .weline-cron-task__summary, .weline-cron-list-head__labels { display: grid; grid-template-columns: 56px minmax(0, 1.6fr) 120px 120px 150px 110px; gap: var(--weline-space-2); align-items: center; width: 100%; }
 .weline-cron-list-head { border: 0; background: transparent; }
 .weline-cron-list-head .weline-cron-list-head__labels { padding: var(--weline-space-2) var(--weline-space-4); }
-@media (max-width: 960px) { .weline-cron-task__summary, .weline-cron-list-head__labels { grid-template-columns: 48px minmax(0, 1fr); } .weline-cron-col-freq, .weline-cron-col-status, .weline-cron-col-time { grid-column: 2; } .weline-cron-list-head { display: none; } .weline-cron-task__bar { flex-direction: column; align-items: stretch; } }
+@media (max-width: 960px) { .weline-cron-task__summary, .weline-cron-list-head__labels { grid-template-columns: 48px minmax(0, 1fr); } .weline-cron-col-freq, .weline-cron-col-status, .weline-cron-col-time, .weline-cron-col-cpu { grid-column: 2; } .weline-cron-list-head { display: none; } .weline-cron-task__bar { flex-direction: column; align-items: stretch; } }
 .weline-cron-task__bar { display: flex; align-items: stretch; gap: var(--weline-space-2); background: var(--weline-theme-surface-muted); }
 .weline-cron-task__trigger { flex: 1 1 auto; min-width: 0; background: transparent; }
 .weline-cron-task__trigger:hover { background: var(--weline-theme-surface-hover); }

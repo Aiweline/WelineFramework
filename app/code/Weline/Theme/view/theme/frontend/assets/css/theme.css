@@ -480,6 +480,20 @@ input[disabled].btn {
     text-decoration: underline;
 }
 
+/* ========== Inverse surface 骨架绑定（HARD：反色面必须成对）==========
+ * `[data-surface="inverse"]` 在本文件只给子元素配了「浅墨」，从未配过「深底」；
+ * 骨架假定皮肤或组件 CSS 会补底。实测 /terms 页的
+ * `policy-document` 部件声明了 data-surface="inverse"（default.phtml:190）却没随包带
+ * widget-content-policy-document-default.css，导致 hero 区浅墨 rgb(203,213,225)
+ * 一路透到白色 MAIN 上，实测 1.48:1、h1 1.05:1（等同白底白字）。
+ * 骨架在这里兜底成对绑定：底色消费盘中既有叶子 --color-bg-dark(#232f3e)，
+ * 不新增色相、不改任何子元素墨色，组件自带 CSS 仍可用更高优先级覆盖。
+ */
+[data-surface="inverse"] {
+    background-color: var(--color-bg-dark);
+    color: var(--color-text-on-dark);
+}
+
 /* ========== Header language / currency triggers（inverse chrome，跟随主题浅色 Token） ==========
  * Unlayered `.w-button` defaults to `--weline-component-primary` fill; layered quiet
  * tone loses. Dark chrome must stay ghost (same rank as account/wishlist), not brand chips.
@@ -2983,6 +2997,18 @@ html[data-theme="dark"] .form-select { appearance: auto; -webkit-appearance: aut
 .w-surface-inverse dialog.w-dialog[data-language-request-modal] :is(p, li, small, span, label, h2),
 .w-surface-inverse .delivery-panel :is(p, li, small, span, strong, label, button:not(.w-button):not(.btn)) {
     color: inherit;
+}
+
+/* Logo wordmark inside the inverse belt: the belt mounts a light logo plate
+ * (`--weline-theme-surface`), so the broad `_inverse-muted` span rule above would paint
+ * #cbd5e1 on #ffffff (measured 1.48:1, gate is 4.5:1). Restore the brand ink the logo rules
+ * already declare in header-default.css. The value stays on the palette leaf
+ * `--weline-theme-primary`; never inherit here, because `--weline-theme-text` is re-bound to
+ * on-dark inside `.w-surface-inverse` and would resolve to #f7f4ef on the light plate
+ * (measured 1.09:1 on /search and /cart). */
+[data-surface="inverse"] .header-logo__link :is(p, li, small, span),
+.w-surface-inverse .header-logo__link :is(p, li, small, span) {
+    color: var(--weline-theme-primary, var(--weline-theme-text));
 }
 
 /* Theme UI buttons keep own on-primary / outline ink under paper remap. */

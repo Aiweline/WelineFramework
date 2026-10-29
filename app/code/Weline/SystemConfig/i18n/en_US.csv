@@ -76,11 +76,6 @@ warning,warning
 回滚配置失败，已恢复本次回滚前状态。%{1},"The configuration rollback failed and the state before this rollback has been restored. %{1}"
 "当前 system_config 表尚未升级，不能保存非全局 scope 配置。","The current system_config table has not been upgraded and non-global scope configuration cannot be saved."
 配置保存失败,"Failed to save configuration"
-管理,Manage
-没有这个字段,"Field not found"
-前往统一配置中心修改,"Open unified config center"
-可搜索多选标签；保存为逗号分隔值,"Searchable multi-select tags; saved comma-separated"
-素材目录,"Asset directory"
 沙盒,Sandbox
 生产,Production
 关闭为%{1}，开启为%{2},"Off is %{1}, on is %{2}"
@@ -90,6 +85,11 @@ warning,warning
 选择文件,"Choose file"
 "图片路径或 URL","Image path or URL"
 "文件路径或 URL","File path or URL"
+管理,Manage
+没有这个字段,"Field not found"
+前往统一配置中心修改,"Open unified config center"
+可搜索多选标签；保存为逗号分隔值,"Searchable multi-select tags; saved comma-separated"
+素材目录,"Asset directory"
 系统管理,"System Management"
 系统配置,"System Configuration"
 "按模块、区域与 Scope 管理全站配置项","Manage site-wide configuration by module, area, and scope"
