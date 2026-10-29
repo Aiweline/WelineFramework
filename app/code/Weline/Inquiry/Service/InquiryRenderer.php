@@ -45,7 +45,10 @@ final class InquiryRenderer implements InquiryRendererInterface
             $html .= '<button type="button" class="weline-inquiry__trigger" data-inquiry-open="' . $e($id) . '">' . $e(__('获取报价')) . '</button>';
         }
 
-        $html .= '<div class="weline-inquiry__modal"' . ($mode === 'inline' ? '' : ' hidden') . ' data-inquiry-modal><div class="weline-inquiry__backdrop" data-inquiry-close></div><div class="weline-inquiry__dialog" role="dialog" aria-modal="' . ($mode === 'inline' ? 'false' : 'true') . '"><button type="button" class="weline-inquiry__close" data-inquiry-close aria-label="' . $e(__('关闭')) . '">×</button><div class="weline-inquiry__body" data-inquiry-body aria-live="polite"></div></div></div>';
+        // 无障碍（2026-10-29）：role=dialog 必须有可访问名称，否则 Lighthouse a11y 判失败
+        // （实测 .weline-inquiry__dialog 无 aria-label/labelledby → 无障碍 96 而非 100）。
+        $dialogLabel = $e(__('咨询表单'));
+        $html .= '<div class="weline-inquiry__modal"' . ($mode === 'inline' ? '' : ' hidden') . ' data-inquiry-modal><div class="weline-inquiry__backdrop" data-inquiry-close></div><div class="weline-inquiry__dialog" role="dialog" aria-modal="' . ($mode === 'inline' ? 'false' : 'true') . '" aria-label="' . $dialogLabel . '"><button type="button" class="weline-inquiry__close" data-inquiry-close aria-label="' . $e(__('关闭')) . '">×</button><div class="weline-inquiry__body" data-inquiry-body aria-live="polite"></div></div></div>';
         $html .= $this->baseCss() . $this->css((string)($options['custom_css'] ?? '')) . $this->script($id, $code, $selector, (string)($options['custom_js'] ?? ''), $mode, $skin) . '</section>';
 
         return $html;
