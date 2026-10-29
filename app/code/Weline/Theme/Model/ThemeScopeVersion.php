@@ -27,6 +27,8 @@ use Weline\Theme\Service\ThemeScopeVersionService;
 #[Index(name: 'idx_theme_scope_version_published', columns: ['theme_id', 'scope', 'is_published'])]
 final class ThemeScopeVersion extends Model
 {
+    use \Weline\Theme\Model\Concern\LoadRequestMemoTrait;
+
     public const schema_table = 'theme_scope_version';
     public const schema_primary_key = 'version_id';
 
@@ -522,7 +524,15 @@ final class ThemeScopeVersion extends Model
     public function save_after(): void
     {
         parent::save_after();
+        // In-request row memos captured before this write must not be reused.
+        self::bumpLoadMemoGeneration();
         // 版本行写入即发布内容可能变化：推进主题代次，令跨 Worker L1 失效。
         ThemeScopeVersionService::bumpGeneration();
+    }
+
+    public function delete_after(): void
+    {
+        self::bumpLoadMemoGeneration();
+        parent::delete_after();
     }
 }

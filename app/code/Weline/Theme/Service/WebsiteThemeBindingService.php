@@ -13,6 +13,7 @@ use Weline\Theme\Api\DefaultThemeInterface;
 use Weline\Theme\Api\Version\ThemeApplicationReferenceReaderInterface;
 use Weline\Theme\Model\ThemeScopeVersion;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\Concern\ThemeApplicationRequestMemo;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
 use Weline\Websites\Api\Catalog\WebsiteCatalogInterface;
 use Weline\Websites\Api\Theme\ThemeApplicationInterface;
@@ -415,7 +416,7 @@ final class WebsiteThemeBindingService
         $storageScope = $this->scopes->toStorageScope($identity);
         $scopeKey = $identity->canonicalKey();
         $storeMode = $this->applicationStoreMode($identity);
-        $current = $this->applications->getOwn($scopeKey, $storeMode, 'frontend');
+        $current = ThemeApplicationRequestMemo::own($this->applications, $scopeKey, $storeMode, 'frontend');
 
         if ($themeId <= 0) {
             $themeId = $current['reference']?->themeId ?? 0;
@@ -481,6 +482,9 @@ final class WebsiteThemeBindingService
             $reference,
             $current['revision'],
         );
+        // Read-after-write in the same request must see the new binding, not the
+        // memo captured above (`$current`).
+        ThemeApplicationRequestMemo::bump();
     }
 
     /** @deprecated 版本选择已并入 bindThemeForWebsite */

@@ -11,6 +11,7 @@ use Weline\Framework\Runtime\ThemeApplicationContext;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Model\ThemeScopeVersion;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\Concern\ThemeApplicationRequestMemo;
 use Weline\Framework\Runtime\ProcessSharedInterface;
 
 /**
@@ -65,7 +66,8 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
                 $applications = ObjectManager::getInstance(
                     \Weline\Websites\Service\ThemeApplicationService::class
                 );
-                $record = $applications->getOwn(
+                $record = ThemeApplicationRequestMemo::own(
+                    $applications,
                     'website|' . $websiteId . '|' . $websiteCode . '||||v1',
                     ScopeIdentity::MODE_NORMAL,
                     'frontend',

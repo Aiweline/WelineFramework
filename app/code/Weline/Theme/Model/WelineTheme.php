@@ -18,6 +18,8 @@ use Weline\Framework\Setup\Db\Setup;
 #[Index(name: 'parent_id', columns: ['parent_id'])]
 class WelineTheme extends Model
 {
+    use \Weline\Theme\Model\Concern\LoadRequestMemoTrait;
+
     public string $module_name = '';
     public const cache_TIME = 604800;
     public const schema_table = 'weline_theme';
@@ -326,12 +328,20 @@ class WelineTheme extends Model
      */
     public function save_after()
     {
+        // Any in-request row memo captured before this write must not be reused.
+        self::bumpLoadMemoGeneration();
         if (!$this->getId()) {
             return;
         }
         $this->_cache->delete('theme');
         $this->_cache->delete('theme_frontend');
         $this->_cache->delete('theme_backend');
+    }
+
+    public function delete_after()
+    {
+        self::bumpLoadMemoGeneration();
+        parent::delete_after();
     }
 /**
      * 获取主题配置

@@ -37,6 +37,33 @@ class RequestContext
     private const STOREFRONT_ROUTE_PATH = 'runtime.request_context.storefront_route_path';
     private const LEGACY_STOREFRONT_ROUTE_PATH = 'route.storefront_path';
 
+    /** Max memo entries kept per request by {@see sharedSet()} (memory safety valve). */
+    private const SHARED_MEMO_MAX_ENTRIES = 8192;
+    /** Max bytes kept per request (safety valve against large config/theme JSON). */
+    private const SHARED_MEMO_MAX_BYTES = 8388608; // 8 MiB
+    /** A single value above this size is never memoised (256 KiB). */
+    private const SHARED_MEMO_MAX_VALUE_BYTES = 262144;
+    /** Max request memo scopes kept when cleanup did not run (worker crash safety). */
+    private const SHARED_MEMO_MAX_SCOPES = 8;
+
+    /** @var array<string, array<string, mixed>> requestId => shared memo (cross-Fiber) */
+    private static array $sharedMemo = [];
+
+    /** @var array<string, int> requestId => approximate bytes held */
+    private static array $sharedMemoBytes = [];
+
+    /** @var array<string, array<string, int>> requestId => counters */
+    private static array $sharedStats = [];
+
+    /** @var array<string, array<string, int>> requestId => generation counters */
+    private static array $sharedGeneration = [];
+
+    /** @var bool|null diagnostics/test override for the request-memo kill switch */
+    private static ?bool $sharedMemoEnabledOverride = null;
+
+    /** @var array<string, array{0:int,1:bool}> file switch cache: path => [unixtime, present] */
+    private static array $sharedMemoFileFlagCache = [];
+
     public static function init(): void
     {
         $context = self::ensureContext(true);
@@ -190,6 +217,318 @@ class RequestContext
         return $storage[$key] ?? $default;
     }
 
+    /**
+     * Request-scoped memo shared by every Fiber of the SAME logical request.
+     *
+     * `set()/get()` live in the current Context. WLS creates one Context per
+     * request Fiber, and a child Fiber spawned inside a request receives a copy
+     * of the parent Context, so Context-backed memos are not shared with it.
+     * This store is keyed by request id (which the copy keeps) and dropped by
+     * {@see cleanup()}, so request isolation is preserved while intra-request
+     * Context forks keep seeing the same memo.
+     *
+     * INVARIANTS (do not relax):
+     * - one scope per request id; request ids never repeat across requests;
+     * - `cleanup()` drops the scope; if a request dies without cleanup, at most
+     *   SHARED_MEMO_MAX_SCOPES scopes are kept (oldest dropped first);
+     * - overflow (entries / bytes / single value) drops the whole scope — losing
+     *   a memo is always semantically safe, it only costs one extra read;
+     * - values must be request-stable DB snapshots; keys must be dotted +
+     *   versioned and carry a generation bumped by every in-request write
+     *   (e.g. `theme.model.row.v1.{key}.g{generation}`), so read-after-write
+     *   stays live;
+     * - kill switch: `wls.request_memo.enabled=false` turns the store inert
+     *   without a code rollback (env / config).
+     *
+     * Use for request-stable DB snapshots (config rows, theme/version rows,
+     * cache namespace generations).
+     */
+    public static function shared(string $key, callable $builder): mixed
+    {
+        if (self::sharedHas($key)) {
+            return self::sharedGet($key);
+        }
+        $value = $builder();
+        self::sharedSet($key, $value);
+
+        return $value;
+    }
+
+    public static function sharedHas(string $key): bool
+    {
+        $requestId = self::sharedRequestId();
+        if ($requestId === null) {
+            return false;
+        }
+        $hit = \array_key_exists($key, self::$sharedMemo[$requestId] ?? []);
+        self::sharedCount($requestId, $hit ? 'hits' : 'misses');
+
+        return $hit;
+    }
+
+    public static function sharedGet(string $key, mixed $default = null): mixed
+    {
+        $requestId = self::sharedRequestId();
+        if ($requestId === null) {
+            return $default;
+        }
+        $memo = self::$sharedMemo[$requestId] ?? [];
+
+        return \array_key_exists($key, $memo) ? $memo[$key] : $default;
+    }
+
+    public static function sharedSet(string $key, mixed $value): void
+    {
+        $requestId = self::sharedRequestId();
+        if ($requestId === null) {
+            return;
+        }
+        $size = self::sharedValueSize($value);
+        if ($size > self::SHARED_MEMO_MAX_VALUE_BYTES) {
+            // A single oversized value must never be pinned in request memory.
+            self::sharedCount($requestId, 'single_value_too_large');
+
+            return;
+        }
+        $bytes = (self::$sharedMemoBytes[$requestId] ?? 0) + $size;
+        if ($bytes > self::SHARED_MEMO_MAX_BYTES || \count(self::$sharedMemo[$requestId] ?? []) >= self::SHARED_MEMO_MAX_ENTRIES) {
+            // Safety valve: a runaway key/value space must not grow a worker's
+            // request memory without bound. Dropping the memo is always safe.
+            unset(self::$sharedMemo[$requestId], self::$sharedMemoBytes[$requestId]);
+            self::sharedCount($requestId, 'overflow_drop');
+
+            return;
+        }
+        self::$sharedMemo[$requestId][$key] = $value;
+        self::$sharedMemoBytes[$requestId] = $bytes;
+        self::sharedCount($requestId, 'sets');
+        self::pruneSharedMemoScopes($requestId);
+    }
+
+    public static function sharedRemove(string $key): void
+    {
+        $requestId = self::sharedRequestId();
+        if ($requestId === null) {
+            return;
+        }
+        if (isset(self::$sharedMemo[$requestId][$key])) {
+            $size = self::sharedValueSize(self::$sharedMemo[$requestId][$key]);
+            self::$sharedMemoBytes[$requestId] = \max(0, (self::$sharedMemoBytes[$requestId] ?? 0) - $size);
+        }
+        unset(self::$sharedMemo[$requestId][$key]);
+    }
+
+    /**
+     * Current value of a request-scoped generation counter (0 when absent).
+     *
+     * Writers bump the counter; every memo key includes it, so a write
+     * invalidates all reader memos captured before it in the same request.
+     */
+    public static function sharedGeneration(string $generationKey): int
+    {
+        $requestId = self::sharedRequestId();
+        if ($requestId === null) {
+            return 0;
+        }
+
+        return (int)(self::$sharedGeneration[$requestId][$generationKey] ?? 0);
+    }
+
+    /** Bump a request-scoped generation counter; returns the new value. */
+    public static function sharedBumpGeneration(string $generationKey): int
+    {
+        $requestId = self::sharedRequestId();
+        if ($requestId === null) {
+            return 0;
+        }
+        $next = self::sharedGeneration($generationKey) + 1;
+        self::$sharedGeneration[$requestId][$generationKey] = $next;
+        self::pruneSharedMemoScopes($requestId);
+
+        return $next;
+    }
+
+    /** Drop every shared memo of the current request (request cleanup). */
+    public static function sharedClear(): void
+    {
+        $requestId = self::sharedRequestId();
+        if ($requestId === null) {
+            return;
+        }
+        self::logSharedMemoStats($requestId);
+        unset(
+            self::$sharedMemo[$requestId],
+            self::$sharedGeneration[$requestId],
+            self::$sharedMemoBytes[$requestId],
+            self::$sharedStats[$requestId],
+        );
+    }
+
+    /**
+     * Per-request memo counters (hits/misses/sets/overflow/…, bytes held).
+     *
+     * Low-frequency observability: logged from {@see sharedClear()} when
+     * `wls.request_memo.stats_log` is enabled; also readable from diagnostics.
+     *
+     * @return array<string, int>
+     */
+    public static function sharedMemoStats(?string $requestId = null): array
+    {
+        $requestId ??= self::sharedRequestId();
+        if ($requestId === null) {
+            return [];
+        }
+
+        return (self::$sharedStats[$requestId] ?? []) + [
+            'bytes' => (int)(self::$sharedMemoBytes[$requestId] ?? 0),
+            'entries' => \count(self::$sharedMemo[$requestId] ?? []),
+        ];
+    }
+
+    /** Master switch + stats switch: LIVE file switches (no reload/compile needed). */
+    public static function sharedMemoEnabled(): bool
+    {
+        if (self::$sharedMemoEnabledOverride !== null) {
+            return self::$sharedMemoEnabledOverride;
+        }
+        // File kill switch: `touch generated/framework/request_memo.disabled`
+        // makes the memo inert within ~1s in long-running WLS workers, without
+        // reload/compile. The env flag below still works but needs a worker
+        // restart (env is loaded at process start), so it is the secondary path.
+        if (self::sharedMemoFileFlag('request_memo.disabled', 0) === true) {
+            return false;
+        }
+        try {
+            return (bool)\Weline\Framework\App\Env::get('wls.request_memo.enabled', true);
+        } catch (\Throwable) {
+            return true;
+        }
+    }
+
+    /**
+     * File switch reader with a per-second cache (cheap: one is_file per second).
+     *
+     * @param string $relativePath relative to `BP . 'generated/framework/'`
+     * @param int $default 0 = absent is false, 1 = absent is true
+     */
+    private static function sharedMemoFileFlag(string $relativePath, int $default): bool
+    {
+        $now = \time();
+        $cached = self::$sharedMemoFileFlagCache[$relativePath] ?? null;
+        if (\is_array($cached) && (int)($cached[0] ?? 0) === $now) {
+            return (bool)($cached[1] ?? $default);
+        }
+        $present = \defined('BP')
+            && \is_string(BP)
+            && BP !== ''
+            && \is_file(\rtrim(BP, '/\\') . '/generated/framework/' . $relativePath);
+        self::$sharedMemoFileFlagCache[$relativePath] = [$now, $present];
+
+        return $present;
+    }
+
+    /** Stats logging: env flag OR live file `generated/framework/request_memo.stats`. */
+    private static function sharedMemoStatsLogEnabled(): bool
+    {
+        if (self::sharedMemoFileFlag('request_memo.stats', 0) === true) {
+            return true;
+        }
+        try {
+            return (bool)\Weline\Framework\App\Env::get('wls.request_memo.stats_log', false);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Diagnostics / tests only: force the memo on or off at runtime.
+     *
+     * Production kill switch is the env flag (`wls.request_memo.enabled=false`);
+     * this hook exists so the switch itself is testable without rewriting env.
+     */
+    public static function overrideSharedMemoEnabled(?bool $enabled): void
+    {
+        self::$sharedMemoEnabledOverride = $enabled;
+        self::$sharedMemoFileFlagCache = [];
+    }
+
+    private static function sharedRequestId(): ?string
+    {
+        if (!self::sharedMemoEnabled()) {
+            return null;
+        }
+        $requestId = self::getId();
+        if (!\is_string($requestId) || $requestId === '') {
+            return null;
+        }
+
+        return $requestId;
+    }
+
+    private static function sharedCount(string $requestId, string $counter): void
+    {
+        self::$sharedStats[$requestId][$counter] = (int)(self::$sharedStats[$requestId][$counter] ?? 0) + 1;
+    }
+
+    private static function sharedValueSize(mixed $value): int
+    {
+        if (\is_string($value)) {
+            return \strlen($value);
+        }
+        try {
+            return \strlen((string)\serialize($value));
+        } catch (\Throwable) {
+            // Non-serializable value (closure/resource): treat as oversized.
+            return self::SHARED_MEMO_MAX_VALUE_BYTES + 1;
+        }
+    }
+
+    private static function logSharedMemoStats(string $requestId): void
+    {
+        $stats = self::$sharedStats[$requestId] ?? [];
+        if ($stats === []) {
+            return;
+        }
+        try {
+            if (!self::sharedMemoStatsLogEnabled()) {
+                return;
+            }
+            $line = '[request-memo] ' . \json_encode($stats + [
+                'bytes' => (int)(self::$sharedMemoBytes[$requestId] ?? 0),
+                'entries' => \count(self::$sharedMemo[$requestId] ?? []),
+            ], JSON_UNESCAPED_SLASHES);
+            if (\function_exists('w_log')) {
+                \w_log($line);
+            } else {
+                \error_log($line);
+            }
+        } catch (\Throwable) {
+            // Observability must never break request cleanup.
+        }
+    }
+
+    /** Keep at most SHARED_MEMO_MAX_SCOPES request scopes (crash without cleanup). */
+    private static function pruneSharedMemoScopes(string $currentRequestId): void
+    {
+        if (\count(self::$sharedMemo) <= self::SHARED_MEMO_MAX_SCOPES) {
+            return;
+        }
+        foreach (\array_keys(self::$sharedMemo) as $requestId) {
+            if ($requestId === $currentRequestId) {
+                continue;
+            }
+            unset(
+                self::$sharedMemo[$requestId],
+                self::$sharedGeneration[$requestId],
+                self::$sharedMemoBytes[$requestId],
+                self::$sharedStats[$requestId],
+            );
+            if (\count(self::$sharedMemo) <= self::SHARED_MEMO_MAX_SCOPES) {
+                return;
+            }
+        }
+    }
+
     public static function has(string $key): bool
     {
         $context = Context::getCurrent();
@@ -310,6 +649,7 @@ class RequestContext
         if ($context === null) {
             return;
         }
+        self::sharedClear();
 
         $failures = [];
         $callbacks = (array)$context->get(self::CLEANUP_PATH, []);

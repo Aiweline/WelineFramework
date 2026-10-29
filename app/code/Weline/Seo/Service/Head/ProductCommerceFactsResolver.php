@@ -6,11 +6,11 @@ namespace Weline\Seo\Service\Head;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Service\Merchant\MerchantInfoConfigResolver;
-use Weline\Shipping\Model\ServiceRegion;
 use Weline\Shipping\Model\ShippingCommercePolicy;
 use Weline\Shipping\Model\ShippingService;
 use Weline\Shipping\Service\ShippingCommercePolicyService;
 use Weline\Shipping\Service\ShippingProfileResolver;
+use Weline\Shipping\Service\ShippingServiceBatchLoader;
 
 final class ProductCommerceFactsResolver
 {
@@ -246,81 +246,14 @@ final class ProductCommerceFactsResolver
                 $currency = 'CNY';
             }
 
-            $details = [];
-            foreach ($serviceIds as $serviceId) {
-                /** @var ShippingService $serviceModel */
-                $serviceModel = ObjectManager::getInstance(ShippingService::class, [], false);
-                $items = $serviceModel->reset()
-                    ->where(ShippingService::schema_fields_ID, (int)$serviceId)
-                    ->where(ShippingService::schema_fields_IS_ACTIVE, 1)
-                    ->select()
-                    ->fetch()
-                    ->getItems();
-                $service = is_array($items) ? ($items[0] ?? null) : null;
-                if (!$service instanceof ShippingService) {
-                    continue;
-                }
-
-                /** @var ServiceRegion $regionModel */
-                $regionModel = ObjectManager::getInstance(ServiceRegion::class, [], false);
-                $regions = $regionModel->reset()
-                    ->where(ServiceRegion::schema_fields_SERVICE_ID, (int)$serviceId)
-                    ->where(ServiceRegion::schema_fields_IS_ACTIVE, 1)
-                    ->select()
-                    ->fetch()
-                    ->getItems();
-                $codes = [];
-                foreach (is_array($regions) ? $regions : [] as $region) {
-                    if (!$region instanceof ServiceRegion) {
-                        continue;
-                    }
-                    $code = strtoupper(trim((string)$region->getData(ServiceRegion::schema_fields_COUNTRY_CODE)));
-                    if ($code !== '') {
-                        $codes[$code] = true;
-                    }
-                }
-                if ($codes === []) {
-                    continue;
-                }
-                $addressCountry = count($codes) === 1 ? array_key_first($codes) : array_values(array_keys($codes));
-
-                $detail = [
-                    '@type' => 'OfferShippingDetails',
-                    'shippingDestination' => [
-                        '@type' => 'DefinedRegion',
-                        'addressCountry' => $addressCountry,
-                    ],
-                ];
-
-                $min = max(0, (int)$service->getData(ShippingService::schema_fields_ESTIMATED_DAYS_MIN));
-                $max = max(0, (int)$service->getData(ShippingService::schema_fields_ESTIMATED_DAYS_MAX));
-                if ($max > 0) {
-                    if ($min > $max) {
-                        [$min, $max] = [$max, $min];
-                    }
-                    $detail['deliveryTime'] = [
-                        '@type' => 'ShippingDeliveryTime',
-                        'handlingTime' => [
-                            '@type' => 'QuantitativeValue',
-                            'minValue' => 0,
-                            'maxValue' => 1,
-                            'unitCode' => 'DAY',
-                        ],
-                        'transitTime' => [
-                            '@type' => 'QuantitativeValue',
-                            'minValue' => $min,
-                            'maxValue' => $max,
-                            'unitCode' => 'DAY',
-                        ],
-                    ];
-                }
-                $detail['shippingRate'] = [
-                    '@type' => 'MonetaryAmount',
-                    'value' => 0,
-                    'currency' => $currency,
-                ];
-                $details[] = $detail;
-            }
+            /** @var ShippingServiceBatchLoader $batch */
+            $batch = ObjectManager::getInstance(ShippingServiceBatchLoader::class);
+            $details = $this->buildShippingDetails(
+                $serviceIds,
+                $batch->loadActiveServices($serviceIds),
+                $batch->loadActiveRegionCountryCodes($serviceIds),
+                $currency,
+            );
 
             if ($details === []) {
                 return null;
@@ -347,6 +280,80 @@ final class ProductCommerceFactsResolver
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Pure OfferShippingDetails assembly from already resolved rows.
+     *
+     * Kept free of I/O so the batched path can be compared byte for byte with
+     * the per-service queries it replaced (see
+     * ProductCommerceFactsResolverShippingDetailsTest).
+     *
+     * @param list<int> $serviceIds requested order, preserved in the output
+     * @param array<int, ShippingService> $services active services keyed by service_id
+     * @param array<int, list<string>> $regionCountryCodes upper-cased country codes keyed by service_id
+     * @return list<array<string, mixed>>
+     */
+    private function buildShippingDetails(
+        array $serviceIds,
+        array $services,
+        array $regionCountryCodes,
+        string $currency,
+    ): array {
+        $details = [];
+        foreach ($serviceIds as $serviceId) {
+            $service = $services[(int)$serviceId] ?? null;
+            if (!$service instanceof ShippingService) {
+                continue;
+            }
+            $codes = $regionCountryCodes[(int)$serviceId] ?? [];
+            if ($codes === []) {
+                continue;
+            }
+            // $codes is a list of country codes (ShippingServiceBatchLoader returns
+            // array_keys()), so the single-lane scalar is the first *value*, not the
+            // first key: array_key_first() would yield the int 0 here.
+            $addressCountry = count($codes) === 1 ? reset($codes) : array_values($codes);
+
+            $detail = [
+                '@type' => 'OfferShippingDetails',
+                'shippingDestination' => [
+                    '@type' => 'DefinedRegion',
+                    'addressCountry' => $addressCountry,
+                ],
+            ];
+
+            $min = max(0, (int)$service->getData(ShippingService::schema_fields_ESTIMATED_DAYS_MIN));
+            $max = max(0, (int)$service->getData(ShippingService::schema_fields_ESTIMATED_DAYS_MAX));
+            if ($max > 0) {
+                if ($min > $max) {
+                    [$min, $max] = [$max, $min];
+                }
+                $detail['deliveryTime'] = [
+                    '@type' => 'ShippingDeliveryTime',
+                    'handlingTime' => [
+                        '@type' => 'QuantitativeValue',
+                        'minValue' => 0,
+                        'maxValue' => 1,
+                        'unitCode' => 'DAY',
+                    ],
+                    'transitTime' => [
+                        '@type' => 'QuantitativeValue',
+                        'minValue' => $min,
+                        'maxValue' => $max,
+                        'unitCode' => 'DAY',
+                    ],
+                ];
+            }
+            $detail['shippingRate'] = [
+                '@type' => 'MonetaryAmount',
+                'value' => 0,
+                'currency' => $currency,
+            ];
+            $details[] = $detail;
+        }
+
+        return $details;
     }
 
     /**

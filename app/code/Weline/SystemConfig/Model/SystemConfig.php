@@ -29,6 +29,9 @@ class SystemConfig extends \Weline\Framework\Database\Model
 {
     private const CACHE_HIT_FLAG = '__system_config_cache_hit';
 
+    /** Request-memo sentinel for a concluded "no row" resolution (negative cache). */
+    private const RESOLVED_ROW_MISS = '__system_config_resolved_row_miss__';
+
     public const SCOPE_GLOBAL = 'default.default.default';
     public const LOCALE_DEFAULT = 'default';
 
@@ -187,19 +190,55 @@ class SystemConfig extends \Weline\Framework\Database\Model
             && (($marker['source'] ?? '') === 'db' || ($marker['complete'] ?? false) === true);
     }
 
+    /**
+     * Mutation generation carrier.
+     *
+     * Web requests use the request-shared carrier ({@see RequestContext::sharedGeneration()})
+     * so a write performed on one Fiber of the request is visible to every other
+     * Fiber copy of the Context (Context-local state is per Fiber). CLI / tests
+     * have no request id, so they keep the Context-local carrier unchanged.
+     */
     private function mutationGeneration(): int
     {
+        if ($this->hasRequestIdentity()) {
+            return max(0, RequestContext::sharedGeneration(self::MUTATION_GENERATION_KEY));
+        }
+
         return max(0, (int)RequestContext::get(self::MUTATION_GENERATION_KEY, 0));
     }
 
     /**
      * Any write in this request invalidates the authority of snapshots loaded
      * before it. The next read either rebuilds from the database or falls back
-     * to the exact-row reader.
+     * to the exact-row reader. Single-value read memos embed this generation in
+     * their key ({@see buildRequestCacheKey()}), so they are dropped as well.
      */
     private function bumpMutationGeneration(): void
     {
+        if ($this->hasRequestIdentity()) {
+            RequestContext::sharedBumpGeneration(self::MUTATION_GENERATION_KEY);
+
+            return;
+        }
         RequestContext::set(self::MUTATION_GENERATION_KEY, $this->mutationGeneration() + 1);
+    }
+
+    private function hasRequestIdentity(): bool
+    {
+        $requestId = RequestContext::getRequestId();
+
+        return \is_string($requestId) && $requestId !== '';
+    }
+
+    /**
+     * C2 kill switch coverage: single-value request memos must go inert when the
+     * framework request-memo switch is off (`generated/framework/request_memo.disabled`
+     * or `wls.request_memo.enabled=false`). Reads then fall through to the
+     * authoritative row loaders instead of serving a memo captured earlier.
+     */
+    private function requestMemoEnabled(): bool
+    {
+        return RequestContext::sharedMemoEnabled();
     }
 
     private function rememberExactBatchSource(string $requestCacheKey, string $source): void
@@ -598,13 +637,27 @@ class SystemConfig extends \Weline\Framework\Database\Model
         ?string $scope = null,
         ?string $locale = null
     ): ?array {
-        return $this->loadExactConfigRow(
-            $key,
-            $module,
-            $area,
-            $this->normalizeScope($scope),
-            $this->normalizeLocale($locale)
-        );
+        $scope = $this->normalizeScope($scope);
+        $locale = $this->normalizeLocale($locale);
+        // Request memo (positive AND negative) — scope resolvers probe the same
+        // exact rows repeatedly per request. Generation keeps read-after-write.
+        $memoEnabled = $this->requestMemoEnabled();
+        $requestCacheKey = $this->buildRequestCacheKey('scoped_row', $module, $area, $key, $scope, $locale);
+        if ($memoEnabled && RequestContext::isInitialized() && RequestContext::has($requestCacheKey)) {
+            $cached = RequestContext::get($requestCacheKey);
+            if ($cached === self::RESOLVED_ROW_MISS) {
+                return null;
+            }
+
+            return \is_array($cached) ? $cached : null;
+        }
+
+        $row = $this->loadExactConfigRow($key, $module, $area, $scope, $locale);
+        if ($memoEnabled && RequestContext::isInitialized()) {
+            RequestContext::set($requestCacheKey, $row ?? self::RESOLVED_ROW_MISS);
+        }
+
+        return $row;
     }
 
     /**
@@ -1252,6 +1305,36 @@ class SystemConfig extends \Weline\Framework\Database\Model
      */
     private function loadResolvedConfigRow(string $key, string $module, string $area, string $scope, string $locale): ?array
     {
+        // Request memo (positive AND negative): a single storefront request reads
+        // the same merchant/SEO keys several times; the module snapshot does not
+        // cover them when it misses the whole fallback chain, and every repeat used
+        // to re-probe scope×locale pairs with one SQL each. The mutation generation
+        // in the key makes any in-request write (setConfig/saveScopeConfig/…) fall
+        // through to a fresh read, so read-after-write keeps its semantics.
+        $memoEnabled = $this->requestMemoEnabled();
+        $requestCacheKey = $this->buildRequestCacheKey('resolved_row', $module, $area, $key, $scope, $locale);
+        if ($memoEnabled && RequestContext::isInitialized() && RequestContext::has($requestCacheKey)) {
+            $cached = RequestContext::get($requestCacheKey);
+            if ($cached === self::RESOLVED_ROW_MISS) {
+                return null;
+            }
+
+            return \is_array($cached) ? $cached : null;
+        }
+
+        $result = $this->resolveConfigRowUncached($key, $module, $area, $scope, $locale);
+        if ($memoEnabled && RequestContext::isInitialized()) {
+            RequestContext::set($requestCacheKey, $result ?? self::RESOLVED_ROW_MISS);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function resolveConfigRowUncached(string $key, string $module, string $area, string $scope, string $locale): ?array
+    {
         $rows = $this->getConfigByModule($module, $area, $scope, $locale) ?? [];
         foreach ($rows as $row) {
             if (!\is_array($row)) {
@@ -1359,7 +1442,8 @@ class SystemConfig extends \Weline\Framework\Database\Model
             return ['rows' => [], 'source' => 'db'];
         }
 
-        $requestCacheKey = $this->buildBatchRequestCacheKey('module_exact_rows_batch', $module, $area, $scopes, $locales);
+        $requestCacheKey = $this->buildBatchRequestCacheKey('module_exact_rows_batch', $module, $area, $scopes, $locales)
+            . ':g' . $this->mutationGeneration();
         if (RequestContext::has($requestCacheKey)) {
             $cached = RequestContext::get($requestCacheKey);
 
@@ -2204,6 +2288,11 @@ class SystemConfig extends \Weline\Framework\Database\Model
     ): string {
         $vector = ObjectManager::getInstance(ScopeConfigCacheInvalidator::class)->versionVectorFor($scope);
 
+        // Single-value read memos must stop matching after an in-request write
+        // (read-after-write); module snapshots keep their explicit generation
+        // marker (markModuleSnapshot) so absence authority stays unchanged.
+        $generationScoped = \in_array($type, ['resolved', 'resolved_row', 'scoped_row'], true);
+
         return implode(':', array_filter([
             'system_config',
             $type,
@@ -2213,6 +2302,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
             $scope,
             $locale,
             $vector,
+            $generationScoped ? 'g' . $this->mutationGeneration() : null,
         ], static fn(?string $value): bool => $value !== null && $value !== ''));
     }
 

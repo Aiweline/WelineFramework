@@ -60,16 +60,83 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
     /**
      * Resolve every unique ancestor in one first-access batch query.
      *
+     * Request memo: the same namespace vector (e.g. storefront theme + phrase +
+     * cache pools) is resolved dozens of times per render; every repeat used to
+     * re-enter the snapshot resolver and, on a snapshot miss, issue another
+     * `namespace_hash IN (...)` read. The memo is request-scoped
+     * ({@see RequestContext::shared()}) and its key embeds a generation bumped by
+     * every local mutation below, so read-after-bump stays live.
+     *
      * @param list<string> $namespaces
      * @return array{authority_clock:int,generations:array<string,int>}
      */
     public function resolveVector(array $namespaces): array
     {
         $ancestors = $this->path->expandAncestors($namespaces);
-        return $this->snapshot->resolve(
+        $memoKey = self::requestVectorMemoKey($ancestors);
+        if (RequestContext::sharedHas($memoKey)) {
+            /** @var array{authority_clock:int,generations:array<string,int>} $cached */
+            $cached = RequestContext::sharedGet($memoKey);
+
+            return $cached;
+        }
+
+        $vector = $this->snapshot->resolve(
             $ancestors,
             fn(array $requested): array => $this->readGenerationValues($requested)
         );
+        RequestContext::sharedSet($memoKey, $vector);
+
+        return $vector;
+    }
+
+    /**
+     * Fallback counter for CLI / tests (no request id). Web requests use the
+     * request-shared generation so every Fiber of the SAME request sees the same
+     * invalidation point; a process-static counter would also invalidate other
+     * concurrent requests' memos (correct but noisy) and does not match the
+     * documented request scope.
+     */
+    private static int $processVectorMemoGeneration = 0;
+
+    private const REQUEST_VECTOR_MEMO_GENERATION_KEY = 'framework.cache.namespace.vector.generation';
+
+    private static function requestVectorMemoGeneration(): int
+    {
+        if (self::hasRequestIdentity()) {
+            return RequestContext::sharedGeneration(self::REQUEST_VECTOR_MEMO_GENERATION_KEY);
+        }
+
+        return self::$processVectorMemoGeneration;
+    }
+
+    private static function hasRequestIdentity(): bool
+    {
+        $requestId = RequestContext::getRequestId();
+
+        return \is_string($requestId) && $requestId !== '';
+    }
+
+    /** @param list<string> $ancestors */
+    private static function requestVectorMemoKey(array $ancestors): string
+    {
+        $sorted = $ancestors;
+        \sort($sorted, SORT_STRING);
+
+        return 'framework.cache.namespace.vector.v1.'
+            . \substr(\hash('sha256', \implode("\0", $sorted)), 0, 32)
+            . '.g' . self::requestVectorMemoGeneration();
+    }
+
+    /** Invalidate request vector memos captured before this write/bump. */
+    private static function bumpRequestVectorMemo(): void
+    {
+        if (self::hasRequestIdentity()) {
+            RequestContext::sharedBumpGeneration(self::REQUEST_VECTOR_MEMO_GENERATION_KEY);
+
+            return;
+        }
+        self::$processVectorMemoGeneration++;
     }
 
     /**
@@ -128,6 +195,7 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
     /** Ensure the reserved authority row exists with a positive initial value. */
     public function ensureAuthorityClock(): int
     {
+        self::bumpRequestVectorMemo();
         $stored = $this->readStoredRows([NamespacePath::AUTHORITY_CLOCK]);
         $current = (int)($stored[NamespacePath::AUTHORITY_CLOCK] ?? 0);
         if ($current > 0) {
@@ -174,6 +242,7 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
      */
     public function reconcileProcessSnapshot(): array
     {
+        self::bumpRequestVectorMemo();
         $this->ensureAuthorityClock();
         $known = $this->snapshot->knownNamespaces();
         $requested = \array_values(\array_unique(\array_merge(
@@ -200,6 +269,7 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
      */
     public function applyAuthorityChanges(int $authorityClock, array $changes): array
     {
+        self::bumpRequestVectorMemo();
         if ($authorityClock <= 0) {
             throw new \InvalidArgumentException(__('命名空间权威时钟必须为正数'));
         }
@@ -249,6 +319,7 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
      */
     public function bumpMany(array $namespaces, array $committedCallbacks = []): array
     {
+        self::bumpRequestVectorMemo();
         $canonical = $this->path->canonicalizeMany($namespaces);
         $connection = $this->generationModel->getConnection();
         $transactions = $this->transactionCoordinator();
@@ -315,6 +386,7 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
 
     public function clearSnapshot(): void
     {
+        self::bumpRequestVectorMemo();
         $this->snapshot->clear();
     }
 
@@ -358,6 +430,7 @@ final class NamespaceGenerationRepository implements NamespaceGenerationInterfac
      */
     public function forgetExact(array $namespaces): int
     {
+        self::bumpRequestVectorMemo();
         $canonical = [];
         foreach ($namespaces as $namespace) {
             if (!\is_string($namespace) || \trim($namespace) === '') {

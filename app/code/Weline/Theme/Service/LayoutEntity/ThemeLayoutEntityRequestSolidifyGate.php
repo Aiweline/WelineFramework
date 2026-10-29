@@ -283,6 +283,16 @@ final class ThemeLayoutEntityRequestSolidifyGate
 
     public function expectedInjectionFingerprint(): string
     {
+        // Consumer-side request memo. `DefaultInjectionPlanRepository` lives in
+        // Weline_Widget (outside this change's scope) and re-reads
+        // widget_registry_entry per call; the gate asks for this fingerprint from
+        // every layout evaluation of a request. Durable fix belongs in the Widget
+        // repository (add a request memo there); here we only stop repeating the
+        // same read inside one request.
+        $memoKey = 'theme.layout_entity.injection_fingerprint.v1.frontend';
+        if (RequestContext::has($memoKey)) {
+            return (string)RequestContext::get($memoKey, '');
+        }
         try {
             $declarations = $this->injectionPlans->listDeclarations('frontend');
         } catch (\Throwable) {
@@ -328,7 +338,10 @@ final class ThemeLayoutEntityRequestSolidifyGate
             $b['layout_type'] . '|' . $b['code'] . '|' . $b['slot'],
         ));
 
-        return hash('sha256', json_encode($relevant, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+        $fingerprint = hash('sha256', json_encode($relevant, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+        RequestContext::set($memoKey, $fingerprint);
+
+        return $fingerprint;
     }
 
     private function hasDerivedPage(
@@ -475,6 +488,25 @@ final class ThemeLayoutEntityRequestSolidifyGate
             $payload = (string)($decision['reason'] ?? 'unknown');
         }
         Env::log('theme/request_solidify_decision', $payload);
+    }
+
+    /**
+     * Pending budget: how long a slot may stay queued before the gate stops forbidding
+     * shared FPC. Without it `forbid()` never lifts on a stuck queue → whole storefront
+     * permanently no-store/BYPASS (the 2026-10-30 contract-breach case).
+     *
+     * 1800s default: > lease TTL 300s (so stale leases are not mistaken for a deadline),
+     * ≈12x one measured full bake (140s), 2x the 900s circuit cooldown.
+     */
+    private static function pendingMaxSeconds(): int
+    {
+        try {
+            $configured = (int)(Env::get('theme.layout_entity.solidify_pending_max_seconds', 1800) ?: 1800);
+        } catch (\Throwable) {
+            $configured = 1800;
+        }
+
+        return max(60, $configured);
     }
 
     private static function evaluateRequestKey(        int $themeId,

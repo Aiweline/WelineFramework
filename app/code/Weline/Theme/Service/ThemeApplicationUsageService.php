@@ -9,6 +9,7 @@ use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Service\BackendThemeApplicationService;
 use Weline\Theme\Api\DefaultThemeInterface;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\Concern\ThemeApplicationRequestMemo;
 use Weline\Websites\Api\Theme\ThemeApplicationRepositoryInterface;
 use Weline\Websites\Model\Website;
 
@@ -282,7 +283,9 @@ final class ThemeApplicationUsageService
     private function listOwnApplicationDetailRows(string $area): array
     {
         $out = [];
-        foreach ($this->applications->listForArea(ScopeIdentity::MODE_NORMAL, $area) as $row) {
+        foreach (
+            ThemeApplicationRequestMemo::listForArea($this->applications, ScopeIdentity::MODE_NORMAL, $area) as $row
+        ) {
             $reference = $row['reference'];
             $scopeKey = $row['scope_key'];
             if ($reference === null || $scopeKey === '') {
