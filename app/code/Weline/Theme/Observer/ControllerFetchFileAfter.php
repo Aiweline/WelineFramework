@@ -828,7 +828,24 @@ HTML;
     <script src="{$runtimeScriptUrlEsc}"></script>
     <script src="{$businessScriptUrlEsc}"></script>
     <script src="{$welineScriptUrlEsc}"></script>
-    <script type="module" src="{$uiScriptUrlEsc}"></script>
+    <!-- 2026-10-29 性能（marker: theme-ui-kit-after-load-v1）：UI kit（weline-ui.js，实测 181KB
+         未压缩）延后到 window.load 之后再加载。它是交互组件库（弹窗/菜单/购物车抽屉），首屏渲染
+         不需要；模块自身对 document.readyState 有兜底（已就绪会立即 start），延后不会丢失初始化。
+         收益：首屏主线程少解析执行 ~181KB，PSI TBT / 主线程工作显著下降。 -->
+    <script>
+    (function () {
+        var u = "{$uiScriptUrlEsc}";
+        function loadUiKit() {
+            var s = document.createElement('script');
+            s.type = 'module';
+            s.src = u;
+            s.async = true;
+            (document.head || document.documentElement).appendChild(s);
+        }
+        if (document.readyState === 'complete') { loadUiKit(); }
+        else { window.addEventListener('load', loadUiKit, { once: true }); }
+    })();
+    </script>
 HTML;
     }
 

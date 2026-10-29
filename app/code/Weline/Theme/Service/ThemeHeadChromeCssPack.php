@@ -516,9 +516,11 @@ final class ThemeHeadChromeCssPack
         $this->markPackEmitted($area, $pack);
         // fetchpriority=low（2026-10-29 LCP 优化）：storefront/overlay 是非阻塞装饰性主包（几十~267KB），
         // 默认 preload 优先级与首屏 LCP 图同为 High，在 4G 下会把带宽从图上抢走（实测 LCP 2.7s）。
-        // 首屏骨架由 layout-critical + 内联 tokens 兜住（CLS 实测 0），故让位给图安全。
-        // 可用 $options['preload_priority'] 覆盖（例如 'auto' 回到旧行为）。
-        $priority = (string)($options['preload_priority'] ?? 'low');
+        // 首屏骨架由 layout-critical + 内联 tokens 兜住；'low' 会把批量 CSS 推后 ~几百 ms，
+        // 高负载/慢网下反而造成「先裸后变」的 CLS（实测 CLS 0.22 vs 0.02）。
+        // 2026-10-29 A/B：默认回 'auto'（与 LCP 图同为 High，但 CF 已缓存这些包，RTT 很低）。
+        // 可用 $options['preload_priority'] 覆盖（'low' 可显式降级）。
+        $priority = (string)($options['preload_priority'] ?? 'auto');
         $priorityAttr = ($priority !== '' && $priority !== 'auto')
             ? ' fetchpriority="' . htmlspecialchars($priority, ENT_QUOTES) . '"'
             : '';
