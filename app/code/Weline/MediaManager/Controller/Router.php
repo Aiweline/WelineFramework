@@ -17,13 +17,16 @@ class Router implements RouterInterface
         if (!\w_env('is_media', false)) {
             return;
         }
-        $pathLower = strtolower(ltrim($path, '/'));
+        $normalized = ltrim($path, '/');
+        $pathLower = strtolower($normalized);
         if (str_starts_with($pathLower, 'media/image/')) {
-            $file = preg_replace('#^media/image/#i', '', $pathLower);
+            // 文件系统大小写敏感：小写副本只用于前缀判断，取 file 必须用原始路径，
+            // 否则 catalog/XRYDLLbeKI.webp 这类混合大小写文件名会被改成小写而 404。
+            $file = (string)substr($normalized, \strlen('media/image/'));
             $rule['file'] = self::resolveRasterFallback(urldecode($file));
             $path = '/media/image/index';
         } elseif (str_starts_with($pathLower, 'media/file/')) {
-            $file = preg_replace('#^media/file/#i', '', $pathLower);
+            $file = (string)substr($normalized, \strlen('media/file/'));
             $rule['file'] = self::resolveRasterFallback(urldecode($file));
             $path = '/media/file/index';
         }
