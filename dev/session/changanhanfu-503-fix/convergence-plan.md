@@ -141,6 +141,14 @@ ManagedNginxService.php                    31a34fc4…   （B；同一 Edge/Gate
 4. **solidify drain 终态**：`bake 成功但判据仍真` 无终态 → 应 `moveToFailed('solidify_unfulfilled:<reason>')` + 3 次 circuit。
 5. **CapacityAdviceNotifier 在 DB 池耗尽时自激**（`max_size=24/in_use=24/leases=59`）：池饱和时应跳过通知；`exception.log` 已限流（实测 0 B/s 增长），立项不急救。
 
+## 待同步（本地领先生产，按本地为准）
+
+| 文件 | 生产 md5 | 本地 md5 | 差异 | 动作 |
+|---|---|---|---|---|
+| `Server/Service/Edge/Nginx/ManagedNginxService.php` | `31a34fc4c79a720de8f3135d009995b3`（6425 行） | `f6e6d9dfe88bab476c83a8abd501b417`（6427 行） | 仅 B2 诊断日志级别 `w_log_error` → `w_log_warning`（arch2 建议：容忍性决策不该污染 error 告警） | 下次静默窗口与 reload 验收同一次 scp + compile 落地 |
+
+> 判定口径：这是「待同步」不是「未知分叉」；md5 对账时按 `本地 = 生产 + 一次待发布` 处理。行为无差异，不影响当前线上正确性。
+
 ## 未验证清单（不计入已完成）
 
 | 项 | 原因 | 下一步 |
