@@ -48862,7 +48862,47 @@ CDEF,
     /**
      * @return array{contents:string,status:array<string|int,mixed>}
      */
+    /**
+     * 有界重试读取：状态文件（lease / 凭据 ledger / manifest）会被 Master 的原子重写真出
+     * 「读到一半内容变了」的瞬时态；一次判死会让子进程误判为真失效而自治退出，
+     * 进而触发更多重写 → 自杀回声。这里对瞬时态重试 3 次（3×50ms），
+     * 真损坏/真撤销仍会在最后一次抛出（判据不变）。
+     */
     private function readStableRegularFileWithStatus(
+        string $path,
+        int $maximumBytes,
+        string $label,
+        bool $allowEmpty = false,
+    ): array {
+        $attempts = 0;
+        while (true) {
+            ++$attempts;
+            try {
+                return $this->readStableRegularFileWithStatusOnce(
+                    $path,
+                    $maximumBytes,
+                    $label,
+                    $allowEmpty,
+                );
+            } catch (\RuntimeException $transient) {
+                $message = $transient->getMessage();
+                $retryable = \str_contains($message, ' changed before reading.')
+                    || \str_contains($message, ' changed while being read.');
+                if (!$retryable || $attempts >= 3) {
+                    throw $transient;
+                }
+                \Weline\Server\Log\WlsLogger::warning_(
+                    'stable read retry tolerated: label=' . $label
+                    . ' attempt=' . $attempts
+                    . ' reason=' . $message
+                );
+                \usleep(50_000);
+            }
+        }
+    }
+
+    /** @return array{contents:string,status:array<string,mixed>} */
+    private function readStableRegularFileWithStatusOnce(
         string $path,
         int $maximumBytes,
         string $label,
