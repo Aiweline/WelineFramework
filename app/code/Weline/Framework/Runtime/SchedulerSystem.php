@@ -578,10 +578,16 @@ class SchedulerSystem
             return;
         }
         if (self::$cooperateEnabled === null) {
-            try {
-                self::$cooperateEnabled = (bool)\Weline\Framework\App\Env::get('wls.render.cooperate.enabled', true);
-            } catch (\Throwable) {
-                self::$cooperateEnabled = true;
+            // 运维/测试开关优先级：进程环境变量 > env.php 配置 > 默认开。
+            $envFlag = \getenv('WLS_RENDER_COOPERATE');
+            if (\is_string($envFlag) && $envFlag !== '') {
+                self::$cooperateEnabled = \in_array(\strtolower($envFlag), ['1', 'true', 'on', 'yes'], true);
+            } else {
+                try {
+                    self::$cooperateEnabled = (bool)\Weline\Framework\App\Env::get('wls.render.cooperate.enabled', true);
+                } catch (\Throwable) {
+                    self::$cooperateEnabled = true;
+                }
             }
         }
         if (self::$cooperateEnabled !== true) {
