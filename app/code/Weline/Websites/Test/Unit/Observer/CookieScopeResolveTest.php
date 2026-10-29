@@ -81,7 +81,12 @@ final class CookieScopeResolveTest extends TestCase
 
         self::assertSame('/aisite_accept_ok', CookieScope::resolvePath('/'));
         self::assertSame('WELINE_SESSID_w257', CookieScope::qualifyName('WELINE_SESSID'));
-        self::assertSame('WELINE_SESSID_9502_w257', SessionCookieNameResolver::resolve('shop.test:9502'));
+        // Storefront (route.area=frontend) resolves the customer jar family, then
+        // CookieScope appends the website suffix; keep the base name from the constant.
+        self::assertSame(
+            SessionCookieNameResolver::CUSTOMER_NAME . '_9502_w257',
+            SessionCookieNameResolver::resolve('shop.test:9502'),
+        );
         self::assertTrue(CookieScope::shouldExpireUnscopedAliases());
     }
 
@@ -90,7 +95,10 @@ final class CookieScopeResolveTest extends TestCase
         $this->enterRequest(251, 'https://shop.test/');
 
         self::assertSame('/', CookieScope::resolvePath('/'));
-        self::assertSame('WELINE_SESSID_w251', SessionCookieNameResolver::resolve('shop.test'));
+        self::assertSame(
+            SessionCookieNameResolver::CUSTOMER_NAME . '_w251',
+            SessionCookieNameResolver::resolve('shop.test'),
+        );
     }
 
     public function testRootWebsiteWithEmptyConfiguredUrlStillQualifiesFromRequestHost(): void
@@ -99,7 +107,10 @@ final class CookieScopeResolveTest extends TestCase
 
         self::assertSame('/', CookieScope::resolvePath('/'));
         self::assertSame('WELINE_SESSID_w0', CookieScope::qualifyName('WELINE_SESSID'));
-        self::assertSame('WELINE_SESSID_9555_w0', SessionCookieNameResolver::resolve('shop.test:9555'));
+        self::assertSame(
+            SessionCookieNameResolver::CUSTOMER_NAME . '_9555_w0',
+            SessionCookieNameResolver::resolve('shop.test:9555'),
+        );
         self::assertTrue(CookieScope::shouldExpireUnscopedAliases());
     }
 

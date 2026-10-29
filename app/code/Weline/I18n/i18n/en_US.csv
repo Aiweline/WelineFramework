@@ -294,13 +294,6 @@ language,language
 这个语种没有开通。当前页面用本站默认语显示。请选一个已开通的语种。,"This language is not available. This page is shown in the site default language. Choose an available language."
 这个货币没有开通。当前页面用本站默认货币显示。请选一个已开通的货币。,"This currency is not available. Prices on this page use the site default currency. Choose an available currency."
 货币,Currency
-一键加入,"Join with one click"
-暂无可加入的申请语言,"There is currently no application language to add."
-正在加载语言申请…,"Loading language application..."
-可将已就绪语言加入当前站点。,"Ready languages ​​can be added to the current site."
-当前没有可加入的申请语言。,"There are currently no application languages ​​to add."
-正在加入站点语言…,"Adding site language..."
-站点语言已加入,"Site language has been added"
 用户申请语言,"User application language"
 保存网站后即可查看用户申请并加入语言。,"After saving the website, you can view user applications and add languages."
 仅显示已安装、已启用且语言包可运行的申请语言。,"Only application languages ​​that are installed, enabled, and have language packs running are displayed."
@@ -309,6 +302,13 @@ language,language
 国家/地区,Country/Region
 申请数,"Number of applications"
 操作,Operation
+一键加入,"Join with one click"
+暂无可加入的申请语言,"There is currently no application language to add."
+正在加载语言申请…,"Loading language application..."
+可将已就绪语言加入当前站点。,"Ready languages ​​can be added to the current site."
+当前没有可加入的申请语言。,"There are currently no application languages ​​to add."
+正在加入站点语言…,"Adding site language..."
+站点语言已加入,"Site language has been added"
 已支持,"Already supported"
 拖动排序,拖动排序
 清空选择,"Clear selection"

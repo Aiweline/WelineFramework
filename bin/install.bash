@@ -769,11 +769,12 @@ get_php_configure_flags_for_extensions() {
       gd)
         # 只编 --enable-gd 时 GD 没有 jpeg/webp codec：imagecreatefromjpeg() 变成未定义函数，
         # /media/image 缩略图直接 500。webp 需要 libwebp 头文件，缺头时只保留 jpeg。
-        local gd_flags="--enable-gd --with-jpeg"
+        # 必须一行一个 configure 参数：调用方按行收集，多参数写成一行会被当成单个 feature name。
+        echo "--enable-gd"
+        echo "--with-jpeg"
         if [[ -f /usr/include/webp/encode.h || -f /usr/local/include/webp/encode.h ]]; then
-          gd_flags="$gd_flags --with-webp"
+          echo "--with-webp"
         fi
-        echo "$gd_flags"
         ;;
       iconv)      echo "--with-iconv" ;;
       intl)       echo "--enable-intl" ;;
@@ -1350,7 +1351,15 @@ install_php() {
   fi
   echo "Installing PHP $PHP_VERSION from php-src into $dest ..."
   install_php_system_deps || return 1
-  install_php_from_source "$dest" || return 1
+  # 编译失败必须把旧 PHP 放回去：`|| return 1` 会绕过 ERR trap，
+  # 否则 extend/server/php 会一直是空目录，线上站点直接失去 PHP。
+  if ! install_php_from_source "$dest"; then
+    if [[ -n "${php_rebuild_backup:-}" ]] && [[ -d "$php_rebuild_backup" ]]; then
+      trap - ERR
+      restore_php_rebuild_backup "$dest" "$php_rebuild_backup"
+    fi
+    return 1
+  fi
   configure_wls_php_ini "$dest"
   local php_new=""
   [[ -x "$dest/bin/php" ]] && php_new="$dest/bin/php"

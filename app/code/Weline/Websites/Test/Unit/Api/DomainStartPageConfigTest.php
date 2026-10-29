@@ -13,7 +13,7 @@ final class DomainStartPageConfigTest extends TestCase
     {
         self::assertSame(
             DomainStartPageConfig::key('local-demo.test.weline.com'),
-            DomainStartPageConfig::key('https://LOCAL-DEMO.WELINE.TEST:9502/')
+            DomainStartPageConfig::key('https://LOCAL-DEMO.TEST.WELINE.COM:9502/')
         );
     }
 

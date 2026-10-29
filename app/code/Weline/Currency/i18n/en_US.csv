@@ -258,11 +258,11 @@ API返回数据格式错误,"API return data format error"
 "无法获取新基准货币的汇率: %{1}","Unable to get exchange rate for new base currency: %{1}"
 新基准货币的汇率无效，无法重新计算,"New base currency exchange rate is invalid, cannot recalculate"
 货币汇率无效,"Currency exchange rate is invalid"
-收起悬浮,"Collapse float"
-展开悬浮,"Expand float"
 "当前基准货币为 %{1}。","The current base currency is %{1}."
 汇率来源模式：%{1}。,"Exchange-rate mode: %{1}."
 符号：%{1},"Symbol: %{1}"
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
 确认,确认
 "缺少 data-provider / data-operation","缺少 data-provider / data-operation"
 删除成功,删除成功

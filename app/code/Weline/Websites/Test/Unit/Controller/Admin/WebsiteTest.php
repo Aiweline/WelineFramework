@@ -100,19 +100,56 @@ class WebsiteTest extends TestCore
 
     public function testWebsiteSaveCatchRethrowsResponseTerminateException(): void
     {
+        // add/edit 的 try 内只做数据变更，错误页走 catch；成功页 finishWebsiteMutation 必须在
+        // Throwable catch 之外执行，redirect 抛出的 ResponseTerminateException 才不会被吞掉。
         foreach (['add', 'edit'] as $method) {
             $methodCode = $this->getMethodSource(Website::class, $method);
-            $this->assertMatchesRegularExpression(
-                '/catch\s*\(\s*\\\\Throwable\s+\$e\s*\)\s*\{[\s\S]*?\}\s*[\s\S]*?\$this->redirect\(\'component\/backend\/offcanvas\/getSuccess/m',
-                $methodCode,
+            $catchStart = strpos($methodCode, 'catch (\\Throwable');
+            $this->assertNotFalse($catchStart, $method . ' must catch Throwable for mutation errors');
+
+            $catchEnd = $this->findCatchBlockEnd($methodCode, $catchStart);
+            $successCallPos = strrpos($methodCode, '$this->finishWebsiteMutation(');
+            $this->assertNotFalse($successCallPos, $method . ' must finish the mutation through finishWebsiteMutation()');
+            $this->assertGreaterThan(
+                $catchEnd,
+                $successCallPos,
                 $method . ' must redirect to offcanvas success outside the Throwable catch block',
             );
-            $this->assertDoesNotMatchRegularExpression(
-                '/try\s*\{[\s\S]*?\$this->redirect\(\'component\/backend\/offcanvas\/getSuccess[\s\S]*?\}\s*catch\s*\(\s*\\\\Throwable/m',
-                $methodCode,
-                $method . ' must not call success redirect inside the same try that catches Throwable',
+
+            $successCall = substr($methodCode, $successCallPos, 300);
+            $this->assertMatchesRegularExpression(
+                '/false,\s*\n\s*\);/',
+                $successCall,
+                $method . ' must pass isError=false on the success finish call',
             );
+            $this->assertStringNotContainsString('component/backend/offcanvas/getSuccess', $methodCode);
         }
+
+        $finishCode = $this->getMethodSource(Website::class, 'finishWebsiteMutation');
+        $this->assertStringContainsString('component/backend/offcanvas/getSuccess', $finishCode);
+        $this->assertStringNotContainsString('catch (\\Throwable', $finishCode);
+    }
+
+    private function findCatchBlockEnd(string $source, int $catchStart): int
+    {
+        $braceStart = strpos($source, '{', $catchStart);
+        $this->assertNotFalse($braceStart, 'catch block must open a brace');
+
+        $depth = 0;
+        for ($i = $braceStart, $length = strlen($source); $i < $length; $i++) {
+            if ($source[$i] === '{') {
+                $depth++;
+                continue;
+            }
+            if ($source[$i] === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    return $i;
+                }
+            }
+        }
+
+        $this->fail('catch block must close its brace');
     }
 
     public function testAddRejectsNonPositivePersistedWebsiteId(): void
@@ -146,18 +183,20 @@ class WebsiteTest extends TestCore
 
         $templateContent = file_get_contents($templatePath);
 
-        $this->assertStringContainsString("{{target_button_text|''}}", $templateContent);
-        $this->assertStringContainsString("{{title|''}}", $templateContent);
-        $this->assertStringContainsString("{{submit_button_text|'保存'}}", $templateContent);
+        $this->assertStringContainsString("\$target_button_text ?? ''", $templateContent);
+        $this->assertStringContainsString("\$submit_button_text ?? '保存'", $templateContent);
+        $this->assertStringContainsString("\$flush_button_text ?? '刷新'", $templateContent);
+        $this->assertStringContainsString("\$close_button_text ?? __('关闭')", $templateContent);
+        $this->assertStringContainsString("\$drawerTitle !== '' ? \$drawerTitle : __('抽屉内容')", $templateContent);
     }
 
     public function testOffCanvasBlockSetsDefaultValues(): void
     {
         $reflection = new \ReflectionClass(\Weline\Component\Block\OffCanvas::class);
 
-        $this->assertTrue($reflection->hasConstant('default_data'));
+        $this->assertTrue($reflection->hasConstant('DEFAULT_DATA'));
 
-        $defaultData = $reflection->getConstant('default_data');
+        $defaultData = $reflection->getConstant('DEFAULT_DATA');
         $this->assertIsArray($defaultData);
         $this->assertArrayHasKey('target-button-text', $defaultData);
         $this->assertArrayHasKey('submit-button-text', $defaultData);
@@ -196,7 +235,11 @@ class WebsiteTest extends TestCore
         $templateContent = file_get_contents($templatePath);
 
         $this->assertStringContainsString('method="get"', $templateContent);
-        $this->assertStringContainsString('website-admin-list', $templateContent);
+        $this->assertStringContainsString('data-testid="website-admin-filter-form"', $templateContent);
+        $this->assertStringContainsString("name=\"search\"", $templateContent);
+        $this->assertStringContainsString('*/admin/website/index', $templateContent);
+        // 搜索走普通 GET 提交且不携带 page 参数 → 总是回到第一页。
+        $this->assertStringNotContainsString('name="page"', $templateContent);
         $this->assertStringNotContainsString('window.location.assign', $templateContent);
         $this->assertStringNotContainsString('fetch(ajaxUrl', $templateContent);
         $this->assertStringNotContainsString('X-Requested-With', $templateContent);

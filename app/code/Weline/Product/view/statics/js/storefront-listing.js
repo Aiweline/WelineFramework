@@ -168,7 +168,16 @@
     function softSyncUrl(root, state) {
         try {
             var path = root.getAttribute('data-listing-path') || global.location.pathname;
-            var params = new URLSearchParams();
+            // Keep inbound params (utm_*, gclid, w_fpc_pierce, …); only rewrite the ones this panel owns.
+            var params = new URLSearchParams(global.location.search || '');
+            ['price', 'sort', 'page'].forEach(function (code) {
+                params.delete(code);
+            });
+            Array.from(params.keys()).forEach(function (code) {
+                if (code.indexOf('af_') === 0) {
+                    params.delete(code);
+                }
+            });
             if (state.price) {
                 params.set('price', state.price);
             }

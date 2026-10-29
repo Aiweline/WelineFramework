@@ -1421,39 +1421,6 @@ lock,lock
 要删除的渠道不存在,"The channel to be deleted does not exist"
 请先保存网站，再配置本站联系地址/电话/服务时间。,"Save the website first, then configure this site's contact address/phone/hours."
 "本组写入当前网站范围；未覆盖的字段继承 Global 默认。","This group writes to current website scope; uncovered fields inherit Global defaults."
-网站子路径不允许使用语言编码,"Website sub-paths do not allow the use of language codes."
-网站子路径不允许使用货币编码,"Website sub-paths do not allow the use of currency codes."
-子路径首段为保留字，请更换。,"The first segment of the subpath is a reserved word, please change it."
-子路径格式无效。,"The subpath format is invalid."
-正式,Normal
-开发,Development
-测试,Test
-活动,Active
-墓碑,Tombstone
-"业务范围 (Scope)",Scope
-如：catalog,"For example: catalog"
-用于标识站点的业务来源，留空表示通用站点。由系统自动设置。,"Used to identify the business source of the site; leave blank for a general site. Set automatically by the system."
-无特殊类型,无特殊类型
-首页入口路由,"Homepage entry route"
-继承全局首页配置,"Inherit global homepage configuration"
-选择后，此站点访问根路径时会进入该前台路由；为空则继承全局开始路由。,"When selected, this site's root path enters this frontend route; leave empty to inherit the global start route."
-"Store 与 SalesChannel 只读目录","Read-only Store and SalesChannel directory"
-启用,Enable
-停用,Disabled
-"SalesChannel 列表","SalesChannel list"
-点击选择货币（可多选）,"Click to select currencies (multiple selection allowed)"
-点击选择货币,"Click to select a currency"
-搜索货币代码、名称或符号,"Search currency code, name or symbol"
-拖动排序,"Drag to reorder"
-清空选择,"Clear selection"
-点击选择时区,"Click to select timezone"
-"名称 / UA / 说明","Name / UA / notes"
-放行,Release
-拦截,Intercept
-无匹配条目,"No matching entries"
-"第 {page}/{pages} 页 · 共 {total} 条","Page {page}/{pages} · {total} items total"
-请先保存后再配置联系信息。,"Please save before configuring contact info."
-"继承上级 / 无特殊类型","继承上级 / 无特殊类型"
 请先保存渠道，再配置本渠道联系信息。,"Save the channel first, then configure channel contact info."
 "本组写入当前渠道范围；未覆盖时继承 Store → Website → Global。","This group writes to current channel scope; when uncovered inherits Store → Website → Global."
 请先保存商店，再配置本店联系信息。,"Save the store first, then configure store contact info."
@@ -1498,6 +1465,27 @@ lock,lock
 点击选择时区，可输入关键词搜索,"Click to select a timezone; type keywords to search"
 "保存会清理本站缓存与 CDN；非关键改动请勿点保存。","Saving clears this site's cache and CDN; do not save unless you changed critical settings."
 返回,Back
+网站子路径不允许使用语言编码,"Website sub-paths do not allow the use of language codes."
+网站子路径不允许使用货币编码,"Website sub-paths do not allow the use of currency codes."
+子路径首段为保留字，请更换。,"The first segment of the subpath is a reserved word, please change it."
+子路径格式无效。,"The subpath format is invalid."
+正式,Normal
+开发,Development
+测试,Test
+活动,Active
+墓碑,Tombstone
+"业务范围 (Scope)",Scope
+如：catalog,"For example: catalog"
+用于标识站点的业务来源，留空表示通用站点。由系统自动设置。,"Used to identify the business source of the site; leave blank for a general site. Set automatically by the system."
+无特殊类型,无特殊类型
+首页入口路由,"Homepage entry route"
+继承全局首页配置,"Inherit global homepage configuration"
+选择后，此站点访问根路径时会进入该前台路由；为空则继承全局开始路由。,"When selected, this site's root path enters this frontend route; leave empty to inherit the global start route."
+"Store 与 SalesChannel 只读目录","Read-only Store and SalesChannel directory"
+启用,Enable
+停用,Disabled
+"SalesChannel 列表","SalesChannel list"
+点击选择时区,"Click to select timezone"
 "爬虫拦截 / 放行","Crawler block / allow"
 "由本网站自行管理爬虫策略。每条可选择拦截或放行；命中即拒绝本次请求，不额外封 IP。保存后同步到 WLS 对应域名。","This website manages crawler policy itself. Each rule may block or allow; a hit rejects the request without extra IP ban. After save, sync to the matching WLS domain."
 启用本站爬虫策略,"Enable site crawler policy"
@@ -1510,6 +1498,11 @@ lock,lock
 "UA 正则","UA regex"
 动作,Action
 说明,Description
+"名称 / UA / 说明","Name / UA / notes"
+放行,Release
+拦截,Intercept
+无匹配条目,"No matching entries"
+"第 {page}/{pages} 页 · 共 {total} 条","Page {page}/{pages} · {total} items total"
 当前账号无权编辑该节点,"Current account cannot edit this node"
 请从左侧选择网站、商店或渠道,"Select website, store or channel on the left"
 "Store 商品复制向导","Store Product Copy Wizard"
@@ -1947,6 +1940,7 @@ Windows,Windows
 流转记录,"Transfer Records"
 站点联系信息,"Site contact info"
 "修改即时保存到当前范围；留空可继承上级（Global → Website → Store → Channel）。","Edits save immediately to current scope; blank may inherit parent (Global → Website → Store → Channel)."
+请先保存后再配置联系信息。,"Please save before configuring contact info."
 网站功能授权,"Website function authorization"
 返回网站管理,"Return to website management"
 "为非默认网站勾选可用菜单与 ACL。未授权的子站后台菜单为空。","Check the available menus and ACLs for non-default websites. The backend menu of unauthorized subsites is empty."
@@ -2265,6 +2259,7 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 请选择网站,"Please select a website"
 展示类型,展示类型
 "空表示继承上级；仅影响店面产品展示过滤，与拆单/tob 车无关。","空表示继承上级；仅影响店面产品展示过滤，与拆单/tob 车无关。"
+"继承上级 / 无特殊类型","继承上级 / 无特殊类型"
 返回列表,"Return to list"
 "所属商店 ID","Store ID."
 "可选；须与父店铺同 Origin，且为店铺入口路径的严格延伸。","可选；须与父店铺同 Origin，且为店铺入口路径的严格延伸。"
@@ -3374,6 +3369,11 @@ Weline（本地）,"Weline (local)"
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","Processing completed: %d illegal records"
+点击选择货币（可多选）,"Click to select currencies (multiple selection allowed)"
+点击选择货币,"Click to select a currency"
+搜索货币代码、名称或符号,"Search currency code, name or symbol"
+拖动排序,"Drag to reorder"
+清空选择,"Clear selection"
 "HTTP/HTTPS(不校验证书) 探测连通性；证书摘要来自证书管理表（列表 hover）","HTTP/HTTPS (no certificate verification) Detect connectivity; the certificate summary comes from the certificate management table (list hover)"
 本地测试域名解析到了非回环地址，已阻止启动。,"The local test domain name resolves to a non-loopback address and is blocked from starting."
 "站点运维（DNS 切换 + 健康检查 + NS/HTTPS）","Site Operations (DNS Switching + Health Check + NS/HTTPS)"

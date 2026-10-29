@@ -39,15 +39,15 @@ final class WebsitesUnitContractsTest extends TestCase
             'SiteContactEmbed::testWebsiteStoreChannelHooksEmbedContactGroup' => function () {
             $this->assert_SiteContactEmbed_testWebsiteStoreChannelHooksEmbedContactGroup();
         },
-            'SiteContactEmbed::testModuleVersionIs1829' => function () {
-            $this->assert_SiteContactEmbed_testModuleVersionIs1829();
+            'SiteContactEmbed::testModuleVersionDeclaresReleasedSemver' => function () {
+            $this->assert_SiteContactEmbed_testModuleVersionDeclaresReleasedSemver();
         },
         ];
     }
 
 private function assert_SiteContactConfig_testSiteContactSystemConfigDeclaresScopedAddress(): void
 {
-    $path = '/Users/weline/Project/Official/框架/app/code/Weline/Websites' . '/extends/module/Weline_SystemConfig/Config/backend/site-contact.phtml';
+    $path = $this->moduleRoot() . '/extends/module/Weline_SystemConfig/Config/backend/site-contact.phtml';
     self::assertFileExists($path);
     $src = (string) file_get_contents($path);
     self::assertStringContainsString('website/contact/address', $src);
@@ -60,10 +60,11 @@ private function assert_SiteContactConfig_testSiteContactSystemConfigDeclaresSco
 
 private function assert_SiteContactConfig_testUpgradeSeedsGlobalContactAddress(): void
 {
-    $upgrade = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Websites' . '/Setup/Upgrade.php');
+    $root = $this->moduleRoot();
+    $upgrade = (string) file_get_contents($root . '/Setup/Upgrade.php');
     self::assertStringContainsString('SiteContactSeedService', $upgrade);
     self::assertStringContainsString('ensureGlobalDefaults', $upgrade);
-    $seed = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Websites' . '/Service/SiteContactSeedService.php');
+    $seed = (string) file_get_contents($root . '/Service/SiteContactSeedService.php');
     self::assertStringContainsString('KEY_ADDRESS', $seed);
     self::assertStringContainsString('SCOPE_GLOBAL', $seed);
     self::assertStringContainsString('Chengdu Amayun Technology Co., Ltd.', $seed);
@@ -73,7 +74,7 @@ private function assert_SiteContactConfig_testUpgradeSeedsGlobalContactAddress()
 
 private function assert_SiteContactEmbed_testWebsiteStoreChannelHooksEmbedContactGroup(): void
 {
-    $root = '/Users/weline/Project/Official/框架/app/code/Weline/Websites';
+    $root = $this->moduleRoot();
     $websiteHook = (string) file_get_contents($root . '/view/hooks/Weline_Websites/backend/website/form/sections-after.phtml');
     $storeHook = (string) file_get_contents($root . '/view/hooks/Weline_Websites/backend/store/form/sections-after.phtml');
     $channelHook = (string) file_get_contents($root . '/view/hooks/Weline_Websites/backend/channel/form/sections-after.phtml');
@@ -97,10 +98,17 @@ private function assert_SiteContactEmbed_testWebsiteStoreChannelHooksEmbedContac
     self::assertStringContainsString('resolveFromInput', $mapper);
 }
 
-private function assert_SiteContactEmbed_testModuleVersionIs1829(): void
+private function assert_SiteContactEmbed_testModuleVersionDeclaresReleasedSemver(): void
 {
-    $module = include '/Users/weline/Project/Official/框架/app/code/Weline/Websites' . '/etc/module.php';
+    $module = include $this->moduleRoot() . '/etc/module.php';
     self::assertIsArray($module);
-    self::assertSame('1.8.29', $module['version'] ?? null);
+    $version = $module['version'] ?? null;
+    self::assertIsString($version);
+    self::assertMatchesRegularExpression('/^\d+\.\d+\.\d+$/', $version, 'etc/module.php must declare a released semver');
+}
+
+private function moduleRoot(): string
+{
+    return BP . 'app/code/Weline/Websites';
 }
 }

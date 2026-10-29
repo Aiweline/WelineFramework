@@ -130,8 +130,15 @@ private function assert_WebsiteCrawlerPolicySaveAfterConnection_testMissingConne
     $service->expects(self::never())->method('saveForWebsite');
     $observer = new WebsiteCrawlerPolicySaveAfter($service);
     $event = new Event(['website_id' => 7, 'post_data' => ['extensions' => ['crawler' => ['enabled' => '1']]]]);
-    $this->expectException(\RuntimeException::class);
-    $observer->execute($event);
+    // The aggregated runner catches thrown exceptions per check, so assert the
+    // fail-closed RuntimeException here instead of registering expectException().
+    try {
+        $observer->execute($event);
+        self::fail('Missing connection must fail closed instead of opening a second PDO.');
+    } catch (\RuntimeException $exception) {
+        self::assertStringContainsString('website_save_after missing connection', $exception->getMessage());
+        self::assertStringContainsString('must not open a second PDO', $exception->getMessage());
+    }
 }
 
 private function assert_WebsiteCrawlerPolicySaveAfterConnection_testDispatchPayloadDocumentsConnectionKey(): void

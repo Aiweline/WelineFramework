@@ -123,6 +123,68 @@ EXEMPT：内容运营与纯闲聊。宿主常带：`~/.cursor/rules/requirement-
 
 权威：`HardConstraintsCatalog::mcpOperationalRules()` → `machine_shared_side_effects_require_workspace_scope`。
 
+## 1d. hosts 写入先查后写（`hosts_write_precheck_no_repeat_prompt`，强制）
+
+`/etc/hosts` 是整机共享态，**写一次就要用户输一次管理员密码**。所以「要不要写」必须先判定，不许靠反复弹窗试。
+
+### 先查后写
+
+| 做 | 怎么做 |
+|----|--------|
+| 只读自检 | `grep -qxF "127.0.0.1 <域名>" /etc/hosts`；或直接走 `HostsFileManager::addDomain()`——它内部先 `inspectSatisfiedAddStatus()` 只读判定，已满足就不进授权路径 |
+| 命中即复用 | 域名+地址已在 hosts（无论是否在 WLS 托管块内、是否本项目写的）→ 判 `already_exists` / `external_satisfied`，**到此结束** |
+| 免写优先 | `*.weline.localhost` 由 macOS 原生回环解析，**不需要 hosts**；其次才是 `*.test.weline.com` + hosts |
+| 一次授权 | 先把本次要写的域名清单算齐，一次写入/一次授权 |
+
+### 禁止
+
+| 禁止 |
+|------|
+| 把「本次还没写过」当「未满足」，对已存在的映射再走 `osascript` / sudo 授权弹窗 |
+| 每次重试就换一个一次性随机域（`local-demo-<random>`、`ai-test-<random>`）——每换一次就多一次密码弹窗 |
+| 循环逐域触发弹窗；单任务授权弹窗超过 1 次 |
+| 用户已拒绝授权后，换个命令 / 换个入口再试 |
+| 对「已经写入却仍弹窗」点「好」硬推——这属于缺陷，须保留现场（弹窗截图 + 当时命令 + `grep` 结果）并报告 |
+
+**EXEMPT**：纯闲聊；用户本回合明确要求「把某域写进 hosts」。
+
+权威：`HardConstraintsCatalog::mcpOperationalRules()` → `hosts_write_precheck_no_repeat_prompt`；宿主镜像 `~/.dsh/AGENTS.md`「本机 hosts 写入先查后写」。
+
+## 1e. 站点本地域名用语义 code（`local_site_domain_semantic_code`，强制）
+
+**2026-10-29 用户指定**：某个站的本地演示 / 验收域名，一律用**站点语义 code** 拼，不要各种随机/哈希域；申请好必须回写站点柜，避免下次再申请一遍。
+
+### 域名口径
+
+| 项 | 规则 |
+|----|------|
+| 命名 | `{site_code}.test.weline.com`，`site_code` 取 `w_weline_websites_website.code`（`php bin/w website:listing`）。例：code `amayum` → `https://amayum.test.weline.com` |
+| 禁止 | 把 `p05113ef3…`（项目哈希）、`local-demo-<random>`、`ai-test-<random>`、池子随机域当**某个具名站**的主验收 Host；每换一次就是一次新申请=一次管理员弹窗 |
+| 豁免 | 默认站继续用 `{project_hash}.test.weline.com`；语义域与既有冲突/不可用时才用池域，且必须在柜子里写明原因 |
+| 能免写就免写 | 先试 `{site_code}.test.weline.localhost`（macOS 原生回环，无需 hosts）；要 `*.test.weline.com` 才走 hosts，并遵守 §1d 先查后写 |
+
+### 申请与绑定顺序（一次做完，只允许一次系统授权）
+
+1. `php bin/w website:listing` 取该站 `code` 与 `website_id`；
+2. 确保 `w_weline_websites_website_domain` 有该域行（`domain`、`is_primary`、`status=active`、`https_enabled=1`）；
+3. `AiSiteLocalDomainReadinessService::prepare($domain, true)` 落 hosts + 通配证书（未授权返回 `TEST_DOMAIN_HOSTS_AUTHORIZATION_PENDING`；按 §1d 先只读查一遍再决定是否弹窗）；
+4. `php bin/w cache:clear --no-warm`；Worker 仍认旧站时 `php bin/w server:reload`；
+5. 自证：带章 `curl --max-time 5` / 浏览器打开该域，`x-wls-fpc-status: MISS` 才算可交付；
+6. **回写站点柜**（缺一不可，见下）。
+
+### 回写站点柜（HARD，缺一步算没做完）
+
+| 落点 | 写什么 |
+|------|--------|
+| `websites/README.md` 全集表该站「本地演示站（默认验收面）」列 | 完整 URL + Website id |
+| `websites/<site>/server.md`「本地演示站」行 | URL、Website id、绑定/解析状态（hosts 是否已写、证书是否就绪）、日期 |
+
+**下次先读柜子**：`websites/README.md` + 该站 `server.md` 已有登记 → 直接复用，**禁止**再申请新域。未登记才按上面顺序申请，并当场补齐登记。
+
+**EXEMPT**：纯闲聊；查线上生产域名（非本地演示面）。
+
+权威：`HardConstraintsCatalog::mcpOperationalRules()` → `local_site_domain_semantic_code`；宿主镜像 `~/.dsh/AGENTS.md`「站点本地域名用语义 code」。
+
 ## 2. 内容运营技能跳过 MCP（`content_ops_skills_skip_mcp`）
 
 命中下列任一即属此类：产品优化 / 商品优化 / 详情优化 / 商详优化 / 翻译优化 / 商品翻译 / 主图优化 / 规格图优化 / 修主图 / 新建文章 / 写博客 / 审查文章 / 文章可行性 / 精写文章 / blog article / 规格修复（或宿主/仓内技能 `ecommerce-product-optimize`、`ecommerce-detail-suite`、`ecommerce-product-image`、`ecommerce-product-i18n`、`weline-blog-article`）。
@@ -458,10 +520,13 @@ curl -sS -m 10 -H 'Host: www.example.com' \
 | 仓库正式 e2e 仍走 `php bin/w e2e:run`（`e2e_playwright_formal_runner_only`）；ego 用于真机交互与验收取证 | 用 ego 脚本冒充仓库 e2e 套件；用 Playwright 冒充 WB-OP 交互验收 |
 | 用户明确点名「用 Chrome / Chrome 扩展 / Weline profile」时才走 Chrome 契约（`google_chrome_reuse_before_connect` / `browser_tab_group_identity`） | 默认把外部 Chrome 当浏览器入口 |
 | 验收仍须遵守 `browser_operator_self_test` / `browser_cache_disabled_on_open` / `browser_operator_fail_closed_release`（禁缓存、穿章、探活、卡死释放） | 因换了 ego 就跳过缓存禁用、穿章、截图/审图证据 |
+| **用毕收口（`ego_browser_tab_closeout_after_use`，HARD · 2026-10-29 用户指定）**：**用完之后当回合就关掉正在用的标签页**——中间页 `await page.close()`，任务收尾 `task.finish({ keep: [] })`（技能 CLI）或 `completeTaskSpace(name, { keep: false })`（DSH 工具），默认关光本任务开过的标签页；会话首次用 ego 前 `listTaskSpaces()` 盘点，回收不属于在飞任务的 `ownership === "agent"` 滞留空间；收尾汇报附收口实测（ego 进程数 + 空间清单） | 任务结束不收口、把用过的页面 `keep` 留着、每步新建 taskSpace、循环 `newPage()` 叠标签（单任务并发 ≤3）；出错或等用户接管时调 `finish()`（该情形禁止 finish） |
 
 安装（DSH）：`dsh plugin --profile <name> add -w @dshworks/dsh-ego-browser`，重启 DSH；工具面 = `ego_doctor` / `ego_recall` / `ego_run` / `ego_site_run` / `ego_learn` / `ego_forget` / `ego_handoff`。ego lite 本体与 `ego-browser` 命令需先装好并完成引导（<https://lite.ego.app/>）。
 
-索引：本机 `~/.dsh/AGENTS.md`「浏览器操作默认 ego」；宿主镜像由 MCP 生成，禁止手写。
+**为什么收口是硬规则**：ego 的任务空间与标签页是全机共享资源。事故实录（2026-10-29 00:30，本机实测）：AI 会话开完不关，ego lite 泄漏 61 进程 / 8GB RSS（12 个 Renderer 中 4 个存活 11 小时以上 = 浏览器开机时长），叠加 swap 打满（10.5GB/11.25GB），load 冲到 76.88（10 核）；回收滞留空间后 ego 降到 22 进程 / ~2GB。僵尸进程（`<defunct>`）另案：那是父进程不 wait（本机为 verge-mihomo、AI Work 助手），与 ego 无关、不占 CPU，处置法是重启父应用。
+
+索引：本机 `~/.dsh/AGENTS.md`「浏览器操作默认 ego · 用毕收口」；宿主镜像由 MCP 生成，禁止手写。
 
 ## 9. 模块 doc 禁放一次性工作资料（`module_doc_forbids_ephemeral_work_artifacts`，强制）
 

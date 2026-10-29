@@ -96,8 +96,17 @@ private function assert_WebsiteLocalDescription_testWebsiteDataPrefersLocalDescr
 
 private function assert_WebsiteLocalDescription_testUpgradeRegistersLocalDescriptionModel(): void
 {
-    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Websites' . '/Setup/Upgrade.php');
-    self::assertStringContainsString('WebsiteLocalDescription::class', $source);
-    self::assertStringContainsString('putModel', $source);
+    // Upgrade.php 已把模型初始化委托给播种服务；升级时仍会写入 LocalDescription 行。
+    $moduleRoot = '/Users/weline/Project/Official/框架/app/code/Weline/Websites';
+    $upgrade = (string) file_get_contents($moduleRoot . '/Setup/Upgrade.php');
+    self::assertStringContainsString('WebsiteBrandIdentitySeedService', $upgrade);
+    self::assertStringContainsString('ensureDefaultWebsiteBrandIdentity', $upgrade);
+
+    $seed = (string) file_get_contents($moduleRoot . '/Service/WebsiteBrandIdentitySeedService.php');
+    self::assertStringContainsString('LocalDescription', $seed);
+    self::assertStringContainsString('ensureDefaultWebsiteLocalBrandCopy', $seed);
+
+    self::assertTrue(class_exists(WebsiteLocalDescription::class));
+    self::assertSame('weline_websites_website_local', WebsiteLocalDescription::schema_table);
 }
 }

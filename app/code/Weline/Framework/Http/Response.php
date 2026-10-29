@@ -578,6 +578,8 @@ class Response implements ResponseInterface, RequestLocalInterface
         $this->applyStorefrontGenerationOutboundIfNeeded();
         // Dev auto-pierce client: stamp non-Url::getUrl links (category cards etc.).
         $this->injectFpcDevAutoPierceClientIfNeeded();
+        // Ad-attribution linker: keep utm_*/gclid on same-origin internal links.
+        $this->injectAdAttributionLinkerIfNeeded();
 
         if ($this->telemetryPrepared) {
             return;
@@ -652,6 +654,29 @@ class Response implements ResponseInterface, RequestLocalInterface
                 return;
             }
             $injected = FpcDevAutoPierceClientScript::injectIntoHtml($this->body);
+            if ($injected !== $this->body) {
+                $this->body = $injected;
+                $this->synchronizeContentLengthHeader();
+            }
+        } catch (\Throwable) {
+            // Decoration must never block emission.
+        }
+    }
+
+    /**
+     * Decorate same-origin navigational URLs with the inbound ad params
+     * (utm_*, gclid, fbclid, …). Inert on pages without ad params.
+     */
+    private function injectAdAttributionLinkerIfNeeded(): void
+    {
+        try {
+            if ($this->body === '' || \strncmp($this->body, 'WQB1', 4) === 0) {
+                return;
+            }
+            if (\stripos($this->body, '</body>') === false) {
+                return;
+            }
+            $injected = AdAttributionLinkerClientScript::injectIntoHtml($this->body);
             if ($injected !== $this->body) {
                 $this->body = $injected;
                 $this->synchronizeContentLengthHeader();

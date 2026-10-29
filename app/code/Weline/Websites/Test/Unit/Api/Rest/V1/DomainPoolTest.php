@@ -59,12 +59,7 @@ class DomainPoolTest extends TestCase
         $request->method('getBodyParams')->willReturn(['limit' => 10]);
         $request->method('getParam')->willReturn(null);
 
-        $model = $this->createMock(DomainPoolModel::class);
-        $model->method('clearQuery')->willReturnSelf();
-        $model->method('where')->willReturnSelf();
-        $model->method('order')->willReturnSelf();
-        $model->method('limit')->willReturnSelf();
-        $model->method('select')->willThrowException(new \RuntimeException('db error'));
+        $model = new ThrowingDomainPoolQueryModel();
 
         $controller = $this->getMockBuilder(DomainPool::class)
             ->setConstructorArgs([$model])
@@ -87,5 +82,24 @@ class DomainPoolTest extends TestCase
         $reflectionProperty = $reflection->getProperty($property);
         $reflectionProperty->setAccessible(true);
         $reflectionProperty->setValue($target, $value);
+    }
+}
+
+/**
+ * 生产 postList 通过模型 __call 代理查询构造器（clearQuery/where/order/limit/select
+ * 都不是模型真实方法），PHPUnit 无法为魔术方法配置桩，故用真实子类在 __call 层注入异常。
+ */
+final class ThrowingDomainPoolQueryModel extends DomainPoolModel
+{
+    public function __call($method, $args)
+    {
+        if (\in_array($method, ['clearQuery', 'where', 'order', 'limit'], true)) {
+            return $this;
+        }
+        if ($method === 'select') {
+            throw new \RuntimeException('db error');
+        }
+
+        return parent::__call($method, $args);
     }
 }

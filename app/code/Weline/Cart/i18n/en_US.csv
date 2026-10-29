@@ -28,6 +28,8 @@
 购物车工作台,"Cart workspace"
 search,search
 "按 Scope / guest_token 检查真实 Cart 持久库","Inspect real Cart persistence by Scope / guest_token"
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
 正在加载购物车...,"Loading cart..."
 购物车是空的,"Your cart is empty"
 浏览商品，把喜欢的加入购物车吧。,"Browse products and add your favorites to the cart."
@@ -154,8 +156,6 @@ Scope,Scope
 该商品暂不可售，请从购物车移除或稍后再试,"This product is temporarily unavailable; remove it from the cart or try again later"
 "channel_code 必须与 store_code 同时提供","channel_code must be provided together with store_code"
 "购物车 Scope 与当前可信 Website/Store/Channel 请求不一致","Cart Scope does not match the trusted Website/Store/Channel request"
-收起悬浮,"Collapse float"
-展开悬浮,"Expand float"
 "购物车加购成功后触发；追加 cart_type + type_payload（非破坏）。","Dispatched after a successful cart add; appends cart_type + type_payload (non-breaking)."
 加入购物车,"Add to Cart"
 搜索商品、分类与关键词...,搜索商品、分类与关键词...

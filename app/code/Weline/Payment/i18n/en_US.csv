@@ -154,6 +154,11 @@ settings,settings
 支付成功,"Payment successful"
 支付待处理,"Payment Pending"
 支付处理中,"Payment Processing"
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
+"共 %{1} 个支付供应商","%{1} payment provider(s)"
+或使用下方结账,"Or continue below"
+"使用 %{1} 快捷支付","Pay with %{1}"
 "DevRelay 中继","DevRelay relay."
 "左：SSE 日志 · 右：发送","Left: SSE logs · Right: Send."
 "SSE 实时详情","SSE real-time details."
@@ -344,7 +349,6 @@ More,More
 时间,时间
 未指定,Unspecified
 未标记,Unmarked
-或使用下方结账,"Or continue below"
 快捷支付已关闭。,"Express checkout is closed."
 该商品仅支持询价，暂无快捷支付。,"This product supports inquiry only; quick payment is not available."
 使用支付商账户直接付款，地址可由支付商带回,"Pay with your payment account; address can be returned by the provider"
@@ -751,11 +755,7 @@ More,More
 "PayPal Developer Sandbox REST App Client ID","PayPal Developer Sandbox REST App Client ID"
 "PayPal Developer Sandbox REST App Secret","PayPal Developer Sandbox REST App Secret"
 仅检查平台沙箱凭据是否已就绪,"Only check if the platform sandbox credentials are ready"
-"使用 %{1} 快捷支付","Pay with %{1}"
-"共 %{1} 个支付供应商","%{1} payment provider(s)"
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
-收起悬浮,"Collapse float"
-展开悬浮,"Expand float"
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 小计,小计

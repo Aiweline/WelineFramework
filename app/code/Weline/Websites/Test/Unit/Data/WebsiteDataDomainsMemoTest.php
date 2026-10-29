@@ -57,7 +57,9 @@ final class WebsiteDataDomainsMemoTest extends TestCase
         ]);
         ObjectManager::setInstance(WebsiteDomain::class, $probe);
 
-        $first = WebsiteData::domainsForWebsite(0);
+        // 共享缓存可能已被其他用例写入空结果，强制走一次数据库冷加载作为基线；
+        // 之后的同进程调用必须命中 memo，不再落库。
+        $first = WebsiteData::domainsForWebsite(0, true);
         $second = WebsiteData::domainsForWebsite(0);
 
         self::assertSame(['example.test'], \array_column($first, WebsiteDomain::schema_fields_DOMAIN));

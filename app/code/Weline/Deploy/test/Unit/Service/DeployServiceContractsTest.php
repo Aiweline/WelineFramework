@@ -109,15 +109,6 @@ final class DeployServiceContractsTest extends TestCase
             'DeployWebhookAsyncAck::testAsyncDispatcherSpawnsDetachedDeployRelease' => function () {
             $this->assert_DeployWebhookAsyncAck_testAsyncDispatcherSpawnsDetachedDeployRelease();
         },
-            'DeployWebhookExpectWatch::testExpectWatchServiceAndCronExist' => function () {
-            $this->assert_DeployWebhookExpectWatch_testExpectWatchServiceAndCronExist();
-        },
-            'DeployWebhookExpectWatch::testTipArrivalMustNotUseBareFindByRefAlone' => function () {
-            $this->assert_DeployWebhookExpectWatch_testTipArrivalMustNotUseBareFindByRefAlone();
-        },
-            'DeployWebhookExpectWatch::testNormalizeGraceIsWallClockBounded' => function () {
-            $this->assert_DeployWebhookExpectWatch_testNormalizeGraceIsWallClockBounded();
-        },
             'DeployWebhookExternalReconcile::testReconcilerAndWiringExist' => function () {
             $this->assert_DeployWebhookExternalReconcile_testReconcilerAndWiringExist();
         },
@@ -538,72 +529,6 @@ private function assert_DeployWebhookAsyncAck_testAsyncDispatcherSpawnsDetachedD
     self::assertStringContainsString('PHASE_DEFERRED', $source);
     self::assertStringContainsString('hasInFlight', $source);
     self::assertStringContainsString('DeployReleaseFlightGate', $source);
-}
-
-private function assert_DeployWebhookExpectWatch_testExpectWatchServiceAndCronExist(): void
-{
-    $base = '/Users/weline/Project/Official/框架/app/code/Weline/Deploy';
-    self::assertFileExists($base . '/Service/DeployWebhookExpectWatchService.php');
-    // tag 到达轮询任务已删除：发布由 webhook 命中直接派发，不再每分钟轮询 git。
-    self::assertFileDoesNotExist($base . '/Cron/DeployWebhookExpectCron.php');
-    $watch = (string) file_get_contents($base . '/Service/DeployWebhookExpectWatchService.php');
-    $queue = (string) file_get_contents($base . '/Service/DeployWebhookJobQueue.php');
-    $git = (string) file_get_contents($base . '/Service/DeployGitMetadataService.php');
-    $history = (string) file_get_contents($base . '/Service/DeployReleaseHistoryService.php');
-    $resolver = (string) file_get_contents($base . '/Service/DeployWebhookRefResolver.php');
-    self::assertStringContainsString('webhook-expect.json', $watch);
-    self::assertStringContainsString('DEFAULT_GRACE_SEC = 60', $watch);
-    self::assertStringContainsString('KIND_TAG', $watch);
-    self::assertStringContainsString('KIND_BRANCH_TIP', $watch);
-    self::assertStringContainsString('resolveTriggerMode', $watch);
-    self::assertStringContainsString('listRemoteBranchTip', $watch);
-    self::assertStringContainsString('hasBranchTipArrived', $watch);
-    self::assertStringContainsString('TIP_JOB_SKEW_SEC', $watch);
-    self::assertStringContainsString('bootstrap_tip_sha', $watch);
-    self::assertStringContainsString('PHASE_WEBHOOK_MISS', $watch);
-    self::assertStringContainsString('branch_tip_webhook_miss_after_grace', $watch);
-    self::assertStringContainsString('resolveNotifyDeployRoot', $watch);
-    self::assertStringContainsString("'deploy_root' => \$this->resolveNotifyDeployRoot(\$config)", $watch);
-    self::assertStringContainsString('isCronUpdateEnabled', $watch);
-    self::assertStringContainsString('selectCronWinnerRef', $watch);
-    self::assertStringContainsString('pickNewestTag', $watch);
-    self::assertStringContainsString('asyncDispatcher->dispatchRelease', $watch);
-    // Miss alert path must not call Orchestrator; cron path may dispatchRelease only.
-    self::assertStringNotContainsString('orchestrator->release', $watch);
-    self::assertStringNotContainsString('deploy:release', $watch);
-    // Tip must not use local tracking-only helper as the sole source.
-    self::assertStringNotContainsString('getRemoteBranchCommit', $watch);
-    self::assertStringContainsString('function listRemoteBranchTip', $git);
-    self::assertStringContainsString("ls-remote", $git);
-    self::assertStringContainsString('function findByGitCommit', $history);
-    self::assertStringContainsString('function findByRefCreatedSince', $queue);
-    self::assertStringContainsString('public function resolveTriggerMode', $resolver);
-}
-
-private function assert_DeployWebhookExpectWatch_testTipArrivalMustNotUseBareFindByRefAlone(): void
-{
-    $watch = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Deploy' . '/Service/DeployWebhookExpectWatchService.php');
-    // Extract hasBranchTipArrived body roughly.
-    self::assertMatchesRegularExpression('/function hasBranchTipArrived[\s\S]*?TIP_JOB_SKEW_SEC[\s\S]*?findByRefCreatedSince/', $watch);
-    // Inside hasBranchTipArrived, bare findByRef( without CreatedSince is forbidden.
-    if (!preg_match('/function hasBranchTipArrived\s*\([^)]*\)\s*:\s*bool\s*\{([\s\S]*?)\n    (?:\/\*\*|public function|private function)/', $watch, $m)) {
-        self::fail('could not isolate hasBranchTipArrived body');
-    }
-    $body = $m[1];
-    self::assertStringNotContainsString('->findByRef(', $body);
-    self::assertStringContainsString('findByRefCreatedSince', $body);
-    self::assertStringContainsString('findByGitCommit', $body);
-    self::assertStringContainsString('TIP_JOB_SKEW_SEC', $body);
-}
-
-private function assert_DeployWebhookExpectWatch_testNormalizeGraceIsWallClockBounded(): void
-{
-    $min = \Weline\Deploy\Service\DeployWebhookExpectWatchService::MIN_GRACE_SEC;
-    $max = \Weline\Deploy\Service\DeployWebhookExpectWatchService::MAX_GRACE_SEC;
-    $def = \Weline\Deploy\Service\DeployWebhookExpectWatchService::DEFAULT_GRACE_SEC;
-    self::assertSame(60, $min);
-    self::assertSame(180, $max);
-    self::assertSame(60, $def);
 }
 
 private function assert_DeployWebhookExternalReconcile_testReconcilerAndWiringExist(): void

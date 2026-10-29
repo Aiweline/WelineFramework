@@ -16,8 +16,8 @@ final class HardConstraintsSymbolDsl
 
     public const GLOSS_MAX = 64;
 
-    /** Raised 9200→9400 when browser_tab_group_identity entered the hot package (2026-10-20); 9400→9500 for no_error_masking_or_patch_workaround (2026-10-21); 9500→9700 for google_chrome_reuse_before_connect (2026-10-21). */
-    public const PACKAGE_TOKEN_BUDGET = 9700;
+    /** Raised 9200→9400 when browser_tab_group_identity entered the hot package (2026-10-20); 9400→9500 for no_error_masking_or_patch_workaround (2026-10-21); 9500→9700 for google_chrome_reuse_before_connect (2026-10-21); 9700→9900 for hosts_write_precheck_no_repeat_prompt + ego hot entries (2026-10-29). */
+    public const PACKAGE_TOKEN_BUDGET = 9900;
 
     public const EXPAND_IDS_MAX = 20;
 
@@ -186,6 +186,13 @@ final class HardConstraintsSymbolDsl
             'BrDone' => ['gloss_zh' => '该功能浏览器操作收口', 'rule_ids' => ['browser_tab_group_identity']],
             'DropGrp' => ['gloss_zh' => '删除该标签组及其标签', 'rule_ids' => ['browser_tab_group_identity']],
             'BrOp' => ['gloss_zh' => '导航、点击或填写', 'rule_ids' => ['browser_tab_group_identity']],
+            'Ego' => ['gloss_zh' => 'ego浏览器操作页面', 'rule_ids' => ['ego_browser_tab_closeout_after_use', 'browser_automation_uses_ego']],
+            'CloseTab' => ['gloss_zh' => '用毕关当前ego标签页', 'rule_ids' => ['ego_browser_tab_closeout_after_use']],
+            'KeepTab' => ['gloss_zh' => '用户点名才留页', 'rule_ids' => ['ego_browser_tab_closeout_after_use']],
+            'HostsWrite' => ['gloss_zh' => '本机 /etc/hosts 写入', 'rule_ids' => ['hosts_write_precheck_no_repeat_prompt']],
+            'HostsPrecheck' => ['gloss_zh' => '写前只读查域名+addr已存在', 'rule_ids' => ['hosts_write_precheck_no_repeat_prompt']],
+            'RepeatPrompt' => ['gloss_zh' => '重复弹管理员授权/已存在仍写', 'rule_ids' => ['hosts_write_precheck_no_repeat_prompt']],
+            'RandDomain' => ['gloss_zh' => '每次重试换一次性随机域', 'rule_ids' => ['hosts_write_precheck_no_repeat_prompt']],
             'GChrome' => ['gloss_zh' => '要操作本机已登录 Google Chrome', 'rule_ids' => ['google_chrome_reuse_before_connect']],
             'ChrGrant' => ['gloss_zh' => '先读 chrome-devtools-grant.json', 'rule_ids' => ['google_chrome_reuse_before_connect']],
             'ReuseOk' => ['gloss_zh' => 'owner 还在且 socket 还在', 'rule_ids' => ['google_chrome_reuse_before_connect']],
@@ -513,6 +520,11 @@ final class HardConstraintsSymbolDsl
                 'gloss_zh' => '连Chrome前先读复用记录，有效只走MCP，禁止直连',
                 'cluster' => '§✓',
             ],
+            'hosts_write_precheck_no_repeat_prompt' => [
+                'formula' => 'HostsWrite→□HostsPrecheck∧(RepeatPrompt→⊥)∧(RandDomain→⊥)',
+                'gloss_zh' => 'hosts写前先只读查；禁重复授权与一次性随机域',
+                'cluster' => '§✓',
+            ],
             'browser_operator_self_test' => [
                 'formula' => 'WebTouch→□WBOP∧(¬WBOP→¬Pass)',
                 'gloss_zh' => 'Web改须禁缓存+抹自动+点选+截图Read',
@@ -531,6 +543,11 @@ final class HardConstraintsSymbolDsl
             'browser_automation_uses_ego' => [
                 'formula' => 'Browser→□Ego∧(¬Ego→⊥Auto)',
                 'gloss_zh' => '浏览器默认ego；禁Chrome/Playwright摸页',
+                'cluster' => '§✓',
+            ],
+            'ego_browser_tab_closeout_after_use' => [
+                'formula' => 'Ego→□CloseTab|Ask→KeepTab',
+                'gloss_zh' => 'ego用毕即关当前标签页；用户点名才留页',
                 'cluster' => '§✓',
             ],
             'feature_delivery_urls' => [

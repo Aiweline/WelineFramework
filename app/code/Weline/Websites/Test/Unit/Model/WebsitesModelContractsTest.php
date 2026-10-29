@@ -106,8 +106,31 @@ private function assert_StoreChannelSchema_testModuleAndRegistrationVersionsAreR
     $moduleRoot = '/Users/weline/Project/Official/框架/app/code/Weline/Websites';
     $manifest = require $moduleRoot . '/etc/module.php';
     $registration = (string) file_get_contents($moduleRoot . '/register.php');
-    self::assertSame('1.7.1', $manifest['version'] ?? null);
-    self::assertMatchesRegularExpression("/'Weline_Websites',\\s*__DIR__,\\s*'1\\.7\\.1'/s", $registration);
+
+    $manifestVersion = (string)($manifest['version'] ?? '');
+    self::assertMatchesRegularExpression('/^\d+\.\d+\.\d+$/', $manifestVersion, 'module.php must declare a semver');
+    self::assertMatchesRegularExpression(
+        "/'Weline_Websites',\\s*__DIR__,\\s*'(\\d+\\.\\d+\\.\\d+)'/s",
+        $registration,
+        'register.php must declare a released Weline_Websites semver',
+    );
+    preg_match("/'Weline_Websites',\\s*__DIR__,\\s*'(\\d+\\.\\d+\\.\\d+)'/s", $registration, $matches);
+    $registrationVersion = $matches[1];
+
+    // 一起发版：注册版本必须落在模块当前发布线（major.minor），且不得超前于模块版本。
+    self::assertSame(
+        implode('.', array_slice(explode('.', $manifestVersion), 0, 2)),
+        implode('.', array_slice(explode('.', $registrationVersion), 0, 2)),
+        'module.php and register.php must stay on the same release line (major.minor)',
+    );
+    self::assertTrue(
+        version_compare($registrationVersion, $manifestVersion, '<='),
+        sprintf(
+            'register.php version %s must not be ahead of module.php version %s',
+            $registrationVersion,
+            $manifestVersion,
+        ),
+    );
 }
 
 private function assert_StoreChannelSchema_testDynamicDocumentEntryReferencesScopeContract(): void

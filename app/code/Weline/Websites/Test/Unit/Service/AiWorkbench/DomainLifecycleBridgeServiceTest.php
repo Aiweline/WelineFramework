@@ -6,15 +6,19 @@ namespace Weline\Websites\Test\Unit\Service\AiWorkbench;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Service\AiWorkbench\DomainLifecycleBridgeService;
+use Weline\Websites\Service\AiWorkbench\EventStreamService;
 
 class DomainLifecycleBridgeServiceTest extends AbstractAiWorkbenchPersistenceCase
 {
     private DomainLifecycleBridgeService $bridgeService;
 
+    private EventStreamService $eventStreamService;
+
     public function setUp(): void
     {
         parent::setUp();
         $this->bridgeService = ObjectManager::getInstance(DomainLifecycleBridgeService::class);
+        $this->eventStreamService = ObjectManager::getInstance(EventStreamService::class);
     }
 
     public function testBuildLifecycleStatusReturnsExpectedStructure(): void

@@ -44,10 +44,32 @@ final class WebsitesAiWorkbenchContractsTest extends TestCase
 
 private function assert_PageBuilderDirectHandoff_testPageBuilderProviderIsDisabledOnWebsiteHub(): void
 {
-    $source = (string) \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/extends/module/Weline_Websites/AiSiteBuilderProvider/PageBuilderProvider.php');
-    self::assertStringContainsString('return false;', $source);
-    self::assertStringContainsString('彻底分开', $source);
-    self::assertStringNotContainsString('site-builder-agent/pagebuilder-handoff', $source);
+    $providerFile = BP . '/app/code/GuoLaiRen/PageBuilder/extends/module/Weline_Websites/AiSiteBuilderProvider/PageBuilderProvider.php';
+    if (\is_file($providerFile)) {
+        $source = (string) \file_get_contents($providerFile);
+        self::assertMatchesRegularExpression('/function\s+isEnabled\s*\([^)]*\)[^{]*\{[^}]*return\s+false\s*;/s', $source);
+        self::assertStringContainsString('彻底分开', $source);
+        self::assertStringNotContainsString('site-builder-agent/pagebuilder-handoff', $source);
+
+        return;
+    }
+
+    // PageBuilder 是独立模块，框架仓内可能未安装该扩展；此时契约由 Website Hub
+    // 自身执行：pagebuilder provider 必须在查询注册表之前被拒绝，永不进入工作区。
+    $controller = (string) \file_get_contents(BP . '/app/code/Weline/Websites/Controller/Backend/SiteBuilderAgent.php');
+    $createSession = $this->sourceBetween_PageBuilderDirectHandoff(
+        $controller,
+        'public function postCreateSession(): string',
+        'private function prefillWorkspaceBriefByAi('
+    );
+    $rejectionPos = \strpos($createSession, "if (\$providerCode === 'pagebuilder')");
+    $registryPos = \strpos($createSession, 'getProviderRegistry()->getProvider($providerCode)');
+    self::assertIsInt($rejectionPos);
+    self::assertIsInt($registryPos);
+    self::assertLessThan($registryPos, $rejectionPos);
+    self::assertStringContainsString('PAGEBUILDER_ENTRY_SEPARATED', $createSession);
+    self::assertStringContainsString('彻底分开', $createSession);
+    self::assertStringNotContainsString('site-builder-agent/pagebuilder-handoff', $controller);
 }
 
 private function assert_PageBuilderDirectHandoff_testCreateSessionRejectsPageBuilderProviderAndStaysOnWebsitesWorkspace(): void

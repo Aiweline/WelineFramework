@@ -151,20 +151,34 @@ $this->setData('seo', [
         }
 
         .not-found__shop {
+            box-sizing: border-box;
             background: var(--color-bg-secondary, #eaeded);
-            padding: 1.35rem 0 2.5rem;
+            padding-block: 1.35rem 2.5rem;
+            /* 通栏底色 + 版心沟槽：面板靠 section 的 inline padding 内缩，避免窄屏卡片贴边 */
+            padding-inline: var(--weline-layout-content-padding-inline);
         }
 
         .not-found__shop-panel {
+            box-sizing: border-box;
             width: min(100%, var(--weline-layout-content-max-width));
             max-width: 100%;
-            padding-inline: var(--weline-layout-content-padding-inline);
-            margin: 0 auto;
+            margin-inline: auto;
             padding: 1.15rem 1.15rem 1.35rem;
             border: 1px solid var(--color-border-default, #d5d9d9);
             border-radius: 8px;
             background: var(--color-bg-primary, #fff);
             box-shadow: 0 1px 2px rgba(15, 17, 17, 0.06);
+        }
+
+        /* 404 底部扩展槽：与 .terms-bottom-slot / .policy-bottom-slot 同一条版心数学，
+         * 否则注入的 banner / container 会左右贴边。 */
+        .not-found-bottom-slot {
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            min-width: 0;
+            margin-inline: auto;
+            padding-inline: var(--weline-layout-content-padding-inline);
         }
 
         .not-found__shop-panel .weline-product-recommended {
@@ -174,7 +188,8 @@ $this->setData('seo', [
         @media (max-width: 768px) {
             .not-found__intro-inner {
                 grid-template-columns: 1fr;
-                padding: 1.75rem 0 2rem;
+                /* 只改纵向节奏：inline padding 必须继续用版心沟槽，否则正文贴屏幕边 */
+                padding-block: 1.75rem 2rem;
                 text-align: left;
             }
 
@@ -192,7 +207,7 @@ $this->setData('seo', [
             }
 
             .not-found__shop {
-                padding: 1rem 0 2rem;
+                padding-block: 1rem 2rem;
             }
 
             .not-found__shop-panel {

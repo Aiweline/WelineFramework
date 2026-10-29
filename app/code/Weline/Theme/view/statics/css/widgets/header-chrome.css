@@ -131,6 +131,30 @@
     }
 }
 
+/*
+ * ≤768：顶栏只保留「通知 + 渠道/语言/货币」。
+ * 右侧 rights 簇是 flex:0 0 auto + nowrap（一分不让），帮助中心/订单跟踪（页脚也有）
+ * 会把左侧通知一路压到 ~10px，文案变成一字一列、整条顶栏撑到 214px（审图 550px）。
+ */
+@media (max-width: 768px) {
+    .weline-header .header-site-notice-links .header-top-bar-rights-slot {
+        display: none;
+    }
+
+    .weline-header .header-site-notice-items {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .weline-header .header-site-notice-item .notice-text {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}
+
 .weline-header .header-site-notice-links > *,
 .weline-header .header-top-bar-rights-cluster > *,
 .weline-header .header-top-bar-rights-slot > * {
@@ -1627,6 +1651,28 @@ body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     .weline-header .header-belt-left {
         flex: 0 1 auto;
         max-width: min(42%, var(--token-size-18rem));
+    }
+
+    /*
+     * 地址块与搜索同排：42% 预算 + 地址块 min-content（图标+5.5rem 文本+箭头 ≈176px）
+     * 会在 769–840 溢出父容器 26px，直接压到搜索胶囊上（审图 820px）。
+     * 给足预算并允许地址块自身收缩+裁切，溢出即在这里止住。
+     */
+    .weline-header .header-belt-row-1 .header-belt-left {
+        max-width: min(52%, var(--token-size-22rem));
+    }
+
+    .weline-header .header-belt-row-1 .header-location {
+        max-width: var(--token-size-9rem);
+        min-width: 0;
+    }
+
+    .weline-header .header-belt-row-1 .w-header-delivery-entry,
+    .weline-header .header-belt-row-1 .location-link,
+    .weline-header .header-belt-row-1 .delivery-entry {
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
     }
 
     /* Keep ZH / $ USD labels — do not strip to orphan chevrons. */

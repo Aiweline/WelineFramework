@@ -10,6 +10,7 @@ use Weline\Websites\Model\AiSiteProvisioningRequest;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
+use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Service\AiSiteDomainPreparationService;
 use Weline\Websites\Service\AiSiteDomainPurchaseAccountService;
@@ -298,6 +299,7 @@ final class AiSiteProvisioningJobHandlerTest extends TestCase
             $hostsSyncService,
             $certificateService,
             $websiteTargetResolver,
+            $this->createStub(Website::class),
         );
     }
 
@@ -316,6 +318,7 @@ final class AiSiteProvisioningJobHandlerTest extends TestCase
             $this->createStub(LocalWelineHostsSyncService::class),
             $this->createStub(LocalWelineWildcardCertificateService::class),
             $this->createStub(AiSiteWebsiteTargetResolver::class),
+            $this->createStub(Website::class),
         );
     }
 }

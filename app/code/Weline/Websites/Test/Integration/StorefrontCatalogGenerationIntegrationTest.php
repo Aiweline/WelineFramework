@@ -12,11 +12,20 @@ use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Websites\Model\SalesChannel;
 use Weline\Websites\Model\Store;
 
 final class StorefrontCatalogGenerationIntegrationTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // 生产环境里 generation 快照按请求身份落 request 作用域；CLI 下无请求身份时会落到
+        // 进程级冻结窗口，导致 clearSnapshot() 后仍读旧向量。这里模拟真实请求上下文。
+        RequestContext::init();
+    }
+
     public function testGenerationRepositoryRejectsDifferentLogicalConnection(): void
     {
         $repository = ObjectManager::getInstance(NamespaceGenerationRepository::class);

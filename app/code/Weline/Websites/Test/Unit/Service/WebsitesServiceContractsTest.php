@@ -805,9 +805,11 @@ private function assert_ScopeCatalogHotCachePublisher_testModuleProvidesScopeCat
 private function assert_ScopeCatalogHotCachePublisher_testCacheClearWarmsWebsitePoolAfterFpc(): void
 {
     $src = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/Framework/Cache/Console/Cache/Clear.php');
-    self::assertStringContainsString("warmUp('fpc')", $src);
+    // Framework orchestrator owns the storefront FPC warm; website pool warms right after it.
+    self::assertStringContainsString('StorefrontWarmupOrchestrator', $src);
+    self::assertStringContainsString('runAfterClear()', $src);
     self::assertStringContainsString("warmUp('website')", $src);
-    $fpcPos = \strpos($src, "warmUp('fpc')");
+    $fpcPos = \strpos($src, 'runAfterClear()');
     $webPos = \strpos($src, "warmUp('website')");
     self::assertNotFalse($fpcPos);
     self::assertNotFalse($webPos);
@@ -1081,8 +1083,13 @@ private function invalidSalesChannelRows_StoreChannelCatalog(): iterable
 private function assert_StoreChannelCatalog_testSalesChannelByCodeRejectsOversizedStoreIdBeforeBlankCodeShortcut(): void
 {
     $parent = new StoreSummary(11, 0, 'web', '网站店铺', Store::MODE_DEV, false, true, Store::LIFECYCLE_ACTIVE, null);
-    $this->expectException(\InvalidArgumentException::class);
-    $this->salesChannelCatalog_StoreChannelCatalog($parent)->byCode(2147483648, '');
+    // expectException() cannot be used inside the aggregated try/catch runner; assert the throw explicitly.
+    try {
+        $this->salesChannelCatalog_StoreChannelCatalog($parent)->byCode(2147483648, '');
+        self::fail('Oversized store id must be rejected instead of short-circuiting on blank channel code.');
+    } catch (\InvalidArgumentException $e) {
+        self::assertStringContainsString('2147483647', $e->getMessage());
+    }
 }
 
 private function assert_StoreChannelCatalog_testDirectoryUsesCatalogContractsAndBuildsNestedProjection(): void
@@ -1113,8 +1120,8 @@ private function assert_StoreChannelCatalog_testStoreAndSalesChannelWriteSurface
         self::assertDoesNotMatchRegularExpression('/<(?:input|select|textarea)[^>]+name=["\'][^"\']*(?:store|channel)/i', $template);
         self::assertDoesNotMatchRegularExpression('/(?:href|action)=["\'][^"\']*(?:sales[-_]?channel|\/store)(?:\/|["\'])/i', $template);
     }
-    self::assertStringContainsString('.accordion-button:focus-visible', $form);
-    self::assertStringNotContainsString('.accordion-button:focus {', $form);
+    self::assertStringContainsString('.w-catalog-tree__toggle:focus-visible', $index);
+    self::assertStringNotContainsString(':focus {', $index);
 }
 
 private function assert_StoreChannelCatalog_testQueryProviderPublishesOnlyTheTwoReadOnlyV1CatalogOperations(): void

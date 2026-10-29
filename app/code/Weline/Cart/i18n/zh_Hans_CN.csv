@@ -28,6 +28,8 @@
 购物车工作台,购物车工作台
 search,search
 "按 Scope / guest_token 检查真实 Cart 持久库","按 Scope / guest_token 检查真实 Cart 持久库"
+收起悬浮,收起悬浮
+展开悬浮,展开悬浮
 正在加载购物车...,正在加载购物车...
 购物车是空的,购物车是空的
 浏览商品，把喜欢的加入购物车吧。,浏览商品，把喜欢的加入购物车吧。
@@ -154,8 +156,6 @@ Scope,Scope
 该商品暂不可售，请从购物车移除或稍后再试,该商品暂不可售，请从购物车移除或稍后再试
 "channel_code 必须与 store_code 同时提供","channel_code 必须与 store_code 同时提供"
 "购物车 Scope 与当前可信 Website/Store/Channel 请求不一致","购物车 Scope 与当前可信 Website/Store/Channel 请求不一致"
-收起悬浮,收起悬浮
-展开悬浮,展开悬浮
 "购物车加购成功后触发；追加 cart_type + type_payload（非破坏）。","购物车加购成功后触发；追加 cart_type + type_payload（非破坏）。"
 加入购物车,加入购物车
 搜索商品、分类与关键词...,搜索商品、分类与关键词...

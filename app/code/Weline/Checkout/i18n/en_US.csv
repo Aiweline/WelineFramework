@@ -375,6 +375,8 @@ SKU,SKU
 支付方式优惠,"Payment method discount"
 本单共计,"Order total"
 应付,"Amount due"
+收起悬浮,"Collapse float"
+展开悬浮,"Expand float"
 全部,All
 请输入订单号,"Please enter order number"
 搜索,Search
@@ -572,8 +574,6 @@ SKU,SKU
 当前收货国家：%{1}。,"Current destination country: %{1}."
 系统暂未返回可用的配送方案。请确认收货地址与商品信息，或联系客服了解具体原因（常见如商品缺重量/尺寸，或目的地限制）。,"No shipping options were returned. Please confirm the shipping address and product details, or contact support (common causes: missing weight/dimensions, or destination restrictions)."
 "继续 →","继续 →"
-收起悬浮,"Collapse float"
-展开悬浮,"Expand float"
 搜索商品、分类与关键词...,搜索商品、分类与关键词...
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。

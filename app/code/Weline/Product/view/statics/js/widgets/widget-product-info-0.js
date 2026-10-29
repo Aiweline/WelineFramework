@@ -1544,10 +1544,9 @@ window.WelineWidgetAssets.register('product-product-info-0', function (widgetScr
     function syncUrl(current) {
         // Path-only PDP: selection stays in-page; do not rewrite axis/offer query.
         void current;
-        const existing = new URLSearchParams(window.location.search || '');
-        const params = new URLSearchParams();
-        if (existing.get('quote') === '1') {
-            params.set('quote', '1');
+        const params = new URLSearchParams(window.location.search || '');
+        if (params.get('quote') !== '1') {
+            params.delete('quote');
         }
         const hash = window.location.hash || '';
         const nextUrl = basePath + (params.toString() ? ('?' + params.toString()) : '') + hash;

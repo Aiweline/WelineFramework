@@ -77,6 +77,8 @@ private string $storeCopySpec_R43MutableWorkbench;
 
 private string $backupTemplate_R43MutableWorkbench;
 
+private string $backupScript_R43MutableWorkbench;
+
 private string $backupService_R43MutableWorkbench;
 
 private function setUp_R43MutableWorkbench(): void
@@ -86,6 +88,7 @@ private function setUp_R43MutableWorkbench(): void
     $this->fixture_R43MutableWorkbench = (string) file_get_contents($moduleRoot . '/Test/e2e/backend/Weline_Websites-r43-mutable-workbenches-fixture.php');
     $this->storeCopySpec_R43MutableWorkbench = (string) file_get_contents($moduleRoot . '/Test/e2e/backend/plan-p2c-copy.spec.js');
     $this->backupTemplate_R43MutableWorkbench = (string) file_get_contents($moduleRoot . '/view/templates/backend/Backup/index.phtml');
+    $this->backupScript_R43MutableWorkbench = (string) file_get_contents($moduleRoot . '/view/statics/backend/websites-backup.js');
     $this->backupService_R43MutableWorkbench = (string) file_get_contents($moduleRoot . '/Service/WebsiteBackupService.php');
 }
 
@@ -136,11 +139,15 @@ private function assert_R43MutableWorkbench_testFixtureFailsClosedAndCleansOnlyT
 
 private function assert_R43MutableWorkbench_testBackupWorkbenchUsesTypedQueryOperationAndReportsTerminalState(): void
 {
-    self::assertStringContainsString("resource('websites').manageWebsiteBackup", $this->backupTemplate_R43MutableWorkbench);
+    // Template only bridges form + JSON config; behaviour lives in the lazy-loadable static module.
+    self::assertStringContainsString('data-backup-submit', $this->backupTemplate_R43MutableWorkbench);
+    self::assertStringContainsString('id="website-backup-config"', $this->backupTemplate_R43MutableWorkbench);
     self::assertStringNotContainsString("resource('websites').adminRequest", $this->backupTemplate_R43MutableWorkbench);
-    self::assertStringContainsString("data-backup-state', 'created'", $this->backupTemplate_R43MutableWorkbench);
-    self::assertStringContainsString("data-backup-state', 'failed'", $this->backupTemplate_R43MutableWorkbench);
-    self::assertStringContainsString('data-backup-error', $this->backupTemplate_R43MutableWorkbench);
+    self::assertStringContainsString("resource('websites').manageWebsiteBackup", $this->backupScript_R43MutableWorkbench);
+    self::assertStringNotContainsString("resource('websites').adminRequest", $this->backupScript_R43MutableWorkbench);
+    self::assertStringContainsString("data-backup-state', 'created'", $this->backupScript_R43MutableWorkbench);
+    self::assertStringContainsString("data-backup-state', 'failed'", $this->backupScript_R43MutableWorkbench);
+    self::assertStringContainsString('data-backup-error', $this->backupScript_R43MutableWorkbench);
 }
 
 private function assert_R43MutableWorkbench_testBackupTableDiscoveryIsBoundedBeforeAutoloadingModels(): void

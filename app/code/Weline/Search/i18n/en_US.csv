@@ -46,8 +46,6 @@ chart,chart
 "website_id 不能为负数：%{1}","website_id cannot be negative: %{1}"
 "非法 search shard key：%{1}","Illegal search shard key: %{1}"
 "非法 search shard 实体名：%{1}","Illegal search shard entity name: %{1}"
-搜索筛选,"Search Filters"
-分类面包屑,"Category breadcrumb"
 …,…
 商品,Products
 全部,All
@@ -59,6 +57,8 @@ chart,chart
 "商品 0 条","0 products"
 暂无匹配商品，可换词或浏览分类,"No matching products — try another keyword or browse categories"
 请输入关键词开始搜索,"Enter a keyword to start searching"
+搜索筛选,"Search Filters"
+分类面包屑,"Category breadcrumb"
 搜索类型,"Search type"
 展开/收起,"Expand / collapse"
 是,yes

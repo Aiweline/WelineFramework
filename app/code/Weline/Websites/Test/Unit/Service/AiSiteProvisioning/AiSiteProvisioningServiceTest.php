@@ -5,13 +5,27 @@ declare(strict_types=1);
 namespace Weline\Websites\Test\Unit\Service\AiSiteProvisioning;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Exception\AiSiteProvisioningException;
 use Weline\Websites\Model\AiSiteProvisioningRequest;
+use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Model\DomainRegistrar;
+use Weline\Websites\Model\DomainRegistrarAccount;
+use Weline\Websites\Model\Website;
+use Weline\Websites\Model\WebsiteDomain;
+use Weline\Websites\Service\AiSiteDomainPreparationService;
+use Weline\Websites\Service\AiSiteDomainPurchaseAccountService;
 use Weline\Websites\Service\AiSiteLocalDomainReadinessService;
 use Weline\Websites\Service\AiSiteProvisioningQueueGateway;
 use Weline\Websites\Service\AiSiteProvisioningRequestRepository;
 use Weline\Websites\Service\AiSiteProvisioningService;
 use Weline\Websites\Service\AiSiteStartPageService;
+use Weline\Websites\Service\AiSiteWebsiteTargetResolver;
+use Weline\Websites\Service\DefaultWebsiteService;
+use Weline\Websites\Service\DomainPurchaseService;
+use Weline\Websites\Service\DomainRegistrarResolverService;
+use Weline\Websites\Service\LocalWelineHostsSyncService;
+use Weline\Websites\Service\LocalWelineWildcardCertificateService;
 
 final class AiSiteProvisioningServiceTest extends TestCase
 {
@@ -22,7 +36,7 @@ final class AiSiteProvisioningServiceTest extends TestCase
         $readiness = $this->createMock(AiSiteLocalDomainReadinessService::class);
         $readiness->expects(self::once())
             ->method('prepare')
-            ->with('demo-site.test.weline.com', true)
+            ->with('demo-site.weline.test', true)
             ->willReturn([
                 'can_start' => false,
                 'authorization_pending' => true,
@@ -41,7 +55,7 @@ final class AiSiteProvisioningServiceTest extends TestCase
                     $data[AiSiteProvisioningRequest::schema_fields_DOMAIN_MODE]
                 );
                 self::assertSame(
-                    'demo-site.test.weline.com',
+                    'demo-site.weline.test',
                     $data[AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN]
                 );
                 self::assertNull($data[AiSiteProvisioningRequest::schema_fields_REGISTRAR_ACCOUNT_ID]);
@@ -84,7 +98,7 @@ final class AiSiteProvisioningServiceTest extends TestCase
         self::assertTrue($result['success']);
         self::assertSame(AiSiteProvisioningRequest::STATUS_PENDING, $result['status']);
         self::assertSame(AiSiteProvisioningRequest::DOMAIN_MODE_TEST, $result['domain_mode']);
-        self::assertSame('demo-site.test.weline.com', $result['target_domain']);
+        self::assertSame('demo-site.weline.test', $result['target_domain']);
         self::assertSame(0, $result['purchase_order_id']);
         self::assertSame(0, $result['website_bound']);
         self::assertSame(0, $result['website_id']);
@@ -467,7 +481,7 @@ final class AiSiteProvisioningServiceTest extends TestCase
             ->willReturn(['queue_id' => 52, 'status' => 'done']);
         $startPage->expects(self::once())
             ->method('configure')
-            ->with(0, 'demo-site.test.weline.com', 44)
+            ->with(0, 'demo-site.test.weline.com', 44, '')
             ->willReturn([
                 'website_id' => 0,
                 'target_domain' => 'demo-site.test.weline.com',
@@ -476,22 +490,70 @@ final class AiSiteProvisioningServiceTest extends TestCase
                 'cache_broadcast' => ['success' => true],
             ]);
 
-        $result = (new AiSiteProvisioningService(
-            $repository,
-            $gateway,
-            $readiness,
-            $startPage
-        ))->configureStartPage([
-            'admin_user_id' => 27,
-            'client_request_id' => 'cmd-1',
-            'source_public_id' => 'pagebuilder-session-1',
-            'domain_mode' => 'test',
-            'target_domain' => 'demo-site.test.weline.com',
-            'page_id' => 44,
-        ]);
+        $previousPreparation = ObjectManager::getInstance(AiSiteDomainPreparationService::class);
+        ObjectManager::setInstance(
+            AiSiteDomainPreparationService::class,
+            $this->boundDomainPreparationService()
+        );
+        try {
+            $result = (new AiSiteProvisioningService(
+                $repository,
+                $gateway,
+                $readiness,
+                $startPage
+            ))->configureStartPage([
+                'admin_user_id' => 27,
+                'client_request_id' => 'cmd-1',
+                'source_public_id' => 'pagebuilder-session-1',
+                'domain_mode' => 'test',
+                'target_domain' => 'demo-site.test.weline.com',
+                'page_id' => 44,
+            ]);
+        } finally {
+            ObjectManager::setInstance(AiSiteDomainPreparationService::class, $previousPreparation);
+        }
 
         self::assertTrue($result['success']);
         self::assertSame(44, $result['start_page']['page_id']);
+    }
+
+    /**
+     * Real preparation service whose WebsiteDomain probe reports the already
+     * materialized binding, so configureStartPage can verify ownership.
+     */
+    private function boundDomainPreparationService(): AiSiteDomainPreparationService
+    {
+        $binding = $this->getMockBuilder(WebsiteDomain::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods([
+                'clearData',
+                'loadByDomainAndSubPath',
+                'getDomainId',
+                'getWebsiteId',
+                'getStatus',
+            ])
+            ->getMock();
+        $binding->method('clearData')->willReturnSelf();
+        $binding->method('loadByDomainAndSubPath')->willReturnSelf();
+        $binding->method('getDomainId')->willReturn(1);
+        $binding->method('getWebsiteId')->willReturn(0);
+        $binding->method('getStatus')->willReturn(WebsiteDomain::STATUS_ACTIVE);
+
+        return new AiSiteDomainPreparationService(
+            new AiSiteDomainPurchaseAccountService(
+                $this->createStub(DomainRegistrarAccount::class),
+                $this->createStub(DomainRegistrar::class),
+                $this->createStub(DomainRegistrarResolverService::class),
+            ),
+            $this->createStub(DomainPurchaseService::class),
+            $this->createStub(DefaultWebsiteService::class),
+            $this->createStub(DomainPool::class),
+            $binding,
+            $this->createStub(LocalWelineHostsSyncService::class),
+            $this->createStub(LocalWelineWildcardCertificateService::class),
+            $this->createStub(AiSiteWebsiteTargetResolver::class),
+            $this->createStub(Website::class),
+        );
     }
 
     /** @param array<string, mixed> $data */

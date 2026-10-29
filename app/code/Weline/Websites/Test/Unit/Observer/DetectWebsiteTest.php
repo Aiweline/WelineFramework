@@ -17,7 +17,6 @@ use Weline\Framework\Runtime\StorefrontNavigationScope;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Observer\DetectWebsite;
-use Weline\Websites\Service\Exception\ScopeResolutionException;
 use Weline\Websites\Service\ScopeResolver;
 
 /** TEST-P1A-03 and TEST-P1A-04: canonical scope resolution and localization URL ordering. */
@@ -93,7 +92,9 @@ final class DetectWebsiteTest extends TestCase
 
         $this->assertSame(3, $cache->getCalls, 'Expected process cache to skip backing-cache reads on the second request.');
         $this->assertSame($firstSites, $secondSites);
-        $this->assertCount(2, $secondSites);
+        // One Website row expands to bare + www example.com (2 rows) plus the
+        // reserved project-Host synthetic /~site/default mount (bare + www = 2 rows).
+        $this->assertCount(4, $secondSites);
     }
 
     public function testUrlMatchUsesProcessCacheAcrossObserverInstances(): void
@@ -345,13 +346,9 @@ final class DetectWebsiteTest extends TestCase
         $observer = new DetectWebsite();
         $this->setObserverCache($observer, new DetectWebsiteCachePoolSpy());
 
-        try {
-            $observer->resolveWebsiteContext('https://example.com/shop/order');
-            self::fail('Equal-priority Website routes must be rejected.');
-        } catch (ScopeResolutionException $exception) {
-            self::assertSame('website_route_ambiguous', $exception->reason);
-            self::assertSame(409, $exception->httpStatus);
-        }
+        $this->assertAmbiguousWebsiteRoute(
+            static fn() => $observer->resolveWebsiteContext('https://example.com/shop/order'),
+        );
     }
 
     public function testCanonicallyEquivalentWebsitePathsFailClosed(): void
@@ -548,9 +545,14 @@ final class DetectWebsiteTest extends TestCase
         try {
             $operation();
             self::fail('Equal-priority Website routes must be rejected.');
-        } catch (ScopeResolutionException $exception) {
-            self::assertSame('website_route_ambiguous', $exception->reason);
-            self::assertSame(409, $exception->httpStatus);
+        } catch (NoRouterException $exception) {
+            // DetectWebsite converts the ambiguity ScopeResolutionException into a
+            // terminated 409 response (Response::noRouter) instead of leaking it.
+            self::assertSame(409, $exception->getCode());
+            self::assertMatchesRegularExpression(
+                '/matches multiple websites|同优先级匹配到多个网站/u',
+                $exception->getErrorMessage(),
+            );
         }
     }
 }

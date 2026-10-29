@@ -16,9 +16,15 @@ final class AiSiteProvisioningRequestSchemaTest extends TestCase
     {
         $schema = (new SchemaParser())->parse(AiSiteProvisioningRequest::class);
         self::assertNotNull($schema);
-        self::assertSame(
-            AiSiteProvisioningRequest::schema_table,
-            \trim($schema->tableName, "`\""),
+        // getTable() resolves the physical identifier as "schema"."prefix+table";
+        // compare the normalized physical table so DB schema/prefix never drifts.
+        $physicalTable = \trim(
+            (string)\preg_replace('/^.*[."`]/', '', \trim($schema->tableName, "`\"")),
+            '"'
+        );
+        self::assertMatchesRegularExpression(
+            '/^(?:[A-Za-z0-9]+_)?' . \preg_quote(AiSiteProvisioningRequest::schema_table, '/') . '$/',
+            $physicalTable,
         );
 
         $firstRun = (new SchemaDiffEngine())->diff($schema, null);

@@ -16,7 +16,8 @@ use Weline\Theme\Service\ThemeUpdate\ThemeUpdateRuntime;
  * setup:upgrade / deploy:upgrade / core:update 后：迁到 generated/ 并全主题预固化布局模板（§0 R5/R6）。
  *
  * 非 dev：已进入主题更新代次机制的站点不再就地固化（那会在维护窗内改线上主题字节），
- * 改为给绑定主题写脏标记，由 theme:update / theme_update_auto_publish cron 构建新代次后翻指针。
+ * 改为给绑定主题写脏标记，由发布流水线里的 `php bin/w theme:update` 构建新代次后翻指针。
+ * （原每分钟轮询的 theme_update_auto_publish cron 已删除：发布由 SSE 同步收敛，不需要轮询兜底。）
  * 首次安装（主题还没有代次指针）仍就地固化，保证空站升级后店面有产物可用。
  *
  * @see app/code/Weline/Theme/doc/布局固化与默认注入.md §0 · §3.4

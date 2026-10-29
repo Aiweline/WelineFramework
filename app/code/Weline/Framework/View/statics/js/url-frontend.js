@@ -33,10 +33,11 @@
         if (!key) {
             return false;
         }
-        if (['_', 'ai_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'].includes(key)) {
+        // 只忽略纯缓存击穿/性能标记；广告与渠道参数（utm_*、gclid、fbclid、msclkid …）必须原样保留。
+        if (['_', 'ai_perf', 'browser_perf', 'codex_perf'].includes(key)) {
             return true;
         }
-        return key.startsWith('utm_') || key.startsWith('mtm_') || key.startsWith('pk_');
+        return key.startsWith('codex_');
     }
 
     function sanitizeSwitchSearch(search) {

@@ -4,10 +4,10 @@ declare(strict_types=1);
 namespace Weline\Websites\Test\Unit\Extends\Module\Weline_Ai\Agent;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Ai\Api\AiModel;
+use Weline\Ai\Api\Provider\ProviderRuntimeInterface;
+use Weline\Ai\Api\Provider\ProviderSessionInterface;
 use Weline\Ai\Interface\ToolInterface;
-use Weline\Ai\Model\AiModel;
-use Weline\Ai\Service\Provider\ProviderFactory;
-use Weline\Ai\Service\Provider\ProviderInterface;
 use Weline\Websites\Extends\Module\Weline_Ai\Agent\WebsiteBuilderAgent;
 
 final class WebsiteBuilderAgentTest extends TestCase
@@ -21,7 +21,7 @@ final class WebsiteBuilderAgentTest extends TestCase
     public function testExecuteHonorsMaxIterationsParamOverride(): void
     {
         $tool = $this->createToolDouble('loop_tool', ['ok' => true]);
-        $provider = $this->createMock(ProviderInterface::class);
+        $provider = $this->createMock(ProviderSessionInterface::class);
         $provider->expects($this->exactly(2))
             ->method('generate')
             ->willReturn([
@@ -35,7 +35,7 @@ final class WebsiteBuilderAgentTest extends TestCase
                 ],
             ]);
 
-        $providerFactory = $this->createMock(ProviderFactory::class);
+        $providerFactory = $this->createMock(ProviderRuntimeInterface::class);
         $providerFactory->expects($this->once())
             ->method('getProvider')
             ->willReturn($provider);
@@ -74,7 +74,7 @@ final class WebsiteBuilderAgentTest extends TestCase
             'domain' => 'demo.local',
             'message' => '建站完成：demo.local',
         ]);
-        $provider = $this->createMock(ProviderInterface::class);
+        $provider = $this->createMock(ProviderSessionInterface::class);
         $provider->expects($this->once())
             ->method('generate')
             ->willReturn([
@@ -88,7 +88,7 @@ final class WebsiteBuilderAgentTest extends TestCase
                 ],
             ]);
 
-        $providerFactory = $this->createMock(ProviderFactory::class);
+        $providerFactory = $this->createMock(ProviderRuntimeInterface::class);
         $providerFactory->expects($this->once())
             ->method('getProvider')
             ->willReturn($provider);
@@ -134,30 +134,15 @@ final class WebsiteBuilderAgentTest extends TestCase
 
     public function testExecutePropagatesStreamCancellationToProviderStreamFull(): void
     {
-        $provider = new class implements ProviderInterface {
+        $provider = new class implements ProviderSessionInterface {
             public function generate(AiModel $model, string $prompt, array $params = []): array
             {
                 return ['content' => '', 'tool_calls' => []];
             }
 
-            public function generateStream(AiModel $model, string $prompt, callable $callback, array $params = []): array
-            {
-                return ['content' => '', 'usage' => []];
-            }
-
-            public function supports(string $modelCode): bool
-            {
-                return true;
-            }
-
             public function getProviderCode(): string
             {
                 return 'test';
-            }
-
-            public function getSupportedModels(): array
-            {
-                return [];
             }
 
             public function generateStreamFull(AiModel $model, string $prompt, array $params = []): array
@@ -171,7 +156,7 @@ final class WebsiteBuilderAgentTest extends TestCase
             }
         };
 
-        $providerFactory = $this->createMock(ProviderFactory::class);
+        $providerFactory = $this->createMock(ProviderRuntimeInterface::class);
         $providerFactory->expects($this->once())
             ->method('getProvider')
             ->willReturn($provider);

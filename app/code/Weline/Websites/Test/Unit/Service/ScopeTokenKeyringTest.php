@@ -66,7 +66,7 @@ final class ScopeTokenKeyringTest extends TestCase
         $this->install($snapshot);
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('不允许多个 kid 共用密钥');
+        $this->expectExceptionMessageMatches('/Scope Token keyring (does not allow multiple kids to share keys|不允许多个 kid 共用密钥)/u');
         (new ScopeTokenKeyring())->active();
     }
 
@@ -97,7 +97,7 @@ final class ScopeTokenKeyringTest extends TestCase
 
         $this->install($this->snapshot(1));
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('version 不允许回退');
+        $this->expectExceptionMessageMatches('/Scope Token keyring version (does not allow rollback|不允许回退)/u');
         (new ScopeTokenKeyring())->active();
     }
 

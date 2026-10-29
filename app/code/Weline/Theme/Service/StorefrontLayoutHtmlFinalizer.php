@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Http\AdAttributionLinkerClientScript;
 use Weline\Framework\Http\Fpc\FpcDevAutoPierceClientScript;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\TemplateRenderRouteTrace;
@@ -63,6 +64,12 @@ final class StorefrontLayoutHtmlFinalizer
         try {
             TemplateRenderRouteTrace::mark('layout_finalizer', 'fpc_dev_auto_pierce_client');
             $html = FpcDevAutoPierceClientScript::injectIntoHtml($html);
+        } catch (\Throwable) {
+        }
+
+        try {
+            TemplateRenderRouteTrace::mark('layout_finalizer', 'ad_attribution_linker_client');
+            $html = AdAttributionLinkerClientScript::injectIntoHtml($html);
         } catch (\Throwable) {
         }
 

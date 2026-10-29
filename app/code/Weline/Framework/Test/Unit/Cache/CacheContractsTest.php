@@ -628,7 +628,8 @@ private function assert_StorefrontWarmupOrchestrator_testOrchestratorAndCronLive
     self::assertStringContainsString('Framework/Cron', \str_replace('\\', '/', $cron->getFileName() ?: ''));
     self::assertStringNotContainsString('Framework/Cache/Cron', \str_replace('\\', '/', $cron->getFileName() ?: ''));
     $cronSource = (string) \file_get_contents($cron->getFileName() ?: '');
-    self::assertStringContainsString("'* * * * *'", $cronSource);
+    // 预热是后台加速，无实时性要求：已降为 5 分钟，避免与 FPC 抢 worker。
+    self::assertStringContainsString("'*/5 * * * *'", $cronSource);
     self::assertStringContainsString('function locked()', $cronSource);
     self::assertStringContainsString('return true;', $cronSource);
     self::assertStringNotContainsString('Weline\Server\\', $cronSource);

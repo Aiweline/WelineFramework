@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Websites\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Websites\Service\MaintenancePreviewTokenService;
 use Weline\Websites\Service\ScopeMaintenanceGate;
@@ -25,6 +27,13 @@ final class ScopeMaintenanceGateTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
+        // The gate memoizes maintenance status per request (StorefrontScopeHotCache
+        // request memo) and per worker process (L1). Earlier tests in the same run
+        // leave both warm, which would hide a fresh enable() from inheritance reads.
+        // RequestContext::init(); EXPERIMENT
+        StorefrontScopeHotCache::resetProcessCache();
+        ScopeMaintenanceGate::clearProcessCache();
         $this->previousKeyring = getenv('WELINE_SCOPE_TOKEN_KEYRING_B64');
         $this->resetKeyringProcessVersion();
         putenv('WELINE_SCOPE_TOKEN_KEYRING_B64=' . $this->encodedKeyring());

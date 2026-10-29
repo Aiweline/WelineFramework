@@ -29,7 +29,8 @@ final class SeoHeadScopeContextTest extends TestCase
         $event = new Event('Weline_Seo::head_context_resolve', ['head_context' => []]);
         (new SeoHeadContextResolve($stores, $channels))->execute($event);
         $head = $event->getData('head_context');
-        self::assertSame('Shop', $head['site_name']);
+        // site_name authority is Website.name (brand identity), not Store.name.
+        self::assertSame('Website', $head['site_name']);
         self::assertSame('https://shop.test:9555/retail', $head['organization']['url']);
         self::assertSame(11, $head['store_id']);
         self::assertSame(21, $head['channel_id']);
