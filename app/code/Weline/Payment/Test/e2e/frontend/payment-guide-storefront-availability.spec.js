@@ -28,7 +28,19 @@ function paymentGuideOrigin() {
   const {
     resolveStorefrontOrigin,
   } = require('../../../../../../../tests/e2e/framework/storefront-scope-context');
-  return resolveStorefrontOrigin();
+  const resolved = String(resolveStorefrontOrigin() || '').trim();
+  try {
+    const url = new URL(resolved);
+    // Worker 监听端口（:9555）只回答 308 → 公开 origin，浏览器直连会 ERR_TIMED_OUT
+    // （实测整包内 page.goto :9555/guide/payment 30.1s 超时，同刻 443 为 200）。
+    // 门店面验收一律用公开 origin（https 默认 443），与其它 spec 的 baseURL 口径一致。
+    if (url.port === '9555') {
+      url.port = '';
+    }
+    return url.origin;
+  } catch (_) {
+    return resolved;
+  }
 }
 const BASE = paymentGuideOrigin();
 const HUB = '/guide/payment';

@@ -1291,6 +1291,36 @@ async function approvePaypalAndLand(context, redirectUrl, existingPage = null, s
   return paypal;
 }
 
+/** 服务端可读的客户会话 Cookie 名：规范名 / 带端口段 / 带 worker 段三种形态。 */
+const CUSTOMER_SESSION_COOKIE = /^WELINE_CUSTOMER_SESSID(?:_\d+)?(?:_w\d+)?$/;
+
+/**
+ * 把 minted.session_id 就地写回 jar 里「实际存在」的 scoped 会话 Cookie。
+ *
+ * mint 解析出的名字可能带端口段（如 WELINE_CUSTOMER_SESSID_9555_w0），
+ * 服务端只读规范 scoped 名（WELINE_CUSTOMER_SESSID_w0）；jar 里已有 _w0 时
+ * 只写带端口名等于没换会话 → mint 后仍落登录页（customer.login_session）。
+ */
+async function adoptMintedCustomerSession(page, minted, origin = storefrontOrigin()) {
+  const sessionId = String((minted && minted.session_id) || '').trim();
+  if (sessionId === '') {
+    return 0;
+  }
+  const live = (await page.context().cookies(origin))
+    .filter((cookie) => CUSTOMER_SESSION_COOKIE.test(String(cookie.name || '')));
+  for (const cookie of live) {
+    await page.context().addCookies([{
+      url: origin,
+      name: cookie.name,
+      value: sessionId,
+      httpOnly: true,
+      secure: !!cookie.secure,
+      sameSite: 'Lax',
+    }]);
+  }
+  return live.length;
+}
+
 async function mintCustomerSessionCookie(page, email) {
   const origin = storefrontOrigin();
   const host = origin.replace(/^https?:\/\//, '').split('/')[0];
@@ -1305,6 +1335,16 @@ async function mintCustomerSessionCookie(page, email) {
   if (names.length && !names.some((n) => /_w\d+$/.test(n))) {
     names.push(`${names[0]}_w0`);
   }
+  // mint 的名字可能带端口段（..._9555_w0），服务端读的是规范 scoped 名 —— 两种都写。
+  for (const name of [...names]) {
+    const canonical = name.replace(/^(WELINE_CUSTOMER_SESSID)_\d+(?=_w\d+$)/, '$1');
+    if (canonical !== name && !names.includes(canonical)) {
+      names.push(canonical);
+    }
+  }
+  if (!names.some((n) => /^WELINE_CUSTOMER_SESSID_w\d+$/.test(n))) {
+    names.push('WELINE_CUSTOMER_SESSID_w0');
+  }
   await page.context().addCookies(names.map((name) => ({
     name,
     value: minted.session_id,
@@ -1314,6 +1354,8 @@ async function mintCustomerSessionCookie(page, email) {
     secure,
     sameSite: 'Lax',
   })));
+  // jar 里已有的 scoped 名逐条覆写（同 Cart 的做法），避免旧会话值残留。
+  await adoptMintedCustomerSession(page, minted, origin);
   return minted;
 }
 

@@ -235,10 +235,10 @@ final class StorefrontScopeHotCache implements ProcessSharedInterface
                     $context->translationLocales ?? [],
                 );
                 $vector = $this->generations->resolveVector($namespacePaths);
-                $keys[$KeyBuilder::policyKey($policy, $logicalKey, $decorator->fingerprint($vector))] = true;
+                $keys[KeyBuilder::policyKey($policy, $logicalKey, $decorator->fingerprint($vector))] = true;
                 foreach ($vector as $namespace => $generation) {
                     $single = $decorator->fingerprint([(string)$namespace => (int)$generation]);
-                    $keys[$KeyBuilder::policyKey($policy, $logicalKey, $single)] = true;
+                    $keys[KeyBuilder::policyKey($policy, $logicalKey, $single)] = true;
                 }
             } catch (\Throwable) {
             }

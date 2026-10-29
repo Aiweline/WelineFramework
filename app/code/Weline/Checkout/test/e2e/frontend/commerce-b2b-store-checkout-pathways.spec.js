@@ -66,8 +66,15 @@ function couponRejected(res) {
 }
 
 function defaultPdp(prepared) {
-  return String((prepared && prepared.pdp_path) || process.env.CHECKOUT_PDP_PATH || '').trim()
-    || '/product/yue-ya-ni-shang-yue-ya-ni-shang-zhang-an-yi-yuan-chuang-zheng-pin-tang-zhi-4d375d6d/';
+  const resolved = String((prepared && prepared.pdp_path) || process.env.CHECKOUT_PDP_PATH || '').trim();
+  // fixture 只返回 HTTP 探测通过的 PDP；为空说明候选全部不可用 ——
+  // 禁止回落到未验证 slug（死链只会变成 90s waitForFunction 超时的假根因）。
+  assertStep(
+    /^\/product\/.+/.test(resolved),
+    'b2b.pdp.resolve',
+    { pdp_path: resolved, hint: '设置 CHECKOUT_PDP_PATH 或修复 fixture 候选 slug 探测' },
+  );
+  return resolved;
 }
 
 moduleDescribe(test, MODULE, 'B2B测试店购物结账通路', () => {

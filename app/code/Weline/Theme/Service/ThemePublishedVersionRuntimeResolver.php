@@ -504,6 +504,94 @@ class ThemePublishedVersionRuntimeResolver implements ProcessSharedInterface
             }
         }
 
+        // Path-mounted Channel Scopes (`{website}.{store}.{channel}`, e.g.
+        // default.e2e_b2b_commerce.web) are real storefront owners but never appear in
+        // storefrontScopeProbeList() (built from frontend Website bindings + Global
+        // defaults), so their page stamps used to 409 forever. The wire id itself encodes
+        // theme / area / storeMode / sha256(scope) prefix / version number: verify it
+        // against the stored published row instead of enumerating Scope strings.
+        if ($this->isPublishedStorefrontGenerationCode($clientVersionId)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Owner-verified fallback for {@see isAcceptableStorefrontGenerationId()}.
+     *
+     * Finds the sealed CURRENT published row whose generation code equals the client wire
+     * id, across every storefront Scope column of the theme ancestor chain. Matching by
+     * code (theme + area + storeMode + scope fingerprint + version number) keeps the owner
+     * quad check while dropping the assumption that the Scope string is enumerable.
+     */
+    private function isPublishedStorefrontGenerationCode(string $clientVersionId): bool
+    {
+        if (\preg_match(
+            '/^t(\d+)\.frontend\.([A-Za-z0-9._:+-]{1,32})\.([a-f0-9]{12})\.v(\d+)(?:\.e\d+)?$/D',
+            $clientVersionId,
+            $matched,
+        ) !== 1) {
+            return false;
+        }
+        $themeId = (int)$matched[1];
+        $storeMode = $matched[2];
+        $versionNumber = (int)$matched[4];
+        if ($themeId < 1 || $versionNumber < 1) {
+            return false;
+        }
+        /** @var ThemeScopeVersionService $versions */
+        $versions = ObjectManager::getInstance(ThemeScopeVersionService::class);
+        $model = clone ObjectManager::getInstance(ThemeScopeVersion::class);
+        foreach ($this->themeIdChain($themeId) as $candidateThemeId) {
+            try {
+                $rows = $model->reset()
+                    ->where(ThemeScopeVersion::schema_fields_THEME_ID, $candidateThemeId)
+                    ->where(ThemeScopeVersion::schema_fields_AREA, 'frontend')
+                    ->where(ThemeScopeVersion::schema_fields_STORE_MODE, $storeMode)
+                    ->where(ThemeScopeVersion::schema_fields_VERSION_NUMBER, $versionNumber)
+                    ->where(ThemeScopeVersion::schema_fields_LIFECYCLE, ThemeScopeVersion::LIFECYCLE_SEALED)
+                    ->limit(20)
+                    ->select()
+                    ->fetchArray();
+            } catch (\Throwable) {
+                continue;
+            }
+            foreach (\is_array($rows) ? $rows : [] as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $candidate = clone $model;
+                $candidate->setData($row);
+                $scope = \trim((string)$candidate->getScope());
+                if ($scope === '') {
+                    continue;
+                }
+                try {
+                    // Same authority the server stamp uses: selection/flag resolved publish.
+                    $published = $versions->getPublished($candidateThemeId, $scope, $storeMode, 'frontend');
+                } catch (\Throwable) {
+                    continue;
+                }
+                if (!$published instanceof ThemeScopeVersion
+                    || $published->getVersionId() !== $candidate->getVersionId()
+                ) {
+                    continue;
+                }
+                $code = ThemeScopeGenerationCode::fromVersion($published);
+                if ($code === '') {
+                    continue;
+                }
+                $epoch = $this->storefrontTuEpoch($candidateThemeId);
+                if ($epoch > 0) {
+                    $code .= '.e' . $epoch;
+                }
+                if (\strcasecmp($code, $clientVersionId) === 0) {
+                    return true;
+                }
+            }
+        }
+
         return false;
     }
 

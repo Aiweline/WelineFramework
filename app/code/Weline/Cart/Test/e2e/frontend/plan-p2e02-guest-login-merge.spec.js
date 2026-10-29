@@ -128,6 +128,34 @@ function pickData(result) {
   return result;
 }
 
+const SESSION_COOKIE_NAME = /^WELINE_CUSTOMER_SESSID(_w\d+)?$/;
+
+/**
+ * A real login rotates the storefront's own Session cookie in place. The CLI
+ * mint derives its cookie name from the origin authority (`..._9555_w0`), which
+ * the storefront stops reading once its scoped `_w0` cookie exists, so the
+ * minted id has to be written back onto the live cookie names.
+ */
+async function adoptMintedCustomerSession(page, minted) {
+  const sessionId = String((minted && minted.session_id) || '').trim();
+  if (sessionId === '') {
+    return;
+  }
+  const origin = new URL(page.url()).origin;
+  const live = (await page.context().cookies(origin))
+    .filter((cookie) => SESSION_COOKIE_NAME.test(cookie.name));
+  for (const cookie of live) {
+    await page.context().addCookies([{
+      url: origin,
+      name: cookie.name,
+      value: sessionId,
+      httpOnly: true,
+      secure: cookie.secure,
+      sameSite: 'Lax',
+    }]);
+  }
+}
+
 moduleDescribe(test, MODULE, '计划 P2E-02 guest/login 合车', () => {
   test.setTimeout(240000);
 
@@ -208,7 +236,8 @@ moduleDescribe(test, MODULE, '计划 P2E-02 guest/login 合车', () => {
           .find((cookie) => cookie.name === 'weline_cart_guest_token');
         expect(guestCookie && guestCookie.value, '登录前须保留 guest_token Cookie').toBe(guestToken);
 
-        await mintCustomerSessionCookie(page, fixture.email);
+        const signedIn = await mintCustomerSessionCookie(page, fixture.email);
+        await adoptMintedCustomerSession(page, signedIn);
         await gotoCartStorefront(page, '/');
         await ensureApi(page);
 

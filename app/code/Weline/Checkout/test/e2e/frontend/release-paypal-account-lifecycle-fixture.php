@@ -66,6 +66,10 @@ function rel_paypal_resolve_pdp_path(): string
     if ($forced !== '') {
         $candidates[] = $forced;
     }
+    // 在售 PDP（2026-10-29 实测默认站与 B2B 渠道均 200 且含 product-add-to-cart）。
+    // 必须排在两位旧 slug 之前：旧 slug 探测会落到 404 / 商品页内存超限路径，
+    // 探测不过又会被旧逻辑当成可用路径回落到下游 → 假根因（90s waitForFunction 超时）。
+    $candidates[] = '/product/yueyanichang-4d375d6d-c7370-s7ca5';
     $candidates[] = '/product/yue-ya-ni-shang-yue-ya-ni-shang-zhang-an-yi-yuan-chuang-zheng-pin-tang-zhi-4d375d6d/';
     $candidates[] = '/product/qi-ta-xin-kuan-hei-shan-cha-han-fu-nu-chun-qiu-ji-he-zi-qun-guo-11ae8001/';
 
@@ -82,12 +86,9 @@ function rel_paypal_resolve_pdp_path(): string
         }
     }
 
-    $fallback = $candidates[0] ?? '/products/';
-    if ($fallback !== '' && $fallback[0] !== '/') {
-        $fallback = '/' . $fallback;
-    }
-
-    return $fallback;
+    // 全部候选都未通过 HTTP 探测：不再回落到未验证 slug 静默使用死链，
+    // 否则下游只会 404/超时并报出假根因。返回空串，由调用方显式失败上报。
+    return '';
 }
 
 function rel_paypal_pdp_responds_ok(string $path): bool
