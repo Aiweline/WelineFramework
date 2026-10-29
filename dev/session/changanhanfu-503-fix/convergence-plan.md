@@ -158,3 +158,35 @@ ManagedNginxService.php                    31a34fc4…   （B；同一 Edge/Gate
 | 第 2 段 49s 停站归因 | 我方 stop 因预算未执行，主因更可能是外部 signal（arch2 修正） | 同上 |
 | B 在真实长连接 reload 下的效果 | 只做了反射级 + 源码契约验证 | 下次真 reload 时 grep `drain-soft publication decision` |
 | upstream diff guard 真 reload 生效 | 同上 | 站点柜已加复查条目 |
+
+
+---
+
+# 第三轮（2026-10-30 05:40–06:15）：单次渲染成本专项（目标达成）
+
+## 三项指标前后对比（直连 WLS worker 25376，扣背景）
+
+| 指标 | 优化前 | 优化后 | 说明 |
+|---|---|---|---|
+| SQL 条数 `/blog` | 219 | **71 / 72** | 目标 <80 ✅ |
+| SQL 条数 `/` | 505 | **46** | 目标 <150 ✅ |
+| SQL 条数 404 | 108 | **26 / 21** | 目标 <30 ✅ |
+| 单请求 CPU 秒（/blog + /products 合计） | **42 CPU-s** | **22 CPU-s**（12 + 10） | 降约 48% |
+| 冷渲染 wall（/blog） | 24.7s（当时 st 55–70%） | 36s（当时 st 更高/波动） | **不宣称提速**，wall 由 steal 主导 |
+| 内存峰值（RSS 增量/请求） | 未单独采（历史单请求 real 达 600–900MB） | `/blog +50MB`、`/products +18MB` | 供参考，非峰值口径 |
+
+## 生效改动（4 文件，与 task-8 同批激活）
+`Framework/Runtime/RequestContext.php`（request 级 shared memo + 文件 kill switch + 8MiB/8192 上限）、
+`Framework/Cache/Namespace/NamespaceGenerationRepository.php`、`SystemConfig/Model/SystemConfig.php`（单值读+负缓存 + C2 开关）、
+`Theme/{Model,Service}/**`（模型 load memo / 应用行 memo / gate 指纹 memo）、
+`Shipping/Service/ShippingServiceBatchLoader.php` + `Seo/Service/Head/ProductCommerceFactsResolver.php`（批量取，等价性测试抓到 addressCountry 回归）。
+
+## 验收
+- 官方测试：SystemConfig 19/71、RequestContextSharedMemo 10/37、ThemeModelLoadMemo 7/16、ShippingBatchLoader 6/25、SeoCommerceFacts 5/13，全 EXIT=0
+- 线上：`framework:compile` 05:51；worker 滚动重启；gate 新版本 C6 用真穿章复验（200/MISS、无 decision 头、jobs 0→0）
+- 动态页 `/products`、`/blog`：连续 3 轮 ×2 页全 200（不再 503）
+
+## 未验证 / 边界（如实）
+- kill switch HTTP A/B 仅部分验证（bg=0 on 72 vs off 86 方向正确，样本受 worker recycle 污染）
+- `[request-memo]` stats 行未取到（需 worker 启动前设 env）
+- wall 未提速（steal 主导）；gate `pendingMaxSeconds=1800s` 需单独评审（P1）
