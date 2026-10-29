@@ -457,7 +457,18 @@ final class ManagedNginxService
                     $this->activeLifecycleDeadlineMonotonic,
                 );
             $startedByCall = !$wasRunning && (bool)($lifecycle['ok'] ?? false);
-            if (!($lifecycle['ok'] ?? false)) {
+            $drainSoftFailed = $wasRunning
+                && !($lifecycle['ok'] ?? false)
+                && $this->isReloadWorkerDrainSoftFailure(
+                    (string)($lifecycle['message'] ?? ''),
+                );
+            $upstreamBindingUnchanged = $drainSoftFailed
+                && $this->drainSoftFailureKeepsUpstreamBinding($rollback);
+            if ($this->lifecycleRejectionIsFatal(
+                $lifecycle,
+                $wasRunning,
+                $upstreamBindingUnchanged,
+            )) {
                 $recovery = $this->restorePublishedConfig(
                     $rollback,
                     $wasRunning,
@@ -470,7 +481,35 @@ final class ManagedNginxService
                         . (string)($lifecycle['message'] ?? 'unknown') . $recovery,
                 ];
             }
-            if (!$this->probeConfigGeneration((int)$written['http'], (string)$written['config_generation'])) {
+            $configGenerationLive = $this->probeConfigGeneration(
+                (int)$written['http'],
+                (string)$written['config_generation'],
+            );
+            $tls13Live = (bool)($written['ssl'] ?? false)
+                && $this->probeTls13(
+                    (int)$written['https'],
+                    (array)($written['server_names'] ?? []),
+                    (string)$written['config_generation'],
+                    (string)($written['ssl_certificate_sha256'] ?? ''),
+                );
+            if ($drainSoftFailed) {
+                // B2: one structured line per tolerated drain-soft publication so
+                // the next occurrence is attributable without guesswork.
+                \w_log_error(
+                    '[WLS Managed Nginx] drain-soft publication decision',
+                    [
+                        'lifecycle_message' => (string)($lifecycle['message'] ?? ''),
+                        'drain_soft_failed' => true,
+                        'upstream_binding_unchanged' => $upstreamBindingUnchanged,
+                        'config_generation_live' => $configGenerationLive,
+                        'tls13_live' => $tls13Live,
+                        'owner_config_sha256' => (string)($ownerIntent['config_sha256'] ?? ''),
+                        'owner_config_generation' => (string)($ownerIntent['config_generation'] ?? ''),
+                    ],
+                    'wls',
+                );
+            }
+            if (!$configGenerationLive) {
                 $recovery = $this->restorePublishedConfig(
                     $rollback,
                     $wasRunning,
@@ -482,14 +521,7 @@ final class ManagedNginxService
                     'message' => 'managed nginx did not serve the published config generation' . $recovery,
                 ];
             }
-            if (!(bool)($written['ssl'] ?? false)
-                || !$this->probeTls13(
-                    (int)$written['https'],
-                    (array)($written['server_names'] ?? []),
-                    (string)$written['config_generation'],
-                    (string)($written['ssl_certificate_sha256'] ?? ''),
-                )
-            ) {
+            if (!$tls13Live) {
                 $recovery = $this->restorePublishedConfig(
                     $rollback,
                     $wasRunning,
@@ -1534,6 +1566,108 @@ final class ManagedNginxService
             'unable to prove old nginx worker generation drain',
             'old nginx workers did not drain before the reload generation deadline',
         ], true);
+    }
+
+    /**
+     * Decide whether a rejected lifecycle command must roll the publication back.
+     *
+     * A worker-drain observation is only a proxy for activation: the reload
+     * command already succeeded, old workers may simply still be serving
+     * long-lived connections (SSE, large downloads) bounded by nginx's
+     * worker_shutdown_timeout. reloadUnlocked() has always treated that as soft
+     * and let the live config/TLS proofs decide. The start/adoption path used to
+     * treat it as fatal, so an otherwise verified generation was rolled back and
+     * nginx stopped fail-closed. Both paths must agree.
+     *
+     * Three conditions keep the tolerance narrow:
+     * - the reload branch only: a fresh start has no previous worker generation,
+     *   so a drain report there is not a soft failure at all;
+     * - the rejection must be one of the two known drain messages;
+     * - the upstream binding must be byte-identical to the before-image, because
+     *   a lingering old worker on a *changed* upstream would proxy to the
+     *   previous backend for up to worker_shutdown_timeout seconds.
+     *
+     * Every other rejection stays fatal, and the caller's live proofs remain
+     * mandatory: this only stops a drain-only observation from vetoing them.
+     *
+     * @param array<string,mixed> $lifecycle
+     */
+    private function lifecycleRejectionIsFatal(
+        array $lifecycle,
+        bool $wasRunning,
+        bool $upstreamBindingUnchanged,
+    ): bool {
+        if ((bool)($lifecycle['ok'] ?? false)) {
+            return false;
+        }
+        if (!$wasRunning) {
+            return true;
+        }
+        if (!$this->isReloadWorkerDrainSoftFailure(
+            (string)($lifecycle['message'] ?? ''),
+        )) {
+            return true;
+        }
+
+        return !$upstreamBindingUnchanged;
+    }
+
+    /**
+     * True when the published active config keeps the exact upstream binding of
+     * its transaction before-image. Any missing/unreadable/unparsable input
+     * returns false, so the rejection stays fatal instead of being tolerated on
+     * an unproven binding.
+     */
+    private function drainSoftFailureKeepsUpstreamBinding(?string $rollback): bool
+    {
+        if (!\is_string($rollback) || $rollback === '') {
+            return false;
+        }
+        $before = @\file_get_contents($rollback);
+        $active = @\file_get_contents($this->paths->confFile());
+        if (!\is_string($before) || $before === ''
+            || !\is_string($active) || $active === ''
+        ) {
+            return false;
+        }
+        $beforeFingerprint = $this->upstreamBindingFingerprint($before);
+        $activeFingerprint = $this->upstreamBindingFingerprint($active);
+
+        return $beforeFingerprint !== ''
+            && \hash_equals($beforeFingerprint, $activeFingerprint);
+    }
+
+    /**
+     * Stable fingerprint of every `server host:port` inside the managed
+     * `upstream wls_backend` block. Empty when the block is absent or malformed.
+     */
+    private function upstreamBindingFingerprint(string $conf): string
+    {
+        if (\preg_match(
+            '/upstream\s+wls_backend\s*\{(.*?)\}/s',
+            $conf,
+            $block,
+        ) !== 1) {
+            return '';
+        }
+        \preg_match_all(
+            '/server\s+(\[[^\]]+\]|[^:;\s]+):(\d+)\s*;/',
+            (string)$block[1],
+            $servers,
+            PREG_SET_ORDER,
+        );
+        $targets = [];
+        foreach ($servers as $server) {
+            $host = \strtolower(\trim((string)($server[1] ?? ''), '[]'));
+            $port = (int)($server[2] ?? 0);
+            if ($host === '' || $port < 1 || $port > 65535) {
+                return '';
+            }
+            $targets[] = $host . ':' . $port;
+        }
+        \sort($targets);
+
+        return $targets === [] ? '' : \hash('sha256', \implode(',', $targets));
     }
 
     /**
