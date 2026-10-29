@@ -57,10 +57,17 @@ final class ThemeLayoutEntityBakeCoordinator
     }
 
     /** Pure candidates for a pinned historical R; callers may render these in memory. */
-    public function candidateForIdentity(ThemeVersionIdentity $identity, string $layoutType, string $layoutOption = 'default', string $targetType = 'global', ?int $targetId = null, array $changes = []): array
+    public function candidateForIdentity(ThemeVersionIdentity $identity, string $layoutType, string $layoutOption = 'default', string $targetType = 'global', ?int $targetId = null, array $changes = [], ?array &$chromeWorkset = null): array
     {
-        $chromeCandidates = [];
-        return $this->candidateWithChromeReuse($identity, $layoutType, $layoutOption, $targetType, $targetId, $changes, $chromeCandidates);
+        // $chromeWorkset lets one identity render its shared chrome (header/footer/
+        // sidebar) once for N layouts. A local empty array made the reuse a no-op,
+        // so every layout re-read and re-rendered the same partials.
+        // Marker: theme-bake-chrome-workset-v1
+        if (!is_array($chromeWorkset)) {
+            $chromeWorkset = [];
+        }
+        $candidates = $this->candidateWithChromeReuse($identity, $layoutType, $layoutOption, $targetType, $targetId, $changes, $chromeWorkset);
+        return $candidates;
     }
 
     /** Reuse only byte-equivalent common inputs inside this one synchronous workset. */
@@ -696,7 +703,6 @@ final class ThemeLayoutEntityBakeCoordinator
         $result = $pipeline->run($workItems, $pipelineProgress, $options);
         $this->lastRebakeReport['migrated'] = (int)($result['migrated'] ?? 0);
         $seenOwners = [];
-        $seenChrome = [];
         foreach ($workItems as $item) {
             $identity = $item['identity'];
             $ownerKey = $identity->themeId . "\0" . $identity->canonicalScope . "\0" . $identity->storeMode;
@@ -704,21 +710,11 @@ final class ThemeLayoutEntityBakeCoordinator
                 $seenOwners[$ownerKey] = true;
                 $this->bustPresentationCaches($identity->themeId, $identity->canonicalScope, $identity->storeMode);
             }
-            // Pipeline may skip unchanged pages — still force chrome heal per identity (draft + formal).
-            $chromeKey = $ownerKey . "\0" . $identity->themeVersionId . "\0" . $identity->mode;
-            if (isset($seenChrome[$chromeKey])) {
-                continue;
-            }
-            $seenChrome[$chromeKey] = true;
-            if ($this->rematerializeChromeIfStale(
-                $identity->themeId,
-                $identity->canonicalScope,
-                $identity->themeVersionId,
-                $identity->area,
-                $identity->storeMode,
-            )) {
-                $this->lastRebakeReport['chrome_bootstrapped']++;
-            }
+            // Chrome heal already ran inside solidifyPendingIdentity() for every
+            // workItem identity (serial + solidify-identity-job worker). The only
+            // identity that needs a heal here is the one that never entered the
+            // pipeline — handled by collectRebakeWorkItems() when pending is empty.
+            // Marker: theme-bake-chrome-heal-once-v1
         }
 
         return $this->lastRebakeReport['migrated'];
@@ -761,6 +757,9 @@ final class ThemeLayoutEntityBakeCoordinator
                 ) ?? $identity;
             }
             $candidates = [];
+            // One workset per identity: shared chrome is rendered once and reused
+            // by every pending layout. Marker: theme-bake-chrome-workset-v1
+            $chromeWorkset = [];
             foreach ($pending as $key) {
                 $candidates = array_replace($candidates, $this->candidateForIdentity(
                     $identity,
@@ -769,6 +768,7 @@ final class ThemeLayoutEntityBakeCoordinator
                     (string)$key['target_type'],
                     (int)$key['target_id'],
                     $changes,
+                    $chromeWorkset,
                 ));
             }
             $result = (new ThemeLayoutEntityBatchPublisher())->publish(

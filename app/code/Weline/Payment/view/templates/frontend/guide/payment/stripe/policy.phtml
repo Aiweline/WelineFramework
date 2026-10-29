@@ -4,7 +4,7 @@
 $entry = (array) ($this->getData('payment_guide_entry') ?? []);
 ?>
 
-<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/guide-shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/shell-open.phtml'); ?>
 <?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/sidebar.phtml'); ?>
 
 <article class="payment-guide-layout__main payment-guide-article" data-testid="payment-policy-stripe">
@@ -36,4 +36,4 @@ $entry = (array) ($this->getData('payment_guide_entry') ?? []);
         <p><lang>请仅在本站结账流程或 Stripe 官方域名完成付款与验证，勿向他人泄露卡号、验证码或一次性密码。</lang></p>
     </section>
 </article>
-<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/guide-shell-close.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/shell-close.phtml'); ?>

@@ -730,7 +730,13 @@ $defaultNavItemsFactory = static function (): array {
                     endforeach;
                 else:
                 ?>
+                    <?php
+                    // Only advertise the deals entry when the site really has an active
+                    // `deals` promotion page; otherwise /promotion/deals answers 404.
+                    // Marker: promotion-header-deals-link-guard-v1
+                    if (\Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Promotion\Service\PromotionStorefrontPageService::class)->isPageAvailable('deals')): ?>
                     <li><a href="@url{'promotion/deals'}"><i class="fas fa-bolt" aria-hidden="true"></i> <?= $headerEsc('今日特价') ?></a></li>
+                    <?php endif; ?>
                     <li><a href="@url{'best-sellers'}"><i class="fas fa-fire" aria-hidden="true"></i> <?= $headerEsc('热销榜') ?></a></li>
                     <li><a href="@url{'new-arrivals'}"><i class="fas fa-star" aria-hidden="true"></i> <?= $headerEsc('新品上市') ?></a></li>
                     <li><a href="@url{'faq'}"><i class="fas fa-question-circle" aria-hidden="true"></i> <?= $headerEsc('客户服务') ?></a></li>

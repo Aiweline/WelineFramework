@@ -99,6 +99,13 @@ final readonly class CanonicalStorefrontUrl
         if (\preg_match('/[\x00-\x1F\x7F\\\\]/', $url) === 1) {
             throw new \InvalidArgumentException('URL contains invalid bytes or whitespace.');
         }
+        if ($allowQuery && \str_contains($url, '#')) {
+            // Browsers never send a fragment to the server, so a `#` inside a
+            // trusted request URL is literal path/query data (typically an
+            // upstream rawurldecode of %23). Keep it as data instead of
+            // rejecting an otherwise valid request with 400.
+            $url = \str_replace('#', '%23', $url);
+        }
         if (\str_contains($url, '#') || (!$allowQuery && \str_contains($url, '?'))) {
             throw new \InvalidArgumentException('URL query or fragment is not allowed.');
         }

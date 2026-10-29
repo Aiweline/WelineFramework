@@ -52,6 +52,22 @@ final class CanonicalStorefrontUrlTest extends TestCase
         self::assertTrue($store->matchesRequestPath($request));
     }
 
+    public function testHashInsideRequestQueryIsDataNotFragment(): void
+    {
+        $request = CanonicalStorefrontUrl::fromRequestUrl(
+            'https://example.test/customer/account/login?redirect_url=%2Fcustomer%2Faccount%2Findex%23affiliate',
+        );
+
+        self::assertSame('/customer/account/login', $request->path);
+    }
+
+    public function testStoreUrlStillRejectsFragment(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        CanonicalStorefrontUrl::fromStoreUrl('https://example.test/shop#anchor');
+    }
+
     public function testEncodedPathSeparatorIsRejected(): void
     {
         $this->expectException(\InvalidArgumentException::class);

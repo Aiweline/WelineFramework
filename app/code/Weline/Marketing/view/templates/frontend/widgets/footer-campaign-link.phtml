@@ -20,8 +20,16 @@
  * @param label {default="活动",type="string",label="链接文字"}
  */
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Promotion\Service\PromotionStorefrontPageService;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
+
+// A site without an active `deals` promotion page must not advertise the link:
+// /promotion/deals would answer 404. Marker: promotion-header-deals-link-guard-v1
+if (!ObjectManager::getInstance(PromotionStorefrontPageService::class)->isPageAvailable('deals')) {
+    return;
+}
 
 $scope = WidgetUiScope::forWidget('footer-campaign-link');
 $wc = $scope->cssClass;

@@ -20,8 +20,18 @@
  * @param label {default="今日特价",type="string",label="链接文字"}
  */
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Promotion\Service\PromotionStorefrontPageService;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
+
+// A site without an active `deals` promotion page must not advertise the link:
+// /promotion/deals would answer 404 (Deals::index redirects when unavailable).
+// Sites that renamed their deals page keep their own nav-tab entry elsewhere.
+// Marker: promotion-header-deals-link-guard-v1
+if (!ObjectManager::getInstance(PromotionStorefrontPageService::class)->isPageAvailable('deals')) {
+    return;
+}
 
 $scope = WidgetUiScope::forWidget('header-deals-link');
 $wc = $scope->cssClass;

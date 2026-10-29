@@ -5,7 +5,7 @@ $entry = (array) ($this->getData('payment_guide_entry') ?? []);
 $policyRoute = (string) ($entry['policy_route'] ?? '');
 ?>
 
-<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/guide-shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/shell-open.phtml'); ?>
 <?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/sidebar.phtml'); ?>
 
 <article class="payment-guide-layout__main payment-guide-article" data-testid="payment-guide-stripe">
@@ -59,4 +59,4 @@ $policyRoute = (string) ($entry['policy_route'] ?? '');
         </footer>
     <?php endif; ?>
 </article>
-<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/guide-shell-close.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/frontend/guide/payment/partials/shell-close.phtml'); ?>
