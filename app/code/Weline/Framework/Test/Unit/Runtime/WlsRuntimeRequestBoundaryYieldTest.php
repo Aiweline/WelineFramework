@@ -66,13 +66,14 @@ final class WlsRuntimeRequestBoundaryYieldTest extends TestCase
         );
     }
 
-    public function testTemplateCooperativeYieldDefaultsOptIn(): void
+    public function testTemplateCooperativeYieldIsAlwaysOn(): void
     {
         $method = new ReflectionMethod(Template::class, 'cooperativeTemplateYield');
         $file = $method->getFileName();
 
         self::assertIsString($file);
-        self::assertFalse((bool)\Weline\Framework\App\Env::get('wls.performance.template_cooperative_yield_enabled', true));
+        // 2026-10-30 用户指定：协作让出必须恒开，不再提供 env 开关。
+        self::assertNull(\Weline\Framework\App\Env::get('wls.performance.template_cooperative_yield_enabled', null));
 
         $lines = \file($file);
         self::assertIsArray($lines);
@@ -83,11 +84,12 @@ final class WlsRuntimeRequestBoundaryYieldTest extends TestCase
             $method->getEndLine() - $method->getStartLine() + 1
         ));
 
-        self::assertStringContainsString(
-            'wls.performance.template_cooperative_yield_enabled',
+        self::assertStringNotContainsString(
+            'template_cooperative_yield_enabled',
             $source,
-            'Template-level cooperative yield is opt-in via env and must remain explicitly configurable.'
+            'Template-level cooperative yield must not be gated by a config switch (always on).'
         );
+        self::assertStringContainsString('SchedulerSystem::yield()', $source);
     }
 
     public function testWorkerRequestFiberDoesNotYieldBeforeNormalRequestHandling(): void

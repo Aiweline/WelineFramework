@@ -347,13 +347,14 @@ final class FullPageCacheCoordinatorTest extends TestCase
         self::assertSame($newPayload, $pool->get($freshKey));
     }
 
-    public function testCooperativeFpcYieldDefaultsOptInForPersistentRequests(): void
+    public function testCooperativeFpcYieldIsAlwaysOnForPersistentRequests(): void
     {
         $method = new \ReflectionMethod(FullPageCacheCoordinator::class, 'cooperativeBuildYield');
         $file = $method->getFileName();
 
         self::assertIsString($file);
-        self::assertFalse((bool)\Weline\Framework\App\Env::get('wls.performance.fpc_cooperative_yield_enabled', true));
+        // 2026-10-30 用户指定：协作让出必须恒开，不再提供 env 开关。
+        self::assertNull(\Weline\Framework\App\Env::get('wls.performance.fpc_cooperative_yield_enabled', null));
 
         $lines = \file($file);
         self::assertIsArray($lines);
@@ -364,7 +365,7 @@ final class FullPageCacheCoordinatorTest extends TestCase
             $method->getEndLine() - $method->getStartLine() + 1
         ));
 
-        self::assertStringContainsString('wls.performance.fpc_cooperative_yield_enabled', $source);
+        self::assertStringNotContainsString('fpc_cooperative_yield_enabled', $source);
         self::assertStringContainsString('SchedulerSystem::yield()', $source);
     }
 

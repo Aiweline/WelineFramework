@@ -237,13 +237,11 @@ class Env extends DataObject
                 'memory_limit' => '512M',
             ],
         ],
-        // Cooperative checkpoints are opt-in: enable under high concurrency so
-        // CPU-heavy template/FPC assembly does not starve ready WLS socket waiters.
+        // Cooperative checkpoints are MANDATORY in WLS (user 2026-10-30: always on,
+        // switches removed): CPU-heavy template/FPC assembly must yield so ready
+        // socket waiters are not starved. No enable flags are exposed.
         'wls' => [
-            'performance' => [
-                'fpc_cooperative_yield_enabled' => false,
-                'template_cooperative_yield_enabled' => false,
-            ],
+            'performance' => [],
             // FPC admin (CacheManager 全页缓存): auto-pierce key is absent by default —
             // FpcMode treats absent as OFF (opt-in) so FPC stays hittable until enabled.
             'fpc' => [],

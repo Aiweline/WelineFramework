@@ -781,10 +781,7 @@ final class FullPageCacheCoordinator implements ProcessSharedInterface
 
     private static function cooperativeBuildYield(): void
     {
-        if (!(bool)Env::get('wls.performance.fpc_cooperative_yield_enabled', false)) {
-            return;
-        }
-
+        // 协作让出是 WLS 必需行为，不设开关（用户 2026-10-30 指定：必须开，关着没意义）。
         if (!Runtime::isPersistent() || !SchedulerSystem::isSchedulerActive() || !\Fiber::getCurrent()) {
             return;
         }

@@ -3240,9 +3240,7 @@ class Template extends DataObject implements RequestLocalInterface
         if (!Runtime::isPersistent() || !SchedulerSystem::isSchedulerActive()) {
             return;
         }
-        if (!(bool)Env::get('wls.performance.template_cooperative_yield_enabled', false)) {
-            return;
-        }
+        // 协作让出是 WLS 必需行为，不设开关（用户 2026-10-30 指定：必须开，关着没意义）。
 
         $fiber = \Fiber::getCurrent();
         if (!$fiber instanceof \Fiber) {
