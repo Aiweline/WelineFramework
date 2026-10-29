@@ -16,8 +16,8 @@ final class HardConstraintsSymbolDsl
 
     public const GLOSS_MAX = 64;
 
-    /** Raised 9200→9400 when browser_tab_group_identity entered the hot package (2026-10-20); 9400→9500 for no_error_masking_or_patch_workaround (2026-10-21); 9500→9700 for google_chrome_reuse_before_connect (2026-10-21); 9700→9900 for hosts_write_precheck_no_repeat_prompt + ego hot entries (2026-10-29). */
-    public const PACKAGE_TOKEN_BUDGET = 9900;
+    /** Raised 9200→9400 when browser_tab_group_identity entered the hot package (2026-10-20); 9400→9500 for no_error_masking_or_patch_workaround (2026-10-21); 9500→9700 for google_chrome_reuse_before_connect (2026-10-21); 9700→9900 for hosts_write_precheck_no_repeat_prompt + ego hot entries (2026-10-29); 9900→10300 for algorithm_understanding_pseudocode_report (2026-10-29); 10300→10600 for backup_requires_skill_keep_one_and_space_precheck + finding_reality_gate/param-writeback hot entries (2026-10-29). */
+    public const PACKAGE_TOKEN_BUDGET = 10600;
 
     public const EXPAND_IDS_MAX = 20;
 
@@ -149,6 +149,7 @@ final class HardConstraintsSymbolDsl
             'SeverityUi', 'SemTone', 'AllDefault',
             'CompVar', 'PaletteLeaf', 'DanglingVar',
             'ReqCtxAsk', 'ReadDiag', 'LogicChg', 'SyncDiag',
+            'AlgoUnclear', 'AlgoChg', 'Pseudo', 'Diag',
         ];
     }
 
@@ -475,6 +476,54 @@ final class HardConstraintsSymbolDsl
                 'gloss_zh' => '单站if·白名单绕校验·绕扩展点·临时hack',
                 'rule_ids' => ['no_error_masking_or_patch_workaround'],
             ],
+            'Backup' => [
+                'gloss_zh' => '任何备份动作（库/快照/tar/定时）',
+                'rule_ids' => ['backup_requires_skill_keep_one_and_space_precheck'],
+            ],
+            'KeepOne' => [
+                'gloss_zh' => '备份只保留一个版本',
+                'rule_ids' => ['backup_requires_skill_keep_one_and_space_precheck'],
+            ],
+            'SpaceFirst' => [
+                'gloss_zh' => '备份前先查目标盘余量≥体积',
+                'rule_ids' => ['backup_requires_skill_keep_one_and_space_precheck'],
+            ],
+            'CleanFirst' => [
+                'gloss_zh' => '空间不足先按清理技能清再备份',
+                'rule_ids' => ['backup_requires_skill_keep_one_and_space_precheck'],
+            ],
+            'Findings' => [
+                'gloss_zh' => '缺陷/问题/剩余项清单（含自审与子智能体回报）',
+                'rule_ids' => ['finding_reality_gate_before_defect_list'],
+            ],
+            'Triage' => [
+                'gloss_zh' => '逐条标真/假/未验证并附复现或代码证据',
+                'rule_ids' => ['finding_reality_gate_before_defect_list'],
+            ],
+            'Verified' => [
+                'gloss_zh' => '已复现或已读码证明成立',
+                'rule_ids' => ['finding_reality_gate_before_defect_list'],
+            ],
+            'Count' => [
+                'gloss_zh' => '剩余N项/进度百分比计数',
+                'rule_ids' => ['finding_reality_gate_before_defect_list'],
+            ],
+            'FixClaim' => [
+                'gloss_zh' => '宣称该缺陷已修复',
+                'rule_ids' => ['finding_reality_gate_before_defect_list'],
+            ],
+            'Rerun' => [
+                'gloss_zh' => '同一条复现命令/页面重跑并贴输出',
+                'rule_ids' => ['finding_reality_gate_before_defect_list'],
+            ],
+            'SkelFirst' => [
+                'gloss_zh' => '布局骨架CSS进首屏关键路径先生效',
+                'rule_ids' => ['first_paint_dependency_coherence'],
+            ],
+            'SameGen' => [
+                'gloss_zh' => '页内静态URL同世代且带?v=须200',
+                'rule_ids' => ['first_paint_dependency_coherence'],
+            ],
         ];
     }
 
@@ -616,6 +665,11 @@ final class HardConstraintsSymbolDsl
                 'gloss_zh' => '决定性结论必须放全文末尾',
                 'cluster' => '§U',
             ],
+            'algorithm_understanding_pseudocode_report' => [
+                'formula' => '(AlgoUnclear∨AlgoChg)→□(Pseudo∧Diag)',
+                'gloss_zh' => '算法未理清或汇报涉算法改动→须伪代码+示意图说清再动码',
+                'cluster' => '§U',
+            ],
             'business_forbids_sql_dialect' => [
                 'formula' => 'SqlBiz→⊥∧(合法SQL→OrmOnly)',
                 'gloss_zh' => '业务禁方言SQL；仅ORM Adapter层',
@@ -721,6 +775,11 @@ final class HardConstraintsSymbolDsl
                 'gloss_zh' => '全局规则须MCP与~/.cursor/rules双写',
                 'cluster' => '§P',
             ],
+            'user_param_adjust_rule_writeback' => [
+                'formula' => 'Ask∧GlobalRuleEdit→□(Write∧HostMdc)',
+                'gloss_zh' => '用户调参数/风格→写回对应全局规则分类',
+                'cluster' => '§P',
+            ],
             'user_utterance_commit_ships_dev_and_sites' => [
                 'formula' => 'SayCommit∧¬Negate→□(CommitAll∧PushDevBoth∧ProdPipe)',
                 'gloss_zh' => '口令「提交」：全量提交、推dev两仓、各生产站核心/系统/主题更新',
@@ -791,6 +850,11 @@ final class HardConstraintsSymbolDsl
                 'gloss_zh' => '主题更新/发布主题须柜卡唯一匹配后拷贝并升级；对不上禁拷',
                 'cluster' => '§P',
             ],
+            'backup_requires_skill_keep_one_and_space_precheck' => [
+                'formula' => 'Backup→□(Skill∧KeepOne∧SpaceFirst)|(¬SpaceFirst→□CleanFirst)',
+                'gloss_zh' => '备份前读技能·只留一版·先查空间；不足先清再备',
+                'cluster' => '§P',
+            ],
             'social_scope_mailbox_for_platform_register' => [
                 'formula' => 'MediaAsk→□SocSkill|SocReg→□(LiveCab∧MbProbe)|(¬LiveCab→⊥)',
                 'gloss_zh' => '注册须站柜已上线且官网可通；未上线禁开号',
@@ -800,6 +864,16 @@ final class HardConstraintsSymbolDsl
                 'formula' => 'Mask∨Patch→⊥',
                 'gloss_zh' => '禁掩盖错误/打补丁；错误须真暴露+根因修',
                 'cluster' => '§P',
+            ],
+            'finding_reality_gate_before_defect_list' => [
+                'formula' => 'Findings→□Triage∧(¬Verified→⊥Count)∧(FixClaim→□Rerun)',
+                'gloss_zh' => '缺陷清单逐条判真假未验证+证据；未验证禁计数；修好须同repro重跑',
+                'cluster' => '§✓',
+            ],
+            'first_paint_dependency_coherence' => [
+                'formula' => 'Frontend→□(SkelFirst∧SameGen)∧(¬SkelFirst→⊥Pass)',
+                'gloss_zh' => '首屏骨架CSS先到；页内静态同世代且带?v=须200；未证禁pass',
+                'cluster' => '§Θ',
             ],
         ];
     }
