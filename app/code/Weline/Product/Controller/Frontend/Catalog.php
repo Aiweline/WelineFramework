@@ -143,6 +143,9 @@ final class Catalog extends FrontendController
             \Weline\Server\Security\SearchFilterOriginGate::assertHtmlExtraVariantOrTerminate($this->request);
         }
         $offers = $this->catalog->publishedListingCandidates(1000, $bindListingQuery);
+        // 取回上限：候选被截断时，过滤后 0 命中不能证明「该组合无货」，
+        // 否则会把有货的 facet URL 永久 301 掉（架构评审 R4）。
+        $offersTruncated = \count($offers) >= 1000;
         StorefrontPageContext::setListingOffers($offers);
 
         $productsUrl = (string)$this->getUrl($surface['public_route']);
@@ -174,6 +177,7 @@ final class Catalog extends FrontendController
         if ($bindListingQuery
             && !$isInternalStorefrontChainWarmup
             && $offers !== []
+            && !$offersTruncated
             && (int)($projection['count'] ?? 0) === 0
         ) {
             // 无命中的 facet 组合不再铸造可索引/可缓存变体：永久重定向回规范列表页，

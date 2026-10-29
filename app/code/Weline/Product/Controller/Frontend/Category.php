@@ -70,6 +70,9 @@ final class Category extends FrontendController
         $offers = $productIds === []
             ? []
             : $this->catalog->publishedOffersForProductIds($productIds, 120, $bindListingQuery);
+        // 取回上限：候选被截断时，过滤后 0 命中不能证明「该组合无货」，
+        // 否则会把有货的 facet URL 永久 301 掉（架构评审 R4）。
+        $offersTruncated = \count($productIds) > 120;
         StorefrontPageContext::setListingOffers($offers);
 
         $categoryUrl = trim((string)($category['url'] ?? ''));
@@ -101,6 +104,7 @@ final class Category extends FrontendController
 
         if ($bindListingQuery
             && $offers !== []
+            && !$offersTruncated
             && (int)($projection['count'] ?? 0) === 0
         ) {
             // 无命中的 facet 组合不再铸造可索引/可缓存变体：永久重定向回规范列表页，
