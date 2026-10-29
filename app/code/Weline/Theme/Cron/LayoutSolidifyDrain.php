@@ -49,7 +49,7 @@ final class LayoutSolidifyDrain implements CronTaskInterface, CronTaskPreflightI
      */
     public function hasPendingWork(): bool
     {
-        if (!$this->isDevMode()) {
+        if (!$this->isDevMode() && !$this->drainInProductionEnabled()) {
             return false;
         }
 
@@ -65,9 +65,26 @@ final class LayoutSolidifyDrain implements CronTaskInterface, CronTaskPreflightI
         }
     }
 
+    /**
+     * 生产环境排水开关（默认关闭，保持「生产由 WLS 响应后排水」的既有契约）。
+     * 打开后本 cron 任务也参与排水：用于「固化物 job 长期 pending、分类/搜索布局
+     * 永远走 fallback original → 页面 no-store/BYPASS」的场景（2026-10-29 实测）。
+     * 配置：app/etc/env.php → theme.layout_solidify.drain_in_production = true
+     */
+    private function drainInProductionEnabled(): bool
+    {
+        try {
+            $config = Env::get('theme.layout_solidify', []);
+
+            return \is_array($config) && (bool)($config['drain_in_production'] ?? false);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     public function execute(): string
     {
-        if (!$this->isDevMode()) {
+        if (!$this->isDevMode() && !$this->drainInProductionEnabled()) {
             return 'skip:non_dev';
         }
         $start = microtime(true);
