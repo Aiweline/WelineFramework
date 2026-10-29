@@ -393,7 +393,13 @@ class RouteUpdateStage extends AbstractStage
                 continue;
             }
             $basePath = \rtrim((string)($modules[$moduleName]['base_path'] ?? ''), DIRECTORY_SEPARATOR);
-            if ($basePath === '' || !\is_dir($basePath . DIRECTORY_SEPARATOR . \Weline\Framework\Module\Handle::pc_DIR)) {
+            $pcDir = $basePath . DIRECTORY_SEPARATOR . \Weline\Framework\Module\Handle::pc_DIR;
+            if ($basePath === '' || !\is_dir($pcDir)) {
+                continue;
+            }
+            // 只有 0 字节空壳控制器文件的模块（如 AiKnowledge Controller/Backend/*，创建即空）
+            // 不可能产出路由：不能要求它「至少 1 条」，否则会拖死整次 setup:upgrade。
+            if (!$this->dirHasNonEmptyPhpFile($pcDir)) {
                 continue;
             }
             $count = $this->routerHelper->isBatchMode()
@@ -464,6 +470,34 @@ class RouteUpdateStage extends AbstractStage
         }
 
         return $count;
+    }
+
+    /**
+     * 目录下是否存在非空 .php 文件（递归）。用于区分「真的写了控制器」与「只有空壳占位」。
+     * 探测自身失败时返回 true，保持原有严格性（宁可拦，不要漏）。
+     */
+    private function dirHasNonEmptyPhpFile(string $dir): bool
+    {
+        try {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
+            );
+            foreach ($iterator as $file) {
+                if (!$file instanceof \SplFileInfo || !$file->isFile()) {
+                    continue;
+                }
+                if (\strtolower($file->getExtension()) !== 'php') {
+                    continue;
+                }
+                if ($file->getSize() > 0) {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+            return true;
+        }
+
+        return false;
     }
 
     private function countModuleRoutesOnDisk(string $moduleName): int
