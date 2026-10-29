@@ -39,8 +39,6 @@ class SchedulerSystem
     private static ?\WeakMap $cooperateNextAtNs = null;
     /** cooperate() 重入深度（yield→dispatchWait→事件派发会回到 cooperate）。 */
     private static int $cooperateDepth = 0;
-    /** cooperate() 开关（`wls.render.cooperate.enabled`，默认开；可运行时关停）。 */
-    private static ?bool $cooperateEnabled = null;
     /**
      * Scheduler frames hidden while a nested local Fiber pool is active.
      *
@@ -571,26 +569,13 @@ class SchedulerSystem
      *
      * - 无调度器（FPM / CLI）或当前不在 Fiber 内：立即返回，零行为变化。
      * - 同一 Fiber 内每 $sliceMs 毫秒最多让出一次；其余调用只做一次 hrtime 比较。
+     *
+     * 这是 WLS 请求路径的**必需行为**，不提供关闭开关：PHP Fiber 协作式、不可抢占，
+     * 关掉就等于允许单个慢页把同 Worker 其它请求饿到上游超时（502/504→503）。
      */
     public static function cooperate(int $sliceMs = 8): void
     {
         if (!self::$schedulerActive) {
-            return;
-        }
-        if (self::$cooperateEnabled === null) {
-            // 运维/测试开关优先级：进程环境变量 > env.php 配置 > 默认开。
-            $envFlag = \getenv('WLS_RENDER_COOPERATE');
-            if (\is_string($envFlag) && $envFlag !== '') {
-                self::$cooperateEnabled = \in_array(\strtolower($envFlag), ['1', 'true', 'on', 'yes'], true);
-            } else {
-                try {
-                    self::$cooperateEnabled = (bool)\Weline\Framework\App\Env::get('wls.render.cooperate.enabled', true);
-                } catch (\Throwable) {
-                    self::$cooperateEnabled = true;
-                }
-            }
-        }
-        if (self::$cooperateEnabled !== true) {
             return;
         }
         $fiber = \Fiber::getCurrent();
