@@ -159,11 +159,17 @@ final class ThemeHeadChromeCssPack
             return $this->tryPreloadLinkHtml($area, $pack, $options);
         }
 
-        // 回滚记录（2026-10-29 15:40 生产 503「页面渲染未完成」）：
-        // 曾在此把 PACK_TOKENS 改为 tryInlineCssHtml() 内联，但该实现每次请求都
-        // composeSources()+minify 重新拼 CSS，渲染耗时飙升触发 WLS 渲染超时 503。
-        // 正确做法：内联必须读「已发布产物」字节（publishPack 落盘后 file_get_contents），
-        // 而不是每次重算。等磁盘产物式内联实现并压测通过后再开。
+        // PACK_TOKENS：唯一还会阻塞首屏的样式请求（≈6–10KB）。改为内联「已发布产物字节」——
+        // 注意不是 tryInlineCssHtml()（那会每请求 composeSources+minify，2026-10-29 15:40 因此
+        // 触发过 WLS 渲染超时 503）。这里 publishPackWithTarget 命中已有产物时只做一次文件读取，
+        // 与原先外链路径同样廉价，却省掉一轮 RTT（移动 4G 实测渲染阻塞 140–450ms）。
+        // 读不到产物/超预算时返回 null → 回退原阻塞外链分支，行为与旧版一致。
+        if ($pack === self::PACK_TOKENS && !isset($options['force_link'])) {
+            $inline = $this->tryInlinePublishedCssHtml($area, $pack, $options);
+            if ($inline !== null) {
+                return $inline;
+            }
+        }
 
         $area = $this->themeContext->normalizeArea($area);
         if (!$this->isEnabled($area)) {
@@ -314,11 +320,21 @@ final class ThemeHeadChromeCssPack
 
     private function publishPack(string $area, string $pack, array $options): string
     {
+        return (string)($this->publishPackWithTarget($area, $pack, $options)['url'] ?? '');
+    }
+
+    /**
+     * 发布包并同时给出产物磁盘路径（内联复用已发布字节，避免每请求 compose+minify）。
+     *
+     * @return array{url:string,path:string}|array{}
+     */
+    private function publishPackWithTarget(string $area, string $pack, array $options): array
+    {
         $theme = $this->resolveTheme($area);
         $layoutType = $pack === self::PACK_OVERLAY ? $this->resolveLayoutType($options) : '';
         $sources = $this->collectSources($area, $pack, $theme, $options + ['layout_type' => $layoutType]);
         if ($sources === []) {
-            return '';
+            return [];
         }
         // Base Theme shell must never absorb leaves resolved from app/design/* (scope/theme pollution).
         if (in_array($pack, [self::PACK_STOREFRONT, self::PACK_TOKENS], true) && $this->isBaseThemeShell($theme)) {
@@ -332,7 +348,7 @@ final class ThemeHeadChromeCssPack
             }
             $sources = $filtered;
             if ($sources === []) {
-                return '';
+                return [];
             }
         }
         $minify = !empty($this->resourceConfig->resolve($theme, $area)['css_minify']);
@@ -355,7 +371,7 @@ final class ThemeHeadChromeCssPack
         $key = hash('sha256', json_encode([
             // v9: palette merge order = default → brand/ink → light → dark（未覆盖继承 default）
             // v10: design-theme leaf URLs must use active theme static namespace (not bare Weline/Theme).
-            'theme-head-chrome-v12', // v12: tu-* 代次根不再套构建前缀
+            'theme-head-chrome-v13', // v13: PACK_TOKENS 补投 variables/_colors.css（literal/brand 叶子）
             $area,
             $pack,
             $layoutType,
@@ -369,7 +385,7 @@ final class ThemeHeadChromeCssPack
         // Force the same theme object used for sources — never re-resolve to another namespace.
         $target = $this->gateway->buildHeadChromeArtifact($key, $area, 'css', $theme);
         if ($target === null) {
-            return '';
+            return [];
         }
         if (!$this->artifactPathBelongsToTheme($target['path'], $theme)) {
             if (function_exists('w_log_warning')) {
@@ -377,17 +393,17 @@ final class ThemeHeadChromeCssPack
                     . $themeIdentity . ' path=' . $target['path']);
             }
 
-            return '';
+            return [];
         }
         if (!is_file($target['path'])) {
             $body = $this->composeSources($sources, $minify);
             if ($body === '') {
-                return '';
+                return [];
             }
             $this->atomicPublisher->publish($target['path'], $body);
         }
 
-        return $target['url'];
+        return ['url' => (string)$target['url'], 'path' => (string)$target['path']];
     }
 
     /**
@@ -432,9 +448,44 @@ final class ThemeHeadChromeCssPack
     }
 
     /**
-     * 非阻塞主包：preload + onload 切换为 stylesheet；noscript 回退阻塞。
-     * 仅用于已内联关键 CSS（layout-critical + tokens + components）之后的主题主包。
+     * 内联「已发布产物」字节：publishPackWithTarget 命中磁盘产物后只读一次文件，
+     * 不做 composeSources/minify（那是 2026-10-29 渲染超时 503 的成因）。
+     * 产物缺失/不可读/超过内联预算时返回 null，由调用方回退阻塞外链。
      */
+    private function tryInlinePublishedCssHtml(string $area, string $pack, array $options = []): ?string
+    {
+        $normalized = $this->themeContext->normalizeArea($area);
+        if (!$this->isEnabled($normalized)) {
+            return null;
+        }
+        try {
+            $target = $this->publishPackWithTarget($normalized, $pack, $options);
+        } catch (\Throwable $e) {
+            if (function_exists('w_log_warning')) {
+                w_log_warning('Theme head chrome CSS inline(published) failed: ' . $e->getMessage());
+            }
+
+            return null;
+        }
+        $path = (string)($target['path'] ?? '');
+        if ($path === '' || !is_readable($path)) {
+            return null;
+        }
+        // 内联预算：生产实测 tokens 包 29.2KB（v13 起含 colors 叶子），dev 45KB；
+        // 超过 48KB 说明包结构变了，交回外链更稳妥（避免 HTML 膨胀超过省下的一轮 RTT）。
+        if ((int)@filesize($path) > 49152) {
+            return null;
+        }
+        $css = @file_get_contents($path);
+        if (!is_string($css) || $css === '') {
+            return null;
+        }
+        $this->markPackEmitted($normalized, $pack);
+
+        return '<style data-weline-theme-head-pack="' . htmlspecialchars($pack, ENT_QUOTES) . '" data-weline-inline-pack="1" data-weline-inline-from="published">'
+            . str_replace('</style', '<\\/style', $css) . '</style>';
+    }
+
     public function tryPreloadLinkHtml(string $area, string $pack, array $options = []): ?string
     {
         $area = $this->themeContext->normalizeArea($area);
@@ -574,6 +625,14 @@ final class ThemeHeadChromeCssPack
         $leaves = match ($pack) {
             // ① Variables + palette base/mode (blocking first gun). COM 合并序：default→ink→light；dark 在 STOREFRONT/POST。
             self::PACK_TOKENS => [
+                // variables/_colors.css 必须在最前：它是 variables 层的颜色兜底盘，
+                // 声明 --color-literal-* / --color-brand-* 等叶子。历史清单漏了它，
+                // 导致店面上这些 var() 解析为空值 → 整条 shorthand（如
+                // widget-content-policy-document-default.css 的 .doc-policy__hero
+                // 双层 background）连兜底都失效，反色面 hero 直接空白。
+                // weline-foundation.css:113 的注释也写着 "overridden by theme
+                // variables/_colors.css when loaded"，即框架假定它会被投递。
+                'theme/' . $area . '/variables/_colors.css',
                 'theme/' . $area . '/variables/_spacing.css',
                 'theme/' . $area . '/variables/_auto-literals.css',
                 'theme/' . $area . '/variables/_typography.css',
