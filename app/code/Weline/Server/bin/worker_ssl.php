@@ -3203,6 +3203,18 @@ $ipcSelfTag = null;
 $ipcDraining = false;
 /** @var float Monotonic deadline while waiting for Master TYPE_DRAIN after planned recycle intent. */
 $plannedRecycleAwaitMasterUntil = 0.0;
+/** @var array<string,float> 内存回收窗口（wls.memory_guard.*，含默认值；主循环前填充） */
+$memoryRecyclePolicy = [];
+/** @var string 最近一次回收意向的 reason（闭包据此判定是否走内存压力闸） */
+$memoryRecycleIntentReason = '';
+/** @var float 忙态首次被闸挡下的 monotonic 秒（0=未挡） */
+$pendingMemoryDrainSince = 0.0;
+/** @var bool Master 已发来内存压力回收的 DRAIN，等空闲再起排水时钟 */
+$memoryDrainDrainRequested = false;
+/** @var float 收到内存压力 DRAIN 的 monotonic 秒 */
+$memoryDrainDrainReceivedAt = 0.0;
+/** @var int 本次内存压力 DRAIN 的硬期限（秒） */
+$memoryDrainDrainTimeoutSec = 120;
 $plannedExitReason = '';
 $ipcReceivedShutdown = false;
 $drainStartTime = 0.0;
@@ -3484,6 +3496,29 @@ $memoryDrainThreshold = \min(
         $baseMemoryDrainThreshold + (\max(0, $workerId - 1) % 5) * $memoryDrainJitter
     )
 );
+// 内存回收窗口（全部可被 wls.memory_guard.* 覆盖；默认值经架构评审定稿）。
+$memoryRecyclePolicy = [
+    // Master 已收到回收意向却迟迟不发 DRAIN 时，Worker 自排水前的等待秒数（旧值 5）。
+    'await_master_sec' => \is_numeric($memoryGuardConfig['recycle_await_master_sec'] ?? null)
+        ? \max(5.0, \min(600.0, (float)$memoryGuardConfig['recycle_await_master_sec']))
+        : 30.0,
+    // 内存压力自排水的硬期限（旧值 10）。
+    'self_drain_sec' => \is_numeric($memoryGuardConfig['recycle_self_drain_sec'] ?? null)
+        ? \max(5.0, \min(600.0, (float)$memoryGuardConfig['recycle_self_drain_sec']))
+        : 30.0,
+    // 绝对安全阀：压力达到该值即使在途也发回收（OOM 兜底，不作唯一阀）。
+    'force_ratio' => \is_numeric($memoryGuardConfig['recycle_force_ratio'] ?? null)
+        ? \max(0.90, \min(0.999, (float)$memoryGuardConfig['recycle_force_ratio']))
+        : 0.97,
+    // 时间安全阀：忙态持续超阈达到该秒数后仍发回收，避免长尾 admission 503。
+    'recycle_defer_max_sec' => \is_numeric($memoryGuardConfig['recycle_defer_max_sec'] ?? null)
+        ? \max(5.0, \min(600.0, (float)$memoryGuardConfig['recycle_defer_max_sec']))
+        : 20.0,
+    // 收到内存压力 DRAIN 后等在途请求归零的上限秒数。
+    'drain_wait_inflight_sec' => \is_numeric($memoryGuardConfig['drain_wait_inflight_sec'] ?? null)
+        ? \max(10.0, \min(600.0, (float)$memoryGuardConfig['drain_wait_inflight_sec']))
+        : 120.0,
+];
 $configuredMaxRequests = $wlsEnv['worker_max_requests']
     ?? $wlsEnv['max_request']
     ?? 0;
@@ -3578,7 +3613,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
     $sslCertReloadDeferral = new \Weline\Server\Service\Runtime\SslCertReloadDeferral();
     /** @var null|callable(array): void $controlMessageConsumer */
     $controlMessageConsumer = null;
-    $controlMessageConsumer = static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$waitingForAck, $workerId, &$sniServerCerts, &$ipcClient, &$kernel, $isMaintenanceWorker, $isGatewayFallbackWorker, &$gatewayFallbackListenerState, &$gatewayFallbackListenerDraining, &$gatewayFallbackDrainAcknowledged, &$gatewayFallbackDrainTransition, &$gatewayFallbackUndrainTransition, &$gatewayFallbackRetiredTransitions, $gatewayFallbackExpectedTransitionIdentity, &$activeFibers, $fiberScheduler, &$activeRequests, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $port, &$deferSslOptions, &$sslCert, &$sslKey, $cryptoMethod, $instanceName, $listenerHost, $wlsRuntimeTopology, &$cacheClearEpoch, $maintenanceDrainState, $wlsHttp3Enabled, $wlsHttp3Mode, $wlsHttp3ExpectedNativeDigest, $wlsHttp3RouteSlot, $wlsHttp3RouteCount, $wlsHttp3RouteOwnerEpoch, $wlsHttp3RouteGeneration, $wlsHttp3RouteNamespace, $wlsHttp3RouteEligible, $orchestratorEpoch, $orchestratorLaunchId, $orchestratorSlotId, $orchestratorLeaseId, $orchestratorGeneration, &$http3Runtime, &$http3ActivationId, &$http3RouteActivationReceiptSent, &$http3AvailabilityEpoch, &$http3AvailabilityRouteEpoch, &$http3AvailabilitySignature, &$http3AvailabilityEnabled, $wlsTlsSessionCacheRuntime, &$servingManifestRoutes, &$servingManifestHttpRoutes, &$servingManifestPath, &$servingManifestGeneration, &$servingManifestDigest, &$servingManifestReloadError, $servingInstanceGeneration, $servingCertificateTrustProfile, $masterPid, &$connections, &$connectionPeerIps, &$requestBuffers, &$connectionLastActivity, &$requestLogged, &$writeBuffers, &$writableConnections, &$writeZeroProgress, &$connectionProtocols, &$connectionSniHosts, &$connectionPlaintextHosts, &$http2ConnectionAdapters, &$http2PendingRequests, &$pendingPeek, &$pendingPeekStartTimes, &$pendingHandshakes, &$postHandshakeReadPending, &$pendingClose, &$handshakeStartTimes, &$longLivedConnections, &$sslCertReloadDeferral, $wlsStartupTrace, &$plannedRecycleAwaitMasterUntil): void {
+    $controlMessageConsumer = static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$waitingForAck, $workerId, &$sniServerCerts, &$ipcClient, &$kernel, $isMaintenanceWorker, $isGatewayFallbackWorker, &$gatewayFallbackListenerState, &$gatewayFallbackListenerDraining, &$gatewayFallbackDrainAcknowledged, &$gatewayFallbackDrainTransition, &$gatewayFallbackUndrainTransition, &$gatewayFallbackRetiredTransitions, $gatewayFallbackExpectedTransitionIdentity, &$activeFibers, $fiberScheduler, &$activeRequests, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $port, &$deferSslOptions, &$sslCert, &$sslKey, $cryptoMethod, $instanceName, $listenerHost, $wlsRuntimeTopology, &$cacheClearEpoch, $maintenanceDrainState, $wlsHttp3Enabled, $wlsHttp3Mode, $wlsHttp3ExpectedNativeDigest, $wlsHttp3RouteSlot, $wlsHttp3RouteCount, $wlsHttp3RouteOwnerEpoch, $wlsHttp3RouteGeneration, $wlsHttp3RouteNamespace, $wlsHttp3RouteEligible, $orchestratorEpoch, $orchestratorLaunchId, $orchestratorSlotId, $orchestratorLeaseId, $orchestratorGeneration, &$http3Runtime, &$http3ActivationId, &$http3RouteActivationReceiptSent, &$http3AvailabilityEpoch, &$http3AvailabilityRouteEpoch, &$http3AvailabilitySignature, &$http3AvailabilityEnabled, $wlsTlsSessionCacheRuntime, &$servingManifestRoutes, &$servingManifestHttpRoutes, &$servingManifestPath, &$servingManifestGeneration, &$servingManifestDigest, &$servingManifestReloadError, $servingInstanceGeneration, $servingCertificateTrustProfile, $masterPid, &$connections, &$connectionPeerIps, &$requestBuffers, &$connectionLastActivity, &$requestLogged, &$writeBuffers, &$writableConnections, &$writeZeroProgress, &$connectionProtocols, &$connectionSniHosts, &$connectionPlaintextHosts, &$http2ConnectionAdapters, &$http2PendingRequests, &$pendingPeek, &$pendingPeekStartTimes, &$pendingHandshakes, &$postHandshakeReadPending, &$pendingClose, &$handshakeStartTimes, &$longLivedConnections, &$sslCertReloadDeferral, $wlsStartupTrace, &$plannedRecycleAwaitMasterUntil, &$memoryRecyclePolicy, &$memoryRecycleIntentReason, &$memoryDrainDrainRequested, &$memoryDrainDrainReceivedAt, &$memoryDrainDrainTimeoutSec): void {
             $type = $msg['type'] ?? '';
             // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR）
             if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
@@ -3881,6 +3916,8 @@ if ($controlPort > 0 || $supervisorEnabled) {
                         \opcache_reset();
                     }
                     \clearstatcache(true);
+                    // L2：reload 不是内存回收回执，作废未兑现的回收意向，避免后续 DRAIN 误命中内存闸。
+                    $memoryRecycleIntentReason = '';
                     $shouldExit = true;
                     $ipcDraining = true;
                     $drainStartTime = \hrtime(true) / 1_000_000_000;
@@ -4524,6 +4561,49 @@ if ($controlPort > 0 || $supervisorEnabled) {
                                 . $throwable->getMessage(),
                             );
                         }
+                        break;
+                    }
+                    // 内存压力回收：先立刻关监听（admission 不再进新请求），排水时钟等在途归零后
+                    // 由主循环起（上限 drain_wait_inflight_sec）。reload / stop 不走这里。
+                    if (\str_starts_with($memoryRecycleIntentReason, 'memory_pressure_drain')) {
+                        // 已在排水/退出中：只按 master 的期限放宽硬排水窗口，不重置在途等待。
+                        if ($ipcDraining || $shouldExit) {
+                            $dt = (int) ($msg['drain_timeout_sec'] ?? 0);
+                            if ($dt > 0) {
+                                $maxDrainTime = \max($maxDrainTime, \min(7200, $dt));
+                            }
+                            break;
+                        }
+                        if (!$memoryDrainDrainRequested) {
+                            $memoryDrainDrainReceivedAt = wlsWorkerMonotonicNow();
+                        }
+                        $memoryDrainDrainRequested = true;
+                        $dt = (int) ($msg['drain_timeout_sec'] ?? 0);
+                        $drainWaitCap = (float)($memoryRecyclePolicy['drain_wait_inflight_sec'] ?? 120.0);
+                        $memoryDrainDrainTimeoutSec = $dt > 0
+                            ? (int)\max(1, \min($drainWaitCap, $dt))
+                            : (int)\max(1, $drainWaitCap);
+                        if ($socket && \is_resource($socket)) {
+                            @\fclose($socket);
+                            $socket = null;
+                            \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
+                        }
+                        $wlsStartupTrace('memory_pressure_drain_received', [
+                            'requested_sec' => $dt,
+                            'effective_sec' => $memoryDrainDrainTimeoutSec,
+                            'active_requests' => $activeRequests,
+                        ]);
+                        // D1：意向已兑现，必须清掉请求时设的 await 窗口，否则 30s 后
+                        // 「Planned recycle intent timed out」会抢在在途归零前自排水。
+                        $plannedRecycleAwaitMasterUntil = 0.0;
+                        WlsLogger::warning_(
+                            '收到 drain 命令（内存压力回收）：已关监听，等在途请求归零后起排水'
+                            . ', drain_timeout_sec=' . $dt
+                            . ', effective_sec=' . $memoryDrainDrainTimeoutSec
+                            . ', reason=' . $memoryRecycleIntentReason
+                        );
+                        // L2：意向只对本次回收回执有效，消费后清空，避免 reload/stop 的 DRAIN 误命中。
+                        $memoryRecycleIntentReason = '';
                         break;
                     }
                     // 排水模式：停止接受新连接，完成现有请求后退出
@@ -6236,6 +6316,11 @@ while (true) {
         $currentMemory = \memory_get_usage(true);
         $currentMemoryUsed = \memory_get_usage(false);
         $memoryPercent = $maxMemoryBytes > 0 ? $currentMemoryUsed / $maxMemoryBytes : 0.0;
+        if ($memoryPercent < $memoryDrainThreshold) {
+            // 压力已回落（compact 见效或请求结束）：清掉忙态暂缓起点，
+            // 避免下次超阈时立刻命中 defer_ceiling 提前回收。
+            $pendingMemoryDrainSince = 0.0;
+        }
 
         if ($memoryPercent >= $memoryDrainThreshold) {
             $beforeMb = \round($currentMemoryUsed / 1024 / 1024, 1);
@@ -6246,8 +6331,48 @@ while (true) {
             $memoryPercent = $maxMemoryBytes > 0 ? $currentMemoryUsed / $maxMemoryBytes : 0.0;
             $afterMb = \round($currentMemoryUsed / 1024 / 1024, 1);
             $afterAllocatedMb = \round($currentMemory / 1024 / 1024, 1);
+            if ($memoryPercent < $memoryDrainThreshold) {
+                // compact 已把压力压回阈值下：清掉忙态暂缓起点。
+                $pendingMemoryDrainSince = 0.0;
+            }
 
             if ($memoryPercent >= $memoryDrainThreshold) {
+                $memoryDrainBusy = wlsWorkerHasPendingRequestWork(
+                    $activeRequests,
+                    $requestBuffers,
+                    $writeBuffers,
+                    null,
+                ) || $activeFibers !== [];
+                $memoryDrainForceRatio = (float)($memoryRecyclePolicy['force_ratio'] ?? 0.97);
+                $memoryDrainDeferMaxSec = (float)($memoryRecyclePolicy['recycle_defer_max_sec'] ?? 20.0);
+                $memoryDrainValve = 'idle';
+                $memoryDrainAllowed = !$memoryDrainBusy;
+                if (!$memoryDrainAllowed && $memoryPercent >= $memoryDrainForceRatio) {
+                    $memoryDrainAllowed = true;
+                    $memoryDrainValve = 'force_ratio';
+                }
+                if (!$memoryDrainAllowed) {
+                    if ($pendingMemoryDrainSince <= 0.0) {
+                        $pendingMemoryDrainSince = $now;
+                    }
+                    if (($now - $pendingMemoryDrainSince) >= $memoryDrainDeferMaxSec) {
+                        // 时间安全阀：忙太久也必须回收，否则把截断 503 换成长尾 admission 503。
+                        $memoryDrainAllowed = true;
+                        $memoryDrainValve = 'defer_ceiling';
+                    }
+                }
+                if (!$memoryDrainAllowed) {
+                    // 绝不在在途响应期间截断：只记录，等下一个 tick 重判。
+                    WlsLogger::warning_(
+                        "SSL Worker memory pressure deferred (busy) {$afterMb}MB used ({$afterAllocatedMb}MB allocated) after compact "
+                        . ', active_requests=' . $activeRequests
+                        . ', fibers=' . \count($activeFibers)
+                        . ', deferred_sec=' . \round($now - $pendingMemoryDrainSince, 1)
+                        . ', defer_ceiling_sec=' . $memoryDrainDeferMaxSec
+                        . ', threshold=' . \round($memoryDrainThreshold * 100, 1) . '%'
+                    );
+                } else {
+                $pendingMemoryDrainSince = 0.0;
                 WlsLogger::warning_(
                     "SSL Worker memory pressure {$afterMb}MB used ({$afterAllocatedMb}MB allocated) after compact "
                     . "(before={$beforeMb}MB used, before_allocated={$beforeAllocatedMb}MB), "
@@ -6261,23 +6386,30 @@ while (true) {
                     . ",before_allocated={$beforeAllocatedMb}MB"
                     . ",limit={$wlsMemoryLimit}"
                     . ',threshold=' . \round($memoryDrainThreshold * 100, 1) . '%'
-                    . ",requests={$requestCount}";
+                    . ",requests={$requestCount}"
+                    . ',valve=' . $memoryDrainValve;
+                $memoryRecycleIntentReason = $plannedExitReason;
                 $wlsWorkerGracefulExitReason = $plannedExitReason;
                 if ($ipcClient && $ipcClient->isConnected()) {
                     @$ipcClient->send(\Weline\Server\IPC\ControlMessage::exitReason($plannedExitReason, 0));
                     if ($plannedRecycleAwaitMasterUntil <= 0.0) {
-                        $plannedRecycleAwaitMasterUntil = \hrtime(true) / 1_000_000_000 + 5.0;
+                        $plannedRecycleAwaitMasterUntil = \hrtime(true) / 1_000_000_000
+                            + (float)($memoryRecyclePolicy['await_master_sec'] ?? 30.0);
                     }
                 } else {
                     $shouldExit = true;
                     $ipcDraining = true;
                     $drainStartTime = \hrtime(true) / 1_000_000_000;
-                    $maxDrainTime = \min($maxDrainTime, 10);
+                    $maxDrainTime = \min(
+                        $maxDrainTime,
+                        (int)\max(1.0, (float)($memoryRecyclePolicy['self_drain_sec'] ?? 30.0))
+                    );
                     if ($socket && \is_resource($socket)) {
                         @\fclose($socket);
                         $socket = null;
                         \Weline\Server\Service\Runtime\WorkerReadinessState::markListenerClosed();
                     }
+                }
                 }
             } elseif ($memoryPercent >= $memoryWarningThreshold) {
                 WlsLogger::warning_(
@@ -6290,6 +6422,30 @@ while (true) {
             WlsLogger::warning_(
                 "SSL Worker memory high: " . \round($currentMemoryUsed / 1024 / 1024, 1)
                 . 'MB used (' . \round($currentMemory / 1024 / 1024, 1) . 'MB allocated)'
+            );
+        }
+    }
+
+    // 内存压力 DRAIN：监听已关（见 TYPE_DRAIN 分支），在途归零或等待上限到达后才起排水时钟。
+    if ($memoryDrainDrainRequested
+        && !$shouldExit
+        && !$ipcDraining
+    ) {
+        $memoryDrainWaitElapsed = wlsWorkerMonotonicNow() - $memoryDrainDrainReceivedAt;
+        if (($activeRequests === 0 && $activeFibers === [])
+            || $memoryDrainWaitElapsed >= (float)($memoryRecyclePolicy['drain_wait_inflight_sec'] ?? 120.0)
+        ) {
+            $memoryDrainDrainRequested = false;
+            $shouldExit = true;
+            $ipcDraining = true;
+            $drainStartTime = \hrtime(true) / 1_000_000_000;
+            $maxDrainTime = \max(1, \min(7200, $memoryDrainDrainTimeoutSec));
+            WlsLogger::warning_(
+                'memory-pressure drain started'
+                . ', active_requests=' . $activeRequests
+                . ', fibers=' . \count($activeFibers)
+                . ', waited_sec=' . \round($memoryDrainWaitElapsed, 1)
+                . ', hard_deadline_sec=' . $maxDrainTime
             );
         }
     }
@@ -6307,7 +6463,10 @@ while (true) {
         $shouldExit = true;
         $ipcDraining = true;
         $drainStartTime = \hrtime(true) / 1_000_000_000;
-        $maxDrainTime = \min($maxDrainTime, 10);
+        $maxDrainTime = \min(
+            $maxDrainTime,
+            (int)\max(1.0, (float)($memoryRecyclePolicy['self_drain_sec'] ?? 30.0))
+        );
         if ($socket && \is_resource($socket)) {
             @\fclose($socket);
             $socket = null;

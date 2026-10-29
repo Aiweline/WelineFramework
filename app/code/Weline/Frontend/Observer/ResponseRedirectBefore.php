@@ -151,7 +151,15 @@ class ResponseRedirectBefore implements ObserverInterface
             }
 
             $host = $parsedUrl['host'] ?? '';
-            if (str_starts_with($host, 'www.')) {
+            // 调用方已按站点主域锁定 host（请求级 opt-out）：只保留上面的尾斜杠归一，
+            // 本次不改写 host。flag 未设置时下面的分支与旧行为逐字节一致。
+            $pinnedRedirectHost = strtolower(trim((string)\Weline\Framework\Runtime\RequestContext::get(
+                'weline.frontend.redirect.canonical_host',
+                ''
+            )));
+            if ($pinnedRedirectHost !== '' && strcasecmp($host, $pinnedRedirectHost) === 0) {
+                // no-op：host 已是调用方指定的规范主机
+            } elseif (str_starts_with($host, 'www.')) {
                 $parsedUrl['host'] = substr($host, 4);
                 $newUrl = $this->buildUrl($parsedUrl);
                 $data->setData('url', $newUrl);

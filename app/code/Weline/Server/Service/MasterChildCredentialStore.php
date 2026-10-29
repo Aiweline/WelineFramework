@@ -6,6 +6,7 @@ namespace Weline\Server\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Edge\Gateway\GatewayProjectStateFilesystem;
 
 /**
@@ -33,6 +34,10 @@ final class MasterChildCredentialStore
     // authorizeServices does not abort mid-retry and crash Master self-audit.
     private const PROCESS_CAPTURE_WAIT_SEC = 12.0;
     private const PROCESS_CAPTURE_RETRY_USEC = 50_000;
+    // 私有性断言的有界重试：writer 走「临时文件 + rename」时观测点可能落在
+    // nlink≠1 / mode 未落定的瞬间；判据不放宽，只跨过并发窗口。
+    private const PRIVATE_FILE_ASSERT_ATTEMPTS = 3;
+    private const PRIVATE_FILE_ASSERT_RETRY_USEC = 50_000;
     private const PRUNE_OBSERVATION_WAIT_SEC = 5.0;
     // Align with MasterLeaseManager::LOCK_WAIT_SEC. A 2s wait was too short when
     // several authorizeServices / self-audit fibers contended the ledger during
@@ -1764,18 +1769,47 @@ final class MasterChildCredentialStore
     /** @param array<string|int,mixed> $status */
     private function assertPrivateFile(string $path, array $status): void
     {
+        for ($attempt = 1; ; ++$attempt) {
+            if ($this->isPrivateFileStatus($path, $status)) {
+                return;
+            }
+            if ($attempt >= self::PRIVATE_FILE_ASSERT_ATTEMPTS) {
+                WlsLogger::error_(
+                    'credential assertion retry exhausted; failing closed'
+                    . ' path=' . $path
+                    . ' attempts=' . $attempt
+                );
+                throw new \RuntimeException('Managed-child credential file must be private, regular and unlinked.');
+            }
+            // 只重取一次观测，不重试业务动作；判据（regular / 非软链 / nlink===1 / uid==父目录 / 0600）不变。
+            SchedulerSystem::usleep(self::PRIVATE_FILE_ASSERT_RETRY_USEC);
+            $refreshed = @\lstat($path);
+            if (!\is_array($refreshed)) {
+                throw new \RuntimeException('Managed-child credential file must be private, regular and unlinked.');
+            }
+            $status = $refreshed;
+            WlsLogger::warning_(
+                'credential assertion retry tolerated'
+                . ' path=' . $path
+                . ' attempt=' . $attempt
+                . ' max_attempts=' . self::PRIVATE_FILE_ASSERT_ATTEMPTS
+            );
+        }
+    }
+
+    /** @param array<string|int,mixed> $status */
+    private function isPrivateFileStatus(string $path, array $status): bool
+    {
         $parent = @\lstat(\dirname($path));
         $mode = (int)($status['mode'] ?? 0);
-        if (!\is_array($parent)
-            || \is_link($path)
-            || (($mode & 0170000) !== 0100000)
-            || (int)($status['nlink'] ?? 0) !== 1
-            || (PHP_OS_FAMILY !== 'Windows'
-                && ((int)($status['uid'] ?? -1) !== (int)($parent['uid'] ?? -2)
-                    || (($mode & 0777) !== 0600)))
-        ) {
-            throw new \RuntimeException('Managed-child credential file must be private, regular and unlinked.');
-        }
+
+        return \is_array($parent)
+            && !\is_link($path)
+            && (($mode & 0170000) === 0100000)
+            && (int)($status['nlink'] ?? 0) === 1
+            && (PHP_OS_FAMILY === 'Windows'
+                || ((int)($status['uid'] ?? -1) === (int)($parent['uid'] ?? -2)
+                    && ($mode & 0777) === 0600));
     }
 
     /** @param array<string,mixed> $payload @param list<string> $expected */

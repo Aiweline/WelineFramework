@@ -15,9 +15,12 @@ class ChildMasterGuard
 {
     private const TRANSIENT_OWNER_UNKNOWN_RECHECK_SEC = 5.0;
     private const TRANSIENT_OWNER_UNKNOWN_RECHECK_USEC = 50_000;
+    /** 租约/凭据类断言的连续失败容忍次数；真孤儿（Master PID missing）不受此限。 */
+    private const CREDENTIAL_ASSERT_RETRY_STREAK = 3;
 
     private float $lastCheckAt = 0.0;
     private string $lastExitReason = '';
+    private int $credentialFailureStreak = 0;
     private MasterLeaseManager $leaseManager;
 
     public function __construct(
@@ -79,13 +82,54 @@ class ChildMasterGuard
 
         $reason = $this->evaluateExitReason();
         if ($reason === '') {
+            $this->credentialFailureStreak = 0;
             $this->lastExitReason = '';
             return false;
+        }
+
+        // 租约/凭据类断言在 writer「临时文件 + rename」窗口里会瞬时失败：
+        // 连续 N 次才退出（判据不变，只看同一 reason 是否连续复现）。
+        if ($this->isTransientLeaseCredentialReason($reason)) {
+            ++$this->credentialFailureStreak;
+            if ($this->credentialFailureStreak < self::CREDENTIAL_ASSERT_RETRY_STREAK) {
+                WlsLogger::warning_(
+                    'credential assertion retry tolerated'
+                    . ' tag=' . $this->selfTag
+                    . ' reason=' . $reason
+                    . ' streak=' . $this->credentialFailureStreak
+                    . ' max_streak=' . self::CREDENTIAL_ASSERT_RETRY_STREAK
+                );
+                return false;
+            }
+            WlsLogger::error_(
+                'credential assertion retry exhausted; child exits'
+                . ' tag=' . $this->selfTag
+                . ' reason=' . $reason
+                . ' streak=' . $this->credentialFailureStreak
+            );
+        } else {
+            $this->credentialFailureStreak = 0;
         }
 
         $this->lastExitReason = $reason;
         $this->log('warning', "[{$this->selfTag}] {$reason}");
         return true;
+    }
+
+    /**
+     * 只容忍「租约/凭据文件私有性断言」这一类瞬时失败（writer 的临时文件 + rename 窗口）。
+     * 真孤儿与真实失效一律立刻退出：Master PID missing / lease not running / heartbeat stale /
+     * identity incomplete / not uniquely authorized。
+     */
+    private function isTransientLeaseCredentialReason(string $reason): bool
+    {
+        foreach (['missing', 'not running', 'stale', 'incomplete', 'not uniquely authorized'] as $hardSignal) {
+            if (\str_contains($reason, $hardSignal)) {
+                return false;
+            }
+        }
+
+        return \str_contains($reason, 'must be private, regular and unlinked');
     }
 
     private function evaluateExitReason(): string
