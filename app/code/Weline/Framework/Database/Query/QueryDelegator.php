@@ -97,7 +97,8 @@ final class QueryDelegator
         }
 
         $is_fetch = false;
-        if ($method === 'fetch') {
+        $as_model = false;
+        if ($method === 'fetch' || $method === 'fetchModel') {
             if ($model->getIsDelete()) {
                 $model->delete_before();
                 $eventData = new DataObject(['model' => $model]);
@@ -106,8 +107,15 @@ final class QueryDelegator
             if (!trim($model->getQuery()->getPrepareSql(false))) {
                 return $model;
             }
-            $args[] = $model::class;
+            // fetchModel() 始终对象化（等价于旧的 fetch() 语义）。
+            // fetch() 仅在单行 find() 时对象化——find 的语义是「取一条实体」，全仓 416 处依赖；
+            // 多行 select()/pagination() 走数组形态，避免逐行 ObjectManager::make()。
+            $as_model = ($method === 'fetchModel') || $this->isSingleRowFetch($model);
+            if ($as_model) {
+                $args[] = $model::class;
+            }
             $is_fetch = true;
+            $method = 'fetch';
         }
 
         $query_data = $query->$method(...$args);
@@ -126,12 +134,34 @@ final class QueryDelegator
                 $model->getEventManager()->dispatch($model->getProcessTableName() . '_model_delete_after', $eventData);
                 $model->delete_after();
             }
-            return $this->hydrateFetchResult($model, $query_data);
+            $hydrated = $this->hydrateFetchResultInternal($model, $query_data, $as_model);
+            if ($as_model) {
+                return $hydrated;
+            }
+            // 多行查询：返回数组形态容器，不再逐行构造模型对象。
+            // 每行是关联数组；getItems() 保持可用，故既有 ->fetch()->getItems() 调用点零改动。
+            $rows = \is_array($query_data) ? $query_data : $model->getFetchData();
+            return new RowCollection(\is_array($rows) ? $rows : [], $model::class);
         }
         if (in_array($method, ['getPrepareSql', 'getSql'], true)) {
             return $query_data;
         }
         return $model;
+    }
+
+    /**
+     * 是否为「取单条实体」语义 —— 只有这种查询保留模型对象返回。
+     *
+     * find() 全仓 416 处依赖返回模型实例（`->getId()` / `->getData()` 等），不能改。
+     * 多行 select()/pagination() 走数组形态。
+     */
+    private function isSingleRowFetch(AbstractModel $model): bool
+    {
+        $query = $model->getQuery();
+        $ref = new \ReflectionProperty($query, 'fetch_type');
+        $ref->setAccessible(true);
+
+        return $ref->getValue($query) === 'find';
     }
     /**
      * Apply an already fetched result using the standard model lifecycle.
@@ -140,12 +170,27 @@ final class QueryDelegator
      */
     public function hydrateFetchResult(AbstractModel $model, mixed $queryData): mixed
     {
+        return $this->hydrateFetchResultInternal($model, $queryData, true);
+    }
+
+    /**
+     * @param bool $materializeItems 是否把结果灌进 $model->items。
+     *        items 的写入走 {@see AbstractModel::setItems()}，而 setItems() 对**每一行**都
+     *        `clone $this` + `addData()`——实测 2085 行 = 9.73ms / +58.90MB。
+     *        多行 fetch() 走数组形态时不需要这份对象副本，故跳过（数据由 RowCollection 承载）。
+     */
+    private function hydrateFetchResultInternal(AbstractModel $model, mixed $queryData, bool $materializeItems): mixed
+    {
         $model->fetch_before();
         if (is_object($queryData)) {
-            $model->setFetchData($queryData->getData());
+            if ($materializeItems) {
+                $model->setFetchData($queryData->getData());
+            }
             $model->setObjectData($queryData->getData());
         } elseif (is_array($queryData)) {
-            $model->setFetchData($queryData);
+            if ($materializeItems) {
+                $model->setFetchData($queryData);
+            }
             $model->setObjectData($queryData);
         } elseif ($model->getIsInsert() && (is_numeric($queryData) || is_string($queryData))) {
             $model->setId($queryData);

@@ -1075,6 +1075,12 @@ abstract class QueryAst implements WriteIntentQueryInterface, PhysicalTableQuery
         } else {
             $data = $origin_data;
         }
+        // 写语句走过这里（含裸 SQL query()->update()/delete()/insert()）：
+        // bump 写代数，使 AbstractModel 的 load 身份映射（跨 Fiber 共享快照）整体失效。
+        // 放在 switch 之前而非各分支内，避免新增加写分支时漏接。
+        if (\in_array($this->fetch_type, ['insert', 'update', 'delete'], true)) {
+            \Weline\Framework\Database\LoadIdentityGeneration::bump();
+        }
         switch ($this->fetch_type) {
             case 'find':
                 $result = array_shift($data);

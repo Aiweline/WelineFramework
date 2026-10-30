@@ -105,8 +105,19 @@ abstract class AbstractModel extends DataObject
     /*索引字段排序*/
     public array $_index_sort_keys = [];
 
-    /** @var array<string,array<string,array<string,mixed>>> 按框架 request_id 隔离的 load 身份映射 */
+    /** @var array<string,array<string,array{data:array<string,mixed>,gen:int}>> 按框架 request_id 隔离的 load 身份映射 */
     private static array $loadIdentityMap = [];
+
+    /**
+     * 写代数：同一 request_id 内任何写操作都会 bump，读缓存时代数不符即视为未命中。
+     * 目的：identityMap 跨 Fiber 共享（RequestContext 注释明确 cross-Fiber），
+     * 若不做写感知，A Fiber 写库后 B Fiber 仍会拿到写前快照（实测复现）。
+     * 计数器落在 {@see LoadIdentityGeneration}，好让 Query 层的裸 SQL 写也能 bump。
+     */
+    private const LOAD_IDENTITY_MAX_ENTRIES = 512;
+
+    /** identityMap 的桶数上限（每桶 = 一个 request_id）；防异常路径下桶永久驻留 */
+    private const LOAD_IDENTITY_MAX_BUCKETS = 64;
     public array $_fields = [];
     # 装载join模型时字段数据，用于字段冲突
     public array $_join_model_fields = [];
@@ -625,8 +636,12 @@ abstract class AbstractModel extends DataObject
         $cacheKey = static::class . '::' . (is_null($value) ? (string) $field_or_pk_value : $field_or_pk_value . '::' . $value);
         if ($forceReload) {
             self::invalidateLoadIdentityMapEntry($cacheKey);
-        } elseif ($requestId !== null && isset(self::$loadIdentityMap[$requestId][$cacheKey]) && is_array(self::$loadIdentityMap[$requestId][$cacheKey])) {
-            $this->hydrateFromLoadedRow(self::$loadIdentityMap[$requestId][$cacheKey]);
+        } elseif ($requestId !== null && isset(self::$loadIdentityMap[$requestId][$cacheKey])
+            && is_array(self::$loadIdentityMap[$requestId][$cacheKey]['data'] ?? null)
+            && (self::$loadIdentityMap[$requestId][$cacheKey]['gen'] ?? -1) === LoadIdentityGeneration::current()
+        ) {
+            // 代数一致才复用：写操作会 bump 代数，使所有 Fiber 共享的旧快照自动失效。
+            $this->hydrateFromLoadedRow(self::$loadIdentityMap[$requestId][$cacheKey]['data']);
             return $this;
         }
 
@@ -650,7 +665,7 @@ abstract class AbstractModel extends DataObject
             $this->setObjectData($data);
             $this->_model_fields_data = $data;
             if ($requestId !== null) {
-                self::$loadIdentityMap[$requestId][$cacheKey] = $data;
+                self::storeLoadIdentityMapEntry($requestId, $cacheKey, $data);
             }
         }
         if (!empty($eventManager->getEventObservers($eventNameAfter))) {
@@ -677,7 +692,7 @@ abstract class AbstractModel extends DataObject
         if ($requestId !== null) {
             self::registerLoadIdentityMapCleanup($requestId);
             if ($identityMapKey !== null && $identityMapKey !== '') {
-                self::$loadIdentityMap[$requestId][$identityMapKey] = $data;
+                self::storeLoadIdentityMapEntry($requestId, $identityMapKey, $data);
             }
         }
         $this->fetch_after();
@@ -715,6 +730,54 @@ abstract class AbstractModel extends DataObject
         if ((self::$loadIdentityMap[$requestId] ?? []) === []) {
             unset(self::$loadIdentityMap[$requestId]);
         }
+    }
+
+    /**
+     * 写入一条 load 身份映射条目，并携带当前写代数。
+     * 同时执行条目上限淘汰：异常路径（Fiber 未触发 cleanup）时也不会无界累积。
+     *
+     * @param array<string, mixed> $data
+     */
+    private static function storeLoadIdentityMapEntry(string $requestId, string $cacheKey, array $data): void
+    {
+        // 桶数上限：正常请求结束时由 RequestContext::onCleanup 清桶，但异常路径
+        // （Fiber 未走到 cleanup / 致命错误）会让桶永久驻留，长驻 Worker 下即无界泄漏。
+        // 超过上限时淘汰最旧的桶；当前桶永远保留。
+        if (!isset(self::$loadIdentityMap[$requestId])
+            && \count(self::$loadIdentityMap) >= self::LOAD_IDENTITY_MAX_BUCKETS
+        ) {
+            $oldestBucket = \array_key_first(self::$loadIdentityMap);
+            if ($oldestBucket !== null && $oldestBucket !== $requestId) {
+                unset(self::$loadIdentityMap[$oldestBucket]);
+            }
+        }
+
+        self::$loadIdentityMap[$requestId][$cacheKey] = [
+            'data' => $data,
+            'gen' => LoadIdentityGeneration::current(),
+        ];
+
+        if (\count(self::$loadIdentityMap[$requestId]) > self::LOAD_IDENTITY_MAX_ENTRIES) {
+            // 条目上限：淘汰桶内最旧条目。
+            $oldestKey = \array_key_first(self::$loadIdentityMap[$requestId]);
+            if ($oldestKey !== null && $oldestKey !== $cacheKey) {
+                unset(self::$loadIdentityMap[$requestId][$oldestKey]);
+            }
+        }
+    }
+
+    /**
+     * 标记发生了写操作：使所有 Fiber 共享的 load 身份映射快照失效。
+     *
+     * identityMap 的桶键是 request_id，而同一逻辑请求的父子 Fiber 共享同一 request_id
+     * （见 RequestContext “shared memo (cross-Fiber)”）。不做写感知时，A Fiber 写库后
+     * B Fiber 仍会命中写前快照。此处 bump 后代数不符，读路径自动回落真实查询。
+     *
+     * 写代数按进程内递增，不做 per-key 精确失效：写少读多，全量失效的实现与验证成本最低。
+     */
+    public static function bumpLoadIdentityGeneration(): void
+    {
+        LoadIdentityGeneration::bump();
     }
     /***************便捷查询 开始 *********************/
     //    function all(): mixed
@@ -948,6 +1011,8 @@ abstract class AbstractModel extends DataObject
 
         // 保存后
         $this->save_after();
+        // 写成功：让所有 Fiber 共享的 load 身份映射快照失效
+        self::bumpLoadIdentityGeneration();
         return $save_result;
     }
 
@@ -1128,7 +1193,9 @@ abstract class AbstractModel extends DataObject
      */
     public function __call($method, $args)
     {
-        if (in_array($method, get_class_methods(QueryInterface::class), true)) {
+        // fetchModel 是模型层新增 API（不属于 QueryInterface 的 Query 契约）：
+        // 显式对象化，等价于改写前 fetch() 的语义。默认 fetch() 走数组形态。
+        if ($method === 'fetchModel' || in_array($method, get_class_methods(QueryInterface::class), true)) {
             return (new \Weline\Framework\Database\Query\QueryDelegator())->delegate($this, $method, $args);
         }
         return parent::__call($method, $args);
@@ -1343,6 +1410,8 @@ abstract class AbstractModel extends DataObject
     {
         $this->__call('delete', []);
         $this->fetch();
+        // 写成功：让所有 Fiber 共享的 load 身份映射快照失效
+        self::bumpLoadIdentityGeneration();
         return $this;
     }
 

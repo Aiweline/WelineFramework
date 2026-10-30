@@ -119,7 +119,8 @@ abstract class Model extends AbstractModel implements ModelInterface
             ->order($order_field, $order_sort)
             ->select()
             ->fetch()
-            ->getItems();
+            // getSubs() 逐节点递归并调用模型方法，必须对象化。
+            ->toModels();
         foreach ($top_menus as &$top_menu) {
             $top_menu = $this->getSubs($top_menu, $main_field, $parent_id_field, $order_field, $order_sort);
         }
@@ -214,12 +215,13 @@ abstract class Model extends AbstractModel implements ModelInterface
                                    string $order_sort = 'ASC'): Model
     {
         $main_field = $main_field ?: $this::schema_fields_ID;
+        // 逐节点调用 getData()/getParentPaths()，必须对象化。
         $parents = $this->reset()
             ->where($main_field, $model->getData($parent_id_field))
             ->order($order_field, $order_sort)
             ->select()
             ->fetch()
-            ->getItems();
+            ->toModels();
         $this->unsetData('0');
         if ($parents) {
             foreach ($parents as &$parent) {

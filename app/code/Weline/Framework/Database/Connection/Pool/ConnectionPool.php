@@ -857,6 +857,16 @@ class ConnectionPool
         } while (\microtime(true) < $deadline);
 
         $diagnostics = self::poolDiagnostics($poolKey, $pool);
+        // 日志层只落 message + trace、不带走异常 context，故把「谁持了多久」
+        // 压缩进 message：下一次复现即可直接归因，无需再挂采样器。
+        $heldOwners = $diagnostics['owners'];
+        \usort($heldOwners, static fn (array $a, array $b): int => (float)$b['held_ms'] <=> (float)$a['held_ms']);
+        $ownerTrace = [];
+        foreach (\array_slice($heldOwners, 0, 5) as $heldOwner) {
+            $ownerTrace[] = (string)$heldOwner['owner_type']
+                . '/' . (int)$heldOwner['leases'] . 'L'
+                . '/' . (int)\round((float)$heldOwner['held_ms']) . 'ms';
+        }
         $elapsedMilliseconds = \round(\max(0.0, $acquireTimeoutSeconds) * 1000, 2);
         self::$counterExhaustedTotal++;
         throw new ConnectionPoolExhaustedException(
@@ -866,7 +876,8 @@ class ConnectionPool
             . ', current_size=' . (int)$pool['current_size']
             . ', in_use=' . \count($pool['in_use'])
             . ', owners=' . (int)$diagnostics['owner_count']
-            . ', leases=' . (int)$diagnostics['lease_count'] . ').',
+            . ', leases=' . (int)$diagnostics['lease_count']
+            . ', held=[' . \implode(' ', $ownerTrace) . ']).',
             [
                 'reason' => 'pool_deadline_exhausted',
                 'pool_id' => \substr($poolKey, 0, 12),

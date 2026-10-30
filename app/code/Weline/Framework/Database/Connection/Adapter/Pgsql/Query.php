@@ -2860,6 +2860,16 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $this->PDOStatement = null;
         $this->batch = false;
         
+        // 写语句走过这里（含裸 SQL query()->update()/delete()/insert()）：
+        // bump 写代数，使 AbstractModel 的 load 身份映射（跨 Fiber 共享快照）整体失效。
+        // 注意：裸 SQL 的 fetch_type 是 'query'（不是 update/delete），必须按 SQL 首词判定；
+        // 只判 fetch_type 会漏掉全部裸 SQL 写（实测 gen 不增）。
+        // 本适配器重写了 processFetchResult，父类 QueryAst 的 bump 不会执行，故此处必须独立接一次。
+        if (in_array($this->fetch_type, ['insert', 'update', 'delete'], true)
+            || preg_match('/^\s*(insert|update|delete|truncate|alter|drop|create)\b/i', (string)$this->sql)
+        ) {
+            \Weline\Framework\Database\LoadIdentityGeneration::bump();
+        }
         switch ($this->fetch_type) {
             case 'find':
                 $result = array_shift($data);
