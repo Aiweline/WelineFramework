@@ -6,6 +6,8 @@ namespace Weline\Theme\Service\ThemeUpdate;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Output\Cli\Printing;
+use Weline\Theme\Font\FontWarmupService;
 use Weline\Theme\Model\ThemeUpdateBatch;
 use Weline\Theme\Model\ThemeUpdatePointer;
 
@@ -27,6 +29,12 @@ final class ThemeUpdateBatchService
     /** 自动 GC 保留的历史代次数（不含 current/previous），可用 Env 配置 theme_update_keep_batches 覆盖。 */
     public const DEFAULT_KEEP_BATCHES = 3;
     public const AREA_FRONTEND = 'frontend';
+
+    /**
+     * 字体子集预热在单进程内只跑一次（promote/rollback/gc 共用同一收敛点）。
+     * 跨进程仍会再跑，但 FontWarmupService::warmup() 是 skip-existing 幂等的，成本≈目录扫描。
+     */
+    private static bool $fontWarmupDone = false;
 
     public function __construct(
         private readonly ThemeUpdateBatch $batch,
@@ -979,6 +987,11 @@ final class ThemeUpdateBatchService
     private function invalidateThemeCaches(int $themeId, string $reason): array
     {
         $errors = [];
+        // 0) 字体子集预热：必须早于第 1 步——clearAllThemeRelatedCaches 内部会顺带预热页面，
+        //    子集缺失时首屏渲染会走 resolveOrBuild 现建（把字体生成成本压到用户请求上）。
+        //    原挂在 Weline_Framework_Setup::upgrade_after 的 SetupUpgradeAfterFontWarmup 已按
+        //    「系统更新阶段禁止跑缓存预热」删除，迁到主题更新阶段这一个收敛点。
+        $this->warmupFontSubsetsOnce();
         // 1) 主题相关运行时缓存（chrome/卡片/投影等）
         try {
             $cleaner = ObjectManager::getInstance(\Weline\Theme\Service\ThemeRuntimeCacheCleaner::class);
@@ -1021,6 +1034,62 @@ final class ThemeUpdateBatchService
         }
 
         return $errors;
+    }
+
+    /**
+     * 字体子集预热（主题更新阶段）。迁移自 `Weline_Framework_Setup::upgrade_after` 的
+     * SetupUpgradeAfterFontWarmup——系统更新阶段禁止跑任何缓存预热。
+     *
+     * 只产字体子集文件（`pub/media/font-subset/`），不抓页面、不碰 FPC，与
+     * 「页面预热归 cron warmer」的分工不冲突；放在 invalidateThemeCaches 头部是因为
+     * 第 1 步 clearAllThemeRelatedCaches 内部会顺带预热页面，子集必须先就位。
+     * 预热失败只记 warning，绝不中断指针切换后的收敛流程。
+     *
+     * @internal 允许单测复位 once 守卫
+     */
+    public static function resetFontWarmupOnce(): void
+    {
+        self::$fontWarmupDone = false;
+    }
+
+    private function warmupFontSubsetsOnce(): void
+    {
+        if (self::$fontWarmupDone) {
+            return;
+        }
+        self::$fontWarmupDone = true;
+        try {
+            /** @var Printing $printing */
+            $printing = ObjectManager::getInstance(Printing::class);
+            $printing->note('字体子集预热开始…');
+            $result = ObjectManager::getInstance(FontWarmupService::class)->warmup();
+            $printing->success(sprintf(
+                '字体子集预热完成：新建 %d，跳过 %d，失败 %d',
+                (int)($result['built'] ?? 0),
+                (int)($result['skipped'] ?? 0),
+                (int)($result['failed'] ?? 0)
+            ));
+            foreach ((array)($result['items'] ?? []) as $item) {
+                if (!\is_array($item) || (string)($item['status'] ?? '') !== 'failed') {
+                    continue;
+                }
+                $printing->warning(sprintf(
+                    '字体子集失败：%s [%s] — %s',
+                    (string)($item['font'] ?? ''),
+                    (string)($item['lang'] ?? ''),
+                    (string)($item['error'] ?? '')
+                ));
+            }
+        } catch (\Throwable $e) {
+            // 预热异常不能影响主题切换结果：子集缺失只影响字体观感，不影响功能。
+            try {
+                /** @var Printing $printing */
+                $printing = ObjectManager::getInstance(Printing::class);
+                $printing->warning('字体子集预热异常：' . $e->getMessage());
+            } catch (\Throwable) {
+                // 连打印都拿不到时静默降级（如纯单测环境）。
+            }
+        }
     }
 
     /**

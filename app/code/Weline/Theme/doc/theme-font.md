@@ -1,6 +1,6 @@
 # `<w:theme:font>` 字体加载（语言子集化）
 
-把字体文件放进模块约定目录，模板用标签加载；系统更新时自动按语言预热子集。
+把字体文件放进模块约定目录，模板用标签加载；主题更新（指针切换后）自动按语言预热子集。
 
 与 `theme:css` / `theme:js` 同属 Theme 资源标签族：标签在 Theme，算法在 `Weline\Theme\Font` / `Weline\Theme\Minify`。
 
@@ -31,7 +31,7 @@ Theme 已内置（`Weline_Theme/view/fonts/`，OFL）：
 
 主题编辑器「外观 · 字体」盘对上述 Token 提供预设下拉（源：`theme-disk-appearance.js`，须与 `weline-theme-editor.js` 同步）。后台仍以 Noto Sans SC 为主。
 
-`setup:upgrade` 结束后会扫描所有**已启用**模块的 `view/fonts/**`，为内置语言字符集生成子集（已有文件则跳过）。运行时若尚未预热，标签仍会临时生成并缓存。
+主题更新切换代次后（`theme:update` 的 promote/rollback/gc 收敛点）会扫描所有**已启用**模块的 `view/fonts/**`，为内置语言字符集生成子集（已有文件则跳过）。运行时若尚未预热，标签仍会临时生成并缓存。
 
 引用写法（与 `theme:css` / `theme:js` 同形）：
 
@@ -103,11 +103,15 @@ Theme 已内置（`Weline_Theme/view/fonts/`，OFL）：
 body { font-family: "Noto Sans SC", sans-serif; }
 ```
 
-## 3. 系统更新预热
+## 3. 主题更新阶段预热
 
-事件：`Weline_Framework_Setup::upgrade_after` → Theme `SetupUpgradeAfterFontWarmup`（sort 120）
+字体子集预热挂在**主题更新阶段**：`ThemeUpdateBatchService::invalidateThemeCaches()` 头部调用
+`warmupFontSubsetsOnce()`（promote / rollback / gc 共用这一个收敛点，单进程内只跑一次，且早于第 1 步：
+`clearAllThemeRelatedCaches` 内部会触发页面预热，缺子集时那次回源渲染会同步走
+`FontFaceService` → `resolveOrBuild` 现建，把字体生成成本压进预热请求里）。
+原 `Weline_Framework_Setup::upgrade_after → SetupUpgradeAfterFontWarmup` 已删除——系统更新阶段禁止跑缓存预热。
 
-同批还有生产静态发布：`SetupUpgradeAfterDeployStatic`（`!DEV`，sort 130）→ `deploy:upgrade`，经中立变换事件压缩 css/js（见 `Theme/Minify`）。
+同阶段其它升级期工作仍由 `SetupUpgradeAfterThemeDiskCompile`（sort 125）、`SetupUpgradeAfterDeployStatic`（`!DEV`，sort 130）→ `deploy:upgrade` 承担，经中立变换事件压缩 css/js（见 `Theme/Minify`），与字体预热无关。
 
 1. 自动收集各模块 `view/fonts/**`
 2. 语言列表 = `Theme/Font/charset/*.txt`（如 `en`、`zh_Hans`、`zh_Hant`、`ja`）∪ **网站已启用语种**（`getWebsiteLanguageCodes` / 关联表去重）
