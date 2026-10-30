@@ -495,17 +495,33 @@ class WelineEnv
      */
     public static function getLang(): string
     {
+        // 请求初始化时已把语言写进上下文（App::primeRequestRouteHints →
+        // RequestContext::setWelineUserLang），同一请求内直接取，不再重走
+        // 覆盖 → 路由语言 → 区域默认 的三档解析。
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $cached = $context->get('state.lang_cache', null);
+            if (\is_string($cached) && $cached !== '') {
+                return $cached;
+            }
+        }
+
         $forced = \Weline\Framework\App\State::getRequestLanguageOverride();
         if ($forced !== '' && \Weline\Framework\App\State::isLanguageCodeShape($forced)) {
-            return \Weline\Framework\App\State::normalizeLanguageCode($forced);
+            $lang = \Weline\Framework\App\State::normalizeLanguageCode($forced);
+        } else {
+            $routeLang = $context !== null ? (string)$context->get('route.language', '') : '';
+            $lang = $routeLang !== '' ? $routeLang : self::readRouteLanguage();
+            if ($lang === '') {
+                $lang = \Weline\Framework\App\State::resolveAreaDefaultLanguage();
+            }
         }
 
-        $routeLang = self::readRouteLanguage();
-        if ($routeLang !== '') {
-            return $routeLang;
+        if ($context !== null) {
+            $context->set('state.lang_cache', $lang);
         }
 
-        return \Weline\Framework\App\State::resolveAreaDefaultLanguage();
+        return $lang;
     }
 
     public static function setLang(string $lang): void
@@ -523,6 +539,25 @@ class WelineEnv
      */
     public static function getCurrency(): string
     {
+        // 与 getLang() 同口径：请求初始化已写好币种，请求内直接取上下文。
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $cached = $context->get('state.currency_cache', null);
+            if (\is_string($cached) && $cached !== '') {
+                return $cached;
+            }
+            $routeCurrency = (string)$context->get('route.currency', '');
+            $currency = $routeCurrency !== ''
+                ? \strtoupper(\trim($routeCurrency))
+                : self::readRouteCurrency();
+            if ($currency === '' || !\Weline\Framework\App\State::isAllowedCurrencyCode($currency)) {
+                $currency = \Weline\Framework\App\State::resolveWebsiteDefaultCurrency();
+            }
+            $context->set('state.currency_cache', $currency);
+
+            return $currency;
+        }
+
         $routeCurrency = self::readRouteCurrency();
         if ($routeCurrency !== '') {
             return $routeCurrency;
@@ -544,23 +579,43 @@ class WelineEnv
      */
     public static function getLangLocal(): string
     {
-        $lang = self::getLang();
-        $currency = self::getCurrency();
-        $cacheKey = $lang . '|' . $currency;
+        // 请求上下文在初始化时已写好语言（App::primeRequestRouteHints →
+        // RequestContext::setWelineUserLang），显示语言在同一请求内恒定为
+        // `route.language`。请求内直接读上下文；只有语言被覆盖/切换
+        // （State::resetLangLocalCache 清空缓存）时才重算。
         $context = Context::getCurrent();
         if ($context !== null) {
             $cached = $context->get('state.lang_local_cache', null);
-            if (\is_array($cached)
-                && (string)($cached['key'] ?? '') === $cacheKey
-                && \array_key_exists('value', $cached)
-            ) {
-                return (string)$cached['value'];
+            if (\is_string($cached) && $cached !== '') {
+                return $cached;
+            }
+            $routeLang = (string)$context->get('route.language', '');
+            if ($routeLang !== '') {
+                $context->set('state.lang_local_cache', $routeLang);
+
+                return $routeLang;
             }
         }
 
+        // 无请求上下文（CLI / 引导期）：走一次完整解析。
+        $langLocal = self::resolveLangLocal();
+        if ($context !== null) {
+            $context->set('state.lang_local_cache', $langLocal);
+        }
+
+        return $langLocal;
+    }
+
+    /**
+     * Full resolution: lang-mapped display locale, overridable by the
+     * `lang_local` event. Only used when the request context cannot answer.
+     */
+    private static function resolveLangLocal(): string
+    {
+        $lang = self::getLang();
         $data = new \Weline\Framework\DataObject\DataObject();
         $data->setData('lang', $lang);
-        $data->setData('currency', $currency);
+        $data->setData('currency', self::getCurrency());
         $data->setData('lang_local', $lang);
 
         try {
@@ -569,15 +624,7 @@ class WelineEnv
         } catch (\Exception) {
         }
 
-        $langLocal = (string)$data->getData('lang_local');
-        if ($context !== null) {
-            $context->set('state.lang_local_cache', [
-                'key' => $cacheKey,
-                'value' => $langLocal,
-            ]);
-        }
-
-        return $langLocal;
+        return (string)$data->getData('lang_local');
     }
 
     private static function readRouteLanguage(): string

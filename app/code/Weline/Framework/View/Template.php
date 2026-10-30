@@ -2012,15 +2012,39 @@ class Template extends DataObject implements RequestLocalInterface
                 'area_route' => false,
             ],
         );
+        // Empty-output hooks are deliberately NOT stored in the shared/process caches
+        // (a negative entry would pin "blank" for the whole TTL). But the SAME request
+        // renders the same hook file many times (header/footer body-end bundles): each
+        // call re-resolved the policy, rebuilt the env-scoped key, probed two caches and
+        // re-included the compiled file — measured 8x per key in one request. Remember
+        // "already proven empty" for the rest of THIS request only, keyed by the same
+        // env-scoped cacheKey so a lang/mtime/env change still re-renders.
+        // 诊断日志必须遵守 shouldLogHookDiagnostics() 开关（与 :3712/:3786 一致）：
+        // 未过门禁时这些 warning 会按渲染次数线性写盘（实测单请求 92–154 行）。
+        // 此处只有 hookFile（Module::hooks/…），无法反推 hook name，故按该门禁的
+        // 显式调试口径（?debug_hooks=1）开闸；诊断型 hook 仍由 getHookResult 侧记录。
+        $hookDiagEnabled = $this->hookFileDiagnosticsRequested();
+        $requestEmptyKey = 'view.hook.empty_static.v1.' . $cacheKey;
+        if (RequestContext::get($requestEmptyKey) === true) {
+            TemplateRenderRouteTrace::mark(
+                'hook_empty_static_memo_hit',
+                $this->shortRenderRouteIdentity($hookFile),
+                []
+            );
+
+            return '';
+        }
         $cached = $this->readStaticHookOutputCache($cacheKey, $ttl);
         if ($cached['status'] !== 'miss') {
             if ($this->isEmptyCacheHtml((string)$cached['html'])) {
                 unset(self::$staticHookOutputCache[$cacheKey]);
-                $this->logHookCacheDiagnostic('skip_empty_static_hook_output_cache', [
-                    'hook_file' => $hookFile,
-                    'cache_key' => $cacheKey,
-                    'status' => (string)$cached['status'],
-                ]);
+                if ($hookDiagEnabled) {
+                    $this->logHookCacheDiagnostic('skip_empty_static_hook_output_cache', [
+                        'hook_file' => $hookFile,
+                        'cache_key' => $cacheKey,
+                        'status' => (string)$cached['status'],
+                    ]);
+                }
             } else {
             if ($cached['status'] === 'stale' && ($cachePolicy['allow_async_refresh'] ?? false)) {
                 $this->queueStaticHookOutputRefresh($cacheKey, $compiledFile, $ttl);
@@ -2034,11 +2058,13 @@ class Template extends DataObject implements RequestLocalInterface
         if ($runtimeCached['status'] !== 'miss') {
             if ($this->isEmptyCacheHtml((string)$runtimeCached['html'])) {
                 self::runtimeHookCacheDelete($cacheKey);
-                $this->logHookCacheDiagnostic('skip_empty_runtime_hook_output_cache', [
-                    'hook_file' => $hookFile,
-                    'cache_key' => $cacheKey,
-                    'status' => (string)$runtimeCached['status'],
-                ]);
+                if ($hookDiagEnabled) {
+                    $this->logHookCacheDiagnostic('skip_empty_runtime_hook_output_cache', [
+                        'hook_file' => $hookFile,
+                        'cache_key' => $cacheKey,
+                        'status' => (string)$runtimeCached['status'],
+                    ]);
+                }
             } else {
             $this->rememberStaticHookOutput($cacheKey, (string)$runtimeCached['html'], $ttl, (string)$runtimeCached['status']);
             if ($runtimeCached['status'] === 'stale' && ($cachePolicy['allow_async_refresh'] ?? false)) {
@@ -2051,10 +2077,15 @@ class Template extends DataObject implements RequestLocalInterface
 
         $html = $this->ob_file($compiledFile);
         if ($this->isEmptyCacheHtml($html)) {
-            $this->logHookCacheDiagnostic('skip_empty_static_hook_output_store', [
-                'hook_file' => $hookFile,
-                'cache_key' => $cacheKey,
-            ]);
+            // Request-scoped only (never shared): this hook is proven empty for this
+            // cacheKey, so repeat renders of the same file inside the request short-circuit.
+            RequestContext::set($requestEmptyKey, true);
+            if ($hookDiagEnabled) {
+                $this->logHookCacheDiagnostic('skip_empty_static_hook_output_store', [
+                    'hook_file' => $hookFile,
+                    'cache_key' => $cacheKey,
+                ]);
+            }
             return $html;
         }
         if (HtmlCacheAdmission::admit($html)) {
@@ -4094,6 +4125,22 @@ class Template extends DataObject implements RequestLocalInterface
             return true;
         }
 
+        try {
+            return (string)$this->request->getGet('debug_hooks', '') === '1';
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Per-render hook-file diagnostics gate.
+     *
+     * These fire from fetchHookHtml(), where only the hook FILE is known (not the
+     * hook NAME that {@see shouldLogHookDiagnostics()} expects). They must obey the
+     * same explicit-debug contract: silent unless `?debug_hooks=1`.
+     */
+    private function hookFileDiagnosticsRequested(): bool
+    {
         try {
             return (string)$this->request->getGet('debug_hooks', '') === '1';
         } catch (\Throwable) {

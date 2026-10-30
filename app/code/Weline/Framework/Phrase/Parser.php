@@ -46,7 +46,6 @@ class Parser
     /** Process bag: few full module/locale maps — authority lives in Memory Service. */
     private const WORKER_GLOBAL_DICTIONARY_WORDS_CACHE_MAX_ITEMS = 2;
     private const WORKER_LAYERED_WORDS_CACHE_MAX_ITEMS = 8;
-    private const WORKER_MATERIALIZED_WORDS_CACHE_MAX_ITEMS = 2;
     private const WORKER_WORDS_CACHE_MAX_ITEMS = 4;
     /** 进程袋身份：与 bindDictionaryProcessBags() 共用，禁止匿名登记。 */
     private const BAG_WORKER_WORDS = 'workerWords';
@@ -58,7 +57,20 @@ class Parser
     private const BAG_WORKER_GLOBAL_DICTIONARY_ALL_LOCALES = 'workerGlobalDictionaryAllLocales';
     private const BAG_WORKER_GLOBAL_DICTIONARY_WORD = 'workerGlobalDictionaryWord';
     private const BAG_WORKER_LAYERED_WORDS = 'workerLayeredWords';
-    private const BAG_WORKER_MATERIALIZED_WORDS = 'workerMaterializedWords';
+    /**
+     * One bag, many regions. The dictionary is a process-global fact (files on
+     * disk + the worker's resident layers); regions inside
+     * {@see BAG_WORKER_LAYERED_WORDS} are addressed by cache_key, and the only
+     * two boundaries are the locale chain and the frontend/backend area
+     * (shared∪area bags). There is deliberately NO request-level dictionary.
+     *
+     * Resolving that region address costs a namespace-generation fingerprint
+     * (sha256 per namespace), so the address itself is memoised per
+     * (lang, area, modules, chain): the hot path becomes one array read.
+     *
+     * @var array<string, string>
+     */
+    private static array $layeredWordsCacheKeyMemo = [];
     private const BAG_WORKER_TRANSLATED_WORDS = 'workerTranslatedWords';
     /** Skip heavy locale dictionary load when used headroom is below this (was 96MiB — too late on 256M). */
     private const WLS_HEAVY_LOCALE_HEADROOM_BYTES = 128 * 1024 * 1024;
@@ -76,7 +88,6 @@ class Parser
     protected static array $workerGlobalDictionaryAllLocales = [];
     protected static array $workerGlobalDictionaryWordCache = [];
     protected static array $workerLayeredWordsCache = [];
-    protected static array $workerMaterializedWordsCache = [];
     protected static array $workerTranslatedWordsCache = [];
     private static ?GlobalDictionaryProviderInterface $globalDictionaryProviderInstance = null;
     /** CLI / no-RequestContext fallback only; live HTTP uses RequestContext bag. */
@@ -206,61 +217,93 @@ class Parser
      */
     protected static function processWords(string $words): string
     {
-        // DB / cache / logger bootstrap may call __() again (e.g. MySQL version
-        // warning while loading the global dictionary). Never re-enter resolution.
+        // 热路径：读当前请求语言 → 直接从类上按 (语言, 区域) 常驻的词典取值。
+        // 有译文就返回；没有就返回原文；词典不在才尝试加载一次。
         $requestState = self::requestState();
-        if (self::translationResolutionDepth() > 0 || $requestState->isLoadingWords) {
+        if ($requestState->isLoadingWords) {
+            // Dictionary load itself calls __(); never re-enter it.
             return $words;
         }
 
-        // WLS / CLI / FPM：分层查找；缺词原样返回，禁止写回词典 / 收集 / DB hydrate。
-        // 显式全词库物化仅经 getWords()，热路径不得 array_merge 整袋。
         self::ensureStateRegistered();
         $requestState->usedWords[$words] = $words;
-        self::enterTranslationResolution();
-        try {
-            $lang = WelineEnv::getLangLocal();
-            $eventTranslation = self::translateFromEventDictionary($words, $lang);
-            if ($eventTranslation !== null) {
-                return self::maybeMarkInlinePhrase($words, $eventTranslation);
-            }
-            if (EventDictionary::isExclusive($lang)) {
-                return self::maybeMarkInlinePhrase($words, $words);
-            }
 
-            $layers = TraceGate::measurePhase(
-                'i18n.phrase.layered_words',
-                static fn(): array => self::getCurrentLayeredWords(),
-            );
-            $translationCacheKey = (string)($layers['cache_key'] ?? '') . '|' . $words;
-            $requestWords = &DictionaryCacheNamespace::requestBag($requestState->translatedWords, self::workerTranslatedWordCacheMax(), self::layerLocales($layers));
-            if (isset($requestWords[$translationCacheKey]) && \is_string($requestWords[$translationCacheKey])) {
-                return self::maybeMarkInlinePhrase($words, $requestWords[$translationCacheKey]);
-            }
-
-            $resolved = TraceGate::measurePhase(
-                'i18n.phrase.resolve',
-                static fn(): string => self::translateWordFromLayers($words, $layers),
-            );
-            if (!\is_string($resolved) || $resolved === '') {
-                $resolved = $words;
-            }
-
-            // CJK identity miss on a non-zh locale must not poison request cache:
-            // early __() before prefetchWords would otherwise lock Chinese into
-            // H1/title for the rest of the request even after dictionary prefetch.
-            if (
-                $resolved === $words
-                && self::sourceContainsCjk($words)
-                && !self::isChineseLocaleCode((string)($layers['lang'] ?? ''))
-            ) {
-                return self::maybeMarkInlinePhrase($words, $resolved);
-            }
-
-            return $requestWords[$translationCacheKey] = self::maybeMarkInlinePhrase($words, $resolved);
-        } finally {
-            self::leaveTranslationResolution();
+        $region = self::hotRegionKey();
+        $dictionary = self::$regionWords[$region] ?? null;
+        if ($dictionary === null) {
+            // Only the first miss for this region loads; the attempt is latched so a
+            // failed/ empty region is never retried for the life of the worker.
+            $dictionary = self::lazyLoadRegion($region);
         }
+
+        $translated = $dictionary[$words] ?? null;
+        if (\is_string($translated) && $translated !== '') {
+            return $translated;
+        }
+
+        // Untranslated: the source string is the answer. No second lookup chain.
+        return $words;
+    }
+
+    /**
+     * Resident dictionary per dictionary region, keyed `<lang>|<area>`.
+     *
+     * The dictionary is a process-global fact and the region is (request locale,
+     * frontend/backend area) — nothing else. This is the only dictionary store the
+     * __() hot path touches: one static read, then one array lookup.
+     *
+     * @var array<string, array<string, string>>
+     */
+    private static array $regionWords = [];
+
+    /**
+     * Regions whose dictionary was already loaded (or failed to load). Latched so a
+     * region is attempted exactly once per process, and so a missing region returns
+     * the source string immediately instead of re-running the loader.
+     *
+     * @var array<string, true>
+     */
+    private static array $regionLoadAttempted = [];
+
+    private static function hotRegionKey(): string
+    {
+        return WelineEnv::getLangLocal() . '|' . self::dictionaryArea();
+    }
+
+    /**
+     * Load one region's dictionary straight from its own files — this worker,
+     * this locale, this area, nothing else.
+     *
+     * Files are the source of truth: no shared-memory hop, no cache pool, no bag
+     * and no module walk. Measured on this machine for a 3.15MB region:
+     * `include` (cold, in-worker) 13.6ms once, then the resident static array
+     * answers every later __() in 0.007µs — while a shared-memory-service read
+     * of the same data costs 13.6ms *every time*, i.e. no saving at all.
+     *
+     * The attempt is latched before the I/O so a missing/empty region is never
+     * retried for the life of the worker.
+     *
+     * @return array<string, string>
+     */
+    private static function lazyLoadRegion(string $region): array
+    {
+        if (isset(self::$regionLoadAttempted[$region])) {
+            return self::$regionWords[$region] ??= [];
+        }
+        self::$regionLoadAttempted[$region] = true;
+
+        [$lang, $area] = \explode('|', $region, 2);
+        $words = [];
+        try {
+            if (\class_exists(\Weline\I18n\Service\LocaleAreaDictionaryLoader::class)) {
+                // shared bag + this area's bag only; never the legacy whole-locale bag.
+                $words = \Weline\I18n\Service\LocaleAreaDictionaryLoader::loadMerged($lang, $area, false);
+            }
+        } catch (\Throwable) {
+            $words = [];
+        }
+
+        return self::$regionWords[$region] = \is_array($words) ? $words : [];
     }
 
     /**
@@ -333,7 +376,19 @@ class Parser
         return $result;
     }
 
-    public static function getWords()
+    /**
+     * Materialized dictionary for one dictionary region.
+     *
+     * A region is (locale, area): `$lang` defaults to the request locale and
+     * `$area` to the request area (frontend/backend). Callers that already know
+     * which dictionary they need pass it explicitly instead of relying on the
+     * ambient request — that is what keeps frontend and backend dictionaries
+     * from being confused inside one worker.
+     *
+     * @param string|null $lang Explicit locale; null = current request locale.
+     * @param string|null $area Explicit area (frontend|backend); null = request area.
+     */
+    public static function getWords(?string $lang = null, ?string $area = null)
     {
         if (self::translationResolutionDepth() > 0 || self::requestState()->isLoadingWords) {
             return self::$words;
@@ -341,15 +396,15 @@ class Parser
 
         self::enterTranslationResolution();
         try {
-            return self::loadWords();
+            return self::loadWords($lang, $area);
         } finally {
             self::leaveTranslationResolution();
         }
     }
 
-    private static function loadWords(): array
+    private static function loadWords(?string $lang = null, ?string $area = null): array
     {
-        $locales = self::localeChain(WelineEnv::getLangLocal());
+        $locales = self::localeChain($lang ?? WelineEnv::getLangLocal());
         // An exclusive request must neither load public dictionaries nor publish
         // its empty public layer into the worker-wide materialized cache.
         if (EventDictionary::isExclusive(WelineEnv::getLangLocal())) {
@@ -358,24 +413,19 @@ class Parser
 
         if (Runtime::isPersistent()) {
             self::ensureStateRegistered();
-            $layers = self::getCurrentLayeredWords();
-            $cacheKey = (string)($layers['cache_key'] ?? self::buildWordsCacheKey((string)($layers['lang'] ?? WelineEnv::getLangLocal()), (array)($layers['modules'] ?? [])));
-            if (!isset(DictionaryCacheNamespace::processBag(self::BAG_WORKER_LAYERED_WORDS, self::$workerLayeredWordsCache, self::WORKER_LAYERED_WORDS_CACHE_MAX_ITEMS, $locales)[$cacheKey])) {
-                // 未确认完整的全局词典不能经物化入口变成进程级空快照。
-                return self::$words = self::materializeLayeredWords($layers);
-            }
-            if (!isset(DictionaryCacheNamespace::processBag(self::BAG_WORKER_MATERIALIZED_WORDS, self::$workerMaterializedWordsCache, self::WORKER_MATERIALIZED_WORDS_CACHE_MAX_ITEMS, $locales)[$cacheKey])) {
-                DictionaryCacheNamespace::processBag(self::BAG_WORKER_MATERIALIZED_WORDS, self::$workerMaterializedWordsCache, self::WORKER_MATERIALIZED_WORDS_CACHE_MAX_ITEMS, $locales)[$cacheKey] = self::materializeLayeredWords($layers);
-            }
-            self::$words = DictionaryCacheNamespace::processBag(self::BAG_WORKER_MATERIALIZED_WORDS, self::$workerMaterializedWordsCache, self::WORKER_MATERIALIZED_WORDS_CACHE_MAX_ITEMS, $locales)[$cacheKey];
-            return self::$words;
+            // 词典只有一份：区域记录（layer）就是权威来源，按区域拍平成一份词表返回。
+            // 不再复制进第二个袋（旧 BAG_WORKER_MATERIALIZED_WORDS 已删除），
+            // 区域失效由 getCurrentLayeredWords() 的 cache_key 代际负责。
+            return self::$words = self::materializeLayeredWords(
+                self::getCurrentLayeredWords($lang, $area)
+            );
         }
         // 确保 WLS 状态管理已注册
         self::ensureStateRegistered();
         
         // 防止循环调用：如果正在加载翻译文件，直接返回空数组或已加载的词
         $requestId = Runtime::isPersistent() ? RequestContext::getId() : null;
-        $currentLang = WelineEnv::getLangLocal();
+        $currentLang = $lang ?? WelineEnv::getLangLocal();
         $requestModules = self::resolveRequestModules();
         $requestCacheKey = self::buildWordsCacheKey($currentLang, $requestModules);
         $requestState = self::requestState();
@@ -441,12 +491,14 @@ class Parser
                 foreach ($modules as $module_name) {
                     $words = self::loadModuleWordsForLocaleChain($module_name, $lang);
                     // 后加载的模块词典会覆盖先加载的（优先级：后添加的模块 > 先添加的模块）
-                    $module_words = array_merge($module_words, $words);
+                    $module_words = \array_replace($module_words, $words);
                 }
                 $all_words = self::loadLocaleWordsForLocaleChain($lang, $modules);
 
-                // 合并：模块词典优先，总词典作为补充（模块词典覆盖总词典）
-                self::$words = array_merge($all_words, $module_words);
+                // 合并：模块词典优先，总词典作为补充（模块词典覆盖总词典）。
+                // 用 array_replace 而不是 array_merge：词典是「词 => 译文」，同词只能有一条，
+                // 累积合并必须去重，否则重复词条会一路复制进更大的袋。
+                self::$words = \array_replace($all_words, $module_words);
                 DictionaryCacheNamespace::processBag(self::BAG_WORKER_WORDS, self::$workerWordsCache, self::WORKER_WORDS_CACHE_MAX_ITEMS, $locales)[$requestCacheKey] = self::$words;
                 $requestState->wordsId = $requestId;
                 $requestState->wordsKey = $requestCacheKey;
@@ -553,7 +605,8 @@ class Parser
         self::$workerGlobalDictionaryAllLocales = [];
         self::$workerGlobalDictionaryWordCache = [];
         self::$workerLayeredWordsCache = [];
-        self::$workerMaterializedWordsCache = [];
+        self::$regionWords = [];
+        self::$regionLoadAttempted = [];
         self::$workerTranslatedWordsCache = [];
         GlobalDictionaryModuleBagCache::resetProcessPoolHandle();
         self::$globalDictionaryProviderInstance = null;
@@ -576,7 +629,6 @@ class Parser
         DictionaryCacheNamespace::bindProcessBag(self::BAG_WORKER_GLOBAL_DICTIONARY_ALL_LOCALES, self::$workerGlobalDictionaryAllLocales);
         DictionaryCacheNamespace::bindProcessBag(self::BAG_WORKER_GLOBAL_DICTIONARY_WORD, self::$workerGlobalDictionaryWordCache);
         DictionaryCacheNamespace::bindProcessBag(self::BAG_WORKER_LAYERED_WORDS, self::$workerLayeredWordsCache);
-        DictionaryCacheNamespace::bindProcessBag(self::BAG_WORKER_MATERIALIZED_WORDS, self::$workerMaterializedWordsCache);
         DictionaryCacheNamespace::bindProcessBag(self::BAG_WORKER_TRANSLATED_WORDS, self::$workerTranslatedWordsCache);
         // Whole-locale/module dictionary bags (file-backed) — soft pressure drops cold locales.
         GlobalDictionaryModuleBagCache::bindProcessBag();
@@ -610,9 +662,20 @@ class Parser
         return \array_merge(self::loadLocaleWordsForLocaleChain($lang, $modules), $module_words);
     }
 
-    private static function getCurrentLayeredWords(): array
+    /**
+     * Layered dictionary record for one dictionary region.
+     *
+     * Region = (locale, area). Both are explicit parameters so a caller that
+     * already knows its region (e.g. an admin page, or a prefetch for another
+     * locale) never inherits the wrong dictionary from the ambient request.
+     *
+     * @param string|null $lang null = current request locale
+     * @param string|null $area frontend|backend; null = current request area
+     */
+    private static function getCurrentLayeredWords(?string $lang = null, ?string $area = null): array
     {
-        $lang = WelineEnv::getLangLocal();
+        $lang ??= WelineEnv::getLangLocal();
+        $area ??= self::dictionaryArea();
         $modules = self::resolveRequestModules();
         $locales = self::localeChain($lang);
         // Modules can be appended by widget hooks during the same request, and
@@ -624,56 +687,128 @@ class Parser
             \array_filter($modules),
         )));
         \sort($normalizedModules);
-        $requestSignature = $lang . '|' . \implode(',', $normalizedModules) . '|chain:' . \implode(',', $locales);
-        $requestId = RequestContext::isInitialized() ? RequestContext::getId() : null;
-        $requestState = self::requestState();
-        if (
-            $requestId !== null
-            && $requestState->layeredWordsId === $requestId
-            && $requestState->layeredWordsSignature === $requestSignature
-            && $requestState->layeredWords !== null
-        ) {
-            return $requestState->layeredWords;
-        }
+        $scopeSignature = $lang . '|' . $area . '|' . \implode(',', $normalizedModules)
+            . '|chain:' . \implode(',', $locales);
 
         // 事务中不装词典、不把空层写进本请求。已驻留的层只读；没有就先用原文。
         if (\Weline\Framework\Database\TransactionContext::activeTransactionConnectionCount() > 0) {
             return self::publishedLayeredWords($lang, $normalizedModules)
-                ?? self::emptyLayeredWords($lang, $normalizedModules, $locales, $requestSignature);
+                ?? self::emptyLayeredWords($lang, $normalizedModules, $locales, $scopeSignature);
         }
 
-        $layers = self::getLayeredWords($lang, $modules, $locales);
-        $requestState->layeredWordsId = $requestId;
-        $requestState->layeredWordsKey = (string)($layers['cache_key'] ?? '');
-        $requestState->layeredWordsSignature = $requestSignature;
-        $requestState->layeredWords = $layers;
+        // One bag, many regions: getLayeredWords() keys the resident record by the
+        // generation-carrying cache_key (locale chain + area), so a dictionary bump
+        // naturally misses here. There is no per-request dictionary and no second
+        // cache layer — a signature-only fast path would answer stale layers.
+        $layers = self::getLayeredWords($lang, $modules, $locales, $area);
+
+        // The repeat-lookup record lives in RequestContext (Fiber-local), never in
+        // a process static: peer Fibers must not overwrite each other's layers.
+        $requestState = self::requestState();
+        if ($requestState->layeredWordsSignature !== $scopeSignature
+            || !\is_array($requestState->layeredWords)
+        ) {
+            $requestState->layeredWordsSignature = $scopeSignature;
+            $requestState->layeredWords = $layers;
+            $requestState->layeredWordsKey = (string)($layers['cache_key'] ?? '');
+            $requestState->layeredWordsId = RequestContext::isInitialized() ? RequestContext::getId() : null;
+        }
 
         return $layers;
     }
 
-    private static function buildLayeredWordsCacheKey(string $lang, array $modules, ?array $locales = null): string
+    /**
+     * Region address for the dictionary bag: locale chain + area + module set.
+     * `$area` is explicit so a caller resolving another region (prefetch, admin)
+     * does not fall back to whatever area the current request happens to be in.
+     */
+    private static function buildLayeredWordsCacheKey(string $lang, array $modules, ?array $locales = null, ?string $area = null): string
     {
         $locales ??= self::localeChain($lang);
         $modules = \array_values(\array_unique(\array_map([self::class, 'getFullModuleName'], \array_filter($modules))));
         \sort($modules);
+        // Frontend and backend load DIFFERENT area bags ({locale}.shared.php plus
+        // {locale}.{area}.php), so the area must be part of the scope address.
+        // Without it a worker that served a storefront page would hand the
+        // storefront bag to the next admin request for the same locale.
+        $area ??= self::dictionaryArea();
+
+        // A dictionary scope is a global fact: the same (lang, area, modules,
+        // locale chain) addresses the same words for the whole worker lifetime.
+        // Resolving that address costs a namespace-generation fingerprint (sha256
+        // per namespace) on every call, so remember it per scope in the process.
+        // There is no request-level dictionary — only locale and area boundaries.
+        $memoKey = $lang . "\0" . $area . "\0" . \implode(',', $modules) . "\0" . \implode(',', $locales);
+        $memoized = self::$layeredWordsCacheKeyMemo[$memoKey] ?? null;
+        if (\is_string($memoized) && $memoized !== '') {
+            return $memoized;
+        }
 
         if (Runtime::isPersistent()) {
             // A running Worker owns this immutable scope until cache epoch
             // invalidation. Keep the first lookup entirely in process memory;
             // file versions are only needed when the module L1 itself misses.
-            return DictionaryCacheNamespace::cacheKey('phrase_worker_scope|' . $lang . '|' . \implode(',', $modules)
+            $key = DictionaryCacheNamespace::cacheKey('phrase_worker_scope|' . $lang . '|' . $area . '|' . \implode(',', $modules)
                 . '|chain:' . \implode(',', $locales) . '|file', $locales);
+        } else {
+            $key = self::buildWordsCacheKey($lang, $modules) . '|area:' . $area . '|chain:' . \implode(',', $locales) . '|file';
         }
 
-        return self::buildWordsCacheKey($lang, $modules) . '|chain:' . \implode(',', $locales) . '|file';
+        if (\count(self::$layeredWordsCacheKeyMemo) >= 256) {
+            self::$layeredWordsCacheKeyMemo = [];
+        }
+        self::$layeredWordsCacheKeyMemo[$memoKey] = $key;
+
+        return $key;
     }
 
-    private static function getLayeredWords(string $lang, array $modules, ?array $locales = null): array
+    /**
+     * Dictionary area (frontend / backend). The dictionary is isolated by locale
+     * and area only; area bags are `{locale}.shared.php` + `{locale}.{area}.php`.
+     *
+     * Reads the area from Context directly instead of
+     * {@see \Weline\I18n\Service\LocaleAreaDictionaryLoader::detectRequestArea()}:
+     * that helper requires RequestContext to be initialised and otherwise answers
+     * "frontend" even when `route.area` is already `backend`, which would let an
+     * admin request load (and cache) the storefront bag.
+     */
+    private static function dictionaryArea(): string
+    {
+        $toArea = static function (string $area): string {
+            $area = \strtolower(\trim($area));
+
+            return ($area === '' || $area === 'shared') ? 'frontend' : $area;
+        };
+
+        try {
+            if (RequestContext::isBackendArea()) {
+                return 'backend';
+            }
+            $contextArea = (string)(Context::getCurrent()?->get('route.area', '') ?? '');
+            if ($contextArea !== '') {
+                return $toArea($contextArea);
+            }
+        } catch (\Throwable) {
+        }
+
+        try {
+            $request = ObjectManager::getInstance(Request::class);
+            if (\method_exists($request, 'isBackend') && $request->isBackend()) {
+                return 'backend';
+            }
+        } catch (\Throwable) {
+        }
+
+        return 'frontend';
+    }
+
+    private static function getLayeredWords(string $lang, array $modules, ?array $locales = null, ?string $area = null): array
     {
         $locales ??= self::localeChain($lang);
         $modules = \array_values(\array_unique(\array_map([self::class, 'getFullModuleName'], \array_filter($modules))));
         \sort($modules);
-        $cacheKey = self::buildLayeredWordsCacheKey($lang, $modules, $locales);
+
+        $cacheKey = self::buildLayeredWordsCacheKey($lang, $modules, $locales, $area);
         if (EventDictionary::isExclusive($lang)) {
             // This request-only empty layer must not replace the global one.
             return [
