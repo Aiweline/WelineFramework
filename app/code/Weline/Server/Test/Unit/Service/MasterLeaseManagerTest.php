@@ -220,7 +220,7 @@ final class MasterLeaseManagerTest extends TestCase
 
         $message = '';
         try {
-            $assert->invoke($manager, $path, $status, false);
+            $assert->invoke($manager, $path, $status, false, 'master_lease.json');
         } catch (\ReflectionException $exception) {
             throw $exception;
         } catch (\RuntimeException $exception) {
@@ -229,6 +229,31 @@ final class MasterLeaseManagerTest extends TestCase
 
         self::assertStringContainsString('must be private, regular and unlinked', $message);
         self::assertStringContainsString('"mode":"644"', $message);
+        self::assertStringContainsString('"address":"master_lease.json"', $message);
+    }
+
+    public function testTransientPermissionFlipIsAbsorbedByResampling(): void
+    {
+        $now = 4_300.0;
+        $manager = $this->manager($now);
+        $instance = $this->instance('lease-mode-flap');
+        $path = $manager->writeRunning($instance, (int)\getmypid(), 19141, 1, \str_repeat('7', 64));
+
+        \chmod($path, 0644);
+        // 30ms 后恢复 0600：模拟 Master 心跳整份重写（每 3s）把瞬时漂移自愈。
+        // 断言按 3 次 × 50ms 重采样，第 2 次采样应看到 0600 并放行。
+        $proc = \proc_open('sleep 0.03; chmod 0600 ' . \escapeshellarg($path), [], $pipes);
+        self::assertIsResource($proc);
+
+        $status = \lstat($path);
+        self::assertIsArray($status);
+        $assert = new \ReflectionMethod(MasterLeaseManager::class, 'assertRegularPrivateFile');
+        $assert->setAccessible(true);
+        $assert->invoke($manager, $path, $status, false, 'master_lease.json');
+
+        \proc_close($proc);
+        \clearstatcache(true, $path);
+        self::assertSame(0600, \fileperms($path) & 0777);
     }
 
     public function testLeaseLockIsBornPrivateWithoutA0644Window(): void

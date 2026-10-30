@@ -25,6 +25,13 @@ class MasterLeaseManager
     private const MAX_PROTECTED_LEASE_BYTES = 16_384;
     private const LOCK_WAIT_SEC = 5.0;
     private const LOCK_RETRY_USEC = 10_000;
+    /**
+     * 私有性断言的采样次数与间隔：读侧不持锁，lease 由 Master 每 3s 整份重写，
+     * 单次采样可能落在 mode/nlink/父目录的瞬时中间态；3×50ms 与
+     * MasterChildCredentialStore::assertPrivateFile() 的既有做法保持一致。
+     */
+    private const PRIVATE_FILE_ASSERT_ATTEMPTS = 3;
+    private const PRIVATE_FILE_ASSERT_RETRY_USEC = 50_000;
     private const WINDOWS_EMULATED_CHILD_CREDENTIAL_WAIT_SEC = 120.0;
 
     /** @var list<string> */
@@ -835,7 +842,7 @@ class MasterLeaseManager
             }
             return null;
         }
-        $this->assertRegularPrivateFile($path, $status, $allowLegacyMode);
+        $this->assertRegularPrivateFile($path, $status, $allowLegacyMode, 'master_lease.json');
         $raw = $this->readLeaseSnapshot($path);
         try {
             $decoded = \json_decode($raw, true, 32, JSON_THROW_ON_ERROR);
@@ -849,7 +856,7 @@ class MasterLeaseManager
             // A schema-2 credential is never silently repaired from an
             // over-permissive mode. Only the recognized schema-1 migration
             // payload may be read with its historical 0640 mode.
-            $this->assertRegularPrivateFile($path, $status, false);
+            $this->assertRegularPrivateFile($path, $status, false, 'master_lease.json');
         }
 
         return $decoded;
@@ -1041,7 +1048,7 @@ class MasterLeaseManager
         for ($attempt = 0; $attempt < 8; ++$attempt) {
             $before = @\lstat($path);
             if (\is_array($before)) {
-                $this->assertRegularPrivateFile($path, $before, false);
+                $this->assertRegularPrivateFile($path, $before, false, 'master_lease.lock');
                 $handle = @\fopen($path, 'r+b');
                 $created = false;
             } else {
@@ -1083,7 +1090,7 @@ class MasterLeaseManager
             @\fclose($handle);
             throw new \RuntimeException('WLS Master lease lock changed while opening.');
         }
-        $this->assertRegularPrivateFile($path, $opened, false);
+        $this->assertRegularPrivateFile($path, $opened, false, 'master_lease.lock');
         if ($created) {
             if (!@\fflush($handle)
                 || (\function_exists('fsync') && !@\fsync($handle))
@@ -1204,36 +1211,70 @@ class MasterLeaseManager
         }
     }
 
-    /** @param array<string|int,mixed> $status */
-    private function assertRegularPrivateFile(string $path, array $status, bool $allowLegacyMode): void
-    {
-        $mode = (int)($status['mode'] ?? 0);
-        $parent = @\lstat(\dirname($path));
-        if (\is_link($path)
-            || !\is_array($parent)
-            || (($mode & 0170000) !== 0100000)
-            || (int)($status['nlink'] ?? 0) !== 1
-            || (PHP_OS_FAMILY !== 'Windows'
-                && ((int)($status['uid'] ?? -1) !== (int)($parent['uid'] ?? -2)
-                    || ($allowLegacyMode
-                        ? !\in_array(($mode & 0777), [0600, 0640], true)
-                        : (($mode & 0777) !== 0600))))
-        ) {
-            // 现场故障：2026-10-30 03:15/04:07 UTC amayum 的 Worker 因该断言失败
-            // 自治退出并被反复重建（WLS 不稳定、Nginx connect() failed 突发）。
-            // 断言语义（fail-closed）保持不变，但把实际观测值写进异常便于定位漂移来源。
-            throw new \RuntimeException(
-                'WLS Master lease file must be private, regular and unlinked.'
-                . ' observed=' . \json_encode([
-                    'mode' => \sprintf('%o', $mode & 0777),
-                    'type' => \sprintf('%o', $mode & 0170000),
-                    'nlink' => (int)($status['nlink'] ?? -1),
-                    'uid' => (int)($status['uid'] ?? -1),
-                    'parent_uid' => \is_array($parent) ? (int)($parent['uid'] ?? -1) : -1,
-                    'path_is_link' => \is_link($path),
-                ], JSON_UNESCAPED_SLASHES)
-            );
+    /**
+     * 文件私有性断言（lease 文件与 lease 锁共用）。
+     *
+     * 现场故障：2026-10-30 03:15/04:07 UTC Worker 因本断言失败而「自治退出」并被反复
+     * 重建（Nginx connect() failed 突发），但事后 stat 三根的 lease 都是 600/uid=1000/nlink=1
+     * —— 说明读到的是**瞬时中间态**（mtime/mode/nlink/父目录 lstat 抖动）。
+     *
+     * 因此判据不做任何放宽（持续不安全照旧抛），只把「单次采样」改成
+     * 「3 次采样、间隔 50ms」——与 MasterChildCredentialStore::assertPrivateFile() 的既有做法一致：
+     * 瞬时翻转被第二次采样吃掉，持续异常 100% 抛；异常里带 address + observed 便于定论。
+     *
+     * @param array<string|int,mixed> $status
+     */
+    private function assertRegularPrivateFile(
+        string $path,
+        array $status,
+        bool $allowLegacyMode,
+        string $address = ''
+    ): void {
+        $lastObserved = [];
+        for ($attempt = 1; ; ++$attempt) {
+            $mode = (int)($status['mode'] ?? 0);
+            $parent = @\lstat(\dirname($path));
+            if (!\is_link($path)
+                && \is_array($parent)
+                && (($mode & 0170000) === 0100000)
+                && (int)($status['nlink'] ?? 0) === 1
+                && (PHP_OS_FAMILY === 'Windows'
+                    || ((int)($status['uid'] ?? -1) === (int)($parent['uid'] ?? -2)
+                        && ($allowLegacyMode
+                            ? \in_array(($mode & 0777), [0600, 0640], true)
+                            : (($mode & 0777) === 0600))))
+            ) {
+                return;
+            }
+
+            $lastObserved = [
+                'address' => $address !== '' ? $address : \basename($path),
+                'attempt' => $attempt,
+                'mode' => \sprintf('%o', $mode & 0777),
+                'type' => \sprintf('%o', $mode & 0170000),
+                'nlink' => (int)($status['nlink'] ?? -1),
+                'uid' => (int)($status['uid'] ?? -1),
+                'parent_uid' => \is_array($parent) ? (int)($parent['uid'] ?? -1) : -1,
+                'path_is_link' => \is_link($path),
+            ];
+            if ($attempt >= self::PRIVATE_FILE_ASSERT_ATTEMPTS) {
+                break;
+            }
+
+            SchedulerSystem::usleep(self::PRIVATE_FILE_ASSERT_RETRY_USEC);
+            \clearstatcache(true, $path);
+            $refreshed = @\lstat($path);
+            if (!\is_array($refreshed)) {
+                // 文件在重采样窗口内消失：交给上层按「缺失/被替换」处理，不在这里自造状态。
+                return;
+            }
+            $status = $refreshed;
         }
+
+        throw new \RuntimeException(
+            'WLS Master lease file must be private, regular and unlinked.'
+            . ' observed=' . \json_encode($lastObserved, JSON_UNESCAPED_SLASHES)
+        );
     }
 
     /** @param array<string|int,mixed> $left @param array<string|int,mixed> $right */
