@@ -1048,7 +1048,11 @@ class MasterLeaseManager
                 if (\file_exists($path) || \is_link($path)) {
                     throw new \RuntimeException('WLS Master lease lock path is unsafe.');
                 }
-                $handle = @\fopen($path, 'x+b');
+                // umask 022 下 fopen('x+b') 落盘是 0644；随后 fchmod(0600) 之前存在窗口，
+                // 并发的 openPrivateLock() 读到 0644 就抛
+                // “WLS Master lease file must be private, regular and unlinked”，
+                // 经 ChildMasterGuard 放大成 Worker 自治退出（生产 2026-10-30 实测）。
+                $handle = self::openExclusivePrivateFile($path);
                 $created = \is_resource($handle);
             }
             if (\is_resource($handle)) {
@@ -1091,6 +1095,26 @@ class MasterLeaseManager
         }
 
         return $handle;
+    }
+
+    /**
+     * 以 0600 原子创建独占文件。
+     *
+     * `fopen('x+b')` 的落地权限来自 umask（生产实测 644），随后再 fchmod(0600) 必然存在
+     * 一个「文件已存在但还不私有」的窗口；并发的 openPrivateLock() 会在窗口内读到 0644
+     * 并抛 fail-closed 断言，把一次正常的锁创建放大成 Worker 自治退出。
+     * 收窄 umask 后再创建，文件从第一个瞬间就是 0600，窗口消失。
+     *
+     * @return resource|false
+     */
+    private static function openExclusivePrivateFile(string $path)
+    {
+        $previousUmask = \umask(0077);
+        try {
+            return @\fopen($path, 'x+b');
+        } finally {
+            \umask($previousUmask);
+        }
     }
 
     private function ensurePrivateLeaseDirectory(string $directory): void

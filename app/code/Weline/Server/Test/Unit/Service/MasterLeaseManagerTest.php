@@ -231,6 +231,30 @@ final class MasterLeaseManagerTest extends TestCase
         self::assertStringContainsString('"mode":"644"', $message);
     }
 
+    public function testLeaseLockIsBornPrivateWithoutA0644Window(): void
+    {
+        $previousUmask = \umask(0022);
+        $path = \sys_get_temp_dir() . '/wls-lease-lock-' . \bin2hex(\random_bytes(6));
+        $mode = null;
+        try {
+            $open = new \ReflectionMethod(MasterLeaseManager::class, 'openExclusivePrivateFile');
+            $open->setAccessible(true);
+            $handle = $open->invoke(null, $path);
+            self::assertIsResource($handle);
+
+            // 在任何 fchmod 之前读取：锁文件必须已经是 0600，否则并发 reader 会读到
+            // 0644 并抛 fail-closed 断言（生产 Worker 自治退出的真实成因）。
+            \clearstatcache(true, $path);
+            $mode = \fileperms($path) & 0777;
+            \fclose($handle);
+        } finally {
+            @\unlink($path);
+            \umask($previousUmask);
+        }
+
+        self::assertSame(0600, $mode);
+    }
+
     public function testFutureLeaseWithMissingOwnerIsRecoveredByExactlyOneHigherEpoch(): void
     {
         $now = 4_500.0;
