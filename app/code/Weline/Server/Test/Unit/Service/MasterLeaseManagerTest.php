@@ -201,6 +201,36 @@ final class MasterLeaseManagerTest extends TestCase
         }
     }
 
+    public function testPermissionDriftOnLeaseFailsClosedWithObservedState(): void
+    {
+        $now = 4_200.0;
+        $manager = $this->manager($now);
+        $instance = $this->instance('lease-mode-drift');
+        $path = $manager->writeRunning($instance, (int)\getmypid(), 19131, 1, \str_repeat('5', 64));
+
+        \chmod($path, 0644);
+        self::assertSame(0644, \fileperms($path) & 0777);
+
+        // fail-closed 语义不变（安全边界）；但异常必须带上实际观测值，
+        // 便于定位 2026-10-30 生产 Worker 自治退出（lease 断言失败）的漂移来源。
+        $status = \lstat($path);
+        self::assertIsArray($status);
+        $assert = new \ReflectionMethod(MasterLeaseManager::class, 'assertRegularPrivateFile');
+        $assert->setAccessible(true);
+
+        $message = '';
+        try {
+            $assert->invoke($manager, $path, $status, false);
+        } catch (\ReflectionException $exception) {
+            throw $exception;
+        } catch (\RuntimeException $exception) {
+            $message = $exception->getMessage();
+        }
+
+        self::assertStringContainsString('must be private, regular and unlinked', $message);
+        self::assertStringContainsString('"mode":"644"', $message);
+    }
+
     public function testFutureLeaseWithMissingOwnerIsRecoveredByExactlyOneHigherEpoch(): void
     {
         $now = 4_500.0;

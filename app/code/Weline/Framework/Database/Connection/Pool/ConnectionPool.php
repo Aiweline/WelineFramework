@@ -70,6 +70,11 @@ class ConnectionPool
 
     private const IDLE_SWEEP_EVERY_N_ACQUIRES = 128;
 
+    /** 进程级累计计数（只读出口 getMetrics）。 */
+    private static int $counterAcquireTotal = 0;
+    private static int $counterCreatedTotal = 0;
+    private static int $counterExhaustedTotal = 0;
+
     /**
      * 本次归还已做过事务回滚 + 会话净化的连接。
      * requestEndCleanup 与 releaseConnectionByPoolKey 会先后经过同一连接，
@@ -193,9 +198,57 @@ class ConnectionPool
         self::$disconnectEpoch++;
     }
 
+    /**
+     * 进程级累计计数：acquire_total / created_total / exhausted_total。
+     *
+     * reused_total = acquire_total - created_total，可直接回答
+     * 「到底有没有每个请求都新建连接」，无需依赖外部采样。
+     *
+     * @return array{acquire_total: int, created_total: int, reused_total: int, exhausted_total: int}
+     */
+    public static function getMetrics(): array
+    {
+        $acquired = self::$counterAcquireTotal;
+        $created = self::$counterCreatedTotal;
+
+        return [
+            'acquire_total' => $acquired,
+            'created_total' => $created,
+            'reused_total' => \max(0, $acquired - $created),
+            'exhausted_total' => self::$counterExhaustedTotal,
+        ];
+    }
+
+    public static function resetMetrics(): void
+    {
+        self::$counterAcquireTotal = 0;
+        self::$counterCreatedTotal = 0;
+        self::$counterExhaustedTotal = 0;
+    }
+
     public static function isConnectionMarkedUnhealthy(PDO $connection): bool
     {
         return isset(self::$unhealthyConnections[\spl_object_id($connection)]);
+    }
+
+    /**
+     * Worker 启动期预热主库连接：把「首个请求冷建连」的成本前移到启动阶段。
+     *
+     * 连接建立后立即归还到空闲队列（不留租约），请求阶段可直接复用。
+     * 失败必须静默：DB 未就绪时不能因此让 Worker 起不来。
+     */
+    public static function prewarmDefaultPool(): bool
+    {
+        try {
+            $connector = \Weline\Framework\Database\ConnectionFactory::getInstance()->getConnector();
+            $connector->close();
+            // bootstrap 阶段的连接由 process owner 持有；不结算就会一直被钉在 in_use，
+            // 请求 Fiber 无法复用（每个 Worker 每个池白占一条 PG backend）。
+            self::requestEndCleanup();
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -459,7 +512,6 @@ class ConnectionPool
         unset(self::$unhealthyConnections[$connectionId]);
         unset(self::$returnPrepared[$connectionId]);
         unset(self::$connectionCreatedAt[$connectionId]);
-        self::$metrics['discarded_total']++;
         unset(self::$rawOwners[$poolKey][$connectionId]);
         if (empty(self::$rawOwners[$poolKey])) {
             unset(self::$rawOwners[$poolKey]);
@@ -571,7 +623,6 @@ class ConnectionPool
             } elseif (self::isConnectionExpired($connection, $lastUsed, $idleTtlSeconds, $maxLifetimeSeconds, $now)) {
                 // 空闲超 TTL 或超最大存活时间：直接丢弃，由后面的分支按需重建。
                 unset(self::$connectionCreatedAt[\spl_object_id($connection)]);
-                self::$metrics['discarded_total']++;
                 $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
             } elseif (self::isConnectionMarkedUnhealthy($connection)) {
                 $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
@@ -606,6 +657,7 @@ class ConnectionPool
             $connectionId = spl_object_id($connection);
             $pool['in_use'][$connectionId] = $connection;
             $pool['current_size']++;
+            self::$counterCreatedTotal++;
             self::$connectionCreatedAt[$connectionId] = $now;
             self::trackRawCheckout($poolKey, $connectionId);
             return $connection;
@@ -689,6 +741,7 @@ class ConnectionPool
                 $connectionId = \spl_object_id($connection);
                 $pool['in_use'][$connectionId] = $connection;
                 $pool['current_size']++;
+                self::$counterCreatedTotal++;
                 self::$connectionCreatedAt[$connectionId] = \microtime(true);
                 self::trackRawCheckout($poolKey, $connectionId);
                 return $connection;
@@ -697,6 +750,7 @@ class ConnectionPool
 
         $diagnostics = self::poolDiagnostics($poolKey, $pool);
         $elapsedMilliseconds = \round(\max(0.0, $acquireTimeoutSeconds) * 1000, 2);
+        self::$counterExhaustedTotal++;
         throw new ConnectionPoolExhaustedException(
             'Database connection pool exhausted after '
             . $elapsedMilliseconds
@@ -841,6 +895,7 @@ class ConnectionPool
         }
 
         $leaseToken = ++self::$leaseSequence;
+        self::$counterAcquireTotal++;
         $lease = new ConnectionLease($connection, $poolKey, $ownerKey, $leaseToken, \Fiber::getCurrent());
         self::$ownerConnections[$poolKey][$ownerKey]['lease_tokens'][$leaseToken] = true;
         self::$ownerConnections[$poolKey][$ownerKey]['ref_count'] = \count(
@@ -1357,8 +1412,16 @@ class ConnectionPool
                 // DISCARD ALL = RESET ALL + DEALLOCATE ALL + UNLISTEN * + 清理临时对象。
                 $connection->exec('DISCARD ALL');
             } elseif ($driver === 'mysql') {
-                // MySQL 8.0.3+ 的会话级重置；低版本抛错时按重置失败丢弃连接。
-                $connection->exec('RESET CONNECTION');
+                // MySQL 8.0.3+ 才有 RESET CONNECTION；MariaDB 同样报 driver=mysql 但不支持该语句
+                // （现场：SQLSTATE[42000] ... near 'CONNECTION'）。不支持时退回最小可移植复位，
+                // 否则每次归还都判 unhealthy、丢连接，连接池被反复打穿。
+                try {
+                    $connection->exec('RESET CONNECTION');
+                } catch (\Throwable) {
+                    $connection->exec('SET SESSION sql_mode = DEFAULT');
+                    $connection->exec('SET SESSION time_zone = DEFAULT');
+                    $connection->exec('SET SESSION wait_timeout = DEFAULT');
+                }
             }
         } catch (\Throwable) {
             self::markConnectionUnhealthy($connection);

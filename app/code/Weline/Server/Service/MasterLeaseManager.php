@@ -1195,7 +1195,20 @@ class MasterLeaseManager
                         ? !\in_array(($mode & 0777), [0600, 0640], true)
                         : (($mode & 0777) !== 0600))))
         ) {
-            throw new \RuntimeException('WLS Master lease file must be private, regular and unlinked.');
+            // 现场故障：2026-10-30 03:15/04:07 UTC amayum 的 Worker 因该断言失败
+            // 自治退出并被反复重建（WLS 不稳定、Nginx connect() failed 突发）。
+            // 断言语义（fail-closed）保持不变，但把实际观测值写进异常便于定位漂移来源。
+            throw new \RuntimeException(
+                'WLS Master lease file must be private, regular and unlinked.'
+                . ' observed=' . \json_encode([
+                    'mode' => \sprintf('%o', $mode & 0777),
+                    'type' => \sprintf('%o', $mode & 0170000),
+                    'nlink' => (int)($status['nlink'] ?? -1),
+                    'uid' => (int)($status['uid'] ?? -1),
+                    'parent_uid' => \is_array($parent) ? (int)($parent['uid'] ?? -1) : -1,
+                    'path_is_link' => \is_link($path),
+                ], JSON_UNESCAPED_SLASHES)
+            );
         }
     }
 
