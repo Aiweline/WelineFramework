@@ -68,6 +68,43 @@ class WarmupSend implements ObserverInterface
 
         $insertedCount = 0;
         $updatedCount = 0;
+        /** @var list<array<string,mixed>> $pendingInserts */
+        $pendingInserts = [];
+
+        // 批量预读本批已存在的 URL 行，替代逐条 find()：
+        // 原实现每条 URL 一次 SELECT + 一次 save()，1715 条 URL 会打 3400+ 次数据库往返
+        // （实测 setup:upgrade 的 CDN 预热入队单步 41 秒）。改后每批（200 条）只多 1 次 SELECT。
+        $existingByUrl = [];
+        if ($dedupe) {
+            $urlStrings = [];
+            foreach ($urls as $urlItem) {
+                if (is_string($urlItem)) {
+                    $urlStrings[] = $urlItem;
+                } elseif (is_array($urlItem)) {
+                    $urlStrings[] = (string)($urlItem['url'] ?? '');
+                }
+            }
+            $urlStrings = array_values(array_unique(array_filter($urlStrings, static fn ($u) => $u !== '')));
+            if ($urlStrings !== []) {
+                try {
+                    $existingRows = $this->warmupUrlModel->reset()
+                        ->where(WarmupUrl::schema_fields_MODULE, $module)
+                        ->where(WarmupUrl::schema_fields_URL, $urlStrings, 'IN')
+                        ->select()
+                        ->fetch()
+                        ->toModels();
+                    foreach ($existingRows as $row) {
+                        if (!$row instanceof WarmupUrl) {
+                            continue;
+                        }
+                        $existingByUrl[(string)$row->getData(WarmupUrl::schema_fields_URL)] = $row;
+                    }
+                } catch (\Throwable) {
+                    // 预读失败不影响后续流程，退化为逐条 find()
+                    $existingByUrl = [];
+                }
+            }
+        }
 
         foreach ($urls as $urlItem) {
             // 处理URL格式（可以是字符串或数组）
@@ -101,15 +138,11 @@ class WarmupSend implements ObserverInterface
                 }
             }
 
-            // 如果启用去重，检查URL是否已存在
+            // 如果启用去重，从本批预读映射取已存在行（不再逐条 find()）
             if ($dedupe) {
-                $existing = $this->warmupUrlModel->reset()
-                    ->where(WarmupUrl::schema_fields_URL, $url)
-                    ->where(WarmupUrl::schema_fields_MODULE, $module)
-                    ->find()
-                    ->fetch();
+                $existing = $existingByUrl[$url] ?? null;
 
-                if ($existing->getData(WarmupUrl::schema_fields_WARMUP_URL_ID)) {
+                if ($existing instanceof WarmupUrl && $existing->getData(WarmupUrl::schema_fields_WARMUP_URL_ID)) {
                     // 更新现有记录
                     $existing->setData(WarmupUrl::schema_fields_SITE_ID, $siteId);
                     $existing->setData(WarmupUrl::schema_fields_DOMAIN_ID, $domainId);
@@ -126,22 +159,41 @@ class WarmupSend implements ObserverInterface
                 }
             }
 
-            // 创建新记录
-            $warmupUrl = $this->warmupUrlModel->reset();
-            $warmupUrl->setData(WarmupUrl::schema_fields_MODULE, $module);
-            $warmupUrl->setData(WarmupUrl::schema_fields_PROVIDER, $provider);
-            $warmupUrl->setData(WarmupUrl::schema_fields_URL, $url);
-            $warmupUrl->setData(WarmupUrl::schema_fields_SITE_ID, $siteId);
-            $warmupUrl->setData(WarmupUrl::schema_fields_DOMAIN_ID, $domainId);
-            $warmupUrl->setData(WarmupUrl::schema_fields_STATUS, WarmupUrl::STATUS_PENDING);
-            $warmupUrl->setData(WarmupUrl::schema_fields_TARGET_COUNT, 1);
-            $warmupUrl->setData(WarmupUrl::schema_fields_PROCESSED_COUNT, 0);
-            $warmupUrl->setData(WarmupUrl::schema_fields_SUCCESS_COUNT, 0);
-            $warmupUrl->setData(WarmupUrl::schema_fields_FAIL_COUNT, 0);
-            $warmupUrl->setData(WarmupUrl::schema_fields_RETRIES, 0);
-            $warmupUrl->setData(WarmupUrl::schema_fields_ENABLED, 1);
-            $warmupUrl->save();
+            // 创建新记录：先收集，循环结束后批量 insert（逐条 save() 在 1700+ 条时很慢）
+            $pendingInserts[] = [
+                WarmupUrl::schema_fields_MODULE => $module,
+                WarmupUrl::schema_fields_PROVIDER => $provider,
+                WarmupUrl::schema_fields_URL => $url,
+                WarmupUrl::schema_fields_SITE_ID => $siteId,
+                WarmupUrl::schema_fields_DOMAIN_ID => $domainId,
+                WarmupUrl::schema_fields_STATUS => WarmupUrl::STATUS_PENDING,
+                WarmupUrl::schema_fields_TARGET_COUNT => 1,
+                WarmupUrl::schema_fields_PROCESSED_COUNT => 0,
+                WarmupUrl::schema_fields_SUCCESS_COUNT => 0,
+                WarmupUrl::schema_fields_FAIL_COUNT => 0,
+                WarmupUrl::schema_fields_RETRIES => 0,
+                WarmupUrl::schema_fields_ENABLED => 1,
+            ];
             $insertedCount++;
+        }
+
+        // 批量写入新行：每 200 条一次 INSERT，替代逐条 save() 的 1700+ 次往返
+        if ($pendingInserts !== []) {
+            foreach (array_chunk($pendingInserts, 200) as $chunk) {
+                try {
+                    $this->warmupUrlModel->reset()->insert($chunk);
+                } catch (\Throwable $e) {
+                    // 批量失败时退回逐条 save()，保证数据不丢
+                    w_log_error('WarmupSend batch insert failed, fallback per-row: ' . $e->getMessage());
+                    foreach ($chunk as $rowData) {
+                        try {
+                            $this->warmupUrlModel->reset()->setData($rowData)->save();
+                        } catch (\Throwable $inner) {
+                            w_log_error('WarmupSend insert row failed: ' . $inner->getMessage());
+                        }
+                    }
+                }
+            }
         }
 
         $event->setData('result', [

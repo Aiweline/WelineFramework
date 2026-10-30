@@ -16,6 +16,21 @@ use Weline\Websites\Model\WebsiteLanguage;
  */
 final class WarmupLocaleUrlExpander
 {
+    /**
+     * 按站点缓存语种与默认值。
+     *
+     * expandRoute() 每条路由都重新取一次站点语种与默认语言/货币；
+     * 批量预热展开 2800+ 路由时每个站点会重复打上千次相同查询
+     * （实测 FpcExtraDeclaredUrls::execute() 单次 18.7 秒）。
+     * 站点语种在单次收集内不变，缓存一次即可。
+     *
+     * @var array<int, list<string>>
+     */
+    private array $localesCache = [];
+
+    /** @var array<int, array{locale:string,currency:string}> */
+    private array $defaultsCache = [];
+
     public function __construct(
         private readonly LocalizedUrlBuilderInterface $urlBuilder,
         private readonly WebsiteLanguage $websiteLanguage,
@@ -23,11 +38,21 @@ final class WarmupLocaleUrlExpander
     ) {
     }
 
+    /** 站点语种/默认值变更后如需强制重读，可调用此方法。 */
+    public function clearCaches(): void
+    {
+        $this->localesCache = [];
+        $this->defaultsCache = [];
+    }
+
     /**
      * @return list<string> locale codes, default language first
      */
     public function localesForWebsite(int $websiteId): array
     {
+        if (isset($this->localesCache[$websiteId])) {
+            return $this->localesCache[$websiteId];
+        }
         try {
             $codes = $this->websiteLanguage->getWebsiteLanguageCodes($websiteId);
         } catch (\Throwable $e) {
@@ -51,7 +76,7 @@ final class WarmupLocaleUrlExpander
             }
         }
 
-        return $out;
+        return $this->localesCache[$websiteId] = $out;
     }
 
     /**
@@ -59,6 +84,9 @@ final class WarmupLocaleUrlExpander
      */
     public function defaultsForWebsite(int $websiteId): array
     {
+        if (isset($this->defaultsCache[$websiteId])) {
+            return $this->defaultsCache[$websiteId];
+        }
         $locale = 'zh_Hans_CN';
         $currency = 'CNY';
         try {
@@ -73,7 +101,7 @@ final class WarmupLocaleUrlExpander
         } catch (\Throwable) {
         }
 
-        return ['locale' => $locale, 'currency' => $currency];
+        return $this->defaultsCache[$websiteId] = ['locale' => $locale, 'currency' => $currency];
     }
 
     /**

@@ -26,9 +26,49 @@ class UrlSiteResolver
 {
     private ObjectManager $objectManager;
 
+    /**
+     * 启用域名列表按 scope 缓存（键 = 'all' 或 'w:<websiteId>'）。
+     *
+     * 原实现每解析一个 URL 就 select() 全表查一次启用域名并逐行水合模型；
+     * 批量预热收集 1700+ URL 时会打 1700+ 次全表查询（实测 setup:upgrade
+     * 的 CDN 预热入队单步 66 秒）。域名在单次请求/单次升级内不变，缓存一次即可，
+     * 语义不变（仍由 matchDomainByHost 按同一套规则匹配）。
+     *
+     * @var array<string, list<Domain>>
+     */
+    private array $enabledDomainsCache = [];
+
     public function __construct(ObjectManager $objectManager)
     {
         $this->objectManager = $objectManager;
+    }
+
+    /** 域名增删改后如需强制重读，可调用此方法。 */
+    public function clearEnabledDomainsCache(): void
+    {
+        $this->enabledDomainsCache = [];
+    }
+
+    /**
+     * @return list<Domain>
+     */
+    private function enabledDomains(?ScopeIdentity $scope): array
+    {
+        $key = ($scope !== null && $scope->websiteId !== null) ? 'w:' . (int)$scope->websiteId : 'all';
+        if (isset($this->enabledDomainsCache[$key])) {
+            return $this->enabledDomainsCache[$key];
+        }
+
+        /** @var Domain $domainModel */
+        $domainModel = clone $this->objectManager->getInstance(Domain::class);
+        $query = $domainModel->reset()->where(Domain::schema_fields_ENABLED, 1);
+        if ($scope !== null && $scope->websiteId !== null) {
+            $query->where(Domain::schema_fields_SITE_ID, (int)$scope->websiteId);
+        }
+        // matchDomainByHost() 返回 ?Domain，必须对象化。
+        $domains = $query->select()->fetch()->toModels();
+
+        return $this->enabledDomainsCache[$key] = \is_array($domains) ? $domains : [];
     }
 
     /**
@@ -46,18 +86,7 @@ class UrlSiteResolver
 
         $host = $parsedUrl['host'];
 
-        /** @var Domain $domainModel */
-        $domainModel = clone $this->objectManager->getInstance(Domain::class);
-
-        $query = $domainModel->reset()
-            ->where(Domain::schema_fields_ENABLED, 1);
-        if ($scope !== null && $scope->websiteId !== null) {
-            $query->where(Domain::schema_fields_SITE_ID, (int)$scope->websiteId);
-        }
-        // matchDomainByHost() 返回 ?Domain，必须对象化。
-        $domains = $query->select()->fetch()->toModels();
-
-        return self::matchDomainByHost($domains, $host);
+        return self::matchDomainByHost($this->enabledDomains($scope), $host);
     }
 
     /** Match only within the caller's already scoped domain collection. */

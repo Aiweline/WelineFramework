@@ -137,13 +137,25 @@ final class FpcExtraDeclaredUrls implements WarmupProviderInterface
         $codes = [];
         foreach ($websites->all() as $website) { $codes[$website->id] = $website->code; }
         $out = [];
+        // 按站点缓存店铺/渠道/scope，避免逐条 URL 重复查询。
+        // 原实现对每条 URL 都调 defaultStore()/byWebsite()/defaultChannelForStore()/
+        // resolveFpcForPath()，2823 条 URL 会打上万次查询（实测该 Provider 单次 18.7 秒）。
+        $storeCache = [];
+        $storeListCache = [];
+        $channelCache = [];
+        $scopeCache = [];
+        $policyCache = [];
         foreach ($rows as $row) {
             $site = (int)$row['site_id'];
             if (!isset($codes[$site])) { continue; }
-            $store = $stores->defaultStore($site);
+            if (!array_key_exists($site, $storeCache)) {
+                $storeCache[$site] = $stores->defaultStore($site);
+                $storeListCache[$site] = $stores->byWebsite($site);
+            }
+            $store = $storeCache[$site];
             $base = $siteBases[$site] ?? '';
             $longest = -1;
-            foreach ($stores->byWebsite($site) as $candidate) {
+            foreach ($storeListCache[$site] as $candidate) {
                 $candidateBase = rtrim((string)$candidate->url, '/');
                 if ($candidate->enabled && $candidateBase !== '' && ($row['url'] === $candidateBase || str_starts_with($row['url'], $candidateBase . '/')) && strlen($candidateBase) > $longest) {
                     $store = $candidate; $base = $candidateBase; $longest = strlen($candidateBase);
@@ -151,13 +163,21 @@ final class FpcExtraDeclaredUrls implements WarmupProviderInterface
             }
             $scope = \Weline\Framework\Runtime\ScopeIdentity::website($site, $codes[$site]);
             if ($store !== null) {
-                $channel = $channels->defaultChannelForStore($store);
+                $channelKey = $site . '|' . (string)$store->code . '|' . (string)$store->storeMode;
+                if (!array_key_exists($channelKey, $channelCache)) {
+                    $channelCache[$channelKey] = $channels->defaultChannelForStore($store);
+                }
+                $channel = $channelCache[$channelKey];
                 $scope = $channel !== null
                     ? \Weline\Framework\Runtime\ScopeIdentity::channel($site,$codes[$site],$store->code,$channel->code,$store->storeMode)
                     : \Weline\Framework\Runtime\ScopeIdentity::store($site,$codes[$site],$store->code,$store->storeMode);
             }
             $path = \Weline\Framework\Controller\Extra\FpcPolicySnapshot::normalizePath($row['url'],$base);
-            $policy = $resolver->resolveFpcForPath($path,$scope);
+            $policyKey = $site . '|' . $path;
+            if (!array_key_exists($policyKey, $policyCache)) {
+                $policyCache[$policyKey] = $resolver->resolveFpcForPath($path,$scope);
+            }
+            $policy = $policyCache[$policyKey];
             if ($policy !== null && $policy['enabled'] && $policy['ttl'] > 0) { $out[] = $row; }
         }
         return $out;
