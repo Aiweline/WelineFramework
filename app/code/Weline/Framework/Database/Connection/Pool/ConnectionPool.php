@@ -18,8 +18,16 @@ use Weline\Framework\Database\DbManager\ConfigProviderInterface;
  */
 class ConnectionPool
 {
-    /** 空闲超过此秒数才在取出时做 SELECT 1 验证，减少频繁验证开销 */
-    private const IDLE_VALIDATE_SECONDS = 30;
+    /**
+     * 空闲超过此秒数才在取出时做 SELECT 1 验证，减少频繁验证开销。
+     * 默认 0 秒 = 每次取用都验活：本机实测一次 SELECT 1 往返约 0.265ms，
+     * 而 PG 重启 / 主备切换后「把死连接交给调用方」会让写请求直接 5xx（写路径不重试）。
+     * 需要省这点往返的部署可显式调大 `db.pool.idle_validate_seconds`。
+     */
+    private const DEFAULT_IDLE_VALIDATE_SECONDS = 0.0;
+
+    /** 验活阈值硬上限（秒）：任何配置都不得把死连接窗口拉回 30 秒量级。 */
+    private const MAX_IDLE_VALIDATE_SECONDS = 30.0;
 
     /**
      * 池满时的默认总等待预算；等待期间让出当前 Fiber，禁止创建池外连接。
@@ -47,6 +55,29 @@ class ConnectionPool
 
     /** @var array<int, true> PDO object ids known to be unusable. */
     private static array $unhealthyConnections = [];
+
+    /**
+     * 断链纪元：每次标记连接不健康（断链/重置失败）就自增。
+     * 空闲连接在归还时记录当时的纪元，取用时若纪元已变化则强制验活。
+     */
+    private static int $disconnectEpoch = 0;
+
+    /** @var array<int, float> 物理连接创建时刻（spl_object_id => microtime），用于 max lifetime 淘汰。 */
+    private static array $connectionCreatedAt = [];
+
+    /** 取连接序号：用于低频触发空闲巡检，避免空闲连接只能在有流量时才被回收。 */
+    private static int $acquireSequence = 0;
+
+    private const IDLE_SWEEP_EVERY_N_ACQUIRES = 128;
+
+    /**
+     * 本次归还已做过事务回滚 + 会话净化的连接。
+     * requestEndCleanup 与 releaseConnectionByPoolKey 会先后经过同一连接，
+     * 用该标记避免对同一次归还重复执行 DISCARD ALL 而多付一次往返。
+     *
+     * @var array<int, true> PDO object ids
+     */
+    private static array $returnPrepared = [];
 
     /**
      * Active ownership tokens, held weakly so an abandoned lease can release
@@ -83,11 +114,23 @@ class ConnectionPool
     /** @var \WeakMap<\Fiber, string>|null */
     private static ?\WeakMap $fiberOwners = null;
 
+    /**
+     * Owner 所属的请求 Fiber（弱引用）。Fiber 被回收后，它的 PDO 租赁没人能归还，
+     * 只能由池自己回收；这里只作为「Fiber 已死」的证据。
+     *
+     * @var array<string, array<string, \WeakReference<\Fiber>>>
+     */
+    private static array $ownerFibers = [];
+
     private static int $ownerSequence = 0;
     private static int $leaseSequence = 0;
 
     /**
-     * 获取连接池键名
+     * 获取连接池键名。
+     *
+     * 除物理定位信息外，必须包含会话初始化配置（PDO options / pre_sql / charset）：
+     * 模块分库常用同一实例同一库、仅切换 search_path 或编码，这类配置若共用一条
+     * 物理连接，第二个使用方会继承第一个的会话状态（串库、编码错乱）。
      */
     private static function getPoolKey(ConfigProviderInterface $configProvider): string
     {
@@ -98,7 +141,31 @@ class ConnectionPool
             'database' => $configProvider->getDatabase(),
             'path' => method_exists($configProvider, 'getData') ? (string)$configProvider->getData('path') : '',
             'username' => $configProvider->getUsername(),
+            'options' => self::poolOptionsDigest($configProvider),
+            'pre_sql' => method_exists($configProvider, 'getPreSql') ? (string)$configProvider->getPreSql() : '',
+            'charset' => method_exists($configProvider, 'getCharset') ? (string)$configProvider->getCharset() : '',
         ]));
+    }
+
+    private static function poolOptionsDigest(ConfigProviderInterface $configProvider): string
+    {
+        if (!method_exists($configProvider, 'getOptions')) {
+            return '';
+        }
+
+        try {
+            $options = $configProvider->getOptions();
+        } catch (\Throwable) {
+            return '';
+        }
+
+        if (!\is_array($options)) {
+            return '';
+        }
+
+        \ksort($options);
+
+        return \md5(\serialize($options));
     }
 
     public static function isDisconnectException(\Throwable $exception): bool
@@ -121,6 +188,9 @@ class ConnectionPool
     public static function markConnectionUnhealthy(PDO $connection): void
     {
         self::$unhealthyConnections[\spl_object_id($connection)] = true;
+        // 断链纪元：出现断链后，早于该纪元归还的空闲连接一律强制验活，
+        // 这样 PG 重启/主备切换后的死连接不会因为"刚归还 <1s"而被直接交付。
+        self::$disconnectEpoch++;
     }
 
     public static function isConnectionMarkedUnhealthy(PDO $connection): bool
@@ -155,6 +225,146 @@ class ConnectionPool
         }
 
         return \min(\max(0.0, (float)$configuredMs / 1000), self::MAX_ACQUIRE_TIMEOUT_SECONDS);
+    }
+
+    /**
+     * 取连接时是否验活（`db.pool.validate_on_acquire`，默认开）。
+     *
+     * PG 重启 / 主备切换后，空闲队列里的连接已在服务端终止；若不做验活，
+     * 调用方会拿到死连接并在首个查询（含写语句）上失败，写路径不重试即 5xx。
+     */
+    public static function resolveValidateOnAcquire(): bool
+    {
+        try {
+            $configured = Env::get('db.pool.validate_on_acquire', null);
+        } catch (\Throwable) {
+            return true;
+        }
+
+        if ($configured === null) {
+            return true;
+        }
+
+        $parsed = \filter_var($configured, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+
+        return $parsed ?? true;
+    }
+
+    /**
+     * 空闲多久后淘汰（`db.pool.idle_ttl_seconds`，默认 300 秒；0 = 不淘汰）。
+     * 没有它，池会按历史峰值把 PG backend 永久占住（实测每 worker 3–4 条、42 条里 36 条 idle）。
+     */
+    public static function resolveIdleTtlSeconds(): float
+    {
+        return self::resolveNonNegativeSeconds('db.pool.idle_ttl_seconds', 300.0);
+    }
+
+    /**
+     * 物理连接最长存活时间（`db.pool.max_lifetime_seconds`，默认 1800 秒；0 = 不淘汰）。
+     * 用于滚动回收，避免连接跨越多轮 DB 端配置变更/证书轮换仍被复用。
+     */
+    public static function resolveMaxLifetimeSeconds(): float
+    {
+        return self::resolveNonNegativeSeconds('db.pool.max_lifetime_seconds', 1800.0);
+    }
+
+    /**
+     * 空闲超 TTL 或超过最大存活时间的连接必须淘汰，否则池会按历史峰值永久占用 PG backend。
+     */
+    private static function isConnectionExpired(
+        PDO $connection,
+        float $lastUsed,
+        float $idleTtlSeconds,
+        float $maxLifetimeSeconds,
+        float $now
+    ): bool {
+        if ($idleTtlSeconds > 0 && $lastUsed > 0 && ($now - $lastUsed) > $idleTtlSeconds) {
+            return true;
+        }
+
+        if ($maxLifetimeSeconds > 0) {
+            $createdAt = self::$connectionCreatedAt[\spl_object_id($connection)] ?? 0.0;
+            if ($createdAt > 0 && ($now - $createdAt) > $maxLifetimeSeconds) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 低频巡检：把各池中已过期的空闲连接清掉（不触碰 in_use 中的连接）。
+     * 由取连接序号触发，保证「有流量就会回收」；worker 也可在事件循环里显式调用。
+     */
+    public static function sweepExpiredIdleConnections(
+        ?float $idleTtlSeconds = null,
+        ?float $maxLifetimeSeconds = null,
+        ?float $now = null
+    ): int {
+        $idleTtlSeconds ??= self::resolveIdleTtlSeconds();
+        $maxLifetimeSeconds ??= self::resolveMaxLifetimeSeconds();
+        $now ??= \microtime(true);
+        $removed = 0;
+
+        foreach (\array_keys(self::$pools) as $poolKey) {
+            $pool = &self::$pools[$poolKey];
+            if ($pool['pool']->isEmpty()) {
+                unset($pool);
+                continue;
+            }
+
+            $queue = new \SplQueue();
+            while (!$pool['pool']->isEmpty()) {
+                $item = $pool['pool']->dequeue();
+                $connection = \is_array($item) ? ($item['connection'] ?? null) : $item;
+                $lastUsed = \is_array($item) ? (float)($item['last_used'] ?? 0) : 0.0;
+                if ($connection instanceof PDO
+                    && self::isConnectionExpired($connection, $lastUsed, $idleTtlSeconds, $maxLifetimeSeconds, $now)) {
+                    unset(self::$connectionCreatedAt[\spl_object_id($connection)]);
+                    $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
+                    $removed++;
+                    continue;
+                }
+                $queue->enqueue($item);
+            }
+            $pool['pool'] = $queue;
+            unset($pool);
+        }
+
+        return $removed;
+    }
+
+    private static function resolveNonNegativeSeconds(string $envKey, float $default): float
+    {
+        try {
+            $configured = Env::get($envKey, null);
+        } catch (\Throwable) {
+            return $default;
+        }
+
+        if (!\is_numeric($configured)) {
+            return $default;
+        }
+
+        return \min(\max(0.0, (float)$configured), 86400.0);
+    }
+
+    /**
+     * 空闲多久后必须在取出时验活（`db.pool.idle_validate_seconds`，默认 0 = 每次验活）。
+     */
+    public static function resolveIdleValidateSeconds(): float
+    {
+        try {
+            $configured = Env::get('db.pool.idle_validate_seconds', null);
+        } catch (\Throwable) {
+            return self::DEFAULT_IDLE_VALIDATE_SECONDS;
+        }
+
+        if (!\is_numeric($configured)) {
+            return self::DEFAULT_IDLE_VALIDATE_SECONDS;
+        }
+
+        return \min(\max(0.0, (float)$configured), self::MAX_IDLE_VALIDATE_SECONDS);
     }
 
     /**
@@ -208,6 +418,10 @@ class ConnectionPool
             'acquired_at' => \microtime(true),
             'owner_type' => self::ownerType($ownerKey),
         ];
+        $ownerFiber = \Fiber::getCurrent();
+        if ($ownerFiber instanceof \Fiber) {
+            self::$ownerFibers[$poolKey][$ownerKey] = \WeakReference::create($ownerFiber);
+        }
 
         return self::registerLogicalLease($connection, $poolKey, $ownerKey);
     }
@@ -243,6 +457,9 @@ class ConnectionPool
     {
         $connectionId = \spl_object_id($connection);
         unset(self::$unhealthyConnections[$connectionId]);
+        unset(self::$returnPrepared[$connectionId]);
+        unset(self::$connectionCreatedAt[$connectionId]);
+        self::$metrics['discarded_total']++;
         unset(self::$rawOwners[$poolKey][$connectionId]);
         if (empty(self::$rawOwners[$poolKey])) {
             unset(self::$rawOwners[$poolKey]);
@@ -294,6 +511,16 @@ class ConnectionPool
         $acquireTimeoutSeconds = self::resolveAcquireTimeoutSeconds($acquireTimeoutSeconds);
         $poolKey = self::getPoolKey($configProvider);
         $poolSize = $configProvider->getPoolSize();
+        $validateOnAcquire = self::resolveValidateOnAcquire();
+        $idleValidateSeconds = self::resolveIdleValidateSeconds();
+        $idleTtlSeconds = self::resolveIdleTtlSeconds();
+        $maxLifetimeSeconds = self::resolveMaxLifetimeSeconds();
+        $now = \microtime(true);
+
+        self::$acquireSequence++;
+        if (self::$acquireSequence % self::IDLE_SWEEP_EVERY_N_ACQUIRES === 0) {
+            self::sweepExpiredIdleConnections($idleTtlSeconds, $maxLifetimeSeconds, $now);
+        }
 
         // 初始化连接池
         if (!isset(self::$pools[$poolKey])) {
@@ -307,19 +534,51 @@ class ConnectionPool
 
         $pool = &self::$pools[$poolKey];
 
+        // 后台预热/水合（homepage keep-warm、deferred bootstrap、L1 hydrate）不得吃光连接池：
+        // 后台最多占用池的 75%，其余留给前台请求；余量不足时后台立即失败、由上层延后重试。
+        // 现场依据：max_size=24 的池被后台水合占满，前台请求 2000ms 后
+        // ConnectionPoolExhaustedException，WLS 表现为「全部 Worker 不可用」。
+        if (SchedulerSystem::isCurrentFiberBackground()) {
+            $backgroundCap = \max(1, (int) \floor((int) $pool['max_size'] * 0.75));
+            $inUse = \count($pool['in_use']);
+            if ($inUse >= $backgroundCap) {
+                throw new ConnectionPoolExhaustedException(
+                    'Database connection pool reserved for foreground '
+                    . '(background owner, in_use=' . $inUse
+                    . ', background_cap=' . $backgroundCap
+                    . ', max_size=' . (int) $pool['max_size'] . ').',
+                    [
+                        'reason' => 'background_reserved',
+                        'max_size' => (int) $pool['max_size'],
+                        'in_use' => $inUse,
+                        'background_cap' => $backgroundCap,
+                    ]
+                );
+            }
+        }
+
         // 如果池中有可用连接，取出并视情况验证
         if (!$pool['pool']->isEmpty()) {
             $item = $pool['pool']->dequeue();
             $connection = is_array($item) ? $item['connection'] : $item;
             $lastUsed = is_array($item) ? (float)($item['last_used'] ?? 0) : 0.0;
+            $releasedEpoch = is_array($item) ? (int)($item['epoch'] ?? 0) : 0;
             $connectionValid = false;
-            // 仅当空闲超过阈值时做 SELECT 1 验证，减少高频验证
+            // 仅当空闲超过阈值时做 SELECT 1 验证，减少高频验证；
+            // 发生过断链（纪元变化）时，早于该纪元的连接必须无条件验活。
             if (!$connection instanceof PDO) {
+                $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
+            } elseif (self::isConnectionExpired($connection, $lastUsed, $idleTtlSeconds, $maxLifetimeSeconds, $now)) {
+                // 空闲超 TTL 或超最大存活时间：直接丢弃，由后面的分支按需重建。
+                unset(self::$connectionCreatedAt[\spl_object_id($connection)]);
+                self::$metrics['discarded_total']++;
                 $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
             } elseif (self::isConnectionMarkedUnhealthy($connection)) {
                 $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
                 unset(self::$unhealthyConnections[\spl_object_id($connection)]);
-            } elseif ((microtime(true) - $lastUsed) <= self::IDLE_VALIDATE_SECONDS) {
+            } elseif (!$validateOnAcquire
+                || ($releasedEpoch >= self::$disconnectEpoch
+                    && (microtime(true) - $lastUsed) <= $idleValidateSeconds)) {
                 $connectionValid = true;
             } else {
                 try {
@@ -347,12 +606,26 @@ class ConnectionPool
             $connectionId = spl_object_id($connection);
             $pool['in_use'][$connectionId] = $connection;
             $pool['current_size']++;
+            self::$connectionCreatedAt[$connectionId] = $now;
             self::trackRawCheckout($poolKey, $connectionId);
             return $connection;
         }
 
         // 池已满：在单一 deadline 内等待归还。达到上限后必须显式失败，
         // 不能创建不受池统计和释放协议管理的临时连接。
+        // 等待前先回收「Fiber 已结束且无活租约」的滞留连接：WLS 长驻 Worker 里
+        // 这类滞留会让 in_use/lease 永久顶满 pool，后续请求只能超时失败。
+        if (self::reapAbandonedOwners($poolKey) > 0 && !$pool['pool']->isEmpty()) {
+            $item = $pool['pool']->dequeue();
+            $connection = is_array($item) ? $item['connection'] : $item;
+            if ($connection instanceof PDO) {
+                $connectionId = \spl_object_id($connection);
+                $pool['in_use'][$connectionId] = $connection;
+                self::trackRawCheckout($poolKey, $connectionId);
+                return $connection;
+            }
+            $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
+        }
         $deadline = \microtime(true) + \max(0.0, $acquireTimeoutSeconds);
         $waitSliceUs = self::POOL_FULL_WAIT_BASE_SLICE_US;
         do {
@@ -367,14 +640,21 @@ class ConnectionPool
                 $item = $pool['pool']->dequeue();
                 $connection = is_array($item) ? $item['connection'] : $item;
                 $lastUsed = is_array($item) ? (float)($item['last_used'] ?? 0) : 0.0;
+                $releasedEpoch = is_array($item) ? (int)($item['epoch'] ?? 0) : 0;
                 if (!$connection instanceof PDO) {
+                    $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
+                    $connectionValid = false;
+                } elseif (self::isConnectionExpired($connection, $lastUsed, $idleTtlSeconds, $maxLifetimeSeconds, $now)) {
+                    unset(self::$connectionCreatedAt[\spl_object_id($connection)]);
                     $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
                     $connectionValid = false;
                 } elseif (self::isConnectionMarkedUnhealthy($connection)) {
                     $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
                     unset(self::$unhealthyConnections[\spl_object_id($connection)]);
                     $connectionValid = false;
-                } elseif ((microtime(true) - $lastUsed) <= self::IDLE_VALIDATE_SECONDS) {
+                } elseif (!$validateOnAcquire
+                    || ($releasedEpoch >= self::$disconnectEpoch
+                        && (microtime(true) - $lastUsed) <= $idleValidateSeconds)) {
                     $connectionValid = true;
                 } else {
                     try {
@@ -409,6 +689,7 @@ class ConnectionPool
                 $connectionId = \spl_object_id($connection);
                 $pool['in_use'][$connectionId] = $connection;
                 $pool['current_size']++;
+                self::$connectionCreatedAt[$connectionId] = \microtime(true);
                 self::trackRawCheckout($poolKey, $connectionId);
                 return $connection;
             }
@@ -515,10 +796,25 @@ class ConnectionPool
             unset($pool['in_use'][$connectionId]);
             if (isset(self::$unhealthyConnections[$connectionId])) {
                 unset(self::$unhealthyConnections[$connectionId]);
+                unset(self::$returnPrepared[$connectionId]);
+                unset(self::$connectionCreatedAt[$connectionId]);
                 $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
                 return;
             }
-            $pool['pool']->enqueue(['connection' => $connection, 'last_used' => microtime(true)]);
+            // release/析构路径不经过 requestEndCleanup：入队前必须自行结算事务与会话态，
+            // 否则 idle in transaction、GUC、advisory lock 会被下一个请求原样继承。
+            if (!isset(self::$returnPrepared[$connectionId])
+                && !self::prepareConnectionForReturn($connection)) {
+                unset(self::$returnPrepared[$connectionId]);
+                $pool['current_size'] = \max(0, (int) $pool['current_size'] - 1);
+                return;
+            }
+            unset(self::$returnPrepared[$connectionId]);
+            $pool['pool']->enqueue([
+                'connection' => $connection,
+                'last_used' => microtime(true),
+                'epoch' => self::$disconnectEpoch,
+            ]);
             
             // 注释掉归还时的验证，改为在获取时验证
             // // 检查连接是否仍然有效
@@ -584,6 +880,10 @@ class ConnectionPool
         if (empty(self::$ownerConnections[$poolKey])) {
             unset(self::$ownerConnections[$poolKey]);
         }
+        unset(self::$ownerFibers[$poolKey][$ownerKey]);
+        if (empty(self::$ownerFibers[$poolKey])) {
+            unset(self::$ownerFibers[$poolKey]);
+        }
 
         foreach (\array_keys($owner['lease_tokens']) as $leaseToken) {
             $reference = self::$activeLeases[$poolKey][$leaseToken] ?? null;
@@ -615,6 +915,51 @@ class ConnectionPool
         }
         unset(self::$activeLeases[$poolKey]);
         unset(self::$ownerConnections[$poolKey], self::$rawOwners[$poolKey]);
+        unset(self::$ownerFibers[$poolKey]);
+    }
+
+    /**
+     * 回收「owner Fiber 已结束且没有任何活租约」的滞留连接。
+     *
+     * WLS 长驻 Worker 里请求 Fiber 被强制关闭/超时后，它的 PDO 租赁可能没人归还：
+     * in_use 与 lease 计数长期大于 max_size（现场实测 max_size=24、leases=36），
+     * 后续请求只能等到 ConnectionPoolExhaustedException。
+     *
+     * 只在两条证据同时成立时才回收，绝不碰仍可能运行的请求：
+     * ① 该 owner 记录的请求 Fiber 已被 GC（WeakReference 取不到对象）；
+     * ② 该 owner 名下没有任何仍然存活的 ConnectionLease 对象。
+     */
+    private static function reapAbandonedOwners(string $poolKey): int
+    {
+        $owners = self::$ownerConnections[$poolKey] ?? [];
+        if ($owners === []) {
+            return 0;
+        }
+
+        $reapable = [];
+        foreach ($owners as $ownerKey => $owner) {
+            $fiberRef = self::$ownerFibers[$poolKey][$ownerKey] ?? null;
+            if (!$fiberRef instanceof \WeakReference || $fiberRef->get() instanceof \Fiber) {
+                continue;
+            }
+            $hasLiveLease = false;
+            foreach (\array_keys($owner['lease_tokens'] ?? []) as $leaseToken) {
+                $leaseRef = self::$activeLeases[$poolKey][$leaseToken] ?? null;
+                if ($leaseRef instanceof \WeakReference && $leaseRef->get() instanceof ConnectionLease) {
+                    $hasLiveLease = true;
+                    break;
+                }
+            }
+            if (!$hasLiveLease) {
+                $reapable[] = $ownerKey;
+            }
+        }
+
+        foreach ($reapable as $ownerKey) {
+            self::settleOwnerConnection($poolKey, $ownerKey, false);
+        }
+
+        return \count($reapable);
     }
 
     private static function findLogicalOwnerByConnection(string $poolKey, int $connectionId): ?string
@@ -707,6 +1052,8 @@ class ConnectionPool
             }
             self::$pools = [];
             self::$unhealthyConnections = [];
+            self::$returnPrepared = [];
+            self::$connectionCreatedAt = [];
             self::$activeLeases = [];
             self::$ownerConnections = [];
             self::$rawOwners = [];
@@ -719,9 +1066,15 @@ class ConnectionPool
                 while (!$pool['pool']->isEmpty()) {
                     $item = $pool['pool']->dequeue();
                     $connection = is_array($item) ? $item['connection'] : $item;
+                    if ($connection instanceof PDO) {
+                        unset(self::$connectionCreatedAt[\spl_object_id($connection)]);
+                    }
                     $connection = null;
                 }
                 foreach ($pool['in_use'] as $connection) {
+                    if ($connection instanceof PDO) {
+                        unset(self::$connectionCreatedAt[\spl_object_id($connection)]);
+                    }
                     $connection = null;
                 }
                 unset(self::$pools[$poolKey]);
@@ -847,7 +1200,12 @@ class ConnectionPool
                     throw new \UnexpectedValueException('Connection factory must return PDO.');
                 }
                 $connection->query('SELECT 1');
-                $pool['pool']->enqueue(['connection' => $connection, 'last_used' => microtime(true)]);
+                $pool['pool']->enqueue([
+                    'connection' => $connection,
+                    'last_used' => microtime(true),
+                    'epoch' => self::$disconnectEpoch,
+                ]);
+                self::$connectionCreatedAt[\spl_object_id($connection)] = \microtime(true);
                 $pool['current_size']++;
                 $created++;
             } catch (\PDOException $e) {
@@ -966,7 +1324,48 @@ class ConnectionPool
             return false;
         }
 
+        if (!self::resetConnectionSessionState($connection)) {
+            return false;
+        }
+
+        self::$returnPrepared[\spl_object_id($connection)] = true;
+
         return !self::isConnectionMarkedUnhealthy($connection);
+    }
+
+    /**
+     * 归还前清理会话级状态，避免 GUC、search_path、advisory lock、临时表、
+     * prepared statement 被下一个请求（或分库的另一套配置）继承。
+     *
+     * 无法识别驱动时保持既有行为（不重置）；识别到驱动但重置失败时标记不健康，
+     * 由调用方丢弃该物理连接，绝不把脏会话放回空闲队列。
+     */
+    private static function resetConnectionSessionState(PDO $connection): bool
+    {
+        try {
+            $driver = \strtolower((string) $connection->getAttribute(PDO::ATTR_DRIVER_NAME));
+        } catch (\Throwable) {
+            return true;
+        }
+
+        if ($driver === '') {
+            return true;
+        }
+
+        try {
+            if ($driver === 'pgsql') {
+                // DISCARD ALL = RESET ALL + DEALLOCATE ALL + UNLISTEN * + 清理临时对象。
+                $connection->exec('DISCARD ALL');
+            } elseif ($driver === 'mysql') {
+                // MySQL 8.0.3+ 的会话级重置；低版本抛错时按重置失败丢弃连接。
+                $connection->exec('RESET CONNECTION');
+            }
+        } catch (\Throwable) {
+            self::markConnectionUnhealthy($connection);
+            return false;
+        }
+
+        return true;
     }
     
     /**
