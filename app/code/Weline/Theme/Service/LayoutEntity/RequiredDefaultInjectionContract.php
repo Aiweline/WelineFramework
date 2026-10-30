@@ -162,6 +162,56 @@ final class RequiredDefaultInjectionContract
     }
 
     /**
+     * Same-semantics slot aliases (theme rename bridge).
+     *
+     * A layout slot may be renamed across theme versions/overrides while persisted
+     * default-injection declarations still carry the old name (e.g. `product-main`
+     * vs `design-product-main`). Presence checks must treat such names as one family,
+     * otherwise an overridden widget looks "missing" and gets injected a second time.
+     *
+     * @return list<string> candidate slot ids, own id first, empty when unnormalizable
+     */
+    public static function slotIdAliases(string $slotId): array
+    {
+        $slotId = strtolower(trim($slotId));
+        if ($slotId === '') {
+            return [];
+        }
+        $aliases = [$slotId];
+        // design-<x> ↔ <x> are the same semantic slot for widget presence purposes.
+        if (str_starts_with($slotId, 'design-')) {
+            $bare = substr($slotId, strlen('design-'));
+            if ($bare !== '') {
+                $aliases[] = $bare;
+            }
+        } else {
+            $aliases[] = 'design-' . $slotId;
+        }
+
+        return array_values(array_unique($aliases));
+    }
+
+    /**
+     * Slot-family presence: true when any alias of the declared slot already hosts
+     * the widget. Use this instead of {@see slotHasWidgetPresent} where a slot may
+     * have been renamed between declaration and render.
+     */
+    public static function slotFamilyHasWidgetPresent(
+        string $pageHtml,
+        string $slotId,
+        string $module,
+        string $code,
+    ): bool {
+        foreach (self::slotIdAliases($slotId) as $candidate) {
+            if (self::slotHasWidgetPresent($pageHtml, $candidate, $module, $code)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Inner HTML of the first matching slot host (data-slot-id / data-wslot / id).
      */
     public static function extractSlotInnerHtml(string $pageHtml, string $slotId): ?string

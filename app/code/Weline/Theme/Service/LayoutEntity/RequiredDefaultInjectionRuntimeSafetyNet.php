@@ -86,7 +86,7 @@ final class RequiredDefaultInjectionRuntimeSafetyNet
                 continue;
             }
             // Per declared slot — mini-cart coupon must not suppress checkout/cart summary slots.
-            if (RequiredDefaultInjectionContract::slotHasWidgetPresent($html, $slotId, $module, $code)) {
+            if ($this->widgetAlreadyEffective($html, $slotId, $module, $code)) {
                 TemplateRenderRouteTrace::mark(
                     'safety_net_skip_present',
                     $module . '/' . $code . '@' . $slotId
@@ -275,6 +275,24 @@ final class RequiredDefaultInjectionRuntimeSafetyNet
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    /**
+     * Slot-scoped presence, made resilient to slot renames.
+     *
+     * Invariant (kept deliberately): presence is PER DECLARED SLOT, not page-wide —
+     * one widget may be legitimately required into several different slots
+     * (e.g. `checkout-coupon` in `footer-extras` + `checkout-summary-discount`), and a
+     * page-level check would wrongly suppress the second slot.
+     *
+     * What we add: the declared slot may still carry a pre-rename id while the layout
+     * renders into the renamed one (`product-main` vs `design-product-main`). Checking
+     * the semantically-same slot family prevents the override from being injected twice
+     * while keeping the per-slot XOR semantics intact.
+     */
+    private function widgetAlreadyEffective(string $html, string $slotId, string $module, string $code): bool
+    {
+        return RequiredDefaultInjectionContract::slotFamilyHasWidgetPresent($html, $slotId, $module, $code);
     }
 
     private function htmlMentionsSlot(string $html, string $slotId): bool

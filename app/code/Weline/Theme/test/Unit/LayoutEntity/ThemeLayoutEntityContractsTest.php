@@ -1569,8 +1569,10 @@ private function assert_RequiredDefaultInjectionRuntimeSafetyNet_testSafetyNetUs
 {
     $net = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/LayoutEntity/RequiredDefaultInjectionRuntimeSafetyNet.php';
     $src = (string) file_get_contents($net);
-    self::assertStringContainsString('slotHasWidgetPresent', $src);
-    self::assertStringNotContainsString('pageHasWidgetPresent($html, $module, $code)', $src, 'page-level presence must not suppress other declared slots');
+    // Presence must stay SLOT-SCOPED (one widget may be required into several slots),
+    // but slot names may be aliases of the same semantic slot (theme rename).
+    self::assertStringContainsString('slotFamilyHasWidgetPresent', $src);
+    self::assertStringNotContainsString('pageHasWidgetPresent', $src, 'page-level presence must not suppress other declared slots');
     $bake = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/LayoutEntity/RequiredDefaultInjectionBakeMerger.php';
     $bakeSrc = (string) file_get_contents($bake);
     self::assertStringNotContainsString('pageHasWidgetPresent', $bakeSrc);
