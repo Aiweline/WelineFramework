@@ -46,7 +46,7 @@ use Weline\Theme\Service\StorefrontChromeLocaleCacheWarmer;
 use Weline\Theme\Service\StorefrontHeaderNavFragmentCache;
 use Weline\Theme\Service\StorefrontBlogLayoutHtmlBag;
 use Weline\Theme\Service\StorefrontHomepageLayoutHtmlBag;
-use Weline\Theme\Service\StorefrontNotFoundStaticGenerator;
+use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\StorefrontProductCardFragmentCache;
 use Weline\Theme\Service\StorefrontStaticWidgetSectionFragmentCache;
 use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
@@ -493,39 +493,6 @@ final class ThemeServiceContractsTest extends TestCase
             'StorefrontHeaderNavLocaleAuthority::testStorefrontLocaleSegmentDelegatesToWidgetI18n' => function () {
             $this->assert_StorefrontHeaderNavLocaleAuthority_testStorefrontLocaleSegmentDelegatesToWidgetI18n();
         },
-            'StorefrontNotFoundStaticGeneratorPhraseIsolation::testBuildHtmlClearsUpgradePhraseBagBeforeRender' => function () {
-            $this->assert_StorefrontNotFoundStaticGeneratorPhraseIsolation_testBuildHtmlClearsUpgradePhraseBagBeforeRender();
-        },
-            'StorefrontNotFoundStaticGeneratorPhraseIsolation::testParserClearUsedWordsDropsAccumulatedBag' => function () {
-            $this->assert_StorefrontNotFoundStaticGeneratorPhraseIsolation_testParserClearUsedWordsDropsAccumulatedBag();
-        },
-            'StorefrontNotFoundStaticGeneratorPhraseIsolation::testGeneratorSourceDocumentsUpgradeHangRootCause' => function () {
-            $this->assert_StorefrontNotFoundStaticGeneratorPhraseIsolation_testGeneratorSourceDocumentsUpgradeHangRootCause();
-        },
-            'StorefrontNotFoundStaticGeneratorStripDictionaries::testStripEmptiesWidgetTranslationsObject' => function () {
-            $this->assert_StorefrontNotFoundStaticGeneratorStripDictionaries_testStripEmptiesWidgetTranslationsObject();
-        },
-            'StorefrontNotFoundStaticGeneratorStripDictionaries::testStripHandlesEscapedQuotesInsideDictionary' => function () {
-            $this->assert_StorefrontNotFoundStaticGeneratorStripDictionaries_testStripHandlesEscapedQuotesInsideDictionary();
-        },
-            'StorefrontNotFoundStaticGeneratorStripDictionaries::testStripIsNoopWithoutWidgetTranslations' => function () {
-            $this->assert_StorefrontNotFoundStaticGeneratorStripDictionaries_testStripIsNoopWithoutWidgetTranslations();
-        },
-            'StorefrontNotFoundStaticGeneratorStripDictionaries::testGeneratorAppliesStripDuringBuild' => function () {
-            $this->assert_StorefrontNotFoundStaticGeneratorStripDictionaries_testGeneratorAppliesStripDuringBuild();
-        },
-            'StorefrontNotFoundThemeApplication::testPublishAllForcesSerialConcurrency' => function () {
-            $this->assert_StorefrontNotFoundThemeApplication_testPublishAllForcesSerialConcurrency();
-        },
-            'StorefrontNotFoundThemeApplication::testRenderUsesThemeApplicationContextProducerNotScopeIdentity' => function () {
-            $this->assert_StorefrontNotFoundThemeApplication_testRenderUsesThemeApplicationContextProducerNotScopeIdentity();
-        },
-            'StorefrontNotFoundThemeApplication::testFallbackShellSkipsStaticSnapshotReload' => function () {
-            $this->assert_StorefrontNotFoundThemeApplication_testFallbackShellSkipsStaticSnapshotReload();
-            },
-            'StorefrontNotFoundThemeApplication::testRenderUsesThemeAwareFetchHtmlNotModuleForce' => function () {
-            $this->assert_StorefrontNotFoundThemeApplication_testRenderUsesThemeAwareFetchHtmlNotModuleForce();
-            },
             'StorefrontSsrChromeHealer::testHealerDoesNotDependOnChromeRenderedDiskSplice' => function () {
             $this->assert_StorefrontSsrChromeHealer_testHealerDoesNotDependOnChromeRenderedDiskSplice();
         },
@@ -1663,7 +1630,7 @@ private function assert_HomepageLayoutHtmlBag_testLogicalKeyCarriesHomepageOptio
     /** @var StorefrontHomepageLayoutHtmlBag $bag */
     $bag = $ref->newInstanceWithoutConstructor();
     $key = $bag->logicalKey('Weline_Theme::theme/frontend/layouts/homepage/default.phtml');
-    self::assertStringContainsString('theme.homepage_layout.html.v12.', $key);
+    self::assertStringContainsString('theme.homepage_layout.html.v23.', $key);
     self::assertStringContainsString('.homepage.default', $key);
 }
 
@@ -2892,119 +2859,6 @@ private function assert_StorefrontHeaderNavLocaleAuthority_testStorefrontLocaleS
     self::assertStringContainsString('function storefrontLocaleSegment()', $src);
     self::assertStringContainsString('requestOriginSegment()', $src);
     self::assertStringNotContainsString('WelineEnv::getLangLocal()', $src);
-}
-
-private function assert_StorefrontNotFoundStaticGeneratorPhraseIsolation_testBuildHtmlClearsUpgradePhraseBagBeforeRender(): void
-{
-    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/StorefrontNotFoundStaticGenerator.php');
-    self::assertStringContainsString('isolatePhraseBagForStaticRender', $source);
-    self::assertStringContainsString('Parser::clearUsedWords', $source);
-    self::assertStringContainsString('JsWordsRegistry::reset', $source);
-}
-
-private function assert_StorefrontNotFoundStaticGeneratorPhraseIsolation_testParserClearUsedWordsDropsAccumulatedBag(): void
-{
-    // usedWords 现挂在 ParserRequestState（Parser::$usedWords 已移除），经 requestState() 取同一实例。
-    $ref = new \ReflectionClass(Parser::class);
-    $method = $ref->getMethod('requestState');
-    $method->setAccessible(true);
-    $state = $method->invoke(null);
-    $state->usedWords = ['upgrade phrase a' => 'upgrade phrase a', 'upgrade phrase b' => 'upgrade phrase b'];
-    self::assertCount(2, Parser::getUsedWords());
-    Parser::clearUsedWords();
-    self::assertSame([], Parser::getUsedWords());
-}
-
-private function assert_StorefrontNotFoundStaticGeneratorPhraseIsolation_testGeneratorSourceDocumentsUpgradeHangRootCause(): void
-{
-    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/StorefrontNotFoundStaticGenerator.php');
-    self::assertStringContainsString('setup:upgrade', $source);
-    self::assertStringContainsString('usedWords', $source);
-}
-
-private function assert_StorefrontNotFoundStaticGeneratorStripDictionaries_testStripEmptiesWidgetTranslationsObject(): void
-{
-    $html = <<<'HTML'
-    <script>
-    var customerServiceConfig = {
-        storefrontLocale: "el_GR",
-        widgetTranslations: {"zh_Hans_CN":{"客服服务":"客服服务"},"en_US":{"客服服务":"Customer Service"},"el_GR":{"客服服务":"Customer Service"}},
-        other: true
-    };
-    </script>
-    HTML;
-    $stripped = StorefrontNotFoundStaticGenerator::stripClientTranslationDictionaries($html);
-    self::assertStringContainsString('widgetTranslations: {}', $stripped);
-    self::assertStringNotContainsString('"zh_Hans_CN"', $stripped);
-    self::assertStringNotContainsString('"en_US"', $stripped);
-    self::assertStringContainsString('storefrontLocale: "el_GR"', $stripped);
-    self::assertStringContainsString('other: true', $stripped);
-}
-
-private function assert_StorefrontNotFoundStaticGeneratorStripDictionaries_testStripHandlesEscapedQuotesInsideDictionary(): void
-{
-    $html = 'widgetTranslations: {"fr_FR":{"显示模式":"Mode d\u0027affichage","x":"a\"b"}}, done';
-    $stripped = StorefrontNotFoundStaticGenerator::stripClientTranslationDictionaries($html);
-    self::assertSame('widgetTranslations: {}, done', $stripped);
-}
-
-private function assert_StorefrontNotFoundStaticGeneratorStripDictionaries_testStripIsNoopWithoutWidgetTranslations(): void
-{
-    $html = '<html><body>404</body></html>';
-    self::assertSame($html, StorefrontNotFoundStaticGenerator::stripClientTranslationDictionaries($html));
-}
-
-private function assert_StorefrontNotFoundStaticGeneratorStripDictionaries_testGeneratorAppliesStripDuringBuild(): void
-{
-    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/StorefrontNotFoundStaticGenerator.php');
-    self::assertStringContainsString('stripClientTranslationDictionaries', $source);
-    self::assertStringContainsString('SlotBoundaryMarkers::strip', $source);
-    self::assertStringContainsString('StaticErrorPagePublisher::CTX_PUBLISHING', $source);
-    // 404 static must collapse synth+footer float layers (same as live hard-cut).
-    self::assertStringContainsString('StorefrontFloatLayerHost::ensureInHtml', $source);
-    self::assertStringContainsString('storefront-float-single-layer-v1', $source);
-}
-
-private function generatorSource_StorefrontNotFoundThemeApplication(): string
-{
-    $path = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/StorefrontNotFoundStaticGenerator.php';
-    self::assertFileExists($path);
-    return (string) \file_get_contents($path);
-}
-
-private function assert_StorefrontNotFoundThemeApplication_testPublishAllForcesSerialConcurrency(): void
-{
-    $src = $this->generatorSource_StorefrontNotFoundThemeApplication();
-    self::assertStringContainsString("'concurrency' => 1", $src);
-}
-
-private function assert_StorefrontNotFoundThemeApplication_testRenderUsesThemeApplicationContextProducerNotScopeIdentity(): void
-{
-    $src = $this->generatorSource_StorefrontNotFoundThemeApplication();
-    self::assertStringContainsString('ThemeApplicationContextProducer', $src);
-    self::assertStringContainsString('installWebsiteThemeApplication', $src);
-    self::assertDoesNotMatchRegularExpression('/resolveThemeForScope\s*\(\s*PreviewContextService::AREA_FRONTEND\s*,\s*\$identity\s*\)/', $src, 'resolveThemeForScope must not receive ScopeIdentity');
-    self::assertMatchesRegularExpression('/resolveThemeForScope\s*\(\s*PreviewContextService::AREA_FRONTEND\s*,\s*\$application\s*\)/', $src);
-}
-
-private function assert_StorefrontNotFoundThemeApplication_testFallbackShellSkipsStaticSnapshotReload(): void
-{
-    $src = $this->generatorSource_StorefrontNotFoundThemeApplication();
-    self::assertStringContainsString("'skip_static' => true", $src);
-    self::assertStringContainsString('ThemeApplicationContext::REQUEST_KEY_PREFIX', $src, 'Must clear prior site ThemeApplicationContext between publishes');
-}
-
-private function assert_StorefrontNotFoundThemeApplication_testRenderUsesThemeAwareFetchHtmlNotModuleForce(): void
-{
-    $src = $this->generatorSource_StorefrontNotFoundThemeApplication();
-    self::assertStringContainsString('fetchHtml(', $src, 'Static 404 must bake via theme-aware fetchHtml (design overlay)');
-    self::assertStringNotContainsString('fetchModuleThemeHtml(', $src, 'fetchModuleThemeHtml locks module Theme and blocks design not_found');
-    self::assertStringContainsString('DATA_FORCE_MODULE_THEME_SOURCE', $src, 'Doc must name the forbidden force flag');
-    self::assertDoesNotMatchRegularExpression(
-        '/->fetchModuleThemeHtml\s*\(/',
-        $src,
-        'Generator must never call fetchModuleThemeHtml'
-    );
 }
 
 private function assert_StorefrontSsrChromeHealer_testHealerDoesNotDependOnChromeRenderedDiskSplice(): void

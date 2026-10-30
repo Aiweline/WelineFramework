@@ -43,7 +43,14 @@ final class MaintenanceModeToggleService
         }
         $retryAfter = (int)(Env::getInstance()->getConfig('maintenance_retry_after', 60));
         $locales = (new MaintenanceStaticGenerator())->publishAll($retryAfter);
-        $printing->note(__('维护静态页已生成：%{1}', [\implode(', ', $locales)]));
+        // The WLS maintenance Worker only reads the special FPC, so fill it now
+        // while an app context (DB/theme) is still available.
+        try {
+            $warmed = (new MaintenanceStaticGenerator())->warmCurrent($retryAfter);
+            $printing->note(__('维护页已渲染缓存（下次 503 直返）：%{1}', [\implode(', ', $warmed)]));
+        } catch (\Throwable $e) {
+            $printing->warning(__('维护页预热失败（将回退内置页）：%{1}', [$e->getMessage()]));
+        }
         WlsMaintenanceSync::syncAfterCliToggle($printing, true, $args);
 
         return $locales;

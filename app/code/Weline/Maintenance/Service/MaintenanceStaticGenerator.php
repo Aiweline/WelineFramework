@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Maintenance\Service;
 
 use Weline\Framework\App\State;
+use Weline\Framework\Http\Fpc\MaintenanceFpcStore;
 use Weline\Framework\Http\MaintenanceStaticPage;
 use Weline\Framework\Http\StaticErrorPageMap;
 use Weline\Framework\Http\StaticErrorPagePublisher;
@@ -33,87 +34,51 @@ final class MaintenanceStaticGenerator
 
     public function publishAll(int $retryAfter = 60): array
     {
-        $printing = null;
-        try {
-            if (PHP_SAPI === 'cli') {
-                $printing = ObjectManager::getInstance(Printing::class);
-            }
-        } catch (\Throwable) {
-            $printing = null;
-        }
+        // Maintenance pages are now lazily rendered into the per-language special
+        // FPC (MaintenanceFpcStore). "Publishing" is just invalidation so the next
+        // 503 request re-renders from the Maintenance module layout.
+        unset($retryAfter);
+        MaintenanceFpcStore::purge();
 
-        $skippedLabels = $this->trySkipEntirePublishAll($retryAfter, $printing);
-        if ($skippedLabels !== null) {
-            return $skippedLabels;
-        }
+        return [];
+    }
 
-        $publisher = new StaticErrorPagePublisher();
-        $result = $publisher->publish(
-            MaintenanceStaticPage::KIND,
-            function (array $target) use ($retryAfter): array {
-                return $this->publishOne(
-                    (string)$target['website_code'],
-                    (string)$target['lang'],
-                    (int)$target['website_id'],
-                    (string)($target['website_url'] ?? ''),
-                    $retryAfter,
-                );
-            },
-            static function (string $phase, array $meta) use ($printing): void {
-                if ($printing === null || PHP_SAPI !== 'cli') {
-                    return;
-                }
-                if ($phase === 'start') {
-                    $printing->note(__(
-                        '开始发布维护静态页：%{total} 个 website×locale（Fiber 协作并发 %{c}，非多核）',
-                        ['total' => (int)($meta['total'] ?? 0), 'c' => (int)($meta['concurrency'] ?? 4)]
-                    ));
-                    return;
-                }
-                if ($phase === 'task') {
-                    $label = (string)($meta['website_code'] ?? '') . '/' . (string)($meta['lang'] ?? '');
-                    if (!empty($meta['ok'])) {
-                        $printing->success(__(
-                            '维护静态页 [%{done}/%{total}]：%{label}',
-                            [
-                                'done' => (int)($meta['done'] ?? 0),
-                                'total' => (int)($meta['total'] ?? 0),
-                                'label' => $label,
-                            ]
-                        ));
-                    } else {
-                        $printing->warning(__(
-                            '维护静态页失败 [%{done}/%{total}]：%{label} — %{err}',
-                            [
-                                'done' => (int)($meta['done'] ?? 0),
-                                'total' => (int)($meta['total'] ?? 0),
-                                'label' => $label,
-                                'err' => (string)($meta['error'] ?? ''),
-                            ]
-                        ));
+    /**
+     * Render + cache the maintenance page for the current website×locale.
+     *
+     * The WLS maintenance Worker only READS the special FPC (it has no app/DB to
+     * render the Maintenance layout), so the cache must be filled from an app
+     * context while one still exists — this runs on maintenance:enable, not in
+     * setup:upgrade.
+     *
+     * @return list<string> websiteCode/lang labels warmed
+     */
+    public function warmCurrent(int $retryAfter = 60): array
+    {
+        [$websiteCode] = $this->currentWebsite();
+        $warmed = [];
+        foreach ($this->discoverAvailableLocales() as $locale) {
+            foreach ([false, true] as $isJson) {
+                try {
+                    $isJson
+                        ? $this->renderJson((string)$locale, $retryAfter)
+                        : $this->renderHtml((string)$locale);
+                } catch (\Throwable $e) {
+                    if (\function_exists('w_log_warning')) {
+                        \w_log_warning(
+                            '[maintenance] warm ' . $websiteCode . '/' . $locale . ($isJson ? '.json' : '.html')
+                            . ' failed: ' . $e->getMessage(),
+                            [],
+                            'maintenance_warm'
+                        );
                     }
-                    return;
+                    continue;
                 }
-                if ($phase === 'done') {
-                    $printing->success(__(
-                        '维护静态页发布完成：成功 %{written}，失败 %{failed}，host_map %{keys} 键',
-                        [
-                            'written' => (int)($meta['written'] ?? 0),
-                            'failed' => (int)($meta['failed'] ?? 0),
-                            'keys' => (int)($meta['host_map_keys'] ?? 0),
-                        ]
-                    ));
-                }
-            },
-            ['retry_after' => $retryAfter, 'extensions' => ['html', 'json']],
-        );
-
-        $langs = [];
-        foreach ($result['written'] as $row) {
-            $langs[] = $row['website_code'] . '/' . $row['lang'];
+                $warmed[] = $websiteCode . '/' . $locale . ($isJson ? '.json' : '.html');
+            }
         }
 
-        return $langs;
+        return $warmed;
     }
 
     /**
@@ -126,70 +91,11 @@ final class MaintenanceStaticGenerator
         string $websiteUrl = '',
         int $retryAfter = 60,
     ): array {
-        $websiteCode = StaticErrorPageMap::sanitizeWebsiteCode($websiteCode);
-        if ($websiteCode === '') {
-            return ['ok' => false, 'error' => 'invalid website code'];
-        }
-        $lang = \trim($lang);
-        if ($lang === '' || \preg_match('/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/', $lang) !== 1) {
-            return ['ok' => false, 'error' => 'invalid locale'];
-        }
+        unset($websiteId, $websiteUrl, $retryAfter);
+        // Invalidate the per-language special FPC so the next 503 re-renders.
+        MaintenanceFpcStore::purge($websiteCode, $lang);
 
-        $this->publishSite = [
-            'website_id' => $websiteId,
-            'website_code' => $websiteCode,
-            'website_url' => $websiteUrl,
-        ];
-
-        // Publish in an isolated Context so the per-locale language override and
-        // scope identity never land in the shared main context. If this Fiber is
-        // abandoned mid-publish, the clone is dropped with the Fiber (WeakMap)
-        // instead of leaking its locale into every later request.
-        $previousContext = \Weline\Framework\Context::getCurrent();
-        \Weline\Framework\Context::enter(new \Weline\Framework\Context(
-            $previousContext !== null ? $previousContext->toArray() : []
-        ));
-
-        try {
-            $this->installPublishScope($websiteId, $websiteCode, $lang);
-            $htmlFile = MaintenanceStaticPage::staticFilePath($lang, false, $websiteCode);
-            $jsonFile = MaintenanceStaticPage::staticFilePath($lang, true, $websiteCode);
-            $inputHash = $this->computeMaintenancePublishInputHash($websiteCode, $lang, $websiteId, $retryAfter);
-            $fpHelper = new StaticErrorPagePublishFingerprint();
-            $fpKey = $fpHelper->fpKeyMaintenance($websiteCode, $lang);
-            if ($fpHelper->shouldSkipTarget($fpKey, $inputHash, $htmlFile, $jsonFile)) {
-                FiberTaskRunner::yield();
-
-                return ['ok' => true, 'path' => $htmlFile, 'skipped' => true];
-            }
-            $this->saveStaticFile($htmlFile, $this->buildHtml($lang));
-            FiberTaskRunner::yield();
-            $this->saveStaticFile($jsonFile, $this->buildJson($lang, $retryAfter));
-            // Keep flat legacy for default website as hot-path fallback.
-            if ($websiteCode === StaticErrorPageMap::DEFAULT_WEBSITE_CODE) {
-                $this->saveStaticFile(MaintenanceStaticPage::staticFilePath($lang, false, ''), $this->buildHtml($lang));
-                $this->saveStaticFile(MaintenanceStaticPage::staticFilePath($lang, true, ''), $this->buildJson($lang, $retryAfter));
-            }
-            $fpHelper->rememberTarget($fpKey, $inputHash);
-            FiberTaskRunner::yield();
-
-            return ['ok' => true, 'path' => $htmlFile];
-        } catch (\Throwable $e) {
-            return ['ok' => false, 'error' => $e->getMessage()];
-        } finally {
-            try {
-                \Weline\Framework\Context::leave();
-                if ($previousContext !== null) {
-                    \Weline\Framework\Context::enter($previousContext);
-                }
-            } catch (\Throwable) {
-            }
-            $this->publishSite = null;
-            try {
-                State::setRequestLanguageOverride('');
-            } catch (\Throwable) {
-            }
-        }
+        return ['ok' => true];
     }
 
     /**
@@ -281,15 +187,7 @@ final class MaintenanceStaticGenerator
 
     public function renderHtml(string $lang): string
     {
-        $staticFile = MaintenanceStaticPage::staticFilePath($lang, false);
-        if ($this->isStaticFileFresh($staticFile, $lang, false)) {
-            return (string)\file_get_contents($staticFile);
-        }
-
-        $html = $this->buildHtml($lang);
-        $this->saveStaticFile($staticFile, $html);
-
-        return $html;
+        return $this->renderCached($lang, false, 0);
     }
 
     public function renderDevPreviewHtml(string $lang): string
@@ -299,15 +197,93 @@ final class MaintenanceStaticGenerator
 
     public function renderJson(string $lang, int $retryAfter): string
     {
-        $staticFile = MaintenanceStaticPage::staticFilePath($lang, true);
-        if ($this->isStaticFileFresh($staticFile, $lang, true)) {
-            return (string)\file_get_contents($staticFile);
+        return $this->renderCached($lang, true, $retryAfter);
+    }
+
+    /**
+     * Lazily render one website×locale maintenance page into the special FPC.
+     * Hit → return cached; miss → render the Maintenance module layout once, publish, return.
+     */
+    private function renderCached(string $lang, bool $isJson, int $retryAfter): string
+    {
+        [$websiteCode, $websiteId] = $this->currentWebsite();
+        $hit = MaintenanceFpcStore::read($websiteCode, $lang, $isJson);
+        if ($hit !== null) {
+            return $hit['body'];
         }
 
-        $json = $this->buildJson($lang, $retryAfter);
-        $this->saveStaticFile($staticFile, $json);
+        $body = MaintenanceFpcStore::withBuildLock(
+            $websiteCode,
+            $lang,
+            function () use ($lang, $isJson, $retryAfter, $websiteCode, $websiteId): string {
+                $again = MaintenanceFpcStore::read($websiteCode, $lang, $isJson);
+                if ($again !== null) {
+                    return $again['body'];
+                }
+                $rendered = $this->buildScoped($lang, $isJson, $retryAfter, $websiteId, $websiteCode);
+                if ($rendered !== '') {
+                    MaintenanceFpcStore::publish($websiteCode, $lang, $rendered, $isJson);
+                }
 
-        return $json;
+                return $rendered;
+            }
+        );
+
+        if ($body !== null && $body !== '') {
+            return $body;
+        }
+
+        // Peer held the lock and nothing landed: render without caching as last resort.
+        return $this->buildScoped($lang, $isJson, $retryAfter, $websiteId, $websiteCode);
+    }
+
+    /**
+     * @return array{0: string, 1: int} websiteCode, websiteId
+     */
+    private function currentWebsite(): array
+    {
+        try {
+            if (\class_exists(RequestContext::class)) {
+                $websiteId = (int)RequestContext::getWelineWebsiteId();
+                $websiteCode = (string)RequestContext::getWelineWebsiteCode();
+
+                return [$websiteCode !== '' ? $websiteCode : 'default', $websiteId];
+            }
+        } catch (\Throwable) {
+        }
+
+        return ['default', 0];
+    }
+
+    private function buildScoped(string $lang, bool $isJson, int $retryAfter, int $websiteId, string $websiteCode): string
+    {
+        $previousContext = \Weline\Framework\Context::getCurrent();
+        \Weline\Framework\Context::enter(new \Weline\Framework\Context(
+            $previousContext !== null ? $previousContext->toArray() : []
+        ));
+        try {
+            if ($websiteId > 0) {
+                try {
+                    $this->installPublishScope($websiteId, $websiteCode, $lang);
+                } catch (\Throwable) {
+                }
+            }
+            try {
+                State::setRequestLanguageOverride($lang);
+            } catch (\Throwable) {
+            }
+
+            return $isJson ? $this->buildJson($lang, $retryAfter) : $this->buildHtml($lang);
+        } finally {
+            try {
+                State::setRequestLanguageOverride('');
+                \Weline\Framework\Context::leave();
+                if ($previousContext !== null) {
+                    \Weline\Framework\Context::enter($previousContext);
+                }
+            } catch (\Throwable) {
+            }
+        }
     }
 
     private function buildHtml(string $lang): string

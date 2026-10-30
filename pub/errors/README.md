@@ -4,7 +4,7 @@
 
 ## 解析顺序
 
-1. 前台 404（`area=frontend`）：优先读取 `pub/errors/storefront-not-found/{locale}.html` 静态快照（零 DB，由 Theme 在 `setup:upgrade` 时生成）
+1. 前台 404（`area=frontend`）：读取按 `website×locale` 区分的特殊 FPC（`generated/error-pages/not-found/{website}/{lang}.html`，命中零 DB）；未命中时由主题 `not_found` 布局渲染一次并回填该缓存（请求 URL 不变、返回 404）
 2. 事件 `Weline_Framework_Http::error_page_render`（观察者写入 `html` 可整页覆盖）
 3. `pub/errors/{code}.php`（如 `404.php`）
 4. `pub/errors/default.php`

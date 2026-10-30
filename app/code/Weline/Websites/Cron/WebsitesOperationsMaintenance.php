@@ -16,7 +16,7 @@ use Weline\Framework\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Lock\SetupUpgradeIntent;
 use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
-use Weline\Websites\Service\StaticErrorPageMaintenanceService;
+use Weline\Websites\Service\HttpsSync;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
 #[CronTestHelp(
@@ -29,7 +29,7 @@ use Weline\Websites\Service\WebsitesCronTestContext;
         '② 每 5 分钟：健康检查只探「超过 websites.health_check_fresh_hours（默认 6 小时）未检查」的域名，避免全量重探。',
         '③ 仅整点：根域 NS 检测；cron_resolved 的根域跳过。',
         '④ 仅整点：HttpsSync；建站锁定的绑定域名跳过。',
-        '⑤ 距上次成功发布 ≥ websites.static_error_pages_refresh_days（默认 7 天）时，重发前台 404 与维护静态页。',
+        '⑤ 距上次成功发布 ≥ websites.static_error_pages_refresh_days（默认 7 天）时，重发维护静态页（404 已改为主题级渲染 + 特殊 FPC，不再静态生成）。',
     ],
 )]
 class WebsitesOperationsMaintenance implements CronTaskInterface
@@ -116,25 +116,6 @@ class WebsitesOperationsMaintenance implements CronTaskInterface
                 $parts[] = '[4] ' . $e->getMessage();
                 w_log_error('[websites_operations_maintenance] https: ' . $e->getMessage(), [], 'websites_operations_maintenance');
             }
-        }
-
-        try {
-            /** @var StaticErrorPageMaintenanceService $staticPages */
-            $staticPages = ObjectManager::getInstance(StaticErrorPageMaintenanceService::class);
-            if ($staticPages->isDue()) {
-                $report = $staticPages->publish();
-                $parts[] = '[5] ' . __('静态错误页') . ': ' . \sprintf(
-                    'not_found=%d maintenance=%d failed=%d',
-                    (int)$report['not_found'],
-                    (int)$report['maintenance'],
-                    (int)$report['failed'],
-                ) . ($report['messages'] === [] ? '' : ' ' . \implode('|', $report['messages']));
-            } else {
-                $parts[] = '[5] ' . __('静态错误页：未到刷新时间，跳过');
-            }
-        } catch (\Throwable $e) {
-            $parts[] = '[5] ' . $e->getMessage();
-            w_log_error('[websites_operations_maintenance] static_error_pages: ' . $e->getMessage(), [], 'websites_operations_maintenance');
         }
 
         return \implode("\n---\n", $parts);

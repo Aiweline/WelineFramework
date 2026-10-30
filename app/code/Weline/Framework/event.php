@@ -734,6 +734,10 @@ return [
         'name' => __('错误页资源贡献'),
         'description' => __('内置错误页组装样式前触发。中立字段 font_face_css 可由其他模块写入 @font-face CSS；核心不硬绑主题字体实现。'),
     ],
+    'Weline_Framework_Http::storefront_not_found_render' => [
+        'name' => __('店面 404 页面渲染'),
+        'description' => __('前台 404 特殊 FPC 未命中时触发；观察者用主题 not_found 布局渲染并写入 data["html"]，Framework 缓存并直接返回。payload 含 status_code/area/website_code/lang/request_*。'),
+    ],
     'Weline_Framework_Deploy::static_asset_transform' => [
         'name' => __('静态资源发布变换'),
         'description' => __('deploy:upgrade 写入 pub/static 目标文件前触发。中立字段：source_path、target_path、extension、content（可写）、transformed。核心不包含 minify 语义。'),

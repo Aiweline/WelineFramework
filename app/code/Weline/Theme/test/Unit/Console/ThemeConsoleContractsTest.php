@@ -32,9 +32,6 @@ final class ThemeConsoleContractsTest extends TestCase
     private function contractChecks(): array
     {
         return [
-            'PublishNotFoundStaticCommand::testCommandExposesForceAndLangAndCallsGenerator' => function () {
-            $this->assert_PublishNotFoundStaticCommand_testCommandExposesForceAndLangAndCallsGenerator();
-        },
             'ThemeUpgradeCommand::testLayoutEntitySolidifyIsInvokedAfterStaticPublish' => function () {
             $this->assert_ThemeUpgradeCommand_testLayoutEntitySolidifyIsInvokedAfterStaticPublish();
         },
@@ -100,18 +97,6 @@ final class ThemeConsoleContractsTest extends TestCase
         },
         ];
     }
-
-private function assert_PublishNotFoundStaticCommand_testCommandExposesForceAndLangAndCallsGenerator(): void
-{
-    $source = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Console/Theme/PublishNotFoundStatic.php');
-    self::assertStringContainsString('theme:publish-not-found-static', $source);
-    self::assertStringContainsString('--force', $source);
-    self::assertStringContainsString('publishAll', $source);
-    self::assertStringContainsString('publishOne', $source);
-    self::assertStringContainsString('forgetByPrefix', $source);
-    self::assertStringContainsString('reportSampleSizes', $source);
-    self::assertStringContainsString('widgetTranslations', $source);
-}
 
 private function assert_ThemeUpgradeCommand_testLayoutEntitySolidifyIsInvokedAfterStaticPublish(): void
 {

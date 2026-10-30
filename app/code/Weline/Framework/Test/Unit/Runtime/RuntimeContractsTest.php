@@ -256,7 +256,7 @@ private function assert_ProcessCacheResetContextSurface_testTwoArgAggressiveDeri
 private function assert_RequestPathSuperglobalRead_testHotPathFilesDoNotReadProcessSuperglobals(): void
 {
     $root = '/Users/weline/Project/Official/框架/app/code/Weline/Framework';
-    $files = ['/View/Template.php', '/App/State.php', '/App.php', '/Http/ErrorPageRenderer.php', '/Http/StorefrontNotFoundStaticPage.php', '/Http/Security/SecurityHeaderPolicyService.php', '/Http/HeaderCollector.php', '/Cache/KeyBuilder.php', '/Controller/Api/CspPolicy.php', '/Service/Query/QueryProviderRegistry.php'];
+    $files = ['/View/Template.php', '/App/State.php', '/App.php', '/Http/ErrorPageRenderer.php', '/Http/Security/SecurityHeaderPolicyService.php', '/Http/HeaderCollector.php', '/Cache/KeyBuilder.php', '/Controller/Api/CspPolicy.php', '/Service/Query/QueryProviderRegistry.php'];
     foreach ($files as $relative) {
         $source = (string) \file_get_contents($root . $relative);
         $code = \preg_replace('/\/\*.*?\*\//s', '', $source) ?? $source;

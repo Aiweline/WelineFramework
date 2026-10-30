@@ -804,16 +804,10 @@ private function assert_UpgradeAfterObserverProgress_testEventDispatchPrintsUpgr
 
 private function assert_UpgradeAfterObserverProgress_testSubsequentSilentObserversNowPrintProgress(): void
 {
-    $themeRoot = '/Users/weline/Project/Official/框架/app/code/Weline' . '/Theme';
     $maintenanceRoot = '/Users/weline/Project/Official/框架/app/code/Weline' . '/Maintenance';
     $searchRoot = '/Users/weline/Project/Official/框架/app/code/Weline' . '/Search';
-    $publish404 = (string) file_get_contents($themeRoot . '/Observer/SetupUpgradeAfterPublishNotFoundStatic.php');
-    $generator = (string) file_get_contents($themeRoot . '/Service/StorefrontNotFoundStaticGenerator.php');
     $maintenance = (string) file_get_contents($maintenanceRoot . '/Observer/LocaleCatalogChangedObserver.php');
     $search = (string) file_get_contents($searchRoot . '/Observer/SetupProviderIndexWarmupObserver.php');
-    self::assertStringContainsString('开始发布前台 404 静态页', $publish404);
-    self::assertStringContainsString('website×locale', $generator);
-    self::assertStringContainsString('FiberTaskRunner::yield', $generator);
     self::assertStringContainsString('开始发布维护模式静态页', $maintenance);
     self::assertStringContainsString('系统正在更新，搜索索引重建改到闲时再做。', $search);
 }

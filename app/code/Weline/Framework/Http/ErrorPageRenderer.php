@@ -16,6 +16,7 @@ namespace Weline\Framework\Http;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Http\Fpc\StorefrontNotFoundFpcStore;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FiberOutputBuffer;
 
@@ -45,12 +46,12 @@ final class ErrorPageRenderer
             return self::renderJson($statusCode, $statusText, $message, $context);
         }
 
-        // skip_static: static 404 generators must never re-load published snapshots
-        // (would bake default-site HTML into every website folder on TypeError fallback).
+        // 404 frontend: serve the theme-rendered 404 from the per-language special FPC.
+        // skip_static keeps publish / warm passes from re-entering the cache.
         if ($statusCode === 404 && empty($context['skip_static']) && !self::requestAreaIsBackend($context)) {
-            $staticHtml = self::loadStorefrontNotFoundStaticHtml($context);
-            if ($staticHtml !== null) {
-                return $staticHtml;
+            $storefrontHtml = self::renderStorefrontNotFound($context);
+            if ($storefrontHtml !== null) {
+                return $storefrontHtml;
             }
         }
 
@@ -535,30 +536,82 @@ HTML;
     }
 
     /**
+     * Frontend 404: serve the theme-rendered 404 from the per-language special FPC.
+     * On miss, ask the theme (via event) to render `not_found`, then cache it.
+     *
      * @param array<string, mixed> $context
      */
-    private static function loadStorefrontNotFoundStaticHtml(array $context): ?string
+    private static function renderStorefrontNotFound(array $context): ?string
     {
-        if (!\class_exists(StorefrontNotFoundStaticPage::class, false)
-            && !\class_exists(StorefrontNotFoundStaticPage::class)) {
+        if (!\class_exists(StorefrontNotFoundFpcStore::class)) {
             return null;
         }
 
         try {
-            $path = (string)($context['request_path'] ?? '');
-            $query = (string)($context['request_query'] ?? '');
-            $cookie = (string)($context['cookie_header'] ?? '');
-            $host = (string)($context['request_host'] ?? '');
+            [$path, $query, $cookie, $host] = self::resolveNotFoundRequestParts($context);
 
-            // The router may strip mount and locale segments from REQUEST_URI.
-            $requestUri = '';
-            if (\class_exists(WelineEnv::class, false)) {
-                try {
-                    $requestUri = (string)(WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
-                        ?: WelineEnv::server('REQUEST_URI', ''));
-                } catch (\Throwable) {
-                    $requestUri = '';
+            $lang = StorefrontLocale::resolveLang($path !== '' ? $path : '/', $query, $cookie);
+            $websiteCode = self::resolveWebsiteCode();
+
+            $hit = StorefrontNotFoundFpcStore::read($websiteCode, $lang);
+            if ($hit !== null) {
+                return $hit['body'];
+            }
+
+            return StorefrontNotFoundFpcStore::withBuildLock(
+                $websiteCode,
+                $lang,
+                static function () use ($websiteCode, $lang, $host, $path, $query, $cookie): ?string {
+                    $html = self::dispatchStorefrontNotFoundRender([
+                        'status_code' => 404,
+                        'area' => 'frontend',
+                        'website_code' => $websiteCode,
+                        'lang' => $lang,
+                        'request_host' => $host,
+                        'request_path' => $path,
+                        'request_query' => $query,
+                        'cookie_header' => $cookie,
+                    ]);
+                    if ($html === null || $html === '') {
+                        return null;
+                    }
+                    StorefrontNotFoundFpcStore::publish($websiteCode, $lang, $html);
+
+                    return $html;
                 }
+            );
+        } catch (\Throwable $e) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning(
+                    '[storefront_not_found] fpc/render path failed: ' . $e->getMessage()
+                    . ' @ ' . $e->getFile() . ':' . $e->getLine(),
+                    [],
+                    'theme_not_found_fpc'
+                );
+            }
+
+            return null;
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array{0: string, 1: string, 2: string, 3: string} path, query, cookie, host
+     */
+    private static function resolveNotFoundRequestParts(array $context): array
+    {
+        $path = (string)($context['request_path'] ?? '');
+        $query = (string)($context['request_query'] ?? '');
+        $cookie = (string)($context['cookie_header'] ?? '');
+        $host = (string)($context['request_host'] ?? '');
+
+        // The router may strip mount and locale segments from REQUEST_URI.
+        if (\class_exists(WelineEnv::class, false)) {
+            try {
+                $requestUri = (string)(WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', '')
+                    ?: WelineEnv::server('REQUEST_URI', ''));
+            } catch (\Throwable) {
+                $requestUri = '';
             }
             if ($requestUri !== '') {
                 $uriPath = (string)(\parse_url($requestUri, \PHP_URL_PATH) ?: '');
@@ -570,48 +623,72 @@ HTML;
                     $query = $uriQuery;
                 }
             }
+        }
 
-            if ($path === '' && \function_exists('w_env')) {
-                $path = (string)\w_env('request.path', '/');
+        if ($path === '' && \function_exists('w_env')) {
+            $path = (string)\w_env('request.path', '/');
+        }
+        if ($query === '' && \function_exists('w_env')) {
+            $query = (string)\w_env('request.query', '');
+        }
+        if ($cookie === '' && \class_exists(WelineEnv::class, false)) {
+            $cookie = (string)WelineEnv::server('HTTP_COOKIE', '');
+        }
+        if ($host === '' && \class_exists(WelineEnv::class, false)) {
+            try {
+                $host = (string)WelineEnv::server('HTTP_HOST', '');
+            } catch (\Throwable) {
+                $host = '';
             }
-            if ($query === '' && \function_exists('w_env')) {
-                $query = (string)\w_env('request.query', '');
-            }
-            if ($cookie === '' && \class_exists(WelineEnv::class, false)) {
-                $cookie = (string)WelineEnv::server('HTTP_COOKIE', '');
-            }
-            if ($host === '') {
-                if (\class_exists(WelineEnv::class, false)) {
-                    try {
-                        $host = (string)WelineEnv::server('HTTP_HOST', '');
-                    } catch (\Throwable) {
-                        $host = '';
-                    }
+        }
+
+        return [$path, $query, $cookie, $host];
+    }
+
+    private static function resolveWebsiteCode(): string
+    {
+        try {
+            if (\class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
+                $code = (string)\Weline\Framework\Runtime\RequestContext::getWelineWebsiteCode();
+                if ($code !== '') {
+                    return $code;
                 }
             }
-
-            // Prefer RequestContext / State when REQUEST_URI was rewritten without
-            // /{locale} but the visitor path locale was already written at peel time.
-            $explicitLang = '';
-            if (\class_exists(\Weline\Framework\App\State::class, false)) {
-                try {
-                    $explicitLang = StorefrontNotFoundStaticPage::normalizeLangCode(
-                        (string)\Weline\Framework\Env\WelineEnv::getLang()
-                    );
-                } catch (\Throwable) {
-                    $explicitLang = '';
+        } catch (\Throwable) {
+        }
+        try {
+            if (\class_exists(WelineEnv::class, false)) {
+                $code = (string)WelineEnv::server('WELINE_WEBSITE_CODE', '');
+                if ($code !== '') {
+                    return $code;
                 }
             }
+        } catch (\Throwable) {
+        }
 
-            $html = StorefrontNotFoundStaticPage::loadHtml(
-                $explicitLang !== '' ? $explicitLang : null,
-                $path !== '' ? $path : '/',
-                $query,
-                $cookie,
-                $host,
-            );
+        return 'default';
+    }
 
-            return $html !== null && $html !== '' ? $html : null;
+    /**
+     * Ask the theme layer to render the storefront 404 body. Returns null when no
+     * observer contributes HTML (theme disabled / backend), so the caller falls
+     * through to the generic error shell.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private static function dispatchStorefrontNotFoundRender(array $payload): ?string
+    {
+        try {
+            if (!\class_exists(ObjectManager::class, false) && !\class_exists(ObjectManager::class)) {
+                return null;
+            }
+            /** @var EventsManager $events */
+            $events = ObjectManager::getInstance(EventsManager::class);
+            $data = new DataObject($payload + ['html' => '']);
+            $events->dispatch('Weline_Framework_Http::storefront_not_found_render', $data);
+            $html = \trim((string)$data->getData('html'));
+
+            return $html !== '' ? $html : null;
         } catch (\Throwable) {
             return null;
         }

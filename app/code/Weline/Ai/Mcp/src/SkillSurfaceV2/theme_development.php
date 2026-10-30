@@ -89,7 +89,7 @@ return [
         ['id' => 'area_frontend_backend_and_four_layers', 'summary' => '分清 area∈{frontend,backend} 与四层 layout/partial/component/widget。'],
         ['id' => 'public_component_library_dual_stack', 'summary' => '公共库双层：components/*.phtml + statics/ui Weline UI（w-*/w-backend-page/data-w-component）。'],
         ['id' => 'theme_application_default_authority', 'summary' => '店面权威=websites_theme_application→Theme Default（不假定库 id=1）；theme:active 已非权威。'],
-        ['id' => 'compile_matrix_modules_ui_disk', 'summary' => '编译矩阵：welineModules/welineUi/scan-variables/disk:compile/theme:upgrade/publish-not-found-static。'],
+        ['id' => 'compile_matrix_modules_ui_disk', 'summary' => '编译矩阵：welineModules/welineUi/scan-variables/disk:compile/theme:upgrade。404 走主题 not_found 布局 + 特殊 FPC（无需静态发布）。'],
         ['id' => 'scope_migrate_cli_unimplemented', 'summary' => 'theme:scope:migrate 未实现；禁自写 SQL 删 scope 表；只走 Editor Scope+发布。'],
         ['id' => 'editor_dual_preview_parity', 'summary' => '画布禁 start-preview/种 Token；仅 #btnFrontendPreview 可 Token；禁 preview early-return。'],
         ['id' => 'frontend_section_weline_code', 'summary' => 'section 与 w:slot wrapper=section 必带非空 weline-code；改后 check-section-code。'],

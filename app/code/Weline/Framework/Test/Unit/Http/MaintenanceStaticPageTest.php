@@ -42,17 +42,27 @@ final class MaintenanceStaticPageTest extends TestCase
         );
     }
 
-    public function testLoadHtmlPrefersRequestedLocaleFile(): void
+    public function testLoadHtmlReturnsFpcLeafWhenPresent(): void
     {
         if (!\defined('BP')) {
             self::markTestSkipped('BP not defined');
         }
 
-        $generator = new \Weline\Maintenance\Service\MaintenanceStaticGenerator();
-        $generator->publishAll(60);
+        $marker = 'System Upgrade in Progress';
+        $path = \Weline\Framework\Http\Fpc\MaintenanceFpcStore::filePath('default', 'en_US', false);
+        $dir = \dirname($path);
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0775, true);
+        }
+        @\file_put_contents($path, '<!doctype html><html><body>' . $marker . '</body></html>');
 
-        $html = MaintenanceStaticPage::loadHtml(null, '/en_US/', 'lang=en_US');
-        self::assertIsString($html);
-        self::assertStringContainsString('System Upgrade in Progress', (string)$html);
+        try {
+            $html = MaintenanceStaticPage::loadHtml(null, '/en_US/', 'lang=en_US');
+            self::assertIsString($html);
+            self::assertStringContainsString($marker, (string)$html);
+        } finally {
+            @\unlink($path);
+            @\unlink($path . '.ok');
+        }
     }
 }

@@ -371,8 +371,8 @@ Worker 重载不能代替入口静态缓存或浏览器资源版本的更新。
 入口缓存。入口可能分别保存普通、gzip、Brotli 响应；普通请求拿到新脚本不代表
 浏览器拿到的压缩响应也已更新，应比较正常浏览器响应与当前资源源文件的摘要。
 
-### 404 静态页发布与模板依赖
+### 404 页面：主题级渲染 + 特殊 FPC
 
-404 静态页发布每次走正常模板渲染，覆盖公共模板、Hook 和部件依赖的当前输出；不以仅包含主布局的输入摘要提前跳过。最终内容相同则保留已有静态文件。访问已发布 404 页面仍直接读取静态 HTML，不逐次查询数据库重建部件。
+404 不再由系统在 `setup:upgrade` 预生成静态快照。前台 404 由主题 `not_found` 布局经正常模板渲染产出，并按 `website×locale` 写入「特殊 FPC」（`generated/error-pages/not-found/{website}/{lang}.html`，`Framework\Http\Fpc\StorefrontNotFoundFpcStore`）。任意未匹配 URL 命中该缓存即直接返回（零 DB），未命中则由主题渲染一次并回填；请求 URL 与 404 状态保持不变（不重定向）。
 
-**设计主题继承（硬）**：`StorefrontNotFoundStaticGenerator` 在安装站点 `ThemeApplicationContext` 后必须用 `Template::fetchHtml` 渲染 `layouts/not_found`，以便 `ThemePathResolver` 命中 `app/design/{Vendor}/{theme}/frontend/layouts/not_found/`。禁止 `fetchModuleThemeHtml` / 强制模块源——那会锁死默认模块壳，逼运维手改 `pub/errors`。品牌 404 只落 design 主题；手改 `pub/errors` 不是合法 SoT。
+**设计主题继承（硬）**：`Theme\Service\StorefrontNotFoundRenderer` 在安装站点 `ThemeApplicationContext` 后必须用 `Template::fetchHtml` 渲染 `layouts/not_found`，以便 `ThemePathResolver` 命中 `app/design/{Vendor}/{theme}/frontend/layouts/not_found/`。禁止 `fetchModuleThemeHtml` / 强制模块源——那会锁死默认模块壳。品牌 404 只落 design 主题；`pub/errors/storefront-not-found` 静态快照已废弃，不再作为 SoT。

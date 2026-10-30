@@ -120,7 +120,7 @@ final class StaticErrorPageMapTest extends TestCase
             self::markTestSkipped('BP/PUB not defined');
         }
 
-        $kind = 'storefront-not-found';
+        $kind = 'test-static-error-pages';
         $dir = StaticErrorPageMap::errorsBaseDir($kind);
         @\mkdir($dir, 0755, true);
 

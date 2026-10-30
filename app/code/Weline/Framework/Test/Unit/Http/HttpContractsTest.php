@@ -2117,7 +2117,9 @@ private function assert_StaticErrorPagePublisher_testErrorPageRendererForwardsHo
     $source = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Framework' . '/Http/ErrorPageRenderer.php');
     self::assertStringContainsString('request_host', $source);
     self::assertStringContainsString('HTTP_HOST', $source);
-    self::assertStringContainsString('loadHtml(', $source);
+    // 404 now reads the per-language special FPC instead of the retired static loader.
+    self::assertStringContainsString('StorefrontNotFoundFpcStore', $source);
+    self::assertStringContainsString('storefront_not_found_render', $source);
 }
 
 private function assert_StaticErrorPagePublisher_testDefaultConcurrencyIsFour(): void

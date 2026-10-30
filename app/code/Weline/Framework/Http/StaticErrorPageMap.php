@@ -264,7 +264,7 @@ final class StaticErrorPageMap
     {
         $defaultLang = $kind === 'maintenance'
             ? MaintenanceStaticPage::DEFAULT_LANG
-            : StorefrontNotFoundStaticPage::DEFAULT_LANG;
+            : StorefrontLocale::DEFAULT_LANG;
 
         $chain = [];
         foreach ([$lang, $defaultLang, 'en_US'] as $candidate) {

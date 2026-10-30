@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Http;
 
+use Weline\Framework\Http\Fpc\MaintenanceFpcStore;
+
 /**
- * Zero-DB resolver/loader for pre-generated maintenance pages under pub/errors/maintenance/.
+ * Zero-DB loader for maintenance (503) pages from the per-language special FPC.
  *
- * Used by WLS maintenance Worker and other gates that must return static HTML quickly.
- * Layout: {websiteCode}/{lang}.html|.json plus legacy flat {lang}.* and _host_map.php.
+ * Used by the WLS maintenance Worker and other gates that must return a page quickly.
+ * Layout: generated/error-pages/maintenance/{websiteCode}/{lang}.html|.json.
+ * Miss → null; the app-context renderer (MaintenanceStaticGenerator::renderHtml/renderJson)
+ * renders the Maintenance module layout once and fills the FPC.
  */
 final class MaintenanceStaticPage
 {
@@ -135,15 +139,9 @@ final class MaintenanceStaticPage
         }
 
         $lang = $lang !== null && $lang !== '' ? $lang : self::resolveLang($path, $queryString, $cookieHeader);
+        $hit = MaintenanceFpcStore::read(self::resolveWebsiteCode($websiteCode, $host), $lang, false);
 
-        return StaticErrorPageMap::loadWithFallback(
-            self::KIND,
-            $lang,
-            $host,
-            $path,
-            false,
-            $websiteCode,
-        );
+        return $hit !== null ? $hit['body'] : null;
     }
 
     public static function loadJson(
@@ -159,15 +157,28 @@ final class MaintenanceStaticPage
         }
 
         $lang = $lang !== null && $lang !== '' ? $lang : self::resolveLang($path, $queryString, $cookieHeader);
+        $hit = MaintenanceFpcStore::read(self::resolveWebsiteCode($websiteCode, $host), $lang, true);
 
-        return StaticErrorPageMap::loadWithFallback(
-            self::KIND,
-            $lang,
-            $host,
-            $path,
-            true,
-            $websiteCode,
-        );
+        return $hit !== null ? $hit['body'] : null;
+    }
+
+    private static function resolveWebsiteCode(?string $websiteCode, string $host): string
+    {
+        unset($host);
+        if ($websiteCode !== null && $websiteCode !== '') {
+            return MaintenanceFpcStore::sanitizeCode($websiteCode);
+        }
+        try {
+            if (\class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
+                $code = (string)\Weline\Framework\Runtime\RequestContext::getWelineWebsiteCode();
+                if ($code !== '') {
+                    return MaintenanceFpcStore::sanitizeCode($code);
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return 'default';
     }
 
     /**

@@ -145,9 +145,6 @@ final class SetupContractsTest extends TestCase
             'UpgradeSpeedSkip::testSchemaDiffAllFreshSkipAndNoPartialEmptyDeclarations' => function () {
             $this->assert_UpgradeSpeedSkip_testSchemaDiffAllFreshSkipAndNoPartialEmptyDeclarations();
         },
-            'UpgradeSpeedSkip::testNotFoundObserverAlignsPartialUpgrade' => function () {
-            $this->assert_UpgradeSpeedSkip_testNotFoundObserverAlignsPartialUpgrade();
-        },
             'UpgradeSpeedSkip::testMaintenancePublishHashesUseStableFileFingerprintHelper' => function () {
             $this->assert_UpgradeSpeedSkip_testMaintenancePublishHashesUseStableFileFingerprintHelper();
         },
@@ -558,12 +555,6 @@ private function assert_UpgradeSpeedSkip_testSchemaDiffAllFreshSkipAndNoPartialE
     self::assertStringContainsString('全部模块 Model 源指纹未变', $src);
     self::assertStringContainsString('wasSourceFingerprintSkipped', $src);
     self::assertStringNotContainsString("\$bag['skipped'] = true", $src);
-}
-
-private function assert_UpgradeSpeedSkip_testNotFoundObserverAlignsPartialUpgrade(): void
-{
-    $src = (string) \file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline' . '/Theme/Observer/SetupUpgradeAfterPublishNotFoundStatic.php');
-    self::assertStringContainsString('is_partial_upgrade', $src);
 }
 
 private function assert_UpgradeSpeedSkip_testMaintenancePublishHashesUseStableFileFingerprintHelper(): void

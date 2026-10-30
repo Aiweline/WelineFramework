@@ -1661,7 +1661,7 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'new_design_theme_lifecycle_checklist', 'summary' => '新主题：register→frontend/现代树→listing→网站应用引用或 Default 回落→发布；禁照抄 theme:create 旧 view/templates 树'],
                 ['id' => 'area_frontend_backend_and_four_layers', 'summary' => '须分清 area∈{frontend,backend} 与四层 layout/partial/component/widget，勿混路径'],
                 ['id' => 'public_component_library_dual_stack', 'summary' => '公共库双层：Theme components/*.phtml + statics/ui Weline UI（w-* / w-backend-page / data-w-component）'],
-                ['id' => 'compile_matrix_modules_ui_disk', 'summary' => '编译矩阵：welineModules/welineUi/scan-variables/disk:compile/theme:upgrade/publish-not-found-static/theme:ui:audit'],
+                ['id' => 'compile_matrix_modules_ui_disk', 'summary' => '编译矩阵：welineModules/welineUi/scan-variables/disk:compile/theme:upgrade/theme:ui:audit'],
                 ['id' => 'theme_application_default_authority', 'summary' => '正式店面权威=websites_theme_application→缺省 Theme 模块全局 Default（view/theme 磁盘；不假定库 id=1；无目录行 theme_id=0 仍可用）；theme:active/is_active/旧 theme_binding 不再是店面权威'],
                 ['id' => 'scope_migrate_cli_unimplemented', 'summary' => 'theme:scope:migrate 当前未实现；禁自写 SQL 猜删 scope 表；只走 Editor 规范 Scope+发布'],
                 ['id' => 'runtime_cache_invalidation_ops', 'summary' => '发布后清 Scope 定向缓存；禁 typed Scope 下 clearNonGlobalCaches(null)；blocked 不清缓存；禁手写 @static?v='],

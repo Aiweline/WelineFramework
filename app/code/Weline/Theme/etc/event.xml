@@ -163,6 +163,15 @@
                   sort="10"/>
     </event>
 
+    <!-- Frontend 404: theme renders the not_found layout for the special per-language FPC. -->
+    <event name="Weline_Framework_Http::storefront_not_found_render">
+        <observer name="Weline_Theme::storefront_not_found_renderer"
+                  instance="Weline\Theme\Observer\StorefrontNotFoundRendererObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
+
     <event name="Weline_Framework_Deploy::static_asset_transform">
         <observer name="Weline_Theme::static_asset_transform_minify"
                   instance="Weline\Theme\Observer\StaticAssetTransformMinify"
@@ -187,11 +196,6 @@
                   disabled="false"
                   shared="true"
                   sort="130"/>
-        <observer name="Weline_Theme::setup_upgrade_publish_not_found_static"
-                  instance="Weline\Theme\Observer\SetupUpgradeAfterPublishNotFoundStatic"
-                  disabled="false"
-                  shared="true"
-                  sort="250"/>
         <!-- After Widget registry refresh (sort=50) and Theme static publish (≤250): drop stale bake disks -->
         <observer name="Weline_Theme::setup_upgrade_purge_layout_entities"
                   instance="Weline\Theme\Observer\SetupUpgradeAfterPurgeLayoutEntities"
