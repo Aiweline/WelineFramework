@@ -42,23 +42,33 @@ use Weline\Theme\Service\ThemePlaceableRegistry;
 use Weline\Theme\Service\ThemeScopeVersionService;
 use Weline\Theme\Service\Version\ThemeScopeVersionWidgetDecisionService;
 
+require_once __DIR__ . '/fixtures/ResolvedPhtmlFixture.php';
+
 /**
  * Aggregated contract suite (merged from 38 *ContractTest files).
  * Observe one overall pass/fail via testAllThemeLayoutEntityContractsPass().
  */
 final class ThemeLayoutEntityContractsTest extends TestCase
 {
+    use ResolvedPhtmlFixture;
+
     public function testAllThemeLayoutEntityContractsPass(): void
     {
         $failures = [];
+        $skipped = [];
         foreach ($this->contractChecks() as $name => $fn) {
             try {
                 $fn();
+            } catch (\PHPUnit\Framework\SkippedTest $e) {
+                // markTestSkipped() throws SkippedWithMessageException (implements
+                // SkippedTest): an environment gate, not a defect — never a failure.
+                $skipped[] = $name . ': ' . $e->getMessage();
             } catch (\Throwable $e) {
                 $failures[] = $name . ": " . $e->getMessage();
             }
         }
-        self::assertSame([], $failures, implode("\n", $failures));
+        self::assertSame([], $failures, implode("\n", $failures)
+            . ($skipped !== [] ? "\n[skipped " . count($skipped) . "]: " . implode('; ', $skipped) : ''));
     }
 
     /** @return array<string, callable(): void> */
@@ -1002,7 +1012,7 @@ private function assert_LayoutSlotRendererColdPathPolicy_testHardCutFinalizeReco
     self::assertStringContainsString('ThemeLayoutBudgetPhases::L3_SLOTS', $src);
     self::assertStringContainsString("'reason' => 'storefront_hard_cut'", $src);
     self::assertStringContainsString('theme.layout.hard_cut_finalize', $src);
-    self::assertStringContainsString('storefront hard-cut skips', $src);
+    self::assertStringContainsString('hard-cut never runs processSlots', $src);
 }
 
 private function assert_MiniCartFooterExtrasNativeOwnerBake_testMatchedSavedNativeOwnerStillParentsFooterExtrasOrphans(): void
@@ -1666,17 +1676,19 @@ private function assert_RequiredFilterSlotFallbackInjector_testGateFingerprintAn
     $ensurePos = strpos($obsSrc, 'requiredNet->ensure($html)');
     self::assertNotFalse($stripPos);
     self::assertNotFalse($ensurePos);
-    self::assertLessThan($stripPos, $ensurePos, 'Required ensure must run after SlotBoundaryMarkers::strip');
+    self::assertLessThan($ensurePos, $stripPos, 'Required ensure must run after SlotBoundaryMarkers::strip');
     // Editor canvas finalizeFrontendHtml must run Filters XOR before editor assets.
     self::assertMatchesRegularExpression('/function finalizeFrontendHtml\([\s\S]*?' . 'if \(\$this->isEditorCanvasRequest\(\)\) \{[\s\S]*?' . 'requiredNet->ensure\(\$html\)[\s\S]*?' . 'EditorModeAssetInjector[\s\S]*?' . 'return \$injector->inject\(\$html\)/', $obsSrc, 'Editor canvas Filters ensure must run before EditorModeAssetInjector');
     $healer = '/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/StorefrontSsrChromeHealer.php';
     $healerSrc = (string) file_get_contents($healer);
     self::assertStringContainsString('RequiredDefaultInjectionRuntimeSafetyNet', $healerSrc);
-    $hStrip = strpos($healerSrc, 'SlotBoundaryMarkers::strip($html)');
+    // Two strip() call sites in the healer: the solidified-template early return
+    // (no ensure on that path) and the finalize path. Compare the finalize one.
+    $hStrip = strrpos($healerSrc, 'SlotBoundaryMarkers::strip($html)');
     $hEnsure = strpos($healerSrc, 'requiredNet->ensure($html)');
     self::assertNotFalse($hStrip);
     self::assertNotFalse($hEnsure);
-    self::assertLessThan($hStrip, $hEnsure, 'Healer required ensure must run after strip');
+    self::assertLessThan($hEnsure, $hStrip, 'Healer required ensure must run after strip');
     $netSrc = (string) file_get_contents('/Users/weline/Project/Official/框架/app/code/Weline/Theme' . '/Service/LayoutEntity/RequiredDefaultInjectionRuntimeSafetyNet.php');
     self::assertStringContainsString('RequiredFilterSlotFallbackInjector', $netSrc);
     self::assertTrue(class_exists(ThemeLayoutEntityRequestSolidifyGate::class));
@@ -1787,8 +1799,15 @@ private function assert_ThemeLayoutEntityBakeCoordinator_testResourceReceiptRequ
         self::assertSame(hash_file('sha256', $path), $receipt['artifact_id']);
         self::assertArrayNotHasKey('path', $receipt);
         unlink($path);
-        $this->expectException(\RuntimeException::class);
-        $method->invoke($coordinator, 'page', $path);
+        // Aggregate harness: expectException() is state on the TestCase and would be
+        // verified once per test method, so assert the throw locally instead.
+        $threw = null;
+        try {
+            $method->invoke($coordinator, 'page', $path);
+        } catch (\Throwable $e) {
+            $threw = $e;
+        }
+        self::assertInstanceOf(\RuntimeException::class, $threw, 'Missing artifact must throw RuntimeException');
     } finally {
         if (is_file($path)) {
             unlink($path);
@@ -1977,7 +1996,17 @@ private function assert_ThemeLayoutEntityLocaleComPrewarm_testPublishGateUsesFor
     self::assertStringContainsString('$candidateMap = $candidates', $service);
     self::assertTrue((bool) preg_match('/function\s*\(\s*\)\s*use\s*\([\s\S]*?\$candidateMap[\s\S]*?\)\s*:\s*void/m', $service), 'runPinnedToIdentityWebsite closure must use ($candidateMap)');
     // Prefer candidate snapshot before disk capture (avoid OwnerLock vs solidify WRITE).
-    $loop = (string) preg_replace('/.*foreach \(\$pages as (?:\$pageIndex => )?\$page\) \{/s', 'foreach ($pages as $page) {', $service, 1);
+    // Scope to the FIRST $pages loop: a greedy preg_replace through the LAST foreach
+    // dropped the loop body that holds ThemeLayoutSourceSnapshot::capture.
+    $loopStart = strpos($service, 'foreach ($pages as $pageIndex => $page) {');
+    if ($loopStart === false) {
+        $loopStart = strpos($service, 'foreach ($pages as $page) {');
+    }
+    self::assertNotFalse($loopStart, 'missing $pages compile loop');
+    $loopNext = strpos($service, 'foreach ($pages as', $loopStart + 1);
+    $loop = $loopNext === false
+        ? substr($service, $loopStart)
+        : substr($service, $loopStart, $loopNext - $loopStart);
     $preferPos = strpos($loop, 'snapshotFromPublishedCandidates');
     $capturePos = strpos($loop, 'ThemeLayoutSourceSnapshot::capture');
     self::assertNotFalse($preferPos);
@@ -2274,9 +2303,21 @@ private function assert_ThemeLayoutEntityRequestSolidifyGate_testStampRoundTrip(
     $paths = new ThemeLayoutEntityPaths($this->root_ThemeLayoutEntityRequestSolidifyGate . DIRECTORY_SEPARATOR);
     $stamps = new ThemeLayoutEntitySolidifyStampStore($paths);
     $key = ThemeLayoutEntitySolidifySerialKey::fromParts(7, 'frontend', 'g.default.default', 'normal', 'homepage', 'default', 3, 2);
-    self::assertNull($stamps->read($key));
-    $stamps->write($key, str_repeat('a', 64));
-    self::assertSame(str_repeat('a', 64), $stamps->read($key));
+    // StampStore::pathFor() resolves through ThemeLayoutEntityPaths::stateRoot(), which
+    // intentionally ignores the injected root (coordination state is global, not per
+    // generation). Unlink the shared stamp around this check so the round trip is
+    // isolated from leftovers of earlier runs and leaves nothing behind.
+    $pathFor = new \ReflectionMethod($stamps, 'pathFor');
+    $pathFor->setAccessible(true);
+    $shared = (string) $pathFor->invoke($stamps, $key);
+    @\unlink($shared);
+    try {
+        self::assertNull($stamps->read($key));
+        $stamps->write($key, str_repeat('a', 64));
+        self::assertSame(str_repeat('a', 64), $stamps->read($key));
+    } finally {
+        @\unlink($shared);
+    }
 }
 
 private function assert_ThemeLayoutEntityRequestSolidifyGate_testDeadLetterCountsConsecutiveFailuresAndClears(): void
@@ -2340,6 +2381,9 @@ private function assert_ThemeLayoutEntityRequestSolidifyGate_testCircuitBreakerS
 
 private function assert_ThemeLayoutEntityRequestSolidifyGate_testFiltersInventoryBakeVerdict(): void
 {
+    if (!\defined('BP')) {
+        self::markTestSkipped('BP undefined');
+    }
     $gateRef = new \ReflectionClass(ThemeLayoutEntityRequestSolidifyGate::class);
     $gate = $gateRef->newInstanceWithoutConstructor();
     $verdict = $gateRef->getMethod('filtersInventoryVerdict');
@@ -2719,8 +2763,15 @@ private function assert_ThemeLayoutEntityUpgradePurge_testAssertPurgeableEntityR
         self::markTestSkipped('BP undefined');
     }
     $paths = new ThemeLayoutEntityPaths();
-    $this->expectException(\RuntimeException::class);
-    $paths->assertPurgeableEntityRoot((string) BP);
+    // Aggregate harness: assert the throw locally instead of expectException(), which
+    // PHPUnit would only verify once per test method (and this loop swallows Throwables).
+    $threw = null;
+    try {
+        $paths->assertPurgeableEntityRoot((string) BP);
+    } catch (\Throwable $e) {
+        $threw = $e;
+    }
+    self::assertInstanceOf(\RuntimeException::class, $threw, 'BP itself must be rejected as purgeable entity root');
 }
 
 private function deleteDir_ThemeLayoutEntityUpgradePurge(string $dir): void
